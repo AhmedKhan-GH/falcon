@@ -201,7 +201,7 @@ fn read_json<T: DeserializeOwned>(path: &Path) -> Result<T> {
 }
 
 /// Eagle writes compact JSON with no trailing newline.
-fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
+pub(crate) fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
     let bytes = serde_json::to_vec(value).map_err(|e| Error::json(path, e))?;
     fs::write(path, bytes).map_err(|e| Error::io(path, e))
 }

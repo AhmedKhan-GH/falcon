@@ -193,3 +193,34 @@ fn palette_is_extracted_when_available() {
         assert!(!lib.item(&id).unwrap().palettes.is_empty(), "{src:?}");
     }
 }
+
+#[test]
+fn editing_renames_files_and_trashes() {
+    let Some(src) = fixture() else { return };
+    let tmp = tempfile::tempdir().unwrap();
+    let dest = tmp.path().join("Edit.library");
+    Library::open(&src).unwrap().save_to(&dest).unwrap();
+    let mut lib = Library::open(&dest).unwrap();
+
+    let mut item = lib.items().iter().find(|i| i.thumbnail_path(lib.root()).is_some()).unwrap().clone();
+    let before = item.last_modified;
+    item.name = "Renamed: item".into();
+    item.tags.push("edited".into());
+    lib.update_item(item.clone()).unwrap();
+
+    let reopened = Library::open(&dest).unwrap();
+    let got = reopened.item(&item.id).unwrap();
+    assert_eq!(got.name, "Renamed item");
+    assert!(got.tags.contains(&"edited".to_string()));
+    assert!(got.last_modified > before);
+    assert!(got.original_path(reopened.root()).is_file());
+    assert!(got.thumbnail_path(reopened.root()).is_some());
+
+    lib.set_trashed(std::slice::from_ref(&item.id), true).unwrap();
+    let got = Library::open(&dest).unwrap().item(&item.id).unwrap().clone();
+    assert!(got.is_deleted);
+    assert!(got.extra.contains_key("deletedTime"));
+
+    lib.record_tag_use(&["edited".into()]).unwrap();
+    assert_eq!(Library::open(&dest).unwrap().tags.history_tags[0], "edited");
+}
