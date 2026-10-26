@@ -269,3 +269,27 @@ fn emptying_the_trash_removes_files() {
     assert_eq!(reopened.mtime.all, Some(89));
     assert!(reopened.mtime.entries.iter().all(|(id, _)| !ids.contains(id)));
 }
+
+#[cfg(target_os = "macos")]
+#[test]
+fn quicklook_formats_get_thumbnails() {
+    let Some(src) = fixture() else { return };
+    let tmp = tempfile::tempdir().unwrap();
+    let dest = tmp.path().join("QL.library");
+    Library::open(&src).unwrap().save_to(&dest).unwrap();
+    let mut lib = Library::open(&dest).unwrap();
+    let eagle = lib.items().iter().find(|i| i.ext == "pdf").unwrap().clone();
+    let pdf = tmp.path().join("seal.pdf");
+    std::fs::copy(eagle.original_path(lib.root()), &pdf).unwrap();
+
+    let id = lib.import_file(&pdf, &ImportOptions::default()).unwrap();
+    let item = lib.item(&id).unwrap();
+    let thumb = item.thumbnail_path(lib.root()).expect("thumbnail");
+    let img = falcon_library::thumbnail::decode(&thumb).unwrap();
+    assert_eq!(img.width().min(img.height()), 480); // documents use the 480 limit
+    // QuickLook truncates the scaled side where Eagle rounds, so allow 1 px.
+    assert_eq!(item.width.max(item.height), eagle.width.max(eagle.height));
+    assert!(item.width.abs_diff(eagle.width) <= 1 && item.height.abs_diff(eagle.height) <= 1);
+    assert!(!item.palettes.is_empty());
+    eprintln!("eagle {:?}\nours  {:?}", eagle.palettes, item.palettes);
+}

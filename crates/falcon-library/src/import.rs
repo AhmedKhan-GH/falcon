@@ -180,7 +180,7 @@ fn generate(item: &mut Item, raw: &Path, thumb: &Path) -> Option<Analysis> {
         };
     }
     if !thumbnail::is_supported(&item.ext) {
-        return None;
+        return quicklook_thumbnail(item, raw, thumb, max);
     }
     let img = thumbnail::decode(raw).ok()?;
     item.width = img.width().into();
@@ -195,6 +195,24 @@ fn generate(item: &mut Item, raw: &Path, thumb: &Path) -> Option<Analysis> {
         return None;
     }
     apply(item, plan);
+    Some(Analysis::Thumbnail)
+}
+
+/// Formats falcon can't decode itself (PDF, video, PSD, AI, HEIC, RAW, ...)
+/// get a QuickLook render as their thumbnail, as Eagle renders them with its
+/// own viewers. Sizes come from Spotlight when it knows them, else from the
+/// render (Eagle likewise reports a PDF's render size); videos also get a
+/// `duration` in seconds.
+fn quicklook_thumbnail(item: &mut Item, raw: &Path, thumb: &Path, max: u32) -> Option<Analysis> {
+    let img = thumbnail::quicklook(raw, thumbnail::QUICKLOOK_SIZE).ok()?;
+    let meta = thumbnail::spotlight(raw);
+    let (w, h) = meta.size.unwrap_or((img.width(), img.height()));
+    item.width = w.into();
+    item.height = h.into();
+    if let Some(d) = meta.duration {
+        item.extra.insert("duration".into(), serde_json::json!(d));
+    }
+    thumbnail::write_thumbnail(img, max, thumb).ok()?;
     Some(Analysis::Thumbnail)
 }
 

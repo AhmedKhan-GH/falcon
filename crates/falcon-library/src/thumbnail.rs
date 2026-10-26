@@ -130,6 +130,63 @@ pub fn decode(path: &Path) -> Result<DynamicImage, ThumbError> {
     Ok(img)
 }
 
+/// Long side of QuickLook renders, matching the size Eagle reports for
+/// documents such as PDFs.
+pub const QUICKLOOK_SIZE: u32 = 1024;
+
+/// Renders a preview of any file macOS QuickLook understands, with its long
+/// side at most `size`.
+pub fn quicklook(path: &Path, size: u32) -> Result<DynamicImage, ThumbError> {
+    if !cfg!(target_os = "macos") {
+        return Err(ThumbError("QuickLook is only available on macOS".into()));
+    }
+    let out = tempfile::tempdir().map_err(ThumbError::new)?;
+    let status = std::process::Command::new("qlmanage")
+        .arg("-t")
+        .arg("-s")
+        .arg(size.to_string())
+        .arg("-o")
+        .arg(out.path())
+        .arg(path)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map_err(ThumbError::new)?;
+    let name = format!("{}.png", path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default());
+    let png = out.path().join(name);
+    if !status.success() || !png.is_file() {
+        return Err(ThumbError("QuickLook made no preview".into()));
+    }
+    decode(&png)
+}
+
+/// What Spotlight knows about a file's pixel size and duration.
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+pub struct Spotlight {
+    pub size: Option<(u32, u32)>,
+    pub duration: Option<f64>,
+}
+
+/// Reads pixel size and duration from Spotlight (`mdls`). Files Spotlight
+/// hasn't indexed, such as ones in temporary folders, give nothing.
+pub fn spotlight(path: &Path) -> Spotlight {
+    let out = std::process::Command::new("mdls")
+        .args(["-raw", "-name", "kMDItemPixelWidth", "-name", "kMDItemPixelHeight", "-name", "kMDItemDurationSeconds"])
+        .arg(path)
+        .output();
+    let Ok(out) = out else { return Spotlight::default() };
+    let text = String::from_utf8_lossy(&out.stdout);
+    let vals: Vec<Option<f64>> = text.split('\0').map(|v| v.trim().parse().ok()).collect();
+    let get = |i: usize| vals.get(i).copied().flatten();
+    Spotlight {
+        size: match (get(0), get(1)) {
+            (Some(w), Some(h)) if w > 0.0 && h > 0.0 => Some((w as u32, h as u32)),
+            _ => None,
+        },
+        duration: get(2),
+    }
+}
+
 /// Natural pixel size of an SVG file's contents.
 pub fn svg_size(data: &[u8]) -> Result<(u32, u32), ThumbError> {
     let tree = parse_svg(data)?;
