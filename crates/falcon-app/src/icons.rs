@@ -15,6 +15,7 @@ pub const FILE: &str = "\u{E230}";
 pub const FOLDER: &str = "\u{E24A}";
 pub const FOLDER_DASHED: &str = "\u{E8F8}";
 pub const FOLDER_OPEN: &str = "\u{E256}";
+pub const FOLDER_STAR: &str = "\u{EA86}";
 pub const FUNNEL: &str = "\u{E266}";
 pub const IMAGES: &str = "\u{E836}";
 pub const LAYOUT: &str = "\u{E6D6}";

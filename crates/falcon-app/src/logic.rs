@@ -24,6 +24,8 @@ pub enum Scope {
     /// default).
     Folder(String),
     Tag(String),
+    /// A smart folder's matches.
+    Smart(String),
 }
 
 impl Scope {
@@ -39,6 +41,7 @@ impl Scope {
             Scope::Trash => "Trash".into(),
             Scope::Folder(id) => find_folder(roots, id).map_or_else(|| "Folder".into(), |f| f.name.clone()),
             Scope::Tag(t) => t.clone(),
+            Scope::Smart(_) => "Smart Folder".into(),
         }
     }
 }
@@ -118,6 +121,8 @@ fn in_scope(item: &Item, scope: &Scope) -> bool {
         Scope::Untagged => item.tags.is_empty(),
         Scope::Folder(id) => item.folders.iter().any(|f| f == id),
         Scope::Tag(t) => item.tags.iter().any(|x| x == t),
+        // Membership is decided by the caller's `only` set.
+        Scope::Smart(_) => true,
     }
 }
 
@@ -128,6 +133,7 @@ fn shuffle_key(seed: u64, id: &str) -> u64 {
     h.finish()
 }
 
+#[allow(clippy::too_many_arguments)]
 /// Indices into `items` that pass the scope, the search query and the filter
 /// panel, in Eagle's order. A colour filter sorts by colour distance.
 pub fn visible(
@@ -138,6 +144,7 @@ pub fn visible(
     filter: &Filter,
     order: OrderBy,
     increase: bool,
+    only: Option<&HashSet<String>>,
 ) -> Vec<usize> {
     let index = search::folder_index(roots);
     let q = Query::parse(query);
@@ -145,7 +152,7 @@ pub fn visible(
     let mut hits: Vec<(usize, f64)> = items
         .iter()
         .enumerate()
-        .filter(|(_, i)| in_scope(i, scope))
+        .filter(|(_, i)| in_scope(i, scope) && only.is_none_or(|o| o.contains(&i.id)))
         .filter(|(_, i)| q.is_empty() || q.matches(&search::search_text(i, &index, qlen)))
         .filter_map(|(n, i)| filter.check(i).map(|d| (n, d)))
         .collect();
@@ -261,7 +268,7 @@ mod tests {
     #[test]
     fn scopes() {
         let (roots, items) = fixture();
-        let v = |s: Scope| names(&items, &visible(&items, &roots, &s, "", &Filter::default(), OrderBy::Name, true));
+        let v = |s: Scope| names(&items, &visible(&items, &roots, &s, "", &Filter::default(), OrderBy::Name, true, None));
         assert_eq!(v(Scope::All), ["apple", "loose", "Mango", "Zebra"]);
         assert_eq!(v(Scope::Uncategorized), ["loose"]);
         assert_eq!(v(Scope::Untagged), ["Mango"]);
@@ -275,7 +282,7 @@ mod tests {
     #[test]
     fn search_terms_and_negation() {
         let (roots, items) = fixture();
-        let q = |s: &str| names(&items, &visible(&items, &roots, &Scope::All, s, &Filter::default(), OrderBy::Name, true));
+        let q = |s: &str| names(&items, &visible(&items, &roots, &Scope::All, s, &Filter::default(), OrderBy::Name, true, None));
         assert_eq!(q("ZEB"), ["Zebra"]);
         assert_eq!(q("red big"), ["Zebra"]);
         assert_eq!(q("red -big"), ["apple"]);
@@ -288,7 +295,7 @@ mod tests {
     #[test]
     fn sorting_follows_eagle_directions() {
         let (roots, items) = fixture();
-        let s = |k, inc| names(&items, &visible(&items, &roots, &Scope::All, "", &Filter::default(), k, inc));
+        let s = |k, inc| names(&items, &visible(&items, &roots, &Scope::All, "", &Filter::default(), k, inc, None));
         // Time keys are newest first when "increase" is on.
         assert_eq!(s(OrderBy::Import, true), ["loose", "Zebra", "Mango", "apple"]);
         assert_eq!(s(OrderBy::Import, false), ["apple", "Mango", "Zebra", "loose"]);

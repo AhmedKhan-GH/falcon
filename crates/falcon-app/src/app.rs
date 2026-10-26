@@ -56,6 +56,83 @@ enum Action {
     Trash(Vec<String>, bool),
     DeletePermanently(Vec<String>),
     EmptyTrash,
+    CreateSmart(String, Vec<serde_json::Value>),
+    DeleteSmart(String),
+}
+
+/// A rule row in the smart-folder dialog.
+#[derive(Clone)]
+struct RuleDraft {
+    property: &'static str,
+    method: &'static str,
+    value: String,
+}
+
+impl Default for RuleDraft {
+    fn default() -> Self {
+        RuleDraft { property: "name", method: "contain", value: String::new() }
+    }
+}
+
+/// The smart-folder dialog's state.
+#[derive(Clone, Default)]
+struct SmartDraft {
+    name: String,
+    any: bool,
+    rules: Vec<RuleDraft>,
+}
+
+/// Properties offered in the dialog, with their methods (Eagle's names).
+const SMART_PROPS: [(&str, &str, &[&str]); 12] = [
+    ("name", "Name", &["contain", "uncontain", "equal", "startWith", "endWith", "empty", "not-empty"]),
+    ("annotation", "Notes", &["contain", "uncontain", "equal", "empty", "not-empty"]),
+    ("url", "URL", &["contain", "uncontain", "equal", "empty", "not-empty"]),
+    ("folderName", "Folder name", &["contain", "uncontain", "equal"]),
+    ("tags", "Tags", &["union", "intersection", "equal", "identity", "empty", "not-empty"]),
+    ("type", "Type", &["equal", "unequal"]),
+    ("rating", "Rating", &["equal", "unequal"]),
+    ("shape", "Shape", &["equal", "unequal"]),
+    ("color", "Color", &["similar", "accuracy", "grayscale"]),
+    ("width", "Width", &[">=", "<=", "=", ">", "<", "between"]),
+    ("fileSize", "File size (MB)", &[">=", "<=", "between"]),
+    ("createTime", "Date imported", &["within", "after", "before"]),
+];
+
+impl RuleDraft {
+    /// The rule in Eagle's JSON form, or `None` when the value is unusable.
+    fn to_json(&self) -> Option<serde_json::Value> {
+        use serde_json::json;
+        let v = self.value.trim();
+        let nums = || -> Option<Vec<f64>> {
+            let n: Vec<f64> = v.split(['-', ',', ' ']).filter(|x| !x.is_empty()).filter_map(|x| x.parse().ok()).collect();
+            (!n.is_empty()).then_some(n)
+        };
+        let value = match self.property {
+            "tags" => json!(v.split(',').map(str::trim).filter(|x| !x.is_empty()).collect::<Vec<_>>()),
+            "width" | "fileSize" => {
+                let n = nums()?;
+                json!([n[0], n.get(1).copied().unwrap_or(0.0)])
+            }
+            "createTime" => {
+                let n = nums()?;
+                if self.method == "within" {
+                    json!([n[0]])
+                } else {
+                    let ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).ok()?.as_millis() as f64;
+                    json!([ms - n[0] * 86_400_000.0])
+                }
+            }
+            "rating" => json!(if v.is_empty() || v == "0" { "none".to_string() } else { v.to_string() }),
+            _ if matches!(self.method, "empty" | "not-empty" | "grayscale") => json!(""),
+            _ if v.is_empty() => return None,
+            _ => json!(v),
+        };
+        let mut rule = json!({"property": self.property, "method": self.method, "value": value});
+        if self.property == "fileSize" {
+            rule["unit"] = json!("mb");
+        }
+        Some(rule)
+    }
 }
 
 /// A destructive action waiting for the user to confirm it.
@@ -116,6 +193,7 @@ pub struct App {
     /// Folder being renamed in the sidebar, with the text typed so far.
     renaming: Option<(String, String)>,
     confirm: Option<Confirm>,
+    smart_dialog: Option<SmartDraft>,
 }
 
 impl App {
@@ -155,6 +233,7 @@ impl App {
             actions: Vec::new(),
             renaming: None,
             confirm: None,
+            smart_dialog: None,
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
         app.tile = saved.tile.unwrap_or(app.tile).clamp(TILE_MIN, TILE_MAX);
@@ -390,6 +469,16 @@ impl App {
                     self.flash(format!("Added {n} to {name}"));
                     r
                 }
+                Action::CreateSmart(name, conditions) => lib.create_smart_folder(&name, conditions).map(|id| {
+                    self.scope = Scope::Smart(id);
+                    self.selected.clear();
+                }),
+                Action::DeleteSmart(id) => {
+                    if self.scope == Scope::Smart(id.clone()) {
+                        self.scope = Scope::All;
+                    }
+                    lib.delete_smart_folder(&id)
+                }
                 Action::DeletePermanently(ids) => {
                     self.selected.retain(|s| !ids.contains(s));
                     let r = lib.delete_permanently(&ids);
@@ -561,7 +650,22 @@ impl App {
             ui.spacing_mut().item_spacing.y = 0.0;
             self.nav_rows(ui, &cx);
             ui.add_space(12.0);
-            section(ui, "Smart Folders");
+            if section_with_add(ui, "Smart Folders", "Create Smart Folder") {
+                self.smart_dialog = Some(SmartDraft::default());
+            }
+            for sf in lib.smart_folders() {
+                let count = lib.smart_folder_items(&sf.id).len();
+                let active = self.scope == Scope::Smart(sf.id.clone());
+                let resp = sidebar_row(ui, 0, ic::FOLDER_STAR, &sf.name, (count > 0).then_some(count), active, None);
+                if resp.clicked() {
+                    self.go(Scope::Smart(sf.id.clone()));
+                }
+                resp.context_menu(|ui| {
+                    if ui.button(RichText::new("Delete Smart Folder").color(Color32::from_rgb(0xff, 0x66, 0x67))).clicked() {
+                        self.actions.push(Action::DeleteSmart(sf.id.clone()));
+                    }
+                });
+            }
             let total = lib.all_folders().len();
             section(ui, &format!("Folders ({total})"));
             let filter = self.folder_filter.trim().to_lowercase();
@@ -740,6 +844,26 @@ fn caret_rect(row: Rect, depth: usize) -> Rect {
     Rect::from_center_size(Pos2::new(row.left() + icon_x(depth) - 19.0, row.center().y), vec2(16.0, row.height()))
 }
 
+fn smart_name(lib: &Library, id: &str) -> String {
+    let mut name = String::from("Smart Folder");
+    for sf in lib.smart_folders() {
+        sf.walk(&mut Vec::new(), &mut |f, _| {
+            if f.id == id {
+                name = f.name.clone();
+            }
+        });
+    }
+    name
+}
+
+/// A section header with a + button that shows on hover, like Eagle's.
+fn section_with_add(ui: &mut Ui, title: &str, tip: &str) -> bool {
+    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 25.0), Sense::hover());
+    ui.painter().text(Pos2::new(rect.left() + 20.0, rect.center().y), Align2::LEFT_CENTER, title, font(13.0), t::TEXT_MUTED);
+    let hovered = resp.hovered() || ui.rect_contains_pointer(rect);
+    hovered && icon_button(ui, Pos2::new(rect.right() - 24.0, rect.center().y), ic::PLUS, 15.0, true, tip).clicked()
+}
+
 fn section(ui: &mut Ui, title: &str) {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 25.0), Sense::hover());
     ui.painter().text(
@@ -811,7 +935,9 @@ impl App {
         if icon_button(ui, Pos2::new(x + 27.0, cy), ic::CARET_RIGHT, 17.0, !self.forward.is_empty(), "").clicked() {
             self.go_forward();
         }
-        let title = if self.query.trim().is_empty() {
+        let title = if let Scope::Smart(id) = &self.scope {
+            smart_name(lib, id)
+        } else if self.query.trim().is_empty() {
             self.scope.title(&lib.metadata.folders)
         } else {
             "Search results".into()
@@ -1194,7 +1320,11 @@ impl App {
 impl App {
     fn grid(&mut self, ui: &mut Ui, lib: &Library) {
         let area = ui.max_rect();
-        let order = logic::visible(lib.items(), &lib.metadata.folders, &self.scope, &self.query, &self.filter, self.sort, self.increase);
+        let only: Option<HashSet<String>> = match &self.scope {
+            Scope::Smart(id) => Some(lib.smart_folder_items(id).into_iter().map(|i| i.id.clone()).collect()),
+            _ => None,
+        };
+        let order = logic::visible(lib.items(), &lib.metadata.folders, &self.scope, &self.query, &self.filter, self.sort, self.increase, only.as_ref());
         let items: Vec<&Item> = order.iter().map(|&i| &lib.items()[i]).collect();
         self.order = items.iter().map(|i| i.id.clone()).collect();
 
@@ -1683,6 +1813,94 @@ impl App {
     }
 }
 
+impl App {
+    fn smart_dialog_ui(&mut self, ctx: &egui::Context) {
+        let Some(mut d) = self.smart_dialog.take() else { return };
+        let mut keep = true;
+        let modal = egui::Modal::new(egui::Id::unique("smart-dialog")).show(ctx, |ui| {
+            ui.set_width(520.0);
+            ui.label(RichText::new("New Smart Folder").size(16.0));
+            ui.add_space(6.0);
+            ui.add(TextEdit::singleline(&mut d.name).hint_text("Name").desired_width(f32::INFINITY));
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                ui.label("Match");
+                if ui.selectable_label(!d.any, "all rules").clicked() {
+                    d.any = false;
+                }
+                if ui.selectable_label(d.any, "any rule").clicked() {
+                    d.any = true;
+                }
+            });
+            ui.add_space(4.0);
+            if d.rules.is_empty() {
+                d.rules.push(RuleDraft::default());
+            }
+            let mut remove = None;
+            for (n, r) in d.rules.iter_mut().enumerate() {
+                ui.horizontal(|ui| {
+                    let label = SMART_PROPS.iter().find(|p| p.0 == r.property).map_or("", |p| p.1);
+                    egui::ComboBox::from_id_salt(("prop", n)).selected_text(label).width(130.0).show_ui(ui, |ui| {
+                        for (key, name, methods) in SMART_PROPS {
+                            if ui.selectable_label(r.property == key, name).clicked() {
+                                r.property = key;
+                                r.method = methods[0];
+                            }
+                        }
+                    });
+                    let methods = SMART_PROPS.iter().find(|p| p.0 == r.property).map_or(&[][..], |p| p.2);
+                    egui::ComboBox::from_id_salt(("method", n)).selected_text(r.method).width(110.0).show_ui(ui, |ui| {
+                        for m in methods {
+                            if ui.selectable_label(r.method == *m, *m).clicked() {
+                                r.method = m;
+                            }
+                        }
+                    });
+                    let hint = match r.property {
+                        "tags" => "tag, tag",
+                        "type" => "png, video, font…",
+                        "rating" => "1–5 or 0",
+                        "shape" => "landscape, square…",
+                        "color" => "#FF0000",
+                        "createTime" => "days",
+                        "width" | "fileSize" => "number or a-b",
+                        _ => "text",
+                    };
+                    ui.add(TextEdit::singleline(&mut r.value).hint_text(hint).desired_width(170.0));
+                    if ui.button(ic::X).clicked() {
+                        remove = Some(n);
+                    }
+                });
+            }
+            if let Some(n) = remove {
+                d.rules.remove(n);
+            }
+            if ui.button(format!("{}  Add Rule", ic::PLUS)).clicked() {
+                d.rules.push(RuleDraft::default());
+            }
+            ui.add_space(10.0);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let rules: Vec<serde_json::Value> = d.rules.iter().filter_map(RuleDraft::to_json).collect();
+                let ok = !d.name.trim().is_empty() && !rules.is_empty();
+                if ui.add_enabled(ok, egui::Button::new("Create")).clicked() {
+                    let cond = serde_json::json!({"match": if d.any { "OR" } else { "AND" }, "boolean": "TRUE", "rules": rules});
+                    self.actions.push(Action::CreateSmart(d.name.trim().to_string(), vec![cond]));
+                    keep = false;
+                }
+                if ui.button("Cancel").clicked() {
+                    keep = false;
+                }
+            });
+        });
+        if modal.should_close() {
+            keep = false;
+        }
+        if keep {
+            self.smart_dialog = Some(d);
+        }
+    }
+}
+
 fn divider(ui: &mut Ui) {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 9.0), Sense::hover());
     ui.painter().hline(rect.x_range(), rect.center().y, Stroke::new(1.0, t::DIVIDER));
@@ -1905,6 +2123,9 @@ impl eframe::App for App {
             let r = Rect::from_min_size(pos + vec2(12.0, 12.0), g.size() + vec2(16.0, 8.0));
             painter.rect_filled(r, CornerRadius::same(10), t::PRIMARY);
             painter.galley(r.min + vec2(8.0, 4.0), g, Color32::WHITE);
+        }
+        if self.smart_dialog.is_some() {
+            self.smart_dialog_ui(&ctx);
         }
         if let Some(c) = self.confirm.clone() {
             let (title, detail, label) = match &c {
