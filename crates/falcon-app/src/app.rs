@@ -76,6 +76,18 @@ enum Action {
     DeleteSmart(String),
 }
 
+/// The starting view requested on the command line.
+#[derive(Default)]
+pub struct Launch {
+    /// Items to open (one) or select (several, or with `select`).
+    pub items: Vec<String>,
+    pub select: bool,
+    pub import: Vec<PathBuf>,
+    pub search: Option<String>,
+    pub color: Option<String>,
+    pub tags: bool,
+}
+
 /// A library change requested from the library menu.
 enum Switch {
     Open(PathBuf),
@@ -331,7 +343,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(cc: &eframe::CreationContext<'_>, initial: Option<PathBuf>, open_items: Vec<String>, import: Vec<PathBuf>) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>, initial: Option<PathBuf>, launch: Launch) -> Self {
         t::install(&cc.egui_ctx);
         let mut app = App {
             lib: None,
@@ -393,17 +405,30 @@ impl App {
         if let Some(p) = initial.or(saved.library.filter(|p| p.is_dir())) {
             app.open(p);
         }
-        if !import.is_empty() {
-            app.import(import);
+        if !launch.import.is_empty() {
+            app.import(launch.import);
         }
-        // One item opens in the viewer; several are selected.
-        if let [id] = open_items.as_slice() {
+        // One item opens in the viewer (unless --select); several are selected.
+        if let [id] = launch.items.as_slice()
+            && !launch.select
+        {
             app.viewer = Some(id.clone());
         }
-        if let Some(first) = open_items.first() {
+        if let Some(first) = launch.items.first() {
             app.scroll_to = Some(first.clone());
         }
-        app.selected = open_items;
+        app.selected = launch.items;
+        if let Some(q) = launch.search {
+            app.query = q;
+        }
+        if let Some(rgb) = launch.color.as_deref().and_then(parse_hex) {
+            app.filter.color = Some(ColorQuery::new(rgb));
+            app.color_text = logic::hex(rgb);
+            app.show_filter = true;
+        }
+        if launch.tags {
+            app.scope = Scope::AllTags;
+        }
         app
     }
 
@@ -947,22 +972,33 @@ fn window_drag(ui: &Ui, rect: Rect, id: &str) {
 
 /// A rounded input box with Eagle's field styling.
 fn field(ui: &mut Ui, value: &mut String, hint: &str, height: f32, multiline: bool, id: &str) -> Response {
-    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
-    let p = ui.painter();
-    p.rect_filled(rect, t::FIELD_RADIUS, t::FIELD);
-    p.rect_stroke(rect, t::FIELD_RADIUS, Stroke::new(1.0, t::FIELD_BORDER), StrokeKind::Inside);
-    let inner = rect.shrink2(vec2(11.0, if multiline { 8.0 } else { 0.0 }));
-    let edit = if multiline { TextEdit::multiline(value) } else { TextEdit::singleline(value) };
-    let edit = edit
-        .id_salt(id)
-        .frame(egui::Frame::NONE)
-        .margin(egui::Margin::ZERO)
-        .hint_text(RichText::new(hint).color(t::TEXT_MUTED))
-        .font(font(14.0))
-        .text_color(t::TEXT)
-        .desired_width(inner.width())
-        .align(if multiline { Align2::LEFT_TOP } else { Align2::LEFT_CENTER });
-    ui.put(inner, edit)
+    // A frame around the editor, so the box always contains its text:
+    // single-line fields clip at the edge, multi-line ones grow to fit.
+    egui::Frame::new()
+        .fill(t::FIELD)
+        .stroke(Stroke::new(1.0, t::FIELD_BORDER))
+        .corner_radius(t::FIELD_RADIUS)
+        .inner_margin(egui::Margin::symmetric(11, 8))
+        .show(ui, |ui| {
+            ui.set_min_height(height - 16.0);
+            let width = ui.available_width();
+            let edit = if multiline {
+                TextEdit::multiline(value).desired_rows(2)
+            } else {
+                TextEdit::singleline(value).clip_text(true)
+            };
+            ui.add(
+                edit.id_salt(id)
+                    .frame(egui::Frame::NONE)
+                    .margin(egui::Margin::ZERO)
+                    .hint_text(RichText::new(hint).color(t::TEXT_MUTED))
+                    .font(font(14.0))
+                    .text_color(t::TEXT)
+                    .desired_width(width)
+                    .min_size(vec2(width, height - 16.0)),
+            )
+        })
+        .inner
 }
 
 /// A file-type label like Eagle's: translucent type colour, uppercase.
@@ -2337,7 +2373,7 @@ impl App {
             let (row, _) = ui.allocate_exact_size(vec2(w, d), Sense::hover());
             for (n, c) in item.palettes.iter().enumerate() {
                 let center = Pos2::new(row.left() + d / 2.0 + n as f32 * (d + 6.0), row.center().y);
-                if center.x > row.right() {
+                if center.x + d / 2.0 > row.right() {
                     break;
                 }
                 let color = Color32::from_rgb(c.color[0], c.color[1], c.color[2]);

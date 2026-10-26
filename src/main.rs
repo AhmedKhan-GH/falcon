@@ -31,6 +31,21 @@ enum Command {
         #[arg(long)]
         no_palette: bool,
     },
+    /// Create an empty library
+    New {
+        /// Path of the new .library folder
+        library: PathBuf,
+    },
+    /// Create a folder and print its id
+    Folder {
+        /// Path of the .library folder
+        library: PathBuf,
+        /// Folder name
+        name: String,
+        /// Parent folder id
+        #[arg(long)]
+        parent: Option<String>,
+    },
     /// Print item, folder and tag counts
     Info {
         /// Path of the .library folder
@@ -54,6 +69,14 @@ fn run(cli: Cli) -> falcon_library::Result<()> {
             for file in files {
                 println!("{}", lib.import_file(file, &opts)?);
             }
+        }
+        Command::New { library } => {
+            Library::create(&library)?;
+            println!("{}", library.display());
+        }
+        Command::Folder { library, name, parent } => {
+            let mut lib = Library::open(library)?;
+            println!("{}", lib.create_folder(parent.as_deref(), &name)?);
         }
         Command::Info { library } => {
             let lib = Library::open(library)?;
