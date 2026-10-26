@@ -282,6 +282,31 @@ impl Library {
         Ok(id)
     }
 
+    /// Replaces a smart folder's name and conditions (at any depth) and
+    /// stamps its `modificationTime`, as Eagle's edit dialog does.
+    pub fn update_smart_folder(&mut self, id: &str, name: &str, conditions: Vec<Value>) -> Result<()> {
+        fn find<'a>(list: &'a mut [Value], id: &str) -> Option<&'a mut Value> {
+            for v in list {
+                if v.get("id").and_then(Value::as_str) == Some(id) {
+                    return Some(v);
+                }
+                if let Some(c) = v.get_mut("children").and_then(Value::as_array_mut)
+                    && let Some(found) = find(c, id)
+                {
+                    return Some(found);
+                }
+            }
+            None
+        }
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64);
+        if let Some(v) = find(&mut self.metadata.smart_folders, id) {
+            v["name"] = json!(name);
+            v["conditions"] = json!(conditions);
+            v["modificationTime"] = json!(now);
+        }
+        self.save_metadata()
+    }
+
     /// Removes a smart folder (at any depth) with its children.
     pub fn delete_smart_folder(&mut self, id: &str) -> Result<()> {
         fn remove(list: &mut Vec<Value>, id: &str) -> bool {

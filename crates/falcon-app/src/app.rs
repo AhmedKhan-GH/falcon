@@ -57,6 +57,7 @@ enum Action {
     DeletePermanently(Vec<String>),
     EmptyTrash,
     CreateSmart(String, Vec<serde_json::Value>),
+    UpdateSmart(String, String, Vec<serde_json::Value>),
     RenameTag(String, String),
     DeleteTag(String),
     StarTag(String, bool),
@@ -113,9 +114,25 @@ impl Default for RuleDraft {
 /// The smart-folder dialog's state.
 #[derive(Clone, Default)]
 struct SmartDraft {
+    /// The smart folder being edited; `None` creates a new one.
+    editing: Option<String>,
     name: String,
     any: bool,
     rules: Vec<RuleDraft>,
+}
+
+impl SmartDraft {
+    /// Fills the dialog from a stored smart folder's first condition.
+    fn from_folder(sf: &falcon_library::smart::SmartFolder) -> SmartDraft {
+        let cond = sf.conditions.first().cloned().unwrap_or_default();
+        let any = cond.get("match").and_then(|m| m.as_str()) == Some("OR");
+        let rules = cond
+            .get("rules")
+            .and_then(|r| r.as_array())
+            .map(|rules| rules.iter().filter_map(RuleDraft::from_json).collect())
+            .unwrap_or_default();
+        SmartDraft { editing: Some(sf.id.clone()), name: sf.name.clone(), any, rules }
+    }
 }
 
 /// Properties offered in the dialog, with their methods (Eagle's names).
@@ -135,6 +152,36 @@ const SMART_PROPS: [(&str, &str, &[&str]); 12] = [
 ];
 
 impl RuleDraft {
+    /// Reads a stored rule back into the dialog's text form.
+    fn from_json(r: &serde_json::Value) -> Option<RuleDraft> {
+        let prop = r.get("property")?.as_str()?;
+        let (property, _, methods) = SMART_PROPS.iter().find(|p| p.0 == prop)?;
+        let m = r.get("method").and_then(|m| m.as_str()).unwrap_or("");
+        let method = methods.iter().find(|x| **x == m).copied().unwrap_or(methods[0]);
+        let v = r.get("value").cloned().unwrap_or_default();
+        let num = |x: &serde_json::Value| x.as_f64().map(|n| if n.fract() == 0.0 { format!("{n:.0}") } else { n.to_string() });
+        let value = match (prop, &v) {
+            ("createTime", serde_json::Value::Array(a)) => {
+                let n = a.first().and_then(|x| x.as_f64()).unwrap_or(0.0);
+                if method == "within" {
+                    format!("{n:.0}")
+                } else {
+                    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0.0, |d| d.as_millis() as f64);
+                    format!("{:.0}", ((now - n) / 86_400_000.0).max(0.0))
+                }
+            }
+            ("width" | "fileSize", serde_json::Value::Array(a)) => {
+                let nums: Vec<String> = a.iter().filter_map(num).collect();
+                if method == "between" { nums.join("-") } else { nums.first().cloned().unwrap_or_default() }
+            }
+            (_, serde_json::Value::Array(a)) => a.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>().join(", "),
+            ("rating", serde_json::Value::String(s)) if s == "none" => "0".into(),
+            (_, serde_json::Value::String(s)) => s.clone(),
+            _ => String::new(),
+        };
+        Some(RuleDraft { property, method, value })
+    }
+
     /// The rule in Eagle's JSON form, or `None` when the value is unusable.
     fn to_json(&self) -> Option<serde_json::Value> {
         use serde_json::json;
@@ -232,6 +279,9 @@ pub struct App {
     confirm: Option<Confirm>,
     smart_dialog: Option<SmartDraft>,
     view: ViewState,
+    /// Focus the inspector's title field next frame (F2).
+    focus_title: bool,
+    focus_search: bool,
     /// Tag being renamed on the All Tags page, with the new name so far.
     tag_rename: Option<(String, String)>,
     tag_filter: String,
@@ -276,6 +326,8 @@ impl App {
             confirm: None,
             smart_dialog: None,
             view: ViewState::default(),
+            focus_title: false,
+            focus_search: false,
             tag_rename: None,
             tag_filter: String::new(),
         };
@@ -413,6 +465,20 @@ impl App {
         self.flash(msg);
     }
 
+    /// ⌘C: puts the selected originals on the clipboard as files.
+    fn copy_selection(&mut self) {
+        let Some(shared) = self.lib.clone() else { return };
+        let paths: Vec<PathBuf> = {
+            let lib = lock(&shared);
+            self.selected.iter().filter_map(|id| lib.item(id)).map(|i| i.original_path(lib.root())).collect()
+        };
+        if let Ok(mut clip) = arboard::Clipboard::new()
+            && clip.set().file_list(&paths).is_ok()
+        {
+            self.flash(format!("Copied {} file{}", paths.len(), if paths.len() == 1 { "" } else { "s" }));
+        }
+    }
+
     /// ⌘V in the grid: imports copied files, or a copied image as a PNG.
     fn paste(&mut self) {
         let Ok(mut clip) = arboard::Clipboard::new() else { return };
@@ -437,6 +503,50 @@ impl App {
     fn keyboard(&mut self, ctx: &egui::Context) {
         if ctx.memory(|m| m.focused().is_some()) {
             return;
+        }
+        let (f2, find, back, fwd, zin, zout, newf, copy) = ctx.input(|i| {
+            let c = i.modifiers.command;
+            (
+                i.key_pressed(Key::F2),
+                c && i.key_pressed(Key::F),
+                c && i.key_pressed(Key::OpenBracket),
+                c && i.key_pressed(Key::CloseBracket),
+                c && (i.key_pressed(Key::Equals) || i.key_pressed(Key::Plus)),
+                c && i.key_pressed(Key::Minus),
+                c && i.modifiers.shift && i.key_pressed(Key::N),
+                c && i.key_pressed(Key::C),
+            )
+        });
+        if self.viewer.is_none() {
+            if f2 && self.selected.len() == 1 {
+                self.show_inspector = true;
+                self.focus_title = true;
+            }
+            if find {
+                self.focus_search = true;
+            }
+            if back {
+                self.go_back();
+            }
+            if fwd {
+                self.go_forward();
+            }
+            if zin {
+                self.tile = (self.tile + 20.0).min(TILE_MAX);
+            }
+            if zout {
+                self.tile = (self.tile - 20.0).max(TILE_MIN);
+            }
+            if newf {
+                let parent = match &self.scope {
+                    Scope::Folder(id) => Some(id.clone()),
+                    _ => None,
+                };
+                self.actions.push(Action::CreateFolder { parent });
+            }
+            if copy && !self.selected.is_empty() {
+                self.copy_selection();
+            }
         }
         let paste = ctx.input(|i| {
             i.events.iter().any(|e| matches!(e, egui::Event::Paste(_)))
@@ -555,6 +665,7 @@ impl App {
                     self.scope = Scope::Smart(id);
                     self.selected.clear();
                 }),
+                Action::UpdateSmart(id, name, conditions) => lib.update_smart_folder(&id, &name, conditions),
                 Action::DeleteSmart(id) => {
                     if self.scope == Scope::Smart(id.clone()) {
                         self.scope = Scope::All;
@@ -758,6 +869,9 @@ impl App {
                     self.go(Scope::Smart(sf.id.clone()));
                 }
                 resp.context_menu(|ui| {
+                    if ui.button("Edit…").clicked() {
+                        self.smart_dialog = Some(SmartDraft::from_folder(&sf));
+                    }
                     if ui.button(RichText::new("Delete Smart Folder").color(Color32::from_rgb(0xff, 0x66, 0x67))).clicked() {
                         self.actions.push(Action::DeleteSmart(sf.id.clone()));
                     }
@@ -1081,7 +1195,7 @@ impl App {
         icon(ui, Pos2::new(rect.left() + 28.0, rect.center().y + 1.0), ic::CARET_DOWN, 9.0, t::TEXT_MUTED);
         icon(ui, Pos2::new(rect.right() - 17.0, rect.center().y), ic::CAMERA, 17.0, t::TEXT_DISABLED);
         let inner = Rect::from_min_max(Pos2::new(rect.left() + 40.0, rect.top()), Pos2::new(rect.right() - 32.0, rect.bottom()));
-        ui.put(
+        let resp = ui.put(
             inner,
             TextEdit::singleline(&mut self.query)
                 .id_salt("search")
@@ -1092,6 +1206,9 @@ impl App {
                 .align(Align2::LEFT_CENTER)
                 .desired_width(inner.width()),
         );
+        if std::mem::take(&mut self.focus_search) {
+            resp.request_focus();
+        }
     }
 
     fn zoom_slider(&mut self, ui: &mut Ui, left_center: Pos2) {
@@ -1847,6 +1964,9 @@ impl App {
         let mut changed: Option<Item> = None;
         let edit = self.edit.as_mut().unwrap();
         let r = field(ui, &mut edit.name, "Title", 33.0, false, "item-name");
+        if std::mem::take(&mut self.focus_title) {
+            r.request_focus();
+        }
         if r.lost_focus() && edit.name.trim() != item.name && !edit.name.trim().is_empty() {
             let mut it = item.clone();
             it.name = edit.name.trim().to_string();
@@ -1984,7 +2104,7 @@ impl App {
         let mut keep = true;
         let modal = egui::Modal::new(egui::Id::unique("smart-dialog")).show(ctx, |ui| {
             ui.set_width(520.0);
-            ui.label(RichText::new("New Smart Folder").size(16.0));
+            ui.label(RichText::new(if d.editing.is_some() { "Edit Smart Folder" } else { "New Smart Folder" }).size(16.0));
             ui.add_space(6.0);
             ui.add(TextEdit::singleline(&mut d.name).hint_text("Name").desired_width(f32::INFINITY));
             ui.add_space(6.0);
@@ -2047,9 +2167,14 @@ impl App {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let rules: Vec<serde_json::Value> = d.rules.iter().filter_map(RuleDraft::to_json).collect();
                 let ok = !d.name.trim().is_empty() && !rules.is_empty();
-                if ui.add_enabled(ok, egui::Button::new("Create")).clicked() {
+                let label = if d.editing.is_some() { "Save" } else { "Create" };
+                if ui.add_enabled(ok, egui::Button::new(label)).clicked() {
                     let cond = serde_json::json!({"match": if d.any { "OR" } else { "AND" }, "boolean": "TRUE", "rules": rules});
-                    self.actions.push(Action::CreateSmart(d.name.trim().to_string(), vec![cond]));
+                    let name = d.name.trim().to_string();
+                    self.actions.push(match d.editing.clone() {
+                        Some(id) => Action::UpdateSmart(id, name, vec![cond]),
+                        None => Action::CreateSmart(name, vec![cond]),
+                    });
                     keep = false;
                 }
                 if ui.button("Cancel").clicked() {
