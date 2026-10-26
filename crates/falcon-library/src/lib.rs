@@ -7,6 +7,7 @@ pub mod ids;
 pub mod model;
 pub mod palette;
 pub mod search;
+pub mod smart;
 
 pub use error::{Error, Result};
 pub use library::Library;
