@@ -1,3 +1,5 @@
 /target
 /fixtures/
 /.idea/workspace.xml
+/docs/book/
+/docs/src/api/

@@ -1,0 +1,7 @@
+[book]
+title = "Falcon"
+authors = ["Ahmed Khan"]
+language = "en"
+src = "src"
+
+[output.html]
