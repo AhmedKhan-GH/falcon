@@ -172,8 +172,35 @@ pub fn render_svg(data: &[u8], max: Option<u32>) -> Result<DynamicImage, ThumbEr
 
 /// Scales `img` per [`target_size`]; returns it unchanged when it fits.
 pub fn resize(img: DynamicImage, max: u32) -> DynamicImage {
-    let (w, h) = target_size(img.width(), img.height(), max);
-    if (w, h) == (img.width(), img.height()) { img } else { img.resize_exact(w, h, FilterType::Lanczos3) }
+    resize_with(img, max, RESIZE_FILTER)
+}
+
+/// Filter for each resampling step. Chromium draws with
+/// `imageSmoothingQuality = 'high'`, a cubic filter in Skia.
+const RESIZE_FILTER: FilterType = FilterType::CatmullRom;
+
+/// [`resize`] with an explicit filter.
+///
+/// Like Eagle, an image more than twice the target size is first halved
+/// repeatedly (never below the target) while it is over 1.5 times the target,
+/// and only then drawn at the final size.
+pub fn resize_with(img: DynamicImage, max: u32, filter: FilterType) -> DynamicImage {
+    let (tw, th) = target_size(img.width(), img.height(), max);
+    let (w, h) = (img.width(), img.height());
+    if (tw, th) == (w, h) {
+        return img;
+    }
+    if w <= tw * 2 && h <= th * 2 {
+        return img.resize_exact(tw, th, filter);
+    }
+    let (mut cw, mut ch) = (w, h);
+    let mut cur = img;
+    while f64::from(cw) > f64::from(tw) * 1.5 || f64::from(ch) > f64::from(th) * 1.5 {
+        cw = tw.max(cw / 2);
+        ch = th.max(ch / 2);
+        cur = cur.resize_exact(cw, ch, filter);
+    }
+    cur.resize_exact(tw, th, filter)
 }
 
 /// Encodes `img` as Eagle does: lossy WebP at quality 75, or JPEG at 0.7 when
