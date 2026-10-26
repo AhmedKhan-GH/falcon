@@ -8,3 +8,5 @@ pub mod palette;
 
 pub use error::{Error, Result};
 pub use library::Library;
+pub mod import;
+pub mod thumbnail;

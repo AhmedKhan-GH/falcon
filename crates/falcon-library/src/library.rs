@@ -30,6 +30,8 @@ pub struct Library {
     /// `saved-filters.json` (shape not yet observed; raw JSON).
     pub saved_filters: Vec<Value>,
     items: Vec<Item>,
+    /// Last `modificationTime` handed out by an import, to keep them strictly increasing.
+    last_import_ms: u64,
 }
 
 impl Library {
@@ -56,7 +58,7 @@ impl Library {
             items.push(Item::from_json_str(&text).map_err(|e| Error::json(&file, e))?);
         }
         items.sort_by(|a, b| a.id.cmp(&b.id));
-        Ok(Library { root, metadata, mtime, tags, saved_filters, items })
+        Ok(Library { root, metadata, mtime, tags, saved_filters, items, last_import_ms: 0 })
     }
 
     /// The library's root folder.
@@ -140,6 +142,33 @@ impl Library {
             write_json(&out.join(METADATA), item)?;
         }
         Ok(())
+    }
+}
+
+impl Library {
+    /// An import timestamp (ms) that is at least `now` and strictly greater
+    /// than the previous one handed out.
+    pub(crate) fn next_import_time(&mut self, now: u64) -> u64 {
+        self.last_import_ms = now.max(self.last_import_ms + 1);
+        self.last_import_ms
+    }
+
+    /// Writes `item`'s `metadata.json` in place, adds it to the in-memory
+    /// list (kept sorted by id) and records it in `mtime.json`, whose `all`
+    /// becomes the item count.
+    pub(crate) fn register_item(&mut self, item: Item) -> Result<()> {
+        write_json(&item.info_dir(&self.root).join(METADATA), &item)?;
+        let stamp = item.last_modified;
+        match self.mtime.entries.iter_mut().find(|(id, _)| *id == item.id) {
+            Some(entry) => entry.1 = stamp,
+            None => self.mtime.entries.push((item.id.clone(), stamp)),
+        }
+        match self.items.binary_search_by(|i| i.id.cmp(&item.id)) {
+            Ok(pos) => self.items[pos] = item,
+            Err(pos) => self.items.insert(pos, item),
+        }
+        self.mtime.all = Some(self.items.len() as u64);
+        write_json(&self.root.join(MTIME), &self.mtime)
     }
 }
 

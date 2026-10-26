@@ -12,4 +12,5 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+clap = { version = "4.6.7", features = ["derive"] }
 falcon-library = { path = "crates/falcon-library" }

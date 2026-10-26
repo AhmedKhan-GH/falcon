@@ -30,6 +30,14 @@ pub enum Error {
     /// every file onto itself.
     #[error("cannot save {0} onto itself")]
     SaveOntoSelf(PathBuf),
+    /// The file cannot be imported (empty, missing, unknown folder, ...).
+    #[error("cannot import {path}: {reason}")]
+    Import {
+        /// The file being imported.
+        path: PathBuf,
+        /// Why it was refused.
+        reason: String,
+    },
 }
 
 /// Convenience alias.
