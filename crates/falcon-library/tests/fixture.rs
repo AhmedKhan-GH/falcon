@@ -88,3 +88,16 @@ fn refuses_to_save_onto_itself() {
     assert!(matches!(lib.save_to(&copy), Err(falcon_library::Error::SaveOntoSelf(_))));
     assert_eq!(fs::read(copy.join("metadata.json")).unwrap(), before);
 }
+
+#[test]
+fn creates_an_empty_library() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("New.library");
+    let mut lib = Library::create(&path).unwrap();
+    assert!(lib.items().is_empty());
+    assert_eq!(fs::read_to_string(path.join("tags.json")).unwrap(), r#"{"historyTags":[],"starredTags":[]}"#);
+    assert_eq!(fs::read_to_string(path.join("mtime.json")).unwrap(), r#"{"all":0}"#);
+    lib.create_folder(None, "First").unwrap();
+    assert_eq!(Library::open(&path).unwrap().all_folders().len(), 1);
+    assert!(Library::create(&path).is_err(), "refuses an existing folder");
+}

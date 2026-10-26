@@ -61,6 +61,35 @@ impl Library {
         Ok(Library { root, metadata, mtime, tags, saved_filters, items, last_import_ms: 0 })
     }
 
+    /// Creates an empty library at `path` (normally ending in `.library`)
+    /// with the files Eagle expects, and opens it. Refuses a folder that
+    /// already exists.
+    pub fn create(path: impl AsRef<Path>) -> Result<Library> {
+        let root = path.as_ref().to_path_buf();
+        if root.exists() {
+            return Err(Error::Io {
+                path: root.clone(),
+                source: std::io::Error::new(std::io::ErrorKind::AlreadyExists, "already exists"),
+            });
+        }
+        mkdir(&root.join(IMAGES))?;
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64);
+        let metadata = LibraryMetadata {
+            folders: Vec::new(),
+            smart_folders: Vec::new(),
+            quick_access: Vec::new(),
+            tags_groups: Vec::new(),
+            modification_time: now,
+            application_version: "4.0.0".into(),
+            extra: Default::default(),
+        };
+        write_json(&root.join(METADATA), &metadata)?;
+        write_json(&root.join(MTIME), &MtimeIndex { entries: Vec::new(), all: Some(0) })?;
+        write_json(&root.join(TAGS), &Tags::default())?;
+        write_json(&root.join(FILTERS), &Vec::<Value>::new())?;
+        Library::open(root)
+    }
+
     /// The library's root folder.
     pub fn root(&self) -> &Path {
         &self.root
