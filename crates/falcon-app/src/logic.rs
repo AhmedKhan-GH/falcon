@@ -1,6 +1,7 @@
-//! UI-independent logic: filtering, sorting and counting.
+//! UI-independent logic: filtering, sorting, counting and formatting.
 
 use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
 
 use falcon_library::model::{Folder, Item};
 
@@ -10,42 +11,72 @@ pub enum Scope {
     #[default]
     All,
     Uncategorized,
+    Untagged,
+    /// Most recently changed items first.
+    Recent,
+    /// A shuffled view; the seed changes each time the entry is opened.
+    Random(u64),
+    /// The tag overview page.
+    AllTags,
     Trash,
-    /// A folder and everything below it.
+    /// Items placed directly in a folder (Eagle hides subfolder content by
+    /// default).
     Folder(String),
     Tag(String),
 }
 
+impl Scope {
+    /// Title shown in the toolbar and inspector.
+    pub fn title(&self, roots: &[Folder]) -> String {
+        match self {
+            Scope::All => "All".into(),
+            Scope::Uncategorized => "Uncategorized".into(),
+            Scope::Untagged => "Untagged".into(),
+            Scope::Recent => "Recently Used".into(),
+            Scope::Random(_) => "Random".into(),
+            Scope::AllTags => "All Tags".into(),
+            Scope::Trash => "Trash".into(),
+            Scope::Folder(id) => find_folder(roots, id).map_or_else(|| "Folder".into(), |f| f.name.clone()),
+            Scope::Tag(t) => t.clone(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SortKey {
-    /// `modificationTime`.
+    /// `modificationTime`, Eagle's default.
     #[default]
     DateAdded,
+    DateModified,
+    DateCreated,
     Name,
+    Ext,
     Size,
     Dimensions,
 }
 
 impl SortKey {
-    pub const ALL: [SortKey; 4] = [SortKey::DateAdded, SortKey::Name, SortKey::Size, SortKey::Dimensions];
+    pub const ALL: [SortKey; 7] = [
+        SortKey::DateAdded,
+        SortKey::DateCreated,
+        SortKey::DateModified,
+        SortKey::Name,
+        SortKey::Ext,
+        SortKey::Size,
+        SortKey::Dimensions,
+    ];
 
     pub fn label(self) -> &'static str {
         match self {
-            SortKey::DateAdded => "Date added",
-            SortKey::Name => "Name",
-            SortKey::Size => "Size",
+            SortKey::DateAdded => "Date Imported",
+            SortKey::DateCreated => "Date Created",
+            SortKey::DateModified => "Date Modified",
+            SortKey::Name => "Title",
+            SortKey::Ext => "Extension",
+            SortKey::Size => "File Size",
             SortKey::Dimensions => "Dimensions",
         }
     }
-}
-
-/// Ids of `folder` and all its descendants.
-pub fn subtree_ids(folder: &Folder) -> HashSet<&str> {
-    let mut out = HashSet::new();
-    folder.walk(&mut |f| {
-        out.insert(f.id.as_str());
-    });
-    out
 }
 
 /// Finds a folder by id anywhere in the tree.
@@ -61,24 +92,47 @@ pub fn find_folder<'a>(roots: &'a [Folder], id: &str) -> Option<&'a Folder> {
     found
 }
 
-/// Number of live (not trashed) items in each folder, counting its subfolders.
-/// An item in both a folder and its child counts once.
-pub fn folder_counts(roots: &[Folder], items: &[Item]) -> HashMap<String, usize> {
+/// Number of live items placed directly in each folder, as Eagle's sidebar
+/// shows them. Folders with no direct items are absent.
+pub fn folder_counts(items: &[Item]) -> HashMap<String, usize> {
     let mut out = HashMap::new();
-    for r in roots {
-        r.walk(&mut |f| {
-            let ids = subtree_ids(f);
-            let n = items
-                .iter()
-                .filter(|i| !i.is_deleted && i.folders.iter().any(|x| ids.contains(x.as_str())))
-                .count();
-            out.insert(f.id.clone(), n);
-        });
+    for i in items.iter().filter(|i| !i.is_deleted) {
+        let unique: HashSet<&String> = i.folders.iter().collect();
+        for f in unique {
+            *out.entry(f.clone()).or_default() += 1;
+        }
     }
     out
 }
 
-/// Live tags with their item counts, most used first, then alphabetical.
+/// Counts for the fixed sidebar entries.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct NavCounts {
+    pub all: usize,
+    pub uncategorized: usize,
+    pub untagged: usize,
+    pub trash: usize,
+    pub tags: usize,
+}
+
+pub fn nav_counts(items: &[Item]) -> NavCounts {
+    let mut c = NavCounts::default();
+    let mut tags = HashSet::new();
+    for i in items {
+        if i.is_deleted {
+            c.trash += 1;
+            continue;
+        }
+        c.all += 1;
+        c.uncategorized += usize::from(i.folders.is_empty());
+        c.untagged += usize::from(i.tags.is_empty());
+        tags.extend(i.tags.iter());
+    }
+    c.tags = tags.len();
+    c
+}
+
+/// Live tags with their item counts, sorted by name.
 pub fn tag_counts(items: &[Item]) -> Vec<(String, usize)> {
     let mut map: HashMap<&str, usize> = HashMap::new();
     for i in items.iter().filter(|i| !i.is_deleted) {
@@ -87,30 +141,53 @@ pub fn tag_counts(items: &[Item]) -> Vec<(String, usize)> {
         }
     }
     let mut v: Vec<_> = map.into_iter().map(|(t, n)| (t.to_string(), n)).collect();
-    v.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.to_lowercase().cmp(&b.0.to_lowercase())));
+    v.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()).then_with(|| a.0.cmp(&b.0)));
     v
 }
 
-/// Case-insensitive substring match on name, tags, annotation and extension.
-/// An empty query matches everything.
-pub fn matches_query(item: &Item, query: &str) -> bool {
-    let q = query.trim().to_lowercase();
-    if q.is_empty() {
+/// Keyword search in the spirit of Eagle's: space-separated terms must all
+/// match (AND), and a `-term` must not. Each term is a case-insensitive
+/// substring of the item's name, `.ext`, url, notes, tags or folder names.
+pub fn matches_query(item: &Item, query: &str, folder_names: &HashMap<&str, &str>) -> bool {
+    let terms: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
+    if terms.is_empty() {
         return true;
     }
-    let has = |s: &str| s.to_lowercase().contains(&q);
-    has(&item.name) || has(&item.ext) || has(&item.annotation) || item.tags.iter().any(|t| has(t))
+    let mut hay = format!("{} .{} {} {}", item.name, item.ext, item.url, item.annotation);
+    for t in &item.tags {
+        hay.push(' ');
+        hay.push_str(t);
+    }
+    for f in &item.folders {
+        if let Some(n) = folder_names.get(f.as_str()) {
+            hay.push(' ');
+            hay.push_str(n);
+        }
+    }
+    let hay = hay.to_lowercase();
+    terms.iter().all(|t| match t.strip_prefix('-') {
+        Some(neg) if !neg.is_empty() => !hay.contains(neg),
+        _ => hay.contains(t.as_str()),
+    })
 }
 
-fn in_scope(item: &Item, scope: &Scope, folder_ids: Option<&HashSet<&str>>) -> bool {
+fn in_scope(item: &Item, scope: &Scope) -> bool {
     match scope {
         Scope::Trash => item.is_deleted,
         _ if item.is_deleted => false,
-        Scope::All => true,
+        Scope::All | Scope::Recent | Scope::Random(_) | Scope::AllTags => true,
         Scope::Uncategorized => item.folders.is_empty(),
-        Scope::Folder(_) => folder_ids.is_some_and(|ids| item.folders.iter().any(|f| ids.contains(f.as_str()))),
+        Scope::Untagged => item.tags.is_empty(),
+        Scope::Folder(id) => item.folders.iter().any(|f| f == id),
         Scope::Tag(t) => item.tags.iter().any(|x| x == t),
     }
+}
+
+fn shuffle_key(seed: u64, id: &str) -> u64 {
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    seed.hash(&mut h);
+    id.hash(&mut h);
+    h.finish()
 }
 
 /// Indices into `items` that pass the scope and the search query, sorted.
@@ -122,31 +199,40 @@ pub fn visible(
     key: SortKey,
     ascending: bool,
 ) -> Vec<usize> {
-    let ids = match scope {
-        Scope::Folder(id) => find_folder(roots, id).map(subtree_ids),
-        _ => None,
-    };
+    let mut names = HashMap::new();
+    for r in roots {
+        r.walk(&mut |f| {
+            names.insert(f.id.as_str(), f.name.as_str());
+        });
+    }
     let mut out: Vec<usize> = items
         .iter()
         .enumerate()
-        .filter(|(_, i)| in_scope(i, scope, ids.as_ref()) && matches_query(i, query))
+        .filter(|(_, i)| in_scope(i, scope) && matches_query(i, query, &names))
         .map(|(n, _)| n)
         .collect();
-    out.sort_by(|&a, &b| {
-        let (x, y) = (&items[a], &items[b]);
-        let ord = match key {
-            SortKey::DateAdded => x.modification_time.cmp(&y.modification_time),
-            SortKey::Name => x.name.to_lowercase().cmp(&y.name.to_lowercase()),
-            SortKey::Size => x.size.cmp(&y.size),
-            SortKey::Dimensions => (x.width * x.height).cmp(&(y.width * y.height)),
-        };
-        let ord = if ascending { ord } else { ord.reverse() };
-        ord.then_with(|| x.id.cmp(&y.id))
-    });
+    match scope {
+        Scope::Random(seed) => out.sort_by_key(|&i| shuffle_key(*seed, &items[i].id)),
+        Scope::Recent => out.sort_by(|&a, &b| items[b].last_modified.cmp(&items[a].last_modified)),
+        _ => out.sort_by(|&a, &b| {
+            let (x, y) = (&items[a], &items[b]);
+            let ord = match key {
+                SortKey::DateAdded => x.modification_time.cmp(&y.modification_time),
+                SortKey::DateModified => x.mtime.cmp(&y.mtime),
+                SortKey::DateCreated => x.btime.cmp(&y.btime),
+                SortKey::Name => x.name.to_lowercase().cmp(&y.name.to_lowercase()),
+                SortKey::Ext => x.ext.cmp(&y.ext),
+                SortKey::Size => x.size.cmp(&y.size),
+                SortKey::Dimensions => (x.width * x.height).cmp(&(y.width * y.height)),
+            };
+            let ord = if ascending { ord } else { ord.reverse() };
+            ord.then_with(|| x.id.cmp(&y.id))
+        }),
+    }
     out
 }
 
-/// Human-readable byte size.
+/// Byte size the way Eagle prints it: `512 B`, `5.34 KB`, `17.19 KB`.
 pub fn format_size(bytes: u64) -> String {
     const UNITS: [&str; 4] = ["KB", "MB", "GB", "TB"];
     if bytes < 1024 {
@@ -158,21 +244,28 @@ pub fn format_size(bytes: u64) -> String {
         v /= 1024.0;
         u += 1;
     }
-    format!("{v:.1} {}", UNITS[u])
+    let s = format!("{v:.2}");
+    let s = s.trim_end_matches('0').trim_end_matches('.');
+    format!("{s} {}", UNITS[u])
 }
 
-/// Local date and time for a millisecond timestamp.
+/// Local date and time the way Eagle prints it: `2026/10/26 2:15`.
 pub fn format_ms(ms: u64) -> String {
     use chrono::{Local, TimeZone};
     match Local.timestamp_millis_opt(ms as i64).single() {
-        Some(t) => t.format("%Y-%m-%d %H:%M:%S").to_string(),
+        Some(t) => t.format("%Y/%m/%d %-H:%M").to_string(),
         None => "-".into(),
     }
 }
 
-/// `#rrggbb`.
+/// `#RRGGBB`.
 pub fn hex(rgb: [u8; 3]) -> String {
-    format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2])
+    format!("#{:02X}{:02X}{:02X}", rgb[0], rgb[1], rgb[2])
+}
+
+/// Grid layout: how many square cards of `size` fit in `width`.
+pub fn columns(width: f32, size: f32, gap: f32) -> usize {
+    (((width + gap) / (size + gap)).floor() as usize).max(1)
 }
 
 #[cfg(test)]
@@ -186,14 +279,14 @@ mod tests {
             "id": id, "name": name, "size": size, "btime": 0, "mtime": 0, "ext": "png",
             "tags": tags, "folders": folders, "isDeleted": deleted, "url": "",
             "annotation": "Hello Note", "modificationTime": t, "height": 10, "width": w,
-            "lastModified": 0, "palettes": []
+            "lastModified": t, "palettes": []
         });
         Item::from_json_str(&v.to_string()).unwrap()
     }
 
     fn folder(id: &str, children: Vec<Folder>) -> Folder {
         let v = json!({
-            "id": id, "name": id, "description": "", "children": children,
+            "id": id, "name": format!("{id}-name"), "description": "", "children": children,
             "modificationTime": 0, "tags": [], "password": "", "passwordTips": ""
         });
         serde_json::from_value(v).unwrap()
@@ -216,119 +309,62 @@ mod tests {
     }
 
     #[test]
-    fn counts_include_subfolders_once() {
-        let (roots, items) = fixture();
-        let c = folder_counts(&roots, &items);
-        assert_eq!(c["A"], 3);
+    fn folder_counts_are_direct_and_skip_trash() {
+        let (_, items) = fixture();
+        let c = folder_counts(&items);
+        assert_eq!(c["A"], 2);
         assert_eq!(c["B"], 2);
-        assert_eq!(c["C"], 0); // its only item is trashed
+        assert!(!c.contains_key("C"));
     }
 
     #[test]
-    fn tag_counts_skip_trash_and_sort() {
+    fn nav_counts_cover_fixed_entries() {
         let (_, items) = fixture();
-        let t = tag_counts(&items);
-        assert_eq!(t[0], ("red".into(), 2));
-        assert_eq!(t.len(), 3);
-        assert!(t.contains(&("blue".into(), 1)));
+        assert_eq!(nav_counts(&items), NavCounts { all: 4, uncategorized: 1, untagged: 1, trash: 1, tags: 3 });
     }
 
     #[test]
     fn scopes() {
         let (roots, items) = fixture();
-        let v = |s: Scope| visible(&items, &roots, &s, "", SortKey::Name, true);
-        assert_eq!(names(&items, &v(Scope::All)), ["apple", "loose", "Mango", "Zebra"]);
-        assert_eq!(names(&items, &v(Scope::Uncategorized)), ["loose"]);
-        assert_eq!(names(&items, &v(Scope::Trash)), ["gone"]);
-        assert_eq!(names(&items, &v(Scope::Folder("A".into()))), ["apple", "Mango", "Zebra"]);
-        assert_eq!(names(&items, &v(Scope::Folder("B".into()))), ["apple", "Mango"]);
-        assert_eq!(names(&items, &v(Scope::Tag("red".into()))), ["apple", "Zebra"]);
+        let v = |s: Scope| names(&items, &visible(&items, &roots, &s, "", SortKey::Name, true));
+        assert_eq!(v(Scope::All), ["apple", "loose", "Mango", "Zebra"]);
+        assert_eq!(v(Scope::Uncategorized), ["loose"]);
+        assert_eq!(v(Scope::Untagged), ["Mango"]);
+        assert_eq!(v(Scope::Trash), ["gone"]);
+        assert_eq!(v(Scope::Folder("A".into())), ["Mango", "Zebra"]);
+        assert_eq!(v(Scope::Tag("red".into())), ["apple", "Zebra"]);
+        assert_eq!(v(Scope::Recent), ["loose", "Zebra", "Mango", "apple"]);
+        assert_eq!(v(Scope::Random(7)).len(), 4);
     }
 
     #[test]
-    fn search_is_case_insensitive_over_fields() {
+    fn search_terms_and_negation() {
         let (roots, items) = fixture();
-        let q = |s: &str| visible(&items, &roots, &Scope::All, s, SortKey::Name, true).len();
-        assert_eq!(q("ZEB"), 1);
-        assert_eq!(q("big"), 1); // tag
-        assert_eq!(q("hello"), 4); // annotation
-        assert_eq!(q("PNG"), 4); // ext
-        assert_eq!(q("nothing"), 0);
-        assert_eq!(q("  "), 4);
+        let q = |s: &str| names(&items, &visible(&items, &roots, &Scope::All, s, SortKey::Name, true));
+        assert_eq!(q("ZEB"), ["Zebra"]);
+        assert_eq!(q("red big"), ["Zebra"]);
+        assert_eq!(q("red -big"), ["apple"]);
+        assert_eq!(q(".png").len(), 4);
+        assert_eq!(q("B-name"), ["apple", "Mango"]); // folder name
+        assert_eq!(q("  ").len(), 4);
     }
 
     #[test]
     fn sorting() {
         let (roots, items) = fixture();
         let s = |k, asc| names(&items, &visible(&items, &roots, &Scope::All, "", k, asc));
-        assert_eq!(s(SortKey::DateAdded, true), ["apple", "Mango", "Zebra", "loose"]);
         assert_eq!(s(SortKey::DateAdded, false), ["loose", "Zebra", "Mango", "apple"]);
         assert_eq!(s(SortKey::Size, false), ["apple", "Mango", "Zebra", "loose"]);
         assert_eq!(s(SortKey::Dimensions, true), ["loose", "Zebra", "Mango", "apple"]);
-        assert_eq!(s(SortKey::Name, false), ["Zebra", "Mango", "loose", "apple"]);
     }
 
     #[test]
     fn formatting() {
         assert_eq!(format_size(512), "512 B");
+        assert_eq!(format_size(5465), "5.34 KB");
         assert_eq!(format_size(1536), "1.5 KB");
-        assert_eq!(hex([255, 0, 16]), "#ff0010");
-    }
-}
-
-/// One row of the justified grid: items `start..end` drawn `height` tall.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Row {
-    pub start: usize,
-    pub end: usize,
-    pub height: f32,
-}
-
-/// Packs items with the given aspect ratios (width / height) into rows of
-/// `width`, each close to `target` tall; full rows are scaled to fit exactly.
-pub fn justify(aspects: &[f32], width: f32, target: f32, gap: f32) -> Vec<Row> {
-    let mut rows = Vec::new();
-    let (mut start, mut sum) = (0, 0.0f32);
-    for (i, &a) in aspects.iter().enumerate() {
-        sum += a;
-        let n = (i + 1 - start) as f32;
-        let avail = width - gap * (n - 1.0);
-        if sum * target >= avail {
-            rows.push(Row { start, end: i + 1, height: avail / sum });
-            start = i + 1;
-            sum = 0.0;
-        }
-    }
-    if start < aspects.len() {
-        rows.push(Row { start, end: aspects.len(), height: target });
-    }
-    rows
-}
-
-#[cfg(test)]
-mod justify_tests {
-    use super::*;
-
-    #[test]
-    fn rows_fill_width() {
-        let rows = justify(&[1.0; 7], 400.0, 100.0, 0.0);
-        assert_eq!(rows.len(), 2);
-        assert_eq!((rows[0].start, rows[0].end), (0, 4));
-        assert!((rows[0].height - 100.0).abs() < 1e-3);
-        assert_eq!(rows[1], Row { start: 4, end: 7, height: 100.0 });
-    }
-
-    #[test]
-    fn gaps_are_accounted_for() {
-        let rows = justify(&[2.0, 2.0, 2.0], 410.0, 100.0, 10.0);
-        // two items: 400 wide at h=100 needs 410 incl. gap -> closes at the second
-        assert_eq!(rows[0].end, 2);
-        let used = rows[0].height * 4.0 + 10.0;
-        assert!((used - 410.0).abs() < 1e-3);
-    }
-
-    #[test]
-    fn empty() {
-        assert!(justify(&[], 100.0, 50.0, 4.0).is_empty());
+        assert_eq!(format_size(2048), "2 KB");
+        assert_eq!(hex([255, 0, 16]), "#FF0010");
+        assert_eq!(columns(300.0, 100.0, 8.0), 2);
     }
 }

@@ -1,0 +1,32 @@
+//! Phosphor icon codepoints (MIT, see assets/PHOSPHOR-LICENSE-MIT), picked to
+//! match the glyphs Eagle uses.
+
+pub const ARROWS_LEFT_RIGHT: &str = "\u{E0A0}";
+pub const BOOKMARK_SIMPLE: &str = "\u{E0EA}";
+pub const CAMERA: &str = "\u{E10E}";
+pub const CARET_DOWN: &str = "\u{E136}";
+pub const CARET_LEFT: &str = "\u{E138}";
+pub const CARET_RIGHT: &str = "\u{E13A}";
+pub const CARET_UP_DOWN: &str = "\u{E140}";
+pub const CHECK: &str = "\u{E182}";
+pub const CLOCK: &str = "\u{E19A}";
+pub const EXPORT: &str = "\u{EAF0}";
+pub const FILE: &str = "\u{E230}";
+pub const FOLDER: &str = "\u{E24A}";
+pub const FOLDER_DASHED: &str = "\u{E8F8}";
+pub const FOLDER_OPEN: &str = "\u{E256}";
+pub const FUNNEL: &str = "\u{E266}";
+pub const IMAGES: &str = "\u{E836}";
+pub const LAYOUT: &str = "\u{E6D6}";
+pub const LIGHTNING: &str = "\u{E2DE}";
+pub const MAGNIFYING_GLASS: &str = "\u{E30C}";
+pub const MINUS: &str = "\u{E32A}";
+pub const PLUS: &str = "\u{E3D4}";
+pub const PUSH_PIN: &str = "\u{E3E2}";
+pub const PUZZLE_PIECE: &str = "\u{E596}";
+pub const SHUFFLE: &str = "\u{E422}";
+pub const SIDEBAR_SIMPLE: &str = "\u{EC24}";
+pub const STAR: &str = "\u{E46A}";
+pub const TAG_SIMPLE: &str = "\u{E47A}";
+pub const TRASH: &str = "\u{E4A6}";
+pub const X: &str = "\u{E4F6}";

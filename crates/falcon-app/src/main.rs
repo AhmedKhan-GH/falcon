@@ -1,6 +1,8 @@
 mod app;
+mod icons;
 mod loader;
 mod logic;
+mod theme;
 
 use std::path::PathBuf;
 
@@ -9,7 +11,10 @@ fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_title("Falcon")
-            .with_inner_size([1440.0, 900.0])
+            .with_fullsize_content_view(true)
+            .with_titlebar_shown(false)
+            .with_title_shown(false)
+            .with_inner_size([1280.0, 800.0])
             .with_min_inner_size([800.0, 500.0]),
         ..Default::default()
     };
