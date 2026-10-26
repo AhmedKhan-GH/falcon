@@ -1,62 +1,45 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1024" height="1024" viewBox="0 0 1024 1024">
   <defs>
-    <linearGradient id="tile" x1="0.2" y1="0" x2="0.6" y2="1">
-      <stop offset="0" stop-color="#5566e6"/>
-      <stop offset="1" stop-color="#222c96"/>
+    <filter id="filter-1" filterUnits="userSpaceOnUse" x="60" y="60" width="904" height="904" data-vc-blend="multiply" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceAlpha" stdDeviation="8"/><feOffset dx="0" dy="14" result="shadow"/><feFlood flood-color="#000000" flood-opacity="0.3"/><feComposite in2="shadow" operator="in" result="paint"/><feMerge><feMergeNode in="paint"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <linearGradient id="linear-gradient-1" x1="512" y1="100" x2="512" y2="924" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#303d69"/>
+      <stop offset="0.5" stop-color="#1b2748"/>
+      <stop offset="1" stop-color="#10162a"/>
     </linearGradient>
-    <linearGradient id="white" x1="0.3" y1="0" x2="0.5" y2="1">
+    <filter id="filter-2" filterUnits="userSpaceOnUse" x="168.901" y="216.931" width="584.437" height="559.256" data-vc-blend="multiply" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceAlpha" stdDeviation="4"/><feOffset dx="0" dy="7" result="shadow"/><feFlood flood-color="#090f22" flood-opacity="0.16"/><feComposite in2="shadow" operator="in" result="paint"/><feMerge><feMergeNode in="paint"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <linearGradient id="linear-gradient-2" x1="430" y1="235" x2="430" y2="760" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4c75b6"/>
+      <stop offset="1" stop-color="#294d89"/>
+    </linearGradient>
+    <filter id="filter-3" filterUnits="userSpaceOnUse" x="243.562" y="240.237" width="555.782" height="525.239" data-vc-blend="multiply" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceAlpha" stdDeviation="4"/><feOffset dx="0" dy="7" result="shadow"/><feFlood flood-color="#090f22" flood-opacity="0.16"/><feComposite in2="shadow" operator="in" result="paint"/><feMerge><feMergeNode in="paint"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <linearGradient id="linear-gradient-3" x1="516.52" y1="255.84" x2="516.52" y2="827.04" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#68b6ff"/>
+      <stop offset="0.4" stop-color="#3297ff"/>
+      <stop offset="1" stop-color="#2773d0"/>
+    </linearGradient>
+    <filter id="filter-4" filterUnits="userSpaceOnUse" x="299.388" y="260.86" width="559.704" height="517.582" data-vc-blend="multiply" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceAlpha" stdDeviation="4"/><feOffset dx="0" dy="7" result="shadow"/><feFlood flood-color="#090f22" flood-opacity="0.16"/><feComposite in2="shadow" operator="in" result="paint"/><feMerge><feMergeNode in="paint"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <linearGradient id="linear-gradient-4" x1="516.52" y1="311.84" x2="516.52" y2="815.84" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#ffffff"/>
-      <stop offset="1" stop-color="#e9edfc"/>
+      <stop offset="0.38" stop-color="#f0f5fc"/>
+      <stop offset="1" stop-color="#cdd9ea"/>
     </linearGradient>
-    <linearGradient id="wave1" x1="0" y1="0" x2="0.4" y2="1">
-      <stop offset="0" stop-color="#c3ccfb"/>
-      <stop offset="1" stop-color="#a4b1f4"/>
-    </linearGradient>
-    <linearGradient id="wave2" x1="0" y1="0" x2="0.4" y2="1">
-      <stop offset="0" stop-color="#8d9bef"/>
-      <stop offset="1" stop-color="#6f7fe2"/>
-    </linearGradient>
-    <linearGradient id="hood" x1="0.2" y1="0" x2="0.6" y2="1">
-      <stop offset="0" stop-color="#1d2470"/>
-      <stop offset="1" stop-color="#11164a"/>
-    </linearGradient>
-    <clipPath id="tileclip"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
-    <clipPath id="disc"><circle cx="470" cy="560" r="290"/></clipPath>
-    <!-- The bird: disc, beak and nape tuft, less the cut circle under the beak. -->
-    <mask id="bird">
-      <rect width="1024" height="1024" fill="black"/>
-      <circle cx="470" cy="560" r="290" fill="white"/>
-      <path fill="white" d="M 540 284 C 660 268 780 330 815 494 L 640 470 Z"/>
-      <circle cx="700" cy="590" r="150" fill="black"/>
-    </mask>
-    <mask id="ring">
-      <rect width="1024" height="1024" fill="black"/>
-      <circle cx="470" cy="560" r="290" fill="white"/>
-      <path fill="white" d="M 540 284 C 660 268 780 330 815 494 L 640 470 Z"/>
-    </mask>
   </defs>
-
-  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#tile)"/>
-
-  <g clip-path="url(#tileclip)">
-    <g mask="url(#bird)">
-      <rect width="1024" height="1024" fill="url(#white)"/>
+  <title>Falcon — card stack</title>
+  <g id="Falcon_app_icon" data-name="Falcon app icon">
+    <g filter="url(#filter-1)">
+      <path id="Icon_tile___824___824" data-name="Icon tile · 824 × 824" d="M332 100 L692 100 C853 100 924 171 924 332 L924 692 C924 853 853 924 692 924 L332 924 C171 924 100 853 100 692 L100 332 C100 171 171 100 332 100 Z" fill="url(#linear-gradient-1)"/>
     </g>
-    <!-- Breast: two stacked waves, each notched, running under the cut. -->
-    <g clip-path="url(#disc)">
-      <path fill="url(#wave1)" d="M 240 830 C 280 690 400 590 590 552 L 558 606 C 690 580 800 610 880 690 L 880 900 L 240 900 Z"/>
-      <path fill="url(#wave2)" d="M 420 900 C 460 790 560 710 700 690 L 674 736 C 760 728 830 756 890 800 L 890 900 Z"/>
+    <g id="Falcon___three_image_cards" data-name="Falcon · three image cards">
+      <g filter="url(#filter-2)">
+        <path id="_01___Deep-blue_card" data-name="01 · Deep-blue card" d="M269.785 305.093 L549.156 240.595 C604.605 227.793 659.933 262.366 672.734 317.815 L729.674 564.447 C742.475 619.896 707.903 675.224 652.454 688.025 L373.082 752.523 C317.634 765.325 262.306 730.752 249.504 675.303 L192.565 428.671 C179.763 373.222 214.336 317.894 269.785 305.093 Z" fill="url(#linear-gradient-2)"/>
+      </g>
+      <g filter="url(#filter-3)">
+        <path id="_02___Accent_card" data-name="02 · Accent card" d="M358.627 286.624 L644.256 261.635 C700.947 256.675 750.925 298.611 755.885 355.302 L777.946 607.459 C782.905 664.15 740.969 714.128 684.278 719.088 L398.649 744.077 C341.958 749.037 291.981 707.1 287.021 650.41 L264.96 398.253 C260 341.562 301.937 291.584 358.627 286.624 Z" fill="url(#linear-gradient-3)"/>
+      </g>
+      <g filter="url(#filter-4)">
+        <path id="_03___Silver_card___beak_cut" data-name="03 · Silver card / beak cut" d="M460.665 282.433 L745.814 312.403 C802.41 318.351 843.468 369.054 837.519 425.649 C835.002 449.597 827.618 466.277 815.426 475.131 L798.889 439.608 L752.578 451.633 L640.767 722.549 C631.399 745.248 608.706 759.722 584.201 757.146 L412.666 739.117 C356.07 733.169 315.012 682.466 320.961 625.871 L347.419 374.137 C353.367 317.542 404.07 276.484 460.665 282.433 Z" fill="url(#linear-gradient-4)"/>
+      </g>
     </g>
-    <g mask="url(#bird)">
-      <!-- Hood: crown and nape in one dark cap, dropping the moustache under the eye. -->
-      <path fill="url(#hood)" d="M 100 100 L 760 100 L 760 300 C 700 330 672 372 662 412 C 632 410 604 414 584 428 C 564 480 558 540 548 604 C 522 552 506 500 500 452 C 456 404 396 380 330 380 L 300 440 C 286 420 266 410 240 412 C 180 430 130 490 100 570 Z"/>
-    </g>
-    <!-- The cut that shapes the underside of the beak. -->
-    <g mask="url(#ring)">
-      <circle cx="700" cy="590" r="150" fill="none" stroke="#4b5bd9" stroke-width="14"/>
-    </g>
-    <!-- The eye. -->
-    <circle cx="610" cy="384" r="20" fill="#ffd257"/>
-    <circle cx="610" cy="384" r="13" fill="#0a0e2e"/>
   </g>
 </svg>
