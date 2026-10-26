@@ -57,6 +57,9 @@ enum Action {
     DeletePermanently(Vec<String>),
     EmptyTrash,
     CreateSmart(String, Vec<serde_json::Value>),
+    RenameTag(String, String),
+    DeleteTag(String),
+    StarTag(String, bool),
     DeleteSmart(String),
 }
 
@@ -174,6 +177,7 @@ enum Confirm {
     DeleteFolder(String),
     DeleteItems(Vec<String>),
     EmptyTrash,
+    DeleteTag(String),
 }
 
 /// Uncommitted inspector text for one item.
@@ -228,6 +232,9 @@ pub struct App {
     confirm: Option<Confirm>,
     smart_dialog: Option<SmartDraft>,
     view: ViewState,
+    /// Tag being renamed on the All Tags page, with the new name so far.
+    tag_rename: Option<(String, String)>,
+    tag_filter: String,
 }
 
 impl App {
@@ -269,6 +276,8 @@ impl App {
             confirm: None,
             smart_dialog: None,
             view: ViewState::default(),
+            tag_rename: None,
+            tag_filter: String::new(),
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
         app.tile = saved.tile.unwrap_or(app.tile).clamp(TILE_MIN, TILE_MAX);
@@ -523,6 +532,14 @@ impl App {
                     }
                     lib.delete_smart_folder(&id)
                 }
+                Action::RenameTag(from, to) => lib.rename_tag(&from, &to).map(|n| {
+                    if self.scope == Scope::Tag(from.clone()) {
+                        self.scope = Scope::Tag(to.clone());
+                    }
+                    self.flash(format!("Renamed “{from}” to “{to}” on {n} items"));
+                }),
+                Action::DeleteTag(tag) => lib.delete_tag(&tag).map(|n| self.flash(format!("Removed “{tag}” from {n} items"))),
+                Action::StarTag(tag, on) => lib.set_tag_starred(&tag, on),
                 Action::DeletePermanently(ids) => {
                     self.selected.retain(|s| !ids.contains(s));
                     let r = lib.delete_permanently(&ids);
@@ -1544,43 +1561,111 @@ impl App {
     }
 
     fn tag_page(&mut self, ui: &mut Ui, lib: &Library) {
-        let tags = logic::tag_counts(lib.items());
+        let filter = self.tag_filter.trim().to_lowercase();
+        let tags: Vec<(String, usize)> =
+            logic::tag_counts(lib.items()).into_iter().filter(|(t, _)| filter.is_empty() || t.to_lowercase().contains(&filter)).collect();
+        let starred: Vec<(String, usize)> =
+            lib.tags.starred_tags.iter().filter_map(|s| tags.iter().find(|(t, _)| t == s).cloned()).collect();
         egui::ScrollArea::vertical().id_salt("tags-page").auto_shrink([false, false]).show(ui, |ui| {
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                ui.add_space(GRID_PAD_X);
+                let (rect, _) = ui.allocate_exact_size(vec2(240.0, 30.0), Sense::hover());
+                ui.painter().rect_filled(rect, t::FIELD_RADIUS, t::SEARCH);
+                ui.painter().rect_stroke(rect, t::FIELD_RADIUS, Stroke::new(1.0, t::FIELD_BORDER), StrokeKind::Inside);
+                icon(ui, Pos2::new(rect.left() + 14.0, rect.center().y), ic::MAGNIFYING_GLASS, 15.0, t::TEXT_MUTED);
+                let inner = Rect::from_min_max(Pos2::new(rect.left() + 30.0, rect.top()), rect.max - vec2(8.0, 0.0));
+                ui.put(
+                    inner,
+                    TextEdit::singleline(&mut self.tag_filter)
+                        .id_salt("tag-filter")
+                        .frame(egui::Frame::NONE)
+                        .margin(egui::Margin::ZERO)
+                        .hint_text(RichText::new("Filter tags").color(t::TEXT_MUTED))
+                        .font(font(13.0))
+                        .align(Align2::LEFT_CENTER),
+                );
+                ui.add_space(12.0);
+                ui.label(RichText::new(format!("{} tags", tags.len())).color(t::TEXT_MUTED));
+            });
             ui.add_space(14.0);
+
+            let mut groups: Vec<(String, Vec<(String, usize)>)> = Vec::new();
+            if !starred.is_empty() {
+                groups.push((format!("{}  Starred", ic::STAR), starred.clone()));
+            }
             let mut current: Option<char> = None;
-            let mut groups: Vec<(char, Vec<(String, usize)>)> = Vec::new();
             for (tag, n) in tags {
-                let first = tag.chars().next().map_or('#', |c| c.to_ascii_uppercase());
+                let first = tag.chars().next().map_or('#', |c| c.to_uppercase().next().unwrap_or(c));
                 let first = if first.is_alphabetic() { first } else { '#' };
                 if current != Some(first) {
-                    groups.push((first, Vec::new()));
+                    groups.push((first.to_string(), Vec::new()));
                     current = Some(first);
                 }
                 groups.last_mut().unwrap().1.push((tag, n));
             }
-            for (letter, group) in groups {
+            for (heading, group) in groups {
                 ui.horizontal(|ui| {
-                    ui.add_space(GRID_PAD_X + 4.0);
-                    ui.label(RichText::new(letter.to_string()).size(15.0).color(t::TEXT_MUTED));
+                    ui.add_space(GRID_PAD_X + 2.0);
+                    ui.label(RichText::new(heading).size(14.0).color(t::TEXT_MUTED));
                 });
+                ui.add_space(2.0);
                 ui.horizontal_wrapped(|ui| {
                     ui.add_space(GRID_PAD_X);
                     ui.spacing_mut().item_spacing = vec2(8.0, 8.0);
                     for (tag, n) in group {
-                        let text = format!("{tag}   {n}");
-                        let g = galley(ui, &text, font(13.0), t::TEXT, 400.0);
-                        let (rect, resp) = ui.allocate_exact_size(g.size() + vec2(22.0, 12.0), Sense::click());
-                        let fill = if resp.hovered() { t::BUTTON_HOVER } else { t::BUTTON };
-                        ui.painter().rect_filled(rect, CornerRadius::same(6), fill);
-                        ui.painter().galley(rect.min + vec2(11.0, 6.0), g, t::TEXT);
-                        if resp.clicked() {
-                            self.go(Scope::Tag(tag.clone()));
-                        }
+                        self.tag_chip(ui, lib, &tag, n);
                     }
                 });
-                ui.add_space(14.0);
+                ui.add_space(16.0);
             }
         });
+    }
+
+    fn tag_chip(&mut self, ui: &mut Ui, lib: &Library, tag: &str, n: usize) {
+        let renaming = self.tag_rename.as_ref().is_some_and(|(t, _)| t == tag);
+        if renaming {
+            let (_, buf) = self.tag_rename.as_mut().unwrap();
+            let te = ui.add(TextEdit::singleline(buf).id_salt(("tag-rename", tag)).desired_width(140.0).font(font(13.0)));
+            if !te.has_focus() && !te.lost_focus() {
+                te.request_focus();
+            }
+            let cancel = ui.input(|i| i.key_pressed(Key::Escape));
+            if te.lost_focus() || cancel {
+                let (from, to) = self.tag_rename.take().unwrap();
+                if !cancel && !to.trim().is_empty() && to.trim() != from {
+                    self.actions.push(Action::RenameTag(from, to.trim().to_string()));
+                }
+            }
+            return;
+        }
+        let name_g = galley(ui, tag, font(13.0), t::TEXT, 300.0);
+        let count_g = galley(ui, &n.to_string(), font(12.0), t::TEXT_MUTED, 80.0);
+        let size = vec2(name_g.size().x + count_g.size().x + 30.0, 28.0);
+        let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
+        let fill = if resp.hovered() { t::BUTTON_HOVER } else { t::BUTTON };
+        ui.painter().rect_filled(rect, CornerRadius::same(6), fill);
+        let cy = rect.center().y;
+        ui.painter().galley(Pos2::new(rect.left() + 11.0, cy - name_g.size().y / 2.0), name_g.clone(), t::TEXT);
+        ui.painter().galley(Pos2::new(rect.right() - 11.0 - count_g.size().x, cy - count_g.size().y / 2.0), count_g, t::TEXT_MUTED);
+        if resp.clicked() {
+            self.go(Scope::Tag(tag.to_string()));
+        }
+        let starred = lib.tags.starred_tags.iter().any(|s| s == tag);
+        resp.context_menu(|ui| {
+            ui.set_min_width(180.0);
+            if ui.button("Rename…").clicked() {
+                self.tag_rename = Some((tag.to_string(), tag.to_string()));
+            }
+            if ui.button(if starred { "Unstar" } else { "Star" }).clicked() {
+                self.actions.push(Action::StarTag(tag.to_string(), !starred));
+            }
+            ui.separator();
+            if ui.button(RichText::new("Delete Tag").color(Color32::from_rgb(0xff, 0x66, 0x67))).clicked() {
+                self.confirm = Some(Confirm::DeleteTag(tag.to_string()));
+            }
+        });
+        resp.on_hover_text("Click to show items · right-click to rename, star or delete. Renaming to an existing tag merges them.");
     }
 }
 
@@ -2286,6 +2371,11 @@ impl eframe::App for App {
                     "The files are removed from the library and cannot be restored.".to_string(),
                     "Delete",
                 ),
+                Confirm::DeleteTag(tag) => (
+                    format!("Delete the tag “{tag}”?"),
+                    "It is removed from every item. The items themselves stay.".to_string(),
+                    "Delete Tag",
+                ),
                 Confirm::EmptyTrash => {
                     let n = lib.items().iter().filter(|i| i.is_deleted).count();
                     (format!("Empty the Trash ({n})?"), "The files are removed from the library and cannot be restored.".to_string(), "Empty Trash")
@@ -2303,6 +2393,7 @@ impl eframe::App for App {
                             Confirm::DeleteFolder(id) => Action::DeleteFolder(id),
                             Confirm::DeleteItems(ids) => Action::DeletePermanently(ids),
                             Confirm::EmptyTrash => Action::EmptyTrash,
+                            Confirm::DeleteTag(t) => Action::DeleteTag(t),
                         });
                         self.confirm = None;
                     }

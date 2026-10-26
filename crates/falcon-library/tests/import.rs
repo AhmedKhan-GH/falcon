@@ -293,3 +293,31 @@ fn quicklook_formats_get_thumbnails() {
     assert!(!item.palettes.is_empty());
     eprintln!("eagle {:?}\nours  {:?}", eagle.palettes, item.palettes);
 }
+
+#[test]
+fn tags_rename_merge_and_delete() {
+    let Some(src) = fixture() else { return };
+    let tmp = tempfile::tempdir().unwrap();
+    let dest = tmp.path().join("Tags.library");
+    Library::open(&src).unwrap().save_to(&dest).unwrap();
+    let mut lib = Library::open(&dest).unwrap();
+    let count = |lib: &Library, t: &str| lib.items().iter().filter(|i| i.tags.iter().any(|x| x == t)).count();
+    let (glyph, logo) = (count(&lib, "glyph"), count(&lib, "logo"));
+    assert!(glyph > 0 && logo > 0);
+
+    lib.set_tag_starred("glyph", true).unwrap();
+    assert_eq!(lib.rename_tag("glyph", "letter").unwrap(), glyph);
+    let lib2 = Library::open(&dest).unwrap();
+    assert_eq!(count(&lib2, "glyph"), 0);
+    assert_eq!(count(&lib2, "letter"), glyph);
+    assert_eq!(lib2.tags.starred_tags, ["letter"]);
+
+    // Merging: items with both end up with one copy.
+    lib.rename_tag("letter", "logo").unwrap();
+    let lib3 = Library::open(&dest).unwrap();
+    assert!(lib3.items().iter().all(|i| i.tags.iter().filter(|t| *t == "logo").count() <= 1));
+
+    let n = count(&lib3, "logo");
+    assert_eq!(lib.delete_tag("logo").unwrap(), n);
+    assert_eq!(count(&Library::open(&dest).unwrap(), "logo"), 0);
+}

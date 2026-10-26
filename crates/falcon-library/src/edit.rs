@@ -76,6 +76,81 @@ impl Library {
         Ok(ids.len())
     }
 
+    /// Renames a tag on every item, merging it into `to` where an item has
+    /// both. Tag history, starred tags and tag groups follow, as in Eagle.
+    /// Returns how many items changed.
+    pub fn rename_tag(&mut self, from: &str, to: &str) -> Result<usize> {
+        let to = to.trim();
+        if to.is_empty() || from == to {
+            return Ok(0);
+        }
+        let affected: Vec<Item> = self.items().iter().filter(|i| i.tags.iter().any(|t| t == from)).cloned().collect();
+        let n = affected.len();
+        for mut item in affected {
+            let mut tags = Vec::with_capacity(item.tags.len());
+            for t in item.tags.drain(..) {
+                let t = if t == from { to.to_string() } else { t };
+                if !tags.contains(&t) {
+                    tags.push(t);
+                }
+            }
+            item.tags = tags;
+            self.update_item(item)?;
+        }
+        let swap = |list: &mut Vec<String>| {
+            for t in list.iter_mut() {
+                if t == from {
+                    *t = to.to_string();
+                }
+            }
+            let mut seen = std::collections::HashSet::new();
+            list.retain(|t| seen.insert(t.clone()));
+        };
+        swap(&mut self.tags.history_tags);
+        swap(&mut self.tags.starred_tags);
+        for g in &mut self.metadata.tags_groups {
+            if let Some(serde_json::Value::Array(tags)) = g.get_mut("tags") {
+                for t in tags.iter_mut() {
+                    if t.as_str() == Some(from) {
+                        *t = serde_json::Value::String(to.to_string());
+                    }
+                }
+            }
+        }
+        self.save_metadata()?;
+        write_json(&self.root().join("tags.json"), &self.tags)?;
+        Ok(n)
+    }
+
+    /// Removes a tag from every item, the history, starred tags and groups.
+    pub fn delete_tag(&mut self, tag: &str) -> Result<usize> {
+        let affected: Vec<Item> = self.items().iter().filter(|i| i.tags.iter().any(|t| t == tag)).cloned().collect();
+        let n = affected.len();
+        for mut item in affected {
+            item.tags.retain(|t| t != tag);
+            self.update_item(item)?;
+        }
+        self.tags.history_tags.retain(|t| t != tag);
+        self.tags.starred_tags.retain(|t| t != tag);
+        for g in &mut self.metadata.tags_groups {
+            if let Some(serde_json::Value::Array(tags)) = g.get_mut("tags") {
+                tags.retain(|t| t.as_str() != Some(tag));
+            }
+        }
+        self.save_metadata()?;
+        write_json(&self.root().join("tags.json"), &self.tags)?;
+        Ok(n)
+    }
+
+    /// Stars or unstars a tag (most recent first, as Eagle keeps them).
+    pub fn set_tag_starred(&mut self, tag: &str, starred: bool) -> Result<()> {
+        self.tags.starred_tags.retain(|t| t != tag);
+        if starred {
+            self.tags.starred_tags.insert(0, tag.to_string());
+        }
+        write_json(&self.root().join("tags.json"), &self.tags)
+    }
+
     /// Records tags as just used: moved to the front of `historyTags`, which
     /// is capped at 120, then writes `tags.json`.
     pub fn record_tag_use(&mut self, tags: &[String]) -> Result<()> {
