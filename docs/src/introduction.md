@@ -21,5 +21,9 @@ This builds the API docs with `cargo doc` and serves the book at <http://localho
 
 | Crate | Purpose |
 |---|---|
-| `falcon-library` | Read and write `.library` folders |
-| `falcon` | Command-line tool |
+| `falcon-library` | Reading and writing `.library` folders: import, thumbnails, palettes, editing, search, smart folders |
+| `falcon-server` | Eagle's local HTTP API |
+| `falcon-app` | The desktop app, built with egui |
+| `falcon` | Command-line tool: `import`, `info`, `serve` |
+
+Build a launchable `Falcon.app` with `scripts/bundle.sh`.
