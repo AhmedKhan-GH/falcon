@@ -29,6 +29,20 @@ const ROW_GAP: f32 = 10.0;
 const TILE_MIN: f32 = 80.0;
 const TILE_MAX: f32 = 400.0;
 
+/// What falcon remembers between launches, as Eagle does: the library,
+/// zoom, sort and panel layout.
+#[derive(serde::Serialize, serde::Deserialize, Default)]
+#[serde(default)]
+struct Saved {
+    library: Option<PathBuf>,
+    tile: Option<f32>,
+    sort: Option<String>,
+    increase: Option<bool>,
+    show_sidebar: Option<bool>,
+    show_inspector: Option<bool>,
+    collapsed: Vec<String>,
+}
+
 /// Ids being dragged from the grid.
 #[derive(Clone)]
 struct DragItems(Vec<String>);
@@ -40,6 +54,16 @@ enum Action {
     DeleteFolder(String),
     AddToFolder(Vec<String>, String),
     Trash(Vec<String>, bool),
+    DeletePermanently(Vec<String>),
+    EmptyTrash,
+}
+
+/// A destructive action waiting for the user to confirm it.
+#[derive(Clone)]
+enum Confirm {
+    DeleteFolder(String),
+    DeleteItems(Vec<String>),
+    EmptyTrash,
 }
 
 /// Uncommitted inspector text for one item.
@@ -91,8 +115,7 @@ pub struct App {
     actions: Vec<Action>,
     /// Folder being renamed in the sidebar, with the text typed so far.
     renaming: Option<(String, String)>,
-    /// Folder awaiting delete confirmation.
-    confirm_delete: Option<String>,
+    confirm: Option<Confirm>,
 }
 
 impl App {
@@ -131,9 +154,17 @@ impl App {
             frame_jobs: Vec::new(),
             actions: Vec::new(),
             renaming: None,
-            confirm_delete: None,
+            confirm: None,
         };
-        if let Some(p) = initial {
+        let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
+        app.tile = saved.tile.unwrap_or(app.tile).clamp(TILE_MIN, TILE_MAX);
+        app.sort = saved.sort.as_deref().and_then(|l| OrderBy::ALL.into_iter().find(|o| o.label() == l)).unwrap_or(app.sort);
+        app.increase = saved.increase.unwrap_or(app.increase);
+        app.show_sidebar = saved.show_sidebar.unwrap_or(true);
+        app.show_inspector = saved.show_inspector.unwrap_or(true);
+        app.collapsed = saved.collapsed.into_iter().collect();
+        // Reopen the last library unless one was given on the command line.
+        if let Some(p) = initial.or(saved.library.filter(|p| p.is_dir())) {
             app.open(p);
         }
         app
@@ -285,13 +316,11 @@ impl App {
             return;
         }
         if del && !self.selected.is_empty() {
-            let trash = self.scope != Scope::Trash;
             let ids = self.selected.clone();
-            if let Some(shared) = self.lib.clone()
-                && lock(&shared).set_trashed(&ids, trash).is_ok()
-            {
-                self.flash(if trash { "Moved to Trash" } else { "Restored" });
-                self.selected.clear();
+            if self.scope == Scope::Trash {
+                self.confirm = Some(Confirm::DeleteItems(ids));
+            } else {
+                self.actions.push(Action::Trash(ids, true));
             }
         }
         let step: isize = if self.viewer.is_some() {
@@ -361,6 +390,16 @@ impl App {
                     self.flash(format!("Added {n} to {name}"));
                     r
                 }
+                Action::DeletePermanently(ids) => {
+                    self.selected.retain(|s| !ids.contains(s));
+                    let r = lib.delete_permanently(&ids);
+                    self.flash(format!("Deleted {}", ids.len()));
+                    r
+                }
+                Action::EmptyTrash => lib.empty_trash().map(|n| {
+                    self.selected.clear();
+                    self.flash(format!("Deleted {n}"));
+                }),
                 Action::Trash(ids, trash) => {
                     self.selected.retain(|s| !ids.contains(s));
                     let r = lib.set_trashed(&ids, trash);
@@ -567,6 +606,11 @@ impl App {
             };
             let resp = sidebar_row(ui, 0, glyph, label, (count > 0).then_some(count), active, None);
             if scope == Scope::Trash {
+                resp.context_menu(|ui| {
+                    if ui.add_enabled(n.trash > 0, egui::Button::new("Empty Trash")).clicked() {
+                        self.confirm = Some(Confirm::EmptyTrash);
+                    }
+                });
                 drop_highlight(ui, &resp, 0);
                 if let Some(d) = resp.dnd_release_payload::<DragItems>() {
                     self.actions.push(Action::Trash(d.0.clone(), true));
@@ -637,7 +681,7 @@ impl App {
             }
             ui.separator();
             if ui.button(RichText::new("Delete Folder").color(Color32::from_rgb(0xff, 0x66, 0x67))).clicked() {
-                self.confirm_delete = Some(f.id.clone());
+                self.confirm = Some(Confirm::DeleteFolder(f.id.clone()));
             }
         });
         if resp.clicked() {
@@ -1239,6 +1283,9 @@ impl App {
                             if ui.button("Restore").clicked() {
                                 self.actions.push(Action::Trash(targets.clone(), false));
                             }
+                            if ui.button(RichText::new("Delete Permanently").color(Color32::from_rgb(0xff, 0x66, 0x67))).clicked() {
+                                self.confirm = Some(Confirm::DeleteItems(targets.clone()));
+                            }
                         } else if ui.button("Move to Trash").clicked() {
                             self.actions.push(Action::Trash(targets.clone(), true));
                         }
@@ -1756,6 +1803,23 @@ impl App {
 }
 
 impl eframe::App for App {
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        let saved = Saved {
+            library: self.lib.as_ref().map(|l| lock(l).root().to_path_buf()),
+            tile: Some(self.tile),
+            sort: Some(self.sort.label().to_string()),
+            increase: Some(self.increase),
+            show_sidebar: Some(self.show_sidebar),
+            show_inspector: Some(self.show_inspector),
+            collapsed: self.collapsed.iter().cloned().collect(),
+        };
+        eframe::set_value(storage, eframe::APP_KEY, &saved);
+    }
+
+    fn persist_egui_memory(&self) -> bool {
+        false
+    }
+
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         if ctx.cumulative_frame_nr() == 0 {
@@ -1842,26 +1906,48 @@ impl eframe::App for App {
             painter.rect_filled(r, CornerRadius::same(10), t::PRIMARY);
             painter.galley(r.min + vec2(8.0, 4.0), g, Color32::WHITE);
         }
-        if let Some(id) = self.confirm_delete.clone() {
-            let name = logic::find_folder(&lib.metadata.folders, &id).map_or_else(String::new, |f| f.name.clone());
-            let modal = egui::Modal::new(egui::Id::unique("confirm-delete")).show(&ctx, |ui| {
+        if let Some(c) = self.confirm.clone() {
+            let (title, detail, label) = match &c {
+                Confirm::DeleteFolder(id) => {
+                    let name = logic::find_folder(&lib.metadata.folders, id).map_or_else(String::new, |f| f.name.clone());
+                    (
+                        format!("Delete “{name}”?"),
+                        "Its subfolders are deleted too. Items left in no folder move to the Trash.".to_string(),
+                        "Delete",
+                    )
+                }
+                Confirm::DeleteItems(ids) => (
+                    format!("Delete {} item{} permanently?", ids.len(), if ids.len() == 1 { "" } else { "s" }),
+                    "The files are removed from the library and cannot be restored.".to_string(),
+                    "Delete",
+                ),
+                Confirm::EmptyTrash => {
+                    let n = lib.items().iter().filter(|i| i.is_deleted).count();
+                    (format!("Empty the Trash ({n})?"), "The files are removed from the library and cannot be restored.".to_string(), "Empty Trash")
+                }
+            };
+            let modal = egui::Modal::new(egui::Id::unique("confirm")).show(&ctx, |ui| {
                 ui.set_width(320.0);
-                ui.label(RichText::new(format!("Delete “{name}”?")).size(15.0));
+                ui.label(RichText::new(title).size(15.0));
                 ui.add_space(4.0);
-                ui.label(RichText::new("Its subfolders are deleted too. Items left in no folder move to the Trash.").color(t::TEXT_MUTED));
+                ui.label(RichText::new(detail).color(t::TEXT_MUTED));
                 ui.add_space(10.0);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button(RichText::new("Delete").color(Color32::from_rgb(0xff, 0x66, 0x67))).clicked() {
-                        self.actions.push(Action::DeleteFolder(id.clone()));
-                        self.confirm_delete = None;
+                    if ui.button(RichText::new(label).color(Color32::from_rgb(0xff, 0x66, 0x67))).clicked() {
+                        self.actions.push(match c.clone() {
+                            Confirm::DeleteFolder(id) => Action::DeleteFolder(id),
+                            Confirm::DeleteItems(ids) => Action::DeletePermanently(ids),
+                            Confirm::EmptyTrash => Action::EmptyTrash,
+                        });
+                        self.confirm = None;
                     }
                     if ui.button("Cancel").clicked() {
-                        self.confirm_delete = None;
+                        self.confirm = None;
                     }
                 });
             });
             if modal.should_close() {
-                self.confirm_delete = None;
+                self.confirm = None;
             }
         }
         self.apply_actions(lib);

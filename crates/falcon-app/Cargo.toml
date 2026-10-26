@@ -10,7 +10,8 @@ path = "src/main.rs"
 [dependencies]
 falcon-library = { path = "../falcon-library" }
 falcon-server = { path = "../falcon-server" }
-eframe = "0.37.0"
+eframe = { version = "0.37.0", features = ["persistence"] }
+serde = { version = "1", features = ["derive"] }
 rfd = "0.17.2"
 lru = "0.19.0"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
