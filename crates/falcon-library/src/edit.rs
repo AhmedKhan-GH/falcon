@@ -11,7 +11,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::error::{Error, Result};
 use crate::import::sanitize_name;
 use crate::library::{Library, write_json};
-use crate::model::Item;
+use crate::ids;
+use crate::model::{Folder, Item};
 
 /// How many recent tags Eagle keeps in `historyTags`.
 const HISTORY_LIMIT: usize = 120;
@@ -63,6 +64,101 @@ impl Library {
         self.tags.history_tags.truncate(HISTORY_LIMIT);
         write_json(&self.root().join("tags.json"), &self.tags)
     }
+}
+
+impl Library {
+    /// Creates a folder at the end of `parent`'s children (or at the root)
+    /// and returns its id.
+    pub fn create_folder(&mut self, parent: Option<&str>, name: &str) -> Result<String> {
+        let id = ids::new_id();
+        let folder = Folder {
+            id: id.clone(),
+            name: name.to_string(),
+            description: String::new(),
+            children: Vec::new(),
+            modification_time: now_ms(),
+            tags: Vec::new(),
+            password: String::new(),
+            password_tips: String::new(),
+            extra: Default::default(),
+        };
+        match parent {
+            None => self.metadata.folders.push(folder),
+            Some(p) => match find_mut(&mut self.metadata.folders, p) {
+                Some(f) => f.children.push(folder),
+                None => return Err(self.missing(p)),
+            },
+        }
+        self.save_metadata()?;
+        Ok(id)
+    }
+
+    /// Renames a folder. Eagle leaves its `modificationTime` alone.
+    pub fn rename_folder(&mut self, id: &str, name: &str) -> Result<()> {
+        let Some(f) = find_mut(&mut self.metadata.folders, id) else { return Err(self.missing(id)) };
+        f.name = name.to_string();
+        self.save_metadata()
+    }
+
+    /// Sets a folder's description.
+    pub fn set_folder_description(&mut self, id: &str, description: &str) -> Result<()> {
+        let Some(f) = find_mut(&mut self.metadata.folders, id) else { return Err(self.missing(id)) };
+        f.description = description.to_string();
+        self.save_metadata()
+    }
+
+    /// Deletes a folder and its subfolders. Items that were in them lose
+    /// those folder ids; items left in no folder go to the trash, as Eagle
+    /// does (without a `deletedTime`).
+    pub fn delete_folder(&mut self, id: &str) -> Result<()> {
+        let removed = remove(&mut self.metadata.folders, id).ok_or_else(|| self.missing(id))?;
+        let mut gone = Vec::new();
+        removed.walk(&mut |f| gone.push(f.id.clone()));
+        self.save_metadata()?;
+        let affected: Vec<Item> = self
+            .items()
+            .iter()
+            .filter(|i| i.folders.iter().any(|f| gone.contains(f)))
+            .cloned()
+            .collect();
+        for mut item in affected {
+            item.folders.retain(|f| !gone.contains(f));
+            if item.folders.is_empty() {
+                item.is_deleted = true;
+            }
+            self.update_item(item)?;
+        }
+        Ok(())
+    }
+
+    /// Writes the library `metadata.json`, stamping its `modificationTime`.
+    pub fn save_metadata(&mut self) -> Result<()> {
+        self.metadata.modification_time = now_ms();
+        write_json(&self.root().join("metadata.json"), &self.metadata)
+    }
+
+    fn missing(&self, id: &str) -> Error {
+        Error::Import { path: self.root().to_path_buf(), reason: format!("no folder {id}") }
+    }
+}
+
+fn find_mut<'a>(folders: &'a mut [Folder], id: &str) -> Option<&'a mut Folder> {
+    for f in folders {
+        if f.id == id {
+            return Some(f);
+        }
+        if let Some(found) = find_mut(&mut f.children, id) {
+            return Some(found);
+        }
+    }
+    None
+}
+
+fn remove(folders: &mut Vec<Folder>, id: &str) -> Option<Folder> {
+    if let Some(pos) = folders.iter().position(|f| f.id == id) {
+        return Some(folders.remove(pos));
+    }
+    folders.iter_mut().find_map(|f| remove(&mut f.children, id))
 }
 
 fn now_ms() -> u64 {

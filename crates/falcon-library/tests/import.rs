@@ -224,3 +224,30 @@ fn editing_renames_files_and_trashes() {
     lib.record_tag_use(&["edited".into()]).unwrap();
     assert_eq!(Library::open(&dest).unwrap().tags.history_tags[0], "edited");
 }
+
+#[test]
+fn folders_create_rename_delete() {
+    let Some(src) = fixture() else { return };
+    let tmp = tempfile::tempdir().unwrap();
+    let dest = tmp.path().join("Folders.library");
+    Library::open(&src).unwrap().save_to(&dest).unwrap();
+    let mut lib = Library::open(&dest).unwrap();
+
+    let parent = lib.create_folder(None, "Parent").unwrap();
+    let child = lib.create_folder(Some(&parent), "Child").unwrap();
+    lib.rename_folder(&child, "Renamed").unwrap();
+    let mut item = lib.items()[0].clone();
+    item.folders = vec![child.clone()];
+    lib.update_item(item.clone()).unwrap();
+
+    let reopened = Library::open(&dest).unwrap();
+    assert!(reopened.folder_ids().contains(child.as_str()));
+    assert_eq!(reopened.all_folders().iter().find(|f| f.id == child).unwrap().name, "Renamed");
+
+    lib.delete_folder(&parent).unwrap();
+    let reopened = Library::open(&dest).unwrap();
+    assert!(!reopened.folder_ids().contains(parent.as_str()));
+    let got = reopened.item(&item.id).unwrap();
+    assert!(got.folders.is_empty());
+    assert!(got.is_deleted);
+}
