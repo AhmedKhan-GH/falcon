@@ -28,6 +28,19 @@ const ROW_GAP: f32 = 10.0;
 const TILE_MIN: f32 = 80.0;
 const TILE_MAX: f32 = 400.0;
 
+/// Ids being dragged from the grid.
+#[derive(Clone)]
+struct DragItems(Vec<String>);
+
+/// Library changes requested while drawing, applied at the end of a frame.
+enum Action {
+    CreateFolder { parent: Option<String> },
+    RenameFolder(String, String),
+    DeleteFolder(String),
+    AddToFolder(Vec<String>, String),
+    Trash(Vec<String>, bool),
+}
+
 /// Uncommitted inspector text for one item.
 struct EditBuf {
     id: String,
@@ -63,6 +76,11 @@ pub struct App {
     scroll_to: Option<String>,
     /// Images needed this frame, handed to the loader once at the end.
     frame_jobs: Vec<crate::loader::Job>,
+    actions: Vec<Action>,
+    /// Folder being renamed in the sidebar, with the text typed so far.
+    renaming: Option<(String, String)>,
+    /// Folder awaiting delete confirmation.
+    confirm_delete: Option<String>,
 }
 
 impl App {
@@ -92,6 +110,9 @@ impl App {
             columns: 1,
             scroll_to: None,
             frame_jobs: Vec::new(),
+            actions: Vec::new(),
+            renaming: None,
+            confirm_delete: None,
         };
         if let Some(p) = initial {
             app.open(p);
@@ -273,6 +294,53 @@ impl App {
     }
 }
 
+impl App {
+    fn apply_actions(&mut self, lib: &mut Library) {
+        for action in std::mem::take(&mut self.actions) {
+            let result = match action {
+                Action::CreateFolder { parent } => lib.create_folder(parent.as_deref(), "New Folder").map(|id| {
+                    if let Some(p) = parent {
+                        self.collapsed.remove(&p);
+                    }
+                    self.renaming = Some((id, "New Folder".into()));
+                }),
+                Action::RenameFolder(id, name) => lib.rename_folder(&id, &name),
+                Action::DeleteFolder(id) => {
+                    if self.scope == Scope::Folder(id.clone()) {
+                        self.scope = Scope::All;
+                    }
+                    lib.delete_folder(&id)
+                }
+                Action::AddToFolder(ids, fid) => {
+                    let n = ids.len();
+                    let mut r = Ok(());
+                    for id in ids {
+                        if let Some(mut item) = lib.item(&id).cloned()
+                            && !item.folders.contains(&fid)
+                        {
+                            item.folders.push(fid.clone());
+                            item.is_deleted = false;
+                            r = r.and(lib.update_item(item));
+                        }
+                    }
+                    let name = logic::find_folder(&lib.metadata.folders, &fid).map_or_else(String::new, |f| f.name.clone());
+                    self.flash(format!("Added {n} to {name}"));
+                    r
+                }
+                Action::Trash(ids, trash) => {
+                    self.selected.retain(|s| !ids.contains(s));
+                    let r = lib.set_trashed(&ids, trash);
+                    self.flash(if trash { format!("Moved {} to Trash", ids.len()) } else { format!("Restored {}", ids.len()) });
+                    r
+                }
+            };
+            if let Err(e) = result {
+                self.flash(format!("Could not save: {e}"));
+            }
+        }
+    }
+}
+
 fn fastrand_seed() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos() as u64)
 }
@@ -380,7 +448,9 @@ impl App {
         icon_button(ui, Pos2::new(r - 51.0, cy), ic::ARROWS_LEFT_RIGHT, 18.0, true, "Switch Library")
             .clicked()
             .then(|| self.pick_library());
-        icon_button(ui, Pos2::new(r - 79.0, cy), ic::PLUS, 18.0, false, "Create Folder");
+        if icon_button(ui, Pos2::new(r - 79.0, cy), ic::PLUS, 18.0, true, "Create Folder").clicked() {
+            self.actions.push(Action::CreateFolder { parent: None });
+        }
 
         // Library switcher.
         let lib_row = Rect::from_min_size(Pos2::new(full.left(), header.bottom()), vec2(full.width(), 30.0));
@@ -456,6 +526,12 @@ impl App {
                 (a, b) => a == b,
             };
             let resp = sidebar_row(ui, 0, glyph, label, (count > 0).then_some(count), active, None);
+            if scope == Scope::Trash {
+                drop_highlight(ui, &resp, 0);
+                if let Some(d) = resp.dnd_release_payload::<DragItems>() {
+                    self.actions.push(Action::Trash(d.0.clone(), true));
+                }
+            }
             if resp.clicked() {
                 self.go(scope);
             }
@@ -474,8 +550,56 @@ impl App {
         let active = self.scope == Scope::Folder(f.id.clone());
         let count = cx.folder_counts.get(&f.id).copied();
         let glyph = if open { ic::FOLDER_OPEN } else { ic::FOLDER };
-        let resp = sidebar_row(ui, depth, glyph, &f.name, count, active, has_children.then_some(open));
+        let renaming = self.renaming.as_ref().is_some_and(|(id, _)| *id == f.id);
+        let label = if renaming { "" } else { f.name.as_str() };
+        let resp = sidebar_row(ui, depth, glyph, label, count, active, has_children.then_some(open));
         let row_rect = resp.rect;
+        if renaming {
+            let r = Rect::from_min_max(
+                Pos2::new(row_rect.left() + icon_x(depth) + 12.0, row_rect.top() + 3.0),
+                Pos2::new(row_rect.right() - 14.0, row_rect.bottom() - 3.0),
+            );
+            ui.painter().rect_filled(r, CornerRadius::same(4), t::FIELD);
+            ui.painter().rect_stroke(r, CornerRadius::same(4), Stroke::new(1.0, t::PRIMARY), StrokeKind::Inside);
+            let (_, buf) = self.renaming.as_mut().unwrap();
+            let te = ui.put(
+                r.shrink2(vec2(4.0, 0.0)),
+                TextEdit::singleline(buf)
+                    .id_salt(("rename", &f.id))
+                    .frame(egui::Frame::NONE)
+                    .margin(egui::Margin::ZERO)
+                    .font(font(13.5))
+                    .align(Align2::LEFT_CENTER),
+            );
+            if !te.has_focus() && !te.lost_focus() {
+                te.request_focus();
+            }
+            let cancel = ui.input(|i| i.key_pressed(Key::Escape));
+            if te.lost_focus() || cancel {
+                let (id, name) = self.renaming.take().unwrap();
+                let name = name.trim().to_string();
+                if !cancel && !name.is_empty() && name != f.name {
+                    self.actions.push(Action::RenameFolder(id, name));
+                }
+            }
+        }
+        drop_highlight(ui, &resp, depth);
+        if let Some(d) = resp.dnd_release_payload::<DragItems>() {
+            self.actions.push(Action::AddToFolder(d.0.clone(), f.id.clone()));
+        }
+        resp.context_menu(|ui| {
+            ui.set_min_width(180.0);
+            if ui.button("New Subfolder").clicked() {
+                self.actions.push(Action::CreateFolder { parent: Some(f.id.clone()) });
+            }
+            if ui.button("Rename").clicked() {
+                self.renaming = Some((f.id.clone(), f.name.clone()));
+            }
+            ui.separator();
+            if ui.button(RichText::new("Delete Folder").color(Color32::from_rgb(0xff, 0x66, 0x67))).clicked() {
+                self.confirm_delete = Some(f.id.clone());
+            }
+        });
         if resp.clicked() {
             let caret = caret_rect(row_rect, depth);
             if has_children && resp.interact_pointer_pos().is_some_and(|p| caret.contains(p)) {
@@ -506,6 +630,16 @@ impl App {
             }
         }
         Some(row_rect)
+    }
+}
+
+/// Outlines a sidebar row while grid items are dragged over it.
+fn drop_highlight(ui: &Ui, resp: &Response, depth: usize) {
+    if resp.dnd_hover_payload::<DragItems>().is_some() {
+        let r = resp.rect;
+        let bg = Rect::from_min_max(Pos2::new(r.left() + icon_x(depth) - 14.0, r.top() + 0.5), Pos2::new(r.right() - 11.0, r.bottom() - 0.5));
+        ui.painter().rect_filled(bg, t::RADIUS, t::PRIMARY.gamma_multiply(0.25));
+        ui.painter().rect_stroke(bg, t::RADIUS, Stroke::new(1.5, t::PRIMARY), StrokeKind::Inside);
     }
 }
 
@@ -760,7 +894,45 @@ impl App {
                     let Some(item) = items.get(n) else { break };
                     let tl = origin + vec2(GRID_PAD_X + c as f32 * (s + GRID_GAP), GRID_PAD_TOP + r as f32 * row_h);
                     let card = Rect::from_min_size(tl, vec2(s, s + CARD_TEXT));
-                    let resp = ui.interact(card, ui.scope_id().with(("card", &item.id)), Sense::click());
+                    let resp = ui.interact(card, ui.scope_id().with(("card", &item.id)), Sense::click_and_drag());
+                    if resp.drag_started() {
+                        let ids = if self.selected.contains(&item.id) { self.selected.clone() } else { vec![item.id.clone()] };
+                        resp.dnd_set_drag_payload(DragItems(ids));
+                    }
+                    if resp.secondary_clicked() && !self.selected.contains(&item.id) {
+                        self.selected = vec![item.id.clone()];
+                    }
+                    let scope_is_trash = self.scope == Scope::Trash;
+                    let targets: Vec<String> = if self.selected.contains(&item.id) { self.selected.clone() } else { vec![item.id.clone()] };
+                    resp.context_menu(|ui| {
+                        ui.set_min_width(200.0);
+                        if ui.button("Open").clicked() {
+                            opened = Some(item.id.clone());
+                        }
+                        if ui.button("Show in Finder").clicked() {
+                            let _ = std::process::Command::new("open").arg("-R").arg(item.original_path(lib.root())).spawn();
+                        }
+                        if ui.button("Copy File Path").clicked() {
+                            ui.ctx().copy_text(item.original_path(lib.root()).display().to_string());
+                        }
+                        ui.menu_button("Add to Folder", |ui| {
+                            egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
+                                for f in lib.all_folders() {
+                                    if ui.button(&f.name).clicked() {
+                                        self.actions.push(Action::AddToFolder(targets.clone(), f.id.clone()));
+                                    }
+                                }
+                            });
+                        });
+                        ui.separator();
+                        if scope_is_trash {
+                            if ui.button("Restore").clicked() {
+                                self.actions.push(Action::Trash(targets.clone(), false));
+                            }
+                        } else if ui.button("Move to Trash").clicked() {
+                            self.actions.push(Action::Trash(targets.clone(), true));
+                        }
+                    });
                     if resp.clicked() {
                         clicked = Some((item.id.clone(), ui.input(|i| i.modifiers)));
                     }
@@ -1336,6 +1508,39 @@ impl eframe::App for App {
             let mut v = ui.new_child(egui::UiBuilder::new().max_rect(ctx.content_rect()));
             self.viewer(&ctx, &mut v, &lib);
         }
+        if let Some(d) = egui::DragAndDrop::payload::<DragItems>(&ctx)
+            && let Some(pos) = ctx.pointer_latest_pos()
+        {
+            let text = if d.0.len() == 1 { "1 item".to_string() } else { format!("{} items", d.0.len()) };
+            let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("drag-ghost")));
+            let g = painter.layout_no_wrap(text, font(12.0), Color32::WHITE);
+            let r = Rect::from_min_size(pos + vec2(12.0, 12.0), g.size() + vec2(16.0, 8.0));
+            painter.rect_filled(r, CornerRadius::same(10), t::PRIMARY);
+            painter.galley(r.min + vec2(8.0, 4.0), g, Color32::WHITE);
+        }
+        if let Some(id) = self.confirm_delete.clone() {
+            let name = logic::find_folder(&lib.metadata.folders, &id).map_or_else(String::new, |f| f.name.clone());
+            let modal = egui::Modal::new(egui::Id::unique("confirm-delete")).show(&ctx, |ui| {
+                ui.set_width(320.0);
+                ui.label(RichText::new(format!("Delete “{name}”?")).size(15.0));
+                ui.add_space(4.0);
+                ui.label(RichText::new("Its subfolders are deleted too. Items left in no folder move to the Trash.").color(t::TEXT_MUTED));
+                ui.add_space(10.0);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.button(RichText::new("Delete").color(Color32::from_rgb(0xff, 0x66, 0x67))).clicked() {
+                        self.actions.push(Action::DeleteFolder(id.clone()));
+                        self.confirm_delete = None;
+                    }
+                    if ui.button("Cancel").clicked() {
+                        self.confirm_delete = None;
+                    }
+                });
+            });
+            if modal.should_close() {
+                self.confirm_delete = None;
+            }
+        }
+        self.apply_actions(&mut lib);
         self.loader.want(std::mem::take(&mut self.frame_jobs));
         self.lib = Some(lib);
     }
