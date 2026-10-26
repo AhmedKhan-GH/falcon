@@ -1,0 +1,14 @@
+Falcon
+Copyright (c) 2026 Ahmed Khan
+
+This product is licensed under either of the Apache License, Version 2.0
+(LICENSE-APACHE) or the MIT license (LICENSE-MIT), at your option.
+
+Third-party material:
+- Phosphor Icons (crates/falcon-app/assets/Phosphor-*.ttf), MIT license,
+  copyright (c) 2023 Phosphor Icons. See crates/falcon-app/assets/PHOSPHOR-LICENSE-MIT.
+- The screenshots in docs/images show public-domain artworks from the
+  Art Institute of Chicago, released under CC0. See ATTRIBUTION.md.
+
+"Eagle" is a trademark of its respective owner. Falcon is not affiliated
+with, endorsed by or sponsored by Eagle or its developers.

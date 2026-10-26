@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Falcon</title>
+<meta name="description" content="Falcon is a free, open-source asset manager for everyone, written in Rust. Collect, tag, search and browse images, PDFs, fonts and videos in one library.">
+<meta property="og:title" content="Falcon">
+<meta property="og:description" content="A free, open-source asset manager for everyone, written in Rust.">
+<meta property="og:image" content="images/falcon-hero.jpg">
+<link rel="icon" href="brand/falcon-icon-256.png">
+<style>
+  :root {
+    --bg: #0f1013;
+    --plate: #17191d;
+    --panel: #1f2023;
+    --rule: #2c2d31;
+    --text: #f4f5f7;
+    --muted: #a2a2a4;
+    --faint: #6f7075;
+    --accent: #3297ff;
+    --accent-soft: rgba(50, 151, 255, 0.14);
+    --radius: 14px;
+    --max: 1160px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 17px/1.6 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; text-decoration: none; }
+  img { max-width: 100%; height: auto; display: block; }
+  .wrap { max-width: var(--max); margin: 0 auto; padding: 0 24px; }
+
+  /* Navigation */
+  nav { position: sticky; top: 0; z-index: 10; backdrop-filter: blur(14px); background: rgba(15, 16, 19, 0.78); border-bottom: 1px solid var(--rule); }
+  nav .wrap { display: flex; align-items: center; gap: 28px; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 18px; }
+  .brand img { width: 30px; height: 30px; }
+  nav .links { display: flex; gap: 24px; color: var(--muted); font-size: 15px; margin-left: auto; }
+  nav .links a:hover { color: var(--text); }
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 11px 20px; border-radius: 10px; font-weight: 600; font-size: 15px; transition: background .15s, border-color .15s; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #4aa3ff; }
+  .btn-ghost { border: 1px solid var(--rule); color: var(--text); background: var(--plate); }
+  .btn-ghost:hover { border-color: #45464b; }
+  nav .btn { padding: 8px 14px; }
+
+  /* Hero */
+  header.hero { position: relative; padding: 96px 0 40px; text-align: center; overflow: hidden; }
+  header.hero::before {
+    content: ""; position: absolute; inset: -40% -10% auto; height: 760px; z-index: -1;
+    background: radial-gradient(closest-side, rgba(50, 151, 255, 0.22), transparent 70%);
+  }
+  .hero-icon { width: 112px; height: 112px; margin: 0 auto 28px; filter: drop-shadow(0 18px 40px rgba(0, 0, 0, .55)); }
+  h1 { font-size: clamp(34px, 5.4vw, 60px); line-height: 1.08; letter-spacing: -0.025em; margin: 0 auto 20px; max-width: 900px; font-weight: 700; }
+  .lede { color: var(--muted); font-size: clamp(17px, 2vw, 20px); max-width: 680px; margin: 0 auto 34px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+  .fine { color: var(--faint); font-size: 14px; margin-top: 16px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 40px auto 0; max-width: 760px; }
+  .chip { padding: 6px 14px; border: 1px solid var(--rule); border-radius: 999px; color: var(--muted); font-size: 14px; background: var(--plate); }
+  .shot { margin: 56px auto 0; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--rule); box-shadow: 0 40px 120px rgba(0, 0, 0, .6), 0 0 0 1px rgba(255,255,255,.02); }
+  .caption { color: var(--faint); font-size: 13px; margin-top: 12px; text-align: center; }
+
+  /* Sections */
+  section { padding: 110px 0 0; }
+  .eyebrow { color: var(--accent); font-weight: 600; font-size: 14px; letter-spacing: .04em; margin-bottom: 10px; }
+  h2 { font-size: clamp(28px, 3.6vw, 42px); line-height: 1.15; letter-spacing: -0.02em; margin: 0 0 16px; font-weight: 700; }
+  .intro { color: var(--muted); max-width: 680px; margin: 0 0 40px; font-size: 18px; }
+  .feature { display: grid; grid-template-columns: 1fr 1.35fr; gap: 48px; align-items: center; padding: 56px 0; border-top: 1px solid var(--rule); }
+  .feature:first-of-type { border-top: 0; }
+  .feature.flip { grid-template-columns: 1.35fr 1fr; }
+  .feature.flip .text { order: 2; }
+  .num { font: 600 14px/1 ui-monospace, "SF Mono", Menlo, monospace; color: var(--faint); margin-bottom: 14px; }
+  h3 { font-size: 26px; letter-spacing: -0.015em; margin: 0 0 12px; }
+  .text p { color: var(--muted); margin: 0 0 18px; }
+  .text ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+  .text li { padding-left: 22px; position: relative; color: #d4d5d8; font-size: 16px; }
+  .text li::before { content: ""; position: absolute; left: 2px; top: .62em; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .media { border-radius: var(--radius); overflow: hidden; border: 1px solid var(--rule); box-shadow: 0 24px 70px rgba(0, 0, 0, .5); }
+
+  /* Cards */
+  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .card { background: var(--plate); border: 1px solid var(--rule); border-radius: var(--radius); padding: 24px; }
+  .card h4 { margin: 0 0 8px; font-size: 18px; }
+  .card p { margin: 0; color: var(--muted); font-size: 15px; }
+  .card .k { font-size: 26px; margin-bottom: 14px; }
+
+  /* Code */
+  .code { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  pre { margin: 0; background: #0b0c0e; border: 1px solid var(--rule); border-radius: var(--radius); padding: 22px; overflow-x: auto; font: 14px/1.7 ui-monospace, "SF Mono", Menlo, monospace; color: #d7dae0; }
+  pre .c { color: var(--faint); }
+  pre .p { color: var(--accent); }
+
+  /* Status */
+  .status { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .status .card ul { margin: 10px 0 0; padding-left: 18px; color: var(--muted); font-size: 15px; }
+
+  /* Closing */
+  .closing { text-align: center; padding: 120px 0 110px; }
+  .closing h2 { margin-bottom: 14px; }
+  .closing p { color: var(--muted); margin: 0 auto 30px; max-width: 560px; }
+
+  footer { border-top: 1px solid var(--rule); padding: 40px 0 56px; color: var(--faint); font-size: 14px; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 24px; justify-content: space-between; align-items: center; }
+  footer .links { display: flex; gap: 20px; flex-wrap: wrap; }
+  footer a:hover { color: var(--text); }
+
+  @media (max-width: 900px) {
+    .feature, .feature.flip { grid-template-columns: 1fr; gap: 28px; }
+    .feature.flip .text { order: 0; }
+    .cards { grid-template-columns: 1fr 1fr; }
+    .code, .status { grid-template-columns: 1fr; }
+    nav .links { display: none; }
+    nav .btn { margin-left: auto; }
+  }
+  @media (max-width: 520px) {
+    .cards { grid-template-columns: 1fr; }
+    header.hero { padding-top: 64px; }
+    section { padding-top: 80px; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="brand/falcon-icon-256.png" alt="">Falcon</a>
+    <div class="links">
+      <a href="#collect">Features</a>
+      <a href="#open">Open source</a>
+      <a href="#developers">Developers</a>
+      <a href="book/">Docs</a>
+    </div>
+    <a class="btn btn-ghost" href="https://github.com/AhmedKhan-GH/falcon">GitHub</a>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="wrap">
+    <img class="hero-icon" src="brand/falcon-icon-256.png" alt="Falcon app icon">
+    <h1>Falcon is a free, open-source asset manager for everyone.</h1>
+    <p class="lede">Collect, tag, search and browse your images, PDFs, fonts and videos in one library. Native on macOS, written in Rust, and free.</p>
+    <div class="actions">
+      <a class="btn btn-primary" href="https://github.com/AhmedKhan-GH/falcon#get-started">Get Falcon for macOS</a>
+      <a class="btn btn-ghost" href="https://github.com/AhmedKhan-GH/falcon">View the source</a>
+    </div>
+    <p class="fine">Early alpha · macOS 12 or later · MIT or Apache-2.0</p>
+    <div class="chips">
+      <span class="chip">JPG &amp; PNG</span><span class="chip">WebP</span><span class="chip">GIF</span><span class="chip">SVG</span>
+      <span class="chip">PDF</span><span class="chip">PSD</span><span class="chip">AI</span><span class="chip">HEIC</span>
+      <span class="chip">RAW</span><span class="chip">Video</span><span class="chip">Fonts</span>
+    </div>
+    <div class="shot"><img src="images/falcon-hero.jpg" alt="Falcon showing a library of public-domain paintings in the Waterfall layout, with a painting selected and its palette, notes, tags and rating in the inspector" width="2560" height="1600"></div>
+    <p class="caption">A library of public-domain paintings from the Art Institute of Chicago. <i>A Sunday on La Grande Jatte — 1884</i>, Georges Seurat.</p>
+  </div>
+</header>
+
+<main>
+  <section id="collect">
+    <div class="wrap">
+      <div class="eyebrow">Features</div>
+      <h2>Everything a design library needs, in one native app.</h2>
+      <p class="intro">Falcon keeps your references, assets and inspiration in a library you can search in seconds, and stays out of your way while you work.</p>
+
+      <div class="feature">
+        <div class="text">
+          <div class="num">01 · Collect</div>
+          <h3>Bring files in any way you like</h3>
+          <p>Drop files and folders onto the window, paste with ⌘V, or open files with Falcon. Each item gets a thumbnail and a colour palette automatically.</p>
+          <ul>
+            <li>Images, SVG and animated GIF</li>
+            <li>PDF, PSD, AI, HEIC, RAW and video through macOS QuickLook</li>
+            <li>Imports run in the background with a progress bar</li>
+          </ul>
+        </div>
+        <div class="media"><img src="images/falcon-batch.jpg" alt="Four paintings selected, with the inspector showing their shared tags and actions that apply to all of them" loading="lazy"></div>
+      </div>
+
+      <div class="feature flip">
+        <div class="text">
+          <div class="num">02 · Organise</div>
+          <h3>Folders, tags and rules that work for you</h3>
+          <p>Nest folders, pin the ones you use to Quick Access, and let smart folders gather items that match your rules.</p>
+          <ul>
+            <li>Rename, merge, star and delete tags across the whole library</li>
+            <li>Edit tags, folders and ratings on many items at once</li>
+            <li>Notes, source URLs, ratings and a Trash you can restore from</li>
+          </ul>
+        </div>
+        <div class="media"><img src="images/falcon-tags.jpg" alt="The tag manager listing every tag with its item count" loading="lazy"></div>
+      </div>
+
+      <div class="feature">
+        <div class="text">
+          <div class="num">03 · Search</div>
+          <h3>Find anything by word, rule or colour</h3>
+          <p>Type a few words, or combine them with OR, NOT and quoted phrases. The filter bar narrows by tag, folder, shape, rating, type, notes and URL.</p>
+          <ul>
+            <li>Colour search ranks images by how close their dominant colours are</li>
+            <li>Click a swatch in the inspector to find similar images</li>
+            <li>Sort by date, title, size, dimensions or rating</li>
+          </ul>
+        </div>
+        <div class="media"><img src="images/falcon-color.jpg" alt="The filter bar with a blue colour filter showing five sea paintings" loading="lazy"></div>
+      </div>
+
+      <div class="feature flip">
+        <div class="text">
+          <div class="num">04 · Browse</div>
+          <h3>Four layouts and a viewer that keeps up</h3>
+          <p>Waterfall keeps every image's shape, Justified fills each row, Grid lines up square cards, and List shows the details.</p>
+          <ul>
+            <li>Zoom around the pointer, pan, fit and actual size</li>
+            <li>Step through items with the arrow keys</li>
+            <li>Drag items out into Finder, Figma or Photoshop</li>
+          </ul>
+        </div>
+        <div class="media"><img src="images/falcon-viewer.jpg" alt="A painting open in the full-window viewer" loading="lazy"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="open">
+    <div class="wrap">
+      <div class="eyebrow">Open source</div>
+      <h2>Free to use, free to read, free to change.</h2>
+      <p class="intro">Falcon is built in the open and belongs to the people who use it.</p>
+      <div class="cards">
+        <div class="card"><div class="k">◎</div><h4>Free</h4><p>Every feature is free to use, for everyone.</p></div>
+        <div class="card"><div class="k">⌘</div><h4>MIT or Apache-2.0</h4><p>Read the code, fork it, ship it in your own tools. Contributions are welcome.</p></div>
+        <div class="card"><div class="k">▤</div><h4>Plain files you own</h4><p>A library is a folder of your originals and small JSON files. There is no database and no lock-in.</p></div>
+        <div class="card"><div class="k">⚙︎</div><h4>Written in Rust</h4><p>A native app on egui: no Electron, no web view, thumbnails decoded on every core.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="developers">
+    <div class="wrap">
+      <div class="eyebrow">Developers</div>
+      <h2>Script your library.</h2>
+      <p class="intro">The same engine runs the app, a command-line tool and a local HTTP API, so scripts, plugins and AI agents can work with your library too.</p>
+      <div class="code">
+<pre><span class="c"># Create a library and add files</span>
+<span class="p">$</span> falcon new ~/Pictures/Moodboard.library
+<span class="p">$</span> falcon import ~/Pictures/Moodboard.library \
+    poster.png --tag type --tag 1960s
+<span class="p">$</span> falcon info ~/Pictures/Moodboard.library
+items:   1 (0 in trash)
+folders: 0
+tags:    2</pre>
+<pre><span class="c"># Talk to the running app over HTTP</span>
+<span class="p">$</span> curl -X POST localhost:41596/api/item/addFromPath \
+    -d '{"path": "/tmp/ref.jpg", "tags": ["ref"]}'
+{"status":"success","data":"MVP8K2…"}
+
+<span class="p">$</span> curl -X POST localhost:41596/api/v2/item/query \
+    -d '{"query": "poster OR flyer -draft"}'</pre>
+      </div>
+    </div>
+  </section>
+
+  <section id="status">
+    <div class="wrap">
+      <div class="eyebrow">Status</div>
+      <h2>Early alpha, moving fast.</h2>
+      <p class="intro">The everyday workflow is in place. Here is what is done and what comes next.</p>
+      <div class="status">
+        <div class="card"><h4>Ready today</h4>
+          <ul>
+            <li>Import with thumbnails and colour palettes</li>
+            <li>Folders, tags, smart folders, Quick Access</li>
+            <li>Keyword, filter and colour search</li>
+            <li>Four layouts and the viewer</li>
+            <li>Command-line tool and HTTP API</li>
+          </ul>
+        </div>
+        <div class="card"><h4>Coming next</h4>
+          <ul>
+            <li>Hover preview and per-folder options</li>
+            <li>Video and audio playback</li>
+            <li>Undo and tag groups</li>
+            <li>Windows and Linux builds</li>
+            <li>Signed releases</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="closing">
+    <div class="wrap">
+      <h2>Build your library with Falcon.</h2>
+      <p>Clone the repository, run one command, and start collecting.</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="https://github.com/AhmedKhan-GH/falcon#get-started">Get started</a>
+        <a class="btn btn-ghost" href="book/">Read the docs</a>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div>© 2026 Falcon contributors · MIT or Apache-2.0</div>
+    <div class="links">
+      <a href="https://github.com/AhmedKhan-GH/falcon">GitHub</a>
+      <a href="book/">Documentation</a>
+      <a href="https://github.com/AhmedKhan-GH/falcon/blob/main/ROADMAP.md">Roadmap</a>
+      <a href="https://github.com/AhmedKhan-GH/falcon/blob/main/ATTRIBUTION.md">Artwork credits</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
