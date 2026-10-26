@@ -10,7 +10,17 @@ fn main() -> eframe::Result {
     // `falcon-app [LIBRARY] [ITEM]`, where ITEM is an id or Eagle's
     // `eagle://item/<id>` link, opened in the viewer.
     let initial = std::env::args_os().nth(1).map(PathBuf::from);
-    let open_item = std::env::args().nth(2).map(|a| a.trim_start_matches("eagle://item/").to_string());
+    // Later arguments are an `eagle://item/<id>` link (or bare id) to open,
+    // or files to import, as when files are opened with the app.
+    let mut open_item = None;
+    let mut import = Vec::new();
+    for a in std::env::args().skip(2) {
+        if std::path::Path::new(&a).exists() {
+            import.push(PathBuf::from(a));
+        } else {
+            open_item = Some(a.trim_start_matches("eagle://item/").to_string());
+        }
+    }
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_title("Falcon")
@@ -21,5 +31,5 @@ fn main() -> eframe::Result {
             .with_min_inner_size([800.0, 500.0]),
         ..Default::default()
     };
-    eframe::run_native("Falcon", options, Box::new(move |cc| Ok(Box::new(app::App::new(cc, initial, open_item)))))
+    eframe::run_native("Falcon", options, Box::new(move |cc| Ok(Box::new(app::App::new(cc, initial, open_item, import)))))
 }

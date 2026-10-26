@@ -64,6 +64,19 @@ enum Action {
     DeleteSmart(String),
 }
 
+/// Background import counters.
+#[derive(Default)]
+struct Progress {
+    total: usize,
+    done: usize,
+    failed: usize,
+    current: String,
+}
+
+fn is_hidden(p: &std::path::Path) -> bool {
+    p.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.'))
+}
+
 /// Zoom, pan and animation of the full-window viewer.
 #[derive(Default)]
 struct ViewState {
@@ -282,13 +295,14 @@ pub struct App {
     /// Focus the inspector's title field next frame (F2).
     focus_title: bool,
     focus_search: bool,
+    progress: Arc<Mutex<Progress>>,
     /// Tag being renamed on the All Tags page, with the new name so far.
     tag_rename: Option<(String, String)>,
     tag_filter: String,
 }
 
 impl App {
-    pub fn new(cc: &eframe::CreationContext<'_>, initial: Option<PathBuf>, open_item: Option<String>) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>, initial: Option<PathBuf>, open_item: Option<String>, import: Vec<PathBuf>) -> Self {
         t::install(&cc.egui_ctx);
         let mut app = App {
             lib: None,
@@ -328,6 +342,7 @@ impl App {
             view: ViewState::default(),
             focus_title: false,
             focus_search: false,
+            progress: Arc::new(Mutex::new(Progress::default())),
             tag_rename: None,
             tag_filter: String::new(),
         };
@@ -341,6 +356,9 @@ impl App {
         // Reopen the last library unless one was given on the command line.
         if let Some(p) = initial.or(saved.library.filter(|p| p.is_dir())) {
             app.open(p);
+        }
+        if !import.is_empty() {
+            app.import(import);
         }
         if let Some(id) = open_item {
             app.selected = vec![id.clone()];
@@ -438,31 +456,81 @@ impl App {
         }
     }
 
+    /// Imports files and folders on a background thread: each file is
+    /// staged without the library lock, then committed under it, so the
+    /// window stays responsive. Progress shows under the toolbar.
     fn import(&mut self, paths: Vec<PathBuf>) {
         let Some(shared) = self.lib.clone() else { return };
-        let mut guard = lock(&shared);
-        let lib = &mut *guard;
         let folders = match &self.scope {
             Scope::Folder(id) => vec![id.clone()],
             _ => Vec::new(),
         };
         let opts = ImportOptions { folders, ..Default::default() };
-        let (mut ok, mut failed) = (0, 0);
+        let mut files = Vec::new();
         let mut stack = paths;
         while let Some(p) = stack.pop() {
             if p.is_dir() {
                 if let Ok(rd) = std::fs::read_dir(&p) {
-                    stack.extend(rd.flatten().map(|e| e.path()));
+                    stack.extend(rd.flatten().map(|e| e.path()).filter(|p| !is_hidden(p)));
                 }
-                continue;
-            }
-            match lib.import_file(&p, &opts) {
-                Ok(_) => ok += 1,
-                Err(_) => failed += 1,
+            } else if !is_hidden(&p) {
+                files.push(p);
             }
         }
-        let msg = if failed > 0 { format!("Added {ok}, {failed} failed") } else { format!("Added {ok}") };
-        self.flash(msg);
+        if files.is_empty() {
+            return;
+        }
+        files.sort();
+        let progress = self.progress.clone();
+        {
+            let mut pr = progress.lock().unwrap_or_else(|p| p.into_inner());
+            pr.total += files.len();
+        }
+        let ctx = self.ctx.clone();
+        std::thread::spawn(move || {
+            for f in files {
+                let result = falcon_library::import::stage(&f, &opts).and_then(|staged| lock(&shared).commit_import(staged));
+                let mut pr = progress.lock().unwrap_or_else(|p| p.into_inner());
+                pr.done += 1;
+                if result.is_err() {
+                    pr.failed += 1;
+                }
+                pr.current = f.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                drop(pr);
+                ctx.request_repaint();
+            }
+        });
+    }
+
+    /// The import progress bar; clears itself a moment after finishing.
+    fn progress_bar(&mut self, ui: &mut Ui, rect: Rect) -> bool {
+        let snapshot = {
+            let pr = self.progress.lock().unwrap_or_else(|p| p.into_inner());
+            (pr.total, pr.done, pr.failed, pr.current.clone())
+        };
+        let (total, done, failed, current) = snapshot;
+        if total == 0 {
+            return false;
+        }
+        if done >= total {
+            let mut pr = self.progress.lock().unwrap_or_else(|p| p.into_inner());
+            *pr = Progress::default();
+            drop(pr);
+            let msg = if failed > 0 { format!("Added {}, {failed} failed", done - failed) } else { format!("Added {done}") };
+            self.flash(msg);
+            return false;
+        }
+        let p = ui.painter();
+        p.rect_filled(rect, 0.0, t::MAIN);
+        let track = Rect::from_min_max(Pos2::new(rect.left() + GRID_PAD_X, rect.bottom() - 6.0), Pos2::new(rect.right() - GRID_PAD_X, rect.bottom() - 3.0));
+        p.rect_filled(track, CornerRadius::same(2), t::BUTTON);
+        let f = done as f32 / total as f32;
+        let fill = Rect::from_min_max(track.min, Pos2::new(track.left() + track.width() * f, track.bottom()));
+        p.rect_filled(fill, CornerRadius::same(2), t::PRIMARY);
+        let text = format!("Importing {done} of {total}  ·  {current}");
+        let g = galley(ui, &text, font(12.0), t::TEXT_MUTED, rect.width() - 40.0);
+        p.galley(Pos2::new(rect.left() + GRID_PAD_X, rect.top() + 3.0), g, t::TEXT_MUTED);
+        true
     }
 
     /// ⌘C: puts the selected originals on the clipboard as files.
@@ -2477,6 +2545,11 @@ impl eframe::App for App {
                 }
             }
             let mut grid_top = bar.bottom();
+            let pb = Rect::from_min_size(Pos2::new(full.left(), grid_top), vec2(full.width(), 26.0));
+            let mut pui = ui.new_child(egui::UiBuilder::new().max_rect(pb));
+            if self.progress_bar(&mut pui, pb) {
+                grid_top = pb.bottom();
+            }
             if self.show_filter {
                 let fb = Rect::from_min_size(Pos2::new(full.left(), bar.bottom()), vec2(full.width(), 40.0));
                 let mut fui = ui.new_child(egui::UiBuilder::new().max_rect(fb));
