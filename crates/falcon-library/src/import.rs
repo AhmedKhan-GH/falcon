@@ -204,6 +204,10 @@ fn generate(item: &mut Item, raw: &Path, thumb: &Path) -> Option<Analysis> {
 /// render (Eagle likewise reports a PDF's render size); videos also get a
 /// `duration` in seconds.
 fn quicklook_thumbnail(item: &mut Item, raw: &Path, thumb: &Path, max: u32) -> Option<Analysis> {
+    // Eagle shows text files as text and never thumbnails them.
+    if item.ext == "txt" {
+        return None;
+    }
     let img = thumbnail::quicklook(raw, thumbnail::QUICKLOOK_SIZE).ok()?;
     let meta = thumbnail::spotlight(raw);
     let (w, h) = meta.size.unwrap_or((img.width(), img.height()));
