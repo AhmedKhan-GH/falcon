@@ -34,11 +34,66 @@ pub type Shared = Arc<Mutex<Library>>;
 
 /// Serves the API until the process exits.
 pub fn serve(lib: Shared, port: u16) -> std::io::Result<()> {
+    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
+    if std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_millis(200)).is_ok() {
+        return Err(std::io::Error::other(format!("port {port} is in use (is Eagle running?)")));
+    }
     let server = Server::http(("127.0.0.1", port)).map_err(std::io::Error::other)?;
     for request in server.incoming_requests() {
         handle(&lib, port, request);
     }
     Ok(())
+}
+
+/// A server running on its own thread; dropping it stops the server.
+pub struct Handle {
+    server: Arc<Server>,
+    thread: Option<std::thread::JoinHandle<()>>,
+    pub port: u16,
+}
+
+impl Drop for Handle {
+    fn drop(&mut self) {
+        self.server.unblock();
+        if let Some(t) = self.thread.take() {
+            let _ = t.join();
+        }
+    }
+}
+
+/// Starts serving on the first free port of `ports`, calling `on_request`
+/// after each handled request (for example to repaint a UI).
+pub fn start(
+    lib: Shared,
+    ports: impl IntoIterator<Item = u16>,
+    on_request: impl Fn() + Send + 'static,
+) -> std::io::Result<Handle> {
+    let mut last = None;
+    for port in ports {
+        // macOS lets a 127.0.0.1 bind succeed beside a wildcard listener
+        // (Eagle listens on *:41595), which would capture that server's
+        // localhost traffic. Skip any port where something already answers.
+        let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
+        if std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_millis(200)).is_ok() {
+            last = Some(format!("port {port} is in use"));
+            continue;
+        }
+        match Server::http(("127.0.0.1", port)) {
+            Ok(server) => {
+                let server = Arc::new(server);
+                let s = server.clone();
+                let thread = std::thread::spawn(move || {
+                    for request in s.incoming_requests() {
+                        handle(&lib, port, request);
+                        on_request();
+                    }
+                });
+                return Ok(Handle { server, thread: Some(thread), port });
+            }
+            Err(e) => last = Some(e.to_string()),
+        }
+    }
+    Err(std::io::Error::other(last.unwrap_or_else(|| "no ports given".to_string())))
 }
 
 /// A handler outcome before it is wrapped in Eagle's envelope.

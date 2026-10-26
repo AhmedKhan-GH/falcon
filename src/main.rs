@@ -67,7 +67,7 @@ fn run(cli: Cli) -> falcon_library::Result<()> {
         }
         Command::Serve { library, port } => {
             let lib = Library::open(&library)?;
-            println!("Serving {} on http://127.0.0.1:{port}", library.display());
+            println!("Starting the API for {} on http://127.0.0.1:{port}", library.display());
             let shared = std::sync::Arc::new(std::sync::Mutex::new(lib));
             if let Err(e) = falcon_server::serve(shared, port) {
                 eprintln!("error: {e}");

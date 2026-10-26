@@ -3,7 +3,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use eframe::egui::{
@@ -52,7 +52,10 @@ struct EditBuf {
 }
 
 pub struct App {
-    lib: Option<Library>,
+    lib: Option<Shared>,
+    /// The local HTTP API for the open library, as Eagle runs it.
+    server: Option<falcon_server::Handle>,
+    ctx: egui::Context,
     error: Option<String>,
     loader: Loader,
     scope: Scope,
@@ -97,6 +100,8 @@ impl App {
         t::install(&cc.egui_ctx);
         let mut app = App {
             lib: None,
+            server: None,
+            ctx: cc.egui_ctx.clone(),
             error: None,
             loader: Loader::new(&cc.egui_ctx),
             scope: Scope::All,
@@ -137,7 +142,20 @@ impl App {
     fn open(&mut self, path: PathBuf) {
         match Library::open(&path) {
             Ok(lib) => {
-                self.lib = Some(lib);
+                self.server = None; // stops the previous library's server
+                let shared: Shared = Arc::new(Mutex::new(lib));
+                let ctx = self.ctx.clone();
+                // Never Eagle's own port: clients of a running (or later
+                // started) Eagle must keep reaching Eagle.
+                let ports = falcon_server::DEFAULT_PORT..falcon_server::DEFAULT_PORT + 5;
+                match falcon_server::start(shared.clone(), ports, move || ctx.request_repaint()) {
+                    Ok(h) => {
+                        self.flash(format!("API on http://localhost:{}", h.port));
+                        self.server = Some(h);
+                    }
+                    Err(e) => self.flash(format!("API not started: {e}")),
+                }
+                self.lib = Some(shared);
                 self.error = None;
                 self.scope = Scope::All;
                 self.back.clear();
@@ -210,7 +228,9 @@ impl App {
     }
 
     fn import(&mut self, paths: Vec<PathBuf>) {
-        let Some(lib) = self.lib.as_mut() else { return };
+        let Some(shared) = self.lib.clone() else { return };
+        let mut guard = lock(&shared);
+        let lib = &mut *guard;
         let folders = match &self.scope {
             Scope::Folder(id) => vec![id.clone()],
             _ => Vec::new(),
@@ -267,8 +287,8 @@ impl App {
         if del && !self.selected.is_empty() {
             let trash = self.scope != Scope::Trash;
             let ids = self.selected.clone();
-            if let Some(lib) = self.lib.as_mut()
-                && lib.set_trashed(&ids, trash).is_ok()
+            if let Some(shared) = self.lib.clone()
+                && lock(&shared).set_trashed(&ids, trash).is_ok()
             {
                 self.flash(if trash { "Moved to Trash" } else { "Restored" });
                 self.selected.clear();
@@ -353,6 +373,12 @@ impl App {
             }
         }
     }
+}
+
+type Shared = falcon_server::Shared;
+
+fn lock(s: &Shared) -> std::sync::MutexGuard<'_, Library> {
+    s.lock().unwrap_or_else(|p| p.into_inner())
 }
 
 fn fastrand_seed() -> u64 {
@@ -1744,10 +1770,12 @@ impl eframe::App for App {
         }
         self.keyboard(&ctx);
 
-        let Some(mut lib) = self.lib.take() else {
+        let Some(shared) = self.lib.clone() else {
             egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| self.empty_state(ui));
             return;
         };
+        let mut guard = lock(&shared);
+        let lib: &mut Library = &mut guard;
 
         if self.show_sidebar {
             egui::Panel::left("sidebar")
@@ -1755,7 +1783,7 @@ impl eframe::App for App {
                 .resizable(false)
                 .show_separator_line(false)
                 .frame(egui::Frame::NONE)
-                .show(ui, |ui| self.sidebar(ui, &lib));
+                .show(ui, |ui| self.sidebar(ui, lib));
         }
         if self.show_inspector {
             egui::Panel::right("inspector")
@@ -1763,13 +1791,13 @@ impl eframe::App for App {
                 .resizable(false)
                 .show_separator_line(false)
                 .frame(egui::Frame::NONE)
-                .show(ui, |ui| self.inspector(ui, &mut lib));
+                .show(ui, |ui| self.inspector(ui, lib));
         }
         egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t::MAIN)).show(ui, |ui| {
             let full = ui.max_rect();
             let bar = Rect::from_min_size(full.min, vec2(full.width(), t::BAR_HEIGHT));
             let mut top = ui.new_child(egui::UiBuilder::new().max_rect(bar));
-            self.toolbar(&mut top, &lib);
+            self.toolbar(&mut top, lib);
             if !self.show_inspector {
                 let c = Pos2::new(bar.right() - 24.0, bar.center().y);
                 if icon_button(&mut top, c, ic::SIDEBAR_SIMPLE, 18.0, true, "Show inspector").clicked() {
@@ -1780,13 +1808,13 @@ impl eframe::App for App {
             if self.show_filter {
                 let fb = Rect::from_min_size(Pos2::new(full.left(), bar.bottom()), vec2(full.width(), 40.0));
                 let mut fui = ui.new_child(egui::UiBuilder::new().max_rect(fb));
-                self.filter_bar(&mut fui, &lib);
+                self.filter_bar(&mut fui, lib);
                 grid_top = fb.bottom();
             }
             let grid = Rect::from_min_max(Pos2::new(full.left(), grid_top), full.max);
             let mut g = ui.new_child(egui::UiBuilder::new().max_rect(grid));
             g.set_clip_rect(grid);
-            self.grid(&mut g, &lib);
+            self.grid(&mut g, lib);
 
             if let Some((msg, at)) = &self.status {
                 if at.elapsed().as_secs_f32() < 3.0 {
@@ -1802,7 +1830,7 @@ impl eframe::App for App {
         });
         if self.viewer.is_some() {
             let mut v = ui.new_child(egui::UiBuilder::new().max_rect(ctx.content_rect()));
-            self.viewer(&ctx, &mut v, &lib);
+            self.viewer(&ctx, &mut v, lib);
         }
         if let Some(d) = egui::DragAndDrop::payload::<DragItems>(&ctx)
             && let Some(pos) = ctx.pointer_latest_pos()
@@ -1836,8 +1864,7 @@ impl eframe::App for App {
                 self.confirm_delete = None;
             }
         }
-        self.apply_actions(&mut lib);
+        self.apply_actions(lib);
         self.loader.want(std::mem::take(&mut self.frame_jobs));
-        self.lib = Some(lib);
     }
 }

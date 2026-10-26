@@ -1361,6 +1361,7 @@ dependencies = [
  "chrono",
  "eframe",
  "falcon-library",
+ "falcon-server",
  "lru",
  "rfd",
  "serde_json",
