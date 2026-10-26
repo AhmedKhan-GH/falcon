@@ -2,7 +2,9 @@
 
 pub mod error;
 pub mod library;
+pub mod ids;
 pub mod model;
+pub mod palette;
 
 pub use error::{Error, Result};
 pub use library::Library;
