@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="tile" x1="0.2" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#5566e6"/>
+      <stop offset="1" stop-color="#222c96"/>
+    </linearGradient>
+    <linearGradient id="white" x1="0.3" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#e9edfc"/>
+    </linearGradient>
+    <linearGradient id="wave1" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0" stop-color="#c3ccfb"/>
+      <stop offset="1" stop-color="#a4b1f4"/>
+    </linearGradient>
+    <linearGradient id="wave2" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0" stop-color="#8d9bef"/>
+      <stop offset="1" stop-color="#6f7fe2"/>
+    </linearGradient>
+    <linearGradient id="hood" x1="0.2" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#1d2470"/>
+      <stop offset="1" stop-color="#11164a"/>
+    </linearGradient>
+    <clipPath id="tileclip"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
+    <clipPath id="disc"><circle cx="470" cy="560" r="290"/></clipPath>
+    <!-- The bird: disc, beak and nape tuft, less the cut circle under the beak. -->
+    <mask id="bird">
+      <rect width="1024" height="1024" fill="black"/>
+      <circle cx="470" cy="560" r="290" fill="white"/>
+      <path fill="white" d="M 540 284 C 660 268 780 330 815 494 L 640 470 Z"/>
+      <circle cx="700" cy="590" r="150" fill="black"/>
+    </mask>
+    <mask id="ring">
+      <rect width="1024" height="1024" fill="black"/>
+      <circle cx="470" cy="560" r="290" fill="white"/>
+      <path fill="white" d="M 540 284 C 660 268 780 330 815 494 L 640 470 Z"/>
+    </mask>
+  </defs>
+
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#tile)"/>
+
+  <g clip-path="url(#tileclip)">
+    <g mask="url(#bird)">
+      <rect width="1024" height="1024" fill="url(#white)"/>
+    </g>
+    <!-- Breast: two stacked waves, each notched, running under the cut. -->
+    <g clip-path="url(#disc)">
+      <path fill="url(#wave1)" d="M 240 830 C 280 690 400 590 590 552 L 558 606 C 690 580 800 610 880 690 L 880 900 L 240 900 Z"/>
+      <path fill="url(#wave2)" d="M 420 900 C 460 790 560 710 700 690 L 674 736 C 760 728 830 756 890 800 L 890 900 Z"/>
+    </g>
+    <g mask="url(#bird)">
+      <!-- Hood: crown and nape in one dark cap, dropping the moustache under the eye. -->
+      <path fill="url(#hood)" d="M 100 100 L 760 100 L 760 300 C 700 330 672 372 662 412 C 632 410 604 414 584 428 C 564 480 558 540 548 604 C 522 552 506 500 500 452 C 456 404 396 380 330 380 L 300 440 C 286 420 266 410 240 412 C 180 430 130 490 100 570 Z"/>
+    </g>
+    <!-- The cut that shapes the underside of the beak. -->
+    <g mask="url(#ring)">
+      <circle cx="700" cy="590" r="150" fill="none" stroke="#4b5bd9" stroke-width="14"/>
+    </g>
+    <!-- The eye. -->
+    <circle cx="610" cy="384" r="20" fill="#ffd257"/>
+    <circle cx="610" cy="384" r="13" fill="#0a0e2e"/>
+  </g>
+</svg>

@@ -7,6 +7,7 @@ APP=target/release/Falcon.app
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp target/release/falcon-app "$APP/Contents/MacOS/Falcon"
+cp crates/falcon-app/assets/Falcon.icns "$APP/Contents/Resources/Falcon.icns"
 VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -17,6 +18,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleDisplayName</key><string>Falcon</string>
   <key>CFBundleIdentifier</key><string>dev.falcon.app</string>
   <key>CFBundleExecutable</key><string>Falcon</string>
+  <key>CFBundleIconFile</key><string>Falcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleVersion</key><string>$VERSION</string>
