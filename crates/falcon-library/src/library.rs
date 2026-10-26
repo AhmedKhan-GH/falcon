@@ -153,6 +153,15 @@ impl Library {
         self.last_import_ms
     }
 
+    /// Drops an item from memory and `mtime.json` (its files are already
+    /// gone).
+    pub(crate) fn forget_item(&mut self, id: &str) -> Result<()> {
+        self.items.retain(|i| i.id != id);
+        self.mtime.entries.retain(|(e, _)| e != id);
+        self.mtime.all = Some(self.items.len() as u64);
+        write_json(&self.root.join(MTIME), &self.mtime)
+    }
+
     /// Writes `item`'s `metadata.json` in place, adds it to the in-memory
     /// list (kept sorted by id) and records it in `mtime.json`, whose `all`
     /// becomes the item count.

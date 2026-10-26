@@ -251,3 +251,21 @@ fn folders_create_rename_delete() {
     assert!(got.folders.is_empty());
     assert!(got.is_deleted);
 }
+
+#[test]
+fn emptying_the_trash_removes_files() {
+    let Some(src) = fixture() else { return };
+    let tmp = tempfile::tempdir().unwrap();
+    let dest = tmp.path().join("Trash.library");
+    Library::open(&src).unwrap().save_to(&dest).unwrap();
+    let mut lib = Library::open(&dest).unwrap();
+    let ids: Vec<String> = lib.items().iter().take(2).map(|i| i.id.clone()).collect();
+    let dir = lib.item(&ids[0]).unwrap().info_dir(lib.root());
+    lib.set_trashed(&ids, true).unwrap();
+    assert_eq!(lib.empty_trash().unwrap(), 2);
+    assert!(!dir.exists());
+    let reopened = Library::open(&dest).unwrap();
+    assert_eq!(reopened.items().len(), 89);
+    assert_eq!(reopened.mtime.all, Some(89));
+    assert!(reopened.mtime.entries.iter().all(|(id, _)| !ids.contains(id)));
+}

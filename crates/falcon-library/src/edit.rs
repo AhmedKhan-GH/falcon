@@ -54,6 +54,28 @@ impl Library {
         Ok(())
     }
 
+    /// Deletes items for good, as Eagle's permanent delete does: the whole
+    /// `.info` folder is removed and the id leaves `mtime.json`.
+    pub fn delete_permanently(&mut self, ids: &[String]) -> Result<()> {
+        for id in ids {
+            let Some(item) = self.item(id).cloned() else { continue };
+            let dir = item.info_dir(self.root());
+            if dir.is_dir() {
+                fs::remove_dir_all(&dir).map_err(|e| Error::io(&dir, e))?;
+            }
+            self.forget_item(id)?;
+        }
+        Ok(())
+    }
+
+    /// Permanently deletes everything in the trash and returns how many
+    /// items went.
+    pub fn empty_trash(&mut self) -> Result<usize> {
+        let ids: Vec<String> = self.items().iter().filter(|i| i.is_deleted).map(|i| i.id.clone()).collect();
+        self.delete_permanently(&ids)?;
+        Ok(ids.len())
+    }
+
     /// Records tags as just used: moved to the front of `historyTags`, which
     /// is capped at 120, then writes `tags.json`.
     pub fn record_tag_use(&mut self, tags: &[String]) -> Result<()> {
