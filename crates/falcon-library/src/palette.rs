@@ -240,7 +240,7 @@ fn quantize(rgba: &[u8], skip: usize, alpha_threshold: u8, max_colors: usize) ->
     let mut histo = Histogram(vec![0; BINS * BINS * BINS]);
     let (mut lo, mut hi) = ([31i32; 3], [0i32; 3]);
     let mut pixel_count = 0u64;
-    for px in rgba.chunks_exact(4).step_by(skip) {
+    for px in rgba.as_chunks::<4>().0.iter().step_by(skip) {
         if px[3] < alpha_threshold {
             continue;
         }
