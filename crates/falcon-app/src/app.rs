@@ -47,6 +47,10 @@ struct Saved {
 #[derive(Clone)]
 struct DragItems(Vec<String>);
 
+/// A folder being dragged in the sidebar.
+#[derive(Clone)]
+struct DragFolder(String);
+
 /// Library changes requested while drawing, applied at the end of a frame.
 enum Action {
     CreateFolder { parent: Option<String> },
@@ -59,6 +63,9 @@ enum Action {
     CreateSmart(String, Vec<serde_json::Value>),
     UpdateSmart(String, String, Vec<serde_json::Value>),
     RenameTag(String, String),
+    MoveFolder(String, Option<String>),
+    QuickAdd(&'static str, String),
+    QuickRemove(String),
     DeleteTag(String),
     StarTag(String, bool),
     DeleteSmart(String),
@@ -740,6 +747,14 @@ impl App {
                     }
                     lib.delete_smart_folder(&id)
                 }
+                Action::MoveFolder(id, parent) => {
+                    if let Some(p) = &parent {
+                        self.collapsed.remove(p);
+                    }
+                    lib.move_folder(&id, parent.as_deref())
+                }
+                Action::QuickAdd(kind, id) => lib.add_quick_access(kind, &id),
+                Action::QuickRemove(id) => lib.remove_quick_access(&id),
                 Action::RenameTag(from, to) => lib.rename_tag(&from, &to).map(|n| {
                     if self.scope == Scope::Tag(from.clone()) {
                         self.scope = Scope::Tag(to.clone());
@@ -872,6 +887,8 @@ fn badge(ui: &Ui, top_left: Pos2, ext: &str) {
 struct SidebarCtx<'a> {
     folder_counts: &'a HashMap<String, usize>,
     nav: &'a NavCounts,
+    /// Ids pinned to Quick Access.
+    quick: &'a HashSet<String>,
 }
 
 impl App {
@@ -920,12 +937,41 @@ impl App {
         let list_rect = Rect::from_min_max(Pos2::new(full.left(), lib_row.bottom() + 6.0), Pos2::new(full.right() - 1.0, filter_rect.top() - 8.0));
         let folder_counts = logic::folder_counts(lib.items());
         let nav = logic::nav_counts(lib.items());
-        let cx = SidebarCtx { folder_counts: &folder_counts, nav: &nav };
+        let quick: HashSet<String> =
+            lib.metadata.quick_access.iter().filter_map(|q| q.get("id").and_then(|v| v.as_str()).map(String::from)).collect();
+        let cx = SidebarCtx { folder_counts: &folder_counts, nav: &nav, quick: &quick };
         let mut list = ui.new_child(egui::UiBuilder::new().max_rect(list_rect));
         egui::ScrollArea::vertical().id_salt("sidebar-list").auto_shrink([false, false]).show(&mut list, |ui| {
             ui.spacing_mut().item_spacing.y = 0.0;
             self.nav_rows(ui, &cx);
             ui.add_space(12.0);
+            if !lib.metadata.quick_access.is_empty() {
+                let _ = section(ui, "Quick Access");
+                let smart = lib.smart_folders();
+                for q in &lib.metadata.quick_access {
+                    let (Some(kind), Some(id)) = (q.get("type").and_then(|v| v.as_str()), q.get("id").and_then(|v| v.as_str())) else {
+                        continue;
+                    };
+                    let (glyph, name, scope, count) = if kind == "smartFolder" {
+                        let Some(sf) = smart.iter().find(|s| s.id == id) else { continue };
+                        (ic::FOLDER_STAR, sf.name.clone(), Scope::Smart(id.to_string()), lib.smart_folder_items(id).len())
+                    } else {
+                        let Some(f) = logic::find_folder(&lib.metadata.folders, id) else { continue };
+                        (ic::FOLDER, f.name.clone(), Scope::Folder(id.to_string()), cx.folder_counts.get(id).copied().unwrap_or(0))
+                    };
+                    let active = self.scope == scope;
+                    let resp = sidebar_row(ui, 0, glyph, &name, (count > 0).then_some(count), active, None);
+                    if resp.clicked() {
+                        self.go(scope);
+                    }
+                    resp.context_menu(|ui| {
+                        if ui.button("Remove from Quick Access").clicked() {
+                            self.actions.push(Action::QuickRemove(id.to_string()));
+                        }
+                    });
+                }
+                ui.add_space(8.0);
+            }
             if section_with_add(ui, "Smart Folders", "Create Smart Folder") {
                 self.smart_dialog = Some(SmartDraft::default());
             }
@@ -936,9 +982,17 @@ impl App {
                 if resp.clicked() {
                     self.go(Scope::Smart(sf.id.clone()));
                 }
+                let pinned = quick.contains(&sf.id);
                 resp.context_menu(|ui| {
                     if ui.button("Edit…").clicked() {
                         self.smart_dialog = Some(SmartDraft::from_folder(&sf));
+                    }
+                    if pinned {
+                        if ui.button("Remove from Quick Access").clicked() {
+                            self.actions.push(Action::QuickRemove(sf.id.clone()));
+                        }
+                    } else if ui.button("Add to Quick Access").clicked() {
+                        self.actions.push(Action::QuickAdd("smartFolder", sf.id.clone()));
                     }
                     if ui.button(RichText::new("Delete Smart Folder").color(Color32::from_rgb(0xff, 0x66, 0x67))).clicked() {
                         self.actions.push(Action::DeleteSmart(sf.id.clone()));
@@ -946,7 +1000,13 @@ impl App {
                 });
             }
             let total = lib.all_folders().len();
-            section(ui, &format!("Folders ({total})"));
+            let header = section(ui, &format!("Folders ({total})"));
+            if header.dnd_hover_payload::<DragFolder>().is_some() {
+                ui.painter().rect_stroke(header.rect.shrink2(vec2(11.0, 1.0)), t::RADIUS, Stroke::new(1.5, t::PRIMARY), StrokeKind::Inside);
+            }
+            if let Some(d) = header.dnd_release_payload::<DragFolder>() {
+                self.actions.push(Action::MoveFolder(d.0.clone(), None));
+            }
             let filter = self.folder_filter.trim().to_lowercase();
             for f in &lib.metadata.folders {
                 self.folder_row(ui, f, 0, &cx, &filter);
@@ -1050,10 +1110,22 @@ impl App {
                 }
             }
         }
-        drop_highlight(ui, &resp, depth);
+        if resp.drag_started() {
+            resp.dnd_set_drag_payload(DragFolder(f.id.clone()));
+        }
+        let dragging_self = resp.dnd_hover_payload::<DragFolder>().is_some_and(|d| d.0 == f.id);
+        if !dragging_self {
+            drop_highlight(ui, &resp, depth);
+        }
         if let Some(d) = resp.dnd_release_payload::<DragItems>() {
             self.actions.push(Action::AddToFolder(d.0.clone(), f.id.clone()));
         }
+        if let Some(d) = resp.dnd_release_payload::<DragFolder>()
+            && d.0 != f.id
+        {
+            self.actions.push(Action::MoveFolder(d.0.clone(), Some(f.id.clone())));
+        }
+        let pinned = cx.quick.contains(&f.id);
         resp.context_menu(|ui| {
             ui.set_min_width(180.0);
             if ui.button("New Subfolder").clicked() {
@@ -1061,6 +1133,16 @@ impl App {
             }
             if ui.button("Rename").clicked() {
                 self.renaming = Some((f.id.clone(), f.name.clone()));
+            }
+            if pinned {
+                if ui.button("Remove from Quick Access").clicked() {
+                    self.actions.push(Action::QuickRemove(f.id.clone()));
+                }
+            } else if ui.button("Add to Quick Access").clicked() {
+                self.actions.push(Action::QuickAdd("folder", f.id.clone()));
+            }
+            if depth > 0 && ui.button("Move to Top Level").clicked() {
+                self.actions.push(Action::MoveFolder(f.id.clone(), None));
             }
             ui.separator();
             if ui.button(RichText::new("Delete Folder").color(Color32::from_rgb(0xff, 0x66, 0x67))).clicked() {
@@ -1102,7 +1184,7 @@ impl App {
 
 /// Outlines a sidebar row while grid items are dragged over it.
 fn drop_highlight(ui: &Ui, resp: &Response, depth: usize) {
-    if resp.dnd_hover_payload::<DragItems>().is_some() {
+    if resp.dnd_hover_payload::<DragItems>().is_some() || resp.dnd_hover_payload::<DragFolder>().is_some() {
         let r = resp.rect;
         let bg = Rect::from_min_max(Pos2::new(r.left() + icon_x(depth) - 14.0, r.top() + 0.5), Pos2::new(r.right() - 11.0, r.bottom() - 0.5));
         ui.painter().rect_filled(bg, t::RADIUS, t::PRIMARY.gamma_multiply(0.25));
@@ -1143,8 +1225,8 @@ fn section_with_add(ui: &mut Ui, title: &str, tip: &str) -> bool {
     hovered && icon_button(ui, Pos2::new(rect.right() - 24.0, rect.center().y), ic::PLUS, 15.0, true, tip).clicked()
 }
 
-fn section(ui: &mut Ui, title: &str) {
-    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 25.0), Sense::hover());
+fn section(ui: &mut Ui, title: &str) -> Response {
+    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 25.0), Sense::hover());
     ui.painter().text(
         Pos2::new(rect.left() + 20.0, rect.center().y),
         Align2::LEFT_CENTER,
@@ -1152,6 +1234,7 @@ fn section(ui: &mut Ui, title: &str) {
         font(13.0),
         t::TEXT_MUTED,
     );
+    resp
 }
 
 fn sidebar_row(
@@ -1163,7 +1246,7 @@ fn sidebar_row(
     active: bool,
     caret: Option<bool>,
 ) -> Response {
-    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), t::ROW_HEIGHT), Sense::click());
+    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), t::ROW_HEIGHT), Sense::click_and_drag());
     let ix = rect.left() + icon_x(depth);
     let bg = Rect::from_min_max(Pos2::new(ix - 14.0, rect.top() + 0.5), Pos2::new(rect.right() - 11.0, rect.bottom() - 0.5));
     let p = ui.painter();

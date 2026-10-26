@@ -211,6 +211,9 @@ impl Library {
         let removed = remove(&mut self.metadata.folders, id).ok_or_else(|| self.missing(id))?;
         let mut gone = Vec::new();
         removed.walk(&mut |f| gone.push(f.id.clone()));
+        self.metadata
+            .quick_access
+            .retain(|q| q.get("id").and_then(|v| v.as_str()).is_none_or(|i| !gone.iter().any(|g| g == i)));
         self.save_metadata()?;
         let affected: Vec<Item> = self
             .items()
@@ -226,6 +229,49 @@ impl Library {
             self.update_item(item)?;
         }
         Ok(())
+    }
+
+    /// Moves a folder under `parent` (or to the root), at the end of its new
+    /// siblings as Eagle appends. Moving a folder into itself or one of its
+    /// descendants is refused.
+    pub fn move_folder(&mut self, id: &str, parent: Option<&str>) -> Result<()> {
+        if let Some(p) = parent {
+            let inside = find_mut(&mut self.metadata.folders, id).is_some_and(|f| {
+                let mut hit = false;
+                f.walk(&mut |x| hit |= x.id == p);
+                hit
+            });
+            if inside {
+                return Err(Error::Import { path: self.root().to_path_buf(), reason: "cannot move a folder into itself".into() });
+            }
+        }
+        let Some(folder) = remove(&mut self.metadata.folders, id) else { return Err(self.missing(id)) };
+        match parent {
+            None => self.metadata.folders.push(folder),
+            Some(p) => match find_mut(&mut self.metadata.folders, p) {
+                Some(f) => f.children.push(folder),
+                None => {
+                    self.metadata.folders.push(folder);
+                    return Err(self.missing(p));
+                }
+            },
+        }
+        self.save_metadata()
+    }
+
+    /// Pins a folder (`"folder"`) or smart folder (`"smartFolder"`) to Quick
+    /// Access, at the end as Eagle does.
+    pub fn add_quick_access(&mut self, kind: &str, id: &str) -> Result<()> {
+        if !self.metadata.quick_access.iter().any(|q| q.get("id").and_then(|v| v.as_str()) == Some(id)) {
+            self.metadata.quick_access.push(serde_json::json!({"type": kind, "id": id}));
+        }
+        self.save_metadata()
+    }
+
+    /// Unpins an id from Quick Access.
+    pub fn remove_quick_access(&mut self, id: &str) -> Result<()> {
+        self.metadata.quick_access.retain(|q| q.get("id").and_then(|v| v.as_str()) != Some(id));
+        self.save_metadata()
     }
 
     /// Writes the library `metadata.json`, stamping its `modificationTime`.

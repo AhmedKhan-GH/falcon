@@ -321,3 +321,25 @@ fn tags_rename_merge_and_delete() {
     assert_eq!(lib.delete_tag("logo").unwrap(), n);
     assert_eq!(count(&Library::open(&dest).unwrap(), "logo"), 0);
 }
+
+#[test]
+fn folders_move_and_quick_access() {
+    let Some(src) = fixture() else { return };
+    let tmp = tempfile::tempdir().unwrap();
+    let dest = tmp.path().join("Move.library");
+    Library::open(&src).unwrap().save_to(&dest).unwrap();
+    let mut lib = Library::open(&dest).unwrap();
+    let a = lib.create_folder(None, "A").unwrap();
+    let b = lib.create_folder(None, "B").unwrap();
+    lib.move_folder(&b, Some(&a)).unwrap();
+    assert!(lib.move_folder(&a, Some(&b)).is_err(), "cycle refused");
+    let reopened = Library::open(&dest).unwrap();
+    let fa = reopened.metadata.folders.iter().find(|f| f.id == a).unwrap();
+    assert_eq!(fa.children[0].id, b);
+
+    lib.add_quick_access("folder", &b).unwrap();
+    lib.add_quick_access("folder", &b).unwrap();
+    assert_eq!(Library::open(&dest).unwrap().metadata.quick_access.len(), 1);
+    lib.delete_folder(&a).unwrap();
+    assert!(Library::open(&dest).unwrap().metadata.quick_access.is_empty());
+}
