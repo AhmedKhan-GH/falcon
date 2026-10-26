@@ -41,6 +41,7 @@ struct Saved {
     show_sidebar: Option<bool>,
     show_inspector: Option<bool>,
     collapsed: Vec<String>,
+    recent: Vec<PathBuf>,
 }
 
 /// Ids being dragged from the grid.
@@ -72,6 +73,13 @@ enum Action {
     DeleteTag(String),
     StarTag(String, bool),
     DeleteSmart(String),
+}
+
+/// A library change requested from the library menu.
+enum Switch {
+    Open(PathBuf),
+    Pick,
+    Create,
 }
 
 /// Background import counters.
@@ -308,6 +316,11 @@ pub struct App {
     /// Tag typed into the multi-selection inspector.
     batch_tag: String,
     progress: Arc<Mutex<Progress>>,
+    /// Recently opened libraries, newest first.
+    recent: Vec<PathBuf>,
+    /// What to open once the frame is done (it replaces the library being
+    /// drawn).
+    switch_to: Option<Switch>,
     /// Tag being renamed on the All Tags page, with the new name so far.
     tag_rename: Option<(String, String)>,
     tag_filter: String,
@@ -356,6 +369,8 @@ impl App {
             focus_search: false,
             batch_tag: String::new(),
             progress: Arc::new(Mutex::new(Progress::default())),
+            recent: Vec::new(),
+            switch_to: None,
             tag_rename: None,
             tag_filter: String::new(),
         };
@@ -366,6 +381,7 @@ impl App {
         app.show_sidebar = saved.show_sidebar.unwrap_or(true);
         app.show_inspector = saved.show_inspector.unwrap_or(true);
         app.collapsed = saved.collapsed.into_iter().collect();
+        app.recent = saved.recent.into_iter().filter(|p| p.is_dir()).collect();
         // Reopen the last library unless one was given on the command line.
         if let Some(p) = initial.or(saved.library.filter(|p| p.is_dir())) {
             app.open(p);
@@ -401,6 +417,9 @@ impl App {
                     Err(e) => self.flash(format!("API not started: {e}")),
                 }
                 self.lib = Some(shared);
+                self.recent.retain(|p| *p != path);
+                self.recent.insert(0, path.clone());
+                self.recent.truncate(10);
                 self.error = None;
                 self.scope = Scope::All;
                 self.back.clear();
@@ -410,6 +429,17 @@ impl App {
                 self.loader.clear_all();
             }
             Err(e) => self.error = Some(e.to_string()),
+        }
+    }
+
+    fn new_library(&mut self) {
+        let Some(dest) = rfd::FileDialog::new().set_title("Create Library").set_file_name("Untitled.library").save_file() else {
+            return;
+        };
+        let dest = if dest.extension().is_some_and(|e| e == "library") { dest } else { dest.with_extension("library") };
+        match Library::create(&dest) {
+            Ok(_) => self.open(dest),
+            Err(e) => self.flash(format!("Could not create the library: {e}")),
         }
     }
 
@@ -950,9 +980,9 @@ impl App {
         if icon_button(ui, Pos2::new(r - 24.0, cy), ic::SIDEBAR_SIMPLE, 18.0, true, "Hide sidebar").clicked() {
             self.show_sidebar = false;
         }
-        icon_button(ui, Pos2::new(r - 51.0, cy), ic::ARROWS_LEFT_RIGHT, 18.0, true, "Switch Library")
-            .clicked()
-            .then(|| self.pick_library());
+        if icon_button(ui, Pos2::new(r - 51.0, cy), ic::ARROWS_LEFT_RIGHT, 18.0, true, "Switch Library").clicked() {
+            self.switch_to = Some(Switch::Pick);
+        }
         if icon_button(ui, Pos2::new(r - 79.0, cy), ic::PLUS, 18.0, true, "Create Folder").clicked() {
             self.actions.push(Action::CreateFolder { parent: None });
         }
@@ -968,9 +998,28 @@ impl App {
         let gw = g.size().x;
         p.galley(Pos2::new(full.left() + 44.0, lib_row.center().y - g.size().y / 2.0), g, t::TEXT);
         icon(ui, Pos2::new(full.left() + 44.0 + gw + 10.0, lib_row.center().y), ic::CARET_UP_DOWN, 12.0, t::TEXT);
-        if resp.on_hover_text("Switch Library").clicked() {
-            self.pick_library();
-        }
+        let current = lib.root().to_path_buf();
+        egui::Popup::menu(&resp).show(|ui| {
+            ui.set_min_width(240.0);
+            ui.label(RichText::new("Libraries").color(t::TEXT_MUTED).size(12.0));
+            for p in self.recent.clone() {
+                let name = p.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+                let mark = if p == current { ic::CHECK } else { " " };
+                if ui.button(format!("{mark}  {name}")).on_hover_text(p.display().to_string()).clicked() && p != current {
+                    self.switch_to = Some(Switch::Open(p.clone()));
+                }
+            }
+            ui.separator();
+            if ui.button("Open Library…").clicked() {
+                self.switch_to = Some(Switch::Pick);
+            }
+            if ui.button("Create Library…").clicked() {
+                self.switch_to = Some(Switch::Create);
+            }
+            if ui.button("Show in Finder").clicked() {
+                let _ = std::process::Command::new("open").arg("-R").arg(&current).spawn();
+            }
+        });
 
         // Filter box at the bottom.
         let filter_rect = Rect::from_min_max(
@@ -2687,6 +2736,7 @@ impl eframe::App for App {
             show_sidebar: Some(self.show_sidebar),
             show_inspector: Some(self.show_inspector),
             collapsed: self.collapsed.iter().cloned().collect(),
+            recent: self.recent.clone(),
         };
         eframe::set_value(storage, eframe::APP_KEY, &saved);
     }
@@ -2845,5 +2895,12 @@ impl eframe::App for App {
         }
         self.apply_actions(lib);
         self.loader.want(std::mem::take(&mut self.frame_jobs));
+        drop(guard);
+        match self.switch_to.take() {
+            Some(Switch::Open(p)) => self.open(p),
+            Some(Switch::Pick) => self.pick_library(),
+            Some(Switch::Create) => self.new_library(),
+            None => {}
+        }
     }
 }
