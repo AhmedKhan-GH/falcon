@@ -413,8 +413,37 @@ impl App {
         self.flash(msg);
     }
 
+    /// ⌘V in the grid: imports copied files, or a copied image as a PNG.
+    fn paste(&mut self) {
+        let Ok(mut clip) = arboard::Clipboard::new() else { return };
+        if let Ok(files) = clip.get().file_list()
+            && !files.is_empty()
+        {
+            self.import(files);
+            return;
+        }
+        if let Ok(img) = clip.get_image() {
+            let Some(buf) = image::RgbaImage::from_raw(img.width as u32, img.height as u32, img.bytes.into_owned()) else { return };
+            let Ok(dir) = tempfile_dir() else { return };
+            let stamp = chrono::Local::now().format("%Y-%m-%d at %H.%M.%S");
+            let path = dir.join(format!("Pasted image {stamp}.png"));
+            if buf.save(&path).is_ok() {
+                self.import(vec![path.clone()]);
+            }
+            let _ = std::fs::remove_file(path);
+        }
+    }
+
     fn keyboard(&mut self, ctx: &egui::Context) {
         if ctx.memory(|m| m.focused().is_some()) {
+            return;
+        }
+        let paste = ctx.input(|i| {
+            i.events.iter().any(|e| matches!(e, egui::Event::Paste(_)))
+                || (i.modifiers.command && i.key_pressed(Key::V))
+        });
+        if paste && self.viewer.is_none() {
+            self.paste();
             return;
         }
         let (left, right, up, down, space, esc, all, del) = ctx.input(|i| {
@@ -568,6 +597,13 @@ type Shared = falcon_server::Shared;
 
 fn lock(s: &Shared) -> std::sync::MutexGuard<'_, Library> {
     s.lock().unwrap_or_else(|p| p.into_inner())
+}
+
+/// A private folder for clipboard images before they are imported.
+fn tempfile_dir() -> std::io::Result<PathBuf> {
+    let dir = std::env::temp_dir().join("falcon-paste");
+    std::fs::create_dir_all(&dir)?;
+    Ok(dir)
 }
 
 fn fastrand_seed() -> u64 {

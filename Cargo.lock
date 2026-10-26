@@ -1383,6 +1383,7 @@ dependencies = [
 name = "falcon-app"
 version = "0.1.0"
 dependencies = [
+ "arboard",
  "chrono",
  "eframe",
  "falcon-library",
