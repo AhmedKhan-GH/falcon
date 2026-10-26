@@ -18,6 +18,8 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "std"
 serde_json = "1"
 image = { version = "0.25", default-features = false, features = ["gif", "png"] }
 arboard = "3"
+drag = "2.1"
 
 [dev-dependencies]
 serde_json = "1"
+tempfile = "3"

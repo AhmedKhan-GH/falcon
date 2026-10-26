@@ -316,6 +316,8 @@ pub struct App {
     /// Tag typed into the multi-selection inspector.
     batch_tag: String,
     progress: Arc<Mutex<Progress>>,
+    /// Set while a drag out of the window is in progress.
+    native_drag: Arc<std::sync::atomic::AtomicBool>,
     /// Recently opened libraries, newest first.
     recent: Vec<PathBuf>,
     /// What to open once the frame is done (it replaces the library being
@@ -369,6 +371,7 @@ impl App {
             focus_search: false,
             batch_tag: String::new(),
             progress: Arc::new(Mutex::new(Progress::default())),
+            native_drag: Arc::default(),
             recent: Vec::new(),
             switch_to: None,
             tag_rename: None,
@@ -865,6 +868,20 @@ type Shared = falcon_server::Shared;
 
 fn lock(s: &Shared) -> std::sync::MutexGuard<'_, Library> {
     s.lock().unwrap_or_else(|p| p.into_inner())
+}
+
+/// The picture shown under the pointer while dragging out: a 128 px PNG of
+/// `path`, or a plain tile when it can't be decoded. Always valid PNG, since
+/// the drag crate panics on an image AppKit can't load.
+fn drag_image(path: &std::path::Path) -> Vec<u8> {
+    let img = thumbnail::decode(path)
+        .map(|i| i.thumbnail(128, 128))
+        .unwrap_or_else(|_| image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(96, 96, image::Rgba([60, 61, 64, 255]))));
+    let mut out = std::io::Cursor::new(Vec::new());
+    if img.to_rgba8().write_to(&mut out, image::ImageFormat::Png).is_err() {
+        return Vec::new();
+    }
+    out.into_inner()
 }
 
 /// A private folder for clipboard images before they are imported.
@@ -2745,7 +2762,7 @@ impl eframe::App for App {
         false
     }
 
-    fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         if ctx.cumulative_frame_nr() == 0 {
             // Come to the front on launch, like any Mac app.
@@ -2754,7 +2771,9 @@ impl eframe::App for App {
         self.loader.poll(&ctx);
 
         let dropped: Vec<PathBuf> = ctx.input(|i| i.raw.dropped_files.iter().map(|f| f.path().to_path_buf()).collect());
-        if !dropped.is_empty() {
+        // Our own items dragged out and back in must not import twice.
+        let dragging_out = self.native_drag.load(std::sync::atomic::Ordering::Relaxed);
+        if !dropped.is_empty() && !dragging_out {
             self.import(dropped);
         }
         self.keyboard(&ctx);
@@ -2830,6 +2849,38 @@ impl eframe::App for App {
             let mut v = ui.new_child(egui::UiBuilder::new().max_rect(ctx.content_rect()));
             self.viewer(&ctx, &mut v, lib);
         }
+        // Items dragged past the window edge become a macOS file drag, so
+        // they can be dropped into Finder or other apps, as from Eagle.
+        if let Some(d) = egui::DragAndDrop::payload::<DragItems>(&ctx)
+            && ctx.pointer_latest_pos().is_some_and(|p| !ctx.content_rect().contains(p))
+            && !self.native_drag.load(std::sync::atomic::Ordering::Relaxed)
+        {
+            let files: Vec<PathBuf> = d.0.iter().filter_map(|id| lib.item(id)).map(|i| i.original_path(lib.root())).collect();
+            let preview = d.0.first().and_then(|id| lib.item(id)).map(|i| {
+                i.thumbnail_path(lib.root()).unwrap_or_else(|| i.original_path(lib.root()))
+            });
+            egui::DragAndDrop::clear_payload(&ctx);
+            if let Some(image) = preview.filter(|_| !files.is_empty()).map(|p| drag_image(&p)) {
+                let flag = self.native_drag.clone();
+                flag.store(true, std::sync::atomic::Ordering::Relaxed);
+                let done = flag.clone();
+                let ctx2 = ctx.clone();
+                let started = drag::start_drag(
+                    &*frame,
+                    drag::DragItem::Files(files),
+                    drag::Image::Raw(image),
+                    move |_, _| {
+                        done.store(false, std::sync::atomic::Ordering::Relaxed);
+                        ctx2.request_repaint();
+                    },
+                    drag::Options::default(),
+                );
+                if let Err(e) = started {
+                    flag.store(false, std::sync::atomic::Ordering::Relaxed);
+                    self.flash(format!("Could not drag out: {e}"));
+                }
+            }
+        }
         if let Some(d) = egui::DragAndDrop::payload::<DragItems>(&ctx)
             && let Some(pos) = ctx.pointer_latest_pos()
         {
@@ -2902,5 +2953,29 @@ impl eframe::App for App {
             Some(Switch::Create) => self.new_library(),
             None => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::drag_image;
+
+    fn is_png(bytes: &[u8]) -> bool {
+        image::load_from_memory_with_format(bytes, image::ImageFormat::Png).is_ok()
+    }
+
+    #[test]
+    fn drag_images_are_always_valid_png() {
+        let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/Assets.library");
+        if let Ok(lib) = falcon_library::Library::open(&fixture)
+            && let Some(thumb) = lib.items().iter().find_map(|i| i.thumbnail_path(lib.root()))
+        {
+            assert!(is_png(&drag_image(&thumb)), "WebP thumbnail");
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let txt = dir.path().join("notes.txt");
+        std::fs::write(&txt, "hello").unwrap();
+        assert!(is_png(&drag_image(&txt)), "undecodable file");
+        assert!(is_png(&drag_image(&dir.path().join("missing.png"))), "missing file");
     }
 }
