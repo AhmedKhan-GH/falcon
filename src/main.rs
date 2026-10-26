@@ -36,6 +36,14 @@ enum Command {
         /// Path of the .library folder
         library: PathBuf,
     },
+    /// Serve Eagle's local HTTP API for a library on 127.0.0.1
+    Serve {
+        /// Path of the .library folder
+        library: PathBuf,
+        /// Port to listen on (Eagle itself uses 41595)
+        #[arg(long, default_value_t = falcon_server::DEFAULT_PORT)]
+        port: u16,
+    },
 }
 
 fn run(cli: Cli) -> falcon_library::Result<()> {
@@ -56,6 +64,14 @@ fn run(cli: Cli) -> falcon_library::Result<()> {
             println!("items:   {} ({trashed} in trash)", lib.items().len());
             println!("folders: {}", lib.all_folders().len());
             println!("tags:    {}", tags.len());
+        }
+        Command::Serve { library, port } => {
+            let lib = Library::open(&library)?;
+            println!("Serving {} on http://127.0.0.1:{port}", library.display());
+            let shared = std::sync::Arc::new(std::sync::Mutex::new(lib));
+            if let Err(e) = falcon_server::serve(shared, port) {
+                eprintln!("error: {e}");
+            }
         }
     }
     Ok(())

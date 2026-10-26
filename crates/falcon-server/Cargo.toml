@@ -1,0 +1,12 @@
+[package]
+name = "falcon-server"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+falcon-library = { path = "../falcon-library" }
+serde_json = { version = "1", features = ["preserve_order"] }
+tiny_http = "0.12"
+ureq = "3"
+base64 = "0.22"
+tempfile = "3"
