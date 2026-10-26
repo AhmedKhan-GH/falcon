@@ -43,20 +43,26 @@ pub struct Job {
     pub key: Key,
     path: PathBuf,
     svg: bool,
+    /// Render with QuickLook (formats falcon can't decode, at full size).
+    quicklook: bool,
 }
 
 /// Picks the file to decode for `item`: the thumbnail when it exists (unless
 /// the full-size original is wanted and decodable), else a supported original.
 pub fn job_for(item: &Item, root: &std::path::Path, tier: Tier) -> Option<Job> {
     let ext = item.ext.to_lowercase();
-    let original = thumbnail::is_supported(&ext).then(|| item.original_path(root));
+    let supported = thumbnail::is_supported(&ext);
+    let original = supported.then(|| item.original_path(root));
+    if tier == Tier::Full && !supported && cfg!(target_os = "macos") {
+        return Some(Job { key: (item.id.clone(), tier), path: item.original_path(root), svg: false, quicklook: true });
+    }
     let (path, svg) = match (tier, item.thumbnail_path(root), original) {
         (Tier::Full, _, Some(o)) => (o, ext == "svg"),
         (_, Some(t), _) => (t, false),
         (_, None, Some(o)) => (o, ext == "svg"),
         (_, None, None) => return None,
     };
-    Some(Job { key: (item.id.clone(), tier), path, svg })
+    Some(Job { key: (item.id.clone(), tier), path, svg, quicklook: false })
 }
 
 struct Shared {
@@ -180,9 +186,11 @@ impl Loader {
 
 fn decode(job: &Job) -> Option<ColorImage> {
     let max = job.key.1.max_side();
-    let img = if job.svg {
+    let img = if job.quicklook {
+        thumbnail::quicklook(&job.path, max).ok()?
+    } else if job.svg {
         let data = std::fs::read(&job.path).ok()?;
-        thumbnail::render_svg(&data, Some(max.min(1024))).ok()?
+        thumbnail::render_svg(&data, Some(max)).ok()?
     } else {
         thumbnail::decode(&job.path).ok()?
     };

@@ -60,6 +60,39 @@ enum Action {
     DeleteSmart(String),
 }
 
+/// Zoom, pan and animation of the full-window viewer.
+#[derive(Default)]
+struct ViewState {
+    /// Item the state belongs to; reset when another item opens.
+    id: String,
+    /// Scale relative to the image's pixels; `None` fits the window.
+    zoom: Option<f32>,
+    pan: Vec2,
+    /// Decoded GIF frames with their delays in seconds.
+    frames: Vec<(egui::TextureHandle, f32)>,
+    started: Option<Instant>,
+}
+
+/// Decodes up to 300 GIF frames into textures.
+fn gif_frames(ctx: &egui::Context, path: &std::path::Path) -> Vec<(egui::TextureHandle, f32)> {
+    use image::AnimationDecoder;
+    let Ok(file) = std::fs::File::open(path) else { return Vec::new() };
+    let Ok(decoder) = image::codecs::gif::GifDecoder::new(std::io::BufReader::new(file)) else { return Vec::new() };
+    decoder
+        .into_frames()
+        .take(300)
+        .filter_map(Result::ok)
+        .enumerate()
+        .map(|(n, f)| {
+            let (num, den) = f.delay().numer_denom_ms();
+            let secs = (num as f32 / den.max(1) as f32 / 1000.0).max(0.02);
+            let buf = f.into_buffer();
+            let img = egui::ColorImage::from_rgba_unmultiplied([buf.width() as usize, buf.height() as usize], buf.as_raw());
+            (ctx.load_texture(format!("gif-{n}"), img, egui::TextureOptions::LINEAR), secs)
+        })
+        .collect()
+}
+
 /// A rule row in the smart-folder dialog.
 #[derive(Clone)]
 struct RuleDraft {
@@ -194,10 +227,11 @@ pub struct App {
     renaming: Option<(String, String)>,
     confirm: Option<Confirm>,
     smart_dialog: Option<SmartDraft>,
+    view: ViewState,
 }
 
 impl App {
-    pub fn new(cc: &eframe::CreationContext<'_>, initial: Option<PathBuf>) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>, initial: Option<PathBuf>, open_item: Option<String>) -> Self {
         t::install(&cc.egui_ctx);
         let mut app = App {
             lib: None,
@@ -234,6 +268,7 @@ impl App {
             renaming: None,
             confirm: None,
             smart_dialog: None,
+            view: ViewState::default(),
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
         app.tile = saved.tile.unwrap_or(app.tile).clamp(TILE_MIN, TILE_MAX);
@@ -245,6 +280,11 @@ impl App {
         // Reopen the last library unless one was given on the command line.
         if let Some(p) = initial.or(saved.library.filter(|p| p.is_dir())) {
             app.open(p);
+        }
+        if let Some(id) = open_item {
+            app.selected = vec![id.clone()];
+            app.scroll_to = Some(id.clone());
+            app.viewer = Some(id);
         }
         app
     }
@@ -389,6 +429,10 @@ impl App {
         }
         if all {
             self.selected = self.order.clone();
+        }
+        if space && self.viewer.is_some() {
+            self.viewer = None;
+            return;
         }
         if space && self.viewer.is_none() && self.selected.len() == 1 {
             self.viewer = self.selected.first().cloned();
@@ -1974,28 +2018,128 @@ impl App {
             self.viewer = None;
             return;
         };
+        if self.view.id != id {
+            self.view = ViewState { id: id.clone(), ..Default::default() };
+            if item.ext == "gif" {
+                self.view.frames = gif_frames(ctx, &item.original_path(lib.root()));
+                self.view.started = Some(Instant::now());
+            }
+        }
         let screen = ui.max_rect();
         egui::Area::new(egui::Id::unique("viewer")).fixed_pos(screen.min).order(egui::Order::Foreground).show(ctx, |ui| {
-            let p = ui.painter();
+            let p = ui.painter().clone();
             p.rect_filled(screen, 0.0, t::MAIN);
             let bar = Rect::from_min_size(screen.min, vec2(screen.width(), t::BAR_HEIGHT));
+            let area = Rect::from_min_max(Pos2::new(screen.left(), bar.bottom()), screen.max);
+
+            // The image: a GIF frame, the full render, or the preview.
+            let gif = (!self.view.frames.is_empty()).then(|| {
+                let total: f32 = self.view.frames.iter().map(|f| f.1).sum();
+                let mut t = self.view.started.map_or(0.0, |s| s.elapsed().as_secs_f32()) % total.max(0.01);
+                let mut pick = 0;
+                for (n, (_, d)) in self.view.frames.iter().enumerate() {
+                    if t < *d {
+                        pick = n;
+                        break;
+                    }
+                    t -= d;
+                }
+                ctx.request_repaint_after(std::time::Duration::from_millis(15));
+                self.view.frames[pick].0.clone()
+            });
+            let tex = gif
+                .or_else(|| self.loader.get(&id, Tier::Full).cloned())
+                .or_else(|| self.loader.get(&id, Tier::Preview).cloned());
+            let natural = if item.width > 0 && item.height > 0 {
+                vec2(item.width as f32, item.height as f32)
+            } else {
+                tex.as_ref().map_or(Vec2::splat(512.0), |t| t.size_vec2())
+            };
+            let fit = ((area.width() - 80.0) / natural.x).min((area.height() - 80.0) / natural.y).min(1.0);
+            let scale = self.view.zoom.unwrap_or(fit);
+
+            // Scroll or pinch zooms around the pointer; dragging pans.
+            let resp = ui.interact(area, ui.scope_id().with("viewer-canvas"), Sense::click_and_drag());
+            let (scroll, pinch, pointer) = ui.input(|i| (i.smooth_scroll_delta.y, i.zoom_delta(), i.pointer.hover_pos()));
+            let factor = if pinch != 1.0 { pinch } else if resp.hovered() && scroll != 0.0 { (scroll / 300.0).exp() } else { 1.0 };
+            if factor != 1.0 {
+                let new = (scale * factor).clamp(0.02, 32.0);
+                if let Some(pos) = pointer {
+                    let center = area.center() + self.view.pan;
+                    let off = pos - center;
+                    self.view.pan += off - off * (new / scale);
+                }
+                self.view.zoom = Some(new);
+            }
+            if resp.dragged() {
+                self.view.pan += resp.drag_delta();
+                if self.view.zoom.is_none() {
+                    self.view.zoom = Some(scale);
+                }
+            }
+            if resp.double_clicked() {
+                self.view.zoom = None;
+                self.view.pan = Vec2::ZERO;
+            }
+            let scale = self.view.zoom.unwrap_or(fit);
+            if self.view.zoom.is_none() {
+                self.view.pan = Vec2::ZERO;
+            }
+            let r = Rect::from_center_size(area.center() + self.view.pan, natural * scale);
+            let mut clip = ui.new_child(egui::UiBuilder::new().max_rect(area));
+            clip.set_clip_rect(area);
+            match &tex {
+                Some(tex) => egui::Image::new((tex.id(), r.size())).paint_at(&clip, r),
+                None => ext_placeholder(&clip, Rect::from_center_size(area.center(), Vec2::splat(260.0)), &item.ext),
+            }
+
+            // Bar on top: close, name, zoom controls.
+            p.rect_filled(bar, 0.0, t::MAIN);
             window_drag(ui, bar, "viewer");
-            let name = format!("{}.{}", item.name, item.ext);
-            p.text(bar.center(), Align2::CENTER_CENTER, &name, font(14.0), t::TEXT);
-            if icon_button(ui, Pos2::new(bar.right() - 24.0, bar.center().y), ic::X, 17.0, true, "Close").clicked() {
+            let cy = bar.center().y;
+            if icon_button(ui, Pos2::new(bar.left() + 98.0, cy), ic::CARET_LEFT, 17.0, true, "Back (Esc)").clicked() {
                 self.viewer = None;
             }
-            let area = Rect::from_min_max(Pos2::new(screen.left() + 40.0, bar.bottom() + 10.0), screen.max - vec2(40.0, 40.0));
-            let tex = self.loader.get(&id, Tier::Full).cloned();
-            let tex = tex.or_else(|| self.loader.get(&id, Tier::Preview).cloned());
-            match tex {
-                Some(tex) => {
-                    let ts = if item.width > 0 { vec2(item.width as f32, item.height as f32) } else { tex.size_vec2() };
-                    let scale = (area.width() / ts.x).min(area.height() / ts.y).min(1.0);
-                    let r = Rect::from_center_size(area.center(), ts * scale);
-                    egui::Image::new((tex.id(), r.size())).paint_at(ui, r);
-                }
-                None => ext_placeholder(ui, area, &item.ext),
+            let name = format!("{}.{}", item.name, item.ext);
+            let g = galley(ui, &name, font(14.0), t::TEXT, 360.0);
+            p.galley(Pos2::new(bar.left() + 120.0, cy - g.size().y / 2.0), g, t::TEXT);
+            let mut x = bar.right() - 24.0;
+            if icon_button(ui, Pos2::new(x, cy), ic::PLUS, 15.0, true, "Zoom In (+)").clicked() {
+                self.view.zoom = Some((scale * 1.25).min(32.0));
+            }
+            x -= 28.0;
+            p.text(Pos2::new(x, cy), Align2::CENTER_CENTER, format!("{:.0}%", scale * 100.0), mono(12.0), t::TEXT_VALUE);
+            x -= 30.0;
+            if icon_button(ui, Pos2::new(x, cy), ic::MINUS, 15.0, true, "Zoom Out (−)").clicked() {
+                self.view.zoom = Some((scale / 1.25).max(0.02));
+            }
+            x -= 40.0;
+            let actual = ui.put(Rect::from_center_size(Pos2::new(x, cy), vec2(46.0, 24.0)), egui::Button::new("1:1"));
+            if actual.on_hover_text("Actual Size (1)").clicked() {
+                self.view.zoom = Some(1.0);
+                self.view.pan = Vec2::ZERO;
+            }
+            x -= 50.0;
+            if ui.put(Rect::from_center_size(Pos2::new(x, cy), vec2(46.0, 24.0)), egui::Button::new("Fit")).on_hover_text("Zoom to Fit (0)").clicked() {
+                self.view.zoom = None;
+            }
+
+            // Keys: 0 fits, 1 is actual size, + and - zoom.
+            let (k0, k1, kp, km) = ui.input(|i| {
+                (i.key_pressed(Key::Num0), i.key_pressed(Key::Num1), i.key_pressed(Key::Plus) || i.key_pressed(Key::Equals), i.key_pressed(Key::Minus))
+            });
+            if k0 {
+                self.view.zoom = None;
+            }
+            if k1 {
+                self.view.zoom = Some(1.0);
+                self.view.pan = Vec2::ZERO;
+            }
+            if kp {
+                self.view.zoom = Some((scale * 1.25).min(32.0));
+            }
+            if km {
+                self.view.zoom = Some((scale / 1.25).max(0.02));
             }
             if let Some(j) = job_for(item, lib.root(), Tier::Full) {
                 self.frame_jobs.push(j);

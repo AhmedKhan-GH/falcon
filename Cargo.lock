@@ -1387,6 +1387,7 @@ dependencies = [
  "eframe",
  "falcon-library",
  "falcon-server",
+ "image",
  "lru",
  "rfd",
  "serde",
