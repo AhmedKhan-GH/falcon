@@ -16,7 +16,7 @@ use falcon_library::{Library, thumbnail};
 
 use crate::icons as ic;
 use crate::loader::{Loader, Tier, job_for};
-use crate::logic::{self, NavCounts, Scope};
+use crate::logic::{self, Layout, NavCounts, Scope};
 use falcon_library::search::{ColorQuery, Filter, Logic, OrderBy, Shape, TextFilter};
 use crate::theme::{self as t, font, mono};
 
@@ -42,6 +42,7 @@ struct Saved {
     show_inspector: Option<bool>,
     collapsed: Vec<String>,
     recent: Vec<PathBuf>,
+    layout: Option<Layout>,
 }
 
 /// Ids being dragged from the grid.
@@ -279,6 +280,7 @@ pub struct App {
     forward: Vec<Scope>,
     query: String,
     sort: OrderBy,
+    layout: Layout,
     /// Eagle's `sortIncrease`: time keys newest first, others ascending.
     increase: bool,
     filter: Filter,
@@ -342,6 +344,7 @@ impl App {
             forward: Vec::new(),
             query: String::new(),
             sort: OrderBy::Import,
+            layout: Layout::default(),
             increase: true,
             filter: Filter::default(),
             show_filter: false,
@@ -385,6 +388,7 @@ impl App {
         app.show_inspector = saved.show_inspector.unwrap_or(true);
         app.collapsed = saved.collapsed.into_iter().collect();
         app.recent = saved.recent.into_iter().filter(|p| p.is_dir()).collect();
+        app.layout = saved.layout.unwrap_or_default();
         // Reopen the last library unless one was given on the command line.
         if let Some(p) = initial.or(saved.library.filter(|p| p.is_dir())) {
             app.open(p);
@@ -1500,6 +1504,14 @@ impl App {
 
     fn layout_menu(&mut self, ui: &mut Ui) {
         ui.set_min_width(190.0);
+        ui.label(RichText::new("Layout").color(t::TEXT_MUTED).size(12.0));
+        for l in Layout::ALL {
+            let mark = if l == self.layout { ic::CHECK } else { " " };
+            if ui.button(format!("{mark}  {}", l.label())).clicked() {
+                self.layout = l;
+            }
+        }
+        ui.separator();
         ui.label(RichText::new("Sort by").color(t::TEXT_MUTED).size(12.0));
         for k in OrderBy::ALL {
             let mark = if k == self.sort { ic::CHECK } else { " " };
@@ -1812,26 +1824,32 @@ impl App {
             return;
         }
 
-        let s = self.tile;
+        let layout = self.layout;
         let width = area.width() - 2.0 * GRID_PAD_X;
-        let cols = logic::columns(width, s, GRID_GAP);
+        let aspects: Vec<f32> = items
+            .iter()
+            .map(|i| if i.width > 0 && i.height > 0 { i.width as f32 / i.height as f32 } else { 1.0 })
+            .collect();
+        let caption = if layout.has_caption() { CARD_TEXT } else { 0.0 };
+        let (places, content_h, cols) = logic::place(layout, &aspects, width, self.tile, GRID_GAP, caption, ROW_GAP);
         self.columns = cols;
-        let row_h = s + CARD_TEXT + ROW_GAP;
-        let rows = items.len().div_ceil(cols);
-        let total_h = GRID_PAD_TOP + rows as f32 * row_h + 20.0;
+        let total_h = GRID_PAD_TOP + content_h + 20.0;
+        let card_of = |n: usize| {
+            let [x, y, w, h] = places[n];
+            Rect::from_min_size(Pos2::new(GRID_PAD_X + x, GRID_PAD_TOP + y), vec2(w, h + caption))
+        };
 
         let mut scroll = egui::ScrollArea::vertical().id_salt(("grid", format!("{:?}", self.scope))).auto_shrink([false, false]);
         if let Some(id) = self.scroll_to.take()
             && let Some(pos) = self.order.iter().position(|x| *x == id)
         {
-            let row = (pos / cols) as f32;
-            let top = GRID_PAD_TOP + row * row_h;
+            let r = card_of(pos);
             let cur = ui.ctx().data(|d| d.get_temp::<f32>(ui.scope_id().with("grid-offset"))).unwrap_or(0.0);
             let view_h = area.height();
-            if top < cur {
-                scroll = scroll.vertical_scroll_offset(top);
-            } else if top + row_h > cur + view_h {
-                scroll = scroll.vertical_scroll_offset(top + row_h - view_h);
+            if r.top() < cur {
+                scroll = scroll.vertical_scroll_offset(r.top() - GRID_PAD_TOP);
+            } else if r.bottom() > cur + view_h {
+                scroll = scroll.vertical_scroll_offset(r.bottom() + ROW_GAP - view_h);
             }
         }
 
@@ -1845,67 +1863,68 @@ impl App {
             if bg.clicked() {
                 bg_clicked = true;
             }
-            let first = ((viewport.min.y - GRID_PAD_TOP) / row_h).floor().max(0.0) as usize;
-            let last = (((viewport.max.y - GRID_PAD_TOP) / row_h).ceil() as usize + 1).min(rows);
-            for r in first..last {
-                for c in 0..cols {
-                    let n = r * cols + c;
-                    let Some(item) = items.get(n) else { break };
-                    let tl = origin + vec2(GRID_PAD_X + c as f32 * (s + GRID_GAP), GRID_PAD_TOP + r as f32 * row_h);
-                    let card = Rect::from_min_size(tl, vec2(s, s + CARD_TEXT));
-                    let resp = ui.interact(card, ui.scope_id().with(("card", &item.id)), Sense::click_and_drag());
-                    if resp.drag_started() {
-                        let ids = if self.selected.contains(&item.id) { self.selected.clone() } else { vec![item.id.clone()] };
-                        resp.dnd_set_drag_payload(DragItems(ids));
-                    }
-                    if resp.secondary_clicked() && !self.selected.contains(&item.id) {
-                        self.selected = vec![item.id.clone()];
-                    }
-                    let scope_is_trash = self.scope == Scope::Trash;
-                    let targets: Vec<String> = if self.selected.contains(&item.id) { self.selected.clone() } else { vec![item.id.clone()] };
-                    resp.context_menu(|ui| {
-                        ui.set_min_width(200.0);
-                        if ui.button("Open").clicked() {
-                            opened = Some(item.id.clone());
-                        }
-                        if ui.button("Show in Finder").clicked() {
-                            let _ = std::process::Command::new("open").arg("-R").arg(item.original_path(lib.root())).spawn();
-                        }
-                        if ui.button("Copy File Path").clicked() {
-                            ui.ctx().copy_text(item.original_path(lib.root()).display().to_string());
-                        }
-                        ui.menu_button("Add to Folder", |ui| {
-                            egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
-                                for f in lib.all_folders() {
-                                    if ui.button(&f.name).clicked() {
-                                        self.actions.push(Action::AddToFolder(targets.clone(), f.id.clone()));
-                                    }
-                                }
-                            });
-                        });
-                        ui.separator();
-                        if scope_is_trash {
-                            if ui.button("Restore").clicked() {
-                                self.actions.push(Action::Trash(targets.clone(), false));
-                            }
-                            if ui.button(RichText::new("Delete Permanently").color(Color32::from_rgb(0xff, 0x66, 0x67))).clicked() {
-                                self.confirm = Some(Confirm::DeleteItems(targets.clone()));
-                            }
-                        } else if ui.button("Move to Trash").clicked() {
-                            self.actions.push(Action::Trash(targets.clone(), true));
-                        }
-                    });
-                    if resp.clicked() {
-                        clicked = Some((item.id.clone(), ui.input(|i| i.modifiers)));
-                    }
-                    if resp.double_clicked() {
+            let view = viewport.expand(200.0);
+            for (n, item) in items.iter().enumerate() {
+                let local = card_of(n);
+                if local.bottom() < view.top() || local.top() > view.bottom() {
+                    continue;
+                }
+                let card = local.translate(origin.to_vec2());
+                let resp = ui.interact(card, ui.scope_id().with(("card", &item.id)), Sense::click_and_drag());
+                if resp.drag_started() {
+                    let ids = if self.selected.contains(&item.id) { self.selected.clone() } else { vec![item.id.clone()] };
+                    resp.dnd_set_drag_payload(DragItems(ids));
+                }
+                if resp.secondary_clicked() && !self.selected.contains(&item.id) {
+                    self.selected = vec![item.id.clone()];
+                }
+                let scope_is_trash = self.scope == Scope::Trash;
+                let targets: Vec<String> = if self.selected.contains(&item.id) { self.selected.clone() } else { vec![item.id.clone()] };
+                resp.context_menu(|ui| {
+                    ui.set_min_width(200.0);
+                    if ui.button("Open").clicked() {
                         opened = Some(item.id.clone());
                     }
-                    let selected = self.selected.contains(&item.id);
-                    self.card(ui, lib, item, card, s, selected, resp.hovered());
-                    if let Some(j) = job_for(item, lib.root(), Tier::Grid) {
-                        jobs.push(j);
+                    if ui.button("Show in Finder").clicked() {
+                        let _ = std::process::Command::new("open").arg("-R").arg(item.original_path(lib.root())).spawn();
                     }
+                    if ui.button("Copy File Path").clicked() {
+                        ui.ctx().copy_text(item.original_path(lib.root()).display().to_string());
+                    }
+                    ui.menu_button("Add to Folder", |ui| {
+                        egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
+                            for f in lib.all_folders() {
+                                if ui.button(&f.name).clicked() {
+                                    self.actions.push(Action::AddToFolder(targets.clone(), f.id.clone()));
+                                }
+                            }
+                        });
+                    });
+                    ui.separator();
+                    if scope_is_trash {
+                        if ui.button("Restore").clicked() {
+                            self.actions.push(Action::Trash(targets.clone(), false));
+                        }
+                        if ui.button(RichText::new("Delete Permanently").color(Color32::from_rgb(0xff, 0x66, 0x67))).clicked() {
+                            self.confirm = Some(Confirm::DeleteItems(targets.clone()));
+                        }
+                    } else if ui.button("Move to Trash").clicked() {
+                        self.actions.push(Action::Trash(targets.clone(), true));
+                    }
+                });
+                if resp.clicked() {
+                    clicked = Some((item.id.clone(), ui.input(|i| i.modifiers)));
+                }
+                if resp.double_clicked() {
+                    opened = Some(item.id.clone());
+                }
+                let selected = self.selected.contains(&item.id);
+                match layout {
+                    Layout::List => self.list_row(ui, lib, item, card, selected, resp.hovered(), n),
+                    _ => self.card(ui, lib, item, card, caption, selected, resp.hovered()),
+                }
+                if let Some(j) = job_for(item, lib.root(), Tier::Grid) {
+                    jobs.push(j);
                 }
             }
         });
@@ -1921,42 +1940,51 @@ impl App {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn card(&mut self, ui: &Ui, lib: &Library, item: &Item, card: Rect, s: f32, selected: bool, hovered: bool) {
-        let tile = Rect::from_min_size(card.min, Vec2::splat(s));
-        let p = ui.painter();
-        p.rect_filled(tile, t::RADIUS, t::MAIN);
-        let border = if hovered { t::CARD_HOVER } else { t::CARD_BORDER };
-        p.rect_stroke(tile, t::RADIUS, Stroke::new(1.0, border), StrokeKind::Inside);
-
-        let inner = tile.shrink(6.0);
+    /// Draws an item's image into `rect`: fitted without enlarging (grid),
+    /// or filling it exactly (waterfall and justified boxes already have the
+    /// image's shape).
+    fn draw_image(&mut self, ui: &Ui, lib: &Library, item: &Item, rect: Rect, fill: bool) {
         let failed = self.loader.has_failed(&item.id, Tier::Grid);
         match self.loader.get(&item.id, Tier::Grid).cloned() {
             Some(tex) => {
-                let tex_size = tex.size_vec2();
+                let natural = if item.width > 0 && item.height > 0 { vec2(item.width as f32, item.height as f32) } else { tex.size_vec2() };
+                let scale = (rect.width() / natural.x).min(rect.height() / natural.y);
                 // Eagle's object-fit: scale-down never enlarges a small image.
-                let natural = if item.width > 0 && item.height > 0 {
-                    vec2(item.width as f32, item.height as f32)
-                } else {
-                    tex_size
-                };
-                let scale = (inner.width() / natural.x).min(inner.height() / natural.y).min(1.0);
-                let size = natural * scale;
-                let r = Rect::from_center_size(inner.center(), size);
-                egui::Image::new((tex.id(), size)).corner_radius(4).paint_at(ui, r);
+                let scale = if fill { scale } else { scale.min(1.0) };
+                let r = Rect::from_center_size(rect.center(), natural * scale);
+                egui::Image::new((tex.id(), r.size())).corner_radius(4).paint_at(ui, r);
             }
-            None if failed || job_for(item, lib.root(), Tier::Grid).is_none() => {
-                ext_placeholder(ui, inner, &item.ext);
-            }
+            None if failed || job_for(item, lib.root(), Tier::Grid).is_none() => ext_placeholder(ui, rect, &item.ext),
             None => {}
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn card(&mut self, ui: &Ui, lib: &Library, item: &Item, card: Rect, caption: f32, selected: bool, hovered: bool) {
+        let tile = Rect::from_min_max(card.min, Pos2::new(card.right(), card.bottom() - caption));
+        let grid = self.layout == Layout::Grid;
+        let p = ui.painter().clone();
+        if grid {
+            p.rect_filled(tile, t::RADIUS, t::MAIN);
+            let border = if hovered { t::CARD_HOVER } else { t::CARD_BORDER };
+            p.rect_stroke(tile, t::RADIUS, Stroke::new(1.0, border), StrokeKind::Inside);
+            self.draw_image(ui, lib, item, tile.shrink(6.0), false);
+        } else {
+            p.rect_filled(tile, CornerRadius::same(4), t::FIELD);
+            self.draw_image(ui, lib, item, tile, true);
+            if hovered && !selected {
+                p.rect_stroke(tile, CornerRadius::same(4), Stroke::new(1.0, t::CARD_HOVER), StrokeKind::Inside);
+            }
         }
         badge(ui, tile.min + vec2(5.0, 5.0), &item.ext);
         if selected {
             p.rect_stroke(tile.expand(1.0), CornerRadius::same(7), Stroke::new(2.5, t::PRIMARY), StrokeKind::Inside);
         }
-
+        if caption == 0.0 {
+            return;
+        }
         let name = format!("{}.{}", item.name, item.ext);
-        let g = galley(ui, &name, font(13.0), t::TEXT, s);
+        let g = galley(ui, &name, font(13.0), t::TEXT, tile.width());
         let y = tile.bottom() + 14.0;
         if selected {
             let pill = Rect::from_center_size(Pos2::new(tile.center().x, y), vec2(g.size().x + 10.0, 19.0));
@@ -1971,6 +1999,42 @@ impl App {
                 font(12.0),
                 t::TEXT_MUTED,
             );
+        }
+    }
+
+    /// One row of the list layout: thumbnail, name, type, size, dimensions
+    /// and import date.
+    #[allow(clippy::too_many_arguments)]
+    fn list_row(&mut self, ui: &Ui, lib: &Library, item: &Item, row: Rect, selected: bool, hovered: bool, n: usize) {
+        let p = ui.painter().clone();
+        let bg = row.shrink2(vec2(0.0, 2.0));
+        if selected {
+            p.rect_filled(bg, t::RADIUS, t::PRIMARY.gamma_multiply(0.35));
+        } else if hovered {
+            p.rect_filled(bg, t::RADIUS, t::ROW_HOVER);
+        } else if n % 2 == 1 {
+            p.rect_filled(bg, t::RADIUS, Color32::from_white_alpha(4));
+        }
+        let thumb = Rect::from_min_size(Pos2::new(row.left() + 6.0, row.top() + 5.0), Vec2::splat(row.height() - 10.0));
+        p.rect_filled(thumb, CornerRadius::same(4), t::FIELD);
+        self.draw_image(ui, lib, item, thumb.shrink(2.0), false);
+        let cy = row.center().y;
+        let w = row.width();
+        let cols = [(0.0, 0.46), (0.46, 0.12), (0.58, 0.12), (0.70, 0.14), (0.84, 0.16)];
+        let x = |i: usize| thumb.right() + 12.0 + (w - thumb.width() - 18.0) * cols[i].0;
+        let cw = |i: usize| (w - thumb.width() - 18.0) * cols[i].1 - 8.0;
+        let name = format!("{}.{}", item.name, item.ext);
+        let g = galley(ui, &name, font(13.0), t::TEXT, cw(0));
+        p.galley(Pos2::new(x(0), cy - g.size().y / 2.0), g, t::TEXT);
+        let cells = [
+            item.ext.to_uppercase(),
+            logic::format_size(item.size),
+            if item.width > 0 { format!("{} × {}", item.width, item.height) } else { String::new() },
+            logic::format_ms(item.modification_time),
+        ];
+        for (i, text) in cells.iter().enumerate() {
+            let g = galley(ui, text, font(12.0), t::TEXT_MUTED, cw(i + 1));
+            p.galley(Pos2::new(x(i + 1), cy - g.size().y / 2.0), g, t::TEXT_MUTED);
         }
     }
 
@@ -2754,6 +2818,7 @@ impl eframe::App for App {
             show_inspector: Some(self.show_inspector),
             collapsed: self.collapsed.iter().cloned().collect(),
             recent: self.recent.clone(),
+            layout: Some(self.layout),
         };
         eframe::set_value(storage, eframe::APP_KEY, &saved);
     }
