@@ -1,5 +1,6 @@
 /target
 /fixtures/
-/.idea/workspace.xml
+/.idea/
+/private/
 /docs/book/
 /docs/src/api/

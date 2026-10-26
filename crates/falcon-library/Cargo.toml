@@ -1,5 +1,8 @@
 [package]
 name = "falcon-library"
+description = "Read and write Eagle-format asset libraries: import, thumbnails, palettes, search, smart folders"
+license.workspace = true
+repository.workspace = true
 version.workspace = true
 edition.workspace = true
 

@@ -1,5 +1,5 @@
 //! Smart folders: saved rule sets in the library `metadata.json` (see the
-//! notes, section 8). Entries stay raw JSON in [`LibraryMetadata`] so they
+//! Smart folders chapter of the docs). Entries stay raw JSON in [`LibraryMetadata`] so they
 //! round-trip untouched; this module reads and evaluates them.
 //!
 //! [`LibraryMetadata`]: crate::model::LibraryMetadata

@@ -1,5 +1,8 @@
 [package]
 name = "falcon-server"
+description = "Eagle-compatible local HTTP API for falcon libraries"
+license.workspace = true
+repository.workspace = true
 version.workspace = true
 edition.workspace = true
 

@@ -1,5 +1,5 @@
 //! Keyword search, filter-panel rules, colour matching and sorting, following
-//! Eagle's renderer (see the notes, section 7).
+//! Eagle's behaviour (see the Search and filters chapter of the docs).
 //!
 //! Like Eagle, everything is a linear pass over the items; there is no index.
 
