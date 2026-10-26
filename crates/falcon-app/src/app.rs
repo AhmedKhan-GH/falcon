@@ -64,6 +64,9 @@ enum Action {
     UpdateSmart(String, String, Vec<serde_json::Value>),
     RenameTag(String, String),
     MoveFolder(String, Option<String>),
+    /// Adds and/or removes a tag on several items.
+    BatchTag(Vec<String>, Option<String>, Option<String>),
+    BatchRating(Vec<String>, u64),
     QuickAdd(&'static str, String),
     QuickRemove(String),
     DeleteTag(String),
@@ -302,6 +305,8 @@ pub struct App {
     /// Focus the inspector's title field next frame (F2).
     focus_title: bool,
     focus_search: bool,
+    /// Tag typed into the multi-selection inspector.
+    batch_tag: String,
     progress: Arc<Mutex<Progress>>,
     /// Tag being renamed on the All Tags page, with the new name so far.
     tag_rename: Option<(String, String)>,
@@ -309,7 +314,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(cc: &eframe::CreationContext<'_>, initial: Option<PathBuf>, open_item: Option<String>, import: Vec<PathBuf>) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>, initial: Option<PathBuf>, open_items: Vec<String>, import: Vec<PathBuf>) -> Self {
         t::install(&cc.egui_ctx);
         let mut app = App {
             lib: None,
@@ -349,6 +354,7 @@ impl App {
             view: ViewState::default(),
             focus_title: false,
             focus_search: false,
+            batch_tag: String::new(),
             progress: Arc::new(Mutex::new(Progress::default())),
             tag_rename: None,
             tag_filter: String::new(),
@@ -367,11 +373,14 @@ impl App {
         if !import.is_empty() {
             app.import(import);
         }
-        if let Some(id) = open_item {
-            app.selected = vec![id.clone()];
-            app.scroll_to = Some(id.clone());
-            app.viewer = Some(id);
+        // One item opens in the viewer; several are selected.
+        if let [id] = open_items.as_slice() {
+            app.viewer = Some(id.clone());
         }
+        if let Some(first) = open_items.first() {
+            app.scroll_to = Some(first.clone());
+        }
+        app.selected = open_items;
         app
     }
 
@@ -752,6 +761,41 @@ impl App {
                         self.collapsed.remove(p);
                     }
                     lib.move_folder(&id, parent.as_deref())
+                }
+                Action::BatchTag(ids, add, remove) => {
+                    let mut r = Ok(());
+                    for id in &ids {
+                        let Some(mut item) = lib.item(id).cloned() else { continue };
+                        let before = item.tags.clone();
+                        if let Some(t) = &remove {
+                            item.tags.retain(|x| x != t);
+                        }
+                        if let Some(t) = &add
+                            && !item.tags.contains(t)
+                        {
+                            item.tags.push(t.clone());
+                        }
+                        if item.tags != before {
+                            r = r.and(lib.update_item(item));
+                        }
+                    }
+                    if let Some(t) = add {
+                        r = r.and(lib.record_tag_use(&[t]));
+                    }
+                    r
+                }
+                Action::BatchRating(ids, star) => {
+                    let mut r = Ok(());
+                    for id in &ids {
+                        let Some(mut item) = lib.item(id).cloned() else { continue };
+                        if star == 0 {
+                            item.extra.remove("star");
+                        } else {
+                            item.extra.insert("star".into(), star.into());
+                        }
+                        r = r.and(lib.update_item(item));
+                    }
+                    r
                 }
                 Action::QuickAdd(kind, id) => lib.add_quick_access(kind, &id),
                 Action::QuickRemove(id) => lib.remove_quick_access(&id),
@@ -2045,13 +2089,85 @@ impl App {
     }
 
     fn multi_inspector(&mut self, ui: &mut Ui, lib: &Library, n: usize) {
-        let size: u64 = self.selected.iter().filter_map(|id| lib.item(id)).map(|i| i.size).sum();
-        ui.add_space(8.0);
-        ui.label(RichText::new(format!("{n} items selected")).size(15.0));
+        let items: Vec<&Item> = self.selected.iter().filter_map(|id| lib.item(id)).collect();
+        let ids: Vec<String> = items.iter().map(|i| i.id.clone()).collect();
+        let size: u64 = items.iter().map(|i| i.size).sum();
+
+        // A fanned stack of the first three previews, like Eagle's.
+        let w = ui.available_width();
+        let (stack, _) = ui.allocate_exact_size(vec2(w, 150.0), Sense::hover());
+        for (k, item) in items.iter().take(3).enumerate().rev() {
+            let off = (k as f32 - 1.0) * 14.0;
+            let r = Rect::from_center_size(stack.center() + vec2(off, -off * 0.4), Vec2::splat(112.0));
+            ui.painter().rect_filled(r, CornerRadius::same(6), t::FIELD);
+            ui.painter().rect_stroke(r, CornerRadius::same(6), Stroke::new(1.0, t::FIELD_BORDER), StrokeKind::Inside);
+            if let Some(tex) = self.loader.get(&item.id, Tier::Grid).cloned() {
+                let ts = tex.size_vec2();
+                let sc = ((r.width() - 10.0) / ts.x).min((r.height() - 10.0) / ts.y);
+                let ir = Rect::from_center_size(r.center(), ts * sc);
+                egui::Image::new((tex.id(), ir.size())).corner_radius(4).paint_at(ui, ir);
+            }
+            if let Some(j) = job_for(item, lib.root(), Tier::Grid) {
+                self.frame_jobs.push(j);
+            }
+        }
+        ui.vertical_centered(|ui| ui.label(RichText::new(format!("{n} items selected")).size(15.0)));
+
+        // Tags every selected item shares; adding applies to all.
+        heading(ui, "Tags");
+        let mut common: Vec<String> = items.first().map(|i| i.tags.clone()).unwrap_or_default();
+        common.retain(|t| items.iter().all(|i| i.tags.contains(t)));
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = vec2(6.0, 6.0);
+            for tag in &common {
+                if chip(ui, tag, true).clicked() {
+                    self.actions.push(Action::BatchTag(ids.clone(), None, Some(tag.clone())));
+                }
+            }
+            let buf = &mut self.batch_tag;
+            let r = ui.add(
+                TextEdit::singleline(buf)
+                    .id_salt("batch-tag")
+                    .hint_text(RichText::new("Add tag to all").color(t::TEXT_MUTED))
+                    .font(font(13.0))
+                    .frame(egui::Frame::NONE)
+                    .desired_width(120.0),
+            );
+            if r.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) && !buf.trim().is_empty() {
+                self.actions.push(Action::BatchTag(ids.clone(), Some(buf.trim().to_string()), None));
+                buf.clear();
+                r.request_focus();
+            }
+        });
+
+        heading(ui, "Folders");
+        let add = ui.add(egui::Button::new(RichText::new(format!("{}  Add All to Folder", ic::PLUS)).size(12.0).color(t::TEXT_MUTED)).frame(false));
+        egui::Popup::menu(&add).show(|ui| {
+            ui.set_min_width(200.0);
+            egui::ScrollArea::vertical().max_height(320.0).show(ui, |ui| {
+                for f in lib.all_folders() {
+                    if ui.button(&f.name).clicked() {
+                        self.actions.push(Action::AddToFolder(ids.clone(), f.id.clone()));
+                    }
+                }
+            });
+        });
+
         divider(ui);
         heading(ui, "Properties");
+        let stars: HashSet<u64> = items.iter().map(|i| i.extra.get("star").and_then(|v| v.as_u64()).unwrap_or(0)).collect();
+        let shown = if stars.len() == 1 { stars.into_iter().next().unwrap_or(0) } else { 0 };
+        if let Some(star) = rating(ui, shown) {
+            self.actions.push(Action::BatchRating(ids.clone(), star));
+        }
         prop(ui, "Items", &n.to_string());
         prop(ui, "Size", &logic::format_size(size));
+        ui.add_space(4.0);
+        let trash = self.scope == Scope::Trash;
+        let label = if trash { "Restore All" } else { "Move All to Trash" };
+        if wide_button(ui, ic::TRASH, label, true).clicked() {
+            self.actions.push(Action::Trash(ids, !trash));
+        }
     }
 
     fn item_inspector(&mut self, ui: &mut Ui, lib: &mut Library, item: Item) {
@@ -2599,6 +2715,10 @@ impl eframe::App for App {
         };
         let mut guard = lock(&shared);
         let lib: &mut Library = &mut guard;
+        // Items can vanish under the selection (deleted here or over the API).
+        if self.selected.iter().any(|id| lib.item(id).is_none()) {
+            self.selected.retain(|id| lib.item(id).is_some());
+        }
 
         if self.show_sidebar {
             egui::Panel::left("sidebar")
