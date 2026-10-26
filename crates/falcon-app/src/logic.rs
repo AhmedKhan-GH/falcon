@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 
 use falcon_library::model::{Folder, Item};
+use falcon_library::search::{self, Filter, OrderBy, Query};
 
 /// Which sidebar entry is active.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -38,43 +39,6 @@ impl Scope {
             Scope::Trash => "Trash".into(),
             Scope::Folder(id) => find_folder(roots, id).map_or_else(|| "Folder".into(), |f| f.name.clone()),
             Scope::Tag(t) => t.clone(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum SortKey {
-    /// `modificationTime`, Eagle's default.
-    #[default]
-    DateAdded,
-    DateModified,
-    DateCreated,
-    Name,
-    Ext,
-    Size,
-    Dimensions,
-}
-
-impl SortKey {
-    pub const ALL: [SortKey; 7] = [
-        SortKey::DateAdded,
-        SortKey::DateCreated,
-        SortKey::DateModified,
-        SortKey::Name,
-        SortKey::Ext,
-        SortKey::Size,
-        SortKey::Dimensions,
-    ];
-
-    pub fn label(self) -> &'static str {
-        match self {
-            SortKey::DateAdded => "Date Imported",
-            SortKey::DateCreated => "Date Created",
-            SortKey::DateModified => "Date Modified",
-            SortKey::Name => "Title",
-            SortKey::Ext => "Extension",
-            SortKey::Size => "File Size",
-            SortKey::Dimensions => "Dimensions",
         }
     }
 }
@@ -145,32 +109,6 @@ pub fn tag_counts(items: &[Item]) -> Vec<(String, usize)> {
     v
 }
 
-/// Keyword search in the spirit of Eagle's: space-separated terms must all
-/// match (AND), and a `-term` must not. Each term is a case-insensitive
-/// substring of the item's name, `.ext`, url, notes, tags or folder names.
-pub fn matches_query(item: &Item, query: &str, folder_names: &HashMap<&str, &str>) -> bool {
-    let terms: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
-    if terms.is_empty() {
-        return true;
-    }
-    let mut hay = format!("{} .{} {} {}", item.name, item.ext, item.url, item.annotation);
-    for t in &item.tags {
-        hay.push(' ');
-        hay.push_str(t);
-    }
-    for f in &item.folders {
-        if let Some(n) = folder_names.get(f.as_str()) {
-            hay.push(' ');
-            hay.push_str(n);
-        }
-    }
-    let hay = hay.to_lowercase();
-    terms.iter().all(|t| match t.strip_prefix('-') {
-        Some(neg) if !neg.is_empty() => !hay.contains(neg),
-        _ => hay.contains(t.as_str()),
-    })
-}
-
 fn in_scope(item: &Item, scope: &Scope) -> bool {
     match scope {
         Scope::Trash => item.is_deleted,
@@ -190,46 +128,43 @@ fn shuffle_key(seed: u64, id: &str) -> u64 {
     h.finish()
 }
 
-/// Indices into `items` that pass the scope and the search query, sorted.
+/// Indices into `items` that pass the scope, the search query and the filter
+/// panel, in Eagle's order. A colour filter sorts by colour distance.
 pub fn visible(
     items: &[Item],
     roots: &[Folder],
     scope: &Scope,
     query: &str,
-    key: SortKey,
-    ascending: bool,
+    filter: &Filter,
+    order: OrderBy,
+    increase: bool,
 ) -> Vec<usize> {
-    let mut names = HashMap::new();
-    for r in roots {
-        r.walk(&mut |f| {
-            names.insert(f.id.as_str(), f.name.as_str());
-        });
-    }
-    let mut out: Vec<usize> = items
+    let index = search::folder_index(roots);
+    let q = Query::parse(query);
+    let qlen = query.trim().chars().count();
+    let mut hits: Vec<(usize, f64)> = items
         .iter()
         .enumerate()
-        .filter(|(_, i)| in_scope(i, scope) && matches_query(i, query, &names))
-        .map(|(n, _)| n)
+        .filter(|(_, i)| in_scope(i, scope))
+        .filter(|(_, i)| q.is_empty() || q.matches(&search::search_text(i, &index, qlen)))
+        .filter_map(|(n, i)| filter.check(i).map(|d| (n, d)))
         .collect();
     match scope {
-        Scope::Random(seed) => out.sort_by_key(|&i| shuffle_key(*seed, &items[i].id)),
-        Scope::Recent => out.sort_by(|&a, &b| items[b].last_modified.cmp(&items[a].last_modified)),
-        _ => out.sort_by(|&a, &b| {
-            let (x, y) = (&items[a], &items[b]);
-            let ord = match key {
-                SortKey::DateAdded => x.modification_time.cmp(&y.modification_time),
-                SortKey::DateModified => x.mtime.cmp(&y.mtime),
-                SortKey::DateCreated => x.btime.cmp(&y.btime),
-                SortKey::Name => x.name.to_lowercase().cmp(&y.name.to_lowercase()),
-                SortKey::Ext => x.ext.cmp(&y.ext),
-                SortKey::Size => x.size.cmp(&y.size),
-                SortKey::Dimensions => (x.width * x.height).cmp(&(y.width * y.height)),
-            };
-            let ord = if ascending { ord } else { ord.reverse() };
-            ord.then_with(|| x.id.cmp(&y.id))
+        Scope::Random(seed) => hits.sort_by_key(|&(i, _)| shuffle_key(*seed, &items[i].id)),
+        Scope::Recent => hits.sort_by(|a, b| items[b.0].last_modified.cmp(&items[a.0].last_modified)),
+        Scope::Trash => hits.sort_by_key(|&(i, _)| {
+            let it = &items[i];
+            std::cmp::Reverse(it.extra.get("deletedTime").and_then(|v| v.as_u64()).unwrap_or(it.modification_time))
         }),
+        _ if filter.color.is_some() => hits.sort_by(|a, b| a.1.total_cmp(&b.1)),
+        _ => {
+            let mut refs: Vec<&Item> = hits.iter().map(|&(i, _)| &items[i]).collect();
+            search::sort(&mut refs, order, increase);
+            let pos: HashMap<&str, usize> = hits.iter().map(|&(i, _)| (items[i].id.as_str(), i)).collect();
+            return refs.iter().map(|it| pos[it.id.as_str()]).collect();
+        }
     }
-    out
+    hits.into_iter().map(|(i, _)| i).collect()
 }
 
 /// Byte size the way Eagle prints it: `512 B`, `5.34 KB`, `17.19 KB`.
@@ -326,7 +261,7 @@ mod tests {
     #[test]
     fn scopes() {
         let (roots, items) = fixture();
-        let v = |s: Scope| names(&items, &visible(&items, &roots, &s, "", SortKey::Name, true));
+        let v = |s: Scope| names(&items, &visible(&items, &roots, &s, "", &Filter::default(), OrderBy::Name, true));
         assert_eq!(v(Scope::All), ["apple", "loose", "Mango", "Zebra"]);
         assert_eq!(v(Scope::Uncategorized), ["loose"]);
         assert_eq!(v(Scope::Untagged), ["Mango"]);
@@ -340,22 +275,25 @@ mod tests {
     #[test]
     fn search_terms_and_negation() {
         let (roots, items) = fixture();
-        let q = |s: &str| names(&items, &visible(&items, &roots, &Scope::All, s, SortKey::Name, true));
+        let q = |s: &str| names(&items, &visible(&items, &roots, &Scope::All, s, &Filter::default(), OrderBy::Name, true));
         assert_eq!(q("ZEB"), ["Zebra"]);
         assert_eq!(q("red big"), ["Zebra"]);
         assert_eq!(q("red -big"), ["apple"]);
         assert_eq!(q(".png").len(), 4);
         assert_eq!(q("B-name"), ["apple", "Mango"]); // folder name
+        assert_eq!(q("zebra OR mango"), ["Mango", "Zebra"]);
         assert_eq!(q("  ").len(), 4);
     }
 
     #[test]
-    fn sorting() {
+    fn sorting_follows_eagle_directions() {
         let (roots, items) = fixture();
-        let s = |k, asc| names(&items, &visible(&items, &roots, &Scope::All, "", k, asc));
-        assert_eq!(s(SortKey::DateAdded, false), ["loose", "Zebra", "Mango", "apple"]);
-        assert_eq!(s(SortKey::Size, false), ["apple", "Mango", "Zebra", "loose"]);
-        assert_eq!(s(SortKey::Dimensions, true), ["loose", "Zebra", "Mango", "apple"]);
+        let s = |k, inc| names(&items, &visible(&items, &roots, &Scope::All, "", &Filter::default(), k, inc));
+        // Time keys are newest first when "increase" is on.
+        assert_eq!(s(OrderBy::Import, true), ["loose", "Zebra", "Mango", "apple"]);
+        assert_eq!(s(OrderBy::Import, false), ["apple", "Mango", "Zebra", "loose"]);
+        assert_eq!(s(OrderBy::FileSize, true), ["loose", "Zebra", "Mango", "apple"]);
+        assert_eq!(s(OrderBy::Resolution, false), ["apple", "Mango", "Zebra", "loose"]);
     }
 
     #[test]

@@ -16,7 +16,8 @@ use falcon_library::{Library, thumbnail};
 
 use crate::icons as ic;
 use crate::loader::{Loader, Tier, job_for};
-use crate::logic::{self, NavCounts, Scope, SortKey};
+use crate::logic::{self, NavCounts, Scope};
+use falcon_library::search::{ColorQuery, Filter, Logic, OrderBy, Shape, TextFilter};
 use crate::theme::{self as t, font, mono};
 
 /// Grid geometry, measured from Eagle at 1280 x 800.
@@ -58,8 +59,16 @@ pub struct App {
     back: Vec<Scope>,
     forward: Vec<Scope>,
     query: String,
-    sort: SortKey,
-    ascending: bool,
+    sort: OrderBy,
+    /// Eagle's `sortIncrease`: time keys newest first, others ascending.
+    increase: bool,
+    filter: Filter,
+    show_filter: bool,
+    /// Hex text typed into the colour filter.
+    color_text: String,
+    /// Keyword text typed into the Notes and URL filters.
+    note_text: String,
+    url_text: String,
     tile: f32,
     selected: Vec<String>,
     anchor: Option<String>,
@@ -94,8 +103,13 @@ impl App {
             back: Vec::new(),
             forward: Vec::new(),
             query: String::new(),
-            sort: SortKey::DateAdded,
-            ascending: false,
+            sort: OrderBy::Import,
+            increase: true,
+            filter: Filter::default(),
+            show_filter: false,
+            color_text: String::new(),
+            note_text: String::new(),
+            url_text: String::new(),
             tile: 139.0,
             selected: Vec::new(),
             anchor: None,
@@ -750,15 +764,13 @@ impl App {
         let icons_left = ix - 20.0;
 
         egui::Popup::menu(&layout).show(|ui| self.layout_menu(ui));
-        egui::Popup::menu(&filter).show(|ui| {
-            ui.set_min_width(180.0);
-            ui.label(RichText::new("Filter by type").color(t::TEXT_MUTED).size(12.0));
-            for ext in ["svg", "png", "jpg", "pdf", "gif"] {
-                if ui.button(format!(".{ext}")).clicked() {
-                    self.query = format!(".{ext}");
-                }
-            }
-        });
+        if filter.clicked() {
+            self.show_filter = !self.show_filter;
+        }
+        if self.show_filter || self.filter.is_active() {
+            let r = Rect::from_center_size(filter.rect.center(), Vec2::splat(26.0));
+            ui.painter().rect_stroke(r, t::RADIUS, Stroke::new(1.0, t::PRIMARY), StrokeKind::Inside);
+        }
 
         // Zoom slider between the title and the icons.
         let zx = (bar.left() + 237.0).max(title_end + 30.0);
@@ -818,17 +830,289 @@ impl App {
     fn layout_menu(&mut self, ui: &mut Ui) {
         ui.set_min_width(190.0);
         ui.label(RichText::new("Sort by").color(t::TEXT_MUTED).size(12.0));
-        for k in SortKey::ALL {
+        for k in OrderBy::ALL {
             let mark = if k == self.sort { ic::CHECK } else { " " };
             if ui.button(format!("{mark}  {}", k.label())).clicked() {
                 self.sort = k;
             }
         }
         ui.separator();
-        for (asc, label) in [(true, "Ascending"), (false, "Descending")] {
-            let mark = if asc == self.ascending { ic::CHECK } else { " " };
+        let labels = if self.sort.is_time() { ["Newest First", "Oldest First"] } else { ["Ascending", "Descending"] };
+        for (inc, label) in [(true, labels[0]), (false, labels[1])] {
+            let mark = if inc == self.increase { ic::CHECK } else { " " };
             if ui.button(format!("{mark}  {label}")).clicked() {
-                self.ascending = asc;
+                self.increase = inc;
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Filter bar
+
+/// Colours offered in the colour filter, like Eagle's swatch row.
+const PRESET_COLORS: [[u8; 3]; 14] = [
+    [0xff, 0x3b, 0x30],
+    [0xff, 0x95, 0x00],
+    [0xff, 0xd6, 0x0a],
+    [0x34, 0xc7, 0x59],
+    [0x30, 0xb0, 0xc7],
+    [0x00, 0x7a, 0xff],
+    [0x58, 0x56, 0xd6],
+    [0xaf, 0x52, 0xde],
+    [0xff, 0x2d, 0x55],
+    [0xa2, 0x84, 0x5e],
+    [0x00, 0x00, 0x00],
+    [0x8e, 0x8e, 0x93],
+    [0xff, 0xff, 0xff],
+    [0x67, 0x95, 0x3f],
+];
+
+fn parse_hex(s: &str) -> Option<[u8; 3]> {
+    let s = s.trim().trim_start_matches('#');
+    if s.len() != 6 {
+        return None;
+    }
+    let v = u32::from_str_radix(s, 16).ok()?;
+    Some([(v >> 16) as u8, (v >> 8) as u8, v as u8])
+}
+
+/// A filter chip: muted when off, primary-tinted with its value when on.
+fn filter_chip(ui: &mut Ui, label: &str, value: Option<String>) -> Response {
+    let text = match &value {
+        Some(v) => format!("{label}: {v}"),
+        None => label.to_string(),
+    };
+    let on = value.is_some();
+    let g = galley(ui, &text, font(13.0), t::TEXT, 220.0);
+    let (rect, resp) = ui.allocate_exact_size(vec2(g.size().x + 30.0, 26.0), Sense::click());
+    let fill = if on {
+        t::PRIMARY.gamma_multiply(0.22)
+    } else if resp.hovered() {
+        t::BUTTON_HOVER
+    } else {
+        t::BUTTON
+    };
+    ui.painter().rect_filled(rect, t::RADIUS, fill);
+    if on {
+        ui.painter().rect_stroke(rect, t::RADIUS, Stroke::new(1.0, t::PRIMARY.gamma_multiply(0.7)), StrokeKind::Inside);
+    }
+    let color = if on { t::TEXT } else { t::TEXT_VALUE };
+    ui.painter().galley(Pos2::new(rect.left() + 10.0, rect.center().y - g.size().y / 2.0), g, color);
+    icon(ui, Pos2::new(rect.right() - 11.0, rect.center().y), ic::CARET_DOWN, 10.0, t::TEXT_MUTED);
+    resp
+}
+
+fn logic_picker(ui: &mut Ui, logic: &mut Logic) {
+    ui.horizontal(|ui| {
+        for (l, name) in [(Logic::Or, "Any"), (Logic::And, "All"), (Logic::Equal, "Exact")] {
+            if ui.selectable_label(*logic == l, name).clicked() {
+                *logic = l;
+            }
+        }
+    });
+}
+
+fn text_filter_menu(ui: &mut Ui, f: &mut TextFilter, keywords: &mut String) {
+    ui.set_min_width(200.0);
+    for (opt, name) in [(TextFilter::Off, "Any"), (TextFilter::Has, "Has"), (TextFilter::No, "None")] {
+        let on = std::mem::discriminant(f) == std::mem::discriminant(&opt);
+        if ui.selectable_label(on, name).clicked() {
+            *f = opt;
+        }
+    }
+    ui.separator();
+    ui.label(RichText::new("Contains").color(t::TEXT_MUTED).size(12.0));
+    if ui.add(TextEdit::singleline(keywords).hint_text("keyword, keyword")).changed() {
+        let words: Vec<String> = keywords.split(',').map(|w| w.trim().to_string()).filter(|w| !w.is_empty()).collect();
+        *f = if words.is_empty() { TextFilter::Off } else { TextFilter::Keywords(words) };
+    }
+}
+
+impl App {
+    fn filter_bar(&mut self, ui: &mut Ui, lib: &Library) {
+        let r = ui.max_rect();
+        ui.painter().hline(r.x_range(), r.bottom() - 0.5, Stroke::new(1.0, t::DIVIDER));
+        let inner = r.shrink2(vec2(GRID_PAD_X, 7.0));
+        let mut row = ui.new_child(egui::UiBuilder::new().max_rect(inner).layout(egui::Layout::left_to_right(egui::Align::Center)));
+        let ui = &mut row;
+        ui.spacing_mut().item_spacing.x = 6.0;
+        let f = &mut self.filter;
+
+        let color_val = f.color.map(|c| logic::hex(c.rgb));
+        let resp = filter_chip(ui, "Color", color_val);
+        let color_text = &mut self.color_text;
+        egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
+            ui.set_min_width(230.0);
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing = vec2(6.0, 6.0);
+                for c in PRESET_COLORS {
+                    let (rect, hit) = ui.allocate_exact_size(Vec2::splat(22.0), Sense::click());
+                    ui.painter().circle_filled(rect.center(), 10.0, Color32::from_rgb(c[0], c[1], c[2]));
+                    ui.painter().circle_stroke(rect.center(), 10.0, Stroke::new(1.0, Color32::from_white_alpha(40)));
+                    if f.color.is_some_and(|q| q.rgb == c) {
+                        ui.painter().circle_stroke(rect.center(), 12.5, Stroke::new(1.5, t::PRIMARY));
+                    }
+                    if hit.clicked() {
+                        let acc = f.color.map_or(20.0, |q| q.accuracy);
+                        f.color = Some(ColorQuery { rgb: c, accuracy: acc });
+                        *color_text = logic::hex(c);
+                    }
+                }
+            });
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                ui.label("Hex");
+                if ui.add(TextEdit::singleline(color_text).desired_width(90.0).hint_text("#FF0000")).changed()
+                    && let Some(rgb) = parse_hex(color_text)
+                {
+                    let acc = f.color.map_or(20.0, |q| q.accuracy);
+                    f.color = Some(ColorQuery { rgb, accuracy: acc });
+                }
+            });
+            if let Some(q) = f.color.as_mut() {
+                ui.horizontal(|ui| {
+                    ui.label("Accuracy");
+                    // Eagle draws the slider reversed: right is stricter.
+                    let mut strict = 45.0 - q.accuracy;
+                    ui.add(egui::Slider::new(&mut strict, 5.0..=40.0).show_value(false));
+                    q.accuracy = 45.0 - strict;
+                });
+            }
+            ui.checkbox(&mut f.grayscale, "Grayscale only");
+            if ui.button("Clear").clicked() {
+                f.color = None;
+                f.grayscale = false;
+                color_text.clear();
+            }
+        });
+
+        let tags = logic::tag_counts(lib.items());
+        let tv = (!f.tags.includes.is_empty() || f.tags.empty).then(|| {
+            let n = f.tags.includes.len() + usize::from(f.tags.empty);
+            if n == 1 { f.tags.includes.first().cloned().unwrap_or_else(|| "Untagged".into()) } else { format!("{n}") }
+        });
+        let resp = filter_chip(ui, "Tags", tv);
+        egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
+            ui.set_min_width(220.0);
+            logic_picker(ui, &mut f.tags.logic);
+            ui.separator();
+            ui.checkbox(&mut f.tags.empty, "Untagged");
+            egui::ScrollArea::vertical().max_height(300.0).show(ui, |ui| {
+                for (tag, n) in &tags {
+                    let mut on = f.tags.includes.contains(tag);
+                    if ui.checkbox(&mut on, format!("{tag}  ({n})")).changed() {
+                        if on {
+                            f.tags.includes.push(tag.clone());
+                        } else {
+                            f.tags.includes.retain(|x| x != tag);
+                        }
+                    }
+                }
+            });
+        });
+
+        let fv = (!f.folders.includes.is_empty()).then(|| f.folders.includes.len().to_string());
+        let resp = filter_chip(ui, "Folders", fv);
+        egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
+            ui.set_min_width(220.0);
+            logic_picker(ui, &mut f.folders.logic);
+            ui.separator();
+            ui.checkbox(&mut f.folders.empty, "Uncategorized");
+            egui::ScrollArea::vertical().max_height(300.0).show(ui, |ui| {
+                for folder in lib.all_folders() {
+                    let mut on = f.folders.includes.contains(&folder.id);
+                    if ui.checkbox(&mut on, &folder.name).changed() {
+                        if on {
+                            f.folders.includes.push(folder.id.clone());
+                        } else {
+                            f.folders.includes.retain(|x| *x != folder.id);
+                        }
+                    }
+                }
+            });
+        });
+
+        let sv = (!f.shapes.is_empty()).then(|| f.shapes.len().to_string());
+        let resp = filter_chip(ui, "Shape", sv);
+        egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
+            for (shape, name) in [
+                (Shape::Landscape, "Landscape"),
+                (Shape::Portrait, "Portrait"),
+                (Shape::Square, "Square"),
+                (Shape::PanoramicLandscape, "Panoramic Landscape"),
+                (Shape::PanoramicPortrait, "Panoramic Portrait"),
+            ] {
+                let mut on = f.shapes.contains(&shape);
+                if ui.checkbox(&mut on, name).changed() {
+                    if on {
+                        f.shapes.insert(shape);
+                    } else {
+                        f.shapes.remove(&shape);
+                    }
+                }
+            }
+        });
+
+        let rv = (!f.ratings.is_empty()).then(|| f.ratings.len().to_string());
+        let resp = filter_chip(ui, "Rating", rv);
+        egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
+            for n in (0..=5u8).rev() {
+                let label = if n == 0 { "Unrated".to_string() } else { "★".repeat(n as usize) };
+                let mut on = f.ratings.contains(&n);
+                if ui.checkbox(&mut on, label).changed() {
+                    if on {
+                        f.ratings.insert(n);
+                    } else {
+                        f.ratings.remove(&n);
+                    }
+                }
+            }
+        });
+
+        let mut exts: Vec<String> = lib.items().iter().map(|i| i.ext.clone()).collect::<HashSet<_>>().into_iter().collect();
+        exts.sort();
+        let yv = (!f.types.is_empty()).then(|| {
+            if f.types.len() == 1 { f.types[0].to_uppercase() } else { f.types.len().to_string() }
+        });
+        let resp = filter_chip(ui, "Type", yv);
+        egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
+            for ext in &exts {
+                let mut on = f.types.contains(ext);
+                if ui.checkbox(&mut on, ext.to_uppercase()).changed() {
+                    if on {
+                        f.types.push(ext.clone());
+                    } else {
+                        f.types.retain(|x| x != ext);
+                    }
+                }
+            }
+        });
+
+        let label = |t: &TextFilter| match t {
+            TextFilter::Off => None,
+            TextFilter::Has => Some("Has".to_string()),
+            TextFilter::No => Some("None".to_string()),
+            TextFilter::Keywords(k) => Some(k.join(", ")),
+        };
+        let note_kw = &mut self.note_text;
+        let resp = filter_chip(ui, "Notes", label(&f.note));
+        egui::Popup::menu(&resp)
+            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+            .show(|ui| text_filter_menu(ui, &mut f.note, note_kw));
+        let url_kw = &mut self.url_text;
+        let resp = filter_chip(ui, "URL", label(&f.url));
+        egui::Popup::menu(&resp)
+            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+            .show(|ui| text_filter_menu(ui, &mut f.url, url_kw));
+
+        if f.is_active() {
+            let clear = ui.add(egui::Button::new(RichText::new(format!("{}  Clear", ic::X)).color(t::TEXT_MUTED)).frame(false));
+            if clear.clicked() {
+                *f = Filter::default();
+                self.color_text.clear();
+                self.note_text.clear();
+                self.url_text.clear();
             }
         }
     }
@@ -840,7 +1124,7 @@ impl App {
 impl App {
     fn grid(&mut self, ui: &mut Ui, lib: &Library) {
         let area = ui.max_rect();
-        let order = logic::visible(lib.items(), &lib.metadata.folders, &self.scope, &self.query, self.sort, self.ascending);
+        let order = logic::visible(lib.items(), &lib.metadata.folders, &self.scope, &self.query, &self.filter, self.sort, self.increase);
         let items: Vec<&Item> = order.iter().map(|&i| &lib.items()[i]).collect();
         self.order = items.iter().map(|i| i.id.clone()).collect();
 
@@ -1180,10 +1464,15 @@ impl App {
                 let hit = ui.interact(Rect::from_center_size(center, Vec2::splat(d)), ui.scope_id().with(("swatch", n)), Sense::click());
                 let hex = logic::hex(c.color);
                 if hit.clicked() {
+                    self.filter.color = Some(ColorQuery::new(c.color));
+                    self.color_text = hex.clone();
+                    self.show_filter = true;
+                }
+                if hit.secondary_clicked() {
                     ui.ctx().copy_text(hex.clone());
                     self.flash(format!("Copied {hex}"));
                 }
-                hit.on_hover_text(format!("{hex}  ·  {}%", c.ratio));
+                hit.on_hover_text(format!("{hex}  ·  {}%\nClick to find similar colours, right-click to copy", c.ratio));
             }
         }
 
@@ -1487,7 +1776,14 @@ impl eframe::App for App {
                     self.show_inspector = true;
                 }
             }
-            let grid = Rect::from_min_max(Pos2::new(full.left(), bar.bottom()), full.max);
+            let mut grid_top = bar.bottom();
+            if self.show_filter {
+                let fb = Rect::from_min_size(Pos2::new(full.left(), bar.bottom()), vec2(full.width(), 40.0));
+                let mut fui = ui.new_child(egui::UiBuilder::new().max_rect(fb));
+                self.filter_bar(&mut fui, &lib);
+                grid_top = fb.bottom();
+            }
+            let grid = Rect::from_min_max(Pos2::new(full.left(), grid_top), full.max);
             let mut g = ui.new_child(egui::UiBuilder::new().max_rect(grid));
             g.set_clip_rect(grid);
             self.grid(&mut g, &lib);
