@@ -7,7 +7,7 @@ Falcon is early alpha. This is what is done and what comes next, roughly in orde
 - **Library format:** reads and writes Eagle-format libraries, byte-identical on round trips.
 - **Import:** thumbnails and colour palettes, QuickLook formats (PDF, video, PSD, AI, HEIC, RAW), background imports, paste, drag and drop.
 - **Organise:** folders, tags, smart folders, Quick Access, ratings, notes, trash, batch editing.
-- **Search:** keyword syntax, the filter bar, colour similarity search, sorting.
+- **Search:** keyword syntax, typo tolerance, the filter bar, colour similarity search, sorting.
 - **Browse:** Waterfall, Justified, Grid and List layouts, the viewer, dragging items out to other apps.
 - **Local HTTP API and CLI.**
 
@@ -21,8 +21,57 @@ Falcon is early alpha. This is what is done and what comes next, roughly in orde
 - [ ] Windows and Linux builds
 - [ ] Signed, notarised macOS releases
 
+## Deferred local features
+
+Eagle features that need no online service, put off until after the list above.
+
+**Browsing and look**
+- [ ] Reorder folders by drag
+- [ ] Light, gray, blue and purple themes
+- [ ] Window buttons at Eagle's height
+
+**Search and organising**
+- [ ] Date, duration, camera (EXIF) and font filters
+- [ ] Saved filters
+- [ ] Nested smart folders and smart folder icons
+
+**Editing**
+- [ ] Custom thumbnails
+- [ ] Refresh a palette
+- [ ] Folder covers
+- [ ] Folder passwords
+
+**Viewer**
+- [ ] Comments on a region of an image
+- [ ] Crop and rotate
+
+**File formats**
+- [ ] Audio waveforms
+- [ ] Font previews
+- [ ] 3D model thumbnails
+
+**Import**
+- [ ] Screenshots
+- [ ] IPTC and XMP keywords
+
+**Library**
+- [ ] Batched writes and backup rotation
+- [ ] Duplicate detection
+- [ ] Export
+- [ ] Several libraries open at once
+- [ ] Sync conflict detection for libraries in iCloud Drive or Dropbox
+
+**App**
+- [ ] Preferences
+- [ ] Shortcut settings
+- [ ] Collect window
+- [ ] Localisation
+
+**HTTP API**
+- [ ] Remaining v2 routes: comments, tag groups, smart folders, updates, library switching
+
 ## Later
 
 - [ ] Browser extension for saving images
 - [ ] Plugin system
-- [ ] Sync between devices
+- [ ] AI search (a plugin in Eagle)
