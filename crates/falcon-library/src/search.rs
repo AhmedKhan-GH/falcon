@@ -5,6 +5,9 @@
 
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
+
+use chrono::{Datelike, Local, TimeZone};
 
 use crate::model::{Folder, Item};
 
@@ -482,6 +485,19 @@ pub struct Filter {
     pub note: TextFilter,
     pub color: Option<ColorQuery>,
     pub grayscale: bool,
+    /// Date Imported (`modificationTime`).
+    pub imported: DateFilter,
+    /// Date Created (`btime`); not in Eagle's panel, only in its smart folders.
+    pub created: DateFilter,
+    /// Date Modified (`mtime`).
+    pub modified: DateFilter,
+    /// Inclusive range in seconds; each bound is truncated to whole seconds
+    /// as Eagle's `parseInt` does. Items without a `duration` fail an active
+    /// range.
+    pub duration: (Option<f64>, Option<f64>),
+    /// Camera names (`rawMetas.camera`), matched exactly, OR-ed.
+    pub cameras: HashSet<String>,
+    pub font: FontFilter,
 }
 
 impl Filter {
@@ -522,9 +538,310 @@ impl Filter {
         if !self.tags.matches(&item.tags) || !self.folders.matches(&item.folders) {
             return None;
         }
+        if !self.imported.matches(DateField::Imported.value(item))
+            || !self.created.matches(DateField::Created.value(item))
+            || !self.modified.matches(DateField::Modified.value(item))
+        {
+            return None;
+        }
+        if self.duration != (None, None) {
+            let d = duration(item)?;
+            if self.duration.0.is_some_and(|a| d < a.trunc()) || self.duration.1.is_some_and(|b| d > b.trunc()) {
+                return None;
+            }
+        }
+        if !self.cameras.is_empty() && !camera(item).is_some_and(|c| self.cameras.contains(c)) {
+            return None;
+        }
+        if !self.font.matches(item) {
+            return None;
+        }
         match &self.color {
             Some(c) => c.distance(item),
             None => Some(0.0),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Dates
+
+/// One day in milliseconds; Eagle steps days by this, ignoring DST.
+pub const DAY_MS: i64 = 24 * 60 * 60 * 1000;
+
+/// Which timestamp a date rule reads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DateField {
+    /// `modificationTime`, the import time.
+    Imported,
+    /// `btime`, falling back to `modificationTime` when 0.
+    Created,
+    /// `mtime`, falling back to `modificationTime` when 0.
+    Modified,
+}
+
+impl DateField {
+    pub fn value(self, item: &Item) -> u64 {
+        let or_import = |t: u64| if t == 0 { item.modification_time } else { t };
+        match self {
+            DateField::Imported => item.modification_time,
+            DateField::Created => or_import(item.btime),
+            DateField::Modified => or_import(item.mtime),
+        }
+    }
+}
+
+/// Eagle's date presets. Several selected presets are OR-ed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DatePreset {
+    /// After local midnight today.
+    Today,
+    /// Between local midnight yesterday and today (both exclusive).
+    Yesterday,
+    /// Less than N × 24 h before now.
+    Last7Days,
+    Last30Days,
+    Last90Days,
+    Last365Days,
+}
+
+impl DatePreset {
+    pub const ALL: [DatePreset; 6] = [
+        DatePreset::Today,
+        DatePreset::Yesterday,
+        DatePreset::Last7Days,
+        DatePreset::Last30Days,
+        DatePreset::Last90Days,
+        DatePreset::Last365Days,
+    ];
+
+    pub fn matches(self, t: i64, clock: Clock) -> bool {
+        let within = |days: i64| clock.now - t < days * DAY_MS;
+        match self {
+            DatePreset::Today => t > clock.today_start,
+            DatePreset::Yesterday => t < clock.today_start && t > clock.today_start - DAY_MS,
+            DatePreset::Last7Days => within(7),
+            DatePreset::Last30Days => within(30),
+            DatePreset::Last90Days => within(90),
+            DatePreset::Last365Days => within(365),
+        }
+    }
+}
+
+/// The current time and the start of the local day, in ms since the epoch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Clock {
+    pub now: i64,
+    pub today_start: i64,
+}
+
+impl Clock {
+    /// Reads the system clock and time zone.
+    pub fn local() -> Clock {
+        let now = Local::now();
+        let today_start = now
+            .date_naive()
+            .and_hms_opt(0, 0, 0)
+            .and_then(|m| Local.from_local_datetime(&m).earliest())
+            .map_or(now.timestamp_millis(), |d| d.timestamp_millis());
+        Clock { now: now.timestamp_millis(), today_start }
+    }
+}
+
+/// Local midnight at the start of `year-month-day`, in ms; for building
+/// [`DateFilter::range`] from a date picker.
+pub fn local_day_start(year: i32, month: u32, day: u32) -> Option<u64> {
+    let d = chrono::NaiveDate::from_ymd_opt(year, month, day)?.and_hms_opt(0, 0, 0)?;
+    Local.from_local_datetime(&d).earliest().and_then(|d| u64::try_from(d.timestamp_millis()).ok())
+}
+
+/// The local `(year, month)` of a timestamp in ms.
+pub fn local_month(t: u64) -> Option<(i32, u32)> {
+    let d = Local.timestamp_millis_opt(i64::try_from(t).ok()?).single()?;
+    Some((d.year(), d.month()))
+}
+
+/// One date rule of the filter panel (Date Imported, Date Modified).
+///
+/// Presets and the range are OR-ed with each other; the month list is a
+/// separate rule that must also pass.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct DateFilter {
+    pub presets: HashSet<DatePreset>,
+    /// Days picked in the calendar: the local midnights starting the first
+    /// and the last day. The last day is included whole (Eagle adds 24 h).
+    pub range: Option<(u64, u64)>,
+    /// Calendar months in local time, `(year, month 1..=12)`.
+    pub months: HashSet<(i32, u32)>,
+    /// The clock the presets compare with; `None` reads the system clock.
+    pub clock: Option<Clock>,
+}
+
+impl DateFilter {
+    pub fn is_active(&self) -> bool {
+        !self.presets.is_empty() || self.range.is_some() || !self.months.is_empty()
+    }
+
+    /// Whether a timestamp (ms) passes this rule.
+    pub fn matches(&self, t: u64) -> bool {
+        if !self.months.is_empty() && !local_month(t).is_some_and(|m| self.months.contains(&m)) {
+            return false;
+        }
+        if self.presets.is_empty() && self.range.is_none() {
+            return true;
+        }
+        let t = t as i64;
+        // Eagle ignores a range unless both ends are set (non-zero).
+        let in_range = self.range.is_some_and(|(a, b)| a > 0 && b > 0 && a as i64 <= t && t <= b as i64 + DAY_MS);
+        if in_range {
+            return true;
+        }
+        if self.presets.is_empty() {
+            return false;
+        }
+        let clock = self.clock.unwrap_or_else(Clock::local);
+        self.presets.iter().any(|p| p.matches(t, clock))
+    }
+}
+
+/// How many items fall in each local month, newest month first; the options
+/// of a date rule's month list.
+pub fn month_counts<'a>(items: impl IntoIterator<Item = &'a Item>, field: DateField) -> Vec<((i32, u32), usize)> {
+    let mut counts: HashMap<(i32, u32), usize> = HashMap::new();
+    for i in items {
+        if let Some(m) = local_month(field.value(i)) {
+            *counts.entry(m).or_default() += 1;
+        }
+    }
+    let mut out: Vec<_> = counts.into_iter().collect();
+    out.sort_by_key(|a| std::cmp::Reverse(a.0));
+    out
+}
+
+// ---------------------------------------------------------------------------
+// Duration
+
+/// Units of Eagle's duration fields.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DurationUnit {
+    #[default]
+    Seconds,
+    Minutes,
+    Hours,
+}
+
+impl DurationUnit {
+    pub fn to_seconds(self, v: f64) -> f64 {
+        match self {
+            DurationUnit::Seconds => v,
+            DurationUnit::Minutes => v * 60.0,
+            DurationUnit::Hours => v * 3600.0,
+        }
+    }
+}
+
+/// An item's `duration` in seconds (audio and video).
+pub fn duration(item: &Item) -> Option<f64> {
+    item.extra.get("duration").and_then(|v| v.as_f64())
+}
+
+/// The shortest and longest duration among `items`, for the duration
+/// fields' placeholders.
+pub fn duration_range<'a>(items: impl IntoIterator<Item = &'a Item>) -> Option<(f64, f64)> {
+    items.into_iter().filter_map(duration).fold(None, |acc, d| match acc {
+        None => Some((d, d)),
+        Some((a, b)) => Some((a.min(d), b.max(d))),
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Camera and font
+
+/// The camera Eagle stored for a RAW photo (`rawMetas.camera`).
+pub fn camera(item: &Item) -> Option<&str> {
+    item.extra.get("rawMetas")?.get("camera")?.as_str().filter(|c| !c.is_empty())
+}
+
+/// JavaScript's default string order (UTF-16 code units).
+fn js_cmp(a: &str, b: &str) -> Ordering {
+    a.encode_utf16().cmp(b.encode_utf16())
+}
+
+/// The camera filter's options: every distinct camera, sorted as Eagle sorts
+/// them (plain code-unit order, so case-sensitive).
+pub fn distinct_cameras<'a>(items: impl IntoIterator<Item = &'a Item>) -> Vec<String> {
+    let set: HashSet<&str> = items.into_iter().filter_map(camera).collect();
+    let mut out: Vec<String> = set.into_iter().map(String::from).collect();
+    out.sort_by(|a, b| js_cmp(a, b));
+    out
+}
+
+/// First value of one of a font's `fontMetas` name maps, such as
+/// `postScriptName` or `fontFamily` (Eagle takes the first language key).
+pub fn font_name<'a>(item: &'a Item, key: &str) -> Option<&'a str> {
+    let m = item.extra.get("fontMetas")?.get(key)?.as_object()?;
+    m.values().next()?.as_str()
+}
+
+/// The font's family name (`fontMetas.fontFamily`).
+pub fn font_family(item: &Item) -> Option<&str> {
+    font_name(item, "fontFamily")
+}
+
+/// Every distinct font family, in natural order.
+pub fn distinct_font_families<'a>(items: impl IntoIterator<Item = &'a Item>) -> Vec<String> {
+    let set: HashSet<&str> = items.into_iter().filter_map(font_family).collect();
+    let mut out: Vec<String> = set.into_iter().map(String::from).collect();
+    out.sort_by(|a, b| natural_cmp(a, b));
+    out
+}
+
+/// The key Eagle looks up to tell whether a font is activated:
+/// `<postScriptName>_.<ext>`.
+pub fn font_key(item: &Item) -> Option<String> {
+    Some(format!("{}_.{}", font_name(item, "postScriptName")?, item.ext))
+}
+
+/// The folder Eagle copies activated fonts into (macOS:
+/// `~/Library/Fonts/EagleApp/`).
+pub fn eagle_font_dir() -> Option<PathBuf> {
+    if !cfg!(target_os = "macos") {
+        return None;
+    }
+    std::env::var_os("HOME").map(|h| PathBuf::from(h).join("Library/Fonts/EagleApp"))
+}
+
+/// Keys of the activated fonts in `dir`, built from file names the way Eagle
+/// does: `<base>_<.ext lower-cased>`. The base only loses the extension when
+/// the file name ends with the lower-cased form, as with Node's `basename`.
+pub fn installed_font_keys(dir: &Path) -> HashSet<String> {
+    let Ok(entries) = std::fs::read_dir(dir) else { return HashSet::new() };
+    entries.flatten().map(|e| font_file_key(&e.file_name().to_string_lossy())).collect()
+}
+
+fn font_file_key(file: &str) -> String {
+    let ext = Path::new(file).extension().map(|x| format!(".{}", x.to_string_lossy().to_lowercase())).unwrap_or_default();
+    let base = file.strip_suffix(ext.as_str()).filter(|b| !b.is_empty()).unwrap_or(file);
+    format!("{base}_{ext}")
+}
+
+/// The font filter: activated (installed through Eagle) or not. The sets
+/// hold [`installed_font_keys`]. Items that are not fonts fail both.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub enum FontFilter {
+    #[default]
+    Off,
+    Activated(HashSet<String>),
+    Deactivated(HashSet<String>),
+}
+
+impl FontFilter {
+    pub fn matches(&self, item: &Item) -> bool {
+        let installed = |set: &HashSet<String>| font_key(item).map(|k| set.contains(&k));
+        match self {
+            FontFilter::Off => true,
+            FontFilter::Activated(set) => installed(set) == Some(true),
+            FontFilter::Deactivated(set) => installed(set) == Some(false),
         }
     }
 }
@@ -870,6 +1187,134 @@ mod tests {
         assert!((d - 2.0425).abs() < 1e-4, "{d}");
         assert_eq!(lab([255, 255, 255]), [100.0, 0.0, 0.0]);
         assert_eq!(lab([255, 0, 0]), [53.0, 80.0, 67.0]);
+    }
+
+    fn item(extra: serde_json::Value) -> Item {
+        let mut v = serde_json::json!({
+            "id": "A", "name": "a", "size": 1, "btime": 0, "mtime": 0, "ext": "jpg", "tags": [], "folders": [],
+            "isDeleted": false, "url": "", "annotation": "", "modificationTime": 0, "height": 1, "width": 1,
+            "lastModified": 0, "palettes": []
+        });
+        for (k, x) in extra.as_object().unwrap() {
+            v[k] = x.clone();
+        }
+        serde_json::from_value(v).unwrap()
+    }
+
+    const NOW: i64 = 1_760_000_000_000;
+    const MIDNIGHT: i64 = NOW - 10 * 3_600_000;
+
+    fn dates(presets: &[DatePreset]) -> DateFilter {
+        DateFilter {
+            presets: presets.iter().copied().collect(),
+            clock: Some(Clock { now: NOW, today_start: MIDNIGHT }),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn date_presets() {
+        let at = |t: i64| t as u64;
+        let today = dates(&[DatePreset::Today]);
+        assert!(today.matches(at(MIDNIGHT + 1)));
+        assert!(!today.matches(at(MIDNIGHT)));
+        let yesterday = dates(&[DatePreset::Yesterday]);
+        assert!(yesterday.matches(at(MIDNIGHT - 1)));
+        assert!(!yesterday.matches(at(MIDNIGHT - DAY_MS)));
+        assert!(!yesterday.matches(at(MIDNIGHT + 1)));
+        let week = dates(&[DatePreset::Last7Days]);
+        assert!(week.matches(at(NOW - 7 * DAY_MS + 1)));
+        assert!(!week.matches(at(NOW - 7 * DAY_MS)));
+        for (p, n) in [(DatePreset::Last30Days, 30), (DatePreset::Last90Days, 90), (DatePreset::Last365Days, 365)] {
+            let f = dates(&[p]);
+            assert!(f.matches(at(NOW - n * DAY_MS + 1)) && !f.matches(at(NOW - n * DAY_MS)), "{p:?}");
+        }
+        // Presets are OR-ed.
+        let either = dates(&[DatePreset::Today, DatePreset::Yesterday]);
+        assert!(either.matches(at(MIDNIGHT - 5)) && either.matches(at(MIDNIGHT + 5)));
+        assert!(!either.matches(at(MIDNIGHT - 2 * DAY_MS)));
+    }
+
+    #[test]
+    fn date_range_and_months() {
+        let a = local_day_start(2024, 3, 1).unwrap();
+        let b = local_day_start(2024, 3, 10).unwrap();
+        let f = DateFilter { range: Some((a, b)), ..Default::default() };
+        assert!(f.matches(a));
+        assert!(!f.matches(a - 1));
+        assert!(f.matches(b + DAY_MS as u64)); // the last day is whole, end inclusive
+        assert!(!f.matches(b + DAY_MS as u64 + 1));
+        // An unset end makes Eagle ignore the range.
+        assert!(!DateFilter { range: Some((a, 0)), ..Default::default() }.matches(a));
+
+        let mid_march = local_day_start(2024, 3, 15).unwrap() + 12 * 3_600_000;
+        let f = DateFilter { months: [(2024, 3)].into(), ..Default::default() };
+        assert!(f.matches(mid_march));
+        assert!(!f.matches(local_day_start(2024, 4, 15).unwrap()));
+        // Months and presets must both pass.
+        let f = DateFilter { months: [(2024, 3)].into(), ..dates(&[DatePreset::Today]) };
+        assert!(!f.matches(mid_march));
+    }
+
+    #[test]
+    fn date_fields_in_filter() {
+        let i = item(serde_json::json!({"modificationTime": NOW - 1000, "mtime": 0, "btime": 5}));
+        assert_eq!(DateField::Modified.value(&i), (NOW - 1000) as u64);
+        assert_eq!(DateField::Created.value(&i), 5);
+        let f = Filter { imported: dates(&[DatePreset::Today]), ..Default::default() };
+        assert!(f.check(&i).is_some());
+        let f = Filter { created: dates(&[DatePreset::Today]), ..Default::default() };
+        assert!(f.check(&i).is_none());
+        let f = Filter { modified: dates(&[DatePreset::Today]), ..Default::default() };
+        assert!(f.check(&i).is_some(), "mtime 0 falls back to the import time");
+        let counts = month_counts([&i, &i], DateField::Imported);
+        assert_eq!(counts.len(), 1);
+        assert_eq!(counts[0].1, 2);
+    }
+
+    #[test]
+    fn duration_rule() {
+        let clip = item(serde_json::json!({"ext": "mp3", "duration": 90.7}));
+        let still = item(serde_json::json!({}));
+        let f = |min: Option<f64>, max: Option<f64>| Filter { duration: (min, max), ..Default::default() };
+        assert!(f(Some(90.0), None).check(&clip).is_some());
+        assert!(f(Some(90.9), None).check(&clip).is_some(), "bounds are truncated");
+        assert!(f(None, Some(DurationUnit::Minutes.to_seconds(1.5))).check(&clip).is_none());
+        assert!(f(None, Some(DurationUnit::Minutes.to_seconds(2.0))).check(&clip).is_some());
+        assert!(f(Some(0.0), None).check(&still).is_none());
+        assert_eq!(DurationUnit::Hours.to_seconds(1.0), 3600.0);
+        assert_eq!(duration_range([&clip, &still]), Some((90.7, 90.7)));
+    }
+
+    #[test]
+    fn camera_rule_and_options() {
+        let nikon = item(serde_json::json!({"ext": "nef", "rawMetas": {"camera": "Nikon D850"}}));
+        let canon = item(serde_json::json!({"ext": "cr2", "rawMetas": {"camera": "Canon EOS R5"}}));
+        let lower = item(serde_json::json!({"ext": "cr2", "rawMetas": {"camera": "canon eos r5"}}));
+        let none = item(serde_json::json!({}));
+        let f = Filter { cameras: ["Canon EOS R5".to_string()].into(), ..Default::default() };
+        assert!(f.check(&canon).is_some());
+        assert!(f.check(&lower).is_none(), "exact, case-sensitive");
+        assert!(f.check(&nikon).is_none() && f.check(&none).is_none());
+        assert_eq!(distinct_cameras([&nikon, &canon, &lower, &none, &canon]), ["Canon EOS R5", "Nikon D850", "canon eos r5"]);
+    }
+
+    #[test]
+    fn font_rule_and_options() {
+        let font = item(serde_json::json!({"ext": "ttf", "fontMetas": {
+            "fontFamily": {"en": "Inter"}, "postScriptName": {"en": "Inter-Regular", "zh": "x"}}}));
+        let other = item(serde_json::json!({"ext": "otf", "fontMetas": {"fontFamily": {"en": "Arial"}, "postScriptName": {"en": "ArialMT"}}}));
+        let photo = item(serde_json::json!({}));
+        assert_eq!(font_key(&font).as_deref(), Some("Inter-Regular_.ttf"));
+        let installed: HashSet<String> = [font_file_key("Inter-Regular.TTF"), font_file_key("Inter-Regular.ttf")].into();
+        assert!(installed.contains("Inter-Regular_.ttf"));
+        assert!(installed.contains("Inter-Regular.TTF_.ttf"), "Node's basename keeps a differently cased extension");
+        let on = Filter { font: FontFilter::Activated(installed.clone()), ..Default::default() };
+        let off = Filter { font: FontFilter::Deactivated(installed), ..Default::default() };
+        assert!(on.check(&font).is_some() && off.check(&font).is_none());
+        assert!(on.check(&other).is_none() && off.check(&other).is_some());
+        assert!(on.check(&photo).is_none() && off.check(&photo).is_none());
+        assert_eq!(distinct_font_families([&other, &font, &photo, &font]), ["Arial", "Inter"]);
     }
 
     #[test]
