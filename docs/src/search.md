@@ -29,6 +29,28 @@ Eagle doesn't evaluate a real expression tree. It flattens the query into three 
 
 If the terms fail, Eagle makes one last attempt: it tests the whole query as a single substring.
 
+## Typo tolerance (falcon only)
+
+Eagle has no typo tolerance. falcon's app adds it on top of Eagle's matching (`Query::fuzzy_score`). The HTTP API keeps Eagle's exact behaviour.
+
+- An item that matches the way Eagle matches costs 0 edits.
+- Otherwise, each AND term, and one member of each OR group, must match the start of some word in the item's text within a small number of edits. The edits are insertions, deletions, substitutions and swaps of two adjacent letters (optimal string alignment distance).
+- Words are runs of letters and digits, so `photography_01.jpg` has the words `photography`, `01` and `jpg`.
+- A term may match a whole word, or a word prefix at least as long as the term. So `tigr` finds `tiger`, but not `tiramisu` through `tir`.
+- The edit allowance depends on the term:
+
+| Term | Edits allowed |
+|---|---|
+| under 4 characters | 0 |
+| 4–7 characters | 1 |
+| 8 or more characters | 2 |
+| contains a digit, or is a quoted phrase | 0 |
+
+- Common Latin accents fold in typo matching, so `creme` finds `crème`.
+- NOT terms (`-bird`) stay exact.
+- **Order:** exact matches come first, in the chosen sort order. Typo matches follow, fewest total edits first, and in the chosen sort order within the same count.
+- **Speed:** a word is skipped without computing the distance when the term has more letters missing from the word entirely than its allowance. On 20,000 synthetic items a search takes 6–12 ms in a release build.
+
 ## Filter panel (observed)
 
 Every active rule must pass.

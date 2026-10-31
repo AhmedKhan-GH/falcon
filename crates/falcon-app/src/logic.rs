@@ -135,7 +135,9 @@ fn shuffle_key(seed: u64, id: &str) -> u64 {
 
 #[allow(clippy::too_many_arguments)]
 /// Indices into `items` that pass the scope, the search query and the filter
-/// panel, in Eagle's order. A colour filter sorts by colour distance.
+/// panel, in Eagle's order. A colour filter sorts by colour distance. The
+/// query is matched with typo tolerance; exact matches come first, then
+/// typo matches by number of edits, each group in that order.
 pub fn visible(
     items: &[Item],
     roots: &[Folder],
@@ -149,13 +151,17 @@ pub fn visible(
     let index = search::folder_index(roots);
     let q = Query::parse(query);
     let qlen = query.trim().chars().count();
-    let mut hits: Vec<(usize, f64)> = items
+    let hits: Vec<(usize, f64, usize)> = items
         .iter()
         .enumerate()
         .filter(|(_, i)| in_scope(i, scope) && only.is_none_or(|o| o.contains(&i.id)))
-        .filter(|(_, i)| q.is_empty() || q.matches(&search::search_text(i, &index, qlen)))
-        .filter_map(|(n, i)| filter.check(i).map(|d| (n, d)))
+        .filter_map(|(n, i)| {
+            let cost = if q.is_empty() { 0 } else { q.fuzzy_score(&search::search_text(i, &index, qlen))? };
+            filter.check(i).map(|d| (n, d, cost))
+        })
         .collect();
+    let cost: HashMap<usize, usize> = hits.iter().map(|&(n, _, c)| (n, c)).collect();
+    let mut hits: Vec<(usize, f64)> = hits.into_iter().map(|(n, d, _)| (n, d)).collect();
     match scope {
         Scope::Random(seed) => hits.sort_by_key(|&(i, _)| shuffle_key(*seed, &items[i].id)),
         Scope::Recent => hits.sort_by(|a, b| items[b.0].last_modified.cmp(&items[a.0].last_modified)),
@@ -168,10 +174,15 @@ pub fn visible(
             let mut refs: Vec<&Item> = hits.iter().map(|&(i, _)| &items[i]).collect();
             search::sort(&mut refs, order, increase);
             let pos: HashMap<&str, usize> = hits.iter().map(|&(i, _)| (items[i].id.as_str(), i)).collect();
-            return refs.iter().map(|it| pos[it.id.as_str()]).collect();
+            let mut out: Vec<usize> = refs.iter().map(|it| pos[it.id.as_str()]).collect();
+            out.sort_by_key(|i| cost[i]);
+            return out;
         }
     }
-    hits.into_iter().map(|(i, _)| i).collect()
+    // Exact matches keep their order ahead of typo matches, fewest edits first.
+    let mut out: Vec<usize> = hits.into_iter().map(|(i, _)| i).collect();
+    out.sort_by_key(|i| cost[i]);
+    out
 }
 
 /// Byte size the way Eagle prints it: `512 B`, `5.34 KB`, `17.19 KB`.
@@ -390,6 +401,15 @@ mod tests {
         assert_eq!(q("B-name"), ["apple", "Mango"]); // folder name
         assert_eq!(q("zebra OR mango"), ["Mango", "Zebra"]);
         assert_eq!(q("  ").len(), 4);
+    }
+
+    #[test]
+    fn search_tolerates_typos_after_exact_hits() {
+        let (roots, items) = fixture();
+        let q = |s: &str| names(&items, &visible(&items, &roots, &Scope::All, s, &Filter::default(), OrderBy::Name, true, None));
+        assert_eq!(q("zebar"), ["Zebra"]);
+        assert_eq!(q("mangp"), ["Mango"]);
+        assert!(q("qqqqq").is_empty());
     }
 
     #[test]

@@ -179,6 +179,127 @@ impl Query {
             && self.any.iter().all(|g| g.iter().any(|t| text.contains(t.as_str())));
         terms || (!self.raw.is_empty() && text.contains(&self.raw))
     }
+
+    /// Typo-tolerant match (falcon's own, not Eagle's). `Some(0)` when
+    /// [`Query::matches`] passes; otherwise `Some(cost)`, the total number of
+    /// edits needed for every AND term and one member of every OR group to
+    /// match the start of some word in `text`, or `None` if that's too many.
+    /// NOT terms stay exact. See the Search chapter for the rules.
+    pub fn fuzzy_score(&self, text: &str) -> Option<usize> {
+        if self.matches(text) {
+            return Some(0);
+        }
+        if self.none.iter().any(|n| text.contains(n.as_str())) {
+            return None;
+        }
+        let words = || text.split(|c: char| !c.is_alphanumeric()).filter(|w| !w.is_empty());
+        let mut buf: Vec<char> = Vec::new();
+        let mut cost = |t: &String| -> Option<usize> {
+            if text.contains(t.as_str()) {
+                return Some(0);
+            }
+            let budget = typo_budget(t);
+            if budget == 0 {
+                return None;
+            }
+            let t: Vec<char> = t.chars().map(fold).collect();
+            let mut best: Option<usize> = None;
+            for w in words() {
+                // Each term letter the word lacks entirely costs at least one
+                // edit, which rules out most words before the full distance.
+                let mask = w.chars().fold(0, |m, c| m | letter_bit(fold(c)));
+                if t.iter().filter(|&&c| mask & letter_bit(c) == 0).count() > budget {
+                    continue;
+                }
+                buf.clear();
+                buf.extend(w.chars().map(fold));
+                if let Some(d) = prefix_distance(&t, &buf, best.map_or(budget, |b| b.saturating_sub(1)).min(budget)) {
+                    best = Some(best.map_or(d, |b| b.min(d)));
+                    if d == 0 {
+                        break;
+                    }
+                }
+            }
+            best
+        };
+        let mut total = 0;
+        for t in &self.all {
+            total += cost(t)?;
+        }
+        for g in &self.any {
+            total += g.iter().filter_map(&mut cost).min()?;
+        }
+        Some(total.max(1))
+    }
+}
+
+/// Edits a term may need under fuzzy matching: none for terms under 4
+/// characters, phrases and terms with digits (a typo in a number usually
+/// means a different number), 1 for 4–7 characters, 2 from 8.
+fn typo_budget(term: &str) -> usize {
+    if term.chars().any(|c| c.is_whitespace() || c.is_ascii_digit()) {
+        return 0;
+    }
+    match term.chars().count() {
+        0..=3 => 0,
+        4..=7 => 1,
+        _ => 2,
+    }
+}
+
+/// A bit per letter (non-ASCII letters share bits, which only weakens the
+/// filter that uses it, never makes it wrong).
+fn letter_bit(c: char) -> u128 {
+    1u128 << (c as u32 % 128)
+}
+
+/// Folds common Latin accents so `cafe` and `café` compare equal.
+fn fold(c: char) -> char {
+    match c {
+        'à' | 'á' | 'â' | 'ã' | 'ä' | 'å' | 'ā' => 'a',
+        'ç' | 'ć' | 'č' => 'c',
+        'è' | 'é' | 'ê' | 'ë' | 'ē' | 'ę' => 'e',
+        'ì' | 'í' | 'î' | 'ï' | 'ī' => 'i',
+        'ñ' | 'ń' => 'n',
+        'ò' | 'ó' | 'ô' | 'õ' | 'ö' | 'ø' | 'ō' => 'o',
+        'ù' | 'ú' | 'û' | 'ü' | 'ū' => 'u',
+        'ý' | 'ÿ' => 'y',
+        'ś' | 'š' => 's',
+        'ź' | 'ż' | 'ž' => 'z',
+        'ł' => 'l',
+        _ => c,
+    }
+}
+
+/// The smallest optimal-string-alignment distance (Levenshtein plus adjacent
+/// swaps) between `term` and either the whole `word` or a prefix of it at
+/// least as long as `term`, if it is at most `max`. Shorter prefixes are
+/// left out so that deleting letters from the term can't match unrelated
+/// words (`tigr` would otherwise match `tiramisu` through `tir`).
+fn prefix_distance(term: &[char], word: &[char], max: usize) -> Option<usize> {
+    let (m, n) = (term.len(), word.len());
+    if n + max < m {
+        return None;
+    }
+    let mut prev2: Vec<usize> = Vec::new();
+    let mut prev: Vec<usize> = (0..=n).collect();
+    for i in 1..=m {
+        let mut cur = vec![i; n + 1];
+        for j in 1..=n {
+            let sub = prev[j - 1] + usize::from(term[i - 1] != word[j - 1]);
+            let mut d = sub.min(prev[j] + 1).min(cur[j - 1] + 1);
+            if i > 1 && j > 1 && term[i - 1] == word[j - 2] && term[i - 2] == word[j - 1] {
+                d = d.min(prev2[j - 2] + 1);
+            }
+            cur[j] = d;
+        }
+        if cur.iter().all(|&d| d > max) {
+            return None;
+        }
+        prev2 = std::mem::replace(&mut prev, cur);
+    }
+    let best = (m.min(n)..=n).filter(|&j| j >= m || j == n).map(|j| prev[j]).min()?;
+    (best <= max).then_some(best)
 }
 
 /// The lower-cased text Eagle searches for an item: name, `.ext`, url (for
@@ -688,6 +809,41 @@ mod tests {
         assert!(Query::parse("red || blue").matches("blue sky"));
         assert!(!Query::parse("red || blue").matches("green"));
         assert!(Query::parse("").matches("x"));
+    }
+
+    #[test]
+    fn fuzzy_matching() {
+        let s = |q: &str, t: &str| Query::parse(q).fuzzy_score(t);
+        // Exact hits cost nothing.
+        assert_eq!(s("tiger", "a tiger here"), Some(0));
+        // One typo, a swap, a missing letter, a typo in a prefix.
+        assert_eq!(s("tigre", "a tiger here"), Some(1));
+        assert_eq!(s("tgier", "a tiger here"), Some(1));
+        assert_eq!(s("tigr", "a tiger here"), Some(1));
+        assert_eq!(s("photgraph", "photography_01.jpg"), Some(1));
+        assert_eq!(s("landscpae mountian", "mountain landscape"), Some(2));
+        // Accents fold.
+        assert_eq!(s("creme", "crème brûlée"), Some(1));
+        // Too many edits, short terms, digits and phrases stay exact.
+        assert_eq!(s("tgr", "a tiger here"), None);
+        assert_eq!(s("tigr", "tiramisu"), None);
+        assert_eq!(s("img_2035", "img_2034"), None);
+        assert_eq!(s("\"black dgo\"", "black dog"), None);
+        // Every AND term must match; one OR member is enough; NOT is exact.
+        assert_eq!(s("tigre zebar", "a tiger here"), None);
+        assert_eq!(s("zebar || tigre", "a tiger here"), Some(1));
+        assert_eq!(s("tigre -here", "a tiger here"), None);
+    }
+
+    #[test]
+    fn prefix_distance_rules() {
+        let c = |s: &str| s.chars().collect::<Vec<_>>();
+        assert_eq!(prefix_distance(&c("abcd"), &c("abcd"), 1), Some(0));
+        assert_eq!(prefix_distance(&c("abdc"), &c("abcd"), 1), Some(1));
+        assert_eq!(prefix_distance(&c("abcx"), &c("abcdefgh"), 1), Some(1));
+        assert_eq!(prefix_distance(&c("abcde"), &c("abcd"), 1), Some(1));
+        assert_eq!(prefix_distance(&c("abcdef"), &c("abcd"), 1), None);
+        assert_eq!(prefix_distance(&c("xycd"), &c("abcd"), 1), None);
     }
 
     #[test]
