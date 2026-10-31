@@ -1,6 +1,7 @@
 //! Phosphor icon codepoints (MIT, see assets/PHOSPHOR-LICENSE-MIT), picked to
 //! match the glyphs Eagle uses.
 
+pub const ARROW_CLOCKWISE: &str = "\u{E036}";
 pub const ARROW_COUNTER_CLOCKWISE: &str = "\u{E038}";
 pub const ARROWS_LEFT_RIGHT: &str = "\u{E0A0}";
 pub const BOOKMARK_SIMPLE: &str = "\u{E0EA}";
@@ -9,9 +10,11 @@ pub const CARET_DOWN: &str = "\u{E136}";
 pub const CARET_LEFT: &str = "\u{E138}";
 pub const CARET_RIGHT: &str = "\u{E13A}";
 pub const CARET_UP_DOWN: &str = "\u{E140}";
+pub const CHAT_CIRCLE: &str = "\u{E168}";
 pub const CHECK: &str = "\u{E182}";
 pub const CLOCK: &str = "\u{E19A}";
 pub const CODE: &str = "\u{E1BC}";
+pub const CROP: &str = "\u{E1D4}";
 pub const EXPORT: &str = "\u{EAF0}";
 pub const EYE: &str = "\u{E220}";
 pub const FILE: &str = "\u{E230}";
@@ -27,6 +30,7 @@ pub const LAYOUT: &str = "\u{E6D6}";
 pub const LIGHTNING: &str = "\u{E2DE}";
 pub const MAGNIFYING_GLASS: &str = "\u{E30C}";
 pub const MINUS: &str = "\u{E32A}";
+pub const PENCIL: &str = "\u{E3AE}";
 pub const PLUS: &str = "\u{E3D4}";
 pub const PUSH_PIN: &str = "\u{E3E2}";
 pub const PUZZLE_PIECE: &str = "\u{E596}";

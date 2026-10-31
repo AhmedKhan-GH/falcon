@@ -25,6 +25,14 @@ mod organize_ui;
 mod duplicates_view;
 mod filters_ui;
 mod media_view;
+#[path = "comments.rs"]
+mod comments;
+#[path = "covers.rs"]
+mod covers;
+#[path = "crop.rs"]
+mod crop;
+#[path = "image_edit.rs"]
+mod image_edit;
 
 /// Grid geometry, measured from Eagle at 1280 x 800.
 const GRID_PAD_X: f32 = 17.0;
@@ -88,6 +96,8 @@ enum Action {
     /// Folder icons, sorts, passwords and reordering, nested smart
     /// folders, tag groups and saved filters (see `organize_ui`).
     Organize(organize_ui::OrgAction),
+    /// Thumbnails, palettes, covers, rotate, crop and comments (`image_edit.rs`).
+    Edit(image_edit::Op),
 }
 
 /// The starting view requested on the command line.
@@ -393,6 +403,8 @@ pub struct App {
     font_view: media_view::FontView,
     /// The Duplicates page's hash cache and results.
     duplicates: duplicates_view::Duplicates,
+    /// Comment mode, crop tool and comment editing (`image_edit.rs`).
+    tools: image_edit::Tools,
 }
 
 impl App {
@@ -460,6 +472,7 @@ impl App {
             waveforms: Default::default(),
             font_view: Default::default(),
             duplicates: Default::default(),
+            tools: Default::default(),
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
         app.tile = saved.tile.unwrap_or(app.tile).clamp(TILE_MIN, TILE_MAX);
@@ -1031,6 +1044,7 @@ impl App {
                     r
                 }
                 Action::Organize(a) => self.apply_organize(lib, a),
+                Action::Edit(op) => self.apply_edit(lib, op),
             };
             if let Err(e) = result {
                 self.flash(format!("Could not save: {e}"));
@@ -1130,6 +1144,7 @@ fn action_label(action: &Action) -> String {
         Action::QuickAdd(..) => "Add to Quick Access".into(),
         Action::QuickRemove(_) => "Remove from Quick Access".into(),
         Action::Organize(a) => organize_label(a),
+        Action::Edit(op) => op.label(),
     }
 }
 
@@ -2183,6 +2198,7 @@ impl App {
             self.tag_page(ui, lib);
             return;
         }
+        self.subfolder_strip(ui, lib);
         if items.is_empty() {
             ui.painter().text(area.center(), Align2::CENTER_CENTER, "No items", font(15.0), t::TEXT_MUTED);
             return;
@@ -2265,6 +2281,7 @@ impl App {
                             }
                         });
                     });
+                    self.edit_menu(ui, item, &targets, lib);
                     ui.separator();
                     if scope_is_trash {
                         if ui.button("Restore").clicked() {
@@ -2348,6 +2365,7 @@ impl App {
             }
         }
         badge(ui, tile.min + vec2(5.0, 5.0), &item.ext);
+        comments::count_badge(ui, tile, item);
         if selected {
             p.rect_stroke(tile.expand(1.0), CornerRadius::same(7), Stroke::new(2.5, t::PRIMARY), StrokeKind::Inside);
         }
@@ -2905,6 +2923,7 @@ impl App {
             changed = Some(it);
         }
 
+        self.comment_list(ui, &item);
         divider(ui);
         heading(ui, "Properties");
         let star = item.extra.get("star").and_then(|v| v.as_u64()).unwrap_or(0);
@@ -3189,6 +3208,7 @@ impl App {
                 Some(tex) => egui::Image::new((tex.id(), r.size())).paint_at(&clip, r),
                 None => ext_placeholder(&clip, Rect::from_center_size(area.center(), Vec2::splat(260.0)), &item.ext),
             }
+            self.edit_overlay(ui, item, r, area);
 
             // Bar on top: close, name, zoom controls.
             p.rect_filled(bar, 0.0, t::MAIN);
@@ -3220,6 +3240,7 @@ impl App {
             if ui.put(Rect::from_center_size(Pos2::new(x, cy), vec2(46.0, 24.0)), egui::Button::new("Fit")).on_hover_text("Zoom to Fit (0)").clicked() {
                 self.view.zoom = None;
             }
+            self.edit_bar(ui, item, x - 50.0, cy);
 
             // Keys: 0 fits, 1 is actual size, + and - zoom.
             let (k0, k1, kp, km) = ui.input(|i| {
@@ -3302,6 +3323,7 @@ impl eframe::App for App {
         if !dropped.is_empty() && !dragging_out {
             self.import(dropped);
         }
+        self.edit_keys(&ctx);
         self.keyboard(&ctx);
         if let Some(d) = self.prefs_window.show(&ctx) {
             self.apply_preferences(d);

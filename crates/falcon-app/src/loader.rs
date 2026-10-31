@@ -121,7 +121,10 @@ impl Loader {
     pub fn poll(&mut self, ctx: &Context) {
         for _ in 0..24 {
             let Ok(d) = self.rx.try_recv() else { return };
-            self.pending.remove(&d.key);
+            // A decode started before `forget` would bring back the old pixels.
+            if !self.pending.remove(&d.key) {
+                continue;
+            }
             match d.image {
                 Some(img) => {
                     let tex = ctx.load_texture(format!("{}-{:?}", d.key.0, d.key.1), img, TextureOptions::LINEAR);
@@ -172,6 +175,16 @@ impl Loader {
         drop(q);
         if added {
             self.shared.cv.notify_all();
+        }
+    }
+
+    /// Drops one item's textures in every size, after its file or
+    /// thumbnail changed, so they are decoded again.
+    pub fn forget(&mut self, id: &str) {
+        for (tier, c) in &mut self.caches {
+            c.pop(id);
+            self.failed.remove(&(id.to_string(), *tier));
+            self.pending.remove(&(id.to_string(), *tier));
         }
     }
 

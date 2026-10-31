@@ -1,0 +1,277 @@
+//! Item edits beyond metadata: custom thumbnails, refreshing thumbnails and
+//! palettes, folder covers, rotate and crop, and region comments. Requested
+//! as one [`Op`] action (`Action::Edit`) and applied with the library locked.
+//! This file is a child module of `app`.
+
+use eframe::egui::{self, Key, Modifiers, Rect, Ui};
+use falcon_library::model::{Comment, Item};
+use falcon_library::transform::{self, PixelRect};
+use falcon_library::{Library, thumbnail};
+
+use super::{Action, App};
+use crate::logic::{self, Scope};
+
+/// One edit, applied at the end of the frame.
+pub enum Op {
+    /// Ask for a picture, then make it the item's thumbnail.
+    PickCustomThumbnail(String),
+    ResetCustomThumbnail(String),
+    RefreshThumbnail(Vec<String>),
+    RefreshPalette(Vec<String>),
+    /// Folder id, item id.
+    SetFolderCover(String, String),
+    /// Items and clockwise quarter turns (negative: anticlockwise).
+    Rotate(Vec<String>, i32),
+    Crop(String, PixelRect),
+    AddComment(String, Comment),
+    UpdateComment(String, Comment),
+    /// Item id, comment id.
+    DeleteComment(String, String),
+}
+
+impl Op {
+    /// The undo name.
+    pub fn label(&self) -> String {
+        match self {
+            Op::PickCustomThumbnail(_) => "Set custom thumbnail".into(),
+            Op::ResetCustomThumbnail(_) => "Reset thumbnail".into(),
+            Op::RefreshThumbnail(ids) => format!("Refresh {} thumbnails", ids.len()),
+            Op::RefreshPalette(ids) => format!("Refresh {} palettes", ids.len()),
+            Op::SetFolderCover(..) => "Set folder cover".into(),
+            Op::Rotate(..) => "Rotate".into(),
+            Op::Crop(..) => "Crop".into(),
+            Op::AddComment(..) => "Add comment".into(),
+            Op::UpdateComment(..) => "Edit comment".into(),
+            Op::DeleteComment(..) => "Delete comment".into(),
+        }
+    }
+}
+
+/// A comment being written in the viewer.
+pub struct Draft {
+    pub item: String,
+    /// The comment being edited; `None` for a new one.
+    pub id: Option<String>,
+    /// Region in image pixels.
+    pub rect: Rect,
+    pub text: String,
+    /// Focus the text box next frame.
+    pub focus: bool,
+}
+
+/// Viewer and inspector state for these edits.
+#[derive(Default)]
+pub struct Tools {
+    /// The viewer item the state belongs to.
+    item: String,
+    pub comment_mode: bool,
+    /// Start of a region being dragged, in image pixels.
+    pub draw_start: Option<eframe::egui::Pos2>,
+    pub draft: Option<Draft>,
+    pub crop: Option<super::crop::CropState>,
+    /// Open the crop tool once the viewer shows this item.
+    pub crop_next: Option<String>,
+    /// Comment edited in the inspector: item id, comment id, text.
+    pub list_edit: Option<(String, String, String)>,
+}
+
+impl App {
+    /// Card context-menu entries for these edits. `targets` are the items
+    /// the menu acts on.
+    pub(super) fn edit_menu(&mut self, ui: &mut Ui, item: &Item, targets: &[String], lib: &Library) {
+        let single = targets.len() == 1;
+        ui.separator();
+        if single
+            && let Scope::Folder(fid) = &self.scope
+            && ui.button("Set as Folder Cover").clicked()
+        {
+            self.actions.push(Action::Edit(Op::SetFolderCover(fid.clone(), item.id.clone())));
+        }
+        if single && thumbnail::custom_thumbnail_allowed(&item.ext) {
+            if ui.button("Set Custom Thumbnail…").clicked() {
+                self.actions.push(Action::Edit(Op::PickCustomThumbnail(item.id.clone())));
+            }
+            if thumbnail::has_custom_thumbnail(item) && ui.button("Reset Thumbnail").clicked() {
+                self.actions.push(Action::Edit(Op::ResetCustomThumbnail(item.id.clone())));
+            }
+        }
+        if ui.button("Refresh Thumbnail").clicked() {
+            self.actions.push(Action::Edit(Op::RefreshThumbnail(targets.to_vec())));
+        }
+        if ui.button("Refresh Palette").clicked() {
+            self.actions.push(Action::Edit(Op::RefreshPalette(targets.to_vec())));
+        }
+        let rotatable: Vec<String> = targets.iter().filter(|id| lib.item(id).is_some_and(|i| transform::can_rotate(&i.ext))).cloned().collect();
+        if !rotatable.is_empty() {
+            if ui.button("Rotate Left").clicked() {
+                self.actions.push(Action::Edit(Op::Rotate(rotatable.clone(), -1)));
+            }
+            if ui.button("Rotate Right").clicked() {
+                self.actions.push(Action::Edit(Op::Rotate(rotatable, 1)));
+            }
+        }
+        if single && transform::can_crop(&item.ext) && ui.button("Crop…").clicked() {
+            self.viewer = Some(item.id.clone());
+            self.tools.crop_next = Some(item.id.clone());
+        }
+    }
+
+    /// Applies one edit. Thumbnails of changed items are dropped from the
+    /// texture cache so the new pixels show.
+    pub(super) fn apply_edit(&mut self, lib: &mut Library, op: Op) -> falcon_library::Result<()> {
+        match op {
+            Op::PickCustomThumbnail(id) => {
+                let picked = rfd::FileDialog::new().set_title("Choose Thumbnail").add_filter("Images", &["jpg", "jpeg", "png", "bmp", "webp"]).pick_file();
+                let Some(path) = picked else { return Ok(()) };
+                lib.set_custom_thumbnail(&id, &path)?;
+                self.loader.forget(&id);
+                self.flash("Thumbnail set");
+                Ok(())
+            }
+            Op::ResetCustomThumbnail(id) => {
+                lib.reset_custom_thumbnail(&id)?;
+                self.loader.forget(&id);
+                Ok(())
+            }
+            Op::RefreshThumbnail(ids) => {
+                let (mut done, mut custom) = (0, 0);
+                let mut r = Ok(());
+                for id in &ids {
+                    match lib.refresh_thumbnail(id) {
+                        Ok(true) => done += 1,
+                        Ok(false) => custom += 1,
+                        Err(e) => r = Err(e),
+                    }
+                    self.loader.forget(id);
+                }
+                let mut msg = format!("Refreshed {done} {}", if done == 1 { "thumbnail" } else { "thumbnails" });
+                if custom > 0 {
+                    msg.push_str(&format!(", kept {custom} custom"));
+                }
+                self.flash(msg);
+                r
+            }
+            Op::RefreshPalette(ids) => {
+                let mut done = 0;
+                let mut r = Ok(());
+                for id in &ids {
+                    match lib.refresh_palette(id) {
+                        Ok(true) => done += 1,
+                        Ok(false) => {}
+                        Err(e) => r = Err(e),
+                    }
+                }
+                self.flash(format!("Refreshed {done} {}", if done == 1 { "palette" } else { "palettes" }));
+                r
+            }
+            Op::SetFolderCover(fid, id) => {
+                lib.set_folder_cover(&fid, Some(&id))?;
+                let name = logic::find_folder(&lib.metadata.folders, &fid).map_or_else(String::new, |f| f.name.clone());
+                self.flash(format!("Set as the cover of {name}"));
+                Ok(())
+            }
+            Op::Rotate(ids, turns) => {
+                let mut r = Ok(());
+                for id in &ids {
+                    if lib.item(id).is_some_and(|i| transform::can_rotate(&i.ext)) {
+                        r = r.and(lib.rotate_item(id, turns));
+                        self.loader.forget(id);
+                    }
+                }
+                r
+            }
+            Op::Crop(id, rect) => {
+                let r = lib.crop_item(&id, rect);
+                self.loader.forget(&id);
+                r
+            }
+            Op::AddComment(id, c) => lib.add_comment(&id, c).map(|_| ()),
+            Op::UpdateComment(id, c) => lib.update_comment(&id, c),
+            Op::DeleteComment(id, cid) => lib.delete_comment(&id, &cid),
+        }
+    }
+
+    /// Keys for the viewer's tools, read before the app's own shortcuts so
+    /// Esc and Enter act on the crop tool rather than close the viewer: C
+    /// toggles comment mode, ⇧R rotates left.
+    pub(super) fn edit_keys(&mut self, ctx: &egui::Context) {
+        if self.viewer.is_none() {
+            self.tools.crop = None;
+            self.tools.draft = None;
+            self.tools.draw_start = None;
+            self.tools.item.clear();
+            return;
+        }
+        if ctx.memory(|m| m.focused().is_some()) {
+            return;
+        }
+        let none = Modifiers::NONE;
+        if let Some(crop) = self.tools.crop.as_mut() {
+            let (esc, enter) = ctx.input_mut(|i| (i.consume_key(none, Key::Escape), i.consume_key(none, Key::Enter)));
+            ctx.input_mut(|i| {
+                for k in [Key::Space, Key::ArrowLeft, Key::ArrowRight, Key::ArrowUp, Key::ArrowDown] {
+                    i.consume_key(none, k);
+                }
+            });
+            if esc {
+                if crop.confirming {
+                    crop.confirming = false;
+                } else {
+                    self.tools.crop = None;
+                }
+            } else if enter {
+                if crop.confirming {
+                    let rect = super::crop::pixel_rect(crop.rect);
+                    if let Some(id) = self.viewer.clone() {
+                        self.actions.push(Action::Edit(Op::Crop(id, rect)));
+                    }
+                    self.tools.crop = None;
+                } else {
+                    crop.confirming = true;
+                }
+            }
+            return;
+        }
+        let (c, rotate) = ctx.input_mut(|i| (i.consume_key(none, Key::C), i.consume_key(Modifiers::SHIFT, Key::R)));
+        if c {
+            self.tools.comment_mode = !self.tools.comment_mode;
+            self.tools.draft = None;
+        }
+        if rotate && let Some(id) = self.viewer.clone() {
+            self.actions.push(Action::Edit(Op::Rotate(vec![id], -1)));
+        }
+        if self.tools.comment_mode && ctx.input_mut(|i| i.consume_key(none, Key::Escape)) {
+            self.tools.comment_mode = false;
+            self.tools.draft = None;
+        }
+    }
+
+    /// Everything these tools draw over the viewer's image (at `shown`,
+    /// inside `area`). Their widgets sit above the viewer's canvas, so in
+    /// comment mode and while cropping a drag draws instead of panning.
+    pub(super) fn edit_overlay(&mut self, ui: &mut Ui, item: &Item, shown: Rect, area: Rect) {
+        if self.tools.item != item.id {
+            self.tools.item = item.id.clone();
+            self.tools.crop = None;
+            self.tools.draft = None;
+            self.tools.draw_start = None;
+        }
+        if self.tools.crop_next.as_deref() == Some(item.id.as_str()) {
+            self.tools.crop_next = None;
+            self.start_crop(item);
+        }
+        if !self.crop_overlay(ui, item, shown, area) {
+            self.comment_overlay(ui, item, shown, area);
+        }
+    }
+
+    /// The tools' buttons in the viewer bar, leftwards from `x`.
+    pub(super) fn edit_bar(&mut self, ui: &mut Ui, item: &Item, x: f32, cy: f32) {
+        if self.tools.crop.is_some() {
+            self.crop_bar(ui, item, x + 12.0, cy);
+            return;
+        }
+        let x = self.comment_button(ui, item, x, cy);
+        self.rotate_crop_buttons(ui, item, x, cy);
+    }
+}

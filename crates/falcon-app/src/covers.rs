@@ -1,0 +1,162 @@
+//! Folder covers and the subfolder cards Eagle shows above a folder's
+//! items. A folder's cover is its `coverId` item; without one, Eagle uses
+//! the first of the folder's own items in the current sort order (skipping
+//! trashed, preview-less and text items and items in locked folders), and
+//! a folder with neither borrows the cover of its first subfolder that has
+//! one.
+
+use std::collections::HashSet;
+
+use eframe::egui::{self, Align2, CornerRadius, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, vec2};
+use falcon_library::Library;
+use falcon_library::model::{Folder, Item};
+use falcon_library::search::{self, OrderBy};
+
+use super::{App, ext_placeholder, galley};
+use crate::loader::{Tier, job_for};
+use crate::logic::{self, Scope};
+use crate::theme::{self as t, font};
+
+/// Whether an item may stand in as a folder's default cover.
+fn can_cover(item: &Item, locked: &HashSet<&str>) -> bool {
+    !item.is_deleted
+        && item.ext != "txt"
+        && item.extra.get("noPreview").and_then(|v| v.as_bool()) != Some(true)
+        && !item.folders.iter().any(|f| locked.contains(f.as_str()))
+}
+
+/// Ids of password-protected folders.
+pub fn locked_folders(roots: &[Folder]) -> HashSet<&str> {
+    let mut out = HashSet::new();
+    for r in roots {
+        r.walk(&mut |f| {
+            if f.is_locked() {
+                out.insert(f.id.as_str());
+            }
+        });
+    }
+    out
+}
+
+/// The item shown on `folder`'s card: its `coverId`, else the first usable
+/// item in it under `order`, else the cover of its first subfolder that has
+/// one.
+pub fn cover<'a>(items: &'a [Item], folder: &Folder, order: OrderBy, increase: bool, locked: &HashSet<&str>) -> Option<&'a Item> {
+    if let Some(id) = &folder.cover_id
+        && let Some(item) = items.iter().find(|i| i.id == *id)
+    {
+        return Some(item);
+    }
+    let mut own: Vec<&Item> = items.iter().filter(|i| i.folders.contains(&folder.id) && can_cover(i, locked)).collect();
+    if !own.is_empty() {
+        search::sort(&mut own, order, increase);
+        return own.first().copied();
+    }
+    folder.children.iter().find_map(|c| cover(items, c, order, increase, locked))
+}
+
+const CARD_W: f32 = 150.0;
+const THUMB_H: f32 = 100.0;
+const STRIP_H: f32 = THUMB_H + 56.0;
+
+impl App {
+    /// Cards for the open folder's subfolders, above its items, as in
+    /// Eagle's folder view. Takes no space outside a folder with children.
+    pub(super) fn subfolder_strip(&mut self, ui: &mut Ui, lib: &Library) {
+        let Scope::Folder(id) = &self.scope else { return };
+        let Some(folder) = logic::find_folder(&lib.metadata.folders, id) else { return };
+        if folder.children.is_empty() || self.layout == logic::Layout::List {
+            return;
+        }
+        let locked = locked_folders(&lib.metadata.folders);
+        let mut open = None;
+        let width = ui.available_width();
+        ui.allocate_ui(vec2(width, STRIP_H), |ui| {
+            egui::ScrollArea::horizontal().id_salt(("subfolders", &folder.id)).auto_shrink([false, true]).show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.add_space(17.0);
+                    for child in &folder.children {
+                        let (rect, resp) = ui.allocate_exact_size(vec2(CARD_W, STRIP_H - 8.0), Sense::click());
+                        let thumb = Rect::from_min_size(rect.min + vec2(0.0, 6.0), vec2(CARD_W, THUMB_H));
+                        let p = ui.painter();
+                        p.rect_filled(thumb, t::RADIUS, t::FIELD);
+                        let border = if resp.hovered() { t::CARD_HOVER } else { t::CARD_BORDER };
+                        p.rect_stroke(thumb, t::RADIUS, Stroke::new(1.0, border), StrokeKind::Inside);
+                        if child.is_locked() {
+                            p.text(thumb.center(), Align2::CENTER_CENTER, crate::icons::FOLDER, font(30.0), t::TEXT_DISABLED);
+                        } else if let Some(item) = cover(lib.items(), child, self.sort, self.increase, &locked) {
+                            match self.loader.get(&item.id, Tier::Grid).cloned() {
+                                Some(tex) => {
+                                    let size = tex.size_vec2();
+                                    let s = (thumb.width() / size.x).max(thumb.height() / size.y);
+                                    let uv = Rect::from_center_size(Pos2::new(0.5, 0.5), vec2(thumb.width() / (size.x * s), thumb.height() / (size.y * s)));
+                                    egui::Image::new((tex.id(), thumb.size())).uv(uv).corner_radius(CornerRadius::same(6)).paint_at(ui, thumb.shrink(1.0));
+                                }
+                                None if job_for(item, lib.root(), Tier::Grid).is_none() => ext_placeholder(ui, thumb, &item.ext),
+                                None => {}
+                            }
+                            if let Some(j) = job_for(item, lib.root(), Tier::Grid) {
+                                self.frame_jobs.push(j);
+                            }
+                        } else {
+                            p.text(thumb.center(), Align2::CENTER_CENTER, crate::icons::FOLDER, font(30.0), t::TEXT_DISABLED);
+                        }
+                        let g = galley(ui, &child.name, font(13.0), t::TEXT, CARD_W);
+                        ui.painter().galley(Pos2::new(rect.left(), thumb.bottom() + 6.0), g, t::TEXT);
+                        let count = lib.items().iter().filter(|i| !i.is_deleted && i.folders.contains(&child.id)).count();
+                        let mut meta = format!("{count} items");
+                        if !child.children.is_empty() {
+                            meta.push_str(&format!(" · {} subfolders", child.children.len()));
+                        }
+                        let g = galley(ui, &meta, font(11.5), t::TEXT_MUTED, CARD_W);
+                        ui.painter().galley(Pos2::new(rect.left(), thumb.bottom() + 25.0), g, t::TEXT_MUTED);
+                        if resp.double_clicked() || resp.clicked() {
+                            open = Some(child.id.clone());
+                        }
+                        ui.add_space(4.0);
+                    }
+                });
+            });
+        });
+        if let Some(id) = open {
+            self.go(Scope::Folder(id));
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn item(id: &str, folder: &str, time: u64) -> Item {
+        serde_json::from_value(serde_json::json!({
+            "id": id, "name": id, "size": 1, "btime": time, "mtime": time, "ext": "png", "tags": [], "folders": [folder],
+            "isDeleted": false, "url": "", "annotation": "", "modificationTime": time, "height": 10, "width": 10,
+            "lastModified": time, "palettes": []
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn cover_falls_back_like_eagle() {
+        let mut parent = Folder::new("P", "Parent", 0);
+        let mut child = Folder::new("C", "Child", 0);
+        let mut items = vec![item("old", "C", 1), item("new", "C", 5), item("txt", "C", 9)];
+        items[2].ext = "txt".into();
+        child.cover_id = None;
+        parent.children.push(child.clone());
+        let none = HashSet::new();
+        // Newest import first (Eagle's default order); the text file is skipped.
+        assert_eq!(cover(&items, &child, OrderBy::Import, true, &none).map(|i| i.id.as_str()), Some("new"));
+        // The parent has no items: it borrows the child's cover.
+        assert_eq!(cover(&items, &parent, OrderBy::Import, true, &none).map(|i| i.id.as_str()), Some("new"));
+        // An explicit cover wins.
+        parent.cover_id = Some("old".into());
+        assert_eq!(cover(&items, &parent, OrderBy::Import, true, &none).map(|i| i.id.as_str()), Some("old"));
+        // Trashed items and items in locked folders don't stand in.
+        items[1].is_deleted = true;
+        assert_eq!(cover(&items, &child, OrderBy::Import, true, &none).map(|i| i.id.as_str()), Some("old"));
+        let locked: HashSet<&str> = ["C"].into_iter().collect();
+        assert_eq!(cover(&items, &child, OrderBy::Import, true, &locked), None);
+    }
+}

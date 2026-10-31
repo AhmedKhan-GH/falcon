@@ -17,8 +17,10 @@
 | Toolbar | Back and forward, zoom slider, layout and sort menu, filter bar toggle, search with Eagle's syntax, plus typo tolerance (see Search and filters) |
 | Filter bar | Colour (presets, hex value, accuracy, grayscale), tags, folders, shape, rating, type, notes, URL, date, duration, camera and font (see below), and saved filters |
 | Grid | Four layouts. **Waterfall** (the default): equal columns, each card keeping its image's shape. **Justified**: rows of equal height. **Grid**: square cards. **List**: rows showing type, size, dimensions and date. Cards have type badges. Supports multi-select, drag (inside the app, or out to Finder and other apps), a context menu and a hover preview (see below) |
-| Inspector | **One item:** preview, palette (click a colour to search for it), editable title, notes and URL, tags, folders, rating and properties (with duration, camera facts from `rawMetas`, and font family, style, PostScript name, version and glyph count when the item has them). **Several items:** a preview stack, shared tags, add a tag to all, add all to a folder, a shared rating, trash all |
-| Viewer | Zoom around the pointer, pan, fit (0), actual size (1), + and −, animated GIFs, and full-size QuickLook renders. Audio plays over its waveform and fonts show a live specimen (see below). Video doesn't play yet: the viewer shows its thumbnail |
+| Inspector | **One item:** preview, palette (click a colour to search for it), editable title, notes and URL, tags, folders, comments (edit and delete; click a region comment to show it), rating and properties (with duration, camera facts from `rawMetas`, and font family, style, PostScript name, version and glyph count when the item has them). **Several items:** a preview stack, shared tags, add a tag to all, add all to a folder, a shared rating, trash all |
+| Viewer | Zoom around the pointer, pan, fit (0), actual size (1), + and −, animated GIFs, and full-size QuickLook renders. Audio plays over its waveform and fonts show a live specimen; images take region comments, rotate and crop (see below). Video doesn't play yet: the viewer shows its thumbnail |
+| Card menu | Besides Open, Show in Finder and the folder and Trash entries: Set as Folder Cover (inside a folder), Set Custom Thumbnail… and Reset Thumbnail, Refresh Thumbnail, Refresh Palette, Rotate Left and Right, and Crop… (opens the viewer with the crop tool) |
+| Folder view | Cards for the folder's subfolders above its items, each with its cover, name and counts. Click one to open it |
 | All Tags | A tag manager with a filter, starred tags, rename, merge and delete, grouped A-Z or by tag group |
 | Duplicates | Finds identical files and similar pictures, grouped, with Select All but First and Move to Trash (see below) |
 | Import | Drag and drop, ⌘V (files or images), files passed to the app, and the collect window (see below). Imports run in the background with a progress bar. PDF, video, PSD, AI, HEIC and RAW go through QuickLook |
@@ -101,6 +103,9 @@ These are the defaults. All but the arrows, Esc and Z can be changed under Prefe
 | Hold Z | Show the hover preview of the card under the pointer |
 | ⌘⇧K | Show or hide the collect window |
 | ⌘, | Preferences |
+| C | In the viewer, turn comment mode on or off (Esc also leaves it) |
+| ⇧R | In the viewer, rotate the image left |
+| Enter and Esc | While cropping, save (then confirm) or cancel |
 
 ## Saving
 
@@ -205,6 +210,38 @@ What Eagle does, from `app.bundle.js`, `index.html`, `js/directives/*.html` and 
 | Tag groups | The All Tags page has its own sidebar: All, Uncategorized, Starred, then "Groups (n)" with a + button and a drag-sortable list of groups. Each group row has a tag icon tinted with the group colour. The tag list is grouped A–Z by default; "Group by > Tag Group" shows a heading "Name (count)" per group with its tags under it, and an "Uncategorized" pseudo-group last. Each tag shows a dot in its group's colour. The + button creates "Untitled" and starts a rename. Dragging tags onto a group moves them there (with Alt, copies them). The group menu has Find items, Rename, Remove, Add to Library and a colour row. Removing a group keeps its tags, and asks first only if the group has tags. The main sidebar has no tag group section | Seen | The page has a Group by switch (Alphabet or Tag Group) and a New Group button. In Tag Group mode, each group gets a heading with its colour dot and count, followed by an "Ungrouped" section. Drag a tag onto a heading to move it into that group, or onto Ungrouped to take it out; the tag menu's Move to Group does the same. Double-click a heading, or use its menu, to rename it. The menu also recolours and deletes the group (keeping its tags, and confirming first when it has tags). Not yet built: the group sidebar, Alt-copy, descriptions and reordering groups |
 | Saved filters | A Saved Filter button at the right of the filter bar opens a menu. "Save this filter" asks for a name; it is disabled when there is no filter and no search. The saved filters are listed below it, and clicking one applies it. Each has a more button with Rename and Remove (no confirmation). The menu can be sorted by drag and searched. Applying a saved filter replaces the whole filter and runs its saved search | Seen | A Saved menu in the filter bar holds Save This Filter… and the list. Clicking an entry applies it, replacing the filter and the search. Each entry's ⋯ menu has Rename, Move Up, Move Down and Remove. A notice names any saved rules falcon can't apply yet (dates, duration, camera, fonts, aspect ratios…) |
 | Nested smart folders | The smart folder tree has carets, guide lines and the same three drop strips (nest or reorder). Smart folders take an icon and colour from the same picker and colour row. The dialog has no parent choice: the New Subfolder entry in a smart folder's menu passes the parent. The + menu also offers a smart folder group | Seen | The same tree, drag rules and icon and colour menu, with New Subfolder… in the menu. falcon's dialog also has an Inside choice (the parent), an icon and a colour, so it can move an existing smart folder too. Smart folder groups (folders with no rules) aren't built yet |
+
+## Comments on a region
+
+In the viewer, comment mode (the speech-bubble button or C) lets you drag a rectangle over the image. When you let go, a small box opens for the text: Save (or ⌘↩) adds the comment, Esc or Cancel drops it. Regions of 10 image pixels or less on either side are ignored, as in Eagle. Each comment is drawn as a numbered outline; hovering one shows its text. In comment mode, clicking an outline edits its text and its × button deletes it. Outside comment mode, a drag pans the image as usual. Grid cards show the number of comments in a blue disc at the top right. The code is in `comments.rs`.
+
+What Eagle does, from the viewer's `comment-item` and `comments-container` directives, `js/annotation-preview.js` and the card template:
+
+| Question | Eagle | Seen or inferred | falcon |
+|---|---|---|---|
+| Mode | A toolbar button with a count badge, shortcut C, hidden for video, audio, fonts, 3D models, web links, PDF and text | Seen | Same button, badge and key, hidden for the same kinds |
+| New region | Drag a box; on release it is scaled to the original's pixels, rounded, kept only when both sides are over 10 px, and added at once with empty text; an editable box then opens on it | Seen | Same rule. The box is added when the text is saved, and is clipped to the image |
+| Markers | Outlined boxes with a number badge and a × remove button; hovering shows the text in a floating box | Seen | Same |
+| Moving and resizing | Dragging or resizing a box in comment mode updates `x`, `y`, `width` and `height`, which can then be fractional | Seen | Not built: regions keep the box they were drawn with |
+| Text | Stored as HTML from a contenteditable box (`<br>` for line breaks) | Seen | Stored as plain text. Eagle's HTML is shown with the tags removed (`<br>` and block ends become line breaks, common entities decoded). Eagle will show falcon's line breaks collapsed and would read a `<` in falcon's text as HTML |
+| Card badge | `has-annotation` card class: a 20 pt primary-blue disc with a white border at the top right, showing the count. Its title was meant to list the texts with tags stripped, but `replaceAll` is given the pattern as a string, so it shows the raw HTML | Seen | Same disc, without the title |
+| Inspector | Comments listed with their texts; clicking one opens comment mode and scrolls to it | Seen | Listed with edit and delete buttons; clicking a region comment opens the viewer in comment mode |
+| Undo | Deleting a comment offers a short-lived undo notice | Seen | Part of the normal undo history |
+
+## Rotate and crop
+
+The viewer bar has Rotate Left and Rotate Right for jpg, png, webp and bmp, and Crop for jpg, png and webp. Both rewrite the original (see [Crop and rotate](thumbnails.md#crop-and-rotate-observed)). The crop tool starts on the whole image. Drag its edges or corners, or drag inside it to move it; the size in pixels shows underneath. Save asks for confirmation, then overwrites the original. These edits can't be undone, so they clear the undo history. The rectangle math is in `crop.rs`.
+
+## Folder covers
+
+Eagle shows covers only on the subfolder cards at the top of a folder's content (`sub-folder-list` in `index.html`), not in the sidebar. From `calculateImageBinding` and `setFolderCover` (observed):
+
+- The cover is the folder's `coverId` item, set with "Set as Folder Cover" (⌥⇧C) on a card while browsing a folder.
+- Without one, it is the folder's first item in the current sort order (Eagle's default is newest import first). Trashed items, items with `noPreview`, text files and items in locked folders are skipped.
+- A folder with neither takes the cover of its first subfolder that has one.
+- Eagle writes no cover file. A crop clears the cached covers of the item's folders so they redraw.
+
+falcon draws the subfolder cards in the Waterfall, Justified and Grid layouts with the same rule (`covers.rs`). Locked folders show a folder icon instead of a cover.
 
 ## Running it
 

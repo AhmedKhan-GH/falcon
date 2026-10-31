@@ -37,14 +37,14 @@ Eagle features that need no online service, put off until after the list above.
 - [x] Nested smart folders and smart folder icons
 
 **Editing**
-- [ ] Custom thumbnails
-- [ ] Refresh a palette
-- [ ] Folder covers
+- [x] Custom thumbnails
+- [x] Refresh a palette
+- [x] Folder covers
 - [x] Folder passwords
 
 **Viewer**
-- [ ] Comments on a region of an image
-- [ ] Crop and rotate
+- [x] Comments on a region of an image
+- [x] Crop and rotate
 
 **File formats**
 - [x] Audio waveforms
