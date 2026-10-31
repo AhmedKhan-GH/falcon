@@ -63,9 +63,9 @@ impl App {
     /// Cards for the open folder's subfolders, above its items, as in
     /// Eagle's folder view. Takes no space outside a folder with children.
     pub(super) fn subfolder_strip(&mut self, ui: &mut Ui, lib: &Library) {
-        let Scope::Folder(id) = &self.scope else { return };
+        let Scope::Folder(id) = &self.ws.scope else { return };
         let Some(folder) = logic::find_folder(&lib.metadata.folders, id) else { return };
-        if folder.children.is_empty() || self.layout == logic::Layout::List {
+        if folder.children.is_empty() || self.ws.layout == logic::Layout::List {
             return;
         }
         let locked = locked_folders(&lib.metadata.folders);
@@ -84,8 +84,8 @@ impl App {
                         p.rect_stroke(thumb, t::RADIUS, Stroke::new(1.0, border), StrokeKind::Inside);
                         if child.is_locked() {
                             p.text(thumb.center(), Align2::CENTER_CENTER, crate::icons::FOLDER, font(30.0), t::TEXT_DISABLED);
-                        } else if let Some(item) = cover(lib.items(), child, self.sort, self.increase, &locked) {
-                            match self.loader.get(&item.id, Tier::Grid).cloned() {
+                        } else if let Some(item) = cover(lib.items(), child, self.ws.sort, self.ws.increase, &locked) {
+                            match self.ws.loader.get(&item.id, Tier::Grid).cloned() {
                                 Some(tex) => {
                                     let size = tex.size_vec2();
                                     let s = (thumb.width() / size.x).max(thumb.height() / size.y);
@@ -96,7 +96,7 @@ impl App {
                                 None => {}
                             }
                             if let Some(j) = job_for(item, lib.root(), Tier::Grid) {
-                                self.frame_jobs.push(j);
+                                self.ws.frame_jobs.push(j);
                             }
                         } else {
                             p.text(thumb.center(), Align2::CENTER_CENTER, crate::icons::FOLDER, font(30.0), t::TEXT_DISABLED);

@@ -65,7 +65,7 @@ fn top_bar(app: &mut App, ui: &mut Ui, item: &Item, bar: Rect) {
     window_drag(ui, bar, "viewer");
     let cy = bar.center().y;
     if icon_button(ui, Pos2::new(bar.left() + 98.0, cy), ic::CARET_LEFT, 17.0, true, "Back (Esc)").clicked() {
-        app.viewer = None;
+        app.ws.viewer = None;
     }
     let name = format!("{}.{}", item.name, item.ext);
     let g = galley(ui, &name, font(14.0), t::TEXT, 360.0);
@@ -108,7 +108,7 @@ impl App {
         let w = (area.width() - 160.0).clamp(200.0, 1000.0);
         let wave = Rect::from_center_size(area.center() - vec2(0.0, 30.0), vec2(w, 160.0));
         let p = ui.painter().clone();
-        match self.waveforms.get(ctx, &item.id, &path, &item.ext) {
+        match self.ws.waveforms.get(ctx, &item.id, &path, &item.ext) {
             None => {
                 p.text(wave.center(), Align2::CENTER_CENTER, "Reading waveform…", font(13.0), t::TEXT_MUTED);
             }
@@ -187,7 +187,7 @@ impl App {
         if search::type_group(&item.ext) != Some("font") {
             return false;
         }
-        if self.font_view.id != item.id {
+        if self.ws.font_view.id != item.id {
             let family = FontFamily::Name(format!("falcon-font-{}", item.id).into());
             let data = std::fs::read(item.original_path(lib.root())).ok();
             let sfnt = data.as_deref().and_then(fontmeta::sfnt).map(|c| c.into_owned()).filter(|d| egui_can_read(d));
@@ -200,12 +200,12 @@ impl App {
                 });
                 family
             });
-            let edited = self.font_view.edited;
-            let text = if edited { std::mem::take(&mut self.font_view.text) } else { sample(item) };
-            let size = if self.font_view.size > 0.0 { self.font_view.size } else { 72.0 };
-            self.font_view = FontView { id: item.id.clone(), family, text, edited, size };
+            let edited = self.ws.font_view.edited;
+            let text = if edited { std::mem::take(&mut self.ws.font_view.text) } else { sample(item) };
+            let size = if self.ws.font_view.size > 0.0 { self.ws.font_view.size } else { 72.0 };
+            self.ws.font_view = FontView { id: item.id.clone(), family, text, edited, size };
         }
-        match &self.font_view.family {
+        match &self.ws.font_view.family {
             Some(f) => {
                 let ready = ctx.fonts(|fonts| fonts.definitions().families.contains_key(f));
                 if !ready {
@@ -218,8 +218,8 @@ impl App {
     }
 
     fn font_view(&mut self, ui: &mut Ui, item: &Item, area: Rect) {
-        let Some(family) = self.font_view.family.clone() else { return };
-        let fv = &mut self.font_view;
+        let Some(family) = self.ws.font_view.family.clone() else { return };
+        let fv = &mut self.ws.font_view;
         let mut child = ui.new_child(egui::UiBuilder::new().max_rect(area.shrink2(vec2(48.0, 16.0))));
         let ui = &mut child;
         ui.horizontal(|ui| {

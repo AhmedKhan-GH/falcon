@@ -228,19 +228,19 @@ impl App {
             && let Some((parent, index)) = organize::tree_drop(&lib.metadata.folders, &d.0, &f.id, zone)
         {
             if let Some(p) = &parent {
-                self.collapsed.remove(p);
+                self.ws.collapsed.remove(p);
             }
-            self.actions.push(org(OrgAction::ReorderFolder(d.0.clone(), parent, index)));
+            self.ws.actions.push(org(OrgAction::ReorderFolder(d.0.clone(), parent, index)));
         }
     }
 
     /// The folder context menu entries falcon adds: password, item sort,
     /// icon and colour.
     pub(super) fn folder_menu_extras(&mut self, ui: &mut Ui, f: &Folder) {
-        let shut = organize::is_shut(f, &self.org.unlocked);
+        let shut = organize::is_shut(f, &self.ws.org.unlocked);
         ui.menu_button("Password", |ui| {
             let mut open = |mode| {
-                self.org.password = Some(PasswordDraft {
+                self.ws.org.password = Some(PasswordDraft {
                     id: f.id.clone(),
                     mode,
                     old: String::new(),
@@ -262,27 +262,27 @@ impl App {
                     open(PasswordMode::Remove);
                 }
                 if ui.add_enabled(!shut, egui::Button::new("Lock Now")).clicked() {
-                    self.org.unlocked.remove(&f.id);
+                    self.ws.org.unlocked.remove(&f.id);
                 }
             }
         });
         ui.menu_button("Sort Items By", |ui| {
             ui.set_min_width(180.0);
             let cur = organize::own_order(f.order_by.as_deref(), f.sort_increase);
-            if let Some(v) = sort_entries(ui, cur, true, (self.sort, self.increase)) {
-                self.actions.push(org(OrgAction::FolderOrder(f.id.clone(), v)));
+            if let Some(v) = sort_entries(ui, cur, true, (self.ws.sort, self.ws.increase)) {
+                self.ws.actions.push(org(OrgAction::FolderOrder(f.id.clone(), v)));
             }
         });
         ui.separator();
         let tint = folder_icons::color(f.icon_color.as_deref()).unwrap_or(t::TEXT);
         ui.menu_button("Change Icon", |ui| {
             if let Some(icon) = icon_grid(ui, f.icon.as_deref(), tint, false) {
-                self.actions.push(org(OrgAction::FolderIcon(f.id.clone(), icon, f.icon_color.clone())));
+                self.ws.actions.push(org(OrgAction::FolderIcon(f.id.clone(), icon, f.icon_color.clone())));
                 ui.close();
             }
         });
         if let Some(color) = color_row(ui, f.icon_color.as_deref()) {
-            self.actions.push(org(OrgAction::FolderIcon(f.id.clone(), f.icon.clone(), color)));
+            self.ws.actions.push(org(OrgAction::FolderIcon(f.id.clone(), f.icon.clone(), color)));
             ui.close();
         }
     }
@@ -295,9 +295,9 @@ impl App {
     /// One smart folder row and, unless collapsed, its children.
     pub(super) fn smart_row(&mut self, ui: &mut Ui, lib: &Library, roots: &[SmartFolder], sf: &SmartFolder, depth: usize, quick: &HashSet<String>) -> Option<Rect> {
         let has_children = !sf.children.is_empty();
-        let open = has_children && !self.collapsed.contains(&sf.id);
+        let open = has_children && !self.ws.collapsed.contains(&sf.id);
         let count = lib.smart_folder_items(&sf.id).len();
-        let active = self.scope == Scope::Smart(sf.id.clone());
+        let active = self.ws.scope == Scope::Smart(sf.id.clone());
         let glyph = folder_icons::smart_glyph(sf.icon.as_deref());
         let tint = folder_icons::color(sf.icon_color.as_deref()).unwrap_or(t::TEXT);
         let resp = sidebar_row_tinted(ui, depth, glyph, tint, &sf.name, (count > 0).then_some(count), active, has_children.then_some(open));
@@ -310,61 +310,61 @@ impl App {
             && let Some((parent, index)) = organize::tree_drop(roots, &d.0, &sf.id, zone)
         {
             if let Some(p) = &parent {
-                self.collapsed.remove(p);
+                self.ws.collapsed.remove(p);
             }
-            self.actions.push(org(OrgAction::MoveSmart(d.0.clone(), parent, index)));
+            self.ws.actions.push(org(OrgAction::MoveSmart(d.0.clone(), parent, index)));
         }
         let pinned = quick.contains(&sf.id);
         resp.context_menu(|ui| {
             ui.set_min_width(180.0);
             if ui.button("New Subfolder…").clicked() {
-                self.smart_dialog = Some(SmartDraft { parent: Some(sf.id.clone()), orig_parent: Some(sf.id.clone()), icon: sf.icon.clone(), color: sf.icon_color.clone(), ..Default::default() });
+                self.ws.smart_dialog = Some(SmartDraft { parent: Some(sf.id.clone()), orig_parent: Some(sf.id.clone()), icon: sf.icon.clone(), color: sf.icon_color.clone(), ..Default::default() });
             }
             if ui.button("Edit…").clicked() {
                 let parent = organize::locate(roots, &sf.id).and_then(|(p, _)| p).map(str::to_string);
                 let mut d = SmartDraft::from_folder(sf);
                 d.parent.clone_from(&parent);
                 d.orig_parent = parent;
-                self.smart_dialog = Some(d);
+                self.ws.smart_dialog = Some(d);
             }
             if pinned {
                 if ui.button("Remove from Quick Access").clicked() {
-                    self.actions.push(Action::QuickRemove(sf.id.clone()));
+                    self.ws.actions.push(Action::QuickRemove(sf.id.clone()));
                 }
             } else if ui.button("Add to Quick Access").clicked() {
-                self.actions.push(Action::QuickAdd("smartFolder", sf.id.clone()));
+                self.ws.actions.push(Action::QuickAdd("smartFolder", sf.id.clone()));
             }
             if depth > 0 && ui.button("Move to Top Level").clicked() {
-                self.actions.push(org(OrgAction::MoveSmart(sf.id.clone(), None, usize::MAX)));
+                self.ws.actions.push(org(OrgAction::MoveSmart(sf.id.clone(), None, usize::MAX)));
             }
             ui.menu_button("Sort Items By", |ui| {
                 ui.set_min_width(180.0);
                 let cur = organize::own_order(sf.order_by.as_deref(), sf.sort_increase);
-                if let Some(v) = sort_entries(ui, cur, false, (self.sort, self.increase)) {
-                    self.actions.push(org(OrgAction::SmartOrder(sf.id.clone(), v)));
+                if let Some(v) = sort_entries(ui, cur, false, (self.ws.sort, self.ws.increase)) {
+                    self.ws.actions.push(org(OrgAction::SmartOrder(sf.id.clone(), v)));
                 }
             });
             ui.separator();
             ui.menu_button("Change Icon", |ui| {
                 if let Some(icon) = icon_grid(ui, sf.icon.as_deref(), tint, true) {
-                    self.actions.push(org(OrgAction::SmartIcon(sf.id.clone(), icon, sf.icon_color.clone())));
+                    self.ws.actions.push(org(OrgAction::SmartIcon(sf.id.clone(), icon, sf.icon_color.clone())));
                     ui.close();
                 }
             });
             if let Some(color) = color_row(ui, sf.icon_color.as_deref()) {
-                self.actions.push(org(OrgAction::SmartIcon(sf.id.clone(), sf.icon.clone(), color)));
+                self.ws.actions.push(org(OrgAction::SmartIcon(sf.id.clone(), sf.icon.clone(), color)));
                 ui.close();
             }
             ui.separator();
             if ui.button(RichText::new("Delete Smart Folder").color(Color32::from_rgb(0xff, 0x66, 0x67))).clicked() {
-                self.actions.push(Action::DeleteSmart(sf.id.clone()));
+                self.ws.actions.push(Action::DeleteSmart(sf.id.clone()));
             }
         });
         if resp.clicked() {
             let caret = caret_rect(row, depth);
             if has_children && resp.interact_pointer_pos().is_some_and(|p| caret.contains(p)) {
-                if !self.collapsed.remove(&sf.id) {
-                    self.collapsed.insert(sf.id.clone());
+                if !self.ws.collapsed.remove(&sf.id) {
+                    self.ws.collapsed.insert(sf.id.clone());
                 }
             } else {
                 self.go(Scope::Smart(sf.id.clone()));
@@ -428,14 +428,14 @@ impl App {
     pub(super) fn save_smart_draft(&mut self, d: &SmartDraft, name: String, cond: serde_json::Value) {
         match d.editing.clone() {
             Some(id) => {
-                self.actions.push(Action::UpdateSmart(id.clone(), name, vec![cond]));
-                self.actions.push(org(OrgAction::SmartIcon(id.clone(), d.icon.clone(), d.color.clone())));
+                self.ws.actions.push(Action::UpdateSmart(id.clone(), name, vec![cond]));
+                self.ws.actions.push(org(OrgAction::SmartIcon(id.clone(), d.icon.clone(), d.color.clone())));
                 if d.parent != d.orig_parent {
-                    self.actions.push(org(OrgAction::MoveSmart(id, d.parent.clone(), usize::MAX)));
+                    self.ws.actions.push(org(OrgAction::MoveSmart(id, d.parent.clone(), usize::MAX)));
                 }
             }
-            None if d.parent.is_none() && d.icon.is_none() && d.color.is_none() => self.actions.push(Action::CreateSmart(name, vec![cond])),
-            None => self.actions.push(org(OrgAction::CreateSmart {
+            None if d.parent.is_none() && d.icon.is_none() && d.color.is_none() => self.ws.actions.push(Action::CreateSmart(name, vec![cond])),
+            None => self.ws.actions.push(org(OrgAction::CreateSmart {
                 parent: d.parent.clone(),
                 name,
                 conditions: vec![cond],
@@ -453,7 +453,7 @@ impl App {
     /// The view's own sort target and setting, when browsing a folder or
     /// smart folder (which then owns the sort menu, as in Eagle).
     pub(super) fn own_sort(&self, lib: &Library) -> Option<(OrderTarget, Option<(FolderOrder, bool)>)> {
-        match &self.scope {
+        match &self.ws.scope {
             Scope::Folder(id) => {
                 let f = logic::find_folder(&lib.metadata.folders, id)?;
                 Some((OrderTarget::Folder(id.clone()), organize::own_order(f.order_by.as_deref(), f.sort_increase)))
@@ -472,22 +472,22 @@ impl App {
     /// folders.
     pub(super) fn grid_order(&mut self, lib: &Library, only: Option<&HashSet<String>>) -> Vec<usize> {
         let own = self.own_sort(lib).and_then(|o| o.1);
-        let (key, inc) = organize::base_key(own, (self.sort, self.increase));
-        let mut order = logic::visible(lib.items(), &lib.metadata.folders, &self.scope, &self.query, &self.filter, key, inc, only);
+        let (key, inc) = organize::base_key(own, (self.ws.sort, self.ws.increase));
+        let mut order = logic::visible(lib.items(), &lib.metadata.folders, &self.ws.scope, &self.ws.query, &self.ws.filter, key, inc, only);
         // Random and duration re-sort only a plain listing (no search or
         // colour ranking to keep).
-        if self.query.trim().is_empty() && self.filter.color.is_none() {
-            let seed = match &self.org.seed {
-                Some((s, seed)) if *s == self.scope => *seed,
+        if self.ws.query.trim().is_empty() && self.ws.filter.color.is_none() {
+            let seed = match &self.ws.org.seed {
+                Some((s, seed)) if *s == self.ws.scope => *seed,
                 _ => {
                     let seed = fastrand_seed();
-                    self.org.seed = Some((self.scope.clone(), seed));
+                    self.ws.org.seed = Some((self.ws.scope.clone(), seed));
                     seed
                 }
             };
             organize::finish_order(&mut order, lib.items(), own, seed);
         }
-        let hidden = organize::hidden_folders(&lib.metadata.folders, &self.org.unlocked);
+        let hidden = organize::hidden_folders(&lib.metadata.folders, &self.ws.org.unlocked);
         organize::without_hidden(order, lib.items(), &hidden)
     }
 
@@ -497,19 +497,19 @@ impl App {
     pub(super) fn own_sort_menu(&mut self, ui: &mut Ui, target: OrderTarget, cur: Option<(FolderOrder, bool)>) {
         ui.label(RichText::new("Sort by (this folder)").color(t::TEXT_MUTED).size(12.0));
         let manual = matches!(target, OrderTarget::Folder(_));
-        let pick = sort_entries(ui, cur, manual, (self.sort, self.increase));
+        let pick = sort_entries(ui, cur, manual, (self.ws.sort, self.ws.increase));
         if cur.is_none() {
-            let labels = if self.sort.is_time() { ["Newest First", "Oldest First"] } else { ["Ascending", "Descending"] };
-            ui.label(RichText::new(format!("Global: {}", self.sort.label())).color(t::TEXT_MUTED).size(12.0));
+            let labels = if self.ws.sort.is_time() { ["Newest First", "Oldest First"] } else { ["Ascending", "Descending"] };
+            ui.label(RichText::new(format!("Global: {}", self.ws.sort.label())).color(t::TEXT_MUTED).size(12.0));
             for (inc, label) in [(true, labels[0]), (false, labels[1])] {
-                let mark = if inc == self.increase { ic::CHECK } else { " " };
+                let mark = if inc == self.ws.increase { ic::CHECK } else { " " };
                 if ui.button(format!("{mark}  {label}")).clicked() {
-                    self.increase = inc;
+                    self.ws.increase = inc;
                 }
             }
         }
         if let Some(v) = pick {
-            self.actions.push(org(match target {
+            self.ws.actions.push(org(match target {
                 OrderTarget::Folder(id) => OrgAction::FolderOrder(id, v),
                 OrderTarget::Smart(id) => OrgAction::SmartOrder(id, v),
             }));
@@ -519,8 +519,8 @@ impl App {
     /// The locked folder that must be opened before the current scope
     /// shows anything.
     pub(super) fn scope_gate<'a>(&self, lib: &'a Library) -> Option<&'a Folder> {
-        match &self.scope {
-            Scope::Folder(id) => organize::lock_gate(&lib.metadata.folders, id, &self.org.unlocked),
+        match &self.ws.scope {
+            Scope::Folder(id) => organize::lock_gate(&lib.metadata.folders, id, &self.ws.org.unlocked),
             _ => None,
         }
     }
@@ -537,12 +537,12 @@ impl App {
             y += 24.0;
         }
         let r = Rect::from_center_size(Pos2::new(c.x, y + 14.0), vec2(220.0, 30.0));
-        let border = if self.org.unlock_error { Color32::from_rgb(0xff, 0x66, 0x67) } else { t::FIELD_BORDER };
+        let border = if self.ws.org.unlock_error { Color32::from_rgb(0xff, 0x66, 0x67) } else { t::FIELD_BORDER };
         ui.painter().rect_filled(r, t::FIELD_RADIUS, t::FIELD);
         ui.painter().rect_stroke(r, t::FIELD_RADIUS, Stroke::new(1.0, border), StrokeKind::Inside);
         let te = ui.put(
             r.shrink2(vec2(10.0, 0.0)),
-            TextEdit::singleline(&mut self.org.unlock_text)
+            TextEdit::singleline(&mut self.ws.org.unlock_text)
                 .id_salt(("unlock", &gate.id))
                 .password(true)
                 .frame(egui::Frame::NONE)
@@ -552,17 +552,17 @@ impl App {
                 .align(Align2::LEFT_CENTER),
         );
         if te.changed() {
-            self.org.unlock_error = false;
+            self.ws.org.unlock_error = false;
         }
         if te.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) {
-            if lib.verify_folder_password(&gate.id, &self.org.unlock_text) {
-                self.org.unlocked.insert(gate.id.clone());
-                self.org.unlock_error = false;
+            if lib.verify_folder_password(&gate.id, &self.ws.org.unlock_text) {
+                self.ws.org.unlocked.insert(gate.id.clone());
+                self.ws.org.unlock_error = false;
             } else {
-                self.org.unlock_error = true;
+                self.ws.org.unlock_error = true;
                 te.request_focus();
             }
-            self.org.unlock_text.clear();
+            self.ws.org.unlock_text.clear();
         }
     }
 }
@@ -575,22 +575,22 @@ impl App {
     pub(super) fn tag_page_controls(&mut self, ui: &mut Ui) {
         ui.add_space(12.0);
         ui.label(RichText::new("Group by").color(t::TEXT_MUTED));
-        if ui.selectable_label(!self.org.by_group, "Alphabet").clicked() {
-            self.org.by_group = false;
+        if ui.selectable_label(!self.ws.org.by_group, "Alphabet").clicked() {
+            self.ws.org.by_group = false;
         }
-        if ui.selectable_label(self.org.by_group, "Tag Group").clicked() {
-            self.org.by_group = true;
+        if ui.selectable_label(self.ws.org.by_group, "Tag Group").clicked() {
+            self.ws.org.by_group = true;
         }
         if ui.button(format!("{}  New Group", ic::PLUS)).clicked() {
-            self.org.by_group = true;
-            self.org.rename_new_group = true;
-            self.actions.push(org(OrgAction::CreateGroup(Vec::new())));
+            self.ws.org.by_group = true;
+            self.ws.org.rename_new_group = true;
+            self.ws.actions.push(org(OrgAction::CreateGroup(Vec::new())));
         }
     }
 
     /// Whether the page shows tag groups.
     pub(super) fn tags_by_group(&self) -> bool {
-        self.org.by_group
+        self.ws.org.by_group
     }
 
     /// The All Tags page in tag-group mode: one section per group, then
@@ -630,18 +630,18 @@ impl App {
             ui.painter().circle_filled(Pos2::new(x + 5.0, cy), 5.0, dot);
         }
         let tx = if sec.is_some() { x + 18.0 } else { x };
-        let renaming = sec.is_some_and(|s| self.org.group_rename.as_ref().is_some_and(|(id, _)| *id == s.id));
+        let renaming = sec.is_some_and(|s| self.ws.org.group_rename.as_ref().is_some_and(|(id, _)| *id == s.id));
         if let (true, Some(s)) = (renaming, sec) {
-            let (_, buf) = self.org.group_rename.as_mut().unwrap();
+            let (_, buf) = self.ws.org.group_rename.as_mut().unwrap();
             let te = ui.put(Rect::from_min_size(Pos2::new(tx, rect.top() + 1.0), vec2(220.0, 22.0)), TextEdit::singleline(buf).id_salt(("group-rename", &s.id)).font(font(14.0)));
             if !te.has_focus() && !te.lost_focus() {
                 te.request_focus();
             }
             let cancel = ui.input(|i| i.key_pressed(Key::Escape));
             if te.lost_focus() || cancel {
-                let (id, name) = self.org.group_rename.take().unwrap();
+                let (id, name) = self.ws.org.group_rename.take().unwrap();
                 if !cancel && !name.trim().is_empty() && name.trim() != s.name {
-                    self.actions.push(org(OrgAction::RenameGroup(id, name.trim().to_string())));
+                    self.ws.actions.push(org(OrgAction::RenameGroup(id, name.trim().to_string())));
                 }
             }
         } else {
@@ -653,33 +653,33 @@ impl App {
         }
         if let Some(d) = resp.dnd_release_payload::<DragTag>() {
             match sec {
-                Some(s) => self.actions.push(org(OrgAction::AddToGroup(s.id.clone(), vec![d.0.clone()]))),
+                Some(s) => self.ws.actions.push(org(OrgAction::AddToGroup(s.id.clone(), vec![d.0.clone()]))),
                 None => {
                     if let Some(g) = organize::group_of(&lib.metadata.tags_groups, &d.0) {
-                        self.actions.push(org(OrgAction::RemoveFromGroup(g.id.clone(), vec![d.0.clone()])));
+                        self.ws.actions.push(org(OrgAction::RemoveFromGroup(g.id.clone(), vec![d.0.clone()])));
                     }
                 }
             }
         }
         let Some(s) = sec else { return };
         if resp.double_clicked() {
-            self.org.group_rename = Some((s.id.clone(), s.name.clone()));
+            self.ws.org.group_rename = Some((s.id.clone(), s.name.clone()));
         }
         resp.context_menu(|ui| {
             ui.set_min_width(200.0);
             if ui.button("Rename").clicked() {
-                self.org.group_rename = Some((s.id.clone(), s.name.clone()));
+                self.ws.org.group_rename = Some((s.id.clone(), s.name.clone()));
             }
             if let Some(c) = color_row(ui, s.color.as_deref()) {
-                self.actions.push(org(OrgAction::GroupColor(s.id.clone(), c)));
+                self.ws.actions.push(org(OrgAction::GroupColor(s.id.clone(), c)));
                 ui.close();
             }
             ui.separator();
             if ui.button(RichText::new("Delete Group").color(Color32::from_rgb(0xff, 0x66, 0x67))).clicked() {
                 if s.tags.is_empty() {
-                    self.actions.push(org(OrgAction::DeleteGroup(s.id.clone())));
+                    self.ws.actions.push(org(OrgAction::DeleteGroup(s.id.clone())));
                 } else {
-                    self.org.group_delete = Some(s.id.clone());
+                    self.ws.org.group_delete = Some(s.id.clone());
                 }
             }
         });
@@ -705,21 +705,21 @@ impl App {
             for g in &lib.metadata.tags_groups {
                 let mark = if current.as_deref() == Some(g.id.as_str()) { ic::CHECK } else { " " };
                 if ui.button(format!("{mark}  {}", g.name)).clicked() && current.as_deref() != Some(g.id.as_str()) {
-                    self.actions.push(org(OrgAction::AddToGroup(g.id.clone(), vec![tag.to_string()])));
+                    self.ws.actions.push(org(OrgAction::AddToGroup(g.id.clone(), vec![tag.to_string()])));
                 }
             }
             if !lib.metadata.tags_groups.is_empty() {
                 ui.separator();
             }
             if ui.button("New Group…").clicked() {
-                self.org.by_group = true;
-                self.org.rename_new_group = true;
-                self.actions.push(org(OrgAction::CreateGroup(vec![tag.to_string()])));
+                self.ws.org.by_group = true;
+                self.ws.org.rename_new_group = true;
+                self.ws.actions.push(org(OrgAction::CreateGroup(vec![tag.to_string()])));
             }
             if let Some(g) = &current
                 && ui.button("Remove from Group").clicked()
             {
-                self.actions.push(org(OrgAction::RemoveFromGroup(g.clone(), vec![tag.to_string()])));
+                self.ws.actions.push(org(OrgAction::RemoveFromGroup(g.clone(), vec![tag.to_string()])));
             }
         });
     }
@@ -736,10 +736,10 @@ impl App {
         let resp = filter_chip(ui, &format!("{}  Saved", ic::FLOPPY_DISK), None);
         egui::Popup::menu(&resp).show(|ui| {
             ui.set_min_width(220.0);
-            let can_save = self.filter.is_active() || !self.query.trim().is_empty();
+            let can_save = self.ws.filter.is_active() || !self.ws.query.trim().is_empty();
             if ui.add_enabled(can_save, egui::Button::new("Save This Filter…")).clicked() {
                 let name = organize::fresh_name("Filter", lib.saved_filters.iter().map(|f| f.name.as_str()));
-                self.org.filter_name = Some((None, name));
+                self.ws.org.filter_name = Some((None, name));
             }
             if n > 0 {
                 ui.separator();
@@ -751,16 +751,16 @@ impl App {
                     }
                     ui.menu_button("⋯", |ui| {
                         if ui.button("Rename…").clicked() {
-                            self.org.filter_name = Some((Some(i), sf.name.clone()));
+                            self.ws.org.filter_name = Some((Some(i), sf.name.clone()));
                         }
                         if ui.add_enabled(i > 0, egui::Button::new("Move Up")).clicked() {
-                            self.actions.push(org(OrgAction::MoveFilter(i, i - 1)));
+                            self.ws.actions.push(org(OrgAction::MoveFilter(i, i - 1)));
                         }
                         if ui.add_enabled(i + 1 < n, egui::Button::new("Move Down")).clicked() {
-                            self.actions.push(org(OrgAction::MoveFilter(i, i + 1)));
+                            self.ws.actions.push(org(OrgAction::MoveFilter(i, i + 1)));
                         }
                         if ui.button(RichText::new("Remove").color(Color32::from_rgb(0xff, 0x66, 0x67))).clicked() {
-                            self.actions.push(org(OrgAction::DeleteFilter(i)));
+                            self.ws.actions.push(org(OrgAction::DeleteFilter(i)));
                         }
                     });
                 });
@@ -773,12 +773,12 @@ impl App {
     fn apply_saved_filter(&mut self, sf: &SavedFilter) {
         let q = sf.to_filter();
         let words = |t: &TextFilter| if let TextFilter::Keywords(k) = t { k.join(", ") } else { String::new() };
-        self.note_text = words(&q.filter.note);
-        self.url_text = words(&q.filter.url);
-        self.color_text = q.filter.color.map(|c| logic::hex(c.rgb)).unwrap_or_default();
-        self.filter = q.filter;
-        self.query = q.keyword.unwrap_or_default();
-        self.show_filter = true;
+        self.ws.note_text = words(&q.filter.note);
+        self.ws.url_text = words(&q.filter.url);
+        self.ws.color_text = q.filter.color.map(|c| logic::hex(c.rgb)).unwrap_or_default();
+        self.ws.filter = q.filter;
+        self.ws.query = q.keyword.unwrap_or_default();
+        self.ws.show_filter = true;
         let skipped = organize::unsupported_names(&q.unsupported);
         if skipped.is_empty() {
             self.flash(format!("Applied “{}”", sf.name));
@@ -796,7 +796,7 @@ impl App {
     pub(super) fn organize_dialogs(&mut self, ctx: &egui::Context, lib: &Library) {
         self.password_dialog(ctx, lib);
         self.filter_name_dialog(ctx, lib);
-        if let Some(id) = self.org.group_delete.clone() {
+        if let Some(id) = self.ws.org.group_delete.clone() {
             let name = lib.metadata.tags_groups.iter().find(|g| g.id == id).map_or_else(String::new, |g| g.name.clone());
             let modal = egui::Modal::new(egui::Id::unique("group-delete")).show(ctx, |ui| {
                 ui.set_width(320.0);
@@ -806,22 +806,22 @@ impl App {
                 ui.add_space(10.0);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui.button(RichText::new("Delete Group").color(Color32::from_rgb(0xff, 0x66, 0x67))).clicked() {
-                        self.actions.push(org(OrgAction::DeleteGroup(id.clone())));
-                        self.org.group_delete = None;
+                        self.ws.actions.push(org(OrgAction::DeleteGroup(id.clone())));
+                        self.ws.org.group_delete = None;
                     }
                     if ui.button("Cancel").clicked() {
-                        self.org.group_delete = None;
+                        self.ws.org.group_delete = None;
                     }
                 });
             });
             if modal.should_close() {
-                self.org.group_delete = None;
+                self.ws.org.group_delete = None;
             }
         }
     }
 
     fn password_dialog(&mut self, ctx: &egui::Context, lib: &Library) {
-        let Some(mut d) = self.org.password.take() else { return };
+        let Some(mut d) = self.ws.org.password.take() else { return };
         let mut keep = true;
         let name = logic::find_folder(&lib.metadata.folders, &d.id).map_or_else(String::new, |f| f.name.clone());
         let modal = egui::Modal::new(egui::Id::unique("folder-password")).show(ctx, |ui| {
@@ -866,12 +866,12 @@ impl App {
                         Err(e) => d.error = Some(e),
                         Ok(()) => {
                             if d.mode == PasswordMode::Remove {
-                                self.org.unlocked.remove(&d.id);
-                                self.actions.push(org(OrgAction::FolderPassword(d.id.clone(), None)));
+                                self.ws.org.unlocked.remove(&d.id);
+                                self.ws.actions.push(org(OrgAction::FolderPassword(d.id.clone(), None)));
                             } else {
                                 // The folder stays open until Lock Now or the next launch.
-                                self.org.unlocked.insert(d.id.clone());
-                                self.actions.push(org(OrgAction::FolderPassword(d.id.clone(), Some((d.new.clone(), d.hint.trim().to_string())))));
+                                self.ws.org.unlocked.insert(d.id.clone());
+                                self.ws.actions.push(org(OrgAction::FolderPassword(d.id.clone(), Some((d.new.clone(), d.hint.trim().to_string())))));
                             }
                             keep = false;
                         }
@@ -886,12 +886,12 @@ impl App {
             keep = false;
         }
         if keep {
-            self.org.password = Some(d);
+            self.ws.org.password = Some(d);
         }
     }
 
     fn filter_name_dialog(&mut self, ctx: &egui::Context, lib: &Library) {
-        let Some((index, mut name)) = self.org.filter_name.take() else { return };
+        let Some((index, mut name)) = self.ws.org.filter_name.take() else { return };
         let mut keep = true;
         let modal = egui::Modal::new(egui::Id::unique("filter-name")).show(ctx, |ui| {
             ui.set_width(300.0);
@@ -904,11 +904,11 @@ impl App {
                 let ok = !name.trim().is_empty();
                 if (ui.add_enabled(ok, egui::Button::new("Save")).clicked() || (enter && ok)) && keep {
                     let n = name.trim().to_string();
-                    self.actions.push(org(match index {
+                    self.ws.actions.push(org(match index {
                         Some(i) => OrgAction::RenameFilter(i, n),
                         None => {
-                            let keyword = Some(self.query.trim()).filter(|q| !q.is_empty());
-                            let rule = SavedFilter::rule_from_filter(&self.filter, keyword, |id| logic::find_folder(&lib.metadata.folders, id).map(|f| f.name.clone()));
+                            let keyword = Some(self.ws.query.trim()).filter(|q| !q.is_empty());
+                            let rule = SavedFilter::rule_from_filter(&self.ws.filter, keyword, |id| logic::find_folder(&lib.metadata.folders, id).map(|f| f.name.clone()));
                             OrgAction::SaveFilter(n, rule)
                         }
                     }));
@@ -923,7 +923,7 @@ impl App {
             keep = false;
         }
         if keep {
-            self.org.filter_name = Some((index, name));
+            self.ws.org.filter_name = Some((index, name));
         }
     }
 }
@@ -947,10 +947,10 @@ impl App {
                     lib.set_smart_folder_icon(&id, icon.as_deref(), color.as_deref())?;
                 }
                 if let Some(p) = parent {
-                    self.collapsed.remove(&p);
+                    self.ws.collapsed.remove(&p);
                 }
-                self.scope = Scope::Smart(id);
-                self.selected.clear();
+                self.ws.scope = Scope::Smart(id);
+                self.ws.selected.clear();
                 Ok(())
             }
             OrgAction::CreateGroup(tags) => {
@@ -960,8 +960,8 @@ impl App {
                     // Filed tags move out of any other group, as a drag does.
                     lib.add_tags_to_group(&id, &tags)?;
                 }
-                if std::mem::take(&mut self.org.rename_new_group) {
-                    self.org.group_rename = Some((id, name));
+                if std::mem::take(&mut self.ws.org.rename_new_group) {
+                    self.ws.org.group_rename = Some((id, name));
                 }
                 Ok(())
             }

@@ -112,7 +112,7 @@ fn scan(lib: Library, threshold: u32, cache: &Mutex<HashCache>, progress: &Mutex
 impl App {
     /// Starts a scan of the library on a background thread.
     fn start_duplicate_scan(&mut self, lib: &Library) {
-        let d = &mut self.duplicates;
+        let d = &mut self.ws.duplicates;
         if d.root.as_deref() != Some(lib.root()) {
             *d = Duplicates { threshold: d.threshold, ..Default::default() };
             d.root = Some(lib.root().to_path_buf());
@@ -130,20 +130,20 @@ impl App {
     }
 
     pub(super) fn duplicates_page(&mut self, ui: &mut Ui, lib: &Library) {
-        if self.duplicates.root.as_deref().is_some_and(|r| r != lib.root()) {
-            self.duplicates = Duplicates { threshold: self.duplicates.threshold, ..Default::default() };
+        if self.ws.duplicates.root.as_deref().is_some_and(|r| r != lib.root()) {
+            self.ws.duplicates = Duplicates { threshold: self.ws.duplicates.threshold, ..Default::default() };
         }
         // A finished scan hands over its groups.
-        let finished = self.duplicates.progress.as_ref().and_then(|p| p.lock().ok().and_then(|mut p| p.result.take()));
+        let finished = self.ws.duplicates.progress.as_ref().and_then(|p| p.lock().ok().and_then(|mut p| p.result.take()));
         if let Some(g) = finished {
-            self.duplicates.groups = Some(g);
-            self.duplicates.progress = None;
+            self.ws.duplicates.groups = Some(g);
+            self.ws.duplicates.progress = None;
         }
-        let running = self.duplicates.progress.as_ref().and_then(|p| p.lock().ok().map(|p| (p.phase, p.done, p.total)));
-        let groups = self.duplicates.groups.as_ref().map(|g| logic::live_groups(g, |id| lib.item(id).is_some_and(|i| !i.is_deleted)));
+        let running = self.ws.duplicates.progress.as_ref().and_then(|p| p.lock().ok().map(|p| (p.phase, p.done, p.total)));
+        let groups = self.ws.duplicates.groups.as_ref().map(|g| logic::live_groups(g, |id| lib.item(id).is_some_and(|i| !i.is_deleted)));
         // Selection and arrow keys walk the members in page order.
         let mut seen = HashSet::new();
-        self.order = groups.iter().flatten().flat_map(|g| g.ids.iter()).filter(|id| seen.insert(id.as_str())).cloned().collect();
+        self.ws.order = groups.iter().flatten().flat_map(|g| g.ids.iter()).filter(|id| seen.insert(id.as_str())).cloned().collect();
 
         let area = ui.max_rect();
         let mut rescan = false;
@@ -159,12 +159,12 @@ impl App {
                 }
                 ui.label(RichText::new("Similarity").color(t::TEXT_MUTED));
                 // Right is stricter, as in Eagle; the value is the bits allowed to differ.
-                let mut strict = 20 - self.duplicates.threshold.min(20) as i32;
+                let mut strict = 20 - self.ws.duplicates.threshold.min(20) as i32;
                 let s = ui.add_enabled(running.is_none(), egui::Slider::new(&mut strict, 0..=20).show_value(false));
                 if s.on_hover_text("How alike similar pictures must be").drag_stopped() {
                     rescan = groups.is_some();
                 }
-                self.duplicates.threshold = (20 - strict) as u32;
+                self.ws.duplicates.threshold = (20 - strict) as u32;
                 if let Some(g) = &groups
                     && !g.is_empty()
                 {
@@ -172,9 +172,9 @@ impl App {
                     if ui.button("Select All but First").on_hover_text("Selects every copy, keeping the first of each group").clicked() {
                         pick = Some(marked);
                     }
-                    let sel = self.selected.len();
+                    let sel = self.ws.selected.len();
                     if ui.add_enabled(sel > 0, egui::Button::new(format!("Move {sel} to Trash"))).clicked() {
-                        self.actions.push(Action::Trash(self.selected.clone(), true));
+                        self.ws.actions.push(Action::Trash(self.ws.selected.clone(), true));
                     }
                 }
             });
@@ -232,7 +232,7 @@ impl App {
                     if !ui.is_rect_visible(cell.expand(THUMB)) {
                         continue;
                     }
-                    let selected = self.selected.contains(id);
+                    let selected = self.ws.selected.contains(id);
                     let resp = ui.interact(cell, ui.scope_id().with(("dup", gn, id.as_str())), Sense::click());
                     p.rect_filled(cell, 6.0, if resp.hovered() { t::CARD_HOVER } else { t::CARD_BORDER });
                     if let Some(j) = job_for(item, lib.root(), Tier::Grid) {
@@ -255,17 +255,17 @@ impl App {
                 }
                 ui.add_space(8.0);
             }
-            self.frame_jobs.extend(jobs);
+            self.ws.frame_jobs.extend(jobs);
             if let Some((id, m)) = clicked {
                 self.click(&id, m);
             }
             if let Some(id) = opened {
-                self.selected = vec![id.clone()];
-                self.viewer = Some(id);
+                self.ws.selected = vec![id.clone()];
+                self.ws.viewer = Some(id);
             }
         });
         if let Some(ids) = pick {
-            self.selected = ids;
+            self.ws.selected = ids;
         }
         if rescan {
             self.start_duplicate_scan(lib);

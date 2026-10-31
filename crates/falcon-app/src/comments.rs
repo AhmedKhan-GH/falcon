@@ -108,14 +108,14 @@ impl App {
         if !supports_regions(item) {
             return x;
         }
-        let on = self.tools.comment_mode;
+        let on = self.ws.tools.comment_mode;
         let r = Rect::from_center_size(Pos2::new(x, cy), Vec2::splat(26.0));
         if on {
             ui.painter().rect_filled(r, t::RADIUS, t::PRIMARY.gamma_multiply(0.5));
         }
         if icon_button(ui, Pos2::new(x, cy), ic::CHAT_CIRCLE, 17.0, true, "Comment Mode (C)").clicked() {
-            self.tools.comment_mode = !on;
-            self.tools.crop = None;
+            self.ws.tools.comment_mode = !on;
+            self.ws.tools.crop = None;
         }
         let n = item.comments().len();
         if n > 0 {
@@ -134,30 +134,30 @@ impl App {
             return false;
         }
         let natural = vec2(item.width as f32, item.height as f32);
-        let mode = self.tools.comment_mode && self.tools.crop.is_none();
+        let mode = self.ws.tools.comment_mode && self.ws.tools.crop.is_none();
         let p = ui.painter().clone().with_clip_rect(area);
 
         if mode {
             let canvas = ui.interact(area, ui.scope_id().with("comment-canvas"), Sense::drag());
             ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
             if canvas.drag_started() {
-                self.tools.draw_start = ui.input(|i| i.pointer.press_origin()).map(|o| to_image(o, shown, natural));
-                self.tools.draft = None;
+                self.ws.tools.draw_start = ui.input(|i| i.pointer.press_origin()).map(|o| to_image(o, shown, natural));
+                self.ws.tools.draft = None;
             }
-            if let (Some(a), Some(now)) = (self.tools.draw_start, canvas.interact_pointer_pos()) {
+            if let (Some(a), Some(now)) = (self.ws.tools.draw_start, canvas.interact_pointer_pos()) {
                 let b = to_image(now, shown, natural);
                 let r = to_screen(Rect::from_two_pos(a, b), shown, natural);
                 p.rect_filled(r, 0.0, t::PRIMARY.gamma_multiply(0.15));
                 p.rect_stroke(r, 0.0, Stroke::new(1.5, t::PRIMARY), StrokeKind::Middle);
                 if canvas.drag_stopped() {
-                    self.tools.draw_start = None;
+                    self.ws.tools.draw_start = None;
                     if let Some(rect) = new_region(a, b, natural) {
-                        self.tools.draft = Some(Draft { item: item.id.clone(), id: None, rect, text: String::new(), focus: true });
+                        self.ws.tools.draft = Some(Draft { item: item.id.clone(), id: None, rect, text: String::new(), focus: true });
                     }
                 }
             }
             if canvas.drag_stopped() {
-                self.tools.draw_start = None;
+                self.ws.tools.draw_start = None;
             }
         }
 
@@ -165,7 +165,7 @@ impl App {
         for (n, c) in comments.iter().enumerate() {
             let Some(rect) = region(c) else { continue };
             let s = to_screen(rect, shown, natural);
-            let editing = self.tools.draft.as_ref().is_some_and(|d| d.id.as_deref() == Some(c.id.as_str()));
+            let editing = self.ws.tools.draft.as_ref().is_some_and(|d| d.id.as_deref() == Some(c.id.as_str()));
             let resp = ui.interact(s, ui.scope_id().with(("comment", &c.id)), if mode { Sense::click() } else { Sense::hover() });
             let hot = resp.hovered() || editing;
             p.rect_filled(s, 0.0, Color32::from_black_alpha(if hot { 40 } else { 20 }));
@@ -180,7 +180,7 @@ impl App {
                 resp.clone().on_hover_text(tip);
             }
             if mode && resp.clicked() {
-                self.tools.draft = Some(Draft { item: item.id.clone(), id: Some(c.id.clone()), rect, text: plain_text(&c.annotation), focus: true });
+                self.ws.tools.draft = Some(Draft { item: item.id.clone(), id: Some(c.id.clone()), rect, text: plain_text(&c.annotation), focus: true });
             }
             if mode && hot {
                 let x = Rect::from_center_size(s.right_top(), Vec2::splat(18.0));
@@ -188,20 +188,20 @@ impl App {
                 p.circle_filled(x.center(), 9.0, if xr.hovered() { Color32::from_rgb(0xff, 0x66, 0x67) } else { t::BUTTON });
                 p.text(x.center(), Align2::CENTER_CENTER, ic::X, font(10.0), Color32::WHITE);
                 if xr.on_hover_text("Delete comment").clicked() {
-                    self.actions.push(Action::Edit(Op::DeleteComment(item.id.clone(), c.id.clone())));
-                    self.tools.draft = None;
+                    self.ws.actions.push(Action::Edit(Op::DeleteComment(item.id.clone(), c.id.clone())));
+                    self.ws.tools.draft = None;
                 }
             }
         }
 
         // A new region not saved yet.
-        if let Some(d) = self.tools.draft.as_ref().filter(|d| d.id.is_none() && d.item == item.id) {
+        if let Some(d) = self.ws.tools.draft.as_ref().filter(|d| d.id.is_none() && d.item == item.id) {
             let s = to_screen(d.rect, shown, natural);
             p.rect_filled(s, 0.0, t::PRIMARY.gamma_multiply(0.15));
             p.rect_stroke(s, 0.0, Stroke::new(2.0, t::PRIMARY), StrokeKind::Middle);
         }
-        if self.tools.draft.as_ref().is_some_and(|d| d.item == item.id) {
-            let s = to_screen(self.tools.draft.as_ref().unwrap().rect, shown, natural);
+        if self.ws.tools.draft.as_ref().is_some_and(|d| d.item == item.id) {
+            let s = to_screen(self.ws.tools.draft.as_ref().unwrap().rect, shown, natural);
             self.comment_editor(ui, item, s, area);
         }
         mode
@@ -215,7 +215,7 @@ impl App {
         let mut save = false;
         let mut cancel = false;
         let mut delete = false;
-        let draft = self.tools.draft.as_mut().unwrap();
+        let draft = self.ws.tools.draft.as_mut().unwrap();
         egui::Area::new(ui.scope_id().with("comment-editor")).order(egui::Order::Tooltip).fixed_pos(Pos2::new(x, y)).show(ui.ctx(), |ui| {
             egui::Frame::new().fill(t::PANEL).stroke(Stroke::new(1.0, t::DIVIDER)).corner_radius(CornerRadius::same(8)).inner_margin(10).show(ui, |ui| {
                 ui.set_width(width - 20.0);
@@ -251,30 +251,30 @@ impl App {
             });
         });
         if save {
-            let d = self.tools.draft.take().unwrap();
+            let d = self.ws.tools.draft.take().unwrap();
             let r = d.rect;
             let text = d.text.trim_end().to_string();
             match d.id {
                 None => {
                     let c = Comment::region(r.min.x as u64, r.min.y as u64, r.width() as u64, r.height() as u64, &text);
-                    self.actions.push(Action::Edit(Op::AddComment(item.id.clone(), c)));
+                    self.ws.actions.push(Action::Edit(Op::AddComment(item.id.clone(), c)));
                 }
                 Some(id) => {
                     if let Some(mut c) = item.comments().into_iter().find(|c| c.id == id)
                         && plain_text(&c.annotation) != text
                     {
                         c.annotation = text;
-                        self.actions.push(Action::Edit(Op::UpdateComment(item.id.clone(), c)));
+                        self.ws.actions.push(Action::Edit(Op::UpdateComment(item.id.clone(), c)));
                     }
                 }
             }
         } else if delete {
-            let d = self.tools.draft.take().unwrap();
+            let d = self.ws.tools.draft.take().unwrap();
             if let Some(id) = d.id {
-                self.actions.push(Action::Edit(Op::DeleteComment(item.id.clone(), id)));
+                self.ws.actions.push(Action::Edit(Op::DeleteComment(item.id.clone(), id)));
             }
         } else if cancel {
-            self.tools.draft = None;
+            self.ws.tools.draft = None;
         }
     }
 
@@ -287,9 +287,9 @@ impl App {
         heading(ui, &format!("Comments ({})", comments.len()));
         let w = ui.available_width();
         for (n, c) in comments.iter().enumerate() {
-            let editing = self.tools.list_edit.as_ref().is_some_and(|(i, id, _)| *i == item.id && *id == c.id);
+            let editing = self.ws.tools.list_edit.as_ref().is_some_and(|(i, id, _)| *i == item.id && *id == c.id);
             if editing {
-                let (_, _, text) = self.tools.list_edit.as_mut().unwrap();
+                let (_, _, text) = self.ws.tools.list_edit.as_mut().unwrap();
                 let te = ui.add(TextEdit::multiline(text).id_salt(("comment-edit", &c.id)).font(font(13.0)).desired_rows(2).desired_width(w));
                 let mut done = None;
                 ui.horizontal(|ui| {
@@ -301,12 +301,12 @@ impl App {
                     }
                 });
                 if let Some(save) = done {
-                    let (_, _, text) = self.tools.list_edit.take().unwrap();
+                    let (_, _, text) = self.ws.tools.list_edit.take().unwrap();
                     let text = text.trim_end().to_string();
                     if save && text != plain_text(&c.annotation) {
                         let mut c = c.clone();
                         c.annotation = text;
-                        self.actions.push(Action::Edit(Op::UpdateComment(item.id.clone(), c)));
+                        self.ws.actions.push(Action::Edit(Op::UpdateComment(item.id.clone(), c)));
                     }
                 }
                 continue;
@@ -329,16 +329,16 @@ impl App {
                 let edit = icon_button(ui, Pos2::new(row.right() - 34.0, row.top() + 12.0), ic::PENCIL, 13.0, true, "Edit");
                 let del = icon_button(ui, Pos2::new(row.right() - 10.0, row.top() + 12.0), ic::TRASH, 13.0, true, "Delete");
                 if edit.clicked() {
-                    self.tools.list_edit = Some((item.id.clone(), c.id.clone(), plain_text(&c.annotation)));
+                    self.ws.tools.list_edit = Some((item.id.clone(), c.id.clone(), plain_text(&c.annotation)));
                 }
                 if del.clicked() {
-                    self.actions.push(Action::Edit(Op::DeleteComment(item.id.clone(), c.id.clone())));
+                    self.ws.actions.push(Action::Edit(Op::DeleteComment(item.id.clone(), c.id.clone())));
                 }
             }
             if resp.clicked() && region(c).is_some() {
                 // Show it on the image, in comment mode, as Eagle does.
-                self.viewer = Some(item.id.clone());
-                self.tools.comment_mode = true;
+                self.ws.viewer = Some(item.id.clone());
+                self.ws.tools.comment_mode = true;
             }
         }
         ui.add_space(4.0);

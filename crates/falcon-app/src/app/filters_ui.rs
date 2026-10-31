@@ -52,8 +52,8 @@ impl App {
     pub(super) fn media_filter_chips(&mut self, ui: &mut Ui, lib: &Library) {
         let items = lib.items();
         let live = || items.iter().filter(|i| !i.is_deleted);
-        let fui = &mut self.filter_ui;
-        let f = &mut self.filter;
+        let fui = &mut self.ws.filter_ui;
+        let f = &mut self.ws.filter;
 
         // Date: one chip with a tab per timestamp, to keep the bar short.
         let rules = [&f.imported, &f.modified, &f.created];
@@ -213,8 +213,8 @@ impl App {
 
     /// Clears the text typed into the new chips (the bar's Clear).
     pub(super) fn clear_media_filter_text(&mut self) {
-        let keys = self.filter_ui.font_keys.take();
-        self.filter_ui = MediaFilterUi { font_keys: keys, ..Default::default() };
+        let keys = self.ws.filter_ui.font_keys.take();
+        self.ws.filter_ui = MediaFilterUi { font_keys: keys, ..Default::default() };
     }
 }
 

@@ -143,7 +143,7 @@ impl App {
     /// drags. Returns true while the tool is open, so the viewer doesn't pan.
     pub(super) fn crop_overlay(&mut self, ui: &mut Ui, item: &Item, shown: Rect, area: Rect) -> bool {
         let natural = vec2(item.width as f32, item.height as f32);
-        let Some(crop) = self.tools.crop.as_mut() else { return false };
+        let Some(crop) = self.ws.tools.crop.as_mut() else { return false };
         let p = ui.painter().clone().with_clip_rect(area);
         let screen = to_screen(crop.rect, shown, natural);
         // Dim what will be cut away.
@@ -201,7 +201,7 @@ impl App {
 
     /// The crop tool's controls in the viewer bar, right-aligned at `right`.
     pub(super) fn crop_bar(&mut self, ui: &mut Ui, item: &Item, right: f32, cy: f32) {
-        let Some(crop) = self.tools.crop.as_mut() else { return };
+        let Some(crop) = self.ws.tools.crop.as_mut() else { return };
         let button = |ui: &mut Ui, x: f32, w: f32, label: &str, primary: bool| {
             let r = Rect::from_center_size(Pos2::new(x - w / 2.0, cy), vec2(w, 26.0));
             let b = egui::Button::new(egui::RichText::new(label).color(t::TEXT)).fill(if primary { t::PRIMARY } else { t::BUTTON });
@@ -210,8 +210,8 @@ impl App {
         if crop.confirming {
             if button(ui, right, 130.0, "Replace Original", true).clicked() {
                 let rect = pixel_rect(crop.rect);
-                self.actions.push(Action::Edit(Op::Crop(item.id.clone(), rect)));
-                self.tools.crop = None;
+                self.ws.actions.push(Action::Edit(Op::Crop(item.id.clone(), rect)));
+                self.ws.tools.crop = None;
                 return;
             }
             if button(ui, right - 138.0, 70.0, "Back", false).clicked() {
@@ -224,7 +224,7 @@ impl App {
                 crop.confirming = true;
             }
             if button(ui, right - 78.0, 70.0, "Cancel", false).on_hover_text("Cancel (Esc)").clicked() {
-                self.tools.crop = None;
+                self.ws.tools.crop = None;
             }
         }
     }
@@ -233,7 +233,7 @@ impl App {
     /// `x`. Returns the x where the next control can go.
     pub(super) fn rotate_crop_buttons(&mut self, ui: &mut Ui, item: &Item, mut x: f32, cy: f32) -> f32 {
         if transform::can_crop(&item.ext) {
-            let open = self.tools.crop.is_some();
+            let open = self.ws.tools.crop.is_some();
             if icon_button(ui, Pos2::new(x, cy), ic::CROP, 17.0, !open, "Crop").clicked() && !open {
                 self.start_crop(item);
             }
@@ -241,11 +241,11 @@ impl App {
         }
         if transform::can_rotate(&item.ext) {
             if icon_button(ui, Pos2::new(x, cy), ic::ARROW_CLOCKWISE, 17.0, true, "Rotate Right").clicked() {
-                self.actions.push(Action::Edit(Op::Rotate(vec![item.id.clone()], 1)));
+                self.ws.actions.push(Action::Edit(Op::Rotate(vec![item.id.clone()], 1)));
             }
             x -= 30.0;
             if icon_button(ui, Pos2::new(x, cy), ic::ARROW_COUNTER_CLOCKWISE, 17.0, true, "Rotate Left (⇧R)").clicked() {
-                self.actions.push(Action::Edit(Op::Rotate(vec![item.id.clone()], -1)));
+                self.ws.actions.push(Action::Edit(Op::Rotate(vec![item.id.clone()], -1)));
             }
             x -= 30.0;
         }
@@ -255,8 +255,8 @@ impl App {
     /// Opens the crop tool on the whole image.
     pub(super) fn start_crop(&mut self, item: &Item) {
         if item.width > 0 && item.height > 0 && transform::can_crop(&item.ext) {
-            self.tools.comment_mode = false;
-            self.tools.crop = Some(CropState::new(item.width as f32, item.height as f32));
+            self.ws.tools.comment_mode = false;
+            self.ws.tools.crop = Some(CropState::new(item.width as f32, item.height as f32));
         }
     }
 }

@@ -82,37 +82,37 @@ impl App {
         let single = targets.len() == 1;
         ui.separator();
         if single
-            && let Scope::Folder(fid) = &self.scope
+            && let Scope::Folder(fid) = &self.ws.scope
             && ui.button("Set as Folder Cover").clicked()
         {
-            self.actions.push(Action::Edit(Op::SetFolderCover(fid.clone(), item.id.clone())));
+            self.ws.actions.push(Action::Edit(Op::SetFolderCover(fid.clone(), item.id.clone())));
         }
         if single && thumbnail::custom_thumbnail_allowed(&item.ext) {
             if ui.button("Set Custom Thumbnail…").clicked() {
-                self.actions.push(Action::Edit(Op::PickCustomThumbnail(item.id.clone())));
+                self.ws.actions.push(Action::Edit(Op::PickCustomThumbnail(item.id.clone())));
             }
             if thumbnail::has_custom_thumbnail(item) && ui.button("Reset Thumbnail").clicked() {
-                self.actions.push(Action::Edit(Op::ResetCustomThumbnail(item.id.clone())));
+                self.ws.actions.push(Action::Edit(Op::ResetCustomThumbnail(item.id.clone())));
             }
         }
         if ui.button("Refresh Thumbnail").clicked() {
-            self.actions.push(Action::Edit(Op::RefreshThumbnail(targets.to_vec())));
+            self.ws.actions.push(Action::Edit(Op::RefreshThumbnail(targets.to_vec())));
         }
         if ui.button("Refresh Palette").clicked() {
-            self.actions.push(Action::Edit(Op::RefreshPalette(targets.to_vec())));
+            self.ws.actions.push(Action::Edit(Op::RefreshPalette(targets.to_vec())));
         }
         let rotatable: Vec<String> = targets.iter().filter(|id| lib.item(id).is_some_and(|i| transform::can_rotate(&i.ext))).cloned().collect();
         if !rotatable.is_empty() {
             if ui.button("Rotate Left").clicked() {
-                self.actions.push(Action::Edit(Op::Rotate(rotatable.clone(), -1)));
+                self.ws.actions.push(Action::Edit(Op::Rotate(rotatable.clone(), -1)));
             }
             if ui.button("Rotate Right").clicked() {
-                self.actions.push(Action::Edit(Op::Rotate(rotatable, 1)));
+                self.ws.actions.push(Action::Edit(Op::Rotate(rotatable, 1)));
             }
         }
         if single && transform::can_crop(&item.ext) && ui.button("Crop…").clicked() {
-            self.viewer = Some(item.id.clone());
-            self.tools.crop_next = Some(item.id.clone());
+            self.ws.viewer = Some(item.id.clone());
+            self.ws.tools.crop_next = Some(item.id.clone());
         }
     }
 
@@ -124,13 +124,13 @@ impl App {
                 let picked = rfd::FileDialog::new().set_title("Choose Thumbnail").add_filter("Images", &["jpg", "jpeg", "png", "bmp", "webp"]).pick_file();
                 let Some(path) = picked else { return Ok(()) };
                 lib.set_custom_thumbnail(&id, &path)?;
-                self.loader.forget(&id);
+                self.ws.loader.forget(&id);
                 self.flash("Thumbnail set");
                 Ok(())
             }
             Op::ResetCustomThumbnail(id) => {
                 lib.reset_custom_thumbnail(&id)?;
-                self.loader.forget(&id);
+                self.ws.loader.forget(&id);
                 Ok(())
             }
             Op::RefreshThumbnail(ids) => {
@@ -142,7 +142,7 @@ impl App {
                         Ok(false) => custom += 1,
                         Err(e) => r = Err(e),
                     }
-                    self.loader.forget(id);
+                    self.ws.loader.forget(id);
                 }
                 let mut msg = format!("Refreshed {done} {}", if done == 1 { "thumbnail" } else { "thumbnails" });
                 if custom > 0 {
@@ -175,14 +175,14 @@ impl App {
                 for id in &ids {
                     if lib.item(id).is_some_and(|i| transform::can_rotate(&i.ext)) {
                         r = r.and(lib.rotate_item(id, turns));
-                        self.loader.forget(id);
+                        self.ws.loader.forget(id);
                     }
                 }
                 r
             }
             Op::Crop(id, rect) => {
                 let r = lib.crop_item(&id, rect);
-                self.loader.forget(&id);
+                self.ws.loader.forget(&id);
                 r
             }
             Op::AddComment(id, c) => lib.add_comment(&id, c).map(|_| ()),
@@ -195,18 +195,18 @@ impl App {
     /// Esc and Enter act on the crop tool rather than close the viewer: C
     /// toggles comment mode, ⇧R rotates left.
     pub(super) fn edit_keys(&mut self, ctx: &egui::Context) {
-        if self.viewer.is_none() {
-            self.tools.crop = None;
-            self.tools.draft = None;
-            self.tools.draw_start = None;
-            self.tools.item.clear();
+        if self.ws.viewer.is_none() {
+            self.ws.tools.crop = None;
+            self.ws.tools.draft = None;
+            self.ws.tools.draw_start = None;
+            self.ws.tools.item.clear();
             return;
         }
         if ctx.memory(|m| m.focused().is_some()) {
             return;
         }
         let none = Modifiers::NONE;
-        if let Some(crop) = self.tools.crop.as_mut() {
+        if let Some(crop) = self.ws.tools.crop.as_mut() {
             let (esc, enter) = ctx.input_mut(|i| (i.consume_key(none, Key::Escape), i.consume_key(none, Key::Enter)));
             ctx.input_mut(|i| {
                 for k in [Key::Space, Key::ArrowLeft, Key::ArrowRight, Key::ArrowUp, Key::ArrowDown] {
@@ -217,15 +217,15 @@ impl App {
                 if crop.confirming {
                     crop.confirming = false;
                 } else {
-                    self.tools.crop = None;
+                    self.ws.tools.crop = None;
                 }
             } else if enter {
                 if crop.confirming {
                     let rect = super::crop::pixel_rect(crop.rect);
-                    if let Some(id) = self.viewer.clone() {
-                        self.actions.push(Action::Edit(Op::Crop(id, rect)));
+                    if let Some(id) = self.ws.viewer.clone() {
+                        self.ws.actions.push(Action::Edit(Op::Crop(id, rect)));
                     }
-                    self.tools.crop = None;
+                    self.ws.tools.crop = None;
                 } else {
                     crop.confirming = true;
                 }
@@ -234,15 +234,15 @@ impl App {
         }
         let (c, rotate) = ctx.input_mut(|i| (i.consume_key(none, Key::C), i.consume_key(Modifiers::SHIFT, Key::R)));
         if c {
-            self.tools.comment_mode = !self.tools.comment_mode;
-            self.tools.draft = None;
+            self.ws.tools.comment_mode = !self.ws.tools.comment_mode;
+            self.ws.tools.draft = None;
         }
-        if rotate && let Some(id) = self.viewer.clone() {
-            self.actions.push(Action::Edit(Op::Rotate(vec![id], -1)));
+        if rotate && let Some(id) = self.ws.viewer.clone() {
+            self.ws.actions.push(Action::Edit(Op::Rotate(vec![id], -1)));
         }
-        if self.tools.comment_mode && ctx.input_mut(|i| i.consume_key(none, Key::Escape)) {
-            self.tools.comment_mode = false;
-            self.tools.draft = None;
+        if self.ws.tools.comment_mode && ctx.input_mut(|i| i.consume_key(none, Key::Escape)) {
+            self.ws.tools.comment_mode = false;
+            self.ws.tools.draft = None;
         }
     }
 
@@ -250,14 +250,14 @@ impl App {
     /// inside `area`). Their widgets sit above the viewer's canvas, so in
     /// comment mode and while cropping a drag draws instead of panning.
     pub(super) fn edit_overlay(&mut self, ui: &mut Ui, item: &Item, shown: Rect, area: Rect) {
-        if self.tools.item != item.id {
-            self.tools.item = item.id.clone();
-            self.tools.crop = None;
-            self.tools.draft = None;
-            self.tools.draw_start = None;
+        if self.ws.tools.item != item.id {
+            self.ws.tools.item = item.id.clone();
+            self.ws.tools.crop = None;
+            self.ws.tools.draft = None;
+            self.ws.tools.draw_start = None;
         }
-        if self.tools.crop_next.as_deref() == Some(item.id.as_str()) {
-            self.tools.crop_next = None;
+        if self.ws.tools.crop_next.as_deref() == Some(item.id.as_str()) {
+            self.ws.tools.crop_next = None;
             self.start_crop(item);
         }
         if !self.crop_overlay(ui, item, shown, area) {
@@ -267,7 +267,7 @@ impl App {
 
     /// The tools' buttons in the viewer bar, leftwards from `x`.
     pub(super) fn edit_bar(&mut self, ui: &mut Ui, item: &Item, x: f32, cy: f32) {
-        if self.tools.crop.is_some() {
+        if self.ws.tools.crop.is_some() {
             self.crop_bar(ui, item, x + 12.0, cy);
             return;
         }

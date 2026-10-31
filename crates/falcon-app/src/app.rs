@@ -317,12 +317,11 @@ struct EditBuf {
     new_tag: String,
 }
 
-pub struct App {
+/// Everything that belongs to one open library: the library itself, where
+/// the user is in it, what is selected, its undo history, its dialogs and
+/// its image caches. The app draws one workspace at a time.
+struct Workspace {
     lib: Option<Shared>,
-    /// The local HTTP API for the open library, as Eagle runs it.
-    server: Option<falcon_server::Handle>,
-    ctx: egui::Context,
-    error: Option<String>,
     loader: Loader,
     scope: Scope,
     back: Vec<Scope>,
@@ -339,14 +338,11 @@ pub struct App {
     /// Keyword text typed into the Notes and URL filters.
     note_text: String,
     url_text: String,
-    tile: f32,
     selected: Vec<String>,
     anchor: Option<String>,
     viewer: Option<String>,
     collapsed: HashSet<String>,
     folder_filter: String,
-    show_sidebar: bool,
-    show_inspector: bool,
     edit: Option<EditBuf>,
     status: Option<(String, Instant)>,
     /// Ids in grid order, refreshed every frame.
@@ -363,17 +359,9 @@ pub struct App {
     view: ViewState,
     /// Focus the inspector's title field next frame (F2).
     focus_title: bool,
-    focus_search: bool,
     /// Tag typed into the multi-selection inspector.
     batch_tag: String,
     progress: Arc<Mutex<Progress>>,
-    /// Set while a drag out of the window is in progress.
-    native_drag: Arc<std::sync::atomic::AtomicBool>,
-    /// Recently opened libraries, newest first.
-    recent: Vec<PathBuf>,
-    /// What to open once the frame is done (it replaces the library being
-    /// drawn).
-    switch_to: Option<Switch>,
     /// Tag being renamed on the All Tags page, with the new name so far.
     tag_rename: Option<(String, String)>,
     tag_filter: String,
@@ -388,17 +376,11 @@ pub struct App {
     undo_root: Option<PathBuf>,
     /// Labels of the actions applied this frame, naming its transaction.
     frame_labels: Vec<String>,
-    prefs: crate::prefs::Prefs,
-    prefs_window: crate::prefs::Window,
-    shortcuts: crate::shortcuts::Shortcuts,
-    /// The small always-on-top drop window (see `collect.rs`).
-    collect: crate::collect::Collect,
     /// Unlocked folders and the organising dialogs (see `organize_ui`).
     org: organize_ui::OrgState,
     /// Text typed into the Date, Duration, Camera and Font chips.
     filter_ui: filters_ui::MediaFilterUi,
-    /// Audio playback and waveforms for the viewer, and its font specimen.
-    audio: crate::audio::Audio,
+    /// Waveforms for the viewer, and its font specimen.
     waveforms: crate::audio::Waveforms,
     font_view: media_view::FontView,
     /// The Duplicates page's hash cache and results.
@@ -407,15 +389,12 @@ pub struct App {
     tools: image_edit::Tools,
 }
 
-impl App {
-    pub fn new(cc: &eframe::CreationContext<'_>, initial: Option<PathBuf>, launch: Launch) -> Self {
-        t::install(&cc.egui_ctx);
-        let mut app = App {
-            lib: None,
-            server: None,
-            ctx: cc.egui_ctx.clone(),
-            error: None,
-            loader: Loader::new(&cc.egui_ctx),
+impl Workspace {
+    /// A fresh workspace for `lib` (or the empty window when `None`).
+    fn new(ctx: &egui::Context, lib: Option<Shared>) -> Self {
+        Workspace {
+            lib,
+            loader: Loader::new(ctx),
             scope: Scope::All,
             back: Vec::new(),
             forward: Vec::new(),
@@ -428,14 +407,11 @@ impl App {
             color_text: String::new(),
             note_text: String::new(),
             url_text: String::new(),
-            tile: 139.0,
             selected: Vec::new(),
             anchor: None,
             viewer: None,
             collapsed: HashSet::new(),
             folder_filter: String::new(),
-            show_sidebar: true,
-            show_inspector: true,
             edit: None,
             status: None,
             order: Vec::new(),
@@ -448,12 +424,8 @@ impl App {
             smart_dialog: None,
             view: ViewState::default(),
             focus_title: false,
-            focus_search: false,
             batch_tag: String::new(),
             progress: Arc::new(Mutex::new(Progress::default())),
-            native_drag: Arc::default(),
-            recent: Vec::new(),
-            switch_to: None,
             tag_rename: None,
             tag_filter: String::new(),
             hover: Default::default(),
@@ -462,27 +434,73 @@ impl App {
             undo_request: None,
             undo_root: None,
             frame_labels: Vec::new(),
-            prefs: Default::default(),
-            prefs_window: Default::default(),
-            shortcuts: Default::default(),
-            collect: Default::default(),
             org: Default::default(),
             filter_ui: Default::default(),
-            audio: Default::default(),
             waveforms: Default::default(),
             font_view: Default::default(),
             duplicates: Default::default(),
             tools: Default::default(),
+        }
+    }
+}
+
+pub struct App {
+    /// The library being drawn, with all its per-library state.
+    ws: Workspace,
+    /// The local HTTP API for the open library, as Eagle runs it.
+    server: Option<falcon_server::Handle>,
+    ctx: egui::Context,
+    error: Option<String>,
+    tile: f32,
+    show_sidebar: bool,
+    show_inspector: bool,
+    focus_search: bool,
+    /// Set while a drag out of the window is in progress.
+    native_drag: Arc<std::sync::atomic::AtomicBool>,
+    /// Recently opened libraries, newest first.
+    recent: Vec<PathBuf>,
+    /// What to open once the frame is done (it replaces the library being
+    /// drawn).
+    switch_to: Option<Switch>,
+    prefs: crate::prefs::Prefs,
+    prefs_window: crate::prefs::Window,
+    shortcuts: crate::shortcuts::Shortcuts,
+    /// The small always-on-top drop window (see `collect.rs`).
+    collect: crate::collect::Collect,
+    /// Audio playback for the viewer.
+    audio: crate::audio::Audio,
+}
+
+impl App {
+    pub fn new(cc: &eframe::CreationContext<'_>, initial: Option<PathBuf>, launch: Launch) -> Self {
+        t::install(&cc.egui_ctx);
+        let mut app = App {
+            ws: Workspace::new(&cc.egui_ctx, None),
+            server: None,
+            ctx: cc.egui_ctx.clone(),
+            error: None,
+            tile: 139.0,
+            show_sidebar: true,
+            show_inspector: true,
+            focus_search: false,
+            native_drag: Arc::default(),
+            recent: Vec::new(),
+            switch_to: None,
+            prefs: Default::default(),
+            prefs_window: Default::default(),
+            shortcuts: Default::default(),
+            collect: Default::default(),
+            audio: Default::default(),
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
         app.tile = saved.tile.unwrap_or(app.tile).clamp(TILE_MIN, TILE_MAX);
-        app.sort = saved.sort.as_deref().and_then(|l| OrderBy::ALL.into_iter().find(|o| o.label() == l)).unwrap_or(app.sort);
-        app.increase = saved.increase.unwrap_or(app.increase);
+        app.ws.sort = saved.sort.as_deref().and_then(|l| OrderBy::ALL.into_iter().find(|o| o.label() == l)).unwrap_or(app.ws.sort);
+        app.ws.increase = saved.increase.unwrap_or(app.ws.increase);
         app.show_sidebar = saved.show_sidebar.unwrap_or(true);
         app.show_inspector = saved.show_inspector.unwrap_or(true);
-        app.collapsed = saved.collapsed.into_iter().collect();
+        app.ws.collapsed = saved.collapsed.into_iter().collect();
         app.recent = saved.recent.into_iter().filter(|p| p.is_dir()).collect();
-        app.layout = saved.layout.unwrap_or_default();
+        app.ws.layout = saved.layout.unwrap_or_default();
         app.prefs = saved.prefs.sanitized();
         app.shortcuts = saved.shortcuts;
         app.collect.pos = saved.collect_pos.map(Pos2::from);
@@ -497,22 +515,22 @@ impl App {
         if let [id] = launch.items.as_slice()
             && !launch.select
         {
-            app.viewer = Some(id.clone());
+            app.ws.viewer = Some(id.clone());
         }
         if let Some(first) = launch.items.first() {
-            app.scroll_to = Some(first.clone());
+            app.ws.scroll_to = Some(first.clone());
         }
-        app.selected = launch.items;
+        app.ws.selected = launch.items;
         if let Some(q) = launch.search {
-            app.query = q;
+            app.ws.query = q;
         }
         if let Some(rgb) = launch.color.as_deref().and_then(parse_hex) {
-            app.filter.color = Some(ColorQuery::new(rgb));
-            app.color_text = logic::hex(rgb);
-            app.show_filter = true;
+            app.ws.filter.color = Some(ColorQuery::new(rgb));
+            app.ws.color_text = logic::hex(rgb);
+            app.ws.show_filter = true;
         }
         if launch.tags {
-            app.scope = Scope::AllTags;
+            app.ws.scope = Scope::AllTags;
         }
         app
     }
@@ -522,19 +540,19 @@ impl App {
             Ok(lib) => {
                 self.server = None; // stops the previous library's server
                 let shared: Shared = Arc::new(Mutex::new(lib));
-                self.lib = Some(shared);
+                self.ws.lib = Some(shared);
                 self.start_server();
                 self.recent.retain(|p| *p != path);
                 self.recent.insert(0, path.clone());
                 self.recent.truncate(10);
                 self.error = None;
-                self.scope = Scope::All;
-                self.back.clear();
-                self.forward.clear();
-                self.selected.clear();
-                self.edit = None;
-                self.org = Default::default();
-                self.loader.clear_all();
+                self.ws.scope = Scope::All;
+                self.ws.back.clear();
+                self.ws.forward.clear();
+                self.ws.selected.clear();
+                self.ws.edit = None;
+                self.ws.org = Default::default();
+                self.ws.loader.clear_all();
             }
             Err(e) => self.error = Some(e.to_string()),
         }
@@ -545,7 +563,7 @@ impl App {
     /// started) Eagle must keep reaching Eagle.
     fn start_server(&mut self) {
         self.server = None;
-        let (Some(shared), Some(ports)) = (self.lib.clone(), self.prefs.api_ports()) else { return };
+        let (Some(shared), Some(ports)) = (self.ws.lib.clone(), self.prefs.api_ports()) else { return };
         let ctx = self.ctx.clone();
         match falcon_server::start(shared, ports, move || ctx.request_repaint()) {
             Ok(h) => {
@@ -574,7 +592,7 @@ impl App {
         self.shortcuts = d.keys;
         if restart {
             self.start_server();
-            if self.lib.is_some() && !self.prefs.api_enabled {
+            if self.ws.lib.is_some() && !self.prefs.api_enabled {
                 self.flash("API stopped");
             }
         }
@@ -584,7 +602,7 @@ impl App {
     /// chosen folder.
     fn collect_window(&mut self, ctx: &egui::Context) {
         use crate::collect;
-        let folders = self.lib.as_ref().map(|l| collect::flatten(&lock(l).metadata.folders));
+        let folders = self.ws.lib.as_ref().map(|l| collect::flatten(&lock(l).metadata.folders));
         let event = self.collect.show(ctx, folders.as_deref(), &mut self.prefs.collect_folder, &self.shortcuts);
         let target = folders.as_deref().and_then(|f| collect::target(f, self.prefs.collect_folder.as_deref())).into_iter().collect();
         match event {
@@ -616,51 +634,51 @@ impl App {
             Scope::Random(_) => Scope::Random(fastrand_seed()),
             s => s,
         };
-        if scope == self.scope {
+        if scope == self.ws.scope {
             return;
         }
-        self.back.push(std::mem::replace(&mut self.scope, scope));
-        self.forward.clear();
-        self.selected.clear();
-        self.anchor = None;
+        self.ws.back.push(std::mem::replace(&mut self.ws.scope, scope));
+        self.ws.forward.clear();
+        self.ws.selected.clear();
+        self.ws.anchor = None;
     }
 
     fn go_back(&mut self) {
-        if let Some(s) = self.back.pop() {
-            self.forward.push(std::mem::replace(&mut self.scope, s));
-            self.selected.clear();
+        if let Some(s) = self.ws.back.pop() {
+            self.ws.forward.push(std::mem::replace(&mut self.ws.scope, s));
+            self.ws.selected.clear();
         }
     }
 
     fn go_forward(&mut self) {
-        if let Some(s) = self.forward.pop() {
-            self.back.push(std::mem::replace(&mut self.scope, s));
-            self.selected.clear();
+        if let Some(s) = self.ws.forward.pop() {
+            self.ws.back.push(std::mem::replace(&mut self.ws.scope, s));
+            self.ws.selected.clear();
         }
     }
 
     fn flash(&mut self, msg: impl Into<String>) {
-        self.status = Some((msg.into(), Instant::now()));
+        self.ws.status = Some((msg.into(), Instant::now()));
     }
 
     /// Applies a click on the card at `id` with the given modifiers.
     fn click(&mut self, id: &str, m: Modifiers) {
         if m.command {
-            if let Some(p) = self.selected.iter().position(|s| s == id) {
-                self.selected.remove(p);
+            if let Some(p) = self.ws.selected.iter().position(|s| s == id) {
+                self.ws.selected.remove(p);
             } else {
-                self.selected.push(id.to_string());
+                self.ws.selected.push(id.to_string());
             }
-            self.anchor = Some(id.to_string());
+            self.ws.anchor = Some(id.to_string());
         } else if m.shift
-            && let Some(a) = self.anchor.as_ref().and_then(|a| self.order.iter().position(|x| x == a))
-            && let Some(b) = self.order.iter().position(|x| x == id)
+            && let Some(a) = self.ws.anchor.as_ref().and_then(|a| self.ws.order.iter().position(|x| x == a))
+            && let Some(b) = self.ws.order.iter().position(|x| x == id)
         {
             let (lo, hi) = (a.min(b), a.max(b));
-            self.selected = self.order[lo..=hi].to_vec();
+            self.ws.selected = self.ws.order[lo..=hi].to_vec();
         } else {
-            self.selected = vec![id.to_string()];
-            self.anchor = Some(id.to_string());
+            self.ws.selected = vec![id.to_string()];
+            self.ws.anchor = Some(id.to_string());
         }
     }
 
@@ -674,14 +692,14 @@ impl App {
 
     /// The folder new items join: the one being viewed, if any.
     fn scope_folders(&self) -> Vec<String> {
-        match &self.scope {
+        match &self.ws.scope {
             Scope::Folder(id) => vec![id.clone()],
             _ => Vec::new(),
         }
     }
 
     fn import_into(&mut self, paths: Vec<PathBuf>, folders: Vec<String>) {
-        let Some(shared) = self.lib.clone() else { return };
+        let Some(shared) = self.ws.lib.clone() else { return };
         let opts = ImportOptions { folders, ..Default::default() };
         let mut files = Vec::new();
         let mut stack = paths;
@@ -698,7 +716,7 @@ impl App {
             return;
         }
         files.sort();
-        let progress = self.progress.clone();
+        let progress = self.ws.progress.clone();
         {
             let mut pr = progress.lock().unwrap_or_else(|p| p.into_inner());
             pr.total += files.len();
@@ -722,7 +740,7 @@ impl App {
     /// The import progress bar; clears itself a moment after finishing.
     fn progress_bar(&mut self, ui: &mut Ui, rect: Rect) -> bool {
         let snapshot = {
-            let pr = self.progress.lock().unwrap_or_else(|p| p.into_inner());
+            let pr = self.ws.progress.lock().unwrap_or_else(|p| p.into_inner());
             (pr.total, pr.done, pr.failed, pr.current.clone())
         };
         let (total, done, failed, current) = snapshot;
@@ -730,7 +748,7 @@ impl App {
             return false;
         }
         if done >= total {
-            let mut pr = self.progress.lock().unwrap_or_else(|p| p.into_inner());
+            let mut pr = self.ws.progress.lock().unwrap_or_else(|p| p.into_inner());
             *pr = Progress::default();
             drop(pr);
             let msg = if failed > 0 { format!("Added {}, {failed} failed", done - failed) } else { format!("Added {done}") };
@@ -752,10 +770,10 @@ impl App {
 
     /// ⌘C: puts the selected originals on the clipboard as files.
     fn copy_selection(&mut self) {
-        let Some(shared) = self.lib.clone() else { return };
+        let Some(shared) = self.ws.lib.clone() else { return };
         let paths: Vec<PathBuf> = {
             let lib = lock(&shared);
-            self.selected.iter().filter_map(|id| lib.item(id)).map(|i| i.original_path(lib.root())).collect()
+            self.ws.selected.iter().filter_map(|id| lib.item(id)).map(|i| i.original_path(lib.root())).collect()
         };
         if let Ok(mut clip) = arboard::Clipboard::new()
             && clip.set().file_list(&paths).is_ok()
@@ -802,15 +820,15 @@ impl App {
             return;
         }
         if ctx.input(|i| i.modifiers.command && i.key_pressed(Key::Z)) {
-            self.undo_request = Some(!ctx.input(|i| i.modifiers.shift));
+            self.ws.undo_request = Some(!ctx.input(|i| i.modifiers.shift));
         }
         if on(C::CollectWindow) {
             self.collect.toggle();
         }
-        if self.viewer.is_none() {
-            if on(C::Rename) && self.selected.len() == 1 {
+        if self.ws.viewer.is_none() {
+            if on(C::Rename) && self.ws.selected.len() == 1 {
                 self.show_inspector = true;
-                self.focus_title = true;
+                self.ws.focus_title = true;
             }
             if on(C::Find) {
                 self.focus_search = true;
@@ -828,13 +846,13 @@ impl App {
                 self.tile = (self.tile - 20.0).max(TILE_MIN);
             }
             if on(C::NewFolder) {
-                let parent = match &self.scope {
+                let parent = match &self.ws.scope {
                     Scope::Folder(id) => Some(id.clone()),
                     _ => None,
                 };
-                self.actions.push(Action::CreateFolder { parent });
+                self.ws.actions.push(Action::CreateFolder { parent });
             }
-            if on(C::Copy) && !self.selected.is_empty() {
+            if on(C::Copy) && !self.ws.selected.is_empty() {
                 self.copy_selection();
             }
             if on(C::ToggleSidebar) {
@@ -844,15 +862,15 @@ impl App {
                 self.show_inspector = !self.show_inspector;
             }
             if on(C::ToggleFilter) {
-                self.show_filter = !self.show_filter;
+                self.ws.show_filter = !self.ws.show_filter;
             }
             for (c, l) in [(C::LayoutGrid, Layout::Grid), (C::LayoutJustified, Layout::Justified), (C::LayoutWaterfall, Layout::Waterfall), (C::LayoutList, Layout::List)] {
                 if on(c) {
-                    self.layout = l;
+                    self.ws.layout = l;
                 }
             }
         }
-        if on(C::Paste) && self.viewer.is_none() {
+        if on(C::Paste) && self.ws.viewer.is_none() {
             self.paste();
             return;
         }
@@ -867,44 +885,44 @@ impl App {
         });
         let (space, all, del) = (on(C::Viewer), on(C::SelectAll), on(C::Trash));
         if esc {
-            if self.viewer.is_some() {
-                self.viewer = None;
+            if self.ws.viewer.is_some() {
+                self.ws.viewer = None;
             } else {
-                self.selected.clear();
+                self.ws.selected.clear();
             }
         }
         if all {
-            self.selected = self.order.clone();
+            self.ws.selected = self.ws.order.clone();
         }
         // With audio in the viewer, Space plays and pauses (Esc closes), as in Eagle.
-        if self.viewer.is_some() && self.audio.loaded() == self.viewer.as_deref() && ctx.input(|i| i.key_pressed(Key::Space)) {
+        if self.ws.viewer.is_some() && self.audio.loaded() == self.ws.viewer.as_deref() && ctx.input(|i| i.key_pressed(Key::Space)) {
             self.audio.toggle();
             return;
         }
-        if space && self.viewer.is_some() {
-            self.viewer = None;
+        if space && self.ws.viewer.is_some() {
+            self.ws.viewer = None;
             return;
         }
-        if space && self.viewer.is_none() && self.selected.len() == 1 {
-            self.viewer = self.selected.first().cloned();
+        if space && self.ws.viewer.is_none() && self.ws.selected.len() == 1 {
+            self.ws.viewer = self.ws.selected.first().cloned();
             return;
         }
-        if del && !self.selected.is_empty() {
-            let ids = self.selected.clone();
-            if self.scope == Scope::Trash {
-                self.confirm = Some(Confirm::DeleteItems(ids));
+        if del && !self.ws.selected.is_empty() {
+            let ids = self.ws.selected.clone();
+            if self.ws.scope == Scope::Trash {
+                self.ws.confirm = Some(Confirm::DeleteItems(ids));
             } else {
-                self.actions.push(Action::Trash(ids, true));
+                self.ws.actions.push(Action::Trash(ids, true));
             }
         }
-        let step: isize = if self.viewer.is_some() {
+        let step: isize = if self.ws.viewer.is_some() {
             match (left || up, right || down) {
                 (true, _) => -1,
                 (_, true) => 1,
                 _ => 0,
             }
         } else {
-            let c = self.columns as isize;
+            let c = self.ws.columns as isize;
             match (left, right, up, down) {
                 (true, ..) => -1,
                 (_, true, ..) => 1,
@@ -913,39 +931,39 @@ impl App {
                 _ => 0,
             }
         };
-        if step != 0 && !self.order.is_empty() {
-            let cur = self.viewer.as_ref().or(self.selected.last());
-            let pos = cur.and_then(|c| self.order.iter().position(|x| x == c));
+        if step != 0 && !self.ws.order.is_empty() {
+            let cur = self.ws.viewer.as_ref().or(self.ws.selected.last());
+            let pos = cur.and_then(|c| self.ws.order.iter().position(|x| x == c));
             let next = match pos {
-                Some(p) => (p as isize + step).clamp(0, self.order.len() as isize - 1) as usize,
+                Some(p) => (p as isize + step).clamp(0, self.ws.order.len() as isize - 1) as usize,
                 None => 0,
             };
-            let id = self.order[next].clone();
-            if self.viewer.is_some() {
-                self.viewer = Some(id.clone());
+            let id = self.ws.order[next].clone();
+            if self.ws.viewer.is_some() {
+                self.ws.viewer = Some(id.clone());
             }
-            self.selected = vec![id.clone()];
-            self.anchor = Some(id.clone());
-            self.scroll_to = Some(id);
+            self.ws.selected = vec![id.clone()];
+            self.ws.anchor = Some(id.clone());
+            self.ws.scroll_to = Some(id);
         }
     }
 }
 
 impl App {
     fn apply_actions(&mut self, lib: &mut Library) {
-        for action in std::mem::take(&mut self.actions) {
-            self.frame_labels.push(action_label(&action));
+        for action in std::mem::take(&mut self.ws.actions) {
+            self.ws.frame_labels.push(action_label(&action));
             let result = match action {
                 Action::CreateFolder { parent } => lib.create_folder(parent.as_deref(), "New Folder").map(|id| {
                     if let Some(p) = parent {
-                        self.collapsed.remove(&p);
+                        self.ws.collapsed.remove(&p);
                     }
-                    self.renaming = Some((id, "New Folder".into()));
+                    self.ws.renaming = Some((id, "New Folder".into()));
                 }),
                 Action::RenameFolder(id, name) => lib.rename_folder(&id, &name),
                 Action::DeleteFolder(id) => {
-                    if self.scope == Scope::Folder(id.clone()) {
-                        self.scope = Scope::All;
+                    if self.ws.scope == Scope::Folder(id.clone()) {
+                        self.ws.scope = Scope::All;
                     }
                     lib.delete_folder(&id)
                 }
@@ -966,19 +984,19 @@ impl App {
                     r
                 }
                 Action::CreateSmart(name, conditions) => lib.create_smart_folder(&name, conditions).map(|id| {
-                    self.scope = Scope::Smart(id);
-                    self.selected.clear();
+                    self.ws.scope = Scope::Smart(id);
+                    self.ws.selected.clear();
                 }),
                 Action::UpdateSmart(id, name, conditions) => lib.update_smart_folder(&id, &name, conditions),
                 Action::DeleteSmart(id) => {
-                    if self.scope == Scope::Smart(id.clone()) {
-                        self.scope = Scope::All;
+                    if self.ws.scope == Scope::Smart(id.clone()) {
+                        self.ws.scope = Scope::All;
                     }
                     lib.delete_smart_folder(&id)
                 }
                 Action::MoveFolder(id, parent) => {
                     if let Some(p) = &parent {
-                        self.collapsed.remove(p);
+                        self.ws.collapsed.remove(p);
                     }
                     lib.move_folder(&id, parent.as_deref())
                 }
@@ -1020,25 +1038,25 @@ impl App {
                 Action::QuickAdd(kind, id) => lib.add_quick_access(kind, &id),
                 Action::QuickRemove(id) => lib.remove_quick_access(&id),
                 Action::RenameTag(from, to) => lib.rename_tag(&from, &to).map(|n| {
-                    if self.scope == Scope::Tag(from.clone()) {
-                        self.scope = Scope::Tag(to.clone());
+                    if self.ws.scope == Scope::Tag(from.clone()) {
+                        self.ws.scope = Scope::Tag(to.clone());
                     }
                     self.flash(format!("Renamed “{from}” to “{to}” on {n} items"));
                 }),
                 Action::DeleteTag(tag) => lib.delete_tag(&tag).map(|n| self.flash(format!("Removed “{tag}” from {n} items"))),
                 Action::StarTag(tag, on) => lib.set_tag_starred(&tag, on),
                 Action::DeletePermanently(ids) => {
-                    self.selected.retain(|s| !ids.contains(s));
+                    self.ws.selected.retain(|s| !ids.contains(s));
                     let r = lib.delete_permanently(&ids);
                     self.flash(format!("Deleted {}", ids.len()));
                     r
                 }
                 Action::EmptyTrash => lib.empty_trash().map(|n| {
-                    self.selected.clear();
+                    self.ws.selected.clear();
                     self.flash(format!("Deleted {n}"));
                 }),
                 Action::Trash(ids, trash) => {
-                    self.selected.retain(|s| !ids.contains(s));
+                    self.ws.selected.retain(|s| !ids.contains(s));
                     let r = lib.set_trashed(&ids, trash);
                     self.flash(if trash { format!("Moved {} to Trash", ids.len()) } else { format!("Restored {}", ids.len()) });
                     r
@@ -1056,18 +1074,18 @@ impl App {
     /// pending ⌘Z or ⇧⌘Z applied, and a transaction opened for the frame's
     /// edits.
     fn begin_frame_edits(&mut self, lib: &mut Library) {
-        if self.undo_root.as_deref() != Some(lib.root()) {
-            self.undo.clear();
-            self.redo.clear();
-            self.undo_root = Some(lib.root().to_path_buf());
+        if self.ws.undo_root.as_deref() != Some(lib.root()) {
+            self.ws.undo.clear();
+            self.ws.redo.clear();
+            self.ws.undo_root = Some(lib.root().to_path_buf());
         }
         if lib.write_mode() != WriteMode::Batched
             && let Err(e) = lib.set_write_mode(WriteMode::Batched)
         {
             self.flash(format!("Could not save: {e}"));
         }
-        if let Some(undo) = self.undo_request.take() {
-            let (from, to) = if undo { (&mut self.undo, &mut self.redo) } else { (&mut self.redo, &mut self.undo) };
+        if let Some(undo) = self.ws.undo_request.take() {
+            let (from, to) = if undo { (&mut self.ws.undo, &mut self.ws.redo) } else { (&mut self.ws.redo, &mut self.ws.undo) };
             match from.pop() {
                 None => self.flash(if undo { "Nothing to undo" } else { "Nothing to redo" }),
                 Some(tx) => {
@@ -1076,7 +1094,7 @@ impl App {
                         Ok(inverse) => {
                             push_capped(to, inverse);
                             // Reload the inspector's text from the restored item.
-                            self.edit = None;
+                            self.ws.edit = None;
                             self.flash(format!("{}: {label}", if undo { "Undid" } else { "Redid" }));
                         }
                         Err(e) => self.flash(format!("Could not save: {e}")),
@@ -1090,15 +1108,15 @@ impl App {
     /// End of a frame: the frame's edits become one undo step (a permanent
     /// delete clears the history instead), and pending writes are flushed.
     fn end_frame_edits(&mut self, lib: &mut Library) {
-        let labels = std::mem::take(&mut self.frame_labels);
+        let labels = std::mem::take(&mut self.ws.frame_labels);
         if let Some(mut tx) = lib.end_transaction() {
             if tx.irreversible {
-                self.undo.clear();
-                self.redo.clear();
+                self.ws.undo.clear();
+                self.ws.redo.clear();
             } else {
                 tx.label = undo_label(&labels);
-                push_capped(&mut self.undo, tx);
-                self.redo.clear();
+                push_capped(&mut self.ws.undo, tx);
+                self.ws.redo.clear();
             }
         }
         if lib.has_pending_writes()
@@ -1358,7 +1376,7 @@ impl App {
             self.switch_to = Some(Switch::Pick);
         }
         if icon_button(ui, Pos2::new(r - 79.0, cy), ic::PLUS, 18.0, true, "Create Folder").clicked() {
-            self.actions.push(Action::CreateFolder { parent: None });
+            self.ws.actions.push(Action::CreateFolder { parent: None });
         }
 
         // Library switcher.
@@ -1433,21 +1451,21 @@ impl App {
                         let Some(f) = logic::find_folder(&lib.metadata.folders, id) else { continue };
                         (ic::FOLDER, f.name.clone(), Scope::Folder(id.to_string()), cx.folder_counts.get(id).copied().unwrap_or(0))
                     };
-                    let active = self.scope == scope;
+                    let active = self.ws.scope == scope;
                     let resp = sidebar_row(ui, 0, glyph, &name, (count > 0).then_some(count), active, None);
                     if resp.clicked() {
                         self.go(scope);
                     }
                     resp.context_menu(|ui| {
                         if ui.button("Remove from Quick Access").clicked() {
-                            self.actions.push(Action::QuickRemove(id.to_string()));
+                            self.ws.actions.push(Action::QuickRemove(id.to_string()));
                         }
                     });
                 }
                 ui.add_space(8.0);
             }
             if section_with_add(ui, "Smart Folders", "Create Smart Folder") {
-                self.smart_dialog = Some(SmartDraft::default());
+                self.ws.smart_dialog = Some(SmartDraft::default());
             }
             let smart = lib.smart_folders();
             for sf in &smart {
@@ -1459,9 +1477,9 @@ impl App {
                 ui.painter().rect_stroke(header.rect.shrink2(vec2(11.0, 1.0)), t::RADIUS, Stroke::new(1.5, t::PRIMARY), StrokeKind::Inside);
             }
             if let Some(d) = header.dnd_release_payload::<DragFolder>() {
-                self.actions.push(Action::MoveFolder(d.0.clone(), None));
+                self.ws.actions.push(Action::MoveFolder(d.0.clone(), None));
             }
-            let filter = self.folder_filter.trim().to_lowercase();
+            let filter = self.ws.folder_filter.trim().to_lowercase();
             for f in &lib.metadata.folders {
                 self.folder_row(ui, lib, f, 0, &cx, &filter);
             }
@@ -1474,7 +1492,7 @@ impl App {
         let inner = Rect::from_min_max(Pos2::new(filter_rect.left() + 30.0, filter_rect.top()), filter_rect.max);
         ui.put(
             inner,
-            TextEdit::singleline(&mut self.folder_filter)
+            TextEdit::singleline(&mut self.ws.folder_filter)
                 .id_salt("folder-filter")
                 .frame(egui::Frame::NONE)
                 .margin(egui::Margin::ZERO)
@@ -1498,7 +1516,7 @@ impl App {
             (ic::TRASH, "Trash", Scope::Trash, n.trash),
         ];
         for (glyph, label, scope, count) in entries {
-            let active = match (&scope, &self.scope) {
+            let active = match (&scope, &self.ws.scope) {
                 (Scope::Random(_), Scope::Random(_)) => true,
                 (a, b) => a == b,
             };
@@ -1506,12 +1524,12 @@ impl App {
             if scope == Scope::Trash {
                 resp.context_menu(|ui| {
                     if ui.add_enabled(n.trash > 0, egui::Button::new("Empty Trash")).clicked() {
-                        self.confirm = Some(Confirm::EmptyTrash);
+                        self.ws.confirm = Some(Confirm::EmptyTrash);
                     }
                 });
                 drop_highlight(ui, &resp, 0);
                 if let Some(d) = resp.dnd_release_payload::<DragItems>() {
-                    self.actions.push(Action::Trash(d.0.clone(), true));
+                    self.ws.actions.push(Action::Trash(d.0.clone(), true));
                 }
             }
             if resp.clicked() {
@@ -1528,13 +1546,13 @@ impl App {
             return None;
         }
         // A locked folder keeps its subfolders hidden until it is unlocked.
-        let shut = crate::organize::is_shut(f, &self.org.unlocked);
+        let shut = crate::organize::is_shut(f, &self.ws.org.unlocked);
         let has_children = !f.children.is_empty() && !shut;
-        let open = has_children && (!filter.is_empty() || !self.collapsed.contains(&f.id));
-        let active = self.scope == Scope::Folder(f.id.clone());
+        let open = has_children && (!filter.is_empty() || !self.ws.collapsed.contains(&f.id));
+        let active = self.ws.scope == Scope::Folder(f.id.clone());
         let count = cx.folder_counts.get(&f.id).copied().filter(|_| !shut);
         let (glyph, tint) = App::folder_look(f, open);
-        let renaming = self.renaming.as_ref().is_some_and(|(id, _)| *id == f.id);
+        let renaming = self.ws.renaming.as_ref().is_some_and(|(id, _)| *id == f.id);
         let label = if renaming { "" } else { f.name.as_str() };
         let resp = sidebar_row_tinted(ui, depth, glyph, tint, label, count, active, has_children.then_some(open));
         let row_rect = resp.rect;
@@ -1548,7 +1566,7 @@ impl App {
             );
             ui.painter().rect_filled(r, CornerRadius::same(4), t::FIELD);
             ui.painter().rect_stroke(r, CornerRadius::same(4), Stroke::new(1.0, t::PRIMARY), StrokeKind::Inside);
-            let (_, buf) = self.renaming.as_mut().unwrap();
+            let (_, buf) = self.ws.renaming.as_mut().unwrap();
             let te = ui.put(
                 r.shrink2(vec2(4.0, 0.0)),
                 TextEdit::singleline(buf)
@@ -1563,10 +1581,10 @@ impl App {
             }
             let cancel = ui.input(|i| i.key_pressed(Key::Escape));
             if te.lost_focus() || cancel {
-                let (id, name) = self.renaming.take().unwrap();
+                let (id, name) = self.ws.renaming.take().unwrap();
                 let name = name.trim().to_string();
                 if !cancel && !name.is_empty() && name != f.name {
-                    self.actions.push(Action::RenameFolder(id, name));
+                    self.ws.actions.push(Action::RenameFolder(id, name));
                 }
             }
         }
@@ -1575,46 +1593,46 @@ impl App {
         }
         drop_highlight(ui, &resp, depth);
         if let Some(d) = resp.dnd_release_payload::<DragItems>() {
-            self.actions.push(Action::AddToFolder(d.0.clone(), f.id.clone()));
+            self.ws.actions.push(Action::AddToFolder(d.0.clone(), f.id.clone()));
         }
         self.folder_drop(ui, lib, &resp, f, depth);
         let pinned = cx.quick.contains(&f.id);
         resp.context_menu(|ui| {
             ui.set_min_width(180.0);
             if ui.add_enabled(!shut, egui::Button::new("New Subfolder")).clicked() {
-                self.actions.push(Action::CreateFolder { parent: Some(f.id.clone()) });
+                self.ws.actions.push(Action::CreateFolder { parent: Some(f.id.clone()) });
             }
             if ui.button("Rename").clicked() {
-                self.renaming = Some((f.id.clone(), f.name.clone()));
+                self.ws.renaming = Some((f.id.clone(), f.name.clone()));
             }
             if pinned {
                 if ui.button("Remove from Quick Access").clicked() {
-                    self.actions.push(Action::QuickRemove(f.id.clone()));
+                    self.ws.actions.push(Action::QuickRemove(f.id.clone()));
                 }
             } else if ui.button("Add to Quick Access").clicked() {
-                self.actions.push(Action::QuickAdd("folder", f.id.clone()));
+                self.ws.actions.push(Action::QuickAdd("folder", f.id.clone()));
             }
             if depth > 0 && ui.button("Move to Top Level").clicked() {
-                self.actions.push(Action::MoveFolder(f.id.clone(), None));
+                self.ws.actions.push(Action::MoveFolder(f.id.clone(), None));
             }
             self.folder_menu_extras(ui, f);
             ui.separator();
             if ui.button(RichText::new("Delete Folder").color(Color32::from_rgb(0xff, 0x66, 0x67))).clicked() {
-                self.confirm = Some(Confirm::DeleteFolder(f.id.clone()));
+                self.ws.confirm = Some(Confirm::DeleteFolder(f.id.clone()));
             }
         });
         if resp.clicked() {
             let caret = caret_rect(row_rect, depth);
             if has_children && resp.interact_pointer_pos().is_some_and(|p| caret.contains(p)) {
-                if !self.collapsed.remove(&f.id) {
-                    self.collapsed.insert(f.id.clone());
+                if !self.ws.collapsed.remove(&f.id) {
+                    self.ws.collapsed.insert(f.id.clone());
                 }
             } else {
                 self.go(Scope::Folder(f.id.clone()));
             }
         }
-        if resp.double_clicked() && has_children && !self.collapsed.remove(&f.id) {
-            self.collapsed.insert(f.id.clone());
+        if resp.double_clicked() && has_children && !self.ws.collapsed.remove(&f.id) {
+            self.ws.collapsed.insert(f.id.clone());
         }
         if open {
             let mut last_center = None;
@@ -1764,16 +1782,16 @@ impl App {
             }
             x += 30.0;
         }
-        if icon_button(ui, Pos2::new(x, cy), ic::CARET_LEFT, 17.0, !self.back.is_empty(), "").clicked() {
+        if icon_button(ui, Pos2::new(x, cy), ic::CARET_LEFT, 17.0, !self.ws.back.is_empty(), "").clicked() {
             self.go_back();
         }
-        if icon_button(ui, Pos2::new(x + 27.0, cy), ic::CARET_RIGHT, 17.0, !self.forward.is_empty(), "").clicked() {
+        if icon_button(ui, Pos2::new(x + 27.0, cy), ic::CARET_RIGHT, 17.0, !self.ws.forward.is_empty(), "").clicked() {
             self.go_forward();
         }
-        let title = if let Scope::Smart(id) = &self.scope {
+        let title = if let Scope::Smart(id) = &self.ws.scope {
             smart_name(lib, id)
-        } else if self.query.trim().is_empty() {
-            self.scope.title(&lib.metadata.folders)
+        } else if self.ws.query.trim().is_empty() {
+            self.ws.scope.title(&lib.metadata.folders)
         } else {
             "Search results".into()
         };
@@ -1797,9 +1815,9 @@ impl App {
         let own = self.own_sort(lib);
         egui::Popup::menu(&layout).show(|ui| self.layout_menu(ui, own));
         if filter.clicked() {
-            self.show_filter = !self.show_filter;
+            self.ws.show_filter = !self.ws.show_filter;
         }
-        if self.show_filter || self.filter.is_active() {
+        if self.ws.show_filter || self.ws.filter.is_active() {
             let r = Rect::from_center_size(filter.rect.center(), Vec2::splat(26.0));
             ui.painter().rect_stroke(r, t::RADIUS, Stroke::new(1.0, t::PRIMARY), StrokeKind::Inside);
         }
@@ -1822,7 +1840,7 @@ impl App {
         let inner = Rect::from_min_max(Pos2::new(rect.left() + 40.0, rect.top()), Pos2::new(rect.right() - 32.0, rect.bottom()));
         let resp = ui.put(
             inner,
-            TextEdit::singleline(&mut self.query)
+            TextEdit::singleline(&mut self.ws.query)
                 .id_salt("search")
                 .frame(egui::Frame::NONE)
                 .margin(egui::Margin::ZERO)
@@ -1866,9 +1884,9 @@ impl App {
         ui.set_min_width(190.0);
         ui.label(RichText::new("Layout").color(t::TEXT_MUTED).size(12.0));
         for l in Layout::ALL {
-            let mark = if l == self.layout { ic::CHECK } else { " " };
+            let mark = if l == self.ws.layout { ic::CHECK } else { " " };
             if ui.button(format!("{mark}  {}", l.label())).clicked() {
-                self.layout = l;
+                self.ws.layout = l;
             }
         }
         ui.separator();
@@ -1879,17 +1897,17 @@ impl App {
         }
         ui.label(RichText::new("Sort by").color(t::TEXT_MUTED).size(12.0));
         for k in OrderBy::ALL {
-            let mark = if k == self.sort { ic::CHECK } else { " " };
+            let mark = if k == self.ws.sort { ic::CHECK } else { " " };
             if ui.button(format!("{mark}  {}", k.label())).clicked() {
-                self.sort = k;
+                self.ws.sort = k;
             }
         }
         ui.separator();
-        let labels = if self.sort.is_time() { ["Newest First", "Oldest First"] } else { ["Ascending", "Descending"] };
+        let labels = if self.ws.sort.is_time() { ["Newest First", "Oldest First"] } else { ["Ascending", "Descending"] };
         for (inc, label) in [(true, labels[0]), (false, labels[1])] {
-            let mark = if inc == self.increase { ic::CHECK } else { " " };
+            let mark = if inc == self.ws.increase { ic::CHECK } else { " " };
             if ui.button(format!("{mark}  {label}")).clicked() {
-                self.increase = inc;
+                self.ws.increase = inc;
             }
         }
     }
@@ -1985,11 +2003,11 @@ impl App {
         let mut row = ui.new_child(egui::UiBuilder::new().max_rect(inner).layout(egui::Layout::left_to_right(egui::Align::Center)));
         let ui = &mut row;
         ui.spacing_mut().item_spacing.x = 6.0;
-        let f = &mut self.filter;
+        let f = &mut self.ws.filter;
 
         let color_val = f.color.map(|c| logic::hex(c.rgb));
         let resp = filter_chip(ui, "Color", color_val);
-        let color_text = &mut self.color_text;
+        let color_text = &mut self.ws.color_text;
         egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
             ui.set_min_width(230.0);
             ui.horizontal_wrapped(|ui| {
@@ -2143,26 +2161,26 @@ impl App {
             TextFilter::No => Some("None".to_string()),
             TextFilter::Keywords(k) => Some(k.join(", ")),
         };
-        let note_kw = &mut self.note_text;
+        let note_kw = &mut self.ws.note_text;
         let resp = filter_chip(ui, "Notes", label(&f.note));
         egui::Popup::menu(&resp)
             .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
             .show(|ui| text_filter_menu(ui, &mut f.note, note_kw));
-        let url_kw = &mut self.url_text;
+        let url_kw = &mut self.ws.url_text;
         let resp = filter_chip(ui, "URL", label(&f.url));
         egui::Popup::menu(&resp)
             .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
             .show(|ui| text_filter_menu(ui, &mut f.url, url_kw));
         self.media_filter_chips(ui, lib);
 
-        if self.filter.is_active() {
+        if self.ws.filter.is_active() {
             let clear = ui.add(egui::Button::new(RichText::new(format!("{}  Clear", ic::X)).color(t::TEXT_MUTED)).frame(false));
             if clear.clicked() {
-                self.filter = Filter::default();
+                self.ws.filter = Filter::default();
                 self.clear_media_filter_text();
-                self.color_text.clear();
-                self.note_text.clear();
-                self.url_text.clear();
+                self.ws.color_text.clear();
+                self.ws.note_text.clear();
+                self.ws.url_text.clear();
             }
         }
         self.saved_filters_menu(ui, lib);
@@ -2175,26 +2193,26 @@ impl App {
 impl App {
     fn grid(&mut self, ui: &mut Ui, lib: &Library) {
         let area = ui.max_rect();
-        let only: Option<HashSet<String>> = match &self.scope {
+        let only: Option<HashSet<String>> = match &self.ws.scope {
             Scope::Smart(id) => Some(lib.smart_folder_items(id).into_iter().map(|i| i.id.clone()).collect()),
             _ => None,
         };
         let order = self.grid_order(lib, only.as_ref());
         if let Some(gate) = self.scope_gate(lib) {
-            self.order.clear();
+            self.ws.order.clear();
             self.unlock_screen(ui, gate, lib);
             return;
         }
         let items: Vec<&Item> = order.iter().map(|&i| &lib.items()[i]).collect();
         let new_order: Vec<String> = items.iter().map(|i| i.id.clone()).collect();
-        let order_changed = self.hover.shown().is_some() && self.order != new_order;
-        self.order = new_order;
+        let order_changed = self.ws.hover.shown().is_some() && self.ws.order != new_order;
+        self.ws.order = new_order;
 
-        if self.scope == Scope::Duplicates {
+        if self.ws.scope == Scope::Duplicates {
             self.duplicates_page(ui, lib);
             return;
         }
-        if self.scope == Scope::AllTags && self.query.trim().is_empty() {
+        if self.ws.scope == Scope::AllTags && self.ws.query.trim().is_empty() {
             self.tag_page(ui, lib);
             return;
         }
@@ -2204,7 +2222,7 @@ impl App {
             return;
         }
 
-        let layout = self.layout;
+        let layout = self.ws.layout;
         let width = area.width() - 2.0 * GRID_PAD_X;
         let aspects: Vec<f32> = items
             .iter()
@@ -2212,16 +2230,16 @@ impl App {
             .collect();
         let caption = if layout.has_caption() { CARD_TEXT } else { 0.0 };
         let (places, content_h, cols) = logic::place(layout, &aspects, width, self.tile, GRID_GAP, caption, ROW_GAP);
-        self.columns = cols;
+        self.ws.columns = cols;
         let total_h = GRID_PAD_TOP + content_h + 20.0;
         let card_of = |n: usize| {
             let [x, y, w, h] = places[n];
             Rect::from_min_size(Pos2::new(GRID_PAD_X + x, GRID_PAD_TOP + y), vec2(w, h + caption))
         };
 
-        let mut scroll = egui::ScrollArea::vertical().id_salt(("grid", format!("{:?}", self.scope))).auto_shrink([false, false]);
-        if let Some(id) = self.scroll_to.take()
-            && let Some(pos) = self.order.iter().position(|x| *x == id)
+        let mut scroll = egui::ScrollArea::vertical().id_salt(("grid", format!("{:?}", self.ws.scope))).auto_shrink([false, false]);
+        if let Some(id) = self.ws.scroll_to.take()
+            && let Some(pos) = self.ws.order.iter().position(|x| *x == id)
         {
             let r = card_of(pos);
             let cur = ui.ctx().data(|d| d.get_temp::<f32>(ui.scope_id().with("grid-offset"))).unwrap_or(0.0);
@@ -2253,14 +2271,14 @@ impl App {
                 let card = local.translate(origin.to_vec2());
                 let resp = ui.interact(card, ui.scope_id().with(("card", &item.id)), Sense::click_and_drag());
                 if resp.drag_started() {
-                    let ids = if self.selected.contains(&item.id) { self.selected.clone() } else { vec![item.id.clone()] };
+                    let ids = if self.ws.selected.contains(&item.id) { self.ws.selected.clone() } else { vec![item.id.clone()] };
                     resp.dnd_set_drag_payload(DragItems(ids));
                 }
-                if resp.secondary_clicked() && !self.selected.contains(&item.id) {
-                    self.selected = vec![item.id.clone()];
+                if resp.secondary_clicked() && !self.ws.selected.contains(&item.id) {
+                    self.ws.selected = vec![item.id.clone()];
                 }
-                let scope_is_trash = self.scope == Scope::Trash;
-                let targets: Vec<String> = if self.selected.contains(&item.id) { self.selected.clone() } else { vec![item.id.clone()] };
+                let scope_is_trash = self.ws.scope == Scope::Trash;
+                let targets: Vec<String> = if self.ws.selected.contains(&item.id) { self.ws.selected.clone() } else { vec![item.id.clone()] };
                 resp.context_menu(|ui| {
                     ui.set_min_width(200.0);
                     if ui.button("Open").clicked() {
@@ -2276,7 +2294,7 @@ impl App {
                         egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
                             for f in lib.all_folders() {
                                 if ui.button(&f.name).clicked() {
-                                    self.actions.push(Action::AddToFolder(targets.clone(), f.id.clone()));
+                                    self.ws.actions.push(Action::AddToFolder(targets.clone(), f.id.clone()));
                                 }
                             }
                         });
@@ -2285,13 +2303,13 @@ impl App {
                     ui.separator();
                     if scope_is_trash {
                         if ui.button("Restore").clicked() {
-                            self.actions.push(Action::Trash(targets.clone(), false));
+                            self.ws.actions.push(Action::Trash(targets.clone(), false));
                         }
                         if ui.button(RichText::new("Delete Permanently").color(Color32::from_rgb(0xff, 0x66, 0x67))).clicked() {
-                            self.confirm = Some(Confirm::DeleteItems(targets.clone()));
+                            self.ws.confirm = Some(Confirm::DeleteItems(targets.clone()));
                         }
                     } else if ui.button("Move to Trash").clicked() {
-                        self.actions.push(Action::Trash(targets.clone(), true));
+                        self.ws.actions.push(Action::Trash(targets.clone(), true));
                     }
                 });
                 if resp.clicked() {
@@ -2300,7 +2318,7 @@ impl App {
                 if resp.double_clicked() {
                     opened = Some(item.id.clone());
                 }
-                let selected = self.selected.contains(&item.id);
+                let selected = self.ws.selected.contains(&item.id);
                 match layout {
                     Layout::List => self.list_row(ui, lib, item, card, selected, resp.hovered(), n),
                     _ => self.card(ui, lib, item, card, caption, selected, resp.hovered()),
@@ -2317,14 +2335,14 @@ impl App {
         let scrolled = ui.ctx().data(|d| d.get_temp::<f32>(ui.scope_id().with("grid-offset"))).is_some_and(|o| (o - offset).abs() > 0.5);
         ui.ctx().data_mut(|d| d.insert_temp(ui.scope_id().with("grid-offset"), offset));
         self.hover_preview(ui, lib, hovered, scrolled, order_changed || clicked.is_some() || opened.is_some());
-        self.frame_jobs.extend(jobs);
+        self.ws.frame_jobs.extend(jobs);
         if let Some((id, m)) = clicked {
             self.click(&id, m);
         } else if bg_clicked {
-            self.selected.clear();
+            self.ws.selected.clear();
         }
         if let Some(id) = opened {
-            self.viewer = Some(id);
+            self.ws.viewer = Some(id);
         }
     }
 
@@ -2332,8 +2350,8 @@ impl App {
     /// or filling it exactly (waterfall and justified boxes already have the
     /// image's shape).
     fn draw_image(&mut self, ui: &Ui, lib: &Library, item: &Item, rect: Rect, fill: bool) {
-        let failed = self.loader.has_failed(&item.id, Tier::Grid);
-        match self.loader.get(&item.id, Tier::Grid).cloned() {
+        let failed = self.ws.loader.has_failed(&item.id, Tier::Grid);
+        match self.ws.loader.get(&item.id, Tier::Grid).cloned() {
             Some(tex) => {
                 let natural = if item.width > 0 && item.height > 0 { vec2(item.width as f32, item.height as f32) } else { tex.size_vec2() };
                 let scale = (rect.width() / natural.x).min(rect.height() / natural.y);
@@ -2350,7 +2368,7 @@ impl App {
     #[allow(clippy::too_many_arguments)]
     fn card(&mut self, ui: &Ui, lib: &Library, item: &Item, card: Rect, caption: f32, selected: bool, hovered: bool) {
         let tile = Rect::from_min_max(card.min, Pos2::new(card.right(), card.bottom() - caption));
-        let grid = self.layout == Layout::Grid;
+        let grid = self.ws.layout == Layout::Grid;
         let p = ui.painter().clone();
         if grid {
             p.rect_filled(tile, t::RADIUS, t::MAIN);
@@ -2433,7 +2451,7 @@ impl App {
         if !self.prefs.hover_zoom || !crate::hover::has_zoom_button(&item.ext) {
             return false;
         }
-        let list = self.layout == Layout::List;
+        let list = self.ws.layout == Layout::List;
         let thumb = if list {
             Rect::from_min_size(Pos2::new(card.left() + 6.0, card.top() + 5.0), Vec2::splat(card.height() - 10.0))
         } else {
@@ -2456,7 +2474,7 @@ impl App {
         });
         let cancel = cancel
             || down
-            || self.viewer.is_some()
+            || self.ws.viewer.is_some()
             || egui::DragAndDrop::has_any_payload(&ctx)
             || self.native_drag.load(std::sync::atomic::Ordering::Relaxed);
         let input = hover::Input {
@@ -2467,12 +2485,12 @@ impl App {
             cancel,
             now,
         };
-        if let Some(wait) = self.hover.update(input) {
+        if let Some(wait) = self.ws.hover.update(input) {
             ctx.request_repaint_after(std::time::Duration::from_secs_f64(wait));
         }
-        let fade = ctx.animate_bool_with_time(egui::Id::unique("hover-preview-fade"), self.hover.shown().is_some(), 0.15);
-        let Some((item, card, _)) = hovered.filter(|h| self.hover.shown() == Some(h.0.id.as_str())) else { return };
-        let grid = self.loader.get(&item.id, Tier::Grid).cloned();
+        let fade = ctx.animate_bool_with_time(egui::Id::unique("hover-preview-fade"), self.ws.hover.shown().is_some(), 0.15);
+        let Some((item, card, _)) = hovered.filter(|h| self.ws.hover.shown() == Some(h.0.id.as_str())) else { return };
+        let grid = self.ws.loader.get(&item.id, Tier::Grid).cloned();
         let natural = match (item.width, item.height, &grid) {
             (w, h, _) if w > 0 && h > 0 => vec2(w as f32, h as f32),
             (_, _, Some(t)) => t.size_vec2(),
@@ -2483,9 +2501,9 @@ impl App {
         let original = hover::wants_original(&item.ext, item.width, item.height, rect.size() * ctx.pixels_per_point(), hover::GRID_SIDE);
         let full = if original {
             if let Some(j) = job_for(item, lib.root(), Tier::Full) {
-                self.frame_jobs.insert(0, j);
+                self.ws.frame_jobs.insert(0, j);
             }
-            self.loader.get(&item.id, Tier::Full).cloned()
+            self.ws.loader.get(&item.id, Tier::Full).cloned()
         } else {
             None
         };
@@ -2495,7 +2513,7 @@ impl App {
     }
 
     fn tag_page(&mut self, ui: &mut Ui, lib: &Library) {
-        let filter = self.tag_filter.trim().to_lowercase();
+        let filter = self.ws.tag_filter.trim().to_lowercase();
         let tags: Vec<(String, usize)> =
             logic::tag_counts(lib.items()).into_iter().filter(|(t, _)| filter.is_empty() || t.to_lowercase().contains(&filter)).collect();
         let starred: Vec<(String, usize)> =
@@ -2511,7 +2529,7 @@ impl App {
                 let inner = Rect::from_min_max(Pos2::new(rect.left() + 30.0, rect.top()), rect.max - vec2(8.0, 0.0));
                 ui.put(
                     inner,
-                    TextEdit::singleline(&mut self.tag_filter)
+                    TextEdit::singleline(&mut self.ws.tag_filter)
                         .id_salt("tag-filter")
                         .frame(egui::Frame::NONE)
                         .margin(egui::Margin::ZERO)
@@ -2562,18 +2580,18 @@ impl App {
     }
 
     fn tag_chip(&mut self, ui: &mut Ui, lib: &Library, tag: &str, n: usize) {
-        let renaming = self.tag_rename.as_ref().is_some_and(|(t, _)| t == tag);
+        let renaming = self.ws.tag_rename.as_ref().is_some_and(|(t, _)| t == tag);
         if renaming {
-            let (_, buf) = self.tag_rename.as_mut().unwrap();
+            let (_, buf) = self.ws.tag_rename.as_mut().unwrap();
             let te = ui.add(TextEdit::singleline(buf).id_salt(("tag-rename", tag)).desired_width(140.0).font(font(13.0)));
             if !te.has_focus() && !te.lost_focus() {
                 te.request_focus();
             }
             let cancel = ui.input(|i| i.key_pressed(Key::Escape));
             if te.lost_focus() || cancel {
-                let (from, to) = self.tag_rename.take().unwrap();
+                let (from, to) = self.ws.tag_rename.take().unwrap();
                 if !cancel && !to.trim().is_empty() && to.trim() != from {
-                    self.actions.push(Action::RenameTag(from, to.trim().to_string()));
+                    self.ws.actions.push(Action::RenameTag(from, to.trim().to_string()));
                 }
             }
             return;
@@ -2601,15 +2619,15 @@ impl App {
         resp.context_menu(|ui| {
             ui.set_min_width(180.0);
             if ui.button("Rename…").clicked() {
-                self.tag_rename = Some((tag.to_string(), tag.to_string()));
+                self.ws.tag_rename = Some((tag.to_string(), tag.to_string()));
             }
             if ui.button(if starred { "Unstar" } else { "Star" }).clicked() {
-                self.actions.push(Action::StarTag(tag.to_string(), !starred));
+                self.ws.actions.push(Action::StarTag(tag.to_string(), !starred));
             }
             self.tag_group_menu(ui, lib, tag);
             ui.separator();
             if ui.button(RichText::new("Delete Tag").color(Color32::from_rgb(0xff, 0x66, 0x67))).clicked() {
-                self.confirm = Some(Confirm::DeleteTag(tag.to_string()));
+                self.ws.confirm = Some(Confirm::DeleteTag(tag.to_string()));
             }
         });
         resp.on_hover_text("Click to show items · right-click to rename, star or delete. Renaming to an existing tag merges them.");
@@ -2649,10 +2667,10 @@ impl App {
         let mut ui = ui.new_child(egui::UiBuilder::new().max_rect(body));
         egui::ScrollArea::vertical().id_salt("inspector").auto_shrink([false, false]).show(&mut ui, |ui| {
             ui.spacing_mut().item_spacing.y = 9.0;
-            match self.selected.len() {
+            match self.ws.selected.len() {
                 0 => self.scope_inspector(ui, lib),
                 1 => {
-                    let id = self.selected[0].clone();
+                    let id = self.ws.selected[0].clone();
                     if let Some(item) = lib.item(&id).cloned() {
                         self.item_inspector(ui, lib, item);
                     }
@@ -2663,18 +2681,18 @@ impl App {
     }
 
     fn scope_inspector(&mut self, ui: &mut Ui, lib: &Library) {
-        let folder = match &self.scope {
+        let folder = match &self.ws.scope {
             Scope::Folder(id) => logic::find_folder(&lib.metadata.folders, id).cloned(),
             _ => None,
         };
-        let mut name = self.scope.title(&lib.metadata.folders);
+        let mut name = self.ws.scope.title(&lib.metadata.folders);
         let mut desc = folder.as_ref().map(|f| f.description.clone()).unwrap_or_default();
         field(ui, &mut name, "Name", 33.0, false, "scope-name");
         if folder.is_some() {
             field(ui, &mut desc, "Description", 33.0, false, "scope-desc");
         }
         divider(ui);
-        let items: Vec<&Item> = self.order.iter().filter_map(|id| lib.item(id)).collect();
+        let items: Vec<&Item> = self.ws.order.iter().filter_map(|id| lib.item(id)).collect();
         let size: u64 = items.iter().map(|i| i.size).sum();
         heading(ui, "Properties");
         prop(ui, "Items", &items.len().to_string());
@@ -2688,7 +2706,7 @@ impl App {
     }
 
     fn multi_inspector(&mut self, ui: &mut Ui, lib: &Library, n: usize) {
-        let items: Vec<&Item> = self.selected.iter().filter_map(|id| lib.item(id)).collect();
+        let items: Vec<&Item> = self.ws.selected.iter().filter_map(|id| lib.item(id)).collect();
         let ids: Vec<String> = items.iter().map(|i| i.id.clone()).collect();
         let size: u64 = items.iter().map(|i| i.size).sum();
 
@@ -2700,14 +2718,14 @@ impl App {
             let r = Rect::from_center_size(stack.center() + vec2(off, -off * 0.4), Vec2::splat(112.0));
             ui.painter().rect_filled(r, CornerRadius::same(6), t::FIELD);
             ui.painter().rect_stroke(r, CornerRadius::same(6), Stroke::new(1.0, t::FIELD_BORDER), StrokeKind::Inside);
-            if let Some(tex) = self.loader.get(&item.id, Tier::Grid).cloned() {
+            if let Some(tex) = self.ws.loader.get(&item.id, Tier::Grid).cloned() {
                 let ts = tex.size_vec2();
                 let sc = ((r.width() - 10.0) / ts.x).min((r.height() - 10.0) / ts.y);
                 let ir = Rect::from_center_size(r.center(), ts * sc);
                 egui::Image::new((tex.id(), ir.size())).corner_radius(4).paint_at(ui, ir);
             }
             if let Some(j) = job_for(item, lib.root(), Tier::Grid) {
-                self.frame_jobs.push(j);
+                self.ws.frame_jobs.push(j);
             }
         }
         ui.vertical_centered(|ui| ui.label(RichText::new(format!("{n} items selected")).size(15.0)));
@@ -2720,10 +2738,10 @@ impl App {
             ui.spacing_mut().item_spacing = vec2(6.0, 6.0);
             for tag in &common {
                 if chip(ui, tag, true).clicked() {
-                    self.actions.push(Action::BatchTag(ids.clone(), None, Some(tag.clone())));
+                    self.ws.actions.push(Action::BatchTag(ids.clone(), None, Some(tag.clone())));
                 }
             }
-            let buf = &mut self.batch_tag;
+            let buf = &mut self.ws.batch_tag;
             let r = ui.add(
                 TextEdit::singleline(buf)
                     .id_salt("batch-tag")
@@ -2733,7 +2751,7 @@ impl App {
                     .desired_width(120.0),
             );
             if r.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) && !buf.trim().is_empty() {
-                self.actions.push(Action::BatchTag(ids.clone(), Some(buf.trim().to_string()), None));
+                self.ws.actions.push(Action::BatchTag(ids.clone(), Some(buf.trim().to_string()), None));
                 buf.clear();
                 r.request_focus();
             }
@@ -2746,7 +2764,7 @@ impl App {
             egui::ScrollArea::vertical().max_height(320.0).show(ui, |ui| {
                 for f in lib.all_folders() {
                     if ui.button(&f.name).clicked() {
-                        self.actions.push(Action::AddToFolder(ids.clone(), f.id.clone()));
+                        self.ws.actions.push(Action::AddToFolder(ids.clone(), f.id.clone()));
                     }
                 }
             });
@@ -2757,21 +2775,21 @@ impl App {
         let stars: HashSet<u64> = items.iter().map(|i| i.extra.get("star").and_then(|v| v.as_u64()).unwrap_or(0)).collect();
         let shown = if stars.len() == 1 { stars.into_iter().next().unwrap_or(0) } else { 0 };
         if let Some(star) = rating(ui, shown) {
-            self.actions.push(Action::BatchRating(ids.clone(), star));
+            self.ws.actions.push(Action::BatchRating(ids.clone(), star));
         }
         prop(ui, "Items", &n.to_string());
         prop(ui, "Size", &logic::format_size(size));
         ui.add_space(4.0);
-        let trash = self.scope == Scope::Trash;
+        let trash = self.ws.scope == Scope::Trash;
         let label = if trash { "Restore All" } else { "Move All to Trash" };
         if wide_button(ui, ic::TRASH, label, true).clicked() {
-            self.actions.push(Action::Trash(ids, !trash));
+            self.ws.actions.push(Action::Trash(ids, !trash));
         }
     }
 
     fn item_inspector(&mut self, ui: &mut Ui, lib: &mut Library, item: Item) {
-        if self.edit.as_ref().is_none_or(|e| e.id != item.id) {
-            self.edit = Some(EditBuf {
+        if self.ws.edit.as_ref().is_none_or(|e| e.id != item.id) {
+            self.ws.edit = Some(EditBuf {
                 id: item.id.clone(),
                 name: item.name.clone(),
                 notes: item.annotation.clone(),
@@ -2785,7 +2803,7 @@ impl App {
         let aspect = if item.width > 0 && item.height > 0 { item.height as f32 / item.width as f32 } else { 1.0 };
         let ph = (w * aspect).clamp(80.0, 260.0);
         let (prect, presp) = ui.allocate_exact_size(vec2(w, ph), Sense::click());
-        if let Some(tex) = self.loader.get(&item.id, Tier::Preview) {
+        if let Some(tex) = self.ws.loader.get(&item.id, Tier::Preview) {
             let ts = if item.width > 0 { vec2(item.width as f32, item.height as f32) } else { tex.size_vec2() };
             let scale = (prect.width() / ts.x).min(prect.height() / ts.y).min(1.0);
             let r = Rect::from_center_size(prect.center(), ts * scale);
@@ -2794,10 +2812,10 @@ impl App {
             ext_placeholder(ui, prect, &item.ext);
         }
         if presp.double_clicked() {
-            self.viewer = Some(item.id.clone());
+            self.ws.viewer = Some(item.id.clone());
         }
         if let Some(j) = job_for(&item, lib.root(), Tier::Preview) {
-            self.frame_jobs.push(j);
+            self.ws.frame_jobs.push(j);
         }
 
         // Palette.
@@ -2815,9 +2833,9 @@ impl App {
                 let hit = ui.interact(Rect::from_center_size(center, Vec2::splat(d)), ui.scope_id().with(("swatch", n)), Sense::click());
                 let hex = logic::hex(c.color);
                 if hit.clicked() {
-                    self.filter.color = Some(ColorQuery::new(c.color));
-                    self.color_text = hex.clone();
-                    self.show_filter = true;
+                    self.ws.filter.color = Some(ColorQuery::new(c.color));
+                    self.ws.color_text = hex.clone();
+                    self.ws.show_filter = true;
                 }
                 if hit.secondary_clicked() {
                     ui.ctx().copy_text(hex.clone());
@@ -2828,9 +2846,9 @@ impl App {
         }
 
         let mut changed: Option<Item> = None;
-        let edit = self.edit.as_mut().unwrap();
+        let edit = self.ws.edit.as_mut().unwrap();
         let r = field(ui, &mut edit.name, "Title", 33.0, false, "item-name");
-        if std::mem::take(&mut self.focus_title) {
+        if std::mem::take(&mut self.ws.focus_title) {
             r.request_focus();
         }
         if r.lost_focus() && edit.name.trim() != item.name && !edit.name.trim().is_empty() {
@@ -2956,7 +2974,7 @@ impl App {
                     if let Some(tag) = add_tag {
                         let _ = lib.record_tag_use(&[tag]);
                     }
-                    if let Some(e) = self.edit.as_mut() {
+                    if let Some(e) = self.ws.edit.as_mut() {
                         e.name = lib.item(&item.id).map_or(e.name.clone(), |i| i.name.clone());
                     }
                 }
@@ -2968,7 +2986,7 @@ impl App {
 
 impl App {
     fn smart_dialog_ui(&mut self, ctx: &egui::Context, lib: &Library) {
-        let Some(mut d) = self.smart_dialog.take() else { return };
+        let Some(mut d) = self.ws.smart_dialog.take() else { return };
         let mut keep = true;
         let modal = egui::Modal::new(egui::Id::unique("smart-dialog")).show(ctx, |ui| {
             ui.set_width(520.0);
@@ -3053,7 +3071,7 @@ impl App {
             keep = false;
         }
         if keep {
-            self.smart_dialog = Some(d);
+            self.ws.smart_dialog = Some(d);
         }
     }
 }
@@ -3126,16 +3144,16 @@ fn wide_button(ui: &mut Ui, glyph: &str, label: &str, enabled: bool) -> Response
 
 impl App {
     fn viewer(&mut self, ctx: &egui::Context, ui: &mut Ui, lib: &Library) {
-        let Some(id) = self.viewer.clone() else { return };
+        let Some(id) = self.ws.viewer.clone() else { return };
         let Some(item) = lib.item(&id) else {
-            self.viewer = None;
+            self.ws.viewer = None;
             return;
         };
-        if self.view.id != id {
-            self.view = ViewState { id: id.clone(), ..Default::default() };
+        if self.ws.view.id != id {
+            self.ws.view = ViewState { id: id.clone(), ..Default::default() };
             if item.ext == "gif" {
-                self.view.frames = gif_frames(ctx, &item.original_path(lib.root()));
-                self.view.started = Some(Instant::now());
+                self.ws.view.frames = gif_frames(ctx, &item.original_path(lib.root()));
+                self.ws.view.started = Some(Instant::now());
             }
         }
         let screen = ui.max_rect();
@@ -3149,11 +3167,11 @@ impl App {
             let area = Rect::from_min_max(Pos2::new(screen.left(), bar.bottom()), screen.max);
 
             // The image: a GIF frame, the full render, or the preview.
-            let gif = (!self.view.frames.is_empty()).then(|| {
-                let total: f32 = self.view.frames.iter().map(|f| f.1).sum();
-                let mut t = self.view.started.map_or(0.0, |s| s.elapsed().as_secs_f32()) % total.max(0.01);
+            let gif = (!self.ws.view.frames.is_empty()).then(|| {
+                let total: f32 = self.ws.view.frames.iter().map(|f| f.1).sum();
+                let mut t = self.ws.view.started.map_or(0.0, |s| s.elapsed().as_secs_f32()) % total.max(0.01);
                 let mut pick = 0;
-                for (n, (_, d)) in self.view.frames.iter().enumerate() {
+                for (n, (_, d)) in self.ws.view.frames.iter().enumerate() {
                     if t < *d {
                         pick = n;
                         break;
@@ -3161,18 +3179,18 @@ impl App {
                     t -= d;
                 }
                 ctx.request_repaint_after(std::time::Duration::from_millis(15));
-                self.view.frames[pick].0.clone()
+                self.ws.view.frames[pick].0.clone()
             });
             let tex = gif
-                .or_else(|| self.loader.get(&id, Tier::Full).cloned())
-                .or_else(|| self.loader.get(&id, Tier::Preview).cloned());
+                .or_else(|| self.ws.loader.get(&id, Tier::Full).cloned())
+                .or_else(|| self.ws.loader.get(&id, Tier::Preview).cloned());
             let natural = if item.width > 0 && item.height > 0 {
                 vec2(item.width as f32, item.height as f32)
             } else {
                 tex.as_ref().map_or(Vec2::splat(512.0), |t| t.size_vec2())
             };
             let fit = ((area.width() - 80.0) / natural.x).min((area.height() - 80.0) / natural.y).min(1.0);
-            let scale = self.view.zoom.unwrap_or(fit);
+            let scale = self.ws.view.zoom.unwrap_or(fit);
 
             // Scroll or pinch zooms around the pointer; dragging pans.
             let resp = ui.interact(area, ui.scope_id().with("viewer-canvas"), Sense::click_and_drag());
@@ -3181,27 +3199,27 @@ impl App {
             if factor != 1.0 {
                 let new = (scale * factor).clamp(0.02, 32.0);
                 if let Some(pos) = pointer {
-                    let center = area.center() + self.view.pan;
+                    let center = area.center() + self.ws.view.pan;
                     let off = pos - center;
-                    self.view.pan += off - off * (new / scale);
+                    self.ws.view.pan += off - off * (new / scale);
                 }
-                self.view.zoom = Some(new);
+                self.ws.view.zoom = Some(new);
             }
             if resp.dragged() {
-                self.view.pan += resp.drag_delta();
-                if self.view.zoom.is_none() {
-                    self.view.zoom = Some(scale);
+                self.ws.view.pan += resp.drag_delta();
+                if self.ws.view.zoom.is_none() {
+                    self.ws.view.zoom = Some(scale);
                 }
             }
             if resp.double_clicked() {
-                self.view.zoom = None;
-                self.view.pan = Vec2::ZERO;
+                self.ws.view.zoom = None;
+                self.ws.view.pan = Vec2::ZERO;
             }
-            let scale = self.view.zoom.unwrap_or(fit);
-            if self.view.zoom.is_none() {
-                self.view.pan = Vec2::ZERO;
+            let scale = self.ws.view.zoom.unwrap_or(fit);
+            if self.ws.view.zoom.is_none() {
+                self.ws.view.pan = Vec2::ZERO;
             }
-            let r = Rect::from_center_size(area.center() + self.view.pan, natural * scale);
+            let r = Rect::from_center_size(area.center() + self.ws.view.pan, natural * scale);
             let mut clip = ui.new_child(egui::UiBuilder::new().max_rect(area));
             clip.set_clip_rect(area);
             match &tex {
@@ -3215,30 +3233,30 @@ impl App {
             window_drag(ui, bar, "viewer");
             let cy = bar.center().y;
             if icon_button(ui, Pos2::new(bar.left() + 98.0, cy), ic::CARET_LEFT, 17.0, true, "Back (Esc)").clicked() {
-                self.viewer = None;
+                self.ws.viewer = None;
             }
             let name = format!("{}.{}", item.name, item.ext);
             let g = galley(ui, &name, font(14.0), t::TEXT, 360.0);
             p.galley(Pos2::new(bar.left() + 120.0, cy - g.size().y / 2.0), g, t::TEXT);
             let mut x = bar.right() - 24.0;
             if icon_button(ui, Pos2::new(x, cy), ic::PLUS, 15.0, true, "Zoom In (+)").clicked() {
-                self.view.zoom = Some((scale * 1.25).min(32.0));
+                self.ws.view.zoom = Some((scale * 1.25).min(32.0));
             }
             x -= 28.0;
             p.text(Pos2::new(x, cy), Align2::CENTER_CENTER, format!("{:.0}%", scale * 100.0), mono(12.0), t::TEXT_VALUE);
             x -= 30.0;
             if icon_button(ui, Pos2::new(x, cy), ic::MINUS, 15.0, true, "Zoom Out (−)").clicked() {
-                self.view.zoom = Some((scale / 1.25).max(0.02));
+                self.ws.view.zoom = Some((scale / 1.25).max(0.02));
             }
             x -= 40.0;
             let actual = ui.put(Rect::from_center_size(Pos2::new(x, cy), vec2(46.0, 24.0)), egui::Button::new("1:1"));
             if actual.on_hover_text("Actual Size (1)").clicked() {
-                self.view.zoom = Some(1.0);
-                self.view.pan = Vec2::ZERO;
+                self.ws.view.zoom = Some(1.0);
+                self.ws.view.pan = Vec2::ZERO;
             }
             x -= 50.0;
             if ui.put(Rect::from_center_size(Pos2::new(x, cy), vec2(46.0, 24.0)), egui::Button::new("Fit")).on_hover_text("Zoom to Fit (0)").clicked() {
-                self.view.zoom = None;
+                self.ws.view.zoom = None;
             }
             self.edit_bar(ui, item, x - 50.0, cy);
 
@@ -3247,20 +3265,20 @@ impl App {
                 (i.key_pressed(Key::Num0), i.key_pressed(Key::Num1), i.key_pressed(Key::Plus) || i.key_pressed(Key::Equals), i.key_pressed(Key::Minus))
             });
             if k0 {
-                self.view.zoom = None;
+                self.ws.view.zoom = None;
             }
             if k1 {
-                self.view.zoom = Some(1.0);
-                self.view.pan = Vec2::ZERO;
+                self.ws.view.zoom = Some(1.0);
+                self.ws.view.pan = Vec2::ZERO;
             }
             if kp {
-                self.view.zoom = Some((scale * 1.25).min(32.0));
+                self.ws.view.zoom = Some((scale * 1.25).min(32.0));
             }
             if km {
-                self.view.zoom = Some((scale / 1.25).max(0.02));
+                self.ws.view.zoom = Some((scale / 1.25).max(0.02));
             }
             if let Some(j) = job_for(item, lib.root(), Tier::Full) {
-                self.frame_jobs.push(j);
+                self.ws.frame_jobs.push(j);
             }
         });
     }
@@ -3285,19 +3303,19 @@ impl App {
 impl eframe::App for App {
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         // Also runs on quit: nothing batched may be left unwritten.
-        if let Some(l) = &self.lib {
+        if let Some(l) = &self.ws.lib {
             let _ = lock(l).flush();
         }
         let saved = Saved {
-            library: self.lib.as_ref().map(|l| lock(l).root().to_path_buf()),
+            library: self.ws.lib.as_ref().map(|l| lock(l).root().to_path_buf()),
             tile: Some(self.tile),
-            sort: Some(self.sort.label().to_string()),
-            increase: Some(self.increase),
+            sort: Some(self.ws.sort.label().to_string()),
+            increase: Some(self.ws.increase),
             show_sidebar: Some(self.show_sidebar),
             show_inspector: Some(self.show_inspector),
-            collapsed: self.collapsed.iter().cloned().collect(),
+            collapsed: self.ws.collapsed.iter().cloned().collect(),
             recent: self.recent.clone(),
-            layout: Some(self.layout),
+            layout: Some(self.ws.layout),
             prefs: self.prefs.clone(),
             shortcuts: self.shortcuts.clone(),
             collect_pos: self.collect.pos.map(<[f32; 2]>::from),
@@ -3315,7 +3333,7 @@ impl eframe::App for App {
             // Come to the front on launch, like any Mac app.
             ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
         }
-        self.loader.poll(&ctx);
+        self.ws.loader.poll(&ctx);
 
         let dropped: Vec<PathBuf> = ctx.input(|i| i.raw.dropped_files.iter().map(|f| f.path().to_path_buf()).collect());
         // Our own items dragged out and back in must not import twice.
@@ -3332,7 +3350,7 @@ impl eframe::App for App {
             self.collect_window(&ctx);
         }
 
-        let Some(shared) = self.lib.clone() else {
+        let Some(shared) = self.ws.lib.clone() else {
             egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| self.empty_state(ui));
             return;
         };
@@ -3340,8 +3358,8 @@ impl eframe::App for App {
         let lib: &mut Library = &mut guard;
         self.begin_frame_edits(lib);
         // Items can vanish under the selection (deleted here or over the API).
-        if self.selected.iter().any(|id| lib.item(id).is_none()) {
-            self.selected.retain(|id| lib.item(id).is_some());
+        if self.ws.selected.iter().any(|id| lib.item(id).is_none()) {
+            self.ws.selected.retain(|id| lib.item(id).is_some());
         }
 
         if self.show_sidebar {
@@ -3377,7 +3395,7 @@ impl eframe::App for App {
             if self.progress_bar(&mut pui, pb) {
                 grid_top = pb.bottom();
             }
-            if self.show_filter {
+            if self.ws.show_filter {
                 let fb = Rect::from_min_size(Pos2::new(full.left(), bar.bottom()), vec2(full.width(), 40.0));
                 let mut fui = ui.new_child(egui::UiBuilder::new().max_rect(fb));
                 self.filter_bar(&mut fui, lib);
@@ -3388,7 +3406,7 @@ impl eframe::App for App {
             g.set_clip_rect(grid);
             self.grid(&mut g, lib);
 
-            if let Some((msg, at)) = &self.status {
+            if let Some((msg, at)) = &self.ws.status {
                 if at.elapsed().as_secs_f32() < 3.0 {
                     let gal = galley(ui, msg, font(13.0), t::TEXT, 400.0);
                     let r = Rect::from_center_size(Pos2::new(full.center().x, full.bottom() - 30.0), gal.size() + vec2(24.0, 14.0));
@@ -3396,16 +3414,16 @@ impl eframe::App for App {
                     ui.painter().galley(r.min + vec2(12.0, 7.0), gal, t::TEXT);
                     ctx.request_repaint_after(std::time::Duration::from_millis(250));
                 } else {
-                    self.status = None;
+                    self.ws.status = None;
                 }
             }
         });
-        if self.viewer.is_some() {
+        if self.ws.viewer.is_some() {
             let mut v = ui.new_child(egui::UiBuilder::new().max_rect(ctx.content_rect()));
             self.viewer(&ctx, &mut v, lib);
         }
         // Playback stops when the viewer closes or moves to another item.
-        if self.audio.loaded().is_some() && self.audio.loaded() != self.viewer.as_deref() {
+        if self.audio.loaded().is_some() && self.audio.loaded() != self.ws.viewer.as_deref() {
             self.audio.stop();
         }
         // Items dragged past the window edge become a macOS file drag, so
@@ -3450,11 +3468,11 @@ impl eframe::App for App {
             painter.rect_filled(r, CornerRadius::same(10), t::PRIMARY);
             painter.galley(r.min + vec2(8.0, 4.0), g, Color32::WHITE);
         }
-        if self.smart_dialog.is_some() {
+        if self.ws.smart_dialog.is_some() {
             self.smart_dialog_ui(&ctx, lib);
         }
         self.organize_dialogs(&ctx, lib);
-        if let Some(c) = self.confirm.clone() {
+        if let Some(c) = self.ws.confirm.clone() {
             let (title, detail, label) = match &c {
                 Confirm::DeleteFolder(id) => {
                     let name = logic::find_folder(&lib.metadata.folders, id).map_or_else(String::new, |f| f.name.clone());
@@ -3487,26 +3505,26 @@ impl eframe::App for App {
                 ui.add_space(10.0);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui.button(RichText::new(label).color(Color32::from_rgb(0xff, 0x66, 0x67))).clicked() {
-                        self.actions.push(match c.clone() {
+                        self.ws.actions.push(match c.clone() {
                             Confirm::DeleteFolder(id) => Action::DeleteFolder(id),
                             Confirm::DeleteItems(ids) => Action::DeletePermanently(ids),
                             Confirm::EmptyTrash => Action::EmptyTrash,
                             Confirm::DeleteTag(t) => Action::DeleteTag(t),
                         });
-                        self.confirm = None;
+                        self.ws.confirm = None;
                     }
                     if ui.button("Cancel").clicked() {
-                        self.confirm = None;
+                        self.ws.confirm = None;
                     }
                 });
             });
             if modal.should_close() {
-                self.confirm = None;
+                self.ws.confirm = None;
             }
         }
         self.apply_actions(lib);
         self.end_frame_edits(lib);
-        self.loader.want(std::mem::take(&mut self.frame_jobs));
+        self.ws.loader.want(std::mem::take(&mut self.ws.frame_jobs));
         drop(guard);
         match self.switch_to.take() {
             Some(Switch::Open(p)) => self.open(p),
