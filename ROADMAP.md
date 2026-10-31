@@ -64,7 +64,7 @@ Eagle features that need no online service, put off until after the list above.
 **App**
 - [x] Preferences
 - [x] Shortcut settings
-- [ ] Collect window
+- [x] Collect window
 - [ ] Localisation
 
 **HTTP API**

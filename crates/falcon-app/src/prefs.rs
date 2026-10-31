@@ -30,6 +30,9 @@ pub struct Prefs {
     pub api_enabled: bool,
     /// The first port the API tries.
     pub api_port: u16,
+    /// The folder the collect window adds items to (None: no folder).
+    /// Chosen in the collect window itself.
+    pub collect_folder: Option<String>,
 }
 
 impl Default for Prefs {
@@ -40,6 +43,7 @@ impl Default for Prefs {
             backup_on_change: true,
             api_enabled: true,
             api_port: falcon_server::DEFAULT_PORT,
+            collect_folder: None,
         }
     }
 }

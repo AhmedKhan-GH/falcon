@@ -45,6 +45,8 @@ struct Saved {
     recent: Vec<PathBuf>,
     layout: Option<Layout>,
     prefs: crate::prefs::Prefs,
+    /// Where the collect window was last.
+    collect_pos: Option<[f32; 2]>,
     /// Changed keyboard shortcuts (see `shortcuts.rs`).
     shortcuts: crate::shortcuts::Shortcuts,
 }
@@ -358,6 +360,8 @@ pub struct App {
     prefs: crate::prefs::Prefs,
     prefs_window: crate::prefs::Window,
     shortcuts: crate::shortcuts::Shortcuts,
+    /// The small always-on-top drop window (see `collect.rs`).
+    collect: crate::collect::Collect,
 }
 
 impl App {
@@ -418,6 +422,7 @@ impl App {
             prefs: Default::default(),
             prefs_window: Default::default(),
             shortcuts: Default::default(),
+            collect: Default::default(),
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
         app.tile = saved.tile.unwrap_or(app.tile).clamp(TILE_MIN, TILE_MAX);
@@ -430,6 +435,7 @@ impl App {
         app.layout = saved.layout.unwrap_or_default();
         app.prefs = saved.prefs.sanitized();
         app.shortcuts = saved.shortcuts;
+        app.collect.pos = saved.collect_pos.map(Pos2::from);
         // Reopen the last library unless one was given on the command line.
         if let Some(p) = initial.or(saved.library.filter(|p| p.is_dir())) {
             app.open(p);
@@ -507,7 +513,11 @@ impl App {
     /// Takes the Preferences window's Save or Apply.
     fn apply_preferences(&mut self, d: crate::prefs::Draft) {
         let restart = self.prefs.api_changed(&d.prefs);
+        // The collect folder is chosen in the collect window, which may
+        // have changed it while Preferences was open.
+        let folder = self.prefs.collect_folder.take();
         self.prefs = d.prefs;
+        self.prefs.collect_folder = folder;
         self.show_sidebar = d.panels.sidebar;
         self.show_inspector = d.panels.inspector;
         self.shortcuts = d.keys;
@@ -516,6 +526,20 @@ impl App {
             if self.lib.is_some() && !self.prefs.api_enabled {
                 self.flash("API stopped");
             }
+        }
+    }
+
+    /// Draws the collect window and imports what it receives into its
+    /// chosen folder.
+    fn collect_window(&mut self, ctx: &egui::Context) {
+        use crate::collect;
+        let folders = self.lib.as_ref().map(|l| collect::flatten(&lock(l).metadata.folders));
+        let event = self.collect.show(ctx, folders.as_deref(), &mut self.prefs.collect_folder, &self.shortcuts);
+        let target = folders.as_deref().and_then(|f| collect::target(f, self.prefs.collect_folder.as_deref())).into_iter().collect();
+        match event {
+            Some(collect::Event::Files(paths)) => self.import_into(paths, target),
+            Some(collect::Event::Paste) => self.paste_into(target),
+            None => {}
         }
     }
 
@@ -593,11 +617,20 @@ impl App {
     /// staged without the library lock, then committed under it, so the
     /// window stays responsive. Progress shows under the toolbar.
     fn import(&mut self, paths: Vec<PathBuf>) {
-        let Some(shared) = self.lib.clone() else { return };
-        let folders = match &self.scope {
+        let folders = self.scope_folders();
+        self.import_into(paths, folders);
+    }
+
+    /// The folder new items join: the one being viewed, if any.
+    fn scope_folders(&self) -> Vec<String> {
+        match &self.scope {
             Scope::Folder(id) => vec![id.clone()],
             _ => Vec::new(),
-        };
+        }
+    }
+
+    fn import_into(&mut self, paths: Vec<PathBuf>, folders: Vec<String>) {
+        let Some(shared) = self.lib.clone() else { return };
         let opts = ImportOptions { folders, ..Default::default() };
         let mut files = Vec::new();
         let mut stack = paths;
@@ -682,11 +715,16 @@ impl App {
 
     /// ⌘V in the grid: imports copied files, or a copied image as a PNG.
     fn paste(&mut self) {
+        let folders = self.scope_folders();
+        self.paste_into(folders);
+    }
+
+    fn paste_into(&mut self, folders: Vec<String>) {
         let Ok(mut clip) = arboard::Clipboard::new() else { return };
         if let Ok(files) = clip.get().file_list()
             && !files.is_empty()
         {
-            self.import(files);
+            self.import_into(files, folders);
             return;
         }
         if let Ok(img) = clip.get_image() {
@@ -695,7 +733,7 @@ impl App {
             let stamp = chrono::Local::now().format("%Y-%m-%d at %H.%M.%S");
             let path = dir.join(format!("Pasted image {stamp}.png"));
             if buf.save(&path).is_ok() {
-                self.import(vec![path.clone()]);
+                self.import_into(vec![path.clone()], folders);
             }
             let _ = std::fs::remove_file(path);
         }
@@ -714,6 +752,9 @@ impl App {
         }
         if ctx.input(|i| i.modifiers.command && i.key_pressed(Key::Z)) {
             self.undo_request = Some(!ctx.input(|i| i.modifiers.shift));
+        }
+        if on(C::CollectWindow) {
+            self.collect.toggle();
         }
         if self.viewer.is_none() {
             if on(C::Rename) && self.selected.len() == 1 {
@@ -1269,6 +1310,9 @@ impl App {
                 let _ = std::process::Command::new("open").arg("-R").arg(&current).spawn();
             }
             ui.separator();
+            if ui.button(if self.collect.open { "Hide Collect Window" } else { "Show Collect Window" }).clicked() {
+                self.collect.toggle();
+            }
             if ui.button("Preferences…").clicked() {
                 self.open_preferences();
             }
@@ -3133,6 +3177,7 @@ impl eframe::App for App {
             layout: Some(self.layout),
             prefs: self.prefs.clone(),
             shortcuts: self.shortcuts.clone(),
+            collect_pos: self.collect.pos.map(<[f32; 2]>::from),
         };
         eframe::set_value(storage, eframe::APP_KEY, &saved);
     }
@@ -3158,6 +3203,9 @@ impl eframe::App for App {
         self.keyboard(&ctx);
         if let Some(d) = self.prefs_window.show(&ctx) {
             self.apply_preferences(d);
+        }
+        if self.collect.open {
+            self.collect_window(&ctx);
         }
 
         let Some(shared) = self.lib.clone() else {

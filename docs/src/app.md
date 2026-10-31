@@ -11,7 +11,7 @@
 | Area | Features |
 |---|---|
 | Window | No title bar: the traffic lights sit over the sidebar, and empty bar space drags the window |
-| Library menu | Recent libraries, plus Open, Create, Show in Finder and Preferences. The last library, layout and sort reopen on launch |
+| Library menu | Recent libraries, plus Open, Create, Show in Finder, the collect window and Preferences. The last library, layout and sort reopen on launch |
 | Preferences | ⌘, or the library menu (see below) |
 | Sidebar | Eagle's fixed entries, Quick Access, smart folders, and a folder tree with guide lines and direct-item counts. You can filter it, create, rename, delete and drag-move folders, and drop items onto folders or the Trash |
 | Toolbar | Back and forward, zoom slider, layout and sort menu, filter bar toggle, search with Eagle's syntax, plus typo tolerance (see Search and filters) |
@@ -20,7 +20,7 @@
 | Inspector | **One item:** preview, palette (click a colour to search for it), editable title, notes and URL, tags, folders, rating and properties. **Several items:** a preview stack, shared tags, add a tag to all, add all to a folder, a shared rating, trash all |
 | Viewer | Zoom around the pointer, pan, fit (0), actual size (1), + and −, animated GIFs, and full-size QuickLook renders |
 | All Tags | A tag manager with a filter, starred tags, and rename, merge and delete |
-| Import | Drag and drop, ⌘V (files or images), and files passed to the app. Imports run in the background with a progress bar. PDF, video, PSD, AI, HEIC and RAW go through QuickLook |
+| Import | Drag and drop, ⌘V (files or images), files passed to the app, and the collect window (see below). Imports run in the background with a progress bar. PDF, video, PSD, AI, HEIC and RAW go through QuickLook |
 | Smart folders | Create and edit them with rule rows, matched by any or all |
 | Trash | Restore, Delete Permanently and Empty Trash, all with confirmation |
 | HTTP API | Runs while the app is open, from port 41596 up |
@@ -47,6 +47,7 @@ These are the defaults. All but the arrows, Esc and Z can be changed under Prefe
 | ⌥1 to ⌥4 | Grid, Justified, Waterfall and List layouts |
 | Esc | Close the viewer, or clear the selection |
 | Hold Z | Show the hover preview of the card under the pointer |
+| ⌘⇧K | Show or hide the collect window |
 | ⌘, | Preferences |
 
 ## Saving
@@ -108,6 +109,20 @@ What Eagle does, from `js/default-preferences.js`, `js/preferences.js`, `js/serv
 - Conflicts are checked within a group's `conflict` scope: player keys only clash with other player keys, everything else with everything else. A clashing chord is refused, the old one stays, and a note names the other command for 1.5 s.
 - Restore Defaults asks first, then reloads the defaults (plugin shortcuts too). The window has a shortcut search box; falcon has no search.
 - falcon keeps F2 for rename (Eagle's macOS default is ⌘R) and its own ids for commands Eagle lacks or names differently (`view.viewer`, `go.back`, `edit.select.all`) (inferred mapping).
+
+## Collect window
+
+⌘⇧K, or Show Collect Window in the library menu, opens a small (280 × 360 pt) borderless window that floats above all other apps. Files dropped on it, or pasted into it with ⌘V (copied files or image data), go through the normal background import into the folder picked in its list ("No folder" by default; a search box narrows the list by any part of a folder's path). The choice is saved with the preferences, and a folder that is missing from the open library counts as no folder. Drag the header to move it; ×, Esc or ⌘⇧K close it. Its position is remembered between launches. The code is in `crates/falcon-app/src/collect.rs`.
+
+It is a second OS window (an egui immediate viewport with `with_always_on_top` and `with_decorations(false)`). In eframe 0.37 each viewport has its own winit window and input, and `WindowEvent::DroppedFile` lands in that viewport's `raw.dropped_files`, so drops work on it directly; no fallback was needed. On a backend without multiple viewports egui draws it as a panel inside the main window instead, and drops there go to the main window's import.
+
+What Eagle's collect window is, from `collect-window/` and `js/background.js` (seen):
+
+- It is not a drop target. It opens for one incoming item, when the browser extension adds an image (`general.showCollectModal`, "ask me where to save", off by default, also switchable through the API) or after a screenshot (`general.showCaptureCollectModal`).
+- Left side (240 pt): the image preview with its dimensions, a 1–5 rating, an editable title and description, and tags. Right side: a searchable folder list with recent folders first, multi-select and creating a folder; choosing a folder saves the item there with the folder's auto-tags and closes the window.
+- The window is frameless with 8 pt rounded corners on a translucent background. Its size, position and always-on-top setting are set in Eagle's main process, which is not in the readable bundle (inferred: small, centred, on top).
+
+falcon keeps the folder chooser and the always-on-top window but works as a drop target, because falcon has no browser extension or screenshots yet. Not built: per-item title, description, rating and tags, recent folders, multi-select, creating a folder from the window, and dropping images straight from a browser (macOS hands winit only file drops, so browser image drags that carry no file are ignored).
 
 ## Running it
 

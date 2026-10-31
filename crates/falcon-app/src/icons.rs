@@ -35,4 +35,5 @@ pub const SIDEBAR_SIMPLE: &str = "\u{EC24}";
 pub const STAR: &str = "\u{E46A}";
 pub const TAG_SIMPLE: &str = "\u{E47A}";
 pub const TRASH: &str = "\u{E4A6}";
+pub const TRAY_ARROW_DOWN: &str = "\u{E010}";
 pub const X: &str = "\u{E4F6}";

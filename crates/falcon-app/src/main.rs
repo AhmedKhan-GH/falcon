@@ -1,4 +1,5 @@
 mod app;
+mod collect;
 mod hover;
 mod icons;
 mod loader;
