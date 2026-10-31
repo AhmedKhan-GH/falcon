@@ -12,7 +12,7 @@ use crate::error::{Error, Result};
 use crate::import::sanitize_name;
 use crate::library::{Library, write_json};
 use crate::ids;
-use crate::model::{Folder, Item};
+use crate::model::{Folder, FolderOrder, ICON_COLORS, Item};
 
 /// How many recent tags Eagle keeps in `historyTags`.
 const HISTORY_LIMIT: usize = 120;
@@ -165,24 +165,19 @@ impl Library {
 
 impl Library {
     /// Creates a folder at the end of `parent`'s children (or at the root)
-    /// and returns its id.
+    /// and returns its id. A subfolder takes its parent's icon and colour,
+    /// as Eagle's new-subfolder command does.
     pub fn create_folder(&mut self, parent: Option<&str>, name: &str) -> Result<String> {
         let id = ids::new_id();
-        let folder = Folder {
-            id: id.clone(),
-            name: name.to_string(),
-            description: String::new(),
-            children: Vec::new(),
-            modification_time: now_ms(),
-            tags: Vec::new(),
-            password: String::new(),
-            password_tips: String::new(),
-            extra: Default::default(),
-        };
+        let mut folder = Folder::new(id.clone(), name, now_ms());
         match parent {
             None => self.metadata.folders.push(folder),
             Some(p) => match find_mut(&mut self.metadata.folders, p) {
-                Some(f) => f.children.push(folder),
+                Some(f) => {
+                    folder.icon.clone_from(&f.icon);
+                    folder.icon_color.clone_from(&f.icon_color);
+                    f.children.push(folder)
+                }
                 None => return Err(self.missing(p)),
             },
         }
@@ -190,10 +185,43 @@ impl Library {
         Ok(id)
     }
 
-    /// Renames a folder. Eagle leaves its `modificationTime` alone.
+    /// Renames a folder. Eagle leaves its `modificationTime` alone and
+    /// recomputes the cached `pinyin`; falcon has no pinyin table, so it
+    /// copies a Latin-1 name (which is what Eagle's conversion yields) and
+    /// otherwise drops the key for Eagle to rebuild on load.
     pub fn rename_folder(&mut self, id: &str, name: &str) -> Result<()> {
         let Some(f) = find_mut(&mut self.metadata.folders, id) else { return Err(self.missing(id)) };
         f.name = name.to_string();
+        if f.pinyin.is_some() {
+            f.pinyin = name.chars().all(|c| (c as u32) < 256).then(|| name.to_string());
+        }
+        self.save_metadata()
+    }
+
+    /// Sets a folder's own sort, or clears it with `None` (both `orderBy`
+    /// and `sortIncrease` go). Eagle leaves `modificationTime` alone.
+    pub fn set_folder_order(&mut self, id: &str, order: Option<FolderOrder>, increase: bool) -> Result<()> {
+        let Some(f) = find_mut(&mut self.metadata.folders, id) else { return Err(self.missing(id)) };
+        f.order_by = order.map(|o| o.as_str().to_string());
+        f.sort_increase = order.map(|_| increase);
+        self.save_metadata()
+    }
+
+    /// Sets a folder's icon and icon colour; `None` removes the key (the
+    /// default icon or colour). Pass the current value to keep one. The
+    /// colour must be one of [`ICON_COLORS`].
+    pub fn set_folder_icon(&mut self, id: &str, icon: Option<&str>, color: Option<&str>) -> Result<()> {
+        self.check_color(color)?;
+        let Some(f) = find_mut(&mut self.metadata.folders, id) else { return Err(self.missing(id)) };
+        f.icon = icon.map(str::to_string);
+        f.icon_color = color.map(str::to_string);
+        self.save_metadata()
+    }
+
+    /// Sets the item shown as a folder's cover, or removes `coverId`.
+    pub fn set_folder_cover(&mut self, id: &str, item: Option<&str>) -> Result<()> {
+        let Some(f) = find_mut(&mut self.metadata.folders, id) else { return Err(self.missing(id)) };
+        f.cover_id = item.map(str::to_string);
         self.save_metadata()
     }
 
@@ -235,27 +263,32 @@ impl Library {
     /// siblings as Eagle appends. Moving a folder into itself or one of its
     /// descendants is refused.
     pub fn move_folder(&mut self, id: &str, parent: Option<&str>) -> Result<()> {
-        if let Some(p) = parent {
-            let inside = find_mut(&mut self.metadata.folders, id).is_some_and(|f| {
-                let mut hit = false;
-                f.walk(&mut |x| hit |= x.id == p);
-                hit
-            });
+        self.reorder_folder(id, parent, usize::MAX)
+    }
+
+    /// Moves a folder under `new_parent` (or to the root) at position
+    /// `index` among its new siblings, counted after it has left its old
+    /// place; an index past the end appends. Use it with the same parent to
+    /// reorder siblings. Moving a folder into itself or one of its
+    /// descendants is refused, and nothing changes on any error.
+    pub fn reorder_folder(&mut self, id: &str, new_parent: Option<&str>, index: usize) -> Result<()> {
+        let Some(folder) = find_mut(&mut self.metadata.folders, id) else { return Err(self.missing(id)) };
+        if let Some(p) = new_parent {
+            let mut inside = false;
+            folder.walk(&mut |x| inside |= x.id == p);
             if inside {
-                return Err(Error::Import { path: self.root().to_path_buf(), reason: "cannot move a folder into itself".into() });
+                return Err(self.invalid("cannot move a folder into itself"));
+            }
+            if find_mut(&mut self.metadata.folders, p).is_none() {
+                return Err(self.missing(p));
             }
         }
-        let Some(folder) = remove(&mut self.metadata.folders, id) else { return Err(self.missing(id)) };
-        match parent {
-            None => self.metadata.folders.push(folder),
-            Some(p) => match find_mut(&mut self.metadata.folders, p) {
-                Some(f) => f.children.push(folder),
-                None => {
-                    self.metadata.folders.push(folder);
-                    return Err(self.missing(p));
-                }
-            },
-        }
+        let folder = remove(&mut self.metadata.folders, id).ok_or_else(|| self.missing(id))?;
+        let siblings = match new_parent {
+            None => &mut self.metadata.folders,
+            Some(p) => &mut find_mut(&mut self.metadata.folders, p).expect("parent checked above").children,
+        };
+        siblings.insert(index.min(siblings.len()), folder);
         self.save_metadata()
     }
 
@@ -282,6 +315,18 @@ impl Library {
 
     fn missing(&self, id: &str) -> Error {
         Error::Import { path: self.root().to_path_buf(), reason: format!("no folder {id}") }
+    }
+
+    pub(crate) fn invalid(&self, reason: impl Into<String>) -> Error {
+        Error::Import { path: self.root().to_path_buf(), reason: reason.into() }
+    }
+
+    /// Refuses a colour outside Eagle's palette.
+    pub(crate) fn check_color(&self, color: Option<&str>) -> Result<()> {
+        match color {
+            Some(c) if !ICON_COLORS.contains(&c) => Err(self.invalid(format!("unknown colour {c}"))),
+            _ => Ok(()),
+        }
     }
 }
 

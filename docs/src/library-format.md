@@ -21,7 +21,30 @@ Assets.library/
 
 The top-level keys, in this order, are `folders`, `smartFolders`, `quickAccess`, `tagsGroups`, `modificationTime` and `applicationVersion`.
 
-`folders` is a recursive tree. Each node has `id`, `name`, `description`, `children`, `modificationTime`, `tags`, `password` and `passwordTips`.
+`folders` is a recursive tree. Eagle rebuilds every node in a fixed key order each time it saves, and leaves out keys whose value is unset. The fixture's folders carry only the always-present keys.
+
+| Key | Type | Notes |
+|---|---|---|
+| `id` | string | See [IDs](ids.md) |
+| `name`, `description` | string | `description` is `""` when empty |
+| `children` | array | Child folders, in sidebar order |
+| `modificationTime` | integer | ms. Set when the folder is created or duplicated. Renames, icons, sorting, passwords and moves leave it alone (observed) |
+| `tags` | string array | Tags given to items added to the folder |
+| `extendTags` | string array | Optional. The folder's tags plus its ancestors', which Eagle works out on load and saves back |
+| `icon` | string | Optional. A name from the icon picker (see below). No key means the default folder icon |
+| `iconColor` | string | Optional. `red`, `orange`, `yellow`, `green`, `aqua`, `blue`, `purple` or `pink`. No key means the default grey |
+| `pinyin` | string | Optional. A romanised name cached for search. Latin characters map to themselves, so for English names it equals `name` |
+| `password` | string | Always present. `""` when unset (see passwords below) |
+| `passwordTips` | string | Always present. The hint, `""` when unset |
+| `coverId` | string | Optional. The item shown as the folder's cover |
+| `orderBy` | string | Optional. The folder's own sort (see below) |
+| `sortIncrease` | bool | Written with `orderBy`. `true` is ascending |
+
+**Sort keys (observed):** `IMPORT`, `MTIME`, `BTIME`, `NAME`, `EXT`, `FILESIZE`, `RESOLUTION`, `RATING`, `DURATION` and `RANDOM` are in the folder menu. `TAGS` is in the main sort menu, and `MANUAL` (a hand-arranged order, kept per folder in each item's `order` map) is honoured when present. No `orderBy` key means the folder follows the global sort. Choosing a sort sets `sortIncrease` to `true` if it was unset. Clearing it deletes both keys.
+
+**Icons (observed):** the picker offers 161 names. Falcon lists them in `falcon_library::model::FOLDER_ICONS`, spelled exactly as Eagle stores them (including `excalmation`, `airplan` and `rophy`). Picking the first, blank entry deletes the key. A new subfolder takes its parent's `icon` and `iconColor`.
+
+**Ordering:** the array order is the sidebar order. Dragging a folder between siblings moves it in its parent's `children`. Dropping a folder onto another one appends it to that folder's children.
 
 ## Item `metadata.json` (observed)
 

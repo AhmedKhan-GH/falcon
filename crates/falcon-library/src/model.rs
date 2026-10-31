@@ -31,7 +31,13 @@ pub struct LibraryMetadata {
 }
 
 /// A node in the folder tree.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+///
+/// Eagle writes the keys in this order: `id`, `name`, `description`,
+/// `children`, `modificationTime`, `tags`, `extendTags`, `icon`, `iconColor`,
+/// `pinyin`, `password`, `passwordTips`, `coverId`, then `orderBy` and
+/// `sortIncrease` when the folder has its own sort. Optional keys are left
+/// out when unset, as `JSON.stringify` drops `undefined`.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Folder {
     /// Folder id.
@@ -42,26 +48,194 @@ pub struct Folder {
     pub description: String,
     /// Child folders.
     pub children: Vec<Folder>,
-    /// Last modification time, ms since epoch.
+    /// Creation time, ms since epoch. Eagle sets it when the folder is
+    /// created or duplicated and leaves it alone on later edits.
     pub modification_time: u64,
     /// Tags attached to the folder.
     pub tags: Vec<String>,
-    /// Password (empty when unset).
+    /// The folder's tags plus its ancestors', which Eagle caches on load.
+    pub extend_tags: Option<Vec<String>>,
+    /// Icon name from [`FOLDER_ICONS`]; absent for the default folder icon.
+    pub icon: Option<String>,
+    /// Icon colour from [`ICON_COLORS`]; absent for the default colour.
+    pub icon_color: Option<String>,
+    /// Romanised name Eagle caches for search (the name itself for Latin text).
+    pub pinyin: Option<String>,
+    /// Base64 of the password's Latin-1 bytes, or empty when unset. See
+    /// [`Folder::is_locked`].
     pub password: String,
-    /// Password hint.
+    /// Password hint (empty when unset).
     pub password_tips: String,
+    /// Id of the item shown as the folder's cover.
+    pub cover_id: Option<String>,
+    /// The folder's own sort key (see [`FolderOrder`]); absent to follow the
+    /// global sort.
+    pub order_by: Option<String>,
+    /// Ascending when true; written alongside `orderBy`.
+    pub sort_increase: Option<bool>,
     /// Unknown keys.
     #[serde(flatten)]
     pub extra: Extra,
 }
 
+impl Serialize for Folder {
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        let mut m = s.serialize_map(None)?;
+        m.serialize_entry("id", &self.id)?;
+        m.serialize_entry("name", &self.name)?;
+        m.serialize_entry("description", &self.description)?;
+        m.serialize_entry("children", &self.children)?;
+        m.serialize_entry("modificationTime", &self.modification_time)?;
+        m.serialize_entry("tags", &self.tags)?;
+        if let Some(v) = &self.extend_tags {
+            m.serialize_entry("extendTags", v)?;
+        }
+        if let Some(v) = &self.icon {
+            m.serialize_entry("icon", v)?;
+        }
+        if let Some(v) = &self.icon_color {
+            m.serialize_entry("iconColor", v)?;
+        }
+        if let Some(v) = &self.pinyin {
+            m.serialize_entry("pinyin", v)?;
+        }
+        m.serialize_entry("password", &self.password)?;
+        m.serialize_entry("passwordTips", &self.password_tips)?;
+        if let Some(v) = &self.cover_id {
+            m.serialize_entry("coverId", v)?;
+        }
+        if let Some(v) = &self.order_by {
+            m.serialize_entry("orderBy", v)?;
+        }
+        if let Some(v) = &self.sort_increase {
+            m.serialize_entry("sortIncrease", v)?;
+        }
+        for (k, v) in &self.extra {
+            m.serialize_entry(k, v)?;
+        }
+        m.end()
+    }
+}
+
 impl Folder {
+    /// A new, empty folder in the shape Eagle writes.
+    pub fn new(id: impl Into<String>, name: impl Into<String>, modification_time: u64) -> Folder {
+        Folder {
+            id: id.into(),
+            name: name.into(),
+            description: String::new(),
+            children: Vec::new(),
+            modification_time,
+            tags: Vec::new(),
+            extend_tags: None,
+            icon: None,
+            icon_color: None,
+            pinyin: None,
+            password: String::new(),
+            password_tips: String::new(),
+            cover_id: None,
+            order_by: None,
+            sort_increase: None,
+            extra: Extra::new(),
+        }
+    }
+
     /// Visits this folder and all descendants, depth first.
     pub fn walk<'a>(&'a self, f: &mut impl FnMut(&'a Folder)) {
         f(self);
         for c in &self.children {
             c.walk(f);
         }
+    }
+
+    /// The folder's own sort, if it has one Eagle knows.
+    pub fn order(&self) -> Option<FolderOrder> {
+        self.order_by.as_deref().and_then(FolderOrder::parse)
+    }
+}
+
+/// Icon colours Eagle offers for folders, smart folders and tag groups, in
+/// menu order. No colour key means the default (grey).
+pub const ICON_COLORS: [&str; 8] = ["red", "orange", "yellow", "green", "aqua", "blue", "purple", "pink"];
+
+/// Icon names Eagle's folder and smart-folder icon picker offers, in picker
+/// order (spellings as Eagle stores them). No `icon` key means the default
+/// folder icon.
+pub const FOLDER_ICONS: &[&str] = &[
+    "library", "box", "grid", "layer", "briefcase", "photo", "photos", "video", "film", "film2", "film3", "music",
+    "book", "book2", "bookshelf", "keynote", "camera", "aperture", "attachment", "scissors", "palette", "wrench",
+    "helmet", "life-buoy", "graph", "graph2", "tableware", "cog", "bachelor-cap", "cones", "dribbble", "email",
+    "business-card", "coffee", "cart", "lightbulb", "inspiration", "thumb-up", "thumb-down", "like", "unlike", "star",
+    "hot", "upload", "download", "paid", "free", "medical", "shield", "search", "shortcuts", "recycle", "excalmation",
+    "question", "coin1", "coin2", "coin3", "coin4", "wallet", "watch", "clock", "calendar-week", "calendar-month",
+    "website", "phone", "tablet", "desktop", "tv", "cpu", "safari", "chrome", "pie", "bar-chart", "line-chart", "2d",
+    "3d", "contrast", "texture", "transition", "animation", "spectrogram", "font-sans", "font-sans-serif",
+    "font-handwritten", "flag", "earth", "pin", "pin-check", "map", "road", "motor", "rocket", "airplan", "ship",
+    "train", "car", "truck", "water-drop", "sun", "moon", "tree", "mountain", "cloud", "bathtub", "door", "bed",
+    "cabinet", "sofa", "home", "store", "house", "game", "weapon", "armor", "award2", "award", "award3", "crown",
+    "rophy", "gift", "facebook", "twitter", "instagram", "eye", "bear", "dog", "cat", "man", "woman", "group", "smile",
+    "meh", "frown", "die", "baby", "kid", "angel", "demon", "hand", "brain", "number0", "number1", "number2", "number3",
+    "number4", "number5", "number6", "number7", "number8", "number9", "number10", "number11", "number12", "number13",
+    "number14", "number15", "number16", "number17", "number18", "number19", "number20",
+];
+
+/// A folder's or smart folder's own sort key, stored as `orderBy`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FolderOrder {
+    /// One of the keys the main list also sorts by.
+    By(crate::search::OrderBy),
+    /// Video and audio length.
+    Duration,
+    /// Shuffled on every visit.
+    Random,
+    /// Hand-arranged order, kept per folder in each item's `order` map.
+    Manual,
+}
+
+impl From<crate::search::OrderBy> for FolderOrder {
+    fn from(o: crate::search::OrderBy) -> Self {
+        FolderOrder::By(o)
+    }
+}
+
+impl FolderOrder {
+    /// Eagle's string for this key.
+    pub fn as_str(self) -> &'static str {
+        use crate::search::OrderBy as O;
+        match self {
+            FolderOrder::By(O::Import) => "IMPORT",
+            FolderOrder::By(O::Name) => "NAME",
+            FolderOrder::By(O::Ext) => "EXT",
+            FolderOrder::By(O::Resolution) => "RESOLUTION",
+            FolderOrder::By(O::FileSize) => "FILESIZE",
+            FolderOrder::By(O::Rating) => "RATING",
+            FolderOrder::By(O::Btime) => "BTIME",
+            FolderOrder::By(O::Mtime) => "MTIME",
+            FolderOrder::By(O::Tags) => "TAGS",
+            FolderOrder::Duration => "DURATION",
+            FolderOrder::Random => "RANDOM",
+            FolderOrder::Manual => "MANUAL",
+        }
+    }
+
+    /// Parses Eagle's string; `None` for anything unknown.
+    pub fn parse(s: &str) -> Option<FolderOrder> {
+        use crate::search::OrderBy as O;
+        Some(match s {
+            "IMPORT" => O::Import.into(),
+            "NAME" => O::Name.into(),
+            "EXT" => O::Ext.into(),
+            "RESOLUTION" => O::Resolution.into(),
+            "FILESIZE" => O::FileSize.into(),
+            "RATING" => O::Rating.into(),
+            "BTIME" => O::Btime.into(),
+            "MTIME" => O::Mtime.into(),
+            "TAGS" => O::Tags.into(),
+            "DURATION" => FolderOrder::Duration,
+            "RANDOM" => FolderOrder::Random,
+            "MANUAL" => FolderOrder::Manual,
+            _ => return None,
+        })
     }
 }
 
@@ -280,5 +454,33 @@ impl<'de> Deserialize<'de> for MtimeIndex {
             }
         }
         Ok(out)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn folder_with_every_optional_key_round_trips() {
+        let json = r#"{"id":"MVP1BZ7QBLH3P","name":"Logos","description":"d","children":[{"id":"MVP1BZ7UEGUE3","name":"Red","description":"","children":[],"modificationTime":2,"tags":[],"password":"","passwordTips":""}],"modificationTime":1,"tags":["a"],"extendTags":["a"],"icon":"palette","iconColor":"red","pinyin":"Logos","password":"MTIz","passwordTips":"hint","coverId":"MVP1BZ81EWQ4O","orderBy":"RANDOM","sortIncrease":false}"#;
+        let f: Folder = serde_json::from_str(json).unwrap();
+        assert!(f.extra.is_empty());
+        assert_eq!(f.order(), Some(FolderOrder::Random));
+        assert_eq!(f.icon_color.as_deref(), Some("red"));
+        assert_eq!(serde_json::to_string(&f).unwrap(), json);
+    }
+
+    #[test]
+    fn folder_order_names_round_trip() {
+        for o in crate::search::OrderBy::ALL {
+            let f = FolderOrder::from(o);
+            assert_eq!(FolderOrder::parse(f.as_str()), Some(f));
+        }
+        for s in ["DURATION", "RANDOM", "MANUAL"] {
+            assert_eq!(FolderOrder::parse(s).unwrap().as_str(), s);
+        }
+        assert_eq!(FolderOrder::parse("nope"), None);
+        assert_eq!(FOLDER_ICONS.len(), 161);
     }
 }
