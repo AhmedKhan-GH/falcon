@@ -1,6 +1,7 @@
 //! Phosphor icon codepoints (MIT, see assets/PHOSPHOR-LICENSE-MIT), picked to
 //! match the glyphs Eagle uses.
 
+pub const ARROW_COUNTER_CLOCKWISE: &str = "\u{E038}";
 pub const ARROWS_LEFT_RIGHT: &str = "\u{E0A0}";
 pub const BOOKMARK_SIMPLE: &str = "\u{E0EA}";
 pub const CAMERA: &str = "\u{E10E}";
@@ -21,6 +22,7 @@ pub const FOLDER_STAR: &str = "\u{EA86}";
 pub const FUNNEL: &str = "\u{E266}";
 pub const GEAR: &str = "\u{E270}";
 pub const IMAGES: &str = "\u{E836}";
+pub const KEYBOARD: &str = "\u{E2D8}";
 pub const LAYOUT: &str = "\u{E6D6}";
 pub const LIGHTNING: &str = "\u{E2DE}";
 pub const MAGNIFYING_GLASS: &str = "\u{E30C}";

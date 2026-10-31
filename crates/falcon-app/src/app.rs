@@ -45,6 +45,8 @@ struct Saved {
     recent: Vec<PathBuf>,
     layout: Option<Layout>,
     prefs: crate::prefs::Prefs,
+    /// Changed keyboard shortcuts (see `shortcuts.rs`).
+    shortcuts: crate::shortcuts::Shortcuts,
 }
 
 /// Ids being dragged from the grid.
@@ -355,6 +357,7 @@ pub struct App {
     frame_labels: Vec<String>,
     prefs: crate::prefs::Prefs,
     prefs_window: crate::prefs::Window,
+    shortcuts: crate::shortcuts::Shortcuts,
 }
 
 impl App {
@@ -414,6 +417,7 @@ impl App {
             frame_labels: Vec::new(),
             prefs: Default::default(),
             prefs_window: Default::default(),
+            shortcuts: Default::default(),
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
         app.tile = saved.tile.unwrap_or(app.tile).clamp(TILE_MIN, TILE_MAX);
@@ -425,6 +429,7 @@ impl App {
         app.recent = saved.recent.into_iter().filter(|p| p.is_dir()).collect();
         app.layout = saved.layout.unwrap_or_default();
         app.prefs = saved.prefs.sanitized();
+        app.shortcuts = saved.shortcuts;
         // Reopen the last library unless one was given on the command line.
         if let Some(p) = initial.or(saved.library.filter(|p| p.is_dir())) {
             app.open(p);
@@ -496,7 +501,7 @@ impl App {
 
     fn open_preferences(&mut self) {
         let panels = crate::prefs::Panels { sidebar: self.show_sidebar, inspector: self.show_inspector };
-        self.prefs_window.show_with(crate::prefs::Draft { prefs: self.prefs.clone(), panels });
+        self.prefs_window.show_with(crate::prefs::Draft { prefs: self.prefs.clone(), panels, keys: self.shortcuts.clone() });
     }
 
     /// Takes the Preferences window's Save or Apply.
@@ -505,6 +510,7 @@ impl App {
         self.prefs = d.prefs;
         self.show_sidebar = d.panels.sidebar;
         self.show_inspector = d.panels.inspector;
+        self.shortcuts = d.keys;
         if restart {
             self.start_server();
             if self.lib.is_some() && !self.prefs.api_enabled {
@@ -696,7 +702,11 @@ impl App {
     }
 
     fn keyboard(&mut self, ctx: &egui::Context) {
-        if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::Comma)) && !self.prefs_window.open {
+        // Rebindable keys go through the shortcut table (`shortcuts.rs`).
+        use crate::shortcuts::Command as C;
+        let pressed = ctx.input(|i| self.shortcuts.pressed(i));
+        let on = |c: C| pressed.contains(&c);
+        if on(C::Preferences) && !self.prefs_window.open {
             self.open_preferences();
         }
         if self.prefs_window.open || ctx.memory(|m| m.focused().is_some()) {
@@ -705,70 +715,65 @@ impl App {
         if ctx.input(|i| i.modifiers.command && i.key_pressed(Key::Z)) {
             self.undo_request = Some(!ctx.input(|i| i.modifiers.shift));
         }
-        let (f2, find, back, fwd, zin, zout, newf, copy) = ctx.input(|i| {
-            let c = i.modifiers.command;
-            (
-                i.key_pressed(Key::F2),
-                c && i.key_pressed(Key::F),
-                c && i.key_pressed(Key::OpenBracket),
-                c && i.key_pressed(Key::CloseBracket),
-                c && (i.key_pressed(Key::Equals) || i.key_pressed(Key::Plus)),
-                c && i.key_pressed(Key::Minus),
-                c && i.modifiers.shift && i.key_pressed(Key::N),
-                c && i.key_pressed(Key::C),
-            )
-        });
         if self.viewer.is_none() {
-            if f2 && self.selected.len() == 1 {
+            if on(C::Rename) && self.selected.len() == 1 {
                 self.show_inspector = true;
                 self.focus_title = true;
             }
-            if find {
+            if on(C::Find) {
                 self.focus_search = true;
             }
-            if back {
+            if on(C::Back) {
                 self.go_back();
             }
-            if fwd {
+            if on(C::Forward) {
                 self.go_forward();
             }
-            if zin {
+            if on(C::ZoomIn) {
                 self.tile = (self.tile + 20.0).min(TILE_MAX);
             }
-            if zout {
+            if on(C::ZoomOut) {
                 self.tile = (self.tile - 20.0).max(TILE_MIN);
             }
-            if newf {
+            if on(C::NewFolder) {
                 let parent = match &self.scope {
                     Scope::Folder(id) => Some(id.clone()),
                     _ => None,
                 };
                 self.actions.push(Action::CreateFolder { parent });
             }
-            if copy && !self.selected.is_empty() {
+            if on(C::Copy) && !self.selected.is_empty() {
                 self.copy_selection();
             }
+            if on(C::ToggleSidebar) {
+                self.show_sidebar = !self.show_sidebar;
+            }
+            if on(C::ToggleInspector) {
+                self.show_inspector = !self.show_inspector;
+            }
+            if on(C::ToggleFilter) {
+                self.show_filter = !self.show_filter;
+            }
+            for (c, l) in [(C::LayoutGrid, Layout::Grid), (C::LayoutJustified, Layout::Justified), (C::LayoutWaterfall, Layout::Waterfall), (C::LayoutList, Layout::List)] {
+                if on(c) {
+                    self.layout = l;
+                }
+            }
         }
-        let paste = ctx.input(|i| {
-            i.events.iter().any(|e| matches!(e, egui::Event::Paste(_)))
-                || (i.modifiers.command && i.key_pressed(Key::V))
-        });
-        if paste && self.viewer.is_none() {
+        if on(C::Paste) && self.viewer.is_none() {
             self.paste();
             return;
         }
-        let (left, right, up, down, space, esc, all, del) = ctx.input(|i| {
+        let (left, right, up, down, esc) = ctx.input(|i| {
             (
                 i.key_pressed(Key::ArrowLeft),
                 i.key_pressed(Key::ArrowRight),
                 i.key_pressed(Key::ArrowUp),
                 i.key_pressed(Key::ArrowDown),
-                i.key_pressed(Key::Space) || i.key_pressed(Key::Enter),
                 i.key_pressed(Key::Escape),
-                i.modifiers.command && i.key_pressed(Key::A),
-                i.modifiers.command && i.key_pressed(Key::Backspace),
             )
         });
+        let (space, all, del) = (on(C::Viewer), on(C::SelectAll), on(C::Trash));
         if esc {
             if self.viewer.is_some() {
                 self.viewer = None;
@@ -3127,6 +3132,7 @@ impl eframe::App for App {
             recent: self.recent.clone(),
             layout: Some(self.layout),
             prefs: self.prefs.clone(),
+            shortcuts: self.shortcuts.clone(),
         };
         eframe::set_value(storage, eframe::APP_KEY, &saved);
     }

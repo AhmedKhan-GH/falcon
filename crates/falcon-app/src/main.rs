@@ -4,6 +4,7 @@ mod icons;
 mod loader;
 mod logic;
 mod prefs;
+mod shortcuts;
 mod theme;
 
 use std::path::PathBuf;

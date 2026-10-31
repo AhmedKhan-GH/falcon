@@ -27,9 +27,11 @@
 
 ## Keys
 
+These are the defaults. All but the arrows, Esc and Z can be changed under Preferences → Shortcuts (see Shortcut settings).
+
 | Key | Action |
 |---|---|
-| Space | Open or close the viewer |
+| Space (or ↩) | Open or close the viewer |
 | ← → ↑ ↓ | Move the selection, or go to the next item in the viewer |
 | ⌘A | Select all |
 | ⌘⌫ | Move to the Trash, or delete permanently when in the Trash |
@@ -40,6 +42,10 @@
 | ⌘⇧N | New folder |
 | ⌘C and ⌘V | Copy the selected files, or paste files or images |
 | ⌘Z and ⇧⌘Z | Undo and redo library edits, up to 100 steps. Each frame's edits are one step, named after what was done ("Undid: Move 3 to Trash"). Deleting permanently or emptying the Trash can't be undone and clears the history. Text fields keep their own undo while focused |
+| ⌘⇧F | Show or hide the filter bar |
+| ⌘⌥1 and ⌘⌥2 | Show or hide the sidebar and the inspector |
+| ⌥1 to ⌥4 | Grid, Justified, Waterfall and List layouts |
+| Esc | Close the viewer, or clear the selection |
 | Hold Z | Show the hover preview of the card under the pointer |
 | ⌘, | Preferences |
 
@@ -88,6 +94,20 @@ What Eagle does, from `js/default-preferences.js`, `preferences.html`, `js/prefe
 - Save applies and closes, Apply applies and stays open, Cancel and Esc revert (including a previewed theme or zoom), ⌘↩ saves.
 - The window's own size is set in Eagle's main process, which is not in the readable bundle; falcon's 720 × 500 pt is a guess (inferred).
 - Not built in falcon: themes, interface zoom, language, the sidebar item toggles, scroll and double-click habits, notifications, screenshots, password lock, auto-import, proxy and the preference search.
+
+## Shortcut settings
+
+Preferences → Shortcuts lists every rebindable command by group, with its chord. Clicking a chord starts recording: the next key press becomes the shortcut. Backspace alone clears it, Esc alone stops recording, and a letter, digit or symbol needs a modifier (function keys, Space, ↩, arrows, Home, End, Page Up/Down, Delete and brackets may stand alone). A chord another command already uses is refused with "Used by …" for 1.5 s, and the old chord stays. A changed row has a reset button, and Restore Defaults (after a confirmation) resets them all. The table, the parser and the recorder rules are in `crates/falcon-app/src/shortcuts.rs`.
+
+Changes are saved as a map from command id to Eagle's accelerator text, for example `{"edit.rename": "Command + R"}`, holding only the changed commands; an empty string means unbound. Ids reuse Eagle's keybind names where Eagle has the command (`file.create.folder`, `view.zoom.in`, `find.filter.toggle`, `app.preferences`). When a key press matches several chords (⌘F and ⌘⇧F for ⌘⇧F), the one with the most modifiers wins. ⌘C, ⌘X and ⌘V reach egui as Copy, Cut and Paste events rather than key presses, so falcon maps them back; this also makes ⌘C in the grid work, which the old hard-coded check missed.
+
+What Eagle does, from `js/default-preferences.js`, `js/preferences.js`, `js/services/shortcut-manager.js` and `js/directives/shortcut-input.js` (all seen):
+
+- `shortcuts.keybinds` maps 150 names (`file.create.folder`, `view.zoom.in`, …) to Electron accelerators such as `CmdOrCtrl + Shift + N`. On load, `CmdOrCtrl` is rewritten to `Command` (macOS) or `Ctrl`. Platform pairs such as `edit.rename.darwin` (⌘R) and `edit.rename.win32` (F2) show only on their platform.
+- The recorder writes modifiers in the order Ctrl, Command, Shift, Alt, then the key; letters and digits need a modifier; Backspace alone clears.
+- Conflicts are checked within a group's `conflict` scope: player keys only clash with other player keys, everything else with everything else. A clashing chord is refused, the old one stays, and a note names the other command for 1.5 s.
+- Restore Defaults asks first, then reloads the defaults (plugin shortcuts too). The window has a shortcut search box; falcon has no search.
+- falcon keeps F2 for rename (Eagle's macOS default is ⌘R) and its own ids for commands Eagle lacks or names differently (`view.viewer`, `go.back`, `edit.select.all`) (inferred mapping).
 
 ## Running it
 

@@ -6,6 +6,7 @@ use std::ops::RangeInclusive;
 
 use eframe::egui::{self, Align2, Color32, CornerRadius, Key, Modifiers, RichText, Sense, Stroke, Ui, vec2};
 
+use crate::shortcuts::{Recorder, Shortcuts};
 use crate::theme::{self as t, font};
 
 /// Eagle's own API port, which falcon must never take.
@@ -99,6 +100,7 @@ pub struct Panels {
 pub struct Draft {
     pub prefs: Prefs,
     pub panels: Panels,
+    pub keys: Shortcuts,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
@@ -106,16 +108,18 @@ pub enum Section {
     #[default]
     General,
     Preview,
+    Shortcuts,
     Developer,
 }
 
 impl Section {
-    pub const ALL: [Section; 3] = [Section::General, Section::Preview, Section::Developer];
+    pub const ALL: [Section; 4] = [Section::General, Section::Preview, Section::Shortcuts, Section::Developer];
 
     pub fn label(self) -> &'static str {
         match self {
             Section::General => "General",
             Section::Preview => "Preview",
+            Section::Shortcuts => "Shortcuts",
             Section::Developer => "Developer",
         }
     }
@@ -124,6 +128,7 @@ impl Section {
         match self {
             Section::General => crate::icons::GEAR,
             Section::Preview => crate::icons::EYE,
+            Section::Shortcuts => crate::icons::KEYBOARD,
             Section::Developer => crate::icons::CODE,
         }
     }
@@ -137,6 +142,7 @@ pub struct Window {
     section: Section,
     draft: Option<Draft>,
     port_text: String,
+    recorder: Recorder,
 }
 
 /// Size of the window, close to Eagle's.
@@ -148,11 +154,13 @@ impl Window {
         self.port_text = draft.prefs.api_port.to_string();
         self.draft = Some(draft);
         self.open = true;
+        self.recorder.stop();
     }
 
     pub fn close(&mut self) {
         self.open = false;
         self.draft = None;
+        self.recorder.stop();
     }
 
     /// Draws the window; returns a draft to apply on Save or Apply.
@@ -164,6 +172,9 @@ impl Window {
             self.open = false;
             return None;
         };
+        // A shortcut being recorded takes the key presses first, so Esc
+        // and ⌘↩ can be recorded instead of closing the window.
+        self.recorder.capture(ctx, &mut draft.keys);
         let port = parse_port(&self.port_text);
         let (save_key, esc) = ctx.input_mut(|i| {
             (i.consume_key(Modifiers::COMMAND, Key::Enter), i.consume_key(Modifiers::NONE, Key::Escape))
@@ -198,6 +209,7 @@ impl Window {
             egui::ScrollArea::vertical().auto_shrink(false).show(&mut c, |ui| match self.section {
                 Section::General => general(ui, &mut draft),
                 Section::Preview => preview(ui, &mut draft.prefs),
+                Section::Shortcuts => self.recorder.ui(ui, &mut draft.keys),
                 Section::Developer => developer(ui, &mut draft.prefs, &mut self.port_text, port.as_ref().err()),
             });
 
@@ -240,6 +252,7 @@ impl Window {
             ui.painter().text(rect.left_center() + vec2(30.0, 0.0), Align2::LEFT_CENTER, s.label(), font(13.0), t::TEXT);
             if resp.clicked() {
                 self.section = s;
+                self.recorder.stop();
             }
         }
     }
