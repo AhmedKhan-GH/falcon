@@ -114,7 +114,7 @@ pub fn stage(path: impl AsRef<Path>, opts: &ImportOptions) -> Result<Staged> {
         width: 0,
         last_modified: 0,
         palettes: Vec::new(),
-        width_first: false,
+        key_order: Default::default(),
         extra: Default::default(),
     };
 

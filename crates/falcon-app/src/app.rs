@@ -573,9 +573,14 @@ impl App {
         }
         match Library::open(&path) {
             Ok(lib) => {
+                let skipped = lib.skipped.len();
                 self.add_workspace(Arc::new(Mutex::new(lib)));
                 crate::workspaces::remember(&mut self.recent, &path, RECENT_LIMIT);
                 self.error = None;
+                if skipped > 0 {
+                    let s = if skipped == 1 { "" } else { "s" };
+                    self.flash(format!("{skipped} item{s} couldn't be read and are hidden; their files are untouched"));
+                }
             }
             Err(e) => {
                 if self.ws.lib.is_some() {

@@ -119,6 +119,12 @@ Falcon's `SavedFilter::to_filter` returns the filter, the keyword and a list of 
 | `lastModified` | integer | ms |
 | `palettes` | array | `{color: [r,g,b], ratio}`. See [palettes](palettes.md) |
 
+**Files Eagle can't preview.** For items such as `.tex`, `.md`, `.py`, `.csv` and `.epub` files, Eagle leaves out `height`, `width` and `palettes`. It may also add keys such as `noPreview` and `deletedTime` before `lastModified`. Seen in real libraries: 1,456 of 2,632 items in one, 2 EPUBs in another.
+
+**Damaged records.** A record can be unreadable, for example 604 zero bytes after a cloud sync went wrong (seen once in a real library).
+
+Falcon treats every key but `id` as optional. It remembers each record's key order and writes keys back in that order, and leaves out a field the record didn't have while it still holds its default. New items use the order in the table. An unreadable record is skipped when the library opens: falcon lists it in `Library::skipped`, never writes to it, and `save_to` copies its folder unchanged. Checked on four real libraries (3,905 readable records): every record saves back byte for byte.
+
 ### Comments (observed in code)
 
 Region notes on images and timed notes on video and audio live in an optional `comments` array on the item. JavaScript adds the key the first time a comment is made, so it comes after the keys an item starts with. None of the fixture's items has comments. Eagle's filter panel calls these "annotations". They are separate from the item's `annotation` string, which is the note.

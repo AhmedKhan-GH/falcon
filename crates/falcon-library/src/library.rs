@@ -30,6 +30,10 @@ pub struct Library {
     /// `saved-filters.json`, in menu order.
     pub saved_filters: Vec<SavedFilter>,
     items: Vec<Item>,
+    /// Item folders whose `metadata.json` couldn't be read or parsed (for
+    /// example zeroed by a sync tool), with the reason. They are left out
+    /// and never written to.
+    pub skipped: Vec<(PathBuf, String)>,
     /// Last `modificationTime` handed out by an import, to keep them strictly increasing.
     last_import_ms: u64,
     /// The open undo transaction, if any (see [`Library::begin_transaction`]).
@@ -56,15 +60,20 @@ impl Library {
 
         let images = root.join(IMAGES);
         let mut items = Vec::new();
+        let mut skipped = Vec::new();
         for entry in fs::read_dir(&images).map_err(|e| Error::io(&images, e))? {
             let entry = entry.map_err(|e| Error::io(&images, e))?;
             if !entry.file_name().to_string_lossy().ends_with(".info") || !entry.path().is_dir() {
                 continue;
             }
+            // One damaged item must not make the whole library unreadable.
             let file = entry.path().join(METADATA);
-            let text = fs::read_to_string(&file).map_err(|e| Error::io(&file, e))?;
-            items.push(Item::from_json_str(&text).map_err(|e| Error::json(&file, e))?);
+            match fs::read_to_string(&file).map_err(|e| e.to_string()).and_then(|t| Item::from_json_str(&t).map_err(|e| e.to_string())) {
+                Ok(item) => items.push(item),
+                Err(e) => skipped.push((entry.path(), e)),
+            }
         }
+        skipped.sort();
         items.sort_by(|a, b| a.id.cmp(&b.id));
         let committed = Committed { metadata: metadata.clone(), tags: tags.clone(), saved_filters: saved_filters.clone() };
         Ok(Library {
@@ -74,6 +83,7 @@ impl Library {
             tags,
             saved_filters,
             items,
+            skipped,
             last_import_ms: 0,
             journal: None,
             committed,
@@ -190,6 +200,12 @@ impl Library {
                 }
             }
             write_json(&out.join(METADATA), item)?;
+        }
+        // Items that couldn't be read are copied as they are.
+        for (dir, _) in &self.skipped {
+            if let Some(name) = dir.file_name() {
+                copy_recursive(dir, &images.join(name))?;
+            }
         }
         Ok(())
     }

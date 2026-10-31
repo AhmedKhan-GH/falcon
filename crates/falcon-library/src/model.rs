@@ -338,34 +338,78 @@ pub struct Item {
     pub last_modified: u64,
     /// Dominant colours.
     pub palettes: Vec<Palette>,
-    /// Eagle writes `width` before `height` for a few items; remembered so
-    /// the output keeps the original key order.
-    pub width_first: bool,
+    /// The keys of the `metadata.json` this item was read from, in file
+    /// order (empty for new items). Writing follows this order, and a field
+    /// the file didn't have is left out while it still holds its default,
+    /// so items round-trip byte for byte. Eagle leaves out `width`,
+    /// `height` and `palettes` for files it can't preview, and writes keys
+    /// such as `noPreview` and `deletedTime` mid-record.
+    pub key_order: KeyOrder,
     /// Unknown keys.
     pub extra: Extra,
 }
 
-/// Deserialization shape for [`Item`]; `width_first` is filled in afterwards.
+/// An item's original key order. Only formatting, so it never makes two
+/// items unequal.
+#[derive(Debug, Clone, Default)]
+pub struct KeyOrder(pub Vec<String>);
+
+impl PartialEq for KeyOrder {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+impl std::ops::Deref for KeyOrder {
+    type Target = Vec<String>;
+    fn deref(&self) -> &Vec<String> {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for KeyOrder {
+    fn deref_mut(&mut self) -> &mut Vec<String> {
+        &mut self.0
+    }
+}
+
+/// Deserialization shape for [`Item`]; `key_order` is filled in afterwards.
+/// Every field but `id` may be missing.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ItemRepr {
     id: String,
+    #[serde(default)]
     name: String,
+    #[serde(default)]
     size: u64,
+    #[serde(default)]
     btime: u64,
+    #[serde(default)]
     mtime: u64,
+    #[serde(default)]
     ext: String,
+    #[serde(default)]
     tags: Vec<String>,
+    #[serde(default)]
     folders: Vec<String>,
+    #[serde(default)]
     is_deleted: bool,
+    #[serde(default)]
     url: String,
+    #[serde(default)]
     annotation: String,
+    #[serde(default)]
     modification_time: u64,
     remove_thumbnail: Option<bool>,
     no_thumbnail: Option<bool>,
+    #[serde(default)]
     height: u64,
+    #[serde(default)]
     width: u64,
+    #[serde(default)]
     last_modified: u64,
+    #[serde(default)]
     palettes: Vec<Palette>,
     #[serde(flatten)]
     extra: Extra,
@@ -392,7 +436,7 @@ impl From<ItemRepr> for Item {
             width: r.width,
             last_modified: r.last_modified,
             palettes: r.palettes,
-            width_first: false,
+            key_order: KeyOrder::default(),
             extra: r.extra,
         }
     }
@@ -481,53 +525,79 @@ impl Item {
         }
     }
 
-    /// Parses an item's `metadata.json`, recording the width/height key order.
+    /// Parses an item's `metadata.json`, recording its key order.
     pub fn from_json_str(s: &str) -> serde_json::Result<Item> {
         let value: Value = serde_json::from_str(s)?;
-        let width_first = value.as_object().is_some_and(|m| {
-            let pos = |k: &str| m.keys().position(|x| x == k);
-            matches!((pos("width"), pos("height")), (Some(w), Some(h)) if w < h)
-        });
+        let key_order = value.as_object().map(|m| m.keys().cloned().collect()).unwrap_or_default();
         let mut item: Item = serde_json::from_value(value)?;
-        item.width_first = width_first;
+        item.key_order = KeyOrder(key_order);
         Ok(item)
+    }
+
+    /// The fields to write, in Eagle's order for new items: known fields,
+    /// then unknown keys. Known fields the source file lacked are dropped
+    /// while they hold their default.
+    fn entries(&self) -> Vec<(String, Value)> {
+        let v = |x: &dyn erased::ToValue| x.to_value();
+        let mut out: Vec<(String, Value, bool)> = vec![
+            ("id".into(), v(&self.id), false),
+            ("name".into(), v(&self.name), self.name.is_empty()),
+            ("size".into(), v(&self.size), self.size == 0),
+            ("btime".into(), v(&self.btime), self.btime == 0),
+            ("mtime".into(), v(&self.mtime), self.mtime == 0),
+            ("ext".into(), v(&self.ext), self.ext.is_empty()),
+            ("tags".into(), v(&self.tags), self.tags.is_empty()),
+            ("folders".into(), v(&self.folders), self.folders.is_empty()),
+            ("isDeleted".into(), v(&self.is_deleted), !self.is_deleted),
+            ("url".into(), v(&self.url), self.url.is_empty()),
+            ("annotation".into(), v(&self.annotation), self.annotation.is_empty()),
+            ("modificationTime".into(), v(&self.modification_time), self.modification_time == 0),
+        ];
+        if let Some(x) = &self.remove_thumbnail {
+            out.push(("removeThumbnail".into(), v(x), false));
+        }
+        if let Some(x) = &self.no_thumbnail {
+            out.push(("noThumbnail".into(), v(x), false));
+        }
+        out.push(("height".into(), v(&self.height), self.height == 0));
+        out.push(("width".into(), v(&self.width), self.width == 0));
+        out.push(("lastModified".into(), v(&self.last_modified), self.last_modified == 0));
+        out.push(("palettes".into(), v(&self.palettes), self.palettes.is_empty()));
+        let fresh = self.key_order.is_empty();
+        let mut out: Vec<(String, Value)> = out
+            .into_iter()
+            .filter(|(k, _, default)| fresh || !default || self.key_order.contains(k))
+            .map(|(k, val, _)| (k, val))
+            .collect();
+        out.extend(self.extra.iter().map(|(k, val)| (k.clone(), val.clone())));
+        if !fresh {
+            // Keys from the file first, in file order; anything new after.
+            let rank = |k: &str| self.key_order.iter().position(|x| x == k).unwrap_or(usize::MAX);
+            out.sort_by_key(|(k, _)| rank(k)); // stable: new keys keep their order
+        }
+        out
     }
 }
 
 impl Serialize for Item {
     fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
         let mut m = s.serialize_map(None)?;
-        m.serialize_entry("id", &self.id)?;
-        m.serialize_entry("name", &self.name)?;
-        m.serialize_entry("size", &self.size)?;
-        m.serialize_entry("btime", &self.btime)?;
-        m.serialize_entry("mtime", &self.mtime)?;
-        m.serialize_entry("ext", &self.ext)?;
-        m.serialize_entry("tags", &self.tags)?;
-        m.serialize_entry("folders", &self.folders)?;
-        m.serialize_entry("isDeleted", &self.is_deleted)?;
-        m.serialize_entry("url", &self.url)?;
-        m.serialize_entry("annotation", &self.annotation)?;
-        m.serialize_entry("modificationTime", &self.modification_time)?;
-        if let Some(v) = &self.remove_thumbnail {
-            m.serialize_entry("removeThumbnail", v)?;
-        }
-        if let Some(v) = &self.no_thumbnail {
-            m.serialize_entry("noThumbnail", v)?;
-        }
-        if self.width_first {
-            m.serialize_entry("width", &self.width)?;
-            m.serialize_entry("height", &self.height)?;
-        } else {
-            m.serialize_entry("height", &self.height)?;
-            m.serialize_entry("width", &self.width)?;
-        }
-        m.serialize_entry("lastModified", &self.last_modified)?;
-        m.serialize_entry("palettes", &self.palettes)?;
-        for (k, v) in &self.extra {
-            m.serialize_entry(k, v)?;
+        for (k, v) in self.entries() {
+            m.serialize_entry(&k, &v)?;
         }
         m.end()
+    }
+}
+
+/// Field-to-JSON conversion used by [`Item::entries`].
+mod erased {
+    pub trait ToValue {
+        fn to_value(&self) -> serde_json::Value;
+    }
+    impl<T: serde::Serialize> ToValue for T {
+        fn to_value(&self) -> serde_json::Value {
+            serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+        }
     }
 }
 
@@ -863,6 +933,46 @@ impl<'de> Deserialize<'de> for MtimeIndex {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Records shaped like real ones from users' libraries.
+    const EPUB: &str = r#"{"id":"MU2PQF5G9ZVDB","name":"book","size":46784743,"btime":1789479226928,"mtime":1789479229513,"ext":"epub","tags":[],"folders":[],"isDeleted":true,"url":"","annotation":"","modificationTime":1789479235636,"noPreview":true,"deletedTime":1789479244672,"lastModified":1789479244751}"#;
+    const TEX: &str = r#"{"id":"MPLM58NXPSPTR","name":"main","size":1200,"btime":1,"mtime":2,"ext":"tex","tags":[],"folders":["F1"],"isDeleted":false,"url":"","annotation":"","modificationTime":3,"lastModified":4}"#;
+    const WIDTH_FIRST: &str = r#"{"id":"A","name":"n","size":1,"btime":1,"mtime":1,"ext":"png","tags":[],"folders":[],"isDeleted":false,"url":"","annotation":"","modificationTime":1,"width":10,"height":20,"lastModified":1,"palettes":[]}"#;
+
+    #[test]
+    fn items_without_dimensions_round_trip() {
+        for json in [EPUB, TEX, WIDTH_FIRST] {
+            let item = Item::from_json_str(json).unwrap();
+            assert_eq!(serde_json::to_string(&item).unwrap(), json);
+        }
+        let item = Item::from_json_str(EPUB).unwrap();
+        assert_eq!((item.width, item.height, item.palettes.len()), (0, 0, 0));
+        assert!(item.is_deleted);
+    }
+
+    #[test]
+    fn values_set_later_are_written_even_if_the_file_lacked_them() {
+        let mut item = Item::from_json_str(TEX).unwrap();
+        item.width = 640;
+        item.tags.push("paper".into());
+        let out = serde_json::to_string(&item).unwrap();
+        assert!(out.contains(r#""tags":["paper"]"#), "{out}");
+        assert!(out.ends_with(r#""lastModified":4,"width":640}"#), "{out}");
+    }
+
+    #[test]
+    fn new_items_use_eagles_key_order() {
+        let mut item = Item::from_json_str(TEX).unwrap();
+        item.key_order.clear();
+        let out = serde_json::to_string(&item).unwrap();
+        assert!(out.ends_with(r#""modificationTime":3,"height":0,"width":0,"lastModified":4,"palettes":[]}"#), "{out}");
+    }
+
+    #[test]
+    fn only_id_is_required() {
+        assert!(Item::from_json_str(r#"{"id":"X"}"#).is_ok());
+        assert!(Item::from_json_str(r#"{"name":"X"}"#).is_err());
+    }
 
     #[test]
     fn folder_with_every_optional_key_round_trips() {
