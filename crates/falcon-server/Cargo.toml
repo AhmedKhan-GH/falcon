@@ -13,3 +13,6 @@ tiny_http = "0.12"
 ureq = "3"
 base64 = "0.22"
 tempfile = "3"
+
+[dev-dependencies]
+image = "0.25"

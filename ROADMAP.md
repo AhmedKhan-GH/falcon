@@ -68,7 +68,7 @@ Eagle features that need no online service, put off until after the list above.
 - [ ] Localisation
 
 **HTTP API**
-- [ ] Remaining v2 routes: comments, tag groups, smart folders, updates, library switching
+- [x] Remaining v2 routes: comments, tag groups, smart folders, updates, library switching
 
 ## Later
 

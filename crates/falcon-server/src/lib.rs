@@ -9,7 +9,11 @@
 //! - it listens on 127.0.0.1 only;
 //! - it serves library routes only;
 //! - application info reports version and platform only;
-//! - imports finish before the reply, so returned ids always exist.
+//! - imports finish before the reply, so returned ids always exist;
+//! - library history is the libraries this server has served, newest first.
+
+mod rules;
+mod v2;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -32,6 +36,33 @@ const API_VERSION: &str = "4.0.0";
 
 pub type Shared = Arc<Mutex<Library>>;
 
+/// Server state beside the library: the libraries served so far, newest
+/// first (what `library/history` reports).
+struct State {
+    history: Mutex<Vec<String>>,
+}
+
+impl State {
+    fn new(lib: &Shared) -> State {
+        let root = match lib.lock() {
+            Ok(l) => l.root().display().to_string(),
+            Err(p) => p.into_inner().root().display().to_string(),
+        };
+        State { history: Mutex::new(vec![root]) }
+    }
+
+    fn history(&self) -> Vec<String> {
+        self.history.lock().map(|h| h.clone()).unwrap_or_default()
+    }
+
+    fn remember(&self, path: String) {
+        if let Ok(mut h) = self.history.lock() {
+            h.retain(|p| *p != path);
+            h.insert(0, path);
+        }
+    }
+}
+
 /// Serves the API until the process exits.
 pub fn serve(lib: Shared, port: u16) -> std::io::Result<()> {
     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
@@ -39,8 +70,9 @@ pub fn serve(lib: Shared, port: u16) -> std::io::Result<()> {
         return Err(std::io::Error::other(format!("port {port} is in use (is Eagle running?)")));
     }
     let server = Server::http(("127.0.0.1", port)).map_err(std::io::Error::other)?;
+    let state = State::new(&lib);
     for request in server.incoming_requests() {
-        handle(&lib, port, request);
+        handle(&lib, &state, port, request);
     }
     Ok(())
 }
@@ -82,9 +114,10 @@ pub fn start(
             Ok(server) => {
                 let server = Arc::new(server);
                 let s = server.clone();
+                let state = State::new(&lib);
                 let thread = std::thread::spawn(move || {
                     for request in s.incoming_requests() {
-                        handle(&lib, port, request);
+                        handle(&lib, &state, port, request);
                         on_request();
                     }
                 });
@@ -100,15 +133,18 @@ pub fn start(
 enum Reply {
     Data(Value),
     Empty,
-    /// A string rejection: HTTP 500 with the message in `data`.
+    /// A string rejection (v1): HTTP 500 with the message in `data`.
     Fail(String),
+    /// A thrown `Error` (v2): HTTP 500 with the text in `message` and the
+    /// error's enumerable fields (none) as `data: {}`.
+    Error(String),
     BadRequest,
     NotFound,
     WrongMethod,
     Unauthorized,
 }
 
-fn handle(lib: &Shared, port: u16, mut req: Request) {
+fn handle(lib: &Shared, state: &State, port: u16, mut req: Request) {
     let url = req.url().to_string();
     let (path, query) = url.split_once('?').unwrap_or((&url, ""));
     let path = path.trim_end_matches('/').to_string();
@@ -132,7 +168,7 @@ fn handle(lib: &Shared, port: u16, mut req: Request) {
         return send(req, Reply::Unauthorized);
     }
 
-    let reply = route(lib, &method, &path, &args);
+    let reply = route(lib, state, &method, &path, &args);
     send(req, reply);
 }
 
@@ -174,6 +210,7 @@ fn send(req: Request, reply: Reply) {
         Reply::Data(d) => (200, json!({"status": "success", "data": d})),
         Reply::Empty => (200, json!({"status": "success"})),
         Reply::Fail(m) => (500, json!({"status": "error", "data": m})),
+        Reply::Error(m) => (500, json!({"status": "error", "message": m, "data": {}})),
         Reply::BadRequest => (400, json!({"status": "error", "code": 400, "message": "Bad Request"})),
         Reply::NotFound => (404, json!({"status": "error", "code": 404, "message": "method not allowed"})),
         Reply::WrongMethod => (405, json!({"status": "error", "code": 405, "message": "method not allowed"})),
@@ -262,9 +299,13 @@ fn tag_objects(lib: &Library) -> Vec<Value> {
     v.into_iter().map(|(name, n)| json!({"name": name, "imageCount": n})).collect()
 }
 
+fn library_name(lib: &Library) -> String {
+    lib.root().file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()
+}
+
 fn library_info(lib: &Library) -> Value {
     let mut v = serde_json::to_value(&lib.metadata).unwrap_or(json!({}));
-    let name = lib.root().file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    let name = library_name(lib);
     if let Value::Object(m) = &mut v {
         m.insert("library".into(), json!({"path": lib.root().display().to_string(), "name": name}));
     }
@@ -273,7 +314,7 @@ fn library_info(lib: &Library) -> Value {
 
 fn paginate(items: Vec<Value>, args: &Map<String, Value>) -> Value {
     let offset = number(args, "offset").unwrap_or(0) as usize;
-    let limit = (number(args, "limit").unwrap_or(50) as usize).clamp(1, 1000);
+    let limit = (number(args, "limit").filter(|l| *l > 0).unwrap_or(50) as usize).min(1000);
     let total = items.len();
     let page: Vec<Value> = items.into_iter().skip(offset).take(limit).collect();
     json!({"data": page, "total": total, "offset": offset, "limit": limit})
@@ -282,13 +323,15 @@ fn paginate(items: Vec<Value>, args: &Map<String, Value>) -> Value {
 // ---------------------------------------------------------------------------
 // Routing
 
-fn route(lib: &Shared, method: &Method, path: &str, args: &Map<String, Value>) -> Reply {
+fn route(lib: &Shared, state: &State, method: &Method, path: &str, args: &Map<String, Value>) -> Reply {
     use Method::{Get, Post};
     let routes: &[(&str, &[Method])] = &[
         ("/", &[Get]),
         ("/api/application/info", &[Get]),
         ("/api/library/info", &[Get]),
         ("/api/library/history", &[Get]),
+        ("/api/library/switch", &[Post]),
+        ("/api/library/icon", &[Get]),
         ("/api/folder/list", &[Get]),
         ("/api/folder/listRecent", &[Get]),
         ("/api/folder/create", &[Post]),
@@ -309,11 +352,38 @@ fn route(lib: &Shared, method: &Method, path: &str, args: &Map<String, Value>) -
         ("/api/item/list", &[Get]),
         ("/api/v2/app/info", &[Get]),
         ("/api/v2/library/info", &[Get]),
+        ("/api/v2/library/history", &[Get]),
+        ("/api/v2/library/switch", &[Post]),
+        ("/api/v2/library/icon", &[Get]),
         ("/api/v2/item/get", &[Get, Post]),
         ("/api/v2/item/query", &[Post]),
         ("/api/v2/item/countAll", &[Get]),
+        ("/api/v2/item/add", &[Post]),
+        ("/api/v2/item/update", &[Post]),
+        ("/api/v2/item/getComments", &[Get]),
+        ("/api/v2/item/addComment", &[Post]),
+        ("/api/v2/item/updateComment", &[Post]),
+        ("/api/v2/item/removeComment", &[Post]),
         ("/api/v2/folder/get", &[Get, Post]),
+        ("/api/v2/folder/create", &[Post]),
+        ("/api/v2/folder/update", &[Post]),
+        ("/api/v2/smartFolder/get", &[Get, Post]),
+        ("/api/v2/smartFolder/create", &[Post]),
+        ("/api/v2/smartFolder/update", &[Post]),
+        ("/api/v2/smartFolder/remove", &[Post]),
+        ("/api/v2/smartFolder/getItems", &[Get, Post]),
+        ("/api/v2/smartFolder/getRules", &[Get]),
         ("/api/v2/tag/get", &[Get, Post]),
+        ("/api/v2/tag/getRecentTags", &[Get]),
+        ("/api/v2/tag/getStarredTags", &[Get]),
+        ("/api/v2/tag/update", &[Post]),
+        ("/api/v2/tag/merge", &[Post]),
+        ("/api/v2/tagGroup/get", &[Get]),
+        ("/api/v2/tagGroup/create", &[Post]),
+        ("/api/v2/tagGroup/update", &[Post]),
+        ("/api/v2/tagGroup/remove", &[Post]),
+        ("/api/v2/tagGroup/addTags", &[Post]),
+        ("/api/v2/tagGroup/removeTags", &[Post]),
     ];
     let Some((_, methods)) = routes.iter().find(|(p, _)| *p == path) else {
         return Reply::NotFound;
@@ -340,8 +410,32 @@ fn route(lib: &Shared, method: &Method, path: &str, args: &Map<String, Value>) -
             "buildVersion": concat!("falcon-", env!("CARGO_PKG_VERSION")),
             "platform": std::env::consts::OS,
         })),
-        "/api/library/info" | "/api/v2/library/info" => Reply::Data(library_info(lib)),
-        "/api/library/history" => Reply::Data(json!([lib.root().display().to_string()])),
+        "/api/library/info" => Reply::Data(library_info(lib)),
+        "/api/v2/library/info" => {
+            // v2 puts `path` and `name` at the top level instead of under `library`.
+            let mut v = serde_json::to_value(&lib.metadata).unwrap_or(json!({}));
+            if let Value::Object(m) = &mut v {
+                m.insert("path".into(), json!(lib.root().display().to_string()));
+                m.insert("name".into(), json!(library_name(lib)));
+            }
+            Reply::Data(v)
+        }
+        "/api/library/history" => Reply::Data(json!(state.history())),
+        "/api/v2/library/history" => Reply::Data(paginate(state.history().into_iter().map(Value::from).collect(), args)),
+        "/api/library/switch" | "/api/v2/library/switch" => {
+            let v2 = path.starts_with("/api/v2/");
+            match v2::open_library(s(args, "libraryPath").unwrap_or("")) {
+                Ok(new) => {
+                    state.remember(new.root().display().to_string());
+                    *lib = new;
+                    if v2 { Reply::Data(json!(true)) } else { Reply::Empty }
+                }
+                Err(e) if v2 => Reply::Error(e),
+                Err(e) => Reply::Fail(e),
+            }
+        }
+        "/api/library/icon" => v2::library_icon(s(args, "libraryPath")).map_or_else(Reply::Fail, Reply::Data),
+        "/api/v2/library/icon" => v2::library_icon(s(args, "libraryPath")).map_or_else(Reply::Error, Reply::Data),
 
         "/api/folder/list" => Reply::Data(Value::Array(lib.metadata.folders.iter().map(folder_json).collect())),
         "/api/folder/listRecent" => {
@@ -401,7 +495,31 @@ fn route(lib: &Shared, method: &Method, path: &str, args: &Map<String, Value>) -
             Reply::Data(Value::Array(recent))
         }
         "/api/tag/groups" => Reply::Data(json!(lib.metadata.tags_groups)),
-        "/api/v2/tag/get" => Reply::Data(paginate(tag_objects(lib), args)),
+        "/api/v2/tag/get" => v2::get_tags(lib, args),
+        "/api/v2/tag/getRecentTags" => v2::listed_tags(lib, &lib.tags.history_tags, args),
+        "/api/v2/tag/getStarredTags" => v2::listed_tags(lib, &lib.tags.starred_tags, args),
+        "/api/v2/tag/update" => v2::update_tag(lib, args),
+        "/api/v2/tag/merge" => v2::merge_tags(lib, args),
+        "/api/v2/tagGroup/get" => v2::get_tag_groups(lib, args),
+        "/api/v2/tagGroup/create" => v2::create_tag_group(lib, args),
+        "/api/v2/tagGroup/update" => v2::update_tag_group(lib, args),
+        "/api/v2/tagGroup/remove" => v2::remove_tag_group(lib, args),
+        "/api/v2/tagGroup/addTags" => v2::add_group_tags(lib, args),
+        "/api/v2/tagGroup/removeTags" => v2::remove_group_tags(lib, args),
+        "/api/v2/smartFolder/get" => v2::get_smart_folders(lib, args),
+        "/api/v2/smartFolder/create" => v2::create_smart_folder(lib, args),
+        "/api/v2/smartFolder/update" => v2::update_smart_folder(lib, args),
+        "/api/v2/smartFolder/remove" => v2::remove_smart_folder(lib, args),
+        "/api/v2/smartFolder/getItems" => v2::smart_folder_items(lib, args),
+        "/api/v2/smartFolder/getRules" => Reply::Data(rules::schema()),
+        "/api/v2/item/add" => v2::add_item(lib, args),
+        "/api/v2/item/update" => v2::update_item(lib, args),
+        "/api/v2/item/getComments" => v2::get_comments(lib, args),
+        "/api/v2/item/addComment" => v2::add_comment(lib, args),
+        "/api/v2/item/updateComment" => v2::update_comment(lib, args),
+        "/api/v2/item/removeComment" => v2::remove_comment(lib, args),
+        "/api/v2/folder/create" => v2::create_folder(lib, args),
+        "/api/v2/folder/update" => v2::update_folder(lib, args),
 
         "/api/item/addFromPath" => {
             let Some(p) = s(args, "path") else { return Reply::Fail("Missing required parameters.".into()) };
@@ -493,10 +611,13 @@ fn route(lib: &Shared, method: &Method, path: &str, args: &Map<String, Value>) -
         }
         "/api/item/list" => Reply::Data(Value::Array(v1_list(lib, args))),
 
-        "/api/v2/item/get" => {
-            let items = v2_get(lib, args);
-            Reply::Data(paginate(project(items, args), args))
-        }
+        "/api/v2/item/get" => match v2::smart_filter(lib, args) {
+            Ok(only) => {
+                let items = v2_get(lib, args, only.as_ref());
+                Reply::Data(paginate(project(items, args), args))
+            }
+            Err(e) => Reply::Error(e),
+        },
         "/api/v2/item/query" => {
             let q = Query::parse(s(args, "query").unwrap_or(""));
             let index = search::folder_index(&lib.metadata.folders);
@@ -511,12 +632,16 @@ fn route(lib: &Shared, method: &Method, path: &str, args: &Map<String, Value>) -
         "/api/v2/folder/get" => {
             let ids = strings(args, "ids");
             let one = s(args, "id");
-            let folders: Vec<Value> = lib
-                .all_folders()
-                .into_iter()
-                .filter(|f| (ids.is_empty() && one.is_none()) || ids.contains(&f.id) || one == Some(f.id.as_str()))
-                .map(folder_json)
-                .collect();
+            // With no filter Eagle returns the top-level tree, else a flat list.
+            let folders: Vec<Value> = if ids.is_empty() && one.is_none() {
+                lib.metadata.folders.iter().map(folder_json).collect()
+            } else {
+                lib.all_folders()
+                    .into_iter()
+                    .filter(|f| ids.contains(&f.id) || one == Some(f.id.as_str()))
+                    .map(folder_json)
+                    .collect()
+            };
             Reply::Data(paginate(folders, args))
         }
         _ => Reply::NotFound,
@@ -622,7 +747,17 @@ fn v1_list(lib: &Library, args: &Map<String, Value>) -> Vec<Value> {
         .filter(|i| folders.is_empty() || i.folders.iter().any(|f| folders.contains(f)))
         .collect();
 
-    let order = s(args, "orderBy").unwrap_or("CREATEDATE");
+    sort_v1(&mut items, s(args, "orderBy").unwrap_or("CREATEDATE"));
+    let limit = number(args, "limit").map_or(200, |l| l as usize);
+    let page = number(args, "offset").unwrap_or(0) as usize;
+    let mut page: Vec<&Item> = items.into_iter().skip(limit * page).take(limit).collect();
+    page.sort_by_key(|i| std::cmp::Reverse(i.modification_time));
+    page.into_iter().map(item_json).collect()
+}
+
+/// Sorts by an Eagle `orderBy` key (`CREATEDATE`, `FILESIZE`, `NAME`,
+/// `RESOLUTION`); a `-` reverses it.
+fn sort_v1(items: &mut [&Item], order: &str) {
     let reverse = order.contains('-');
     let key = order.replace('-', "").to_uppercase();
     match key.as_str() {
@@ -634,15 +769,11 @@ fn v1_list(lib: &Library, args: &Map<String, Value>) -> Vec<Value> {
     if reverse {
         items.reverse();
     }
-    let limit = number(args, "limit").map_or(200, |l| l as usize);
-    let page = number(args, "offset").unwrap_or(0) as usize;
-    let mut page: Vec<&Item> = items.into_iter().skip(limit * page).take(limit).collect();
-    page.sort_by_key(|i| std::cmp::Reverse(i.modification_time));
-    page.into_iter().map(item_json).collect()
 }
 
 /// `/api/v2/item/get` filters, AND-ed; trash excluded; newest first.
-fn v2_get(lib: &Library, args: &Map<String, Value>) -> Vec<Value> {
+/// `only`, from `smartFolders`, keeps the items of those smart folders.
+fn v2_get(lib: &Library, args: &Map<String, Value>, only: Option<&std::collections::HashSet<String>>) -> Vec<Value> {
     let id = s(args, "id");
     let ids = strings(args, "ids");
     let keywords: Vec<String> = strings(args, "keywords").into_iter().map(|k| k.to_lowercase()).collect();
@@ -658,6 +789,7 @@ fn v2_get(lib: &Library, args: &Map<String, Value>) -> Vec<Value> {
         .iter()
         .filter(|i| !i.is_deleted)
         .filter(|i| id.is_none_or(|x| i.id == x))
+        .filter(|i| only.is_none_or(|o| o.contains(&i.id)))
         .filter(|i| ids.is_empty() || ids.contains(&i.id))
         .filter(|i| !flag("isUnfiled") || i.folders.is_empty())
         .filter(|i| !flag("isUntagged") || i.tags.is_empty())

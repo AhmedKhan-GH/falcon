@@ -1600,6 +1600,7 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "falcon-library",
+ "image",
  "serde_json",
  "tempfile",
  "tiny_http",
