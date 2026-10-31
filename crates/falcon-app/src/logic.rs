@@ -19,6 +19,8 @@ pub enum Scope {
     Random(u64),
     /// The tag overview page.
     AllTags,
+    /// The duplicates page.
+    Duplicates,
     Trash,
     /// Items placed directly in a folder (Eagle hides subfolder content by
     /// default).
@@ -38,6 +40,7 @@ impl Scope {
             Scope::Recent => "Recently Used".into(),
             Scope::Random(_) => "Random".into(),
             Scope::AllTags => "All Tags".into(),
+            Scope::Duplicates => "Duplicates".into(),
             Scope::Trash => "Trash".into(),
             Scope::Folder(id) => find_folder(roots, id).map_or_else(|| "Folder".into(), |f| f.name.clone()),
             Scope::Tag(t) => t.clone(),
@@ -116,7 +119,7 @@ fn in_scope(item: &Item, scope: &Scope) -> bool {
     match scope {
         Scope::Trash => item.is_deleted,
         _ if item.is_deleted => false,
-        Scope::All | Scope::Recent | Scope::Random(_) | Scope::AllTags => true,
+        Scope::All | Scope::Recent | Scope::Random(_) | Scope::AllTags | Scope::Duplicates => true,
         Scope::Uncategorized => item.folders.is_empty(),
         Scope::Untagged => item.tags.is_empty(),
         Scope::Folder(id) => item.folders.iter().any(|f| f == id),
@@ -473,6 +476,73 @@ pub fn time_label(pos: f64, duration: f64) -> String {
     format!("{} / {}", format_duration(pos.min(duration.max(0.0))), format_duration(duration))
 }
 
+// ---------------------------------------------------------------------------
+// Duplicates
+
+/// One group of the duplicates page.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DupGroup {
+    /// Byte-identical originals (true) or similar pictures (false).
+    pub exact: bool,
+    pub ids: Vec<String>,
+    /// Bits each member's perceptual hash differs from the first member's
+    /// (0 for exact groups and for members without a hash).
+    pub distances: Vec<u32>,
+}
+
+/// Builds the page's groups: every exact group, then every similar group
+/// that is not just an exact group again (all its members in one exact
+/// group).
+pub fn dup_groups(exact: Vec<Vec<String>>, near: Vec<Vec<String>>, hash: impl Fn(&str) -> Option<u64>) -> Vec<DupGroup> {
+    let mut out: Vec<DupGroup> = exact.iter().map(|ids| DupGroup { exact: true, distances: vec![0; ids.len()], ids: ids.clone() }).collect();
+    for ids in near {
+        let covered = exact.iter().any(|e| ids.iter().all(|id| e.contains(id)));
+        if covered || ids.len() < 2 {
+            continue;
+        }
+        let first = hash(&ids[0]);
+        let distances = ids
+            .iter()
+            .map(|id| match (first, hash(id)) {
+                (Some(a), Some(b)) => (a ^ b).count_ones(),
+                _ => 0,
+            })
+            .collect();
+        out.push(DupGroup { exact: false, ids, distances });
+    }
+    out
+}
+
+/// The groups with only the members `alive` keeps; a group left with one
+/// member drops out.
+pub fn live_groups(groups: &[DupGroup], alive: impl Fn(&str) -> bool) -> Vec<DupGroup> {
+    groups
+        .iter()
+        .filter_map(|g| {
+            let keep: Vec<usize> = (0..g.ids.len()).filter(|&n| alive(&g.ids[n])).collect();
+            (keep.len() > 1).then(|| DupGroup {
+                exact: g.exact,
+                ids: keep.iter().map(|&n| g.ids[n].clone()).collect(),
+                distances: keep.iter().map(|&n| g.distances[n]).collect(),
+            })
+        })
+        .collect()
+}
+
+/// Every member but the first of each group, each id once. The first
+/// member is the one kept, and an item kept by one group is never picked
+/// from another.
+pub fn all_but_first(groups: &[DupGroup]) -> Vec<String> {
+    let keep: HashSet<&str> = groups.iter().filter_map(|g| g.ids.first().map(String::as_str)).collect();
+    let mut seen = HashSet::new();
+    groups
+        .iter()
+        .flat_map(|g| g.ids.iter().skip(1))
+        .filter(|id| !keep.contains(id.as_str()) && seen.insert(id.as_str()))
+        .cloned()
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -712,5 +782,31 @@ mod filter_media_tests {
         assert_eq!(played_peaks(1.0, 0.0, 1000), 0);
         assert_eq!(time_label(12.4, 184.0), "0:12 / 3:04");
         assert_eq!(time_label(200.0, 184.0), "3:04 / 3:04");
+    }
+
+    #[test]
+    fn duplicate_groups() {
+        let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        let hashes: HashMap<&str, u64> = [("a", 0b0000), ("b", 0b0000), ("c", 0b0111), ("d", 0b0001)].into();
+        let exact = vec![s(&["a", "b"])];
+        // [a, b] again is dropped; [c, d] stays, with distances from c.
+        let near = vec![s(&["a", "b"]), s(&["c", "d"])];
+        let g = dup_groups(exact, near, |id| hashes.get(id).copied());
+        assert_eq!(g.len(), 2);
+        assert!(g[0].exact);
+        assert_eq!(g[0].distances, vec![0, 0]);
+        assert!(!g[1].exact);
+        assert_eq!(g[1].distances, vec![0, 2]);
+        assert_eq!(all_but_first(&g), s(&["b", "d"]));
+        // An item kept by one group is never picked from another.
+        let overlap = vec![
+            DupGroup { exact: true, ids: s(&["a", "b"]), distances: vec![0, 0] },
+            DupGroup { exact: false, ids: s(&["b", "a", "c"]), distances: vec![0, 0, 3] },
+        ];
+        assert_eq!(all_but_first(&overlap), s(&["c"]));
+        // Trashed members leave; a group of one disappears.
+        let live = live_groups(&g, |id| id != "d");
+        assert_eq!(live.len(), 1);
+        assert_eq!(live[0].ids, s(&["a", "b"]));
     }
 }

@@ -22,6 +22,7 @@ use falcon_library::search::{ColorQuery, Filter, Logic, OrderBy, Shape, TextFilt
 use crate::theme::{self as t, font, mono};
 
 mod organize_ui;
+mod duplicates_view;
 mod filters_ui;
 mod media_view;
 
@@ -390,6 +391,8 @@ pub struct App {
     audio: crate::audio::Audio,
     waveforms: crate::audio::Waveforms,
     font_view: media_view::FontView,
+    /// The Duplicates page's hash cache and results.
+    duplicates: duplicates_view::Duplicates,
 }
 
 impl App {
@@ -456,6 +459,7 @@ impl App {
             audio: Default::default(),
             waveforms: Default::default(),
             font_view: Default::default(),
+            duplicates: Default::default(),
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
         app.tile = saved.tile.unwrap_or(app.tile).clamp(TILE_MIN, TILE_MAX);
@@ -1468,13 +1472,14 @@ impl App {
 
     fn nav_rows(&mut self, ui: &mut Ui, cx: &SidebarCtx) {
         let n = cx.nav;
-        let entries: [(&str, &str, Scope, usize); 7] = [
+        let entries: [(&str, &str, Scope, usize); 8] = [
             (ic::IMAGES, "All", Scope::All, n.all),
             (ic::FOLDER_DASHED, "Uncategorized", Scope::Uncategorized, n.uncategorized),
             (ic::TAG_SIMPLE, "Untagged", Scope::Untagged, n.untagged),
             (ic::CLOCK, "Recently Used", Scope::Recent, 0),
             (ic::SHUFFLE, "Random", Scope::Random(0), 0),
             (ic::BOOKMARK_SIMPLE, "All Tags", Scope::AllTags, n.tags),
+            (duplicates_view::ICON, "Duplicates", Scope::Duplicates, 0),
             (ic::TRASH, "Trash", Scope::Trash, n.trash),
         ];
         for (glyph, label, scope, count) in entries {
@@ -2170,6 +2175,10 @@ impl App {
         let order_changed = self.hover.shown().is_some() && self.order != new_order;
         self.order = new_order;
 
+        if self.scope == Scope::Duplicates {
+            self.duplicates_page(ui, lib);
+            return;
+        }
         if self.scope == Scope::AllTags && self.query.trim().is_empty() {
             self.tag_page(ui, lib);
             return;

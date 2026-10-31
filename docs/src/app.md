@@ -20,6 +20,7 @@
 | Inspector | **One item:** preview, palette (click a colour to search for it), editable title, notes and URL, tags, folders, rating and properties (with duration, camera facts from `rawMetas`, and font family, style, PostScript name, version and glyph count when the item has them). **Several items:** a preview stack, shared tags, add a tag to all, add all to a folder, a shared rating, trash all |
 | Viewer | Zoom around the pointer, pan, fit (0), actual size (1), + and −, animated GIFs, and full-size QuickLook renders. Audio plays over its waveform and fonts show a live specimen (see below). Video doesn't play yet: the viewer shows its thumbnail |
 | All Tags | A tag manager with a filter, starred tags, rename, merge and delete, grouped A-Z or by tag group |
+| Duplicates | Finds identical files and similar pictures, grouped, with Select All but First and Move to Trash (see below) |
 | Import | Drag and drop, ⌘V (files or images), files passed to the app, and the collect window (see below). Imports run in the background with a progress bar. PDF, video, PSD, AI, HEIC and RAW go through QuickLook |
 | Smart folders | Create and edit them with rule rows, matched by any or all, inside another smart folder, with an icon and colour |
 | Trash | Restore, Delete Permanently and Empty Trash, all with confirmation |
@@ -58,6 +59,23 @@ What Eagle does, from `js/directives/audio-media-element.js`, its video.js setup
 | Font viewer | A separate page with tabs for alphabet, article, waterfall (72 down to 12 px, edits mirrored on every line) and font information; a size slider from 31.25 to 625; editable text; light, dark and colour themes; an Activate button | Seen | One scrolling page: the sample text, editable in place, at a size from 12 to 200 pt; a waterfall of the same text from 72 down to 12 pt; and the character set. Font information is in the inspector. No themes, no activation |
 | Rendering | Chromium with the font loaded as a web font | Seen | The font file (WOFF unpacked to sfnt; the first face of a collection) is added to egui's fonts under its own family the first time it is viewed, and stays for the session. Fonts egui's parser rejects, and WOFF2, fall back to the image viewer showing the specimen thumbnail |
 | Sample text | Translated sample paragraphs per language | Seen | falcon's own short sample, in the script the font supports (Latin, Chinese, Japanese or Korean, chosen like the specimen thumbnail). Text you type stays as you move between fonts until Reset Text |
+
+## Duplicates
+
+The sidebar's Duplicates entry (after All Tags) opens a page that scans the library on a background thread, with a progress bar, and lists the groups it finds. Each group is a row of thumbnails labelled "Identical files" or "Similar pictures (within N of 64 bits)"; each thumbnail shows its size (identical) or its distance in bits from the first (similar), and the first is marked "Kept". Clicking selects as in the grid (⌘ and ⇧ work, and the inspector follows), double-clicking opens the viewer. **Select All but First** selects every member except the first of each group (never an item that is the first of another group), and **Move N to Trash** trashes the selection through the usual trash action, so ⌘Z undoes it. The similarity slider sets how many of the 64 perceptual-hash bits may differ (10 by default, right is stricter) and scans again. The code is in `crates/falcon-app/src/app/duplicates_view.rs`, with the grouping rules in `logic.rs`.
+
+The scan fills the hash cache item by item so it can report progress (content hashes only for files that share their size with another), then calls the library's `find_exact_duplicates_cached` and `find_near_duplicates_cached` (see [Import](import.md)) on a copy of the library taken when the scan starts. Similar groups that only repeat an identical group are left out. The cache is kept in memory for the session, keyed by item id and checked against the original's size and mtime, so a second scan only hashes new or changed files. Nothing is written to the library or next to it.
+
+What Eagle does, from `js/directives/duplicate-scan-panel.html` and `.js` and the import menu in `app.bundle.js`:
+
+| Question | Eagle | Seen or inferred | falcon |
+|---|---|---|---|
+| Where | The import (+) menu's Find Duplicates submenu: the whole library, the current list, or the selected items | Seen | A sidebar entry that scans the whole library |
+| Methods | Two separate scans to choose from first: identical files and similar images, each with its own progress bar (`current/total` and a percentage) | Seen | One scan does both, with the phase and `done/total` |
+| Similarity | A slider (default 0.8) over a fingerprint weighting, re-grouping without rescanning | Seen | A bit threshold on the 64-bit pHash; changing it rescans, which is fast once hashes are cached |
+| Results | Groups of thumbnails with name, size and dimensions; each group has a chosen item to keep (the first by default) and a checkbox; groups can be removed from the list | Seen | Groups as rows; the first is kept; no per-group checkbox or choosing another item to keep, and no removing a group from the list |
+| Action | Merge: the kept item takes the group's combined tags, folders and notes (a merge editor lets you pick name, URL and notes), and the others go | Seen (merge); inferred (the others go to the Trash) | No merge: Move to Trash only, leaving the kept item's tags and folders as they were |
+| Stored hashes | None in item JSON | Seen | None; an in-memory cache for the session |
 
 ## Keys
 
