@@ -56,6 +56,22 @@ Eagle's thumbnail modules (`app/js/thumbs/`) also add keys for some formats. New
 - The parts are appended to the caller's tags, and the whole list is de-duplicated (first occurrence wins).
 - This happens before the copy, so the keyword tags come before the font weight tag.
 
+### Duplicates (observed)
+
+Eagle stores no content hash in item JSON and never hashes file bytes. Its duplicate check (`getHashID`) builds a key from metadata alone:
+
+| Kind | Key built from |
+|---|---|
+| Video | size and duration |
+| Audio | size, duration, extension, and `bpm` when known |
+| PDF | size, width and height |
+| Fonts | size, `fontMetas.uniqueID`, `postScriptName` and `version` |
+| URL bookmarks | the video id or the URL |
+| Images | the first palette colour rounded up to tens, the second and third colours, then size, width, height and extension |
+
+- svg, tif, tiff and trashed items are skipped.
+- Images without a palette fall back to size, width, height and extension.
+
 ### Timestamps
 
 - `btime` and `mtime` are the file's own times (observed).
@@ -102,6 +118,15 @@ Eagle's thumbnail modules (`app/js/thumbs/`) also add keys for some formats. New
   - Collections get the opentype.js shape, not Typr's.
   - Eagle's MD5 fallback for fonts with a family name but no English PostScript name is not reproduced.
   - `ImportOptions::font_weight_tag` (default true, as in Eagle) adds the weight tag.
+
+### Duplicates in falcon
+
+The `duplicates` module compares file contents instead of copying Eagle's metadata key, and writes nothing to the library.
+
+- **Exact copies.** `find_exact_duplicates` groups items, trash excluded, whose originals hash to the same BLAKE3 digest. Only files that share their size with another file are hashed.
+- **Near copies.** `find_near_duplicates(lib, threshold)` takes a 64-bit perceptual hash of each item's thumbnail, or of the original for small images shown without one. The hash is a 32×32 grey DCT, keeping the 8×8 lowest frequencies, each compared with their median. Items within `threshold` bits are grouped, transitively. About 10 suits resized or recompressed copies.
+- **Cache.** The `_cached` variants take a `HashCache`, keyed by item id and invalidated when the original's size or mtime changes. `HashCache::save` and `load` keep it as JSON wherever the caller likes.
+- **Results.** Groups list item ids in library order.
 
 ### Keywords in falcon
 
