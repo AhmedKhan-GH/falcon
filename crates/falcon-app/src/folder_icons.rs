@@ -198,14 +198,14 @@ pub fn is_text(glyph: &str) -> bool {
 /// default text colour.
 pub fn color(name: Option<&str>) -> Option<Color32> {
     Some(match name? {
-        "red" => t::ICON_RED,
-        "orange" => t::ICON_ORANGE,
-        "yellow" => t::ICON_YELLOW,
-        "green" => t::ICON_GREEN,
-        "aqua" => t::ICON_AQUA,
-        "blue" => t::ICON_BLUE,
-        "purple" => t::ICON_PURPLE,
-        "pink" => t::ICON_PINK,
+        "red" => t::p().icon_red,
+        "orange" => t::p().icon_orange,
+        "yellow" => t::p().icon_yellow,
+        "green" => t::p().icon_green,
+        "aqua" => t::p().icon_aqua,
+        "blue" => t::p().icon_blue,
+        "purple" => t::p().icon_purple,
+        "pink" => t::p().icon_pink,
         _ => return None,
     })
 }
@@ -217,7 +217,7 @@ pub fn all() -> impl Iterator<Item = (&'static str, &'static str)> {
 
 /// The colour keys in menu order with their tints.
 pub fn colors() -> impl Iterator<Item = (&'static str, Color32)> {
-    ICON_COLORS.iter().map(|c| (*c, color(Some(c)).unwrap_or(t::ICON_NONE)))
+    ICON_COLORS.iter().map(|c| (*c, color(Some(c)).unwrap_or(t::p().icon_none)))
 }
 
 #[cfg(test)]

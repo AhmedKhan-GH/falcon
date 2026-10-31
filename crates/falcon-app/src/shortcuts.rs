@@ -395,17 +395,17 @@ impl Recorder {
             }
             let (row, _) = ui.allocate_exact_size(vec2(ui.available_width(), 30.0), Sense::hover());
             let p = ui.painter();
-            p.text(row.left_center() + vec2(12.0, 0.0), Align2::LEFT_CENTER, s.label, font(13.0), t::TEXT);
+            p.text(row.left_center() + vec2(12.0, 0.0), Align2::LEFT_CENTER, s.label, font(13.0), t::p().text);
             let button = egui::Rect::from_min_size(egui::pos2(row.right() - 150.0, row.top() + 3.0), vec2(150.0, 24.0));
             let resp = ui.interact(button, ui.scope_id().with(s.id), Sense::click());
             let active = self.recording == Some(s.cmd);
-            let fill = if resp.hovered() || active { t::BUTTON_HOVER } else { t::BUTTON };
-            let stroke = if active { Stroke::new(1.0, t::PRIMARY) } else { Stroke::NONE };
+            let fill = if resp.hovered() || active { t::p().button_hover } else { t::p().button };
+            let stroke = if active { Stroke::new(1.0, t::p().primary) } else { Stroke::NONE };
             p.rect(button, CornerRadius::same(6), fill, stroke, egui::StrokeKind::Inside);
             let (text, color) = match (active, keys.binding(s.cmd)) {
-                (true, _) => ("Type a shortcut".to_string(), t::TEXT_MUTED),
-                (false, Some(c)) => (display(ui.ctx(), &c), t::TEXT),
-                (false, None) => ("None".to_string(), t::TEXT_DISABLED),
+                (true, _) => ("Type a shortcut".to_string(), t::p().text_muted),
+                (false, Some(c)) => (display(ui.ctx(), &c), t::p().text),
+                (false, None) => ("None".to_string(), t::p().text_disabled),
             };
             p.text(button.center(), Align2::CENTER_CENTER, text, font(12.5), color);
             if resp.clicked() {
@@ -419,9 +419,9 @@ impl Recorder {
                 let r = egui::Rect::from_center_size(button.left_center() - vec2(16.0, 0.0), vec2(22.0, 22.0));
                 let reset = ui.interact(r, ui.scope_id().with((s.id, "reset")), Sense::click()).on_hover_text("Use the default");
                 if reset.hovered() {
-                    p.rect_filled(r, CornerRadius::same(5), t::BUTTON_HOVER);
+                    p.rect_filled(r, CornerRadius::same(5), t::p().button_hover);
                 }
-                p.text(r.center(), Align2::CENTER_CENTER, crate::icons::ARROW_COUNTER_CLOCKWISE, font(13.0), t::TEXT_MUTED);
+                p.text(r.center(), Align2::CENTER_CENTER, crate::icons::ARROW_COUNTER_CLOCKWISE, font(13.0), t::p().text_muted);
                 if reset.clicked() {
                     keys.reset(s.cmd);
                     // The default may now clash with a chord given to
@@ -440,8 +440,8 @@ impl Recorder {
         ui.label(RichText::new("Fixed").strong().size(13.0));
         for (k, what) in FIXED {
             let (row, _) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::hover());
-            ui.painter().text(row.left_center() + vec2(12.0, 0.0), Align2::LEFT_CENTER, *what, font(13.0), t::TEXT_MUTED);
-            ui.painter().text(row.right_center() - vec2(75.0, 0.0), Align2::CENTER_CENTER, *k, font(12.5), t::TEXT_MUTED);
+            ui.painter().text(row.left_center() + vec2(12.0, 0.0), Align2::LEFT_CENTER, *what, font(13.0), t::p().text_muted);
+            ui.painter().text(row.right_center() - vec2(75.0, 0.0), Align2::CENTER_CENTER, *k, font(12.5), t::p().text_muted);
         }
         ui.add_space(12.0);
         ui.separator();

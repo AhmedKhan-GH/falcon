@@ -246,7 +246,7 @@ Only dark was checked against Eagle's window. The other four were not sampled fr
 | `BRAND` | `#0072ef` | `#0072ef` | `#0072ef` | `#0072ef` | `#0072ef` | `--color-brand` (observed) |
 | `ICON_RED` … `ICON_PINK`, `ICON_NONE` | dark set | light set | dark set | dark set | dark set | the two `$colors` maps (observed) |
 
-**State of the code.** The theme choice, the palettes, the Preferences row and the startup hook are built. The drawing code still uses the dark `pub const` colours (`t::MAIN` and so on), so until those uses move to `t::p().main`, a theme change only restyles egui's own widgets.
+**How the code reads colours.** Drawing code asks for the current palette with `t::p()` (`t::p().main`, `t::p().text_muted`, …), a static lookup that is cheap enough per card. The `pub const` colours in `theme.rs` are the dark values and only seed the dark palette. A few greys that used to be hard-coded for a dark background (the toolbar icon tint, the zoom slider, list zebra rows, the type placeholder, swatch rings and the delete-button red) now read the palette too, so they stay readable on light. Overlays drawn on images, on the primary colour or on black scrims keep their fixed white, as they do not sit on a theme surface.
 
 ## Shortcut settings
 

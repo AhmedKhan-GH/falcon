@@ -215,7 +215,7 @@ impl Window {
         });
         let mut result = None;
         let mut close = esc;
-        let frame = egui::Frame::NONE.fill(t::PANEL).stroke(Stroke::new(1.0, t::DIVIDER)).corner_radius(CornerRadius::same(10));
+        let frame = egui::Frame::NONE.fill(t::p().panel).stroke(Stroke::new(1.0, t::p().divider)).corner_radius(CornerRadius::same(10));
         egui::Modal::new(egui::Id::unique("preferences")).frame(frame).show(ctx, |ui| {
             ui.set_width(SIZE.x);
             ui.set_height(SIZE.y);
@@ -226,15 +226,15 @@ impl Window {
             self.nav(&mut nav_ui);
 
             let inner = body.shrink2(vec2(0.0, 8.0)).with_max_x(body.right() - 8.0);
-            ui.painter().rect(inner, CornerRadius::same(8), t::MAIN, Stroke::new(1.0, t::DIVIDER), egui::StrokeKind::Inside);
+            ui.painter().rect(inner, CornerRadius::same(8), t::p().main, Stroke::new(1.0, t::p().divider), egui::StrokeKind::Inside);
             let header = egui::Rect::from_min_size(inner.min, vec2(inner.width(), t::BAR_HEIGHT));
-            ui.painter().text(header.left_center() + vec2(16.0, 0.0), Align2::LEFT_CENTER, self.section.label(), font(14.0), t::TEXT);
+            ui.painter().text(header.left_center() + vec2(16.0, 0.0), Align2::LEFT_CENTER, self.section.label(), font(14.0), t::p().text);
             let x = egui::Rect::from_center_size(header.right_center() - vec2(24.0, 0.0), vec2(24.0, 24.0));
             let xr = ui.interact(x, ui.scope_id().with("close"), Sense::click());
             if xr.hovered() {
-                ui.painter().rect_filled(x, CornerRadius::same(6), t::BUTTON_HOVER);
+                ui.painter().rect_filled(x, CornerRadius::same(6), t::p().button_hover);
             }
-            ui.painter().text(x.center(), Align2::CENTER_CENTER, crate::icons::X, font(14.0), t::TEXT_MUTED);
+            ui.painter().text(x.center(), Align2::CENTER_CENTER, crate::icons::X, font(14.0), t::p().text_muted);
             close |= xr.clicked();
 
             let footer = egui::Rect::from_min_max(egui::pos2(inner.left(), inner.bottom() - 52.0), inner.max);
@@ -247,10 +247,10 @@ impl Window {
                 Section::Developer => developer(ui, &mut draft.prefs, &mut self.port_text, port.as_ref().err()),
             });
 
-            ui.painter().hline(footer.x_range(), footer.top(), Stroke::new(1.0, t::DIVIDER));
+            ui.painter().hline(footer.x_range(), footer.top(), Stroke::new(1.0, t::p().divider));
             let mut f = ui.new_child(egui::UiBuilder::new().max_rect(footer.shrink2(vec2(16.0, 10.0))).layout(egui::Layout::right_to_left(egui::Align::Center)));
             let valid = port.is_ok();
-            let save = f.add_enabled(valid, egui::Button::new(RichText::new("Save").color(Color32::WHITE)).fill(t::PRIMARY)).clicked();
+            let save = f.add_enabled(valid, egui::Button::new(RichText::new("Save").color(Color32::WHITE)).fill(t::p().primary)).clicked();
             let apply = f.add_enabled(valid, egui::Button::new("Apply")).clicked();
             close |= f.button("Cancel").clicked();
             if (save || apply || (save_key && valid))
@@ -275,19 +275,19 @@ impl Window {
 
     fn nav(&mut self, ui: &mut Ui) {
         let (title, _) = ui.allocate_exact_size(vec2(ui.available_width(), t::BAR_HEIGHT), Sense::hover());
-        ui.painter().text(title.left_center(), Align2::LEFT_CENTER, "Preferences", font(14.0), t::TEXT);
+        ui.painter().text(title.left_center(), Align2::LEFT_CENTER, "Preferences", font(14.0), t::p().text);
         for s in Section::ALL {
             let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 32.0), Sense::click());
             let fill = if s == self.section {
-                t::ROW_SELECTED
+                t::p().row_selected
             } else if resp.hovered() {
-                t::ROW_HOVER
+                t::p().row_hover
             } else {
                 Color32::TRANSPARENT
             };
             ui.painter().rect_filled(rect, CornerRadius::same(6), fill);
-            ui.painter().text(rect.left_center() + vec2(14.0, 0.0), Align2::CENTER_CENTER, s.icon(), font(15.0), t::TEXT);
-            ui.painter().text(rect.left_center() + vec2(30.0, 0.0), Align2::LEFT_CENTER, s.label(), font(13.0), t::TEXT);
+            ui.painter().text(rect.left_center() + vec2(14.0, 0.0), Align2::CENTER_CENTER, s.icon(), font(15.0), t::p().text);
+            ui.painter().text(rect.left_center() + vec2(30.0, 0.0), Align2::LEFT_CENTER, s.label(), font(13.0), t::p().text);
             if resp.clicked() {
                 self.section = s;
                 self.recorder.stop();
@@ -305,7 +305,7 @@ fn block(ui: &mut Ui, title: &str, add: impl FnOnce(&mut Ui)) {
 }
 
 fn note(ui: &mut Ui, text: &str) {
-    ui.label(RichText::new(text).size(11.0).color(t::TEXT_MUTED));
+    ui.label(RichText::new(text).size(11.0).color(t::p().text_muted));
 }
 
 fn general(ui: &mut Ui, d: &mut Draft) {
@@ -346,7 +346,7 @@ fn developer(ui: &mut Ui, p: &mut Prefs, port_text: &mut String, error: Option<&
             });
             match error {
                 Some(e) => {
-                    ui.label(RichText::new(e).size(11.0).color(Color32::from_rgb(0xff, 0x66, 0x67)));
+                    ui.label(RichText::new(e).size(11.0).color(t::p().icon_red));
                 }
                 None => {
                     let first = parse_port(port_text).unwrap_or(p.api_port);

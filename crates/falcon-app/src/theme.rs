@@ -302,9 +302,6 @@ fn store(theme: Theme) {
 }
 
 /// The current theme's colours.
-// Unused until the sweep turns `t::MAIN`-style constants into `t::p().main`;
-// drop the allow then.
-#[allow(dead_code)]
 pub fn p() -> &'static Palette {
     &PALETTES[current() as usize]
 }

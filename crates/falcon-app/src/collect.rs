@@ -120,8 +120,8 @@ impl Collect {
 
         let full = ui.max_rect();
         let p = ui.painter().clone();
-        p.rect_filled(full, 0.0, t::PANEL);
-        p.rect_stroke(full, 0.0, Stroke::new(1.0, t::DIVIDER), egui::StrokeKind::Inside);
+        p.rect_filled(full, 0.0, t::p().panel);
+        p.rect_stroke(full, 0.0, Stroke::new(1.0, t::p().divider), egui::StrokeKind::Inside);
 
         // Header: drag to move, × to close.
         let header = Rect::from_min_size(full.min, vec2(full.width(), 36.0));
@@ -129,33 +129,33 @@ impl Collect {
         if drag.drag_started() {
             ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
         }
-        p.text(header.left_center() + vec2(14.0, 0.0), Align2::LEFT_CENTER, "Collect", font(13.0), t::TEXT);
+        p.text(header.left_center() + vec2(14.0, 0.0), Align2::LEFT_CENTER, "Collect", font(13.0), t::p().text);
         let x = Rect::from_center_size(header.right_center() - vec2(20.0, 0.0), vec2(22.0, 22.0));
         let xr = ui.interact(x, ui.scope_id().with("close"), Sense::click());
         if xr.hovered() {
-            p.rect_filled(x, CornerRadius::same(5), t::BUTTON_HOVER);
+            p.rect_filled(x, CornerRadius::same(5), t::p().button_hover);
         }
-        p.text(x.center(), Align2::CENTER_CENTER, crate::icons::X, font(13.0), t::TEXT_MUTED);
+        p.text(x.center(), Align2::CENTER_CENTER, crate::icons::X, font(13.0), t::p().text_muted);
         if xr.clicked() {
             self.open = false;
         }
 
         // Drop zone.
         let zone = Rect::from_min_size(Pos2::new(full.left() + 12.0, header.bottom()), vec2(full.width() - 24.0, 110.0));
-        let (fill, edge) = if hovering { (t::PRIMARY.gamma_multiply(0.15), t::PRIMARY) } else { (t::MAIN, t::GUIDE) };
+        let (fill, edge) = if hovering { (t::p().primary.gamma_multiply(0.15), t::p().primary) } else { (t::p().main, t::p().guide) };
         p.rect(zone, CornerRadius::same(8), fill, Stroke::new(1.0, edge), egui::StrokeKind::Inside);
         let enabled = folders.is_some();
         let (line1, line2) = if enabled { ("Drop files here", "or paste with ⌘V") } else { ("No library open", "") };
-        p.text(zone.center() - vec2(0.0, 22.0), Align2::CENTER_CENTER, crate::icons::TRAY_ARROW_DOWN, font(26.0), if hovering { t::PRIMARY } else { t::TEXT_MUTED });
-        p.text(zone.center() + vec2(0.0, 10.0), Align2::CENTER_CENTER, line1, font(13.0), t::TEXT);
-        p.text(zone.center() + vec2(0.0, 28.0), Align2::CENTER_CENTER, line2, font(11.5), t::TEXT_MUTED);
+        p.text(zone.center() - vec2(0.0, 22.0), Align2::CENTER_CENTER, crate::icons::TRAY_ARROW_DOWN, font(26.0), if hovering { t::p().primary } else { t::p().text_muted });
+        p.text(zone.center() + vec2(0.0, 10.0), Align2::CENTER_CENTER, line1, font(13.0), t::p().text);
+        p.text(zone.center() + vec2(0.0, 28.0), Align2::CENTER_CENTER, line2, font(11.5), t::p().text_muted);
 
         // Folder chooser.
         let list_top = zone.bottom() + 12.0;
         let status_h = 24.0;
         let area = Rect::from_min_max(Pos2::new(full.left() + 12.0, list_top), Pos2::new(full.right() - 12.0, full.bottom() - status_h));
         let mut c = ui.new_child(egui::UiBuilder::new().max_rect(area));
-        c.label(egui::RichText::new("Save to").size(12.0).color(t::TEXT_MUTED));
+        c.label(egui::RichText::new("Save to").size(12.0).color(t::p().text_muted));
         if let Some(rows) = folders {
             c.add(egui::TextEdit::singleline(&mut self.filter).hint_text("Search folders").desired_width(f32::INFINITY));
             c.add_space(4.0);
@@ -180,7 +180,7 @@ impl Collect {
         }
         if let Some((msg, _)) = &self.status {
             let r = Rect::from_min_max(Pos2::new(full.left() + 14.0, full.bottom() - status_h), full.max);
-            p.text(r.left_center(), Align2::LEFT_CENTER, msg, font(11.5), t::TEXT_MUTED);
+            p.text(r.left_center(), Align2::LEFT_CENTER, msg, font(11.5), t::p().text_muted);
             ctx.request_repaint_after(std::time::Duration::from_millis(500));
         }
 
@@ -203,17 +203,17 @@ impl Collect {
 fn folder_row(ui: &mut Ui, label: &str, depth: usize, selected: bool) -> bool {
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::click());
     let fill = if selected {
-        t::ROW_SELECTED
+        t::p().row_selected
     } else if resp.hovered() {
-        t::ROW_HOVER
+        t::p().row_hover
     } else {
         Color32::TRANSPARENT
     };
     ui.painter().rect_filled(rect, CornerRadius::same(6), fill);
     let x = rect.left() + 8.0 + depth as f32 * 14.0;
-    ui.painter().text(Pos2::new(x + 7.0, rect.center().y), Align2::CENTER_CENTER, crate::icons::FOLDER, font(14.0), t::TEXT_MUTED);
-    let g = ui.painter().layout(label.to_string(), font(13.0), t::TEXT, rect.right() - x - 24.0);
-    ui.painter().galley(Pos2::new(x + 20.0, rect.center().y - g.size().y / 2.0), g, t::TEXT);
+    ui.painter().text(Pos2::new(x + 7.0, rect.center().y), Align2::CENTER_CENTER, crate::icons::FOLDER, font(14.0), t::p().text_muted);
+    let g = ui.painter().layout(label.to_string(), font(13.0), t::p().text, rect.right() - x - 24.0);
+    ui.painter().galley(Pos2::new(x + 20.0, rect.center().y - g.size().y / 2.0), g, t::p().text);
     resp.clicked()
 }
 

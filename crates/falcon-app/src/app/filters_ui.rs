@@ -42,7 +42,7 @@ fn menu(resp: &egui::Response, add: impl FnOnce(&mut Ui)) {
 }
 
 fn muted(ui: &mut Ui, text: &str) {
-    ui.label(RichText::new(text).color(t::TEXT_MUTED).size(12.0));
+    ui.label(RichText::new(text).color(t::p().text_muted).size(12.0));
 }
 
 impl App {

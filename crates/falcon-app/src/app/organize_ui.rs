@@ -98,7 +98,7 @@ fn color_row(ui: &mut Ui, current: Option<&str>) -> Option<Option<String>> {
     let mut pick = None;
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 6.0;
-        let swatches = std::iter::once((None, t::ICON_NONE)).chain(folder_icons::colors().map(|(n, c)| (Some(n), c)));
+        let swatches = std::iter::once((None, t::p().icon_none)).chain(folder_icons::colors().map(|(n, c)| (Some(n), c)));
         for (name, c) in swatches {
             let (rect, resp) = ui.allocate_exact_size(Vec2::splat(20.0), Sense::click());
             let p = ui.painter();
@@ -108,9 +108,9 @@ fn color_row(ui: &mut Ui, current: Option<&str>) -> Option<Option<String>> {
                 p.circle_stroke(rect.center(), 6.5, Stroke::new(1.5, c));
             }
             if name == current {
-                p.circle_stroke(rect.center(), 9.5, Stroke::new(1.5, t::PRIMARY));
+                p.circle_stroke(rect.center(), 9.5, Stroke::new(1.5, t::p().primary));
             } else if resp.hovered() {
-                p.circle_stroke(rect.center(), 9.5, Stroke::new(1.0, t::TEXT_MUTED));
+                p.circle_stroke(rect.center(), 9.5, Stroke::new(1.0, t::p().text_muted));
             }
             if resp.clicked() {
                 pick = Some(name.map(str::to_string));
@@ -134,9 +134,9 @@ fn icon_grid(ui: &mut Ui, current: Option<&str>, tint: Color32, smart: bool) -> 
             for (name, g) in std::iter::once((None, default)).chain(folder_icons::all().map(|(n, g)| (Some(n), g))) {
                 let (rect, resp) = ui.allocate_exact_size(Vec2::splat(24.0), Sense::click());
                 if name == current {
-                    ui.painter().rect_filled(rect, t::RADIUS, t::ROW_SELECTED);
+                    ui.painter().rect_filled(rect, t::RADIUS, t::p().row_selected);
                 } else if resp.hovered() {
-                    ui.painter().rect_filled(rect, t::RADIUS, t::ROW_HOVER);
+                    ui.painter().rect_filled(rect, t::RADIUS, t::p().row_hover);
                 }
                 let size = if folder_icons::is_text(g) { 11.0 } else { 17.0 };
                 icon(ui, rect.center(), g, size, tint);
@@ -190,13 +190,13 @@ fn tree_drop_feedback<P: Clone + Send + Sync + 'static>(ui: &Ui, resp: &Response
     match zone {
         DropZone::Into => {
             let bg = Rect::from_min_max(Pos2::new(x0, r.top() + 0.5), Pos2::new(r.right() - 11.0, r.bottom() - 0.5));
-            p.rect_filled(bg, t::RADIUS, t::PRIMARY.gamma_multiply(0.3));
-            p.rect_stroke(bg, t::RADIUS, Stroke::new(1.0, t::PRIMARY), StrokeKind::Inside);
+            p.rect_filled(bg, t::RADIUS, t::p().primary.gamma_multiply(0.3));
+            p.rect_stroke(bg, t::RADIUS, Stroke::new(1.0, t::p().primary), StrokeKind::Inside);
         }
         DropZone::Before | DropZone::After => {
             let y = if zone == DropZone::Before { r.top() + 0.5 } else { r.bottom() - 0.5 };
-            p.hline(x0..=r.right() - 11.0, y, Stroke::new(1.5, t::PRIMARY));
-            p.circle_stroke(Pos2::new(x0, y), 2.5, Stroke::new(1.5, t::PRIMARY));
+            p.hline(x0..=r.right() - 11.0, y, Stroke::new(1.5, t::p().primary));
+            p.circle_stroke(Pos2::new(x0, y), 2.5, Stroke::new(1.5, t::p().primary));
         }
     }
     Some(zone)
@@ -207,7 +207,7 @@ fn tree_drop_feedback<P: Clone + Send + Sync + 'static>(ui: &Ui, resp: &Response
 pub(super) fn lock_badge(ui: &Ui, row: Rect, shut: bool, has_count: bool) {
     let x = row.right() - if has_count { 52.0 } else { 24.0 };
     let glyph = if shut { ic::LOCK_SIMPLE } else { ic::LOCK_SIMPLE_OPEN };
-    icon(ui, Pos2::new(x, row.center().y), glyph, 13.0, t::TEXT_MUTED);
+    icon(ui, Pos2::new(x, row.center().y), glyph, 13.0, t::p().text_muted);
 }
 
 // ---------------------------------------------------------------------------
@@ -216,7 +216,7 @@ pub(super) fn lock_badge(ui: &Ui, row: Rect, shut: bool, has_count: bool) {
 impl App {
     /// The folder's icon glyph and tint for its sidebar row.
     pub(super) fn folder_look(f: &Folder, open: bool) -> (&'static str, Color32) {
-        (folder_icons::glyph(f.icon.as_deref(), open), folder_icons::color(f.icon_color.as_deref()).unwrap_or(t::TEXT))
+        (folder_icons::glyph(f.icon.as_deref(), open), folder_icons::color(f.icon_color.as_deref()).unwrap_or(t::p().text))
     }
 
     /// Reorder and nest by dragging a folder row: an insertion line in the
@@ -274,7 +274,7 @@ impl App {
             }
         });
         ui.separator();
-        let tint = folder_icons::color(f.icon_color.as_deref()).unwrap_or(t::TEXT);
+        let tint = folder_icons::color(f.icon_color.as_deref()).unwrap_or(t::p().text);
         ui.menu_button("Change Icon", |ui| {
             if let Some(icon) = icon_grid(ui, f.icon.as_deref(), tint, false) {
                 self.ws.actions.push(org(OrgAction::FolderIcon(f.id.clone(), icon, f.icon_color.clone())));
@@ -299,7 +299,7 @@ impl App {
         let count = lib.smart_folder_items(&sf.id).len();
         let active = self.ws.scope == Scope::Smart(sf.id.clone());
         let glyph = folder_icons::smart_glyph(sf.icon.as_deref());
-        let tint = folder_icons::color(sf.icon_color.as_deref()).unwrap_or(t::TEXT);
+        let tint = folder_icons::color(sf.icon_color.as_deref()).unwrap_or(t::p().text);
         let resp = sidebar_row_tinted(ui, depth, glyph, tint, &sf.name, (count > 0).then_some(count), active, has_children.then_some(open));
         let row = resp.rect;
         if resp.drag_started() {
@@ -356,7 +356,7 @@ impl App {
                 ui.close();
             }
             ui.separator();
-            if ui.button(RichText::new("Delete Smart Folder").color(Color32::from_rgb(0xff, 0x66, 0x67))).clicked() {
+            if ui.button(RichText::new("Delete Smart Folder").color(t::p().icon_red)).clicked() {
                 self.ws.actions.push(Action::DeleteSmart(sf.id.clone()));
             }
         });
@@ -380,8 +380,8 @@ impl App {
             if let Some(end) = last {
                 let x = row.left() + icon_x(depth);
                 let p = ui.painter();
-                p.line_segment([Pos2::new(x, row.bottom() - 3.0), Pos2::new(x, end - 5.0)], Stroke::new(1.0, t::GUIDE));
-                p.line_segment([Pos2::new(x, end - 5.0), Pos2::new(x + 5.0, end)], Stroke::new(1.0, t::GUIDE));
+                p.line_segment([Pos2::new(x, row.bottom() - 3.0), Pos2::new(x, end - 5.0)], Stroke::new(1.0, t::p().guide));
+                p.line_segment([Pos2::new(x, end - 5.0), Pos2::new(x + 5.0, end)], Stroke::new(1.0, t::p().guide));
             }
         }
         Some(row)
@@ -408,7 +408,7 @@ impl App {
         });
         ui.horizontal(|ui| {
             ui.label("Icon");
-            let tint = folder_icons::color(d.color.as_deref()).unwrap_or(t::TEXT);
+            let tint = folder_icons::color(d.color.as_deref()).unwrap_or(t::p().text);
             let glyph = folder_icons::smart_glyph(d.icon.as_deref());
             ui.menu_button(RichText::new(glyph).size(16.0).color(tint), |ui| {
                 if let Some(icon) = icon_grid(ui, d.icon.as_deref(), tint, true) {
@@ -495,12 +495,12 @@ impl App {
     /// folder owns the sort: changes go to it. With "Global Settings" the
     /// direction still changes the global sort.
     pub(super) fn own_sort_menu(&mut self, ui: &mut Ui, target: OrderTarget, cur: Option<(FolderOrder, bool)>) {
-        ui.label(RichText::new("Sort by (this folder)").color(t::TEXT_MUTED).size(12.0));
+        ui.label(RichText::new("Sort by (this folder)").color(t::p().text_muted).size(12.0));
         let manual = matches!(target, OrderTarget::Folder(_));
         let pick = sort_entries(ui, cur, manual, (self.ws.sort, self.ws.increase));
         if cur.is_none() {
             let labels = if self.ws.sort.is_time() { ["Newest First", "Oldest First"] } else { ["Ascending", "Descending"] };
-            ui.label(RichText::new(format!("Global: {}", self.ws.sort.label())).color(t::TEXT_MUTED).size(12.0));
+            ui.label(RichText::new(format!("Global: {}", self.ws.sort.label())).color(t::p().text_muted).size(12.0));
             for (inc, label) in [(true, labels[0]), (false, labels[1])] {
                 let mark = if inc == self.ws.increase { ic::CHECK } else { " " };
                 if ui.button(format!("{mark}  {label}")).clicked() {
@@ -529,16 +529,16 @@ impl App {
     pub(super) fn unlock_screen(&mut self, ui: &mut Ui, gate: &Folder, lib: &Library) {
         let area = ui.max_rect();
         let c = area.center() - vec2(0.0, 60.0);
-        icon(ui, c, ic::LOCK_SIMPLE, 48.0, t::TEXT_MUTED);
-        ui.painter().text(c + vec2(0.0, 48.0), Align2::CENTER_CENTER, "Unlock to view contents", font(16.0), t::TEXT);
+        icon(ui, c, ic::LOCK_SIMPLE, 48.0, t::p().text_muted);
+        ui.painter().text(c + vec2(0.0, 48.0), Align2::CENTER_CENTER, "Unlock to view contents", font(16.0), t::p().text);
         let mut y = c.y + 74.0;
         if !gate.password_tips.is_empty() {
-            ui.painter().text(Pos2::new(c.x, y), Align2::CENTER_CENTER, format!("Hint: {}", gate.password_tips), font(13.0), t::TEXT_MUTED);
+            ui.painter().text(Pos2::new(c.x, y), Align2::CENTER_CENTER, format!("Hint: {}", gate.password_tips), font(13.0), t::p().text_muted);
             y += 24.0;
         }
         let r = Rect::from_center_size(Pos2::new(c.x, y + 14.0), vec2(220.0, 30.0));
-        let border = if self.ws.org.unlock_error { Color32::from_rgb(0xff, 0x66, 0x67) } else { t::FIELD_BORDER };
-        ui.painter().rect_filled(r, t::FIELD_RADIUS, t::FIELD);
+        let border = if self.ws.org.unlock_error { t::p().icon_red } else { t::p().field_border };
+        ui.painter().rect_filled(r, t::FIELD_RADIUS, t::p().field);
         ui.painter().rect_stroke(r, t::FIELD_RADIUS, Stroke::new(1.0, border), StrokeKind::Inside);
         let te = ui.put(
             r.shrink2(vec2(10.0, 0.0)),
@@ -547,7 +547,7 @@ impl App {
                 .password(true)
                 .frame(egui::Frame::NONE)
                 .margin(egui::Margin::ZERO)
-                .hint_text(RichText::new("Enter password").color(t::TEXT_MUTED))
+                .hint_text(RichText::new("Enter password").color(t::p().text_muted))
                 .font(font(14.0))
                 .align(Align2::LEFT_CENTER),
         );
@@ -574,7 +574,7 @@ impl App {
     /// The All Tags page's mode switch and New Group button.
     pub(super) fn tag_page_controls(&mut self, ui: &mut Ui) {
         ui.add_space(12.0);
-        ui.label(RichText::new("Group by").color(t::TEXT_MUTED));
+        ui.label(RichText::new("Group by").color(t::p().text_muted));
         if ui.selectable_label(!self.ws.org.by_group, "Alphabet").clicked() {
             self.ws.org.by_group = false;
         }
@@ -625,7 +625,7 @@ impl App {
         let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
         let x = rect.left() + GRID_PAD_X + 2.0;
         let cy = rect.center().y;
-        let dot = sec.and_then(|s| folder_icons::color(s.color.as_deref())).unwrap_or(t::ICON_NONE);
+        let dot = sec.and_then(|s| folder_icons::color(s.color.as_deref())).unwrap_or(t::p().icon_none);
         if sec.is_some() {
             ui.painter().circle_filled(Pos2::new(x + 5.0, cy), 5.0, dot);
         }
@@ -646,10 +646,10 @@ impl App {
             }
         } else {
             let title = sec.map_or("Ungrouped", |s| s.name.as_str());
-            ui.painter().text(Pos2::new(tx, cy), Align2::LEFT_CENTER, format!("{title}  ({n})"), font(14.0), t::TEXT_MUTED);
+            ui.painter().text(Pos2::new(tx, cy), Align2::LEFT_CENTER, format!("{title}  ({n})"), font(14.0), t::p().text_muted);
         }
         if resp.dnd_hover_payload::<DragTag>().is_some() {
-            ui.painter().rect_stroke(rect.shrink2(vec2(GRID_PAD_X - 6.0, 0.0)), t::RADIUS, Stroke::new(1.5, t::PRIMARY), StrokeKind::Inside);
+            ui.painter().rect_stroke(rect.shrink2(vec2(GRID_PAD_X - 6.0, 0.0)), t::RADIUS, Stroke::new(1.5, t::p().primary), StrokeKind::Inside);
         }
         if let Some(d) = resp.dnd_release_payload::<DragTag>() {
             match sec {
@@ -675,7 +675,7 @@ impl App {
                 ui.close();
             }
             ui.separator();
-            if ui.button(RichText::new("Delete Group").color(Color32::from_rgb(0xff, 0x66, 0x67))).clicked() {
+            if ui.button(RichText::new("Delete Group").color(t::p().icon_red)).clicked() {
                 if s.tags.is_empty() {
                     self.ws.actions.push(org(OrgAction::DeleteGroup(s.id.clone())));
                 } else {
@@ -694,7 +694,7 @@ impl App {
 
     /// The colour dot of a tag filed in a group (grey for an uncoloured group).
     pub(super) fn tag_dot(lib: &Library, tag: &str) -> Option<Color32> {
-        organize::group_of(&lib.metadata.tags_groups, tag).map(|g| folder_icons::color(g.color.as_deref()).unwrap_or(t::ICON_NONE))
+        organize::group_of(&lib.metadata.tags_groups, tag).map(|g| folder_icons::color(g.color.as_deref()).unwrap_or(t::p().icon_none))
     }
 
     /// The tag chip menu's Move to Group submenu.
@@ -759,7 +759,7 @@ impl App {
                         if ui.add_enabled(i + 1 < n, egui::Button::new("Move Down")).clicked() {
                             self.ws.actions.push(org(OrgAction::MoveFilter(i, i + 1)));
                         }
-                        if ui.button(RichText::new("Remove").color(Color32::from_rgb(0xff, 0x66, 0x67))).clicked() {
+                        if ui.button(RichText::new("Remove").color(t::p().icon_red)).clicked() {
                             self.ws.actions.push(org(OrgAction::DeleteFilter(i)));
                         }
                     });
@@ -802,10 +802,10 @@ impl App {
                 ui.set_width(320.0);
                 ui.label(RichText::new(format!("Delete the group “{name}”?")).size(15.0));
                 ui.add_space(4.0);
-                ui.label(RichText::new("Its tags stay on their items.").color(t::TEXT_MUTED));
+                ui.label(RichText::new("Its tags stay on their items.").color(t::p().text_muted));
                 ui.add_space(10.0);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button(RichText::new("Delete Group").color(Color32::from_rgb(0xff, 0x66, 0x67))).clicked() {
+                    if ui.button(RichText::new("Delete Group").color(t::p().icon_red)).clicked() {
                         self.ws.actions.push(org(OrgAction::DeleteGroup(id.clone())));
                         self.ws.org.group_delete = None;
                     }
@@ -852,7 +852,7 @@ impl App {
                 ui.add(TextEdit::multiline(&mut d.hint).hint_text("Password hint").desired_rows(2).desired_width(f32::INFINITY));
             }
             if let Some(e) = d.error {
-                ui.label(RichText::new(e).color(Color32::from_rgb(0xff, 0x66, 0x67)));
+                ui.label(RichText::new(e).color(t::p().icon_red));
             }
             ui.add_space(8.0);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

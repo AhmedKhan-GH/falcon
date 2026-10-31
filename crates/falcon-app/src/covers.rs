@@ -79,11 +79,11 @@ impl App {
                         let (rect, resp) = ui.allocate_exact_size(vec2(CARD_W, STRIP_H - 8.0), Sense::click());
                         let thumb = Rect::from_min_size(rect.min + vec2(0.0, 6.0), vec2(CARD_W, THUMB_H));
                         let p = ui.painter();
-                        p.rect_filled(thumb, t::RADIUS, t::FIELD);
-                        let border = if resp.hovered() { t::CARD_HOVER } else { t::CARD_BORDER };
+                        p.rect_filled(thumb, t::RADIUS, t::p().field);
+                        let border = if resp.hovered() { t::p().card_hover } else { t::p().card_border };
                         p.rect_stroke(thumb, t::RADIUS, Stroke::new(1.0, border), StrokeKind::Inside);
                         if child.is_locked() {
-                            p.text(thumb.center(), Align2::CENTER_CENTER, crate::icons::FOLDER, font(30.0), t::TEXT_DISABLED);
+                            p.text(thumb.center(), Align2::CENTER_CENTER, crate::icons::FOLDER, font(30.0), t::p().text_disabled);
                         } else if let Some(item) = cover(lib.items(), child, self.ws.sort, self.ws.increase, &locked) {
                             match self.ws.loader.get(&item.id, Tier::Grid).cloned() {
                                 Some(tex) => {
@@ -99,17 +99,17 @@ impl App {
                                 self.ws.frame_jobs.push(j);
                             }
                         } else {
-                            p.text(thumb.center(), Align2::CENTER_CENTER, crate::icons::FOLDER, font(30.0), t::TEXT_DISABLED);
+                            p.text(thumb.center(), Align2::CENTER_CENTER, crate::icons::FOLDER, font(30.0), t::p().text_disabled);
                         }
-                        let g = galley(ui, &child.name, font(13.0), t::TEXT, CARD_W);
-                        ui.painter().galley(Pos2::new(rect.left(), thumb.bottom() + 6.0), g, t::TEXT);
+                        let g = galley(ui, &child.name, font(13.0), t::p().text, CARD_W);
+                        ui.painter().galley(Pos2::new(rect.left(), thumb.bottom() + 6.0), g, t::p().text);
                         let count = lib.items().iter().filter(|i| !i.is_deleted && i.folders.contains(&child.id)).count();
                         let mut meta = format!("{count} items");
                         if !child.children.is_empty() {
                             meta.push_str(&format!(" · {} subfolders", child.children.len()));
                         }
-                        let g = galley(ui, &meta, font(11.5), t::TEXT_MUTED, CARD_W);
-                        ui.painter().galley(Pos2::new(rect.left(), thumb.bottom() + 25.0), g, t::TEXT_MUTED);
+                        let g = galley(ui, &meta, font(11.5), t::p().text_muted, CARD_W);
+                        ui.painter().galley(Pos2::new(rect.left(), thumb.bottom() + 25.0), g, t::p().text_muted);
                         if resp.double_clicked() || resp.clicked() {
                             open = Some(child.id.clone());
                         }

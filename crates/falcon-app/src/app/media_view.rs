@@ -61,15 +61,15 @@ fn sample(item: &Item) -> String {
 /// The bar above the audio and font viewers: back and the item's name.
 fn top_bar(app: &mut App, ui: &mut Ui, item: &Item, bar: Rect) {
     let p = ui.painter().clone();
-    p.rect_filled(bar, 0.0, t::MAIN);
+    p.rect_filled(bar, 0.0, t::p().main);
     window_drag(ui, bar, "viewer");
     let cy = bar.center().y;
     if icon_button(ui, Pos2::new(bar.left() + 98.0, cy), ic::CARET_LEFT, 17.0, true, "Back (Esc)").clicked() {
         app.ws.viewer = None;
     }
     let name = format!("{}.{}", item.name, item.ext);
-    let g = galley(ui, &name, font(14.0), t::TEXT, 360.0);
-    p.galley(Pos2::new(bar.left() + 120.0, cy - g.size().y / 2.0), g, t::TEXT);
+    let g = galley(ui, &name, font(14.0), t::p().text, 360.0);
+    p.galley(Pos2::new(bar.left() + 120.0, cy - g.size().y / 2.0), g, t::p().text);
 }
 
 impl App {
@@ -82,7 +82,7 @@ impl App {
             return false;
         }
         egui::Area::new(egui::Id::unique("media-viewer")).fixed_pos(screen.min).order(egui::Order::Foreground).show(ctx, |ui| {
-            ui.painter().rect_filled(screen, 0.0, t::MAIN);
+            ui.painter().rect_filled(screen, 0.0, t::p().main);
             let bar = Rect::from_min_size(screen.min, vec2(screen.width(), t::BAR_HEIGHT));
             let area = Rect::from_min_max(Pos2::new(screen.left(), bar.bottom()), screen.max);
             // Swallow clicks on the background so the grid below never gets them.
@@ -110,7 +110,7 @@ impl App {
         let p = ui.painter().clone();
         match self.ws.waveforms.get(ctx, &item.id, &path, &item.ext) {
             None => {
-                p.text(wave.center(), Align2::CENTER_CENTER, "Reading waveform…", font(13.0), t::TEXT_MUTED);
+                p.text(wave.center(), Align2::CENTER_CENTER, "Reading waveform…", font(13.0), t::p().text_muted);
             }
             Some(peaks) => {
                 let bars = (w / 3.0) as usize;
@@ -145,14 +145,14 @@ impl App {
         let cy = wave.bottom() + 40.0;
         let play = Rect::from_center_size(Pos2::new(wave.left() + 20.0, cy), Vec2::splat(40.0));
         let resp = ui.interact(play, ui.scope_id().with("play"), Sense::click());
-        p.circle_filled(play.center(), 20.0, if resp.hovered() { t::PRIMARY } else { t::BRAND });
+        p.circle_filled(play.center(), 20.0, if resp.hovered() { t::p().primary } else { t::p().brand });
         let playing = self.audio.is_playing();
         let glyph = if playing { PAUSE } else { PLAY };
         p.text(play.center(), Align2::CENTER_CENTER, glyph, FontId::new(18.0, t::fill_family()), Color32::WHITE);
         if resp.on_hover_text("Play/Pause (Space)").clicked() {
             self.audio.toggle();
         }
-        p.text(Pos2::new(play.right() + 14.0, cy), Align2::LEFT_CENTER, logic::time_label(pos, duration), mono(13.0), t::TEXT_VALUE);
+        p.text(Pos2::new(play.right() + 14.0, cy), Align2::LEFT_CENTER, logic::time_label(pos, duration), mono(13.0), t::p().text_value);
 
         let vol = Rect::from_min_size(Pos2::new(wave.right() - 110.0, cy - 10.0), vec2(110.0, 20.0));
         let mut v = self.audio.volume;
@@ -162,19 +162,19 @@ impl App {
             self.audio.set_volume(v);
         }
         let spk = Pos2::new(vol.left() - 16.0, cy);
-        ui.painter().text(spk, Align2::CENTER_CENTER, SPEAKER, font(16.0), t::TEXT_MUTED);
+        ui.painter().text(spk, Align2::CENTER_CENTER, SPEAKER, font(16.0), t::p().text_muted);
         let lp = Pos2::new(spk.x - 34.0, cy);
-        let color = if self.audio.looping { t::PRIMARY } else { t::TEXT_MUTED };
+        let color = if self.audio.looping { t::p().primary } else { t::p().text_muted };
         let lresp = ui.interact(Rect::from_center_size(lp, Vec2::splat(26.0)), ui.scope_id().with("loop"), Sense::click());
         if lresp.hovered() {
-            ui.painter().rect_filled(Rect::from_center_size(lp, Vec2::splat(26.0)), t::RADIUS, t::ROW_HOVER);
+            ui.painter().rect_filled(Rect::from_center_size(lp, Vec2::splat(26.0)), t::RADIUS, t::p().row_hover);
         }
         ui.painter().text(lp, Align2::CENTER_CENTER, REPEAT, font(16.0), color);
         if lresp.on_hover_text("Loop").clicked() {
             self.audio.looping = !self.audio.looping;
         }
         if let Some(e) = &self.audio.error {
-            p.text(Pos2::new(wave.center().x, cy + 44.0), Align2::CENTER_CENTER, e, font(12.0), t::TEXT_MUTED);
+            p.text(Pos2::new(wave.center().x, cy + 44.0), Align2::CENTER_CENTER, e, font(12.0), t::p().text_muted);
         }
         if playing {
             ctx.request_repaint_after(std::time::Duration::from_millis(33));
@@ -223,7 +223,7 @@ impl App {
         let mut child = ui.new_child(egui::UiBuilder::new().max_rect(area.shrink2(vec2(48.0, 16.0))));
         let ui = &mut child;
         ui.horizontal(|ui| {
-            ui.label(RichText::new("Size").color(t::TEXT_MUTED));
+            ui.label(RichText::new("Size").color(t::p().text_muted));
             ui.spacing_mut().slider_width = 220.0;
             ui.add(egui::Slider::new(&mut fv.size, 12.0..=200.0).suffix(" pt").max_decimals(0));
             if ui.button("Reset Text").clicked() {
@@ -238,7 +238,7 @@ impl App {
                 TextEdit::multiline(&mut fv.text)
                     .id_salt("font-sample")
                     .font(FontId::new(fv.size, family.clone()))
-                    .text_color(t::TEXT)
+                    .text_color(t::p().text)
                     .frame(egui::Frame::NONE)
                     .desired_rows(1)
                     .desired_width(f32::INFINITY),
@@ -251,17 +251,17 @@ impl App {
             for size in WATERFALL {
                 ui.horizontal(|ui| {
                     let (r, _) = ui.allocate_exact_size(vec2(44.0, size * 1.2), Sense::hover());
-                    ui.painter().text(r.left_center(), Align2::LEFT_CENTER, format!("{size:.0}"), mono(11.0), t::TEXT_MUTED);
-                    let g = ui.painter().layout_no_wrap(fv.text.replace('\n', " "), FontId::new(size, family.clone()), t::TEXT);
+                    ui.painter().text(r.left_center(), Align2::LEFT_CENTER, format!("{size:.0}"), mono(11.0), t::p().text_muted);
+                    let g = ui.painter().layout_no_wrap(fv.text.replace('\n', " "), FontId::new(size, family.clone()), t::p().text);
                     let (r, _) = ui.allocate_exact_size(vec2(g.size().x, size * 1.2), Sense::hover());
-                    ui.painter().galley(Pos2::new(r.left(), r.center().y - g.size().y / 2.0), g, t::TEXT);
+                    ui.painter().galley(Pos2::new(r.left(), r.center().y - g.size().y / 2.0), g, t::p().text);
                 });
             }
             ui.add_space(12.0);
             ui.separator();
             ui.add_space(8.0);
             for line in CHARSET {
-                ui.label(RichText::new(line).font(FontId::new(36.0, family.clone())).color(t::TEXT));
+                ui.label(RichText::new(line).font(FontId::new(36.0, family.clone())).color(t::p().text));
             }
             ui.add_space(24.0);
         });

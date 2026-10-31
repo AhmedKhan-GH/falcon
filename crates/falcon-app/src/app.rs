@@ -888,15 +888,15 @@ impl App {
             return false;
         }
         let p = ui.painter();
-        p.rect_filled(rect, 0.0, t::MAIN);
+        p.rect_filled(rect, 0.0, t::p().main);
         let track = Rect::from_min_max(Pos2::new(rect.left() + GRID_PAD_X, rect.bottom() - 6.0), Pos2::new(rect.right() - GRID_PAD_X, rect.bottom() - 3.0));
-        p.rect_filled(track, CornerRadius::same(2), t::BUTTON);
+        p.rect_filled(track, CornerRadius::same(2), t::p().button);
         let f = done as f32 / total as f32;
         let fill = Rect::from_min_max(track.min, Pos2::new(track.left() + track.width() * f, track.bottom()));
-        p.rect_filled(fill, CornerRadius::same(2), t::PRIMARY);
+        p.rect_filled(fill, CornerRadius::same(2), t::p().primary);
         let text = format!("Importing {done} of {total}  ·  {current}");
-        let g = galley(ui, &text, font(12.0), t::TEXT_MUTED, rect.width() - 40.0);
-        p.galley(Pos2::new(rect.left() + GRID_PAD_X, rect.top() + 3.0), g, t::TEXT_MUTED);
+        let g = galley(ui, &text, font(12.0), t::p().text_muted, rect.width() - 40.0);
+        p.galley(Pos2::new(rect.left() + GRID_PAD_X, rect.top() + 3.0), g, t::p().text_muted);
         true
     }
 
@@ -1379,8 +1379,8 @@ fn library_label(path: &std::path::Path) -> LayoutJob {
     let name = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
     let dir = path.parent().map(crate::workspaces::tilde).unwrap_or_default();
     let mut job = LayoutJob::default();
-    job.append(&name, 0.0, egui::TextFormat::simple(font(13.0), t::TEXT));
-    job.append(&format!("\n{dir}"), 0.0, egui::TextFormat::simple(font(11.0), t::TEXT_MUTED));
+    job.append(&name, 0.0, egui::TextFormat::simple(font(13.0), t::p().text));
+    job.append(&format!("\n{dir}"), 0.0, egui::TextFormat::simple(font(11.0), t::p().text_muted));
     job
 }
 
@@ -1443,14 +1443,14 @@ fn icon_button(ui: &mut Ui, center: Pos2, glyph: &str, size: f32, enabled: bool,
     let rect = Rect::from_center_size(center, Vec2::splat(26.0));
     let resp = ui.interact(rect, ui.scope_id().with(("icon", glyph, center.x as i32)), Sense::click());
     let color = if !enabled {
-        t::TEXT_DISABLED
+        t::p().text_disabled
     } else if resp.hovered() {
-        t::TEXT
+        t::p().text
     } else {
-        Color32::from_gray(222)
+        t::p().text_value
     };
     if enabled && resp.hovered() {
-        ui.painter().rect_filled(rect, t::RADIUS, t::ROW_HOVER);
+        ui.painter().rect_filled(rect, t::RADIUS, t::p().row_hover);
     }
     icon(ui, center, glyph, size, color);
     if tip.is_empty() { resp } else { resp.on_hover_text(tip) }
@@ -1473,8 +1473,8 @@ fn field(ui: &mut Ui, value: &mut String, hint: &str, height: f32, multiline: bo
     // A frame around the editor, so the box always contains its text:
     // single-line fields clip at the edge, multi-line ones grow to fit.
     egui::Frame::new()
-        .fill(t::FIELD)
-        .stroke(Stroke::new(1.0, t::FIELD_BORDER))
+        .fill(t::p().field)
+        .stroke(Stroke::new(1.0, t::p().field_border))
         .corner_radius(t::FIELD_RADIUS)
         .inner_margin(egui::Margin::symmetric(11, 8))
         .show(ui, |ui| {
@@ -1489,9 +1489,9 @@ fn field(ui: &mut Ui, value: &mut String, hint: &str, height: f32, multiline: bo
                 edit.id_salt(id)
                     .frame(egui::Frame::NONE)
                     .margin(egui::Margin::ZERO)
-                    .hint_text(RichText::new(hint).color(t::TEXT_MUTED))
+                    .hint_text(RichText::new(hint).color(t::p().text_muted))
                     .font(font(14.0))
-                    .text_color(t::TEXT)
+                    .text_color(t::p().text)
                     .desired_width(width)
                     .min_size(vec2(width, height - 16.0)),
             )
@@ -1524,8 +1524,8 @@ impl App {
     fn sidebar(&mut self, ui: &mut Ui, lib: &Library) {
         let full = ui.max_rect();
         let p = ui.painter().clone();
-        p.rect_filled(full, 0.0, t::PANEL);
-        p.vline(full.right() - 0.5, full.y_range(), Stroke::new(1.0, t::DIVIDER));
+        p.rect_filled(full, 0.0, t::p().panel);
+        p.vline(full.right() - 0.5, full.y_range(), Stroke::new(1.0, t::p().divider));
 
         // Header: traffic lights on the left, actions on the right.
         let header = Rect::from_min_size(full.min, vec2(full.width(), t::BAR_HEIGHT));
@@ -1546,20 +1546,20 @@ impl App {
         let lib_row = Rect::from_min_size(Pos2::new(full.left(), header.bottom()), vec2(full.width(), 30.0));
         let resp = ui.interact(lib_row, ui.scope_id().with("library"), Sense::click());
         let ic_rect = Rect::from_center_size(Pos2::new(full.left() + 29.0, lib_row.center().y), Vec2::splat(22.0));
-        p.rect_filled(ic_rect, CornerRadius::same(5), t::BRAND);
+        p.rect_filled(ic_rect, CornerRadius::same(5), t::p().brand);
         icon(ui, ic_rect.center(), ic::FOLDER, 14.0, Color32::WHITE);
         let name = lib.root().file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-        let g = galley(ui, &name, font(15.0), t::TEXT, full.width() - 80.0);
+        let g = galley(ui, &name, font(15.0), t::p().text, full.width() - 80.0);
         let gw = g.size().x;
-        p.galley(Pos2::new(full.left() + 44.0, lib_row.center().y - g.size().y / 2.0), g, t::TEXT);
-        icon(ui, Pos2::new(full.left() + 44.0 + gw + 10.0, lib_row.center().y), ic::CARET_UP_DOWN, 12.0, t::TEXT);
+        p.galley(Pos2::new(full.left() + 44.0, lib_row.center().y - g.size().y / 2.0), g, t::p().text);
+        icon(ui, Pos2::new(full.left() + 44.0 + gw + 10.0, lib_row.center().y), ic::CARET_UP_DOWN, 12.0, t::p().text);
         let current = lib.root().to_path_buf();
         if std::mem::take(&mut self.open_switcher) {
             egui::Popup::open_id(ui.ctx(), egui::Popup::default_response_id(&resp));
         }
         egui::Popup::menu(&resp).show(|ui| {
             ui.set_min_width(260.0);
-            ui.label(RichText::new("Open").color(t::TEXT_MUTED).size(12.0));
+            ui.label(RichText::new("Open").color(t::p().text_muted).size(12.0));
             let open: Vec<PathBuf> = self.others.iter(&self.ws).map(|w| w.root.clone().unwrap_or_default()).collect();
             let slot = self.others.slot();
             for (i, p) in open.iter().enumerate() {
@@ -1576,7 +1576,7 @@ impl App {
             let recent = crate::workspaces::not_open(&self.recent, &open);
             if !recent.is_empty() {
                 ui.separator();
-                ui.label(RichText::new("Recent").color(t::TEXT_MUTED).size(12.0));
+                ui.label(RichText::new("Recent").color(t::p().text_muted).size(12.0));
                 for p in recent {
                     if ui.add(egui::Button::new(library_label(&p)).min_size(vec2(220.0, 0.0))).on_hover_text(p.display().to_string()).clicked() {
                         self.switch_to = Some(Switch::Open(p));
@@ -1656,7 +1656,7 @@ impl App {
             let total = lib.all_folders().len();
             let header = section(ui, &format!("Folders ({total})"));
             if header.dnd_hover_payload::<DragFolder>().is_some() {
-                ui.painter().rect_stroke(header.rect.shrink2(vec2(11.0, 1.0)), t::RADIUS, Stroke::new(1.5, t::PRIMARY), StrokeKind::Inside);
+                ui.painter().rect_stroke(header.rect.shrink2(vec2(11.0, 1.0)), t::RADIUS, Stroke::new(1.5, t::p().primary), StrokeKind::Inside);
             }
             if let Some(d) = header.dnd_release_payload::<DragFolder>() {
                 self.ws.actions.push(Action::MoveFolder(d.0.clone(), None));
@@ -1668,9 +1668,9 @@ impl App {
             ui.add_space(8.0);
         });
 
-        p.rect_filled(filter_rect, t::RADIUS, t::FIELD);
-        p.rect_stroke(filter_rect, t::RADIUS, Stroke::new(1.0, t::FIELD_BORDER), StrokeKind::Inside);
-        icon(ui, Pos2::new(filter_rect.left() + 15.0, filter_rect.center().y), ic::FUNNEL, 15.0, t::TEXT_MUTED);
+        p.rect_filled(filter_rect, t::RADIUS, t::p().field);
+        p.rect_stroke(filter_rect, t::RADIUS, Stroke::new(1.0, t::p().field_border), StrokeKind::Inside);
+        icon(ui, Pos2::new(filter_rect.left() + 15.0, filter_rect.center().y), ic::FUNNEL, 15.0, t::p().text_muted);
         let inner = Rect::from_min_max(Pos2::new(filter_rect.left() + 30.0, filter_rect.top()), filter_rect.max);
         ui.put(
             inner,
@@ -1678,7 +1678,7 @@ impl App {
                 .id_salt("folder-filter")
                 .frame(egui::Frame::NONE)
                 .margin(egui::Margin::ZERO)
-                .hint_text(RichText::new("Filter").color(t::TEXT_MUTED))
+                .hint_text(RichText::new("Filter").color(t::p().text_muted))
                 .font(font(13.0))
                 .align(Align2::LEFT_CENTER)
                 .desired_width(inner.width() - 8.0),
@@ -1746,8 +1746,8 @@ impl App {
                 Pos2::new(row_rect.left() + icon_x(depth) + 12.0, row_rect.top() + 3.0),
                 Pos2::new(row_rect.right() - 14.0, row_rect.bottom() - 3.0),
             );
-            ui.painter().rect_filled(r, CornerRadius::same(4), t::FIELD);
-            ui.painter().rect_stroke(r, CornerRadius::same(4), Stroke::new(1.0, t::PRIMARY), StrokeKind::Inside);
+            ui.painter().rect_filled(r, CornerRadius::same(4), t::p().field);
+            ui.painter().rect_stroke(r, CornerRadius::same(4), Stroke::new(1.0, t::p().primary), StrokeKind::Inside);
             let (_, buf) = self.ws.renaming.as_mut().unwrap();
             let te = ui.put(
                 r.shrink2(vec2(4.0, 0.0)),
@@ -1799,7 +1799,7 @@ impl App {
             }
             self.folder_menu_extras(ui, f);
             ui.separator();
-            if ui.button(RichText::new("Delete Folder").color(Color32::from_rgb(0xff, 0x66, 0x67))).clicked() {
+            if ui.button(RichText::new("Delete Folder").color(t::p().icon_red)).clicked() {
                 self.ws.confirm = Some(Confirm::DeleteFolder(f.id.clone()));
             }
         });
@@ -1829,7 +1829,7 @@ impl App {
                 let p = ui.painter();
                 let top = row_rect.bottom() - 3.0;
                 // Eagle tints a coloured folder's guide line in its colour.
-                let guide = if f.icon_color.is_some() { tint.gamma_multiply(0.25) } else { t::GUIDE };
+                let guide = if f.icon_color.is_some() { tint.gamma_multiply(0.25) } else { t::p().guide };
                 p.line_segment([Pos2::new(x, top), Pos2::new(x, end - 5.0)], Stroke::new(1.0, guide));
                 p.line_segment([Pos2::new(x, end - 5.0), Pos2::new(x + 5.0, end)], Stroke::new(1.0, guide));
             }
@@ -1844,8 +1844,8 @@ fn drop_highlight(ui: &Ui, resp: &Response, depth: usize) {
     if resp.dnd_hover_payload::<DragItems>().is_some() {
         let r = resp.rect;
         let bg = Rect::from_min_max(Pos2::new(r.left() + icon_x(depth) - 14.0, r.top() + 0.5), Pos2::new(r.right() - 11.0, r.bottom() - 0.5));
-        ui.painter().rect_filled(bg, t::RADIUS, t::PRIMARY.gamma_multiply(0.25));
-        ui.painter().rect_stroke(bg, t::RADIUS, Stroke::new(1.5, t::PRIMARY), StrokeKind::Inside);
+        ui.painter().rect_filled(bg, t::RADIUS, t::p().primary.gamma_multiply(0.25));
+        ui.painter().rect_stroke(bg, t::RADIUS, Stroke::new(1.5, t::p().primary), StrokeKind::Inside);
     }
 }
 
@@ -1877,7 +1877,7 @@ fn smart_name(lib: &Library, id: &str) -> String {
 /// A section header with a + button that shows on hover, like Eagle's.
 fn section_with_add(ui: &mut Ui, title: &str, tip: &str) -> bool {
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 25.0), Sense::hover());
-    ui.painter().text(Pos2::new(rect.left() + 20.0, rect.center().y), Align2::LEFT_CENTER, title, font(13.0), t::TEXT_MUTED);
+    ui.painter().text(Pos2::new(rect.left() + 20.0, rect.center().y), Align2::LEFT_CENTER, title, font(13.0), t::p().text_muted);
     let hovered = resp.hovered() || ui.rect_contains_pointer(rect);
     hovered && icon_button(ui, Pos2::new(rect.right() - 24.0, rect.center().y), ic::PLUS, 15.0, true, tip).clicked()
 }
@@ -1889,7 +1889,7 @@ fn section(ui: &mut Ui, title: &str) -> Response {
         Align2::LEFT_CENTER,
         title,
         font(13.0),
-        t::TEXT_MUTED,
+        t::p().text_muted,
     );
     resp
 }
@@ -1903,7 +1903,7 @@ fn sidebar_row(
     active: bool,
     caret: Option<bool>,
 ) -> Response {
-    sidebar_row_tinted(ui, depth, glyph, t::TEXT, label, count, active, caret)
+    sidebar_row_tinted(ui, depth, glyph, t::p().text, label, count, active, caret)
 }
 
 /// A sidebar row whose icon is drawn in `tint` (a folder's icon colour).
@@ -1923,9 +1923,9 @@ fn sidebar_row_tinted(
     let bg = Rect::from_min_max(Pos2::new(ix - 14.0, rect.top() + 0.5), Pos2::new(rect.right() - 11.0, rect.bottom() - 0.5));
     let p = ui.painter();
     if active {
-        p.rect_filled(bg, t::RADIUS, t::ROW_SELECTED);
+        p.rect_filled(bg, t::RADIUS, t::p().row_selected);
     } else if resp.hovered() {
-        p.rect_filled(bg, t::RADIUS, t::ROW_HOVER);
+        p.rect_filled(bg, t::RADIUS, t::p().row_hover);
     }
     if let Some(open) = caret {
         // A small solid triangle, pointing down when open.
@@ -1935,15 +1935,15 @@ fn sidebar_row_tinted(
         } else {
             vec![c + vec2(-2.5, -4.5), c + vec2(3.0, 0.0), c + vec2(-2.5, 4.5)]
         };
-        p.add(egui::Shape::convex_polygon(pts, t::TEXT_MUTED, Stroke::NONE));
+        p.add(egui::Shape::convex_polygon(pts, t::p().text_muted, Stroke::NONE));
     }
     let size = if crate::folder_icons::is_text(glyph) { 11.0 } else { 18.0 };
     p.text(Pos2::new(ix, rect.center().y), Align2::CENTER_CENTER, glyph, font(size), tint);
     let count_w = if count.is_some() { 30.0 } else { 0.0 };
-    let g = galley(ui, label, font(13.5), t::TEXT, rect.right() - 20.0 - count_w - (ix + 15.0));
-    p.galley(Pos2::new(ix + 15.0, rect.center().y - g.size().y / 2.0), g, t::TEXT);
+    let g = galley(ui, label, font(13.5), t::p().text, rect.right() - 20.0 - count_w - (ix + 15.0));
+    p.galley(Pos2::new(ix + 15.0, rect.center().y - g.size().y / 2.0), g, t::p().text);
     if let Some(n) = count {
-        p.text(Pos2::new(rect.right() - 19.0, rect.center().y), Align2::RIGHT_CENTER, n.to_string(), font(12.0), t::TEXT_MUTED);
+        p.text(Pos2::new(rect.right() - 19.0, rect.center().y), Align2::RIGHT_CENTER, n.to_string(), font(12.0), t::p().text_muted);
     }
     resp
 }
@@ -1977,9 +1977,9 @@ impl App {
         } else {
             "Search results".into()
         };
-        let g = galley(ui, &title, font(15.0), t::TEXT, 220.0);
+        let g = galley(ui, &title, font(15.0), t::p().text, 220.0);
         let title_end = x + 45.0 + g.size().x;
-        ui.painter().galley(Pos2::new(x + 45.0, cy - g.size().y / 2.0), g, t::TEXT);
+        ui.painter().galley(Pos2::new(x + 45.0, cy - g.size().y / 2.0), g, t::p().text);
 
         // Right side: search field, then the icon row.
         let search = Rect::from_min_size(Pos2::new(bar.right() - 18.0 - 178.0, cy - 15.0), vec2(178.0, 30.0));
@@ -2001,7 +2001,7 @@ impl App {
         }
         if self.ws.show_filter || self.ws.filter.is_active() {
             let r = Rect::from_center_size(filter.rect.center(), Vec2::splat(26.0));
-            ui.painter().rect_stroke(r, t::RADIUS, Stroke::new(1.0, t::PRIMARY), StrokeKind::Inside);
+            ui.painter().rect_stroke(r, t::RADIUS, Stroke::new(1.0, t::p().primary), StrokeKind::Inside);
         }
 
         // Zoom slider between the title and the icons.
@@ -2009,16 +2009,16 @@ impl App {
         if zx + 130.0 < icons_left {
             self.zoom_slider(ui, Pos2::new(zx, cy));
         }
-        ui.painter().hline(bar.x_range(), bar.bottom() - 0.5, Stroke::new(1.0, t::MAIN));
+        ui.painter().hline(bar.x_range(), bar.bottom() - 0.5, Stroke::new(1.0, t::p().main));
     }
 
     fn search_field(&mut self, ui: &mut Ui, rect: Rect) {
         let p = ui.painter();
-        p.rect_filled(rect, t::FIELD_RADIUS, t::SEARCH);
-        p.rect_stroke(rect, t::FIELD_RADIUS, Stroke::new(1.0, t::FIELD_BORDER), StrokeKind::Inside);
-        icon(ui, Pos2::new(rect.left() + 14.0, rect.center().y), ic::MAGNIFYING_GLASS, 16.0, t::TEXT);
-        icon(ui, Pos2::new(rect.left() + 28.0, rect.center().y + 1.0), ic::CARET_DOWN, 9.0, t::TEXT_MUTED);
-        icon(ui, Pos2::new(rect.right() - 17.0, rect.center().y), ic::CAMERA, 17.0, t::TEXT_DISABLED);
+        p.rect_filled(rect, t::FIELD_RADIUS, t::p().search);
+        p.rect_stroke(rect, t::FIELD_RADIUS, Stroke::new(1.0, t::p().field_border), StrokeKind::Inside);
+        icon(ui, Pos2::new(rect.left() + 14.0, rect.center().y), ic::MAGNIFYING_GLASS, 16.0, t::p().text);
+        icon(ui, Pos2::new(rect.left() + 28.0, rect.center().y + 1.0), ic::CARET_DOWN, 9.0, t::p().text_muted);
+        icon(ui, Pos2::new(rect.right() - 17.0, rect.center().y), ic::CAMERA, 17.0, t::p().text_disabled);
         let inner = Rect::from_min_max(Pos2::new(rect.left() + 40.0, rect.top()), Pos2::new(rect.right() - 32.0, rect.bottom()));
         let resp = ui.put(
             inner,
@@ -2026,7 +2026,7 @@ impl App {
                 .id_salt("search")
                 .frame(egui::Frame::NONE)
                 .margin(egui::Margin::ZERO)
-                .hint_text(RichText::new("Search").color(t::TEXT_MUTED))
+                .hint_text(RichText::new("Search").color(t::p().text_muted))
                 .font(font(14.0))
                 .align(Align2::LEFT_CENTER)
                 .desired_width(inner.width()),
@@ -2056,15 +2056,15 @@ impl App {
         let f = (self.tile - TILE_MIN) / (TILE_MAX - TILE_MIN);
         let p = ui.painter();
         let y = track.center().y;
-        p.line_segment([Pos2::new(track.left(), y), Pos2::new(track.right(), y)], Stroke::new(2.0, Color32::from_gray(70)));
+        p.line_segment([Pos2::new(track.left(), y), Pos2::new(track.right(), y)], Stroke::new(2.0, t::p().divider));
         let kx = track.left() + f * track.width();
-        p.line_segment([Pos2::new(track.left(), y), Pos2::new(kx, y)], Stroke::new(2.0, Color32::from_gray(200)));
+        p.line_segment([Pos2::new(track.left(), y), Pos2::new(kx, y)], Stroke::new(2.0, t::p().text_muted));
         p.circle_filled(Pos2::new(kx, y), 7.0, Color32::WHITE);
     }
 
     fn layout_menu(&mut self, ui: &mut Ui, own: Option<(organize_ui::OrderTarget, Option<(falcon_library::model::FolderOrder, bool)>)>) {
         ui.set_min_width(190.0);
-        ui.label(RichText::new("Layout").color(t::TEXT_MUTED).size(12.0));
+        ui.label(RichText::new("Layout").color(t::p().text_muted).size(12.0));
         for l in Layout::ALL {
             let mark = if l == self.ws.layout { ic::CHECK } else { " " };
             if ui.button(format!("{mark}  {}", l.label())).clicked() {
@@ -2077,7 +2077,7 @@ impl App {
             self.own_sort_menu(ui, target, cur);
             return;
         }
-        ui.label(RichText::new("Sort by").color(t::TEXT_MUTED).size(12.0));
+        ui.label(RichText::new("Sort by").color(t::p().text_muted).size(12.0));
         for k in OrderBy::ALL {
             let mark = if k == self.ws.sort { ic::CHECK } else { " " };
             if ui.button(format!("{mark}  {}", k.label())).clicked() {
@@ -2132,22 +2132,22 @@ fn filter_chip(ui: &mut Ui, label: &str, value: Option<String>) -> Response {
         None => label.to_string(),
     };
     let on = value.is_some();
-    let g = galley(ui, &text, font(13.0), t::TEXT, 220.0);
+    let g = galley(ui, &text, font(13.0), t::p().text, 220.0);
     let (rect, resp) = ui.allocate_exact_size(vec2(g.size().x + 30.0, 26.0), Sense::click());
     let fill = if on {
-        t::PRIMARY.gamma_multiply(0.22)
+        t::p().primary.gamma_multiply(0.22)
     } else if resp.hovered() {
-        t::BUTTON_HOVER
+        t::p().button_hover
     } else {
-        t::BUTTON
+        t::p().button
     };
     ui.painter().rect_filled(rect, t::RADIUS, fill);
     if on {
-        ui.painter().rect_stroke(rect, t::RADIUS, Stroke::new(1.0, t::PRIMARY.gamma_multiply(0.7)), StrokeKind::Inside);
+        ui.painter().rect_stroke(rect, t::RADIUS, Stroke::new(1.0, t::p().primary.gamma_multiply(0.7)), StrokeKind::Inside);
     }
-    let color = if on { t::TEXT } else { t::TEXT_VALUE };
+    let color = if on { t::p().text } else { t::p().text_value };
     ui.painter().galley(Pos2::new(rect.left() + 10.0, rect.center().y - g.size().y / 2.0), g, color);
-    icon(ui, Pos2::new(rect.right() - 11.0, rect.center().y), ic::CARET_DOWN, 10.0, t::TEXT_MUTED);
+    icon(ui, Pos2::new(rect.right() - 11.0, rect.center().y), ic::CARET_DOWN, 10.0, t::p().text_muted);
     resp
 }
 
@@ -2170,7 +2170,7 @@ fn text_filter_menu(ui: &mut Ui, f: &mut TextFilter, keywords: &mut String) {
         }
     }
     ui.separator();
-    ui.label(RichText::new("Contains").color(t::TEXT_MUTED).size(12.0));
+    ui.label(RichText::new("Contains").color(t::p().text_muted).size(12.0));
     if ui.add(TextEdit::singleline(keywords).hint_text("keyword, keyword")).changed() {
         let words: Vec<String> = keywords.split(',').map(|w| w.trim().to_string()).filter(|w| !w.is_empty()).collect();
         *f = if words.is_empty() { TextFilter::Off } else { TextFilter::Keywords(words) };
@@ -2180,7 +2180,7 @@ fn text_filter_menu(ui: &mut Ui, f: &mut TextFilter, keywords: &mut String) {
 impl App {
     fn filter_bar(&mut self, ui: &mut Ui, lib: &Library) {
         let r = ui.max_rect();
-        ui.painter().hline(r.x_range(), r.bottom() - 0.5, Stroke::new(1.0, t::DIVIDER));
+        ui.painter().hline(r.x_range(), r.bottom() - 0.5, Stroke::new(1.0, t::p().divider));
         let inner = r.shrink2(vec2(GRID_PAD_X, 7.0));
         let mut row = ui.new_child(egui::UiBuilder::new().max_rect(inner).layout(egui::Layout::left_to_right(egui::Align::Center)));
         let ui = &mut row;
@@ -2197,9 +2197,9 @@ impl App {
                 for c in PRESET_COLORS {
                     let (rect, hit) = ui.allocate_exact_size(Vec2::splat(22.0), Sense::click());
                     ui.painter().circle_filled(rect.center(), 10.0, Color32::from_rgb(c[0], c[1], c[2]));
-                    ui.painter().circle_stroke(rect.center(), 10.0, Stroke::new(1.0, Color32::from_white_alpha(40)));
+                    ui.painter().circle_stroke(rect.center(), 10.0, Stroke::new(1.0, t::p().divider));
                     if f.color.is_some_and(|q| q.rgb == c) {
-                        ui.painter().circle_stroke(rect.center(), 12.5, Stroke::new(1.5, t::PRIMARY));
+                        ui.painter().circle_stroke(rect.center(), 12.5, Stroke::new(1.5, t::p().primary));
                     }
                     if hit.clicked() {
                         let acc = f.color.map_or(20.0, |q| q.accuracy);
@@ -2356,7 +2356,7 @@ impl App {
         self.media_filter_chips(ui, lib);
 
         if self.ws.filter.is_active() {
-            let clear = ui.add(egui::Button::new(RichText::new(format!("{}  Clear", ic::X)).color(t::TEXT_MUTED)).frame(false));
+            let clear = ui.add(egui::Button::new(RichText::new(format!("{}  Clear", ic::X)).color(t::p().text_muted)).frame(false));
             if clear.clicked() {
                 self.ws.filter = Filter::default();
                 self.clear_media_filter_text();
@@ -2400,7 +2400,7 @@ impl App {
         }
         self.subfolder_strip(ui, lib);
         if items.is_empty() {
-            ui.painter().text(area.center(), Align2::CENTER_CENTER, "No items", font(15.0), t::TEXT_MUTED);
+            ui.painter().text(area.center(), Align2::CENTER_CENTER, "No items", font(15.0), t::p().text_muted);
             return;
         }
 
@@ -2487,7 +2487,7 @@ impl App {
                         if ui.button("Restore").clicked() {
                             self.ws.actions.push(Action::Trash(targets.clone(), false));
                         }
-                        if ui.button(RichText::new("Delete Permanently").color(Color32::from_rgb(0xff, 0x66, 0x67))).clicked() {
+                        if ui.button(RichText::new("Delete Permanently").color(t::p().icon_red)).clicked() {
                             self.ws.confirm = Some(Confirm::DeleteItems(targets.clone()));
                         }
                     } else if ui.button("Move to Trash").clicked() {
@@ -2553,40 +2553,40 @@ impl App {
         let grid = self.ws.layout == Layout::Grid;
         let p = ui.painter().clone();
         if grid {
-            p.rect_filled(tile, t::RADIUS, t::MAIN);
-            let border = if hovered { t::CARD_HOVER } else { t::CARD_BORDER };
+            p.rect_filled(tile, t::RADIUS, t::p().main);
+            let border = if hovered { t::p().card_hover } else { t::p().card_border };
             p.rect_stroke(tile, t::RADIUS, Stroke::new(1.0, border), StrokeKind::Inside);
             self.draw_image(ui, lib, item, tile.shrink(6.0), false);
         } else {
-            p.rect_filled(tile, CornerRadius::same(4), t::FIELD);
+            p.rect_filled(tile, CornerRadius::same(4), t::p().field);
             self.draw_image(ui, lib, item, tile, true);
             if hovered && !selected {
-                p.rect_stroke(tile, CornerRadius::same(4), Stroke::new(1.0, t::CARD_HOVER), StrokeKind::Inside);
+                p.rect_stroke(tile, CornerRadius::same(4), Stroke::new(1.0, t::p().card_hover), StrokeKind::Inside);
             }
         }
         badge(ui, tile.min + vec2(5.0, 5.0), &item.ext);
         comments::count_badge(ui, tile, item);
         if selected {
-            p.rect_stroke(tile.expand(1.0), CornerRadius::same(7), Stroke::new(2.5, t::PRIMARY), StrokeKind::Inside);
+            p.rect_stroke(tile.expand(1.0), CornerRadius::same(7), Stroke::new(2.5, t::p().primary), StrokeKind::Inside);
         }
         if caption == 0.0 {
             return;
         }
         let name = format!("{}.{}", item.name, item.ext);
-        let g = galley(ui, &name, font(13.0), t::TEXT, tile.width());
+        let g = galley(ui, &name, font(13.0), t::p().text, tile.width());
         let y = tile.bottom() + 14.0;
         if selected {
             let pill = Rect::from_center_size(Pos2::new(tile.center().x, y), vec2(g.size().x + 10.0, 19.0));
-            p.rect_filled(pill, CornerRadius::same(4), t::PRIMARY);
+            p.rect_filled(pill, CornerRadius::same(4), t::p().primary);
         }
-        p.galley(Pos2::new(tile.center().x - g.size().x / 2.0, y - g.size().y / 2.0), g, t::TEXT);
+        p.galley(Pos2::new(tile.center().x - g.size().x / 2.0, y - g.size().y / 2.0), g, t::p().text);
         if item.width > 0 && item.height > 0 {
             p.text(
                 Pos2::new(tile.center().x, tile.bottom() + 32.0),
                 Align2::CENTER_CENTER,
                 format!("{} × {}", item.width, item.height),
                 font(12.0),
-                t::TEXT_MUTED,
+                t::p().text_muted,
             );
         }
     }
@@ -2598,14 +2598,14 @@ impl App {
         let p = ui.painter().clone();
         let bg = row.shrink2(vec2(0.0, 2.0));
         if selected {
-            p.rect_filled(bg, t::RADIUS, t::PRIMARY.gamma_multiply(0.35));
+            p.rect_filled(bg, t::RADIUS, t::p().primary.gamma_multiply(0.35));
         } else if hovered {
-            p.rect_filled(bg, t::RADIUS, t::ROW_HOVER);
+            p.rect_filled(bg, t::RADIUS, t::p().row_hover);
         } else if n % 2 == 1 {
-            p.rect_filled(bg, t::RADIUS, Color32::from_white_alpha(4));
+            p.rect_filled(bg, t::RADIUS, t::p().row_hover.gamma_multiply(0.3));
         }
         let thumb = Rect::from_min_size(Pos2::new(row.left() + 6.0, row.top() + 5.0), Vec2::splat(row.height() - 10.0));
-        p.rect_filled(thumb, CornerRadius::same(4), t::FIELD);
+        p.rect_filled(thumb, CornerRadius::same(4), t::p().field);
         self.draw_image(ui, lib, item, thumb.shrink(2.0), false);
         let cy = row.center().y;
         let w = row.width();
@@ -2613,8 +2613,8 @@ impl App {
         let x = |i: usize| thumb.right() + 12.0 + (w - thumb.width() - 18.0) * cols[i].0;
         let cw = |i: usize| (w - thumb.width() - 18.0) * cols[i].1 - 8.0;
         let name = format!("{}.{}", item.name, item.ext);
-        let g = galley(ui, &name, font(13.0), t::TEXT, cw(0));
-        p.galley(Pos2::new(x(0), cy - g.size().y / 2.0), g, t::TEXT);
+        let g = galley(ui, &name, font(13.0), t::p().text, cw(0));
+        p.galley(Pos2::new(x(0), cy - g.size().y / 2.0), g, t::p().text);
         let cells = [
             item.ext.to_uppercase(),
             logic::format_size(item.size),
@@ -2622,8 +2622,8 @@ impl App {
             logic::format_ms(item.modification_time),
         ];
         for (i, text) in cells.iter().enumerate() {
-            let g = galley(ui, text, font(12.0), t::TEXT_MUTED, cw(i + 1));
-            p.galley(Pos2::new(x(i + 1), cy - g.size().y / 2.0), g, t::TEXT_MUTED);
+            let g = galley(ui, text, font(12.0), t::p().text_muted, cw(i + 1));
+            p.galley(Pos2::new(x(i + 1), cy - g.size().y / 2.0), g, t::p().text_muted);
         }
     }
 
@@ -2690,7 +2690,7 @@ impl App {
             None
         };
         if let Some(tex) = full.or(grid) {
-            hover::paint(&ctx, window, rect, tex.id(), t::PANEL, fade);
+            hover::paint(&ctx, window, rect, tex.id(), t::p().panel, fade);
         }
     }
 
@@ -2705,9 +2705,9 @@ impl App {
             ui.horizontal(|ui| {
                 ui.add_space(GRID_PAD_X);
                 let (rect, _) = ui.allocate_exact_size(vec2(240.0, 30.0), Sense::hover());
-                ui.painter().rect_filled(rect, t::FIELD_RADIUS, t::SEARCH);
-                ui.painter().rect_stroke(rect, t::FIELD_RADIUS, Stroke::new(1.0, t::FIELD_BORDER), StrokeKind::Inside);
-                icon(ui, Pos2::new(rect.left() + 14.0, rect.center().y), ic::MAGNIFYING_GLASS, 15.0, t::TEXT_MUTED);
+                ui.painter().rect_filled(rect, t::FIELD_RADIUS, t::p().search);
+                ui.painter().rect_stroke(rect, t::FIELD_RADIUS, Stroke::new(1.0, t::p().field_border), StrokeKind::Inside);
+                icon(ui, Pos2::new(rect.left() + 14.0, rect.center().y), ic::MAGNIFYING_GLASS, 15.0, t::p().text_muted);
                 let inner = Rect::from_min_max(Pos2::new(rect.left() + 30.0, rect.top()), rect.max - vec2(8.0, 0.0));
                 ui.put(
                     inner,
@@ -2715,12 +2715,12 @@ impl App {
                         .id_salt("tag-filter")
                         .frame(egui::Frame::NONE)
                         .margin(egui::Margin::ZERO)
-                        .hint_text(RichText::new("Filter tags").color(t::TEXT_MUTED))
+                        .hint_text(RichText::new("Filter tags").color(t::p().text_muted))
                         .font(font(13.0))
                         .align(Align2::LEFT_CENTER),
                 );
                 ui.add_space(12.0);
-                ui.label(RichText::new(format!("{} tags", tags.len())).color(t::TEXT_MUTED));
+                ui.label(RichText::new(format!("{} tags", tags.len())).color(t::p().text_muted));
                 self.tag_page_controls(ui);
             });
             ui.add_space(14.0);
@@ -2746,7 +2746,7 @@ impl App {
             for (heading, group) in groups {
                 ui.horizontal(|ui| {
                     ui.add_space(GRID_PAD_X + 2.0);
-                    ui.label(RichText::new(heading).size(14.0).color(t::TEXT_MUTED));
+                    ui.label(RichText::new(heading).size(14.0).color(t::p().text_muted));
                 });
                 ui.add_space(2.0);
                 ui.horizontal_wrapped(|ui| {
@@ -2778,22 +2778,22 @@ impl App {
             }
             return;
         }
-        let name_g = galley(ui, tag, font(13.0), t::TEXT, 300.0);
-        let count_g = galley(ui, &n.to_string(), font(12.0), t::TEXT_MUTED, 80.0);
+        let name_g = galley(ui, tag, font(13.0), t::p().text, 300.0);
+        let count_g = galley(ui, &n.to_string(), font(12.0), t::p().text_muted, 80.0);
         // Tags filed in a group carry the group's colour dot.
         let dot = App::tag_dot(lib, tag);
         let dot_w = if dot.is_some() { 14.0 } else { 0.0 };
         let size = vec2(name_g.size().x + count_g.size().x + 30.0 + dot_w, 28.0);
         let (rect, resp) = ui.allocate_exact_size(size, Sense::click_and_drag());
         App::tag_chip_drag(&resp, tag);
-        let fill = if resp.hovered() { t::BUTTON_HOVER } else { t::BUTTON };
+        let fill = if resp.hovered() { t::p().button_hover } else { t::p().button };
         ui.painter().rect_filled(rect, CornerRadius::same(6), fill);
         let cy = rect.center().y;
         if let Some(c) = dot {
             ui.painter().circle_filled(Pos2::new(rect.left() + 14.0, cy), 4.0, c);
         }
-        ui.painter().galley(Pos2::new(rect.left() + 11.0 + dot_w, cy - name_g.size().y / 2.0), name_g.clone(), t::TEXT);
-        ui.painter().galley(Pos2::new(rect.right() - 11.0 - count_g.size().x, cy - count_g.size().y / 2.0), count_g, t::TEXT_MUTED);
+        ui.painter().galley(Pos2::new(rect.left() + 11.0 + dot_w, cy - name_g.size().y / 2.0), name_g.clone(), t::p().text);
+        ui.painter().galley(Pos2::new(rect.right() - 11.0 - count_g.size().x, cy - count_g.size().y / 2.0), count_g, t::p().text_muted);
         if resp.clicked() {
             self.go(Scope::Tag(tag.to_string()));
         }
@@ -2808,7 +2808,7 @@ impl App {
             }
             self.tag_group_menu(ui, lib, tag);
             ui.separator();
-            if ui.button(RichText::new("Delete Tag").color(Color32::from_rgb(0xff, 0x66, 0x67))).clicked() {
+            if ui.button(RichText::new("Delete Tag").color(t::p().icon_red)).clicked() {
                 self.ws.confirm = Some(Confirm::DeleteTag(tag.to_string()));
             }
         });
@@ -2819,13 +2819,13 @@ impl App {
 fn ext_placeholder(ui: &Ui, rect: Rect, ext: &str) {
     let s = rect.width().min(rect.height()) * 0.42;
     let r = Rect::from_center_size(rect.center(), vec2(s * 0.8, s));
-    icon(ui, r.center(), ic::FILE, s, Color32::from_gray(90));
+    icon(ui, r.center(), ic::FILE, s, t::p().text_disabled);
     ui.painter().text(
         r.center() + vec2(0.0, s * 0.12),
         Align2::CENTER_CENTER,
         ext.to_uppercase(),
         font((s * 0.18).max(9.0)),
-        Color32::from_gray(150),
+        t::p().text_muted,
     );
 }
 
@@ -2836,8 +2836,8 @@ impl App {
     fn inspector(&mut self, ui: &mut Ui, lib: &mut Library) {
         let full = ui.max_rect();
         let p = ui.painter().clone();
-        p.rect_filled(full, 0.0, t::PANEL);
-        p.vline(full.left() + 0.5, full.y_range(), Stroke::new(1.0, t::DIVIDER));
+        p.rect_filled(full, 0.0, t::p().panel);
+        p.vline(full.left() + 0.5, full.y_range(), Stroke::new(1.0, t::p().divider));
         let header = Rect::from_min_size(full.min, vec2(full.width(), t::BAR_HEIGHT));
         window_drag(ui, header, "inspector");
         if icon_button(ui, Pos2::new(full.right() - 24.0, header.center().y), ic::PUSH_PIN, 17.0, true, "Hide inspector")
@@ -2898,8 +2898,8 @@ impl App {
         for (k, item) in items.iter().take(3).enumerate().rev() {
             let off = (k as f32 - 1.0) * 14.0;
             let r = Rect::from_center_size(stack.center() + vec2(off, -off * 0.4), Vec2::splat(112.0));
-            ui.painter().rect_filled(r, CornerRadius::same(6), t::FIELD);
-            ui.painter().rect_stroke(r, CornerRadius::same(6), Stroke::new(1.0, t::FIELD_BORDER), StrokeKind::Inside);
+            ui.painter().rect_filled(r, CornerRadius::same(6), t::p().field);
+            ui.painter().rect_stroke(r, CornerRadius::same(6), Stroke::new(1.0, t::p().field_border), StrokeKind::Inside);
             if let Some(tex) = self.ws.loader.get(&item.id, Tier::Grid).cloned() {
                 let ts = tex.size_vec2();
                 let sc = ((r.width() - 10.0) / ts.x).min((r.height() - 10.0) / ts.y);
@@ -2927,7 +2927,7 @@ impl App {
             let r = ui.add(
                 TextEdit::singleline(buf)
                     .id_salt("batch-tag")
-                    .hint_text(RichText::new("Add tag to all").color(t::TEXT_MUTED))
+                    .hint_text(RichText::new("Add tag to all").color(t::p().text_muted))
                     .font(font(13.0))
                     .frame(egui::Frame::NONE)
                     .desired_width(120.0),
@@ -2940,7 +2940,7 @@ impl App {
         });
 
         heading(ui, "Folders");
-        let add = ui.add(egui::Button::new(RichText::new(format!("{}  Add All to Folder", ic::PLUS)).size(12.0).color(t::TEXT_MUTED)).frame(false));
+        let add = ui.add(egui::Button::new(RichText::new(format!("{}  Add All to Folder", ic::PLUS)).size(12.0).color(t::p().text_muted)).frame(false));
         egui::Popup::menu(&add).show(|ui| {
             ui.set_min_width(200.0);
             egui::ScrollArea::vertical().max_height(320.0).show(ui, |ui| {
@@ -3011,7 +3011,7 @@ impl App {
                 }
                 let color = Color32::from_rgb(c.color[0], c.color[1], c.color[2]);
                 ui.painter().circle_filled(center, d / 2.0, color);
-                ui.painter().circle_stroke(center, d / 2.0, Stroke::new(1.0, Color32::from_white_alpha(25)));
+                ui.painter().circle_stroke(center, d / 2.0, Stroke::new(1.0, t::p().divider));
                 let hit = ui.interact(Rect::from_center_size(center, Vec2::splat(d)), ui.scope_id().with(("swatch", n)), Sense::click());
                 let hex = logic::hex(c.color);
                 if hit.clicked() {
@@ -3064,7 +3064,7 @@ impl App {
             }
             let te = TextEdit::singleline(&mut edit.new_tag)
                 .id_salt("new-tag")
-                .hint_text(RichText::new("New tag").color(t::TEXT_MUTED))
+                .hint_text(RichText::new("New tag").color(t::p().text_muted))
                 .font(font(13.0))
                 .frame(egui::Frame::NONE)
                 .desired_width(90.0);
@@ -3100,7 +3100,7 @@ impl App {
                     remove_folder = Some(fid.clone());
                 }
             }
-            let add = ui.add(egui::Button::new(RichText::new(format!("{}  Add Category", ic::PLUS)).size(12.0).color(t::TEXT_MUTED)).frame(false));
+            let add = ui.add(egui::Button::new(RichText::new(format!("{}  Add Category", ic::PLUS)).size(12.0).color(t::p().text_muted)).frame(false));
             egui::Popup::menu(&add).show(|ui| {
                 ui.set_min_width(200.0);
                 egui::ScrollArea::vertical().max_height(320.0).show(ui, |ui| {
@@ -3260,33 +3260,33 @@ impl App {
 
 fn divider(ui: &mut Ui) {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 9.0), Sense::hover());
-    ui.painter().hline(rect.x_range(), rect.center().y, Stroke::new(1.0, t::DIVIDER));
+    ui.painter().hline(rect.x_range(), rect.center().y, Stroke::new(1.0, t::p().divider));
 }
 
 fn heading(ui: &mut Ui, text: &str) {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 18.0), Sense::hover());
-    ui.painter().text(rect.left_center(), Align2::LEFT_CENTER, text, font(13.0), t::TEXT_MUTED);
+    ui.painter().text(rect.left_center(), Align2::LEFT_CENTER, text, font(13.0), t::p().text_muted);
 }
 
 fn prop(ui: &mut Ui, key: &str, value: &str) {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 13.0), Sense::hover());
     let p = ui.painter();
-    p.text(rect.left_center(), Align2::LEFT_CENTER, key, font(12.0), t::TEXT);
-    let g = galley(ui, value, mono(12.0), t::TEXT_VALUE, rect.width() - 90.0);
-    p.galley(Pos2::new(rect.left() + 90.0, rect.center().y - g.size().y / 2.0), g, t::TEXT_VALUE);
+    p.text(rect.left_center(), Align2::LEFT_CENTER, key, font(12.0), t::p().text);
+    let g = galley(ui, value, mono(12.0), t::p().text_value, rect.width() - 90.0);
+    p.galley(Pos2::new(rect.left() + 90.0, rect.center().y - g.size().y / 2.0), g, t::p().text_value);
 }
 
 /// Rating row: five stars; clicking the current rating clears it.
 fn rating(ui: &mut Ui, star: u64) -> Option<u64> {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 14.0), Sense::hover());
-    ui.painter().text(rect.left_center(), Align2::LEFT_CENTER, "Rating", font(12.0), t::TEXT);
+    ui.painter().text(rect.left_center(), Align2::LEFT_CENTER, "Rating", font(12.0), t::p().text);
     let mut out = None;
     for n in 1..=5u64 {
         let c = Pos2::new(rect.left() + 90.0 + 7.0 + (n - 1) as f32 * 17.0, rect.center().y);
         let hit = ui.interact(Rect::from_center_size(c, Vec2::splat(16.0)), ui.scope_id().with(("star", n)), Sense::click());
         let on = n <= star;
         let fam = egui::FontId::new(13.0, t::fill_family());
-        let color = if on { Color32::from_rgb(0xff, 0xd6, 0x0a) } else if hit.hovered() { t::TEXT_VALUE } else { t::TEXT_DISABLED };
+        let color = if on { Color32::from_rgb(0xff, 0xd6, 0x0a) } else if hit.hovered() { t::p().text_value } else { t::p().text_disabled };
         ui.painter().text(c, Align2::CENTER_CENTER, ic::STAR, fam, color);
         if hit.clicked() {
             out = Some(if star == n { 0 } else { n });
@@ -3296,23 +3296,23 @@ fn rating(ui: &mut Ui, star: u64) -> Option<u64> {
 }
 
 fn chip(ui: &mut Ui, text: &str, removable: bool) -> Response {
-    let g = galley(ui, text, font(12.0), t::TEXT, 180.0);
+    let g = galley(ui, text, font(12.0), t::p().text, 180.0);
     let extra = if removable { 14.0 } else { 0.0 };
     let (rect, resp) = ui.allocate_exact_size(vec2(g.size().x + 16.0 + extra, 22.0), Sense::click());
-    let fill = if resp.hovered() { t::BUTTON_HOVER } else { t::BUTTON };
+    let fill = if resp.hovered() { t::p().button_hover } else { t::p().button };
     ui.painter().rect_filled(rect, CornerRadius::same(5), fill);
-    ui.painter().galley(Pos2::new(rect.left() + 8.0, rect.center().y - g.size().y / 2.0), g, t::TEXT);
+    ui.painter().galley(Pos2::new(rect.left() + 8.0, rect.center().y - g.size().y / 2.0), g, t::p().text);
     if removable && resp.hovered() {
-        icon(ui, Pos2::new(rect.right() - 10.0, rect.center().y), ic::X, 10.0, t::TEXT_MUTED);
+        icon(ui, Pos2::new(rect.right() - 10.0, rect.center().y), ic::X, 10.0, t::p().text_muted);
     }
     resp.on_hover_text(if removable { "Click to remove" } else { "" })
 }
 
 fn wide_button(ui: &mut Ui, glyph: &str, label: &str, enabled: bool) -> Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 28.0), Sense::click());
-    let fill = if enabled && resp.hovered() { t::BUTTON_HOVER } else { t::BUTTON };
+    let fill = if enabled && resp.hovered() { t::p().button_hover } else { t::p().button };
     ui.painter().rect_filled(rect, t::RADIUS, fill);
-    let color = if enabled { t::TEXT } else { t::TEXT_MUTED };
+    let color = if enabled { t::p().text } else { t::p().text_muted };
     let g = galley(ui, label, font(13.0), color, rect.width());
     let total = 22.0 + g.size().x;
     let x = rect.center().x - total / 2.0;
@@ -3344,7 +3344,7 @@ impl App {
         }
         egui::Area::new(egui::Id::unique("viewer")).fixed_pos(screen.min).order(egui::Order::Foreground).show(ctx, |ui| {
             let p = ui.painter().clone();
-            p.rect_filled(screen, 0.0, t::MAIN);
+            p.rect_filled(screen, 0.0, t::p().main);
             let bar = Rect::from_min_size(screen.min, vec2(screen.width(), t::BAR_HEIGHT));
             let area = Rect::from_min_max(Pos2::new(screen.left(), bar.bottom()), screen.max);
 
@@ -3411,21 +3411,21 @@ impl App {
             self.edit_overlay(ui, item, r, area);
 
             // Bar on top: close, name, zoom controls.
-            p.rect_filled(bar, 0.0, t::MAIN);
+            p.rect_filled(bar, 0.0, t::p().main);
             window_drag(ui, bar, "viewer");
             let cy = bar.center().y;
             if icon_button(ui, Pos2::new(bar.left() + 98.0, cy), ic::CARET_LEFT, 17.0, true, "Back (Esc)").clicked() {
                 self.ws.viewer = None;
             }
             let name = format!("{}.{}", item.name, item.ext);
-            let g = galley(ui, &name, font(14.0), t::TEXT, 360.0);
-            p.galley(Pos2::new(bar.left() + 120.0, cy - g.size().y / 2.0), g, t::TEXT);
+            let g = galley(ui, &name, font(14.0), t::p().text, 360.0);
+            p.galley(Pos2::new(bar.left() + 120.0, cy - g.size().y / 2.0), g, t::p().text);
             let mut x = bar.right() - 24.0;
             if icon_button(ui, Pos2::new(x, cy), ic::PLUS, 15.0, true, "Zoom In (+)").clicked() {
                 self.ws.view.zoom = Some((scale * 1.25).min(32.0));
             }
             x -= 28.0;
-            p.text(Pos2::new(x, cy), Align2::CENTER_CENTER, format!("{:.0}%", scale * 100.0), mono(12.0), t::TEXT_VALUE);
+            p.text(Pos2::new(x, cy), Align2::CENTER_CENTER, format!("{:.0}%", scale * 100.0), mono(12.0), t::p().text_value);
             x -= 30.0;
             if icon_button(ui, Pos2::new(x, cy), ic::MINUS, 15.0, true, "Zoom Out (−)").clicked() {
                 self.ws.view.zoom = Some((scale / 1.25).max(0.02));
@@ -3468,11 +3468,11 @@ impl App {
     fn empty_state(&mut self, ui: &mut Ui) {
         let r = ui.max_rect();
         window_drag(ui, Rect::from_min_size(r.min, vec2(r.width(), t::BAR_HEIGHT)), "empty");
-        ui.painter().rect_filled(r, 0.0, t::MAIN);
+        ui.painter().rect_filled(r, 0.0, t::p().main);
         let c = r.center();
-        ui.painter().text(c - vec2(0.0, 40.0), Align2::CENTER_CENTER, "Open an Eagle library", font(18.0), t::TEXT);
+        ui.painter().text(c - vec2(0.0, 40.0), Align2::CENTER_CENTER, "Open an Eagle library", font(18.0), t::p().text);
         if let Some(e) = &self.error {
-            ui.painter().text(c - vec2(0.0, 14.0), Align2::CENTER_CENTER, e, font(12.0), t::TEXT_MUTED);
+            ui.painter().text(c - vec2(0.0, 14.0), Align2::CENTER_CENTER, e, font(12.0), t::p().text_muted);
         }
         let b = Rect::from_center_size(c + vec2(0.0, 24.0), vec2(180.0, 32.0));
         let mut child = ui.new_child(egui::UiBuilder::new().max_rect(b));
@@ -3572,7 +3572,7 @@ impl eframe::App for App {
                 .frame(egui::Frame::NONE)
                 .show(ui, |ui| self.inspector(ui, lib));
         }
-        egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t::MAIN)).show(ui, |ui| {
+        egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t::p().main)).show(ui, |ui| {
             let full = ui.max_rect();
             let bar = Rect::from_min_size(full.min, vec2(full.width(), t::BAR_HEIGHT));
             let mut top = ui.new_child(egui::UiBuilder::new().max_rect(bar));
@@ -3602,10 +3602,10 @@ impl eframe::App for App {
 
             if let Some((msg, at)) = &self.ws.status {
                 if at.elapsed().as_secs_f32() < 3.0 {
-                    let gal = galley(ui, msg, font(13.0), t::TEXT, 400.0);
+                    let gal = galley(ui, msg, font(13.0), t::p().text, 400.0);
                     let r = Rect::from_center_size(Pos2::new(full.center().x, full.bottom() - 30.0), gal.size() + vec2(24.0, 14.0));
-                    ui.painter().rect_filled(r, CornerRadius::same(8), t::ROW_SELECTED);
-                    ui.painter().galley(r.min + vec2(12.0, 7.0), gal, t::TEXT);
+                    ui.painter().rect_filled(r, CornerRadius::same(8), t::p().row_selected);
+                    ui.painter().galley(r.min + vec2(12.0, 7.0), gal, t::p().text);
                     ctx.request_repaint_after(std::time::Duration::from_millis(250));
                 } else {
                     self.ws.status = None;
@@ -3659,7 +3659,7 @@ impl eframe::App for App {
             let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("drag-ghost")));
             let g = painter.layout_no_wrap(text, font(12.0), Color32::WHITE);
             let r = Rect::from_min_size(pos + vec2(12.0, 12.0), g.size() + vec2(16.0, 8.0));
-            painter.rect_filled(r, CornerRadius::same(10), t::PRIMARY);
+            painter.rect_filled(r, CornerRadius::same(10), t::p().primary);
             painter.galley(r.min + vec2(8.0, 4.0), g, Color32::WHITE);
         }
         if self.ws.smart_dialog.is_some() {
@@ -3695,10 +3695,10 @@ impl eframe::App for App {
                 ui.set_width(320.0);
                 ui.label(RichText::new(title).size(15.0));
                 ui.add_space(4.0);
-                ui.label(RichText::new(detail).color(t::TEXT_MUTED));
+                ui.label(RichText::new(detail).color(t::p().text_muted));
                 ui.add_space(10.0);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button(RichText::new(label).color(Color32::from_rgb(0xff, 0x66, 0x67))).clicked() {
+                    if ui.button(RichText::new(label).color(t::p().icon_red)).clicked() {
                         self.ws.actions.push(match c.clone() {
                             Confirm::DeleteFolder(id) => Action::DeleteFolder(id),
                             Confirm::DeleteItems(ids) => Action::DeletePermanently(ids),

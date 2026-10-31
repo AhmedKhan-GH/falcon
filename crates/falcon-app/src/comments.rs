@@ -90,7 +90,7 @@ pub fn count_badge(ui: &Ui, tile: Rect, item: &Item) {
     }
     let c = Pos2::new(tile.right() - 15.0, tile.top() + 15.0);
     let p = ui.painter();
-    p.circle_filled(c, 10.0, t::PRIMARY);
+    p.circle_filled(c, 10.0, t::p().primary);
     p.circle_stroke(c, 10.0, Stroke::new(1.0, Color32::WHITE));
     p.text(c, Align2::CENTER_CENTER, list.len().to_string(), mono(11.0), Color32::WHITE);
 }
@@ -111,7 +111,7 @@ impl App {
         let on = self.ws.tools.comment_mode;
         let r = Rect::from_center_size(Pos2::new(x, cy), Vec2::splat(26.0));
         if on {
-            ui.painter().rect_filled(r, t::RADIUS, t::PRIMARY.gamma_multiply(0.5));
+            ui.painter().rect_filled(r, t::RADIUS, t::p().primary.gamma_multiply(0.5));
         }
         if icon_button(ui, Pos2::new(x, cy), ic::CHAT_CIRCLE, 17.0, true, "Comment Mode (C)").clicked() {
             self.ws.tools.comment_mode = !on;
@@ -120,7 +120,7 @@ impl App {
         let n = item.comments().len();
         if n > 0 {
             let c = Pos2::new(x + 9.0, cy - 8.0);
-            ui.painter().circle_filled(c, 7.0, t::PRIMARY);
+            ui.painter().circle_filled(c, 7.0, t::p().primary);
             ui.painter().text(c, Align2::CENTER_CENTER, n.to_string(), mono(9.0), Color32::WHITE);
         }
         x - 30.0
@@ -147,8 +147,8 @@ impl App {
             if let (Some(a), Some(now)) = (self.ws.tools.draw_start, canvas.interact_pointer_pos()) {
                 let b = to_image(now, shown, natural);
                 let r = to_screen(Rect::from_two_pos(a, b), shown, natural);
-                p.rect_filled(r, 0.0, t::PRIMARY.gamma_multiply(0.15));
-                p.rect_stroke(r, 0.0, Stroke::new(1.5, t::PRIMARY), StrokeKind::Middle);
+                p.rect_filled(r, 0.0, t::p().primary.gamma_multiply(0.15));
+                p.rect_stroke(r, 0.0, Stroke::new(1.5, t::p().primary), StrokeKind::Middle);
                 if canvas.drag_stopped() {
                     self.ws.tools.draw_start = None;
                     if let Some(rect) = new_region(a, b, natural) {
@@ -169,9 +169,9 @@ impl App {
             let resp = ui.interact(s, ui.scope_id().with(("comment", &c.id)), if mode { Sense::click() } else { Sense::hover() });
             let hot = resp.hovered() || editing;
             p.rect_filled(s, 0.0, Color32::from_black_alpha(if hot { 40 } else { 20 }));
-            p.rect_stroke(s, 0.0, Stroke::new(if hot { 2.0 } else { 1.5 }, t::PRIMARY), StrokeKind::Middle);
+            p.rect_stroke(s, 0.0, Stroke::new(if hot { 2.0 } else { 1.5 }, t::p().primary), StrokeKind::Middle);
             let badge = s.left_top() + vec2(0.0, 0.0);
-            p.circle_filled(badge, 10.0, t::PRIMARY);
+            p.circle_filled(badge, 10.0, t::p().primary);
             p.circle_stroke(badge, 10.0, Stroke::new(1.0, Color32::WHITE));
             p.text(badge, Align2::CENTER_CENTER, (n + 1).to_string(), mono(11.0), Color32::WHITE);
             let text = plain_text(&c.annotation);
@@ -185,7 +185,7 @@ impl App {
             if mode && hot {
                 let x = Rect::from_center_size(s.right_top(), Vec2::splat(18.0));
                 let xr = ui.interact(x, ui.scope_id().with(("comment-x", &c.id)), Sense::click());
-                p.circle_filled(x.center(), 9.0, if xr.hovered() { Color32::from_rgb(0xff, 0x66, 0x67) } else { t::BUTTON });
+                p.circle_filled(x.center(), 9.0, if xr.hovered() { t::p().icon_red } else { t::p().button });
                 p.text(x.center(), Align2::CENTER_CENTER, ic::X, font(10.0), Color32::WHITE);
                 if xr.on_hover_text("Delete comment").clicked() {
                     self.ws.actions.push(Action::Edit(Op::DeleteComment(item.id.clone(), c.id.clone())));
@@ -197,8 +197,8 @@ impl App {
         // A new region not saved yet.
         if let Some(d) = self.ws.tools.draft.as_ref().filter(|d| d.id.is_none() && d.item == item.id) {
             let s = to_screen(d.rect, shown, natural);
-            p.rect_filled(s, 0.0, t::PRIMARY.gamma_multiply(0.15));
-            p.rect_stroke(s, 0.0, Stroke::new(2.0, t::PRIMARY), StrokeKind::Middle);
+            p.rect_filled(s, 0.0, t::p().primary.gamma_multiply(0.15));
+            p.rect_stroke(s, 0.0, Stroke::new(2.0, t::p().primary), StrokeKind::Middle);
         }
         if self.ws.tools.draft.as_ref().is_some_and(|d| d.item == item.id) {
             let s = to_screen(self.ws.tools.draft.as_ref().unwrap().rect, shown, natural);
@@ -217,7 +217,7 @@ impl App {
         let mut delete = false;
         let draft = self.ws.tools.draft.as_mut().unwrap();
         egui::Area::new(ui.scope_id().with("comment-editor")).order(egui::Order::Tooltip).fixed_pos(Pos2::new(x, y)).show(ui.ctx(), |ui| {
-            egui::Frame::new().fill(t::PANEL).stroke(Stroke::new(1.0, t::DIVIDER)).corner_radius(CornerRadius::same(8)).inner_margin(10).show(ui, |ui| {
+            egui::Frame::new().fill(t::p().panel).stroke(Stroke::new(1.0, t::p().divider)).corner_radius(CornerRadius::same(8)).inner_margin(10).show(ui, |ui| {
                 ui.set_width(width - 20.0);
                 let te = ui.add(
                     TextEdit::multiline(&mut draft.text)
@@ -316,15 +316,15 @@ impl App {
                 Some(s) => format!("{}  {}", time_label(s), text),
                 None => text,
             };
-            let g = wrapped(ui, if label.is_empty() { "(no text)" } else { &label }, 12.5, t::TEXT, w - 64.0, 3);
+            let g = wrapped(ui, if label.is_empty() { "(no text)" } else { &label }, 12.5, t::p().text, w - 64.0, 3);
             let (row, resp) = ui.allocate_exact_size(vec2(w, g.size().y.max(16.0) + 8.0), Sense::click());
             if resp.hovered() {
-                ui.painter().rect_filled(row, CornerRadius::same(4), t::ROW_HOVER);
+                ui.painter().rect_filled(row, CornerRadius::same(4), t::p().row_hover);
             }
             let badge = Pos2::new(row.left() + 9.0, row.top() + 12.0);
-            ui.painter().circle_filled(badge, 8.0, t::PRIMARY);
+            ui.painter().circle_filled(badge, 8.0, t::p().primary);
             ui.painter().text(badge, Align2::CENTER_CENTER, (n + 1).to_string(), mono(10.0), Color32::WHITE);
-            ui.painter().galley(Pos2::new(row.left() + 24.0, row.top() + 4.0), g, t::TEXT);
+            ui.painter().galley(Pos2::new(row.left() + 24.0, row.top() + 4.0), g, t::p().text);
             if resp.hovered() || ui.rect_contains_pointer(row) {
                 let edit = icon_button(ui, Pos2::new(row.right() - 34.0, row.top() + 12.0), ic::PENCIL, 13.0, true, "Edit");
                 let del = icon_button(ui, Pos2::new(row.right() - 10.0, row.top() + 12.0), ic::TRASH, 13.0, true, "Delete");

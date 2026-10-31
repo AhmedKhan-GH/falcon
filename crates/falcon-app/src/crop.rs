@@ -192,10 +192,10 @@ impl App {
         let px = pixel_rect(crop.rect);
         let label = format!("{} × {}", px.width, px.height);
         let at = Pos2::new(screen.center().x, (screen.bottom() + 16.0).min(area.bottom() - 12.0));
-        let g = ui.painter().layout_no_wrap(label, mono(12.0), t::TEXT);
+        let g = ui.painter().layout_no_wrap(label, mono(12.0), t::p().text);
         let bg = Rect::from_center_size(at, g.size() + vec2(12.0, 6.0));
         p.rect_filled(bg, CornerRadius::same(4), Color32::from_black_alpha(180));
-        p.galley(bg.min + vec2(6.0, 3.0), g, t::TEXT);
+        p.galley(bg.min + vec2(6.0, 3.0), g, t::p().text);
         true
     }
 
@@ -204,7 +204,7 @@ impl App {
         let Some(crop) = self.ws.tools.crop.as_mut() else { return };
         let button = |ui: &mut Ui, x: f32, w: f32, label: &str, primary: bool| {
             let r = Rect::from_center_size(Pos2::new(x - w / 2.0, cy), vec2(w, 26.0));
-            let b = egui::Button::new(egui::RichText::new(label).color(t::TEXT)).fill(if primary { t::PRIMARY } else { t::BUTTON });
+            let b = egui::Button::new(egui::RichText::new(label).color(t::p().text)).fill(if primary { t::p().primary } else { t::p().button });
             ui.put(r, b)
         };
         if crop.confirming {
@@ -217,8 +217,8 @@ impl App {
             if button(ui, right - 138.0, 70.0, "Back", false).clicked() {
                 crop.confirming = false;
             }
-            let g = ui.painter().layout_no_wrap("Cropping overwrites the original file and can't be undone".into(), font(12.0), t::TEXT_MUTED);
-            ui.painter().galley(Pos2::new(right - 216.0 - g.size().x, cy - g.size().y / 2.0), g, t::TEXT_MUTED);
+            let g = ui.painter().layout_no_wrap("Cropping overwrites the original file and can't be undone".into(), font(12.0), t::p().text_muted);
+            ui.painter().galley(Pos2::new(right - 216.0 - g.size().x, cy - g.size().y / 2.0), g, t::p().text_muted);
         } else {
             if button(ui, right, 70.0, "Save", true).on_hover_text("Save (Enter)").clicked() {
                 crop.confirming = true;

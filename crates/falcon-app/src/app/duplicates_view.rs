@@ -157,7 +157,7 @@ impl App {
                 if ui.add_enabled(running.is_none(), egui::Button::new(label)).clicked() {
                     rescan = true;
                 }
-                ui.label(RichText::new("Similarity").color(t::TEXT_MUTED));
+                ui.label(RichText::new("Similarity").color(t::p().text_muted));
                 // Right is stricter, as in Eagle; the value is the bits allowed to differ.
                 let mut strict = 20 - self.ws.duplicates.threshold.min(20) as i32;
                 let s = ui.add_enabled(running.is_none(), egui::Slider::new(&mut strict, 0..=20).show_value(false));
@@ -184,10 +184,10 @@ impl App {
             if let Some((phase, done, total)) = running {
                 let (r, _) = ui.allocate_exact_size(vec2(area.width(), 40.0), Sense::hover());
                 let bar = Rect::from_min_size(Pos2::new(x0, r.top() + 4.0), vec2(320.0, 6.0));
-                p.rect_filled(bar, 3.0, t::BUTTON);
+                p.rect_filled(bar, 3.0, t::p().button);
                 let f = if total > 0 { done as f32 / total as f32 } else { 0.0 };
-                p.rect_filled(Rect::from_min_size(bar.min, vec2(bar.width() * f, bar.height())), 3.0, t::PRIMARY);
-                p.text(Pos2::new(x0, bar.bottom() + 14.0), Align2::LEFT_CENTER, format!("{phase}… {done}/{total}"), font(12.0), t::TEXT_MUTED);
+                p.rect_filled(Rect::from_min_size(bar.min, vec2(bar.width() * f, bar.height())), 3.0, t::p().primary);
+                p.text(Pos2::new(x0, bar.bottom() + 14.0), Align2::LEFT_CENTER, format!("{phase}… {done}/{total}"), font(12.0), t::p().text_muted);
                 ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));
                 return;
             }
@@ -198,19 +198,19 @@ impl App {
                     Align2::LEFT_CENTER,
                     "Finds byte-identical files and similar-looking pictures. Nothing is changed until you trash items.",
                     font(13.0),
-                    t::TEXT_MUTED,
+                    t::p().text_muted,
                 );
                 return;
             };
             if groups.is_empty() {
                 let (r, _) = ui.allocate_exact_size(vec2(area.width(), 60.0), Sense::hover());
-                p.text(Pos2::new(x0, r.center().y), Align2::LEFT_CENTER, "No duplicates found", font(14.0), t::TEXT_MUTED);
+                p.text(Pos2::new(x0, r.center().y), Align2::LEFT_CENTER, "No duplicates found", font(14.0), t::p().text_muted);
                 return;
             }
             let n_items: usize = groups.iter().map(|g| g.ids.len()).sum();
             ui.horizontal(|ui| {
                 ui.add_space(GRID_PAD_X);
-                ui.label(RichText::new(format!("{} groups, {n_items} items", groups.len())).color(t::TEXT_MUTED));
+                ui.label(RichText::new(format!("{} groups, {n_items} items", groups.len())).color(t::p().text_muted));
             });
             ui.add_space(6.0);
             let mut jobs = Vec::new();
@@ -220,7 +220,7 @@ impl App {
                 let kind = if g.exact { "Identical files".to_string() } else { format!("Similar pictures (within {} of 64 bits)", g.distances.iter().max().unwrap_or(&0)) };
                 ui.horizontal(|ui| {
                     ui.add_space(GRID_PAD_X);
-                    ui.label(RichText::new(kind).color(t::TEXT_VALUE).size(12.0));
+                    ui.label(RichText::new(kind).color(t::p().text_value).size(12.0));
                 });
                 let per_row = (((area.width() - 2.0 * GRID_PAD_X) + 10.0) / (THUMB + 10.0)).floor().max(1.0) as usize;
                 let rows = g.ids.len().div_ceil(per_row);
@@ -234,19 +234,19 @@ impl App {
                     }
                     let selected = self.ws.selected.contains(id);
                     let resp = ui.interact(cell, ui.scope_id().with(("dup", gn, id.as_str())), Sense::click());
-                    p.rect_filled(cell, 6.0, if resp.hovered() { t::CARD_HOVER } else { t::CARD_BORDER });
+                    p.rect_filled(cell, 6.0, if resp.hovered() { t::p().card_hover } else { t::p().card_border });
                     if let Some(j) = job_for(item, lib.root(), Tier::Grid) {
                         jobs.push(j);
                     }
                     self.draw_image(ui, lib, item, cell.shrink(4.0), false);
                     if selected {
-                        p.rect_stroke(cell, 6.0, Stroke::new(2.0, t::PRIMARY), StrokeKind::Outside);
+                        p.rect_stroke(cell, 6.0, Stroke::new(2.0, t::p().primary), StrokeKind::Outside);
                     }
                     let first = if n == 0 { "Kept · " } else { "" };
                     let meta = if g.exact { format!("{first}{}", logic::format_size(item.size)) } else { format!("{first}{} bits", g.distances[n]) };
-                    let name = super::galley(ui, &format!("{}.{}", item.name, item.ext), font(11.0), t::TEXT, THUMB);
-                    p.galley(Pos2::new(cell.left(), cell.bottom() + 4.0), name, t::TEXT);
-                    p.text(Pos2::new(cell.left(), cell.bottom() + 28.0), Align2::LEFT_CENTER, meta, mono(10.0), t::TEXT_MUTED);
+                    let name = super::galley(ui, &format!("{}.{}", item.name, item.ext), font(11.0), t::p().text, THUMB);
+                    p.galley(Pos2::new(cell.left(), cell.bottom() + 4.0), name, t::p().text);
+                    p.text(Pos2::new(cell.left(), cell.bottom() + 28.0), Align2::LEFT_CENTER, meta, mono(10.0), t::p().text_muted);
                     if resp.double_clicked() {
                         opened = Some(id.clone());
                     } else if resp.clicked() {
