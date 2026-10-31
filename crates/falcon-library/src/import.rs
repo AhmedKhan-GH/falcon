@@ -5,13 +5,14 @@ use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use filetime::FileTime;
+use image::DynamicImage;
 use serde_json::{Value, json};
 use unicode_normalization::UnicodeNormalization;
 
 use crate::error::{Error, Result};
 use crate::library::Library;
 use crate::model::Item;
-use crate::{exif, fontmeta, ids, keywords, media, palette, thumbnail};
+use crate::{exif, fontmeta, fontpreview, ids, keywords, media, palette, thumbnail, waveform};
 
 /// Longest file name Eagle allows inside an `.info` folder, in bytes.
 const MAX_FILE_NAME: usize = 255;
@@ -244,6 +245,12 @@ fn generate(item: &mut Item, raw: &Path, thumb: &Path) -> Option<Analysis> {
             }
         };
     }
+    if let Some((img, w, h)) = drawn_thumbnail(&item.ext, raw) {
+        thumbnail::write_thumbnail(img, max, thumb).ok()?;
+        item.width = w.into();
+        item.height = h.into();
+        return Some(Analysis::Thumbnail);
+    }
     if !thumbnail::is_supported(&item.ext) {
         return quicklook_thumbnail(item, raw, thumb, max);
     }
@@ -261,6 +268,23 @@ fn generate(item: &mut Item, raw: &Path, thumb: &Path) -> Option<Analysis> {
     }
     apply(item, plan);
     Some(Analysis::Thumbnail)
+}
+
+/// Thumbnails falcon draws itself, with the size Eagle records for them:
+/// a 280×140 waveform for audio and a 600×600 specimen for fonts. `None`
+/// for other formats, or when drawing fails (QuickLook is tried next).
+fn drawn_thumbnail(ext: &str, raw: &Path) -> Option<(DynamicImage, u32, u32)> {
+    if media::is_audio(ext) {
+        let img = waveform::thumbnail(raw, ext)?;
+        return Some((DynamicImage::ImageRgba8(img), waveform::WIDTH, waveform::HEIGHT));
+    }
+    if FONT_EXTENSIONS.contains(&ext) {
+        let data = fs::read(raw).ok()?;
+        let metas = fontmeta::font_metas(&data, "")?;
+        let img = fontpreview::render(&data, &metas)?;
+        return Some((img, fontpreview::SIZE, fontpreview::SIZE));
+    }
+    None
 }
 
 /// Formats falcon can't decode itself (PDF, video, PSD, AI, HEIC, RAW, ...)
@@ -362,12 +386,19 @@ mod tests {
     use super::*;
 
     fn import(file: &str, bytes: &[u8], opts: &ImportOptions) -> Item {
+        import_with_thumb(file, bytes, opts).0
+    }
+
+    /// Imports into a fresh library; also returns the thumbnail's size.
+    fn import_with_thumb(file: &str, bytes: &[u8], opts: &ImportOptions) -> (Item, Option<(u32, u32)>) {
         let tmp = tempfile::tempdir().unwrap();
         let mut lib = Library::create(tmp.path().join("T.library")).unwrap();
         let src = tmp.path().join(file);
         fs::write(&src, bytes).unwrap();
         let id = lib.import_file(&src, opts).unwrap();
-        lib.item(&id).unwrap().clone()
+        let item = lib.item(&id).unwrap().clone();
+        let thumb = item.thumbnail_path(lib.root()).and_then(|p| thumbnail::decode(&p).ok()).map(|i| (i.width(), i.height()));
+        (item, thumb)
     }
 
     fn keys(item: &Item) -> Vec<&str> {
@@ -420,15 +451,19 @@ mod tests {
     #[test]
     fn audio_gets_duration() {
         let opts = ImportOptions { palette: false, ..Default::default() };
-        let item = import("tone.wav", &crate::media::tests::wav(8000, 1.25, |t| (t * 300.0).sin()), &opts);
+        let (item, thumb) = import_with_thumb("tone.wav", &crate::media::tests::wav(8000, 1.25, |t| (t * 300.0).sin()), &opts);
         assert_eq!(item.extra["duration"], 1.25);
+        assert_eq!((item.width, item.height), (280, 140));
+        assert_eq!(thumb, Some((280, 140)), "the waveform is the thumbnail");
     }
 
     #[test]
     fn font_gets_font_metas_and_weight_tag() {
         let Ok(data) = fs::read("/System/Library/Fonts/Supplemental/Arial.ttf") else { return };
         let opts = ImportOptions { palette: false, tags: vec!["mine".into()], ..Default::default() };
-        let item = import("Arial.ttf", &data, &opts);
+        let (item, thumb) = import_with_thumb("Arial.ttf", &data, &opts);
+        assert_eq!((item.width, item.height), (600, 600));
+        assert_eq!(thumb, Some((320, 320)), "the specimen is scaled to the thumbnail limit");
         assert_eq!(item.extra["fontMetas"]["postScriptName"]["en"], "ArialMT");
         assert_eq!(item.tags, ["mine", "Regular"]);
         assert!(keys(&item).contains(&"fontMetas"));

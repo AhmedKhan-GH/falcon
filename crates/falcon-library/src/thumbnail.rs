@@ -133,6 +133,8 @@ pub fn decode(path: &Path) -> Result<DynamicImage, ThumbError> {
 /// Long side of QuickLook renders, matching the size Eagle reports for
 /// documents such as PDFs.
 pub const QUICKLOOK_SIZE: u32 = 1024;
+/// How long a QuickLook render may take.
+pub const QUICKLOOK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
 /// Renders a preview of any file macOS QuickLook understands, with its long
 /// side at most `size`.
@@ -141,7 +143,7 @@ pub fn quicklook(path: &Path, size: u32) -> Result<DynamicImage, ThumbError> {
         return Err(ThumbError("QuickLook is only available on macOS".into()));
     }
     let out = tempfile::tempdir().map_err(ThumbError::new)?;
-    let status = std::process::Command::new("qlmanage")
+    let mut child = std::process::Command::new("qlmanage")
         .arg("-t")
         .arg("-s")
         .arg(size.to_string())
@@ -150,8 +152,21 @@ pub fn quicklook(path: &Path, size: u32) -> Result<DynamicImage, ThumbError> {
         .arg(path)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
-        .status()
+        .spawn()
         .map_err(ThumbError::new)?;
+    // qlmanage can hang on a malformed file; give up after a while.
+    let deadline = std::time::Instant::now() + QUICKLOOK_TIMEOUT;
+    let status = loop {
+        if let Some(s) = child.try_wait().map_err(ThumbError::new)? {
+            break s;
+        }
+        if std::time::Instant::now() > deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(ThumbError("QuickLook timed out".into()));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    };
     let name = format!("{}.png", path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default());
     let png = out.path().join(name);
     if !status.success() || !png.is_file() {
