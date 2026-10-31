@@ -854,9 +854,15 @@ impl App {
             pr.total += files.len();
         }
         let ctx = self.ctx.clone();
+        let scratch = tempfile_dir().ok();
         std::thread::spawn(move || {
             for f in files {
                 let result = falcon_library::import::stage(&f, &opts).and_then(|staged| lock(&shared).commit_import(staged));
+                // Pasted images are staged in falcon's own temp folder; they
+                // are removed only now, after the import has read them.
+                if scratch.as_ref().is_some_and(|d| f.starts_with(d)) {
+                    let _ = std::fs::remove_file(&f);
+                }
                 let mut pr = progress.lock().unwrap_or_else(|p| p.into_inner());
                 pr.done += 1;
                 if result.is_err() {
@@ -933,10 +939,10 @@ impl App {
             let Ok(dir) = tempfile_dir() else { return };
             let stamp = chrono::Local::now().format("%Y-%m-%d at %H.%M.%S");
             let path = dir.join(format!("Pasted image {stamp}.png"));
+            // The import thread deletes the file once it has copied it in.
             if buf.save(&path).is_ok() {
-                self.import_into(vec![path.clone()], folders);
+                self.import_into(vec![path], folders);
             }
-            let _ = std::fs::remove_file(path);
         }
     }
 
