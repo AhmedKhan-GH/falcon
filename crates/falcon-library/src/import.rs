@@ -11,7 +11,7 @@ use unicode_normalization::UnicodeNormalization;
 use crate::error::{Error, Result};
 use crate::library::Library;
 use crate::model::Item;
-use crate::{exif, fontmeta, ids, media, palette, thumbnail};
+use crate::{exif, fontmeta, ids, keywords, media, palette, thumbnail};
 
 /// Longest file name Eagle allows inside an `.info` folder, in bytes.
 const MAX_FILE_NAME: usize = 255;
@@ -37,6 +37,9 @@ pub struct ImportOptions {
     /// Also store `rawMetas` for JPEG, TIFF, HEIC, PNG and WebP photos.
     /// Eagle only does it for RAW files (default false).
     pub camera_metadata_all_photos: bool,
+    /// Add embedded IPTC keywords and XMP `dc:subject` entries as tags, like
+    /// Eagle's IPTC preference (default false, as in Eagle).
+    pub keywords_as_tags: bool,
 }
 
 impl Default for ImportOptions {
@@ -49,6 +52,7 @@ impl Default for ImportOptions {
             url: String::new(),
             font_weight_tag: true,
             camera_metadata_all_photos: false,
+            keywords_as_tags: false,
         }
     }
 }
@@ -112,6 +116,10 @@ pub fn stage(path: impl AsRef<Path>, opts: &ImportOptions) -> Result<Staged> {
         width_first: false,
         extra: Default::default(),
     };
+
+    if opts.keywords_as_tags {
+        add_keyword_tags(&mut item.tags, keywords::read(src, &item.ext));
+    }
 
     let dir = tempfile::Builder::new().prefix("falcon-import").tempdir().map_err(|e| Error::io(src, e))?;
     let file = if item.ext.is_empty() { item.name.clone() } else { format!("{}.{}", item.name, item.ext) };
@@ -306,6 +314,17 @@ fn file_metadata(item: &mut Item, raw: &Path, opts: &ImportOptions) {
     }
 }
 
+/// Appends keywords to the tags. As in Eagle, when there are keywords the
+/// whole list is then de-duplicated, keeping first occurrences.
+fn add_keyword_tags(tags: &mut Vec<String>, keywords: Vec<String>) {
+    if keywords.is_empty() {
+        return;
+    }
+    let mut seen = std::collections::HashSet::new();
+    let all: Vec<String> = tags.drain(..).chain(keywords).filter(|t| seen.insert(t.clone())).collect();
+    *tags = all;
+}
+
 /// Font formats whose metadata falcon reads (WOFF 2 is not supported).
 pub const FONT_EXTENSIONS: [&str; 5] = ["ttf", "otf", "ttc", "otc", "woff"];
 
@@ -387,6 +406,15 @@ mod tests {
         let all = ImportOptions { camera_metadata_all_photos: true, ..opts };
         let item = metadata_only("shot.tif", &crate::exif::tests::tiff_with_exif(), &all);
         assert!(item.extra.contains_key("rawMetas"));
+    }
+
+    #[test]
+    fn keywords_become_tags_when_asked() {
+        let png = crate::keywords::tests::png_with_xmp(true);
+        let opts = ImportOptions { palette: false, tags: vec!["beach".into(), "mine".into()], ..Default::default() };
+        assert_eq!(import("k.png", &png, &opts).tags, ["beach", "mine"]);
+        let on = ImportOptions { keywords_as_tags: true, ..opts };
+        assert_eq!(import("k.png", &png, &on).tags, ["beach", "mine", "sunset", "sea & sky"]);
     }
 
     #[test]

@@ -48,6 +48,14 @@ Eagle's thumbnail modules (`app/js/thumbs/`) also add keys for some formats. New
 - With the "auto tag" font preference, which is on by default, the weight is also pushed onto `tags`.
 - Fonts opentype.js can't parse (collections, woff2) go through a second parser, Typr, which writes a different fixed set of keys, every one with only an `en` value.
 
+### IPTC keywords (observed)
+
+- The preference `general.IPTC` is off by default. When it is on, Eagle reads keywords from files whose extension is exactly `jpg`. A `.jpeg` file is not read.
+- It looks only at the first APP13 segment, in the "Photoshop 3.0" resource 0x0404, and takes IIM dataset 25 (keywords) from it. XMP is never read.
+- A keyword field over 200 characters is skipped. The rest are split on `;`.
+- The parts are appended to the caller's tags, and the whole list is de-duplicated (first occurrence wins).
+- This happens before the copy, so the keyword tags come before the font weight tag.
+
 ### Timestamps
 
 - `btime` and `mtime` are the file's own times (observed).
@@ -94,3 +102,13 @@ Eagle's thumbnail modules (`app/js/thumbs/`) also add keys for some formats. New
   - Collections get the opentype.js shape, not Typr's.
   - Eagle's MD5 fallback for fonts with a family name but no English PostScript name is not reproduced.
   - `ImportOptions::font_weight_tag` (default true, as in Eagle) adds the weight tag.
+
+### Keywords in falcon
+
+`ImportOptions::keywords_as_tags` is off by default, as in Eagle. When it is on, the `keywords` module reads:
+
+- jpg and jpeg: the IPTC block in APP13, parsed as proper IIM records (record 2, dataset 25), and the XMP packet in APP1.
+- png: the XMP packet in the `iTXt` chunk `XML:com.adobe.xmp`, compressed or not.
+- tif and tiff: the IPTC (tag 33723) and XMP (tag 700) entries of the first IFD.
+
+IPTC keywords come first, then the XMP `dc:subject` items. Eagle's 200-character limit and `;` split apply to both. Falcon also drops empty parts, where Eagle would keep an empty tag. Reading `.jpeg`, XMP, PNG and TIFF goes beyond what Eagle does.

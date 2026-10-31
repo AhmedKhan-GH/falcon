@@ -7,6 +7,7 @@ pub mod exif;
 pub mod fontmeta;
 pub mod library;
 pub mod ids;
+pub mod keywords;
 pub mod media;
 pub mod model;
 pub mod pack;
