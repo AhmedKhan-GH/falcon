@@ -1,17 +1,18 @@
 //! Smart folders: saved rule sets in the library `metadata.json` (see the
 //! Smart folders chapter of the docs). Entries stay raw JSON in [`LibraryMetadata`] so they
-//! round-trip untouched; this module reads and evaluates them.
+//! round-trip untouched; this module reads, evaluates and edits them.
 //!
 //! [`LibraryMetadata`]: crate::model::LibraryMetadata
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 
+use crate::edit::{display_name, now_ms};
 use crate::error::Result;
 use crate::ids;
-use crate::library::{Library, write_json};
-use crate::model::Item;
+use crate::library::Library;
+use crate::model::{FolderOrder, Item};
 use crate::search::{self, ColorQuery, FolderIndex};
 
 /// A smart folder, read from its JSON entry.
@@ -21,13 +22,27 @@ pub struct SmartFolder {
     pub name: String,
     pub conditions: Vec<Value>,
     pub children: Vec<SmartFolder>,
+    /// Icon name from [`crate::model::FOLDER_ICONS`], if not the default.
+    pub icon: Option<String>,
+    /// Colour from [`crate::model::ICON_COLORS`], if not the default.
+    pub icon_color: Option<String>,
+    pub description: String,
+    /// The smart folder's own sort, as Eagle's `orderBy` string.
+    pub order_by: Option<String>,
+    pub sort_increase: Option<bool>,
 }
 
 impl SmartFolder {
     fn from_value(v: &Value) -> Option<SmartFolder> {
+        let text = |k: &str| v.get(k).and_then(Value::as_str).map(str::to_string);
         Some(SmartFolder {
             id: v.get("id")?.as_str()?.to_string(),
-            name: v.get("name").and_then(Value::as_str).unwrap_or("").to_string(),
+            name: text("name").unwrap_or_default(),
+            icon: text("icon"),
+            icon_color: text("iconColor"),
+            description: text("description").unwrap_or_default(),
+            order_by: text("orderBy"),
+            sort_increase: v.get("sortIncrease").and_then(Value::as_bool),
             conditions: v.get("conditions").and_then(Value::as_array).cloned().unwrap_or_default(),
             children: v
                 .get("children")
@@ -270,14 +285,32 @@ impl Library {
         self.items().iter().filter(|i| contains(i, &folder, &refs, &fx)).collect()
     }
 
-    /// Adds a top-level smart folder in the shape Eagle's dialog writes and
-    /// returns its id.
+    /// Adds a top-level smart folder at the end and returns its id.
     pub fn create_smart_folder(&mut self, name: &str, conditions: Vec<Value>) -> Result<String> {
+        self.create_smart_folder_in(None, name, conditions)
+    }
+
+    /// Adds a smart folder at the end of `parent`'s children (or at the top
+    /// level) and returns its id. A top-level entry takes the shape Eagle's
+    /// save rebuilds top-level entries into (`id`, `name`, `description`,
+    /// `modificationTime`, `conditions`, `children`). Eagle writes nested
+    /// entries as its dialog built them, with the parent's id added
+    /// (`id`, `name`, `conditions`, `modificationTime`, `children`, `parent`).
+    pub fn create_smart_folder_in(&mut self, parent: Option<&str>, name: &str, conditions: Vec<Value>) -> Result<String> {
         let id = ids::new_id();
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64);
-        self.metadata.smart_folders.push(json!({
-            "id": id, "name": name, "conditions": conditions, "modificationTime": now, "children": []
-        }));
+        let (name, now) = (display_name(name), now_ms());
+        match parent {
+            None => self.metadata.smart_folders.push(json!({
+                "id": id, "name": name, "description": "", "modificationTime": now, "conditions": conditions, "children": []
+            })),
+            Some(p) => {
+                let entry = json!({
+                    "id": id, "name": name, "conditions": conditions, "modificationTime": now, "children": [], "parent": p
+                });
+                let Some(parent) = find_smart(&mut self.metadata.smart_folders, p) else { return Err(self.no_smart(p)) };
+                children_of(parent).push(entry);
+            }
+        }
         self.save_metadata()?;
         Ok(id)
     }
@@ -285,41 +318,125 @@ impl Library {
     /// Replaces a smart folder's name and conditions (at any depth) and
     /// stamps its `modificationTime`, as Eagle's edit dialog does.
     pub fn update_smart_folder(&mut self, id: &str, name: &str, conditions: Vec<Value>) -> Result<()> {
-        fn find<'a>(list: &'a mut [Value], id: &str) -> Option<&'a mut Value> {
-            for v in list {
-                if v.get("id").and_then(Value::as_str) == Some(id) {
-                    return Some(v);
-                }
-                if let Some(c) = v.get_mut("children").and_then(Value::as_array_mut)
-                    && let Some(found) = find(c, id)
-                {
-                    return Some(found);
-                }
-            }
-            None
-        }
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64);
-        if let Some(v) = find(&mut self.metadata.smart_folders, id) {
-            v["name"] = json!(name);
+        if let Some(v) = find_smart(&mut self.metadata.smart_folders, id) {
+            v["name"] = json!(display_name(name));
             v["conditions"] = json!(conditions);
-            v["modificationTime"] = json!(now);
+            v["modificationTime"] = json!(now_ms());
         }
         self.save_metadata()
     }
 
     /// Removes a smart folder (at any depth) with its children.
     pub fn delete_smart_folder(&mut self, id: &str) -> Result<()> {
-        fn remove(list: &mut Vec<Value>, id: &str) -> bool {
-            if let Some(pos) = list.iter().position(|v| v.get("id").and_then(Value::as_str) == Some(id)) {
-                list.remove(pos);
-                return true;
-            }
-            list.iter_mut().any(|v| v.get_mut("children").and_then(Value::as_array_mut).is_some_and(|c| remove(c, id)))
-        }
-        remove(&mut self.metadata.smart_folders, id);
-        let path = self.root().join("metadata.json");
-        write_json(&path, &self.metadata)
+        remove_smart(&mut self.metadata.smart_folders, id);
+        self.save_metadata()
     }
+
+    /// Moves a smart folder under `parent` (or to the top level) at
+    /// position `index` among its new siblings, counted after it has left
+    /// its old place; past the end appends. A nested entry gets `parent`
+    /// set to its parent's id and a top-level one loses it, as Eagle's drag
+    /// does. Moving into itself or a descendant is refused. Children keep
+    /// narrowing their new ancestors when evaluated.
+    pub fn move_smart_folder(&mut self, id: &str, parent: Option<&str>, index: usize) -> Result<()> {
+        let Some(entry) = find_smart(&mut self.metadata.smart_folders, id) else { return Err(self.no_smart(id)) };
+        if let Some(p) = parent {
+            if find_smart(std::slice::from_mut(entry), p).is_some() {
+                return Err(self.invalid("cannot move a smart folder into itself"));
+            }
+            if find_smart(&mut self.metadata.smart_folders, p).is_none() {
+                return Err(self.no_smart(p));
+            }
+        }
+        let mut entry = remove_smart(&mut self.metadata.smart_folders, id).ok_or_else(|| self.no_smart(id))?;
+        if let Some(m) = entry.as_object_mut() {
+            match parent {
+                Some(p) => {
+                    m.insert("parent".into(), json!(p));
+                }
+                None => {
+                    m.shift_remove("parent");
+                }
+            }
+        }
+        let siblings = match parent {
+            None => &mut self.metadata.smart_folders,
+            Some(p) => children_of(find_smart(&mut self.metadata.smart_folders, p).expect("parent checked above")),
+        };
+        siblings.insert(index.min(siblings.len()), entry);
+        self.save_metadata()
+    }
+
+    /// Sets a smart folder's icon and colour; `None` removes the key. Pass
+    /// the current value to keep one. A new key goes where Eagle's save
+    /// puts it on a top-level entry (right after `id`), or at the end of a
+    /// nested one. `modificationTime` is left alone.
+    pub fn set_smart_folder_icon(&mut self, id: &str, icon: Option<&str>, color: Option<&str>) -> Result<()> {
+        self.check_color(color)?;
+        let top = self.metadata.smart_folders.iter().any(|v| v.get("id").and_then(Value::as_str) == Some(id));
+        let Some(m) = find_smart(&mut self.metadata.smart_folders, id).and_then(Value::as_object_mut) else { return Err(self.no_smart(id)) };
+        put(m, "icon", icon.map(|s| json!(s)), top.then_some(1));
+        let after_icon = usize::from(m.contains_key("icon")) + 1;
+        put(m, "iconColor", color.map(|s| json!(s)), top.then_some(after_icon));
+        self.save_metadata()
+    }
+
+    /// Sets a smart folder's own sort, or clears it (`orderBy` and
+    /// `sortIncrease` both go).
+    pub fn set_smart_folder_order(&mut self, id: &str, order: Option<FolderOrder>, increase: bool) -> Result<()> {
+        let Some(m) = find_smart(&mut self.metadata.smart_folders, id).and_then(Value::as_object_mut) else { return Err(self.no_smart(id)) };
+        put(m, "orderBy", order.map(|o| json!(o.as_str())), None);
+        put(m, "sortIncrease", order.map(|_| json!(increase)), None);
+        self.save_metadata()
+    }
+
+    fn no_smart(&self, id: &str) -> crate::Error {
+        self.invalid(format!("no smart folder {id}"))
+    }
+}
+
+/// Sets `key` in place if present, else inserts it at `at` (or the end);
+/// `None` removes it.
+fn put(m: &mut Map<String, Value>, key: &str, value: Option<Value>, at: Option<usize>) {
+    match value {
+        None => {
+            m.shift_remove(key);
+        }
+        Some(v) if m.contains_key(key) => m[key] = v,
+        Some(v) => {
+            let at = at.unwrap_or(m.len()).min(m.len());
+            m.shift_insert(at, key.to_string(), v);
+        }
+    }
+}
+
+fn find_smart<'a>(list: &'a mut [Value], id: &str) -> Option<&'a mut Value> {
+    for v in list {
+        if v.get("id").and_then(Value::as_str) == Some(id) {
+            return Some(v);
+        }
+        if let Some(c) = v.get_mut("children").and_then(Value::as_array_mut)
+            && let Some(found) = find_smart(c, id)
+        {
+            return Some(found);
+        }
+    }
+    None
+}
+
+fn remove_smart(list: &mut Vec<Value>, id: &str) -> Option<Value> {
+    if let Some(pos) = list.iter().position(|v| v.get("id").and_then(Value::as_str) == Some(id)) {
+        return Some(list.remove(pos));
+    }
+    list.iter_mut().find_map(|v| v.get_mut("children").and_then(Value::as_array_mut).and_then(|c| remove_smart(c, id)))
+}
+
+/// An entry's `children`, created (at the end) when missing.
+fn children_of(entry: &mut Value) -> &mut Vec<Value> {
+    if !entry.get("children").is_some_and(Value::is_array) {
+        entry["children"] = json!([]);
+    }
+    entry["children"].as_array_mut().expect("just ensured")
 }
 
 #[cfg(test)]

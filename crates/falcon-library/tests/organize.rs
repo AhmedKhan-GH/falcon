@@ -191,6 +191,70 @@ fn saved_filters() {
     assert_eq!(Library::open(lib.root()).unwrap().saved_filters.len(), 1);
 }
 
+#[test]
+fn nested_smart_folders_icons_and_moves() {
+    use serde_json::json;
+    let tmp = tempfile::tempdir().unwrap();
+    let mut lib = new_library(tmp.path());
+    let rule = |prop: &str, method: &str, value: serde_json::Value| vec![json!({"match": "AND", "rules": [{"property": prop, "method": method, "value": value}]})];
+    let images = lib.create_smart_folder("Images", rule("type", "equal", json!("png"))).unwrap();
+    let wide = lib.create_smart_folder_in(Some(&images), "Wide", rule("shape", "equal", json!("landscape"))).unwrap();
+    let other = lib.create_smart_folder("Other", vec![]).unwrap();
+    assert!(lib.create_smart_folder_in(Some("NOPE"), "x", vec![]).is_err());
+
+    let text = metadata(&lib);
+    assert!(text.contains(&format!(r#"{{"id":"{images}","name":"Images","description":"","modificationTime":"#)), "{text}");
+    assert!(text.contains(&format!(r#""children":[],"parent":"{images}"}}"#)), "{text}");
+
+    lib.set_smart_folder_icon(&images, Some("star"), Some("pink")).unwrap();
+    lib.set_smart_folder_icon(&wide, Some("film"), None).unwrap();
+    lib.set_smart_folder_order(&images, Some(FolderOrder::Random), true).unwrap();
+    assert!(lib.set_smart_folder_icon(&images, None, Some("beige")).is_err());
+    let text = metadata(&lib);
+    assert!(text.contains(&format!(r#"{{"id":"{images}","icon":"star","iconColor":"pink","name":"Images""#)), "{text}");
+    assert!(text.contains(&format!(r#""parent":"{images}","icon":"film"}}],"orderBy":"RANDOM","sortIncrease":true}}"#)), "{text}");
+
+    let sf = lib.smart_folders();
+    assert_eq!((sf[0].icon.as_deref(), sf[0].icon_color.as_deref(), sf[0].order_by.as_deref()), (Some("star"), Some("pink"), Some("RANDOM")));
+    assert_eq!(sf[0].children[0].icon.as_deref(), Some("film"));
+
+    // Moving: refuse cycles, set and clear `parent`, honour the index.
+    assert!(lib.move_smart_folder(&images, Some(&wide), 0).is_err());
+    lib.move_smart_folder(&other, Some(&images), 0).unwrap();
+    let ids: Vec<String> = lib.smart_folders()[0].children.iter().map(|c| c.id.clone()).collect();
+    assert_eq!(ids, [other.clone(), wide.clone()]);
+    lib.move_smart_folder(&wide, None, 0).unwrap();
+    let reopened = Library::open(lib.root()).unwrap();
+    let top: Vec<&str> = reopened.metadata.smart_folders.iter().map(|v| v["id"].as_str().unwrap()).collect();
+    assert_eq!(top, [wide.as_str(), images.as_str()]);
+    assert!(reopened.metadata.smart_folders[0].get("parent").is_none());
+    assert_eq!(reopened.metadata.smart_folders[1]["children"][0]["parent"], json!(images));
+
+    lib.set_smart_folder_icon(&images, None, None).unwrap();
+    lib.set_smart_folder_order(&images, None, true).unwrap();
+    assert!(lib.metadata.smart_folders[1].get("icon").is_none() && lib.metadata.smart_folders[1].get("orderBy").is_none());
+    lib.delete_smart_folder(&images).unwrap();
+    assert_eq!(Library::open(lib.root()).unwrap().smart_folders().len(), 1);
+}
+
+#[test]
+fn nested_smart_folders_narrow_their_parents() {
+    use serde_json::json;
+    let Some(src) = fixture() else { return };
+    let tmp = tempfile::tempdir().unwrap();
+    let dest = tmp.path().join("Smart.library");
+    Library::open(&src).unwrap().save_to(&dest).unwrap();
+    let mut lib = Library::open(&dest).unwrap();
+    let ext = lib.items().iter().find(|i| !i.is_deleted).unwrap().ext.clone();
+    let parent = lib.create_smart_folder("By type", vec![json!({"match": "AND", "rules": [{"property": "type", "method": "equal", "value": ext}]})]).unwrap();
+    let child = lib.create_smart_folder_in(Some(&parent), "Big", vec![json!({"match": "AND", "rules": [{"property": "width", "method": ">=", "value": [1, 0]}]})]).unwrap();
+    let loose = lib.create_smart_folder("Big anywhere", vec![json!({"match": "AND", "rules": [{"property": "width", "method": ">=", "value": [1, 0]}]})]).unwrap();
+    let (p, c, l) = (lib.smart_folder_items(&parent).len(), lib.smart_folder_items(&child).len(), lib.smart_folder_items(&loose).len());
+    assert!(c <= p && c <= l && c > 0, "{p} {c} {l}");
+    lib.move_smart_folder(&child, None, 99).unwrap();
+    assert_eq!(lib.smart_folder_items(&child).len(), l, "no longer narrowed once moved out");
+}
+
 fn fixture() -> Option<std::path::PathBuf> {
     let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/Assets.library");
     p.is_dir().then_some(p)
