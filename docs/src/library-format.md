@@ -175,6 +175,39 @@ Eagle keeps snapshots of the library `metadata.json` in `backup/`. Only that one
 
 `Library::save_metadata` does not take backups, because Eagle doesn't back up on each write. Callers (the app on change or a timer, or `falcon backup <library>`) call `backup_metadata()`.
 
+## Undo
+
+| Behaviour | Status | Detail |
+|---|---|---|
+| Eagle's undo | observed | Not a history. Some actions (removing items from a folder, deleting a folder or smart folder, renaming a folder, deleting a comment) show a notice with an undo link that holds one restore callback for the notice's duration plus 5 seconds; ⌘Z runs the same callback. Each new notice replaces it |
+| How Eagle restores | observed | The callback puts the old values back in memory and saves them like any edit, so restored items go through the normal item save, which stamps a new `lastModified` |
+| Permanent deletes | observed | Emptying the trash and deleting permanently remove the `.info` folders and offer no undo |
+
+### How falcon does it
+
+falcon keeps a real history. `Library::begin_transaction(label)` starts recording and `end_transaction()` returns a `undo::Transaction`, or `None` when nothing changed. While a transaction is open, the write paths record what they replace:
+
+- `register_item` (every item save and import) records the item's first pre-edit copy, or its id as created when it didn't exist.
+- `save_metadata`, `save_tags` and `save_filters` record the value as last saved, once per transaction. The library keeps a copy of the last saved `metadata`, `tags` and `saved_filters` for this, so edits that change the fields before saving still record the old value.
+- `forget_item` (permanent delete, empty trash) marks the transaction `irreversible`. The files are gone, so the app clears its undo history when such a transaction lands, as Eagle offers no undo there either.
+
+`Library::revert(tx)` restores the recorded state in a new transaction and returns it, so reverting that redoes the edit. Items are saved through `update_item`, so a rename moves the original and thumbnail back, and `lastModified` moves forward, which matches Eagle's restore (observed above). Items created in the transaction (imports) go to the trash, with their files kept. Library metadata gets a new `modificationTime`. Recording never changes what is written, so the fixture round trip is unaffected.
+
+## Write batching
+
+| Behaviour | Status | Detail |
+|---|---|---|
+| Item saves | observed | Queued per item id in a worker queue (8 at a time). A later change to an item still waiting in the queue replaces the queued copy, so each item is written once. `lastModified` is stamped when the file is written |
+| `mtime.json` | observed | 2 s after the item queue drains, then after another 1 s debounce, Eagle rewrites `mtime.json` from its in-memory map of id to `lastModified`. It drops ids no longer in the library, adds new ones and sets `all` to the item count. It is written to a temporary file and moved into place |
+| Library `metadata.json` | observed | Folder, smart folder, quick access and tag group changes are debounced by 300 ms and written by a one-at-a-time queue |
+| Backup | observed | Taken right after a changed `mtime.json` is written (see Backups) |
+
+### How falcon does it
+
+`Library::set_write_mode(WriteMode::Batched)` makes the item, `mtime.json`, `metadata.json`, `tags.json` and `saved-filters.json` writers mark what is dirty instead of writing. `Library::flush()` then writes each dirty item once, `mtime.json` once, and each library-wide file once, and returns a `FlushReport`. Because every writer serialises the whole in-memory value, the bytes after a flush are the ones immediate mode would have written last. When `mtime.json` or `metadata.json` was written, the flush calls `backup_metadata()`, as Eagle backs up after rewriting `mtime.json` (falcon also counts a metadata write, inferred harmless: the backup is skipped when the size is unchanged). File renames and permanent deletes still happen at once. An item deleted before the flush is skipped. If a write fails, the pending set is kept for the next flush. Dropping a batched library with pending writes flushes it, ignoring errors. `WriteMode::Immediate` is the default, used by the CLI, the server and the tests. Switching back to it flushes first.
+
+falcon writes JSON files in place rather than through a temporary file, as before.
+
 ## Export (`.eaglepack`)
 
 An `.eaglepack` is how Eagle moves items and folders between libraries.

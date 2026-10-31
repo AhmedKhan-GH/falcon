@@ -9,6 +9,7 @@ use serde::de::DeserializeOwned;
 
 use crate::error::{Error, Result};
 use crate::model::{Folder, Item, LibraryMetadata, MtimeIndex, SavedFilter, Tags};
+use crate::undo::{Committed, Dirty, Transaction, WriteMode};
 
 const METADATA: &str = "metadata.json";
 const MTIME: &str = "mtime.json";
@@ -31,6 +32,14 @@ pub struct Library {
     items: Vec<Item>,
     /// Last `modificationTime` handed out by an import, to keep them strictly increasing.
     last_import_ms: u64,
+    /// The open undo transaction, if any (see [`Library::begin_transaction`]).
+    pub(crate) journal: Option<Transaction>,
+    /// `metadata`, `tags` and `saved_filters` as last saved, so a transaction
+    /// can record what an edit replaced.
+    pub(crate) committed: Committed,
+    pub(crate) write_mode: WriteMode,
+    /// Writes held back in [`WriteMode::Batched`] until [`Library::flush`].
+    pub(crate) dirty: Dirty,
 }
 
 impl Library {
@@ -40,10 +49,10 @@ impl Library {
         if !root.join(METADATA).is_file() || !root.join(IMAGES).is_dir() {
             return Err(Error::NotALibrary(root));
         }
-        let metadata = read_json(&root.join(METADATA))?;
+        let metadata: LibraryMetadata = read_json(&root.join(METADATA))?;
         let mtime = read_json(&root.join(MTIME))?;
-        let tags = read_json(&root.join(TAGS))?;
-        let saved_filters = read_json(&root.join(FILTERS))?;
+        let tags: Tags = read_json(&root.join(TAGS))?;
+        let saved_filters: Vec<SavedFilter> = read_json(&root.join(FILTERS))?;
 
         let images = root.join(IMAGES);
         let mut items = Vec::new();
@@ -57,7 +66,20 @@ impl Library {
             items.push(Item::from_json_str(&text).map_err(|e| Error::json(&file, e))?);
         }
         items.sort_by(|a, b| a.id.cmp(&b.id));
-        Ok(Library { root, metadata, mtime, tags, saved_filters, items, last_import_ms: 0 })
+        let committed = Committed { metadata: metadata.clone(), tags: tags.clone(), saved_filters: saved_filters.clone() };
+        Ok(Library {
+            root,
+            metadata,
+            mtime,
+            tags,
+            saved_filters,
+            items,
+            last_import_ms: 0,
+            journal: None,
+            committed,
+            write_mode: WriteMode::Immediate,
+            dirty: Dirty::default(),
+        })
     }
 
     /// Creates an empty library at `path` (normally ending in `.library`)
@@ -182,19 +204,31 @@ impl Library {
     }
 
     /// Drops an item from memory and `mtime.json` (its files are already
-    /// gone).
+    /// gone). This can't be undone, so an open transaction is marked
+    /// irreversible.
     pub(crate) fn forget_item(&mut self, id: &str) -> Result<()> {
+        if let Some(j) = &mut self.journal {
+            j.irreversible = true;
+        }
+        self.dirty.items.remove(id);
         self.items.retain(|i| i.id != id);
         self.mtime.entries.retain(|(e, _)| e != id);
         self.mtime.all = Some(self.items.len() as u64);
-        write_json(&self.root.join(MTIME), &self.mtime)
+        self.write_mtime()
     }
 
     /// Writes `item`'s `metadata.json` in place, adds it to the in-memory
     /// list (kept sorted by id) and records it in `mtime.json`, whose `all`
-    /// becomes the item count.
+    /// becomes the item count. An open transaction records the item as it
+    /// was (or as new).
     pub(crate) fn register_item(&mut self, item: Item) -> Result<()> {
-        write_json(&item.info_dir(&self.root).join(METADATA), &item)?;
+        self.journal_item(&item.id);
+        match self.write_mode {
+            WriteMode::Immediate => write_json(&item.info_dir(&self.root).join(METADATA), &item)?,
+            WriteMode::Batched => {
+                self.dirty.items.insert(item.id.clone());
+            }
+        }
         let stamp = item.last_modified;
         match self.mtime.entries.iter_mut().find(|(id, _)| *id == item.id) {
             Some(entry) => entry.1 = stamp,
@@ -205,7 +239,18 @@ impl Library {
             Err(pos) => self.items.insert(pos, item),
         }
         self.mtime.all = Some(self.items.len() as u64);
-        write_json(&self.root.join(MTIME), &self.mtime)
+        self.write_mtime()
+    }
+
+    /// Writes `mtime.json`, or marks it dirty in batched mode.
+    fn write_mtime(&mut self) -> Result<()> {
+        match self.write_mode {
+            WriteMode::Immediate => write_json(&self.root.join(MTIME), &self.mtime),
+            WriteMode::Batched => {
+                self.dirty.mtime = true;
+                Ok(())
+            }
+        }
     }
 }
 

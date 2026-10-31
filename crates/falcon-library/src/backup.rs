@@ -57,6 +57,10 @@ impl Library {
         let metadata = parse_backup(path).ok_or_else(|| Error::Import { path: path.to_path_buf(), reason: "not a usable metadata.json backup".into() })?;
         replace_metadata(self.root(), path)?;
         self.metadata = metadata;
+        // The file on disk is now the backup: nothing pending, and undo
+        // starts from here.
+        self.committed.metadata = self.metadata.clone();
+        self.dirty.metadata = false;
         Ok(())
     }
 

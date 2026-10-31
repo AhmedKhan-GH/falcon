@@ -161,7 +161,7 @@ impl Library {
             swap(&mut g.tags);
         }
         self.save_metadata()?;
-        write_json(&self.root().join("tags.json"), &self.tags)?;
+        self.save_tags()?;
         Ok(n)
     }
 
@@ -179,7 +179,7 @@ impl Library {
             g.tags.retain(|t| t != tag);
         }
         self.save_metadata()?;
-        write_json(&self.root().join("tags.json"), &self.tags)?;
+        self.save_tags()?;
         Ok(n)
     }
 
@@ -189,7 +189,7 @@ impl Library {
         if starred {
             self.tags.starred_tags.insert(0, tag.to_string());
         }
-        write_json(&self.root().join("tags.json"), &self.tags)
+        self.save_tags()
     }
 
     /// Records tags as just used: moved to the front of `historyTags`, which
@@ -200,7 +200,7 @@ impl Library {
             self.tags.history_tags.insert(0, t.clone());
         }
         self.tags.history_tags.truncate(HISTORY_LIMIT);
-        write_json(&self.root().join("tags.json"), &self.tags)
+        self.save_tags()
     }
 }
 
@@ -369,7 +369,13 @@ impl Library {
         self.saved_filters.get_mut(index).ok_or(err)
     }
 
-    fn save_filters(&self) -> Result<()> {
+    /// Writes `saved-filters.json` (or marks it dirty in batched mode),
+    /// recording the previous list in an open transaction.
+    pub(crate) fn save_filters(&mut self) -> Result<()> {
+        self.journal_saved_filters();
+        if self.batching(|d| d.saved_filters = true) {
+            return Ok(());
+        }
         write_json(&self.root().join("saved-filters.json"), &self.saved_filters)
     }
 }
@@ -554,9 +560,24 @@ impl Library {
     }
 
     /// Writes the library `metadata.json`, stamping its `modificationTime`.
+    /// An open transaction records the metadata as last saved; in batched
+    /// mode the write waits for [`Library::flush`].
     pub fn save_metadata(&mut self) -> Result<()> {
         self.metadata.modification_time = now_ms();
+        self.journal_metadata();
+        if self.batching(|d| d.metadata = true) {
+            return Ok(());
+        }
         write_json(&self.root().join("metadata.json"), &self.metadata)
+    }
+
+    /// Writes `tags.json` like [`Library::save_metadata`] writes metadata.
+    pub(crate) fn save_tags(&mut self) -> Result<()> {
+        self.journal_tags();
+        if self.batching(|d| d.tags = true) {
+            return Ok(());
+        }
+        write_json(&self.root().join("tags.json"), &self.tags)
     }
 
     fn missing(&self, id: &str) -> Error {
