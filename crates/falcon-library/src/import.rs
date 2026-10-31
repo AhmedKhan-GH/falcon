@@ -5,12 +5,13 @@ use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use filetime::FileTime;
+use serde_json::{Value, json};
 use unicode_normalization::UnicodeNormalization;
 
 use crate::error::{Error, Result};
 use crate::library::Library;
 use crate::model::Item;
-use crate::{ids, palette, thumbnail};
+use crate::{exif, fontmeta, ids, media, palette, thumbnail};
 
 /// Longest file name Eagle allows inside an `.info` folder, in bytes.
 const MAX_FILE_NAME: usize = 255;
@@ -30,6 +31,12 @@ pub struct ImportOptions {
     pub annotation: String,
     /// Source URL.
     pub url: String,
+    /// Add a font's weight (`fontMetas.weight`) as a tag, like Eagle's
+    /// "font auto tag" preference (default true, as in Eagle).
+    pub font_weight_tag: bool,
+    /// Also store `rawMetas` for JPEG, TIFF, HEIC, PNG and WebP photos.
+    /// Eagle only does it for RAW files (default false).
+    pub camera_metadata_all_photos: bool,
 }
 
 impl Default for ImportOptions {
@@ -40,6 +47,8 @@ impl Default for ImportOptions {
             palette: true,
             annotation: String::new(),
             url: String::new(),
+            font_weight_tag: true,
+            camera_metadata_all_photos: false,
         }
     }
 }
@@ -113,6 +122,7 @@ pub fn stage(path: impl AsRef<Path>, opts: &ImportOptions) -> Result<Staged> {
 
     let thumb = dir.path().join(format!("{}{THUMB_SUFFIX}", item.name));
     let analysis = generate(&mut item, &raw, &thumb);
+    file_metadata(&mut item, &raw, opts);
     if opts.palette
         && let Some(img) = analysis.and_then(|a| match a {
             Analysis::Original => thumbnail::decode(&raw).ok(),
@@ -260,12 +270,44 @@ fn quicklook_thumbnail(item: &mut Item, raw: &Path, thumb: &Path, max: u32) -> O
     let (w, h) = meta.size.unwrap_or((img.width(), img.height()));
     item.width = w.into();
     item.height = h.into();
-    if let Some(d) = meta.duration {
-        item.extra.insert("duration".into(), serde_json::json!(d));
-    }
     thumbnail::write_thumbnail(img, max, thumb).ok()?;
     Some(Analysis::Thumbnail)
 }
+
+/// Format-specific keys Eagle's thumbnail modules add, appended to the item
+/// in the order Eagle assigns them: `rawMetas` for RAW photos,
+/// `resolutionWidth`, `resolutionHeight` and `duration` for video,
+/// `duration` for audio, and `fontMetas` for fonts.
+fn file_metadata(item: &mut Item, raw: &Path, opts: &ImportOptions) {
+    let ext = item.ext.clone();
+    if (exif::is_raw(&ext) || (opts.camera_metadata_all_photos && exif::EXIF_EXTENSIONS.contains(&ext.as_str())))
+        && let Some(meta) = exif::read(raw)
+    {
+        item.extra.insert("rawMetas".into(), Value::Object(meta.to_raw_metas()));
+    }
+    if media::is_video(&ext) {
+        item.extra.insert("resolutionWidth".into(), json!(item.width));
+        item.extra.insert("resolutionHeight".into(), json!(item.height));
+    }
+    if (media::is_video(&ext) || media::is_audio(&ext))
+        && let Some(d) = media::duration(raw, &ext).or_else(|| thumbnail::spotlight(raw).duration)
+    {
+        item.extra.insert("duration".into(), json!(d));
+    }
+    if FONT_EXTENSIONS.contains(&ext.as_str())
+        && let Some(metas) = fs::read(raw).ok().and_then(|data| fontmeta::font_metas(&data, &ids::new_id()))
+    {
+        if opts.font_weight_tag
+            && let Some(w) = metas.get("weight").and_then(|w| w.as_str())
+        {
+            item.tags.push(w.to_string());
+        }
+        item.extra.insert("fontMetas".into(), Value::Object(metas));
+    }
+}
+
+/// Font formats whose metadata falcon reads (WOFF 2 is not supported).
+pub const FONT_EXTENSIONS: [&str; 5] = ["ttf", "otf", "ttc", "otc", "woff"];
 
 /// Turns a file stem into an item name: forbidden characters removed, trimmed,
 /// NFC-normalised, shortened to fit the file system, `_` if nothing is left.
@@ -294,4 +336,75 @@ fn to_ms(t: Option<SystemTime>) -> u64 {
 
 fn now_ms() -> u64 {
     to_ms(Some(SystemTime::now()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn import(file: &str, bytes: &[u8], opts: &ImportOptions) -> Item {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut lib = Library::create(tmp.path().join("T.library")).unwrap();
+        let src = tmp.path().join(file);
+        fs::write(&src, bytes).unwrap();
+        let id = lib.import_file(&src, opts).unwrap();
+        lib.item(&id).unwrap().clone()
+    }
+
+    fn keys(item: &Item) -> Vec<&str> {
+        item.extra.keys().map(|k| k.as_str()).collect()
+    }
+
+    /// Runs only the metadata step: QuickLook can stall on the tiny made-up
+    /// TIFF, and the thumbnail doesn't matter here.
+    fn metadata_only(file: &str, bytes: &[u8], opts: &ImportOptions) -> Item {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join(file);
+        fs::write(&src, bytes).unwrap();
+        let mut item: Item = serde_json::from_value(json!({
+            "id": "", "name": "shot", "size": bytes.len(), "btime": 0, "mtime": 0, "ext": src.extension().unwrap().to_str(),
+            "tags": [], "folders": [], "isDeleted": false, "url": "", "annotation": "", "modificationTime": 0,
+            "height": 0, "width": 0, "lastModified": 0, "palettes": []
+        }))
+        .unwrap();
+        file_metadata(&mut item, &src, opts);
+        item
+    }
+
+    #[test]
+    fn raw_photo_gets_raw_metas() {
+        let opts = ImportOptions { palette: false, ..Default::default() };
+        let item = metadata_only("shot.nef", &crate::exif::tests::tiff_with_exif(), &opts);
+        let m = &item.extra["rawMetas"];
+        assert_eq!(m["camera"], "Nikon D850");
+        assert_eq!(m["isoSpeed"], 400);
+        assert_eq!(m["shutter"], "1/250.0 sec");
+        assert_eq!(m["aperture"], "f/2.8");
+        assert_eq!(m["focalLength"], "50.0 mm");
+        // A TIFF only gets them when asked.
+        let item = metadata_only("shot.tif", &crate::exif::tests::tiff_with_exif(), &opts);
+        assert!(!item.extra.contains_key("rawMetas"));
+        let all = ImportOptions { camera_metadata_all_photos: true, ..opts };
+        let item = metadata_only("shot.tif", &crate::exif::tests::tiff_with_exif(), &all);
+        assert!(item.extra.contains_key("rawMetas"));
+    }
+
+    #[test]
+    fn audio_gets_duration() {
+        let opts = ImportOptions { palette: false, ..Default::default() };
+        let item = import("tone.wav", &crate::media::tests::wav(8000, 1.25, |t| (t * 300.0).sin()), &opts);
+        assert_eq!(item.extra["duration"], 1.25);
+    }
+
+    #[test]
+    fn font_gets_font_metas_and_weight_tag() {
+        let Ok(data) = fs::read("/System/Library/Fonts/Supplemental/Arial.ttf") else { return };
+        let opts = ImportOptions { palette: false, tags: vec!["mine".into()], ..Default::default() };
+        let item = import("Arial.ttf", &data, &opts);
+        assert_eq!(item.extra["fontMetas"]["postScriptName"]["en"], "ArialMT");
+        assert_eq!(item.tags, ["mine", "Regular"]);
+        assert!(keys(&item).contains(&"fontMetas"));
+        let item = import("Arial.ttf", &data, &ImportOptions { font_weight_tag: false, ..opts });
+        assert_eq!(item.tags, ["mine"]);
+    }
 }

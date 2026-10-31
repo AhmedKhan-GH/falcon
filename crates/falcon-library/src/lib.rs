@@ -3,8 +3,11 @@
 pub mod backup;
 pub mod edit;
 pub mod error;
+pub mod exif;
+pub mod fontmeta;
 pub mod library;
 pub mod ids;
+pub mod media;
 pub mod model;
 pub mod pack;
 pub mod palette;

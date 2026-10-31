@@ -14,6 +14,40 @@ Every claim is from Eagle's plain-JS background window code (`processImage` in `
 8. **Palette (observed).** Computed from the thumbnail, or from the original when `noThumbnail && !removeThumbnail`. When `removeThumbnail` is set, the thumbnail is deleted once the palette task finishes.
 9. **Metadata write (observed).** Each write sets `lastModified` to the current time and writes the item's `metadata.json`.
 
+### Format metadata
+
+Eagle's thumbnail modules (`app/js/thumbs/`) also add keys for some formats. New keys go after the ones already set, in the order below. In Eagle they land before `lastModified` and `palettes`. Falcon keeps unknown keys after `palettes`, so it writes them at the end. Eagle's reader doesn't depend on key order.
+
+**RAW photos (observed).** These are 3fr, arw, orf, mrw, nef, nrw, raw, cr2, crw, dng, erf, pef, raf, rw2, sr2, srw, x3f and cr3. Eagle runs dcraw's identify on the file and stores `rawMetas`:
+
+| Key | Value | Example |
+|---|---|---|
+| `timestamp` | date taken, ms; dcraw prints local time and Eagle parses it back as local | `1541495719000` |
+| `camera` | make and model as dcraw names them | `"Pentax K-1 Mark II"` |
+| `isoSpeed` | integer | `200` |
+| `focalLength` | string | `"200.0 mm"` |
+| `shutter` | string, `1/N.N sec` under a second, else `N.N sec` | `"1/320.0 sec"` |
+| `aperture` | string | `"f/3.2"` |
+| `width`, `height` | dcraw's full sensor size, also copied to the item | `7392` |
+
+- Missing values are left out. An empty object is not stored.
+- JPEG, HEIC and TIFF get no `rawMetas`. Eagle reads their EXIF only for orientation.
+- Smart-folder rules parse the strings back: the first number of `aperture` and `focalLength`, and the second number of `shutter`. So `"2.0 sec"` never matches a shutter rule.
+
+**Video (observed).** `resolutionWidth` and `resolutionHeight` (copies of `width` and `height`), then `duration`. All come from Chromium's `<video>` element. `duration` is in seconds with a fraction.
+
+**Audio (observed).** mp3, wav, flac, ogg, aac and m4a. `width` 280 and `height` 140 (the waveform thumbnail, see [Thumbnails](thumbnails.md)), then `duration` from an `<audio>` element. `bpm` comes from a tempo detector when one is found. Falcon doesn't detect tempo, so it never writes `bpm`.
+
+**Fonts (observed).** For ttf, otf, ttc, otc, woff and woff2, Eagle parses the file with opentype.js and stores `fontMetas`:
+
+- First, one key per `name` table entry, in table order: `copyright`, `fontFamily`, `fontSubfamily`, `uniqueID`, `fullName`, `version`, `postScriptName`, `trademark`, `manufacturer`, `designer`, `description`, `manufacturerURL`, `designerURL`, `license`, `licenseURL`, `preferredFamily`, `preferredSubfamily`, and others. Each is a map from language code (`en`, `zh`, `zh-TW`, `ja`, …) to text. A Windows record replaces the Macintosh text for the same language but keeps its position.
+- Then `numGlyphs`.
+- Then `support`, which holds `zh_CN`, `jp`, `zh_TW` and `kr` set to true when the font has glyphs for a few test characters of that script.
+- Then `weight`. It is the first of Thin, Hairline, ExtraLight, UltraLight, Light, Regular, Normal (written Regular), Medium, DemiBold, SemiBold, Bold, ExtraBold, UltraBold, Black, ExtraBlack and Heavy found in the lower-cased PostScript name. If none is found, the subfamily is used when it is one of those words, and otherwise Regular. " Italic" is appended when the PostScript name contains "italic". Because "bold" is tested before "extrabold", an ExtraBold font is labelled Bold.
+- A font with no names gets a random `postScriptName` and `fullName`. One with no PostScript name uses its `uniqueID`.
+- With the "auto tag" font preference, which is on by default, the weight is also pushed onto `tags`.
+- Fonts opentype.js can't parse (collections, woff2) go through a second parser, Typr, which writes a different fixed set of keys, every one with only an `en` value.
+
 ### Timestamps
 
 - `btime` and `mtime` are the file's own times (observed).
@@ -38,4 +72,25 @@ Every claim is from Eagle's plain-JS background window code (`processImage` in `
 - **Palette.** Taken from the decoded thumbnail, so it sees the same WebP artefacts Eagle's analyser sees. `palette: false` skips it.
 - **Timestamps.** `modificationTime` is the later of the current time and the previous import's value plus 1 ms, tracked on the `Library`, so it is strictly increasing across calls. `lastModified` is read after the palette is done.
 - **mtime.json.** Updated and written after every import, not debounced. The entry is set to `lastModified`, and `all` becomes the count of loaded items. Existing entries that are missing from the file are left missing.
-- **Not done.** Library `metadata.json` is not touched, no backup is taken, and IPTC keywords, stars and concurrency are not implemented.
+- **Not done.** Library `metadata.json` is not touched, no backup is taken, and stars and concurrency are not implemented.
+
+### Format metadata in falcon
+
+- **`rawMetas`.** Falcon reads EXIF with the `kamadak-exif` crate instead of running dcraw, and prints the values the way dcraw does:
+  - `camera` is the Make tag shortened to a known maker name (`NIKON CORPORATION` becomes `Nikon`), followed by the Model with a repeated maker word removed. This is an approximation of dcraw's table (inferred).
+  - `timestamp` is DateTimeOriginal, or DateTime, read as local time.
+  - `width` and `height` are not written. EXIF doesn't hold dcraw's full sensor size.
+  - Only TIFF-based RAW files can be read: dng, nef, nrw, cr2, arw, srw, pef, 3fr and erf. orf, rw2, raf, cr3, crw, mrw and x3f give nothing.
+  - `ImportOptions::camera_metadata_all_photos` (off by default) also stores `rawMetas` for jpg, jpeg, tif, tiff, heic, heif, png and webp. Eagle never does this. It lets the camera filter work on ordinary photos.
+- **`duration`.**
+  - Audio is read with symphonia, from the frame count, or by adding up packet durations when the header has no count.
+  - mp4, mov, m4v, 3gp and f4v are read from the `mvhd` box (duration ÷ timescale).
+  - Other video formats fall back to Spotlight (`mdls`), which knows nothing about files in temporary folders.
+  - Values can differ slightly from a browser's, for example around MP3 encoder padding.
+- **Video sizes.** `resolutionWidth` and `resolutionHeight` copy the item's `width` and `height`.
+- **`fontMetas`.**
+  - Read with `ttf-parser` (ttf, otf, the first face of ttc or otc) and falcon's own WOFF 1 unpacker. woff2 is not read.
+  - Language codes cover the common Windows and Mac Roman languages. Records in other languages or Mac encodings are skipped, where opentype.js would decode them.
+  - Collections get the opentype.js shape, not Typr's.
+  - Eagle's MD5 fallback for fonts with a family name but no English PostScript name is not reproduced.
+  - `ImportOptions::font_weight_tag` (default true, as in Eagle) adds the weight tag.

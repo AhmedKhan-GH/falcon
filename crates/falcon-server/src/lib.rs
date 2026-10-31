@@ -552,6 +552,7 @@ fn add_path(lib: &mut Library, path: PathBuf, item: &Map<String, Value>, outer: 
         palette: true,
         annotation: s(item, "annotation").unwrap_or("").to_string(),
         url: s(item, "website").unwrap_or("").to_string(),
+        ..Default::default()
     };
     let id = lib.import_file(&path, &opts).map_err(|e| e.to_string())?;
     let mut changed = lib.item(&id).cloned().ok_or("import failed")?;

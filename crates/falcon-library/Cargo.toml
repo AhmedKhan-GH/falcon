@@ -20,6 +20,10 @@ tempfile = "3"
 zip = { version = "9.2.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
 base64 = "0.22"
+kamadak-exif = "0.6"
+symphonia = { version = "0.5", default-features = false, features = ["mp3", "aac", "isomp4", "flac", "wav", "pcm", "ogg", "vorbis", "adpcm"] }
+ttf-parser = "0.25"
+miniz_oxide = "0.8"
 
 [dev-dependencies]
 tempfile = "3"
