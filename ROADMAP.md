@@ -15,7 +15,8 @@ Falcon is early alpha. This is what is done and what comes next, roughly in orde
 
 - [x] Hover preview in the grid
 - [x] Per-folder sort, colours and icons
-- [ ] Video and audio playback in the viewer
+- [x] Audio playback in the viewer
+- [ ] Video playback in the viewer
 - [x] Tag groups
 - [x] Undo
 - [ ] Windows and Linux builds
@@ -46,8 +47,8 @@ Eagle features that need no online service, put off until after the list above.
 - [ ] Crop and rotate
 
 **File formats**
-- [ ] Audio waveforms
-- [ ] Font previews
+- [x] Audio waveforms
+- [x] Font previews
 - [ ] 3D model thumbnails
 
 **Import**

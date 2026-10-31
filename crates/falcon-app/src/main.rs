@@ -1,6 +1,7 @@
 mod app;
 mod collect;
 mod folder_icons;
+mod audio;
 mod hover;
 mod icons;
 mod loader;

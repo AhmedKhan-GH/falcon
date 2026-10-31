@@ -23,6 +23,7 @@ use crate::theme::{self as t, font, mono};
 
 mod organize_ui;
 mod filters_ui;
+mod media_view;
 
 /// Grid geometry, measured from Eagle at 1280 x 800.
 const GRID_PAD_X: f32 = 17.0;
@@ -385,6 +386,10 @@ pub struct App {
     org: organize_ui::OrgState,
     /// Text typed into the Date, Duration, Camera and Font chips.
     filter_ui: filters_ui::MediaFilterUi,
+    /// Audio playback and waveforms for the viewer, and its font specimen.
+    audio: crate::audio::Audio,
+    waveforms: crate::audio::Waveforms,
+    font_view: media_view::FontView,
 }
 
 impl App {
@@ -448,6 +453,9 @@ impl App {
             collect: Default::default(),
             org: Default::default(),
             filter_ui: Default::default(),
+            audio: Default::default(),
+            waveforms: Default::default(),
+            font_view: Default::default(),
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
         app.tile = saved.tile.unwrap_or(app.tile).clamp(TILE_MIN, TILE_MAX);
@@ -850,6 +858,11 @@ impl App {
         }
         if all {
             self.selected = self.order.clone();
+        }
+        // With audio in the viewer, Space plays and pauses (Esc closes), as in Eagle.
+        if self.viewer.is_some() && self.audio.loaded() == self.viewer.as_deref() && ctx.input(|i| i.key_pressed(Key::Space)) {
+            self.audio.toggle();
+            return;
         }
         if space && self.viewer.is_some() {
             self.viewer = None;
@@ -2903,6 +2916,7 @@ impl App {
         prop(ui, "Date Imported", &logic::format_ms(item.modification_time));
         prop(ui, "Date Created", &logic::format_ms(item.btime));
         prop(ui, "Date Modified", &logic::format_ms(item.mtime));
+        media_view::media_props(ui, &item);
         ui.add_space(4.0);
         if wide_button(ui, ic::EXPORT, "Show in Finder", true).clicked() {
             let _ = std::process::Command::new("open").arg("-R").arg(item.original_path(lib.root())).spawn();
@@ -3097,6 +3111,9 @@ impl App {
             }
         }
         let screen = ui.max_rect();
+        if self.media_viewer(ctx, lib, item, screen) {
+            return;
+        }
         egui::Area::new(egui::Id::unique("viewer")).fixed_pos(screen.min).order(egui::Order::Foreground).show(ctx, |ui| {
             let p = ui.painter().clone();
             p.rect_filled(screen, 0.0, t::MAIN);
@@ -3355,6 +3372,10 @@ impl eframe::App for App {
         if self.viewer.is_some() {
             let mut v = ui.new_child(egui::UiBuilder::new().max_rect(ctx.content_rect()));
             self.viewer(&ctx, &mut v, lib);
+        }
+        // Playback stops when the viewer closes or moves to another item.
+        if self.audio.loaded().is_some() && self.audio.loaded() != self.viewer.as_deref() {
+            self.audio.stop();
         }
         // Items dragged past the window edge become a macOS file drag, so
         // they can be dropped into Finder or other apps, as from Eagle.

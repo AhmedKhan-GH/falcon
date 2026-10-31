@@ -17,8 +17,8 @@
 | Toolbar | Back and forward, zoom slider, layout and sort menu, filter bar toggle, search with Eagle's syntax, plus typo tolerance (see Search and filters) |
 | Filter bar | Colour (presets, hex value, accuracy, grayscale), tags, folders, shape, rating, type, notes, URL, date, duration, camera and font (see below), and saved filters |
 | Grid | Four layouts. **Waterfall** (the default): equal columns, each card keeping its image's shape. **Justified**: rows of equal height. **Grid**: square cards. **List**: rows showing type, size, dimensions and date. Cards have type badges. Supports multi-select, drag (inside the app, or out to Finder and other apps), a context menu and a hover preview (see below) |
-| Inspector | **One item:** preview, palette (click a colour to search for it), editable title, notes and URL, tags, folders, rating and properties. **Several items:** a preview stack, shared tags, add a tag to all, add all to a folder, a shared rating, trash all |
-| Viewer | Zoom around the pointer, pan, fit (0), actual size (1), + and −, animated GIFs, and full-size QuickLook renders |
+| Inspector | **One item:** preview, palette (click a colour to search for it), editable title, notes and URL, tags, folders, rating and properties (with duration, camera facts from `rawMetas`, and font family, style, PostScript name, version and glyph count when the item has them). **Several items:** a preview stack, shared tags, add a tag to all, add all to a folder, a shared rating, trash all |
+| Viewer | Zoom around the pointer, pan, fit (0), actual size (1), + and −, animated GIFs, and full-size QuickLook renders. Audio plays over its waveform and fonts show a live specimen (see below). Video doesn't play yet: the viewer shows its thumbnail |
 | All Tags | A tag manager with a filter, starred tags, rename, merge and delete, grouped A-Z or by tag group |
 | Import | Drag and drop, ⌘V (files or images), files passed to the app, and the collect window (see below). Imports run in the background with a progress bar. PDF, video, PSD, AI, HEIC and RAW go through QuickLook |
 | Smart folders | Create and edit them with rule rows, matched by any or all, inside another smart folder, with an icon and colour |
@@ -40,13 +40,32 @@ What Eagle does, from `js/directives/filter-item-import.html`, `filter-item-mtim
 | Font | Two exclusive options, Activated and Deactivated, each with its count and shown only when its count is above 0 | Seen | Both options always listed with counts. "Activated" means the font's `<postScriptName>_.<ext>` key is among the files in `~/Library/Fonts/EagleApp/` (`installed_font_keys`), read once per session. On a Mac where Eagle never activated a font that folder is missing or empty, so every font counts as deactivated. falcon can't activate fonts itself |
 | Clearing | A clear button on each item, and right-click | Seen | A Clear button inside each menu, and the bar's Clear for everything |
 
+## Audio and font viewer
+
+Opening an audio item (mp3, wav, flac, ogg, aac, m4a) shows its waveform with playback controls instead of an image; opening a font shows a specimen drawn with the font itself. The code is in `crates/falcon-app/src/audio.rs` (playback and the waveform cache) and `crates/falcon-app/src/app/media_view.rs` (drawing), with the seek and time arithmetic in `logic.rs`.
+
+What Eagle does, from `js/directives/audio-media-element.js`, its video.js setup in `app.bundle.js`, `js/default-preferences.js` and `font-viewer/`:
+
+| Question | Eagle | Seen or inferred | falcon |
+|---|---|---|---|
+| Player | video.js controls (play, volume, time, progress, loop, playback rate) over an HTML media element; wavesurfer draws the waveform inside the progress bar, 40 px high, unplayed `#7C7C7C`, played and cursor `#0072EF`, normalised | Seen | A waveform 160 pt high in the same two colours, normalised, with a playhead; under it a play/pause button, elapsed / total time, loop and volume. No playback rate |
+| Start | Plays as soon as the item opens; loop is on | Seen | Same |
+| Seeking | Click on the progress bar; ⌘← and ⌘→ step by 2% of the length, at most 10 s; ⌘↑ and ⌘↓ change the volume by 5% | Seen | Click or drag on the waveform. No step or volume keys, because ← and → already move to the next item |
+| Space | Bound to `player.playAndPause` | Seen | Plays and pauses while an audio item is in the viewer; elsewhere it still opens and closes the viewer |
+| Volume | Remembered in local storage, 100% by default | Seen | 100% at launch, kept until quit |
+| Waveform data | Decoded in the page each time, nothing cached on disk | Seen | Peaks computed once per item on a background thread with `waveform::peaks` and kept in memory for the session. "Reading waveform…" shows meanwhile |
+| Audio output | Chromium | Seen | rodio on the default output device, opened on first play and kept open. Only an output stream is opened, which macOS allows without a permission prompt; no input device is ever touched |
+| Font viewer | A separate page with tabs for alphabet, article, waterfall (72 down to 12 px, edits mirrored on every line) and font information; a size slider from 31.25 to 625; editable text; light, dark and colour themes; an Activate button | Seen | One scrolling page: the sample text, editable in place, at a size from 12 to 200 pt; a waterfall of the same text from 72 down to 12 pt; and the character set. Font information is in the inspector. No themes, no activation |
+| Rendering | Chromium with the font loaded as a web font | Seen | The font file (WOFF unpacked to sfnt; the first face of a collection) is added to egui's fonts under its own family the first time it is viewed, and stays for the session. Fonts egui's parser rejects, and WOFF2, fall back to the image viewer showing the specimen thumbnail |
+| Sample text | Translated sample paragraphs per language | Seen | falcon's own short sample, in the script the font supports (Latin, Chinese, Japanese or Korean, chosen like the specimen thumbnail). Text you type stays as you move between fonts until Reset Text |
+
 ## Keys
 
 These are the defaults. All but the arrows, Esc and Z can be changed under Preferences → Shortcuts (see Shortcut settings).
 
 | Key | Action |
 |---|---|
-| Space (or ↩) | Open or close the viewer |
+| Space (or ↩) | Open or close the viewer. With audio in the viewer, Space plays or pauses instead (Esc or ↩ closes) |
 | ← → ↑ ↓ | Move the selection, or go to the next item in the viewer |
 | ⌘A | Select all |
 | ⌘⌫ | Move to the Trash, or delete permanently when in the Trash |
