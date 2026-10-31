@@ -28,7 +28,7 @@ Eagle features that need no online service, put off until after the list above.
 
 **Browsing and look**
 - [x] Reorder folders by drag
-- [ ] Light, gray, blue and purple themes
+- [x] Light, gray, blue and purple themes
 - [ ] Window buttons at Eagle's height
 
 **Search and organising**

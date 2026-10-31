@@ -48,5 +48,14 @@ fn main() -> eframe::Result {
             .with_icon(eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon-256.png")).unwrap_or_default()),
         ..Default::default()
     };
-    eframe::run_native("Falcon", options, Box::new(move |cc| Ok(Box::new(app::App::new(cc, initial, launch)))))
+    eframe::run_native(
+        "Falcon",
+        options,
+        Box::new(move |cc| {
+            let app = app::App::new(cc, initial, launch);
+            // After `App::new` has installed the fonts and default visuals.
+            theme::set_theme(&cc.egui_ctx, prefs::saved_theme(cc.storage));
+            Ok(Box::new(app))
+        }),
+    )
 }

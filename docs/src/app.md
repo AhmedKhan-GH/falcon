@@ -2,7 +2,7 @@
 
 `falcon-app` is falcon's version of Eagle's main window, built with egui. Its look comes from Eagle itself:
 
-- **Colours:** sampled from Eagle's window and its dark-theme stylesheet (`style/base/_color.scss`). For example, the content area is `#17191d`, the panels `#1f2023` and the accent `#3297ff`.
+- **Colours:** dark is sampled from Eagle's window and its dark-theme stylesheet (`style/base/_color.scss`). For example, the content area is `#17191d`, the panels `#1f2023` and the accent `#3297ff`. Light, gray, blue and purple are worked out from the stylesheets (see Themes below).
 - **Fonts and icons:** SF Pro for text, plus Phosphor Light icons, which are MIT-licensed and close to Eagle's line icons.
 - **Measurements:** taken from Eagle at 1280 × 800: 240 pt panels, a 48 pt toolbar, 27 pt sidebar rows and 139 pt cards.
 
@@ -165,6 +165,7 @@ What Eagle does, from its `js/hover-preview.js`, `style/components/_hover-previe
 
 | Section | Setting | Eagle | falcon |
 |---|---|---|---|
+| General | Theme: Light, Gray, Dark, Blue, Purple | `theme` (`{name, color, css}`), default `DARK`; the picker also offers Auto and Lightgray | Stored as `theme` under Eagle's `css` names; picking one previews it at once, Cancel or Esc switch back. No Auto or Lightgray |
 | General | Show the sidebar, show the inspector | View menu toggles, not preferences | Same flags as the panel buttons |
 | General | Add IPTC and XMP keywords as tags | `general.IPTC`, off by default | Same: every import from the app (drops, ⌘V, files passed to the app, the collect window) reads it (see [IPTC keywords](import.md)) |
 | Preview | Hover zoom | `habits.hoverZoom`, on by default; off removes the zoom button, but holding Z still works | Same |
@@ -176,7 +177,76 @@ What Eagle does, from `js/default-preferences.js`, `preferences.html`, `js/prefe
 - The window's sidebar (200 pt wide, 32 pt rows) has General and Sidebar, then Controls, Preview (the `habits` group), Screenshot and Shortcuts, then Notification, Password and Auto-Import, then the AI panels. A search box filters every panel by keywords.
 - Save applies and closes, Apply applies and stays open, Cancel and Esc revert (including a previewed theme or zoom), ⌘↩ saves.
 - The window's own size is set in Eagle's main process, which is not in the readable bundle; falcon's 720 × 500 pt is a guess (inferred).
-- Not built in falcon: themes, interface zoom, language, the sidebar item toggles, scroll and double-click habits, notifications, screenshots, password lock, auto-import, proxy and the preference search.
+- Not built in falcon: the Auto and Lightgray themes, interface zoom, language, the sidebar item toggles, scroll and double-click habits, notifications, screenshots, password lock, auto-import, proxy and the preference search.
+
+## Themes
+
+Eagle has seven theme choices: Auto, Light, Lightgray, Gray, Dark, Blue and Purple, in that order in `js/preferences.js` (observed). falcon offers the five fixed ones in the same order. The code is in `crates/falcon-app/src/theme.rs`:
+- `Theme` is the choice.
+- `Palette` holds one theme's colours.
+- `p()` returns the current palette.
+- `set_theme` switches it and restyles egui.
+
+**Where the colours come from (observed in `style/base/_color.scss`).** `body[theme=…]` sets `--color-theme`:
+- dark `#18191c`
+- gray `#37383c`
+- blue `#0d1630`
+- purple `#1C1424`
+- light `--color-white` (`#ffffff`; the map's `color-theme-light #f3f4f6` is not used by it)
+
+The four dark themes share one block, and light has its own:
+
+| Variable | Dark family | Light |
+|---|---|---|
+| foreground (text, hover and active overlays) | `--color-lightgray` `#f8f9fb` | `--color-dark` `#2c2f32` |
+| `--color-primary` | `#3297FF` | `#0072ef` |
+| borders (secondary) | white at 8% | black at 10% |
+| card ring (`--box-item-border-color`) | white at 5% | black at 10% |
+| hover / active | foreground at 5% / 10% | foreground at 5% / 10% |
+| inputs (`_toolbar.scss`, `_inspector.scss`) | black at 20% | white at 50% |
+| sidebar (`_sidebar.scss`) | lightgray at 3% | dark at 3% |
+| folder colours and "none" | `#FF6667` … `#FF99CC`, `#BDBEC0` | `#E55245`, `#CC782F`, `#C29343`, `#548164`, `#0097A7`, `#3987BF`, `#8A67AB`, `#CC6699`, `#50555B` |
+
+The old per-theme stylesheets (`css/style_<theme>.scss`) differ only in `$black-color`, which feeds a few legacy classes. They play no part here.
+
+**Flattening (inferred).** Each falcon colour is one of these layers, composited source-over onto the surface below it and rounded to opaque sRGB:
+- `main` is the base.
+- `panel` is the sidebar layer over `main`.
+- Rows, buttons, dividers, fields and muted text sit over `panel`.
+- The search field, card ring, card hover and disabled text sit over `main`.
+
+Which layer stands for which falcon colour is my reading, not something the stylesheets say. It assumes vibrancy is off. The same model applied to dark reproduces every colour sampled from Eagle's window to within 2 per channel. The script is `derive.py` in the session scratchpad.
+
+A worked example, gray's selected row:
+1. panel = 3% `#f8f9fb` over `#37383c` = 0.03 × (248, 249, 251) + 0.97 × (55, 56, 60) = (60.8, 61.8, 65.7), which rounds to `#3d3e42`.
+2. selected row = 10% `#f8f9fb` over that = 0.10 × (248, 249, 251) + 0.90 × (61, 62, 66) = (79.7, 80.7, 84.5), which rounds to `#505155`.
+
+Only dark was checked against Eagle's window. The other four were not sampled from a running Eagle, because switching its theme would mean changing Eagle's preferences and taking screenshots. Treat their colours as stylesheet-derived. Dark keeps its sampled values, which is why it differs slightly from the model (for example, `main` `#17191d` against the stylesheet's `#18191c`).
+
+| Constant | Dark (sampled) | Light | Gray | Blue | Purple | Layer |
+|---|---|---|---|---|---|---|
+| `MAIN` | `#17191d` | `#ffffff` | `#37383c` | `#0d1630` | `#1c1424` | `--color-theme` (observed) |
+| `PANEL` | `#1f2023` | `#f9f9f9` | `#3d3e42` | `#141d36` | `#231b2a` | sidebar 3% over main |
+| `DIVIDER` | `#303134` | `#e0e0e0` | `#4d4d51` | `#272f46` | `#352d3b` | border over panel |
+| `ROW_SELECTED` | `#353639` | `#e5e5e5` | `#505155` | `#2b334a` | `#38313f` | active 10% over panel |
+| `ROW_HOVER` | `#2a2b2e` | `#efefef` | `#46474b` | `#1f2840` | `#2e2634` | hover 5% over panel |
+| `FIELD` | `#19191d` | `#fcfcfc` | `#313235` | `#10172b` | `#1c1622` | input over panel |
+| `FIELD_BORDER` | `#2c2d30` | `#e3e3e3` | `#414245` | `#232a3c` | `#2e2934` | border over field |
+| `SEARCH` | `#131416` | `#ffffff` | `#2c2d30` | `#0a1226` | `#16101d` | input over main |
+| `BUTTON` | `#2b2c2f` | `#efefef` | `#46474b` | `#1f2840` | `#2e2634` | hover 5% over panel |
+| `BUTTON_HOVER` | `#343538` | `#e5e5e5` | `#505155` | `#2b334a` | `#38313f` | active 10% over panel |
+| `CARD_BORDER` | `#242528` | `#e6e6e6` | `#414246` | `#19223a` | `#27202f` | card ring over main |
+| `CARD_HOVER` | `#3a3b3e` | `#dfe0e0` | `#545559` | `#30384e` | `#3d3644` | foreground 15% over main |
+| `GUIDE` | `#37383b` | `#e0e0e1` | `#505155` | `#2d354b` | `#3a3341` | "none" colour 15% over panel |
+| `TEXT` | `#f8f9fb` | `#2c2f32` | `#f8f9fb` | `#f8f9fb` | `#f8f9fb` | `--color-text-primary` (observed) |
+| `TEXT_MUTED` | `#a2a2a4` | `#7e8082` | `#adaeb1` | `#9da1ac` | `#a3a0a7` | text 60% (`-tertiary`) over panel |
+| `TEXT_VALUE` | `#cdced0` | `#55575a` | `#d3d4d6` | `#cacdd4` | `#cdcdd1` | text 80% over panel |
+| `TEXT_DISABLED` | `#5a5b5e` | `#c0c1c2` | `#717275` | `#535a6d` | `#5e5965` | text 30% over main |
+| `PRIMARY` | `#3297ff` | `#0072ef` | `#3297ff` | `#3297ff` | `#3297ff` | `--color-primary` (observed) |
+| `BRAND` | `#0072ef` | `#0072ef` | `#0072ef` | `#0072ef` | `#0072ef` | `--color-brand` (observed) |
+| `ICON_RED` … `ICON_PINK`, `ICON_NONE` | dark set | light set | dark set | dark set | dark set | the two `$colors` maps (observed) |
+
+**State of the code.** The theme choice, the palettes, the Preferences row and the startup hook are built. The drawing code still uses the dark `pub const` colours (`t::MAIN` and so on), so until those uses move to `t::p().main`, a theme change only restyles egui's own widgets.
 
 ## Shortcut settings
 

@@ -7,7 +7,7 @@ use std::ops::RangeInclusive;
 use eframe::egui::{self, Align2, Color32, CornerRadius, Key, Modifiers, RichText, Sense, Stroke, Ui, vec2};
 
 use crate::shortcuts::{Recorder, Shortcuts};
-use crate::theme::{self as t, font};
+use crate::theme::{self as t, Theme, font};
 
 /// Eagle's own API port, which falcon must never take.
 pub const EAGLE_PORT: u16 = 41595;
@@ -30,6 +30,8 @@ pub struct Prefs {
     /// The folder the collect window adds items to (None: no folder).
     /// Chosen in the collect window itself.
     pub collect_folder: Option<String>,
+    /// Eagle's `theme.css`: the colour theme.
+    pub theme: Theme,
 }
 
 impl Default for Prefs {
@@ -40,6 +42,7 @@ impl Default for Prefs {
             api_enabled: true,
             api_port: falcon_server::DEFAULT_PORT,
             collect_folder: None,
+            theme: Theme::Dark,
         }
     }
 }
@@ -69,6 +72,28 @@ impl Prefs {
     pub fn api_changed(&self, new: &Prefs) -> bool {
         self.api_ports() != new.api_ports()
     }
+}
+
+/// The theme in the saved app state, read on its own so it can be applied
+/// at startup without the rest of the state.
+pub fn saved_theme(storage: Option<&dyn eframe::Storage>) -> Theme {
+    #[derive(serde::Deserialize, Default)]
+    #[serde(default)]
+    struct Saved {
+        prefs: ThemeOnly,
+    }
+    #[derive(serde::Deserialize, Default)]
+    #[serde(default)]
+    struct ThemeOnly {
+        theme: Theme,
+    }
+    storage.and_then(|s| eframe::get_value::<Saved>(s, eframe::APP_KEY)).unwrap_or_default().prefs.theme
+}
+
+/// The theme to switch back to when the window closes without saving:
+/// the last saved or applied one, if a different one is being previewed.
+pub fn theme_to_restore(applied: Theme, shown: Theme) -> Option<Theme> {
+    (applied != shown).then_some(applied)
 }
 
 /// Why a first API port is unusable, if it is.
@@ -149,6 +174,8 @@ pub struct Window {
     draft: Option<Draft>,
     port_text: String,
     recorder: Recorder,
+    /// The theme last saved or applied; a previewed one reverts to it.
+    applied_theme: Theme,
 }
 
 /// Size of the window, close to Eagle's.
@@ -158,6 +185,7 @@ const NAV_WIDTH: f32 = 180.0;
 impl Window {
     pub fn show_with(&mut self, draft: Draft) {
         self.port_text = draft.prefs.api_port.to_string();
+        self.applied_theme = draft.prefs.theme;
         self.draft = Some(draft);
         self.open = true;
         self.recorder.stop();
@@ -229,11 +257,15 @@ impl Window {
                 && let Ok(p) = port
             {
                 draft.prefs.api_port = p;
+                self.applied_theme = draft.prefs.theme;
                 result = Some(draft.clone());
                 close |= save || save_key;
             }
         });
         if close {
+            if let Some(theme) = theme_to_restore(self.applied_theme, t::current()) {
+                t::set_theme(ctx, theme);
+            }
             self.close();
         } else {
             self.draft = Some(draft);
@@ -277,6 +309,16 @@ fn note(ui: &mut Ui, text: &str) {
 }
 
 fn general(ui: &mut Ui, d: &mut Draft) {
+    block(ui, "Theme", |ui| {
+        ui.horizontal(|ui| {
+            for theme in Theme::all() {
+                if ui.selectable_value(&mut d.prefs.theme, theme, theme.to_string()).changed() {
+                    // Previewed at once; Cancel switches back.
+                    t::set_theme(ui.ctx(), theme);
+                }
+            }
+        });
+    });
     block(ui, "Window", |ui| {
         ui.checkbox(&mut d.panels.sidebar, "Show the sidebar");
         ui.checkbox(&mut d.panels.inspector, "Show the inspector");
@@ -364,6 +406,50 @@ mod tests {
         assert!(p.api_changed(&Prefs { api_enabled: false, ..p.clone() }));
         assert!(p.api_changed(&Prefs { api_port: 42000, ..p.clone() }));
         assert_eq!(Prefs { api_enabled: false, ..p }.api_ports(), None);
+    }
+
+    #[test]
+    fn theme_defaults_and_restores() {
+        assert_eq!(Prefs::default().theme, Theme::Dark);
+        let p: Prefs = serde_json::from_str(r#"{"theme":"purple"}"#).unwrap();
+        assert_eq!(p.theme, Theme::Purple);
+        assert_eq!(theme_to_restore(Theme::Dark, Theme::Light), Some(Theme::Dark));
+        assert_eq!(theme_to_restore(Theme::Blue, Theme::Blue), None);
+    }
+
+    /// In-memory stand-in for eframe's storage.
+    struct Mem(Option<String>);
+
+    impl eframe::Storage for Mem {
+        fn get_string(&self, _key: &str) -> Option<String> {
+            self.0.clone()
+        }
+        fn set_string(&mut self, _key: &str, value: String) {
+            self.0 = Some(value);
+        }
+        fn remove_string(&mut self, _key: &str) {
+            self.0 = None;
+        }
+        fn flush(&mut self) {}
+    }
+
+    #[test]
+    fn saved_theme_reads_only_the_theme() {
+        // The app state has many more fields than the theme reader knows.
+        #[derive(serde::Serialize)]
+        struct State {
+            library: Option<String>,
+            tile: f32,
+            prefs: Prefs,
+            recent: Vec<String>,
+        }
+        let mut mem = Mem(None);
+        let state = State { library: Some("/x.library".into()), tile: 200.0, prefs: Prefs { theme: Theme::Gray, ..Default::default() }, recent: vec!["/y".into()] };
+        eframe::set_value(&mut mem, eframe::APP_KEY, &state);
+        assert_eq!(saved_theme(Some(&mem)), Theme::Gray);
+        assert_eq!(saved_theme(Some(&Mem(None))), Theme::Dark);
+        assert_eq!(saved_theme(Some(&Mem(Some("garbage".into())))), Theme::Dark);
+        assert_eq!(saved_theme(None), Theme::Dark);
     }
 
     #[test]
