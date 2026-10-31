@@ -68,6 +68,8 @@ pub fn job_for(item: &Item, root: &std::path::Path, tier: Tier) -> Option<Job> {
 struct Shared {
     queue: Mutex<VecDeque<Job>>,
     cv: Condvar,
+    /// Set when the loader is dropped; the workers then stop.
+    closed: std::sync::atomic::AtomicBool,
 }
 
 struct Decoded {
@@ -86,7 +88,7 @@ pub struct Loader {
 
 impl Loader {
     pub fn new(ctx: &Context) -> Self {
-        let shared = Arc::new(Shared { queue: Mutex::new(VecDeque::new()), cv: Condvar::new() });
+        let shared = Arc::new(Shared { queue: Mutex::new(VecDeque::new()), cv: Condvar::new(), closed: Default::default() });
         let (tx, rx) = std::sync::mpsc::channel();
         let workers = std::thread::available_parallelism().map_or(4, |n| n.get().clamp(2, 6));
         for _ in 0..workers {
@@ -96,6 +98,9 @@ impl Loader {
                     let job = {
                         let mut q = shared.queue.lock().unwrap();
                         loop {
+                            if shared.closed.load(std::sync::atomic::Ordering::Relaxed) {
+                                return;
+                            }
                             if let Some(j) = q.pop_front() {
                                 break j;
                             }
@@ -187,13 +192,16 @@ impl Loader {
             self.pending.remove(&(id.to_string(), *tier));
         }
     }
+}
 
-    /// Forgets everything cached for `id` (after the library changes).
-    pub fn clear_all(&mut self) {
-        for c in self.caches.values_mut() {
-            c.clear();
-        }
-        self.failed.clear();
+/// Closing a library drops its loader: wake the idle workers so they exit.
+impl Drop for Loader {
+    fn drop(&mut self) {
+        // Under the queue lock, so no worker is between its check and its wait.
+        let q = self.shared.queue.lock().unwrap_or_else(|p| p.into_inner());
+        self.shared.closed.store(true, std::sync::atomic::Ordering::Relaxed);
+        drop(q);
+        self.shared.cv.notify_all();
     }
 }
 

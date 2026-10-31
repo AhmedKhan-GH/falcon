@@ -31,6 +31,9 @@ pub enum Command {
     LayoutList,
     Preferences,
     CollectWindow,
+    SwitchLibrary,
+    NextLibrary,
+    PreviousLibrary,
 }
 
 /// One row of the shortcut table.
@@ -80,6 +83,10 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::Trash, id: "edit.remove.trash", group: "Edit", label: "Move to the Trash", default: k(CMD, Key::Backspace), alias: None },
     Spec { cmd: Command::NewFolder, id: "file.create.folder", group: "File", label: "New folder", default: k(CMD_SHIFT, Key::N), alias: None },
     Spec { cmd: Command::CollectWindow, id: "file.collect.window", group: "File", label: "Show or hide the collect window", default: k(CMD_SHIFT, Key::K), alias: None },
+    Spec { cmd: Command::SwitchLibrary, id: "library.switch", group: "Library", label: "Open the library switcher", default: k(CMD, Key::L), alias: None },
+    // falcon's own: Eagle shows one library at a time.
+    Spec { cmd: Command::NextLibrary, id: "library.next", group: "Library", label: "Next open library", default: k(CMD_SHIFT, Key::CloseBracket), alias: k(CMD_SHIFT, Key::CloseCurlyBracket) },
+    Spec { cmd: Command::PreviousLibrary, id: "library.previous", group: "Library", label: "Previous open library", default: k(CMD_SHIFT, Key::OpenBracket), alias: k(CMD_SHIFT, Key::OpenCurlyBracket) },
     Spec { cmd: Command::Preferences, id: "app.preferences", group: "App", label: "Preferences", default: k(CMD, Key::Comma), alias: None },
 ];
 
@@ -510,6 +517,17 @@ mod tests {
         assert_eq!(parse(""), None);
         assert_eq!(parse("Hyper + A"), None);
         assert_eq!(parse("Command + Nope"), None);
+    }
+
+    #[test]
+    fn library_switch_keys() {
+        let keys = Shortcuts::default();
+        assert_eq!(keys.resolve(Key::L, Modifiers::COMMAND), Some(Command::SwitchLibrary));
+        // ⇧ may or may not turn the bracket into a brace before it reaches us.
+        for (key, cmd) in [(Key::CloseBracket, Command::NextLibrary), (Key::CloseCurlyBracket, Command::NextLibrary), (Key::OpenBracket, Command::PreviousLibrary), (Key::OpenCurlyBracket, Command::PreviousLibrary)] {
+            assert_eq!(keys.resolve(key, CMD_SHIFT), Some(cmd), "{key:?}");
+        }
+        assert_eq!(keys.resolve(Key::OpenBracket, Modifiers::COMMAND), Some(Command::Back));
     }
 
     #[test]

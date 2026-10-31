@@ -11,7 +11,7 @@
 | Area | Features |
 |---|---|
 | Window | No title bar: the traffic lights sit over the sidebar, and empty bar space drags the window |
-| Library menu | Recent libraries, plus Open, Create, Show in Finder, the collect window and Preferences. The last library, layout and sort reopen on launch |
+| Library menu | The open libraries (each with a close button), then recent ones, then Open, New, Show in Finder, the collect window and Preferences. Several libraries can be open at once (see Several libraries). The open libraries, layout and sort reopen on launch |
 | Preferences | ⌘, or the library menu (see below) |
 | Sidebar | Eagle's fixed entries, Quick Access, a nested smart folder tree, and a folder tree with guide lines and direct-item counts. Folders and smart folders show their icon in their colour, and locked folders a lock. You can filter it, create, rename and delete folders, drag folders and smart folders to reorder or nest them, and drop items onto folders or the Trash (see Organising below) |
 | Toolbar | Back and forward, zoom slider, layout and sort menu, filter bar toggle, search with Eagle's syntax, plus typo tolerance (see Search and filters) |
@@ -102,6 +102,8 @@ These are the defaults. All but the arrows, Esc and Z can be changed under Prefe
 | Esc | Close the viewer, or clear the selection |
 | Hold Z | Show the hover preview of the card under the pointer |
 | ⌘⇧K | Show or hide the collect window |
+| ⌘L | Open the library menu (Eagle's `library.switch`) |
+| ⌘⇧[ and ⌘⇧] | Previous and next open library (falcon's own) |
 | ⌘, | Preferences |
 | C | In the viewer, turn comment mode on or off (Esc also leaves it) |
 | ⇧R | In the viewer, rotate the image left |
@@ -109,7 +111,29 @@ These are the defaults. All but the arrows, Esc and Z can be changed under Prefe
 
 ## Saving
 
-The app opens libraries in batched write mode (see [Write batching](library-format.md#write-batching)): edits made during a frame, including those from the HTTP API and background imports since the last frame, are written together at the end of the frame, and a metadata backup follows when `mtime.json` or `metadata.json` changed. Pending writes are also flushed when the app saves its state on quit. A failed write shows "Could not save".
+The app opens libraries in batched write mode (see [Write batching](library-format.md#write-batching)): edits made during a frame, including those from the HTTP API and background imports since the last frame, are written together at the end of the frame, and a metadata backup follows when `mtime.json` or `metadata.json` changed. Pending writes are also flushed when a library is closed and, for every open library, when the app saves its state on quit. A failed write shows "Could not save".
+
+## Several libraries
+
+Falcon can keep several libraries open in one window and switch between them; Eagle can't. Each open library is a workspace with all of its own state: where you are (scope, back and forward history, search, filters, sort and layout), the selection, the viewer, its undo and redo stacks, open dialogs and its image caches. Switching keeps all of it. Global state stays shared: Preferences, shortcuts, the recent list, zoom, panel visibility, the collect window and the HTTP API server.
+
+- **Switching:** click the library name at the top of the sidebar, the ⇄ button in the sidebar header, or press ⌘L. The menu lists the open libraries first (name over its folder, dimmed, the shown one highlighted, × to close), then recent libraries that aren't open, then Open Library…, New Library…, Show in Finder, the collect window and Preferences. ⌘⇧[ and ⌘⇧] step through the open libraries.
+- **Opening** a library that is already open shows it instead of loading it twice (paths are compared after resolving symlinks). A new workspace starts with the shown library's sort and layout and is added at the end of the list.
+- **Closing** writes the library's pending changes, then picks the next library to the right (or the left at the end). Closing the last one leaves the empty window and stops the API.
+- **Window title:** the shown library's name ("Falcon" when none is open). The title bar is hidden, so it shows in the Window menu, Mission Control and the Dock.
+- **Launch:** the open libraries, and which one was shown, are saved with the app state (`libraries` and `active`) and reopened; missing ones are skipped. A library passed on the command line is opened (or shown, if it was already open) after them. State saved by older versions, which has only `library`, opens that one library.
+- **HTTP API:** it serves the shown library and keeps its port when you switch. A `library/switch` request opens (or shows) that library in its own workspace and gives the one it replaced back its library; see [HTTP API](http-api.md#the-desktop-app).
+
+What Eagle does (Eagle 4.0, from `js/directives/library-panel.js` and its template, `js/background.js`, `js/api-server.js` and `js/default-preferences.js`; observed unless marked):
+
+- One library per window. The renderer keeps a single library path, and switching (`openLibrary`, then the `add-to-history-and-open` message to the background page) saves the cache, drops the current library and loads the new one in the same window. A dialog first asks to cancel running imports, downloads or saves. No code path opens a second main window for another library (inferred from the absence of one; the main-process window code isn't in the extracted renderer files).
+- The library panel opens at the brand icon (`switchLibrary`) or with `library.switch`, ⌘L by default. It has a search field (fuzzy, with pinyin), then one row per entry of the `libraryHistory` setting: the library's icon (`icon.png` in the library, if any), its name without `.library`, its parent folder, and a check on the open one. Rows can be reordered by dragging, and their menu changes or removes the icon, shows the library in Finder, or removes it from the list. Below the list: Create, Load (open), Reload and Merge. ↑, ↓ and ↩ pick a row; Esc closes the panel.
+- `libraryHistory` appends a newly opened library at the end, without duplicates, and keeps the user's order. A separate `pinnedLibrary` list exists.
+- Item counts are not shown in the panel.
+- `library/switch` over the API calls the same `openLibrary`, so the API always serves the window's library.
+- Eagle has no next or previous library shortcut; `library.create` and `library.load` exist without defaults.
+
+How falcon differs: several libraries open at once (above) and its own ⌘⇧[ and ⌘⇧] shortcuts; one window rather than one OS window per library (Eagle doesn't have several windows either); the recent list is newest first and capped at 10, with no search, icons, pinning, reordering, Reload or Merge yet.
 
 ## Hover preview
 

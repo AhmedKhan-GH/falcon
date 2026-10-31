@@ -43,12 +43,17 @@ const ROW_GAP: f32 = 10.0;
 const TILE_MIN: f32 = 80.0;
 const TILE_MAX: f32 = 400.0;
 
-/// What falcon remembers between launches, as Eagle does: the library,
-/// zoom, sort and panel layout.
+/// What falcon remembers between launches, as Eagle does: the open
+/// libraries, zoom, sort and panel layout.
 #[derive(serde::Serialize, serde::Deserialize, Default)]
 #[serde(default)]
 struct Saved {
+    /// The library being shown. Also all that state saved before several
+    /// libraries could be open has (see `workspaces::restore`).
     library: Option<PathBuf>,
+    /// Every open library, in switcher order, and which one is shown.
+    libraries: Vec<PathBuf>,
+    active: Option<usize>,
     tile: Option<f32>,
     sort: Option<String>,
     increase: Option<bool>,
@@ -112,11 +117,16 @@ pub struct Launch {
     pub tags: bool,
 }
 
-/// A library change requested from the library menu.
+/// A library change requested from the library menu or a shortcut,
+/// applied once the frame is done.
 enum Switch {
     Open(PathBuf),
     Pick,
     Create,
+    /// Show the open library at this switcher position.
+    Focus(usize),
+    /// Close the open library at this switcher position.
+    Close(usize),
 }
 
 /// Background import counters.
@@ -322,6 +332,9 @@ struct EditBuf {
 /// its image caches. The app draws one workspace at a time.
 struct Workspace {
     lib: Option<Shared>,
+    /// `lib`'s root when it was opened here. The HTTP API can put another
+    /// library into `lib` (`library/switch`); the app notices the change.
+    root: Option<PathBuf>,
     loader: Loader,
     scope: Scope,
     back: Vec<Scope>,
@@ -393,6 +406,7 @@ impl Workspace {
     /// A fresh workspace for `lib` (or the empty window when `None`).
     fn new(ctx: &egui::Context, lib: Option<Shared>) -> Self {
         Workspace {
+            root: lib.as_ref().map(|l| lock(l).root().to_path_buf()),
             lib,
             loader: Loader::new(ctx),
             scope: Scope::All,
@@ -447,7 +461,13 @@ impl Workspace {
 pub struct App {
     /// The library being drawn, with all its per-library state.
     ws: Workspace,
-    /// The local HTTP API for the open library, as Eagle runs it.
+    /// The other open libraries, kept whole while hidden.
+    others: crate::workspaces::Parked<Workspace>,
+    /// The window title last sent, so it is only sent on change.
+    title: String,
+    /// Open the library switcher next frame (⌘L).
+    open_switcher: bool,
+    /// The local HTTP API for the shown library, as Eagle runs it.
     server: Option<falcon_server::Handle>,
     ctx: egui::Context,
     error: Option<String>,
@@ -476,6 +496,9 @@ impl App {
         t::install(&cc.egui_ctx);
         let mut app = App {
             ws: Workspace::new(&cc.egui_ctx, None),
+            others: Default::default(),
+            title: String::new(),
+            open_switcher: false,
             server: None,
             ctx: cc.egui_ctx.clone(),
             error: None,
@@ -504,8 +527,14 @@ impl App {
         app.prefs = saved.prefs.sanitized();
         app.shortcuts = saved.shortcuts;
         app.collect.pos = saved.collect_pos.map(Pos2::from);
-        // Reopen the last library unless one was given on the command line.
-        if let Some(p) = initial.or(saved.library.filter(|p| p.is_dir())) {
+        // Reopen the libraries that were open, then the one given on the
+        // command line (focused if it was already open).
+        let (libraries, active) = crate::workspaces::restore(&saved.libraries, saved.active, saved.library.as_deref(), |p| p.is_dir());
+        for p in libraries {
+            app.open(p);
+        }
+        app.focus(active);
+        if let Some(p) = initial {
             app.open(p);
         }
         if !launch.import.is_empty() {
@@ -535,30 +564,134 @@ impl App {
         app
     }
 
+    /// Opens the library at `path` in a workspace of its own and shows it,
+    /// or shows it if it is already open.
     fn open(&mut self, path: PathBuf) {
+        if let Some(i) = self.position_of(&path) {
+            self.focus(i);
+            crate::workspaces::remember(&mut self.recent, &path, RECENT_LIMIT);
+            return;
+        }
         match Library::open(&path) {
             Ok(lib) => {
-                self.server = None; // stops the previous library's server
-                let shared: Shared = Arc::new(Mutex::new(lib));
-                self.ws.lib = Some(shared);
-                self.start_server();
-                self.recent.retain(|p| *p != path);
-                self.recent.insert(0, path.clone());
-                self.recent.truncate(10);
+                self.add_workspace(Arc::new(Mutex::new(lib)));
+                crate::workspaces::remember(&mut self.recent, &path, RECENT_LIMIT);
                 self.error = None;
-                self.ws.scope = Scope::All;
-                self.ws.back.clear();
-                self.ws.forward.clear();
-                self.ws.selected.clear();
-                self.ws.edit = None;
-                self.ws.org = Default::default();
-                self.ws.loader.clear_all();
             }
-            Err(e) => self.error = Some(e.to_string()),
+            Err(e) => {
+                if self.ws.lib.is_some() {
+                    self.flash(format!("Could not open the library: {e}"));
+                }
+                self.error = Some(e.to_string());
+            }
         }
     }
 
-    /// (Re)starts the HTTP API for the open library on the ports set in
+    /// Shows `lib` in a new workspace, after the open ones (or in place of
+    /// the empty window). It starts with the shown library's sort and
+    /// layout.
+    fn add_workspace(&mut self, lib: Shared) {
+        let mut ws = Workspace::new(&self.ctx, Some(lib));
+        ws.sort = self.ws.sort;
+        ws.increase = self.ws.increase;
+        ws.layout = self.ws.layout;
+        if self.ws.lib.is_none() {
+            // The empty window holds the folder state restored on launch.
+            ws.collapsed = std::mem::take(&mut self.ws.collapsed);
+            self.ws = ws;
+        } else {
+            self.others.push(&mut self.ws, ws);
+        }
+        self.serve_active();
+    }
+
+    /// Where the library at `path` sits in the switcher, if it is open.
+    fn position_of(&self, path: &std::path::Path) -> Option<usize> {
+        self.others.iter(&self.ws).position(|w| w.root.as_deref().is_some_and(|r| same_path(r, path)))
+    }
+
+    /// Shows the open library at switcher position `i`.
+    fn focus(&mut self, i: usize) {
+        if i == self.others.slot() {
+            return;
+        }
+        self.others.focus(&mut self.ws, i);
+        self.focus_search = false;
+        self.serve_active();
+    }
+
+    /// Closes the open library at switcher position `i`, writing anything
+    /// pending first. Closing the last one leaves the empty window.
+    fn close_workspace(&mut self, i: usize) {
+        let closed = match self.others.close(&mut self.ws, i) {
+            Some(w) => w,
+            None if i == self.others.slot() => {
+                let mut empty = Workspace::new(&self.ctx, None);
+                (empty.sort, empty.increase, empty.layout) = (self.ws.sort, self.ws.increase, self.ws.layout);
+                std::mem::replace(&mut self.ws, empty)
+            }
+            None => return,
+        };
+        if let Some(l) = &closed.lib
+            && let Err(e) = lock(l).flush()
+        {
+            self.flash(format!("Could not save: {e}"));
+        }
+        drop(closed);
+        self.serve_active();
+    }
+
+    /// Points the HTTP API at the shown library: swaps it into the running
+    /// server, starts one if none runs, or stops it when nothing is open.
+    fn serve_active(&mut self) {
+        match (&self.server, self.ws.lib.clone()) {
+            (Some(h), Some(lib)) => h.set_library(lib),
+            (None, Some(_)) => self.start_server(),
+            (_, None) => self.server = None,
+        }
+    }
+
+    /// `library/switch` over the API replaces the library inside the shown
+    /// workspace's slot. Give that slot its own library back and show the
+    /// new one in a workspace of its own (an existing one if it is open),
+    /// with fresh state and no undo history.
+    fn follow_api_switch(&mut self) {
+        let (Some(shared), Some(was)) = (self.ws.lib.clone(), self.ws.root.clone()) else { return };
+        let now = lock(&shared).root().to_path_buf();
+        if now == was {
+            return;
+        }
+        let existing = self.position_of(&now);
+        match Library::open(&was) {
+            Ok(back) => {
+                let new = std::mem::replace(&mut *lock(&shared), back);
+                match existing {
+                    // The open workspace's copy is the one with its edits.
+                    Some(i) => {
+                        drop(new);
+                        self.focus(i);
+                    }
+                    None => self.add_workspace(Arc::new(Mutex::new(new))),
+                }
+            }
+            Err(_) => {
+                // The old library can't be reopened: this workspace becomes
+                // the new one, starting over.
+                let mut ws = Workspace::new(&self.ctx, Some(shared));
+                (ws.sort, ws.increase, ws.layout) = (self.ws.sort, self.ws.increase, self.ws.layout);
+                self.ws = ws;
+                if let Some(i) = existing {
+                    self.close_workspace(i);
+                }
+            }
+        }
+        crate::workspaces::remember(&mut self.recent, &now, RECENT_LIMIT);
+        let name = now.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+        self.flash(format!("Switched to {name} over the API"));
+        self.serve_active();
+    }
+
+    /// (Re)starts the HTTP API for the shown library on the ports set in
     /// Preferences. Never Eagle's own port: clients of a running (or later
     /// started) Eagle must keep reaching Eagle.
     fn start_server(&mut self) {
@@ -824,6 +957,18 @@ impl App {
         }
         if on(C::CollectWindow) {
             self.collect.toggle();
+        }
+        if on(C::SwitchLibrary) && self.ws.lib.is_some() {
+            self.show_sidebar = true;
+            self.open_switcher = true;
+        }
+        if self.others.len() > 1 {
+            if on(C::NextLibrary) {
+                self.switch_to = Some(Switch::Focus(self.others.step(true)));
+            }
+            if on(C::PreviousLibrary) {
+                self.switch_to = Some(Switch::Focus(self.others.step(false)));
+            }
         }
         if self.ws.viewer.is_none() {
             if on(C::Rename) && self.ws.selected.len() == 1 {
@@ -1230,6 +1375,25 @@ mod undo_tests {
 
 type Shared = falcon_server::Shared;
 
+/// A switcher row: the library's name over its folder, dimmed.
+fn library_label(path: &std::path::Path) -> LayoutJob {
+    let name = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    let dir = path.parent().map(crate::workspaces::tilde).unwrap_or_default();
+    let mut job = LayoutJob::default();
+    job.append(&name, 0.0, egui::TextFormat::simple(font(13.0), t::TEXT));
+    job.append(&format!("\n{dir}"), 0.0, egui::TextFormat::simple(font(11.0), t::TEXT_MUTED));
+    job
+}
+
+/// Most libraries kept in the recent list.
+const RECENT_LIMIT: usize = 10;
+
+/// Whether two paths name the same library folder (exact, or after
+/// resolving symlinks and `..`).
+fn same_path(a: &std::path::Path, b: &std::path::Path) -> bool {
+    a == b || matches!((a.canonicalize(), b.canonicalize()), (Ok(x), Ok(y)) if x == y)
+}
+
 fn lock(s: &Shared) -> std::sync::MutexGuard<'_, Library> {
     s.lock().unwrap_or_else(|p| p.into_inner())
 }
@@ -1373,7 +1537,7 @@ impl App {
             self.show_sidebar = false;
         }
         if icon_button(ui, Pos2::new(r - 51.0, cy), ic::ARROWS_LEFT_RIGHT, 18.0, true, "Switch Library").clicked() {
-            self.switch_to = Some(Switch::Pick);
+            self.open_switcher = true;
         }
         if icon_button(ui, Pos2::new(r - 79.0, cy), ic::PLUS, 18.0, true, "Create Folder").clicked() {
             self.ws.actions.push(Action::CreateFolder { parent: None });
@@ -1391,21 +1555,40 @@ impl App {
         p.galley(Pos2::new(full.left() + 44.0, lib_row.center().y - g.size().y / 2.0), g, t::TEXT);
         icon(ui, Pos2::new(full.left() + 44.0 + gw + 10.0, lib_row.center().y), ic::CARET_UP_DOWN, 12.0, t::TEXT);
         let current = lib.root().to_path_buf();
+        if std::mem::take(&mut self.open_switcher) {
+            egui::Popup::open_id(ui.ctx(), egui::Popup::default_response_id(&resp));
+        }
         egui::Popup::menu(&resp).show(|ui| {
-            ui.set_min_width(240.0);
-            ui.label(RichText::new("Libraries").color(t::TEXT_MUTED).size(12.0));
-            for p in self.recent.clone() {
-                let name = p.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-                let mark = if p == current { ic::CHECK } else { " " };
-                if ui.button(format!("{mark}  {name}")).on_hover_text(p.display().to_string()).clicked() && p != current {
-                    self.switch_to = Some(Switch::Open(p.clone()));
+            ui.set_min_width(260.0);
+            ui.label(RichText::new("Open").color(t::TEXT_MUTED).size(12.0));
+            let open: Vec<PathBuf> = self.others.iter(&self.ws).map(|w| w.root.clone().unwrap_or_default()).collect();
+            let slot = self.others.slot();
+            for (i, p) in open.iter().enumerate() {
+                ui.horizontal(|ui| {
+                    let row = ui.add(egui::Button::selectable(i == slot, library_label(p)).min_size(vec2(220.0, 0.0)));
+                    if row.on_hover_text(p.display().to_string()).clicked() && i != slot {
+                        self.switch_to = Some(Switch::Focus(i));
+                    }
+                    if ui.small_button(ic::X).on_hover_text("Close Library").clicked() {
+                        self.switch_to = Some(Switch::Close(i));
+                    }
+                });
+            }
+            let recent = crate::workspaces::not_open(&self.recent, &open);
+            if !recent.is_empty() {
+                ui.separator();
+                ui.label(RichText::new("Recent").color(t::TEXT_MUTED).size(12.0));
+                for p in recent {
+                    if ui.add(egui::Button::new(library_label(&p)).min_size(vec2(220.0, 0.0))).on_hover_text(p.display().to_string()).clicked() {
+                        self.switch_to = Some(Switch::Open(p));
+                    }
                 }
             }
             ui.separator();
             if ui.button("Open Library…").clicked() {
                 self.switch_to = Some(Switch::Pick);
             }
-            if ui.button("Create Library…").clicked() {
+            if ui.button("New Library…").clicked() {
                 self.switch_to = Some(Switch::Create);
             }
             if ui.button("Show in Finder").clicked() {
@@ -3303,11 +3486,14 @@ impl App {
 impl eframe::App for App {
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         // Also runs on quit: nothing batched may be left unwritten.
-        if let Some(l) = &self.ws.lib {
+        for l in std::iter::once(&self.ws).chain(self.others.parked_mut().map(|w| &*w)).filter_map(|w| w.lib.as_ref()) {
             let _ = lock(l).flush();
         }
+        let libraries: Vec<PathBuf> = self.others.iter(&self.ws).filter_map(|w| w.root.clone()).collect();
         let saved = Saved {
-            library: self.ws.lib.as_ref().map(|l| lock(l).root().to_path_buf()),
+            library: self.ws.root.clone(),
+            active: (!libraries.is_empty()).then_some(self.others.slot()),
+            libraries,
             tile: Some(self.tile),
             sort: Some(self.ws.sort.label().to_string()),
             increase: Some(self.ws.increase),
@@ -3333,7 +3519,16 @@ impl eframe::App for App {
             // Come to the front on launch, like any Mac app.
             ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
         }
+        self.follow_api_switch();
         self.ws.loader.poll(&ctx);
+        let title = match &self.ws.root {
+            Some(r) => r.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default(),
+            None => "Falcon".to_string(),
+        };
+        if title != self.title {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
+            self.title = title;
+        }
 
         let dropped: Vec<PathBuf> = ctx.input(|i| i.raw.dropped_files.iter().map(|f| f.path().to_path_buf()).collect());
         // Our own items dragged out and back in must not import twice.
@@ -3530,6 +3725,8 @@ impl eframe::App for App {
             Some(Switch::Open(p)) => self.open(p),
             Some(Switch::Pick) => self.pick_library(),
             Some(Switch::Create) => self.new_library(),
+            Some(Switch::Focus(i)) => self.focus(i),
+            Some(Switch::Close(i)) => self.close_workspace(i),
             None => {}
         }
     }
@@ -3538,6 +3735,54 @@ impl eframe::App for App {
 #[cfg(test)]
 mod tests {
     use super::drag_image;
+    use super::Saved;
+    use std::collections::HashMap;
+    use std::path::{Path, PathBuf};
+
+    /// eframe's storage, in memory.
+    #[derive(Default)]
+    struct Memory(HashMap<String, String>);
+
+    impl eframe::Storage for Memory {
+        fn get_string(&self, key: &str) -> Option<String> {
+            self.0.get(key).cloned()
+        }
+        fn set_string(&mut self, key: &str, value: String) {
+            self.0.insert(key.to_string(), value);
+        }
+        fn remove_string(&mut self, key: &str) {
+            self.0.remove(key);
+        }
+        fn flush(&mut self) {}
+    }
+
+    #[test]
+    fn saved_state_from_one_library_still_loads() {
+        // As saved before several libraries could be open (RON, as eframe stores it).
+        let mut m = Memory::default();
+        m.set_string_raw(r#"(library: Some("/x/A.library"), tile: Some(150.0), recent: ["/x/A.library", "/x/B.library"], prefs: (backup_on_change: true))"#);
+        let saved: Saved = eframe::get_value(&m, eframe::APP_KEY).expect("old state parses");
+        assert_eq!(saved.tile, Some(150.0));
+        let (libs, active) = crate::workspaces::restore(&saved.libraries, saved.active, saved.library.as_deref(), |_| true);
+        assert_eq!((libs, active), (vec![PathBuf::from("/x/A.library")], 0));
+    }
+
+    #[test]
+    fn saved_state_keeps_every_open_library() {
+        let mut m = Memory::default();
+        let libs = vec![PathBuf::from("/x/A.library"), PathBuf::from("/x/B.library")];
+        let saved = Saved { library: Some(libs[1].clone()), libraries: libs.clone(), active: Some(1), ..Default::default() };
+        eframe::set_value(&mut m, eframe::APP_KEY, &saved);
+        let back: Saved = eframe::get_value(&m, eframe::APP_KEY).unwrap();
+        let exists = |p: &Path| p != Path::new("/nowhere");
+        assert_eq!(crate::workspaces::restore(&back.libraries, back.active, back.library.as_deref(), exists), (libs, 1));
+    }
+
+    impl Memory {
+        fn set_string_raw(&mut self, ron: &str) {
+            eframe::Storage::set_string(self, eframe::APP_KEY, ron.to_string());
+        }
+    }
 
     fn is_png(bytes: &[u8]) -> bool {
         image::load_from_memory_with_format(bytes, image::ImageFormat::Png).is_ok()

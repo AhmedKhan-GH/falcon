@@ -10,6 +10,7 @@ mod prefs;
 mod shortcuts;
 mod organize;
 mod theme;
+mod workspaces;
 
 use std::path::PathBuf;
 
