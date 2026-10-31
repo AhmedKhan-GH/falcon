@@ -15,7 +15,7 @@
 | Preferences | ⌘, or the library menu (see below) |
 | Sidebar | Eagle's fixed entries, Quick Access, a nested smart folder tree, and a folder tree with guide lines and direct-item counts. Folders and smart folders show their icon in their colour, and locked folders a lock. You can filter it, create, rename and delete folders, drag folders and smart folders to reorder or nest them, and drop items onto folders or the Trash (see Organising below) |
 | Toolbar | Back and forward, zoom slider, layout and sort menu, filter bar toggle, search with Eagle's syntax, plus typo tolerance (see Search and filters) |
-| Filter bar | Colour (presets, hex value, accuracy, grayscale), tags, folders, shape, rating, type, notes, URL, and saved filters |
+| Filter bar | Colour (presets, hex value, accuracy, grayscale), tags, folders, shape, rating, type, notes, URL, date, duration, camera and font (see below), and saved filters |
 | Grid | Four layouts. **Waterfall** (the default): equal columns, each card keeping its image's shape. **Justified**: rows of equal height. **Grid**: square cards. **List**: rows showing type, size, dimensions and date. Cards have type badges. Supports multi-select, drag (inside the app, or out to Finder and other apps), a context menu and a hover preview (see below) |
 | Inspector | **One item:** preview, palette (click a colour to search for it), editable title, notes and URL, tags, folders, rating and properties. **Several items:** a preview stack, shared tags, add a tag to all, add all to a folder, a shared rating, trash all |
 | Viewer | Zoom around the pointer, pan, fit (0), actual size (1), + and −, animated GIFs, and full-size QuickLook renders |
@@ -24,6 +24,21 @@
 | Smart folders | Create and edit them with rule rows, matched by any or all, inside another smart folder, with an icon and colour |
 | Trash | Restore, Delete Permanently and Empty Trash, all with confirmation |
 | HTTP API | Runs while the app is open, from port 41596 up |
+
+## Date, duration, camera and font filters
+
+Four chips follow the existing ones in the filter bar. They set the `imported`, `modified`, `created`, `duration`, `cameras` and `font` rules of the library's `Filter` (see [Search and filters](search.md)), so the grid applies them like any other rule. The code is in `crates/falcon-app/src/app/filters_ui.rs`, with the parsing and labels in `logic.rs`.
+
+What Eagle does, from `js/directives/filter-item-import.html`, `filter-item-mtime.html`, `filter-item-duration.html`, `filter-item-camera.html` and `filter-item-fonts.html`:
+
+| Question | Eagle | Seen or inferred | falcon |
+|---|---|---|---|
+| Which chips show | Every filter item is hidden unless it is active or pinned (`hide-filter` when `!isEnabled && !pinned[type]`); pinning is a user choice | Seen | Date always shows. Duration, Camera and Font show only when the library has an item they can match (a `duration`, a camera, a font) or they are active. There is no pinning |
+| Date | Two separate items, Date Imported and Date Modified. Each menu has the six presets (Today, Yesterday, Last 7, 30, 90 and 365 days) with counts, then every month that has items (`YYYY-MM`, newest first, with counts), then a Range checkbox that opens a calendar picker | Seen | One Date chip with a tab for Imported, Modified and Created (Created is falcon's own; Eagle only has it in smart folders). Each tab has the presets with counts, a range typed as two days (`2026-01-01` – `2026-12-31`, swapped if reversed, both needed), and the month list with counts. There is no calendar widget |
+| Duration | Min and max text fields and a unit (seconds, minutes, hours) | Seen | Same, and a field also accepts a time such as `1:30`. The placeholders show the library's shortest and longest duration. The chip reads `0:30 – 2:00`, `≥ 0:30` or `≤ 2:00` |
+| Camera | Every distinct `rawMetas.camera` value with its count; several can be ticked; "no results" when there are none | Seen | Same, counting items not in the Trash |
+| Font | Two exclusive options, Activated and Deactivated, each with its count and shown only when its count is above 0 | Seen | Both options always listed with counts. "Activated" means the font's `<postScriptName>_.<ext>` key is among the files in `~/Library/Fonts/EagleApp/` (`installed_font_keys`), read once per session. On a Mac where Eagle never activated a font that folder is missing or empty, so every font counts as deactivated. falcon can't activate fonts itself |
+| Clearing | A clear button on each item, and right-click | Seen | A Clear button inside each menu, and the bar's Clear for everything |
 
 ## Keys
 

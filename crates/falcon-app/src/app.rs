@@ -22,6 +22,7 @@ use falcon_library::search::{ColorQuery, Filter, Logic, OrderBy, Shape, TextFilt
 use crate::theme::{self as t, font, mono};
 
 mod organize_ui;
+mod filters_ui;
 
 /// Grid geometry, measured from Eagle at 1280 x 800.
 const GRID_PAD_X: f32 = 17.0;
@@ -382,6 +383,8 @@ pub struct App {
     collect: crate::collect::Collect,
     /// Unlocked folders and the organising dialogs (see `organize_ui`).
     org: organize_ui::OrgState,
+    /// Text typed into the Date, Duration, Camera and Font chips.
+    filter_ui: filters_ui::MediaFilterUi,
 }
 
 impl App {
@@ -444,6 +447,7 @@ impl App {
             shortcuts: Default::default(),
             collect: Default::default(),
             org: Default::default(),
+            filter_ui: Default::default(),
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
         app.tile = saved.tile.unwrap_or(app.tile).clamp(TILE_MIN, TILE_MAX);
@@ -2116,11 +2120,13 @@ impl App {
         egui::Popup::menu(&resp)
             .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
             .show(|ui| text_filter_menu(ui, &mut f.url, url_kw));
+        self.media_filter_chips(ui, lib);
 
-        if f.is_active() {
+        if self.filter.is_active() {
             let clear = ui.add(egui::Button::new(RichText::new(format!("{}  Clear", ic::X)).color(t::TEXT_MUTED)).frame(false));
             if clear.clicked() {
-                *f = Filter::default();
+                self.filter = Filter::default();
+                self.clear_media_filter_text();
                 self.color_text.clear();
                 self.note_text.clear();
                 self.url_text.clear();

@@ -31,7 +31,7 @@ Eagle features that need no online service, put off until after the list above.
 - [ ] Window buttons at Eagle's height
 
 **Search and organising**
-- [ ] Date, duration, camera (EXIF) and font filters
+- [x] Date, duration, camera (EXIF) and font filters
 - [x] Saved filters
 - [x] Nested smart folders and smart folder icons
 
