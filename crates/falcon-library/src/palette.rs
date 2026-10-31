@@ -384,6 +384,37 @@ fn bilinear(src: &RgbaImage, dw: u32, dh: u32) -> RgbaImage {
     })
 }
 
+/// The picture Eagle analyses when a palette is refreshed: the original
+/// when the item has `noThumbnail` (a small SVG is rendered at its own size),
+/// otherwise the thumbnail file. `None` when there is nothing to read.
+pub fn refresh_source(item: &crate::model::Item, root: &std::path::Path) -> Option<DynamicImage> {
+    use crate::thumbnail;
+    if item.no_thumbnail == Some(true) {
+        let raw = item.original_path(root);
+        if item.ext.eq_ignore_ascii_case("svg") {
+            return thumbnail::render_svg(&std::fs::read(raw).ok()?, None).ok();
+        }
+        return thumbnail::decode(&raw).ok();
+    }
+    thumbnail::decode(&item.thumbnail_path(root)?).ok()
+}
+
+impl crate::Library {
+    /// Recomputes an item's palette (Eagle's "Refresh Palette") with the
+    /// same median cut as import, from [`refresh_source`]. Only `palettes`
+    /// changes, in place, so the item's key order stays the same. Audio is
+    /// skipped, as Eagle's analyser skips it; the result is then false.
+    pub fn refresh_palette(&mut self, id: &str) -> crate::Result<bool> {
+        let mut item = self.item(id).cloned().ok_or_else(|| self.invalid(format!("no item {id}")))?;
+        if crate::media::is_audio(&item.ext) {
+            return Ok(false);
+        }
+        let img = refresh_source(&item, self.root()).ok_or_else(|| self.invalid(format!("nothing to analyse for {}.{}", item.name, item.ext)))?;
+        item.palettes = extract(&img);
+        self.update_item(item).map(|()| true)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

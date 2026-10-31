@@ -45,6 +45,23 @@ A font's thumbnail is a 600×600 specimen. The item's `width` and `height` are 6
 - The script is chosen from `fontMetas.support` and the languages of `postScriptName`.
 - Missing glyphs fall back to an outline font.
 
+### Custom thumbnails (observed)
+
+From the context menu's "Custom Thumbnail" entries and the background window's `set-custom-thumbnail` handler:
+
+- The command is hidden for tif, jpg, png, bmp and webp items, whose file is already their picture. Every other format can have one.
+- The file dialog offers jpg, jpeg, png, bmp and webp. A file over 10,000,000 bytes is refused with a warning. "From clipboard" also takes a copied gif file, or saves a copied image as PNG first.
+- The chosen file is copied **byte for byte** to `<name>_thumbnail.png`. It is not resized or re-encoded, so a custom thumbnail can be a large JPEG under a `.png` name.
+- The item's `width` and `height` become the picture's size, even for a video or PDF (the HTTP API may pass its own `width` and `height`).
+- The palette is computed from the new file.
+- `noThumbnail` and `noPreview` are deleted, and `customThumbnail: true` is set. Being a new key, it lands at the end of the item. `removeThumbnail` is left alone.
+- Grid cards with a custom thumbnail get a `custom-thumbnail` CSS class. The viewer and the plugin API use the thumbnail in place of the original for formats Eagle can't show itself.
+- Refresh Thumbnail skips an item whose `customThumbnail` is set. "Reset Thumbnail" (shown only when it is set) deletes the key and then refreshes the thumbnail.
+
+### Refresh Thumbnail (observed)
+
+The `regenerate-thumbnail` queue reads the original's size, birth time and mtime again (`size`, `btime`, `mtime`), then runs the same per-format generator as import, so `width`, `height` and the flags are measured again. The palette is then queued the same way as at import. A format Eagle no longer recognises loses its thumbnail, `palettes`, `width` and `height` and gets `noPreview: true`. When a re-measured image becomes small enough for `noThumbnail`, the jpg generator sets the flag but does not delete the old thumbnail file (inferred harmless, since Eagle then shows the original).
+
 ## How falcon does it
 
 The `thumbnail` module holds the rules as plain functions: `plan_raster`, `plan_svg`, `target_size`, `max_side`, `resize` and `encode`.
@@ -69,3 +86,5 @@ The `thumbnail` module holds the rules as plain functions: `plan_raster`, `plan_
   - Missing glyphs are left blank instead of drawn in an outline font.
   - The result is opaque RGB, as Eagle's JPEG capture is.
   - woff2 is not supported and falls back to QuickLook.
+- **Custom thumbnails.** `Library::set_custom_thumbnail(id, path)` follows Eagle: the same format and 10 MB rules, a byte-for-byte copy, `width` and `height` from the picture, a new palette, `noThumbnail` and `noPreview` removed and `customThumbnail: true` appended. It also refuses a file it can't decode. `reset_custom_thumbnail` removes the key and redraws. `thumbnail::has_custom_thumbnail` and `custom_thumbnail_allowed` hold the rules; jpeg and tiff count as jpg and tif.
+- **Refresh Thumbnail.** `Library::refresh_thumbnail(id)` re-reads size and file times, then redraws with import's own pipeline and recomputes the palette. It returns false and changes nothing for an item with a custom thumbnail. The new thumbnail replaces the old file only once it has been drawn, so a failed redraw keeps the old one. Unlike Eagle, a thumbnail that is no longer needed is deleted, because falcon shows a thumbnail file whenever one exists.

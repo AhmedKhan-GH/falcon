@@ -57,6 +57,16 @@ The 5-cut limit on each pass means a palette rarely has more than about 11 colou
 
 The code that finds the starting box tracks each channel's minimum and maximum with `if … else if`. A value that lowers the minimum is never also checked against the maximum. For the first pixel, every channel lowers the starting minimum of 31 (unless it is 31 itself), so the first pixel never sets a maximum. An image with a single counted pixel therefore gets an empty box and no palette. For real images this almost never matters.
 
+### Refresh Palette (observed)
+
+The "Refresh Palette" menu entry (and `/api/item/refreshPalette`) sends the items to the colour analyser's queue:
+
+- The source is the original when the item has `noThumbnail`, otherwise `<name>_thumbnail.png`. The `removeThumbnail` case doesn't matter here: a small SVG has `noThumbnail` too, so its SVG file is drawn.
+- The analysis is the same as at import, at most 360 px wide.
+- Only `palettes` is assigned on the stored item, so it keeps its place among the keys. `processingPalette` is a temporary key that is removed again.
+- Audio files are skipped (mp3, wav, flac, ogg, aac, m4a).
+- Items whose image would exceed 30 megapixels when scaled to 480 px wide are not analysed.
+
 ## How falcon does it
 
 `falcon_library::palette::extract(&DynamicImage)` reproduces the whole pipeline: the 360 px analysis image, the sampling step, MMCQ with Eagle's control flow, and the rounding and filtering rules.
@@ -77,3 +87,7 @@ The `matches_eagle_on_fixture_thumbnails` test recomputes the palette for all 19
 | over 360 px (resized first) | 7 | Same dominant colour and ratio. Smaller colours differ slightly |
 
 The quantizer is therefore an exact match. The remaining difference is the resize step. Chromium scales canvases in Skia with fixed-point arithmetic. Falcon uses one bilinear sample per pixel. Of six filters tried, point-sampling filters came closest and area-averaging filters (box, triangle) did worst, which fits Chromium sampling without mipmaps. Matching Skia bit for bit isn't worth it here.
+
+### Refreshing
+
+`Library::refresh_palette(id)` recomputes `palettes` with `extract`, from `palette::refresh_source`: the original for `noThumbnail` items (a small SVG is rendered at its own size), otherwise the thumbnail. Audio is skipped and the result is false. Only the palette changes, and the edit goes through `update_item` like any other. The 30-megapixel check is not applied.

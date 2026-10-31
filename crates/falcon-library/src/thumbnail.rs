@@ -302,6 +302,88 @@ pub fn write_encoded(img: &DynamicImage, dest: &Path) -> Result<(), ThumbError> 
     fs::write(dest, bytes).map_err(ThumbError::new)
 }
 
+/// Largest file Eagle accepts as a custom thumbnail, in bytes.
+pub const CUSTOM_THUMBNAIL_MAX_BYTES: u64 = 10_000_000;
+/// Item key Eagle sets when the thumbnail was chosen by the user.
+pub const CUSTOM_THUMBNAIL_KEY: &str = "customThumbnail";
+
+/// Whether an item of this extension may get a custom thumbnail. Eagle hides
+/// the command for the image formats it shows as themselves (tif, jpg, png,
+/// bmp, webp); jpeg and tiff are falcon's addition, as the same formats.
+pub fn custom_thumbnail_allowed(ext: &str) -> bool {
+    !matches!(ext.to_lowercase().as_str(), "tif" | "tiff" | "jpg" | "jpeg" | "png" | "bmp" | "webp")
+}
+
+/// Whether the item's thumbnail was set by hand (`customThumbnail: true`).
+pub fn has_custom_thumbnail(item: &crate::model::Item) -> bool {
+    item.extra.get(CUSTOM_THUMBNAIL_KEY).and_then(|v| v.as_bool()) == Some(true)
+}
+
+impl crate::Library {
+    /// Makes the image at `image` the item's thumbnail, as Eagle's
+    /// "Custom Thumbnail" does: the file is copied byte for byte to
+    /// `<name>_thumbnail.png` (not resized or re-encoded), `width` and
+    /// `height` become the picture's size, the palette is computed from it,
+    /// `noThumbnail` and `noPreview` are removed and `customThumbnail: true`
+    /// is set. Refuses files over 10 MB, pictures falcon can't decode, and
+    /// items whose format is its own thumbnail.
+    pub fn set_custom_thumbnail(&mut self, id: &str, image: &Path) -> crate::Result<()> {
+        let mut item = self.item(id).cloned().ok_or_else(|| self.invalid(format!("no item {id}")))?;
+        if !custom_thumbnail_allowed(&item.ext) {
+            return Err(self.invalid(format!("a .{} file is its own thumbnail", item.ext)));
+        }
+        let size = fs::metadata(image).map_err(|e| crate::Error::io(image, e))?.len();
+        if size > CUSTOM_THUMBNAIL_MAX_BYTES {
+            return Err(self.invalid("a custom thumbnail can be at most 10 MB"));
+        }
+        let img = decode(image).map_err(|e| self.invalid(format!("cannot read {}: {e}", image.display())))?;
+        let dest = self.info_dir(&item).join(format!("{}_thumbnail.png", item.name));
+        fs::copy(image, &dest).map_err(|e| crate::Error::io(&dest, e))?;
+        item.width = img.width().into();
+        item.height = img.height().into();
+        item.palettes = crate::palette::extract(&img);
+        item.no_thumbnail = None;
+        item.extra.shift_remove("noPreview");
+        item.extra.insert(CUSTOM_THUMBNAIL_KEY.into(), true.into());
+        self.update_item(item)
+    }
+
+    /// Drops a custom thumbnail and draws the item's own again (Eagle's
+    /// "Reset Thumbnail"). Returns false when the item had none.
+    pub fn reset_custom_thumbnail(&mut self, id: &str) -> crate::Result<bool> {
+        let mut item = self.item(id).cloned().ok_or_else(|| self.invalid(format!("no item {id}")))?;
+        if !has_custom_thumbnail(&item) {
+            return Ok(false);
+        }
+        item.extra.shift_remove(CUSTOM_THUMBNAIL_KEY);
+        self.redraw_item(item).map(|()| true)
+    }
+
+    /// Redraws an item's thumbnail from its original and recomputes the
+    /// palette (Eagle's "Refresh Thumbnail"). Size, birth time and mtime are
+    /// read from the file again. As in Eagle, an item with a custom thumbnail
+    /// is left alone; the result is then false.
+    pub fn refresh_thumbnail(&mut self, id: &str) -> crate::Result<bool> {
+        let item = self.item(id).cloned().ok_or_else(|| self.invalid(format!("no item {id}")))?;
+        if has_custom_thumbnail(&item) {
+            return Ok(false);
+        }
+        self.redraw_item(item).map(|()| true)
+    }
+
+    /// Re-reads the original's file times and redraws thumbnail and palette,
+    /// then saves the item.
+    pub(crate) fn redraw_item(&mut self, mut item: crate::model::Item) -> crate::Result<()> {
+        let raw = item.original_path(self.root());
+        crate::import::restat(&mut item, &raw)?;
+        let thumb = self.info_dir(&item).join(format!("{}_thumbnail.png", item.name));
+        if !crate::import::redraw(&mut item, &raw, &thumb) {
+            return Err(self.invalid(format!("cannot draw a thumbnail for {}.{}", item.name, item.ext)));
+        }
+        self.update_item(item)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

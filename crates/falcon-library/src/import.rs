@@ -207,6 +207,43 @@ impl Library {
     }
 }
 
+/// Redraws the thumbnail of an item already in a library and recomputes its
+/// palette, as Eagle's Refresh Thumbnail does: width, height and the
+/// thumbnail flags are measured again from `raw`, and the thumbnail at
+/// `thumb` is replaced only once the new one has been drawn. When the item no
+/// longer needs a thumbnail, the old file is deleted so it can't be shown in
+/// place of the original. Audio keeps its palette, since Eagle's analyser
+/// skips audio. Returns false, with `item` unchanged, when nothing could be
+/// drawn.
+pub(crate) fn redraw(item: &mut Item, raw: &Path, thumb: &Path) -> bool {
+    let tmp = thumb.with_file_name(".falcon-redraw_thumbnail.png");
+    let _ = fs::remove_file(&tmp);
+    let mut next = item.clone();
+    let Some(analysis) = generate(&mut next, raw, &tmp) else {
+        let _ = fs::remove_file(&tmp);
+        return false;
+    };
+    if !media::is_audio(&next.ext) {
+        let img = match analysis {
+            Analysis::Original => thumbnail::decode(raw).ok(),
+            Analysis::Thumbnail => thumbnail::decode(&tmp).ok(),
+        };
+        next.palettes = img.map(|i| palette::extract(&i)).unwrap_or_default();
+    }
+    let keep = tmp.is_file() && next.remove_thumbnail != Some(true);
+    if keep {
+        if fs::rename(&tmp, thumb).is_err() {
+            let _ = fs::remove_file(&tmp);
+            return false;
+        }
+    } else {
+        let _ = fs::remove_file(&tmp);
+        let _ = fs::remove_file(thumb);
+    }
+    *item = next;
+    true
+}
+
 /// Where the palette should be computed from.
 enum Analysis {
     Original,
@@ -371,6 +408,16 @@ pub(crate) fn sanitize_name(stem: &str, ext: &str) -> String {
     }
     let out = out.trim().to_string();
     if out.is_empty() || out == "." || out == ".." { "_".into() } else { out }
+}
+
+/// Copies a file's size, birth time and mtime (ms) onto `item`, as Eagle
+/// re-reads them before refreshing a thumbnail.
+pub(crate) fn restat(item: &mut Item, path: &Path) -> Result<()> {
+    let meta = fs::metadata(path).map_err(|e| Error::io(path, e))?;
+    item.size = meta.len();
+    item.mtime = to_ms(meta.modified().ok());
+    item.btime = meta.created().ok().map_or(item.mtime, |t| to_ms(Some(t)));
+    Ok(())
 }
 
 fn to_ms(t: Option<SystemTime>) -> u64 {
