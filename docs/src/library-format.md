@@ -119,6 +119,22 @@ Falcon's `SavedFilter::to_filter` returns the filter, the keyword and a list of 
 | `lastModified` | integer | ms |
 | `palettes` | array | `{color: [r,g,b], ratio}`. See [palettes](palettes.md) |
 
+### Comments (observed in code)
+
+Region notes on images and timed notes on video and audio live in an optional `comments` array on the item. JavaScript adds the key the first time a comment is made, so it comes after the keys an item starts with. None of the fixture's items has comments. Eagle's filter panel calls these "annotations". They are separate from the item's `annotation` string, which is the note.
+
+| Key | Type | Notes |
+|---|---|---|
+| `id` | string | Same generator as item IDs |
+| `x`, `y`, `width`, `height` | number | Image regions only. Pixels of the **original image**, not fractions: Eagle scales the dragged box by `image.width / displayed width`. New boxes are rounded to integers. After a move or resize the values can be fractional. Boxes of 10 px or less in either direction are discarded |
+| `duration` | number | Timed notes only. Seconds into playback (`currentTime`, fractional). Eagle re-sorts the list by `duration` after adding one |
+| `annotation` | string | Starts `""` for a region. It holds the `innerHTML` of an editable box (`<br>` for line breaks, `&amp;` turned back into `&`) |
+| `lastModified` | integer | ms. Set on creation and not bumped when the text, position or size changes |
+
+Every comment change saves the whole item, so the item's own `lastModified` and `mtime.json` move as in any edit. Deleting the last comment leaves `"comments":[]`.
+
+Falcon models these as `model::Comment`. `Item::comments()` and `Item::set_comments()` read and write the key without moving it or any other key in `extra`. On `Library`, `add_comment` fills in the id and time, and keeps timed notes sorted (a new note goes after others at the same time). `update_comment` replaces a comment by id, and `delete_comment` removes one. Falcon re-serialises each comment in Eagle's key order: `id`, region or `duration`, `annotation`, `lastModified`, then unknown keys.
+
 ## `mtime.json` (observed)
 
 An object that maps item IDs to ms times, ending with `"all"`. In the fixture it lists only 32 of the 91 items, yet `all` is 91. So `all` is the library's total item count, not the number of entries.

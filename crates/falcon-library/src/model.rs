@@ -53,13 +53,14 @@ pub struct Folder {
     pub modification_time: u64,
     /// Tags attached to the folder.
     pub tags: Vec<String>,
-    /// The folder's tags plus its ancestors', which Eagle caches on load.
+    /// The folder's tags plus its ancestors'. A runtime cache Eagle's writer
+    /// strips; kept only so a file holding it round-trips.
     pub extend_tags: Option<Vec<String>>,
     /// Icon name from [`FOLDER_ICONS`]; absent for the default folder icon.
     pub icon: Option<String>,
     /// Icon colour from [`ICON_COLORS`]; absent for the default colour.
     pub icon_color: Option<String>,
-    /// Romanised name Eagle caches for search (the name itself for Latin text).
+    /// Romanised name for search. Also a runtime cache Eagle's writer strips.
     pub pinyin: Option<String>,
     /// Base64 of the password's Latin-1 bytes, or empty when unset. See
     /// [`Folder::is_locked`].
@@ -397,7 +398,89 @@ impl From<ItemRepr> for Item {
     }
 }
 
+/// One entry of an item's `comments`: a region note on an image or a
+/// timestamped note on a video or audio file. Eagle writes `id`, then `x`,
+/// `y`, `width`, `height` (image) or `duration` (video), then `annotation`
+/// and `lastModified`.
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Comment {
+    /// Comment id, in the item id format.
+    #[serde(default)]
+    pub id: String,
+    /// Region left edge in the original image's pixels (may be fractional
+    /// after a drag).
+    pub x: Option<Number>,
+    /// Region top edge in original-image pixels.
+    pub y: Option<Number>,
+    /// Region width in original-image pixels.
+    pub width: Option<Number>,
+    /// Region height in original-image pixels.
+    pub height: Option<Number>,
+    /// Playback position in seconds, for video and audio notes.
+    pub duration: Option<Number>,
+    /// The note as HTML from Eagle's editable box (`<br>` for line breaks).
+    #[serde(default)]
+    pub annotation: String,
+    /// Creation time, ms since epoch. Eagle does not bump it on edits.
+    pub last_modified: Option<u64>,
+    /// Unknown keys.
+    #[serde(flatten)]
+    pub extra: Extra,
+}
+
+impl Serialize for Comment {
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        let mut m = s.serialize_map(None)?;
+        m.serialize_entry("id", &self.id)?;
+        for (k, v) in [("x", &self.x), ("y", &self.y), ("width", &self.width), ("height", &self.height), ("duration", &self.duration)] {
+            if let Some(v) = v {
+                m.serialize_entry(k, v)?;
+            }
+        }
+        m.serialize_entry("annotation", &self.annotation)?;
+        if let Some(v) = &self.last_modified {
+            m.serialize_entry("lastModified", v)?;
+        }
+        for (k, v) in &self.extra {
+            m.serialize_entry(k, v)?;
+        }
+        m.end()
+    }
+}
+
+impl Comment {
+    /// A region note on an image, in original-image pixels.
+    pub fn region(x: u64, y: u64, width: u64, height: u64, annotation: &str) -> Comment {
+        Comment { x: Some(x.into()), y: Some(y.into()), width: Some(width.into()), height: Some(height.into()), annotation: annotation.into(), ..Default::default() }
+    }
+
+    /// A note at `seconds` into a video or audio file.
+    pub fn at_time(seconds: f64, annotation: &str) -> Comment {
+        Comment { duration: Number::from_f64(seconds), annotation: annotation.into(), ..Default::default() }
+    }
+}
+
 impl Item {
+    /// The item's comments (`comments` in `extra`), empty when it has none.
+    /// Entries that are not objects are skipped.
+    pub fn comments(&self) -> Vec<Comment> {
+        let Some(Value::Array(list)) = self.extra.get("comments") else { return Vec::new() };
+        list.iter().filter_map(|c| serde_json::from_value(c.clone()).ok()).collect()
+    }
+
+    /// Replaces the item's comments. The `comments` key keeps its place in
+    /// `extra`, or is added at the end, as Eagle adds it.
+    pub fn set_comments(&mut self, comments: &[Comment]) {
+        let value = serde_json::to_value(comments).unwrap_or_else(|_| Value::Array(Vec::new()));
+        match self.extra.get_mut("comments") {
+            Some(slot) => *slot = value,
+            None => {
+                self.extra.insert("comments".into(), value);
+            }
+        }
+    }
+
     /// Parses an item's `metadata.json`, recording the width/height key order.
     pub fn from_json_str(s: &str) -> serde_json::Result<Item> {
         let value: Value = serde_json::from_str(s)?;
@@ -880,6 +963,31 @@ mod tests {
         assert_eq!(back.filter, f);
         assert_eq!(back.keyword.as_deref(), Some("cat"));
         assert!(back.unsupported.is_empty());
+    }
+
+    #[test]
+    fn comments_round_trip_and_keep_their_place() {
+        let image = r#"{"id":"M1","x":12,"y":30.5,"width":200,"height":80.25,"annotation":"look<br>here","lastModified":1793005755402}"#;
+        let video = r#"{"id":"M2","duration":3.733,"annotation":"cut","lastModified":1793005755403,"extra":true}"#;
+        for json in [image, video] {
+            let c: Comment = serde_json::from_str(json).unwrap();
+            assert_eq!(serde_json::to_string(&c).unwrap(), json);
+        }
+        let base = r#"{"id":"X","name":"n","size":1,"btime":0,"mtime":0,"ext":"png","tags":[],"folders":[],"isDeleted":false,"url":"","annotation":"","modificationTime":1,"height":1,"width":1,"lastModified":1,"palettes":[]"#;
+        let text = format!(r#"{base},"comments":[{image}],"star":3}}"#);
+        let mut item = Item::from_json_str(&text).unwrap();
+        let mut list = item.comments();
+        assert_eq!(list[0].width, Some(200.into()));
+        item.set_comments(&list);
+        assert_eq!(serde_json::to_string(&item).unwrap(), text, "untouched comments round-trip in place");
+        list.push(Comment::at_time(1.5, "x"));
+        item.set_comments(&list);
+        assert!(serde_json::to_string(&item).unwrap().ends_with(r#""duration":1.5,"annotation":"x"}],"star":3}"#));
+
+        let mut bare = Item::from_json_str(&format!("{base}}}")).unwrap();
+        assert!(bare.comments().is_empty());
+        bare.set_comments(&[Comment::region(1, 2, 30, 40, "")]);
+        assert!(serde_json::to_string(&bare).unwrap().ends_with(r#""palettes":[],"comments":[{"id":"","x":1,"y":2,"width":30,"height":40,"annotation":""}]}"#));
     }
 
     #[test]

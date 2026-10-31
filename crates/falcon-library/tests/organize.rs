@@ -255,6 +255,51 @@ fn nested_smart_folders_narrow_their_parents() {
     assert_eq!(lib.smart_folder_items(&child).len(), l, "no longer narrowed once moved out");
 }
 
+#[test]
+fn comments_on_a_fixture_copy() {
+    use falcon_library::model::Comment;
+    let Some(src) = fixture() else { return };
+    let tmp = tempfile::tempdir().unwrap();
+    let dest = tmp.path().join("Comments.library");
+    Library::open(&src).unwrap().save_to(&dest).unwrap();
+    let mut lib = Library::open(&dest).unwrap();
+    let item = lib.items()[0].clone();
+    let file = item.info_dir(lib.root()).join("metadata.json");
+    let before = fs::read_to_string(&file).unwrap();
+
+    let region = lib.add_comment(&item.id, Comment::region(10, 20, 300, 150, "logo")).unwrap();
+    let late = lib.add_comment(&item.id, Comment::at_time(9.0, "late")).unwrap();
+    let early = lib.add_comment(&item.id, Comment::at_time(2.5, "early")).unwrap();
+    let order: Vec<String> = lib.item(&item.id).unwrap().comments().into_iter().map(|c| c.id).collect();
+    assert_eq!(order, [region.clone(), early.clone(), late.clone()]);
+
+    let mut edited = lib.item(&item.id).unwrap().comments()[0].clone();
+    let stamp = edited.last_modified;
+    edited.annotation = "logo<br>mark".into();
+    lib.update_comment(&item.id, edited).unwrap();
+    lib.delete_comment(&item.id, &late).unwrap();
+    assert!(lib.delete_comment(&item.id, &late).is_err());
+    assert!(lib.add_comment("NOPE", Comment::default()).is_err());
+
+    let reopened = Library::open(&dest).unwrap();
+    let saved = reopened.item(&item.id).unwrap();
+    let list = saved.comments();
+    assert_eq!(list.len(), 2);
+    assert_eq!((list[0].annotation.as_str(), list[0].last_modified), ("logo<br>mark", stamp));
+    assert_eq!(list[1].duration.as_ref().and_then(|d| d.as_f64()), Some(2.5));
+    assert!(saved.last_modified > item.last_modified, "edits bump the item's lastModified");
+
+    // Everything before `comments` is unchanged apart from lastModified.
+    let after = fs::read_to_string(&file).unwrap();
+    let cut = |s: &str| s.split(r#","lastModified":"#).next().unwrap().to_string();
+    assert_eq!(cut(&before), cut(&after));
+    assert!(after.contains(r#","comments":[{"id":""#));
+
+    lib.delete_comment(&item.id, &region).unwrap();
+    lib.delete_comment(&item.id, &early).unwrap();
+    assert!(fs::read_to_string(&file).unwrap().contains(r#""comments":[]"#), "an empty list stays, as in Eagle");
+}
+
 fn fixture() -> Option<std::path::PathBuf> {
     let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/Assets.library");
     p.is_dir().then_some(p)

@@ -12,7 +12,7 @@ use crate::error::{Error, Result};
 use crate::import::sanitize_name;
 use crate::library::{Library, write_json};
 use crate::ids;
-use crate::model::{Folder, FolderOrder, ICON_COLORS, Item, SavedFilter, TagGroup};
+use crate::model::{Comment, Folder, FolderOrder, ICON_COLORS, Item, SavedFilter, TagGroup};
 
 /// How many recent tags Eagle keeps in `historyTags`.
 const HISTORY_LIMIT: usize = 120;
@@ -38,6 +38,55 @@ impl Library {
         }
         item.last_modified = now_ms().max(old.last_modified + 1);
         self.register_item(item)
+    }
+
+    /// Adds a comment to an item and returns its id. A missing id or
+    /// `lastModified` is filled in. Timed notes (`duration`) are kept sorted
+    /// by time, a new one after any at the same time; region notes are
+    /// appended. The item is saved like any other edit.
+    pub fn add_comment(&mut self, item_id: &str, mut comment: Comment) -> Result<String> {
+        let mut item = self.item(item_id).cloned().ok_or_else(|| self.invalid(format!("no item {item_id}")))?;
+        if comment.id.is_empty() {
+            comment.id = ids::new_id();
+        }
+        comment.last_modified.get_or_insert_with(now_ms);
+        let id = comment.id.clone();
+        let mut list = item.comments();
+        match comment.duration.as_ref().and_then(|d| d.as_f64()) {
+            Some(t) => {
+                let at = list.iter().position(|c| c.duration.as_ref().and_then(|d| d.as_f64()).is_some_and(|d| d > t)).unwrap_or(list.len());
+                list.insert(at, comment);
+            }
+            None => list.push(comment),
+        }
+        item.set_comments(&list);
+        self.update_item(item)?;
+        Ok(id)
+    }
+
+    /// Replaces the comment with `comment.id` on an item (text, region or
+    /// time). Eagle leaves the comment's `lastModified` alone on edits, so
+    /// whatever `comment` carries is written.
+    pub fn update_comment(&mut self, item_id: &str, comment: Comment) -> Result<()> {
+        let mut item = self.item(item_id).cloned().ok_or_else(|| self.invalid(format!("no item {item_id}")))?;
+        let mut list = item.comments();
+        let slot = list.iter_mut().find(|c| c.id == comment.id).ok_or_else(|| self.invalid(format!("no comment {}", comment.id)))?;
+        *slot = comment;
+        item.set_comments(&list);
+        self.update_item(item)
+    }
+
+    /// Removes a comment from an item. Eagle keeps an empty `comments: []`.
+    pub fn delete_comment(&mut self, item_id: &str, comment_id: &str) -> Result<()> {
+        let mut item = self.item(item_id).cloned().ok_or_else(|| self.invalid(format!("no item {item_id}")))?;
+        let mut list = item.comments();
+        let before = list.len();
+        list.retain(|c| c.id != comment_id);
+        if list.len() == before {
+            return Err(self.invalid(format!("no comment {comment_id}")));
+        }
+        item.set_comments(&list);
+        self.update_item(item)
     }
 
     /// Moves items to the trash (`isDeleted` plus `deletedTime`) or restores
