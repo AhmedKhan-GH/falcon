@@ -302,16 +302,13 @@ impl Library {
         Ok(id)
     }
 
-    /// Renames a folder. Eagle leaves its `modificationTime` alone and
-    /// recomputes the cached `pinyin`; falcon has no pinyin table, so it
-    /// copies a Latin-1 name (which is what Eagle's conversion yields) and
-    /// otherwise drops the key for Eagle to rebuild on load.
+    /// Renames a folder. Eagle leaves its `modificationTime` alone. A
+    /// cached `pinyin` (which Eagle itself strips before writing) would now
+    /// be stale, so it goes.
     pub fn rename_folder(&mut self, id: &str, name: &str) -> Result<()> {
         let Some(f) = find_mut(&mut self.metadata.folders, id) else { return Err(self.missing(id)) };
         f.name = display_name(name);
-        if f.pinyin.is_some() {
-            f.pinyin = f.name.chars().all(|c| (c as u32) < 256).then(|| f.name.clone());
-        }
+        f.pinyin = None;
         self.save_metadata()
     }
 

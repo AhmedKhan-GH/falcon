@@ -166,15 +166,14 @@ fn fixture() -> Option<std::path::PathBuf> {
 }
 
 #[test]
-fn rename_keeps_pinyin_in_step() {
+fn rename_normalises_and_drops_stale_pinyin() {
     let tmp = tempfile::tempdir().unwrap();
     let mut lib = new_library(tmp.path());
     let a = lib.create_folder(None, "A").unwrap();
-    lib.rename_folder(&a, "Plain").unwrap();
-    assert_eq!(lib.metadata.folders[0].pinyin, None, "not added when absent");
-    lib.metadata.folders[0].pinyin = Some("Plain".into());
-    lib.rename_folder(&a, "Café").unwrap();
-    assert_eq!(lib.metadata.folders[0].pinyin.as_deref(), Some("Café"));
-    lib.rename_folder(&a, "设计").unwrap();
-    assert_eq!(lib.metadata.folders[0].pinyin, None, "left for Eagle to rebuild");
+    lib.metadata.folders[0].pinyin = Some("A".into());
+    lib.rename_folder(&a, "Cafe\u{301}").unwrap();
+    let f = &lib.metadata.folders[0];
+    assert_eq!((f.name.as_str(), f.pinyin.as_deref()), ("Café", None));
+    lib.rename_folder(&a, &"x".repeat(2000)).unwrap();
+    assert_eq!(lib.metadata.folders[0].name.len(), 1024);
 }

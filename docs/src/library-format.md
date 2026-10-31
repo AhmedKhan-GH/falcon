@@ -30,10 +30,10 @@ The top-level keys, in this order, are `folders`, `smartFolders`, `quickAccess`,
 | `children` | array | Child folders, in sidebar order |
 | `modificationTime` | integer | ms. Set when the folder is created or duplicated. Renames, icons, sorting, passwords and moves leave it alone (observed) |
 | `tags` | string array | Tags given to items added to the folder |
-| `extendTags` | string array | Optional. The folder's tags plus its ancestors', which Eagle works out on load and saves back |
+| `extendTags` | string array | Runtime only. The folder's tags plus its ancestors', worked out on load. The renderer's save includes it, but the writer deletes it before writing, so it shouldn't appear on disk |
 | `icon` | string | Optional. A name from the icon picker (see below). No key means the default folder icon |
 | `iconColor` | string | Optional. `red`, `orange`, `yellow`, `green`, `aqua`, `blue`, `purple` or `pink`. No key means the default grey |
-| `pinyin` | string | Optional. A romanised name cached for search. Latin characters map to themselves, so for English names it equals `name` |
+| `pinyin` | string | Runtime only. A romanised name cached for search, which the writer also deletes |
 | `password` | string | Always present. `""` when unset (see passwords below) |
 | `passwordTips` | string | Always present. The hint, `""` when unset |
 | `coverId` | string | Optional. The item shown as the folder's cover |
@@ -48,7 +48,9 @@ The top-level keys, in this order, are `folders`, `smartFolders`, `quickAccess`,
 
 **Ordering:** the array order is the sidebar order. Dragging a folder between siblings moves it in its parent's `children`. Dropping a folder onto another one appends it to that folder's children.
 
-**Names (observed):** every save NFC-normalises folder, smart-folder and tag-group names. Renames are cut to 1024 characters. Falcon does both when it writes a name. Renaming also recomputes `pinyin`. Falcon has no pinyin table, so it copies Latin-1 names, which is what Eagle's conversion yields for them. For any other name it drops the key, and Eagle rebuilds it on load (inferred to be harmless, since Eagle fills a missing `pinyin` itself).
+**The writer (observed):** the background process writing `metadata.json` deletes these runtime keys from every folder: `covers`, `images`, `folders`, `newFolderName`, `editable`, `pinyin`, `__root`, `extendTags` and `$$hashKey`. From smart folders it deletes only `newFolderName`, `editable` and `$$hashKey`. It then writes `{folders, smartFolders, quickAccess, tagsGroups, modificationTime: Date.now(), applicationVersion}`. It refuses to write, and reports a sync conflict, when the file's `modificationTime` is newer than the one Eagle loaded. Falcon still models `extendTags` and `pinyin` so that a file holding them round-trips.
+
+**Names (observed):** every save NFC-normalises folder, smart-folder and tag-group names. Renames are cut to 1024 UTF-16 units; falcon cuts at 1024 characters. Falcon normalises and cuts every name it writes. A rename drops any stale `pinyin`.
 
 ### Tag groups (observed in code)
 
