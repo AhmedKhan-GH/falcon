@@ -53,7 +53,7 @@ Eagle features that need no online service, put off until after the list above.
 
 **Import**
 - [ ] Screenshots
-- [ ] IPTC and XMP keywords
+- [x] IPTC and XMP keywords
 
 **Library**
 - [x] Batched writes and backup rotation

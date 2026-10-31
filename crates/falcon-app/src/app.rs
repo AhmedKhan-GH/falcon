@@ -10,7 +10,6 @@ use eframe::egui::{
     self, Align2, Color32, CornerRadius, Galley, Key, Modifiers, Pos2, Rect, Response, RichText,
     Sense, Stroke, StrokeKind, TextEdit, Ui, Vec2, text::LayoutJob, vec2,
 };
-use falcon_library::import::ImportOptions;
 use falcon_library::model::{Folder, Item};
 use falcon_library::undo::{Transaction, WriteMode};
 use falcon_library::{Library, thumbnail};
@@ -833,7 +832,7 @@ impl App {
 
     fn import_into(&mut self, paths: Vec<PathBuf>, folders: Vec<String>) {
         let Some(shared) = self.ws.lib.clone() else { return };
-        let opts = ImportOptions { folders, ..Default::default() };
+        let opts = self.prefs.import_options(folders);
         let mut files = Vec::new();
         let mut stack = paths;
         while let Some(p) = stack.pop() {

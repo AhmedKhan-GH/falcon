@@ -113,6 +113,8 @@ These are the defaults. All but the arrows, Esc and Z can be changed under Prefe
 
 The app opens libraries in batched write mode (see [Write batching](library-format.md#write-batching)): edits made during a frame, including those from the HTTP API and background imports since the last frame, are written together at the end of the frame, and a metadata backup follows when `mtime.json` or `metadata.json` changed. Pending writes are also flushed when a library is closed and, for every open library, when the app saves its state on quit. A failed write shows "Could not save".
 
+Metadata backups have no setting: falcon backs up after a change the way Eagle does (Eagle has no preference for it either). An earlier "Back up metadata on change" checkbox that did nothing was removed; old saved state that has it still loads.
+
 ## Several libraries
 
 Falcon can keep several libraries open in one window and switch between them; Eagle can't. Each open library is a workspace with all of its own state: where you are (scope, back and forward history, search, filters, sort and layout), the selection, the viewer, its undo and redo stacks, open dialogs and its image caches. Switching keeps all of it. Global state stays shared: Preferences, shortcuts, the recent list, zoom, panel visibility, the collect window and the HTTP API server.
@@ -164,8 +166,7 @@ What Eagle does, from its `js/hover-preview.js`, `style/components/_hover-previe
 | Section | Setting | Eagle | falcon |
 |---|---|---|---|
 | General | Show the sidebar, show the inspector | View menu toggles, not preferences | Same flags as the panel buttons |
-| General | Add IPTC and XMP keywords as tags | `general.IPTC`, off by default | Stored as `keywords_as_tags`; import does not read it yet |
-| General | Back up metadata on change | Eagle backs up on its own; no preference | Stored as `backup_on_change`; nothing calls it yet |
+| General | Add IPTC and XMP keywords as tags | `general.IPTC`, off by default | Same: every import from the app (drops, ⌘V, files passed to the app, the collect window) reads it (see [IPTC keywords](import.md)) |
 | Preview | Hover zoom | `habits.hoverZoom`, on by default; off removes the zoom button, but holding Z still works | Same |
 | Developer | Run the HTTP API, first port | Eagle always serves on 41595 and only has an API token setting | On by default, from 41596; tries five ports. Ports whose range would include 41595, or below 1024, are refused. Changing either restarts the API |
 

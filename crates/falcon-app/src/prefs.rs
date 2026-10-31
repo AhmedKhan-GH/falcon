@@ -22,10 +22,7 @@ pub struct Prefs {
     /// Eagle's `habits.hoverZoom`: the zoom button on hovered cards.
     pub hover_zoom: bool,
     /// Eagle's `general.IPTC`: add IPTC/XMP keywords as tags on import.
-    /// Stored only; the import side reads it once it supports keywords.
     pub keywords_as_tags: bool,
-    /// Back up `metadata.json` when the library changes. Stored only.
-    pub backup_on_change: bool,
     /// Run the local HTTP API while a library is open.
     pub api_enabled: bool,
     /// The first port the API tries.
@@ -40,7 +37,6 @@ impl Default for Prefs {
         Prefs {
             hover_zoom: true,
             keywords_as_tags: false,
-            backup_on_change: true,
             api_enabled: true,
             api_port: falcon_server::DEFAULT_PORT,
             collect_folder: None,
@@ -55,6 +51,12 @@ impl Prefs {
             self.api_port = Prefs::default().api_port;
         }
         self
+    }
+
+    /// How the app imports into `folders`: everything as Eagle defaults
+    /// it, plus the keyword preference.
+    pub fn import_options(&self, folders: Vec<String>) -> falcon_library::import::ImportOptions {
+        falcon_library::import::ImportOptions { folders, keywords_as_tags: self.keywords_as_tags, ..Default::default() }
     }
 
     /// The ports to try for the API, or None when it is off.
@@ -281,11 +283,6 @@ fn general(ui: &mut Ui, d: &mut Draft) {
     });
     block(ui, "Import", |ui| {
         ui.checkbox(&mut d.prefs.keywords_as_tags, "Add IPTC and XMP keywords as tags when importing images");
-        note(ui, "Saved for the keyword import, which is not built yet.");
-    });
-    block(ui, "Library", |ui| {
-        ui.checkbox(&mut d.prefs.backup_on_change, "Back up the library's metadata when it changes");
-        note(ui, "Saved; automatic backups are not wired up yet.");
     });
 }
 
@@ -328,6 +325,15 @@ mod tests {
         assert!(p.hover_zoom, "Eagle's hoverZoom defaults to on");
         assert!(!p.keywords_as_tags, "Eagle's IPTC defaults to off");
         assert_eq!(p.api_ports(), Some(41596..=41600));
+    }
+
+    #[test]
+    fn imports_follow_the_keyword_setting() {
+        let mut p = Prefs::default();
+        let o = p.import_options(vec!["F1".into()]);
+        assert_eq!((o.folders.as_slice(), o.keywords_as_tags, o.palette), (["F1".to_string()].as_slice(), false, true));
+        p.keywords_as_tags = true;
+        assert!(p.import_options(Vec::new()).keywords_as_tags);
     }
 
     #[test]
