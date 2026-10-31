@@ -12,7 +12,7 @@ use crate::error::{Error, Result};
 use crate::import::sanitize_name;
 use crate::library::{Library, write_json};
 use crate::ids;
-use crate::model::{Folder, FolderOrder, ICON_COLORS, Item, TagGroup};
+use crate::model::{Folder, FolderOrder, ICON_COLORS, Item, SavedFilter, TagGroup};
 
 /// How many recent tags Eagle keeps in `historyTags`.
 const HISTORY_LIMIT: usize = 120;
@@ -265,6 +265,63 @@ impl Library {
     fn tag_group_mut(&mut self, id: &str) -> Result<&mut TagGroup> {
         let pos = self.tag_group_index(id)?;
         Ok(&mut self.metadata.tags_groups[pos])
+    }
+}
+
+/// Saved filters in `saved-filters.json`. Entries have no id, so they are
+/// addressed by position, as Eagle's menu does. Each edit rewrites the file
+/// (compact, no trailing newline) and leaves `metadata.json` alone.
+impl Library {
+    /// Appends a saved filter and returns its position. `rule` is the rule
+    /// object (see [`SavedFilter::rule_from_filter`]).
+    pub fn create_saved_filter(&mut self, name: &str, rule: serde_json::Value) -> Result<usize> {
+        if name.is_empty() {
+            return Err(self.invalid("empty saved filter name"));
+        }
+        self.saved_filters.push(SavedFilter { name: name.to_string(), rule, extra: Default::default() });
+        self.save_filters()?;
+        Ok(self.saved_filters.len() - 1)
+    }
+
+    /// Renames the saved filter at `index`; Eagle ignores empty names.
+    pub fn rename_saved_filter(&mut self, index: usize, name: &str) -> Result<()> {
+        if name.is_empty() {
+            return Err(self.invalid("empty saved filter name"));
+        }
+        self.saved_filter_mut(index)?.name = name.to_string();
+        self.save_filters()
+    }
+
+    /// Replaces the rules of the saved filter at `index`.
+    pub fn update_saved_filter(&mut self, index: usize, rule: serde_json::Value) -> Result<()> {
+        self.saved_filter_mut(index)?.rule = rule;
+        self.save_filters()
+    }
+
+    /// Deletes the saved filter at `index`.
+    pub fn delete_saved_filter(&mut self, index: usize) -> Result<()> {
+        self.saved_filter_mut(index)?;
+        self.saved_filters.remove(index);
+        self.save_filters()
+    }
+
+    /// Moves the saved filter at `index` to position `to` (past the end
+    /// appends), as dragging in Eagle's menu does.
+    pub fn reorder_saved_filter(&mut self, index: usize, to: usize) -> Result<()> {
+        self.saved_filter_mut(index)?;
+        let f = self.saved_filters.remove(index);
+        let at = to.min(self.saved_filters.len());
+        self.saved_filters.insert(at, f);
+        self.save_filters()
+    }
+
+    fn saved_filter_mut(&mut self, index: usize) -> Result<&mut SavedFilter> {
+        let err = self.invalid(format!("no saved filter {index}"));
+        self.saved_filters.get_mut(index).ok_or(err)
+    }
+
+    fn save_filters(&self) -> Result<()> {
+        write_json(&self.root().join("saved-filters.json"), &self.saved_filters)
     }
 }
 

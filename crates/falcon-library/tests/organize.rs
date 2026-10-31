@@ -160,6 +160,37 @@ fn deleting_a_group_can_take_its_tags_off_items() {
     assert!(reopened.items().iter().all(|i| !i.tags.contains(&tag)));
 }
 
+#[test]
+fn saved_filters() {
+    use falcon_library::model::SavedFilter;
+    use falcon_library::search::Filter;
+    let tmp = tempfile::tempdir().unwrap();
+    let mut lib = new_library(tmp.path());
+    let path = lib.root().join("saved-filters.json");
+    assert_eq!(fs::read_to_string(&path).unwrap(), "[]");
+
+    let mut f = Filter::default();
+    f.tags.includes.push("red".into());
+    let rule = SavedFilter::rule_from_filter(&f, None, |_| None);
+    assert_eq!(lib.create_saved_filter("Red", rule.clone()).unwrap(), 0);
+    assert_eq!(lib.create_saved_filter("Plain", serde_json::json!({"keyword": "cat"})).unwrap(), 1);
+    assert!(lib.create_saved_filter("", rule.clone()).is_err());
+    let text = fs::read_to_string(&path).unwrap();
+    assert!(text.starts_with(r#"[{"name":"Red","rule":{"type":"#) && text.ends_with(r#"{"name":"Plain","rule":{"keyword":"cat"}}]"#), "{text}");
+
+    lib.rename_saved_filter(1, "Cats").unwrap();
+    lib.update_saved_filter(1, serde_json::json!({"keyword": "dog"})).unwrap();
+    lib.reorder_saved_filter(1, 0).unwrap();
+    let reopened = Library::open(lib.root()).unwrap();
+    assert_eq!(reopened.saved_filters[0].name, "Cats");
+    assert_eq!(reopened.saved_filters[0].to_filter().keyword.as_deref(), Some("dog"));
+    assert_eq!(reopened.saved_filters[1].to_filter().filter, f);
+
+    lib.delete_saved_filter(0).unwrap();
+    assert!(lib.delete_saved_filter(5).is_err());
+    assert_eq!(Library::open(lib.root()).unwrap().saved_filters.len(), 1);
+}
+
 fn fixture() -> Option<std::path::PathBuf> {
     let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/Assets.library");
     p.is_dir().then_some(p)

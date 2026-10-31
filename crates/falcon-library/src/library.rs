@@ -6,10 +6,9 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 use serde::de::DeserializeOwned;
-use serde_json::Value;
 
 use crate::error::{Error, Result};
-use crate::model::{Folder, Item, LibraryMetadata, MtimeIndex, Tags};
+use crate::model::{Folder, Item, LibraryMetadata, MtimeIndex, SavedFilter, Tags};
 
 const METADATA: &str = "metadata.json";
 const MTIME: &str = "mtime.json";
@@ -27,8 +26,8 @@ pub struct Library {
     pub mtime: MtimeIndex,
     /// `tags.json`.
     pub tags: Tags,
-    /// `saved-filters.json` (shape not yet observed; raw JSON).
-    pub saved_filters: Vec<Value>,
+    /// `saved-filters.json`, in menu order.
+    pub saved_filters: Vec<SavedFilter>,
     items: Vec<Item>,
     /// Last `modificationTime` handed out by an import, to keep them strictly increasing.
     last_import_ms: u64,
@@ -86,7 +85,7 @@ impl Library {
         write_json(&root.join(METADATA), &metadata)?;
         write_json(&root.join(MTIME), &MtimeIndex { entries: Vec::new(), all: Some(0) })?;
         write_json(&root.join(TAGS), &Tags::default())?;
-        write_json(&root.join(FILTERS), &Vec::<Value>::new())?;
+        write_json(&root.join(FILTERS), &Vec::<SavedFilter>::new())?;
         Library::open(root)
     }
 

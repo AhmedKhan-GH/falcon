@@ -73,6 +73,34 @@ The top-level keys, in this order, are `folders`, `smartFolders`, `quickAccess`,
 
 None of these edits touch the folders' `modificationTime`. The library's top-level `modificationTime` is stamped when `metadata.json` is written.
 
+## `saved-filters.json` (observed in code)
+
+A JSON array in menu order, `[]` in the fixture. Eagle writes it compact with `JSON.stringify` and no trailing newline. Each entry is `{"name": …, "rule": {…}}`, with no id and no timestamp, and Eagle finds entries by position. Saving a filter first re-reads the file, then appends. A rename ignores empty names. The menu is drag-sortable, and the array follows it.
+
+`rule` is a deep copy of the filter panel's rules, made by `JSON.parse(JSON.stringify(defaults))` and then edited, so `undefined` values are dropped and integer-like keys come first (`rating` is written `"0"` to `"5"`, and `shape` starts with `"34","43","169","916"`). `keyword` is added at the end when a search was active. Applying a filter replaces each top-level rule key, a shallow `{...defaults, ...rule}`. The tag and folder logic (OR, AND or EQUAL) is a panel setting that isn't saved.
+
+| Rule key | Shape | Falcon `search::Filter` |
+|---|---|---|
+| `type.includes`, `type.excludes` | `{ext or group: true}` | `types`, `exclude_types` |
+| `tag.includes`, `tag.excludes` | string arrays | `tags.includes`, `tags.excludes` |
+| `tag.no` | bool | `tags.empty` |
+| `folder.includes`, `folder.excludes` | `{id: folder object}`. Only `.id` is read back. The key `NoFolders` means items in no folder | `folders.includes`, `folders.excludes`, and `NoFolders` in includes maps to `folders.empty`. `NoFolders` in excludes has no counterpart |
+| `rating` | `{"0"…"5": bool}`, `0` = unrated | `ratings` |
+| `shape.portrait`, `landscape`, `square`, `panoramicPortrait`, `panoramicLandscape` | bool | `shapes` |
+| `shape.34`, `43`, `169`, `916`, `custom` (+ `width`, `height`) | bool, numbers | none yet |
+| `color.value` | `[r, g, b]`, absent when off | `color.rgb` |
+| `color.accuracy` | number, default 20 | `color.accuracy` |
+| `color.gray` | bool | `grayscale` |
+| `resolution.minW`, `maxW`, `minH`, `maxH` | number or numeric string | `width`, `height` |
+| `file.min`, `file.max`, `file.unit` | number in `kb` or `mb` (`× 1024` or `× 1024²`, then `parseInt`) | `size` in bytes |
+| `url`, `note` | `{has, no, keywords}`. `keywords` is comma-separated, and all must match | `url`, `note` (`TextFilter`) |
+| `annotation` | `{has, no, keywords}` over the item's `comments` | none yet |
+| `import`, `mtime` | `today`, `yesterday`, `last7day` … `last365day`, `usingRange`, `range`, `type`, `model`, `selectedMonths` | none yet |
+| `duration` (`unit` `s`/`m`/`h`), `bpm`, `font`, `camera`, `image`, `semantic` | various | none yet |
+| `keyword` | string | returned beside the filter |
+
+Falcon's `SavedFilter::to_filter` returns the filter, the keyword and a list of active rules it couldn't express. `SavedFilter::rule_from_filter` builds the full default rule object with falcon's rules filled in. It writes sizes in KB, and folder entries as `{id, name}`, since Eagle only reads `id` back. Both directions are falcon's own reading of Eagle's code, checked by unit tests against hand-built rules, not against a file Eagle wrote (inferred).
+
 ## Item `metadata.json` (observed)
 
 | Key | Type | Notes |

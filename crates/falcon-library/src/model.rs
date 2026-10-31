@@ -448,6 +448,282 @@ impl Serialize for Item {
     }
 }
 
+/// One entry of `saved-filters.json`: a name and a snapshot of the filter
+/// panel's rules. Entries have no id; Eagle finds them by position.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SavedFilter {
+    /// Display name.
+    pub name: String,
+    /// The panel's rule object at save time (see [`SavedFilter::to_filter`]),
+    /// plus `keyword` when a search was active. Kept as raw JSON so every
+    /// rule Eagle knows survives.
+    pub rule: Value,
+    /// Unknown keys.
+    #[serde(flatten)]
+    pub extra: Extra,
+}
+
+/// A saved filter read into falcon's search types.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct SavedFilterQuery {
+    /// The rules falcon's filter can express.
+    pub filter: crate::search::Filter,
+    /// The search text saved with the filter.
+    pub keyword: Option<String>,
+    /// Active rules falcon cannot express yet, by their rule key (`import`,
+    /// `mtime`, `duration`, `bpm`, `font`, `camera`, `annotation`, `image`,
+    /// `semantic`, `shape.43`, ...).
+    pub unsupported: Vec<String>,
+}
+
+impl SavedFilter {
+    /// Reads the saved rules into a [`crate::search::Filter`]. Eagle does not
+    /// save whether tags and folders combine with OR, AND or EQUAL (that
+    /// setting lives in the panel), so they come back as OR, the panel's
+    /// starting value.
+    pub fn to_filter(&self) -> SavedFilterQuery {
+        use crate::search::{ColorQuery, Filter, SetFilter, Shape, TextFilter};
+        let r = &self.rule;
+        let get = |path: &[&str]| path.iter().try_fold(r, |v, k| v.get(*k));
+        let truthy = |path: &[&str]| get(path).is_some_and(|v| v.as_bool() == Some(true));
+        let keys = |path: &[&str]| -> Vec<String> {
+            get(path).and_then(Value::as_object).map(|m| m.iter().filter(|(_, v)| !v.is_null() && v.as_bool() != Some(false)).map(|(k, _)| k.clone()).collect()).unwrap_or_default()
+        };
+        let strings = |path: &[&str]| -> Vec<String> {
+            get(path).and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect()).unwrap_or_default()
+        };
+        // `$.isNumeric` accepts numbers and numeric strings.
+        let number = |path: &[&str]| -> Option<f64> {
+            get(path).and_then(|v| v.as_f64().or_else(|| v.as_str().and_then(|s| s.trim().parse().ok())))
+        };
+        let mut out = SavedFilterQuery::default();
+        let mut f = Filter::default();
+        let mut skip = |k: &str| out.unsupported.push(k.to_string());
+
+        f.types = keys(&["type", "includes"]);
+        f.exclude_types = keys(&["type", "excludes"]);
+        f.tags = SetFilter { includes: strings(&["tag", "includes"]), excludes: strings(&["tag", "excludes"]), empty: truthy(&["tag", "no"]), ..Default::default() };
+        let (inc, exc) = (keys(&["folder", "includes"]), keys(&["folder", "excludes"]));
+        if exc.iter().any(|k| k == "NoFolders") {
+            skip("folder.excludes.NoFolders");
+        }
+        f.folders = SetFilter {
+            empty: inc.iter().any(|k| k == "NoFolders"),
+            includes: inc.into_iter().filter(|k| k != "NoFolders").collect(),
+            excludes: exc.into_iter().filter(|k| k != "NoFolders").collect(),
+            ..Default::default()
+        };
+
+        let unit = if get(&["file", "unit"]).and_then(Value::as_str) == Some("mb") { 1_048_576.0 } else { 1024.0 };
+        f.size = (number(&["file", "min"]).map(|v| (v * unit) as u64), number(&["file", "max"]).map(|v| (v * unit) as u64));
+        let px = |k: &str| number(&["resolution", k]).map(|v| v as u64);
+        f.width = (px("minW"), px("maxW"));
+        f.height = (px("minH"), px("maxH"));
+
+        for star in 0..=5u8 {
+            if truthy(&["rating", &star.to_string()]) {
+                f.ratings.insert(star);
+            }
+        }
+        for (key, shape) in [
+            ("portrait", Shape::Portrait),
+            ("landscape", Shape::Landscape),
+            ("square", Shape::Square),
+            ("panoramicPortrait", Shape::PanoramicPortrait),
+            ("panoramicLandscape", Shape::PanoramicLandscape),
+        ] {
+            if truthy(&["shape", key]) {
+                f.shapes.insert(shape);
+            }
+        }
+        for key in ["43", "34", "169", "916", "custom"] {
+            if truthy(&["shape", key]) {
+                skip(&format!("shape.{key}"));
+            }
+        }
+
+        if let Some(rgb) = get(&["color", "value"]).and_then(Value::as_array).filter(|a| a.len() >= 3) {
+            let c = |i: usize| rgb[i].as_f64().unwrap_or(0.0).clamp(0.0, 255.0) as u8;
+            f.color = Some(ColorQuery { rgb: [c(0), c(1), c(2)], accuracy: number(&["color", "accuracy"]).unwrap_or(20.0) });
+        }
+        f.grayscale = truthy(&["color", "gray"]);
+
+        let text = |k: &str| -> TextFilter {
+            if truthy(&[k, "has"]) {
+                match get(&[k, "keywords"]).and_then(Value::as_str).filter(|s| !s.is_empty()) {
+                    Some(words) => TextFilter::Keywords(words.split(',').map(str::to_string).collect()),
+                    None => TextFilter::Has,
+                }
+            } else if truthy(&[k, "no"]) {
+                TextFilter::No
+            } else {
+                TextFilter::Off
+            }
+        };
+        f.url = text("url");
+        f.note = text("note");
+
+        // Rules with no counterpart in falcon's filter yet.
+        if truthy(&["annotation", "has"]) || truthy(&["annotation", "no"]) {
+            skip("annotation");
+        }
+        for k in ["import", "mtime"] {
+            let on = ["today", "yesterday", "last7day", "last30day", "last90day", "last365day", "usingRange"].iter().any(|d| truthy(&[k, d]))
+                || get(&[k, "selectedMonths"]).and_then(Value::as_object).is_some_and(|m| !m.is_empty());
+            if on {
+                skip(k);
+            }
+        }
+        for k in ["duration", "bpm"] {
+            if number(&[k, "min"]).is_some() || number(&[k, "max"]).is_some() {
+                skip(k);
+            }
+        }
+        if truthy(&["font", "activated"]) || truthy(&["font", "deactivated"]) {
+            skip("font");
+        }
+        if get(&["camera"]).and_then(Value::as_object).is_some_and(|m| !m.is_empty()) {
+            skip("camera");
+        }
+        if get(&["image", "itemId"]).is_some_and(|v| !v.is_null()) {
+            skip("image");
+        }
+        if get(&["semantic", "value"]).is_some_and(|v| !v.is_null()) {
+            skip("semantic");
+        }
+
+        out.filter = f;
+        out.keyword = r.get("keyword").and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string);
+        out
+    }
+
+    /// Builds the rule object Eagle's panel would save for `filter`: its
+    /// full default rule set (as `JSON.stringify` writes it, integer-like
+    /// keys first) with falcon's rules filled in. `folder_name` looks up a
+    /// folder's name; Eagle stores whole folder objects under
+    /// `folder.includes`, of which it only reads `id` back, so falcon writes
+    /// `{id, name}`. The tag and folder logic is not part of the rule.
+    pub fn rule_from_filter(filter: &crate::search::Filter, keyword: Option<&str>, folder_name: impl Fn(&str) -> Option<String>) -> Value {
+        use crate::search::{Shape, TextFilter};
+        let mut r = default_filter_rule();
+        let obj = |list: &[String]| Value::Object(list.iter().map(|t| (t.clone(), Value::Bool(true))).collect());
+        r["type"]["includes"] = obj(&filter.types);
+        r["type"]["excludes"] = obj(&filter.exclude_types);
+        r["tag"]["no"] = filter.tags.empty.into();
+        r["tag"]["includes"] = filter.tags.includes.clone().into();
+        r["tag"]["excludes"] = filter.tags.excludes.clone().into();
+        let folder = |id: &str| {
+            let mut m = Map::new();
+            m.insert("id".into(), id.into());
+            if let Some(n) = folder_name(id) {
+                m.insert("name".into(), n.into());
+            }
+            Value::Object(m)
+        };
+        let mut inc: Map<String, Value> = filter.folders.includes.iter().map(|id| (id.clone(), folder(id))).collect();
+        if filter.folders.empty {
+            inc.insert("NoFolders".into(), serde_json::json!({"id": "NoFolders"}));
+        }
+        r["folder"]["includes"] = Value::Object(inc);
+        r["folder"]["excludes"] = Value::Object(filter.folders.excludes.iter().map(|id| (id.clone(), folder(id))).collect());
+        for star in &filter.ratings {
+            r["rating"][star.to_string()] = true.into();
+        }
+        for s in &filter.shapes {
+            let key = match s {
+                Shape::Portrait => "portrait",
+                Shape::Landscape => "landscape",
+                Shape::Square => "square",
+                Shape::PanoramicPortrait => "panoramicPortrait",
+                Shape::PanoramicLandscape => "panoramicLandscape",
+            };
+            r["shape"][key] = true.into();
+        }
+        if let Some(c) = &filter.color {
+            let color = r["color"].as_object_mut().expect("default color rule");
+            color.shift_insert(1, "value".into(), serde_json::json!(c.rgb));
+            color["accuracy"] = js_number(c.accuracy);
+        }
+        r["color"]["gray"] = filter.grayscale.into();
+        // Sizes go in KB, which Eagle multiplies back by 1024.
+        let kb = |b: u64| js_number(b as f64 / 1024.0);
+        let file = r["file"].as_object_mut().expect("default file rule");
+        if let Some(b) = filter.size.0 {
+            file.shift_insert(0, "min".into(), kb(b));
+        }
+        if let Some(b) = filter.size.1 {
+            let at = usize::from(filter.size.0.is_some());
+            file.shift_insert(at, "max".into(), kb(b));
+        }
+        for (k, v) in [("minW", filter.width.0), ("maxW", filter.width.1), ("minH", filter.height.0), ("maxH", filter.height.1)] {
+            if let Some(v) = v {
+                r["resolution"][k] = v.into();
+            }
+        }
+        let text = |r: &mut Value, k: &str, t: &TextFilter| match t {
+            TextFilter::Off => {}
+            TextFilter::Has => r[k]["has"] = true.into(),
+            TextFilter::No => r[k]["no"] = true.into(),
+            TextFilter::Keywords(words) => {
+                r[k]["has"] = true.into();
+                r[k]["keywords"] = words.join(",").into();
+            }
+        };
+        text(&mut r, "url", &filter.url);
+        text(&mut r, "note", &filter.note);
+        if let Some(k) = keyword.filter(|k| !k.is_empty()) {
+            r["keyword"] = k.into();
+        }
+        r
+    }
+}
+
+/// A number as JavaScript prints it: whole values without a `.0`.
+fn js_number(v: f64) -> Value {
+    if v.is_finite() && v.fract() == 0.0 && v.abs() < 9_007_199_254_740_992.0 {
+        Value::from(v as i64)
+    } else {
+        Value::from(v)
+    }
+}
+
+/// Eagle's default filter rules after `JSON.parse(JSON.stringify(..))`:
+/// `undefined` values gone and integer-like keys first.
+fn default_filter_rule() -> Value {
+    let day = || {
+        serde_json::json!({
+            "today": false, "yesterday": false, "last7day": false, "last30day": false, "last90day": false,
+            "last365day": false, "usingRange": false, "type": "undefined", "selectedMonths": {}
+        })
+    };
+    let has = || serde_json::json!({"has": false, "no": false});
+    serde_json::json!({
+        "type": {"includes": {}, "excludes": {}},
+        "tag": {"no": false, "includes": [], "excludes": []},
+        "folder": {"includes": {}, "excludes": {}},
+        "font": {"activated": false, "deactivated": false},
+        "camera": {},
+        "import": day(),
+        "mtime": day(),
+        "rating": {"0": false, "1": false, "2": false, "3": false, "4": false, "5": false},
+        "color": {"gray": false, "accuracy": 20},
+        "shape": {
+            "34": false, "43": false, "169": false, "916": false, "portrait": false, "landscape": false,
+            "square": false, "panoramicPortrait": false, "panoramicLandscape": false, "custom": false,
+            "width": 4, "height": 3
+        },
+        "resolution": {},
+        "file": {"unit": "kb"},
+        "duration": {"unit": "s"},
+        "bpm": {},
+        "annotation": has(),
+        "note": has(),
+        "url": has(),
+        "image": {},
+        "semantic": {}
+    })
+}
+
 /// `tags.json`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -526,6 +802,84 @@ mod tests {
         }
         assert_eq!(FolderOrder::parse("nope"), None);
         assert_eq!(FOLDER_ICONS.len(), 161);
+    }
+
+    /// Eagle's default rules as its save writes them.
+    const DEFAULT_RULE: &str = r#"{"type":{"includes":{},"excludes":{}},"tag":{"no":false,"includes":[],"excludes":[]},"folder":{"includes":{},"excludes":{}},"font":{"activated":false,"deactivated":false},"camera":{},"import":{"today":false,"yesterday":false,"last7day":false,"last30day":false,"last90day":false,"last365day":false,"usingRange":false,"type":"undefined","selectedMonths":{}},"mtime":{"today":false,"yesterday":false,"last7day":false,"last30day":false,"last90day":false,"last365day":false,"usingRange":false,"type":"undefined","selectedMonths":{}},"rating":{"0":false,"1":false,"2":false,"3":false,"4":false,"5":false},"color":{"gray":false,"accuracy":20},"shape":{"34":false,"43":false,"169":false,"916":false,"portrait":false,"landscape":false,"square":false,"panoramicPortrait":false,"panoramicLandscape":false,"custom":false,"width":4,"height":3},"resolution":{},"file":{"unit":"kb"},"duration":{"unit":"s"},"bpm":{},"annotation":{"has":false,"no":false},"note":{"has":false,"no":false},"url":{"has":false,"no":false},"image":{},"semantic":{}}"#;
+
+    #[test]
+    fn empty_filter_builds_eagles_default_rule() {
+        let rule = SavedFilter::rule_from_filter(&crate::search::Filter::default(), None, |_| None);
+        assert_eq!(rule.to_string(), DEFAULT_RULE);
+        let saved = SavedFilter { name: "x".into(), rule, extra: Extra::new() };
+        assert_eq!(saved.to_filter(), SavedFilterQuery::default());
+    }
+
+    #[test]
+    fn saved_filter_reads_eagle_rules() {
+        let rule = DEFAULT_RULE
+            .replace(r#""type":{"includes":{}"#, r#""type":{"includes":{"png":true,"video":true}"#)
+            .replace(r#""tag":{"no":false,"includes":[]"#, r#""tag":{"no":true,"includes":["red"]"#)
+            .replace(r#""folder":{"includes":{}"#, r#""folder":{"includes":{"F1":{"id":"F1","name":"One","images":[]},"NoFolders":{"id":"NoFolders"}}"#)
+            .replace(r#""rating":{"0":false,"1":false"#, r#""rating":{"0":true,"1":false"#)
+            .replace(r#""color":{"gray":false,"accuracy":20}"#, r#""color":{"gray":false,"value":[255,0,10],"accuracy":10}"#)
+            .replace(r#""square":false"#, r#""square":true"#)
+            .replace(r#""169":false"#, r#""169":true"#)
+            .replace(r#""resolution":{}"#, r#""resolution":{"minW":"100","maxH":800}"#)
+            .replace(r#""file":{"unit":"kb"}"#, r#""file":{"min":1.5,"unit":"mb"}"#)
+            .replace(r#""url":{"has":false,"no":false}"#, r#""url":{"has":true,"no":false,"keywords":"dribbble,shot"}"#)
+            .replace(r#""note":{"has":false,"no":false}"#, r#""note":{"has":false,"no":true}"#)
+            .replace(r#""import":{"today":false"#, r#""import":{"today":true"#)
+            .replace(r#""semantic":{}}"#, r#""semantic":{},"keyword":"logo"}"#);
+        let json = format!(r#"{{"name":"Mine","rule":{rule}}}"#);
+        let saved: SavedFilter = serde_json::from_str(&json).unwrap();
+        assert_eq!(serde_json::to_string(&saved).unwrap(), json, "round trip");
+
+        let q = saved.to_filter();
+        let f = &q.filter;
+        assert_eq!(q.keyword.as_deref(), Some("logo"));
+        assert_eq!(f.types, ["png", "video"]);
+        assert_eq!((f.tags.includes.clone(), f.tags.empty), (vec!["red".to_string()], true));
+        assert_eq!((f.folders.includes.clone(), f.folders.empty), (vec!["F1".to_string()], true));
+        assert!(f.ratings.contains(&0) && f.ratings.len() == 1);
+        assert_eq!(f.color.map(|c| (c.rgb, c.accuracy)), Some(([255, 0, 10], 10.0)));
+        assert!(f.shapes.contains(&crate::search::Shape::Square));
+        assert_eq!((f.width, f.height), ((Some(100), None), (None, Some(800))));
+        assert_eq!(f.size, (Some(1_572_864), None));
+        assert_eq!(f.url, crate::search::TextFilter::Keywords(vec!["dribbble".into(), "shot".into()]));
+        assert_eq!(f.note, crate::search::TextFilter::No);
+        assert_eq!(q.unsupported, ["shape.169", "import"]);
+    }
+
+    #[test]
+    fn filters_survive_a_save() {
+        use crate::search::{ColorQuery, Filter, SetFilter, Shape, TextFilter};
+        let mut f = Filter {
+            tags: SetFilter { includes: vec!["a".into()], excludes: vec!["b".into()], ..Default::default() },
+            folders: SetFilter { includes: vec!["F1".into()], empty: true, ..Default::default() },
+            types: vec!["jpg".into()],
+            exclude_types: vec!["font".into()],
+            size: (Some(2048), Some(1_048_576)),
+            width: (Some(10), None),
+            height: (None, Some(20)),
+            url: TextFilter::Has,
+            note: TextFilter::Keywords(vec!["x".into()]),
+            color: Some(ColorQuery { rgb: [1, 2, 3], accuracy: 20.0 }),
+            grayscale: true,
+            ..Default::default()
+        };
+        f.ratings.insert(5);
+        f.shapes.insert(Shape::PanoramicPortrait);
+        let rule = SavedFilter::rule_from_filter(&f, Some("cat"), |id| (id == "F1").then(|| "One".to_string()));
+        let text = rule.to_string();
+        assert!(text.contains(r#""color":{"gray":true,"value":[1,2,3],"accuracy":20}"#), "{text}");
+        assert!(text.contains(r#""file":{"min":2,"max":1024,"unit":"kb"}"#), "{text}");
+        assert!(text.contains(r#""folder":{"includes":{"F1":{"id":"F1","name":"One"},"NoFolders":{"id":"NoFolders"}}"#), "{text}");
+        assert!(text.ends_with(r#""keyword":"cat"}"#));
+        let back = SavedFilter { name: "n".into(), rule, extra: Extra::new() }.to_filter();
+        assert_eq!(back.filter, f);
+        assert_eq!(back.keyword.as_deref(), Some("cat"));
+        assert!(back.unsupported.is_empty());
     }
 
     #[test]
