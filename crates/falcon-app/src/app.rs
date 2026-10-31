@@ -44,6 +44,7 @@ struct Saved {
     collapsed: Vec<String>,
     recent: Vec<PathBuf>,
     layout: Option<Layout>,
+    prefs: crate::prefs::Prefs,
 }
 
 /// Ids being dragged from the grid.
@@ -352,6 +353,8 @@ pub struct App {
     undo_root: Option<PathBuf>,
     /// Labels of the actions applied this frame, naming its transaction.
     frame_labels: Vec<String>,
+    prefs: crate::prefs::Prefs,
+    prefs_window: crate::prefs::Window,
 }
 
 impl App {
@@ -409,6 +412,8 @@ impl App {
             undo_request: None,
             undo_root: None,
             frame_labels: Vec::new(),
+            prefs: Default::default(),
+            prefs_window: Default::default(),
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
         app.tile = saved.tile.unwrap_or(app.tile).clamp(TILE_MIN, TILE_MAX);
@@ -419,6 +424,7 @@ impl App {
         app.collapsed = saved.collapsed.into_iter().collect();
         app.recent = saved.recent.into_iter().filter(|p| p.is_dir()).collect();
         app.layout = saved.layout.unwrap_or_default();
+        app.prefs = saved.prefs.sanitized();
         // Reopen the last library unless one was given on the command line.
         if let Some(p) = initial.or(saved.library.filter(|p| p.is_dir())) {
             app.open(p);
@@ -455,18 +461,8 @@ impl App {
             Ok(lib) => {
                 self.server = None; // stops the previous library's server
                 let shared: Shared = Arc::new(Mutex::new(lib));
-                let ctx = self.ctx.clone();
-                // Never Eagle's own port: clients of a running (or later
-                // started) Eagle must keep reaching Eagle.
-                let ports = falcon_server::DEFAULT_PORT..falcon_server::DEFAULT_PORT + 5;
-                match falcon_server::start(shared.clone(), ports, move || ctx.request_repaint()) {
-                    Ok(h) => {
-                        self.flash(format!("API on http://localhost:{}", h.port));
-                        self.server = Some(h);
-                    }
-                    Err(e) => self.flash(format!("API not started: {e}")),
-                }
                 self.lib = Some(shared);
+                self.start_server();
                 self.recent.retain(|p| *p != path);
                 self.recent.insert(0, path.clone());
                 self.recent.truncate(10);
@@ -479,6 +475,41 @@ impl App {
                 self.loader.clear_all();
             }
             Err(e) => self.error = Some(e.to_string()),
+        }
+    }
+
+    /// (Re)starts the HTTP API for the open library on the ports set in
+    /// Preferences. Never Eagle's own port: clients of a running (or later
+    /// started) Eagle must keep reaching Eagle.
+    fn start_server(&mut self) {
+        self.server = None;
+        let (Some(shared), Some(ports)) = (self.lib.clone(), self.prefs.api_ports()) else { return };
+        let ctx = self.ctx.clone();
+        match falcon_server::start(shared, ports, move || ctx.request_repaint()) {
+            Ok(h) => {
+                self.flash(format!("API on http://localhost:{}", h.port));
+                self.server = Some(h);
+            }
+            Err(e) => self.flash(format!("API not started: {e}")),
+        }
+    }
+
+    fn open_preferences(&mut self) {
+        let panels = crate::prefs::Panels { sidebar: self.show_sidebar, inspector: self.show_inspector };
+        self.prefs_window.show_with(crate::prefs::Draft { prefs: self.prefs.clone(), panels });
+    }
+
+    /// Takes the Preferences window's Save or Apply.
+    fn apply_preferences(&mut self, d: crate::prefs::Draft) {
+        let restart = self.prefs.api_changed(&d.prefs);
+        self.prefs = d.prefs;
+        self.show_sidebar = d.panels.sidebar;
+        self.show_inspector = d.panels.inspector;
+        if restart {
+            self.start_server();
+            if self.lib.is_some() && !self.prefs.api_enabled {
+                self.flash("API stopped");
+            }
         }
     }
 
@@ -665,7 +696,10 @@ impl App {
     }
 
     fn keyboard(&mut self, ctx: &egui::Context) {
-        if ctx.memory(|m| m.focused().is_some()) {
+        if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::Comma)) && !self.prefs_window.open {
+            self.open_preferences();
+        }
+        if self.prefs_window.open || ctx.memory(|m| m.focused().is_some()) {
             return;
         }
         if ctx.input(|i| i.modifiers.command && i.key_pressed(Key::Z)) {
@@ -1228,6 +1262,10 @@ impl App {
             }
             if ui.button("Show in Finder").clicked() {
                 let _ = std::process::Command::new("open").arg("-R").arg(&current).spawn();
+            }
+            ui.separator();
+            if ui.button("Preferences…").clicked() {
+                self.open_preferences();
             }
         });
 
@@ -2239,7 +2277,7 @@ impl App {
     /// Draws a hovered card's zoom button, as Eagle does, and says whether
     /// the pointer is on it.
     fn zoom_button(&self, ui: &Ui, item: &Item, card: Rect, caption: f32) -> bool {
-        if !crate::hover::has_zoom_button(&item.ext) {
+        if !self.prefs.hover_zoom || !crate::hover::has_zoom_button(&item.ext) {
             return false;
         }
         let list = self.layout == Layout::List;
@@ -3088,6 +3126,7 @@ impl eframe::App for App {
             collapsed: self.collapsed.iter().cloned().collect(),
             recent: self.recent.clone(),
             layout: Some(self.layout),
+            prefs: self.prefs.clone(),
         };
         eframe::set_value(storage, eframe::APP_KEY, &saved);
     }
@@ -3111,6 +3150,9 @@ impl eframe::App for App {
             self.import(dropped);
         }
         self.keyboard(&ctx);
+        if let Some(d) = self.prefs_window.show(&ctx) {
+            self.apply_preferences(d);
+        }
 
         let Some(shared) = self.lib.clone() else {
             egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| self.empty_state(ui));

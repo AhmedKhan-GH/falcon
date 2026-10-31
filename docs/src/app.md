@@ -11,7 +11,8 @@
 | Area | Features |
 |---|---|
 | Window | No title bar: the traffic lights sit over the sidebar, and empty bar space drags the window |
-| Library menu | Recent libraries, plus Open, Create and Show in Finder. The last library, layout and sort reopen on launch |
+| Library menu | Recent libraries, plus Open, Create, Show in Finder and Preferences. The last library, layout and sort reopen on launch |
+| Preferences | ⌘, or the library menu (see below) |
 | Sidebar | Eagle's fixed entries, Quick Access, smart folders, and a folder tree with guide lines and direct-item counts. You can filter it, create, rename, delete and drag-move folders, and drop items onto folders or the Trash |
 | Toolbar | Back and forward, zoom slider, layout and sort menu, filter bar toggle, search with Eagle's syntax, plus typo tolerance (see Search and filters) |
 | Filter bar | Colour (presets, hex value, accuracy, grayscale), tags, folders, shape, rating, type, notes, URL |
@@ -40,6 +41,7 @@
 | ⌘C and ⌘V | Copy the selected files, or paste files or images |
 | ⌘Z and ⇧⌘Z | Undo and redo library edits, up to 100 steps. Each frame's edits are one step, named after what was done ("Undid: Move 3 to Trash"). Deleting permanently or emptying the Trash can't be undone and clears the history. Text fields keep their own undo while focused |
 | Hold Z | Show the hover preview of the card under the pointer |
+| ⌘, | Preferences |
 
 ## Saving
 
@@ -66,6 +68,26 @@ What Eagle does, from its `js/hover-preview.js`, `style/components/_hover-previe
 | Cancels | Leaving the button, leaving the card, releasing Z, clicking a card (a held Z must then be pressed again), opening the viewer, and the item list refreshing (search, filter, folder change) | Seen | Same, plus any pointer press, a drag, and scrolling (for the button; with Z held it switches to the card now under the pointer) |
 | Scrolling | No explicit handler; the pointer leaving the card as the grid scrolls closes it | Inferred | Closes on scroll |
 | `noPreview` | Checked before showing, but nothing in the bundle sets it | Inferred unused | Not modelled |
+
+## Preferences
+
+⌘, (or Preferences… in the library menu) opens a window over the main one, laid out like Eagle's: sections on the left, the section on the right, and Save, Apply and Cancel at the bottom. Edits stay in a draft until Save (also ⌘↩) or Apply; Cancel, the close button and Esc drop them, as in Eagle. The code is in `crates/falcon-app/src/prefs.rs`, and the values are saved with the rest of the app state.
+
+| Section | Setting | Eagle | falcon |
+|---|---|---|---|
+| General | Show the sidebar, show the inspector | View menu toggles, not preferences | Same flags as the panel buttons |
+| General | Add IPTC and XMP keywords as tags | `general.IPTC`, off by default | Stored as `keywords_as_tags`; import does not read it yet |
+| General | Back up metadata on change | Eagle backs up on its own; no preference | Stored as `backup_on_change`; nothing calls it yet |
+| Preview | Hover zoom | `habits.hoverZoom`, on by default; off removes the zoom button, but holding Z still works | Same |
+| Developer | Run the HTTP API, first port | Eagle always serves on 41595 and only has an API token setting | On by default, from 41596; tries five ports. Ports whose range would include 41595, or below 1024, are refused. Changing either restarts the API |
+
+What Eagle does, from `js/default-preferences.js`, `preferences.html`, `js/preferences.js` and `css/preferences.css` (all seen):
+
+- Preferences live in one tree with groups `general`, `habits`, `shortcuts.keybinds`, `theme`, `notification`, `sidebar`, `screencapture`, `video`, `proxy`, `privacy`, `autoImport` and `developer`. Booleans are stored as the strings `'true'` and `'false'`, and choices as strings (`hoverZoom: "on"`).
+- The window's sidebar (200 pt wide, 32 pt rows) has General and Sidebar, then Controls, Preview (the `habits` group), Screenshot and Shortcuts, then Notification, Password and Auto-Import, then the AI panels. A search box filters every panel by keywords.
+- Save applies and closes, Apply applies and stays open, Cancel and Esc revert (including a previewed theme or zoom), ⌘↩ saves.
+- The window's own size is set in Eagle's main process, which is not in the readable bundle; falcon's 720 × 500 pt is a guess (inferred).
+- Not built in falcon: themes, interface zoom, language, the sidebar item toggles, scroll and double-click habits, notifications, screenshots, password lock, auto-import, proxy and the preference search.
 
 ## Running it
 

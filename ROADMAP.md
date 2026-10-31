@@ -62,7 +62,7 @@ Eagle features that need no online service, put off until after the list above.
 - [ ] Sync conflict detection for libraries in iCloud Drive or Dropbox
 
 **App**
-- [ ] Preferences
+- [x] Preferences
 - [ ] Shortcut settings
 - [ ] Collect window
 - [ ] Localisation

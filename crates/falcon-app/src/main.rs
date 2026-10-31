@@ -3,6 +3,7 @@ mod hover;
 mod icons;
 mod loader;
 mod logic;
+mod prefs;
 mod theme;
 
 use std::path::PathBuf;
