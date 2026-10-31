@@ -80,3 +80,47 @@ Eagle keeps snapshots of the library `metadata.json` in `backup/`. Only that one
 `falcon_library::backup` follows the table. `Library::backup_metadata()` takes a backup now (returning `None` when skipped), `Library::backups()` lists them newest first, and `Library::restore_metadata_from_backup(path)` restores a chosen one. `Library::open_or_restore(path)` opens a library and, when `metadata.json` can't be read or parsed, restores the newest usable backup first, as Eagle does on launch. falcon also requires the backup to load as a `LibraryMetadata`, slightly stricter than Eagle's `modificationTime` check (inferred to be harmless: a backup without the standard keys would break Eagle too).
 
 `Library::save_metadata` does not take backups, because Eagle doesn't back up on each write. Callers (the app on change or a timer, or `falcon backup <library>`) call `backup_metadata()`.
+
+## Export (`.eaglepack`)
+
+An `.eaglepack` is how Eagle moves items and folders between libraries.
+
+```text
+Refs.eaglepack           a zip archive, entries stored without compression
+├── pack.json            {"images": [...], "folder": {...}}
+└── <ID>.info/           each item's whole info folder, as in images/
+    ├── metadata.json
+    ├── <name>.<ext>
+    └── <name>_thumbnail.png
+```
+
+| Behaviour | Status | Detail |
+|---|---|---|
+| Container | observed | Zip, written by Eagle's archiver with `store: true` (no compression). The 7-Zip binaries Eagle ships are not used for packs |
+| Entry order | observed | `pack.json` first, then each item's `<ID>.info` folder in `images` order |
+| `pack.json` keys | observed | `images` first; `folder` only for a folder export |
+| `images` | observed | Item records (the item `metadata.json` contents, minus Eagle's in-memory fields), sorted by `modificationTime`, newest first |
+| Exporting items | observed | Every record gets `"folders": []`. Trashed items may be exported; their record loses `isDeleted` |
+| Exporting a folder | observed | Untrashed items in the folder or any subfolder; their `folders` keep the original ids, including folders outside the export. `folder` is a copy of the subtree with `id`, `name`, `description`, `children`, `modificationTime`, `tags`, then `extendTags`, `icon`, `iconColor`, `pinyin` when set, `password`, `passwordTips`, `coverId` when set, and `orderBy` with `sortIncrease` when a custom sort is set |
+| Duplicate records | inferred | Eagle's export means to skip items listed twice, but the map it checks is never filled, so an item in a folder and its subfolder may be listed twice. falcon lists each item once |
+| Names | observed | Eagle skips items whose name contains characters the file system rejects. falcon's names are already sanitized at import |
+| Verification | observed | After writing, Eagle checks the zip signature (`PK\x03\x04` and its variants) and that the file is at least 80% of the bytes written; otherwise it deletes the file. falcon writes to a temporary file, reads it back (signature, entry count, `pack.json` parses) and only then moves it into place |
+| Import: extract | observed | Unzipped (with `unzip -o` on macOS, which keeps file times) into a temporary folder; fails without `pack.json` |
+| Import: order | observed | `images` is reversed (oldest first). For a folder pack, items are sorted by `order[<old folder id>]`, falling back to `modificationTime` |
+| Import: ids | observed | Every item and folder gets a new id; nothing keeps its old one. Folders are marked `isExpand: true` and `coverId` follows the item's new id |
+| Import: folders | observed | A folder pack's tree is added to the library and item `folders` are mapped to the new ids. A pack of items dropped on a folder goes into that folder; otherwise items keep their `folders` |
+| Import: records | observed | Each item's `metadata.json` is rewritten from its `pack.json` record with the new `id` and `modificationTime` = now + index; `lastModified` is kept |
+| Import: duplicates | observed | Eagle asks whether to skip items that match existing ones by its duplicate key: for most images `size + width + height + ext`, for videos `size + duration`; SVG, TIFF and some other kinds never match |
+| Smart folders | observed | Exporting a smart folder writes a folder pack of its matching items, but those items' `folders` don't point into the exported tree, so they import with no folder. Smart folder rules are never carried |
+
+### How falcon does it
+
+`falcon_library::pack::export_pack(&lib, PackSource::Items(ids) | PackSource::Folder(id), dest)` writes a pack following the table, using the `zip` crate with stored entries and each file's time and Unix mode. `import_pack(&mut lib, pack, &PackImportOptions { folder, skip_duplicates })` imports one and returns the new item ids. Item files are moved in as they are (thumbnail included), not re-imported, as Eagle does. Differences from Eagle, all inferred to be harmless:
+
+- falcon drops item `folders` ids that don't exist after import, where Eagle would write `null` or keep a dangling id.
+- An item whose `<ID>.info` folder is missing from the pack is skipped; Eagle still lists it, with no files.
+- A record without `isDeleted` (an exported trashed item) is written back with `"isDeleted": false`, since falcon's item model requires the key.
+- The duplicate key covers images and videos only; audio and font keys are not implemented.
+- Smart folder export isn't offered.
+
+The CLI has `falcon export <library> <out.eaglepack> [--folder ID | ITEM...]` and `falcon import-pack <library> <pack> [--folder ID] [--skip-duplicates]`.

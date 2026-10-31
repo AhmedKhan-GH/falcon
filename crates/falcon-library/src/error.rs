@@ -38,6 +38,14 @@ pub enum Error {
         /// Why it was refused.
         reason: String,
     },
+    /// An `.eaglepack` could not be written or read.
+    #[error("eaglepack {path}: {reason}")]
+    Pack {
+        /// The pack file.
+        path: PathBuf,
+        /// What went wrong.
+        reason: String,
+    },
 }
 
 /// Convenience alias.

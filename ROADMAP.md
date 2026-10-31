@@ -57,7 +57,7 @@ Eagle features that need no online service, put off until after the list above.
 **Library**
 - [ ] Batched writes and backup rotation
 - [ ] Duplicate detection
-- [ ] Export
+- [x] Export
 - [ ] Several libraries open at once
 - [ ] Sync conflict detection for libraries in iCloud Drive or Dropbox
 

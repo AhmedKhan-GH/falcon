@@ -6,6 +6,7 @@ pub mod error;
 pub mod library;
 pub mod ids;
 pub mod model;
+pub mod pack;
 pub mod palette;
 pub mod search;
 pub mod smart;

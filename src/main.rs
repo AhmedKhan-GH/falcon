@@ -4,6 +4,7 @@ use std::process::ExitCode;
 use clap::{Parser, Subcommand};
 use falcon_library::Library;
 use falcon_library::import::ImportOptions;
+use falcon_library::pack::{PackImportOptions, PackSource, export_pack, import_pack};
 
 #[derive(Parser)]
 #[command(version, about = "Work with Eagle libraries")]
@@ -56,6 +57,31 @@ enum Command {
         /// Path of the .library folder
         library: PathBuf,
     },
+    /// Export a folder or items as an .eaglepack
+    Export {
+        /// Path of the .library folder
+        library: PathBuf,
+        /// Pack file to write
+        out: PathBuf,
+        /// Export this folder and its subfolders
+        #[arg(long, conflicts_with = "items", required_unless_present = "items")]
+        folder: Option<String>,
+        /// Item ids to export
+        items: Vec<String>,
+    },
+    /// Import an .eaglepack and print the new item ids
+    ImportPack {
+        /// Path of the .library folder
+        library: PathBuf,
+        /// The .eaglepack file
+        pack: PathBuf,
+        /// Put the items in this folder (packs of items only)
+        #[arg(long)]
+        folder: Option<String>,
+        /// Leave out items that match ones already in the library
+        #[arg(long)]
+        skip_duplicates: bool,
+    },
     /// Serve Eagle's local HTTP API for a library on 127.0.0.1
     Serve {
         /// Path of the .library folder
@@ -98,6 +124,21 @@ fn run(cli: Cli) -> falcon_library::Result<()> {
             match lib.backup_metadata()? {
                 Some(path) => println!("{}", path.display()),
                 None => println!("no backup written (same size as the newest backup, or metadata.json is damaged)"),
+            }
+        }
+        Command::Export { library, out, folder, items } => {
+            let lib = Library::open(library)?;
+            let source = match &folder {
+                Some(id) => PackSource::Folder(id),
+                None => PackSource::Items(&items),
+            };
+            let count = export_pack(&lib, source, &out)?;
+            println!("{} ({count} items)", out.display());
+        }
+        Command::ImportPack { library, pack, folder, skip_duplicates } => {
+            let mut lib = Library::open(library)?;
+            for id in import_pack(&mut lib, &pack, &PackImportOptions { folder, skip_duplicates })? {
+                println!("{id}");
             }
         }
         Command::Serve { library, port } => {
