@@ -21,6 +21,8 @@ use crate::logic::{self, Layout, NavCounts, Scope};
 use falcon_library::search::{ColorQuery, Filter, Logic, OrderBy, Shape, TextFilter};
 use crate::theme::{self as t, font, mono};
 
+mod organize_ui;
+
 /// Grid geometry, measured from Eagle at 1280 x 800.
 const GRID_PAD_X: f32 = 17.0;
 const GRID_PAD_TOP: f32 = 4.0;
@@ -80,6 +82,9 @@ enum Action {
     DeleteTag(String),
     StarTag(String, bool),
     DeleteSmart(String),
+    /// Folder icons, sorts, passwords and reordering, nested smart
+    /// folders, tag groups and saved filters (see `organize_ui`).
+    Organize(organize_ui::OrgAction),
 }
 
 /// The starting view requested on the command line.
@@ -169,6 +174,11 @@ struct SmartDraft {
     name: String,
     any: bool,
     rules: Vec<RuleDraft>,
+    /// The parent smart folder (`None` is the top level), and where it was.
+    parent: Option<String>,
+    orig_parent: Option<String>,
+    icon: Option<String>,
+    color: Option<String>,
 }
 
 impl SmartDraft {
@@ -181,7 +191,15 @@ impl SmartDraft {
             .and_then(|r| r.as_array())
             .map(|rules| rules.iter().filter_map(RuleDraft::from_json).collect())
             .unwrap_or_default();
-        SmartDraft { editing: Some(sf.id.clone()), name: sf.name.clone(), any, rules }
+        SmartDraft {
+            editing: Some(sf.id.clone()),
+            name: sf.name.clone(),
+            any,
+            rules,
+            icon: sf.icon.clone(),
+            color: sf.icon_color.clone(),
+            ..Default::default()
+        }
     }
 }
 
@@ -362,6 +380,8 @@ pub struct App {
     shortcuts: crate::shortcuts::Shortcuts,
     /// The small always-on-top drop window (see `collect.rs`).
     collect: crate::collect::Collect,
+    /// Unlocked folders and the organising dialogs (see `organize_ui`).
+    org: organize_ui::OrgState,
 }
 
 impl App {
@@ -423,6 +443,7 @@ impl App {
             prefs_window: Default::default(),
             shortcuts: Default::default(),
             collect: Default::default(),
+            org: Default::default(),
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
         app.tile = saved.tile.unwrap_or(app.tile).clamp(TILE_MIN, TILE_MAX);
@@ -483,6 +504,7 @@ impl App {
                 self.forward.clear();
                 self.selected.clear();
                 self.edit = None;
+                self.org = Default::default();
                 self.loader.clear_all();
             }
             Err(e) => self.error = Some(e.to_string()),
@@ -987,6 +1009,7 @@ impl App {
                     self.flash(if trash { format!("Moved {} to Trash", ids.len()) } else { format!("Restored {}", ids.len()) });
                     r
                 }
+                Action::Organize(a) => self.apply_organize(lib, a),
             };
             if let Err(e) = result {
                 self.flash(format!("Could not save: {e}"));
@@ -1085,6 +1108,31 @@ fn action_label(action: &Action) -> String {
         Action::BatchRating(ids, _) => format!("Rate {}", ids.len()),
         Action::QuickAdd(..) => "Add to Quick Access".into(),
         Action::QuickRemove(_) => "Remove from Quick Access".into(),
+        Action::Organize(a) => organize_label(a),
+    }
+}
+
+/// The undo name of an organising action.
+fn organize_label(a: &organize_ui::OrgAction) -> String {
+    use organize_ui::OrgAction as O;
+    match a {
+        O::FolderOrder(..) | O::SmartOrder(..) => "Change sort".into(),
+        O::FolderIcon(..) | O::SmartIcon(..) => "Change icon".into(),
+        O::ReorderFolder(..) => "Move folder".into(),
+        O::MoveSmart(..) => "Move smart folder".into(),
+        O::FolderPassword(_, Some(_)) => "Set password".into(),
+        O::FolderPassword(_, None) => "Remove password".into(),
+        O::CreateSmart { .. } => "New smart folder".into(),
+        O::CreateGroup(_) => "New tag group".into(),
+        O::RenameGroup(..) => "Rename tag group".into(),
+        O::GroupColor(..) => "Recolour tag group".into(),
+        O::DeleteGroup(_) => "Delete tag group".into(),
+        O::AddToGroup(_, tags) => format!("Group {} tags", tags.len()),
+        O::RemoveFromGroup(_, tags) => format!("Ungroup {} tags", tags.len()),
+        O::SaveFilter(..) => "Save filter".into(),
+        O::RenameFilter(..) => "Rename saved filter".into(),
+        O::DeleteFilter(_) => "Remove saved filter".into(),
+        O::MoveFilter(..) => "Move saved filter".into(),
     }
 }
 
@@ -1365,29 +1413,9 @@ impl App {
             if section_with_add(ui, "Smart Folders", "Create Smart Folder") {
                 self.smart_dialog = Some(SmartDraft::default());
             }
-            for sf in lib.smart_folders() {
-                let count = lib.smart_folder_items(&sf.id).len();
-                let active = self.scope == Scope::Smart(sf.id.clone());
-                let resp = sidebar_row(ui, 0, ic::FOLDER_STAR, &sf.name, (count > 0).then_some(count), active, None);
-                if resp.clicked() {
-                    self.go(Scope::Smart(sf.id.clone()));
-                }
-                let pinned = quick.contains(&sf.id);
-                resp.context_menu(|ui| {
-                    if ui.button("Edit…").clicked() {
-                        self.smart_dialog = Some(SmartDraft::from_folder(&sf));
-                    }
-                    if pinned {
-                        if ui.button("Remove from Quick Access").clicked() {
-                            self.actions.push(Action::QuickRemove(sf.id.clone()));
-                        }
-                    } else if ui.button("Add to Quick Access").clicked() {
-                        self.actions.push(Action::QuickAdd("smartFolder", sf.id.clone()));
-                    }
-                    if ui.button(RichText::new("Delete Smart Folder").color(Color32::from_rgb(0xff, 0x66, 0x67))).clicked() {
-                        self.actions.push(Action::DeleteSmart(sf.id.clone()));
-                    }
-                });
+            let smart = lib.smart_folders();
+            for sf in &smart {
+                self.smart_row(ui, lib, &smart, sf, 0, &quick);
             }
             let total = lib.all_folders().len();
             let header = section(ui, &format!("Folders ({total})"));
@@ -1399,7 +1427,7 @@ impl App {
             }
             let filter = self.folder_filter.trim().to_lowercase();
             for f in &lib.metadata.folders {
-                self.folder_row(ui, f, 0, &cx, &filter);
+                self.folder_row(ui, lib, f, 0, &cx, &filter);
             }
             ui.add_space(8.0);
         });
@@ -1458,19 +1486,24 @@ impl App {
     /// One folder and, unless collapsed, its children. Returns whether
     /// anything was drawn (filtered folders are hidden with their subtree
     /// unless a descendant matches).
-    fn folder_row(&mut self, ui: &mut Ui, f: &Folder, depth: usize, cx: &SidebarCtx, filter: &str) -> Option<Rect> {
+    fn folder_row(&mut self, ui: &mut Ui, lib: &Library, f: &Folder, depth: usize, cx: &SidebarCtx, filter: &str) -> Option<Rect> {
         if !filter.is_empty() && !subtree_matches(f, filter) {
             return None;
         }
-        let has_children = !f.children.is_empty();
+        // A locked folder keeps its subfolders hidden until it is unlocked.
+        let shut = crate::organize::is_shut(f, &self.org.unlocked);
+        let has_children = !f.children.is_empty() && !shut;
         let open = has_children && (!filter.is_empty() || !self.collapsed.contains(&f.id));
         let active = self.scope == Scope::Folder(f.id.clone());
-        let count = cx.folder_counts.get(&f.id).copied();
-        let glyph = if open { ic::FOLDER_OPEN } else { ic::FOLDER };
+        let count = cx.folder_counts.get(&f.id).copied().filter(|_| !shut);
+        let (glyph, tint) = App::folder_look(f, open);
         let renaming = self.renaming.as_ref().is_some_and(|(id, _)| *id == f.id);
         let label = if renaming { "" } else { f.name.as_str() };
-        let resp = sidebar_row(ui, depth, glyph, label, count, active, has_children.then_some(open));
+        let resp = sidebar_row_tinted(ui, depth, glyph, tint, label, count, active, has_children.then_some(open));
         let row_rect = resp.rect;
+        if f.is_locked() && !renaming {
+            organize_ui::lock_badge(ui, row_rect, shut, count.is_some());
+        }
         if renaming {
             let r = Rect::from_min_max(
                 Pos2::new(row_rect.left() + icon_x(depth) + 12.0, row_rect.top() + 3.0),
@@ -1503,22 +1536,15 @@ impl App {
         if resp.drag_started() {
             resp.dnd_set_drag_payload(DragFolder(f.id.clone()));
         }
-        let dragging_self = resp.dnd_hover_payload::<DragFolder>().is_some_and(|d| d.0 == f.id);
-        if !dragging_self {
-            drop_highlight(ui, &resp, depth);
-        }
+        drop_highlight(ui, &resp, depth);
         if let Some(d) = resp.dnd_release_payload::<DragItems>() {
             self.actions.push(Action::AddToFolder(d.0.clone(), f.id.clone()));
         }
-        if let Some(d) = resp.dnd_release_payload::<DragFolder>()
-            && d.0 != f.id
-        {
-            self.actions.push(Action::MoveFolder(d.0.clone(), Some(f.id.clone())));
-        }
+        self.folder_drop(ui, lib, &resp, f, depth);
         let pinned = cx.quick.contains(&f.id);
         resp.context_menu(|ui| {
             ui.set_min_width(180.0);
-            if ui.button("New Subfolder").clicked() {
+            if ui.add_enabled(!shut, egui::Button::new("New Subfolder")).clicked() {
                 self.actions.push(Action::CreateFolder { parent: Some(f.id.clone()) });
             }
             if ui.button("Rename").clicked() {
@@ -1534,6 +1560,7 @@ impl App {
             if depth > 0 && ui.button("Move to Top Level").clicked() {
                 self.actions.push(Action::MoveFolder(f.id.clone(), None));
             }
+            self.folder_menu_extras(ui, f);
             ui.separator();
             if ui.button(RichText::new("Delete Folder").color(Color32::from_rgb(0xff, 0x66, 0x67))).clicked() {
                 self.confirm = Some(Confirm::DeleteFolder(f.id.clone()));
@@ -1555,7 +1582,7 @@ impl App {
         if open {
             let mut last_center = None;
             for c in &f.children {
-                if let Some(r) = self.folder_row(ui, c, depth + 1, cx, filter) {
+                if let Some(r) = self.folder_row(ui, lib, c, depth + 1, cx, filter) {
                     last_center = Some(r.center().y);
                 }
             }
@@ -1564,17 +1591,20 @@ impl App {
                 let x = row_rect.left() + icon_x(depth);
                 let p = ui.painter();
                 let top = row_rect.bottom() - 3.0;
-                p.line_segment([Pos2::new(x, top), Pos2::new(x, end - 5.0)], Stroke::new(1.0, t::GUIDE));
-                p.line_segment([Pos2::new(x, end - 5.0), Pos2::new(x + 5.0, end)], Stroke::new(1.0, t::GUIDE));
+                // Eagle tints a coloured folder's guide line in its colour.
+                let guide = if f.icon_color.is_some() { tint.gamma_multiply(0.25) } else { t::GUIDE };
+                p.line_segment([Pos2::new(x, top), Pos2::new(x, end - 5.0)], Stroke::new(1.0, guide));
+                p.line_segment([Pos2::new(x, end - 5.0), Pos2::new(x + 5.0, end)], Stroke::new(1.0, guide));
             }
         }
         Some(row_rect)
     }
 }
 
-/// Outlines a sidebar row while grid items are dragged over it.
+/// Outlines a sidebar row while grid items are dragged over it (folders
+/// dragged in the tree get insertion lines instead, see `organize_ui`).
 fn drop_highlight(ui: &Ui, resp: &Response, depth: usize) {
-    if resp.dnd_hover_payload::<DragItems>().is_some() || resp.dnd_hover_payload::<DragFolder>().is_some() {
+    if resp.dnd_hover_payload::<DragItems>().is_some() {
         let r = resp.rect;
         let bg = Rect::from_min_max(Pos2::new(r.left() + icon_x(depth) - 14.0, r.top() + 0.5), Pos2::new(r.right() - 11.0, r.bottom() - 0.5));
         ui.painter().rect_filled(bg, t::RADIUS, t::PRIMARY.gamma_multiply(0.25));
@@ -1636,6 +1666,21 @@ fn sidebar_row(
     active: bool,
     caret: Option<bool>,
 ) -> Response {
+    sidebar_row_tinted(ui, depth, glyph, t::TEXT, label, count, active, caret)
+}
+
+/// A sidebar row whose icon is drawn in `tint` (a folder's icon colour).
+#[allow(clippy::too_many_arguments)]
+fn sidebar_row_tinted(
+    ui: &mut Ui,
+    depth: usize,
+    glyph: &str,
+    tint: Color32,
+    label: &str,
+    count: Option<usize>,
+    active: bool,
+    caret: Option<bool>,
+) -> Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), t::ROW_HEIGHT), Sense::click_and_drag());
     let ix = rect.left() + icon_x(depth);
     let bg = Rect::from_min_max(Pos2::new(ix - 14.0, rect.top() + 0.5), Pos2::new(rect.right() - 11.0, rect.bottom() - 0.5));
@@ -1655,7 +1700,8 @@ fn sidebar_row(
         };
         p.add(egui::Shape::convex_polygon(pts, t::TEXT_MUTED, Stroke::NONE));
     }
-    p.text(Pos2::new(ix, rect.center().y), Align2::CENTER_CENTER, glyph, font(18.0), t::TEXT);
+    let size = if crate::folder_icons::is_text(glyph) { 11.0 } else { 18.0 };
+    p.text(Pos2::new(ix, rect.center().y), Align2::CENTER_CENTER, glyph, font(size), tint);
     let count_w = if count.is_some() { 30.0 } else { 0.0 };
     let g = galley(ui, label, font(13.5), t::TEXT, rect.right() - 20.0 - count_w - (ix + 15.0));
     p.galley(Pos2::new(ix + 15.0, rect.center().y - g.size().y / 2.0), g, t::TEXT);
@@ -1711,7 +1757,8 @@ impl App {
         icon_button(ui, Pos2::new(ix, cy), ic::PUZZLE_PIECE, 18.0, false, "Plugins");
         let icons_left = ix - 20.0;
 
-        egui::Popup::menu(&layout).show(|ui| self.layout_menu(ui));
+        let own = self.own_sort(lib);
+        egui::Popup::menu(&layout).show(|ui| self.layout_menu(ui, own));
         if filter.clicked() {
             self.show_filter = !self.show_filter;
         }
@@ -1778,7 +1825,7 @@ impl App {
         p.circle_filled(Pos2::new(kx, y), 7.0, Color32::WHITE);
     }
 
-    fn layout_menu(&mut self, ui: &mut Ui) {
+    fn layout_menu(&mut self, ui: &mut Ui, own: Option<(organize_ui::OrderTarget, Option<(falcon_library::model::FolderOrder, bool)>)>) {
         ui.set_min_width(190.0);
         ui.label(RichText::new("Layout").color(t::TEXT_MUTED).size(12.0));
         for l in Layout::ALL {
@@ -1788,6 +1835,11 @@ impl App {
             }
         }
         ui.separator();
+        // A folder or smart folder owns the sort while it is open.
+        if let Some((target, cur)) = own {
+            self.own_sort_menu(ui, target, cur);
+            return;
+        }
         ui.label(RichText::new("Sort by").color(t::TEXT_MUTED).size(12.0));
         for k in OrderBy::ALL {
             let mark = if k == self.sort { ic::CHECK } else { " " };
@@ -2074,6 +2126,7 @@ impl App {
                 self.url_text.clear();
             }
         }
+        self.saved_filters_menu(ui, lib);
     }
 }
 
@@ -2087,7 +2140,12 @@ impl App {
             Scope::Smart(id) => Some(lib.smart_folder_items(id).into_iter().map(|i| i.id.clone()).collect()),
             _ => None,
         };
-        let order = logic::visible(lib.items(), &lib.metadata.folders, &self.scope, &self.query, &self.filter, self.sort, self.increase, only.as_ref());
+        let order = self.grid_order(lib, only.as_ref());
+        if let Some(gate) = self.scope_gate(lib) {
+            self.order.clear();
+            self.unlock_screen(ui, gate, lib);
+            return;
+        }
         let items: Vec<&Item> = order.iter().map(|&i| &lib.items()[i]).collect();
         let new_order: Vec<String> = items.iter().map(|i| i.id.clone()).collect();
         let order_changed = self.hover.shown().is_some() && self.order != new_order;
@@ -2417,8 +2475,13 @@ impl App {
                 );
                 ui.add_space(12.0);
                 ui.label(RichText::new(format!("{} tags", tags.len())).color(t::TEXT_MUTED));
+                self.tag_page_controls(ui);
             });
             ui.add_space(14.0);
+            if self.tags_by_group() {
+                self.tag_groups_page(ui, lib, &filter);
+                return;
+            }
 
             let mut groups: Vec<(String, Vec<(String, usize)>)> = Vec::new();
             if !starred.is_empty() {
@@ -2471,12 +2534,19 @@ impl App {
         }
         let name_g = galley(ui, tag, font(13.0), t::TEXT, 300.0);
         let count_g = galley(ui, &n.to_string(), font(12.0), t::TEXT_MUTED, 80.0);
-        let size = vec2(name_g.size().x + count_g.size().x + 30.0, 28.0);
-        let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
+        // Tags filed in a group carry the group's colour dot.
+        let dot = App::tag_dot(lib, tag);
+        let dot_w = if dot.is_some() { 14.0 } else { 0.0 };
+        let size = vec2(name_g.size().x + count_g.size().x + 30.0 + dot_w, 28.0);
+        let (rect, resp) = ui.allocate_exact_size(size, Sense::click_and_drag());
+        App::tag_chip_drag(&resp, tag);
         let fill = if resp.hovered() { t::BUTTON_HOVER } else { t::BUTTON };
         ui.painter().rect_filled(rect, CornerRadius::same(6), fill);
         let cy = rect.center().y;
-        ui.painter().galley(Pos2::new(rect.left() + 11.0, cy - name_g.size().y / 2.0), name_g.clone(), t::TEXT);
+        if let Some(c) = dot {
+            ui.painter().circle_filled(Pos2::new(rect.left() + 14.0, cy), 4.0, c);
+        }
+        ui.painter().galley(Pos2::new(rect.left() + 11.0 + dot_w, cy - name_g.size().y / 2.0), name_g.clone(), t::TEXT);
         ui.painter().galley(Pos2::new(rect.right() - 11.0 - count_g.size().x, cy - count_g.size().y / 2.0), count_g, t::TEXT_MUTED);
         if resp.clicked() {
             self.go(Scope::Tag(tag.to_string()));
@@ -2490,6 +2560,7 @@ impl App {
             if ui.button(if starred { "Unstar" } else { "Star" }).clicked() {
                 self.actions.push(Action::StarTag(tag.to_string(), !starred));
             }
+            self.tag_group_menu(ui, lib, tag);
             ui.separator();
             if ui.button(RichText::new("Delete Tag").color(Color32::from_rgb(0xff, 0x66, 0x67))).clicked() {
                 self.confirm = Some(Confirm::DeleteTag(tag.to_string()));
@@ -2848,7 +2919,7 @@ impl App {
 }
 
 impl App {
-    fn smart_dialog_ui(&mut self, ctx: &egui::Context) {
+    fn smart_dialog_ui(&mut self, ctx: &egui::Context, lib: &Library) {
         let Some(mut d) = self.smart_dialog.take() else { return };
         let mut keep = true;
         let modal = egui::Modal::new(egui::Id::unique("smart-dialog")).show(ctx, |ui| {
@@ -2857,6 +2928,8 @@ impl App {
             ui.add_space(6.0);
             ui.add(TextEdit::singleline(&mut d.name).hint_text("Name").desired_width(f32::INFINITY));
             ui.add_space(6.0);
+            App::smart_dialog_extras(ui, &mut d, lib);
+            ui.add_space(4.0);
             ui.horizontal(|ui| {
                 ui.label("Match");
                 if ui.selectable_label(!d.any, "all rules").clicked() {
@@ -2920,10 +2993,7 @@ impl App {
                 if ui.add_enabled(ok, egui::Button::new(label)).clicked() {
                     let cond = serde_json::json!({"match": if d.any { "OR" } else { "AND" }, "boolean": "TRUE", "rules": rules});
                     let name = d.name.trim().to_string();
-                    self.actions.push(match d.editing.clone() {
-                        Some(id) => Action::UpdateSmart(id, name, vec![cond]),
-                        None => Action::CreateSmart(name, vec![cond]),
-                    });
+                    self.save_smart_draft(&d, name, cond);
                     keep = false;
                 }
                 if ui.button("Cancel").clicked() {
@@ -3323,8 +3393,9 @@ impl eframe::App for App {
             painter.galley(r.min + vec2(8.0, 4.0), g, Color32::WHITE);
         }
         if self.smart_dialog.is_some() {
-            self.smart_dialog_ui(&ctx);
+            self.smart_dialog_ui(&ctx, lib);
         }
+        self.organize_dialogs(&ctx, lib);
         if let Some(c) = self.confirm.clone() {
             let (title, detail, label) = match &c {
                 Confirm::DeleteFolder(id) => {

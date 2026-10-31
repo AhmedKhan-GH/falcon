@@ -14,9 +14,9 @@ Falcon is early alpha. This is what is done and what comes next, roughly in orde
 ## Next
 
 - [x] Hover preview in the grid
-- [ ] Per-folder sort, colours and icons
+- [x] Per-folder sort, colours and icons
 - [ ] Video and audio playback in the viewer
-- [ ] Tag groups
+- [x] Tag groups
 - [x] Undo
 - [ ] Windows and Linux builds
 - [ ] Signed, notarised macOS releases
@@ -26,20 +26,20 @@ Falcon is early alpha. This is what is done and what comes next, roughly in orde
 Eagle features that need no online service, put off until after the list above.
 
 **Browsing and look**
-- [ ] Reorder folders by drag
+- [x] Reorder folders by drag
 - [ ] Light, gray, blue and purple themes
 - [ ] Window buttons at Eagle's height
 
 **Search and organising**
 - [ ] Date, duration, camera (EXIF) and font filters
-- [ ] Saved filters
-- [ ] Nested smart folders and smart folder icons
+- [x] Saved filters
+- [x] Nested smart folders and smart folder icons
 
 **Editing**
 - [ ] Custom thumbnails
 - [ ] Refresh a palette
 - [ ] Folder covers
-- [ ] Folder passwords
+- [x] Folder passwords
 
 **Viewer**
 - [ ] Comments on a region of an image

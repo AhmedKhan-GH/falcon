@@ -1,11 +1,13 @@
 mod app;
 mod collect;
+mod folder_icons;
 mod hover;
 mod icons;
 mod loader;
 mod logic;
 mod prefs;
 mod shortcuts;
+mod organize;
 mod theme;
 
 use std::path::PathBuf;

@@ -37,3 +37,6 @@ pub const TAG_SIMPLE: &str = "\u{E47A}";
 pub const TRASH: &str = "\u{E4A6}";
 pub const TRAY_ARROW_DOWN: &str = "\u{E010}";
 pub const X: &str = "\u{E4F6}";
+pub const FLOPPY_DISK: &str = "\u{E248}";
+pub const LOCK_SIMPLE: &str = "\u{E308}";
+pub const LOCK_SIMPLE_OPEN: &str = "\u{E30A}";

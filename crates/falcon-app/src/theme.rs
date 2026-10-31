@@ -44,6 +44,19 @@ pub const PRIMARY: Color32 = rgb(0x3297ff);
 /// The library switcher's icon.
 pub const BRAND: Color32 = rgb(0x0072ef);
 
+/// Eagle's eight folder, smart folder and tag group colours in its dark
+/// themes (`--color-<name>` in `style/base/_color.scss`), in menu order.
+pub const ICON_RED: Color32 = rgb(0xff6667);
+pub const ICON_ORANGE: Color32 = rgb(0xff9f0a);
+pub const ICON_YELLOW: Color32 = rgb(0xffd60a);
+pub const ICON_GREEN: Color32 = rgb(0x30d159);
+pub const ICON_AQUA: Color32 = rgb(0x40cbe0);
+pub const ICON_BLUE: Color32 = rgb(0x00aaff);
+pub const ICON_PURPLE: Color32 = rgb(0xc499ff);
+pub const ICON_PINK: Color32 = rgb(0xff99cc);
+/// The uncoloured swatch.
+pub const ICON_NONE: Color32 = rgb(0xbdbec0);
+
 pub const RADIUS: CornerRadius = CornerRadius::same(6);
 pub const FIELD_RADIUS: CornerRadius = CornerRadius::same(8);
 
