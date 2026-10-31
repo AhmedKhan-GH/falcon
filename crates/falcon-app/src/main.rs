@@ -1,4 +1,5 @@
 mod app;
+mod hover;
 mod icons;
 mod loader;
 mod logic;

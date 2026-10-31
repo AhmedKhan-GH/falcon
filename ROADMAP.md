@@ -13,7 +13,7 @@ Falcon is early alpha. This is what is done and what comes next, roughly in orde
 
 ## Next
 
-- [ ] Hover preview in the grid
+- [x] Hover preview in the grid
 - [ ] Per-folder sort, colours and icons
 - [ ] Video and audio playback in the viewer
 - [ ] Tag groups

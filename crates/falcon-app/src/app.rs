@@ -340,6 +340,8 @@ pub struct App {
     /// Tag being renamed on the All Tags page, with the new name so far.
     tag_rename: Option<(String, String)>,
     tag_filter: String,
+    /// The enlarged preview of a hovered card (see `hover.rs`).
+    hover: crate::hover::Hover,
 }
 
 impl App {
@@ -391,6 +393,7 @@ impl App {
             switch_to: None,
             tag_rename: None,
             tag_filter: String::new(),
+            hover: Default::default(),
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
         app.tile = saved.tile.unwrap_or(app.tile).clamp(TILE_MIN, TILE_MAX);
@@ -1849,7 +1852,9 @@ impl App {
         };
         let order = logic::visible(lib.items(), &lib.metadata.folders, &self.scope, &self.query, &self.filter, self.sort, self.increase, only.as_ref());
         let items: Vec<&Item> = order.iter().map(|&i| &lib.items()[i]).collect();
-        self.order = items.iter().map(|i| i.id.clone()).collect();
+        let new_order: Vec<String> = items.iter().map(|i| i.id.clone()).collect();
+        let order_changed = self.hover.shown().is_some() && self.order != new_order;
+        self.order = new_order;
 
         if self.scope == Scope::AllTags && self.query.trim().is_empty() {
             self.tag_page(ui, lib);
@@ -1893,6 +1898,7 @@ impl App {
         let mut clicked: Option<(String, Modifiers)> = None;
         let mut opened: Option<String> = None;
         let mut bg_clicked = false;
+        let mut hovered: Option<(&Item, Rect, bool)> = None;
         let out = scroll.show_viewport(ui, |ui, viewport| {
             let origin = ui.max_rect().min;
             let bg = ui.allocate_rect(Rect::from_min_size(origin, vec2(area.width(), total_h.max(area.height()))), Sense::click());
@@ -1959,12 +1965,18 @@ impl App {
                     Layout::List => self.list_row(ui, lib, item, card, selected, resp.hovered(), n),
                     _ => self.card(ui, lib, item, card, caption, selected, resp.hovered()),
                 }
+                if resp.hovered() {
+                    hovered = Some((item, card, self.zoom_button(ui, item, card, caption)));
+                }
                 if let Some(j) = job_for(item, lib.root(), Tier::Grid) {
                     jobs.push(j);
                 }
             }
         });
-        ui.ctx().data_mut(|d| d.insert_temp(ui.scope_id().with("grid-offset"), out.state.clamped_offset().y));
+        let offset = out.state.clamped_offset().y;
+        let scrolled = ui.ctx().data(|d| d.get_temp::<f32>(ui.scope_id().with("grid-offset"))).is_some_and(|o| (o - offset).abs() > 0.5);
+        ui.ctx().data_mut(|d| d.insert_temp(ui.scope_id().with("grid-offset"), offset));
+        self.hover_preview(ui, lib, hovered, scrolled, order_changed || clicked.is_some() || opened.is_some());
         self.frame_jobs.extend(jobs);
         if let Some((id, m)) = clicked {
             self.click(&id, m);
@@ -2071,6 +2083,73 @@ impl App {
         for (i, text) in cells.iter().enumerate() {
             let g = galley(ui, text, font(12.0), t::TEXT_MUTED, cw(i + 1));
             p.galley(Pos2::new(x(i + 1), cy - g.size().y / 2.0), g, t::TEXT_MUTED);
+        }
+    }
+
+    /// Draws a hovered card's zoom button, as Eagle does, and says whether
+    /// the pointer is on it.
+    fn zoom_button(&self, ui: &Ui, item: &Item, card: Rect, caption: f32) -> bool {
+        if !crate::hover::has_zoom_button(&item.ext) {
+            return false;
+        }
+        let list = self.layout == Layout::List;
+        let thumb = if list {
+            Rect::from_min_size(Pos2::new(card.left() + 6.0, card.top() + 5.0), Vec2::splat(card.height() - 10.0))
+        } else {
+            Rect::from_min_max(card.min, Pos2::new(card.right(), card.bottom() - caption))
+        };
+        let rect = crate::hover::zoom_button_rect(thumb, self.tile, list);
+        let hot = ui.rect_contains_pointer(rect);
+        crate::hover::paint_button(ui.painter(), rect, list, hot, font(rect.width().min(24.0) * 0.6), ic::MAGNIFYING_GLASS);
+        hot
+    }
+
+    /// Eagle's hover preview: an enlarged image over the window after the
+    /// pointer rests on a card's zoom button, or at once while Z is held.
+    fn hover_preview(&mut self, ui: &Ui, lib: &Library, hovered: Option<(&Item, Rect, bool)>, scrolled: bool, cancel: bool) {
+        use crate::hover;
+        let ctx = ui.ctx().clone();
+        let (now, key, down) = ctx.input(|i| {
+            let m = i.modifiers;
+            (i.time, i.key_down(Key::Z) && !m.command && !m.ctrl && !m.shift, i.pointer.any_down())
+        });
+        let cancel = cancel
+            || down
+            || self.viewer.is_some()
+            || egui::DragAndDrop::has_any_payload(&ctx)
+            || self.native_drag.load(std::sync::atomic::Ordering::Relaxed);
+        let input = hover::Input {
+            card: hovered.map(|h| h.0.id.as_str()),
+            on_button: hovered.is_some_and(|h| h.2),
+            key: key && ctx.memory(|m| m.focused().is_none()),
+            scrolled,
+            cancel,
+            now,
+        };
+        if let Some(wait) = self.hover.update(input) {
+            ctx.request_repaint_after(std::time::Duration::from_secs_f64(wait));
+        }
+        let fade = ctx.animate_bool_with_time(egui::Id::unique("hover-preview-fade"), self.hover.shown().is_some(), 0.15);
+        let Some((item, card, _)) = hovered.filter(|h| self.hover.shown() == Some(h.0.id.as_str())) else { return };
+        let grid = self.loader.get(&item.id, Tier::Grid).cloned();
+        let natural = match (item.width, item.height, &grid) {
+            (w, h, _) if w > 0 && h > 0 => vec2(w as f32, h as f32),
+            (_, _, Some(t)) => t.size_vec2(),
+            _ => return,
+        };
+        let window = ctx.content_rect();
+        let rect = hover::preview_rect(card, natural, window, f32::INFINITY);
+        let original = hover::wants_original(&item.ext, item.width, item.height, rect.size() * ctx.pixels_per_point(), hover::GRID_SIDE);
+        let full = if original {
+            if let Some(j) = job_for(item, lib.root(), Tier::Full) {
+                self.frame_jobs.insert(0, j);
+            }
+            self.loader.get(&item.id, Tier::Full).cloned()
+        } else {
+            None
+        };
+        if let Some(tex) = full.or(grid) {
+            hover::paint(&ctx, window, rect, tex.id(), t::PANEL, fade);
         }
     }
 
