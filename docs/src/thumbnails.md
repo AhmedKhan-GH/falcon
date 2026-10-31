@@ -62,6 +62,19 @@ From the context menu's "Custom Thumbnail" entries and the background window's `
 
 The `regenerate-thumbnail` queue reads the original's size, birth time and mtime again (`size`, `btime`, `mtime`), then runs the same per-format generator as import, so `width`, `height` and the flags are measured again. The palette is then queued the same way as at import. A format Eagle no longer recognises loses its thumbnail, `palettes`, `width` and `height` and gets `noPreview: true`. When a re-measured image becomes small enough for `noThumbnail`, the jpg generator sets the flag but does not delete the old thumbnail file (inferred harmless, since Eagle then shows the original).
 
+## Crop and rotate (observed)
+
+From the viewer's `rotateImage`, `cropImage` and `saveCrop`, `js/utils/rotateImage.js` and `my_modules/image-cropper`:
+
+- **Where.** Both are buttons in the viewer's toolbar. Rotate (⇧R) turns 90° anticlockwise, or clockwise with ⇧ held while clicking. It is offered for jpg, png, webp and bmp. Crop is offered for jpg, png and webp, and is disabled for animated images.
+- **Rotation is written to the file** when the `imageRotateMode` preference is `write`, which is the default. The other mode only turns the view.
+- **JPEG rotation is lossless.** Only the EXIF Orientation tag changes, following a table of the eight orientations. The compressed image is untouched.
+- **Other formats are re-encoded.** PNG, WebP and BMP are drawn rotated on a canvas and exported in the same format, at quality 1 for WebP. Animated PNG is refused, and AVIF can't be written.
+- **Cropping is always re-encoded.** The crop box is cut out on a canvas and exported as PNG, JPEG or WebP, with a quality setting of 100 passed to Eagle's canvas helper (inferred to mean the best quality). The canvas drops the EXIF block, so a JPEG's orientation ends up in its pixels. Eagle shows the result and asks before saving.
+- **Writing.** Crop and rotate both overwrite the original in place and keep its name. Crop first copies it to `<file>.bk` and restores that if the write fails. Rotate writes `<file>.tmp` and then the file.
+- **Afterwards.** Eagle refreshes the thumbnail (see above), which updates `size`, `btime`, `mtime`, `width`, `height`, the thumbnail and the palette. The item edit also bumps `lastModified`; `modificationTime` stays. Folder covers that show the item are redrawn.
+- **Undo.** There is none. The overwritten pixels are gone.
+
 ## How falcon does it
 
 The `thumbnail` module holds the rules as plain functions: `plan_raster`, `plan_svg`, `target_size`, `max_side`, `resize` and `encode`.
@@ -88,3 +101,10 @@ The `thumbnail` module holds the rules as plain functions: `plan_raster`, `plan_
   - woff2 is not supported and falls back to QuickLook.
 - **Custom thumbnails.** `Library::set_custom_thumbnail(id, path)` follows Eagle: the same format and 10 MB rules, a byte-for-byte copy, `width` and `height` from the picture, a new palette, `noThumbnail` and `noPreview` removed and `customThumbnail: true` appended. It also refuses a file it can't decode. `reset_custom_thumbnail` removes the key and redraws. `thumbnail::has_custom_thumbnail` and `custom_thumbnail_allowed` hold the rules; jpeg and tiff count as jpg and tif.
 - **Refresh Thumbnail.** `Library::refresh_thumbnail(id)` re-reads size and file times, then redraws with import's own pipeline and recomputes the palette. It returns false and changes nothing for an item with a custom thumbnail. The new thumbnail replaces the old file only once it has been drawn, so a failed redraw keeps the old one. Unlike Eagle, a thumbnail that is no longer needed is deleted, because falcon shows a thumbnail file whenever one exists.
+- **Crop and rotate.** In `transform`: `Library::rotate_item(id, quarter_turns)` (clockwise; negative is anticlockwise) and `Library::crop_item(id, PixelRect)`, in the image's displayed pixels.
+  - Formats: rotate takes jpg, png, webp and bmp, crop takes jpg, png and webp. GIF, SVG, PDF and the rest are refused, and so are animated PNG and WebP.
+  - A JPEG rotation rewrites only the EXIF orientation. An existing tag is changed in place. EXIF without the tag gets a copy of IFD0 with the tag added, appended to the block. A JPEG without EXIF gets a minimal block after its JFIF header. The compressed image data is copied unchanged.
+  - Everything else is decoded with the `image` crate, turned or cut, and encoded again in the same format: PNG, JPEG at quality 100 with no EXIF (as Chromium's canvas does), BMP, and WebP through libwebp. Eagle's canvas exports WebP at quality 1, which falcon takes to be lossy quality 100 (inferred); falcon keeps a lossless WebP lossless.
+  - The file is overwritten in place, so its birth time stays. Then the item is refreshed as by Refresh Thumbnail and saved through `update_item`.
+  - Undo: falcon's undo can't restore pixels, so these edits mark the open undo transaction irreversible, like a permanent delete. In the app that clears the undo history rather than restoring dimensions that no longer match the file.
+
