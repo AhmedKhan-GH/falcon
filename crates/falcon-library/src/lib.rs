@@ -1,5 +1,6 @@
 //! Reading and writing Eagle `.library` folders.
 
+pub mod backup;
 pub mod edit;
 pub mod error;
 pub mod library;

@@ -51,6 +51,11 @@ enum Command {
         /// Path of the .library folder
         library: PathBuf,
     },
+    /// Back up metadata.json into the library's backup folder, as Eagle does
+    Backup {
+        /// Path of the .library folder
+        library: PathBuf,
+    },
     /// Serve Eagle's local HTTP API for a library on 127.0.0.1
     Serve {
         /// Path of the .library folder
@@ -87,6 +92,13 @@ fn run(cli: Cli) -> falcon_library::Result<()> {
             println!("items:   {} ({trashed} in trash)", lib.items().len());
             println!("folders: {}", lib.all_folders().len());
             println!("tags:    {}", tags.len());
+        }
+        Command::Backup { library } => {
+            let lib = Library::open(library)?;
+            match lib.backup_metadata()? {
+                Some(path) => println!("{}", path.display()),
+                None => println!("no backup written (same size as the newest backup, or metadata.json is damaged)"),
+            }
         }
         Command::Serve { library, port } => {
             let lib = Library::open(&library)?;
