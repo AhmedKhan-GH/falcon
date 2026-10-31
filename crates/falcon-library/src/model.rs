@@ -148,6 +148,11 @@ impl Folder {
         }
     }
 
+    /// Whether the folder has a password.
+    pub fn is_locked(&self) -> bool {
+        !self.password.is_empty()
+    }
+
     /// The folder's own sort, if it has one Eagle knows.
     pub fn order(&self) -> Option<FolderOrder> {
         self.order_by.as_deref().and_then(FolderOrder::parse)

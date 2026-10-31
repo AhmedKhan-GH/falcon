@@ -19,6 +19,7 @@ unicode-normalization = "0.1.26"
 tempfile = "3"
 zip = { version = "9.2.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+base64 = "0.22"
 
 [dev-dependencies]
 tempfile = "3"

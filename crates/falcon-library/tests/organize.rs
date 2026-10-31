@@ -81,6 +81,30 @@ fn reorder_places_folders_among_siblings() {
 }
 
 #[test]
+fn folder_passwords() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut lib = new_library(tmp.path());
+    let a = lib.create_folder(None, "A").unwrap();
+    assert!(!lib.metadata.folders[0].is_locked());
+    assert!(!lib.verify_folder_password(&a, ""));
+
+    lib.set_folder_password(&a, Some(("123", "the usual"))).unwrap();
+    assert!(metadata(&lib).contains(r#""password":"MTIz","passwordTips":"the usual""#));
+    let reopened = Library::open(lib.root()).unwrap();
+    assert!(reopened.metadata.folders[0].is_locked());
+    assert!(reopened.verify_folder_password(&a, "123"));
+    assert!(!reopened.verify_folder_password(&a, "124"));
+
+    assert!(lib.set_folder_password(&a, Some(("密码", ""))).is_err());
+    assert!(lib.set_folder_password(&a, Some(("", ""))).is_err());
+    assert!(lib.verify_folder_password(&a, "123"), "refused changes keep the old password");
+
+    lib.set_folder_password(&a, None).unwrap();
+    assert!(metadata(&lib).contains(r#""password":"","passwordTips":"""#));
+    assert!(!lib.verify_folder_password(&a, "123"));
+}
+
+#[test]
 fn rename_keeps_pinyin_in_step() {
     let tmp = tempfile::tempdir().unwrap();
     let mut lib = new_library(tmp.path());

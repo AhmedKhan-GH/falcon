@@ -44,6 +44,8 @@ The top-level keys, in this order, are `folders`, `smartFolders`, `quickAccess`,
 
 **Icons (observed):** the picker offers 161 names. Falcon lists them in `falcon_library::model::FOLDER_ICONS`, spelled exactly as Eagle stores them (including `excalmation`, `airplan` and `rophy`). Picking the first, blank entry deletes the key. A new subfolder takes its parent's `icon` and `iconColor`.
 
+**Passwords (observed):** `password` is `btoa(password)`, plain base64 with no hashing. `btoa` reads each UTF-16 unit as one byte and throws on anything above U+00FF. Eagle doesn't escape the text first, so a password with such characters can't be set at all. `é` is stored as `6Q==`, not as the base64 of its UTF-8 bytes. Unlocking checks `atob(password)` against the typed text. Removing a password deletes both keys from the in-memory folder, but the save writes `password || ""`, so on disk a folder that never had a password and one whose password was removed look the same: `"password":"","passwordTips":""`. Falcon refuses empty and non-Latin-1 passwords.
+
 **Ordering:** the array order is the sidebar order. Dragging a folder between siblings moves it in its parent's `children`. Dropping a folder onto another one appends it to that folder's children.
 
 ## Item `metadata.json` (observed)

@@ -232,6 +232,32 @@ impl Library {
         self.save_metadata()
     }
 
+    /// Locks a folder with `(password, hint)`, or unlocks it with `None`.
+    /// Eagle stores `btoa(password)`, which only accepts characters up to
+    /// U+00FF, so other passwords are refused here as Eagle cannot set them
+    /// either. Unlocking writes `""` for both keys, as Eagle's save does.
+    pub fn set_folder_password(&mut self, id: &str, password: Option<(&str, &str)>) -> Result<()> {
+        let encoded = match password {
+            Some(("", _)) => return Err(self.invalid("empty password")),
+            Some((p, hint)) => Some((encode_password(p).ok_or_else(|| self.invalid("password has characters beyond Latin-1"))?, hint)),
+            None => None,
+        };
+        let Some(f) = find_mut(&mut self.metadata.folders, id) else { return Err(self.missing(id)) };
+        let (password, tips) = encoded.unwrap_or_default();
+        f.password = password;
+        f.password_tips = tips.to_string();
+        self.save_metadata()
+    }
+
+    /// Whether `password` opens the folder. An unlocked or unknown folder
+    /// never matches.
+    pub fn verify_folder_password(&self, id: &str, password: &str) -> bool {
+        self.all_folders()
+            .into_iter()
+            .find(|f| f.id == id)
+            .is_some_and(|f| f.is_locked() && encode_password(password).is_some_and(|e| e == f.password))
+    }
+
     /// Deletes a folder and its subfolders. Items that were in them lose
     /// those folder ids; items left in no folder go to the trash, as Eagle
     /// does (without a `deletedTime`).
@@ -349,6 +375,26 @@ fn remove(folders: &mut Vec<Folder>, id: &str) -> Option<Folder> {
     folders.iter_mut().find_map(|f| remove(&mut f.children, id))
 }
 
-fn now_ms() -> u64 {
+pub(crate) fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64)
+}
+
+/// `btoa`: base64 of each character as one byte; `None` past U+00FF.
+fn encode_password(p: &str) -> Option<String> {
+    use base64::Engine;
+    let bytes: Option<Vec<u8>> = p.chars().map(|c| u8::try_from(u32::from(c)).ok()).collect();
+    Some(base64::engine::general_purpose::STANDARD.encode(bytes?))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn passwords_encode_like_btoa() {
+        assert_eq!(encode_password("123").as_deref(), Some("MTIz"));
+        // btoa takes each UTF-16 unit below 256 as a byte, not UTF-8.
+        assert_eq!(encode_password("é").as_deref(), Some("6Q=="));
+        assert_eq!(encode_password("密码"), None);
+    }
 }
