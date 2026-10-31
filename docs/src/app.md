@@ -38,7 +38,12 @@
 | ⌘= and ⌘− | Zoom the grid |
 | ⌘⇧N | New folder |
 | ⌘C and ⌘V | Copy the selected files, or paste files or images |
+| ⌘Z and ⇧⌘Z | Undo and redo library edits, up to 100 steps. Each frame's edits are one step, named after what was done ("Undid: Move 3 to Trash"). Deleting permanently or emptying the Trash can't be undone and clears the history. Text fields keep their own undo while focused |
 | Hold Z | Show the hover preview of the card under the pointer |
+
+## Saving
+
+The app opens libraries in batched write mode (see [Write batching](library-format.md#write-batching)): edits made during a frame, including those from the HTTP API and background imports since the last frame, are written together at the end of the frame, and a metadata backup follows when `mtime.json` or `metadata.json` changed. Pending writes are also flushed when the app saves its state on quit. A failed write shows "Could not save".
 
 ## Hover preview
 

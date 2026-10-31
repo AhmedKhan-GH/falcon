@@ -17,7 +17,7 @@ Falcon is early alpha. This is what is done and what comes next, roughly in orde
 - [ ] Per-folder sort, colours and icons
 - [ ] Video and audio playback in the viewer
 - [ ] Tag groups
-- [ ] Undo
+- [x] Undo
 - [ ] Windows and Linux builds
 - [ ] Signed, notarised macOS releases
 
@@ -55,7 +55,7 @@ Eagle features that need no online service, put off until after the list above.
 - [ ] IPTC and XMP keywords
 
 **Library**
-- [ ] Batched writes and backup rotation
+- [x] Batched writes and backup rotation
 - [ ] Duplicate detection
 - [x] Export
 - [ ] Several libraries open at once

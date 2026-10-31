@@ -12,6 +12,7 @@ use eframe::egui::{
 };
 use falcon_library::import::ImportOptions;
 use falcon_library::model::{Folder, Item};
+use falcon_library::undo::{Transaction, WriteMode};
 use falcon_library::{Library, thumbnail};
 
 use crate::icons as ic;
@@ -342,6 +343,15 @@ pub struct App {
     tag_filter: String,
     /// The enlarged preview of a hovered card (see `hover.rs`).
     hover: crate::hover::Hover,
+    /// Edits that ⌘Z reverts, newest last, and what ⇧⌘Z redoes.
+    undo: Vec<Transaction>,
+    redo: Vec<Transaction>,
+    /// ⌘Z (true) or ⇧⌘Z (false) pressed, applied once the library is locked.
+    undo_request: Option<bool>,
+    /// The library the undo history belongs to.
+    undo_root: Option<PathBuf>,
+    /// Labels of the actions applied this frame, naming its transaction.
+    frame_labels: Vec<String>,
 }
 
 impl App {
@@ -394,6 +404,11 @@ impl App {
             tag_rename: None,
             tag_filter: String::new(),
             hover: Default::default(),
+            undo: Vec::new(),
+            redo: Vec::new(),
+            undo_request: None,
+            undo_root: None,
+            frame_labels: Vec::new(),
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
         app.tile = saved.tile.unwrap_or(app.tile).clamp(TILE_MIN, TILE_MAX);
@@ -653,6 +668,9 @@ impl App {
         if ctx.memory(|m| m.focused().is_some()) {
             return;
         }
+        if ctx.input(|i| i.modifiers.command && i.key_pressed(Key::Z)) {
+            self.undo_request = Some(!ctx.input(|i| i.modifiers.shift));
+        }
         let (f2, find, back, fwd, zin, zout, newf, copy) = ctx.input(|i| {
             let c = i.modifiers.command;
             (
@@ -780,6 +798,7 @@ impl App {
 impl App {
     fn apply_actions(&mut self, lib: &mut Library) {
         for action in std::mem::take(&mut self.actions) {
+            self.frame_labels.push(action_label(&action));
             let result = match action {
                 Action::CreateFolder { parent } => lib.create_folder(parent.as_deref(), "New Folder").map(|id| {
                     if let Some(p) = parent {
@@ -893,6 +912,137 @@ impl App {
                 self.flash(format!("Could not save: {e}"));
             }
         }
+    }
+
+    /// Start of a frame with the library locked: batched writes on, a
+    /// pending ⌘Z or ⇧⌘Z applied, and a transaction opened for the frame's
+    /// edits.
+    fn begin_frame_edits(&mut self, lib: &mut Library) {
+        if self.undo_root.as_deref() != Some(lib.root()) {
+            self.undo.clear();
+            self.redo.clear();
+            self.undo_root = Some(lib.root().to_path_buf());
+        }
+        if lib.write_mode() != WriteMode::Batched
+            && let Err(e) = lib.set_write_mode(WriteMode::Batched)
+        {
+            self.flash(format!("Could not save: {e}"));
+        }
+        if let Some(undo) = self.undo_request.take() {
+            let (from, to) = if undo { (&mut self.undo, &mut self.redo) } else { (&mut self.redo, &mut self.undo) };
+            match from.pop() {
+                None => self.flash(if undo { "Nothing to undo" } else { "Nothing to redo" }),
+                Some(tx) => {
+                    let label = tx.label.clone();
+                    match lib.revert(tx) {
+                        Ok(inverse) => {
+                            push_capped(to, inverse);
+                            // Reload the inspector's text from the restored item.
+                            self.edit = None;
+                            self.flash(format!("{}: {label}", if undo { "Undid" } else { "Redid" }));
+                        }
+                        Err(e) => self.flash(format!("Could not save: {e}")),
+                    }
+                }
+            }
+        }
+        lib.begin_transaction("Edit item");
+    }
+
+    /// End of a frame: the frame's edits become one undo step (a permanent
+    /// delete clears the history instead), and pending writes are flushed.
+    fn end_frame_edits(&mut self, lib: &mut Library) {
+        let labels = std::mem::take(&mut self.frame_labels);
+        if let Some(mut tx) = lib.end_transaction() {
+            if tx.irreversible {
+                self.undo.clear();
+                self.redo.clear();
+            } else {
+                tx.label = undo_label(&labels);
+                push_capped(&mut self.undo, tx);
+                self.redo.clear();
+            }
+        }
+        if lib.has_pending_writes()
+            && let Err(e) = lib.flush()
+        {
+            self.flash(format!("Could not save: {e}"));
+        }
+    }
+}
+
+/// Most undo steps kept.
+const UNDO_LIMIT: usize = 100;
+
+fn push_capped(stack: &mut Vec<Transaction>, tx: Transaction) {
+    stack.push(tx);
+    if stack.len() > UNDO_LIMIT {
+        stack.remove(0);
+    }
+}
+
+/// The undo name of an action, as "Undid: …" shows it.
+fn action_label(action: &Action) -> String {
+    match action {
+        Action::CreateFolder { .. } => "New folder".into(),
+        Action::RenameFolder(..) => "Rename folder".into(),
+        Action::DeleteFolder(_) => "Delete folder".into(),
+        Action::AddToFolder(ids, _) => format!("Add {} to folder", ids.len()),
+        Action::Trash(ids, true) => format!("Move {} to Trash", ids.len()),
+        Action::Trash(ids, false) => format!("Restore {}", ids.len()),
+        Action::DeletePermanently(ids) => format!("Delete {}", ids.len()),
+        Action::EmptyTrash => "Empty Trash".into(),
+        Action::CreateSmart(..) => "New smart folder".into(),
+        Action::UpdateSmart(..) => "Edit smart folder".into(),
+        Action::DeleteSmart(_) => "Delete smart folder".into(),
+        Action::RenameTag(..) => "Rename tag".into(),
+        Action::DeleteTag(_) => "Delete tag".into(),
+        Action::StarTag(_, true) => "Star tag".into(),
+        Action::StarTag(_, false) => "Unstar tag".into(),
+        Action::MoveFolder(..) => "Move folder".into(),
+        Action::BatchTag(ids, Some(_), _) => format!("Tag {}", ids.len()),
+        Action::BatchTag(ids, None, _) => format!("Untag {}", ids.len()),
+        Action::BatchRating(ids, _) => format!("Rate {}", ids.len()),
+        Action::QuickAdd(..) => "Add to Quick Access".into(),
+        Action::QuickRemove(_) => "Remove from Quick Access".into(),
+    }
+}
+
+/// Names a frame's undo step from its actions; a frame without actions
+/// only had inspector edits.
+fn undo_label(labels: &[String]) -> String {
+    match labels {
+        [] => "Edit item".into(),
+        [one] => one.clone(),
+        [first, rest @ ..] => format!("{first} and {} more", rest.len()),
+    }
+}
+
+#[cfg(test)]
+mod undo_tests {
+    use super::*;
+
+    #[test]
+    fn undo_labels() {
+        assert_eq!(action_label(&Action::Trash(vec!["a".into(), "b".into(), "c".into()], true)), "Move 3 to Trash");
+        assert_eq!(action_label(&Action::RenameFolder("f".into(), "x".into())), "Rename folder");
+        assert_eq!(undo_label(&[]), "Edit item");
+        assert_eq!(undo_label(&["Rename folder".into()]), "Rename folder");
+        assert_eq!(undo_label(&["New folder".into(), "Tag 2".into(), "Rate 2".into()]), "New folder and 2 more");
+    }
+
+    #[test]
+    fn undo_history_is_capped() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut lib = Library::create(tmp.path().join("Undo.library")).unwrap();
+        let mut stack = Vec::new();
+        for n in 0..UNDO_LIMIT + 5 {
+            lib.begin_transaction(n.to_string());
+            lib.create_folder(None, "F").unwrap();
+            push_capped(&mut stack, lib.end_transaction().unwrap());
+        }
+        assert_eq!(stack.len(), UNDO_LIMIT);
+        assert_eq!(stack[0].label, "5");
     }
 }
 
@@ -2924,6 +3074,10 @@ impl App {
 
 impl eframe::App for App {
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        // Also runs on quit: nothing batched may be left unwritten.
+        if let Some(l) = &self.lib {
+            let _ = lock(l).flush();
+        }
         let saved = Saved {
             library: self.lib.as_ref().map(|l| lock(l).root().to_path_buf()),
             tile: Some(self.tile),
@@ -2964,6 +3118,7 @@ impl eframe::App for App {
         };
         let mut guard = lock(&shared);
         let lib: &mut Library = &mut guard;
+        self.begin_frame_edits(lib);
         // Items can vanish under the selection (deleted here or over the API).
         if self.selected.iter().any(|id| lib.item(id).is_none()) {
             self.selected.retain(|id| lib.item(id).is_some());
@@ -3125,6 +3280,7 @@ impl eframe::App for App {
             }
         }
         self.apply_actions(lib);
+        self.end_frame_edits(lib);
         self.loader.want(std::mem::take(&mut self.frame_jobs));
         drop(guard);
         match self.switch_to.take() {
