@@ -83,9 +83,16 @@ Smart-folder `conditions` are checked strictly before anything is saved. The fir
 
 ## Library switching
 
-`library/switch` (v1 and v2) opens the given path into the server's library slot, which the desktop app shares, so the app shows the new library too. Falcon refuses a path that does not exist (`Library does not exist.`), and also one that is not a folder ending in `.library` with a `metadata.json` (`Not an Eagle library.`, falcon's own text: Eagle tries to open anything that exists). Opening only reads, so nothing is created or written in the target.
+`library/switch` (v1 and v2) opens the given path into the server's library slot, which the desktop app shares, so the app shows the new library too (see "The desktop app" below). Falcon refuses a path that does not exist (`Library does not exist.`), and also one that is not a folder ending in `.library` with a `metadata.json` (`Not an Eagle library.`, falcon's own text: Eagle tries to open anything that exists). Opening only reads, so nothing is created or written in the target.
 
-`library/history` comes from Eagle's app settings (`libraryHistory`). Falcon's server can't reach the app's recent list, so it reports the libraries it has served since it started, newest first, beginning with the one it was started on.
+`library/history` comes from Eagle's app settings (`libraryHistory`). Falcon's server can't reach the app's recent list, so it reports the libraries it has served since it started, newest first, beginning with the one it was started on. Libraries the app hands it with `set_library` count as served.
+
+### The desktop app
+
+Eagle has one library open per window, and its API serves that library; `library/switch` goes through the same code as the library panel (observed in `js/api-server.js`, which calls the window's `openLibrary`). Falcon's app can keep several libraries open (see [Several libraries](app.md#several-libraries)), and the API follows the one being shown:
+
+- The running server keeps its port. When the shown library changes, the app calls `Handle::set_library(Shared)`, which swaps the library the next request sees and adds it to `library/history`. `Handle::library()` returns the one being served. `start` and `serve` are unchanged.
+- `library/switch` still replaces the library inside the served slot. The app checks the slot's root every frame. When it changed, the app puts the library that was there back into the slot (reopened from disk; the server's drop of it has already written anything pending) and shows the new path in a workspace of its own: an existing one if that library is already open, otherwise a new one with fresh state and no undo history. The path also joins the app's recent list. If the old library can't be reopened, the shown workspace becomes the new library and starts over.
 
 ## How falcon differs, on purpose
 
@@ -101,6 +108,7 @@ Smart-folder `conditions` are checked strictly before anything is saved. The fir
 - **Comments:** they are written in the order falcon's model uses (`id`, region or `duration`, `annotation`, `lastModified`). The `addComment` reply uses Eagle's order.
 - **Smart folders:** a top-level entry made through the API is stored in the shape Eagle's save gives top-level entries, with no empty `icon` or `iconColor`. A nested one is stored as the API builds it.
 - **Library history:** see above.
+- **Several libraries:** the app can keep several libraries open; the API serves the one shown, and `library/switch` opens or focuses a workspace instead of replacing the window's only library (see above).
 
 ## Ports
 

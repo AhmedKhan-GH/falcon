@@ -353,6 +353,24 @@ fn library_switch_and_history() {
     assert_eq!(e.ok_get(&format!("/api/v2/library/icon?libraryPath={}", other.display())), json!({"type": "Buffer", "data": [1, 2, 3]}));
 }
 
+#[test]
+fn set_library_keeps_the_port() {
+    let e = env();
+    let other = e.tmp.path().join("Second.library");
+    let second: falcon_server::Shared = Arc::new(Mutex::new(Library::create(&other).unwrap()));
+    e.server.set_library(second.clone());
+    assert!(Arc::ptr_eq(&e.server.library(), &second));
+    assert_eq!(e.ok_get("/api/v2/library/info")["name"], "Second");
+    assert_eq!(e.ok_get("/api/v2/item/countAll"), json!(0));
+    assert_eq!(e.ok_get("/api/library/history"), json!([other.display().to_string(), e.root.display().to_string()]));
+    // A switch over the API now replaces what is inside the new slot.
+    assert_eq!(e.ok_post("/api/v2/library/switch", json!({"libraryPath": e.root})), json!(true));
+    assert_eq!(second.lock().unwrap().root(), e.root.as_path());
+    assert_eq!(e.lib.lock().unwrap().root(), e.root.as_path(), "the first library is untouched");
+    e.server.set_library(e.lib.clone());
+    assert_eq!(e.ok_get("/api/v2/item/countAll"), json!(2));
+}
+
 /// Every file under `dir` with its size and modification time.
 fn walk(dir: &Path) -> Vec<(PathBuf, u64, std::time::SystemTime)> {
     let mut out = Vec::new();

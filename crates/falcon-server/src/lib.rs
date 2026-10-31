@@ -44,11 +44,7 @@ struct State {
 
 impl State {
     fn new(lib: &Shared) -> State {
-        let root = match lib.lock() {
-            Ok(l) => l.root().display().to_string(),
-            Err(p) => p.into_inner().root().display().to_string(),
-        };
-        State { history: Mutex::new(vec![root]) }
+        State { history: Mutex::new(vec![root_of(lib)]) }
     }
 
     fn history(&self) -> Vec<String> {
@@ -81,7 +77,32 @@ pub fn serve(lib: Shared, port: u16) -> std::io::Result<()> {
 pub struct Handle {
     server: Arc<Server>,
     thread: Option<std::thread::JoinHandle<()>>,
+    /// The library being served; [`Handle::set_library`] swaps it.
+    slot: Arc<Mutex<Shared>>,
+    state: Arc<State>,
     pub port: u16,
+}
+
+impl Handle {
+    /// Serves `lib` from the next request on, keeping the port. The old
+    /// library is left as it is (its owner still holds it), and the new
+    /// one joins `library/history`.
+    pub fn set_library(&self, lib: Shared) {
+        self.state.remember(root_of(&lib));
+        *self.slot.lock().unwrap_or_else(|p| p.into_inner()) = lib;
+    }
+
+    /// The library being served now.
+    pub fn library(&self) -> Shared {
+        self.slot.lock().unwrap_or_else(|p| p.into_inner()).clone()
+    }
+}
+
+fn root_of(lib: &Shared) -> String {
+    match lib.lock() {
+        Ok(l) => l.root().display().to_string(),
+        Err(p) => p.into_inner().root().display().to_string(),
+    }
 }
 
 impl Drop for Handle {
@@ -114,14 +135,17 @@ pub fn start(
             Ok(server) => {
                 let server = Arc::new(server);
                 let s = server.clone();
-                let state = State::new(&lib);
+                let state = Arc::new(State::new(&lib));
+                let slot = Arc::new(Mutex::new(lib));
+                let (st, sl) = (state.clone(), slot.clone());
                 let thread = std::thread::spawn(move || {
                     for request in s.incoming_requests() {
-                        handle(&lib, &state, port, request);
+                        let lib = sl.lock().unwrap_or_else(|p| p.into_inner()).clone();
+                        handle(&lib, &st, port, request);
                         on_request();
                     }
                 });
-                return Ok(Handle { server, thread: Some(thread), port });
+                return Ok(Handle { server, thread: Some(thread), slot, state, port });
             }
             Err(e) => last = Some(e.to_string()),
         }
