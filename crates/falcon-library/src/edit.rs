@@ -12,7 +12,7 @@ use crate::error::{Error, Result};
 use crate::import::sanitize_name;
 use crate::library::{Library, write_json};
 use crate::ids;
-use crate::model::{Folder, FolderOrder, ICON_COLORS, Item};
+use crate::model::{Folder, FolderOrder, ICON_COLORS, Item, TagGroup};
 
 /// How many recent tags Eagle keeps in `historyTags`.
 const HISTORY_LIMIT: usize = 120;
@@ -109,13 +109,7 @@ impl Library {
         swap(&mut self.tags.history_tags);
         swap(&mut self.tags.starred_tags);
         for g in &mut self.metadata.tags_groups {
-            if let Some(serde_json::Value::Array(tags)) = g.get_mut("tags") {
-                for t in tags.iter_mut() {
-                    if t.as_str() == Some(from) {
-                        *t = serde_json::Value::String(to.to_string());
-                    }
-                }
-            }
+            swap(&mut g.tags);
         }
         self.save_metadata()?;
         write_json(&self.root().join("tags.json"), &self.tags)?;
@@ -133,9 +127,7 @@ impl Library {
         self.tags.history_tags.retain(|t| t != tag);
         self.tags.starred_tags.retain(|t| t != tag);
         for g in &mut self.metadata.tags_groups {
-            if let Some(serde_json::Value::Array(tags)) = g.get_mut("tags") {
-                tags.retain(|t| t.as_str() != Some(tag));
-            }
+            g.tags.retain(|t| t != tag);
         }
         self.save_metadata()?;
         write_json(&self.root().join("tags.json"), &self.tags)?;
@@ -163,13 +155,138 @@ impl Library {
     }
 }
 
+/// Tag groups, kept in `tagsGroups` of the library `metadata.json`. Group
+/// edits only rewrite that file; items are untouched unless a delete asks
+/// for its tags to go too.
+impl Library {
+    /// Adds a tag group at the end of the list and returns its id. Tags are
+    /// kept in the given order without duplicates; like Eagle's "create
+    /// group from tags", they are not taken out of other groups.
+    pub fn create_tag_group(&mut self, name: &str, tags: &[String], color: Option<&str>) -> Result<String> {
+        self.check_color(color)?;
+        let id = ids::new_id();
+        let mut list = Vec::new();
+        for t in tags.iter().map(|t| clean_tag(t)) {
+            if !list.contains(&t) {
+                list.push(t);
+            }
+        }
+        self.metadata.tags_groups.push(TagGroup {
+            id: id.clone(),
+            name: display_name(name),
+            tags: list,
+            color: color.map(str::to_string),
+            description: None,
+            extra: Default::default(),
+        });
+        self.save_metadata()?;
+        Ok(id)
+    }
+
+    /// Renames a tag group (cut to 1024 characters, as Eagle does).
+    pub fn rename_tag_group(&mut self, id: &str, name: &str) -> Result<()> {
+        self.tag_group_mut(id)?.name = display_name(name);
+        self.save_metadata()
+    }
+
+    /// Replaces a group's tags (order kept, duplicates dropped). Other
+    /// groups are left alone.
+    pub fn set_tag_group_tags(&mut self, id: &str, tags: &[String]) -> Result<()> {
+        let g = self.tag_group_mut(id)?;
+        g.tags.clear();
+        for t in tags.iter().map(|t| clean_tag(t)) {
+            if !g.tags.contains(&t) {
+                g.tags.push(t);
+            }
+        }
+        self.save_metadata()
+    }
+
+    /// Adds tags to the end of a group. As in Eagle's tag manager, a tag
+    /// moves: it leaves any other group it was in.
+    pub fn add_tags_to_group(&mut self, id: &str, tags: &[String]) -> Result<()> {
+        self.tag_group_mut(id)?;
+        let tags: Vec<String> = tags.iter().map(|t| clean_tag(t)).collect();
+        for g in &mut self.metadata.tags_groups {
+            if g.id == id {
+                for t in &tags {
+                    if !g.tags.contains(t) {
+                        g.tags.push(t.clone());
+                    }
+                }
+            } else {
+                g.tags.retain(|t| !tags.contains(t));
+            }
+        }
+        self.save_metadata()
+    }
+
+    /// Takes tags out of a group; the tags stay on their items.
+    pub fn remove_tags_from_group(&mut self, id: &str, tags: &[String]) -> Result<()> {
+        self.tag_group_mut(id)?.tags.retain(|t| !tags.contains(t));
+        self.save_metadata()
+    }
+
+    /// Sets a group's colour (one of [`ICON_COLORS`]) or removes it.
+    pub fn set_tag_group_color(&mut self, id: &str, color: Option<&str>) -> Result<()> {
+        self.check_color(color)?;
+        self.tag_group_mut(id)?.color = color.map(str::to_string);
+        self.save_metadata()
+    }
+
+    /// Deletes a group. With `remove_tags`, its tags are also deleted from
+    /// every item, the tag history and starred tags, as Eagle offers.
+    pub fn delete_tag_group(&mut self, id: &str, remove_tags: bool) -> Result<()> {
+        let pos = self.tag_group_index(id)?;
+        let group = self.metadata.tags_groups.remove(pos);
+        self.save_metadata()?;
+        if remove_tags {
+            for t in &group.tags {
+                self.delete_tag(t)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Moves a group to `index` in the list (after it has left its old
+    /// place; past the end appends), as dragging in the tag manager does.
+    pub fn reorder_tag_group(&mut self, id: &str, index: usize) -> Result<()> {
+        let pos = self.tag_group_index(id)?;
+        let g = self.metadata.tags_groups.remove(pos);
+        let at = index.min(self.metadata.tags_groups.len());
+        self.metadata.tags_groups.insert(at, g);
+        self.save_metadata()
+    }
+
+    fn tag_group_index(&self, id: &str) -> Result<usize> {
+        self.metadata.tags_groups.iter().position(|g| g.id == id).ok_or_else(|| self.invalid(format!("no tag group {id}")))
+    }
+
+    fn tag_group_mut(&mut self, id: &str) -> Result<&mut TagGroup> {
+        let pos = self.tag_group_index(id)?;
+        Ok(&mut self.metadata.tags_groups[pos])
+    }
+}
+
+/// Eagle strips line breaks from tags it files into a group.
+fn clean_tag(t: &str) -> String {
+    t.replace(['\r', '\n'], "")
+}
+
+/// A name as Eagle stores it: cut to 1024 characters and NFC-normalised
+/// (Eagle normalises folder, smart-folder and tag-group names on save).
+pub(crate) fn display_name(name: &str) -> String {
+    use unicode_normalization::UnicodeNormalization;
+    name.chars().take(1024).nfc().collect()
+}
+
 impl Library {
     /// Creates a folder at the end of `parent`'s children (or at the root)
     /// and returns its id. A subfolder takes its parent's icon and colour,
     /// as Eagle's new-subfolder command does.
     pub fn create_folder(&mut self, parent: Option<&str>, name: &str) -> Result<String> {
         let id = ids::new_id();
-        let mut folder = Folder::new(id.clone(), name, now_ms());
+        let mut folder = Folder::new(id.clone(), display_name(name), now_ms());
         match parent {
             None => self.metadata.folders.push(folder),
             Some(p) => match find_mut(&mut self.metadata.folders, p) {
@@ -191,9 +308,9 @@ impl Library {
     /// otherwise drops the key for Eagle to rebuild on load.
     pub fn rename_folder(&mut self, id: &str, name: &str) -> Result<()> {
         let Some(f) = find_mut(&mut self.metadata.folders, id) else { return Err(self.missing(id)) };
-        f.name = name.to_string();
+        f.name = display_name(name);
         if f.pinyin.is_some() {
-            f.pinyin = name.chars().all(|c| (c as u32) < 256).then(|| name.to_string());
+            f.pinyin = f.name.chars().all(|c| (c as u32) < 256).then(|| f.name.clone());
         }
         self.save_metadata()
     }

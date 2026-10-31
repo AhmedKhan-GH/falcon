@@ -19,8 +19,8 @@ pub struct LibraryMetadata {
     pub smart_folders: Vec<Value>,
     /// Quick-access entries (raw JSON).
     pub quick_access: Vec<Value>,
-    /// Tag groups (raw JSON).
-    pub tags_groups: Vec<Value>,
+    /// Tag groups, in sidebar order.
+    pub tags_groups: Vec<TagGroup>,
     /// Last modification time, ms since epoch.
     pub modification_time: u64,
     /// Version of Eagle that wrote the library.
@@ -183,6 +183,45 @@ pub const FOLDER_ICONS: &[&str] = &[
     "number4", "number5", "number6", "number7", "number8", "number9", "number10", "number11", "number12", "number13",
     "number14", "number15", "number16", "number17", "number18", "number19", "number20",
 ];
+
+/// A tag group from `tagsGroups` in the library `metadata.json`. Eagle
+/// writes `id`, `name`, `tags`, then `color` when set and `description` when
+/// defined.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct TagGroup {
+    /// Group id, in the same format as item ids.
+    pub id: String,
+    /// Display name.
+    pub name: String,
+    /// Member tags, in the group's order.
+    pub tags: Vec<String>,
+    /// Colour from [`ICON_COLORS`].
+    pub color: Option<String>,
+    /// Description (may be present and empty).
+    pub description: Option<String>,
+    /// Unknown keys.
+    #[serde(flatten)]
+    pub extra: Extra,
+}
+
+impl Serialize for TagGroup {
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        let mut m = s.serialize_map(None)?;
+        m.serialize_entry("id", &self.id)?;
+        m.serialize_entry("name", &self.name)?;
+        m.serialize_entry("tags", &self.tags)?;
+        if let Some(v) = &self.color {
+            m.serialize_entry("color", v)?;
+        }
+        if let Some(v) = &self.description {
+            m.serialize_entry("description", v)?;
+        }
+        for (k, v) in &self.extra {
+            m.serialize_entry(k, v)?;
+        }
+        m.end()
+    }
+}
 
 /// A folder's or smart folder's own sort key, stored as `orderBy`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -487,5 +526,17 @@ mod tests {
         }
         assert_eq!(FolderOrder::parse("nope"), None);
         assert_eq!(FOLDER_ICONS.len(), 161);
+    }
+
+    #[test]
+    fn tag_groups_round_trip() {
+        for json in [
+            r#"{"id":"LZ1Q2W3E4R5TY","name":"Mood","tags":["calm","loud"]}"#,
+            r#"{"id":"LZ1Q2W3E4R5TY","name":"Mood","tags":[],"color":"aqua","description":""}"#,
+            r#"{"id":"LZ1Q2W3E4R5TY","name":"Mood","tags":[],"description":"x","later":1}"#,
+        ] {
+            let g: TagGroup = serde_json::from_str(json).unwrap();
+            assert_eq!(serde_json::to_string(&g).unwrap(), json);
+        }
     }
 }

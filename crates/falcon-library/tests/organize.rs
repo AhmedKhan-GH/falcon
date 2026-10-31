@@ -104,6 +104,67 @@ fn folder_passwords() {
     assert!(!lib.verify_folder_password(&a, "123"));
 }
 
+fn strings(v: &[&str]) -> Vec<String> {
+    v.iter().map(|s| s.to_string()).collect()
+}
+
+#[test]
+fn tag_groups() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut lib = new_library(tmp.path());
+    let mood = lib.create_tag_group("Mood", &strings(&["calm", "loud", "calm"]), Some("aqua")).unwrap();
+    let style = lib.create_tag_group("Style", &strings(&["flat"]), None).unwrap();
+    assert_eq!(mood.len(), 13);
+    let text = metadata(&lib);
+    assert!(text.contains(&format!(r#""tagsGroups":[{{"id":"{mood}","name":"Mood","tags":["calm","loud"],"color":"aqua"}},{{"id":"{style}","name":"Style","tags":["flat"]}}]"#)), "{text}");
+
+    // Adding moves a tag out of its other groups.
+    lib.add_tags_to_group(&style, &strings(&["loud\n", "flat"])).unwrap();
+    assert_eq!(lib.metadata.tags_groups[0].tags, ["calm"]);
+    assert_eq!(lib.metadata.tags_groups[1].tags, ["flat", "loud"]);
+    lib.remove_tags_from_group(&style, &strings(&["flat"])).unwrap();
+    lib.set_tag_group_tags(&mood, &strings(&["b", "a", "b"])).unwrap();
+    lib.rename_tag_group(&mood, "Feel").unwrap();
+    lib.set_tag_group_color(&mood, None).unwrap();
+    assert!(lib.set_tag_group_color(&mood, Some("grey")).is_err());
+    lib.reorder_tag_group(&style, 0).unwrap();
+
+    let reopened = Library::open(lib.root()).unwrap();
+    let g = &reopened.metadata.tags_groups;
+    assert_eq!((g[0].id.as_str(), g[0].tags.clone()), (style.as_str(), strings(&["loud"])));
+    assert_eq!((g[1].name.as_str(), g[1].tags.clone(), g[1].color.clone()), ("Feel", strings(&["b", "a"]), None));
+
+    // Tag renames and deletes reach the groups.
+    lib.rename_tag("b", "a").unwrap();
+    assert_eq!(lib.metadata.tags_groups[1].tags, ["a"]);
+    lib.delete_tag("loud").unwrap();
+    assert!(lib.metadata.tags_groups[0].tags.is_empty());
+
+    lib.delete_tag_group(&style, false).unwrap();
+    assert_eq!(Library::open(lib.root()).unwrap().metadata.tags_groups.len(), 1);
+    assert!(lib.rename_tag_group(&style, "x").is_err());
+}
+
+#[test]
+fn deleting_a_group_can_take_its_tags_off_items() {
+    let Some(src) = fixture() else { return };
+    let tmp = tempfile::tempdir().unwrap();
+    let dest = tmp.path().join("Groups.library");
+    Library::open(&src).unwrap().save_to(&dest).unwrap();
+    let mut lib = Library::open(&dest).unwrap();
+    let tag = lib.items().iter().find_map(|i| i.tags.first().cloned()).expect("fixture has tags");
+    let g = lib.create_tag_group("G", std::slice::from_ref(&tag), None).unwrap();
+    lib.delete_tag_group(&g, true).unwrap();
+    let reopened = Library::open(&dest).unwrap();
+    assert!(reopened.metadata.tags_groups.is_empty());
+    assert!(reopened.items().iter().all(|i| !i.tags.contains(&tag)));
+}
+
+fn fixture() -> Option<std::path::PathBuf> {
+    let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/Assets.library");
+    p.is_dir().then_some(p)
+}
+
 #[test]
 fn rename_keeps_pinyin_in_step() {
     let tmp = tempfile::tempdir().unwrap();

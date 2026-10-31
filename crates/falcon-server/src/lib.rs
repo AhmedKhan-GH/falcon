@@ -400,7 +400,7 @@ fn route(lib: &Shared, method: &Method, path: &str, args: &Map<String, Value>) -
                 .collect();
             Reply::Data(Value::Array(recent))
         }
-        "/api/tag/groups" => Reply::Data(Value::Array(lib.metadata.tags_groups.clone())),
+        "/api/tag/groups" => Reply::Data(json!(lib.metadata.tags_groups)),
         "/api/v2/tag/get" => Reply::Data(paginate(tag_objects(lib), args)),
 
         "/api/item/addFromPath" => {

@@ -48,6 +48,29 @@ The top-level keys, in this order, are `folders`, `smartFolders`, `quickAccess`,
 
 **Ordering:** the array order is the sidebar order. Dragging a folder between siblings moves it in its parent's `children`. Dropping a folder onto another one appends it to that folder's children.
 
+**Names (observed):** every save NFC-normalises folder, smart-folder and tag-group names. Renames are cut to 1024 characters. Falcon does both when it writes a name. Renaming also recomputes `pinyin`. Falcon has no pinyin table, so it copies Latin-1 names, which is what Eagle's conversion yields for them. For any other name it drops the key, and Eagle rebuilds it on load (inferred to be harmless, since Eagle fills a missing `pinyin` itself).
+
+### Tag groups (observed in code)
+
+`tagsGroups` is an array in sidebar order. The fixture has none. Each save rebuilds every entry as:
+
+| Key | Type | Notes |
+|---|---|---|
+| `id` | string | Same generator as item IDs (time in base 36 plus 5 random characters) |
+| `name` | string | NFC-normalised. Renames are cut to 1024 characters |
+| `tags` | string array | Members in group order. Line breaks are stripped when tags are filed |
+| `color` | string | Optional, written only when set. Same palette as folder `iconColor` |
+| `description` | string | Optional, written whenever it isn't `undefined`, so `""` survives |
+
+- **Creating a group:** a new group goes at the end. Creating one from selected tags leaves those tags in their other groups.
+- **Adding tags:** adding through the tag manager moves each tag, taking it out of any other group, so a tag normally belongs to one group.
+- **Removing tags:** taking tags out of a group leaves them on their items.
+- **Deleting a group:** Eagle asks whether to delete the group's tags from every item too.
+- **Reordering:** the sidebar is drag-sortable, and the array follows it.
+- **Other tag edits:** renaming or deleting a tag also updates every group.
+
+None of these edits touch the folders' `modificationTime`. The library's top-level `modificationTime` is stamped when `metadata.json` is written.
+
 ## Item `metadata.json` (observed)
 
 | Key | Type | Notes |
