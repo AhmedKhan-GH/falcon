@@ -7,10 +7,10 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
 | Main window: menus, shortcuts, toolbar, sidebar, layouts | 203 | 32 | 36 | 9 |
-| Viewers and file formats | 157 | 22 | 11 | 7 |
+| Viewers and file formats | 156 | 23 | 11 | 7 |
 | Search, filters and organising | 189 | 14 | 19 | 3 |
-| Import, export, library, preferences and integrations | 154 | 12 | 46 | 26 |
-| **Total** | 703 | 80 | 112 | 45 |
+| Import, export, library, preferences and integrations | 153 | 13 | 46 | 26 |
+| **Total** | 701 | 82 | 112 | 45 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -632,7 +632,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Colour themes for the specimen (auto, light, dark, purple, yellow) | Done | auto, light, dark, purple, yellow | local |
 | Font info panel (PostScript, full name, family, version, designer, maker, description, copyright, trademark, glyph count) | Done | `fontmeta::FontInfo`, `info_rows` with Use as File Name on the names | local |
 | Rename the file from the PostScript, full or family name | Done | `Op::Rename` from the info panel or the header name; undoable | local |
-| Activate or deactivate (install) the font | Done | `F/font_install.rs` copies to `~/Library/Fonts/EagleApp/<postScriptName>.<ext>` after a confirmation (Eagle asks none); macOS only | local |
+| Activate or deactivate (install) the font | Partial | `F/font_install.rs` writes and removes only in `~/Library/Fonts/Falcon/`; fonts in Eagle's `EagleApp/` show as "Activated by Eagle" and are left alone; both folders count as installed for the filter and rules. Eagle doesn't see falcon-activated fonts; activation from the context menu or for several fonts not checked | local |
 | Change the sample language | Done | Language menu writing `fontMetas.preferLng` (`Library::set_font_language`), redrawing the specimen thumbnail | local |
 | Number keys rate the font from inside the viewer | Done | `digits_rate` in `keyboard`: font, video, audio and text viewers rate; the image viewer keeps 0/1 for zoom | local |
 | Fonts egui can't read (some woff2, CFF) | Partial | Falls back to the image viewer (`F/app/media_view.rs:88-90`, `:189`) | local |
@@ -1232,7 +1232,7 @@ Two cross-cutting facts explain many rows:
 | Drag an image or link from a web browser into the window | Missing | Only `dropped_files` with local paths are read (`app.rs:3600`) | online |
 | Batch-download panel: pick images from a page, filter by type and size, select all or invert | Missing | — | online |
 | Screen capture of an area, a window or the full screen into the library | Missing | No screenshot code (`grep screencapture` finds only a doc comment in `collect.rs:5`) | local |
-| Watched auto-import folder: files dropped into it are imported automatically | Done | `crates/falcon-app/src/auto_import.rs`, `import_ui::auto_import_tick`: polls `<chosen>/<library name>` every 2 s and imports settled files into the root through `spawn_import`; files are left in place and remembered (Eagle deletes them) | local |
+| Watched auto-import folder: files dropped into it are imported automatically | Partial | `auto_import.rs` polls `<chosen>/<library name>` every 2 s and imports settled files into the root; imported files go to the Trash as Eagle deletes them (preference `auto_import_delete`, on by default, Trash instead of a hard delete). Still Partial: polling instead of file events, only the shown library is watched, any format is accepted | local |
 | Auto-import rejects network drives and missing paths | Done | `auto_import::is_network_volume` (`NSURLVolumeIsLocalKey`), `prefs::auto_import_refusal`; a vanished folder pauses with a notice | local |
 | Auto-import skips `.tmp` files, tiny files and unsupported types, and waits until a copy has finished | Done | `auto_import::skip` and `Settle` (size and mtime unchanged for 3 s); any extension is accepted, as a drop is | local |
 | Import an Eagle Package (`.eaglepack`) from the File menu or by opening the file | Done | File ▸ Import submenu, the switcher and a drop; Finder Open With is still not registered | local |
@@ -1419,7 +1419,7 @@ Eagle panes (`app/js/preferences.js:659-788`): General, Sidebar, Controls, Previ
 | **AI Search** pane (install, enable or disable the local semantic-search plugin) | Missing | — | online/plugin |
 | **AI Models** pane (shared API keys for OpenAI, Anthropic, Gemini and so on) | Missing | — | online/plugin |
 | **Eagle MCP** pane (install or open the MCP server plugin) | Missing | — | online/plugin |
-| **Developer:** show, copy and regenerate the API token | Done | Developer pane: token, Copy, Regenerate and the `?token=` link (`Prefs::api_token`, made on first launch; Eagle's default is empty until Regenerate) | local |
+| **Developer:** show, copy and regenerate the API token | Done | Developer pane: empty by default like Eagle, Generate when empty, Copy / Regenerate / link when set; an empty token means Host-check-only auth (`authorized` in `falcon-server`) | local |
 | Developer (falcon only): API on or off, and first port | Done (beyond Eagle) | `prefs.rs:339-358` | local |
 | Developer: plugin developer tools | Missing | — | local |
 | **Proxy** (server address and port, used for downloads and web search) | Missing | — | online |
@@ -1517,8 +1517,8 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 
 Rows marked "not counted" are features Eagle 4.0.0 does not have.
 
-- **Done:** 154, including 5 where falcon goes beyond Eagle and 1 with a small difference.
-- **Partial:** 12.
+- **Done:** 153, including 5 where falcon goes beyond Eagle and 1 with a small difference.
+- **Partial:** 13.
 - **Missing:** 72, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
 - **Different on purpose:** 1 (the API listens on localhost only).
 
