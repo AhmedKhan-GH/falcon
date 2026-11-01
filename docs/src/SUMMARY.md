@@ -16,6 +16,7 @@
 # Falcon
 
 - [The desktop app](app.md)
+- [Localisation](localisation.md)
 
 # Reference
 
