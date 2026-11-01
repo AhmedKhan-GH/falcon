@@ -3663,9 +3663,10 @@ impl App {
                 self.ws.view.zoom = Some(scale);
             }
         }
-        if resp.double_clicked() {
-            self.ws.view.zoom = None;
-            self.ws.view.pan = Vec2::ZERO;
+        // Double-clicking the picture or the space around it leaves the
+        // viewer, as in Eagle (not while cropping or marking regions).
+        if resp.double_clicked() && self.ws.tools.crop.is_none() && !self.ws.tools.comment_mode {
+            self.ws.viewer = None;
         }
         let scale = self.ws.view.zoom.unwrap_or(fit);
         if self.ws.view.zoom.is_none() {
