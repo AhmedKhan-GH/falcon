@@ -105,7 +105,12 @@ Eagle stores no content hash in item JSON and never hashes file bytes. Its dupli
   - `camera` is the Make tag shortened to a known maker name (`NIKON CORPORATION` becomes `Nikon`), followed by the Model with a repeated maker word removed. This is an approximation of dcraw's table (inferred).
   - `timestamp` is DateTimeOriginal, or DateTime, read as local time.
   - `width` and `height` are not written. EXIF doesn't hold dcraw's full sensor size.
-  - Only TIFF-based RAW files can be read: dng, nef, nrw, cr2, arw, srw, pef, 3fr and erf. orf, rw2, raf, cr3, crw, mrw and x3f give nothing.
+  - Readable RAW files: the TIFF-based ones (dng, nef, nrw, cr2, arw, srw, pef, 3fr, erf), plus four with their own containers. crw, mrw and x3f give nothing.
+    - **orf, rw2:** TIFF with another magic number in place of 42 (`IIRO`, `IIRS` or `MMOR` for Olympus, `IIU\0` for Panasonic). Falcon reads them as TIFF. The camera tags sit where they do in any TIFF.
+    - **raf:** a `FUJIFILMCCD-RAW` header with the embedded JPEG preview's offset and length (big-endian, at bytes 84 and 88). That JPEG's EXIF holds the camera facts.
+    - **cr3:** an ISO media file (`ftyp` brand `crx `). Inside `moov`, Canon's `uuid` box (`85c0b687-820f-11e0-8111-f4ce462b6a48`) holds `CMT1`, a TIFF block with the main IFD (Make, Model, DateTime), and `CMT2`, a TIFF block whose first IFD holds the EXIF tags (exposure, f-number, ISO, DateTimeOriginal, focal length). Falcon reads both.
+    - All four produce the same `rawMetas` keys and formats as the TIFF-based files.
+    - Eagle's dcraw build is inferred to read orf, rw2 and raf, which classic dcraw supports. Classic dcraw predates CR3, so Eagle is inferred to store no `rawMetas` for cr3 files, where falcon does.
   - `ImportOptions::camera_metadata_all_photos` (off by default) also stores `rawMetas` for jpg, jpeg, tif, tiff, heic, heif, png and webp. Eagle never does this. It lets the camera filter work on ordinary photos.
 - **`duration`.**
   - Audio is read with symphonia, from the frame count, or by adding up packet durations when the header has no count.
