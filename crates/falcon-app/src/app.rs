@@ -313,6 +313,8 @@ struct Workspace {
     order: Vec<String>,
     columns: usize,
     scroll_to: Option<String>,
+    /// A Home, End, Page Up or Page Down for the grid, applied next frame.
+    scroll: Option<crate::shortcuts::Scroll>,
     /// Images needed this frame, handed to the loader once at the end.
     frame_jobs: Vec<crate::loader::Job>,
     actions: Vec<Action>,
@@ -391,6 +393,7 @@ impl Workspace {
             order: Vec::new(),
             columns: 1,
             scroll_to: None,
+            scroll: None,
             frame_jobs: Vec::new(),
             actions: Vec::new(),
             renaming: None,
@@ -1187,6 +1190,15 @@ impl App {
             }
             C::ExportComputer | C::ExportPack | C::ExportCsv | C::ExportFormat | C::CopyPath | C::CopyFolderPath | C::CopyName | C::CopyLink | C::CopyThumbnail | C::CopyBase64 => {
                 self.export_keys(&|c| c == cmd);
+            }
+            C::Scroll(how) => self.ws.scroll = Some(how),
+            C::SelectFirst | C::SelectLast => {
+                let id = if cmd == C::SelectFirst { self.ws.order.first() } else { self.ws.order.last() };
+                if let Some(id) = id.cloned() {
+                    self.ws.selected = vec![id.clone()];
+                    self.ws.anchor = Some(id.clone());
+                    self.ws.scroll_to = Some(id);
+                }
             }
             C::Page(p) => {
                 self.ws.viewer = None;
@@ -2645,6 +2657,7 @@ impl App {
 
     fn grid(&mut self, ui: &mut Ui, lib: &Library) {
         let area = ui.max_rect();
+        let scroll_by = self.ws.scroll.take();
         let order = self.scope_order(lib);
         if let Some(gate) = self.scope_gate(lib) {
             self.ws.order.clear();
@@ -2698,6 +2711,10 @@ impl App {
             } else if r.bottom() > cur + view_h {
                 scroll = scroll.vertical_scroll_offset(r.bottom() + ROW_GAP - view_h);
             }
+        }
+        if let Some(how) = scroll_by {
+            let cur = ui.ctx().data(|d| d.get_temp::<f32>(ui.scope_id().with("grid-offset"))).unwrap_or(0.0);
+            scroll = scroll.vertical_scroll_offset(how.offset(cur, area.height(), total_h));
         }
 
         let mut jobs = Vec::new();

@@ -67,6 +67,36 @@ pub enum Command {
     Player(PlayerKey),
     /// Show a sidebar page (Eagle's View ▸ All … Trash, ⌘1–⌘7).
     Page(Page),
+    /// Scroll the grid (Home, End, Page Up, Page Down).
+    Scroll(Scroll),
+    /// Select the first or last item (⌘↑, ⌘↓).
+    SelectFirst,
+    SelectLast,
+}
+
+/// How a scroll command moves the grid.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum Scroll {
+    Top,
+    Bottom,
+    PageUp,
+    PageDown,
+}
+
+impl Scroll {
+    /// The new offset from the current one, for a viewport `view` high
+    /// over content `content` high. A page is the viewport less a little
+    /// overlap, as in Eagle (its window height less 72 px).
+    pub fn offset(self, current: f32, view: f32, content: f32) -> f32 {
+        let page = (view - 72.0).max(view / 2.0);
+        let to = match self {
+            Scroll::Top => 0.0,
+            Scroll::Bottom => content,
+            Scroll::PageUp => current - page,
+            Scroll::PageDown => current + page,
+        };
+        to.clamp(0.0, (content - view).max(0.0))
+    }
 }
 
 /// The sidebar pages ⌘1–⌘7 open, in the order of Eagle's View menu.
@@ -198,6 +228,13 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::Page(Page::Random), id: "view.random", group: "Go", label: "Show Random", default: k(CMD, Key::Num5), aliases: &[] },
     Spec { cmd: Command::Page(Page::AllTags), id: "view.alltags", group: "Go", label: "Show All Tags", default: k(CMD, Key::Num6), aliases: &[] },
     Spec { cmd: Command::Page(Page::Trash), id: "view.trash", group: "Go", label: "Show the Trash", default: k(CMD, Key::Num7), aliases: &[] },
+    // Eagle's View ▸ Scroll; ⌘↑ and ⌘↓ select the first and last item.
+    Spec { cmd: Command::Scroll(Scroll::Top), id: "view.scroll.home", group: "Go", label: "Scroll to the top", default: k(NONE, Key::Home), aliases: &[] },
+    Spec { cmd: Command::Scroll(Scroll::Bottom), id: "view.scroll.end", group: "Go", label: "Scroll to the bottom", default: k(NONE, Key::End), aliases: &[] },
+    Spec { cmd: Command::Scroll(Scroll::PageUp), id: "view.scroll.prevpage", group: "Go", label: "Scroll up a page", default: k(NONE, Key::PageUp), aliases: &[] },
+    Spec { cmd: Command::Scroll(Scroll::PageDown), id: "view.scroll.nextpage", group: "Go", label: "Scroll down a page", default: k(NONE, Key::PageDown), aliases: &[] },
+    Spec { cmd: Command::SelectFirst, id: "view.select.first", group: "Go", label: "Select the first item", default: k(CMD, Key::ArrowUp), aliases: &[] },
+    Spec { cmd: Command::SelectLast, id: "view.select.last", group: "Go", label: "Select the last item", default: k(CMD, Key::ArrowDown), aliases: &[] },
     Spec { cmd: Command::Player(PlayerKey::Toggle), id: "player.playAndPause", group: PLAYER, label: "Play or pause", default: k(NONE, Key::Space), aliases: &[] },
     Spec { cmd: Command::Player(PlayerKey::Frames(-1)), id: "player.prev1frame", group: PLAYER, label: "Previous frame", default: k(NONE, Key::OpenBracket), aliases: &[] },
     Spec { cmd: Command::Player(PlayerKey::Frames(1)), id: "player.next1frame", group: PLAYER, label: "Next frame", default: k(NONE, Key::CloseBracket), aliases: &[] },
@@ -711,6 +748,31 @@ mod tests {
     }
 
     #[test]
+    fn scroll_keys() {
+        let keys = Shortcuts::default();
+        assert_eq!(keys.resolve(Key::Home, Modifiers::NONE), Some(Command::Scroll(Scroll::Top)));
+        assert_eq!(keys.resolve(Key::End, Modifiers::NONE), Some(Command::Scroll(Scroll::Bottom)));
+        assert_eq!(keys.resolve(Key::PageUp, Modifiers::NONE), Some(Command::Scroll(Scroll::PageUp)));
+        assert_eq!(keys.resolve(Key::PageDown, Modifiers::NONE), Some(Command::Scroll(Scroll::PageDown)));
+        assert_eq!(keys.resolve(Key::ArrowUp, CMD), Some(Command::SelectFirst));
+        assert_eq!(keys.resolve(Key::ArrowDown, CMD), Some(Command::SelectLast));
+        // Plain ↑ ↓ stay fixed selection moves.
+        assert_eq!(keys.resolve(Key::ArrowUp, Modifiers::NONE), None);
+    }
+
+    #[test]
+    fn scroll_offsets() {
+        // A 600 px view over 2000 px of content, now at 500.
+        assert_eq!(Scroll::Top.offset(500.0, 600.0, 2000.0), 0.0);
+        assert_eq!(Scroll::Bottom.offset(500.0, 600.0, 2000.0), 1400.0);
+        assert_eq!(Scroll::PageDown.offset(500.0, 600.0, 2000.0), 1028.0);
+        assert_eq!(Scroll::PageUp.offset(500.0, 600.0, 2000.0), 0.0);
+        assert_eq!(Scroll::PageDown.offset(1300.0, 600.0, 2000.0), 1400.0);
+        // Content shorter than the view doesn't scroll.
+        assert_eq!(Scroll::Bottom.offset(0.0, 600.0, 300.0), 0.0);
+    }
+
+    #[test]
     fn library_switch_keys() {
         let keys = Shortcuts::default();
         assert_eq!(keys.resolve(Key::L, Modifiers::COMMAND), Some(Command::SwitchLibrary));
@@ -920,6 +982,10 @@ mod tests {
                 // ⌘← and ⌘→ skip in a playing video and are Back and
                 // Forward elsewhere, as in Eagle.
                 assert_eq!(global, Some(if fwd { Command::Forward } else { Command::Back }));
+            } else if let Command::Player(PlayerKey::Volume(up)) = s.cmd {
+                // ⌘↑ and ⌘↓ change the volume in a playing video and
+                // select the first or last item elsewhere.
+                assert_eq!(global, Some(if up { Command::SelectFirst } else { Command::SelectLast }));
             } else {
                 // A global chord that only matches loosely (⌘[ for [) is no clash.
                 assert!(global.is_none_or(|g| !keys.chords(g).iter().any(|x| same(*x, Some(c)))), "{} clashes with {global:?}", s.id);
@@ -937,10 +1003,11 @@ mod tests {
         assert_eq!(keys.set(Command::Player(PlayerKey::Toggle), parse("Command + F")), Ok(()));
         assert_eq!(keys.player(&[Key::F], Modifiers::COMMAND), Some(PlayerKey::Toggle));
         assert_eq!(keys.resolve(Key::F, Modifiers::COMMAND), Some(Command::Find));
-        // ⌘↑ is the player's volume, so another player key can't take it…
+        // ⌘↑ is the player's volume, so another player key can't take it,
         assert_eq!(keys.set(Command::Player(PlayerKey::AddComment), parse("Command + Up")), Err(Command::Player(PlayerKey::Volume(true))));
-        // …but a global command can.
-        assert_eq!(keys.set(Command::Rename, parse("Command + Up")), Ok(()));
+        // …and ] is the player's next frame, which a global command may take.
+        assert_eq!(keys.set(Command::Player(PlayerKey::AddComment), parse("]")), Err(Command::Player(PlayerKey::Frames(1))));
+        assert_eq!(keys.set(Command::Rename, parse("]")), Ok(()));
         assert_eq!(keys.0.get("player.playAndPause").map(String::as_str), Some("Command + F"));
     }
 

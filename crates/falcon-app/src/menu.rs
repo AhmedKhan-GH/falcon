@@ -79,6 +79,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::SwitchLibrary | C::CollectWindow | C::Preferences => true,
         C::NextLibrary | C::PreviousLibrary => s.libraries > 1,
         C::Page(_) => s.library,
+        C::Scroll(_) | C::SelectFirst | C::SelectLast => grid,
         C::Player(_) => false,
     }
 }
