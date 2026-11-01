@@ -1209,9 +1209,56 @@ pub fn viewer_counter(order: &[String], id: &str) -> Option<(usize, usize)> {
     order.iter().position(|x| x == id).map(|n| (n + 1, order.len()))
 }
 
+/// The end of the grid a viewer step ran into.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Edge {
+    First,
+    Last,
+}
+
+impl Edge {
+    /// The note the viewer shows when a step can go no further.
+    pub fn note(self) -> &'static str {
+        match self {
+            Edge::First => "This is the first item",
+            Edge::Last => "This is the last item",
+        }
+    }
+}
+
+/// Where a viewer step of `step` from position `at` (none: the item is not
+/// in the grid) lands among `len` items, or the end it ran into.
+pub fn viewer_step(len: usize, at: Option<usize>, step: isize) -> Result<usize, Edge> {
+    if len == 0 {
+        return Err(if step < 0 { Edge::First } else { Edge::Last });
+    }
+    let Some(at) = at else { return Ok(0) };
+    let to = at as isize + step;
+    if to < 0 {
+        Err(Edge::First)
+    } else if to >= len as isize {
+        Err(Edge::Last)
+    } else {
+        Ok(to as usize)
+    }
+}
+
 #[cfg(test)]
 mod viewer_shell_tests {
     use super::*;
+
+    #[test]
+    fn steps_stop_at_the_ends() {
+        assert_eq!(viewer_step(3, Some(1), 1), Ok(2));
+        assert_eq!(viewer_step(3, Some(1), -1), Ok(0));
+        assert_eq!(viewer_step(3, Some(2), 1), Err(Edge::Last));
+        assert_eq!(viewer_step(3, Some(0), -1), Err(Edge::First));
+        assert_eq!(viewer_step(1, Some(0), 1), Err(Edge::Last));
+        // An item that left the grid steps to the first one.
+        assert_eq!(viewer_step(3, None, 1), Ok(0));
+        assert_eq!(viewer_step(0, None, -1), Err(Edge::First));
+        assert_ne!(Edge::First.note(), Edge::Last.note());
+    }
 
     #[test]
     fn counter_counts_from_one() {

@@ -1152,15 +1152,17 @@ impl App {
     }
 
     /// Shows the previous (`-1`) or next (`1`) item of the grid in the
-    /// viewer; the selection follows.
+    /// viewer; the selection follows. Past either end a note says so, as
+    /// Eagle's viewer does.
     fn viewer_step(&mut self, step: isize) {
         let Some(cur) = self.ws.viewer.clone() else { return };
-        if self.ws.order.is_empty() {
-            return;
-        }
-        let next = match self.ws.order.iter().position(|x| *x == cur) {
-            Some(p) => (p as isize + step).clamp(0, self.ws.order.len() as isize - 1) as usize,
-            None => 0,
+        let at = self.ws.order.iter().position(|x| *x == cur);
+        let next = match logic::viewer_step(self.ws.order.len(), at, step) {
+            Ok(n) => n,
+            Err(edge) => {
+                self.flash(edge.note());
+                return;
+            }
         };
         let id = self.ws.order[next].clone();
         self.ws.viewer = Some(id.clone());
@@ -3898,8 +3900,10 @@ impl eframe::App for App {
             }
 
             if let Some((msg, at)) = &self.ws.status {
-                // Long messages (a restored backup, say) stay up longer.
-                if at.elapsed().as_secs_f32() < (msg.chars().count() as f32 / 20.0).max(3.0) {
+                // Long messages (a restored backup, say) stay up longer;
+                // short notes over the viewer go quickly, like Eagle's tips.
+                let least = if self.ws.viewer.is_some() { 1.2 } else { 3.0 };
+                if at.elapsed().as_secs_f32() < (msg.chars().count() as f32 / 20.0).max(least) {
                     let gal = galley(ui, msg, font(13.0), t::p().text, 400.0);
                     // Over the viewer the note sits in the middle of the
                     // picture, as Eagle's viewer tips do.
