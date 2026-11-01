@@ -5,16 +5,19 @@
 
 use std::collections::HashMap;
 
-use eframe::egui::{self, Color32, RichText, Sense, Stroke, TextEdit, Ui, Vec2, vec2};
+use eframe::egui::{self, Color32, Pos2, Response, RichText, Sense, Stroke, StrokeKind, TextEdit, Ui, Vec2, vec2};
 use falcon_library::Library;
 use falcon_library::model::{Folder, Item, TagGroup};
-use falcon_library::search::{self, ColorQuery, Filter, FontFilter, SetFilter, TextFilter};
+use falcon_library::search::{self, ColorQuery, Filter, FontFilter, Logic, SetFilter, TextFilter};
 
-use super::{App, GRID_PAD_X, PRESET_COLORS, filter_chip, logic_picker, parse_hex, text_filter_menu};
+pub(crate) mod media;
+
+use crate::app::{App, GRID_PAD_X};
 use crate::icons as ic;
 use crate::logic;
 use crate::search_state::FilterKind;
-use crate::theme as t;
+use crate::theme::{self as t, font};
+use crate::ui::widgets::{galley, icon};
 
 /// What the Tags chip's sidebar shows.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -122,11 +125,11 @@ fn pick_row(ui: &mut Ui, indent: f32, label: &str, count: Option<usize>, pick: P
         }
         Pick::In => {
             ui.painter().rect_filled(mark, 3.0, t::p().primary);
-            super::icon(ui, mark.center(), ic::CHECK, 10.0, Color32::WHITE);
+            icon(ui, mark.center(), ic::CHECK, 10.0, Color32::WHITE);
         }
         Pick::Out => {
             ui.painter().rect_filled(mark, 3.0, t::p().icon_red);
-            super::icon(ui, mark.center(), ic::X, 10.0, Color32::WHITE);
+            icon(ui, mark.center(), ic::X, 10.0, Color32::WHITE);
         }
     }
     let p = ui.painter();
@@ -288,7 +291,7 @@ impl App {
             FilterKind::Types => self.types_chip(ui, lib),
             FilterKind::Note | FilterKind::Url => {
                 let (f, text) = if kind == FilterKind::Note { (&mut self.ws.filter.note, &mut self.ws.note_text) } else { (&mut self.ws.filter.url, &mut self.ws.url_text) };
-                let resp = filter_chip(ui, kind.label(), super::filters_ui::text_filter_summary(f));
+                let resp = filter_chip(ui, kind.label(), media::text_filter_summary(f));
                 egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| text_filter_menu(ui, f, text));
             }
             _ => self.media_chip(ui, lib, kind),
@@ -676,5 +679,84 @@ mod tests {
         assert!(!kind_active(&f, FilterKind::Tags));
         assert_eq!(type_label("youtube"), "YouTube");
         assert_eq!(type_label("png"), "PNG");
+    }
+}
+
+/// Colours offered in the colour filter, like Eagle's swatch row.
+pub(crate) const PRESET_COLORS: [[u8; 3]; 14] = [
+    [0xff, 0x3b, 0x30],
+    [0xff, 0x95, 0x00],
+    [0xff, 0xd6, 0x0a],
+    [0x34, 0xc7, 0x59],
+    [0x30, 0xb0, 0xc7],
+    [0x00, 0x7a, 0xff],
+    [0x58, 0x56, 0xd6],
+    [0xaf, 0x52, 0xde],
+    [0xff, 0x2d, 0x55],
+    [0xa2, 0x84, 0x5e],
+    [0x00, 0x00, 0x00],
+    [0x8e, 0x8e, 0x93],
+    [0xff, 0xff, 0xff],
+    [0x67, 0x95, 0x3f],
+];
+
+pub(crate) fn parse_hex(s: &str) -> Option<[u8; 3]> {
+    let s = s.trim().trim_start_matches('#');
+    if s.len() != 6 {
+        return None;
+    }
+    let v = u32::from_str_radix(s, 16).ok()?;
+    Some([(v >> 16) as u8, (v >> 8) as u8, v as u8])
+}
+
+/// A filter chip: muted when off, primary-tinted with its value when on.
+pub(crate) fn filter_chip(ui: &mut Ui, label: &str, value: Option<String>) -> Response {
+    let text = match &value {
+        Some(v) => format!("{label}: {v}"),
+        None => label.to_string(),
+    };
+    let on = value.is_some();
+    let g = galley(ui, &text, font(13.0), t::p().text, 220.0);
+    let (rect, resp) = ui.allocate_exact_size(vec2(g.size().x + 30.0, 26.0), Sense::click());
+    let fill = if on {
+        t::p().primary.gamma_multiply(0.22)
+    } else if resp.hovered() {
+        t::p().button_hover
+    } else {
+        t::p().button
+    };
+    ui.painter().rect_filled(rect, t::RADIUS, fill);
+    if on {
+        ui.painter().rect_stroke(rect, t::RADIUS, Stroke::new(1.0, t::p().primary.gamma_multiply(0.7)), StrokeKind::Inside);
+    }
+    let color = if on { t::p().text } else { t::p().text_value };
+    ui.painter().galley(Pos2::new(rect.left() + 10.0, rect.center().y - g.size().y / 2.0), g, color);
+    icon(ui, Pos2::new(rect.right() - 11.0, rect.center().y), ic::CARET_DOWN, 10.0, t::p().text_muted);
+    resp
+}
+
+pub(crate) fn logic_picker(ui: &mut Ui, logic: &mut Logic) {
+    ui.horizontal(|ui| {
+        for (l, name) in [(Logic::Or, "Any"), (Logic::And, "All"), (Logic::Equal, "Exact")] {
+            if ui.selectable_label(*logic == l, name).clicked() {
+                *logic = l;
+            }
+        }
+    });
+}
+
+pub(crate) fn text_filter_menu(ui: &mut Ui, f: &mut TextFilter, keywords: &mut String) {
+    ui.set_min_width(200.0);
+    for (opt, name) in [(TextFilter::Off, "Any"), (TextFilter::Has, "Has"), (TextFilter::No, "None")] {
+        let on = std::mem::discriminant(f) == std::mem::discriminant(&opt);
+        if ui.selectable_label(on, name).clicked() {
+            *f = opt;
+        }
+    }
+    ui.separator();
+    ui.label(RichText::new("Contains").color(t::p().text_muted).size(12.0));
+    if ui.add(TextEdit::singleline(keywords).hint_text("keyword, keyword")).changed() {
+        let words: Vec<String> = keywords.split(',').map(|w| w.trim().to_string()).filter(|w| !w.is_empty()).collect();
+        *f = if words.is_empty() { TextFilter::Off } else { TextFilter::Keywords(words) };
     }
 }

@@ -39,8 +39,8 @@ pub(crate) use crate::ui::sidebar::folders as folders_ui;
 pub(crate) use crate::ui::sidebar::{smart_has, smart_name};
 
 // Toolbar and filter bar.
-pub(crate) mod filter_bar;
-pub(crate) mod filters_ui;
+pub(crate) use crate::ui::filter_bar::media as filters_ui;
+pub(crate) use crate::ui::filter_bar::{filter_chip, parse_hex};
 
 // Grid.
 pub(crate) use crate::ui::grid::{GRID_GAP, GRID_PAD_TOP, GRID_PAD_X, list_span};
@@ -1096,85 +1096,6 @@ pub(crate) fn fastrand_seed() -> u64 {
 
 // ---------------------------------------------------------------------------
 // Filter bar
-
-/// Colours offered in the colour filter, like Eagle's swatch row.
-pub(crate) const PRESET_COLORS: [[u8; 3]; 14] = [
-    [0xff, 0x3b, 0x30],
-    [0xff, 0x95, 0x00],
-    [0xff, 0xd6, 0x0a],
-    [0x34, 0xc7, 0x59],
-    [0x30, 0xb0, 0xc7],
-    [0x00, 0x7a, 0xff],
-    [0x58, 0x56, 0xd6],
-    [0xaf, 0x52, 0xde],
-    [0xff, 0x2d, 0x55],
-    [0xa2, 0x84, 0x5e],
-    [0x00, 0x00, 0x00],
-    [0x8e, 0x8e, 0x93],
-    [0xff, 0xff, 0xff],
-    [0x67, 0x95, 0x3f],
-];
-
-pub(crate) fn parse_hex(s: &str) -> Option<[u8; 3]> {
-    let s = s.trim().trim_start_matches('#');
-    if s.len() != 6 {
-        return None;
-    }
-    let v = u32::from_str_radix(s, 16).ok()?;
-    Some([(v >> 16) as u8, (v >> 8) as u8, v as u8])
-}
-
-/// A filter chip: muted when off, primary-tinted with its value when on.
-pub(crate) fn filter_chip(ui: &mut Ui, label: &str, value: Option<String>) -> Response {
-    let text = match &value {
-        Some(v) => format!("{label}: {v}"),
-        None => label.to_string(),
-    };
-    let on = value.is_some();
-    let g = galley(ui, &text, font(13.0), t::p().text, 220.0);
-    let (rect, resp) = ui.allocate_exact_size(vec2(g.size().x + 30.0, 26.0), Sense::click());
-    let fill = if on {
-        t::p().primary.gamma_multiply(0.22)
-    } else if resp.hovered() {
-        t::p().button_hover
-    } else {
-        t::p().button
-    };
-    ui.painter().rect_filled(rect, t::RADIUS, fill);
-    if on {
-        ui.painter().rect_stroke(rect, t::RADIUS, Stroke::new(1.0, t::p().primary.gamma_multiply(0.7)), StrokeKind::Inside);
-    }
-    let color = if on { t::p().text } else { t::p().text_value };
-    ui.painter().galley(Pos2::new(rect.left() + 10.0, rect.center().y - g.size().y / 2.0), g, color);
-    icon(ui, Pos2::new(rect.right() - 11.0, rect.center().y), ic::CARET_DOWN, 10.0, t::p().text_muted);
-    resp
-}
-
-pub(crate) fn logic_picker(ui: &mut Ui, logic: &mut Logic) {
-    ui.horizontal(|ui| {
-        for (l, name) in [(Logic::Or, "Any"), (Logic::And, "All"), (Logic::Equal, "Exact")] {
-            if ui.selectable_label(*logic == l, name).clicked() {
-                *logic = l;
-            }
-        }
-    });
-}
-
-pub(crate) fn text_filter_menu(ui: &mut Ui, f: &mut TextFilter, keywords: &mut String) {
-    ui.set_min_width(200.0);
-    for (opt, name) in [(TextFilter::Off, "Any"), (TextFilter::Has, "Has"), (TextFilter::No, "None")] {
-        let on = std::mem::discriminant(f) == std::mem::discriminant(&opt);
-        if ui.selectable_label(on, name).clicked() {
-            *f = opt;
-        }
-    }
-    ui.separator();
-    ui.label(RichText::new("Contains").color(t::p().text_muted).size(12.0));
-    if ui.add(TextEdit::singleline(keywords).hint_text("keyword, keyword")).changed() {
-        let words: Vec<String> = keywords.split(',').map(|w| w.trim().to_string()).filter(|w| !w.is_empty()).collect();
-        *f = if words.is_empty() { TextFilter::Off } else { TextFilter::Keywords(words) };
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Grid

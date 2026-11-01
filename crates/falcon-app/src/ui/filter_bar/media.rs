@@ -8,7 +8,8 @@ use eframe::egui::{self, RichText, TextEdit, Ui};
 use falcon_library::Library;
 use falcon_library::search::{self, Clock, DateField, DateFilter, DatePreset, DurationUnit, FontFilter, Shape, TextFilter};
 
-use super::{App, filter_chip};
+use super::filter_chip;
+use crate::app::App;
 use crate::search_state::FilterKind;
 use crate::logic;
 use crate::theme as t;
@@ -28,7 +29,7 @@ pub(crate) struct MediaFilterUi {
     pub(crate) folder_search: String,
     pub(crate) type_search: String,
     /// The Tags chip's sidebar: all tags, the selected ones, or a group.
-    pub(crate) tag_view: super::filter_bar::TagView,
+    pub(crate) tag_view: super::TagView,
     /// The Date chip's tab: Imported, Modified or Created.
     date_tab: usize,
     /// Range fields per tab, as typed.
