@@ -149,6 +149,7 @@ impl App {
         let mut clicked: Option<(String, Modifiers)> = None;
         let mut opened: Option<String> = None;
         let mut double_clicked: Option<String> = None;
+        let mut middle: Option<String> = None;
         let mut bg_clicked = false;
         let mut hovered: Option<(&Item, Rect, bool)> = None;
         let manual = self.manual_folder(lib);
@@ -209,6 +210,10 @@ impl App {
                 if resp.double_clicked() {
                     double_clicked = Some(item.id.clone());
                 }
+                // Eagle's wheel-button preference: a new window, never for audio.
+                if resp.middle_clicked() && self.prefs.middle_button == crate::prefs::MiddleButton::NewWindow && !falcon_library::media::is_audio(&item.ext.to_lowercase()) {
+                    middle = Some(item.id.clone());
+                }
                 let selected = self.ws.selected.contains(&item.id);
                 self.card_anim(ui, lib, item, card, resp.hovered());
                 match layout {
@@ -235,6 +240,10 @@ impl App {
         ui.ctx().data_mut(|d| d.insert_temp(ui.scope_id().with("grid-offset"), offset));
         self.hover_preview(ui, lib, hovered, scrolled, order_changed || clicked.is_some() || opened.is_some());
         self.ws.frame_jobs.extend(jobs);
+        if let Some(id) = middle {
+            self.used_item(&id);
+            self.preview = Some(crate::ui::viewer::preview_window::PreviewWin::new(id));
+        }
         if let Some((id, m)) = clicked {
             self.click(&id, m);
         } else if bg_clicked {

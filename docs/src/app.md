@@ -570,7 +570,7 @@ Edits stay in a draft until Save (also ⌘↩) or Apply; Cancel, the close butto
 | Sidebar | Sections: Uncategorized, Untagged, Recently Used, Random, Quick Access, Smart Folders, Folders | `sidebar.unfiled`, `untagged`, `recent`, `random`, `quickAccess`, `smartFolder`, `folder` (and `community2`), all on | The same seven, all on by default. Community has no counterpart; All, All Tags, Duplicates and Trash are always shown. As in Eagle (`openSidebarVisibleContextMenu`, seen), right-clicking any of the sidebar's fixed entries but Trash and Recently Used (which have menus of their own) opens a menu of tick boxes for the first four, with All ticked and greyed; it stays open while you tick |
 | Controls | Zoom button on hovered cards (hover zoom) | `habits.hoverZoom`, on by default, under Controls ▸ Mouse; off removes the zoom button, but holding Z still works | Same |
 | Controls | Double-clicking an item opens it in falcon, or in its default app | `habits.doubleclick`, `internal` | Same; the default app is opened with `open` |
-| Controls | Middle button | `habits.middleBtn`, opens a new window by default | Not offered: falcon has no separate preview window |
+| Controls | Middle button | `habits.middleBtn`, opens a new window by default | Same (`Prefs::middle_button`): a middle click on a card opens it in the preview window (not audio), or does nothing; no plugin choice |
 | Controls | Space in the grid opens the viewer, shows Quick Look, or scrolls down a page | `habits.keyspace`: `preview` (default), `preview-native`, `scroll` | The same three. Quick Look runs `qlmanage -p` on the selected originals (macOS only). It applies to whatever key the "Open or close the viewer" shortcut uses. In the viewer, Space still closes it or plays and pauses media |
 | Preview | Video: scrolling over a video moves through it, or changes the volume | `habits.videoScrollBehavior`, `progress` | Same; volume mode moves 5% per wheel notch, up is louder |
 | Preview | Stretch videos to fill the viewer | `video.zoomFill`, off | Same: on enlarges past the video's own size to fit the stage |
@@ -599,7 +599,7 @@ What Eagle does, from `js/default-preferences.js`, `preferences.html`, `js/prefe
 - The window's sidebar (200 pt wide, 32 pt rows) has General and Sidebar, then Controls, Preview (the `habits` group), Screenshot and Shortcuts, then Notification, Password and Auto-Import, then the AI panels. A search box filters every panel by keywords.
 - Save applies and closes, Apply applies and stays open, Cancel and Esc revert (including a previewed theme or zoom), ⌘↩ saves.
 - The window's own size is set in Eagle's main process, which is not in the readable bundle; falcon's 720 × 500 pt is a guess (inferred).
-- Not built in falcon: language, vibrancy, menu bar and Dock icon options, launch at login, GPU, the collect modal, screenshots, the middle button, sound effects, Touch ID, proxy, the AI and MCP panes.
+- Not built in falcon: language, vibrancy, menu bar and Dock icon options, launch at login, GPU, the collect modal, screenshots, sound effects, Touch ID, proxy, the AI and MCP panes.
 
 ## Themes
 

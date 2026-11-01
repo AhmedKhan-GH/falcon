@@ -140,6 +140,23 @@ pub struct Prefs {
     /// The tag picker's own settings (its gear menu), as Eagle keeps them
     /// for its tag panel.
     pub tag_picker: crate::tags::PickerPrefs,
+    /// Eagle's `habits.middleBtn`: what a middle click on a card does.
+    pub middle_button: MiddleButton,
+    /// Eagle's `video.hoverPlay`: hovered video cards play a preview that
+    /// the pointer scrubs.
+    pub video_hover: bool,
+}
+
+/// What a middle click on a card in the grid does.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum MiddleButton {
+    /// Nothing (Eagle's "none").
+    Nothing,
+    /// Opens the item in the preview window (Eagle's default), except
+    /// audio, as in Eagle.
+    #[default]
+    NewWindow,
 }
 
 /// What the wheel does over a playing video.
@@ -275,6 +292,8 @@ impl Default for Prefs {
             notify_auto_import: true,
             auto_import_delete: true,
             tag_picker: Default::default(),
+            middle_button: MiddleButton::default(),
+            video_hover: true,
         }
     }
 }
@@ -394,6 +413,10 @@ impl Prefs {
                     DoubleClick::Viewer => "internal",
                     DoubleClick::External => "external",
                 },
+                "middleBtn": match self.middle_button {
+                    MiddleButton::Nothing => "none",
+                    MiddleButton::NewWindow => "openNewWindow",
+                },
                 "gifViewer": on(self.gif_player),
                 "alwaysPlayGIF": on(self.always_play_animated),
             },
@@ -408,6 +431,7 @@ impl Prefs {
                 "autoPlay": b(self.video_autoplay),
                 "rememberPosition": b(self.video_resume),
                 "loopShortVideo": b(self.video_loop_short),
+                "hoverPlay": b(self.video_hover),
             },
             "font": {"autoTag": b(self.font_style_tags)},
             "autoImport": {
@@ -903,7 +927,7 @@ fn sidebar(p: &mut Page, d: &mut Draft) {
 
 /// Controls: what the mouse and the keyboard do.
 fn controls(p: &mut Page, d: &mut Draft) {
-    p.block("Mouse", &["hover", "zoom button", "cards", "double click", "open", "default app", "wheel", "scroll"], |ui| {
+    p.block("Mouse", &["hover", "zoom button", "cards", "double click", "open", "default app", "wheel", "scroll", "middle", "new window"], |ui| {
         ui.label("Zoom button on hovered cards");
         ui.radio_value(&mut d.prefs.hover_zoom, true, "Show");
         ui.radio_value(&mut d.prefs.hover_zoom, false, "Hide");
@@ -919,6 +943,11 @@ fn controls(p: &mut Page, d: &mut Draft) {
         ui.radio_value(&mut d.prefs.viewer_wheel, WheelMode::Zoom, "Zooms it");
         ui.radio_value(&mut d.prefs.viewer_wheel, WheelMode::Paging, "Goes to the previous or next item");
         note(ui, "With ⌘, ⌃ or ⌥, or a pinch, it zooms either way.");
+        ui.add_space(6.0);
+        ui.label("The wheel button on an item");
+        ui.radio_value(&mut d.prefs.middle_button, MiddleButton::NewWindow, "Opens it in a new window");
+        ui.radio_value(&mut d.prefs.middle_button, MiddleButton::Nothing, "Does nothing");
+        note(ui, "Audio files never open in a new window. In the viewer it enters or leaves presentation mode either way.");
     });
     p.block("Keyboard", &["space", "spacebar", "preview", "quick look", "scroll"], |ui| {
         ui.label("Space in the grid");
@@ -945,7 +974,7 @@ fn preview(p: &mut Page, d: &mut Draft) {
         ui.radio_value(&mut d.prefs.rotate_mode, RotateMode::Preview, "Changes the preview only");
         note(ui, "The card menu in the grid always writes to the file.");
     });
-    let keywords = ["video", "movie", "wheel", "scroll", "progress", "volume", "stretch", "fill", "autoplay", "play", "position", "resume", "loop", "short"];
+    let keywords = ["video", "movie", "wheel", "scroll", "progress", "volume", "stretch", "fill", "autoplay", "play", "position", "resume", "loop", "short", "hover", "preview", "scrub"];
     p.block("Video", &keywords, |ui| {
         let v = &mut d.prefs;
         ui.label("Scrolling over a video");
@@ -956,6 +985,8 @@ fn preview(p: &mut Page, d: &mut Draft) {
         ui.checkbox(&mut v.video_autoplay, "Play videos when they open");
         ui.checkbox(&mut v.video_resume, "Resume where each video was left");
         ui.checkbox(&mut v.video_loop_short, "Always loop clips of 30 seconds or less");
+        ui.checkbox(&mut v.video_hover, "Play a preview on hovered video cards");
+        note(ui, "Moving the pointer across the card moves through the clip.");
     });
     p.block("GIF", &["gif", "player", "frame", "animation", "autoplay", "hover", "webp", "avif"], |ui| {
         ui.checkbox(&mut d.prefs.always_play_animated, "Always play GIFs and animated WebPs and AVIFs in the grid");
@@ -1279,6 +1310,11 @@ mod tests {
         assert!(p.notify_duplicates, "Eagle's repeatImage notification defaults to on");
         assert!(p.auto_select, "Eagle's autoSelect defaults to on");
         assert!(p.font_style_tags, "Eagle's font autoTag defaults to on");
+        assert_eq!(p.middle_button, MiddleButton::NewWindow, "Eagle's middleBtn defaults to openNewWindow");
+        assert!(p.video_hover, "Eagle's video hoverPlay defaults to true");
+        let v = p.eagle_preferences();
+        assert_eq!(v["habits"]["middleBtn"], "openNewWindow");
+        assert_eq!(v["video"]["hoverPlay"], "true");
         assert_eq!(p.api_ports(), Some(41596..=41600));
         assert!(!p.auto_import && p.auto_import_path.is_none(), "Eagle's autoImport defaults to off with no folder");
         assert!(p.auto_import_delete, "Eagle deletes imported files from the watched folder");
