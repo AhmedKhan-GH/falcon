@@ -1141,9 +1141,20 @@ pub struct Cards {
     popup: Option<(String, Player)>,
     /// Items found to be stills, never tried again.
     stills: HashSet<String>,
+    /// The grayscale preview: frames are desaturated.
+    gray: bool,
 }
 
 impl Cards {
+    /// Follows the grayscale preview; on a change the players start again
+    /// in the new colours.
+    pub fn set_gray(&mut self, gray: bool) {
+        if self.gray != gray {
+            self.gray = gray;
+            self.clear();
+        }
+    }
+
     /// Drops the players of cards not drawn in the frame before `frame`.
     pub fn begin(&mut self, frame: u64) {
         self.players.retain(|_, (_, f)| *f + 1 >= frame);
@@ -1172,7 +1183,12 @@ impl Cards {
         if !self.may_play(id) {
             return;
         }
-        let (p, f) = self.players.entry(id.to_string()).or_insert_with(|| (Player::open(ctx, path, kind, Opts::card(side, 24 << 20)), frame));
+        let gray = self.gray;
+        let (p, f) = self.players.entry(id.to_string()).or_insert_with(|| {
+            let mut p = Player::open(ctx, path, kind, Opts::card(side, 24 << 20));
+            p.gray = gray;
+            (p, frame)
+        });
         *f = frame;
         p.update(now);
         if matches!(p.state, State::Still | State::Failed(_)) {
@@ -1193,7 +1209,9 @@ impl Cards {
             return None;
         }
         if self.popup.as_ref().is_none_or(|(p, _)| p != id) {
-            self.popup = Some((id.to_string(), Player::open(ctx, path, kind, Opts::card(side, 64 << 20))));
+            let mut p = Player::open(ctx, path, kind, Opts::card(side, 64 << 20));
+            p.gray = self.gray;
+            self.popup = Some((id.to_string(), p));
         }
         let (_, p) = self.popup.as_mut()?;
         p.update(now);

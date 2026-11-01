@@ -296,7 +296,12 @@ impl App {
     pub(crate) fn font_view(&mut self, ui: &mut Ui, lib: &Library, item: &Item, area: Rect) {
         let Some(family) = self.ws.font_view.family.clone() else { return };
         let look = self.font_look;
+        // The grayscale preview grays the specimen's colours, as Eagle's
+        // filter grays its font page.
+        let grayscale = self.modes.grayscale;
+        let gray = move |c: Color32| if grayscale { crate::logic::gray_color(c) } else { c };
         let (bg, ink) = look.theme.colors().unwrap_or((t::p().main, t::p().text));
+        let (bg, ink, accent) = (gray(bg), gray(ink), gray(t::p().primary));
         let muted = ink.gamma_multiply(0.6);
         ui.painter().rect_filled(area, 0.0, bg);
         let specimen = self.ws.font_view.specimen.unwrap_or(Specimen::Latin);
@@ -367,7 +372,7 @@ impl App {
                 };
                 let active = state != Activation::Off;
                 let b = egui::Button::new(RichText::new(label).color(if active { Color32::WHITE } else { ink }))
-                    .fill(if active { t::p().primary } else { Color32::TRANSPARENT })
+                    .fill(if active { accent } else { Color32::TRANSPARENT })
                     .stroke(Stroke::new(1.0, muted));
                 let r = ui.add_enabled(state != Activation::Eagle, b);
                 let r = if state == Activation::Eagle { r.on_disabled_hover_text(tip) } else { r.on_hover_text(tip) };
@@ -396,11 +401,11 @@ impl App {
                     let (sbg, sink) = theme.colors().unwrap_or((t::p().main, t::p().text));
                     let (r, resp) = ui.allocate_exact_size(Vec2::splat(22.0), Sense::click());
                     let p = ui.painter();
-                    p.circle_filled(r.center(), 10.0, sbg);
-                    let ring = if self.font_look.theme == *theme { Stroke::new(2.0, t::p().primary) } else { Stroke::new(1.0, muted) };
+                    p.circle_filled(r.center(), 10.0, gray(sbg));
+                    let ring = if self.font_look.theme == *theme { Stroke::new(2.0, accent) } else { Stroke::new(1.0, muted) };
                     p.circle_stroke(r.center(), 10.0, ring);
                     let glyph = if *theme == FontTheme::Auto { "A" } else { "a" };
-                    p.text(r.center(), Align2::CENTER_CENTER, glyph, font(12.0), sink);
+                    p.text(r.center(), Align2::CENTER_CENTER, glyph, font(12.0), gray(sink));
                     if resp.on_hover_text(theme.label()).clicked() {
                         self.font_look.theme = *theme;
                     }

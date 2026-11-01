@@ -132,10 +132,10 @@ struct Decoded {
     gray: bool,
 }
 
-/// Whether a tier follows the grayscale preview: the viewer's sizes, not
-/// the grid's cards.
-fn grays(tier: Tier) -> bool {
-    tier != Tier::Grid
+/// Whether a tier follows the grayscale preview: every one, as Eagle's
+/// filter grays the grid's thumbnails as well as the viewer.
+fn grays(_tier: Tier) -> bool {
+    true
 }
 
 /// Desaturates decoded pixels in place.
@@ -361,8 +361,8 @@ impl Loader {
         self.staged = None;
     }
 
-    /// Turns the grayscale preview on or off for the viewer's renders (the
-    /// grid's cards keep their colours). What is cached is marked stale and
+    /// Turns the grayscale preview on or off for every render, the grid's
+    /// cards included. What is cached is marked stale and
     /// decoded again, still shown until the new pixels arrive.
     pub fn set_grayscale(&mut self, on: bool) {
         if self.gray == on {

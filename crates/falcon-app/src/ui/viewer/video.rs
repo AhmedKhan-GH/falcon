@@ -74,9 +74,9 @@ impl SeekPreview {
     }
 
     /// The newest picture as a texture, uploading it if it is new.
-    fn texture(&mut self, ctx: &egui::Context) -> Option<&TextureHandle> {
+    fn texture(&mut self, ctx: &egui::Context, gray: bool) -> Option<&TextureHandle> {
         if let Some((_, f)) = self.got.lock().unwrap_or_else(|p| p.into_inner()).take() {
-            let img = color_image(&f);
+            let img = color_image(&f, gray);
             match &mut self.texture {
                 Some(tex) => tex.set(img, egui::TextureOptions::LINEAR),
                 None => self.texture = Some(ctx.load_texture("video-seek-preview", img, egui::TextureOptions::LINEAR)),
@@ -220,6 +220,8 @@ pub(crate) struct VideoState {
     /// Items AVFoundation can't play; the "can't play" page shows instead.
     failed: HashSet<String>,
     texture: Option<TextureHandle>,
+    /// Whether `texture` was made for the grayscale preview.
+    texture_gray: bool,
     /// 0..=1, saved between launches, as Eagle saves its player volume.
     pub volume: f32,
     /// The saved loop setting for clips over 30 s (Eagle's loop button).
@@ -260,6 +262,7 @@ impl Default for VideoState {
             player: None,
             failed: HashSet::new(),
             texture: None,
+            texture_gray: false,
             volume: 1.0,
             looping: false,
             muted: false,
@@ -460,9 +463,19 @@ fn rgba_image(f: falcon_video::Frame) -> Option<image::RgbaImage> {
     image::RgbaImage::from_raw(f.width as u32, f.height as u32, f.rgba)
 }
 
-/// Builds the egui picture for a decoded frame.
-fn color_image(f: &falcon_video::Frame) -> egui::ColorImage {
-    let pixels = f.rgba.as_chunks::<4>().0.iter().map(|p| Color32::from_rgb(p[0], p[1], p[2])).collect();
+/// Builds the egui picture for a decoded frame, desaturated for the
+/// grayscale preview (Eagle grays its video element too).
+pub(crate) fn color_image(f: &falcon_video::Frame, gray: bool) -> egui::ColorImage {
+    let pixels = f
+        .rgba
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|&p| {
+            let [r, g, b, _] = if gray { logic::grayscale_pixel(p) } else { p };
+            Color32::from_rgb(r, g, b)
+        })
+        .collect();
     egui::ColorImage { size: [f.width, f.height], source_size: vec2(f.width as f32, f.height as f32), pixels }
 }
 
@@ -725,12 +738,17 @@ impl App {
         }
         let (fill, wheel_volume) = (self.prefs.video_fill, self.prefs.video_scroll == crate::prefs::VideoScroll::Volume);
         let presenting = self.modes.presenting;
+        let gray = self.modes.grayscale;
         let mut present = false;
         let vs = &mut self.video;
         let Some(v) = vs.player.as_mut() else { return };
         v.tick();
-        if let Some(f) = v.frame() {
-            let img = color_image(&f);
+        // A paused picture is decoded again when the grayscale preview
+        // changes, since no new frame would come to replace it.
+        let regray = vs.texture.is_some() && vs.texture_gray != gray && !v.is_playing();
+        vs.texture_gray = gray;
+        if let Some(f) = v.frame().or_else(|| regray.then(|| v.current_frame().ok()).flatten()) {
+            let img = color_image(&f, gray);
             match &mut vs.texture {
                 Some(tex) => tex.set(img, egui::TextureOptions::LINEAR),
                 None => vs.texture = Some(ctx.load_texture("video-frame", img, egui::TextureOptions::LINEAR)),
@@ -878,7 +896,7 @@ impl App {
             let pic = Rect::from_min_size(Pos2::new(x0, track_y - 22.0 - size.y), size);
             let top = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, ui.scope_id().with("video-seek-preview")));
             top.rect_filled(pic.expand(2.0), CornerRadius::same(4), Color32::from_black_alpha(220));
-            if let Some(tex) = preview.texture(ctx) {
+            if let Some(tex) = preview.texture(ctx, gray) {
                 top.image(tex.id(), pic, Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)), Color32::WHITE);
             }
             let label = logic::format_duration(at);
@@ -1241,9 +1259,12 @@ mod tests {
     #[test]
     fn frames_become_opaque_pictures() {
         let f = falcon_video::Frame { width: 2, height: 1, rgba: vec![255, 0, 0, 255, 0, 0, 255, 255] };
-        let img = color_image(&f);
+        let img = color_image(&f, false);
         assert_eq!(img.size, [2, 1]);
         assert_eq!(img.pixels, vec![Color32::RED, Color32::BLUE]);
+        let gray = color_image(&f, true);
+        assert!(gray.pixels.iter().all(|c| c.r() == c.g() && c.g() == c.b()), "the grayscale preview drops the colour");
+        assert_eq!(gray.pixels[0], Color32::from_gray(54), "red keeps its luminance");
     }
 
     #[test]

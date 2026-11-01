@@ -263,6 +263,13 @@ pub fn grayscale_pixel([r, g, b, a]: [u8; 4]) -> [u8; 4] {
     [y, y, y, a]
 }
 
+/// One colour through [`grayscale_pixel`]: what the grayscale preview does
+/// to the colours a viewer paints itself (the font specimen's themes).
+pub fn gray_color(c: eframe::egui::Color32) -> eframe::egui::Color32 {
+    let [r, g, b, a] = grayscale_pixel(c.to_srgba_unmultiplied());
+    eframe::egui::Color32::from_rgba_unmultiplied(r, g, b, a)
+}
+
 /// Desaturates RGBA pixels in place with [`grayscale_pixel`] (a trailing
 /// partial pixel is left alone). The grid can run it on its cards' pixels.
 pub fn grayscale_rgba(rgba: &mut [u8]) {

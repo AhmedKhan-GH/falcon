@@ -64,6 +64,9 @@ impl App {
     pub(crate) fn grid(&mut self, ui: &mut Ui, lib: &Library) {
         let area = ui.max_rect();
         self.ws.cards.begin(ui.ctx().cumulative_frame_nr());
+        // The grayscale preview grays the cards too, as Eagle's does.
+        self.ws.cards.set_gray(self.modes.grayscale);
+        self.ws.loader.set_grayscale(self.modes.grayscale);
         let scroll_by = self.ws.scroll.take();
         let order = self.scope_order(lib);
         if let Some(gate) = self.scope_gate(lib) {

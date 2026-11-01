@@ -739,6 +739,8 @@ struct Job {
     key: i32,
     /// Quarter turns the picture is drawn turned by.
     turns: u8,
+    /// Desaturated for the grayscale preview.
+    gray: bool,
 }
 
 enum Req {
@@ -870,7 +872,13 @@ fn work(path: &Path, rx: &Receiver<Req>, tx: &Sender<Reply>, ctx: &egui::Context
                 let cap = (MAX_PAGE_PIXELS / (w * h).max(1.0)).sqrt();
                 doc.render(job.page, key_scale(job.key).min(cap), max_side)
             };
-            Reply::Page(job, bitmap.ok().map(|b| turn_bitmap(b, job.turns)))
+            let gray = |mut b: falcon_pdf::Bitmap| {
+                if job.gray {
+                    crate::logic::grayscale_rgba(&mut b.rgba);
+                }
+                b
+            };
+            Reply::Page(job, bitmap.ok().map(|b| gray(turn_bitmap(b, job.turns))))
         } else {
             continue;
         };
@@ -998,6 +1006,8 @@ struct Open {
     outline_shown: Option<usize>,
     /// Print was asked for this frame.
     print: bool,
+    /// The pages are drawn for the grayscale preview.
+    gray: bool,
 }
 
 impl Open {
@@ -1043,6 +1053,7 @@ impl Open {
             properties: false,
             outline_shown: None,
             print: false,
+            gray: false,
         }
     }
 
@@ -1080,6 +1091,19 @@ impl Open {
         self.restore = Some(self.current);
     }
 
+    /// Switches the page pictures to or from the grayscale preview: they
+    /// are rendered again (Eagle grays its pdf.js frame too).
+    fn set_gray(&mut self, gray: bool) {
+        if self.gray == gray {
+            return;
+        }
+        self.gray = gray;
+        self.pages = PageCache::new(PAGE_BUDGET);
+        self.thumbs = PageCache::new(THUMB_BUDGET);
+        self.broken.clear();
+        self.sent.clear();
+    }
+
     fn mark(&self) -> Mark {
         Mark { id: self.id.clone(), page: self.current, zoom: self.zoom.key(), turns: self.turns, scroll: self.scroll, spread: self.spread }
     }
@@ -1102,7 +1126,7 @@ impl Open {
                     }
                 }
                 Ok(Reply::Failed(e)) => self.status = Status::Failed(e),
-                Ok(Reply::Page(job, _)) if job.turns != self.turns => {}
+                Ok(Reply::Page(job, _)) if job.turns != self.turns || job.gray != self.gray => {}
                 Ok(Reply::Page(job, Some(b))) => {
                     let img = egui::ColorImage::from_rgba_unmultiplied([b.width, b.height], &b.rgba);
                     let tex = ctx.load_texture(format!("pdf-{}-{}", job.page, job.key), img, egui::TextureOptions::LINEAR);
@@ -1433,6 +1457,7 @@ impl App {
             ui.interact(area, ui.scope_id().with("pdf-bg"), Sense::click());
             let sidebar = self.pdf.sidebar;
             if let Some(o) = self.pdf.open.as_mut() {
+                o.set_gray(self.modes.grayscale);
                 o.poll(ctx);
                 match o.status.clone() {
                     Status::Ready => {
@@ -1563,7 +1588,7 @@ fn pages(o: &mut Open, ui: &mut Ui, area: Rect, jobs: &mut Vec<Job>) {
         let order = (a..=b).chain(a.checked_sub(1)).chain((b + 1 < n).then_some(b + 1));
         for i in order {
             if !o.broken.contains(&i) && !o.pages.contains((i, key)) && (settled || !o.pages.has_page(i)) {
-                jobs.push(Job { page: i, key, turns });
+                jobs.push(Job { page: i, key, turns, gray: o.gray });
             }
         }
 
@@ -1726,7 +1751,7 @@ fn side_panel(o: &mut Open, ui: &mut Ui, side: Rect, tab: Tab, jobs: &mut Vec<Jo
             let sizes = o.shown_sizes();
             let widest = sizes.iter().map(|s| s.0).fold(1.0f32, f32::max);
             let tl = layout(&sizes, THUMB_W / (widest * UNIT), 26.0);
-            let turns = o.turns;
+            let (turns, gray) = (o.turns, o.gray);
             let current = o.current;
             let mut go = None;
             egui::ScrollArea::vertical().id_salt("pdf-thumbs").auto_shrink([false, false]).show_viewport(&mut child, |ui, viewport| {
@@ -1742,7 +1767,7 @@ fn side_panel(o: &mut Open, ui: &mut Ui, side: Rect, tab: Tab, jobs: &mut Vec<Jo
                         Some(tex) => {
                             p.image(tex.id(), r, Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)), Color32::WHITE);
                         }
-                        None => jobs.push(Job { page: i, key: THUMB_KEY, turns }),
+                        None => jobs.push(Job { page: i, key: THUMB_KEY, turns, gray }),
                     }
                     let stroke = if i == current { Stroke::new(2.0, t::p().primary) } else { Stroke::new(1.0, t::p().divider) };
                     p.rect_stroke(r.expand(2.0), 2.0, stroke, egui::StrokeKind::Outside);
