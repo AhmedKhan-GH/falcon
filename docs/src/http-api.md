@@ -62,6 +62,8 @@ The app bundle registers the `eagle` scheme (`CFBundleURLTypes` in `scripts/bund
 
 The bundle also registers image, video, design, `.eaglepack` and `.library` document types, so Finder's Open With and Dock drops reach falcon. Files are imported into the shown library, a package is imported as a package, and a library is opened (only inside the sandbox folder). Folders can be dropped on the Dock icon, but falcon does not become any folder's default app.
 
+The files reach the running app as an Apple "open documents" event, handled in `crates/falcon-app/src/open_files.rs` and passed to the same import path as a drop (`App::import`), as Eagle's `open-file` handler imports files and opens packages. AppKit installs its own handler for that event while the app finishes launching, so falcon installs its handler when AppKit posts `NSApplicationWillFinishLaunchingNotification`, which is still before a launch's own files arrive. A package asks first, showing its size, as Eagle does. With no library open, files other than a library are ignored.
+
 ## v2 routes (observed)
 
 Read from Eagle 4.0's `app/js/api-server-v2.js` (the route table), `api-v2-playground-config.js` (parameters) and the handlers in `app/js/plugin/index.js` and `plugin/handlers/smart-folder-handlers.js`. "Paged" means the reply is wrapped as above. GET takes the query string, POST a JSON body, so array parameters only work through POST.

@@ -22,6 +22,7 @@ mod import_dupes;
 mod loader;
 mod logic;
 mod menu;
+mod open_files;
 mod open_with;
 mod prefs;
 mod share;
@@ -50,6 +51,8 @@ fn main() -> eframe::Result {
     falcon_library::sandbox::enforce(falcon_library::sandbox::default_root());
     // Before the event loop, so the link that launched the app arrives.
     links::install();
+    // Files opened with the app from Finder or dropped on its Dock icon.
+    open_files::install();
     // `falcon-app [LIBRARY] [ITEM]`, where ITEM is an id or Eagle's
     // `eagle://item/<id>` link, opened in the viewer.
     let initial = std::env::args_os().nth(1).map(PathBuf::from);

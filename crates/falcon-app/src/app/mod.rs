@@ -319,6 +319,7 @@ impl App {
             app.follow_link(link);
         }
         crate::links::set_repaint(&app.ctx);
+        crate::open_files::set_repaint(&app.ctx);
         app
     }
 
@@ -377,6 +378,13 @@ impl App {
         self.follow_api_preferences();
         for link in crate::links::take() {
             self.follow_link(link);
+        }
+        // Files opened with falcon: packages and files are imported,
+        // libraries opened (`App::import_into`), as when dropped.
+        let opened = crate::open_files::take();
+        if !opened.is_empty() {
+            self.import(opened);
+            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
         }
         self.poll_loading();
         if std::mem::take(&mut self.refresh) {
