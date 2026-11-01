@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 256 | 6 | 10 | 8 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 257 | 6 | 9 | 8 |
 | Viewers and file formats | 186 | 14 | 3 | 5 |
 | Search, filters and organising | 216 | 1 | 4 | 3 |
 | Import, export, library, preferences and integrations | 190 | 3 | 16 | 26 |
-| **Total** | 848 | 24 | 33 | 42 |
+| **Total** | 849 | 24 | 32 | 42 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -364,7 +364,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Remember window size and position | Done | eframe persistence (Cargo.toml `persistence` feature) | local |
 | Full screen | Done | ⌃⌘F and Window ▸ Full Screen, plus the green button | local |
 | Always on top for the main window | Done | `modes.rs` | local |
-| Open items in a separate preview window: own titlebar always-on-top toggle, opacity 10–100%, navigator, zoom presets 5–800%, grayscale, rotate / flip, copy, copy path / link, Reveal in Eagle | Missing |  | local |
+| Open items in a separate preview window: own titlebar always-on-top toggle, opacity 10–100%, navigator, zoom presets 5–800%, grayscale, rotate / flip, copy, copy path / link, Reveal in Eagle | Done | `ui/viewer/preview_window/`: always-on-top, opacity 10–100%, navigator, zoom presets, grayscale, rotate/flip, Copy, Copy File Path, Copy ▸ Link / Eagle Link, Reveal in Finder, Show in Falcon; every viewer type incl. 3D and web; ⌘O, middle click and the item menu | local |
 | Middle-click opens an item in a new window (preference) | Done | `Prefs::middle_button` (new window, default, or nothing); never for audio, as Eagle | local |
 | Presentation / slideshow mode | Done | `modes.rs`; `ViewportCommand::Fullscreen`, panels and bar hidden | local |
 | Closing the window keeps the app running (Dock icon stays); reopen from the Dock | Done | Closing hides falcon (`NSApp hide:`, so the collect and preview windows hide too); the Dock icon or reopening brings it back; ⌘Q quits | local |
