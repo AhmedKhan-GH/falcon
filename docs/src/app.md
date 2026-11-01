@@ -336,6 +336,12 @@ The toolbar's layout button opens a panel after Eagle's (`layout-panel.html`, se
 | Show Subfolder Content | In Eagle's preferences (`showSubfolderContent`), off by default. A folder then also lists the items of every folder under it (search and filters included), the subfolder strip lists every folder under it, and its cards can't be dragged into order. The sidebar's counts don't change | Same, kept in falcon's saved state (`display`). Manual drag ordering is off while it is on, since items from subfolders have no place in the folder's order; a Manual sort still applies, those items falling back to their import time as in Eagle. The switch is also on the subfolder strip's heading, in the View menu and on ⌥⌘7 |
 | Thumbnail Speed / Quality | Loads originals for large tiles when set to Quality | Not built: falcon always draws the thumbnail |
 
+## Selection
+
+Click selects one item, ⌘-click adds or removes one, ⇧-click selects the range from the last clicked item, and a click on empty space clears the selection.
+
+Dragging over empty grid space draws a rubber band, in every layout, as Eagle's `rect-select` does (seen): every card the band touches is selected, replacing the selection; with ⌘ held when the drag starts, each touched card flips (selected ones drop out); with ⇧, touched cards join the selection (Eagle keeps the selection when a ⇧ drag starts but drops what the band leaves as it moves, so ⇧ acts nearly like a plain drag there; falcon adds, as Finder does). Shrinking the band gives back what it no longer touches. Held within 24 px of the grid's top or bottom edge (or past it), the band scrolls the grid. A drag that starts on a card still drags items. The rules are `logic::marquee_selection` and `logic::rect_hits`.
+
 ## Hover preview
 
 Hovering a card shows a faint zoom button in the bottom-right corner of its image (in the List layout, over the whole thumbnail). Resting on the button for 200 ms floats an enlarged copy of the image over the window, which dims behind it. Holding Z shows it at once for whichever card is under the pointer. The code is in `crates/falcon-app/src/hover.rs`.

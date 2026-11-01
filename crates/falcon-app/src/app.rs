@@ -98,6 +98,14 @@ struct Saved {
     zoom_edge: Option<bool>,
 }
 
+/// A rubber-band selection in progress: where it started, in the grid's
+/// content space, and the selection it started from.
+struct Marquee {
+    start: Pos2,
+    base: Vec<String>,
+    mode: logic::MarqueeMode,
+}
+
 /// Ids being dragged from the grid.
 #[derive(Clone)]
 struct DragItems(Vec<String>);
@@ -387,6 +395,8 @@ struct Workspace {
     order: Vec<String>,
     columns: usize,
     scroll_to: Option<String>,
+    /// The rubber band being dragged over the grid, if any.
+    marquee: Option<Marquee>,
     /// Where ⌥↑ goes: the open folder's (or smart folder's) parent.
     /// Refreshed each frame while the library is locked.
     up: Option<Scope>,
@@ -480,6 +490,7 @@ impl Workspace {
             order: Vec::new(),
             columns: 1,
             scroll_to: None,
+            marquee: None,
             scroll: None,
             up: None,
             editable: [false; 3],
@@ -3175,6 +3186,21 @@ impl App {
             let cur = ui.ctx().data(|d| d.get_temp::<f32>(ui.scope_id().with("grid-offset"))).unwrap_or(0.0);
             scroll = scroll.vertical_scroll_offset(how.offset(cur, area.height(), total_h));
         }
+        // The rubber band ends with the button; near an edge it scrolls.
+        let pointer = ui.ctx().pointer_latest_pos();
+        if self.ws.marquee.is_some() && !ui.input(|i| i.pointer.primary_down()) {
+            self.ws.marquee = None;
+        }
+        if self.ws.marquee.is_some()
+            && let Some(p) = pointer
+        {
+            let step = logic::edge_scroll(p.y, area.top(), area.bottom());
+            if step != 0.0 {
+                let cur = ui.ctx().data(|d| d.get_temp::<f32>(ui.scope_id().with("grid-offset"))).unwrap_or(0.0);
+                scroll = scroll.vertical_scroll_offset((cur + step).clamp(0.0, (total_h - area.height()).max(0.0)));
+                ui.ctx().request_repaint();
+            }
+        }
 
         let mut jobs = Vec::new();
         let mut clicked: Option<(String, Modifiers)> = None;
@@ -3183,11 +3209,35 @@ impl App {
         let mut bg_clicked = false;
         let mut hovered: Option<(&Item, Rect, bool)> = None;
         let manual = self.manual_folder(lib);
+        let mut band_rect: Option<Rect> = None;
         let out = scroll.show_viewport(ui, |ui, viewport| {
             let origin = ui.max_rect().min;
-            let bg = ui.allocate_rect(Rect::from_min_size(origin, vec2(area.width(), total_h.max(area.height()))), Sense::click());
+            let bg = ui.allocate_rect(Rect::from_min_size(origin, vec2(area.width(), total_h.max(area.height()))), Sense::click_and_drag());
             if bg.clicked() {
                 bg_clicked = true;
+            }
+            if bg.drag_started_by(egui::PointerButton::Primary)
+                && let Some(at) = ui.input(|i| i.pointer.press_origin())
+            {
+                let m = ui.input(|i| i.modifiers);
+                let mode = logic::marquee_mode(m.command, m.shift);
+                let base = if mode == logic::MarqueeMode::Replace { Vec::new() } else { self.ws.selected.clone() };
+                self.ws.marquee = Some(Marquee { start: at - origin.to_vec2(), base, mode });
+            }
+            if let Some(mq) = &self.ws.marquee
+                && let Some(p) = pointer
+            {
+                let now = p - origin.to_vec2();
+                let band = logic::rect_between([mq.start.x, mq.start.y], [now.x, now.y]);
+                let cards: Vec<logic::Place> = (0..items.len()).map(card_of).map(|r| [r.left(), r.top(), r.width(), r.height()]).collect();
+                let hits = logic::rect_hits(&cards, band);
+                let sel = logic::marquee_selection(&self.ws.order, &mq.base, &hits, mq.mode);
+                if let Some(last) = hits.last().and_then(|&n| self.ws.order.get(n)) {
+                    self.ws.anchor = Some(last.clone());
+                }
+                self.ws.selected = sel;
+                let [x, y, w, h] = band;
+                band_rect = Some(Rect::from_min_size(origin + vec2(x, y), vec2(w, h)));
             }
             let view = viewport.expand(200.0);
             for (n, item) in items.iter().enumerate() {
@@ -3231,6 +3281,10 @@ impl App {
             }
             if let Some(folder) = &manual {
                 self.manual_drag(ui, folder, &places, caption, origin);
+            }
+            if let Some(r) = band_rect {
+                ui.painter().rect_filled(r, CornerRadius::same(2), t::p().primary.gamma_multiply(0.15));
+                ui.painter().rect_stroke(r, CornerRadius::same(2), Stroke::new(1.0, t::p().primary), StrokeKind::Inside);
             }
         });
         let offset = out.state.clamped_offset().y;
