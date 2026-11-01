@@ -11,6 +11,7 @@ use falcon_library::{Library, fontmeta, media, search, waveform};
 use crate::app::App;
 use crate::ui::widgets::{galley, icon_button, window_drag};
 use crate::icons as ic;
+use crate::locale::{tr, tr_key};
 use crate::logic;
 use crate::theme::{self as t, font, mono};
 
@@ -37,7 +38,7 @@ pub(crate) fn bar_shell(app: &mut App, ui: &mut Ui, item: &Item, bar: Rect) -> (
     let mut x = bar.left() + logic::bar_inset(bar.left() <= ui.ctx().content_rect().left() + 1.0);
     app.panels_button(ui, Pos2::new(x, cy));
     x += 28.0;
-    if icon_button(ui, Pos2::new(x, cy), ic::CARET_LEFT, 17.0, true, "Back (Esc)").clicked() {
+    if icon_button(ui, Pos2::new(x, cy), ic::CARET_LEFT, 17.0, true, tr("Back (Esc)")).clicked() {
         app.ws.viewer = None;
     }
     x += 22.0;
@@ -50,10 +51,10 @@ pub(crate) fn bar_shell(app: &mut App, ui: &mut Ui, item: &Item, bar: Rect) -> (
     }
     // Previous and next at the right end, as in Eagle.
     let (first, last) = counter.map_or((true, true), |(n, total)| (n == 1, n == total));
-    if icon_button(ui, Pos2::new(bar.right() - 22.0, cy), ic::CARET_RIGHT, 16.0, !last, "Next (→)").clicked() {
+    if icon_button(ui, Pos2::new(bar.right() - 22.0, cy), ic::CARET_RIGHT, 16.0, !last, tr("Next (→)")).clicked() {
         app.viewer_step(1);
     }
-    if icon_button(ui, Pos2::new(bar.right() - 48.0, cy), ic::CARET_LEFT, 16.0, !first, "Previous (←)").clicked() {
+    if icon_button(ui, Pos2::new(bar.right() - 48.0, cy), ic::CARET_LEFT, 16.0, !first, tr("Previous (←)")).clicked() {
         app.viewer_step(-1);
     }
     let mut right = bar.right() - 68.0;
@@ -123,7 +124,7 @@ impl App {
         let p = ui.painter().clone();
         match self.ws.waveforms.get(ctx, &item.id, &path, &item.ext) {
             None => {
-                p.text(wave.center(), Align2::CENTER_CENTER, "Reading waveform…", font(13.0), t::p().text_muted);
+                p.text(wave.center(), Align2::CENTER_CENTER, tr("Reading waveform…"), font(13.0), t::p().text_muted);
             }
             Some(peaks) => {
                 let bars = (w / 3.0) as usize;
@@ -162,7 +163,7 @@ impl App {
         let playing = self.audio.is_playing();
         let glyph = if playing { PAUSE } else { PLAY };
         p.text(play.center(), Align2::CENTER_CENTER, glyph, FontId::new(18.0, t::fill_family()), Color32::WHITE);
-        if resp.on_hover_text("Play/Pause (Space)").clicked() {
+        if resp.on_hover_text(tr("Play/Pause (Space)")).clicked() {
             self.audio.toggle();
         }
         p.text(Pos2::new(play.right() + 14.0, cy), Align2::LEFT_CENTER, logic::time_label(pos, duration), mono(13.0), t::p().text_value);
@@ -171,7 +172,7 @@ impl App {
         let mut v = self.audio.volume;
         let mut vui = ui.new_child(egui::UiBuilder::new().max_rect(vol));
         vui.spacing_mut().slider_width = 110.0;
-        if vui.add(egui::Slider::new(&mut v, 0.0..=1.0).show_value(false)).on_hover_text("Volume").changed() {
+        if vui.add(egui::Slider::new(&mut v, 0.0..=1.0).show_value(false)).on_hover_text(tr("Volume")).changed() {
             self.audio.set_volume(v);
         }
         let spk = Pos2::new(vol.left() - 16.0, cy);
@@ -183,7 +184,7 @@ impl App {
             ui.painter().rect_filled(Rect::from_center_size(lp, Vec2::splat(26.0)), t::RADIUS, t::p().row_hover);
         }
         ui.painter().text(lp, Align2::CENTER_CENTER, REPEAT, font(16.0), color);
-        if lresp.on_hover_text("Loop").clicked() {
+        if lresp.on_hover_text(tr("Loop")).clicked() {
             self.audio.looping = !self.audio.looping;
         }
         // Speed menu left of loop (⇧. and ⇧, step through 0.25–8×).
@@ -223,43 +224,43 @@ impl App {
 /// item has them: `duration`, `bpm`, `rawMetas` and `fontMetas`.
 pub(crate) fn media_props(ui: &mut Ui, item: &Item) {
     if let Some(d) = search::duration(item) {
-        crate::ui::widgets::prop(ui, "Duration", &logic::format_duration(d));
+        crate::ui::widgets::prop(ui, tr("Duration"), &logic::format_duration(d));
     }
     if let Some(b) = search::bpm(item) {
         // As stored (`119.985`), as Eagle's inspector shows it.
-        crate::ui::widgets::prop(ui, "BPM", &b.to_string());
+        crate::ui::widgets::prop(ui, tr("BPM"), &b.to_string());
     }
     if let Some(raw) = item.extra.get("rawMetas") {
         let text = |k: &str| raw.get(k).and_then(|v| v.as_str()).filter(|s| !s.is_empty()).map(String::from);
         if let Some(c) = search::camera(item) {
-            crate::ui::widgets::prop(ui, "Camera", c);
+            crate::ui::widgets::prop(ui, tr("Camera"), c);
         }
         if let Some(ms) = raw.get("timestamp").and_then(|v| v.as_u64()).filter(|&t| t > 0) {
-            crate::ui::widgets::prop(ui, "Date Taken", &logic::format_ms(ms));
+            crate::ui::widgets::prop(ui, tr("Date Taken"), &logic::format_ms(ms));
         }
         if let Some(iso) = raw.get("isoSpeed").and_then(|v| v.as_u64()) {
             crate::ui::widgets::prop(ui, "ISO", &iso.to_string());
         }
-        for (k, label) in [("focalLength", "Focal Length"), ("shutter", "Shutter"), ("aperture", "Aperture")] {
+        for (k, label) in [("focalLength", tr_key("Focal Length")), ("shutter", tr_key("Shutter")), ("aperture", tr_key("Aperture"))] {
             if let Some(v) = text(k) {
-                crate::ui::widgets::prop(ui, label, &v);
+                crate::ui::widgets::prop(ui, tr(label), &v);
             }
         }
     }
     if let Some(metas) = item.extra.get("fontMetas").and_then(|m| m.as_object()) {
         if let Some(f) = search::font_family(item) {
-            crate::ui::widgets::prop(ui, "Family", f);
+            crate::ui::widgets::prop(ui, tr("Family"), f);
         }
         let style = metas.get("weight").and_then(|v| v.as_str()).map_or_else(|| fontmeta::weight(metas), String::from);
-        crate::ui::widgets::prop(ui, "Style", &style);
+        crate::ui::widgets::prop(ui, tr("Style"), &style);
         if let Some(ps) = search::font_name(item, "postScriptName") {
-            crate::ui::widgets::prop(ui, "PostScript", ps);
+            crate::ui::widgets::prop(ui, tr("PostScript"), ps);
         }
         if let Some(v) = search::font_name(item, "version") {
-            crate::ui::widgets::prop(ui, "Version", v);
+            crate::ui::widgets::prop(ui, tr("Version"), v);
         }
         if let Some(n) = metas.get("numGlyphs").and_then(|v| v.as_u64()) {
-            crate::ui::widgets::prop(ui, "Glyphs", &n.to_string());
+            crate::ui::widgets::prop(ui, tr("Glyphs"), &n.to_string());
         }
     }
 }

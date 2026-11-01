@@ -17,6 +17,7 @@ use crate::app::{Action, App};
 use crate::ui::widgets::icon_button;
 use crate::icons as ic;
 use crate::shortcuts::{Command, FrameTool, PlayerKey};
+use crate::locale::{tr, tr_key, trf};
 use crate::logic;
 use crate::theme::{self as t, font, mono};
 
@@ -144,9 +145,9 @@ const NEEDS_OTHER_PLAYER: [&str; 6] = ["mkv", "webm", "avi", "wmv", "flv", "360"
 pub fn cannot_play_line(ext: &str) -> String {
     let ext = ext.to_lowercase();
     if NEEDS_OTHER_PLAYER.contains(&ext.as_str()) {
-        format!("macOS can't play .{ext} videos, and Falcon has no player of its own for them. Try opening it in another app.")
+        trf("macOS can't play .{ext} videos, and Falcon has no player of its own for them. Try opening it in another app.", &[("ext", &ext)])
     } else {
-        "macOS couldn't play this video. Try opening it in another app.".to_string()
+        tr("macOS couldn't play this video. Try opening it in another app.").to_string()
     }
 }
 
@@ -616,7 +617,7 @@ impl App {
             Ok(Some(img)) => img,
             Ok(None) => return,
             Err(e) => {
-                self.flash(format!("Couldn't read the frame: {e}"));
+                self.flash(trf("Couldn't read the frame: {error}", &[("error", &e)]));
                 return;
             }
         };
@@ -626,7 +627,7 @@ impl App {
                 let (w, h) = img.dimensions();
                 let data = arboard::ImageData { width: w as usize, height: h as usize, bytes: img.into_raw().into() };
                 if arboard::Clipboard::new().and_then(|mut c| c.set_image(data)).is_ok() {
-                    self.flash("Frame copied");
+                    self.flash(tr("Frame copied"));
                 }
             }
             FrameTool::Save => {
@@ -647,18 +648,18 @@ impl App {
     /// Eagle's viewer, above the item's own menu.
     fn video_menu(&mut self, ui: &mut Ui, lib: &Library, item: &Item) {
         let entries = [
-            ("Set Current Frame as Thumbnail", FrameTool::Thumbnail),
-            ("Copy Current Frame", FrameTool::Copy),
-            ("Save Current Frame to Library", FrameTool::Save),
+            (tr_key("Set Current Frame as Thumbnail"), FrameTool::Thumbnail),
+            (tr_key("Copy Current Frame"), FrameTool::Copy),
+            (tr_key("Save Current Frame to Library"), FrameTool::Save),
         ];
         for (label, tool) in entries {
             let keys = self.shortcut_text(ui.ctx(), Command::Player(PlayerKey::Frame(tool)));
-            if ui.add(egui::Button::new(label).shortcut_text(keys)).clicked() {
+            if ui.add(egui::Button::new(tr(label)).shortcut_text(keys)).clicked() {
                 self.frame_tool(item, tool);
                 ui.close();
             }
         }
-        if ui.button("Load Subtitles…").clicked() {
+        if ui.button(tr("Load Subtitles…")).clicked() {
             ui.close();
             self.load_subtitles(lib, item);
         }
@@ -670,10 +671,10 @@ impl App {
     /// the item's folder as `<name>.<ext>`, where the viewer finds it next
     /// time, and shown at once.
     fn load_subtitles(&mut self, lib: &Library, item: &Item) {
-        let picked = rfd::FileDialog::new().set_title("Load Subtitles").add_filter("Subtitles", &["srt", "vtt"]).pick_file();
+        let picked = rfd::FileDialog::new().set_title(tr("Load Subtitles")).add_filter(tr("Subtitles"), &["srt", "vtt"]).pick_file();
         let Some(src) = picked else { return };
         let Some(cues) = crate::subtitles::load(&src) else {
-            self.flash("No subtitles found in that file");
+            self.flash(tr("No subtitles found in that file"));
             return;
         };
         let ext = src.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
@@ -681,7 +682,7 @@ impl App {
         if src != dest
             && let Err(e) = std::fs::copy(&src, &dest)
         {
-            self.flash(format!("Couldn't copy the subtitles: {e}"));
+            self.flash(trf("Couldn't copy the subtitles: {error}", &[("error", &e)]));
             return;
         }
         if self.video.loaded() == Some(item.id.as_str()) {
@@ -722,8 +723,8 @@ impl App {
             let (name_x, mut right) = crate::ui::viewer::audio::bar_shell(self, ui, item, bar);
             let cy = bar.center().y;
             let keyed = |label: &str, cmd| self.shortcuts.tooltip(ui.ctx(), label, cmd);
-            let tip = format!("{}\n⇧-click: Rotate Right", keyed("Rotate Left", crate::shortcuts::Command::RotateLeft));
-            let flip_tip = keyed("Flip", crate::shortcuts::Command::FlipHorizontal);
+            let tip = format!("{}\n{}", keyed(tr("Rotate Left"), crate::shortcuts::Command::RotateLeft), tr("⇧-click: Rotate Right"));
+            let flip_tip = keyed(tr("Flip"), crate::shortcuts::Command::FlipHorizontal);
             if icon_button(ui, Pos2::new(right - 4.0, cy), ic::ARROW_COUNTER_CLOCKWISE, 17.0, true, &tip).clicked() {
                 self.video.turns = rotate_step(self.video.turns, ui.input(|i| i.modifiers.shift));
             }
@@ -782,7 +783,7 @@ impl App {
         match &vs.texture {
             Some(tex) => paint_turned(ui, tex, shown, corner_uvs(vs.turns, vs.flipped)),
             None => {
-                p.text(stage.center(), Align2::CENTER_CENTER, "Loading…", font(13.0), t::p().text_muted);
+                p.text(stage.center(), Align2::CENTER_CENTER, tr("Loading…"), font(13.0), t::p().text_muted);
                 ctx.request_repaint_after(std::time::Duration::from_millis(16));
             }
         }
@@ -867,18 +868,18 @@ impl App {
             p.rect_filled(r, CornerRadius::same(1), color);
             let resp = ui.interact(r.expand2(vec2(3.0, 4.0)), ui.scope_id().with(("video-mark", &c.id)), Sense::click());
             let text = plain_text(&c.annotation);
-            let resp = resp.on_hover_text(format!("{}  {}", comment_time(*s), if text.is_empty() { "(no text)" } else { &text }));
+            let resp = resp.on_hover_text(format!("{}  {}", comment_time(*s), if text.is_empty() { tr("(no text)") } else { &text }));
             if resp.clicked() {
                 v.seek(*s);
             }
             resp.context_menu(|ui| {
-                if ui.button("Edit Comment…").clicked() {
+                if ui.button(tr("Edit Comment…")).clicked() {
                     v.pause();
                     v.seek(*s);
                     vs.draft = Some(Draft { item: item.id.clone(), id: Some(c.id.clone()), at: *s, text: text.clone(), focus: true });
                     ui.close();
                 }
-                if ui.button("Delete Comment").clicked() {
+                if ui.button(tr("Delete Comment")).clicked() {
                     self.ws.actions.push(Action::Edit(Op::DeleteComment(item.id.clone(), c.id.clone())));
                     ui.close();
                 }
@@ -918,19 +919,19 @@ impl App {
         let presp = ui.interact(play, ui.scope_id().with("video-play"), Sense::click());
         p.circle_filled(play.center(), 17.0, if presp.hovered() { t::p().primary } else { t::p().brand });
         p.text(play.center(), Align2::CENTER_CENTER, if playing { PAUSE } else { PLAY }, egui::FontId::new(16.0, t::fill_family()), Color32::WHITE);
-        if presp.on_hover_text("Play/Pause (Space)").clicked() {
+        if presp.on_hover_text(tr("Play/Pause (Space)")).clicked() {
             v.toggle();
         }
         // Back and forward act on press and repeat while held (Eagle: 2% of
         // the clip, at most 10 s back and 20 s forward).
         let now = ctx.input(|i| i.time);
         let mut x = play.right() + 20.0;
-        let held = icon_button(ui, Pos2::new(x, cy), ic::ARROW_COUNTER_CLOCKWISE, 16.0, true, "Back (⌘←)").is_pointer_button_down_on();
+        let held = icon_button(ui, Pos2::new(x, cy), ic::ARROW_COUNTER_CLOCKWISE, 16.0, true, tr("Back (⌘←)")).is_pointer_button_down_on();
         if vs.back.fire(held, now) {
             v.seek(v.current_time() - skip_step(duration, 10.0));
         }
         x += 28.0;
-        let held = icon_button(ui, Pos2::new(x, cy), ic::ARROW_CLOCKWISE, 16.0, true, "Forward (⌘→)").is_pointer_button_down_on();
+        let held = icon_button(ui, Pos2::new(x, cy), ic::ARROW_CLOCKWISE, 16.0, true, tr("Forward (⌘→)")).is_pointer_button_down_on();
         if vs.forward.fire(held, now) {
             v.seek(v.current_time() + skip_step(duration, 20.0));
         }
@@ -938,11 +939,11 @@ impl App {
             ctx.request_repaint_after(std::time::Duration::from_millis(16));
         }
         x += 28.0;
-        if icon_button(ui, Pos2::new(x, cy), ic::CARET_LEFT, 15.0, true, "Previous Frame ([)").clicked() {
+        if icon_button(ui, Pos2::new(x, cy), ic::CARET_LEFT, 15.0, true, tr("Previous Frame ([)")).clicked() {
             v.step(-1);
         }
         x += 26.0;
-        if icon_button(ui, Pos2::new(x, cy), ic::CARET_RIGHT, 15.0, true, "Next Frame (])").clicked() {
+        if icon_button(ui, Pos2::new(x, cy), ic::CARET_RIGHT, 15.0, true, tr("Next Frame (])")).clicked() {
             v.step(1);
         }
         x += 22.0;
@@ -950,7 +951,7 @@ impl App {
 
         // Full screen at the right end: as Eagle's, it enters (or leaves)
         // presentation mode.
-        let (glyph, tip) = if presenting { (ic::CORNERS_IN, "Exit Full Screen") } else { (ic::CORNERS_OUT, "Full Screen") };
+        let (glyph, tip) = if presenting { (ic::CORNERS_IN, tr("Exit Full Screen")) } else { (ic::CORNERS_OUT, tr("Full Screen")) };
         if icon_button(ui, Pos2::new(right - 6.0, cy), glyph, 17.0, true, tip).clicked() {
             present = true;
         }
@@ -958,14 +959,14 @@ impl App {
         let mut level = if vs.muted { 0.0 } else { vs.volume };
         let mut vui = ui.new_child(egui::UiBuilder::new().max_rect(vol));
         vui.spacing_mut().slider_width = 90.0;
-        if vui.add(egui::Slider::new(&mut level, 0.0..=1.0).show_value(false)).on_hover_text("Volume (⌘↑ ⌘↓)").changed() {
+        if vui.add(egui::Slider::new(&mut level, 0.0..=1.0).show_value(false)).on_hover_text(tr("Volume (⌘↑ ⌘↓)")).changed() {
             vs.volume = level;
             vs.muted = false;
             v.set_volume(level);
             v.set_muted(false);
         }
         let spk = Pos2::new(vol.left() - 18.0, cy);
-        let tip = if vs.muted { "Unmute" } else { "Mute" };
+        let tip = if vs.muted { tr("Unmute") } else { tr("Mute") };
         let sresp = icon_button(ui, spk, SPEAKER, 16.0, true, tip);
         if vs.muted || !info.has_audio {
             p.line_segment([spk + vec2(-8.0, 7.0), spk + vec2(8.0, -7.0)], Stroke::new(1.5, t::p().text_muted));
@@ -979,7 +980,7 @@ impl App {
         if looping {
             p.rect_filled(Rect::from_center_size(lp, Vec2::splat(26.0)), t::RADIUS, t::p().primary.gamma_multiply(0.35));
         }
-        if icon_button(ui, lp, REPEAT, 16.0, true, if looping { "Loop: On" } else { "Loop: Off" }).clicked() {
+        if icon_button(ui, lp, REPEAT, 16.0, true, if looping { tr("Loop: On") } else { tr("Loop: Off") }).clicked() {
             v.set_looping(!looping);
             vs.looping = !looping;
         }
@@ -997,7 +998,7 @@ impl App {
             }
         });
         let cp = Pos2::new(sp.left() - 22.0, cy);
-        if icon_button(ui, cp, ic::CHAT_CIRCLE, 16.0, true, "Add Comment at Current Time (N)").clicked() {
+        if icon_button(ui, cp, ic::CHAT_CIRCLE, 16.0, true, tr("Add Comment at Current Time (N)")).clicked() {
             v.pause();
             vs.draft = Some(Draft { item: item.id.clone(), id: None, at: pos, text: String::new(), focus: true });
         }
@@ -1039,8 +1040,8 @@ impl App {
         egui::Area::new(ui.scope_id().with("timed-comment")).order(egui::Order::Tooltip).fixed_pos(at).show(ui.ctx(), |ui| {
             egui::Frame::new().fill(t::p().panel).stroke(Stroke::new(1.0, t::p().divider)).corner_radius(CornerRadius::same(8)).inner_margin(10).show(ui, |ui| {
                 ui.set_width(width - 20.0);
-                ui.label(egui::RichText::new(format!("Comment at {}", comment_time(draft.at))).font(font(12.0)).color(t::p().text_muted));
-                let te = ui.add(TextEdit::multiline(&mut draft.text).id_salt("timed-comment-text").hint_text("Write a comment…").font(font(13.0)).desired_rows(3).desired_width(width - 20.0));
+                ui.label(egui::RichText::new(trf("Comment at {time}", &[("time", &comment_time(draft.at))])).font(font(12.0)).color(t::p().text_muted));
+                let te = ui.add(TextEdit::multiline(&mut draft.text).id_salt("timed-comment-text").hint_text(tr("Write a comment…")).font(font(13.0)).desired_rows(3).desired_width(width - 20.0));
                 if std::mem::take(&mut draft.focus) {
                     te.request_focus();
                 }
@@ -1051,13 +1052,13 @@ impl App {
                     cancel = true;
                 }
                 ui.horizontal(|ui| {
-                    if ui.button("Save").on_hover_text("⌘↩").clicked() {
+                    if ui.button(tr("Save")).on_hover_text("⌘↩").clicked() {
                         save = true;
                     }
-                    if ui.button("Cancel").clicked() {
+                    if ui.button(tr("Cancel")).clicked() {
                         cancel = true;
                     }
-                    if draft.id.is_some() && ui.button("Delete").clicked() {
+                    if draft.id.is_some() && ui.button(tr("Delete")).clicked() {
                         delete = true;
                     }
                 });

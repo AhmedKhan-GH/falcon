@@ -18,6 +18,7 @@ use falcon_library::model::Item;
 use crate::app::App;
 use crate::ui::viewer::audio::{bar_name, bar_shell};
 use crate::icons as ic;
+use crate::locale::{tr, trf};
 use crate::logic::ViewZoom;
 use crate::textdoc::{self, Autosave};
 use crate::theme::{self as t, font};
@@ -250,7 +251,7 @@ impl App {
                         }
                         view.title.clone_from(&item.name);
                     }
-                    if let Some(why) = view.error.as_deref().or(view.read_only) {
+                    if let Some(why) = view.error.as_deref().or(view.read_only.map(tr)) {
                         ui.add_space(4.0);
                         ui.label(RichText::new(why).size(12.0).color(t::p().text_muted));
                     }
@@ -292,7 +293,7 @@ impl App {
                         if clicked && (cmd || !editable) {
                             open_link = Some(url.clone());
                         }
-                        r.clone().on_hover_text_at_pointer(if editable { format!("⌘-click to open {url}") } else { format!("Click to open {url}") });
+                        r.clone().on_hover_text_at_pointer(if editable { trf("⌘-click to open {url}", &[("url", &url)]) } else { trf("Click to open {url}", &[("url", &url)]) });
                     }
                 });
             });
@@ -314,7 +315,7 @@ impl App {
         // The bar: the shared buttons, then the text size at the right.
         let (left, mut right) = bar_shell(self, ui, item, bar);
         let cy = bar.center().y;
-        if crate::ui::widgets::icon_button(ui, Pos2::new(right - 12.0, cy), ic::PLUS, 15.0, zoom + 1 < textdoc::ZOOM_LEVELS, "Larger text (⌘=)").clicked() {
+        if crate::ui::widgets::icon_button(ui, Pos2::new(right - 12.0, cy), ic::PLUS, 15.0, zoom + 1 < textdoc::ZOOM_LEVELS, tr("Larger text (⌘=)")).clicked() {
             zoom = textdoc::zoom_step(zoom, true);
         }
         let label = format!("{}%", (scale * 100.0).round());
@@ -322,10 +323,10 @@ impl App {
         let lx = right - 26.0 - g.size().x;
         let reset = ui.interact(Rect::from_min_size(Pos2::new(lx, cy - 10.0), vec2(g.size().x, 20.0)), ui.scope_id().with("text-zoom-reset"), Sense::click());
         ui.painter().galley(Pos2::new(lx, cy - g.size().y / 2.0), g, t::p().text_value);
-        if reset.on_hover_text("Smallest text (⌘0)").clicked() {
+        if reset.on_hover_text(tr("Smallest text (⌘0)")).clicked() {
             zoom = 0;
         }
-        if crate::ui::widgets::icon_button(ui, Pos2::new(lx - 14.0, cy), ic::MINUS, 15.0, zoom > 0, "Smaller text (⌘−)").clicked() {
+        if crate::ui::widgets::icon_button(ui, Pos2::new(lx - 14.0, cy), ic::MINUS, 15.0, zoom > 0, tr("Smaller text (⌘−)")).clicked() {
             zoom = textdoc::zoom_step(zoom, false);
         }
         right = lx - 30.0;
@@ -343,7 +344,7 @@ impl App {
         if (gone || view.save_now || view.autosave.due(now))
             && let Err(e) = view.save(lib)
         {
-            self.flash_error(format!("Could not save the text: {e}"));
+            self.flash_error(trf("Could not save the text: {error}", &[("error", &e)]));
         }
         if gone {
             self.ws.text = None;

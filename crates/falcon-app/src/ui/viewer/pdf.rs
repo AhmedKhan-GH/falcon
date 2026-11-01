@@ -22,6 +22,7 @@ use falcon_pdf::{Document, Hit, Link, LinkTarget, OutlineEntry, SearchOptions};
 use crate::app::App;
 use crate::ui::widgets::icon_button;
 use crate::icons as ic;
+use crate::locale::{tr, tr_key, trf};
 use crate::theme::{self as t, font, mono};
 
 /// Screen points per PDF point at 100%, as in pdf.js (96 CSS pixels per
@@ -95,10 +96,10 @@ impl Zoom {
 
     pub fn label(self) -> String {
         match self {
-            Zoom::Auto => "Automatic Zoom".into(),
-            Zoom::PageFit => "Page Fit".into(),
-            Zoom::PageWidth => "Page Width".into(),
-            Zoom::Actual => "Actual Size".into(),
+            Zoom::Auto => tr("Automatic Zoom").into(),
+            Zoom::PageFit => tr("Page Fit").into(),
+            Zoom::PageWidth => tr("Page Width").into(),
+            Zoom::Actual => tr("Actual Size").into(),
             Zoom::Percent(p) => format!("{:.0}%", p * 100.0),
         }
     }
@@ -1173,8 +1174,8 @@ impl Open {
                 }
                 Ok(Reply::Saved(r)) => {
                     self.notice = Some(match r {
-                        Ok(path) => format!("Saved {}", path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned())),
-                        Err(e) => format!("Can't save the attachment: {e}"),
+                        Ok(path) => trf("Saved {name}", &[("name", &path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned()))]),
+                        Err(e) => trf("Can't save the attachment: {error}", &[("error", &e)]),
                     });
                 }
                 Ok(Reply::Selected(g, s)) => {
@@ -1189,7 +1190,7 @@ impl Open {
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
                     if self.status == Status::Opening {
-                        self.status = Status::Failed("the reader stopped".into());
+                        self.status = Status::Failed(tr("the reader stopped").into());
                     }
                     break;
                 }
@@ -1509,11 +1510,11 @@ impl App {
                         }
                     }
                     Status::Opening => {
-                        let text = if o.icloud { "Downloading from iCloud…" } else { "Opening…" };
+                        let text = if o.icloud { tr("Downloading from iCloud…") } else { tr("Opening…") };
                         ui.painter().text(area.center(), Align2::CENTER_CENTER, text, font(13.0), t::p().text_muted);
                     }
                     Status::Failed(e) => {
-                        ui.painter().text(area.center(), Align2::CENTER_CENTER, format!("Can't open this PDF: {e}"), font(13.0), t::p().text_muted);
+                        ui.painter().text(area.center(), Align2::CENTER_CENTER, trf("Can't open this PDF: {error}", &[("error", &e)]), font(13.0), t::p().text_muted);
                     }
                     Status::Locked(wrong) => password_prompt(o, ui, area, wrong),
                 }
@@ -1540,7 +1541,7 @@ impl App {
                 o.print = false;
                 let title = o.info.pdf.title.clone().unwrap_or_else(|| item.name.clone());
                 if let Err(e) = falcon_pdf::print(&item.original_path(lib.root()), o.info.password.as_deref(), &title) {
-                    self.flash(format!("Can't print: {e}"));
+                    self.flash(trf("Can't print: {error}", &[("error", &e)]));
                 }
             }
             crate::ui::viewer::audio::bar_name(ui, item, bar, name_x, right);
@@ -1595,7 +1596,7 @@ fn pages(o: &mut Open, ui: &mut Ui, area: Rect, jobs: &mut Vec<Job>) {
             if let Some(tex) = o.pages.best(i, key) {
                 p.image(tex.id(), r, Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)), Color32::WHITE);
             } else if o.broken.contains(&i) {
-                p.text(r.center(), Align2::CENTER_CENTER, "Can't draw this page", font(12.0), Color32::from_gray(120));
+                p.text(r.center(), Align2::CENTER_CENTER, tr("Can't draw this page"), font(12.0), Color32::from_gray(120));
             }
             let raw = (f64::from(o.sizes[i].0), f64::from(o.sizes[i].1));
             let to_screen = |rc: &falcon_pdf::Rect| {
@@ -1646,7 +1647,7 @@ fn pages(o: &mut Open, ui: &mut Ui, area: Rect, jobs: &mut Vec<Job>) {
             ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
             let tip = match &target {
                 LinkTarget::Url(u) => u.clone(),
-                LinkTarget::Page { page, .. } => format!("Page {}", page + 1),
+                LinkTarget::Page { page, .. } => trf("Page {n}", &[("n", &(page + 1))]),
             };
             let clicked = resp.clicked();
             resp.clone().on_hover_text_at_pointer(tip);
@@ -1823,7 +1824,7 @@ fn side_panel(o: &mut Open, ui: &mut Ui, side: Rect, tab: Tab, jobs: &mut Vec<Jo
             egui::ScrollArea::vertical().id_salt("pdf-outline").auto_shrink([false, false]).show(&mut child, |ui| {
                 if o.outline.is_empty() {
                     ui.add_space(8.0);
-                    ui.label(egui::RichText::new("No outline").font(font(12.0)).color(t::p().text_muted));
+                    ui.label(egui::RichText::new(tr("No outline")).font(font(12.0)).color(t::p().text_muted));
                 }
                 for (n, e) in o.outline.iter().enumerate() {
                     if here == Some(n) {
@@ -1858,7 +1859,7 @@ fn side_panel(o: &mut Open, ui: &mut Ui, side: Rect, tab: Tab, jobs: &mut Vec<Jo
             egui::ScrollArea::vertical().id_salt("pdf-attachments").auto_shrink([false, false]).show(&mut child, |ui| {
                 if o.info.attachments.is_empty() {
                     ui.add_space(8.0);
-                    ui.label(egui::RichText::new("No attachments").font(font(12.0)).color(t::p().text_muted));
+                    ui.label(egui::RichText::new(tr("No attachments")).font(font(12.0)).color(t::p().text_muted));
                 }
                 for (n, a) in o.info.attachments.iter().enumerate() {
                     ui.horizontal(|ui| {
@@ -1866,7 +1867,7 @@ fn side_panel(o: &mut Open, ui: &mut Ui, side: Rect, tab: Tab, jobs: &mut Vec<Jo
                         let size = a.size.map(|b| format!("  {}", crate::logic::format_size(b))).unwrap_or_default();
                         let text = egui::RichText::new(format!("{}{size}", a.name)).font(font(12.0)).color(t::p().text);
                         let resp = ui.push_id(("attachment", n), |ui| ui.add(egui::Label::new(text).truncate().sense(Sense::click()))).inner;
-                        let tip = a.description.as_deref().map_or_else(|| "Save the attachment…".to_string(), |d| format!("{d}\nClick to save it"));
+                        let tip = a.description.as_deref().map_or_else(|| tr("Save the attachment…").to_string(), |d| trf("{description}\nClick to save it", &[("description", &d)]));
                         if resp.on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text(tip).clicked() {
                             save = Some((n, a.name.clone()));
                         }
@@ -1874,7 +1875,7 @@ fn side_panel(o: &mut Open, ui: &mut Ui, side: Rect, tab: Tab, jobs: &mut Vec<Jo
                 }
             });
             if let Some((n, name)) = save
-                && let Some(dest) = rfd::FileDialog::new().set_title("Save Attachment").set_file_name(name).save_file()
+                && let Some(dest) = rfd::FileDialog::new().set_title(tr("Save Attachment")).set_file_name(name).save_file()
             {
                 let _ = o.tx.send(Req::Save(n, dest));
             }
@@ -1886,7 +1887,7 @@ fn side_panel(o: &mut Open, ui: &mut Ui, side: Rect, tab: Tab, jobs: &mut Vec<Jo
             egui::ScrollArea::vertical().id_salt("pdf-layers").auto_shrink([false, false]).show(&mut child, |ui| {
                 if o.info.layers.is_empty() {
                     ui.add_space(8.0);
-                    ui.label(egui::RichText::new("No layers").font(font(12.0)).color(t::p().text_muted));
+                    ui.label(egui::RichText::new(tr("No layers")).font(font(12.0)).color(t::p().text_muted));
                     return;
                 }
                 for l in &o.info.layers {
@@ -1900,7 +1901,7 @@ fn side_panel(o: &mut Open, ui: &mut Ui, side: Rect, tab: Tab, jobs: &mut Vec<Jo
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
                     ui.add_space(8.0);
-                    ui.add(egui::Label::new(egui::RichText::new("Shown as the document sets them; macOS's PDF engine can't switch layers.").font(font(11.0)).color(t::p().text_muted)).wrap());
+                    ui.add(egui::Label::new(egui::RichText::new(tr("Shown as the document sets them; macOS's PDF engine can't switch layers.")).font(font(11.0)).color(t::p().text_muted)).wrap());
                 });
             });
         }
@@ -1916,9 +1917,9 @@ fn toolbar(o: &mut Open, ui: &mut Ui, bar: Rect, right: f32, mut sidebar: Option
     // pdf.js's Tools menu, at the right end as in its toolbar.
     let menu = Rect::from_center_size(Pos2::new(right - 24.0, cy), vec2(48.0, 24.0));
     let mut mui = ui.new_child(egui::UiBuilder::new().max_rect(menu));
-    egui::containers::menu::MenuButton::new(egui::RichText::new("Tools").font(font(12.0))).ui(&mut mui, |ui| tools_menu(o, ui));
+    egui::containers::menu::MenuButton::new(egui::RichText::new(tr("Tools")).font(font(12.0))).ui(&mut mui, |ui| tools_menu(o, ui));
     let mut x = menu.left() - 16.0;
-    if icon_button(ui, Pos2::new(x, cy), ic::PLUS, 15.0, o.zoom_factor() < MAX_ZOOM, "Zoom In (⌘+)").clicked() {
+    if icon_button(ui, Pos2::new(x, cy), ic::PLUS, 15.0, o.zoom_factor() < MAX_ZOOM, tr("Zoom In (⌘+)")).clicked() {
         o.act(PdfKey::ZoomIn);
     }
     x -= 70.0;
@@ -1937,14 +1938,14 @@ fn toolbar(o: &mut Open, ui: &mut Ui, bar: Rect, right: f32, mut sidebar: Option
         }
     });
     x -= 70.0;
-    if icon_button(ui, Pos2::new(x, cy), ic::MINUS, 15.0, o.zoom_factor() > MIN_ZOOM, "Zoom Out (⌘−)").clicked() {
+    if icon_button(ui, Pos2::new(x, cy), ic::MINUS, 15.0, o.zoom_factor() > MIN_ZOOM, tr("Zoom Out (⌘−)")).clicked() {
         o.act(PdfKey::ZoomOut);
     }
     x -= 24.0;
     p.line_segment([Pos2::new(x, cy - 8.0), Pos2::new(x, cy + 8.0)], Stroke::new(1.0, t::p().divider));
 
     // Page number field and count.
-    let count = format!("of {}", o.count());
+    let count = trf("of {total}", &[("total", &o.count())]);
     let g = ui.painter().layout_no_wrap(count.clone(), font(12.5), t::p().text_muted);
     x -= 10.0 + g.size().x;
     p.galley(Pos2::new(x, cy - g.size().y / 2.0), g, t::p().text_muted);
@@ -1962,11 +1963,11 @@ fn toolbar(o: &mut Open, ui: &mut Ui, bar: Rect, right: f32, mut sidebar: Option
         o.go_to(p);
     }
     x = field.left() - 18.0;
-    if icon_button(ui, Pos2::new(x, cy), PAGE_DOWN, 15.0, o.current + 1 < o.count(), "Next Page (N)").clicked() {
+    if icon_button(ui, Pos2::new(x, cy), PAGE_DOWN, 15.0, o.current + 1 < o.count(), tr("Next Page (N)")).clicked() {
         o.act(PdfKey::NextPage);
     }
     x -= 26.0;
-    if icon_button(ui, Pos2::new(x, cy), PAGE_UP, 15.0, o.current > 0, "Previous Page (P)").clicked() {
+    if icon_button(ui, Pos2::new(x, cy), PAGE_UP, 15.0, o.current > 0, tr("Previous Page (P)")).clicked() {
         o.act(PdfKey::PrevPage);
     }
     x -= 22.0;
@@ -1975,35 +1976,35 @@ fn toolbar(o: &mut Open, ui: &mut Ui, bar: Rect, right: f32, mut sidebar: Option
     if o.find.open {
         p.rect_filled(Rect::from_center_size(Pos2::new(x, cy), Vec2::splat(26.0)), t::RADIUS, t::p().primary.gamma_multiply(0.35));
     }
-    if icon_button(ui, Pos2::new(x, cy), ic::MAGNIFYING_GLASS, 16.0, true, "Find in Document (⌘F)").clicked() {
+    if icon_button(ui, Pos2::new(x, cy), ic::MAGNIFYING_GLASS, 16.0, true, tr("Find in Document (⌘F)")).clicked() {
         if o.find.open { o.act(PdfKey::CloseFind) } else { o.act(PdfKey::Find) }
     }
     x -= 28.0;
     if sidebar.is_some() {
         p.rect_filled(Rect::from_center_size(Pos2::new(x, cy), Vec2::splat(26.0)), t::RADIUS, t::p().primary.gamma_multiply(0.35));
     }
-    let sresp = icon_button(ui, Pos2::new(x, cy), ic::SIDEBAR_SIMPLE, 16.0, true, "Thumbnails and Outline");
+    let sresp = icon_button(ui, Pos2::new(x, cy), ic::SIDEBAR_SIMPLE, 16.0, true, tr("Thumbnails and Outline"));
     if sresp.clicked() {
         sidebar = if sidebar.is_some() { None } else { Some(Tab::Thumbnails) };
     }
     if sidebar.is_some() {
         // Which list the sidebar shows, from the button's menu.
         sresp.context_menu(|ui| {
-            if ui.selectable_label(sidebar == Some(Tab::Thumbnails), "Thumbnails").clicked() {
+            if ui.selectable_label(sidebar == Some(Tab::Thumbnails), tr("Thumbnails")).clicked() {
                 sidebar = Some(Tab::Thumbnails);
                 ui.close();
             }
-            if ui.selectable_label(sidebar == Some(Tab::Outline), "Outline").clicked() {
+            if ui.selectable_label(sidebar == Some(Tab::Outline), tr("Outline")).clicked() {
                 sidebar = Some(Tab::Outline);
                 ui.close();
             }
             // As pdf.js, the lists a document lacks can't be picked.
             let (has_files, has_layers) = (!o.info.attachments.is_empty(), !o.info.layers.is_empty());
-            if ui.add_enabled(has_files, egui::Button::selectable(sidebar == Some(Tab::Attachments), "Attachments")).clicked() {
+            if ui.add_enabled(has_files, egui::Button::selectable(sidebar == Some(Tab::Attachments), tr("Attachments"))).clicked() {
                 sidebar = Some(Tab::Attachments);
                 ui.close();
             }
-            if ui.add_enabled(has_layers, egui::Button::selectable(sidebar == Some(Tab::Layers), "Layers")).clicked() {
+            if ui.add_enabled(has_layers, egui::Button::selectable(sidebar == Some(Tab::Layers), tr("Layers"))).clicked() {
                 sidebar = Some(Tab::Layers);
                 ui.close();
             }
@@ -2019,8 +2020,8 @@ fn password_prompt(o: &mut Open, ui: &mut Ui, area: Rect, wrong: bool) {
     let p = ui.painter().clone();
     p.rect_filled(r, CornerRadius::same(10), t::p().panel);
     p.rect_stroke(r, CornerRadius::same(10), Stroke::new(1.0, t::p().divider), egui::StrokeKind::Inside);
-    p.text(r.min + vec2(18.0, 22.0), Align2::LEFT_CENTER, "This PDF is locked", font(14.0), t::p().text);
-    let line = if wrong { "That password doesn't open it. Try again." } else { "Type its password to read it." };
+    p.text(r.min + vec2(18.0, 22.0), Align2::LEFT_CENTER, tr("This PDF is locked"), font(14.0), t::p().text);
+    let line = if wrong { tr("That password doesn't open it. Try again.") } else { tr("Type its password to read it.") };
     p.text(r.min + vec2(18.0, 46.0), Align2::LEFT_CENTER, line, font(12.5), if wrong { t::p().icon_red } else { t::p().text_muted });
     let field = Rect::from_min_size(r.min + vec2(18.0, 64.0), vec2(r.width() - 36.0, 24.0));
     let id = Id::unique("pdf-password");
@@ -2031,7 +2032,7 @@ fn password_prompt(o: &mut Open, ui: &mut Ui, area: Rect, wrong: bool) {
     }
     let enter = resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
     let button = Rect::from_min_size(Pos2::new(r.right() - 18.0 - 80.0, r.bottom() - 34.0), vec2(80.0, 24.0));
-    let open = ui.put(button, egui::Button::new("Open")).clicked();
+    let open = ui.put(button, egui::Button::new(tr("Open"))).clicked();
     if (enter || open) && !o.password.is_empty() {
         let _ = o.tx.send(Req::Password(std::mem::take(&mut o.password)));
         o.status = Status::Opening;
@@ -2045,35 +2046,35 @@ fn properties_dialog(o: &mut Open, ctx: &egui::Context, item: &Item) {
     let date = |t: Option<f64>| t.map_or_else(none, |s| crate::logic::date_time_text((s * 1000.0) as i64));
     let size = o.sizes.get(o.current).map(|&s| turn_size(s, o.turns)).map_or_else(none, |(w, h)| page_size_text(w, h));
     let rows: Vec<(&str, String)> = vec![
-        ("File", format!("{}.{}", item.name, item.ext)),
-        ("Size", format!("{} ({} bytes)", crate::logic::format_size(item.size), item.size)),
-        ("Title", i.title.clone().unwrap_or_else(none)),
-        ("Author", i.author.clone().unwrap_or_else(none)),
-        ("Subject", i.subject.clone().unwrap_or_else(none)),
-        ("Keywords", i.keywords.clone().unwrap_or_else(none)),
-        ("Created", date(i.created)),
-        ("Modified", date(i.modified)),
-        ("Application", i.creator.clone().unwrap_or_else(none)),
-        ("PDF producer", i.producer.clone().unwrap_or_else(none)),
-        ("PDF version", format!("{}.{}", i.version.0, i.version.1)),
-        ("Pages", i.pages.to_string()),
-        ("Page size", size),
-        ("Fast web view", if o.info.linearized { "Yes" } else { "No" }.to_string()),
-        ("Password", if i.encrypted { "Yes" } else { "No" }.to_string()),
+        (tr_key("pdf::File"), format!("{}.{}", item.name, item.ext)),
+        (tr_key("Size"), format!("{} ({} bytes)", crate::logic::format_size(item.size), item.size)),
+        (tr_key("Title"), i.title.clone().unwrap_or_else(none)),
+        (tr_key("Author"), i.author.clone().unwrap_or_else(none)),
+        (tr_key("Subject"), i.subject.clone().unwrap_or_else(none)),
+        (tr_key("Keywords"), i.keywords.clone().unwrap_or_else(none)),
+        (tr_key("Created"), date(i.created)),
+        (tr_key("Modified"), date(i.modified)),
+        (tr_key("Application"), i.creator.clone().unwrap_or_else(none)),
+        (tr_key("PDF producer"), i.producer.clone().unwrap_or_else(none)),
+        (tr_key("PDF version"), format!("{}.{}", i.version.0, i.version.1)),
+        (tr_key("Pages"), i.pages.to_string()),
+        (tr_key("Page size"), size),
+        (tr_key("Fast web view"), if o.info.linearized { tr("Yes") } else { tr("No") }.to_string()),
+        (tr_key("Password"), if i.encrypted { tr("Yes") } else { tr("No") }.to_string()),
     ];
     let modal = egui::Modal::new(Id::unique("pdf-properties")).show(ctx, |ui| {
         ui.set_width(420.0);
-        ui.label(egui::RichText::new("Document Properties").size(15.0));
+        ui.label(egui::RichText::new(tr("Document Properties")).size(15.0));
         ui.add_space(8.0);
         egui::Grid::new("pdf-properties-grid").num_columns(2).spacing(vec2(14.0, 5.0)).show(ui, |ui| {
             for (k, v) in rows {
-                ui.label(egui::RichText::new(k).color(t::p().text_muted));
+                ui.label(egui::RichText::new(tr(k)).color(t::p().text_muted));
                 ui.add(egui::Label::new(egui::RichText::new(v).color(t::p().text)).wrap());
                 ui.end_row();
             }
         });
         ui.add_space(10.0);
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| ui.button("Close").clicked()).inner
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| ui.button(tr("Close")).clicked()).inner
     });
     if modal.inner || modal.should_close() {
         o.properties = false;
@@ -2085,14 +2086,14 @@ fn properties_dialog(o: &mut Open, ctx: &egui::Context, item: &Item) {
 pub fn page_size_text(w_pt: f32, h_pt: f32) -> String {
     let (wi, hi) = (w_pt / 72.0, h_pt / 72.0);
     let round = |v: f32| ((v * 100.0).round() / 100.0).to_string();
-    let orientation = if w_pt > h_pt { "Landscape" } else { "Portrait" };
+    let orientation = if w_pt > h_pt { tr("Landscape") } else { tr("Portrait") };
     // Paper sizes in points, short side first, matched within a point.
     const PAPERS: [(&str, f32, f32); 5] = [("Letter", 612.0, 792.0), ("Legal", 612.0, 1008.0), ("Tabloid", 792.0, 1224.0), ("A4", 595.28, 841.89), ("A3", 841.89, 1190.55)];
     let (short, long) = (w_pt.min(h_pt), w_pt.max(h_pt));
     let name = PAPERS.iter().find(|p| (p.1 - short).abs() < 1.0 && (p.2 - long).abs() < 1.0).map(|p| p.0);
     match name {
-        Some(n) => format!("{} × {} in ({n}, {orientation})", round(wi), round(hi)),
-        None => format!("{} × {} in ({orientation})", round(wi), round(hi)),
+        Some(n) => trf("{width} × {height} in ({paper}, {orientation})", &[("width", &round(wi)), ("height", &round(hi)), ("paper", &n), ("orientation", &orientation)]),
+        None => trf("{width} × {height} in ({orientation})", &[("width", &round(wi)), ("height", &round(hi)), ("orientation", &orientation)]),
     }
 }
 
@@ -2100,57 +2101,57 @@ pub fn page_size_text(w_pt: f32, h_pt: f32) -> String {
 fn tools_menu(o: &mut Open, ui: &mut Ui) {
     ui.set_min_width(220.0);
     let row = |ui: &mut Ui, label: &str, on: bool, key: &str| ui.add(egui::Button::new(label).selected(on).shortcut_text(key)).clicked();
-    if row(ui, "Print…", false, "⌘P") {
+    if row(ui, tr("Print…"), false, "⌘P") {
         o.act(PdfKey::Print);
         ui.close();
     }
-    if row(ui, "Presentation Mode", false, "F5") {
+    if row(ui, tr("Presentation Mode"), false, "F5") {
         o.present = true;
         ui.close();
     }
     ui.separator();
-    if row(ui, "Go to First Page", false, "Home") {
+    if row(ui, tr("Go to First Page"), false, "Home") {
         o.act(PdfKey::First);
         ui.close();
     }
-    if row(ui, "Go to Last Page", false, "End") {
+    if row(ui, tr("Go to Last Page"), false, "End") {
         o.act(PdfKey::Last);
         ui.close();
     }
     ui.separator();
-    if row(ui, "Rotate Clockwise", false, "R") {
+    if row(ui, tr("Rotate Clockwise"), false, "R") {
         o.act(PdfKey::Rotate(1));
         ui.close();
     }
-    if row(ui, "Rotate Counterclockwise", false, "⇧R") {
+    if row(ui, tr("Rotate Counterclockwise"), false, "⇧R") {
         o.act(PdfKey::Rotate(-1));
         ui.close();
     }
     ui.separator();
-    if row(ui, "Text Selection Tool", !o.hand, "S") {
+    if row(ui, tr("Text Selection Tool"), !o.hand, "S") {
         o.act(PdfKey::Hand(false));
         ui.close();
     }
-    if row(ui, "Hand Tool", o.hand, "H") {
+    if row(ui, tr("Hand Tool"), o.hand, "H") {
         o.act(PdfKey::Hand(true));
         ui.close();
     }
     ui.separator();
-    for (mode, label) in [(ScrollMode::Page, "Page Scrolling"), (ScrollMode::Vertical, "Vertical Scrolling"), (ScrollMode::Horizontal, "Horizontal Scrolling"), (ScrollMode::Wrapped, "Wrapped Scrolling")] {
-        if row(ui, label, o.scroll == mode, "") {
+    for (mode, label) in [(ScrollMode::Page, tr_key("Page Scrolling")), (ScrollMode::Vertical, tr_key("Vertical Scrolling")), (ScrollMode::Horizontal, tr_key("Horizontal Scrolling")), (ScrollMode::Wrapped, tr_key("Wrapped Scrolling"))] {
+        if row(ui, tr(label), o.scroll == mode, "") {
             o.set_modes(mode, o.spread);
             ui.close();
         }
     }
     ui.separator();
-    for (spread, label) in [(Spread::None, "No Spreads"), (Spread::Odd, "Odd Spreads"), (Spread::Even, "Even Spreads")] {
-        if row(ui, label, o.spread == spread, "") {
+    for (spread, label) in [(Spread::None, tr_key("No Spreads")), (Spread::Odd, tr_key("Odd Spreads")), (Spread::Even, tr_key("Even Spreads"))] {
+        if row(ui, tr(label), o.spread == spread, "") {
             o.set_modes(o.scroll, spread);
             ui.close();
         }
     }
     ui.separator();
-    if row(ui, "Document Properties…", false, "") {
+    if row(ui, tr("Document Properties…"), false, "") {
         o.properties = true;
         ui.close();
     }
@@ -2167,7 +2168,7 @@ fn find_bar(o: &mut Open, ui: &mut Ui, top_right: Pos2) {
     p.rect_stroke(r, CornerRadius::same(8), Stroke::new(1.0, t::p().divider), egui::StrokeKind::Inside);
     let field = Rect::from_min_size(r.min + vec2(8.0, 7.0), vec2(170.0, 22.0));
     let mut fui = ui.new_child(egui::UiBuilder::new().max_rect(field));
-    let resp = fui.add(TextEdit::singleline(&mut o.find.text).id(Id::unique(FIND_ID)).hint_text("Find in document").font(font(12.5)).desired_width(field.width()));
+    let resp = fui.add(TextEdit::singleline(&mut o.find.text).id(Id::unique(FIND_ID)).hint_text(tr("Find in document")).font(font(12.5)).desired_width(field.width()));
     if std::mem::take(&mut o.find.focus) {
         resp.request_focus();
     }
@@ -2175,36 +2176,36 @@ fn find_bar(o: &mut Open, ui: &mut Ui, top_right: Pos2) {
     let cy = r.center().y;
     let mut x = field.right() + 18.0;
     let has = !o.find.hits.is_empty();
-    if icon_button(ui, Pos2::new(x, cy), PAGE_UP, 14.0, has, "Previous Match (⇧⌘G)").clicked() {
+    if icon_button(ui, Pos2::new(x, cy), PAGE_UP, 14.0, has, tr("Previous Match (⇧⌘G)")).clicked() {
         o.act(PdfKey::FindNext(false));
     }
     x += 26.0;
-    if icon_button(ui, Pos2::new(x, cy), PAGE_DOWN, 14.0, has, "Next Match (⌘G)").clicked() {
+    if icon_button(ui, Pos2::new(x, cy), PAGE_DOWN, 14.0, has, tr("Next Match (⌘G)")).clicked() {
         o.act(PdfKey::FindNext(true));
     }
     x += 18.0;
     for (on, label, tip, w) in [
-        (&mut o.find.match_case, "Aa", "Match Case", 50.0),
-        (&mut o.find.whole_words, "Word", "Whole Words", 62.0),
-        (&mut o.find.match_diacritics, "é", "Match Diacritics (e doesn't find é)", 44.0),
+        (&mut o.find.match_case, "Aa", tr_key("Match Case"), 50.0),
+        (&mut o.find.whole_words, tr_key("Word"), tr_key("Whole Words"), 62.0),
+        (&mut o.find.match_diacritics, "é", tr_key("Match Diacritics (e doesn't find é)"), 44.0),
     ] {
         let rect = Rect::from_min_size(Pos2::new(x, cy - 10.0), vec2(w, 20.0));
         let mut cui = ui.new_child(egui::UiBuilder::new().max_rect(rect));
-        cui.checkbox(on, egui::RichText::new(label).font(font(12.0))).on_hover_text(tip);
+        cui.checkbox(on, egui::RichText::new(tr(label)).font(font(12.0))).on_hover_text(tr(tip));
         x = rect.right() + 2.0;
     }
     x += 2.0;
     let status = if o.find.searching {
-        "Searching…".to_string()
+        tr("Searching…").to_string()
     } else if o.find.text.is_empty() {
         String::new()
     } else if !has {
-        "No matches".to_string()
+        tr("No matches").to_string()
     } else {
-        format!("{} of {}", o.find.current.map_or(0, |c| c + 1), o.find.hits.len())
+        trf("{current} of {total}", &[("current", &o.find.current.map_or(0, |c| c + 1)), ("total", &o.find.hits.len())])
     };
     p.text(Pos2::new(x, cy), Align2::LEFT_CENTER, status, font(12.0), t::p().text_muted);
-    if icon_button(ui, Pos2::new(r.right() - 16.0, cy), ic::X, 13.0, true, "Close (Esc)").clicked() {
+    if icon_button(ui, Pos2::new(r.right() - 16.0, cy), ic::X, 13.0, true, tr("Close (Esc)")).clicked() {
         o.act(PdfKey::CloseFind);
     }
 }

@@ -17,6 +17,7 @@ use crate::app::{Action, App};
 use crate::ui::widgets::icon_button;
 use crate::icons as ic;
 use crate::loader::{Tier, job_for};
+use crate::locale::{tr, tr_key, trf};
 use crate::logic::ViewZoom;
 use crate::theme::{self as t, font, mono};
 
@@ -49,10 +50,10 @@ impl FontTab {
 
     pub fn label(self) -> &'static str {
         match self {
-            FontTab::Article => "Article",
-            FontTab::Waterfall => "Waterfall",
-            FontTab::Alphabet => "Alphabet",
-            FontTab::Info => "Info",
+            FontTab::Article => tr_key("Article"),
+            FontTab::Waterfall => tr_key("Waterfall"),
+            FontTab::Alphabet => tr_key("Alphabet"),
+            FontTab::Info => tr_key("Info"),
         }
     }
 }
@@ -87,11 +88,11 @@ impl FontTheme {
 
     pub fn label(self) -> &'static str {
         match self {
-            FontTheme::Auto => "Auto (follows the app)",
-            FontTheme::Light => "Light",
-            FontTheme::Dark => "Dark",
-            FontTheme::Purple => "Purple",
-            FontTheme::Yellow => "Yellow",
+            FontTheme::Auto => tr_key("Auto (follows the app)"),
+            FontTheme::Light => tr_key("Light"),
+            FontTheme::Dark => tr_key("Dark"),
+            FontTheme::Purple => tr_key("Purple"),
+            FontTheme::Yellow => tr_key("Yellow"),
         }
     }
 }
@@ -195,25 +196,25 @@ pub fn samples(s: Specimen) -> (&'static str, &'static str, &'static str) {
 pub fn glyph_groups(s: Specimen) -> Vec<(&'static str, String)> {
     let range = |a: u32, b: u32| (a..=b).filter_map(char::from_u32).collect::<String>();
     let mut groups = vec![
-        ("Uppercase", range('A' as u32, 'Z' as u32)),
-        ("Lowercase", range('a' as u32, 'z' as u32)),
-        ("Numbers", range('0' as u32, '9' as u32)),
-        ("Punctuation", "!?¡¿&@#%*()[]{}.,:;'\"/\\-–—…«»“”‘’$€£¥¢+−×÷=<>©®".to_string()),
+        (tr_key("Uppercase"), range('A' as u32, 'Z' as u32)),
+        (tr_key("Lowercase"), range('a' as u32, 'z' as u32)),
+        (tr_key("Numbers"), range('0' as u32, '9' as u32)),
+        (tr_key("Punctuation"), "!?¡¿&@#%*()[]{}.,:;'\"/\\-–—…«»“”‘’$€£¥¢+−×÷=<>©®".to_string()),
     ];
     match s {
-        Specimen::Latin => groups.push(("Accented", "ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÑÒÓÔÕÖØŒÙÚÛÜÝŸßàáâãäåæçèéêëìíîïñòóôõöøœùúûüýÿ".to_string())),
+        Specimen::Latin => groups.push((tr_key("Accented"), "ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÑÒÓÔÕÖØŒÙÚÛÜÝŸßàáâãäåæçèéêëìíîïñòóôõöøœùúûüýÿ".to_string())),
         Specimen::Japanese => {
-            groups.push(("Hiragana", range(0x3041, 0x3093)));
-            groups.push(("Katakana", range(0x30A1, 0x30F3)));
-            groups.push(("Kanji", "日月火水木金土山川田人口目耳手足心学校先生年本中大小上下左右名字花草雨雪空海森林春夏秋冬東西南北朝昼夜".to_string()));
+            groups.push((tr_key("Hiragana"), range(0x3041, 0x3093)));
+            groups.push((tr_key("Katakana"), range(0x30A1, 0x30F3)));
+            groups.push((tr_key("Kanji"), "日月火水木金土山川田人口目耳手足心学校先生年本中大小上下左右名字花草雨雪空海森林春夏秋冬東西南北朝昼夜".to_string()));
         }
         Specimen::Korean => {
             // Each initial consonant with five vowels, no final.
             let syllables = (0..19u32).flat_map(|i| [0u32, 4, 8, 13, 18].map(move |v| 0xAC00 + (i * 21 + v) * 28)).filter_map(char::from_u32).collect();
-            groups.push(("Hangul", syllables));
+            groups.push((tr_key("Hangul"), syllables));
         }
-        Specimen::SimplifiedChinese => groups.push(("Hanzi", "的一是不了人我在有他这中大来上国个到说们为子和你地出道也时年得就那要下以生会自着去之过家学对可她里后小么心多天而能好都然没日于起还发成事只作当想看文无开手十用主行方又如前所本见经头面公同三已老从动两长".to_string())),
-        Specimen::TraditionalChinese => groups.push(("Hanzi", "的一是不了人我在有他這中大來上國個到說們為子和你地出道也時年得就那要下以生會自著去之過家學對可她裡後小麼心多天而能好都然沒日於起還發成事只作當想看文無開手十用主行方又如前所本見經頭面公同三已老從動兩長".to_string())),
+        Specimen::SimplifiedChinese => groups.push((tr_key("Hanzi"), "的一是不了人我在有他这中大来上国个到说们为子和你地出道也时年得就那要下以生会自着去之过家学对可她里后小么心多天而能好都然没日于起还发成事只作当想看文无开手十用主行方又如前所本见经头面公同三已老从动两长".to_string())),
+        Specimen::TraditionalChinese => groups.push((tr_key("Hanzi"), "的一是不了人我在有他這中大來上國個到說們為子和你地出道也時年得就那要下以生會自著去之過家學對可她裡後小麼心多天而能好都然沒日於起還發成事只作當想看文無開手十用主行方又如前所本見經頭面公同三已老從動兩長".to_string())),
     }
     groups
 }
@@ -223,17 +224,17 @@ pub fn glyph_groups(s: Specimen) -> Vec<(&'static str, String)> {
 /// values are left out.
 pub fn info_rows(info: &FontInfo) -> Vec<(&'static str, String, bool)> {
     let rows = [
-        ("PostScript Name", info.postscript.clone(), true),
-        ("Full Name", info.full_name.clone(), true),
-        ("Family", info.family.clone(), true),
-        ("Style", info.style.clone(), false),
-        ("Version", info.version.clone(), false),
-        ("Designer", info.designer.clone(), false),
-        ("Manufacturer", info.manufacturer.clone(), false),
-        ("Description", info.description.clone(), false),
-        ("Copyright", info.copyright.clone(), false),
-        ("Trademark", info.trademark.clone(), false),
-        ("Glyphs", info.glyphs.map(|n| n.to_string()).unwrap_or_default(), false),
+        (tr_key("PostScript Name"), info.postscript.clone(), true),
+        (tr_key("Full Name"), info.full_name.clone(), true),
+        (tr_key("Family"), info.family.clone(), true),
+        (tr_key("Style"), info.style.clone(), false),
+        (tr_key("Version"), info.version.clone(), false),
+        (tr_key("Designer"), info.designer.clone(), false),
+        (tr_key("Manufacturer"), info.manufacturer.clone(), false),
+        (tr_key("Description"), info.description.clone(), false),
+        (tr_key("Copyright"), info.copyright.clone(), false),
+        (tr_key("Trademark"), info.trademark.clone(), false),
+        (tr_key("Glyphs"), info.glyphs.map(|n| n.to_string()).unwrap_or_default(), false),
     ];
     rows.into_iter().filter(|r| !r.1.is_empty()).collect()
 }
@@ -244,11 +245,11 @@ fn font_info_grid(ui: &mut Ui, info: &FontInfo, item: &Item, muted: Color32) -> 
     let mut name_from = None;
     egui::Grid::new("font-info").num_columns(2).spacing(vec2(24.0, 10.0)).striped(false).show(ui, |ui| {
         for (label, value, renames) in info_rows(info) {
-            ui.label(RichText::new(label).color(muted).font(font(12.5)));
+            ui.label(RichText::new(tr(label)).color(muted).font(font(12.5)));
             ui.horizontal_wrapped(|ui| {
                 ui.set_max_width(560.0);
                 ui.label(RichText::new(&value).font(font(13.0)));
-                if renames && value != item.name && ui.small_button("Use as File Name").clicked() {
+                if renames && value != item.name && ui.small_button(tr("Use as File Name")).clicked() {
                     name_from = Some(value.clone());
                 }
             });
@@ -382,7 +383,7 @@ impl App {
         ui.horizontal(|ui| {
             for tab in FontTab::ALL {
                 let on = self.font_look.tab == tab;
-                let text = RichText::new(tab.label()).color(if on { ink } else { muted }).font(font(13.0));
+                let text = RichText::new(tr(tab.label())).color(if on { ink } else { muted }).font(font(13.0));
                 if ui.add(egui::Button::new(text).fill(if on { ink.gamma_multiply(0.12) } else { Color32::TRANSPARENT }).stroke(Stroke::NONE)).clicked() {
                     self.font_look.tab = tab;
                 }
@@ -397,14 +398,14 @@ impl App {
                     p.circle_stroke(r.center(), 10.0, ring);
                     let glyph = if *theme == FontTheme::Auto { "A" } else { "a" };
                     p.text(r.center(), Align2::CENTER_CENTER, glyph, font(12.0), gray(sink));
-                    if resp.on_hover_text(theme.label()).clicked() {
+                    if resp.on_hover_text(tr(theme.label())).clicked() {
                         self.font_look.theme = *theme;
                     }
                 }
                 ui.add_space(8.0);
                 let current = SAMPLE_LANGUAGES.iter().find(|(c, _)| *c == language_code(specimen)).map_or("English", |l| l.1);
                 ui.menu_button(RichText::new(format!("{current} ▾")).color(ink).font(font(12.5)), |ui| {
-                    ui.label(RichText::new("Sample language").font(font(11.5)).weak());
+                    ui.label(RichText::new(tr("Sample language")).font(font(11.5)).weak());
                     for (code, name) in SAMPLE_LANGUAGES {
                         if ui.selectable_label(code == language_code(specimen), name).clicked() {
                             language = Some(code);
@@ -413,7 +414,7 @@ impl App {
                     }
                 })
                 .response
-                .on_hover_text("The language of the sample text and the thumbnail");
+                .on_hover_text(tr("The language of the sample text and the thumbnail"));
             });
         });
 
@@ -424,20 +425,20 @@ impl App {
             ui.horizontal(|ui| {
                 let fv = &mut self.ws.font_view;
                 let (r, _) = ui.allocate_exact_size(Vec2::splat(26.0), Sense::hover());
-                if icon_button(ui, r.center(), ic::MINUS, 15.0, fv.zoom > ZOOM_MIN, "Smaller (⌘−)").clicked() {
+                if icon_button(ui, r.center(), ic::MINUS, 15.0, fv.zoom > ZOOM_MIN, tr("Smaller (⌘−)")).clicked() {
                     fv.zoom = zoom_step(fv.zoom, false);
                 }
                 ui.spacing_mut().slider_width = 220.0;
                 ui.add(egui::Slider::new(&mut fv.zoom, ZOOM_MIN..=ZOOM_MAX).show_value(false).logarithmic(true));
                 let (r, _) = ui.allocate_exact_size(Vec2::splat(26.0), Sense::hover());
-                if icon_button(ui, r.center(), ic::PLUS, 15.0, fv.zoom < ZOOM_MAX, "Larger (⌘=)").clicked() {
+                if icon_button(ui, r.center(), ic::PLUS, 15.0, fv.zoom < ZOOM_MAX, tr("Larger (⌘=)")).clicked() {
                     fv.zoom = zoom_step(fv.zoom, true);
                 }
                 let pct = ui.add(egui::Label::new(RichText::new(format!("{:.0}%", fv.zoom * 100.0)).font(mono(12.0)).color(muted)).sense(Sense::click()));
-                if pct.on_hover_text("Click for 100% (⌘0)").clicked() {
+                if pct.on_hover_text(tr("Click for 100% (⌘0)")).clicked() {
                     fv.zoom = 1.0;
                 }
-                if fv.edited && ui.button("Reset Text").clicked() {
+                if fv.edited && ui.button(tr("Reset Text")).clicked() {
                     let (_, body, line) = samples(specimen);
                     (fv.text, fv.line, fv.edited) = (body.to_string(), line.to_string(), false);
                 }
@@ -480,7 +481,7 @@ impl App {
                     .frame(egui::Frame::NONE)
                     .desired_width((ui.available_width() - 140.0).max(120.0)),
             );
-            let r = r.on_hover_text("Rename the file");
+            let r = r.on_hover_text(tr("Rename the file"));
             if r.lost_focus() {
                 let typed = fv.name.trim().to_string();
                 if !typed.is_empty() && typed != item.name {
@@ -495,16 +496,16 @@ impl App {
                 use crate::font_install::Activation;
                 // A font only in Eagle's folder is Eagle's to deactivate.
                 let (label, tip) = match state {
-                    Activation::Off => ("Activate", "Install the font for every app"),
-                    Activation::Falcon => ("Activated", "Deactivate the font"),
-                    Activation::Eagle => ("Activated by Eagle", "Eagle installed this font; deactivate it in Eagle"),
+                    Activation::Off => (tr_key("Activate"), tr_key("Install the font for every app")),
+                    Activation::Falcon => (tr_key("Activated"), tr_key("Deactivate the font")),
+                    Activation::Eagle => (tr_key("Activated by Eagle"), tr_key("Eagle installed this font; deactivate it in Eagle")),
                 };
                 let active = state != Activation::Off;
-                let b = egui::Button::new(RichText::new(label).color(if active { Color32::WHITE } else { ink }))
+                let b = egui::Button::new(RichText::new(tr(label)).color(if active { Color32::WHITE } else { ink }))
                     .fill(if active { accent } else { Color32::TRANSPARENT })
                     .stroke(Stroke::new(1.0, muted));
                 let r = ui.add_enabled(state != Activation::Eagle, b);
-                let r = if state == Activation::Eagle { r.on_disabled_hover_text(tip) } else { r.on_hover_text(tip) };
+                let r = if state == Activation::Eagle { r.on_disabled_hover_text(tr(tip)) } else { r.on_hover_text(tr(tip)) };
                 if r.clicked() {
                     toggle = Some(!active);
                 }
@@ -533,15 +534,15 @@ impl App {
 
         // Two tabs: the specimen and the information.
         ui.horizontal(|ui| {
-            for (label, info_tab) in [("Specimen", false), ("Info", true)] {
+            for (label, info_tab) in [(tr_key("Specimen"), false), (tr_key("Info"), true)] {
                 let on = self.ws.font_view.fallback_info == info_tab;
-                let text = RichText::new(label).color(if on { ink } else { muted }).font(font(13.0));
+                let text = RichText::new(tr(label)).color(if on { ink } else { muted }).font(font(13.0));
                 if ui.add(egui::Button::new(text).fill(if on { ink.gamma_multiply(0.12) } else { Color32::TRANSPARENT }).stroke(Stroke::NONE)).clicked() {
                     self.ws.font_view.fallback_info = info_tab;
                 }
             }
             ui.add_space(12.0);
-            ui.label(RichText::new("Drawn by QuickLook: falcon can't read this font itself").color(muted).font(font(11.5)));
+            ui.label(RichText::new(tr("Drawn by QuickLook: falcon can't read this font itself")).color(muted).font(font(11.5)));
         });
         ui.add_space(8.0);
 
@@ -569,10 +570,10 @@ impl App {
                     ui.painter().image(tex.id(), r, Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)), Color32::WHITE);
                 }
                 None if failed => {
-                    ui.painter().text(rest.center(), Align2::CENTER_CENTER, "No specimen for this font", font(13.0), muted);
+                    ui.painter().text(rest.center(), Align2::CENTER_CENTER, tr("No specimen for this font"), font(13.0), muted);
                 }
                 None => {
-                    ui.painter().text(rest.center(), Align2::CENTER_CENTER, "Rendering the specimen…", font(13.0), muted);
+                    ui.painter().text(rest.center(), Align2::CENTER_CENTER, tr("Rendering the specimen…"), font(13.0), muted);
                     ui.ctx().request_repaint_after(std::time::Duration::from_millis(200));
                 }
             }
@@ -646,7 +647,7 @@ impl App {
         let cell = Vec2::splat((fid.size * 1.6).max(20.0));
         let mut hovered = None;
         for (label, chars) in groups.iter() {
-            ui.label(RichText::new(*label).font(font(12.0)).color(muted));
+            ui.label(RichText::new(tr(label)).font(font(12.0)).color(muted));
             ui.add_space(4.0);
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing = vec2(1.0, 1.0);
@@ -682,14 +683,14 @@ impl App {
     fn toggle_font(&mut self, lib: &Library, item: &Item, on: bool) {
         let Some(dir) = search::falcon_font_dir() else { return };
         let Some(file) = crate::font_install::file_name(item) else {
-            self.flash("This font has no PostScript name to install it under");
+            self.flash(tr("This font has no PostScript name to install it under"));
             return;
         };
         let place = format!("~/Library/Fonts/Falcon/{file}");
         let (title, text) = if on {
-            ("Activate Font", format!("Copy \u{201c}{}\u{201d} to {place}? macOS then offers it in every app, as fonts activated in Eagle are.", item.name))
+            (tr("Activate Font"), trf("Copy “{name}” to {place}? macOS then offers it in every app, as fonts activated in Eagle are.", &[("name", &item.name), ("place", &place)]))
         } else {
-            ("Deactivate Font", format!("Remove {place}? The font stays in the library."))
+            (tr("Deactivate Font"), trf("Remove {place}? The font stays in the library.", &[("place", &place)]))
         };
         let answer = rfd::MessageDialog::new().set_title(title).set_description(text).set_buttons(rfd::MessageButtons::OkCancel).show();
         if answer != rfd::MessageDialogResult::Ok {
@@ -700,9 +701,9 @@ impl App {
             Ok(()) => {
                 self.ws.font_view.active = activation(item);
                 self.ws.filter_ui.forget_font_keys();
-                self.flash(if on { format!("Activated {}", item.name) } else { format!("Deactivated {}", item.name) });
+                self.flash(if on { trf("Activated {name}", &[("name", &item.name)]) } else { trf("Deactivated {name}", &[("name", &item.name)]) });
             }
-            Err(e) => self.flash(format!("Couldn't change the font: {e}")),
+            Err(e) => self.flash(trf("Couldn't change the font: {error}", &[("error", &e)])),
         }
     }
 }

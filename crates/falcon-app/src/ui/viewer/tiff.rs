@@ -8,6 +8,7 @@ use falcon_library::Library;
 
 use crate::app::App;
 use crate::icons as ic;
+use crate::locale::tr;
 use crate::loader::{Tier, tiff_page_job};
 use crate::theme::{self as t, mono};
 use crate::ui::widgets::icon_button;
@@ -84,13 +85,13 @@ impl App {
         let Some(n) = self.tiff.pages().filter(|_| self.tiff.id == item.id) else { return x };
         let mut step = 0;
         let page = self.tiff.page;
-        if icon_button(ui, Pos2::new(x, cy), ic::CARET_RIGHT, 14.0, page + 1 < n, "Next Page (Page Down)").clicked() {
+        if icon_button(ui, Pos2::new(x, cy), ic::CARET_RIGHT, 14.0, page + 1 < n, tr("Next Page (Page Down)")).clicked() {
             step = 1;
         }
         let label = format!("{} / {n}", page + 1);
         let w = 12.0 + 8.0 * label.chars().count() as f32;
         ui.painter().text(Pos2::new(x - 15.0 - w / 2.0, cy), egui::Align2::CENTER_CENTER, label, mono(12.0), t::p().text_value);
-        if icon_button(ui, Pos2::new(x - 30.0 - w, cy), ic::CARET_LEFT, 14.0, page > 0, "Previous Page (Page Up)").clicked() {
+        if icon_button(ui, Pos2::new(x - 30.0 - w, cy), ic::CARET_LEFT, 14.0, page > 0, tr("Previous Page (Page Up)")).clicked() {
             step = -1;
         }
         self.tiff_step(step);
