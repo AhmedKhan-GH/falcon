@@ -77,10 +77,10 @@ impl State {
         }
     }
 
-    /// Whether `given` is the Developer token. No token set never matches.
-    fn token_matches(&self, given: &str) -> bool {
+    /// Whether a request is let in: see [`authorized`].
+    fn allows(&self, host_ok: bool, given: Option<&str>) -> bool {
         let token = self.token.lock().unwrap_or_else(|p| p.into_inner());
-        !token.is_empty() && *token == given
+        authorized(host_ok, &token, given)
     }
 
     fn preferences(&self) -> Value {
@@ -272,7 +272,7 @@ fn handle(lib: &Shared, state: &State, port: u16, mut req: Request) {
         Some(Value::String(t)) => Some(t.clone()),
         _ => parse_query(query).get("token").and_then(Value::as_str).map(String::from),
     };
-    if !host_ok && !token.is_some_and(|t| state.token_matches(&t)) {
+    if !state.allows(host_ok, token.as_deref()) {
         return send(req, Reply::Unauthorized);
     }
 
@@ -1180,6 +1180,16 @@ fn project(items: Vec<Value>, args: &Map<String, Value>) -> Vec<Value> {
         .collect()
 }
 
+/// Eagle's access rule: a request whose `Host` is the server's own address
+/// is served; otherwise it must carry the Developer token, compared
+/// exactly. An empty Developer token (Eagle's default; one that is only
+/// whitespace counts as empty) means token auth is off: only the Host
+/// check applies, and no token given, not even an empty one, lets a
+/// request in.
+fn authorized(host_ok: bool, token: &str, given: Option<&str>) -> bool {
+    host_ok || (!token.trim().is_empty() && given == Some(token))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1191,5 +1201,25 @@ mod tests {
         assert_eq!(m["tags"], "a,b");
         assert_eq!(m["x"], "1 2");
         assert_eq!(decode("100%"), "100%");
+    }
+
+    #[test]
+    fn empty_token_means_host_check_only() {
+        assert!(authorized(true, "", None));
+        assert!(authorized(true, "", Some("")));
+        assert!(authorized(true, "abc", Some("wrong")));
+        assert!(!authorized(false, "", None));
+        assert!(!authorized(false, "", Some("")));
+        assert!(!authorized(false, "", Some("abc")));
+        assert!(!authorized(false, "  ", Some("  ")), "a blank token is no token");
+    }
+
+    #[test]
+    fn set_token_is_exact() {
+        assert!(authorized(false, "abc", Some("abc")));
+        assert!(!authorized(false, "abc", Some("ABC")));
+        assert!(!authorized(false, "abc", Some("abc ")));
+        assert!(!authorized(false, "abc", Some("")));
+        assert!(!authorized(false, "abc", None));
     }
 }

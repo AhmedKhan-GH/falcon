@@ -550,6 +550,27 @@ fn token_auth() {
 }
 
 #[test]
+fn empty_token_turns_token_auth_off() {
+    let e = env();
+    // Initial state: no token, so only the Host check applies.
+    for path in ["/api/library/info?token=", "/api/library/info?token=anything"] {
+        assert_eq!(e.foreign("GET", path, None).0, 401, "{path}");
+    }
+    let (code, _) = e.foreign("POST", "/api/folder/create", Some(r#"{"token":"","folderName":"X"}"#));
+    assert_eq!(code, 401);
+    assert_eq!(e.raw("GET", "/api/library/info", None, None).0, 401);
+    assert_eq!(e.get("/api/library/info").0, 200);
+
+    e.server.set_token("abc");
+    assert_eq!(e.foreign("GET", "/api/library/info?token=abc", None).0, 200);
+
+    e.server.set_token("");
+    assert_eq!(e.foreign("GET", "/api/library/info?token=abc", None).0, 401);
+    assert_eq!(e.raw("GET", "/api/library/info", None, None).0, 401);
+    assert_eq!(e.get("/api/library/info").0, 200);
+}
+
+#[test]
 fn application_info_and_preferences() {
     let e = env();
     for path in ["/api/application/info", "/"] {

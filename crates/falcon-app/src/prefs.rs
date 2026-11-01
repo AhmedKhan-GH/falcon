@@ -42,8 +42,10 @@ pub struct Prefs {
     /// The first port the API tries.
     pub api_port: u16,
     /// Eagle's `developer.apiToken`: requests carrying it as `token` are
-    /// served by the API whatever their `Host`. Empty until first launch
-    /// makes one (`sanitized`); regenerated in the Developer pane.
+    /// served by the API whatever their `Host`. Empty by default, as in
+    /// Eagle; only Generate/Regenerate in the Developer pane makes one.
+    /// Empty means token auth is off and the API serves only requests whose
+    /// Host is its own address.
     pub api_token: String,
     /// Eagle's `general.showCollectModal`, which falcon only keeps for the
     /// API: `preferences/collect/on` and `off` set it, and
@@ -288,8 +290,10 @@ impl Prefs {
         if port_error(self.api_port).is_some() {
             self.api_port = Prefs::default().api_port;
         }
+        // A token is never made here. One that is only whitespace is empty;
+        // any other is kept, so tokens made by earlier versions survive.
         if self.api_token.trim().is_empty() {
-            self.api_token = new_token();
+            self.api_token.clear();
         }
         self.ui_zoom = self.ui_zoom.clamp(ZOOM_STEPS[0], ZOOM_STEPS[ZOOM_STEPS.len() - 1]);
         // As in Eagle, a chosen folder that is gone is forgotten and
@@ -1178,6 +1182,13 @@ fn developer(p: &mut Page, d: &mut Draft, port_text: &mut String, error: Option<
     let pr = &mut d.prefs;
     let first = parse_port(port_text).unwrap_or(pr.api_port);
     p.block("API token", &["api", "token", "key", "auth", "developer", "restful"], |ui| {
+        if pr.api_token.is_empty() {
+            note(ui, "No token. Only requests addressed to localhost are served.");
+            if ui.button("Generate").clicked() {
+                pr.api_token = new_token();
+            }
+            return;
+        }
         ui.horizontal(|ui| {
             ui.add(egui::Label::new(RichText::new(&pr.api_token).monospace()).selectable(true));
             if ui.button("Copy").clicked() {
@@ -1264,9 +1275,16 @@ mod tests {
         assert_ne!(t, new_token());
         assert!(Prefs::default().api_token.is_empty(), "Eagle's default is empty");
         let mut p = Prefs::default().sanitized();
-        assert_eq!(p.api_token.len(), 36, "made on first launch");
+        assert!(p.api_token.is_empty(), "Eagle's default is empty; nothing is made on launch");
         let kept = Prefs { api_token: "abc".into(), ..Default::default() }.sanitized();
         assert_eq!(kept.api_token, "abc");
+        let old = Prefs { api_token: t.clone(), ..Default::default() }.sanitized();
+        assert_eq!(old.api_token, t, "a token made by an earlier version survives");
+        let blank = Prefs { api_token: "   ".into(), ..Default::default() }.sanitized();
+        assert_eq!(blank.api_token, "");
+        let v = p.eagle_preferences();
+        assert_eq!(v["developer"]["apiToken"], "");
+        p.api_token = t.clone();
         let v = p.eagle_preferences();
         assert_eq!(v["general"]["showCollectModal"], "false");
         assert_eq!(v["habits"]["hoverZoom"], "on");
