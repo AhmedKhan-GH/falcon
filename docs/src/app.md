@@ -160,7 +160,7 @@ These are the defaults. All but the arrows, Esc, Z and the viewer's C, ⇧R and 
 | ⌘Z and ⇧⌘Z | Undo and redo library edits, up to 100 steps. Each frame's edits are one step, named after what was done ("Undid: Move 3 to Trash"). Deleting permanently or emptying the Trash can't be undone and clears the history. Text fields keep their own undo while focused |
 | ⌘⇧F | Show or hide the filter bar |
 | ⌘⌥1 and ⌘⌥2 | Show or hide the sidebar and the inspector |
-| ⌥1 to ⌥4 | Grid, Justified, Waterfall and List layouts |
+| ⌥1 to ⌥4 | Waterfall, Justified, Grid and List layouts, as in Eagle |
 | Esc | Close the viewer, or clear the selection |
 | Hold Z | Show the hover preview of the card under the pointer |
 | ⌘⇧K | Show or hide the collect window |

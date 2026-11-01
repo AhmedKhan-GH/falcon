@@ -97,9 +97,10 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::ZoomOut, id: "view.zoom.out", group: "View", label: "Zoom out", default: k(CMD, Key::Minus), alias: None },
     Spec { cmd: Command::ToggleSidebar, id: "view.toggle.sidebar", group: "View", label: "Show or hide the sidebar", default: k(CMD_ALT, Key::Num1), alias: None },
     Spec { cmd: Command::ToggleInspector, id: "view.toggle.inspector", group: "View", label: "Show or hide the inspector", default: k(CMD_ALT, Key::Num2), alias: None },
-    Spec { cmd: Command::LayoutGrid, id: "view.layout.grid", group: "View", label: "Grid layout", default: k(ALT, Key::Num1), alias: None },
+    // Eagle's ⌥1 is Waterfall and ⌥3 the square Grid (its keybind names say the opposite).
+    Spec { cmd: Command::LayoutWaterfall, id: "view.layout.waterfall", group: "View", label: "Waterfall layout", default: k(ALT, Key::Num1), alias: None },
     Spec { cmd: Command::LayoutJustified, id: "view.layout.justified", group: "View", label: "Justified layout", default: k(ALT, Key::Num2), alias: None },
-    Spec { cmd: Command::LayoutWaterfall, id: "view.layout.waterfall", group: "View", label: "Waterfall layout", default: k(ALT, Key::Num3), alias: None },
+    Spec { cmd: Command::LayoutGrid, id: "view.layout.grid", group: "View", label: "Grid layout", default: k(ALT, Key::Num3), alias: None },
     Spec { cmd: Command::LayoutList, id: "view.layout.list", group: "View", label: "List layout", default: k(ALT, Key::Num4), alias: None },
     Spec { cmd: Command::OpenDefault, id: "view.file.opendefault", group: "View", label: "Open in the default app", default: k(SHIFT, Key::Enter), alias: None },
     Spec { cmd: Command::RevealInFinder, id: "view.file.openfinder", group: "View", label: "Show in Finder", default: k(CMD, Key::Enter), alias: None },
@@ -546,6 +547,15 @@ mod tests {
         assert_eq!(ids.len(), TABLE.len(), "ids are unique");
         let cmds: HashSet<_> = TABLE.iter().map(|s| s.cmd).collect();
         assert_eq!(cmds.len(), TABLE.len(), "each command appears once");
+    }
+
+    #[test]
+    fn layout_keys_match_eagle() {
+        let keys = Shortcuts::default();
+        assert_eq!(keys.resolve(Key::Num1, Modifiers::ALT), Some(Command::LayoutWaterfall));
+        assert_eq!(keys.resolve(Key::Num2, Modifiers::ALT), Some(Command::LayoutJustified));
+        assert_eq!(keys.resolve(Key::Num3, Modifiers::ALT), Some(Command::LayoutGrid));
+        assert_eq!(keys.resolve(Key::Num4, Modifiers::ALT), Some(Command::LayoutList));
     }
 
     #[test]
