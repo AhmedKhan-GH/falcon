@@ -25,8 +25,7 @@ impl App {
                 self.flash("Exported the debug report");
             }
             Err(e) => {
-                crate::errlog::error(&format!("could not export the debug report: {e}"));
-                self.flash(format!("Could not export the debug report: {e}"));
+                self.flash_error(format!("Could not export the debug report: {e}"));
             }
         }
     }

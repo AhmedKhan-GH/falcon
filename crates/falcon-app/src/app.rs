@@ -983,8 +983,9 @@ impl App {
             Err(e) => {
                 if self.ws.lib.is_some() {
                     self.flash_error(format!("Could not open the library: {e}"));
+                } else {
+                    crate::errlog::error(&format!("Could not open the library: {e}"));
                 }
-                crate::errlog::error(&format!("could not open the library: {e}"));
                 self.error = Some(e.to_string());
             }
         }
@@ -1356,7 +1357,7 @@ impl App {
     /// A failure: a red mark before the text, and it stays longer.
     fn flash_error(&mut self, msg: impl Into<String>) {
         let msg = msg.into();
-        // Hook: write `msg` to the error log here once there is one.
+        crate::errlog::error(&msg);
         self.ws.status = Some(Toast::new(msg, ToastKind::Error, Life::Normal));
     }
 
