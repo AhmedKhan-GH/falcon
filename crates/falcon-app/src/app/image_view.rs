@@ -3,7 +3,7 @@
 //! when zoomed in past the full tier (see the desktop app chapter).
 
 use eframe::egui::{self, Align2, Color32, Pos2, Rect, Sense, TextureHandle, Ui, Vec2, vec2};
-use falcon_library::Library;
+use falcon_library::{Library, thumbnail};
 use falcon_library::model::Item;
 
 use super::{App, ext_placeholder, icon_button, media_view};
@@ -28,6 +28,11 @@ impl App {
         gif_bar: Option<Rect>,
     ) {
         let id = item.id.clone();
+        let ext = item.ext.to_lowercase();
+        if logic::too_large_to_preview(&ext, item.width, item.height, thumbnail::has_custom_thumbnail(item)) {
+            self.too_large(ui, lib, item, bar, area);
+            return;
+        }
         let p = ui.painter().clone();
         let natural = if item.width > 0 && item.height > 0 {
             vec2(item.width as f32, item.height as f32)
@@ -89,7 +94,7 @@ impl App {
         let shown_px = r.width().max(r.height()) * ui.ctx().pixels_per_point();
         let tile = logic::tile_side(ui.ctx().input(|i| i.max_texture_side));
         if !animated
-            && logic::wants_original(&item.ext.to_lowercase(), natural.x.max(natural.y) as u32, shown_px)
+            && logic::wants_original(&ext, natural.x.max(natural.y) as u32, shown_px)
             && let Some(j) = original_job(item, lib.root(), tile)
         {
             self.ws.frame_jobs.push(j);
@@ -169,5 +174,37 @@ impl App {
         if let Some(j) = job_for(item, lib.root(), Tier::Full) {
             self.ws.frame_jobs.push(j);
         }
+    }
+
+    /// Eagle's "too large to preview" page for TIFF, HEIC and TGA images
+    /// over its pixel limit: the thumbnail, a line giving the limit, and
+    /// the Open With button. No full render is attempted.
+    fn too_large(&mut self, ui: &mut Ui, lib: &Library, item: &Item, bar: Rect, area: Rect) {
+        let resp = ui.interact(area, ui.scope_id().with("viewer-canvas"), Sense::click());
+        resp.context_menu(|ui| {
+            self.item_menu(ui, lib, item, std::slice::from_ref(&item.id));
+        });
+        if resp.double_clicked() {
+            self.ws.viewer = None;
+        }
+        let thumb = Rect::from_center_size(area.center() - vec2(0.0, 70.0), Vec2::splat(150.0));
+        match self.ws.loader.get(&item.id, Tier::Preview).cloned() {
+            Some(tex) => {
+                let size = tex.size_vec2() * (thumb.width() / tex.size_vec2().max_elem());
+                egui::Image::new((tex.id(), size)).paint_at(ui, Rect::from_center_size(thumb.center(), size));
+            }
+            None => ext_placeholder(ui, thumb, &item.ext),
+        }
+        if let Some(j) = job_for(item, lib.root(), Tier::Preview) {
+            self.ws.frame_jobs.push(j);
+        }
+        let megapixels = item.width.saturating_mul(item.height) / 1_000_000;
+        let line = format!(
+            "Falcon previews TIFF, HEIC and TGA images of up to {} megapixels; this one has {megapixels}.",
+            logic::TOO_LARGE_PIXELS / 1_000_000
+        );
+        self.notice_lines(ui, area, "Too large to preview", &line);
+        let (name_x, right) = media_view::bar_shell(self, ui, item, bar);
+        media_view::bar_name(ui, item, bar, name_x, right);
     }
 }

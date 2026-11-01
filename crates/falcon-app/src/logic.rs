@@ -1322,6 +1322,17 @@ pub struct TileSpan {
     pub padded: [usize; 4],
 }
 
+/// Pixel count above which Eagle shows its "too large" page instead of a
+/// TIFF, HEIC or TGA (`MAX_DIMENSION` in `index.html`).
+pub const TOO_LARGE_PIXELS: u64 = 120_000_000;
+
+/// Whether the viewer shows the "too large to preview" page for an item:
+/// a TIFF, HEIC/HEIF or TGA over [`TOO_LARGE_PIXELS`], unless it has a
+/// custom thumbnail, as in Eagle. Other formats show at any size.
+pub fn too_large_to_preview(ext: &str, w: u64, h: u64, custom_thumbnail: bool) -> bool {
+    matches!(ext, "tif" | "tiff" | "heic" | "heif" | "hif" | "tga") && w.saturating_mul(h) > TOO_LARGE_PIXELS && !custom_thumbnail
+}
+
 /// Cuts a `w` x `h` image into tiles whose padded size is at most `side`.
 pub fn tile_spans(w: usize, h: usize, side: usize) -> Vec<TileSpan> {
     let step = side.saturating_sub(2).max(1);
@@ -1352,6 +1363,17 @@ mod image_viewer_tests {
         assert!(!wants_original("gif", 12000, 6000.0), "animations are the player's");
         assert!(!wants_original("psd", 12000, 6000.0), "no decoder");
         assert!(wants_original("tiff", 9000, 4000.0));
+    }
+
+    #[test]
+    fn too_large_only_for_eagles_formats_over_the_limit() {
+        assert!(too_large_to_preview("tiff", 12000, 10001, false));
+        assert!(!too_large_to_preview("tiff", 12000, 10000, false), "exactly the limit still shows");
+        assert!(too_large_to_preview("heic", 20000, 7000, false));
+        assert!(too_large_to_preview("tga", 20000, 7000, false));
+        assert!(!too_large_to_preview("tiff", 20000, 7000, true), "a custom thumbnail shows instead");
+        assert!(!too_large_to_preview("png", 20000, 7000, false));
+        assert!(!too_large_to_preview("jpg", 100_000, 100_000, false));
     }
 
     #[test]

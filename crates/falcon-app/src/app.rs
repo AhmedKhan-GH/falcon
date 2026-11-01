@@ -4166,9 +4166,15 @@ impl App {
         let c = area.center();
         ext_placeholder(ui, Rect::from_center_size(c - vec2(0.0, 70.0), Vec2::splat(150.0)), &item.ext);
         let name = format!("{}.{}", item.name, item.ext);
-        let g = galley(ui, &name, font(15.0), t::p().text, (area.width() - 40.0).max(1.0));
+        self.notice_lines(ui, area, &name, "Falcon can't show a preview of this file. Try opening it in another app.");
+    }
+
+    /// The title, line and Open With button under the picture of a page
+    /// shown instead of a preview.
+    fn notice_lines(&mut self, ui: &mut Ui, area: Rect, title: &str, line: &str) {
+        let c = area.center();
+        let g = galley(ui, title, font(15.0), t::p().text, (area.width() - 40.0).max(1.0));
         ui.painter().galley(Pos2::new(c.x - g.size().x / 2.0, c.y + 14.0), g, t::p().text);
-        let line = "Falcon can't show a preview of this file. Try opening it in another app.";
         ui.painter().text(c + vec2(0.0, 48.0), Align2::CENTER_CENTER, line, font(12.5), t::p().text_muted);
         let b = ui.put(Rect::from_center_size(c + vec2(0.0, 84.0), vec2(210.0, 28.0)), egui::Button::new("Open With Another App…"));
         let file = self.ws.view.file.clone();
