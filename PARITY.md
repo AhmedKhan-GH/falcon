@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 236 | 26 | 10 | 8 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 238 | 24 | 10 | 8 |
 | Viewers and file formats | 183 | 17 | 3 | 5 |
-| Search, filters and organising | 215 | 1 | 5 | 3 |
-| Import, export, library, preferences and integrations | 176 | 12 | 21 | 26 |
-| **Total** | 810 | 56 | 39 | 42 |
+| Search, filters and organising | 216 | 1 | 4 | 3 |
+| Import, export, library, preferences and integrations | 184 | 9 | 16 | 26 |
+| **Total** | 821 | 51 | 33 | 42 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -397,13 +397,13 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Toast messages (rename, remove, rate, copy path, pin and so on) | Done | `toast.rs`: brief, normal, undoable and error kinds with Eagle's durations; errors also go to the log | local |
 | UNDO button on toasts | Done | `toast.rs` undoable kind | local |
 | Clickable links in toasts (open the folder) | Done | `Toast.link` on the folder add and drop toasts | local |
-| Import progress bar with count and time remaining | Partial | Count and file name (app.rs:911-940). No time remaining and no cancel | local |
+| Import progress bar with count and time remaining | Done | "Importing 3 of 10 · About 20 s left · name" (hidden while paused); Pause/Resume on the sidebar spinner | local |
 | Import errors toast ("N files failed, click for details") opens an error list with retry and reveal | Partial | Toast shows the failure count only (app.rs:925) | local |
 | Dock icon progress bar during long tasks | Partial | `dock_progress.rs` driven by the progress modal (thumbnails, Trash, package import); not by the background file import | local |
 | Progress modals for export, eaglepack, thumbnail refresh, empty trash, WebP conversion and similar | Partial | Shared progress modal with Cancel for pack import and export, thumbnail refresh and Empty Trash; Export to Computer keeps its toolbar bar; no WebP conversion | local |
 | Sound effects (delete item, delete folder, capture) | Missing | Not built: falcon ships no sound assets; the capture uses the system shutter sound | local |
 | System notifications (import done, capture done) | Partial | `notify.rs` posts UserNotifications for import done, export done and capture done when falcon runs from a bundle (`dev.falcon.app`); dropped under `cargo run`; clicking one only activates falcon | local |
-| Warnings: slow disk, NTFS on macOS, library path permissions, localhost / API port | Partial | API port errors appear in Preferences (prefs.rs:100). No disk or permission warnings | local |
+| Warnings: slow disk, NTFS on macOS, library path permissions, localhost / API port | Done | Read-only file, no write permission, slow disk, NTFS, plus a lasting alert when no API port is free or `localhost:<port>` can't be reached | local |
 | Tooltips on toolbar buttons | Done | app.rs:1492-1507 | local |
 
 ---
@@ -993,7 +993,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Folder inspector: set, change or remove password buttons | Done | Create, or Change | Remove, for a single folder; count and size hidden while locked | local |
 | Copy Folder Link (eagle:// link) | Done | Localhost URL; `eagle://` under Copy ▸ Eagle Link | local |
 | Export folder (computer, .eaglepack) | Done | Folder menu Export ▸ … and the inspector's Export button (`export_ui.rs` `tree_export_menu`, `scope_export_button`) | local |
-| Clear Invalid Content (empty or broken folders) | Missing | Cross-ref: library agent | local |
+| Clear Invalid Content (empty or broken folders) | Done | Same tool from the library switcher | local |
 
 ### 7. Smart folders
 
@@ -1308,10 +1308,10 @@ Two cross-cutting facts explain many rows:
 | Copy Base64 | Done | One item: data URL of the original for jpg/png/webp/gif, else of the thumbnail | local |
 | Copy Eagle Link (`eagle://item/<id>`) | Done | Copy ▸ Eagle Link in the item menu, Edit ▸ Copy Details, `edit.copy.eaglelink` (unbound, as Eagle) | local |
 | Copy Link (the item's source URL) | Done | Copy ▸ Link copies Eagle's local API link per item (`edit.copy.link`); the source URL keeps its own entry (`edit.copy.sourceurl`) | local |
-| Copy the image to the clipboard as pixels plus file reference (the AppleScript helper) | Partial | Falcon copies a file list only (`app.rs:948-949`) | local |
+| Copy the image to the clipboard as pixels plus file reference (the AppleScript helper) | Done | One jpg/png/bmp: raw bytes, TIFF, `public.file-url` and `NSFilenamesPboardType` together; several items: a file list, as Eagle | local |
 | macOS Share sheet for items | Done | Share… in the item menu over the selected files (`share.rs`, `NSSharingServicePicker`) | local |
-| Add selected items to another library (from the recent list, or choose a path) | Missing | — | local |
-| Convert items to WebP to save space | Missing | — | local |
+| Add selected items to another library (from the recent list, or choose a path) | Done | `add_to_library.rs` (both crates): item, single-folder, folder-card, smart-folder and tag-group menus; recent libraries plus Choose Library…; whole `.info` folders copied under a temporary name, existing ids skipped, folder ids kept as Eagle; target must pass the sandbox and install-folder guards; asks above one item; progress with Stop | local |
+| Convert WebP items to PNG or JPG (Eagle's "Convert WebP…") | Done | Eagle's tool converts **WebP items to PNG or JPG** (not to WebP): item menu ▸ Convert WebP ▸ PNG/JPG for every WebP in the selection, warning first, animated skipped, old file to the macOS Trash (irreversible for ⌘Z), `ext`/`size` updated | local |
 | Save the current video frame as an item or copy it | Done | Video right-click menu and ⇧S / ⇧C; also in the preview window | local |
 
 ### 5. Library management
@@ -1322,7 +1322,7 @@ Two cross-cutting facts explain many rows:
 | Create-library dialog with a name field, name validation and folder choice | Done | Eagle's forbidden characters, folder picker | local |
 | Warn when creating a library in Desktop, Documents or Downloads | Done | Desktop and Downloads, as Eagle (substring match) | local |
 | Refuse a path that already holds a library | Done | `library.rs:101-106` refuses any existing path | local |
-| Refuse libraries inside the app's install folder | Missing | — | local |
+| Refuse libraries inside the app's install folder | Done | `install_dir::guard` on create, open, background open, reload, Empty Cache and Add to Other Library | local |
 | Open an existing library | Done | `app.rs:790-794,594-618` | local |
 | Reject a folder that is not a library | Done | `library.rs:53-55` (`NotALibrary`), shown in the empty state (`app.rs:3537-3539`) | local |
 | Switch library (⌘L) through a switcher listing libraries | Done | `app.rs:998-1001,1607-1650` | local |
@@ -1331,7 +1331,7 @@ Two cross-cutting facts explain many rows:
 | Remove one library from the list | Done | Switcher menu; missing libraries are kept and shown dimmed | local |
 | Delete a library folder from the list menu | Missing | Not an Eagle feature (the string is the Remove Icon confirmation); not built, on data-safety grounds | local |
 | Set or remove a library icon (`icon.png`) | Done | `library_icon.rs`: shorter side scaled to 64 px, written atomically; Change Icon / Remove Icon in the switcher | local |
-| Warn before switching while tasks run (Force Switch), or block while an AI action runs | Missing | Imports keep running against their own shared library handle; there is no prompt | local |
+| Warn before switching while tasks run (Force Switch), or block while an AI action runs | Partial | Falcon's switching keeps tasks running in the parked library, so the warning ("Stop Tasks and Close") is on Close Library; export copies can't be cancelled and are waited for; no AI actions exist | local |
 | Several libraries open at once | Done (beyond Eagle) | `workspaces.rs` (several workspaces), `app.rs:621-689` | local |
 | Show the library in Finder | Done | `app.rs:1643-1645` | local |
 | Missing-library screen with Try Again, Select another path and Create a new library | Done | At launch, from a missing recent entry, and when an open library vanishes | local |
@@ -1342,16 +1342,16 @@ Two cross-cutting facts explain many rows:
 | Restore a damaged `metadata.json` from the newest good backup on open | Done | `App::open` and `follow_api_switch` use `Library::open_or_restore`; `restored_note` names the backup used in the toast. The HTTP API's own `library/switch` still uses `Library::open` | local |
 | Keep a per-library backup copy in app data (`eagle-backup/<hash>.json`) | Done | `~/Library/Application Support/Falcon/eagle-backup/<hash>.json` with Eagle's FNV-1a path hash, written with every new backup | local |
 | Empty cache and reload the library (forced rebuild) | Done | Rebuilds `mtime.json` from the items as Eagle does | local |
-| Repair tool "Clear Invalid Content" (removes empty or broken item folders, then reloads) | Partial | Unreadable items are skipped and reported on open (`library.rs:63-73`, `app.rs:607-610`), but cannot be cleaned up | local |
+| Repair tool "Clear Invalid Content" (removes empty or broken item folders, then reloads) | Done | Switcher ▸ Clear Invalid Content…: background scan, sync warning, orphan `.info` folders to the macOS Trash, items without originals to the library Trash, missing folders dropped, then reload; Eagle hides it behind a modifier-click | local |
 | Refresh thumbnails for the selection | Done | `crates/falcon-app/src/image_edit.rs:104-106,151-171` | local |
 | Refresh the palette for the selection | Done | `image_edit.rs:107-109` | local |
 | Detect external changes to `metadata.json` and `mtime.json` (sync tools) and reload | Done | `sync.rs`, `watch.rs`: polled every 4 s, parsed off the UI thread, nothing written back; a vanished folder closes the library | local |
 | Cloud-sync conflict detection (disk copy newer than memory, so warn and reload) | Done | Every metadata write first reads the disk copy and refuses if it is newer (`Error::SyncConflict`); the app alerts and reloads | local |
 | iCloud placeholder handling (`.icloud` names, files not yet downloaded) | Done | `crates/falcon-app/src/icloud.rs` (dataless detection, background download, wait screen in `app/open_ui.rs:128-180`) | local |
-| "File not found, sync may be in progress" hint for missing originals | Partial | iCloud files are handled; other missing originals get no specific hint | local |
+| "File not found, sync may be in progress" hint for missing originals | Done | Card tooltip (`broken_thumb_hint`) and the viewer placeholder line | local |
 | Library storage health warnings (read-only path, slow disk, NTFS on macOS, permission errors) | Done | Read-only file, no write permission, slow disk (falcon's own 1.5 s round-trip threshold), NTFS volume | local |
 | Library loading progress screen | Done | `Library::open_with_progress` | local |
-| Library stats (item count, size, trash count) | Partial | Sidebar counts (`app.rs:1744-1745`) and folder inspector items and size (`app.rs:2925-2928`); CLI `info` prints items, trash, folders and tags (`src/main.rs:112-121`). No library-wide stats in the app | local |
+| Library stats (item count, size, trash count) | Done | The scope inspector shows Items and Size for every scope incl. All and Trash, as Eagle's inspector; falcon counts the filtered list | local |
 | Welcome or onboarding flow (theme, extension install, create library) | Done | First-launch welcome with theme choice and create or open; no extension step | local |
 | Password lock for the whole app: password, hint, Lock Now (⌥⌘L), Touch ID unlock | Done | `applock.rs` with Touch ID unlock (`touch_id.rs`) | local |
 
@@ -1370,9 +1370,9 @@ Eagle panes (`app/js/preferences.js:659-788`): General, Sidebar, Controls, Previ
 | General: transparency (vibrancy) effects | Missing | Not feasible (vibrancy) | local |
 | General: show counts in the sidebar | Done | `Prefs::sidebar_counts` | local |
 | General: menu bar icon | Done | `tray.rs` status item with its General switch | local |
-| General: keep the Dock icon after the window closes | Done | Closing hides falcon (`dock.rs`); always on, no preference | local |
-| General: launch at login | Missing | — | local |
-| General: GPU acceleration | Missing | — | local |
+| General: keep the Dock icon after the window closes | Done | Pref on by default (Eagle's `keepDockIcon`); off leaves the Dock on close while the menu bar icon is shown, or quits without one | local |
+| General: launch at login | Done | `SMAppService` on macOS 13+, read from the system, **off by default**, never registered until the user turns it on; shown unavailable before 13 or unbundled | local |
+| General: GPU acceleration | Missing | Not built: eframe's `glow` backend isn't compiled in and the 3D viewer needs wgpu; no switch to offer | local |
 | General: auto-select items after import | Done | `Prefs::auto_select` | local |
 | General: notify on duplicate import | Done | `Prefs::notify_duplicates` | local |
 | General: ask where to save items from the extension | Missing | Not applicable: the browser extension is an online feature | local |
@@ -1517,9 +1517,9 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 
 Rows marked "not counted" are features Eagle 4.0.0 does not have.
 
-- **Done:** 176, including 5 where falcon goes beyond Eagle and 1 with a small difference.
-- **Partial:** 12.
-- **Missing:** 47, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
+- **Done:** 184, including 5 where falcon goes beyond Eagle and 1 with a small difference.
+- **Partial:** 9.
+- **Missing:** 42, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
 - **Different on purpose:** 1 (the API listens on localhost only).
 
 ### Ranked Missing and Partial local items
