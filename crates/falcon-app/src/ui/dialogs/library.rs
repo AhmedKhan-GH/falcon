@@ -200,7 +200,7 @@ impl App {
             dlg.error = Some(tr("A library already exists there. Create again and pick another folder, or change the name.").to_string());
             return true;
         }
-        match falcon_library::sandbox::guard(&dest).and_then(|()| Library::create(&dest)) {
+        match crate::install_dir::guard(&dest).and_then(|()| Library::create(&dest)) {
             Ok(_) => self.open(dest),
             Err(e) => self.flash(trf("Could not create the library: {error}", &[("error", &e)])),
         }

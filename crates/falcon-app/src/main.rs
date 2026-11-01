@@ -21,6 +21,7 @@ mod hover_media;
 mod urls;
 mod icloud;
 mod icons;
+mod install_dir;
 mod links;
 mod folder_picker;
 mod import_dupes;

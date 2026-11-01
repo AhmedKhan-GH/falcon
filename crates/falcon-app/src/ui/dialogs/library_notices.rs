@@ -93,7 +93,7 @@ impl App {
     pub(crate) fn reload_after_conflict(&mut self) {
         let (Some(shared), Some(root)) = (self.ws.lib.clone(), self.ws.root.clone()) else { return };
         let _ = lock(&shared).flush();
-        match falcon_library::sandbox::guard(&root).and_then(|()| Library::open(&root)) {
+        match crate::install_dir::guard(&root).and_then(|()| Library::open(&root)) {
             Ok(fresh) => {
                 let ids: Vec<String> = {
                     let mut lib = lock(&shared);
@@ -605,7 +605,7 @@ impl App {
             self.flash(trf("Could not save: {error}", &[("error", &e)]));
             return;
         }
-        let fresh = falcon_library::sandbox::guard(&root).and_then(|()| Library::open_or_restore(&root)).and_then(|(mut lib, _)| lib.rebuild_mtime().map(|()| lib));
+        let fresh = crate::install_dir::guard(&root).and_then(|()| Library::open_or_restore(&root)).and_then(|(mut lib, _)| lib.rebuild_mtime().map(|()| lib));
         match fresh {
             Ok(fresh) => {
                 let ids: Vec<String> = {
@@ -662,7 +662,7 @@ impl App {
                 n.store(b, Ordering::Relaxed);
                 ctx.request_repaint();
             };
-            let result = falcon_library::sandbox::guard(&p).and_then(|()| Library::open_or_restore_with_progress(&p, &progress));
+            let result = crate::install_dir::guard(&p).and_then(|()| Library::open_or_restore_with_progress(&p, &progress));
             let _ = tx.send(result);
             ctx.request_repaint();
         });

@@ -68,7 +68,7 @@ impl App {
             crate::workspaces::remember(&mut self.recent, &path, RECENT_LIMIT);
             return;
         }
-        let result = falcon_library::sandbox::guard(&path).and_then(|()| Library::open_or_restore(&path));
+        let result = crate::install_dir::guard(&path).and_then(|()| Library::open_or_restore(&path));
         self.opened(path, result);
     }
 
@@ -325,7 +325,7 @@ impl App {
             self.flash_error(trf("Could not save: {e}", &[("e", &e)]));
             return;
         }
-        match falcon_library::sandbox::guard(&root).and_then(|()| Library::open_or_restore(&root)) {
+        match crate::install_dir::guard(&root).and_then(|()| Library::open_or_restore(&root)) {
             Ok((fresh, _)) => {
                 let ids: Vec<String> = {
                     let mut lib = lock(&shared);
