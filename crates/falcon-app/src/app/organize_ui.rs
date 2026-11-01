@@ -43,6 +43,16 @@ pub(super) struct OrgState {
     /// ⇧⌘R asked for the open folder's settings; opened once the library
     /// is at hand.
     pub settings_request: Option<String>,
+    /// Tags picked on the All Tags page, the last one clicked, and the
+    /// chips in the order drawn (this frame, and the last one's for ⇧).
+    pub tag_sel: Vec<String>,
+    pub tag_anchor: Option<String>,
+    pub tag_order: Vec<String>,
+    pub tag_order_shown: Vec<String>,
+    /// The All Tags page's sort.
+    pub tag_sort: crate::tags::TagSort,
+    /// The merge dialog: the tags and the name typed so far.
+    pub merge: Option<(Vec<String>, String)>,
 }
 
 impl OrgState {
@@ -105,6 +115,8 @@ pub(super) enum OrgAction {
     GroupColor(String, Option<String>),
     DeleteGroup(String),
     AddToGroup(String, Vec<String>),
+    /// Eagle's Add to Group: the tags stay in their other groups too.
+    AddToGroupToo(String, Vec<String>),
     RemoveFromGroup(String, Vec<String>),
     SaveFilter(String, serde_json::Value),
     RenameFilter(usize, String),
@@ -1012,6 +1024,18 @@ impl App {
             self.ws.org.rename_new_group = true;
             self.ws.actions.push(org(OrgAction::CreateGroup(Vec::new())));
         }
+        ui.menu_button(format!("Sort: {}", self.ws.org.tag_sort.label()), |ui| {
+            ui.set_min_width(180.0);
+            for s in crate::tags::TagSort::ALL {
+                let mark = if s == self.ws.org.tag_sort { ic::CHECK } else { " " };
+                if ui.button(format!("{mark}  {}", s.label())).clicked() {
+                    self.ws.org.tag_sort = s;
+                }
+            }
+        });
+        if ui.button("Clear Tag History…").on_hover_text("Start the tag picker's Recent tags over").clicked() {
+            self.ws.confirm = Some(Confirm::ClearTagHistory);
+        }
     }
 
     /// Whether the page shows tag groups.
@@ -1022,7 +1046,9 @@ impl App {
     /// The All Tags page in tag-group mode: one section per group, then
     /// the tags in no group.
     pub(super) fn tag_groups_page(&mut self, ui: &mut Ui, lib: &Library, filter: &str) {
-        let counts = logic::tag_counts(lib.items());
+        // The sort orders the ungrouped tags; groups keep their own order.
+        let mut counts = logic::tag_counts(lib.items());
+        self.ws.org.tag_sort.apply(&mut counts);
         let (sections, rest) = organize::tag_sections(&counts, &lib.metadata.tags_groups, filter);
         for sec in &sections {
             self.tag_group_header(ui, lib, Some(sec), sec.tags.len());
@@ -1098,6 +1124,11 @@ impl App {
         let pos = groups.iter().position(|g| g.id == s.id).unwrap_or(0);
         resp.context_menu(|ui| {
             ui.set_min_width(200.0);
+            let tags = groups.get(pos).map(|g| g.tags.clone()).unwrap_or_default();
+            if ui.add_enabled(!tags.is_empty(), egui::Button::new("Find Items with These Tags")).clicked() {
+                self.filter_any_tags(tags);
+            }
+            ui.separator();
             if ui.button("Rename").clicked() {
                 self.ws.org.group_rename = Some((s.id.clone(), s.name.clone()));
             }
@@ -1194,31 +1225,84 @@ impl App {
         organize::group_of(&lib.metadata.tags_groups, tag).map(|g| folder_icons::color(g.color.as_deref()).unwrap_or(t::p().icon_none))
     }
 
-    /// The tag chip menu's Move to Group submenu.
-    pub(super) fn tag_group_menu(&mut self, ui: &mut Ui, lib: &Library, tag: &str) {
-        let current = organize::group_of(&lib.metadata.tags_groups, tag).map(|g| g.id.clone());
+    /// The tag menu's group entries for the picked `tags`: Add to Group
+    /// (they also stay in their other groups), Move to Group (they leave
+    /// them), New Group… and Remove from Group.
+    pub(super) fn tag_group_menu(&mut self, ui: &mut Ui, lib: &Library, tags: &[String]) {
+        let groups = &lib.metadata.tags_groups;
+        let in_all = |g: &falcon_library::model::TagGroup| tags.iter().all(|t| g.tags.contains(t));
+        ui.add_enabled_ui(!groups.is_empty(), |ui| {
+            ui.menu_button("Add to Group", |ui| {
+                ui.set_min_width(180.0);
+                for g in groups {
+                    let all = in_all(g);
+                    let mark = if all { ic::CHECK } else { " " };
+                    if ui.add_enabled(!all, egui::Button::new(format!("{mark}  {}", g.name))).clicked() {
+                        self.ws.actions.push(org(OrgAction::AddToGroupToo(g.id.clone(), tags.to_vec())));
+                    }
+                }
+            });
+        });
         ui.menu_button("Move to Group", |ui| {
             ui.set_min_width(180.0);
-            for g in &lib.metadata.tags_groups {
-                let mark = if current.as_deref() == Some(g.id.as_str()) { ic::CHECK } else { " " };
-                if ui.button(format!("{mark}  {}", g.name)).clicked() && current.as_deref() != Some(g.id.as_str()) {
-                    self.ws.actions.push(org(OrgAction::AddToGroup(g.id.clone(), vec![tag.to_string()])));
+            for g in groups {
+                let mark = if in_all(g) { ic::CHECK } else { " " };
+                if ui.button(format!("{mark}  {}", g.name)).clicked() {
+                    self.ws.actions.push(org(OrgAction::AddToGroup(g.id.clone(), tags.to_vec())));
                 }
             }
-            if !lib.metadata.tags_groups.is_empty() {
+            if !groups.is_empty() {
                 ui.separator();
             }
             if ui.button("New Group…").clicked() {
                 self.ws.org.by_group = true;
                 self.ws.org.rename_new_group = true;
-                self.ws.actions.push(org(OrgAction::CreateGroup(vec![tag.to_string()])));
-            }
-            if let Some(g) = &current
-                && ui.button("Remove from Group").clicked()
-            {
-                self.ws.actions.push(org(OrgAction::RemoveFromGroup(g.clone(), vec![tag.to_string()])));
+                self.ws.actions.push(org(OrgAction::CreateGroup(tags.to_vec())));
             }
         });
+        let holding: Vec<&falcon_library::model::TagGroup> = groups.iter().filter(|g| tags.iter().any(|t| g.tags.contains(t))).collect();
+        if ui.add_enabled(!holding.is_empty(), egui::Button::new("Remove from Group")).clicked() {
+            for g in holding {
+                self.ws.actions.push(org(OrgAction::RemoveFromGroup(g.id.clone(), tags.to_vec())));
+            }
+        }
+    }
+
+    /// Eagle's merge dialog: the picked tags become one, named in a field
+    /// that starts with the first tag's name.
+    pub(super) fn merge_dialog(&mut self, ctx: &egui::Context) {
+        let Some((tags, mut name)) = self.ws.org.merge.take() else { return };
+        let mut keep = true;
+        let modal = egui::Modal::new(egui::Id::unique("merge-tags")).show(ctx, |ui| {
+            ui.set_width(340.0);
+            ui.label(RichText::new(format!("Merge {} tags", tags.len())).size(15.0));
+            ui.add_space(4.0);
+            ui.label(RichText::new(tags.join(", ")).color(t::p().text_muted));
+            ui.label(RichText::new("Items with any of them get this tag instead:").color(t::p().text_muted));
+            ui.add_space(6.0);
+            let te = ui.add(TextEdit::singleline(&mut name).id_salt("merge-name").hint_text("Tag name").desired_width(f32::INFINITY));
+            if ui.memory(|m| m.focused().is_none()) {
+                te.request_focus();
+            }
+            let enter = te.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
+            ui.add_space(10.0);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let ok = ui.add_enabled(!name.trim().is_empty(), egui::Button::new("Merge"));
+                if (ok.clicked() || enter) && !name.trim().is_empty() {
+                    self.ws.actions.push(Action::MergeTags(tags.clone(), name.trim().to_string()));
+                    keep = false;
+                }
+                if ui.button("Cancel").clicked() {
+                    keep = false;
+                }
+            });
+        });
+        if modal.should_close() {
+            keep = false;
+        }
+        if keep {
+            self.ws.org.merge = Some((tags, name));
+        }
     }
 }
 
@@ -1296,6 +1380,7 @@ impl App {
     }
 
     pub(super) fn organize_dialogs(&mut self, ctx: &egui::Context, lib: &Library) {
+        self.merge_dialog(ctx);
         if let Some(id) = self.ws.org.settings_request.take()
             && let Some(f) = logic::find_folder(&lib.metadata.folders, &id)
             && !organize::is_shut(f, &self.ws.org.unlocked)
@@ -1574,6 +1659,7 @@ impl App {
             OrgAction::GroupColor(id, color) => lib.set_tag_group_color(&id, color.as_deref()),
             OrgAction::DeleteGroup(id) => lib.delete_tag_group(&id, false),
             OrgAction::AddToGroup(id, tags) => lib.add_tags_to_group(&id, &tags),
+            OrgAction::AddToGroupToo(id, tags) => lib.add_tags_to_group_too(&id, &tags),
             OrgAction::RemoveFromGroup(id, tags) => lib.remove_tags_from_group(&id, &tags),
             OrgAction::SaveFilter(name, rule) => lib.create_saved_filter(&name, rule).map(|_| self.flash(format!("Saved “{name}”"))),
             OrgAction::RenameFilter(i, name) => lib.rename_saved_filter(i, &name),

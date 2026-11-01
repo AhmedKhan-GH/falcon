@@ -113,6 +113,74 @@ impl Library {
     }
 }
 
+/// The tag manager's commands on several tags at once.
+impl Library {
+    /// Eagle's Merge Tags: renames each of `tags` to `into` everywhere
+    /// ([`Library::rename_tag`]: items, history, starred tags and groups),
+    /// so items keep one copy. Returns how many items changed.
+    pub fn merge_tags(&mut self, tags: &[String], into: &str) -> Result<usize> {
+        let into = into.trim();
+        if into.is_empty() {
+            return Ok(0);
+        }
+        let affected: std::collections::HashSet<String> =
+            self.items().iter().filter(|i| i.tags.iter().any(|t| t != into && tags.contains(t))).map(|i| i.id.clone()).collect();
+        for t in tags {
+            if t != into {
+                self.rename_tag(t, into)?;
+            }
+        }
+        Ok(affected.len())
+    }
+
+    /// Deletes several tags ([`Library::delete_tag`]). Returns how many
+    /// items changed.
+    pub fn delete_tags(&mut self, tags: &[String]) -> Result<usize> {
+        let affected = self.items().iter().filter(|i| i.tags.iter().any(|t| tags.contains(t))).count();
+        for t in tags {
+            self.delete_tag(t)?;
+        }
+        Ok(affected)
+    }
+
+    /// Stars several tags, the first one ending up first (Eagle's
+    /// `addStarredTags`), or unstars them.
+    pub fn star_tags(&mut self, tags: &[String], starred: bool) -> Result<()> {
+        self.tags.starred_tags.retain(|t| !tags.contains(t));
+        if starred {
+            let mut front: Vec<String> = Vec::new();
+            for t in tags {
+                if !front.contains(t) {
+                    front.push(t.clone());
+                }
+            }
+            front.append(&mut self.tags.starred_tags);
+            self.tags.starred_tags = front;
+        }
+        self.save_tags()
+    }
+
+    /// Eagle's Add to Group: files tags in a group as well, leaving them in
+    /// their other groups (where [`Library::add_tags_to_group`] moves them).
+    pub fn add_tags_to_group_too(&mut self, id: &str, tags: &[String]) -> Result<()> {
+        let Some(g) = self.metadata.tags_groups.iter_mut().find(|g| g.id == id) else {
+            return self.add_tags_to_group(id, tags);
+        };
+        for t in tags.iter().map(|t| t.replace(['\r', '\n'], "")) {
+            if !g.tags.contains(&t) {
+                g.tags.push(t);
+            }
+        }
+        self.save_metadata()
+    }
+
+    /// Empties `historyTags` (Eagle's Clear Tag History).
+    pub fn clear_tag_history(&mut self) -> Result<()> {
+        self.tags.history_tags.clear();
+        self.save_tags()
+    }
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
@@ -188,6 +256,51 @@ pub(crate) mod tests {
         // `b` is still on A2; `z` was not touched.
         assert_eq!(lib.tags.history_tags, s(&["b", "z"]));
         assert_eq!(Library::open(lib.root()).unwrap().tags.history_tags, s(&["b", "z"]));
+    }
+
+    #[test]
+    fn merging_renames_into_one_name_everywhere() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut lib = library(tmp.path(), &[&["cat", "kitty", "x"], &["kitten"], &["dog"]]);
+        lib.record_tag_use(&s(&["kitty", "dog", "cat"])).unwrap();
+        lib.star_tags(&s(&["kitten"]), true).unwrap();
+        let g = lib.create_tag_group("Pets", &s(&["kitty", "dog", "cat"]), None).unwrap();
+        let n = lib.merge_tags(&s(&["cat", "kitty", "kitten"]), " cat ").unwrap();
+        assert_eq!(n, 2);
+        assert_eq!(lib.item("A1").unwrap().tags, s(&["cat", "x"]));
+        assert_eq!(lib.item("A2").unwrap().tags, s(&["cat"]));
+        assert_eq!(lib.item("A3").unwrap().tags, s(&["dog"]));
+        assert_eq!(lib.tags.history_tags, s(&["dog", "cat"]));
+        assert_eq!(lib.tags.starred_tags, s(&["cat"]));
+        assert_eq!(lib.metadata.tags_groups.iter().find(|x| x.id == g).unwrap().tags, s(&["dog", "cat"]));
+        assert_eq!(lib.merge_tags(&s(&["dog"]), "  ").unwrap(), 0, "an empty name does nothing");
+    }
+
+    #[test]
+    fn several_tags_at_once() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut lib = library(tmp.path(), &[&["a", "b", "c"], &["b"]]);
+        lib.star_tags(&s(&["z"]), true).unwrap();
+        lib.star_tags(&s(&["a", "b", "a"]), true).unwrap();
+        assert_eq!(lib.tags.starred_tags, s(&["a", "b", "z"]));
+        lib.star_tags(&s(&["a", "z"]), false).unwrap();
+        assert_eq!(lib.tags.starred_tags, s(&["b"]));
+        assert_eq!(lib.delete_tags(&s(&["a", "b"])).unwrap(), 2);
+        assert_eq!(lib.item("A1").unwrap().tags, s(&["c"]));
+        assert!(lib.tags.starred_tags.is_empty());
+
+        let one = lib.create_tag_group("One", &s(&["c"]), None).unwrap();
+        let two = lib.create_tag_group("Two", &[], None).unwrap();
+        lib.add_tags_to_group_too(&two, &s(&["c", "d\n", "c"])).unwrap();
+        let reopened = Library::open(lib.root()).unwrap();
+        let tags_of = |id: &str| reopened.metadata.tags_groups.iter().find(|g| g.id == id).unwrap().tags.clone();
+        assert_eq!(tags_of(&one), s(&["c"]), "the tag stays in its first group");
+        assert_eq!(tags_of(&two), s(&["c", "d"]));
+        assert!(lib.add_tags_to_group_too("nope", &s(&["c"])).is_err());
+
+        lib.record_tag_use(&s(&["c"])).unwrap();
+        lib.clear_tag_history().unwrap();
+        assert_eq!(tags_json(&lib), r#"{"historyTags":[],"starredTags":[]}"#);
     }
 
     #[test]

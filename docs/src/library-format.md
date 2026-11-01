@@ -82,7 +82,7 @@ None of these edits touch the folders' `modificationTime`. The library's top-lev
 
 `{"historyTags":[...],"starredTags":[...]}`, compact, with no trailing newline. Eagle writes it five seconds after a change, through an atomic write.
 
-- `historyTags`: recently used tags, latest first, at most 120. Adding a tag (the tag picker, pasting tags, the inspector) moves it to the front; adding several moves each in turn, so the last one leads. Eagle's imports with tags move them as a batch, so there the first one leads (falcon's imports leave the history alone). A tag taken off its last item is dropped. Renaming a tag renames it in place (or drops it when the new name is already listed); deleting a tag removes it.
+- `historyTags`: recently used tags, latest first, at most 120. Adding a tag (the tag picker, pasting tags, the inspector) moves it to the front; adding several moves each in turn, so the last one leads. Eagle's imports with tags move them as a batch, so there the first one leads (falcon's imports leave the history alone). A tag taken off its last item is dropped. Renaming or merging a tag renames it in place, or drops it when the new name is already listed (the same rule holds for `starredTags` and each tag group's `tags`); deleting a tag removes it. Clear Tag History empties the list.
 - `starredTags`: starred tags, most recently starred first.
 
 Tag groups are not in this file but in `tagsGroups` of the library `metadata.json` (see above).

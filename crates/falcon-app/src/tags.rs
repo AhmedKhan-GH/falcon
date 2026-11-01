@@ -487,6 +487,73 @@ pub fn common_tags(items: &[&Item]) -> Vec<String> {
     first.tags.iter().filter(|t| items.iter().all(|i| i.tags.contains(t))).cloned().collect()
 }
 
+// ---------------------------------------------------------------------------
+// The All Tags page
+
+/// A click on a tag of the All Tags page, after Eagle's tag manager: a
+/// plain click picks only that tag, ⌘ adds or drops it, ⇧ adds the run
+/// from the last clicked tag to it in page order (keeping the rest).
+/// Returns the picked tags and the new anchor.
+pub fn select_click(picked: &[String], anchor: Option<&str>, order: &[String], tag: &str, shift: bool, cmd: bool) -> (Vec<String>, Option<String>) {
+    let mut out = picked.to_vec();
+    if shift && let (Some(a), Some(b)) = (anchor.and_then(|a| order.iter().position(|t| t == a)), order.iter().position(|t| t == tag)) {
+        for t in &order[a.min(b)..=a.max(b)] {
+            if !out.contains(t) {
+                out.push(t.clone());
+            }
+        }
+    } else if cmd || shift {
+        if let Some(at) = out.iter().position(|t| t == tag) {
+            out.remove(at);
+        } else {
+            out.push(tag.to_string());
+        }
+    } else {
+        out = vec![tag.to_string()];
+    }
+    (out, Some(tag.to_string()))
+}
+
+/// How many tags Eagle merges at once: two to five.
+pub fn can_merge(n: usize) -> bool {
+    (2..=5).contains(&n)
+}
+
+/// The All Tags page's sort (Eagle's tag list menu).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum TagSort {
+    #[default]
+    NameUp,
+    NameDown,
+    CountDown,
+    CountUp,
+}
+
+impl TagSort {
+    pub const ALL: [TagSort; 4] = [TagSort::NameUp, TagSort::NameDown, TagSort::CountDown, TagSort::CountUp];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            TagSort::NameUp => "A > Z",
+            TagSort::NameDown => "Z > A",
+            TagSort::CountDown => "Count, High to Low",
+            TagSort::CountUp => "Count, Low to High",
+        }
+    }
+
+    /// Sorts `(tag, count)` pairs; names compare without case, then as
+    /// written, and break ties between equal counts.
+    pub fn apply(self, tags: &mut [(String, usize)]) {
+        let name = |a: &(String, usize), b: &(String, usize)| a.0.to_lowercase().cmp(&b.0.to_lowercase()).then_with(|| a.0.cmp(&b.0));
+        match self {
+            TagSort::NameUp => tags.sort_by(name),
+            TagSort::NameDown => tags.sort_by(|a, b| name(b, a)),
+            TagSort::CountDown => tags.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| name(a, b))),
+            TagSort::CountUp => tags.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| name(a, b))),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -662,6 +729,47 @@ mod tests {
         assert_eq!(got, s(&["Japan", "Kyoto", "V2", "Travel", "Photos"]));
         let two = item("other", &[], &[]);
         assert_eq!(suggestions(&[&one, &two], &folders, &known, &[]), s(&["Japan", "Travel", "Photos"]), "names only for one item");
+    }
+
+    #[test]
+    fn tag_page_clicks() {
+        let order = s(&["a", "b", "c", "d", "e"]);
+        let (p, a) = select_click(&[], None, &order, "b", false, false);
+        assert_eq!((p.clone(), a.clone()), (s(&["b"]), Some("b".into())));
+        let (p, a) = select_click(&p, a.as_deref(), &order, "d", true, false);
+        assert_eq!(p, s(&["b", "c", "d"]));
+        let (p, a) = select_click(&p, a.as_deref(), &order, "c", false, true);
+        assert_eq!(p, s(&["b", "d"]), "⌘ drops a picked tag");
+        let (p, a) = select_click(&p, a.as_deref(), &order, "a", false, true);
+        assert_eq!(p, s(&["b", "d", "a"]));
+        // ⇧ runs from the last clicked tag and keeps the others.
+        let (p, _) = select_click(&p, a.as_deref(), &order, "e", true, false);
+        assert_eq!(p, s(&["b", "d", "a", "c", "e"]));
+        // With no anchor ⇧ toggles just the tag.
+        assert_eq!(select_click(&[], None, &order, "c", true, false).0, s(&["c"]));
+        let (p, _) = select_click(&order, Some("a"), &order, "c", false, false);
+        assert_eq!(p, s(&["c"]));
+    }
+
+    #[test]
+    fn merge_takes_two_to_five() {
+        assert!(!can_merge(1));
+        assert!(can_merge(2) && can_merge(5));
+        assert!(!can_merge(6));
+    }
+
+    #[test]
+    fn tag_sorts() {
+        let base = counts(&[("b", 2), ("A", 5), ("c", 2), ("a", 1)]);
+        let run = |s: TagSort| {
+            let mut v = base.clone();
+            s.apply(&mut v);
+            v.into_iter().map(|x| x.0).collect::<Vec<_>>()
+        };
+        assert_eq!(run(TagSort::NameUp), s(&["A", "a", "b", "c"]));
+        assert_eq!(run(TagSort::NameDown), s(&["c", "b", "a", "A"]));
+        assert_eq!(run(TagSort::CountDown), s(&["A", "b", "c", "a"]));
+        assert_eq!(run(TagSort::CountUp), s(&["a", "b", "c", "A"]));
     }
 
     #[test]

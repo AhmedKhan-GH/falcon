@@ -152,8 +152,12 @@ enum Action {
     BatchRating(Vec<String>, u64),
     QuickAdd(&'static str, String),
     QuickRemove(String),
-    DeleteTag(String),
-    StarTag(String, bool),
+    /// Tags deleted, starred or unstarred, or merged into one name, from
+    /// the All Tags page.
+    DeleteTags(Vec<String>),
+    StarTags(Vec<String>, bool),
+    MergeTags(Vec<String>, String),
+    ClearTagHistory,
     DeleteSmart(String),
     /// Edit ▸ Move Folder on the open folder or smart folder.
     Arrange(crate::organize::Arrange),
@@ -363,7 +367,8 @@ enum Confirm {
     DeleteSmarts(Vec<String>),
     DeleteItems(Vec<String>),
     EmptyTrash,
-    DeleteTag(String),
+    DeleteTags(Vec<String>),
+    ClearTagHistory,
 }
 
 /// Uncommitted inspector text for one item.
@@ -1352,6 +1357,8 @@ impl App {
         if esc {
             if self.ws.picker.open {
                 self.ws.picker.open = false;
+            } else if self.ws.scope == Scope::AllTags && !self.ws.org.tag_sel.is_empty() {
+                self.ws.org.tag_sel.clear();
             } else if self.ws.viewer.is_some() {
                 self.ws.viewer = None;
             } else {
@@ -1888,8 +1895,23 @@ impl App {
                     }
                     self.flash(format!("Renamed “{from}” to “{to}” on {n} items"));
                 }),
-                Action::DeleteTag(tag) => lib.delete_tag(&tag).map(|n| self.flash(format!("Removed “{tag}” from {n} items"))),
-                Action::StarTag(tag, on) => lib.set_tag_starred(&tag, on),
+                Action::DeleteTags(tags) => lib.delete_tags(&tags).map(|n| {
+                    self.ws.org.tag_sel.retain(|t| !tags.contains(t));
+                    let what = if let [one] = tags.as_slice() { format!("“{one}”") } else { export_ui::plural(tags.len(), "tag") };
+                    self.flash(format!("Removed {what} from {}", export_ui::plural(n, "item")));
+                }),
+                Action::StarTags(tags, on) => lib.star_tags(&tags, on),
+                Action::MergeTags(tags, into) => lib.merge_tags(&tags, &into).map(|n| {
+                    let into = into.trim().to_string();
+                    if let Scope::Tag(t) = &self.ws.scope
+                        && tags.contains(t)
+                    {
+                        self.ws.scope = Scope::Tag(into.clone());
+                    }
+                    self.ws.org.tag_sel = vec![into.clone()];
+                    self.flash(format!("Merged {} into “{into}” on {}", export_ui::plural(tags.len(), "tag"), export_ui::plural(n, "item")));
+                }),
+                Action::ClearTagHistory => lib.clear_tag_history().map(|_| self.flash("Cleared the tag history")),
                 Action::DeletePermanently(ids) => {
                     self.select_after_removal(&ids);
                     let r = lib.delete_permanently(&ids);
@@ -2060,9 +2082,11 @@ fn action_label(action: &Action) -> String {
         Action::DeleteSmart(_) => "Delete smart folder".into(),
         Action::Arrange(_) => "Move folder".into(),
         Action::RenameTag(..) => "Rename tag".into(),
-        Action::DeleteTag(_) => "Delete tag".into(),
-        Action::StarTag(_, true) => "Star tag".into(),
-        Action::StarTag(_, false) => "Unstar tag".into(),
+        Action::DeleteTags(t) => if t.len() == 1 { "Delete tag".into() } else { format!("Delete {} tags", t.len()) },
+        Action::StarTags(_, true) => "Star tags".into(),
+        Action::StarTags(_, false) => "Unstar tags".into(),
+        Action::MergeTags(t, _) => format!("Merge {} tags", t.len()),
+        Action::ClearTagHistory => "Clear tag history".into(),
         Action::MoveFolder(..) => "Move folder".into(),
         Action::AddTags(ids, ..) => format!("Tag {}", ids.len()),
         Action::RemoveTags(ids, _) => format!("Untag {}", ids.len()),
@@ -2097,6 +2121,7 @@ fn organize_label(a: &organize_ui::OrgAction) -> String {
         O::GroupColor(..) => "Recolour tag group".into(),
         O::DeleteGroup(_) => "Delete tag group".into(),
         O::AddToGroup(_, tags) => format!("Group {} tags", tags.len()),
+        O::AddToGroupToo(_, tags) => format!("Group {} tags", tags.len()),
         O::RemoveFromGroup(_, tags) => format!("Ungroup {} tags", tags.len()),
         O::SaveFilter(..) => "Save filter".into(),
         O::RenameFilter(..) => "Rename saved filter".into(),
@@ -3757,8 +3782,13 @@ impl App {
 
     fn tag_page(&mut self, ui: &mut Ui, lib: &Library) {
         let filter = self.ws.tag_filter.trim().to_lowercase();
-        let tags: Vec<(String, usize)> =
+        let mut tags: Vec<(String, usize)> =
             logic::tag_counts(lib.items()).into_iter().filter(|(t, _)| filter.is_empty() || t.to_lowercase().contains(&filter)).collect();
+        let sort = self.ws.org.tag_sort;
+        sort.apply(&mut tags);
+        // The order the chips were drawn in last frame is what ⇧-click spans.
+        self.ws.org.tag_order_shown = std::mem::take(&mut self.ws.org.tag_order);
+        self.ws.org.tag_sel.retain(|t| tags.iter().any(|(x, _)| x == t) || lib.tags.starred_tags.contains(t));
         let starred: Vec<(String, usize)> =
             lib.tags.starred_tags.iter().filter_map(|s| tags.iter().find(|(t, _)| t == s).cloned()).collect();
         egui::ScrollArea::vertical().id_salt("tags-page").auto_shrink([false, false]).show(ui, |ui| {
@@ -3794,10 +3824,19 @@ impl App {
             if !starred.is_empty() {
                 groups.push((format!("{}  Starred", ic::STAR), starred.clone()));
             }
+            let letter = |t: &str| {
+                let first = t.chars().next().map_or('#', |c| c.to_uppercase().next().unwrap_or(c));
+                if first.is_alphabetic() { first } else { '#' }
+            };
+            // A-Z sections (Z-A for Z > A, # last either way), the sort inside each.
+            let down = sort == crate::tags::TagSort::NameDown;
+            tags.sort_by(|a, b| {
+                let (x, y) = (letter(&a.0), letter(&b.0));
+                (x == '#').cmp(&(y == '#')).then_with(|| if down { y.cmp(&x) } else { x.cmp(&y) })
+            });
             let mut current: Option<char> = None;
             for (tag, n) in tags {
-                let first = tag.chars().next().map_or('#', |c| c.to_uppercase().next().unwrap_or(c));
-                let first = if first.is_alphabetic() { first } else { '#' };
+                let first = letter(&tag);
                 if current != Some(first) {
                     groups.push((first.to_string(), Vec::new()));
                     current = Some(first);
@@ -3847,33 +3886,91 @@ impl App {
         let size = vec2(name_g.size().x + count_g.size().x + 30.0 + dot_w, 28.0);
         let (rect, resp) = ui.allocate_exact_size(size, Sense::click_and_drag());
         App::tag_chip_drag(&resp, tag);
-        let fill = if resp.hovered() { t::p().button_hover } else { t::p().button };
+        self.ws.org.tag_order.push(tag.to_string());
+        let picked = self.ws.org.tag_sel.iter().any(|t| t == tag);
+        let fill = if picked {
+            t::p().primary.gamma_multiply(0.45)
+        } else if resp.hovered() {
+            t::p().button_hover
+        } else {
+            t::p().button
+        };
         ui.painter().rect_filled(rect, CornerRadius::same(6), fill);
+        if picked {
+            ui.painter().rect_stroke(rect, CornerRadius::same(6), Stroke::new(1.0, t::p().primary), StrokeKind::Inside);
+        }
         let cy = rect.center().y;
         if let Some(c) = dot {
             ui.painter().circle_filled(Pos2::new(rect.left() + 14.0, cy), 4.0, c);
         }
         ui.painter().galley(Pos2::new(rect.left() + 11.0 + dot_w, cy - name_g.size().y / 2.0), name_g.clone(), t::p().text);
         ui.painter().galley(Pos2::new(rect.right() - 11.0 - count_g.size().x, cy - count_g.size().y / 2.0), count_g, t::p().text_muted);
-        if resp.clicked() {
+        // Eagle's tag manager: a click picks (⌘ and ⇧ pick more), a
+        // double-click shows the tag's items.
+        if resp.double_clicked() {
             self.go(Scope::Tag(tag.to_string()));
+        } else if resp.clicked() {
+            let m = ui.input(|i| i.modifiers);
+            let o = &mut self.ws.org;
+            let (sel, anchor) = crate::tags::select_click(&o.tag_sel, o.tag_anchor.as_deref(), &o.tag_order_shown, tag, m.shift, m.command);
+            o.tag_sel = sel;
+            o.tag_anchor = anchor;
         }
-        let starred = lib.tags.starred_tags.iter().any(|s| s == tag);
+        if resp.secondary_clicked() && !picked {
+            self.ws.org.tag_sel = vec![tag.to_string()];
+            self.ws.org.tag_anchor = Some(tag.to_string());
+        }
         resp.context_menu(|ui| {
-            ui.set_min_width(180.0);
-            if ui.button("Rename…").clicked() {
-                self.ws.tag_rename = Some((tag.to_string(), tag.to_string()));
-            }
-            if ui.button(if starred { "Unstar" } else { "Star" }).clicked() {
-                self.ws.actions.push(Action::StarTag(tag.to_string(), !starred));
-            }
-            self.tag_group_menu(ui, lib, tag);
-            ui.separator();
-            if ui.button(RichText::new("Delete Tag").color(t::p().icon_red)).clicked() {
-                self.ws.confirm = Some(Confirm::DeleteTag(tag.to_string()));
-            }
+            let tags = if self.ws.org.tag_sel.is_empty() { vec![tag.to_string()] } else { self.ws.org.tag_sel.clone() };
+            self.tags_menu(ui, lib, &tags);
         });
-        resp.on_hover_text("Click to show items · right-click to rename, star or delete. Renaming to an existing tag merges them.");
+        resp.on_hover_text("Click to pick, ⌘ or ⇧ to pick more · double-click to show items · right-click for more. Renaming to an existing tag merges them.");
+    }
+
+    /// The menu of picked tags on the All Tags page, after Eagle's.
+    fn tags_menu(&mut self, ui: &mut Ui, lib: &Library, tags: &[String]) {
+        ui.set_min_width(200.0);
+        let n = tags.len();
+        if ui.button(if n == 1 { "Show Items".to_string() } else { format!("Show Items with Any of {n} Tags") }).clicked() {
+            match tags {
+                [one] => self.go(Scope::Tag(one.clone())),
+                _ => self.filter_any_tags(tags.to_vec()),
+            }
+        }
+        ui.separator();
+        let all_starred = tags.iter().all(|t| lib.tags.starred_tags.contains(t));
+        if ui.button(if all_starred { "Unstar" } else { "Star" }).clicked() {
+            self.ws.actions.push(Action::StarTags(tags.to_vec(), !all_starred));
+        }
+        if let [one] = tags
+            && ui.button("Rename…").clicked()
+        {
+            self.ws.tag_rename = Some((one.clone(), one.clone()));
+        }
+        if n > 1 {
+            let merge = ui.add_enabled(crate::tags::can_merge(n), egui::Button::new(format!("Merge {n} Tags…")));
+            if merge.on_disabled_hover_text("Eagle merges two to five tags at a time").clicked() {
+                self.ws.org.merge = Some((tags.to_vec(), tags[0].clone()));
+            }
+        }
+        ui.separator();
+        self.tag_group_menu(ui, lib, tags);
+        ui.separator();
+        let label = if n == 1 { "Delete Tag".to_string() } else { format!("Delete {n} Tags") };
+        if ui.button(RichText::new(label).color(t::p().icon_red)).clicked() {
+            self.ws.confirm = Some(Confirm::DeleteTags(tags.to_vec()));
+        }
+    }
+
+    /// Eagle's Filter with Tags: All, with the tag filter set to any of
+    /// `tags`.
+    fn filter_any_tags(&mut self, tags: Vec<String>) {
+        self.go(Scope::All);
+        self.ws.filter.tags.includes = tags;
+        self.ws.filter.tags.excludes.clear();
+        self.ws.filter.tags.empty = false;
+        self.ws.filter.tags.logic = Logic::Or;
+        self.ws.show_filter = true;
     }
 }
 
@@ -4887,10 +4984,15 @@ impl App {
                     "The files are removed from the library and cannot be restored.".to_string(),
                     "Delete",
                 ),
-                Confirm::DeleteTag(tag) => (
-                    format!("Delete the tag “{tag}”?"),
-                    "It is removed from every item. The items themselves stay.".to_string(),
-                    "Delete Tag",
+                Confirm::DeleteTags(tags) => (
+                    if let [one] = tags.as_slice() { format!("Delete the tag “{one}”?") } else { format!("Delete {} tags?", tags.len()) },
+                    "They are removed from every item. The items themselves stay.".to_string(),
+                    if tags.len() == 1 { "Delete Tag" } else { "Delete Tags" },
+                ),
+                Confirm::ClearTagHistory => (
+                    "Clear the tag history?".to_string(),
+                    "The tag picker's Recent tags start over. Tags stay on their items.".to_string(),
+                    "Clear",
                 ),
                 Confirm::EmptyTrash => {
                     let n = lib.items().iter().filter(|i| i.is_deleted).count();
@@ -4915,7 +5017,8 @@ impl App {
                             Confirm::DeleteSmarts(ids) => Action::Folders(folders_ui::FolderAction::DeleteSmart(ids)),
                             Confirm::DeleteItems(ids) => Action::DeletePermanently(ids),
                             Confirm::EmptyTrash => Action::EmptyTrash,
-                            Confirm::DeleteTag(t) => Action::DeleteTag(t),
+                            Confirm::DeleteTags(t) => Action::DeleteTags(t),
+                            Confirm::ClearTagHistory => Action::ClearTagHistory,
                         });
                         self.ws.confirm = None;
                     }

@@ -147,14 +147,20 @@ impl Library {
             item.tags = tags;
             self.update_item(item)?;
         }
+        // As Eagle does: where the new name is listed already the old one
+        // goes, otherwise the new name takes the old one's place.
         let swap = |list: &mut Vec<String>| {
-            for t in list.iter_mut() {
-                if t == from {
-                    *t = to.to_string();
+            if list.iter().any(|t| t == to) {
+                list.retain(|t| t != from);
+            } else {
+                for t in list.iter_mut() {
+                    if t == from {
+                        *t = to.to_string();
+                    }
                 }
+                let mut seen = std::collections::HashSet::new();
+                list.retain(|t| seen.insert(t.clone()));
             }
-            let mut seen = std::collections::HashSet::new();
-            list.retain(|t| seen.insert(t.clone()));
         };
         swap(&mut self.tags.history_tags);
         swap(&mut self.tags.starred_tags);
