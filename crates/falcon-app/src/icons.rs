@@ -46,3 +46,5 @@ pub const FLOPPY_DISK: &str = "\u{E248}";
 pub const LOCK_SIMPLE: &str = "\u{E308}";
 pub const LOCK_SIMPLE_OPEN: &str = "\u{E30A}";
 pub const FLIP_HORIZONTAL: &str = "\u{ED6A}";
+pub const BELL: &str = "\u{E0CE}";
+pub const MOUSE: &str = "\u{E33A}";

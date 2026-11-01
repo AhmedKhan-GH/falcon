@@ -70,6 +70,8 @@ struct Saved {
     recent: Vec<PathBuf>,
     layout: Option<Layout>,
     prefs: crate::prefs::Prefs,
+    /// The Preferences pane shown last.
+    prefs_pane: crate::prefs::Section,
     /// Where the collect window was last.
     collect_pos: Option<[f32; 2]>,
     /// Changed keyboard shortcuts (see `shortcuts.rs`).
@@ -615,6 +617,7 @@ impl App {
         app.recent = saved.recent.into_iter().filter(|p| p.is_dir()).collect();
         app.ws.layout = saved.layout.unwrap_or_default();
         app.prefs = saved.prefs.sanitized();
+        app.prefs_window.set_pane(saved.prefs_pane);
         app.shortcuts = saved.shortcuts;
         app.collect.pos = saved.collect_pos.map(Pos2::from);
         app.video.volume = saved.video_volume.unwrap_or(1.0).clamp(0.0, 1.0);
@@ -4220,6 +4223,7 @@ impl eframe::App for App {
             recent: self.recent.clone(),
             layout: Some(self.ws.layout),
             prefs: self.prefs.clone(),
+            prefs_pane: self.prefs_window.pane(),
             shortcuts: self.shortcuts.clone(),
             collect_pos: self.collect.pos.map(<[f32; 2]>::from),
             video_volume: Some(self.video.volume),

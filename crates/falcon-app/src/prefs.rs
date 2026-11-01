@@ -1,6 +1,8 @@
 //! Preferences: the settings falcon honours, and a window for them laid
-//! out after Eagle's (a section list on the left, the section on the
-//! right, Save, Apply and Cancel at the bottom).
+//! out after Eagle's (a search box and the pane list on the left, the pane
+//! on the right, Save, Apply and Cancel at the bottom). Each pane is one
+//! function that adds blocks of settings to a `Page`; the search shows the
+//! matching blocks of every pane.
 
 use std::ops::RangeInclusive;
 
@@ -155,23 +157,31 @@ pub struct Draft {
     pub keys: Shortcuts,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+/// The panes, in Eagle's order. Eagle's Screenshot, AI, MCP and Proxy
+/// panes have no counterpart (falcon has no capture, plugins or network
+/// features), and a pane appears only once it has a setting that works.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
+#[serde(rename_all = "lowercase")]
 pub enum Section {
     #[default]
     General,
+    Controls,
     Preview,
     Shortcuts,
+    Notification,
     Developer,
 }
 
 impl Section {
-    pub const ALL: [Section; 4] = [Section::General, Section::Preview, Section::Shortcuts, Section::Developer];
+    pub const ALL: [Section; 6] = [Section::General, Section::Controls, Section::Preview, Section::Shortcuts, Section::Notification, Section::Developer];
 
     pub fn label(self) -> &'static str {
         match self {
             Section::General => "General",
+            Section::Controls => "Controls",
             Section::Preview => "Preview",
             Section::Shortcuts => "Shortcuts",
+            Section::Notification => "Notification",
             Section::Developer => "Developer",
         }
     }
@@ -179,11 +189,33 @@ impl Section {
     fn icon(self) -> &'static str {
         match self {
             Section::General => crate::icons::GEAR,
+            Section::Controls => crate::icons::MOUSE,
             Section::Preview => crate::icons::EYE,
             Section::Shortcuts => crate::icons::KEYBOARD,
+            Section::Notification => crate::icons::BELL,
             Section::Developer => crate::icons::CODE,
         }
     }
+
+    /// Eagle separates its pane list into groups; a line goes above the
+    /// first pane of each group.
+    fn group(self) -> u8 {
+        match self {
+            Section::General => 0,
+            Section::Controls | Section::Preview | Section::Shortcuts => 1,
+            Section::Notification => 2,
+            Section::Developer => 3,
+        }
+    }
+}
+
+/// Whether a block of settings matches the search: every word typed must
+/// appear in its pane's name, its title or one of its keywords (the labels
+/// of its settings and other words for them), ignoring case. An empty
+/// search matches everything.
+pub fn matches(query: &str, fields: &[&str]) -> bool {
+    let hay = fields.join(" ").to_lowercase();
+    query.split_whitespace().all(|w| hay.contains(&w.to_lowercase()))
 }
 
 /// The Preferences window. Edits go to a draft; Save and Apply hand it to
@@ -192,6 +224,9 @@ impl Section {
 pub struct Window {
     pub open: bool,
     section: Section,
+    /// The search across every pane; while it has text the panes give way
+    /// to the blocks that match.
+    query: String,
     draft: Option<Draft>,
     port_text: String,
     recorder: Recorder,
@@ -203,12 +238,56 @@ pub struct Window {
 const SIZE: egui::Vec2 = vec2(720.0, 500.0);
 const NAV_WIDTH: f32 = 180.0;
 
+/// What a pane draws into: blocks of settings, filtered by the search.
+/// Each pane is one function below that adds its blocks in order; a new
+/// setting goes into its block (adding its words to the block's keywords
+/// so the search finds it), or a new block where Eagle has it.
+pub struct Page<'u> {
+    ui: &'u mut Ui,
+    pane: Section,
+    query: String,
+    /// How many blocks matched the search, and whether this pane's name
+    /// has been drawn above its first one.
+    hits: usize,
+    headed: bool,
+    /// A pane to switch to, asked for from a search result.
+    goto: Option<Section>,
+}
+
+impl Page<'_> {
+    fn searching(&self) -> bool {
+        !self.query.trim().is_empty()
+    }
+
+    /// Draws a titled block of settings if it matches the search.
+    pub fn block(&mut self, title: &str, keywords: &[&str], add: impl FnOnce(&mut Ui)) {
+        let mut fields = vec![self.pane.label(), title];
+        fields.extend_from_slice(keywords);
+        if !matches(&self.query, &fields) {
+            return;
+        }
+        if self.searching() && !self.headed {
+            self.headed = true;
+            self.ui.add_space(if self.hits == 0 { 4.0 } else { 8.0 });
+            self.ui.label(RichText::new(self.pane.label().to_uppercase()).size(11.0).color(t::p().text_muted));
+        }
+        self.hits += 1;
+        let ui = &mut *self.ui;
+        ui.add_space(4.0);
+        ui.label(RichText::new(title).strong().size(13.0));
+        ui.add_space(2.0);
+        ui.indent(title, add);
+        ui.add_space(10.0);
+    }
+}
+
 impl Window {
     pub fn show_with(&mut self, draft: Draft) {
         self.port_text = draft.prefs.api_port.to_string();
         self.applied_theme = draft.prefs.theme;
         self.draft = Some(draft);
         self.open = true;
+        self.query.clear();
         self.recorder.stop();
     }
 
@@ -216,6 +295,15 @@ impl Window {
         self.open = false;
         self.draft = None;
         self.recorder.stop();
+    }
+
+    /// The pane shown last, remembered across launches as Eagle does.
+    pub fn pane(&self) -> Section {
+        self.section
+    }
+
+    pub fn set_pane(&mut self, s: Section) {
+        self.section = s;
     }
 
     /// Draws the window; returns a draft to apply on Save or Apply.
@@ -246,10 +334,12 @@ impl Window {
             let mut nav_ui = ui.new_child(egui::UiBuilder::new().max_rect(nav.shrink2(vec2(12.0, 0.0))));
             self.nav(&mut nav_ui);
 
+            let searching = !self.query.trim().is_empty();
             let inner = body.shrink2(vec2(0.0, 8.0)).with_max_x(body.right() - 8.0);
             ui.painter().rect(inner, CornerRadius::same(8), t::p().main, Stroke::new(1.0, t::p().divider), egui::StrokeKind::Inside);
             let header = egui::Rect::from_min_size(inner.min, vec2(inner.width(), t::BAR_HEIGHT));
-            ui.painter().text(header.left_center() + vec2(16.0, 0.0), Align2::LEFT_CENTER, self.section.label(), font(14.0), t::p().text);
+            let heading = if searching { "Search" } else { self.section.label() };
+            ui.painter().text(header.left_center() + vec2(16.0, 0.0), Align2::LEFT_CENTER, heading, font(14.0), t::p().text);
             let x = egui::Rect::from_center_size(header.right_center() - vec2(24.0, 0.0), vec2(24.0, 24.0));
             let xr = ui.interact(x, ui.scope_id().with("close"), Sense::click());
             if xr.hovered() {
@@ -261,12 +351,30 @@ impl Window {
             let footer = egui::Rect::from_min_max(egui::pos2(inner.left(), inner.bottom() - 52.0), inner.max);
             let content = egui::Rect::from_min_max(egui::pos2(inner.left(), header.bottom()), egui::pos2(inner.right(), footer.top()));
             let mut c = ui.new_child(egui::UiBuilder::new().max_rect(content.shrink2(vec2(16.0, 0.0))));
-            egui::ScrollArea::vertical().auto_shrink(false).show(&mut c, |ui| match self.section {
-                Section::General => general(ui, &mut draft),
-                Section::Preview => preview(ui, &mut draft.prefs),
-                Section::Shortcuts => self.recorder.ui(ui, &mut draft.keys),
-                Section::Developer => developer(ui, &mut draft.prefs, &mut self.port_text, port.as_ref().err()),
+            let port_error = port.as_ref().err().cloned();
+            let goto = egui::ScrollArea::vertical().id_salt(("prefs", searching, self.section)).auto_shrink(false).show(&mut c, |ui| {
+                let panes: Vec<Section> = if searching { Section::ALL.to_vec() } else { vec![self.section] };
+                let mut hits = 0;
+                let mut goto = None;
+                for s in panes {
+                    let mut page = Page { ui, pane: s, query: self.query.clone(), hits, headed: false, goto: None };
+                    self.pane_ui(&mut page, &mut draft, port_error.as_ref());
+                    hits = page.hits;
+                    goto = goto.or(page.goto);
+                }
+                if searching && hits == 0 {
+                    ui.add_space(40.0);
+                    ui.vertical_centered(|ui| {
+                        ui.label(RichText::new("No settings match").size(14.0).color(t::p().text));
+                        note(ui, "Try another word, or clear the search to browse the panes.");
+                    });
+                }
+                goto
             });
+            if let Some(s) = goto.inner {
+                self.section = s;
+                self.query.clear();
+            }
 
             ui.painter().hline(footer.x_range(), footer.top(), Stroke::new(1.0, t::p().divider));
             let mut f = ui.new_child(egui::UiBuilder::new().max_rect(footer.shrink2(vec2(16.0, 10.0))).layout(egui::Layout::right_to_left(egui::Align::Center)));
@@ -294,12 +402,55 @@ impl Window {
         result
     }
 
+    /// Draws one pane's blocks.
+    fn pane_ui(&mut self, p: &mut Page, d: &mut Draft, port_error: Option<&String>) {
+        match p.pane {
+            Section::General => general(p, d),
+            Section::Controls => controls(p, d),
+            Section::Preview => preview(p, d),
+            Section::Shortcuts => self.shortcuts(p, d),
+            Section::Notification => notification(p, d),
+            Section::Developer => developer(p, d, &mut self.port_text, port_error),
+        }
+    }
+
+    fn shortcuts(&mut self, p: &mut Page, d: &mut Draft) {
+        if p.searching() {
+            // The shortcut list has its own search, in its pane.
+            let mut go = false;
+            p.block("Keyboard shortcuts", &["keys", "hotkey", "chord", "key bindings"], |ui| {
+                go = ui.button("Show the Shortcuts pane").clicked();
+            });
+            if go {
+                p.goto = Some(Section::Shortcuts);
+            }
+        } else {
+            self.recorder.ui(p.ui, &mut d.keys);
+        }
+    }
+
     fn nav(&mut self, ui: &mut Ui) {
         let (title, _) = ui.allocate_exact_size(vec2(ui.available_width(), t::BAR_HEIGHT), Sense::hover());
         ui.painter().text(title.left_center(), Align2::LEFT_CENTER, "Preferences", font(14.0), t::p().text);
+        let search = ui.add(
+            egui::TextEdit::singleline(&mut self.query)
+                .hint_text(RichText::new(format!("{}  Search", crate::icons::MAGNIFYING_GLASS)).color(t::p().text_muted))
+                .desired_width(f32::INFINITY),
+        );
+        if search.changed() {
+            self.recorder.stop();
+        }
+        ui.add_space(6.0);
+        let searching = !self.query.trim().is_empty();
+        let mut group = Section::ALL[0].group();
         for s in Section::ALL {
-            let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 32.0), Sense::click());
-            let fill = if s == self.section {
+            if s.group() != group {
+                group = s.group();
+                let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 9.0), Sense::hover());
+                ui.painter().hline(r.x_range().shrink(6.0), r.center().y, Stroke::new(1.0, t::p().divider));
+            }
+            let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 30.0), Sense::click());
+            let fill = if s == self.section && !searching {
                 t::p().row_selected
             } else if resp.hovered() {
                 t::p().row_hover
@@ -311,26 +462,20 @@ impl Window {
             ui.painter().text(rect.left_center() + vec2(30.0, 0.0), Align2::LEFT_CENTER, s.label(), font(13.0), t::p().text);
             if resp.clicked() {
                 self.section = s;
+                self.query.clear();
                 self.recorder.stop();
             }
         }
     }
 }
 
-fn block(ui: &mut Ui, title: &str, add: impl FnOnce(&mut Ui)) {
-    ui.add_space(4.0);
-    ui.label(RichText::new(title).strong().size(13.0));
-    ui.add_space(2.0);
-    ui.indent(title, add);
-    ui.add_space(10.0);
-}
-
 fn note(ui: &mut Ui, text: &str) {
     ui.label(RichText::new(text).size(11.0).color(t::p().text_muted));
 }
 
-fn general(ui: &mut Ui, d: &mut Draft) {
-    block(ui, "Theme", |ui| {
+/// General: appearance, the window, and how imports behave.
+fn general(p: &mut Page, d: &mut Draft) {
+    p.block("Appearance", &["theme", "colour", "color", "dark", "light", "gray", "blue", "purple", "auto"], |ui| {
         ui.horizontal(|ui| {
             for theme in Theme::all() {
                 if ui.selectable_value(&mut d.prefs.theme, theme, theme.to_string()).changed() {
@@ -340,33 +485,49 @@ fn general(ui: &mut Ui, d: &mut Draft) {
             }
         });
     });
-    block(ui, "Window", |ui| {
+    p.block("Window", &["sidebar", "inspector", "panel", "show"], |ui| {
         ui.checkbox(&mut d.panels.sidebar, "Show the sidebar");
         ui.checkbox(&mut d.panels.inspector, "Show the inspector");
     });
-    block(ui, "Import", |ui| {
-        ui.checkbox(&mut d.prefs.keywords_as_tags, "Add IPTC and XMP keywords as tags when importing images");
+    p.block("Importing", &["import", "collect", "keywords", "iptc", "xmp", "tags", "duplicate", "already", "select", "new items"], |ui| {
+        ui.checkbox(&mut d.prefs.auto_select, "Select the new items after importing");
         ui.checkbox(&mut d.prefs.notify_duplicates, "Ask what to do when an imported file is already in the library");
         note(ui, "When off, such files are imported as new items.");
-        ui.checkbox(&mut d.prefs.auto_select, "Select the new items after importing");
+        ui.checkbox(&mut d.prefs.keywords_as_tags, "Add IPTC and XMP keywords as tags when importing images");
     });
 }
 
-fn preview(ui: &mut Ui, p: &mut Prefs) {
-    block(ui, "Hover zoom", |ui| {
-        ui.radio_value(&mut p.hover_zoom, true, "Show the zoom button on hovered cards");
-        ui.radio_value(&mut p.hover_zoom, false, "Hide it");
+/// Controls: what the mouse and the keyboard do.
+fn controls(p: &mut Page, d: &mut Draft) {
+    p.block("Mouse", &["hover", "zoom button", "cards", "double click", "middle button", "wheel", "scroll"], |ui| {
+        ui.label("Zoom button on hovered cards");
+        ui.radio_value(&mut d.prefs.hover_zoom, true, "Show");
+        ui.radio_value(&mut d.prefs.hover_zoom, false, "Hide");
         note(ui, "Holding Z shows the preview either way.");
     });
-    block(ui, "Fonts", |ui| {
-        ui.checkbox(&mut p.font_style_tags, "Add style tags (Regular, Bold, Italic) when importing fonts");
+}
+
+/// Preview: how the viewer shows each kind of file. Eagle's order is
+/// image, video, GIF, then fonts.
+fn preview(p: &mut Page, d: &mut Draft) {
+    p.block("Fonts", &["font", "style", "regular", "bold", "italic", "tags", "import"], |ui| {
+        ui.checkbox(&mut d.prefs.font_style_tags, "Add style tags (Regular, Bold, Italic) when importing fonts");
     });
 }
 
-fn developer(ui: &mut Ui, p: &mut Prefs, port_text: &mut String, error: Option<&String>) {
-    block(ui, "HTTP API", |ui| {
-        ui.checkbox(&mut p.api_enabled, "Run the local API while a library is open");
-        ui.add_enabled_ui(p.api_enabled, |ui| {
+/// Notification: which notices falcon shows.
+fn notification(p: &mut Page, d: &mut Draft) {
+    p.block("Pop-ups", &["notice", "notification", "duplicate", "already", "import"], |ui| {
+        ui.checkbox(&mut d.prefs.notify_duplicates, "Ask what to do when an imported file is already in the library");
+    });
+}
+
+/// Developer: the local HTTP API.
+fn developer(p: &mut Page, d: &mut Draft, port_text: &mut String, error: Option<&String>) {
+    let pr = &mut d.prefs;
+    p.block("HTTP API", &["api", "server", "port", "local", "plugin"], |ui| {
+        ui.checkbox(&mut pr.api_enabled, "Run the local API while a library is open");
+        ui.add_enabled_ui(pr.api_enabled, |ui| {
             ui.horizontal(|ui| {
                 ui.label("First port");
                 ui.add(egui::TextEdit::singleline(port_text).desired_width(70.0));
@@ -376,7 +537,7 @@ fn developer(ui: &mut Ui, p: &mut Prefs, port_text: &mut String, error: Option<&
                     ui.label(RichText::new(e).size(11.0).color(t::p().icon_red));
                 }
                 None => {
-                    let first = parse_port(port_text).unwrap_or(p.api_port);
+                    let first = parse_port(port_text).unwrap_or(pr.api_port);
                     note(ui, &format!("falcon tries ports {first} to {} and never uses Eagle's {EAGLE_PORT}.", first + PORT_SPAN - 1));
                 }
             }
@@ -489,6 +650,46 @@ mod tests {
         assert_eq!(saved_theme(Some(&Mem(None))), Theme::Dark);
         assert_eq!(saved_theme(Some(&Mem(Some("garbage".into())))), Theme::Dark);
         assert_eq!(saved_theme(None), Theme::Dark);
+    }
+
+    #[test]
+    fn search_matches_every_word() {
+        assert!(matches("", &["General", "Appearance"]));
+        assert!(matches("  ", &["General"]));
+        assert!(matches("theme", &["General", "Appearance", "theme", "dark"]));
+        assert!(matches("THE dark", &["General", "Appearance", "theme", "dark"]));
+        assert!(matches("gener", &["General", "Window"]), "a pane's name finds its blocks");
+        assert!(!matches("theme port", &["General", "Appearance", "theme"]));
+        assert!(!matches("zzz", &["General"]));
+    }
+
+    #[test]
+    fn panes_follow_eagles_order() {
+        let labels: Vec<_> = Section::ALL.iter().map(|s| s.label()).collect();
+        assert_eq!(labels, ["General", "Controls", "Preview", "Shortcuts", "Notification", "Developer"]);
+        let groups: Vec<_> = Section::ALL.iter().map(|s| s.group()).collect();
+        assert!(groups.windows(2).all(|w| w[0] <= w[1]), "groups are contiguous");
+        let s: Section = serde_json::from_str(r#""preview""#).unwrap();
+        assert_eq!(s, Section::Preview);
+        assert_eq!(serde_json::to_string(&Section::Developer).unwrap(), r#""developer""#);
+    }
+
+    /// Prefs saved before the panes were reorganised load unchanged.
+    #[test]
+    fn old_prefs_still_load() {
+        let old = r#"{"hover_zoom":false,"keywords_as_tags":true,"notify_duplicates":false,"auto_select":false,
+            "font_style_tags":false,"api_enabled":false,"api_port":42000,"collect_folder":"F1","theme":"blue"}"#;
+        let p: Prefs = serde_json::from_str(old).unwrap();
+        assert!(!p.hover_zoom && p.keywords_as_tags && !p.notify_duplicates && !p.auto_select && !p.font_style_tags && !p.api_enabled);
+        assert_eq!((p.api_port, p.collect_folder.as_deref(), p.theme), (42000, Some("F1"), Theme::Blue));
+        // And the same through eframe's RON storage, as the app saves it.
+        #[derive(serde::Deserialize)]
+        struct Saved {
+            prefs: Prefs,
+        }
+        let mem = Mem(Some(r#"(tile: Some(150.0), prefs: (hover_zoom: false, api_port: 42000, theme: gray, backup_on_change: true))"#.into()));
+        let p = eframe::get_value::<Saved>(&mem, eframe::APP_KEY).unwrap().prefs;
+        assert_eq!((p.hover_zoom, p.api_port, p.theme), (false, 42000, Theme::Gray));
     }
 
     #[test]
