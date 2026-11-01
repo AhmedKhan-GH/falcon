@@ -11,6 +11,7 @@ use falcon_library::model::Folder;
 use falcon_library::smart::SmartFolder;
 use falcon_library::Library;
 
+use crate::locale::tr;
 use crate::app::{Action, App, Confirm, DragFolder, DragItems, DragQuick, Switch};
 use crate::icons as ic;
 use crate::logic::{self, NavCounts, Scope};
@@ -365,7 +366,7 @@ impl App {
             if ui.button("Empty Cache and Reload…").clicked() {
                 self.confirm_reload = true;
             }
-            if ui.button("Clear Invalid Content…").on_hover_text("Find empty or broken item folders and clean them up").clicked() {
+            if ui.button(tr("Clear Invalid Content…")).on_hover_text(tr("Find empty or broken item folders and clean them up")).clicked() {
                 self.clear_invalid_content();
             }
             if ui.button("Show in Finder").clicked() {

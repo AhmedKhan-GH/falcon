@@ -9,13 +9,25 @@ use std::ops::RangeInclusive;
 use std::sync::mpsc::{Receiver, channel};
 use std::time::Duration;
 
+use crate::locale::{tr, tr_key, trf};
+
 /// How long after the server starts the check runs.
 const DELAY: Duration = Duration::from_secs(1);
 /// How long each connection attempt may take.
 const TIMEOUT: Duration = Duration::from_millis(500);
 
 /// Title of the alert both warnings use.
-pub const TITLE: &str = "Local API unavailable";
+pub const TITLE: &str = tr_key("Local API unavailable");
+
+/// The title as shown, in the current language; [`TITLE`] stays the key.
+pub fn title() -> &'static str {
+    tr(TITLE)
+}
+
+/// Whether `shown` is this warning's title, in any language.
+pub fn is_title(shown: &str) -> bool {
+    shown == TITLE || shown == title()
+}
 
 /// Whether any address `localhost` resolves to (IPv4 or IPv6 loopback)
 /// accepts a connection on `port`.
@@ -26,16 +38,18 @@ pub fn localhost_reaches(port: u16, timeout: Duration) -> bool {
 
 /// The warning for a server that couldn't start on any port of `ports`.
 pub fn start_failed_message(ports: &RangeInclusive<u16>) -> String {
-    format!(
-        "The local API couldn't start: ports {}–{} are all in use. Apps and browser extensions that talk to Falcon won't reach it. Choose another first port in Preferences ▸ Developer.",
-        ports.start(),
-        ports.end()
+    trf(
+        "The local API couldn't start: ports {first}–{last} are all in use. Apps and browser extensions that talk to Falcon won't reach it. Choose another first port in Preferences ▸ Developer.",
+        &[("first", ports.start()), ("last", ports.end())],
     )
 }
 
 /// The warning for a server that runs but isn't reached through `localhost`.
 pub fn unreachable_message(port: u16) -> String {
-    format!("The local API is running on port {port} but can't be reached through localhost, so browser extensions can't reach Falcon. A proxy or VPN may be redirecting localhost.")
+    trf(
+        "The local API is running on port {port} but can't be reached through localhost, so browser extensions can't reach Falcon. A proxy or VPN may be redirecting localhost.",
+        &[("port", &port)],
+    )
 }
 
 /// A check in flight.

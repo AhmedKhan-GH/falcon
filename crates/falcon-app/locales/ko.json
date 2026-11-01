@@ -13,6 +13,10 @@
   "API on http://localhost:{port}": "API: http://localhost:{port}",
   "API stopped": "API가 중지되었습니다",
   "About Falcon": "Falcon 정보",
+  "About {h} h {m} min left": "약 {h}시간 {m}분 남음",
+  "About {n} h left": "약 {n}시간 남음",
+  "About {n} min left": "약 {n}분 남음",
+  "About {n} s left": "약 {n}초 남음",
   "Accuracy": "정확도",
   "Actions": "동작",
   "Activated": "활성화됨",
@@ -43,20 +47,35 @@
   "Add to Folders…": "폴더에 추가…",
   "Add to Group": "그룹에 추가",
   "Add to Last Used Folder": "마지막으로 사용한 폴더에 추가",
+  "Add to Other Library": "다른 라이브러리에 추가",
   "Add to Quick Access": "빠른 접근에 추가",
   "Add to the last used folder": "마지막으로 사용한 폴더에 추가",
   "Add {n} items": {
     "other": "항목 {n}개 추가"
   },
+  "Add {n} items to {library}": {
+    "other": "항목 {n}개를 {library}에 추가"
+  },
   "Add {n} to folder": "{n}개를 폴더에 추가",
+  "Added the folder and {n} items to {target}": {
+    "other": "폴더와 항목 {n}개를 {target}에 추가했습니다"
+  },
   "Added the folder's tags to {n} items": {
     "other": "폴더의 태그를 항목 {n}개에 추가했습니다"
   },
+  "Added the smart folder to {target}": "스마트 폴더를 {target}에 추가했습니다",
+  "Added the tag group to {target}": "태그 그룹을 {target}에 추가했습니다",
   "Added {count}": "{count}개 추가됨",
   "Added {count}, {failed} failed": "{count}개 추가됨, {failed}개 실패",
   "Added {items}, {folders} and {others} from {name}.": "{name}에서 {items}, {folders}, {others}을(를) 추가했습니다.",
   "Added {n} items to": {
     "other": "항목 {n}개 추가:"
+  },
+  "Added {n} items to {target}": {
+    "other": "항목 {n}개를 {target}에 추가했습니다"
+  },
+  "Added {n} items to {target}; it already had the folder": {
+    "other": "항목 {n}개를 {target}에 추가했습니다. 폴더는 이미 있었습니다"
   },
   "Added {n} to": "{n}개 추가됨:",
   "Adding {n} items to the library": {
@@ -78,6 +97,7 @@
   "All Tags": "모든 태그",
   "All Tags  {n}": "모든 태그  {n}",
   "All Tags Are in Groups": "모든 태그가 그룹에 있습니다",
+  "Allow Falcon in System Settings ▸ General ▸ Login Items.": "시스템 설정 ▸ 일반 ▸ 로그인 항목에서 Falcon을 허용하세요.",
   "Almost there…": "거의 다 됐습니다…",
   "Alphabet": "가나다순",
   "Already in the library": "이미 라이브러리에 있음",
@@ -122,6 +142,7 @@
   "Blue": "블루",
   "Bookmark": "북마크",
   "Camera": "카메라",
+  "Can't add to that library": "해당 라이브러리에 추가할 수 없습니다",
   "Can't find it?": "찾을 수 없나요?",
   "Can't import the Inboard backup": "Inboard 백업을 가져올 수 없음",
   "Can't import the package": "패키지를 가져올 수 없음",
@@ -152,15 +173,19 @@
   "Choose Another": "다른 위치 선택",
   "Choose Library…": "라이브러리 선택…",
   "Choose Thumbnail": "썸네일 선택",
+  "Choose a Library to Add To": "추가할 라이브러리 선택",
   "Choose a Library to Merge In": "병합할 라이브러리 선택",
   "Choose a look": "화면 스타일 선택",
   "Choose an Inboard Backup Folder": "Inboard 백업 폴더 선택",
   "Choose folders…": "폴더 선택…",
   "Choose where each screenshot is saved": "스크린샷마다 저장 위치 선택",
   "Choose where to keep the library": "라이브러리를 보관할 위치 선택",
+  "Clean Up": "정리",
+  "Cleanup finished": "정리 완료",
   "Clear": "지우기",
   "Clear All": "모두 지우기",
   "Clear Filter": "필터 지우기",
+  "Clear Invalid Content…": "잘못된 콘텐츠 지우기…",
   "Clear Library History": "라이브러리 기록 지우기",
   "Clear Library History…": "라이브러리 기록 지우기…",
   "Clear Tag History…": "태그 기록 지우기…",
@@ -188,6 +213,7 @@
   "Click to resume": "클릭하여 다시 시작",
   "Close": "닫기",
   "Close (Esc)": "닫기 (Esc)",
+  "Close Library While Tasks Run": "작업 실행 중 라이브러리 닫기",
   "Close Window": "윈도우 닫기",
   "Close the viewer, or clear the selection": "뷰어를 닫거나 선택 해제",
   "Close the window": "윈도우 닫기",
@@ -204,6 +230,15 @@
   "Comparing pictures": "이미지 비교 중",
   "Contains": "포함",
   "Controls": "조작",
+  "Convert": "변환",
+  "Convert WebP": "WebP 변환",
+  "Convert {n} WebP images to {format}": {
+    "other": "WebP 이미지 {n}개를 {format} 형식으로 변환"
+  },
+  "Converted {n} items to {format}": {
+    "other": "항목 {n}개를 {format} 형식으로 변환했습니다"
+  },
+  "Converting WebP": "WebP 변환 중",
   "Copied Base64": "Base64를 복사했습니다",
   "Copied thumbnail": "썸네일을 복사했습니다",
   "Copied {n} Eagle links": {
@@ -252,6 +287,8 @@
   "Copy thumbnail": "썸네일 복사",
   "Copy to Clipboard": "클립보드에 복사",
   "Copy {value}": "{value} 복사",
+  "Copying to {library}": "{library}에 복사하는 중",
+  "Could not change opening at login: {error}": "로그인 시 열기를 변경하지 못했습니다: {error}",
   "Could not create the folder: {error}": "폴더를 만들 수 없습니다: {error}",
   "Could not create the library: {error}": "라이브러리를 만들 수 없습니다: {error}",
   "Could not drag out: {error}": "끌어내지 못했습니다: {error}",
@@ -361,6 +398,9 @@
   "Drop files to import them into this folder": "파일을 놓아서 이 폴더로 가져오기",
   "Drop folders on the sidebar, or files on the grid or a folder": "폴더는 사이드바에, 파일은 격자나 폴더에 놓으세요",
   "Drop folders to import them with their subfolders": "폴더를 놓아서 하위 폴더와 함께 가져오기",
+  "Dropped {n} items whose folders were gone.": {
+    "other": "폴더가 없어진 항목 {n}개를 제외했습니다."
+  },
   "Duplicate": "복제",
   "Duplicate item": "항목 복제",
   "Duplicate the item": "항목 복제",
@@ -451,6 +491,7 @@
   "Failed imports ({n})": "가져오기 실패 ({n})",
   "Falcon Documentation": "Falcon 문서",
   "Falcon can't create files in the library folder ({why}), so changes may not be saved. Check the folder's permissions.": "Falcon이 라이브러리 폴더에 파일을 만들 수 없어({why}) 변경 사항이 저장되지 않을 수 있습니다. 폴더 권한을 확인하세요.",
+  "Falcon can't show a preview of this file. Try opening it in another app.": "Falcon에서 이 파일의 미리보기를 표시할 수 없습니다. 다른 앱에서 열어 보세요.",
   "Falcon can't show or edit this rule. Saving keeps it exactly as it is; remove it to drop it.": "Falcon에서 이 규칙을 표시하거나 편집할 수 없습니다. 저장해도 그대로 유지되며, 제거하면 삭제됩니다.",
   "Falcon couldn't read the library again: {error}": "Falcon에서 라이브러리를 다시 읽을 수 없습니다: {error}",
   "Falcon is locked": "Falcon이 잠겨 있습니다",
@@ -461,6 +502,7 @@
   "File Name": "파일 이름",
   "File Paths": "파일 경로",
   "File Size": "파일 크기",
+  "File not found. If the library is synced, the sync may still be in progress.": "파일을 찾을 수 없습니다. 라이브러리를 동기화하는 경우 동기화가 아직 진행 중일 수 있습니다.",
   "File replaced": "파일을 교체했습니다",
   "File size": "파일 크기",
   "Files": "파일",
@@ -476,6 +518,7 @@
   "Find Duplicates": "중복 항목 찾기",
   "Find Items with These Tags": "이 태그가 있는 항목 찾기",
   "Find Similar Colours": "비슷한 색상 찾기",
+  "Find empty or broken item folders and clean them up": "비어 있거나 손상된 항목 폴더를 찾아 정리합니다",
   "Finds byte-identical files and merges each group into one item. Nothing changes until you merge.": "바이트 단위로 동일한 파일을 찾아 각 그룹을 하나의 항목으로 병합합니다. 병합하기 전에는 아무것도 바뀌지 않습니다.",
   "Finds pictures that look alike, picks the best copy of each group, and merges the rest into it. Nothing changes until you merge.": "비슷하게 생긴 이미지를 찾아 각 그룹에서 가장 좋은 사본을 고르고 나머지를 거기에 병합합니다. 병합하기 전에는 아무것도 바뀌지 않습니다.",
   "First Item": "첫 번째 항목",
@@ -509,6 +552,9 @@
   "Format and quality": "포맷 및 품질",
   "Forward": "앞으로",
   "Forward 10 frames": "10프레임 앞으로",
+  "Found {n} invalid entries": {
+    "other": "잘못된 항목 {n}개를 찾았습니다"
+  },
   "Fr": "금",
   "From a File…": "파일에서…",
   "From the Clipboard": "클립보드에서",
@@ -553,6 +599,7 @@
   "How alike similar pictures must be": "이미지가 얼마나 비슷해야 하는지",
   "Icon": "아이콘",
   "Identical Files": "동일한 파일",
+  "If the library is synced by a cloud service, let the sync finish first: files still downloading look missing.": "라이브러리를 클라우드 서비스로 동기화하는 경우 먼저 동기화를 끝내세요. 아직 다운로드 중인 파일은 없는 것처럼 보입니다.",
   "Image": "이미지",
   "Images": "이미지",
   "Images are only made smaller, never larger.": "이미지는 축소만 되고 확대되지 않습니다.",
@@ -582,6 +629,7 @@
   "Importing Eagle Package": "Eagle 패키지 가져오는 중",
   "Importing into:": "가져올 위치:",
   "Importing {done} of {total}  ·  {current}": "{total}개 중 {done}개 가져오는 중  ·  {current}",
+  "Importing {done} of {total}  ·  {left}  ·  {current}": "{total}개 중 {done}개 가져오는 중  ·  {left}  ·  {current}",
   "Importing {images} and {folders} from Inboard": "Inboard에서 {images}와(과) {folders}을(를) 가져오는 중",
   "In Another Format…": "다른 형식으로…",
   "In the library:": "라이브러리 내:",
@@ -611,6 +659,7 @@
   "Justified": "양쪽 맞춤",
   "Justified layout": "양쪽 맞춤 레이아웃",
   "Keep Both": "모두 유지",
+  "Keep Falcon in the Dock after closing its window": "윈도우를 닫아도 Falcon을 Dock에 유지",
   "Keep Merging": "계속 병합",
   "Keep This Copy": "이 사본 유지",
   "Keep both (import this copy as a new item)": "둘 다 유지 (이 사본을 새 항목으로 가져오기)",
@@ -636,6 +685,7 @@
   "Leave Them Out": "제외",
   "Leaves these items alone": "이 항목은 그대로 둡니다",
   "Leaves this item alone": "이 항목은 그대로 둡니다",
+  "Libraries can't be kept in the folder Falcon is installed in, because removing or updating the app would delete them. Move the library somewhere else and open it again.": "Falcon이 설치된 폴더에는 라이브러리를 둘 수 없습니다. 앱을 삭제하거나 업데이트하면 라이브러리도 함께 삭제되기 때문입니다. 라이브러리를 다른 곳으로 옮긴 다음 다시 여세요.",
   "Library": "라이브러리",
   "Library changed elsewhere": "다른 곳에서 라이브러리가 변경됨",
   "Library closed": "라이브러리가 닫힘",
@@ -650,6 +700,7 @@
   "Links": "링크",
   "List": "목록",
   "List layout": "목록 레이아웃",
+  "Local API unavailable": "로컬 API를 사용할 수 없음",
   "Lock Falcon": "Falcon 잠금",
   "Lock Now": "지금 잠금",
   "Lock falcon": "Falcon 잠금",
@@ -658,6 +709,10 @@
   "Lock the open folder now": "열린 폴더 지금 잠그기",
   "Locked: the filter and search stay when you open another view": "잠김: 다른 보기를 열어도 필터와 검색이 유지됩니다",
   "Longest side": "긴 변",
+  "Looked at {n} item folders; none is empty or broken.": {
+    "other": "항목 폴더 {n}개를 확인했습니다. 비어 있거나 손상된 폴더는 없습니다."
+  },
+  "Looking for empty or broken item folders…": "비어 있거나 손상된 항목 폴더를 찾는 중…",
   "Low": "낮음",
   "Made by a newer Eagle": "더 최신 Eagle에서 만들어짐",
   "Manual": "수동",
@@ -733,8 +788,14 @@
   },
   "Move {n} to Trash": "{n}개를 휴지통으로 이동",
   "Move {n} to folder": "{n}개를 폴더로 이동",
+  "Moved {n} empty item folders to the macOS Trash.": {
+    "other": "빈 항목 폴더 {n}개를 macOS 휴지통으로 이동했습니다."
+  },
   "Moved {n} items to": {
     "other": "항목 {n}개 이동:"
+  },
+  "Moved {n} items with missing files to the Trash.": {
+    "other": "파일이 없는 항목 {n}개를 휴지통으로 이동했습니다."
   },
   "Moved {n} to Trash": "{n}개를 휴지통으로 이동했습니다",
   "Moved {t} to Trash": "{t}개를 휴지통으로 이동했습니다",
@@ -795,6 +856,7 @@
   "No link": "링크 없음",
   "No link to open": "열 링크가 없습니다",
   "No note": "메모 없음",
+  "No other recent libraries": "다른 최근 라이브러리가 없음",
   "No picture on the clipboard": "클립보드에 이미지가 없습니다",
   "No settings match": "일치하는 설정 없음",
   "No shortcuts match": "일치하는 단축키가 없습니다",
@@ -811,10 +873,13 @@
   "Not a valid link": "올바른 링크가 아닙니다",
   "Not an Inboard backup": "Inboard 백업이 아님",
   "Not available: falcon has no template file for this format": "사용할 수 없음: falcon에는 이 형식의 템플릿 파일이 없습니다",
+  "Not finished": "완료되지 않음",
   "Note": "메모",
   "Notes": "메모",
   "Notes...": "메모...",
   "Nothing found": "결과 없음",
+  "Nothing invalid": "잘못된 항목 없음",
+  "Nothing needed cleaning up.": "정리할 항목이 없었습니다.",
   "Nothing to export": "내보낼 항목이 없습니다",
   "Nothing to redo": "실행 복귀할 작업이 없습니다",
   "Nothing to undo": "실행 취소할 작업이 없습니다",
@@ -828,10 +893,12 @@
   "One Tag per Row": "한 줄에 태그 하나",
   "Only images can be exported in another format": "이미지만 다른 형식으로 내보낼 수 있습니다",
   "Only take them out of this folder": "이 폴더에서만 제거",
+  "Only the app bundle can open at login": "앱 번들만 로그인 시 열 수 있습니다",
   "Only the smart folders go; the items they show stay.": "스마트 폴더만 삭제되며 표시된 항목은 그대로 남습니다.",
   "Open": "열기",
   "Open Eagle Library": "Eagle 라이브러리 열기",
   "Open Existing Library…": "기존 라이브러리 열기…",
+  "Open Falcon when you log in": "로그인할 때 Falcon 열기",
   "Open File Location": "파일 위치 열기",
   "Open Filter": "필터 열기",
   "Open Library…": "라이브러리 열기…",
@@ -870,6 +937,8 @@
   "Open {n} files": {
     "other": "파일 {n}개 열기"
   },
+  "Opening at login is only available on macOS": "로그인 시 열기는 macOS에서만 사용할 수 있습니다",
+  "Opening at login needs macOS 13 or later": "로그인 시 열기에는 macOS 13 이상이 필요합니다",
   "Opening {name}": "\"{name}\" 여는 중",
   "Opening {name}; {n} other libraries were left closed (one opens at a time)": {
     "other": "{name}을(를) 여는 중입니다. 다른 라이브러리 {n}개는 닫아 둡니다 (한 번에 하나만 열 수 있음)"
@@ -1234,10 +1303,19 @@
   "Start at": "시작 번호",
   "Start the tag picker's Recent tags over": "태그 선택기의 최근 태그를 초기화합니다",
   "Starting": "시작 중",
+  "Startup": "시작",
   "Stop": "중지",
+  "Stop Tasks and Close": "작업 중지 후 닫기",
+  "Stopped after adding {done} of {n} items to {target}": {
+    "other": "{target}에 항목 {n}개 중 {done}개를 추가한 후 중지했습니다"
+  },
+  "Stopped after converting {n} items to {format}": {
+    "other": "항목 {n}개를 {format} 형식으로 변환한 후 중지했습니다"
+  },
   "Stopped after {added} of {n} items from {name}": {
     "other": "{name}의 항목 {n}개 중 {added}개 후 중지했습니다"
   },
+  "Stopping tasks…": "작업을 중지하는 중…",
   "Stretch videos to fill the viewer": "비디오를 뷰어에 가득 차게 확대",
   "Su": "일",
   "Subfolders ({count})": "하위 폴더 ({count})",
@@ -1254,6 +1332,7 @@
   "Take them out of the open folder": "열린 폴더에서 빼기",
   "Takes effect when you Save or Apply.": "저장하거나 적용하면 반영됩니다.",
   "Tall portrait": "긴 세로",
+  "Tasks are still running in {library}. Closing it stops them. Work already done is kept.": "{library}에서 아직 작업이 실행 중입니다. 닫으면 중지됩니다. 이미 끝난 작업은 유지됩니다.",
   "Text Document": "텍스트 문서",
   "Text, or /pattern/flags": "텍스트 또는 /패턴/플래그",
   "Th": "목",
@@ -1263,13 +1342,17 @@
   "The file isn't UTF-8 text, so it is shown read-only": "UTF-8 텍스트가 아니므로 읽기 전용으로 표시됩니다",
   "The file name or path is too long to preview. Rename the file or move the library to a shorter path.": "파일 이름이나 경로가 너무 길어 미리 볼 수 없습니다. 파일 이름을 바꾸거나 라이브러리를 더 짧은 경로로 옮기세요.",
   "The files are removed from the library and cannot be restored.": "파일이 라이브러리에서 제거되며 복원할 수 없습니다.",
+  "The files were copied, but {library} couldn't be updated: {error}. Opening it again picks the copied items up.": "파일은 복사되었지만 {library}을(를) 업데이트하지 못했습니다: {error}. 다시 열면 복사된 항목이 반영됩니다.",
   "The folder already exists": "폴더가 이미 있습니다",
   "The item's file becomes a copy of “{file}”. Its name, tags, folders and notes stay; the current file is deleted.": "항목의 파일이 “{file}”의 복사본으로 바뀝니다. 이름, 태그, 폴더, 메모는 유지되며 현재 파일은 삭제됩니다.",
   "The items were copied, but the folders couldn't be saved: {error}": "항목은 복사되었지만 폴더를 저장할 수 없습니다: {error}",
   "The library is a folder stored on this Mac. Back it up as you would any other files.": "라이브러리는 이 Mac에 저장되는 폴더입니다. 다른 파일처럼 백업해 두세요.",
   "The library is still missing": "라이브러리를 아직 찾을 수 없습니다",
+  "The library was reloaded.": "라이브러리를 다시 불러왔습니다.",
   "The list can't be brought back. The files themselves are not touched.": "목록은 되돌릴 수 없습니다. 파일 자체는 변경되지 않습니다.",
   "The list of recent libraries is emptied, except for the libraries that are open now. This can't be undone. No library is deleted.": "최근 라이브러리 목록이 비워집니다. 현재 열려 있는 라이브러리는 제외됩니다. 이 작업은 되돌릴 수 없습니다. 라이브러리는 삭제되지 않습니다.",
+  "The local API couldn't start: ports {first}–{last} are all in use. Apps and browser extensions that talk to Falcon won't reach it. Choose another first port in Preferences ▸ Developer.": "로컬 API를 시작하지 못했습니다: 포트 {first}–{last}이(가) 모두 사용 중입니다. Falcon과 통신하는 앱과 브라우저 확장 프로그램이 API에 연결할 수 없습니다. 환경설정 ▸ 개발자에서 다른 첫 번째 포트를 선택하세요.",
+  "The local API is running on port {port} but can't be reached through localhost, so browser extensions can't reach Falcon. A proxy or VPN may be redirecting localhost.": "로컬 API가 포트 {port}에서 실행 중이지만 localhost로 연결할 수 없어 브라우저 확장 프로그램이 Falcon에 연결할 수 없습니다. 프록시나 VPN이 localhost를 다른 곳으로 보내고 있을 수 있습니다.",
   "The name can't be empty.": "이름을 비워 둘 수 없습니다.",
   "The name can't contain symbols such as % ^ & * # @ or slashes.": "이름에 % ^ & * # @ 같은 기호나 슬래시를 사용할 수 없습니다.",
   "The old password is wrong.": "이전 비밀번호가 올바르지 않습니다.",
@@ -1277,9 +1360,12 @@
   "The password is wrong.": "비밀번호가 올바르지 않습니다.",
   "The passwords don't match.": "비밀번호가 일치하지 않습니다.",
   "The screenshot failed: {error}": "스크린샷 실패: {error}",
+  "The system can't find the app to open at login": "시스템에서 로그인 시 열 앱을 찾을 수 없습니다",
+  "The system has no login item for this app": "시스템에 이 앱의 로그인 항목이 없습니다",
   "The tag picker's Recent tags start over. Tags stay on their items.": "태그 선택기의 최근 태그가 초기화됩니다. 항목의 태그는 그대로 유지됩니다.",
   "The wheel button on an item": "항목 위에서 휠 버튼",
   "The wheel over an image in the viewer": "뷰어에서 이미지 위의 휠",
+  "Their files and details are copied into the other library. This library keeps them as they are.": "파일과 세부 정보가 다른 라이브러리로 복사됩니다. 이 라이브러리의 항목은 그대로 유지됩니다.",
   "Their hand-made order is replaced.": "직접 정한 순서는 바뀝니다.",
   "Theme": "테마",
   "There is no library folder at {path}. It may have been moved, renamed or deleted, or its drive isn't connected.": "{path}에 라이브러리 폴더가 없습니다. 이동, 이름 변경 또는 삭제되었거나 드라이브가 연결되지 않았을 수 있습니다.",
@@ -1337,6 +1423,7 @@
     "other": "태그 {n}개 그룹 해제"
   },
   "Ungrouped": "그룹 없음",
+  "Unknown login item status": "알 수 없는 로그인 항목 상태",
   "Unlock": "잠금 해제",
   "Unlock to view contents": "잠금을 해제하여 내용 보기",
   "Unlock with Touch ID": "Touch ID로 잠금 해제",
@@ -1380,6 +1467,8 @@
   "Waterfall": "워터폴",
   "Waterfall layout": "워터폴 레이아웃",
   "We": "수",
+  "WebP files are usually smaller, so the {format} files will take more space. Each WebP replaced goes to the Trash; animated WebPs are skipped.": "WebP 파일은 보통 더 작아서 {format} 파일은 더 많은 공간을 차지합니다. 교체된 WebP는 휴지통으로 이동하며, 애니메이션 WebP는 건너뜁니다.",
+  "When off, closing the window takes Falcon out of the Dock while its menu bar icon is shown, and quits it otherwise.": "끄면 윈도우를 닫을 때 메뉴 막대 아이콘이 표시되어 있으면 Falcon이 Dock에서 사라지고, 그렇지 않으면 종료됩니다.",
   "When off, screenshots taken on a Retina screen are saved at half size.": "끄면 Retina 화면에서 찍은 스크린샷이 절반 크기로 저장됩니다.",
   "When off, such files are imported as new items.": "끄면 해당 파일은 새 항목으로 가져옵니다.",
   "White": "흰색",
@@ -1472,6 +1561,21 @@
   "{folders} and {items} from {path} will be added. Folders, smart folders and tag groups already here are kept as they are, and so are items already here.": "{path}에서 {folders}와(과) {items}이(가) 추가됩니다. 이미 있는 폴더, 스마트 폴더, 태그 그룹과 항목은 그대로 유지됩니다.",
   "{hex}  ·  {ratio}%\nClick to find similar colours, right-click for more": "{hex}  ·  {ratio}%\n클릭하면 비슷한 색상 찾기, 오른쪽 클릭으로 더 보기",
   "{lib}'s metadata.json was damaged and was restored from backup/{name}; the damaged file was kept in backup/": "{lib}의 metadata.json이 손상되어 backup/{name}에서 복원했습니다. 손상된 파일은 backup/에 보관되어 있습니다.",
+  "{message}; skipped {n} items (animated)": {
+    "other": "{message}; 애니메이션 항목 {n}개 건너뜀"
+  },
+  "{message}; {n} items couldn't be converted ({reason})": {
+    "other": "{message}; 항목 {n}개를 변환하지 못했습니다({reason})"
+  },
+  "{message}; {n} items couldn't be copied": {
+    "other": "{message}; 항목 {n}개를 복사하지 못했습니다"
+  },
+  "{message}; {n} items were already there": {
+    "other": "{message}; 항목 {n}개는 이미 있었습니다"
+  },
+  "{message}; {n} old WebP files couldn't go to the Trash and were left in their item folders": {
+    "other": "{message}; 이전 WebP 파일 {n}개를 휴지통으로 옮기지 못해 항목 폴더에 남겨 두었습니다"
+  },
   "{month} {year}": "{year}년 {month}",
   "{name} (Default)": "{name} (기본)",
   "{name} may not save changes": "\"{name}\"의 변경 사항이 저장되지 않을 수 있음",
@@ -1501,6 +1605,12 @@
   },
   "{n} folders": {
     "other": "폴더 {n}개"
+  },
+  "{n} folders couldn't be moved to the Trash ({path}: {reason}).": {
+    "other": "폴더 {n}개를 휴지통으로 이동하지 못했습니다({path}: {reason})."
+  },
+  "{n} folders that belong to no item go to the macOS Trash.": {
+    "other": "어떤 항목에도 속하지 않는 폴더 {n}개는 macOS 휴지통으로 이동합니다."
   },
   "{n} groups · tick the groups to merge": {
     "other": "그룹 {n}개 · 병합할 그룹을 선택하세요"
@@ -1542,11 +1652,17 @@
   "{n} items that are not images will be skipped.": {
     "other": "이미지가 아닌 항목 {n}개는 건너뜁니다."
   },
+  "{n} items whose folder is gone are dropped.": {
+    "other": "폴더가 없어진 항목 {n}개는 제외됩니다."
+  },
   "{n} items will be affected. Go ahead?": {
     "other": "항목 {n}개가 변경됩니다. 계속할까요?"
   },
   "{n} items will take up {size} of disk space in this library.": {
     "other": "항목 {n}개가 이 라이브러리에서 디스크 공간 {size}을(를) 차지합니다."
+  },
+  "{n} items with a missing or empty file go to the Trash.": {
+    "other": "파일이 없거나 비어 있는 항목 {n}개는 휴지통으로 이동합니다."
   },
   "{n} similar pictures, the best copy picked (within {bits} of 64 bits)": {
     "other": "비슷한 이미지 {n}개, 최상의 사본 선택됨 (64비트 중 {bits}비트 이내 차이)"

@@ -16,9 +16,9 @@ use falcon_library::add_to_library::{self as add, AddPlan};
 
 use crate::app::{App, lock};
 use crate::theme as t;
-use crate::ui::dialogs::export::plural;
 use crate::ui::dialogs::library_notices::Alert;
 use crate::ui::dialogs::progress::Outcome;
+use crate::locale::{tr, tr_nf, trf};
 
 /// What is added to the other library.
 #[derive(Clone, Debug, PartialEq)]
@@ -49,16 +49,21 @@ pub(crate) fn asks_first(what: &AddWhat) -> bool {
 pub(crate) fn summary(target: &str, what: &AddWhat, copied: &add::Copied, report: &add::AddReport, total: usize, stopped: bool) -> String {
     let n = report.items;
     let mut msg = match what {
-        AddWhat::Items(_) | AddWhat::Folder(_) if stopped => format!("Stopped after adding {n} of {} to {target}", plural(total, "item")),
-        AddWhat::Items(_) => format!("Added {} to {target}", plural(n, "item")),
-        AddWhat::Folder(_) if report.definition => format!("Added the folder and {} to {target}", plural(n, "item")),
-        AddWhat::Folder(_) => format!("Added {} to {target}; it already had the folder", plural(n, "item")),
-        AddWhat::Smart(_) => format!("Added the smart folder to {target}"),
-        AddWhat::TagGroup(_) => format!("Added the tag group to {target}"),
+        AddWhat::Items(_) | AddWhat::Folder(_) if stopped => {
+            tr_nf(total, "Stopped after adding {done} of {n} item to {target}", "Stopped after adding {done} of {n} items to {target}", &[("done", &n), ("target", &target)])
+        }
+        AddWhat::Items(_) => tr_nf(n, "Added {n} item to {target}", "Added {n} items to {target}", &[("target", &target)]),
+        AddWhat::Folder(_) if report.definition => {
+            tr_nf(n, "Added the folder and {n} item to {target}", "Added the folder and {n} items to {target}", &[("target", &target)])
+        }
+        AddWhat::Folder(_) => {
+            tr_nf(n, "Added {n} item to {target}; it already had the folder", "Added {n} items to {target}; it already had the folder", &[("target", &target)])
+        }
+        AddWhat::Smart(_) => trf("Added the smart folder to {target}", &[("target", &target)]),
+        AddWhat::TagGroup(_) => trf("Added the tag group to {target}", &[("target", &target)]),
     };
     if !copied.present.is_empty() {
-        let k = copied.present.len();
-        msg.push_str(&if k == 1 { "; 1 item was already there".to_string() } else { format!("; {k} items were already there") });
+        msg = tr_nf(copied.present.len(), "{message}; {n} item was already there", "{message}; {n} items were already there", &[("message", &msg)]);
     }
     msg
 }
@@ -67,11 +72,11 @@ impl App {
     /// The Add to Other Library submenu.
     pub(crate) fn add_to_library_menu(&mut self, ui: &mut Ui, what: AddWhat) {
         let current = self.ws.root.clone();
-        crate::ui::menus::search::submenu(ui, "Add to Other Library", |ui| {
+        crate::ui::menus::search::submenu(ui, tr("Add to Other Library"), |ui| {
             ui.set_min_width(240.0);
             let others: Vec<PathBuf> = self.recent.iter().filter(|p| !current.as_deref().is_some_and(|c| crate::app::library::same_path(c, p))).cloned().collect();
             if others.is_empty() {
-                ui.label(RichText::new("No other recent libraries").color(t::p().text_muted));
+                ui.label(RichText::new(tr("No other recent libraries")).color(t::p().text_muted));
             }
             for p in others {
                 let missing = !p.is_dir();
@@ -81,8 +86,8 @@ impl App {
                 }
             }
             ui.separator();
-            if ui.button("Choose Library…").clicked()
-                && let Some(p) = rfd::FileDialog::new().set_title("Choose a Library to Add To").pick_folder()
+            if ui.button(tr("Choose Library…")).clicked()
+                && let Some(p) = rfd::FileDialog::new().set_title(tr("Choose a Library to Add To")).pick_folder()
             {
                 self.choose_add_target(what.clone(), p);
             }
@@ -94,7 +99,7 @@ impl App {
         let Some(current) = self.ws.root.clone() else { return };
         let checked = crate::install_dir::guard(&target).map_err(add::AddRefusal::from).and_then(|()| add::check_target(&current, &target));
         if let Err(e) = checked {
-            self.show_alert(Alert::new("Can't add to that library", e.to_string()));
+            self.show_alert(Alert::new(tr("Can't add to that library"), e.to_string()));
             return;
         }
         if asks_first(&what) {
@@ -114,15 +119,15 @@ impl App {
         let mut answer = None;
         let modal = egui::Modal::new(egui::Id::unique("add-to-library-confirm")).show(ctx, |ui| {
             ui.set_width(340.0);
-            ui.label(RichText::new(format!("Add {} to {}", plural(n, "item"), name(&target))).size(15.0));
+            ui.label(RichText::new(tr_nf(n, "Add {n} item to {library}", "Add {n} items to {library}", &[("library", &name(&target))])).size(15.0));
             ui.add_space(4.0);
-            ui.label(RichText::new("Their files and details are copied into the other library. This library keeps them as they are.").color(t::p().text_muted));
+            ui.label(RichText::new(tr("Their files and details are copied into the other library. This library keeps them as they are.")).color(t::p().text_muted));
             ui.add_space(10.0);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button("Add").clicked() {
+                if ui.button(tr("Add")).clicked() {
                     answer = Some(true);
                 }
-                if ui.button("Cancel").clicked() {
+                if ui.button(tr("Cancel")).clicked() {
                     answer = Some(false);
                 }
             });
@@ -158,7 +163,7 @@ impl App {
         let open = self.others.iter(&self.ws).find(|w| w.root.as_deref().is_some_and(|r| crate::app::library::same_path(r, &target))).and_then(|w| w.lib.clone());
         let target_name = name(&target);
         let total = plan.items.len();
-        let h = self.ws.op.start(&self.ctx, format!("Copying to {target_name}"), total, true);
+        let h = self.ws.op.start(&self.ctx, trf("Copying to {library}", &[("library", &target_name)]), total, true);
         std::thread::spawn(move || {
             let names: Vec<String> = {
                 let lib = lock(&shared);
@@ -176,11 +181,19 @@ impl App {
             let outcome = match finished {
                 Ok(report) => {
                     let message = summary(&target_name, &what, &copied, &report, total, stopped);
-                    let error = (!copied.failed.is_empty()).then(|| format!("{message}; {} couldn't be copied", plural(copied.failed.len(), "item")));
+                    let error = (!copied.failed.is_empty()).then(|| {
+                        tr_nf(copied.failed.len(), "{message}; {n} item couldn't be copied", "{message}; {n} items couldn't be copied", &[("message", &message)])
+                    });
                     Outcome { message, error, ..Default::default() }
                 }
                 Err(e) => Outcome {
-                    alert: Some(Alert::new("Not finished", format!("The files were copied, but {target_name} couldn't be updated: {e}. Opening it again picks the copied items up."))),
+                    alert: Some(Alert::new(
+                        tr("Not finished"),
+                        trf(
+                            "The files were copied, but {library} couldn't be updated: {error}. Opening it again picks the copied items up.",
+                            &[("library", &target_name), ("error", &e)],
+                        ),
+                    )),
                     ..Default::default()
                 },
             };

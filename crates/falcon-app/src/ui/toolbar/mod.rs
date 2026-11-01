@@ -239,7 +239,7 @@ impl App {
         let left = if paused { None } else { started.and_then(|s| crate::progress_eta::remaining(s.elapsed(), done, total)).map(crate::progress_eta::format) };
         let text = match (paused, left) {
             (true, _) => trf("Paused at {done} of {total}", &[("done", &done), ("total", &total)]),
-            (false, Some(left)) => format!("Importing {done} of {total}  ·  {left}  ·  {current}"),
+            (false, Some(left)) => trf("Importing {done} of {total}  ·  {left}  ·  {current}", &[("done", &done), ("total", &total), ("left", &left), ("current", &current)]),
             (false, None) => trf("Importing {done} of {total}  ·  {current}", &[("done", &done), ("total", &total), ("current", &current)]),
         };
         ui.ctx().request_repaint_after(std::time::Duration::from_secs(1));

@@ -13,6 +13,10 @@
   "API on http://localhost:{port}": "API en http://localhost:{port}",
   "API stopped": "API detenida",
   "About Falcon": "Acerca de Falcon",
+  "About {h} h {m} min left": "Quedan unas {h} h {m} min",
+  "About {n} h left": "Quedan unas {n} h",
+  "About {n} min left": "Quedan unos {n} min",
+  "About {n} s left": "Quedan unos {n} s",
   "Accuracy": "Precisión",
   "Actions": "Acciones",
   "Activated": "Activado",
@@ -43,23 +47,42 @@
   "Add to Folders…": "Añadir a carpetas…",
   "Add to Group": "Añadir al grupo",
   "Add to Last Used Folder": "Añadir a la última carpeta usada",
+  "Add to Other Library": "Añadir a otra biblioteca",
   "Add to Quick Access": "Añadir a Acceso rápido",
   "Add to the last used folder": "Añadir a la última carpeta usada",
   "Add {n} items": {
     "one": "Añadir {n} elemento",
     "other": "Añadir {n} elementos"
   },
+  "Add {n} items to {library}": {
+    "one": "Añadir {n} elemento a {library}",
+    "other": "Añadir {n} elementos a {library}"
+  },
   "Add {n} to folder": "Añadir {n} a la carpeta",
+  "Added the folder and {n} items to {target}": {
+    "one": "Se añadieron la carpeta y {n} elemento a {target}",
+    "other": "Se añadieron la carpeta y {n} elementos a {target}"
+  },
   "Added the folder's tags to {n} items": {
     "one": "Se añadieron las etiquetas de la carpeta a {n} elemento",
     "other": "Se añadieron las etiquetas de la carpeta a {n} elementos"
   },
+  "Added the smart folder to {target}": "Se añadió la carpeta inteligente a {target}",
+  "Added the tag group to {target}": "Se añadió el grupo de etiquetas a {target}",
   "Added {count}": "Añadidos: {count}",
   "Added {count}, {failed} failed": "Añadidos {count}, {failed} con error",
   "Added {items}, {folders} and {others} from {name}.": "Se añadieron {items}, {folders} y {others} de {name}.",
   "Added {n} items to": {
     "one": "{n} elemento añadido a",
     "other": "{n} elementos añadidos a"
+  },
+  "Added {n} items to {target}": {
+    "one": "Se añadió {n} elemento a {target}",
+    "other": "Se añadieron {n} elementos a {target}"
+  },
+  "Added {n} items to {target}; it already had the folder": {
+    "one": "Se añadió {n} elemento a {target}; ya tenía la carpeta",
+    "other": "Se añadieron {n} elementos a {target}; ya tenía la carpeta"
   },
   "Added {n} to": "{n} añadidos a",
   "Adding {n} items to the library": {
@@ -84,6 +107,7 @@
   "All Tags": "Todas las etiquetas",
   "All Tags  {n}": "Todas las etiquetas  {n}",
   "All Tags Are in Groups": "Todas las etiquetas están en grupos",
+  "Allow Falcon in System Settings ▸ General ▸ Login Items.": "Permitir a Falcon en Ajustes del Sistema ▸ General ▸ Ítems de inicio de sesión.",
   "Almost there…": "Casi listo…",
   "Alphabet": "Alfabeto",
   "Already in the library": "Ya está en la biblioteca",
@@ -128,6 +152,7 @@
   "Blue": "Azul",
   "Bookmark": "Marcador",
   "Camera": "Cámara",
+  "Can't add to that library": "No se puede añadir a esa biblioteca",
   "Can't find it?": "¿No la encuentras?",
   "Can't import the Inboard backup": "No se puede importar la copia de Inboard",
   "Can't import the package": "No se puede importar el paquete",
@@ -158,15 +183,19 @@
   "Choose Another": "Elegir otra",
   "Choose Library…": "Elegir biblioteca…",
   "Choose Thumbnail": "Elegir miniatura",
+  "Choose a Library to Add To": "Elegir una biblioteca de destino",
   "Choose a Library to Merge In": "Elige una biblioteca para combinar",
   "Choose a look": "Elige un aspecto",
   "Choose an Inboard Backup Folder": "Elige una carpeta de copia de Inboard",
   "Choose folders…": "Elegir carpetas…",
   "Choose where each screenshot is saved": "Elegir dónde se guarda cada captura",
   "Choose where to keep the library": "Elige dónde guardar la biblioteca",
+  "Clean Up": "Limpiar",
+  "Cleanup finished": "Limpieza terminada",
   "Clear": "Limpiar",
   "Clear All": "Borrar todo",
   "Clear Filter": "Borrar filtro",
+  "Clear Invalid Content…": "Borrar contenido no válido…",
   "Clear Library History": "Borrar historial de bibliotecas",
   "Clear Library History…": "Borrar historial de bibliotecas…",
   "Clear Tag History…": "Borrar historial de etiquetas…",
@@ -195,6 +224,7 @@
   "Click to resume": "Hacer clic para reanudar",
   "Close": "Cerrar",
   "Close (Esc)": "Cerrar (Esc)",
+  "Close Library While Tasks Run": "Cerrar la biblioteca mientras hay tareas en curso",
   "Close Window": "Cerrar ventana",
   "Close the viewer, or clear the selection": "Cerrar el visor o anular la selección",
   "Close the window": "Cerrar la ventana",
@@ -211,6 +241,17 @@
   "Comparing pictures": "Comparando imágenes",
   "Contains": "Contiene",
   "Controls": "Controles",
+  "Convert": "Convertir",
+  "Convert WebP": "Convertir WebP",
+  "Convert {n} WebP images to {format}": {
+    "one": "Convertir {n} imagen WebP a {format}",
+    "other": "Convertir {n} imágenes WebP a {format}"
+  },
+  "Converted {n} items to {format}": {
+    "one": "Se convirtió {n} elemento a {format}",
+    "other": "Se convirtieron {n} elementos a {format}"
+  },
+  "Converting WebP": "Convirtiendo WebP",
   "Copied Base64": "Base64 copiado",
   "Copied thumbnail": "Miniatura copiada",
   "Copied {n} Eagle links": {
@@ -267,6 +308,8 @@
   "Copy thumbnail": "Copiar miniatura",
   "Copy to Clipboard": "Copiar al portapapeles",
   "Copy {value}": "Copiar {value}",
+  "Copying to {library}": "Copiando en {library}",
+  "Could not change opening at login: {error}": "No se pudo cambiar la apertura al iniciar sesión: {error}",
   "Could not create the folder: {error}": "No se pudo crear la carpeta: {error}",
   "Could not create the library: {error}": "No se pudo crear la biblioteca: {error}",
   "Could not drag out: {error}": "No se pudo arrastrar fuera: {error}",
@@ -381,6 +424,10 @@
   "Drop files to import them into this folder": "Soltar archivos para importarlos en esta carpeta",
   "Drop folders on the sidebar, or files on the grid or a folder": "Soltar carpetas en la barra lateral, o archivos en la cuadrícula o en una carpeta",
   "Drop folders to import them with their subfolders": "Soltar carpetas para importarlas con sus subcarpetas",
+  "Dropped {n} items whose folders were gone.": {
+    "one": "Se quitó {n} elemento cuya carpeta ya no existía.",
+    "other": "Se quitaron {n} elementos cuyas carpetas ya no existían."
+  },
   "Duplicate": "Duplicar",
   "Duplicate item": "Duplicar elemento",
   "Duplicate the item": "Duplicar el elemento",
@@ -474,6 +521,7 @@
   "Failed imports ({n})": "Importaciones fallidas ({n})",
   "Falcon Documentation": "Documentación de Falcon",
   "Falcon can't create files in the library folder ({why}), so changes may not be saved. Check the folder's permissions.": "Falcon no puede crear archivos en la carpeta de la biblioteca ({why}), por lo que es posible que los cambios no se guarden. Revisa los permisos de la carpeta.",
+  "Falcon can't show a preview of this file. Try opening it in another app.": "Falcon no puede mostrar una vista previa de este archivo. Se puede intentar abrirlo en otra app.",
   "Falcon can't show or edit this rule. Saving keeps it exactly as it is; remove it to drop it.": "Falcon no puede mostrar ni editar esta regla. Al guardar se conserva tal cual; quítala para descartarla.",
   "Falcon couldn't read the library again: {error}": "Falcon no pudo volver a leer la biblioteca: {error}",
   "Falcon is locked": "Falcon está bloqueado",
@@ -484,6 +532,7 @@
   "File Name": "Nombre de archivo",
   "File Paths": "Rutas de archivo",
   "File Size": "Tamaño de archivo",
+  "File not found. If the library is synced, the sync may still be in progress.": "Archivo no encontrado. Si la biblioteca está sincronizada, puede que la sincronización siga en curso.",
   "File replaced": "Archivo reemplazado",
   "File size": "Tamaño del archivo",
   "Files": "Archivos",
@@ -499,6 +548,7 @@
   "Find Duplicates": "Buscar duplicados",
   "Find Items with These Tags": "Buscar elementos con estas etiquetas",
   "Find Similar Colours": "Buscar colores similares",
+  "Find empty or broken item folders and clean them up": "Buscar y limpiar carpetas de elementos vacías o dañadas",
   "Finds byte-identical files and merges each group into one item. Nothing changes until you merge.": "Busca archivos idénticos byte a byte y combina cada grupo en un solo elemento. No cambia nada hasta que se combine.",
   "Finds pictures that look alike, picks the best copy of each group, and merges the rest into it. Nothing changes until you merge.": "Busca imágenes parecidas, elige la mejor copia de cada grupo y combina el resto con ella. No cambia nada hasta que se combine.",
   "First Item": "Primer elemento",
@@ -532,6 +582,10 @@
   "Format and quality": "Formato y calidad",
   "Forward": "Adelante",
   "Forward 10 frames": "Avanzar 10 fotogramas",
+  "Found {n} invalid entries": {
+    "one": "Se encontró {n} entrada no válida",
+    "other": "Se encontraron {n} entradas no válidas"
+  },
   "Fr": "vi",
   "From a File…": "Desde un archivo…",
   "From the Clipboard": "Desde el portapapeles",
@@ -577,6 +631,7 @@
   "How alike similar pictures must be": "Cuán parecidas deben ser las imágenes",
   "Icon": "Icono",
   "Identical Files": "Archivos idénticos",
+  "If the library is synced by a cloud service, let the sync finish first: files still downloading look missing.": "Si la biblioteca se sincroniza con un servicio en la nube, conviene esperar a que termine la sincronización: los archivos que aún se descargan parecen faltar.",
   "Image": "Imagen",
   "Images": "Imágenes",
   "Images are only made smaller, never larger.": "Las imágenes solo se reducen, nunca se amplían.",
@@ -608,6 +663,7 @@
   "Importing Eagle Package": "Importando paquete de Eagle",
   "Importing into:": "Importando en:",
   "Importing {done} of {total}  ·  {current}": "Importando {done} de {total}  ·  {current}",
+  "Importing {done} of {total}  ·  {left}  ·  {current}": "Importando {done} de {total}  ·  {left}  ·  {current}",
   "Importing {images} and {folders} from Inboard": "Importando {images} y {folders} de Inboard",
   "In Another Format…": "En otro formato…",
   "In the library:": "En la biblioteca:",
@@ -637,6 +693,7 @@
   "Justified": "Justificado",
   "Justified layout": "Vista justificada",
   "Keep Both": "Conservar ambos",
+  "Keep Falcon in the Dock after closing its window": "Mantener Falcon en el Dock al cerrar su ventana",
   "Keep Merging": "Seguir combinando",
   "Keep This Copy": "Conservar esta copia",
   "Keep both (import this copy as a new item)": "Conservar ambos (importar esta copia como elemento nuevo)",
@@ -662,6 +719,7 @@
   "Leave Them Out": "Dejarlos fuera",
   "Leaves these items alone": "Deja estos elementos como están",
   "Leaves this item alone": "Deja este elemento como está",
+  "Libraries can't be kept in the folder Falcon is installed in, because removing or updating the app would delete them. Move the library somewhere else and open it again.": "Las bibliotecas no pueden guardarse en la carpeta donde está instalado Falcon, porque al quitar o actualizar la app se eliminarían. Mover la biblioteca a otro lugar y abrirla de nuevo.",
   "Library": "Biblioteca",
   "Library changed elsewhere": "Biblioteca modificada en otro lugar",
   "Library closed": "Biblioteca cerrada",
@@ -676,6 +734,7 @@
   "Links": "Enlaces",
   "List": "Lista",
   "List layout": "Vista de lista",
+  "Local API unavailable": "API local no disponible",
   "Lock Falcon": "Bloquear Falcon",
   "Lock Now": "Bloquear ahora",
   "Lock falcon": "Bloquear Falcon",
@@ -684,6 +743,11 @@
   "Lock the open folder now": "Bloquear ahora la carpeta abierta",
   "Locked: the filter and search stay when you open another view": "Bloqueado: el filtro y la búsqueda se conservan al abrir otra vista",
   "Longest side": "Lado más largo",
+  "Looked at {n} item folders; none is empty or broken.": {
+    "one": "Se revisó {n} carpeta de elementos; ninguna está vacía ni dañada.",
+    "other": "Se revisaron {n} carpetas de elementos; ninguna está vacía ni dañada."
+  },
+  "Looking for empty or broken item folders…": "Buscando carpetas de elementos vacías o dañadas…",
   "Low": "Baja",
   "Made by a newer Eagle": "Creada por una versión más reciente de Eagle",
   "Manual": "Manual",
@@ -766,9 +830,17 @@
   },
   "Move {n} to Trash": "Mover {n} a la papelera",
   "Move {n} to folder": "Mover {n} a la carpeta",
+  "Moved {n} empty item folders to the macOS Trash.": {
+    "one": "Se movió {n} carpeta de elementos vacía a la papelera de macOS.",
+    "other": "Se movieron {n} carpetas de elementos vacías a la papelera de macOS."
+  },
   "Moved {n} items to": {
     "one": "{n} elemento movido a",
     "other": "{n} elementos movidos a"
+  },
+  "Moved {n} items with missing files to the Trash.": {
+    "one": "Se movió {n} elemento con archivos que faltaban a la papelera.",
+    "other": "Se movieron {n} elementos con archivos que faltaban a la papelera."
   },
   "Moved {n} to Trash": "{n} movidos a la papelera",
   "Moved {t} to Trash": "{t} movidos a la papelera",
@@ -829,6 +901,7 @@
   "No link": "Sin enlace",
   "No link to open": "No hay ningún enlace que abrir",
   "No note": "Sin nota",
+  "No other recent libraries": "No hay otras bibliotecas recientes",
   "No picture on the clipboard": "No hay ninguna imagen en el portapapeles",
   "No settings match": "Ningún ajuste coincide",
   "No shortcuts match": "Ningún atajo coincide",
@@ -845,10 +918,13 @@
   "Not a valid link": "No es un enlace válido",
   "Not an Inboard backup": "No es una copia de Inboard",
   "Not available: falcon has no template file for this format": "No disponible: falcon no tiene una plantilla para este formato",
+  "Not finished": "No terminado",
   "Note": "Nota",
   "Notes": "Notas",
   "Notes...": "Notas...",
   "Nothing found": "Sin resultados",
+  "Nothing invalid": "Nada no válido",
+  "Nothing needed cleaning up.": "No hacía falta limpiar nada.",
   "Nothing to export": "Nada que exportar",
   "Nothing to redo": "Nada que rehacer",
   "Nothing to undo": "Nada que deshacer",
@@ -862,10 +938,12 @@
   "One Tag per Row": "Una etiqueta por fila",
   "Only images can be exported in another format": "Solo se pueden exportar imágenes en otro formato",
   "Only take them out of this folder": "Solo quitarlos de esta carpeta",
+  "Only the app bundle can open at login": "Solo el paquete de la app puede abrirse al iniciar sesión",
   "Only the smart folders go; the items they show stay.": "Solo se eliminan las carpetas inteligentes; los elementos que muestran se conservan.",
   "Open": "Abrir",
   "Open Eagle Library": "Abrir biblioteca de Eagle",
   "Open Existing Library…": "Abrir biblioteca existente…",
+  "Open Falcon when you log in": "Abrir Falcon al iniciar sesión",
   "Open File Location": "Abrir ubicación del archivo",
   "Open Filter": "Abrir filtro",
   "Open Library…": "Abrir biblioteca…",
@@ -905,6 +983,8 @@
     "one": "Abrir {n} archivo",
     "other": "Abrir {n} archivos"
   },
+  "Opening at login is only available on macOS": "La apertura al iniciar sesión solo está disponible en macOS",
+  "Opening at login needs macOS 13 or later": "La apertura al iniciar sesión requiere macOS 13 o posterior",
   "Opening {name}": "Abriendo {name}",
   "Opening {name}; {n} other libraries were left closed (one opens at a time)": {
     "one": "Abriendo {name}; {n} biblioteca más queda cerrada (solo se abre una a la vez)",
@@ -1289,11 +1369,22 @@
   "Start at": "Empezar en",
   "Start the tag picker's Recent tags over": "Reinicia las etiquetas recientes del selector de etiquetas",
   "Starting": "Iniciando",
+  "Startup": "Inicio",
   "Stop": "Detener",
+  "Stop Tasks and Close": "Detener tareas y cerrar",
+  "Stopped after adding {done} of {n} items to {target}": {
+    "one": "Detenido tras añadir {done} de {n} elemento a {target}",
+    "other": "Detenido tras añadir {done} de {n} elementos a {target}"
+  },
+  "Stopped after converting {n} items to {format}": {
+    "one": "Detenido tras convertir {n} elemento a {format}",
+    "other": "Detenido tras convertir {n} elementos a {format}"
+  },
   "Stopped after {added} of {n} items from {name}": {
     "one": "Detenido tras {added} de {n} elemento de {name}",
     "other": "Detenido tras {added} de {n} elementos de {name}"
   },
+  "Stopping tasks…": "Deteniendo tareas…",
   "Stretch videos to fill the viewer": "Ampliar los vídeos para llenar el visor",
   "Su": "do",
   "Subfolders ({count})": "Subcarpetas ({count})",
@@ -1310,6 +1401,7 @@
   "Take them out of the open folder": "Quitarlos de la carpeta abierta",
   "Takes effect when you Save or Apply.": "Se aplica al guardar o aplicar.",
   "Tall portrait": "Vertical alto",
+  "Tasks are still running in {library}. Closing it stops them. Work already done is kept.": "Todavía hay tareas en curso en {library}. Al cerrarla se detienen. El trabajo ya hecho se conserva.",
   "Text Document": "Documento de texto",
   "Text, or /pattern/flags": "Texto, o /patrón/indicadores",
   "Th": "ju",
@@ -1319,13 +1411,17 @@
   "The file isn't UTF-8 text, so it is shown read-only": "El archivo no es texto UTF-8, así que se muestra de solo lectura",
   "The file name or path is too long to preview. Rename the file or move the library to a shorter path.": "El nombre o la ruta del archivo es demasiado largo para la vista previa. Solución: cambiar el nombre del archivo o mover la biblioteca a una ruta más corta.",
   "The files are removed from the library and cannot be restored.": "Los archivos se eliminan de la biblioteca y no se pueden restaurar.",
+  "The files were copied, but {library} couldn't be updated: {error}. Opening it again picks the copied items up.": "Los archivos se copiaron, pero no se pudo actualizar {library}: {error}. Al abrirla de nuevo se incorporan los elementos copiados.",
   "The folder already exists": "La carpeta ya existe",
   "The item's file becomes a copy of “{file}”. Its name, tags, folders and notes stay; the current file is deleted.": "El archivo del elemento pasa a ser una copia de «{file}». Se conservan su nombre, etiquetas, carpetas y notas; el archivo actual se elimina.",
   "The items were copied, but the folders couldn't be saved: {error}": "Los elementos se copiaron, pero no se pudieron guardar las carpetas: {error}",
   "The library is a folder stored on this Mac. Back it up as you would any other files.": "La biblioteca es una carpeta guardada en este Mac. Haz copias de seguridad como con cualquier otro archivo.",
   "The library is still missing": "La biblioteca sigue sin encontrarse",
+  "The library was reloaded.": "Se recargó la biblioteca.",
   "The list can't be brought back. The files themselves are not touched.": "La lista no se puede recuperar. Los archivos no se tocan.",
   "The list of recent libraries is emptied, except for the libraries that are open now. This can't be undone. No library is deleted.": "Se vacía la lista de bibliotecas recientes, salvo las que están abiertas ahora. No se puede deshacer. No se elimina ninguna biblioteca.",
+  "The local API couldn't start: ports {first}–{last} are all in use. Apps and browser extensions that talk to Falcon won't reach it. Choose another first port in Preferences ▸ Developer.": "La API local no pudo iniciarse: los puertos {first}–{last} están todos en uso. Las apps y extensiones del navegador que se comunican con Falcon no podrán acceder a ella. Elegir otro primer puerto en Preferencias ▸ Desarrollador.",
+  "The local API is running on port {port} but can't be reached through localhost, so browser extensions can't reach Falcon. A proxy or VPN may be redirecting localhost.": "La API local se ejecuta en el puerto {port}, pero no se puede acceder a ella a través de localhost, por lo que las extensiones del navegador no llegan a Falcon. Puede que un proxy o una VPN esté redirigiendo localhost.",
   "The name can't be empty.": "El nombre no puede estar vacío.",
   "The name can't contain symbols such as % ^ & * # @ or slashes.": "El nombre no puede contener símbolos como % ^ & * # @ ni barras.",
   "The old password is wrong.": "La contraseña anterior no es correcta.",
@@ -1333,9 +1429,12 @@
   "The password is wrong.": "La contraseña no es correcta.",
   "The passwords don't match.": "Las contraseñas no coinciden.",
   "The screenshot failed: {error}": "La captura falló: {error}",
+  "The system can't find the app to open at login": "El sistema no encuentra la app que abrir al iniciar sesión",
+  "The system has no login item for this app": "El sistema no tiene ningún ítem de inicio de sesión para esta app",
   "The tag picker's Recent tags start over. Tags stay on their items.": "Las etiquetas recientes del selector empiezan de cero. Las etiquetas se conservan en sus elementos.",
   "The wheel button on an item": "El botón de la rueda sobre un elemento",
   "The wheel over an image in the viewer": "La rueda sobre una imagen en el visor",
+  "Their files and details are copied into the other library. This library keeps them as they are.": "Sus archivos y detalles se copian a la otra biblioteca. Esta biblioteca los conserva tal cual.",
   "Their hand-made order is replaced.": "Se reemplaza su orden manual.",
   "Theme": "Tema",
   "There is no library folder at {path}. It may have been moved, renamed or deleted, or its drive isn't connected.": "No hay ninguna carpeta de biblioteca en {path}. Puede que se haya movido, renombrado o eliminado, o que su disco no esté conectado.",
@@ -1395,6 +1494,7 @@
     "other": "Desagrupar {n} etiquetas"
   },
   "Ungrouped": "Sin grupo",
+  "Unknown login item status": "Estado del ítem de inicio de sesión desconocido",
   "Unlock": "Desbloquear",
   "Unlock to view contents": "Desbloquea para ver el contenido",
   "Unlock with Touch ID": "Desbloquear con Touch ID",
@@ -1440,6 +1540,8 @@
   "Waterfall": "Cascada",
   "Waterfall layout": "Vista en cascada",
   "We": "mi",
+  "WebP files are usually smaller, so the {format} files will take more space. Each WebP replaced goes to the Trash; animated WebPs are skipped.": "Los archivos WebP suelen ser más pequeños, por lo que los archivos {format} ocuparán más espacio. Cada WebP sustituido va a la papelera; los WebP animados se omiten.",
+  "When off, closing the window takes Falcon out of the Dock while its menu bar icon is shown, and quits it otherwise.": "Si está desactivado, al cerrar la ventana Falcon desaparece del Dock mientras se muestra su icono de la barra de menús; si no, se cierra.",
   "When off, screenshots taken on a Retina screen are saved at half size.": "Desactivado, las capturas hechas en una pantalla Retina se guardan a la mitad de tamaño.",
   "When off, such files are imported as new items.": "Si está desactivado, esos archivos se importan como elementos nuevos.",
   "White": "Blanco",
@@ -1533,6 +1635,26 @@
   "{folders} and {items} from {path} will be added. Folders, smart folders and tag groups already here are kept as they are, and so are items already here.": "Se añadirán {folders} y {items} de {path}. Las carpetas, carpetas inteligentes y grupos de etiquetas que ya están aquí se mantienen tal cual, igual que los elementos existentes.",
   "{hex}  ·  {ratio}%\nClick to find similar colours, right-click for more": "{hex}  ·  {ratio}%\nClic para buscar colores similares, clic derecho para más",
   "{lib}'s metadata.json was damaged and was restored from backup/{name}; the damaged file was kept in backup/": "El metadata.json de «{lib}» estaba dañado y se restauró desde backup/{name}; el archivo dañado se conservó en backup/.",
+  "{message}; skipped {n} items (animated)": {
+    "one": "{message}; se omitió {n} elemento (animado)",
+    "other": "{message}; se omitieron {n} elementos (animados)"
+  },
+  "{message}; {n} items couldn't be converted ({reason})": {
+    "one": "{message}; no se pudo convertir {n} elemento ({reason})",
+    "other": "{message}; no se pudieron convertir {n} elementos ({reason})"
+  },
+  "{message}; {n} items couldn't be copied": {
+    "one": "{message}; no se pudo copiar {n} elemento",
+    "other": "{message}; no se pudieron copiar {n} elementos"
+  },
+  "{message}; {n} items were already there": {
+    "one": "{message}; ya estaba {n} elemento",
+    "other": "{message}; ya estaban {n} elementos"
+  },
+  "{message}; {n} old WebP files couldn't go to the Trash and were left in their item folders": {
+    "one": "{message}; no se pudo mover {n} WebP antiguo a la papelera y se dejó en su carpeta de elemento",
+    "other": "{message}; no se pudieron mover {n} archivos WebP antiguos a la papelera y se dejaron en sus carpetas de elementos"
+  },
   "{month} {year}": "{month} de {year}",
   "{name} (Default)": "{name} (predeterminada)",
   "{name} may not save changes": "{name} podría no guardar los cambios",
@@ -1570,6 +1692,14 @@
   "{n} folders": {
     "one": "{n} carpeta",
     "other": "{n} carpetas"
+  },
+  "{n} folders couldn't be moved to the Trash ({path}: {reason}).": {
+    "one": "No se pudo mover {n} carpeta a la papelera ({path}: {reason}).",
+    "other": "No se pudieron mover {n} carpetas a la papelera ({path}: {reason})."
+  },
+  "{n} folders that belong to no item go to the macOS Trash.": {
+    "one": "{n} carpeta que no pertenece a ningún elemento va a la papelera de macOS.",
+    "other": "{n} carpetas que no pertenecen a ningún elemento van a la papelera de macOS."
   },
   "{n} groups · tick the groups to merge": {
     "one": "{n} grupo · marcar los grupos que se combinarán",
@@ -1627,6 +1757,10 @@
     "one": "Se omitirá {n} elemento que no es una imagen.",
     "other": "Se omitirán {n} elementos que no son imágenes."
   },
+  "{n} items whose folder is gone are dropped.": {
+    "one": "Se quita {n} elemento cuya carpeta ya no existe.",
+    "other": "Se quitan {n} elementos cuya carpeta ya no existe."
+  },
   "{n} items will be affected. Go ahead?": {
     "one": "Afectará a {n} elemento. ¿Continuar?",
     "other": "Afectará a {n} elementos. ¿Continuar?"
@@ -1634,6 +1768,10 @@
   "{n} items will take up {size} of disk space in this library.": {
     "one": "{n} elemento ocupará {size} de espacio en disco en esta biblioteca.",
     "other": "{n} elementos ocuparán {size} de espacio en disco en esta biblioteca."
+  },
+  "{n} items with a missing or empty file go to the Trash.": {
+    "one": "{n} elemento con un archivo ausente o vacío va a la papelera.",
+    "other": "{n} elementos con un archivo ausente o vacío van a la papelera."
   },
   "{n} similar pictures, the best copy picked (within {bits} of 64 bits)": {
     "one": "{n} imagen similar, mejor copia elegida (diferencia de hasta {bits} de 64 bits)",

@@ -11,7 +11,7 @@ use falcon_library::repair::{self, InvalidScan};
 
 use crate::app::{App, lock};
 use crate::theme as t;
-use crate::ui::dialogs::export::plural;
+use crate::locale::{tr, tr_n, tr_nf, trf};
 use crate::ui::dialogs::library_notices::Alert;
 
 #[derive(Default)]
@@ -26,20 +26,27 @@ pub(crate) enum State {
 pub(crate) fn finished_text(c: &repair::Cleared) -> String {
     let mut parts = Vec::new();
     if c.trashed > 0 {
-        parts.push(format!("moved {} with missing files to the Trash", plural(c.trashed, "item")));
+        parts.push(tr_n(c.trashed, "Moved {n} item with missing files to the Trash.", "Moved {n} items with missing files to the Trash."));
     }
     if c.removed > 0 {
-        parts.push(format!("moved {} to the macOS Trash", plural(c.removed, "empty item folder")));
+        parts.push(tr_n(c.removed, "Moved {n} empty item folder to the macOS Trash.", "Moved {n} empty item folders to the macOS Trash."));
     }
     if c.forgotten > 0 {
-        parts.push(format!("dropped {} whose folders were gone", plural(c.forgotten, "item")));
+        parts.push(tr_n(c.forgotten, "Dropped {n} item whose folder was gone.", "Dropped {n} items whose folders were gone."));
     }
-    let mut text = if parts.is_empty() { "Nothing needed cleaning up.".to_string() } else { format!("Falcon {}.", parts.join(", ")) };
+    if parts.is_empty() {
+        parts.push(tr("Nothing needed cleaning up.").to_string());
+    }
     if let Some((p, why)) = c.failed.first() {
-        text.push_str(&format!(" {} couldn't be moved to the Trash ({}: {why}).", plural(c.failed.len(), "folder"), p.display()));
+        parts.push(tr_nf(
+            c.failed.len(),
+            "{n} folder couldn't be moved to the Trash ({path}: {reason}).",
+            "{n} folders couldn't be moved to the Trash ({path}: {reason}).",
+            &[("path", &p.display()), ("reason", why)],
+        ));
     }
-    text.push_str(" The library was reloaded.");
-    text
+    parts.push(tr("The library was reloaded.").to_string());
+    parts.join(" ")
 }
 
 impl App {
@@ -68,7 +75,7 @@ impl App {
             State::Idle => {}
             State::Scanning(rx) => match rx.try_recv() {
                 Ok(scan) if scan.total() == 0 => {
-                    self.show_alert(Alert::new("Nothing invalid", format!("Looked at {}; none is empty or broken.", plural(scan.scanned, "item folder"))));
+                    self.show_alert(Alert::new(tr("Nothing invalid"), tr_n(scan.scanned, "Looked at {n} item folder; none is empty or broken.", "Looked at {n} item folders; none is empty or broken.")));
                 }
                 Ok(scan) => self.tools.clear = State::Found(scan),
                 Err(TryRecvError::Disconnected) => {}
@@ -76,7 +83,7 @@ impl App {
                     egui::Modal::new(egui::Id::unique("clear-invalid-scan")).show(ctx, |ui| {
                         ui.horizontal(|ui| {
                             ui.spinner();
-                            ui.label("Looking for empty or broken item folders…");
+                            ui.label(tr("Looking for empty or broken item folders…"));
                         });
                     });
                     self.tools.clear = State::Scanning(rx);
@@ -86,27 +93,27 @@ impl App {
                 let mut answer = None;
                 let modal = egui::Modal::new(egui::Id::unique("clear-invalid-confirm")).show(ctx, |ui| {
                     ui.set_width(360.0);
-                    ui.label(RichText::new(if scan.total() == 1 { "Found 1 invalid entry".to_string() } else { format!("Found {} invalid entries", scan.total()) }).size(15.0));
+                    ui.label(RichText::new(tr_n(scan.total(), "Found {n} invalid entry", "Found {n} invalid entries")).size(15.0));
                     ui.add_space(4.0);
                     let mut lines = Vec::new();
                     if !scan.broken.is_empty() {
-                        lines.push(format!("{} with a missing or empty file go to the Trash.", plural(scan.broken.len(), "item")));
+                        lines.push(tr_n(scan.broken.len(), "{n} item with a missing or empty file goes to the Trash.", "{n} items with a missing or empty file go to the Trash."));
                     }
                     if !scan.orphans.is_empty() {
-                        lines.push(format!("{} that belong to no item go to the macOS Trash.", plural(scan.orphans.len(), "folder")));
+                        lines.push(tr_n(scan.orphans.len(), "{n} folder that belongs to no item goes to the macOS Trash.", "{n} folders that belong to no item go to the macOS Trash."));
                     }
                     if !scan.gone.is_empty() {
-                        lines.push(format!("{} whose folder is gone are dropped.", plural(scan.gone.len(), "item")));
+                        lines.push(tr_n(scan.gone.len(), "{n} item whose folder is gone is dropped.", "{n} items whose folder is gone are dropped."));
                     }
                     ui.label(lines.join(" "));
                     ui.add_space(4.0);
-                    ui.label(RichText::new("If the library is synced by a cloud service, let the sync finish first: files still downloading look missing.").color(t::p().text_muted));
+                    ui.label(RichText::new(tr("If the library is synced by a cloud service, let the sync finish first: files still downloading look missing.")).color(t::p().text_muted));
                     ui.add_space(10.0);
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.button(RichText::new("Clean Up").color(t::p().icon_red)).clicked() {
+                        if ui.button(RichText::new(tr("Clean Up")).color(t::p().icon_red)).clicked() {
                             answer = Some(true);
                         }
-                        if ui.button("Cancel").clicked() {
+                        if ui.button(tr("Cancel")).clicked() {
                             answer = Some(false);
                         }
                     });
@@ -132,9 +139,9 @@ impl App {
                     crate::errlog::error(&format!("Clear Invalid Content: couldn't move {} to the Trash: {why}", p.display()));
                 }
                 self.ws.selected.retain(|id| !scan.broken.contains(id) && !scan.gone.contains(id));
-                self.show_alert(Alert::new("Cleanup finished", finished_text(&done)));
+                self.show_alert(Alert::new(tr("Cleanup finished"), finished_text(&done)));
             }
-            Err(e) => self.flash_error(format!("Could not save: {e}")),
+            Err(e) => self.flash_error(trf("Could not save: {error}", &[("error", &e)])),
         }
         // As Eagle does, the library is read again from disk.
         self.refresh = true;
@@ -148,7 +155,7 @@ mod tests {
     #[test]
     fn finished_texts() {
         let c = repair::Cleared { trashed: 2, removed: 1, forgotten: 0, failed: vec![] };
-        assert_eq!(finished_text(&c), "Falcon moved 2 items with missing files to the Trash, moved 1 empty item folder to the macOS Trash. The library was reloaded.");
+        assert_eq!(finished_text(&c), "Moved 2 items with missing files to the Trash. Moved 1 empty item folder to the macOS Trash. The library was reloaded.");
         let none = repair::Cleared::default();
         assert_eq!(finished_text(&none), "Nothing needed cleaning up. The library was reloaded.");
     }

@@ -22,6 +22,7 @@ use eframe::egui::{self, Align2, Pos2, Rect, Ui, Vec2, vec2};
 use falcon_library::Library;
 use falcon_library::model::Item;
 
+use crate::locale::tr;
 use crate::app::{App, ViewState};
 use crate::loader::Tier;
 use crate::theme::{self as t, font};
@@ -97,7 +98,7 @@ impl App {
         let c = area.center();
         ext_placeholder(ui, Rect::from_center_size(c - vec2(0.0, 70.0), Vec2::splat(150.0)), &item.ext);
         let name = format!("{}.{}", item.name, item.ext);
-        let line = if crate::icloud::is_missing(&item.original_path(root)) { crate::icloud::MISSING_HINT } else { "Falcon can't show a preview of this file. Try opening it in another app." };
+        let line = if crate::icloud::is_missing(&item.original_path(root)) { tr(crate::icloud::MISSING_HINT) } else { tr("Falcon can't show a preview of this file. Try opening it in another app.") };
         self.notice_lines(ui, area, &name, line);
     }
 

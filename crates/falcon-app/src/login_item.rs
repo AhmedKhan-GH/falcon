@@ -28,6 +28,8 @@ impl Status {
     }
 }
 
+use crate::locale::{tr, tr_key};
+
 /// Maps `SMAppServiceStatus` (0 not registered, 1 enabled, 2 requires
 /// approval, 3 not found).
 pub fn status_from_code(code: isize) -> Status {
@@ -35,8 +37,8 @@ pub fn status_from_code(code: isize) -> Status {
         0 => Status::Off,
         1 => Status::On,
         2 => Status::NeedsApproval,
-        3 => Status::Unavailable("The system can't find the app to open at login".into()),
-        _ => Status::Unavailable("Unknown login item status".into()),
+        3 => Status::Unavailable(tr("The system can't find the app to open at login").into()),
+        _ => Status::Unavailable(tr("Unknown login item status").into()),
     }
 }
 
@@ -45,7 +47,7 @@ pub fn is_app_bundle(path: &str) -> bool {
     path.trim_end_matches('/').ends_with(".app")
 }
 
-const NOT_BUNDLED: &str = "Only the app bundle can open at login";
+const NOT_BUNDLED: &str = tr_key("Only the app bundle can open at login");
 
 /// The current state, read from the system.
 pub fn status() -> Status {
@@ -66,6 +68,7 @@ mod platform {
     use objc2_foundation::{NSBundle, NSError};
 
     use super::{NOT_BUNDLED, Status, is_app_bundle, status_from_code};
+    use crate::locale::tr;
 
     #[link(name = "ServiceManagement", kind = "framework")]
     unsafe extern "C" {}
@@ -78,13 +81,13 @@ mod platform {
     /// `+[SMAppService mainAppService]`, or why there isn't one.
     fn service() -> Result<Retained<AnyObject>, Status> {
         if !bundled() {
-            return Err(Status::Unavailable(NOT_BUNDLED.into()));
+            return Err(Status::Unavailable(tr(NOT_BUNDLED).into()));
         }
         let Some(class) = AnyClass::get(c"SMAppService") else {
-            return Err(Status::Unavailable("Opening at login needs macOS 13 or later".into()));
+            return Err(Status::Unavailable(tr("Opening at login needs macOS 13 or later").into()));
         };
         let service: Option<Retained<AnyObject>> = unsafe { msg_send![class, mainAppService] };
-        service.ok_or_else(|| Status::Unavailable("The system has no login item for this app".into()))
+        service.ok_or_else(|| Status::Unavailable(tr("The system has no login item for this app").into()))
     }
 
     fn read(service: &AnyObject) -> Status {
@@ -114,13 +117,14 @@ mod platform {
 #[cfg(not(target_os = "macos"))]
 mod platform {
     use super::Status;
+    use crate::locale::tr;
 
     pub fn status() -> Status {
-        Status::Unavailable("Opening at login is only available on macOS".into())
+        Status::Unavailable(tr("Opening at login is only available on macOS").into())
     }
 
     pub fn set(_on: bool) -> Result<Status, String> {
-        Err("Opening at login is only available on macOS".into())
+        Err(tr("Opening at login is only available on macOS").into())
     }
 }
 

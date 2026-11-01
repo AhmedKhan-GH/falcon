@@ -9,7 +9,7 @@ use falcon_library::webp_convert::{Converted, Format};
 
 use crate::app::{App, lock};
 use crate::theme as t;
-use crate::ui::dialogs::export::plural;
+use crate::locale::{tr, tr_nf, trf};
 use crate::ui::dialogs::progress::Outcome;
 
 /// The confirmation waiting for an answer: the WebP items and the format.
@@ -26,9 +26,13 @@ pub(crate) fn webps<'a>(targets: &[String], item: impl Fn(&str) -> Option<&'a It
 /// The toast for a finished conversion.
 pub(crate) fn summary(done: usize, skipped: usize, format: Format, stopped: bool) -> String {
     let fmt = format.ext().to_uppercase();
-    let mut msg = if stopped { format!("Stopped after converting {} to {fmt}", plural(done, "item")) } else { format!("Converted {} to {fmt}", plural(done, "item")) };
+    let mut msg = if stopped {
+        tr_nf(done, "Stopped after converting {n} item to {format}", "Stopped after converting {n} items to {format}", &[("format", &fmt)])
+    } else {
+        tr_nf(done, "Converted {n} item to {format}", "Converted {n} items to {format}", &[("format", &fmt)])
+    };
     if skipped > 0 {
-        msg.push_str(&format!("; skipped {} (animated)", plural(skipped, "item")));
+        msg = tr_nf(skipped, "{message}; skipped {n} item (animated)", "{message}; skipped {n} items (animated)", &[("message", &msg)]);
     }
     msg
 }
@@ -39,7 +43,7 @@ impl App {
         if !item.ext.eq_ignore_ascii_case("webp") {
             return;
         }
-        crate::ui::menus::search::submenu(ui, "Convert WebP", |ui| {
+        crate::ui::menus::search::submenu(ui, tr("Convert WebP"), |ui| {
             for format in [Format::Png, Format::Jpg] {
                 if ui.button(format.ext().to_uppercase()).clicked()
                     && let Some(shared) = self.ws.lib.clone()
@@ -63,15 +67,15 @@ impl App {
         let mut answer = None;
         let modal = egui::Modal::new(egui::Id::unique("webp-convert-confirm")).show(ctx, |ui| {
             ui.set_width(340.0);
-            ui.label(RichText::new(format!("Convert {} to {fmt}", plural(ids.len(), "WebP image"))).size(15.0));
+            ui.label(RichText::new(tr_nf(ids.len(), "Convert {n} WebP image to {format}", "Convert {n} WebP images to {format}", &[("format", &fmt)])).size(15.0));
             ui.add_space(4.0);
-            ui.label(RichText::new(format!("WebP files are usually smaller, so the {fmt} files will take more space. Each WebP replaced goes to the Trash; animated WebPs are skipped.")).color(t::p().text_muted));
+            ui.label(RichText::new(trf("WebP files are usually smaller, so the {format} files will take more space. Each WebP replaced goes to the Trash; animated WebPs are skipped.", &[("format", &fmt)])).color(t::p().text_muted));
             ui.add_space(10.0);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button("Convert").clicked() {
+                if ui.button(tr("Convert")).clicked() {
                     answer = Some(true);
                 }
-                if ui.button("Cancel").clicked() {
+                if ui.button(tr("Cancel")).clicked() {
                     answer = Some(false);
                 }
             });
@@ -93,7 +97,7 @@ impl App {
         if self.operation_running() {
             return;
         }
-        let h = self.ws.op.start(&self.ctx, "Converting WebP", ids.len(), true);
+        let h = self.ws.op.start(&self.ctx, tr("Converting WebP"), ids.len(), true);
         std::thread::spawn(move || {
             let (mut done, mut skipped, mut failures, mut kept) = (0, 0, Vec::new(), 0);
             let mut forget = Vec::new();
@@ -124,9 +128,19 @@ impl App {
                 for f in &failures {
                     crate::errlog::error(&format!("Convert WebP: {f}"));
                 }
-                error = Some(format!("{message}; {} couldn't be converted ({})", plural(failures.len(), "item"), failures[0]));
+                error = Some(tr_nf(
+                    failures.len(),
+                    "{message}; {n} item couldn't be converted ({reason})",
+                    "{message}; {n} items couldn't be converted ({reason})",
+                    &[("message", &message), ("reason", &failures[0])],
+                ));
             } else if kept > 0 {
-                error = Some(format!("{message}; {} old WebP files couldn't go to the Trash and were left in their item folders", kept));
+                error = Some(tr_nf(
+                    kept,
+                    "{message}; {n} old WebP file couldn't go to the Trash and was left in its item folder",
+                    "{message}; {n} old WebP files couldn't go to the Trash and were left in their item folders",
+                    &[("message", &message)],
+                ));
             }
             h.finish(Outcome { message, error, forget, changed: done > 0, ..Default::default() });
         });

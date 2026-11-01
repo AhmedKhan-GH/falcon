@@ -13,6 +13,10 @@
   "API on http://localhost:{port}": "API on http://localhost:{port}",
   "API stopped": "API stopped",
   "About Falcon": "About Falcon",
+  "About {h} h {m} min left": "About {h} h {m} min left",
+  "About {n} h left": "About {n} h left",
+  "About {n} min left": "About {n} min left",
+  "About {n} s left": "About {n} s left",
   "Accuracy": "Accuracy",
   "Actions": "Actions",
   "Activated": "Activated",
@@ -43,23 +47,42 @@
   "Add to Folders…": "Add to Folders…",
   "Add to Group": "Add to Group",
   "Add to Last Used Folder": "Add to Last Used Folder",
+  "Add to Other Library": "Add to Other Library",
   "Add to Quick Access": "Add to Quick Access",
   "Add to the last used folder": "Add to the last used folder",
   "Add {n} items": {
     "one": "Add {n} item",
     "other": "Add {n} items"
   },
+  "Add {n} items to {library}": {
+    "one": "Add {n} item to {library}",
+    "other": "Add {n} items to {library}"
+  },
   "Add {n} to folder": "Add {n} to folder",
+  "Added the folder and {n} items to {target}": {
+    "one": "Added the folder and {n} item to {target}",
+    "other": "Added the folder and {n} items to {target}"
+  },
   "Added the folder's tags to {n} items": {
     "one": "Added the folder's tags to {n} item",
     "other": "Added the folder's tags to {n} items"
   },
+  "Added the smart folder to {target}": "Added the smart folder to {target}",
+  "Added the tag group to {target}": "Added the tag group to {target}",
   "Added {count}": "Added {count}",
   "Added {count}, {failed} failed": "Added {count}, {failed} failed",
   "Added {items}, {folders} and {others} from {name}.": "Added {items}, {folders} and {others} from {name}.",
   "Added {n} items to": {
     "one": "Added {n} item to",
     "other": "Added {n} items to"
+  },
+  "Added {n} items to {target}": {
+    "one": "Added {n} item to {target}",
+    "other": "Added {n} items to {target}"
+  },
+  "Added {n} items to {target}; it already had the folder": {
+    "one": "Added {n} item to {target}; it already had the folder",
+    "other": "Added {n} items to {target}; it already had the folder"
   },
   "Added {n} to": "Added {n} to",
   "Adding {n} items to the library": {
@@ -84,6 +107,7 @@
   "All Tags": "All Tags",
   "All Tags  {n}": "All Tags  {n}",
   "All Tags Are in Groups": "All Tags Are in Groups",
+  "Allow Falcon in System Settings ▸ General ▸ Login Items.": "Allow Falcon in System Settings ▸ General ▸ Login Items.",
   "Almost there…": "Almost there…",
   "Alphabet": "Alphabet",
   "Already in the library": "Already in the library",
@@ -128,6 +152,7 @@
   "Blue": "Blue",
   "Bookmark": "Bookmark",
   "Camera": "Camera",
+  "Can't add to that library": "Can't add to that library",
   "Can't find it?": "Can't find it?",
   "Can't import the Inboard backup": "Can't import the Inboard backup",
   "Can't import the package": "Can't import the package",
@@ -158,15 +183,19 @@
   "Choose Another": "Choose Another",
   "Choose Library…": "Choose Library…",
   "Choose Thumbnail": "Choose Thumbnail",
+  "Choose a Library to Add To": "Choose a Library to Add To",
   "Choose a Library to Merge In": "Choose a Library to Merge In",
   "Choose a look": "Choose a look",
   "Choose an Inboard Backup Folder": "Choose an Inboard Backup Folder",
   "Choose folders…": "Choose folders…",
   "Choose where each screenshot is saved": "Choose where each screenshot is saved",
   "Choose where to keep the library": "Choose where to keep the library",
+  "Clean Up": "Clean Up",
+  "Cleanup finished": "Cleanup finished",
   "Clear": "Clear",
   "Clear All": "Clear All",
   "Clear Filter": "Clear Filter",
+  "Clear Invalid Content…": "Clear Invalid Content…",
   "Clear Library History": "Clear Library History",
   "Clear Library History…": "Clear Library History…",
   "Clear Tag History…": "Clear Tag History…",
@@ -195,6 +224,7 @@
   "Click to resume": "Click to resume",
   "Close": "Close",
   "Close (Esc)": "Close (Esc)",
+  "Close Library While Tasks Run": "Close Library While Tasks Run",
   "Close Window": "Close Window",
   "Close the viewer, or clear the selection": "Close the viewer, or clear the selection",
   "Close the window": "Close the window",
@@ -211,6 +241,17 @@
   "Comparing pictures": "Comparing pictures",
   "Contains": "Contains",
   "Controls": "Controls",
+  "Convert": "Convert",
+  "Convert WebP": "Convert WebP",
+  "Convert {n} WebP images to {format}": {
+    "one": "Convert {n} WebP image to {format}",
+    "other": "Convert {n} WebP images to {format}"
+  },
+  "Converted {n} items to {format}": {
+    "one": "Converted {n} item to {format}",
+    "other": "Converted {n} items to {format}"
+  },
+  "Converting WebP": "Converting WebP",
   "Copied Base64": "Copied Base64",
   "Copied thumbnail": "Copied thumbnail",
   "Copied {n} Eagle links": {
@@ -267,6 +308,8 @@
   "Copy thumbnail": "Copy thumbnail",
   "Copy to Clipboard": "Copy to Clipboard",
   "Copy {value}": "Copy {value}",
+  "Copying to {library}": "Copying to {library}",
+  "Could not change opening at login: {error}": "Could not change opening at login: {error}",
   "Could not create the folder: {error}": "Could not create the folder: {error}",
   "Could not create the library: {error}": "Could not create the library: {error}",
   "Could not drag out: {error}": "Could not drag out: {error}",
@@ -381,6 +424,10 @@
   "Drop files to import them into this folder": "Drop files to import them into this folder",
   "Drop folders on the sidebar, or files on the grid or a folder": "Drop folders on the sidebar, or files on the grid or a folder",
   "Drop folders to import them with their subfolders": "Drop folders to import them with their subfolders",
+  "Dropped {n} items whose folders were gone.": {
+    "one": "Dropped {n} item whose folder was gone.",
+    "other": "Dropped {n} items whose folders were gone."
+  },
   "Duplicate": "Duplicate",
   "Duplicate item": "Duplicate item",
   "Duplicate the item": "Duplicate the item",
@@ -474,6 +521,7 @@
   "Failed imports ({n})": "Failed imports ({n})",
   "Falcon Documentation": "Falcon Documentation",
   "Falcon can't create files in the library folder ({why}), so changes may not be saved. Check the folder's permissions.": "Falcon can't create files in the library folder ({why}), so changes may not be saved. Check the folder's permissions.",
+  "Falcon can't show a preview of this file. Try opening it in another app.": "Falcon can't show a preview of this file. Try opening it in another app.",
   "Falcon can't show or edit this rule. Saving keeps it exactly as it is; remove it to drop it.": "Falcon can't show or edit this rule. Saving keeps it exactly as it is; remove it to drop it.",
   "Falcon couldn't read the library again: {error}": "Falcon couldn't read the library again: {error}",
   "Falcon is locked": "Falcon is locked",
@@ -484,6 +532,7 @@
   "File Name": "File Name",
   "File Paths": "File Paths",
   "File Size": "File Size",
+  "File not found. If the library is synced, the sync may still be in progress.": "File not found. If the library is synced, the sync may still be in progress.",
   "File replaced": "File replaced",
   "File size": "File size",
   "Files": "Files",
@@ -499,6 +548,7 @@
   "Find Duplicates": "Find Duplicates",
   "Find Items with These Tags": "Find Items with These Tags",
   "Find Similar Colours": "Find Similar Colours",
+  "Find empty or broken item folders and clean them up": "Find empty or broken item folders and clean them up",
   "Finds byte-identical files and merges each group into one item. Nothing changes until you merge.": "Finds byte-identical files and merges each group into one item. Nothing changes until you merge.",
   "Finds pictures that look alike, picks the best copy of each group, and merges the rest into it. Nothing changes until you merge.": "Finds pictures that look alike, picks the best copy of each group, and merges the rest into it. Nothing changes until you merge.",
   "First Item": "First Item",
@@ -532,6 +582,10 @@
   "Format and quality": "Format and quality",
   "Forward": "Forward",
   "Forward 10 frames": "Forward 10 frames",
+  "Found {n} invalid entries": {
+    "one": "Found {n} invalid entry",
+    "other": "Found {n} invalid entries"
+  },
   "Fr": "Fr",
   "From a File…": "From a File…",
   "From the Clipboard": "From the Clipboard",
@@ -577,6 +631,7 @@
   "How alike similar pictures must be": "How alike similar pictures must be",
   "Icon": "Icon",
   "Identical Files": "Identical Files",
+  "If the library is synced by a cloud service, let the sync finish first: files still downloading look missing.": "If the library is synced by a cloud service, let the sync finish first: files still downloading look missing.",
   "Image": "Image",
   "Images": "Images",
   "Images are only made smaller, never larger.": "Images are only made smaller, never larger.",
@@ -608,6 +663,7 @@
   "Importing Eagle Package": "Importing Eagle Package",
   "Importing into:": "Importing into:",
   "Importing {done} of {total}  ·  {current}": "Importing {done} of {total}  ·  {current}",
+  "Importing {done} of {total}  ·  {left}  ·  {current}": "Importing {done} of {total}  ·  {left}  ·  {current}",
   "Importing {images} and {folders} from Inboard": "Importing {images} and {folders} from Inboard",
   "In Another Format…": "In Another Format…",
   "In the library:": "In the library:",
@@ -637,6 +693,7 @@
   "Justified": "Justified",
   "Justified layout": "Justified layout",
   "Keep Both": "Keep Both",
+  "Keep Falcon in the Dock after closing its window": "Keep Falcon in the Dock after closing its window",
   "Keep Merging": "Keep Merging",
   "Keep This Copy": "Keep This Copy",
   "Keep both (import this copy as a new item)": "Keep both (import this copy as a new item)",
@@ -662,6 +719,7 @@
   "Leave Them Out": "Leave Them Out",
   "Leaves these items alone": "Leaves these items alone",
   "Leaves this item alone": "Leaves this item alone",
+  "Libraries can't be kept in the folder Falcon is installed in, because removing or updating the app would delete them. Move the library somewhere else and open it again.": "Libraries can't be kept in the folder Falcon is installed in, because removing or updating the app would delete them. Move the library somewhere else and open it again.",
   "Library": "Library",
   "Library changed elsewhere": "Library changed elsewhere",
   "Library closed": "Library closed",
@@ -676,6 +734,7 @@
   "Links": "Links",
   "List": "List",
   "List layout": "List layout",
+  "Local API unavailable": "Local API unavailable",
   "Lock Falcon": "Lock Falcon",
   "Lock Now": "Lock Now",
   "Lock falcon": "Lock falcon",
@@ -684,6 +743,11 @@
   "Lock the open folder now": "Lock the open folder now",
   "Locked: the filter and search stay when you open another view": "Locked: the filter and search stay when you open another view",
   "Longest side": "Longest side",
+  "Looked at {n} item folders; none is empty or broken.": {
+    "one": "Looked at {n} item folder; none is empty or broken.",
+    "other": "Looked at {n} item folders; none is empty or broken."
+  },
+  "Looking for empty or broken item folders…": "Looking for empty or broken item folders…",
   "Low": "Low",
   "Made by a newer Eagle": "Made by a newer Eagle",
   "Manual": "Manual",
@@ -766,9 +830,17 @@
   },
   "Move {n} to Trash": "Move {n} to Trash",
   "Move {n} to folder": "Move {n} to folder",
+  "Moved {n} empty item folders to the macOS Trash.": {
+    "one": "Moved {n} empty item folder to the macOS Trash.",
+    "other": "Moved {n} empty item folders to the macOS Trash."
+  },
   "Moved {n} items to": {
     "one": "Moved {n} item to",
     "other": "Moved {n} items to"
+  },
+  "Moved {n} items with missing files to the Trash.": {
+    "one": "Moved {n} item with missing files to the Trash.",
+    "other": "Moved {n} items with missing files to the Trash."
   },
   "Moved {n} to Trash": "Moved {n} to Trash",
   "Moved {t} to Trash": "Moved {t} to Trash",
@@ -829,6 +901,7 @@
   "No link": "No link",
   "No link to open": "No link to open",
   "No note": "No note",
+  "No other recent libraries": "No other recent libraries",
   "No picture on the clipboard": "No picture on the clipboard",
   "No settings match": "No settings match",
   "No shortcuts match": "No shortcuts match",
@@ -845,10 +918,13 @@
   "Not a valid link": "Not a valid link",
   "Not an Inboard backup": "Not an Inboard backup",
   "Not available: falcon has no template file for this format": "Not available: falcon has no template file for this format",
+  "Not finished": "Not finished",
   "Note": "Note",
   "Notes": "Notes",
   "Notes...": "Notes...",
   "Nothing found": "Nothing found",
+  "Nothing invalid": "Nothing invalid",
+  "Nothing needed cleaning up.": "Nothing needed cleaning up.",
   "Nothing to export": "Nothing to export",
   "Nothing to redo": "Nothing to redo",
   "Nothing to undo": "Nothing to undo",
@@ -862,10 +938,12 @@
   "One Tag per Row": "One Tag per Row",
   "Only images can be exported in another format": "Only images can be exported in another format",
   "Only take them out of this folder": "Only take them out of this folder",
+  "Only the app bundle can open at login": "Only the app bundle can open at login",
   "Only the smart folders go; the items they show stay.": "Only the smart folders go; the items they show stay.",
   "Open": "Open",
   "Open Eagle Library": "Open Eagle Library",
   "Open Existing Library…": "Open Existing Library…",
+  "Open Falcon when you log in": "Open Falcon when you log in",
   "Open File Location": "Open File Location",
   "Open Filter": "Open Filter",
   "Open Library…": "Open Library…",
@@ -905,6 +983,8 @@
     "one": "Open {n} file",
     "other": "Open {n} files"
   },
+  "Opening at login is only available on macOS": "Opening at login is only available on macOS",
+  "Opening at login needs macOS 13 or later": "Opening at login needs macOS 13 or later",
   "Opening {name}": "Opening {name}",
   "Opening {name}; {n} other libraries were left closed (one opens at a time)": {
     "one": "Opening {name}; {n} other library was left closed (one opens at a time)",
@@ -1289,11 +1369,22 @@
   "Start at": "Start at",
   "Start the tag picker's Recent tags over": "Start the tag picker's Recent tags over",
   "Starting": "Starting",
+  "Startup": "Startup",
   "Stop": "Stop",
+  "Stop Tasks and Close": "Stop Tasks and Close",
+  "Stopped after adding {done} of {n} items to {target}": {
+    "one": "Stopped after adding {done} of {n} item to {target}",
+    "other": "Stopped after adding {done} of {n} items to {target}"
+  },
+  "Stopped after converting {n} items to {format}": {
+    "one": "Stopped after converting {n} item to {format}",
+    "other": "Stopped after converting {n} items to {format}"
+  },
   "Stopped after {added} of {n} items from {name}": {
     "one": "Stopped after {added} of {n} item from {name}",
     "other": "Stopped after {added} of {n} items from {name}"
   },
+  "Stopping tasks…": "Stopping tasks…",
   "Stretch videos to fill the viewer": "Stretch videos to fill the viewer",
   "Su": "Su",
   "Subfolders ({count})": "Subfolders ({count})",
@@ -1310,6 +1401,7 @@
   "Take them out of the open folder": "Take them out of the open folder",
   "Takes effect when you Save or Apply.": "Takes effect when you Save or Apply.",
   "Tall portrait": "Tall portrait",
+  "Tasks are still running in {library}. Closing it stops them. Work already done is kept.": "Tasks are still running in {library}. Closing it stops them. Work already done is kept.",
   "Text Document": "Text Document",
   "Text, or /pattern/flags": "Text, or /pattern/flags",
   "Th": "Th",
@@ -1319,13 +1411,17 @@
   "The file isn't UTF-8 text, so it is shown read-only": "The file isn't UTF-8 text, so it is shown read-only",
   "The file name or path is too long to preview. Rename the file or move the library to a shorter path.": "The file name or path is too long to preview. Rename the file or move the library to a shorter path.",
   "The files are removed from the library and cannot be restored.": "The files are removed from the library and cannot be restored.",
+  "The files were copied, but {library} couldn't be updated: {error}. Opening it again picks the copied items up.": "The files were copied, but {library} couldn't be updated: {error}. Opening it again picks the copied items up.",
   "The folder already exists": "The folder already exists",
   "The item's file becomes a copy of “{file}”. Its name, tags, folders and notes stay; the current file is deleted.": "The item's file becomes a copy of “{file}”. Its name, tags, folders and notes stay; the current file is deleted.",
   "The items were copied, but the folders couldn't be saved: {error}": "The items were copied, but the folders couldn't be saved: {error}",
   "The library is a folder stored on this Mac. Back it up as you would any other files.": "The library is a folder stored on this Mac. Back it up as you would any other files.",
   "The library is still missing": "The library is still missing",
+  "The library was reloaded.": "The library was reloaded.",
   "The list can't be brought back. The files themselves are not touched.": "The list can't be brought back. The files themselves are not touched.",
   "The list of recent libraries is emptied, except for the libraries that are open now. This can't be undone. No library is deleted.": "The list of recent libraries is emptied, except for the libraries that are open now. This can't be undone. No library is deleted.",
+  "The local API couldn't start: ports {first}–{last} are all in use. Apps and browser extensions that talk to Falcon won't reach it. Choose another first port in Preferences ▸ Developer.": "The local API couldn't start: ports {first}–{last} are all in use. Apps and browser extensions that talk to Falcon won't reach it. Choose another first port in Preferences ▸ Developer.",
+  "The local API is running on port {port} but can't be reached through localhost, so browser extensions can't reach Falcon. A proxy or VPN may be redirecting localhost.": "The local API is running on port {port} but can't be reached through localhost, so browser extensions can't reach Falcon. A proxy or VPN may be redirecting localhost.",
   "The name can't be empty.": "The name can't be empty.",
   "The name can't contain symbols such as % ^ & * # @ or slashes.": "The name can't contain symbols such as % ^ & * # @ or slashes.",
   "The old password is wrong.": "The old password is wrong.",
@@ -1333,9 +1429,12 @@
   "The password is wrong.": "The password is wrong.",
   "The passwords don't match.": "The passwords don't match.",
   "The screenshot failed: {error}": "The screenshot failed: {error}",
+  "The system can't find the app to open at login": "The system can't find the app to open at login",
+  "The system has no login item for this app": "The system has no login item for this app",
   "The tag picker's Recent tags start over. Tags stay on their items.": "The tag picker's Recent tags start over. Tags stay on their items.",
   "The wheel button on an item": "The wheel button on an item",
   "The wheel over an image in the viewer": "The wheel over an image in the viewer",
+  "Their files and details are copied into the other library. This library keeps them as they are.": "Their files and details are copied into the other library. This library keeps them as they are.",
   "Their hand-made order is replaced.": "Their hand-made order is replaced.",
   "Theme": "Theme",
   "There is no library folder at {path}. It may have been moved, renamed or deleted, or its drive isn't connected.": "There is no library folder at {path}. It may have been moved, renamed or deleted, or its drive isn't connected.",
@@ -1395,6 +1494,7 @@
     "other": "Ungroup {n} tags"
   },
   "Ungrouped": "Ungrouped",
+  "Unknown login item status": "Unknown login item status",
   "Unlock": "Unlock",
   "Unlock to view contents": "Unlock to view contents",
   "Unlock with Touch ID": "Unlock with Touch ID",
@@ -1440,6 +1540,8 @@
   "Waterfall": "Waterfall",
   "Waterfall layout": "Waterfall layout",
   "We": "We",
+  "WebP files are usually smaller, so the {format} files will take more space. Each WebP replaced goes to the Trash; animated WebPs are skipped.": "WebP files are usually smaller, so the {format} files will take more space. Each WebP replaced goes to the Trash; animated WebPs are skipped.",
+  "When off, closing the window takes Falcon out of the Dock while its menu bar icon is shown, and quits it otherwise.": "When off, closing the window takes Falcon out of the Dock while its menu bar icon is shown, and quits it otherwise.",
   "When off, screenshots taken on a Retina screen are saved at half size.": "When off, screenshots taken on a Retina screen are saved at half size.",
   "When off, such files are imported as new items.": "When off, such files are imported as new items.",
   "White": "White",
@@ -1533,6 +1635,26 @@
   "{folders} and {items} from {path} will be added. Folders, smart folders and tag groups already here are kept as they are, and so are items already here.": "{folders} and {items} from {path} will be added. Folders, smart folders and tag groups already here are kept as they are, and so are items already here.",
   "{hex}  ·  {ratio}%\nClick to find similar colours, right-click for more": "{hex}  ·  {ratio}%\nClick to find similar colours, right-click for more",
   "{lib}'s metadata.json was damaged and was restored from backup/{name}; the damaged file was kept in backup/": "{lib}'s metadata.json was damaged and was restored from backup/{name}; the damaged file was kept in backup/",
+  "{message}; skipped {n} items (animated)": {
+    "one": "{message}; skipped {n} item (animated)",
+    "other": "{message}; skipped {n} items (animated)"
+  },
+  "{message}; {n} items couldn't be converted ({reason})": {
+    "one": "{message}; {n} item couldn't be converted ({reason})",
+    "other": "{message}; {n} items couldn't be converted ({reason})"
+  },
+  "{message}; {n} items couldn't be copied": {
+    "one": "{message}; {n} item couldn't be copied",
+    "other": "{message}; {n} items couldn't be copied"
+  },
+  "{message}; {n} items were already there": {
+    "one": "{message}; {n} item was already there",
+    "other": "{message}; {n} items were already there"
+  },
+  "{message}; {n} old WebP files couldn't go to the Trash and were left in their item folders": {
+    "one": "{message}; {n} old WebP file couldn't go to the Trash and was left in its item folder",
+    "other": "{message}; {n} old WebP files couldn't go to the Trash and were left in their item folders"
+  },
   "{month} {year}": "{month} {year}",
   "{name} (Default)": "{name} (Default)",
   "{name} may not save changes": "{name} may not save changes",
@@ -1570,6 +1692,14 @@
   "{n} folders": {
     "one": "{n} folder",
     "other": "{n} folders"
+  },
+  "{n} folders couldn't be moved to the Trash ({path}: {reason}).": {
+    "one": "{n} folder couldn't be moved to the Trash ({path}: {reason}).",
+    "other": "{n} folders couldn't be moved to the Trash ({path}: {reason})."
+  },
+  "{n} folders that belong to no item go to the macOS Trash.": {
+    "one": "{n} folder that belongs to no item goes to the macOS Trash.",
+    "other": "{n} folders that belong to no item go to the macOS Trash."
   },
   "{n} groups · tick the groups to merge": {
     "one": "{n} group · tick the groups to merge",
@@ -1627,6 +1757,10 @@
     "one": "{n} item that is not an image will be skipped.",
     "other": "{n} items that are not images will be skipped."
   },
+  "{n} items whose folder is gone are dropped.": {
+    "one": "{n} item whose folder is gone is dropped.",
+    "other": "{n} items whose folder is gone are dropped."
+  },
   "{n} items will be affected. Go ahead?": {
     "one": "{n} item will be affected. Go ahead?",
     "other": "{n} items will be affected. Go ahead?"
@@ -1634,6 +1768,10 @@
   "{n} items will take up {size} of disk space in this library.": {
     "one": "{n} item will take up {size} of disk space in this library.",
     "other": "{n} items will take up {size} of disk space in this library."
+  },
+  "{n} items with a missing or empty file go to the Trash.": {
+    "one": "{n} item with a missing or empty file goes to the Trash.",
+    "other": "{n} items with a missing or empty file go to the Trash."
   },
   "{n} similar pictures, the best copy picked (within {bits} of 64 bits)": {
     "one": "{n} similar picture, the best copy picked (within {bits} of 64 bits)",

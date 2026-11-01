@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use eframe::egui::{self, RichText};
 
 use crate::app::{App, Workspace};
+use crate::locale::{tr, trf};
 use crate::theme as t;
 
 /// A close waiting for its library's tasks.
@@ -56,7 +57,7 @@ pub(crate) fn step(stopping: bool, running: bool) -> Step {
 
 /// The dialog's text.
 pub(crate) fn body(library: &str) -> String {
-    format!("Tasks are still running in {library}. Closing it stops them. Work already done is kept.")
+    trf("Tasks are still running in {library}. Closing it stops them. Work already done is kept.", &[("library", &library)])
 }
 
 /// Whether imports, a long operation or an export are running in `ws`,
@@ -103,9 +104,9 @@ impl App {
             Step::Wait => {
                 egui::Modal::new(egui::Id::unique("force-close-wait")).show(ctx, |ui| {
                     ui.set_width(340.0);
-                    ui.label(RichText::new("Close Library While Tasks Run").size(15.0));
+                    ui.label(RichText::new(tr("Close Library While Tasks Run")).size(15.0));
                     ui.add_space(4.0);
-                    ui.label(RichText::new("Stopping tasks…").color(t::p().text_muted));
+                    ui.label(RichText::new(tr("Stopping tasks…")).color(t::p().text_muted));
                 });
                 ctx.request_repaint_after(std::time::Duration::from_millis(100));
             }
@@ -113,15 +114,15 @@ impl App {
                 let mut answer = None;
                 let modal = egui::Modal::new(egui::Id::unique("force-close")).show(ctx, |ui| {
                     ui.set_width(340.0);
-                    ui.label(RichText::new("Close Library While Tasks Run").size(15.0));
+                    ui.label(RichText::new(tr("Close Library While Tasks Run")).size(15.0));
                     ui.add_space(4.0);
                     ui.label(RichText::new(body(&name)).color(t::p().text_muted));
                     ui.add_space(10.0);
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.button(RichText::new("Stop Tasks and Close").color(t::p().icon_red)).clicked() {
+                        if ui.button(RichText::new(tr("Stop Tasks and Close")).color(t::p().icon_red)).clicked() {
                             answer = Some(true);
                         }
-                        if ui.button("Cancel").clicked() {
+                        if ui.button(tr("Cancel")).clicked() {
                             answer = Some(false);
                         }
                     });

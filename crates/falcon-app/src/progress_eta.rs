@@ -3,6 +3,8 @@
 
 use std::time::Duration;
 
+use crate::locale::trf;
+
 /// Shortest time worth basing an estimate on.
 const MIN_ELAPSED: Duration = Duration::from_secs(2);
 
@@ -23,16 +25,16 @@ pub fn format(d: Duration) -> String {
     if secs < 55.0 {
         let s = if secs <= 10.0 { secs.ceil().max(1.0) as u64 } else { ((secs / 5.0).round() * 5.0) as u64 };
         if s < 60 {
-            return format!("About {s} s left");
+            return trf("About {n} s left", &[("n", &s)]);
         }
     }
     let mins = (secs / 60.0).round().max(1.0) as u64;
     if mins < 60 {
-        format!("About {mins} min left")
+        trf("About {n} min left", &[("n", &mins)])
     } else if mins.is_multiple_of(60) {
-        format!("About {} h left", mins / 60)
+        trf("About {n} h left", &[("n", &(mins / 60))])
     } else {
-        format!("About {} h {} min left", mins / 60, mins % 60)
+        trf("About {h} h {m} min left", &[("h", &(mins / 60)), ("m", &(mins % 60))])
     }
 }
 

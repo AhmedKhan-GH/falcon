@@ -13,6 +13,10 @@
   "API on http://localhost:{port}": "API: http://localhost:{port}",
   "API stopped": "API остановлен",
   "About Falcon": "О программе Falcon",
+  "About {h} h {m} min left": "Осталось около {h} ч {m} мин",
+  "About {n} h left": "Осталось около {n} ч",
+  "About {n} min left": "Осталось около {n} мин",
+  "About {n} s left": "Осталось около {n} с",
   "Accuracy": "Точность",
   "Actions": "Действия",
   "Activated": "Активирован",
@@ -43,6 +47,7 @@
   "Add to Folders…": "Добавить в папки…",
   "Add to Group": "Добавить в группу",
   "Add to Last Used Folder": "Добавить в последнюю папку",
+  "Add to Other Library": "Добавить в другую библиотеку",
   "Add to Quick Access": "Добавить в быстрый доступ",
   "Add to the last used folder": "Добавить в последнюю использованную папку",
   "Add {n} items": {
@@ -50,12 +55,24 @@
     "many": "Добавить {n} элементов",
     "one": "Добавить {n} элемент"
   },
+  "Add {n} items to {library}": {
+    "few": "Добавить {n} элемента в {library}",
+    "many": "Добавить {n} элементов в {library}",
+    "one": "Добавить {n} элемент в {library}"
+  },
   "Add {n} to folder": "Добавить в папку: {n}",
+  "Added the folder and {n} items to {target}": {
+    "few": "В {target} добавлены папка и {n} элемента",
+    "many": "В {target} добавлены папка и {n} элементов",
+    "one": "В {target} добавлены папка и {n} элемент"
+  },
   "Added the folder's tags to {n} items": {
     "few": "Теги папки добавлены к {n} элементам",
     "many": "Теги папки добавлены к {n} элементам",
     "one": "Теги папки добавлены к {n} элементу"
   },
+  "Added the smart folder to {target}": "Смарт-папка добавлена в {target}",
+  "Added the tag group to {target}": "Группа тегов добавлена в {target}",
   "Added {count}": "Добавлено: {count}",
   "Added {count}, {failed} failed": "Добавлено: {count}, ошибок: {failed}",
   "Added {items}, {folders} and {others} from {name}.": "Добавлено из «{name}»: {items}, {folders} и {others}.",
@@ -63,6 +80,16 @@
     "few": "Добавлено {n} элемента в",
     "many": "Добавлено {n} элементов в",
     "one": "Добавлен {n} элемент в"
+  },
+  "Added {n} items to {target}": {
+    "few": "В {target} добавлено {n} элемента",
+    "many": "В {target} добавлено {n} элементов",
+    "one": "В {target} добавлен {n} элемент"
+  },
+  "Added {n} items to {target}; it already had the folder": {
+    "few": "В {target} добавлено {n} элемента; папка там уже была",
+    "many": "В {target} добавлено {n} элементов; папка там уже была",
+    "one": "В {target} добавлен {n} элемент; папка там уже была"
   },
   "Added {n} to": "Добавлено ({n}) в",
   "Adding {n} items to the library": {
@@ -90,6 +117,7 @@
   "All Tags": "Все теги",
   "All Tags  {n}": "Все теги  {n}",
   "All Tags Are in Groups": "Все теги в группах",
+  "Allow Falcon in System Settings ▸ General ▸ Login Items.": "Разрешите Falcon в разделе «Системные настройки ▸ Основные ▸ Объекты входа».",
   "Almost there…": "Почти готово…",
   "Alphabet": "По алфавиту",
   "Already in the library": "Уже в библиотеке",
@@ -134,6 +162,7 @@
   "Blue": "Синий",
   "Bookmark": "Закладка",
   "Camera": "Камера",
+  "Can't add to that library": "Нельзя добавить в эту библиотеку",
   "Can't find it?": "Не удаётся найти?",
   "Can't import the Inboard backup": "Не удаётся импортировать копию Inboard",
   "Can't import the package": "Не удаётся импортировать пакет",
@@ -164,15 +193,19 @@
   "Choose Another": "Выбрать другую",
   "Choose Library…": "Выбрать библиотеку…",
   "Choose Thumbnail": "Выбор миниатюры",
+  "Choose a Library to Add To": "Выберите библиотеку для добавления",
   "Choose a Library to Merge In": "Выберите библиотеку для объединения",
   "Choose a look": "Выберите оформление",
   "Choose an Inboard Backup Folder": "Выберите папку копии Inboard",
   "Choose folders…": "Выбрать папки…",
   "Choose where each screenshot is saved": "Выбирать место для каждого снимка",
   "Choose where to keep the library": "Выберите, где хранить библиотеку",
+  "Clean Up": "Очистить",
+  "Cleanup finished": "Очистка завершена",
   "Clear": "Сбросить",
   "Clear All": "Очистить всё",
   "Clear Filter": "Сбросить фильтр",
+  "Clear Invalid Content…": "Удалить недействительное содержимое…",
   "Clear Library History": "Очистить историю библиотек",
   "Clear Library History…": "Очистить историю библиотек…",
   "Clear Tag History…": "Очистить историю тегов…",
@@ -202,6 +235,7 @@
   "Click to resume": "Нажмите, чтобы продолжить",
   "Close": "Закрыть",
   "Close (Esc)": "Закрыть (Esc)",
+  "Close Library While Tasks Run": "Закрыть библиотеку, пока выполняются задачи",
   "Close Window": "Закрыть окно",
   "Close the viewer, or clear the selection": "Закрыть просмотрщик или снять выделение",
   "Close the window": "Закрыть окно",
@@ -218,6 +252,19 @@
   "Comparing pictures": "Сравнение изображений",
   "Contains": "Содержит",
   "Controls": "Управление",
+  "Convert": "Конвертировать",
+  "Convert WebP": "Конвертировать WebP",
+  "Convert {n} WebP images to {format}": {
+    "few": "Конвертировать {n} изображения WebP в {format}",
+    "many": "Конвертировать {n} изображений WebP в {format}",
+    "one": "Конвертировать {n} изображение WebP в {format}"
+  },
+  "Converted {n} items to {format}": {
+    "few": "Сконвертировано {n} элемента в {format}",
+    "many": "Сконвертировано {n} элементов в {format}",
+    "one": "Сконвертирован {n} элемент в {format}"
+  },
+  "Converting WebP": "Конвертация WebP",
   "Copied Base64": "Base64 скопирован",
   "Copied thumbnail": "Миниатюра скопирована",
   "Copied {n} Eagle links": {
@@ -282,6 +329,8 @@
   "Copy thumbnail": "Скопировать миниатюру",
   "Copy to Clipboard": "Копировать в буфер обмена",
   "Copy {value}": "Копировать {value}",
+  "Copying to {library}": "Копирование в {library}",
+  "Could not change opening at login: {error}": "Не удалось изменить открытие при входе: {error}",
   "Could not create the folder: {error}": "Не удалось создать папку: {error}",
   "Could not create the library: {error}": "Не удалось создать библиотеку: {error}",
   "Could not drag out: {error}": "Не удалось перетащить: {error}",
@@ -401,6 +450,11 @@
   "Drop files to import them into this folder": "Отпустите файлы, чтобы импортировать их в эту папку",
   "Drop folders on the sidebar, or files on the grid or a folder": "Перетащите папки на боковую панель, а файлы — на сетку или в папку",
   "Drop folders to import them with their subfolders": "Отпустите папки, чтобы импортировать их со вложенными папками",
+  "Dropped {n} items whose folders were gone.": {
+    "few": "Исключено {n} элемента, папки которых пропали.",
+    "many": "Исключено {n} элементов, папки которых пропали.",
+    "one": "Исключён {n} элемент, папка которого пропала."
+  },
   "Duplicate": "Дублировать",
   "Duplicate item": "Дублировать элемент",
   "Duplicate the item": "Дублировать элемент",
@@ -497,6 +551,7 @@
   "Failed imports ({n})": "Неудавшиеся импорты ({n})",
   "Falcon Documentation": "Документация Falcon",
   "Falcon can't create files in the library folder ({why}), so changes may not be saved. Check the folder's permissions.": "Falcon не может создавать файлы в папке библиотеки ({why}), поэтому изменения могут не сохраниться. Проверьте права доступа к папке.",
+  "Falcon can't show a preview of this file. Try opening it in another app.": "Falcon не может показать предпросмотр этого файла. Попробуйте открыть его в другом приложении.",
   "Falcon can't show or edit this rule. Saving keeps it exactly as it is; remove it to drop it.": "Falcon не может показать или изменить это правило. При сохранении оно остаётся как есть; удалите его, чтобы убрать.",
   "Falcon couldn't read the library again: {error}": "Falcon не смог заново прочитать библиотеку: {error}",
   "Falcon is locked": "Falcon заблокирован",
@@ -507,6 +562,7 @@
   "File Name": "Имя файла",
   "File Paths": "Пути к файлам",
   "File Size": "Размер файла",
+  "File not found. If the library is synced, the sync may still be in progress.": "Файл не найден. Если библиотека синхронизируется, синхронизация может ещё идти.",
   "File replaced": "Файл заменён",
   "File size": "Размер файла",
   "Files": "Файлы",
@@ -522,6 +578,7 @@
   "Find Duplicates": "Найти дубликаты",
   "Find Items with These Tags": "Найти элементы с этими тегами",
   "Find Similar Colours": "Найти похожие цвета",
+  "Find empty or broken item folders and clean them up": "Найти пустые или повреждённые папки элементов и очистить их",
   "Finds byte-identical files and merges each group into one item. Nothing changes until you merge.": "Находит файлы, совпадающие побайтно, и объединяет каждую группу в один элемент. Пока вы не объедините, ничего не меняется.",
   "Finds pictures that look alike, picks the best copy of each group, and merges the rest into it. Nothing changes until you merge.": "Находит похожие изображения, выбирает лучшую копию в каждой группе и объединяет остальные с ней. Пока вы не объедините, ничего не меняется.",
   "First Item": "Первый элемент",
@@ -555,6 +612,11 @@
   "Format and quality": "Формат и качество",
   "Forward": "Вперёд",
   "Forward 10 frames": "Вперёд на 10 кадров",
+  "Found {n} invalid entries": {
+    "few": "Найдено {n} недействительные записи",
+    "many": "Найдено {n} недействительных записей",
+    "one": "Найдена {n} недействительная запись"
+  },
   "Fr": "Пт",
   "From a File…": "Из файла…",
   "From the Clipboard": "Из буфера обмена",
@@ -601,6 +663,7 @@
   "How alike similar pictures must be": "Насколько похожими должны быть изображения",
   "Icon": "Значок",
   "Identical Files": "Идентичные файлы",
+  "If the library is synced by a cloud service, let the sync finish first: files still downloading look missing.": "Если библиотека синхронизируется через облачный сервис, сначала дождитесь окончания синхронизации: файлы, которые ещё загружаются, выглядят отсутствующими.",
   "Image": "Изображение",
   "Images": "Изображения",
   "Images are only made smaller, never larger.": "Изображения только уменьшаются, но не увеличиваются.",
@@ -634,6 +697,7 @@
   "Importing Eagle Package": "Импорт пакета Eagle",
   "Importing into:": "Импорт в:",
   "Importing {done} of {total}  ·  {current}": "Импорт: {done} из {total}  ·  {current}",
+  "Importing {done} of {total}  ·  {left}  ·  {current}": "Импорт: {done} из {total}  ·  {left}  ·  {current}",
   "Importing {images} and {folders} from Inboard": "Импорт из Inboard: {images} и {folders}",
   "In Another Format…": "В другом формате…",
   "In the library:": "В библиотеке:",
@@ -663,6 +727,7 @@
   "Justified": "По ширине",
   "Justified layout": "Вид «По ширине»",
   "Keep Both": "Оставить оба",
+  "Keep Falcon in the Dock after closing its window": "Оставлять Falcon в Dock после закрытия окна",
   "Keep Merging": "Продолжить объединение",
   "Keep This Copy": "Оставить эту копию",
   "Keep both (import this copy as a new item)": "Оставить оба (импортировать эту копию как новый элемент)",
@@ -688,6 +753,7 @@
   "Leave Them Out": "Пропустить",
   "Leaves these items alone": "Эти элементы останутся без изменений",
   "Leaves this item alone": "Этот элемент останется без изменений",
+  "Libraries can't be kept in the folder Falcon is installed in, because removing or updating the app would delete them. Move the library somewhere else and open it again.": "Библиотеки нельзя хранить в папке, в которую установлен Falcon: при удалении или обновлении приложения они будут удалены. Переместите библиотеку в другое место и откройте её снова.",
   "Library": "Библиотека",
   "Library changed elsewhere": "Библиотека изменена извне",
   "Library closed": "Библиотека закрыта",
@@ -702,6 +768,7 @@
   "Links": "Ссылки",
   "List": "Список",
   "List layout": "Вид «Список»",
+  "Local API unavailable": "Локальный API недоступен",
   "Lock Falcon": "Заблокировать Falcon",
   "Lock Now": "Заблокировать сейчас",
   "Lock falcon": "Заблокировать Falcon",
@@ -710,6 +777,12 @@
   "Lock the open folder now": "Заблокировать открытую папку сейчас",
   "Locked: the filter and search stay when you open another view": "Закреплено: фильтр и поиск сохраняются при переходе в другой раздел",
   "Longest side": "Длинная сторона",
+  "Looked at {n} item folders; none is empty or broken.": {
+    "few": "Проверено {n} папки элементов; пустых или повреждённых нет.",
+    "many": "Проверено {n} папок элементов; пустых или повреждённых нет.",
+    "one": "Проверена {n} папка элементов; пустых или повреждённых нет."
+  },
+  "Looking for empty or broken item folders…": "Поиск пустых или повреждённых папок элементов…",
   "Low": "Низкое",
   "Made by a newer Eagle": "Создана более новым Eagle",
   "Manual": "Вручную",
@@ -799,10 +872,20 @@
   },
   "Move {n} to Trash": "Переместить в корзину: {n}",
   "Move {n} to folder": "Переместить в папку: {n}",
+  "Moved {n} empty item folders to the macOS Trash.": {
+    "few": "{n} пустые папки элементов перемещены в корзину macOS.",
+    "many": "{n} пустых папок элементов перемещено в корзину macOS.",
+    "one": "{n} пустая папка элементов перемещена в корзину macOS."
+  },
   "Moved {n} items to": {
     "few": "Перемещено {n} элемента в",
     "many": "Перемещено {n} элементов в",
     "one": "Перемещён {n} элемент в"
+  },
+  "Moved {n} items with missing files to the Trash.": {
+    "few": "{n} элемента с отсутствующими файлами перемещено в корзину.",
+    "many": "{n} элементов с отсутствующими файлами перемещено в корзину.",
+    "one": "{n} элемент с отсутствующими файлами перемещён в корзину."
   },
   "Moved {n} to Trash": "В корзину перемещено: {n}",
   "Moved {t} to Trash": "В корзину перемещено: {t}",
@@ -863,6 +946,7 @@
   "No link": "Нет ссылки",
   "No link to open": "Нет ссылки для открытия",
   "No note": "Нет заметки",
+  "No other recent libraries": "Других недавних библиотек нет",
   "No picture on the clipboard": "В буфере обмена нет изображения",
   "No settings match": "Настройки не найдены",
   "No shortcuts match": "Нет подходящих сочетаний",
@@ -879,10 +963,13 @@
   "Not a valid link": "Недопустимая ссылка",
   "Not an Inboard backup": "Это не копия Inboard",
   "Not available: falcon has no template file for this format": "Недоступно: у falcon нет файла шаблона для этого формата",
+  "Not finished": "Не завершено",
   "Note": "Заметка",
   "Notes": "Заметки",
   "Notes...": "Заметки...",
   "Nothing found": "Ничего не найдено",
+  "Nothing invalid": "Недействительного нет",
+  "Nothing needed cleaning up.": "Очищать было нечего.",
   "Nothing to export": "Нечего экспортировать",
   "Nothing to redo": "Нечего повторять",
   "Nothing to undo": "Нечего отменять",
@@ -896,10 +983,12 @@
   "One Tag per Row": "Один тег в строке",
   "Only images can be exported in another format": "В другом формате можно экспортировать только изображения",
   "Only take them out of this folder": "Только убрать из этой папки",
+  "Only the app bundle can open at login": "При входе может открываться только пакет приложения",
   "Only the smart folders go; the items they show stay.": "Удаляются только смарт-папки; элементы в них остаются.",
   "Open": "Открыть",
   "Open Eagle Library": "Открыть библиотеку Eagle",
   "Open Existing Library…": "Открыть существующую библиотеку…",
+  "Open Falcon when you log in": "Открывать Falcon при входе",
   "Open File Location": "Открыть расположение файла",
   "Open Filter": "Открыть фильтр",
   "Open Library…": "Открыть библиотеку…",
@@ -940,6 +1029,8 @@
     "many": "Открыть {n} файлов",
     "one": "Открыть {n} файл"
   },
+  "Opening at login is only available on macOS": "Открытие при входе доступно только в macOS",
+  "Opening at login needs macOS 13 or later": "Для открытия при входе нужна macOS 13 или новее",
   "Opening {name}": "Открывается «{name}»",
   "Opening {name}; {n} other libraries were left closed (one opens at a time)": {
     "few": "Открывается {name}; {n} другие библиотеки остались закрытыми (открывается только одна)",
@@ -1342,12 +1433,25 @@
   "Start at": "Начать с",
   "Start the tag picker's Recent tags over": "Сбросить список недавних тегов в выборе тегов",
   "Starting": "Запуск",
+  "Startup": "Запуск",
   "Stop": "Остановить",
+  "Stop Tasks and Close": "Остановить задачи и закрыть",
+  "Stopped after adding {done} of {n} items to {target}": {
+    "few": "Остановлено после добавления {done} из {n} элементов в {target}",
+    "many": "Остановлено после добавления {done} из {n} элементов в {target}",
+    "one": "Остановлено после добавления {done} из {n} элемента в {target}"
+  },
+  "Stopped after converting {n} items to {format}": {
+    "few": "Остановлено после конвертации {n} элементов в {format}",
+    "many": "Остановлено после конвертации {n} элементов в {format}",
+    "one": "Остановлено после конвертации {n} элемента в {format}"
+  },
   "Stopped after {added} of {n} items from {name}": {
     "few": "Остановлено после {added} из {n} элементов из {name}",
     "many": "Остановлено после {added} из {n} элементов из {name}",
     "one": "Остановлено после {added} из {n} элемента из {name}"
   },
+  "Stopping tasks…": "Остановка задач…",
   "Stretch videos to fill the viewer": "Растягивать видео на весь просмотрщик",
   "Su": "Вс",
   "Subfolders ({count})": "Вложенные папки ({count})",
@@ -1364,6 +1468,7 @@
   "Take them out of the open folder": "Убрать их из открытой папки",
   "Takes effect when you Save or Apply.": "Вступает в силу после нажатия «Сохранить» или «Применить».",
   "Tall portrait": "Высокая портретная",
+  "Tasks are still running in {library}. Closing it stops them. Work already done is kept.": "В {library} ещё выполняются задачи. При закрытии они будут остановлены. Уже выполненная работа сохранится.",
   "Text Document": "Текстовый документ",
   "Text, or /pattern/flags": "Текст или /шаблон/флаги",
   "Th": "Чт",
@@ -1373,13 +1478,17 @@
   "The file isn't UTF-8 text, so it is shown read-only": "Файл не в кодировке UTF-8, поэтому он открыт только для чтения",
   "The file name or path is too long to preview. Rename the file or move the library to a shorter path.": "Имя файла или путь слишком длинные для предпросмотра. Переименуйте файл или переместите библиотеку в более короткий путь.",
   "The files are removed from the library and cannot be restored.": "Файлы будут удалены из библиотеки без возможности восстановления.",
+  "The files were copied, but {library} couldn't be updated: {error}. Opening it again picks the copied items up.": "Файлы скопированы, но обновить {library} не удалось: {error}. При повторном открытии скопированные элементы будут подхвачены.",
   "The folder already exists": "Папка уже существует",
   "The item's file becomes a copy of “{file}”. Its name, tags, folders and notes stay; the current file is deleted.": "Файл элемента станет копией «{file}». Имя, теги, папки и заметки сохранятся; текущий файл будет удалён.",
   "The items were copied, but the folders couldn't be saved: {error}": "Элементы скопированы, но папки сохранить не удалось: {error}",
   "The library is a folder stored on this Mac. Back it up as you would any other files.": "Библиотека — это папка на этом Mac. Делайте её резервные копии, как и других файлов.",
   "The library is still missing": "Библиотека по-прежнему не найдена",
+  "The library was reloaded.": "Библиотека перезагружена.",
   "The list can't be brought back. The files themselves are not touched.": "Список нельзя вернуть. Сами файлы не затрагиваются.",
   "The list of recent libraries is emptied, except for the libraries that are open now. This can't be undone. No library is deleted.": "Список недавних библиотек будет очищен, кроме библиотек, открытых сейчас. Это действие нельзя отменить. Ни одна библиотека не удаляется.",
+  "The local API couldn't start: ports {first}–{last} are all in use. Apps and browser extensions that talk to Falcon won't reach it. Choose another first port in Preferences ▸ Developer.": "Не удалось запустить локальный API: все порты {first}–{last} заняты. Приложения и расширения браузера, работающие с Falcon, не смогут к нему подключиться. Выберите другой первый порт в разделе «Настройки ▸ Разработчик».",
+  "The local API is running on port {port} but can't be reached through localhost, so browser extensions can't reach Falcon. A proxy or VPN may be redirecting localhost.": "Локальный API работает на порту {port}, но недоступен через localhost, поэтому расширения браузера не могут подключиться к Falcon. Возможно, прокси или VPN перенаправляет localhost.",
   "The name can't be empty.": "Имя не может быть пустым.",
   "The name can't contain symbols such as % ^ & * # @ or slashes.": "Имя не может содержать символы вроде % ^ & * # @ и косые черты.",
   "The old password is wrong.": "Старый пароль неверен.",
@@ -1387,9 +1496,12 @@
   "The password is wrong.": "Неверный пароль.",
   "The passwords don't match.": "Пароли не совпадают.",
   "The screenshot failed: {error}": "Снимок не удался: {error}",
+  "The system can't find the app to open at login": "Система не находит приложение для открытия при входе",
+  "The system has no login item for this app": "В системе нет объекта входа для этого приложения",
   "The tag picker's Recent tags start over. Tags stay on their items.": "Список недавних тегов в выборе тегов начнётся заново. Теги на элементах останутся.",
   "The wheel button on an item": "Нажатие колеса мыши на элементе",
   "The wheel over an image in the viewer": "Колесо над изображением в просмотрщике",
+  "Their files and details are copied into the other library. This library keeps them as they are.": "Их файлы и сведения копируются в другую библиотеку. В этой библиотеке они остаются без изменений.",
   "Their hand-made order is replaced.": "Заданный вручную порядок будет заменён.",
   "Theme": "Тема",
   "There is no library folder at {path}. It may have been moved, renamed or deleted, or its drive isn't connected.": "По адресу {path} нет папки библиотеки. Возможно, её переместили, переименовали или удалили, либо диск не подключён.",
@@ -1451,6 +1563,7 @@
     "one": "Разгруппировать {n} тег"
   },
   "Ungrouped": "Без группы",
+  "Unknown login item status": "Неизвестное состояние объекта входа",
   "Unlock": "Разблокировать",
   "Unlock to view contents": "Разблокируйте, чтобы увидеть содержимое",
   "Unlock with Touch ID": "Разблокировать с помощью Touch ID",
@@ -1498,6 +1611,8 @@
   "Waterfall": "Каскад",
   "Waterfall layout": "Вид «Каскад»",
   "We": "Ср",
+  "WebP files are usually smaller, so the {format} files will take more space. Each WebP replaced goes to the Trash; animated WebPs are skipped.": "Файлы WebP обычно меньше, поэтому файлы {format} займут больше места. Каждый заменённый WebP перемещается в корзину; анимированные WebP пропускаются.",
+  "When off, closing the window takes Falcon out of the Dock while its menu bar icon is shown, and quits it otherwise.": "Если выключено, при закрытии окна Falcon исчезает из Dock, пока показан его значок в строке меню, а иначе завершает работу.",
   "When off, screenshots taken on a Retina screen are saved at half size.": "Если выключено, снимки с экрана Retina сохраняются в половинном размере.",
   "When off, such files are imported as new items.": "Если выключено, такие файлы импортируются как новые элементы.",
   "White": "Белый",
@@ -1592,6 +1707,31 @@
   "{folders} and {items} from {path} will be added. Folders, smart folders and tag groups already here are kept as they are, and so are items already here.": "Из {path} будут добавлены {folders} и {items}. Уже имеющиеся здесь папки, смарт-папки, группы тегов и элементы останутся без изменений.",
   "{hex}  ·  {ratio}%\nClick to find similar colours, right-click for more": "{hex}  ·  {ratio}%\nЩелчок — найти похожие цвета, правый щелчок — другие действия",
   "{lib}'s metadata.json was damaged and was restored from backup/{name}; the damaged file was kept in backup/": "Файл metadata.json библиотеки «{lib}» был повреждён и восстановлен из backup/{name}; повреждённый файл сохранён в backup/.",
+  "{message}; skipped {n} items (animated)": {
+    "few": "{message}; пропущено {n} элемента (анимированные)",
+    "many": "{message}; пропущено {n} элементов (анимированные)",
+    "one": "{message}; пропущен {n} элемент (анимированный)"
+  },
+  "{message}; {n} items couldn't be converted ({reason})": {
+    "few": "{message}; не удалось конвертировать {n} элемента ({reason})",
+    "many": "{message}; не удалось конвертировать {n} элементов ({reason})",
+    "one": "{message}; не удалось конвертировать {n} элемент ({reason})"
+  },
+  "{message}; {n} items couldn't be copied": {
+    "few": "{message}; не удалось скопировать {n} элемента",
+    "many": "{message}; не удалось скопировать {n} элементов",
+    "one": "{message}; не удалось скопировать {n} элемент"
+  },
+  "{message}; {n} items were already there": {
+    "few": "{message}; {n} элемента уже были там",
+    "many": "{message}; {n} элементов уже были там",
+    "one": "{message}; {n} элемент уже был там"
+  },
+  "{message}; {n} old WebP files couldn't go to the Trash and were left in their item folders": {
+    "few": "{message}; {n} старых файла WebP не удалось переместить в корзину, они остались в папках элементов",
+    "many": "{message}; {n} старых файлов WebP не удалось переместить в корзину, они остались в папках элементов",
+    "one": "{message}; {n} старый файл WebP не удалось переместить в корзину, он остался в папке элемента"
+  },
   "{month} {year}": "{month} {year}",
   "{name} (Default)": "{name} (по умолчанию)",
   "{name} may not save changes": "«{name}» может не сохранять изменения",
@@ -1637,6 +1777,16 @@
     "few": "{n} папки",
     "many": "{n} папок",
     "one": "{n} папка"
+  },
+  "{n} folders couldn't be moved to the Trash ({path}: {reason}).": {
+    "few": "Не удалось переместить в корзину {n} папки ({path}: {reason}).",
+    "many": "Не удалось переместить в корзину {n} папок ({path}: {reason}).",
+    "one": "Не удалось переместить в корзину {n} папку ({path}: {reason})."
+  },
+  "{n} folders that belong to no item go to the macOS Trash.": {
+    "few": "{n} папки, не относящиеся ни к одному элементу, перемещаются в корзину macOS.",
+    "many": "{n} папок, не относящихся ни к одному элементу, перемещаются в корзину macOS.",
+    "one": "{n} папка, не относящаяся ни к одному элементу, перемещается в корзину macOS."
   },
   "{n} groups · tick the groups to merge": {
     "few": "{n} группы · отметьте группы для объединения",
@@ -1708,6 +1858,11 @@
     "many": "{n} элементов, не являющихся изображениями, будут пропущены.",
     "one": "{n} элемент, не являющийся изображением, будет пропущен."
   },
+  "{n} items whose folder is gone are dropped.": {
+    "few": "{n} элемента, папки которых пропали, исключаются.",
+    "many": "{n} элементов, папки которых пропали, исключаются.",
+    "one": "{n} элемент, папка которого пропала, исключается."
+  },
   "{n} items will be affected. Go ahead?": {
     "few": "Это затронет {n} элемента. Продолжить?",
     "many": "Это затронет {n} элементов. Продолжить?",
@@ -1717,6 +1872,11 @@
     "few": "{n} элемента займут {size} на диске в этой библиотеке.",
     "many": "{n} элементов займут {size} на диске в этой библиотеке.",
     "one": "{n} элемент займёт {size} на диске в этой библиотеке."
+  },
+  "{n} items with a missing or empty file go to the Trash.": {
+    "few": "{n} элемента с отсутствующим или пустым файлом перемещаются в корзину.",
+    "many": "{n} элементов с отсутствующим или пустым файлом перемещаются в корзину.",
+    "one": "{n} элемент с отсутствующим или пустым файлом перемещается в корзину."
   },
   "{n} similar pictures, the best copy picked (within {bits} of 64 bits)": {
     "few": "{n} похожих изображения, выбрана лучшая копия (отличие не более {bits} из 64 бит)",

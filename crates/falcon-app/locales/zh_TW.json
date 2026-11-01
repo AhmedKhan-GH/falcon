@@ -13,6 +13,10 @@
   "API on http://localhost:{port}": "API：http://localhost:{port}",
   "API stopped": "API 已停止",
   "About Falcon": "關於 Falcon",
+  "About {h} h {m} min left": "約剩餘 {h} 小時 {m} 分鐘",
+  "About {n} h left": "約剩餘 {n} 小時",
+  "About {n} min left": "約剩餘 {n} 分鐘",
+  "About {n} s left": "約剩餘 {n} 秒",
   "Accuracy": "精確度",
   "Actions": "動作",
   "Activated": "已啟用",
@@ -43,20 +47,35 @@
   "Add to Folders…": "加入資料夾…",
   "Add to Group": "加入群組",
   "Add to Last Used Folder": "加入上次使用的資料夾",
+  "Add to Other Library": "加入其他資料庫",
   "Add to Quick Access": "加入快速存取",
   "Add to the last used folder": "加入上次使用的資料夾",
   "Add {n} items": {
     "other": "加入{n}個項目"
   },
+  "Add {n} items to {library}": {
+    "other": "將 {n} 個項目加入 {library}"
+  },
   "Add {n} to folder": "將{n}個項目加入資料夾",
+  "Added the folder and {n} items to {target}": {
+    "other": "已將資料夾和 {n} 個項目加入 {target}"
+  },
   "Added the folder's tags to {n} items": {
     "other": "已將資料夾的標籤加入 {n} 個項目"
   },
+  "Added the smart folder to {target}": "已將智慧型資料夾加入 {target}",
+  "Added the tag group to {target}": "已將標籤群組加入 {target}",
   "Added {count}": "已加入 {count} 項",
   "Added {count}, {failed} failed": "已加入 {count} 項，{failed} 項失敗",
   "Added {items}, {folders} and {others} from {name}.": "已從「{name}」加入 {items}、{folders}和 {others}。",
   "Added {n} items to": {
     "other": "已將{n}個項目加入："
+  },
+  "Added {n} items to {target}": {
+    "other": "已將 {n} 個項目加入 {target}"
+  },
+  "Added {n} items to {target}; it already had the folder": {
+    "other": "已將 {n} 個項目加入 {target}；該資料夾已存在"
   },
   "Added {n} to": "已加入{n}個到",
   "Adding {n} items to the library": {
@@ -78,6 +97,7 @@
   "All Tags": "所有標籤",
   "All Tags  {n}": "所有標籤  {n}",
   "All Tags Are in Groups": "所有標籤都已分組",
+  "Allow Falcon in System Settings ▸ General ▸ Login Items.": "請在「系統設定 ▸ 一般 ▸ 登入項目」中允許 Falcon。",
   "Almost there…": "馬上就好…",
   "Alphabet": "字母順序",
   "Already in the library": "已在資料庫中",
@@ -122,6 +142,7 @@
   "Blue": "藍色",
   "Bookmark": "書籤",
   "Camera": "相機",
+  "Can't add to that library": "無法加入該資料庫",
   "Can't find it?": "找不到？",
   "Can't import the Inboard backup": "無法匯入 Inboard 備份",
   "Can't import the package": "無法匯入套件",
@@ -152,15 +173,19 @@
   "Choose Another": "選擇其他位置",
   "Choose Library…": "選擇資料庫…",
   "Choose Thumbnail": "選擇縮圖",
+  "Choose a Library to Add To": "選擇要加入的資料庫",
   "Choose a Library to Merge In": "選擇要合併的資料庫",
   "Choose a look": "選擇外觀",
   "Choose an Inboard Backup Folder": "選擇 Inboard 備份資料夾",
   "Choose folders…": "選擇資料夾…",
   "Choose where each screenshot is saved": "為每張截圖選擇儲存位置",
   "Choose where to keep the library": "選擇資料庫的存放位置",
+  "Clean Up": "清理",
+  "Cleanup finished": "清理完成",
   "Clear": "清除",
   "Clear All": "全部清除",
   "Clear Filter": "清除篩選",
+  "Clear Invalid Content…": "清除無效內容…",
   "Clear Library History": "清除資料庫記錄",
   "Clear Library History…": "清除資料庫記錄…",
   "Clear Tag History…": "清除標籤記錄…",
@@ -188,6 +213,7 @@
   "Click to resume": "點擊繼續",
   "Close": "關閉",
   "Close (Esc)": "關閉（Esc）",
+  "Close Library While Tasks Run": "工作執行時關閉資料庫",
   "Close Window": "關閉視窗",
   "Close the viewer, or clear the selection": "關閉檢視器，或取消選取",
   "Close the window": "關閉視窗",
@@ -204,6 +230,15 @@
   "Comparing pictures": "正在比較圖片",
   "Contains": "包含",
   "Controls": "操作",
+  "Convert": "轉換",
+  "Convert WebP": "轉換 WebP",
+  "Convert {n} WebP images to {format}": {
+    "other": "將 {n} 張 WebP 圖片轉換為 {format}"
+  },
+  "Converted {n} items to {format}": {
+    "other": "已將 {n} 個項目轉換為 {format}"
+  },
+  "Converting WebP": "正在轉換 WebP",
   "Copied Base64": "已拷貝 Base64",
   "Copied thumbnail": "已拷貝縮圖",
   "Copied {n} Eagle links": {
@@ -252,6 +287,8 @@
   "Copy thumbnail": "拷貝縮圖",
   "Copy to Clipboard": "複製到剪貼簿",
   "Copy {value}": "複製 {value}",
+  "Copying to {library}": "正在拷貝到 {library}",
+  "Could not change opening at login: {error}": "無法更改登入時開啟：{error}",
   "Could not create the folder: {error}": "無法建立資料夾：{error}",
   "Could not create the library: {error}": "無法建立資料庫：{error}",
   "Could not drag out: {error}": "無法拖出：{error}",
@@ -361,6 +398,9 @@
   "Drop files to import them into this folder": "拖放檔案以匯入此資料夾",
   "Drop folders on the sidebar, or files on the grid or a folder": "請將資料夾拖到側邊欄，或將檔案拖到網格或某個資料夾上",
   "Drop folders to import them with their subfolders": "拖放資料夾以連同子資料夾一併匯入",
+  "Dropped {n} items whose folders were gone.": {
+    "other": "已移除資料夾遺失的 {n} 個項目。"
+  },
   "Duplicate": "複製",
   "Duplicate item": "複製項目",
   "Duplicate the item": "複製項目",
@@ -451,6 +491,7 @@
   "Failed imports ({n})": "匯入失敗（{n}）",
   "Falcon Documentation": "Falcon 說明文件",
   "Falcon can't create files in the library folder ({why}), so changes may not be saved. Check the folder's permissions.": "Falcon 無法在資料庫資料夾中建立檔案（{why}），變更可能無法儲存。請檢查資料夾的權限。",
+  "Falcon can't show a preview of this file. Try opening it in another app.": "Falcon 無法顯示此檔案的預覽。請嘗試用其他 App 開啟。",
   "Falcon can't show or edit this rule. Saving keeps it exactly as it is; remove it to drop it.": "Falcon 無法顯示或編輯此規則。儲存時會原樣保留；移除後才會捨棄。",
   "Falcon couldn't read the library again: {error}": "Falcon 無法再次讀取該資料庫：{error}",
   "Falcon is locked": "Falcon 已鎖定",
@@ -461,6 +502,7 @@
   "File Name": "檔案名稱",
   "File Paths": "檔案路徑",
   "File Size": "檔案大小",
+  "File not found. If the library is synced, the sync may still be in progress.": "找不到檔案。如果資料庫使用了同步，同步可能仍在進行。",
   "File replaced": "檔案已替換",
   "File size": "檔案大小",
   "Files": "檔案",
@@ -476,6 +518,7 @@
   "Find Duplicates": "尋找重複項目",
   "Find Items with These Tags": "尋找帶有這些標籤的項目",
   "Find Similar Colours": "尋找相似顏色",
+  "Find empty or broken item folders and clean them up": "尋找空的或已損毀的項目資料夾並清理",
   "Finds byte-identical files and merges each group into one item. Nothing changes until you merge.": "尋找位元組完全相同的檔案，並將每組合併為一個項目。合併之前不會有任何變更。",
   "Finds pictures that look alike, picks the best copy of each group, and merges the rest into it. Nothing changes until you merge.": "尋找外觀相似的圖片，為每組挑出最佳複本，並將其餘合併到其中。合併之前不會有任何變更。",
   "First Item": "第一個項目",
@@ -509,6 +552,9 @@
   "Format and quality": "格式與品質",
   "Forward": "下一頁",
   "Forward 10 frames": "前進 10 格",
+  "Found {n} invalid entries": {
+    "other": "發現 {n} 個無效項目"
+  },
   "Fr": "五",
   "From a File…": "從檔案…",
   "From the Clipboard": "從剪貼簿",
@@ -553,6 +599,7 @@
   "How alike similar pictures must be": "圖片需要多相似",
   "Icon": "圖示",
   "Identical Files": "完全相同的檔案",
+  "If the library is synced by a cloud service, let the sync finish first: files still downloading look missing.": "如果資料庫透過雲端服務同步，請先等待同步完成：仍在下載的檔案會顯示為遺失。",
   "Image": "圖片",
   "Images": "影像",
   "Images are only made smaller, never larger.": "圖片只會縮小，不會放大。",
@@ -582,6 +629,7 @@
   "Importing Eagle Package": "正在匯入 Eagle 套件",
   "Importing into:": "匯入到：",
   "Importing {done} of {total}  ·  {current}": "正在匯入 {done}/{total}  ·  {current}",
+  "Importing {done} of {total}  ·  {left}  ·  {current}": "正在匯入 {done}/{total}  ·  {left}  ·  {current}",
   "Importing {images} and {folders} from Inboard": "正在從 Inboard 匯入 {images}和 {folders}",
   "In Another Format…": "以其他格式…",
   "In the library:": "資料庫中：",
@@ -611,6 +659,7 @@
   "Justified": "自適應",
   "Justified layout": "自適應版面",
   "Keep Both": "保留兩者",
+  "Keep Falcon in the Dock after closing its window": "關閉視窗後將 Falcon 保留在 Dock 中",
   "Keep Merging": "繼續合併",
   "Keep This Copy": "保留此複本",
   "Keep both (import this copy as a new item)": "兩者都保留（將此複本匯入為新項目）",
@@ -636,6 +685,7 @@
   "Leave Them Out": "排除",
   "Leaves these items alone": "保持這些項目不變",
   "Leaves this item alone": "保持此項目不變",
+  "Libraries can't be kept in the folder Falcon is installed in, because removing or updating the app would delete them. Move the library somewhere else and open it again.": "資料庫不能放在 Falcon 的安裝資料夾中，因為移除或更新 App 會將其刪除。請將資料庫移到其他位置後重新開啟。",
   "Library": "資料庫",
   "Library changed elsewhere": "資料庫在別處被更動",
   "Library closed": "資料庫已關閉",
@@ -650,6 +700,7 @@
   "Links": "連結",
   "List": "列表",
   "List layout": "列表版面",
+  "Local API unavailable": "本機 API 無法使用",
   "Lock Falcon": "鎖定 Falcon",
   "Lock Now": "立即鎖定",
   "Lock falcon": "鎖定 Falcon",
@@ -658,6 +709,10 @@
   "Lock the open folder now": "立即鎖定目前資料夾",
   "Locked: the filter and search stay when you open another view": "已鎖定：開啟其他檢視時保留篩選與搜尋",
   "Longest side": "最長邊",
+  "Looked at {n} item folders; none is empty or broken.": {
+    "other": "已檢查 {n} 個項目資料夾，沒有空的或已損毀的。"
+  },
+  "Looking for empty or broken item folders…": "正在尋找空的或已損毀的項目資料夾…",
   "Low": "低",
   "Made by a newer Eagle": "由較新版本的 Eagle 建立",
   "Manual": "手動",
@@ -733,8 +788,14 @@
   },
   "Move {n} to Trash": "將{n}個項目丟到垃圾桶",
   "Move {n} to folder": "將{n}個項目移到資料夾",
+  "Moved {n} empty item folders to the macOS Trash.": {
+    "other": "已將 {n} 個空的項目資料夾丟到 macOS 垃圾桶。"
+  },
   "Moved {n} items to": {
     "other": "已將{n}個項目移到："
+  },
+  "Moved {n} items with missing files to the Trash.": {
+    "other": "已將 {n} 個缺少檔案的項目丟到垃圾桶。"
   },
   "Moved {n} to Trash": "已將{n}個項目丟到垃圾桶",
   "Moved {t} to Trash": "已將{t}個項目丟到垃圾桶",
@@ -795,6 +856,7 @@
   "No link": "無連結",
   "No link to open": "沒有可打開的連結",
   "No note": "無備註",
+  "No other recent libraries": "沒有其他最近使用的資料庫",
   "No picture on the clipboard": "剪貼簿中沒有圖片",
   "No settings match": "沒有符合的設定",
   "No shortcuts match": "沒有符合的快速鍵",
@@ -811,10 +873,13 @@
   "Not a valid link": "不是有效的連結",
   "Not an Inboard backup": "不是 Inboard 備份",
   "Not available: falcon has no template file for this format": "無法使用：falcon沒有此格式的範本檔案",
+  "Not finished": "未完成",
   "Note": "備註",
   "Notes": "備註",
   "Notes...": "備註...",
   "Nothing found": "找不到項目",
+  "Nothing invalid": "沒有無效內容",
+  "Nothing needed cleaning up.": "沒有需要清理的內容。",
   "Nothing to export": "沒有可匯出的內容",
   "Nothing to redo": "沒有可重做的操作",
   "Nothing to undo": "沒有可還原的操作",
@@ -828,10 +893,12 @@
   "One Tag per Row": "每行一個標籤",
   "Only images can be exported in another format": "只有圖片可以匯出為其他格式",
   "Only take them out of this folder": "僅從此資料夾中移除",
+  "Only the app bundle can open at login": "只有 App 套件可以在登入時開啟",
   "Only the smart folders go; the items they show stay.": "僅刪除智慧型資料夾，其中顯示的項目會保留。",
   "Open": "開啟",
   "Open Eagle Library": "打開 Eagle 資料庫",
   "Open Existing Library…": "打開現有資料庫…",
+  "Open Falcon when you log in": "登入時開啟 Falcon",
   "Open File Location": "打開檔案位置",
   "Open Filter": "開啟篩選",
   "Open Library…": "開啟資料庫…",
@@ -870,6 +937,8 @@
   "Open {n} files": {
     "other": "打開{n}個檔案"
   },
+  "Opening at login is only available on macOS": "登入時開啟僅在 macOS 上可用",
+  "Opening at login needs macOS 13 or later": "登入時開啟需要 macOS 13 或更新版本",
   "Opening {name}": "正在打開「{name}」",
   "Opening {name}; {n} other libraries were left closed (one opens at a time)": {
     "other": "正在開啟 {name}；其他{n}個資料庫保持關閉（一次只能開啟一個）"
@@ -1234,10 +1303,19 @@
   "Start at": "起始編號",
   "Start the tag picker's Recent tags over": "重置標籤選擇器中的最近使用標籤",
   "Starting": "正在開始",
+  "Startup": "啟動",
   "Stop": "停止",
+  "Stop Tasks and Close": "停止工作並關閉",
+  "Stopped after adding {done} of {n} items to {target}": {
+    "other": "已在向 {target} 加入 {n} 個項目中的 {done} 個後停止"
+  },
+  "Stopped after converting {n} items to {format}": {
+    "other": "已將 {n} 個項目轉換為 {format} 後停止"
+  },
   "Stopped after {added} of {n} items from {name}": {
     "other": "已在 {name} 的{n}個項目中完成{added}個後停止"
   },
+  "Stopping tasks…": "正在停止工作…",
   "Stretch videos to fill the viewer": "拉伸影片以填滿檢視器",
   "Su": "日",
   "Subfolders ({count})": "子資料夾（{count}）",
@@ -1254,6 +1332,7 @@
   "Take them out of the open folder": "從目前資料夾中移出",
   "Takes effect when you Save or Apply.": "儲存或套用後生效。",
   "Tall portrait": "高直向",
+  "Tasks are still running in {library}. Closing it stops them. Work already done is kept.": "{library} 中仍有工作在執行。關閉會停止這些工作，已完成的部分會保留。",
   "Text Document": "文字文件",
   "Text, or /pattern/flags": "文字，或 /模式/旗標",
   "Th": "四",
@@ -1263,13 +1342,17 @@
   "The file isn't UTF-8 text, so it is shown read-only": "檔案不是 UTF-8 文字，因此以唯讀方式顯示",
   "The file name or path is too long to preview. Rename the file or move the library to a shorter path.": "檔名或路徑過長，無法預覽。請重新命名檔案，或將資料庫移到較短的路徑。",
   "The files are removed from the library and cannot be restored.": "檔案將從資料庫中移除，且無法回復。",
+  "The files were copied, but {library} couldn't be updated: {error}. Opening it again picks the copied items up.": "檔案已拷貝，但無法更新 {library}：{error}。再次開啟後會載入已拷貝的項目。",
   "The folder already exists": "資料夾已存在",
   "The item's file becomes a copy of “{file}”. Its name, tags, folders and notes stay; the current file is deleted.": "項目的檔案將變為「{file}」的拷貝。名稱、標籤、資料夾和備註會保留，目前的檔案將被刪除。",
   "The items were copied, but the folders couldn't be saved: {error}": "項目已拷貝，但無法儲存資料夾：{error}",
   "The library is a folder stored on this Mac. Back it up as you would any other files.": "資料庫是儲存在這台 Mac 上的資料夾。請像備份其他檔案一樣備份它。",
   "The library is still missing": "仍然找不到資料庫",
+  "The library was reloaded.": "資料庫已重新載入。",
   "The list can't be brought back. The files themselves are not touched.": "列表無法回復。檔案本身不受影響。",
   "The list of recent libraries is emptied, except for the libraries that are open now. This can't be undone. No library is deleted.": "最近使用的資料庫列表將被清空，目前已開啟的資料庫除外。此操作無法還原。不會刪除任何資料庫。",
+  "The local API couldn't start: ports {first}–{last} are all in use. Apps and browser extensions that talk to Falcon won't reach it. Choose another first port in Preferences ▸ Developer.": "本機 API 無法啟動：連接埠 {first}–{last} 均已被占用。與 Falcon 通訊的 App 和瀏覽器擴充功能將無法連線。請在「偏好設定 ▸ 開發者」中選擇其他起始連接埠。",
+  "The local API is running on port {port} but can't be reached through localhost, so browser extensions can't reach Falcon. A proxy or VPN may be redirecting localhost.": "本機 API 正在連接埠 {port} 上執行，但無法透過 localhost 連線，因此瀏覽器擴充功能無法連接 Falcon。可能是代理伺服器或 VPN 重新導向了 localhost。",
   "The name can't be empty.": "名稱不能為空。",
   "The name can't contain symbols such as % ^ & * # @ or slashes.": "名稱不能包含 % ^ & * # @ 等符號或斜線。",
   "The old password is wrong.": "舊密碼不正確。",
@@ -1277,9 +1360,12 @@
   "The password is wrong.": "密碼不正確。",
   "The passwords don't match.": "兩次輸入的密碼不一致。",
   "The screenshot failed: {error}": "截圖失敗：{error}",
+  "The system can't find the app to open at login": "系統找不到要在登入時開啟的 App",
+  "The system has no login item for this app": "系統中沒有此 App 的登入項目",
   "The tag picker's Recent tags start over. Tags stay on their items.": "標籤選擇器中的「最近使用」將重新開始。項目上的標籤會保留。",
   "The wheel button on an item": "在項目上按下滾輪鍵",
   "The wheel over an image in the viewer": "在檢視器中，滾輪作用於圖片時",
+  "Their files and details are copied into the other library. This library keeps them as they are.": "它們的檔案和詳細資訊會拷貝到另一個資料庫，目前資料庫中的項目保持不變。",
   "Their hand-made order is replaced.": "手動排列的順序將被取代。",
   "Theme": "主題",
   "There is no library folder at {path}. It may have been moved, renamed or deleted, or its drive isn't connected.": "{path}處沒有資料庫資料夾。它可能已被移動、重新命名或刪除，或者所在磁碟未連接。",
@@ -1337,6 +1423,7 @@
     "other": "取消{n}個標籤的分組"
   },
   "Ungrouped": "未分組",
+  "Unknown login item status": "未知的登入項目狀態",
   "Unlock": "解鎖",
   "Unlock to view contents": "解鎖以檢視內容",
   "Unlock with Touch ID": "使用 Touch ID 解鎖",
@@ -1380,6 +1467,8 @@
   "Waterfall": "瀑布流",
   "Waterfall layout": "瀑布流版面",
   "We": "三",
+  "WebP files are usually smaller, so the {format} files will take more space. Each WebP replaced goes to the Trash; animated WebPs are skipped.": "WebP 檔案通常較小，因此 {format} 檔案會佔用更多空間。每個被取代的 WebP 會丟到垃圾桶；動畫 WebP 會被略過。",
+  "When off, closing the window takes Falcon out of the Dock while its menu bar icon is shown, and quits it otherwise.": "關閉後，關閉視窗時：若顯示選單列圖示，Falcon 會從 Dock 中移除，否則會結束。",
   "When off, screenshots taken on a Retina screen are saved at half size.": "關閉後，在 Retina 螢幕上擷取的截圖會以一半尺寸儲存。",
   "When off, such files are imported as new items.": "關閉時，此類檔案將作為新項目匯入。",
   "White": "白色",
@@ -1472,6 +1561,21 @@
   "{folders} and {items} from {path} will be added. Folders, smart folders and tag groups already here are kept as they are, and so are items already here.": "將從 {path} 加入 {folders}和 {items}。此處已有的資料夾、智慧型資料夾、標籤群組和項目將保持不變。",
   "{hex}  ·  {ratio}%\nClick to find similar colours, right-click for more": "{hex}  ·  {ratio}%\n點按以尋找相似顏色，按右鍵查看更多",
   "{lib}'s metadata.json was damaged and was restored from backup/{name}; the damaged file was kept in backup/": "{lib} 的 metadata.json 已損毀，已從 backup/{name} 回復；損毀的檔案保留在 backup/ 中。",
+  "{message}; skipped {n} items (animated)": {
+    "other": "{message}；已略過 {n} 個項目（動畫）"
+  },
+  "{message}; {n} items couldn't be converted ({reason})": {
+    "other": "{message}；{n} 個項目無法轉換（{reason}）"
+  },
+  "{message}; {n} items couldn't be copied": {
+    "other": "{message}；{n} 個項目無法拷貝"
+  },
+  "{message}; {n} items were already there": {
+    "other": "{message}；{n} 個項目已存在"
+  },
+  "{message}; {n} old WebP files couldn't go to the Trash and were left in their item folders": {
+    "other": "{message}；{n} 個舊 WebP 檔案無法丟到垃圾桶，已保留在其項目資料夾中"
+  },
   "{month} {year}": "{year}年{month}",
   "{name} (Default)": "{name}（預設）",
   "{name} may not save changes": "「{name}」可能無法儲存更動",
@@ -1501,6 +1605,12 @@
   },
   "{n} folders": {
     "other": "{n} 個資料夾"
+  },
+  "{n} folders couldn't be moved to the Trash ({path}: {reason}).": {
+    "other": "{n} 個資料夾無法丟到垃圾桶（{path}：{reason}）。"
+  },
+  "{n} folders that belong to no item go to the macOS Trash.": {
+    "other": "{n} 個不屬於任何項目的資料夾會丟到 macOS 垃圾桶。"
   },
   "{n} groups · tick the groups to merge": {
     "other": "{n} 組 · 勾選要合併的組"
@@ -1542,11 +1652,17 @@
   "{n} items that are not images will be skipped.": {
     "other": "{n} 個非圖片項目將被略過。"
   },
+  "{n} items whose folder is gone are dropped.": {
+    "other": "資料夾已遺失的 {n} 個項目會被移除。"
+  },
   "{n} items will be affected. Go ahead?": {
     "other": "將影響{n}個項目。要繼續嗎？"
   },
   "{n} items will take up {size} of disk space in this library.": {
     "other": "{n} 個項目將在此資料庫中佔用 {size} 磁碟空間。"
+  },
+  "{n} items with a missing or empty file go to the Trash.": {
+    "other": "{n} 個檔案遺失或為空的項目會丟到垃圾桶。"
   },
   "{n} similar pictures, the best copy picked (within {bits} of 64 bits)": {
     "other": "{n} 張相似圖片，已選出最佳複本（64 位元中相差不超過 {bits} 位元）"

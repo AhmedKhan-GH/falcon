@@ -239,14 +239,14 @@ impl App {
             }
             Err(e) => {
                 crate::errlog::error(&format!("API not started: {e}"));
-                self.show_alert(Alert::new(crate::api_check::TITLE, crate::api_check::start_failed_message(&ports)));
+                self.show_alert(Alert::new(crate::api_check::title(), crate::api_check::start_failed_message(&ports)));
             }
         }
     }
 
     /// Drops the API warning when it is the alert on screen.
     fn clear_api_warning(&mut self) {
-        if self.alert.as_ref().is_some_and(|a| a.title == crate::api_check::TITLE) {
+        if self.alert.as_ref().is_some_and(|a| crate::api_check::is_title(&a.title)) {
             self.alert = None;
         }
     }
@@ -256,7 +256,7 @@ impl App {
     pub(crate) fn poll_api_check(&mut self) {
         let Some((port, reached)) = self.api_check.poll() else { return };
         if !reached && self.server.as_ref().is_some_and(|h| h.port == port) {
-            self.show_alert(Alert::new(crate::api_check::TITLE, crate::api_check::unreachable_message(port)));
+            self.show_alert(Alert::new(crate::api_check::title(), crate::api_check::unreachable_message(port)));
         }
     }
 
@@ -318,7 +318,7 @@ impl App {
         self.shortcuts = d.keys;
         if d.launch_at_login != crate::login_item::status().is_on() {
             if let Err(e) = crate::login_item::set(d.launch_at_login) {
-                self.flash_error(format!("Could not change opening at login: {e}"));
+                self.flash_error(trf("Could not change opening at login: {error}", &[("error", &e)]));
             }
             self.prefs_window.refresh_login();
         }

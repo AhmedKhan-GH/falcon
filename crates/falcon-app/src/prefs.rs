@@ -1082,14 +1082,14 @@ fn general(p: &mut Page, d: &mut Draft, login: &crate::login_item::Status) {
             ui.checkbox(&mut d.prefs.menu_icon, tr("Show the falcon icon in the menu bar"));
         }
     });
-    p.block("Startup", &["startup", "login", "log in", "open at login", "launch", "start", "dock", "close", "quit"], |ui| {
+    p.block(tr_key("Startup"), &["startup", "login", "log in", "open at login", "launch", "start", "dock", "close", "quit"], |ui| {
         use crate::login_item::Status;
         let usable = !matches!(login, Status::Unavailable(_));
-        ui.add_enabled(usable, egui::Checkbox::new(&mut d.launch_at_login, "Open Falcon when you log in"));
-        ui.checkbox(&mut d.prefs.keep_dock_icon, "Keep Falcon in the Dock after closing its window");
-        note(ui, "When off, closing the window takes Falcon out of the Dock while its menu bar icon is shown, and quits it otherwise.");
+        ui.add_enabled(usable, egui::Checkbox::new(&mut d.launch_at_login, tr("Open Falcon when you log in")));
+        ui.checkbox(&mut d.prefs.keep_dock_icon, tr("Keep Falcon in the Dock after closing its window"));
+        note(ui, tr("When off, closing the window takes Falcon out of the Dock while its menu bar icon is shown, and quits it otherwise."));
         match login {
-            Status::NeedsApproval => note(ui, "Allow Falcon in System Settings ▸ General ▸ Login Items."),
+            Status::NeedsApproval => note(ui, tr("Allow Falcon in System Settings ▸ General ▸ Login Items.")),
             Status::Unavailable(why) => note(ui, why),
             _ => {}
         }

@@ -13,6 +13,10 @@
   "API on http://localhost:{port}": "API：http://localhost:{port}",
   "API stopped": "APIを停止しました",
   "About Falcon": "Falconについて",
+  "About {h} h {m} min left": "残り約{h}時間{m}分",
+  "About {n} h left": "残り約{n}時間",
+  "About {n} min left": "残り約{n}分",
+  "About {n} s left": "残り約{n}秒",
   "Accuracy": "精度",
   "Actions": "アクション",
   "Activated": "有効",
@@ -43,20 +47,35 @@
   "Add to Folders…": "フォルダに追加…",
   "Add to Group": "グループに追加",
   "Add to Last Used Folder": "最後に使ったフォルダに追加",
+  "Add to Other Library": "別のライブラリに追加",
   "Add to Quick Access": "クイックアクセスに追加",
   "Add to the last used folder": "最後に使ったフォルダに追加",
   "Add {n} items": {
     "other": "{n}個のアイテムを追加"
   },
+  "Add {n} items to {library}": {
+    "other": "{n}個のアイテムを{library}に追加"
+  },
   "Add {n} to folder": "{n}件をフォルダに追加",
+  "Added the folder and {n} items to {target}": {
+    "other": "フォルダと{n}個のアイテムを{target}に追加しました"
+  },
   "Added the folder's tags to {n} items": {
     "other": "フォルダのタグを{n}個のアイテムに追加しました"
   },
+  "Added the smart folder to {target}": "スマートフォルダを{target}に追加しました",
+  "Added the tag group to {target}": "タググループを{target}に追加しました",
   "Added {count}": "{count} 件を追加しました",
   "Added {count}, {failed} failed": "{count} 件を追加、{failed} 件は失敗しました",
   "Added {items}, {folders} and {others} from {name}.": "{name}から{items}、{folders}、{others}を追加しました。",
   "Added {n} items to": {
     "other": "{n}個のアイテムを追加："
+  },
+  "Added {n} items to {target}": {
+    "other": "{n}個のアイテムを{target}に追加しました"
+  },
+  "Added {n} items to {target}; it already had the folder": {
+    "other": "{n}個のアイテムを{target}に追加しました（フォルダは既にあります）"
   },
   "Added {n} to": "{n}件を追加：",
   "Adding {n} items to the library": {
@@ -78,6 +97,7 @@
   "All Tags": "すべてのタグ",
   "All Tags  {n}": "すべてのタグ  {n}",
   "All Tags Are in Groups": "すべてのタグがグループに入っています",
+  "Allow Falcon in System Settings ▸ General ▸ Login Items.": "システム設定 ▸ 一般 ▸ ログイン項目でFalconを許可してください。",
   "Almost there…": "もうすぐです…",
   "Alphabet": "アルファベット順",
   "Already in the library": "ライブラリにすでにあります",
@@ -122,6 +142,7 @@
   "Blue": "ブルー",
   "Bookmark": "ブックマーク",
   "Camera": "カメラ",
+  "Can't add to that library": "そのライブラリには追加できません",
   "Can't find it?": "見つかりませんか？",
   "Can't import the Inboard backup": "Inboardバックアップを読み込めません",
   "Can't import the package": "パッケージを読み込めません",
@@ -152,15 +173,19 @@
   "Choose Another": "別の場所を選択",
   "Choose Library…": "ライブラリを選択…",
   "Choose Thumbnail": "サムネールを選択",
+  "Choose a Library to Add To": "追加先のライブラリを選択",
   "Choose a Library to Merge In": "統合するライブラリを選択",
   "Choose a look": "外観を選択",
   "Choose an Inboard Backup Folder": "Inboardバックアップのフォルダを選択",
   "Choose folders…": "フォルダを選択…",
   "Choose where each screenshot is saved": "スクリーンショットごとに保存先を選ぶ",
   "Choose where to keep the library": "ライブラリの保存先を選択",
+  "Clean Up": "クリーンアップ",
+  "Cleanup finished": "クリーンアップが完了しました",
   "Clear": "クリア",
   "Clear All": "すべて消去",
   "Clear Filter": "フィルタを解除",
+  "Clear Invalid Content…": "無効なコンテンツを削除…",
   "Clear Library History": "ライブラリ履歴を消去",
   "Clear Library History…": "ライブラリの履歴を消去…",
   "Clear Tag History…": "タグ履歴を消去…",
@@ -188,6 +213,7 @@
   "Click to resume": "クリックで再開",
   "Close": "閉じる",
   "Close (Esc)": "閉じる（Esc）",
+  "Close Library While Tasks Run": "タスクの実行中にライブラリを閉じる",
   "Close Window": "ウインドウを閉じる",
   "Close the viewer, or clear the selection": "ビューアを閉じる、または選択を解除",
   "Close the window": "ウインドウを閉じる",
@@ -204,6 +230,15 @@
   "Comparing pictures": "画像を比較中",
   "Contains": "含む",
   "Controls": "操作",
+  "Convert": "変換",
+  "Convert WebP": "WebPを変換",
+  "Convert {n} WebP images to {format}": {
+    "other": "{n}個のWebP画像を{format}に変換"
+  },
+  "Converted {n} items to {format}": {
+    "other": "{n}個のアイテムを{format}に変換しました"
+  },
+  "Converting WebP": "WebPを変換中",
   "Copied Base64": "Base64をコピーしました",
   "Copied thumbnail": "サムネールをコピーしました",
   "Copied {n} Eagle links": {
@@ -252,6 +287,8 @@
   "Copy thumbnail": "サムネールをコピー",
   "Copy to Clipboard": "クリップボードにコピー",
   "Copy {value}": "{value} をコピー",
+  "Copying to {library}": "{library}にコピー中",
+  "Could not change opening at login: {error}": "ログイン時の起動を変更できませんでした：{error}",
   "Could not create the folder: {error}": "フォルダを作成できませんでした：{error}",
   "Could not create the library: {error}": "ライブラリを作成できませんでした：{error}",
   "Could not drag out: {error}": "ドラッグできませんでした：{error}",
@@ -361,6 +398,9 @@
   "Drop files to import them into this folder": "ファイルをドロップしてこのフォルダに読み込む",
   "Drop folders on the sidebar, or files on the grid or a folder": "フォルダはサイドバーに、ファイルはグリッドかフォルダにドロップしてください",
   "Drop folders to import them with their subfolders": "フォルダをドロップしてサブフォルダごと読み込む",
+  "Dropped {n} items whose folders were gone.": {
+    "other": "フォルダがなくなっていた{n}個のアイテムを除外しました。"
+  },
   "Duplicate": "複製",
   "Duplicate item": "アイテムを複製",
   "Duplicate the item": "アイテムを複製",
@@ -451,6 +491,7 @@
   "Failed imports ({n})": "読み込みに失敗（{n}）",
   "Falcon Documentation": "Falconドキュメント",
   "Falcon can't create files in the library folder ({why}), so changes may not be saved. Check the folder's permissions.": "Falconはライブラリフォルダ内にファイルを作成できないため（{why}）、変更が保存されない可能性があります。フォルダの権限を確認してください。",
+  "Falcon can't show a preview of this file. Try opening it in another app.": "Falconはこのファイルのプレビューを表示できません。別のアプリで開いてみてください。",
   "Falcon can't show or edit this rule. Saving keeps it exactly as it is; remove it to drop it.": "Falconはこのルールを表示・編集できません。保存してもそのまま残ります。削除すると取り除かれます。",
   "Falcon couldn't read the library again: {error}": "Falconはライブラリを再度読み込めませんでした：{error}",
   "Falcon is locked": "Falconはロックされています",
@@ -461,6 +502,7 @@
   "File Name": "ファイル名",
   "File Paths": "ファイルパス",
   "File Size": "ファイルサイズ",
+  "File not found. If the library is synced, the sync may still be in progress.": "ファイルが見つかりません。ライブラリを同期している場合は、同期がまだ進行中かもしれません。",
   "File replaced": "ファイルを置き換えました",
   "File size": "ファイルサイズ",
   "Files": "ファイル",
@@ -476,6 +518,7 @@
   "Find Duplicates": "重複を検索",
   "Find Items with These Tags": "これらのタグのアイテムを検索",
   "Find Similar Colours": "似た色を検索",
+  "Find empty or broken item folders and clean them up": "空または壊れたアイテムフォルダを見つけてクリーンアップします",
   "Finds byte-identical files and merges each group into one item. Nothing changes until you merge.": "バイト単位で同一のファイルを探し、各グループを1つのアイテムに統合します。統合するまで何も変更されません。",
   "Finds pictures that look alike, picks the best copy of each group, and merges the rest into it. Nothing changes until you merge.": "似ている画像を探し、各グループで最良のコピーを選んで、残りをそこに統合します。統合するまで何も変更されません。",
   "First Item": "最初のアイテム",
@@ -509,6 +552,9 @@
   "Format and quality": "フォーマットと画質",
   "Forward": "進む",
   "Forward 10 frames": "10フレーム進む",
+  "Found {n} invalid entries": {
+    "other": "無効な項目が{n}件見つかりました"
+  },
   "Fr": "金",
   "From a File…": "ファイルから…",
   "From the Clipboard": "クリップボードから",
@@ -553,6 +599,7 @@
   "How alike similar pictures must be": "画像がどのくらい似ている必要があるか",
   "Icon": "アイコン",
   "Identical Files": "同一のファイル",
+  "If the library is synced by a cloud service, let the sync finish first: files still downloading look missing.": "ライブラリをクラウドサービスで同期している場合は、先に同期を完了させてください。ダウンロード中のファイルは見つからないように見えます。",
   "Image": "画像",
   "Images": "画像",
   "Images are only made smaller, never larger.": "画像は縮小のみで、拡大はされません。",
@@ -582,6 +629,7 @@
   "Importing Eagle Package": "Eagleパッケージを読み込んでいます",
   "Importing into:": "読み込み先：",
   "Importing {done} of {total}  ·  {current}": "{total} 件中 {done} 件を読み込み中  ·  {current}",
+  "Importing {done} of {total}  ·  {left}  ·  {current}": "{total} 件中 {done} 件を読み込み中  ·  {left}  ·  {current}",
   "Importing {images} and {folders} from Inboard": "Inboardから{images}と{folders}を読み込み中",
   "In Another Format…": "別の形式で…",
   "In the library:": "ライブラリ内：",
@@ -611,6 +659,7 @@
   "Justified": "両端揃え",
   "Justified layout": "両端揃えレイアウト",
   "Keep Both": "両方を残す",
+  "Keep Falcon in the Dock after closing its window": "ウインドウを閉じてもFalconをDockに残す",
   "Keep Merging": "統合を続ける",
   "Keep This Copy": "このコピーを残す",
   "Keep both (import this copy as a new item)": "両方を残す（このコピーを新しいアイテムとして読み込む）",
@@ -636,6 +685,7 @@
   "Leave Them Out": "除外する",
   "Leaves these items alone": "これらのアイテムはそのまま残ります",
   "Leaves this item alone": "このアイテムはそのまま残ります",
+  "Libraries can't be kept in the folder Falcon is installed in, because removing or updating the app would delete them. Move the library somewhere else and open it again.": "Falconがインストールされているフォルダにはライブラリを置けません。アプリを削除または更新するとライブラリも削除されてしまうためです。ライブラリを別の場所に移動してから、もう一度開いてください。",
   "Library": "ライブラリ",
   "Library changed elsewhere": "ライブラリが別の場所で変更されました",
   "Library closed": "ライブラリを閉じました",
@@ -650,6 +700,7 @@
   "Links": "リンク",
   "List": "リスト",
   "List layout": "リストレイアウト",
+  "Local API unavailable": "ローカルAPIを利用できません",
   "Lock Falcon": "Falconをロック",
   "Lock Now": "今すぐロック",
   "Lock falcon": "Falconをロック",
@@ -658,6 +709,10 @@
   "Lock the open folder now": "開いているフォルダを今すぐロック",
   "Locked: the filter and search stay when you open another view": "ロック中：別の表示を開いてもフィルタと検索が維持されます",
   "Longest side": "長辺",
+  "Looked at {n} item folders; none is empty or broken.": {
+    "other": "{n}個のアイテムフォルダを確認しました。空または壊れたものはありません。"
+  },
+  "Looking for empty or broken item folders…": "空または壊れたアイテムフォルダを探しています…",
   "Low": "低",
   "Made by a newer Eagle": "より新しいEagleで作成されています",
   "Manual": "手動",
@@ -733,8 +788,14 @@
   },
   "Move {n} to Trash": "{n}件をゴミ箱に入れる",
   "Move {n} to folder": "{n}件をフォルダに移動",
+  "Moved {n} empty item folders to the macOS Trash.": {
+    "other": "空のアイテムフォルダ{n}個をmacOSのゴミ箱に入れました。"
+  },
   "Moved {n} items to": {
     "other": "{n}個のアイテムを移動："
+  },
+  "Moved {n} items with missing files to the Trash.": {
+    "other": "ファイルが見つからないアイテム{n}個をゴミ箱に入れました。"
   },
   "Moved {n} to Trash": "{n}件をゴミ箱に入れました",
   "Moved {t} to Trash": "{t}件をゴミ箱に入れました",
@@ -795,6 +856,7 @@
   "No link": "リンクなし",
   "No link to open": "開くリンクがありません",
   "No note": "メモなし",
+  "No other recent libraries": "ほかの最近使ったライブラリはありません",
   "No picture on the clipboard": "クリップボードに画像がありません",
   "No settings match": "一致する設定はありません",
   "No shortcuts match": "一致するショートカットはありません",
@@ -811,10 +873,13 @@
   "Not a valid link": "無効なリンクです",
   "Not an Inboard backup": "Inboardバックアップではありません",
   "Not available: falcon has no template file for this format": "利用できません：falconにはこの形式のテンプレートファイルがありません",
+  "Not finished": "完了していません",
   "Note": "メモ",
   "Notes": "メモ",
   "Notes...": "メモ...",
   "Nothing found": "見つかりません",
+  "Nothing invalid": "無効なものはありません",
+  "Nothing needed cleaning up.": "クリーンアップが必要なものはありませんでした。",
   "Nothing to export": "書き出すものがありません",
   "Nothing to redo": "やり直す操作がありません",
   "Nothing to undo": "取り消す操作がありません",
@@ -828,10 +893,12 @@
   "One Tag per Row": "1行に1つのタグ",
   "Only images can be exported in another format": "別の形式で書き出せるのは画像のみです",
   "Only take them out of this folder": "このフォルダからのみ外す",
+  "Only the app bundle can open at login": "ログイン時に開けるのはアプリバンドルのみです",
   "Only the smart folders go; the items they show stay.": "スマートフォルダだけが削除され、表示されているアイテムは残ります。",
   "Open": "開く",
   "Open Eagle Library": "Eagleライブラリを開く",
   "Open Existing Library…": "既存のライブラリを開く…",
+  "Open Falcon when you log in": "ログイン時にFalconを開く",
   "Open File Location": "ファイルの場所を開く",
   "Open Filter": "フィルタを開く",
   "Open Library…": "ライブラリを開く…",
@@ -870,6 +937,8 @@
   "Open {n} files": {
     "other": "{n}個のファイルを開く"
   },
+  "Opening at login is only available on macOS": "ログイン時の起動はmacOSでのみ利用できます",
+  "Opening at login needs macOS 13 or later": "ログイン時の起動にはmacOS 13以降が必要です",
   "Opening {name}": "「{name}」を開いています",
   "Opening {name}; {n} other libraries were left closed (one opens at a time)": {
     "other": "{name}を開いています。他の{n}個のライブラリは閉じたままです（一度に開けるのは1つだけ）"
@@ -1234,10 +1303,19 @@
   "Start at": "開始番号",
   "Start the tag picker's Recent tags over": "タグピッカーの最近使ったタグをリセットします",
   "Starting": "開始中",
+  "Startup": "起動",
   "Stop": "停止",
+  "Stop Tasks and Close": "タスクを停止して閉じる",
+  "Stopped after adding {done} of {n} items to {target}": {
+    "other": "{target}への追加を{n}個中{done}個で停止しました"
+  },
+  "Stopped after converting {n} items to {format}": {
+    "other": "{n}個のアイテムを{format}に変換した後で停止しました"
+  },
   "Stopped after {added} of {n} items from {name}": {
     "other": "{name}の{n}個中{added}個で停止しました"
   },
+  "Stopping tasks…": "タスクを停止しています…",
   "Stretch videos to fill the viewer": "ビデオをビューアいっぱいに拡大",
   "Su": "日",
   "Subfolders ({count})": "サブフォルダ（{count}）",
@@ -1254,6 +1332,7 @@
   "Take them out of the open folder": "開いているフォルダから外す",
   "Takes effect when you Save or Apply.": "保存または適用すると有効になります。",
   "Tall portrait": "縦長（トール）",
+  "Tasks are still running in {library}. Closing it stops them. Work already done is kept.": "{library}ではまだタスクが実行中です。閉じると停止します。完了済みの作業は保持されます。",
   "Text Document": "テキスト書類",
   "Text, or /pattern/flags": "テキスト、または /パターン/フラグ",
   "Th": "木",
@@ -1263,13 +1342,17 @@
   "The file isn't UTF-8 text, so it is shown read-only": "UTF-8のテキストではないため、読み取り専用で表示しています",
   "The file name or path is too long to preview. Rename the file or move the library to a shorter path.": "ファイル名またはパスが長すぎてプレビューできません。ファイル名を変更するか、ライブラリを短いパスに移動してください。",
   "The files are removed from the library and cannot be restored.": "ファイルはライブラリから削除され、元に戻せません。",
+  "The files were copied, but {library} couldn't be updated: {error}. Opening it again picks the copied items up.": "ファイルはコピーされましたが、{library}を更新できませんでした：{error}。もう一度開くとコピーしたアイテムが反映されます。",
   "The folder already exists": "フォルダはすでに存在します",
   "The item's file becomes a copy of “{file}”. Its name, tags, folders and notes stay; the current file is deleted.": "アイテムのファイルは「{file}」のコピーになります。名前、タグ、フォルダ、メモはそのままで、現在のファイルは削除されます。",
   "The items were copied, but the folders couldn't be saved: {error}": "アイテムはコピーされましたが、フォルダを保存できませんでした：{error}",
   "The library is a folder stored on this Mac. Back it up as you would any other files.": "ライブラリはこのMacに保存されるフォルダです。ほかのファイルと同じようにバックアップしてください。",
   "The library is still missing": "ライブラリはまだ見つかりません",
+  "The library was reloaded.": "ライブラリを再読み込みしました。",
   "The list can't be brought back. The files themselves are not touched.": "リストは元に戻せません。ファイル自体は変更されません。",
   "The list of recent libraries is emptied, except for the libraries that are open now. This can't be undone. No library is deleted.": "最近使ったライブラリの一覧が空になります（現在開いているライブラリを除く）。この操作は取り消せません。ライブラリは削除されません。",
+  "The local API couldn't start: ports {first}–{last} are all in use. Apps and browser extensions that talk to Falcon won't reach it. Choose another first port in Preferences ▸ Developer.": "ローカルAPIを起動できませんでした：ポート{first}～{last}はすべて使用中です。Falconと通信するアプリやブラウザ拡張機能はAPIに接続できません。環境設定 ▸ 開発者で別の先頭ポートを選んでください。",
+  "The local API is running on port {port} but can't be reached through localhost, so browser extensions can't reach Falcon. A proxy or VPN may be redirecting localhost.": "ローカルAPIはポート{port}で動作していますが、localhost経由で接続できないため、ブラウザ拡張機能はFalconに接続できません。プロキシまたはVPNがlocalhostをリダイレクトしている可能性があります。",
   "The name can't be empty.": "名前を空にすることはできません。",
   "The name can't contain symbols such as % ^ & * # @ or slashes.": "名前に % ^ & * # @ などの記号やスラッシュは使えません。",
   "The old password is wrong.": "古いパスワードが違います。",
@@ -1277,9 +1360,12 @@
   "The password is wrong.": "パスワードが違います。",
   "The passwords don't match.": "パスワードが一致しません。",
   "The screenshot failed: {error}": "スクリーンショットに失敗しました：{error}",
+  "The system can't find the app to open at login": "ログイン時に開くアプリがシステムで見つかりません",
+  "The system has no login item for this app": "このアプリのログイン項目がシステムにありません",
   "The tag picker's Recent tags start over. Tags stay on their items.": "タグピッカーの最近使ったタグが空になります。アイテムのタグは残ります。",
   "The wheel button on an item": "アイテム上でのホイールボタン",
   "The wheel over an image in the viewer": "ビューアで画像上のホイールを回すと",
+  "Their files and details are copied into the other library. This library keeps them as they are.": "ファイルと詳細情報が別のライブラリにコピーされます。このライブラリのアイテムは変更されません。",
   "Their hand-made order is replaced.": "手動で並べた順序は置き換えられます。",
   "Theme": "テーマ",
   "There is no library folder at {path}. It may have been moved, renamed or deleted, or its drive isn't connected.": "{path}にライブラリのフォルダがありません。移動、名前の変更、削除されたか、ドライブが接続されていない可能性があります。",
@@ -1337,6 +1423,7 @@
     "other": "{n}個のタグのグループ化を解除"
   },
   "Ungrouped": "グループなし",
+  "Unknown login item status": "ログイン項目の状態が不明です",
   "Unlock": "ロック解除",
   "Unlock to view contents": "ロックを解除して内容を表示",
   "Unlock with Touch ID": "Touch IDでロック解除",
@@ -1380,6 +1467,8 @@
   "Waterfall": "ウォーターフォール",
   "Waterfall layout": "ウォーターフォールレイアウト",
   "We": "水",
+  "WebP files are usually smaller, so the {format} files will take more space. Each WebP replaced goes to the Trash; animated WebPs are skipped.": "WebPファイルは通常より小さいため、{format}ファイルは容量が大きくなります。置き換えたWebPはゴミ箱に入ります。アニメーションWebPはスキップされます。",
+  "When off, closing the window takes Falcon out of the Dock while its menu bar icon is shown, and quits it otherwise.": "オフにすると、ウインドウを閉じたとき、メニューバーアイコンが表示されていればFalconはDockから消え、表示されていなければ終了します。",
   "When off, screenshots taken on a Retina screen are saved at half size.": "オフにすると、Retina 画面で撮ったスクリーンショットは半分のサイズで保存されます。",
   "When off, such files are imported as new items.": "オフの場合、そのようなファイルは新しいアイテムとして読み込まれます。",
   "White": "白",
@@ -1472,6 +1561,21 @@
   "{folders} and {items} from {path} will be added. Folders, smart folders and tag groups already here are kept as they are, and so are items already here.": "{path}から{folders}と{items}が追加されます。すでにあるフォルダ、スマートフォルダ、タググループ、アイテムはそのまま残ります。",
   "{hex}  ·  {ratio}%\nClick to find similar colours, right-click for more": "{hex}  ·  {ratio}%\nクリックで似た色を検索、右クリックでその他",
   "{lib}'s metadata.json was damaged and was restored from backup/{name}; the damaged file was kept in backup/": "{lib}のmetadata.jsonが破損していたため、backup/{name}から復元しました。破損したファイルはbackup/に残してあります。",
+  "{message}; skipped {n} items (animated)": {
+    "other": "{message}；スキップ：{n}個（アニメーション）"
+  },
+  "{message}; {n} items couldn't be converted ({reason})": {
+    "other": "{message}；{n}個のアイテムを変換できませんでした（{reason}）"
+  },
+  "{message}; {n} items couldn't be copied": {
+    "other": "{message}；{n}個のアイテムをコピーできませんでした"
+  },
+  "{message}; {n} items were already there": {
+    "other": "{message}；{n}個のアイテムは既にありました"
+  },
+  "{message}; {n} old WebP files couldn't go to the Trash and were left in their item folders": {
+    "other": "{message}；古いWebPファイル{n}個をゴミ箱に入れられず、アイテムフォルダに残しました"
+  },
   "{month} {year}": "{year}年{month}",
   "{name} (Default)": "{name}（デフォルト）",
   "{name} may not save changes": "「{name}」は変更を保存できない可能性があります",
@@ -1501,6 +1605,12 @@
   },
   "{n} folders": {
     "other": "{n}個のフォルダ"
+  },
+  "{n} folders couldn't be moved to the Trash ({path}: {reason}).": {
+    "other": "{n}個のフォルダをゴミ箱に入れられませんでした（{path}：{reason}）。"
+  },
+  "{n} folders that belong to no item go to the macOS Trash.": {
+    "other": "どのアイテムにも属さないフォルダ{n}個はmacOSのゴミ箱に入ります。"
   },
   "{n} groups · tick the groups to merge": {
     "other": "{n} グループ · 統合するグループにチェックを入れてください"
@@ -1542,11 +1652,17 @@
   "{n} items that are not images will be skipped.": {
     "other": "画像ではない{n}個のアイテムはスキップされます。"
   },
+  "{n} items whose folder is gone are dropped.": {
+    "other": "フォルダがなくなったアイテム{n}個は除外されます。"
+  },
   "{n} items will be affected. Go ahead?": {
     "other": "{n}個のアイテムが変更されます。続けますか？"
   },
   "{n} items will take up {size} of disk space in this library.": {
     "other": "{n}個のアイテムがこのライブラリで{size}のディスク容量を使用します。"
+  },
+  "{n} items with a missing or empty file go to the Trash.": {
+    "other": "ファイルがない、または空のアイテム{n}個はゴミ箱に入ります。"
   },
   "{n} similar pictures, the best copy picked (within {bits} of 64 bits)": {
     "other": "似ている画像 {n} 件、最良のコピーを選択済み（64ビット中 {bits} 以内の差）"

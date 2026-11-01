@@ -22,7 +22,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use crate::locale::{tr, tr_n, trf};
+use crate::locale::{tr, tr_key, tr_n, trf};
 
 use eframe::egui;
 
@@ -49,7 +49,7 @@ pub fn placeholder(path: &Path) -> Option<PathBuf> {
 
 /// The hint for a picture whose original is gone from disk (tooltip on its
 /// card, line under the viewer's placeholder).
-pub const MISSING_HINT: &str = "File not found. If the library is synced, the sync may still be in progress.";
+pub const MISSING_HINT: &str = tr_key("File not found. If the library is synced, the sync may still be in progress.");
 
 /// Whether to show [`MISSING_HINT`]: the picture failed to load, the
 /// original is not on disk, and it is not waiting on iCloud.

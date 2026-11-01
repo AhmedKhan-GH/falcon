@@ -10,6 +10,8 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::locale::tr;
+
 /// Where falcon is installed: the enclosing `.app` bundle, or the
 /// executable's folder.
 #[derive(Debug, Clone, PartialEq)]
@@ -63,7 +65,7 @@ pub fn refusal(lib: &Path) -> Option<String> {
     let exe = std::env::current_exe().ok()?;
     let install = install_of(&resolve(&exe))?;
     inside(&install, lib).then(|| {
-        "Libraries can't be kept in the folder Falcon is installed in, because removing or updating the app would delete them. Move the library somewhere else and open it again.".to_string()
+        tr("Libraries can't be kept in the folder Falcon is installed in, because removing or updating the app would delete them. Move the library somewhere else and open it again.").to_string()
     })
 }
 
