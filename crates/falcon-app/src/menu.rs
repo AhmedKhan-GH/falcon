@@ -13,6 +13,7 @@ pub enum ScopeKind {
     Folder,
     Smart,
     Trash,
+    Random,
 }
 
 /// The app's state as far as commands care. Built each frame by
@@ -82,6 +83,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::NextLibrary | C::PreviousLibrary => s.libraries > 1,
         C::Page(_) => s.library,
         C::Scroll(_) | C::SelectFirst | C::SelectLast => grid,
+        C::Reshuffle => grid && s.scope == ScopeKind::Random,
         C::Rate(_) => any || (s.library && s.viewer),
         C::Player(_) => false,
     }

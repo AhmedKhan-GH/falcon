@@ -1108,6 +1108,7 @@ impl App {
                 Scope::Folder(_) => ScopeKind::Folder,
                 Scope::Smart(_) => ScopeKind::Smart,
                 Scope::Trash => ScopeKind::Trash,
+                Scope::Random(_) => ScopeKind::Random,
                 _ => ScopeKind::Other,
             },
             back: !self.ws.back.is_empty(),
@@ -1256,6 +1257,12 @@ impl App {
                 self.ws.selected = next.iter().cloned().collect();
                 self.ws.anchor.clone_from(&next);
                 self.ws.actions.push(Action::RemoveFromFolder(ids, fid));
+            }
+            // A new order in place, without a history step.
+            C::Reshuffle => {
+                self.ws.scope = Scope::Random(fastrand_seed());
+                self.ws.selected.clear();
+                self.ws.anchor = None;
             }
             C::Page(p) => {
                 self.ws.viewer = None;

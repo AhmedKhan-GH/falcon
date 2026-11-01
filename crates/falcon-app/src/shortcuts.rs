@@ -86,6 +86,8 @@ pub enum Command {
     RefreshThumbnail,
     /// Take the selection out of the open folder.
     RemoveFromFolder,
+    /// Shuffle the Random page again.
+    Reshuffle,
 }
 
 /// How a scroll command moves the grid.
@@ -255,6 +257,8 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::Scroll(Scroll::PageDown), id: "view.scroll.nextpage", group: "Go", label: "Scroll down a page", default: k(NONE, Key::PageDown), aliases: &[] },
     Spec { cmd: Command::SelectFirst, id: "view.select.first", group: "Go", label: "Select the first item", default: k(CMD, Key::ArrowUp), aliases: &[] },
     Spec { cmd: Command::SelectLast, id: "view.select.last", group: "Go", label: "Select the last item", default: k(CMD, Key::ArrowDown), aliases: &[] },
+    // Eagle binds R outside its keybind table.
+    Spec { cmd: Command::Reshuffle, id: "view.random.refresh", group: "Go", label: "Shuffle the Random page again", default: k(NONE, Key::R), aliases: &[] },
     // Eagle binds 0–5 outside its keybind table (`organize.rating.*` have no default).
     Spec { cmd: Command::Rate(0), id: "organize.rating.0", group: "Organize", label: "Remove the rating", default: k(NONE, Key::Num0), aliases: &[] },
     Spec { cmd: Command::Rate(1), id: "organize.rating.1", group: "Organize", label: "Rate 1 star", default: k(NONE, Key::Num1), aliases: &[] },
@@ -827,6 +831,14 @@ mod tests {
         assert_eq!(keys.resolve(Key::F, mac(CTRL_CMD)), Some(Command::FullScreen));
         assert_eq!(keys.resolve(Key::F, mac(CMD)), Some(Command::Find));
         assert_eq!(format(&keys.binding(Command::FullScreen).unwrap()), "Ctrl + Command + F");
+    }
+
+    #[test]
+    fn r_reshuffles() {
+        let keys = Shortcuts::default();
+        assert_eq!(keys.resolve(Key::R, Modifiers::NONE), Some(Command::Reshuffle));
+        assert_eq!(keys.resolve(Key::R, CMD), Some(Command::Rename));
+        assert_eq!(keys.resolve(Key::R, ALT), None);
     }
 
     #[test]
