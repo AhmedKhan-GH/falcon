@@ -132,6 +132,26 @@ pub fn nav_counts(items: &[Item], roots: &[Folder]) -> NavCounts {
     c
 }
 
+/// The folder to ask about before trashing `items`, as Eagle does: the
+/// open folder (one, not several picked), when some item is in more than
+/// one folder.
+pub fn trash_question(scope: &Scope, combined: bool, items: &[&Item]) -> Option<String> {
+    match scope {
+        Scope::Folder(id) if !combined && items.iter().any(|i| i.folders.len() > 1) => Some(id.clone()),
+        _ => None,
+    }
+}
+
+/// Takes `item` out of folder `fid` when it is in another folder too
+/// (returns true); an item in that folder alone is left for the Trash.
+pub fn leave_folder(item: &mut Item, fid: &str) -> bool {
+    if item.folders.len() < 2 {
+        return false;
+    }
+    item.folders.retain(|f| f != fid);
+    true
+}
+
 /// Live tags with their item counts, sorted by name.
 /// What a field shows for several items: their common value, or nothing
 /// when they differ (Eagle's `calculateUrl` and `calculateAnnotation`).
@@ -894,6 +914,23 @@ mod tests {
     fn nav_counts_cover_fixed_entries() {
         let (roots, items) = fixture();
         assert_eq!(nav_counts(&items, &roots), NavCounts { all: 4, uncategorized: 1, untagged: 1, trash: 1, tags: 3 });
+    }
+
+    #[test]
+    fn trashing_in_a_folder_asks_about_items_in_other_folders() {
+        let (_, items) = fixture();
+        let open = Scope::Folder("A".into());
+        let (zebra, mango) = (&items[0], &items[2]);
+        assert_eq!(trash_question(&open, false, &[zebra]), None);
+        assert_eq!(trash_question(&open, false, &[zebra, mango]).as_deref(), Some("A"));
+        assert_eq!(trash_question(&open, true, &[mango]), None, "several picked folders don't ask");
+        assert_eq!(trash_question(&Scope::All, false, &[mango]), None);
+        let mut m = mango.clone();
+        assert!(leave_folder(&mut m, "A"));
+        assert_eq!(m.folders, ["B"]);
+        let mut z = zebra.clone();
+        assert!(!leave_folder(&mut z, "A"));
+        assert_eq!(z.folders, ["A"]);
     }
 
     #[test]

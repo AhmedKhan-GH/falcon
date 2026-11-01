@@ -198,6 +198,12 @@ enum Action {
     /// added (`logic::folder_drop`).
     DropOnFolder(Vec<String>, String, logic::FolderDrop),
     Trash(Vec<String>, bool),
+    /// Move to Trash from a view: inside a folder, when some of the items
+    /// are in other folders too, ask first (`Confirm::TrashInFolder`).
+    TrashAsk(Vec<String>),
+    /// The answer: take the items out of this folder, trashing only those
+    /// in no other folder (`true`), or trash them all.
+    TrashInFolder(Vec<String>, String, bool),
     DeletePermanently(Vec<String>),
     EmptyTrash,
     CreateSmart(String, Vec<serde_json::Value>),
@@ -440,6 +446,9 @@ enum Confirm {
     EmptyTrash,
     /// Trash ▸ Restore All Items.
     RestoreAll,
+    /// Move to Trash in a folder where some items are also in other
+    /// folders: `(items, folder)`.
+    TrashInFolder(Vec<String>, String),
     DeleteTags(Vec<String>),
     ClearTagHistory,
 }
@@ -688,6 +697,9 @@ pub struct App {
     show_inspector: bool,
     /// The Quick Access list is folded to its header.
     quick_collapsed: bool,
+    /// The last answer to the Move to Trash question in a folder (take the
+    /// items out of the folder only), kept while falcon runs, as Eagle does.
+    trash_folder_only: bool,
     focus_search: bool,
     /// Focus the sidebar's folder filter next frame (Find ▸ Filter Sidebar).
     focus_folder_filter: bool,
@@ -783,6 +795,7 @@ impl App {
             show_sidebar: true,
             show_inspector: true,
             quick_collapsed: false,
+            trash_folder_only: true,
             focus_search: false,
             focus_folder_filter: false,
             quick: Default::default(),
@@ -1887,7 +1900,7 @@ impl App {
                     self.ws.confirm = Some(Confirm::DeleteItems(ids));
                 } else {
                     self.leave_viewed(&ids);
-                    self.push_bulk(ids.len(), Action::Trash(ids, true));
+                    self.push_bulk(ids.len(), Action::TrashAsk(ids));
                 }
             }
             C::ExportComputer | C::ExportPack | C::ExportCsv | C::ExportFormat | C::CopyPath | C::CopyFolderPath | C::CopyName | C::CopyLink | C::CopyThumbnail | C::CopyBase64 => {
@@ -2254,6 +2267,41 @@ impl App {
                     self.flash(if trash { format!("Moved {} to Trash", ids.len()) } else { format!("Restored {}", ids.len()) });
                     r
                 }
+                Action::TrashAsk(ids) => {
+                    let items: Vec<&Item> = ids.iter().filter_map(|id| lib.item(id)).collect();
+                    match logic::trash_question(&self.ws.scope, self.ws.folders.combined(), &items) {
+                        Some(fid) => {
+                            self.ws.confirm = Some(Confirm::TrashInFolder(ids, fid));
+                            Ok(())
+                        }
+                        None => {
+                            self.select_after_removal(&ids);
+                            let r = lib.set_trashed(&ids, true);
+                            self.flash(format!("Moved {} to Trash", ids.len()));
+                            r
+                        }
+                    }
+                }
+                Action::TrashInFolder(ids, fid, only) => {
+                    self.select_after_removal(&ids);
+                    let (mut r, mut trash) = (Ok(()), Vec::new());
+                    for id in &ids {
+                        let Some(mut item) = lib.item(id).cloned() else { continue };
+                        if only && logic::leave_folder(&mut item, &fid) {
+                            r = r.and(lib.update_item(item));
+                        } else {
+                            trash.push(id.clone());
+                        }
+                    }
+                    let removed = ids.len() - trash.len();
+                    r = r.and(lib.set_trashed(&trash, true));
+                    self.flash(match (removed, trash.len()) {
+                        (0, t) => format!("Moved {t} to Trash"),
+                        (n, 0) => format!("Removed {n} from the folder"),
+                        (n, t) => format!("Removed {n} from the folder and moved {t} to Trash"),
+                    });
+                    r
+                }
                 Action::Organize(a) => self.apply_organize(lib, a),
                 Action::ResolveDuplicates(files, choice) => {
                     let n = files.len();
@@ -2399,6 +2447,8 @@ fn action_label(action: &Action) -> String {
         Action::Trash(ids, true) => format!("Move {} to Trash", ids.len()),
         Action::Background(ids, _) => format!("Set the thumbnail background of {}", ids.len()),
         Action::Trash(ids, false) => format!("Restore {}", ids.len()),
+        Action::TrashAsk(ids) | Action::TrashInFolder(ids, _, false) => format!("Move {} to Trash", ids.len()),
+        Action::TrashInFolder(ids, _, true) => format!("Remove {} from folder", ids.len()),
         Action::DeletePermanently(ids) => format!("Delete {}", ids.len()),
         Action::EmptyTrash => "Empty Trash".into(),
         Action::CreateSmart(..) => "New smart folder".into(),
@@ -3784,7 +3834,7 @@ impl App {
             }
             if ui.button("Move to Trash").clicked() {
                 self.leave_viewed(targets);
-                self.push_bulk(targets.len(), Action::Trash(targets.to_vec(), true));
+                self.push_bulk(targets.len(), Action::TrashAsk(targets.to_vec()));
             }
         }
         opened
@@ -4523,7 +4573,7 @@ impl App {
             if trash {
                 self.ws.actions.push(Action::Trash(ids, false));
             } else {
-                self.push_bulk(n, Action::Trash(ids, true));
+                self.push_bulk(n, Action::TrashAsk(ids));
             }
         }
     }
@@ -5462,6 +5512,11 @@ impl App {
                     let n = lib.items().iter().filter(|i| i.is_deleted).count();
                     (format!("Empty the Trash ({n})?"), "The files are removed from the library and cannot be restored.".to_string(), "Empty Trash")
                 }
+                Confirm::TrashInFolder(ids, _) => (
+                    format!("Move {} to Trash?", export_ui::plural(ids.len(), "item")),
+                    "Some of them are in other folders as well.".to_string(),
+                    if self.trash_folder_only { "Remove" } else { "Move to Trash" },
+                ),
                 Confirm::RestoreAll => {
                     let n = lib.items().iter().filter(|i| i.is_deleted).count();
                     (format!("Restore all {n} items in the Trash?"), "They go back to their folders. ⌘Z puts them back in the Trash.".to_string(), "Restore All")
@@ -5472,6 +5527,12 @@ impl App {
                 ui.label(RichText::new(title).size(15.0));
                 ui.add_space(4.0);
                 ui.label(RichText::new(detail).color(t::p().text_muted));
+                if matches!(c, Confirm::TrashInFolder(..)) {
+                    ui.add_space(6.0);
+                    ui.radio_value(&mut self.trash_folder_only, true, "Only take them out of this folder")
+                        .on_hover_text("Items in no other folder still go to the Trash");
+                    ui.radio_value(&mut self.trash_folder_only, false, "Move them all to the Trash");
+                }
                 if matches!(c, Confirm::DeleteFolders(_)) {
                     ui.add_space(6.0);
                     ui.checkbox(&mut self.ws.folders.trash_items, "Move the items to the Trash as well")
@@ -5485,6 +5546,7 @@ impl App {
                             Confirm::DeleteSmarts(ids) => Action::Folders(folders_ui::FolderAction::DeleteSmart(ids)),
                             Confirm::DeleteItems(ids) => Action::DeletePermanently(ids),
                             Confirm::EmptyTrash => Action::EmptyTrash,
+                            Confirm::TrashInFolder(ids, fid) => Action::TrashInFolder(ids, fid, self.trash_folder_only),
                             Confirm::RestoreAll => Action::Trash(lib.items().iter().filter(|i| i.is_deleted).map(|i| i.id.clone()).collect(), false),
                             Confirm::DeleteTags(t) => Action::DeleteTags(t),
                             Confirm::ClearTagHistory => Action::ClearTagHistory,
