@@ -136,6 +136,19 @@ The core words, so every file uses one term for one thing.
 - "{chord} is taken by another app", the note on a global key's row
   when another app holds its chord (machine-written).
 
+- The viewers, sidebar and context menus (the follow-up pass),
+  machine-written: the 3D viewer's terms (Perspective, Orthographic, Fixed
+  Up Vector, Free Orbit, Shading, Vertices, Surface), the PDF viewer's
+  (Wrapped Scrolling, Odd/Even Spreads, Match Diacritics, Fast web view,
+  "{current} of {total}"), the font viewer's script groups (Hanzi, Kanji,
+  Hangul) and Activate (= install the font), the folder move sentences
+  ("Move … and {n} other folders above/into/below") with their short
+  Above, Into and Below buttons, Star/Unstar (verbs: mark a tag as a
+  favourite), the folder rename templates "Folder %N" and "Smart Folder
+  %N" (translated, since they fill the field the user edits), the
+  Developer and Auto-Import panes' long explanations, and the Russian
+  "Label: N" phrasing used where agreement with a count is awkward.
+
 ## Reviewed
 
 Nothing yet.

@@ -46,9 +46,10 @@ lower-case prefix and `::` in the key, as in `tr("tags::Uncategorized")`
 (tags in no group) beside `tr("Uncategorized")` (items in no folder).
 English shows the text after `::`; `en.json` lists the context key with
 that text. The contexts in use are `tags::` (the tag sidebar and tag
-picker), `match::` (the Any/All picker of the tag and folder filters)
-and `size::` and `shape::` (a custom export size and a custom aspect
-ratio).
+picker), `match::` (the Any/All picker of the tag and folder filters),
+`size::` and `shape::` (a custom export size and a custom aspect
+ratio), `model::` (the 3D viewer's toggles), `switcher::` (the library
+switcher's Open heading) and `pdf::` (the PDF properties' File row).
 
 `{{` and `}}` stand for literal braces. An unknown placeholder is left as
 it is, so a mistake shows instead of vanishing.
@@ -111,10 +112,15 @@ time it is shown: Hiragino Sans (Japanese), Apple SD Gothic Neo
 Chinese), from `/System/Library/Fonts`. A font once added stays for the
 session.
 
-## Not translated yet
+## What stays English
 
-The viewers (`ui/viewer/`), the sidebar and the item and folder context
-menus (`ui/sidebar/`, `ui/menus/`), the Auto-Import and Developer panes
-of Preferences and font installation still show English; they are
-converted in a later pass. The Preferences search matches the translated
-pane names and block titles, but each block's keywords are English. Dates and numbers keep falcon's English formats.
+Every window, pane, menu, dialog, toast and viewer goes through the
+catalogue. What stays English is what isn't interface text: names falcon
+writes into a library ("New Folder", "Untitled", "Screenshot - …", saved
+filter and group defaults, frame snapshots), the debug report and the
+error log, product and format names (Eagle, Finder, PNG, BPM, ISO),
+units and symbols (px, MB, EV, ★), the font viewer's specimen texts and
+messages that come from macOS or a library error unchanged. The
+Preferences search matches the translated pane names and block titles,
+but each block's keywords are English. Dates and numbers keep falcon's
+English formats.
