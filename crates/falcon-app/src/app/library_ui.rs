@@ -253,7 +253,9 @@ impl App {
                 }
             }
             if ui.button("Select Another Path…").clicked() {
-                self.pick_library();
+                if let Some(p) = rfd::FileDialog::new().set_title("Open Eagle Library").set_directory(falcon_library::sandbox::default_root()).pick_folder() {
+                    self.open(p);
+                }
                 if self.missing.is_none() {
                     // Found elsewhere: the old place leaves the history.
                     crate::workspaces::remove_from_list(&mut self.recent, &path);
@@ -627,10 +629,123 @@ impl App {
     }
 }
 
+/// A library being read on a background thread, for the loading screen.
+pub(super) struct Loading {
+    path: PathBuf,
+    /// Item folders read so far, and how many there are (0 until the
+    /// folder list is known).
+    done: Arc<AtomicUsize>,
+    total: Arc<AtomicUsize>,
+    rx: Receiver<falcon_library::Result<(Library, Option<PathBuf>)>>,
+}
+
+impl App {
+    /// Opens the library at `path` on a background thread, showing a
+    /// loading screen meanwhile (an open one is just shown).
+    pub(super) fn open_in_background(&mut self, path: PathBuf) {
+        if self.position_of(&path).is_some() || self.loading.is_some() {
+            if self.loading.is_none() {
+                self.open(path);
+            }
+            return;
+        }
+        let (done, total) = (Arc::new(AtomicUsize::new(0)), Arc::new(AtomicUsize::new(0)));
+        let (tx, rx) = std::sync::mpsc::channel();
+        let (d, n, p, ctx) = (done.clone(), total.clone(), path.clone(), self.ctx.clone());
+        std::thread::spawn(move || {
+            let progress = |a: usize, b: usize| {
+                d.store(a, Ordering::Relaxed);
+                n.store(b, Ordering::Relaxed);
+                ctx.request_repaint();
+            };
+            let result = falcon_library::sandbox::guard(&p).and_then(|()| Library::open_or_restore_with_progress(&p, &progress));
+            let _ = tx.send(result);
+            ctx.request_repaint();
+        });
+        self.loading = Some(Loading { path, done, total, rx });
+    }
+
+    /// Takes a finished background load.
+    pub(super) fn poll_loading(&mut self) {
+        let Some(l) = &self.loading else { return };
+        match l.rx.try_recv() {
+            Ok(result) => {
+                let path = l.path.clone();
+                self.loading = None;
+                self.opened(path, result);
+            }
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => self.loading = None,
+            Err(std::sync::mpsc::TryRecvError::Empty) => {}
+        }
+    }
+
+    /// The loading screen's text: the library, then what is being read.
+    fn loading_lines(&self) -> Option<(String, String, Option<f32>)> {
+        let l = self.loading.as_ref()?;
+        let (done, total) = (l.done.load(Ordering::Relaxed), l.total.load(Ordering::Relaxed));
+        let (line, frac) = loading_status(done, total);
+        Some((format!("Opening {}", name(&l.path)), line, frac))
+    }
+
+    /// The loading screen, when no library is open.
+    pub(super) fn loading_page(&mut self, ui: &mut egui::Ui) {
+        let r = ui.max_rect();
+        super::window_drag(ui, egui::Rect::from_min_size(r.min, egui::vec2(r.width(), t::BAR_HEIGHT)), "loading");
+        ui.painter().rect_filled(r, 0.0, t::p().main);
+        let card = egui::Rect::from_center_size(r.center(), egui::vec2(320.0, 120.0));
+        let mut c = ui.new_child(egui::UiBuilder::new().max_rect(card).layout(egui::Layout::top_down(egui::Align::Center)));
+        self.loading_contents(&mut c);
+    }
+
+    /// The same, as a dialog over the open library.
+    pub(super) fn loading_modal(&mut self, ctx: &egui::Context) {
+        if self.loading.is_none() {
+            return;
+        }
+        egui::Modal::new(egui::Id::unique("library-loading")).show(ctx, |ui| {
+            ui.set_width(320.0);
+            ui.vertical_centered(|ui| self.loading_contents(ui));
+        });
+    }
+
+    fn loading_contents(&mut self, ui: &mut egui::Ui) {
+        let Some((title, line, frac)) = self.loading_lines() else { return };
+        ui.label(RichText::new(title).size(15.0).color(t::p().text));
+        ui.add_space(6.0);
+        let bar = match frac {
+            Some(f) => egui::ProgressBar::new(f),
+            None => egui::ProgressBar::new(0.0).animate(true),
+        };
+        ui.add(bar.desired_width(260.0));
+        ui.add_space(4.0);
+        ui.label(RichText::new(line).size(12.0).color(t::p().text_muted));
+        ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));
+    }
+}
+
+/// The loading screen's status line and bar fill for `done` of `total`
+/// item folders read (`total` 0: still listing them).
+fn loading_status(done: usize, total: usize) -> (String, Option<f32>) {
+    if total == 0 {
+        ("Reading the library…".to_string(), None)
+    } else if done >= total {
+        ("Almost there…".to_string(), Some(1.0))
+    } else {
+        (format!("Reading items: {done} of {total}"), Some(done as f32 / total as f32))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::path::PathBuf;
+
+    #[test]
+    fn loading_lines() {
+        assert_eq!(loading_status(0, 0), ("Reading the library…".to_string(), None));
+        assert_eq!(loading_status(50, 200), ("Reading items: 50 of 200".to_string(), Some(0.25)));
+        assert_eq!(loading_status(200, 200).0, "Almost there…");
+    }
 
     #[test]
     fn plurals() {

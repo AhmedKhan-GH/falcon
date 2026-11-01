@@ -60,6 +60,13 @@ pub struct Library {
 impl Library {
     /// Loads the library at `path`. Items are sorted by id.
     pub fn open(path: impl AsRef<Path>) -> Result<Library> {
+        Library::open_with_progress(path, &|_, _| {})
+    }
+
+    /// [`Library::open`], calling `progress(read, total)` as item folders
+    /// are read (first with 0 once the folder list is known), for a
+    /// loading screen.
+    pub fn open_with_progress(path: impl AsRef<Path>, progress: &dyn Fn(usize, usize)) -> Result<Library> {
         let root = path.as_ref().to_path_buf();
         if !root.join(METADATA).is_file() || !root.join(IMAGES).is_dir() {
             return Err(Error::NotALibrary(root));
@@ -73,18 +80,26 @@ impl Library {
         let saved_filters: Vec<SavedFilter> = read_json(&root.join(FILTERS))?;
 
         let images = root.join(IMAGES);
-        let mut items = Vec::new();
-        let mut skipped = Vec::new();
+        let mut dirs = Vec::new();
         for entry in fs::read_dir(&images).map_err(|e| Error::io(&images, e))? {
             let entry = entry.map_err(|e| Error::io(&images, e))?;
-            if !entry.file_name().to_string_lossy().ends_with(".info") || !entry.path().is_dir() {
-                continue;
+            if entry.file_name().to_string_lossy().ends_with(".info") && entry.path().is_dir() {
+                dirs.push(entry.path());
             }
+        }
+        let total = dirs.len();
+        progress(0, total);
+        let mut items = Vec::new();
+        let mut skipped = Vec::new();
+        for (n, dir) in dirs.into_iter().enumerate() {
             // One damaged item must not make the whole library unreadable.
-            let file = entry.path().join(METADATA);
+            let file = dir.join(METADATA);
             match fs::read_to_string(&file).map_err(|e| e.to_string()).and_then(|t| Item::from_json_str(&t).map_err(|e| e.to_string())) {
                 Ok(item) => items.push(item),
-                Err(e) => skipped.push((entry.path(), e)),
+                Err(e) => skipped.push((dir, e)),
+            }
+            if (n + 1) % 200 == 0 || n + 1 == total {
+                progress(n + 1, total);
             }
         }
         skipped.sort();
@@ -461,6 +476,22 @@ mod tests {
         let mut v: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
         edit(&mut v);
         fs::write(path, serde_json::to_vec(&v).unwrap()).unwrap();
+    }
+
+    #[test]
+    fn reports_loading_progress() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("P.library");
+        let mut lib = Library::create(&root).unwrap();
+        for n in 0..3 {
+            let src = dir.path().join(format!("{n}.txt"));
+            fs::write(&src, b"x").unwrap();
+            lib.import_file(&src, &crate::import::ImportOptions::default()).unwrap();
+        }
+        let seen = std::sync::Mutex::new(Vec::new());
+        let again = Library::open_with_progress(&root, &|a, b| seen.lock().unwrap().push((a, b))).unwrap();
+        assert_eq!(again.items().len(), 3);
+        assert_eq!(seen.into_inner().unwrap(), vec![(0, 3), (3, 3)]);
     }
 
     #[test]

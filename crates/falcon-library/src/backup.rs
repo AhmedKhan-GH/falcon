@@ -78,13 +78,19 @@ impl Library {
     /// can't be read or parsed, restores it from the newest usable backup
     /// first, as Eagle does on launch. Returns the backup used, if any.
     pub fn open_or_restore(path: impl AsRef<Path>) -> Result<(Library, Option<PathBuf>)> {
+        Library::open_or_restore_with_progress(path, &|_, _| {})
+    }
+
+    /// [`Library::open_or_restore`] with [`Library::open_with_progress`]'s
+    /// progress calls.
+    pub fn open_or_restore_with_progress(path: impl AsRef<Path>, progress: &dyn Fn(usize, usize)) -> Result<(Library, Option<PathBuf>)> {
         let root = path.as_ref();
         let metadata = root.join(METADATA);
-        match Library::open(root) {
+        match Library::open_with_progress(root, progress) {
             Ok(lib) => Ok((lib, None)),
             Err(Error::Json { path, .. } | Error::Io { path, .. }) if path == metadata => match restore_newest(root)? {
-                Some(used) => Ok((Library::open(root)?, Some(used))),
-                None => Library::open(root).map(|lib| (lib, None)),
+                Some(used) => Ok((Library::open_with_progress(root, progress)?, Some(used))),
+                None => Library::open_with_progress(root, progress).map(|lib| (lib, None)),
             },
             Err(e) => Err(e),
         }

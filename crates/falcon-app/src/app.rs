@@ -850,6 +850,8 @@ pub struct App {
     pack_ask: Option<library_ui::PackAsk>,
     /// Empty Cache and Reload is asking for confirmation.
     confirm_reload: bool,
+    /// A library being read on a background thread (`library_ui.rs`).
+    loading: Option<library_ui::Loading>,
 }
 
 impl App {
@@ -927,6 +929,7 @@ impl App {
             merge: None,
             pack_ask: None,
             confirm_reload: false,
+            loading: None,
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
         app.welcomed = library_dialogs::already_welcomed(saved.welcomed, saved.recent.len(), saved.libraries.len(), saved.library.is_some());
@@ -1045,7 +1048,14 @@ impl App {
             crate::workspaces::remember(&mut self.recent, &path, RECENT_LIMIT);
             return;
         }
-        match falcon_library::sandbox::guard(&path).and_then(|()| Library::open_or_restore(&path)) {
+        let result = falcon_library::sandbox::guard(&path).and_then(|()| Library::open_or_restore(&path));
+        self.opened(path, result);
+    }
+
+    /// Shows a library [`App::open`] or a background load
+    /// (`library_ui::Loading`) read, or reports why it couldn't be read.
+    fn opened(&mut self, path: PathBuf, result: falcon_library::Result<(Library, Option<PathBuf>)>) {
+        match result {
             Ok((lib, restored)) => {
                 let skipped = lib.skipped.len();
                 self.add_workspace(Arc::new(Mutex::new(lib)));
@@ -1366,9 +1376,11 @@ impl App {
         self.dialogs.start_create();
     }
 
+    /// Asks for a library and opens it in the background, with a loading
+    /// screen.
     fn pick_library(&mut self) {
         if let Some(p) = rfd::FileDialog::new().set_title("Open Eagle Library").set_directory(falcon_library::sandbox::default_root()).pick_folder() {
-            self.open(p);
+            self.open_in_background(p);
         }
     }
 
@@ -5665,6 +5677,7 @@ impl App {
         for link in crate::links::take() {
             self.follow_link(link);
         }
+        self.poll_loading();
         if std::mem::take(&mut self.refresh) {
             self.refresh_library();
         }
@@ -5712,11 +5725,14 @@ impl App {
         self.alert_modal(&ctx);
         if self.ws.lib.is_some() {
             self.missing_modal(&ctx);
+            self.loading_modal(&ctx);
         }
 
         let Some(shared) = self.ws.lib.clone() else {
             egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| {
-                if self.missing.is_some() {
+                if self.loading.is_some() {
+                    self.loading_page(ui);
+                } else if self.missing.is_some() {
                     self.missing_page(ui);
                 } else {
                     self.empty_or_welcome(ui);
@@ -6110,7 +6126,7 @@ impl App {
         self.ws.loader.want(std::mem::take(&mut self.ws.frame_jobs));
         drop(guard);
         match self.switch_to.take() {
-            Some(Switch::Open(p)) => self.open(p),
+            Some(Switch::Open(p)) => self.open_in_background(p),
             Some(Switch::Pick) => self.pick_library(),
             Some(Switch::Create) => self.new_library(),
             Some(Switch::Focus(i)) => self.focus(i),
