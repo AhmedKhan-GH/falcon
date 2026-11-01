@@ -411,7 +411,7 @@ impl App {
                 }
             }
             let mut custom = f.custom_shape.is_some();
-            if ui.checkbox(&mut custom, tr("Custom")).changed() {
+            if ui.checkbox(&mut custom, tr("shape::Custom")).changed() {
                 f.custom_shape = custom.then(|| fui.custom_last.unwrap_or((4.0, 3.0)));
             }
             if let Some((mut w, mut h)) = f.custom_shape {

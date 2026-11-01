@@ -86,11 +86,17 @@ The core words, so every file uses one term for one thing.
 ## Look at first
 
 - Short labels that are ambiguous out of context: *Zoom* (the window
-  command), *Grid* (layout), *Size* (file size vs. dimensions), *Open*
-  (verb), *None*, *Fixed* (the shortcut heading: keys that can't be
-  changed), *Clear*, *Remove*, *Merge*, *Set*, *Fit*/*Fill*, *Starred*,
-  *Inside* (a smart folder's parent row), *Has*/*None* (text filters),
-  *Min*/*Max*, *Source*/*Reason* (failed-import columns), *recent*.
+  command), *Grid* (layout), *Size* (file size), *Open* (verb), *None*
+  (no binding, no rating, no text), *Fixed* (the shortcut heading: keys
+  that can't be changed), *Clear*, *Remove*, *Merge*, *Set*,
+  *Fit*/*Fill*, *Starred*, *Inside* (a smart folder's parent row),
+  *Has*/*None* (text filters), *Min*/*Max*, *Source*/*Reason*
+  (failed-import columns), *recent*. Where one English word needed two
+  translations it now has a context key: `tags::Uncategorized` and
+  `tags::All` (tags, not items or folders), `match::Any`/`match::All`
+  (the filters' match picker), `size::Custom` and `shape::Custom`
+  (grammatical gender in es and ru). Check
+  whether any other short word still reads wrong where it is shown.
 - Sentences split across widgets, whose word order can't change: the
   smart-folder rule row ("Items" / "must match" / "all" / "any" / "of
   these rules", and the method words *is*, *on*, *and*, *days*,

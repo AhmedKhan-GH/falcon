@@ -51,8 +51,8 @@ impl App {
         let ui = &mut child;
         ui.spacing_mut().item_spacing.y = 0.0;
         let fixed = [
-            (TagView::All, ic::TAG_SIMPLE, tr("All"), counts.len()),
-            (TagView::Uncategorized, ic::FOLDER_DASHED, tr("Uncategorized"), tag_view::uncategorized(counts, groups).len()),
+            (TagView::All, ic::TAG_SIMPLE, tr("tags::All"), counts.len()),
+            (TagView::Uncategorized, ic::FOLDER_DASHED, tr("tags::Uncategorized"), tag_view::uncategorized(counts, groups).len()),
             (TagView::Starred, ic::STAR, tr("Starred"), lib.tags.starred_tags.len()),
         ];
         for (v, glyph, label, n) in fixed {

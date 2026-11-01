@@ -705,7 +705,7 @@ pub(crate) fn filter_chip(ui: &mut Ui, label: &str, value: Option<String>) -> Re
 
 pub(crate) fn logic_picker(ui: &mut Ui, logic: &mut Logic) {
     ui.horizontal(|ui| {
-        for (l, name) in [(Logic::Or, tr("Any")), (Logic::And, tr("All")), (Logic::Equal, tr("Exact"))] {
+        for (l, name) in [(Logic::Or, tr("match::Any")), (Logic::And, tr("match::All")), (Logic::Equal, tr("Exact"))] {
             if ui.selectable_label(*logic == l, name).clicked() {
                 *logic = l;
             }

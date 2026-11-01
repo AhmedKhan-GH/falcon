@@ -286,8 +286,8 @@ fn english() -> BTreeMap<String, Entry> {
         .into_iter()
         .map(|(k, f)| {
             let e = match f {
-                Found::Text => Entry::Text(k.clone()),
-                Found::Plural { one } => Entry::Plural(BTreeMap::from([("one".to_string(), one), ("other".to_string(), k.clone())])),
+                Found::Text => Entry::Text(super::english(&k).to_string()),
+                Found::Plural { one } => Entry::Plural(BTreeMap::from([("one".to_string(), super::english(&one).to_string()), ("other".to_string(), super::english(&k).to_string())])),
             };
             (k, e)
         })
@@ -455,6 +455,15 @@ fn the_preference_saves_as_a_code() {
     assert_eq!(String::from(Language::Fixed(Lang::ZhTw)), "zh_TW");
     assert_eq!(Language::from("klingon".to_string()), Language::Auto);
     assert_eq!(Language::default(), Language::Auto);
+}
+
+#[test]
+fn contexts_are_dropped_in_english() {
+    assert_eq!(super::english("tags::Uncategorized"), "Uncategorized");
+    assert_eq!(super::english("Uncategorized"), "Uncategorized");
+    assert_eq!(super::english("Viewer: zoom to fit"), "Viewer: zoom to fit");
+    assert_eq!(super::english("A::B"), "A::B", "only a lower-case context counts");
+    assert_eq!(super::english("::x"), "::x");
 }
 
 #[test]

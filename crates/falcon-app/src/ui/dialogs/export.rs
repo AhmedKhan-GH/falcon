@@ -218,7 +218,7 @@ impl App {
                 ui.label(tr("Longest side"));
                 ui.horizontal(|ui| {
                     let text = match (d.custom, d.longest) {
-                        (true, _) => tr("Custom").to_string(),
+                        (true, _) => tr("size::Custom").to_string(),
                         (false, Some(px)) => format!("{px} px"),
                         (false, None) => tr("Original size").to_string(),
                     };
@@ -231,7 +231,7 @@ impl App {
                                 (d.custom, d.longest) = (false, Some(px));
                             }
                         }
-                        if ui.selectable_label(d.custom, tr("Custom")).clicked() {
+                        if ui.selectable_label(d.custom, tr("size::Custom")).clicked() {
                             d.custom = true;
                             d.longest.get_or_insert(1600);
                         }

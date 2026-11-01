@@ -253,8 +253,19 @@ fn lookup(lang: Lang, key: &str) -> Option<&'static Entry> {
 pub fn tr(key: &str) -> &str {
     match lookup(current(), key) {
         Some(Entry::Text(t)) => t,
-        Some(Entry::Plural(forms)) => forms.get("other").map_or(key, |s| s.as_str()),
-        None => key,
+        Some(Entry::Plural(forms)) => forms.get("other").map_or(english(key), |s| s.as_str()),
+        None => english(key),
+    }
+}
+
+/// The English text of a key: the key itself, without a `context::`
+/// prefix. A context (lower-case letters) tells apart a word that
+/// translates differently in two places, such as "tags::Uncategorized"
+/// (tags in no group) beside "Uncategorized" (items in no folder).
+pub fn english(key: &str) -> &str {
+    match key.split_once("::") {
+        Some((ctx, text)) if !ctx.is_empty() && ctx.bytes().all(|b| b.is_ascii_lowercase() || b == b'_') => text,
+        _ => key,
     }
 }
 
@@ -282,8 +293,8 @@ pub fn tr_nf(n: usize, one: &str, other: &str, args: &[(&str, &dyn Display)]) ->
     let text = match lookup(lang, other) {
         Some(Entry::Plural(forms)) => forms.get(lang.plural(count)).or_else(|| forms.get("other")).map_or(other, |s| s.as_str()),
         Some(Entry::Text(t)) => t.as_str(),
-        None if Lang::En.plural(count) == "one" => one,
-        None => other,
+        None if Lang::En.plural(count) == "one" => english(one),
+        None => english(other),
     };
     let mut all: Vec<(&str, &dyn Display)> = vec![("n", &n)];
     all.extend_from_slice(args);

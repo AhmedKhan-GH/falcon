@@ -280,7 +280,7 @@ impl App {
                                     set_side = Some(s);
                                 }
                             };
-                            row(ui, Side::All, None, tr("All"));
+                            row(ui, Side::All, None, tr("tags::All"));
                             for (gi, g) in groups.iter().enumerate() {
                                 let c = crate::folder_icons::color(g.color.as_deref()).unwrap_or(t::p().icon_none);
                                 row(ui, Side::Group(gi), Some(c), &g.name);

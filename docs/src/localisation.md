@@ -41,6 +41,15 @@ Rules for a new string:
   first argument of `tr`, `trf` and `tr_key`, and both forms of `tr_n`,
   must be plain string literals.
 
+A word that needs two translations in two places gets a context: a
+lower-case prefix and `::` in the key, as in `tr("tags::Uncategorized")`
+(tags in no group) beside `tr("Uncategorized")` (items in no folder).
+English shows the text after `::`; `en.json` lists the context key with
+that text. The contexts in use are `tags::` (the tag sidebar and tag
+picker), `match::` (the Any/All picker of the tag and folder filters)
+and `size::` and `shape::` (a custom export size and a custom aspect
+ratio).
+
 `{{` and `}}` stand for literal braces. An unknown placeholder is left as
 it is, so a mistake shows instead of vanishing.
 
