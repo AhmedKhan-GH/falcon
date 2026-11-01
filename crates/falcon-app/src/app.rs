@@ -2144,7 +2144,8 @@ impl App {
             ui.spacing_mut().item_spacing.y = 0.0;
             self.nav_rows(ui, &cx);
             ui.add_space(12.0);
-            if !lib.metadata.quick_access.is_empty() {
+            let shown = self.prefs.sidebar.clone();
+            if shown.quick_access && !lib.metadata.quick_access.is_empty() {
                 let _ = section(ui, "Quick Access");
                 let smart = lib.smart_folders();
                 for q in &lib.metadata.quick_access {
@@ -2175,10 +2176,15 @@ impl App {
                 }
                 ui.add_space(8.0);
             }
-            self.smart_section(ui);
-            let smart = lib.smart_folders();
-            for sf in &smart {
-                self.smart_row(ui, lib, &smart, sf, 0, &quick);
+            if shown.smart_folders {
+                self.smart_section(ui);
+                let smart = lib.smart_folders();
+                for sf in &smart {
+                    self.smart_row(ui, lib, &smart, sf, 0, &quick);
+                }
+            }
+            if !shown.folders {
+                return;
             }
             let total = lib.all_folders().len();
             let header = section(ui, &format!("Folders ({total})"));
@@ -2234,6 +2240,9 @@ impl App {
             (ic::TRASH, "Trash", Scope::Trash, n.trash),
         ];
         for (glyph, label, scope, count) in entries {
+            if !self.prefs.sidebar.shows(&scope) {
+                continue;
+            }
             let active = match (&scope, &self.ws.scope) {
                 (Scope::Random(_), Scope::Random(_)) => true,
                 (a, b) => a == b,
@@ -2372,8 +2381,15 @@ impl App {
                 self.go(Scope::Folder(f.id.clone()));
             }
         }
-        if resp.double_clicked() && has_children && !self.ws.collapsed.remove(&f.id) {
-            self.ws.collapsed.insert(f.id.clone());
+        if resp.double_clicked() {
+            match self.prefs.sidebar_double_click {
+                crate::prefs::SidebarDoubleClick::Rename => self.ws.renaming = Some((f.id.clone(), f.name.clone())),
+                crate::prefs::SidebarDoubleClick::Collapse => {
+                    if has_children && !self.ws.collapsed.remove(&f.id) {
+                        self.ws.collapsed.insert(f.id.clone());
+                    }
+                }
+            }
         }
         if open {
             let mut last_center = None;

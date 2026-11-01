@@ -461,6 +461,16 @@ impl App {
                 self.go(Scope::Smart(sf.id.clone()));
             }
         }
+        if resp.double_clicked() {
+            match self.prefs.sidebar_double_click {
+                crate::prefs::SidebarDoubleClick::Rename => self.ws.org.smart_rename = Some((sf.id.clone(), sf.name.clone())),
+                crate::prefs::SidebarDoubleClick::Collapse => {
+                    if has_children && !self.ws.collapsed.remove(&sf.id) {
+                        self.ws.collapsed.insert(sf.id.clone());
+                    }
+                }
+            }
+        }
         if open {
             let mut last = None;
             for c in &sf.children {

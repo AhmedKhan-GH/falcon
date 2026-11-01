@@ -8,6 +8,7 @@ use std::ops::RangeInclusive;
 
 use eframe::egui::{self, Align2, Color32, CornerRadius, Key, Modifiers, RichText, Sense, Stroke, Ui, vec2};
 
+use crate::logic::Scope;
 use crate::shortcuts::{Recorder, Shortcuts};
 use crate::theme::{self as t, Theme, font};
 
@@ -49,6 +50,55 @@ pub struct Prefs {
     pub ui_zoom: u16,
     /// Eagle's `general.showSidebarBadge`: item counts beside sidebar rows.
     pub sidebar_counts: bool,
+    /// Eagle's `habits.dblclickSidebarItem`: what double-clicking a folder
+    /// or smart folder in the sidebar does.
+    pub sidebar_double_click: SidebarDoubleClick,
+    /// Eagle's `sidebar.*`: which sidebar sections are shown.
+    pub sidebar: SidebarSections,
+}
+
+/// What double-clicking a sidebar folder does.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum SidebarDoubleClick {
+    Rename,
+    /// Expands or collapses its subfolders (Eagle's default).
+    #[default]
+    Collapse,
+}
+
+/// The sidebar sections that can be hidden, all shown by default as in
+/// Eagle. (Eagle's Community entry has no counterpart; All, All Tags and
+/// Trash are always shown.)
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, Debug)]
+#[serde(default)]
+pub struct SidebarSections {
+    pub uncategorized: bool,
+    pub untagged: bool,
+    pub recent: bool,
+    pub random: bool,
+    pub quick_access: bool,
+    pub smart_folders: bool,
+    pub folders: bool,
+}
+
+impl Default for SidebarSections {
+    fn default() -> Self {
+        SidebarSections { uncategorized: true, untagged: true, recent: true, random: true, quick_access: true, smart_folders: true, folders: true }
+    }
+}
+
+impl SidebarSections {
+    /// Whether the entry for `scope` is shown among the sidebar's top rows.
+    pub fn shows(&self, scope: &Scope) -> bool {
+        match scope {
+            Scope::Uncategorized => self.uncategorized,
+            Scope::Untagged => self.untagged,
+            Scope::Recent => self.recent,
+            Scope::Random(_) => self.random,
+            _ => true,
+        }
+    }
 }
 
 impl Default for Prefs {
@@ -65,6 +115,8 @@ impl Default for Prefs {
             theme: Theme::Dark,
             ui_zoom: 100,
             sidebar_counts: true,
+            sidebar_double_click: SidebarDoubleClick::default(),
+            sidebar: SidebarSections::default(),
         }
     }
 }
@@ -182,6 +234,7 @@ pub struct Draft {
 pub enum Section {
     #[default]
     General,
+    Sidebar,
     Controls,
     Preview,
     Shortcuts,
@@ -190,11 +243,12 @@ pub enum Section {
 }
 
 impl Section {
-    pub const ALL: [Section; 6] = [Section::General, Section::Controls, Section::Preview, Section::Shortcuts, Section::Notification, Section::Developer];
+    pub const ALL: [Section; 7] = [Section::General, Section::Sidebar, Section::Controls, Section::Preview, Section::Shortcuts, Section::Notification, Section::Developer];
 
     pub fn label(self) -> &'static str {
         match self {
             Section::General => "General",
+            Section::Sidebar => "Sidebar",
             Section::Controls => "Controls",
             Section::Preview => "Preview",
             Section::Shortcuts => "Shortcuts",
@@ -206,6 +260,7 @@ impl Section {
     fn icon(self) -> &'static str {
         match self {
             Section::General => crate::icons::GEAR,
+            Section::Sidebar => crate::icons::SIDEBAR_SIMPLE,
             Section::Controls => crate::icons::MOUSE,
             Section::Preview => crate::icons::EYE,
             Section::Shortcuts => crate::icons::KEYBOARD,
@@ -218,7 +273,7 @@ impl Section {
     /// first pane of each group.
     fn group(self) -> u8 {
         match self {
-            Section::General => 0,
+            Section::General | Section::Sidebar => 0,
             Section::Controls | Section::Preview | Section::Shortcuts => 1,
             Section::Notification => 2,
             Section::Developer => 3,
@@ -428,6 +483,7 @@ impl Window {
     fn pane_ui(&mut self, p: &mut Page, d: &mut Draft, port_error: Option<&String>) {
         match p.pane {
             Section::General => general(p, d),
+            Section::Sidebar => sidebar(p, d),
             Section::Controls => controls(p, d),
             Section::Preview => preview(p, d),
             Section::Shortcuts => self.shortcuts(p, d),
@@ -532,6 +588,25 @@ fn general(p: &mut Page, d: &mut Draft) {
         ui.checkbox(&mut d.prefs.notify_duplicates, "Ask what to do when an imported file is already in the library");
         note(ui, "When off, such files are imported as new items.");
         ui.checkbox(&mut d.prefs.keywords_as_tags, "Add IPTC and XMP keywords as tags when importing images");
+    });
+}
+
+/// Sidebar: what double-clicking does, and which sections are shown.
+fn sidebar(p: &mut Page, d: &mut Draft) {
+    p.block("Double-clicking a folder", &["double click", "rename", "expand", "collapse", "folder"], |ui| {
+        ui.radio_value(&mut d.prefs.sidebar_double_click, SidebarDoubleClick::Rename, "Renames it");
+        ui.radio_value(&mut d.prefs.sidebar_double_click, SidebarDoubleClick::Collapse, "Expands or collapses it");
+    });
+    let keywords = ["sections", "show", "hide", "uncategorized", "untagged", "recently used", "random", "quick access", "smart folders", "folders"];
+    p.block("Sections", &keywords, |ui| {
+        let s = &mut d.prefs.sidebar;
+        ui.checkbox(&mut s.uncategorized, "Uncategorized");
+        ui.checkbox(&mut s.untagged, "Untagged");
+        ui.checkbox(&mut s.recent, "Recently Used");
+        ui.checkbox(&mut s.random, "Random");
+        ui.checkbox(&mut s.quick_access, "Quick Access");
+        ui.checkbox(&mut s.smart_folders, "Smart Folders");
+        ui.checkbox(&mut s.folders, "Folders");
     });
 }
 
@@ -704,6 +779,20 @@ mod tests {
     }
 
     #[test]
+    fn sidebar_sections() {
+        let p = Prefs::default();
+        assert_eq!(p.sidebar_double_click, SidebarDoubleClick::Collapse, "Eagle's dblclickSidebarItem defaults to collapse");
+        let all = [Scope::All, Scope::Uncategorized, Scope::Untagged, Scope::Recent, Scope::Random(3), Scope::AllTags, Scope::Duplicates, Scope::Trash];
+        assert!(all.iter().all(|s| p.sidebar.shows(s)), "every section is shown by default");
+        let s = SidebarSections { uncategorized: false, random: false, ..Default::default() };
+        assert!(!s.shows(&Scope::Uncategorized) && !s.shows(&Scope::Random(9)));
+        assert!(s.shows(&Scope::Untagged) && s.shows(&Scope::All) && s.shows(&Scope::Trash));
+        let p: Prefs = serde_json::from_str(r#"{"sidebar":{"folders":false},"sidebar_double_click":"rename"}"#).unwrap();
+        assert!(!p.sidebar.folders && p.sidebar.quick_access);
+        assert_eq!(p.sidebar_double_click, SidebarDoubleClick::Rename);
+    }
+
+    #[test]
     fn search_matches_every_word() {
         assert!(matches("", &["General", "Appearance"]));
         assert!(matches("  ", &["General"]));
@@ -717,7 +806,7 @@ mod tests {
     #[test]
     fn panes_follow_eagles_order() {
         let labels: Vec<_> = Section::ALL.iter().map(|s| s.label()).collect();
-        assert_eq!(labels, ["General", "Controls", "Preview", "Shortcuts", "Notification", "Developer"]);
+        assert_eq!(labels, ["General", "Sidebar", "Controls", "Preview", "Shortcuts", "Notification", "Developer"]);
         let groups: Vec<_> = Section::ALL.iter().map(|s| s.group()).collect();
         assert!(groups.windows(2).all(|w| w[0] <= w[1]), "groups are contiguous");
         let s: Section = serde_json::from_str(r#""preview""#).unwrap();
