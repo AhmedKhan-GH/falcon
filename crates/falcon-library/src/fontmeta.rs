@@ -360,6 +360,51 @@ pub fn weight(metas: &Map<String, Value>) -> String {
     w
 }
 
+/// The font viewer's information panel, read from `fontMetas` as Eagle's
+/// viewer reads it: each name in English when the font has it, else its
+/// first language. Missing names are empty.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct FontInfo {
+    pub postscript: String,
+    pub full_name: String,
+    pub family: String,
+    /// `weight`, the style label Eagle stores.
+    pub style: String,
+    pub version: String,
+    pub designer: String,
+    pub manufacturer: String,
+    pub description: String,
+    /// The copyright notice, or the licence text when there is none.
+    pub copyright: String,
+    pub trademark: String,
+    pub glyphs: Option<u64>,
+}
+
+impl FontInfo {
+    pub fn from_metas(metas: &Map<String, Value>) -> FontInfo {
+        let name = |k: &str| en_value(metas, k).or_else(|| first_value(metas, k)).unwrap_or("").trim().to_string();
+        let copyright = name("copyright");
+        FontInfo {
+            postscript: name("postScriptName"),
+            full_name: name("fullName"),
+            family: name("fontFamily"),
+            style: metas.get("weight").and_then(Value::as_str).unwrap_or("").to_string(),
+            version: name("version"),
+            designer: name("designer"),
+            manufacturer: name("manufacturer"),
+            description: name("description"),
+            copyright: if copyright.is_empty() { name("license") } else { copyright },
+            trademark: name("trademark"),
+            glyphs: metas.get("numGlyphs").and_then(Value::as_u64),
+        }
+    }
+}
+
+/// The sample languages Eagle's "change language" offers, as stored in
+/// `fontMetas.preferLng`, with their names.
+pub const SAMPLE_LANGUAGES: [(&str, &str); 5] =
+    [("en", "English"), ("jp", "日本語"), ("kr", "한국어"), ("zh_CN", "简体中文"), ("zh_TW", "繁體中文")];
+
 /// Builds `fontMetas` for a font file's bytes, or `None` if it can't be
 /// parsed. `fallback_id` names a font whose table has no names at all.
 pub fn font_metas(data: &[u8], fallback_id: &str) -> Option<Map<String, Value>> {
@@ -418,6 +463,29 @@ mod tests {
         assert_eq!(weight(&metas("Foo", Some("Oblique"))), "Regular");
         assert_eq!(weight(&metas("Foo-Italic", None)), "Regular Italic");
         assert_eq!(weight(&Map::new()), "Regular");
+    }
+
+    #[test]
+    fn info_prefers_english_names() {
+        let m = json!({
+            "copyright": {"en": "(c) Someone"},
+            "fontFamily": {"zh": "字体", "en": "Ziti"},
+            "fullName": {"ja": "フル"},
+            "postScriptName": {"en": " Ziti-Bold "},
+            "license": {"en": "OFL"},
+            "numGlyphs": 1234,
+            "weight": "Bold",
+        });
+        let info = FontInfo::from_metas(m.as_object().unwrap());
+        assert_eq!(info.family, "Ziti");
+        assert_eq!(info.full_name, "フル", "the first language when there is no English");
+        assert_eq!(info.postscript, "Ziti-Bold", "trimmed");
+        assert_eq!(info.copyright, "(c) Someone");
+        assert_eq!((info.style.as_str(), info.glyphs), ("Bold", Some(1234)));
+        assert_eq!(info.designer, "");
+        let no_copyright = FontInfo::from_metas(json!({"license": {"en": "OFL"}}).as_object().unwrap());
+        assert_eq!(no_copyright.copyright, "OFL", "the licence stands in for a missing copyright");
+        assert_eq!(FontInfo::from_metas(&Map::new()), FontInfo::default());
     }
 
     #[test]

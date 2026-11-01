@@ -29,6 +29,14 @@ pub(super) struct MediaFilterUi {
     font_keys: Option<HashSet<String>>,
 }
 
+impl MediaFilterUi {
+    /// Reads Eagle's font folder again next time (after falcon activated
+    /// or deactivated a font).
+    pub(super) fn forget_font_keys(&mut self) {
+        self.font_keys = None;
+    }
+}
+
 const DATE_TABS: [(DateField, &str); 3] = [(DateField::Imported, "Imported"), (DateField::Modified, "Modified"), (DateField::Created, "Created")];
 
 fn date_rule(f: &mut search::Filter, field: DateField) -> &mut DateFilter {

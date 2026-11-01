@@ -27,6 +27,7 @@ mod export_ui;
 mod duplicates_view;
 mod filters_ui;
 mod media_view;
+mod font_view;
 mod image_view;
 mod video_view;
 mod gif_view;
@@ -102,6 +103,8 @@ struct Saved {
     text_zoom: Option<u8>,
     /// Files the auto-import folder has handed over (`auto_import.rs`).
     auto_imported: crate::auto_import::Imported,
+    /// The font viewer's tab and theme.
+    font_look: Option<font_view::FontLook>,
 }
 
 /// A rubber-band selection in progress: where it started, in the grid's
@@ -485,7 +488,7 @@ struct Workspace {
     filter_ui: filters_ui::MediaFilterUi,
     /// Waveforms for the viewer, and its font specimen.
     waveforms: crate::audio::Waveforms,
-    font_view: media_view::FontView,
+    font_view: font_view::FontView,
     /// The text item open in the viewer and its unsaved typing.
     text: Option<text_view::TextView>,
     /// The Duplicates page's hash cache and results.
@@ -634,6 +637,8 @@ pub struct App {
     audio: crate::audio::Audio,
     /// Video playback for the viewer (`video_view.rs`).
     video: video_view::VideoState,
+    /// The font viewer's tab and theme, kept across fonts and launches.
+    font_look: font_view::FontLook,
     /// The PDF reader for the viewer (`pdf_view.rs`).
     pdf: pdf_view::PdfState,
     /// The image viewer's zoom mode and remembered views (`image_view.rs`).
@@ -690,6 +695,7 @@ impl App {
             collect: Default::default(),
             audio: Default::default(),
             video: Default::default(),
+            font_look: Default::default(),
             pdf: Default::default(),
             image: Default::default(),
             menu_bar: Default::default(),
@@ -730,6 +736,7 @@ impl App {
         app.image.edge = saved.zoom_edge.unwrap_or(false);
         app.text_zoom = saved.text_zoom.unwrap_or(0).min(crate::textdoc::ZOOM_LEVELS - 1);
         app.auto_imported = Arc::new(Mutex::new(saved.auto_imported));
+        app.font_look = saved.font_look.unwrap_or_default();
         // Reopen the libraries that were open, then the one given on the
         // command line (focused if it was already open).
         let (libraries, active) = crate::workspaces::restore(&saved.libraries, saved.active, saved.library.as_deref(), |p| p.is_dir());
@@ -1313,6 +1320,10 @@ impl App {
         // item, as in Eagle's text editor (only reached while neither its
         // text nor its title has focus).
         let text = viewer && self.ws.text.as_ref().is_some_and(|v| self.ws.viewer.as_deref() == Some(v.id.as_str()));
+        // In the font, video and audio viewers the digits rate the item too,
+        // as in Eagle.
+        let open = self.ws.viewer.as_deref();
+        let digits_rate = text || (viewer && (self.font_viewer_open() || self.video.loaded() == open || self.audio.loaded() == open));
         // The viewer's fixed zoom keys: plain 0, 1, + and −. The table's
         // chords (⌘0, ⌘9, ⌘=, ⌘−) come through `run_command`.
         if viewer && !text {
@@ -1320,8 +1331,8 @@ impl App {
             self.ws.view.zoom_key = ctx.input(|i| {
                 i.events.iter().find_map(|e| match e {
                     egui::Event::Key { key, pressed: true, modifiers: m, .. } if !m.command && !m.ctrl && !m.alt => match key {
-                        Key::Num0 => Some(Z::Fit),
-                        Key::Num1 => Some(Z::Actual),
+                        Key::Num0 if !digits_rate => Some(Z::Fit),
+                        Key::Num1 if !digits_rate => Some(Z::Actual),
                         Key::Plus | Key::Equals => Some(Z::In),
                         Key::Minus => Some(Z::Out),
                         Key::Backtick => Some(Z::Edge),
@@ -1342,9 +1353,10 @@ impl App {
         if audio {
             pressed.retain(|c| *c != C::Viewer);
         }
-        // In the viewer the bare digits are its own keys (0 fits, 1 is
-        // actual size); the menu still rates there.
-        if viewer && !text {
+        // In the image viewer the bare digits are its own keys (0 fits, 1
+        // is actual size); the menu still rates there. In the text, font,
+        // video and audio viewers they rate, as in Eagle.
+        if viewer && !digits_rate {
             pressed.retain(|c| !matches!(c, C::Rate(_)));
         }
         // These take the whole key press: the fixed keys wait a frame.
@@ -4777,6 +4789,7 @@ impl eframe::App for App {
             zoom_edge: Some(self.image.edge),
             text_zoom: Some(self.text_zoom),
             auto_imported: self.auto_imported.lock().unwrap_or_else(|p| p.into_inner()).clone(),
+            font_look: Some(self.font_look),
         };
         eframe::set_value(storage, eframe::APP_KEY, &saved);
     }

@@ -1,12 +1,10 @@
-//! The viewer for audio and font items: a waveform with playback controls,
-//! and a font specimen drawn with the font itself (see the desktop app
-//! chapter of the docs).
+//! The viewer for audio and font items: a waveform with playback controls
+//! here, and the font viewer in `font_view.rs` (see the desktop app chapter
+//! of the docs).
 
 use eframe::egui::{
-    self, Align2, Color32, FontData, FontFamily, FontId, FontInsert, InsertFontFamily, Pos2, Rect, RichText, Sense, Stroke,
-    TextEdit, Ui, Vec2, vec2,
+    self, Align2, Color32, FontId, Pos2, Rect, RichText, Sense, Stroke, Ui, Vec2, vec2,
 };
-use falcon_library::fontpreview::Specimen;
 use falcon_library::model::Item;
 use falcon_library::{Library, fontmeta, media, search, waveform};
 
@@ -22,42 +20,6 @@ const SPEAKER: &str = "\u{E44A}";
 /// Eagle's waveform colours: unplayed grey, played in the brand blue.
 const WAVE: Color32 = Color32::from_rgb(0x7c, 0x7c, 0x7c);
 const PLAYED: Color32 = Color32::from_rgb(waveform::COLOR[0], waveform::COLOR[1], waveform::COLOR[2]);
-/// Sizes of the font viewer's waterfall, in points.
-const WATERFALL: [f32; 9] = [72.0, 60.0, 48.0, 36.0, 30.0, 24.0, 18.0, 14.0, 12.0];
-const CHARSET: [&str; 4] = ["ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz", "0123456789", "!?&@#%*()[]{}.,:;'\"/-–—"];
-
-/// The font viewer's state for the font on screen.
-#[derive(Default)]
-pub(super) struct FontView {
-    id: String,
-    /// The family the font is registered under, or `None` if egui can't
-    /// read it.
-    family: Option<FontFamily>,
-    text: String,
-    /// The text was typed by the user, so it stays when another font opens.
-    edited: bool,
-    size: f32,
-}
-
-/// Whether egui can parse a font, checked with the same parser it uses, as
-/// it panics on fonts it can't read.
-fn egui_can_read(data: &[u8]) -> bool {
-    skrifa::FontRef::from_index(data, 0).is_ok()
-}
-
-/// Sample text in a script the font covers.
-fn sample(item: &Item) -> String {
-    let metas = item.extra.get("fontMetas").and_then(|m| m.as_object()).cloned().unwrap_or_default();
-    match Specimen::for_metas(&metas) {
-        Specimen::Latin => "Sphinx of black quartz, judge my vow",
-        Specimen::SimplifiedChinese => "字体样张 汉字之美 Aa 0123",
-        Specimen::TraditionalChinese => "字體樣張 漢字之美 Aa 0123",
-        Specimen::Japanese => "あいうえお 日本語文 Aa 0123",
-        Specimen::Korean => "가나다라마 Aa 0123",
-    }
-    .to_string()
-}
-
 /// The bar every viewer shares: the panels button, back, the counter and
 /// the item's name at the left; open, previous and next at the right.
 /// Returns where the name starts and the x left of what was drawn on the
@@ -139,7 +101,7 @@ impl App {
             if audio {
                 self.audio_view(ctx, ui, lib, item, area);
             } else {
-                self.font_view(ui, item, area);
+                self.font_view(ui, lib, item, area);
             }
             top_bar(self, ui, item, bar);
         }
@@ -254,91 +216,6 @@ impl App {
         }
     }
 
-    /// Registers the font with egui the first time it is viewed; true once
-    /// egui has it (a frame later).
-    fn font_ready(&mut self, ctx: &egui::Context, lib: &Library, item: &Item) -> bool {
-        if search::type_group(&item.ext) != Some("font") {
-            return false;
-        }
-        if self.ws.font_view.id != item.id {
-            let family = FontFamily::Name(format!("falcon-font-{}", item.id).into());
-            let data = std::fs::read(item.original_path(lib.root())).ok();
-            let sfnt = data.as_deref().and_then(fontmeta::sfnt).map(|c| c.into_owned()).filter(|d| egui_can_read(d));
-            let family = sfnt.map(|bytes| {
-                // egui keeps a font once added; adding the same name again is a no-op.
-                ctx.add_font(FontInsert {
-                    name: format!("falcon-font-{}", item.id),
-                    data: FontData::from_owned(bytes),
-                    families: vec![InsertFontFamily { family: family.clone(), priority: egui::FontPriority::Highest }],
-                });
-                family
-            });
-            let edited = self.ws.font_view.edited;
-            let text = if edited { std::mem::take(&mut self.ws.font_view.text) } else { sample(item) };
-            let size = if self.ws.font_view.size > 0.0 { self.ws.font_view.size } else { 72.0 };
-            self.ws.font_view = FontView { id: item.id.clone(), family, text, edited, size };
-        }
-        match &self.ws.font_view.family {
-            Some(f) => {
-                let ready = ctx.fonts(|fonts| fonts.definitions().families.contains_key(f));
-                if !ready {
-                    ctx.request_repaint();
-                }
-                ready
-            }
-            None => false,
-        }
-    }
-
-    fn font_view(&mut self, ui: &mut Ui, item: &Item, area: Rect) {
-        let Some(family) = self.ws.font_view.family.clone() else { return };
-        let fv = &mut self.ws.font_view;
-        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(area.shrink2(vec2(48.0, 16.0))));
-        let ui = &mut child;
-        ui.horizontal(|ui| {
-            ui.label(RichText::new("Size").color(t::p().text_muted));
-            ui.spacing_mut().slider_width = 220.0;
-            ui.add(egui::Slider::new(&mut fv.size, 12.0..=200.0).suffix(" pt").max_decimals(0));
-            if ui.button("Reset Text").clicked() {
-                fv.text = sample(item);
-                fv.edited = false;
-            }
-        });
-        ui.add_space(8.0);
-        egui::ScrollArea::vertical().id_salt("font-view").auto_shrink([false, false]).show(ui, |ui| {
-            // The sample is editable in place, as in Eagle's font viewer.
-            let sample_edit = ui.add(
-                TextEdit::multiline(&mut fv.text)
-                    .id_salt("font-sample")
-                    .font(FontId::new(fv.size, family.clone()))
-                    .text_color(t::p().text)
-                    .frame(egui::Frame::NONE)
-                    .desired_rows(1)
-                    .desired_width(f32::INFINITY),
-            );
-            if sample_edit.changed() {
-                fv.edited = true;
-            }
-            ui.add_space(20.0);
-            ui.separator();
-            for size in WATERFALL {
-                ui.horizontal(|ui| {
-                    let (r, _) = ui.allocate_exact_size(vec2(44.0, size * 1.2), Sense::hover());
-                    ui.painter().text(r.left_center(), Align2::LEFT_CENTER, format!("{size:.0}"), mono(11.0), t::p().text_muted);
-                    let g = ui.painter().layout_no_wrap(fv.text.replace('\n', " "), FontId::new(size, family.clone()), t::p().text);
-                    let (r, _) = ui.allocate_exact_size(vec2(g.size().x, size * 1.2), Sense::hover());
-                    ui.painter().galley(Pos2::new(r.left(), r.center().y - g.size().y / 2.0), g, t::p().text);
-                });
-            }
-            ui.add_space(12.0);
-            ui.separator();
-            ui.add_space(8.0);
-            for line in CHARSET {
-                ui.label(RichText::new(line).font(FontId::new(36.0, family.clone())).color(t::p().text));
-            }
-            ui.add_space(24.0);
-        });
-    }
 }
 
 /// The inspector rows for audio, video, camera and font metadata, when the
@@ -383,37 +260,5 @@ pub(super) fn media_props(ui: &mut Ui, item: &Item) {
         if let Some(n) = metas.get("numGlyphs").and_then(|v| v.as_u64()) {
             super::prop(ui, "Glyphs", &n.to_string());
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn fonts_egui_cannot_read_are_refused() {
-        assert!(!egui_can_read(b"not a font"));
-        assert!(!egui_can_read(&[]));
-        let Ok(data) = std::fs::read("/System/Library/Fonts/Supplemental/Arial.ttf") else { return };
-        assert!(egui_can_read(&data));
-        // A registered font lays out text in its own family from the next pass.
-        let ctx = egui::Context::default();
-        let family = FontFamily::Name("falcon-font-test".into());
-        let mut out = ctx.run_ui(Default::default(), |ui| {
-            ui.label("before");
-            ui.ctx().add_font(FontInsert {
-                name: "falcon-font-test".into(),
-                data: FontData::from_owned(data.clone()),
-                families: vec![InsertFontFamily { family: family.clone(), priority: egui::FontPriority::Highest }],
-            });
-        });
-        out.textures_delta.clear();
-        let mut width = 0.0;
-        let mut out = ctx.run_ui(Default::default(), |ui| {
-            assert!(ui.ctx().fonts(|f| f.definitions().families.contains_key(&family)));
-            width = ui.painter().layout_no_wrap("Sphinx".into(), FontId::new(48.0, family.clone()), Color32::WHITE).size().x;
-        });
-        out.textures_delta.clear();
-        assert!(width > 50.0, "{width}");
     }
 }

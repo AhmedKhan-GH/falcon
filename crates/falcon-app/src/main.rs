@@ -5,6 +5,7 @@ mod backups;
 mod collect;
 mod drop_pos;
 mod folder_icons;
+mod font_install;
 mod audio;
 mod auto_import;
 mod hover;

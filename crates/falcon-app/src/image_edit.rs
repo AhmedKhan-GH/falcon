@@ -33,6 +33,10 @@ pub enum Op {
     FrameThumbnail(String, image::RgbaImage),
     /// Make a video frame, taken at this second, the item's thumbnail.
     VideoThumbnail(String, image::RgbaImage, f64),
+    /// Rename the item (and its files) to this name.
+    Rename(String, String),
+    /// Set a font's sample language (`fontMetas.preferLng`).
+    FontLanguage(String, String),
 }
 
 impl Op {
@@ -52,6 +56,8 @@ impl Op {
             Op::Flip(_, Flip::Horizontal) => "Flip horizontally".into(),
             Op::Flip(_, Flip::Vertical) => "Flip vertically".into(),
             Op::FrameThumbnail(..) | Op::VideoThumbnail(..) => "Set frame as thumbnail".into(),
+            Op::Rename(..) => "Rename".into(),
+            Op::FontLanguage(..) => "Change sample language".into(),
         }
     }
 }
@@ -160,6 +166,18 @@ impl App {
                 lib.set_video_thumbnail(&id, &img, at)?;
                 self.ws.loader.forget(&id);
                 self.flash("Thumbnail set");
+                Ok(())
+            }
+            Op::Rename(id, name) => {
+                let Some(mut item) = lib.item(&id).cloned() else { return Ok(()) };
+                item.name = name;
+                lib.update_item(item)?;
+                self.ws.loader.forget(&id);
+                Ok(())
+            }
+            Op::FontLanguage(id, lang) => {
+                lib.set_font_language(&id, &lang)?;
+                self.ws.loader.forget(&id);
                 Ok(())
             }
             Op::ResetCustomThumbnail(id) => {

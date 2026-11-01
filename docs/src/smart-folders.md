@@ -118,5 +118,5 @@ Eagle's quirks are kept:
 ## How falcon differs
 
 - **Regex engine:** Eagle runs JavaScript `RegExp`; falcon runs the Rust `regex` crate. It has no look-around or backreferences, so a pattern using them fails to compile and never matches (in Eagle it works). `\w`, `\d`, `\b` and case folding are Unicode-aware, where JavaScript without the `u` flag is ASCII-only. An invalid `regex` pattern fails the rule in both, but Eagle fails its whole test on an invalid `startWith` or `endWith` pattern, where falcon fails only that rule.
-- **Installed fonts:** like Eagle, falcon counts a font as installed when a file named after it is in Eagle's font folder (`~/Library/Fonts/EagleApp`, read once per evaluation). Fonts installed any other way count as not installed in both. Falcon has no font activation of its own and no such folder on other systems, so there every font is "not installed".
+- **Installed fonts:** like Eagle, falcon counts a font as installed when a file named after it is in Eagle's font folder (`~/Library/Fonts/EagleApp`, read once per evaluation). Fonts installed any other way count as not installed in both. Falcon's font viewer activates fonts into the same folder on macOS; there is no such folder on other systems, so there every font is "not installed".
 - **The dialog:** see above for how falcon's differs from Eagle's.

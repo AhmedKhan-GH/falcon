@@ -125,6 +125,32 @@ pub fn render(data: &[u8], metas: &Map<String, Value>) -> Option<DynamicImage> {
     RgbaImage::from_raw(SIZE, SIZE, raw).map(|i| DynamicImage::ImageRgb8(DynamicImage::ImageRgba8(i).to_rgb8()))
 }
 
+impl crate::Library {
+    /// Sets the language of a font item's specimen, as Eagle's "change
+    /// language" does: `fontMetas.preferLng` becomes `lang` (one of
+    /// [`fontmeta::SAMPLE_LANGUAGES`]) and the specimen thumbnail and its
+    /// palette are drawn again in that language.
+    pub fn set_font_language(&mut self, id: &str, lang: &str) -> crate::Result<()> {
+        if !fontmeta::SAMPLE_LANGUAGES.iter().any(|(code, _)| *code == lang) {
+            return Err(self.invalid(format!("unknown sample language {lang}")));
+        }
+        let mut item = self.item(id).cloned().ok_or_else(|| self.invalid(format!("no item {id}")))?;
+        let Some(Value::Object(metas)) = item.extra.get_mut("fontMetas") else {
+            return Err(self.invalid(format!("{}.{} has no font metadata", item.name, item.ext)));
+        };
+        metas.insert("preferLng".into(), Value::String(lang.into()));
+        let metas = metas.clone();
+        let raw = item.original_path(self.root());
+        let data = std::fs::read(&raw).map_err(|e| crate::Error::io(&raw, e))?;
+        if let Some(img) = render(&data, &metas) {
+            let thumb = self.info_dir(&item).join(format!("{}_thumbnail.png", item.name));
+            item.palettes = crate::palette::extract(&img);
+            crate::thumbnail::write_thumbnail(img, crate::thumbnail::max_side(&item.ext), &thumb).map_err(|e| self.invalid(e.0))?;
+        }
+        self.update_item(item)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -138,6 +164,25 @@ mod tests {
         assert_eq!(Specimen::for_metas(&m(json!({"support": {"zh_TW": true}}))), Specimen::TraditionalChinese);
         assert_eq!(Specimen::for_metas(&m(json!({"postScriptName": {"ja": "x"}}))), Specimen::Japanese);
         assert_eq!(Specimen::for_metas(&m(json!({"support": {"kr": true, "jp": true}}))), Specimen::Korean);
+    }
+
+    #[test]
+    fn changing_the_language_redraws_the_specimen() {
+        let Ok(data) = std::fs::read("/System/Library/Fonts/Supplemental/Arial.ttf") else { return };
+        let tmp = tempfile::tempdir().unwrap();
+        let mut lib = crate::Library::create(tmp.path().join("T.library")).unwrap();
+        let src = tmp.path().join("Arial.ttf");
+        std::fs::write(&src, &data).unwrap();
+        let id = lib.import_file(&src, &crate::import::ImportOptions::default()).unwrap();
+        let thumb = lib.item(&id).unwrap().thumbnail_path(lib.root()).unwrap();
+        let before = std::fs::read(&thumb).unwrap();
+        assert!(lib.set_font_language(&id, "xx").is_err());
+        lib.set_font_language(&id, "zh_CN").unwrap();
+        let item = lib.item(&id).unwrap();
+        assert_eq!(item.extra["fontMetas"]["preferLng"], "zh_CN");
+        assert_ne!(std::fs::read(&thumb).unwrap(), before, "the specimen is drawn again");
+        lib.set_font_language(&id, "en").unwrap();
+        assert_eq!(lib.item(&id).unwrap().extra["fontMetas"]["preferLng"], "en");
     }
 
     #[test]
