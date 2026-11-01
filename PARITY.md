@@ -6,23 +6,23 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 79 | 57 | 135 | 9 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 82 | 56 | 133 | 9 |
 | Viewers and file formats | 63 | 31 | 96 | 7 |
-| Search, filters and organising | 103 | 43 | 76 | 3 |
-| Import, export, library, preferences and integrations | 58 | 30 | 124 | 26 |
-| **Total** | 303 | 161 | 431 | 45 |
+| Search, filters and organising | 125 | 30 | 67 | 3 |
+| Import, export, library, preferences and integrations | 61 | 28 | 123 | 26 |
+| **Total** | 331 | 145 | 419 | 45 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
 
-1. Dropping a `.library` folder on the window imports every file inside it as new items. Eagle opens the library.
-2. Editing a smart folder keeps only one condition and drops NOT flags and rule types the dialog doesn't offer, so saving a smart folder made in Eagle loses rules.
-3. The folder name and description in the inspector are never saved.
-4. Clicking a folder chip in the item inspector removes the item from that folder. In Eagle it opens the folder.
-5. Smart folder rules on comments, camera, ISO, aperture, focal length, shutter, duration, timestamp and font never match; `regex` is only a substring test; `on` compares UTC days.
-6. Saved filters drop date, duration, camera and font rules when saved.
-7. The app opens libraries without the backup fallback, so a damaged `metadata.json` stops the library opening.
-8. Keys that differ from Eagle: ⌥1 and ⌥3 are swapped, Back and Forward, Rename. Dragging items onto a folder adds them; Eagle moves them out of the open folder unless ⌥ is held.
+1. ~~Dropping a `.library` folder on the window imports every file inside it as new items.~~ Fixed: it opens the library.
+2. ~~Editing a smart folder keeps only one condition and drops NOT flags and rule types the dialog doesn't offer.~~ Fixed: every condition is edited and unknown rules are kept.
+3. ~~The folder name and description in the inspector are never saved.~~ Fixed.
+4. ~~Clicking a folder chip in the item inspector removes the item from that folder.~~ Fixed: it opens the folder, and the chip's × removes.
+5. ~~Smart folder rules on comments, camera, ISO, aperture, focal length, shutter, duration, timestamp and font never match; `regex` is only a substring test; `on` compares UTC days.~~ Fixed.
+6. ~~Saved filters drop date, duration, camera and font rules when saved.~~ Fixed; they are saved and restored in Eagle's format.
+7. ~~The app opens libraries without the backup fallback.~~ Fixed: the app restores from the newest good backup and backs up on change and every 30 minutes.
+8. ~~Keys that differ from Eagle: ⌥1 and ⌥3 are swapped, Back and Forward, Rename. Dragging items onto a folder adds them.~~ Fixed: ⌥1 Waterfall / ⌥3 Grid, ⌫ and ⌘←/⌘→ for history, ⌘R renames, ⌘[ ⌘] move folders, and a drop onto a folder moves unless ⌥ is held.
 
 ## Biggest gaps
 
@@ -72,13 +72,13 @@ Overall finding: falcon has **no application menu bar**. There is no `muda` or m
 | File: New Smart Folder (⇧⌥⌘N) | Partial | Only from the + on the Smart Folders heading (organize_ui.rs:500). No key | local |
 | Edit: Undo / Redo | Done | ⌘Z and ⇧⌘Z with a capped transaction history (app.rs:992, 1262-1300) | local |
 | Edit: Cut / Copy / Paste / Select All | Partial | ⌘C copies files (app.rs:942), ⌘V imports the clipboard (app.rs:956) and ⌘A selects all. There is no menu entry and no Cut | local |
-| Edit: Rename (⌘R on macOS) | Partial | Default is **F2**, not ⌘R (shortcuts.rs:111). It only focuses the inspector title for one item. Eagle renames several items in a batch dialog | local |
+| Edit: Rename (⌘R on macOS) | Partial | ⌘R, with F2 as an alias (shortcuts.rs `edit.rename`). It only focuses the inspector title for one item. Eagle renames several items in a batch dialog | local |
 | Edit: Copy File Path (⌥⌘C) | Partial | Item context menu only (app.rs:2515). No key | local |
 | Edit: Copy Folder Path (⌥⇧⌘C), Copy Eagle Link, Copy Thumbnail, Copy Base64, Copy Name | Missing | None of these copy variants exist | local |
 | Edit: Duplicate item (⌘D) | Missing | No duplicate-item action | local |
 | Edit: Refresh Thumbnail (⌥⌘R), Custom thumbnail from a file (⌥⌘T), Reset custom thumbnail | Partial | Context menu only (image_edit.rs:96-106). No keys | local |
 | Edit: Custom thumbnail from the clipboard (⇧⌥⌘T) | Missing | Choosing a file is the only option | local |
-| Edit ▸ Move Folder: Up, Down, To Top, To Bottom (⌘] ⌘[ ⇧⌘] ⇧⌘[) | Missing | Folders reorder only by dragging (organize_ui.rs:254). Falcon uses ⌘[ and ⌘] for Back and Forward, which Eagle binds to folder moves | local |
+| Edit ▸ Move Folder: Up, Down, To Top, To Bottom (⌘] ⌘[ ⇧⌘] ⇧⌘[) | Partial | The keys move the open folder or smart folder among its siblings, undoably (shortcuts.rs `edit.folder.arrange.*`, `organize::arrange`, `Action::Arrange` in app.rs). No menu | local |
 | Edit ▸ Edit Image: Horizontal Flip (⇧F), Rotate (⇧R), Crop (⇧C), Combine Images (⇧⌘M) | Partial | Flip, rotate and crop are in the context menu (image_edit.rs:110-132). ⇧R and ⇧F work only inside the viewer (image_edit.rs:276). No ⇧C and no Combine Images | local |
 | Edit ▸ Edit Folder: Set Current Folder (⇧⌘R), Move Folder, Password create / edit / remove / lock (⇧⌘L) | Partial | Password items are in the folder context menu (organize_ui.rs:270-296). No menu, no keys, no Move Folder dialog and no folder-settings shortcut | local |
 | Edit: Remove from current folder (⇧⌘⌫) | Partial | Only by removing the folder chip in the inspector (app.rs:3141-3146). No menu item and no key | local |
@@ -90,7 +90,7 @@ Overall finding: falcon has **no application menu bar**. There is no `muda` or m
 | Organize: Add Tags… (⌘T), Copy Tags (⇧⌘C), Paste Tags (⇧⌘V), Clear Tags | Missing | No tag-panel key and no tag clipboard | local |
 | View: Always on Top (⇧T) | Missing | Only the collect window floats (collect.rs:89). The main window cannot | local |
 | View: jump to All / Uncategorized / Untagged / Recent / Random / All Tags / Trash (⌘1–⌘7) | Missing | Sidebar clicks only (app.rs:1740) | local |
-| View: layout Waterfall / Justified / Grid / List with checkmarks (⌥1–⌥4) | Partial | Keys exist (shortcuts.rs:100-103), but **⌥1 and ⌥3 are swapped**. In Eagle ⌥1 is Waterfall and ⌥3 is the square Grid. Falcon binds ⌥1 to Grid and ⌥3 to Waterfall | local |
+| View: layout Waterfall / Justified / Grid / List with checkmarks (⌥1–⌥4) | Partial | ⌥1 Waterfall, ⌥2 Justified, ⌥3 Grid, ⌥4 List as in Eagle (shortcuts.rs `view.layout.*`). No menu with checkmarks | local |
 | View: Scroll to Top / Bottom / Page Up / Page Down (Home, End, PgUp, PgDn) | Missing | Grid keys are arrows only (app.rs:1063-1136) | local |
 | View: Zoom In / Out (⌘= / ⌘-) | Done | Thumbnail size (shortcuts.rs:96-97, app.rs:1024-1029) | local |
 | View: Actual Size (⌘0) / Zoom to Fit (⌘9) | Partial | The viewer has 0 for fit and 1 for actual size, without ⌘ (app.rs:3510). No ⌘0 or ⌘9 | local |
@@ -201,7 +201,7 @@ Eagle defaults come from prefs `shortcuts.keybinds` (rebindable) and from the ha
 | ⌘L switch library | Done | shortcuts.rs:117, app.rs:998 | local |
 | ⌘E export, ⇧⌘E export .eaglepack, ⇧E export as format | Missing | Cross-ref export | local |
 | ⌘1–⌘7 sidebar views | Missing |  | local |
-| ⌥1–⌥4 layouts | Partial | ⌥1 and ⌥3 swapped compared with Eagle (see §1) | local |
+| ⌥1–⌥4 layouts | Done | shortcuts.rs `view.layout.*`, in Eagle's order | local |
 | ⌥⌘1–⌥⌘8 panel and caption toggles plus Navigator | Partial | Only ⌥⌘1 and ⌥⌘2 | local |
 | ⇧T always on top, F5 slideshow, ⌥⌘G grayscale | Missing |  | local |
 | ⌘O open in new window, ⇧⌘O open link | Missing |  | local |
@@ -221,7 +221,7 @@ Eagle defaults come from prefs `shortcuts.keybinds` (rebindable) and from the ha
 | WASD as arrow keys | Missing |  | local |
 | ⇧ + arrows extend the selection | Missing |  | local |
 | Arrow keys move through the sidebar tree when it has focus (focus zones: content / sidebar / tags) | Missing |  | local |
-| ⌫ goes back (or leaves the viewer); ⌥← / ⌥→ and ⌘← / ⌘→ move through history | Partial | Back and Forward are **⌘[ / ⌘]** (shortcuts.rs:106-107). None of Eagle's history keys work | local |
+| ⌫ goes back (or leaves the viewer); ⌥← / ⌥→ and ⌘← / ⌘→ move through history | Done | shortcuts.rs `go.back` (⌫, ⌘←, ⌥←) and `go.forward` (⌘→, ⌥→); in the viewer ⌫ leaves it (app.rs `keyboard`) | local |
 | ⌥↑ opens the parent folder | Missing |  | local |
 | ⌥⇧N creates a text file from a template; ⌥⇧C sets the folder cover | Missing | Folder cover is in the context menu only | local |
 | ⌘W closes the window | Missing |  | local |
@@ -232,7 +232,7 @@ Eagle defaults come from prefs `shortcuts.keybinds` (rebindable) and from the ha
 | ⇧⌘L lock the folder now, ⌥⌘L lock the app | Missing |  | local |
 | Hold Z for the hover preview | Done | app.rs:2703, hover.rs | local |
 | Global shortcuts: Show Eagle, Bring up Eagle and search, screen captures (⌥⌘E) | Missing | Captures cross-ref import | local |
-| Falcon extras: ⇧⌘K collect window, ⇧⌘] / ⇧⌘[ next or previous open library | Done | shortcuts.rs:116-120 (falcon only) | local |
+| Falcon extras: ⇧⌘K collect window, ⌃Tab / ⌃⇧Tab next or previous open library | Done | shortcuts.rs `file.collect.window`, `library.next`, `library.previous` (falcon only) | local |
 
 Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute, C comment mode) belong to the viewer audit. Falcon has the player table at shortcuts.rs:122-134.
 
@@ -335,8 +335,8 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| Drag items onto a sidebar folder | Partial | Adds to the folder (app.rs:1829-1831). Eagle **moves** items out of the open folder by default and adds only with ⌥. Falcon never moves | local |
-| Toast after a drop ("N items moved to Folder", with a link to the folder) | Missing |  | local |
+| Drag items onto a sidebar folder | Done | `logic::folder_drop`: inside a folder the drop moves the items out of it, ⌥ adds; from other views it adds; trashed items come back (`Action::DropOnFolder`, one undo step). A locked target isn't asked for its password and folder auto-tags aren't applied | local |
+| Toast after a drop ("N items moved to Folder", with a link to the folder) | Partial | `logic::folder_drop_notice` shows "Moved N items to Folder" / "Added …". No link; falcon's toast has no actions | local |
 | Drag items onto a Quick Access folder | Missing | Quick Access rows take no drops (app.rs:1688-1697) | local |
 | Drag items onto a subfolder card | Missing |  | local |
 | Drag items onto the Trash | Done | app.rs:1764-1767 | local |
@@ -429,8 +429,8 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 
 1. No application menubar. File / Edit / Find / Organize / View / Window menus are absent, so menu discovery and most shortcuts are gone.
 2. Shortcuts missing: rating 0–5, T (tags), F (folders), ⌘J Go to Folder, ⌘1–7 views, Home / End / PgUp / PgDn, ⇧-arrows, ⌘T and copy/paste tags, ⇧D last folder, ⌘D duplicate, ⇧⌘⌫ remove from folder, Tab panels, ⌘W.
-3. Layout keys ⌥1 and ⌥3 are swapped compared with Eagle (Waterfall and Grid). History and rename keys differ: Back/Forward are ⌘[ / ⌘] where Eagle uses ⌫ and ⌥← / ⌥→ (and ⌘[ / ⌘] move folders); Rename is F2 where Eagle uses ⌘R.
-4. Dragging items between folders adds them instead of moving them (Eagle moves by default, ⌥ adds), and no toast with a folder link appears.
+3. ~~Layout, history and rename keys differ from Eagle.~~ Fixed; what remains is Home/End/PgUp/PgDn, ⌘1–7 and the other missing keys in §3.
+4. ~~Dragging items between folders adds them instead of moving them.~~ Fixed; the drop toast still has no link to the folder.
 5. No rubber-band (marquee) selection.
 6. Item context menu gaps: Rename / batch rename, Copy ▸ (link, folder path, thumbnail, base64, name), Copy / Paste Tags, Duplicate, Remove from this Folder, Open File Location, Pin to Top, New Folder with Selection, Add to Last Used Folder, Share, thumbnail background, custom thumbnail from clipboard, Replace with File, Combine Images.
 7. Grid display options missing: show or hide name, info type, extension, extension label and comment badge; Fit / Fill; Speed / Quality; Show Subfolder Contents.
@@ -982,8 +982,8 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Folder password: create with hint, change, remove, Lock Now | Done | `OU:270`, `OU:1067`, `O:202` | local |
 | Locked folder hides its items and subfolders until unlocked; unlock screen shows the hint | Done | `O:160` hidden_folders, `OU:676` unlock_screen | local |
 | Unlock a folder with Touch ID | Missing | none | local |
-| Folder description, edited in the inspector | Missing | `A:2921` draws a Description field on a local copy that is never saved; `E:472` set_folder_description is unused | local |
-| Rename a folder from the inspector name field | Missing | `A:2920` name field is not saved | local |
+| Folder description, edited in the inspector | Done | `scope_inspector` in app.rs keeps a `folder_edit` buffer and saves on blur through `Action::SetFolderDescription` (`edit.rs` set_folder_description), one undo step. Eagle saves a second after typing stops | local |
+| Rename a folder from the inspector name field | Done | `scope_inspector`: Return or blur saves through `Action::RenameFolder`; an emptied name reverts | local |
 | Folder auto-tagging: tags added to every item put in the folder, including the parent folders' tags | Missing | No editor, and existing folder `tags` are ignored when items are added (`A:1156` AddToFolder) or imported into a folder. Eagle libraries with auto-tags behave differently in falcon. | local |
 | Folder settings dialog (name plus auto-tags), Cmd+Shift+R | Missing | none | local |
 | Show Subfolder Content (folder view includes descendants' items) | Missing | Folder scope is direct items only (`L:126`) | local |
@@ -1009,32 +1009,32 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Add to Quick Access | Done | `OU:394` | local |
 | Duplicate a smart folder | Missing | none | local |
 | Description | Missing | Read (`SM:30`) but not editable | local |
-| Several conditions, each with its own Any/All and true/false (NOT), AND-ed together | Partial | The evaluator handles them (`SM:93` passes). The dialog edits one condition with no NOT (`A:219` from_folder reads only the first). | local |
-| Editing a smart folder keeps its other conditions and rules | Missing | DATA LOSS: saving overwrites `conditions` with one condition (`OU:539`, `SM:354`). Rules whose property the dialog doesn't offer are dropped (`A:259` returns None for them). | local |
+| Several conditions, each with its own Any/All and true/false (NOT), AND-ed together | Done | `smart_draft.rs` drafts/conditions and `organize_ui::smart_conditions_ui`: every condition is edited, each with must/must-not and all/any | local |
+| Editing a smart folder keeps its other conditions and rules | Done | Untouched conditions and rules are written back verbatim, edited ones keep their unknown keys, and rules the dialog can't show stay as read-only Unsupported rows until deleted (`smart_draft.rs`, test `eagle_smart_folder_survives_an_edit`) | local |
 | Live "N items found" count while editing rules | Missing | none | local |
 | Batch rename, recolour or delete several smart folders | Missing | no multi-select | local |
 | Export a smart folder | Missing | Cross-ref: export agent | local |
-| Rule: name, URL, note, with equals, contains, excludes, begins with, ends with, empty, not empty | Partial | Evaluated (`SM:203`). The dialog offers begins/ends only for name (`A:240`). | local |
-| Rule: regex method | Partial | Evaluated as a plain substring test (`SM:219`); not offered in the dialog | local |
+| Rule: name, URL, note, with equals, contains, excludes, begins with, ends with, empty, not empty | Done | `smart.rs` text rules; every method is in the dialog for each text property. Begins/ends-with are anchored regexes as in Eagle | local |
+| Rule: regex method | Done | `smart.rs` uses the `regex` crate, lower-casing pattern and text as Eagle does; no look-around or backreferences (documented in `docs/src/smart-folders.md`) | local |
 | Rule: folder name | Done | `SM:111`, `A:243` | local |
-| Rule: folders (in any, all, equal, excludes, empty, not empty) | Partial | Evaluated (`SM:125`), not in the dialog and no folder picker | local |
+| Rule: folders (in any, all, equal, excludes, empty, not empty) | Done | `smart.rs`; the dialog has a folder checklist (`organize_ui::rule_fields_ui`) | local |
 | Rule: tags (any, all, equal, excludes, empty, not empty) | Done | `SM:124`, `A:244` (typed list, no tag picker) | local |
 | Rule: type (is, is not; extensions and groups) | Done | `SM:126` | local |
-| Rule: rating (is, is not, contains) | Partial | Evaluated (`SM:131`); the dialog lacks "contains" | local |
-| Rule: shape including custom W:H | Partial | Evaluated (`SM:144`); the dialog has no custom W:H fields | local |
+| Rule: rating (is, is not, contains) | Done | `smart.rs` rating, including "contains" over the stars as text; all three in the dialog | local |
+| Rule: shape including custom W:H | Done | `smart.rs` shape; the dialog has custom W:H fields | local |
 | Rule: colour (similar, almost the same, grayscale) | Done | `SM:157`, `SM:168` | local |
 | Rule: width | Done | `SM:113`, `A:249` | local |
-| Rule: height | Partial | Evaluated (`SM:114`), not in the dialog | local |
-| Rule: file size with KB or MB unit | Partial | Evaluated (`SM:115`); the dialog uses MB only and lacks =, <, > | local |
-| Rule: BPM | Partial | Evaluated (`SM:112`), not in the dialog | local |
-| Rule: Date Added (on, before, after, between, within last N days) | Partial | Evaluated (`SM:245`), but "on" compares UTC days, not local days (`SM:250`). The dialog offers within/after/before as "days ago" only, with no date picker. | local |
-| Rule: Date Created and Date Modified | Partial | Evaluated (`SM:122`/`123`), not in the dialog | local |
-| Rule: comments | Missing | `SM:103` has no `comments` arm, so these rules never match | local |
-| Rule: camera | Missing | no arm | local |
-| Rule: ISO, aperture, focal length, shutter | Missing | no arm | local |
-| Rule: video duration with h/min/sec | Missing | no arm | local |
-| Rule: timestamp (date taken) | Missing | no arm | local |
-| Rule: font installed or not | Missing | no arm | local |
+| Rule: height | Done | `smart.rs`; in the dialog | local |
+| Rule: file size with KB or MB unit | Done | `smart.rs`; the dialog offers KB/MB and =, <, >, between | local |
+| Rule: BPM | Done | `smart.rs`; in the dialog | local |
+| Rule: Date Added (on, before, after, between, within last N days) | Done | `smart.rs` compares local calendar days for "on"; the dialog takes dates typed as YYYY-MM-DD and a "within N days" count. No date picker | local |
+| Rule: Date Created and Date Modified | Done | `smart.rs`; in the dialog | local |
+| Rule: comments | Done | `smart.rs` rule arm over the joined comment texts, with tests | local |
+| Rule: camera | Done | `smart.rs` text methods on the lower-cased camera; a photo without one fails every method, as in Eagle | local |
+| Rule: ISO, aperture, focal length, shutter | Done | `smart.rs` numeric arms parsed from `rawMetas` as Eagle does (shutter takes the denominator) | local |
+| Rule: video duration with h/min/sec | Done | `smart.rs` duration arm with the h/m/s unit | local |
+| Rule: timestamp (date taken) | Done | `smart.rs` as a date rule | local |
+| Rule: font installed or not | Done | `smart.rs` checks `~/Library/Fonts/EagleApp` for the `<postScriptName>_.<ext>` file, as Eagle does; fonts installed any other way count as not installed | local |
 
 ### 8. Tags
 
@@ -1075,8 +1075,8 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Tags: chips, remove, type a new tag | Done | `A:3107` | local |
 | Tag picker with Selected, Starred, Recent, Recommended and groups, search, column sizes | Missing | Plain text field with no suggestions or autocomplete. History is recorded but never shown. | local |
 | Copy, paste and clear an item's tags | Missing | none | local |
-| Folders: chips, remove, Add Category | Done | `A:3146` | local |
-| Click a folder chip to open that folder | Partial | Clicking a chip removes the item from the folder (`A:3154`), which is the opposite risk | local |
+| Folders: chips, remove, Add Category | Done | `folder_chip` in app.rs; removal is the × on the chip | local |
+| Click a folder chip to open that folder | Done | `folder_chip` in app.rs: the click opens the folder with the item still selected and scrolled to; the tooltip shows the folder path | local |
 | Folder picker with search, Recent, Selected and create-new | Partial | Flat scrolling list (`A:3159`) | local |
 | Comments list: jump to, edit, delete | Done | `comments.rs:427` | local |
 | Rating stars; click the same star again to clear | Done | `A:3332` | local |
@@ -1100,7 +1100,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Confirm bulk actions on many items | Missing | none | local |
 | New Folder with Selection | Missing | none | local |
 | Add To Last Used Folder | Missing | none | local |
-| Remove from the current folder | Missing | Only through the single-item inspector chip | local |
+| Remove from the current folder | Missing | Only through the × on the single-item inspector chip | local |
 | Pin items to the top of a folder | Missing | none | local |
 | Open File Location (show the item in All or in one of its folders) | Missing | none | local |
 | Rating shortcuts (keys 0-5) | Missing | No rating keys in `shortcuts.rs`. Cross-ref: shortcuts agent. | local |
@@ -1150,8 +1150,8 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | --- | --- | --- | --- |
 | Save the current filter (and search) under a name | Done | `OU:958`, `E:334` | local |
 | Apply, rename, remove, reorder saved filters | Done | `OU:952`-`985` | local |
-| Saving keeps every active rule | Partial | `M:758` rule_from_filter leaves out date added/modified, duration, camera and font. Those rules are dropped silently when saving. | local |
-| Applying restores every saved rule | Partial | `M:724`-`748` still skips date, duration, camera and font (now supported by falcon's filter), plus comments, the 4:3/16:9/custom shapes and excluding Uncategorized. Falcon warns about the skipped rules (`OU:1004`). | local |
+| Saving keeps every active rule | Done | `SavedFilter::rule_from_filter` in model.rs writes dates (Eagle's shared `import.range`), duration (`min`/`max`/`unit`), camera and font in Eagle's key names; Date Created goes under falcon's own `btime` key | local |
+| Applying restores every saved rule | Partial | `SavedFilter::to_filter` restores dates, duration, camera and font; it still skips comments, the 4:3/16:9/custom shapes and excluding Uncategorized, with a warning (organize_ui.rs saved-filter popup) | local |
 | Saved filters button appears in the filter bar | Done | `OU:954` | local |
 
 ### 15. Cross-references (other agents' areas)
@@ -1166,15 +1166,15 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 
 Ranked by user impact. Data-loss and silent-mismatch bugs come first, then everyday organising, then niche items.
 
-1. **Editing a smart folder loses its rules.** Extra conditions, NOT flags and any rule type the dialog doesn't know are thrown away on save (`OU:539`, `A:259`). Data loss.
+1. ~~Editing a smart folder loses its rules.~~ Fixed.
 2. **Folder auto-tagging is ignored.** Folders' `tags` (and their parents') are not applied when items are added or imported, and there is no editor or settings dialog. Libraries made in Eagle behave differently.
-3. **Smart folder rules always fail for comments, camera, ISO, aperture, focal length, shutter, duration, timestamp and font.** Eagle smart folders using them show nothing in falcon (`SM:103`). The `regex` method is a substring test, and `on` uses UTC days.
+3. ~~Smart folder rules always fail for comments, camera, ISO, aperture, focal length, shutter, duration, timestamp and font.~~ Fixed, with real regex and local-day "on".
 4. **Saved filters drop and skip rules.** Saving drops date, duration, camera and font. Applying skips them, plus comments, ratio shapes and excluding Uncategorized.
-5. **Folder description and inspector rename don't save.** The fields are drawn but discarded (`A:2920`-`2921`).
-6. **Clicking a folder chip in the inspector removes the item from the folder.** In Eagle it opens the folder. Easy to lose filing.
+5. ~~Folder description and inspector rename don't save.~~ Fixed.
+6. ~~Clicking a folder chip in the inspector removes the item from the folder.~~ Fixed: it opens the folder; the chip's × removes.
 7. **No size or dimensions filter chips.** The engine supports them, but there's no UI.
 8. **No Comment filter, and comments, camera, text content and fonts aren't searched.** There's also no Search Scope menu.
-9. **The smart folder dialog is thin.** It lacks height, folders, BPM, created/modified dates, regex, custom shape and KB units; has no date picker; and shows no live hit count.
+9. **The smart folder dialog** has no date picker and shows no live hit count.
 10. **No tag picker.** No suggestions, recent or starred tags, autocomplete or copy/paste/clear tags in the inspector.
 11. **No exclude, search or tag-group options in the Tag, Folder and Type filters.** Also no type groups (video, audio, font...).
 12. **Remove from current folder is missing**, and so is the "remove from folder or trash" prompt for items in several folders.
@@ -1222,7 +1222,7 @@ Two cross-cutting facts explain many rows:
 | Import Folders from a file dialog (several folders, structure kept) | Missing | No file or folder picker for import. `rfd` is used only for create or open library and custom thumbnails (`app.rs:780,791`, `image_edit.rs:140`) | local |
 | Warning before importing a very large folder ("contains N items, continue?") | Missing | No confirmation; any folder is walked | local |
 | Refuse folders deeper than 15 levels or with 100k+ files | Missing | No limits | local |
-| Dropping or picking a `.library` folder opens it as a library instead of importing it | Missing | `import_into` walks a dropped `.library` like any folder and would import its `metadata.json`, thumbnails and originals as items (`app.rs:869-876`). This is a data hazard | local |
+| Dropping or picking a `.library` folder opens it as a library instead of importing it | Done | `logic::split_libraries` separates `*.library` paths before the import walk in `import_into`; the first opens through the sandbox-guarded `App::open`, the rest are named in a toast. Like Eagle, a `.library` nested inside a dropped folder is not special-cased | local |
 | A Pixave `.pxvlibrary` folder is skipped by folder import | Missing | Not special-cased | local |
 | Paste files copied in Finder (⌘V) | Done | `app.rs:961-967` (`arboard` file list) | local |
 | Paste a copied bitmap image as a new PNG item | Done | `app.rs:968-977` (named "Pasted image <date>") | local |
@@ -1338,8 +1338,8 @@ Two cross-cutting facts explain many rows:
 | Relocate a library that moved | Partial | Only by reopening it through Open Library | local |
 | Rename a library | — (not counted) | — | — |
 | Refuse a library made by a newer Eagle and prompt to update | Missing | `Library::open` never checks `applicationVersion` (`library.rs:51-93`) | local |
-| Automatic `metadata.json` backups (on change and every 30 minutes, up to 100 kept) | Partial | The library implements it (`crates/falcon-library/src/backup.rs:24-53`), but only the CLI `backup` command calls it (`src/main.rs:56-60,123-128`). The app never backs up, and `backup_on_change` was removed from Prefs (stale test at `app.rs:3837`) | local |
-| Restore a damaged `metadata.json` from the newest good backup on open | Partial | `Library::open_or_restore` exists (`backup.rs:70`), but the app calls `Library::open` (`app.rs:601,696`), so a damaged library fails to open | local |
+| Automatic `metadata.json` backups (on change and every 30 minutes, up to 100 kept) | Done | `crates/falcon-app/src/backups.rs` schedules a backup 1 s after a metadata write and every 30 minutes, run off the UI thread by `run_backups` in app.rs; `flush_and_backup` takes a waiting one when a library closes or the app saves state. Written by `backup::backup_library` | local |
+| Restore a damaged `metadata.json` from the newest good backup on open | Done | `App::open` and `follow_api_switch` use `Library::open_or_restore`; `restored_note` names the backup used in the toast. The HTTP API's own `library/switch` still uses `Library::open` | local |
 | Keep a per-library backup copy in app data (`eagle-backup/<hash>.json`) | Missing | — | local |
 | Empty cache and reload the library (forced rebuild) | Missing | Falcon keeps no library cache, but has no "reload from disk" either | local |
 | Repair tool "Clear Invalid Content" (removes empty or broken item folders, then reloads) | Partial | Unreadable items are skipped and reported on open (`library.rs:63-73`, `app.rs:607-610`), but cannot be cleaned up | local |
@@ -1517,9 +1517,9 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 
 Rows marked "not counted" are features Eagle 4.0.0 does not have.
 
-- **Done:** 58, including 5 where falcon goes beyond Eagle and 1 with a small difference.
-- **Partial:** 30.
-- **Missing:** 150, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
+- **Done:** 61, including 5 where falcon goes beyond Eagle and 1 with a small difference.
+- **Partial:** 28.
+- **Missing:** 149, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
 - **Different on purpose:** 1 (the API listens on localhost only).
 
 ### Ranked Missing and Partial local items
