@@ -526,10 +526,29 @@ pub enum Shape {
     Square,
     PanoramicLandscape,
     PanoramicPortrait,
+    /// Exactly 4:3, 3:4, 16:9 or 9:16 (width over height compared as
+    /// floating point, as Eagle does, so 1366 × 768 is not 16:9).
+    Ratio4x3,
+    Ratio3x4,
+    Ratio16x9,
+    Ratio9x16,
 }
 
 impl Shape {
-    fn matches(self, w: u64, h: u64) -> bool {
+    /// Every shape in the order of Eagle's Shape filter.
+    pub const ALL: [Shape; 9] = [
+        Shape::Landscape,
+        Shape::Portrait,
+        Shape::Square,
+        Shape::PanoramicLandscape,
+        Shape::PanoramicPortrait,
+        Shape::Ratio4x3,
+        Shape::Ratio3x4,
+        Shape::Ratio16x9,
+        Shape::Ratio9x16,
+    ];
+
+    pub fn matches(self, w: u64, h: u64) -> bool {
         let (w, h) = (w as f64, h as f64);
         match self {
             Shape::Landscape => w > h,
@@ -537,8 +556,47 @@ impl Shape {
             Shape::Square => w == h,
             Shape::PanoramicLandscape => w > h && w / h >= 2.5,
             Shape::PanoramicPortrait => w < h && h / w >= 2.5,
+            Shape::Ratio4x3 => w / h == 4.0 / 3.0,
+            Shape::Ratio3x4 => w / h == 3.0 / 4.0,
+            Shape::Ratio16x9 => w / h == 16.0 / 9.0,
+            Shape::Ratio9x16 => w / h == 9.0 / 16.0,
         }
     }
+}
+
+/// Eagle's custom W:H shape: the exact ratio, or every item while either
+/// side is unset (0).
+pub fn custom_shape_matches((rw, rh): (f64, f64), w: u64, h: u64) -> bool {
+    if rw == 0.0 || rh == 0.0 || rw.is_nan() || rh.is_nan() {
+        return true;
+    }
+    w as f64 / h as f64 == rw / rh
+}
+
+/// How many items the Shape filter's options would find, as Eagle counts
+/// them: only items with a width that are not audio or fonts; each falls
+/// in one of the five orientations (panoramic ones are not also counted
+/// as horizontal or vertical) and at most one of the four ratios.
+pub fn shape_counts<'a>(items: impl IntoIterator<Item = &'a Item>) -> HashMap<Shape, usize> {
+    let mut out: HashMap<Shape, usize> = HashMap::new();
+    for i in items {
+        if i.width == 0 || matches!(type_group(&i.ext), Some("audio" | "font")) {
+            continue;
+        }
+        let (w, h) = (i.width as f64, i.height as f64);
+        let orientation = if w > h {
+            if w / h >= 2.5 { Shape::PanoramicLandscape } else { Shape::Landscape }
+        } else if w < h {
+            if h / w >= 2.5 { Shape::PanoramicPortrait } else { Shape::Portrait }
+        } else {
+            Shape::Square
+        };
+        *out.entry(orientation).or_default() += 1;
+        if let Some(r) = [Shape::Ratio4x3, Shape::Ratio3x4, Shape::Ratio16x9, Shape::Ratio9x16].into_iter().find(|r| r.matches(i.width, i.height)) {
+            *out.entry(r).or_default() += 1;
+        }
+    }
+    out
 }
 
 /// Eagle's file-type groups for the type filter.
@@ -571,6 +629,9 @@ pub struct Filter {
     /// Ratings to match (0 = unrated), OR-ed.
     pub ratings: HashSet<u8>,
     pub shapes: HashSet<Shape>,
+    /// The custom W:H shape when it is ticked (see [`custom_shape_matches`]);
+    /// OR-ed with `shapes`.
+    pub custom_shape: Option<(f64, f64)>,
     pub url: TextFilter,
     pub note: TextFilter,
     /// Region and video comments (Eagle's `annotation` rule).
@@ -622,7 +683,10 @@ impl Filter {
                 return None;
             }
         }
-        if !self.shapes.is_empty() && !self.shapes.iter().any(|s| s.matches(item.width, item.height)) {
+        if (!self.shapes.is_empty() || self.custom_shape.is_some())
+            && !self.shapes.iter().any(|s| s.matches(item.width, item.height))
+            && !self.custom_shape.is_some_and(|r| custom_shape_matches(r, item.width, item.height))
+        {
             return None;
         }
         if !self.url.matches(&item.url) || !self.note.matches(&item.annotation) || !self.comments.matches_any(comment_texts(item)) {
@@ -1498,6 +1562,28 @@ mod tests {
         assert!(kw(&["car", "SKY"]).check(&noted).is_some(), "each keyword may sit in a different comment");
         assert!(kw(&["car", "boat"]).check(&noted).is_none());
         assert!(kw(&["car"]).check(&bare).is_none());
+    }
+
+    #[test]
+    fn ratio_and_custom_shapes() {
+        let sized = |w: u64, h: u64| item(serde_json::json!({"width": w, "height": h}));
+        let f = |shapes: &[Shape], custom: Option<(f64, f64)>| Filter { shapes: shapes.iter().copied().collect(), custom_shape: custom, ..Default::default() };
+        assert!(f(&[Shape::Ratio16x9], None).check(&sized(1920, 1080)).is_some());
+        assert!(f(&[Shape::Ratio16x9], None).check(&sized(1366, 768)).is_none(), "exact ratios only");
+        assert!(f(&[Shape::Ratio9x16], None).check(&sized(1080, 1920)).is_some());
+        assert!(f(&[Shape::Ratio4x3, Shape::Ratio3x4], None).check(&sized(600, 800)).is_some());
+        assert!(f(&[], Some((2.0, 1.0))).check(&sized(400, 200)).is_some());
+        assert!(f(&[], Some((2.0, 1.0))).check(&sized(400, 201)).is_none());
+        assert!(f(&[], Some((0.0, 3.0))).check(&sized(1, 7)).is_some(), "an unset side lets everything through");
+        assert!(f(&[Shape::Square], Some((2.0, 1.0))).check(&sized(5, 5)).is_some(), "OR-ed with the other shapes");
+
+        let items = [sized(1920, 1080), sized(3000, 1000), sized(800, 600), sized(10, 10), item(serde_json::json!({"ext": "mp3", "width": 9, "height": 3})), sized(0, 0)];
+        let c = shape_counts(items.iter());
+        assert_eq!(c.get(&Shape::Landscape), Some(&2));
+        assert_eq!(c.get(&Shape::PanoramicLandscape), Some(&1));
+        assert_eq!(c.get(&Shape::Square), Some(&1));
+        assert_eq!((c.get(&Shape::Ratio16x9), c.get(&Shape::Ratio4x3)), (Some(&1), Some(&1)));
+        assert_eq!(c.get(&Shape::Portrait), None);
     }
 
     #[test]

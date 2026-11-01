@@ -692,15 +692,17 @@ impl SavedFilter {
             ("square", Shape::Square),
             ("panoramicPortrait", Shape::PanoramicPortrait),
             ("panoramicLandscape", Shape::PanoramicLandscape),
+            ("43", Shape::Ratio4x3),
+            ("34", Shape::Ratio3x4),
+            ("169", Shape::Ratio16x9),
+            ("916", Shape::Ratio9x16),
         ] {
             if truthy(&["shape", key]) {
                 f.shapes.insert(shape);
             }
         }
-        for key in ["43", "34", "169", "916", "custom"] {
-            if truthy(&["shape", key]) {
-                skip(&format!("shape.{key}"));
-            }
+        if truthy(&["shape", "custom"]) {
+            f.custom_shape = Some((number(&["shape", "width"]).unwrap_or(0.0), number(&["shape", "height"]).unwrap_or(0.0)));
         }
 
         if let Some(rgb) = get(&["color", "value"]).and_then(Value::as_array).filter(|a| a.len() >= 3) {
@@ -818,8 +820,17 @@ impl SavedFilter {
                 Shape::Square => "square",
                 Shape::PanoramicPortrait => "panoramicPortrait",
                 Shape::PanoramicLandscape => "panoramicLandscape",
+                Shape::Ratio4x3 => "43",
+                Shape::Ratio3x4 => "34",
+                Shape::Ratio16x9 => "169",
+                Shape::Ratio9x16 => "916",
             };
             r["shape"][key] = true.into();
+        }
+        if let Some((w, h)) = filter.custom_shape {
+            r["shape"]["custom"] = true.into();
+            r["shape"]["width"] = js_number(w);
+            r["shape"]["height"] = js_number(h);
         }
         if let Some(c) = &filter.color {
             let color = r["color"].as_object_mut().expect("default color rule");
@@ -1155,7 +1166,8 @@ mod tests {
         assert_eq!(f.size, (Some(1_572_864), None));
         assert_eq!(f.url, crate::search::TextFilter::Keywords(vec!["dribbble".into(), "shot".into()]));
         assert_eq!(f.note, crate::search::TextFilter::No);
-        assert_eq!(q.unsupported, ["shape.169"]);
+        assert!(f.shapes.contains(&crate::search::Shape::Ratio16x9));
+        assert!(q.unsupported.is_empty(), "{:?}", q.unsupported);
         assert_eq!(f.imported.presets, [crate::search::DatePreset::Today].into());
     }
 
@@ -1179,6 +1191,8 @@ mod tests {
             ("height", Filter { height: (None, Some(30)), ..Default::default() }),
             ("ratings", Filter { ratings: [0, 4].into(), ..Default::default() }),
             ("shapes", Filter { shapes: [Shape::Portrait, Shape::PanoramicLandscape].into(), ..Default::default() }),
+            ("ratios", Filter { shapes: [Shape::Ratio4x3, Shape::Ratio3x4, Shape::Ratio16x9, Shape::Ratio9x16].into(), ..Default::default() }),
+            ("custom shape", Filter { custom_shape: Some((2.35, 1.0)), ..Default::default() }),
             ("url", Filter { url: TextFilter::Keywords(vec!["a".into(), "b".into()]), ..Default::default() }),
             ("note", Filter { note: TextFilter::No, ..Default::default() }),
             ("comments", Filter { comments: TextFilter::Has, ..Default::default() }),
