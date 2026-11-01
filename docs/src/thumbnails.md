@@ -110,7 +110,7 @@ The `thumbnail` module holds the rules as plain functions: `plan_raster`, `plan_
 - **Reading back.** `thumbnail::decode` sniffs the content, so it reads a thumbnail even though its name ends in `.png`.
 - **QuickLook.** Formats falcon can't decode are rendered with `qlmanage`. A render that takes more than 30 seconds is abandoned, since qlmanage can hang on malformed files.
 - **Audio.**
-  - `waveform::peaks` decodes the file with symphonia and returns (min, max) pairs of the mono mix for any number of buckets.
+  - `waveform::peaks` decodes the file with `falcon_library::audio` (the decoder the player uses; see Audio formats in [The desktop app](app.md)) and returns (min, max) pairs of the mono mix for any number of buckets.
   - `waveform::render` draws them one column per bucket, normalised and mirrored around the middle.
   - Import draws 280 buckets at 280×140 in #0072EF on transparency, sets `width` and `height` to 280 and 140, and stores that as the thumbnail. There is no pixel-ratio scaling.
   - Nothing is cached, as in Eagle. If decoding fails, QuickLook is tried instead.

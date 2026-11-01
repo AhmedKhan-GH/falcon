@@ -137,13 +137,13 @@ A folder's `tags` key holds its auto-tags. Eagle's code calls the list it applie
     - Eagle's dcraw build is inferred to read orf, rw2 and raf, which classic dcraw supports. Classic dcraw predates CR3, so Eagle is inferred to store no `rawMetas` for cr3 files, where falcon does.
   - `ImportOptions::camera_metadata_all_photos` (off by default) also stores `rawMetas` for jpg, jpeg, tif, tiff, heic, heif, png and webp. Eagle never does this. It lets the camera filter work on ordinary photos.
 - **`duration`.**
-  - Audio is read with symphonia, from the frame count, or by adding up packet durations when the header has no count.
+  - Audio is read with `falcon_library::audio`: the length the container gives, after trimming encoder priming (MP3 gapless headers, the MP4 edit list or `iTunSMPB`, the CAF packet table, the Opus pre-skip), or by adding up packet durations when the header has no count. Raw AAC is counted frame by frame. A file that doesn't decode gets no `duration`. Falcon also stores it for opus, aiff, aif, aifc and caf, which Eagle imports as plain files.
   - mp4, mov, m4v, 3gp and f4v are read from the `mvhd` box (duration ÷ timescale).
   - Other video formats fall back to Spotlight (`mdls`), which knows nothing about files in temporary folders.
   - Values can differ slightly from a browser's, for example around MP3 encoder padding.
 - **Video sizes.** `resolutionWidth` and `resolutionHeight` copy the item's `width` and `height`.
 - **`bpm`.** `tempo::bpm(path, ext)` estimates the tempo with falcon's own method rather than Eagle's beat tracker, over the same opening stretch (`tempo::analysed_seconds`):
-  - The audio is decoded with symphonia and mixed to mono. A loudness-rise envelope is built at about 100 frames a second: the log RMS over two hops, its positive differences, lightly smoothed, with the mean removed.
+  - The audio is decoded with `falcon_library::audio` and mixed to mono. A loudness-rise envelope is built at about 100 frames a second: the log RMS over two hops, its positive differences, lightly smoothed, with the mean removed.
   - The envelope's autocorrelation is scored for every tempo from 60 to 200 BPM in 0.01 steps. Each score averages the autocorrelation at 1 to 4 beat periods, read between lags by cubic interpolation, and is weighted by a gentle preference for tempos near 120 (one octave wide). The best score wins, rounded to three decimals, and is written right after `duration`, whole values without a fraction.
   - Nothing is written when the file is silent, too short (under about two seconds), has no clear rises (a steady tone), or no beat stands out (hiss).
   - Checked on generated clicks at 60, 75, 90, 120, 140 and 174 BPM, and on a drum loop over a drone, all within 1 BPM. Clicks at 200 read as 100, an octave down, because the preference for 120 breaks the tie. Eagle's tracker can also land on a different octave, and values on real music will differ from Eagle's.

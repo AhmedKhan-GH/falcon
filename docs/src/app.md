@@ -116,7 +116,7 @@ What Eagle does, from `index.html`, the `BitmapViewer` and zoomer in `app.bundle
 
 ## Audio and font viewer
 
-Opening an audio item (mp3, wav, flac, ogg, aac, m4a) shows its waveform with playback controls instead of an image; opening a font shows a specimen drawn with the font itself. The code is in `crates/falcon-app/src/audio.rs` (playback and the waveform cache), `crates/falcon-app/src/ui/viewer/audio.rs` (the audio view), `crates/falcon-app/src/ui/viewer/font.rs` (the font viewer) and `crates/falcon-app/src/font_install.rs` (activation), with the seek and time arithmetic in `logic/`, the font information in `fontmeta::FontInfo` and the language change in `Library::set_font_language`.
+Opening an audio item (Eagle's mp3, wav, flac, ogg, aac and m4a, and falcon's extra opus, aiff, aif, aifc and caf; see Audio formats) shows its waveform with playback controls instead of an image; opening a font shows a specimen drawn with the font itself. The code is in `crates/falcon-app/src/audio.rs` (playback and the waveform cache), `crates/falcon-app/src/ui/viewer/audio.rs` (the audio view), `crates/falcon-app/src/ui/viewer/font.rs` (the font viewer) and `crates/falcon-app/src/font_install.rs` (activation), with the seek and time arithmetic in `logic/`, the font information in `fontmeta::FontInfo` and the language change in `Library::set_font_language`.
 
 What Eagle does, from `js/directives/audio-media-element.js`, its video.js setup in `app.bundle.js`, `js/default-preferences.js` and `font-viewer/`:
 
@@ -131,6 +131,7 @@ What Eagle does, from `js/directives/audio-media-element.js`, its video.js setup
 | Volume | Remembered in local storage, 100% by default | Seen | 100% at launch, kept until quit |
 | Waveform data | Decoded in the page each time, nothing cached on disk | Seen | Peaks computed once per item on a background thread with `waveform::peaks` and kept in memory for the session. "Reading waveform…" shows meanwhile |
 | Audio output | Chromium | Seen | rodio on the default output device, opened on first play and kept open. Only an output stream is opened, which macOS allows without a permission prompt; no input device is ever touched |
+| Decoding | Chromium's media stack, whatever it plays | Seen | `falcon_library::audio` (see Audio formats), the one decoder behind playback, seeking, the waveform, the stored duration and the tempo. A file it can't decode shows "Can't play this file:" with the reason (for example "unsupported audio format") and a flat waveform. An item whose record has no `duration` takes the decoded length for the seek bar and the time |
 | Font viewer | A separate page: a header with the file name (editable) and an Activate button, the PostScript name under it; four tabs (article, waterfall, glyphs, information) whose choice is remembered; five colour themes; a size slider | Seen | The same layout drawn by falcon: header with the editable name, an Activate / Activated button and the PostScript name; tabs Article, Waterfall, Alphabet and Info; theme swatches and a sample-language menu at the right. The tab and theme are saved with the app's state |
 | Size | The slider sets the page's root size from 31.25% to 625% (62.5% by default); zoom buttons step 31.25; ⌘= ⌘+ and ⌘− step, ⌘0 and ⌘9 reset; ⌘, ⌃ or ⌥ with the wheel steps (at most one step per 200 ms). The slider is hidden on the information tab | Seen | The same range as a factor from 50% to 1000%, with − and + buttons stepping 50%, the zoom chords from the shortcut table (and plain + and −), ⌘-scroll, pinch or ⌥-scroll stepping at most every 0.2 s, and the percentage, which resets to 100% when clicked. Hidden on Info |
 | Article | Translated sample paragraphs per language with a heading, editable (rich text) | Seen | falcon's own heading (38 pt at 100%) and paragraphs (18 pt), in the sample language; the paragraphs are editable plain text. Typed text stays as you move between fonts until Reset Text |
@@ -143,6 +144,40 @@ What Eagle does, from `js/directives/audio-media-element.js`, its video.js setup
 | Rating keys | 0 removes the rating and 1–5 set it from inside the viewer | Seen | Same: in every viewer (image, GIF, RAW, video, audio, font, text, PDF, 3D, web) and the grid the bare digits rate; zoom to fit and actual size are ⌘9 and ⌘0 |
 | Rendering | Chromium with the font loaded as a web font | Seen | The font file (WOFF unpacked to sfnt; the first face of a collection) is added to egui's fonts under its own family the first time it is viewed, and stays for the session. A font egui's parser rejects (some WOFF2 and CFF files) keeps the font viewer's header (editable name, Activate button, PostScript name) and gets two tabs: Specimen, QuickLook's rendering of the file (else the specimen thumbnail), and Info, the same rows with Use as File Name. Themes, the size slider, the language menu and the drawn tabs need egui to read the font, so they are left out; the digits rate as in the other font views |
 | Sample text | Chosen from the font's script support, or `fontMetas.preferLng` | Seen | Same choice as the specimen thumbnail (Latin, Chinese, Japanese or Korean) |
+
+### Audio formats
+
+Eagle 4.0.0 treats six extensions as audio (`mp3`, `wav`, `ogg`, `flac`, `aac`, `m4a`: the audio viewer's `ng-switch-when` in `index.html`, the hover selectors in `js/hover-preview/audio-hover-preview.js` and the thumbnail list in `app.bundle.js`) and plays them with Chromium. Every other sound file (opus, aiff, wma, ape, amr, caf…) is a plain file there, with no player, waveform or duration. Falcon decodes Eagle's six and also treats `opus`, `aiff`, `aif`, `aifc` and `caf` as audio (`media::EXTRA_AUDIO_EXTENSIONS`): they get the viewer, hover playback, a waveform thumbnail and `duration` at import, and the Audio type filter. Items Eagle imported in those formats have no `duration` in their record; the viewer and the hover player take the decoded length instead.
+
+Decoding is `falcon_library::audio`. `audio::open` returns an `AudioSource`: interleaved `f32` blocks, the rate and channels, the length and an accurate seek. Today's only backend is symphonia 0.5.5 (pure Rust, MPL-2.0) with the pure-Rust `opus-decoder` crate for Opus. The app wraps the source as a rodio source; `waveform::peaks`, `media::audio_duration` and `tempo::bpm` read the same source.
+
+| Extension | Codecs that decode |
+|---|---|
+| mp3 | MPEG-1, 2 and 2.5 Layer III, with LAME/Xing gapless trimming and ID3v2 tags skipped |
+| wav | PCM (8 to 32 bit), IEEE float, A-law, µ-law, IMA and Microsoft ADPCM |
+| flac | FLAC |
+| ogg | Vorbis, Opus, FLAC |
+| opus | Opus (mono, stereo and multichannel mapping family 1), with the pre-skip trimmed |
+| aac | AAC-LC in ADTS, MPEG-2 (`FF F9`, as Apple writes) and MPEG-4 (`FF F1`) headers, with or without CRC |
+| m4a | AAC-LC, ALAC, FLAC and Opus in MP4, with the edit list or iTunes gapless tag (`iTunSMPB`) trimming the encoder priming |
+| aiff, aif, aifc | PCM, IEEE float, A-law, µ-law |
+| caf | PCM, ALAC, AAC-LC, FLAC, Opus, A-law, µ-law, with the packet table's priming trimmed |
+
+Fixes falcon makes around symphonia 0.5.5, each in `crates/falcon-library/src/audio/`:
+
+- `adts.rs` replaces symphonia's ADTS reader, which only syncs on `FF F1` and guesses the length from the bitrate: it indexes every frame at open, so the length is exact and seeks land on the frame.
+- `edit.rs` reads the MP4 edit list, the `iTunSMPB` tag and the CAF packet table, which symphonia parses but doesn't apply, so an Apple AAC file is 1.000 s long rather than 1.152 s and its audio starts at 0.
+- `opus.rs` adds the Opus decoder symphonia 0.5 lacks, and the source trims the Ogg pre-skip and decodes 80 ms before a seek's time so the decoder settles.
+- An MP4 whose sample entry gives a different rate from the ALAC header plays at the codec's rate.
+- symphonia's CAF reader can't seek once it reaches the end; the source reopens the file and seeks again, and if a reader can't seek at all it decodes from the top and drops up to the time.
+
+Gaps:
+
+- **WMA, APE, AMR (and AWB)** have no FOSS pure-Rust decoder. They aren't audio items in falcon (nor in Eagle) and open as plain files. A runtime-loaded FFmpeg backend can implement `AudioSource` and be tried after symphonia in `audio::open` without the callers changing.
+- **HE-AAC** (SBR, PS) plays its AAC-LC core only, at the core's bandwidth. AAC Main, LTP and more than two AAC channels don't decode.
+- **Raw AAC** carries no priming information, so an `.aac` file starts with the encoder's silence (about 2112 frames) and reads that much longer than its source.
+- Speed changes move the pitch (rodio resamples), as described under Speed.
+
 
 ## Text viewer
 
@@ -619,7 +654,7 @@ From Eagle's `js/hover-preview/video-hover-preview.js` and `audio-hover-preview.
 | Video: start | 500 ms after the pointer enters the card's picture, a muted, looping `<video>` of the original replaces the thumbnail; off when `video.hoverPlay` is `"false"` | Seen | Same delay and preference (`Prefs::video_hover`, on by default). Instead of playing the file, a worker thread decodes a strip of 48 small pictures of the clip with `falcon_video::Grabber` (at most 640 px, sized to the card), in bit-reversed order so the whole clip is covered early, and the card steps through them in real time, looping. Only the hovered card has a strip; it is dropped (and its worker stopped) when the pointer leaves, so memory stays at one strip. Originals still in iCloud aren't downloaded for it |
 | Video: scrub | Moving the pointer sets the time to its fraction across the picture and pauses; 200 ms after it rests, play resumes from there | Seen | Same, showing the nearest decoded picture |
 | Video: bar and time | A progress bar along the bottom; the current time shows for 600 ms after each move | Seen | Same, with `time_label` (elapsed / total) in a dark pill |
-| Video: sound | A mute toggle on the card, muted by default, remembered (`eagle.list.video.muted`) | Seen | A round speaker button at the bottom right of the picture, above the progress bar (tooltip Mute / Unmute). Muted by default; the choice is kept in the grid options (`Display::video_muted`, default true) for all later previews. Clicking it is the button's own click (it doesn't select or open the card), and the card's preview goes on while the pointer is on it. The strip has no sound, so unmuting plays the file's audio through the hover player (`HoverMedia::player`) from the preview's time at the viewer's video volume: the strip is the clock, the sound is moved back only when it drifts more than 0.3 s (after a scrub or a loop), pauses while the pointer scrubs, and stops on mute or when the preview ends. It is silent for a file rodio can't decode, with no message |
+| Video: sound | A mute toggle on the card, muted by default, remembered (`eagle.list.video.muted`) | Seen | A round speaker button at the bottom right of the picture, above the progress bar (tooltip Mute / Unmute). Muted by default; the choice is kept in the grid options (`Display::video_muted`, default true) for all later previews. Clicking it is the button's own click (it doesn't select or open the card), and the card's preview goes on while the pointer is on it. The strip has no sound, so unmuting plays the file's audio through the hover player (`HoverMedia::player`) from the preview's time at the viewer's video volume: the strip is the clock, the sound is moved back only when it drifts more than 0.3 s (after a scrub or a loop), pauses while the pointer scrubs, and stops on mute or when the preview ends. It is silent for a file falcon can't decode (see Audio formats), with no message |
 | Audio: start | 200 ms after entering, the track plays at the player's volume, unless the card's play button was last switched off (`listAudioAutoPlay`, remembered) | Seen | Same, with a player of its own (`HoverMedia::player`) so the viewer's isn't disturbed; the switch is kept in the grid options (`Display::audio_autoplay`) |
 | Audio: progress | The played part of the waveform is tinted, a line follows the pointer, a press seeks there, the time shows, and the track loops | Seen | Same: a primary-tinted band and playhead line, a pointer line, click to seek, the time in a pill, and looping |
 | Audio: stop | Leaving the card, dragging it, or hiding the window stops it | Seen | Leaving the card or the grid stops it (checked each frame). Hiding the app (⌘H, or the red button and ⌘W, which hide it as in Eagle) and minimizing the window silence the hover sound at once from AppKit notifications (`dock::on_hidden`), since no frames are drawn while hidden, and the next frame ends the previews (`HoverMedia::stop_all`); a viewport that reports itself minimized does the same. Dragging the card does not stop it yet |
