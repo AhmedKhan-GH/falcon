@@ -1007,9 +1007,11 @@ fn rule_fields_ui(ui: &mut Ui, salt: (usize, usize), f: &mut RuleFields, folders
         }
         Kind::Date => {
             field(ui, &mut f.value, "YYYY-MM-DD", 96.0);
+            crate::ui::date_picker::date_button(ui, ui.scope_id().with(("date", salt, 1)), &mut f.value);
             if between {
                 ui.label(tr("and"));
                 field(ui, &mut f.value2, "YYYY-MM-DD", 96.0);
+                crate::ui::date_picker::date_button(ui, ui.scope_id().with(("date", salt, 2)), &mut f.value2);
             }
         }
         Kind::Folders => {

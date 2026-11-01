@@ -4,6 +4,7 @@
 //! `crate::app` and the feature modules at the crate root.
 
 pub(crate) mod widgets;
+pub(crate) mod date_picker;
 pub(crate) mod color_picker;
 pub(crate) mod toast;
 pub(crate) mod organize;

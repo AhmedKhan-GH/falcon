@@ -30,6 +30,7 @@ mod image_viewer;
 mod display;
 mod color;
 mod viewer3d;
+mod calendar;
 
 pub use scope::*;
 pub use format::*;
@@ -46,6 +47,7 @@ pub use image_viewer::*;
 pub use display::*;
 pub use color::*;
 pub use viewer3d::*;
+pub use calendar::*;
 
 #[cfg(test)]
 pub(crate) mod test_util {
