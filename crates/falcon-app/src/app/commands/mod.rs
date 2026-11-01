@@ -316,6 +316,7 @@ impl App {
             redo: !self.ws.redo.is_empty(),
             fullscreen: ctx.input(|i| i.viewport().fullscreen.unwrap_or(false)),
             random_sorted: self.random_sorted(),
+            space_scrolls: self.prefs.space == crate::prefs::SpaceKey::Scroll,
             flippable: self.ws.editable[0],
             rotatable: self.ws.editable[1],
             croppable: self.ws.editable[2],
@@ -525,8 +526,10 @@ impl App {
             C::SelectAll => self.ws.selected = self.ws.order.clone(),
             C::Viewer if viewer => self.ws.viewer = None,
             C::Viewer => match self.prefs.space {
-                crate::prefs::SpaceKey::Preview => self.ws.viewer = self.ws.selected.first().cloned(),
-                crate::prefs::SpaceKey::QuickLook => self.quick_look(),
+                // As in Eagle, Preview and Quick Look need a selection.
+                crate::prefs::SpaceKey::Preview if !self.ws.selected.is_empty() => self.ws.viewer = self.ws.selected.first().cloned(),
+                crate::prefs::SpaceKey::QuickLook if !self.ws.selected.is_empty() => self.quick_look(),
+                crate::prefs::SpaceKey::Preview | crate::prefs::SpaceKey::QuickLook => {}
                 crate::prefs::SpaceKey::Scroll => self.ws.scroll = Some(crate::shortcuts::Scroll::PageDown),
             },
             C::Trash => {

@@ -69,6 +69,8 @@ pub struct State {
     pub flippable: bool,
     /// The open folder or smart folder is sorted at random by its own setting.
     pub random_sorted: bool,
+    /// The Space preference scrolls a page, which needs no selection.
+    pub space_scrolls: bool,
     pub rotatable: bool,
     pub croppable: bool,
     /// The item acted on has a custom thumbnail.
@@ -110,7 +112,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
     let grid = s.grid();
     let any = s.library && s.selected > 0;
     match cmd {
-        C::Viewer => s.library && (s.viewer || s.selected == 1),
+        C::Viewer => s.library && (s.viewer || s.selected > 0 || s.space_scrolls),
         // The clipboard commands and undo also serve a focused text field.
         C::SelectAll => s.text || s.library,
         C::Copy => s.text || (grid && s.selected > 0),
@@ -861,7 +863,9 @@ mod tests {
         assert!(!enabled(Command::Copy, &grid(0)));
         assert!(enabled(Command::Trash, &grid(2)));
         assert!(enabled(Command::Viewer, &grid(1)));
-        assert!(!enabled(Command::Viewer, &grid(2)));
+        assert!(enabled(Command::Viewer, &grid(2)), "Space previews the first of several");
+        assert!(!enabled(Command::Viewer, &grid(0)), "Space previews nothing without a selection");
+        assert!(enabled(Command::Viewer, &State { space_scrolls: true, ..grid(0) }), "page down needs no selection");
     }
 
     #[test]
