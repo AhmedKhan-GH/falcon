@@ -17,8 +17,8 @@
 | Toolbar | Back and forward, zoom slider, layout and sort menu, filter bar toggle, search with Eagle's syntax, plus typo tolerance (see Search and filters) |
 | Filter bar | Colour (presets, hex value, accuracy, grayscale), tags, folders, shape, rating, type, notes, URL, date, duration, camera and font (see below), and saved filters |
 | Grid | Four layouts. **Waterfall** (the default): equal columns, each card keeping its image's shape. **Justified**: rows of equal height. **Grid**: square cards. **List**: rows showing type, size, dimensions and date. Cards have type badges. Supports multi-select, drag (inside the app, or out to Finder and other apps), a context menu and a hover preview (see below) |
-| Inspector | **One item:** preview, palette (click a colour to search for it), editable title, notes and URL, tags, folders, comments (edit and delete; click a region comment to show it), rating and properties (with duration, camera facts from `rawMetas`, and font family, style, PostScript name, version and glyph count when the item has them). **Several items:** a preview stack, shared tags, add a tag to all, add all to a folder, a shared rating, trash all |
-| Viewer | Zoom around the pointer, pan, fit (0), actual size (1), + and −, animated GIFs, and full-size QuickLook renders. Audio plays over its waveform and fonts show a live specimen; images take region comments, rotate and crop (see below). Video doesn't play yet: the viewer shows its thumbnail |
+| Inspector | **One item:** preview, palette (click a colour to search for it), editable title, notes and URL, tags, folders, comments (edit and delete; click a region comment to show it, or a timed comment to play the video from its moment), rating and properties (with duration, camera facts from `rawMetas`, and font family, style, PostScript name, version and glyph count when the item has them). **Several items:** a preview stack, shared tags, add a tag to all, add all to a folder, a shared rating, trash all |
+| Viewer | Zoom around the pointer, pan, fit (0), actual size (1), + and −, animated GIFs, and full-size QuickLook renders. Video plays with a control bar and timed comments, audio plays over its waveform and fonts show a live specimen; images take region comments, rotate and crop (see below) |
 | Card menu | Besides Open, Show in Finder and the folder and Trash entries: Set as Folder Cover (inside a folder), Set Custom Thumbnail… and Reset Thumbnail, Refresh Thumbnail, Refresh Palette, Rotate Left and Right, and Crop… (opens the viewer with the crop tool) |
 | Folder view | Cards for the folder's subfolders above its items, each with its cover, name and counts. Click one to open it |
 | All Tags | A tag manager with a filter, starred tags, rename, merge and delete, grouped A-Z or by tag group |
@@ -62,6 +62,33 @@ What Eagle does, from `js/directives/audio-media-element.js`, its video.js setup
 | Rendering | Chromium with the font loaded as a web font | Seen | The font file (WOFF unpacked to sfnt; the first face of a collection) is added to egui's fonts under its own family the first time it is viewed, and stays for the session. Fonts egui's parser rejects, and WOFF2, fall back to the image viewer showing the specimen thumbnail |
 | Sample text | Translated sample paragraphs per language | Seen | falcon's own short sample, in the script the font supports (Latin, Chinese, Japanese or Korean, chosen like the specimen thumbnail). Text you type stays as you move between fonts until Reset Text |
 
+## Video viewer
+
+Opening a video AVFoundation can play (mp4, mov, m4v and the other QuickTime and MPEG-4 files with H.264, HEVC, ProRes and similar codecs) shows it with a control bar instead of the image viewer. Files it can't play (WebM, Matroska, AVI, WMV, FLV) fall back to the image viewer with their thumbnail. Playback, decoding and sound are macOS's own, through the `falcon-video` crate (`crates/falcon-video`), which keeps every Objective-C call in one module and hands the app RGBA frames to upload as a texture. Nothing GPL or LGPL is linked, so falcon stays MIT/Apache-2.0. The drawing, keys and timed comments are in `crates/falcon-app/src/app/video_view.rs`.
+
+What Eagle does, from the `mediaElement` and `mpvMediaElement` directives and the comment dialogs in `app.bundle.js`, its stylesheets and `js/default-preferences.js`:
+
+| Question | Eagle | Seen or inferred | falcon |
+|---|---|---|---|
+| Player | video.js over an HTML video element, falling back to a bundled mpv when the element can't decode the file (no size or duration, or no frame within 1.5 s of playing) | Seen | AVFoundation's AVPlayer, with frames copied out of an `AVPlayerItemVideoOutput` each time the window draws. No second player: what macOS can't play shows its thumbnail |
+| Control bar | Play, back and forward, time, progress bar, volume, playback rate, loop, note (add comment) and full screen | Seen | Play, back, forward, previous and next frame, elapsed / total, add comment, speed, loop, mute and volume. No full screen |
+| Picture | Fitted to the window and never enlarged past the video's own size (`max-width`/`max-height` set to the video size), unless the Zoom to Fill preference is on | Seen | Fitted and never enlarged; no fill mode. The size comes from the file, so records with `width` and `height` of 0 still show at the right shape. Rotated phone clips are shown upright |
+| Start | Plays at once (`video.autoPlay`, on by default) and resumes where the item was left (`video.rememberPosition`, on), kept per item in local storage | Seen | Plays at once and resumes where the item was left during this session; positions are not kept across launches. A clip left at its end starts from the top |
+| Loop | Clips of 30 s or less always loop (`video.loopShortVideo`, on); longer ones follow the loop button, whose state is saved | Seen | Same, and the loop setting is saved with the app's state |
+| Volume | Saved in local storage as a percentage, 100% by default; a muted player saves 0% | Seen | Saved with the app's state, 100% by default. Mute is not saved |
+| Speeds | 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 3, 4 and 8×, from a menu or ⇧. and ⇧, | Seen | Same list from the speed menu or the keys. Each video starts at 1× (inferred: the rate belongs to the video element) |
+| Skipping | ⌘← and ⌘→ move 2% of the length, at most 10 s. The back button moves the same; the forward button 2% at most 20 s; both repeat while held | Seen | Same steps; the buttons don't repeat while held |
+| Frame steps | `[` and `]` one frame, ⇧[ and ⇧] ten frames. The HTML player moves by a measured frame time (1/24 s until measured); mpv steps real frames | Seen | Real frames, through AVPlayerItem's frame stepping. Stepping pauses |
+| Seek bar | Click or drag; playing pauses while dragging and resumes after. Hovering shows a thumbnail preview of that moment. A resizable range on the bar limits playback to a section | Seen | Click or drag, pausing while dragging. No hover thumbnail and no range |
+| Scrolling | Scrolling over the video seeks (the `habits.videoScrollBehavior` default, "progress"): 2% of the length at most 10 s per wheel step, less for small trackpad moves; scrolling up or right goes back | Seen | Same direction and steps. No volume mode |
+| Clicking | Click plays or pauses (video.js); double-click leaves the viewer | Seen (double-click); inferred (click) | Click plays or pauses |
+| Subtitles | A `.vtt` or `.srt` next to the original with the same name is loaded and shown | Seen | Not supported |
+| Leaving | The position is saved and the player destroyed | Seen | The player stops and is dropped when the viewer closes or moves to another item, or another library is shown |
+| Timed comments | Stored in the item's `comments` with `duration` (seconds), `annotation` and `lastModified`, kept sorted by time | Seen | The same records, written with `Comment::at_time`; the library keeps them sorted |
+| Markers | A 4 px tick per comment on the progress bar at `duration / length`; hovering shows the text | Seen | Same, with the time and text on hover. Clicking a tick seeks there; right-click offers Edit and Delete |
+| Adding | The note button or N pauses and asks for the text in a dialog at the bottom of the window; an empty text adds nothing | Seen | The comment button or N pauses and opens a box above the control bar (Save, Cancel, ⌘↩, Esc); an empty text adds nothing |
+| Inspector | Comments listed with their times; clicking one seeks the video there, editing seeks and pauses first, deleting offers an undo notice | Seen | Listed with their times; clicking one opens the video at that moment; edit and delete as for region comments (⌘Z undoes) |
+
 ## Duplicates
 
 The sidebar's Duplicates entry (after All Tags) opens a page that scans the library on a background thread, with a progress bar, and lists the groups it finds. Each group is a row of thumbnails labelled "Identical files" or "Similar pictures (within N of 64 bits)"; each thumbnail shows its size (identical) or its distance in bits from the first (similar), and the first is marked "Kept". Clicking selects as in the grid (⌘ and ⇧ work, and the inspector follows), double-clicking opens the viewer. **Select All but First** selects every member except the first of each group (never an item that is the first of another group), and **Move N to Trash** trashes the selection through the usual trash action, so ⌘Z undoes it. The similarity slider sets how many of the 64 perceptual-hash bits may differ (10 by default, right is stricter) and scans again. The code is in `crates/falcon-app/src/app/duplicates_view.rs`, with the grouping rules in `logic.rs`.
@@ -85,7 +112,7 @@ These are the defaults. All but the arrows, Esc and Z can be changed under Prefe
 
 | Key | Action |
 |---|---|
-| Space (or ↩) | Open or close the viewer. With audio in the viewer, Space plays or pauses instead (Esc or ↩ closes) |
+| Space (or ↩) | Open or close the viewer. With audio or video in the viewer, Space plays or pauses instead (Esc or ↩ closes) |
 | ← → ↑ ↓ | Move the selection, or go to the next item in the viewer |
 | ⌘A | Select all |
 | ⌘⌫ | Move to the Trash, or delete permanently when in the Trash |
@@ -108,6 +135,11 @@ These are the defaults. All but the arrows, Esc and Z can be changed under Prefe
 | C | In the viewer, turn comment mode on or off (Esc also leaves it) |
 | ⇧R | In the viewer, rotate the image left |
 | Enter and Esc | While cropping, save (then confirm) or cancel |
+| ⌘← and ⌘→ | With video in the viewer, skip back or forward 2% of its length, at most 10 s |
+| ⌘↑ and ⌘↓ | With video in the viewer, volume up or down 5% |
+| `[` and `]` (with ⇧, ten) | With video in the viewer, previous or next frame |
+| ⇧, and ⇧. | With video in the viewer, slower or faster |
+| N | With video in the viewer, add a comment at the current time |
 
 ## Saving
 

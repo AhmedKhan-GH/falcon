@@ -24,6 +24,7 @@ mod organize_ui;
 mod duplicates_view;
 mod filters_ui;
 mod media_view;
+mod video_view;
 #[path = "comments.rs"]
 mod comments;
 #[path = "covers.rs"]
@@ -66,6 +67,9 @@ struct Saved {
     collect_pos: Option<[f32; 2]>,
     /// Changed keyboard shortcuts (see `shortcuts.rs`).
     shortcuts: crate::shortcuts::Shortcuts,
+    /// The video player's volume and loop setting.
+    video_volume: Option<f32>,
+    video_loop: Option<bool>,
 }
 
 /// Ids being dragged from the grid.
@@ -488,6 +492,8 @@ pub struct App {
     collect: crate::collect::Collect,
     /// Audio playback for the viewer.
     audio: crate::audio::Audio,
+    /// Video playback for the viewer (`video_view.rs`).
+    video: video_view::VideoState,
 }
 
 impl App {
@@ -513,6 +519,7 @@ impl App {
             shortcuts: Default::default(),
             collect: Default::default(),
             audio: Default::default(),
+            video: Default::default(),
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
         app.tile = saved.tile.unwrap_or(app.tile).clamp(TILE_MIN, TILE_MAX);
@@ -526,6 +533,8 @@ impl App {
         app.prefs = saved.prefs.sanitized();
         app.shortcuts = saved.shortcuts;
         app.collect.pos = saved.collect_pos.map(Pos2::from);
+        app.video.volume = saved.video_volume.unwrap_or(1.0).clamp(0.0, 1.0);
+        app.video.looping = saved.video_loop.unwrap_or(false);
         // Reopen the libraries that were open, then the one given on the
         // command line (focused if it was already open).
         let (libraries, active) = crate::workspaces::restore(&saved.libraries, saved.active, saved.library.as_deref(), |p| p.is_dir());
@@ -3350,7 +3359,7 @@ impl App {
             }
         }
         let screen = ui.max_rect();
-        if self.media_viewer(ctx, lib, item, screen) {
+        if self.video_viewer(ctx, lib, item, screen) || self.media_viewer(ctx, lib, item, screen) {
             return;
         }
         egui::Area::new(egui::Id::unique("viewer")).fixed_pos(screen.min).order(egui::Order::Foreground).show(ctx, |ui| {
@@ -3515,6 +3524,8 @@ impl eframe::App for App {
             prefs: self.prefs.clone(),
             shortcuts: self.shortcuts.clone(),
             collect_pos: self.collect.pos.map(<[f32; 2]>::from),
+            video_volume: Some(self.video.volume),
+            video_loop: Some(self.video.looping),
         };
         eframe::set_value(storage, eframe::APP_KEY, &saved);
     }
@@ -3547,6 +3558,7 @@ impl eframe::App for App {
         if !dropped.is_empty() && !dragging_out {
             self.import(dropped);
         }
+        self.video_keys(&ctx);
         self.edit_keys(&ctx);
         self.keyboard(&ctx);
         if let Some(d) = self.prefs_window.show(&ctx) {
@@ -3632,6 +3644,7 @@ impl eframe::App for App {
         if self.audio.loaded().is_some() && self.audio.loaded() != self.ws.viewer.as_deref() {
             self.audio.stop();
         }
+        self.video.keep_only(self.ws.viewer.as_deref());
         // Items dragged past the window edge become a macOS file drag, so
         // they can be dropped into Finder or other apps, as from Eagle.
         if let Some(d) = egui::DragAndDrop::payload::<DragItems>(&ctx)

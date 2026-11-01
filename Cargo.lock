@@ -1634,6 +1634,7 @@ dependencies = [
  "eframe",
  "falcon-library",
  "falcon-server",
+ "falcon-video",
  "image",
  "lru",
  "rfd",

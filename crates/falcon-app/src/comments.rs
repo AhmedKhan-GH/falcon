@@ -485,6 +485,11 @@ impl App {
                 self.ws.viewer = Some(item.id.clone());
                 self.ws.tools.comment_mode = true;
             }
+            if resp.clicked() && let Some(s) = c.duration.as_ref().and_then(|d| d.as_f64()) {
+                // A timed comment plays from its moment (`video_view.rs`).
+                self.ws.viewer = Some(item.id.clone());
+                self.video.seek_when_open(&item.id, s);
+            }
         }
         ui.add_space(4.0);
     }

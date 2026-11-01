@@ -13,6 +13,7 @@ path = "src/main.rs"
 [dependencies]
 falcon-library = { path = "../falcon-library" }
 falcon-server = { path = "../falcon-server" }
+falcon-video = { path = "../falcon-video" }
 eframe = { version = "0.37.0", features = ["persistence"] }
 serde = { version = "1", features = ["derive"] }
 rfd = "0.17.2"

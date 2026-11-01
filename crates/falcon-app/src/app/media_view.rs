@@ -59,7 +59,7 @@ fn sample(item: &Item) -> String {
 }
 
 /// The bar above the audio and font viewers: back and the item's name.
-fn top_bar(app: &mut App, ui: &mut Ui, item: &Item, bar: Rect) {
+pub(super) fn top_bar(app: &mut App, ui: &mut Ui, item: &Item, bar: Rect) {
     let p = ui.painter().clone();
     p.rect_filled(bar, 0.0, t::p().main);
     window_drag(ui, bar, "viewer");

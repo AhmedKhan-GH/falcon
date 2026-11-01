@@ -16,7 +16,7 @@ Falcon is early alpha. This is what is done and what comes next, roughly in orde
 - [x] Hover preview in the grid
 - [x] Per-folder sort, colours and icons
 - [x] Audio playback in the viewer
-- [ ] Video playback in the viewer
+- [x] Video playback in the viewer
 - [x] Tag groups
 - [x] Undo
 - [ ] Windows and Linux builds
