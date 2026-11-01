@@ -30,6 +30,7 @@ mod search_state;
 mod recent;
 mod shortcuts;
 mod subtitles;
+mod storage;
 mod tags;
 mod organize;
 mod textdoc;

@@ -602,6 +602,9 @@ struct Workspace {
     folders: folders_ui::FolderUi,
     /// Polls the library for changes made by other apps (`watch.rs`).
     watch: Option<crate::watch::Watcher>,
+    /// The storage checks run when the library opened (`storage.rs`),
+    /// until their result is taken.
+    health: Option<std::sync::mpsc::Receiver<Vec<crate::storage::Warning>>>,
 }
 
 impl Workspace {
@@ -612,9 +615,14 @@ impl Workspace {
             let ctx = ctx.clone();
             crate::watch::Watcher::start(r, move || ctx.request_repaint())
         });
+        let health = root.clone().map(|r| {
+            let ctx = ctx.clone();
+            crate::storage::spawn_check(r, move || ctx.request_repaint())
+        });
         Workspace {
             root,
             watch,
+            health,
             lib,
             loader: Loader::new(ctx),
             scope: Scope::All,

@@ -128,7 +128,18 @@ impl App {
     /// or go, and a library whose folder vanished closes.
     pub(super) fn apply_outside_changes(&mut self) {
         let mut vanished = Vec::new();
+        let mut storage = Vec::new();
         for ws in std::iter::once(&mut self.ws).chain(self.others.parked_mut()) {
+            if let Some(rx) = &ws.health
+                && let Ok(warnings) = rx.try_recv()
+            {
+                ws.health = None;
+                if !warnings.is_empty()
+                    && let Some(root) = &ws.root
+                {
+                    storage.push((root.clone(), warnings));
+                }
+            }
             let changes = ws.watch.as_ref().map(|w| w.drain()).unwrap_or_default();
             if changes.is_empty() {
                 continue;
@@ -155,6 +166,14 @@ impl App {
                     }
                     Change::Missing => vanished.extend(ws.root.clone()),
                 }
+            }
+        }
+        for (root, warnings) in storage {
+            let text = warnings.iter().map(crate::storage::Warning::message).collect::<Vec<_>>().join(" ");
+            if warnings.iter().any(crate::storage::Warning::is_serious) {
+                self.show_alert(Alert::new(format!("{} may not save changes", name(&root)), text));
+            } else {
+                self.flash(format!("{}: {text}", name(&root)));
             }
         }
         for root in vanished {
