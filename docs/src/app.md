@@ -167,9 +167,29 @@ Every import from the app (drops, ⌘V, files passed to the app, the collect win
 
 The dialog, "Already in the library (N)", shows the existing item's thumbnail, name and first folder, the new file's size and target folder, two choices, Use the existing item (the default) and Keep both, a "Do the same for all N files" box when more than one file is held, and Import and Don't Import buttons. Return imports with the chosen option and Esc skips; with ⌘ held either answers for every file. A click outside doesn't answer. Use the existing item puts the existing item in the import's folders with their auto-tags and moves its date added to now (`Library::use_existing_for_import`); if that item has been deleted or trashed meanwhile, the file is imported instead. Keep both commits the held copy as a new item. Don't Import drops it, removing the staged copy. Each answer is one undo step and shows a notice ("Used the existing items for 2 files"). Held files count as done in the progress bar's "Added N". Held files still waiting when their library is closed are dropped.
 
+## Menu bar
+
+On macOS falcon has a native menu bar, built with AppKit in `crates/falcon-app/src/menu.rs`. It follows the order of Eagle's menus (`app.bundle.js`, seen) without Eagle's Library and Actions menus, and holds only what falcon can do:
+
+| Menu | Items |
+|---|---|
+| Falcon | winit's About, Services, Hide, Hide Others, Show All and Quit, plus Preferences… after About |
+| File | New Folder, New Subfolder, New Smart Folder…, Import Files…, Open Library…, Close Window |
+| Edit | Undo, Redo, Cut, Copy, Paste, Select All, Rename, Copy File Path, Refresh Thumbnail, Move Folder ▸ (Up, Down, To the Top, To the Bottom), Edit Image ▸ (Flip Horizontally, Rotate Left, Crop…), Remove from Folder, Move to Trash |
+| Find | Search, Filter Bar, Find Duplicates |
+| Organize | No Rating, 1 Star … 5 Stars |
+| View | All Items, Uncategorized, Untagged, Recently Used, Random, All Tags, Trash; Waterfall, Justified, Grid, List; Scroll to Top, Scroll to Bottom, Page Up, Page Down, First Item, Last Item; Zoom In, Zoom Out; Viewer, Open With Default App, Reveal in Finder; Sidebar, Inspector; Back, Forward, Parent Folder, Shuffle Again, Expand or Collapse All Folders |
+| Window | Minimize, Zoom, Full Screen, Collect Window, Next Library, Previous Library, Close Window, then macOS's window list |
+| Help | Falcon Documentation (the book in `docs/`, built or not, when falcon runs from its source tree; disabled otherwise) |
+
+- Each item shows its chord from the shortcut table (Undo, Redo and Cut show egui's fixed ⌘Z, ⇧⌘Z and ⌘X). The menus are rebuilt when the bindings change, so a chord changed under Preferences → Shortcuts shows at once, and an unbound command shows none.
+- An item is enabled when its command can act, by the same rules the keys follow (`menu::enabled`): Rename needs one selected item and no viewer, Remove from Folder a selection inside a folder, Move Folder an open folder or smart folder, Parent Folder a folder with a parent, Shuffle Again the Random page, Next and Previous Library a second open library, the Edit Image entries an image of a kind falcon can flip, rotate or crop. Everything is disabled while Preferences is open. The open page, the layout, the sidebar, the inspector, the filter bar, the viewer and full screen carry checkmarks. The app hands the menu a fresh state only when it changes; AppKit reads it when a menu opens.
+- Keys stay with egui. Every falcon menu has a delegate that tells AppKit it has no key equivalents, so a key press never fires an item: egui gets it as before, text fields keep ⌘C, ⌘V, ⌘A, ⌘Z, ⌘← and the rest, and bare keys such as R or the digits still type. Should AppKit fire an item from a key anyway (the application menu has no such delegate, so ⌘, comes this way), falcon turns it back into the key egui would have had. Clicking an item runs the same `App::run_command` as its key. Undo, Redo, Cut, Copy, Paste and Select All act on a focused text field when there is one.
+- Left out because falcon can't do them yet: File ▸ New… and the importers and exporters, Copy Folder Path and the other copy variants, Duplicate, custom thumbnails from the menu, Edit Folder, Go to Folder, Add to Folders…, the tag commands, Always on Top, Actual Size and Zoom to Fit, Grayscale, Open in New Window, Open Link, the caption toggles, Presentation Mode, Lock and Color Space, and the online Help items. Show or hide both panels is not in the View menu yet.
+
 ## Keys
 
-These are the defaults. All but the arrows, Esc, Tab, Z and the viewer's C, ⇧R, ⇧F, 0, 1, + and − can be changed under Preferences → Shortcuts (see Shortcut settings); the video keys are its Player group.
+These are the defaults. All but the arrows, Esc, Tab, Z and the viewer's C, ⇧R, ⇧F, 0, 1, + and − can be changed under Preferences → Shortcuts (see Shortcut settings); the video keys are its Player group. Bare keys (the digits, R and /) don't answer their ⌥ chord. Apart from the Player keys, every rebindable command is also in the menu bar (see Menu bar).
 
 | Key | Action |
 |---|---|
@@ -184,7 +204,12 @@ These are the defaults. All but the arrows, Esc, Tab, Z and the viewer's C, ⇧R
 | ⌘] and ⌘[, ⇧⌘] and ⇧⌘[ | Move the open folder (or open smart folder) up or down one place among its siblings; with ⇧, to the top or the bottom (Eagle's Edit ▸ Move Folder). Each move is one undo step |
 | ⇧⌘R | Folder settings (name and auto-tags) for the open folder, unless it is locked (Eagle's Set Current Folder, `edit.folder.setting`) |
 | ⌘= and ⌘− | Zoom the grid's cards, or zoom the image in the viewer |
-| ⌘⇧N | New folder |
+| ⌘⇧N | New folder, right after the open folder among its siblings, or at the top level when no folder is open (as Eagle) |
+| ⌥N | New subfolder of the open folder |
+| ⇧⌥⌘N | New smart folder |
+| ⇧⌘⌫ | Remove the selection from the open folder, then select the next item; as in Eagle there is no prompt, and an item left in no folder becomes Uncategorized |
+| ⌥↑ | Open the parent of the open folder or smart folder |
+| / and * | Expand every folder if the reference folder (the open folder's parent, or the first folder) is collapsed, else collapse them all; in a smart folder, the smart folders |
 | ⌘C and ⌘V | Copy the selected files, or paste files or images |
 | ⌘E | Export the selected items' originals to a folder (see Export and copy-out) |
 | ⇧⌘E | Export the selected items as an `.eaglepack` |
@@ -204,6 +229,14 @@ These are the defaults. All but the arrows, Esc, Tab, Z and the viewer's C, ⇧R
 | ⌘L | Open the library menu (Eagle's `library.switch`) |
 | ⌃⇧Tab and ⌃Tab | Previous and next open library (falcon's own) |
 | ⌘, | Preferences |
+| ⌘1 to ⌘7 | All, Uncategorized, Untagged, Recently Used, Random, All Tags and Trash (Eagle's View menu order). From the viewer they close it first |
+| Home, End, Page Up and Page Down | Scroll the grid to the top or bottom, or by a page (the view less 72 px, as in Eagle) |
+| ⌘↑ and ⌘↓ | Select the first or last item and scroll to it (with video in the viewer they are still the volume keys) |
+| 0 to 5 | Set the rating of the selection (0 removes it), with a toast such as "Rated 3 stars". In the viewer 0 and 1 stay its zoom keys; Organize in the menu bar rates there |
+| ⌥⌘R | Refresh the thumbnails of the selection (or the viewer's item) |
+| R | On the Random page, shuffle again (no history step) |
+| ⌘W | Close the viewer if it is open, otherwise the window (which quits falcon, as the red button does) |
+| ⌘M and ⌃⌘F | Minimise the window, and enter or leave full screen |
 | ⇧↩ | Open the selected items (or the viewer's item) in their default apps (Eagle's `view.file.opendefault`) |
 | ⌘↩ | Show the selected items (or the viewer's item) in Finder (Eagle's `view.file.openfinder`) |
 | C | In the viewer, turn comment mode on or off (Esc also leaves it) |
@@ -378,7 +411,7 @@ Only dark was checked against Eagle's window. The other five were not sampled fr
 
 ## Shortcut settings
 
-Preferences → Shortcuts lists every rebindable command by group, with its chord. Clicking a chord starts recording: the next key press becomes the shortcut. Backspace alone clears it, Esc alone stops recording, and a letter, digit or symbol needs a modifier (function keys, Space, ↩, arrows, Home, End, Page Up/Down, Delete and brackets may stand alone). A chord another command already uses is refused with "Used by …" for 1.5 s, and the old chord stays. A changed row has a reset button, and Restore Defaults (after a confirmation) resets them all. The last group, Player, holds the video player's keys (play or pause, previous and next frame, back and forward 10 frames, volume, skip, speed and add comment). They act only while a video plays in the viewer, so, as in Eagle, they conflict only with each other: the player may use ⌘F, and its Space overrides the viewer's while a video plays. Player chords must match their modifiers exactly (⇧[ is not also [). A command can also have extra chords that work only while its binding is still the default: ⌘← and ⌥← for Back, F2 for Rename and Enter for the viewer. Because Backspace alone clears a binding in the recorder, bare ⌫ can't be recorded for Back; the reset button brings it back. When a newer falcon's default lands on a chord the user had already given another command, the saved chord wins and that default is left unbound (its extra chords still work if free). The table, the parser and the recorder rules are in `crates/falcon-app/src/shortcuts.rs`.
+Preferences → Shortcuts lists every rebindable command by group, with its chord. Clicking a chord starts recording: the next key press becomes the shortcut. Backspace alone clears it, Esc alone stops recording, and a letter, digit or symbol needs a modifier (function keys, Space, ↩, arrows, Home, End, Page Up/Down, Delete and brackets may stand alone). A chord another command already uses is refused with "Used by …" for 1.5 s, and the old chord stays. A changed row has a reset button, and Restore Defaults (after a confirmation) resets them all. The last group, Player, holds the video player's keys (play or pause, previous and next frame, back and forward 10 frames, volume, skip, speed and add comment). They act only while a video plays in the viewer, so, as in Eagle, they conflict only with each other: the player may use ⌘F, and its Space overrides the viewer's while a video plays. Player chords must match their modifiers exactly (⇧[ is not also [). A command can also have extra chords that work only while its binding is still the default: ⌘← and ⌥← for Back, F2 for Rename, Enter for the viewer, and * (⇧8) for expand or collapse all folders. Because Backspace alone clears a binding in the recorder, bare ⌫ can't be recorded for Back; the reset button brings it back. When a newer falcon's default lands on a chord the user had already given another command, the saved chord wins and that default is left unbound (its extra chords still work if free). The table, the parser and the recorder rules are in `crates/falcon-app/src/shortcuts.rs`.
 
 Changes are saved as a map from command id to Eagle's accelerator text, for example `{"edit.rename": "Command + R"}`, holding only the changed commands; an empty string means unbound. Ids reuse Eagle's keybind names where Eagle has the command (`file.create.folder`, `view.zoom.in`, `find.filter.toggle`, `app.preferences`, `player.prev1frame`, `player.step.forward`, …). The add-comment key N gets falcon's own id (`player.comment.add`): Eagle handles N outside its keybind table, so it can't be changed there. falcon has no thumbnail keys (`player.thumbnail.*`). When a key press matches several chords (⌘F and ⌘⇧F for ⌘⇧F), the one with the most modifiers wins. ⌘C, ⌘X and ⌘V reach egui as Copy, Cut and Paste events rather than key presses, so falcon maps them back; this also makes ⌘C in the grid work, which the old hard-coded check missed.
 
