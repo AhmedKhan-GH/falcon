@@ -37,6 +37,7 @@ mod storage;
 mod tags;
 mod organize;
 mod textdoc;
+mod tiff_pages;
 mod toast;
 mod touch_id;
 mod theme;

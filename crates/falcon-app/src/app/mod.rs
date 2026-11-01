@@ -124,6 +124,8 @@ pub struct App {
     pub(crate) image: crate::ui::viewer::image::ImageState,
     /// The 3D model viewer (`model3d/`, `ui/viewer/model.rs`).
     pub(crate) model3d: crate::model3d::Model3dState,
+    /// The page control of a multi-page TIFF in the viewer (`ui/viewer/tiff.rs`).
+    pub(crate) tiff: crate::tiff_pages::TiffPages,
     /// Drop targets and other import state (`import.rs`).
     pub(crate) imports: import::Imports,
     /// The macOS menu bar (`menu.rs`).
@@ -223,6 +225,7 @@ impl App {
             web: Default::default(),
             image: Default::default(),
             model3d: crate::model3d::Model3dState::new(cc),
+            tiff: Default::default(),
             menu_bar: Default::default(),
             layouts: HashMap::new(),
             legacy_layout: None,
@@ -421,6 +424,7 @@ impl App {
         self.pdf_keys(&ctx);
         self.video_keys(&ctx);
         self.gif_keys(&ctx);
+        self.tiff_keys(&ctx);
         self.edit_keys(&ctx);
         self.keyboard(&ctx);
         if let Some(d) = self.prefs_window.show(&ctx) {

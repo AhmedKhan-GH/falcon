@@ -60,7 +60,9 @@ impl App {
     ) {
         let id = item.id.clone();
         let ext = item.ext.to_lowercase();
-        if logic::too_large_to_preview(&ext, item.width, item.height, thumbnail::has_custom_thumbnail(item)) {
+        // A page above the first of a TIFF is drawn at its own size.
+        let page_size = self.tiff.natural.filter(|_| self.tiff.id == id);
+        if page_size.is_none() && logic::too_large_to_preview(&ext, item.width, item.height, thumbnail::has_custom_thumbnail(item)) {
             self.too_large(ui, lib, item, bar, area);
             return;
         }
@@ -68,7 +70,9 @@ impl App {
             self.image.tf = Default::default();
         }
         let tf = self.image.tf;
-        let natural = if item.width > 0 && item.height > 0 {
+        let natural = if let Some(size) = page_size {
+            tf.size(size.x, size.y)
+        } else if item.width > 0 && item.height > 0 {
             tf.size(item.width as f32, item.height as f32)
         } else {
             tex.as_ref().map_or(Vec2::splat(512.0), |t| tf.size(t.size_vec2().x, t.size_vec2().y))
@@ -158,6 +162,7 @@ impl App {
         let shown_px = r.width().max(r.height()) * ui.ctx().pixels_per_point();
         let tile = logic::tile_side(ui.ctx().input(|i| i.max_texture_side));
         if !animated
+            && page_size.is_none()
             && tf.is_identity()
             && logic::wants_original(&ext, natural.x.max(natural.y) as u32, shown_px)
             && let Some(j) = original_job(item, lib.root(), tile)
@@ -189,7 +194,7 @@ impl App {
             });
         }
         let full_px = tex.as_ref().map_or(0.0, |t| t.size_vec2().max_elem());
-        let original = self.ws.loader.original(&id).filter(|o| !animated && tf.is_identity() && shown_px > full_px && o.size[0].max(o.size[1]) as f32 > full_px);
+        let original = self.ws.loader.original(&id).filter(|o| !animated && page_size.is_none() && tf.is_identity() && shown_px > full_px && o.size[0].max(o.size[1]) as f32 > full_px);
 
         // Without a full render the thumbnail stands in; with neither, the
         // format can't be previewed.
@@ -311,6 +316,7 @@ impl App {
         }
         let tools_x = self.gif_toggle_button(ui, item, x, cy);
         let tools_left = self.edit_bar(ui, item, tools_x, cy);
+        let tools_left = self.tiff_bar(ui, item, tools_left, cy);
         audio::bar_name(ui, item, bar, name_x, tools_left);
 
         if let Some(z) = zoom {

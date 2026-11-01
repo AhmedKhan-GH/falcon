@@ -12,6 +12,7 @@ pub(crate) mod open;
 pub(crate) mod pdf;
 pub(crate) mod preview_window;
 pub(crate) mod text;
+pub(crate) mod tiff;
 pub(crate) mod video;
 pub(crate) mod web;
 
@@ -80,7 +81,9 @@ impl App {
             a.update(now);
             a.texture().cloned()
         });
+        let page = self.tiff_view(ctx, lib, item);
         let tex = gif
+            .or(page)
             .or_else(|| self.ws.loader.get(&id, Tier::Full).cloned())
             .or_else(|| self.ws.loader.get(&id, Tier::Preview).cloned());
         self.image_canvas(ui, lib, item, tex, bar, area, gif_bar);
