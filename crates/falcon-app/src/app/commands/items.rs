@@ -280,7 +280,7 @@ impl App {
     /// Eagle's Open File Location submenu for one item: All, then each
     /// folder the item is in.
     pub(crate) fn location_menu(&mut self, ui: &mut Ui, lib: &Library, item: &Item) {
-        ui.menu_button("Open File Location", |ui| {
+        crate::ui::menus::search::submenu(ui, "Open File Location", |ui| {
             if ui.button("All").clicked() {
                 self.open_item_location(&item.id, None);
             }

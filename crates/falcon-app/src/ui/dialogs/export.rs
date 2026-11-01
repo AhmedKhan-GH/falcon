@@ -445,7 +445,7 @@ impl App {
         if ui.button("Copy File Path").clicked() {
             ask(CopyKind::Path);
         }
-        ui.menu_button("Copy", |ui| {
+        crate::ui::menus::search::submenu(ui, "Copy", |ui| {
             ui.set_min_width(160.0);
             for (label, kind) in [
                 ("Link", CopyKind::Link),
@@ -648,7 +648,7 @@ impl App {
     /// the folder is locked).
     pub(crate) fn tree_export_menu(&mut self, ui: &mut Ui, target: Target, enabled: bool) {
         ui.add_enabled_ui(enabled, |ui| {
-            ui.menu_button("Export", |ui| self.tree_export_entries(ui, &target));
+            crate::ui::menus::search::submenu(ui, "Export", |ui| self.tree_export_entries(ui, &target));
         });
     }
 
@@ -684,7 +684,7 @@ impl App {
 
     /// The Export submenu of the item context menu.
     pub(crate) fn item_export_menu(&mut self, ui: &mut Ui, targets: &[String]) {
-        ui.menu_button("Export", |ui| {
+        crate::ui::menus::search::submenu(ui, "Export", |ui| {
             ui.set_min_width(200.0);
             if ui.button("Export to Computer…").clicked() {
                 self.ws.export.request = Some(Request::Items(targets.to_vec()));

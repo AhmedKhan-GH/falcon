@@ -80,7 +80,7 @@ impl App {
         self.edit_menu(ui, item, targets, lib);
         if !in_viewer {
             let cur = logic::ThumbBg::of(item);
-            ui.menu_button("Thumbnail Background", |ui| {
+            crate::ui::menus::search::submenu(ui, "Thumbnail Background", |ui| {
                 if ui.add(egui::Button::selectable(cur.is_none(), "None")).clicked() {
                     self.ws.actions.push(Action::Background(targets.to_vec(), None));
                 }

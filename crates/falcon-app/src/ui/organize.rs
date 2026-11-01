@@ -401,7 +401,7 @@ impl App {
 
     pub(crate) fn folder_password_menu(&mut self, ui: &mut Ui, f: &Folder) {
         let shut = organize::is_shut(f, &self.ws.org.unlocked);
-        ui.menu_button("Password", |ui| {
+        crate::ui::menus::search::submenu(ui, "Password", |ui| {
             let mut open = |mode| self.open_password(f, mode);
             if !f.is_locked() {
                 if ui.button("Create Password…").clicked() {
@@ -433,7 +433,7 @@ impl App {
         self.folder_password_menu(ui, f);
         let parent = organize::locate(&lib.metadata.folders, &f.id).and_then(|(p, _)| p).map(str::to_string);
         self.folder_title_sort_menu(ui, parent.as_deref());
-        ui.menu_button("Sort Items By", |ui| {
+        crate::ui::menus::search::submenu(ui, "Sort Items By", |ui| {
             ui.set_min_width(180.0);
             let cur = organize::own_order(f.order_by.as_deref(), f.sort_increase);
             if let Some(v) = sort_entries(ui, cur, true, (self.ws.sort, self.ws.increase)) {
@@ -460,7 +460,7 @@ impl App {
     /// parent is `parent` (`None`: on the top level, or the Folders
     /// heading). Asks first, as Eagle does.
     pub(crate) fn folder_title_sort_menu(&mut self, ui: &mut Ui, parent: Option<&str>) {
-        ui.menu_button("Sort By", |ui| {
+        crate::ui::menus::search::submenu(ui, "Sort By", |ui| {
             ui.set_min_width(200.0);
             for (label, sort) in organize::FOLDER_TITLE_SORTS {
                 if ui.button(label).clicked() {
@@ -555,7 +555,7 @@ impl App {
             if depth > 0 && ui.button("Move to Top Level").clicked() {
                 self.ws.actions.push(org(OrgAction::MoveSmart(sf.id.clone(), None, usize::MAX)));
             }
-            ui.menu_button("Sort Items By", |ui| {
+            crate::ui::menus::search::submenu(ui, "Sort Items By", |ui| {
                 ui.set_min_width(180.0);
                 let cur = organize::own_order(sf.order_by.as_deref(), sf.sort_increase);
                 if let Some(v) = sort_entries(ui, cur, false, (self.ws.sort, self.ws.increase)) {

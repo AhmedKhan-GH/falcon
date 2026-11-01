@@ -310,7 +310,7 @@ impl App {
         if ui.button(format!("Rename {} Folders…", ids.len())).clicked() {
             self.open_rename(Tree::Folders, ids.clone());
         }
-        ui.menu_button("Sort Items By", |ui| {
+        crate::ui::menus::search::submenu(ui, "Sort Items By", |ui| {
             ui.set_min_width(180.0);
             let cur = common_sort(folders.iter().map(|f| crate::organize::own_order(f.order_by.as_deref(), f.sort_increase)));
             if let Some(v) = sort_entries(ui, cur, false, (self.ws.sort, self.ws.increase)) {
@@ -324,7 +324,7 @@ impl App {
         // Eagle offers only Export to Computer here, and not from a locked row.
         let shut = crate::organize::is_shut(f, &self.ws.org.unlocked);
         ui.add_enabled_ui(!shut, |ui| {
-            ui.menu_button("Export", |ui| {
+            crate::ui::menus::search::submenu(ui, "Export", |ui| {
                 if ui.button("Export to Computer…").clicked() {
                     self.ws.export.request = Some(crate::ui::dialogs::export::Request::Trees(ids.clone()));
                 }
@@ -357,7 +357,7 @@ impl App {
         let ids = self.ws.folders.smart.ids.clone();
         let roots = lib.smart_folders();
         let picked: Vec<&falcon_library::smart::SmartFolder> = ids.iter().filter_map(|id| crate::organize::find(&roots, id)).collect();
-        ui.menu_button("Sort Items By", |ui| {
+        crate::ui::menus::search::submenu(ui, "Sort Items By", |ui| {
             ui.set_min_width(180.0);
             let cur = common_sort(picked.iter().map(|f| crate::organize::own_order(f.order_by.as_deref(), f.sort_increase)));
             if let Some(v) = sort_entries(ui, cur, false, (self.ws.sort, self.ws.increase)) {

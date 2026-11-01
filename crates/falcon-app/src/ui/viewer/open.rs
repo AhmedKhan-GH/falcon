@@ -38,7 +38,7 @@ impl App {
             self.open_files(files, true);
         }
         if let [file] = files {
-            ui.menu_button("Open With", |ui| self.open_with_list(ui, file));
+            crate::ui::menus::search::submenu(ui, "Open With", |ui| self.open_with_list(ui, file));
         }
         let reveal = self.shortcut_text(ui.ctx(), Command::RevealInFinder);
         if ui.add(egui::Button::new("Show in Finder").shortcut_text(reveal)).clicked() {
