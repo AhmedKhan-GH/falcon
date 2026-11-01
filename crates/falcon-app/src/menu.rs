@@ -67,6 +67,8 @@ pub struct State {
     /// Some of the items acted on can be flipped or rotated; the one item
     /// acted on can be cropped.
     pub flippable: bool,
+    /// The open folder or smart folder is sorted at random by its own setting.
+    pub random_sorted: bool,
     pub rotatable: bool,
     pub croppable: bool,
     /// The item acted on has a custom thumbnail.
@@ -148,7 +150,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::Page(_) | C::Import | C::ImportFolders | C::FindDuplicates => s.library,
         C::Scroll(_) | C::SelectFirst | C::SelectLast | C::ToggleFolders => grid,
         C::ParentFolder => grid && s.parent,
-        C::Reshuffle => grid && s.scope == ScopeKind::Random,
+        C::Reshuffle => grid && (s.scope == ScopeKind::Random || s.random_sorted),
         C::Rate(_) => any || (s.library && s.viewer),
         C::AddTags | C::TagPanel | C::CopyTags | C::ClearTags => any,
         C::PasteTags => any && s.tag_clipboard,
@@ -945,6 +947,8 @@ mod tests {
         };
         assert!(!enabled(Command::PasteTags, &State { tag_clipboard: false, ..full.clone() }), "Paste Tags needs copied tags");
         assert!(!enabled(Command::LockApp, &State::default()), "Lock needs a password");
+        assert!(!enabled(Command::Reshuffle, &full), "Shuffle Again needs the Random page or a random sort");
+        assert!(enabled(Command::Reshuffle, &State { random_sorted: true, ..full.clone() }), "a folder sorted at random shuffles again");
         assert!(!enabled(Command::AddToLastFolder, &State { last_folder: false, ..full.clone() }), "Add to Last Used Folder needs a used folder");
         let locked = State { folder_password: true, ..full.clone() };
         assert!(!enabled(Command::FolderPasswordNew, &locked), "a folder has one password");

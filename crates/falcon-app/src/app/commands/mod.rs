@@ -9,7 +9,7 @@ pub(crate) mod items;
 use std::path::PathBuf;
 
 use eframe::egui::{self, Key, Modifiers};
-use falcon_library::model::Item;
+use falcon_library::model::{FolderOrder, Item};
 use falcon_library::{Library, thumbnail};
 
 use super::{
@@ -315,6 +315,7 @@ impl App {
             undo: !self.ws.undo.is_empty(),
             redo: !self.ws.redo.is_empty(),
             fullscreen: ctx.input(|i| i.viewport().fullscreen.unwrap_or(false)),
+            random_sorted: self.random_sorted(),
             flippable: self.ws.editable[0],
             rotatable: self.ws.editable[1],
             croppable: self.ws.editable[2],
@@ -401,6 +402,11 @@ impl App {
     }
 
     /// The first item acted on has a custom thumbnail.
+    /// The open folder or smart folder has Random as its own sort.
+    fn random_sorted(&self) -> bool {
+        self.ws.lib.clone().is_some_and(|s| matches!(self.own_sort(&lock(&s)), Some((_, Some((FolderOrder::Random, _))))))
+    }
+
     fn has_custom_thumb(&self) -> bool {
         let Some(id) = self.acted_on().into_iter().next() else { return false };
         self.ws.lib.clone().is_some_and(|s| lock(&s).item(&id).is_some_and(thumbnail::has_custom_thumbnail))
@@ -618,6 +624,12 @@ impl App {
                 self.ws.actions.push(Action::RemoveFromFolder(ids, fid));
             }
             // A new order in place, without a history step.
+            C::Reshuffle if self.random_sorted() => {
+                // A folder sorted at random: forget its seed, so it shuffles again.
+                self.ws.org.reshuffle();
+                self.ws.selected.clear();
+                self.ws.anchor = None;
+            }
             C::Reshuffle => {
                 self.ws.folders.clear();
                 self.ws.scope = Scope::Random(fastrand_seed());
