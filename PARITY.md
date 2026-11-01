@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 175 | 40 | 56 | 9 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 178 | 40 | 53 | 9 |
 | Viewers and file formats | 157 | 22 | 11 | 7 |
-| Search, filters and organising | 154 | 28 | 40 | 3 |
+| Search, filters and organising | 173 | 22 | 27 | 3 |
 | Import, export, library, preferences and integrations | 129 | 17 | 66 | 26 |
-| **Total** | 615 | 107 | 173 | 45 |
+| **Total** | 637 | 101 | 157 | 45 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -83,7 +83,7 @@ Overall finding: falcon now has a native menu bar (`crates/falcon-app/src/menu.r
 | Edit ▸ Edit Folder: Set Current Folder (⇧⌘R), Move Folder, Password create / edit / remove / lock (⇧⌘L) | Partial | ⇧⌘R opens Folder Settings; Edit ▸ Move Folder… opens the picker dialog (`Command::MoveFolder`, no default key as Eagle). Passwords are still context-menu only, no ⇧⌘L | local |
 | Edit: Remove from current folder (⇧⌘⌫) | Done | shortcuts.rs `edit.remove.folder`, menu and card menu; one undo step, no prompt (Eagle's `removeFromFolder` asks nothing) | local |
 | Edit: Move to Trash (⌘⌫) | Done | shortcuts.rs:114, app.rs:1095-1102 | local |
-| Find: Go to Folder (⌘J or J), a quick-switch dialog with Folders / Smart Folders / Tags tabs | Missing | No quick switcher | local |
+| Find: Go to Folder (⌘J or J), a quick-switch dialog with Folders / Smart Folders / Tags tabs | Done | `find.quicksearch` ⌘J and bare J: Folders / Tags / Smart Folders / Items tabs, ranked by `string_score`, recents (200 kept) | local |
 | Find: Add to Folders… (⇧⌘J, a searchable folder picker that can create folders) | Partial | A plain scrolling submenu in the item context menu (app.rs:2520). No search, no new folder and no key | local |
 | Organize: Add To Last Used Folder (⇧D) | Done | `organize.folder.addLast`: 50 recent folders kept app-wide, as Eagle's localStorage list | local |
 | Organize: Rate 0–5 stars from the menu and keys | Done | Organize menu and the 0–5 keys (`organize.rating.*`) with a toast; in the viewer the bare digits keep their zoom meaning | local |
@@ -197,7 +197,7 @@ Eagle defaults come from prefs `shortcuts.keybinds` (rebindable) and from the ha
 | Shortcut editor: search field ("Search Shortcut") | Missing | No filter in the shortcut list | local |
 | Shortcut editor coverage: the roughly 150 rebindable commands | Partial | 60 commands plus 12 player keys (shortcuts.rs TABLE) | local |
 | ⌘F search, ⇧⌘F toggle filter | Done | shortcuts.rs:108-109 | local |
-| ⌥⌘F search all, ⌥⇧F filter sidebar, ⇧⌥⌘F reset filter, ⌥F / ⌥T / ⌥C / ⌥S / ⌥R / ⌥D / ⌥E open one filter | Missing |  | local |
+| ⌥⌘F search all, ⌥⇧F filter sidebar, ⇧⌥⌘F reset filter, ⌥F / ⌥T / ⌥C / ⌥S / ⌥R / ⌥D / ⌥E open one filter | Done | shortcuts.rs `find.search.all`, `find.filter.sidebar`, `find.filter.reset`, `find.filter.*` | local |
 | ⌘L switch library | Done | shortcuts.rs:117, app.rs:998 | local |
 | ⌘E export, ⇧⌘E export .eaglepack, ⇧E export as format | Done | shortcuts.rs Export group | local |
 | ⌘1–⌘7 sidebar views | Done | shortcuts.rs `view.all`, `view.unfiled`, … | local |
@@ -209,7 +209,7 @@ Eagle defaults come from prefs `shortcuts.keybinds` (rebindable) and from the ha
 | ⌥⌘S reveal, ⌥⌘D duplicate (view) | Missing |  | local |
 | Home / End / PageUp / PageDown scroll the grid; ⌘↑ / ⌘↓ jump to top or bottom | Done | `run_command` scroll offsets; ⌘↑ / ⌘↓ also select the first or last item, where Eagle only scrolls | local |
 | 0–5 set the rating of the selection | Done | shortcuts.rs `organize.rating.*`, grid only; toast "Rated N stars" | local |
-| T opens the tag panel, F opens the folder panel, J opens Go to Folder, G opens Actions, P opens Plugins | Partial | T opens the tag picker (`organize.tag.panel`); no F, J, G or P | local |
+| T opens the tag panel, F opens the folder panel, J opens Go to Folder, G opens Actions, P opens Plugins | Partial | T and J done; no F, G or P | local |
 | R reshuffles the Random view | Done | shortcuts.rs; in place, without a history step | local |
 | `*` or `/` expand or collapse every folder | Done | Eagle's `toggleAllFolders` rule (smart folders when one is open); `*` is the ⇧8 alias chord | local |
 | Tab toggles all panels | Done | Fixed key in shortcuts.rs FIXED, when no text field has focus (`logic::toggle_all`) | local |
@@ -277,7 +277,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Double-click a folder to expand or collapse (preference: or rename) | Done | `Prefs::sidebar_double_click`, folders and smart folders | local |
 | Select several folders with ⌘ or ⇧ click to see their combined items | Done | `logic::TreeSel` (⌘ toggles, ⇧ ranges among visible rows), `folders_ui`; the grid shows the union under the global sort | local |
 | Filter field at the bottom of the sidebar | Done | app.rs:1656, 1719-1736. No ⌥⇧F key | local |
-| "Go to Folder" button | Missing |  | local |
+| "Go to Folder" button | Done | Opens the quick switcher | local |
 | Resize the sidebar by dragging its edge | Missing | Fixed width (app.rs:3624-3631) | local |
 | Background task status: "Processing" or "Paused" palette analysis with Pause / Resume | Missing |  | local |
 | Drop zone hint: "Drag and drop folder here to import" | Missing |  | local |
@@ -434,7 +434,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 5. ~~No rubber-band (marquee) selection.~~ Fixed.
 6. Item context menu gaps: Rename / batch rename, Copy ▸ (link, folder path, thumbnail, base64, name), Copy / Paste Tags, Duplicate, Remove from this Folder, Open File Location, Pin to Top, New Folder with Selection, Add to Last Used Folder, Share, thumbnail background, custom thumbnail from clipboard, Replace with File, Combine Images.
 7. Grid display options: only Thumbnail Speed / Quality is missing.
-8. Go to Folder quick switcher (⌘J), and Add to Folders as a searchable picker instead of a flat list.
+8. Add to Folders as a searchable picker instead of a flat list (Go to Folder is done).
 9. No multi-folder selection in the sidebar.
 10. Open in New Window (preview window with always-on-top, opacity and navigator), plus main-window Always on Top.
 11. Presentation / slideshow mode (F5) and grayscale preview.
@@ -870,10 +870,10 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Quoted phrases and parentheses, flattened lossily as Eagle does | Done | `S:92` flatten_group | local |
 | If the terms fail, the whole query is tried as one substring | Done | `S:174` matches (`raw`) | local |
 | Matches item name, `.ext`, URL (queries of 2+ characters), note, tags, and the name and description of each folder the item is in | Done | `S:311` search_text | local |
-| Also matches region and video comment text | Missing | `S:311` leaves out `comments[]` | local |
-| Also matches camera (`rawMetas.camera`), text-file content (`image.text`) and font metadata | Missing | not in `S:311` | local |
-| Search Scope menu: turn name, folder name, folder description, extension, tags, URL, comment and note on or off (remembered) | Missing | The caret at `A:2068` is only drawn; it has no menu | local |
-| Search All: search the whole library from any view | Missing | Only the current scope is searched (`L:118` in_scope) | local |
+| Also matches region and video comment text | Done | `search_text_in` with a `SearchScope` (search.rs) | local |
+| Also matches camera (`rawMetas.camera`), text-file content (`image.text`) and font metadata | Done | Always searched, as Eagle | local |
+| Search Scope menu: turn name, folder name, folder description, extension, tags, URL, comment and note on or off (remembered) | Done | Menu on the search caret, 8 toggles remembered (`search_state.rs`) | local |
+| Search All: search the whole library from any view | Done | ⌥⌘F (`find.search.all`) | local |
 | Exact-substring results only | Partial | Falcon adds its own typo-tolerant fallback (`S:191` fuzzy_score, `L:165`), which returns results Eagle would not. This is a deviation to keep or put behind an option. | local |
 | Traditional and simplified Chinese match each other | Missing | none | local |
 | Pinyin matching for folder, smart folder and tag names in sidebar and tag lists | Missing | `A:1904` subtree_matches is a plain substring test | local |
@@ -888,10 +888,10 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Show or hide the filter bar | Done | `A:2045`, Command::ToggleFilter | local |
 | Badge or highlight while filters are active | Done | `A:2048` outlines the funnel | local |
 | Clear all filters | Done | `A:2403` Clear | local |
-| Add filter (+) menu: choose and pin which filters appear in the bar | Partial | Fixed chips. Duration, BPM, Camera and Font hide when not applicable (`FU:52`); nothing can be pinned or chosen. | local |
-| Lock the filter so it survives switching folders. Unlocked, a view change clears the filter and search | Partial | No lock toggle. Falcon never clears the filter or search on a view change (`A:796` go), so it always acts as if locked. | local |
-| Per-option counts in each filter menu | Partial | Counts for tags, date presets, months and cameras. None for types, shapes or ratings. | local |
-| A shortcut for each filter (open the colour, tag, folder... chip) | Missing | Only toggle-filter exists. Cross-ref: shortcuts agent. | local |
+| Add filter (+) menu: choose and pin which filters appear in the bar | Done | `app/filter_bar.rs`: Eagle's default pins, + menu to pin or open any filter; no drag reordering | local |
+| Lock the filter so it survives switching folders. Unlocked, a view change clears the filter and search | Done | `filter_bar.rs` Lock; not kept across launches, as Eagle | local |
+| Per-option counts in each filter menu | Done | Tags, folders, type, shape and rating counts (`type_counts`, `shape_counts`); counted over the whole library | local |
+| A shortcut for each filter (open the colour, tag, folder... chip) | Done | ⌥F/⌥T/⌥C/⌥S/⌥R/⌥D/⌥E (`find.filter.*`); the others have unbound rows | local |
 
 ### 3. Individual filters
 
@@ -902,24 +902,24 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Colour: full picker widget | Partial | Hex text field plus 14 swatches, no picker | local |
 | Tags: include tags, with Any, All or Equals logic | Done | `A:2289`, `S:362` SetFilter (keeps the OR quirk) | local |
 | Tags: Untagged option | Done | `A:2294` | local |
-| Tags: exclude a tag (right-click) | Missing | `SetFilter.excludes` exists (`S:362`) but has no UI | local |
-| Tags: search box, Select all, and a sidebar with All, Selected and tag groups; filter by a whole group | Missing | Plain checkbox list (`A:2296`) | local |
+| Tags: exclude a tag (right-click) | Done | `filter_bar.rs` Tags chip | local |
+| Tags: search box, Select all, and a sidebar with All, Selected and tag groups; filter by a whole group | Done | Tags chip search, sidebar (All / Selected / groups) and Select all per group | local |
 | Folders: include folders with Any, All or Equals; Uncategorized option | Done | `A:2310` | local |
-| Folders: exclude, search box, tree view | Missing | Flat list of names, no exclude | local |
+| Folders: exclude, search box, tree view | Done | Folders chip in tree order with counts, search and exclude, Uncategorized included | local |
 | Shape: horizontal, vertical, square, panoramic horizontal, panoramic vertical | Done | `A:2331`, `S:433` | local |
-| Shape: 4:3, 3:4, 16:9, 9:16 and a custom W:H ratio | Missing | Falcon has no such options; saved filters that use them are skipped (`M:690`) | local |
+| Shape: 4:3, 3:4, 16:9, 9:16 and a custom W:H ratio | Done | `Filter::custom_shape`; exact float equality as Eagle; saved-filter keys `43`/`34`/`169`/`916`/`custom` | local |
 | Rating: 5 to 1 stars plus None, OR-ed | Done | `A:2352` | local |
 | Type: pick extensions | Done | `A:2372` | local |
-| Type: built-in groups (font, video, audio, YouTube, Vimeo, Bilibili), exclude by right-click, search box, counts | Partial | Groups are matched in `S:455` and `exclude_types` exists, but the UI lists only raw extensions, with no exclude, search or counts | local |
+| Type: built-in groups (font, video, audio, YouTube, Vimeo, Bilibili), exclude by right-click, search box, counts | Done | `type_options`, Eagle's include order and quirks (video/audio decide alone); falcon counts font/video/audio so they appear, which Eagle's zero counts never do | local |
 | Date Added: Today, Yesterday, last 7/30/90/365 days, custom range, months | Done | `FU:68` | local |
 | Date Modified: same options | Done | `FU:68` (Modified tab). Falcon also has a Created tab, which Eagle lacks. | local |
-| File size min/max in KB or MB | Missing | Engine supports it (`S:477` size); the bar has no chip. It only works through saved filters. | local |
-| Dimensions: min/max width and height | Missing | Engine supports it (`S:479`); no chip | local |
+| File size min/max in KB or MB | Done | Size chip | local |
+| Dimensions: min/max width and height | Done | Dimensions chip | local |
 | Duration min/max with s, m or h | Done | `FU:132` | local |
 | BPM min/max | Done | `FU:172` | local |
 | Note: has, none, or keywords | Done | `A:2393` | local |
 | URL: has, none, or keywords | Done | `A:2398` | local |
-| Comment (region and video comments): has, none, or keywords | Missing | No field in `S:470` Filter | local |
+| Comment (region and video comments): has, none, or keywords | Done | `Filter::comments`; saved under the `annotation` key | local |
 | Camera: pick from the cameras present | Done | `FU:201` | local |
 | Font: activated or deactivated | Done | `FU:228` | local |
 | Visual Match (find by image, drop or paste an image) | Missing | AI search service | online/plugin |
@@ -930,7 +930,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | Global sort by Date Added, Created, Modified, Title, Extension, File Size, Dimensions, Rating, Tags, with ascending/descending | Done | `S:1012` OrderBy, `S:1099` sort, `A:2125` | local |
-| Global sort by Duration and Random | Partial | Offered only as a folder's own sort (`O:223`); the main sort menu lacks them (`S:1026`) | local |
+| Global sort by Duration and Random | Done | Global sort menu; Duration on whole seconds with missing counted as 0, as Eagle | local |
 | A folder or smart folder keeps its own sort, or follows Global Settings | Done | `OU:178` sort_entries, `OU:644` own_sort_menu, `O:280` finish_order | local |
 | Manual sort by dragging items inside a folder | Done | `O:309` manual_sortable, `S:1122` sort_manual, OrgAction::MoveManual | local |
 | Natural (numeric-aware) title order | Done | `S:1060` natural_cmp | local |
@@ -945,8 +945,8 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Random view | Done | `L:19` Scope::Random | local |
 | Random refresh button (key R) | Partial | Clicking Random again reshuffles (`A:797`); no button or key | local |
 | Recently Used: items the user recently opened | Partial | Falcon shows every item by `lastModified` (`L:166`), not a list of opened items | local |
-| Filter sidebar items | Partial | Filters folders only (`A:1716`), not smart folders or Quick Access; no shortcut | local |
-| Go to Folder: quick-search folders, smart folders and tags, with history | Missing | none | local |
+| Filter sidebar items | Partial | Filters folders only; ⌥⇧F focuses it | local |
+| Go to Folder: quick-search folders, smart folders and tags, with history | Done | `app/goto.rs`-style dialog with history; also an Items tab as Eagle 4 | local |
 | Quick Access: add or remove a folder or smart folder | Done | `A:1842`, `OU:391`, `E:595` | local |
 | Quick Access: reorder by dragging, drag a folder in to add it | Missing | Rows are click and context menu only (`A:1678`) | local |
 | Quick Access: drop items on a row to add them to that folder | Missing | No dnd on Quick Access rows | local |
@@ -1151,7 +1151,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Save the current filter (and search) under a name | Done | `OU:958`, `E:334` | local |
 | Apply, rename, remove, reorder saved filters | Done | `OU:952`-`985` | local |
 | Saving keeps every active rule | Done | `SavedFilter::rule_from_filter` in model.rs writes dates (Eagle's shared `import.range`), duration (`min`/`max`/`unit`), camera and font in Eagle's key names; Date Created goes under falcon's own `btime` key | local |
-| Applying restores every saved rule | Partial | `SavedFilter::to_filter` restores dates, duration, camera and font; it still skips comments, the 4:3/16:9/custom shapes and excluding Uncategorized, with a warning (organize_ui.rs saved-filter popup) | local |
+| Applying restores every saved rule | Done | `SavedFilter::to_filter` restores every rule; only Eagle's AI rules (`image`, `semantic`) are skipped with a warning | local |
 | Saved filters button appears in the filter bar | Done | `OU:954` | local |
 
 ### 15. Cross-references (other agents' areas)
@@ -1181,7 +1181,7 @@ Ranked by user impact. Data-loss and silent-mismatch bugs come first, then every
 13. ~~No Show Subfolder Content toggle.~~ Fixed.
 14. **Batch rename of items is missing**, and so is batch name/note/URL editing for several items (folders can be batch-renamed).
 15. **Duplicates can't merge.** Folders, tags, notes and links aren't combined; there's no best-copy pick, no scope (current list or selected), and no remove-from-results.
-16. **No Go to Folder quick search.**
+16. ~~No Go to Folder quick search.~~ Fixed.
 17. ~~No multi-select of folders.~~ Fixed, for folders and smart folders.
 18. ~~Missing folder commands.~~ Fixed, including Add to Last Used Folder.
 19. **Emoji folder icons don't show.** A new folder doesn't inherit the parent's icon or colour, and there's no reset cover.
@@ -1189,7 +1189,7 @@ Ranked by user impact. Data-loss and silent-mismatch bugs come first, then every
 21. **Tag manager gaps**: no Uncategorized or Starred tag pages, no rubber-band tag selection, and rename or merge don't reach folder auto-tags or smart-folder rules.
 22. **Quick Access can't be reordered, dragged into, or used as a drop target.**
 23. **Filter bar gaps**: no Filter Lock toggle (falcon always keeps the filter and search when switching views), no add or pin filters, no ratio shapes (4:3, 16:9, custom), no counts for type, shape and rating.
-24. **Global sort lacks Duration and Random.**
+24. ~~Global sort lacks Duration and Random.~~ Fixed.
 25. **Rating gaps**: no rating shortcuts (0-5) and no rating toast.
 26. ~~Palette gaps.~~ Fixed; colour search still ignores the primary colour.
 27. ~~No change-extension in the inspector; URL isn't validated; no Open Link button.~~ Fixed.
