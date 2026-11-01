@@ -79,6 +79,9 @@ pub enum Command {
     CloseWindow,
     Minimize,
     FullScreen,
+    /// File ▸ New Subfolder (inside the open folder) and New Smart Folder.
+    NewSubfolder,
+    NewSmartFolder,
 }
 
 /// How a scroll command moves the grid.
@@ -183,6 +186,7 @@ const SHIFT: Modifiers = Modifiers::SHIFT;
 /// The Mac's ⌃ key (on other systems ⌘ chords already use Ctrl).
 const CTRL: Modifiers = Modifiers::CTRL;
 const CTRL_SHIFT: Modifiers = Modifiers { shift: true, ..Modifiers::CTRL };
+const CMD_SHIFT_ALT: Modifiers = Modifiers { shift: true, alt: true, ..Modifiers::COMMAND };
 const CTRL_CMD: Modifiers = Modifiers { ctrl: true, ..Modifiers::COMMAND };
 
 /// Every rebindable command with its default. Arrow keys, Escape and the
@@ -222,6 +226,8 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::FolderBottom, id: "edit.folder.arrange.bottom", group: "Edit", label: "Move folder to the bottom", default: k(CMD_SHIFT, Key::OpenBracket), aliases: &[KeyboardShortcut::new(CMD_SHIFT, Key::OpenCurlyBracket)] },
     Spec { cmd: Command::FolderSettings, id: "edit.folder.setting", group: "Edit", label: "Folder settings (name and auto-tags)", default: k(CMD_SHIFT, Key::R), aliases: &[] },
     Spec { cmd: Command::NewFolder, id: "file.create.folder", group: "File", label: "New folder", default: k(CMD_SHIFT, Key::N), aliases: &[] },
+    Spec { cmd: Command::NewSubfolder, id: "file.create.subfolder", group: "File", label: "New subfolder", default: k(ALT, Key::N), aliases: &[] },
+    Spec { cmd: Command::NewSmartFolder, id: "file.create.smartfolder", group: "File", label: "New smart folder", default: k(CMD_SHIFT_ALT, Key::N), aliases: &[] },
     Spec { cmd: Command::CollectWindow, id: "file.collect.window", group: "File", label: "Show or hide the collect window", default: k(CMD_SHIFT, Key::K), aliases: &[] },
     Spec { cmd: Command::SwitchLibrary, id: "library.switch", group: "Library", label: "Open the library switcher", default: k(CMD, Key::L), aliases: &[] },
     // falcon's own: Eagle shows one library at a time.
@@ -915,6 +921,8 @@ mod tests {
         assert_eq!(keys.resolve(Key::F, cmd_shift), Some(Command::ToggleFilter));
         assert_eq!(keys.resolve(Key::N, cmd_shift), Some(Command::NewFolder));
         assert_eq!(keys.resolve(Key::N, cmd), None);
+        assert_eq!(keys.resolve(Key::N, Modifiers::ALT), Some(Command::NewSubfolder));
+        assert_eq!(keys.resolve(Key::N, Modifiers { alt: true, ..cmd_shift }), Some(Command::NewSmartFolder));
         assert_eq!(keys.resolve(Key::Plus, cmd_shift), Some(Command::ZoomIn), "⌘+ needs shift on US keyboards");
         assert_eq!(keys.resolve(Key::Enter, Modifiers::NONE), Some(Command::Viewer));
         assert_eq!(keys.resolve(Key::Space, cmd), None);

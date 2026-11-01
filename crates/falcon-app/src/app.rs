@@ -92,6 +92,8 @@ struct DragFolder(String);
 /// Library changes requested while drawing, applied at the end of a frame.
 enum Action {
     CreateFolder { parent: Option<String> },
+    /// A new folder right after this one, among its siblings.
+    CreateSibling(String),
     RenameFolder(String, String),
     SetFolderDescription(String, String),
     DeleteFolder(String),
@@ -1174,13 +1176,17 @@ impl App {
                 };
                 self.ws.actions.push(Action::Arrange(how));
             }
-            C::NewFolder => {
-                let parent = match &self.ws.scope {
-                    Scope::Folder(id) => Some(id.clone()),
-                    _ => None,
-                };
-                self.ws.actions.push(Action::CreateFolder { parent });
+            // As in Eagle: next to the open folder, else at the top level.
+            C::NewFolder => self.ws.actions.push(match &self.ws.scope {
+                Scope::Folder(id) => Action::CreateSibling(id.clone()),
+                _ => Action::CreateFolder { parent: None },
+            }),
+            C::NewSubfolder => {
+                if let Scope::Folder(id) = &self.ws.scope {
+                    self.ws.actions.push(Action::CreateFolder { parent: Some(id.clone()) });
+                }
             }
+            C::NewSmartFolder => self.ws.smart_dialog = Some(SmartDraft::default()),
             C::Copy => self.copy_selection(),
             C::Paste => self.paste(),
             C::ToggleFilter => self.ws.show_filter = !self.ws.show_filter,
@@ -1269,6 +1275,17 @@ impl App {
                     }
                     self.ws.renaming = Some((id, "New Folder".into()));
                 }),
+                Action::CreateSibling(of) => match crate::organize::locate(&lib.metadata.folders, &of).map(|(p, at)| (p.map(str::to_string), at)) {
+                    Some((parent, at)) => lib.create_folder(parent.as_deref(), "New Folder").and_then(|id| {
+                        lib.reorder_folder(&id, parent.as_deref(), at + 1)?;
+                        if let Some(p) = &parent {
+                            self.ws.collapsed.remove(p);
+                        }
+                        self.ws.renaming = Some((id, "New Folder".into()));
+                        Ok(())
+                    }),
+                    None => Ok(()),
+                },
                 Action::RenameFolder(id, name) => lib.rename_folder(&id, &name),
                 Action::SetFolderDescription(id, text) => lib.set_folder_description(&id, &text),
                 Action::DeleteFolder(id) => {
@@ -1512,7 +1529,7 @@ fn push_capped(stack: &mut Vec<Transaction>, tx: Transaction) {
 /// The undo name of an action, as "Undid: …" shows it.
 fn action_label(action: &Action) -> String {
     match action {
-        Action::CreateFolder { .. } => "New folder".into(),
+        Action::CreateFolder { .. } | Action::CreateSibling(_) => "New folder".into(),
         Action::RenameFolder(..) => "Rename folder".into(),
         Action::SetFolderDescription(..) => "Edit folder description".into(),
         Action::DeleteFolder(_) => "Delete folder".into(),

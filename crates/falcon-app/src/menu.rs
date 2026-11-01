@@ -63,7 +63,8 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::Rename => grid && s.selected == 1,
         C::Back => s.viewer || (s.library && s.back),
         C::Forward => grid && s.forward,
-        C::Find | C::ToggleFilter | C::NewFolder => grid,
+        C::Find | C::ToggleFilter | C::NewFolder | C::NewSmartFolder => grid,
+        C::NewSubfolder => grid && s.scope == ScopeKind::Folder,
         // The panels can be toggled anywhere, the viewer included.
         C::ToggleSidebar | C::ToggleInspector | C::ToggleAll => true,
         // In the viewer they zoom the image, else the grid.
