@@ -97,6 +97,9 @@ pub struct Prefs {
     pub notify_import_done: bool,
     /// Eagle's `privacy.*`: the app password, if one is set (`applock`).
     pub app_lock: Option<Secret>,
+    /// Eagle's `privacy.enableTouchID`: the lock screen offers Touch ID
+    /// (`touch_id`), on a Mac that has it.
+    pub touch_id: bool,
     /// Eagle's `habits.gifViewer`: always show the frame-by-frame player
     /// for GIFs in the viewer.
     pub gif_player: bool,
@@ -258,6 +261,7 @@ impl Default for Prefs {
             notifications: true,
             notify_import_done: true,
             app_lock: None,
+            touch_id: false,
             gif_player: false,
             always_play_animated: false,
             viewer_wheel: crate::logic::WheelMode::Scroll,
@@ -1074,6 +1078,8 @@ struct PasswordForm {
     again: String,
     hint: String,
     error: Option<&'static str>,
+    /// The fingerprint asked for to turn Touch ID on.
+    touch_ticket: Option<u64>,
 }
 
 /// Checks the Password pane's form against the current password and
@@ -1088,6 +1094,30 @@ fn submit_password(form: &PasswordForm, current: Option<&Secret>) -> Result<Opti
     }
     applock::check_new(&form.new, &form.again)?;
     Ok(Some(Secret::new(&form.new, &form.hint)))
+}
+
+/// The Touch ID switch, shown only on a Mac that can use it, as Eagle
+/// shows it. Turning it on asks for a fingerprint first and stays off if
+/// that fails, as Eagle's does.
+fn touch_id_switch(ui: &mut Ui, d: &mut Draft, form: &mut PasswordForm) {
+    if let Some(ticket) = form.touch_ticket
+        && let Some(ok) = crate::touch_id::poll(ticket)
+    {
+        form.touch_ticket = None;
+        d.prefs.touch_id = ok;
+    }
+    if !crate::touch_id::available() {
+        return;
+    }
+    let mut on = d.prefs.touch_id;
+    let resp = ui.add_enabled(form.touch_ticket.is_none(), egui::Checkbox::new(&mut on, "Unlock with Touch ID"));
+    if resp.changed() {
+        if on {
+            form.touch_ticket = crate::touch_id::start("turn on Touch ID for unlocking Falcon", ui.ctx());
+        } else {
+            d.prefs.touch_id = false;
+        }
+    }
 }
 
 /// Password: lock falcon behind a password.
@@ -1110,6 +1140,7 @@ fn password(p: &mut Page, d: &mut Draft, form: &mut PasswordForm) {
                     *form = PasswordForm { mode: Some(PasswordMode::Remove), ..Default::default() };
                 }
             });
+            touch_id_switch(ui, d, form);
         }
         let Some(mode) = form.mode else {
             note(ui, "The password guards this window only; it is kept in falcon's settings, not in the library.");
@@ -1452,7 +1483,7 @@ mod tests {
 
     #[test]
     fn password_form() {
-        let form = |mode, old: &str, new: &str, again: &str| PasswordForm { mode: Some(mode), old: old.into(), new: new.into(), again: again.into(), hint: "tip".into(), error: None };
+        let form = |mode, old: &str, new: &str, again: &str| PasswordForm { mode: Some(mode), old: old.into(), new: new.into(), again: again.into(), hint: "tip".into(), error: None, touch_ticket: None };
         assert_eq!(Prefs::default().app_lock, None, "Eagle's privacy lock defaults to off");
         assert_eq!(submit_password(&PasswordForm::default(), None), Ok(None));
         let set = submit_password(&form(PasswordMode::Set, "", "pw", "pw"), None).unwrap().unwrap();

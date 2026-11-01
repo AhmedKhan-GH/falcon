@@ -43,6 +43,9 @@ impl App {
             if self.lock.failed {
                 c.label(RichText::new("Wrong password").size(12.0).color(t::p().icon_red));
             }
+            if self.touch_id_button(&mut c) {
+                return;
+            }
             let hint = self.prefs.app_lock.as_ref().map(|s| s.hint.clone()).unwrap_or_default();
             if !hint.is_empty() {
                 if self.lock.show_hint {
@@ -52,5 +55,30 @@ impl App {
                 }
             }
         });
+    }
+
+    /// Eagle's Touch ID button on the lock screen, when it is turned on in
+    /// Preferences and the Mac can use it; the password still works.
+    /// Returns whether a fingerprint unlocked the app.
+    fn touch_id_button(&mut self, ui: &mut Ui) -> bool {
+        if let Some(ticket) = self.lock.touch_ticket
+            && let Some(ok) = crate::touch_id::poll(ticket)
+        {
+            return self.lock.touch_answer(ok);
+        }
+        if !self.prefs.touch_id || self.prefs.app_lock.is_none() || !crate::touch_id::available() {
+            return false;
+        }
+        ui.add_space(4.0);
+        let waiting = self.lock.touch_ticket.is_some();
+        let label = RichText::new(format!("{}  Use Touch ID", ic::LOCK_SIMPLE_OPEN)).color(t::p().text);
+        if ui.add_enabled(!waiting, egui::Button::new(label).min_size(vec2(220.0, 0.0))).clicked() {
+            self.lock.touch_failed = false;
+            self.lock.touch_ticket = crate::touch_id::start("unlock Falcon", ui.ctx());
+        }
+        if self.lock.touch_failed {
+            ui.label(RichText::new("Touch ID didn't unlock Falcon").size(12.0).color(t::p().icon_red));
+        }
+        false
     }
 }

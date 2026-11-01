@@ -36,6 +36,7 @@ mod tags;
 mod organize;
 mod textdoc;
 mod toast;
+mod touch_id;
 mod theme;
 mod ui;
 mod library_icons;

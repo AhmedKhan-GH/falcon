@@ -79,6 +79,10 @@ pub struct Lock {
     /// The last password typed was wrong.
     pub failed: bool,
     pub show_hint: bool,
+    /// A Touch ID request waiting for its answer (`touch_id`).
+    pub touch_ticket: Option<u64>,
+    /// The last Touch ID attempt failed or was cancelled.
+    pub touch_failed: bool,
 }
 
 impl Lock {
@@ -97,6 +101,18 @@ impl Lock {
             *self = Lock { locked: true, ..Default::default() };
         }
         self.locked
+    }
+
+    /// Takes a Touch ID answer: a match unlocks (Touch ID only stands in
+    /// for the password when one is set). Returns whether it unlocked.
+    pub fn touch_answer(&mut self, matched: bool) -> bool {
+        self.touch_ticket = None;
+        if matched {
+            *self = Lock::default();
+        } else {
+            self.touch_failed = true;
+        }
+        matched
     }
 
     /// Checks the typed password; unlocks on a match (or when the
@@ -138,6 +154,18 @@ mod tests {
         assert_eq!(check_new("a", "a"), Ok(()));
         assert!(check_new("", "").is_err());
         assert!(check_new("a", "b").is_err());
+    }
+
+    #[test]
+    fn touch_id_answers() {
+        let s = Secret::with_salt("pw", "salt", "");
+        let mut l = Lock::at_launch(Some(&s));
+        l.touch_ticket = Some(3);
+        assert!(!l.touch_answer(false));
+        assert!(l.is_locked() && l.touch_failed && l.touch_ticket.is_none());
+        l.touch_ticket = Some(4);
+        assert!(l.touch_answer(true));
+        assert!(!l.is_locked() && !l.touch_failed);
     }
 
     #[test]
