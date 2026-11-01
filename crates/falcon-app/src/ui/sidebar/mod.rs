@@ -283,9 +283,12 @@ impl App {
         if icon_button(ui, Pos2::new(r - 51.0, cy), ic::ARROWS_LEFT_RIGHT, 18.0, true, &tip).clicked() {
             self.quick.toggle();
         }
-        if icon_button(ui, Pos2::new(r - 79.0, cy), ic::PLUS, 18.0, true, "Create Folder").clicked() {
-            self.ws.actions.push(Action::CreateFolder { parent: None });
+        let add_tip = self.shortcuts.tooltip(ui.ctx(), "Add", crate::shortcuts::Command::NewMenu);
+        let add = icon_button(ui, Pos2::new(r - 79.0, cy), ic::PLUS, 18.0, true, &add_tip);
+        if add.clicked() {
+            self.toggle_new_menu(ui.ctx());
         }
+        self.new_menu(ui, Some(add.rect), add.rect.left_bottom());
 
         // Library switcher.
         let lib_row = Rect::from_min_size(Pos2::new(full.left(), header.bottom()), vec2(full.width(), 30.0));

@@ -113,6 +113,8 @@ pub enum Command {
     NewSmartFolder,
     /// File ▸ New ▸ Text File: an empty `.txt` item, opened in the viewer.
     NewTextFile,
+    /// File ▸ New… (Eagle's ⌘N): the searchable New menu.
+    NewMenu,
     /// Organize ▸ Add to Last Used Folder.
     AddToLastFolder,
     /// Find ▸ Add to Folders…: the folder picker for the selection.
@@ -407,6 +409,7 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::NewSubfolder, id: "file.create.subfolder", group: "File", label: "New subfolder", default: k(ALT, Key::N), aliases: &[] },
     Spec { cmd: Command::NewSmartFolder, id: "file.create.smartfolder", group: "File", label: "New smart folder", default: k(CMD_SHIFT_ALT, Key::N), aliases: &[] },
     // falcon's own id: Eagle binds ⌥⇧N outside its keybind table.
+    Spec { cmd: Command::NewMenu, id: "file.create.new", group: "File", label: "Open the New menu", default: k(CMD, Key::N), aliases: &[] },
     Spec { cmd: Command::NewTextFile, id: "file.create.txt", group: "File", label: "New text file", default: k(ALT_SHIFT, Key::N), aliases: &[] },
     Spec { cmd: Command::CollectWindow, id: "file.collect.window", group: "File", label: "Show or hide the collect window", default: k(CMD_SHIFT, Key::K), aliases: &[] },
     Spec { cmd: Command::SwitchLibrary, id: "library.switch", group: "Library", label: "Open the library switcher", default: k(CMD, Key::L), aliases: &[] },
@@ -1215,8 +1218,9 @@ mod tests {
     /// Eagle's macOS keybind ids that falcon has an action for, with
     /// Eagle's default (empty is unbound). Ids falcon lacks an action for
     /// (global capture, link and site importers, reverse image search,
-    /// image merge, the import-date filter, File ▸ New…) are not listed.
+    /// image merge, the import-date filter) are not listed.
     const EAGLE_IDS: &[(&str, &str)] = &[
+        ("file.create.new", "Command + N"),
         ("file.create.folder", "Command + Shift + N"),
         ("file.create.subfolder", "Alt + N"),
         ("file.create.smartfolder", "Command + Shift + Alt + N"),
@@ -1515,7 +1519,7 @@ mod tests {
         assert_eq!(keys.resolve(Key::F, cmd), Some(Command::Find));
         assert_eq!(keys.resolve(Key::F, cmd_shift), Some(Command::ToggleFilter));
         assert_eq!(keys.resolve(Key::N, cmd_shift), Some(Command::NewFolder));
-        assert_eq!(keys.resolve(Key::N, cmd), None);
+        assert_eq!(keys.resolve(Key::N, cmd), Some(Command::NewMenu));
         assert_eq!(keys.resolve(Key::N, Modifiers::ALT), Some(Command::NewSubfolder));
         assert_eq!(keys.resolve(Key::N, Modifiers { alt: true, ..cmd_shift }), Some(Command::NewSmartFolder));
         assert_eq!(keys.resolve(Key::Plus, cmd_shift), Some(Command::ZoomIn), "⌘+ needs shift on US keyboards");

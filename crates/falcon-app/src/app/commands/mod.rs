@@ -539,6 +539,7 @@ impl App {
                 }
             }
             C::NewSmartFolder => self.ws.smart_dialog = Some(SmartDraft::default()),
+            C::NewMenu => self.request_new_menu(),
             C::NewTextFile => {
                 let folders = self.scope_folders();
                 self.ws.actions.push(Action::NewTextFile(folders));

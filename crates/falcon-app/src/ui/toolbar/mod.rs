@@ -22,6 +22,10 @@ impl App {
         let cy = bar.center().y;
         let mut x = bar.left() + logic::bar_inset(!self.show_sidebar);
         self.panels_button(ui, Pos2::new(x, cy));
+        // With the sidebar hidden, ⌘N's menu opens under the toolbar's left end.
+        if !self.show_sidebar {
+            self.new_menu(ui, None, Pos2::new(x - 13.0, bar.bottom()));
+        }
         x += 30.0;
         if icon_button(ui, Pos2::new(x, cy), ic::CARET_LEFT, 17.0, !self.ws.back.is_empty(), "").clicked() {
             self.go_back();
