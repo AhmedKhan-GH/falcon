@@ -6,6 +6,7 @@ use eframe::egui::{self, Align2, CornerRadius, Key, Modifiers, Pos2, Rect, RichT
 use falcon_library::Library;
 
 use crate::app::App;
+use crate::locale::tr;
 use crate::logic::{self, Scope};
 use crate::theme::{self as t, font};
 use crate::ui::widgets::{galley};
@@ -154,7 +155,7 @@ impl App {
             ui.set_width(WIDTH.min(ctx.content_rect().width() - 40.0));
             let mut out = TextEdit::singleline(&mut self.quick.keyword)
                 .id_salt("quick-switch-keyword")
-                .hint_text("Go to a folder, tag or smart folder")
+                .hint_text(tr("Go to a folder, tag or smart folder"))
                 .desired_width(f32::INFINITY)
                 .show(ui);
             if self.quick.focus {
@@ -224,7 +225,7 @@ impl App {
                         right -= 10.0;
                     }
                     if e.recent {
-                        let g = galley(ui, "recent", font(10.0), t::p().text_muted, 60.0);
+                        let g = galley(ui, tr("recent"), font(10.0), t::p().text_muted, 60.0);
                         right -= g.size().x;
                         ui.painter().galley(Pos2::new(right, rect.center().y - g.size().y / 2.0), g, t::p().text_muted);
                         right -= 10.0;

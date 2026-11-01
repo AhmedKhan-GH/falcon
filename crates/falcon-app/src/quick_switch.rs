@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 
+use crate::locale::tr;
 use falcon_library::model::{Folder, Item, TagGroup};
 use falcon_library::search::{self, Query};
 use falcon_library::smart::SmartFolder;
@@ -30,10 +31,10 @@ impl Tab {
 
     pub fn label(self) -> &'static str {
         match self {
-            Tab::Folders => "Folders",
-            Tab::Tags => "Tags",
-            Tab::Smart => "Smart Folders",
-            Tab::Items => "Items",
+            Tab::Folders => tr("Folders"),
+            Tab::Tags => tr("Tags"),
+            Tab::Smart => tr("Smart Folders"),
+            Tab::Items => tr("Items"),
         }
     }
 
@@ -51,14 +52,14 @@ impl Tab {
     /// part or a keyword with no match.
     pub fn empty_text(self, searching: bool) -> &'static str {
         match (self, searching) {
-            (Tab::Folders, false) => "No folders",
-            (Tab::Folders, true) => "No folders found",
-            (Tab::Tags, false) => "No tags",
-            (Tab::Tags, true) => "No tags found",
-            (Tab::Smart, false) => "No smart folders",
-            (Tab::Smart, true) => "No smart folders found",
-            (Tab::Items, false) => "No items",
-            (Tab::Items, true) => "No items found",
+            (Tab::Folders, false) => tr("No folders"),
+            (Tab::Folders, true) => tr("No folders found"),
+            (Tab::Tags, false) => tr("No tags"),
+            (Tab::Tags, true) => tr("No tags found"),
+            (Tab::Smart, false) => tr("No smart folders"),
+            (Tab::Smart, true) => tr("No smart folders found"),
+            (Tab::Items, false) => tr("No items"),
+            (Tab::Items, true) => tr("No items found"),
         }
     }
 }

@@ -10,6 +10,7 @@ use falcon_library::import::{Failure, ImportOptions};
 
 use super::{App, lock};
 use crate::drop_pos::{self, Target};
+use crate::locale::{tr, tr_n, tr_nf, trf};
 use crate::logic::{self, Scope};
 use crate::theme as t;
 
@@ -110,7 +111,7 @@ impl App {
             return;
         }
         let at = Rect::from_center_size(centre, eframe::egui::vec2(160.0, 26.0));
-        if ui.put(at, eframe::egui::Button::new("Import Folders…")).clicked() {
+        if ui.put(at, eframe::egui::Button::new(tr("Import Folders…"))).clicked() {
             self.imports.request = Some(Request::Folders { parent });
         }
     }
@@ -124,12 +125,12 @@ impl App {
         }
         match request {
             Request::Files { folders } => {
-                if let Some(files) = rfd::FileDialog::new().set_title("Import Files").pick_files() {
+                if let Some(files) = rfd::FileDialog::new().set_title(tr("Import Files")).pick_files() {
                     self.import_into(files, folders);
                 }
             }
             Request::Folders { parent } => {
-                let Some(picked) = rfd::FileDialog::new().set_title("Import Folders").pick_folders() else { return };
+                let Some(picked) = rfd::FileDialog::new().set_title(tr("Import Folders")).pick_folders() else { return };
                 // As in Eagle, a library is opened rather than imported,
                 // and only when it is the only folder picked.
                 let (libraries, dirs) = logic::split_libraries(picked);
@@ -172,7 +173,7 @@ impl App {
                 let (dirs, files): (Vec<PathBuf>, Vec<PathBuf>) = rest.into_iter().partition(|p| p.is_dir());
                 self.import_into(libraries, Vec::new());
                 if dirs.is_empty() && !files.is_empty() {
-                    self.flash("Drop folders on the sidebar, or files on the grid or a folder");
+                    self.flash(tr("Drop folders on the sidebar, or files on the grid or a folder"));
                 }
                 self.import_folder_trees(dirs, None);
             }
@@ -189,7 +190,7 @@ impl App {
         let pixave = dirs.iter().filter(|d| folder_import::is_pixave_library(d)).count();
         dirs.retain(|d| !folder_import::is_pixave_library(d));
         if pixave > 0 {
-            self.flash(format!("Skipped {pixave} Pixave librar{}", if pixave == 1 { "y" } else { "ies" }));
+            self.flash(tr_n(pixave, "Skipped {n} Pixave library", "Skipped {n} Pixave libraries"));
         }
         dirs.sort_by(|a, b| falcon_library::search::natural_cmp(&a.to_string_lossy(), &b.to_string_lossy()));
         let mut ready = Vec::new();
@@ -216,7 +217,7 @@ impl App {
         for tree in trees {
             let plan = folder_import::plan(&tree, parent.as_deref(), falcon_library::ids::new_id);
             if let Err(e) = lock(&shared).create_folders(&plan.folders) {
-                self.flash_error(format!("Couldn't import {}: {e}", tree.dir.display()));
+                self.flash_error(trf("Couldn't import {path}: {error}", &[("path", &tree.dir.display()), ("error", &e)]));
                 continue;
             }
             opened = plan.root().map(String::from);
@@ -246,7 +247,7 @@ impl App {
         if n == 0 {
             return;
         }
-        let text = format!("{n} file{} failed to import. Click for details.", if n == 1 { "" } else { "s" });
+        let text = tr_n(n, "{n} file failed to import. Click for details.", "{n} files failed to import. Click for details.");
         let g = super::galley(ui, &text, t::font(13.0), t::p().text, 420.0);
         let size = vec2(g.size().x + 60.0, 32.0);
         let r = Rect::from_center_size(top_center + vec2(0.0, size.y / 2.0), size);
@@ -283,11 +284,11 @@ impl App {
         let (mut close, mut retry, mut copy) = (false, false, false);
         let modal = egui::Modal::new(egui::Id::unique("import-errors")).show(ctx, |ui| {
             ui.set_width(680.0);
-            ui.label(RichText::new(format!("Failed imports ({})", errors.len())).size(15.0));
+            ui.label(RichText::new(trf("Failed imports ({n})", &[("n", &errors.len())])).size(15.0));
             ui.add_space(6.0);
             let cols = [190.0, 250.0, 200.0];
             ui.horizontal(|ui| {
-                for (w, h) in cols.iter().zip(["Name", "Source", "Reason"]) {
+                for (w, h) in cols.iter().zip([tr("Name"), tr("Source"), tr("Reason")]) {
                     ui.add_sized(vec2(*w, 18.0), egui::Label::new(RichText::new(h).size(12.0).color(t::p().text_muted)).truncate());
                 }
             });
@@ -300,11 +301,11 @@ impl App {
                         ui.add_sized(vec2(cols[0], 22.0), egui::Label::new(&name).truncate()).on_hover_text(&name);
                         let src = f.path.parent().map(|d| d.display().to_string()).unwrap_or_default();
                         let link = ui.add_sized(vec2(cols[1], 22.0), egui::Label::new(RichText::new(&src).color(t::p().text_muted)).truncate().sense(egui::Sense::click()));
-                        if link.on_hover_text(format!("{}\nClick to show in Finder", f.path.display())).clicked() {
+                        if link.on_hover_text(trf("{path}\nClick to show in Finder", &[("path", &f.path.display())])).clicked() {
                             let _ = std::process::Command::new("open").arg("-R").arg(&f.path).spawn();
                         }
                         ui.add_sized(vec2(cols[2], 22.0), egui::Label::new(f.kind.describe()).truncate()).on_hover_text(&f.detail);
-                        if ui.small_button(crate::icons::X).on_hover_text("Remove from the list").clicked() {
+                        if ui.small_button(crate::icons::X).on_hover_text(tr("Remove from the list")).clicked() {
                             remove = Some(i);
                         }
                     });
@@ -312,13 +313,13 @@ impl App {
             });
             ui.add_space(8.0);
             ui.horizontal(|ui| {
-                if ui.button("Clear All").clicked() {
+                if ui.button(tr("Clear All")).clicked() {
                     self.imports.confirm_clear = true;
                 }
-                copy = ui.button("Copy to Clipboard").on_hover_text("Copies the files, to paste in Finder").clicked();
+                copy = ui.button(tr("Copy to Clipboard")).on_hover_text(tr("Copies the files, to paste in Finder")).clicked();
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    close = ui.button("Close").clicked();
-                    retry = ui.add(egui::Button::new(RichText::new("Retry All").color(eframe::egui::Color32::WHITE)).fill(t::p().primary)).clicked();
+                    close = ui.button(tr("Close")).clicked();
+                    retry = ui.add(egui::Button::new(RichText::new(tr("Retry All")).color(eframe::egui::Color32::WHITE)).fill(t::p().primary)).clicked();
                 });
             });
         });
@@ -332,7 +333,7 @@ impl App {
             if let Ok(mut clip) = arboard::Clipboard::new()
                 && clip.set().file_list(&paths).is_ok()
             {
-                self.flash_brief(format!("Copied {} file{}", paths.len(), if paths.len() == 1 { "" } else { "s" }));
+                self.flash_brief(tr_n(paths.len(), "Copied {n} file", "Copied {n} files"));
             }
         }
         if retry {
@@ -353,15 +354,15 @@ impl App {
         let mut answer = None;
         let modal = egui::Modal::new(egui::Id::unique("import-errors-clear")).show(ctx, |ui| {
             ui.set_width(320.0);
-            ui.label(RichText::new("Clear the failed imports?").size(15.0));
+            ui.label(RichText::new(tr("Clear the failed imports?")).size(15.0));
             ui.add_space(4.0);
-            ui.label(RichText::new("The list can't be brought back. The files themselves are not touched.").color(t::p().text_muted));
+            ui.label(RichText::new(tr("The list can't be brought back. The files themselves are not touched.")).color(t::p().text_muted));
             ui.add_space(10.0);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button("Clear All").clicked() {
+                if ui.button(tr("Clear All")).clicked() {
                     answer = Some(true);
                 }
-                if ui.button("Cancel").clicked() {
+                if ui.button(tr("Cancel")).clicked() {
                     answer = Some(false);
                 }
             });
@@ -424,15 +425,15 @@ impl App {
             let mut choice = None;
             let modal = egui::Modal::new(egui::Id::unique("import-large-folder")).show(ctx, |ui| {
                 ui.set_width(340.0);
-                ui.label(RichText::new("Import a large folder?").size(15.0));
+                ui.label(RichText::new(tr("Import a large folder?")).size(15.0));
                 ui.add_space(4.0);
-                ui.label(RichText::new(format!("“{name}” holds {files} files. Importing them all may take a while.")).color(t::p().text_muted));
+                ui.label(RichText::new(trf("“{name}” holds {files} files. Importing them all may take a while.", &[("name", &name), ("files", &files)])).color(t::p().text_muted));
                 ui.add_space(10.0);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("Import").clicked() {
+                    if ui.button(tr("Import")).clicked() {
                         choice = Some(true);
                     }
-                    if ui.button("Cancel").clicked() {
+                    if ui.button(tr("Cancel")).clicked() {
                         choice = Some(false);
                     }
                 });
@@ -452,17 +453,16 @@ impl App {
             let mut close = false;
             let modal = egui::Modal::new(egui::Id::unique("import-refused-folder")).show(ctx, |ui| {
                 ui.set_width(340.0);
-                ui.label(RichText::new("This folder is too large to import").size(15.0));
+                ui.label(RichText::new(tr("This folder is too large to import")).size(15.0));
                 ui.add_space(4.0);
-                let detail = format!(
-                    "“{name}” has {} or more levels of folders, or {} or more files. Import its subfolders one at a time instead.",
-                    folder_import::MAX_DEPTH,
-                    folder_import::MAX_FILES
+                let detail = trf(
+                    "“{name}” has {depth} or more levels of folders, or {files} or more files. Import its subfolders one at a time instead.",
+                    &[("name", &name), ("depth", &folder_import::MAX_DEPTH), ("files", &folder_import::MAX_FILES)],
                 );
                 ui.label(RichText::new(detail).color(t::p().text_muted));
                 ui.add_space(10.0);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    close = ui.button("Close").clicked();
+                    close = ui.button(tr("Close")).clicked();
                 });
             });
             if close || modal.should_close() {
@@ -628,8 +628,12 @@ impl App {
             let others = libraries.len() - 1;
             if others > 0 {
                 let name = first.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-                let s = if others == 1 { "y was" } else { "ies were" };
-                self.flash(format!("Opening {name}; {others} other librar{s} left closed (one opens at a time)"));
+                self.flash(tr_nf(
+                    others,
+                    "Opening {name}; {n} other library was left closed (one opens at a time)",
+                    "Opening {name}; {n} other libraries were left closed (one opens at a time)",
+                    &[("name", &name)],
+                ));
             }
         }
     }
@@ -683,7 +687,7 @@ impl App {
             && clip.set().file_list(&paths).is_ok()
         {
             self.used(&paths);
-            self.flash_brief(format!("Copied {} file{}", paths.len(), if paths.len() == 1 { "" } else { "s" }));
+            self.flash_brief(tr_n(paths.len(), "Copied {n} file", "Copied {n} files"));
         }
     }
 

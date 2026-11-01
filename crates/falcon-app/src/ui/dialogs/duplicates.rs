@@ -5,6 +5,7 @@ use eframe::egui::{self, CornerRadius, Key, Rect, RichText, Sense, Ui, Vec2};
 use falcon_library::Library;
 
 use crate::app::{Action, App};
+use crate::locale::{tr, trf};
 use crate::loader::{Tier, job_for};
 use crate::logic;
 use crate::theme as t;
@@ -41,16 +42,16 @@ impl App {
         let new = first.staged.item().clone();
         let existing = lib.item(&first.existing).cloned();
         let folder_name = |id: Option<&String>| match id {
-            Some(id) => logic::find_folder(&lib.metadata.folders, id).map_or_else(|| "Uncategorized".to_string(), |f| f.name.clone()),
-            None => "Uncategorized".to_string(),
+            Some(id) => logic::find_folder(&lib.metadata.folders, id).map_or_else(|| tr("Uncategorized").to_string(), |f| f.name.clone()),
+            None => tr("Uncategorized").to_string(),
         };
         let mut answer: Option<(Choice, bool)> = None;
         let modal = egui::Modal::new(egui::Id::unique("import-duplicate")).show(ctx, |ui| {
             ui.set_width(420.0);
-            let title = if n > 1 { format!("Already in the library ({n})") } else { "Already in the library".to_string() };
+            let title = if n > 1 { trf("Already in the library ({n})", &[("n", &n)]) } else { tr("Already in the library").to_string() };
             ui.label(RichText::new(title).size(15.0));
             ui.add_space(4.0);
-            ui.label(RichText::new(format!("“{}.{}” has the same contents as an item you already have.", new.name, new.ext)).color(t::p().text_muted));
+            ui.label(RichText::new(trf("“{name}” has the same contents as an item you already have.", &[("name", &format!("{}.{}", new.name, new.ext))])).color(t::p().text_muted));
             ui.add_space(8.0);
             ui.horizontal(|ui| {
                 let (r, _) = ui.allocate_exact_size(Vec2::splat(96.0), Sense::hover());
@@ -74,26 +75,26 @@ impl App {
                         });
                     };
                     if let Some(item) = &existing {
-                        line(ui, "In the library:", format!("{}.{}", item.name, item.ext));
-                        line(ui, "Folder:", folder_name(item.folders.first()));
+                        line(ui, tr("In the library:"), format!("{}.{}", item.name, item.ext));
+                        line(ui, tr("Folder:"), folder_name(item.folders.first()));
                     }
                     let dims = if new.width > 0 { format!("{} × {}, ", new.width, new.height) } else { String::new() };
-                    line(ui, "Size:", format!("{dims}{} KB", new.size.div_ceil(1024)));
-                    line(ui, "Importing into:", folder_name(new.folders.first()));
+                    line(ui, tr("Size:"), format!("{dims}{} KB", new.size.div_ceil(1024)));
+                    line(ui, tr("Importing into:"), folder_name(new.folders.first()));
                 });
             });
             ui.add_space(8.0);
-            ui.radio_value(&mut d.choice, Choice::UseExisting, "Use the existing item (it joins the folder and takes its auto-tags)");
-            ui.radio_value(&mut d.choice, Choice::KeepBoth, "Keep both (import this copy as a new item)");
+            ui.radio_value(&mut d.choice, Choice::UseExisting, tr("Use the existing item (it joins the folder and takes its auto-tags)"));
+            ui.radio_value(&mut d.choice, Choice::KeepBoth, tr("Keep both (import this copy as a new item)"));
             if n > 1 {
-                ui.checkbox(&mut d.apply_all, format!("Do the same for all {n} files"));
+                ui.checkbox(&mut d.apply_all, trf("Do the same for all {n} files", &[("n", &n)]));
             }
             ui.add_space(8.0);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button("Import").clicked() {
+                if ui.button(tr("Import")).clicked() {
                     answer = Some((d.choice, d.apply_all));
                 }
-                if ui.button("Don't Import").clicked() {
+                if ui.button(tr("Don't Import")).clicked() {
                     answer = Some((Choice::Skip, d.apply_all));
                 }
             });

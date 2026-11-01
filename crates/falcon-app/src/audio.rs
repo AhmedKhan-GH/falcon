@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use crate::locale::trf;
 use eframe::egui;
 use falcon_library::waveform;
 
@@ -93,7 +94,7 @@ impl Audio {
                     self.device = Some(d);
                 }
                 Err(e) => {
-                    self.error = Some(format!("No audio output: {e}"));
+                    self.error = Some(trf("No audio output: {error}", &[("error", &e)]));
                     return;
                 }
             }
@@ -102,7 +103,7 @@ impl Audio {
         let source = match decoder(path, ext) {
             Ok(s) => s,
             Err(e) => {
-                self.error = Some(format!("Can't play this file: {e}"));
+                self.error = Some(trf("Can't play this file: {error}", &[("error", &e)]));
                 return;
             }
         };
@@ -200,7 +201,7 @@ impl Audio {
                 t.player.append(source);
             }
             Err(e) => {
-                self.error = Some(format!("Can't play this file: {e}"));
+                self.error = Some(trf("Can't play this file: {error}", &[("error", &e)]));
                 self.track = None;
             }
         }

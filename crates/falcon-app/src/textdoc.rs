@@ -4,6 +4,8 @@
 
 use std::ops::Range;
 
+use crate::locale::tr_key;
+
 /// The file File ▸ New ▸ Text File imports: Eagle's blank template is an
 /// empty `Untitled.txt`.
 pub const NEW_FILE_NAME: &str = "Untitled.txt";
@@ -66,10 +68,10 @@ pub struct Loaded {
 pub fn decode(bytes: Vec<u8>) -> Loaded {
     let large = bytes.len() > MAX_EDITABLE;
     match String::from_utf8(bytes) {
-        Ok(text) => Loaded { text, read_only: large.then_some("The file is too large to edit here") },
+        Ok(text) => Loaded { text, read_only: large.then_some(tr_key("The file is too large to edit here")) },
         Err(e) => Loaded {
             text: String::from_utf8_lossy(e.as_bytes()).into_owned(),
-            read_only: Some("The file isn't UTF-8 text, so it is shown read-only"),
+            read_only: Some(tr_key("The file isn't UTF-8 text, so it is shown read-only")),
         },
     }
 }

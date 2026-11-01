@@ -5,6 +5,7 @@ use eframe::egui::{self, RichText};
 use falcon_library::Library;
 
 use crate::app::{Action, App, Confirm};
+use crate::locale::{tr, tr_n, trf};
 use crate::logic;
 use crate::theme as t;
 
@@ -21,43 +22,54 @@ impl App {
             let (title, detail, label) = match &c {
                 Confirm::DeleteFolders(ids) => {
                     let title = match ids.as_slice() {
-                        [one] => format!("Delete “{}”?", logic::find_folder(&lib.metadata.folders, one).map_or("", |f| f.name.as_str())),
-                        _ => format!("Delete {} folders?", ids.len()),
+                        [one] => {
+                            let name = logic::find_folder(&lib.metadata.folders, one).map_or("", |f| f.name.as_str());
+                            trf("Delete “{name}”?", &[("name", &name)])
+                        }
+                        _ => tr_n(ids.len(), "Delete {n} folder?", "Delete {n} folders?"),
                     };
-                    (title, "Subfolders are deleted too.".to_string(), "Delete")
+                    (title, tr("Subfolders are deleted too."), tr("Delete"))
                 }
                 Confirm::DeleteSmarts(ids) => (
-                    format!("Delete {} smart folders?", ids.len()),
-                    "Only the smart folders go; the items they show stay.".to_string(),
-                    "Delete",
+                    tr_n(ids.len(), "Delete {n} smart folder?", "Delete {n} smart folders?"),
+                    tr("Only the smart folders go; the items they show stay."),
+                    tr("Delete"),
                 ),
                 Confirm::DeleteItems(ids) => (
-                    format!("Delete {} item{} permanently?", ids.len(), if ids.len() == 1 { "" } else { "s" }),
-                    "The files are removed from the library and cannot be restored.".to_string(),
-                    "Delete",
+                    tr_n(ids.len(), "Delete {n} item permanently?", "Delete {n} items permanently?"),
+                    tr("The files are removed from the library and cannot be restored."),
+                    tr("Delete"),
                 ),
                 Confirm::DeleteTags(tags) => (
-                    if let [one] = tags.as_slice() { format!("Delete the tag “{one}”?") } else { format!("Delete {} tags?", tags.len()) },
-                    "They are removed from every item. The items themselves stay.".to_string(),
-                    if tags.len() == 1 { "Delete Tag" } else { "Delete Tags" },
+                    if let [one] = tags.as_slice() {
+                        trf("Delete the tag “{tag}”?", &[("tag", one)])
+                    } else {
+                        tr_n(tags.len(), "Delete {n} tag?", "Delete {n} tags?")
+                    },
+                    tr("They are removed from every item. The items themselves stay."),
+                    if tags.len() == 1 { tr("Delete Tag") } else { tr("Delete Tags") },
                 ),
                 Confirm::ClearTagHistory => (
-                    "Clear the tag history?".to_string(),
-                    "The tag picker's Recent tags start over. Tags stay on their items.".to_string(),
-                    "Clear",
+                    tr("Clear the tag history?").to_string(),
+                    tr("The tag picker's Recent tags start over. Tags stay on their items."),
+                    tr("Clear"),
                 ),
                 Confirm::EmptyTrash => {
                     let n = lib.items().iter().filter(|i| i.is_deleted).count();
-                    (format!("Empty the Trash ({n})?"), "The files are removed from the library and cannot be restored.".to_string(), "Empty Trash")
+                    (trf("Empty the Trash ({n})?", &[("n", &n)]), tr("The files are removed from the library and cannot be restored."), tr("Empty Trash"))
                 }
                 Confirm::TrashInFolder(ids, _) => (
-                    format!("Move {} to Trash?", crate::ui::dialogs::export::plural(ids.len(), "item")),
-                    "Some of them are in other folders as well.".to_string(),
-                    if self.trash_folder_only { "Remove" } else { "Move to Trash" },
+                    tr_n(ids.len(), "Move {n} item to Trash?", "Move {n} items to Trash?"),
+                    tr("Some of them are in other folders as well."),
+                    if self.trash_folder_only { tr("Remove") } else { tr("Move to Trash") },
                 ),
                 Confirm::RestoreAll => {
                     let n = lib.items().iter().filter(|i| i.is_deleted).count();
-                    (format!("Restore all {n} items in the Trash?"), "They go back to their folders. ⌘Z puts them back in the Trash.".to_string(), "Restore All")
+                    (
+                        tr_n(n, "Restore all {n} item in the Trash?", "Restore all {n} items in the Trash?"),
+                        tr("They go back to their folders. ⌘Z puts them back in the Trash."),
+                        tr("Restore All"),
+                    )
                 }
             };
             let modal = egui::Modal::new(egui::Id::unique("confirm")).show(ctx, |ui| {
@@ -67,14 +79,14 @@ impl App {
                 ui.label(RichText::new(detail).color(t::p().text_muted));
                 if matches!(c, Confirm::TrashInFolder(..)) {
                     ui.add_space(6.0);
-                    ui.radio_value(&mut self.trash_folder_only, true, "Only take them out of this folder")
-                        .on_hover_text("Items in no other folder still go to the Trash");
-                    ui.radio_value(&mut self.trash_folder_only, false, "Move them all to the Trash");
+                    ui.radio_value(&mut self.trash_folder_only, true, tr("Only take them out of this folder"))
+                        .on_hover_text(tr("Items in no other folder still go to the Trash"));
+                    ui.radio_value(&mut self.trash_folder_only, false, tr("Move them all to the Trash"));
                 }
                 if matches!(c, Confirm::DeleteFolders(_)) {
                     ui.add_space(6.0);
-                    ui.checkbox(&mut self.ws.folders.trash_items, "Move the items to the Trash as well")
-                        .on_hover_text("Items that are also in another folder stay. Untick to keep every item.");
+                    ui.checkbox(&mut self.ws.folders.trash_items, tr("Move the items to the Trash as well"))
+                        .on_hover_text(tr("Items that are also in another folder stay. Untick to keep every item."));
                 }
                 ui.add_space(10.0);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -96,7 +108,7 @@ impl App {
                         }
                         self.ws.confirm = None;
                     }
-                    if ui.button("Cancel").clicked() {
+                    if ui.button(tr("Cancel")).clicked() {
                         self.ws.confirm = None;
                     }
                 });
@@ -114,15 +126,15 @@ impl App {
             let mut answer = None;
             let modal = egui::Modal::new(egui::Id::unique("bulk")).show(ctx, |ui| {
                 ui.set_width(320.0);
-                ui.label(RichText::new("Many items at once").size(15.0));
+                ui.label(RichText::new(tr("Many items at once")).size(15.0));
                 ui.add_space(4.0);
-                ui.label(RichText::new(format!("{n} items will be affected. Go ahead?")).color(t::p().text_muted));
+                ui.label(RichText::new(tr_n(n, "{n} item will be affected. Go ahead?", "{n} items will be affected. Go ahead?")).color(t::p().text_muted));
                 ui.add_space(10.0);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("OK").clicked() {
+                    if ui.button(tr("OK")).clicked() {
                         answer = Some(true);
                     }
-                    if ui.button("Cancel").clicked() {
+                    if ui.button(tr("Cancel")).clicked() {
                         answer = Some(false);
                     }
                 });

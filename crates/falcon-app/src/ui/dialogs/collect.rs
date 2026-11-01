@@ -3,6 +3,7 @@
 use eframe::egui;
 
 use crate::app::{App, lock};
+use crate::locale::trf;
 use crate::logic;
 
 impl App {
@@ -32,7 +33,7 @@ impl App {
                     let made = lock(&l).create_folder(None, &name);
                     match made {
                         Ok(id) => self.prefs.collect_folders.push(id),
-                        Err(e) => self.flash(format!("Could not create the folder: {e}")),
+                        Err(e) => self.flash(trf("Could not create the folder: {error}", &[("error", &e)])),
                     }
                 }
             }

@@ -14,6 +14,7 @@ use std::collections::VecDeque;
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 
+use crate::locale::tr_n;
 use falcon_library::import::{ImportOptions, Staged};
 use falcon_library::{Library, Result, import_check};
 
@@ -102,11 +103,10 @@ pub fn resolve(lib: &mut Library, p: Pending, choice: Choice) -> Result<Option<S
 
 /// The notice after answering: "Used the existing item for 2 files".
 pub fn notice(choice: Choice, n: usize) -> String {
-    let files = if n == 1 { "1 file".to_string() } else { format!("{n} files") };
     match choice {
-        Choice::UseExisting => format!("Used the existing items for {files}"),
-        Choice::KeepBoth => format!("Imported {files} as new items"),
-        Choice::Skip => format!("Skipped {files}"),
+        Choice::UseExisting => tr_n(n, "Used the existing items for {n} file", "Used the existing items for {n} files"),
+        Choice::KeepBoth => tr_n(n, "Imported {n} file as new items", "Imported {n} files as new items"),
+        Choice::Skip => tr_n(n, "Skipped {n} file", "Skipped {n} files"),
     }
 }
 
