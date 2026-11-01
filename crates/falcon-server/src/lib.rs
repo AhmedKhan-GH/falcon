@@ -237,6 +237,12 @@ enum Reply {
     NotFound,
     WrongMethod,
     Unauthorized,
+    /// A 302 to this location (the `eagle://` link routes).
+    Redirect(String),
+    /// A link route's 404: `{"error": "..."}`.
+    Missing(&'static str),
+    /// An HTML page.
+    Page(&'static str),
 }
 
 fn handle(lib: &Shared, state: &State, port: u16, mut req: Request) {
@@ -270,9 +276,32 @@ fn handle(lib: &Shared, state: &State, port: u16, mut req: Request) {
         return send(req, Reply::Unauthorized);
     }
 
-    let reply = route(lib, state, &method, &path, &args);
+    let reply = match path.as_str() {
+        "/item" | "/folder" | "/smart-folder" => link_redirect(&lock(lib), &path, s(&args, "id")),
+        "/api/v2/playground" => Reply::Page(PLAYGROUND),
+        _ => route(lib, state, &method, &path, &args),
+    };
     send(req, reply);
 }
+
+/// `/item?id=`, `/folder?id=` and `/smart-folder?id=`: a redirect to the
+/// matching `eagle://` link, or 404 when there is no such object.
+fn link_redirect(lib: &Library, path: &str, id: Option<&str>) -> Reply {
+    let id = id.unwrap_or("");
+    let (found, missing) = match path {
+        "/item" => (lib.item(id).is_some(), "File does not exist."),
+        "/folder" => (lib.all_folders().iter().any(|f| f.id == id), "Folder does not exist."),
+        _ => (find_smart(&lib.smart_folders(), id), "Smart Folder does not exist."),
+    };
+    if found && !id.is_empty() { Reply::Redirect(format!("eagle:/{path}/{id}")) } else { Reply::Missing(missing) }
+}
+
+fn find_smart(list: &[falcon_library::smart::SmartFolder], id: &str) -> bool {
+    list.iter().any(|f| f.id == id || find_smart(&f.children, id))
+}
+
+/// The interactive API page served at `/api/v2/playground`.
+const PLAYGROUND: &str = include_str!("playground.html");
 
 fn parse_query(q: &str) -> Map<String, Value> {
     let mut out = Map::new();
@@ -309,6 +338,26 @@ fn decode(s: &str) -> String {
 
 fn send(req: Request, reply: Reply) {
     let (code, body) = match reply {
+        Reply::Redirect(to) => {
+            let resp = match Header::from_bytes("Location", to.as_bytes()) {
+                Ok(h) => Response::empty(302).with_header(h),
+                Err(()) => Response::empty(404),
+            };
+            let _ = req.respond(resp);
+            return;
+        }
+        Reply::Missing(m) => {
+            let resp = Response::from_string(json!({"error": m}).to_string())
+                .with_status_code(404)
+                .with_header(Header::from_bytes("Content-Type", "application/json").unwrap());
+            let _ = req.respond(resp);
+            return;
+        }
+        Reply::Page(html) => {
+            let resp = Response::from_string(html).with_header(Header::from_bytes("Content-Type", "text/html; charset=utf-8").unwrap());
+            let _ = req.respond(resp);
+            return;
+        }
         Reply::Data(d) => (200, json!({"status": "success", "data": d})),
         Reply::Empty => (200, json!({"status": "success"})),
         Reply::Fail(m) => (500, json!({"status": "error", "data": m})),

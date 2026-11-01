@@ -482,6 +482,15 @@ impl Env {
         (code, head.to_lowercase(), body.to_string())
     }
 
+    fn own_host(&self) -> String {
+        format!("127.0.0.1:{}", self.server.port)
+    }
+
+    /// Raw GET with the server's own Host.
+    fn get_raw(&self, path: &str) -> (u16, String, String) {
+        self.raw("GET", path, Some(&self.own_host()), None)
+    }
+
     fn foreign(&self, method: &str, path: &str, body: Option<&str>) -> (u16, Value) {
         let (code, _, text) = self.raw(method, path, Some("example.com"), body);
         (code, serde_json::from_str(&text).unwrap())
@@ -704,6 +713,39 @@ fn set_custom_thumbnail() {
         let (code, v) = e.post("/api/v2/item/setCustomThumbnail", body);
         assert_eq!((code, v), (200, json!({"status": "success", "data": false})));
     }
+}
+
+#[test]
+fn eagle_link_redirects() {
+    let e = env();
+    let cond = json!([{"match": "AND", "boolean": "TRUE", "rules": [{"property": "tags", "method": "union", "value": ["red"]}]}]);
+    let sid = e.ok_post("/api/v2/smartFolder/create", json!({"name": "S", "conditions": cond}))["id"].as_str().unwrap().to_string();
+
+    for (path, id, link) in [("/item", &e.a, "item"), ("/folder", &e.folder, "folder"), ("/smart-folder", &sid, "smart-folder")] {
+        let (code, head, body) = e.get_raw(&format!("{path}?id={id}"));
+        assert_eq!(code, 302, "{path}");
+        assert!(head.contains(&format!("location: eagle://{link}/{}", id.to_lowercase())), "{head}");
+        assert_eq!(body, "");
+    }
+    for (path, msg) in [("/item", "File does not exist."), ("/folder", "Folder does not exist."), ("/smart-folder", "Smart Folder does not exist.")] {
+        for q in ["?id=NOPE", ""] {
+            let (code, _, body) = e.get_raw(&format!("{path}{q}"));
+            assert_eq!(code, 404, "{path}{q}");
+            assert_eq!(serde_json::from_str::<Value>(&body).unwrap(), json!({"error": msg}));
+        }
+        let (code, _, body) = e.raw("GET", &format!("{path}?id=x"), Some("example.com"), None);
+        assert_eq!(code, 401);
+        assert_eq!(serde_json::from_str::<Value>(&body).unwrap()["code"], 401);
+    }
+}
+
+#[test]
+fn playground_page() {
+    let e = env();
+    let (code, head, body) = e.get_raw("/api/v2/playground");
+    assert_eq!(code, 200);
+    assert!(head.contains("content-type: text/html"), "{head}");
+    assert!(!body.is_empty());
 }
 
 #[test]

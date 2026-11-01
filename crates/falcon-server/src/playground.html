@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>falcon API</title>
+<style>
+:root{--bg:#fafafa;--fg:#1c1c1e;--mut:#6b6b73;--pan:#fff;--bd:#d8d8de;--ac:#2563eb;--acfg:#fff;--code:#f0f0f4;--ok:#15803d;--err:#b91c1c}
+@media (prefers-color-scheme:dark){:root{--bg:#161618;--fg:#e8e8ec;--mut:#9a9aa4;--pan:#1f1f23;--bd:#38383f;--ac:#5b8def;--acfg:#101014;--code:#101013;--ok:#4ade80;--err:#f87171}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,sans-serif;display:flex;flex-direction:column;height:100vh}
+header{display:flex;gap:12px;align-items:center;padding:8px 16px;border-bottom:1px solid var(--bd);background:var(--pan);flex-wrap:wrap}
+h1{font-size:16px;margin:0 auto 0 0}
+header label{display:flex;gap:6px;align-items:center;color:var(--mut)}
+main{flex:1;display:flex;min-height:0}
+nav{width:290px;border-right:1px solid var(--bd);display:flex;flex-direction:column;background:var(--pan)}
+nav input{margin:8px;width:calc(100% - 16px)}
+#list{overflow:auto;flex:1;padding-bottom:12px}
+#list h3{margin:12px 12px 4px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut)}
+#list h4{margin:8px 12px 2px;font-size:12px;color:var(--mut);font-weight:600}
+#list button{display:flex;gap:6px;width:100%;text-align:left;border:0;background:none;color:var(--fg);padding:3px 12px;cursor:pointer;font:inherit;font-size:13px}
+#list button:hover{background:var(--code)}
+#list button.on{background:var(--ac);color:var(--acfg)}
+.m{font:600 10px ui-monospace,monospace;min-width:34px;padding-top:2px;opacity:.75}
+section{flex:1;overflow:auto;padding:16px 24px}
+input,select,textarea,button{font:inherit;color:var(--fg);background:var(--pan);border:1px solid var(--bd);border-radius:5px;padding:5px 8px}
+textarea{width:100%;font-family:ui-monospace,monospace;font-size:12px;resize:vertical}
+code,pre{font:12px/1.5 ui-monospace,monospace}
+pre{background:var(--code);border:1px solid var(--bd);border-radius:5px;padding:10px;overflow:auto;white-space:pre-wrap;word-break:break-all;margin:6px 0 16px;max-height:55vh}
+h2{margin:0 0 4px;font:600 17px ui-monospace,monospace;word-break:break-all}
+.d{color:var(--mut);margin:0 0 14px}
+.row{display:grid;grid-template-columns:150px 1fr;gap:4px 12px;margin-bottom:10px;align-items:start}
+.row b{font:600 13px ui-monospace,monospace;word-break:break-all}
+.row small{display:block;color:var(--mut);font-weight:400}
+.req{color:var(--err)}
+.go{background:var(--ac);color:var(--acfg);border-color:var(--ac);padding:6px 18px;cursor:pointer;font-weight:600}
+.bar{display:flex;gap:10px;align-items:center;margin:14px 0}
+#st{font-weight:600;font-family:ui-monospace,monospace}
+.ok{color:var(--ok)}.bad{color:var(--err)}
+@media (max-width:700px){main{flex-direction:column}nav{width:100%;height:35vh;border-right:0;border-bottom:1px solid var(--bd)}.row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+<h1>falcon API</h1>
+<label>token <input id="tok" type="password" size="18" placeholder="optional" autocomplete="off"></label>
+</header>
+<main>
+<nav><input id="flt" type="search" placeholder="Filter routes" aria-label="Filter routes"><div id="list"></div></nav>
+<section id="pane"><p class="d">Select a route from the list.</p></section>
+</main>
+<script>
+// P(name, type, required, description); types: s text, n number, b boolean, j JSON array/object
+const P = (name, type, req, desc) => ({name, type, req: !!req, desc});
+const pg = [P('offset','n',0,'Items to skip.'), P('limit','n',0,'Page size (default 50, max 1000).')];
+const lp = P('libraryPath','s',1,'Absolute path of a .library folder.');
+const addFields = [P('name','s',0,'Item name.'), P('website','s',0,'Source URL.'), P('tags','j',0,'Array of tag names.'), P('annotation','s',0,'Note text.'), P('folders','j',0,'Array of folder IDs.')];
+const cm = [P('x','n',0,'Region left (image).'), P('y','n',0,'Region top (image).'), P('width','n',0,'Region width (image).'), P('height','n',0,'Region height (image).'), P('duration','n',0,'Time in seconds (video).')];
+const id1 = P('id','s',1,'Item ID.');
+const sec = (title, groups) => ({title, groups});
+const R = (m, path, desc, params) => ({m: m.split('/'), path, desc, params: params || []});
+const V2 = '/api/v2/', V1 = '/api/';
+const SECTIONS = [
+sec('v2', [
+['app', [R('GET','app/info','Version, build and platform of the running app.')]],
+['library', [
+ R('GET','library/info','Metadata of the open library, with its path and name.'),
+ R('GET','library/history','Paged list of libraries served so far.', pg),
+ R('POST','library/switch','Open another library in the server slot.', [lp]),
+ R('GET','library/icon','Icon of a library as a Buffer object.', [lp])]],
+['item', [
+ R('GET/POST','item/get','Find items by ID or filters; POST allows array filters.', [P('id','s',0,'One item ID.'), P('ids','j',0,'Array of item IDs.'), P('keywords','j',0,'Words to match in name, tags, notes.'), P('tags','j',0,'Tags the item must have.'), P('folders','j',0,'Folder IDs.'), P('smartFolders','j',0,'Smart folder IDs.'), P('ext','s',0,'File extension.'), P('annotation','s',0,'Text in the note.'), P('url','s',0,'Source URL.'), P('rating','n',0,'Star rating 0 to 5.'), P('shape','s',0,'Shape filter.'), P('isUnfiled','b',0,'Only items in no folder.'), P('isUntagged','b',0,'Only items without tags.'), P('isSelected','b',0,'Only selected items.'), P('fields','j',0,'Keys to return.')].concat(pg)),
+ R('POST','item/query','Query items with a query string.', [P('query','s',0,'Query text.')].concat(pg)),
+ R('GET','item/countAll','Number of items, trash included.'),
+ R('POST','item/add','Import one item from a path, URL or base64, or many through items.', [P('path','s',0,'Local file path.'), P('url','s',0,'URL to download.'), P('base64','s',0,'Base64 file data.'), P('bookmarkURL','s',0,'Bookmark URL (not supported).')].concat(addFields, [P('items','j',0,'Array of up to 1000 entries with the same fields.')])),
+ R('POST','item/update','Change fields of an item.', [id1, P('name','s',0,'New name.'), P('annotation','s',0,'Note text.'), P('url','s',0,'Source URL.'), P('tags','j',0,'Array of tags.'), P('folders','j',0,'Array of folder IDs.'), P('star','n',0,'Rating 0 to 5.'), P('ext','s',0,'Extension.'), P('width','n',0,'Width.'), P('height','n',0,'Height.'), P('noThumbnail','b',0,'No thumbnail.'), P('noPreview','b',0,'No preview.'), P('isDeleted','b',0,'In trash.'), P('modificationTime','n',0,'Time in ms.')]),
+ R('POST','item/setCustomThumbnail','Use an image file as the item thumbnail.', [P('itemId','s',1,'Item ID.'), P('filePath','s',1,'Image file path.')]),
+ R('POST','item/refreshThumbnail','Rebuild the thumbnail of an item.', [P('itemId','s',1,'Item ID.')]),
+ R('GET','item/getComments','Comments of an item.', [id1]),
+ R('POST','item/addComment','Add a region or time comment.', [id1, P('annotation','s',1,'Comment text.')].concat(cm)),
+ R('POST','item/updateComment','Change a comment.', [id1, P('commentId','s',1,'Comment ID.'), P('annotation','s',0,'Comment text.')].concat(cm)),
+ R('POST','item/removeComment','Delete a comment.', [id1, P('commentId','s',1,'Comment ID.')])]],
+['folder', [
+ R('GET/POST','folder/get','Folder tree, or folders by ID.', [P('id','s',0,'Folder ID.'), P('ids','j',0,'Array of folder IDs.'), P('isRecent','b',0,'Recently used folders.'), P('isSelected','b',0,'Selected folders.')].concat(pg)),
+ R('POST','folder/create','Create a folder.', [P('name','s',1,'Folder name.'), P('description','s',0,'Description.'), P('parent','s',0,'Parent folder ID.'), P('iconColor','s',0,'One of the eight color names.')]),
+ R('POST','folder/update','Change a folder; send iconColor and parent or they reset.', [P('id','s',1,'Folder ID.'), P('name','s',0,'Name.'), P('description','s',0,'Description.'), P('tags','j',0,'Array of tags.'), P('iconColor','s',0,'Color name.'), P('parent','s',0,'Parent folder ID.')])]],
+['smartFolder', [
+ R('GET/POST','smartFolder/get','Smart folder tree, or smart folders by ID.', [P('id','s',0,'Smart folder ID.'), P('ids','j',0,'Array of IDs (POST).')].concat(pg)),
+ R('POST','smartFolder/create','Create a smart folder from rule conditions.', [P('name','s',1,'Name.'), P('conditions','j',1,'Array of conditions with match, rules, boolean.'), P('description','s',0,'Description.'), P('icon','s',0,'Icon.'), P('iconColor','s',0,'Color name.'), P('parent','s',0,'Parent smart folder ID.')]),
+ R('POST','smartFolder/update','Change a smart folder.', [P('id','s',1,'Smart folder ID.'), P('name','s',0,'Name.'), P('conditions','j',0,'Conditions array.'), P('description','s',0,'Description.'), P('icon','s',0,'Icon.'), P('iconColor','s',0,'Color name.')]),
+ R('POST','smartFolder/remove','Delete a smart folder and its children.', [P('id','s',1,'Smart folder ID.')]),
+ R('GET/POST','smartFolder/getItems','Items that match a smart folder.', [P('smartFolderId','s',1,'Smart folder ID.'), P('orderBy','s',0,'Sort key.'), P('fields','j',0,'Keys to return.')].concat(pg)),
+ R('GET','smartFolder/getRules','Schema of the available rules.')]],
+['tag', [
+ R('GET/POST','tag/get','Tags whose name contains a text.', [P('name','s',0,'Case-insensitive substring.')].concat(pg)),
+ R('GET','tag/getRecentTags','Recently used tags.', pg),
+ R('GET','tag/getStarredTags','Starred tags.', pg),
+ R('POST','tag/update','Rename a tag.', [P('originalName','s',1,'Current name.'), P('name','s',1,'New name.')]),
+ R('POST','tag/merge','Merge one tag into another.', [P('source','s',1,'Tag to remove.'), P('target','s',1,'Tag to keep.')])]],
+['tagGroup', [
+ R('GET','tagGroup/get','Tag groups.', pg),
+ R('POST','tagGroup/create','Create a tag group.', [P('name','s',1,'Group name.'), P('tags','j',0,'Array of tags.'), P('color','s',0,'Color name.'), P('description','s',0,'Description.')]),
+ R('POST','tagGroup/update','Change a tag group.', [P('id','s',1,'Group ID.'), P('name','s',0,'Name.'), P('tags','j',0,'Array of tags (replaces).'), P('color','s',0,'Color name.'), P('description','s',0,'Description.')]),
+ R('POST','tagGroup/remove','Delete a tag group; tags stay on items.', [P('id','s',1,'Group ID.')]),
+ R('POST','tagGroup/addTags','Add tags to a group.', [P('groupId','s',1,'Group ID.'), P('tags','j',1,'Array of tags.'), P('removeFromSource','b',0,'Move out of other groups.')]),
+ R('POST','tagGroup/removeTags','Remove tags from a group.', [P('groupId','s',1,'Group ID.'), P('tags','j',1,'Array of tags.')])]]
+].map(([g, rs]) => [g, rs.map(r => ({...r, path: V2 + r.path}))])),
+sec('v1', [
+['application', [R('GET','application/info','Version and platform of the app.')]],
+['library', [
+ R('GET','library/info','Open library with folders, tags and counts.'),
+ R('GET','library/history','Paths of libraries served so far.'),
+ R('POST','library/switch','Open another library.', [lp]),
+ R('GET','library/icon','Icon of a library.', [lp])]],
+['folder', [
+ R('GET','folder/list','All folders as a tree.'),
+ R('GET','folder/listRecent','Recently used folders.'),
+ R('POST','folder/create','Create a folder.', [P('folderName','s',1,'Folder name.'), P('parent','s',0,'Parent folder ID.')]),
+ R('POST','folder/rename','Rename a folder.', [P('folderId','s',1,'Folder ID.'), P('newName','s',1,'New name.')]),
+ R('POST','folder/update','Change name or description of a folder.', [P('folderId','s',1,'Folder ID.'), P('newName','s',0,'New name.'), P('newDescription','s',0,'New description.')]),
+ R('POST','folder/unlock','Unlock a password-protected folder.', [P('folderId','s',1,'Folder ID.'), P('password','s',1,'Folder password.')])]],
+['tag', [
+ R('GET','tag/all','Tags, recent tags, groups and starred tags.'),
+ R('GET','tag/list','All tags with counts.'),
+ R('GET','tag/listRecent','Recently used tags.'),
+ R('GET','tag/groups','Tag groups.')]],
+['preferences', [
+ R('GET','preferences/collect/on','Turn the collect dialog on.'),
+ R('GET','preferences/collect/off','Turn the collect dialog off.')]],
+['item', [
+ R('POST','item/addFromPath','Import a local file.', [P('path','s',1,'File path.'), P('name','s',0,'Name.'), P('website','s',0,'Source URL.'), P('annotation','s',0,'Note.'), P('tags','j',0,'Array of tags.'), P('folderId','s',0,'Folder ID.')]),
+ R('POST','item/addFromPaths','Import several local files.', [P('paths','j',0,'Array of file paths.'), P('items','j',0,'Array of entries with path and fields; used before paths.'), P('folderId','s',0,'Folder ID.')]),
+ R('POST','item/addFromURL','Download and import a URL.', [P('url','s',1,'Image URL.'), P('name','s',0,'Name.'), P('website','s',0,'Source page.'), P('tags','j',0,'Array of tags.'), P('annotation','s',0,'Note.'), P('folderId','s',0,'Folder ID.')]),
+ R('POST','item/addFromURLs','Download and import several URLs.', [P('items','j',1,'Array of entries with url and fields.'), P('folderId','s',0,'Folder ID.')]),
+ R('POST','item/update','Change tags, URL, note or star of an item.', [id1, P('tags','j',0,'Array of tags.'), P('url','s',0,'Source URL.'), P('annotation','s',0,'Note.'), P('star','n',0,'Rating 1 to 5 (0 ignored).')]),
+ R('GET','item/info','One item by ID.', [id1]),
+ R('GET','item/thumbnail','Thumbnail path of an item.', [id1]),
+ R('POST','item/moveToTrash','Move items to the trash.', [P('itemIds','j',1,'Array of item IDs.')]),
+ R('GET','item/list','List items with simple filters.', [P('limit','n',0,'Page size.'), P('offset','n',0,'Page number.'), P('orderBy','s',0,'Sort key, such as CREATEDATE.'), P('keyword','s',0,'Search text.'), P('ext','s',0,'Extension.'), P('tags','s',0,'Comma-separated tags.'), P('folders','s',0,'Comma-separated folder IDs.')]),
+ R('POST','item/setCustomThumbnail','Use an image file as the thumbnail.', [P('id','s',1,'Item ID.'), P('thumbnailPath','s',1,'Image file path.')]),
+ R('POST','item/refreshPalette','Recompute the color palette.', [P('id','s',1,'Item ID.')]),
+ R('POST','item/refreshThumbnail','Rebuild the thumbnail.', [P('id','s',1,'Item ID.')])]]
+].map(([g, rs]) => [g, rs.map(r => ({...r, path: V1 + r.path}))]))
+];
+
+const $ = id => document.getElementById(id);
+const el = (tag, props, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
+let cur = null;
+
+try { $('tok').value = localStorage.getItem('falcon-token') || ''; } catch (e) {}
+$('tok').addEventListener('input', () => { try { localStorage.setItem('falcon-token', $('tok').value); } catch (e) {} if (cur) preview(); });
+
+function buildList() {
+  const q = $('flt').value.trim().toLowerCase(), box = $('list');
+  box.replaceChildren();
+  for (const s of SECTIONS) {
+    const out = [];
+    for (const [g, rs] of s.groups) {
+      const hit = rs.filter(r => !q || (r.path + ' ' + r.desc).toLowerCase().includes(q));
+      if (!hit.length) continue;
+      out.push(el('h4', {textContent: g}));
+      for (const r of hit) {
+        const b = el('button', {title: r.desc, className: r === cur ? 'on' : ''}, el('span', {className: 'm', textContent: r.m.join('/')}), el('span', {textContent: r.path.replace(/^\/api\/(v2\/)?/, '')}));
+        b.onclick = () => select(r);
+        out.push(b);
+      }
+    }
+    if (out.length) box.append(el('h3', {textContent: s.title}), ...out);
+  }
+}
+$('flt').addEventListener('input', buildList);
+
+function select(r) {
+  cur = r; buildList();
+  const pane = $('pane'); pane.replaceChildren();
+  pane.append(el('h2', {textContent: r.path}), el('p', {className: 'd', textContent: r.desc}));
+  const bar = el('div', {className: 'bar'});
+  const sel = el('select', {id: 'meth', ariaLabel: 'Method'}, ...r.m.map(m => el('option', {value: m, textContent: m})));
+  if (r.m.length > 1) bar.append(sel); else bar.append(el('b', {textContent: r.m[0]}), sel), sel.hidden = true;
+  const form = el('div', {id: 'form'});
+  for (const p of r.params) {
+    const inp = p.type === 'j' ? el('textarea', {rows: 2, placeholder: '[ ] or { }'})
+      : p.type === 'b' ? el('select', {}, ...['', 'true', 'false'].map(v => el('option', {value: v, textContent: v || '(unset)'})))
+      : el('input', {type: 'text', placeholder: p.type === 'n' ? 'number' : ''});
+    inp.dataset.name = p.name; inp.dataset.type = p.type; inp.addEventListener('input', preview);
+    form.append(el('div', {className: 'row'}, el('b', {}, p.name, p.req ? el('span', {className: 'req', textContent: ' *'}) : ''), el('div', {}, inp, el('small', {textContent: p.desc}))));
+  }
+  if (!r.params.length) form.append(el('p', {className: 'd', textContent: 'No parameters.'}));
+  const go = el('button', {className: 'go', textContent: 'Send'});
+  go.onclick = send; sel.onchange = preview;
+  bar.append(go, el('span', {id: 'st'}));
+  pane.append(form, bar, el('b', {textContent: 'curl'}), el('pre', {id: 'curl'}), el('b', {textContent: 'Response'}), el('pre', {id: 'out'}));
+  preview();
+}
+
+// Returns {url, init, body, error}; values are parsed from the form.
+function build() {
+  const method = $('meth').value, vals = {};
+  for (const i of document.querySelectorAll('#form [data-name]')) {
+    const v = i.value.trim();
+    if (v === '') continue;
+    const t = i.dataset.type;
+    if (t === 'j') { try { vals[i.dataset.name] = JSON.parse(v); } catch (e) { return {error: i.dataset.name + ': invalid JSON (' + e.message + ')'}; } }
+    else if (t === 'n') { const n = Number(v); if (Number.isNaN(n)) return {error: i.dataset.name + ': not a number'}; vals[i.dataset.name] = n; }
+    else if (t === 'b') vals[i.dataset.name] = v === 'true';
+    else vals[i.dataset.name] = v;
+  }
+  const qs = new URLSearchParams(), tok = $('tok').value.trim();
+  let body = null;
+  if (method === 'GET') {
+    for (const [k, v] of Object.entries(vals)) qs.set(k, Array.isArray(v) ? v.join(',') : typeof v === 'object' ? JSON.stringify(v) : String(v));
+  } else body = JSON.stringify(vals);
+  if (tok) qs.set('token', tok);
+  const q = qs.toString();
+  return {method, url: cur.path + (q ? '?' + q : ''), body};
+}
+
+const sh = s => "'" + s.replace(/'/g, "'\\''") + "'";
+function preview() {
+  const b = build();
+  if (b.error) { $('curl').textContent = b.error; return; }
+  let c = 'curl ' + (b.method === 'POST' ? '-X POST -H "Content-Type: application/json" -d ' + sh(b.body) + ' ' : '') + sh(location.origin + b.url);
+  $('curl').textContent = c;
+}
+
+async function send() {
+  const b = build(), st = $('st'), out = $('out');
+  if (b.error) { st.className = 'bad'; st.textContent = ''; out.textContent = b.error; return; }
+  st.className = ''; st.textContent = 'sending...'; out.textContent = '';
+  try {
+    const init = {method: b.method};
+    if (b.body !== null) { init.headers = {'Content-Type': 'application/json'}; init.body = b.body; }
+    const t0 = performance.now(), res = await fetch(b.url, init), text = await res.text();
+    let shown = text;
+    try { shown = JSON.stringify(JSON.parse(text), null, 2); } catch (e) {}
+    st.className = res.ok ? 'ok' : 'bad';
+    st.textContent = res.status + ' ' + res.statusText + '  ' + Math.round(performance.now() - t0) + ' ms';
+    out.textContent = shown;
+  } catch (e) {
+    st.className = 'bad'; st.textContent = 'request failed'; out.textContent = String(e);
+  }
+}
+
+buildList();
+</script>
+</body>
+</html>
