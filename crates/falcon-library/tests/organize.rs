@@ -317,3 +317,39 @@ fn rename_normalises_and_drops_stale_pinyin() {
     lib.rename_folder(&a, &"x".repeat(2000)).unwrap();
     assert_eq!(lib.metadata.folders[0].name.len(), 1024);
 }
+
+#[test]
+fn tag_renames_reach_folder_auto_tags_and_smart_rules_in_one_undo_step() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut lib = new_library(tmp.path());
+    let a = lib.create_folder(None, "A").unwrap();
+    let b = lib.create_folder(Some(&a), "B").unwrap();
+    lib.set_folder_auto_tags(&a, &strings(&["old", "keep"])).unwrap();
+    lib.set_folder_auto_tags(&b, &strings(&["new", "old"])).unwrap();
+    let rule = serde_json::json!([{"match": "AND", "boolean": "TRUE", "rules": [{"property": "tags", "method": "union", "value": ["old", "x"]}, {"property": "name", "method": "contains", "value": "old"}]}]);
+    let parent = lib.create_smart_folder("S", rule.as_array().unwrap().clone()).unwrap();
+    lib.create_smart_folder_in(Some(&parent), "C", serde_json::from_value(serde_json::json!([{"match": "OR", "rules": [{"property": "tags", "method": "intersection", "value": ["new", "old"]}]}])).unwrap()).unwrap();
+    let before = metadata(&lib);
+
+    lib.begin_transaction("Rename tag");
+    lib.rename_tag("old", "new").unwrap();
+    let tx = lib.end_transaction().unwrap();
+    let text = metadata(&lib);
+    assert_eq!(lib.metadata.folders[0].tags, ["new", "keep"]);
+    assert_eq!(lib.metadata.folders[0].children[0].tags, ["new"]);
+    assert!(text.contains(r#""rules":[{"property":"tags","method":"union","value":["new","x"]},{"property":"name","method":"contains","value":"old"}]"#), "{text}");
+    assert!(text.contains(r#""value":["new"]"#), "{text}");
+
+    // One step puts every list back as it was.
+    lib.revert(tx).unwrap();
+    let back = metadata(&lib);
+    let strip = |s: &str| s.split(r#""modificationTime""#).next().unwrap().to_string();
+    assert_eq!(strip(&back), strip(&before));
+    assert_eq!(lib.metadata.folders[0].tags, ["old", "keep"]);
+
+    // Deleting a tag takes it off folders' auto-tags, not off rules.
+    lib.delete_tag("old").unwrap();
+    assert_eq!(lib.metadata.folders[0].tags, ["keep"]);
+    assert_eq!(lib.metadata.folders[0].children[0].tags, ["new"]);
+    assert!(metadata(&lib).contains(r#""value":["old","x"]"#));
+}

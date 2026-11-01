@@ -127,7 +127,8 @@ impl Library {
     }
 
     /// Renames a tag on every item, merging it into `to` where an item has
-    /// both. Tag history, starred tags and tag groups follow, as in Eagle.
+    /// both. Tag history, starred tags, tag groups, folders' auto-tags and
+    /// smart-folder tag rules follow, as in Eagle.
     /// Returns how many items changed.
     pub fn rename_tag(&mut self, from: &str, to: &str) -> Result<usize> {
         let to = to.trim();
@@ -167,12 +168,27 @@ impl Library {
         for g in &mut self.metadata.tags_groups {
             swap(&mut g.tags);
         }
+        // Folders' auto-tags and smart-folder tag rules follow too, as in
+        // Eagle: the first `from` becomes `to`, then duplicates go (the
+        // first copy stays).
+        let rename = |list: &mut Vec<String>| {
+            if let Some(i) = list.iter().position(|t| t == from) {
+                list[i] = to.to_string();
+                let mut seen = HashSet::new();
+                list.retain(|t| seen.insert(t.clone()));
+            }
+        };
+        walk_folders_mut(&mut self.metadata.folders, &mut |f| rename(&mut f.tags));
+        for sf in &mut self.metadata.smart_folders {
+            rename_in_smart_rules(sf, from, to);
+        }
         self.save_metadata()?;
         self.save_tags()?;
         Ok(n)
     }
 
-    /// Removes a tag from every item, the history, starred tags and groups.
+    /// Removes a tag from every item, the history, starred tags, groups and
+    /// folders' auto-tags.
     pub fn delete_tag(&mut self, tag: &str) -> Result<usize> {
         let affected: Vec<Item> = self.items().iter().filter(|i| i.tags.iter().any(|t| t == tag)).cloned().collect();
         let n = affected.len();
@@ -185,6 +201,9 @@ impl Library {
         for g in &mut self.metadata.tags_groups {
             g.tags.retain(|t| t != tag);
         }
+        // Eagle takes a deleted tag off folders' auto-tags as well (smart
+        // folder rules keep it).
+        walk_folders_mut(&mut self.metadata.folders, &mut |f| f.tags.retain(|t| t != tag));
         self.save_metadata()?;
         self.save_tags()?;
         Ok(n)
@@ -208,6 +227,50 @@ impl Library {
         }
         self.tags.history_tags.truncate(HISTORY_LIMIT);
         self.save_tags()
+    }
+}
+
+/// Visits every folder in the tree, parents before children.
+fn walk_folders_mut(folders: &mut [Folder], f: &mut impl FnMut(&mut Folder)) {
+    for folder in folders {
+        f(folder);
+        walk_folders_mut(&mut folder.children, f);
+    }
+}
+
+/// Renames `from` to `to` in the `tags` rules of a smart folder entry and
+/// its children, in place so the entry's other keys keep their order. As
+/// Eagle does, the first `from` in a rule's list becomes `to` and
+/// duplicates are dropped after.
+fn rename_in_smart_rules(entry: &mut serde_json::Value, from: &str, to: &str) {
+    use serde_json::Value;
+    if let Some(conditions) = entry.get_mut("conditions").and_then(Value::as_array_mut) {
+        for c in conditions {
+            let Some(rules) = c.get_mut("rules").and_then(Value::as_array_mut) else { continue };
+            for r in rules {
+                if r.get("property").and_then(Value::as_str) != Some("tags") {
+                    continue;
+                }
+                let Some(list) = r.get_mut("value").and_then(Value::as_array_mut) else { continue };
+                if let Some(i) = list.iter().position(|v| v.as_str() == Some(from)) {
+                    list[i] = Value::String(to.to_string());
+                    let mut seen: Vec<Value> = Vec::with_capacity(list.len());
+                    list.retain(|v| {
+                        if seen.contains(v) {
+                            false
+                        } else {
+                            seen.push(v.clone());
+                            true
+                        }
+                    });
+                }
+            }
+        }
+    }
+    if let Some(children) = entry.get_mut("children").and_then(Value::as_array_mut) {
+        for c in children {
+            rename_in_smart_rules(c, from, to);
+        }
     }
 }
 
