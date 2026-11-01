@@ -453,6 +453,7 @@ pub fn ext_color(ext: &str) -> Option<Color32> {
     let c = match ext {
         "mp3" | "wav" | "flac" | "ogg" | "aac" | "m4a" | "mp4" | "mov" | "m4v" | "webm" | "mkv" | "avi"
         | "wmv" | "mpg" | "ts" => 0x333333,
+        e if falcon_library::media::is_audio(e) => 0x333333,
         "gif" => 0xbb1404,
         "eps" | "svg" => 0xe97d34,
         "doc" | "docx" => 0x265cb9,

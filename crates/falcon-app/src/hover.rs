@@ -31,9 +31,11 @@ const NO_BUTTON: [&str; 21] = [
     "ttc", "woff", "woff2", "url",
 ];
 
-/// Whether cards of this type show a zoom button.
+/// Whether cards of this type show a zoom button (audio cards, including
+/// the formats falcon plays beyond Eagle's, have the audio hover instead).
 pub fn has_zoom_button(ext: &str) -> bool {
-    !NO_BUTTON.contains(&ext.to_lowercase().as_str())
+    let ext = ext.to_lowercase();
+    !NO_BUTTON.contains(&ext.as_str()) && !falcon_library::media::is_audio(&ext)
 }
 
 /// Side of the zoom button for a given card size: 24 pt, 20 pt on small
