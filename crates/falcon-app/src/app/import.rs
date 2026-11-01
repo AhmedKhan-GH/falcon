@@ -519,119 +519,148 @@ impl App {
     /// with deleting on (`removal`), each file whose import committed is
     /// moved to the Trash (`auto_import::Removal`).
     fn spawn_import_then(&mut self, jobs: Vec<Job>, removal: Option<crate::auto_import::Removal>) {
-        if jobs.is_empty() {
-            return;
-        }
-        let Some(shared) = self.ws.lib.clone() else { return };
-        let progress = self.ws.progress.clone();
-        {
-            let mut pr = progress.lock().unwrap_or_else(|p| p.into_inner());
-            if pr.total == 0 {
-                pr.started = Some(std::time::Instant::now());
+        spawn_jobs(&self.ws, self.ctx.clone(), self.prefs.asks_duplicates(), jobs, removal);
+    }
+
+    /// Keeps an auto-import watcher on each open library's folder (none
+    /// when auto-import is off) and imports what each found into its own
+    /// library, shown or not, as Eagle's auto-import does: into the
+    /// library's root, with no folders or tags, through the usual import
+    /// so the duplicate check and the failed-imports list apply. With
+    /// "Delete files after importing them" on, each file is moved to the
+    /// Trash once its import committed. A chosen folder that can't be
+    /// watched (gone, or on a network drive) is reported once.
+    pub(crate) fn auto_import_tick(&mut self) {
+        let want: std::collections::HashMap<PathBuf, PathBuf> = self
+            .others
+            .iter(&self.ws)
+            .filter(|w| w.lib.is_some())
+            .filter_map(|w| w.root.as_ref())
+            .filter_map(|root| self.prefs.auto_import_dir(root).map(|dir| (root.clone(), dir)))
+            .collect();
+        self.auto_import.watchers.retain(|root, w| want.get(root) == Some(&w.dir));
+        for (root, dir) in want {
+            if self.auto_import.watchers.contains_key(&root) {
+                continue;
             }
-            pr.total += jobs.len();
+            let chosen = self.prefs.auto_import_path.clone().unwrap_or_default();
+            if self.auto_import.refused.as_ref() == Some(&chosen) {
+                break;
+            }
+            if let Some(why) = crate::prefs::auto_import_refusal(&chosen) {
+                self.flash(trf("Auto-import is paused. {reason}", &[("reason", &why)]));
+                self.auto_import.refused = Some(chosen);
+                break;
+            }
+            let ctx = self.ctx.clone();
+            if let Some(w) = crate::auto_import::Watcher::start(dir, self.auto_import.imported.clone(), move || ctx.request_repaint()) {
+                self.auto_import.watchers.insert(root, w);
+            }
         }
-        let ctx = self.ctx.clone();
-        let scratch = tempfile_dir().ok();
-        let dupes = self.prefs.asks_duplicates().then(|| self.ws.dupes.clone());
-        std::thread::spawn(move || {
-            for Job { path: f, opts } in jobs {
-                // Paused from the sidebar: wait before the next file (a
-                // stop request ends the wait).
-                while {
-                    let pr = progress.lock().unwrap_or_else(|p| p.into_inner());
-                    pr.paused && !pr.cancel
-                } {
-                    std::thread::sleep(crate::tasks::PAUSE_POLL);
-                }
-                if progress.lock().unwrap_or_else(|p| p.into_inner()).cancel {
-                    // Stopped: skip the file, but still clear a pasted copy.
-                    if scratch.as_ref().is_some_and(|d| f.starts_with(d)) {
-                        let _ = std::fs::remove_file(&f);
+        let found: Vec<(PathBuf, PathBuf, Vec<Vec<PathBuf>>)> = self
+            .auto_import
+            .watchers
+            .iter()
+            .map(|(root, w)| (root.clone(), w.dir.clone(), w.take()))
+            .filter(|(_, _, b)| !b.is_empty())
+            .collect();
+        let opts = self.prefs.import_options(Vec::new());
+        let (ctx, ask_dupes) = (self.ctx.clone(), self.prefs.asks_duplicates());
+        for (root, dir, batches) in found {
+            for files in batches {
+                let removal = self.prefs.auto_import_delete.then(|| crate::auto_import::Removal { watched: dir.clone(), imported: self.auto_import.imported.clone() });
+                let jobs: Vec<Job> = files.into_iter().map(|path| Job { path, opts: opts.clone() }).collect();
+                if self.ws.root.as_ref() == Some(&root) {
+                    if self.prefs.tells_auto_import() {
+                        let n = jobs.len();
+                        self.flash(tr_n(n, "Importing {n} file from the auto-import folder", "Importing {n} files from the auto-import folder"));
                     }
-                    progress.lock().unwrap_or_else(|p| p.into_inner()).done += 1;
-                    continue;
+                    self.spawn_import_then(jobs, removal);
+                } else if let Some(ws) = self.others.parked_mut().find(|w| w.root.as_ref() == Some(&root)) {
+                    // A library in the background imports quietly; its
+                    // progress shows when it is brought forward.
+                    spawn_jobs(ws, ctx.clone(), ask_dupes, jobs, removal);
                 }
-                // A file already in the library is held for the duplicate
-                // dialog (`import_dupes`) instead of being committed.
-                let result = crate::import_dupes::import_one(&f, &opts, &shared, dupes.as_ref());
-                if let Some(removal) = &removal {
-                    // The item's original as the library now has it; `None`
-                    // when the import failed or the file is held for the
-                    // duplicate dialog, which still needs it.
-                    let committed = match &result {
-                        Ok(Some(id)) => {
-                            let lib = lock(&shared);
-                            lib.item(id).map(|item| item.original_path(lib.root()))
-                        }
-                        _ => None,
-                    };
-                    if removal.finish(&f, committed.as_deref(), crate::auto_import::trash) == crate::auto_import::After::TrashFailed {
-                        crate::errlog::error(&format!("auto-import: couldn't move {} to the Trash", f.display()));
-                    }
-                }
-                // Pasted images are staged in falcon's own temp folder; they
-                // are removed only now, after the import has read them.
+            }
+        }
+    }
+}
+
+/// Stages each of `jobs` without the library lock and commits it under it,
+/// into `ws`'s library on a background thread, counting in its progress.
+/// For files from the auto-import folder with deleting on (`removal`),
+/// each file whose import committed is moved to the Trash.
+fn spawn_jobs(ws: &super::Workspace, ctx: eframe::egui::Context, ask_dupes: bool, jobs: Vec<Job>, removal: Option<crate::auto_import::Removal>) {
+    if jobs.is_empty() {
+        return;
+    }
+    let Some(shared) = ws.lib.clone() else { return };
+    let progress = ws.progress.clone();
+    {
+        let mut pr = progress.lock().unwrap_or_else(|p| p.into_inner());
+        if pr.total == 0 {
+            pr.started = Some(std::time::Instant::now());
+        }
+        pr.total += jobs.len();
+    }
+    let scratch = tempfile_dir().ok();
+    let dupes = ask_dupes.then(|| ws.dupes.clone());
+    std::thread::spawn(move || {
+        for Job { path: f, opts } in jobs {
+            // Paused from the sidebar: wait before the next file (a
+            // stop request ends the wait).
+            while {
+                let pr = progress.lock().unwrap_or_else(|p| p.into_inner());
+                pr.paused && !pr.cancel
+            } {
+                std::thread::sleep(crate::tasks::PAUSE_POLL);
+            }
+            if progress.lock().unwrap_or_else(|p| p.into_inner()).cancel {
+                // Stopped: skip the file, but still clear a pasted copy.
                 if scratch.as_ref().is_some_and(|d| f.starts_with(d)) {
                     let _ = std::fs::remove_file(&f);
                 }
-                let mut pr = progress.lock().unwrap_or_else(|p| p.into_inner());
-                pr.done += 1;
-                // `Ok(None)` is a duplicate held for the dialog, not added.
-                if let Ok(Some(id)) = &result {
-                    pr.added.push(id.clone());
-                }
-                if let Err(e) = &result {
-                    pr.failed += 1;
-                    pr.errors.push(ImportError { failure: Failure::new(&f, e), opts: opts.clone() });
-                }
-                pr.current = f.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-                drop(pr);
-                ctx.request_repaint();
+                progress.lock().unwrap_or_else(|p| p.into_inner()).done += 1;
+                continue;
             }
-        });
-    }
-
-    /// Keeps the auto-import watcher on the shown library's folder (or
-    /// stops it when auto-import is off or no library is open) and imports
-    /// what it found, as Eagle's auto-import does: into the library's root,
-    /// with no folders or tags, through the usual import so the duplicate
-    /// check and the failed-imports list apply. With "Delete files after
-    /// importing them" on, each file is moved to the Trash once its import
-    /// committed. A folder that can't be watched (gone, or on a network
-    /// drive) is reported once.
-    pub(crate) fn auto_import_tick(&mut self) {
-        let want = match (&self.ws.lib, &self.ws.root) {
-            (Some(_), Some(root)) => self.prefs.auto_import_dir(root),
-            _ => None,
-        };
-        if self.auto_import.watcher.as_ref().map(|w| &w.dir) != want.as_ref() && self.auto_import.refused != want {
-            self.auto_import.watcher = None;
-            if let Some(dir) = want {
-                let chosen = self.prefs.auto_import_path.clone().unwrap_or_default();
-                match crate::prefs::auto_import_refusal(&chosen) {
-                    Some(why) => {
-                        self.flash(trf("Auto-import is paused. {reason}", &[("reason", &why)]));
-                        self.auto_import.refused = Some(dir);
+            // A file already in the library is held for the duplicate
+            // dialog (`import_dupes`) instead of being committed.
+            let result = crate::import_dupes::import_one(&f, &opts, &shared, dupes.as_ref());
+            if let Some(removal) = &removal {
+                // The item's original as the library now has it; `None`
+                // when the import failed or the file is held for the
+                // duplicate dialog, which still needs it.
+                let committed = match &result {
+                    Ok(Some(id)) => {
+                        let lib = lock(&shared);
+                        lib.item(id).map(|item| item.original_path(lib.root()))
                     }
-                    None => {
-                        let ctx = self.ctx.clone();
-                        self.auto_import.watcher = crate::auto_import::Watcher::start(dir, self.auto_import.imported.clone(), move || ctx.request_repaint());
-                    }
+                    _ => None,
+                };
+                if removal.finish(&f, committed.as_deref(), crate::auto_import::trash) == crate::auto_import::After::TrashFailed {
+                    crate::errlog::error(&format!("auto-import: couldn't move {} to the Trash", f.display()));
                 }
             }
-        }
-        let batches = self.auto_import.watcher.as_ref().map(|w| w.take()).unwrap_or_default();
-        for files in batches {
-            if self.prefs.tells_auto_import() {
-                let n = files.len();
-                self.flash(tr_n(n, "Importing {n} file from the auto-import folder", "Importing {n} files from the auto-import folder"));
+            // Pasted images are staged in falcon's own temp folder; they
+            // are removed only now, after the import has read them.
+            if scratch.as_ref().is_some_and(|d| f.starts_with(d)) {
+                let _ = std::fs::remove_file(&f);
             }
-            let opts = self.prefs.import_options(Vec::new());
-            let removal = self.auto_import.watcher.as_ref().filter(|_| self.prefs.auto_import_delete).map(|w| crate::auto_import::Removal { watched: w.dir.clone(), imported: self.auto_import.imported.clone() });
-            self.spawn_import_then(files.into_iter().map(|path| Job { path, opts: opts.clone() }).collect(), removal);
+            let mut pr = progress.lock().unwrap_or_else(|p| p.into_inner());
+            pr.done += 1;
+            // `Ok(None)` is a duplicate held for the dialog, not added.
+            if let Ok(Some(id)) = &result {
+                pr.added.push(id.clone());
+            }
+            if let Err(e) = &result {
+                pr.failed += 1;
+                pr.errors.push(ImportError { failure: Failure::new(&f, e), opts: opts.clone() });
+            }
+            pr.current = f.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            drop(pr);
+            ctx.request_repaint();
         }
-    }
+    });
 }
 
 pub(crate) fn is_hidden(p: &std::path::Path) -> bool {

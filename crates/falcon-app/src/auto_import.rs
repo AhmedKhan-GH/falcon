@@ -1,16 +1,22 @@
 //! The watched auto-import folder (Preferences ▸ Auto-Import), after
-//! Eagle's `auto-import.js`: files added to a folder are imported into the
-//! open library by themselves.
+//! Eagle's `auto-import.js`: files added to a folder are imported into a
+//! library by themselves.
 //!
 //! As in Eagle, each library watches a folder named after it inside the
 //! chosen one (`<chosen>/<library name without .library>`), so one chosen
-//! folder serves every library. Network volumes are refused.
+//! folder serves every library; falcon watches the folder of every open
+//! library at once, each with a [`Watcher`] of its own, and imports into
+//! that library whether it is shown or not. Network volumes are refused.
 //!
-//! Eagle watches with `fs.watch`; falcon has no file-event crate, so a
-//! background thread lists the folder every two seconds instead. A file is
-//! imported once its size and modification time have stayed the same for
-//! three seconds (Eagle waits for six unchanged checks half a second
-//! apart), so a copy still in progress is left alone.
+//! Eagle watches with `fs.watch`; falcon listens to FSEvents
+//! (`fsevents.rs`) on the chosen folder and lists the library's folder
+//! when something changed. When the stream can't start it lists the
+//! folder every two seconds instead. A file is imported once its size and
+//! modification time have stayed the same for three seconds (Eagle waits
+//! for six unchanged checks half a second apart), so a copy still in
+//! progress is left alone; while files wait to settle the folder is
+//! listed again every half second, since a file that stops changing
+//! sends no event.
 //!
 //! Eagle deletes each file once it is imported. falcon does the same while
 //! "Delete files after importing them" is on (the default), with three
@@ -95,12 +101,13 @@ impl Sig {
 /// The app's side of auto-import, kept in `App`.
 #[derive(Default)]
 pub struct AutoImport {
-    /// The thread watching the shown library's auto-import folder.
-    pub watcher: Option<Watcher>,
+    /// The threads watching the open libraries' auto-import folders, by
+    /// library root.
+    pub watchers: HashMap<PathBuf, Watcher>,
     /// Files it has handed over, shared with the thread and saved.
     pub imported: Arc<Mutex<Imported>>,
-    /// A folder that couldn't be watched and was reported, so it isn't
-    /// checked again until the preferences change.
+    /// A chosen folder that couldn't be watched and was reported, so it
+    /// isn't checked again until the preferences change.
     pub refused: Option<PathBuf>,
 }
 
@@ -124,6 +131,11 @@ impl Settle {
                 false
             }
         }
+    }
+
+    /// Files are waiting to settle.
+    pub fn pending(&self) -> bool {
+        !self.files.is_empty()
     }
 
     /// Forgets files no longer in the folder, or handed to the import.
@@ -282,8 +294,36 @@ pub fn trash(path: &Path) -> io::Result<()> {
     platform::trash(path)
 }
 
+/// While files are waiting to settle, how often an event-driven watcher
+/// looks again (no event comes for a file that stops changing).
+pub const RECHECK: Duration = Duration::from_millis(500);
+/// How long FSEvents gathers changes before it reports them (Eagle
+/// debounces its `fs.watch` events by half a second).
+pub const LATENCY: f64 = 0.5;
+
+/// What wakes a watcher up to look at its folder.
+pub enum Wake {
+    /// File events: a `()` for each batch of changes under the folder,
+    /// with the stream that sends them, kept alive with the watcher (the
+    /// tests send their own events and have none).
+    Events(Receiver<()>, Option<crate::fsevents::Stream>),
+    /// No events: the folder is listed every [`POLL`].
+    Poll,
+}
+
+/// When a watcher next lists its folder without being woken: every
+/// [`POLL`] when polling; when driven by events, every [`RECHECK`] while
+/// files wait to settle and otherwise only on the next event.
+pub fn next_look(events: bool, pending: bool, last: Instant) -> Option<Instant> {
+    match (events, pending) {
+        (false, _) => Some(last + POLL),
+        (true, true) => Some(last + RECHECK),
+        (true, false) => None,
+    }
+}
+
 /// The background thread watching one folder. Dropping it stops the
-/// thread within a fraction of a second.
+/// thread within a fraction of a second (and its event stream).
 pub struct Watcher {
     pub dir: PathBuf,
     stop: Arc<AtomicBool>,
@@ -291,31 +331,79 @@ pub struct Watcher {
 }
 
 impl Watcher {
-    /// Starts watching `dir`, calling `wake` when files are ready. Never
-    /// starts under the test harness.
+    /// Starts watching `dir`, calling `wake` when files are ready: on file
+    /// events from FSEvents, or by listing it every two seconds when the
+    /// stream can't start. The stream watches the chosen folder above
+    /// `dir`, which exists (falcon doesn't make `dir` the way Eagle does;
+    /// it only reads the chosen folder), so `dir` appearing later is seen
+    /// too. Never starts under the test harness.
     pub fn start(dir: PathBuf, imported: Arc<Mutex<Imported>>, wake: impl Fn() + Send + 'static) -> Option<Watcher> {
         if cfg!(test) {
             return None;
         }
+        let root = dir.parent().filter(|p| p.is_dir()).unwrap_or(&dir);
+        let source = match crate::fsevents::watch(root, LATENCY) {
+            Some((stream, rx)) => Wake::Events(rx, Some(stream)),
+            None => {
+                crate::errlog::error(&format!("auto-import: no file events for {}, listing it every 2 seconds", root.display()));
+                Wake::Poll
+            }
+        };
+        Self::start_with(dir, imported, wake, source)
+    }
+
+    /// [`Watcher::start`] with the wake-ups given (the tests inject their
+    /// own events).
+    pub fn start_with(dir: PathBuf, imported: Arc<Mutex<Imported>>, wake: impl Fn() + Send + 'static, source: Wake) -> Option<Watcher> {
         let stop = Arc::new(AtomicBool::new(false));
         let (tx, batches): (Sender<Vec<PathBuf>>, _) = channel();
         let (flag, at) = (stop.clone(), dir.clone());
         std::thread::Builder::new()
             .name("auto-import".into())
             .spawn(move || {
+                let (rx, _stream) = match source {
+                    Wake::Events(rx, stream) => (Some(rx), stream),
+                    Wake::Poll => (None, None),
+                };
+                let mut rx = rx;
                 let mut settle = Settle::default();
+                // Look once at the start, for files already there.
+                let mut look = true;
+                let mut last = Instant::now();
                 while !flag.load(Ordering::Relaxed) {
-                    let ready = scan(&at, &mut settle, &imported, Instant::now());
-                    if !ready.is_empty() {
-                        if tx.send(ready).is_err() {
-                            return;
+                    if look {
+                        let ready = scan(&at, &mut settle, &imported, Instant::now());
+                        last = Instant::now();
+                        if !ready.is_empty() {
+                            if tx.send(ready).is_err() {
+                                return;
+                            }
+                            wake();
                         }
-                        wake();
                     }
-                    let until = Instant::now() + POLL;
-                    while Instant::now() < until && !flag.load(Ordering::Relaxed) {
-                        std::thread::sleep(Duration::from_millis(100));
-                    }
+                    let due = next_look(rx.is_some(), settle.pending(), last);
+                    let step = Duration::from_millis(100);
+                    let wait = due.map_or(step, |d| d.saturating_duration_since(Instant::now()).min(step));
+                    look = match &rx {
+                        Some(r) => match r.recv_timeout(wait) {
+                            Ok(()) => {
+                                // One look for the whole batch.
+                                while r.try_recv().is_ok() {}
+                                true
+                            }
+                            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => false,
+                            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                                // The stream ended: poll from now on.
+                                rx = None;
+                                true
+                            }
+                        },
+                        None => {
+                            std::thread::sleep(wait);
+                            false
+                        }
+                    };
+                    look |= due.is_some_and(|d| Instant::now() >= d);
                 }
             })
             .ok()?;
@@ -578,6 +666,63 @@ mod tests {
     fn watchers_never_run_under_test() {
         let tmp = tempfile::tempdir().unwrap();
         assert!(Watcher::start(tmp.path().to_path_buf(), Arc::default(), || {}).is_none());
+    }
+
+    #[test]
+    fn when_a_watcher_looks_again() {
+        let t0 = Instant::now();
+        assert_eq!(next_look(false, false, t0), Some(t0 + POLL), "polling lists every two seconds");
+        assert_eq!(next_look(false, true, t0), Some(t0 + POLL));
+        assert_eq!(next_look(true, true, t0), Some(t0 + RECHECK), "files settling are checked again");
+        assert_eq!(next_look(true, false, t0), None, "otherwise only an event wakes it");
+    }
+
+    /// Waits up to `secs` for a batch from `w`.
+    fn first_batch(w: &Watcher, secs: u64) -> Vec<PathBuf> {
+        let until = Instant::now() + Duration::from_secs(secs);
+        while Instant::now() < until {
+            if let Some(b) = w.take().into_iter().next() {
+                return b;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        Vec::new()
+    }
+
+    #[test]
+    fn injected_events_wake_the_watcher_and_the_settle_rule_holds() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("Books");
+        std::fs::create_dir(&dir).unwrap();
+        let (tx, rx) = channel();
+        let w = Watcher::start_with(dir.clone(), Arc::default(), || {}, Wake::Events(rx, None)).unwrap();
+        // Nothing there yet: no batch, and no event means no more looks.
+        std::thread::sleep(Duration::from_millis(300));
+        assert!(w.take().is_empty());
+        let file = dir.join("photo.png");
+        std::fs::write(&file, vec![1u8; 4000]).unwrap();
+        tx.send(()).unwrap();
+        // Not before it has stayed unchanged for SETTLE, then once, with
+        // no further event needed (the watcher checks again while waiting).
+        std::thread::sleep(Duration::from_millis(1500));
+        assert!(w.take().is_empty(), "still settling");
+        assert_eq!(first_batch(&w, 6), [file]);
+        tx.send(()).unwrap();
+        std::thread::sleep(Duration::from_millis(800));
+        assert!(w.take().is_empty(), "handed over once");
+    }
+
+    #[test]
+    fn a_stream_that_ends_falls_back_to_polling() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().to_path_buf();
+        let (tx, rx) = channel::<()>();
+        let w = Watcher::start_with(dir.clone(), Arc::default(), || {}, Wake::Events(rx, None)).unwrap();
+        drop(tx);
+        std::thread::sleep(Duration::from_millis(200));
+        // No event will ever come, yet the file is found by listing.
+        std::fs::write(dir.join("late.png"), vec![1u8; 4000]).unwrap();
+        assert_eq!(first_batch(&w, 10), [dir.join("late.png")]);
     }
 
     #[test]
