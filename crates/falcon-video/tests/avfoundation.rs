@@ -277,6 +277,8 @@ mod mac {
         check("seek moves the playhead", wait_for(3.0, || (v.current_time() - 1.5).abs() < 0.01), v.current_time());
         let f = next_frame(&mut v);
         check("frame after seeking to 1.5 s is blue", f.as_ref().is_some_and(is_blue), f.map(|f| f.mean()));
+        let cur = v.current_frame();
+        check("current_frame at 1.5 s is blue and full size", cur.as_ref().is_ok_and(|f| is_blue(f) && (f.width, f.height) == (W, H)), cur.map(|f| f.mean()));
 
         v.seek(0.5);
         wait_for(3.0, || (v.current_time() - 0.5).abs() < 0.01);

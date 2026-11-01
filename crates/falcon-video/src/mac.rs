@@ -108,13 +108,18 @@ fn media_type(video: bool) -> Result<&'static NSString> {
 
 /// The picture at `secs` (exactly, not the nearest keyframe), turned the
 /// way the track asks. Safe to call from any thread.
-#[allow(deprecated)] // The synchronous image call blocks, which is what callers want.
 pub fn frame_at(path: &Path, secs: f64) -> Result<Frame> {
     let asset = asset(path)?;
     info(&asset)?;
+    frame_of(&asset, secs)
+}
+
+/// The picture of an already probed asset at `secs`, as [`frame_at`].
+#[allow(deprecated)] // The synchronous image call blocks, which is what callers want.
+fn frame_of(asset: &AVAsset, secs: f64) -> Result<Frame> {
     // SAFETY: owned, plain. AVAssetImageGenerator is usable from any thread.
     let image = unsafe {
-        let generator = AVAssetImageGenerator::assetImageGeneratorWithAsset(&asset);
+        let generator = AVAssetImageGenerator::assetImageGeneratorWithAsset(asset);
         generator.setAppliesPreferredTrackTransform(true);
         generator.setRequestedTimeToleranceBefore(zero());
         generator.setRequestedTimeToleranceAfter(zero());
@@ -171,6 +176,7 @@ fn buffer_to_frame(buffer: &CVPixelBuffer, turns: u8) -> Option<Frame> {
 ///
 /// Main thread only (it is not `Send`). Dropping it stops playback.
 pub struct Video {
+    asset: Retained<AVURLAsset>,
     player: Retained<AVPlayer>,
     item: Retained<AVPlayerItem>,
     output: Retained<AVPlayerItemVideoOutput>,
@@ -206,7 +212,7 @@ impl Video {
             player.setActionAtItemEnd(AVPlayerActionAtItemEnd::Pause);
             (player, item, output)
         };
-        Ok(Video { player, item, output, info, playing: false, looping: false, rate: 1.0 })
+        Ok(Video { asset, player, item, output, info, playing: false, looping: false, rate: 1.0 })
     }
 
     pub fn info(&self) -> &Info {
@@ -326,6 +332,14 @@ impl Video {
                 self.playing = false;
             }
         }
+    }
+
+    /// The picture at the playhead at the clip's full size, turned upright:
+    /// what Eagle's frame tools (set as thumbnail, copy, save) capture.
+    /// Decoded afresh by an image generator on the player's asset, so it
+    /// does not disturb playback or the frames [`Video::frame`] hands out.
+    pub fn current_frame(&self) -> Result<Frame> {
+        frame_of(&self.asset, self.current_time())
     }
 
     /// The frame due now, if it differs from the last one handed out.

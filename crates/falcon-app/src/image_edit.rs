@@ -31,6 +31,8 @@ pub enum Op {
     Flip(Vec<String>, Flip),
     /// Make a frame of the GIF player the item's thumbnail.
     FrameThumbnail(String, image::RgbaImage),
+    /// Make a video frame, taken at this second, the item's thumbnail.
+    VideoThumbnail(String, image::RgbaImage, f64),
 }
 
 impl Op {
@@ -49,7 +51,7 @@ impl Op {
             Op::DeleteComment(..) => "Delete comment".into(),
             Op::Flip(_, Flip::Horizontal) => "Flip horizontally".into(),
             Op::Flip(_, Flip::Vertical) => "Flip vertically".into(),
-            Op::FrameThumbnail(..) => "Set frame as thumbnail".into(),
+            Op::FrameThumbnail(..) | Op::VideoThumbnail(..) => "Set frame as thumbnail".into(),
         }
     }
 }
@@ -150,6 +152,12 @@ impl App {
             }
             Op::FrameThumbnail(id, img) => {
                 lib.set_frame_thumbnail(&id, &img)?;
+                self.ws.loader.forget(&id);
+                self.flash("Thumbnail set");
+                Ok(())
+            }
+            Op::VideoThumbnail(id, img, at) => {
+                lib.set_video_thumbnail(&id, &img, at)?;
                 self.ws.loader.forget(&id);
                 self.flash("Thumbnail set");
                 Ok(())

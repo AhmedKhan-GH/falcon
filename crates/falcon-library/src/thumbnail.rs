@@ -417,7 +417,55 @@ pub fn frame_thumbnail_size(w: u32, h: u32) -> (u32, u32) {
     (scale(w), scale(h))
 }
 
+/// Width Eagle draws a video's thumbnail at, whatever the video's size.
+pub const VIDEO_THUMBNAIL_WIDTH: u32 = 480;
+/// Item key Eagle sets to the second a video's thumbnail was taken at.
+pub const THUMBNAIL_AT_KEY: &str = "thumbnailAt";
+
+/// The size of Eagle's video thumbnail for a `w` × `h` frame: 480 wide,
+/// the height scaled to match and cut to whole pixels (a canvas size).
+pub fn video_thumbnail_size(w: u32, h: u32) -> (u32, u32) {
+    let h = (u64::from(VIDEO_THUMBNAIL_WIDTH) * u64::from(h) / u64::from(w.max(1))) as u32;
+    (VIDEO_THUMBNAIL_WIDTH, h.max(1))
+}
+
+/// Encodes a video frame the way Eagle's thumbnailer does: drawn at
+/// [`video_thumbnail_size`] and saved as a JPEG at full quality. Eagle
+/// writes those JPEG bytes under the usual `_thumbnail.png` name.
+pub fn video_thumbnail_jpeg(frame: &RgbaImage) -> Result<Vec<u8>, ThumbError> {
+    let (w, h) = video_thumbnail_size(frame.width(), frame.height());
+    let img = DynamicImage::ImageRgba8(frame.clone());
+    let img = if (w, h) == (frame.width(), frame.height()) { img } else { img.resize_exact(w, h, RESIZE_FILTER) };
+    jpeg(&img, 100)
+}
+
+/// `img` as a JPEG at `quality` (1..=100), alpha dropped.
+pub fn jpeg(img: &DynamicImage, quality: u8) -> Result<Vec<u8>, ThumbError> {
+    let mut out = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, quality).encode_image(&img.to_rgb8()).map_err(ThumbError::new)?;
+    Ok(out)
+}
+
 impl crate::Library {
+    /// Makes the video frame shown at `at` seconds the item's thumbnail, as
+    /// Eagle's "Set Current Frame as Thumbnail" does: Eagle regenerates the
+    /// video thumbnail from that time, so the frame is written per
+    /// [`video_thumbnail_jpeg`] to `<name>_thumbnail.png`, the palette is
+    /// computed from it and `thumbnailAt` records the time (Eagle keeps it
+    /// and draws later thumbnails from there). The item is not marked as a
+    /// custom thumbnail and keeps its size.
+    pub fn set_video_thumbnail(&mut self, id: &str, frame: &RgbaImage, at: f64) -> crate::Result<()> {
+        let mut item = self.item(id).cloned().ok_or_else(|| self.invalid(format!("no item {id}")))?;
+        let bytes = video_thumbnail_jpeg(frame).map_err(|e| self.invalid(e.0))?;
+        let dest = self.info_dir(&item).join(format!("{}_thumbnail.png", item.name));
+        let img = image::load_from_memory_with_format(&bytes, image::ImageFormat::Jpeg).map_err(|e| self.invalid(e.to_string()))?;
+        fs::write(&dest, &bytes).map_err(|e| crate::Error::io(&dest, e))?;
+        item.palettes = crate::palette::extract(&img);
+        let at = serde_json::Number::from_f64(at.max(0.0)).unwrap_or_else(|| 0.into());
+        item.extra.insert(THUMBNAIL_AT_KEY.into(), serde_json::Value::Number(at));
+        self.update_item(item)
+    }
+
     /// Makes a frame of an animated item its thumbnail, as Eagle's GIF
     /// player does: the frame is scaled per [`frame_thumbnail_size`],
     /// written as a PNG to `<name>_thumbnail.png`, and the palette is
@@ -559,6 +607,21 @@ mod tests {
         assert_eq!(frame_thumbnail_size(900, 1200), (480, 640));
         assert_eq!(frame_thumbnail_size(2000, 480), (2000, 480), "a short side of 480 is left alone");
         assert_eq!(frame_thumbnail_size(300, 200), (300, 200));
+    }
+
+    #[test]
+    fn video_thumbnails_are_480_wide_jpegs() {
+        assert_eq!(video_thumbnail_size(1920, 1080), (480, 270));
+        assert_eq!(video_thumbnail_size(1080, 1920), (480, 853), "cut to whole pixels");
+        assert_eq!(video_thumbnail_size(160, 120), (480, 360), "small videos are drawn larger");
+        assert_eq!(video_thumbnail_size(0, 0), (480, 1));
+        let frame = RgbaImage::from_pixel(640, 360, image::Rgba([200, 30, 40, 255]));
+        let bytes = video_thumbnail_jpeg(&frame).unwrap();
+        assert_eq!(&bytes[..3], &[0xFF, 0xD8, 0xFF]);
+        let back = image::load_from_memory(&bytes).unwrap().to_rgb8();
+        assert_eq!(back.dimensions(), (480, 270));
+        let px = back.get_pixel(240, 135).0;
+        assert!(px[0].abs_diff(200) < 6 && px[1].abs_diff(30) < 6 && px[2].abs_diff(40) < 6, "{px:?}");
     }
 
     #[test]

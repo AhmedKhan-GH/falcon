@@ -88,6 +88,33 @@ fn frame_thumbnail_is_a_png_like_eagles() {
 }
 
 #[test]
+fn video_frame_thumbnail_is_a_jpeg_with_its_time() {
+    // The write path doesn't look at the format, so a GIF item stands in
+    // for a video here (importing a real clip needs AVFoundation).
+    let (_tmp, mut lib, id) = setup("clip.gif", &picture(320, 180, 10), ImageFormat::Gif);
+    let before = lib.item(&id).unwrap().clone();
+    let mut order = keys(&lib, &id);
+    let frame = image::DynamicImage::ImageRgb8(picture(1280, 720, 250)).to_rgba8();
+    lib.set_video_thumbnail(&id, &frame, 12.5).unwrap();
+    let item = lib.item(&id).unwrap().clone();
+    let thumb = item.thumbnail_path(lib.root()).unwrap();
+    let bytes = fs::read(&thumb).unwrap();
+    assert_eq!(&bytes[..3], &[0xFF, 0xD8, 0xFF], "JPEG bytes under the .png name, as Eagle writes");
+    let t = thumbnail::decode(&thumb).unwrap();
+    assert_eq!((t.width(), t.height()), (480, 270));
+    assert_eq!((item.width, item.height), (before.width, before.height), "the item keeps its size");
+    assert!(!thumbnail::has_custom_thumbnail(&item));
+    assert_ne!(item.palettes, before.palettes);
+    assert_eq!(item.extra.get("thumbnailAt").and_then(|v| v.as_f64()), Some(12.5));
+    order.push("thumbnailAt".into());
+    assert_eq!(keys(&lib, &id), order, "only thumbnailAt is added, at the end");
+    // Setting it again replaces the time in place.
+    lib.set_video_thumbnail(&id, &frame, 3.0).unwrap();
+    assert_eq!(lib.item(&id).unwrap().extra.get("thumbnailAt").and_then(|v| v.as_f64()), Some(3.0));
+    assert_eq!(keys(&lib, &id), order);
+}
+
+#[test]
 fn custom_thumbnail_refusals() {
     let (tmp, mut lib, id) = setup("a.png", &picture(50, 50, 0), ImageFormat::Png);
     let custom = tmp.path().join("c.png");

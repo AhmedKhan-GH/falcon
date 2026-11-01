@@ -13,7 +13,7 @@ use super::comments::{plain_text, time_label as comment_time};
 use super::image_edit::Op;
 use super::{Action, App, icon_button};
 use crate::icons as ic;
-use crate::shortcuts::PlayerKey;
+use crate::shortcuts::{Command, FrameTool, PlayerKey};
 use crate::logic;
 use crate::theme::{self as t, font, mono};
 
@@ -59,6 +59,8 @@ pub(super) struct VideoState {
     draft: Option<Draft>,
     /// A time to jump to once the item's player is open.
     pending: Option<(String, f64)>,
+    /// A frame tool asked for by a key, run while the viewer draws.
+    tool: Option<FrameTool>,
 }
 
 impl Default for VideoState {
@@ -75,6 +77,7 @@ impl Default for VideoState {
             scrub_resume: None,
             draft: None,
             pending: None,
+            tool: None,
         }
     }
 }
@@ -108,6 +111,7 @@ impl VideoState {
         self.texture = None;
         self.draft = None;
         self.scrub_resume = None;
+        self.tool = None;
     }
 
     /// The positions to save, with the open clip's current one.
@@ -235,6 +239,18 @@ pub fn marker_at(x: f32, times: &[f64], duration: f64, left: f32, width: f32, sl
         .map(|(n, _)| n)
 }
 
+/// The name Eagle gives a frame saved from a video: the video's name and
+/// the second it was taken at, to two decimals (`toFixed(2)`, which
+/// rounds an exact half up).
+pub fn frame_item_name(name: &str, at: f64) -> String {
+    format!("{name} - {:.2}", (at.max(0.0) * 100.0).round() / 100.0)
+}
+
+/// A decoded frame as an image the library and clipboard code take.
+fn rgba_image(f: falcon_video::Frame) -> Option<image::RgbaImage> {
+    image::RgbaImage::from_raw(f.width as u32, f.height as u32, f.rgba)
+}
+
 /// Builds the egui picture for a decoded frame.
 fn color_image(f: &falcon_video::Frame) -> egui::ColorImage {
     let pixels = f.rgba.as_chunks::<4>().0.iter().map(|p| Color32::from_rgb(p[0], p[1], p[2])).collect();
@@ -296,7 +312,65 @@ impl App {
                 v.pause();
                 self.video.draft = Some(Draft { item: id, id: None, at: v.current_time(), text: String::new(), focus: true });
             }
+            PlayerKey::Frame(t) => self.video.tool = Some(t),
         }
+    }
+
+    /// Eagle's frame tools on the picture at the playhead, decoded at the
+    /// clip's full size: make it the thumbnail, copy it, or add it to the
+    /// library as a new JPEG item named after the video and the time, in
+    /// the video's folders and with its URL.
+    fn frame_tool(&mut self, item: &Item, tool: FrameTool) {
+        let Some(v) = self.video.player.as_ref() else { return };
+        let at = v.current_time();
+        let img = match v.current_frame().map(rgba_image) {
+            Ok(Some(img)) => img,
+            Ok(None) => return,
+            Err(e) => {
+                self.flash(format!("Couldn't read the frame: {e}"));
+                return;
+            }
+        };
+        match tool {
+            FrameTool::Thumbnail => self.ws.actions.push(Action::Edit(Op::VideoThumbnail(item.id.clone(), img, at))),
+            FrameTool::Copy => {
+                let (w, h) = img.dimensions();
+                let data = arboard::ImageData { width: w as usize, height: h as usize, bytes: img.into_raw().into() };
+                if arboard::Clipboard::new().and_then(|mut c| c.set_image(data)).is_ok() {
+                    self.flash("Frame copied");
+                }
+            }
+            FrameTool::Save => {
+                let jpeg = falcon_library::thumbnail::jpeg(&image::DynamicImage::ImageRgba8(img), 95);
+                let Ok(dir) = super::tempfile_dir() else { return };
+                let path = dir.join(format!("{}.jpg", frame_item_name(&item.name, at)));
+                // The import thread deletes the staged file once it has it.
+                if jpeg.is_ok_and(|b| std::fs::write(&path, b).is_ok()) {
+                    let mut opts = self.prefs.import_options(item.folders.clone());
+                    opts.url = item.url.clone();
+                    self.spawn_import(vec![super::import_ui::Job { path, opts }]);
+                }
+            }
+        }
+    }
+
+    /// The frame tools at the top of the video's right-click menu, as in
+    /// Eagle's viewer, above the item's own menu.
+    fn video_menu(&mut self, ui: &mut Ui, lib: &Library, item: &Item) {
+        let entries = [
+            ("Set Current Frame as Thumbnail", FrameTool::Thumbnail),
+            ("Copy Current Frame", FrameTool::Copy),
+            ("Save Current Frame to Library", FrameTool::Save),
+        ];
+        for (label, tool) in entries {
+            let keys = self.shortcut_text(ui.ctx(), Command::Player(PlayerKey::Frame(tool)));
+            if ui.add(egui::Button::new(label).shortcut_text(keys)).clicked() {
+                self.frame_tool(item, tool);
+                ui.close();
+            }
+        }
+        ui.separator();
+        self.item_menu(ui, lib, item, std::slice::from_ref(&item.id));
     }
 
     /// Draws the viewer for a video AVFoundation can play and returns true;
@@ -312,13 +386,16 @@ impl App {
             let bar = Rect::from_min_size(screen.min, vec2(screen.width(), t::BAR_HEIGHT));
             let area = Rect::from_min_max(Pos2::new(screen.left(), bar.bottom()), screen.max);
             ui.interact(area, ui.scope_id().with("video-bg"), Sense::click());
-            self.video_view(ctx, ui, item, area);
+            self.video_view(ctx, ui, lib, item, area);
             super::media_view::top_bar(self, ui, item, bar);
         }
         true
     }
 
-    fn video_view(&mut self, ctx: &egui::Context, ui: &mut Ui, item: &Item, area: Rect) {
+    fn video_view(&mut self, ctx: &egui::Context, ui: &mut Ui, lib: &Library, item: &Item, area: Rect) {
+        if let Some(tool) = self.video.tool.take() {
+            self.frame_tool(item, tool);
+        }
         let (fill, wheel_volume) = (self.prefs.video_fill, self.prefs.video_scroll == crate::prefs::VideoScroll::Volume);
         let vs = &mut self.video;
         let Some(v) = vs.player.as_mut() else { return };
@@ -529,6 +606,7 @@ impl App {
             // A seek or frame step delivers its picture a moment later.
             ctx.request_repaint_after(std::time::Duration::from_millis(60));
         }
+        canvas.context_menu(|ui| self.video_menu(ui, lib, item));
     }
 
     /// The small box for writing a timed comment, above the control bar.
@@ -683,6 +761,15 @@ mod tests {
         assert_eq!(marker_at(0.0, &[], 100.0, 0.0, 1000.0, 5.0), None);
         // A clip of unknown length puts every marker at the start.
         assert_eq!(marker_at(1.0, &times, 0.0, 0.0, 1000.0, 5.0), Some(0));
+    }
+
+    #[test]
+    fn saved_frames_are_named_like_eagles() {
+        assert_eq!(frame_item_name("Clip", 12.0), "Clip - 12.00");
+        assert_eq!(frame_item_name("Clip", 7.4567), "Clip - 7.46");
+        assert_eq!(frame_item_name("Clip", 0.125), "Clip - 0.13", "an exact half rounds up, as toFixed does");
+        assert_eq!(frame_item_name("Clip", 1.005), "Clip - 1.00", "1.005 is just under in binary");
+        assert_eq!(frame_item_name("Clip", -1.0), "Clip - 0.00");
     }
 
     #[test]

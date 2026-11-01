@@ -154,6 +154,9 @@ What Eagle does, from the `mediaElement` and `mpvMediaElement` directives and th
 | Markers | A 4 px tick per comment on the progress bar at `duration / length`; hovering shows the text | Seen | Same, with the time and text on hover. Clicking a tick seeks there; right-click offers Edit and Delete |
 | Adding | The note button or N pauses and asks for the text in a dialog at the bottom of the window; an empty text adds nothing | Seen | The comment button or N pauses and opens a box above the control bar (Save, Cancel, ⌘↩, Esc); an empty text adds nothing |
 | Inspector | Comments listed with their times; clicking one seeks the video there, editing seeks and pauses first, deleting offers an undo notice | Seen | Listed with their times; clicking one opens the video at that moment; edit and delete as for region comments (⌘Z undoes) |
+| Frame as thumbnail | "Set current frame as thumbnail" in the viewer's right-click menu (`player.thumbnail.set`, unbound) sets `thumbnailAt` to the current second and regenerates the video thumbnail from there: a 480 px wide canvas drawing saved as a JPEG at quality 1.0 under the usual `<name>_thumbnail.png` name, then the palette. `customThumbnail` is not set | Seen | Same: the frame at the playhead, decoded at full size by an image generator on the player's asset (`Video::current_frame`), drawn 480 wide and written as JPEG bytes to `_thumbnail.png` (`Library::set_video_thumbnail`), the palette recomputed and `thumbnailAt` saved |
+| Copy frame | ⇧C or the menu copies the frame (drawn at the item's recorded size) to the clipboard as an image | Seen | ⇧C or the menu puts the full-size frame on the clipboard |
+| Save frame | ⇧S or the menu adds the frame to the library as a new item named `<name> - <seconds to 2 decimals>`, a JPEG at 0.95, with the video's URL and folders and a modification time just after the video's | Seen | Same name, JPEG at 95, URL and folders, through the normal import (so it shows in the import progress). The modification time is the import's own. Nothing is saved to disk outside the library |
 
 ## GIF and animated images
 
@@ -314,6 +317,7 @@ These are the defaults. All but the arrows, Esc, Tab, Z and the viewer's C, ⇧R
 | `[` and `]` (with ⇧, ten) | With video in the viewer, previous or next frame |
 | ⇧, and ⇧. | With video in the viewer, slower or faster |
 | N | With video in the viewer, add a comment at the current time |
+| ⇧C and ⇧S | With video in the viewer, copy the current frame, or save it to the library as a new item ("Set current frame as thumbnail" has no default key) |
 | n/j and p/k, Home and End | With a PDF in the viewer, next and previous page, first and last page (⌘↑ and ⌘↓ too); ↑ ↓ and Page Up/Down scroll |
 | ⌘+, ⌘− and ⌘0 | With a PDF in the viewer, zoom in, out and back to Automatic |
 | ⌘F, ⌘G and ⇧⌘G | With a PDF in the viewer, find in the document and step through matches (↩ and ⇧↩ in the find field) |

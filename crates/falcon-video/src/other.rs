@@ -59,4 +59,7 @@ impl Video {
     pub fn frame(&mut self) -> Option<Frame> {
         None
     }
+    pub fn current_frame(&self) -> Result<Frame> {
+        unsupported()
+    }
 }

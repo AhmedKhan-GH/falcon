@@ -192,6 +192,20 @@ pub enum PlayerKey {
     Volume(bool),
     Speed(bool),
     AddComment,
+    /// The frame tools (`App::frame_tool`).
+    Frame(FrameTool),
+}
+
+/// What the video player can do with the frame on screen (Eagle's
+/// `player.thumbnail.*` keybinds and viewer menu).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum FrameTool {
+    /// Make it the video's thumbnail.
+    Thumbnail,
+    /// Put the picture on the clipboard.
+    Copy,
+    /// Add the picture to the library as a new item.
+    Save,
 }
 
 /// The group whose keys only act in the video player.
@@ -331,6 +345,10 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::Player(PlayerKey::Speed(false)), id: "player.speed.down", group: PLAYER, label: "Slower", default: k(SHIFT, Key::Comma), aliases: &[] },
     // falcon's own id: Eagle handles N outside its keybind table.
     Spec { cmd: Command::Player(PlayerKey::AddComment), id: "player.comment.add", group: PLAYER, label: "Add a comment at the current time", default: k(NONE, Key::N), aliases: &[] },
+    // Eagle leaves "set as thumbnail" unbound.
+    Spec { cmd: Command::Player(PlayerKey::Frame(FrameTool::Thumbnail)), id: "player.thumbnail.set", group: PLAYER, label: "Set the current frame as the thumbnail", default: None, aliases: &[] },
+    Spec { cmd: Command::Player(PlayerKey::Frame(FrameTool::Copy)), id: "player.thumbnail.copy", group: PLAYER, label: "Copy the current frame", default: k(SHIFT, Key::C), aliases: &[] },
+    Spec { cmd: Command::Player(PlayerKey::Frame(FrameTool::Save)), id: "player.thumbnail.save", group: PLAYER, label: "Save the current frame to the library", default: k(SHIFT, Key::S), aliases: &[] },
     // Export and copy-out (`App::export_keys`).
     Spec { cmd: Command::ExportComputer, id: "file.export.item.computer", group: "Export", label: "Export to Computer", default: k(CMD, Key::E), aliases: &[] },
     Spec { cmd: Command::ExportPack, id: "file.export.item.eaglepack", group: "Export", label: "Export as .eaglepack", default: k(CMD_SHIFT, Key::E), aliases: &[] },
@@ -1177,7 +1195,7 @@ mod tests {
     fn player_keys_only_clash_with_the_viewer_key() {
         let keys = Shortcuts::default();
         for s in TABLE.iter().filter(|s| s.group == PLAYER) {
-            let c = s.default.unwrap();
+            let Some(c) = s.default else { continue };
             let global = keys.resolve(c.logical_key, c.modifiers);
             if s.cmd == Command::Player(PlayerKey::Toggle) {
                 assert_eq!(global, Some(Command::Viewer));
@@ -1236,6 +1254,9 @@ mod tests {
         assert_eq!(p(&[Key::ArrowDown], cmd), Some(PlayerKey::Volume(false)));
         assert_eq!(p(&[Key::ArrowRight], cmd), Some(PlayerKey::Skip(true)));
         assert_eq!(p(&[Key::ArrowLeft], cmd), Some(PlayerKey::Skip(false)));
+        assert_eq!(p(&[Key::C], shift), Some(PlayerKey::Frame(FrameTool::Copy)));
+        assert_eq!(p(&[Key::S], shift), Some(PlayerKey::Frame(FrameTool::Save)));
+        assert_eq!(p(&[Key::C], none), None, "plain C is the comment mode of the image viewer");
         // Plain arrows stay with the viewer (previous and next item).
         assert_eq!(p(&[Key::ArrowLeft], none), None);
         assert_eq!(p(&[Key::A], none), None);
