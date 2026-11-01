@@ -133,6 +133,8 @@ pub enum Command {
     Grayscale,
     /// Show or hide the image viewer's navigator.
     Navigator,
+    /// Eagle's Open in New Window: the item in a window of its own.
+    OpenNewWindow,
 }
 
 /// How a scroll command moves the grid.
@@ -386,6 +388,7 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::AlwaysOnTop, id: "view.alwaysOnTop", group: "View", label: "Keep the window on top", default: k(SHIFT, Key::T), aliases: &[] },
     Spec { cmd: Command::Grayscale, id: "view.grayscale", group: "View", label: "Grayscale preview", default: k(CMD_ALT, Key::G), aliases: &[] },
     Spec { cmd: Command::Navigator, id: "view.toggle.navigator", group: "View", label: "Show or hide the navigator (viewer)", default: k(CMD_ALT, Key::Num8), aliases: &[] },
+    Spec { cmd: Command::OpenNewWindow, id: "view.file.opennewwindow", group: "View", label: "Open in a new window", default: k(CMD, Key::O), aliases: &[] },
 ];
 
 /// Keys that cannot be rebound, listed in the Shortcuts section.
@@ -992,6 +995,7 @@ mod tests {
         assert_eq!(keys.resolve(Key::T, Modifiers::NONE), Some(Command::TagPanel));
         assert_eq!(keys.resolve(Key::G, CMD_ALT), Some(Command::Grayscale));
         assert_eq!(keys.resolve(Key::Num8, CMD_ALT), Some(Command::Navigator));
+        assert_eq!(keys.resolve(Key::O, CMD), Some(Command::OpenNewWindow));
     }
 
     #[test]

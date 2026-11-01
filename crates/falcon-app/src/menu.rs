@@ -150,6 +150,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::ToggleName | C::ToggleInfo | C::ToggleComments | C::ToggleSubfolders => s.library,
         C::AlwaysOnTop => true,
         C::Grayscale | C::Navigator => s.library,
+        C::OpenNewWindow => s.library && (s.viewer || s.selected > 0),
         C::Presentation => s.library && (s.viewer || s.selected > 0 || s.presenting),
         C::Player(_) => false,
     }
@@ -366,6 +367,7 @@ pub static MENUS: &[(&str, &[Entry])] = &[
             checked("Navigator", Command::Navigator, Check::Navigator),
             SEP,
             checked("Viewer", Command::Viewer, Check::Viewer),
+            item("Open in New Window", Command::OpenNewWindow),
             item("Open With Default App", Command::OpenDefault),
             item("Reveal in Finder", Command::RevealInFinder),
             SEP,

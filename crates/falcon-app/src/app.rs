@@ -34,6 +34,7 @@ mod gif_view;
 mod open_ui;
 mod pdf_view;
 mod modes;
+mod preview_window;
 mod import_ui;
 mod folders_ui;
 mod layout_panel;
@@ -669,6 +670,8 @@ pub struct App {
     auto_import_refused: Option<PathBuf>,
     /// Presentation mode and the other View modes (`modes.rs`).
     modes: modes::Modes,
+    /// The item open in its own window (`preview_window.rs`).
+    preview: Option<preview_window::PreviewWin>,
 }
 
 impl App {
@@ -713,6 +716,7 @@ impl App {
             auto_imported: Arc::default(),
             auto_import_refused: None,
             modes: Default::default(),
+            preview: None,
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
         app.tile = saved.tile.unwrap_or(app.tile).clamp(TILE_MIN, TILE_MAX);
@@ -1781,6 +1785,7 @@ impl App {
             C::AlwaysOnTop => self.toggle_on_top(ctx),
             C::Grayscale => self.modes.grayscale = !self.modes.grayscale,
             C::Navigator => self.modes.hide_navigator = !self.modes.hide_navigator,
+            C::OpenNewWindow => self.open_preview_window(),
             C::Player(_) => {}
             C::ToggleName => self.display.show_name = !self.display.show_name,
             C::ToggleInfo => self.display.show_info = !self.display.show_info,
@@ -3560,6 +3565,11 @@ impl App {
             });
         }
         self.item_export_menu(ui, targets);
+        // Eagle's Open Item in New Window.
+        let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::OpenNewWindow);
+        if ui.add(egui::Button::new("Open in New Window").shortcut_text(keys)).clicked() {
+            self.preview = Some(preview_window::PreviewWin::new(item.id.clone()));
+        }
         // Eagle's Navigator toggle, in the viewer.
         if in_viewer {
             let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::Navigator);
@@ -5148,6 +5158,7 @@ impl App {
             }
         }
         self.text_saves(lib, ctx.input(|i| i.time));
+        self.preview_window(&ctx, lib);
         self.apply_actions(lib);
         self.end_frame_edits(lib);
         self.ws.loader.keep_original(self.ws.viewer.as_deref());
