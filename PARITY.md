@@ -9,8 +9,8 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 | Main window: menus, shortcuts, toolbar, sidebar, layouts | 160 | 43 | 68 | 9 |
 | Viewers and file formats | 152 | 24 | 14 | 7 |
 | Search, filters and organising | 148 | 28 | 46 | 3 |
-| Import, export, library, preferences and integrations | 115 | 19 | 78 | 26 |
-| **Total** | 575 | 114 | 206 | 45 |
+| Import, export, library, preferences and integrations | 129 | 17 | 66 | 26 |
+| **Total** | 589 | 112 | 194 | 45 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -1283,7 +1283,7 @@ Two cross-cutting facts explain many rows:
 | Recent folders list | Missing | — | local |
 | Create a new folder from the collect window | Missing | — | local |
 | Set name, description and tags before collecting (tag picker with recent, starred and recommended tags) | Missing | Falcon's collect window has no metadata fields | local |
-| Toggle the collect prompt over the API (`/api/preferences/collect/on`, `/off`) | Missing | Route not registered (`lib.rs:355-411`) | local |
+| Toggle the collect prompt over the API (`/api/preferences/collect/on`, `/off`) | Done | `preferences/collect/on|off` served; `Handle::set_preferences`; the app keeps the flag | local |
 | Window position remembered between launches | Done | `collect.rs:65-67` | local |
 
 ### 4. Export and copy-out
@@ -1419,7 +1419,7 @@ Eagle panes (`app/js/preferences.js:659-788`): General, Sidebar, Controls, Previ
 | **AI Search** pane (install, enable or disable the local semantic-search plugin) | Missing | — | online/plugin |
 | **AI Models** pane (shared API keys for OpenAI, Anthropic, Gemini and so on) | Missing | — | online/plugin |
 | **Eagle MCP** pane (install or open the MCP server plugin) | Missing | — | online/plugin |
-| **Developer:** show, copy and regenerate the API token | Missing | Falcon has no token auth; the Host check is the only gate (`lib.rs:190-194`) | local |
+| **Developer:** show, copy and regenerate the API token | Done | Developer pane: token, Copy, Regenerate and the `?token=` link (`Prefs::api_token`, made on first launch; Eagle's default is empty until Regenerate) | local |
 | Developer (falcon only): API on or off, and first port | Done (beyond Eagle) | `prefs.rs:339-358` | local |
 | Developer: plugin developer tools | Missing | — | local |
 | **Proxy** (server address and port, used for downloads and web search) | Missing | — | online |
@@ -1433,15 +1433,15 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| `GET /` and `/api/application/info` | Partial | `lib.rs:426-431`: version, build and platform only. No `preferences` or `showCollectModal` (a deliberate choice) | local |
+| `GET /` and `/api/application/info` | Done | version, build, platform, `showCollectModal` and a `preferences` subset (`lib.rs`) | local |
 | `GET /api/library/info` | Done | `lib.rs:438` | local |
-| `GET /api/library/history` | Partial | Lists libraries this server has served (`lib.rs:448`, header comment `lib.rs:14`), not the app's recent list | local |
+| `GET /api/library/history` | Done | The app's recent-libraries list through `Handle::set_history` | local |
 | `POST /api/library/switch` | Done | `lib.rs:450-461`; the app follows it (`app.rs:692-722`) | local |
 | `GET /api/library/icon` | Done | `lib.rs:462`, `v2.rs:920` | local |
 | `GET /api/folder/list` | Done | `lib.rs:465` | local |
 | `GET /api/folder/listRecent` | Done | `lib.rs:466` | local |
 | `POST /api/folder/create`, `rename`, `update` | Done | `lib.rs:469-501` | local |
-| `POST /api/folder/unlock` | Missing | Not registered | local |
+| `POST /api/folder/unlock` | Done | Unlock for the server's session, nothing written; `folder/list` then reports `isUnLock` and children | local |
 | `GET /api/tag/all`, `list`, `listRecent`, `groups` | Done | `lib.rs:502-522` | local |
 | `POST /api/item/addFromPath`, `addFromPaths` | Done | `lib.rs:369-370` (imports finish before the reply) | local |
 | `POST /api/item/addFromURL`, `addFromURLs` | Done | `lib.rs:668-680,753-779` | online for http URLs |
@@ -1450,13 +1450,13 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 | `POST /api/item/update` | Done | `lib.rs:373` | local |
 | `GET /api/item/info`, `thumbnail`, `list` | Done | `lib.rs:374-377,782-800` | local |
 | `POST /api/item/moveToTrash` | Done | `lib.rs:376` | local |
-| `POST /api/item/setCustomThumbnail` | Missing | The library supports it (`set_custom_thumbnail`, used at `image_edit.rs:142`), but the route is not registered | local |
-| `POST /api/item/refreshPalette`, `refreshThumbnail` | Missing | The library supports both (`image_edit.rs:160`), but the routes are not registered | local |
-| `GET /api/preferences/collect/on`, `/off` | Missing | Not registered | local |
-| `/item?id=`, `/folder?id=` and `/smart-folder?id=` redirects to `eagle://` links | Missing | Not registered | local |
+| `POST /api/item/setCustomThumbnail` | Done | File work without the library lock (`thumbnail::custom_thumbnailed`), then only the changed keys written | local |
+| `POST /api/item/refreshPalette`, `refreshThumbnail` | Done | `thumbnail::redrawn` off the lock; v1 replies with no data as Eagle | local |
+| `GET /api/preferences/collect/on`, `/off` | Done | Served; `application/info` reflects it | local |
+| `/item?id=`, `/folder?id=` and `/smart-folder?id=` redirects to `eagle://` links | Done | 302 to the `eagle://` link, or 404 with Eagle's `{"error":…}`; auth still applies (Eagle skips it there) | local |
 | `POST /api/script/inject` (runs arbitrary JavaScript) | Missing (on purpose) | Deliberately left out; a security hole | local |
 | `GET /api/check` (obfuscated remote-script loader) | Missing (on purpose) | Not library functionality | online |
-| Token auth (`?token=` matching the Developer token) | Missing | Host-header check only (`lib.rs:190-194`) | local |
+| Token auth (`?token=` matching the Developer token) | Done | Served if the Host is right or `token` matches (query, or body on POST); the Host check is kept | local |
 | Listen on all interfaces | Different (on purpose) | 127.0.0.1 only (`lib.rs:9,69`) | local |
 
 #### 7.2 v2
@@ -1468,21 +1468,21 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 | `item/get`, `query`, `countAll`, `add`, `update` | Done | `lib.rs:383-387,540` | local |
 | `item/add` with `bookmarkURL` | Missing | `v2.rs:301-302` | online |
 | `item/getComments`, `addComment`, `updateComment`, `removeComment` | Done | `lib.rs:388-391,541-544` | local |
-| `item/setCustomThumbnail`, `item/refreshThumbnail` | Missing | Not registered | local |
+| `item/setCustomThumbnail`, `item/refreshThumbnail` | Done | v2 shapes: `itemId`/`filePath`, `true`/`false` replies | local |
 | `folder/get`, `create`, `update` | Done | `lib.rs:392-394,545-546` | local |
 | `smartFolder/get`, `create`, `update`, `remove`, `getItems`, `getRules` | Done | `lib.rs:395-400,534-539` | local |
 | `tag/get`, `getRecentTags`, `getStarredTags`, `update`, `merge` | Done | `lib.rs:401-405,523-527` | local |
 | `tagGroup/get`, `create`, `update`, `remove`, `addTags`, `removeTags` | Done | `lib.rs:406-411,528-533` | local |
 | `aiSearch/*` (isInstalled, isReady, isStarting, isSyncing, getSyncStatus, checkServiceHealth, searchByText, searchByBase64, searchByItemId) | Missing | — | online/plugin |
-| Interactive API playground page | Missing | — | local |
+| Interactive API playground page | Done | `/api/v2/playground` (`crates/falcon-server/src/playground.html`) | local |
 
 ### 8. Integrations
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| `eagle://` URL scheme registered with macOS | Missing | The bundle Info.plist has no URL types (`scripts/bundle.sh:12-30`) | local |
-| `eagle://item/<id>` opens the item | Partial | Accepted as a **launch argument** only (`crates/falcon-app/src/main.rs:39`); not a handler for links clicked elsewhere | local |
-| `eagle://folder/<id>`, `eagle://smart-folder/<id>`, `eagle://openFolder/<id>` | Missing | — | local |
+| `eagle://` URL scheme registered with macOS | Done | `CFBundleURLTypes` in `scripts/bundle.sh`; `links.rs` handles the get-URL Apple event | local |
+| `eagle://item/<id>` opens the item | Done | Opens the item in the viewer inside its first folder (or All); also as a launch argument | local |
+| `eagle://folder/<id>`, `eagle://smart-folder/<id>`, `eagle://openFolder/<id>` | Partial | `folder` and `smart-folder` open; `openFolder` is not handled | local |
 | Open `.eaglepack` files by double-clicking them | Missing | — | local |
 | Install a plugin by opening a `.eagleplugin` file | Missing | — | local |
 | Open With: list the apps that can open a file | Done | `crates/falcon-app/src/open_with.rs` | local |
@@ -1517,9 +1517,9 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 
 Rows marked "not counted" are features Eagle 4.0.0 does not have.
 
-- **Done:** 115, including 5 where falcon goes beyond Eagle and 1 with a small difference.
-- **Partial:** 19.
-- **Missing:** 104, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
+- **Done:** 129, including 5 where falcon goes beyond Eagle and 1 with a small difference.
+- **Partial:** 17.
+- **Missing:** 92, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
 - **Different on purpose:** 1 (the API listens on localhost only).
 
 ### Ranked Missing and Partial local items
@@ -1545,7 +1545,7 @@ Ranked by how often a user would hit the gap, and the risk if they do.
 17. **The collect window is thin**: no multi-folder, recent folders, new folder, name, description or tags.
 18. **Library list management is missing**: clear history, remove from list, library icon, and the missing-library retry or relocate screen.
 19. **App password lock** has no Touch ID.
-20. **Missing API routes**: `folder/unlock`, `item/setCustomThumbnail`, `item/refreshThumbnail`, `item/refreshPalette` (v1 and v2), `preferences/collect/on|off`, and the `/item`, `/folder` and `/smart-folder` redirects. There is no token auth, and `library/history` is per server rather than the app's recent list.
+20. ~~Missing API routes.~~ Fixed; `eagle://openFolder` is still unhandled.
 21. **Hard-coded behaviours need preference switches**: font style tag, video autoplay, loop short clips, hover video preview, saved playback position, sidebar counts.
 22. **Missing Controls and Preview settings**: middle button, and the image settings not yet wired (see §6).
 23. **Sidebar pane is missing**: show or hide sections, and double-click to rename or collapse.
