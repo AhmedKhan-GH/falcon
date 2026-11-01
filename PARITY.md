@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 249 | 13 | 10 | 8 |
-| Viewers and file formats | 185 | 15 | 3 | 5 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 256 | 6 | 10 | 8 |
+| Viewers and file formats | 186 | 14 | 3 | 5 |
 | Search, filters and organising | 216 | 1 | 4 | 3 |
-| Import, export, library, preferences and integrations | 189 | 4 | 16 | 26 |
-| **Total** | 839 | 33 | 33 | 42 |
+| Import, export, library, preferences and integrations | 190 | 3 | 16 | 26 |
+| **Total** | 848 | 24 | 33 | 42 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -115,7 +115,7 @@ Cross-references (not counted): File ▸ Import Folders / Links / Eagle Package 
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| Every context menu has a type-to-filter search box with keyword matching | Partial | `ui/menus/search.rs` on the item, folder, smart folder and tag menus incl. submenus; Eagle also searches the palette, tag-group, New, filter +, saved-filter and Help menus | local |
+| Every context menu has a type-to-filter search box with keyword matching | Partial | `ui/menus/search.rs` on the item, folder, smart folder, tag, tag group, palette, New, filter + and saved-filter menus incl. submenus; the macOS Help menu searches itself. Missing: Eagle's inspector Help button menu (no such button) and a few nested menus (Change Icon, rename Insert/Number/Date, Add/Move to Group) | local |
 | **Item**: Restore (in the Trash) | Done | app.rs:2531-2534, which also offers Delete Permanently | local |
 | Item: Open Item(s) in New Window | Done | Card menu opens all its targets in one window stepping with ←/→; middle click opens its card | local |
 | Item: Open With Default App / Open With ▸ apps / Reveal in Finder | Done | open_ui.rs:33-46 | local |
@@ -181,7 +181,7 @@ Cross-references (not counted): File ▸ Import Folders / Links / Eagle Package 
 | Tag: Filter items with the tag(s), Merge N tags (several selected), Add to several groups | Done | `tags_menu` in app.rs, `merge_dialog` (2–5 tags as Eagle), `Library::merge_tags`, `add_tags_to_group_too` | local |
 | **Tag group**: Rename / Remove | Done | organize_ui.rs:820-845, which adds description, move and colour | local |
 | Tag group: Find items with any tag in the group | Done | Group heading menu, `filter_any_tags` | local |
-| **Tag list sort**: A>Z / Z>A / by count / group by Alphabet or Groups | Partial | Sort menu A>Z / Z>A / by count and group-by toggle; the choice isn't saved across launches, Eagle keeps it | local |
+| **Tag list sort**: A>Z / Z>A / by count / group by Alphabet or Groups | Done | Sort and group-by saved app-wide, as Eagle's localStorage keys | local |
 | **Palette swatch** (inspector): Find similar colour, copy as HEX / RGB / RGBA / HSL / HSV / HWB / CMYK, set as primary | Done | Find Similar, copy as HEX/RGB/RGBA/HSL/HSV/HWB/CMYK (`colors.rs`), Primary Colour toggle with a ring on the primary swatch | local |
 | **Inspector tag input**: Copy / Paste / Clear All Tags | Done | `tag_area_menu` in `app/tag_picker.rs` | local |
 
@@ -209,7 +209,7 @@ Eagle defaults come from prefs `shortcuts.keybinds` (rebindable) and from the ha
 | ⌥⌘S reveal, ⌥⌘D duplicate (view) | Done | `view.reveal.darwin` ⌥⌘S and `view.duplicate.darwin` ⌥⌘D (inert in Eagle itself; macOS reserves ⌥⌘D for the Dock) | local |
 | Home / End / PageUp / PageDown scroll the grid; ⌘↑ / ⌘↓ jump to top or bottom | Done | `run_command` scroll offsets; ⌘↑ / ⌘↓ also select the first or last item, where Eagle only scrolls | local |
 | 0–5 set the rating of the selection | Done | `organize.rating.*` in the grid and every viewer (bare 0/1 no longer zoom the image viewer, as Eagle); the web viewer takes the keys while its page has focus | local |
-| T opens the tag panel, F opens the folder panel, J opens Go to Folder, G opens Actions, P opens Plugins | Partial | T and J done; no F, G or P | local |
+| T opens the tag panel, F opens the folder panel, J opens Go to Folder, G opens Actions, P opens Plugins | Done | T opens the tag picker, F the Add to Folders picker (`organize.folder.panel`), J Go to Folder; G and P are not applicable (no Actions or plugins) | local |
 | R reshuffles the Random view | Done | R and View ▸ Shuffle Again; also a folder or smart folder sorted Random | local |
 | `*` or `/` expand or collapse every folder | Done | Eagle's `toggleAllFolders` rule (smart folders when one is open); `*` is the ⇧8 alias chord | local |
 | Tab toggles all panels | Done | Fixed key in shortcuts.rs FIXED, when no text field has focus (`logic::toggle_all`) | local |
@@ -335,9 +335,9 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| Drag items onto a sidebar folder | Partial | `logic::folder_drop` move/add rules with ⌥ and the toast; no password prompt for a locked target, and removal only from the open folder rather than every selected folder | local |
+| Drag items onto a sidebar folder | Done | `logic::folder_drop` move/add rules with ⌥ and the toast; a locked target asks for its password first; items leave every picked folder, else the open one, as Eagle's `classifySelected` | local |
 | Toast after a drop ("N items moved to Folder", with a link to the folder) | Done | `flash_folder` toast with the folder name as a link (`toast.rs` `Toast.link`) | local |
-| Drag items onto a Quick Access folder | Partial | Drops accepted; same locked-folder and multi-folder gaps as sidebar rows | local |
+| Drag items onto a Quick Access folder | Done | Same flow as sidebar rows, incl. the password prompt | local |
 | Drag items onto a subfolder card | Done | Same `DropOnFolder` path as sidebar rows, with the bulk gate | local |
 | Drag items onto the Trash | Done | app.rs:1764-1767 | local |
 | Drag folders to reorder or nest, with insertion lines | Done | organize_ui.rs:254-266 | local |
@@ -370,7 +370,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Closing the window keeps the app running (Dock icon stays); reopen from the Dock | Done | Closing hides falcon (`NSApp hide:`, so the collect and preview windows hide too); the Dock icon or reopening brings it back; ⌘Q quits | local |
 | Menu bar status icon: Show Eagle, Capture Area / Window / Full Screen, Quit | Done | `tray.rs` `NSStatusItem`: Show falcon, Capture Area / Window / Full Screen, Quit; General switch; rebuilt on language change | local |
 | Lock screen for the whole app, with Touch ID | Done | Password and a Use Touch ID button (`touch_id.rs`) | local |
-| Loading screen while a library opens (progress messages) | Partial | `Library::open_with_progress` for opens started in the app; Try Again / Select Another Path, the open after creating a library and launch restore still block | local |
+| Loading screen while a library opens (progress messages) | Done | Every open goes through the queue behind the loading screen: switcher, Open Library, Try Again, Select Another Path, after creating, launch restore; launch arguments, links and opened files wait until it drains | local |
 | Resizable inspector | Done | Drag its inner edge; kept across launches | local |
 | Several libraries open in one window (falcon only) | Done | app.rs:624-676, workspaces.rs (extra) | local |
 | Floating collect window (falcon only) | Done | collect.rs (extra) | local |
@@ -398,8 +398,8 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | UNDO button on toasts | Done | `toast.rs` undoable kind | local |
 | Clickable links in toasts (open the folder) | Done | `Toast.link` on the folder add and drop toasts | local |
 | Import progress bar with count and time remaining | Done | "Importing 3 of 10 · About 20 s left · name" (hidden while paused); Pause/Resume on the sidebar spinner | local |
-| Import errors toast ("N files failed, click for details") opens an error list with retry and reveal | Partial | Toast shows the failure count only (app.rs:925) | local |
-| Dock icon progress bar during long tasks | Partial | `dock_progress.rs` driven by the progress modal (thumbnails, Trash, package import); not by the background file import | local |
+| Import errors toast ("N files failed, click for details") opens an error list with retry and reveal | Done | Toast opens the panel: per-file Retry and Reveal (Eagle has only Retry All and click-to-reveal), Retry All, Copy, Clear All; a failed paste can't be retried (temp file gone) | local |
+| Dock icon progress bar during long tasks | Done | `dock_progress.rs` from the progress modal and the background import (finished/total, hidden from 97% as Eagle) | local |
 | Progress modals for export, eaglepack, thumbnail refresh, empty trash, WebP conversion and similar | Done | Shared modal with Cancel for pack import/export, thumbnail refresh, Empty Trash, Export to Computer and Export in Format (`export::run` takes a cancel flag); WebP conversion has its own confirm and runs per item | local |
 | Sound effects (delete item, delete folder, capture) | Missing | Not built: falcon ships no sound assets; the capture uses the system shutter sound | local |
 | System notifications (import done, capture done) | Done | `notify.rs` posts UserNotifications for import, export and capture done; they need the bundled app (`dev.falcon.app`), which is how falcon is run; clicking one activates falcon | local |
@@ -696,7 +696,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Measure tool | Done | Distance, angle and distance between parallel faces (`ui/viewer/model.rs`) | local |
 | Model tree navigator (files, meshes, materials) and details sidebar | Done | Files, meshes (hide, isolate, fit one), materials, plus the details panel | local |
 | Settings: background colour, edge display, dark theme | Done | Background colour, edges with colour and angle, default colour, Auto/Light/Dark theme, Reset | local |
-| Export model and create snapshot | Partial | `model3d/export.rs` writes OBJ+MTL, STL, GLB, glTF and PLY; the viewer menu offers OBJ and STL only so far; snapshot without edges/grid/axes; no OFF or 3DM | local |
+| Export model and create snapshot | Partial | Viewer menu exports OBJ+MTL, STL, GLB, glTF and PLY (`export::Format::ALL`); the snapshot draws edges, grid and axes; OFF and 3DM are not built | local |
 | Esc/←/→ still exit or move between items | Done | The shared viewer shell handles Esc, ← and → | local |
 
 ### 11. Special formats viewed as images (PSD, PSB, AI, EPS, XD, Sketch, Figma, Affinity, C4D, Blender, SketchUp, DWG, CDR, Clip, InDesign, Office, iWork, XMind, MindNode, OmniGraffle, HDR, EXR, ICO, ICNS, DDS)
@@ -737,7 +737,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | Open one or more items in their own window (Cmd+O, middle click) | Done | ⌘O and the middle-click preference open the acted-on items in a window that steps with ←/→ (`open_preview_items`), as Eagle's | local |
-| Same viewers in the window (image, GIF, RAW, video, font, text, PDF, 3D, web, plugin) | Partial | Image, GIF, video, audio, text, PDF and fonts (incl. the fallback font view) are real viewers in the preview window; 3D and web are stills | local |
+| Same viewers in the window (image, GIF, RAW, video, font, text, PDF, 3D, web, plugin) | Done | Image, GIF, video, audio, text, PDF, fonts, 3D (shared wgpu callback) and web (WKWebView on the preview's NSWindow) in the preview window; plugins not applicable | local |
 | Window opacity 10%–100% | Done | NSWindow `alphaValue` from the window menu | local |
 | Always on top toggle in the window | Done | Preview window menu | local |
 | Navigator, grayscale, rotate, flip in the window menu | Done | Preview window menu; rotate and flip change the preview only | local |
@@ -1232,7 +1232,7 @@ Two cross-cutting facts explain many rows:
 | Drag an image or link from a web browser into the window | Missing | Only `dropped_files` with local paths are read (`app.rs:3600`) | online |
 | Batch-download panel: pick images from a page, filter by type and size, select all or invert | Missing | — | online |
 | Screen capture of an area, a window or the full screen into the library | Done | `capture.rs`: area (`screencapture -i`), window (`-w`), full screen (`-D` of the pointer's display); from the menu bar icon, the global keys and `Command::Capture`; Eagle's naming "Screenshot - date", format conversion, @2x halving | local |
-| Watched auto-import folder: files dropped into it are imported automatically | Partial | `auto_import.rs` polls `<chosen>/<library name>` every 2 s and imports settled files into the root; imported files go to the Trash as Eagle deletes them (preference `auto_import_delete`, on by default, Trash instead of a hard delete). Still Partial: polling instead of file events, only the shown library is watched, any format is accepted | local |
+| Watched auto-import folder: files dropped into it are imported automatically | Done | `fsevents` stream on the chosen folder (2 s poll as fallback), one watcher per open library, settle rule, delete-after-import option (Trash); any format accepted where Eagle takes only its supported ones | local |
 | Auto-import rejects network drives and missing paths | Done | `auto_import::is_network_volume` (`NSURLVolumeIsLocalKey`), `prefs::auto_import_refusal`; a vanished folder pauses with a notice | local |
 | Auto-import skips `.tmp` files, tiny files and unsupported types, and waits until a copy has finished | Done | `auto_import::skip` and `Settle` (size and mtime unchanged for 3 s); any extension is accepted, as a drop is | local |
 | Import an Eagle Package (`.eaglepack`) from the File menu or by opening the file | Done | File ▸ Import submenu, the switcher, a drop, and Finder Open With / Dock drop through `open_files.rs` and the bundle's document types | local |
@@ -1517,8 +1517,8 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 
 Rows marked "not counted" are features Eagle 4.0.0 does not have.
 
-- **Done:** 189, including 5 where falcon goes beyond Eagle and 1 with a small difference.
-- **Partial:** 4.
+- **Done:** 190, including 5 where falcon goes beyond Eagle and 1 with a small difference.
+- **Partial:** 3.
 - **Missing:** 42, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
 - **Different on purpose:** 1 (the API listens on localhost only).
 
