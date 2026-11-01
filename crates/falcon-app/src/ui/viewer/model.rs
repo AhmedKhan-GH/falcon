@@ -16,6 +16,7 @@ use falcon_library::model::Item;
 
 use crate::app::App;
 use crate::icons as ic;
+use crate::locale::tr;
 use crate::logic::{self, DragAction, Projection, UpAxis, ViewZoom};
 use crate::model3d::gpu::SceneCallback;
 use crate::model3d::{ModelView, Settings, Shading, ViewerTheme};
@@ -236,20 +237,20 @@ impl App {
             });
             right -= 30.0;
             // Create Snapshot and Export, as in Eagle's viewer toolbar.
-            if icon_button(ui, Pos2::new(right - 13.0, cy), ic::CAMERA, 16.0, true, "Create Snapshot (PNG of the view)").clicked() {
+            if icon_button(ui, Pos2::new(right - 13.0, cy), ic::CAMERA, 16.0, true, tr("Create Snapshot (PNG of the view)")).clicked() {
                 let ppp = ui.ctx().pixels_per_point();
                 let size = [(area.width() * ppp).round().max(1.0) as u32, (area.height() * ppp).round().max(1.0) as u32];
                 self.model_snapshot(item, size, aspect);
             }
             right -= 30.0;
-            let export = icon_button(ui, Pos2::new(right - 13.0, cy), ic::EXPORT, 16.0, true, "Export Model");
+            let export = icon_button(ui, Pos2::new(right - 13.0, cy), ic::EXPORT, 16.0, true, tr("Export Model"));
             let mut format = None;
             egui::Popup::menu(&export).show(|ui| {
                 ui.set_min_width(170.0);
-                if ui.button("Export as OBJ…").clicked() {
+                if ui.button(tr("Export as OBJ…")).clicked() {
                     format = Some(m3d::export::Format::Obj);
                 }
-                if ui.button("Export as STL…").clicked() {
+                if ui.button(tr("Export as STL…")).clicked() {
                     format = Some(m3d::export::Format::Stl);
                 }
             });
@@ -258,11 +259,11 @@ impl App {
             }
             right -= 30.0;
             let s = &mut self.model3d.settings;
-            let (r, x) = bar_toggle(ui, right, cy, "Measure", s.measuring, "Measure: click two points on the model");
+            let (r, x) = bar_toggle(ui, right, cy, tr("Measure"), s.measuring, tr("Measure: click two points on the model"));
             if r.clicked() {
                 s.measuring = !s.measuring;
             }
-            let (r, x) = bar_toggle(ui, x, cy, "Tree", s.tree, "Show the files, meshes and materials");
+            let (r, x) = bar_toggle(ui, x, cy, tr("Tree"), s.tree, tr("Show the files, meshes and materials"));
             if r.clicked() {
                 s.tree = !s.tree;
             }
@@ -346,11 +347,11 @@ impl App {
             ui.color_edit_button_srgb(&mut s.default_color);
             ui.label("Default Colour");
         });
-        ui.label(egui::RichText::new("Theme").color(t::p().text_muted));
+        ui.label(egui::RichText::new(tr("Theme")).color(t::p().text_muted));
         ui.horizontal(|ui| {
-            ui.selectable_value(&mut s.theme, ViewerTheme::Auto, "Auto");
-            ui.selectable_value(&mut s.theme, ViewerTheme::Light, "Light");
-            ui.selectable_value(&mut s.theme, ViewerTheme::Dark, "Dark");
+            ui.selectable_value(&mut s.theme, ViewerTheme::Auto, tr("Auto"));
+            ui.selectable_value(&mut s.theme, ViewerTheme::Light, tr("Light"));
+            ui.selectable_value(&mut s.theme, ViewerTheme::Dark, tr("Dark"));
         });
         ui.separator();
         let reset = ui.button("Reset to Default").clicked();

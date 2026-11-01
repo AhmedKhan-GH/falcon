@@ -295,7 +295,7 @@ impl App {
             None => label.to_string(),
         };
         let t_fit = match self.shortcuts.binding(C::ZoomFit) {
-            Some(c) => format!(", {} fits", crate::shortcuts::display(ui.ctx(), &c)),
+            Some(c) => crate::locale::trf(", {key} fits", &[("key", &crate::shortcuts::display(ui.ctx(), &c))]),
             None => String::new(),
         };
         let (t_zoom, t_actual, t_edge) = (

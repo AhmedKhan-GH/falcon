@@ -13,6 +13,7 @@ use falcon_library::model3d::{math, raster};
 
 use crate::app::App;
 use crate::icons as ic;
+use crate::locale::{tr, trf};
 use crate::logic;
 use crate::model3d::{ModelView, Settings, ViewerTheme};
 use crate::theme::{self as t, font, mono};
@@ -84,44 +85,44 @@ impl App {
                 let (r, _) = ui.allocate_exact_size(vec2(w, ROW), Sense::hover());
                 ui.painter().text(Pos2::new(r.left(), r.center().y), Align2::LEFT_CENTER, label, font(11.5), muted);
             };
-            heading(ui, "Files");
+            heading(ui, tr("Files"));
             let (r, _) = ui.allocate_exact_size(vec2(w, ROW), Sense::hover());
             icon(ui, Pos2::new(r.left() + 8.0, r.center().y), ic::FILE, 13.0, text);
             let g = galley(ui, &format!("{}.{}", item.name, item.ext), font(12.0), text, w - 24.0);
             ui.painter().galley(Pos2::new(r.left() + 22.0, r.center().y - g.size().y / 2.0), g, text);
             ui.add_space(6.0);
 
-            heading(ui, "Meshes");
+            heading(ui, tr("Meshes"));
             for (k, mesh) in model.meshes.iter().enumerate() {
                 let (r, resp) = ui.allocate_exact_size(vec2(w, ROW), Sense::click());
                 if resp.hovered() {
                     ui.painter().rect_filled(r, CornerRadius::same(4), text.gamma_multiply(0.08));
                 }
                 let shown = !hidden[k];
-                let eye = row_button(ui, ("tree-eye", k), Pos2::new(r.left() + 10.0, r.center().y), ic::EYE, if shown { text } else { muted.gamma_multiply(0.5) }, if shown { "Hide" } else { "Show" });
+                let eye = row_button(ui, ("tree-eye", k), Pos2::new(r.left() + 10.0, r.center().y), ic::EYE, if shown { text } else { muted.gamma_multiply(0.5) }, if shown { tr("Hide") } else { tr("Show") });
                 if eye.clicked() {
                     act = Some(TreeAct::Toggle(k));
                 }
-                let name = if mesh.name.trim().is_empty() { format!("Mesh {}", k + 1) } else { mesh.name.clone() };
+                let name = if mesh.name.trim().is_empty() { trf("Mesh {n}", &[("n", &(k + 1))]) } else { mesh.name.clone() };
                 let ink = if shown { text } else { muted };
                 let g = galley(ui, &name, font(12.0), ink, w - 76.0);
                 ui.painter().galley(Pos2::new(r.left() + 24.0, r.center().y - g.size().y / 2.0), g, ink);
-                if row_button(ui, ("tree-fit", k), Pos2::new(r.right() - 32.0, r.center().y), ic::CORNERS_IN, text, "Fit Mesh to Window").clicked() {
+                if row_button(ui, ("tree-fit", k), Pos2::new(r.right() - 32.0, r.center().y), ic::CORNERS_IN, text, tr("Fit Mesh to Window")).clicked() {
                     act = Some(TreeAct::Fit(k));
                 }
-                if row_button(ui, ("tree-iso", k), Pos2::new(r.right() - 10.0, r.center().y), ic::FUNNEL, text, "Isolate (again to show all)").clicked() {
+                if row_button(ui, ("tree-iso", k), Pos2::new(r.right() - 10.0, r.center().y), ic::FUNNEL, text, tr("Isolate (again to show all)")).clicked() {
                     act = Some(TreeAct::Isolate(k));
                 }
                 if resp.double_clicked() {
                     act = Some(TreeAct::Fit(k));
                 }
             }
-            if hidden.iter().any(|&h| h) && ui.add(egui::Button::new(egui::RichText::new("Show All").color(text)).small()).clicked() {
+            if hidden.iter().any(|&h| h) && ui.add(egui::Button::new(egui::RichText::new(tr("Show All")).color(text)).small()).clicked() {
                 act = Some(TreeAct::ShowAll);
             }
             if !materials.is_empty() {
                 ui.add_space(6.0);
-                heading(ui, "Materials");
+                heading(ui, tr("Materials"));
                 for (name, c) in &materials {
                     let (r, resp) = ui.allocate_exact_size(vec2(w, ROW), Sense::click());
                     if resp.hovered() {
@@ -130,10 +131,10 @@ impl App {
                     let sw = Rect::from_center_size(Pos2::new(r.left() + 10.0, r.center().y), vec2(11.0, 11.0));
                     let col = Color32::from_rgb((c[0] * 255.0) as u8, (c[1] * 255.0) as u8, (c[2] * 255.0) as u8);
                     ui.painter().rect_filled(sw, CornerRadius::same(2), col);
-                    let label = if name.is_empty() { "No Name" } else { name.as_str() };
+                    let label = if name.is_empty() { tr("No Name") } else { name.as_str() };
                     let g = galley(ui, label, font(12.0), text, w - 30.0);
                     ui.painter().galley(Pos2::new(r.left() + 24.0, r.center().y - g.size().y / 2.0), g, text);
-                    if resp.on_hover_text("Show only the meshes with this material (again to show all)").clicked() {
+                    if resp.on_hover_text(tr("Show only the meshes with this material (again to show all)")).clicked() {
                         act = Some(TreeAct::Material(name.clone()));
                     }
                 }
@@ -188,13 +189,13 @@ impl App {
         // The readout, bottom left.
         let (panel, text, muted, divider) = panel_colors(settings.theme);
         let lines: Vec<(String, String)> = match &view.picks[..] {
-            [] => vec![("Measure".into(), "Click a point on the model".into())],
-            [_] => vec![("Measure".into(), "Click a second point".into())],
+            [] => vec![(tr("Measure").into(), tr("Click a point on the model").into())],
+            [_] => vec![(tr("Measure").into(), tr("Click a second point").into())],
             [a, b, ..] => {
                 let m = export::measure(a, b);
-                let mut rows = vec![("Distance".to_string(), logic::detail_number(f64::from(m.distance))), ("Angle".to_string(), format!("{:.1}°", m.angle))];
+                let mut rows = vec![(tr("Distance").to_string(), logic::detail_number(f64::from(m.distance))), (tr("Angle").to_string(), format!("{:.1}°", m.angle))];
                 if let Some(d) = m.parallel {
-                    rows.push(("Parallel faces".to_string(), logic::detail_number(f64::from(d))));
+                    rows.push((tr("Parallel faces").to_string(), logic::detail_number(f64::from(d))));
                 }
                 rows
             }
@@ -217,8 +218,8 @@ impl App {
         let name = format!("{}.{ext}", item.name);
         let Some(dest) = rfd::FileDialog::new().set_file_name(name).add_filter(ext.to_uppercase(), &[ext]).save_file() else { return };
         match export::write(view.visible_meshes(), format, &dest) {
-            Ok(()) => self.flash_brief("Model exported"),
-            Err(e) => self.flash_error(format!("Couldn't export the model: {e}")),
+            Ok(()) => self.flash_brief(tr("Model exported")),
+            Err(e) => self.flash_error(trf("Couldn't export the model: {error}", &[("error", &e)])),
         }
     }
 
@@ -242,8 +243,8 @@ impl App {
             }
         }
         match img.save(&dest) {
-            Ok(()) => self.flash_brief("Snapshot saved"),
-            Err(e) => self.flash_error(format!("Couldn't save the snapshot: {e}")),
+            Ok(()) => self.flash_brief(tr("Snapshot saved")),
+            Err(e) => self.flash_error(trf("Couldn't save the snapshot: {error}", &[("error", &e)])),
         }
     }
 }

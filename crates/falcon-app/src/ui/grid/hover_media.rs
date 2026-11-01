@@ -7,6 +7,7 @@ use falcon_library::media;
 use falcon_library::model::Item;
 
 use crate::app::App;
+use crate::locale::tr;
 use crate::hover_media::{self as hm, Strip};
 use crate::logic::{self, Layout};
 use crate::theme::{self as t, mono};
@@ -115,7 +116,7 @@ impl App {
         p.circle_filled(button.center(), 11.0, if b.hovered() { t::p().primary } else { Color32::from_black_alpha(170) });
         let glyph = if muted { crate::icons::SPEAKER_X } else { crate::icons::SPEAKER_HIGH };
         p.text(button.center(), Align2::CENTER_CENTER, glyph, egui::FontId::new(13.0, t::fill_family()), Color32::WHITE);
-        let b = b.on_hover_text(if muted { "Unmute" } else { "Mute" });
+        let b = b.on_hover_text(if muted { tr("Unmute") } else { tr("Mute") });
         if b.clicked() {
             self.display.video_muted = !muted;
         }

@@ -8,6 +8,7 @@ use falcon_library::hdr;
 use falcon_library::model::Item;
 
 use crate::app::App;
+use crate::locale::tr;
 use crate::theme::{self as t, mono};
 
 /// The slider's range in stops, and its step.
@@ -44,8 +45,8 @@ impl App {
         } else if let Some(p) = resp.interact_pointer_pos().filter(|_| resp.dragged() || resp.clicked()) {
             stops = stops_at((p.x - track.left()) / track.width());
         }
-        resp.on_hover_text("Exposure (double-click to reset)");
-        label_resp.on_hover_text("Exposure in stops (double-click to reset)");
+        resp.on_hover_text(tr("Exposure (double-click to reset)"));
+        label_resp.on_hover_text(tr("Exposure in stops (double-click to reset)"));
         let painter = ui.painter();
         let y = track.center().y;
         let f = (stops - RANGE.0) / (RANGE.1 - RANGE.0);
