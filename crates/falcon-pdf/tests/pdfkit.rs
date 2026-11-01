@@ -6,7 +6,7 @@
 
 use std::path::{Path, PathBuf};
 
-use falcon_pdf::{Document, SearchOptions};
+use falcon_pdf::{Document, LinkTarget, SearchOptions};
 
 const WORDS: [&str; 5] = ["alpha", "bravo", "charlie", "delta", "echo"];
 const COLORS: [[u8; 3]; 5] = [[255, 0, 0], [0, 255, 0], [0, 0, 255], [255, 255, 0], [255, 0, 255]];
@@ -154,6 +154,55 @@ fn outline_and_thumbnails() {
     assert_eq!(outline[0].depth, 0);
     let t = doc.thumbnail(0, 128).unwrap();
     assert_eq!((t.width, t.height), (99, 128));
+}
+
+/// Writes a PDF from its numbered objects (1 is the catalog).
+fn write_objects(path: &Path, objs: &[String]) {
+    let mut out = b"%PDF-1.4\n".to_vec();
+    let mut offsets = Vec::new();
+    for (k, body) in objs.iter().enumerate() {
+        offsets.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n{body}\nendobj\n", k + 1).as_bytes());
+    }
+    let xref = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
+    for o in offsets {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objs.len() + 1).as_bytes());
+    std::fs::write(path, out).unwrap();
+}
+
+#[test]
+fn reads_links() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("links.pdf");
+    // Page 1 (object 3) has three links: to page 2 at a point, to page 2
+    // through a GoTo action, and to a web address; page 2 is object 4.
+    let objs = vec![
+        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        "<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>".to_string(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Annots [5 0 R 6 0 R 7 0 R] >>".to_string(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>".to_string(),
+        "<< /Type /Annot /Subtype /Link /Rect [72 700 272 720] /Border [0 0 0] /Dest [4 0 R /XYZ 0 692 0] >>".to_string(),
+        "<< /Type /Annot /Subtype /Link /Rect [72 600 272 620] /Border [0 0 0] /A << /S /GoTo /D [4 0 R /Fit] >> >>".to_string(),
+        "<< /Type /Annot /Subtype /Link /Rect [72 500 272 520] /Border [0 0 0] /A << /S /URI /URI (https://example.com/a) >> >>".to_string(),
+    ];
+    write_objects(&path, &objs);
+    let doc = Document::open(&path).unwrap();
+    let links = doc.links(0);
+    assert_eq!(links.len(), 3, "{links:?}");
+    // Display points: 720 up a 792-point page is 72 down from the top.
+    let r = links[0].rect;
+    assert!((r.x - 72.0).abs() < 0.5 && (r.y - 72.0).abs() < 0.5 && (r.w - 200.0).abs() < 0.5 && (r.h - 20.0).abs() < 0.5, "{r:?}");
+    match &links[0].target {
+        LinkTarget::Page { page: 1, point: Some((_, y)) } => assert!((y - 100.0).abs() < 0.5, "{y}"),
+        other => panic!("{other:?}"),
+    }
+    assert!(matches!(links[1].target, LinkTarget::Page { page: 1, .. }), "{:?}", links[1].target);
+    assert_eq!(links[2].target, LinkTarget::Url("https://example.com/a".into()));
+    assert!(doc.links(1).is_empty());
+    assert!(doc.links(9).is_empty());
 }
 
 #[test]

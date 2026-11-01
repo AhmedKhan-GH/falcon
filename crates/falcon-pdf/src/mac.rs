@@ -26,10 +26,10 @@ use objc2::rc::{Retained, autoreleasepool};
 use objc2_core_foundation::{CGPoint, CGRect, CGSize};
 use objc2_core_graphics::{CGBitmapContextCreate, CGColorSpace, CGContext, CGImageAlphaInfo, CGImageByteOrderInfo, CGInterpolationQuality};
 use objc2_foundation::{NSPoint, NSString, NSStringCompareOptions, NSURL};
-use objc2_pdf_kit::{PDFDisplayBox, PDFDocument, PDFDocumentTitleAttribute, PDFOutline, PDFPage, PDFSelection};
+use objc2_pdf_kit::{PDFActionGoTo, PDFActionURL, PDFDestination, PDFDisplayBox, PDFDocument, PDFDocumentTitleAttribute, PDFOutline, PDFPage, PDFSelection};
 
 use crate::geom::{self, PageGeom};
-use crate::{Bitmap, Error, Hit, OutlineEntry, Rect, Result, SearchOptions, Selection, render_size};
+use crate::{Bitmap, Error, Hit, Link, LinkTarget, OutlineEntry, Rect, Result, SearchOptions, Selection, render_size};
 
 /// Search stops collecting after this many matches.
 const MAX_HITS: usize = 10_000;
@@ -218,6 +218,54 @@ impl Document {
             }
             out
         })
+    }
+
+    /// Page `i`'s link annotations: their areas and where they go (a page
+    /// of this document or a URL). Links to other files are left out.
+    pub fn links(&self, i: usize) -> Vec<Link> {
+        autoreleasepool(|_| {
+            let Ok(page) = self.page(i) else { return Vec::new() };
+            let g = Self::geom(&page);
+            let mut out = Vec::new();
+            // SAFETY: owned; one thread.
+            let annotations = unsafe { page.annotations() };
+            for a in annotations.iter() {
+                // SAFETY: owned; one thread.
+                let (kind, b) = unsafe { (a.r#type(), a.bounds()) };
+                if kind.is_none_or(|k| k.to_string() != "Link") || b.size.width <= 0.0 || b.size.height <= 0.0 {
+                    continue;
+                }
+                // The annotation's own URL or destination, else its action's.
+                // SAFETY: owned; one thread.
+                let (url, dest, action) = unsafe { (a.URL(), a.destination(), a.action()) };
+                let url = url.or_else(|| action.clone().and_then(|act| act.downcast::<PDFActionURL>().ok()).and_then(|u| unsafe { u.URL() }));
+                // SAFETY: owned; one thread.
+                let dest = dest.or_else(|| action.and_then(|act| act.downcast::<PDFActionGoTo>().ok()).map(|go| unsafe { go.destination() }));
+                let target = if let Some(text) = url.and_then(|u| u.absoluteString()).map(|s| s.to_string()) {
+                    Some(LinkTarget::Url(text))
+                } else {
+                    dest.and_then(|d| self.destination(&d))
+                };
+                if let Some(target) = target {
+                    out.push(Link { rect: g.rect_to_display(b.origin.x, b.origin.y, b.size.width, b.size.height), target });
+                }
+            }
+            out
+        })
+    }
+
+    /// A destination in this document as a page and display point.
+    fn destination(&self, d: &PDFDestination) -> Option<LinkTarget> {
+        // SAFETY: owned; one thread; the page belongs to this document.
+        let (page, point) = unsafe { (d.page()?, d.point()) };
+        let index = unsafe { self.doc.indexForPage(&page) };
+        if index >= self.count {
+            return None;
+        }
+        // PDFKit marks an unspecified coordinate with a huge value.
+        let known = |v: f64| v.is_finite() && v.abs() < 1e7;
+        let point = (known(point.x) && known(point.y)).then(|| Self::geom(&page).to_display(point.x, point.y));
+        Some(LinkTarget::Page { page: index, point })
     }
 
     fn walk(&self, node: &PDFOutline, depth: usize, out: &mut Vec<OutlineEntry>) {

@@ -86,6 +86,24 @@ pub struct OutlineEntry {
     pub page: Option<usize>,
 }
 
+/// Where a link in a page goes.
+#[derive(Clone, Debug, PartialEq)]
+pub enum LinkTarget {
+    /// A page of this document (0-based), and the display point on it to
+    /// show, when the link names one.
+    Page { page: usize, point: Option<(f64, f64)> },
+    /// A web address or other URL.
+    Url(String),
+}
+
+/// A link annotation: the area to click, in display points, and where it
+/// goes.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Link {
+    pub rect: Rect,
+    pub target: LinkTarget,
+}
+
 /// Why a document could not be opened or read.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Error(pub String);

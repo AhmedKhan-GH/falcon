@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use crate::{Bitmap, Error, Hit, OutlineEntry, Result, SearchOptions, Selection};
+use crate::{Bitmap, Error, Hit, Link, OutlineEntry, Result, SearchOptions, Selection};
 
 /// Never constructed off macOS.
 pub struct Document {
@@ -42,6 +42,9 @@ impl Document {
         Selection::default()
     }
     pub fn outline(&self) -> Vec<OutlineEntry> {
+        Vec::new()
+    }
+    pub fn links(&self, _i: usize) -> Vec<Link> {
         Vec::new()
     }
 }

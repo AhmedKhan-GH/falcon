@@ -17,7 +17,7 @@ use std::time::{Duration, Instant};
 use eframe::egui::{self, Align2, Color32, CornerRadius, Event, Id, Key, Modifiers, Pos2, Rect, Sense, Stroke, TextEdit, TextureHandle, Ui, Vec2, vec2};
 use falcon_library::Library;
 use falcon_library::model::Item;
-use falcon_pdf::{Document, Hit, OutlineEntry, SearchOptions};
+use falcon_pdf::{Document, Hit, Link, LinkTarget, OutlineEntry, SearchOptions};
 
 use super::{App, icon_button};
 use crate::icons as ic;
@@ -736,6 +736,8 @@ enum Reply {
     Page(Job, Option<falcon_pdf::Bitmap>),
     Found(u64, Vec<Hit>),
     Selected(u64, falcon_pdf::Selection),
+    /// A page's links, sent once, with its first picture.
+    Links(usize, Vec<Link>),
 }
 
 /// A selection request: serial, page, drag start and end.
@@ -791,6 +793,7 @@ fn work(path: &Path, rx: &Receiver<Req>, tx: &Sender<Reply>, ctx: &egui::Context
     // Jobs just rendered: a resent list may still name them before their
     // pictures reach the viewer.
     let mut recent: VecDeque<Job> = VecDeque::new();
+    let mut linked: HashSet<usize> = HashSet::new();
     loop {
         if p.idle() {
             match rx.recv() {
@@ -816,6 +819,9 @@ fn work(path: &Path, rx: &Receiver<Req>, tx: &Sender<Reply>, ctx: &egui::Context
             recent.push_back(job);
             if recent.len() > 16 {
                 recent.pop_front();
+            }
+            if job.key != THUMB_KEY && linked.insert(job.page) && !send(Reply::Links(job.page, doc.links(job.page))) {
+                return;
             }
             let bitmap = if job.key == THUMB_KEY {
                 doc.thumbnail(job.page, THUMB_PX)
@@ -919,6 +925,8 @@ struct Open {
     laid: Option<(f32, u8, ScrollMode, Spread, usize, i32)>,
     /// Wheel movement past the end of the page in page mode.
     page_wheel: f32,
+    /// Each page's links, once its first picture has been drawn.
+    links: HashMap<usize, Vec<Link>>,
 }
 
 impl Open {
@@ -958,6 +966,7 @@ impl Open {
             spread: mark.map_or_else(Spread::default, |m| m.spread),
             laid: None,
             page_wheel: 0.0,
+            links: HashMap::new(),
         }
     }
 
@@ -1030,6 +1039,9 @@ impl Open {
                         self.find.hits = hits;
                         self.reveal_hit();
                     }
+                }
+                Ok(Reply::Links(page, links)) => {
+                    self.links.insert(page, links);
                 }
                 Ok(Reply::Selected(g, s)) => {
                     if g == self.sel.serial {
@@ -1464,6 +1476,36 @@ fn pages(o: &mut Open, ui: &mut Ui, area: Rect, jobs: &mut Vec<Job>) {
         // pans); a click clears the selection.
         let screen_view = Rect::from_min_size(origin + viewport.min.to_vec2(), viewport.size());
         let resp = ui.interact(screen_view, ui.scope_id().with("pdf-select"), Sense::click_and_drag());
+        // Links: the pointing hand and the address over them; a click
+        // follows them, as pdf.js's link layer does.
+        let link_at = |o: &Open, pos: Pos2| -> Option<LinkTarget> {
+            let c = (pos - origin).to_pos2();
+            let i = o.layout.page_at_pos(c, cw)?;
+            let page = o.layout.rect(i, cw);
+            let raw = (f64::from(o.sizes[i].0), f64::from(o.sizes[i].1));
+            o.links.get(&i)?.iter().find_map(|l| {
+                let r = turn_rect(&l.rect, raw, turns);
+                Rect::from_min_size(page.min + vec2(r.x as f32 * k, r.y as f32 * k), vec2(r.w as f32 * k, r.h as f32 * k)).contains(c).then(|| l.target.clone())
+            })
+        };
+        if !resp.dragged()
+            && let Some(target) = resp.hover_pos().and_then(|p| link_at(o, p))
+        {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+            let tip = match &target {
+                LinkTarget::Url(u) => u.clone(),
+                LinkTarget::Page { page, .. } => format!("Page {}", page + 1),
+            };
+            let clicked = resp.clicked();
+            resp.clone().on_hover_text_at_pointer(tip);
+            if clicked {
+                follow_link(o, ui.ctx(), &target);
+                return;
+            }
+            if !o.hand {
+                return;
+            }
+        }
         if o.hand {
             if resp.dragged() {
                 o.jump = Some(o.offset - resp.drag_delta());
@@ -1517,6 +1559,35 @@ fn pages(o: &mut Open, ui: &mut Ui, area: Rect, jobs: &mut Vec<Job>) {
         let cw = o.layout.content_width(area.width());
         o.current = o.layout.current_in(Rect::from_min_size(o.offset.to_pos2(), area.size()), cw);
     }
+}
+
+/// Follows a link: to its page (and the spot on it it names), or to its
+/// web or mail address in the default app. Other kinds of address (files,
+/// scripts) are not opened.
+fn follow_link(o: &mut Open, ctx: &egui::Context, target: &LinkTarget) {
+    match target {
+        LinkTarget::Page { page, point } => {
+            o.go_to(*page);
+            if let (Some(pt), Some(jump), true) = (point, o.jump, matches!(o.scroll, ScrollMode::Vertical | ScrollMode::Wrapped))
+                && let Some(&(w, h)) = o.sizes.get(*page)
+            {
+                let (_, y) = turn_point(*pt, (f64::from(w), f64::from(h)), o.turns);
+                let top = o.layout.tops[*page] + y as f32 * o.zoom_factor() * UNIT - PAD;
+                o.jump = Some(vec2(jump.x, top.max(0.0)));
+            }
+        }
+        LinkTarget::Url(url) => {
+            if link_opens(url) {
+                ctx.open_url(egui::OpenUrl::new_tab(url));
+            }
+        }
+    }
+}
+
+/// Whether a link's address may be opened: web and mail addresses only.
+pub fn link_opens(url: &str) -> bool {
+    let lower = url.trim().to_ascii_lowercase();
+    ["http://", "https://", "mailto:"].iter().any(|s| lower.starts_with(s))
 }
 
 /// In page mode, the wheel turns the page once the page has scrolled to
@@ -2114,6 +2185,16 @@ mod tests {
         let r = falcon_pdf::Rect { x: 10.0, y: 20.0, w: 30.0, h: 5.0 };
         assert_eq!(turn_rect(&r, size, 1), falcon_pdf::Rect { x: 175.0, y: 10.0, w: 5.0, h: 30.0 });
         assert_eq!(turn_rect(&r, size, 0), r);
+    }
+
+    #[test]
+    fn only_web_and_mail_links_open() {
+        assert!(link_opens("https://example.com"));
+        assert!(link_opens("HTTP://example.com"));
+        assert!(link_opens("mailto:a@b.c"));
+        assert!(!link_opens("file:///etc/passwd"));
+        assert!(!link_opens("javascript:alert(1)"));
+        assert!(!link_opens("/Applications/Calculator.app"));
     }
 
     #[test]
