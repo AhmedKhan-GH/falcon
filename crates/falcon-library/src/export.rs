@@ -12,6 +12,7 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use filetime::FileTime;
 
@@ -230,13 +231,17 @@ pub fn copy_file(from: &Path, to: &Path, overwrite: bool) -> Result<()> {
 
 /// Runs `plan`, calling `on_step` after each copy with whether it worked,
 /// and returns the paths written. A step that fails is skipped; the rest
-/// still run.
-pub fn run(plan: &Plan, mut on_step: impl FnMut(&Step, bool)) -> Result<Vec<PathBuf>> {
+/// still run. Once `cancel` is set the run stops before the next file;
+/// the files already written stay (each is written whole or not at all).
+pub fn run(plan: &Plan, cancel: &AtomicBool, mut on_step: impl FnMut(&Step, bool)) -> Result<Vec<PathBuf>> {
     for d in &plan.dirs {
         fs::create_dir_all(d).map_err(|e| Error::io(d, e))?;
     }
     let mut written = Vec::new();
     for step in &plan.steps {
+        if cancel.load(Ordering::Relaxed) {
+            break;
+        }
         let ok = copy_file(&step.from, &step.to, plan.overwrite).is_ok();
         if ok {
             written.push(step.to.clone());
@@ -353,13 +358,17 @@ pub fn convert_bytes(from: &Path, convert: &Convert) -> std::result::Result<Vec<
 }
 
 /// Runs a [`plan_converted`] plan: each step's original is converted and
-/// written beside its destination, then renamed into place.
-pub fn run_converted(plan: &Plan, convert: &Convert, mut on_step: impl FnMut(&Step, bool)) -> Result<Vec<PathBuf>> {
+/// written beside its destination, then renamed into place. `cancel`
+/// stops it between files, as in [`run`].
+pub fn run_converted(plan: &Plan, convert: &Convert, cancel: &AtomicBool, mut on_step: impl FnMut(&Step, bool)) -> Result<Vec<PathBuf>> {
     for d in &plan.dirs {
         fs::create_dir_all(d).map_err(|e| Error::io(d, e))?;
     }
     let mut written = Vec::new();
     for step in &plan.steps {
+        if cancel.load(Ordering::Relaxed) {
+            break;
+        }
         let ok = convert_bytes(&step.from, convert).ok().is_some_and(|bytes| write_new(&step.to, &bytes, plan.overwrite).is_ok());
         if ok {
             written.push(step.to.clone());
@@ -602,7 +611,7 @@ mod tests {
         assert_eq!(to, ["pic-1.png", "other.png", "pic-2.png"]);
         assert_eq!(plan.clashes(), 0);
         let mut seen = 0;
-        let written = run(&plan, |_, ok| seen += usize::from(ok)).unwrap();
+        let written = run(&plan, &AtomicBool::new(false), |_, ok| seen += usize::from(ok)).unwrap();
         assert_eq!((written.len(), seen), (3, 3));
         for (step, id) in plan.steps.iter().zip(&ids) {
             let item = lib.item(id).unwrap();
@@ -613,6 +622,27 @@ mod tests {
         }
         // No temp files are left behind.
         assert_eq!(fs::read_dir(&out).unwrap().count(), 3);
+    }
+
+    #[test]
+    fn a_cancelled_export_stops_between_files_and_keeps_what_it_wrote() {
+        let dir = tempfile::tempdir().unwrap();
+        let (lib, ids) = library(dir.path());
+        let out = dir.path().join("out");
+        let plan = plan_items(&lib, &ids, &out, Collision::KeepBoth);
+        let cancel = AtomicBool::new(false);
+        let mut steps = 0;
+        let written = run(&plan, &cancel, |_, _| {
+            steps += 1;
+            cancel.store(true, Ordering::Relaxed);
+        })
+        .unwrap();
+        assert_eq!((written.len(), steps), (1, 1), "stops after the file in progress");
+        assert_eq!(fs::read_dir(&out).unwrap().count(), 1, "the written file stays, no temp file");
+        let cancel = AtomicBool::new(true);
+        let convert = Convert { format: Format::Png, quality: 90, longest: None };
+        let conv = plan_converted(&lib, &ids, &dir.path().join("conv"), Format::Png, Collision::KeepBoth);
+        assert!(run_converted(&conv, &convert, &cancel, |_, _| panic!("no step after cancel")).unwrap().is_empty());
     }
 
     #[test]
@@ -627,9 +657,9 @@ mod tests {
         assert_eq!(replace.clashes(), 1);
         let keep = plan_items(&lib, &ids[1..2], &out, Collision::KeepBoth);
         assert_eq!(keep.steps[0].to, out.join("other-2.png"));
-        run(&keep, |_, _| {}).unwrap();
+        run(&keep, &AtomicBool::new(false), |_, _| {}).unwrap();
         assert_eq!(fs::read(out.join("other.png")).unwrap(), b"mine");
-        run(&replace, |_, _| {}).unwrap();
+        run(&replace, &AtomicBool::new(false), |_, _| {}).unwrap();
         assert_ne!(fs::read(out.join("other.png")).unwrap(), b"mine");
         assert_eq!(fs::read(out.join("other.png")).unwrap(), fs::read(out.join("other-2.png")).unwrap());
     }
@@ -667,7 +697,7 @@ mod tests {
         let to: Vec<_> = plan.steps.iter().map(|s| s.to.strip_prefix(&out).unwrap().to_path_buf()).collect();
         // The two "Inner" folders share a directory, so their pics are numbered.
         assert_eq!(to, [PathBuf::from("Refs old/pic.png"), PathBuf::from("Refs old/Inner/pic-1.png"), PathBuf::from("Refs old/Inner/pic-2.png")]);
-        run(&plan, |_, _| {}).unwrap();
+        run(&plan, &AtomicBool::new(false), |_, _| {}).unwrap();
         assert!(root.join("Inner/pic-2.png").is_file());
 
         // Unlocked, the locked folder comes too.
@@ -817,7 +847,7 @@ mod tests {
         let to: Vec<_> = plan.steps.iter().map(|s| s.to.file_name().unwrap().to_string_lossy().into_owned()).collect();
         assert_eq!(to, ["pic-1.jpg", "pic-2.jpg"]);
         let convert = Convert { format: Format::Jpeg, quality: 90, longest: None };
-        let written = run_converted(&plan, &convert, |_, _| {}).unwrap();
+        let written = run_converted(&plan, &convert, &AtomicBool::new(false), |_, _| {}).unwrap();
         assert_eq!(written.len(), 2);
         assert_eq!(image::guess_format(&fs::read(&written[0]).unwrap()).unwrap(), image::ImageFormat::Jpeg);
         // pic.jpg itself is still free.
@@ -833,7 +863,7 @@ mod tests {
         let mut plan = plan_items(&lib, &ids, &out, Collision::KeepBoth);
         plan.steps[0].from = dir.path().join("missing.png");
         let mut failed = 0;
-        let written = run(&plan, |_, ok| failed += usize::from(!ok)).unwrap();
+        let written = run(&plan, &AtomicBool::new(false), |_, ok| failed += usize::from(!ok)).unwrap();
         assert_eq!((written.len(), failed), (2, 1));
         assert_eq!(fs::read_dir(&out).unwrap().count(), 2);
     }

@@ -137,7 +137,6 @@
   "Always on Top": "Siempre visible",
   "Always play GIFs and animated WebPs and AVIFs in the grid": "Reproducir siempre en la cuadrícula los GIF y los WebP y AVIF animados",
   "Always use the frame-by-frame player for GIFs": "Usar siempre el reproductor fotograma a fotograma para los GIF",
-  "An export is still running": "Todavía hay una exportación en curso",
   "And items": "Y los elementos",
   "Angle": "Ángulo",
   "Another app or a sync service changed {name} while it was open here, so falcon didn't save over it. The library was reloaded from disk; the last change made here may need doing again.": "Otra app o un servicio de sincronización modificó {name} mientras estaba abierta aquí, así que falcon no la sobrescribió. La biblioteca se recargó desde el disco; puede que haya que repetir el último cambio.",
@@ -625,7 +624,6 @@
     "other": "{n} elementos exportados, {failed} con error"
   },
   "Exporting Eagle Package": "Exportando paquete de Eagle",
-  "Exporting {done} of {total}  ·  {current}": "Exportando {done} de {total}  ·  {current}",
   "Export…": "Exportar…",
   "Exposure (double-click to reset)": "Exposición (doble clic para restablecer)",
   "Exposure in stops (double-click to reset)": "Exposición en pasos (doble clic para restablecer)",
@@ -1247,7 +1245,6 @@
   "PDF producer": "Productor del PDF",
   "PDF version": "Versión de PDF",
   "PNG keeps every pixel; JPG and WebP files are smaller.": "PNG conserva cada píxel; los archivos JPG y WebP ocupan menos.",
-  "Packing {done} of {total}  ·  {current}": "Empaquetando {done} de {total}  ·  {current}",
   "Page Down": "Avance de página",
   "Page Fit": "Ajustar a la página",
   "Page Scrolling": "Desplazamiento por páginas",
@@ -1727,6 +1724,10 @@
   "Stopped after converting {n} items to {format}": {
     "one": "Detenido tras convertir {n} elemento a {format}",
     "other": "Detenido tras convertir {n} elementos a {format}"
+  },
+  "Stopped after exporting {done} of {n} items": {
+    "one": "Detenido tras exportar {done} de {n} elemento",
+    "other": "Detenido tras exportar {done} de {n} elementos"
   },
   "Stopped after {added} of {n} items from {name}": {
     "one": "Detenido tras {added} de {n} elemento de {name}",

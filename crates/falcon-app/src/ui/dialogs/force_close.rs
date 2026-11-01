@@ -25,13 +25,13 @@ pub(crate) struct Pending {
 pub(crate) struct Counts {
     pub import_total: usize,
     pub import_done: usize,
+    /// A progress-modal operation, exports included.
     pub op_working: bool,
-    pub export_working: bool,
 }
 
 impl Counts {
     pub fn running(&self) -> bool {
-        (self.import_total > 0 && self.import_done < self.import_total) || self.op_working || self.export_working
+        (self.import_total > 0 && self.import_done < self.import_total) || self.op_working
     }
 }
 
@@ -67,7 +67,7 @@ pub(crate) fn tasks_running(ws: &Workspace) -> bool {
         let p = ws.progress.lock().unwrap_or_else(|p| p.into_inner());
         (p.total, p.done)
     };
-    Counts { import_total, import_done, op_working: ws.op.working(), export_working: ws.export.working() }.running()
+    Counts { import_total, import_done, op_working: ws.op.working() }.running()
 }
 
 pub(crate) fn stop_tasks(ws: &Workspace) {
@@ -158,7 +158,6 @@ mod tests {
         assert!(Counts { import_total: 5, import_done: 2, ..Default::default() }.running());
         assert!(!Counts { import_total: 5, import_done: 5, ..Default::default() }.running());
         assert!(Counts { op_working: true, ..Default::default() }.running());
-        assert!(Counts { export_working: true, ..Default::default() }.running());
     }
 
     #[test]

@@ -137,7 +137,6 @@
   "Always on Top": "Always on Top",
   "Always play GIFs and animated WebPs and AVIFs in the grid": "Always play GIFs and animated WebPs and AVIFs in the grid",
   "Always use the frame-by-frame player for GIFs": "Always use the frame-by-frame player for GIFs",
-  "An export is still running": "An export is still running",
   "And items": "And items",
   "Angle": "Angle",
   "Another app or a sync service changed {name} while it was open here, so falcon didn't save over it. The library was reloaded from disk; the last change made here may need doing again.": "Another app or a sync service changed {name} while it was open here, so falcon didn't save over it. The library was reloaded from disk; the last change made here may need doing again.",
@@ -625,7 +624,6 @@
     "other": "Exported {n} items, {failed} failed"
   },
   "Exporting Eagle Package": "Exporting Eagle Package",
-  "Exporting {done} of {total}  ·  {current}": "Exporting {done} of {total}  ·  {current}",
   "Export…": "Export…",
   "Exposure (double-click to reset)": "Exposure (double-click to reset)",
   "Exposure in stops (double-click to reset)": "Exposure in stops (double-click to reset)",
@@ -1247,7 +1245,6 @@
   "PDF producer": "PDF producer",
   "PDF version": "PDF version",
   "PNG keeps every pixel; JPG and WebP files are smaller.": "PNG keeps every pixel; JPG and WebP files are smaller.",
-  "Packing {done} of {total}  ·  {current}": "Packing {done} of {total}  ·  {current}",
   "Page Down": "Page Down",
   "Page Fit": "Page Fit",
   "Page Scrolling": "Page Scrolling",
@@ -1727,6 +1724,10 @@
   "Stopped after converting {n} items to {format}": {
     "one": "Stopped after converting {n} item to {format}",
     "other": "Stopped after converting {n} items to {format}"
+  },
+  "Stopped after exporting {done} of {n} items": {
+    "one": "Stopped after exporting {done} of {n} item",
+    "other": "Stopped after exporting {done} of {n} items"
   },
   "Stopped after {added} of {n} items from {name}": {
     "one": "Stopped after {added} of {n} item from {name}",

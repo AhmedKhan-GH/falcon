@@ -125,7 +125,6 @@
   "Always on Top": "항상 위에 표시",
   "Always play GIFs and animated WebPs and AVIFs in the grid": "격자에서 GIF와 애니메이션 WebP·AVIF를 항상 재생",
   "Always use the frame-by-frame player for GIFs": "GIF는 항상 프레임 단위 플레이어 사용",
-  "An export is still running": "내보내기가 아직 진행 중입니다",
   "And items": "그리고 항목은",
   "Angle": "각도",
   "Another app or a sync service changed {name} while it was open here, so falcon didn't save over it. The library was reloaded from disk; the last change made here may need doing again.": "{name}을(를) 여기서 열어 둔 동안 다른 앱이나 동기화 서비스가 변경하여 falcon은 덮어쓰지 않았습니다. 라이브러리를 디스크에서 다시 불러왔으며, 마지막 변경은 다시 해야 할 수 있습니다.",
@@ -587,7 +586,6 @@
     "other": "항목 {n}개를 내보냈습니다(실패 {failed}개)"
   },
   "Exporting Eagle Package": "Eagle 패키지 내보내는 중",
-  "Exporting {done} of {total}  ·  {current}": "내보내는 중 {done}/{total}  ·  {current}",
   "Export…": "내보내기…",
   "Exposure (double-click to reset)": "노출(더블 클릭하여 재설정)",
   "Exposure in stops (double-click to reset)": "노출 단계(더블 클릭하여 재설정)",
@@ -1184,7 +1182,6 @@
   "PDF producer": "PDF 생성 프로그램",
   "PDF version": "PDF 버전",
   "PNG keeps every pixel; JPG and WebP files are smaller.": "PNG는 모든 픽셀을 보존하고, JPG와 WebP는 파일이 더 작습니다.",
-  "Packing {done} of {total}  ·  {current}": "패키징 중 {done}/{total}  ·  {current}",
   "Page Down": "Page Down",
   "Page Fit": "페이지 맞춤",
   "Page Scrolling": "페이지 단위 스크롤",
@@ -1637,6 +1634,9 @@
   },
   "Stopped after converting {n} items to {format}": {
     "other": "항목 {n}개를 {format} 형식으로 변환한 후 중지했습니다"
+  },
+  "Stopped after exporting {done} of {n} items": {
+    "other": "항목 {n}개 중 {done}개를 내보낸 후 중지했습니다"
   },
   "Stopped after {added} of {n} items from {name}": {
     "other": "{name}의 항목 {n}개 중 {added}개 후 중지했습니다"

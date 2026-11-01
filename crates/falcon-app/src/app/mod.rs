@@ -605,7 +605,7 @@ impl App {
                 let mut grid_top = bar.bottom();
                 let pb = Rect::from_min_size(Pos2::new(full.left(), grid_top), vec2(full.width(), 26.0));
                 let mut pui = ui.new_child(egui::UiBuilder::new().max_rect(pb));
-                if self.progress_bar(&mut pui, pb) || self.export_bar(&mut pui, pb) {
+                if self.progress_bar(&mut pui, pb) {
                     grid_top = pb.bottom();
                 }
                 if self.ws.show_filter {

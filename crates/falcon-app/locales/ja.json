@@ -125,7 +125,6 @@
   "Always on Top": "常に手前に表示",
   "Always play GIFs and animated WebPs and AVIFs in the grid": "グリッドでGIFとアニメーションWebP・AVIFを常に再生",
   "Always use the frame-by-frame player for GIFs": "GIFでは常にコマ送りプレーヤーを使用",
-  "An export is still running": "書き出しがまだ実行中です",
   "And items": "さらにアイテムは",
   "Angle": "角度",
   "Another app or a sync service changed {name} while it was open here, so falcon didn't save over it. The library was reloaded from disk; the last change made here may need doing again.": "{name}をここで開いている間に、別のアプリまたは同期サービスが変更したため、falconは上書き保存しませんでした。ライブラリはディスクから再読み込みされました。直前の変更はやり直しが必要な場合があります。",
@@ -587,7 +586,6 @@
     "other": "{n}個のアイテムを書き出しました（失敗：{failed}）"
   },
   "Exporting Eagle Package": "Eagleパッケージを書き出しています",
-  "Exporting {done} of {total}  ·  {current}": "書き出し中 {done}/{total}  ·  {current}",
   "Export…": "書き出す…",
   "Exposure (double-click to reset)": "露出（ダブルクリックでリセット）",
   "Exposure in stops (double-click to reset)": "露出（段数、ダブルクリックでリセット）",
@@ -1184,7 +1182,6 @@
   "PDF producer": "PDF作成ソフト",
   "PDF version": "PDFバージョン",
   "PNG keeps every pixel; JPG and WebP files are smaller.": "PNG はすべてのピクセルを保ちます。JPG と WebP はファイルが小さくなります。",
-  "Packing {done} of {total}  ·  {current}": "パッケージ化中 {done}/{total}  ·  {current}",
   "Page Down": "ページダウン",
   "Page Fit": "ページに合わせる",
   "Page Scrolling": "ページ単位のスクロール",
@@ -1637,6 +1634,9 @@
   },
   "Stopped after converting {n} items to {format}": {
     "other": "{n}個のアイテムを{format}に変換した後で停止しました"
+  },
+  "Stopped after exporting {done} of {n} items": {
+    "other": "{n}個中{done}個を書き出した後で停止しました"
   },
   "Stopped after {added} of {n} items from {name}": {
     "other": "{name}の{n}個中{added}個で停止しました"

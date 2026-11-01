@@ -149,7 +149,6 @@
   "Always on Top": "Поверх всех окон",
   "Always play GIFs and animated WebPs and AVIFs in the grid": "Всегда воспроизводить в сетке GIF и анимированные WebP и AVIF",
   "Always use the frame-by-frame player for GIFs": "Всегда использовать покадровый плеер для GIF",
-  "An export is still running": "Экспорт ещё выполняется",
   "And items": "И элементы",
   "Angle": "Угол",
   "Another app or a sync service changed {name} while it was open here, so falcon didn't save over it. The library was reloaded from disk; the last change made here may need doing again.": "Пока «{name}» была открыта здесь, другое приложение или служба синхронизации изменили её, поэтому falcon не стал перезаписывать файлы. Библиотека перезагружена с диска; последнее изменение, возможно, придётся повторить.",
@@ -663,7 +662,6 @@
     "one": "Экспортирован {n} элемент, ошибок: {failed}"
   },
   "Exporting Eagle Package": "Экспорт пакета Eagle",
-  "Exporting {done} of {total}  ·  {current}": "Экспорт {done} из {total}  ·  {current}",
   "Export…": "Экспорт…",
   "Exposure (double-click to reset)": "Экспозиция (двойной щелчок — сброс)",
   "Exposure in stops (double-click to reset)": "Экспозиция в ступенях (двойной щелчок — сброс)",
@@ -1310,7 +1308,6 @@
   "PDF producer": "Производитель PDF",
   "PDF version": "Версия PDF",
   "PNG keeps every pixel; JPG and WebP files are smaller.": "PNG сохраняет каждый пиксель; файлы JPG и WebP меньше.",
-  "Packing {done} of {total}  ·  {current}": "Упаковка {done} из {total}  ·  {current}",
   "Page Down": "Страница вниз",
   "Page Fit": "По размеру страницы",
   "Page Scrolling": "Постраничная прокрутка",
@@ -1815,6 +1812,11 @@
     "few": "Остановлено после конвертации {n} элементов в {format}",
     "many": "Остановлено после конвертации {n} элементов в {format}",
     "one": "Остановлено после конвертации {n} элемента в {format}"
+  },
+  "Stopped after exporting {done} of {n} items": {
+    "few": "Остановлено после экспорта {done} из {n} элементов",
+    "many": "Остановлено после экспорта {done} из {n} элементов",
+    "one": "Остановлено после экспорта {done} из {n} элемента"
   },
   "Stopped after {added} of {n} items from {name}": {
     "few": "Остановлено после {added} из {n} элементов из {name}",

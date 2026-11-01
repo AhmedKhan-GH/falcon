@@ -125,7 +125,6 @@
   "Always on Top": "永遠在最上層",
   "Always play GIFs and animated WebPs and AVIFs in the grid": "在網格中一律播放 GIF 及動態 WebP 與 AVIF",
   "Always use the frame-by-frame player for GIFs": "GIF 一律使用逐格播放器",
-  "An export is still running": "匯出仍在進行",
   "And items": "並且項目",
   "Angle": "角度",
   "Another app or a sync service changed {name} while it was open here, so falcon didn't save over it. The library was reloaded from disk; the last change made here may need doing again.": "「{name}」在此處開啟期間，其他 App 或同步服務對其做了更動，因此 falcon 沒有覆寫儲存。資料庫已從磁碟重新載入；最近一次更動可能需要重做。",
@@ -587,7 +586,6 @@
     "other": "已匯出{n}個項目，{failed}個失敗"
   },
   "Exporting Eagle Package": "正在匯出 Eagle 套件",
-  "Exporting {done} of {total}  ·  {current}": "正在匯出{done}/{total}  ·  {current}",
   "Export…": "匯出…",
   "Exposure (double-click to reset)": "曝光（雙擊重設）",
   "Exposure in stops (double-click to reset)": "曝光級數（雙擊重設）",
@@ -1184,7 +1182,6 @@
   "PDF producer": "PDF 產生程式",
   "PDF version": "PDF 版本",
   "PNG keeps every pixel; JPG and WebP files are smaller.": "PNG 保留每個像素；JPG 與 WebP 檔案較小。",
-  "Packing {done} of {total}  ·  {current}": "正在打包{done}/{total}  ·  {current}",
   "Page Down": "向下翻頁",
   "Page Fit": "符合頁面",
   "Page Scrolling": "逐頁捲動",
@@ -1637,6 +1634,9 @@
   },
   "Stopped after converting {n} items to {format}": {
     "other": "已將{n}個項目轉換為{format}後停止"
+  },
+  "Stopped after exporting {done} of {n} items": {
+    "other": "已匯出 {n} 個項目中的 {done} 個後停止"
   },
   "Stopped after {added} of {n} items from {name}": {
     "other": "已在{name}的{n}個項目中完成{added}個後停止"

@@ -4,9 +4,8 @@
 //! in `falcon_library::export`; this module asks, runs and reports.
 
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
 
-use eframe::egui::{self, CornerRadius, Pos2, Rect, RichText, Ui};
+use eframe::egui::{self, RichText, Ui};
 use falcon_library::model::Item;
 use falcon_library::Library;
 
@@ -14,11 +13,10 @@ use crate::app::App;
 use crate::icons as ic;
 use crate::locale::{tr, tr_key, tr_n, tr_nf, trf};
 use crate::logic::{self, Scope};
-use crate::theme::{self as t, font};
-use crate::ui::widgets::{galley, wide_button};
+use crate::theme as t;
+use crate::ui::widgets::wide_button;
 use falcon_library::export::{self, Collision, Convert, Format, Plan};
 use falcon_library::pack::{self, PackSource};
-use crate::ui::grid::GRID_PAD_X;
 use crate::ui::dialogs::progress::Outcome;
 
 /// An export asked for from a menu or a key, handled once the frame has
@@ -105,39 +103,15 @@ impl Default for FormatDraft {
     }
 }
 
-/// A background export's counters.
-#[derive(Default)]
-struct Job {
-    /// Packing a .eaglepack rather than copying files.
-    packing: bool,
-    total: usize,
-    done: usize,
-    failed: usize,
-    current: String,
-    /// Set by the worker when it ends: the message to show and the paths
-    /// to show in Finder.
-    finished: Option<(String, Vec<PathBuf>)>,
-    running: bool,
-}
-
-/// Export state kept per workspace.
+/// Export state kept per workspace. A running copy or conversion is the
+/// workspace's long operation (`ws.op`), behind the shared progress modal.
 #[derive(Default)]
 pub(crate) struct ExportState {
     pub request: Option<Request>,
     clash: Option<Clash>,
-    job: Arc<Mutex<Job>>,
     /// The items the Export in Format dialog is open for.
     format_for: Option<Vec<String>>,
     format: FormatDraft,
-}
-
-impl ExportState {
-    /// Whether a copy is still running. The copy can't be stopped part way;
-    /// it ends on its own.
-    pub(crate) fn working(&self) -> bool {
-        let j = self.job.lock().unwrap_or_else(|p| p.into_inner());
-        j.running && j.finished.is_none()
-    }
 }
 
 /// Several folder exports into `dest` as one, revealing `dest` when done.
@@ -148,6 +122,11 @@ fn merge_plans(dest: &std::path::Path, plans: impl Iterator<Item = Plan>, how: C
         all.steps.extend(p.steps);
     }
     all
+}
+
+/// What a stopped export says: how far it got.
+fn stopped(done: usize, total: usize) -> String {
+    tr_nf(total, "Stopped after exporting {done} of {n} item", "Stopped after exporting {done} of {n} items", &[("done", &done)])
 }
 
 /// What an export says when done: "Exported 3 items" (and failures).
@@ -278,10 +257,6 @@ impl App {
     }
 
     fn handle_export(&mut self, lib: &Library, req: Request) {
-        if self.export_busy() {
-            self.flash(tr("An export is still running"));
-            return;
-        }
         match req {
             Request::Items(ids) => {
                 if ids.is_empty() {
@@ -563,88 +538,51 @@ impl App {
         }
     }
 
-    fn export_busy(&self) -> bool {
-        self.ws.export.job.lock().unwrap_or_else(|p| p.into_inner()).running
-    }
-
     /// Runs a copy plan (or, with `convert`, a conversion) on a background
-    /// thread. When it ends, Finder shows the copied files (`files`) or the
-    /// plan's top folder.
+    /// thread behind the progress modal; Cancel (or Close Library's Stop
+    /// Tasks) stops it before the next file and keeps the files written.
+    /// When it ends, Finder shows the copied files (`files`) or the plan's
+    /// top folder.
     fn start_copy(&mut self, plan: Plan, files: bool, convert: Option<Convert>) {
         if plan.steps.is_empty() {
             self.flash(tr("Nothing to export"));
             return;
         }
-        let job = self.ws.export.job.clone();
-        *job.lock().unwrap_or_else(|p| p.into_inner()) = Job { packing: false, total: plan.steps.len(), running: true, ..Default::default() };
-        let ctx = self.ctx.clone();
+        if self.operation_running() {
+            return;
+        }
+        let total = plan.steps.len();
+        let title = if convert.is_some() { tr("Export in Format") } else { tr("Export to Computer") };
+        let h = self.ws.op.start(&self.ctx, title, total, true);
+        h.step(0, plan.steps[0].to.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default());
         std::thread::spawn(move || {
+            let (mut done, mut failed) = (0, 0);
             let on_step = |step: &export::Step, ok: bool| {
-                let mut j = job.lock().unwrap_or_else(|p| p.into_inner());
-                j.done += 1;
-                j.failed += usize::from(!ok);
-                j.current = step.to.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-                drop(j);
-                ctx.request_repaint();
+                done += 1;
+                failed += usize::from(!ok);
+                h.step(done, step.to.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default());
             };
             let result = match &convert {
-                Some(c) => export::run_converted(&plan, c, on_step),
-                None => export::run(&plan, on_step),
+                Some(c) => export::run_converted(&plan, c, h.cancel_flag(), on_step),
+                None => export::run(&plan, h.cancel_flag(), on_step),
             };
-            let mut j = job.lock().unwrap_or_else(|p| p.into_inner());
-            j.finished = Some(match result {
+            h.finish(match result {
                 Ok(written) => {
-                    let failed = j.failed;
                     // Eagle shows the exported files in Finder, or the folder
-                    // when there are many.
-                    let reveal = if !files || written.len() > 500 { vec![plan.top.clone()] } else { written.clone() };
-                    (exported(written.len(), failed), reveal)
+                    // when there are many; only an export that wrote something.
+                    let reveal = if written.is_empty() {
+                        Vec::new()
+                    } else if !files || written.len() > 500 {
+                        vec![plan.top.clone()]
+                    } else {
+                        written.clone()
+                    };
+                    let message = if h.cancelled() && done < total { stopped(done, total) } else { exported(written.len(), failed) };
+                    Outcome { message, exported: !reveal.is_empty(), reveal, ..Default::default() }
                 }
-                Err(e) => (trf("Export failed: {error}", &[("error", &e)]), Vec::new()),
+                Err(e) => Outcome { error: Some(trf("Export failed: {error}", &[("error", &e)])), ..Default::default() },
             });
-            drop(j);
-            ctx.request_repaint();
         });
-    }
-
-    /// The export progress bar, drawn where the import bar goes; reports
-    /// the result once the worker is done.
-    pub(crate) fn export_bar(&mut self, ui: &mut Ui, rect: Rect) -> bool {
-        let (packing, total, done, current, finished) = {
-            let mut j = self.ws.export.job.lock().unwrap_or_else(|p| p.into_inner());
-            let finished = j.finished.take();
-            if finished.is_some() {
-                j.running = false;
-            }
-            (j.packing, j.total, j.done, j.current.clone(), finished)
-        };
-        if let Some((msg, reveal)) = finished {
-            // Only an export that wrote something reveals it.
-            if !reveal.is_empty() {
-                self.export_done_notice(&msg);
-            }
-            self.flash(msg);
-            crate::open_with::reveal(&reveal);
-            return false;
-        }
-        if !self.export_busy() || total == 0 {
-            return false;
-        }
-        let p = ui.painter();
-        p.rect_filled(rect, 0.0, t::p().main);
-        let track = Rect::from_min_max(Pos2::new(rect.left() + GRID_PAD_X, rect.bottom() - 6.0), Pos2::new(rect.right() - GRID_PAD_X, rect.bottom() - 3.0));
-        p.rect_filled(track, CornerRadius::same(2), t::p().button);
-        let f = done as f32 / total as f32;
-        let fill = Rect::from_min_max(track.min, Pos2::new(track.left() + track.width() * f, track.bottom()));
-        p.rect_filled(fill, CornerRadius::same(2), t::p().primary);
-        let text = if packing {
-            trf("Packing {done} of {total}  ·  {current}", &[("done", &done), ("total", &total), ("current", &current)])
-        } else {
-            trf("Exporting {done} of {total}  ·  {current}", &[("done", &done), ("total", &total), ("current", &current)])
-        };
-        let g = galley(ui, &text, font(12.0), t::p().text_muted, rect.width() - 40.0);
-        p.galley(Pos2::new(rect.left() + GRID_PAD_X, rect.top() + 3.0), g, t::p().text_muted);
-        true
     }
 
     /// The export keys, read in `App::keyboard` (grid only).

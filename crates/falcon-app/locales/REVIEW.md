@@ -141,6 +141,8 @@ The core words, so every file uses one term for one thing.
   Quitting stops them. Work already done is kept.", "Stop Tasks and
   Quit"), machine-written with the terms of "Close Library While Tasks
   Run".
+- "Stopped after exporting {done} of {n} items", the toast of an
+  Export to Computer stopped from its progress modal (machine-written).
 
 - The viewers, sidebar and context menus (the follow-up pass),
   machine-written: the 3D viewer's terms (Perspective, Orthographic, Fixed
