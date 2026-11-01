@@ -28,6 +28,8 @@ pub(super) struct FolderUi {
     mover: Option<MoveDraft>,
     /// The delete confirmation's "trash the items too" box.
     pub trash_items: bool,
+    /// New Folder with Selection: the items, and the name typed so far.
+    pub new_with: Option<(Vec<String>, String)>,
 }
 
 /// The batch rename dialog as filled in so far.
@@ -87,6 +89,10 @@ pub(super) enum FolderAction {
     DeleteSmart(Vec<String>),
     QuickAdd(&'static str, Vec<String>),
     QuickRemove(Vec<String>),
+    Duplicate(String),
+    DuplicateSmart(String),
+    /// A new top-level folder with this name, holding these items.
+    CreateWith(String, Vec<String>),
 }
 
 impl FolderAction {
@@ -104,6 +110,9 @@ impl FolderAction {
             FolderAction::DeleteSmart(v) => format!("Delete {}", n(v).replace("folder", "smart folder")),
             FolderAction::QuickAdd(_, v) => format!("Add {} to Quick Access", n(v)),
             FolderAction::QuickRemove(v) => format!("Remove {} from Quick Access", n(v)),
+            FolderAction::Duplicate(_) => "Duplicate folder".into(),
+            FolderAction::DuplicateSmart(_) => "Duplicate smart folder".into(),
+            FolderAction::CreateWith(_, items) => format!("New folder with {} items", items.len()),
         }
     }
 }
@@ -420,6 +429,44 @@ impl App {
     pub(super) fn folder_dialogs(&mut self, ctx: &egui::Context, lib: &Library) {
         self.rename_dialog(ctx, lib);
         self.move_dialog(ctx, lib);
+        self.new_with_dialog(ctx);
+    }
+
+    /// New Folder with Selection: asks for the name of the folder the
+    /// selected items go into.
+    fn new_with_dialog(&mut self, ctx: &egui::Context) {
+        let Some((items, mut name)) = self.ws.folders.new_with.take() else { return };
+        let mut keep = true;
+        let modal = egui::Modal::new(egui::Id::unique("new-folder-with")).show(ctx, |ui| {
+            ui.set_width(300.0);
+            ui.label(RichText::new("New Folder").size(15.0));
+            ui.add_space(2.0);
+            ui.label(RichText::new(format!("The {} selected items go into it.", items.len())).color(t::p().text_muted));
+            ui.add_space(6.0);
+            let te = ui.add(TextEdit::singleline(&mut name).hint_text("Folder name").desired_width(f32::INFINITY));
+            if ui.memory(|m| m.focused().is_none()) {
+                te.request_focus();
+            }
+            let enter = te.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
+            ui.add_space(8.0);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let clean = logic::clean_folder_name(&name);
+                let ok = !clean.is_empty();
+                if (ui.add_enabled(ok, egui::Button::new("Create")).clicked() || (enter && ok)) && keep {
+                    self.ws.actions.push(act(FolderAction::CreateWith(clean, items.clone())));
+                    keep = false;
+                }
+                if ui.button("Cancel").clicked() {
+                    keep = false;
+                }
+            });
+        });
+        if modal.should_close() {
+            keep = false;
+        }
+        if keep {
+            self.ws.folders.new_with = Some((items, name));
+        }
     }
 
     /// Eagle's Rename dialog for several folders or smart folders: a name
@@ -813,6 +860,22 @@ impl App {
                 for id in &ids {
                     r = r.and(lib.remove_quick_access(id));
                 }
+                r
+            }
+            FolderAction::Duplicate(id) => lib.duplicate_folder(&id).map(drop),
+            FolderAction::DuplicateSmart(id) => lib.duplicate_smart_folder(&id).map(drop),
+            FolderAction::CreateWith(name, items) => {
+                let id = lib.create_folder(None, &name)?;
+                let mut r = Ok(());
+                for item in &items {
+                    if let Some(mut it) = lib.item(item).cloned()
+                        && falcon_library::autotag::join_folder(&mut it, &lib.metadata.folders, &id)
+                    {
+                        r = r.and(lib.update_item(it));
+                    }
+                }
+                // Eagle opens the new folder.
+                self.go(Scope::Folder(id));
                 r
             }
         }

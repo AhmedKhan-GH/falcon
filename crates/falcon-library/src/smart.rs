@@ -643,6 +643,51 @@ impl Library {
         self.save_metadata()
     }
 
+    /// Duplicates a smart folder with its children, as Eagle's Duplicate
+    /// does, and returns the copy's id. The copy is a deep copy of the
+    /// entry (same name, rules, icon and sort, same `modificationTime`)
+    /// placed just before the original, with new ids throughout; nested
+    /// copies point their `parent` at their new parent.
+    pub fn duplicate_smart_folder(&mut self, id: &str) -> Result<String> {
+        fn fresh(entry: &mut Value) {
+            let id = ids::new_id();
+            entry["id"] = json!(id);
+            if let Some(kids) = entry.get_mut("children").and_then(Value::as_array_mut) {
+                for k in kids {
+                    fresh(k);
+                    k["parent"] = json!(id);
+                }
+            }
+        }
+        let parent = self.smart_parent(id).ok_or_else(|| self.no_smart(id))?;
+        let mut copy = find_smart(&mut self.metadata.smart_folders, id).expect("found above").clone();
+        fresh(&mut copy);
+        let new_id = copy["id"].as_str().expect("just set").to_string();
+        let siblings = match parent {
+            None => &mut self.metadata.smart_folders,
+            Some(p) => children_of(find_smart(&mut self.metadata.smart_folders, &p).expect("parent exists")),
+        };
+        let at = siblings.iter().position(|v| v.get("id").and_then(Value::as_str) == Some(id)).expect("in its parent");
+        siblings.insert(at, copy);
+        self.save_metadata()?;
+        Ok(new_id)
+    }
+
+    /// The parent of a smart folder: `Some(None)` at the top level, `None`
+    /// when there is no such smart folder.
+    fn smart_parent(&self, id: &str) -> Option<Option<String>> {
+        fn go(list: &[Value], parent: Option<&str>, id: &str) -> Option<Option<String>> {
+            list.iter().find_map(|v| {
+                let vid = v.get("id").and_then(Value::as_str);
+                if vid == Some(id) {
+                    return Some(parent.map(str::to_string));
+                }
+                go(v.get("children").and_then(Value::as_array).map_or(&[], Vec::as_slice), vid, id)
+            })
+        }
+        go(&self.metadata.smart_folders, None, id)
+    }
+
     fn no_smart(&self, id: &str) -> crate::Error {
         self.invalid(format!("no smart folder {id}"))
     }
@@ -921,5 +966,53 @@ mod tests {
         };
         assert_eq!(strip(&after), strip(&before.replace(r#""name":"Inner""#, r#""name":"Renamed""#)), "only the name changes");
         assert!(lib.rename_smart_folder("NOPE", "x").is_err());
+    }
+
+    #[test]
+    fn duplicating_a_smart_folder() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut lib = Library::create(tmp.path().join("S.library")).unwrap();
+        let rule = json!([{"match": "AND", "rules": [{"property": "name", "method": "contain", "value": "logo"}]}]);
+        let first = lib.create_smart_folder("First", vec![]).unwrap();
+        let top = lib.create_smart_folder("Logos", rule.as_array().unwrap().clone()).unwrap();
+        let kid = lib.create_smart_folder_in(Some(&top), "Blue", vec![]).unwrap();
+        lib.create_smart_folder_in(Some(&kid), "Deep", vec![]).unwrap();
+        lib.set_smart_folder_icon(&top, Some("star"), Some("red")).unwrap();
+        let original = lib.metadata.smart_folders[1].clone();
+
+        let copy = lib.duplicate_smart_folder(&top).unwrap();
+        let got = Library::open(lib.root()).unwrap();
+        let list = &got.metadata.smart_folders;
+        let ids: Vec<&str> = list.iter().map(|v| v["id"].as_str().unwrap()).collect();
+        assert_eq!(ids, [first.as_str(), copy.as_str(), top.as_str()], "just before the original, as Eagle puts it");
+        assert_eq!(list[2], original, "the original is untouched");
+        let dup = &list[1];
+        // Everything but the ids (and the parents that follow them) is the same.
+        let strip = |v: &Value| {
+            let mut v = v.clone();
+            fn go(v: &mut Value) {
+                if let Some(m) = v.as_object_mut() {
+                    m.shift_remove("id");
+                    m.shift_remove("parent");
+                }
+                for k in v.get_mut("children").and_then(Value::as_array_mut).into_iter().flatten() {
+                    go(k);
+                }
+            }
+            go(&mut v);
+            v
+        };
+        assert_eq!(strip(dup), strip(&original));
+        let dup_kid = &dup["children"][0];
+        assert_ne!(dup_kid["id"], json!(kid));
+        assert_eq!(dup_kid["parent"], json!(copy));
+        assert_eq!(dup_kid["children"][0]["parent"], dup_kid["id"]);
+
+        // A nested one is copied among its siblings.
+        let kid_copy = lib.duplicate_smart_folder(&kid).unwrap();
+        let roots = lib.smart_folders();
+        let parent = roots.iter().find(|f| f.id == top).unwrap();
+        assert_eq!(parent.children.iter().map(|c| c.id.as_str()).collect::<Vec<_>>(), [kid_copy.as_str(), kid.as_str()]);
+        assert!(lib.duplicate_smart_folder("NOPE").is_err());
     }
 }

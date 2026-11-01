@@ -1476,3 +1476,24 @@ mod tree_sel_tests {
         assert_eq!(s, TreeSel::default());
     }
 }
+
+/// A folder name typed for New Folder with Selection, cleaned as Eagle
+/// does on macOS: runs of white space become one space, `:`, `/` and `\`
+/// become spaces, and the ends are trimmed.
+pub fn clean_folder_name(name: &str) -> String {
+    let squeezed = name.split_whitespace().collect::<Vec<_>>().join(" ");
+    squeezed.replace([':', '/', '\\'], " ").trim().to_string()
+}
+
+#[cfg(test)]
+mod clean_name_tests {
+    use super::*;
+
+    #[test]
+    fn folder_names_are_cleaned_like_eagle() {
+        assert_eq!(clean_folder_name("  Mood\tboard   2026 "), "Mood board 2026");
+        assert_eq!(clean_folder_name("a/b:c\\d"), "a b c d");
+        assert_eq!(clean_folder_name("a / b"), "a   b", "slashes go after the spaces are squeezed");
+        assert_eq!(clean_folder_name(" / "), "");
+    }
+}

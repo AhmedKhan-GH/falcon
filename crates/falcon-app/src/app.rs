@@ -2303,12 +2303,17 @@ impl App {
                 return;
             }
             ui.set_min_width(180.0);
+            let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::NewFolder);
+            if ui.add(egui::Button::new("New Folder").shortcut_text(keys)).on_hover_text("A new folder right below this one").clicked() {
+                self.ws.actions.push(Action::CreateSibling(f.id.clone()));
+            }
             if ui.add_enabled(!shut, egui::Button::new("New Subfolder")).clicked() {
                 self.ws.actions.push(Action::CreateFolder { parent: Some(f.id.clone()) });
             }
-            if ui.button("Rename").clicked() {
-                self.ws.renaming = Some((f.id.clone(), f.name.clone()));
+            if ui.button("Move Folder…").clicked() {
+                self.open_mover(vec![f.id.clone()]);
             }
+            ui.separator();
             if pinned {
                 if ui.button("Remove from Quick Access").clicked() {
                     self.ws.actions.push(Action::QuickRemove(f.id.clone()));
@@ -2319,7 +2324,16 @@ impl App {
             if depth > 0 && ui.button("Move to Top Level").clicked() {
                 self.ws.actions.push(Action::MoveFolder(f.id.clone(), None));
             }
+            ui.separator();
+            if ui.button("Rename").clicked() {
+                self.ws.renaming = Some((f.id.clone(), f.name.clone()));
+            }
             self.folder_menu_extras(ui, lib, f);
+            ui.separator();
+            // Eagle disables Duplicate on a locked folder.
+            if ui.add_enabled(!shut, egui::Button::new("Duplicate")).clicked() {
+                self.ws.actions.push(Action::Folders(folders_ui::FolderAction::Duplicate(f.id.clone())));
+            }
             self.tree_export_menu(ui, export_ui::Target::Folder(f.id.clone()), !shut);
             ui.separator();
             if ui.add_enabled(!shut, egui::Button::new(RichText::new("Delete Folder").color(t::p().icon_red))).clicked() {
@@ -3093,6 +3107,10 @@ impl App {
                 }
             });
         });
+        // Eagle offers it for several items.
+        if targets.len() > 1 && self.ws.scope != Scope::Trash && ui.button(format!("New Folder with {} Items…", targets.len())).clicked() {
+            self.ws.folders.new_with = Some((targets.to_vec(), String::new()));
+        }
         self.edit_menu(ui, item, targets, lib);
         self.item_export_menu(ui, targets);
         ui.separator();

@@ -430,6 +430,9 @@ impl App {
                     self.ws.actions.push(org(OrgAction::SmartOrder(sf.id.clone(), v)));
                 }
             });
+            if ui.button("Duplicate").clicked() {
+                self.ws.actions.push(Action::Folders(super::folders_ui::FolderAction::DuplicateSmart(sf.id.clone())));
+            }
             self.tree_export_menu(ui, super::export_ui::Target::Smart(sf.id.clone()), true);
             ui.separator();
             ui.menu_button("Change Icon", |ui| {

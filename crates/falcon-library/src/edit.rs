@@ -548,6 +548,35 @@ impl Library {
         Ok(())
     }
 
+    /// Duplicates a folder with its subfolders, right after it, as Eagle's
+    /// Duplicate does, and returns the copy's id. The copies keep the
+    /// names, description, auto-tags, icon, colour, cover and item sort;
+    /// each gets a new id and a new `modificationTime`, and loses its
+    /// password. No items are put in the copies.
+    pub fn duplicate_folder(&mut self, id: &str) -> Result<String> {
+        fn fresh(f: &mut Folder, now: u64) {
+            f.id = ids::new_id();
+            f.modification_time = now;
+            f.password = String::new();
+            f.password_tips = String::new();
+            for c in &mut f.children {
+                fresh(c, now);
+            }
+        }
+        let parent = parent_map(&self.metadata.folders).get(id).copied().ok_or_else(|| self.missing(id))?.map(str::to_string);
+        let mut copy = find_mut(&mut self.metadata.folders, id).expect("found above").clone();
+        fresh(&mut copy, now_ms());
+        let new_id = copy.id.clone();
+        let siblings = match parent {
+            None => &mut self.metadata.folders,
+            Some(p) => &mut find_mut(&mut self.metadata.folders, &p).expect("parent exists").children,
+        };
+        let at = siblings.iter().position(|f| f.id == id).expect("in its parent");
+        siblings.insert(at + 1, copy);
+        self.save_metadata()?;
+        Ok(new_id)
+    }
+
     /// Renames several folders, `(id, new name)` each, in one save, as
     /// Eagle's batch rename does. Like [`Library::rename_folder`] it leaves
     /// `modificationTime` alone and drops a stale `pinyin`. An unknown id
@@ -1056,6 +1085,43 @@ mod tests {
         assert!(lib.move_folders(&[b.clone(), c.clone()], &c, FolderPlace::Above).is_err(), "onto a moved folder");
         assert!(lib.move_folders(std::slice::from_ref(&c), "NOPE", FolderPlace::Above).is_err());
         assert_eq!(tree(&lib), before);
+    }
+
+    #[test]
+    fn duplicating_a_folder() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (mut lib, items) = with_items(tmp.path());
+        let a = lib.create_folder(None, "A").unwrap();
+        let a1 = lib.create_folder(Some(&a), "A1").unwrap();
+        lib.create_folder(Some(&a1), "A1x").unwrap();
+        let b = lib.create_folder(None, "B").unwrap();
+        lib.set_folder_icon(&a1, Some("star"), Some("blue")).unwrap();
+        lib.set_folder_password(&a1, Some(("pw", "hint"))).unwrap();
+        lib.set_folder_description(&a1, "about").unwrap();
+        lib.set_folder_cover(&a1, Some(&items[0])).unwrap();
+        lib.set_folder_order(&a1, Some(FolderOrder::Random), false).unwrap();
+        file_into(&mut lib, &items[0], &[&a1]);
+        let original = lib.metadata.folders[0].children[0].clone();
+
+        let copy = lib.duplicate_folder(&a1).unwrap();
+        let got = Library::open(lib.root()).unwrap();
+        let kids = &got.metadata.folders[0].children;
+        assert_eq!(names(kids), ["A1", "A1"], "right after the original, same name");
+        assert_eq!(kids[0], original, "the original is untouched");
+        let dup = &kids[1];
+        assert_eq!(dup.id, copy);
+        assert_ne!(dup.children[0].id, original.children[0].id);
+        assert_eq!(dup.children[0].name, "A1x");
+        assert_eq!((dup.icon.as_deref(), dup.icon_color.as_deref(), dup.description.as_str()), (Some("star"), Some("blue"), "about"));
+        assert_eq!((dup.cover_id.as_deref(), dup.order_by.as_deref(), dup.sort_increase), (Some(items[0].as_str()), Some("RANDOM"), Some(false)));
+        assert!(!dup.is_locked() && dup.password_tips.is_empty());
+        assert!(dup.modification_time >= original.modification_time);
+        assert_eq!(got.item(&items[0]).unwrap().folders, std::slice::from_ref(&a1), "items are not copied");
+
+        // A top-level folder lands after itself, before the next one.
+        lib.duplicate_folder(&b).unwrap();
+        assert_eq!(names(&lib.metadata.folders), ["A", "B", "B"]);
+        assert!(lib.duplicate_folder("NOPE").is_err());
     }
 
     #[test]
