@@ -36,7 +36,7 @@ Eagle's thumbnail modules (`app/js/thumbs/`) also add keys for some formats. New
 
 **Video (observed).** `resolutionWidth` and `resolutionHeight` (copies of `width` and `height`), then `duration`. All come from Chromium's `<video>` element. `duration` is in seconds with a fraction.
 
-**Audio (observed).** mp3, wav, flac, ogg, aac and m4a. `width` 280 and `height` 140 (the waveform thumbnail, see [Thumbnails](thumbnails.md)), then `duration` from an `<audio>` element. `bpm` comes from a tempo detector when one is found. Falcon doesn't detect tempo, so it never writes `bpm`.
+**Audio (observed).** mp3, wav, flac, ogg, aac and m4a. `width` 280 and `height` 140 (the waveform thumbnail, see [Thumbnails](thumbnails.md)), then `duration` from an `<audio>` element. Then `bpm` (observed in `js/thumbs/audio.js`): after drawing the waveform, Eagle mixes the decoded audio to mono and runs a bundled beat tracker (music-tempo) over it. For files over 3 minutes it analyses only the start: the first 3 minutes, or the first 2 past 10 minutes, or the first 1 past an hour. The tracker searches beat intervals of 0.3 to 1 second (60 to 200 BPM) and reports the tempo as a string with three decimals. Eagle stores it with `parseFloat`, so it is a JSON number such as `119.985`, or `120` when whole. When the tracker finds no tempo, nothing is stored (inferred for silence, where the tracker has no beats to follow). Refresh Thumbnail recomputes it.
 
 **Fonts (observed).** For ttf, otf, ttc, otc, woff and woff2, Eagle parses the file with opentype.js and stores `fontMetas`:
 
@@ -118,6 +118,12 @@ Eagle stores no content hash in item JSON and never hashes file bytes. Its dupli
   - Other video formats fall back to Spotlight (`mdls`), which knows nothing about files in temporary folders.
   - Values can differ slightly from a browser's, for example around MP3 encoder padding.
 - **Video sizes.** `resolutionWidth` and `resolutionHeight` copy the item's `width` and `height`.
+- **`bpm`.** `tempo::bpm(path, ext)` estimates the tempo with falcon's own method rather than Eagle's beat tracker, over the same opening stretch (`tempo::analysed_seconds`):
+  - The audio is decoded with symphonia and mixed to mono. A loudness-rise envelope is built at about 100 frames a second: the log RMS over two hops, its positive differences, lightly smoothed, with the mean removed.
+  - The envelope's autocorrelation is scored for every tempo from 60 to 200 BPM in 0.01 steps. Each score averages the autocorrelation at 1 to 4 beat periods, read between lags by cubic interpolation, and is weighted by a gentle preference for tempos near 120 (one octave wide). The best score wins, rounded to three decimals, and is written right after `duration`, whole values without a fraction.
+  - Nothing is written when the file is silent, too short (under about two seconds), has no clear rises (a steady tone), or no beat stands out (hiss).
+  - Checked on generated clicks at 60, 75, 90, 120, 140 and 174 BPM, and on a drum loop over a drone, all within 1 BPM. Clicks at 200 read as 100, an octave down, because the preference for 120 breaks the tie. Eagle's tracker can also land on a different octave, and values on real music will differ from Eagle's.
+  - Refresh Thumbnail doesn't recompute `bpm` yet.
 - **`fontMetas`.**
   - Read with `ttf-parser` (ttf, otf, the first face of ttc or otc) after falcon's own WOFF 1 and WOFF 2 unpackers (`fontmeta::sfnt`).
   - WOFF 2 goes further than Eagle: falcon writes the same opentype.js-shaped `fontMetas` (and weight tag) as for the plain font. The Brotli stream is decoded with `brotli-decompressor`, and the tables are rebuilt into an sfnt. Tables stored with a WOFF 2 transform (the packed `glyf` and `loca`, and a transformed `hmtx`) are left out, since names, `maxp` and `cmap` are all metadata needs. WOFF 2 collections are not read.

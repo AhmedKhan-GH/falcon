@@ -12,7 +12,7 @@ use unicode_normalization::UnicodeNormalization;
 use crate::error::{Error, Result};
 use crate::library::Library;
 use crate::model::Item;
-use crate::{exif, fontmeta, fontpreview, ids, keywords, media, palette, thumbnail, waveform};
+use crate::{exif, fontmeta, fontpreview, ids, keywords, media, palette, tempo, thumbnail, waveform};
 
 /// Longest file name Eagle allows inside an `.info` folder, in bytes.
 const MAX_FILE_NAME: usize = 255;
@@ -346,7 +346,8 @@ fn quicklook_thumbnail(item: &mut Item, raw: &Path, thumb: &Path, max: u32) -> O
 /// Format-specific keys Eagle's thumbnail modules add, appended to the item
 /// in the order Eagle assigns them: `rawMetas` for RAW photos,
 /// `resolutionWidth`, `resolutionHeight` and `duration` for video,
-/// `duration` for audio, and `fontMetas` for fonts.
+/// `duration` then `bpm` (when a beat is found) for audio, and `fontMetas`
+/// for fonts.
 fn file_metadata(item: &mut Item, raw: &Path, opts: &ImportOptions) {
     let ext = item.ext.clone();
     if (exif::is_raw(&ext) || (opts.camera_metadata_all_photos && exif::EXIF_EXTENSIONS.contains(&ext.as_str())))
@@ -362,6 +363,11 @@ fn file_metadata(item: &mut Item, raw: &Path, opts: &ImportOptions) {
         && let Some(d) = media::duration(raw, &ext).or_else(|| thumbnail::spotlight(raw).duration)
     {
         item.extra.insert("duration".into(), json!(d));
+    }
+    if media::is_audio(&ext)
+        && let Some(bpm) = tempo::bpm(raw, &ext)
+    {
+        item.extra.insert("bpm".into(), tempo::json_value(bpm));
     }
     if FONT_EXTENSIONS.contains(&ext.as_str())
         && let Some(metas) = fs::read(raw).ok().and_then(|data| fontmeta::font_metas(&data, &ids::new_id()))
@@ -502,6 +508,18 @@ mod tests {
         assert_eq!(item.extra["duration"], 1.25);
         assert_eq!((item.width, item.height), (280, 140));
         assert_eq!(thumb, Some((280, 140)), "the waveform is the thumbnail");
+        assert!(!item.extra.contains_key("bpm"), "a steady tone has no beat");
+    }
+
+    #[test]
+    fn audio_with_a_beat_gets_bpm_after_duration() {
+        let opts = ImportOptions { palette: false, ..Default::default() };
+        let click = |t: f64| { let s = t % 0.5; if s < 0.004 { 0.8 * (s * 9000.0).sin() } else { 0.0 } };
+        let item = metadata_only("beat.wav", &crate::media::tests::wav(22050, 12.0, click), &opts);
+        let bpm = item.extra["bpm"].as_f64().unwrap();
+        assert!((bpm - 120.0).abs() <= 1.0, "{bpm}");
+        let keys: Vec<&str> = item.extra.keys().map(String::as_str).collect();
+        assert_eq!(keys, ["duration", "bpm"]);
     }
 
     #[test]

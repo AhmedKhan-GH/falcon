@@ -109,6 +109,7 @@ fn rule(item: &Item, r: &Value, fx: &FolderIndex) -> bool {
         "url" => string_rule(&item.url, method, &value),
         "annotation" => string_rule(&item.annotation, method, &value),
         "folderName" => item.folders.iter().filter_map(|f| fx.get(f)).any(|(name, _)| string_rule(name, method, &value)),
+        "bpm" => search::bpm(item).is_some_and(|b| number_rule(b, method, &value)),
         "width" => number_rule(item.width as f64, method, &value),
         "height" => number_rule(item.height as f64, method, &value),
         "fileSize" => {
@@ -513,6 +514,10 @@ mod tests {
         assert!(!yes(json!([{"rules": [{"property": "color", "method": "similar", "value": "#1010FF"}]}])));
         assert!(yes(json!([{"rules": [{"property": "rating", "method": "equal", "value": "none"}]}])));
         assert!(!yes(json!([{"rules": [{"property": "name", "method": "contain", "value": ""}]}])));
+        assert!(!yes(json!([{"rules": [{"property": "bpm", "method": ">=", "value": [0, 0]}]}])), "no bpm never matches");
+        let song = item(json!({"ext": "mp3", "bpm": 128}));
+        let rule = |m: &str, v: Value| contains(&song, &folder(json!([{"rules": [{"property": "bpm", "method": m, "value": v}]}])), &[], &fx);
+        assert!(rule("between", json!([120, 130])) && rule("=", json!([128, 0])) && !rule("<", json!([128, 0])));
     }
 
     #[test]

@@ -89,6 +89,13 @@ Each rule has presets, a calendar range and a month list:
 - Min and max are entered in seconds, minutes or hours. Each bound is converted to seconds and truncated with `parseInt`. The test is `duration ≥ min` and `duration ≤ max`, both inclusive.
 - Any numeric bound, including 0, makes the rule active. Items with no `duration` then fail.
 
+### BPM (observed)
+
+- Reads `bpm`, the tempo of audio items, which may have a fraction.
+- Min and max are each truncated with `parseInt`. The test is `bpm ≥ min` and `bpm ≤ max`, both inclusive.
+- Any numeric bound makes the rule active. Items with no `bpm`, or `0`, then fail.
+- In saved filters the rule is `bpm: {min, max}`, with each key present only when set.
+
 ### Camera (observed)
 
 - Reads `rawMetas.camera`, which Eagle only writes for RAW photos (see [Import](import.md)).
@@ -105,7 +112,7 @@ The font rule is not a family picker. It has two choices, activated and deactiva
 
 ### How falcon does it
 
-`Filter` has `imported`, `created` and `modified` (`DateFilter`), `duration` (a pair of optional bounds in seconds), `cameras` (a set) and `font` (`FontFilter::Off`, `Activated(keys)` or `Deactivated(keys)`).
+`Filter` has `imported`, `created` and `modified` (`DateFilter`), `duration` (a pair of optional bounds in seconds), `bpm` (a pair of optional bounds, read from and written to saved filters; `search::bpm(item)` reads the value), `cameras` (a set) and `font` (`FontFilter::Off`, `Activated(keys)` or `Deactivated(keys)`).
 
 - A `DateFilter` takes an optional `Clock` (`now` and the start of today). With none, it reads the system clock and time zone. `local_day_start` builds range ends from a date picker.
 - `DurationUnit::to_seconds` converts the min and max fields.

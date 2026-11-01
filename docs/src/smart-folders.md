@@ -75,7 +75,7 @@ Any entry without conditions behaves as a group:
 - **No conditions:** a smart folder without conditions is a group and shows the union of its children (see below).
 - **Rule types:**
   - text: name, notes, URL, folder name
-  - numbers: width, height, file size
+  - numbers: width, height, file size, BPM (an item without `bpm` never matches)
   - dates
   - sets: tags, folders
   - type, rating, shape

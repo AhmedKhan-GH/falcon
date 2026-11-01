@@ -495,6 +495,10 @@ pub struct Filter {
     /// as Eagle's `parseInt` does. Items without a `duration` fail an active
     /// range.
     pub duration: (Option<f64>, Option<f64>),
+    /// Inclusive tempo range in BPM; each bound is truncated to a whole
+    /// number as Eagle's `parseInt` does. Items without a `bpm` (or with
+    /// `0`) fail an active range.
+    pub bpm: (Option<f64>, Option<f64>),
     /// Camera names (`rawMetas.camera`), matched exactly, OR-ed.
     pub cameras: HashSet<String>,
     pub font: FontFilter,
@@ -547,6 +551,12 @@ impl Filter {
         if self.duration != (None, None) {
             let d = duration(item)?;
             if self.duration.0.is_some_and(|a| d < a.trunc()) || self.duration.1.is_some_and(|b| d > b.trunc()) {
+                return None;
+            }
+        }
+        if self.bpm != (None, None) {
+            let b = bpm(item)?;
+            if self.bpm.0.is_some_and(|a| b < a.trunc()) || self.bpm.1.is_some_and(|z| b > z.trunc()) {
                 return None;
             }
         }
@@ -743,6 +753,11 @@ impl DurationUnit {
 /// An item's `duration` in seconds (audio and video).
 pub fn duration(item: &Item) -> Option<f64> {
     item.extra.get("duration").and_then(|v| v.as_f64())
+}
+
+/// An item's `bpm` (audio tempo), when it has a non-zero one.
+pub fn bpm(item: &Item) -> Option<f64> {
+    item.extra.get("bpm").and_then(|v| v.as_f64()).filter(|b| *b != 0.0)
 }
 
 /// The shortest and longest duration among `items`, for the duration
@@ -1299,6 +1314,19 @@ mod tests {
         assert!(f(Some(0.0), None).check(&still).is_none());
         assert_eq!(DurationUnit::Hours.to_seconds(1.0), 3600.0);
         assert_eq!(duration_range([&clip, &still]), Some((90.7, 90.7)));
+    }
+
+    #[test]
+    fn bpm_rule() {
+        let song = item(serde_json::json!({"ext": "mp3", "bpm": 119.985}));
+        let still = item(serde_json::json!({}));
+        let f = |min: Option<f64>, max: Option<f64>| Filter { bpm: (min, max), ..Default::default() };
+        assert!(f(Some(100.0), Some(120.0)).check(&song).is_some());
+        assert!(f(None, Some(119.9)).check(&song).is_none(), "119.9 truncates to 119");
+        assert!(f(Some(120.7), None).check(&song).is_none(), "120.7 truncates to 120");
+        assert!(f(Some(0.0), None).check(&still).is_none(), "no bpm fails an active range");
+        assert!(Filter::default().check(&still).is_some());
+        assert!(f(Some(1.0), None).check(&item(serde_json::json!({"bpm": 0}))).is_none());
     }
 
     #[test]

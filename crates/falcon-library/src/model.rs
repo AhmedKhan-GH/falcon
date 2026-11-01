@@ -624,7 +624,7 @@ pub struct SavedFilterQuery {
     /// The search text saved with the filter.
     pub keyword: Option<String>,
     /// Active rules falcon cannot express yet, by their rule key (`import`,
-    /// `mtime`, `duration`, `bpm`, `font`, `camera`, `annotation`, `image`,
+    /// `mtime`, `duration`, `font`, `camera`, `annotation`, `image`,
     /// `semantic`, `shape.43`, ...).
     pub unsupported: Vec<String>,
 }
@@ -727,11 +727,10 @@ impl SavedFilter {
                 skip(k);
             }
         }
-        for k in ["duration", "bpm"] {
-            if number(&[k, "min"]).is_some() || number(&[k, "max"]).is_some() {
-                skip(k);
-            }
+        if number(&["duration", "min"]).is_some() || number(&["duration", "max"]).is_some() {
+            skip("duration");
         }
+        f.bpm = (number(&["bpm", "min"]), number(&["bpm", "max"]));
         if truthy(&["font", "activated"]) || truthy(&["font", "deactivated"]) {
             skip("font");
         }
@@ -822,6 +821,11 @@ impl SavedFilter {
                 r[k]["keywords"] = words.join(",").into();
             }
         };
+        for (k, v) in [("min", filter.bpm.0), ("max", filter.bpm.1)] {
+            if let Some(v) = v {
+                r["bpm"][k] = js_number(v);
+            }
+        }
         text(&mut r, "url", &filter.url);
         text(&mut r, "note", &filter.note);
         if let Some(k) = keyword.filter(|k| !k.is_empty()) {
@@ -1059,6 +1063,7 @@ mod tests {
             note: TextFilter::Keywords(vec!["x".into()]),
             color: Some(ColorQuery { rgb: [1, 2, 3], accuracy: 20.0 }),
             grayscale: true,
+            bpm: (Some(90.0), Some(128.5)),
             ..Default::default()
         };
         f.ratings.insert(5);
@@ -1069,6 +1074,7 @@ mod tests {
         assert!(text.contains(r#""file":{"min":2,"max":1024,"unit":"kb"}"#), "{text}");
         assert!(text.contains(r#""folder":{"includes":{"F1":{"id":"F1","name":"One"},"NoFolders":{"id":"NoFolders"}}"#), "{text}");
         assert!(text.ends_with(r#""keyword":"cat"}"#));
+        assert!(text.contains(r#""bpm":{"min":90,"max":128.5}"#), "{text}");
         let back = SavedFilter { name: "n".into(), rule, extra: Extra::new() }.to_filter();
         assert_eq!(back.filter, f);
         assert_eq!(back.keyword.as_deref(), Some("cat"));

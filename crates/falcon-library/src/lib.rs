@@ -17,6 +17,7 @@ pub mod pack;
 pub mod palette;
 pub mod search;
 pub mod smart;
+pub mod tempo;
 pub mod undo;
 
 pub use error::{Error, Result};
