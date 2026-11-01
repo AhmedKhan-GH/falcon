@@ -623,13 +623,13 @@ impl App {
         }
         self.import_files(paths, folders);
         if let Some(first) = libraries.first() {
-            self.open(first.clone());
-            let opened = self.position_of(first).is_some();
+            // Behind the loading screen, as the switcher's opens are.
+            self.open_in_background(first.clone());
             let others = libraries.len() - 1;
-            if opened && others > 0 {
+            if others > 0 {
                 let name = first.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
                 let s = if others == 1 { "y was" } else { "ies were" };
-                self.flash(format!("Opened {name}; {others} other librar{s} left closed (one opens at a time)"));
+                self.flash(format!("Opening {name}; {others} other librar{s} left closed (one opens at a time)"));
             }
         }
     }
