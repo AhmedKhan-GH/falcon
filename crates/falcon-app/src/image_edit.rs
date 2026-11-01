@@ -6,7 +6,7 @@
 use eframe::egui::{self, Key, Modifiers, Rect, Ui};
 use falcon_library::model::{Comment, Item};
 use falcon_library::transform::{self, Flip, PixelRect};
-use falcon_library::{Library, thumbnail};
+use falcon_library::{Library, item_ops, thumbnail};
 
 use super::{Action, App};
 use crate::logic::{self, Scope};
@@ -39,6 +39,8 @@ pub enum Op {
     FontLanguage(String, String),
     /// Eagle's Duplicate: a copy of the item under a new id.
     Duplicate(String),
+    /// Pin items to the top of these folders (`true`) or unpin them.
+    Pin(Vec<String>, Vec<String>, bool),
 }
 
 impl Op {
@@ -61,6 +63,8 @@ impl Op {
             Op::Rename(..) => "Rename".into(),
             Op::FontLanguage(..) => "Change sample language".into(),
             Op::Duplicate(_) => "Duplicate item".into(),
+            Op::Pin(ids, _, true) => format!("Pin {} to the top", ids.len()),
+            Op::Pin(ids, _, false) => format!("Unpin {}", ids.len()),
         }
     }
 }
@@ -101,6 +105,16 @@ impl App {
     pub(super) fn edit_menu(&mut self, ui: &mut Ui, item: &Item, targets: &[String], lib: &Library) {
         let single = targets.len() == 1;
         ui.separator();
+        // Eagle's Pin to Top / Unpin from Top, inside a folder: every picked
+        // folder when several are shown together.
+        if let Scope::Folder(fid) = &self.ws.scope {
+            let picked = &self.ws.folders.sel.ids;
+            let folders: Vec<String> = if picked.is_empty() { vec![fid.clone()] } else { picked.clone() };
+            let pinned = item_ops::all_pinned(targets.iter().filter_map(|id| lib.item(id)), fid);
+            if ui.button(if pinned { "Unpin from Top" } else { "Pin to Top" }).clicked() {
+                self.ws.actions.push(Action::Edit(Op::Pin(targets.to_vec(), folders, !pinned)));
+            }
+        }
         if single
             && let Scope::Folder(fid) = &self.ws.scope
             && ui.button("Set as Folder Cover").clicked()
@@ -186,6 +200,13 @@ impl App {
             Op::Duplicate(id) => {
                 lib.duplicate_item(&id)?;
                 self.flash("Duplicated");
+                Ok(())
+            }
+            Op::Pin(ids, folders, pin) => {
+                let now = chrono::Utc::now().timestamp_millis().max(0) as u64;
+                let n = lib.set_pinned(&ids, &folders, pin, now)?;
+                let s = if n == 1 { "" } else { "s" };
+                self.flash(if pin { format!("Pinned {n} item{s} to the top") } else { format!("Unpinned {n} item{s}") });
                 Ok(())
             }
             Op::ResetCustomThumbnail(id) => {

@@ -883,6 +883,13 @@ impl App {
             let folder = if let Scope::Folder(id) = &scope { Some(id.as_str()) } else { None };
             organize::finish_order(&mut order, lib.items(), own, folder, seed);
         }
+        // Eagle puts items pinned in the open folder first, unless the
+        // folder is sorted at random.
+        if let Scope::Folder(id) = &self.ws.scope
+            && !matches!(own, Some((falcon_library::model::FolderOrder::Random, _)))
+        {
+            falcon_library::item_ops::pinned_first(&mut order, lib.items(), id);
+        }
         let hidden = organize::hidden_folders(&lib.metadata.folders, &self.ws.org.unlocked);
         organize::without_hidden(order, lib.items(), &hidden)
     }
