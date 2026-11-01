@@ -1,5 +1,6 @@
 //! Reading and writing Eagle `.library` folders.
 
+pub mod add_to_library;
 pub mod autotag;
 pub mod backup;
 pub mod duplicates;

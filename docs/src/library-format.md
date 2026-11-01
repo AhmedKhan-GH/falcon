@@ -250,6 +250,19 @@ Falcon differs from Eagle in two small ways. It copies only `*.info` folders, no
 
 The work is split so the app stays responsive. `merge::plan(&lib, source)` reads the other library and reports what would come in (`MergePlan::counts()`). `merge::copy_items` needs no lock on the open library, runs on a background thread, reports progress, can be cancelled and returns the folders copied, with the reason for any that failed. `Library::finish_merge` then merges the folder tree, saves `metadata.json` and registers the copied items in memory and in `mtime.json`, returning a `MergeReport` of folders, smart folders, tag groups and items added.
 
+## Adding to another library
+
+Eagle's Add to Other Library copies items, a folder, a smart folder or a tag group of the open library into another one. Falcon's `falcon_library::add_to_library` follows it:
+
+- **Items:** each `images/<id>.info` folder is copied whole. One whose id the other library already has is left alone. The copy's `metadata.json` loses its `folders`, and its `modificationTime` becomes the time of the copy plus the item's position in the selection, so the items show up as newly added, in order.
+- **A folder:** the folder and its subfolders, ids kept, go to the top of the other library's tree, unless it already has the folder's id. Subfolders whose ids it has are not added twice. The items in the folder and its subfolders (not those in the Trash) are copied as above but keep their `folders`, and in a folder sorted by hand they also keep their `modificationTime`.
+- **A smart folder or a tag group:** only the definition is added, at the top of its list, under new ids (a smart folder's subfolders too).
+- The other library's `tags.json` is left alone, as Eagle leaves it.
+
+Falcon differs in three small ways. An item copied with a folder keeps only the folder ids the other library has once the tree is merged, so no item points at a missing folder. A new folder's descendants whose ids exist elsewhere in the other library are merged into those, as when merging libraries. And each item folder is copied under a temporary name, its `metadata.json` rewritten there, and then renamed into place, so the other library never sees half an item.
+
+`add_to_library::check_target` refuses the open library itself, a folder that is not a library and one from a newer Eagle, and applies the sandbox guard. `copy_items` needs no lock, reports progress and can be cancelled. `Library::finish_add`, called on the other library, adds the definition (saving `metadata.json` only then) and registers the copied items in memory and in `mtime.json`.
+
 ## Inboard backups
 
 Eagle's File ▸ Import ▸ Inboard reads a backup folder made by the Inboard app, and `falcon_library::inboard` reads it the same way. The folder holds `InboardBackup.json`, with `folders` (each with a `title`) and `items`, plus the files in `images/` and `screenshots/`.

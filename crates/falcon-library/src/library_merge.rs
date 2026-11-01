@@ -193,6 +193,11 @@ impl Library {
     }
 }
 
+/// [`merge_folder`] at the top level, for Add to Other Library.
+pub(crate) fn merge_folder_into(tree: &mut Vec<Folder>, folder: Folder, known: &mut HashSet<String>) -> usize {
+    merge_folder(tree, None, folder, known)
+}
+
 /// Merges `folder` into `tree` under `parent` (None: top level). A folder
 /// whose id the tree already has is not added; its children are merged
 /// into the existing folder of that id, wherever it is. A new folder is
