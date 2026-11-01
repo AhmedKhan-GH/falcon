@@ -50,8 +50,12 @@ pub(crate) enum CopyKind {
     /// Each item's `<id>.info` folder, one per line.
     FolderPath,
     Name,
-    /// The items' source URLs.
+    /// Each item's local API link (Eagle's Copy Link).
     Link,
+    /// Each item's `eagle://item/<id>` link (Eagle's Copy Eagle Link).
+    EagleLink,
+    /// The items' source URLs (falcon's own).
+    SourceUrl,
     /// The first item's thumbnail as an image; several items' thumbnail
     /// files as files, as Eagle copies them.
     Thumbnail,
@@ -370,6 +374,12 @@ impl App {
         }
     }
 
+    /// The port Copy Link names: the running API's, else the first one
+    /// Preferences sets (the link works once the API is on).
+    fn api_link_port(&self) -> u16 {
+        self.server.as_ref().map(|h| h.port).or_else(|| self.prefs.api_ports().map(|r| *r.start())).unwrap_or(falcon_server::DEFAULT_PORT)
+    }
+
     fn copy_variant(&mut self, lib: &Library, kind: CopyKind, ids: &[String]) {
         let items: Vec<&Item> = ids.iter().filter_map(|id| lib.item(id)).collect();
         let Some(first) = items.first() else { return };
@@ -389,6 +399,11 @@ impl App {
             CopyKind::FolderPath => Some((export::folder_paths_text(lib, &items), plural(n, "folder path"))),
             CopyKind::Name => Some((items.iter().map(|i| i.name.as_str()).collect::<Vec<_>>().join("\n"), plural(n, "name"))),
             CopyKind::Link => {
+                let port = self.api_link_port();
+                Some((items.iter().map(|i| crate::links::api_item_link(port, &i.id)).collect::<Vec<_>>().join("\n"), plural(n, "link")))
+            }
+            CopyKind::EagleLink => Some((items.iter().map(|i| crate::links::item_link(&i.id)).collect::<Vec<_>>().join("\n"), plural(n, "Eagle link"))),
+            CopyKind::SourceUrl => {
                 let links: Vec<&str> = items.iter().map(|i| i.url.trim()).filter(|u| !u.is_empty()).collect();
                 if links.is_empty() {
                     self.flash(if n == 1 { "This item has no source URL" } else { "These items have no source URL" });
@@ -432,7 +447,13 @@ impl App {
         }
         ui.menu_button("Copy", |ui| {
             ui.set_min_width(160.0);
-            for (label, kind) in [("Link", CopyKind::Link), ("Folder Path", CopyKind::FolderPath), ("Thumbnail", CopyKind::Thumbnail)] {
+            for (label, kind) in [
+                ("Link", CopyKind::Link),
+                ("Eagle Link", CopyKind::EagleLink),
+                ("Source URL", CopyKind::SourceUrl),
+                ("Folder Path", CopyKind::FolderPath),
+                ("Thumbnail", CopyKind::Thumbnail),
+            ] {
                 if ui.button(label).clicked() {
                     ask(kind);
                 }
@@ -607,6 +628,8 @@ impl App {
             (C::CopyFolderPath, CopyKind::FolderPath),
             (C::CopyName, CopyKind::Name),
             (C::CopyLink, CopyKind::Link),
+            (C::CopyEagleLink, CopyKind::EagleLink),
+            (C::CopySourceUrl, CopyKind::SourceUrl),
             (C::CopyThumbnail, CopyKind::Thumbnail),
             (C::CopyBase64, CopyKind::Base64),
         ] {

@@ -163,6 +163,12 @@ impl App {
                 ui.ctx().send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Focus);
                 ui.close();
             }
+            // Eagle's window menu copies the item's link too.
+            if ui.button("Copy Link").clicked() {
+                use crate::ui::dialogs::export::{CopyKind, Request};
+                self.ws.export.request = Some(Request::Copy(CopyKind::Link, vec![item.id.clone()]));
+                ui.close();
+            }
             ui.separator();
             if ui.button("Close Window").clicked() {
                 pw.close = true;

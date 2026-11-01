@@ -519,7 +519,7 @@ impl App {
                     self.push_bulk(ids.len(), Action::TrashAsk(ids));
                 }
             }
-            C::ExportComputer | C::ExportPack | C::ExportCsv | C::ExportFormat | C::CopyPath | C::CopyFolderPath | C::CopyName | C::CopyLink | C::CopyThumbnail | C::CopyBase64 => {
+            C::ExportComputer | C::ExportPack | C::ExportCsv | C::ExportFormat | C::CopyPath | C::CopyFolderPath | C::CopyName | C::CopyLink | C::CopyEagleLink | C::CopySourceUrl | C::CopyThumbnail | C::CopyBase64 => {
                 self.export_keys(&|c| c == cmd);
             }
             C::Scroll(how) => self.ws.scroll = Some(how),

@@ -75,7 +75,12 @@ pub enum Command {
     CopyPath,
     CopyFolderPath,
     CopyName,
+    /// Copy ▸ Link: each item's local API link (`/item?id=`).
     CopyLink,
+    /// Copy Eagle Link: each item's `eagle://item/<id>` link.
+    CopyEagleLink,
+    /// Each item's source URL (falcon's own entry).
+    CopySourceUrl,
     CopyThumbnail,
     CopyBase64,
     /// A key of the video player (`App::video_keys` reads these).
@@ -438,8 +443,10 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::CopyPath, id: "edit.copy.path", group: "Copy", label: "Copy file paths", default: k(CMD_ALT, Key::C), aliases: &[] },
     Spec { cmd: Command::CopyFolderPath, id: "edit.copy.folderpath", group: "Copy", label: "Copy item folder paths", default: k(CMD_ALT_SHIFT, Key::C), aliases: &[] },
     Spec { cmd: Command::CopyName, id: "edit.copy.name", group: "Copy", label: "Copy names", default: None, aliases: &[] },
-    // falcon's own id: Eagle's Copy Link entry copies its local item link.
-    Spec { cmd: Command::CopyLink, id: "edit.copy.sourceurl", group: "Copy", label: "Copy source URLs", default: None, aliases: &[] },
+    // Eagle's Copy Eagle Link id; Copy Link and the source URLs have falcon's own ids.
+    Spec { cmd: Command::CopyEagleLink, id: "edit.copy.eaglelink", group: "Copy", label: "Copy Eagle links", default: None, aliases: &[] },
+    Spec { cmd: Command::CopyLink, id: "edit.copy.link", group: "Copy", label: "Copy item links", default: None, aliases: &[] },
+    Spec { cmd: Command::CopySourceUrl, id: "edit.copy.sourceurl", group: "Copy", label: "Copy source URLs", default: None, aliases: &[] },
     Spec { cmd: Command::CopyThumbnail, id: "edit.copy.thumbnail", group: "Copy", label: "Copy thumbnail", default: None, aliases: &[] },
     Spec { cmd: Command::CopyBase64, id: "edit.copy.base64", group: "Copy", label: "Copy as Base64", default: None, aliases: &[] },
     // The layout panel's switches (Eagle's `view.toggle.list*`).

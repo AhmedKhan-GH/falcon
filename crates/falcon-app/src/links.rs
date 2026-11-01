@@ -41,6 +41,17 @@ pub fn smart_link(id: &str) -> String {
     format!("eagle://smart-folder/{id}")
 }
 
+/// An item's `eagle://` link, as Copy Eagle Link writes it.
+pub fn item_link(id: &str) -> String {
+    format!("eagle://item/{id}")
+}
+
+/// An item's link through the local API on `port`, as Copy Link writes
+/// it: the API answers it with a redirect to [`item_link`].
+pub fn api_item_link(port: u16, id: &str) -> String {
+    format!("http://localhost:{port}/item?id={id}")
+}
+
 #[cfg(target_os = "macos")]
 pub use mac::{install, set_repaint, take};
 
@@ -163,5 +174,12 @@ mod tests {
         assert_eq!(parse("eagle://item/"), None);
         assert_eq!(parse("eagle://plugin/X"), None);
         assert_eq!(parse("https://item/X"), None);
+    }
+
+    #[test]
+    fn writes_item_links() {
+        assert_eq!(item_link("M3QSGJNQTC2DG"), "eagle://item/M3QSGJNQTC2DG");
+        assert_eq!(parse(&item_link("A1")), Some(Link::Item("A1".into())));
+        assert_eq!(api_item_link(41600, "A1"), "http://localhost:41600/item?id=A1");
     }
 }
