@@ -146,6 +146,8 @@ fn exif_blocks(data: &[u8]) -> Vec<::exif::Exif> {
             let jpeg = be32(84).zip(be32(88)).and_then(|(at, len)| data.get(at..at.checked_add(len)?));
             jpeg.and_then(|j| reader.read_from_container(&mut std::io::Cursor::new(j)).ok()).into_iter().collect()
         }
+        b"\0MRM" => mrw_ttw(data).and_then(|t| tiff(t.to_vec())).into_iter().collect(),
+        b"FOVb" => x3f_preview(data).and_then(|j| reader.read_from_container(&mut std::io::Cursor::new(j)).ok()).into_iter().collect(),
         _ if data.get(4..12) == Some(b"ftypcrx ") => cr3_tiff_blocks(data).into_iter().filter_map(|b| tiff(b.to_vec())).collect(),
         _ => reader.read_from_container(&mut std::io::Cursor::new(data)).ok().into_iter().collect(),
     }
@@ -173,6 +175,122 @@ fn boxes(data: &[u8]) -> Vec<(&[u8], &[u8])> {
     out
 }
 
+fn le32(data: &[u8], at: usize) -> Option<usize> {
+    data.get(at..at.checked_add(4)?).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]) as usize)
+}
+
+fn be32(data: &[u8], at: usize) -> Option<usize> {
+    data.get(at..at.checked_add(4)?).map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]) as usize)
+}
+
+/// The TIFF block (`\0TTW`) of a Minolta MRW file. The file starts with
+/// `\0MRM` and the big-endian offset of the image data (counted from byte
+/// 8); before it come blocks of a 4-byte tag and a big-endian length
+/// (`\0PRD`, `\0TTW`, `\0WBG`, `\0RIF`). The TTW payload is a complete TIFF.
+fn mrw_ttw(data: &[u8]) -> Option<&[u8]> {
+    let end = be32(data, 4)?.checked_add(8)?.min(data.len());
+    let mut at = 8usize;
+    // A handful of blocks exist; the cap stops a corrupt chain of tiny ones.
+    for _ in 0..32 {
+        let tag = data.get(at..at.checked_add(4)?)?;
+        let len = be32(data, at + 4)?;
+        let body = at.checked_add(8)?;
+        let next = body.checked_add(len)?;
+        if next > end {
+            return None;
+        }
+        if tag == b"\0TTW" {
+            return data.get(body..next);
+        }
+        at = next;
+    }
+    None
+}
+
+/// The JPEG preview of a Sigma/Foveon X3F file. The last 4 bytes (LE) point
+/// at the `SECd` directory: tag, version, entry count, then entries of
+/// (offset, length, 4-char type). An `IMAG` or `IMA2` section has a 28-byte
+/// header (`SECi`, version, type, format, columns, rows, row size) before its
+/// data; any such section whose data starts with a JPEG signature is taken
+/// (the format code is not trusted, as it differs between camera
+/// generations). The header's own rotation field (offset 36) is left out.
+fn x3f_preview(data: &[u8]) -> Option<&[u8]> {
+    let dir = le32(data, data.len().checked_sub(4)?)?;
+    if data.get(dir..dir.checked_add(4)?)? != b"SECd" {
+        return None;
+    }
+    let count = le32(data, dir + 8)?.min(256);
+    for i in 0..count {
+        let e = dir.checked_add(12)?.checked_add(i * 12)?;
+        let (offset, length) = (le32(data, e)?, le32(data, e + 4)?);
+        let kind = data.get(e + 8..e + 12)?;
+        if kind != b"IMAG" && kind != b"IMA2" || length < 28 {
+            continue;
+        }
+        let section = data.get(offset..offset.checked_add(length)?)?;
+        if section.starts_with(b"SECi") && section[28..].starts_with(&[0xFF, 0xD8, 0xFF]) {
+            return Some(&section[28..]);
+        }
+    }
+    None
+}
+
+/// Orientation of a Canon CRW (CIFF) file. Header: `II`, LE header length,
+/// `HEAPCCDR`; the heap runs from the header length to the end of the file.
+/// The last 4 bytes of a heap give the offset (from the heap start) of its
+/// record table: u16 count, then 10-byte entries of u16 tag, u32 size, u32
+/// offset. Tag bits 0x3800 are the data type; 0x2800 and 0x3000 mean the
+/// data is itself a heap, so the search recurses (to a fixed depth). Bits
+/// 0x4000 mean the data sits inside the entry and has no heap location.
+/// Record 0x1810 (ImageInfo) holds width, height, aspect ratio (f32) and a
+/// rotation in degrees at byte 12, the clockwise turn needed to display the
+/// image upright, so 90 is EXIF 6 and 270 is EXIF 8 (as ExifTool reports it).
+fn crw_orientation(data: &[u8]) -> Option<u32> {
+    if data.get(..2)? != b"II" || data.get(6..14)? != b"HEAPCCDR" {
+        return None;
+    }
+    let start = le32(data, 2)?;
+    let angle = ciff_rotation(data.get(start..)?, 0, &mut 0)?;
+    match angle.rem_euclid(360) {
+        0 => Some(1),
+        90 => Some(6),
+        180 => Some(3),
+        270 => Some(8),
+        _ => None,
+    }
+}
+
+fn ciff_rotation(heap: &[u8], depth: u32, seen: &mut u32) -> Option<i32> {
+    if depth > 6 {
+        return None;
+    }
+    let table = le32(heap, heap.len().checked_sub(4)?)?;
+    let count = heap.get(table..table.checked_add(2)?).map(|b| u16::from_le_bytes([b[0], b[1]]) as usize)?;
+    for i in 0..count {
+        *seen += 1;
+        if *seen > 512 {
+            return None;
+        }
+        let e = table.checked_add(2)?.checked_add(i * 10)?;
+        let tag = heap.get(e..e + 2).map(|b| u16::from_le_bytes([b[0], b[1]]))?;
+        if tag & 0xC000 != 0 {
+            continue;
+        }
+        let (size, offset) = (le32(heap, e + 2)?, le32(heap, e + 6)?);
+        let body = heap.get(offset..offset.checked_add(size)?)?;
+        match tag & 0x3800 {
+            0x2800 | 0x3000 => {
+                if let Some(a) = ciff_rotation(body, depth + 1, seen) {
+                    return Some(a);
+                }
+            }
+            _ if tag == 0x1810 => return body.get(12..16).map(|b| i32::from_le_bytes([b[0], b[1], b[2], b[3]])),
+            _ => {}
+        }
+    }
+    None
+}
+
 /// Canon's metadata box inside CR3's `moov`.
 const CANON_UUID: [u8; 16] = [0x85, 0xC0, 0xB6, 0x87, 0x82, 0x0F, 0x11, 0xE0, 0x81, 0x11, 0xF4, 0xCE, 0x46, 0x2B, 0x6A, 0x48];
 
@@ -191,9 +309,11 @@ pub fn read(path: &Path) -> Option<CameraMeta> {
 
 /// The EXIF orientation (1-8) of a photo file's main image, read from the
 /// same places as [`read`]: the TIFF IFDs of TIFF-based RAW files, the EXIF
-/// of the JPEG preview inside RAF, and the `CMT1` block of CR3.
+/// of the JPEG preview inside RAF, the `CMT1` block of CR3, the `\0TTW` TIFF
+/// of MRW, the JPEG preview of X3F and the CIFF `ImageInfo` rotation of CRW.
 pub fn orientation(data: &[u8]) -> Option<u32> {
-    field(&exif_blocks(data), Tag::Orientation.number())?.value.get_uint(0).filter(|v| (1..=8).contains(v))
+    let from_exif = field(&exif_blocks(data), Tag::Orientation.number()).and_then(|f| f.value.get_uint(0)).filter(|v| (1..=8).contains(v));
+    from_exif.or_else(|| crw_orientation(data))
 }
 
 fn from_blocks(exif: &[::exif::Exif]) -> Option<CameraMeta> {
@@ -441,5 +561,132 @@ pub(crate) mod tests {
         assert_eq!(orientation(&cr3), Some(8));
         // Out-of-range values are ignored.
         assert_eq!(orientation(&tiff(&[(0x0112, 3, 1, 9u16.to_le_bytes().to_vec())])), None);
+    }
+
+    /// A minimal MRW: `\0MRM`, data offset, then PRD, TTW and WBG blocks.
+    fn mrw(ttw: &[u8]) -> Vec<u8> {
+        let blk = |tag: &[u8; 4], body: &[u8]| [&tag[..], &(body.len() as u32).to_be_bytes(), body].concat();
+        let blocks = [blk(b"\0PRD", &[0; 24]), blk(b"\0TTW", ttw), blk(b"\0WBG", &[0; 12])].concat();
+        [&b"\0MRM"[..], &(blocks.len() as u32).to_be_bytes(), &blocks, &[0; 16]].concat()
+    }
+
+    fn jpeg_with_exif(tiff: &[u8]) -> Vec<u8> {
+        let mut jpeg = vec![0xFF, 0xD8, 0xFF, 0xE1];
+        jpeg.extend_from_slice(&((tiff.len() + 8) as u16).to_be_bytes());
+        jpeg.extend_from_slice(b"Exif\0\0");
+        jpeg.extend_from_slice(tiff);
+        jpeg.extend_from_slice(&[0xFF, 0xD9]);
+        jpeg
+    }
+
+    #[test]
+    fn orientation_of_mrw_ttw_block() {
+        for o in 1..=8u16 {
+            let raw = mrw(&tiff(&[(0x0112, 3, 1, o.to_le_bytes().to_vec())]));
+            assert_eq!(orientation(&raw), Some(u32::from(o)));
+        }
+        let ttw = tiff(&[ascii(0x010F, "Minolta")]);
+        assert_eq!(orientation(&mrw(&ttw)), None);
+        let raw = mrw(&tiff(&[(0x0112, 3, 1, 6u16.to_le_bytes().to_vec())]));
+        assert_eq!(orientation(&raw[..20]), None);
+        assert_eq!(orientation(&raw[..raw.len() / 2]), None);
+        // A block length past the data area is refused.
+        let mut bad = raw.clone();
+        bad[12..16].copy_from_slice(&u32::MAX.to_be_bytes());
+        assert_eq!(orientation(&bad), None);
+        assert_eq!(orientation(b"\0MRM"), None);
+    }
+
+    /// An X3F with a raw `IMAG` section and a preview section.
+    fn x3f(preview: &[u8]) -> Vec<u8> {
+        let mut f = b"FOVb".to_vec();
+        f.resize(104, 0);
+        let sec = |body: &[u8]| [&b"SECi"[..], &[0; 24], body].concat();
+        let raw = sec(&[0u8; 20]);
+        let prev = sec(preview);
+        let raw_at = f.len();
+        f.extend_from_slice(&raw);
+        let prev_at = f.len();
+        f.extend_from_slice(&prev);
+        let dir_at = f.len() as u32;
+        f.extend_from_slice(b"SECd");
+        f.extend_from_slice(&0x0002_0000u32.to_le_bytes());
+        f.extend_from_slice(&2u32.to_le_bytes());
+        for (at, len, kind) in [(raw_at, raw.len(), b"IMAG"), (prev_at, prev.len(), b"IMA2")] {
+            f.extend_from_slice(&(at as u32).to_le_bytes());
+            f.extend_from_slice(&(len as u32).to_le_bytes());
+            f.extend_from_slice(kind);
+        }
+        f.extend_from_slice(&dir_at.to_le_bytes());
+        f
+    }
+
+    #[test]
+    fn orientation_of_x3f_preview() {
+        for o in [1u16, 3, 6, 8] {
+            let raw = x3f(&jpeg_with_exif(&tiff(&[(0x0112, 3, 1, o.to_le_bytes().to_vec())])));
+            assert_eq!(orientation(&raw), Some(u32::from(o)));
+        }
+        let raw = x3f(&jpeg_with_exif(&tiff(&[(0x0112, 3, 1, 6u16.to_le_bytes().to_vec())])));
+        assert_eq!(orientation(&raw[..raw.len() - 8]), None);
+        assert_eq!(orientation(&raw[..60]), None);
+        assert_eq!(orientation(&x3f(&[1, 2, 3, 4])), None);
+        assert_eq!(orientation(b"FOVb"), None);
+        // A directory pointer past the end gives nothing.
+        let mut bad = raw.clone();
+        let n = bad.len();
+        bad[n - 4..].copy_from_slice(&u32::MAX.to_le_bytes());
+        assert_eq!(orientation(&bad), None);
+    }
+
+    /// A CRW: header, then a heap whose root table holds a sub-heap
+    /// (0x300a, image properties) with a 0x1810 record of `angle` degrees.
+    fn crw(angle: i32) -> Vec<u8> {
+        let entry = |tag: u16, size: usize, off: usize| [&tag.to_le_bytes()[..], &(size as u32).to_le_bytes(), &(off as u32).to_le_bytes()].concat();
+        // Inner heap: 26 bytes of ImageInfo, table, table offset.
+        let mut info = vec![0u8; 12];
+        info.extend_from_slice(&angle.to_le_bytes());
+        info.extend_from_slice(&[0; 10]);
+        let mut inner = info.clone();
+        let table_at = inner.len() as u32;
+        inner.extend_from_slice(&1u16.to_le_bytes());
+        inner.extend_from_slice(&entry(0x1810, info.len(), 0));
+        inner.extend_from_slice(&table_at.to_le_bytes());
+        // Outer heap: a decoy record, the inner heap, table, table offset.
+        let mut heap = vec![0xAA; 8];
+        let inner_at = heap.len();
+        heap.extend_from_slice(&inner);
+        let table_at = heap.len() as u32;
+        heap.extend_from_slice(&2u16.to_le_bytes());
+        heap.extend_from_slice(&entry(0x2005, 8, 0));
+        heap.extend_from_slice(&entry(0x300A, inner.len(), inner_at));
+        heap.extend_from_slice(&table_at.to_le_bytes());
+        [&b"II"[..], &26u32.to_le_bytes(), b"HEAPCCDR", &[0; 12], &heap].concat()
+    }
+
+    #[test]
+    fn orientation_of_crw_image_info() {
+        for (angle, want) in [(0, Some(1)), (90, Some(6)), (180, Some(3)), (270, Some(8)), (-90, Some(8)), (45, None)] {
+            assert_eq!(orientation(&crw(angle)), want, "{angle}");
+        }
+        let raw = crw(90);
+        assert_eq!(orientation(&raw[..raw.len() - 1]), None);
+        assert_eq!(orientation(&raw[..20]), None);
+        assert_eq!(orientation(&raw[..14]), None);
+        // A header length or table offset past the end gives nothing.
+        let mut bad = raw.clone();
+        bad[2..6].copy_from_slice(&u32::MAX.to_le_bytes());
+        assert_eq!(orientation(&bad), None);
+        let mut bad = raw.clone();
+        let n = bad.len();
+        bad[n - 4..].copy_from_slice(&u32::MAX.to_le_bytes());
+        assert_eq!(orientation(&bad), None);
+        // A heap that nests itself ends at the depth cap.
+        let mut looped = raw.clone();
+        let n = looped.len();
+        looped[26..30].copy_from_slice(&[0; 4]);
+        looped[n - 4..].copy_from_slice(&(n as u32 - 26 - 4).to_le_bytes());
+        assert_eq!(orientation(&looped), None);
+        assert_eq!(orientation(b"II\x1a\0\0\0HEAPCCDR"), None);
     }
 }

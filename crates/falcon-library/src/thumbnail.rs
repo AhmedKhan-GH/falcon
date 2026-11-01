@@ -135,7 +135,7 @@ pub fn decode(path: &Path) -> Result<DynamicImage, ThumbError> {
 
 /// The largest JPEG preview embedded in a RAW photo, turned by the file's
 /// EXIF orientation when it has one (from its TIFF IFDs, RAF's preview
-/// EXIF or CR3's `CMT1`; see [`crate::exif::orientation`]). Eagle's RAW
+/// EXIF, CR3's `CMT1`, MRW's TTW block, X3F's preview or CRW's rotation record; see [`crate::exif::orientation`]). Eagle's RAW
 /// viewer shows the preview dcraw extracts; falcon finds the same kind of picture by scanning for
 /// baseline or progressive 8-bit JPEG streams and keeping the one with the
 /// most pixels (the camera's full-size preview rather than its thumbnail).
