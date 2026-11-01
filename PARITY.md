@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 183 | 39 | 49 | 9 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 201 | 32 | 38 | 9 |
 | Viewers and file formats | 157 | 22 | 11 | 7 |
-| Search, filters and organising | 188 | 15 | 19 | 3 |
-| Import, export, library, preferences and integrations | 129 | 17 | 66 | 26 |
-| **Total** | 657 | 93 | 145 | 45 |
+| Search, filters and organising | 189 | 14 | 19 | 3 |
+| Import, export, library, preferences and integrations | 130 | 17 | 65 | 26 |
+| **Total** | 677 | 85 | 133 | 45 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -60,7 +60,7 @@ Overall finding: falcon now has a native menu bar (`crates/falcon-app/src/menu.r
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | A menubar with File / Edit / Find / Organize / View / Actions / Window / Help menus, each item showing its live shortcut | Partial | Native AppKit menus in `crates/falcon-app/src/menu.rs` (File, Edit, Find, Organize, View, Window, Help) with live shortcuts, enabled rules and checkmarks; clicks run through `App::run_command`. No Actions menu; only commands falcon has | local |
-| App menu: About | Partial | Only winit's stock About panel. No Eagle-style About window | local |
+| App menu: About | Done | Falcon's own About window (`about.rs`), replacing winit's stock item | local |
 | App menu: Preferences… (⌘,) | Done | shortcuts.rs `app.preferences`; in the app menu after About (`menu.rs`) and in the library switcher | local |
 | App menu: Lock Now (⌘⌥L, locks the whole app behind a password or Touch ID) | Partial | ⌥⌘L locks the app behind the password set in Preferences ▸ Password (`applock.rs`, `app.lock`); in the app menu. No Touch ID | local |
 | App menu: Color Space (sRGB / Display P3 / Unmanaged) | Missing | No colour-space choice | local |
@@ -105,7 +105,7 @@ Overall finding: falcon now has a native menu bar (`crates/falcon-app/src/menu.r
 | Actions menu: user-defined Actions, each with its own shortcut | Missing | The toolbar ⚡ button is drawn but disabled (app.rs:2038) | local |
 | Window: Toggle Full Screen, Minimize, Close Window (⌘W) | Done | ⌃⌘F, ⌘M and ⌘W through eframe viewport commands; ⌘W closes the viewer first, then the window (which quits falcon, like the red button) | local |
 | Help: Help Center, Show Tutorial, Install Extensions, Feedback, Recover license, Change Logs | Missing | Not applicable | online/plugin |
-| Help: Error Logs, Export Debug Report… | Missing | No log viewer or debug report export | local |
+| Help: Error Logs, Export Debug Report… | Done | Errors and panics logged to `~/Library/Logs/Falcon`; Help ▸ Error Logs and Export Debug Report (a zip of system, library and log details; no network or disk tests) | local |
 
 Cross-references (not counted): File ▸ Import Folders / Links / Eagle Package / Pinterest / ArtStation / Auto Import, File ▸ Export to Computer / .eaglepack / Specified Format / CSV, Library menu (Create / Switch / Merge / Clear History / Empty cache and reload) and Find ▸ Search / Search All / Filter submenu / Search by Image / Find Duplicates belong to the import, export, library and search audits. Falcon's library switcher popup (app.rs:1595-1652) covers Open, Recent, New, Show in Finder, Collect Window and Preferences.
 
@@ -115,7 +115,7 @@ Cross-references (not counted): File ▸ Import Folders / Links / Eagle Package 
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| Every context menu has a type-to-filter search box with keyword matching | Missing | Plain egui context menus | local |
+| Every context menu has a type-to-filter search box with keyword matching | Done | `menu_search.rs` wraps the item, folder, smart folder and tag menus: type to filter, ↑/↓, Enter; submenu entries aren't searched (egui builds them only when open) | local |
 | **Item**: Restore (in the Trash) | Done | app.rs:2531-2534, which also offers Delete Permanently | local |
 | Item: Open Item(s) in New Window | Done | Item menu; one item per window | local |
 | Item: Open With Default App / Open With ▸ apps / Reveal in Finder | Done | open_ui.rs:33-46 | local |
@@ -214,13 +214,13 @@ Eagle defaults come from prefs `shortcuts.keybinds` (rebindable) and from the ha
 | `*` or `/` expand or collapse every folder | Done | Eagle's `toggleAllFolders` rule (smart folders when one is open); `*` is the ⇧8 alias chord | local |
 | Tab toggles all panels | Done | Fixed key in shortcuts.rs FIXED, when no text field has focus (`logic::toggle_all`) | local |
 | Space opens the quick preview (preference: preview, native Quick Look, or page down) | Done | `Prefs::space`: viewer, Quick Look (`open_with::quick_look`, `qlmanage -p`) or page down | local |
-| ⇧Space pages up | Missing |  | local |
+| ⇧Space pages up | Done | Fixed key | local |
 | Enter toggles the viewer | Done | Enter is an alias of Viewer (shortcuts.rs:95) | local |
 | Esc closes panel, slideshow or viewer, otherwise clears the selection | Done | app.rs:1076-1081 | local |
 | Arrow keys move the selection; ←→ step in the viewer | Done | app.rs:1105-1135 | local |
-| WASD as arrow keys | Missing |  | local |
+| WASD as arrow keys | Done | Fixed keys | local |
 | ⇧ + arrows extend the selection | Done | `logic::extend_selection`: ⇧←/→ grow or shrink from the anchor; ⇧↑/↓ only in List layout, as Eagle | local |
-| Arrow keys move through the sidebar tree when it has focus (focus zones: content / sidebar / tags) | Missing |  | local |
+| Arrow keys move through the sidebar tree when it has focus (focus zones: content / sidebar / tags) | Partial | Content and sidebar focus zones (click a row, then ↑/↓/←/→); no tags zone | local |
 | ⌫ goes back (or leaves the viewer); ⌥← / ⌥→ and ⌘← / ⌘→ move through history | Done | shortcuts.rs `go.back` (⌫, ⌘←, ⌥←) and `go.forward` (⌘→, ⌥→); in the viewer ⌫ leaves it (app.rs `keyboard`) | local |
 | ⌥↑ opens the parent folder | Done | Of the open folder or smart folder | local |
 | ⌥⇧N creates a text file from a template; ⌥⇧C sets the folder cover | Partial | ⌥⇧N creates and opens an empty Untitled.txt (`file.create.txt`); ⌥⇧C is still context-menu only | local |
@@ -268,7 +268,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Nav entries: All, Uncategorized, Untagged, Recently Used, Random, All Tags, Trash, each with a count | Done | app.rs:1740-1776, which adds Duplicates | local |
 | Recently Used lists items the user recently opened | Done | Opened items newest first (viewer after a second, external open, Open With, new window, copy), kept per library in app storage as Eagle | local |
 | Community entry | Missing |  | online/plugin |
-| Show or hide each nav entry (context menu and preferences) | Partial | Preferences ▸ Sidebar (`SidebarSections`); no context menu | local |
+| Show or hide each nav entry (context menu and preferences) | Done | Context menu on All / Untagged / Random and Preferences ▸ Sidebar | local |
 | Show or hide the count badges | Done | `Prefs::sidebar_counts` | local |
 | Quick Access section | Done | app.rs:1670-1699 | local |
 | Section headers (Quick Access / Smart Folders / Folders) collapse on click and show a count | Partial | Quick Access folds and shows a count; Smart Folders and Folders don't fold | local |
@@ -278,9 +278,9 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Select several folders with ⌘ or ⇧ click to see their combined items | Done | `logic::TreeSel` (⌘ toggles, ⇧ ranges among visible rows), `folders_ui`; the grid shows the union under the global sort | local |
 | Filter field at the bottom of the sidebar | Done | app.rs:1656, 1719-1736. No ⌥⇧F key | local |
 | "Go to Folder" button | Done | Opens the quick switcher | local |
-| Resize the sidebar by dragging its edge | Missing | Fixed width (app.rs:3624-3631) | local |
+| Resize the sidebar by dragging its edge | Done | 200–480 pt, kept across launches | local |
 | Background task status: "Processing" or "Paused" palette analysis with Pause / Resume | Missing |  | local |
-| Drop zone hint: "Drag and drop folder here to import" | Missing |  | local |
+| Drop zone hint: "Drag and drop folder here to import" | Done | Hints over the grid, the sidebar and a folder row while files are dragged in | local |
 
 ---
 
@@ -362,16 +362,16 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | --- | --- | --- | --- |
 | Frameless window with traffic lights; drag the title area; double-click to zoom | Done | main.rs:45-51, app.rs:1510-1519 | local |
 | Remember window size and position | Done | eframe persistence (Cargo.toml `persistence` feature) | local |
-| Full screen | Partial | Through the OS green button only. No menu or key | local |
+| Full screen | Done | ⌃⌘F and Window ▸ Full Screen, plus the green button | local |
 | Always on top for the main window | Done | `modes.rs` | local |
 | Open items in a separate preview window: own titlebar always-on-top toggle, opacity 10–100%, navigator, zoom presets 5–800%, grayscale, rotate / flip, copy, copy path / link, Reveal in Eagle | Missing |  | local |
 | Middle-click opens an item in a new window (preference) | Missing |  | local |
 | Presentation / slideshow mode | Done | `modes.rs`; `ViewportCommand::Fullscreen`, panels and bar hidden | local |
-| Closing the window keeps the app running (Dock icon stays); reopen from the Dock | Missing | Closing quits | local |
+| Closing the window keeps the app running (Dock icon stays); reopen from the Dock | Done | Closing hides falcon (`NSApp hide:`, so the collect and preview windows hide too); the Dock icon or reopening brings it back; ⌘Q quits | local |
 | Menu bar status icon: Show Eagle, Capture Area / Window / Full Screen, Quit | Missing | Captures cross-ref import | local |
-| Lock screen for the whole app, with Touch ID | Missing |  | local |
+| Lock screen for the whole app, with Touch ID | Partial | Password lock (`applock.rs`, ⌥⌘L); no Touch ID | local |
 | Loading screen while a library opens (progress messages) | Missing | Opening is synchronous (app.rs:595-618) | local |
-| Resizable inspector | Missing | Fixed width (app.rs:3633-3640) | local |
+| Resizable inspector | Done | Drag its inner edge; kept across launches | local |
 | Several libraries open in one window (falcon only) | Done | app.rs:624-676, workspaces.rs (extra) | local |
 | Floating collect window (falcon only) | Done | collect.rs (extra) | local |
 
@@ -394,8 +394,8 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| Toast messages (rename, remove, rate, copy path, pin and so on) | Partial | One transient 3-second toast (app.rs:824, 3675-3686). Many actions raise none | local |
-| UNDO button on toasts | Missing | ⌘Z works, but toasts have no button | local |
+| Toast messages (rename, remove, rate, copy path, pin and so on) | Done | `toast.rs`: brief, normal, undoable and error kinds with Eagle's durations; errors also go to the log | local |
+| UNDO button on toasts | Done | `toast.rs` undoable kind | local |
 | Clickable links in toasts (open the folder) | Missing |  | local |
 | Import progress bar with count and time remaining | Partial | Count and file name (app.rs:911-940). No time remaining and no cancel | local |
 | Import errors toast ("N files failed, click for details") opens an error list with retry and reveal | Partial | Toast shows the failure count only (app.rs:925) | local |
@@ -415,11 +415,11 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Welcome flow: welcome, choose a theme, install browser extension, create or open a library with example names | Missing |  | local (extension step online) |
 | No-library screen offers both Create and Open | Partial | Only "Choose Library…" (app.rs:3531-3546). Create is reachable from the switcher only after a library is open | local |
 | Tutorial / tips overlay | Missing |  | local |
-| Empty All or folder view: "Drag and Drop" with a hint | Partial | Plain "No items" for every view (app.rs:2448-2451) | local |
-| Empty search: "Nothing Found, maybe another keyword" | Partial | Same "No items" | local |
-| Empty Trash text | Partial | Same "No items" | local |
-| Uncategorized and Untagged intro and "done" states | Partial | Same "No items" | local |
-| No tags yet / no uncategorized tags | Partial | Tag page has no tailored empty text | local |
+| Empty All or folder view: "Drag and Drop" with a hint | Done | Tailored empty states per view | local |
+| Empty search: "Nothing Found, maybe another keyword" | Done | Tailored empty state | local |
+| Empty Trash text | Done | Tailored empty state | local |
+| Uncategorized and Untagged intro and "done" states | Done | Tailored intro and done states | local |
+| No tags yet / no uncategorized tags | Done | All Tags page empty state | local |
 | Duplicates: none found | Done | duplicates_view.rs:199-207 | local |
 | Locked-folder unlock screen | Partial | Password unlock screen (organize_ui.rs:676). No Touch ID | local |
 
@@ -439,17 +439,17 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 10. Open in New Window (preview window with always-on-top, opacity and navigator), plus main-window Always on Top.
 11. Presentation / slideshow mode (F5) and grayscale preview.
 12. Folder context menu gaps: New Folder (sibling), Move Folder dialog, Expand/Collapse submenu, Duplicate, Copy Link, Show Subfolder Content. Also no menu at all on subfolder cards, and no menu for several folders.
-13. Fixed-width sidebar and inspector (Eagle's are resizable). Sidebar sections don't collapse. Nav entries can't be hidden.
+13. ~~Fixed-width sidebar and inspector; nav entries fixed.~~ Fixed; Smart Folders and Folders section headers still don't fold.
 14. ~~List layout: no column header, no column chooser, no sort-by-column.~~ Fixed.
-15. Empty states are a single "No items"; no welcome flow; the no-library screen lacks Create Library.
-16. Toast system: no UNDO button, no links, no import error list, no dock progress, no time remaining.
+15. ~~Empty states are a single "No items".~~ Fixed; the welcome flow and the no-library screen are the library builder's.
+16. Toast system: ~~no UNDO button, no links, no import error list~~ fixed; no dock progress, no time remaining.
 17. Drag and drop gaps: files onto a specific sidebar folder, a Finder folder onto the sidebar (keeping its tree), items onto Quick Access or subfolder cards, Quick Access reorder.
-18. Context menus have no type-to-filter search.
+18. ~~Context menus have no type-to-filter search.~~ Fixed (not inside submenus).
 19. ~~Trash ▸ Restore All, Recently Used ▸ Clear history, Recently Used by modification time.~~ Fixed.
 20. Right-click on the empty grid (layout panel), right-click on the title (ancestor jump), ⌥↑ to the parent folder, R to reshuffle Random and a refresh button.
 21. Video, GIF and audio hover-play in the grid.
-22. Window: closing quits instead of keeping the app in the Dock; no Full Screen menu or key; no app lock screen; no menu bar status icon; no library loading screen.
-23. Smaller items: Color Space menu, vibrancy, sound effects, sidebar badge toggle, palette-analysis status indicator, double-click-to-rename preference, shortcut-list search, Error Logs / Debug Report.
+22. Window: closing now hides falcon (whole app) and the Dock icon brings it back; Full Screen and the app lock exist.
+23. Smaller items: Color Space menu, vibrancy, sound effects, palette-analysis status indicator, shortcut-list search is done, Error Logs / Debug Report are done.
 
 ## Viewers and file formats
 
@@ -1158,7 +1158,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| Undo for organising edits with an UNDO toast | Partial | Cmd+Z works through transactions (`A:1262`); no toast button | local |
+| Undo for organising edits with an UNDO toast | Done | ⌘Z through transactions plus the toast's Undo button | local |
 | Layout "Show annotation" on cards | n/a | main window agent | local |
 | Context-menu search box | n/a | shell agent | local |
 
@@ -1498,7 +1498,7 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 | Reverse image search on web engines | Missing | — | online |
 | Licence activation, trial, unregister, device management, licence recovery | Missing (not needed) | Falcon is free software | online |
 | Check for updates, update dialog, minor update, Rosetta warning | Missing | — | online |
-| Help: Error Logs and Export Debug Report | Missing | — | local |
+| Help: Error Logs and Export Debug Report | Done | Help menu; `~/Library/Logs/Falcon/falcon.log` | local |
 | Help: help centre, changelogs, roadmap, feedback, tutorial, tips | Missing | Cross-ref menus audit | online |
 | Menu bar (tray) icon with capture actions, Show Eagle and Quit | Missing | — | local |
 | Scripted launch options (`--search`, `--color`, `--tags`, `--select`, item ids, files) | Done (beyond Eagle) | `crates/falcon-app/src/main.rs:20-41` | local |
@@ -1517,9 +1517,9 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 
 Rows marked "not counted" are features Eagle 4.0.0 does not have.
 
-- **Done:** 129, including 5 where falcon goes beyond Eagle and 1 with a small difference.
+- **Done:** 130, including 5 where falcon goes beyond Eagle and 1 with a small difference.
 - **Partial:** 17.
-- **Missing:** 92, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
+- **Missing:** 91, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
 - **Different on purpose:** 1 (the API listens on localhost only).
 
 ### Ranked Missing and Partial local items
