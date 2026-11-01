@@ -16,9 +16,12 @@ the reviewer.
 - Japanese and Korean use polite forms in sentences (です/ます, 합니다/하세요)
   and nouns or plain verbs in menu items; Japanese uses full-width
   punctuation (、。（）「」) and the menu ellipsis `…`.
-- Chinese uses full-width punctuation (，。：（）) and no space between
-  Chinese and Latin text or numbers, except around placeholders that
-  stand for names.
+- Chinese (both files) uses full-width punctuation (，。：（）), a space
+  between Chinese and a Latin word (在 Finder 中显示, 关于 Falcon, PNG 文件)
+  and no space between Chinese and a number or a placeholder
+  (已加入{n}个项目, 移到{folder}). Earlier files mixed both; they were
+  made to follow this rule mechanically, so a reader should look for
+  spacing that reads oddly.
 - Placeholders such as `{n}`, `{name}` and `{folder}` are kept exactly;
   `…` at the end of a menu item (it opens a dialog) is kept.
 - Product and file names stay as they are: Falcon, Eagle, Finder,
