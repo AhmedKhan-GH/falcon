@@ -2,7 +2,11 @@
 //! dropped on it (or pasted into it) and adds them to a chosen folder,
 //! so items can be collected while the main window is behind other apps.
 //! It is falcon's take on Eagle's collect window, which asks where to save
-//! an item arriving from the browser extension or a screenshot.
+//! an item arriving from the browser extension or a screenshot: with
+//! Preferences ▸ Screenshot ▸ "Ask where to save" on, an area or window
+//! screenshot waits here ([`Pending`]) until Save adds it to the chosen
+//! folders with the name and tags above, or Discard (or closing the
+//! window) drops it.
 
 use std::path::PathBuf;
 
@@ -223,6 +227,16 @@ impl Meta {
     }
 }
 
+/// A screenshot waiting for where it goes.
+#[derive(Clone, PartialEq, Debug)]
+pub struct Pending {
+    pub path: PathBuf,
+    /// Its item name, put in the Name field.
+    pub name: String,
+    /// Its tags ("Screenshot", unless that is off), put in the Tags field.
+    pub tags: Vec<String>,
+}
+
 /// What the window received this frame.
 #[derive(PartialEq, Debug)]
 pub enum Event {
@@ -231,6 +245,10 @@ pub enum Event {
     Paste,
     /// Make a top-level folder with this name.
     CreateFolder(String),
+    /// Save the waiting screenshot into the chosen folders.
+    Save(Pending),
+    /// Drop waiting screenshots (Discard, or the window closed).
+    Discard(Vec<Pending>),
 }
 
 #[derive(Default)]
@@ -246,6 +264,14 @@ pub struct Collect {
     /// Name, description and tags for the next collect.
     pub meta: Meta,
     tag_input: String,
+    /// Screenshots waiting for Save or Discard, oldest first; the first
+    /// one is shown.
+    pending: Vec<Pending>,
+    /// Bring the window to the front next frame.
+    raise: bool,
+    /// The name, description and tags a Save went with (the fields
+    /// already show the next screenshot's).
+    pub saved_meta: Option<Meta>,
 }
 
 impl Collect {
@@ -258,6 +284,46 @@ impl Collect {
     pub fn clear_meta(&mut self) {
         self.meta = Meta::default();
         self.tag_input.clear();
+    }
+
+    /// Opens the window with a screenshot waiting in it.
+    pub fn ask(&mut self, p: Pending) {
+        if !self.open {
+            self.open = true;
+            self.open_at = self.pos;
+        }
+        self.raise = true;
+        self.pending.push(p);
+        if self.pending.len() == 1 {
+            self.fill_from_pending();
+        }
+    }
+
+    /// Whether a screenshot is waiting.
+    pub fn waiting(&self) -> bool {
+        !self.pending.is_empty()
+    }
+
+    /// Puts the first waiting screenshot's name and tags in the fields.
+    fn fill_from_pending(&mut self) {
+        if let Some(p) = self.pending.first() {
+            self.meta = Meta { name: p.name.clone(), description: String::new(), tags: Vec::new() };
+            for t in &p.tags {
+                add_tag(&mut self.meta.tags, t);
+            }
+            self.tag_input.clear();
+        }
+    }
+
+    /// The first waiting screenshot, taken off the queue; the next one's
+    /// name and tags take its place in the fields.
+    fn next_pending(&mut self) -> Option<Pending> {
+        if self.pending.is_empty() {
+            return None;
+        }
+        let p = self.pending.remove(0);
+        self.fill_from_pending();
+        Some(p)
     }
 
     /// Shows the window as its own always-on-top, borderless OS window.
@@ -273,7 +339,17 @@ impl Collect {
             builder = builder.with_position(p);
         }
         let id = egui::ViewportId::from_hash_of("falcon-collect");
-        ctx.show_viewport_immediate(id, builder, |ui, _class| self.contents(ui, folders, state, pool, keys))
+        if std::mem::take(&mut self.raise) {
+            ctx.send_viewport_cmd_to(id, egui::ViewportCommand::Focus);
+        }
+        let event = ctx.show_viewport_immediate(id, builder, |ui, _class| self.contents(ui, folders, state, pool, keys));
+        // Closing the window drops what waits in it, as Eagle's does.
+        if !self.open && !self.pending.is_empty() {
+            let gone = std::mem::take(&mut self.pending);
+            self.clear_meta();
+            return Some(Event::Discard(gone));
+        }
+        event
     }
 
     fn contents(&mut self, ui: &mut Ui, folders: Option<&[FolderRow]>, state: &mut State, pool: &TagPool, keys: &Shortcuts) -> Option<Event> {
@@ -322,15 +398,35 @@ impl Collect {
             self.open = false;
         }
 
-        // Drop zone.
+        // Drop zone, or the waiting screenshot with Save and Discard.
         let zone = Rect::from_min_size(Pos2::new(full.left() + 12.0, header.bottom()), vec2(full.width() - 24.0, 84.0));
-        let (fill, edge) = if hovering { (t::p().primary.gamma_multiply(0.15), t::p().primary) } else { (t::p().main, t::p().guide) };
-        p.rect(zone, CornerRadius::same(8), fill, Stroke::new(1.0, edge), egui::StrokeKind::Inside);
-        let enabled = folders.is_some();
-        let (line1, line2) = if enabled { (tr("Drop files here"), tr("or paste with ⌘V")) } else { (tr("No library open"), "") };
-        p.text(zone.center() - vec2(0.0, 20.0), Align2::CENTER_CENTER, crate::icons::TRAY_ARROW_DOWN, font(22.0), if hovering { t::p().primary } else { t::p().text_muted });
-        p.text(zone.center() + vec2(0.0, 6.0), Align2::CENTER_CENTER, line1, font(13.0), t::p().text);
-        p.text(zone.center() + vec2(0.0, 24.0), Align2::CENTER_CENTER, line2, font(11.5), t::p().text_muted);
+        let mut decided: Option<bool> = None;
+        if let Some(first) = self.pending.first() {
+            p.rect(zone, CornerRadius::same(8), t::p().main, Stroke::new(1.0, t::p().primary), egui::StrokeKind::Inside);
+            let more = self.pending.len() - 1;
+            let title = if more == 0 { "Screenshot".to_string() } else { format!("Screenshot (and {more} more)") };
+            p.text(zone.left_top() + vec2(12.0, 16.0), Align2::LEFT_CENTER, title, font(13.0), t::p().text);
+            let file = first.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            let g = p.layout_no_wrap(file, font(11.5), t::p().text_muted);
+            p.galley(zone.left_top() + vec2(12.0, 28.0), g, t::p().text_muted);
+            let buttons = Rect::from_min_max(Pos2::new(zone.left() + 12.0, zone.bottom() - 34.0), Pos2::new(zone.right() - 12.0, zone.bottom() - 8.0));
+            let mut b = ui.new_child(egui::UiBuilder::new().max_rect(buttons).layout(egui::Layout::right_to_left(egui::Align::Center)));
+            let can_save = folders.is_some();
+            if b.add_enabled(can_save, egui::Button::new(egui::RichText::new("Save").color(Color32::WHITE)).fill(t::p().primary)).clicked() {
+                decided = Some(true);
+            }
+            if b.button("Discard").clicked() {
+                decided = Some(false);
+            }
+        } else {
+            let (fill, edge) = if hovering { (t::p().primary.gamma_multiply(0.15), t::p().primary) } else { (t::p().main, t::p().guide) };
+            p.rect(zone, CornerRadius::same(8), fill, Stroke::new(1.0, edge), egui::StrokeKind::Inside);
+            let enabled = folders.is_some();
+            let (line1, line2) = if enabled { (tr("Drop files here"), tr("or paste with ⌘V")) } else { (tr("No library open"), "") };
+            p.text(zone.center() - vec2(0.0, 20.0), Align2::CENTER_CENTER, crate::icons::TRAY_ARROW_DOWN, font(22.0), if hovering { t::p().primary } else { t::p().text_muted });
+            p.text(zone.center() + vec2(0.0, 6.0), Align2::CENTER_CENTER, line1, font(13.0), t::p().text);
+            p.text(zone.center() + vec2(0.0, 24.0), Align2::CENTER_CENTER, line2, font(11.5), t::p().text_muted);
+        }
 
         // Name, description, tags, then the folder chooser.
         let status_h = 24.0;
@@ -418,9 +514,31 @@ impl Collect {
             ctx.request_repaint_after(std::time::Duration::from_millis(500));
         }
 
+        match decided {
+            Some(false) => {
+                if let Some(p) = self.next_pending() {
+                    return Some(Event::Discard(vec![p]));
+                }
+            }
+            Some(true) if folders.is_some() => {
+                // The name and tags typed for it go with it; the next
+                // screenshot's replace them in the fields.
+                let meta = self.meta.clone();
+                if let Some(p) = self.next_pending() {
+                    self.status = Some((format!("Saved {}", meta.name.trim()), now));
+                    self.saved_meta = Some(meta);
+                    return Some(Event::Save(p));
+                }
+            }
+            _ => {}
+        }
         let rows = folders?;
         if event.is_some() {
             return event;
+        }
+        if self.waiting() && (!dropped.is_empty() || (pasted && !typing)) {
+            self.status = Some(("Save or discard the screenshot first".into(), now));
+            return None;
         }
         let chosen = target(rows, state.selected);
         enum Target {

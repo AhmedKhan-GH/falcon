@@ -717,6 +717,9 @@ impl App {
                 }
             }
             C::Player(_) => {}
+            C::ShowFalcon => self.show_falcon(ctx, false),
+            C::ShowSearch => self.show_falcon(ctx, true),
+            C::Capture(mode) => self.start_capture(mode),
             C::ToggleName => self.display.show_name = !self.display.show_name,
             C::ToggleInfo => self.display.show_info = !self.display.show_info,
             C::ToggleComments => self.display.comment_badge = !self.display.comment_badge,

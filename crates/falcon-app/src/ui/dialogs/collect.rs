@@ -37,6 +37,20 @@ impl App {
                     }
                 }
             }
+            Some(collect::Event::Save(shot)) => {
+                // The name, description and tags typed for the screenshot
+                // go with it; the file is in falcon's temp folder, which
+                // the import empties.
+                self.collect_extra = self.collect.saved_meta.take();
+                self.import_files(vec![shot.path], target.clone());
+                self.collect_extra = None;
+                collect::push_recent(&mut self.prefs.collect_recent, &target);
+            }
+            Some(collect::Event::Discard(shots)) => {
+                for s in shots {
+                    let _ = std::fs::remove_file(&s.path);
+                }
+            }
             Some(e @ (collect::Event::Files(_) | collect::Event::Paste)) => {
                 self.collect_extra = Some(self.collect.meta.clone());
                 match e {

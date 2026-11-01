@@ -47,6 +47,8 @@ pub(crate) struct Outcome {
     pub changed: bool,
     /// Files to show in Finder.
     pub reveal: Vec<PathBuf>,
+    /// An export finished: `message` also goes out as a notification.
+    pub exported: bool,
 }
 
 /// The worker's side: a cheap clone that goes into the thread.
@@ -213,6 +215,9 @@ impl App {
         } else if let Some(e) = o.error {
             self.flash_error(e);
         } else {
+            if o.exported {
+                self.export_done_notice(&o.message);
+            }
             self.flash(o.message);
         }
         if !o.reveal.is_empty() {

@@ -179,6 +179,13 @@ pub enum Command {
     ErrorLogs,
     About,
     DebugReport,
+    /// Eagle's global shortcuts (`global.*`), which act from any app
+    /// (`hotkeys.rs`), and the menu bar icon's items (`tray.rs`): bring
+    /// falcon to the front, the same with the search focused, and the
+    /// three screen captures (`capture.rs`).
+    ShowFalcon,
+    ShowSearch,
+    Capture(crate::capture::Mode),
 }
 
 /// How a scroll command moves the grid.
@@ -264,6 +271,9 @@ pub enum FrameTool {
 
 /// The group whose keys only act in the video and audio players.
 pub const PLAYER: &str = "Player";
+/// The group whose keys act from any app, registered with the system
+/// (`hotkeys.rs`) instead of read from egui's input.
+pub const GLOBAL: &str = "Global";
 
 /// Whether two rows can conflict: Eagle checks a chord only against the
 /// rows of the same conflict group (`player` or `all`).
@@ -306,6 +316,12 @@ const ALT_SHIFT: Modifiers = Modifiers { alt: true, shift: true, ..Modifiers::NO
 /// Every rebindable command with its default. Arrow keys, Escape and the
 /// held Z of the hover preview stay fixed (see `FIXED`).
 pub const TABLE: &[Spec] = &[
+    // Eagle's global keys: only the area capture has a default (⌥⌘E).
+    Spec { cmd: Command::ShowFalcon, id: "global.show.eagle", group: GLOBAL, label: "Show falcon", default: None, aliases: &[] },
+    Spec { cmd: Command::ShowSearch, id: "global.show.search", group: GLOBAL, label: "Bring up falcon and search", default: None, aliases: &[] },
+    Spec { cmd: Command::Capture(crate::capture::Mode::Area), id: "global.capture.area", group: GLOBAL, label: "Capture an area", default: k(CMD_ALT, Key::E), aliases: &[] },
+    Spec { cmd: Command::Capture(crate::capture::Mode::Window), id: "global.capture.window", group: GLOBAL, label: "Capture a window", default: None, aliases: &[] },
+    Spec { cmd: Command::Capture(crate::capture::Mode::Full), id: "global.capture.full", group: GLOBAL, label: "Capture the full screen", default: None, aliases: &[] },
     Spec { cmd: Command::Viewer, id: "view.viewer", group: "View", label: "Open or close the viewer", default: k(NONE, Key::Space), aliases: &[KeyboardShortcut::new(NONE, Key::Enter)] },
     Spec { cmd: Command::ZoomIn, id: "view.zoom.in", group: "View", label: "Zoom in", default: k(CMD, Key::Equals), aliases: &[KeyboardShortcut::new(CMD, Key::Plus)] },
     Spec { cmd: Command::ZoomOut, id: "view.zoom.out", group: "View", label: "Zoom out", default: k(CMD, Key::Minus), aliases: &[] },
@@ -566,12 +582,13 @@ impl Shortcuts {
         TABLE.iter().filter(|s| s.cmd != cmd && same_scope(s, me)).map(|s| s.cmd).find(|&c| self.chords(c).iter().any(|x| same(*x, Some(chord))))
     }
 
-    /// The command a key press triggers, outside the Player group. When
+    /// The command a key press triggers, outside the Player group and the
+    /// Global group (the system hands those over, `hotkeys.rs`). When
     /// several match (⌘F and ⌘⇧F for ⌘⇧F), the chord with the most
     /// modifiers wins.
     pub fn resolve(&self, key: Key, pressed: Modifiers) -> Option<Command> {
         let mut best: Option<(Command, u8)> = None;
-        for s in TABLE.iter().filter(|s| s.group != PLAYER) {
+        for s in TABLE.iter().filter(|s| s.group != PLAYER && s.group != GLOBAL) {
             for c in self.chords(s.cmd) {
                 // A bare key (a digit, R, /) is not also its ⌥ chord.
                 let bare_with_alt = c.modifiers.is_none() && pressed.alt;

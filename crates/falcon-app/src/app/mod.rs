@@ -24,6 +24,7 @@ pub(crate) mod library;
 pub(crate) mod long_ops;
 pub(crate) mod navigation;
 pub(crate) mod state;
+pub(crate) mod system;
 
 pub(crate) use actions::{Action, BULK_CONFIRM};
 use commands::editable_now;
@@ -176,6 +177,8 @@ pub struct App {
     pub(crate) confirm_reload: bool,
     /// A library being read on a background thread (`ui/dialogs/library_notices.rs`).
     pub(crate) loading: Option<crate::ui::dialogs::library_notices::Loading>,
+    /// The global keys, the menu bar icon and screen capture (`system.rs`).
+    pub(crate) system: system::System,
 }
 
 impl App {
@@ -254,6 +257,7 @@ impl App {
             pack_ask: None,
             confirm_reload: false,
             loading: None,
+            system: Default::default(),
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
         app.welcomed = crate::ui::dialogs::library::already_welcomed(saved.welcomed, saved.recent.len(), saved.libraries.len(), saved.library.is_some());
@@ -368,6 +372,7 @@ impl eframe::App for App {
                 let _ = ws.flush_and_backup();
             }
         }
+        self.system_tick(&ctx);
         if self.lock.is_locked() {
             // Nothing but the lock screen acts while locked.
             let _ = crate::menu::take_clicks();

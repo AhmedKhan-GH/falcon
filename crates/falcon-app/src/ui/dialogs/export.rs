@@ -518,7 +518,7 @@ impl App {
                 !h.cancelled()
             });
             h.finish(match result {
-                Ok(Some(n)) => Outcome { message: exported(n, 0), reveal: vec![dest], ..Default::default() },
+                Ok(Some(n)) => Outcome { message: exported(n, 0), reveal: vec![dest], exported: true, ..Default::default() },
                 Ok(None) => Outcome { message: tr("Export cancelled").into(), ..Default::default() },
                 Err(e) => Outcome { error: Some(trf("Export failed: {error}", &[("error", &e)])), ..Default::default() },
             });
@@ -615,6 +615,10 @@ impl App {
             (j.packing, j.total, j.done, j.current.clone(), finished)
         };
         if let Some((msg, reveal)) = finished {
+            // Only an export that wrote something reveals it.
+            if !reveal.is_empty() {
+                self.export_done_notice(&msg);
+            }
             self.flash(msg);
             crate::open_with::reveal(&reveal);
             return false;

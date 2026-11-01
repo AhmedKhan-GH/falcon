@@ -173,6 +173,7 @@ impl App {
             *pr = Progress { errors, ..Progress::default() };
             drop(pr);
             self.imports.select_after = Some(added);
+            self.import_done_notice(total, done - failed);
             if failed > 0 {
                 self.flash_error(trf("Added {count}, {failed} failed", &[("count", &(done - failed)), ("failed", &failed)]));
             } else if self.prefs.tells_import_done() {

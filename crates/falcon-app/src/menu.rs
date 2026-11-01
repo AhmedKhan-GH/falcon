@@ -174,6 +174,10 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::OpenNewWindow => s.library && (s.viewer || s.selected > 0),
         C::Presentation => s.library && (s.viewer || s.selected > 0 || s.presenting),
         C::Player(_) => false,
+        // The menu bar icon and the global keys: a capture needs a
+        // library to go into.
+        C::ShowFalcon | C::ShowSearch => true,
+        C::Capture(_) => s.library,
     }
 }
 

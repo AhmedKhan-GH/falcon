@@ -149,6 +149,34 @@ pub struct Prefs {
     /// Eagle's `general.language`: the interface language, the system's
     /// unless one is chosen (`locale.rs`).
     pub language: crate::locale::Language,
+    /// Eagle's `screencapture.format`: what screenshots are saved as.
+    pub screenshot_format: crate::capture::Format,
+    /// Eagle's `screencapture.quality`, for JPG and WebP screenshots
+    /// (`capture::QUALITIES`).
+    pub screenshot_quality: u8,
+    /// Eagle's `screencapture.shortcutsEnable`: the global capture keys
+    /// are registered (`hotkeys.rs`).
+    pub screenshot_shortcuts: bool,
+    /// Eagle's `general.showCaptureCollectModal`: an area or window
+    /// screenshot opens the collect window to choose where it goes.
+    pub screenshot_ask: bool,
+    /// Eagle's `notification.notification.when.screencapture`: a system
+    /// notification when an area or window screenshot is taken.
+    pub notify_capture: bool,
+    /// Eagle's `screencapture.autoTagging.enable`: screenshots get the
+    /// "Screenshot" tag.
+    pub screenshot_tag: bool,
+    /// Eagle's `screencapture.autoWriteClipboard`: screenshots also go to
+    /// the clipboard.
+    pub screenshot_clipboard: bool,
+    /// Eagle's `screencapture.useRetina`: keep a Retina screen's full
+    /// pixel size; off halves screenshots taken there.
+    pub screenshot_retina: bool,
+    /// Eagle's `general.showMenuItem`: the menu bar icon (`tray.rs`).
+    pub menu_icon: bool,
+    /// A system notification when an export finishes (falcon's own,
+    /// after Eagle's "Export Successful" notice).
+    pub notify_export_done: bool,
 }
 
 /// What a middle click on a card in the grid does.
@@ -299,6 +327,16 @@ impl Default for Prefs {
             middle_button: MiddleButton::default(),
             video_hover: true,
             language: crate::locale::Language::Auto,
+            screenshot_format: crate::capture::Format::Png,
+            screenshot_quality: crate::capture::DEFAULT_QUALITY,
+            screenshot_shortcuts: true,
+            screenshot_ask: false,
+            notify_capture: true,
+            screenshot_tag: true,
+            screenshot_clipboard: false,
+            screenshot_retina: true,
+            menu_icon: true,
+            notify_export_done: true,
         }
     }
 }
@@ -324,6 +362,10 @@ impl Prefs {
             self.api_token.clear();
         }
         self.ui_zoom = self.ui_zoom.clamp(ZOOM_STEPS[0], ZOOM_STEPS[ZOOM_STEPS.len() - 1]);
+        // Only Eagle's three qualities are offered.
+        if !crate::capture::QUALITIES.iter().any(|q| q.0 == self.screenshot_quality) {
+            self.screenshot_quality = crate::capture::DEFAULT_QUALITY;
+        }
         // As in Eagle, a chosen folder that is gone is forgotten and
         // auto-import turned off.
         if self.auto_import_path.as_ref().is_some_and(|p| !p.is_dir()) {
@@ -361,6 +403,28 @@ impl Prefs {
     /// Whether files found in the watched folder get a notice.
     pub fn tells_auto_import(&self) -> bool {
         self.notifications && self.notify_auto_import
+    }
+
+    /// Whether a screenshot taken in `mode` posts a notification: only an
+    /// area or window one, as in Eagle (a full-screen one only sounds).
+    pub fn tells_capture(&self, mode: crate::capture::Mode) -> bool {
+        self.notifications && self.notify_capture && mode != crate::capture::Mode::Full
+    }
+
+    /// Whether a screenshot taken in `mode` opens the collect window to
+    /// choose where it goes: never a full-screen one, as in Eagle.
+    pub fn asks_capture(&self, mode: crate::capture::Mode) -> bool {
+        self.screenshot_ask && mode != crate::capture::Mode::Full
+    }
+
+    /// Whether a finished export posts a notification.
+    pub fn tells_export_done(&self) -> bool {
+        self.notifications && self.notify_export_done
+    }
+
+    /// How screenshots are saved.
+    pub fn capture_options(&self) -> crate::capture::Options {
+        crate::capture::Options { format: self.screenshot_format, quality: self.screenshot_quality, retina: self.screenshot_retina, clipboard: self.screenshot_clipboard }
     }
 
     /// The folder the library at `root` watches, while auto-import is on
