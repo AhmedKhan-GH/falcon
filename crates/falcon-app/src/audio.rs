@@ -1,18 +1,20 @@
 //! Audio playback for the viewer, and the waveforms drawn under it.
 //!
-//! Playback goes through rodio on the default output device. Only an
-//! output stream is ever opened, which needs no macOS permission; nothing
-//! here touches an input device.
+//! Files are decoded by `falcon_library::audio` (the same decoder the
+//! waveform, the stored duration and the tempo use) and played through
+//! rodio on the default output device. Only an output stream is ever
+//! opened, which needs no macOS permission; nothing here touches an input
+//! device.
 
 use std::collections::{HashMap, HashSet};
-use std::fs::File;
-use std::io::BufReader;
+use std::num::NonZero;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 
 use crate::locale::trf;
 use eframe::egui;
+use falcon_library::audio::AudioSource;
 use falcon_library::waveform;
 
 /// Peaks computed per item for the viewer's waveform; the drawing merges
@@ -25,6 +27,8 @@ struct Track {
     path: PathBuf,
     ext: String,
     player: Arc<rodio::Player>,
+    /// The length the decoder found, for items whose record has none.
+    duration: Option<f64>,
 }
 
 /// The viewer's audio player: one track at a time.
@@ -69,16 +73,71 @@ fn open_sink() -> Result<rodio::MixerDeviceSink, String> {
     Ok(d)
 }
 
-fn decoder(path: &Path, ext: &str) -> Result<rodio::Decoder<BufReader<File>>, String> {
-    let file = File::open(path).map_err(|e| e.to_string())?;
-    let len = file.metadata().map_err(|e| e.to_string())?.len();
-    rodio::Decoder::builder()
-        .with_data(BufReader::new(file))
-        .with_byte_len(len)
-        .with_hint(ext)
-        .with_seekable(true)
-        .build()
-        .map_err(|e| e.to_string())
+/// A decoded file as a rodio source. Each block of the decoder is one
+/// rodio span, so a change of rate or channels between blocks is followed.
+struct Stream {
+    source: Box<dyn AudioSource>,
+    block: Vec<f32>,
+    at: usize,
+    channels: NonZero<u16>,
+    rate: NonZero<u32>,
+}
+
+impl Stream {
+    fn open(path: &Path, ext: &str) -> Result<Stream, String> {
+        let source = falcon_library::audio::open(path, ext).map_err(|e| e.to_string())?;
+        let mut s = Stream { source, block: Vec::new(), at: 0, channels: NonZero::<u16>::MIN, rate: NonZero::<u32>::MIN };
+        s.refill();
+        Ok(s)
+    }
+
+    /// Takes the next block from the decoder; leaves `block` empty at the end.
+    fn refill(&mut self) {
+        self.block.clear();
+        self.at = 0;
+        if let Some(b) = self.source.next_block() {
+            self.block.extend_from_slice(b.samples);
+            self.channels = NonZero::new(b.channels).unwrap_or(NonZero::<u16>::MIN);
+            self.rate = NonZero::new(b.rate).unwrap_or(NonZero::<u32>::MIN);
+        }
+    }
+}
+
+impl Iterator for Stream {
+    type Item = f32;
+
+    fn next(&mut self) -> Option<f32> {
+        let s = *self.block.get(self.at)?;
+        self.at += 1;
+        if self.at == self.block.len() {
+            self.refill();
+        }
+        Some(s)
+    }
+}
+
+impl rodio::Source for Stream {
+    fn current_span_len(&self) -> Option<usize> {
+        Some(self.block.len() - self.at)
+    }
+
+    fn channels(&self) -> rodio::ChannelCount {
+        self.channels
+    }
+
+    fn sample_rate(&self) -> rodio::SampleRate {
+        self.rate
+    }
+
+    fn total_duration(&self) -> Option<Duration> {
+        self.source.duration().map(Duration::from_secs_f64)
+    }
+
+    fn try_seek(&mut self, pos: Duration) -> Result<(), rodio::source::SeekError> {
+        self.source.seek(pos.as_secs_f64()).map_err(|e| rodio::source::SeekError::Other(Arc::new(e)))?;
+        self.refill();
+        Ok(())
+    }
 }
 
 impl Audio {
@@ -102,7 +161,7 @@ impl Audio {
             return;
         }
         let Some(device) = &self.device else { return };
-        let source = match decoder(path, ext) {
+        let source = match Stream::open(path, ext) {
             Ok(s) => s,
             Err(e) => {
                 self.error = Some(trf("Can't play this file: {error}", &[("error", &e)]));
@@ -114,8 +173,9 @@ impl Audio {
         if !autoplay {
             player.pause();
         }
+        let duration = source.source.duration();
         player.append(source);
-        self.track = Some(Track { id: id.to_string(), path: path.to_path_buf(), ext: ext.to_string(), player });
+        self.track = Some(Track { id: id.to_string(), path: path.to_path_buf(), ext: ext.to_string(), player, duration });
     }
 
     /// Opens the default output stream unless it is open (waiting for one
@@ -172,6 +232,12 @@ impl Audio {
             self.opening = Some(rx);
         }
         Ok(())
+    }
+
+    /// The loaded track's length as decoded, for items whose record holds
+    /// no duration (imported before falcon could read the format).
+    pub fn track_duration(&self) -> Option<f64> {
+        self.track.as_ref().and_then(|t| t.duration)
     }
 
     /// A handle on the loaded track's player, for pausing it from another
@@ -255,7 +321,7 @@ impl Audio {
     /// Appends the file again (sources can't rewind once finished).
     fn restart(&mut self, play: bool) {
         let Some(t) = &self.track else { return };
-        match decoder(&t.path, &t.ext) {
+        match Stream::open(&t.path, &t.ext) {
             Ok(source) => {
                 if play {
                     t.player.play();
@@ -349,10 +415,22 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let p = dir.path().join("tone.wav");
         wav(&p, 2);
-        let d = decoder(&p, "wav").unwrap();
+        let mut d = Stream::open(&p, "wav").unwrap();
         let total = d.total_duration().unwrap().as_secs_f64();
         assert!((total - 2.0).abs() < 0.01, "{total}");
-        assert!(decoder(&dir.path().join("missing.wav"), "wav").is_err());
+        assert_eq!((d.channels().get(), d.sample_rate().get()), (1, 8000));
+        // Seeking through rodio's interface lands where asked: the samples
+        // after 1.5 s are the ones the file has there.
+        d.try_seek(Duration::from_secs_f64(1.5)).unwrap();
+        let rest: Vec<f32> = d.by_ref().collect();
+        assert_eq!(rest.len(), 4000);
+        let want = (12000.0f32 * (12000.0 * 440.0 * std::f32::consts::TAU / 8000.0).sin()).trunc() / 32768.0;
+        assert!((rest[0] - want).abs() < 1e-3, "{} vs {want}", rest[0]);
+        assert!(Stream::open(&dir.path().join("missing.wav"), "wav").is_err());
+        // A format with no decoder is refused with a reason, not a panic.
+        let wma = dir.path().join("x.wma");
+        std::fs::write(&wma, [0x30, 0x26, 0xB2, 0x75, 0x8E, 0x66, 0xCF, 0x11, 0, 0, 0, 0]).unwrap();
+        assert_eq!(Stream::open(&wma, "wma").err().as_deref(), Some("unsupported audio format"));
         // Nothing is loaded until the viewer asks, so no device is opened here.
         let mut a = Audio::default();
         assert_eq!(a.loaded(), None);

@@ -145,7 +145,7 @@ impl AudioPane {
         let mut audio = Audio::default();
         audio.load(&item.id, path, &item.ext, true);
         audio.loaded()?;
-        let duration = search::duration(item).unwrap_or(0.0);
+        let duration = search::duration(item).or(audio.track_duration()).unwrap_or(0.0);
         audio.duration = duration;
         Some(AudioPane { audio, duration })
     }

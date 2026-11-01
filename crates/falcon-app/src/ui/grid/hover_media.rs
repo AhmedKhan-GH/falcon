@@ -152,7 +152,7 @@ impl App {
             return;
         }
         player.tick();
-        let duration = falcon_library::search::duration(item).unwrap_or(0.0);
+        let duration = falcon_library::search::duration(item).or(player.track_duration()).unwrap_or(0.0);
         let pos = player.position();
         let p = ui.painter().with_clip_rect(pic.intersect(ui.clip_rect()));
         if duration > 0.0 {

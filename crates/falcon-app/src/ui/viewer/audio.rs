@@ -120,7 +120,7 @@ impl App {
         // Eagle starts playing as soon as the item opens.
         self.audio.load(&item.id, &path, &item.ext, true);
         self.audio.tick();
-        let duration = search::duration(item).unwrap_or(0.0);
+        let duration = search::duration(item).or(self.audio.track_duration()).unwrap_or(0.0);
         self.audio.duration = duration;
         let pos = self.audio.position();
 
