@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 203 | 32 | 36 | 9 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 213 | 27 | 31 | 9 |
 | Viewers and file formats | 156 | 23 | 11 | 7 |
-| Search, filters and organising | 189 | 14 | 19 | 3 |
+| Search, filters and organising | 197 | 11 | 14 | 3 |
 | Import, export, library, preferences and integrations | 153 | 13 | 46 | 26 |
-| **Total** | 701 | 82 | 112 | 45 |
+| **Total** | 719 | 74 | 102 | 45 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -80,11 +80,11 @@ Overall finding: falcon now has a native menu bar (`crates/falcon-app/src/menu.r
 | Edit: Custom thumbnail from the clipboard (⇧⌥⌘T) | Done | Clipboard image or copied file | local |
 | Edit ▸ Move Folder: Up, Down, To Top, To Bottom (⌘] ⌘[ ⇧⌘] ⇧⌘[) | Done | Keys and Edit menu entries move the open folder or smart folder among its siblings, undoably (`organize::arrange`) | local |
 | Edit ▸ Edit Image: Horizontal Flip (⇧F), Rotate (⇧R), Crop (⇧C), Combine Images (⇧⌘M) | Partial | Flip, Rotate and Crop (⇧C, `edit.image.crop`) in the menu and keys; Combine Images is a plugin in Eagle 4, not built | local |
-| Edit ▸ Edit Folder: Set Current Folder (⇧⌘R), Move Folder, Password create / edit / remove / lock (⇧⌘L) | Partial | ⇧⌘R opens Folder Settings; Edit ▸ Move Folder… opens the picker dialog (`Command::MoveFolder`, no default key as Eagle). Passwords are still context-menu only, no ⇧⌘L | local |
+| Edit ▸ Edit Folder: Set Current Folder (⇧⌘R), Move Folder, Password create / edit / remove / lock (⇧⌘L) | Done | ⇧⌘R Folder Settings, Edit ▸ Move Folder…, Edit ▸ Folder Password ▸ Create / Change / Remove / Lock Now (⇧⌘L), with Eagle's ids and enabled states | local |
 | Edit: Remove from current folder (⇧⌘⌫) | Done | shortcuts.rs `edit.remove.folder`, menu and card menu; one undo step, no prompt (Eagle's `removeFromFolder` asks nothing) | local |
 | Edit: Move to Trash (⌘⌫) | Done | shortcuts.rs:114, app.rs:1095-1102 | local |
 | Find: Go to Folder (⌘J or J), a quick-switch dialog with Folders / Smart Folders / Tags tabs | Done | `find.quicksearch` ⌘J and bare J: Folders / Tags / Smart Folders / Items tabs, ranked by `string_score`, recents (200 kept) | local |
-| Find: Add to Folders… (⇧⌘J, a searchable folder picker that can create folders) | Partial | A plain scrolling submenu in the item context menu (app.rs:2520). No search, no new folder and no key | local |
+| Find: Add to Folders… (⇧⌘J, a searchable folder picker that can create folders) | Done | `ui/dialogs/add_to_folders.rs`, `folder_picker.rs`: Find menu, ⇧⌘J, item menu and the inspector's + (one or several items); search, 8 recent folders, Create “…”, tree with keys; one undo step. Falcon's is a modal applied on Save where Eagle's popover applies on close | local |
 | Organize: Add To Last Used Folder (⇧D) | Done | `organize.folder.addLast`: 50 recent folders kept app-wide, as Eagle's localStorage list | local |
 | Organize: Rate 0–5 stars from the menu and keys | Done | Organize menu and the 0–5 keys (`organize.rating.*`) with a toast; in the viewer the bare digits keep their zoom meaning | local |
 | Organize: Add Tags… (⌘T), Copy Tags (⇧⌘C), Paste Tags (⇧⌘V), Clear Tags | Done | Organize menu; shortcuts.rs `organize.tag.*` (Clear Tags unbound by default, as Eagle) | local |
@@ -122,7 +122,7 @@ Cross-references (not counted): File ▸ Import Folders / Links / Eagle Package 
 | Item: Open File Location ▸ All or one of the item's folders (jumps to the item there) | Done | Card menu; jumps to the item in that view | local |
 | Item: Plugin ▸ recent plugins | Missing |  | online/plugin |
 | Item: Add To Last Used Folder | Done | Card menu, ⇧D | local |
-| Item: Add to Folders… (picker panel) | Partial | Flat list submenu (app.rs:2520-2528) | local |
+| Item: Add to Folders… (picker panel) | Done | Opens the Add to Folders picker | local |
 | Item: Share (macOS share sheet) | Done | `share.rs` through `NSSharingServicePicker` at runtime | local |
 | Item: Pin to Top / Unpin from Top inside a folder | Done | `item_ops.rs`: item key `pinned: {folderId: ms}`; pinned items sort first unless the folder is sorted at random; no pin badge on cards yet | local |
 | Item: Set as Folder Cover | Done | image_edit.rs:90-95 | local |
@@ -151,23 +151,23 @@ Cross-references (not counted): File ▸ Import Folders / Links / Eagle Package 
 | Folder: Move Folder… (picker dialog) | Done | `folders_ui` `move_dialog` with destination search; `Library::move_folders` (above, into or below a target) | local |
 | Folder: Add to / Remove from Quick Access | Done | app.rs:1842-1848 | local |
 | Folder: Rename | Done | Inline rename (app.rs:1839, 1797-1823) | local |
-| Folder: Copy Link (eagle:// folder link) | Missing |  | local |
+| Folder: Copy Link (eagle:// folder link) | Done | `eagle://folder/<id>` (Eagle copies its localhost URL); smart folders get `eagle://smart-folder/<id>` | local |
 | Folder: Set Auto-Tag | Done | "Auto-Tags…" in the folder menu and ⇧⌘R (`organize_ui.rs` auto_tag_dialog) | local |
 | Folder: Password ▸ Create / Edit / Remove / Lock Now | Done | organize_ui.rs:270-296 | local |
 | Folder: Sort By ▸ Title A-Z / Z-A, current level or all levels | Done | organize_ui.rs:327-336 (falcon asks to confirm, like Eagle) | local |
-| Folder: Expand/Collapse ▸ this folder, same level, all folders | Missing | Caret click and double-click only | local |
+| Folder: Expand/Collapse ▸ this folder, same level, all folders | Done | Expand/collapse entries in the folder menu; ⌘/⌥/⌘⌥ clicks on carets | local |
 | Folder: Duplicate | Done | `Library::duplicate_folder`: copy placed after the original, new ids, no password, no items | local |
-| Folder: Show Subfolder Content | Missing |  | local |
+| Folder: Show Subfolder Content | Partial | In View, the layout panel, the strip switch and ⌥⌘7; not in the folder context menu, where Eagle has it | local |
 | Folder: Change Icon… and colour row | Done | organize_ui.rs:308-320 | local |
 | Folder: item sort for this folder (Order By) | Done | "Sort Items By" (organize_ui.rs:300) | local |
 | Folder: Remove Folder | Done | Asks only when the folder has items or subfolders, with a ticked "trash the items too" box that can be unticked; disabled while locked | local |
 | **Several folders selected**: menu with batch rename, shared order, move, quick access, export, icon, colour, remove | Done | `multi_folder_menu` in `folders_ui`: batch rename (Eagle's templates, `rename.rs`), shared sort, Move Folder…, Quick Access, Export to Computer, icon and colour for all, remove. Falcon's icon grid instead of emoji | local |
 | **Smart folder**: New Smart Folder (sibling) / New Subfolder / Rename / Edit Rules / Quick Access / Change Icon / Remove | Done | organize_ui.rs:372-423 | local |
 | Smart folder: Duplicate | Done | `smart::duplicate_smart_folder`: deep copy placed before the original, `parent` keys fixed | local |
-| Smart folder: Refresh | Missing | Smart folders refresh live, so this matters less | local |
+| Smart folder: Refresh | Missing | Not in Eagle 4's smart-folder menu either; not applicable | local |
 | **Smart Folders heading +**: New Smart Folder / New Group | Done | organize_ui.rs:488-505 | local |
 | **Quick Access item**: Remove from Quick Access | Done | app.rs:1692-1696 | local |
-| **Subfolder card** (strip above a folder's items): Rename / Auto-Tag / Password / Export / Remove | Missing | The cards have no menu (covers.rs:65-140) | local |
+| **Subfolder card** (strip above a folder's items): Rename / Auto-Tag / Password / Export / Remove | Done | Card menu: Rename, Auto-Tags…, Password ▸, Export ▸, Delete Folder (⌘⌫); Rename/Auto-Tags/Delete disabled and Export hidden while locked, as Eagle | local |
 | **Trash** sidebar item: Empty Trash | Done | app.rs:1758-1763 | local |
 | Trash sidebar item: Restore All Items | Done | Trash menu, after asking | local |
 | **Recently Used** item: Clear history | Done | Recently Used menu | local |
@@ -220,7 +220,7 @@ Eagle defaults come from prefs `shortcuts.keybinds` (rebindable) and from the ha
 | Arrow keys move the selection; ←→ step in the viewer | Done | app.rs:1105-1135 | local |
 | WASD as arrow keys | Done | Fixed keys | local |
 | ⇧ + arrows extend the selection | Done | `logic::extend_selection`: ⇧←/→ grow or shrink from the anchor; ⇧↑/↓ only in List layout, as Eagle | local |
-| Arrow keys move through the sidebar tree when it has focus (focus zones: content / sidebar / tags) | Partial | Content and sidebar focus zones (click a row, then ↑/↓/←/→); no tags zone | local |
+| Arrow keys move through the sidebar tree when it has focus (focus zones: content / sidebar / tags) | Partial | Content and sidebar zones; no tags zone (needs the All Tags tag-group sidebar) | local |
 | ⌫ goes back (or leaves the viewer); ⌥← / ⌥→ and ⌘← / ⌘→ move through history | Done | shortcuts.rs `go.back` (⌫, ⌘←, ⌥←) and `go.forward` (⌘→, ⌥→); in the viewer ⌫ leaves it (app.rs `keyboard`) | local |
 | ⌥↑ opens the parent folder | Done | Of the open folder or smart folder | local |
 | ⌥⇧N creates a text file from a template; ⌥⇧C sets the folder cover | Partial | ⌥⇧N creates and opens an empty Untitled.txt (`file.create.txt`); ⌥⇧C is still context-menu only | local |
@@ -228,8 +228,8 @@ Eagle defaults come from prefs `shortcuts.keybinds` (rebindable) and from the ha
 | ⌘Z undo | Done | app.rs:992 | local |
 | ⌘A select all, ⌘C copy | Done | shortcuts.rs:110-112 | local |
 | Delete (Windows) / ⌘⌫ trash; ⇧⌘⌫ remove from folder | Done | shortcuts.rs `edit.remove.trash`, `edit.remove.folder` | local |
-| ⌘T add tags, ⇧⌘C / ⇧⌘V copy and paste tags, ⇧D add to last folder, ⌘D duplicate | Partial | ⌘T, ⇧⌘C and ⇧⌘V done (`organize.tag.*`); no ⇧D or ⌘D | local |
-| ⇧⌘L lock the folder now, ⌥⌘L lock the app | Partial | ⌥⌘L locks the app (`app.lock`); no ⇧⌘L for the folder | local |
+| ⌘T add tags, ⇧⌘C / ⇧⌘V copy and paste tags, ⇧D add to last folder, ⌘D duplicate | Done | `organize.tag.*`, `organize.folder.addLast` ⇧D, `edit.duplicate` ⌘D | local |
+| ⇧⌘L lock the folder now, ⌥⌘L lock the app | Done | `edit.folder.lock` ⇧⌘L and `app.lock` ⌥⌘L | local |
 | Hold Z for the hover preview | Done | app.rs:2703, hover.rs | local |
 | Global shortcuts: Show Eagle, Bring up Eagle and search, screen captures (⌥⌘E) | Missing | Captures cross-ref import | local |
 | Falcon extras: ⇧⌘K collect window, ⌃Tab / ⌃⇧Tab next or previous open library | Done | shortcuts.rs `file.collect.window`, `library.next`, `library.previous` (falcon only) | local |
@@ -271,7 +271,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Show or hide each nav entry (context menu and preferences) | Done | Context menu on All / Untagged / Random and Preferences ▸ Sidebar | local |
 | Show or hide the count badges | Done | `Prefs::sidebar_counts` | local |
 | Quick Access section | Done | app.rs:1670-1699 | local |
-| Section headers (Quick Access / Smart Folders / Folders) collapse on click and show a count | Partial | Quick Access folds and shows a count; Smart Folders and Folders don't fold | local |
+| Section headers (Quick Access / Smart Folders / Folders) collapse on click and show a count | Done | Every header folds with a caret and shows its count (`SectionFold`, saved globally as Eagle) | local |
 | Smart Folders tree with groups, nesting, icons, colours, counts | Done | organize_ui.rs:340-450 | local |
 | Folder tree with carets, guide lines, icon and colour tints, counts, lock badge | Done | app.rs:1778-1890 | local |
 | Double-click a folder to expand or collapse (preference: or rename) | Done | `Prefs::sidebar_double_click`, folders and smart folders | local |
@@ -338,7 +338,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Drag items onto a sidebar folder | Done | `logic::folder_drop`: inside a folder the drop moves the items out of it, ⌥ adds; from other views it adds; trashed items come back (`Action::DropOnFolder`, one undo step). A locked target isn't asked for its password | local |
 | Toast after a drop ("N items moved to Folder", with a link to the folder) | Partial | `logic::folder_drop_notice` shows "Moved N items to Folder" / "Added …". No link; falcon's toast has no actions | local |
 | Drag items onto a Quick Access folder | Done | Quick Access rows take item drops (move/add rules as the tree) | local |
-| Drag items onto a subfolder card | Missing |  | local |
+| Drag items onto a subfolder card | Done | Same `DropOnFolder` path as sidebar rows, with the bulk gate | local |
 | Drag items onto the Trash | Done | app.rs:1764-1767 | local |
 | Drag folders to reorder or nest, with insertion lines | Done | organize_ui.rs:254-266 | local |
 | Drag a folder onto the Folders heading to move it to the top level | Done | app.rs:1705-1711 | local |
@@ -945,7 +945,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Random view | Done | `L:19` Scope::Random | local |
 | Random refresh button (key R) | Partial | Clicking Random again reshuffles (`A:797`); no button or key | local |
 | Recently Used: items the user recently opened | Done | Opened items, newest first; trashed items listed too, as Eagle | local |
-| Filter sidebar items | Partial | Filters folders only; ⌥⇧F focuses it | local |
+| Filter sidebar items | Done | Folders and smart folders filtered, Quick Access not (as Eagle); headers with no match hide; ⌥⇧F focuses the field | local |
 | Go to Folder: quick-search folders, smart folders and tags, with history | Done | `app/goto.rs`-style dialog with history; also an Items tab as Eagle 4 | local |
 | Quick Access: add or remove a folder or smart folder | Done | `A:1842`, `OU:391`, `E:595` | local |
 | Quick Access: reorder by dragging, drag a folder in to add it | Done | Entries keep their whole JSON object when moved | local |
@@ -964,11 +964,11 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Rename (inline) | Done | `A:1839` | local |
 | Batch rename selected folders | Done | `Library::rename_folders` with Eagle's templates (`crates/falcon-library/src/rename.rs`), preview dialog, asks first from 10 folders | local |
 | Delete a folder and its subfolders | Done | `A:1855`, `E:507` | local |
-| Delete-folder checkbox "Move items within folders to Trash too" (on by default, can be unticked) | Done | `Library::delete_folders(keep_items)`; the dialog's box is ticked by default | local |
+| Delete-folder checkbox "Move items within folders to Trash too" (on by default, can be unticked) | Done | `Library::delete_folders(keep_items)`; the box is ticked by default; a delete covering 50 or more items asks again, as Eagle | local |
 | Delete several selected folders at once | Done | `Library::delete_folders`, one undo step; Quick Access entries removed | local |
 | Move a folder by dragging (above, below, into) | Done | `OU:255` folder_drop, `O:135` tree_drop | local |
-| Confirmation dialog when dropping a folder | Partial | Moves without asking | local |
-| Move Folder dialog with destination search | Done | `folders_ui` `move_dialog`; no create-folder-from-search | local |
+| Confirmation dialog when dropping a folder | Done | Eagle asks nothing on a drag either; only its Move Folder dialog confirms, which falcon's does | local |
+| Move Folder dialog with destination search | Done | `folders_ui` `move_dialog`; Eagle's doesn't create a folder from the search either | local |
 | Move Up, Down, To Top, To Bottom | Missing | Cross-ref: menus agent | local |
 | Sort folders by title for this level or all levels, A-Z or Z-A, with confirmation | Done | `OU:327`, `O:352`, `OU:1025` confirm | local |
 | Duplicate a folder | Done | `Library::duplicate_folder` | local |
@@ -991,7 +991,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Folder item counts | Done | `L:67` folder_counts | local |
 | Folder inspector: item count, size, date imported, password state | Done | `A:2926` | local |
 | Folder inspector: set, change or remove password buttons | Partial | Shows only "Set" or "None"; the actions are in the context menu | local |
-| Copy Folder Link (eagle:// link) | Missing | Cross-ref: API/links agent | local |
+| Copy Folder Link (eagle:// link) | Done | Folder and smart folder menus | local |
 | Export folder (computer, .eaglepack) | Done | Folder menu Export ▸ … and the inspector's Export button (`export_ui.rs` `tree_export_menu`, `scope_export_button`) | local |
 | Clear Invalid Content (empty or broken folders) | Missing | Cross-ref: library agent | local |
 
@@ -1077,7 +1077,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Copy, paste and clear an item's tags | Done | `Library::paste_tags`, `clear_tags`; one undo step and a notice | local |
 | Folders: chips, remove, Add Category | Done | `folder_chip` in app.rs; removal is the × on the chip | local |
 | Click a folder chip to open that folder | Done | `folder_chip` in app.rs: the click opens the folder with the item still selected and scrolled to; the tooltip shows the folder path | local |
-| Folder picker with search, Recent, Selected and create-new | Partial | Flat scrolling list (`A:3159`) | local |
+| Folder picker with search, Recent, Selected and create-new | Done | `add_to_folders.rs`; modal applied on Save (Eagle: popover applied on close) | local |
 | Comments list: jump to, edit, delete | Done | `comments.rs:427` | local |
 | Rating stars; click the same star again to clear | Done | `A:3332` | local |
 | Dimensions, size, type, date imported, created, modified | Done | `A:3196`-`3203` | local |
@@ -1092,15 +1092,15 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Preview stack and "N items selected" | Done | `A:2943` | local |
 | Add a tag to all; remove a tag they share | Done | The picker and the chip × for several items | local |
 | Add all to a folder | Done | `A:2988` | local |
-| Show the folders they share, remove all from one | Missing | none | local |
+| Show the folders they share, remove all from one | Done | `shared_folders` chips with × in the multi-item inspector | local |
 | Edit the name, note or URL of all at once ("Multiple titles", "multiple URLs") | Done | `set_notes`, `set_urls` from the multi-item inspector; Eagle has no batch name either | local |
 | Rate all | Done | `A:3003`, Action::BatchRating | local |
 | Total size | Done | `A:3007` | local |
 | Batch rename with a template (%NN, $D, original name, tags, folders, index, date) and find/replace with regex | Done | Rename N Items dialog (`rename.rs`): `%NN`, dates, original name, tags, folders, `%F`, index, find/replace | local |
-| Confirm bulk actions on many items | Done | `App::push_bulk`: asks before changing 100 or more items (rate, trash, drops); newer commands still need the gate | local |
-| New Folder with Selection | Missing | none | local |
-| Add To Last Used Folder | Missing | none | local |
-| Remove from the current folder | Missing | Only through the × on the single-item inspector chip | local |
+| Confirm bulk actions on many items | Done | `push_bulk` / `push_bulk_at`: rating, trash, drops, batch notes/URL, the folder panel, Add to Last Used, Pin/Unpin, Show in Finder and Open in default app on several, Remove from Group; folder delete at 50 items. Eagle also gates fonts and plugins (out of scope) | local |
+| New Folder with Selection | Done | Item menu, `folders_ui` `new_with_dialog` | local |
+| Add To Last Used Folder | Done | ⇧D, Organize menu, card menu | local |
+| Remove from the current folder | Done | ⇧⌘⌫, Edit menu and card menu | local |
 | Pin items to the top of a folder | Done | `item_ops.rs` pin/unpin | local |
 | Open File Location (show the item in All or in one of its folders) | Done | Card menu | local |
 | Rating shortcuts (keys 0-5) | Missing | No rating keys in `shortcuts.rs`. Cross-ref: shortcuts agent. | local |
