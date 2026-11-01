@@ -59,6 +59,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::Copy => grid && s.selected > 0,
         C::Paste => grid,
         C::Trash => any,
+        C::RemoveFromFolder => any && s.scope == ScopeKind::Folder,
         C::OpenDefault | C::RevealInFinder | C::RefreshThumbnail => any || (s.library && s.viewer),
         C::Rename => grid && s.selected == 1,
         C::Back => s.viewer || (s.library && s.back),

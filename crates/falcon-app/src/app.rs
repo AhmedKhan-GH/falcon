@@ -94,6 +94,8 @@ enum Action {
     CreateFolder { parent: Option<String> },
     /// A new folder right after this one, among its siblings.
     CreateSibling(String),
+    /// Items taken out of a folder (Edit ▸ Remove from Folder).
+    RemoveFromFolder(Vec<String>, String),
     RenameFolder(String, String),
     SetFolderDescription(String, String),
     DeleteFolder(String),
@@ -1244,6 +1246,17 @@ impl App {
                 let ids = self.acted_on();
                 self.ws.actions.push(Action::Edit(image_edit::Op::RefreshThumbnail(ids)));
             }
+            C::RemoveFromFolder => {
+                let Scope::Folder(fid) = self.ws.scope.clone() else { return };
+                let ids = self.ws.selected.clone();
+                let next = logic::next_after_removal(&self.ws.order, &ids);
+                if self.ws.viewer.is_some() {
+                    self.ws.viewer.clone_from(&next);
+                }
+                self.ws.selected = next.iter().cloned().collect();
+                self.ws.anchor.clone_from(&next);
+                self.ws.actions.push(Action::RemoveFromFolder(ids, fid));
+            }
             C::Page(p) => {
                 self.ws.viewer = None;
                 self.go(p.scope());
@@ -1295,6 +1308,22 @@ impl App {
                     }),
                     None => Ok(()),
                 },
+                Action::RemoveFromFolder(ids, fid) => {
+                    let mut r = Ok(());
+                    let mut n = 0;
+                    for id in &ids {
+                        if let Some(mut item) = lib.item(id).cloned()
+                            && item.folders.contains(&fid)
+                        {
+                            item.folders.retain(|f| *f != fid);
+                            r = r.and(lib.update_item(item));
+                            n += 1;
+                        }
+                    }
+                    let name = logic::find_folder(&lib.metadata.folders, &fid).map_or_else(String::new, |f| f.name.clone());
+                    self.flash(format!("Removed {n} from {name}"));
+                    r
+                }
                 Action::RenameFolder(id, name) => lib.rename_folder(&id, &name),
                 Action::SetFolderDescription(id, text) => lib.set_folder_description(&id, &text),
                 Action::DeleteFolder(id) => {
@@ -1539,6 +1568,7 @@ fn push_capped(stack: &mut Vec<Transaction>, tx: Transaction) {
 fn action_label(action: &Action) -> String {
     match action {
         Action::CreateFolder { .. } | Action::CreateSibling(_) => "New folder".into(),
+        Action::RemoveFromFolder(ids, _) => format!("Remove {} from folder", ids.len()),
         Action::RenameFolder(..) => "Rename folder".into(),
         Action::SetFolderDescription(..) => "Edit folder description".into(),
         Action::DeleteFolder(_) => "Delete folder".into(),
@@ -2874,9 +2904,19 @@ impl App {
             if ui.button(RichText::new("Delete Permanently").color(t::p().icon_red)).clicked() {
                 self.ws.confirm = Some(Confirm::DeleteItems(targets.to_vec()));
             }
-        } else if ui.button("Move to Trash").clicked() {
-            self.leave_viewed(targets);
-            self.ws.actions.push(Action::Trash(targets.to_vec(), true));
+        } else {
+            if let Scope::Folder(fid) = self.ws.scope.clone() {
+                let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::RemoveFromFolder);
+                if ui.add(egui::Button::new("Remove from Folder").shortcut_text(keys)).clicked() {
+                    self.leave_viewed(targets);
+                    self.ws.selected.retain(|s| !targets.contains(s));
+                    self.ws.actions.push(Action::RemoveFromFolder(targets.to_vec(), fid));
+                }
+            }
+            if ui.button("Move to Trash").clicked() {
+                self.leave_viewed(targets);
+                self.ws.actions.push(Action::Trash(targets.to_vec(), true));
+            }
         }
         opened
     }

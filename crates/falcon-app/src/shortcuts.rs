@@ -84,6 +84,8 @@ pub enum Command {
     NewSmartFolder,
     /// Remake the selected items' thumbnails.
     RefreshThumbnail,
+    /// Take the selection out of the open folder.
+    RemoveFromFolder,
 }
 
 /// How a scroll command moves the grid.
@@ -221,6 +223,7 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::RefreshThumbnail, id: "edit.thumbnail.refresh", group: "Edit", label: "Refresh the thumbnails", default: k(CMD_ALT, Key::R), aliases: &[] },
     Spec { cmd: Command::Paste, id: "edit.paste", group: "Edit", label: "Paste files or an image", default: k(CMD, Key::V), aliases: &[] },
     Spec { cmd: Command::Trash, id: "edit.remove.trash", group: "Edit", label: "Move to the Trash", default: k(CMD, Key::Backspace), aliases: &[] },
+    Spec { cmd: Command::RemoveFromFolder, id: "edit.remove.folder", group: "Edit", label: "Remove from the open folder", default: k(CMD_SHIFT, Key::Backspace), aliases: &[] },
     // Eagle's Edit ▸ Move Folder accelerators. ⇧ may or may not turn the
     // bracket into a brace before it reaches us.
     Spec { cmd: Command::FolderUp, id: "edit.folder.arrange.up", group: "Edit", label: "Move folder up", default: k(CMD, Key::CloseBracket), aliases: &[] },
@@ -867,6 +870,7 @@ mod tests {
         assert_eq!(keys.resolve(Key::ArrowRight, Modifiers::ALT), Some(Command::Forward));
         // ⌘⌫ is still the Trash, and plain arrows are no command.
         assert_eq!(keys.resolve(Key::Backspace, cmd), Some(Command::Trash));
+        assert_eq!(keys.resolve(Key::Backspace, Modifiers { shift: true, ..cmd }), Some(Command::RemoveFromFolder));
         assert_eq!(keys.resolve(Key::ArrowLeft, Modifiers::NONE), None);
         assert_eq!(keys.chords(Command::Back).len(), 3);
     }

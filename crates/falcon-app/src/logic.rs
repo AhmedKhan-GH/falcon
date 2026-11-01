@@ -626,6 +626,15 @@ pub fn apply_folder_drop(item: &mut Item, target: &str, drop: &FolderDrop, auto_
     (item.folders.clone(), item.is_deleted, item.tags.len()) != before
 }
 
+/// What to select once `removed` leave the grid (`order`): the first
+/// item after the first removed one that stays, else the nearest one
+/// before it, as Eagle does after Remove from Folder.
+pub fn next_after_removal(order: &[String], removed: &[String]) -> Option<String> {
+    let first = order.iter().position(|id| removed.contains(id))?;
+    let stays = |id: &&String| !removed.contains(id);
+    order[first..].iter().find(stays).or_else(|| order[..first].iter().rev().find(stays)).cloned()
+}
+
 /// The notice after a folder drop: "Moved 3 items to Logos".
 pub fn folder_drop_notice(drop: &FolderDrop, n: usize, folder: &str) -> String {
     let verb = match drop {
@@ -718,6 +727,17 @@ mod folder_drop_tests {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn selection_after_removal() {
+        let order: Vec<String> = ["a", "b", "c", "d"].map(String::from).to_vec();
+        let ids = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(next_after_removal(&order, &ids(&["b"])).as_deref(), Some("c"));
+        assert_eq!(next_after_removal(&order, &ids(&["b", "c"])).as_deref(), Some("d"));
+        assert_eq!(next_after_removal(&order, &ids(&["c", "d"])).as_deref(), Some("b"));
+        assert_eq!(next_after_removal(&order, &ids(&["a", "b", "c", "d"])), None);
+        assert_eq!(next_after_removal(&order, &ids(&["x"])), None);
+    }
 
     #[test]
     fn libraries_are_split_from_importables() {
