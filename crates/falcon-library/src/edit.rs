@@ -380,6 +380,15 @@ impl Library {
     }
 }
 
+/// How [`Library::sort_subfolders`] orders folders by name.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SubfolderSort {
+    /// Z to A instead of A to Z.
+    pub descending: bool,
+    /// Sort every level below as well, not just the direct subfolders.
+    pub all_levels: bool,
+}
+
 /// Eagle strips line breaks from tags it files into a group.
 fn clean_tag(t: &str) -> String {
     t.replace(['\r', '\n'], "")
@@ -544,6 +553,35 @@ impl Library {
         self.save_metadata()
     }
 
+    /// Sorts `parent`'s subfolders (or the root folders) by name, as the
+    /// folder menu's "Sort By" commands do, and saves the reordered tree.
+    /// With `all_levels`, every folder below is sorted too. Names compare
+    /// case-insensitively with numbers by value; descending is the
+    /// ascending list reversed. Eagle stores no flag: only `children` (or
+    /// the root list) changes order.
+    pub fn sort_subfolders(&mut self, parent: Option<&str>, sort: SubfolderSort) -> Result<()> {
+        fn sort_level(list: &mut [Folder], sort: SubfolderSort) {
+            list.sort_by(|a, b| crate::search::natural_cmp(&a.name, &b.name));
+            if sort.descending {
+                list.reverse();
+            }
+            if sort.all_levels {
+                for f in list {
+                    sort_level(&mut f.children, sort);
+                }
+            }
+        }
+        let list = match parent {
+            None => &mut self.metadata.folders,
+            Some(p) => match find_mut(&mut self.metadata.folders, p) {
+                Some(f) => &mut f.children,
+                None => return Err(self.missing(p)),
+            },
+        };
+        sort_level(list, sort);
+        self.save_metadata()
+    }
+
     /// Pins a folder (`"folder"`) or smart folder (`"smartFolder"`) to Quick
     /// Access, at the end as Eagle does.
     pub fn add_quick_access(&mut self, kind: &str, id: &str) -> Result<()> {
@@ -630,6 +668,39 @@ fn encode_password(p: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn subfolders_sort_by_name_with_numbers_by_value() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut lib = Library::create(tmp.path().join("S.library")).unwrap();
+        let top = lib.create_folder(None, "Top").unwrap();
+        for n in ["folder 10", "Folder 2", "beta", "Alpha", "folder 1"] {
+            let id = lib.create_folder(Some(&top), n).unwrap();
+            for c in ["z", "B", "a"] {
+                lib.create_folder(Some(&id), c).unwrap();
+            }
+        }
+        lib.create_folder(None, "Another").unwrap();
+        let names = |l: &[Folder]| l.iter().map(|f| f.name.clone()).collect::<Vec<_>>();
+        let stamp = lib.metadata.folders[0].children[0].modification_time;
+
+        lib.sort_subfolders(Some(&top), SubfolderSort::default()).unwrap();
+        let reopened = Library::open(lib.root()).unwrap();
+        let kids = &reopened.metadata.folders[0].children;
+        assert_eq!(names(kids), ["Alpha", "beta", "folder 1", "Folder 2", "folder 10"]);
+        assert_eq!(names(&kids[0].children), ["z", "B", "a"], "one level only");
+        assert_eq!(names(&reopened.metadata.folders), ["Top", "Another"], "other levels untouched");
+        assert!(kids.iter().any(|f| f.modification_time == stamp), "folders keep their times");
+
+        lib.sort_subfolders(None, SubfolderSort { descending: true, all_levels: true }).unwrap();
+        assert_eq!(names(&lib.metadata.folders), ["Top", "Another"]);
+        let kids = &lib.metadata.folders[0].children;
+        assert_eq!(names(kids), ["folder 10", "Folder 2", "folder 1", "beta", "Alpha"]);
+        assert_eq!(names(&kids[0].children), ["z", "B", "a"]);
+        lib.sort_subfolders(None, SubfolderSort { descending: false, all_levels: true }).unwrap();
+        assert_eq!(names(&lib.metadata.folders[1].children[0].children), ["a", "B", "z"]);
+        assert!(lib.sort_subfolders(Some("NOPE"), SubfolderSort::default()).is_err());
+    }
 
     #[test]
     fn passwords_encode_like_btoa() {
