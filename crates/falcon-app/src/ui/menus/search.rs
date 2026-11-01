@@ -1,6 +1,7 @@
 //! A type-to-filter search box on top of a context menu, after Eagle's
 //! searchable menus (item, folder, smart folder, tag, tag group, palette
-//! swatch, New…, filter bar + and Saved).
+//! swatch, New…, filter bar + and Saved, and the rename dialogs' Insert
+//! menu).
 //!
 //! A menu wraps its body: `resp.context_menu(|ui| menu_search::show(ui,
 //! |ui| { … }))`. The body stays an ordinary egui menu; nothing in it

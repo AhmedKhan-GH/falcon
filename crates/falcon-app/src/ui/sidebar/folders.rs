@@ -334,7 +334,7 @@ impl App {
         let color = common_value(folders.iter().map(|f| f.icon_color.as_deref()));
         let icon = common_value(folders.iter().map(|f| f.icon.as_deref()));
         let tint = folder_icons::color(color.flatten()).unwrap_or(t::p().text);
-        ui.menu_button(tr("Change Icon"), |ui| {
+        crate::ui::menus::search::submenu(ui, tr("Change Icon"), |ui| {
             if let Some(pick) = icon_grid(ui, icon.flatten(), tint, false) {
                 self.ws.actions.push(act(FolderAction::Restyle(ids.clone(), Some(pick), None)));
                 ui.close();
@@ -383,7 +383,7 @@ impl App {
         let color = common_value(picked.iter().map(|f| f.icon_color.as_deref()));
         let icon = common_value(picked.iter().map(|f| f.icon.as_deref()));
         let tint = folder_icons::color(color.flatten()).unwrap_or(t::p().text);
-        ui.menu_button(tr("Change Icon"), |ui| {
+        crate::ui::menus::search::submenu(ui, tr("Change Icon"), |ui| {
             if let Some(pick) = icon_grid(ui, icon.flatten(), tint, true) {
                 self.ws.actions.push(act(FolderAction::RestyleSmart(ids.clone(), Some(pick), None)));
                 ui.close();
@@ -572,36 +572,7 @@ impl App {
                     ui.label(tr("Name"));
                     ui.horizontal(|ui| {
                         ui.add(TextEdit::singleline(&mut d.template).desired_width(270.0));
-                        ui.menu_button(tr("Insert"), |ui| {
-                            ui.set_min_width(200.0);
-                            let mut pick = |ui: &mut Ui, label: &str, token: &str| {
-                                if ui.add(egui::Button::new(label).shortcut_text(token)).clicked() {
-                                    d.template.push_str(token);
-                                    ui.close();
-                                }
-                            };
-                            ui.menu_button(tr("Number"), |ui| {
-                                for (label, token) in [("1", "%N"), ("01", "%NN"), ("001", "%NNN"), ("0001", "%NNNN")] {
-                                    pick(ui, label, token);
-                                }
-                            });
-                            ui.menu_button(tr("Date"), |ui| {
-                                for (head, letter) in [(tr_key("Today"), 'D'), (tr_key("Modified"), 'M'), (tr_key("Created"), 'B')] {
-                                    ui.label(RichText::new(tr(head)).color(t::p().text_muted).size(12.0));
-                                    for (label, suffix) in [(tr_key("Date"), "1"), (tr_key("Month and day"), "2"), (tr_key("Written out"), "3"), (tr_key("Date and time"), "HM"), (tr_key("Date and time with seconds"), "HMS")] {
-                                        let token = match suffix {
-                                            "1" => format!("%{letter}"),
-                                            "2" => format!("%{letter}{letter}"),
-                                            "3" => format!("%{letter}{letter}{letter}"),
-                                            s => format!("%{letter}{s}"),
-                                        };
-                                        pick(ui, tr(label), &token);
-                                    }
-                                }
-                            });
-                            pick(ui, tr("Tags"), "%T");
-                            pick(ui, tr("Original Name"), "*");
-                        });
+                        crate::ui::menus::insert::insert_menu(ui, &mut d.template, false);
                     });
                     ui.end_row();
                     ui.label(tr("Start at"));

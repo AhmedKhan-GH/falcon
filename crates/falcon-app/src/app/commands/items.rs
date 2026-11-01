@@ -10,7 +10,7 @@ use falcon_library::rename::{Method, Rename, Subject, TextCase};
 
 use crate::app::image_edit::Op;
 use crate::app::{Action, App};
-use crate::locale::{tr, tr_key, tr_n};
+use crate::locale::{tr, tr_n};
 use crate::logic::{self, Scope};
 use crate::theme as t;
 
@@ -186,37 +186,7 @@ impl App {
                     ui.label(tr("Name"));
                     ui.horizontal(|ui| {
                         ui.add(TextEdit::singleline(&mut d.template).desired_width(290.0));
-                        ui.menu_button(tr("Insert"), |ui| {
-                            ui.set_min_width(200.0);
-                            let mut pick = |ui: &mut Ui, label: &str, token: &str| {
-                                if ui.add(egui::Button::new(label).shortcut_text(token)).clicked() {
-                                    d.template.push_str(token);
-                                    ui.close();
-                                }
-                            };
-                            ui.menu_button(tr("Number"), |ui| {
-                                for (label, token) in [("1", "%N"), ("01", "%NN"), ("001", "%NNN"), ("0001", "%NNNN")] {
-                                    pick(ui, label, token);
-                                }
-                            });
-                            ui.menu_button(tr("Date"), |ui| {
-                                for (head, letter) in [(tr_key("Today"), 'D'), (tr_key("Modified"), 'M'), (tr_key("Created"), 'B')] {
-                                    ui.label(RichText::new(tr(head)).color(t::p().text_muted).size(12.0));
-                                    for (label, suffix) in [(tr_key("Date"), "1"), (tr_key("Month and day"), "2"), (tr_key("Written out"), "3"), (tr_key("Date and time"), "HM"), (tr_key("Date and time with seconds"), "HMS")] {
-                                        let token = match suffix {
-                                            "1" => format!("%{letter}"),
-                                            "2" => format!("%{letter}{letter}"),
-                                            "3" => format!("%{letter}{letter}{letter}"),
-                                            s => format!("%{letter}{s}"),
-                                        };
-                                        pick(ui, tr(label), &token);
-                                    }
-                                }
-                            });
-                            pick(ui, tr("Tags"), "%T");
-                            pick(ui, tr("Folders"), "%F");
-                            pick(ui, tr("Original Name"), "*");
-                        });
+                        crate::ui::menus::insert::insert_menu(ui, &mut d.template, true);
                     });
                     ui.end_row();
                     ui.label(tr("Start at"));

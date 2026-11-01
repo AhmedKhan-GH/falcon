@@ -228,9 +228,23 @@ pub(crate) fn color_row(ui: &mut Ui, current: Option<&str>) -> Option<Option<Str
 /// The icon picker: the default icon, then every icon Eagle offers, in a
 /// scrolling grid drawn in the current colour. Returns the pick
 /// (`Some(None)` is the default icon).
+///
+/// Inside a searchable menu that is filtering, the icons are instead one
+/// button each, labelled with the glyph and the icon's name, so the
+/// search finds them by name (and nothing sits out of sight in a
+/// scrolled area, where egui would not paint the labels it reads).
 pub(crate) fn icon_grid(ui: &mut Ui, current: Option<&str>, tint: Color32, smart: bool) -> Option<Option<String>> {
     let mut pick = None;
     let default = if smart { ic::FOLDER_STAR } else { ic::FOLDER };
+    if crate::ui::menus::search::filtering(ui) {
+        for (name, g) in std::iter::once((None, default)).chain(folder_icons::all().map(|(n, g)| (Some(n), g))) {
+            let label = icon_search_label(name, g);
+            if ui.button(label).clicked() {
+                pick = Some(name.map(str::to_string));
+            }
+        }
+        return pick;
+    }
     egui::ScrollArea::vertical().id_salt("icon-grid").max_height(320.0).show(ui, |ui| {
         ui.set_width(10.0 * 28.0);
         ui.horizontal_wrapped(|ui| {
@@ -252,6 +266,13 @@ pub(crate) fn icon_grid(ui: &mut Ui, current: Option<&str>, tint: Color32, smart
         });
     });
     pick
+}
+
+/// An icon's entry in a filtered menu: its glyph and its name ("Default"
+/// for the default icon). Icons drawn as plain digits show the name only.
+fn icon_search_label(name: Option<&str>, glyph: &str) -> String {
+    let name = name.unwrap_or(tr("Default"));
+    if folder_icons::is_text(glyph) { name.to_string() } else { format!("{glyph}  {name}") }
 }
 
 /// The item sort entries for a folder or smart folder: "Global Settings"
@@ -468,7 +489,7 @@ impl App {
         });
         ui.separator();
         let tint = folder_icons::color(f.icon_color.as_deref()).unwrap_or(t::p().text);
-        ui.menu_button(tr("Change Icon"), |ui| {
+        crate::ui::menus::search::submenu(ui, tr("Change Icon"), |ui| {
             if let Some(icon) = icon_grid(ui, f.icon.as_deref(), tint, false) {
                 self.ws.actions.push(org(OrgAction::FolderIcon(f.id.clone(), icon, f.icon_color.clone())));
                 ui.close();
@@ -605,7 +626,7 @@ impl App {
             ui.separator();
             self.expand_menu(ui, roots, &sf.id);
             ui.separator();
-            ui.menu_button(tr("Change Icon"), |ui| {
+            crate::ui::menus::search::submenu(ui, tr("Change Icon"), |ui| {
                 if let Some(icon) = icon_grid(ui, sf.icon.as_deref(), tint, true) {
                     self.ws.actions.push(org(OrgAction::SmartIcon(sf.id.clone(), icon, sf.icon_color.clone())));
                     ui.close();
@@ -1552,7 +1573,7 @@ impl App {
         let groups = &lib.metadata.tags_groups;
         let in_all = |g: &falcon_library::model::TagGroup| tags.iter().all(|t| g.tags.contains(t));
         ui.add_enabled_ui(!groups.is_empty(), |ui| {
-            ui.menu_button(tr("Add to Group"), |ui| {
+            crate::ui::menus::search::submenu(ui, tr("Add to Group"), |ui| {
                 ui.set_min_width(180.0);
                 for g in groups {
                     let all = in_all(g);
@@ -1563,7 +1584,7 @@ impl App {
                 }
             });
         });
-        ui.menu_button(tr("Move to Group"), |ui| {
+        crate::ui::menus::search::submenu(ui, tr("Move to Group"), |ui| {
             ui.set_min_width(180.0);
             for g in groups {
                 let mark = if in_all(g) { ic::CHECK } else { " " };
