@@ -1200,7 +1200,7 @@ mod tests {
         assert_eq!(keys.resolve(Key::Minus, CMD), Some(Command::ZoomOut));
         assert_eq!(keys.resolve(Key::Num0, CMD), Some(Command::ZoomActual));
         assert_eq!(keys.resolve(Key::Num9, CMD), Some(Command::ZoomFit));
-        assert_eq!(keys.resolve(Key::Num0, Modifiers::NONE), Some(Command::Rate(0)), "plain 0 rates; in the viewer it stays the fixed fit key (`keyboard` drops Rate there)");
+        assert_eq!(keys.resolve(Key::Num0, Modifiers::NONE), Some(Command::Rate(0)), "plain 0 rates, in the viewer too, as in Eagle");
     }
 
     #[test]

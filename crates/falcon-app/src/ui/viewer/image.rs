@@ -290,13 +290,17 @@ impl App {
         let (name_x, right) = audio::bar_shell(self, ui, item, bar);
         let cy = bar.center().y;
         use crate::shortcuts::Command as C;
-        let tip = |label: &str, fixed: &str, cmd: C| match self.shortcuts.binding(cmd) {
-            Some(c) => format!("{label} ({fixed}, {})", crate::shortcuts::display(ui.ctx(), &c)),
-            None => format!("{label} ({fixed})"),
+        let tip = |label: &str, cmd: C| match self.shortcuts.binding(cmd) {
+            Some(c) => format!("{label} ({})", crate::shortcuts::display(ui.ctx(), &c)),
+            None => label.to_string(),
+        };
+        let t_fit = match self.shortcuts.binding(C::ZoomFit) {
+            Some(c) => format!(", {} fits", crate::shortcuts::display(ui.ctx(), &c)),
+            None => String::new(),
         };
         let (t_zoom, t_actual, t_edge) = (
-            "Zoom sizes. Right-click switches between actual size and fit".to_string(),
-            tip("Actual Size", "1", C::ZoomActual),
+            format!("Zoom sizes. Right-click switches between actual size and fit{t_fit}"),
+            tip("Actual Size", C::ZoomActual),
             "Fit to Window Edge (`)".to_string(),
         );
         let mut zoom = self.ws.view.zoom_key.take();

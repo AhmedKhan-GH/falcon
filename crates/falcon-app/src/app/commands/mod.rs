@@ -120,19 +120,15 @@ impl App {
         if text && ctx.input(|i| i.key_pressed(Key::F5)) {
             pressed.retain(|c| *c != C::Presentation);
         }
-        // In the font, video and audio viewers the digits rate the item too,
-        // as in Eagle.
-        let open = self.ws.viewer.as_deref();
-        let digits_rate = text || (viewer && (self.font_viewer_open() || self.video.loaded() == open || self.audio.loaded() == open));
-        // The viewer's fixed zoom keys: plain 0, 1, + and −. The table's
-        // chords (⌘0, ⌘9, ⌘=, ⌘−) come through `run_command`.
+        // The viewer's fixed zoom keys: plain + and −, and ` for fit to the
+        // window edge. The digits rate the item in every viewer, as in Eagle;
+        // zoom to fit and actual size are the table's ⌘9 and ⌘0 (with ⌘= and
+        // ⌘−), through `run_command`.
         if viewer && !text {
             use logic::ViewZoom as Z;
             self.ws.view.zoom_key = ctx.input(|i| {
                 i.events.iter().find_map(|e| match e {
                     egui::Event::Key { key, pressed: true, modifiers: m, .. } if !m.command && !m.ctrl && !m.alt => match key {
-                        Key::Num0 if !digits_rate => Some(Z::Fit),
-                        Key::Num1 if !digits_rate => Some(Z::Actual),
                         Key::Plus | Key::Equals => Some(Z::In),
                         Key::Minus => Some(Z::Out),
                         Key::Backtick => Some(Z::Edge),
@@ -152,12 +148,6 @@ impl App {
         let audio = viewer && self.audio.loaded() == self.ws.viewer.as_deref() && ctx.input(|i| i.key_pressed(Key::Space));
         if audio {
             pressed.retain(|c| *c != C::Viewer);
-        }
-        // In the image viewer the bare digits are its own keys (0 fits, 1
-        // is actual size); the menu still rates there. In the text, font,
-        // video and audio viewers they rate, as in Eagle.
-        if viewer && !digits_rate {
-            pressed.retain(|c| !matches!(c, C::Rate(_)));
         }
         // ⇧Space pages up, as in Eagle; the table would read it as Space
         // (the viewer key), since a chord without ⇧ also matches with it.

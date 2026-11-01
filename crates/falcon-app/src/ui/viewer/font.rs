@@ -705,12 +705,6 @@ impl App {
             Err(e) => self.flash(format!("Couldn't change the font: {e}")),
         }
     }
-
-    /// Whether the viewer shows this font in the font viewer (digits rate
-    /// there rather than zoom).
-    pub(crate) fn font_viewer_open(&self) -> bool {
-        self.ws.viewer.as_deref() == Some(self.ws.font_view.id.as_str()) && (self.ws.font_view.family.is_some() || self.ws.font_view.fallback)
-    }
 }
 
 /// The set of characters the alphabet tab would show, for tests.
