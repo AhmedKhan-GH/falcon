@@ -1945,6 +1945,7 @@
   "tags::All": "全部",
   "tags::Uncategorized": "未分組",
   "text": "文字",
+  "the model could not be read": "無法讀取模型",
   "the read stopped": "讀取已中斷",
   "the reader stopped": "閱讀器已停止",
   "turn on Touch ID for unlocking Falcon": "開啟 Touch ID 以解鎖 Falcon",

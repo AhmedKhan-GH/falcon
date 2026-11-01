@@ -1945,6 +1945,7 @@
   "tags::All": "すべて",
   "tags::Uncategorized": "未分類",
   "text": "テキスト",
+  "the model could not be read": "モデルを読み込めませんでした",
   "the read stopped": "読み込みが停止しました",
   "the reader stopped": "リーダーが停止しました",
   "turn on Touch ID for unlocking Falcon": "Falconのロック解除にTouch IDを使用",

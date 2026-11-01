@@ -2143,6 +2143,7 @@
   "tags::All": "Все",
   "tags::Uncategorized": "Без группы",
   "text": "текст",
+  "the model could not be read": "не удалось прочитать модель",
   "the read stopped": "чтение прервано",
   "the reader stopped": "средство чтения остановлено",
   "turn on Touch ID for unlocking Falcon": "включить Touch ID для разблокировки Falcon",

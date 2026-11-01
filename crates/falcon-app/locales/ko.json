@@ -1945,6 +1945,7 @@
   "tags::All": "전체",
   "tags::Uncategorized": "그룹 없음",
   "text": "텍스트",
+  "the model could not be read": "모델을 읽을 수 없습니다",
   "the read stopped": "읽기가 중단되었습니다",
   "the reader stopped": "리더가 중지되었습니다",
   "turn on Touch ID for unlocking Falcon": "Falcon 잠금 해제에 Touch ID 사용",

@@ -2045,6 +2045,7 @@
   "tags::All": "Todas",
   "tags::Uncategorized": "Sin grupo",
   "text": "texto",
+  "the model could not be read": "no se pudo leer el modelo",
   "the read stopped": "la lectura se detuvo",
   "the reader stopped": "el lector se detuvo",
   "turn on Touch ID for unlocking Falcon": "activar Touch ID para desbloquear Falcon",

@@ -59,7 +59,7 @@ impl App {
         // Random, and a folder sorted at random, offer a new shuffle.
         let refresh = matches!(self.ws.scope, Scope::Random(_)) || matches!(own, Some((_, Some((FolderOrder::Random, _)))));
         if refresh {
-            let tip = self.shortcuts.tooltip(ui.ctx(), "Refresh", Command::Reshuffle);
+            let tip = self.shortcuts.tooltip(ui.ctx(), tr("Refresh"), Command::Reshuffle);
             if icon_button(ui, Pos2::new(ix, cy), ic::ARROW_CLOCKWISE, 18.0, true, &tip).clicked() {
                 let ctx = ui.ctx().clone();
                 self.run_command(&ctx, Command::Reshuffle);

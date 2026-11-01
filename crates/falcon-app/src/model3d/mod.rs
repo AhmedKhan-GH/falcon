@@ -276,7 +276,7 @@ impl ModelView {
             }
             Ok(Err(e)) => self.error = Some(e),
             Err(TryRecvError::Empty) => return true,
-            Err(TryRecvError::Disconnected) => self.error = Some("the model could not be read".into()),
+            Err(TryRecvError::Disconnected) => self.error = Some(crate::locale::tr("the model could not be read").into()),
         }
         self.loading = None;
         false
