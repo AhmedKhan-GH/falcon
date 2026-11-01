@@ -249,6 +249,9 @@ enum Action {
     RenameItem(String, String),
     /// File ▸ New ▸ Text File, into these folders.
     NewTextFile(Vec<String>),
+    /// The Duplicates page's merge: each kept item takes its group's
+    /// values and the rest go to the Trash (`falcon_library::merge`).
+    MergeDuplicates(Vec<falcon_library::merge::Merge>),
     /// The duplicate dialog's answer for these held files.
     ResolveDuplicates(Vec<crate::import_dupes::Pending>, crate::import_dupes::Choice),
 }
@@ -1250,6 +1253,10 @@ impl App {
         self.recent_shown = None;
         if scope == self.ws.scope {
             return;
+        }
+        // The Duplicates page can scan the view it was opened from.
+        if scope == Scope::Duplicates {
+            self.ws.duplicates.opened_from(self.ws.scope.clone(), self.ws.order.clone(), self.ws.selected.clone());
         }
         self.ws.back.push(std::mem::replace(&mut self.ws.scope, scope));
         self.ws.forward.clear();
@@ -2302,6 +2309,11 @@ impl App {
                     });
                     r
                 }
+                Action::MergeDuplicates(merges) => lib.merge_duplicates(&merges).map(|report| {
+                    self.ws.selected.retain(|id| lib.item(id).is_some_and(|i| !i.is_deleted));
+                    self.flash(format!("Merged {} and moved {} to the Trash", export_ui::plural(report.kept, "group"), report.trashed));
+                    self.ws.duplicates.merged(report);
+                }),
                 Action::Organize(a) => self.apply_organize(lib, a),
                 Action::ResolveDuplicates(files, choice) => {
                     let n = files.len();
@@ -2473,6 +2485,7 @@ fn action_label(action: &Action) -> String {
         Action::QuickRemove(_) => "Remove from Quick Access".into(),
         Action::PlaceQuick(..) => "Move in Quick Access".into(),
         Action::Organize(a) => organize_label(a),
+        Action::MergeDuplicates(m) => format!("Merge {} duplicates", m.len()),
         Action::ResolveDuplicates(files, crate::import_dupes::Choice::UseExisting) => format!("Use existing for {}", files.len()),
         Action::ResolveDuplicates(files, _) => format!("Import {}", files.len()),
         Action::Edit(op) => op.label(),

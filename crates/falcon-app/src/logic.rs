@@ -599,59 +599,56 @@ pub struct DupGroup {
     /// Bits each member's perceptual hash differs from the first member's
     /// (0 for exact groups and for members without a hash).
     pub distances: Vec<u32>,
+    /// The member a merge keeps: the first, until the user picks another.
+    pub keep: String,
+    /// Ticked for merging (every group starts ticked, as in Eagle).
+    pub picked: bool,
 }
 
-/// Builds the page's groups: every exact group, then every similar group
-/// that is not just an exact group again (all its members in one exact
-/// group).
-pub fn dup_groups(exact: Vec<Vec<String>>, near: Vec<Vec<String>>, hash: impl Fn(&str) -> Option<u64>) -> Vec<DupGroup> {
-    let mut out: Vec<DupGroup> = exact.iter().map(|ids| DupGroup { exact: true, distances: vec![0; ids.len()], ids: ids.clone() }).collect();
-    for ids in near {
-        let covered = exact.iter().any(|e| ids.iter().all(|id| e.contains(id)));
-        if covered || ids.len() < 2 {
-            continue;
-        }
-        let first = hash(&ids[0]);
-        let distances = ids
-            .iter()
-            .map(|id| match (first, hash(id)) {
-                (Some(a), Some(b)) => (a ^ b).count_ones(),
-                _ => 0,
-            })
-            .collect();
-        out.push(DupGroup { exact: false, ids, distances });
-    }
-    out
+/// A group of `ids` (two or more, the best copy first), with each
+/// member's distance from the first.
+pub fn dup_group(exact: bool, ids: Vec<String>, hash: impl Fn(&str) -> Option<u64>) -> DupGroup {
+    let first = ids.first().and_then(|id| hash(id));
+    let distances = ids
+        .iter()
+        .map(|id| match (first, hash(id)) {
+            (Some(a), Some(b)) if !exact => (a ^ b).count_ones(),
+            _ => 0,
+        })
+        .collect();
+    DupGroup { exact, keep: ids.first().cloned().unwrap_or_default(), ids, distances, picked: true }
 }
 
 /// The groups with only the members `alive` keeps; a group left with one
-/// member drops out.
+/// member drops out, and one whose kept member went keeps its first.
 pub fn live_groups(groups: &[DupGroup], alive: impl Fn(&str) -> bool) -> Vec<DupGroup> {
     groups
         .iter()
         .filter_map(|g| {
             let keep: Vec<usize> = (0..g.ids.len()).filter(|&n| alive(&g.ids[n])).collect();
-            (keep.len() > 1).then(|| DupGroup {
-                exact: g.exact,
-                ids: keep.iter().map(|&n| g.ids[n].clone()).collect(),
-                distances: keep.iter().map(|&n| g.distances[n]).collect(),
+            (keep.len() > 1).then(|| {
+                let ids: Vec<String> = keep.iter().map(|&n| g.ids[n].clone()).collect();
+                let kept = if ids.contains(&g.keep) { g.keep.clone() } else { ids[0].clone() };
+                DupGroup { exact: g.exact, distances: keep.iter().map(|&n| g.distances[n]).collect(), ids, keep: kept, picked: g.picked }
             })
         })
         .collect()
 }
 
-/// Every member but the first of each group, each id once. The first
-/// member is the one kept, and an item kept by one group is never picked
-/// from another.
-pub fn all_but_first(groups: &[DupGroup]) -> Vec<String> {
-    let keep: HashSet<&str> = groups.iter().filter_map(|g| g.ids.first().map(String::as_str)).collect();
-    let mut seen = HashSet::new();
-    groups
-        .iter()
-        .flat_map(|g| g.ids.iter().skip(1))
-        .filter(|id| !keep.contains(id.as_str()) && seen.insert(id.as_str()))
-        .cloned()
-        .collect()
+/// Takes `id` out of group `at` (Eagle's Remove This Item): a group left
+/// with one member leaves the list, and a removed kept member hands the
+/// part to the first one left.
+pub fn remove_member(groups: &mut Vec<DupGroup>, at: usize, id: &str) {
+    let Some(g) = groups.get_mut(at) else { return };
+    if let Some(n) = g.ids.iter().position(|x| x == id) {
+        g.ids.remove(n);
+        g.distances.remove(n);
+    }
+    if g.ids.len() < 2 {
+        groups.remove(at);
+    } else if g.keep == id {
+        g.keep = g.ids[0].clone();
+    }
 }
 
 /// Whether `path` names an Eagle library folder (`*.library`). Such a path
@@ -1139,26 +1136,27 @@ mod filter_media_tests {
     fn duplicate_groups() {
         let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
         let hashes: HashMap<&str, u64> = [("a", 0b0000), ("b", 0b0000), ("c", 0b0111), ("d", 0b0001)].into();
-        let exact = vec![s(&["a", "b"])];
-        // [a, b] again is dropped; [c, d] stays, with distances from c.
-        let near = vec![s(&["a", "b"]), s(&["c", "d"])];
-        let g = dup_groups(exact, near, |id| hashes.get(id).copied());
-        assert_eq!(g.len(), 2);
-        assert!(g[0].exact);
-        assert_eq!(g[0].distances, vec![0, 0]);
-        assert!(!g[1].exact);
-        assert_eq!(g[1].distances, vec![0, 2]);
-        assert_eq!(all_but_first(&g), s(&["b", "d"]));
-        // An item kept by one group is never picked from another.
-        let overlap = vec![
-            DupGroup { exact: true, ids: s(&["a", "b"]), distances: vec![0, 0] },
-            DupGroup { exact: false, ids: s(&["b", "a", "c"]), distances: vec![0, 0, 3] },
-        ];
-        assert_eq!(all_but_first(&overlap), s(&["c"]));
-        // Trashed members leave; a group of one disappears.
-        let live = live_groups(&g, |id| id != "d");
+        let h = |id: &str| hashes.get(id).copied();
+        let exact = dup_group(true, s(&["c", "d"]), h);
+        assert_eq!((exact.distances.clone(), exact.keep.as_str(), exact.picked), (vec![0, 0], "c", true));
+        let near = dup_group(false, s(&["c", "d", "a"]), h);
+        assert_eq!(near.distances, vec![0, 2, 3]);
+        let mut g = vec![dup_group(true, s(&["a", "b"]), h), near];
+        g[1].keep = "d".into();
+        g[1].picked = false;
+        // Trashed members leave; a group of one disappears; the pick stays.
+        let live = live_groups(&g, |id| id != "b");
         assert_eq!(live.len(), 1);
-        assert_eq!(live[0].ids, s(&["a", "b"]));
+        assert_eq!((live[0].ids.clone(), live[0].keep.as_str(), live[0].picked), (s(&["c", "d", "a"]), "d", false));
+        // A kept member that goes hands the part to the first left.
+        let live = live_groups(&g, |id| id != "d");
+        assert_eq!(live[1].keep, "c");
+        // Removing members from the results.
+        remove_member(&mut g, 1, "d");
+        assert_eq!((g[1].ids.clone(), g[1].distances.clone(), g[1].keep.as_str()), (s(&["c", "a"]), vec![0, 3], "c"));
+        remove_member(&mut g, 0, "a");
+        assert_eq!(g.len(), 1, "a group of one leaves the list");
+        assert_eq!(g[0].ids, s(&["c", "a"]));
     }
 }
 
