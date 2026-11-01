@@ -462,9 +462,13 @@ impl App {
 
 impl App {
     /// One smart folder row and, unless collapsed, its children.
-    pub(crate) fn smart_row(&mut self, ui: &mut Ui, lib: &Library, roots: &[SmartFolder], sf: &SmartFolder, depth: usize, quick: &HashSet<String>) -> Option<Rect> {
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn smart_row(&mut self, ui: &mut Ui, lib: &Library, roots: &[SmartFolder], sf: &SmartFolder, depth: usize, quick: &HashSet<String>, filter: &str) -> Option<Rect> {
+        if !filter.is_empty() && !crate::ui::sidebar::smart_subtree_matches(sf, filter) {
+            return None;
+        }
         let has_children = !sf.children.is_empty();
-        let open = has_children && !self.ws.collapsed.contains(&sf.id);
+        let open = has_children && (!filter.is_empty() || !self.ws.collapsed.contains(&sf.id));
         let group = sf.is_group();
         // A group shows no count, as in Eagle.
         let count = if group || !self.prefs.sidebar_counts { 0 } else { lib.smart_folder_items(&sf.id).len() };
@@ -585,7 +589,7 @@ impl App {
         if open {
             let mut last = None;
             for c in &sf.children {
-                if let Some(r) = self.smart_row(ui, lib, roots, c, depth + 1, quick) {
+                if let Some(r) = self.smart_row(ui, lib, roots, c, depth + 1, quick, filter) {
                     last = Some(r.center().y);
                 }
             }
@@ -626,15 +630,19 @@ impl App {
 
     /// The Smart Folders heading. Its + button (shown on hover) opens
     /// Eagle's menu: a new smart folder, or a new smart folder group.
-    pub(crate) fn smart_section(&mut self, ui: &mut Ui) {
-        let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 25.0), Sense::hover());
-        ui.painter().text(Pos2::new(rect.left() + 20.0, rect.center().y), Align2::LEFT_CENTER, "Smart Folders", font(13.0), t::p().text_muted);
+    /// Returns whether the title was clicked, which folds the section; a
+    /// click on the + button does not count.
+    pub(crate) fn smart_section(&mut self, ui: &mut Ui, title: &str, folded: bool) -> bool {
+        let resp = crate::ui::sidebar::section(ui, title, folded);
+        let rect = resp.rect;
         let menu_id = ui.make_persistent_id("smart-add-menu");
         let menu_open = egui::Popup::is_id_open(ui.ctx(), menu_id);
         if !(menu_open || resp.hovered() || ui.rect_contains_pointer(rect)) {
-            return;
+            return resp.clicked();
         }
         let btn = icon_button(ui, Pos2::new(rect.right() - 24.0, rect.center().y), ic::PLUS, 15.0, true, "New Smart Folder");
+        let on_btn = btn.rect.contains(ui.input(|i| i.pointer.interact_pos()).unwrap_or(Pos2::new(f32::MIN, f32::MIN)));
+        let toggled = resp.clicked() && !btn.clicked() && !on_btn;
         egui::Popup::menu(&btn).id(menu_id).show(|ui| {
             ui.set_min_width(200.0);
             if ui.button(format!("{}  New Smart Folder…", ic::FOLDER_STAR)).clicked() {
@@ -644,6 +652,7 @@ impl App {
                 self.ws.actions.push(org(OrgAction::CreateSmartGroup(None)));
             }
         });
+        toggled
     }
 
     /// The smart folder dialog's parent, icon and colour rows.

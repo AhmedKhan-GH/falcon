@@ -7,6 +7,7 @@ use std::path::PathBuf;
 
 use eframe::egui::{self, Align2, Color32, CornerRadius, Key, Pos2, Rect, Response, RichText, Sense, Stroke, StrokeKind, TextEdit, Ui, Vec2, text::LayoutJob, vec2};
 use falcon_library::model::Folder;
+use falcon_library::smart::SmartFolder;
 use falcon_library::Library;
 
 use crate::app::{Action, App, Confirm, DragFolder, DragItems, DragQuick, Switch};
@@ -71,16 +72,43 @@ pub(crate) fn smart_name(lib: &Library, id: &str) -> String {
 
 /// A section header with a + button that shows on hover, like Eagle's.
 /// A sidebar section heading. It senses clicks so it can carry a menu.
-pub(crate) fn section(ui: &mut Ui, title: &str) -> Response {
+/// A caret after the title shows whether the section is `folded`.
+pub(crate) fn section(ui: &mut Ui, title: &str, folded: bool) -> Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 25.0), Sense::click());
-    ui.painter().text(
+    let text = ui.painter().text(
         Pos2::new(rect.left() + 20.0, rect.center().y),
         Align2::LEFT_CENTER,
         title,
         font(13.0),
         t::p().text_muted,
     );
+    let caret = if folded { ic::CARET_RIGHT } else { ic::CARET_DOWN };
+    ui.painter().text(Pos2::new(text.right() + 5.0, rect.center().y), Align2::LEFT_CENTER, caret, font(11.0), t::p().text_muted);
     resp
+}
+
+/// Which sidebar sections are folded away to their headers.
+#[derive(Clone, Copy, Default, Debug, PartialEq)]
+pub(crate) struct SectionFold {
+    pub quick: bool,
+    pub smart: bool,
+    pub folders: bool,
+}
+
+/// How many smart folders (groups and nested ones included) are in `roots`.
+pub(crate) fn smart_count(roots: &[SmartFolder]) -> usize {
+    roots.iter().map(|s| 1 + smart_count(&s.children)).sum()
+}
+
+/// Whether a smart folder or any of its descendants has `filter` (already
+/// lowercased) in its name.
+pub(crate) fn smart_subtree_matches(s: &SmartFolder, filter: &str) -> bool {
+    s.name.to_lowercase().contains(filter) || s.children.iter().any(|c| smart_subtree_matches(c, filter))
+}
+
+/// A heading's title with its count, shown only when there is something.
+fn counted(title: &str, n: usize) -> String {
+    if n > 0 { format!("{title} ({n})") } else { title.to_string() }
 }
 
 pub(crate) fn sidebar_row(
@@ -372,11 +400,11 @@ impl App {
             ui.add_space(12.0);
             let shown = self.prefs.sidebar.clone();
             if shown.quick_access && !lib.metadata.quick_access.is_empty() {
-                let head = section(ui, &format!("Quick Access ({})", lib.metadata.quick_access.len()));
+                let head = section(ui, &format!("Quick Access ({})", lib.metadata.quick_access.len()), self.sections.quick);
                 if head.clicked() {
-                    self.quick_collapsed = !self.quick_collapsed;
+                    self.sections.quick = !self.sections.quick;
                 }
-                let folded = self.quick_collapsed;
+                let folded = self.sections.quick;
                 let smart = lib.smart_folders();
                 for q in lib.metadata.quick_access.iter().filter(|_| !folded) {
                     let (Some(kind), Some(id)) = (q.get("type").and_then(|v| v.as_str()), q.get("id").and_then(|v| v.as_str())) else {
@@ -420,18 +448,32 @@ impl App {
                 }
                 ui.add_space(8.0);
             }
+            let filter = self.ws.folder_filter.trim().to_lowercase();
             if shown.smart_folders {
-                self.smart_section(ui);
                 let smart = lib.smart_folders();
-                for sf in &smart {
-                    self.smart_row(ui, lib, &smart, sf, 0, &quick);
+                if filter.is_empty() || smart.iter().any(|s| smart_subtree_matches(s, &filter)) {
+                    let title = counted("Smart Folders", smart_count(&smart));
+                    if self.smart_section(ui, &title, self.sections.smart) {
+                        self.sections.smart = !self.sections.smart;
+                    }
+                    if !self.sections.smart {
+                        for sf in &smart {
+                            self.smart_row(ui, lib, &smart, sf, 0, &quick, &filter);
+                        }
+                    }
                 }
             }
             if !shown.folders {
                 return;
             }
+            if !filter.is_empty() && !lib.metadata.folders.iter().any(|f| subtree_matches(f, &filter)) {
+                return;
+            }
             let total = lib.all_folders().len();
-            let header = section(ui, &format!("Folders ({total})"));
+            let header = section(ui, &counted("Folders", total), self.sections.folders);
+            if header.clicked() {
+                self.sections.folders = !self.sections.folders;
+            }
             if header.dnd_hover_payload::<DragFolder>().is_some() {
                 ui.painter().rect_stroke(header.rect.shrink2(vec2(11.0, 1.0)), t::RADIUS, Stroke::new(1.5, t::p().primary), StrokeKind::Inside);
             }
@@ -441,9 +483,10 @@ impl App {
             header.context_menu(|ui| {
                 self.folder_title_sort_menu(ui, None);
             });
-            let filter = self.ws.folder_filter.trim().to_lowercase();
-            for f in &lib.metadata.folders {
-                self.folder_row(ui, lib, f, 0, &cx, &filter);
+            if !self.sections.folders {
+                for f in &lib.metadata.folders {
+                    self.folder_row(ui, lib, f, 0, &cx, &filter);
+                }
             }
             ui.add_space(8.0);
         });
@@ -709,5 +752,45 @@ impl App {
             }
         }
         Some(row_rect)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sf(name: &str, children: Vec<SmartFolder>) -> SmartFolder {
+        SmartFolder {
+            id: name.to_string(),
+            name: name.to_string(),
+            conditions: Vec::new(),
+            children,
+            icon: None,
+            icon_color: None,
+            description: String::new(),
+            order_by: None,
+            sort_increase: None,
+        }
+    }
+
+    #[test]
+    fn counts_nested_smart_folders_and_groups() {
+        assert_eq!(smart_count(&[]), 0);
+        let tree = vec![sf("A", vec![sf("B", vec![sf("C", vec![])])]), sf("D", vec![])];
+        assert_eq!(smart_count(&tree), 4);
+    }
+
+    #[test]
+    fn smart_filter_matches_descendants_case_insensitively() {
+        let tree = sf("Work", vec![sf("Red Cars", vec![])]);
+        assert!(smart_subtree_matches(&tree, "work"));
+        assert!(smart_subtree_matches(&tree, "cars"));
+        assert!(!smart_subtree_matches(&tree, "boats"));
+    }
+
+    #[test]
+    fn heading_count_only_when_nonzero() {
+        assert_eq!(counted("Folders", 0), "Folders");
+        assert_eq!(counted("Folders", 3), "Folders (3)");
     }
 }

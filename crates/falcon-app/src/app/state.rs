@@ -39,6 +39,9 @@ pub(crate) struct Saved {
     pub(crate) show_inspector: Option<bool>,
     /// Whether the Quick Access list is folded away, as Eagle remembers.
     pub(crate) quick_collapsed: bool,
+    /// The same for the Smart Folders and Folders sections.
+    pub(crate) smart_collapsed: bool,
+    pub(crate) folders_collapsed: bool,
     /// Panel widths as last dragged.
     pub(crate) sidebar_width: Option<f32>,
     pub(crate) inspector_width: Option<f32>,
@@ -526,7 +529,9 @@ impl App {
             sidebar_width: Some(self.sidebar_width),
             inspector_width: Some(self.inspector_width),
             show_inspector: Some(self.show_inspector),
-            quick_collapsed: self.quick_collapsed,
+            quick_collapsed: self.sections.quick,
+            smart_collapsed: self.sections.smart,
+            folders_collapsed: self.sections.folders,
             collapsed: self.ws.collapsed.iter().cloned().collect(),
             recent: self.recent.clone(),
             recent_folders: self.recent_folders.clone(),
@@ -591,6 +596,18 @@ mod tests {
         assert_eq!(saved.tile, Some(150.0));
         let (libs, active) = crate::workspaces::restore(&saved.libraries, saved.active, saved.library.as_deref(), |_| true);
         assert_eq!((libs, active), (vec![PathBuf::from("/x/A.library")], 0));
+    }
+
+    #[test]
+    fn sidebar_section_folds_default_open_and_are_kept() {
+        let mut m = Memory::default();
+        m.set_string_raw(r#"(quick_collapsed: true)"#);
+        let saved: Saved = eframe::get_value(&m, eframe::APP_KEY).unwrap();
+        assert!(saved.quick_collapsed && !saved.smart_collapsed && !saved.folders_collapsed);
+        let saved = Saved { smart_collapsed: true, folders_collapsed: true, ..Default::default() };
+        eframe::set_value(&mut m, eframe::APP_KEY, &saved);
+        let back: Saved = eframe::get_value(&m, eframe::APP_KEY).unwrap();
+        assert!(!back.quick_collapsed && back.smart_collapsed && back.folders_collapsed);
     }
 
     #[test]

@@ -48,8 +48,8 @@ pub struct App {
     pub(crate) tile: f32,
     pub(crate) show_sidebar: bool,
     pub(crate) show_inspector: bool,
-    /// The Quick Access list is folded to its header.
-    pub(crate) quick_collapsed: bool,
+    /// Which sidebar sections are folded to their headers.
+    pub(crate) sections: crate::ui::sidebar::SectionFold,
     /// The last answer to the Move to Trash question in a folder (take the
     /// items out of the folder only), kept while falcon runs, as Eagle does.
     pub(crate) trash_folder_only: bool,
@@ -182,7 +182,7 @@ impl App {
             sidebar_width: t::SIDEBAR_WIDTH,
             inspector_width: t::INSPECTOR_WIDTH,
             show_inspector: true,
-            quick_collapsed: false,
+            sections: Default::default(),
             trash_folder_only: true,
             focus_search: false,
             focus_folder_filter: false,
@@ -248,7 +248,7 @@ impl App {
         app.sidebar_width = clamp(saved.sidebar_width, t::SIDEBAR_WIDTH);
         app.inspector_width = clamp(saved.inspector_width, t::INSPECTOR_WIDTH);
         app.show_inspector = saved.show_inspector.unwrap_or(true);
-        app.quick_collapsed = saved.quick_collapsed;
+        app.sections = crate::ui::sidebar::SectionFold { quick: saved.quick_collapsed, smart: saved.smart_collapsed, folders: saved.folders_collapsed };
         app.ws.collapsed = saved.collapsed.into_iter().collect();
         app.recent = saved.recent;
         app.recent_folders = saved.recent_folders;
