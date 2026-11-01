@@ -1017,8 +1017,11 @@ impl App {
             *pr = Progress { errors, ..Progress::default() };
             drop(pr);
             self.imports.select_after = Some(added);
-            let msg = if failed > 0 { format!("Added {}, {failed} failed", done - failed) } else { format!("Added {done}") };
-            self.flash(msg);
+            if failed > 0 {
+                self.flash(format!("Added {}, {failed} failed", done - failed));
+            } else if self.prefs.tells_import_done() {
+                self.flash(format!("Added {done}"));
+            }
             return false;
         }
         let p = ui.painter();

@@ -476,7 +476,7 @@ impl App {
         }
         let ctx = self.ctx.clone();
         let scratch = tempfile_dir().ok();
-        let dupes = self.prefs.notify_duplicates.then(|| self.ws.dupes.clone());
+        let dupes = self.prefs.asks_duplicates().then(|| self.ws.dupes.clone());
         std::thread::spawn(move || {
             for Job { path: f, opts } in jobs {
                 // A file already in the library is held for the duplicate

@@ -73,6 +73,12 @@ pub struct Prefs {
     pub video_resume: bool,
     /// Eagle's `video.loopShortVideo`: always loop clips of 30 s or less.
     pub video_loop_short: bool,
+    /// Eagle's `notification.notification.enable`: the switch over every
+    /// pop-up notice below (and `notify_duplicates`).
+    pub notifications: bool,
+    /// The "Added N" note when an import finishes (falcon's own; failures
+    /// are always reported).
+    pub notify_import_done: bool,
 }
 
 /// What the wheel does over a playing video.
@@ -176,6 +182,8 @@ impl Default for Prefs {
             video_autoplay: true,
             video_resume: true,
             video_loop_short: true,
+            notifications: true,
+            notify_import_done: true,
         }
     }
 }
@@ -211,6 +219,17 @@ impl Prefs {
             folder_auto_tags: true,
             ..Default::default()
         }
+    }
+
+    /// Whether imported files already in the library are held for the
+    /// duplicate dialog: only with notices on, as in Eagle.
+    pub fn asks_duplicates(&self) -> bool {
+        self.notifications && self.notify_duplicates
+    }
+
+    /// Whether a finished import says how many items it added.
+    pub fn tells_import_done(&self) -> bool {
+        self.notifications && self.notify_import_done
     }
 
     /// The ports to try for the API, or None when it is off.
@@ -714,8 +733,16 @@ fn preview(p: &mut Page, d: &mut Draft) {
 
 /// Notification: which notices falcon shows.
 fn notification(p: &mut Page, d: &mut Draft) {
-    p.block("Pop-ups", &["notice", "notification", "duplicate", "already", "import"], |ui| {
-        ui.checkbox(&mut d.prefs.notify_duplicates, "Ask what to do when an imported file is already in the library");
+    p.block("Pop-ups", &["notice", "notification", "pop-up", "duplicate", "already", "import", "added", "finished"], |ui| {
+        let n = &mut d.prefs;
+        ui.checkbox(&mut n.notifications, "Show notices");
+        ui.add_enabled_ui(n.notifications, |ui| {
+            ui.indent("notices", |ui| {
+                ui.checkbox(&mut n.notify_duplicates, "Ask what to do when an imported file is already in the library");
+                ui.checkbox(&mut n.notify_import_done, "Say how many items an import added");
+            });
+        });
+        note(ui, "Import failures are always reported. falcon plays no sound effects.");
     });
 }
 
@@ -891,6 +918,16 @@ mod tests {
         assert_eq!(p.video_scroll, VideoScroll::Progress, "Eagle's videoScrollBehavior defaults to progress");
         assert!(!p.video_fill, "Eagle's zoomFill defaults to off");
         assert!(p.video_autoplay && p.video_resume && p.video_loop_short, "Eagle's autoPlay, rememberPosition and loopShortVideo default to on");
+    }
+
+    #[test]
+    fn notices_follow_the_master_switch() {
+        let p = Prefs::default();
+        assert!(p.notifications && p.asks_duplicates() && p.tells_import_done(), "Eagle's notifications default to on");
+        let off = Prefs { notifications: false, ..Default::default() };
+        assert!(!off.asks_duplicates() && !off.tells_import_done());
+        let some = Prefs { notify_import_done: false, ..Default::default() };
+        assert!(some.asks_duplicates() && !some.tells_import_done());
     }
 
     #[test]
