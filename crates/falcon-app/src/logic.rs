@@ -62,6 +62,23 @@ pub fn find_folder<'a>(roots: &'a [Folder], id: &str) -> Option<&'a Folder> {
     found
 }
 
+/// A folder's names from the top level down, joined with ` / ` (the
+/// folder chip's tooltip, as Eagle titles it).
+pub fn folder_path(roots: &[Folder], id: &str) -> Option<String> {
+    fn down<'a>(list: &'a [Folder], id: &str, path: &mut Vec<&'a str>) -> bool {
+        for f in list {
+            path.push(&f.name);
+            if f.id == id || down(&f.children, id, path) {
+                return true;
+            }
+            path.pop();
+        }
+        false
+    }
+    let mut path = Vec::new();
+    down(roots, id, &mut path).then(|| path.join(" / "))
+}
+
 /// Number of live items placed directly in each folder, as Eagle's sidebar
 /// shows them. Folders with no direct items are absent.
 pub fn folder_counts(items: &[Item]) -> HashMap<String, usize> {
@@ -736,6 +753,14 @@ mod tests {
 
     fn names(items: &[Item], v: &[usize]) -> Vec<String> {
         v.iter().map(|&i| items[i].name.clone()).collect()
+    }
+
+    #[test]
+    fn folder_paths_join_ancestors() {
+        let (roots, _) = fixture();
+        assert_eq!(folder_path(&roots, "B").as_deref(), Some("A-name / B-name"));
+        assert_eq!(folder_path(&roots, "C").as_deref(), Some("C-name"));
+        assert_eq!(folder_path(&roots, "Z"), None);
     }
 
     #[test]

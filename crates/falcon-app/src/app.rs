@@ -3328,13 +3328,17 @@ impl App {
         // Folders.
         heading(ui, "Folders");
         let mut remove_folder = None;
+        let mut open_folder = None;
         let mut add_folder = None;
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing = vec2(6.0, 6.0);
             for fid in &item.folders {
                 let name = logic::find_folder(&lib.metadata.folders, fid).map_or_else(|| fid.clone(), |f| f.name.clone());
-                if chip(ui, &name, true).clicked() {
-                    remove_folder = Some(fid.clone());
+                let path = logic::folder_path(&lib.metadata.folders, fid).unwrap_or_else(|| name.clone());
+                match folder_chip(ui, &name, &path) {
+                    Some(ChipClick::Remove) => remove_folder = Some(fid.clone()),
+                    Some(ChipClick::Open) => open_folder = Some(fid.clone()),
+                    None => {}
                 }
             }
             let add = ui.add(egui::Button::new(RichText::new(format!("{}  Add Category", ic::PLUS)).size(12.0).color(t::p().text_muted)).frame(false));
@@ -3353,6 +3357,15 @@ impl App {
             let mut it = changed.clone().unwrap_or_else(|| item.clone());
             it.folders.retain(|x| *x != fid);
             changed = Some(it);
+        }
+        // Eagle's quick open: show the folder with this item still selected.
+        if let Some(fid) = open_folder
+            && logic::find_folder(&lib.metadata.folders, &fid).is_some()
+        {
+            self.go(Scope::Folder(fid));
+            self.ws.selected = vec![item.id.clone()];
+            self.ws.anchor = Some(item.id.clone());
+            self.ws.scroll_to = Some(item.id.clone());
         }
         if let Some(fid) = add_folder {
             let mut it = changed.clone().unwrap_or_else(|| item.clone());
@@ -3547,6 +3560,34 @@ fn chip(ui: &mut Ui, text: &str, removable: bool) -> Response {
         icon(ui, Pos2::new(rect.right() - 10.0, rect.center().y), ic::X, 10.0, t::p().text_muted);
     }
     resp.on_hover_text(if removable { "Click to remove" } else { "" })
+}
+
+/// What a click on a folder chip asked for.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ChipClick {
+    Open,
+    Remove,
+}
+
+/// The inspector's folder chip, like Eagle's: clicking it opens the folder,
+/// and its × (always shown, brighter under the pointer) removes the item.
+fn folder_chip(ui: &mut Ui, text: &str, path: &str) -> Option<ChipClick> {
+    let g = galley(ui, text, font(12.0), t::p().text, 180.0);
+    let (rect, resp) = ui.allocate_exact_size(vec2(g.size().x + 16.0 + 16.0, 22.0), Sense::click());
+    let x = Rect::from_center_size(Pos2::new(rect.right() - 11.0, rect.center().y), vec2(18.0, 18.0));
+    let on_x = resp.hover_pos().is_some_and(|p| x.contains(p));
+    let fill = if resp.hovered() { t::p().button_hover } else { t::p().button };
+    let p = ui.painter();
+    p.rect_filled(rect, CornerRadius::same(5), fill);
+    if on_x {
+        p.rect_filled(x, CornerRadius::same(4), t::p().button);
+    }
+    p.galley(Pos2::new(rect.left() + 8.0, rect.center().y - g.size().y / 2.0), g, t::p().text);
+    let mark = if on_x { t::p().text } else { t::p().text_muted.gamma_multiply(0.7) };
+    icon(ui, x.center(), ic::X, 10.0, mark);
+    let click = resp.clicked().then(|| if resp.interact_pointer_pos().is_some_and(|p| x.contains(p)) { ChipClick::Remove } else { ChipClick::Open });
+    resp.on_hover_text(if on_x { "Remove from this folder".to_string() } else { format!("{path}\nClick to open") });
+    click
 }
 
 fn wide_button(ui: &mut Ui, glyph: &str, label: &str, enabled: bool) -> Response {
