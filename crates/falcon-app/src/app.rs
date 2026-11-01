@@ -1766,6 +1766,13 @@ impl App {
                 let _ = std::process::Command::new("open").arg("-R").arg(&current).spawn();
             }
             ui.separator();
+            if ui.button("Import Files…").clicked() {
+                self.import_files_dialog();
+            }
+            if ui.button("Import Folders…").clicked() {
+                self.import_folders_dialog();
+            }
+            ui.separator();
             if ui.button(if self.collect.open { "Hide Collect Window" } else { "Show Collect Window" }).clicked() {
                 self.collect.toggle();
             }
@@ -2617,6 +2624,7 @@ impl App {
         self.subfolder_strip(ui, lib);
         if items.is_empty() {
             ui.painter().text(area.center(), Align2::CENTER_CENTER, "No items", font(15.0), t::p().text_muted);
+            self.empty_import_button(ui, area);
             return;
         }
 
@@ -4100,6 +4108,7 @@ impl eframe::App for App {
             Some(Switch::Close(i)) => self.close_workspace(i),
             None => {}
         }
+        self.run_import_request();
     }
 }
 

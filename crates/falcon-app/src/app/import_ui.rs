@@ -25,6 +25,18 @@ pub(super) struct Imports {
     /// folder rows, to tell where a drop from Finder landed.
     pub sidebar: Option<Rect>,
     pub folder_rows: Vec<(Rect, String)>,
+    /// A file dialog to show once the frame is done and the library lock
+    /// is released.
+    pub request: Option<Request>,
+}
+
+/// An import file dialog, asked for during the frame.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum Request {
+    /// Pick files; they go into `folders`.
+    Files { folders: Vec<String> },
+    /// Pick folders; each is imported with its tree inside `parent`.
+    Folders { parent: Option<String> },
 }
 
 impl Imports {
@@ -39,6 +51,66 @@ impl Imports {
 }
 
 impl App {
+    /// File ▸ Import Folders…: a dialog for one or more folders, each
+    /// imported with its structure kept as a new top-level Eagle folder,
+    /// as Eagle's menu item does. Safe to call at any point in a frame;
+    /// the dialog opens once the frame is done.
+    pub fn import_folders_dialog(&mut self) {
+        self.imports.request = Some(Request::Folders { parent: None });
+    }
+
+    /// Import Files…: a dialog for files to import into the open folder,
+    /// as if dropped on the grid. Eagle has no such menu item; it is
+    /// falcon's own. The dialog opens once the frame is done.
+    pub fn import_files_dialog(&mut self) {
+        let folders = self.scope_folders();
+        self.imports.request = Some(Request::Files { folders });
+    }
+
+    /// Under "No items" in All or an empty folder, an Import Folders…
+    /// button, as on Eagle's empty views: from All the folders go to the
+    /// top level, from a folder inside it.
+    pub(super) fn empty_import_button(&mut self, ui: &mut eframe::egui::Ui, area: Rect) {
+        let parent = match &self.ws.scope {
+            Scope::All => None,
+            Scope::Folder(id) => Some(id.clone()),
+            _ => return,
+        };
+        if !self.ws.query.trim().is_empty() {
+            return;
+        }
+        let at = Rect::from_center_size(area.center() + eframe::egui::vec2(0.0, 34.0), eframe::egui::vec2(160.0, 26.0));
+        if ui.put(at, eframe::egui::Button::new("Import Folders…")).clicked() {
+            self.imports.request = Some(Request::Folders { parent });
+        }
+    }
+
+    /// Shows the dialog asked for during the frame, if any, and starts the
+    /// import. Called with the library lock released.
+    pub(super) fn run_import_request(&mut self) {
+        let Some(request) = self.imports.request.take() else { return };
+        if self.ws.lib.is_none() {
+            return;
+        }
+        match request {
+            Request::Files { folders } => {
+                if let Some(files) = rfd::FileDialog::new().set_title("Import Files").pick_files() {
+                    self.import_into(files, folders);
+                }
+            }
+            Request::Folders { parent } => {
+                let Some(picked) = rfd::FileDialog::new().set_title("Import Folders").pick_folders() else { return };
+                // As in Eagle, a library is opened rather than imported,
+                // and only when it is the only folder picked.
+                let (libraries, dirs) = logic::split_libraries(picked);
+                if dirs.is_empty() && libraries.len() == 1 {
+                    self.import_into(libraries, Vec::new());
+                }
+                self.import_folder_trees(dirs, parent);
+            }
+        }
+    }
+
     /// Files dropped from Finder at `at`: on the grid they go into the open
     /// folder, flattened (Eagle's `onDropContainer`); on a sidebar folder,
     /// files go into it and folders are ignored (`onDropFolder`); on the
