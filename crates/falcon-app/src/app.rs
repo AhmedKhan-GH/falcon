@@ -190,6 +190,7 @@ enum Action {
     /// Item id and new extension (the inspector's Type row).
     SetExtension(String, String),
     SetFolderDescription(String, String),
+    SetSmartDescription(String, String),
     AddToFolder(Vec<String>, String),
     /// Items dropped on a sidebar folder: moved out of the open folder, or
     /// added (`logic::folder_drop`).
@@ -456,8 +457,9 @@ struct MultiEditBuf {
     url: String,
 }
 
-/// Uncommitted folder inspector text: `(folder id, name, description)`.
-type FolderEditBuf = (String, String, String);
+/// Uncommitted folder inspector text: `(id, name, description, smart)`, for
+/// a folder or (`smart`) a smart folder.
+type FolderEditBuf = (String, String, String, bool);
 
 /// Everything that belongs to one open library: the library itself, where
 /// the user is in it, what is selected, its undo history, its dialogs and
@@ -2087,6 +2089,7 @@ impl App {
                     r
                 }
                 Action::SetFolderDescription(id, text) => lib.set_folder_description(&id, &text),
+                Action::SetSmartDescription(id, text) => lib.set_smart_folder_description(&id, &text),
                 Action::AddToFolder(ids, fid) => {
                     self.note_folder_use(std::slice::from_ref(&fid));
                     let n = ids.len();
@@ -2362,6 +2365,7 @@ fn action_label(action: &Action) -> String {
         Action::RenameFolder(..) => "Rename folder".into(),
         Action::SetExtension(..) => "Change extension".into(),
         Action::SetFolderDescription(..) => "Edit folder description".into(),
+        Action::SetSmartDescription(..) => "Edit smart folder description".into(),
         Action::AddToFolder(ids, _) => format!("Add {} to folder", ids.len()),
         Action::DropOnFolder(ids, _, logic::FolderDrop::Move(_)) => format!("Move {} to folder", ids.len()),
         Action::DropOnFolder(ids, _, logic::FolderDrop::Add) => format!("Add {} to folder", ids.len()),
@@ -2453,6 +2457,7 @@ mod undo_tests {
         assert_eq!(action_label(&Action::RenameFolder("f".into(), "x".into())), "Rename folder");
         assert_eq!(action_label(&Action::SetExtension("i".into(), "png".into())), "Change extension");
         assert_eq!(action_label(&Action::SetFolderDescription("f".into(), "x".into())), "Edit folder description");
+        assert_eq!(action_label(&Action::SetSmartDescription("f".into(), "x".into())), "Edit smart folder description");
         assert_eq!(undo_label(&[]), "Edit item");
         assert_eq!(undo_label(&["Rename folder".into()]), "Rename folder");
         assert_eq!(undo_label(&["New folder".into(), "Tag 2".into(), "Rate 2".into()]), "New folder and 2 more");
@@ -4301,13 +4306,13 @@ impl App {
     /// with focus still in them (the scope or the selection changed), unless
     /// they are still shown for folder `shown`.
     fn flush_folder_edit(&mut self, lib: &Library, shown: Option<&str>) {
-        let Some((id, name, desc)) = self.ws.folder_edit.take_if(|(id, ..)| shown != Some(id.as_str())) else { return };
-        let Some(old) = logic::find_folder(&lib.metadata.folders, &id) else { return };
-        if !name.trim().is_empty() && name.trim() != old.name {
-            self.ws.actions.push(Action::RenameFolder(id.clone(), name.trim().to_string()));
+        let Some((id, name, desc, smart)) = self.ws.folder_edit.take_if(|(id, ..)| shown != Some(id.as_str())) else { return };
+        let Some((old_name, old_desc)) = folder_texts(lib, &id, smart) else { return };
+        if !name.trim().is_empty() && name.trim() != old_name {
+            self.ws.actions.push(rename_action(&id, name.trim(), smart));
         }
-        if desc != old.description {
-            self.ws.actions.push(Action::SetFolderDescription(id, desc));
+        if desc != old_desc {
+            self.ws.actions.push(if smart { Action::SetSmartDescription(id, desc) } else { Action::SetFolderDescription(id, desc) });
         }
     }
 
@@ -4316,32 +4321,41 @@ impl App {
             Scope::Folder(id) => logic::find_folder(&lib.metadata.folders, id).cloned(),
             _ => None,
         };
-        self.flush_folder_edit(lib, folder.as_ref().map(|f| f.id.as_str()));
-        if let Some(f) = &folder {
+        let smart_id = match &self.ws.scope {
+            Scope::Smart(id) => Some(id.clone()),
+            _ => None,
+        };
+        // The smart folder open, as (id, name, description), if it exists.
+        let smart = smart_id.and_then(|id| folder_texts(lib, &id, true).map(|(n, d)| (id, n, d)));
+        let shown = folder.as_ref().map(|f| (f.id.clone(), f.name.clone(), f.description.clone(), false)).or_else(|| smart.map(|(i, n, d)| (i, n, d, true)));
+        self.flush_folder_edit(lib, shown.as_ref().map(|s| s.0.as_str()));
+        if let Some((id, saved_name, saved_desc, is_smart)) = &shown {
             // A folder's name and description save when the field loses
             // focus (Return does that for the name), as one undo step each.
-            // An emptied name goes back to the saved one, as in Eagle.
+            // An emptied name goes back to the saved one, as in Eagle. A
+            // smart folder's are edited the same way.
             if self.ws.folder_edit.is_none() {
-                self.ws.folder_edit = Some((f.id.clone(), f.name.clone(), f.description.clone()));
+                self.ws.folder_edit = Some((id.clone(), saved_name.clone(), saved_desc.clone(), *is_smart));
             }
-            let (_, name, desc) = self.ws.folder_edit.as_mut().expect("set above");
+            let (_, name, desc, _) = self.ws.folder_edit.as_mut().expect("set above");
             let r = field(ui, name, "Name", 33.0, false, "scope-name");
             if r.lost_focus() {
                 let typed = name.trim();
-                if !typed.is_empty() && typed != f.name {
-                    self.ws.actions.push(Action::RenameFolder(f.id.clone(), typed.to_string()));
+                if !typed.is_empty() && typed != saved_name {
+                    self.ws.actions.push(rename_action(id, typed, *is_smart));
                 }
             } else if !r.has_focus() {
                 // Follow renames made elsewhere, and undo.
-                *name = f.name.clone();
+                name.clone_from(saved_name);
             }
             let r = field(ui, desc, "Description", 54.0, true, "scope-desc");
             if r.lost_focus() {
-                if *desc != f.description {
-                    self.ws.actions.push(Action::SetFolderDescription(f.id.clone(), desc.clone()));
+                if desc != saved_desc {
+                    let (id, text) = (id.clone(), desc.clone());
+                    self.ws.actions.push(if *is_smart { Action::SetSmartDescription(id, text) } else { Action::SetFolderDescription(id, text) });
                 }
             } else if !r.has_focus() {
-                *desc = f.description.clone();
+                desc.clone_from(saved_desc);
             }
         } else {
             // Other scopes have fixed names.
@@ -4857,6 +4871,22 @@ impl App {
             self.ws.smart_dialog = Some(d);
         }
     }
+}
+
+/// The saved name and description of a folder, or of a smart folder.
+fn folder_texts(lib: &Library, id: &str, smart: bool) -> Option<(String, String)> {
+    if !smart {
+        return logic::find_folder(&lib.metadata.folders, id).map(|f| (f.name.clone(), f.description.clone()));
+    }
+    fn find(list: &[falcon_library::smart::SmartFolder], id: &str) -> Option<(String, String)> {
+        list.iter().find_map(|f| if f.id == id { Some((f.name.clone(), f.description.clone())) } else { find(&f.children, id) })
+    }
+    find(&lib.smart_folders(), id)
+}
+
+/// The action that renames a folder or a smart folder from the inspector.
+fn rename_action(id: &str, name: &str, smart: bool) -> Action {
+    if smart { Action::Organize(organize_ui::OrgAction::RenameSmart(id.to_string(), name.to_string())) } else { Action::RenameFolder(id.to_string(), name.to_string()) }
 }
 
 fn divider(ui: &mut Ui) {

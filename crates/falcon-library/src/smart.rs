@@ -620,6 +620,16 @@ impl Library {
         self.save_metadata()
     }
 
+    /// Sets a smart folder's description (at any depth). An existing
+    /// `description` is replaced where it is; a missing one goes right after
+    /// `name`. `modificationTime` is left alone, as Eagle leaves it.
+    pub fn set_smart_folder_description(&mut self, id: &str, description: &str) -> Result<()> {
+        let Some(m) = find_smart(&mut self.metadata.smart_folders, id).and_then(Value::as_object_mut) else { return Err(self.no_smart(id)) };
+        let after_name = m.keys().position(|k| k == "name").map_or(m.len(), |i| i + 1);
+        put(m, "description", Some(json!(description)), Some(after_name));
+        self.save_metadata()
+    }
+
     /// Sets a smart folder's icon and colour; `None` removes the key. Pass
     /// the current value to keep one. A new key goes where Eagle's save
     /// puts it on a top-level entry (right after `id`), or at the end of a
@@ -1014,5 +1024,38 @@ mod tests {
         let parent = roots.iter().find(|f| f.id == top).unwrap();
         assert_eq!(parent.children.iter().map(|c| c.id.as_str()).collect::<Vec<_>>(), [kid_copy.as_str(), kid.as_str()]);
         assert!(lib.duplicate_smart_folder("NOPE").is_err());
+    }
+
+    #[test]
+    fn smart_folder_description_keeps_key_order() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut lib = Library::create(tmp.path().join("D.library")).unwrap();
+        let top = lib.create_smart_folder("Top", vec![]).unwrap();
+        let kid = lib.create_smart_folder_in(Some(&top), "Kid", vec![]).unwrap();
+        let keys = |lib: &Library, i: usize| lib.metadata.smart_folders[i].as_object().unwrap().keys().cloned().collect::<Vec<_>>();
+        // Folders made by falcon have the key; Eagle's older ones may not.
+        lib.metadata.smart_folders[0].as_object_mut().unwrap().shift_remove("description");
+        let before = keys(&lib, 0);
+        let stamp = lib.metadata.smart_folders[0]["modificationTime"].clone();
+
+        // Missing: inserted right after the name.
+        lib.set_smart_folder_description(&top, "first").unwrap();
+        let mut want = before.clone();
+        want.insert(want.iter().position(|k| k == "name").unwrap() + 1, "description".into());
+        assert_eq!(keys(&lib, 0), want);
+        assert_eq!(lib.smart_folders()[0].description, "first");
+        assert_eq!(lib.metadata.smart_folders[0]["modificationTime"], stamp);
+
+        // Present: replaced where it is.
+        lib.set_smart_folder_description(&top, "second").unwrap();
+        assert_eq!(keys(&lib, 0), want);
+        assert_eq!(lib.smart_folders()[0].description, "second");
+
+        // Nested.
+        lib.set_smart_folder_description(&kid, "deep").unwrap();
+        assert_eq!(lib.smart_folders()[0].children[0].description, "deep");
+        assert_eq!(Library::open(lib.root()).unwrap().smart_folders()[0].children[0].description, "deep");
+
+        assert!(lib.set_smart_folder_description("NOPE", "x").is_err());
     }
 }

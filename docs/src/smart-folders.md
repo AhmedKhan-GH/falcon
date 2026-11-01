@@ -52,6 +52,7 @@ Falcon's API, all on `Library`:
 | `set_smart_folder_icon(id, icon, color)` | `None` removes a key. New keys go right after `id` on top-level entries, as Eagle's save places them, and at the end of nested ones |
 | `set_smart_folder_order(id, order, increase)` | Sets or clears `orderBy` and `sortIncrease` |
 | `delete_smart_folder(id)` | Removes the folder with its children |
+| `set_smart_folder_description(id, text)` | Sets `description` at any depth: an existing key keeps its place, a missing one goes right after `name`; `modificationTime` is left alone |
 
 `Library::smart_folders()` returns `SmartFolder` values with `icon`, `icon_color`, `description`, `order_by` and `sort_increase` read out for display.
 
