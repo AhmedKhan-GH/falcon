@@ -2,8 +2,15 @@
 //! fill mode, the sort, the caption and badge switches, the panel switches
 //! and Refresh. The options live in `logic::Display`.
 
-use super::*;
-use super::organize_ui::OrderTarget;
+use eframe::egui::{self, Color32, CornerRadius, Pos2, Rect, RichText, Sense, Stroke, Ui, vec2};
+use crate::app::{Action, App, GRID_PAD_X, list_span};
+use falcon_library::Library;
+use crate::icons as ic;
+use falcon_library::search::OrderBy;
+use crate::logic::{self, Layout};
+use crate::theme::{self as t, font};
+use crate::ui::widgets::{galley, icon};
+use crate::app::organize_ui::OrderTarget;
 use crate::organize;
 use falcon_library::model::FolderOrder;
 
@@ -168,8 +175,8 @@ impl App {
         ui.painter().hline(rect.x_range().shrink(GRID_PAD_X), rect.bottom() - 0.5, Stroke::new(1.0, t::p().divider));
         let Some((key, inc)) = picked else { return };
         match own {
-            Some((OrderTarget::Folder(id), _)) => self.ws.actions.push(Action::Organize(super::organize_ui::OrgAction::FolderOrder(id, Some((FolderOrder::By(key), inc))))),
-            Some((OrderTarget::Smart(id), _)) => self.ws.actions.push(Action::Organize(super::organize_ui::OrgAction::SmartOrder(id, Some((FolderOrder::By(key), inc))))),
+            Some((OrderTarget::Folder(id), _)) => self.ws.actions.push(Action::Organize(crate::app::organize_ui::OrgAction::FolderOrder(id, Some((FolderOrder::By(key), inc))))),
+            Some((OrderTarget::Smart(id), _)) => self.ws.actions.push(Action::Organize(crate::app::organize_ui::OrgAction::SmartOrder(id, Some((FolderOrder::By(key), inc))))),
             None => (self.ws.sort, self.ws.increase) = (key, inc),
         }
     }
