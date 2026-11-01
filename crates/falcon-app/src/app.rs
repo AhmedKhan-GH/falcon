@@ -79,6 +79,8 @@ struct Saved {
     increase: Option<bool>,
     show_sidebar: Option<bool>,
     show_inspector: Option<bool>,
+    /// Whether the Quick Access list is folded away, as Eagle remembers.
+    quick_collapsed: bool,
     collapsed: Vec<String>,
     recent: Vec<PathBuf>,
     /// Folder ids items were last added to, newest first (Eagle's
@@ -140,6 +142,10 @@ struct DragItems(Vec<String>);
 #[derive(Clone)]
 struct DragFolder(String);
 
+/// A Quick Access row being dragged, by the id it pins.
+#[derive(Clone)]
+struct DragQuick(String);
+
 /// Library changes requested while drawing, applied at the end of a frame.
 enum Action {
     CreateFolder { parent: Option<String> },
@@ -177,6 +183,8 @@ enum Action {
     BatchRating(Vec<String>, u64),
     QuickAdd(&'static str, String),
     QuickRemove(String),
+    /// Pins or moves `(kind, id)` beside `target`; below it when true.
+    PlaceQuick(&'static str, String, String, bool),
     /// Tags deleted, starred or unstarred, or merged into one name, from
     /// the All Tags page.
     DeleteTags(Vec<String>),
@@ -635,6 +643,8 @@ pub struct App {
     tile: f32,
     show_sidebar: bool,
     show_inspector: bool,
+    /// The Quick Access list is folded to its header.
+    quick_collapsed: bool,
     focus_search: bool,
     /// Focus the sidebar's folder filter next frame (Find ▸ Filter Sidebar).
     focus_folder_filter: bool,
@@ -727,6 +737,7 @@ impl App {
             tile: 139.0,
             show_sidebar: true,
             show_inspector: true,
+            quick_collapsed: false,
             focus_search: false,
             focus_folder_filter: false,
             quick: Default::default(),
@@ -772,6 +783,7 @@ impl App {
         app.ws.increase = saved.increase.unwrap_or(app.ws.increase);
         app.show_sidebar = saved.show_sidebar.unwrap_or(true);
         app.show_inspector = saved.show_inspector.unwrap_or(true);
+        app.quick_collapsed = saved.quick_collapsed;
         app.ws.collapsed = saved.collapsed.into_iter().collect();
         app.recent = saved.recent.into_iter().filter(|p| p.is_dir()).collect();
         app.recent_folders = saved.recent_folders;
@@ -2130,6 +2142,7 @@ impl App {
                 }
                 Action::QuickAdd(kind, id) => lib.add_quick_access(kind, &id),
                 Action::QuickRemove(id) => lib.remove_quick_access(&id),
+                Action::PlaceQuick(kind, id, target, below) => lib.place_quick_access(kind, &id, &target, below),
                 Action::RenameTag(from, to) => lib.rename_tag(&from, &to).map(|n| {
                     if self.ws.scope == Scope::Tag(from.clone()) {
                         self.ws.scope = Scope::Tag(to.clone());
@@ -2340,6 +2353,7 @@ fn action_label(action: &Action) -> String {
         Action::BatchRating(ids, _) => format!("Rate {}", ids.len()),
         Action::QuickAdd(..) => "Add to Quick Access".into(),
         Action::QuickRemove(_) => "Remove from Quick Access".into(),
+        Action::PlaceQuick(..) => "Move in Quick Access".into(),
         Action::Organize(a) => organize_label(a),
         Action::ResolveDuplicates(files, crate::import_dupes::Choice::UseExisting) => format!("Use existing for {}", files.len()),
         Action::ResolveDuplicates(files, _) => format!("Import {}", files.len()),
@@ -2697,9 +2711,13 @@ impl App {
             ui.add_space(12.0);
             let shown = self.prefs.sidebar.clone();
             if shown.quick_access && !lib.metadata.quick_access.is_empty() {
-                let _ = section(ui, "Quick Access");
+                let head = section(ui, &format!("Quick Access ({})", lib.metadata.quick_access.len()));
+                if head.clicked() {
+                    self.quick_collapsed = !self.quick_collapsed;
+                }
+                let folded = self.quick_collapsed;
                 let smart = lib.smart_folders();
-                for q in &lib.metadata.quick_access {
+                for q in lib.metadata.quick_access.iter().filter(|_| !folded) {
                     let (Some(kind), Some(id)) = (q.get("type").and_then(|v| v.as_str()), q.get("id").and_then(|v| v.as_str())) else {
                         continue;
                     };
@@ -2715,6 +2733,19 @@ impl App {
                     let resp = sidebar_row(ui, 0, glyph, &name, self.badge(count), active, None);
                     if kind != "smartFolder" {
                         self.imports.note_row(ui, resp.rect, id);
+                    }
+                    if resp.drag_started() {
+                        resp.dnd_set_drag_payload(DragQuick(id.to_string()));
+                    }
+                    let kind: &'static str = if kind == "smartFolder" { "smartFolder" } else { "folder" };
+                    self.quick_drop(ui, lib, &resp, id);
+                    if kind == "folder" {
+                        drop_highlight(ui, &resp, 0);
+                        if let Some(d) = resp.dnd_release_payload::<DragItems>()
+                            && let Some(op) = logic::folder_drop(&self.ws.scope, id, ui.input(|i| i.modifiers.alt))
+                        {
+                            self.ws.actions.push(Action::DropOnFolder(d.0.clone(), id.to_string(), op));
+                        }
                     }
                     if resp.clicked() {
                         self.go(scope);
@@ -4966,6 +4997,7 @@ impl eframe::App for App {
             increase: Some(self.ws.increase),
             show_sidebar: Some(self.show_sidebar),
             show_inspector: Some(self.show_inspector),
+            quick_collapsed: self.quick_collapsed,
             collapsed: self.ws.collapsed.iter().cloned().collect(),
             recent: self.recent.clone(),
             recent_folders: self.recent_folders.clone(),

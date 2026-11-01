@@ -758,6 +758,27 @@ impl Library {
         self.save_metadata()
     }
 
+    /// Pins `id` (a `"folder"` or `"smartFolder"`) to Quick Access just
+    /// above `target`, or just below it when `below`, as Eagle does when an
+    /// entry or a folder is dropped on a pinned row. An id already pinned is
+    /// moved. A `target` that isn't pinned appends; dropping on itself does
+    /// nothing.
+    pub fn place_quick_access(&mut self, kind: &str, id: &str, target: &str, below: bool) -> Result<()> {
+        if id == target {
+            return Ok(());
+        }
+        let key = |q: &serde_json::Value| q.get("id").and_then(|v| v.as_str()).map(String::from);
+        // A pinned entry moves as it is (any other keys it has stay).
+        let entry = match self.metadata.quick_access.iter().position(|q| key(q).as_deref() == Some(id)) {
+            Some(i) => self.metadata.quick_access.remove(i),
+            None => serde_json::json!({"type": kind, "id": id}),
+        };
+        let at = self.metadata.quick_access.iter().position(|q| key(q).as_deref() == Some(target));
+        let at = at.map_or(self.metadata.quick_access.len(), |i| i + usize::from(below));
+        self.metadata.quick_access.insert(at, entry);
+        self.save_metadata()
+    }
+
     /// Unpins an id from Quick Access.
     pub fn remove_quick_access(&mut self, id: &str) -> Result<()> {
         self.metadata.quick_access.retain(|q| q.get("id").and_then(|v| v.as_str()) != Some(id));

@@ -81,7 +81,7 @@ struct DragGroup(String);
 
 /// A smart folder dragged in the sidebar.
 #[derive(Clone)]
-struct DragSmart(String);
+pub(super) struct DragSmart(String);
 
 #[derive(Clone, Copy, PartialEq)]
 enum PasswordMode {
@@ -297,6 +297,30 @@ impl App {
             }
             self.ws.actions.push(org(OrgAction::ReorderFolder(d.0.clone(), parent, index)));
         }
+    }
+
+    /// Drops onto a Quick Access row, as Eagle does: another pinned row, a
+    /// folder or a smart folder lands above the row when released over its
+    /// top half and below it over the bottom half, with an insertion line.
+    pub(super) fn quick_drop(&mut self, ui: &Ui, lib: &Library, resp: &Response, target: &str) {
+        let moved = tree_drop_feedback::<DragQuick>(ui, resp, 0, false, |d| d.0 == target)
+            .zip(resp.dnd_release_payload::<DragQuick>())
+            .map(|(z, d)| (z, d.0.clone(), None))
+            .or_else(|| {
+                tree_drop_feedback::<DragFolder>(ui, resp, 0, false, |d| d.0 == target)
+                    .zip(resp.dnd_release_payload::<DragFolder>())
+                    .map(|(z, d)| (z, d.0.clone(), Some("folder")))
+            })
+            .or_else(|| {
+                tree_drop_feedback::<DragSmart>(ui, resp, 0, false, |d| d.0 == target)
+                    .zip(resp.dnd_release_payload::<DragSmart>())
+                    .map(|(z, d)| (z, d.0.clone(), Some("smartFolder")))
+            });
+        let Some((zone, id, kind)) = moved else { return };
+        // A pinned row keeps its own kind.
+        let pinned = lib.metadata.quick_access.iter().find(|q| q.get("id").and_then(|v| v.as_str()) == Some(&id));
+        let kind = kind.unwrap_or(if pinned.is_some_and(|q| q.get("type").and_then(|v| v.as_str()) == Some("smartFolder")) { "smartFolder" } else { "folder" });
+        self.ws.actions.push(Action::PlaceQuick(kind, id, target.to_string(), zone == DropZone::After));
     }
 
     /// The folder context menu entries falcon adds: password, item sort,

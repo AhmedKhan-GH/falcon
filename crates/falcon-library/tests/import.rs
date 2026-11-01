@@ -345,6 +345,39 @@ fn folders_move_and_quick_access() {
 }
 
 #[test]
+fn quick_access_placement() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut lib = Library::create(tmp.path().join("Quick.library")).unwrap();
+    let ids = |lib: &Library| -> Vec<String> {
+        lib.metadata.quick_access.iter().map(|q| q["id"].as_str().unwrap().to_string()).collect()
+    };
+    for id in ["a", "b", "c"] {
+        lib.add_quick_access("folder", id).unwrap();
+    }
+    // Reorder above and below.
+    lib.place_quick_access("folder", "c", "a", false).unwrap();
+    assert_eq!(ids(&lib), ["c", "a", "b"]);
+    lib.place_quick_access("folder", "c", "b", true).unwrap();
+    assert_eq!(ids(&lib), ["a", "b", "c"]);
+    // A new entry lands beside the target, with `type` before `id`.
+    lib.place_quick_access("smartFolder", "s", "b", false).unwrap();
+    assert_eq!(ids(&lib), ["a", "s", "b", "c"]);
+    assert_eq!(serde_json::to_string(&lib.metadata.quick_access[1]).unwrap(), r#"{"type":"smartFolder","id":"s"}"#);
+    // Moving an existing entry keeps one copy, unchanged.
+    lib.metadata.quick_access[0]["extra"] = serde_json::json!(1);
+    lib.place_quick_access("folder", "a", "c", true).unwrap();
+    assert_eq!(ids(&lib), ["s", "b", "c", "a"]);
+    assert_eq!(serde_json::to_string(&lib.metadata.quick_access[3]).unwrap(), r#"{"type":"folder","id":"a","extra":1}"#);
+    // On itself: nothing.
+    lib.place_quick_access("folder", "b", "b", true).unwrap();
+    assert_eq!(ids(&lib), ["s", "b", "c", "a"]);
+    // An unknown target appends.
+    lib.place_quick_access("folder", "s", "zzz", false).unwrap();
+    assert_eq!(ids(&lib), ["b", "c", "a", "s"]);
+    assert_eq!(ids(&Library::open(tmp.path().join("Quick.library")).unwrap()), ["b", "c", "a", "s"]);
+}
+
+#[test]
 fn folder_auto_tags_on_import() {
     let tmp = tempfile::tempdir().unwrap();
     let mut lib = Library::create(tmp.path().join("Auto.library")).unwrap();
