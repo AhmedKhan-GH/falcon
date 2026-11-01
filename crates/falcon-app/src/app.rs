@@ -966,55 +966,33 @@ impl App {
         }
     }
 
+    /// Key presses: rebindable commands go through the shortcut table
+    /// (`shortcuts.rs`) to `run_command`, as menu clicks do; Tab, the
+    /// viewer's plain zoom keys, the arrows and Esc are fixed.
     fn keyboard(&mut self, ctx: &egui::Context) {
-        // Rebindable keys go through the shortcut table (`shortcuts.rs`).
         use crate::shortcuts::Command as C;
-        let pressed = ctx.input(|i| self.shortcuts.pressed(i));
-        let on = |c: C| pressed.contains(&c);
-        if on(C::Preferences) && !self.prefs_window.open {
+        let mut pressed = ctx.input(|i| self.shortcuts.pressed(i));
+        if pressed.contains(&C::Preferences) && !self.prefs_window.open {
             self.open_preferences();
         }
         // The duplicate dialog takes Return and Esc for itself.
         if self.prefs_window.open || self.ws.dup_dialog.is_some() || ctx.memory(|m| m.focused().is_some()) {
             return;
         }
+        pressed.retain(|c| *c != C::Preferences);
         if ctx.input(|i| i.modifiers.command && i.key_pressed(Key::Z)) {
             self.ws.undo_request = Some(!ctx.input(|i| i.modifiers.shift));
         }
-        if on(C::CollectWindow) {
-            self.collect.toggle();
-        }
-        if on(C::SwitchLibrary) && self.ws.lib.is_some() {
-            self.show_sidebar = true;
-            self.open_switcher = true;
-        }
-        if self.others.len() > 1 {
-            if on(C::NextLibrary) {
-                self.switch_to = Some(Switch::Focus(self.others.step(true)));
-            }
-            if on(C::PreviousLibrary) {
-                self.switch_to = Some(Switch::Focus(self.others.step(false)));
-            }
-        }
-        // The panel toggles are global, as Eagle's View menu items are;
-        self.export_keys(&on);
         // Tab is Eagle's fixed key for both panels.
-        if on(C::ToggleSidebar) {
-            self.show_sidebar = !self.show_sidebar;
+        if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Tab)) && !pressed.contains(&C::ToggleAll) {
+            pressed.push(C::ToggleAll);
         }
-        if on(C::ToggleInspector) {
-            self.show_inspector = !self.show_inspector;
-        }
-        if on(C::ToggleAll) || ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Tab)) {
-            self.toggle_panels();
-            // Tab must not also hand keyboard focus to the first widget.
-            ctx.memory_mut(|m| m.move_focus(egui::FocusDirection::None));
-        }
-        // Zoom keys in the viewer: the table's ⌘ chords and the fixed
-        // plain 0, 1, + and −.
-        if self.ws.viewer.is_some() {
+        let viewer = self.ws.viewer.is_some();
+        // The viewer's fixed zoom keys: plain 0, 1, + and −. The table's
+        // chords (⌘0, ⌘9, ⌘=, ⌘−) come through `run_command`.
+        if viewer {
             use logic::ViewZoom as Z;
-            let plain = ctx.input(|i| {
+            self.ws.view.zoom_key = ctx.input(|i| {
                 i.events.iter().find_map(|e| match e {
                     egui::Event::Key { key, pressed: true, modifiers: m, .. } if !m.command && !m.ctrl && !m.alt => match key {
                         Key::Num0 => Some(Z::Fit),
@@ -1026,71 +1004,24 @@ impl App {
                     _ => None,
                 })
             });
-            let table = [(C::ZoomIn, Z::In), (C::ZoomOut, Z::Out), (C::ZoomActual, Z::Actual), (C::ZoomFit, Z::Fit)].into_iter().find(|(c, _)| on(*c)).map(|(_, z)| z);
-            self.ws.view.zoom_key = table.or(plain);
         }
-        // In the viewer, Back from ⌫ leaves it, as in Eagle; the arrow
-        // chords of Back do nothing there.
-        if self.ws.viewer.is_some() && on(C::Back) && !ctx.input(|i| i.key_pressed(Key::ArrowLeft)) {
-            self.ws.viewer = None;
-            return;
+        // In the viewer, ⌫ (Back) leaves it, as in Eagle; the arrow chords
+        // of Back do nothing there.
+        if viewer && ctx.input(|i| i.key_pressed(Key::ArrowLeft)) {
+            pressed.retain(|c| *c != C::Back);
         }
-        if self.ws.viewer.is_none() {
-            if on(C::Rename) && self.ws.selected.len() == 1 {
-                self.show_inspector = true;
-                self.ws.focus_title = true;
-            }
-            if on(C::Find) {
-                self.focus_search = true;
-            }
-            if on(C::Back) {
-                self.go_back();
-            }
-            if on(C::Forward) {
-                self.go_forward();
-            }
-            if on(C::FolderSettings)
-                && let Scope::Folder(id) = &self.ws.scope
-            {
-                self.ws.org.settings_request = Some(id.clone());
-            }
-            use crate::organize::Arrange;
-            for (c, how) in [(C::FolderUp, Arrange::Up), (C::FolderDown, Arrange::Down), (C::FolderTop, Arrange::Top), (C::FolderBottom, Arrange::Bottom)] {
-                if on(c) && matches!(self.ws.scope, Scope::Folder(_) | Scope::Smart(_)) {
-                    self.ws.actions.push(Action::Arrange(how));
-                }
-            }
-            if on(C::ZoomIn) {
-                self.tile = (self.tile + 20.0).min(TILE_MAX);
-            }
-            if on(C::ZoomOut) {
-                self.tile = (self.tile - 20.0).max(TILE_MIN);
-            }
-            if on(C::NewFolder) {
-                let parent = match &self.ws.scope {
-                    Scope::Folder(id) => Some(id.clone()),
-                    _ => None,
-                };
-                self.ws.actions.push(Action::CreateFolder { parent });
-            }
-            if on(C::Copy) && !self.ws.selected.is_empty() {
-                self.copy_selection();
-            }
-            if on(C::ToggleFilter) {
-                self.ws.show_filter = !self.ws.show_filter;
-            }
-            for (c, l) in [(C::LayoutGrid, Layout::Grid), (C::LayoutJustified, Layout::Justified), (C::LayoutWaterfall, Layout::Waterfall), (C::LayoutList, Layout::List)] {
-                if on(c) {
-                    self.ws.layout = l;
-                }
-            }
+        // With audio in the viewer, Space plays and pauses (Esc closes), as in Eagle.
+        let audio = viewer && self.audio.loaded() == self.ws.viewer.as_deref() && ctx.input(|i| i.key_pressed(Key::Space));
+        if audio {
+            self.audio.toggle();
+            pressed.retain(|c| *c != C::Viewer);
         }
-        if on(C::Paste) && self.ws.viewer.is_none() {
-            self.paste();
-            return;
+        // These take the whole key press: the fixed keys wait a frame.
+        let done = audio || pressed.iter().any(|c| matches!(c, C::Paste | C::OpenDefault | C::RevealInFinder | C::Viewer) || (*c == C::Back && viewer));
+        for cmd in pressed {
+            self.run_command(ctx, cmd);
         }
-        if on(C::OpenDefault) || on(C::RevealInFinder) {
-            self.open_keys(on(C::OpenDefault));
+        if done {
             return;
         }
         // ⌘ or ⌥ with ← → is Back or Forward, not a selection move.
@@ -1104,37 +1035,11 @@ impl App {
                 i.key_pressed(Key::Escape),
             )
         });
-        let (space, all, del) = (on(C::Viewer), on(C::SelectAll), on(C::Trash));
         if esc {
             if self.ws.viewer.is_some() {
                 self.ws.viewer = None;
             } else {
                 self.ws.selected.clear();
-            }
-        }
-        if all {
-            self.ws.selected = self.ws.order.clone();
-        }
-        // With audio in the viewer, Space plays and pauses (Esc closes), as in Eagle.
-        if self.ws.viewer.is_some() && self.audio.loaded() == self.ws.viewer.as_deref() && ctx.input(|i| i.key_pressed(Key::Space)) {
-            self.audio.toggle();
-            return;
-        }
-        if space && self.ws.viewer.is_some() {
-            self.ws.viewer = None;
-            return;
-        }
-        if space && self.ws.viewer.is_none() && self.ws.selected.len() == 1 {
-            self.ws.viewer = self.ws.selected.first().cloned();
-            return;
-        }
-        if del && !self.ws.selected.is_empty() {
-            let ids = self.ws.selected.clone();
-            if self.ws.scope == Scope::Trash {
-                self.ws.confirm = Some(Confirm::DeleteItems(ids));
-            } else {
-                self.leave_viewed(&ids);
-                self.ws.actions.push(Action::Trash(ids, true));
             }
         }
         if self.ws.viewer.is_some() {
@@ -1166,6 +1071,124 @@ impl App {
             self.ws.selected = vec![id.clone()];
             self.ws.anchor = Some(id.clone());
             self.ws.scroll_to = Some(id);
+        }
+    }
+
+    /// The state commands and the menu bar look at (see `menu.rs`).
+    fn menu_state(&self, ctx: &egui::Context) -> crate::menu::State {
+        use crate::menu::ScopeKind;
+        crate::menu::State {
+            library: self.ws.lib.is_some(),
+            modal: self.prefs_window.open || self.ws.dup_dialog.is_some(),
+            text: ctx.egui_wants_keyboard_input(),
+            viewer: self.ws.viewer.is_some(),
+            selected: self.ws.selected.len(),
+            scope: match self.ws.scope {
+                Scope::Folder(_) => ScopeKind::Folder,
+                Scope::Smart(_) => ScopeKind::Smart,
+                Scope::Trash => ScopeKind::Trash,
+                _ => ScopeKind::Other,
+            },
+            back: !self.ws.back.is_empty(),
+            forward: !self.ws.forward.is_empty(),
+            layout: self.ws.layout,
+            sidebar: self.show_sidebar,
+            inspector: self.show_inspector,
+            filter: self.ws.show_filter,
+            libraries: self.others.len(),
+        }
+    }
+
+    /// Runs one command, from a key press or a menu click. A command that
+    /// can't act now (`menu::enabled`) does nothing. Called before the
+    /// frame locks the library, which some commands lock themselves.
+    fn run_command(&mut self, ctx: &egui::Context, cmd: crate::shortcuts::Command) {
+        use crate::shortcuts::Command as C;
+        if !crate::menu::enabled(cmd, &self.menu_state(ctx)) {
+            return;
+        }
+        let viewer = self.ws.viewer.is_some();
+        match cmd {
+            C::Preferences => self.open_preferences(),
+            C::CollectWindow => self.collect.toggle(),
+            C::SwitchLibrary => {
+                if self.ws.lib.is_some() {
+                    self.show_sidebar = true;
+                    self.open_switcher = true;
+                } else {
+                    self.pick_library();
+                }
+            }
+            C::NextLibrary => self.switch_to = Some(Switch::Focus(self.others.step(true))),
+            C::PreviousLibrary => self.switch_to = Some(Switch::Focus(self.others.step(false))),
+            C::ToggleSidebar => self.show_sidebar = !self.show_sidebar,
+            C::ToggleInspector => self.show_inspector = !self.show_inspector,
+            C::ToggleAll => {
+                self.toggle_panels();
+                // Tab must not also hand keyboard focus to the first widget.
+                ctx.memory_mut(|m| m.move_focus(egui::FocusDirection::None));
+            }
+            C::ZoomIn if viewer => self.ws.view.zoom_key = Some(logic::ViewZoom::In),
+            C::ZoomOut if viewer => self.ws.view.zoom_key = Some(logic::ViewZoom::Out),
+            C::ZoomIn => self.tile = (self.tile + 20.0).min(TILE_MAX),
+            C::ZoomOut => self.tile = (self.tile - 20.0).max(TILE_MIN),
+            C::ZoomActual => self.ws.view.zoom_key = Some(logic::ViewZoom::Actual),
+            C::ZoomFit => self.ws.view.zoom_key = Some(logic::ViewZoom::Fit),
+            C::Back if viewer => self.ws.viewer = None,
+            C::Back => self.go_back(),
+            C::Forward => self.go_forward(),
+            C::Rename => {
+                self.show_inspector = true;
+                self.ws.focus_title = true;
+            }
+            C::Find => self.focus_search = true,
+            C::FolderSettings => {
+                if let Scope::Folder(id) = &self.ws.scope {
+                    self.ws.org.settings_request = Some(id.clone());
+                }
+            }
+            C::FolderUp | C::FolderDown | C::FolderTop | C::FolderBottom => {
+                use crate::organize::Arrange;
+                let how = match cmd {
+                    C::FolderUp => Arrange::Up,
+                    C::FolderDown => Arrange::Down,
+                    C::FolderTop => Arrange::Top,
+                    _ => Arrange::Bottom,
+                };
+                self.ws.actions.push(Action::Arrange(how));
+            }
+            C::NewFolder => {
+                let parent = match &self.ws.scope {
+                    Scope::Folder(id) => Some(id.clone()),
+                    _ => None,
+                };
+                self.ws.actions.push(Action::CreateFolder { parent });
+            }
+            C::Copy => self.copy_selection(),
+            C::Paste => self.paste(),
+            C::ToggleFilter => self.ws.show_filter = !self.ws.show_filter,
+            C::LayoutGrid => self.ws.layout = Layout::Grid,
+            C::LayoutJustified => self.ws.layout = Layout::Justified,
+            C::LayoutWaterfall => self.ws.layout = Layout::Waterfall,
+            C::LayoutList => self.ws.layout = Layout::List,
+            C::OpenDefault => self.open_keys(true),
+            C::RevealInFinder => self.open_keys(false),
+            C::SelectAll => self.ws.selected = self.ws.order.clone(),
+            C::Viewer if viewer => self.ws.viewer = None,
+            C::Viewer => self.ws.viewer = self.ws.selected.first().cloned(),
+            C::Trash => {
+                let ids = self.ws.selected.clone();
+                if self.ws.scope == Scope::Trash {
+                    self.ws.confirm = Some(Confirm::DeleteItems(ids));
+                } else {
+                    self.leave_viewed(&ids);
+                    self.ws.actions.push(Action::Trash(ids, true));
+                }
+            }
+            C::ExportComputer | C::ExportPack | C::ExportCsv | C::ExportFormat | C::CopyPath | C::CopyFolderPath | C::CopyName | C::CopyLink | C::CopyThumbnail | C::CopyBase64 => {
+                self.export_keys(&|c| c == cmd);
+            }
+            C::Player(_) => {}
         }
     }
 

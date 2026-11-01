@@ -10,6 +10,7 @@ mod icons;
 mod import_dupes;
 mod loader;
 mod logic;
+mod menu;
 mod open_with;
 mod prefs;
 mod shortcuts;
