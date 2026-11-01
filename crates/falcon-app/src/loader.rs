@@ -526,7 +526,7 @@ fn decode(job: &Job) -> Option<Pixels> {
             None => return None,
         }
     } else if job.quicklook {
-        thumbnail::quicklook(&job.path, max).ok()?
+        native_or_quicklook(&job.path, max)?
     } else if job.svg {
         let data = std::fs::read(&job.path).ok()?;
         thumbnail::render_svg(&data, Some(max)).ok()?
@@ -538,6 +538,23 @@ fn decode(job: &Job) -> Option<Pixels> {
     Some(Pixels::Whole(ColorImage::from_rgba_unmultiplied([rgba.width() as usize, rgba.height() as usize], rgba.as_raw())))
 }
 
+/// Whether ImageIO decodes `path` here (AVIF, HEIC/HEIF, JPEG XL on a
+/// system that reads it).
+fn imageio(path: &std::path::Path) -> bool {
+    path.extension().and_then(|e| e.to_str()).is_some_and(falcon_library::imageio::available)
+}
+
+/// A format falcon's own decoder can't read: ImageIO's full decode when it
+/// reads the format, else (or when that fails) a QuickLook render.
+fn native_or_quicklook(path: &std::path::Path, max: u32) -> Option<image::DynamicImage> {
+    if imageio(path)
+        && let Ok(img) = falcon_library::imageio::decode(path)
+    {
+        return Some(img);
+    }
+    thumbnail::quicklook(path, max).ok()
+}
+
 /// A RAW photo's embedded JPEG preview.
 fn raw_preview(path: &std::path::Path) -> Option<image::DynamicImage> {
     thumbnail::raw_preview(&std::fs::read(path).ok()?).ok()
@@ -546,7 +563,13 @@ fn raw_preview(path: &std::path::Path) -> Option<image::DynamicImage> {
 /// Decodes the original at full size and cuts it into tiles, all on the
 /// worker; the UI thread only uploads them.
 fn decode_tiled(job: &Job) -> Option<Pixels> {
-    let img = if job.raw { raw_preview(&job.path)? } else { thumbnail::decode(&job.path).ok()? };
+    let img = if job.raw {
+        raw_preview(&job.path)?
+    } else if imageio(&job.path) {
+        falcon_library::imageio::decode(&job.path).ok()?
+    } else {
+        thumbnail::decode(&job.path).ok()?
+    };
     let rgba = img.into_rgba8();
     let (w, h) = (rgba.width() as usize, rgba.height() as usize);
     let raw = rgba.as_raw();
@@ -599,6 +622,24 @@ mod tests {
             // The tile's first pixel is the image's pixel at its padded origin.
             assert_eq!(img.pixels[0], Color32::from_rgb((x0 % 251) as u8, (y0 % 241) as u8, ((x0 / 64 + y0 / 64) % 256) as u8));
         }
+    }
+
+    /// A HEIC original (which falcon's own decoder can't read) decodes
+    /// through ImageIO into tiles, upright, and its full tier too.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn heic_originals_decode_through_imageio() {
+        use falcon_library::imageio::{WriteFrame, write};
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("photo.heic");
+        let img = image::RgbaImage::from_fn(300, 130, |x, _| image::Rgba([(x % 256) as u8, 0, 0, 255]));
+        write(&path, "heic", &[WriteFrame { image: &img, orientation: 6, delay: None }]).unwrap();
+        let Some(Pixels::Tiled { size, tiles }) = decode(&original(path.clone(), 128)) else { panic!("not tiled") };
+        assert_eq!(size, [130, 300], "turned by its orientation");
+        assert_eq!(tiles.len(), 2 * 3);
+        let full = Job { key: ("x".into(), Tier::Full), path, svg: false, quicklook: true, tile: 0, region: None, raw: false };
+        let Some(Pixels::Whole(img)) = decode(&full) else { panic!("no full tier") };
+        assert_eq!(img.size, [130, 300]);
     }
 
     /// A 12000 x 8000 PNG decodes and tiles on the worker; the UI thread

@@ -7,7 +7,9 @@
 //! decoded frames, plus canvas snapshots for seeking, is ever held, so a GIF
 //! of thousands of frames costs about as much memory as one of a few dozen.
 //! WebP and APNG frame counts and delays come from their chunk headers, and
-//! their frames are decoded in order by the `image` crate. Frame timing, loop
+//! their frames are decoded in order by the `image` crate. Animated AVIF
+//! (and HEIF sequences) come from ImageIO on macOS, which gives each
+//! frame's delay and decodes any frame directly. Frame timing, loop
 //! ranges, speed steps and the scrub bar's mapping are pure functions with
 //! tests.
 
@@ -25,6 +27,9 @@ pub enum Kind {
     WebP,
     /// PNG, animated when it is an APNG.
     Png,
+    /// AVIF or a HEIF sequence, read through ImageIO (macOS only);
+    /// animated when it holds a timed sequence.
+    ImageIo,
 }
 
 /// The format of an extension falcon may animate. WebP and PNG files are
@@ -34,13 +39,13 @@ pub fn kind(ext: &str) -> Option<Kind> {
         "gif" => Some(Kind::Gif),
         "webp" => Some(Kind::WebP),
         "png" => Some(Kind::Png),
+        "avif" | "avifs" | "heics" if cfg!(target_os = "macos") => Some(Kind::ImageIo),
         _ => None,
     }
 }
 
-/// The format of a grid card that plays when hovered, as in Eagle: GIFs
-/// and WebPs (which play only if animated). Eagle also plays animated AVIF,
-/// which falcon can't decode.
+/// The format of a grid card that plays when hovered, as in Eagle: GIFs,
+/// WebPs and AVIFs (which play only if animated; AVIF on macOS).
 pub fn card_kind(ext: &str) -> Option<Kind> {
     kind(ext).filter(|k| *k != Kind::Png)
 }
@@ -661,6 +666,24 @@ impl Source for SeqSource {
     }
 }
 
+/// An animated AVIF or HEIF sequence through ImageIO, which decodes any
+/// frame on its own.
+struct ImageIoSource(falcon_library::imageio::Animation);
+
+impl Source for ImageIoSource {
+    fn size(&self) -> (u32, u32) {
+        self.0.size()
+    }
+
+    fn delays(&self) -> &[u32] {
+        self.0.delays()
+    }
+
+    fn frame(&mut self, i: usize) -> Result<RgbaImage, String> {
+        self.0.frame(i)
+    }
+}
+
 /// A file with no animation: one frame, never decoded (the image viewer
 /// shows it as a still).
 struct StillSource;
@@ -684,6 +707,10 @@ fn open_source(path: &Path, kind: Kind, budget: usize) -> Result<Box<dyn Source>
         Kind::Gif => Ok(Box::new(GifSource::open(path, budget)?)),
         Kind::WebP | Kind::Png => match SeqSource::open(path, kind)? {
             Some(s) => Ok(Box::new(s)),
+            None => Ok(Box::new(StillSource)),
+        },
+        Kind::ImageIo => match falcon_library::imageio::Animation::open(path)? {
+            Some(a) => Ok(Box::new(ImageIoSource(a))),
             None => Ok(Box::new(StillSource)),
         },
     }
@@ -1555,6 +1582,48 @@ pub(crate) mod tests {
         assert!(!cards.playing("g"));
         assert_eq!(card_kind("PNG"), None);
         assert_eq!(card_kind("webp"), Some(Kind::WebP));
+    }
+
+    #[test]
+    fn avif_and_heif_sequences_go_to_imageio() {
+        let want = cfg!(target_os = "macos").then_some(Kind::ImageIo);
+        assert_eq!(kind("AVIF"), want);
+        assert_eq!(kind("heics"), want);
+        assert_eq!(card_kind("avif"), want, "animated AVIFs play when hovered, as in Eagle");
+        assert_eq!(kind("heic"), None, "HEIC photos are stills");
+    }
+
+    /// A HEIF sequence written by macOS plays through ImageIO frame by
+    /// frame with its own delays; an AVIF still reports itself a still.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn imageio_sequences_play() {
+        use falcon_library::imageio::{WriteFrame, write};
+        let dir = tempfile::tempdir().unwrap();
+        let pics: Vec<RgbaImage> = [0u8, 120, 240].iter().map(|&b| RgbaImage::from_pixel(16, 8, image::Rgba([0, 0, b, 255]))).collect();
+        let frames: Vec<WriteFrame> = pics.iter().map(|image| WriteFrame { image, orientation: 1, delay: Some(0.2) }).collect();
+        let seq = dir.path().join("seq.heics");
+        write(&seq, "heics", &frames).unwrap();
+        let ctx = egui::Context::default();
+        let mut p = Player::open(&ctx, seq, Kind::ImageIo, Opts::viewer());
+        let start = std::time::Instant::now();
+        while (p.state == State::Opening || p.texture().is_none()) && start.elapsed().as_secs() < 10 {
+            p.update(0.0);
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        assert_eq!(p.state, State::Ready);
+        assert_eq!(p.texture().map(|t| t.size()), Some([16, 8]));
+
+        let avif = dir.path().join("still.avif");
+        if write(&avif, "avif", &frames[..1].iter().map(|f| WriteFrame { delay: None, ..*f }).collect::<Vec<_>>()).is_ok() {
+            let mut p = Player::open(&ctx, avif, Kind::ImageIo, Opts::viewer());
+            let start = std::time::Instant::now();
+            while p.state == State::Opening && start.elapsed().as_secs() < 5 {
+                p.update(0.0);
+                std::thread::sleep(std::time::Duration::from_millis(2));
+            }
+            assert_eq!(p.state, State::Still);
+        }
     }
 
     #[test]

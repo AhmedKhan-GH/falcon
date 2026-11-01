@@ -1,72 +1,26 @@
-//! ImageIO round trips: pictures encoded by macOS's own HEIC, HEIF
+//! ImageIO round trips: pictures written by macOS's own HEIC, HEIF
 //! sequence and AVIF encoders decode through `falcon_library::imageio`
 //! upright, at full size, with their frame timing.
 #![cfg(target_os = "macos")]
 
-use falcon_library::imageio;
-use objc2::rc::Retained;
-use objc2::runtime::AnyObject;
-use objc2_core_foundation::{CFDictionary, CFString, CFURL};
-use objc2_core_graphics::{CGBitmapContextCreate, CGBitmapContextCreateImage, CGColorSpace, CGImage, CGImageAlphaInfo, CGImageByteOrderInfo};
-use objc2_foundation::{NSDictionary, NSNumber, NSString};
-use objc2_image_io::CGImageDestination;
+use falcon_library::imageio::{self, WriteFrame};
+use image::RgbaImage;
 use std::path::Path;
 
-/// A picture and the properties to write it with.
-type Frame = (objc2_core_foundation::CFRetained<CGImage>, Retained<NSDictionary<NSString, AnyObject>>);
-
 /// A `w` x `h` opaque picture: red rising left to right, `blue` everywhere.
-fn picture(w: usize, h: usize, blue: u8) -> objc2_core_foundation::CFRetained<CGImage> {
-    let mut px = vec![255u8; w * h * 4];
-    for (i, p) in px.as_chunks_mut::<4>().0.iter_mut().enumerate() {
-        p[0] = ((i % w) * 255 / (w - 1)) as u8;
-        p[1] = 0;
-        p[2] = blue;
-    }
-    let space = CGColorSpace::new_device_rgb().unwrap();
-    let info = CGImageAlphaInfo::PremultipliedLast.0 | CGImageByteOrderInfo::Order32Big.0;
-    // SAFETY: the buffer is w*h*4 bytes and outlives the context.
-    let ctx = unsafe { CGBitmapContextCreate(px.as_mut_ptr().cast(), w, h, 8, w * 4, Some(&space), info) }.unwrap();
-    CGBitmapContextCreateImage(Some(&ctx)).unwrap()
+fn picture(w: u32, h: u32, blue: u8) -> RgbaImage {
+    RgbaImage::from_fn(w, h, |x, _| image::Rgba([(x * 255 / (w - 1)) as u8, 0, blue, 255]))
 }
 
-fn dict(pairs: &[(&str, Retained<AnyObject>)]) -> Retained<NSDictionary<NSString, AnyObject>> {
-    let keys: Vec<Retained<NSString>> = pairs.iter().map(|(k, _)| NSString::from_str(k)).collect();
-    let keys: Vec<&NSString> = keys.iter().map(|k| &**k).collect();
-    let values: Vec<&AnyObject> = pairs.iter().map(|(_, v)| &**v).collect();
-    NSDictionary::from_slices(&keys, &values)
-}
-
-/// Any object as an `AnyObject`, to sit among a dictionary's values.
-fn obj<T: objc2::Message>(r: Retained<T>) -> Retained<AnyObject> {
-    // SAFETY: every Objective-C object is an AnyObject.
-    unsafe { Retained::cast_unchecked(r) }
-}
-
-fn num(v: f64) -> Retained<AnyObject> {
-    obj(NSNumber::new_f64(v))
-}
-
-/// Writes `frames` (each with its properties) as a file of type `uti`.
-/// `false` when this system has no encoder for it.
-fn encode(path: &Path, uti: &str, frames: &[Frame]) -> bool {
-    let url = CFURL::from_file_path(path).unwrap();
-    // SAFETY: owned arguments; no options.
-    let Some(dest) = (unsafe { CGImageDestination::with_url(&url, &CFString::from_str(uti), frames.len(), None) }) else { return false };
-    for (img, props) in frames {
-        // SAFETY: NSDictionary is toll-free bridged to CFDictionary.
-        let props: &CFDictionary = unsafe { &*(Retained::as_ptr(props).cast::<CFDictionary>()) };
-        unsafe { dest.add_image(img, Some(props)) };
-    }
-    unsafe { dest.finalize() }
+fn still(image: &RgbaImage, orientation: u8) -> WriteFrame<'_> {
+    WriteFrame { image, orientation, delay: None }
 }
 
 #[test]
 fn heic_decodes_upright_at_full_size() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("turned.heic");
-    let props = dict(&[("Orientation", num(6.0))]);
-    assert!(encode(&path, "public.heic", &[(picture(64, 32, 0), props)]), "macOS writes HEIC");
+    imageio::write(&path, "heic", &[still(&picture(64, 32, 0), 6)]).expect("macOS writes HEIC");
     assert!(imageio::available("heic"));
     let img = imageio::decode(&path).unwrap().into_rgba8();
     // Stored 64 x 32, shown turned a quarter clockwise.
@@ -83,8 +37,8 @@ fn heic_decodes_upright_at_full_size() {
 fn avif_decodes_through_imageio() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("still.avif");
-    if !encode(&path, "public.avif", &[(picture(48, 24, 200), dict(&[]))]) {
-        eprintln!("skipped: this macOS has no AVIF encoder");
+    if let Err(e) = imageio::write(&path, "avif", &[still(&picture(48, 24, 200), 1)]) {
+        eprintln!("skipped: {e}");
         return;
     }
     assert!(imageio::available("avif"));
@@ -100,9 +54,9 @@ fn avif_decodes_through_imageio() {
 fn heif_sequences_give_frames_and_delays() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("seq.heics");
-    let frame = |delay: f64| dict(&[("{HEICS}", obj(dict(&[("DelayTime", num(delay))])))]);
-    let frames = [(picture(40, 20, 0), frame(0.1)), (picture(40, 20, 120), frame(0.3)), (picture(40, 20, 240), frame(0.3))];
-    assert!(encode(&path, "public.heics", &frames), "macOS writes HEIF sequences");
+    let pics = [picture(40, 20, 0), picture(40, 20, 120), picture(40, 20, 240)];
+    let frames: Vec<WriteFrame> = pics.iter().zip([0.1, 0.3, 0.3]).map(|(image, d)| WriteFrame { image, orientation: 1, delay: Some(d) }).collect();
+    imageio::write(&path, "heics", &frames).expect("macOS writes HEIF sequences");
     let mut anim = imageio::Animation::open(&path).unwrap().expect("animated");
     assert_eq!(anim.size(), (40, 20));
     // macOS's HEICS encoder stores the last frame with the one before's
@@ -112,6 +66,12 @@ fn heif_sequences_give_frames_and_delays() {
     assert!(blues[0] < 30 && (90..150).contains(&blues[1]) && blues[2] > 210, "{blues:?}");
     // Out of range frames fail rather than panic.
     assert!(anim.frame(7).is_err());
+}
+
+#[test]
+fn unwritable_formats_say_so() {
+    let dir = tempfile::tempdir().unwrap();
+    assert!(imageio::write(&dir.path().join("x.png"), "png", &[still(&picture(4, 4, 0), 1)]).is_err());
 }
 
 /// An animated AVIF (AVIS) plays through the same code; ImageIO can read

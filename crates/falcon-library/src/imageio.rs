@@ -123,6 +123,24 @@ impl Animation {
     }
 }
 
+/// One picture to write with [`write`].
+#[derive(Clone, Copy)]
+pub struct WriteFrame<'a> {
+    pub image: &'a RgbaImage,
+    /// The EXIF orientation to record (1 leaves it upright).
+    pub orientation: u8,
+    /// For a HEIF sequence: how long the frame shows, in seconds.
+    pub delay: Option<f64>,
+}
+
+/// Writes `frames` to `path` as the ImageIO format of `ext` (macOS can
+/// write AVIF, HEIC and HEIF sequences, not AVIF sequences or JPEG XL).
+/// Several frames with delays make a HEIF sequence.
+pub fn write(path: &Path, ext: &str, frames: &[WriteFrame]) -> Result<(), String> {
+    let uti = type_of(&ext.to_lowercase()).ok_or_else(|| format!("ImageIO doesn't handle .{ext}"))?;
+    imp::write(path, uti, frames)
+}
+
 fn readable_types() -> &'static [String] {
     static TYPES: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
     TYPES.get_or_init(imp::readable_types)
@@ -139,12 +157,13 @@ mod imp {
     use image::DynamicImage;
     use objc2::rc::Retained;
     use objc2::runtime::AnyObject;
-    use objc2_core_foundation::{CFArray, CFDictionary, CFRetained, CFURL, CGPoint, CGRect, CGSize};
+    use objc2_core_foundation::{CFArray, CFDictionary, CFRetained, CFString, CFURL, CGPoint, CGRect, CGSize};
     use objc2_core_graphics::{
-        CGBitmapContextCreate, CGColorSpace, CGContext, CGImage, CGImageAlphaInfo, CGImageByteOrderInfo, kCGColorSpaceSRGB,
+        CGBitmapContextCreate, CGBitmapContextCreateImage, CGColorSpace, CGContext, CGImage, CGImageAlphaInfo, CGImageByteOrderInfo,
+        kCGColorSpaceSRGB,
     };
     use objc2_foundation::{NSArray, NSDictionary, NSNumber, NSString};
-    use objc2_image_io::CGImageSource;
+    use objc2_image_io::{CGImageDestination, CGImageSource};
 
     fn as_ns(d: &CFDictionary) -> &NSDictionary<AnyObject, AnyObject> {
         // SAFETY: CFDictionary and NSDictionary are toll-free bridged; the
@@ -243,6 +262,59 @@ mod imp {
         types.iter().map(|s| s.to_string()).collect()
     }
 
+    /// Any object as an `AnyObject`, to sit among a dictionary's values.
+    fn obj<T: objc2::Message>(r: Retained<T>) -> Retained<AnyObject> {
+        // SAFETY: every Objective-C object is an AnyObject.
+        unsafe { Retained::cast_unchecked(r) }
+    }
+
+    fn dict(pairs: Vec<(&str, Retained<AnyObject>)>) -> Retained<NSDictionary<NSString, AnyObject>> {
+        let keys: Vec<Retained<NSString>> = pairs.iter().map(|(k, _)| NSString::from_str(k)).collect();
+        let keys: Vec<&NSString> = keys.iter().map(|k| &**k).collect();
+        let values: Vec<&AnyObject> = pairs.iter().map(|(_, v)| &**v).collect();
+        NSDictionary::from_slices(&keys, &values)
+    }
+
+    /// A CGImage holding a copy of `img`.
+    fn cg_image(img: &RgbaImage) -> Result<CFRetained<CGImage>, String> {
+        let (w, h) = (img.width() as usize, img.height() as usize);
+        let mut px = img.as_raw().clone();
+        // Premultiply, as the bitmap context stores it.
+        for p in px.as_chunks_mut::<4>().0 {
+            let a = u32::from(p[3]);
+            for c in &mut p[..3] {
+                *c = ((u32::from(*c) * a + 127) / 255) as u8;
+            }
+        }
+        // SAFETY: kCGColorSpaceSRGB is a constant CFString.
+        let space = CGColorSpace::with_name(Some(unsafe { kCGColorSpaceSRGB })).ok_or("no sRGB colour space")?;
+        let info = CGImageAlphaInfo::PremultipliedLast.0 | CGImageByteOrderInfo::Order32Big.0;
+        // SAFETY: `px` is `w * h * 4` bytes and outlives the context; the
+        // image made from it is a copy.
+        let ctx = unsafe { CGBitmapContextCreate(px.as_mut_ptr().cast(), w, h, 8, w * 4, Some(&space), info) }.ok_or("no bitmap context")?;
+        CGBitmapContextCreateImage(Some(&ctx)).ok_or_else(|| "no image".to_string())
+    }
+
+    pub fn write(path: &Path, uti: &str, frames: &[super::WriteFrame]) -> Result<(), String> {
+        let url = CFURL::from_file_path(path).ok_or("not a file path")?;
+        // SAFETY: owned arguments; no options.
+        let dest = unsafe { CGImageDestination::with_url(&url, &CFString::from_str(uti), frames.len(), None) }
+            .ok_or_else(|| format!("this system can't write {uti}"))?;
+        for f in frames {
+            let mut props = vec![("Orientation", obj(NSNumber::new_u8(f.orientation)))];
+            if let Some(d) = f.delay {
+                props.push(("{HEICS}", obj(dict(vec![("DelayTime", obj(NSNumber::new_f64(d)))]))));
+            }
+            let props = dict(props);
+            let image = cg_image(f.image)?;
+            // SAFETY: NSDictionary is toll-free bridged to CFDictionary;
+            // owned arguments.
+            unsafe { dest.add_image(&image, Some(&*Retained::as_ptr(&props).cast::<CFDictionary>())) };
+        }
+        // SAFETY: owned.
+        if unsafe { dest.finalize() } { Ok(()) } else { Err(format!("writing {uti} failed")) }
+    }
+
     pub struct Source {
         src: CFRetained<CGImageSource>,
     }
@@ -283,6 +355,10 @@ mod imp {
 
     pub fn readable_types() -> Vec<String> {
         Vec::new()
+    }
+
+    pub fn write(_: &Path, _: &str, _: &[super::WriteFrame]) -> Result<(), String> {
+        Err("ImageIO is only available on macOS".into())
     }
 
     pub enum Source {}

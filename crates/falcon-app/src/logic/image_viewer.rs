@@ -67,12 +67,17 @@ pub const FULL_TIER_SIDE: u32 = 3072;
 /// past the full tier. Eagle's bitmap viewer decodes jpg, png, webp, bmp,
 /// avif, jxl, tiff and heic originals in full (`BitmapViewer.isSupportFormat`);
 /// falcon decodes the ones its image decoder reads (TIFF included, falling
-/// back to the QuickLook render when a TIFF's compression isn't supported).
+/// back to the QuickLook render when a TIFF's compression isn't supported),
+/// and AVIF, HEIC/HEIF and JPEG XL through ImageIO on macOS (keeping the
+/// QuickLook render where the system can't read them, as JPEG XL before
+/// macOS 14).
 /// GIFs belong to the animation player; SVGs are re-rendered instead.
 /// RAW photos show their embedded JPEG preview at its full size, as
 /// Eagle's RAW viewer does.
 pub fn full_resolution(ext: &str) -> bool {
-    matches!(ext, "jpg" | "jpeg" | "jfif" | "jpe" | "png" | "webp" | "bmp" | "tif" | "tiff") || falcon_library::exif::is_raw(ext)
+    matches!(ext, "jpg" | "jpeg" | "jfif" | "jpe" | "png" | "webp" | "bmp" | "tif" | "tiff")
+        || falcon_library::exif::is_raw(ext)
+        || (cfg!(target_os = "macos") && falcon_library::imageio::handles(ext))
 }
 
 /// Whether the original is worth decoding: the image is larger than the
@@ -356,6 +361,11 @@ mod image_viewer_tests {
         assert!(!wants_original("psd", 12000, 6000.0), "no decoder");
         assert!(wants_original("tiff", 9000, 4000.0));
         assert!(wants_original("nef", 8256, 4000.0), "a RAW's embedded preview");
+        if cfg!(target_os = "macos") {
+            for ext in ["avif", "heic", "heif", "hif", "jxl"] {
+                assert!(wants_original(ext, 8000, 4000.0), "{ext} through ImageIO");
+            }
+        }
     }
 
     #[test]

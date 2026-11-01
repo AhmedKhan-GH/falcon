@@ -953,8 +953,8 @@ fn preview(p: &mut Page, d: &mut Draft) {
         ui.checkbox(&mut v.video_resume, "Resume where each video was left");
         ui.checkbox(&mut v.video_loop_short, "Always loop clips of 30 seconds or less");
     });
-    p.block("GIF", &["gif", "player", "frame", "animation", "autoplay", "hover", "webp"], |ui| {
-        ui.checkbox(&mut d.prefs.always_play_animated, "Always play GIFs and animated WebPs in the grid");
+    p.block("GIF", &["gif", "player", "frame", "animation", "autoplay", "hover", "webp", "avif"], |ui| {
+        ui.checkbox(&mut d.prefs.always_play_animated, "Always play GIFs and animated WebPs and AVIFs in the grid");
         ui.checkbox(&mut d.prefs.gif_player, "Always use the frame-by-frame player for GIFs");
         note(ui, "Cards play while hovered either way; hold ⌥ to keep one still.");
     });
