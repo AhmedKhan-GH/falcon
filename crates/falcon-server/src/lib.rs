@@ -755,7 +755,7 @@ fn import_route(lib: &Shared, path: &str, args: &Map<String, Value>) -> Option<R
     Some(match path {
         "/api/item/addFromPath" => {
             let Some(p) = s(args, "path") else { return Some(Reply::Fail("Missing required parameters.".into())) };
-            match add_path(lib, PathBuf::from(p), args, args) {
+            match add_path(lib, PathBuf::from(p), args, args, false) {
                 Ok(id) => Reply::Data(json!(id)),
                 Err(e) => Reply::Fail(e),
             }
@@ -777,7 +777,7 @@ fn import_route(lib: &Shared, path: &str, args: &Map<String, Value>) -> Option<R
             let mut ids = Vec::new();
             for e in entries {
                 if let Some(p) = s(&e, "path")
-                    && let Ok(id) = add_path(lib, PathBuf::from(p), &e, args)
+                    && let Ok(id) = add_path(lib, PathBuf::from(p), &e, args, false)
                 {
                     ids.push(id);
                 }
@@ -786,7 +786,9 @@ fn import_route(lib: &Shared, path: &str, args: &Map<String, Value>) -> Option<R
         }
         "/api/item/addFromURL" => {
             let Some(url) = s(args, "url") else { return Some(Reply::Fail("Missing required parameters.".into())) };
-            match add_url(lib, url, args, args) {
+            let added = add_url(lib, url, args, args);
+            record_tags(lib, args);
+            match added {
                 Ok(_) => Reply::Empty,
                 Err(e) => Reply::Fail(e),
             }
@@ -796,6 +798,7 @@ fn import_route(lib: &Shared, path: &str, args: &Map<String, Value>) -> Option<R
             for e in items.iter().filter_map(Value::as_object) {
                 if let Some(url) = s(e, "url") {
                     let _ = add_url(lib, url, e, args);
+                    record_tags(lib, e);
                 }
             }
             Reply::Empty
@@ -930,6 +933,15 @@ fn merge_changes(before: &Item, after: &Item, current: &Item) -> Option<Item> {
     serde_json::from_value(Value::Object(c)).ok()
 }
 
+/// v1's URL routes put the tags they were given at the front of the
+/// recent tags, as Eagle's do (its path routes don't).
+fn record_tags(lib: &Shared, entry: &Map<String, Value>) {
+    let tags: Vec<String> = strings(entry, "tags").into_iter().filter(|t| !t.is_empty()).collect();
+    if !tags.is_empty() {
+        let _ = lock(lib).record_tag_use(&tags);
+    }
+}
+
 fn folder_reply(lib: &Library, id: &str) -> Reply {
     match lib.all_folders().into_iter().find(|f| f.id == id) {
         Some(f) => Reply::Data(folder_json(f)),
@@ -953,18 +965,23 @@ fn thumbnail_path(lib: &Library, item: &Item) -> String {
 /// commit. The source is read, thumbnailed and analysed in between, unlocked,
 /// because the app locks the same library every frame and a dataless iCloud
 /// source blocks until it has downloaded.
-fn add_path(lib: &Shared, path: PathBuf, item: &Map<String, Value>, outer: &Map<String, Value>) -> Result<String, String> {
-    let folders = {
+///
+/// With `auto_tags`, the auto-tags of the target folders come first, then
+/// the given tags, as Eagle's URL imports do (its path imports add none).
+fn add_path(lib: &Shared, path: PathBuf, item: &Map<String, Value>, outer: &Map<String, Value>, auto_tags: bool) -> Result<String, String> {
+    let (folders, tags) = {
         let lib = lock(lib);
         let mut folders = folder_ids(&lib, item);
         if folders.is_empty() {
             folders = folder_ids(&lib, outer);
         }
-        folders
+        let mut tags = if auto_tags { falcon_library::autotag::auto_tags_for(&lib.metadata.folders, &folders) } else { Vec::new() };
+        falcon_library::autotag::append_new(&mut tags, &strings(item, "tags"));
+        (folders, tags)
     };
     let opts = ImportOptions {
         folders,
-        tags: strings(item, "tags"),
+        tags,
         palette: true,
         annotation: s(item, "annotation").unwrap_or("").to_string(),
         url: s(item, "website").unwrap_or("").to_string(),
@@ -1019,7 +1036,7 @@ fn add_url(lib: &Shared, url: &str, item: &Map<String, Value>, outer: &Map<Strin
     std::fs::write(&file, bytes).map_err(|e| e.to_string())?;
     let mut entry = item.clone();
     entry.entry("website").or_insert_with(|| json!(if url.starts_with("data:") { "" } else { url }));
-    add_path(lib, file, &entry, outer)
+    add_path(lib, file, &entry, outer, true)
 }
 
 /// `/api/item/list` with Eagle's quirks: `offset` is a page number, no limit

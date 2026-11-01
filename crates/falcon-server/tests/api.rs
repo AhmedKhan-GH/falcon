@@ -488,6 +488,14 @@ impl Env {
     }
 }
 
+fn png_data_url(w: u32, h: u32) -> String {
+    use base64::Engine;
+    let img = RgbImage::from_fn(w, h, |x, y| Rgb([(x * 7) as u8, (y * 5) as u8, 40]));
+    let mut buf = std::io::Cursor::new(Vec::new());
+    img.write_to(&mut buf, image::ImageFormat::Png).unwrap();
+    format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(buf.into_inner()))
+}
+
 fn keys(v: &Value) -> Vec<&str> {
     v.as_object().unwrap().keys().map(String::as_str).collect()
 }
@@ -696,4 +704,35 @@ fn set_custom_thumbnail() {
         let (code, v) = e.post("/api/v2/item/setCustomThumbnail", body);
         assert_eq!((code, v), (200, json!({"status": "success", "data": false})));
     }
+}
+
+#[test]
+fn add_from_url_applies_folder_auto_tags() {
+    let e = env();
+    e.lib.lock().unwrap().set_folder_auto_tags(&e.folder, &["auto".to_string()]).unwrap();
+    let url = png_data_url(16, 16);
+    let tags_of = |name: &str| -> Vec<String> {
+        let lib = e.lib.lock().unwrap();
+        let hits: Vec<_> = lib.items().iter().filter(|i| i.name == name).collect();
+        assert_eq!(hits.len(), 1, "{name}");
+        hits[0].tags.clone()
+    };
+
+    let (code, v) = e.post("/api/item/addFromURL", json!({"url": url, "folderId": e.folder, "tags": ["mine", "auto"], "name": "u1"}));
+    assert_eq!((code, v), (200, json!({"status": "success"})));
+    assert_eq!(tags_of("u1"), ["auto", "mine"]);
+    {
+        let lib = e.lib.lock().unwrap();
+        assert_eq!(&lib.tags.history_tags[..2], ["mine", "auto"]);
+    }
+    let history = e.lib.lock().unwrap().tags.history_tags.clone();
+
+    let p = e.tmp.path().join("p.png");
+    png(&p, 10, 10);
+    e.ok_post("/api/item/addFromPath", json!({"path": p.display().to_string(), "name": "p1", "folderId": e.folder, "tags": ["p"]}));
+    assert_eq!(tags_of("p1"), ["p"]);
+    assert_eq!(e.lib.lock().unwrap().tags.history_tags, history);
+
+    e.ok_post("/api/item/addFromURLs", json!({"folderId": e.folder, "items": [{"url": url, "name": "u2", "tags": ["t2"]}]}));
+    assert_eq!(tags_of("u2"), ["auto", "t2"]);
 }

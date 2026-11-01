@@ -311,7 +311,7 @@ fn add_one(lib: &Shared, e: &Map<String, Value>, batch: bool) -> Result<String, 
         if p.is_dir() {
             return Err("not support for directory".into());
         }
-        super::add_path(lib, p, &m, &none)
+        super::add_path(lib, p, &m, &none, false)
     } else {
         Err("item.add requires at least one of: url, path, base64, bookmarkURL".into())
     }
