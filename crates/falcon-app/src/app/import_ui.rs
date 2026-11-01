@@ -49,6 +49,8 @@ pub(super) struct Imports {
     pub errors_open: bool,
     /// Clear All is waiting for confirmation.
     pub confirm_clear: bool,
+    /// Items a finished batch added, to select next frame.
+    pub select_after: Option<Vec<String>>,
 }
 
 /// A walked folder with 2,000 files or more, imported only once confirmed.
@@ -366,11 +368,40 @@ impl App {
         }
     }
 
+    /// Most items Eagle selects after an import (`MAX_AUTO_SELECT`).
+    const MAX_AUTO_SELECT: usize = 1000;
+
+    /// After a batch, as Eagle's `autoSelectUploadedItems`: with the
+    /// preference on, the new items shown in the current view are
+    /// selected (not in the viewer or Random, and not more than 1,000),
+    /// and a single one is scrolled to. With it off, a single new item is
+    /// only scrolled to.
+    fn select_imported(&mut self, added: Vec<String>) {
+        if self.ws.viewer.is_some() || matches!(self.ws.scope, Scope::Random(_)) {
+            return;
+        }
+        let shown: std::collections::HashSet<&String> = self.ws.order.iter().collect();
+        let visible: Vec<String> = added.into_iter().filter(|id| shown.contains(id)).collect();
+        if visible.is_empty() {
+            return;
+        }
+        if visible.len() == 1 {
+            self.ws.scroll_to = Some(visible[0].clone());
+        }
+        if self.prefs.auto_select && visible.len() <= Self::MAX_AUTO_SELECT {
+            self.ws.anchor = visible.first().cloned();
+            self.ws.selected = visible;
+        }
+    }
+
     /// The large-folder confirmation and the too-large notice, one at a
     /// time. Drawn before the library is locked for the frame, since
     /// confirming creates folders.
     pub(super) fn import_dialogs(&mut self, ctx: &eframe::egui::Context) {
         use eframe::egui::{self, RichText};
+        if let Some(added) = self.imports.select_after.take() {
+            self.select_imported(added);
+        }
         if self.imports.errors_open {
             self.error_panel(ctx);
         }
@@ -458,6 +489,10 @@ impl App {
                 }
                 let mut pr = progress.lock().unwrap_or_else(|p| p.into_inner());
                 pr.done += 1;
+                // `Ok(None)` is a duplicate held for the dialog, not added.
+                if let Ok(Some(id)) = &result {
+                    pr.added.push(id.clone());
+                }
                 if let Err(e) = &result {
                     pr.failed += 1;
                     pr.errors.push(ImportError { failure: Failure::new(&f, e), opts: opts.clone() });

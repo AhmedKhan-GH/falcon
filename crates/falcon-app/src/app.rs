@@ -158,6 +158,8 @@ struct Progress {
     /// Every failed import since the list was last cleared, kept across
     /// batches like Eagle's error list (`import_ui.rs` shows it).
     errors: Vec<import_ui::ImportError>,
+    /// Ids of the items added in this batch, for auto-select.
+    added: Vec<String>,
 }
 
 /// What the toast says when opening a library restored its damaged
@@ -899,8 +901,10 @@ impl App {
         if done >= total {
             let mut pr = self.ws.progress.lock().unwrap_or_else(|p| p.into_inner());
             let errors = std::mem::take(&mut pr.errors);
+            let added = std::mem::take(&mut pr.added);
             *pr = Progress { errors, ..Progress::default() };
             drop(pr);
+            self.imports.select_after = Some(added);
             let msg = if failed > 0 { format!("Added {}, {failed} failed", done - failed) } else { format!("Added {done}") };
             self.flash(msg);
             return false;

@@ -154,7 +154,7 @@ A folder's `tags` key holds its auto-tags. Eagle's code calls the list it applie
   - Language codes cover the common Windows and Mac Roman languages. Records in other languages or Mac encodings are skipped, where opentype.js would decode them.
   - Collections get the opentype.js shape, not Typr's.
   - Eagle's MD5 fallback for fonts with a family name but no English PostScript name is not reproduced.
-  - `ImportOptions::font_weight_tag` (default true, as in Eagle) adds the weight tag.
+  - `ImportOptions::font_weight_tag` (default true, as in Eagle) adds the weight tag. The app sets it from the Preferences switch in the Preview pane.
 
 ### Duplicates in falcon
 

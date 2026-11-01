@@ -27,6 +27,12 @@ pub struct Prefs {
     /// do with imported files already in the library. Off imports them
     /// as new items without asking, as Eagle does.
     pub notify_duplicates: bool,
+    /// Eagle's `general.autoSelect`: select the new items when an import
+    /// finishes.
+    pub auto_select: bool,
+    /// Eagle's `font.autoTag`: add a font's style (Regular, Bold, Italic...)
+    /// as a tag on import.
+    pub font_style_tags: bool,
     /// Run the local HTTP API while a library is open.
     pub api_enabled: bool,
     /// The first port the API tries.
@@ -44,6 +50,8 @@ impl Default for Prefs {
             hover_zoom: true,
             keywords_as_tags: false,
             notify_duplicates: true,
+            auto_select: true,
+            font_style_tags: true,
             api_enabled: true,
             api_port: falcon_server::DEFAULT_PORT,
             collect_folder: None,
@@ -62,10 +70,17 @@ impl Prefs {
     }
 
     /// How the app imports into `folders`: everything as Eagle defaults
-    /// it, plus the keyword preference. Items take the folders' auto-tags,
-    /// as they do when imported or pasted in Eagle's window.
+    /// it, plus the keyword and font style preferences. Items take the
+    /// folders' auto-tags, as they do when imported or pasted in Eagle's
+    /// window.
     pub fn import_options(&self, folders: Vec<String>) -> falcon_library::import::ImportOptions {
-        falcon_library::import::ImportOptions { folders, keywords_as_tags: self.keywords_as_tags, folder_auto_tags: true, ..Default::default() }
+        falcon_library::import::ImportOptions {
+            folders,
+            keywords_as_tags: self.keywords_as_tags,
+            font_weight_tag: self.font_style_tags,
+            folder_auto_tags: true,
+            ..Default::default()
+        }
     }
 
     /// The ports to try for the API, or None when it is off.
@@ -333,6 +348,7 @@ fn general(ui: &mut Ui, d: &mut Draft) {
         ui.checkbox(&mut d.prefs.keywords_as_tags, "Add IPTC and XMP keywords as tags when importing images");
         ui.checkbox(&mut d.prefs.notify_duplicates, "Ask what to do when an imported file is already in the library");
         note(ui, "When off, such files are imported as new items.");
+        ui.checkbox(&mut d.prefs.auto_select, "Select the new items after importing");
     });
 }
 
@@ -341,6 +357,9 @@ fn preview(ui: &mut Ui, p: &mut Prefs) {
         ui.radio_value(&mut p.hover_zoom, true, "Show the zoom button on hovered cards");
         ui.radio_value(&mut p.hover_zoom, false, "Hide it");
         note(ui, "Holding Z shows the preview either way.");
+    });
+    block(ui, "Fonts", |ui| {
+        ui.checkbox(&mut p.font_style_tags, "Add style tags (Regular, Bold, Italic) when importing fonts");
     });
 }
 
@@ -375,6 +394,8 @@ mod tests {
         assert!(p.hover_zoom, "Eagle's hoverZoom defaults to on");
         assert!(!p.keywords_as_tags, "Eagle's IPTC defaults to off");
         assert!(p.notify_duplicates, "Eagle's repeatImage notification defaults to on");
+        assert!(p.auto_select, "Eagle's autoSelect defaults to on");
+        assert!(p.font_style_tags, "Eagle's font autoTag defaults to on");
         assert_eq!(p.api_ports(), Some(41596..=41600));
     }
 
@@ -386,6 +407,14 @@ mod tests {
         assert!(o.folder_auto_tags, "items imported in the window take folder auto-tags");
         p.keywords_as_tags = true;
         assert!(p.import_options(Vec::new()).keywords_as_tags);
+    }
+
+    #[test]
+    fn imports_follow_the_font_setting() {
+        let mut p = Prefs::default();
+        assert!(p.import_options(Vec::new()).font_weight_tag);
+        p.font_style_tags = false;
+        assert!(!p.import_options(Vec::new()).font_weight_tag);
     }
 
     #[test]

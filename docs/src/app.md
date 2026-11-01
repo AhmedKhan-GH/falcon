@@ -277,6 +277,8 @@ What Eagle does, from its `js/hover-preview.js`, `style/components/_hover-previe
 | General | Show the sidebar, show the inspector | View menu toggles, not preferences | Same flags as the panel buttons |
 | General | Ask what to do when an imported file is already in the library | `notification.notification.when.repeatImage` (Notification ▸ Notify me when importing duplicates), on by default, and only while the notification master switch is on | On by default; when off, such files are imported as new items without asking, as in Eagle (see Duplicate check on import) |
 | General | Add IPTC and XMP keywords as tags | `general.IPTC`, off by default | Same: every import from the app (drops, ⌘V, files passed to the app, the collect window) reads it (see [IPTC keywords](import.md)) |
+| General | Select the new items after importing | `general.autoSelect`, on by default. When a batch finishes, the new items shown in the open view are selected (not in the viewer or a Random view, and only up to 1,000); a single new item is scrolled to, also with the setting off | Same rule, applied when falcon's batch finishes rather than per Eagle refresh |
+| Preview | Add style tags (Regular, Bold, Italic) when importing fonts | `font.autoTag`, on by default, in Eagle's Preview pane | Same; sets `ImportOptions::font_weight_tag` for every import from the app |
 | Preview | Hover zoom | `habits.hoverZoom`, on by default; off removes the zoom button, but holding Z still works | Same |
 | Developer | Run the HTTP API, first port | Eagle always serves on 41595 and only has an API token setting | On by default, from 41596; tries five ports. Ports whose range would include 41595, or below 1024, are refused. Changing either restarts the API |
 
