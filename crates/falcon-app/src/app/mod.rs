@@ -145,6 +145,8 @@ pub struct App {
     pub(crate) imports: import::Imports,
     /// The macOS menu bar (`menu.rs`).
     pub(crate) menu_bar: crate::menu::Bar,
+    /// The open library's actions, their panel and editor (`actions/`).
+    pub(crate) user_actions: crate::actions::ActionsState,
     /// Layouts remembered per view, the fallback from before, and the
     /// display options (see `ui/toolbar/layout_panel.rs`).
     pub(crate) layouts: HashMap<String, Layout>,
@@ -265,6 +267,7 @@ impl App {
             hover_media: Default::default(),
             shell: Default::default(),
             menu_bar: Default::default(),
+            user_actions: Default::default(),
             layouts: HashMap::new(),
             legacy_layout: None,
             display: Default::default(),
@@ -412,7 +415,7 @@ impl eframe::App for App {
         // The web page sits over the viewer only in frames that asked for it.
         self.web.sync(&ctx, frame);
         let state = self.menu_state(&ctx);
-        self.menu_bar.sync(&ctx, &self.shortcuts, &state);
+        self.menu_bar.sync(&ctx, &self.shortcuts, &state, &self.user_actions.menu_entries());
     }
 }
 
@@ -475,6 +478,7 @@ impl App {
         self.hover_media.begin(ctx.cumulative_frame_nr());
         self.tiff_keys(&ctx);
         self.edit_keys(&ctx);
+        self.actions_tick(&ctx);
         self.keyboard(&ctx);
         if let Some(d) = self.prefs_window.show(&ctx) {
             self.apply_preferences(d);
@@ -634,6 +638,8 @@ impl App {
         self.organize_dialogs(&ctx, lib);
         self.tag_picker_ui(&ctx, lib);
         self.quick_switch_ui(&ctx, lib);
+        self.actions_panel_ui(&ctx, lib);
+        self.action_editor_ui(&ctx, lib);
         self.folder_dialogs(&ctx, lib);
         self.ext_dialog(&ctx);
         self.item_rename_dialog(&ctx, lib);

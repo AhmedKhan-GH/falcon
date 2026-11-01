@@ -91,8 +91,23 @@ impl App {
         }
         let layout = icon_button(ui, Pos2::new(ix, cy), ic::LAYOUT, 18.0, true, tr("Layout and sort"));
         ix -= 26.0;
-        icon_button(ui, Pos2::new(ix, cy), ic::LIGHTNING, 18.0, false, tr("Actions"));
-        ix -= 26.0;
+        // Eagle hides its Actions button on the All Tags page.
+        if self.ws.scope != Scope::AllTags {
+            let tip = self.shortcuts.tooltip(ui.ctx(), tr("Actions"), Command::ActionsPanel);
+            let b = icon_button(ui, Pos2::new(ix, cy), ic::LIGHTNING, 18.0, true, &tip);
+            if b.clicked() {
+                if self.user_actions.panel.open {
+                    self.user_actions.panel.open = false;
+                } else {
+                    self.open_actions_panel(Some(b.rect.center_bottom()));
+                }
+            }
+            if self.user_actions.panel.open {
+                let r = Rect::from_center_size(b.rect.center(), Vec2::splat(26.0));
+                ui.painter().rect_stroke(r, t::RADIUS, Stroke::new(1.0, t::p().primary), StrokeKind::Inside);
+            }
+            ix -= 26.0;
+        }
         icon_button(ui, Pos2::new(ix, cy), ic::PUZZLE_PIECE, 18.0, false, tr("Plugins"));
         let icons_left = ix - 20.0;
 
