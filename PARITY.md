@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 239 | 23 | 10 | 8 |
-| Viewers and file formats | 183 | 17 | 3 | 5 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 241 | 21 | 10 | 8 |
+| Viewers and file formats | 184 | 16 | 3 | 5 |
 | Search, filters and organising | 216 | 1 | 4 | 3 |
-| Import, export, library, preferences and integrations | 185 | 8 | 16 | 26 |
-| **Total** | 823 | 49 | 33 | 42 |
+| Import, export, library, preferences and integrations | 189 | 4 | 16 | 26 |
+| **Total** | 830 | 42 | 33 | 42 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -93,7 +93,7 @@ Overall finding: falcon now has a native menu bar (`crates/falcon-app/src/menu.r
 | View: layout Waterfall / Justified / Grid / List with checkmarks (⌥1–⌥4) | Done | ⌥1–⌥4 in Eagle's order; View menu entries with checkmarks (`menu.rs` `validateMenuItem`) | local |
 | View: Scroll to Top / Bottom / Page Up / Page Down (Home, End, PgUp, PgDn) | Done | Home, End, Page Up and Page Down scroll the grid (a page is the view less 72 px, as Eagle); ⌘↑ / ⌘↓ select the first or last item | local |
 | View: Zoom In / Out (⌘= / ⌘-) | Done | Thumbnail size (shortcuts.rs:96-97, app.rs:1024-1029) | local |
-| View: Actual Size (⌘0) / Zoom to Fit (⌘9) | Partial | The viewer has 0 for fit and 1 for actual size, without ⌘ (app.rs:3510). No ⌘0 or ⌘9 | local |
+| View: Actual Size (⌘0) / Zoom to Fit (⌘9) | Done | View ▸ Actual Size ⌘0 and Zoom to Fit ⌘9 (`view.zoom.actual`, `view.zoom.fit`), enabled in the viewer | local |
 | View: Grayscale preview (⌥⌘G) | Done | Every loader tier incl. grid cards, animations, video frames, PDF pages, font specimen and the preview window (`logic::grayscale_rgba`); custom thumbnails gray too, unlike Eagle | local |
 | View: Open in New Window (⌘O) | Done | Every acted-on item except audio in a new window per open, stepped with ←/→ (`ui/viewer/preview_window/mod.rs` `open_preview_items`), as Eagle's one window that steps | local |
 | View: Open With Default App (⇧↩), Open with Other App, Reveal in Finder (⌘↩) | Done | open_ui.rs:33-46, shortcuts.rs:104-105 | local |
@@ -402,7 +402,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Dock icon progress bar during long tasks | Partial | `dock_progress.rs` driven by the progress modal (thumbnails, Trash, package import); not by the background file import | local |
 | Progress modals for export, eaglepack, thumbnail refresh, empty trash, WebP conversion and similar | Partial | Shared progress modal with Cancel for pack import and export, thumbnail refresh and Empty Trash; Export to Computer keeps its toolbar bar; no WebP conversion | local |
 | Sound effects (delete item, delete folder, capture) | Missing | Not built: falcon ships no sound assets; the capture uses the system shutter sound | local |
-| System notifications (import done, capture done) | Partial | `notify.rs` posts UserNotifications for import done, export done and capture done when falcon runs from a bundle (`dev.falcon.app`); dropped under `cargo run`; clicking one only activates falcon | local |
+| System notifications (import done, capture done) | Done | `notify.rs` posts UserNotifications for import, export and capture done; they need the bundled app (`dev.falcon.app`), which is how falcon is run; clicking one activates falcon | local |
 | Warnings: slow disk, NTFS on macOS, library path permissions, localhost / API port | Done | Read-only file, no write permission, slow disk, NTFS, plus a lasting alert when no API port is free or `localhost:<port>` can't be reached | local |
 | Tooltips on toolbar buttons | Done | app.rs:1492-1507 | local |
 
@@ -736,7 +736,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| Open one or more items in their own window (Cmd+O, middle click) | Partial | ⌘O and middle click (preference) open one item per window; no multi-item opening | local |
+| Open one or more items in their own window (Cmd+O, middle click) | Done | ⌘O and the middle-click preference open the acted-on items in a window that steps with ←/→ (`open_preview_items`), as Eagle's | local |
 | Same viewers in the window (image, GIF, RAW, video, font, text, PDF, 3D, web, plugin) | Partial | Image, GIF, video, audio, text, PDF and fonts (incl. the fallback font view) are real viewers in the preview window; 3D and web are stills | local |
 | Window opacity 10%–100% | Done | NSWindow `alphaValue` from the window menu | local |
 | Always on top toggle in the window | Done | Preview window menu | local |
@@ -1257,7 +1257,7 @@ Two cross-cutting facts explain many rows:
 | Copy the original into `images/<ID>.info`, keep the source mtime, make a thumbnail and palette | Done | `crates/falcon-library/src/import.rs:79-147,173-207` | local |
 | Imports run in the background with a progress display | Done | `app.rs:888-938` (background thread and progress bar) | local |
 | Upload queue panel listing failed imports with reasons (download failed, timeout, cannot decode and so on), plus Retry All, Copy to Clipboard and Clear All | Done | `import::Failure` / `FailKind` per file; `import_ui.rs` `error_panel` with Retry All, Copy to Clipboard (the files), Clear All; opened from a toast. Local-file reasons only | local |
-| "Import Successful, N image(s) imported" notification | Partial | In-window note plus a system notification when bundled | local |
+| "Import Successful, N image(s) imported" notification | Done | In-window note plus a system notification from the bundled app | local |
 | Duplicate check on import (Eagle's metadata key), with a dialog offering Import, Don't Import, Keep both, Use existing file and Apply to all | Done | `import_check.rs` (same size and extension, then a BLAKE3 hash of the whole file), `crates/falcon-app/src/import_dupes.rs`, `app/dupes_ui.rs`: Eagle's two choices (use existing, keep both), Import, close = don't import, apply to all. One thumbnail shown, not two | local |
 | Setting: notify me when importing duplicates | Done | `Prefs::notify_duplicates`, on by default; off imports duplicates silently as Eagle does | local |
 | Folder auto-tagging: tags set on a folder are added to every item imported or pasted into it | Done | `ImportOptions::folder_auto_tags`, set by `Prefs::import_options`; applied in `commit_import` | local |
@@ -1271,7 +1271,7 @@ Two cross-cutting facts explain many rows:
 | Not-enough-disk-space check before copying | Done | Eagle has no pre-copy check on import either; ENOSPC is reported per file as "Not enough disk space" in the error list | local |
 | Filename sanitising and length limit | Done | `import.rs:411-430` | local |
 | Cut mode: files staged in app data (pasted or downloaded) are moved, not copied | Done | Pasted temp files are deleted after import (`app.rs:893-897`) | local |
-| Choose where a screenshot or extension item is saved (collect prompt) | Partial | The collect window's waiting-screenshot mode for area and window captures (`showCaptureCollectModal`); the extension doesn't exist | local |
+| Choose where a screenshot or extension item is saved (collect prompt) | Done | Collect-window prompt for area and window captures (`showCaptureCollectModal`); the browser extension is an online feature with no local counterpart | local |
 
 ### 3. Collect window
 
@@ -1298,7 +1298,7 @@ Two cross-cutting facts explain many rows:
 | Export a smart folder as `.eaglepack` | Done | `pack.rs` `PackSource::Smart`: one flat folder, as Eagle 4; CLI `export --smart` | local |
 | Export in a chosen format and size (custom export) | Done | ⇧E, Export ▸ Export in Format…: JPG, PNG, WebP, quality, longest side (`export::plan_converted`). Eagle's dialog is a plugin outside its source, so the options are falcon's own | local |
 | Export metadata to CSV (ID, name, extension, size, URL, notes, tags, folders, comments and so on) | Done | `export::csv`: Eagle's 16 columns in order, BOM and `\n` line ends, falcon's own headers; item menu and inspector | local |
-| "Export Successful, N item(s) exported" notification | Partial | In-window note, Finder reveal and a system notification when bundled; CSV export posts none | local |
+| "Export Successful, N item(s) exported" notification | Done | In-window note, Finder reveal and a system notification from the bundled app; CSV export posts none | local |
 | Drag items out to Finder or other apps | Done | `app.rs:489,1451,3714` (`native_drag`, `drag_image`, `drag::start_drag`) | local |
 | Copy the selected files to the clipboard (⌘C) | Done | `app.rs:941-953` | local |
 | Copy File Path (⌥⌘C) | Done | All selected items, one per line (`export_ui.rs`) | local |
@@ -1412,7 +1412,7 @@ Eagle panes (`app/js/preferences.js:659-788`): General, Sidebar, Controls, Previ
 | Shortcuts: plugin shortcuts | Missing | Not applicable: no plugin system | local |
 | Global shortcuts (show Eagle, quick search from anywhere) | Done | `hotkeys.rs`, Global group in the shortcut table | local |
 | **Notification:** sound effects master switch, plus per event (delete item, delete folder, screenshot, extension) | Missing | Not built: no sound assets | local |
-| Notification: pop-up master switch, plus per event (screenshot, extension, duplicates, auto-import) | Partial | Master switch, duplicates, import done, auto-import, screenshot and export switches; the extension switch has nothing to control | local |
+| Notification: pop-up master switch, plus per event (screenshot, extension, duplicates, auto-import) | Done | Master switch plus duplicates, import done, auto-import, screenshot and export switches; the extension event has no local counterpart | local |
 | Notification Center panel (history) | Missing | Not applicable: Eagle 4 has no notification history either | local |
 | **Password:** enable the app password lock, change the password, Lock Now, Touch ID | Done | Set, change, remove, hint, Lock Now ⌥⌘L, Unlock with Touch ID (shown when available, fingerprint checked when turned on, as Eagle) | local |
 | **Auto-Import:** enable, choose folder, open folder | Done | `prefs.rs` `auto_import` pane: enable, Choose Folder…, Open Folder, Make It for the watched subfolder | local |
@@ -1517,8 +1517,8 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 
 Rows marked "not counted" are features Eagle 4.0.0 does not have.
 
-- **Done:** 185, including 5 where falcon goes beyond Eagle and 1 with a small difference.
-- **Partial:** 8.
+- **Done:** 189, including 5 where falcon goes beyond Eagle and 1 with a small difference.
+- **Partial:** 4.
 - **Missing:** 42, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
 - **Different on purpose:** 1 (the API listens on localhost only).
 
