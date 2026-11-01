@@ -275,8 +275,12 @@ impl App {
         if icon_button(ui, Pos2::new(r - 24.0, cy), ic::SIDEBAR_SIMPLE, 18.0, true, "Hide sidebar").clicked() {
             self.show_sidebar = false;
         }
-        if icon_button(ui, Pos2::new(r - 51.0, cy), ic::ARROWS_LEFT_RIGHT, 18.0, true, "Switch Library").clicked() {
-            self.open_switcher = true;
+        // Go to Folder opens the quick switcher, as Eagle's header button
+        // does; the library name below switches libraries.
+        let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::QuickSwitchKey);
+        let tip = if keys.is_empty() { "Go to Folder".to_owned() } else { format!("Go to Folder  {keys}") };
+        if icon_button(ui, Pos2::new(r - 51.0, cy), ic::ARROWS_LEFT_RIGHT, 18.0, true, &tip).clicked() {
+            self.quick.toggle();
         }
         if icon_button(ui, Pos2::new(r - 79.0, cy), ic::PLUS, 18.0, true, "Create Folder").clicked() {
             self.ws.actions.push(Action::CreateFolder { parent: None });
