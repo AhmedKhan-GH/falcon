@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 144 | 40 | 87 | 9 |
-| Viewers and file formats | 108 | 26 | 56 | 7 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 144 | 42 | 85 | 9 |
+| Viewers and file formats | 115 | 25 | 50 | 7 |
 | Search, filters and organising | 140 | 29 | 53 | 3 |
-| Import, export, library, preferences and integrations | 111 | 19 | 82 | 26 |
-| **Total** | 503 | 114 | 278 | 45 |
+| Import, export, library, preferences and integrations | 115 | 19 | 78 | 26 |
+| **Total** | 514 | 115 | 266 | 45 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -36,8 +36,8 @@ These are bugs, not missing features. The first four can lose data or edits.
 8. ~~No marquee selection, no multi-select of folders, no grid display options.~~ Fixed.
 9. No tag picker or suggestions.
 10. ~~No GIF player controls, no animated WebP, no GIF hover previews.~~ Fixed; still no animated AVIF (no decoder) and no hover playback for video or audio.
-11. No interactive 3D viewer, text editor or full font viewer.
-12. No watched import folder, no reload on outside changes, no sync-conflict detection, no screen capture.
+11. No interactive 3D viewer; ~~text editor~~ fixed; the font viewer is still partial.
+12. ~~No watched import folder.~~ Fixed. No reload on outside changes, no sync-conflict detection, no screen capture.
 13. English only; Eagle ships 8 languages.
 
 The full tables follow. Each section ends with that area's own ranked gap list.
@@ -66,7 +66,7 @@ Overall finding: falcon now has a native menu bar (`crates/falcon-app/src/menu.r
 | App menu: Color Space (sRGB / Display P3 / Unmanaged) | Missing | No colour-space choice | local |
 | App menu: Hide, Hide Others, Quit | Done | Supplied by winit's default macOS app menu (main.rs uses eframe defaults) | local |
 | App menu: Check for Updates, Register / Unregister, Manage devices | Missing | Not applicable to falcon | online/plugin |
-| File: New… (⌘N), a searchable menu of folder, smart folder, imports, duplicates and new documents from templates (Sketch, PSD, AI, XD, TXT, Word, PPT, Excel, Keynote, Pages, Numbers, MindNode, XMind) | Missing | No New… menu and no create-from-template | local |
+| File: New… (⌘N), a searchable menu of folder, smart folder, imports, duplicates and new documents from templates (Sketch, PSD, AI, XD, TXT, Word, PPT, Excel, Keynote, Pages, Numbers, MindNode, XMind) | Partial | File ▸ New ▸ Text File only (`menu.rs`, `app/text_view.rs` `new_text_file`); no searchable menu or other templates | local |
 | File: New Folder (⇧⌘N) | Done | A sibling right after the open folder, or top level when none is open, as Eagle's `newFolder` (`Action::CreateSibling`) | local |
 | File: New Subfolder (⌥N) | Done | shortcuts.rs `file.create.subfolder`; menu and folder context menu | local |
 | File: New Smart Folder (⇧⌥⌘N) | Done | shortcuts.rs; opens the smart folder dialog | local |
@@ -223,7 +223,7 @@ Eagle defaults come from prefs `shortcuts.keybinds` (rebindable) and from the ha
 | Arrow keys move through the sidebar tree when it has focus (focus zones: content / sidebar / tags) | Missing |  | local |
 | ⌫ goes back (or leaves the viewer); ⌥← / ⌥→ and ⌘← / ⌘→ move through history | Done | shortcuts.rs `go.back` (⌫, ⌘←, ⌥←) and `go.forward` (⌘→, ⌥→); in the viewer ⌫ leaves it (app.rs `keyboard`) | local |
 | ⌥↑ opens the parent folder | Done | Of the open folder or smart folder | local |
-| ⌥⇧N creates a text file from a template; ⌥⇧C sets the folder cover | Missing | Folder cover is in the context menu only | local |
+| ⌥⇧N creates a text file from a template; ⌥⇧C sets the folder cover | Partial | ⌥⇧N creates and opens an empty Untitled.txt (`file.create.txt`); ⌥⇧C is still context-menu only | local |
 | ⌘W closes the window | Done | Closes the viewer first, then the window | local |
 | ⌘Z undo | Done | app.rs:992 | local |
 | ⌘A select all, ⌘C copy | Done | shortcuts.rs:110-112 | local |
@@ -641,13 +641,13 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| View text in the app | Partial | Shows a QuickLook still render (`F/loader.rs:56-57`) | local |
-| Edit the text in place, auto-saved | Missing | None | local |
-| Edit the title (rename) at the top of the page | Missing | None | local |
-| Zoom the text size (wheel and buttons) | Missing | Zooms the still image only | local |
-| Reloads when the file changes outside | Missing | None | local |
-| Links in the text open in the browser | Missing | None | local |
-| Number keys rate the item from inside the editor | Missing | None | local |
+| View text in the app | Done | `app/text_view.rs` in the central viewer panel, `textdoc.rs` rules; non-UTF-8 or files over 2 MB open read-only | local |
+| Edit the text in place, auto-saved | Done | `Library::save_text` (`crates/falcon-library/src/text.rs`) writes atomically 500 ms after typing stops, on blur, ⌘S and leaving; refreshes `size`, `mtime`, `lastModified`; empty text is never saved, as Eagle | local |
+| Edit the title (rename) at the top of the page | Done | `Action::RenameItem` on blur/Enter; Eagle 4.0.0 has this commented out | local |
+| Zoom the text size (wheel and buttons) | Done | Eagle's five sizes 14–42 pt; ⌘=/⌘−, ⌘0/⌘9, ⌘-wheel/pinch and bar buttons; size kept in `Saved.text_zoom` | local |
+| Reloads when the file changes outside | Done | One `stat` a second, reload on an mtime change unless typing is pending; F5 reloads | local |
+| Links in the text open in the browser | Done | http(s)/www. links underlined, ⌘-click opens through `open_with::open_url`; Eagle's handler never fires | local |
+| Number keys rate the item from inside the editor | Done | 0–5 when neither the text nor the title has focus | local |
 
 ### 9. PDF reader (pdf.js)
 
@@ -1232,9 +1232,9 @@ Two cross-cutting facts explain many rows:
 | Drag an image or link from a web browser into the window | Missing | Only `dropped_files` with local paths are read (`app.rs:3600`) | online |
 | Batch-download panel: pick images from a page, filter by type and size, select all or invert | Missing | — | online |
 | Screen capture of an area, a window or the full screen into the library | Missing | No screenshot code (`grep screencapture` finds only a doc comment in `collect.rs:5`) | local |
-| Watched auto-import folder: files dropped into it are imported automatically | Missing | No folder watcher in the workspace | local |
-| Auto-import rejects network drives and missing paths | Missing | Needs auto-import first | local |
-| Auto-import skips `.tmp` files, tiny files and unsupported types, and waits until a copy has finished | Missing | Needs auto-import first | local |
+| Watched auto-import folder: files dropped into it are imported automatically | Done | `crates/falcon-app/src/auto_import.rs`, `import_ui::auto_import_tick`: polls `<chosen>/<library name>` every 2 s and imports settled files into the root through `spawn_import`; files are left in place and remembered (Eagle deletes them) | local |
+| Auto-import rejects network drives and missing paths | Done | `auto_import::is_network_volume` (`NSURLVolumeIsLocalKey`), `prefs::auto_import_refusal`; a vanished folder pauses with a notice | local |
+| Auto-import skips `.tmp` files, tiny files and unsupported types, and waits until a copy has finished | Done | `auto_import::skip` and `Settle` (size and mtime unchanged for 3 s); any extension is accepted, as a drop is | local |
 | Import an Eagle Package (`.eaglepack`) from the File menu or by opening the file | Partial | Library and CLI only: `crates/falcon-library/src/pack.rs:108` `import_pack`, `src/main.rs:73-84,138-142`. No app entry point. Dropping a pack on the window imports the `.eaglepack` file as an item | local |
 | Confirm the disk space an `.eaglepack` will use before importing it | Missing | — | local |
 | When an `.eaglepack` holds items already in the library, ask "N repeated files, import anyway?" | Partial | CLI flag `--skip-duplicates` (`pack.rs:50`, `main.rs:82`); no prompt | local |
@@ -1412,10 +1412,10 @@ Eagle panes (`app/js/preferences.js:659-788`): General, Sidebar, Controls, Previ
 | Shortcuts: plugin shortcuts | Missing | No plugins | local |
 | Global shortcuts (show Eagle, quick search from anywhere) | Missing | — | local |
 | **Notification:** sound effects master switch, plus per event (delete item, delete folder, screenshot, extension) | Missing | — | local |
-| Notification: pop-up master switch, plus per event (screenshot, extension, duplicates, auto-import) | Partial | "Show notices" master switch gating the duplicate dialog and the import-done note; screenshot, extension and auto-import don't exist | local |
+| Notification: pop-up master switch, plus per event (screenshot, extension, duplicates, auto-import) | Partial | "Show notices" master switch over the duplicate dialog, the import-done note and auto-import notices; screenshot and extension don't exist | local |
 | Notification Center panel (history) | Missing | — | local |
 | **Password:** enable the app password lock, change the password, Lock Now, Touch ID | Partial | Set, change, remove, hint, Lock Now ⌥⌘L (`applock.rs`); no Touch ID | local |
-| **Auto-Import:** enable, choose folder, open folder | Missing | — | local |
+| **Auto-Import:** enable, choose folder, open folder | Done | `prefs.rs` `auto_import` pane: enable, Choose Folder…, Open Folder, Make It for the watched subfolder | local |
 | **AI Search** pane (install, enable or disable the local semantic-search plugin) | Missing | — | online/plugin |
 | **AI Models** pane (shared API keys for OpenAI, Anthropic, Gemini and so on) | Missing | — | online/plugin |
 | **Eagle MCP** pane (install or open the MCP server plugin) | Missing | — | online/plugin |
@@ -1517,9 +1517,9 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 
 Rows marked "not counted" are features Eagle 4.0.0 does not have.
 
-- **Done:** 111, including 5 where falcon goes beyond Eagle and 1 with a small difference.
+- **Done:** 115, including 5 where falcon goes beyond Eagle and 1 with a small difference.
 - **Partial:** 19.
-- **Missing:** 108, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
+- **Missing:** 104, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
 - **Different on purpose:** 1 (the API listens on localhost only).
 
 ### Ranked Missing and Partial local items
@@ -1533,7 +1533,7 @@ Ranked by how often a user would hit the gap, and the risk if they do.
 5. **No Export to Computer for items or folders.** The Export button is disabled, and overwrite prompts are missing.
 6. **No external-change reload or sync-conflict detection.** Nothing watches `metadata.json` or `mtime.json`. This is risky with Dropbox, iCloud or a second app, including Eagle itself.
 7. **The import error panel is missing.** Falcon shows a count only, with no per-file reasons, retry or copy-out.
-8. **Watched auto-import folder is missing**, along with its preference pane.
+8. ~~Watched auto-import folder is missing.~~ Fixed.
 9. ~~Folder auto-tags are not applied on import or paste.~~ Fixed.
 10. **`.eaglepack` import and export are missing from the app** (CLI only). Smart-folder packs are missing entirely, and dropping a pack imports the pack file itself as an item.
 11. **Merge another library and Add to Other Library are missing.**
