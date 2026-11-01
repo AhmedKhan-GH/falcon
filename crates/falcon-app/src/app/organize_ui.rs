@@ -367,7 +367,8 @@ impl App {
         let group = sf.is_group();
         // A group shows no count, as in Eagle.
         let count = if group { 0 } else { lib.smart_folder_items(&sf.id).len() };
-        let active = self.ws.scope == Scope::Smart(sf.id.clone());
+        let active = self.tree_active(super::folders_ui::Tree::Smart, &sf.id);
+        self.ws.folders.row(super::folders_ui::Tree::Smart, &sf.id);
         let glyph = smart_look(sf);
         let tint = folder_icons::color(sf.icon_color.as_deref()).unwrap_or(t::p().text);
         let renaming = self.ws.org.smart_rename.as_ref().is_some_and(|(id, _)| *id == sf.id);
@@ -449,7 +450,7 @@ impl App {
                 if !self.ws.collapsed.remove(&sf.id) {
                     self.ws.collapsed.insert(sf.id.clone());
                 }
-            } else {
+            } else if !self.tree_click(super::folders_ui::Tree::Smart, &sf.id, ui.input(|i| i.modifiers)) {
                 self.go(Scope::Smart(sf.id.clone()));
             }
         }
@@ -796,6 +797,10 @@ impl App {
     /// The view's own sort target and setting, when browsing a folder or
     /// smart folder (which then owns the sort menu, as in Eagle).
     pub(super) fn own_sort(&self, lib: &Library) -> Option<(OrderTarget, Option<(FolderOrder, bool)>)> {
+        // Several picked folders follow the global sort, as in Eagle.
+        if self.ws.folders.combined() {
+            return None;
+        }
         match &self.ws.scope {
             Scope::Folder(id) => {
                 let f = logic::find_folder(&lib.metadata.folders, id)?;
@@ -816,7 +821,10 @@ impl App {
     pub(super) fn grid_order(&mut self, lib: &Library, only: Option<&HashSet<String>>) -> Vec<usize> {
         let own = self.own_sort(lib).and_then(|o| o.1);
         let (key, inc) = organize::base_key(own, (self.ws.sort, self.ws.increase));
-        let mut order = logic::visible(lib.items(), &lib.metadata.folders, &self.ws.scope, &self.ws.query, &self.ws.filter, key, inc, only);
+        // Picked folders show their items together: everything the caller's
+        // `only` set lets through.
+        let scope = if self.ws.folders.combined() { Scope::All } else { self.ws.scope.clone() };
+        let mut order = logic::visible(lib.items(), &lib.metadata.folders, &scope, &self.ws.query, &self.ws.filter, key, inc, only);
         // Random and duration re-sort only a plain listing (no search or
         // colour ranking to keep).
         if self.ws.query.trim().is_empty() && self.ws.filter.color.is_none() {
@@ -828,7 +836,7 @@ impl App {
                     seed
                 }
             };
-            let folder = if let Scope::Folder(id) = &self.ws.scope { Some(id.as_str()) } else { None };
+            let folder = if let Scope::Folder(id) = &scope { Some(id.as_str()) } else { None };
             organize::finish_order(&mut order, lib.items(), own, folder, seed);
         }
         let hidden = organize::hidden_folders(&lib.metadata.folders, &self.ws.org.unlocked);
@@ -839,6 +847,9 @@ impl App {
     /// (see [`organize::manual_sortable`]).
     pub(super) fn manual_folder(&self, lib: &Library) -> Option<String> {
         let Scope::Folder(id) = &self.ws.scope else { return None };
+        if self.ws.folders.combined() {
+            return None;
+        }
         let own = self.own_sort(lib).and_then(|o| o.1);
         organize::manual_sortable(true, own, self.ws.sort, self.ws.filter.is_active(), !self.ws.query.trim().is_empty()).then(|| id.clone())
     }

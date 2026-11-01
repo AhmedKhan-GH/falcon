@@ -31,6 +31,7 @@ mod video_view;
 mod open_ui;
 mod pdf_view;
 mod import_ui;
+mod folders_ui;
 #[path = "comments.rs"]
 mod comments;
 #[path = "covers.rs"]
@@ -438,6 +439,8 @@ struct Workspace {
     backup: crate::backups::Schedule,
     /// Export requests, prompts and the background copy (`export_ui`).
     export: export_ui::ExportState,
+    /// Folders and smart folders picked with ⌘ and ⇧ (`folders_ui`).
+    folders: folders_ui::FolderUi,
 }
 
 impl Workspace {
@@ -500,6 +503,7 @@ impl Workspace {
             tools: Default::default(),
             backup: crate::backups::Schedule::new(Instant::now()),
             export: Default::default(),
+            folders: Default::default(),
         }
     }
 
@@ -868,6 +872,8 @@ impl App {
             Scope::Random(_) => Scope::Random(fastrand_seed()),
             s => s,
         };
+        // Opening any view, even the one open, drops picked folders.
+        self.ws.folders.clear();
         if scope == self.ws.scope {
             return;
         }
@@ -881,6 +887,7 @@ impl App {
         if let Some(s) = self.ws.back.pop() {
             self.ws.forward.push(std::mem::replace(&mut self.ws.scope, s));
             self.ws.selected.clear();
+            self.ws.folders.clear();
         }
     }
 
@@ -888,6 +895,7 @@ impl App {
         if let Some(s) = self.ws.forward.pop() {
             self.ws.back.push(std::mem::replace(&mut self.ws.scope, s));
             self.ws.selected.clear();
+            self.ws.folders.clear();
         }
     }
 
@@ -1380,6 +1388,7 @@ impl App {
             }
             // A new order in place, without a history step.
             C::Reshuffle => {
+                self.ws.folders.clear();
                 self.ws.scope = Scope::Random(fastrand_seed());
                 self.ws.selected.clear();
                 self.ws.anchor = None;
@@ -2016,6 +2025,7 @@ impl App {
         let full = ui.max_rect();
         self.imports.sidebar = Some(full);
         self.imports.folder_rows.clear();
+        self.ws.folders.begin_rows();
         let p = ui.painter().clone();
         p.rect_filled(full, 0.0, t::p().panel);
         p.vline(full.right() - 0.5, full.y_range(), Stroke::new(1.0, t::p().divider));
@@ -2236,7 +2246,8 @@ impl App {
         let shut = crate::organize::is_shut(f, &self.ws.org.unlocked);
         let has_children = !f.children.is_empty() && !shut;
         let open = has_children && (!filter.is_empty() || !self.ws.collapsed.contains(&f.id));
-        let active = self.ws.scope == Scope::Folder(f.id.clone());
+        let active = self.tree_active(folders_ui::Tree::Folders, &f.id);
+        self.ws.folders.row(folders_ui::Tree::Folders, &f.id);
         let count = cx.folder_counts.get(&f.id).copied().filter(|_| !shut);
         let (glyph, tint) = App::folder_look(f, open);
         let renaming = self.ws.renaming.as_ref().is_some_and(|(id, _)| *id == f.id);
@@ -2318,7 +2329,7 @@ impl App {
                 if !self.ws.collapsed.remove(&f.id) {
                     self.ws.collapsed.insert(f.id.clone());
                 }
-            } else {
+            } else if !self.tree_click(folders_ui::Tree::Folders, &f.id, ui.input(|i| i.modifiers)) {
                 self.go(Scope::Folder(f.id.clone()));
             }
         }
@@ -2468,7 +2479,10 @@ impl App {
         if icon_button(ui, Pos2::new(x + 27.0, cy), ic::CARET_RIGHT, 17.0, !self.ws.forward.is_empty(), "").clicked() {
             self.go_forward();
         }
-        let title = if let Scope::Smart(id) = &self.ws.scope {
+        let combined = self.combined_title().filter(|_| self.ws.query.trim().is_empty());
+        let title = if let Some(t) = combined {
+            t
+        } else if let Scope::Smart(id) = &self.ws.scope {
             smart_name(lib, id)
         } else if self.ws.query.trim().is_empty() {
             self.ws.scope.title(&lib.metadata.folders)
@@ -2905,6 +2919,7 @@ impl App {
     /// The scope's items in grid order, as indices into the library.
     fn scope_order(&mut self, lib: &Library) -> Vec<usize> {
         let only: Option<HashSet<String>> = match &self.ws.scope {
+            _ if self.ws.folders.combined() => self.combined_items(lib),
             Scope::Smart(id) => Some(lib.smart_folder_items(id).into_iter().map(|i| i.id.clone()).collect()),
             _ => None,
         };

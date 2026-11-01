@@ -1348,3 +1348,131 @@ mod viewer_shell_tests {
         assert_eq!(bar_inset(true), 98.0);
     }
 }
+
+/// Several sidebar folders, or several smart folders, picked with ⌘ and ⇧
+/// clicks, as in Eagle. The view then shows the items of all of them, and
+/// the context menu acts on all of them. Empty means the plain single
+/// view of the open scope.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TreeSel {
+    /// Picked ids, in the order they were picked.
+    pub ids: Vec<String>,
+    /// Where a ⇧-click range starts: the last row a ⌘-click added (Eagle's
+    /// current row). Without one the range starts at the open folder.
+    pub anchor: Option<String>,
+}
+
+impl TreeSel {
+    /// Two or more picked: the batch menu applies.
+    pub fn is_multi(&self) -> bool {
+        self.ids.len() > 1
+    }
+
+    pub fn contains(&self, id: &str) -> bool {
+        self.ids.iter().any(|x| x == id)
+    }
+
+    pub fn clear(&mut self) {
+        self.ids.clear();
+        self.anchor = None;
+    }
+
+    /// A ⌘-click on `id` while `open` is the folder shown. A first ⌘-click
+    /// picks the open folder too; after that the click toggles `id`, but
+    /// the last picked row stays picked. Adding a row makes it the anchor.
+    pub fn toggle(&mut self, open: Option<&str>, id: &str) {
+        if self.ids.is_empty()
+            && let Some(o) = open
+        {
+            self.ids.push(o.to_string());
+        }
+        match self.ids.iter().position(|x| x == id) {
+            Some(at) if self.ids.len() > 1 => {
+                self.ids.remove(at);
+            }
+            Some(_) => {}
+            None => {
+                self.ids.push(id.to_string());
+                self.anchor = Some(id.to_string());
+            }
+        }
+    }
+
+    /// A ⇧-click on `id`: every row of `rows` (the rows shown, top to
+    /// bottom) from the anchor, or else the open folder, through `id` joins
+    /// the picked ones; the anchor stays. Returns false, changing nothing,
+    /// when there is no start row among `rows`, as Eagle ignores the click.
+    pub fn extend(&mut self, rows: &[String], open: Option<&str>, id: &str) -> bool {
+        let Some(start) = self.anchor.as_deref().or(open) else { return false };
+        let (Some(a), Some(b)) = (rows.iter().position(|r| r == start), rows.iter().position(|r| r == id)) else { return false };
+        for r in &rows[a.min(b)..=a.max(b)] {
+            if !self.contains(r) {
+                self.ids.push(r.clone());
+            }
+        }
+        true
+    }
+}
+
+#[cfg(test)]
+mod tree_sel_tests {
+    use super::*;
+
+    fn rows(ids: &[&str]) -> Vec<String> {
+        ids.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn command_click_picks_the_open_folder_then_toggles() {
+        let mut s = TreeSel::default();
+        s.toggle(Some("A"), "C");
+        assert_eq!(s.ids, ["A", "C"]);
+        assert_eq!(s.anchor.as_deref(), Some("C"));
+        s.toggle(Some("A"), "B");
+        assert_eq!(s.ids, ["A", "C", "B"]);
+        // Toggling off keeps the anchor where it was.
+        s.toggle(Some("A"), "C");
+        assert_eq!(s.ids, ["A", "B"]);
+        assert_eq!(s.anchor.as_deref(), Some("B"));
+        s.toggle(Some("A"), "A");
+        assert_eq!(s.ids, ["B"]);
+        // The last one can't be taken away.
+        s.toggle(Some("A"), "B");
+        assert_eq!(s.ids, ["B"]);
+        assert!(!s.is_multi());
+        // ⌘-clicking the open folder alone picks only it.
+        let mut s = TreeSel::default();
+        s.toggle(Some("A"), "A");
+        assert_eq!(s.ids, ["A"]);
+        assert_eq!(s.anchor, None);
+    }
+
+    #[test]
+    fn shift_click_adds_the_rows_between() {
+        let shown = rows(&["A", "A1", "A2", "B", "C"]);
+        let mut s = TreeSel::default();
+        assert!(s.extend(&shown, Some("A1"), "B"));
+        assert_eq!(s.ids, ["A1", "A2", "B"]);
+        // Upwards from the open folder, adding to what is picked.
+        assert!(s.extend(&shown, Some("A1"), "A"));
+        assert_eq!(s.ids, ["A1", "A2", "B", "A"]);
+        // From the ⌘-click anchor rather than the open folder.
+        let mut s = TreeSel::default();
+        s.toggle(Some("A"), "C");
+        assert!(s.extend(&shown, Some("A"), "A2"));
+        assert_eq!(s.ids, ["A", "C", "A2", "B"]);
+        assert_eq!(s.anchor.as_deref(), Some("C"));
+    }
+
+    #[test]
+    fn shift_click_without_a_start_row_does_nothing() {
+        let shown = rows(&["A", "B"]);
+        let mut s = TreeSel::default();
+        assert!(!s.extend(&shown, None, "B"));
+        // The open folder is hidden (collapsed or filtered out).
+        assert!(!s.extend(&shown, Some("Z"), "B"));
+        assert!(s.ids.is_empty());
+        s.clear();
+        assert_eq!(s, TreeSel::default());
+    }
+}
