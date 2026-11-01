@@ -59,7 +59,8 @@ pub struct Job {
     quicklook: bool,
     /// For [`Tier::Original`]: the side of the tiles to cut it into.
     tile: usize,
-    /// For an SVG zoomed in: the visible part to render sharp.
+    /// For an SVG or a QuickLook format zoomed in: the visible part to
+    /// render sharp.
     region: Option<Region>,
     /// A RAW photo: show its embedded preview (QuickLook if it has none).
     raw: bool,
@@ -69,17 +70,20 @@ pub struct Job {
     hdr: bool,
 }
 
-/// The part of an SVG on screen: fractions of the drawing
-/// (`[x0, y0, x1, y1]`) and the pixel size to render it at.
+/// The part of a zoomed picture on screen: fractions of the drawing
+/// (`[x0, y0, x1, y1]`); for an SVG the pixel size to render it at, for a
+/// QuickLook format the long side to render the whole page at (`render`).
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Region {
     pub rect: [f32; 4],
     pub size: [u32; 2],
+    pub render: u32,
     seq: u64,
 }
 
-/// A sharp render of the visible part of the viewed SVG.
-pub struct SvgPatch {
+/// A sharp render of the visible part of the viewed SVG or QuickLook
+/// format.
+pub struct Patch {
     pub id: String,
     /// Where it sits, as a fraction of the drawing.
     pub rect: Rect,
@@ -95,13 +99,14 @@ pub fn original_job(item: &Item, root: &std::path::Path, tile: usize) -> Option<
         .then(|| Job { key: (item.id.clone(), Tier::Original), path: item.original_path(root), svg: false, quicklook: false, tile, region: None, raw: falcon_library::exif::is_raw(&ext), page: 0, hdr: falcon_library::hdr::is_hdr(&ext) })
 }
 
-/// The job asking QuickLook for a render of `item` up to
-/// `logic::HIRES_QUICKLOOK_SIDE`, cut into tiles like an original, for the
-/// formats Eagle draws again natively when zoomed (`logic::hires_quicklook`).
-pub fn hires_job(item: &Item, root: &std::path::Path, tile: usize) -> Option<Job> {
+/// The job asking QuickLook for the visible part of `item` at the zoom
+/// shown (see [`Loader::want_region`]), for the formats Eagle draws again
+/// natively when zoomed (`logic::hires_quicklook`). It shares its key with
+/// the full tier, as an SVG region does.
+pub fn quicklook_region_job(item: &Item, root: &std::path::Path) -> Option<Job> {
     let ext = item.ext.to_lowercase();
     (crate::logic::hires_quicklook(&ext) && cfg!(target_os = "macos"))
-        .then(|| Job { key: (item.id.clone(), Tier::Original), path: item.original_path(root), svg: false, quicklook: true, tile, region: None, raw: false, page: 0, hdr: false })
+        .then(|| Job { key: (item.id.clone(), Tier::Full), path: item.original_path(root), svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false })
 }
 
 /// The job decoding page `page` (0-based, above 0) of a multi-page TIFF at
@@ -165,20 +170,26 @@ struct Shared {
     /// again without reading the file: its path, the long side it was
     /// reduced to (`u32::MAX`: not reduced) and the linear pixels.
     linear: Mutex<Option<(PathBuf, u32, Arc<image::Rgba32FImage>)>>,
+    /// The last whole-page QuickLook render for a zoomed region: its path,
+    /// the long side asked for and the pixels, so panning or zooming out
+    /// cuts from it without running QuickLook again. One at most
+    /// (`logic::QUICKLOOK_RENDER_PIXELS`), dropped when the viewer leaves
+    /// the item.
+    rendered: Mutex<Option<(PathBuf, u32, Arc<image::RgbaImage>)>>,
 }
 
 /// What a worker hands back: one image, or a full-resolution one in tiles.
 enum Pixels {
     Whole(ColorImage),
     Tiled { size: [usize; 2], tiles: Vec<(crate::logic::TileSpan, ColorImage)> },
-    /// A render of part of an SVG.
+    /// A render of part of an SVG or a QuickLook page.
     Patch(Region, ColorImage),
 }
 
 struct Decoded {
     key: Key,
     image: Option<Pixels>,
-    /// From an SVG region job, which shares its key with the full tier.
+    /// From a region job, which shares its key with the full tier.
     region: bool,
     /// Decoded desaturated (grayscale preview).
     gray: bool,
@@ -247,11 +258,12 @@ pub struct Loader {
     staged: Option<Staged>,
     /// Draw the viewer's renders with sharp pixels when enlarged.
     pixelated: bool,
-    /// The viewed SVG's sharp render of what is on screen, the region last
-    /// asked for (with its item), and the count of regions asked for.
-    svg_patch: Option<SvgPatch>,
-    svg_last: Option<(String, [f32; 4], [u32; 2])>,
-    svg_seq: u64,
+    /// The viewed SVG's or QuickLook format's sharp render of what is on
+    /// screen, the region last asked for (with its item), and the count of
+    /// regions asked for.
+    patch: Option<Patch>,
+    region_last: Option<(String, [f32; 4], [u32; 2], u32)>,
+    region_seq: u64,
     /// Grayscale preview, and the cached renders made before it last
     /// changed: still shown until their replacement arrives, so switching
     /// doesn't blank the view.
@@ -264,7 +276,7 @@ pub struct Loader {
 
 impl Loader {
     pub fn new(ctx: &Context) -> Self {
-        let shared = Arc::new(Shared { queue: Mutex::new(VecDeque::new()), cv: Condvar::new(), closed: Default::default(), gray: Default::default(), exposure: std::sync::atomic::AtomicU32::new(1.0f32.to_bits()), linear: Mutex::new(None) });
+        let shared = Arc::new(Shared { queue: Mutex::new(VecDeque::new()), cv: Condvar::new(), closed: Default::default(), gray: Default::default(), exposure: std::sync::atomic::AtomicU32::new(1.0f32.to_bits()), linear: Mutex::new(None), rendered: Mutex::new(None) });
         let (tx, rx) = std::sync::mpsc::channel();
         let workers = std::thread::available_parallelism().map_or(4, |n| n.get().clamp(2, 6));
         for _ in 0..workers {
@@ -285,7 +297,7 @@ impl Loader {
                     };
                     let gray = grays(job.key.1) && shared.gray.load(std::sync::atomic::Ordering::Relaxed);
                     let exposure = shared.exposure.load(Ordering::Relaxed);
-                    let mut image = decode(&job, f32::from_bits(exposure), &shared.linear);
+                    let mut image = decode(&job, f32::from_bits(exposure), &shared.linear, &shared.rendered);
                     if gray && let Some(p) = &mut image {
                         desaturate(p);
                     }
@@ -309,9 +321,9 @@ impl Loader {
             original: None,
             staged: None,
             pixelated: false,
-            svg_patch: None,
-            svg_last: None,
-            svg_seq: 0,
+            patch: None,
+            region_last: None,
+            region_seq: 0,
             gray: false,
             stale: HashSet::new(),
             exposure: 1.0,
@@ -339,12 +351,12 @@ impl Loader {
             if d.region {
                 let Some(Pixels::Patch(region, img)) = d.image else { continue };
                 // Only the latest region for the item still on screen.
-                let current = self.svg_last.as_ref().is_some_and(|l| l.0 == d.key.0);
-                if current && self.svg_patch.as_ref().is_none_or(|p| p.seq < region.seq) {
+                let current = self.region_last.as_ref().is_some_and(|l| l.0 == d.key.0);
+                if current && self.patch.as_ref().is_none_or(|p| p.seq < region.seq) {
                     let [x0, y0, x1, y1] = region.rect;
-                    let texture = ctx.load_texture(format!("{}-svg-region", d.key.0), img, TextureOptions::LINEAR);
+                    let texture = ctx.load_texture(format!("{}-region", d.key.0), img, TextureOptions::LINEAR);
                     let rect = Rect::from_min_max(Pos2::new(x0, y0), Pos2::new(x1, y1));
-                    self.svg_patch = Some(SvgPatch { id: d.key.0, rect, texture, seq: region.seq });
+                    self.patch = Some(Patch { id: d.key.0, rect, texture, seq: region.seq });
                 }
                 continue;
             }
@@ -452,8 +464,8 @@ impl Loader {
             self.stale.insert((o.id.clone(), Tier::Original));
         }
         self.staged = None;
-        self.svg_last = None;
-        self.svg_patch = None;
+        self.region_last = None;
+        self.patch = None;
     }
 
     /// Sets the exposure (a multiplier) HDR and EXR images are tone mapped
@@ -481,18 +493,19 @@ impl Loader {
         self.original.as_ref().filter(|o| o.id == id)
     }
 
-    /// Asks for the part `rect` of the SVG `job` (a full-tier SVG job) to be
-    /// rendered at `size`, unless that is what was last asked for. The job
-    /// goes to the front of the queue; an older region still queued is
-    /// dropped.
-    pub fn want_svg_region(&mut self, mut job: Job, rect: [f32; 4], size: [u32; 2]) {
-        let last = (job.key.0.clone(), rect, size);
-        if self.svg_last.as_ref() == Some(&last) {
+    /// Asks for the part `rect` of `job` (a full-tier SVG job, or a
+    /// [`quicklook_region_job`]) to be rendered at `size` (SVG) or with the
+    /// whole page `render` pixels on its long side (QuickLook), unless that
+    /// is what was last asked for. The job goes to the front of the queue;
+    /// an older region still queued is dropped.
+    pub fn want_region(&mut self, mut job: Job, rect: [f32; 4], size: [u32; 2], render: u32) {
+        let last = (job.key.0.clone(), rect, size, render);
+        if self.region_last.as_ref() == Some(&last) {
             return;
         }
-        self.svg_last = Some(last);
-        self.svg_seq += 1;
-        job.region = Some(Region { rect, size, seq: self.svg_seq });
+        self.region_last = Some(last);
+        self.region_seq += 1;
+        job.region = Some(Region { rect, size, render, seq: self.region_seq });
         let mut q = self.shared.queue.lock().unwrap();
         q.retain(|j| j.region.is_none());
         q.push_front(job);
@@ -500,9 +513,9 @@ impl Loader {
         self.shared.cv.notify_all();
     }
 
-    /// The sharp render of part of the SVG `id`, if one has arrived.
-    pub fn svg_patch(&self, id: &str) -> Option<&SvgPatch> {
-        self.svg_patch.as_ref().filter(|p| p.id == id)
+    /// The sharp render of part of `id`, if one has arrived.
+    pub fn patch(&self, id: &str) -> Option<&Patch> {
+        self.patch.as_ref().filter(|p| p.id == id)
     }
 
     /// Drops the full-resolution original unless it belongs to `id` (the
@@ -515,9 +528,10 @@ impl Loader {
         if self.staged.as_ref().is_some_and(|s| Some(s.original.id.as_str()) != id) {
             self.staged = None;
         }
-        if self.svg_last.as_ref().is_some_and(|l| Some(l.0.as_str()) != id) {
-            self.svg_last = None;
-            self.svg_patch = None;
+        if self.region_last.as_ref().is_some_and(|l| Some(l.0.as_str()) != id) {
+            self.region_last = None;
+            self.patch = None;
+            *self.shared.rendered.lock().unwrap_or_else(|p| p.into_inner()) = None;
         }
     }
 
@@ -537,7 +551,7 @@ impl Loader {
         let mut q = self.shared.queue.lock().unwrap();
         let pending = &mut self.pending;
         q.retain(|j| {
-            // SVG regions are managed by `want_svg_region`.
+            // Regions are managed by `want_region`.
             let keep = wanted.contains(&j.key) || j.region.is_some();
             if !keep {
                 pending.remove(&j.key);
@@ -586,10 +600,12 @@ impl Loader {
         if self.staged.as_ref().is_some_and(|s| s.original.id == id) {
             self.staged = None;
         }
-        if self.svg_last.as_ref().is_some_and(|l| l.0 == id) {
-            self.svg_last = None;
-            self.svg_patch = None;
+        if self.region_last.as_ref().is_some_and(|l| l.0 == id) {
+            self.region_last = None;
+            self.patch = None;
         }
+        // The file may have changed under the kept QuickLook render.
+        *self.shared.rendered.lock().unwrap_or_else(|p| p.into_inner()) = None;
     }
 }
 
@@ -606,7 +622,12 @@ impl Drop for Loader {
 
 /// Decodes `job`; HDR images are tone mapped at `exposure`, reading the file
 /// only when `linear` doesn't already hold it.
-fn decode(job: &Job, exposure: f32, linear: &Mutex<Option<(PathBuf, u32, Arc<image::Rgba32FImage>)>>) -> Option<Pixels> {
+fn decode(job: &Job, exposure: f32, linear: &Mutex<Option<(PathBuf, u32, Arc<image::Rgba32FImage>)>>, rendered: &Rendered) -> Option<Pixels> {
+    if let Some(region) = job.region
+        && job.quicklook
+    {
+        return quicklook_patch(&job.path, region, rendered);
+    }
     if let Some(region) = job.region {
         let data = std::fs::read(&job.path).ok()?;
         let rgba = thumbnail::render_svg_region(&data, region.rect, (region.size[0], region.size[1])).ok()?.into_rgba8();
@@ -640,6 +661,41 @@ fn decode(job: &Job, exposure: f32, linear: &Mutex<Option<(PathBuf, u32, Arc<ima
     let img = if img.width() > max || img.height() > max { img.thumbnail(max, max) } else { img };
     let rgba = img.to_rgba8();
     Some(Pixels::Whole(ColorImage::from_rgba_unmultiplied([rgba.width() as usize, rgba.height() as usize], rgba.as_raw())))
+}
+
+/// The kept whole-page QuickLook render (see `Shared::rendered`).
+type Rendered = Mutex<Option<(PathBuf, u32, Arc<image::RgbaImage>)>>;
+
+/// The part `region.rect` of the page at `path`, from a QuickLook render
+/// with `region.render` pixels on its long side: the kept render when it is
+/// of this file and at least that large (scaled down to the size asked),
+/// else a new one, which is kept in its place.
+fn quicklook_patch(path: &std::path::Path, region: Region, rendered: &Rendered) -> Option<Pixels> {
+    let want = region.render;
+    let kept = rendered.lock().ok()?.as_ref().filter(|(p, side, _)| p == path && *side >= want).map(|(_, _, img)| img.clone());
+    let page = match kept {
+        Some(img) => img,
+        None => {
+            // The old render goes first, so two never sit in memory.
+            *rendered.lock().ok()? = None;
+            let img = Arc::new(thumbnail::quicklook(path, want).ok()?.into_rgba8());
+            *rendered.lock().ok()? = Some((path.to_path_buf(), want, img.clone()));
+            img
+        }
+    };
+    let (x, y, w, h) = crate::logic::crop_span(region.rect, page.width(), page.height());
+    let part = image::imageops::crop_imm(&*page, x, y, w, h).to_image();
+    // A larger render kept from before is brought to the size asked.
+    let long = page.width().max(page.height());
+    let part = if long > want {
+        let s = want as f32 / long as f32;
+        let (pw, ph) = (((w as f32 * s).round() as u32).max(1), ((h as f32 * s).round() as u32).max(1));
+        image::imageops::resize(&part, pw, ph, image::imageops::FilterType::Triangle)
+    } else {
+        part
+    };
+    let size = [part.width() as usize, part.height() as usize];
+    Some(Pixels::Patch(region, ColorImage::from_rgba_unmultiplied(size, part.as_raw())))
 }
 
 /// Whether ImageIO decodes `path` here (AVIF, HEIC/HEIF, JPEG XL on a
@@ -703,8 +759,6 @@ fn tone_mapped(job: &Job, max: u32, exposure: f32, linear: &Mutex<Option<(PathBu
 fn decode_tiled(job: &Job, exposure: f32, linear: &Mutex<Option<(PathBuf, u32, Arc<image::Rgba32FImage>)>>) -> Option<Pixels> {
     let img = if job.hdr {
         tone_mapped(job, u32::MAX, exposure, linear)?
-    } else if job.quicklook {
-        thumbnail::quicklook(&job.path, crate::logic::HIRES_QUICKLOOK_SIDE).ok()?
     } else if job.raw {
         raw_preview(&job.path)?
     } else if imageio(&job.path) {
@@ -750,11 +804,28 @@ mod tests {
         Job { key: ("x".into(), Tier::Original), path, svg: false, quicklook: false, tile, region: None, raw: false, page: 0, hdr: false }
     }
 
+    /// A zoomed QuickLook region is cut from the kept page render when it
+    /// is large enough (no QuickLook run), scaled to the size asked.
+    #[test]
+    fn quicklook_regions_cut_from_the_kept_render() {
+        let path = PathBuf::from("/nonexistent/deck.pptx");
+        let page = image::RgbaImage::from_fn(1000, 500, |x, y| image::Rgba([(x / 4) as u8, (y / 2) as u8, 0, 255]));
+        let rendered: Rendered = Mutex::new(Some((path.clone(), 1000, Arc::new(page))));
+        let job = Job { key: ("x".into(), Tier::Full), path, svg: false, quicklook: true, tile: 0, region: Some(Region { rect: [0.5, 0.0, 1.0, 0.5], size: [0, 0], render: 1000, seq: 1 }), raw: false, page: 0, hdr: false };
+        let Some(Pixels::Patch(_, img)) = decode(&job, 1.0, &Mutex::new(None), &rendered) else { panic!("no patch") };
+        assert_eq!(img.size, [500, 250]);
+        assert_eq!(img.pixels[0], Color32::from_rgb(125, 0, 0));
+        // Zoomed out to half: the same render, scaled down.
+        let job = Job { region: Some(Region { rect: [0.0, 0.0, 1.0, 1.0], size: [0, 0], render: 500, seq: 2 }), ..job };
+        let Some(Pixels::Patch(_, img)) = decode(&job, 1.0, &Mutex::new(None), &rendered) else { panic!("no patch") };
+        assert_eq!(img.size, [500, 250]);
+    }
+
     #[test]
     fn originals_decode_into_padded_tiles() {
         let dir = tempfile::tempdir().unwrap();
         let path = write_png(dir.path(), 300, 130);
-        let Some(Pixels::Tiled { size, tiles }) = decode(&original(path, 128), 1.0, &Mutex::new(None)) else { panic!("not tiled") };
+        let Some(Pixels::Tiled { size, tiles }) = decode(&original(path, 128), 1.0, &Mutex::new(None), &Mutex::new(None)) else { panic!("not tiled") };
         assert_eq!(size, [300, 130]);
         assert_eq!(tiles.len(), 3 * 2);
         for (span, img) in &tiles {
@@ -776,15 +847,15 @@ mod tests {
         image::DynamicImage::ImageRgba32F(lin).save(&path).unwrap();
         let full = Job { key: ("x".into(), Tier::Full), path: path.clone(), svg: false, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: true };
         let kept = Mutex::new(None);
-        let Some(Pixels::Whole(a)) = decode(&full, 1.0, &kept) else { panic!("no full tier") };
+        let Some(Pixels::Whole(a)) = decode(&full, 1.0, &kept, &Mutex::new(None)) else { panic!("no full tier") };
         assert_eq!(a.size, [8, 4]);
         assert_eq!(a.pixels[0], Color32::from_rgb(188, 188, 188));
         // The file is gone, yet a new exposure is made from what was kept.
         std::fs::remove_file(&path).unwrap();
-        let Some(Pixels::Whole(b)) = decode(&full, 4.0, &kept) else { panic!("not kept") };
+        let Some(Pixels::Whole(b)) = decode(&full, 4.0, &kept, &Mutex::new(None)) else { panic!("not kept") };
         assert!(b.pixels[0].r() > 188);
         let original = Job { key: ("x".into(), Tier::Original), tile: 128, ..full };
-        let Some(Pixels::Tiled { size, .. }) = decode(&original, 1.0, &kept) else { panic!("not tiled") };
+        let Some(Pixels::Tiled { size, .. }) = decode(&original, 1.0, &kept, &Mutex::new(None)) else { panic!("not tiled") };
         assert_eq!(size, [8, 4]);
     }
 
@@ -793,7 +864,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("x.tga");
         image::RgbaImage::from_pixel(300, 130, image::Rgba([10, 20, 30, 255])).save(&path).unwrap();
-        let Some(Pixels::Tiled { size, .. }) = decode(&original(path, 128), 1.0, &Mutex::new(None)) else { panic!("not tiled") };
+        let Some(Pixels::Tiled { size, .. }) = decode(&original(path, 128), 1.0, &Mutex::new(None), &Mutex::new(None)) else { panic!("not tiled") };
         assert_eq!(size, [300, 130]);
     }
 
@@ -807,11 +878,11 @@ mod tests {
         let path = dir.path().join("photo.heic");
         let img = image::RgbaImage::from_fn(300, 130, |x, _| image::Rgba([(x % 256) as u8, 0, 0, 255]));
         write(&path, "heic", &[WriteFrame { image: &img, orientation: 6, delay: None }]).unwrap();
-        let Some(Pixels::Tiled { size, tiles }) = decode(&original(path.clone(), 128), 1.0, &Mutex::new(None)) else { panic!("not tiled") };
+        let Some(Pixels::Tiled { size, tiles }) = decode(&original(path.clone(), 128), 1.0, &Mutex::new(None), &Mutex::new(None)) else { panic!("not tiled") };
         assert_eq!(size, [130, 300], "turned by its orientation");
         assert_eq!(tiles.len(), 2 * 3);
         let full = Job { key: ("x".into(), Tier::Full), path, svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false };
-        let Some(Pixels::Whole(img)) = decode(&full, 1.0, &Mutex::new(None)) else { panic!("no full tier") };
+        let Some(Pixels::Whole(img)) = decode(&full, 1.0, &Mutex::new(None), &Mutex::new(None)) else { panic!("no full tier") };
         assert_eq!(img.size, [130, 300]);
     }
 
@@ -826,7 +897,7 @@ mod tests {
         let path = write_png(dir.path(), 12000, 8000);
         eprintln!("wrote 12000x8000 PNG ({} MB) in {:?}", std::fs::metadata(&path).unwrap().len() >> 20, t.elapsed());
         let t = std::time::Instant::now();
-        let Some(Pixels::Tiled { size, tiles }) = decode(&original(path, crate::logic::tile_side(16384)), 1.0, &Mutex::new(None)) else { panic!("not tiled") };
+        let Some(Pixels::Tiled { size, tiles }) = decode(&original(path, crate::logic::tile_side(16384)), 1.0, &Mutex::new(None), &Mutex::new(None)) else { panic!("not tiled") };
         eprintln!("decoded and tiled in {:?}: {} tiles", t.elapsed(), tiles.len());
         assert_eq!(size, [12000, 8000]);
         assert!(tiles.iter().all(|(_, img)| img.size[0] <= 2048 && img.size[1] <= 2048));

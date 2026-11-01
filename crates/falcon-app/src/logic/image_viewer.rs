@@ -99,20 +99,57 @@ pub fn wants_original(ext: &str, natural_long: u32, shown_px: f32) -> bool {
     full_resolution(ext) && natural_long > FULL_TIER_SIDE && shown_px > FULL_TIER_SIDE as f32
 }
 
-/// Formats Eagle draws again natively at a larger size when zoomed in
-/// (its native viewer over the thumbnail); falcon asks QuickLook for a
-/// render up to [`HIRES_QUICKLOOK_SIDE`] instead.
+/// Formats Eagle draws again natively at the size shown when zoomed in
+/// (its native viewer over the thumbnail); falcon asks QuickLook for the
+/// page again at the zoom shown once the view holds still and keeps the
+/// part on screen ([`quicklook_region`]).
 pub fn hires_quicklook(ext: &str) -> bool {
     matches!(ext, "psd" | "psb" | "ai" | "ppt" | "pptx" | "potx")
 }
 
-/// The long side of the larger QuickLook render (a 256 MB picture at most).
-pub const HIRES_QUICKLOOK_SIDE: u32 = 8192;
+/// Most pixels a zoomed QuickLook render of the whole page may have (a
+/// 256 MB picture, held on a worker while the part on screen is cut out).
+pub const QUICKLOOK_RENDER_PIXELS: f32 = 8192.0 * 8192.0;
 
-/// Whether to ask for the larger render: a format of
-/// [`hires_quicklook`] larger than the full tier, drawn larger than it.
-pub fn wants_hires_render(ext: &str, natural_long: u32, shown_px: f32) -> bool {
-    hires_quicklook(ext) && natural_long > FULL_TIER_SIDE && shown_px > FULL_TIER_SIDE as f32
+/// The longest side asked of QuickLook.
+pub const QUICKLOOK_MAX_SIDE: u32 = 16384;
+
+/// Renders are asked in steps of this many pixels on the long side, so
+/// small zoom changes reuse the last render.
+const QUICKLOOK_STEP: f32 = 512.0;
+
+/// The QuickLook render for a zoomed special format: `image` is where the
+/// whole page is on screen and `view` the viewer's rect (both `[x0, y0,
+/// x1, y1]` in points), `ppp` pixels per point. Gives the visible part as
+/// fractions of the page and the long side to render the whole page at:
+/// the size shown, rounded up to a step, within
+/// [`QUICKLOOK_RENDER_PIXELS`], [`QUICKLOOK_MAX_SIDE`] and, for a raster
+/// format, its own size (`raster_long`), past which a render adds nothing.
+/// `None` when none of it is visible.
+pub fn quicklook_region(image: [f32; 4], view: [f32; 4], ppp: f32, raster_long: Option<u32>) -> Option<([f32; 4], u32)> {
+    let (rect, _) = svg_region(image, view, ppp, u32::MAX)?;
+    let (iw, ih) = (image[2] - image[0], image[3] - image[1]);
+    let long = (iw.max(ih) * ppp / QUICKLOOK_STEP).ceil() * QUICKLOOK_STEP;
+    let aspect = (iw.min(ih) / iw.max(ih)).max(1e-3);
+    let budget = (QUICKLOOK_RENDER_PIXELS / aspect).sqrt();
+    let side = long.min(budget).min(QUICKLOOK_MAX_SIDE as f32).min(raster_long.map_or(f32::MAX, |n| n as f32));
+    Some((rect, side.max(1.0) as u32))
+}
+
+/// The pixels of `rect` (fractions `[x0, y0, x1, y1]`) in a `w` × `h`
+/// picture, as `(x, y, width, height)`: at least one pixel, inside it.
+pub fn crop_span(rect: [f32; 4], w: u32, h: u32) -> (u32, u32, u32, u32) {
+    let at = |f: f32, len: u32| ((f.clamp(0.0, 1.0) * len as f32).round() as u32).min(len.saturating_sub(1));
+    let (x0, y0) = (at(rect[0], w), at(rect[1], h));
+    let end = |f: f32, len: u32, start: u32| ((f.clamp(0.0, 1.0) * len as f32).round() as u32).clamp(start + 1, len.max(start + 1));
+    let (x1, y1) = (end(rect[2], w, x0), end(rect[3], h, y0));
+    (x0, y0, x1 - x0, y1 - y0)
+}
+
+/// Raster formats among [`hires_quicklook`]: a render past their own size
+/// only magnifies.
+pub fn quicklook_raster(ext: &str) -> bool {
+    matches!(ext, "psd" | "psb")
 }
 
 /// The formats Eagle shows as a picture of their own (its special-format
@@ -255,6 +292,9 @@ pub fn smart_fit(natural: (f32, f32), view: (f32, f32), margin: f32, name: &str)
 /// How long the view must hold still before a zoomed-in SVG is rendered
 /// again at the new size.
 pub const SVG_SETTLE: f32 = 0.15;
+
+/// The same for a zoomed QuickLook format, whose render starts a process.
+pub const QUICKLOOK_SETTLE: f32 = 0.4;
 
 /// The part of an SVG to render sharp: `image` is where the whole drawing
 /// is on screen and `view` the viewer's rect (both `[x0, y0, x1, y1]` in
@@ -453,6 +493,23 @@ mod image_viewer_tests {
     }
 
     #[test]
+    fn quicklook_regions_render_the_page_at_the_zoom_shown() {
+        // A page drawn 3000 points square at 2× shows its middle third; the
+        // whole page is asked for at its 6000 px size on screen (a step).
+        let (rect, side) = quicklook_region([-1000.0, -1000.0, 2000.0, 2000.0], [0.0, 0.0, 1000.0, 1000.0], 2.0, None).unwrap();
+        assert_eq!(rect, [1.0 / 3.0, 1.0 / 3.0, 2.0 / 3.0, 2.0 / 3.0]);
+        assert_eq!(side, 6144);
+        // A square page is held to 8192² pixels; a wide one may be longer.
+        assert_eq!(quicklook_region([0.0, 0.0, 20000.0, 20000.0], [0.0, 0.0, 1000.0, 1000.0], 1.0, None).unwrap().1, 8192);
+        assert_eq!(quicklook_region([0.0, 0.0, 40000.0, 10000.0], [0.0, 0.0, 1000.0, 1000.0], 1.0, None).unwrap().1, 16384);
+        // A PSD never past its own pixels.
+        assert_eq!(quicklook_region([0.0, 0.0, 9000.0, 6000.0], [0.0, 0.0, 1000.0, 1000.0], 1.0, Some(5000)).unwrap().1, 5000);
+        assert_eq!(quicklook_region([2000.0, 0.0, 3000.0, 10.0], [0.0, 0.0, 1000.0, 1000.0], 2.0, None), None);
+        assert_eq!(crop_span([0.25, 0.5, 0.75, 1.0], 400, 200), (100, 100, 200, 100));
+        assert_eq!(crop_span([1.0, 1.0, 1.0, 1.0], 400, 200), (399, 199, 1, 1));
+    }
+
+    #[test]
     fn scrolling_stops_at_the_edges() {
         // A long picture scrolls until its bottom meets the view's bottom.
         assert_eq!(clamp_pan((0.0, -5000.0), (1000.0, 6000.0), (1000.0, 800.0)), (0.0, -2600.0));
@@ -554,10 +611,8 @@ mod zoom_tests {
 
     #[test]
     fn larger_renders_and_custom_thumbnails() {
-        assert!(wants_hires_render("psd", 6000, 4000.0));
-        assert!(!wants_hires_render("psd", 3000, 4000.0), "the full tier already covers it");
-        assert!(!wants_hires_render("psd", 6000, 2000.0));
-        assert!(!wants_hires_render("sketch", 6000, 4000.0));
+        assert!(hires_quicklook("pptx") && !hires_quicklook("sketch"));
+        assert!(quicklook_raster("psb") && !quicklook_raster("ai"));
         assert!(custom_thumbnail_is_picture("zip", true));
         assert!(!custom_thumbnail_is_picture("zip", false));
         assert!(!custom_thumbnail_is_picture("psd", true));

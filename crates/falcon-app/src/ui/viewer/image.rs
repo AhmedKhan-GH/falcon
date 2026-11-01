@@ -13,7 +13,7 @@ use crate::app::App;
 use crate::gesture::{Gesture, Outcome};
 use crate::ui::viewer::audio;
 use crate::ui::widgets::ext_placeholder;
-use crate::loader::{Tier, hires_job, job_for, original_job};
+use crate::loader::{Tier, job_for, original_job, quicklook_region_job};
 use crate::locale::{tr, trf};
 use crate::logic;
 use crate::theme::{self as t, mono};
@@ -33,8 +33,9 @@ pub(crate) struct ImageState {
     page: Option<(isize, Instant)>,
     /// The transparency checkerboard, made on first use.
     checker: Option<TextureHandle>,
-    /// The visible part of a zoomed-in SVG and since when it has held still.
-    svg_view: Option<([f32; 4], [u32; 2], Instant)>,
+    /// The visible part of a zoomed-in SVG or QuickLook format, its render
+    /// size (see `loader::Region`) and since when it has held still.
+    region_view: Option<([f32; 4], [u32; 2], u32, Instant)>,
     /// Where in the navigator's frame a drag took hold, from its centre.
     nav_grab: Vec2,
     /// The preview-only rotation and flip of the image shown; reset when the
@@ -191,42 +192,46 @@ impl App {
             && let Some(j) = original_job(item, lib.root(), tile)
         {
             self.ws.frame_jobs.push(j);
-        } else if !animated
-            && page_size.is_none()
-            && tf.is_identity()
-            && logic::wants_hires_render(&ext, natural.x.max(natural.y) as u32, shown_px)
-            && let Some(j) = hires_job(item, lib.root(), tile)
-        {
-            // PSD, AI and PowerPoint zoomed past the full tier: a larger
-            // QuickLook render, drawn like an original.
-            self.ws.frame_jobs.push(j);
         }
         // An SVG enlarged past its render is drawn again, sharp, for the part
-        // on screen once the view holds still.
+        // on screen once the view holds still. So are PSD, AI and PowerPoint
+        // (Eagle's native viewer draws them at the size shown): QuickLook
+        // renders the page at the zoom shown and the part on screen is kept.
         let mut patch = None;
-        if ext == "svg" && tf.is_identity() && tex.as_ref().is_some_and(|t| shown_px > t.size_vec2().max_elem()) {
-            let max = ui.ctx().input(|i| i.max_texture_side).min(8192) as u32;
-            let region = logic::svg_region([r.min.x, r.min.y, r.max.x, r.max.y], [area.min.x, area.min.y, area.max.x, area.max.y], ui.ctx().pixels_per_point(), max);
-            if let Some((rect, size)) = region {
-                let same = self.image.svg_view.is_some_and(|(r0, s0, _)| r0 == rect && s0 == size);
+        let full_side = tex.as_ref().map_or(0.0, |t| t.size_vec2().max_elem());
+        let quicklook = logic::hires_quicklook(&ext) && !animated && page_size.is_none();
+        if (ext == "svg" || quicklook) && tf.is_identity() && tex.is_some() && shown_px > full_side {
+            let ppp = ui.ctx().pixels_per_point();
+            let (image_rect, view_rect) = ([r.min.x, r.min.y, r.max.x, r.max.y], [area.min.x, area.min.y, area.max.x, area.max.y]);
+            let (region, job, settle) = if quicklook {
+                let raster = logic::quicklook_raster(&ext).then_some(natural.x.max(natural.y) as u32).filter(|n| *n > 0);
+                // Only a render larger than the full tier's adds anything.
+                let region = logic::quicklook_region(image_rect, view_rect, ppp, raster).filter(|(_, side)| *side as f32 > full_side);
+                (region.map(|(rect, side)| (rect, [0, 0], side)), quicklook_region_job(item, lib.root()), logic::QUICKLOOK_SETTLE)
+            } else {
+                let max = ui.ctx().input(|i| i.max_texture_side).min(8192) as u32;
+                let region = logic::svg_region(image_rect, view_rect, ppp, max);
+                (region.map(|(rect, size)| (rect, size, 0)), job_for(item, lib.root(), Tier::Full), logic::SVG_SETTLE)
+            };
+            if let Some((rect, size, render)) = region {
+                let same = self.image.region_view.is_some_and(|(r0, s0, n0, _)| r0 == rect && s0 == size && n0 == render);
                 if !same {
-                    self.image.svg_view = Some((rect, size, Instant::now()));
+                    self.image.region_view = Some((rect, size, render, Instant::now()));
                 }
-                let settled = self.image.svg_view.is_some_and(|(_, _, at)| at.elapsed().as_secs_f32() >= logic::SVG_SETTLE);
+                let settled = self.image.region_view.is_some_and(|(.., at)| at.elapsed().as_secs_f32() >= settle);
                 if settled {
-                    if let Some(j) = job_for(item, lib.root(), Tier::Full) {
-                        self.ws.loader.want_svg_region(j, rect, size);
+                    if let Some(j) = job {
+                        self.ws.loader.want_region(j, rect, size, render);
                     }
                 } else {
-                    ui.ctx().request_repaint_after(std::time::Duration::from_secs_f32(logic::SVG_SETTLE));
+                    ui.ctx().request_repaint_after(std::time::Duration::from_secs_f32(settle));
                 }
             }
-            patch = self.ws.loader.svg_patch(&id).map(|p| {
+            patch = self.ws.loader.patch(&id).map(|p| {
                 (p.texture.id(), Rect::from_min_max(r.min + p.rect.min.to_vec2() * r.size(), r.min + p.rect.max.to_vec2() * r.size()))
             });
         }
-        let full_px = tex.as_ref().map_or(0.0, |t| t.size_vec2().max_elem());
-        let original = self.ws.loader.original(&id).filter(|o| !animated && page_size.is_none() && tf.is_identity() && shown_px > full_px && o.size[0].max(o.size[1]) as f32 > full_px);
+        let original = self.ws.loader.original(&id).filter(|o| !animated && page_size.is_none() && tf.is_identity() && shown_px > full_side && o.size[0].max(o.size[1]) as f32 > full_side);
 
         // Without a full render the thumbnail stands in; with neither, the
         // format can't be previewed.
@@ -261,7 +266,7 @@ impl App {
                 }
             }
             (Some(tex), None) => match patch {
-                // Under the sharp part of an SVG the render isn't drawn, so
+                // Under the sharp part the render isn't drawn, so
                 // semi-transparent shapes aren't laid on twice.
                 Some((patch_tex, hole)) => {
                     paint_except(clip.painter(), tex.id(), r, hole);
