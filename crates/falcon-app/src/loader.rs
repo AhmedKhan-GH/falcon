@@ -5,7 +5,7 @@ use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::{Arc, Condvar, Mutex};
 
-use eframe::egui::{ColorImage, Context, TextureHandle, TextureOptions};
+use eframe::egui::{Color32, ColorImage, Context, Pos2, Rect, TextureHandle, TextureOptions};
 use falcon_library::model::Item;
 use falcon_library::thumbnail;
 use lru::LruCache;
@@ -16,6 +16,9 @@ pub enum Tier {
     Grid,
     Preview,
     Full,
+    /// The original at its full resolution, cut into tiles; only for the
+    /// item in the viewer (see [`Loader::original`]).
+    Original,
 }
 
 impl Tier {
@@ -23,7 +26,8 @@ impl Tier {
         match self {
             Tier::Grid => 512,
             Tier::Preview => 1024,
-            Tier::Full => 3072,
+            Tier::Full => crate::logic::FULL_TIER_SIDE,
+            Tier::Original => u32::MAX,
         }
     }
 
@@ -32,6 +36,7 @@ impl Tier {
             Tier::Grid => 900,
             Tier::Preview => 24,
             Tier::Full => 4,
+            Tier::Original => 1,
         }
     }
 }
@@ -45,6 +50,16 @@ pub struct Job {
     svg: bool,
     /// Render with QuickLook (formats falcon can't decode, at full size).
     quicklook: bool,
+    /// For [`Tier::Original`]: the side of the tiles to cut it into.
+    tile: usize,
+}
+
+/// The job decoding `item`'s original at full resolution, in tiles of at
+/// most `tile` pixels (see `logic::tile_side`).
+pub fn original_job(item: &Item, root: &std::path::Path, tile: usize) -> Option<Job> {
+    let ext = item.ext.to_lowercase();
+    crate::logic::full_resolution(&ext)
+        .then(|| Job { key: (item.id.clone(), Tier::Original), path: item.original_path(root), svg: false, quicklook: false, tile })
 }
 
 /// Picks the file to decode for `item`: the thumbnail when it exists (unless
@@ -54,7 +69,7 @@ pub fn job_for(item: &Item, root: &std::path::Path, tier: Tier) -> Option<Job> {
     let supported = thumbnail::is_supported(&ext);
     let original = supported.then(|| item.original_path(root));
     if tier == Tier::Full && !supported && cfg!(target_os = "macos") {
-        return Some(Job { key: (item.id.clone(), tier), path: item.original_path(root), svg: false, quicklook: true });
+        return Some(Job { key: (item.id.clone(), tier), path: item.original_path(root), svg: false, quicklook: true, tile: 0 });
     }
     let (path, svg) = match (tier, item.thumbnail_path(root), original) {
         (Tier::Full, _, Some(o)) => (o, ext == "svg"),
@@ -62,7 +77,7 @@ pub fn job_for(item: &Item, root: &std::path::Path, tier: Tier) -> Option<Job> {
         (_, None, Some(o)) => (o, ext == "svg"),
         (_, None, None) => return None,
     };
-    Some(Job { key: (item.id.clone(), tier), path, svg, quicklook: false })
+    Some(Job { key: (item.id.clone(), tier), path, svg, quicklook: false, tile: 0 })
 }
 
 struct Shared {
@@ -72,10 +87,43 @@ struct Shared {
     closed: std::sync::atomic::AtomicBool,
 }
 
+/// What a worker hands back: one image, or a full-resolution one in tiles.
+enum Pixels {
+    Whole(ColorImage),
+    Tiled { size: [usize; 2], tiles: Vec<(crate::logic::TileSpan, ColorImage)> },
+}
+
 struct Decoded {
     key: Key,
-    image: Option<ColorImage>,
+    image: Option<Pixels>,
 }
+
+/// One texture of a full-resolution image.
+pub struct Tile {
+    pub texture: TextureHandle,
+    /// Where it sits, as a fraction of the image (0..1 on both axes).
+    pub rect: Rect,
+    /// The part of the texture to draw (the tile without its padding).
+    pub uv: Rect,
+}
+
+/// The viewed item's original at full resolution.
+pub struct Original {
+    pub id: String,
+    /// Decoded size in pixels.
+    pub size: [usize; 2],
+    pub tiles: Vec<Tile>,
+}
+
+/// An original still being uploaded, a few tiles per frame.
+struct Staged {
+    original: Original,
+    rest: Vec<(crate::logic::TileSpan, ColorImage)>,
+}
+
+/// Bytes of tile pixels uploaded per frame, so a 100-megapixel original
+/// doesn't stall one frame with a 400 MB upload.
+const UPLOAD_BUDGET: usize = 48 << 20;
 
 /// Decodes on worker threads; textures are uploaded from the UI thread.
 pub struct Loader {
@@ -84,6 +132,9 @@ pub struct Loader {
     caches: HashMap<Tier, LruCache<String, TextureHandle>>,
     pending: HashSet<Key>,
     failed: HashSet<Key>,
+    /// The viewed item's full-resolution original, at most one at a time.
+    original: Option<Original>,
+    staged: Option<Staged>,
 }
 
 impl Loader {
@@ -119,11 +170,12 @@ impl Loader {
             .into_iter()
             .map(|t| (t, LruCache::new(NonZeroUsize::new(t.capacity()).unwrap())))
             .collect();
-        Loader { shared, rx, caches, pending: HashSet::new(), failed: HashSet::new() }
+        Loader { shared, rx, caches, pending: HashSet::new(), failed: HashSet::new(), original: None, staged: None }
     }
 
     /// Uploads finished decodes (bounded per call so frames stay short).
     pub fn poll(&mut self, ctx: &Context) {
+        self.upload_staged(ctx);
         for _ in 0..24 {
             let Ok(d) = self.rx.try_recv() else { return };
             // A decode started before `forget` would bring back the old pixels.
@@ -131,9 +183,14 @@ impl Loader {
                 continue;
             }
             match d.image {
-                Some(img) => {
+                Some(Pixels::Whole(img)) => {
                     let tex = ctx.load_texture(format!("{}-{:?}", d.key.0, d.key.1), img, TextureOptions::LINEAR);
                     self.caches.get_mut(&d.key.1).unwrap().put(d.key.0, tex);
+                }
+                Some(Pixels::Tiled { size, tiles }) => {
+                    self.original = None;
+                    self.staged = Some(Staged { original: Original { id: d.key.0, size, tiles: Vec::new() }, rest: tiles });
+                    self.upload_staged(ctx);
                 }
                 None => {
                     self.failed.insert(d.key);
@@ -141,6 +198,53 @@ impl Loader {
             }
         }
         ctx.request_repaint();
+    }
+
+    /// Uploads the staged original's next tiles, within the frame's budget;
+    /// once all are up it becomes [`Loader::original`].
+    fn upload_staged(&mut self, ctx: &Context) {
+        let Some(staged) = &mut self.staged else { return };
+        let mut bytes = 0;
+        while bytes < UPLOAD_BUDGET {
+            let Some((span, img)) = staged.rest.pop() else { break };
+            bytes += img.pixels.len() * 4;
+            let [w, h] = staged.original.size.map(|v| v as f32);
+            let [x0, y0, x1, y1] = span.core.map(|v| v as f32);
+            let [px0, py0, px1, py1] = span.padded.map(|v| v as f32);
+            let (tw, th) = (px1 - px0, py1 - py0);
+            let n = staged.original.tiles.len();
+            let texture = ctx.load_texture(format!("{}-original-{n}", staged.original.id), img, TextureOptions::LINEAR);
+            staged.original.tiles.push(Tile {
+                texture,
+                rect: Rect::from_min_max(Pos2::new(x0 / w, y0 / h), Pos2::new(x1 / w, y1 / h)),
+                uv: Rect::from_min_max(
+                    Pos2::new((x0 - px0) / tw, (y0 - py0) / th),
+                    Pos2::new((x1 - px0) / tw, (y1 - py0) / th),
+                ),
+            });
+        }
+        if staged.rest.is_empty() {
+            self.original = self.staged.take().map(|s| s.original);
+        } else {
+            ctx.request_repaint();
+        }
+    }
+
+    /// The full-resolution original of `id`, once every tile is uploaded.
+    pub fn original(&self, id: &str) -> Option<&Original> {
+        self.original.as_ref().filter(|o| o.id == id)
+    }
+
+    /// Drops the full-resolution original unless it belongs to `id` (the
+    /// item in the viewer, if any). Called every frame, so leaving an item
+    /// frees its textures at once.
+    pub fn keep_original(&mut self, id: Option<&str>) {
+        if self.original.as_ref().is_some_and(|o| Some(o.id.as_str()) != id) {
+            self.original = None;
+        }
+        if self.staged.as_ref().is_some_and(|s| Some(s.original.id.as_str()) != id) {
+            self.staged = None;
+        }
     }
 
     /// Returns the cached texture, refreshing its LRU position.
@@ -167,10 +271,13 @@ impl Loader {
         });
         let mut added = false;
         for j in jobs {
-            if self.failed.contains(&j.key)
-                || self.pending.contains(&j.key)
-                || self.caches[&j.key.1].peek(&j.key.0).is_some()
-            {
+            let have = match j.key.1 {
+                Tier::Original => {
+                    self.original.as_ref().is_some_and(|o| o.id == j.key.0) || self.staged.as_ref().is_some_and(|s| s.original.id == j.key.0)
+                }
+                tier => self.caches[&tier].peek(&j.key.0).is_some(),
+            };
+            if self.failed.contains(&j.key) || self.pending.contains(&j.key) || have {
                 continue;
             }
             self.pending.insert(j.key.clone());
@@ -191,6 +298,15 @@ impl Loader {
             self.failed.remove(&(id.to_string(), *tier));
             self.pending.remove(&(id.to_string(), *tier));
         }
+        let original = (id.to_string(), Tier::Original);
+        self.failed.remove(&original);
+        self.pending.remove(&original);
+        if self.original.as_ref().is_some_and(|o| o.id == id) {
+            self.original = None;
+        }
+        if self.staged.as_ref().is_some_and(|s| s.original.id == id) {
+            self.staged = None;
+        }
     }
 }
 
@@ -205,7 +321,10 @@ impl Drop for Loader {
     }
 }
 
-fn decode(job: &Job) -> Option<ColorImage> {
+fn decode(job: &Job) -> Option<Pixels> {
+    if job.key.1 == Tier::Original {
+        return decode_tiled(job);
+    }
     let max = job.key.1.max_side();
     let img = if job.quicklook {
         thumbnail::quicklook(&job.path, max).ok()?
@@ -217,5 +336,83 @@ fn decode(job: &Job) -> Option<ColorImage> {
     };
     let img = if img.width() > max || img.height() > max { img.thumbnail(max, max) } else { img };
     let rgba = img.to_rgba8();
-    Some(ColorImage::from_rgba_unmultiplied([rgba.width() as usize, rgba.height() as usize], rgba.as_raw()))
+    Some(Pixels::Whole(ColorImage::from_rgba_unmultiplied([rgba.width() as usize, rgba.height() as usize], rgba.as_raw())))
+}
+
+/// Decodes the original at full size and cuts it into tiles, all on the
+/// worker; the UI thread only uploads them.
+fn decode_tiled(job: &Job) -> Option<Pixels> {
+    let rgba = thumbnail::decode(&job.path).ok()?.into_rgba8();
+    let (w, h) = (rgba.width() as usize, rgba.height() as usize);
+    let raw = rgba.as_raw();
+    let tiles = crate::logic::tile_spans(w, h, job.tile)
+        .into_iter()
+        .map(|span| {
+            let [x0, y0, x1, y1] = span.padded;
+            let mut pixels = Vec::with_capacity((x1 - x0) * (y1 - y0));
+            for y in y0..y1 {
+                let row = &raw[(y * w + x0) * 4..(y * w + x1) * 4];
+                pixels.extend(row.as_chunks::<4>().0.iter().map(|&[r, g, b, a]| Color32::from_rgba_unmultiplied(r, g, b, a)));
+            }
+            (span, ColorImage::new([x1 - x0, y1 - y0], pixels))
+        })
+        .collect();
+    Some(Pixels::Tiled { size: [w, h], tiles })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn write_png(dir: &std::path::Path, w: u32, h: u32) -> PathBuf {
+        use image::ImageEncoder;
+        use image::codecs::png::{CompressionType, FilterType, PngEncoder};
+        let img = image::RgbImage::from_fn(w, h, |x, y| image::Rgb([(x % 251) as u8, (y % 241) as u8, ((x / 64 + y / 64) % 256) as u8]));
+        let path = dir.join("big.png");
+        let file = std::io::BufWriter::new(std::fs::File::create(&path).unwrap());
+        PngEncoder::new_with_quality(file, CompressionType::Fast, FilterType::NoFilter)
+            .write_image(img.as_raw(), w, h, image::ExtendedColorType::Rgb8)
+            .unwrap();
+        path
+    }
+
+    fn original(path: PathBuf, tile: usize) -> Job {
+        Job { key: ("x".into(), Tier::Original), path, svg: false, quicklook: false, tile }
+    }
+
+    #[test]
+    fn originals_decode_into_padded_tiles() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = write_png(dir.path(), 300, 130);
+        let Some(Pixels::Tiled { size, tiles }) = decode(&original(path, 128)) else { panic!("not tiled") };
+        assert_eq!(size, [300, 130]);
+        assert_eq!(tiles.len(), 3 * 2);
+        for (span, img) in &tiles {
+            let [x0, y0, x1, y1] = span.padded;
+            assert_eq!(img.size, [x1 - x0, y1 - y0]);
+            assert!(img.size[0] <= 128 && img.size[1] <= 128);
+            // The tile's first pixel is the image's pixel at its padded origin.
+            assert_eq!(img.pixels[0], Color32::from_rgb((x0 % 251) as u8, (y0 % 241) as u8, ((x0 / 64 + y0 / 64) % 256) as u8));
+        }
+    }
+
+    /// A 12000 x 8000 PNG decodes and tiles on the worker; the UI thread
+    /// only uploads a few tiles a frame. Slow in a debug build, so run it
+    /// with `cargo test --release -p falcon-app -- --ignored large_original`.
+    #[test]
+    #[ignore]
+    fn large_original_decodes_off_the_ui_thread() {
+        let dir = tempfile::tempdir().unwrap();
+        let t = std::time::Instant::now();
+        let path = write_png(dir.path(), 12000, 8000);
+        eprintln!("wrote 12000x8000 PNG ({} MB) in {:?}", std::fs::metadata(&path).unwrap().len() >> 20, t.elapsed());
+        let t = std::time::Instant::now();
+        let Some(Pixels::Tiled { size, tiles }) = decode(&original(path, crate::logic::tile_side(16384))) else { panic!("not tiled") };
+        eprintln!("decoded and tiled in {:?}: {} tiles", t.elapsed(), tiles.len());
+        assert_eq!(size, [12000, 8000]);
+        assert!(tiles.iter().all(|(_, img)| img.size[0] <= 2048 && img.size[1] <= 2048));
+        let biggest = tiles.iter().map(|(_, img)| img.pixels.len() * 4).max().unwrap();
+        assert!(biggest <= UPLOAD_BUDGET, "a frame uploads at least one whole tile");
+        eprintln!("frames to upload at {} MB a frame: {}", UPLOAD_BUDGET >> 20, tiles.iter().map(|(_, i)| i.pixels.len() * 4).sum::<usize>().div_ceil(UPLOAD_BUDGET));
+    }
 }

@@ -1282,6 +1282,100 @@ pub fn view_zoom(cmd: ViewZoom, scale: f32) -> Option<f32> {
     }
 }
 
+// ---- Image viewer: resolution, fitting and zoom ----
+
+/// Long side of the loader's full tier, the render the viewer shows first.
+pub const FULL_TIER_SIDE: u32 = 3072;
+
+/// Whether the viewer decodes `ext` at its full resolution when zoomed in
+/// past the full tier. Eagle's bitmap viewer decodes jpg, png, webp, bmp,
+/// avif, jxl, tiff and heic originals in full (`BitmapViewer.isSupportFormat`);
+/// falcon decodes the ones its image decoder reads (TIFF included, falling
+/// back to the QuickLook render when a TIFF's compression isn't supported).
+/// GIFs belong to the animation player; SVGs are re-rendered instead.
+pub fn full_resolution(ext: &str) -> bool {
+    matches!(ext, "jpg" | "jpeg" | "jfif" | "jpe" | "png" | "webp" | "bmp" | "tif" | "tiff")
+}
+
+/// Whether the original is worth decoding: the image is larger than the
+/// full tier and is drawn (in physical pixels, `shown_px` on its long side)
+/// larger than the full tier's render, which would otherwise be magnified.
+/// Decoding only then keeps flipping through large photos cheap.
+pub fn wants_original(ext: &str, natural_long: u32, shown_px: f32) -> bool {
+    full_resolution(ext) && natural_long > FULL_TIER_SIDE && shown_px > FULL_TIER_SIDE as f32
+}
+
+/// Side of the textures a full-resolution image is cut into. egui can't
+/// hold a texture larger than the GPU's limit (`max_texture_side`, 8192 or
+/// 16384 on Macs), and a smaller tile also keeps each upload short enough
+/// to spread over frames.
+pub fn tile_side(max_texture_side: usize) -> usize {
+    max_texture_side.clamp(64, 2048)
+}
+
+/// One tile of a full-resolution image, in image pixels. `core` is the part
+/// the tile draws; `padded` adds a pixel on every inner edge, so linear
+/// filtering at the seams blends with the neighbour instead of clamping.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct TileSpan {
+    pub core: [usize; 4],
+    pub padded: [usize; 4],
+}
+
+/// Cuts a `w` x `h` image into tiles whose padded size is at most `side`.
+pub fn tile_spans(w: usize, h: usize, side: usize) -> Vec<TileSpan> {
+    let step = side.saturating_sub(2).max(1);
+    let mut out = Vec::new();
+    let mut y = 0;
+    while y < h {
+        let y1 = (y + step).min(h);
+        let mut x = 0;
+        while x < w {
+            let x1 = (x + step).min(w);
+            out.push(TileSpan { core: [x, y, x1, y1], padded: [x.saturating_sub(1), y.saturating_sub(1), (x1 + 1).min(w), (y1 + 1).min(h)] });
+            x = x1;
+        }
+        y = y1;
+    }
+    out
+}
+
+#[cfg(test)]
+mod image_viewer_tests {
+    use super::*;
+
+    #[test]
+    fn originals_only_when_the_full_tier_would_be_magnified() {
+        assert!(wants_original("jpg", 12000, 3500.0));
+        assert!(!wants_original("jpg", 12000, 1500.0), "fitted, the full tier is enough");
+        assert!(!wants_original("jpg", 3000, 6000.0), "the full tier already is the original");
+        assert!(!wants_original("gif", 12000, 6000.0), "animations are the player's");
+        assert!(!wants_original("psd", 12000, 6000.0), "no decoder");
+        assert!(wants_original("tiff", 9000, 4000.0));
+    }
+
+    #[test]
+    fn tiles_fit_the_gpu_and_cover_the_image() {
+        assert_eq!(tile_side(8192), 2048);
+        assert_eq!(tile_side(1024), 1024);
+        let (w, h, side) = (12000, 8000, 2048);
+        let spans = tile_spans(w, h, side);
+        let mut covered = 0;
+        for s in &spans {
+            let [x0, y0, x1, y1] = s.padded;
+            assert!(x1 - x0 <= side && y1 - y0 <= side);
+            let [cx0, cy0, cx1, cy1] = s.core;
+            assert!(x0 <= cx0 && cx1 <= x1 && y0 <= cy0 && cy1 <= y1);
+            covered += (cx1 - cx0) * (cy1 - cy0);
+        }
+        assert_eq!(covered, w * h, "cores tile the image exactly");
+        // Inner edges carry a pixel of overlap; the image's own edges don't.
+        assert_eq!(spans[0].padded, [0, 0, 2047, 2047]);
+        assert_eq!(spans[1].padded[0], 2045);
+        assert_eq!(tile_spans(10, 10, 2048), vec![TileSpan { core: [0, 0, 10, 10], padded: [0, 0, 10, 10] }]);
+    }
+}
+
 #[cfg(test)]
 mod viewer_shell_tests {
     use super::*;

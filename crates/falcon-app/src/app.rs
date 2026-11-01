@@ -27,6 +27,7 @@ mod export_ui;
 mod duplicates_view;
 mod filters_ui;
 mod media_view;
+mod image_view;
 mod video_view;
 mod gif_view;
 mod open_ui;
@@ -4156,121 +4157,7 @@ impl App {
         let tex = gif
             .or_else(|| self.ws.loader.get(&id, Tier::Full).cloned())
             .or_else(|| self.ws.loader.get(&id, Tier::Preview).cloned());
-        let natural = if item.width > 0 && item.height > 0 {
-            vec2(item.width as f32, item.height as f32)
-        } else {
-            tex.as_ref().map_or(Vec2::splat(512.0), |t| t.size_vec2())
-        };
-        let fit = ((area.width() - 80.0) / natural.x).min((area.height() - 80.0) / natural.y).min(1.0);
-        let scale = self.ws.view.zoom.unwrap_or(fit);
-
-        // Scroll or pinch over the picture zooms around the pointer;
-        // dragging pans.
-        let resp = ui.interact(area, ui.scope_id().with("viewer-canvas"), Sense::click_and_drag());
-        let (scroll, pinch, pointer) = ui.input(|i| (i.smooth_scroll_delta.y, i.zoom_delta(), i.pointer.hover_pos()));
-        let factor = if !resp.hovered() {
-            1.0
-        } else if pinch != 1.0 {
-            pinch
-        } else if scroll != 0.0 {
-            (scroll / 300.0).exp()
-        } else {
-            1.0
-        };
-        if factor != 1.0 {
-            let new = (scale * factor).clamp(0.02, 32.0);
-            if let Some(pos) = pointer {
-                let center = area.center() + self.ws.view.pan;
-                let off = pos - center;
-                self.ws.view.pan += off - off * (new / scale);
-            }
-            self.ws.view.zoom = Some(new);
-        }
-        if resp.dragged() {
-            self.ws.view.pan += resp.drag_delta();
-            if self.ws.view.zoom.is_none() {
-                self.ws.view.zoom = Some(scale);
-            }
-        }
-        // Right-click opens the item's menu, as on its card.
-        resp.context_menu(|ui| {
-            self.item_menu(ui, lib, item, std::slice::from_ref(&id));
-        });
-        // Double-clicking the picture or the space around it leaves the
-        // viewer, as in Eagle (not while cropping or marking regions).
-        if resp.double_clicked() && self.ws.tools.crop.is_none() && !self.ws.tools.comment_mode {
-            self.ws.viewer = None;
-        }
-        let scale = self.ws.view.zoom.unwrap_or(fit);
-        if self.ws.view.zoom.is_none() {
-            self.ws.view.pan = Vec2::ZERO;
-        }
-        let r = Rect::from_center_size(area.center() + self.ws.view.pan, natural * scale);
-        let mut clip = ui.new_child(egui::UiBuilder::new().max_rect(area));
-        clip.set_clip_rect(area);
-        // Without a full render the thumbnail stands in; with neither, the
-        // format can't be previewed.
-        let full_failed = self.ws.loader.has_failed(&id, Tier::Full) || job_for(item, lib.root(), Tier::Full).is_none();
-        let preview_job = if full_failed { job_for(item, lib.root(), Tier::Preview) } else { None };
-        let no_preview = full_failed && (preview_job.is_none() || self.ws.loader.has_failed(&id, Tier::Preview));
-        match &tex {
-            Some(tex) => egui::Image::new((tex.id(), r.size())).paint_at(&clip, r),
-            None if no_preview => self.cannot_preview(&mut clip, item, area),
-            None => ext_placeholder(&clip, Rect::from_center_size(area.center(), Vec2::splat(260.0)), &item.ext),
-        }
-        if tex.is_none()
-            && let Some(j) = preview_job
-        {
-            self.ws.frame_jobs.push(j);
-        }
-        self.edit_overlay(ui, item, r, area);
-        if let Some(gif_bar) = gif_bar {
-            self.gif_toolbar(ui, item, gif_bar, &resp);
-        }
-
-        // The bar on top: back and name, then zoom and the tools.
-        let (name_x, right) = media_view::bar_shell(self, ui, item, bar);
-        let cy = bar.center().y;
-        use crate::shortcuts::Command as C;
-        let tip = |label: &str, fixed: &str, cmd: C| match self.shortcuts.binding(cmd) {
-            Some(c) => format!("{label} ({fixed}, {})", crate::shortcuts::display(ui.ctx(), &c)),
-            None => format!("{label} ({fixed})"),
-        };
-        let (t_in, t_out, t_actual, t_fit) =
-            (tip("Zoom In", "+", C::ZoomIn), tip("Zoom Out", "−", C::ZoomOut), tip("Actual Size", "1", C::ZoomActual), tip("Zoom to Fit", "0", C::ZoomFit));
-        let mut zoom = self.ws.view.zoom_key.take();
-        let mut x = right - 14.0;
-        if icon_button(ui, Pos2::new(x, cy), ic::PLUS, 15.0, true, &t_in).clicked() {
-            zoom = Some(logic::ViewZoom::In);
-        }
-        x -= 28.0;
-        p.text(Pos2::new(x, cy), Align2::CENTER_CENTER, format!("{:.0}%", scale * 100.0), mono(12.0), t::p().text_value);
-        x -= 30.0;
-        if icon_button(ui, Pos2::new(x, cy), ic::MINUS, 15.0, true, &t_out).clicked() {
-            zoom = Some(logic::ViewZoom::Out);
-        }
-        x -= 40.0;
-        let actual = ui.put(Rect::from_center_size(Pos2::new(x, cy), vec2(46.0, 24.0)), egui::Button::new("1:1"));
-        if actual.on_hover_text(t_actual).clicked() {
-            zoom = Some(logic::ViewZoom::Actual);
-        }
-        x -= 50.0;
-        if ui.put(Rect::from_center_size(Pos2::new(x, cy), vec2(46.0, 24.0)), egui::Button::new("Fit")).on_hover_text(t_fit).clicked() {
-            zoom = Some(logic::ViewZoom::Fit);
-        }
-        let tools_x = self.gif_toggle_button(ui, item, x - 50.0, cy);
-        let tools_left = self.edit_bar(ui, item, tools_x, cy);
-        media_view::bar_name(ui, item, bar, name_x, tools_left);
-
-        if let Some(z) = zoom {
-            self.ws.view.zoom = logic::view_zoom(z, scale);
-            if matches!(z, logic::ViewZoom::Actual | logic::ViewZoom::Fit) {
-                self.ws.view.pan = Vec2::ZERO;
-            }
-        }
-        if let Some(j) = job_for(item, lib.root(), Tier::Full) {
-            self.ws.frame_jobs.push(j);
-        }
+        self.image_canvas(ui, lib, item, tex, bar, area, gif_bar);
     }
 
     /// Eagle's "cannot preview" page: the file's type, a line saying so
@@ -4623,6 +4510,7 @@ impl App {
         }
         self.apply_actions(lib);
         self.end_frame_edits(lib);
+        self.ws.loader.keep_original(self.ws.viewer.as_deref());
         self.ws.loader.want(std::mem::take(&mut self.ws.frame_jobs));
         drop(guard);
         match self.switch_to.take() {
