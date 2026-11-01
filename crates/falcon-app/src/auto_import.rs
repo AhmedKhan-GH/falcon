@@ -10,12 +10,22 @@
 //! background thread lists the folder every two seconds instead. A file is
 //! imported once its size and modification time have stayed the same for
 //! three seconds (Eagle waits for six unchanged checks half a second
-//! apart), so a copy still in progress is left alone. Eagle deletes each
-//! file once it is imported; falcon only reads the folder, so it remembers
-//! what it imported (path, size and mtime, kept with the app state) and
-//! leaves the files where they are.
+//! apart), so a copy still in progress is left alone.
+//!
+//! Eagle deletes each file once it is imported. falcon does the same while
+//! "Delete files after importing them" is on (the default), with three
+//! differences, all on the side of keeping a file: it removes a file only
+//! once its import committed (the item is in the library and its original
+//! is in place there), only when the file is still directly inside the
+//! watched folder and unchanged since it was handed over, and it moves the
+//! file to the Trash (`NSFileManager trashItemAtURL:`) instead of
+//! unlinking it, so a mistake can be undone from the Trash ([`after_import`]).
+//! With the setting off, falcon leaves the files where they are. Either
+//! way it remembers what it handed over (path, size and mtime, kept with
+//! the app state), so a file that stays is not imported again.
 
 use std::collections::{HashMap, HashSet};
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
@@ -133,6 +143,17 @@ impl Imported {
         self.0.iter().any(|(p, s)| p == path && *s == sig)
     }
 
+    /// The version of `path` that was handed over, if it was.
+    pub fn sig(&self, path: &Path) -> Option<Sig> {
+        self.0.iter().rev().find(|(p, _)| p == path).map(|(_, s)| *s)
+    }
+
+    /// Forgets `path`, once it has left the folder, so a file dropped
+    /// there again later under the same name imports again.
+    pub fn forget(&mut self, path: &Path) {
+        self.0.retain(|(p, _)| p != path);
+    }
+
     pub fn add(&mut self, path: PathBuf, sig: Sig) {
         self.0.retain(|(p, _)| *p != path);
         self.0.push((path, sig));
@@ -176,6 +197,89 @@ pub fn scan(dir: &Path, settle: &mut Settle, imported: &Mutex<Imported>, now: In
         list.add(path.clone(), *sig);
     }
     ready.into_iter().map(|(p, _)| p).collect()
+}
+
+/// What became of a file from the watched folder after its import.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum After {
+    /// Left where it is: deleting is off, the import didn't commit, or the
+    /// file isn't the one that was imported any more.
+    Kept,
+    /// Moved to the Trash.
+    Trashed,
+    /// Removing it was allowed but failed; it stays in the folder.
+    TrashFailed,
+}
+
+/// Whether `file`, handed over from `watched` as version `expected`, may be
+/// removed now that its import gave `committed` (the item's original in
+/// the library, `None` when the import failed or the file was held for the
+/// duplicate dialog). Every check errs towards keeping the file:
+/// - the import committed and its original exists, and is not the file
+///   itself;
+/// - `file` is a regular file (not a link or a folder) directly inside
+///   `watched`, compared after resolving links, so nothing outside the
+///   watched folder is ever touched;
+/// - it is still the version that was handed over (same size and
+///   modification time), so a file replaced since is kept and imported
+///   in turn.
+pub fn may_remove(file: &Path, watched: &Path, expected: Option<Sig>, committed: Option<&Path>) -> bool {
+    let Some(original) = committed else { return false };
+    let Ok(meta) = std::fs::symlink_metadata(file) else { return false };
+    if !meta.file_type().is_file() || expected != Some(Sig::of(&meta)) {
+        return false;
+    }
+    let (Some(parent), Some(_)) = (file.parent(), file.file_name()) else { return false };
+    let (Ok(parent), Ok(watched)) = (parent.canonicalize(), watched.canonicalize()) else { return false };
+    if parent != watched {
+        return false;
+    }
+    match (original.canonicalize(), file.canonicalize()) {
+        (Ok(o), Ok(f)) => o != f && !o.starts_with(&watched) && o.is_file(),
+        _ => false,
+    }
+}
+
+/// After a watched file's import: when `delete` is on and [`may_remove`]
+/// allows it, hands the file to `trash` (the app passes [`trash`]; tests
+/// pass their own). A trash failure keeps the file.
+pub fn after_import(file: &Path, watched: &Path, delete: bool, expected: Option<Sig>, committed: Option<&Path>, trash: impl FnOnce(&Path) -> io::Result<()>) -> After {
+    if !delete || !may_remove(file, watched, expected, committed) {
+        return After::Kept;
+    }
+    match trash(file) {
+        Ok(()) => After::Trashed,
+        Err(_) => After::TrashFailed,
+    }
+}
+
+/// What the import thread needs to remove auto-imported files: the
+/// watched folder and the list of files handed over. Only made while
+/// "Delete files after importing them" is on.
+#[derive(Clone)]
+pub struct Removal {
+    pub watched: PathBuf,
+    pub imported: Arc<Mutex<Imported>>,
+}
+
+impl Removal {
+    /// [`after_import`] for `file`, with the version handed over taken from
+    /// the list. A trashed file is forgotten, so the same file dropped in
+    /// again later imports again (the duplicate check then applies).
+    pub fn finish(&self, file: &Path, committed: Option<&Path>, trash: impl FnOnce(&Path) -> io::Result<()>) -> After {
+        let expected = self.imported.lock().unwrap_or_else(|p| p.into_inner()).sig(file);
+        let after = after_import(file, &self.watched, true, expected, committed, trash);
+        if after == After::Trashed {
+            self.imported.lock().unwrap_or_else(|p| p.into_inner()).forget(file);
+        }
+        after
+    }
+}
+
+/// Moves `path` to the Trash. falcon trashes rather than deletes so that a
+/// file removed by mistake can be put back from the Trash.
+pub fn trash(path: &Path) -> io::Result<()> {
+    platform::trash(path)
 }
 
 /// The background thread watching one folder. Dropping it stops the
@@ -252,7 +356,12 @@ pub fn is_network_volume(path: &Path) -> bool {
 mod platform {
     use std::path::Path;
 
-    use objc2_foundation::{NSNumber, NSString, NSURL, NSURLVolumeIsLocalKey};
+    use objc2_foundation::{NSFileManager, NSNumber, NSString, NSURL, NSURLVolumeIsLocalKey};
+
+    pub fn trash(path: &Path) -> std::io::Result<()> {
+        let url = NSURL::fileURLWithPath(&NSString::from_str(&path.to_string_lossy()));
+        NSFileManager::defaultManager().trashItemAtURL_resultingItemURL_error(&url, None).map_err(|e| std::io::Error::other(e.localizedDescription().to_string()))
+    }
 
     pub fn is_remote(path: &Path) -> bool {
         let url = NSURL::fileURLWithPath(&NSString::from_str(&path.to_string_lossy()));
@@ -270,6 +379,10 @@ mod platform {
 mod platform {
     pub fn is_remote(_: &std::path::Path) -> bool {
         false
+    }
+
+    pub fn trash(_: &std::path::Path) -> std::io::Result<()> {
+        Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "no Trash on this system"))
     }
 }
 
@@ -343,6 +456,122 @@ mod tests {
             assert!(scan(dir, &mut fresh, &imported, t0 + Duration::from_secs(s)).is_empty());
         }
         assert!(scan(&dir.join("missing"), &mut settle, &imported, t0).is_empty());
+    }
+
+    /// A watched folder holding `photo.png`, handed over, and a library
+    /// folder beside it holding the imported original.
+    struct Setup {
+        _tmp: tempfile::TempDir,
+        watched: PathBuf,
+        file: PathBuf,
+        original: PathBuf,
+        removal: Removal,
+    }
+
+    fn setup() -> Setup {
+        let tmp = tempfile::tempdir().unwrap();
+        let watched = tmp.path().join("Drop/Books");
+        let lib = tmp.path().join("Books.library/images/X.info");
+        std::fs::create_dir_all(&watched).unwrap();
+        std::fs::create_dir_all(&lib).unwrap();
+        let file = watched.join("photo.png");
+        let original = lib.join("photo.png");
+        std::fs::write(&file, vec![1u8; 4000]).unwrap();
+        std::fs::write(&original, vec![1u8; 4000]).unwrap();
+        let imported: Arc<Mutex<Imported>> = Arc::default();
+        imported.lock().unwrap().add(file.clone(), Sig::of(&std::fs::metadata(&file).unwrap()));
+        let removal = Removal { watched: watched.clone(), imported };
+        Setup { _tmp: tmp, watched, file, original, removal }
+    }
+
+    /// A stand-in for the Trash that deletes and records what it was given.
+    fn bin(log: &Mutex<Vec<PathBuf>>) -> impl FnOnce(&Path) -> io::Result<()> + '_ {
+        move |p: &Path| {
+            log.lock().unwrap().push(p.to_path_buf());
+            std::fs::remove_file(p)
+        }
+    }
+
+    #[test]
+    fn a_committed_import_removes_the_file() {
+        let s = setup();
+        let log = Mutex::new(Vec::new());
+        assert_eq!(s.removal.finish(&s.file, Some(&s.original), bin(&log)), After::Trashed);
+        assert_eq!(*log.lock().unwrap(), std::slice::from_ref(&s.file));
+        assert!(!s.file.exists() && s.original.exists(), "only the watched copy goes");
+        assert_eq!(s.removal.imported.lock().unwrap().sig(&s.file), None, "forgotten, so the same file dropped again imports again");
+    }
+
+    #[test]
+    fn a_failed_or_held_import_keeps_the_file() {
+        let s = setup();
+        let log = Mutex::new(Vec::new());
+        assert_eq!(s.removal.finish(&s.file, None, bin(&log)), After::Kept, "failed, or held for the duplicate dialog");
+        let gone = s.original.with_file_name("missing.png");
+        assert_eq!(s.removal.finish(&s.file, Some(&gone), bin(&log)), After::Kept, "the original isn't in the library");
+        assert_eq!(s.removal.finish(&s.file, Some(&s.file), bin(&log)), After::Kept, "the original can't be the file itself");
+        assert!(log.lock().unwrap().is_empty() && s.file.exists());
+        assert!(s.removal.imported.lock().unwrap().sig(&s.file).is_some(), "still remembered, so it isn't imported again");
+    }
+
+    #[test]
+    fn deleting_off_keeps_the_file() {
+        let s = setup();
+        let sig = s.removal.imported.lock().unwrap().sig(&s.file);
+        let log = Mutex::new(Vec::new());
+        assert_eq!(after_import(&s.file, &s.watched, false, sig, Some(&s.original), bin(&log)), After::Kept);
+        assert!(log.lock().unwrap().is_empty() && s.file.exists());
+        assert_eq!(after_import(&s.file, &s.watched, true, sig, Some(&s.original), bin(&log)), After::Trashed);
+    }
+
+    #[test]
+    fn nothing_outside_the_watched_folder_is_removed() {
+        let s = setup();
+        let log = Mutex::new(Vec::new());
+        // A file in a subfolder, or elsewhere, even if listed as handed over.
+        let sub = s.watched.join("sub");
+        std::fs::create_dir(&sub).unwrap();
+        let nested = sub.join("deep.png");
+        std::fs::write(&nested, vec![2u8; 4000]).unwrap();
+        let sig = Some(Sig::of(&std::fs::metadata(&nested).unwrap()));
+        assert!(!may_remove(&nested, &s.watched, sig, Some(&s.original)));
+        let outside = s.watched.parent().unwrap().join("other.png");
+        std::fs::write(&outside, vec![2u8; 4000]).unwrap();
+        let sig = Some(Sig::of(&std::fs::metadata(&outside).unwrap()));
+        assert!(!may_remove(&outside, &s.watched, sig, Some(&s.original)));
+        // A path that climbs out through `..`.
+        let climbing = s.watched.join("../other.png");
+        assert!(!may_remove(&climbing, &s.watched, sig, Some(&s.original)));
+        // A link inside the folder is not followed to its target.
+        #[cfg(unix)]
+        {
+            let link = s.watched.join("link.png");
+            std::os::unix::fs::symlink(&outside, &link).unwrap();
+            assert!(!may_remove(&link, &s.watched, sig, Some(&s.original)));
+        }
+        assert_eq!(after_import(&outside, &s.watched, true, sig, Some(&s.original), bin(&log)), After::Kept);
+        assert!(log.lock().unwrap().is_empty() && outside.exists() && nested.exists());
+    }
+
+    #[test]
+    fn a_file_changed_since_it_was_handed_over_is_kept() {
+        let s = setup();
+        std::fs::write(&s.file, vec![3u8; 9000]).unwrap();
+        let log = Mutex::new(Vec::new());
+        assert_eq!(s.removal.finish(&s.file, Some(&s.original), bin(&log)), After::Kept);
+        let other = s.watched.join("never-handed-over.png");
+        std::fs::write(&other, vec![1u8; 4000]).unwrap();
+        assert_eq!(s.removal.finish(&other, Some(&s.original), bin(&log)), After::Kept, "not in the list");
+        assert!(log.lock().unwrap().is_empty() && s.file.exists());
+    }
+
+    #[test]
+    fn a_trash_failure_keeps_the_file() {
+        let s = setup();
+        let after = s.removal.finish(&s.file, Some(&s.original), |_: &Path| Err(io::Error::other("no")));
+        assert_eq!(after, After::TrashFailed);
+        assert!(s.file.exists());
+        assert!(s.removal.imported.lock().unwrap().sig(&s.file).is_some(), "still remembered, so it isn't imported in a loop");
     }
 
     #[test]

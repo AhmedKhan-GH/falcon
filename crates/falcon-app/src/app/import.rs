@@ -465,6 +465,13 @@ impl App {
     /// on a background thread, so the window stays responsive. Progress
     /// shows under the toolbar.
     pub(crate) fn spawn_import(&mut self, jobs: Vec<Job>) {
+        self.spawn_import_then(jobs, None);
+    }
+
+    /// [`App::spawn_import`], then, for files from the auto-import folder
+    /// with deleting on (`removal`), each file whose import committed is
+    /// moved to the Trash (`auto_import::Removal`).
+    fn spawn_import_then(&mut self, jobs: Vec<Job>, removal: Option<crate::auto_import::Removal>) {
         if jobs.is_empty() {
             return;
         }
@@ -482,6 +489,21 @@ impl App {
                 // A file already in the library is held for the duplicate
                 // dialog (`import_dupes`) instead of being committed.
                 let result = crate::import_dupes::import_one(&f, &opts, &shared, dupes.as_ref());
+                if let Some(removal) = &removal {
+                    // The item's original as the library now has it; `None`
+                    // when the import failed or the file is held for the
+                    // duplicate dialog, which still needs it.
+                    let committed = match &result {
+                        Ok(Some(id)) => {
+                            let lib = lock(&shared);
+                            lib.item(id).map(|item| item.original_path(lib.root()))
+                        }
+                        _ => None,
+                    };
+                    if removal.finish(&f, committed.as_deref(), crate::auto_import::trash) == crate::auto_import::After::TrashFailed {
+                        crate::errlog::error(&format!("auto-import: couldn't move {} to the Trash", f.display()));
+                    }
+                }
                 // Pasted images are staged in falcon's own temp folder; they
                 // are removed only now, after the import has read them.
                 if scratch.as_ref().is_some_and(|d| f.starts_with(d)) {
@@ -508,8 +530,10 @@ impl App {
     /// stops it when auto-import is off or no library is open) and imports
     /// what it found, as Eagle's auto-import does: into the library's root,
     /// with no folders or tags, through the usual import so the duplicate
-    /// check and the failed-imports list apply. A folder that can't be
-    /// watched (gone, or on a network drive) is reported once.
+    /// check and the failed-imports list apply. With "Delete files after
+    /// importing them" on, each file is moved to the Trash once its import
+    /// committed. A folder that can't be watched (gone, or on a network
+    /// drive) is reported once.
     pub(crate) fn auto_import_tick(&mut self) {
         let want = match (&self.ws.lib, &self.ws.root) {
             (Some(_), Some(root)) => self.prefs.auto_import_dir(root),
@@ -538,7 +562,8 @@ impl App {
                 self.flash(format!("Importing {n} file{} from the auto-import folder", if n == 1 { "" } else { "s" }));
             }
             let opts = self.prefs.import_options(Vec::new());
-            self.spawn_import(files.into_iter().map(|path| Job { path, opts: opts.clone() }).collect());
+            let removal = self.auto_import.watcher.as_ref().filter(|_| self.prefs.auto_import_delete).map(|w| crate::auto_import::Removal { watched: w.dir.clone(), imported: self.auto_import.imported.clone() });
+            self.spawn_import_then(files.into_iter().map(|path| Job { path, opts: opts.clone() }).collect(), removal);
         }
     }
 }

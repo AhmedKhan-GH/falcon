@@ -127,6 +127,11 @@ pub struct Prefs {
     /// Eagle's `notification.notification.when.autoImport`: a notice when
     /// files from the watched folder start importing.
     pub notify_auto_import: bool,
+    /// Delete each file from the watched folder once it is in the library,
+    /// as Eagle always does (it has no setting for it). On by default. Off
+    /// keeps the files and remembers what was imported instead
+    /// (`auto_import::Imported`).
+    pub auto_import_delete: bool,
     /// The tag picker's own settings (its gear menu), as Eagle keeps them
     /// for its tag panel.
     pub tag_picker: crate::tags::PickerPrefs,
@@ -262,6 +267,7 @@ impl Default for Prefs {
             auto_import: false,
             auto_import_path: None,
             notify_auto_import: true,
+            auto_import_delete: true,
             tag_picker: Default::default(),
         }
     }
@@ -982,10 +988,16 @@ pub fn auto_import_refusal(path: &std::path::Path) -> Option<String> {
 
 /// Auto-Import: a folder whose new files are imported by themselves.
 fn auto_import(p: &mut Page, d: &mut Draft, library: Option<&std::path::Path>, refused: &mut Option<String>) {
-    let keywords = ["auto", "import", "watch", "monitor", "folder", "drop", "automatic", "inbox"];
+    let keywords = ["auto", "import", "watch", "monitor", "folder", "drop", "automatic", "inbox", "delete", "trash", "remove"];
     p.block("Auto-import", &keywords, |ui| {
         let was = d.prefs.auto_import;
         ui.checkbox(&mut d.prefs.auto_import, "Import files added to a folder automatically");
+        ui.checkbox(&mut d.prefs.auto_import_delete, "Delete files after importing them");
+        if d.prefs.auto_import_delete {
+            ui.label(RichText::new("Files in the watched folder are moved to the Trash once they are in the library.").size(11.0).color(t::p().icon_red));
+        } else {
+            note(ui, "Files stay in the folder; falcon remembers which ones it imported and skips them.");
+        }
         let mut choose = d.prefs.auto_import && !was && d.prefs.auto_import_path.is_none();
         ui.add_space(4.0);
         ui.horizontal(|ui| {
@@ -1227,11 +1239,20 @@ mod tests {
         assert!(p.font_style_tags, "Eagle's font autoTag defaults to on");
         assert_eq!(p.api_ports(), Some(41596..=41600));
         assert!(!p.auto_import && p.auto_import_path.is_none(), "Eagle's autoImport defaults to off with no folder");
+        assert!(p.auto_import_delete, "Eagle deletes imported files from the watched folder");
         assert!(p.tells_auto_import(), "Eagle's autoImport notification defaults to on");
         let chosen = Prefs { auto_import_path: Some("/d".into()), ..Default::default() };
         assert_eq!(chosen.auto_import_dir(std::path::Path::new("/x/Books.library")), None, "off watches nothing");
         let on = Prefs { auto_import: true, ..chosen };
         assert_eq!(on.auto_import_dir(std::path::Path::new("/x/Books.library")), Some("/d/Books".into()));
+    }
+
+    #[test]
+    fn auto_import_delete_is_on_for_saved_states_without_it() {
+        let p: Prefs = serde_json::from_str("{}").unwrap();
+        assert!(p.auto_import_delete);
+        let off: Prefs = serde_json::from_str(r#"{"auto_import_delete":false}"#).unwrap();
+        assert!(!off.auto_import_delete);
     }
 
     #[test]
