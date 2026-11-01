@@ -1712,6 +1712,7 @@ dependencies = [
  "objc2-image-io",
  "regex",
  "resvg",
+ "roxmltree 0.21.2",
  "serde",
  "serde_json",
  "symphonia",

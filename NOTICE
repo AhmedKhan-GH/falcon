@@ -14,6 +14,8 @@ Third-party material:
   C source vendored by the ufbx Rust crate.
 - ufbx Rust crate 0.8.0 (https://github.com/ufbx/ufbx-rust), MIT OR PDDL-1.0,
   copyright (c) Samuli Raivio.
+- roxmltree 0.21 (https://github.com/RazrFalcon/roxmltree), the COLLADA XML
+  parser, MIT OR Apache-2.0, copyright (c) Yevhenii Reizner.
 
 "Eagle" is a trademark of its respective owner. Falcon is not affiliated
 with, endorsed by or sponsored by Eagle or its developers.

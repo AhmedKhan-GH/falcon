@@ -122,10 +122,10 @@ The `thumbnail` module holds the rules as plain functions: `plan_raster`, `plan_
   - The result is opaque RGB, as Eagle's JPEG capture is.
   - woff2 is unpacked first. A TrueType woff2 whose glyphs are stored packed (the usual case) has no outlines after unpacking, so it falls back to QuickLook instead of drawing a blank card.
 - **3D models.**
-  - obj, stl, ply, glb, gltf, 3mf and fbx are drawn by `model3d::raster` instead of QuickLook, as Eagle renders models in its own viewer at import.
+  - obj, stl, ply, glb, gltf, 3mf, fbx and dae are drawn by `model3d::raster` instead of QuickLook, as Eagle renders models in its own viewer at import.
   - The model is drawn in the viewer's opening view (Y up, fitted, Eagle's lighting and default colour) on a transparent 1080×1080 canvas at 2× supersampling. The empty border is cropped and 40 transparent pixels are added on each side.
   - That image is the thumbnail, not scaled down (`max_side` is 1160 for these formats), and `width` and `height` are its size, as in Eagle.
-  - A model that can't be read falls back to QuickLook. 3ds, dae and ifc always use QuickLook.
+  - A model that can't be read falls back to QuickLook. 3ds and ifc always use QuickLook.
 - **Custom thumbnails.** `Library::set_custom_thumbnail(id, path)` follows Eagle: the same format and 10 MB rules, a byte-for-byte copy, `width` and `height` from the picture, a new palette, `noThumbnail` and `noPreview` removed and `customThumbnail: true` appended. It also refuses a file it can't decode. `reset_custom_thumbnail` removes the key and redraws. `thumbnail::has_custom_thumbnail` and `custom_thumbnail_allowed` hold the rules; jpeg and tiff count as jpg and tif.
 - **Refresh Thumbnail.** `Library::refresh_thumbnail(id)` re-reads size and file times, then redraws with import's own pipeline and recomputes the palette, or for audio the `bpm` (see [Import](import.md)). It returns false and changes nothing for an item with a custom thumbnail. The new thumbnail replaces the old file only once it has been drawn, so a failed redraw keeps the old one. Unlike Eagle, a thumbnail that is no longer needed is deleted, because falcon shows a thumbnail file whenever one exists.
 - **Crop, rotate and flip.** In `transform`: `Library::rotate_item(id, quarter_turns)` (clockwise; negative is anticlockwise), `Library::flip_item(id, Flip)` (see Flip above) and `Library::crop_item(id, PixelRect)`, in the image's displayed pixels.

@@ -60,3 +60,4 @@ Libraries built into falcon beyond ordinary Rust crates from crates.io, with the
 |---|---|---|---|---|
 | ufbx (C library, vendored by the `ufbx` crate and compiled with `cc`) | 0.18.0 | MIT (or public domain, at the user's choice) | https://github.com/ufbx/ufbx | Reading FBX models (`crates/falcon-library/src/model3d/fbx.rs`) |
 | `ufbx` Rust bindings | 0.8.0 | MIT OR PDDL-1.0 | https://github.com/ufbx/ufbx-rust | Rust interface to the ufbx C library |
+| roxmltree | 0.21 | MIT OR Apache-2.0 | https://github.com/RazrFalcon/roxmltree | Reading COLLADA (`.dae`) models (`crates/falcon-library/src/model3d/dae.rs`); already linked through resvg |

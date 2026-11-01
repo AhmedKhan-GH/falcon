@@ -1,11 +1,12 @@
 //! 3D models: readers for the formats falcon can show itself (OBJ with MTL
-//! colours, STL, PLY, glTF/GLB, 3MF and FBX), the triangle model they produce,
-//! the measurements Eagle's model viewer shows, and the geometry the viewer
-//! and the thumbnail renderer share (normals, feature edges, shading).
+//! colours, STL, PLY, glTF/GLB, 3MF, FBX and COLLADA), the triangle model
+//! they produce, the measurements Eagle's model viewer shows, and the
+//! geometry the viewer and the thumbnail renderer share (normals, feature
+//! edges, shading).
 //!
-//! 3DS, DAE and IFC are not read; those items keep their QuickLook
-//! still.
+//! 3DS and IFC are not read; those items keep their QuickLook still.
 
+pub mod dae;
 pub mod export;
 pub mod fbx;
 pub mod geom;
@@ -23,7 +24,7 @@ use std::path::Path;
 use math::V3;
 
 /// Extensions read here, lower case.
-pub const EXTENSIONS: &[&str] = &["obj", "stl", "ply", "glb", "gltf", "3mf", "fbx"];
+pub const EXTENSIONS: &[&str] = &["obj", "stl", "ply", "glb", "gltf", "3mf", "fbx", "dae"];
 
 /// Whether files with extension `ext` (any case) are read here.
 pub fn is_supported(ext: &str) -> bool {
@@ -180,6 +181,7 @@ pub fn parse(bytes: &[u8], ext: &str, side: &dyn Fn(&str) -> Option<Vec<u8>>) ->
         "gltf" => gltf::parse_gltf(bytes, side),
         "3mf" => threemf::parse(bytes),
         "fbx" => fbx::parse(bytes),
+        "dae" => dae::parse(bytes, side),
         other => Err(ParseError(format!("cannot read .{other} models"))),
     }
 }
@@ -208,6 +210,7 @@ mod tests {
         assert!(load(&sub.join("missing.ply"), "ply").is_err());
         assert!(parse(b"", "fbx", &|_| None).is_err());
         assert!(parse(b"", "dae", &|_| None).is_err());
-        assert!(is_supported("GLB") && is_supported("FBX") && !is_supported("dae"));
+        assert!(parse(b"", "3ds", &|_| None).is_err());
+        assert!(is_supported("GLB") && is_supported("FBX") && is_supported("Dae") && !is_supported("3ds"));
     }
 }
