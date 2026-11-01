@@ -32,7 +32,6 @@ pub(crate) mod state;
 pub(crate) mod import;
 pub(crate) mod library;
 pub(crate) mod navigation;
-#[path = "../image_edit.rs"]
 pub(crate) mod image_edit;
 
 // Sidebar.
