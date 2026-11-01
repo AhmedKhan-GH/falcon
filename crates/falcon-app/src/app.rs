@@ -3117,6 +3117,21 @@ impl App {
                     }
                 });
             }
+            if scope != Scope::Trash && scope != Scope::Recent {
+                // As in Eagle, the entries' menu picks which of them show;
+                // it stays open while you tick them. Trash and Recently Used
+                // have menus of their own.
+                egui::Popup::context_menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
+                    ui.set_min_width(180.0);
+                    let mut all = true;
+                    ui.add_enabled(false, egui::Checkbox::new(&mut all, "All"));
+                    let s = &mut self.prefs.sidebar;
+                    ui.checkbox(&mut s.uncategorized, "Uncategorized");
+                    ui.checkbox(&mut s.untagged, "Untagged");
+                    ui.checkbox(&mut s.recent, "Recently Used");
+                    ui.checkbox(&mut s.random, "Random");
+                });
+            }
             if scope == Scope::Trash {
                 resp.context_menu(|ui| {
                     if ui.add_enabled(n.trash > 0, egui::Button::new("Restore All Items")).clicked() {
