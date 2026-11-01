@@ -38,6 +38,9 @@ pub(crate) struct ImageState {
     /// The preview-only rotation and flip of the image shown; reset when the
     /// viewer moves to another item or closes.
     pub tf: crate::ui::viewer::crop::ViewTransform,
+    /// The HDR/EXR exposure in stops (the bar's slider); reset to 0 when the
+    /// viewer moves to another item.
+    pub exposure: f32,
 }
 
 /// Side of a checkerboard square, in points.
@@ -68,6 +71,7 @@ impl App {
         }
         if self.image.opened != id {
             self.image.tf = Default::default();
+            self.image.exposure = 0.0;
         }
         let tf = self.image.tf;
         let natural = if let Some(size) = page_size {
@@ -317,6 +321,7 @@ impl App {
         let tools_x = self.gif_toggle_button(ui, item, x, cy);
         let tools_left = self.edit_bar(ui, item, tools_x, cy);
         let tools_left = self.tiff_bar(ui, item, tools_left, cy);
+        let tools_left = self.exposure_bar(ui, item, tools_left, cy);
         audio::bar_name(ui, item, bar, name_x, tools_left);
 
         if let Some(z) = zoom {

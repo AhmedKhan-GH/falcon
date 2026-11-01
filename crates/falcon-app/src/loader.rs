@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::{Arc, Condvar, Mutex};
+use std::sync::atomic::Ordering;
 
 use eframe::egui::{Color32, ColorImage, Context, Pos2, Rect, TextureHandle, TextureOptions};
 use falcon_library::model::Item;
@@ -64,6 +65,8 @@ pub struct Job {
     raw: bool,
     /// A page of a multi-page TIFF to decode (0: the file as usual).
     page: usize,
+    /// A Radiance HDR or OpenEXR image: tone mapped at the loader's exposure.
+    hdr: bool,
 }
 
 /// The part of an SVG on screen: fractions of the drawing
@@ -89,14 +92,14 @@ pub struct SvgPatch {
 pub fn original_job(item: &Item, root: &std::path::Path, tile: usize) -> Option<Job> {
     let ext = item.ext.to_lowercase();
     crate::logic::full_resolution(&ext)
-        .then(|| Job { key: (item.id.clone(), Tier::Original), path: item.original_path(root), svg: false, quicklook: false, tile, region: None, raw: falcon_library::exif::is_raw(&ext), page: 0 })
+        .then(|| Job { key: (item.id.clone(), Tier::Original), path: item.original_path(root), svg: false, quicklook: false, tile, region: None, raw: falcon_library::exif::is_raw(&ext), page: 0, hdr: falcon_library::hdr::is_hdr(&ext) })
 }
 
 /// The job decoding page `page` (0-based, above 0) of a multi-page TIFF at
 /// the full tier, kept under the key `<id>#page<n>`.
 pub fn tiff_page_job(item: &Item, root: &std::path::Path, page: usize) -> Job {
     let key = (format!("{}#page{page}", item.id), Tier::Full);
-    Job { key, path: item.original_path(root), svg: false, quicklook: false, tile: 0, region: None, raw: false, page }
+    Job { key, path: item.original_path(root), svg: false, quicklook: false, tile: 0, region: None, raw: false, page, hdr: false }
 }
 
 /// The job decoding `item`'s original for a large grid card, for the
@@ -104,7 +107,7 @@ pub fn tiff_page_job(item: &Item, root: &std::path::Path, page: usize) -> Job {
 pub fn card_job(item: &Item, root: &std::path::Path) -> Option<Job> {
     let ext = item.ext.to_lowercase();
     crate::logic::quality_card_format(&ext)
-        .then(|| Job { key: (item.id.clone(), Tier::Card), path: item.original_path(root), svg: false, quicklook: false, tile: 0, region: None, raw: false, page: 0 })
+        .then(|| Job { key: (item.id.clone(), Tier::Card), path: item.original_path(root), svg: false, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: false })
 }
 
 /// Picks the file to decode for `item`: the thumbnail when it exists (unless
@@ -115,10 +118,14 @@ pub fn job_for(item: &Item, root: &std::path::Path, tier: Tier) -> Option<Job> {
     let original = supported.then(|| item.original_path(root));
     if tier == Tier::Full && falcon_library::exif::is_raw(&ext) {
         let quicklook = cfg!(target_os = "macos");
-        return Some(Job { key: (item.id.clone(), tier), path: item.original_path(root), svg: false, quicklook, tile: 0, region: None, raw: true, page: 0 });
+        return Some(Job { key: (item.id.clone(), tier), path: item.original_path(root), svg: false, quicklook, tile: 0, region: None, raw: true, page: 0, hdr: false });
+    }
+    if tier == Tier::Full && (ext == "tga" || falcon_library::hdr::is_hdr(&ext)) {
+        // Decoded by falcon itself (HDR and EXR tone mapped), not QuickLook.
+        return Some(Job { key: (item.id.clone(), tier), path: item.original_path(root), svg: false, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: falcon_library::hdr::is_hdr(&ext) });
     }
     if tier == Tier::Full && !supported && cfg!(target_os = "macos") {
-        return Some(Job { key: (item.id.clone(), tier), path: item.original_path(root), svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0 });
+        return Some(Job { key: (item.id.clone(), tier), path: item.original_path(root), svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false });
     }
     let (path, svg) = match (tier, item.thumbnail_path(root), original) {
         (Tier::Full, _, Some(o)) => (o, ext == "svg"),
@@ -126,7 +133,7 @@ pub fn job_for(item: &Item, root: &std::path::Path, tier: Tier) -> Option<Job> {
         (_, None, Some(o)) => (o, ext == "svg"),
         (_, None, None) => return None,
     };
-    Some(Job { key: (item.id.clone(), tier), path, svg, quicklook: false, tile: 0, region: None, raw: false, page: 0 })
+    Some(Job { key: (item.id.clone(), tier), path, svg, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: false })
 }
 
 struct Shared {
@@ -136,6 +143,12 @@ struct Shared {
     closed: std::sync::atomic::AtomicBool,
     /// Grayscale preview: the viewer's tiers decode desaturated.
     gray: std::sync::atomic::AtomicBool,
+    /// The HDR exposure (an `f32`'s bits): a multiplier, 1.0 by default.
+    exposure: std::sync::atomic::AtomicU32,
+    /// The last HDR image decoded, so moving the exposure slider tone maps
+    /// again without reading the file: its path, the long side it was
+    /// reduced to (`u32::MAX`: not reduced) and the linear pixels.
+    linear: Mutex<Option<(PathBuf, u32, Arc<image::Rgba32FImage>)>>,
 }
 
 /// What a worker hands back: one image, or a full-resolution one in tiles.
@@ -153,6 +166,8 @@ struct Decoded {
     region: bool,
     /// Decoded desaturated (grayscale preview).
     gray: bool,
+    /// For an HDR job: the exposure (bits) it was tone mapped at.
+    exposure: Option<u32>,
 }
 
 /// Whether a tier follows the grayscale preview: every one, as Eagle's
@@ -226,11 +241,14 @@ pub struct Loader {
     /// doesn't blank the view.
     gray: bool,
     stale: HashSet<Key>,
+    /// The HDR exposure (a multiplier) and the keys queued for HDR images.
+    exposure: f32,
+    hdr_keys: HashSet<Key>,
 }
 
 impl Loader {
     pub fn new(ctx: &Context) -> Self {
-        let shared = Arc::new(Shared { queue: Mutex::new(VecDeque::new()), cv: Condvar::new(), closed: Default::default(), gray: Default::default() });
+        let shared = Arc::new(Shared { queue: Mutex::new(VecDeque::new()), cv: Condvar::new(), closed: Default::default(), gray: Default::default(), exposure: std::sync::atomic::AtomicU32::new(1.0f32.to_bits()), linear: Mutex::new(None) });
         let (tx, rx) = std::sync::mpsc::channel();
         let workers = std::thread::available_parallelism().map_or(4, |n| n.get().clamp(2, 6));
         for _ in 0..workers {
@@ -250,11 +268,12 @@ impl Loader {
                         }
                     };
                     let gray = grays(job.key.1) && shared.gray.load(std::sync::atomic::Ordering::Relaxed);
-                    let mut image = decode(&job);
+                    let exposure = shared.exposure.load(Ordering::Relaxed);
+                    let mut image = decode(&job, f32::from_bits(exposure), &shared.linear);
                     if gray && let Some(p) = &mut image {
                         desaturate(p);
                     }
-                    if tx.send(Decoded { key: job.key, image, region: job.region.is_some(), gray }).is_err() {
+                    if tx.send(Decoded { key: job.key, image, region: job.region.is_some(), gray, exposure: job.hdr.then_some(exposure) }).is_err() {
                         return;
                     }
                     ctx.request_repaint();
@@ -279,6 +298,8 @@ impl Loader {
             svg_seq: 0,
             gray: false,
             stale: HashSet::new(),
+            exposure: 1.0,
+            hdr_keys: HashSet::new(),
         }
     }
 
@@ -292,6 +313,11 @@ impl Loader {
                 if !d.region {
                     self.pending.remove(&d.key);
                 }
+                continue;
+            }
+            // Tone mapped before the exposure moved: asked again.
+            if d.exposure.is_some_and(|e| e != self.exposure.to_bits()) {
+                self.pending.remove(&d.key);
                 continue;
             }
             if d.region {
@@ -406,6 +432,26 @@ impl Loader {
         self.svg_patch = None;
     }
 
+    /// Sets the exposure (a multiplier) HDR and EXR images are tone mapped
+    /// at. On a change, what is cached for them is marked stale and made
+    /// again, still shown until the new pixels arrive.
+    pub fn set_exposure(&mut self, exposure: f32) {
+        if self.exposure == exposure {
+            return;
+        }
+        self.exposure = exposure;
+        self.shared.exposure.store(exposure.to_bits(), Ordering::Relaxed);
+        for key in &self.hdr_keys {
+            let have = match key.1 {
+                Tier::Original => self.original.as_ref().is_some_and(|o| o.id == key.0) || self.staged.as_ref().is_some_and(|s| s.original.id == key.0),
+                tier => self.caches.get(&tier).is_some_and(|c| c.peek(&key.0).is_some()),
+            };
+            if have {
+                self.stale.insert(key.clone());
+            }
+        }
+    }
+
     /// The full-resolution original of `id`, once every tile is uploaded.
     pub fn original(&self, id: &str) -> Option<&Original> {
         self.original.as_ref().filter(|o| o.id == id)
@@ -486,6 +532,9 @@ impl Loader {
                 continue;
             }
             self.pending.insert(j.key.clone());
+            if j.hdr {
+                self.hdr_keys.insert(j.key.clone());
+            }
             q.push_back(j);
             added = true;
         }
@@ -531,7 +580,9 @@ impl Drop for Loader {
     }
 }
 
-fn decode(job: &Job) -> Option<Pixels> {
+/// Decodes `job`; HDR images are tone mapped at `exposure`, reading the file
+/// only when `linear` doesn't already hold it.
+fn decode(job: &Job, exposure: f32, linear: &Mutex<Option<(PathBuf, u32, Arc<image::Rgba32FImage>)>>) -> Option<Pixels> {
     if let Some(region) = job.region {
         let data = std::fs::read(&job.path).ok()?;
         let rgba = thumbnail::render_svg_region(&data, region.rect, (region.size[0], region.size[1])).ok()?.into_rgba8();
@@ -539,14 +590,16 @@ fn decode(job: &Job) -> Option<Pixels> {
         return Some(Pixels::Patch(region, ColorImage::from_rgba_unmultiplied(size, rgba.as_raw())));
     }
     if job.key.1 == Tier::Original {
-        return decode_tiled(job);
+        return decode_tiled(job, exposure, linear);
     }
     let max = job.key.1.max_side();
     if job.page > 0 {
         let rgba = crate::tiff_pages::decode_page(&job.path, job.page, max)?;
         return Some(Pixels::Whole(ColorImage::from_rgba_unmultiplied([rgba.width() as usize, rgba.height() as usize], rgba.as_raw())));
     }
-    let img = if job.raw {
+    let img = if job.hdr {
+        tone_mapped(job, max, exposure, linear)?
+    } else if job.raw {
         match raw_preview(&job.path) {
             Some(img) => img,
             None if job.quicklook => thumbnail::quicklook(&job.path, max).ok()?,
@@ -587,10 +640,46 @@ fn raw_preview(path: &std::path::Path) -> Option<image::DynamicImage> {
     thumbnail::raw_preview(&std::fs::read(path).ok()?).ok()
 }
 
+/// The HDR image of `job` tone mapped at `exposure`, at most `max` pixels on
+/// its long side. The linear pixels are kept for the next exposure: reduced
+/// to `max` when that is all that was asked for (the full tier), else whole;
+/// a whole one serves every size.
+fn tone_mapped(job: &Job, max: u32, exposure: f32, linear: &Mutex<Option<(PathBuf, u32, Arc<image::Rgba32FImage>)>>) -> Option<image::DynamicImage> {
+    let cached = linear.lock().ok()?.as_ref().filter(|(p, side, _)| *p == job.path && *side >= max).map(|(_, _, img)| img.clone());
+    let img = match cached {
+        Some(img) => img,
+        None => {
+            let img = falcon_library::hdr::decode_linear(&job.path).ok()?;
+            let long = img.width().max(img.height());
+            let (side, img) = if long > max {
+                let scale = max as f32 / long as f32;
+                let (w, h) = (((img.width() as f32 * scale).round() as u32).max(1), ((img.height() as f32 * scale).round() as u32).max(1));
+                (max, image::imageops::resize(&img, w, h, image::imageops::FilterType::Triangle))
+            } else {
+                (u32::MAX, img)
+            };
+            let img = Arc::new(img);
+            *linear.lock().ok()? = Some((job.path.clone(), side, img.clone()));
+            img
+        }
+    };
+    // A whole image kept for a smaller size is reduced again here.
+    let long = img.width().max(img.height());
+    if long > max {
+        let scale = max as f32 / long as f32;
+        let (w, h) = (((img.width() as f32 * scale).round() as u32).max(1), ((img.height() as f32 * scale).round() as u32).max(1));
+        let small = image::imageops::resize(&*img, w, h, image::imageops::FilterType::Triangle);
+        return Some(image::DynamicImage::ImageRgba8(falcon_library::hdr::tone_map(&small, exposure)));
+    }
+    Some(image::DynamicImage::ImageRgba8(falcon_library::hdr::tone_map(&img, exposure)))
+}
+
 /// Decodes the original at full size and cuts it into tiles, all on the
 /// worker; the UI thread only uploads them.
-fn decode_tiled(job: &Job) -> Option<Pixels> {
-    let img = if job.raw {
+fn decode_tiled(job: &Job, exposure: f32, linear: &Mutex<Option<(PathBuf, u32, Arc<image::Rgba32FImage>)>>) -> Option<Pixels> {
+    let img = if job.hdr {
+        tone_mapped(job, u32::MAX, exposure, linear)?
+    } else if job.raw {
         raw_preview(&job.path)?
     } else if imageio(&job.path) {
         falcon_library::imageio::decode(&job.path).ok()?
@@ -632,14 +721,14 @@ mod tests {
     }
 
     fn original(path: PathBuf, tile: usize) -> Job {
-        Job { key: ("x".into(), Tier::Original), path, svg: false, quicklook: false, tile, region: None, raw: false, page: 0 }
+        Job { key: ("x".into(), Tier::Original), path, svg: false, quicklook: false, tile, region: None, raw: false, page: 0, hdr: false }
     }
 
     #[test]
     fn originals_decode_into_padded_tiles() {
         let dir = tempfile::tempdir().unwrap();
         let path = write_png(dir.path(), 300, 130);
-        let Some(Pixels::Tiled { size, tiles }) = decode(&original(path, 128)) else { panic!("not tiled") };
+        let Some(Pixels::Tiled { size, tiles }) = decode(&original(path, 128), 1.0, &Mutex::new(None)) else { panic!("not tiled") };
         assert_eq!(size, [300, 130]);
         assert_eq!(tiles.len(), 3 * 2);
         for (span, img) in &tiles {
@@ -649,6 +738,37 @@ mod tests {
             // The tile's first pixel is the image's pixel at its padded origin.
             assert_eq!(img.pixels[0], Color32::from_rgb((x0 % 251) as u8, (y0 % 241) as u8, ((x0 / 64 + y0 / 64) % 256) as u8));
         }
+    }
+
+    /// An EXR is tone mapped at the exposure asked for, from the linear
+    /// pixels kept after the first read; a TGA decodes in full.
+    #[test]
+    fn hdr_tone_maps_from_the_kept_linear_image() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("x.exr");
+        let lin = image::Rgba32FImage::from_pixel(8, 4, image::Rgba([1.0, 1.0, 1.0, 1.0]));
+        image::DynamicImage::ImageRgba32F(lin).save(&path).unwrap();
+        let full = Job { key: ("x".into(), Tier::Full), path: path.clone(), svg: false, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: true };
+        let kept = Mutex::new(None);
+        let Some(Pixels::Whole(a)) = decode(&full, 1.0, &kept) else { panic!("no full tier") };
+        assert_eq!(a.size, [8, 4]);
+        assert_eq!(a.pixels[0], Color32::from_rgb(188, 188, 188));
+        // The file is gone, yet a new exposure is made from what was kept.
+        std::fs::remove_file(&path).unwrap();
+        let Some(Pixels::Whole(b)) = decode(&full, 4.0, &kept) else { panic!("not kept") };
+        assert!(b.pixels[0].r() > 188);
+        let original = Job { key: ("x".into(), Tier::Original), tile: 128, ..full };
+        let Some(Pixels::Tiled { size, .. }) = decode(&original, 1.0, &kept) else { panic!("not tiled") };
+        assert_eq!(size, [8, 4]);
+    }
+
+    #[test]
+    fn tga_originals_decode_in_full() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("x.tga");
+        image::RgbaImage::from_pixel(300, 130, image::Rgba([10, 20, 30, 255])).save(&path).unwrap();
+        let Some(Pixels::Tiled { size, .. }) = decode(&original(path, 128), 1.0, &Mutex::new(None)) else { panic!("not tiled") };
+        assert_eq!(size, [300, 130]);
     }
 
     /// A HEIC original (which falcon's own decoder can't read) decodes
@@ -661,11 +781,11 @@ mod tests {
         let path = dir.path().join("photo.heic");
         let img = image::RgbaImage::from_fn(300, 130, |x, _| image::Rgba([(x % 256) as u8, 0, 0, 255]));
         write(&path, "heic", &[WriteFrame { image: &img, orientation: 6, delay: None }]).unwrap();
-        let Some(Pixels::Tiled { size, tiles }) = decode(&original(path.clone(), 128)) else { panic!("not tiled") };
+        let Some(Pixels::Tiled { size, tiles }) = decode(&original(path.clone(), 128), 1.0, &Mutex::new(None)) else { panic!("not tiled") };
         assert_eq!(size, [130, 300], "turned by its orientation");
         assert_eq!(tiles.len(), 2 * 3);
-        let full = Job { key: ("x".into(), Tier::Full), path, svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0 };
-        let Some(Pixels::Whole(img)) = decode(&full) else { panic!("no full tier") };
+        let full = Job { key: ("x".into(), Tier::Full), path, svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false };
+        let Some(Pixels::Whole(img)) = decode(&full, 1.0, &Mutex::new(None)) else { panic!("no full tier") };
         assert_eq!(img.size, [130, 300]);
     }
 
@@ -680,7 +800,7 @@ mod tests {
         let path = write_png(dir.path(), 12000, 8000);
         eprintln!("wrote 12000x8000 PNG ({} MB) in {:?}", std::fs::metadata(&path).unwrap().len() >> 20, t.elapsed());
         let t = std::time::Instant::now();
-        let Some(Pixels::Tiled { size, tiles }) = decode(&original(path, crate::logic::tile_side(16384))) else { panic!("not tiled") };
+        let Some(Pixels::Tiled { size, tiles }) = decode(&original(path, crate::logic::tile_side(16384)), 1.0, &Mutex::new(None)) else { panic!("not tiled") };
         eprintln!("decoded and tiled in {:?}: {} tiles", t.elapsed(), tiles.len());
         assert_eq!(size, [12000, 8000]);
         assert!(tiles.iter().all(|(_, img)| img.size[0] <= 2048 && img.size[1] <= 2048));

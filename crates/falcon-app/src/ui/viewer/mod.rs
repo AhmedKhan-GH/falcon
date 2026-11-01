@@ -3,6 +3,7 @@
 pub(crate) mod audio;
 pub(crate) mod comments;
 pub(crate) mod crop;
+pub(crate) mod exposure;
 pub(crate) mod font;
 pub(crate) mod gif;
 pub(crate) mod image;

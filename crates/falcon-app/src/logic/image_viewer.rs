@@ -73,9 +73,10 @@ pub const FULL_TIER_SIDE: u32 = 3072;
 /// macOS 14).
 /// GIFs belong to the animation player; SVGs are re-rendered instead.
 /// RAW photos show their embedded JPEG preview at its full size, as
-/// Eagle's RAW viewer does.
+/// Eagle's RAW viewer does. TGA is decoded by falcon; HDR and EXR are tone
+/// mapped at the viewer's exposure.
 pub fn full_resolution(ext: &str) -> bool {
-    matches!(ext, "jpg" | "jpeg" | "jfif" | "jpe" | "png" | "webp" | "bmp" | "tif" | "tiff")
+    matches!(ext, "jpg" | "jpeg" | "jfif" | "jpe" | "png" | "webp" | "bmp" | "tif" | "tiff" | "tga" | "hdr" | "exr")
         || falcon_library::exif::is_raw(ext)
         || (cfg!(target_os = "macos") && falcon_library::imageio::handles(ext))
 }
