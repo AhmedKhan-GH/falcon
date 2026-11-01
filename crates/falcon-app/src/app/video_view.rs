@@ -86,7 +86,19 @@ impl SeekPreview {
 }
 
 /// How long the volume tip stays up after the last change, in seconds.
-const TIP_SECS: f64 = 1.0;
+pub(super) const TIP_SECS: f64 = 1.0;
+
+/// Eagle's volume tip: the level's speaker and the percentage in a dark
+/// box whose top right corner is at `corner`.
+pub(super) fn volume_tip(p: &egui::Painter, corner: Pos2, percent: u32) {
+    let glyph = [ic::SPEAKER_X, ic::SPEAKER_NONE, ic::SPEAKER_LOW, ic::SPEAKER_HIGH][usize::from(volume_level(percent))];
+    let g = p.layout_no_wrap(format!("{percent}%"), font(12.0), Color32::WHITE);
+    let size = vec2(8.0 + 22.0 + 2.0 + g.size().x + 12.0, 30.0);
+    let r = Rect::from_min_size(Pos2::new(corner.x - size.x, corner.y), size);
+    p.rect_filled(r, CornerRadius::same(8), Color32::from_black_alpha(178));
+    p.text(Pos2::new(r.left() + 19.0, r.center().y), Align2::CENTER_CENTER, glyph, font(18.0), Color32::WHITE);
+    p.galley(Pos2::new(r.left() + 32.0, r.center().y - g.size().y / 2.0), g, Color32::WHITE);
+}
 /// How often a held skip button repeats, in seconds (Eagle's 100 ms).
 const REPEAT_SECS: f64 = 0.1;
 
@@ -459,10 +471,19 @@ fn timed(item: &Item) -> Vec<(usize, f64, Comment)> {
 }
 
 impl App {
-    /// Player keys while a video plays in the viewer, read before the app's
-    /// own keys so Space and ⌘-arrows act on the player.
+    /// Player keys while a video or an audio item is in the viewer, read
+    /// before the app's own keys so Space and ⌘-arrows act on the player.
     pub(super) fn video_keys(&mut self, ctx: &egui::Context) {
-        if self.ws.viewer.is_none() || self.video.loaded() != self.ws.viewer.as_deref() || self.prefs_window.open || ctx.memory(|m| m.focused().is_some()) {
+        let viewer = self.ws.viewer.as_deref();
+        let (video, audio) = (viewer.is_some() && self.video.loaded() == viewer, viewer.is_some() && self.audio.loaded() == viewer);
+        if !(video || audio) || self.prefs_window.open || ctx.memory(|m| m.focused().is_some()) {
+            return;
+        }
+        if audio {
+            let pressed = self.take_player_keys(ctx);
+            for k in pressed {
+                self.audio_action(k);
+            }
             return;
         }
         // ⇧R and ⇧F turn and mirror the picture, as Eagle's image keys do
@@ -474,6 +495,14 @@ impl App {
         if flip {
             self.video.flipped = !self.video.flipped;
         }
+        let pressed = self.take_player_keys(ctx);
+        for k in pressed {
+            self.player_action(k);
+        }
+    }
+
+    /// Takes this frame's presses of the player keys out of the input.
+    fn take_player_keys(&self, ctx: &egui::Context) -> Vec<PlayerKey> {
         let mut pressed = Vec::new();
         ctx.input_mut(|i| {
             i.events.retain(|e| match e {
@@ -491,8 +520,24 @@ impl App {
                 _ => true,
             })
         });
-        for k in pressed {
-            self.player_action(k);
+        pressed
+    }
+
+    /// A player key with audio in the viewer, as Eagle's audio player
+    /// binds them: volume 5%, skips of 2% (at most 10 s), the speed steps,
+    /// and frame keys moving 1/24 s (its default frame time).
+    fn audio_action(&mut self, k: PlayerKey) {
+        let a = &mut self.audio;
+        match k {
+            PlayerKey::Toggle => a.toggle(),
+            PlayerKey::Volume(up) => a.set_volume(a.volume + if up { 0.05 } else { -0.05 }),
+            PlayerKey::Skip(fwd) => {
+                let s = skip_step(a.duration, 10.0);
+                a.seek(a.position() + if fwd { s } else { -s });
+            }
+            PlayerKey::Speed(up) => a.set_speed(falcon_video::step_rate(a.speed(), up)),
+            PlayerKey::Frames(n) => a.seek(a.position() + f64::from(n) / 24.0),
+            PlayerKey::AddComment | PlayerKey::Frame(_) => {}
         }
     }
 
@@ -941,13 +986,7 @@ impl App {
         vs.tip_seen = Some(level);
         if now < vs.tip_until {
             let percent = if vs.muted { 0 } else { (vs.volume * 100.0).round() as u32 };
-            let glyph = [ic::SPEAKER_X, ic::SPEAKER_NONE, ic::SPEAKER_LOW, ic::SPEAKER_HIGH][usize::from(volume_level(percent))];
-            let g = p.layout_no_wrap(format!("{percent}%"), font(12.0), Color32::WHITE);
-            let size = vec2(8.0 + 22.0 + 2.0 + g.size().x + 12.0, 30.0);
-            let r = Rect::from_min_size(Pos2::new(stage.right() - 12.0 - size.x, stage.top() + 12.0), size);
-            p.rect_filled(r, CornerRadius::same(8), Color32::from_black_alpha(178));
-            p.text(Pos2::new(r.left() + 19.0, r.center().y), Align2::CENTER_CENTER, glyph, font(18.0), Color32::WHITE);
-            p.galley(Pos2::new(r.left() + 32.0, r.center().y - g.size().y / 2.0), g, Color32::WHITE);
+            volume_tip(&p, Pos2::new(stage.right() - 12.0, stage.top() + 12.0), percent);
             ctx.request_repaint_after(std::time::Duration::from_secs_f64((vs.tip_until - now).max(0.01)));
         }
 

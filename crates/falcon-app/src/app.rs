@@ -1336,10 +1336,10 @@ impl App {
         if viewer && ctx.input(|i| i.key_pressed(Key::ArrowLeft)) {
             pressed.retain(|c| *c != C::Back);
         }
-        // With audio in the viewer, Space plays and pauses (Esc closes), as in Eagle.
+        // With audio in the viewer, Space plays and pauses through the
+        // player keys (`video_keys`), as in Eagle; it never closes the viewer.
         let audio = viewer && self.audio.loaded() == self.ws.viewer.as_deref() && ctx.input(|i| i.key_pressed(Key::Space));
         if audio {
-            self.audio.toggle();
             pressed.retain(|c| *c != C::Viewer);
         }
         // In the viewer the bare digits are its own keys (0 fits, 1 is

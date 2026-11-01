@@ -93,10 +93,12 @@ What Eagle does, from `js/directives/audio-media-element.js`, its video.js setup
 
 | Question | Eagle | Seen or inferred | falcon |
 |---|---|---|---|
-| Player | video.js controls (play, volume, time, progress, loop, playback rate) over an HTML media element; wavesurfer draws the waveform inside the progress bar, 40 px high, unplayed `#7C7C7C`, played and cursor `#0072EF`, normalised | Seen | A waveform 160 pt high in the same two colours, normalised, with a playhead; under it a play/pause button, elapsed / total time, loop and volume. No playback rate |
+| Player | video.js controls (play, volume, time, progress, loop, playback rate) over an HTML media element; wavesurfer draws the waveform inside the progress bar, 40 px high, unplayed `#7C7C7C`, played and cursor `#0072EF`, normalised | Seen | A waveform 160 pt high in the same two colours, normalised, with a playhead; under it a play/pause button, elapsed / total time, speed, loop and volume |
 | Start | Plays as soon as the item opens; loop is on | Seen | Same |
-| Seeking | Click on the progress bar; ⌘← and ⌘→ step by 2% of the length, at most 10 s; ⌘↑ and ⌘↓ change the volume by 5% | Seen | Click or drag on the waveform. No step or volume keys, because ← and → already move to the next item |
-| Space | Bound to `player.playAndPause` | Seen | Plays and pauses while an audio item is in the viewer; elsewhere it still opens and closes the viewer |
+| Seeking | Click on the progress bar; ⌘← and ⌘→ step by 2% of the length, at most 10 s; ⌘↑ and ⌘↓ change the volume by 5%; `[` `]` (⇧ for ten) move by a frame time, 1/24 s | Seen | Click or drag on the waveform, and the same keys from the Player group of the shortcut table (rebinding them there changes them for video and audio alike). Plain ← and → still move to the previous and next item |
+| Space | Bound to `player.playAndPause` | Seen | Plays and pauses while an audio item is in the viewer (the Player group's key); elsewhere it still opens and closes the viewer |
+| Speed | A rate menu with 0.5–2×; ⇧. and ⇧, step through 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 3, 4 and 8×. The browser keeps the pitch | Seen | Same menu and steps, 1× for each new track. rodio resamples, so the pitch moves with the speed |
+| Volume tip | The same tip as the video player on every volume change | Seen | Same |
 | Volume | Remembered in local storage, 100% by default | Seen | 100% at launch, kept until quit |
 | Waveform data | Decoded in the page each time, nothing cached on disk | Seen | Peaks computed once per item on a background thread with `waveform::peaks` and kept in memory for the session. "Reading waveform…" shows meanwhile |
 | Audio output | Chromium | Seen | rodio on the default output device, opened on first play and kept open. Only an output stream is opened, which macOS allows without a permission prompt; no input device is ever touched |
@@ -255,7 +257,7 @@ On macOS falcon has a native menu bar, built with AppKit in `crates/falcon-app/s
 
 ## Keys
 
-These are the defaults. All but the arrows, Esc, Tab, Z and the viewer's C, ⇧R, ⇧F, 0, 1, +, − and ` can be changed under Preferences → Shortcuts (see Shortcut settings); the video keys are its Player group. Bare keys (the digits, R, T and /) don't answer their ⌥ chord. Apart from the Player keys, every rebindable command is also in the menu bar (see Menu bar).
+These are the defaults. All but the arrows, Esc, Tab, Z and the viewer's C, ⇧R, ⇧F, 0, 1, +, − and ` can be changed under Preferences → Shortcuts (see Shortcut settings); the video and audio player keys are its Player group. Bare keys (the digits, R, T and /) don't answer their ⌥ chord. Apart from the Player keys, every rebindable command is also in the menu bar (see Menu bar).
 
 | Key | Action |
 |---|---|
@@ -316,10 +318,10 @@ These are the defaults. All but the arrows, Esc, Tab, Z and the viewer's C, ⇧R
 | ⇧R | In the viewer, rotate the image left |
 | ⇧F | In the viewer, flip the image horizontally |
 | Enter and Esc | While cropping, save (then confirm) or cancel |
-| ⌘← and ⌘→ | With video in the viewer, skip back or forward 2% of its length, at most 10 s |
-| ⌘↑ and ⌘↓ | With video in the viewer, volume up or down 5% |
-| `[` and `]` (with ⇧, ten) | With video in the viewer, previous or next frame |
-| ⇧, and ⇧. | With video in the viewer, slower or faster |
+| ⌘← and ⌘→ | With video or audio in the viewer, skip back or forward 2% of its length, at most 10 s |
+| ⌘↑ and ⌘↓ | With video or audio in the viewer, volume up or down 5% |
+| `[` and `]` (with ⇧, ten) | With video in the viewer, previous or next frame; with audio, back or forward 1/24 s |
+| ⇧, and ⇧. | With video or audio in the viewer, slower or faster |
 | N | With video in the viewer, add a comment at the current time |
 | ⇧R and ⇧F | With video in the viewer, turn the picture a quarter anticlockwise or mirror it (view only; on images they rotate and flip the file) |
 | ⇧C and ⇧S | With video in the viewer, copy the current frame, or save it to the library as a new item ("Set current frame as thumbnail" has no default key) |

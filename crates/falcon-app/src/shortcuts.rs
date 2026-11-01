@@ -2,7 +2,7 @@
 //! preference: a table of commands with default chords, user overrides
 //! stored as Eagle-style accelerator strings ("Command + Shift + N"),
 //! conflict checks and Reset. The Player group's keys act only while a
-//! video plays in the viewer, so, as in Eagle, they conflict only with
+//! video or audio item is in the viewer, so, as in Eagle, they conflict only with
 //! each other.
 
 use std::collections::BTreeMap;
@@ -208,7 +208,7 @@ pub enum FrameTool {
     Save,
 }
 
-/// The group whose keys only act in the video player.
+/// The group whose keys only act in the video and audio players.
 pub const PLAYER: &str = "Player";
 
 /// Whether two rows can conflict: Eagle checks a chord only against the

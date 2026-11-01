@@ -37,11 +37,24 @@ pub struct Audio {
     pub volume: f32,
     /// Why the last load failed, shown in the viewer.
     pub error: Option<String>,
+    /// Playback speed of the loaded track, 1 at each load.
+    speed: f32,
+    /// The loaded item's length in seconds, as its record gives it (the
+    /// viewer sets it), for the skip keys.
+    pub duration: f64,
+    /// The volume last drawn and until when the volume tip shows, as in
+    /// the video viewer.
+    pub tip_seen: Option<f32>,
+    pub tip_until: f64,
 }
+
+/// The speeds in the audio player's menu (Eagle's video.js list for
+/// audio); the speed keys step through all of [`falcon_video::RATES`].
+pub const MENU_RATES: [f32; 7] = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
 
 impl Default for Audio {
     fn default() -> Self {
-        Audio { device: None, track: None, looping: true, volume: 1.0, error: None }
+        Audio { device: None, track: None, looping: true, volume: 1.0, error: None, speed: 1.0, duration: 0.0, tip_seen: None, tip_until: 0.0 }
     }
 }
 
@@ -71,6 +84,8 @@ impl Audio {
         }
         self.stop();
         self.error = None;
+        self.speed = 1.0;
+        self.tip_seen = None;
         if self.device.is_none() {
             match rodio::DeviceSinkBuilder::open_default_sink() {
                 Ok(mut d) => {
@@ -122,18 +137,39 @@ impl Audio {
         }
     }
 
-    /// The playback position in seconds.
+    /// The playback position in seconds of the file. rodio counts in
+    /// played time, which runs `speed` times slower than the file's.
     pub fn position(&self) -> f64 {
-        self.track.as_ref().map_or(0.0, |t| t.player.get_pos().as_secs_f64())
+        self.track.as_ref().map_or(0.0, |t| t.player.get_pos().as_secs_f64() * f64::from(self.speed))
     }
 
-    /// Jumps to `secs`. A track that already ended is reloaded first.
+    /// Jumps to `secs` of the file. A track that already ended is reloaded
+    /// first.
     pub fn seek(&mut self, secs: f64) {
         if self.track.as_ref().is_some_and(|t| t.player.empty()) {
             self.restart(false);
         }
         if let Some(t) = &self.track {
-            let _ = t.player.try_seek(Duration::from_secs_f64(secs.max(0.0)));
+            let _ = t.player.try_seek(Duration::from_secs_f64(secs.max(0.0) / f64::from(self.speed)));
+        }
+    }
+
+    pub fn speed(&self) -> f32 {
+        self.speed
+    }
+
+    /// Sets the playback speed (clamped to 0.25–8×). The track is re-seeked
+    /// to where it is, so rodio's played-time clock restarts at the new
+    /// speed and [`Audio::position`] stays right. Unlike a browser, rodio
+    /// changes the pitch with the speed.
+    pub fn set_speed(&mut self, speed: f32) {
+        let pos = self.position();
+        self.speed = speed.clamp(falcon_video::RATES[0], falcon_video::RATES[falcon_video::RATES.len() - 1]);
+        if let Some(t) = &self.track {
+            t.player.set_speed(self.speed);
+        }
+        if self.track.as_ref().is_some_and(|t| !t.player.empty()) {
+            self.seek(pos);
         }
     }
 
@@ -253,10 +289,14 @@ mod tests {
         assert!((total - 2.0).abs() < 0.01, "{total}");
         assert!(decoder(&dir.path().join("missing.wav"), "wav").is_err());
         // Nothing is loaded until the viewer asks, so no device is opened here.
-        let a = Audio::default();
+        let mut a = Audio::default();
         assert_eq!(a.loaded(), None);
         assert!(!a.is_playing());
         assert_eq!(a.position(), 0.0);
+        a.set_speed(20.0);
+        assert_eq!(a.speed(), 8.0, "speeds are clamped to the player's range");
+        a.set_speed(0.5);
+        assert_eq!(a.speed(), 0.5);
     }
 
     #[test]

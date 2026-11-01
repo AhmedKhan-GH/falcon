@@ -152,6 +152,7 @@ impl App {
         self.audio.load(&item.id, &path, &item.ext, true);
         self.audio.tick();
         let duration = search::duration(item).unwrap_or(0.0);
+        self.audio.duration = duration;
         let pos = self.audio.position();
 
         let w = (area.width() - 160.0).clamp(200.0, 1000.0);
@@ -221,6 +222,29 @@ impl App {
         ui.painter().text(lp, Align2::CENTER_CENTER, REPEAT, font(16.0), color);
         if lresp.on_hover_text("Loop").clicked() {
             self.audio.looping = !self.audio.looping;
+        }
+        // Speed menu left of loop (⇧. and ⇧, step through 0.25–8×).
+        let sp = Rect::from_center_size(Pos2::new(lp.x - 40.0, cy), vec2(44.0, 24.0));
+        let rate = self.audio.speed();
+        let name = |r: f32| format!("{}×", format!("{r:.2}").trim_end_matches('0').trim_end_matches('.'));
+        let mut sui = ui.new_child(egui::UiBuilder::new().max_rect(sp));
+        egui::containers::menu::MenuButton::new(RichText::new(name(rate)).font(mono(12.0))).ui(&mut sui, |ui| {
+            for r in crate::audio::MENU_RATES.iter().rev() {
+                if ui.selectable_label((r - rate).abs() < 1e-3, name(*r)).clicked() {
+                    self.audio.set_speed(*r);
+                    ui.close();
+                }
+            }
+        });
+        // The volume tip, as in the video viewer.
+        let now = ctx.input(|i| i.time);
+        if self.audio.tip_seen.is_some_and(|seen| seen != self.audio.volume) {
+            self.audio.tip_until = now + super::video_view::TIP_SECS;
+        }
+        self.audio.tip_seen = Some(self.audio.volume);
+        if now < self.audio.tip_until {
+            super::video_view::volume_tip(&p, Pos2::new(area.right() - 12.0, area.top() + 12.0), (self.audio.volume * 100.0).round() as u32);
+            ctx.request_repaint_after(std::time::Duration::from_secs_f64((self.audio.tip_until - now).max(0.01)));
         }
         if let Some(e) = &self.audio.error {
             p.text(Pos2::new(wave.center().x, cy + 44.0), Align2::CENTER_CENTER, e, font(12.0), t::p().text_muted);
