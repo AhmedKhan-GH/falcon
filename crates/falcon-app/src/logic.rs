@@ -358,6 +358,16 @@ pub fn parse_day(text: &str) -> Option<(i32, u32, u32)> {
     chrono::NaiveDate::from_ymd_opt(y, m, d).map(|_| (y, m, d))
 }
 
+/// A range end (local midnight, ms) as `YYYY-MM-DD`, the form
+/// [`day_range`] reads; empty for 0, an end Eagle leaves unset.
+pub fn day_text(t: u64) -> String {
+    use chrono::TimeZone;
+    match i64::try_from(t).ok().filter(|t| *t > 0).and_then(|t| chrono::Local.timestamp_millis_opt(t).single()) {
+        Some(d) => d.format("%Y-%m-%d").to_string(),
+        None => String::new(),
+    }
+}
+
 /// The calendar range of a date rule from the two day fields: both must be
 /// valid days, swapped if typed the wrong way round.
 pub fn day_range(from: &str, to: &str) -> Option<(u64, u64)> {
@@ -882,6 +892,8 @@ mod filter_media_tests {
         assert!(a < b);
         assert_eq!(Some(a), search::local_day_start(2026, 10, 1));
         assert_eq!(day_range("2026-10-01", ""), None);
+        assert_eq!(day_text(a), "2026-10-01");
+        assert_eq!(day_text(0), "");
         let mut f = DateFilter::default();
         assert_eq!(date_summary(&f), None);
         f.presets.insert(DatePreset::Last7Days);

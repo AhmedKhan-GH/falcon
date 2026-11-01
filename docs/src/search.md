@@ -94,7 +94,7 @@ Each rule has presets, a calendar range and a month list:
 - Reads `bpm`, the tempo of audio items, which may have a fraction.
 - Min and max are each truncated with `parseInt`. The test is `bpm ≥ min` and `bpm ≤ max`, both inclusive.
 - Any numeric bound makes the rule active. Items with no `bpm`, or `0`, then fail.
-- In saved filters the rule is `bpm: {min, max}`, with each key present only when set.
+- In saved filters the rule is `bpm: {min, max}`, with each key present only when set. Dates, duration, camera and font are saved too; see the `saved-filters.json` table in [Library format](library-format.md).
 
 ### Camera (observed)
 

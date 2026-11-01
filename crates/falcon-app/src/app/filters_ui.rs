@@ -247,6 +247,28 @@ impl App {
         let keys = self.ws.filter_ui.font_keys.take();
         self.ws.filter_ui = MediaFilterUi { font_keys: keys, ..Default::default() };
     }
+
+    /// Refills the typed fields from the filter after a saved filter
+    /// replaced it: date ranges as days, durations in seconds.
+    pub(super) fn sync_media_filter_text(&mut self) {
+        self.clear_media_filter_text();
+        let f = &self.ws.filter;
+        let fui = &mut self.ws.filter_ui;
+        for (n, (field, _)) in DATE_TABS.iter().enumerate() {
+            let rule = match field {
+                DateField::Imported => &f.imported,
+                DateField::Modified => &f.modified,
+                DateField::Created => &f.created,
+            };
+            if let Some((a, b)) = rule.range {
+                fui.from[n] = logic::day_text(a);
+                fui.to[n] = logic::day_text(b);
+            }
+        }
+        let secs = |v: Option<f64>| v.map(|s| s.to_string()).unwrap_or_default();
+        fui.dur_min = secs(f.duration.0);
+        fui.dur_max = secs(f.duration.1);
+    }
 }
 
 fn unit_label(u: DurationUnit) -> &'static str {

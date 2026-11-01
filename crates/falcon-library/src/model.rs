@@ -623,9 +623,9 @@ pub struct SavedFilterQuery {
     pub filter: crate::search::Filter,
     /// The search text saved with the filter.
     pub keyword: Option<String>,
-    /// Active rules falcon cannot express yet, by their rule key (`import`,
-    /// `mtime`, `duration`, `font`, `camera`, `annotation`, `image`,
-    /// `semantic`, `shape.43`, ...).
+    /// Active rules falcon cannot express yet, by their rule key
+    /// (`annotation`, `image`, `semantic`, `shape.43`,
+    /// `folder.excludes.NoFolders`, ...).
     pub unsupported: Vec<String>,
 }
 
@@ -633,9 +633,17 @@ impl SavedFilter {
     /// Reads the saved rules into a [`crate::search::Filter`]. Eagle does not
     /// save whether tags and folders combine with OR, AND or EQUAL (that
     /// setting lives in the panel), so they come back as OR, the panel's
-    /// starting value.
+    /// starting value. A font rule reads the fonts activated through Eagle
+    /// from [`crate::search::eagle_font_dir`].
     pub fn to_filter(&self) -> SavedFilterQuery {
-        use crate::search::{ColorQuery, Filter, SetFilter, Shape, TextFilter};
+        use crate::search::{eagle_font_dir, installed_font_keys};
+        self.to_filter_with_fonts(|| eagle_font_dir().map(|d| installed_font_keys(&d)).unwrap_or_default())
+    }
+
+    /// [`SavedFilter::to_filter`] with the activated font keys supplied;
+    /// `font_keys` is only called when the font rule is on.
+    pub fn to_filter_with_fonts(&self, font_keys: impl FnOnce() -> std::collections::HashSet<String>) -> SavedFilterQuery {
+        use crate::search::{ColorQuery, DateFilter, Filter, FontFilter, SetFilter, Shape, TextFilter};
         let r = &self.rule;
         let get = |path: &[&str]| path.iter().try_fold(r, |v, k| v.get(*k));
         let truthy = |path: &[&str]| get(path).is_some_and(|v| v.as_bool() == Some(true));
@@ -716,26 +724,50 @@ impl SavedFilter {
         f.url = text("url");
         f.note = text("note");
 
+        // Dates. Eagle's Date Modified range reads `import.range` (its panel
+        // has one picker for both); falcon writes `mtime.range` only when
+        // the two ranges differ. `btime` (Date Created) is falcon's own key.
+        let date = |k: &str, range_keys: &[&str]| -> DateFilter {
+            let mut d = DateFilter::default();
+            for (key, p) in DATE_PRESET_KEYS {
+                if truthy(&[k, key]) {
+                    d.presets.insert(p);
+                }
+            }
+            if truthy(&[k, "usingRange"]) {
+                // Eagle passes nothing through a range that lacks an end,
+                // which `DateFilter` does for a zero end.
+                let ends = range_keys.iter().find_map(|rk| get(&[rk, "range"]).and_then(Value::as_array)).filter(|a| a.len() >= 2);
+                let end = |v: &Value| v.as_f64().filter(|t| *t > 0.0).map_or(0, |t| t as u64);
+                d.range = Some(ends.map_or((0, 0), |a| (end(&a[0]), end(&a[1]))));
+            }
+            d.months = keys(&[k, "selectedMonths"]).iter().filter_map(|m| parse_month_key(m)).collect();
+            d
+        };
+        f.imported = date("import", &["import"]);
+        f.modified = date("mtime", &["mtime", "import"]);
+        f.created = date("btime", &["btime"]);
+
+        // Eagle multiplies each bound by the unit, then truncates (as the
+        // filter does).
+        let per = match get(&["duration", "unit"]).and_then(Value::as_str) {
+            Some("h") => 3600.0,
+            Some("m") => 60.0,
+            _ => 1.0,
+        };
+        f.duration = (number(&["duration", "min"]).map(|v| v * per), number(&["duration", "max"]).map(|v| v * per));
+        f.bpm = (number(&["bpm", "min"]), number(&["bpm", "max"]));
+        f.cameras = keys(&["camera"]).into_iter().collect();
+        // Eagle tests `activated` first.
+        if truthy(&["font", "activated"]) {
+            f.font = FontFilter::Activated(font_keys());
+        } else if truthy(&["font", "deactivated"]) {
+            f.font = FontFilter::Deactivated(font_keys());
+        }
+
         // Rules with no counterpart in falcon's filter yet.
         if truthy(&["annotation", "has"]) || truthy(&["annotation", "no"]) {
             skip("annotation");
-        }
-        for k in ["import", "mtime"] {
-            let on = ["today", "yesterday", "last7day", "last30day", "last90day", "last365day", "usingRange"].iter().any(|d| truthy(&[k, d]))
-                || get(&[k, "selectedMonths"]).and_then(Value::as_object).is_some_and(|m| !m.is_empty());
-            if on {
-                skip(k);
-            }
-        }
-        if number(&["duration", "min"]).is_some() || number(&["duration", "max"]).is_some() {
-            skip("duration");
-        }
-        f.bpm = (number(&["bpm", "min"]), number(&["bpm", "max"]));
-        if truthy(&["font", "activated"]) || truthy(&["font", "deactivated"]) {
-            skip("font");
-        }
-        if get(&["camera"]).and_then(Value::as_object).is_some_and(|m| !m.is_empty()) {
-            skip("camera");
         }
         if get(&["image", "itemId"]).is_some_and(|v| !v.is_null()) {
             skip("image");
@@ -756,7 +788,7 @@ impl SavedFilter {
     /// `folder.includes`, of which it only reads `id` back, so falcon writes
     /// `{id, name}`. The tag and folder logic is not part of the rule.
     pub fn rule_from_filter(filter: &crate::search::Filter, keyword: Option<&str>, folder_name: impl Fn(&str) -> Option<String>) -> Value {
-        use crate::search::{Shape, TextFilter};
+        use crate::search::{DateFilter, FontFilter, Shape, TextFilter};
         let mut r = default_filter_rule();
         let obj = |list: &[String]| Value::Object(list.iter().map(|t| (t.clone(), Value::Bool(true))).collect());
         r["type"]["includes"] = obj(&filter.types);
@@ -828,11 +860,90 @@ impl SavedFilter {
         }
         text(&mut r, "url", &filter.url);
         text(&mut r, "note", &filter.note);
+
+        // Dates: presets, then the range in the place Eagle's defaults give
+        // it, then months.
+        let date = |rule: &mut Value, d: &DateFilter, range: Option<(u64, u64)>| {
+            for (key, p) in DATE_PRESET_KEYS {
+                if d.presets.contains(&p) {
+                    rule[key] = true.into();
+                }
+            }
+            if d.range.is_some() {
+                rule["usingRange"] = true.into();
+            }
+            if let Some((a, b)) = range {
+                let m = rule.as_object_mut().expect("default date rule");
+                let at = m.keys().position(|k| k == "type").unwrap_or(m.len());
+                m.shift_insert(at, "range".into(), serde_json::json!([a, b]));
+            }
+            let mut months: Vec<_> = d.months.iter().copied().collect();
+            months.sort_unstable();
+            rule["selectedMonths"] = Value::Object(months.into_iter().map(|(y, m)| (format!("{y:04}/{m:02}"), Value::Bool(true))).collect());
+        };
+        // Eagle's panel stores one picked range, in `import`, and its
+        // Date Modified rule reads it from there.
+        let shared = filter.imported.range.or(filter.modified.range);
+        date(&mut r["import"], &filter.imported, shared);
+        if shared.is_some() {
+            r["import"]["type"] = "range".into();
+        }
+        let own = filter.modified.range.filter(|m| Some(*m) != shared);
+        date(&mut r["mtime"], &filter.modified, own);
+
+        // Each bound in the largest unit that keeps it whole.
+        if filter.duration != (None, None) {
+            let bounds = [filter.duration.0, filter.duration.1];
+            let whole = |per: f64| bounds.iter().flatten().all(|s| (s / per).fract() == 0.0);
+            let (unit, per) = if whole(3600.0) {
+                ("h", 3600.0)
+            } else if whole(60.0) {
+                ("m", 60.0)
+            } else {
+                ("s", 1.0)
+            };
+            let d = r["duration"].as_object_mut().expect("default duration rule");
+            let mut at = 0;
+            for (k, v) in [("min", filter.duration.0), ("max", filter.duration.1)] {
+                if let Some(s) = v {
+                    d.shift_insert(at, k.into(), js_number(s / per));
+                    at += 1;
+                }
+            }
+            d["unit"] = unit.into();
+        }
+        let mut cameras: Vec<&String> = filter.cameras.iter().collect();
+        cameras.sort();
+        r["camera"] = Value::Object(cameras.into_iter().map(|c| (c.clone(), Value::Bool(true))).collect());
+        match filter.font {
+            FontFilter::Off => {}
+            FontFilter::Activated(_) => r["font"]["activated"] = true.into(),
+            FontFilter::Deactivated(_) => r["font"]["deactivated"] = true.into(),
+        }
+        if filter.created.is_active() {
+            let mut btime = default_filter_rule()["import"].take();
+            date(&mut btime, &filter.created, filter.created.range);
+            r["btime"] = btime;
+        }
         if let Some(k) = keyword.filter(|k| !k.is_empty()) {
             r["keyword"] = k.into();
         }
         r
     }
+}
+
+/// The date presets under their rule keys, in Eagle's order.
+const DATE_PRESET_KEYS: [(&str, crate::search::DatePreset); 6] = {
+    use crate::search::DatePreset as P;
+    [("today", P::Today), ("yesterday", P::Yesterday), ("last7day", P::Last7Days), ("last30day", P::Last30Days), ("last90day", P::Last90Days), ("last365day", P::Last365Days)]
+};
+
+/// A `selectedMonths` key, `YYYY/MM`.
+fn parse_month_key(key: &str) -> Option<(i32, u32)> {
+    let (y, m) = key.split_once('/')?;
+    let m: u32 = m.parse().ok()?;
+    let year = y.parse().ok()?;
+    (1..=12).contains(&m).then_some((year, m))
 }
 
 /// A number as JavaScript prints it: whole values without a `.0`.
@@ -1045,7 +1156,109 @@ mod tests {
         assert_eq!(f.size, (Some(1_572_864), None));
         assert_eq!(f.url, crate::search::TextFilter::Keywords(vec!["dribbble".into(), "shot".into()]));
         assert_eq!(f.note, crate::search::TextFilter::No);
-        assert_eq!(q.unsupported, ["shape.169", "import"]);
+        assert_eq!(q.unsupported, ["shape.169"]);
+        assert_eq!(f.imported.presets, [crate::search::DatePreset::Today].into());
+    }
+
+    fn saved(rule: Value) -> SavedFilter {
+        SavedFilter { name: "n".into(), rule, extra: Extra::new() }
+    }
+
+    /// Filter -> rule -> Filter for every rule `Filter` has, one at a time.
+    #[test]
+    fn every_filter_field_survives_a_save() {
+        use crate::search::{ColorQuery, DateFilter, DatePreset, Filter, FontFilter, SetFilter, Shape, TextFilter};
+        let fonts: std::collections::HashSet<String> = ["Inter-Regular_.ttf".to_string()].into();
+        let dates = DateFilter { presets: [DatePreset::Yesterday, DatePreset::Last90Days].into(), range: Some((1_700_000_000_000, 1_700_086_400_000)), months: [(2024, 3), (2025, 11)].into(), clock: None };
+        let cases: Vec<(&str, Filter)> = vec![
+            ("tags", Filter { tags: SetFilter { includes: vec!["a".into()], excludes: vec!["b".into()], empty: true, ..Default::default() }, ..Default::default() }),
+            ("folders", Filter { folders: SetFilter { includes: vec!["F1".into()], excludes: vec!["F2".into()], empty: true, ..Default::default() }, ..Default::default() }),
+            ("types", Filter { types: vec!["png".into(), "video".into()], ..Default::default() }),
+            ("exclude_types", Filter { exclude_types: vec!["font".into()], ..Default::default() }),
+            ("size", Filter { size: (Some(1024), Some(3 * 1_048_576)), ..Default::default() }),
+            ("width", Filter { width: (Some(10), Some(20)), ..Default::default() }),
+            ("height", Filter { height: (None, Some(30)), ..Default::default() }),
+            ("ratings", Filter { ratings: [0, 4].into(), ..Default::default() }),
+            ("shapes", Filter { shapes: [Shape::Portrait, Shape::PanoramicLandscape].into(), ..Default::default() }),
+            ("url", Filter { url: TextFilter::Keywords(vec!["a".into(), "b".into()]), ..Default::default() }),
+            ("note", Filter { note: TextFilter::No, ..Default::default() }),
+            ("color", Filter { color: Some(ColorQuery { rgb: [9, 8, 7], accuracy: 12.5 }), ..Default::default() }),
+            ("grayscale", Filter { grayscale: true, ..Default::default() }),
+            ("imported", Filter { imported: dates.clone(), ..Default::default() }),
+            ("modified", Filter { modified: dates.clone(), ..Default::default() }),
+            ("created", Filter { created: dates.clone(), ..Default::default() }),
+            ("both ranges", Filter { imported: dates.clone(), modified: DateFilter { range: Some((5, 6)), ..Default::default() }, ..Default::default() }),
+            ("unfinished range", Filter { modified: DateFilter { range: Some((0, 0)), ..Default::default() }, ..Default::default() }),
+            ("duration s", Filter { duration: (Some(90.5), None), ..Default::default() }),
+            ("duration m", Filter { duration: (Some(60.0), Some(5400.0)), ..Default::default() }),
+            ("duration h", Filter { duration: (None, Some(7200.0)), ..Default::default() }),
+            ("bpm", Filter { bpm: (Some(90.0), Some(128.5)), ..Default::default() }),
+            ("cameras", Filter { cameras: ["Canon EOS R5".to_string(), "NIKON Z 6".to_string()].into(), ..Default::default() }),
+            ("font activated", Filter { font: FontFilter::Activated(fonts.clone()), ..Default::default() }),
+            ("font deactivated", Filter { font: FontFilter::Deactivated(fonts.clone()), ..Default::default() }),
+        ];
+        for (name, f) in cases {
+            let rule = SavedFilter::rule_from_filter(&f, None, |_| None);
+            let back = saved(rule.clone()).to_filter_with_fonts(|| fonts.clone());
+            assert_eq!(back.filter, f, "{name}: {rule}");
+            assert!(back.unsupported.is_empty(), "{name}: {:?}", back.unsupported);
+        }
+    }
+
+    #[test]
+    fn new_rules_are_written_in_eagles_shape() {
+        use crate::search::{DateFilter, DatePreset, Filter, FontFilter};
+        let f = Filter {
+            imported: DateFilter { presets: [DatePreset::Today].into(), range: Some((10, 20)), ..Default::default() },
+            modified: DateFilter { months: [(2024, 3)].into(), ..Default::default() },
+            duration: (Some(60.0), Some(5400.0)),
+            cameras: ["X100V".to_string()].into(),
+            font: FontFilter::Deactivated(Default::default()),
+            ..Default::default()
+        };
+        let text = SavedFilter::rule_from_filter(&f, None, |_| None).to_string();
+        let day = |k: &str, today: bool, using: bool, range: &str, ty: &str, months: &str| {
+            format!(r#""{k}":{{"today":{today},"yesterday":false,"last7day":false,"last30day":false,"last90day":false,"last365day":false,"usingRange":{using},{range}"type":"{ty}","selectedMonths":{{{months}}}}}"#)
+        };
+        for part in [
+            r#""font":{"activated":false,"deactivated":true},"camera":{"X100V":true}"#.to_string(),
+            day("import", true, true, r#""range":[10,20],"#, "range", ""),
+            day("mtime", false, false, "", "undefined", r#""2024/03":true"#),
+            r#""duration":{"min":1,"max":90,"unit":"m"}"#.to_string(),
+        ] {
+            assert!(text.contains(&part), "{part}\n{text}");
+        }
+        assert!(!text.contains("btime"), "no Date Created rule, no key");
+    }
+
+    #[test]
+    fn reads_eagles_date_duration_camera_and_font_rules() {
+        use crate::search::{DateFilter, DatePreset, FontFilter};
+        // As Eagle saves them: text-field strings, the shared picked range in
+        // `import` (with `model`), and a Date Modified rule using it.
+        let rule = DEFAULT_RULE
+            .replace(r#""font":{"activated":false,"deactivated":false}"#, r#""font":{"activated":true,"deactivated":false}"#)
+            .replace(r#""camera":{}"#, r#""camera":{"ILCE-7M3":true,"DMC-GH5":true}"#)
+            .replace(
+                r#""import":{"today":false,"yesterday":false,"last7day":false,"last30day":false,"last90day":false,"last365day":false,"usingRange":false,"type":"undefined","selectedMonths":{}}"#,
+                r#""import":{"today":false,"yesterday":false,"last7day":true,"last30day":false,"last90day":false,"last365day":false,"usingRange":false,"type":"range","selectedMonths":{"2023/12":true},"model":"2024-01-01 to 2024-01-31","range":[1704067200000,1706659200000]}"#,
+            )
+            .replace(r#""mtime":{"today":false"#, r#""mtime":{"today":true"#)
+            .replace(r#""usingRange":false,"type":"undefined","selectedMonths":{}},"rating""#, r#""usingRange":true,"type":"undefined","selectedMonths":{}},"rating""#)
+            .replace(r#""duration":{"unit":"s"}"#, r#""duration":{"unit":"m","min":"1.5","max":"10"}"#);
+        assert_eq!(rule.matches("ILCE").count() + rule.matches("last7day\":true").count() + rule.matches("\"today\":true").count() + rule.matches("\"usingRange\":true").count() + rule.matches("\"min\":\"1.5\"").count() + rule.matches("\"activated\":true").count(), 6, "{rule}");
+        let q = saved(serde_json::from_str(&rule).unwrap()).to_filter_with_fonts(|| ["A_.otf".to_string()].into());
+        let f = &q.filter;
+        assert!(q.unsupported.is_empty(), "{:?}", q.unsupported);
+        assert_eq!(f.imported, DateFilter { presets: [DatePreset::Last7Days].into(), months: [(2023, 12)].into(), ..Default::default() });
+        assert_eq!(f.modified, DateFilter { presets: [DatePreset::Today].into(), range: Some((1_704_067_200_000, 1_706_659_200_000)), ..Default::default() });
+        assert_eq!(f.created, DateFilter::default());
+        assert_eq!(f.duration, (Some(90.0), Some(600.0)));
+        assert_eq!(f.cameras, ["ILCE-7M3".to_string(), "DMC-GH5".to_string()].into());
+        assert_eq!(f.font, FontFilter::Activated(["A_.otf".to_string()].into()));
+
+        let off = saved(serde_json::from_str(DEFAULT_RULE).unwrap()).to_filter_with_fonts(|| panic!("font keys read for an inactive rule"));
+        assert_eq!(off.filter, Default::default());
     }
 
     #[test]

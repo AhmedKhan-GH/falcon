@@ -100,11 +100,16 @@ A JSON array in menu order, `[]` in the fixture. Eagle writes it compact with `J
 | `file.min`, `file.max`, `file.unit` | number in `kb` or `mb` (`× 1024` or `× 1024²`, then `parseInt`) | `size` in bytes |
 | `url`, `note` | `{has, no, keywords}`. `keywords` is comma-separated, and all must match | `url`, `note` (`TextFilter`) |
 | `annotation` | `{has, no, keywords}` over the item's `comments` | none yet |
-| `import`, `mtime` | `today`, `yesterday`, `last7day` … `last365day`, `usingRange`, `range`, `type`, `model`, `selectedMonths` | none yet |
-| `duration` (`unit` `s`/`m`/`h`), `bpm`, `font`, `camera`, `image`, `semantic` | various | none yet |
+| `import`, `mtime` | `today`, `yesterday`, `last7day` … `last365day` and `usingRange` (bools), `range` (`[start, end]` local midnights in ms), `type` (`"range"` once a range is picked), `model` (the picker's text), `selectedMonths` (`{"YYYY/MM": true}`). The panel has one range picker, so the range lives in `import.range` and Date Modified's `usingRange` reads it from there | `imported`, `modified` (`DateFilter`: presets, `range`, `months`) |
+| `btime` (falcon only) | same shape as `import`, written only when Date Created is on; Eagle ignores the key | `created` |
+| `duration` | `min`, `max` (number or numeric string) in `unit` `s`, `m` or `h` | `duration` in seconds |
+| `bpm` | `min`, `max` | `bpm` |
+| `camera` | `{camera name: true}` | `cameras` |
+| `font` | `{activated, deactivated}` bools; `activated` wins | `font` (`FontFilter`) |
+| `image`, `semantic` | image search and natural-language search | none yet |
 | `keyword` | string | returned beside the filter |
 
-Falcon's `SavedFilter::to_filter` returns the filter, the keyword and a list of active rules it couldn't express. `SavedFilter::rule_from_filter` builds the full default rule object with falcon's rules filled in. It writes sizes in KB, and folder entries as `{id, name}`, since Eagle only reads `id` back. Both directions are falcon's own reading of Eagle's code, checked by unit tests against hand-built rules, not against a file Eagle wrote (inferred).
+Falcon's `SavedFilter::to_filter` returns the filter, the keyword and a list of active rules it couldn't express. `SavedFilter::rule_from_filter` builds the full default rule object with falcon's rules filled in. It writes sizes in KB, and folder entries as `{id, name}`, since Eagle only reads `id` back. Durations go in the largest of `h`, `m` and `s` that keeps both bounds whole. A Date Imported or Date Modified range goes in `import.range` with `import.type: "range"`, where Eagle reads both; only when the two rules have different ranges does falcon also write `mtime.range`, which it reads back first and Eagle ignores (Eagle then applies the imported range to both). A range with an unset end reads as `(0, 0)`, which passes nothing, as in Eagle. Reading a font rule fills the `FontFilter` with the fonts in `~/Library/Fonts/EagleApp` (`to_filter_with_fonts` takes them from the caller). Both directions are falcon's own reading of Eagle's code, checked by unit tests against hand-built rules, not against a file Eagle wrote (inferred).
 
 ## Item `metadata.json` (observed)
 
