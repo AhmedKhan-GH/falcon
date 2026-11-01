@@ -34,6 +34,7 @@ pub mod undo;
 
 pub use error::{Error, Result};
 pub use library::Library;
+pub mod imageio;
 pub mod import;
 pub mod item_ops;
 pub mod inboard;
