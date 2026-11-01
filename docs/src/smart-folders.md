@@ -45,6 +45,7 @@ Falcon's API, all on `Library`:
 |---|---|
 | `create_smart_folder(name, conditions)` | Appends a top-level entry in the rebuilt shape above |
 | `create_smart_folder_in(parent, name, conditions)` | Same, or appends a nested entry in the dialog shape with `parent` |
+| `create_smart_folder_group(parent, name)` | Appends a smart folder group (see below) |
 | `update_smart_folder(id, name, conditions)` | Edits at any depth and stamps `modificationTime` |
 | `move_smart_folder(id, parent, index)` | Moves to a position among the new siblings. Sets `parent`, or removes it at the top level. Refuses cycles |
 | `set_smart_folder_icon(id, icon, color)` | `None` removes a key. New keys go right after `id` on top-level entries, as Eagle's save places them, and at the end of nested ones |
@@ -53,12 +54,25 @@ Falcon's API, all on `Library`:
 
 `Library::smart_folders()` returns `SmartFolder` values with `icon`, `icon_color`, `description`, `order_by` and `sort_increase` read out for display.
 
+## Smart folder groups (observed in code)
+
+A smart folder group has no flag of its own. Eagle's "new smart folder group" command (in the + menu next to the smart folder heading) appends a top-level entry with `conditions: []` and the `grid` icon, named "Untitled" in the UI language. It saves at once, then opens the group and starts a rename. The save writes it as `{"id", "icon": "grid", "name", "description": "", "modificationTime", "conditions": [], "children": []}`. The command only makes top-level groups, but a group can be dragged into another smart folder like any other entry.
+
+Any entry without conditions behaves as a group:
+- **View:** it shows the union of its children's items. With no children it shows nothing.
+- **Badge:** it shows no count (Eagle's counter returns 0 for an entry without conditions).
+- **Children:** each child still has to pass its own ancestors' conditions. A group adds none.
+
+`SmartFolder::is_group()` is `conditions.is_empty()`. `create_smart_folder_group(None, name)` writes the top-level shape above. `create_smart_folder_group(Some(parent), name)` nests a group in the key order of Eagle's new-group object, with `parent` added: `id`, `name`, `modificationTime`, `children`, `conditions`, `icon`, `parent` (inferred from how Eagle writes nested entries as they sit in memory).
+
+**How falcon differs:** Eagle's union checks each child with its plain rule test, which treats a child with no conditions as matching every item. So a group nested in a group would show the whole library in its parent's view, but only its own children's items when opened. Falcon uses the second reading in both places: a nested group is the union of its own children.
+
 ## Evaluation (observed)
 
 - **Conditions:** all of them must pass. `boolean: "FALSE"` negates one.
 - **Rules in a condition:** combined by `match`, which is `AND` or `OR`.
 - **Nesting:** a child must also pass every one of its ancestors' conditions, so it narrows its parent. Moving a child out of its parent stops the narrowing.
-- **No conditions:** a smart folder without conditions shows the union of its children.
+- **No conditions:** a smart folder without conditions is a group and shows the union of its children (see below).
 - **Rule types:**
   - text: name, notes, URL, folder name
   - numbers: width, height, file size

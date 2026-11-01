@@ -52,6 +52,13 @@ impl SmartFolder {
         })
     }
 
+    /// Whether this is a smart folder group: an entry with no conditions,
+    /// which shows the union of its children. Eagle stores no flag; its
+    /// "new group" command simply makes an entry with `conditions: []`.
+    pub fn is_group(&self) -> bool {
+        self.conditions.is_empty()
+    }
+
     /// Visits this smart folder and its descendants with their ancestry
     /// (outermost first).
     pub fn walk<'a>(&'a self, path: &mut Vec<&'a SmartFolder>, f: &mut impl FnMut(&'a SmartFolder, &[&'a SmartFolder])) {
@@ -315,6 +322,32 @@ impl Library {
         Ok(id)
     }
 
+    /// Adds a smart folder group (no conditions, the `grid` icon) at the end
+    /// of `parent`'s children or of the top level, and returns its id.
+    /// Eagle's command only makes top-level groups, which its save writes
+    /// as `id`, `icon`, `name`, `description`, `modificationTime`,
+    /// `conditions`, `children`. A nested group keeps the key order of
+    /// Eagle's new group object with `parent` added, as a group dragged into
+    /// another smart folder would be written.
+    pub fn create_smart_folder_group(&mut self, parent: Option<&str>, name: &str) -> Result<String> {
+        let id = ids::new_id();
+        let (name, now) = (display_name(name), now_ms());
+        match parent {
+            None => self.metadata.smart_folders.push(json!({
+                "id": id, "icon": "grid", "name": name, "description": "", "modificationTime": now, "conditions": [], "children": []
+            })),
+            Some(p) => {
+                let entry = json!({
+                    "id": id, "name": name, "modificationTime": now, "children": [], "conditions": [], "icon": "grid", "parent": p
+                });
+                let Some(parent) = find_smart(&mut self.metadata.smart_folders, p) else { return Err(self.no_smart(p)) };
+                children_of(parent).push(entry);
+            }
+        }
+        self.save_metadata()?;
+        Ok(id)
+    }
+
     /// Replaces a smart folder's name and conditions (at any depth) and
     /// stamps its `modificationTime`, as Eagle's edit dialog does.
     pub fn update_smart_folder(&mut self, id: &str, name: &str, conditions: Vec<Value>) -> Result<()> {
@@ -490,5 +523,41 @@ mod tests {
         let fx = FolderIndex::new();
         assert!(contains(&it, &child, &[], &fx));
         assert!(!contains(&it, &child, &[&parent], &fx));
+    }
+
+    #[test]
+    fn groups_show_the_union_of_their_children() {
+        let png = item(json!({}));
+        let jpg = item(json!({"id": "Y", "ext": "jpg", "name": "Blue"}));
+        let fx = FolderIndex::new();
+        let by = |ext: &str| folder(json!([{"rules": [{"property": "type", "method": "equal", "value": ext}]}]));
+        let group = SmartFolder { id: "G".into(), children: vec![by("png"), by("jpg")], ..folder(json!([])) };
+        assert!(group.is_group() && !by("png").is_group());
+        assert!(contains(&png, &group, &[], &fx) && contains(&jpg, &group, &[], &fx));
+        let empty = folder(json!([]));
+        assert!(!contains(&png, &empty, &[], &fx), "a group without children shows nothing");
+        // A group inside a group unions its own children.
+        let outer = SmartFolder { id: "O".into(), children: vec![SmartFolder { children: vec![by("jpg")], ..folder(json!([])) }], ..folder(json!([])) };
+        assert!(contains(&jpg, &outer, &[], &fx) && !contains(&png, &outer, &[], &fx));
+        let trashed = item(json!({"isDeleted": true}));
+        assert!(!contains(&trashed, &group, &[], &fx));
+    }
+
+    #[test]
+    fn groups_are_written_in_eagles_shape() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut lib = Library::create(tmp.path().join("G.library")).unwrap();
+        let g = lib.create_smart_folder_group(None, "Mine").unwrap();
+        let inner = lib.create_smart_folder_group(Some(&g), "Inner").unwrap();
+        let png = lib.create_smart_folder_in(Some(&g), "PNG", vec![json!({"match": "AND", "rules": [{"property": "type", "method": "equal", "value": "png"}]})]).unwrap();
+        assert!(lib.create_smart_folder_group(Some("NOPE"), "x").is_err());
+        let text = std::fs::read_to_string(lib.root().join("metadata.json")).unwrap();
+        assert!(text.contains(&format!(r#"{{"id":"{g}","icon":"grid","name":"Mine","description":"","modificationTime":"#)), "{text}");
+        assert!(text.contains(&format!(r#""conditions":[],"children":[{{"id":"{inner}","name":"Inner","modificationTime":"#)), "{text}");
+        assert!(text.contains(&format!(r#""children":[],"conditions":[],"icon":"grid","parent":"{g}"}}"#)), "{text}");
+        let sf = lib.smart_folders();
+        assert!(sf[0].is_group() && sf[0].children[0].is_group() && !sf[0].children[1].is_group());
+        assert_eq!(sf[0].children[1].id, png);
+        assert!(lib.smart_folder_items(&g).is_empty(), "an empty library has nothing to show");
     }
 }
