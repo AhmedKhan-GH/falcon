@@ -79,6 +79,11 @@ impl Handle {
         self.ctx.request_repaint();
     }
 
+    /// The Cancel flag itself, for library code that checks it between items.
+    pub fn cancel_flag(&self) -> &AtomicBool {
+        &self.cancel
+    }
+
     /// Whether Cancel was pressed; workers check it between items.
     pub fn cancelled(&self) -> bool {
         self.cancel.load(Ordering::Relaxed)

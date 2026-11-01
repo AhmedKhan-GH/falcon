@@ -1,6 +1,7 @@
 //! Dialogs and modal windows, one module per dialog or family of dialogs.
 
 pub(crate) mod about;
+pub(crate) mod add_to_library;
 pub(crate) mod debug;
 pub(crate) mod duplicates;
 pub(crate) mod export;
@@ -14,4 +15,5 @@ pub(crate) mod collect;
 pub(crate) mod confirm;
 pub(crate) mod history;
 pub(crate) mod smart;
+pub(crate) mod tools;
 pub(crate) mod add_to_folders;

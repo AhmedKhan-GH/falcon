@@ -90,6 +90,8 @@ pub struct App {
     pub(crate) recent_shown: Option<(PathBuf, Vec<String>)>,
     /// The Clear Library History dialog is showing.
     pub(crate) clear_history_open: bool,
+    /// The library tools' dialogs (`ui/dialogs/tools.rs`).
+    pub(crate) tools: crate::ui::dialogs::tools::Tools,
     /// The libraries' `icon.png` textures.
     pub(crate) lib_icons: crate::library_icons::LibraryIcons,
     /// What to open once the frame is done (it replaces the library being
@@ -217,6 +219,7 @@ impl App {
             view_timer: Default::default(),
             recent_shown: None,
             clear_history_open: false,
+            tools: Default::default(),
             lib_icons: Default::default(),
             switch_to: None,
             dialogs: Default::default(),
@@ -465,6 +468,7 @@ impl App {
             self.collect_window(&ctx);
         }
         self.merge_dialogs(&ctx);
+        self.tools_dialogs(&ctx);
         self.pack_dialogs(&ctx);
         self.progress_modal(&ctx);
         self.reload_confirm(&ctx);

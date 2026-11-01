@@ -186,6 +186,7 @@ impl App {
                             if !shut {
                                 ui.separator();
                                 self.tree_export_menu(ui, crate::ui::dialogs::export::Target::Folder(child.id.clone()), true);
+                                self.add_to_library_menu(ui, crate::ui::dialogs::add_to_library::AddWhat::Folder(child.id.clone()));
                             }
                             ui.separator();
                             let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::Trash);

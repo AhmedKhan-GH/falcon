@@ -729,6 +729,7 @@ impl App {
                 self.ws.actions.push(Action::Folders(crate::ui::sidebar::folders::FolderAction::Duplicate(f.id.clone())));
             }
             self.tree_export_menu(ui, crate::ui::dialogs::export::Target::Folder(f.id.clone()), !shut);
+            ui.add_enabled_ui(!shut, |ui| self.add_to_library_menu(ui, crate::ui::dialogs::add_to_library::AddWhat::Folder(f.id.clone())));
             ui.separator();
             // The same switch as the View menu's (Eagle shows it checked).
             let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::ToggleSubfolders);

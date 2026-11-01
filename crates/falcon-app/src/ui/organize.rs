@@ -602,6 +602,7 @@ impl App {
                 self.ws.actions.push(Action::Folders(crate::ui::sidebar::folders::FolderAction::DuplicateSmart(sf.id.clone())));
             }
             self.tree_export_menu(ui, crate::ui::dialogs::export::Target::Smart(sf.id.clone()), true);
+            self.add_to_library_menu(ui, crate::ui::dialogs::add_to_library::AddWhat::Smart(sf.id.clone()));
             ui.separator();
             self.expand_menu(ui, roots, &sf.id);
             ui.separator();
@@ -1447,6 +1448,7 @@ impl App {
         if ui.add_enabled(pos + 1 < groups.len(), egui::Button::new(tr("Move Down"))).clicked() {
             self.ws.actions.push(org(OrgAction::MoveGroup(g.id.clone(), pos + 1)));
         }
+        self.add_to_library_menu(ui, crate::ui::dialogs::add_to_library::AddWhat::TagGroup(g.id.clone()));
         if let Some(c) = color_row(ui, g.color.as_deref()) {
             self.ws.actions.push(org(OrgAction::GroupColor(g.id.clone(), c)));
             ui.close();

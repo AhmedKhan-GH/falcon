@@ -93,6 +93,7 @@ impl App {
             });
         }
         self.item_export_menu(ui, targets);
+        self.add_to_library_menu(ui, crate::ui::dialogs::add_to_library::AddWhat::Items(targets.to_vec()));
         // Eagle's Open Item in New Window.
         let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::OpenNewWindow);
         if ui.add(egui::Button::new("Open in New Window").shortcut_text(keys)).clicked() {
