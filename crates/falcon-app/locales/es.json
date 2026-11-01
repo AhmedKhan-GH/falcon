@@ -365,6 +365,7 @@
   "Delete": "Eliminar",
   "Delete Folder": "Eliminar carpeta",
   "Delete Group": "Eliminar grupo",
+  "Delete Permanently": "Eliminar definitivamente",
   "Delete Smart Folder": "Eliminar carpeta inteligente",
   "Delete Smart Folder Group": "Eliminar grupo de carpetas inteligentes",
   "Delete Tag": "Eliminar etiqueta",
@@ -375,6 +376,10 @@
   "Delete the group “{name}”?": "¿Eliminar el grupo «{name}»?",
   "Delete the tag “{tag}”?": "¿Eliminar la etiqueta “{tag}”?",
   "Delete {n}": "Eliminar {n}",
+  "Delete {n} Tags": {
+    "one": "Eliminar {n} etiqueta",
+    "other": "Eliminar {n} etiquetas"
+  },
   "Delete {n} folders?": {
     "one": "¿Eliminar {n} carpeta?",
     "other": "¿Eliminar {n} carpetas?"
@@ -437,6 +442,7 @@
   "Eagle Link": "Enlace de Eagle",
   "Eagle Links": "Enlaces de Eagle",
   "Eagle Package…": "Paquete de Eagle…",
+  "Eagle merges two to five tags at a time": "Eagle fusiona de dos a cinco etiquetas a la vez",
   "Edit": "Edición",
   "Edit Description…": "Editar descripción…",
   "Edit Image": "Editar imagen",
@@ -456,6 +462,7 @@
   "Empty the Trash ({n})?": "¿Vaciar la papelera ({n})?",
   "Empty the cache and reload the library": "Vaciar la caché y recargar la biblioteca",
   "Emptying the Trash": "Vaciando la papelera",
+  "Enter Presentation Mode": "Entrar en modo presentación",
   "Enter a name for the library, then pick the folder to keep it in.": "Escribe un nombre para la biblioteca y elige la carpeta donde guardarla.",
   "Enter a number from 1024 to 65531": "Introduce un número de 1024 a 65531",
   "Enter a password.": "Introduce una contraseña.",
@@ -714,6 +721,7 @@
   "Last Item": "Último elemento",
   "Layout": "Disposición",
   "Layout and sort": "Disposición y orden",
+  "Leave Presentation Mode": "Salir del modo presentación",
   "Leave Them Out": "Dejarlos fuera",
   "Leaves these items alone": "Deja estos elementos como están",
   "Leaves this item alone": "Deja este elemento como está",
@@ -765,6 +773,10 @@
   "Merge {n} Groups…": {
     "one": "Combinar {n} grupo…",
     "other": "Combinar {n} grupos…"
+  },
+  "Merge {n} Tags…": {
+    "one": "Fusionar {n} etiqueta…",
+    "other": "Fusionar {n} etiquetas…"
   },
   "Merge {n} duplicates": {
     "one": "Combinar {n} duplicado",
@@ -854,6 +866,10 @@
   "Navigator": "Navegador",
   "New Folder": "Nueva carpeta",
   "New Folder Below": "Nueva carpeta debajo",
+  "New Folder with {n} Items…": {
+    "one": "Nueva carpeta con {n} elemento…",
+    "other": "Nueva carpeta con {n} elementos…"
+  },
   "New Folder “{name}”": "Nueva carpeta «{name}»",
   "New Group": "Nuevo grupo",
   "New Group…": "Nuevo grupo…",
@@ -898,6 +914,7 @@
   "No library open": "Ninguna biblioteca abierta",
   "No link": "Sin enlace",
   "No link to open": "No hay ningún enlace que abrir",
+  "No matches": "Sin coincidencias",
   "No note": "Sin nota",
   "No other recent libraries": "No hay otras bibliotecas recientes",
   "No picture on the clipboard": "No hay ninguna imagen en el portapapeles",
@@ -1144,6 +1161,10 @@
     "one": "Renombrar {n} elemento",
     "other": "Renombrar {n} elementos"
   },
+  "Rename {n} Items…": {
+    "one": "Renombrar {n} elemento…",
+    "other": "Renombrar {n} elementos…"
+  },
   "Rename {n} items": {
     "one": "Renombrar {n} elemento",
     "other": "Renombrar {n} elementos"
@@ -1263,6 +1284,7 @@
   "Set the thumbnail background of {n}": "Establecer el fondo de miniatura de {n}",
   "Settings": "Ajustes",
   "Shape": "Forma",
+  "Share…": "Compartir…",
   "Shortcuts": "Atajos",
   "Show": "Mostrar",
   "Show All": "Mostrar todo",
@@ -1274,6 +1296,11 @@
   "Show Falcon": "Mostrar Falcon",
   "Show Inspector": "Mostrar inspector",
   "Show Item Info": "Mostrar información del elemento",
+  "Show Items": "Mostrar elementos",
+  "Show Items with Any of {n} Tags": {
+    "one": "Mostrar elementos con {n} etiqueta",
+    "other": "Objekte mit einem der {n} Tags zeigen"
+  },
   "Show Items with This Tag": "Mostrar elementos con esta etiqueta",
   "Show Name": "Mostrar nombre",
   "Show Random": "Mostrar aleatorios",
@@ -1361,6 +1388,7 @@
   "Space in the grid": "Barra espaciadora en la cuadrícula",
   "Speed": "Velocidad",
   "Square": "Cuadrado",
+  "Star": "Destacar",
   "Star tags": "Marcar etiquetas con estrella",
   "Starred": "Destacadas",
   "Starred Tags": "Etiquetas destacadas",
@@ -1456,6 +1484,7 @@
     "other": "Se renombrarán {n} elementos. ¿Continuar?"
   },
   "Thumbnail": "Miniatura",
+  "Thumbnail Background": "Fondo de miniatura",
   "Thumbnail set": "Miniatura establecida",
   "Title": "Título",
   "Title, All Levels (A→Z)": "Título, todos los niveles (A→Z)",
@@ -1506,6 +1535,7 @@
     "other": "{n} elementos sin fijar"
   },
   "Unrated": "Sin valorar",
+  "Unstar": "Quitar destacado",
   "Unstar tags": "Quitar estrella de etiquetas",
   "Unsupported rule": "Regla no compatible",
   "Untag {n}": "Quitar etiquetas de {n}",

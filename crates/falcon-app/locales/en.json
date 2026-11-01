@@ -365,6 +365,7 @@
   "Delete": "Delete",
   "Delete Folder": "Delete Folder",
   "Delete Group": "Delete Group",
+  "Delete Permanently": "Delete Permanently",
   "Delete Smart Folder": "Delete Smart Folder",
   "Delete Smart Folder Group": "Delete Smart Folder Group",
   "Delete Tag": "Delete Tag",
@@ -375,6 +376,10 @@
   "Delete the group “{name}”?": "Delete the group “{name}”?",
   "Delete the tag “{tag}”?": "Delete the tag “{tag}”?",
   "Delete {n}": "Delete {n}",
+  "Delete {n} Tags": {
+    "one": "Delete {n} Tag",
+    "other": "Delete {n} Tags"
+  },
   "Delete {n} folders?": {
     "one": "Delete {n} folder?",
     "other": "Delete {n} folders?"
@@ -437,6 +442,7 @@
   "Eagle Link": "Eagle Link",
   "Eagle Links": "Eagle Links",
   "Eagle Package…": "Eagle Package…",
+  "Eagle merges two to five tags at a time": "Eagle merges two to five tags at a time",
   "Edit": "Edit",
   "Edit Description…": "Edit Description…",
   "Edit Image": "Edit Image",
@@ -456,6 +462,7 @@
   "Empty the Trash ({n})?": "Empty the Trash ({n})?",
   "Empty the cache and reload the library": "Empty the cache and reload the library",
   "Emptying the Trash": "Emptying the Trash",
+  "Enter Presentation Mode": "Enter Presentation Mode",
   "Enter a name for the library, then pick the folder to keep it in.": "Enter a name for the library, then pick the folder to keep it in.",
   "Enter a number from 1024 to 65531": "Enter a number from 1024 to 65531",
   "Enter a password.": "Enter a password.",
@@ -714,6 +721,7 @@
   "Last Item": "Last Item",
   "Layout": "Layout",
   "Layout and sort": "Layout and sort",
+  "Leave Presentation Mode": "Leave Presentation Mode",
   "Leave Them Out": "Leave Them Out",
   "Leaves these items alone": "Leaves these items alone",
   "Leaves this item alone": "Leaves this item alone",
@@ -765,6 +773,10 @@
   "Merge {n} Groups…": {
     "one": "Merge {n} Group…",
     "other": "Merge {n} Groups…"
+  },
+  "Merge {n} Tags…": {
+    "one": "Merge {n} Tag…",
+    "other": "Merge {n} Tags…"
   },
   "Merge {n} duplicates": {
     "one": "Merge {n} duplicate",
@@ -854,6 +866,10 @@
   "Navigator": "Navigator",
   "New Folder": "New Folder",
   "New Folder Below": "New Folder Below",
+  "New Folder with {n} Items…": {
+    "one": "New Folder with {n} Item…",
+    "other": "New Folder with {n} Items…"
+  },
   "New Folder “{name}”": "New Folder “{name}”",
   "New Group": "New Group",
   "New Group…": "New Group…",
@@ -898,6 +914,7 @@
   "No library open": "No library open",
   "No link": "No link",
   "No link to open": "No link to open",
+  "No matches": "No matches",
   "No note": "No note",
   "No other recent libraries": "No other recent libraries",
   "No picture on the clipboard": "No picture on the clipboard",
@@ -1144,6 +1161,10 @@
     "one": "Rename {n} Item",
     "other": "Rename {n} Items"
   },
+  "Rename {n} Items…": {
+    "one": "Rename {n} Item…",
+    "other": "Rename {n} Items…"
+  },
   "Rename {n} items": {
     "one": "Rename {n} item",
     "other": "Rename {n} items"
@@ -1263,6 +1284,7 @@
   "Set the thumbnail background of {n}": "Set the thumbnail background of {n}",
   "Settings": "Settings",
   "Shape": "Shape",
+  "Share…": "Share…",
   "Shortcuts": "Shortcuts",
   "Show": "Show",
   "Show All": "Show All",
@@ -1274,6 +1296,11 @@
   "Show Falcon": "Show Falcon",
   "Show Inspector": "Show Inspector",
   "Show Item Info": "Show Item Info",
+  "Show Items": "Show Items",
+  "Show Items with Any of {n} Tags": {
+    "one": "Show Items with Any of {n} Tag",
+    "other": "Show Items with Any of {n} Tags"
+  },
   "Show Items with This Tag": "Show Items with This Tag",
   "Show Name": "Show Name",
   "Show Random": "Show Random",
@@ -1361,6 +1388,7 @@
   "Space in the grid": "Space in the grid",
   "Speed": "Speed",
   "Square": "Square",
+  "Star": "Star",
   "Star tags": "Star tags",
   "Starred": "Starred",
   "Starred Tags": "Starred Tags",
@@ -1456,6 +1484,7 @@
     "other": "This renames {n} items. Go ahead?"
   },
   "Thumbnail": "Thumbnail",
+  "Thumbnail Background": "Thumbnail Background",
   "Thumbnail set": "Thumbnail set",
   "Title": "Title",
   "Title, All Levels (A→Z)": "Title, All Levels (A→Z)",
@@ -1506,6 +1535,7 @@
     "other": "Unpinned {n} items"
   },
   "Unrated": "Unrated",
+  "Unstar": "Unstar",
   "Unstar tags": "Unstar tags",
   "Unsupported rule": "Unsupported rule",
   "Untag {n}": "Untag {n}",

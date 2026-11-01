@@ -344,6 +344,7 @@
   "Delete": "刪除",
   "Delete Folder": "刪除資料夾",
   "Delete Group": "刪除群組",
+  "Delete Permanently": "永久刪除",
   "Delete Smart Folder": "刪除智慧型資料夾",
   "Delete Smart Folder Group": "刪除智慧型資料夾群組",
   "Delete Tag": "刪除標籤",
@@ -354,6 +355,9 @@
   "Delete the group “{name}”?": "要刪除群組「{name}」嗎？",
   "Delete the tag “{tag}”?": "要刪除標籤「{tag}」嗎？",
   "Delete {n}": "刪除{n}個項目",
+  "Delete {n} Tags": {
+    "other": "刪除{n}個標籤"
+  },
   "Delete {n} folders?": {
     "other": "要刪除{n}個資料夾嗎？"
   },
@@ -410,6 +414,7 @@
   "Eagle Link": "Eagle 連結",
   "Eagle Links": "Eagle 連結",
   "Eagle Package…": "Eagle 套件…",
+  "Eagle merges two to five tags at a time": "Eagle 一次可合併 2 到 5 個標籤",
   "Edit": "編輯",
   "Edit Description…": "編輯描述…",
   "Edit Image": "編輯影像",
@@ -429,6 +434,7 @@
   "Empty the Trash ({n})?": "要清空垃圾桶（{n}）嗎？",
   "Empty the cache and reload the library": "清空快取並重新載入資料庫",
   "Emptying the Trash": "正在清空垃圾桶",
+  "Enter Presentation Mode": "進入簡報模式",
   "Enter a name for the library, then pick the folder to keep it in.": "輸入資料庫名稱，然後選擇存放它的資料夾。",
   "Enter a number from 1024 to 65531": "請輸入 1024 到 65531 之間的數字",
   "Enter a password.": "請輸入密碼。",
@@ -680,6 +686,7 @@
   "Last Item": "最後一個項目",
   "Layout": "版面配置",
   "Layout and sort": "版面配置與排序",
+  "Leave Presentation Mode": "結束簡報模式",
   "Leave Them Out": "排除",
   "Leaves these items alone": "保持這些項目不變",
   "Leaves this item alone": "保持此項目不變",
@@ -729,6 +736,9 @@
   "Merge not finished": "合併未完成",
   "Merge {n} Groups…": {
     "other": "合併{n}組…"
+  },
+  "Merge {n} Tags…": {
+    "other": "合併{n}個標籤…"
   },
   "Merge {n} duplicates": {
     "other": "合併{n}個重複項目"
@@ -809,6 +819,9 @@
   "Navigator": "導覽器",
   "New Folder": "新增資料夾",
   "New Folder Below": "在下方新增資料夾",
+  "New Folder with {n} Items…": {
+    "other": "用{n}個項目新增資料夾…"
+  },
   "New Folder “{name}”": "新增資料夾「{name}」",
   "New Group": "新增群組",
   "New Group…": "新增群組…",
@@ -853,6 +866,7 @@
   "No library open": "未開啟資料庫",
   "No link": "無連結",
   "No link to open": "沒有可打開的連結",
+  "No matches": "沒有符合的項目",
   "No note": "無備註",
   "No other recent libraries": "沒有其他最近使用的資料庫",
   "No picture on the clipboard": "剪貼簿中沒有圖片",
@@ -1087,6 +1101,9 @@
   "Rename {n} Items": {
     "other": "重新命名{n}個項目"
   },
+  "Rename {n} Items…": {
+    "other": "重新命名{n}個項目…"
+  },
   "Rename {n} items": {
     "other": "重新命名{n}個項目"
   },
@@ -1199,6 +1216,7 @@
   "Set the thumbnail background of {n}": "設定{n}個項目的縮圖背景",
   "Settings": "設定",
   "Shape": "形狀",
+  "Share…": "分享…",
   "Shortcuts": "快速鍵",
   "Show": "顯示",
   "Show All": "顯示全部",
@@ -1210,6 +1228,10 @@
   "Show Falcon": "顯示 Falcon",
   "Show Inspector": "顯示檢閱器",
   "Show Item Info": "顯示項目資訊",
+  "Show Items": "顯示項目",
+  "Show Items with Any of {n} Tags": {
+    "other": "顯示含{n}個標籤中任一個的項目"
+  },
   "Show Items with This Tag": "顯示含此標籤的項目",
   "Show Name": "顯示名稱",
   "Show Random": "顯示隨機項目",
@@ -1295,6 +1317,7 @@
   "Space in the grid": "網格中的空白鍵",
   "Speed": "速度",
   "Square": "正方形",
+  "Star": "加上星號",
   "Star tags": "為標籤加星號",
   "Starred": "星號",
   "Starred Tags": "星號標籤",
@@ -1386,6 +1409,7 @@
     "other": "這將重新命名{n}個項目。要繼續嗎？"
   },
   "Thumbnail": "縮圖",
+  "Thumbnail Background": "縮圖背景",
   "Thumbnail set": "已設定縮圖",
   "Title": "標題",
   "Title, All Levels (A→Z)": "標題，所有層級 (A→Z)",
@@ -1434,6 +1458,7 @@
     "other": "已取消釘選{n}個項目"
   },
   "Unrated": "未評分",
+  "Unstar": "移除星號",
   "Unstar tags": "取消標籤星號",
   "Unsupported rule": "不支援的規則",
   "Untag {n}": "移除{n}個項目的標籤",

@@ -344,6 +344,7 @@
   "Delete": "删除",
   "Delete Folder": "删除文件夹",
   "Delete Group": "删除组",
+  "Delete Permanently": "永久删除",
   "Delete Smart Folder": "删除智能文件夹",
   "Delete Smart Folder Group": "删除智能文件夹组",
   "Delete Tag": "删除标签",
@@ -354,6 +355,9 @@
   "Delete the group “{name}”?": "要删除组“{name}”吗？",
   "Delete the tag “{tag}”?": "要删除标签“{tag}”吗？",
   "Delete {n}": "删除{n}个项目",
+  "Delete {n} Tags": {
+    "other": "删除{n}个标签"
+  },
   "Delete {n} folders?": {
     "other": "要删除{n}个文件夹吗？"
   },
@@ -410,6 +414,7 @@
   "Eagle Link": "Eagle 链接",
   "Eagle Links": "Eagle 链接",
   "Eagle Package…": "Eagle 资源包…",
+  "Eagle merges two to five tags at a time": "Eagle 一次可合并 2 到 5 个标签",
   "Edit": "编辑",
   "Edit Description…": "编辑描述…",
   "Edit Image": "编辑图像",
@@ -429,6 +434,7 @@
   "Empty the Trash ({n})?": "要清倒废纸篓（{n}）吗？",
   "Empty the cache and reload the library": "清空缓存并重新载入资源库",
   "Emptying the Trash": "正在清倒废纸篓",
+  "Enter Presentation Mode": "进入演示模式",
   "Enter a name for the library, then pick the folder to keep it in.": "输入资源库名称，然后选择存放它的文件夹。",
   "Enter a number from 1024 to 65531": "请输入 1024 到 65531 之间的数字",
   "Enter a password.": "请输入密码。",
@@ -680,6 +686,7 @@
   "Last Item": "最后一个项目",
   "Layout": "布局",
   "Layout and sort": "布局和排序",
+  "Leave Presentation Mode": "退出演示模式",
   "Leave Them Out": "排除",
   "Leaves these items alone": "保持这些项目不变",
   "Leaves this item alone": "保持此项目不变",
@@ -729,6 +736,9 @@
   "Merge not finished": "合并未完成",
   "Merge {n} Groups…": {
     "other": "合并{n}组…"
+  },
+  "Merge {n} Tags…": {
+    "other": "合并{n}个标签…"
   },
   "Merge {n} duplicates": {
     "other": "合并{n}个重复项"
@@ -809,6 +819,9 @@
   "Navigator": "导航器",
   "New Folder": "新建文件夹",
   "New Folder Below": "在下方新建文件夹",
+  "New Folder with {n} Items…": {
+    "other": "用{n}个项目新建文件夹…"
+  },
   "New Folder “{name}”": "新建文件夹“{name}”",
   "New Group": "新建组",
   "New Group…": "新建组…",
@@ -853,6 +866,7 @@
   "No library open": "未打开资源库",
   "No link": "无链接",
   "No link to open": "没有可打开的链接",
+  "No matches": "无匹配项",
   "No note": "无备注",
   "No other recent libraries": "没有其他最近的资源库",
   "No picture on the clipboard": "剪贴板中没有图片",
@@ -1087,6 +1101,9 @@
   "Rename {n} Items": {
     "other": "重命名{n}个项目"
   },
+  "Rename {n} Items…": {
+    "other": "重命名{n}个项目…"
+  },
   "Rename {n} items": {
     "other": "重命名{n}个项目"
   },
@@ -1199,6 +1216,7 @@
   "Set the thumbnail background of {n}": "设置{n}个项目的缩略图背景",
   "Settings": "设置",
   "Shape": "形状",
+  "Share…": "共享…",
   "Shortcuts": "快捷键",
   "Show": "显示",
   "Show All": "显示全部",
@@ -1210,6 +1228,10 @@
   "Show Falcon": "显示 Falcon",
   "Show Inspector": "显示检查器",
   "Show Item Info": "显示项目信息",
+  "Show Items": "显示项目",
+  "Show Items with Any of {n} Tags": {
+    "other": "显示含{n}个标签中任一个的项目"
+  },
   "Show Items with This Tag": "显示带此标签的项目",
   "Show Name": "显示名称",
   "Show Random": "显示随机项目",
@@ -1295,6 +1317,7 @@
   "Space in the grid": "网格中的空格键",
   "Speed": "速度",
   "Square": "正方形",
+  "Star": "加星标",
   "Star tags": "给标签加星标",
   "Starred": "星标",
   "Starred Tags": "星标标签",
@@ -1386,6 +1409,7 @@
     "other": "这将重命名{n}个项目。要继续吗？"
   },
   "Thumbnail": "缩略图",
+  "Thumbnail Background": "缩略图背景",
   "Thumbnail set": "已设置缩略图",
   "Title": "标题",
   "Title, All Levels (A→Z)": "标题，所有层级 (A→Z)",
@@ -1434,6 +1458,7 @@
     "other": "已取消固定{n}个项目"
   },
   "Unrated": "未评分",
+  "Unstar": "取消星标",
   "Unstar tags": "取消标签星标",
   "Unsupported rule": "不支持的规则",
   "Untag {n}": "移除{n}个项目的标签",

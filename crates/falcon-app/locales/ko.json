@@ -344,6 +344,7 @@
   "Delete": "삭제",
   "Delete Folder": "폴더 삭제",
   "Delete Group": "그룹 삭제",
+  "Delete Permanently": "영구 삭제",
   "Delete Smart Folder": "스마트 폴더 삭제",
   "Delete Smart Folder Group": "스마트 폴더 그룹 삭제",
   "Delete Tag": "태그 삭제",
@@ -354,6 +355,9 @@
   "Delete the group “{name}”?": "“{name}” 그룹을 삭제할까요?",
   "Delete the tag “{tag}”?": "태그 “{tag}”을(를) 삭제할까요?",
   "Delete {n}": "{n}개 삭제",
+  "Delete {n} Tags": {
+    "other": "태그 {n}개 삭제"
+  },
   "Delete {n} folders?": {
     "other": "폴더 {n}개를 삭제할까요?"
   },
@@ -410,6 +414,7 @@
   "Eagle Link": "Eagle 링크",
   "Eagle Links": "Eagle 링크",
   "Eagle Package…": "Eagle 패키지…",
+  "Eagle merges two to five tags at a time": "Eagle은 한 번에 태그 2~5개를 병합합니다",
   "Edit": "편집",
   "Edit Description…": "설명 편집…",
   "Edit Image": "이미지 편집",
@@ -429,6 +434,7 @@
   "Empty the Trash ({n})?": "휴지통을 비울까요? ({n})",
   "Empty the cache and reload the library": "캐시를 비우고 라이브러리 다시 불러오기",
   "Emptying the Trash": "휴지통 비우는 중",
+  "Enter Presentation Mode": "프레젠테이션 모드 시작",
   "Enter a name for the library, then pick the folder to keep it in.": "라이브러리 이름을 입력한 다음 보관할 폴더를 선택하세요.",
   "Enter a number from 1024 to 65531": "1024에서 65531 사이의 숫자를 입력하세요",
   "Enter a password.": "비밀번호를 입력하세요.",
@@ -680,6 +686,7 @@
   "Last Item": "마지막 항목",
   "Layout": "레이아웃",
   "Layout and sort": "레이아웃 및 정렬",
+  "Leave Presentation Mode": "프레젠테이션 모드 종료",
   "Leave Them Out": "제외",
   "Leaves these items alone": "이 항목은 그대로 둡니다",
   "Leaves this item alone": "이 항목은 그대로 둡니다",
@@ -729,6 +736,9 @@
   "Merge not finished": "병합이 완료되지 않음",
   "Merge {n} Groups…": {
     "other": "그룹 {n}개 병합…"
+  },
+  "Merge {n} Tags…": {
+    "other": "태그 {n}개 병합…"
   },
   "Merge {n} duplicates": {
     "other": "중복 항목 {n}개 병합"
@@ -809,6 +819,9 @@
   "Navigator": "내비게이터",
   "New Folder": "새 폴더",
   "New Folder Below": "아래에 새 폴더",
+  "New Folder with {n} Items…": {
+    "other": "항목 {n}개로 새 폴더…"
+  },
   "New Folder “{name}”": "새 폴더 “{name}”",
   "New Group": "새 그룹",
   "New Group…": "새 그룹…",
@@ -853,6 +866,7 @@
   "No library open": "열린 라이브러리 없음",
   "No link": "링크 없음",
   "No link to open": "열 링크가 없습니다",
+  "No matches": "일치하는 항목 없음",
   "No note": "메모 없음",
   "No other recent libraries": "다른 최근 라이브러리가 없음",
   "No picture on the clipboard": "클립보드에 이미지가 없습니다",
@@ -1087,6 +1101,9 @@
   "Rename {n} Items": {
     "other": "항목 {n}개 이름 변경"
   },
+  "Rename {n} Items…": {
+    "other": "항목 {n}개 이름 변경…"
+  },
   "Rename {n} items": {
     "other": "항목 {n}개 이름 변경"
   },
@@ -1199,6 +1216,7 @@
   "Set the thumbnail background of {n}": "{n}개의 썸네일 배경 설정",
   "Settings": "설정",
   "Shape": "모양",
+  "Share…": "공유…",
   "Shortcuts": "단축키",
   "Show": "표시",
   "Show All": "모두 보기",
@@ -1210,6 +1228,10 @@
   "Show Falcon": "Falcon 보기",
   "Show Inspector": "속성 패널 보기",
   "Show Item Info": "항목 정보 보기",
+  "Show Items": "항목 보기",
+  "Show Items with Any of {n} Tags": {
+    "other": "태그 {n}개 중 하나라도 있는 항목 보기"
+  },
   "Show Items with This Tag": "이 태그가 있는 항목 보기",
   "Show Name": "이름 보기",
   "Show Random": "무작위 보기",
@@ -1295,6 +1317,7 @@
   "Space in the grid": "격자에서의 스페이스바",
   "Speed": "속도",
   "Square": "정사각형",
+  "Star": "별표 추가",
   "Star tags": "태그에 별표 지정",
   "Starred": "별표",
   "Starred Tags": "별표 태그",
@@ -1386,6 +1409,7 @@
     "other": "항목 {n}개의 이름이 변경됩니다. 계속하시겠습니까?"
   },
   "Thumbnail": "썸네일",
+  "Thumbnail Background": "썸네일 배경",
   "Thumbnail set": "썸네일을 설정했습니다",
   "Title": "제목",
   "Title, All Levels (A→Z)": "제목, 모든 단계 (A→Z)",
@@ -1434,6 +1458,7 @@
     "other": "항목 {n}개의 고정을 해제했습니다"
   },
   "Unrated": "별점 없음",
+  "Unstar": "별표 해제",
   "Unstar tags": "태그 별표 해제",
   "Unsupported rule": "지원되지 않는 규칙",
   "Untag {n}": "{n}개의 태그 제거",

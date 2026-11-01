@@ -344,6 +344,7 @@
   "Delete": "削除",
   "Delete Folder": "フォルダを削除",
   "Delete Group": "グループを削除",
+  "Delete Permanently": "完全に削除",
   "Delete Smart Folder": "スマートフォルダを削除",
   "Delete Smart Folder Group": "スマートフォルダグループを削除",
   "Delete Tag": "タグを削除",
@@ -354,6 +355,9 @@
   "Delete the group “{name}”?": "グループ「{name}」を削除しますか？",
   "Delete the tag “{tag}”?": "タグ「{tag}」を削除しますか？",
   "Delete {n}": "{n}件を削除",
+  "Delete {n} Tags": {
+    "other": "{n}個のタグを削除"
+  },
   "Delete {n} folders?": {
     "other": "{n}個のフォルダを削除しますか？"
   },
@@ -410,6 +414,7 @@
   "Eagle Link": "Eagleリンク",
   "Eagle Links": "Eagleリンク",
   "Eagle Package…": "Eagleパッケージ…",
+  "Eagle merges two to five tags at a time": "Eagleでは一度に2～5個のタグを統合できます",
   "Edit": "編集",
   "Edit Description…": "説明を編集…",
   "Edit Image": "画像を編集",
@@ -429,6 +434,7 @@
   "Empty the Trash ({n})?": "ゴミ箱を空にしますか？（{n}）",
   "Empty the cache and reload the library": "キャッシュを空にしてライブラリを再読み込み",
   "Emptying the Trash": "ゴミ箱を空にしています",
+  "Enter Presentation Mode": "プレゼンテーションモードを開始",
   "Enter a name for the library, then pick the folder to keep it in.": "ライブラリの名前を入力し、保存先のフォルダを選んでください。",
   "Enter a number from 1024 to 65531": "1024から65531の数値を入力してください",
   "Enter a password.": "パスワードを入力してください。",
@@ -680,6 +686,7 @@
   "Last Item": "最後のアイテム",
   "Layout": "レイアウト",
   "Layout and sort": "レイアウトと並べ替え",
+  "Leave Presentation Mode": "プレゼンテーションモードを終了",
   "Leave Them Out": "除外する",
   "Leaves these items alone": "これらのアイテムはそのまま残ります",
   "Leaves this item alone": "このアイテムはそのまま残ります",
@@ -729,6 +736,9 @@
   "Merge not finished": "統合が完了していません",
   "Merge {n} Groups…": {
     "other": "{n} グループを統合…"
+  },
+  "Merge {n} Tags…": {
+    "other": "{n}個のタグを統合…"
   },
   "Merge {n} duplicates": {
     "other": "{n}件の重複を統合"
@@ -809,6 +819,9 @@
   "Navigator": "ナビゲータ",
   "New Folder": "新規フォルダ",
   "New Folder Below": "下に新規フォルダ",
+  "New Folder with {n} Items…": {
+    "other": "{n}個のアイテムで新規フォルダ…"
+  },
   "New Folder “{name}”": "新規フォルダ「{name}」",
   "New Group": "新規グループ",
   "New Group…": "新規グループ…",
@@ -853,6 +866,7 @@
   "No library open": "開いているライブラリはありません",
   "No link": "リンクなし",
   "No link to open": "開くリンクがありません",
+  "No matches": "一致なし",
   "No note": "メモなし",
   "No other recent libraries": "ほかの最近使ったライブラリはありません",
   "No picture on the clipboard": "クリップボードに画像がありません",
@@ -1087,6 +1101,9 @@
   "Rename {n} Items": {
     "other": "{n}件のアイテムの名前を変更"
   },
+  "Rename {n} Items…": {
+    "other": "{n}個のアイテムの名前を変更…"
+  },
   "Rename {n} items": {
     "other": "{n}件のアイテムの名前を変更"
   },
@@ -1199,6 +1216,7 @@
   "Set the thumbnail background of {n}": "{n}件のサムネール背景を設定",
   "Settings": "設定",
   "Shape": "形状",
+  "Share…": "共有…",
   "Shortcuts": "ショートカット",
   "Show": "表示",
   "Show All": "すべてを表示",
@@ -1210,6 +1228,10 @@
   "Show Falcon": "Falcon を表示",
   "Show Inspector": "インスペクタを表示",
   "Show Item Info": "アイテム情報を表示",
+  "Show Items": "アイテムを表示",
+  "Show Items with Any of {n} Tags": {
+    "other": "{n}個のタグのいずれかを持つアイテムを表示"
+  },
   "Show Items with This Tag": "このタグのアイテムを表示",
   "Show Name": "名前を表示",
   "Show Random": "ランダムを表示",
@@ -1295,6 +1317,7 @@
   "Space in the grid": "グリッドでのスペースキー",
   "Speed": "速度優先",
   "Square": "正方形",
+  "Star": "スターを付ける",
   "Star tags": "タグにスターを付ける",
   "Starred": "スター付き",
   "Starred Tags": "スター付きタグ",
@@ -1386,6 +1409,7 @@
     "other": "{n}件のアイテムの名前を変更します。続けますか？"
   },
   "Thumbnail": "サムネール",
+  "Thumbnail Background": "サムネールの背景",
   "Thumbnail set": "サムネールを設定しました",
   "Title": "タイトル",
   "Title, All Levels (A→Z)": "タイトル、全階層（A→Z）",
@@ -1434,6 +1458,7 @@
     "other": "{n}件のアイテムのピン留めを解除しました"
   },
   "Unrated": "評価なし",
+  "Unstar": "スターを外す",
   "Unstar tags": "タグのスターを外す",
   "Unsupported rule": "未対応のルール",
   "Untag {n}": "{n}件のタグを外す",

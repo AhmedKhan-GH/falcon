@@ -386,6 +386,7 @@
   "Delete": "Удалить",
   "Delete Folder": "Удалить папку",
   "Delete Group": "Удалить группу",
+  "Delete Permanently": "Удалить навсегда",
   "Delete Smart Folder": "Удалить смарт-папку",
   "Delete Smart Folder Group": "Удалить группу смарт-папок",
   "Delete Tag": "Удалить тег",
@@ -396,6 +397,11 @@
   "Delete the group “{name}”?": "Удалить группу «{name}»?",
   "Delete the tag “{tag}”?": "Удалить тег «{tag}»?",
   "Delete {n}": "Удалить: {n}",
+  "Delete {n} Tags": {
+    "few": "Удалить {n} тега",
+    "many": "Удалить {n} тегов",
+    "one": "Удалить {n} тег"
+  },
   "Delete {n} folders?": {
     "few": "Удалить {n} папки?",
     "many": "Удалить {n} папок?",
@@ -464,6 +470,7 @@
   "Eagle Link": "Ссылка Eagle",
   "Eagle Links": "Ссылки Eagle",
   "Eagle Package…": "Пакет Eagle…",
+  "Eagle merges two to five tags at a time": "Eagle объединяет от двух до пяти тегов за раз",
   "Edit": "Правка",
   "Edit Description…": "Изменить описание…",
   "Edit Image": "Изменить изображение",
@@ -483,6 +490,7 @@
   "Empty the Trash ({n})?": "Очистить корзину ({n})?",
   "Empty the cache and reload the library": "Очистить кэш и перезагрузить библиотеку",
   "Emptying the Trash": "Очистка корзины",
+  "Enter Presentation Mode": "Включить режим презентации",
   "Enter a name for the library, then pick the folder to keep it in.": "Введите имя библиотеки, затем выберите папку для её хранения.",
   "Enter a number from 1024 to 65531": "Введите число от 1024 до 65531",
   "Enter a password.": "Введите пароль.",
@@ -748,6 +756,7 @@
   "Last Item": "Последний элемент",
   "Layout": "Макет",
   "Layout and sort": "Макет и сортировка",
+  "Leave Presentation Mode": "Выйти из режима презентации",
   "Leave Them Out": "Пропустить",
   "Leaves these items alone": "Эти элементы останутся без изменений",
   "Leaves this item alone": "Этот элемент останется без изменений",
@@ -801,6 +810,11 @@
     "few": "Объединить {n} группы…",
     "many": "Объединить {n} групп…",
     "one": "Объединить {n} группу…"
+  },
+  "Merge {n} Tags…": {
+    "few": "Объединить {n} тега…",
+    "many": "Объединить {n} тегов…",
+    "one": "Объединить {n} тег…"
   },
   "Merge {n} duplicates": {
     "few": "Объединить {n} дубликата",
@@ -899,6 +913,11 @@
   "Navigator": "Навигатор",
   "New Folder": "Новая папка",
   "New Folder Below": "Новая папка ниже",
+  "New Folder with {n} Items…": {
+    "few": "Новая папка с {n} элементами…",
+    "many": "Новая папка с {n} элементами…",
+    "one": "Новая папка с {n} элементом…"
+  },
   "New Folder “{name}”": "Новая папка «{name}»",
   "New Group": "Новая группа",
   "New Group…": "Новая группа…",
@@ -943,6 +962,7 @@
   "No library open": "Нет открытой библиотеки",
   "No link": "Нет ссылки",
   "No link to open": "Нет ссылки для открытия",
+  "No matches": "Нет совпадений",
   "No note": "Нет заметки",
   "No other recent libraries": "Других недавних библиотек нет",
   "No picture on the clipboard": "В буфере обмена нет изображения",
@@ -1201,6 +1221,11 @@
     "many": "Переименовать {n} элементов",
     "one": "Переименовать {n} элемент"
   },
+  "Rename {n} Items…": {
+    "few": "Переименовать {n} элемента…",
+    "many": "Переименовать {n} элементов…",
+    "one": "Переименовать {n} элемент…"
+  },
   "Rename {n} items": {
     "few": "Переименовать {n} элемента",
     "many": "Переименовать {n} элементов",
@@ -1325,6 +1350,7 @@
   "Set the thumbnail background of {n}": "Задать фон миниатюр: {n}",
   "Settings": "Параметры",
   "Shape": "Форма",
+  "Share…": "Поделиться…",
   "Shortcuts": "Сочетания клавиш",
   "Show": "Показать",
   "Show All": "Показать все",
@@ -1336,6 +1362,12 @@
   "Show Falcon": "Показать Falcon",
   "Show Inspector": "Показывать инспектор",
   "Show Item Info": "Показывать сведения об элементе",
+  "Show Items": "Показать элементы",
+  "Show Items with Any of {n} Tags": {
+    "few": "Показать элементы с любым из {n} тегов",
+    "many": "Показать элементы с любым из {n} тегов",
+    "one": "Показать элементы с {n} тегом"
+  },
   "Show Items with This Tag": "Показать элементы с этим тегом",
   "Show Name": "Показывать имя",
   "Show Random": "Показать случайные",
@@ -1425,6 +1457,7 @@
   "Space in the grid": "Пробел в сетке",
   "Speed": "Скорость",
   "Square": "Квадрат",
+  "Star": "Добавить в избранное",
   "Star tags": "Отметить теги звездой",
   "Starred": "Избранные",
   "Starred Tags": "Избранные теги",
@@ -1524,6 +1557,7 @@
     "one": "Будет переименован {n} элемент. Продолжить?"
   },
   "Thumbnail": "Миниатюра",
+  "Thumbnail Background": "Фон миниатюры",
   "Thumbnail set": "Миниатюра задана",
   "Title": "Название",
   "Title, All Levels (A→Z)": "Название, все уровни (А→Я)",
@@ -1576,6 +1610,7 @@
     "one": "Откреплён {n} элемент"
   },
   "Unrated": "Без рейтинга",
+  "Unstar": "Убрать из избранного",
   "Unstar tags": "Снять звезду с тегов",
   "Unsupported rule": "Неподдерживаемое правило",
   "Untag {n}": "Снять теги: {n}",

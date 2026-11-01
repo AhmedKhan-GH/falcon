@@ -19,7 +19,10 @@
 //! the search is filtering, that runs the contents inline in the hidden
 //! body and reports them as a group; otherwise it is `ui.menu_button`.
 //! Typing a submenu's name lists its entries, as Eagle's keywords do.
+//! Callers pass the submenu name already translated, so the search
+//! matches what the user sees.
 
+use crate::locale::tr;
 use eframe::egui::{
     self, Align2, Event, Id, Key, LayerId, Modifiers, Order, Rect, Sense, Shape, TextEdit, Ui, UiBuilder,
     accesskit,
@@ -120,7 +123,7 @@ pub fn show<R>(ui: &mut Ui, body: impl FnOnce(&mut Ui) -> R) -> R {
     st.last_pass = pass;
 
     let field_id = menu.with("menu-search-field");
-    let field = ui.add(TextEdit::singleline(&mut st.query).id(field_id).hint_text("Search").desired_width(st.width.max(160.0)));
+    let field = ui.add(TextEdit::singleline(&mut st.query).id(field_id).hint_text(tr("Search")).desired_width(st.width.max(160.0)));
     if fresh {
         field.request_focus();
     }
@@ -192,7 +195,7 @@ pub fn show<R>(ui: &mut Ui, body: impl FnOnce(&mut Ui) -> R) -> R {
             row += 1;
         }
         if hits.is_empty() {
-            ui.label(egui::RichText::new("No matches").color(ui.visuals().weak_text_color()));
+            ui.label(egui::RichText::new(tr("No matches")).color(ui.visuals().weak_text_color()));
         } else if ui.input(|i| i.key_pressed(Key::Enter)) {
             fire = Some(st.entries[hits[st.sel.min(hits.len() - 1)]].id);
         }
