@@ -34,6 +34,7 @@ impl App {
         let def = self.shortcut_text(ui.ctx(), Command::OpenDefault);
         if ui.add(egui::Button::new("Open in Default App").shortcut_text(def)).clicked() {
             open_with::open_default(files);
+            self.used(files);
         }
         if let [file] = files {
             ui.menu_button("Open With", |ui| self.open_with_list(ui, file));
@@ -65,6 +66,7 @@ impl App {
         };
         if default {
             open_with::open_default(&files);
+            self.used(&files);
         } else {
             open_with::reveal(&files);
         }
@@ -103,6 +105,7 @@ impl App {
         for e in &apps {
             if ui.button(e.label()).on_hover_text(e.app.path.display().to_string()).clicked() {
                 open_with::open_in(&e.app.path, &[file.to_path_buf()]);
+                self.used(&[file.to_path_buf()]);
             }
             if e.default && apps.len() > 1 {
                 ui.separator();
@@ -126,6 +129,7 @@ impl App {
         let tip = if def.is_empty() { "Open in Default App".to_string() } else { format!("Open in Default App ({def})") };
         if icon_button(ui, Pos2::new(x, cy), ic::ARROW_SQUARE_OUT, 16.0, true, &tip).clicked() {
             open_with::open_default(&[file.to_path_buf()]);
+            self.used(&[file.to_path_buf()]);
         }
         x - 13.0
     }

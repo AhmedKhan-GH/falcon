@@ -892,6 +892,17 @@ impl App {
         {
             falcon_library::item_ops::pinned_first(&mut order, lib.items(), id);
         }
+        // Recently Used keeps the order things were opened in, newest
+        // first, whatever the sort, as Eagle does.
+        if self.ws.scope == Scope::Recent && !self.ws.folders.combined() {
+            let live = self.recent_items.list(lib.root());
+            let shown = match &self.recent_shown {
+                Some((root, ids)) if root == lib.root() => ids.as_slice(),
+                _ => live,
+            };
+            let pos: HashMap<&str, usize> = shown.iter().enumerate().map(|(n, id)| (id.as_str(), n)).collect();
+            order.sort_by_key(|&i| pos.get(lib.items()[i].id.as_str()).copied().unwrap_or(usize::MAX));
+        }
         let hidden = organize::hidden_folders(&lib.metadata.folders, &self.ws.org.unlocked);
         organize::without_hidden(order, lib.items(), &hidden)
     }

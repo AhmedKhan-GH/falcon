@@ -23,6 +23,7 @@ mod prefs;
 mod share;
 mod quick_switch;
 mod search_state;
+mod recent;
 mod shortcuts;
 mod subtitles;
 mod tags;

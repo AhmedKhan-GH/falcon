@@ -155,8 +155,11 @@ pub fn tag_counts(items: &[Item]) -> Vec<(String, usize)> {
 fn in_scope(item: &Item, scope: &Scope, index: &search::FolderIndex) -> bool {
     match scope {
         Scope::Trash => item.is_deleted,
+        // Recently Used lists what was opened, trashed items too, as in
+        // Eagle; the caller's `only` set holds the list.
+        Scope::Recent => true,
         _ if item.is_deleted => false,
-        Scope::All | Scope::Recent | Scope::Random(_) | Scope::AllTags | Scope::Duplicates => true,
+        Scope::All | Scope::Random(_) | Scope::AllTags | Scope::Duplicates => true,
         Scope::Uncategorized => uncategorized(item, &|id| index.contains_key(id)),
         Scope::Untagged => item.tags.is_empty(),
         Scope::Folder(id) => item.folders.iter().any(|f| f == id),
@@ -223,7 +226,6 @@ pub fn visible_in(
     let mut hits: Vec<(usize, f64)> = hits.into_iter().map(|(n, d, _)| (n, d)).collect();
     match scope {
         Scope::Random(seed) => hits.sort_by_key(|&(i, _)| shuffle_key(*seed, &items[i].id)),
-        Scope::Recent => hits.sort_by(|a, b| items[b.0].last_modified.cmp(&items[a.0].last_modified)),
         Scope::Trash => hits.sort_by_key(|&(i, _)| {
             let it = &items[i];
             std::cmp::Reverse(it.extra.get("deletedTime").and_then(|v| v.as_u64()).unwrap_or(it.modification_time))
@@ -888,7 +890,10 @@ mod tests {
         assert_eq!(v(Scope::Trash), ["gone"]);
         assert_eq!(v(Scope::Folder("A".into())), ["Mango", "Zebra"]);
         assert_eq!(v(Scope::Tag("red".into())), ["apple", "Zebra"]);
-        assert_eq!(v(Scope::Recent), ["loose", "Zebra", "Mango", "apple"]);
+        // Recently Used is whatever `only` lets through, trashed items too.
+        let recent: HashSet<String> = ["4", "5"].iter().map(|s| s.to_string()).collect();
+        let r = visible(&items, &roots, &Scope::Recent, "", &Filter::default(), OrderBy::Name, true, Some(&recent));
+        assert_eq!(names(&items, &r), ["gone", "loose"]);
         assert_eq!(v(Scope::Random(7)).len(), 4);
     }
 

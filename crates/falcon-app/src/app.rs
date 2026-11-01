@@ -120,6 +120,8 @@ struct Saved {
     hide_navigator: Option<bool>,
     /// Search scope, pinned filters and Go to Folder history.
     search: crate::search_state::SearchPrefs,
+    /// Recently Used, per library (`recent.rs`).
+    recent_items: crate::recent::RecentItems,
 }
 
 /// A rubber-band selection in progress: where it started, in the grid's
@@ -654,6 +656,14 @@ pub struct App {
     /// The Rename dialog for several items, and the template it used last.
     item_rename: Option<item_cmds::ItemRename>,
     rename_template: String,
+    /// Items opened in each library, for Recently Used (`recent.rs`).
+    recent_items: crate::recent::RecentItems,
+    /// How long the viewer has shown its item, so it counts as used.
+    view_timer: crate::recent::ViewTimer,
+    /// The Recently Used list as it was when the page was opened, so
+    /// items viewed from it don't jump to the top under the user (opening
+    /// the page again refreshes it).
+    recent_shown: Option<(PathBuf, Vec<String>)>,
     /// What to open once the frame is done (it replaces the library being
     /// drawn).
     switch_to: Option<Switch>,
@@ -729,6 +739,9 @@ impl App {
             recent_folders: Vec::new(),
             item_rename: None,
             rename_template: "Untitled - %N".into(),
+            recent_items: Default::default(),
+            view_timer: Default::default(),
+            recent_shown: None,
             switch_to: None,
             prefs: Default::default(),
             search: Default::default(),
@@ -785,6 +798,7 @@ impl App {
         app.auto_imported = Arc::new(Mutex::new(saved.auto_imported));
         app.font_look = saved.font_look.unwrap_or_default();
         app.modes.hide_navigator = saved.hide_navigator.unwrap_or(false);
+        app.recent_items = saved.recent_items;
         // Reopen the libraries that were open, then the one given on the
         // command line (focused if it was already open).
         let (libraries, active) = crate::workspaces::restore(&saved.libraries, saved.active, saved.library.as_deref(), |p| p.is_dir());
@@ -1158,8 +1172,10 @@ impl App {
             Scope::Random(_) => Scope::Random(fastrand_seed()),
             s => s,
         };
-        // Opening any view, even the one open, drops picked folders.
+        // Opening any view, even the one open, drops picked folders and
+        // takes a fresh look at Recently Used.
         self.ws.folders.clear();
+        self.recent_shown = None;
         if scope == self.ws.scope {
             return;
         }
@@ -1369,7 +1385,24 @@ impl App {
         if let Ok(mut clip) = arboard::Clipboard::new()
             && clip.set().file_list(&paths).is_ok()
         {
+            self.used(&paths);
             self.flash(format!("Copied {} file{}", paths.len(), if paths.len() == 1 { "" } else { "s" }));
+        }
+    }
+
+    /// Records library originals that were opened or copied as Recently
+    /// Used, as Eagle does for its open, Open With, new window and copy
+    /// commands. Other files are ignored.
+    fn used(&mut self, files: &[PathBuf]) {
+        if let Some(root) = self.ws.root.clone() {
+            self.recent_items.add_many(&root, &crate::recent::item_ids(files));
+        }
+    }
+
+    /// Records one item opened in the preview window as Recently Used.
+    fn used_item(&mut self, id: &str) {
+        if let Some(root) = self.ws.root.clone() {
+            self.recent_items.add(&root, id);
         }
     }
 
@@ -2769,6 +2802,19 @@ impl App {
                 (a, b) => a == b,
             };
             let resp = sidebar_row(ui, 0, glyph, label, self.badge(count), active, None);
+            if scope == Scope::Recent {
+                resp.context_menu(|ui| {
+                    let root = self.ws.root.clone().unwrap_or_default();
+                    let any = !self.recent_items.list(&root).is_empty();
+                    if ui.add_enabled(any, egui::Button::new("Clear Recently Used")).clicked() {
+                        self.recent_items.clear(&root);
+                        self.recent_shown = None;
+                        if self.ws.scope == Scope::Recent {
+                            self.ws.selected.clear();
+                        }
+                    }
+                });
+            }
             if scope == Scope::Trash {
                 resp.context_menu(|ui| {
                     if ui.add_enabled(n.trash > 0, egui::Button::new("Empty Trash")).clicked() {
@@ -3283,6 +3329,12 @@ impl App {
         let only: Option<HashSet<String>> = match &self.ws.scope {
             _ if self.ws.folders.combined() => self.combined_items(lib),
             Scope::Smart(id) => Some(lib.smart_folder_items(id).into_iter().map(|i| i.id.clone()).collect()),
+            Scope::Recent => {
+                if self.recent_shown.as_ref().is_none_or(|(root, _)| root != lib.root()) {
+                    self.recent_shown = Some((lib.root().to_path_buf(), self.recent_items.list(lib.root()).to_vec()));
+                }
+                self.recent_shown.as_ref().map(|(_, ids)| ids.iter().cloned().collect())
+            }
             _ => None,
         };
         self.grid_order(lib, only.as_ref())
@@ -3479,7 +3531,9 @@ impl App {
         if let Some(id) = &double_clicked
             && self.prefs.double_click == crate::prefs::DoubleClick::External
         {
-            crate::open_with::open_default(&open_ui::originals(lib, std::slice::from_ref(id)));
+            let files = open_ui::originals(lib, std::slice::from_ref(id));
+            crate::open_with::open_default(&files);
+            self.used(&files);
         } else if let Some(id) = opened.or(double_clicked) {
             self.ws.viewer = Some(id);
         }
@@ -3571,6 +3625,7 @@ impl App {
         let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::OpenNewWindow);
         if ui.add(egui::Button::new("Open in New Window").shortcut_text(keys)).clicked() {
             self.preview = Some(preview_window::PreviewWin::new(item.id.clone()));
+            self.used_item(&item.id);
         }
         // Eagle's Navigator toggle, in the viewer.
         if in_viewer {
@@ -4616,7 +4671,9 @@ impl App {
         media_view::media_props(ui, &item);
         ui.add_space(4.0);
         if wide_button(ui, ic::ARROW_SQUARE_OUT, "Open in Default App", true).clicked() {
-            crate::open_with::open_default(&[item.original_path(lib.root())]);
+            let files = [item.original_path(lib.root())];
+            crate::open_with::open_default(&files);
+            self.used(&files);
         }
         ui.add_space(4.0);
         if wide_button(ui, ic::EXPORT, "Show in Finder", true).clicked() {
@@ -4930,6 +4987,7 @@ impl eframe::App for App {
             auto_imported: self.auto_imported.lock().unwrap_or_else(|p| p.into_inner()).clone(),
             font_look: Some(self.font_look),
             hide_navigator: Some(self.modes.hide_navigator),
+            recent_items: self.recent_items.clone(),
         };
         eframe::set_value(storage, eframe::APP_KEY, &saved);
     }
@@ -5009,6 +5067,14 @@ impl App {
         let mut guard = lock(&shared);
         let lib: &mut Library = &mut guard;
         self.begin_frame_edits(lib);
+        // An item the viewer has shown for a second counts as used.
+        let now = ctx.input(|i| i.time);
+        if let Some(id) = self.view_timer.tick(self.ws.viewer.as_deref(), now) {
+            self.recent_items.add(lib.root(), &id);
+        }
+        if let Some(wait) = self.view_timer.wait(now) {
+            ctx.request_repaint_after(std::time::Duration::from_secs_f64(wait));
+        }
         // Typing in a text item the viewer has just left (an arrow key,
         // Esc) is saved before the viewer opens the next one.
         self.text_saves(lib, ctx.input(|i| i.time));

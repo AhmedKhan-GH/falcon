@@ -41,6 +41,7 @@ impl App {
     /// the preview window, replacing what it showed.
     pub(super) fn open_preview_window(&mut self) {
         if let Some(id) = self.acted_on().into_iter().next() {
+            self.used_item(&id);
             self.preview = Some(PreviewWin::new(id));
         }
     }
