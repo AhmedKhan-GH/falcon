@@ -11,8 +11,9 @@
 //! Falcon's own choices:
 //! - it listens on 127.0.0.1 only;
 //! - it serves library routes only (no script injection, plugins or AI);
-//! - imports finish before the reply, so returned ids always exist;
-//! - imports read their source without holding the library lock;
+//! - imports and thumbnail work finish before the reply, so returned ids
+//!   exist and new thumbnails are in place;
+//! - routes that read or write files do so without holding the library lock;
 //! - library history is what the app hands over ([`Handle::set_history`]),
 //!   or else the libraries this server has served, newest first.
 
@@ -20,7 +21,7 @@ mod rules;
 mod v2;
 
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -461,6 +462,9 @@ fn route(lib: &Shared, state: &State, method: &Method, path: &str, args: &Map<St
         ("/api/item/thumbnail", &[Get]),
         ("/api/item/moveToTrash", &[Post]),
         ("/api/item/list", &[Get]),
+        ("/api/item/setCustomThumbnail", &[Post]),
+        ("/api/item/refreshPalette", &[Post]),
+        ("/api/item/refreshThumbnail", &[Post]),
         ("/api/v2/app/info", &[Get]),
         ("/api/v2/library/info", &[Get]),
         ("/api/v2/library/history", &[Get]),
@@ -471,6 +475,8 @@ fn route(lib: &Shared, state: &State, method: &Method, path: &str, args: &Map<St
         ("/api/v2/item/countAll", &[Get]),
         ("/api/v2/item/add", &[Post]),
         ("/api/v2/item/update", &[Post]),
+        ("/api/v2/item/setCustomThumbnail", &[Post]),
+        ("/api/v2/item/refreshThumbnail", &[Post]),
         ("/api/v2/item/getComments", &[Get]),
         ("/api/v2/item/addComment", &[Post]),
         ("/api/v2/item/updateComment", &[Post]),
@@ -503,6 +509,9 @@ fn route(lib: &Shared, state: &State, method: &Method, path: &str, args: &Map<St
         return Reply::WrongMethod;
     }
     if let Some(reply) = import_route(lib, path, args) {
+        return reply;
+    }
+    if let Some(reply) = unlocked_route(lib, state, path, args) {
         return reply;
     }
     let mut lib = lock(lib);
@@ -538,21 +547,6 @@ fn route(lib: &Shared, state: &State, method: &Method, path: &str, args: &Map<St
         }
         "/api/library/history" => Reply::Data(json!(state.history())),
         "/api/v2/library/history" => Reply::Data(paginate(state.history().into_iter().map(Value::from).collect(), args)),
-        "/api/library/switch" | "/api/v2/library/switch" => {
-            let v2 = path.starts_with("/api/v2/");
-            match v2::open_library(s(args, "libraryPath").unwrap_or("")) {
-                Ok(new) => {
-                    state.remember(new.root().display().to_string());
-                    *lib = new;
-                    if v2 { Reply::Data(json!(true)) } else { Reply::Empty }
-                }
-                Err(e) if v2 => Reply::Error(e),
-                Err(e) => Reply::Fail(e),
-            }
-        }
-        "/api/library/icon" => v2::library_icon(s(args, "libraryPath")).map_or_else(Reply::Fail, Reply::Data),
-        "/api/v2/library/icon" => v2::library_icon(s(args, "libraryPath")).map_or_else(Reply::Error, Reply::Data),
-
         "/api/folder/list" => {
             let open = state.unlocked_in(&lib.root().display().to_string());
             Reply::Data(Value::Array(lib.metadata.folders.iter().map(|f| folder_json_with(f, &open)).collect()))
@@ -809,6 +803,131 @@ fn import_route(lib: &Shared, path: &str, args: &Map<String, Value>) -> Option<R
         "/api/v2/item/add" => v2::add_item(lib, args),
         _ => return None,
     })
+}
+
+/// Routes that read or write files. Like the add routes, they hold the
+/// library lock only to look things up and to commit, never while a file
+/// is read, decoded or written.
+fn unlocked_route(lib: &Shared, state: &State, path: &str, args: &Map<String, Value>) -> Option<Reply> {
+    use falcon_library::{palette, thumbnail};
+    Some(match path {
+        "/api/library/switch" | "/api/v2/library/switch" => {
+            let v2 = path.starts_with("/api/v2/");
+            match v2::open_library(s(args, "libraryPath").unwrap_or("")) {
+                Ok(new) => {
+                    state.remember(new.root().display().to_string());
+                    *lock(lib) = new;
+                    if v2 { Reply::Data(json!(true)) } else { Reply::Empty }
+                }
+                Err(e) if v2 => Reply::Error(e),
+                Err(e) => Reply::Fail(e),
+            }
+        }
+        "/api/library/icon" => v2::library_icon(s(args, "libraryPath")).map_or_else(Reply::Fail, Reply::Data),
+        "/api/v2/library/icon" => v2::library_icon(s(args, "libraryPath")).map_or_else(Reply::Error, Reply::Data),
+
+        // v1 resolves `true` once the thumbnail is in place; v2 answers
+        // `true` or `false` and never throws.
+        "/api/item/setCustomThumbnail" | "/api/v2/item/setCustomThumbnail" => {
+            let v2 = path.starts_with("/api/v2/");
+            let (id, file) = if v2 { (s(args, "itemId"), s(args, "filePath")) } else { (s(args, "id"), s(args, "thumbnailPath")) };
+            let file = PathBuf::from(file.unwrap_or(""));
+            let done = restage(lib, id.unwrap_or(""), |root, item| {
+                thumbnail::custom_thumbnailed(root, item.clone(), &file).map(Some).map_err(|e| e.to_string())
+            });
+            match done {
+                Restaged::Done => Reply::Data(json!(true)),
+                _ if v2 => Reply::Data(json!(false)),
+                Restaged::NoItem => Reply::Fail("File does not exist.".into()),
+                Restaged::Failed => Reply::Fail("Failed to set custom thumbnail.".into()),
+            }
+        }
+        // Eagle queues the work and replies at once, so only an unknown
+        // item is an error; falcon finishes the work first.
+        "/api/item/refreshPalette" => match restage(lib, s(args, "id").unwrap_or(""), |root, item| {
+            if falcon_library::media::is_audio(&item.ext) {
+                return Ok(None);
+            }
+            let img = palette::refresh_source(item, root).ok_or("nothing to analyse")?;
+            Ok(Some(Item { palettes: palette::extract(&img), ..item.clone() }))
+        }) {
+            Restaged::NoItem => Reply::Fail("File does not exist.".into()),
+            _ => Reply::Empty,
+        },
+        "/api/item/refreshThumbnail" | "/api/v2/item/refreshThumbnail" => {
+            let v2 = path.starts_with("/api/v2/");
+            let id = if v2 { s(args, "itemId") } else { s(args, "id") };
+            let done = restage(lib, id.unwrap_or(""), |root, item| {
+                // As in the app, a custom thumbnail is left alone.
+                if thumbnail::has_custom_thumbnail(item) {
+                    return Ok(None);
+                }
+                thumbnail::redrawn(root, item.clone()).map(Some).map_err(|e| e.to_string())
+            });
+            match done {
+                Restaged::NoItem if v2 => Reply::Data(json!(false)),
+                Restaged::NoItem => Reply::Fail("File does not exist.".into()),
+                _ if v2 => Reply::Data(json!(true)),
+                _ => Reply::Empty,
+            }
+        }
+        _ => return None,
+    })
+}
+
+enum Restaged {
+    NoItem,
+    Failed,
+    Done,
+}
+
+/// Runs `work` on a copy of item `id` without the library lock, then
+/// saves what it changed. `work` returns `None` when there is nothing to
+/// save. Only the keys `work` changed are written over the item as it is
+/// at commit time, so edits made meanwhile (by the app, say) survive.
+fn restage(lib: &Shared, id: &str, work: impl FnOnce(&Path, &Item) -> Result<Option<Item>, String>) -> Restaged {
+    let (root, before) = {
+        let lib = lock(lib);
+        match lib.item(id) {
+            Some(i) => (lib.root().to_path_buf(), i.clone()),
+            None => return Restaged::NoItem,
+        }
+    };
+    let after = match work(&root, &before) {
+        Ok(Some(after)) => after,
+        Ok(None) => return Restaged::Done,
+        Err(_) => return Restaged::Failed,
+    };
+    let mut lib = lock(lib);
+    // A library switched meanwhile has other items, even under the same id.
+    if lib.root() != root {
+        return Restaged::NoItem;
+    }
+    let Some(current) = lib.item(id).cloned() else { return Restaged::NoItem };
+    let Some(merged) = merge_changes(&before, &after, &current) else { return Restaged::Failed };
+    match lib.update_item(merged) {
+        Ok(()) => Restaged::Done,
+        Err(_) => Restaged::Failed,
+    }
+}
+
+/// `current` with the keys that differ between `before` and `after` taken
+/// from `after` (and the keys `after` dropped removed). Key order is kept.
+fn merge_changes(before: &Item, after: &Item, current: &Item) -> Option<Item> {
+    let (Value::Object(b), Value::Object(a), Value::Object(mut c)) =
+        (serde_json::to_value(before).ok()?, serde_json::to_value(after).ok()?, serde_json::to_value(current).ok()?)
+    else {
+        return None;
+    };
+    for (k, v) in &a {
+        if b.get(k) != Some(v) {
+            c.insert(k.clone(), v.clone());
+        }
+    }
+    for k in b.keys().filter(|k| !a.contains_key(*k)) {
+        c.shift_remove(k);
+    }
+    serde_json::from_value(Value::Object(c)).ok()
 }
 
 fn folder_reply(lib: &Library, id: &str) -> Reply {

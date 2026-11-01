@@ -627,3 +627,73 @@ fn folder_unlock() {
     // Nothing was written: the password is still set on disk.
     assert!(e.reopen().all_folders().into_iter().find(|f| f.id == e.folder).unwrap().is_locked());
 }
+
+#[test]
+fn refresh_palette() {
+    let e = env();
+    assert!(e.lib.lock().unwrap().item(&e.a).unwrap().palettes.is_empty());
+    let (code, v) = e.post("/api/item/refreshPalette", json!({"id": "NOPE"}));
+    assert_eq!((code, v), (500, json!({"status": "error", "data": "File does not exist."})));
+    let (code, v) = e.post("/api/item/refreshPalette", json!({"id": e.a}));
+    assert_eq!((code, v), (200, json!({"status": "success"})));
+    assert!(!e.lib.lock().unwrap().item(&e.a).unwrap().palettes.is_empty());
+    assert!(!e.reopen().item(&e.a).unwrap().palettes.is_empty());
+}
+
+#[test]
+fn refresh_thumbnail() {
+    let e = env();
+    let (code, v) = e.post("/api/item/refreshThumbnail", json!({"id": "NOPE"}));
+    assert_eq!((code, v), (500, json!({"status": "error", "data": "File does not exist."})));
+    let (code, v) = e.post("/api/item/refreshThumbnail", json!({"id": e.a}));
+    assert_eq!((code, v), (200, json!({"status": "success"})));
+    let (code, v) = e.post("/api/v2/item/refreshThumbnail", json!({"itemId": e.a}));
+    assert_eq!((code, v), (200, json!({"status": "success", "data": true})));
+    let (code, v) = e.post("/api/v2/item/refreshThumbnail", json!({"itemId": "NOPE"}));
+    assert_eq!((code, v), (200, json!({"status": "success", "data": false})));
+}
+
+#[test]
+fn set_custom_thumbnail() {
+    let e = env();
+    // PNG items are their own thumbnail and refuse a custom one, so use GIFs.
+    let gif = |name: &str| {
+        let p = e.tmp.path().join(format!("{name}.png"));
+        png(&p, 30, 30);
+        let img = image::open(&p).unwrap();
+        let g = e.tmp.path().join(format!("{name}.gif"));
+        let img = img.to_rgba8();
+        img.save(&g).unwrap();
+        e.ok_post("/api/item/addFromPath", json!({"path": g.display().to_string(), "name": name}));
+        let lib = e.lib.lock().unwrap();
+        lib.items().iter().find(|i| i.name == name).unwrap().id.clone()
+    };
+    let (ga, gb) = (gif("ga"), gif("gb"));
+    let file = e.tmp.path().join("custom.png");
+    png(&file, 64, 48);
+    let file = file.display().to_string();
+
+    let (code, v) = e.post("/api/item/setCustomThumbnail", json!({"id": "NOPE", "thumbnailPath": file}));
+    assert_eq!((code, v), (500, json!({"status": "error", "data": "File does not exist."})));
+    let missing = e.tmp.path().join("missing.png").display().to_string();
+    let (code, v) = e.post("/api/item/setCustomThumbnail", json!({"id": ga, "thumbnailPath": missing}));
+    assert_eq!((code, v), (500, json!({"status": "error", "data": "Failed to set custom thumbnail."})));
+
+    let (code, v) = e.post("/api/item/setCustomThumbnail", json!({"id": ga, "thumbnailPath": file}));
+    assert_eq!((code, v), (200, json!({"status": "success", "data": true})));
+    let info = e.ok_get(&format!("/api/item/info?id={}", ga));
+    assert_eq!(info["customThumbnail"], true);
+    assert_eq!((info["width"].clone(), info["height"].clone()), (json!(64), json!(48)));
+
+    // v2 never errors.
+    // A PNG item refuses one, and v2 answers false.
+    let (code, v) = e.post("/api/v2/item/setCustomThumbnail", json!({"itemId": e.a, "filePath": file}));
+    assert_eq!((code, v), (200, json!({"status": "success", "data": false})));
+    let (code, v) = e.post("/api/v2/item/setCustomThumbnail", json!({"itemId": gb, "filePath": file}));
+    assert_eq!((code, v), (200, json!({"status": "success", "data": true})));
+    assert_eq!(e.ok_get(&format!("/api/item/info?id={}", gb))["customThumbnail"], true);
+    for body in [json!({"itemId": "NOPE", "filePath": file}), json!({"itemId": ga, "filePath": missing})] {
+        let (code, v) = e.post("/api/v2/item/setCustomThumbnail", body);
+        assert_eq!((code, v), (200, json!({"status": "success", "data": false})));
+    }
+}
