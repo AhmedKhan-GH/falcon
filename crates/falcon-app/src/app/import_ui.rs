@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use eframe::egui::{Pos2, Rect};
 use falcon_library::folder_import::{self, Verdict};
-use falcon_library::import::ImportOptions;
+use falcon_library::import::{Failure, ImportOptions};
 
 use super::{App, lock, tempfile_dir};
 use crate::drop_pos::{self, Target};
@@ -16,6 +16,13 @@ use crate::theme as t;
 /// A path's last component, for messages.
 fn display_name(path: &std::path::Path) -> String {
     path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned())
+}
+
+/// A failed import, with the options to retry it with.
+#[derive(Debug, Clone)]
+pub(super) struct ImportError {
+    pub failure: Failure,
+    pub opts: ImportOptions,
 }
 
 /// One file to import and the options to import it with.
@@ -38,6 +45,10 @@ pub(super) struct Imports {
     pub pending: Vec<Pending>,
     /// Names of folders refused for their size, to be told about.
     pub refused: Vec<String>,
+    /// The failed-imports panel is open.
+    pub errors_open: bool,
+    /// Clear All is waiting for confirmation.
+    pub confirm_clear: bool,
 }
 
 /// A walked folder with 2,000 files or more, imported only once confirmed.
@@ -205,11 +216,167 @@ impl App {
         self.spawn_import(jobs);
     }
 
+    /// The failed imports so far.
+    fn import_errors(&self) -> Vec<ImportError> {
+        self.ws.progress.lock().unwrap_or_else(|p| p.into_inner()).errors.clone()
+    }
+
+    fn set_import_errors(&mut self, errors: Vec<ImportError>) {
+        self.ws.progress.lock().unwrap_or_else(|p| p.into_inner()).errors = errors;
+    }
+
+    /// While imports have failed, a notice under the toolbar ("3 files
+    /// failed to import"), as Eagle's error toast: clicking it opens the
+    /// list, its × clears the list after a confirmation.
+    pub(super) fn error_toast(&mut self, ui: &mut eframe::egui::Ui, top_center: Pos2) {
+        use eframe::egui::{Align2, CornerRadius, Sense, Stroke, StrokeKind, vec2};
+        let n = self.ws.progress.lock().unwrap_or_else(|p| p.into_inner()).errors.len();
+        if n == 0 {
+            return;
+        }
+        let text = format!("{n} file{} failed to import. Click for details.", if n == 1 { "" } else { "s" });
+        let g = super::galley(ui, &text, t::font(13.0), t::p().text, 420.0);
+        let size = vec2(g.size().x + 60.0, 32.0);
+        let r = Rect::from_center_size(top_center + vec2(0.0, size.y / 2.0), size);
+        let p = ui.painter();
+        p.rect(r, CornerRadius::same(8), t::p().panel, Stroke::new(1.0, t::p().divider), StrokeKind::Inside);
+        p.circle_filled(Pos2::new(r.left() + 16.0, r.center().y), 5.0, t::p().icon_red);
+        p.galley(Pos2::new(r.left() + 28.0, r.center().y - g.size().y / 2.0), g, t::p().text);
+        // The toast first, so the × on top of it takes its own clicks.
+        let body = ui.interact(r, ui.scope_id().with("import-errors-toast"), Sense::click());
+        let x = Rect::from_center_size(Pos2::new(r.right() - 16.0, r.center().y), vec2(20.0, 20.0));
+        let xr = ui.interact(x, ui.scope_id().with("import-errors-clear"), Sense::click());
+        if xr.hovered() {
+            ui.painter().rect_filled(x, CornerRadius::same(4), t::p().button_hover);
+        }
+        ui.painter().text(x.center(), Align2::CENTER_CENTER, crate::icons::X, t::font(12.0), t::p().text_muted);
+        if xr.clicked() {
+            self.imports.confirm_clear = true;
+        } else if body.clicked() {
+            self.imports.errors_open = true;
+        }
+    }
+
+    /// The failed-imports panel, after Eagle's error modal: name, source
+    /// and reason for each file, with Clear All, Copy to Clipboard, Retry
+    /// All and Close.
+    fn error_panel(&mut self, ctx: &eframe::egui::Context) {
+        use eframe::egui::{self, RichText, vec2};
+        let errors = self.import_errors();
+        if errors.is_empty() {
+            self.imports.errors_open = false;
+            return;
+        }
+        let mut remove = None;
+        let (mut close, mut retry, mut copy) = (false, false, false);
+        let modal = egui::Modal::new(egui::Id::unique("import-errors")).show(ctx, |ui| {
+            ui.set_width(680.0);
+            ui.label(RichText::new(format!("Failed imports ({})", errors.len())).size(15.0));
+            ui.add_space(6.0);
+            let cols = [190.0, 250.0, 200.0];
+            ui.horizontal(|ui| {
+                for (w, h) in cols.iter().zip(["Name", "Source", "Reason"]) {
+                    ui.add_sized(vec2(*w, 18.0), egui::Label::new(RichText::new(h).size(12.0).color(t::p().text_muted)).truncate());
+                }
+            });
+            ui.separator();
+            egui::ScrollArea::vertical().max_height(320.0).auto_shrink([false, true]).show(ui, |ui| {
+                for (i, e) in errors.iter().enumerate() {
+                    let f = &e.failure;
+                    ui.horizontal(|ui| {
+                        let name = display_name(&f.path);
+                        ui.add_sized(vec2(cols[0], 22.0), egui::Label::new(&name).truncate()).on_hover_text(&name);
+                        let src = f.path.parent().map(|d| d.display().to_string()).unwrap_or_default();
+                        let link = ui.add_sized(vec2(cols[1], 22.0), egui::Label::new(RichText::new(&src).color(t::p().text_muted)).truncate().sense(egui::Sense::click()));
+                        if link.on_hover_text(format!("{}\nClick to show in Finder", f.path.display())).clicked() {
+                            let _ = std::process::Command::new("open").arg("-R").arg(&f.path).spawn();
+                        }
+                        ui.add_sized(vec2(cols[2], 22.0), egui::Label::new(f.kind.describe()).truncate()).on_hover_text(&f.detail);
+                        if ui.small_button(crate::icons::X).on_hover_text("Remove from the list").clicked() {
+                            remove = Some(i);
+                        }
+                    });
+                }
+            });
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                if ui.button("Clear All").clicked() {
+                    self.imports.confirm_clear = true;
+                }
+                copy = ui.button("Copy to Clipboard").on_hover_text("Copies the files, to paste in Finder").clicked();
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    close = ui.button("Close").clicked();
+                    retry = ui.add(egui::Button::new(RichText::new("Retry All").color(eframe::egui::Color32::WHITE)).fill(t::p().primary)).clicked();
+                });
+            });
+        });
+        if let Some(i) = remove {
+            let mut errors = errors.clone();
+            errors.remove(i);
+            self.set_import_errors(errors);
+        }
+        if copy {
+            let paths: Vec<PathBuf> = errors.iter().map(|e| e.failure.path.clone()).collect();
+            if let Ok(mut clip) = arboard::Clipboard::new()
+                && clip.set().file_list(&paths).is_ok()
+            {
+                self.flash(format!("Copied {} file{}", paths.len(), if paths.len() == 1 { "" } else { "s" }));
+            }
+        }
+        if retry {
+            // As in Eagle, the list empties and each file is tried again
+            // with the folders and tags it had; failures come back.
+            self.set_import_errors(Vec::new());
+            self.spawn_import(errors.into_iter().map(|e| Job { path: e.failure.path, opts: e.opts }).collect());
+            close = true;
+        }
+        if close || (modal.should_close() && !self.imports.confirm_clear) {
+            self.imports.errors_open = false;
+        }
+    }
+
+    /// Clear All's confirmation, from the panel or the toast's ×.
+    fn clear_errors_confirm(&mut self, ctx: &eframe::egui::Context) {
+        use eframe::egui::{self, RichText};
+        let mut answer = None;
+        let modal = egui::Modal::new(egui::Id::unique("import-errors-clear")).show(ctx, |ui| {
+            ui.set_width(320.0);
+            ui.label(RichText::new("Clear the failed imports?").size(15.0));
+            ui.add_space(4.0);
+            ui.label(RichText::new("The list can't be brought back. The files themselves are not touched.").color(t::p().text_muted));
+            ui.add_space(10.0);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.button("Clear All").clicked() {
+                    answer = Some(true);
+                }
+                if ui.button("Cancel").clicked() {
+                    answer = Some(false);
+                }
+            });
+        });
+        if modal.should_close() && answer.is_none() {
+            answer = Some(false);
+        }
+        if let Some(yes) = answer {
+            self.imports.confirm_clear = false;
+            if yes {
+                self.set_import_errors(Vec::new());
+                self.imports.errors_open = false;
+            }
+        }
+    }
+
     /// The large-folder confirmation and the too-large notice, one at a
     /// time. Drawn before the library is locked for the frame, since
     /// confirming creates folders.
     pub(super) fn import_dialogs(&mut self, ctx: &eframe::egui::Context) {
         use eframe::egui::{self, RichText};
+        if self.imports.errors_open {
+            self.error_panel(ctx);
+        }
+        if self.imports.confirm_clear {
+            self.clear_errors_confirm(ctx);
+        }
         if let Some(p) = self.imports.pending.first() {
             let name = display_name(&p.tree.dir);
             let files = p.files;
@@ -291,8 +458,9 @@ impl App {
                 }
                 let mut pr = progress.lock().unwrap_or_else(|p| p.into_inner());
                 pr.done += 1;
-                if result.is_err() {
+                if let Err(e) = &result {
                     pr.failed += 1;
+                    pr.errors.push(ImportError { failure: Failure::new(&f, e), opts: opts.clone() });
                 }
                 pr.current = f.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
                 drop(pr);

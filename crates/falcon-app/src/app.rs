@@ -155,6 +155,9 @@ struct Progress {
     done: usize,
     failed: usize,
     current: String,
+    /// Every failed import since the list was last cleared, kept across
+    /// batches like Eagle's error list (`import_ui.rs` shows it).
+    errors: Vec<import_ui::ImportError>,
 }
 
 /// What the toast says when opening a library restored its damaged
@@ -895,7 +898,8 @@ impl App {
         }
         if done >= total {
             let mut pr = self.ws.progress.lock().unwrap_or_else(|p| p.into_inner());
-            *pr = Progress::default();
+            let errors = std::mem::take(&mut pr.errors);
+            *pr = Progress { errors, ..Progress::default() };
             drop(pr);
             let msg = if failed > 0 { format!("Added {}, {failed} failed", done - failed) } else { format!("Added {done}") };
             self.flash(msg);
@@ -3974,6 +3978,7 @@ impl eframe::App for App {
                 let mut g = ui.new_child(egui::UiBuilder::new().max_rect(grid));
                 g.set_clip_rect(grid);
                 self.grid(&mut g, lib);
+                self.error_toast(ui, Pos2::new(full.center().x, grid_top + 10.0));
             }
 
             if let Some((msg, at)) = &self.ws.status {

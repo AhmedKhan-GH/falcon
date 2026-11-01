@@ -64,6 +64,98 @@ impl Default for ImportOptions {
     }
 }
 
+/// Refusal reasons [`stage`] gives, which [`Failure::new`] recognises.
+const NOT_A_FILE: &str = "not a regular file";
+const EMPTY_FILE: &str = "file is empty";
+
+/// Why a file could not be imported, for the app's list of failed imports.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FailKind {
+    /// The file is gone.
+    Missing,
+    /// A folder or package, not a regular file.
+    NotAFile,
+    /// Empty (only `.txt` files may be).
+    Empty,
+    /// Its format can't be told.
+    Unrecognized,
+    /// It can't be read (permissions, a disk error).
+    Unreadable,
+    /// The disk is full.
+    NoSpace,
+    /// Copying it into the staging folder failed.
+    CopyFailed,
+    /// Writing it into the library failed.
+    LibraryWrite,
+    /// A folder it should go in no longer exists.
+    UnknownFolder,
+    /// Anything else.
+    Other,
+}
+
+impl FailKind {
+    /// A short reason for the user.
+    pub fn describe(self) -> &'static str {
+        match self {
+            FailKind::Missing => "The file no longer exists",
+            FailKind::NotAFile => "Folders and packages can't be imported as items",
+            FailKind::Empty => "The file is empty",
+            FailKind::Unrecognized => "The file format isn't recognised",
+            FailKind::Unreadable => "The file can't be read",
+            FailKind::NoSpace => "Not enough disk space",
+            FailKind::CopyFailed => "Copying the file failed",
+            FailKind::LibraryWrite => "Writing to the library failed",
+            FailKind::UnknownFolder => "The folder to import into no longer exists",
+            FailKind::Other => "The file couldn't be imported",
+        }
+    }
+}
+
+/// One file that failed to import.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Failure {
+    /// The file.
+    pub path: std::path::PathBuf,
+    /// Why, in general.
+    pub kind: FailKind,
+    /// The underlying error, for copying out.
+    pub detail: String,
+}
+
+impl Failure {
+    /// Classifies an error from [`stage`], [`Library::check_folders`] or
+    /// [`Library::commit_import`] for the file at `path`.
+    pub fn new(path: &Path, err: &Error) -> Failure {
+        use std::io::ErrorKind as K;
+        let kind = match err {
+            Error::Import { reason, .. } if reason == NOT_A_FILE => FailKind::NotAFile,
+            Error::Import { reason, .. } if reason == EMPTY_FILE => FailKind::Empty,
+            Error::Import { reason, .. } if reason.starts_with("unknown folder") => FailKind::UnknownFolder,
+            Error::Io { source, .. } if source.kind() == K::StorageFull => FailKind::NoSpace,
+            Error::Io { path: at, source } if at == path => match source.kind() {
+                K::NotFound => FailKind::Missing,
+                _ => FailKind::Unreadable,
+            },
+            // Reading the source fails inside the staging copy too.
+            Error::Io { path: at, source } if is_staging(at) => match source.kind() {
+                K::NotFound if !path.exists() => FailKind::Missing,
+                K::PermissionDenied => FailKind::Unreadable,
+                _ => FailKind::CopyFailed,
+            },
+            Error::Io { .. } | Error::Json { .. } => FailKind::LibraryWrite,
+            _ => FailKind::Other,
+        };
+        Failure { path: path.to_path_buf(), kind, detail: err.to_string() }
+    }
+}
+
+/// Whether `path` is inside one of [`stage`]'s temporary folders.
+fn is_staging(path: &Path) -> bool {
+    path.components().any(|c| c.as_os_str().to_string_lossy().starts_with(STAGING_PREFIX))
+}
+
+const STAGING_PREFIX: &str = "falcon-import";
+
 /// A file copied, thumbnailed and analysed in a temporary folder, ready to
 /// be moved into a library with [`Library::commit_import`]. Staging needs no
 /// access to the library, so it can run on another thread.
@@ -96,11 +188,11 @@ pub fn stage(path: impl AsRef<Path>, opts: &ImportOptions) -> Result<Staged> {
 
     let meta = fs::metadata(src).map_err(|e| Error::io(src, e))?;
     if !meta.is_file() {
-        return Err(refuse("not a regular file"));
+        return Err(refuse(NOT_A_FILE));
     }
     let ext = src.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
     if meta.len() == 0 && ext != "txt" {
-        return Err(refuse("file is empty"));
+        return Err(refuse(EMPTY_FILE));
     }
 
     let mtime_ms = to_ms(meta.modified().ok());
@@ -136,7 +228,7 @@ pub fn stage(path: impl AsRef<Path>, opts: &ImportOptions) -> Result<Staged> {
         add_keyword_tags(&mut item.tags, keywords::read(src, &item.ext));
     }
 
-    let dir = tempfile::Builder::new().prefix("falcon-import").tempdir().map_err(|e| Error::io(src, e))?;
+    let dir = tempfile::Builder::new().prefix(STAGING_PREFIX).tempdir().map_err(|e| Error::io(src, e))?;
     let file = if item.ext.is_empty() { item.name.clone() } else { format!("{}.{}", item.name, item.ext) };
     let raw = dir.path().join(file);
     fs::copy(src, &raw).map_err(|e| Error::io(&raw, e))?;
@@ -500,6 +592,47 @@ mod tests {
         .unwrap();
         file_metadata(&mut item, &src, opts);
         item
+    }
+
+    #[test]
+    fn failures_are_classified() {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = ImportOptions { palette: false, ..Default::default() };
+        let fail = |p: &Path| Failure::new(p, &stage(p, &opts).unwrap_err());
+
+        let missing = tmp.path().join("gone.png");
+        assert_eq!(fail(&missing).kind, FailKind::Missing);
+        assert_eq!(fail(tmp.path()).kind, FailKind::NotAFile);
+        let empty = tmp.path().join("empty.png");
+        fs::write(&empty, b"").unwrap();
+        let f = fail(&empty);
+        assert_eq!((f.kind, f.path.as_path()), (FailKind::Empty, empty.as_path()));
+        assert!(f.detail.contains("empty"), "{}", f.detail);
+
+        let mut lib = Library::create(tmp.path().join("T.library")).unwrap();
+        let ok = tmp.path().join("a.txt");
+        fs::write(&ok, b"hi").unwrap();
+        let bad = ImportOptions { folders: vec!["NOPE".into()], ..opts.clone() };
+        let err = lib.import_file(&ok, &bad).unwrap_err();
+        assert_eq!(Failure::new(&ok, &err).kind, FailKind::UnknownFolder);
+
+        let full = Error::io(tmp.path().join("falcon-importXYZ/a.png"), std::io::Error::from(std::io::ErrorKind::StorageFull));
+        assert_eq!(Failure::new(&ok, &full).kind, FailKind::NoSpace);
+        let copy = Error::io(tmp.path().join("falcon-importXYZ/a.png"), std::io::Error::other("boom"));
+        assert_eq!(Failure::new(&ok, &copy).kind, FailKind::CopyFailed);
+        let write = Error::io(tmp.path().join("T.library/images/X.info"), std::io::Error::other("boom"));
+        assert_eq!(Failure::new(&ok, &write).kind, FailKind::LibraryWrite);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let locked = tmp.path().join("locked.png");
+            fs::write(&locked, b"x").unwrap();
+            fs::set_permissions(&locked, fs::Permissions::from_mode(0o000)).unwrap();
+            // Root can read anything; only check when the file is unreadable.
+            if fs::read(&locked).is_err() {
+                assert_eq!(fail(&locked).kind, FailKind::Unreadable);
+            }
+        }
     }
 
     #[test]
