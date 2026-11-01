@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 238 | 24 | 10 | 8 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 239 | 23 | 10 | 8 |
 | Viewers and file formats | 183 | 17 | 3 | 5 |
 | Search, filters and organising | 216 | 1 | 4 | 3 |
-| Import, export, library, preferences and integrations | 184 | 9 | 16 | 26 |
-| **Total** | 821 | 51 | 33 | 42 |
+| Import, export, library, preferences and integrations | 185 | 8 | 16 | 26 |
+| **Total** | 823 | 49 | 33 | 42 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -38,7 +38,7 @@ These are bugs, not missing features. The first four can lose data or edits.
 10. ~~No GIF player controls, no animated WebP or AVIF, no GIF hover previews.~~ Fixed (AVIF on macOS); still no hover playback for video or audio.
 11. ~~No interactive 3D viewer, text editor or full font viewer.~~ Fixed for obj/stl/ply/glb/gltf/3mf; fbx, 3ds, dae and ifc stay stills.
 12. ~~No watched import folder, no reload on outside changes, no sync-conflict detection, no screen capture.~~ Fixed.
-13. ~~English only.~~ Fixed in part: falcon's own translations into Eagle's eight languages with a live language preference; the viewers, sidebar and context menus still need converting.
+13. ~~English only; Eagle ships 8 languages.~~ Fixed: the whole interface in all eight (machine-written translations, pending a native read).
 
 The full tables follow. Each section ends with that area's own ranked gap list.
 
@@ -385,7 +385,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Auto theme follows the system | Done | theme.rs:365 `follow_system` | local |
 | Transparency (vibrancy) effects | Missing | Not feasible: egui draws opaque surfaces; no NSVisualEffectView behind the window | local |
 | UI zoom level | Done | `Prefs::ui_zoom`, applied live | local |
-| Interface language | Partial | `crate::locale`: Automatic or one of Eagle's eight languages (en, de, es, ja, ko, ru, zh_CN, zh_TW), applied live incl. the native menu bar; falcon's own translations (`crates/falcon-app/locales/`, unreviewed). The viewers, sidebar, context menus and the Auto-Import/Developer blocks are still English | local |
+| Interface language | Done | `crate::locale`: Automatic or one of Eagle's eight languages, applied live to every pane, menu (incl. the native menu bar), toast, dialog and viewer; 1,837 keys incl. context keys (`tags::Uncategorized`…); falcon's own translations, machine-written and unreviewed (`locales/REVIEW.md`) | local |
 | File-type colours on extension badges | Done | theme.rs:447-468 | local |
 
 ---
@@ -1365,7 +1365,7 @@ Eagle panes (`app/js/preferences.js:659-788`): General, Sidebar, Controls, Previ
 | Search box across preferences | Done | `prefs.rs` `matches` over every pane's blocks | local |
 | Remember the last open pane | Done | `Saved.prefs_pane` | local |
 | **General:** theme (Auto, Light, Light Grey, Gray, Dark, Blue, Purple) | Done | `crates/falcon-app/src/theme.rs:73-83`, `prefs.rs:312-321` (live preview, reverted on Cancel) | local |
-| General: language | Partial | Preferences ▸ General ▸ Language (`Prefs::language`, `FALCON_LANG` override), Cancel reverts; conversion of the viewers, sidebar and menus pending | local |
+| General: language | Done | Preferences ▸ General ▸ Language (`Prefs::language`), Cancel reverts, `FALCON_LANG` override; whole interface converted | local |
 | General: UI zoom level (50 to 150%) | Done | `Prefs::ui_zoom` in Eagle's steps, previewed live; egui's own keyboard zoom is disabled so ⌘+/⌘− only zoom the grid | local |
 | General: transparency (vibrancy) effects | Missing | Not feasible (vibrancy) | local |
 | General: show counts in the sidebar | Done | `Prefs::sidebar_counts` | local |
@@ -1508,7 +1508,7 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| Eight UI languages: English, Simplified Chinese, Traditional Chinese, Japanese, Korean, Spanish, German and Russian (picked automatically from the system language, or set in Preferences) | `i18n/index.js` `supportLanguage`; `i18n/{en,zh_CN,zh_TW,ja_JP,ko_KR,es_ES,de_DE,ru_RU}.js`; collect window `locales/*.json`; PH `general.language` | Partial | `crate::locale` with falcon's own catalogues for all eight (`crates/falcon-app/locales/`, machine-written, unreviewed), picked from the system language or set in Preferences, applied live incl. the menu bar; the viewers, sidebar, context menus and the Auto-Import/Developer blocks are still English | local |
+| Eight UI languages: English, Simplified Chinese, Traditional Chinese, Japanese, Korean, Spanish, German and Russian (picked automatically from the system language, or set in Preferences) | `i18n/index.js` `supportLanguage`; `i18n/{en,zh_CN,zh_TW,ja_JP,ko_KR,es_ES,de_DE,ru_RU}.js`; collect window `locales/*.json`; PH `general.language` | Done | `crate::locale` with falcon's own catalogues for all eight (`crates/falcon-app/locales/`), picked from the system language or set in Preferences, applied live to the whole interface incl. the native menu bar; translations are machine-written and listed for review in `locales/REVIEW.md` | local |
 | Chinese pinyin search support (jieba dictionaries) | Missing | Model round-trips `pinyin` only | local |
 
 ---
@@ -1517,8 +1517,8 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 
 Rows marked "not counted" are features Eagle 4.0.0 does not have.
 
-- **Done:** 184, including 5 where falcon goes beyond Eagle and 1 with a small difference.
-- **Partial:** 9.
+- **Done:** 185, including 5 where falcon goes beyond Eagle and 1 with a small difference.
+- **Partial:** 8.
 - **Missing:** 42, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
 - **Different on purpose:** 1 (the API listens on localhost only).
 
