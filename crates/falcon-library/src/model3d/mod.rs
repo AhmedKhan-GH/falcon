@@ -11,6 +11,7 @@ pub mod geom;
 pub mod gltf;
 pub mod math;
 pub mod obj;
+pub mod off;
 pub mod ply;
 pub mod raster;
 pub mod stl;

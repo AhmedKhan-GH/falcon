@@ -2,7 +2,8 @@
 //! tree navigator (the file, its meshes with hide, isolate and fit, and its
 //! materials), the measure tool (two points picked on the surface, their
 //! distance, the angle between the faces and the distance between parallel
-//! faces), Export (GLB, glTF, OBJ, PLY or STL of the visible meshes) and Create Snapshot (a
+//! faces), Export (GLB, glTF, OFF, OBJ, PLY or STL of
+//! the visible meshes) and Create Snapshot (a
 //! PNG of the current view). The scene itself is `model.rs`; the geometry
 //! (writers, picking, the snapshot rasterizer) is `falcon_library::model3d`.
 

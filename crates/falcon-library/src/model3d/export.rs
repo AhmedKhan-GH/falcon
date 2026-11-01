@@ -1,9 +1,9 @@
 //! Writing a model back out, for the viewer's Export: Wavefront OBJ (with
 //! an MTL of the material colours), binary STL, glTF 2.0 (binary GLB, or a
-//! `.gltf` with its buffer embedded) and binary PLY. Only what falcon holds
-//! is written: positions, normals where the file had them, vertex colours,
-//! triangles and material colours. OFF and 3DM, which Eagle's viewer also
-//! writes, are not.
+//! `.gltf` with its buffer embedded), binary PLY and ASCII OFF. Only what
+//! falcon holds is written: positions, normals where the file had them,
+//! vertex colours, triangles and material colours (OFF keeps positions and
+//! triangles only). 3DM, which Eagle's viewer also writes, is not.
 
 use super::math::{self, V3};
 use super::{Mesh, geom};
@@ -18,11 +18,13 @@ pub enum Format {
     /// glTF 2.0 as JSON with the buffer embedded as a data URI.
     Gltf,
     Ply,
+    /// ASCII Object File Format: positions and triangles.
+    Off,
 }
 
 impl Format {
     /// In the order of Eagle's viewer's Export menu where it has them.
-    pub const ALL: [Format; 5] = [Format::Glb, Format::Gltf, Format::Obj, Format::Ply, Format::Stl];
+    pub const ALL: [Format; 6] = [Format::Glb, Format::Gltf, Format::Off, Format::Obj, Format::Ply, Format::Stl];
 
     pub fn ext(self) -> &'static str {
         match self {
@@ -31,6 +33,7 @@ impl Format {
             Format::Glb => "glb",
             Format::Gltf => "gltf",
             Format::Ply => "ply",
+            Format::Off => "off",
         }
     }
 }
@@ -289,6 +292,29 @@ pub fn ply<'a>(meshes: impl IntoIterator<Item = &'a Mesh>) -> Vec<u8> {
     out
 }
 
+/// ASCII OFF of `meshes` merged into one: `OFF`, the vertex and face counts
+/// and a zero edge count, a line per vertex, then `3 a b c` per triangle
+/// with zero-based indices offset per mesh.
+pub fn off<'a>(meshes: impl IntoIterator<Item = &'a Mesh>) -> String {
+    use std::fmt::Write;
+    let meshes: Vec<&Mesh> = meshes.into_iter().filter(|m| !m.positions.is_empty()).collect();
+    let vertices: usize = meshes.iter().map(|m| m.positions.len()).sum();
+    let faces: usize = meshes.iter().map(|m| m.triangle_count()).sum();
+    let mut out = format!("OFF\n{vertices} {faces} 0\n");
+    for p in meshes.iter().flat_map(|m| &m.positions) {
+        let _ = writeln!(out, "{} {} {}", p[0], p[1], p[2]);
+    }
+    let mut base = 0usize;
+    for m in &meshes {
+        for t in m.indices.as_chunks::<3>().0 {
+            let [a, b, c] = t.map(|i| i as usize + base);
+            let _ = writeln!(out, "3 {a} {b} {c}");
+        }
+        base += m.positions.len();
+    }
+    out
+}
+
 /// Writes `meshes` to `path` in `format`; an OBJ gets its MTL next to it
 /// (same name, `.mtl`) when it has materials.
 pub fn write<'a>(meshes: impl IntoIterator<Item = &'a Mesh>, format: Format, path: &std::path::Path) -> std::io::Result<()> {
@@ -297,6 +323,7 @@ pub fn write<'a>(meshes: impl IntoIterator<Item = &'a Mesh>, format: Format, pat
         Format::Glb => std::fs::write(path, glb(meshes)),
         Format::Gltf => std::fs::write(path, gltf(meshes)),
         Format::Ply => std::fs::write(path, ply(meshes)),
+        Format::Off => std::fs::write(path, off(meshes)),
         Format::Obj => {
             let mtl_path = path.with_extension("mtl");
             let mtl_name = mtl_path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
@@ -470,6 +497,41 @@ mod tests {
         let plain = ply([&cube(false)]);
         assert!(!String::from_utf8_lossy(&plain).contains("red"));
         assert_eq!(super::super::parse(&plain, "ply", &|_| None).unwrap().triangle_count(), 12);
+    }
+
+    #[test]
+    fn off_round_trips_through_the_reader() {
+        let (a, b) = painted();
+        let text = off([&a, &b]);
+        let nv = a.positions.len() + b.positions.len();
+        assert!(text.starts_with(&format!("OFF\n{nv} 24 0\n")), "{}", &text[..20]);
+        assert_eq!(text.lines().count(), 2 + nv + 24);
+        let back = super::super::off::parse(text.as_bytes()).unwrap();
+        let m = &back.meshes[0];
+        let all: Vec<V3> = a.positions.iter().chain(&b.positions).copied().collect();
+        assert_eq!(m.positions.len(), all.len());
+        assert!(m.positions.iter().zip(&all).all(|(p, q)| close(*p, *q)));
+        let want: Vec<u32> = a.indices.iter().copied().chain(b.indices.iter().map(|i| i + a.positions.len() as u32)).collect();
+        assert_eq!(m.indices, want);
+        assert_eq!(back.bounds(), Some(([0.0; 3], [3.0, 1.0, 1.0])));
+    }
+
+    #[test]
+    fn off_offsets_indices_per_mesh() {
+        let (a, b) = painted();
+        let text = off([&a, &b]);
+        let n = a.positions.len();
+        let last = text.lines().last().unwrap();
+        let ix: Vec<usize> = last.split(' ').skip(1).map(|s| s.parse().unwrap()).collect();
+        assert!(ix.iter().all(|&i| i >= n && i < n + b.positions.len()), "{last}");
+        assert!(off(std::iter::empty()).starts_with("OFF\n0 0 0\n"));
+    }
+
+    #[test]
+    fn off_reader_takes_comments_polygons_and_colours() {
+        let text = "OFF\n# comment\n\n4 1 0\n0 0 0\n1 0 0\n1 1 0 # c\n0 1 0\n4 0 1 2 3 255 0 0\n";
+        let m = &super::super::off::parse(text.as_bytes()).unwrap().meshes[0];
+        assert_eq!(m.indices, vec![0, 1, 2, 0, 2, 3]);
     }
 
     #[test]
