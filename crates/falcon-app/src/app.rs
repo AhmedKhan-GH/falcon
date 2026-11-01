@@ -87,6 +87,9 @@ struct Saved {
     show_inspector: Option<bool>,
     /// Whether the Quick Access list is folded away, as Eagle remembers.
     quick_collapsed: bool,
+    /// Panel widths as last dragged.
+    sidebar_width: Option<f32>,
+    inspector_width: Option<f32>,
     collapsed: Vec<String>,
     recent: Vec<PathBuf>,
     /// Folder ids items were last added to, newest first (Eagle's
@@ -707,6 +710,9 @@ pub struct App {
     /// The last answer to the Move to Trash question in a folder (take the
     /// items out of the folder only), kept while falcon runs, as Eagle does.
     trash_folder_only: bool,
+    /// The sidebar's and inspector's widths, dragged by their inner edge.
+    sidebar_width: f32,
+    inspector_width: f32,
     focus_search: bool,
     /// Focus the sidebar's folder filter next frame (Find ▸ Filter Sidebar).
     focus_folder_filter: bool,
@@ -812,6 +818,8 @@ impl App {
             error: None,
             tile: 139.0,
             show_sidebar: true,
+            sidebar_width: t::SIDEBAR_WIDTH,
+            inspector_width: t::INSPECTOR_WIDTH,
             show_inspector: true,
             quick_collapsed: false,
             trash_folder_only: true,
@@ -867,6 +875,9 @@ impl App {
         app.ws.sort = saved.sort.as_deref().and_then(|l| OrderBy::ALL.into_iter().find(|o| o.label() == l)).unwrap_or(app.ws.sort);
         app.ws.increase = saved.increase.unwrap_or(app.ws.increase);
         app.show_sidebar = saved.show_sidebar.unwrap_or(true);
+        let clamp = |w: Option<f32>, default: f32| w.unwrap_or(default).clamp(*t::PANEL_WIDTHS.start(), *t::PANEL_WIDTHS.end());
+        app.sidebar_width = clamp(saved.sidebar_width, t::SIDEBAR_WIDTH);
+        app.inspector_width = clamp(saved.inspector_width, t::INSPECTOR_WIDTH);
         app.show_inspector = saved.show_inspector.unwrap_or(true);
         app.quick_collapsed = saved.quick_collapsed;
         app.ws.collapsed = saved.collapsed.into_iter().collect();
@@ -5355,6 +5366,8 @@ impl eframe::App for App {
             sort: Some(self.ws.sort.label().to_string()),
             increase: Some(self.ws.increase),
             show_sidebar: Some(self.show_sidebar),
+            sidebar_width: Some(self.sidebar_width),
+            inspector_width: Some(self.inspector_width),
             show_inspector: Some(self.show_inspector),
             quick_collapsed: self.quick_collapsed,
             collapsed: self.ws.collapsed.iter().cloned().collect(),
@@ -5498,20 +5511,25 @@ impl App {
 
         let (show_sidebar, show_inspector) = self.panels_shown();
         if show_sidebar {
-            egui::Panel::left("sidebar")
-                .exact_size(t::SIDEBAR_WIDTH)
-                .resizable(false)
+            // Dragging the inner edge resizes it, as in Eagle.
+            let shown = egui::Panel::left("sidebar")
+                .default_size(self.sidebar_width)
+                .size_range(t::PANEL_WIDTHS)
+                .resizable(true)
                 .show_separator_line(false)
                 .frame(egui::Frame::NONE)
                 .show(ui, |ui| self.sidebar(ui, lib));
+            self.sidebar_width = shown.response.rect.width();
         }
         if show_inspector {
-            egui::Panel::right("inspector")
-                .exact_size(t::INSPECTOR_WIDTH)
-                .resizable(false)
+            let shown = egui::Panel::right("inspector")
+                .default_size(self.inspector_width)
+                .size_range(t::PANEL_WIDTHS)
+                .resizable(true)
                 .show_separator_line(false)
                 .frame(egui::Frame::NONE)
                 .show(ui, |ui| self.inspector(ui, lib));
+            self.inspector_width = shown.response.rect.width();
         }
         egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t::p().main)).show(ui, |ui| {
             let full = ui.max_rect();
@@ -5524,8 +5542,8 @@ impl App {
                 let (l, r) = logic::viewer_span(
                     window.left(),
                     window.right(),
-                    show_sidebar.then_some(t::SIDEBAR_WIDTH),
-                    show_inspector.then_some(t::INSPECTOR_WIDTH),
+                    show_sidebar.then_some(self.sidebar_width),
+                    show_inspector.then_some(self.inspector_width),
                 );
                 let mut screen = Rect::from_x_y_ranges(l..=r, full.y_range()).intersect(full);
                 // Presenting, the viewer's bar sits above the window, out

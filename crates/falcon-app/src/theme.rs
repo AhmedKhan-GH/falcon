@@ -429,6 +429,9 @@ pub const BAR_HEIGHT: f32 = 48.0;
 /// Sidebar row height.
 pub const ROW_HEIGHT: f32 = 27.0;
 pub const SIDEBAR_WIDTH: f32 = 240.0;
+/// How far the sidebar and the inspector can be dragged: Eagle stops
+/// both at 200 px; the upper bound keeps the grid usable.
+pub const PANEL_WIDTHS: std::ops::RangeInclusive<f32> = 200.0..=480.0;
 pub const INSPECTOR_WIDTH: f32 = 240.0;
 
 /// Font family of the filled icon set.
