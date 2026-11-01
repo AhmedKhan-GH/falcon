@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 91 | 55 | 125 | 9 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 110 | 47 | 114 | 9 |
 | Viewers and file formats | 81 | 31 | 78 | 7 |
 | Search, filters and organising | 129 | 30 | 63 | 3 |
 | Import, export, library, preferences and integrations | 91 | 21 | 100 | 26 |
-| **Total** | 392 | 137 | 366 | 45 |
+| **Total** | 411 | 129 | 355 | 45 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -27,12 +27,12 @@ These are bugs, not missing features. The first four can lose data or edits.
 ## Biggest gaps
 
 1. ~~Every viewer opens inside the window between the sidebar and inspector in Eagle, with a toolbar button that hides both. Falcon does this only for PDFs.~~ Fixed: every viewer draws in the central panel, with the panels button, ⌥⌘3 and Tab.
-2. No application menu bar.
+2. ~~No application menu bar.~~ Fixed: native File / Edit / Find / Organize / View / Window / Help menus with live shortcuts; no Actions menu.
 3. Preferences: 4 panes and 9 settings against Eagle's 13 panes and about 80 settings.
 4. The full-size image is capped at 3072 px.
 5. ~~Folder import flattens structure; no duplicate check on import; no import error list.~~ Fixed.
 6. ~~No export of items or folders, and no CSV export.~~ Fixed.
-7. Many shortcuts missing (ratings, T, F, ⌘J Go to Folder, ⌘1–7 views, Home and End, ⇧+arrows, ⌘D and more).
+7. Shortcuts still missing: T, F, ⌘J Go to Folder, ⇧+arrows, ⌘D, ⌘T and the tag clipboard, ⇧D, ⇧T, F5, ⌘O and more (see §3).
 8. No marquee selection, no multi-select of folders, no grid display options.
 9. No tag picker or suggestions.
 10. No GIF player controls, no animated WebP or AVIF, no hover previews for video, audio or GIFs.
@@ -51,7 +51,7 @@ Paths: Eagle paths are relative to `eagle-src/app/` (`bundle` = `app/app.bundle.
 
 Every falcon status here was checked in the code. ROADMAP and docs were not used. Rows that belong to other audits (viewers, search and filters, import, export, library, preferences, API) appear only as cross-references at the end of each section and are **not counted**.
 
-Overall finding: falcon has **no application menu bar**. There is no `muda` or menu code anywhere in the crate. The only menu is the default macOS app menu that winit supplies (About, Hide, Hide Others, Quit). So every Eagle menubar entry that falcon does support is reached some other way: a context menu, a toolbar button, the library switcher or a shortcut.
+Overall finding: falcon now has a native menu bar (`crates/falcon-app/src/menu.rs`, AppKit through `objc2-app-kit`) with File, Edit, Find, Organize, View, Window and Help menus whose items show their live shortcuts, enable and disable with the app's state and carry checkmarks. It holds only commands falcon has; Eagle's Actions menu and online items are absent.
 
 ---
 
@@ -59,39 +59,39 @@ Overall finding: falcon has **no application menu bar**. There is no `muda` or m
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| A menubar with File / Edit / Find / Organize / View / Actions / Window / Help menus, each item showing its live shortcut | Missing | No menu code in the crate. Commands are spread across context menus and keys | local |
+| A menubar with File / Edit / Find / Organize / View / Actions / Window / Help menus, each item showing its live shortcut | Partial | Native AppKit menus in `crates/falcon-app/src/menu.rs` (File, Edit, Find, Organize, View, Window, Help) with live shortcuts, enabled rules and checkmarks; clicks run through `App::run_command`. No Actions menu; only commands falcon has | local |
 | App menu: About | Partial | Only winit's stock About panel. No Eagle-style About window | local |
-| App menu: Preferences… (⌘,) | Done | shortcuts.rs:121, app.rs:986. Also in the library switcher (app.rs:1650) | local |
+| App menu: Preferences… (⌘,) | Done | shortcuts.rs `app.preferences`; in the app menu after About (`menu.rs`) and in the library switcher | local |
 | App menu: Lock Now (⌘⌥L, locks the whole app behind a password or Touch ID) | Missing | Only per-folder passwords exist (organize_ui.rs:270). There is no app lock screen | local |
 | App menu: Color Space (sRGB / Display P3 / Unmanaged) | Missing | No colour-space choice | local |
 | App menu: Hide, Hide Others, Quit | Done | Supplied by winit's default macOS app menu (main.rs uses eframe defaults) | local |
 | App menu: Check for Updates, Register / Unregister, Manage devices | Missing | Not applicable to falcon | online/plugin |
 | File: New… (⌘N), a searchable menu of folder, smart folder, imports, duplicates and new documents from templates (Sketch, PSD, AI, XD, TXT, Word, PPT, Excel, Keynote, Pages, Numbers, MindNode, XMind) | Missing | No New… menu and no create-from-template | local |
-| File: New Folder (⇧⌘N) | Partial | The key exists (shortcuts.rs:115) but always makes a **subfolder** of the open folder (app.rs:1027-1033). Eagle has separate keys for a folder and a subfolder | local |
-| File: New Subfolder (⌥N) | Partial | Only from the folder context menu (app.rs:1836) or the ⇧⌘N behaviour above. No ⌥N | local |
-| File: New Smart Folder (⇧⌥⌘N) | Partial | Only from the + on the Smart Folders heading (organize_ui.rs:500). No key | local |
-| Edit: Undo / Redo | Done | ⌘Z and ⇧⌘Z with a capped transaction history (app.rs:992, 1262-1300) | local |
-| Edit: Cut / Copy / Paste / Select All | Partial | ⌘C copies files (app.rs:942), ⌘V imports the clipboard (app.rs:956) and ⌘A selects all. There is no menu entry and no Cut | local |
+| File: New Folder (⇧⌘N) | Done | A sibling right after the open folder, or top level when none is open, as Eagle's `newFolder` (`Action::CreateSibling`) | local |
+| File: New Subfolder (⌥N) | Done | shortcuts.rs `file.create.subfolder`; menu and folder context menu | local |
+| File: New Smart Folder (⇧⌥⌘N) | Done | shortcuts.rs; opens the smart folder dialog | local |
+| Edit: Undo / Redo | Done | ⌘Z and ⇧⌘Z with a capped transaction history; Edit menu entries go to a focused text field first | local |
+| Edit: Cut / Copy / Paste / Select All | Partial | Menu entries exist and act on a focused text field; ⌘C copies files, ⌘V imports, ⌘A selects all. Cut works only in text fields | local |
 | Edit: Rename (⌘R on macOS) | Partial | ⌘R, with F2 as an alias (shortcuts.rs `edit.rename`). It only focuses the inspector title for one item. Eagle renames several items in a batch dialog | local |
 | Edit: Copy File Path (⌥⌘C) | Done | Key and item menu copy every selected path, one per line (`export_ui.rs` `copy_variant`) | local |
 | Edit: Copy Folder Path (⌥⇧⌘C), Copy Eagle Link, Copy Thumbnail, Copy Base64, Copy Name | Partial | All but Copy Eagle Link (`export_ui.rs` `item_copy_menu`); Copy Folder Path copies the items' `.info` folders as Eagle does. Falcon doesn't register `eagle://` | local |
 | Edit: Duplicate item (⌘D) | Missing | No duplicate-item action | local |
-| Edit: Refresh Thumbnail (⌥⌘R), Custom thumbnail from a file (⌥⌘T), Reset custom thumbnail | Partial | Context menu only (image_edit.rs:96-106). No keys | local |
+| Edit: Refresh Thumbnail (⌥⌘R), Custom thumbnail from a file (⌥⌘T), Reset custom thumbnail | Partial | ⌥⌘R and its menu entry (`run_command`); custom thumbnail from a file is context-menu only, no ⌥⌘T | local |
 | Edit: Custom thumbnail from the clipboard (⇧⌥⌘T) | Missing | Choosing a file is the only option | local |
-| Edit ▸ Move Folder: Up, Down, To Top, To Bottom (⌘] ⌘[ ⇧⌘] ⇧⌘[) | Partial | The keys move the open folder or smart folder among its siblings, undoably (shortcuts.rs `edit.folder.arrange.*`, `organize::arrange`, `Action::Arrange` in app.rs). No menu | local |
-| Edit ▸ Edit Image: Horizontal Flip (⇧F), Rotate (⇧R), Crop (⇧C), Combine Images (⇧⌘M) | Partial | Flip, rotate and crop are in the context menu (image_edit.rs:110-132). ⇧R and ⇧F work only inside the viewer (image_edit.rs:276). No ⇧C and no Combine Images | local |
+| Edit ▸ Move Folder: Up, Down, To Top, To Bottom (⌘] ⌘[ ⇧⌘] ⇧⌘[) | Done | Keys and Edit menu entries move the open folder or smart folder among its siblings, undoably (`organize::arrange`) | local |
+| Edit ▸ Edit Image: Horizontal Flip (⇧F), Rotate (⇧R), Crop (⇧C), Combine Images (⇧⌘M) | Partial | Edit ▸ Edit Image menu has Flip, Rotate and Crop; ⇧R and ⇧F work in the viewer. No ⇧C key and no Combine Images | local |
 | Edit ▸ Edit Folder: Set Current Folder (⇧⌘R), Move Folder, Password create / edit / remove / lock (⇧⌘L) | Partial | Password items are in the folder context menu (organize_ui.rs:270-296). No menu, no keys, no Move Folder dialog and no folder-settings shortcut | local |
-| Edit: Remove from current folder (⇧⌘⌫) | Partial | Only by removing the folder chip in the inspector (app.rs:3141-3146). No menu item and no key | local |
+| Edit: Remove from current folder (⇧⌘⌫) | Done | shortcuts.rs `edit.remove.folder`, menu and card menu; one undo step, no prompt (Eagle's `removeFromFolder` asks nothing) | local |
 | Edit: Move to Trash (⌘⌫) | Done | shortcuts.rs:114, app.rs:1095-1102 | local |
 | Find: Go to Folder (⌘J or J), a quick-switch dialog with Folders / Smart Folders / Tags tabs | Missing | No quick switcher | local |
 | Find: Add to Folders… (⇧⌘J, a searchable folder picker that can create folders) | Partial | A plain scrolling submenu in the item context menu (app.rs:2520). No search, no new folder and no key | local |
 | Organize: Add To Last Used Folder (⇧D) | Missing | No record of recently used folders | local |
-| Organize: Rate 0–5 stars from the menu and keys | Partial | Stars can be clicked in the inspector (app.rs:3332, 3008). No menu and no keys (see §3) | local |
+| Organize: Rate 0–5 stars from the menu and keys | Done | Organize menu and the 0–5 keys (`organize.rating.*`) with a toast; in the viewer the bare digits keep their zoom meaning | local |
 | Organize: Add Tags… (⌘T), Copy Tags (⇧⌘C), Paste Tags (⇧⌘V), Clear Tags | Missing | No tag-panel key and no tag clipboard | local |
 | View: Always on Top (⇧T) | Missing | Only the collect window floats (collect.rs:89). The main window cannot | local |
-| View: jump to All / Uncategorized / Untagged / Recent / Random / All Tags / Trash (⌘1–⌘7) | Missing | Sidebar clicks only (app.rs:1740) | local |
-| View: layout Waterfall / Justified / Grid / List with checkmarks (⌥1–⌥4) | Partial | ⌥1 Waterfall, ⌥2 Justified, ⌥3 Grid, ⌥4 List as in Eagle (shortcuts.rs `view.layout.*`). No menu with checkmarks | local |
-| View: Scroll to Top / Bottom / Page Up / Page Down (Home, End, PgUp, PgDn) | Missing | Grid keys are arrows only (app.rs:1063-1136) | local |
+| View: jump to All / Uncategorized / Untagged / Recent / Random / All Tags / Trash (⌘1–⌘7) | Done | shortcuts.rs `view.all` … in Eagle's View menu order; from the viewer they close it first | local |
+| View: layout Waterfall / Justified / Grid / List with checkmarks (⌥1–⌥4) | Done | ⌥1–⌥4 in Eagle's order; View menu entries with checkmarks (`menu.rs` `validateMenuItem`) | local |
+| View: Scroll to Top / Bottom / Page Up / Page Down (Home, End, PgUp, PgDn) | Done | Home, End, Page Up and Page Down scroll the grid (a page is the view less 72 px, as Eagle); ⌘↑ / ⌘↓ select the first or last item | local |
 | View: Zoom In / Out (⌘= / ⌘-) | Done | Thumbnail size (shortcuts.rs:96-97, app.rs:1024-1029) | local |
 | View: Actual Size (⌘0) / Zoom to Fit (⌘9) | Partial | The viewer has 0 for fit and 1 for actual size, without ⌘ (app.rs:3510). No ⌘0 or ⌘9 | local |
 | View: Grayscale preview (⌥⌘G) | Missing | No grayscale toggle | local |
@@ -103,7 +103,7 @@ Overall finding: falcon has **no application menu bar**. There is no `muda` or m
 | View: Show Subfolder Content (⌥⌘7) | Missing | A folder shows only its own items (logic.rs:125) | local |
 | View: Enter / Leave Presentation Mode (F5) | Missing | No slideshow | local |
 | Actions menu: user-defined Actions, each with its own shortcut | Missing | The toolbar ⚡ button is drawn but disabled (app.rs:2038) | local |
-| Window: Toggle Full Screen, Minimize, Close Window (⌘W) | Partial | The green traffic light works through the OS. No menu, no ⌘W, ⌘M or ⌃⌘F | local |
+| Window: Toggle Full Screen, Minimize, Close Window (⌘W) | Done | ⌃⌘F, ⌘M and ⌘W through eframe viewport commands; ⌘W closes the viewer first, then the window (which quits falcon, like the red button) | local |
 | Help: Help Center, Show Tutorial, Install Extensions, Feedback, Recover license, Change Logs | Missing | Not applicable | online/plugin |
 | Help: Error Logs, Export Debug Report… | Missing | No log viewer or debug report export | local |
 
@@ -143,7 +143,7 @@ Cross-references (not counted): File ▸ Import Folders / Links / Eagle Package 
 | Item: More ▸ Refresh Thumbnail | Done | image_edit.rs:104 | local |
 | Item: More ▸ Re-analyze colors | Done | Labelled "Refresh Palette" (image_edit.rs:107) | local |
 | Item: More ▸ Replace with File… | Missing |  | local |
-| Item: Remove from this Folder | Missing | Inspector chip only | local |
+| Item: Remove from this Folder | Done | Card menu entry and ⇧⌘⌫ | local |
 | Item: Move to Trash | Done | app.rs:2538 | local |
 | Item (falcon only): Rotate Left / Right, Flip H / V, Crop… | Done | image_edit.rs:110-132 (falcon extra) | local |
 | **Folder**: New Folder (sibling) | Missing | Only New Subfolder | local |
@@ -195,23 +195,23 @@ Eagle defaults come from prefs `shortcuts.keybinds` (rebindable) and from the ha
 | --- | --- | --- | --- |
 | Shortcut editor: rebind, conflict check, clear, reset, grouped list | Done | shortcuts.rs:150-200, 400-530 | local |
 | Shortcut editor: search field ("Search Shortcut") | Missing | No filter in the shortcut list | local |
-| Shortcut editor coverage: the roughly 150 rebindable commands | Partial | 26 commands plus 12 player keys (shortcuts.rs:94-135) | local |
+| Shortcut editor coverage: the roughly 150 rebindable commands | Partial | 60 commands plus 12 player keys (shortcuts.rs TABLE) | local |
 | ⌘F search, ⇧⌘F toggle filter | Done | shortcuts.rs:108-109 | local |
 | ⌥⌘F search all, ⌥⇧F filter sidebar, ⇧⌥⌘F reset filter, ⌥F / ⌥T / ⌥C / ⌥S / ⌥R / ⌥D / ⌥E open one filter | Missing |  | local |
 | ⌘L switch library | Done | shortcuts.rs:117, app.rs:998 | local |
 | ⌘E export, ⇧⌘E export .eaglepack, ⇧E export as format | Done | shortcuts.rs Export group | local |
-| ⌘1–⌘7 sidebar views | Missing |  | local |
+| ⌘1–⌘7 sidebar views | Done | shortcuts.rs `view.all`, `view.unfiled`, … | local |
 | ⌥1–⌥4 layouts | Done | shortcuts.rs `view.layout.*`, in Eagle's order | local |
 | ⌥⌘1–⌥⌘8 panel and caption toggles plus Navigator | Partial | ⌥⌘1, ⌥⌘2 and ⌥⌘3; no caption toggles or Navigator | local |
 | ⇧T always on top, F5 slideshow, ⌥⌘G grayscale | Missing |  | local |
 | ⌘O open in new window, ⇧⌘O open link | Missing |  | local |
 | ⇧↩ default app, ⌘↩ reveal | Done | shortcuts.rs:104-105 | local |
 | ⌥⌘S reveal, ⌥⌘D duplicate (view) | Missing |  | local |
-| Home / End / PageUp / PageDown scroll the grid; ⌘↑ / ⌘↓ jump to top or bottom | Missing |  | local |
-| 0–5 set the rating of the selection | Missing |  | local |
+| Home / End / PageUp / PageDown scroll the grid; ⌘↑ / ⌘↓ jump to top or bottom | Done | `run_command` scroll offsets; ⌘↑ / ⌘↓ also select the first or last item, where Eagle only scrolls | local |
+| 0–5 set the rating of the selection | Done | shortcuts.rs `organize.rating.*`, grid only; toast "Rated N stars" | local |
 | T opens the tag panel, F opens the folder panel, J opens Go to Folder, G opens Actions, P opens Plugins | Missing |  | local |
-| R reshuffles the Random view | Missing | Clicking Random again reshuffles (app.rs:797-799) | local |
-| `*` or `/` expand or collapse every folder | Missing |  | local |
+| R reshuffles the Random view | Done | shortcuts.rs; in place, without a history step | local |
+| `*` or `/` expand or collapse every folder | Done | Eagle's `toggleAllFolders` rule (smart folders when one is open); `*` is the ⇧8 alias chord | local |
 | Tab toggles all panels | Done | Fixed key in shortcuts.rs FIXED, when no text field has focus (`logic::toggle_all`) | local |
 | Space opens the quick preview (preference: preview, native Quick Look, or page down) | Partial | Space toggles the viewer (app.rs:1088-1095). No Quick Look option and no page-down option | local |
 | ⇧Space pages up | Missing |  | local |
@@ -222,12 +222,12 @@ Eagle defaults come from prefs `shortcuts.keybinds` (rebindable) and from the ha
 | ⇧ + arrows extend the selection | Missing |  | local |
 | Arrow keys move through the sidebar tree when it has focus (focus zones: content / sidebar / tags) | Missing |  | local |
 | ⌫ goes back (or leaves the viewer); ⌥← / ⌥→ and ⌘← / ⌘→ move through history | Done | shortcuts.rs `go.back` (⌫, ⌘←, ⌥←) and `go.forward` (⌘→, ⌥→); in the viewer ⌫ leaves it (app.rs `keyboard`) | local |
-| ⌥↑ opens the parent folder | Missing |  | local |
+| ⌥↑ opens the parent folder | Done | Of the open folder or smart folder | local |
 | ⌥⇧N creates a text file from a template; ⌥⇧C sets the folder cover | Missing | Folder cover is in the context menu only | local |
-| ⌘W closes the window | Missing |  | local |
+| ⌘W closes the window | Done | Closes the viewer first, then the window | local |
 | ⌘Z undo | Done | app.rs:992 | local |
 | ⌘A select all, ⌘C copy | Done | shortcuts.rs:110-112 | local |
-| Delete (Windows) / ⌘⌫ trash; ⇧⌘⌫ remove from folder | Partial | Trash only | local |
+| Delete (Windows) / ⌘⌫ trash; ⇧⌘⌫ remove from folder | Done | shortcuts.rs `edit.remove.trash`, `edit.remove.folder` | local |
 | ⌘T add tags, ⇧⌘C / ⇧⌘V copy and paste tags, ⇧D add to last folder, ⌘D duplicate | Missing |  | local |
 | ⇧⌘L lock the folder now, ⌥⌘L lock the app | Missing |  | local |
 | Hold Z for the hover preview | Done | app.rs:2703, hover.rs | local |
@@ -427,8 +427,8 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 
 ### Missing and Partial local items, ranked by how noticeable they are
 
-1. No application menubar. File / Edit / Find / Organize / View / Window menus are absent, so menu discovery and most shortcuts are gone.
-2. Shortcuts missing: rating 0–5, T (tags), F (folders), ⌘J Go to Folder, ⌘1–7 views, Home / End / PgUp / PgDn, ⇧-arrows, ⌘T and copy/paste tags, ⇧D last folder, ⌘D duplicate, ⇧⌘⌫ remove from folder, Tab panels, ⌘W.
+1. ~~No application menubar.~~ Fixed; no Actions menu.
+2. Shortcuts missing: T (tags), F (folders), ⌘J Go to Folder, ⇧-arrows, ⌘T and copy/paste tags, ⇧D last folder, ⌘D duplicate, ⇧T always on top, F5, ⌘O new window.
 3. ~~Layout, history and rename keys differ from Eagle.~~ Fixed; what remains is Home/End/PgUp/PgDn, ⌘1–7 and the other missing keys in §3.
 4. ~~Dragging items between folders adds them instead of moving them.~~ Fixed; the drop toast still has no link to the folder.
 5. No rubber-band (marquee) selection.
@@ -1208,7 +1208,7 @@ Scope: what users can do in this area. Eagle paths are relative to `eagle-src/ap
 Status meanings: **Done** means it works in the falcon app, or the API for API rows. **Partial** means it exists only in the CLI or library crate, or behaves differently. **Missing** means it does not exist.
 
 Two cross-cutting facts explain many rows:
-- Falcon has no native menu bar. Every Eagle File and Library menu action with no button or shortcut in falcon is Missing in the app.
+- Falcon's native menu bar (`menu.rs`) carries File, Edit, Find, Organize, View, Window and Help; Eagle's online and plugin entries are left out.
 - Falcon's `Prefs` struct (`crates/falcon-app/src/prefs.rs:21-35`) holds six fields: hover zoom, IPTC keywords, API on/off, API port, collect folder and theme. The Preferences window has four sections: General, Preview, Shortcuts and Developer (`prefs.rs:138-147`). Every other Eagle setting has no switch in falcon. Where falcon hard-codes the behaviour, the row says so.
 
 ---
