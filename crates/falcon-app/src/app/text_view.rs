@@ -1,9 +1,11 @@
 //! The viewer for text (`.txt`) items, after Eagle's text editor: the
-//! item's name above its text on a centred page, the text editable in
-//! place and saved by itself half a second after typing stops (also when
-//! the editor loses focus, the viewer closes or moves on, ⌘S, or the
-//! library closes). Saves go through `Library::save_text` (see the
-//! desktop app chapter of the docs).
+//! item's name (editable, to rename it) above its text on a centred page,
+//! the text editable in place and saved by itself half a second after
+//! typing stops (also when the editor loses focus, the viewer closes or
+//! moves on, ⌘S, or the library closes). Saves go through
+//! `Library::save_text`. The text size zooms in Eagle's five steps, links
+//! open in the browser, and a change made to the file outside is read
+//! again (see the desktop app chapter of the docs).
 
 use std::path::Path;
 use std::sync::Arc;
@@ -14,7 +16,9 @@ use falcon_library::Library;
 use falcon_library::model::Item;
 
 use super::App;
-use super::media_view::top_bar;
+use super::media_view::{bar_name, bar_shell};
+use crate::icons as ic;
+use crate::logic::ViewZoom;
 use crate::textdoc::{self, Autosave};
 use crate::theme::{self as t, font};
 
@@ -42,6 +46,12 @@ pub(super) struct TextView {
     save_now: bool,
     /// The file's modification time as last read or written.
     stamp: Option<SystemTime>,
+    /// When the file was last checked for outside changes.
+    polled: f64,
+    /// When the wheel last zoomed.
+    wheel_at: f64,
+    /// The title being edited.
+    title: String,
 }
 
 fn modified(path: &Path) -> Option<SystemTime> {
@@ -60,6 +70,9 @@ impl TextView {
             autosave: Autosave::default(),
             save_now: false,
             stamp: None,
+            polled: 0.0,
+            wheel_at: f64::NEG_INFINITY,
+            title: String::new(),
         };
         v.read(path);
         v
@@ -97,13 +110,34 @@ impl TextView {
     }
 }
 
-/// Lays the text out with Eagle's line spacing.
+/// Lays the text out with Eagle's line spacing, links in the accent colour
+/// and underlined.
 fn body_job(text: &str, size: f32, wrap: f32) -> LayoutJob {
     let mut job = LayoutJob::default();
     job.wrap.max_width = wrap;
-    let format = egui::TextFormat { font_id: font(size), color: t::p().text, line_height: Some(size * LINE), ..Default::default() };
-    job.append(text, 0.0, format);
+    let plain = egui::TextFormat { font_id: font(size), color: t::p().text, line_height: Some(size * LINE), ..Default::default() };
+    let link = egui::TextFormat { color: t::p().primary, underline: egui::Stroke::new(1.0, t::p().primary), ..plain.clone() };
+    let mut at = 0;
+    for r in textdoc::find_links(text) {
+        job.append(&text[at..r.start], 0.0, plain.clone());
+        job.append(&text[r.clone()], 0.0, link.clone());
+        at = r.end;
+    }
+    job.append(&text[at..], 0.0, plain);
     job
+}
+
+/// The link under `pos` (relative to the galley), if the pointer is over
+/// one of its characters rather than just nearest to it.
+fn link_at(galley: &Galley, text: &str, pos: egui::Vec2) -> Option<String> {
+    let near = galley.cursor_from_pos(pos).index.0;
+    let hit = [near.saturating_sub(1), near].into_iter().find(|&c| {
+        let a = galley.pos_from_cursor(egui::text::CCursor::new(c));
+        let b = galley.pos_from_cursor(egui::text::CCursor::new(c + 1));
+        a.y_range().contains(pos.y) && b.min.y == a.min.y && (a.min.x..=b.min.x).contains(&pos.x)
+    })?;
+    let byte = text.char_indices().nth(hit).map(|(b, _)| b)?;
+    textdoc::find_links(text).into_iter().find(|r| r.contains(&byte)).map(|r| textdoc::link_target(&text[r]))
 }
 
 impl App {
@@ -124,10 +158,56 @@ impl App {
         let bar = Rect::from_min_size(screen.min, vec2(screen.width(), t::BAR_HEIGHT));
         let area = Rect::from_min_max(Pos2::new(screen.left(), bar.bottom()), screen.max);
         let editor_id = egui::Id::unique(("text-editor", &item.id));
-        // ⌘S saves at once, as in Eagle.
+        let title_id = egui::Id::unique(("text-title", &item.id));
+        let editing = ctx.memory(|m| m.has_focus(editor_id) || m.has_focus(title_id));
+        let view = self.ws.text.as_mut().expect("opened above");
+        // ⌘S saves at once, as in Eagle; F5 reads the file again while
+        // nothing is being typed.
         if ctx.memory(|m| m.has_focus(editor_id)) && ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::S)) {
-            self.ws.text.as_mut().expect("opened above").save_now = true;
+            view.save_now = true;
         }
+        let reload = !editing && ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::F5));
+        // A change made outside (another editor, a sync tool) is read
+        // again, checked once a second.
+        if reload || now - view.polled >= textdoc::POLL_INTERVAL {
+            view.polled = now;
+            let changed = modified(&path) != view.stamp;
+            let disk_empty = std::fs::metadata(&path).is_ok_and(|m| m.len() == 0);
+            if reload || textdoc::should_reload(changed, view.autosave.wait(now).is_some(), disk_empty, view.text.is_empty()) {
+                view.read(&path);
+            } else if changed {
+                view.stamp = modified(&path);
+            }
+        }
+        ctx.request_repaint_after(std::time::Duration::from_secs_f64(textdoc::POLL_INTERVAL));
+
+        // Zoom: ⌘= and ⌘− step, ⌘0 and ⌘9 go back to the smallest size,
+        // and the wheel with ⌘, ⌃ or ⌥ (or a pinch) steps at most every
+        // 200 ms, as in Eagle.
+        let mut zoom = self.text_zoom;
+        match self.ws.view.zoom_key.take() {
+            Some(ViewZoom::In) => zoom = textdoc::zoom_step(zoom, true),
+            Some(ViewZoom::Out) => zoom = textdoc::zoom_step(zoom, false),
+            Some(ViewZoom::Fit | ViewZoom::Actual) => zoom = 0,
+            _ => {}
+        }
+        if ui.rect_contains_pointer(area) {
+            let (pinch, alt, wheel) = ctx.input(|i| (i.zoom_delta(), i.modifiers.alt, i.smooth_scroll_delta.y));
+            let dir = if pinch != 1.0 { Some(pinch > 1.0) } else if alt && wheel != 0.0 { Some(wheel > 0.0) } else { None };
+            if alt {
+                // The page must not scroll while ⌥ zooms it.
+                ctx.input_mut(|i| {
+                    i.smooth_scroll_delta = egui::Vec2::ZERO;
+                });
+            }
+            if let Some(zoom_in) = dir
+                && now - view.wheel_at >= textdoc::WHEEL_ZOOM_GAP
+            {
+                view.wheel_at = now;
+                zoom = textdoc::zoom_step(zoom, zoom_in);
+            }
+        }
+        let scale = textdoc::zoom_scale(zoom);
 
         // Under the page: a click beside the text puts the cursor in
         // it, and a right-click opens the item menu.
@@ -135,12 +215,10 @@ impl App {
         if bg.clicked() {
             ctx.memory_mut(|m| m.request_focus(editor_id));
         }
-        bg.context_menu(|ui| {
-            self.item_menu(ui, lib, item, std::slice::from_ref(&item.id));
-        });
         let mut page = ui.new_child(egui::UiBuilder::new().max_rect(area));
         page.set_clip_rect(area.intersect(ui.clip_rect()));
-        let view = self.ws.text.as_mut().expect("opened above");
+        let mut rename = None;
+        let mut open_link = None;
         egui::ScrollArea::vertical().id_salt(("text-scroll", &item.id)).auto_shrink(false).show(&mut page, |ui| {
             let side = ((ui.available_width() - PAGE_WIDTH) / 2.0).max(0.0) + PAD;
             let width = (ui.available_width() - 2.0 * side).max(40.0);
@@ -149,21 +227,42 @@ impl App {
                 ui.add_space(side);
                 ui.vertical(|ui| {
                     ui.set_width(width);
-                    ui.label(RichText::new(&item.name).font(font(TITLE)).strong().color(t::p().text));
+                    // The title renames the item when it loses focus;
+                    // emptied, it goes back to the name.
+                    if !ctx.memory(|m| m.has_focus(title_id)) {
+                        view.title.clone_from(&item.name);
+                    }
+                    let title = TextEdit::singleline(&mut view.title)
+                        .id(title_id)
+                        .frame(egui::Frame::NONE)
+                        .margin(Margin::ZERO)
+                        .font(font(TITLE * scale))
+                        .text_color(t::p().text)
+                        .desired_width(width)
+                        .show(ui);
+                    if title.response.response.lost_focus() {
+                        let name = view.title.trim();
+                        if !name.is_empty() && name != item.name {
+                            rename = Some(name.to_string());
+                        }
+                        view.title.clone_from(&item.name);
+                    }
                     if let Some(why) = view.error.as_deref().or(view.read_only) {
                         ui.add_space(4.0);
                         ui.label(RichText::new(why).size(12.0).color(t::p().text_muted));
                     }
-                    ui.add_space(12.0);
-                    let mut layouter = |ui: &Ui, buf: &dyn TextBuffer, wrap: f32| -> Arc<Galley> { ui.fonts_mut(|f| f.layout_job(body_job(buf.as_str(), BODY, wrap))) };
+                    ui.add_space(12.0 * scale);
+                    let size = BODY * scale;
+                    let mut layouter = |ui: &Ui, buf: &dyn TextBuffer, wrap: f32| -> Arc<Galley> { ui.fonts_mut(|f| f.layout_job(body_job(buf.as_str(), size, wrap))) };
+                    let editable = view.read_only.is_none() && view.error.is_none();
                     let out = TextEdit::multiline(&mut view.text)
                         .id(editor_id)
                         .frame(egui::Frame::NONE)
                         .margin(Margin::ZERO)
                         .desired_width(width)
-                        .min_size(vec2(width, (area.height() - 160.0).max(BODY * LINE)))
+                        .min_size(vec2(width, (area.height() - 160.0).max(size * LINE)))
                         .lock_focus(true)
-                        .interactive(view.read_only.is_none() && view.error.is_none())
+                        .interactive(editable)
                         .layouter(&mut layouter)
                         .show(ui);
                     let r = &out.response.response;
@@ -173,14 +272,59 @@ impl App {
                     if r.lost_focus() {
                         view.save_now = true;
                     }
+                    // Links open in the browser with ⌘-click (a plain
+                    // click when the text can't be edited).
+                    if let Some(p) = r.hover_pos()
+                        && let Some(url) = link_at(&out.galley, &view.text, p - out.galley_pos)
+                    {
+                        let cmd = ctx.input(|i| i.modifiers.command);
+                        if cmd || !editable {
+                            ctx.set_cursor_icon(egui::CursorIcon::PointingHand);
+                        }
+                        // A read-only editor senses no clicks of its own.
+                        let clicked = r.clicked() || (!editable && ctx.input(|i| i.pointer.primary_clicked()));
+                        if clicked && (cmd || !editable) {
+                            open_link = Some(url.clone());
+                        }
+                        r.clone().on_hover_text_at_pointer(if editable { format!("⌘-click to open {url}") } else { format!("Click to open {url}") });
+                    }
                 });
             });
             ui.add_space(PAD);
         });
+        bg.context_menu(|ui| {
+            self.item_menu(ui, lib, item, std::slice::from_ref(&item.id));
+        });
+        if let Some(url) = open_link {
+            crate::open_with::open_url(&url);
+        }
+        if let Some(name) = rename {
+            self.ws.actions.push(super::Action::RenameItem(item.id.clone(), name));
+        }
         if let Some(wait) = self.ws.text.as_ref().and_then(|v| v.autosave.wait(now)) {
             ctx.request_repaint_after(std::time::Duration::from_secs_f64(wait));
         }
-        top_bar(self, ui, item, bar);
+
+        // The bar: the shared buttons, then the text size at the right.
+        let (left, mut right) = bar_shell(self, ui, item, bar);
+        let cy = bar.center().y;
+        if super::icon_button(ui, Pos2::new(right - 12.0, cy), ic::PLUS, 15.0, zoom + 1 < textdoc::ZOOM_LEVELS, "Larger text (⌘=)").clicked() {
+            zoom = textdoc::zoom_step(zoom, true);
+        }
+        let label = format!("{}%", (scale * 100.0).round());
+        let g = ui.painter().layout_no_wrap(label, font(12.0), t::p().text_value);
+        let lx = right - 26.0 - g.size().x;
+        let reset = ui.interact(Rect::from_min_size(Pos2::new(lx, cy - 10.0), vec2(g.size().x, 20.0)), ui.scope_id().with("text-zoom-reset"), Sense::click());
+        ui.painter().galley(Pos2::new(lx, cy - g.size().y / 2.0), g, t::p().text_value);
+        if reset.on_hover_text("Smallest text (⌘0)").clicked() {
+            zoom = 0;
+        }
+        if super::icon_button(ui, Pos2::new(lx - 14.0, cy), ic::MINUS, 15.0, zoom > 0, "Smaller text (⌘−)").clicked() {
+            zoom = textdoc::zoom_step(zoom, false);
+        }
+        right = lx - 30.0;
+        bar_name(ui, item, bar, left, right);
+        self.text_zoom = zoom;
         true
     }
 

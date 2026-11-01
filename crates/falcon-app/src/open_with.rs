@@ -104,6 +104,21 @@ pub fn open_default(files: &[PathBuf]) {
     }
 }
 
+/// The `open` arguments for a web link, or None unless it is an http or
+/// https address (so a link in a note can't open a file or run an app).
+pub fn url_args(url: &str) -> Option<Vec<std::ffi::OsString>> {
+    let lower = url.to_ascii_lowercase();
+    let web = (lower.starts_with("http://") || lower.starts_with("https://")) && !url.chars().any(char::is_whitespace);
+    web.then(|| vec!["--".into(), url.into()])
+}
+
+/// Opens a web link in the default browser.
+pub fn open_url(url: &str) {
+    if let Some(args) = url_args(url) {
+        run_open(args);
+    }
+}
+
 /// Opens the files in `app`.
 pub fn open_in(app: &Path, files: &[PathBuf]) {
     if !files.is_empty() {
@@ -221,6 +236,15 @@ mod platform {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_web_links_open() {
+        assert_eq!(url_args("https://a.b/c"), Some(vec!["--".into(), "https://a.b/c".into()]));
+        assert!(url_args("HTTP://a.b").is_some());
+        assert!(url_args("file:///etc/passwd").is_none());
+        assert!(url_args("/Applications/Calculator.app").is_none());
+        assert!(url_args("https://a b").is_none());
+    }
 
     fn app(name: &str, path: &str) -> AppInfo {
         AppInfo { name: name.into(), path: path.into() }

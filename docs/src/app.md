@@ -120,6 +120,11 @@ What Eagle does, from `text-editor/text-editor.js`, `text-editor.html` and its s
 | Empty text | Never saved, so clearing a note leaves the file as it was | Seen | Same |
 | Item metadata | Not touched: `size` and `mtime` keep their import values | Seen | `size` and `mtime` are refreshed from the new file and `lastModified` moves on, as with every item edit; `btime` and `modificationTime` stay |
 | Encoding | Read and written as UTF-8 | Seen | UTF-8 (a byte order mark is kept). A file that isn't UTF-8, or is larger than 2 MB, opens read-only with a note, so saving can't change bytes falcon can't show |
+| Title | The page's title element is commented out in Eagle 4.0.0's `text-editor.html`; its rename code (`changeName`: renames on blur, an emptied title goes back to the name) is still there, and renaming happens in the inspector | Seen | The item's name is an editable title at the top of the page, with that rule: it renames the item when it loses focus (↩ or Esc too), and an emptied title goes back to the name. A rename is one undo step |
+| Text size | ⌘= / ⌘+ and ⌘− step the page scale by 31.25% between 62.5% and 187.5% (five sizes, body 14 to 42 px, the title with it); ⌘0 and ⌘9 go back to the smallest; the wheel with ⌘, ⌃ or ⌥ steps at most every 200 ms. The zoom toolbar is hidden for text items and the size resets for each item | Seen | The same five sizes, keys and wheel, plus a pinch, and − / percentage / + buttons in the viewer bar (the percentage goes back to the smallest). The size is kept across items and launches |
+| Links | A click handler opens `target="_blank"` links in the browser, but the text is inserted as plain text, so no link is ever made and nothing opens | Seen | `http://`, `https://` and `www.` addresses are underlined in the accent colour; ⌘-click opens one in the default browser (a plain click when the text is read-only). Only web addresses are ever opened (`open_with::open_url`) |
+| Outside changes | Read again when the window regains focus and the file's mtime differs (`checkForUpdate`), or with F5 or ⌘R; a file that became empty doesn't replace text on screen | Seen | Checked once a second while the item is open (one `stat`), and read again when its mtime changed, unless typing is waiting to be saved (the save wins) or the file became empty while the page has text. F5 reads it again. ⌘R stays Rename |
+| Keys | 0 to 5 rate the item, ← and → step through items, only while the text doesn't have focus (Mousetrap ignores keys typed into editable text) | Seen | Same: the digits, arrows, ⌫ and Space act only while neither the text nor the title has focus |
 
 ## Video viewer
 
@@ -289,7 +294,7 @@ These are the defaults. All but the arrows, Esc, Tab, Z and the viewer's C, ⇧R
 | ⌘1 to ⌘7 | All, Uncategorized, Untagged, Recently Used, Random, All Tags and Trash (Eagle's View menu order). From the viewer they close it first |
 | Home, End, Page Up and Page Down | Scroll the grid to the top or bottom, or by a page (the view less 72 px, as in Eagle) |
 | ⌘↑ and ⌘↓ | Select the first or last item and scroll to it (with video in the viewer they are still the volume keys) |
-| 0 to 5 | Set the rating of the selection (0 removes it), with a toast such as "Rated 3 stars". In the viewer 0 and 1 stay its zoom keys; Organize in the menu bar rates there |
+| 0 to 5 | Set the rating of the selection (0 removes it), with a toast such as "Rated 3 stars". In the viewer 0 and 1 stay its zoom keys; Organize in the menu bar rates there. In the text viewer they rate the item while neither the text nor the title has focus, as in Eagle's text editor |
 | ⌥⌘R | Refresh the thumbnails of the selection (or the viewer's item) |
 | R | On the Random page, shuffle again (no history step) |
 | ⌘W | Close the viewer if it is open, otherwise the window (which quits falcon, as the red button does) |
@@ -309,6 +314,10 @@ These are the defaults. All but the arrows, Esc, Tab, Z and the viewer's C, ⇧R
 | ⌘+, ⌘− and ⌘0 | With a PDF in the viewer, zoom in, out and back to Automatic |
 | ⌘F, ⌘G and ⇧⌘G | With a PDF in the viewer, find in the document and step through matches (↩ and ⇧↩ in the find field) |
 | ⌘C | With text selected in a PDF, copy it |
+| ⌘= and ⌘−, ⌘0 and ⌘9 | With a text item in the viewer, larger or smaller text, and back to the smallest size (also ⌘, ⌃ or ⌥ with the wheel, or a pinch). Not while typing, as in Eagle |
+| ⌘S | While typing in the text viewer, save now |
+| F5 | In the text viewer, read the file again (not while typing) |
+| ⌘-click | On a link in the text viewer, open it in the browser |
 
 ## Saving
 

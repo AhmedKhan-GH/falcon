@@ -97,6 +97,8 @@ struct Saved {
     /// The image viewer's "fit to window edge" mode, kept like Eagle's
     /// `eagle.viewer.lastZoomMode`.
     zoom_edge: Option<bool>,
+    /// The text viewer's text size (`textdoc::zoom_scale`).
+    text_zoom: Option<u8>,
 }
 
 /// A rubber-band selection in progress: where it started, in the grid's
@@ -154,6 +156,8 @@ enum Action {
     Folders(folders_ui::FolderAction),
     /// Sets or removes the thumbnail background of these items.
     Background(Vec<String>, Option<logic::ThumbBg>),
+    /// An item renamed from the text viewer's title.
+    RenameItem(String, String),
     /// The duplicate dialog's answer for these held files.
     ResolveDuplicates(Vec<crate::import_dupes::Pending>, crate::import_dupes::Choice),
 }
@@ -613,6 +617,8 @@ pub struct App {
     /// Reload the shown library from disk next frame (the layout panel's
     /// Refresh).
     refresh: bool,
+    /// The text viewer's zoom level, kept across items and launches.
+    text_zoom: u8,
 }
 
 impl App {
@@ -650,6 +656,7 @@ impl App {
             legacy_layout: None,
             display: Default::default(),
             refresh: false,
+            text_zoom: 0,
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
         app.tile = saved.tile.unwrap_or(app.tile).clamp(TILE_MIN, TILE_MAX);
@@ -677,6 +684,7 @@ impl App {
         app.video.resume = saved.video_positions;
         app.pdf.set_marks(saved.pdf_marks);
         app.image.edge = saved.zoom_edge.unwrap_or(false);
+        app.text_zoom = saved.text_zoom.unwrap_or(0).min(crate::textdoc::ZOOM_LEVELS - 1);
         // Reopen the libraries that were open, then the one given on the
         // command line (focused if it was already open).
         let (libraries, active) = crate::workspaces::restore(&saved.libraries, saved.active, saved.library.as_deref(), |p| p.is_dir());
@@ -1253,9 +1261,13 @@ impl App {
             pressed.push(C::ToggleAll);
         }
         let viewer = self.ws.viewer.is_some();
+        // The text viewer has no plain zoom keys, and its digits rate the
+        // item, as in Eagle's text editor (only reached while neither its
+        // text nor its title has focus).
+        let text = viewer && self.ws.text.as_ref().is_some_and(|v| self.ws.viewer.as_deref() == Some(v.id.as_str()));
         // The viewer's fixed zoom keys: plain 0, 1, + and −. The table's
         // chords (⌘0, ⌘9, ⌘=, ⌘−) come through `run_command`.
-        if viewer {
+        if viewer && !text {
             use logic::ViewZoom as Z;
             self.ws.view.zoom_key = ctx.input(|i| {
                 i.events.iter().find_map(|e| match e {
@@ -1284,7 +1296,7 @@ impl App {
         }
         // In the viewer the bare digits are its own keys (0 fits, 1 is
         // actual size); the menu still rates there.
-        if viewer {
+        if viewer && !text {
             pressed.retain(|c| !matches!(c, C::Rate(_)));
         }
         // These take the whole key press: the fixed keys wait a frame.
@@ -1886,6 +1898,15 @@ impl App {
                     }
                     r
                 }
+                Action::RenameItem(id, name) => match lib.item(&id).cloned() {
+                    Some(mut item) => {
+                        item.name = name;
+                        // The inspector's title field shows the new name.
+                        self.ws.edit = None;
+                        lib.update_item(item)
+                    }
+                    None => Ok(()),
+                },
             };
             if let Err(e) = result {
                 self.flash(format!("Could not save: {e}"));
@@ -2017,6 +2038,7 @@ fn action_label(action: &Action) -> String {
         Action::ResolveDuplicates(files, _) => format!("Import {}", files.len()),
         Action::Edit(op) => op.label(),
         Action::Folders(a) => a.label(),
+        Action::RenameItem(..) => "Rename".into(),
     }
 }
 
@@ -4512,6 +4534,7 @@ impl eframe::App for App {
             video_positions: self.video.positions(),
             pdf_marks: self.pdf.marks(),
             zoom_edge: Some(self.image.edge),
+            text_zoom: Some(self.text_zoom),
         };
         eframe::set_value(storage, eframe::APP_KEY, &saved);
     }

@@ -1,5 +1,8 @@
 //! The rules of the text (`.txt`) viewer, kept apart from its drawing so
-//! they can be tested: when typing is saved, and how a file is read.
+//! they can be tested: when typing is saved, how a file is read, the text
+//! sizes, links, and when a file changed outside is read again.
+
+use std::ops::Range;
 
 /// Eagle saves half a second after the last key press.
 pub const AUTOSAVE_DELAY: f64 = 0.5;
@@ -67,6 +70,78 @@ pub fn decode(bytes: Vec<u8>) -> Loaded {
     }
 }
 
+/// Eagle's text sizes: its page scale goes from 62.5% to 187.5% in steps
+/// of 31.25%, so the body runs from 14 to 42 points in five sizes.
+pub const ZOOM_LEVELS: u8 = 5;
+
+/// The text scale at zoom `level` (0 is the smallest and the default).
+pub fn zoom_scale(level: u8) -> f32 {
+    1.0 + 0.5 * f32::from(level.min(ZOOM_LEVELS - 1))
+}
+
+/// The zoom level one step in (`true`) or out from `level`, kept in range.
+pub fn zoom_step(level: u8, zoom_in: bool) -> u8 {
+    if zoom_in { (level + 1).min(ZOOM_LEVELS - 1) } else { level.saturating_sub(1) }
+}
+
+/// Eagle zooms at most once every 200 ms while the wheel turns.
+pub const WHEEL_ZOOM_GAP: f64 = 0.2;
+
+/// How often the open file is checked for changes made outside.
+pub const POLL_INTERVAL: f64 = 1.0;
+
+/// What to do about the file on disk when it was modified outside: read it
+/// again, unless typing is waiting to be saved (the save wins, as it would
+/// in Eagle half a second later), or unless the file became empty while
+/// the editor has text (Eagle keeps the text then, as a sync tool may
+/// truncate a file before writing it).
+pub fn should_reload(changed: bool, typing_pending: bool, disk_empty: bool, editor_empty: bool) -> bool {
+    changed && !typing_pending && !(disk_empty && !editor_empty)
+}
+
+/// The web links in `text`, as byte ranges: `http://`, `https://` and
+/// `www.` addresses starting a word, up to the next space, without
+/// trailing punctuation or an unmatched closing bracket.
+pub fn find_links(text: &str) -> Vec<Range<usize>> {
+    let lower = text.to_ascii_lowercase();
+    let mut out = Vec::new();
+    let mut at = 0;
+    while at < text.len() {
+        let Some(start) = ["http://", "https://", "www."].iter().filter_map(|p| lower[at..].find(p).map(|i| at + i)).min() else { break };
+        let starts_word = text[..start].chars().next_back().is_none_or(|c| !c.is_alphanumeric() && !matches!(c, '/' | '.' | '@' | '-' | '_'));
+        let end = text[start..].find(|c: char| c.is_whitespace() || c.is_control() || matches!(c, '<' | '>' | '"' | '`')).map_or(text.len(), |i| start + i);
+        let end = trim_link_end(&text[start..end]) + start;
+        let prefix = ["http://", "https://", "www."].iter().find(|p| lower[start..].starts_with(*p)).map_or(0, |p| p.len());
+        if starts_word && end > start + prefix {
+            out.push(start..end);
+            at = end;
+        } else {
+            at = start + prefix.max(1);
+        }
+    }
+    out
+}
+
+/// The length of `link` without trailing punctuation, or closing brackets
+/// that open nowhere inside it.
+fn trim_link_end(link: &str) -> usize {
+    let mut end = link.len();
+    loop {
+        let Some(c) = link[..end].chars().next_back() else { return end };
+        let unmatched = |open: char, close: char| c == close && link[..end].matches(open).count() < link[..end].matches(close).count();
+        if matches!(c, '.' | ',' | ';' | ':' | '!' | '?' | '\'' | '*') || unmatched('(', ')') || unmatched('[', ']') || unmatched('{', '}') {
+            end -= c.len_utf8();
+        } else {
+            return end;
+        }
+    }
+}
+
+/// The address a link opens: `www.` links get `https://`.
+pub fn link_target(link: &str) -> String {
+    if link.to_ascii_lowercase().starts_with("www.") { format!("https://{link}") } else { link.to_string() }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -105,5 +180,43 @@ mod tests {
         assert!(latin1.read_only.is_some());
         let big = decode(vec![b'a'; MAX_EDITABLE + 1]);
         assert!(big.read_only.is_some());
+    }
+
+    #[test]
+    fn zoom_has_eagles_five_sizes() {
+        assert_eq!(zoom_scale(0), 1.0);
+        assert_eq!(zoom_scale(4), 3.0);
+        assert_eq!(zoom_scale(9), 3.0);
+        assert_eq!(zoom_step(0, false), 0);
+        assert_eq!(zoom_step(0, true), 1);
+        assert_eq!(zoom_step(4, true), 4);
+    }
+
+    #[test]
+    fn outside_changes_reload_unless_typing_or_truncated() {
+        assert!(should_reload(true, false, false, false));
+        assert!(!should_reload(false, false, false, false));
+        assert!(!should_reload(true, true, false, false), "unsaved typing wins");
+        assert!(!should_reload(true, false, true, false), "an emptied file keeps the text");
+        assert!(should_reload(true, false, true, true));
+    }
+
+    fn links(text: &str) -> Vec<&str> {
+        find_links(text).into_iter().map(|r| &text[r]).collect()
+    }
+
+    #[test]
+    fn links_are_found_and_trimmed() {
+        assert_eq!(links("see https://eagle.cool/a?b=1, then"), ["https://eagle.cool/a?b=1"]);
+        assert_eq!(links("(at www.example.com/x_(y))."), ["www.example.com/x_(y)"]);
+        assert_eq!(links("HTTP://A.B and http://c.d/e."), ["HTTP://A.B", "http://c.d/e"]);
+        assert_eq!(links("[http://x.y/z]"), ["http://x.y/z"]);
+        assert_eq!(links("über https://例え.jp/パス 次"), ["https://例え.jp/パス"]);
+        assert_eq!(links("<https://a.b>"), ["https://a.b"]);
+        // Not links: a bare prefix, or one inside a word or address.
+        assert!(links("http:// and www. alone").is_empty());
+        assert!(links("abchttp://x.y me@www.x.y").is_empty());
+        assert_eq!(link_target("www.a.b"), "https://www.a.b");
+        assert_eq!(link_target("http://a.b"), "http://a.b");
     }
 }
