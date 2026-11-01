@@ -837,10 +837,55 @@ impl Recorder {
         }
     }
 
-    pub fn ui(&mut self, ui: &mut egui::Ui, keys: &mut Shortcuts) {
+    fn row(&mut self, ui: &mut egui::Ui, keys: &mut Shortcuts, s: &Spec) {
         use crate::locale::{tr, trf};
         use crate::theme::{self as t, font};
-        use egui::{Align2, CornerRadius, RichText, Sense, Stroke, vec2};
+        use egui::{Align2, CornerRadius, Sense, Stroke, vec2};
+        let (row, _) = ui.allocate_exact_size(vec2(ui.available_width(), 30.0), Sense::hover());
+        let p = ui.painter();
+        p.text(row.left_center() + vec2(12.0, 0.0), Align2::LEFT_CENTER, tr(s.label), font(13.0), t::p().text);
+        let button = egui::Rect::from_min_size(egui::pos2(row.right() - 150.0, row.top() + 3.0), vec2(150.0, 24.0));
+        let resp = ui.interact(button, ui.scope_id().with(s.id), Sense::click());
+        let active = self.recording == Some(s.cmd);
+        let fill = if resp.hovered() || active { t::p().button_hover } else { t::p().button };
+        let stroke = if active { Stroke::new(1.0, t::p().primary) } else { Stroke::NONE };
+        p.rect(button, CornerRadius::same(6), fill, stroke, egui::StrokeKind::Inside);
+        let (text, color) = match (active, keys.binding(s.cmd)) {
+            (true, _) => (tr("Type a shortcut").to_string(), t::p().text_muted),
+            (false, Some(c)) => (display(ui.ctx(), &c), t::p().text),
+            (false, None) => (tr("None").to_string(), t::p().text_disabled),
+        };
+        p.text(button.center(), Align2::CENTER_CENTER, text, font(12.5), color);
+        if resp.clicked() {
+            self.recording = if active { None } else { Some(s.cmd) };
+            self.conflict = None;
+        }
+        if let Some((_, other, _)) = self.conflict.filter(|c| c.0 == s.cmd) {
+            let note = trf("Used by {command}", &[("command", &tr(spec(other).label))]);
+            p.text(button.left_center() - vec2(10.0, 0.0), Align2::RIGHT_CENTER, note, font(11.5), egui::Color32::from_rgb(0xff, 0xb0, 0x40));
+        } else if !keys.is_default(s.cmd) {
+            let r = egui::Rect::from_center_size(button.left_center() - vec2(16.0, 0.0), vec2(22.0, 22.0));
+            let reset = ui.interact(r, ui.scope_id().with((s.id, "reset")), Sense::click()).on_hover_text(tr("Use the default"));
+            if reset.hovered() {
+                p.rect_filled(r, CornerRadius::same(5), t::p().button_hover);
+            }
+            p.text(r.center(), Align2::CENTER_CENTER, crate::icons::ARROW_COUNTER_CLOCKWISE, font(13.0), t::p().text_muted);
+            if reset.clicked() {
+                keys.reset(s.cmd);
+                // The default may now clash with a chord given to
+                // another command; that command gives way.
+                if let Some(c) = s.default {
+                    for other in TABLE.iter().filter(|o| o.cmd != s.cmd && same_scope(o, s)) {
+                        if keys.chords(other.cmd).iter().any(|x| same(*x, Some(c))) {
+                            let _ = keys.set(other.cmd, None);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn tick(&mut self, ui: &egui::Ui) {
         let now = ui.input(|i| i.time);
         if self.conflict.is_some_and(|c| now - c.2 > CONFLICT_SECS) {
             self.conflict = None;
@@ -848,6 +893,22 @@ impl Recorder {
         if self.conflict.is_some() {
             ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));
         }
+    }
+
+    /// The rows of the commands `only` accepts, each recordable and
+    /// resettable, without search, group headers or footer.
+    pub fn rows(&mut self, ui: &mut egui::Ui, keys: &mut Shortcuts, only: impl Fn(&Spec) -> bool) {
+        self.tick(ui);
+        for s in TABLE.iter().filter(|s| only(s)) {
+            self.row(ui, keys, s);
+        }
+    }
+
+    pub fn ui(&mut self, ui: &mut egui::Ui, keys: &mut Shortcuts) {
+        use crate::locale::tr;
+        use crate::theme::{self as t, font};
+        use egui::{Align2, RichText, Sense, vec2};
+        self.tick(ui);
         ui.add_space(4.0);
         if ui
             .add(egui::TextEdit::singleline(&mut self.query).hint_text(RichText::new(format!("{}  {}", crate::icons::MAGNIFYING_GLASS, tr("Search shortcuts"))).color(t::p().text_muted)).desired_width(240.0))
@@ -868,48 +929,7 @@ impl Recorder {
                 ui.add_space(if shown == 1 { 4.0 } else { 10.0 });
                 ui.label(RichText::new(tr(group)).strong().size(13.0));
             }
-            let (row, _) = ui.allocate_exact_size(vec2(ui.available_width(), 30.0), Sense::hover());
-            let p = ui.painter();
-            p.text(row.left_center() + vec2(12.0, 0.0), Align2::LEFT_CENTER, tr(s.label), font(13.0), t::p().text);
-            let button = egui::Rect::from_min_size(egui::pos2(row.right() - 150.0, row.top() + 3.0), vec2(150.0, 24.0));
-            let resp = ui.interact(button, ui.scope_id().with(s.id), Sense::click());
-            let active = self.recording == Some(s.cmd);
-            let fill = if resp.hovered() || active { t::p().button_hover } else { t::p().button };
-            let stroke = if active { Stroke::new(1.0, t::p().primary) } else { Stroke::NONE };
-            p.rect(button, CornerRadius::same(6), fill, stroke, egui::StrokeKind::Inside);
-            let (text, color) = match (active, keys.binding(s.cmd)) {
-                (true, _) => (tr("Type a shortcut").to_string(), t::p().text_muted),
-                (false, Some(c)) => (display(ui.ctx(), &c), t::p().text),
-                (false, None) => (tr("None").to_string(), t::p().text_disabled),
-            };
-            p.text(button.center(), Align2::CENTER_CENTER, text, font(12.5), color);
-            if resp.clicked() {
-                self.recording = if active { None } else { Some(s.cmd) };
-                self.conflict = None;
-            }
-            if let Some((_, other, _)) = self.conflict.filter(|c| c.0 == s.cmd) {
-                let note = trf("Used by {command}", &[("command", &tr(spec(other).label))]);
-                p.text(button.left_center() - vec2(10.0, 0.0), Align2::RIGHT_CENTER, note, font(11.5), egui::Color32::from_rgb(0xff, 0xb0, 0x40));
-            } else if !keys.is_default(s.cmd) {
-                let r = egui::Rect::from_center_size(button.left_center() - vec2(16.0, 0.0), vec2(22.0, 22.0));
-                let reset = ui.interact(r, ui.scope_id().with((s.id, "reset")), Sense::click()).on_hover_text(tr("Use the default"));
-                if reset.hovered() {
-                    p.rect_filled(r, CornerRadius::same(5), t::p().button_hover);
-                }
-                p.text(r.center(), Align2::CENTER_CENTER, crate::icons::ARROW_COUNTER_CLOCKWISE, font(13.0), t::p().text_muted);
-                if reset.clicked() {
-                    keys.reset(s.cmd);
-                    // The default may now clash with a chord given to
-                    // another command; that command gives way.
-                    if let Some(c) = s.default {
-                        for other in TABLE.iter().filter(|o| o.cmd != s.cmd && same_scope(o, s)) {
-                            if keys.chords(other.cmd).iter().any(|x| same(*x, Some(c))) {
-                                let _ = keys.set(other.cmd, None);
-                            }
-                        }
-                    }
-                }
-            }
+            self.row(ui, keys, s);
         }
         let fixed: Vec<_> = FIXED.iter().filter(|(k, what)| crate::prefs::matches(&self.query, &[tr("Fixed"), tr(k), tr(what), what])).collect();
         if shown == 0 && fixed.is_empty() {

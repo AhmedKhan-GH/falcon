@@ -47,6 +47,12 @@ pub enum Format {
 }
 
 impl Format {
+    pub const ALL: [Format; 3] = [Format::Png, Format::Jpg, Format::Webp];
+
+    pub fn label(self) -> &'static str {
+        self.export().label()
+    }
+
     pub fn ext(self) -> &'static str {
         self.export().ext()
     }
@@ -62,7 +68,7 @@ impl Format {
 
 /// Eagle's three qualities for JPG and WebP screenshots: High, Medium and
 /// Low.
-pub const QUALITIES: [(u8, &str); 3] = [(90, "High"), (80, "Medium"), (70, "Low")];
+pub const QUALITIES: [(u8, &str); 3] = [(90, crate::locale::tr_key("High")), (80, crate::locale::tr_key("Medium")), (70, crate::locale::tr_key("Low"))];
 /// Eagle's default quality (High).
 pub const DEFAULT_QUALITY: u8 = 90;
 

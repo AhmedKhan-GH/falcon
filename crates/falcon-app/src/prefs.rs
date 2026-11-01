@@ -585,9 +585,9 @@ pub struct Draft {
     pub keys: Shortcuts,
 }
 
-/// The panes, in Eagle's order. Eagle's Screenshot, AI, MCP and Proxy
-/// panes have no counterpart (falcon has no capture, plugins or network
-/// features), and a pane appears only once it has a setting that works.
+/// The panes, in Eagle's order. Eagle's AI, MCP and Proxy panes have no
+/// counterpart (falcon has no plugins or network features), and a pane
+/// appears only once it has a setting that works.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum Section {
@@ -596,6 +596,7 @@ pub enum Section {
     Sidebar,
     Controls,
     Preview,
+    Screenshot,
     Shortcuts,
     Notification,
     Password,
@@ -604,11 +605,12 @@ pub enum Section {
 }
 
 impl Section {
-    pub const ALL: [Section; 9] = [
+    pub const ALL: [Section; 10] = [
         Section::General,
         Section::Sidebar,
         Section::Controls,
         Section::Preview,
+        Section::Screenshot,
         Section::Shortcuts,
         Section::Notification,
         Section::Password,
@@ -623,6 +625,7 @@ impl Section {
             Section::Sidebar => tr_key("Sidebar"),
             Section::Controls => tr_key("Controls"),
             Section::Preview => tr_key("Preview"),
+            Section::Screenshot => tr_key("Screenshot"),
             Section::Shortcuts => tr_key("Shortcuts"),
             Section::Notification => tr_key("Notification"),
             Section::Password => tr_key("Password"),
@@ -637,6 +640,7 @@ impl Section {
             Section::Sidebar => crate::icons::SIDEBAR_SIMPLE,
             Section::Controls => crate::icons::MOUSE,
             Section::Preview => crate::icons::EYE,
+            Section::Screenshot => crate::icons::CAMERA,
             Section::Shortcuts => crate::icons::KEYBOARD,
             Section::Notification => crate::icons::BELL,
             Section::Password => crate::icons::LOCK_SIMPLE,
@@ -650,7 +654,7 @@ impl Section {
     fn group(self) -> u8 {
         match self {
             Section::General | Section::Sidebar => 0,
-            Section::Controls | Section::Preview | Section::Shortcuts => 1,
+            Section::Controls | Section::Preview | Section::Screenshot | Section::Shortcuts => 1,
             Section::Notification | Section::Password | Section::AutoImport => 2,
             Section::Developer => 3,
         }
@@ -874,12 +878,57 @@ impl Window {
             Section::Sidebar => sidebar(p, d),
             Section::Controls => controls(p, d),
             Section::Preview => preview(p, d),
+            Section::Screenshot => self.screenshot(p, d),
             Section::Shortcuts => self.shortcuts(p, d),
             Section::Notification => notification(p, d),
             Section::Password => password(p, d, &mut self.password),
             Section::AutoImport => auto_import(p, d, self.library.as_deref(), &mut self.auto_import_note),
             Section::Developer => developer(p, d, &mut self.port_text, port_error),
         }
+    }
+
+    /// Screenshot: format, the global keys and what happens to each picture.
+    fn screenshot(&mut self, p: &mut Page, d: &mut Draft) {
+        use crate::capture::{self, Format};
+        use crate::shortcuts::Command;
+        let keywords = ["format", "png", "jpg", "jpeg", "webp", "quality", "high", "medium", "low", "size"];
+        p.block(tr_key("Format and quality"), &keywords, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(tr("Format"));
+                for f in Format::ALL {
+                    ui.selectable_value(&mut d.prefs.screenshot_format, f, f.label());
+                }
+            });
+            if d.prefs.screenshot_format != Format::Png {
+                ui.horizontal(|ui| {
+                    ui.label(tr("Quality"));
+                    for (q, name) in capture::QUALITIES {
+                        ui.selectable_value(&mut d.prefs.screenshot_quality, q, tr(name));
+                    }
+                });
+            }
+            note(ui, tr("PNG keeps every pixel; JPG and WebP files are smaller."));
+        });
+        let recorder = &mut self.recorder;
+        p.block(tr_key("Keys"), &["keyboard", "shortcut", "keys", "global", "hotkey", "area", "window", "screen", "capture"], |ui| {
+            ui.checkbox(&mut d.prefs.screenshot_shortcuts, tr("Use the screenshot keys"));
+            if d.prefs.screenshot_shortcuts {
+                recorder.rows(ui, &mut d.keys, |s| matches!(s.cmd, Command::Capture(_)));
+            }
+            note(ui, tr("These keys work from any app, also while falcon is hidden."));
+        });
+        let keywords = ["ask", "where", "save", "collect", "folder", "notify", "notification", "tag", "screenshot", "clipboard", "copy", "retina", "2x", "@2x", "resolution"];
+        p.block(tr_key("Options"), &keywords, |ui| {
+            ui.checkbox(&mut d.prefs.screenshot_ask, tr("Choose where each screenshot is saved"));
+            note(ui, tr("Area and window screenshots wait in the collect window; full-screen ones go straight into the library."));
+            ui.add_enabled_ui(d.prefs.notifications, |ui| {
+                ui.checkbox(&mut d.prefs.notify_capture, tr("Show a notification for each screenshot"));
+            });
+            ui.checkbox(&mut d.prefs.screenshot_tag, tr("Tag screenshots “Screenshot”"));
+            ui.checkbox(&mut d.prefs.screenshot_clipboard, tr("Copy screenshots to the clipboard too"));
+            ui.checkbox(&mut d.prefs.screenshot_retina, tr("Keep full Retina resolution (@2x)"));
+            note(ui, tr("When off, screenshots taken on a Retina screen are saved at half size."));
+        });
     }
 
     fn shortcuts(&mut self, p: &mut Page, d: &mut Draft) {
@@ -983,15 +1032,19 @@ fn general(p: &mut Page, d: &mut Draft) {
             crate::locale::set(lang);
         }
     });
-    p.block(tr_key("Window"), &["sidebar", "inspector", "panel", "show"], |ui| {
+    p.block(tr_key("Window"), &["sidebar", "inspector", "panel", "show", "menu bar", "icon", "tray", "status"], |ui| {
         ui.checkbox(&mut d.panels.sidebar, tr("Show the sidebar"));
         ui.checkbox(&mut d.panels.inspector, tr("Show the inspector"));
+        if cfg!(target_os = "macos") {
+            ui.checkbox(&mut d.prefs.menu_icon, tr("Show the falcon icon in the menu bar"));
+        }
     });
-    p.block(tr_key("Importing"), &["import", "collect", "keywords", "iptc", "xmp", "tags", "duplicate", "already", "select", "new items"], |ui| {
+    p.block(tr_key("Importing"), &["import", "collect", "keywords", "iptc", "xmp", "tags", "duplicate", "already", "select", "new items", "retina", "2x", "@2x", "screenshot"], |ui| {
         ui.checkbox(&mut d.prefs.auto_select, tr("Select the new items after importing"));
         ui.checkbox(&mut d.prefs.notify_duplicates, tr("Ask what to do when an imported file is already in the library"));
         note(ui, tr("When off, such files are imported as new items."));
         ui.checkbox(&mut d.prefs.keywords_as_tags, tr("Add IPTC and XMP keywords as tags when importing images"));
+        ui.checkbox(&mut d.prefs.screenshot_retina, tr("Keep full Retina resolution in screenshots (@2x)"));
     });
 }
 
@@ -1089,7 +1142,7 @@ fn preview(p: &mut Page, d: &mut Draft) {
 
 /// Notification: which notices falcon shows.
 fn notification(p: &mut Page, d: &mut Draft) {
-    p.block(tr_key("Pop-ups"), &["notice", "notification", "pop-up", "duplicate", "already", "import", "added", "finished", "auto-import", "watched"], |ui| {
+    p.block(tr_key("Pop-ups"), &["notice", "notification", "pop-up", "duplicate", "already", "import", "added", "finished", "auto-import", "watched", "screenshot", "capture", "export", "system"], |ui| {
         let n = &mut d.prefs;
         ui.checkbox(&mut n.notifications, tr("Show notices"));
         ui.add_enabled_ui(n.notifications, |ui| {
@@ -1097,9 +1150,11 @@ fn notification(p: &mut Page, d: &mut Draft) {
                 ui.checkbox(&mut n.notify_duplicates, tr("Ask what to do when an imported file is already in the library"));
                 ui.checkbox(&mut n.notify_import_done, tr("Say how many items an import added"));
                 ui.checkbox(&mut n.notify_auto_import, tr("Say when files from the auto-import folder start importing"));
+                ui.checkbox(&mut n.notify_capture, tr("Show a notification for each screenshot"));
+                ui.checkbox(&mut n.notify_export_done, tr("Show a notification when an export finishes"));
             });
         });
-        note(ui, tr("Import failures are always reported. falcon plays no sound effects."));
+        note(ui, tr("Import failures are always reported. Notifications for screenshots, imports and exports appear while falcon is in the background, in the app built by scripts/bundle.sh. falcon plays no sound effects."));
     });
 }
 
@@ -1635,7 +1690,7 @@ mod tests {
     #[test]
     fn panes_follow_eagles_order() {
         let labels: Vec<_> = Section::ALL.iter().map(|s| s.label()).collect();
-        assert_eq!(labels, ["General", "Sidebar", "Controls", "Preview", "Shortcuts", "Notification", "Password", "Auto-Import", "Developer"]);
+        assert_eq!(labels, ["General", "Sidebar", "Controls", "Preview", "Screenshot", "Shortcuts", "Notification", "Password", "Auto-Import", "Developer"]);
         let groups: Vec<_> = Section::ALL.iter().map(|s| s.group()).collect();
         assert!(groups.windows(2).all(|w| w[0] <= w[1]), "groups are contiguous");
         let s: Section = serde_json::from_str(r#""preview""#).unwrap();
