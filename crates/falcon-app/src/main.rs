@@ -5,6 +5,7 @@ mod backups;
 mod collect;
 mod colors;
 mod drop_pos;
+mod errlog;
 mod folder_icons;
 mod font_install;
 mod audio;
@@ -37,6 +38,7 @@ mod workspaces;
 use std::path::PathBuf;
 
 fn main() -> eframe::Result {
+    errlog::install_panic_hook();
     // Only libraries in the sandbox folder open, never real ones.
     falcon_library::sandbox::enforce(falcon_library::sandbox::default_root());
     // Before the event loop, so the link that launched the app arrives.

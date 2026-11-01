@@ -975,6 +975,7 @@ impl App {
                 if self.ws.lib.is_some() {
                     self.flash_error(format!("Could not open the library: {e}"));
                 }
+                crate::errlog::error(&format!("could not open the library: {e}"));
                 self.error = Some(e.to_string());
             }
         }
@@ -2092,6 +2093,12 @@ impl App {
             C::Grayscale => self.modes.grayscale = !self.modes.grayscale,
             C::Navigator => self.modes.hide_navigator = !self.modes.hide_navigator,
             C::OpenNewWindow => self.open_preview_window(),
+
+            C::ErrorLogs => {
+                if let Some(p) = crate::errlog::ensure() {
+                    crate::open_with::open_default(&[p]);
+                }
+            }
             C::Player(_) => {}
             C::ToggleName => self.display.show_name = !self.display.show_name,
             C::ToggleInfo => self.display.show_info = !self.display.show_info,

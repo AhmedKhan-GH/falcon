@@ -152,6 +152,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::RotateLeft => s.library && s.rotatable,
         C::Crop => s.library && s.croppable,
         C::Documentation => s.docs,
+        C::ErrorLogs => true,
         C::ToggleName | C::ToggleInfo | C::ToggleComments | C::ToggleSubfolders => s.library,
         C::AlwaysOnTop => true,
         C::Grayscale | C::Navigator => s.library,
@@ -435,7 +436,14 @@ pub static MENUS: &[(&str, &[Entry])] = &[
             item("Close Window", Command::CloseWindow),
         ],
     ),
-    ("Help", &[item("Falcon Documentation", Command::Documentation)]),
+    (
+        "Help",
+        &[
+            item("Falcon Documentation", Command::Documentation),
+            SEP,
+            item("Error Logs", Command::ErrorLogs),
+        ],
+    ),
 ];
 
 /// Every item, the application menu's first, in menu order. An item's
