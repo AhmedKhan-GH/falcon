@@ -5,7 +5,7 @@
 Every claim is from Eagle's plain-JS background window code (`processImage` in `background.js`). The Electron main process is V8 bytecode and was not read.
 
 1. **Stat the source (observed).** `size` is the byte length. `btime` and `mtime` are the file's birth and modification times as integer milliseconds, read before the copy.
-2. **Reject (observed).** An unknown extension is refused. So is an empty file, unless its extension is `txt`.
+2. **Reject (observed).** A file with no extension is refused ("File format is not recognized"), and so are unfinished browser downloads (`.crdownload`, `.part`, `.download`), which `getExt` treats as having none. Any other extension, known or not, goes ahead. So is an empty file refused, unless its extension is `txt`. The refusal goes to the failed-imports list; there is no dialog.
 3. **Name (observed).** The extension is removed, the name is sanitised and trimmed, shortened to fit the file system, normalised to NFC, and replaced by `_` if empty. The upload step strips `/` and `%` first.
 4. **Directory (observed).** `images/<ID>.info/` is created. The original is `<name>.<ext>` and the thumbnail `<name>_thumbnail.png`.
 5. **Item record (observed).** `isDeleted` is false, `url` and `annotation` are empty, `tags` and `folders` come from the caller.
@@ -112,7 +112,9 @@ A folder's `tags` key holds its auto-tags. Eagle's code calls the list it applie
 - **Source times.** `btime` falls back to the mtime when the file system has no birth time. Eagle's behaviour in that case is unknown.
 - **Name.** Falcon removes control characters and `/ ? < > \ : * | " %`, trims spaces and trailing dots, normalises to NFC, and cuts the name so that `<name>_thumbnail.png` fits in 255 bytes. The exact length Eagle allows is not known.
 - **Copy.** `fs::copy`, then the source's access and modification times are set on the copy. There is no cut mode and no fallback copy.
-- **Unsupported formats.** Only png, jpg, webp, gif, bmp and svg are decoded. Any other extension is imported with `width` and `height` of 0, no thumbnail and no palette. Eagle would generate a thumbnail for many of them.
+- **Unsupported formats.** As in Eagle, `import::is_recognized` refuses only files with no extension and unfinished browser downloads (`.crdownload`, `.part`, `.download`), with `FailKind::Unrecognized`, so they appear in the failed-imports list. Every other file imports. Formats falcon can't draw itself go to QuickLook, and a file nothing can draw is imported with `width` and `height` of 0, no thumbnail and no palette. Eagle marks such an item `noPreview: true` and leaves out `width`, `height` and `palettes` (see [Library format](library-format.md)); falcon does not write those differences yet.
+
+  Eagle's "The file format is not supported" dialog (`Dialog.NotSupport.Format.*`) appears only when something dropped from a browser is neither a file nor a link nor image data (`onDropContainer`). Two other uses of it, for unknown file types in drops and folder imports, are commented out in Eagle 4.0.0, and those files are imported. falcon only receives file drops, so it has no such dialog.
 - **Failures.** If decoding or encoding fails, the item is kept with no thumbnail and no flags, as Eagle does for a thrown error. If the copy fails, the `.info` folder is removed and the error is returned. An unknown folder id is rejected before anything is written.
 - **Palette.** Taken from the decoded thumbnail, so it sees the same WebP artefacts Eagle's analyser sees. `palette: false` skips it.
 - **Timestamps.** `modificationTime` is the later of the current time and the previous import's value plus 1 ms, tracked on the `Library`, so it is strictly increasing across calls. `lastModified` is read after the palette is done.

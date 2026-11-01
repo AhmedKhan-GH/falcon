@@ -67,6 +67,20 @@ impl Default for ImportOptions {
 /// Refusal reasons [`stage`] gives, which [`Failure::new`] recognises.
 const NOT_A_FILE: &str = "not a regular file";
 const EMPTY_FILE: &str = "file is empty";
+const UNRECOGNIZED: &str = "file format is not recognised";
+
+/// Browser download-in-progress extensions (Chrome, Firefox, Safari),
+/// which Eagle's `getExt` treats as having no format.
+const PARTIAL_DOWNLOADS: [&str; 3] = ["crdownload", "part", "download"];
+
+/// Whether Eagle would import a file with this (lower-cased) extension:
+/// any extension at all, except unfinished browser downloads. A file with
+/// no extension is refused as "not recognized"; every other format is
+/// imported, with a thumbnail when one can be made and as an icon
+/// otherwise.
+pub fn is_recognized(ext: &str) -> bool {
+    !ext.is_empty() && !PARTIAL_DOWNLOADS.contains(&ext)
+}
 
 /// Why a file could not be imported, for the app's list of failed imports.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -130,6 +144,7 @@ impl Failure {
         let kind = match err {
             Error::Import { reason, .. } if reason == NOT_A_FILE => FailKind::NotAFile,
             Error::Import { reason, .. } if reason == EMPTY_FILE => FailKind::Empty,
+            Error::Import { reason, .. } if reason == UNRECOGNIZED => FailKind::Unrecognized,
             Error::Import { reason, .. } if reason.starts_with("unknown folder") => FailKind::UnknownFolder,
             Error::Io { source, .. } if source.kind() == K::StorageFull => FailKind::NoSpace,
             Error::Io { path: at, source } if at == path => match source.kind() {
@@ -191,6 +206,9 @@ pub fn stage(path: impl AsRef<Path>, opts: &ImportOptions) -> Result<Staged> {
         return Err(refuse(NOT_A_FILE));
     }
     let ext = src.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+    if !is_recognized(&ext) {
+        return Err(refuse(UNRECOGNIZED));
+    }
     if meta.len() == 0 && ext != "txt" {
         return Err(refuse(EMPTY_FILE));
     }
@@ -608,6 +626,16 @@ mod tests {
         let f = fail(&empty);
         assert_eq!((f.kind, f.path.as_path()), (FailKind::Empty, empty.as_path()));
         assert!(f.detail.contains("empty"), "{}", f.detail);
+
+        for name in ["README", "movie.mp4.crdownload", "song.part", "page.download"] {
+            let p = tmp.path().join(name);
+            fs::write(&p, b"data").unwrap();
+            assert_eq!(fail(&p).kind, FailKind::Unrecognized, "{name}");
+        }
+        // Unknown but present extensions import, as icon-only items.
+        let odd = tmp.path().join("notes.xyz123");
+        fs::write(&odd, b"data").unwrap();
+        assert!(stage(&odd, &opts).is_ok());
 
         let mut lib = Library::create(tmp.path().join("T.library")).unwrap();
         let ok = tmp.path().join("a.txt");
