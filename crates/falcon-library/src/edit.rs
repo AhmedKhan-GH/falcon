@@ -283,6 +283,14 @@ impl Library {
         self.save_metadata()
     }
 
+    /// Sets a group's description, the text under its name in the tag
+    /// manager. Eagle keeps the key once set: clearing the box writes `""`
+    /// rather than removing it, and the key goes after `color`.
+    pub fn set_tag_group_description(&mut self, id: &str, description: &str) -> Result<()> {
+        self.tag_group_mut(id)?.description = Some(description.to_string());
+        self.save_metadata()
+    }
+
     /// Deletes a group. With `remove_tags`, its tags are also deleted from
     /// every item, the tag history and starred tags, as Eagle offers.
     pub fn delete_tag_group(&mut self, id: &str, remove_tags: bool) -> Result<()> {
@@ -700,6 +708,31 @@ mod tests {
         lib.sort_subfolders(None, SubfolderSort { descending: false, all_levels: true }).unwrap();
         assert_eq!(names(&lib.metadata.folders[1].children[0].children), ["a", "B", "z"]);
         assert!(lib.sort_subfolders(Some("NOPE"), SubfolderSort::default()).is_err());
+    }
+
+    #[test]
+    fn tag_group_descriptions_and_drag_order() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut lib = Library::create(tmp.path().join("G.library")).unwrap();
+        let a = lib.create_tag_group("A", &["x".into()], Some("red")).unwrap();
+        let b = lib.create_tag_group("B", &[], None).unwrap();
+        let c = lib.create_tag_group("C", &[], None).unwrap();
+        let path = lib.root().join("metadata.json");
+        let text = || std::fs::read_to_string(&path).unwrap();
+        assert!(!text().contains("description"), "no key until one is set");
+        lib.set_tag_group_description(&a, "Warm & bright").unwrap();
+        assert!(text().contains(&format!(r#"{{"id":"{a}","name":"A","tags":["x"],"color":"red","description":"Warm & bright"}}"#)), "{}", text());
+        lib.set_tag_group_description(&a, "").unwrap();
+        assert!(text().contains(r#""color":"red","description":""}"#), "cleared, the key stays: {}", text());
+        assert!(lib.set_tag_group_description("NOPE", "x").is_err());
+
+        // Dragging C to the top, then A below B (index counted after removal).
+        lib.reorder_tag_group(&c, 0).unwrap();
+        lib.reorder_tag_group(&a, 2).unwrap();
+        let order: Vec<&str> = lib.metadata.tags_groups.iter().map(|g| g.id.as_str()).collect();
+        assert_eq!(order, [c.as_str(), b.as_str(), a.as_str()]);
+        let reopened = Library::open(lib.root()).unwrap();
+        assert_eq!(reopened.metadata.tags_groups[2].description.as_deref(), Some(""));
     }
 
     #[test]

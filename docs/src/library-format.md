@@ -72,7 +72,8 @@ Falcon: `Library::sort_subfolders(parent, SubfolderSort { descending, all_levels
 - **Adding tags:** adding through the tag manager moves each tag, taking it out of any other group, so a tag normally belongs to one group.
 - **Removing tags:** taking tags out of a group leaves them on their items.
 - **Deleting a group:** Eagle asks whether to delete the group's tags from every item too.
-- **Reordering:** the sidebar is drag-sortable, and the array follows it.
+- **Reordering:** the sidebar is drag-sortable, and the array follows it. The drag takes the group out of the array and inserts it at the drop index, which is counted after the removal. This is what falcon's `reorder_tag_group(id, index)` does.
+- **Description:** the tag manager shows an editable box under a selected group's name. On blur, Eagle saves the box's HTML if it changed: a trailing `<br>` and any `<div>` wrappers are stripped, and `&amp;` is turned back into `&`. Clearing the box writes `""`, so the key stays once it has been set. Groups made by the tag manager have no `description` key until then. Falcon's `set_tag_group_description(id, text)` writes the given string, `""` included.
 - **Other tag edits:** renaming or deleting a tag also updates every group.
 
 None of these edits touch the folders' `modificationTime`. The library's top-level `modificationTime` is stamped when `metadata.json` is written.
