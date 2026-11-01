@@ -223,7 +223,18 @@ pub(crate) fn redraw(item: &mut Item, raw: &Path, thumb: &Path) -> bool {
         let _ = fs::remove_file(&tmp);
         return false;
     };
-    if !media::is_audio(&next.ext) {
+    if media::is_audio(&next.ext) {
+        // Eagle's refresh takes the tempo again (`generated.bpm`) and drops
+        // the key when no beat is found. An existing key keeps its place.
+        match tempo::bpm(raw, &next.ext) {
+            Some(bpm) => {
+                next.extra.insert("bpm".into(), tempo::json_value(bpm));
+            }
+            None => {
+                next.extra.shift_remove("bpm");
+            }
+        }
+    } else {
         let img = match analysis {
             Analysis::Original => thumbnail::decode(raw).ok(),
             Analysis::Thumbnail => thumbnail::decode(&tmp).ok(),
@@ -520,6 +531,37 @@ mod tests {
         assert!((bpm - 120.0).abs() <= 1.0, "{bpm}");
         let keys: Vec<&str> = item.extra.keys().map(String::as_str).collect();
         assert_eq!(keys, ["duration", "bpm"]);
+    }
+
+    #[test]
+    fn refresh_thumbnail_takes_the_tempo_again() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("T.library");
+        let mut lib = Library::create(&root).unwrap();
+        let src = tmp.path().join("beat.wav");
+        let click = |t: f64| { let s = t % 0.5; if s < 0.004 { 0.8 * (s * 9000.0).sin() } else { 0.0 } };
+        fs::write(&src, crate::media::tests::wav(22050, 12.0, click)).unwrap();
+        let opts = ImportOptions { palette: false, ..Default::default() };
+        let id = lib.import_file(&src, &opts).unwrap();
+        // A stale tempo, with a key after it whose place must not change.
+        let mut item = lib.item(&id).unwrap().clone();
+        item.extra.insert("bpm".into(), json!(90.5));
+        item.extra.insert("star".into(), json!(3));
+        lib.update_item(item).unwrap();
+        let mut lib = Library::open(&root).unwrap();
+        assert!(lib.refresh_thumbnail(&id).unwrap());
+        let lib = Library::open(&root).unwrap();
+        let item = lib.item(&id).unwrap();
+        let bpm = item.extra["bpm"].as_f64().unwrap();
+        assert!((bpm - 120.0).abs() <= 1.0, "{bpm}");
+        assert_eq!(keys(item), ["duration", "bpm", "star"]);
+
+        // Without a beat the key goes, as Eagle sets it to undefined.
+        let raw = item.original_path(lib.root());
+        fs::write(&raw, crate::media::tests::wav(8000, 1.25, |t| (t * 300.0).sin())).unwrap();
+        let mut lib = Library::open(&root).unwrap();
+        assert!(lib.refresh_thumbnail(&id).unwrap());
+        assert_eq!(keys(Library::open(&root).unwrap().item(&id).unwrap()), ["duration", "star"]);
     }
 
     #[test]
