@@ -42,6 +42,9 @@ impl App {
                 // go with it; the file is in falcon's temp folder, which
                 // the import empties.
                 self.collect_extra = self.collect.saved_meta.take();
+                // Like a screenshot imported straight away, it posts no
+                // "Import finished" of its own.
+                self.system.capture_imports += 1;
                 self.import_files(vec![shot.path], target.clone());
                 self.collect_extra = None;
                 collect::push_recent(&mut self.prefs.collect_recent, &target);

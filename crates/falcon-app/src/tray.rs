@@ -1,5 +1,5 @@
 //! The menu bar icon, after Eagle's tray icon on macOS (shown while
-//! Preferences ▸ General ▸ "Show menu bar icon" is on): its menu has Show
+//! Preferences ▸ General ▸ "Show the falcon icon in the menu bar" is on): its menu has Show
 //! falcon, the three screen captures (with their global keys beside
 //! them) and Quit. A choice is queued for the app's next frame, like the
 //! menu bar's (`menu.rs`).

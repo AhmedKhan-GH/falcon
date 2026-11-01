@@ -3,7 +3,7 @@
 //! so items can be collected while the main window is behind other apps.
 //! It is falcon's take on Eagle's collect window, which asks where to save
 //! an item arriving from the browser extension or a screenshot: with
-//! Preferences ▸ Screenshot ▸ "Ask where to save" on, an area or window
+//! Preferences ▸ Screenshot ▸ "Choose where each screenshot is saved" on, an area or window
 //! screenshot waits here ([`Pending`]) until Save adds it to the chosen
 //! folders with the name and tags above, or Discard (or closing the
 //! window) drops it.
