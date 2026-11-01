@@ -38,7 +38,7 @@ These are bugs, not missing features. The first four can lose data or edits.
 8. ~~No marquee selection, no multi-select of folders, no grid display options.~~ Fixed.
 9. ~~No tag picker or suggestions.~~ Fixed.
 10. ~~No GIF player controls, no animated WebP or AVIF, no GIF hover previews.~~ Fixed (AVIF on macOS); still no hover playback for video or audio.
-11. ~~No interactive 3D viewer, text editor or full font viewer.~~ Fixed for obj/stl/ply/glb/gltf/3mf/fbx/dae/3ds; ifc stays a still.
+11. ~~No interactive 3D viewer, text editor or full font viewer.~~ Fixed for obj/stl/ply/glb/gltf/3mf/fbx/dae/3ds and tessellated ifc (triangulated and polygonal face sets, faceted breps); ifc with only swept, CSG or b-spline geometry stays a still.
 12. ~~No watched import folder, no reload on outside changes, no sync-conflict detection, no screen capture.~~ Fixed.
 13. ~~English only; Eagle ships 8 languages.~~ Fixed: the whole interface in all eight (machine-written translations, pending a native read).
 
@@ -478,7 +478,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Font | Inside main window (`index.html:1388`) | Central panel between sidebar and inspector (`F/app.rs` `fn viewer`, `viewer_ui`) | Done |
 | Text (.txt) | Inside main window (`index.html:1393`) | Central panel between sidebar and inspector (`F/app.rs` `fn viewer`, `viewer_ui`), as a still render | Partial |
 | PDF | Inside main window (`index.html:1301`) | Central area, sidebar and inspector kept (`F/app.rs:3392`, `F/app/pdf_view.rs:958`) | Done (macOS only) |
-| 3D model | Inside main window (`index.html:1443`) | Central panel, interactive for obj/stl/ply/glb/gltf/3mf/fbx/dae/3ds, a still for ifc | Partial |
+| 3D model | Inside main window (`index.html:1443`) | Central panel, interactive for obj/stl/ply/glb/gltf/3mf/fbx/dae/3ds and ifc with tessellated geometry, a still for ifc without it | Partial |
 | Special formats (PSD, AI, Office…) | Inside main window (`index.html:1448`) | Central panel between sidebar and inspector (`F/app.rs` `fn viewer`, `viewer_ui`), as a QuickLook render | Partial |
 | Web page (url/html/mhtml) | Inside main window (`index.html:1491`) | Central panel; live WKWebView for url/html on macOS, MHTML as a still | Partial |
 | Toggle sidebar and inspector from inside the viewer | `toggle-all-btn` in the detail toolbar (`index.html:1015`) | Panels button in every viewer bar and the main toolbar (`App::panels_button`, `logic::toggle_all`), ⌥⌘3 and Tab; both-on/both-off like Eagle | Done |
@@ -691,7 +691,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| Interactive 3D view (orbit, pan, zoom) | Partial | `falcon_library::model3d` readers obj+mtl, stl, ply, glb/gltf, 3mf, fbx (binary and ASCII via ufbx, world transforms, material colours, unit and axis conversion, bind pose), dae (COLLADA 1.4.1/1.5 via roxmltree: scene transforms and instances, controllers in bind pose, up axis and unit to Y-up metres, diffuse colour or a texture's average colour) and 3ds (material groups, every colour form, smoothing-group normals; keyframer skipped); orbit, pan, zoom, wireframe, grid and axes in `ui/viewer/model.rs`. Gaps: ifc stays a QuickLook still; no format maps textures | local |
+| Interactive 3D view (orbit, pan, zoom) | Partial | `falcon_library::model3d` readers obj+mtl, stl, ply, glb/gltf, 3mf, fbx (binary and ASCII via ufbx, world transforms, material colours, unit and axis conversion, bind pose), dae (COLLADA 1.4.1/1.5 via roxmltree: scene transforms and instances, controllers in bind pose, up axis and unit to Y-up metres, diffuse colour or a texture's average colour), 3ds (material groups, every colour form, smoothing-group normals; keyframer skipped) and ifc (own STEP parser: `IfcTriangulatedFaceSet`, `IfcPolygonalFaceSet` with voids, faceted breps, mapped items, local placements, units to metres, Z-up, styled-item / material / per-type colours; products shown, skipped and triangles in the inspector); orbit, pan, zoom, wireframe, grid and axes in `ui/viewer/model.rs`. Gaps: ifc swept solids, CSG, b-splines and advanced breps are not read (such products are skipped, an all-swept file falls back to the QuickLook still with the reason in the inspector), while Eagle's viewer renders them; no format maps textures | local |
 | Fit model to window | Done | Fit button (⌘0), `viewer3d::fit` | local |
 | Up-axis (Y/Z), flip up vector, fixed or free orbit | Done | Settings menu: Y/Z up, Flip, Fixed Up Vector / Free Orbit | local |
 | Perspective or orthographic camera | Done | Settings menu: Perspective / Orthographic | local |
@@ -809,7 +809,7 @@ Eagle columns come from `config.js` (`SUPPORT_FORMATS_DARWIN`), `E/js/thumbs/thu
 | mp4, mov, m4v, 3gp, ts, mts, m2ts | HTML5 video player, mpv fallback | QL | AVFoundation player |
 | webm, mkv, avi, wmv, mpg, flv, f4v | HTML5 player or mpv fallback | QL if available | AVFoundation if it can, else a still |
 | 360, afx, eva, vap | Video player | QL if available | AVFoundation if it can, else a still |
-| glb, obj, fbx, 3ds, 3mf, dae, ifc, ply, stl | Interactive 3D viewer | QL if available (obj/stl/ply/dae usually; fbx/ifc/glb rarely) | Interactive viewer and drawn thumbnail for glb/gltf, obj, fbx, 3mf, ply, stl, dae, 3ds; QL still for ifc |
+| glb, obj, fbx, 3ds, 3mf, dae, ifc, ply, stl | Interactive 3D viewer | QL if available (obj/stl/ply/dae usually; fbx/ifc/glb rarely) | Interactive viewer and drawn thumbnail for glb/gltf, obj, fbx, 3mf, ply, stl, dae, 3ds and ifc with tessellated geometry; QL still for ifc without it |
 | url | Live web view | QL (generic) | Live WKWebView (macOS); `.url`/`.webloc` addresses read on import |
 | html, mhtml | Live web view | QL | QL still |
 
@@ -825,7 +825,7 @@ Ranked by how often a user would notice them.
 6. **No video hover-scrub preview in the grid (Missing).** Also missing: audio hover playback. GIF and WebP cards do play on hover.
 7. **No video frame tools (Missing).** You can't set a frame as the thumbnail, copy it or save it.
 8. **No fallback player for mkv, avi, wmv, flv or webm (Missing).**
-9. ~~No interactive 3D model viewer.~~ Fixed for obj/stl/ply/glb/gltf/3mf/fbx/dae/3ds; ifc stays a still, and no format maps textures (dae and 3ds use a texture's average colour).
+9. ~~No interactive 3D model viewer.~~ Fixed for obj/stl/ply/glb/gltf/3mf/fbx/dae/3ds and tessellated ifc; ifc with only swept, CSG or b-spline geometry stays a still, and no format maps textures (dae and 3ds use a texture's average colour).
 10. **No text editor for .txt (Missing).** No editing, renaming, zoom or auto-reload, and cards don't show the text.
 11. **No viewer context menu or right-drag gestures (Missing).** Right-click menu, swipe to previous or next, drag to zoom.
 12. **No zoom slider or zoom presets menu, and different zoom keys (Partial).** Cmd+=/Cmd+-/Cmd+0/Cmd+9 and backtick don't work in the viewer.
