@@ -2,7 +2,9 @@
 //! (article, waterfall, alphabet and information), a size slider with zoom
 //! buttons, colour themes, the sample language, renaming the file from the
 //! font's names, and activating the font as Eagle does (see the desktop
-//! app chapter of the docs).
+//! app chapter of the docs). A font egui can't parse (some WOFF2 and CFF
+//! files) keeps the header, the information tab, renaming and activation,
+//! with QuickLook's specimen in place of the drawn tabs.
 
 use eframe::egui::{self, Align2, Color32, FontData, FontFamily, FontId, FontInsert, InsertFontFamily, Pos2, Rect, RichText, Sense, Stroke, TextEdit, Ui, Vec2, vec2};
 use falcon_library::fontmeta::{self, FontInfo, SAMPLE_LANGUAGES};
@@ -14,6 +16,7 @@ use crate::app::image_edit::Op;
 use crate::app::{Action, App};
 use crate::ui::widgets::icon_button;
 use crate::icons as ic;
+use crate::loader::{Tier, job_for};
 use crate::logic::ViewZoom;
 use crate::theme::{self as t, font, mono};
 
@@ -127,6 +130,10 @@ pub(crate) struct FontView {
     active: Option<crate::font_install::Activation>,
     /// When the wheel last zoomed (egui time).
     wheel_at: f64,
+    /// egui can't read the font, so QuickLook draws its specimen.
+    fallback: bool,
+    /// The fallback shows the information tab rather than the specimen.
+    fallback_info: bool,
 }
 
 /// Whether egui can parse a font, checked with the same parser it uses, as
@@ -231,6 +238,26 @@ pub fn info_rows(info: &FontInfo) -> Vec<(&'static str, String, bool)> {
     rows.into_iter().filter(|r| !r.1.is_empty()).collect()
 }
 
+/// The information tab's rows, with "Use as File Name" beside the names.
+/// Returns the name picked.
+fn font_info_grid(ui: &mut Ui, info: &FontInfo, item: &Item, muted: Color32) -> Option<String> {
+    let mut name_from = None;
+    egui::Grid::new("font-info").num_columns(2).spacing(vec2(24.0, 10.0)).striped(false).show(ui, |ui| {
+        for (label, value, renames) in info_rows(info) {
+            ui.label(RichText::new(label).color(muted).font(font(12.5)));
+            ui.horizontal_wrapped(|ui| {
+                ui.set_max_width(560.0);
+                ui.label(RichText::new(&value).font(font(13.0)));
+                if renames && value != item.name && ui.small_button("Use as File Name").clicked() {
+                    name_from = Some(value.clone());
+                }
+            });
+            ui.end_row();
+        }
+    });
+    name_from
+}
+
 fn metas(item: &Item) -> serde_json::Map<String, serde_json::Value> {
     item.extra.get("fontMetas").and_then(|m| m.as_object()).cloned().unwrap_or_default()
 }
@@ -246,6 +273,7 @@ impl App {
             let family = FontFamily::Name(format!("falcon-font-{}", item.id).into());
             let data = std::fs::read(item.original_path(lib.root())).ok();
             let sfnt = data.as_deref().and_then(fontmeta::sfnt).map(|c| c.into_owned()).filter(|d| egui_can_read(d));
+            let fallback = sfnt.is_none();
             let family = sfnt.map(|bytes| {
                 // egui keeps a font once added; adding the same name again is a no-op.
                 ctx.add_font(FontInsert {
@@ -267,6 +295,8 @@ impl App {
                 zoom: if old.zoom > 0.0 { old.zoom } else { 1.0 },
                 name: item.name.clone(),
                 active,
+                fallback,
+                fallback_info: old.fallback_info,
                 ..Default::default()
             };
         }
@@ -289,12 +319,17 @@ impl App {
                 }
                 ready
             }
-            None => false,
+            None => self.ws.font_view.fallback,
         }
     }
 
     pub(crate) fn font_view(&mut self, ui: &mut Ui, lib: &Library, item: &Item, area: Rect) {
-        let Some(family) = self.ws.font_view.family.clone() else { return };
+        let Some(family) = self.ws.font_view.family.clone() else {
+            if self.ws.font_view.fallback {
+                self.font_fallback_view(ui, lib, item, area);
+            }
+            return;
+        };
         let look = self.font_look;
         // The grayscale preview grays the specimen's colours, as Eagle's
         // filter grays its font page.
@@ -339,51 +374,7 @@ impl App {
         // Header: the file name (edit to rename), the activate switch and
         // the PostScript name.
         let info = FontInfo::from_metas(&metas(item));
-        let mut rename = None;
-        let mut toggle = None;
-        ui.horizontal(|ui| {
-            let fv = &mut self.ws.font_view;
-            let r = ui.add(
-                TextEdit::singleline(&mut fv.name)
-                    .id_salt("font-name")
-                    .font(FontId::new(26.0, family.clone()))
-                    .text_color(ink)
-                    .frame(egui::Frame::NONE)
-                    .desired_width((ui.available_width() - 140.0).max(120.0)),
-            );
-            let r = r.on_hover_text("Rename the file");
-            if r.lost_focus() {
-                let typed = fv.name.trim().to_string();
-                if !typed.is_empty() && typed != item.name {
-                    rename = Some(typed);
-                } else {
-                    fv.name = item.name.clone();
-                }
-            } else if !r.has_focus() {
-                fv.name = item.name.clone();
-            }
-            if let Some(state) = fv.active {
-                use crate::font_install::Activation;
-                // A font only in Eagle's folder is Eagle's to deactivate.
-                let (label, tip) = match state {
-                    Activation::Off => ("Activate", "Install the font for every app"),
-                    Activation::Falcon => ("Activated", "Deactivate the font"),
-                    Activation::Eagle => ("Activated by Eagle", "Eagle installed this font; deactivate it in Eagle"),
-                };
-                let active = state != Activation::Off;
-                let b = egui::Button::new(RichText::new(label).color(if active { Color32::WHITE } else { ink }))
-                    .fill(if active { accent } else { Color32::TRANSPARENT })
-                    .stroke(Stroke::new(1.0, muted));
-                let r = ui.add_enabled(state != Activation::Eagle, b);
-                let r = if state == Activation::Eagle { r.on_disabled_hover_text(tip) } else { r.on_hover_text(tip) };
-                if r.clicked() {
-                    toggle = Some(!active);
-                }
-            }
-        });
-        if !info.postscript.is_empty() {
-            ui.label(RichText::new(&info.postscript).color(muted).font(font(12.0)));
-        }
+        let (rename, toggle) = self.font_header(ui, item, &info, FontId::new(26.0, family.clone()), [ink, muted, accent]);
         ui.add_space(10.0);
 
         // Tabs at the left; language and themes at the right.
@@ -459,21 +450,7 @@ impl App {
             FontTab::Article => self.font_article(ui, &family, specimen, ink),
             FontTab::Waterfall => self.font_waterfall(ui, &family, ink, muted),
             FontTab::Alphabet => self.font_alphabet(ui, &family, specimen, ink, muted, bg),
-            FontTab::Info => {
-                egui::Grid::new("font-info").num_columns(2).spacing(vec2(24.0, 10.0)).striped(false).show(ui, |ui| {
-                    for (label, value, renames) in info_rows(&info) {
-                        ui.label(RichText::new(label).color(muted).font(font(12.5)));
-                        ui.horizontal_wrapped(|ui| {
-                            ui.set_max_width(560.0);
-                            ui.label(RichText::new(&value).font(font(13.0)));
-                            if renames && value != item.name && ui.small_button("Use as File Name").clicked() {
-                                name_from = Some(value.clone());
-                            }
-                        });
-                        ui.end_row();
-                    }
-                });
-            }
+            FontTab::Info => name_from = font_info_grid(ui, &info, item, muted),
         });
 
         if let Some(name) = rename.or(name_from) {
@@ -481,6 +458,128 @@ impl App {
         }
         if let Some(code) = language {
             self.ws.actions.push(Action::Edit(Op::FontLanguage(item.id.clone(), code.to_string())));
+        }
+        if let Some(on) = toggle {
+            self.toggle_font(lib, item, on);
+        }
+    }
+
+    /// The header: the file name (edit to rename) in `name_font`, the
+    /// activate switch and the PostScript name. Returns a typed new name
+    /// and a requested activation change.
+    fn font_header(&mut self, ui: &mut Ui, item: &Item, info: &FontInfo, name_font: FontId, [ink, muted, accent]: [Color32; 3]) -> (Option<String>, Option<bool>) {
+        let mut rename = None;
+        let mut toggle = None;
+        ui.horizontal(|ui| {
+            let fv = &mut self.ws.font_view;
+            let r = ui.add(
+                TextEdit::singleline(&mut fv.name)
+                    .id_salt("font-name")
+                    .font(name_font)
+                    .text_color(ink)
+                    .frame(egui::Frame::NONE)
+                    .desired_width((ui.available_width() - 140.0).max(120.0)),
+            );
+            let r = r.on_hover_text("Rename the file");
+            if r.lost_focus() {
+                let typed = fv.name.trim().to_string();
+                if !typed.is_empty() && typed != item.name {
+                    rename = Some(typed);
+                } else {
+                    fv.name = item.name.clone();
+                }
+            } else if !r.has_focus() {
+                fv.name = item.name.clone();
+            }
+            if let Some(state) = fv.active {
+                use crate::font_install::Activation;
+                // A font only in Eagle's folder is Eagle's to deactivate.
+                let (label, tip) = match state {
+                    Activation::Off => ("Activate", "Install the font for every app"),
+                    Activation::Falcon => ("Activated", "Deactivate the font"),
+                    Activation::Eagle => ("Activated by Eagle", "Eagle installed this font; deactivate it in Eagle"),
+                };
+                let active = state != Activation::Off;
+                let b = egui::Button::new(RichText::new(label).color(if active { Color32::WHITE } else { ink }))
+                    .fill(if active { accent } else { Color32::TRANSPARENT })
+                    .stroke(Stroke::new(1.0, muted));
+                let r = ui.add_enabled(state != Activation::Eagle, b);
+                let r = if state == Activation::Eagle { r.on_disabled_hover_text(tip) } else { r.on_hover_text(tip) };
+                if r.clicked() {
+                    toggle = Some(!active);
+                }
+            }
+        });
+        if !info.postscript.is_empty() {
+            ui.label(RichText::new(&info.postscript).color(muted).font(font(12.0)));
+        }
+        (rename, toggle)
+    }
+
+    /// A font egui can't draw: the same header, a specimen QuickLook
+    /// renders (else the thumbnail) and the information tab.
+    fn font_fallback_view(&mut self, ui: &mut Ui, lib: &Library, item: &Item, area: Rect) {
+        let grayscale = self.modes.grayscale;
+        let gray = move |c: Color32| if grayscale { crate::logic::gray_color(c) } else { c };
+        let (bg, ink, accent) = (gray(t::p().main), gray(t::p().text), gray(t::p().primary));
+        let muted = ink.gamma_multiply(0.6);
+        ui.painter().rect_filled(area, 0.0, bg);
+        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(area.shrink2(vec2(48.0, 16.0))));
+        let ui = &mut child;
+        ui.visuals_mut().override_text_color = Some(ink);
+        let info = FontInfo::from_metas(&metas(item));
+        let (rename, toggle) = self.font_header(ui, item, &info, FontId::proportional(26.0), [ink, muted, accent]);
+        ui.add_space(10.0);
+
+        // Two tabs: the specimen and the information.
+        ui.horizontal(|ui| {
+            for (label, info_tab) in [("Specimen", false), ("Info", true)] {
+                let on = self.ws.font_view.fallback_info == info_tab;
+                let text = RichText::new(label).color(if on { ink } else { muted }).font(font(13.0));
+                if ui.add(egui::Button::new(text).fill(if on { ink.gamma_multiply(0.12) } else { Color32::TRANSPARENT }).stroke(Stroke::NONE)).clicked() {
+                    self.ws.font_view.fallback_info = info_tab;
+                }
+            }
+            ui.add_space(12.0);
+            ui.label(RichText::new("Drawn by QuickLook: falcon can't read this font itself").color(muted).font(font(11.5)));
+        });
+        ui.add_space(8.0);
+
+        let mut name_from = None;
+        if self.ws.font_view.fallback_info {
+            egui::ScrollArea::vertical().id_salt("font-view-fallback").auto_shrink([false, false]).show(ui, |ui| {
+                name_from = font_info_grid(ui, &info, item, muted);
+            });
+        } else {
+            // A tier with no job to run counts as failed.
+            let mut failed = true;
+            for tier in [Tier::Full, Tier::Preview] {
+                if let Some(j) = job_for(item, lib.root(), tier) {
+                    self.ws.frame_jobs.push(j);
+                    failed &= self.ws.loader.has_failed(&item.id, tier);
+                }
+            }
+            let tex = self.ws.loader.get(&item.id, Tier::Full).cloned().or_else(|| self.ws.loader.get(&item.id, Tier::Preview).cloned());
+            let (rest, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
+            match tex {
+                Some(tex) => {
+                    let size = tex.size_vec2();
+                    let k = (rest.width() / size.x).min(rest.height() / size.y).min(1.0);
+                    let r = Rect::from_center_size(rest.center(), size * k);
+                    ui.painter().image(tex.id(), r, Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)), Color32::WHITE);
+                }
+                None if failed => {
+                    ui.painter().text(rest.center(), Align2::CENTER_CENTER, "No specimen for this font", font(13.0), muted);
+                }
+                None => {
+                    ui.painter().text(rest.center(), Align2::CENTER_CENTER, "Rendering the specimen…", font(13.0), muted);
+                    ui.ctx().request_repaint_after(std::time::Duration::from_millis(200));
+                }
+            }
+        }
+
+        if let Some(name) = rename.or(name_from) {
+            self.ws.actions.push(Action::Edit(Op::Rename(item.id.clone(), name)));
         }
         if let Some(on) = toggle {
             self.toggle_font(lib, item, on);
@@ -610,7 +709,7 @@ impl App {
     /// Whether the viewer shows this font in the font viewer (digits rate
     /// there rather than zoom).
     pub(crate) fn font_viewer_open(&self) -> bool {
-        self.ws.viewer.as_deref() == Some(self.ws.font_view.id.as_str()) && self.ws.font_view.family.is_some()
+        self.ws.viewer.as_deref() == Some(self.ws.font_view.id.as_str()) && (self.ws.font_view.family.is_some() || self.ws.font_view.fallback)
     }
 }
 
