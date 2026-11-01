@@ -140,29 +140,166 @@ pub fn zoom_step(cur: f32, up: bool) -> f32 {
     r.clamp(MIN_ZOOM, MAX_ZOOM)
 }
 
-/// Where each page sits in the scrolling column, in screen points.
+/// pdf.js's scroll modes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum ScrollMode {
+    /// One page (or spread) at a time.
+    Page,
+    #[default]
+    Vertical,
+    Horizontal,
+    /// Pages left to right, wrapping into rows.
+    Wrapped,
+}
+
+/// pdf.js's spread modes: pages side by side in pairs.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum Spread {
+    #[default]
+    None,
+    /// Pairs starting with page 1: 1–2, 3–4, …
+    Odd,
+    /// Page 1 alone, then 2–3, 4–5, …
+    Even,
+}
+
+/// The spreads of `n` pages, as index ranges, in order.
+pub fn spreads(n: usize, spread: Spread) -> Vec<std::ops::Range<usize>> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    if spread == Spread::Even && n > 0 {
+        out.push(0..1);
+        i = 1;
+    }
+    while i < n {
+        let end = if spread == Spread::None { i + 1 } else { (i + 2).min(n) };
+        out.push(i..end);
+        i = end;
+    }
+    out
+}
+
+/// Space between the two pages of a spread, in screen points.
+const SPREAD_GAP: f32 = 2.0;
+
+/// How the pages are arranged.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Arrange {
+    pub scroll: ScrollMode,
+    pub spread: Spread,
+    /// The view's width, for wrapping.
+    pub view_w: f32,
+    /// In page mode, the page whose spread shows.
+    pub page: usize,
+}
+
+impl Default for Arrange {
+    fn default() -> Self {
+        Arrange { scroll: ScrollMode::Vertical, spread: Spread::None, view_w: 0.0, page: 0 }
+    }
+}
+
+/// Where each page sits in the scrolling content, in screen points.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Layout {
     pub tops: Vec<f32>,
+    /// Left edges in content exactly `width + 2 PAD` wide; wider content
+    /// centres everything (see [`Layout::left`]).
+    pub lefts: Vec<f32>,
     pub sizes: Vec<Vec2>,
-    /// The widest page.
+    /// The widest row (or column) of pages.
     pub width: f32,
-    /// The whole column, padding included.
+    /// The whole content, padding included.
     pub height: f32,
+    pub scroll: ScrollMode,
+    /// One page per row, top to bottom: lookups can search by height.
+    pub column: bool,
 }
 
-/// Lays out pages of `pages` points at `zoom`, `gap` points apart.
+/// Lays out pages of `pages` points at `zoom` in one column, `gap` points
+/// apart (the reader's default, and the thumbnail list).
 pub fn layout(pages: &[(f32, f32)], zoom: f32, gap: f32) -> Layout {
-    let mut l = Layout::default();
+    arrange(pages, zoom, gap, Arrange::default())
+}
+
+/// Lays out pages of `pages` points at `zoom` by pdf.js's scroll and
+/// spread modes: spreads sit side by side, centred on each other; rows are
+/// centred. In page mode only `how.page`'s spread is placed, the other
+/// pages get no size.
+pub fn arrange(pages: &[(f32, f32)], zoom: f32, gap: f32, how: Arrange) -> Layout {
+    let n = pages.len();
+    let size = |i: usize| vec2(pages[i].0.max(0.0) * UNIT * zoom, pages[i].1.max(0.0) * UNIT * zoom);
+    let column = how.scroll == ScrollMode::Vertical && how.spread == Spread::None;
+    let sizes: Vec<Vec2> = (0..n).map(size).collect();
+    let mut l = Layout { tops: vec![0.0; n], lefts: vec![0.0; n], sizes: sizes.clone(), scroll: how.scroll, column, ..Default::default() };
+    let groups = spreads(n, how.spread);
+    // Each spread's size, with its pages side by side.
+    let span = |g: &std::ops::Range<usize>| {
+        let w: f32 = g.clone().map(|i| sizes[i].x).sum::<f32>() + SPREAD_GAP * (g.len().saturating_sub(1)) as f32;
+        let h = g.clone().map(|i| sizes[i].y).fold(0.0, f32::max);
+        vec2(w, h)
+    };
+    // Places spread `g` with its top-left at (x, y) in a line `line_h` tall.
+    let place = |l: &mut Layout, g: &std::ops::Range<usize>, x: f32, y: f32, line_h: f32| {
+        let mut x = x;
+        for i in g.clone() {
+            l.lefts[i] = x;
+            l.tops[i] = y + (line_h - sizes[i].y) / 2.0;
+            x += sizes[i].x + SPREAD_GAP;
+        }
+    };
+    // Lines of spreads: one per spread, all in one, or wrapped to the view.
+    let lines: Vec<Vec<usize>> = match how.scroll {
+        ScrollMode::Vertical => (0..groups.len()).map(|g| vec![g]).collect(),
+        ScrollMode::Horizontal => vec![(0..groups.len()).collect()],
+        ScrollMode::Page => groups.iter().position(|g| g.contains(&how.page.min(n.saturating_sub(1)))).map(|g| vec![vec![g]]).unwrap_or_default(),
+        ScrollMode::Wrapped => {
+            let room = (how.view_w - 2.0 * PAD - SCROLLBAR).max(1.0);
+            let mut lines: Vec<Vec<usize>> = Vec::new();
+            let mut used = 0.0;
+            for (k, g) in groups.iter().enumerate() {
+                let w = span(g).x;
+                match lines.last_mut() {
+                    Some(line) if used + gap + w <= room => {
+                        line.push(k);
+                        used += gap + w;
+                    }
+                    _ => {
+                        lines.push(vec![k]);
+                        used = w;
+                    }
+                }
+            }
+            lines
+        }
+    };
+    let line_size = |line: &[usize]| {
+        let sizes: Vec<Vec2> = line.iter().map(|&k| span(&groups[k])).collect();
+        let w = sizes.iter().map(|s| s.x).sum::<f32>() + gap * line.len().saturating_sub(1) as f32;
+        vec2(w, sizes.iter().map(|s| s.y).fold(0.0, f32::max))
+    };
+    l.width = lines.iter().map(|line| line_size(line).x).fold(0.0, f32::max);
     let mut y = PAD;
-    for &(w, h) in pages {
-        let s = vec2(w.max(0.0) * UNIT * zoom, h.max(0.0) * UNIT * zoom);
-        l.tops.push(y);
-        l.sizes.push(s);
-        l.width = l.width.max(s.x);
-        y += s.y + gap;
+    for line in &lines {
+        let ls = line_size(line);
+        let mut x = PAD + (l.width - ls.x) / 2.0;
+        for &k in line {
+            let g = &groups[k];
+            place(&mut l, g, x, y, ls.y);
+            x += span(g).x + gap;
+        }
+        y += ls.y + gap;
     }
-    l.height = if pages.is_empty() { 2.0 * PAD } else { y - gap + PAD };
+    l.height = if lines.is_empty() { 2.0 * PAD } else { y - gap + PAD };
+    // In page mode the pages not shown sit out of reach.
+    if how.scroll == ScrollMode::Page {
+        let shown: Vec<usize> = lines.iter().flatten().flat_map(|&k| groups[k].clone()).collect();
+        for i in (0..n).filter(|i| !shown.contains(i)) {
+            l.sizes[i] = Vec2::ZERO;
+            l.tops[i] = -1e9;
+            l.lefts[i] = -1e9;
+        }
+    }
     l
 }
 
@@ -214,13 +351,76 @@ impl Layout {
 
     /// Page `i`'s left edge in content `content_w` wide: centred.
     pub fn left(&self, i: usize, content_w: f32) -> f32 {
-        ((content_w - self.sizes[i].x) / 2.0).max(PAD)
+        self.lefts[i] + ((content_w - self.width - 2.0 * PAD) / 2.0).max(0.0)
     }
 
     /// The scroll offset that puts page `i`'s top edge at the top of the view.
     pub fn top_of(&self, i: usize) -> f32 {
         self.tops.get(i).map_or(0.0, |t| (t - PAD).max(0.0))
     }
+
+    /// Page `i`'s rectangle in content `content_w` wide.
+    pub fn rect(&self, i: usize, content_w: f32) -> Rect {
+        Rect::from_min_size(Pos2::new(self.left(i, content_w), self.tops[i]), self.sizes[i])
+    }
+
+    /// The first and last page with any part in `view` (content
+    /// coordinates), in any scroll mode.
+    pub fn visible_in(&self, view: Rect, content_w: f32) -> Option<(usize, usize)> {
+        if self.column {
+            return self.visible(view.top(), view.height());
+        }
+        let mut hit = (0..self.tops.len()).filter(|&i| self.sizes[i].x > 0.0 && self.rect(i, content_w).intersects(view));
+        let first = hit.next()?;
+        Some((first, hit.next_back().unwrap_or(first)))
+    }
+
+    /// The page showing the most in `view`: the current page.
+    pub fn current_in(&self, view: Rect, content_w: f32) -> usize {
+        if self.column {
+            return self.current(view.top(), view.height());
+        }
+        let Some((a, b)) = self.visible_in(view, content_w) else { return self.tops.len().saturating_sub(1) };
+        let shown = |i: usize| {
+            let r = self.rect(i, content_w).intersect(view);
+            if r.is_positive() { r.area() } else { 0.0 }
+        };
+        (a..=b).fold(a, |best, i| if shown(i) > shown(best) + 0.5 { i } else { best })
+    }
+
+    /// The page under a content position, if not in a gap.
+    pub fn page_at_pos(&self, pos: Pos2, content_w: f32) -> Option<usize> {
+        if self.column {
+            return self.page_at(pos.y);
+        }
+        (0..self.tops.len()).find(|&i| self.rect(i, content_w).contains(pos))
+    }
+
+    /// The scroll offset that brings page `i` into view from `offset`: its
+    /// top edge to the top in a column or rows, its left edge to the left
+    /// in a row, the start in page mode.
+    pub fn offset_for(&self, i: usize, offset: Vec2, content_w: f32) -> Vec2 {
+        if i >= self.tops.len() {
+            return offset;
+        }
+        match self.scroll {
+            ScrollMode::Page => Vec2::ZERO,
+            ScrollMode::Horizontal => vec2((self.left(i, content_w) - PAD).max(0.0), offset.y),
+            ScrollMode::Vertical | ScrollMode::Wrapped => vec2(offset.x, self.top_of(i)),
+        }
+    }
+}
+
+/// The horizontal offset in `new` that shows the same spot of the same
+/// page as `offset` did in `old`, for a row of pages.
+pub fn anchor_x(old: &Layout, new: &Layout, offset: f32) -> f32 {
+    let n = old.lefts.len().min(new.lefts.len());
+    if n == 0 {
+        return 0.0;
+    }
+    let p = partition(n, |i| old.lefts[i] + old.sizes[i].x + GAP <= offset).min(n - 1);
+    let frac = (offset - old.lefts[p]) / old.sizes[p].x.max(1.0);
+    (new.lefts[p] + frac * new.sizes[p].x).max(0.0)
 }
 
 /// The vertical offset in `new` that shows the same spot of the same page
@@ -345,6 +545,14 @@ pub struct Mark {
     /// 0-based.
     pub page: usize,
     pub zoom: String,
+    /// The view's quarter turns and scroll and spread modes, as pdf.js's
+    /// view history keeps them.
+    #[serde(default)]
+    pub turns: u8,
+    #[serde(default)]
+    pub scroll: ScrollMode,
+    #[serde(default)]
+    pub spread: Spread,
 }
 
 /// Records `mark` as the most recent, keeping the newest [`REMEMBER`].
@@ -699,14 +907,18 @@ struct Open {
     page_text: String,
     find: Find,
     sel: Selecting,
-    /// Quarter turns clockwise the pages are shown at (view only), and
-    /// the turns last laid out.
+    /// Quarter turns clockwise the pages are shown at (view only).
     turns: u8,
-    laid_turns: u8,
     /// The hand tool: dragging pans instead of selecting text.
     hand: bool,
     /// Tools ▸ Presentation Mode was chosen this frame.
     present: bool,
+    scroll: ScrollMode,
+    spread: Spread,
+    /// What the layout was last made from, to make it again on a change.
+    laid: Option<(f32, u8, ScrollMode, Spread, usize, i32)>,
+    /// Wheel movement past the end of the page in page mode.
+    page_wheel: f32,
 }
 
 impl Open {
@@ -739,11 +951,30 @@ impl Open {
             page_text: "1".into(),
             find: Find::default(),
             sel: Selecting::default(),
-            turns: 0,
-            laid_turns: 0,
+            turns: mark.map_or(0, |m| m.turns % 4),
             hand: false,
             present: false,
+            scroll: mark.map_or_else(ScrollMode::default, |m| m.scroll),
+            spread: mark.map_or_else(Spread::default, |m| m.spread),
+            laid: None,
+            page_wheel: 0.0,
         }
+    }
+
+    /// The first page of the spread after (`step` 1) or before (-1) the
+    /// current page's.
+    fn spread_step(&self, step: isize) -> usize {
+        let groups = spreads(self.count(), self.spread);
+        let at = groups.iter().position(|g| g.contains(&self.current)).unwrap_or(0) as isize;
+        let k = (at + step).clamp(0, groups.len() as isize - 1).max(0) as usize;
+        groups.get(k).map_or(0, |g| g.start)
+    }
+
+    /// Switches the scroll or spread mode, keeping the current page.
+    fn set_modes(&mut self, scroll: ScrollMode, spread: Spread) {
+        self.scroll = scroll;
+        self.spread = spread;
+        self.restore = Some(self.current);
     }
 
     /// The pages' sizes as shown, turned.
@@ -765,7 +996,7 @@ impl Open {
     }
 
     fn mark(&self) -> Mark {
-        Mark { id: self.id.clone(), page: self.current, zoom: self.zoom.key() }
+        Mark { id: self.id.clone(), page: self.current, zoom: self.zoom.key(), turns: self.turns, scroll: self.scroll, spread: self.spread }
     }
 
     fn poll(&mut self, ctx: &egui::Context) {
@@ -829,8 +1060,13 @@ impl Open {
             return;
         }
         let page = page.min(self.count() - 1);
-        self.jump = Some(vec2(self.offset.x, self.layout.top_of(page)));
         self.current = page;
+        if self.scroll == ScrollMode::Page {
+            // Laid out again around the new page, from the top.
+            self.restore = Some(page);
+        } else {
+            self.jump = Some(self.layout.offset_for(page, self.offset, self.layout.content_width(self.view.x)));
+        }
     }
 
     fn scroll_by(&mut self, dy: f32) {
@@ -863,8 +1099,8 @@ impl Open {
                 self.find.current = None;
                 self.find.sent = None;
             }
-            PdfKey::NextPage => self.go_to(self.current + 1),
-            PdfKey::PrevPage => self.go_to(self.current.saturating_sub(1)),
+            PdfKey::NextPage => self.go_to(self.spread_step(1)),
+            PdfKey::PrevPage => self.go_to(self.spread_step(-1)),
             PdfKey::First => self.go_to(0),
             PdfKey::Last => self.go_to(self.count().saturating_sub(1)),
             PdfKey::Lines(n) => self.scroll_by(n * 40.0),
@@ -884,15 +1120,26 @@ impl Open {
 
     /// Scrolls so the current find hit shows, a third of the way down.
     fn reveal_hit(&mut self) {
-        let Some(hit) = self.find.current.and_then(|c| self.find.hits.get(c)) else { return };
-        let Some(&top) = self.layout.tops.get(hit.page) else { return };
+        let Some(hit) = self.find.current.and_then(|c| self.find.hits.get(c)).cloned() else { return };
+        if hit.page >= self.count() {
+            return;
+        }
+        if self.scroll == ScrollMode::Page && self.layout.sizes.get(hit.page).is_none_or(|s| s.x <= 0.0) {
+            self.go_to(hit.page);
+            return;
+        }
+        let cw = self.layout.content_width(self.view.x);
+        let page = self.layout.rect(hit.page, cw);
         let k = self.zoom_factor() * UNIT;
-        let r = hit.rects.first().copied().unwrap_or_default();
-        let y = top + r.y as f32 * k;
-        let (view_top, view_bottom) = (self.offset.y, self.offset.y + self.view.y);
-        if y < view_top + 20.0 || y + r.h as f32 * k > view_bottom - 20.0 {
-            let max = (self.layout.height - self.view.y).max(0.0);
-            self.jump = Some(vec2(self.offset.x, (y - self.view.y / 3.0).clamp(0.0, max)));
+        let raw = (f64::from(self.sizes[hit.page].0), f64::from(self.sizes[hit.page].1));
+        let r = turn_rect(&hit.rects.first().copied().unwrap_or_default(), raw, self.turns);
+        let spot = Rect::from_min_size(page.min + vec2(r.x as f32 * k, r.y as f32 * k), vec2(r.w as f32 * k, r.h as f32 * k));
+        let view = Rect::from_min_size(self.offset.to_pos2(), self.view).shrink(20.0);
+        if !view.contains_rect(spot) {
+            let max = vec2((cw - self.view.x).max(0.0), (self.layout.height - self.view.y).max(0.0));
+            let x = if spot.left() < view.left() || spot.right() > view.right() { spot.left() - self.view.x / 3.0 } else { self.offset.x };
+            let y = if spot.top() < view.top() || spot.bottom() > view.bottom() { spot.top() - self.view.y / 3.0 } else { self.offset.y };
+            self.jump = Some(vec2(x.clamp(0.0, max.x), y.clamp(0.0, max.y)));
         }
         self.current = hit.page;
     }
@@ -940,17 +1187,29 @@ impl Open {
     fn relayout(&mut self, view: Vec2) {
         self.view = view;
         let sizes = self.shown_sizes();
-        let reference = sizes.get(self.current).copied().unwrap_or((612.0, 792.0));
+        // The zoom fits the current page's spread (pdf.js measures the
+        // spread for Page Fit and Page Width).
+        let groups = spreads(sizes.len(), self.spread);
+        let group = groups.iter().position(|g| g.contains(&self.current)).unwrap_or(0);
+        let reference = groups.get(group).map_or((612.0, 792.0), |g| {
+            let w = g.clone().map(|i| sizes[i].0).sum::<f32>() + SPREAD_GAP / UNIT * (g.len() - 1) as f32;
+            (w, g.clone().map(|i| sizes[i].1).fold(0.0, f32::max))
+        });
         let scale = self.zoom.resolve(reference, view);
-        if (scale - self.scale).abs() < 1e-4 && self.layout.tops.len() == self.sizes.len() && self.laid_turns == self.turns {
+        let page_group = if self.scroll == ScrollMode::Page { group } else { 0 };
+        let wrap_w = if self.scroll == ScrollMode::Wrapped { view.x.round() as i32 } else { 0 };
+        let sig = (scale, self.turns, self.scroll, self.spread, page_group, wrap_w);
+        if self.laid.is_some_and(|l| (l.0 - scale).abs() < 1e-4 && (l.1, l.2, l.3, l.4, l.5) == (sig.1, sig.2, sig.3, sig.4, sig.5)) && self.layout.tops.len() == self.sizes.len() {
             return;
         }
-        self.laid_turns = self.turns;
-        let new = layout(&sizes, scale, GAP);
-        if self.scale > 0.0 && self.jump.is_none() && !self.layout.tops.is_empty() {
+        let same_arrangement = self.laid.is_some_and(|l| (l.1, l.2, l.3, l.4) == (sig.1, sig.2, sig.3, sig.4));
+        self.laid = Some(sig);
+        let new = arrange(&sizes, scale, GAP, Arrange { scroll: self.scroll, spread: self.spread, view_w: view.x, page: self.current });
+        if same_arrangement && self.scale > 0.0 && self.jump.is_none() && !self.layout.tops.is_empty() {
             let ratio = scale / self.scale;
             self.jump = Some(match self.zoom_at.take() {
                 Some(at) => (self.offset + at) * ratio - at,
+                None if self.scroll == ScrollMode::Horizontal => vec2(anchor_x(&self.layout, &new, self.offset.x), self.offset.y * ratio),
                 None => vec2(self.offset.x * ratio, anchor(&self.layout, &new, self.offset.y)),
             });
         }
@@ -1137,9 +1396,11 @@ fn pages(o: &mut Open, ui: &mut Ui, area: Rect, jobs: &mut Vec<Job>) {
             o.zoom_at = Some(pos - area.min);
         }
     }
+    // Read before the scroll area takes it.
+    let wheel = ui.input(|i| if i.pointer.hover_pos().is_some_and(|p| area.contains(p)) { i.smooth_scroll_delta.y } else { 0.0 });
     o.relayout(area.size());
     if let Some(p) = o.restore.take() {
-        o.jump = Some(vec2(0.0, o.layout.top_of(p)));
+        o.jump = Some(o.layout.offset_for(p, Vec2::ZERO, o.layout.content_width(area.width())));
     }
     let ppp = ui.ctx().pixels_per_point();
     let key = scale_key(o.scale * UNIT * ppp);
@@ -1160,7 +1421,7 @@ fn pages(o: &mut Open, ui: &mut Ui, area: Rect, jobs: &mut Vec<Job>) {
         let origin = ui.max_rect().min;
         let cw = o.layout.content_width(viewport.width());
         ui.set_min_size(vec2(cw, o.layout.height));
-        let Some((a, b)) = o.layout.visible(viewport.top(), viewport.height()) else { return };
+        let Some((a, b)) = o.layout.visible_in(viewport, cw) else { return };
         let p = ui.painter().clone();
         let page_rect = |o: &Open, i: usize| Rect::from_min_size(origin + vec2(o.layout.left(i, cw), o.layout.tops[i]), o.layout.sizes[i]);
         for i in a..=b {
@@ -1215,7 +1476,7 @@ fn pages(o: &mut Open, ui: &mut Ui, area: Rect, jobs: &mut Vec<Job>) {
         // A point on page `i` as the file shows it, from a screen position.
         let at = |o: &Open, pos: Pos2, page: Option<usize>| -> Option<(usize, (f64, f64))> {
             let c = pos - origin;
-            let i = page.or_else(|| o.layout.page_at(c.y))?;
+            let i = page.or_else(|| o.layout.page_at_pos(c.to_pos2(), cw))?;
             let (w, h) = turn_size(o.sizes[i], turns);
             let x = ((c.x - o.layout.left(i, cw)) / k).clamp(0.0, w);
             let y = ((c.y - o.layout.tops[i]) / k).clamp(0.0, h);
@@ -1224,7 +1485,7 @@ fn pages(o: &mut Open, ui: &mut Ui, area: Rect, jobs: &mut Vec<Job>) {
         };
         if resp.hovered()
             && let Some(pos) = resp.hover_pos()
-            && o.layout.page_at((pos - origin).y).is_some()
+            && o.layout.page_at_pos((pos - origin).to_pos2(), cw).is_some()
         {
             ui.ctx().set_cursor_icon(egui::CursorIcon::Text);
         }
@@ -1250,7 +1511,40 @@ fn pages(o: &mut Open, ui: &mut Ui, area: Rect, jobs: &mut Vec<Job>) {
         }
     });
     o.offset = out.state.clamped_offset();
-    o.current = o.layout.current(o.offset.y, area.height());
+    if o.scroll == ScrollMode::Page {
+        page_wheel(o, wheel, area);
+    } else {
+        let cw = o.layout.content_width(area.width());
+        o.current = o.layout.current_in(Rect::from_min_size(o.offset.to_pos2(), area.size()), cw);
+    }
+}
+
+/// In page mode, the wheel turns the page once the page has scrolled to
+/// its end (or at once when it fits), as pdf.js's page scrolling does.
+fn page_wheel(o: &mut Open, dy: f32, area: Rect) {
+    const TURN: f32 = 60.0;
+    if dy == 0.0 {
+        return;
+    }
+    let max = (o.layout.height - area.height()).max(0.0);
+    let at_top = o.offset.y <= 0.5;
+    let at_end = o.offset.y >= max - 0.5;
+    // egui's wheel is positive upwards.
+    if (dy > 0.0 && !at_top) || (dy < 0.0 && !at_end) || o.page_wheel * dy < 0.0 {
+        o.page_wheel = 0.0;
+        if !((dy > 0.0 && at_top) || (dy < 0.0 && at_end)) {
+            return;
+        }
+    }
+    o.page_wheel += dy;
+    if o.page_wheel.abs() >= TURN {
+        let step = if o.page_wheel > 0.0 { -1 } else { 1 };
+        o.page_wheel = 0.0;
+        let to = o.spread_step(step);
+        if to != o.current {
+            o.go_to(to);
+        }
+    }
 }
 
 /// Thumbnails or the outline, down the left side.
@@ -1456,6 +1750,20 @@ fn tools_menu(o: &mut Open, ui: &mut Ui) {
         o.act(PdfKey::Hand(true));
         ui.close();
     }
+    ui.separator();
+    for (mode, label) in [(ScrollMode::Page, "Page Scrolling"), (ScrollMode::Vertical, "Vertical Scrolling"), (ScrollMode::Horizontal, "Horizontal Scrolling"), (ScrollMode::Wrapped, "Wrapped Scrolling")] {
+        if row(ui, label, o.scroll == mode, "") {
+            o.set_modes(mode, o.spread);
+            ui.close();
+        }
+    }
+    ui.separator();
+    for (spread, label) in [(Spread::None, "No Spreads"), (Spread::Odd, "Odd Spreads"), (Spread::Even, "Even Spreads")] {
+        if row(ui, label, o.spread == spread, "") {
+            o.set_modes(o.scroll, spread);
+            ui.close();
+        }
+    }
 }
 
 /// The find bar under the top bar's right end: the query, previous/next,
@@ -1563,10 +1871,74 @@ mod tests {
         assert_eq!(layout(&[], 1.0, GAP).height, 2.0 * PAD);
         // Pages centre in a wider view.
         assert_eq!(l.left(0, 1000.0), 194.0);
-        assert_eq!(l.left(0, 100.0), PAD);
+        // The widest page sits at the padding; narrower ones centre on it.
+        assert_eq!(l.left(1, l.content_width(100.0)), PAD);
+        assert_eq!(l.left(0, l.content_width(100.0)), PAD + 90.0);
         assert_eq!(l.content_width(500.0), 792.0 + 2.0 * PAD);
         assert_eq!(l.top_of(1), 792.0 + GAP);
         assert_eq!(l.top_of(9), 0.0);
+    }
+
+    #[test]
+    fn spreads_pair_pages() {
+        let r = |v: Vec<std::ops::Range<usize>>| v.into_iter().map(|g| (g.start, g.end)).collect::<Vec<_>>();
+        assert_eq!(r(spreads(3, Spread::None)), [(0, 1), (1, 2), (2, 3)]);
+        assert_eq!(r(spreads(5, Spread::Odd)), [(0, 2), (2, 4), (4, 5)]);
+        assert_eq!(r(spreads(5, Spread::Even)), [(0, 1), (1, 3), (3, 5)]);
+        assert_eq!(r(spreads(0, Spread::Even)), []);
+    }
+
+    #[test]
+    fn scroll_and_spread_modes_arrange_pages() {
+        // Pages of 75 points are 100 screen points at 100%.
+        let pages = [(75.0, 75.0); 5];
+        let how = |scroll, spread, view_w, page| Arrange { scroll, spread, view_w, page };
+        // Odd spreads in a column: rows of two side by side.
+        let l = arrange(&pages, 1.0, GAP, how(ScrollMode::Vertical, Spread::Odd, 0.0, 0));
+        assert_eq!(l.tops[0], l.tops[1]);
+        assert_eq!(l.lefts[1], l.lefts[0] + 100.0 + SPREAD_GAP);
+        assert_eq!(l.tops[2], PAD + 100.0 + GAP);
+        assert_eq!(l.width, 200.0 + SPREAD_GAP);
+        // The odd last page is centred under the pairs.
+        assert_eq!(l.lefts[4], PAD + (l.width - 100.0) / 2.0);
+        assert!(!l.column);
+        // Horizontal: one row.
+        let h = arrange(&pages, 1.0, GAP, how(ScrollMode::Horizontal, Spread::None, 0.0, 0));
+        assert!(h.tops.iter().all(|&t| t == PAD));
+        assert_eq!(h.lefts[3], PAD + 3.0 * (100.0 + GAP));
+        assert_eq!(h.height, 100.0 + 2.0 * PAD);
+        assert_eq!(h.offset_for(3, vec2(0.0, 7.0), h.content_width(300.0)), vec2(3.0 * (100.0 + GAP), 7.0));
+        // Wrapped: as many as fit in the view's width per row.
+        let room = 2.0 * PAD + SCROLLBAR + 100.0 * 2.0 + GAP;
+        let w = arrange(&pages, 1.0, GAP, how(ScrollMode::Wrapped, Spread::None, room, 0));
+        assert_eq!(w.tops[0], w.tops[1]);
+        assert_eq!(w.tops[2], PAD + 100.0 + GAP);
+        assert_eq!(w.tops[4], PAD + 2.0 * (100.0 + GAP));
+        // Page mode: only the spread of the page asked for.
+        let p = arrange(&pages, 1.0, GAP, how(ScrollMode::Page, Spread::Even, 0.0, 2));
+        assert_eq!((p.sizes[1].x, p.sizes[2].x), (100.0, 100.0));
+        assert_eq!((p.sizes[0].x, p.sizes[3].x), (0.0, 0.0));
+        assert_eq!(p.tops[1], PAD);
+        let cw = p.content_width(400.0);
+        assert_eq!(p.visible_in(Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0)), cw), Some((1, 2)));
+        assert_eq!(p.offset_for(2, vec2(5.0, 5.0), cw), Vec2::ZERO);
+        // Finding pages by position, and the page showing most.
+        let cw = l.content_width(300.0);
+        let right = l.rect(1, cw).center();
+        assert_eq!(l.page_at_pos(right, cw), Some(1));
+        assert_eq!(l.current_in(Rect::from_min_size(Pos2::new(0.0, 150.0), vec2(300.0, 100.0)), cw), 2);
+        let wide = h.content_width(250.0);
+        assert_eq!(h.current_in(Rect::from_min_size(Pos2::new(230.0, 0.0), vec2(250.0, 130.0)), wide), 2);
+    }
+
+    #[test]
+    fn horizontal_zoom_keeps_the_reading_position() {
+        let pages = vec![LETTER; 4];
+        let how = Arrange { scroll: ScrollMode::Horizontal, ..Default::default() };
+        let a = arrange(&pages, 1.0, GAP, how);
+        let b = arrange(&pages, 2.0, GAP, how);
+        let x = a.lefts[2] + a.sizes[2].x / 4.0;
+        assert!((anchor_x(&a, &b, x) - (b.lefts[2] + b.sizes[2].x / 4.0)).abs() < 1e-3);
     }
 
     #[test]
@@ -1679,11 +2051,11 @@ mod tests {
     fn marks_keep_the_newest_twenty() {
         let mut m = Vec::new();
         for n in 0..25 {
-            remember(&mut m, Mark { id: format!("I{n}"), page: n, zoom: "auto".into() });
+            remember(&mut m, Mark { id: format!("I{n}"), page: n, zoom: "auto".into(), turns: 0, scroll: ScrollMode::Vertical, spread: Spread::None });
         }
         assert_eq!(m.len(), REMEMBER);
         assert_eq!(m[0].id, "I5");
-        remember(&mut m, Mark { id: "I10".into(), page: 99, zoom: "1.5".into() });
+        remember(&mut m, Mark { id: "I10".into(), page: 99, zoom: "1.5".into(), turns: 1, scroll: ScrollMode::Wrapped, spread: Spread::Odd });
         assert_eq!(m.len(), REMEMBER);
         assert_eq!(m.last().unwrap().page, 99);
         assert_eq!(m.iter().filter(|x| x.id == "I10").count(), 1);
