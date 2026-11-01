@@ -392,6 +392,18 @@ Metadata backups follow Eagle's timing (see [Backups](library-format.md#backups)
 
 Metadata backups have no setting: falcon backs up after a change the way Eagle does (Eagle has no preference for it either). An earlier "Back up metadata on change" checkbox that did nothing was removed; old saved state that has it still loads.
 
+## Status messages
+
+Short notes appear in a small rounded box at the bottom centre of the window (in the middle of the picture while the viewer is open). Only one shows at a time, and a new note replaces the old one. A note stays up while the pointer is over it.
+
+- Quick confirmations, such as anything copied, a rating or "Refreshed", go after about a second.
+- Other notes stay for three seconds, or longer when the text is long (one second less over the viewer).
+- A failure ("Could not save", "Export failed" and the like) has a red mark before the text and stays for at least six seconds.
+- Notes for actions that can be undone have an Undo button at the right and stay for at least five seconds. Clicking it undoes the last step, as ⌘Z does, and closes the note. It is offered after moving items to the Trash, removing items from a folder, adding or dropping items on a folder, clearing or pasting tags, and renaming, removing or merging tags. Restoring from the Trash and permanent deletes have no Undo button.
+- Notes about adding or moving items to a folder end with the folder's name as a link. Clicking it opens that folder.
+
+The import error box and the progress bars are separate and unchanged.
+
 ## Several libraries
 
 Falcon can keep several libraries open in one window and switch between them; Eagle can't. Each open library is a workspace with all of its own state: where you are (scope, back and forward history, search, filters, sort and layout), the selection, the viewer, its undo and redo stacks, open dialogs and its image caches. Switching keeps all of it. Global state stays shared: Preferences, shortcuts, the recent list, zoom, panel visibility, the collect window and the HTTP API server.
