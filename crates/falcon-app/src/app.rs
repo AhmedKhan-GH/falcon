@@ -1119,13 +1119,15 @@ impl App {
                 self.ws.actions.push(Action::Trash(ids, true));
             }
         }
-        let step: isize = if self.ws.viewer.is_some() {
+        if self.ws.viewer.is_some() {
             match (left || up, right || down) {
-                (true, _) => -1,
-                (_, true) => 1,
-                _ => 0,
+                (true, _) => self.viewer_step(-1),
+                (_, true) => self.viewer_step(1),
+                _ => {}
             }
-        } else {
+            return;
+        }
+        let step: isize = {
             let c = self.ws.columns as isize;
             match (left, right, up, down) {
                 (true, ..) => -1,
@@ -1136,20 +1138,35 @@ impl App {
             }
         };
         if step != 0 && !self.ws.order.is_empty() {
-            let cur = self.ws.viewer.as_ref().or(self.ws.selected.last());
+            let cur = self.ws.selected.last();
             let pos = cur.and_then(|c| self.ws.order.iter().position(|x| x == c));
             let next = match pos {
                 Some(p) => (p as isize + step).clamp(0, self.ws.order.len() as isize - 1) as usize,
                 None => 0,
             };
             let id = self.ws.order[next].clone();
-            if self.ws.viewer.is_some() {
-                self.ws.viewer = Some(id.clone());
-            }
             self.ws.selected = vec![id.clone()];
             self.ws.anchor = Some(id.clone());
             self.ws.scroll_to = Some(id);
         }
+    }
+
+    /// Shows the previous (`-1`) or next (`1`) item of the grid in the
+    /// viewer; the selection follows.
+    fn viewer_step(&mut self, step: isize) {
+        let Some(cur) = self.ws.viewer.clone() else { return };
+        if self.ws.order.is_empty() {
+            return;
+        }
+        let next = match self.ws.order.iter().position(|x| *x == cur) {
+            Some(p) => (p as isize + step).clamp(0, self.ws.order.len() as isize - 1) as usize,
+            None => 0,
+        };
+        let id = self.ws.order[next].clone();
+        self.ws.viewer = Some(id.clone());
+        self.ws.selected = vec![id.clone()];
+        self.ws.anchor = Some(id.clone());
+        self.ws.scroll_to = Some(id);
     }
 }
 

@@ -59,10 +59,10 @@ fn sample(item: &Item) -> String {
 }
 
 /// The bar every viewer shares: the panels button, back, the counter and
-/// the item's name at the left, the open button at the right. Returns
-/// where the name starts and the x left of what was drawn on the right, so
-/// a viewer can add its own controls there before `bar_name` fits the name
-/// into what is left.
+/// the item's name at the left; open, previous and next at the right.
+/// Returns where the name starts and the x left of what was drawn on the
+/// right, so a viewer can add its own controls there before `bar_name`
+/// fits the name into what is left.
 pub(super) fn bar_shell(app: &mut App, ui: &mut Ui, item: &Item, bar: Rect) -> (f32, f32) {
     let p = ui.painter().clone();
     p.rect_filled(bar, 0.0, t::p().main);
@@ -70,6 +70,7 @@ pub(super) fn bar_shell(app: &mut App, ui: &mut Ui, item: &Item, bar: Rect) -> (
     let cy = bar.center().y;
     // Leave room for the window buttons only when the bar starts at the
     // window's left edge (no sidebar beside it).
+    let counter = logic::viewer_counter(&app.ws.order, &item.id);
     let mut x = bar.left() + logic::bar_inset(bar.left() <= ui.ctx().content_rect().left() + 1.0);
     app.panels_button(ui, Pos2::new(x, cy));
     x += 28.0;
@@ -78,12 +79,20 @@ pub(super) fn bar_shell(app: &mut App, ui: &mut Ui, item: &Item, bar: Rect) -> (
     }
     x += 22.0;
     // Eagle's "n / total" counter.
-    if let Some((n, total)) = logic::viewer_counter(&app.ws.order, &item.id) {
+    if let Some((n, total)) = counter {
         let g = ui.painter().layout_no_wrap(format!("{n} / {total}"), mono(12.0), t::p().text_value);
         p.galley(Pos2::new(x, cy - g.size().y / 2.0), g.clone(), t::p().text_value);
         x += g.size().x + 14.0;
     }
-    let mut right = bar.right() - 12.0;
+    // Previous and next at the right end, as in Eagle.
+    let (first, last) = counter.map_or((true, true), |(n, total)| (n == 1, n == total));
+    if icon_button(ui, Pos2::new(bar.right() - 22.0, cy), ic::CARET_RIGHT, 16.0, !last, "Next (→)").clicked() {
+        app.viewer_step(1);
+    }
+    if icon_button(ui, Pos2::new(bar.right() - 48.0, cy), ic::CARET_LEFT, 16.0, !first, "Previous (←)").clicked() {
+        app.viewer_step(-1);
+    }
+    let mut right = bar.right() - 68.0;
     if app.ws.view.id == item.id {
         let file = app.ws.view.file.clone();
         right = app.viewer_open_button(ui, right, cy, &file);
