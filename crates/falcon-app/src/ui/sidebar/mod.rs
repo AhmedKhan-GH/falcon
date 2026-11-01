@@ -705,9 +705,16 @@ impl App {
                 self.ws.renaming = Some((f.id.clone(), f.name.clone()));
             }
             if ui.button("Copy Link").clicked() {
-                ui.ctx().copy_text(crate::links::folder_link(&f.id));
+                ui.ctx().copy_text(crate::links::api_folder_link(self.api_link_port(), &f.id));
                 self.flash_brief("Link copied");
             }
+            crate::ui::menus::search::submenu(ui, "Copy", |ui| {
+                if ui.button("Eagle Link").clicked() {
+                    ui.ctx().copy_text(crate::links::folder_link(&f.id));
+                    self.flash_brief("Link copied");
+                    ui.close();
+                }
+            });
             self.folder_menu_extras(ui, lib, f);
             ui.separator();
             self.expand_menu(ui, &lib.metadata.folders, &f.id);

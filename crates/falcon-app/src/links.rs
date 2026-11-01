@@ -33,12 +33,12 @@ pub fn parse(url: &str) -> Option<Link> {
     }
 }
 
-/// The link Copy Link puts on the clipboard for a folder.
+/// The link Copy ▸ Eagle Link puts on the clipboard for a folder.
 pub fn folder_link(id: &str) -> String {
     format!("eagle://folder/{id}")
 }
 
-/// The link Copy Link puts on the clipboard for a smart folder.
+/// The link Copy ▸ Eagle Link puts on the clipboard for a smart folder.
 pub fn smart_link(id: &str) -> String {
     format!("eagle://smart-folder/{id}")
 }
@@ -52,6 +52,18 @@ pub fn item_link(id: &str) -> String {
 /// it: the API answers it with a redirect to [`item_link`].
 pub fn api_item_link(port: u16, id: &str) -> String {
     format!("http://localhost:{port}/item?id={id}")
+}
+
+/// A folder's link through the local API on `port`, as Copy Link writes
+/// it: the API answers it with a redirect to [`folder_link`].
+pub fn api_folder_link(port: u16, id: &str) -> String {
+    format!("http://localhost:{port}/folder?id={id}")
+}
+
+/// A smart folder's link through the local API on `port`; the API answers
+/// it with a redirect to [`smart_link`].
+pub fn api_smart_link(port: u16, id: &str) -> String {
+    format!("http://localhost:{port}/smart-folder?id={id}")
 }
 
 #[cfg(target_os = "macos")]
@@ -184,5 +196,7 @@ mod tests {
         assert_eq!(item_link("M3QSGJNQTC2DG"), "eagle://item/M3QSGJNQTC2DG");
         assert_eq!(parse(&item_link("A1")), Some(Link::Item("A1".into())));
         assert_eq!(api_item_link(41600, "A1"), "http://localhost:41600/item?id=A1");
+        assert_eq!(api_folder_link(41600, "L1"), "http://localhost:41600/folder?id=L1");
+        assert_eq!(api_smart_link(41600, "S1"), "http://localhost:41600/smart-folder?id=S1");
     }
 }

@@ -561,8 +561,17 @@ impl App {
                 self.ws.org.smart_rename = Some((sf.id.clone(), sf.name.clone()));
             }
             if !group && ui.button(tr("Copy Link")).clicked() {
-                ui.ctx().copy_text(crate::links::smart_link(&sf.id));
+                ui.ctx().copy_text(crate::links::api_smart_link(self.api_link_port(), &sf.id));
                 self.flash_brief(tr("Link copied"));
+            }
+            if !group {
+                crate::ui::menus::search::submenu(ui, tr("Copy"), |ui| {
+                    if ui.button(tr("Eagle Link")).clicked() {
+                        ui.ctx().copy_text(crate::links::smart_link(&sf.id));
+                        self.flash_brief(tr("Link copied"));
+                        ui.close();
+                    }
+                });
             }
             // A group has no rules to edit.
             if !group && ui.button(tr("Edit Rules…")).clicked() {

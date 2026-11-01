@@ -385,7 +385,7 @@ impl App {
 
     /// The port Copy Link names: the running API's, else the first one
     /// Preferences sets (the link works once the API is on).
-    fn api_link_port(&self) -> u16 {
+    pub(crate) fn api_link_port(&self) -> u16 {
         self.server.as_ref().map(|h| h.port).or_else(|| self.prefs.api_ports().map(|r| *r.start())).unwrap_or(falcon_server::DEFAULT_PORT)
     }
 
