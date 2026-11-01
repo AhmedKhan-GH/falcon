@@ -16,4 +16,5 @@ pub(crate) mod confirm;
 pub(crate) mod history;
 pub(crate) mod smart;
 pub(crate) mod tools;
+pub(crate) mod webp_convert;
 pub(crate) mod add_to_folders;
