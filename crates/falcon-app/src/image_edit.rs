@@ -1,11 +1,11 @@
 //! Item edits beyond metadata: custom thumbnails, refreshing thumbnails and
-//! palettes, folder covers, rotate and crop, and region comments. Requested
+//! palettes, folder covers, rotate, flip and crop, and region comments. Requested
 //! as one [`Op`] action (`Action::Edit`) and applied with the library locked.
 //! This file is a child module of `app`.
 
 use eframe::egui::{self, Key, Modifiers, Rect, Ui};
 use falcon_library::model::{Comment, Item};
-use falcon_library::transform::{self, PixelRect};
+use falcon_library::transform::{self, Flip, PixelRect};
 use falcon_library::{Library, thumbnail};
 
 use super::{Action, App};
@@ -27,6 +27,8 @@ pub enum Op {
     UpdateComment(String, Comment),
     /// Item id, comment id.
     DeleteComment(String, String),
+    /// Mirror the items' originals in place.
+    Flip(Vec<String>, Flip),
 }
 
 impl Op {
@@ -43,6 +45,8 @@ impl Op {
             Op::AddComment(..) => "Add comment".into(),
             Op::UpdateComment(..) => "Edit comment".into(),
             Op::DeleteComment(..) => "Delete comment".into(),
+            Op::Flip(_, Flip::Horizontal) => "Flip horizontally".into(),
+            Op::Flip(_, Flip::Vertical) => "Flip vertically".into(),
         }
     }
 }
@@ -103,13 +107,23 @@ impl App {
         if ui.button("Refresh Palette").clicked() {
             self.ws.actions.push(Action::Edit(Op::RefreshPalette(targets.to_vec())));
         }
-        let rotatable: Vec<String> = targets.iter().filter(|id| lib.item(id).is_some_and(|i| transform::can_rotate(&i.ext))).cloned().collect();
+        let ext_of = |id: &str| lib.item(id).map(|i| i.ext.clone());
+        let rotatable = editable(targets, ext_of, transform::can_rotate);
         if !rotatable.is_empty() {
             if ui.button("Rotate Left").clicked() {
                 self.ws.actions.push(Action::Edit(Op::Rotate(rotatable.clone(), -1)));
             }
             if ui.button("Rotate Right").clicked() {
                 self.ws.actions.push(Action::Edit(Op::Rotate(rotatable, 1)));
+            }
+        }
+        let flippable = editable(targets, ext_of, transform::can_flip);
+        if !flippable.is_empty() {
+            if ui.button("Flip Horizontal").clicked() {
+                self.ws.actions.push(Action::Edit(Op::Flip(flippable.clone(), Flip::Horizontal)));
+            }
+            if ui.button("Flip Vertical").clicked() {
+                self.ws.actions.push(Action::Edit(Op::Flip(flippable, Flip::Vertical)));
             }
         }
         if single && transform::can_crop(&item.ext) && ui.button("Crop…").clicked() {
@@ -182,6 +196,16 @@ impl App {
                 }
                 r
             }
+            Op::Flip(ids, flip) => {
+                let mut r = Ok(());
+                for id in &ids {
+                    if lib.item(id).is_some_and(|i| transform::can_flip(&i.ext)) {
+                        r = r.and(lib.flip_item(id, flip));
+                        self.ws.loader.forget(id);
+                    }
+                }
+                r
+            }
             Op::Crop(id, rect) => {
                 let r = lib.crop_item(&id, rect);
                 self.ws.loader.forget(&id);
@@ -195,7 +219,8 @@ impl App {
 
     /// Keys for the viewer's tools, read before the app's own shortcuts so
     /// Esc and Enter act on the crop tool rather than close the viewer: C
-    /// toggles comment mode, ⇧R rotates left.
+    /// toggles comment mode, ⇧R rotates left, ⇧F flips horizontally (as
+    /// Eagle's flip shortcut does).
     pub(super) fn edit_keys(&mut self, ctx: &egui::Context) {
         if self.ws.viewer.is_none() {
             self.ws.tools.crop = None;
@@ -235,13 +260,16 @@ impl App {
             }
             return;
         }
-        let (c, rotate) = ctx.input_mut(|i| (i.consume_key(none, Key::C), i.consume_key(Modifiers::SHIFT, Key::R)));
+        let (c, rotate, flip) = ctx.input_mut(|i| (i.consume_key(none, Key::C), i.consume_key(Modifiers::SHIFT, Key::R), i.consume_key(Modifiers::SHIFT, Key::F)));
         if c {
             self.ws.tools.comment_mode = !self.ws.tools.comment_mode;
             self.ws.tools.draft = None;
         }
         if rotate && let Some(id) = self.ws.viewer.clone() {
             self.ws.actions.push(Action::Edit(Op::Rotate(vec![id], -1)));
+        }
+        if flip && let Some(id) = self.ws.viewer.clone() {
+            self.ws.actions.push(Action::Edit(Op::Flip(vec![id], Flip::Horizontal)));
         }
         if self.ws.tools.comment_mode && ctx.input_mut(|i| i.consume_key(none, Key::Escape)) {
             self.ws.tools.comment_mode = false;
@@ -277,5 +305,45 @@ impl App {
         }
         let x = self.comment_button(ui, item, x, cy);
         self.rotate_crop_buttons(ui, item, x, cy);
+    }
+}
+
+/// The targets whose format `allow` accepts (`can_rotate`, `can_flip`);
+/// `ext_of` looks an item's extension up.
+pub fn editable(targets: &[String], ext_of: impl Fn(&str) -> Option<String>, allow: fn(&str) -> bool) -> Vec<String> {
+    targets.iter().filter(|id| ext_of(id).is_some_and(|e| allow(&e))).cloned().collect()
+}
+
+/// The mirror a click on the viewer's flip button asks for: horizontal,
+/// or vertical with ⇧ held (Eagle).
+pub fn flip_for_click(shift: bool) -> Flip {
+    if shift { Flip::Vertical } else { Flip::Horizontal }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn flip_targets_follow_the_format() {
+        let ext_of = |id: &str| match id {
+            "a" => Some("JPG".to_string()),
+            "b" => Some("gif".to_string()),
+            "c" => Some("webp".to_string()),
+            "d" => Some("avif".to_string()),
+            "e" => Some("tex".to_string()),
+            _ => None,
+        };
+        let ids: Vec<String> = ["a", "b", "c", "d", "e", "gone"].map(String::from).to_vec();
+        assert_eq!(editable(&ids, ext_of, transform::can_flip), ["a", "c"]);
+        assert_eq!(editable(&ids, ext_of, transform::can_rotate), ["a", "c"]);
+        assert!(editable(&[], ext_of, transform::can_flip).is_empty());
+    }
+
+    #[test]
+    fn shift_click_flips_vertically() {
+        assert_eq!(flip_for_click(false), Flip::Horizontal);
+        assert_eq!(flip_for_click(true), Flip::Vertical);
+        assert_eq!(Op::Flip(vec![], Flip::Vertical).label(), "Flip vertically");
     }
 }

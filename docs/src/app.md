@@ -18,8 +18,8 @@
 | Filter bar | Colour (presets, hex value, accuracy, grayscale), tags, folders, shape, rating, type, notes, URL, date, duration, camera and font (see below), and saved filters |
 | Grid | Four layouts. **Waterfall** (the default): equal columns, each card keeping its image's shape. **Justified**: rows of equal height. **Grid**: square cards. **List**: rows showing type, size, dimensions and date. Cards have type badges. Supports multi-select, drag (inside the app, or out to Finder and other apps), a context menu and a hover preview (see below) |
 | Inspector | **One item:** preview, palette (click a colour to search for it), editable title, notes and URL, tags, folders, comments (edit and delete; click a region comment to show it, or a timed comment to play the video from its moment), rating and properties (with duration, camera facts from `rawMetas`, and font family, style, PostScript name, version and glyph count when the item has them). **Several items:** a preview stack, shared tags, add a tag to all, add all to a folder, a shared rating, trash all |
-| Viewer | Zoom around the pointer, pan, fit (0), actual size (1), + and −, animated GIFs, and full-size QuickLook renders. Video plays with a control bar and timed comments, audio plays over its waveform and fonts show a live specimen; images take region comments, rotate and crop (see below) |
-| Card menu | Besides Open, Show in Finder and the folder and Trash entries: Set as Folder Cover (inside a folder), Set Custom Thumbnail… and Reset Thumbnail, Refresh Thumbnail, Refresh Palette, Rotate Left and Right, and Crop… (opens the viewer with the crop tool) |
+| Viewer | Zoom around the pointer, pan, fit (0), actual size (1), + and −, animated GIFs, and full-size QuickLook renders. Video plays with a control bar and timed comments, audio plays over its waveform and fonts show a live specimen; images take region comments, rotate, flip and crop (see below) |
+| Card menu | Besides Open, Show in Finder and the folder and Trash entries: Set as Folder Cover (inside a folder), Set Custom Thumbnail… and Reset Thumbnail, Refresh Thumbnail, Refresh Palette, Rotate Left and Right, Flip Horizontal and Vertical, and Crop… (opens the viewer with the crop tool) |
 | Folder view | Cards for the folder's subfolders above its items, each with its cover, name and counts. Click one to open it |
 | All Tags | A tag manager with a filter, starred tags, rename, merge and delete, grouped A-Z or by tag group |
 | Duplicates | Finds identical files and similar pictures, grouped, with Select All but First and Move to Trash (see below) |
@@ -134,6 +134,7 @@ These are the defaults. All but the arrows, Esc and Z can be changed under Prefe
 | ⌘, | Preferences |
 | C | In the viewer, turn comment mode on or off (Esc also leaves it) |
 | ⇧R | In the viewer, rotate the image left |
+| ⇧F | In the viewer, flip the image horizontally |
 | Enter and Esc | While cropping, save (then confirm) or cancel |
 | ⌘← and ⌘→ | With video in the viewer, skip back or forward 2% of its length, at most 10 s |
 | ⌘↑ and ⌘↓ | With video in the viewer, volume up or down 5% |
@@ -367,9 +368,9 @@ What Eagle does, from the viewer's `comment-item` and `comments-container` direc
 | Inspector | Comments listed with their texts; clicking one opens comment mode and scrolls to it | Seen | Listed with edit and delete buttons; clicking a region comment opens the viewer in comment mode |
 | Undo | Deleting a comment offers a short-lived undo notice | Seen | Part of the normal undo history |
 
-## Rotate and crop
+## Rotate, flip and crop
 
-The viewer bar has Rotate Left and Rotate Right for jpg, png, webp and bmp, and Crop for jpg, png and webp. Both rewrite the original (see [Crop and rotate](thumbnails.md#crop-and-rotate-observed)). The crop tool starts on the whole image. Drag its edges or corners, or drag inside it to move it; the size in pixels shows underneath. Save asks for confirmation, then overwrites the original. These edits can't be undone, so they clear the undo history. The rectangle math is in `crop.rs`.
+The viewer bar has Rotate Left and Rotate Right and a Flip button for jpg, png, webp and bmp, and Crop for jpg, png and webp. Flip mirrors horizontally, or vertically with ⇧ held while clicking, and ⇧F flips horizontally, as Eagle's single flip button and `edit.image.flip` shortcut (`Shift + F`) do (seen in `preview-window.js` and `default-preferences.js`). Eagle's button also mirrors a playing video; falcon's appears for images only. The card menu offers Flip Horizontal and Flip Vertical as two entries, for every selected item in those formats. All of these rewrite the original (see [Crop and rotate](thumbnails.md#crop-and-rotate-observed)). The crop tool starts on the whole image. Drag its edges or corners, or drag inside it to move it; the size in pixels shows underneath. Save asks for confirmation, then overwrites the original. These edits can't be undone, so they clear the undo history. The rectangle math is in `crop.rs`.
 
 ## Folder covers
 

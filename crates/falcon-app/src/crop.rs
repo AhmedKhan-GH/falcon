@@ -1,4 +1,4 @@
-//! The viewer's crop tool and rotate buttons. The rectangle math is plain
+//! The viewer's crop tool and rotate and flip buttons. The rectangle math is plain
 //! functions with tests; the drawing is an `impl App` block (this file is a
 //! child module of `app`).
 
@@ -246,6 +246,14 @@ impl App {
             x -= 30.0;
             if icon_button(ui, Pos2::new(x, cy), ic::ARROW_COUNTER_CLOCKWISE, 17.0, true, "Rotate Left (⇧R)").clicked() {
                 self.ws.actions.push(Action::Edit(Op::Rotate(vec![item.id.clone()], -1)));
+            }
+            x -= 30.0;
+        }
+        if transform::can_flip(&item.ext) {
+            let tip = "Flip Horizontal (⇧F)\n⇧-click: Flip Vertical";
+            if icon_button(ui, Pos2::new(x, cy), ic::FLIP_HORIZONTAL, 17.0, true, tip).clicked() {
+                let flip = super::image_edit::flip_for_click(ui.input(|i| i.modifiers.shift));
+                self.ws.actions.push(Action::Edit(Op::Flip(vec![item.id.clone()], flip)));
             }
             x -= 30.0;
         }
