@@ -15,6 +15,7 @@ use crate::colors;
 use crate::icons as ic;
 use crate::loader::{Tier, job_for};
 use crate::toast::{Kind as ToastKind, Life, Toast};
+use crate::locale::{tr, tr_n, trf};
 use crate::logic::{self, Scope};
 use crate::theme::{self as t, font};
 use crate::ui::widgets::{
@@ -51,7 +52,7 @@ impl App {
         p.vline(full.left() + 0.5, full.y_range(), Stroke::new(1.0, t::p().divider));
         let header = Rect::from_min_size(full.min, vec2(full.width(), t::BAR_HEIGHT));
         window_drag(ui, header, "inspector");
-        if icon_button(ui, Pos2::new(full.right() - 24.0, header.center().y), ic::PUSH_PIN, 17.0, true, "Hide inspector")
+        if icon_button(ui, Pos2::new(full.right() - 24.0, header.center().y), ic::PUSH_PIN, 17.0, true, tr("Hide inspector"))
             .clicked()
         {
             self.show_inspector = false;
@@ -128,7 +129,7 @@ impl App {
                 self.ws.folder_edit = Some((id.clone(), saved_name.clone(), saved_desc.clone(), *is_smart));
             }
             let (_, name, desc, _) = self.ws.folder_edit.as_mut().expect("set above");
-            let r = field(ui, name, "Name", 33.0, false, "scope-name");
+            let r = field(ui, name, tr("Name"), 33.0, false, "scope-name");
             if r.lost_focus() {
                 let typed = name.trim();
                 if !typed.is_empty() && typed != saved_name {
@@ -138,7 +139,7 @@ impl App {
                 // Follow renames made elsewhere, and undo.
                 name.clone_from(saved_name);
             }
-            let r = field(ui, desc, "Description", 54.0, true, "scope-desc");
+            let r = field(ui, desc, tr("Description"), 54.0, true, "scope-desc");
             // The description also saves a second after typing stops, as
             // Eagle's does.
             let typed_at = r.id.with("typed-at");
@@ -160,17 +161,17 @@ impl App {
         } else {
             // Other scopes have fixed names.
             let mut name = self.ws.scope.title(&lib.metadata.folders);
-            ui.add_enabled_ui(false, |ui| field(ui, &mut name, "Name", 33.0, false, "scope-name"));
+            ui.add_enabled_ui(false, |ui| field(ui, &mut name, tr("Name"), 33.0, false, "scope-name"));
         }
         divider(ui);
         let items: Vec<&Item> = self.ws.order.iter().filter_map(|id| lib.item(id)).collect();
         let size: u64 = items.iter().map(|i| i.size).sum();
-        if self.fold_heading(ui, Fold::Properties, "Properties") {
-            prop(ui, "Items", &items.len().to_string());
-            prop(ui, "Size", &logic::format_size(size));
+        if self.fold_heading(ui, Fold::Properties, tr("Properties")) {
+            prop(ui, tr("Items"), &items.len().to_string());
+            prop(ui, tr("Size"), &logic::format_size(size));
             if let Some(f) = &folder {
-                prop(ui, "Date Imported", &logic::format_ms(f.modification_time));
-                prop(ui, "Password", if f.password.is_empty() { "None" } else { "Set" });
+                prop(ui, tr("Date Imported"), &logic::format_ms(f.modification_time));
+                prop(ui, tr("Password"), if f.password.is_empty() { tr("None") } else { tr("Set") });
             }
         }
         ui.add_space(4.0);
@@ -200,7 +201,7 @@ impl App {
                 self.ws.frame_jobs.push(j);
             }
         }
-        ui.vertical_centered(|ui| ui.label(RichText::new(format!("{n} items selected")).size(15.0)));
+        ui.vertical_centered(|ui| ui.label(RichText::new(tr_n(n, "{n} item selected", "{n} items selected")).size(15.0)));
 
         // Eagle's multi-selection inspector has no name field, but the note
         // and URL apply to every item: each shows the value they share, or
@@ -214,14 +215,14 @@ impl App {
         }
         let m = self.ws.multi_edit.as_mut().unwrap();
         let mut edits = Vec::new();
-        let notes_hint = if shown.0.is_empty() && items.iter().any(|i| !i.annotation.is_empty()) { "Multiple notes" } else { "Notes..." };
+        let notes_hint = if shown.0.is_empty() && items.iter().any(|i| !i.annotation.is_empty()) { tr("Multiple notes") } else { tr("Notes...") };
         let r = field(ui, &mut m.notes, notes_hint, 54.0, true, "multi-notes");
         if r.lost_focus() && m.notes != m.shown.0 {
             let action = Action::SetNotes(ids.clone(), m.notes.clone());
             m.shown.0 = m.notes.clone();
             edits.push(action);
         }
-        let url_hint = if shown.1.is_empty() && items.iter().any(|i| !i.url.is_empty()) { "Multiple URLs" } else { "http://" };
+        let url_hint = if shown.1.is_empty() && items.iter().any(|i| !i.url.is_empty()) { tr("Multiple URLs") } else { "http://" };
         let r = field(ui, &mut m.url, url_hint, 33.0, false, "multi-url");
         if r.lost_focus() && m.url.trim() != m.shown.1 {
             m.url = m.url.trim().to_string();
@@ -234,12 +235,12 @@ impl App {
         }
 
         // Tags every selected item shares; the picker adds to all.
-        if self.fold_heading(ui, Fold::Tags, "Tags") {
+        if self.fold_heading(ui, Fold::Tags, tr("Tags")) {
             let common = crate::tags::common_tags(&items);
             self.tag_field(ui, lib, &common, &ids);
         }
 
-        if self.fold_heading(ui, Fold::Folders, "Folders") {
+        if self.fold_heading(ui, Fold::Folders, tr("Folders")) {
             // A chip for each folder all of them are in; the × takes all of
             // them out, as for one item.
             let mut remove_folder = None;
@@ -255,7 +256,7 @@ impl App {
                         None => {}
                     }
                 }
-                let add = ui.add(egui::Button::new(RichText::new(format!("{}  Add All to Folder", ic::PLUS)).size(12.0).color(t::p().text_muted)).frame(false));
+                let add = ui.add(egui::Button::new(RichText::new(format!("{}  {}", ic::PLUS, tr("Add All to Folder"))).size(12.0).color(t::p().text_muted)).frame(false));
                 if add.clicked() {
                     self.open_add_to_folders(lib, ids.clone());
                 }
@@ -269,18 +270,18 @@ impl App {
         }
 
         divider(ui);
-        if self.fold_heading(ui, Fold::Properties, "Properties") {
+        if self.fold_heading(ui, Fold::Properties, tr("Properties")) {
             let stars: HashSet<u64> = items.iter().map(|i| i.extra.get("star").and_then(|v| v.as_u64()).unwrap_or(0)).collect();
             let shown = if stars.len() == 1 { stars.into_iter().next().unwrap_or(0) } else { 0 };
             if let Some(star) = rating(ui, shown) {
                 self.push_bulk(ids.len(), Action::BatchRating(ids.clone(), star));
             }
-            prop(ui, "Items", &n.to_string());
-            prop(ui, "Size", &logic::format_size(size));
+            prop(ui, tr("Items"), &n.to_string());
+            prop(ui, tr("Size"), &logic::format_size(size));
         }
         ui.add_space(4.0);
         let trash = self.ws.scope == Scope::Trash;
-        let label = if trash { "Restore All" } else { "Move All to Trash" };
+        let label = if trash { tr("Restore All") } else { tr("Move All to Trash") };
         if wide_button(ui, ic::TRASH, label, true).clicked() {
             let n = ids.len();
             if trash {
@@ -296,11 +297,11 @@ impl App {
     /// the old clipboard.
     pub(crate) fn copy_tags(&mut self, ctx: &egui::Context, tags: Vec<String>) {
         if tags.is_empty() {
-            self.flash_brief("No tags to copy");
+            self.flash_brief(tr("No tags to copy"));
             return;
         }
         ctx.copy_text(tags.join("\n"));
-        self.flash_brief(format!("Copied {}", crate::ui::dialogs::export::plural(tags.len(), "tag")));
+        self.flash_brief(tr_n(tags.len(), "Copied {n} tag", "Copied {n} tags"));
         self.copied_tags = Some(tags);
     }
 
@@ -320,28 +321,28 @@ impl App {
         use crate::shortcuts::Command as C;
         ui.set_min_width(190.0);
         if let Some(tag) = tag {
-            if ui.button("Show Items with This Tag").clicked() {
+            if ui.button(tr("Show Items with This Tag")).clicked() {
                 self.go(Scope::Tag(tag.to_string()));
             }
-            if ui.button("Copy Tag").clicked() {
+            if ui.button(tr("Copy Tag")).clicked() {
                 let ctx = ui.ctx().clone();
                 self.copy_tags(&ctx, vec![tag.to_string()]);
             }
         } else {
             let keys = self.shortcut_text(ui.ctx(), C::CopyTags);
-            if ui.add_enabled(!tags.is_empty(), egui::Button::new("Copy Tags").shortcut_text(keys)).clicked() {
+            if ui.add_enabled(!tags.is_empty(), egui::Button::new(tr("Copy Tags")).shortcut_text(keys)).clicked() {
                 let ctx = ui.ctx().clone();
                 self.copy_tags(&ctx, tags.to_vec());
             }
         }
         let keys = self.shortcut_text(ui.ctx(), C::PasteTags);
-        if ui.add_enabled(self.copied_tags.is_some(), egui::Button::new("Paste Tags").shortcut_text(keys)).clicked() {
+        if ui.add_enabled(self.copied_tags.is_some(), egui::Button::new(tr("Paste Tags")).shortcut_text(keys)).clicked() {
             self.paste_tags(ids.to_vec());
         }
         if tag.is_none() {
             ui.separator();
             let keys = self.shortcut_text(ui.ctx(), C::ClearTags);
-            if ui.add_enabled(!tags.is_empty(), egui::Button::new("Clear Tags").shortcut_text(keys)).clicked() {
+            if ui.add_enabled(!tags.is_empty(), egui::Button::new(tr("Clear Tags")).shortcut_text(keys)).clicked() {
                 self.ws.actions.push(Action::ClearTags(ids.to_vec()));
             }
         }
@@ -364,9 +365,9 @@ impl App {
                 chip.context_menu(|ui| self.tag_area_menu(ui, tags, ids, Some(tag)));
             }
             let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::TagPanel);
-            let label = if tags.is_empty() { format!("{}  Add Tags", ic::PLUS) } else { ic::PLUS.to_string() };
+            let label = if tags.is_empty() { format!("{}  {}", ic::PLUS, tr("Add Tags")) } else { ic::PLUS.to_string() };
             let b = ui.add(egui::Button::new(RichText::new(label).size(12.0).color(t::p().text_muted)).frame(false));
-            let b = b.on_hover_text(if keys.is_empty() { "Add tags".to_string() } else { format!("Add tags  ({keys})") });
+            let b = b.on_hover_text(if keys.is_empty() { tr("Add tags").to_string() } else { trf("Add tags  ({keys})", &[("keys", &keys)]) });
             if b.clicked() {
                 open = Some(b.rect.left_center());
             }
@@ -438,7 +439,7 @@ impl App {
                 }
                 let mut similar = false;
                 hit.context_menu(|ui| {
-                    if ui.button("Find Similar Colours").clicked() {
+                    if ui.button(tr("Find Similar Colours")).clicked() {
                         similar = true;
                         ui.close();
                     }
@@ -456,14 +457,14 @@ impl App {
                         if i == 4 {
                             ui.separator();
                         }
-                        if ui.button(format!("Copy {v}")).clicked() {
+                        if ui.button(trf("Copy {value}", &[("value", &v)])).clicked() {
                             ui.ctx().copy_text(v.clone());
-                            self.flash_brief(format!("Copied {v}"));
+                            self.flash_brief(trf("Copied {value}", &[("value", &v)]));
                             ui.close();
                         }
                     }
                     ui.separator();
-                    if ui.checkbox(&mut { marked }, "Primary Colour").clicked() {
+                    if ui.checkbox(&mut { marked }, tr("Primary Colour")).clicked() {
                         toggle_primary = Some((n, !marked));
                         ui.close();
                     }
@@ -473,19 +474,19 @@ impl App {
                     self.ws.color_text = hex.clone();
                     self.ws.show_filter = true;
                 }
-                hit.on_hover_text(format!("{hex}  ·  {}%\nClick to find similar colours, right-click for more", c.ratio));
+                hit.on_hover_text(trf("{hex}  ·  {ratio}%\nClick to find similar colours, right-click for more", &[("hex", &hex), ("ratio", &c.ratio)]));
             }
             if let Some((n, on)) = toggle_primary
                 && let Err(e) = lib.set_palette_marked(&item.id, n, on)
             {
-                self.flash_error(format!("Could not save: {e}"));
+                self.flash_error(trf("Could not save: {error}", &[("error", &e)]));
             }
         }
 
         let mut changed: Option<Item> = None;
         let link_keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::OpenLink);
         let edit = self.ws.edit.as_mut().unwrap();
-        let r = field(ui, &mut edit.name, "Title", 33.0, false, "item-name");
+        let r = field(ui, &mut edit.name, tr("Title"), 33.0, false, "item-name");
         if std::mem::take(&mut self.ws.focus_title) {
             r.request_focus();
         }
@@ -494,7 +495,7 @@ impl App {
             it.name = edit.name.trim().to_string();
             changed = Some(it);
         }
-        let r = field(ui, &mut edit.notes, "Notes...", 54.0, true, "item-notes");
+        let r = field(ui, &mut edit.notes, tr("Notes..."), 54.0, true, "item-notes");
         if r.lost_focus() && edit.notes != item.annotation {
             let mut it = changed.clone().unwrap_or_else(|| item.clone());
             it.annotation = edit.notes.clone();
@@ -504,7 +505,7 @@ impl App {
         let mut open_link = false;
         if !item.url.is_empty() || !edit.url.is_empty() {
             let at = Pos2::new(r.rect.right() - 18.0, r.rect.center().y);
-            let tip = format!("Open Link ({link_keys})");
+            let tip = trf("Open Link ({keys})", &[("keys", &link_keys)]);
             open_link = icon_button(ui, at, ic::ARROW_SQUARE_OUT, 16.0, true, &tip).clicked();
         }
         if r.lost_focus() && edit.url != item.url {
@@ -514,7 +515,7 @@ impl App {
                 changed = Some(it);
             } else {
                 edit.url = item.url.clone();
-                self.ws.status = Some(Toast::new("Not a valid link", ToastKind::Info, Life::Normal));
+                self.ws.status = Some(Toast::new(tr("Not a valid link"), ToastKind::Info, Life::Normal));
             }
         }
         if open_link && let Some(t) = crate::urls::link_target(&item.url, |p| std::path::Path::new(p).exists()) {
@@ -522,12 +523,12 @@ impl App {
         }
 
         // Tags.
-        if self.fold_heading(ui, Fold::Tags, "Tags") {
+        if self.fold_heading(ui, Fold::Tags, tr("Tags")) {
             self.tag_field(ui, lib, &item.tags, std::slice::from_ref(&item.id));
         }
 
         // Folders.
-        let folders_open = self.fold_heading(ui, Fold::Folders, "Folders");
+        let folders_open = self.fold_heading(ui, Fold::Folders, tr("Folders"));
         let mut remove_folder = None;
         let mut open_folder = None;
         let mut pick_folders = false;
@@ -543,7 +544,7 @@ impl App {
                         None => {}
                     }
                 }
-                let add = ui.add(egui::Button::new(RichText::new(format!("{}  Add Category", ic::PLUS)).size(12.0).color(t::p().text_muted)).frame(false));
+                let add = ui.add(egui::Button::new(RichText::new(format!("{}  {}", ic::PLUS, tr("Add Category"))).size(12.0).color(t::p().text_muted)).frame(false));
                 // The Add to Folders picker, as Eagle's folder panel.
                 if add.clicked() {
                     pick_folders = true;
@@ -570,7 +571,7 @@ impl App {
 
         self.comment_list(ui, &item);
         divider(ui);
-        if self.fold_heading(ui, Fold::Properties, "Properties") {
+        if self.fold_heading(ui, Fold::Properties, tr("Properties")) {
             let star = item.extra.get("star").and_then(|v| v.as_u64()).unwrap_or(0);
             if let Some(new_star) = rating(ui, star) {
                 let mut it = changed.clone().unwrap_or_else(|| item.clone());
@@ -582,27 +583,27 @@ impl App {
                 changed = Some(it);
             }
             if item.width > 0 {
-                prop(ui, "Dimensions", &format!("{} × {}", item.width, item.height));
+                prop(ui, tr("Dimensions"), &format!("{} × {}", item.width, item.height));
             }
-            prop(ui, "Size", &logic::format_size(item.size));
-            let type_row = prop(ui, "Type", &item.ext.to_uppercase());
-            let type_hit = ui.interact(type_row.rect, ui.scope_id().with("type-row"), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text("Click to change the extension");
+            prop(ui, tr("Size"), &logic::format_size(item.size));
+            let type_row = prop(ui, tr("Type"), &item.ext.to_uppercase());
+            let type_hit = ui.interact(type_row.rect, ui.scope_id().with("type-row"), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text(tr("Click to change the extension"));
             if type_hit.clicked() {
                 self.ws.ext_dialog = Some(crate::ui::dialogs::ext::ExtDialog { id: item.id.clone(), current: item.ext.to_lowercase(), text: item.ext.clone(), uid: egui::Id::unique("change-extension"), focused: false });
             }
-            prop(ui, "Date Imported", &logic::format_ms(item.modification_time));
-            prop(ui, "Date Created", &logic::format_ms(item.btime));
-            prop(ui, "Date Modified", &logic::format_ms(item.mtime));
+            prop(ui, tr("Date Imported"), &logic::format_ms(item.modification_time));
+            prop(ui, tr("Date Created"), &logic::format_ms(item.btime));
+            prop(ui, tr("Date Modified"), &logic::format_ms(item.mtime));
             crate::ui::viewer::audio::media_props(ui, &item);
         }
         ui.add_space(4.0);
-        if wide_button(ui, ic::ARROW_SQUARE_OUT, "Open in Default App", true).clicked() {
+        if wide_button(ui, ic::ARROW_SQUARE_OUT, tr("Open in Default App"), true).clicked() {
             let files = [item.original_path(lib.root())];
             crate::open_with::open_default(&files);
             self.used(&files);
         }
         ui.add_space(4.0);
-        if wide_button(ui, ic::EXPORT, "Show in Finder", true).clicked() {
+        if wide_button(ui, ic::EXPORT, tr("Show in Finder"), true).clicked() {
             let _ = std::process::Command::new("open").arg("-R").arg(item.original_path(lib.root())).spawn();
         }
 
@@ -613,7 +614,7 @@ impl App {
                         e.name = lib.item(&item.id).map_or(e.name.clone(), |i| i.name.clone());
                     }
                 }
-                Err(e) => self.flash_error(format!("Could not save: {e}")),
+                Err(e) => self.flash_error(trf("Could not save: {error}", &[("error", &e)])),
             }
         }
     }

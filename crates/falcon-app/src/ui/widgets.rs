@@ -10,6 +10,7 @@ use eframe::egui::{
 };
 
 use crate::icons as ic;
+use crate::locale::{tr, trf};
 use crate::logic;
 use crate::theme::{self as t, font, mono};
 
@@ -124,7 +125,7 @@ pub(crate) fn prop(ui: &mut Ui, key: &str, value: &str) -> Response {
 /// Rating row: five stars; clicking the current rating clears it.
 pub(crate) fn rating(ui: &mut Ui, star: u64) -> Option<u64> {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 14.0), Sense::hover());
-    ui.painter().text(rect.left_center(), Align2::LEFT_CENTER, "Rating", font(12.0), t::p().text);
+    ui.painter().text(rect.left_center(), Align2::LEFT_CENTER, tr("Rating"), font(12.0), t::p().text);
     let mut out = None;
     for n in 1..=5u64 {
         let c = Pos2::new(rect.left() + 90.0 + 7.0 + (n - 1) as f32 * 17.0, rect.center().y);
@@ -150,7 +151,7 @@ pub(crate) fn chip(ui: &mut Ui, text: &str, removable: bool) -> Response {
     if removable && resp.hovered() {
         icon(ui, Pos2::new(rect.right() - 10.0, rect.center().y), ic::X, 10.0, t::p().text_muted);
     }
-    resp.on_hover_text(if removable { "Click to remove" } else { "" })
+    resp.on_hover_text(if removable { tr("Click to remove") } else { "" })
 }
 
 /// An inspector tag chip with the colour dot of its group; clicking it
@@ -168,7 +169,7 @@ pub(crate) fn tag_chip_removable(ui: &mut Ui, text: &str, dot: Option<Color32>) 
     if resp.hovered() {
         icon(ui, Pos2::new(rect.right() - 10.0, rect.center().y), ic::X, 10.0, t::p().text_muted);
     }
-    resp.on_hover_text("Click to remove")
+    resp.on_hover_text(tr("Click to remove"))
 }
 
 /// What a click on a folder chip asked for.
@@ -195,7 +196,7 @@ pub(crate) fn folder_chip(ui: &mut Ui, text: &str, path: &str) -> Option<ChipCli
     let mark = if on_x { t::p().text } else { t::p().text_muted.gamma_multiply(0.7) };
     icon(ui, x.center(), ic::X, 10.0, mark);
     let click = resp.clicked().then(|| if resp.interact_pointer_pos().is_some_and(|p| x.contains(p)) { ChipClick::Remove } else { ChipClick::Open });
-    resp.on_hover_text(if on_x { "Remove from this folder".to_string() } else { format!("{path}\nClick to open") });
+    resp.on_hover_text(if on_x { tr("Remove from this folder").to_string() } else { trf("{path}\nClick to open", &[("path", &path)]) });
     click
 }
 

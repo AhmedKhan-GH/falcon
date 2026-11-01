@@ -17,10 +17,10 @@ use falcon_library::merge::{self, Choices, Merge, MergeReport};
 use falcon_library::model::Item;
 use falcon_library::{Library, thumbnail};
 
-use crate::ui::dialogs::export::plural;
 use crate::app::{Action, App};
 use crate::ui::grid::GRID_PAD_X;
 use crate::loader::{Tier, job_for};
+use crate::locale::{tr, tr_key, tr_n, tr_nf, trf};
 use crate::logic::{self, DupGroup, Scope};
 use crate::theme::{self as t, font, mono};
 
@@ -192,24 +192,24 @@ fn scan(lib: Library, method: Method, only: Option<&HashSet<String>>, threshold:
             }
             let candidates: Vec<_> = live.iter().filter(|(_, s)| sizes[&s.0] > 1).collect();
             for (n, (item, st)) in candidates.iter().enumerate() {
-                set("Comparing files", n, candidates.len());
+                set(tr_key("Comparing files"), n, candidates.len());
                 let e = entry(&mut cache, &item.id, *st);
                 if e.content.is_none() {
                     e.content = duplicates::content_hash(&item.original_path(&root)).ok();
                 }
             }
-            set("Grouping", candidates.len(), candidates.len());
+            set(tr_key("Grouping"), candidates.len(), candidates.len());
             duplicates::find_exact_duplicates_in(&lib, only, &mut cache).into_iter().map(|ids| logic::dup_group(true, ids, |_| None)).collect()
         }
         Method::Similar => {
             for (n, (item, st)) in live.iter().enumerate() {
-                set("Comparing pictures", n, live.len());
+                set(tr_key("Comparing pictures"), n, live.len());
                 let e = entry(&mut cache, &item.id, *st);
                 if e.perceptual.is_none() {
                     e.perceptual = picture(item, &root).and_then(|p| thumbnail::decode(&p).ok()).map(|img| duplicates::perceptual_hash(&img));
                 }
             }
-            set("Grouping", live.len(), live.len());
+            set(tr_key("Grouping"), live.len(), live.len());
             let near = duplicates::find_near_duplicates_in(&lib, only, threshold, &mut cache);
             near.into_iter()
                 .map(|ids| {
@@ -253,7 +253,7 @@ impl App {
         let only = d.range_ids();
         d.scanned = Some((d.method, only.clone()));
         d.review = None;
-        let progress = Arc::new(Mutex::new(Progress { phase: "Starting", ..Default::default() }));
+        let progress = Arc::new(Mutex::new(Progress { phase: tr_key("Starting"), ..Default::default() }));
         d.progress = Some(progress.clone());
         let (snapshot, method, threshold, cache, ctx) = (lib.clone(), d.method, d.threshold, d.cache.clone(), self.ctx.clone());
         std::thread::spawn(move || {
@@ -308,23 +308,23 @@ impl App {
                 p.rect_filled(bar, 3.0, t::p().button);
                 let f = if total > 0 { done as f32 / total as f32 } else { 0.0 };
                 p.rect_filled(Rect::from_min_size(bar.min, vec2(bar.width() * f, bar.height())), 3.0, t::p().primary);
-                p.text(Pos2::new(x0, bar.bottom() + 14.0), Align2::LEFT_CENTER, format!("{phase}… {done}/{total}"), font(12.0), t::p().text_muted);
+                p.text(Pos2::new(x0, bar.bottom() + 14.0), Align2::LEFT_CENTER, trf("{phase}… {done}/{total}", &[("phase", &tr(phase)), ("done", &done), ("total", &total)]), font(12.0), t::p().text_muted);
                 ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));
                 return;
             }
             let Some(groups) = &groups else {
                 let (r, _) = ui.allocate_exact_size(vec2(area.width(), 60.0), Sense::hover());
                 let text = if similar {
-                    "Finds pictures that look alike, picks the best copy of each group, and merges the rest into it."
+                    tr("Finds pictures that look alike, picks the best copy of each group, and merges the rest into it. Nothing changes until you merge.")
                 } else {
-                    "Finds byte-identical files and merges each group into one item."
+                    tr("Finds byte-identical files and merges each group into one item. Nothing changes until you merge.")
                 };
-                p.text(Pos2::new(x0, r.center().y), Align2::LEFT_CENTER, format!("{text} Nothing changes until you merge."), font(13.0), t::p().text_muted);
+                p.text(Pos2::new(x0, r.center().y), Align2::LEFT_CENTER, text, font(13.0), t::p().text_muted);
                 return;
             };
             if groups.is_empty() {
                 let (r, _) = ui.allocate_exact_size(vec2(area.width(), 60.0), Sense::hover());
-                let what = if similar { "No similar pictures found" } else { "No identical files found" };
+                let what = if similar { tr("No similar pictures found") } else { tr("No identical files found") };
                 p.text(Pos2::new(x0, r.center().y), Align2::LEFT_CENTER, what, font(14.0), t::p().text_muted);
                 return;
             }
@@ -333,13 +333,13 @@ impl App {
                 ui.add_space(GRID_PAD_X);
                 ui.spacing_mut().item_spacing.x = 8.0;
                 let picked = groups.iter().filter(|g| g.picked).count();
-                if ui.add_enabled(picked > 0, egui::Button::new(format!("Merge {}…", plural(picked, "Group")))).clicked() {
+                if ui.add_enabled(picked > 0, egui::Button::new(tr_n(picked, "Merge {n} Group…", "Merge {n} Groups…"))).clicked() {
                     start_review = true;
                 }
                 let line = if picked > 0 {
-                    format!("{} groups · {} picked, merging saves {}", groups.len(), plural(files, "file"), logic::format_size(bytes))
+                    tr_nf(groups.len(), "{n} group · {files} picked, merging saves {size}", "{n} groups · {files} picked, merging saves {size}", &[("files", &tr_n(files, "{n} file", "{n} files")), ("size", &logic::format_size(bytes))])
                 } else {
-                    format!("{} groups · tick the groups to merge", groups.len())
+                    tr_n(groups.len(), "{n} group · tick the groups to merge", "{n} groups · tick the groups to merge")
                 };
                 ui.label(RichText::new(line).color(t::p().text_muted));
             });
@@ -351,15 +351,15 @@ impl App {
                 ui.horizontal(|ui| {
                     ui.add_space(GRID_PAD_X);
                     let kind = if g.exact {
-                        format!("{} identical files", g.ids.len())
+                        tr_n(g.ids.len(), "{n} identical file", "{n} identical files")
                     } else {
-                        format!("{} similar pictures, the best copy picked (within {} of 64 bits)", g.ids.len(), g.distances.iter().max().unwrap_or(&0))
+                        tr_nf(g.ids.len(), "{n} similar picture, the best copy picked (within {bits} of 64 bits)", "{n} similar pictures, the best copy picked (within {bits} of 64 bits)", &[("bits", g.distances.iter().max().unwrap_or(&0))])
                     };
                     let mut picked = g.picked;
                     if ui.checkbox(&mut picked, RichText::new(kind).color(t::p().text_value).size(12.0)).changed() {
                         edits.push(Edit::Pick(gn, picked));
                     }
-                    if ui.small_button("Remove from List").on_hover_text("Leaves these items alone").clicked() {
+                    if ui.small_button(tr("Remove from List")).on_hover_text(tr("Leaves these items alone")).clicked() {
                         edits.push(Edit::RemoveGroup(gn));
                     }
                 });
@@ -385,17 +385,17 @@ impl App {
                     } else if self.ws.selected.contains(id) {
                         p.rect_stroke(cell, 6.0, Stroke::new(1.5, t::p().text_muted), StrokeKind::Outside);
                     }
-                    let name = crate::ui::widgets::galley(ui, &format!("{}{}.{}", if kept { "Kept · " } else { "" }, item.name, item.ext), font(11.0), t::p().text, THUMB);
+                    let name = crate::ui::widgets::galley(ui, &if kept { trf("Kept · {name}", &[("name", &format!("{}.{}", item.name, item.ext))]) } else { format!("{}.{}", item.name, item.ext) }, font(11.0), t::p().text, THUMB);
                     p.galley(Pos2::new(cell.left(), cell.bottom() + 4.0), name, t::p().text);
                     let mut meta = format!("{} · {}", item.ext.to_uppercase(), logic::format_size(item.size));
                     if !g.exact && n > 0 {
-                        meta.push_str(&format!(" · {} bits", g.distances[n]));
+                        meta.push_str(&format!(" · {}", tr_n(g.distances[n] as usize, "{n} bit", "{n} bits")));
                     }
                     p.text(Pos2::new(cell.left(), cell.bottom() + 28.0), Align2::LEFT_CENTER, meta, mono(10.0), t::p().text_muted);
                     if item.width > 0 {
                         p.text(Pos2::new(cell.left(), cell.bottom() + 42.0), Align2::LEFT_CENTER, format!("{} × {}", item.width, item.height), mono(10.0), t::p().text_muted);
                     }
-                    let resp = resp.on_hover_text(if g.exact { "Right-click to keep this copy instead" } else { "Click to keep this copy" });
+                    let resp = resp.on_hover_text(if g.exact { tr("Right-click to keep this copy instead") } else { tr("Click to keep this copy") });
                     if resp.double_clicked() {
                         opened = Some(id.clone());
                     } else if resp.clicked() {
@@ -407,19 +407,19 @@ impl App {
                         clicked = Some((id.clone(), ui.input(|i| i.modifiers)));
                     }
                     resp.context_menu(|ui| {
-                        if ui.add_enabled(!kept, egui::Button::new("Keep This Copy")).clicked() {
+                        if ui.add_enabled(!kept, egui::Button::new(tr("Keep This Copy"))).clicked() {
                             edits.push(Edit::Keep(gn, id.clone()));
                         }
-                        if ui.button("Open").clicked() {
+                        if ui.button(tr("Open")).clicked() {
                             opened = Some(id.clone());
                         }
                         let files = [item.original_path(lib.root())];
-                        if ui.button("Open in Default App").clicked() {
+                        if ui.button(tr("Open in Default App")).clicked() {
                             crate::open_with::open_default(&files);
                             self.used(&files);
                         }
                         ui.separator();
-                        if ui.button("Remove from Group").on_hover_text("Leaves this item alone").clicked() {
+                        if ui.button(tr("Remove from Group")).on_hover_text(tr("Leaves this item alone")).clicked() {
                             edits.push(Edit::RemoveItem(gn, id.clone()));
                         }
                     });
@@ -464,8 +464,8 @@ impl App {
     fn scan_controls(&mut self, ui: &mut Ui, lib: &Library, has_results: bool, rescan: &mut bool) {
         let d = &mut self.ws.duplicates;
         let before = (d.method, d.range);
-        ui.selectable_value(&mut d.method, Method::Same, "Identical Files").on_hover_text("Files with exactly the same bytes");
-        ui.selectable_value(&mut d.method, Method::Similar, "Similar Pictures").on_hover_text("Pictures that look alike, at any size or format");
+        ui.selectable_value(&mut d.method, Method::Same, tr("Identical Files")).on_hover_text(tr("Files with exactly the same bytes"));
+        ui.selectable_value(&mut d.method, Method::Similar, tr("Similar Pictures")).on_hover_text(tr("Pictures that look alike, at any size or format"));
         ui.add_space(6.0);
         let live = lib.items().iter().filter(|i| !i.is_deleted).count();
         let (view, view_n, sel_n) = match &d.came_from {
@@ -473,9 +473,9 @@ impl App {
             None => (String::new(), 0, 0),
         };
         let label = |r: Range| match r {
-            Range::All => format!("All Items ({live})"),
-            Range::View => format!("{view} ({view_n})"),
-            Range::Selected => format!("Selected Items ({sel_n})"),
+            Range::All => trf("All Items ({count})", &[("count", &live)]),
+            Range::View => trf("{view} ({count})", &[("view", &view), ("count", &view_n)]),
+            Range::Selected => trf("Selected Items ({count})", &[("count", &sel_n)]),
         };
         egui::ComboBox::from_id_salt("dup-range").selected_text(label(d.range)).show_ui(ui, |ui| {
             ui.selectable_value(&mut d.range, Range::All, label(Range::All));
@@ -491,16 +491,16 @@ impl App {
             d.groups = None;
         }
         if d.method == Method::Similar {
-            ui.label(RichText::new("Similarity").color(t::p().text_muted));
+            ui.label(RichText::new(tr("Similarity")).color(t::p().text_muted));
             // Right is stricter, as in Eagle; the value is the bits allowed to differ.
             let mut strict = 20 - d.threshold.min(20) as i32;
             let s = ui.add(egui::Slider::new(&mut strict, 0..=20).show_value(false));
             d.threshold = (20 - strict) as u32;
-            if s.on_hover_text("How alike similar pictures must be").drag_stopped() && has_results {
+            if s.on_hover_text(tr("How alike similar pictures must be")).drag_stopped() && has_results {
                 *rescan = true;
             }
         }
-        let label = if has_results && d.groups.is_some() { "Scan Again" } else { "Scan" };
+        let label = if has_results && d.groups.is_some() { tr("Scan Again") } else { tr("Scan") };
         if ui.button(label).clicked() {
             *rescan = true;
         }
@@ -538,21 +538,21 @@ impl App {
         let modal = egui::Modal::new(egui::Id::unique("merge-review")).show(ctx, |ui| {
             ui.set_width(640.0);
             if review.confirming {
-                ui.label(RichText::new(format!("Merge {}?", plural(review.groups.len(), "group"))).size(15.0));
+                ui.label(RichText::new(tr_n(review.groups.len(), "Merge {n} group?", "Merge {n} groups?")).size(15.0));
                 ui.add_space(4.0);
-                ui.label(RichText::new(format!("{} go to the Trash. ⌘Z undoes the merge.", plural(n_trash, "file"))).color(t::p().text_muted));
+                ui.label(RichText::new(tr_n(n_trash, "{n} file goes to the Trash. ⌘Z undoes the merge.", "{n} files go to the Trash. ⌘Z undoes the merge.")).color(t::p().text_muted));
                 ui.add_space(10.0);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("Merge").clicked() {
+                    if ui.button(tr("Merge")).clicked() {
                         merge = true;
                     }
-                    if ui.button("Back").clicked() {
+                    if ui.button(tr("Back")).clicked() {
                         review.confirming = false;
                     }
                 });
                 return;
             }
-            ui.label(RichText::new("Check Before Merging").size(15.0));
+            ui.label(RichText::new(tr("Check Before Merging")).size(15.0));
             ui.add_space(6.0);
             ui.horizontal_top(|ui| {
                 ui.vertical(|ui| {
@@ -560,7 +560,7 @@ impl App {
                     egui::ScrollArea::vertical().id_salt("merge-groups").max_height(380.0).show(ui, |ui| {
                         for (n, g) in review.groups.iter().enumerate() {
                             let name = lib.item(&g.merge.keep).map_or_else(String::new, |i| i.name.clone());
-                            let text = format!("{}\n{}", name, plural(g.merge.trash.len() + 1, "file"));
+                            let text = format!("{}\n{}", name, tr_n(g.merge.trash.len() + 1, "{n} file", "{n} files"));
                             if ui.selectable_label(n == review.current, text).clicked() {
                                 review.current = n;
                             }
@@ -585,24 +585,24 @@ impl App {
                         let empty = |ui: &mut Ui, text: &str| {
                             ui.label(RichText::new(text).color(t::p().text_muted).italics());
                         };
-                        section(ui, "File Name");
+                        section(ui, tr("File Name"));
                         for name in &g.choices.names {
                             if ui.radio(g.merge.name.as_ref() == Some(name), name).clicked() {
                                 g.merge.name = Some(name.clone());
                             }
                         }
-                        section(ui, "Link");
+                        section(ui, tr("Link"));
                         if g.choices.urls.is_empty() {
-                            empty(ui, "No link");
+                            empty(ui, tr("No link"));
                         }
                         for url in &g.choices.urls {
                             if ui.radio(g.merge.url == *url, url).clicked() {
                                 g.merge.url = url.clone();
                             }
                         }
-                        section(ui, "Note");
+                        section(ui, tr("Note"));
                         if g.choices.notes.is_empty() {
-                            empty(ui, "No note");
+                            empty(ui, tr("No note"));
                         }
                         for note in &g.choices.notes {
                             let short: String = note.lines().next().unwrap_or("").chars().take(60).collect();
@@ -611,12 +611,12 @@ impl App {
                                 g.joined = false;
                             }
                         }
-                        if g.choices.merged_note.is_some() && ui.radio(g.joined, "Join all notes").clicked() {
+                        if g.choices.merged_note.is_some() && ui.radio(g.joined, tr("Join all notes")).clicked() {
                             g.joined = true;
                         }
-                        section(ui, "Folders");
+                        section(ui, tr("Folders"));
                         if g.choices.folders.is_empty() {
-                            empty(ui, "No folders");
+                            empty(ui, tr("No folders"));
                         }
                         ui.horizontal_wrapped(|ui| {
                             for f in g.choices.folders.clone() {
@@ -632,9 +632,9 @@ impl App {
                                 }
                             }
                         });
-                        section(ui, "Tags");
+                        section(ui, tr("Tags"));
                         if g.choices.tags.is_empty() {
-                            empty(ui, "No tags");
+                            empty(ui, tr("No tags"));
                         }
                         ui.horizontal_wrapped(|ui| {
                             for tag in g.choices.tags.clone() {
@@ -655,12 +655,12 @@ impl App {
             });
             ui.add_space(10.0);
             ui.horizontal(|ui| {
-                ui.label(RichText::new(format!("{} · {} go to the Trash", plural(review.groups.len(), "group"), plural(n_trash, "file"))).color(t::p().text_muted));
+                ui.label(RichText::new(tr_nf(review.groups.len(), "{n} group · {files} go to the Trash", "{n} groups · {files} go to the Trash", &[("files", &tr_n(n_trash, "{n} file", "{n} files"))])).color(t::p().text_muted));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("Merge…").clicked() {
+                    if ui.button(tr("Merge…")).clicked() {
                         review.confirming = true;
                     }
-                    if ui.button("Cancel").clicked() {
+                    if ui.button(tr("Cancel")).clicked() {
                         close = true;
                     }
                 });
@@ -695,15 +695,15 @@ impl App {
         let mut done = None;
         let modal = egui::Modal::new(egui::Id::unique("merge-summary")).show(ctx, |ui| {
             ui.set_width(320.0);
-            ui.label(RichText::new("Merged").size(15.0));
+            ui.label(RichText::new(tr("Merged")).size(15.0));
             ui.add_space(4.0);
-            ui.label(RichText::new(format!("{} moved to the Trash, saving {}.", plural(report.trashed, "file"), logic::format_size(report.bytes))).color(t::p().text_muted));
+            ui.label(RichText::new(tr_nf(report.trashed, "{n} file moved to the Trash, saving {size}.", "{n} files moved to the Trash, saving {size}.", &[("size", &logic::format_size(report.bytes))])).color(t::p().text_muted));
             ui.add_space(10.0);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button("Keep Merging").clicked() {
+                if ui.button(tr("Keep Merging")).clicked() {
                     done = Some(false);
                 }
-                if ui.button("Done").clicked() {
+                if ui.button(tr("Done")).clicked() {
                     done = Some(true);
                 }
             });

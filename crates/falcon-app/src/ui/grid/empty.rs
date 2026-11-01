@@ -9,6 +9,7 @@ use falcon_library::Library;
 
 use crate::app::App;
 use crate::icons as ic;
+use crate::locale::{tr, tr_key};
 use crate::logic::Scope;
 use crate::theme::{self as t, font};
 use crate::ui::widgets::icon;
@@ -46,32 +47,32 @@ const fn say(icon: &'static str, title: &'static str, body: &'static str, import
 /// `library_items` counts the items outside the Trash.
 pub(crate) fn message(view: View, searching: bool, library_items: usize) -> Option<Empty> {
     if searching {
-        return say(ic::MAGNIFYING_GLASS, "No Matches", "Try another keyword or loosen the filters.", false);
+        return say(ic::MAGNIFYING_GLASS, tr_key("No Matches"), tr_key("Try another keyword or loosen the filters."), false);
     }
     match view {
         View::All | View::Recent | View::Random => {
-            say(ic::IMAGES, "Drop Files Here", "Drag files or folders onto this window to add them to the library.", true)
+            say(ic::IMAGES, tr_key("Drop Files Here"), tr_key("Drag files or folders onto this window to add them to the library."), true)
         }
         View::Folder { has_children: false, locked: false } => {
-            say(ic::FOLDER, "Drop Files Here", "Drag files onto this window to add them to this folder.", true)
+            say(ic::FOLDER, tr_key("Drop Files Here"), tr_key("Drag files onto this window to add them to this folder."), true)
         }
         View::Folder { .. } => None,
-        View::Smart => say(ic::FUNNEL, "No Matches", "No items match this smart folder's rules.", false),
+        View::Smart => say(ic::FUNNEL, tr_key("No Matches"), tr_key("No items match this smart folder's rules."), false),
         View::Uncategorized if library_items == 0 => {
-            say(ic::FOLDER_DASHED, "Uncategorized Items", "Items that aren't in any folder gather here, ready to be sorted.", false)
+            say(ic::FOLDER_DASHED, tr_key("Uncategorized Items"), tr_key("Items that aren't in any folder gather here, ready to be sorted."), false)
         }
-        View::Uncategorized => say(ic::FOLDER_DASHED, "All Sorted", "Every item is in a folder.", false),
+        View::Uncategorized => say(ic::FOLDER_DASHED, tr_key("All Sorted"), tr_key("Every item is in a folder."), false),
         View::Untagged if library_items == 0 => {
-            say(ic::TAG_SIMPLE, "Untagged Items", "Items without tags gather here, ready to be tagged.", false)
+            say(ic::TAG_SIMPLE, tr_key("Untagged Items"), tr_key("Items without tags gather here, ready to be tagged."), false)
         }
-        View::Untagged => say(ic::TAG_SIMPLE, "All Tagged", "Every item has a tag.", false),
+        View::Untagged => say(ic::TAG_SIMPLE, tr_key("All Tagged"), tr_key("Every item has a tag."), false),
         View::Trash => say(
             ic::TRASH,
-            "Trash Is Empty",
-            "Deleted items wait here until you restore them or delete them for good.",
+            tr_key("Trash Is Empty"),
+            tr_key("Deleted items wait here until you restore them or delete them for good."),
             false,
         ),
-        View::Other => say(ic::IMAGES, "No Items", "", false),
+        View::Other => say(ic::IMAGES, tr_key("No Items"), "", false),
     }
 }
 
@@ -82,12 +83,12 @@ const BUTTON_SIZE: egui::Vec2 = egui::Vec2::new(160.0, 26.0);
 /// Draws the icon, title and body centred in `area`, a little above its
 /// middle. Returns the centre for a button under the text.
 fn paint(ui: &Ui, area: Rect, e: &Empty) -> egui::Pos2 {
-    let title = ui.painter().layout_no_wrap(e.title.to_string(), font(17.0), t::p().text);
+    let title = ui.painter().layout_no_wrap(tr(e.title).to_string(), font(17.0), t::p().text);
     let body = (!e.body.is_empty()).then(|| {
         let mut job = LayoutJob::default();
         job.wrap.max_width = BODY_WIDTH;
         job.halign = Align::Center;
-        job.append(e.body, 0.0, TextFormat::simple(font(13.0), t::p().text_muted));
+        job.append(tr(e.body), 0.0, TextFormat::simple(font(13.0), t::p().text_muted));
         ui.painter().layout_job(job)
     });
     let button = if e.import { 16.0 + BUTTON_SIZE.y } else { 0.0 };
@@ -140,12 +141,12 @@ impl App {
     /// match the page's filter.
     pub(crate) fn empty_tags(&self, ui: &Ui, area: Rect, filtering: bool) {
         let e = if filtering {
-            Empty { icon: ic::MAGNIFYING_GLASS, title: "No Matches", body: "Try another keyword.", import: false }
+            Empty { icon: ic::MAGNIFYING_GLASS, title: tr_key("No Matches"), body: tr_key("Try another keyword."), import: false }
         } else {
             Empty {
                 icon: ic::TAG_SIMPLE,
-                title: "No Tags Yet",
-                body: "Tags help you organize items and find them again in search.",
+                title: tr_key("No Tags Yet"),
+                body: tr_key("Tags help you organize items and find them again in search."),
                 import: false,
             }
         };

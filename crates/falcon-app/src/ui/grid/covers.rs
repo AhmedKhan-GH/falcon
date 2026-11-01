@@ -13,6 +13,7 @@ use falcon_library::model::{Folder, Item};
 use falcon_library::search::{self, OrderBy};
 
 use crate::app::{Action, App};
+use crate::locale::{tr, tr_n, trf};
 use crate::ui::widgets::{ext_placeholder, galley};
 use crate::loader::{Tier, job_for};
 use crate::logic::{self, Scope};
@@ -80,12 +81,12 @@ impl App {
             ui.horizontal_centered(|ui| {
                 ui.add_space(17.0);
                 let caret = if self.display.strip_collapsed { crate::icons::CARET_RIGHT } else { crate::icons::CARET_DOWN };
-                let heading = egui::RichText::new(format!("Subfolders ({})  {caret}", folder.children.len())).color(t::p().text_muted).size(12.5);
+                let heading = egui::RichText::new(format!("{}  {caret}", trf("Subfolders ({count})", &[("count", &folder.children.len())]))).color(t::p().text_muted).size(12.5);
                 if ui.add(egui::Label::new(heading).sense(Sense::click())).on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
                     self.display.strip_collapsed = !self.display.strip_collapsed;
                 }
                 ui.add_space(12.0);
-                ui.checkbox(&mut self.display.subfolders, egui::RichText::new("Show subfolder contents").size(12.5));
+                ui.checkbox(&mut self.display.subfolders, egui::RichText::new(tr("Show subfolder contents")).size(12.5));
             });
         });
         if self.display.strip_collapsed {
@@ -153,9 +154,9 @@ impl App {
                             }
                         }
                         let count = lib.items().iter().filter(|i| !i.is_deleted && i.folders.contains(&child.id)).count();
-                        let mut meta = format!("{count} items");
+                        let mut meta = tr_n(count, "{n} item", "{n} items");
                         if !child.children.is_empty() {
-                            meta.push_str(&format!(" · {} subfolders", child.children.len()));
+                            meta.push_str(&format!(" · {}", tr_n(child.children.len(), "{n} subfolder", "{n} subfolders")));
                         }
                         let g = galley(ui, &meta, font(11.5), t::p().text_muted, CARD_W);
                         ui.painter().galley(Pos2::new(rect.left(), thumb.bottom() + 25.0), g, t::p().text_muted);

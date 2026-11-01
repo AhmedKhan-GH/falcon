@@ -10,11 +10,23 @@ use falcon_library::Library;
 use falcon_library::model::Item;
 
 use crate::app::{Action, App};
+use crate::locale::{tr, trf};
 use crate::logic;
 use crate::icons as ic;
 use crate::theme::{self as t, font};
 use crate::ui::widgets::{galley, icon};
 use crate::tags::{self, Dir, Kind, Pick, Side};
+
+/// The text of one of `tags::COLUMNS`' size names in the current language.
+fn column_label(label: &str) -> &str {
+    match label {
+        "Extra Small" => tr("Extra Small"),
+        "Small" => tr("Small"),
+        "Medium" => tr("Medium"),
+        "Large" => tr("Large"),
+        other => other,
+    }
+}
 
 /// The panel's size, as Eagle opens it.
 const WIDTH: f32 = 320.0;
@@ -199,7 +211,7 @@ impl App {
                     let te = ui.add(
                         TextEdit::singleline(&mut p.keyword)
                             .id(search_id)
-                            .hint_text(RichText::new("Search or create tags").color(t::p().text_muted))
+                            .hint_text(RichText::new(tr("Search or create tags")).color(t::p().text_muted))
                             .font(font(13.0))
                             .char_limit(128)
                             .desired_width(ui.available_width() - buttons * 26.0),
@@ -215,32 +227,32 @@ impl App {
                         icon(ui, r.center(), glyph, 14.0, if on { t::p().text } else { t::p().text_value });
                         resp.on_hover_text(tip)
                     };
-                    if !groups.is_empty() && btn(ui, ic::SIDEBAR_SIMPLE, sidebar, "Show tag groups (Tab moves through them)").clicked() {
+                    if !groups.is_empty() && btn(ui, ic::SIDEBAR_SIMPLE, sidebar, tr("Show tag groups (Tab moves through them)")).clicked() {
                         new_prefs.sidebar = !prefs.sidebar;
                     }
-                    let gear = btn(ui, ic::GEAR, false, "Settings");
+                    let gear = btn(ui, ic::GEAR, false, tr("Settings"));
                     egui::Popup::menu(&gear).show(|ui| {
                         ui.set_min_width(190.0);
-                        ui.checkbox(&mut new_prefs.show.starred, "Starred Tags");
-                        ui.checkbox(&mut new_prefs.show.recent, "Recent Tags");
-                        ui.checkbox(&mut new_prefs.show.suggested, "Recommended Tags");
-                        ui.checkbox(&mut new_prefs.counts, "Show Counts");
+                        ui.checkbox(&mut new_prefs.show.starred, tr("Starred Tags"));
+                        ui.checkbox(&mut new_prefs.show.recent, tr("Recent Tags"));
+                        ui.checkbox(&mut new_prefs.show.suggested, tr("Recommended Tags"));
+                        ui.checkbox(&mut new_prefs.counts, tr("Show Counts"));
                         ui.separator();
-                        ui.checkbox(&mut new_prefs.list, "One Tag per Row");
+                        ui.checkbox(&mut new_prefs.list, tr("One Tag per Row"));
                         ui.add_enabled_ui(!new_prefs.list, |ui| {
-                            ui.label(RichText::new("Column size").color(t::p().text_muted).size(12.0));
+                            ui.label(RichText::new(tr("Column size")).color(t::p().text_muted).size(12.0));
                             for (w, label) in tags::COLUMNS {
                                 let mark = if new_prefs.column == w { ic::CHECK } else { " " };
-                                if ui.button(format!("{mark}  {label}")).clicked() {
+                                if ui.button(format!("{mark}  {}", column_label(label))).clicked() {
                                     new_prefs.column = w;
                                 }
                             }
                         });
                     });
-                    if btn(ui, ic::PUSH_PIN, pin, if pin { "Unpin (close when clicking elsewhere)" } else { "Keep open" }).clicked() {
+                    if btn(ui, ic::PUSH_PIN, pin, if pin { tr("Unpin (close when clicking elsewhere)") } else { tr("Keep open") }).clicked() {
                         pin = !pin;
                     }
-                    if btn(ui, ic::X, false, "Close (Esc)").clicked() {
+                    if btn(ui, ic::X, false, tr("Close (Esc)")).clicked() {
                         close = true;
                     }
                 });
@@ -268,42 +280,42 @@ impl App {
                                     set_side = Some(s);
                                 }
                             };
-                            row(ui, Side::All, None, "All");
+                            row(ui, Side::All, None, tr("All"));
                             for (gi, g) in groups.iter().enumerate() {
                                 let c = crate::folder_icons::color(g.color.as_deref()).unwrap_or(t::p().icon_none);
                                 row(ui, Side::Group(gi), Some(c), &g.name);
                             }
-                            row(ui, Side::Ungrouped, None, "Ungrouped");
+                            row(ui, Side::Ungrouped, None, tr("Ungrouped"));
                         });
                     }
                     egui::ScrollArea::vertical().id_salt("tag-picker-list").auto_shrink([false, false]).show(ui, |ui| {
                         ui.set_width(list_w);
                         if targets.is_empty() {
                             ui.add_space(40.0);
-                            ui.vertical_centered(|ui| ui.label(RichText::new("No items selected").color(t::p().text_muted)));
+                            ui.vertical_centered(|ui| ui.label(RichText::new(tr("No items selected")).color(t::p().text_muted)));
                             return;
                         }
                         if sections.is_empty() {
                             ui.add_space(40.0);
-                            ui.vertical_centered(|ui| ui.label(RichText::new("No tags yet. Type one to create it.").color(t::p().text_muted)));
+                            ui.vertical_centered(|ui| ui.label(RichText::new(tr("No tags yet. Type one to create it.")).color(t::p().text_muted)));
                         }
                         let cell_w = ((list_w - GAP * (cols as f32 - 1.0)) / cols as f32).floor();
                         for (si, sec) in sections.iter().enumerate() {
                             if sec.kind != Kind::Results {
                                 let collapsed = p.collapsed.contains(&sec.kind);
                                 let title = match sec.kind {
-                                    Kind::Starred => "Starred".to_string(),
-                                    Kind::Recent => "Recent".to_string(),
-                                    Kind::Suggested => "Recommended".to_string(),
+                                    Kind::Starred => tr("Starred").to_string(),
+                                    Kind::Recent => tr("Recent").to_string(),
+                                    Kind::Suggested => tr("Recommended").to_string(),
                                     Kind::Group(g) => groups.get(g).map_or_else(String::new, |g| g.name.clone()),
-                                    Kind::Others | Kind::Results => "Others".to_string(),
+                                    Kind::Others | Kind::Results => tr("Others").to_string(),
                                 };
                                 let (r, resp) = ui.allocate_exact_size(vec2(list_w, 26.0), Sense::click());
                                 let caret = if collapsed { ic::CARET_RIGHT } else { ic::CARET_DOWN };
                                 icon(ui, Pos2::new(r.left() + 6.0, r.center().y), caret, 10.0, t::p().text_muted);
                                 let g = galley(ui, &format!("{title}  ({})", sec.picks.len()), font(12.0), t::p().text_muted, list_w - 20.0);
                                 ui.painter().galley(Pos2::new(r.left() + 16.0, r.center().y - g.size().y / 2.0), g, t::p().text_muted);
-                                if resp.on_hover_text("Click to fold or unfold").clicked() {
+                                if resp.on_hover_text(tr("Click to fold or unfold")).clicked() {
                                     toggle = Some(sec.kind);
                                 }
                                 if collapsed {
@@ -431,7 +443,7 @@ fn draw_cell(ui: &Ui, r: Rect, pick: &Pick, entries: &[tags::Entry], groups: &[f
                 _ => None,
             };
             icon(ui, Pos2::new(r.left() + 11.0, cy), ic::PLUS, 12.0, tint.unwrap_or(t::p().primary));
-            let g = galley(ui, &format!("Create “{text}”"), font(12.0), t::p().text, r.width() - 28.0);
+            let g = galley(ui, &trf("Create “{text}”", &[("text", &text)]), font(12.0), t::p().text, r.width() - 28.0);
             p.galley(Pos2::new(r.left() + 22.0, cy - g.size().y / 2.0), g, t::p().text);
         }
         Pick::Tag(i) => {

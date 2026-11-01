@@ -8,6 +8,7 @@ use eframe::egui::{self, Color32, CornerRadius, Rect, vec2};
 use falcon_library::{Library, thumbnail};
 
 use crate::app::{App, DragItems};
+use crate::locale::{tr_n, trf};
 use crate::theme::{self as t, font};
 
 impl App {
@@ -42,14 +43,14 @@ impl App {
                 );
                 if let Err(e) = started {
                     flag.store(false, std::sync::atomic::Ordering::Relaxed);
-                    self.flash_error(format!("Could not drag out: {e}"));
+                    self.flash_error(trf("Could not drag out: {error}", &[("error", &e)]));
                 }
             }
         }
         if let Some(d) = egui::DragAndDrop::payload::<DragItems>(ctx)
             && let Some(pos) = ctx.pointer_latest_pos()
         {
-            let text = if d.0.len() == 1 { "1 item".to_string() } else { format!("{} items", d.0.len()) };
+            let text = tr_n(d.0.len(), "{n} item", "{n} items");
             let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("drag-ghost")));
             let g = painter.layout_no_wrap(text, font(12.0), Color32::WHITE);
             let r = Rect::from_min_size(pos + vec2(12.0, 12.0), g.size() + vec2(16.0, 8.0));

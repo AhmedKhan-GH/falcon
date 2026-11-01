@@ -6,6 +6,7 @@ use falcon_library::search::Logic;
 
 use crate::app::{Action, App};
 use crate::icons as ic;
+use crate::locale::{tr, tr_n};
 use crate::logic::{self, Scope};
 use crate::theme::{self as t, font};
 use crate::ui::widgets::{galley, icon};
@@ -38,12 +39,12 @@ impl App {
                         .id_salt("tag-filter")
                         .frame(egui::Frame::NONE)
                         .margin(egui::Margin::ZERO)
-                        .hint_text(RichText::new("Filter tags").color(t::p().text_muted))
+                        .hint_text(RichText::new(tr("Filter tags")).color(t::p().text_muted))
                         .font(font(13.0))
                         .align(Align2::LEFT_CENTER),
                 );
                 ui.add_space(12.0);
-                ui.label(RichText::new(format!("{} tags", tags.len())).color(t::p().text_muted));
+                ui.label(RichText::new(tr_n(tags.len(), "{n} tag", "{n} tags")).color(t::p().text_muted));
                 self.tag_page_controls(ui);
             });
             ui.add_space(14.0);
@@ -60,7 +61,7 @@ impl App {
 
             let mut groups: Vec<(String, Vec<(String, usize)>)> = Vec::new();
             if !starred.is_empty() {
-                groups.push((format!("{}  Starred", ic::STAR), starred.clone()));
+                groups.push((format!("{}  {}", ic::STAR, tr("Starred")), starred.clone()));
             }
             let letter = |t: &str| {
                 let first = t.chars().next().map_or('#', |c| c.to_uppercase().next().unwrap_or(c));
@@ -162,7 +163,7 @@ impl App {
             let tags = if self.ws.org.tag_sel.is_empty() { vec![tag.to_string()] } else { self.ws.org.tag_sel.clone() };
             self.tags_menu(ui, lib, &tags);
         }));
-        resp.on_hover_text("Click to pick, ⌘ or ⇧ to pick more · double-click to show items · right-click for more. Renaming to an existing tag merges them.");
+        resp.on_hover_text(tr("Click to pick, ⌘ or ⇧ to pick more · double-click to show items · right-click for more. Renaming to an existing tag merges them."));
     }
 
     /// Eagle's Filter with Tags: All, with the tag filter set to any of

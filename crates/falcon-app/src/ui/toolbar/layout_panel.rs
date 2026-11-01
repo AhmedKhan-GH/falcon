@@ -7,6 +7,7 @@ use crate::app::{Action, App};
 use falcon_library::Library;
 use crate::icons as ic;
 use falcon_library::search::OrderBy;
+use crate::locale::{tr, trf};
 use crate::logic::{self, Layout};
 use crate::theme::{self as t, font};
 use crate::ui::widgets::{galley, icon};
@@ -18,6 +19,34 @@ use crate::ui::grid::{GRID_PAD_X, list_span};
 /// The sort part of the panel: the view's own sort while a folder or smart
 /// folder owns it, else the global one.
 type OwnSort = Option<(OrderTarget, Option<(FolderOrder, bool)>)>;
+
+/// The current language's text for a layout, sort key, info type or list
+/// column name, as the `label()` functions of `Layout`, `OrderBy`,
+/// `InfoType`, `ListColumn` and `organize::order_label` give them. Those stay
+/// English (one is saved in the app state and looked up by its text).
+pub(crate) fn label_text(label: &str) -> &str {
+    match label {
+        "Waterfall" => tr("Waterfall"),
+        "Justified" => tr("Justified"),
+        "Grid" => tr("Grid"),
+        "List" => tr("List"),
+        "Dimensions" => tr("Dimensions"),
+        "File Size" => tr("File Size"),
+        "Tags" => tr("Tags"),
+        "Rating" => tr("Rating"),
+        "Date Modified" => tr("Date Modified"),
+        "Date Created" => tr("Date Created"),
+        "Date Imported" => tr("Date Imported"),
+        "Name" => tr("Name"),
+        "Type" => tr("Type"),
+        "Title" => tr("Title"),
+        "Extension" => tr("Extension"),
+        "Duration" => tr("Duration"),
+        "Random" => tr("Random"),
+        "Manual" => tr("Manual"),
+        other => other,
+    }
+}
 
 /// A row with `label` on the left and a switch on the right; the whole row
 /// flips `on`. Returns whether it changed.
@@ -68,16 +97,16 @@ impl App {
     pub(crate) fn layout_panel(&mut self, ui: &mut Ui, own: OwnSort) {
         ui.set_min_width(250.0);
         ui.set_max_width(250.0);
-        heading(ui, "Layout");
-        let labels: Vec<&str> = Layout::ALL.iter().map(|l| l.label()).collect();
+        heading(ui, tr("Layout"));
+        let labels: Vec<&str> = Layout::ALL.iter().map(|l| label_text(l.label())).collect();
         let cur = Layout::ALL.iter().position(|l| *l == self.ws.layout).unwrap_or(0);
         if let Some(i) = segments(ui, &labels, cur) {
             self.set_layout(Layout::ALL[i]);
         }
         if self.ws.layout == Layout::Grid {
             ui.add_space(4.0);
-            heading(ui, "Fill mode");
-            if let Some(i) = segments(ui, &["Fit", "Fill"], usize::from(self.display.fill)) {
+            heading(ui, tr("Fill mode"));
+            if let Some(i) = segments(ui, &[tr("Fit"), tr("Fill")], usize::from(self.display.fill)) {
                 self.display.fill = i == 1;
             }
         }
@@ -92,29 +121,29 @@ impl App {
         self.panel_sort(ui, own);
         ui.separator();
         let d = &mut self.display;
-        switch_row(ui, "Show Name", &mut d.show_name);
-        switch_row(ui, "Show Item Info", &mut d.show_info);
+        switch_row(ui, tr("Show Name"), &mut d.show_name);
+        switch_row(ui, tr("Show Item Info"), &mut d.show_info);
         if d.show_info {
             ui.horizontal(|ui| {
                 ui.add_space(6.0);
-                ui.menu_button(format!("{}  {}", d.info.label(), ic::CARET_DOWN), |ui| {
+                ui.menu_button(format!("{}  {}", label_text(d.info.label()), ic::CARET_DOWN), |ui| {
                     for k in logic::InfoType::ALL {
-                        if ui.add(egui::Button::selectable(d.info == k, k.label())).clicked() {
+                        if ui.add(egui::Button::selectable(d.info == k, label_text(k.label()))).clicked() {
                             d.info = k;
                         }
                     }
                 });
             });
         }
-        switch_row(ui, "Show Extension", &mut d.show_ext);
-        switch_row(ui, "Show Extension Label", &mut d.ext_badge);
-        switch_row(ui, "Show Comment Count", &mut d.comment_badge);
-        switch_row(ui, "Show Subfolder Content", &mut d.subfolders);
+        switch_row(ui, tr("Show Extension"), &mut d.show_ext);
+        switch_row(ui, tr("Show Extension Label"), &mut d.ext_badge);
+        switch_row(ui, tr("Show Comment Count"), &mut d.comment_badge);
+        switch_row(ui, tr("Show Subfolder Content"), &mut d.subfolders);
         ui.separator();
-        switch_row(ui, "Show Sidebar", &mut self.show_sidebar);
-        switch_row(ui, "Show Inspector", &mut self.show_inspector);
+        switch_row(ui, tr("Show Sidebar"), &mut self.show_sidebar);
+        switch_row(ui, tr("Show Inspector"), &mut self.show_inspector);
         ui.separator();
-        if ui.add_sized(vec2(ui.available_width(), 24.0), egui::Button::new("Refresh")).clicked() {
+        if ui.add_sized(vec2(ui.available_width(), 24.0), egui::Button::new(tr("Refresh"))).clicked() {
             self.refresh = true;
             ui.close();
         }
@@ -122,23 +151,23 @@ impl App {
 
     /// The panel's sort row: a menu of keys and the two directions.
     fn panel_sort(&mut self, ui: &mut Ui, own: OwnSort) {
-        heading(ui, "Sort by");
+        heading(ui, tr("Sort by"));
         if let Some((target, cur)) = own {
             let label = match cur {
-                Some((k, _)) => organize::order_label(k).to_string(),
-                None => format!("Global ({})", self.ws.sort.label()),
+                Some((k, _)) => label_text(organize::order_label(k)).to_string(),
+                None => trf("Global ({sort})", &[("sort", &label_text(self.ws.sort.label()))]),
             };
             ui.menu_button(format!("{label}  {}", ic::CARET_DOWN), |ui| self.own_sort_menu(ui, target, cur));
             return;
         }
-        ui.menu_button(format!("{}  {}", self.ws.sort.label(), ic::CARET_DOWN), |ui| {
+        ui.menu_button(format!("{}  {}", label_text(self.ws.sort.label()), ic::CARET_DOWN), |ui| {
             for k in OrderBy::ALL {
-                if ui.add(egui::Button::selectable(k == self.ws.sort, k.label())).clicked() {
+                if ui.add(egui::Button::selectable(k == self.ws.sort, label_text(k.label()))).clicked() {
                     self.ws.sort = k;
                 }
             }
         });
-        let labels = if self.ws.sort.is_time() { ["Newest First", "Oldest First"] } else { ["Ascending", "Descending"] };
+        let labels = if self.ws.sort.is_time() { [tr("Newest First"), tr("Oldest First")] } else { [tr("Ascending"), tr("Descending")] };
         if let Some(i) = segments(ui, &labels, usize::from(!self.ws.increase)) {
             self.ws.increase = i == 0;
         }
@@ -167,7 +196,7 @@ impl App {
                 ui.painter().rect_filled(cell.shrink2(vec2(0.0, 3.0)), t::RADIUS, t::p().row_hover);
             }
             let color = if active { t::p().text } else { t::p().text_muted };
-            let g = galley(ui, col.label(), font(12.0), color, cell.width() - 24.0);
+            let g = galley(ui, label_text(col.label()), font(12.0), color, cell.width() - 24.0);
             let gw = g.size().x;
             ui.painter().galley(Pos2::new(cell.left() + 4.0, cy - g.size().y / 2.0), g, color);
             if active {
@@ -193,7 +222,7 @@ impl App {
     fn column_menu(&mut self, ui: &mut Ui) {
         for col in logic::ListColumn::OPTIONAL {
             if let Some(on) = self.display.columns.flag(col) {
-                ui.checkbox(on, col.label());
+                ui.checkbox(on, label_text(col.label()));
             }
         }
     }

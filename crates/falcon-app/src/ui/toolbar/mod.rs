@@ -7,6 +7,7 @@ use falcon_library::Library;
 
 use crate::app::{App, Progress, TILE_MAX, TILE_MIN};
 use crate::icons as ic;
+use crate::locale::{tr, trf};
 use crate::logic::{self, Scope};
 use crate::theme::{self as t, font};
 use crate::ui::widgets::{galley, icon, icon_button, window_drag};
@@ -34,7 +35,7 @@ impl App {
         } else if self.ws.query.trim().is_empty() {
             self.ws.scope.title(&lib.metadata.folders)
         } else {
-            "Search results".into()
+            tr("Search results").into()
         };
         let g = galley(ui, &title, font(15.0), t::p().text, 220.0);
         let title_end = x + 45.0 + g.size().x;
@@ -44,13 +45,13 @@ impl App {
         let search = Rect::from_min_size(Pos2::new(bar.right() - 18.0 - 178.0, cy - 15.0), vec2(178.0, 30.0));
         self.search_field(ui, search);
         let mut ix = search.left() - 20.0;
-        let filter = icon_button(ui, Pos2::new(ix, cy), ic::FUNNEL, 18.0, true, "Filter");
+        let filter = icon_button(ui, Pos2::new(ix, cy), ic::FUNNEL, 18.0, true, tr("Filter"));
         ix -= 26.0;
-        let layout = icon_button(ui, Pos2::new(ix, cy), ic::LAYOUT, 18.0, true, "Layout and sort");
+        let layout = icon_button(ui, Pos2::new(ix, cy), ic::LAYOUT, 18.0, true, tr("Layout and sort"));
         ix -= 26.0;
-        icon_button(ui, Pos2::new(ix, cy), ic::LIGHTNING, 18.0, false, "Actions");
+        icon_button(ui, Pos2::new(ix, cy), ic::LIGHTNING, 18.0, false, tr("Actions"));
         ix -= 26.0;
-        icon_button(ui, Pos2::new(ix, cy), ic::PUZZLE_PIECE, 18.0, false, "Plugins");
+        icon_button(ui, Pos2::new(ix, cy), ic::PUZZLE_PIECE, 18.0, false, tr("Plugins"));
         let icons_left = ix - 20.0;
 
         let own = self.own_sort(lib);
@@ -83,20 +84,20 @@ impl App {
         use crate::shortcuts::{Command as C, display};
         let key = |cmd: C| self.shortcuts.binding(cmd).map(|c| display(ui.ctx(), &c)).unwrap_or_default();
         let (all, side, insp) = (key(C::ToggleAll), key(C::ToggleSidebar), key(C::ToggleInspector));
-        let tip = if all.is_empty() { "Sidebar and Inspector (Tab)".to_string() } else { format!("Sidebar and Inspector (Tab, {all})") };
+        let tip = if all.is_empty() { tr("Sidebar and Inspector (Tab)").to_string() } else { trf("Sidebar and Inspector (Tab, {keys})", &[("keys", &all)]) };
         let resp = icon_button(ui, center, ic::SIDEBAR_SIMPLE, 18.0, true, &tip);
         if resp.clicked() {
             self.toggle_panels();
         }
         resp.context_menu(|ui| {
             ui.set_min_width(220.0);
-            if ui.add(egui::Button::new("Sidebar and Inspector").shortcut_text("Tab")).clicked() {
+            if ui.add(egui::Button::new(tr("Sidebar and Inspector")).shortcut_text("Tab")).clicked() {
                 self.toggle_panels();
             }
-            if ui.add(egui::Button::selectable(self.show_sidebar, "Sidebar").shortcut_text(side)).clicked() {
+            if ui.add(egui::Button::selectable(self.show_sidebar, tr("Sidebar")).shortcut_text(side)).clicked() {
                 self.show_sidebar = !self.show_sidebar;
             }
-            if ui.add(egui::Button::selectable(self.show_inspector, "Inspector").shortcut_text(insp)).clicked() {
+            if ui.add(egui::Button::selectable(self.show_inspector, tr("Inspector")).shortcut_text(insp)).clicked() {
                 self.show_inspector = !self.show_inspector;
             }
         });
@@ -109,7 +110,7 @@ impl App {
         icon(ui, Pos2::new(rect.left() + 14.0, rect.center().y), ic::MAGNIFYING_GLASS, 16.0, t::p().text);
         icon(ui, Pos2::new(rect.left() + 28.0, rect.center().y + 1.0), ic::CARET_DOWN, 9.0, t::p().text_muted);
         let caret = Rect::from_min_max(Pos2::new(rect.left() + 2.0, rect.top()), Pos2::new(rect.left() + 38.0, rect.bottom()));
-        let scope_resp = ui.interact(caret, ui.scope_id().with("search-scope"), Sense::click()).on_hover_text("Search Scope");
+        let scope_resp = ui.interact(caret, ui.scope_id().with("search-scope"), Sense::click()).on_hover_text(tr("Search Scope"));
         egui::Popup::menu(&scope_resp).show(|ui| self.search_scope_menu(ui));
         icon(ui, Pos2::new(rect.right() - 17.0, rect.center().y), ic::CAMERA, 17.0, t::p().text_disabled);
         let inner = Rect::from_min_max(Pos2::new(rect.left() + 40.0, rect.top()), Pos2::new(rect.right() - 32.0, rect.bottom()));
@@ -119,7 +120,7 @@ impl App {
                 .id_salt("search")
                 .frame(egui::Frame::NONE)
                 .margin(egui::Margin::ZERO)
-                .hint_text(RichText::new("Search").color(t::p().text_muted))
+                .hint_text(RichText::new(tr("Search")).color(t::p().text_muted))
                 .font(font(14.0))
                 .align(Align2::LEFT_CENTER)
                 .desired_width(inner.width()),
@@ -173,9 +174,9 @@ impl App {
             drop(pr);
             self.imports.select_after = Some(added);
             if failed > 0 {
-                self.flash_error(format!("Added {}, {failed} failed", done - failed));
+                self.flash_error(trf("Added {count}, {failed} failed", &[("count", &(done - failed)), ("failed", &failed)]));
             } else if self.prefs.tells_import_done() {
-                self.flash(format!("Added {done}"));
+                self.flash(trf("Added {count}", &[("count", &done)]));
             }
             return false;
         }
@@ -186,7 +187,7 @@ impl App {
         let f = done as f32 / total as f32;
         let fill = Rect::from_min_max(track.min, Pos2::new(track.left() + track.width() * f, track.bottom()));
         p.rect_filled(fill, CornerRadius::same(2), t::p().primary);
-        let text = format!("Importing {done} of {total}  ·  {current}");
+        let text = trf("Importing {done} of {total}  ·  {current}", &[("done", &done), ("total", &total), ("current", &current)]);
         let g = galley(ui, &text, font(12.0), t::p().text_muted, rect.width() - 40.0);
         p.galley(Pos2::new(rect.left() + GRID_PAD_X, rect.top() + 3.0), g, t::p().text_muted);
         true

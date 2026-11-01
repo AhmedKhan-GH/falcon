@@ -7,6 +7,7 @@ use std::time::Instant;
 use eframe::egui::{self, Align2, Color32, CornerRadius, Pos2, Rect, Sense, Stroke, Ui, vec2};
 
 use crate::app::App;
+use crate::locale::tr;
 use crate::logic::Scope;
 use crate::theme::{self as t, font};
 use crate::toast::{Kind as ToastKind, Life, Link, Toast};
@@ -23,7 +24,7 @@ impl App {
                 let f = font(13.0);
                 let gal = galley(ui, &toast.msg, f.clone(), p.text, 400.0);
                 let link = toast.link.as_ref().map(|l| galley(ui, &l.label, f.clone(), p.primary, 240.0));
-                let undo = toast.undo.then(|| galley(ui, "Undo", f.clone(), p.primary, 80.0));
+                let undo = toast.undo.then(|| galley(ui, tr("Undo"), f.clone(), p.primary, 80.0));
                 let mark = if toast.kind == ToastKind::Error { 20.0 } else { 0.0 };
                 let gap = 8.0;
                 let mut w = 24.0 + mark + gal.size().x;

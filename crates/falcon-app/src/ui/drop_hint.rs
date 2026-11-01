@@ -5,6 +5,7 @@
 use eframe::egui::{self, Color32, CornerRadius, LayerId, Order, Rect, Stroke, StrokeKind, vec2};
 
 use crate::app::App;
+use crate::locale::tr;
 use crate::drop_pos::{self, Target};
 use crate::theme::{self as t, font};
 
@@ -36,14 +37,14 @@ impl App {
                 let right = if self.show_inspector { window.right() - self.inspector_width } else { window.right() };
                 let grid = Rect::from_x_y_ranges(left..=right, window.y_range());
                 let text = match &self.ws.scope {
-                    crate::logic::Scope::Folder(_) => "Drop files to import them into this folder",
-                    _ => "Drop files to import them",
+                    crate::logic::Scope::Folder(_) => tr("Drop files to import them into this folder"),
+                    _ => tr("Drop files to import them"),
                 };
                 shade(grid, text);
             }
             Target::Sidebar => {
                 if let Some(s) = sidebar {
-                    shade(s, "Drop folders to import them with their subfolders");
+                    shade(s, tr("Drop folders to import them with their subfolders"));
                 }
             }
             Target::Folder(id) => {
