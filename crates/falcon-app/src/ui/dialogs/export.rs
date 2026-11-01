@@ -458,7 +458,7 @@ impl App {
     /// item menu, which the viewer's right-click menu shares.
     pub(crate) fn item_copy_menu(&mut self, ui: &mut Ui, targets: &[String]) {
         let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::Copy);
-        if ui.add(egui::Button::new("Copy").shortcut_text(keys)).clicked() {
+        if ui.add(egui::Button::new(tr("Copy")).shortcut_text(keys)).clicked() {
             self.copy_items(targets);
         }
         let mut ask = |kind| self.ws.export.request = Some(Request::Copy(kind, targets.to_vec()));

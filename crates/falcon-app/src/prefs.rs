@@ -1166,10 +1166,10 @@ fn touch_id_switch(ui: &mut Ui, d: &mut Draft, form: &mut PasswordForm) {
         return;
     }
     let mut on = d.prefs.touch_id;
-    let resp = ui.add_enabled(form.touch_ticket.is_none(), egui::Checkbox::new(&mut on, "Unlock with Touch ID"));
+    let resp = ui.add_enabled(form.touch_ticket.is_none(), egui::Checkbox::new(&mut on, tr("Unlock with Touch ID")));
     if resp.changed() {
         if on {
-            form.touch_ticket = crate::touch_id::start("turn on Touch ID for unlocking Falcon", ui.ctx());
+            form.touch_ticket = crate::touch_id::start(tr("turn on Touch ID for unlocking Falcon"), ui.ctx());
         } else {
             d.prefs.touch_id = false;
         }

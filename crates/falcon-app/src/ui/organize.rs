@@ -428,7 +428,7 @@ impl App {
     pub(crate) fn folder_menu_extras(&mut self, ui: &mut Ui, lib: &Library, f: &Folder) {
         let shut = organize::is_shut(f, &self.ws.org.unlocked);
         // Eagle disables its auto-tag entry while the folder is locked.
-        if ui.add_enabled(!shut, egui::Button::new("Auto-Tags…")).on_hover_text("Name and auto-tags (⇧⌘R)").clicked() {
+        if ui.add_enabled(!shut, egui::Button::new(tr("Auto-Tags…"))).on_hover_text(tr("Name and auto-tags (⇧⌘R)")).clicked() {
             self.open_folder_settings(f);
         }
         self.folder_password_menu(ui, f);
@@ -534,9 +534,9 @@ impl App {
             if ui.button(tr("Rename")).clicked() {
                 self.ws.org.smart_rename = Some((sf.id.clone(), sf.name.clone()));
             }
-            if !group && ui.button("Copy Link").clicked() {
+            if !group && ui.button(tr("Copy Link")).clicked() {
                 ui.ctx().copy_text(crate::links::smart_link(&sf.id));
-                self.flash_brief("Link copied");
+                self.flash_brief(tr("Link copied"));
             }
             // A group has no rules to edit.
             if !group && ui.button(tr("Edit Rules…")).clicked() {

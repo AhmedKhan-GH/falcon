@@ -43,7 +43,7 @@ impl App {
         let mut save = false;
         let modal = egui::Modal::new(egui::Id::unique("add-to-folders")).show(ctx, |ui| {
             ui.set_width(400.0);
-            ui.label(RichText::new("Add to Folders").size(15.0));
+            ui.label(RichText::new(crate::locale::tr("Add to Folders")).size(15.0));
             ui.add_space(6.0);
             if p.naming.is_some() {
                 self.picker_name_prompt(ui, &mut p);
@@ -52,7 +52,7 @@ impl App {
             let rows = folder_picker::rows(&p, roots, &self.recent_folders, shut);
             // Keys while the search field has focus, as in Eagle.
             let (mut toggle, mut save_key) = (false, false);
-            let te = ui.add(TextEdit::singleline(&mut p.search).hint_text("Search").desired_width(f32::INFINITY));
+            let te = ui.add(TextEdit::singleline(&mut p.search).hint_text(crate::locale::tr("Search")).desired_width(f32::INFINITY));
             if te.changed() {
                 let rows = folder_picker::rows(&p, roots, &self.recent_folders, shut);
                 p.highlight = folder_picker::first_pickable(&rows);
@@ -99,7 +99,7 @@ impl App {
             egui::ScrollArea::vertical().max_height(380.0).auto_shrink([false, true]).show(ui, |ui| {
                 ui.spacing_mut().item_spacing.y = 0.0;
                 if rows.iter().all(|r| matches!(r, Row::Heading)) && roots.is_empty() {
-                    ui.label(RichText::new("No folders yet").color(t::p().text_muted));
+                    ui.label(RichText::new(crate::locale::tr("No folders yet")).color(t::p().text_muted));
                 }
                 for (i, row) in rows.iter().enumerate() {
                     self.picker_row(ui, lib, &mut p, i, row);
@@ -109,14 +109,14 @@ impl App {
             ui.add_space(6.0);
             ui.horizontal(|ui| {
                 if p.current.is_some() {
-                    ui.checkbox(&mut p.remove_from_current, "Take them out of the open folder");
+                    ui.checkbox(&mut p.remove_from_current, crate::locale::tr("Take them out of the open folder"));
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let label = format!("Add {}", crate::ui::dialogs::export::plural(p.items.len(), "item"));
+                    let label = crate::locale::tr_n(p.items.len(), "Add {n} item", "Add {n} items");
                     if ui.add_enabled(p.can_save(), egui::Button::new(label)).clicked() || (save_key && p.can_save()) {
                         save = true;
                     }
-                    if ui.button("Cancel").clicked() {
+                    if ui.button(crate::locale::tr("Cancel")).clicked() {
                         keep = false;
                     }
                 });
@@ -162,12 +162,12 @@ impl App {
             ui.painter().text(
                 Pos2::new(rect.left() + 6.0, rect.center().y),
                 egui::Align2::LEFT_CENTER,
-                format!("Folders ({n})"),
+                crate::locale::trf("Folders ({n})", &[("n", &n)]),
                 font(12.5),
                 t::p().text_muted,
             );
             let plus = Rect::from_center_size(Pos2::new(rect.right() - 14.0, rect.center().y), vec2(20.0, 20.0));
-            let r = ui.interact(plus, ui.scope_id().with("picker-new-top"), Sense::click()).on_hover_text("New Folder");
+            let r = ui.interact(plus, ui.scope_id().with("picker-new-top"), Sense::click()).on_hover_text(crate::locale::tr("New Folder"));
             icon(ui, plus.center(), ic::PLUS, 14.0, if r.hovered() { t::p().text } else { t::p().text_muted });
             if r.clicked() {
                 p.naming = Some((NewPlace::Top, String::new()));
@@ -187,7 +187,7 @@ impl App {
         match row {
             Row::Create => {
                 icon(ui, Pos2::new(rect.left() + 16.0, cy), ic::PLUS, 14.0, t::p().text_muted);
-                let g = galley(ui, &format!("Create “{}”", p.search.trim()), font(13.0), t::p().text, rect.width() - 40.0);
+                let g = galley(ui, &crate::locale::trf("Create “{text}”", &[("text", &p.search.trim())]), font(13.0), t::p().text, rect.width() - 40.0);
                 ui.painter().galley(Pos2::new(rect.left() + 32.0, cy - g.size().y / 2.0), g, t::p().text);
                 if resp.clicked() {
                     self.picker_pick(p, row);
@@ -234,10 +234,10 @@ impl App {
                 }
                 if !recent {
                     resp.context_menu(|ui| {
-                        if ui.button("New Subfolder").clicked() {
+                        if ui.button(crate::locale::tr("New Subfolder")).clicked() {
                             p.naming = Some((NewPlace::Inside(id.clone()), String::new()));
                         }
-                        if ui.button("New Folder Below").clicked() {
+                        if ui.button(crate::locale::tr("New Folder Below")).clicked() {
                             p.naming = Some((NewPlace::After(id.clone()), String::new()));
                         }
                     });
@@ -250,8 +250,8 @@ impl App {
     /// Names a folder made from the heading's + or a row's menu.
     fn picker_name_prompt(&mut self, ui: &mut Ui, p: &mut Picker) {
         let Some((place, mut name)) = p.naming.take() else { return };
-        ui.label(RichText::new("New Folder").color(t::p().text_muted));
-        let te = ui.add(TextEdit::singleline(&mut name).hint_text("Folder name").desired_width(f32::INFINITY));
+        ui.label(RichText::new(crate::locale::tr("New Folder")).color(t::p().text_muted));
+        let te = ui.add(TextEdit::singleline(&mut name).hint_text(crate::locale::tr("Folder name")).desired_width(f32::INFINITY));
         if !te.has_focus() && ui.memory(|m| m.focused().is_none()) {
             te.request_focus();
         }
@@ -261,11 +261,11 @@ impl App {
         let mut done = cancel;
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let clean = logic::clean_folder_name(&name);
-            if (ui.add_enabled(!clean.is_empty(), egui::Button::new("Create")).clicked() || (enter && !clean.is_empty())) && !done {
+            if (ui.add_enabled(!clean.is_empty(), egui::Button::new(crate::locale::tr("Create"))).clicked() || (enter && !clean.is_empty())) && !done {
                 self.ws.actions.push(Action::Folders(FolderAction::PickerCreate(clean, place.clone(), false)));
                 done = true;
             }
-            if ui.button("Cancel").clicked() {
+            if ui.button(crate::locale::tr("Cancel")).clicked() {
                 done = true;
             }
         });

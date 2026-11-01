@@ -75,10 +75,10 @@ impl App {
         let label = RichText::new(format!("{}  Use Touch ID", ic::LOCK_SIMPLE_OPEN)).color(t::p().text);
         if ui.add_enabled(!waiting, egui::Button::new(label).min_size(vec2(220.0, 0.0))).clicked() {
             self.lock.touch_failed = false;
-            self.lock.touch_ticket = crate::touch_id::start("unlock Falcon", ui.ctx());
+            self.lock.touch_ticket = crate::touch_id::start(tr("unlock Falcon"), ui.ctx());
         }
         if self.lock.touch_failed {
-            ui.label(RichText::new("Touch ID didn't unlock Falcon").size(12.0).color(t::p().icon_red));
+            ui.label(RichText::new(tr("Touch ID didn't unlock Falcon")).size(12.0).color(t::p().icon_red));
         }
         false
     }

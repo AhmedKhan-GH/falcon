@@ -113,8 +113,8 @@ impl App {
         ui.add_space(4.0);
         // Eagle's Thumbnail option: Quality shows large cards from their
         // originals, Speed keeps the thumbnails.
-        heading(ui, "Thumbnail");
-        if let Some(i) = segments(ui, &["Speed", "Quality"], usize::from(self.display.quality)) {
+        heading(ui, tr("Thumbnail"));
+        if let Some(i) = segments(ui, &[tr("Speed"), tr("Quality")], usize::from(self.display.quality)) {
             self.display.quality = i == 1;
         }
         ui.separator();

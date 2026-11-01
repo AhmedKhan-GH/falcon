@@ -10,17 +10,16 @@ use falcon_library::pack::{self, PackImport};
 use falcon_library::Library;
 
 use crate::app::{lock, App};
-use crate::ui::dialogs::export::plural;
 use crate::ui::dialogs::library_notices::Alert;
 use crate::ui::dialogs::progress::Outcome;
 
 /// The toast for a finished thumbnail refresh.
 fn refreshed_text(done: usize, custom: usize) -> String {
-    let mut msg = format!("Refreshed {done} {}", if done == 1 { "thumbnail" } else { "thumbnails" });
     if custom > 0 {
-        msg.push_str(&format!(", kept {custom} custom"));
+        crate::locale::tr_nf(done, "Refreshed {n} thumbnail, kept {custom} custom", "Refreshed {n} thumbnails, kept {custom} custom", &[("custom", &custom)])
+    } else {
+        crate::locale::tr_n(done, "Refreshed {n} thumbnail", "Refreshed {n} thumbnails")
     }
-    msg
 }
 
 impl App {
@@ -31,7 +30,7 @@ impl App {
         if self.operation_running() {
             return;
         }
-        let h = self.ws.op.start(&self.ctx, "Refreshing Thumbnails", ids.len(), true);
+        let h = self.ws.op.start(&self.ctx, crate::locale::tr("Refreshing Thumbnails"), ids.len(), true);
         std::thread::spawn(move || {
             let (mut done, mut custom, mut failure) = (0, 0, None);
             let mut forget = Vec::new();
@@ -49,7 +48,7 @@ impl App {
                 }
                 forget.push(id.clone());
             }
-            h.finish(Outcome { message: refreshed_text(done, custom), error: failure.map(|e| format!("Could not save: {e}")), forget, changed: done > 0, ..Default::default() });
+            h.finish(Outcome { message: refreshed_text(done, custom), error: failure.map(|e| crate::locale::trf("Could not save: {error}", &[("error", &e)])), forget, changed: done > 0, ..Default::default() });
         });
     }
 
@@ -59,14 +58,14 @@ impl App {
     pub(crate) fn start_empty_trash(&mut self, lib: &Library) {
         let ids: Vec<String> = lib.items().iter().filter(|i| i.is_deleted).map(|i| i.id.clone()).collect();
         if ids.is_empty() {
-            self.flash("Deleted 0");
+            self.flash(crate::locale::trf("Deleted {n}", &[("n", &0)]));
             return;
         }
         let Some(shared) = self.ws.lib.clone() else { return };
         if self.operation_running() {
             return;
         }
-        let h = self.ws.op.start(&self.ctx, "Emptying the Trash", ids.len(), true);
+        let h = self.ws.op.start(&self.ctx, crate::locale::tr("Emptying the Trash"), ids.len(), true);
         let names: Vec<String> = ids.iter().map(|id| lib.item(id).map(|i| i.name.clone()).unwrap_or_default()).collect();
         std::thread::spawn(move || {
             let mut deleted = 0;
@@ -78,12 +77,12 @@ impl App {
                 h.step(n, names[n].clone());
                 let result = lock(&shared).delete_permanently(std::slice::from_ref(id));
                 if let Err(e) = result {
-                    failure = Some(format!("Could not save: {e}"));
+                    failure = Some(crate::locale::trf("Could not save: {error}", &[("error", &e)]));
                     break;
                 }
                 deleted += 1;
             }
-            h.finish(Outcome { message: format!("Deleted {deleted}"), error: failure, deleted: true, changed: deleted > 0, ..Default::default() });
+            h.finish(Outcome { message: crate::locale::trf("Deleted {n}", &[("n", &deleted)]), error: failure, deleted: true, changed: deleted > 0, ..Default::default() });
         });
     }
 
@@ -96,11 +95,11 @@ impl App {
             return;
         }
         let file = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        let h = self.ws.op.start(&self.ctx, "Importing Eagle Package", 0, true);
-        h.step(0, format!("Reading {file}"));
+        let h = self.ws.op.start(&self.ctx, crate::locale::tr("Importing Eagle Package"), 0, true);
+        h.step(0, crate::locale::trf("Reading {file}", &[("file", &file)]));
         std::thread::spawn(move || {
             let failed = |e: falcon_library::Error| Outcome {
-                alert: Some(Alert::new("Can't import the package", format!("It may be incomplete or damaged; export or download it again. ({e})"))),
+                alert: Some(Alert::new(crate::locale::tr("Can't import the package"), crate::locale::trf("It may be incomplete or damaged; export or download it again. ({error})", &[("error", &e)]))),
                 ..Default::default()
             };
             let opts = pack::PackImportOptions { folder, skip_duplicates };
@@ -134,7 +133,11 @@ impl App {
                     }
                 }
             }
-            let message = if stopped { format!("Stopped after {added} of {} from {file}", plural(total, "item")) } else { format!("Imported {} from {file}", plural(added, "item")) };
+            let message = if stopped {
+                crate::locale::tr_nf(total, "Stopped after {added} of {n} item from {name}", "Stopped after {added} of {n} items from {name}", &[("added", &added), ("name", &file)])
+            } else {
+                crate::locale::tr_nf(added, "Imported {n} item from {name}", "Imported {n} items from {name}", &[("name", &file)])
+            };
             h.finish(Outcome { message, changed: true, ..Default::default() });
         });
     }

@@ -176,10 +176,10 @@ impl App {
                         let shut = crate::organize::is_shut(child, &self.ws.org.unlocked);
                         resp.context_menu(|ui| {
                             ui.set_min_width(180.0);
-                            if ui.add_enabled(!shut, egui::Button::new("Rename")).clicked() {
+                            if ui.add_enabled(!shut, egui::Button::new(tr("Rename"))).clicked() {
                                 self.ws.strip_rename = Some((child.id.clone(), child.name.clone()));
                             }
-                            if ui.add_enabled(!shut, egui::Button::new("Auto-Tags…")).clicked() {
+                            if ui.add_enabled(!shut, egui::Button::new(tr("Auto-Tags…"))).clicked() {
                                 self.open_folder_settings(child);
                             }
                             self.folder_password_menu(ui, child);
@@ -189,7 +189,7 @@ impl App {
                             }
                             ui.separator();
                             let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::Trash);
-                            let delete = egui::Button::new(egui::RichText::new("Delete Folder").color(t::p().icon_red)).shortcut_text(keys);
+                            let delete = egui::Button::new(egui::RichText::new(tr("Delete Folder")).color(t::p().icon_red)).shortcut_text(keys);
                             if ui.add_enabled(!shut, delete).clicked() {
                                 self.ask_delete_folders(lib, vec![child.id.clone()]);
                             }

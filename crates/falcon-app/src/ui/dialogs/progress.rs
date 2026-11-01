@@ -127,7 +127,7 @@ pub(crate) fn fraction(done: usize, total: usize) -> Option<f32> {
 /// "3 of 10", or empty while the total isn't known. `done` never reads
 /// past `total`.
 pub(crate) fn count_text(done: usize, total: usize) -> String {
-    if total == 0 { String::new() } else { format!("{} of {total}", done.min(total)) }
+    if total == 0 { String::new() } else { crate::locale::trf("{done} of {total}", &[("done", &done.min(total)), ("total", &total)]) }
 }
 
 /// `name` cut to `max` characters with an ellipsis in the middle, keeping
@@ -175,7 +175,7 @@ impl App {
             if cancellable {
                 ui.add_space(8.0);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("Cancel").clicked() {
+                    if ui.button(crate::locale::tr("Cancel")).clicked() {
                         cancel.store(true, Ordering::Relaxed);
                     }
                 });
@@ -191,7 +191,7 @@ impl App {
     pub(crate) fn operation_running(&mut self) -> bool {
         let busy = self.ws.op.busy();
         if busy {
-            self.flash("Wait for the current operation to finish");
+            self.flash(crate::locale::tr("Wait for the current operation to finish"));
         }
         busy
     }
