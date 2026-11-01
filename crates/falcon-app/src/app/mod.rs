@@ -643,52 +643,6 @@ impl App {
         }
     }
 
-    /// The lock screen: the password field, its hint and Unlock.
-    pub(crate) fn lock_screen(&mut self, ui: &mut Ui) {
-        let rect = ui.max_rect();
-        let ctx = ui.ctx().clone();
-        if ctx.cumulative_frame_nr() == 0 {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
-        }
-        t::follow_system(&ctx);
-        egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t::p().main)).show(ui, |ui| {
-            window_drag(ui, Rect::from_min_size(rect.min, vec2(rect.width(), t::BAR_HEIGHT)), "lock");
-            let card = Rect::from_center_size(rect.center(), vec2(300.0, 220.0));
-            let mut c = ui.new_child(egui::UiBuilder::new().max_rect(card).layout(egui::Layout::top_down(egui::Align::Center)));
-            c.label(RichText::new(ic::LOCK_SIMPLE).font(font(40.0)).color(t::p().text_muted));
-            c.add_space(8.0);
-            c.label(RichText::new("Falcon is locked").size(16.0).color(t::p().text));
-            c.add_space(12.0);
-            let field = c.add(
-                TextEdit::singleline(&mut self.lock.typed)
-                    .password(true)
-                    .hint_text(RichText::new("Password").color(t::p().text_muted))
-                    .desired_width(220.0)
-                    .id_salt("lock-password"),
-            );
-            if !field.has_focus() && !field.lost_focus() {
-                field.request_focus();
-            }
-            let enter = field.lost_focus() && ctx.input(|i| i.key_pressed(Key::Enter));
-            c.add_space(8.0);
-            let unlock = c.add(egui::Button::new(RichText::new("Unlock").color(Color32::WHITE)).fill(t::p().primary).min_size(vec2(220.0, 0.0))).clicked();
-            if (enter || unlock) && self.lock.try_unlock(self.prefs.app_lock.as_ref()) {
-                return;
-            }
-            if self.lock.failed {
-                c.label(RichText::new("Wrong password").size(12.0).color(t::p().icon_red));
-            }
-            let hint = self.prefs.app_lock.as_ref().map(|s| s.hint.clone()).unwrap_or_default();
-            if !hint.is_empty() {
-                if self.lock.show_hint {
-                    c.label(RichText::new(hint).size(12.0).color(t::p().text_muted));
-                } else if c.link(RichText::new("Show hint").size(12.0)).clicked() {
-                    self.lock.show_hint = true;
-                }
-            }
-        });
-    }
-
     /// Takes the Preferences window's Save or Apply.
     pub(crate) fn apply_preferences(&mut self, d: crate::prefs::Draft) {
         let restart = self.prefs.api_changed(&d.prefs);
@@ -712,77 +666,6 @@ impl App {
             self.start_server();
             if self.ws.lib.is_some() && !self.prefs.api_enabled {
                 self.flash("API stopped");
-            }
-        }
-    }
-
-    /// Draws the collect window and imports what it receives into its
-    /// chosen folder.
-    pub(crate) fn collect_window(&mut self, ctx: &egui::Context) {
-        use crate::collect;
-        collect::migrate(&mut self.prefs.collect_folders, &mut self.prefs.collect_folder);
-        let (folders, pool) = match self.ws.lib.as_ref() {
-            Some(l) => {
-                let lib = lock(l);
-                let pool = collect::TagPool {
-                    starred: lib.tags.starred_tags.clone(),
-                    history: lib.tags.history_tags.clone(),
-                    all: logic::tag_counts(lib.items()).into_iter().map(|(t, _)| t).collect(),
-                };
-                (Some(collect::flatten(&lib.metadata.folders)), pool)
-            }
-            None => (None, collect::TagPool::default()),
-        };
-        let mut state = collect::State { selected: &mut self.prefs.collect_folders, recent: &mut self.prefs.collect_recent };
-        let event = self.collect.show(ctx, folders.as_deref(), &mut state, &pool, &self.shortcuts);
-        let target = folders.as_deref().map(|f| collect::target(f, &self.prefs.collect_folders)).unwrap_or_default();
-        match event {
-            Some(collect::Event::CreateFolder(name)) => {
-                if let Some(l) = self.ws.lib.clone() {
-                    let made = lock(&l).create_folder(None, &name);
-                    match made {
-                        Ok(id) => self.prefs.collect_folders.push(id),
-                        Err(e) => self.flash(format!("Could not create the folder: {e}")),
-                    }
-                }
-            }
-            Some(e @ (collect::Event::Files(_) | collect::Event::Paste)) => {
-                self.collect_extra = Some(self.collect.meta.clone());
-                match e {
-                    collect::Event::Files(paths) => self.import_into(paths, target.clone()),
-                    _ => self.paste_into(target.clone()),
-                }
-                self.collect_extra = None;
-                self.collect.clear_meta();
-                collect::push_recent(&mut self.prefs.collect_recent, &target);
-            }
-            None => {}
-        }
-    }
-
-    /// Library ▸ Clear Library History: asks first. Shown with or without
-    /// a library open.
-    pub(crate) fn clear_history_dialog(&mut self, ctx: &egui::Context) {
-        if self.clear_history_open {
-            let modal = egui::Modal::new(egui::Id::unique("clear-library-history")).show(ctx, |ui| {
-                ui.set_width(320.0);
-                ui.label(RichText::new("Clear Library History").size(15.0));
-                ui.add_space(4.0);
-                ui.label(RichText::new("The list of recent libraries is emptied, except for the libraries that are open now. This can't be undone. No library is deleted.").color(t::p().text_muted));
-                ui.add_space(10.0);
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button(RichText::new("Clear All").color(t::p().icon_red)).clicked() {
-                        let open: Vec<PathBuf> = self.others.iter(&self.ws).filter_map(|w| w.root.clone()).collect();
-                        self.recent = crate::workspaces::clear_history(&self.recent, &open);
-                        self.clear_history_open = false;
-                    }
-                    if ui.button("Cancel").clicked() {
-                        self.clear_history_open = false;
-                    }
-                });
-            });
-            if modal.should_close() {
-                self.clear_history_open = false;
             }
         }
     }
@@ -1286,73 +1169,10 @@ impl App {
 // Inspector
 
 
-impl App {
-    pub(crate) fn smart_dialog_ui(&mut self, ctx: &egui::Context, lib: &Library) {
-        let Some(mut d) = self.ws.smart_dialog.take() else { return };
-        let mut keep = true;
-        let folders = organize_ui::folder_choices(&lib.metadata.folders);
-        let max_rules_height = (ctx.content_rect().height() - 320.0).max(160.0);
-        let modal = egui::Modal::new(egui::Id::unique("smart-dialog")).show(ctx, |ui| {
-            ui.set_width(660.0);
-            ui.label(RichText::new(if d.editing.is_some() { "Edit Smart Folder" } else { "New Smart Folder" }).size(16.0));
-            ui.add_space(6.0);
-            ui.add(TextEdit::singleline(&mut d.name).hint_text("Name").desired_width(f32::INFINITY));
-            ui.add_space(6.0);
-            App::smart_dialog_extras(ui, &mut d, lib);
-            ui.add_space(6.0);
-            egui::ScrollArea::vertical().max_height(max_rules_height).auto_shrink([false, true]).show(ui, |ui| {
-                organize_ui::smart_conditions_ui(ui, &mut d.conditions, &folders);
-            });
-            let result = smart_draft::conditions(&d.conditions);
-            if let Err(e) = &result {
-                ui.add_space(4.0);
-                ui.label(RichText::new(e).color(t::p().icon_red));
-            }
-            ui.add_space(10.0);
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let ok = !d.name.trim().is_empty() && !d.conditions.is_empty() && result.is_ok();
-                let label = if d.editing.is_some() { "Save" } else { "Create" };
-                if ui.add_enabled(ok, egui::Button::new(label)).clicked()
-                    && let Ok(conditions) = result
-                {
-                    let name = d.name.trim().to_string();
-                    self.save_smart_draft(&d, name, conditions);
-                    keep = false;
-                }
-                if ui.button("Cancel").clicked() {
-                    keep = false;
-                }
-            });
-        });
-        if modal.should_close() {
-            keep = false;
-        }
-        if keep {
-            self.ws.smart_dialog = Some(d);
-        }
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Viewer and frame
 
-impl App {
-    pub(crate) fn empty_state(&mut self, ui: &mut Ui) {
-        let r = ui.max_rect();
-        window_drag(ui, Rect::from_min_size(r.min, vec2(r.width(), t::BAR_HEIGHT)), "empty");
-        ui.painter().rect_filled(r, 0.0, t::p().main);
-        let c = r.center();
-        ui.painter().text(c - vec2(0.0, 40.0), Align2::CENTER_CENTER, "Open an Eagle library", font(18.0), t::p().text);
-        if let Some(e) = &self.error {
-            ui.painter().text(c - vec2(0.0, 14.0), Align2::CENTER_CENTER, e, font(12.0), t::p().text_muted);
-        }
-        let b = Rect::from_center_size(c + vec2(0.0, 24.0), vec2(180.0, 32.0));
-        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(b));
-        if wide_button(&mut child, ic::FOLDER_OPEN, "Choose Library…", true).clicked() {
-            self.pick_library();
-        }
-    }
-}
 
 impl eframe::App for App {
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
