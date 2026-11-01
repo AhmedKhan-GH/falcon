@@ -2,7 +2,10 @@
 //! controls in the bar, and the full-resolution original drawn in tiles
 //! when zoomed in past the full tier (see the desktop app chapter).
 
-use eframe::egui::{self, Color32, Pos2, Rect, Sense, TextureHandle, Ui, Vec2, vec2};
+use std::collections::HashMap;
+use std::time::Instant;
+
+use eframe::egui::{self, Color32, ColorImage, Pos2, Rect, Sense, TextureHandle, TextureOptions, Ui, Vec2, vec2};
 use falcon_library::{Library, thumbnail};
 use falcon_library::model::Item;
 
@@ -17,7 +20,19 @@ pub(super) struct ImageState {
     /// "Fit to window edge" (backtick): every image opens filling the view,
     /// enlarged if small, until switched off or Zoom to Fit is chosen.
     pub edge: bool,
+    /// The item the opening zoom was last applied to.
+    opened: String,
+    /// Zoom (`None`: fitted) and pan each image was left at, this session
+    /// (Eagle's `lastItemStates`, also kept in memory only).
+    views: HashMap<String, (Option<f32>, Vec2)>,
+    /// A wheel move in paging mode, stepped once the wheel rests.
+    page: Option<(isize, Instant)>,
+    /// The transparency checkerboard, made on first use.
+    checker: Option<TextureHandle>,
 }
+
+/// Side of a checkerboard square, in points.
+const CHECKER: f32 = 8.0;
 
 impl App {
     /// Draws the picture `tex` (a frame of an animation, the full render or
@@ -50,29 +65,54 @@ impl App {
         } else {
             logic::smart_fit((natural.x, natural.y), (area.width(), area.height()), 40.0, &item.name)
         };
+        self.ws.loader.set_pixelated(self.prefs.pixelated);
+        // A newly opened image starts where it was left, at actual size, or
+        // fitted, by the preferences; "fit to window edge" overrides both,
+        // as in Eagle.
+        if self.image.opened != id {
+            self.image.opened = id.clone();
+            let remembered = self.prefs.remember_zoom.then(|| self.image.views.get(&id).copied()).flatten();
+            match remembered {
+                _ if self.image.edge => {}
+                Some((zoom, pan)) => (self.ws.view.zoom, self.ws.view.pan) = (zoom, pan),
+                None if self.prefs.open_actual_size => (self.ws.view.zoom, self.ws.view.pan) = (Some(1.0), Vec2::ZERO),
+                None => {}
+            }
+        }
         let scale = self.ws.view.zoom.unwrap_or(fit);
 
-        // Scroll or pinch over the picture zooms around the pointer;
-        // dragging pans.
+        // The wheel scrolls, zooms or pages by the preference; pinching (or
+        // the wheel with ⌘, ⌃ or ⌥) zooms around the pointer; dragging pans.
         let resp = ui.interact(area, ui.scope_id().with("viewer-canvas"), Sense::click_and_drag());
-        let (scroll, pinch, pointer) = ui.input(|i| (i.smooth_scroll_delta.y, i.zoom_delta(), i.pointer.hover_pos()));
-        let factor = if !resp.hovered() {
-            1.0
-        } else if pinch != 1.0 {
-            pinch
-        } else if scroll != 0.0 {
-            (scroll / 300.0).exp()
-        } else {
-            1.0
-        };
-        if factor != 1.0 {
-            let new = (scale * factor).clamp(logic::ZOOM_MIN, logic::ZOOM_MAX);
-            if let Some(pos) = pointer {
-                let center = area.center() + self.ws.view.pan;
-                let off = pos - center;
-                self.ws.view.pan += off - off * (new / scale);
+        let (scroll, pinch, alt, pointer) = ui.input(|i| (i.smooth_scroll_delta, i.zoom_delta(), i.modifiers.alt, i.pointer.hover_pos()));
+        let action =
+            if resp.hovered() { logic::wheel_action(self.prefs.viewer_wheel, (scroll.x, scroll.y), pinch, alt) } else { logic::WheelAction::None };
+        match action {
+            logic::WheelAction::Zoom(factor) => {
+                let new = (scale * factor).clamp(logic::ZOOM_MIN, logic::ZOOM_MAX);
+                if let Some(pos) = pointer {
+                    let center = area.center() + self.ws.view.pan;
+                    let off = pos - center;
+                    self.ws.view.pan += off - off * (new / scale);
+                }
+                self.ws.view.zoom = Some(new);
             }
-            self.ws.view.zoom = Some(new);
+            logic::WheelAction::Pan(dx, dy) => {
+                let pan = self.ws.view.pan + vec2(dx, dy);
+                let (px, py) = logic::clamp_pan((pan.x, pan.y), (natural.x * scale, natural.y * scale), (area.width(), area.height()));
+                self.ws.view.pan = vec2(px, py);
+                self.ws.view.zoom = Some(scale);
+            }
+            logic::WheelAction::Page(step) => self.image.page = Some((step, Instant::now())),
+            logic::WheelAction::None => {}
+        }
+        if let Some((step, at)) = self.image.page {
+            if at.elapsed().as_secs_f32() >= logic::PAGE_REST {
+                self.image.page = None;
+                self.viewer_step(step);
+            } else {
+                ui.ctx().request_repaint_after(std::time::Duration::from_secs_f32(logic::PAGE_REST));
+            }
         }
         if resp.dragged() {
             self.ws.view.pan += resp.drag_delta();
@@ -117,6 +157,15 @@ impl App {
         let full_failed = self.ws.loader.has_failed(&id, Tier::Full) || job_for(item, lib.root(), Tier::Full).is_none();
         let preview_job = if full_failed { job_for(item, lib.root(), Tier::Preview) } else { None };
         let no_preview = full_failed && (preview_job.is_none() || self.ws.loader.has_failed(&id, Tier::Preview));
+        if self.prefs.transparency_grid && (tex.is_some() || original.is_some()) {
+            let checker = self.image.checker.get_or_insert_with(|| {
+                let (a, b) = (Color32::WHITE, Color32::from_gray(0xcc));
+                ui.ctx().load_texture("viewer-checker", ColorImage::new([2, 2], vec![a, b, b, a]), TextureOptions::NEAREST_REPEAT)
+            });
+            let shown = r.intersect(area);
+            let uv = |p: Pos2| ((p - r.min) / (2.0 * CHECKER)).to_pos2();
+            clip.painter().image(checker.id(), shown, Rect::from_min_max(uv(shown.min), uv(shown.max)), Color32::WHITE);
+        }
         match (&tex, original) {
             (_, Some(o)) => {
                 let painter = clip.painter();
@@ -220,6 +269,9 @@ impl App {
         }
         if let Some(j) = job_for(item, lib.root(), Tier::Full) {
             self.ws.frame_jobs.push(j);
+        }
+        if self.prefs.remember_zoom && !self.image.edge && self.ws.viewer.as_deref() == Some(id.as_str()) {
+            self.image.views.insert(id, (self.ws.view.zoom, self.ws.view.pan));
         }
     }
 

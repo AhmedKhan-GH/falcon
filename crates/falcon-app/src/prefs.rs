@@ -88,6 +88,20 @@ pub struct Prefs {
     /// Eagle's `habits.alwaysPlayGIF`: GIFs and animated WebPs play in the
     /// grid without being hovered.
     pub always_play_animated: bool,
+    /// Eagle's `habits.scrollBehavior`: what the wheel does in the image viewer.
+    pub viewer_wheel: crate::logic::WheelMode,
+    /// Eagle's `habits.defaultRatio` "100%": images open at actual size
+    /// instead of Smart Zoom.
+    pub open_actual_size: bool,
+    /// Eagle's `habits.renderBehavior` "pixelated": sharp pixels when an
+    /// image is enlarged.
+    pub pixelated: bool,
+    /// Eagle's `habits.rememberLastZoom`: reopen an image at the zoom and
+    /// position it was left at (for the session).
+    pub remember_zoom: bool,
+    /// Eagle's `habits.transparency` "show": a checkerboard behind
+    /// transparent images.
+    pub transparency_grid: bool,
 }
 
 /// What the wheel does over a playing video.
@@ -196,6 +210,11 @@ impl Default for Prefs {
             app_lock: None,
             gif_player: false,
             always_play_animated: false,
+            viewer_wheel: crate::logic::WheelMode::Scroll,
+            open_actual_size: false,
+            pixelated: false,
+            remember_zoom: true,
+            transparency_grid: false,
         }
     }
 }
@@ -717,6 +736,13 @@ fn controls(p: &mut Page, d: &mut Draft) {
         ui.label("Double-clicking an item");
         ui.radio_value(&mut d.prefs.double_click, DoubleClick::Viewer, "Opens it in falcon");
         ui.radio_value(&mut d.prefs.double_click, DoubleClick::External, "Opens it in its default app");
+        ui.add_space(6.0);
+        use crate::logic::WheelMode;
+        ui.label("The wheel over an image in the viewer");
+        ui.radio_value(&mut d.prefs.viewer_wheel, WheelMode::Scroll, "Scrolls it");
+        ui.radio_value(&mut d.prefs.viewer_wheel, WheelMode::Zoom, "Zooms it");
+        ui.radio_value(&mut d.prefs.viewer_wheel, WheelMode::Paging, "Goes to the previous or next item");
+        note(ui, "With ⌘, ⌃ or ⌥, or a pinch, it zooms either way.");
     });
     p.block("Keyboard", &["space", "spacebar", "preview", "quick look", "scroll"], |ui| {
         ui.label("Space in the grid");
@@ -732,6 +758,12 @@ fn controls(p: &mut Page, d: &mut Draft) {
 /// Preview: how the viewer shows each kind of file. Eagle's order is
 /// image, video, GIF, then fonts.
 fn preview(p: &mut Page, d: &mut Draft) {
+    p.block("Image", &["image", "zoom", "actual size", "fit", "pixel", "pixelated", "smooth", "remember", "last", "transparency", "checkerboard", "grid"], |ui| {
+        ui.checkbox(&mut d.prefs.open_actual_size, "Open images at actual size instead of fitting them to the window");
+        ui.checkbox(&mut d.prefs.pixelated, "Show sharp pixels when an image is enlarged");
+        ui.checkbox(&mut d.prefs.remember_zoom, "Reopen an image at the zoom and position it was left at");
+        ui.checkbox(&mut d.prefs.transparency_grid, "Show a checkerboard behind transparent areas");
+    });
     let keywords = ["video", "movie", "wheel", "scroll", "progress", "volume", "stretch", "fill", "autoplay", "play", "position", "resume", "loop", "short"];
     p.block("Video", &keywords, |ui| {
         let v = &mut d.prefs;
@@ -900,6 +932,11 @@ mod tests {
         let p = Prefs::default();
         assert!(p.hover_zoom, "Eagle's hoverZoom defaults to on");
         assert!(!p.gif_player && !p.always_play_animated, "Eagle's gifViewer and alwaysPlayGIF default to off");
+        assert_eq!(p.viewer_wheel, crate::logic::WheelMode::Scroll, "Eagle's scrollBehavior defaults to scroll");
+        assert!(!p.open_actual_size, "Eagle's defaultRatio defaults to auto");
+        assert!(!p.pixelated, "Eagle's renderBehavior defaults to non-pixelated");
+        assert!(p.remember_zoom, "Eagle's rememberLastZoom defaults to on");
+        assert!(!p.transparency_grid, "Eagle's transparency defaults to hide");
         assert!(!p.keywords_as_tags, "Eagle's IPTC defaults to off");
         assert!(p.notify_duplicates, "Eagle's repeatImage notification defaults to on");
         assert!(p.auto_select, "Eagle's autoSelect defaults to on");

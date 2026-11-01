@@ -121,6 +121,10 @@ struct Staged {
     rest: Vec<(crate::logic::TileSpan, ColorImage)>,
 }
 
+/// Sharp pixels when enlarged, smooth when shrunk (Eagle's "pixelated"
+/// rendering; egui has no mipmaps, so shrinking stays linear).
+const PIXELATED: TextureOptions = TextureOptions { magnification: eframe::egui::TextureFilter::Nearest, ..TextureOptions::LINEAR };
+
 /// Bytes of tile pixels uploaded per frame, so a 100-megapixel original
 /// doesn't stall one frame with a 400 MB upload.
 const UPLOAD_BUDGET: usize = 48 << 20;
@@ -135,6 +139,8 @@ pub struct Loader {
     /// The viewed item's full-resolution original, at most one at a time.
     original: Option<Original>,
     staged: Option<Staged>,
+    /// Draw the viewer's renders with sharp pixels when enlarged.
+    pixelated: bool,
 }
 
 impl Loader {
@@ -170,7 +176,7 @@ impl Loader {
             .into_iter()
             .map(|t| (t, LruCache::new(NonZeroUsize::new(t.capacity()).unwrap())))
             .collect();
-        Loader { shared, rx, caches, pending: HashSet::new(), failed: HashSet::new(), original: None, staged: None }
+        Loader { shared, rx, caches, pending: HashSet::new(), failed: HashSet::new(), original: None, staged: None, pixelated: false }
     }
 
     /// Uploads finished decodes (bounded per call so frames stay short).
@@ -184,7 +190,7 @@ impl Loader {
             }
             match d.image {
                 Some(Pixels::Whole(img)) => {
-                    let tex = ctx.load_texture(format!("{}-{:?}", d.key.0, d.key.1), img, TextureOptions::LINEAR);
+                    let tex = ctx.load_texture(format!("{}-{:?}", d.key.0, d.key.1), img, self.options(d.key.1));
                     self.caches.get_mut(&d.key.1).unwrap().put(d.key.0, tex);
                 }
                 Some(Pixels::Tiled { size, tiles }) => {
@@ -213,7 +219,8 @@ impl Loader {
             let [px0, py0, px1, py1] = span.padded.map(|v| v as f32);
             let (tw, th) = (px1 - px0, py1 - py0);
             let n = staged.original.tiles.len();
-            let texture = ctx.load_texture(format!("{}-original-{n}", staged.original.id), img, TextureOptions::LINEAR);
+            let options = if self.pixelated { PIXELATED } else { TextureOptions::LINEAR };
+            let texture = ctx.load_texture(format!("{}-original-{n}", staged.original.id), img, options);
             staged.original.tiles.push(Tile {
                 texture,
                 rect: Rect::from_min_max(Pos2::new(x0 / w, y0 / h), Pos2::new(x1 / w, y1 / h)),
@@ -228,6 +235,28 @@ impl Loader {
         } else {
             ctx.request_repaint();
         }
+    }
+
+    /// Texture sampling for `tier`: the viewer's renders (full and
+    /// original) can be pixelated; thumbnails are always smooth.
+    fn options(&self, tier: Tier) -> TextureOptions {
+        match tier {
+            Tier::Full | Tier::Original if self.pixelated => PIXELATED,
+            _ => TextureOptions::LINEAR,
+        }
+    }
+
+    /// Switches the viewer's renders between sharp and smooth enlarging;
+    /// on a change they are dropped and decoded again. Sampling is chosen
+    /// at upload, so decodes in flight come out right.
+    pub fn set_pixelated(&mut self, on: bool) {
+        if self.pixelated == on {
+            return;
+        }
+        self.pixelated = on;
+        self.caches.get_mut(&Tier::Full).unwrap().clear();
+        self.original = None;
+        self.staged = None;
     }
 
     /// The full-resolution original of `id`, once every tile is uploaded.

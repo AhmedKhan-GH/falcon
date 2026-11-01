@@ -1360,6 +1360,69 @@ pub struct TileSpan {
     pub padded: [usize; 4],
 }
 
+/// What the mouse wheel does over a picture in the viewer (Eagle's
+/// `habits.scrollBehavior`; scroll is its default).
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum WheelMode {
+    /// Pan the picture; with ⌘, ⌃ or ⌥ the wheel zooms.
+    #[default]
+    Scroll,
+    /// Zoom around the pointer.
+    Zoom,
+    /// Go to the previous or next item.
+    Paging,
+}
+
+/// What one frame of wheel input does in the image viewer.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum WheelAction {
+    None,
+    /// Move the picture by this many points.
+    Pan(f32, f32),
+    /// Multiply the zoom by this factor, around the pointer.
+    Zoom(f32),
+    /// Wheel moved in paging mode: -1 previous, 1 next (stepped once the
+    /// wheel has rested, see [`PAGE_REST`]).
+    Page(isize),
+}
+
+/// How long the wheel must rest before paging steps, as Eagle's 50 ms
+/// debounce: one gesture, momentum included, moves one item.
+pub const PAGE_REST: f32 = 0.05;
+
+/// Turns the frame's scroll (`scroll`, egui's sign: up and left are
+/// positive), pinch factor and the zoom modifier (⌥; egui already turns
+/// ⌘ and ⌃ scrolling into a pinch) into what the viewer does.
+pub fn wheel_action(mode: WheelMode, scroll: (f32, f32), pinch: f32, zoom_modifier: bool) -> WheelAction {
+    if pinch != 1.0 {
+        return WheelAction::Zoom(pinch);
+    }
+    let (dx, dy) = scroll;
+    if dx == 0.0 && dy == 0.0 {
+        return WheelAction::None;
+    }
+    let zoom = WheelAction::Zoom(((if dy != 0.0 { dy } else { dx }) / 300.0).exp());
+    match mode {
+        _ if zoom_modifier => zoom,
+        WheelMode::Zoom => zoom,
+        WheelMode::Scroll => WheelAction::Pan(dx, dy),
+        WheelMode::Paging if dy != 0.0 => WheelAction::Page(if dy < 0.0 { 1 } else { -1 }),
+        WheelMode::Paging => WheelAction::Page(if dx < 0.0 { 1 } else { -1 }),
+    }
+}
+
+/// Keeps a scrolled picture in view: on each axis, a picture larger than
+/// the view can't leave a gap at either edge, and a smaller one stays
+/// inside the view. `pan` is the offset of the picture's centre from the
+/// view's centre.
+pub fn clamp_pan(pan: (f32, f32), shown: (f32, f32), view: (f32, f32)) -> (f32, f32) {
+    let axis = |p: f32, s: f32, v: f32| {
+        let limit = ((s - v) / 2.0).abs();
+        p.clamp(-limit, limit)
+    };
+    (axis(pan.0, shown.0, view.0), axis(pan.1, shown.1, view.1))
+}
+
 /// Whether an image is "long" (a tall strip such as a web page capture)
 /// by Eagle's `smartZoom` rule: at least 960 px wide and over 1.8 times as
 /// tall as wide, or at least 320 px wide and over 2.7 times as tall. Eagle
@@ -1436,6 +1499,31 @@ mod image_viewer_tests {
         assert!(!wants_original("gif", 12000, 6000.0), "animations are the player's");
         assert!(!wants_original("psd", 12000, 6000.0), "no decoder");
         assert!(wants_original("tiff", 9000, 4000.0));
+    }
+
+    #[test]
+    fn wheel_follows_the_preference() {
+        use WheelMode::*;
+        assert_eq!(WheelMode::default(), Scroll, "Eagle's default");
+        assert_eq!(wheel_action(Scroll, (0.0, -30.0), 1.0, false), WheelAction::Pan(0.0, -30.0));
+        assert_eq!(wheel_action(Scroll, (0.0, 0.0), 1.0, false), WheelAction::None);
+        // ⌥ (or a pinch, which is also what ⌘-scrolling becomes) zooms in any mode.
+        assert!(matches!(wheel_action(Scroll, (0.0, 30.0), 1.0, true), WheelAction::Zoom(f) if f > 1.0));
+        assert_eq!(wheel_action(Paging, (0.0, 0.0), 1.25, false), WheelAction::Zoom(1.25));
+        assert!(matches!(wheel_action(Zoom, (0.0, -30.0), 1.0, false), WheelAction::Zoom(f) if f < 1.0));
+        // Scrolling down or right goes to the next item.
+        assert_eq!(wheel_action(Paging, (0.0, -5.0), 1.0, false), WheelAction::Page(1));
+        assert_eq!(wheel_action(Paging, (0.0, 5.0), 1.0, false), WheelAction::Page(-1));
+        assert_eq!(wheel_action(Paging, (-5.0, 0.0), 1.0, false), WheelAction::Page(1));
+    }
+
+    #[test]
+    fn scrolling_stops_at_the_edges() {
+        // A long picture scrolls until its bottom meets the view's bottom.
+        assert_eq!(clamp_pan((0.0, -5000.0), (1000.0, 6000.0), (1000.0, 800.0)), (0.0, -2600.0));
+        assert_eq!(clamp_pan((0.0, 100.0), (1000.0, 6000.0), (1000.0, 800.0)), (0.0, 100.0));
+        // A small one moves only within the view.
+        assert_eq!(clamp_pan((900.0, 0.0), (200.0, 100.0), (1000.0, 800.0)), (400.0, 0.0));
     }
 
     #[test]
