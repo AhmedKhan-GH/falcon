@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 227 | 23 | 21 | 9 |
-| Viewers and file formats | 171 | 23 | -4 | 7 |
-| Search, filters and organising | 208 | 7 | 7 | 3 |
-| Import, export, library, preferences and integrations | 164 | 10 | 38 | 26 |
-| **Total** | 770 | 63 | 62 | 45 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 215 | 35 | 22 | 8 |
+| Viewers and file formats | 171 | 23 | 9 | 5 |
+| Search, filters and organising | 207 | 8 | 7 | 3 |
+| Import, export, library, preferences and integrations | 162 | 10 | 37 | 26 |
+| **Total** | 755 | 76 | 75 | 42 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -60,7 +60,7 @@ Overall finding: falcon now has a native menu bar (`crates/falcon-app/src/menu.r
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | A menubar with File / Edit / Find / Organize / View / Actions / Window / Help menus, each item showing its live shortcut | Partial | Native AppKit menus in `crates/falcon-app/src/menu.rs` (File, Edit, Find, Organize, View, Window, Help) with live shortcuts, enabled rules and checkmarks; clicks run through `App::run_command`. No Actions menu; only commands falcon has | local |
-| App menu: About | Done | Falcon's own About window (`about.rs`), replacing winit's stock item | local |
+| App menu: About | Done | `ui/dialogs/about.rs`, replacing winit's stock item | local |
 | App menu: Preferences… (⌘,) | Done | shortcuts.rs `app.preferences`; in the app menu after About (`menu.rs`) and in the library switcher | local |
 | App menu: Lock Now (⌘⌥L, locks the whole app behind a password or Touch ID) | Done | ⌥⌘L locks the app (`applock.rs`); unlock by password or Touch ID (`touch_id.rs`, LAContext through `msg_send!`, pref `touch_id` shown only when available) | local |
 | App menu: Color Space (sRGB / Display P3 / Unmanaged) | Missing | No colour-space choice | local |
@@ -68,15 +68,15 @@ Overall finding: falcon now has a native menu bar (`crates/falcon-app/src/menu.r
 | App menu: Check for Updates, Register / Unregister, Manage devices | Missing | Not applicable to falcon | online/plugin |
 | File: New… (⌘N), a searchable menu of folder, smart folder, imports, duplicates and new documents from templates (Sketch, PSD, AI, XD, TXT, Word, PPT, Excel, Keynote, Pages, Numbers, MindNode, XMind) | Partial | File ▸ New ▸ Text File only (`menu.rs`, `app/text_view.rs` `new_text_file`); no searchable menu or other templates | local |
 | File: New Folder (⇧⌘N) | Done | A sibling right after the open folder, or top level when none is open, as Eagle's `newFolder` (`Action::CreateSibling`) | local |
-| File: New Subfolder (⌥N) | Done | shortcuts.rs `file.create.subfolder`; menu and folder context menu | local |
+| File: New Subfolder (⌥N) | Done | ⌥N, File menu and folder menu; inserted first among its siblings, as Eagle | local |
 | File: New Smart Folder (⇧⌥⌘N) | Done | shortcuts.rs; opens the smart folder dialog | local |
 | Edit: Undo / Redo | Done | ⌘Z and ⇧⌘Z with a capped transaction history; Edit menu entries go to a focused text field first | local |
 | Edit: Cut / Copy / Paste / Select All | Partial | Menu entries exist and act on a focused text field; ⌘C copies files, ⌘V imports, ⌘A selects all. Cut works only in text fields | local |
 | Edit: Rename (⌘R on macOS) | Done | ⌘R (F2 alias): one item renames through the inspector title; several open the Rename N Items dialog with Eagle's templates (`rename.rs`) | local |
 | Edit: Copy File Path (⌥⌘C) | Done | Key and item menu copy every selected path, one per line (`export_ui.rs` `copy_variant`) | local |
 | Edit: Copy Folder Path (⌥⇧⌘C), Copy Eagle Link, Copy Thumbnail, Copy Base64, Copy Name | Done | Edit ▸ Copy Details: Folder Paths, Links (`http://localhost:<port>/item?id=`, as Eagle's Copy Link), Eagle Links (`eagle://item/<id>`), Thumbnail, Base64, Names; all for every selected item | local |
-| Edit: Duplicate item (⌘D) | Done | `item_ops.rs` duplicate: a byte-identical metadata copy with a new id, keeping `modificationTime` as Eagle; ⌘D, Edit menu, card menu | local |
-| Edit: Refresh Thumbnail (⌥⌘R), Custom thumbnail from a file (⌥⌘T), Reset custom thumbnail | Done | ⌥⌘R, ⌥⌘T and Edit ▸ Custom Thumbnail submenu | local |
+| Edit: Duplicate item (⌘D) | Done | The first selected item, as Eagle's `duplicateItem`; the card entry is single-item only, as Eagle | local |
+| Edit: Refresh Thumbnail (⌥⌘R), Custom thumbnail from a file (⌥⌘T), Reset custom thumbnail | Done | ⌥⌘R, ⌥⌘T, Edit ▸ Custom Thumbnail ▸ From File / From Clipboard / Reset (`edit.thumbnail.custom.reset`), card menu; Reset on the first item, as Eagle | local |
 | Edit: Custom thumbnail from the clipboard (⇧⌥⌘T) | Done | Clipboard image or copied file | local |
 | Edit ▸ Move Folder: Up, Down, To Top, To Bottom (⌘] ⌘[ ⇧⌘] ⇧⌘[) | Done | Keys and Edit menu entries move the open folder or smart folder among its siblings, undoably (`organize::arrange`) | local |
 | Edit ▸ Edit Image: Horizontal Flip (⇧F), Rotate (⇧R), Crop (⇧C), Combine Images (⇧⌘M) | Partial | Flip, Rotate and Crop (⇧C, `edit.image.crop`) in the menu and keys; Combine Images is a plugin in Eagle 4, not built | local |
@@ -95,7 +95,7 @@ Overall finding: falcon now has a native menu bar (`crates/falcon-app/src/menu.r
 | View: Zoom In / Out (⌘= / ⌘-) | Done | Thumbnail size (shortcuts.rs:96-97, app.rs:1024-1029) | local |
 | View: Actual Size (⌘0) / Zoom to Fit (⌘9) | Partial | The viewer has 0 for fit and 1 for actual size, without ⌘ (app.rs:3510). No ⌘0 or ⌘9 | local |
 | View: Grayscale preview (⌥⌘G) | Done | Every loader tier incl. grid cards, animations, video frames, PDF pages, font specimen and the preview window (`logic::grayscale_rgba`); custom thumbnails gray too, unlike Eagle | local |
-| View: Open in New Window (⌘O) | Done | `preview_window.rs`, a second viewport; see §15 for what the window lacks | local |
+| View: Open in New Window (⌘O) | Done | Every acted-on item except audio in a new window per open, stepped with ←/→ (`ui/viewer/preview_window/mod.rs` `open_preview_items`), as Eagle's one window that steps | local |
 | View: Open With Default App (⇧↩), Open with Other App, Reveal in Finder (⌘↩) | Done | open_ui.rs:33-46, shortcuts.rs:104-105 | local |
 | View: Open Link in Browser (⇧⌘O) | Done | `view.file.openlink`, `urls.rs` (web URL or file path) | local |
 | View: show or hide Sidebar (⌥⌘1), Inspector (⌥⌘2), both (⌥⌘3) | Done | shortcuts.rs `view.toggle.sidebar`, `view.toggle.inspector`, `view.toggle.all`; Tab also toggles both; all work in the viewer too | local |
@@ -115,9 +115,9 @@ Cross-references (not counted): File ▸ Import Folders / Links / Eagle Package 
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| Every context menu has a type-to-filter search box with keyword matching | Done | `ui/menus/search.rs` on the item, folder, smart folder and tag menus, including submenu entries grouped under their name (`search::submenu`); Change Icon's grid is left out | local |
+| Every context menu has a type-to-filter search box with keyword matching | Partial | `ui/menus/search.rs` on the item, folder, smart folder and tag menus incl. submenus; Eagle also searches the palette, tag-group, New, filter +, saved-filter and Help menus | local |
 | **Item**: Restore (in the Trash) | Done | app.rs:2531-2534, which also offers Delete Permanently | local |
-| Item: Open Item(s) in New Window | Done | Item menu; one item per window | local |
+| Item: Open Item(s) in New Window | Done | Card menu opens all its targets in one window stepping with ←/→; middle click opens its card | local |
 | Item: Open With Default App / Open With ▸ apps / Reveal in Finder | Done | open_ui.rs:33-46 | local |
 | Item: Open File Location ▸ All or one of the item's folders (jumps to the item there) | Done | Card menu; jumps to the item in that view | local |
 | Item: Plugin ▸ recent plugins | Missing |  | online/plugin |
@@ -126,7 +126,7 @@ Cross-references (not counted): File ▸ Import Folders / Links / Eagle Package 
 | Item: Share (macOS share sheet) | Done | `share.rs` through `NSSharingServicePicker` at runtime | local |
 | Item: Pin to Top / Unpin from Top inside a folder | Done | `item_ops.rs`: item key `pinned: {folderId: ms}`; pinned items sort first unless the folder is sorted at random; no pin badge on cards yet | local |
 | Item: Set as Folder Cover | Done | image_edit.rs:90-95 | local |
-| Item: New Folder with Selection (N items) | Done | `folders_ui` `new_with_dialog`: creates the folder and adds the selected items | local |
+| Item: New Folder with Selection (N items) | Done | `folders_ui` `new_with_dialog`; the new folder becomes the last-used folder for ⇧D | local |
 | Item: Rename / Rename N Items (batch rename dialog) | Done | Rename N Items dialog (`rename.rs`, incl. `%F`), asks first at 10+ items; one item uses the inspector title | local |
 | Item: Copy (files) | Done | Edit ▸ Copy, the item menu's Copy and ⌘C copy the selected files (`ui/dialogs/export.rs` `copy_items`) | local |
 | Item: Copy File Path | Done | `export_ui.rs` `copy_variant`, every selected item | local |
@@ -142,7 +142,7 @@ Cross-references (not counted): File ▸ Import Folders / Links / Eagle Package 
 | Item: More ▸ custom thumbnail from the clipboard | Done | ⇧⌥⌘T and the card menu | local |
 | Item: More ▸ Refresh Thumbnail | Done | image_edit.rs:104 | local |
 | Item: More ▸ Re-analyze colors | Done | Labelled "Refresh Palette" (image_edit.rs:107) | local |
-| Item: More ▸ Replace with File… | Done | Confirmation, copy in, swap with a `.bk` kept until synced, thumbnail redrawn (`item_ops.rs`) | local |
+| Item: More ▸ Replace with File… | Done | Confirmation, copy in, swap through a `.bk` that is deleted at once (`item_ops.rs` `swap_in`), thumbnail redrawn | local |
 | Item: Remove from this Folder | Done | Card menu entry and ⇧⌘⌫ | local |
 | Item: Move to Trash | Done | app.rs:2538 | local |
 | Item (falcon only): Rotate Left / Right, Flip H / V, Crop… | Done | image_edit.rs:110-132 (falcon extra) | local |
@@ -181,7 +181,7 @@ Cross-references (not counted): File ▸ Import Folders / Links / Eagle Package 
 | Tag: Filter items with the tag(s), Merge N tags (several selected), Add to several groups | Done | `tags_menu` in app.rs, `merge_dialog` (2–5 tags as Eagle), `Library::merge_tags`, `add_tags_to_group_too` | local |
 | **Tag group**: Rename / Remove | Done | organize_ui.rs:820-845, which adds description, move and colour | local |
 | Tag group: Find items with any tag in the group | Done | Group heading menu, `filter_any_tags` | local |
-| **Tag list sort**: A>Z / Z>A / by count / group by Alphabet or Groups | Done | All Tags page sort menu (per session) | local |
+| **Tag list sort**: A>Z / Z>A / by count / group by Alphabet or Groups | Partial | Sort menu A>Z / Z>A / by count and group-by toggle; the choice isn't saved across launches, Eagle keeps it | local |
 | **Palette swatch** (inspector): Find similar colour, copy as HEX / RGB / RGBA / HSL / HSV / HWB / CMYK, set as primary | Done | Find Similar, copy as HEX/RGB/RGBA/HSL/HSV/HWB/CMYK (`colors.rs`), Primary Colour toggle with a ring on the primary swatch | local |
 | **Inspector tag input**: Copy / Paste / Clear All Tags | Done | `tag_area_menu` in `app/tag_picker.rs` | local |
 
@@ -197,23 +197,23 @@ Eagle defaults come from prefs `shortcuts.keybinds` (rebindable) and from the ha
 | Shortcut editor: search field ("Search Shortcut") | Missing | No filter in the shortcut list | local |
 | Shortcut editor coverage: the roughly 150 rebindable commands | Partial | 60 commands plus 12 player keys (shortcuts.rs TABLE) | local |
 | ⌘F search, ⇧⌘F toggle filter | Done | shortcuts.rs:108-109 | local |
-| ⌥⌘F search all, ⌥⇧F filter sidebar, ⇧⌥⌘F reset filter, ⌥F / ⌥T / ⌥C / ⌥S / ⌥R / ⌥D / ⌥E open one filter | Done | shortcuts.rs `find.search.all`, `find.filter.sidebar`, `find.filter.reset`, `find.filter.*` | local |
+| ⌥⌘F search all, ⌥⇧F filter sidebar, ⇧⌥⌘F reset filter, ⌥F / ⌥T / ⌥C / ⌥S / ⌥R / ⌥D / ⌥E open one filter | Done | `find.search.all`, `find.sidebar.filter`, `find.filter.reset`, `find.filter.*` | local |
 | ⌘L switch library | Done | shortcuts.rs:117, app.rs:998 | local |
 | ⌘E export, ⇧⌘E export .eaglepack, ⇧E export as format | Done | shortcuts.rs Export group | local |
 | ⌘1–⌘7 sidebar views | Done | shortcuts.rs `view.all`, `view.unfiled`, … | local |
 | ⌥1–⌥4 layouts | Done | shortcuts.rs `view.layout.*`, in Eagle's order | local |
 | ⌥⌘1–⌥⌘8 panel and caption toggles plus Navigator | Done | ⌥⌘1–⌥⌘7 and ⌥⌘8 Navigator (`view.toggle.navigator`) | local |
 | ⇧T always on top, F5 slideshow, ⌥⌘G grayscale | Done | shortcuts.rs `view.alwaysOnTop`, `view.toggle.slideshow`, `view.grayscale` | local |
-| ⌘O open in new window, ⇧⌘O open link | Done | `view.file.opennewwindow`, `view.file.openlink` | local |
+| ⌘O open in new window, ⇧⌘O open link | Done | ⌘O opens the acted-on items in a new window; ⇧⌘O opens the link | local |
 | ⇧↩ default app, ⌘↩ reveal | Done | shortcuts.rs:104-105 | local |
 | ⌥⌘S reveal, ⌥⌘D duplicate (view) | Missing |  | local |
 | Home / End / PageUp / PageDown scroll the grid; ⌘↑ / ⌘↓ jump to top or bottom | Done | `run_command` scroll offsets; ⌘↑ / ⌘↓ also select the first or last item, where Eagle only scrolls | local |
-| 0–5 set the rating of the selection | Done | shortcuts.rs `organize.rating.*`, grid only; toast "Rated N stars" | local |
+| 0–5 set the rating of the selection | Partial | Grid and the text, font, video and audio viewers; in the image viewer 0 and 1 are falcon's zoom keys where Eagle rates | local |
 | T opens the tag panel, F opens the folder panel, J opens Go to Folder, G opens Actions, P opens Plugins | Partial | T and J done; no F, G or P | local |
-| R reshuffles the Random view | Done | shortcuts.rs; in place, without a history step | local |
+| R reshuffles the Random view | Done | R and View ▸ Shuffle Again; also a folder or smart folder sorted Random | local |
 | `*` or `/` expand or collapse every folder | Done | Eagle's `toggleAllFolders` rule (smart folders when one is open); `*` is the ⇧8 alias chord | local |
 | Tab toggles all panels | Done | Fixed key in shortcuts.rs FIXED, when no text field has focus (`logic::toggle_all`) | local |
-| Space opens the quick preview (preference: preview, native Quick Look, or page down) | Done | `Prefs::space`: viewer, Quick Look (`open_with::quick_look`, `qlmanage -p`) or page down | local |
+| Space opens the quick preview (preference: preview, native Quick Look, or page down) | Done | `Prefs::space`: previews the first selected item (any selection), Quick Look, or page down (no selection needed) | local |
 | ⇧Space pages up | Done | Fixed key | local |
 | Enter toggles the viewer | Done | Enter is an alias of Viewer (shortcuts.rs:95) | local |
 | Esc closes panel, slideshow or viewer, otherwise clears the selection | Done | app.rs:1076-1081 | local |
@@ -227,7 +227,7 @@ Eagle defaults come from prefs `shortcuts.keybinds` (rebindable) and from the ha
 | ⌘W closes the window | Done | Closes the viewer first, then the window | local |
 | ⌘Z undo | Done | app.rs:992 | local |
 | ⌘A select all, ⌘C copy | Done | shortcuts.rs:110-112 | local |
-| Delete (Windows) / ⌘⌫ trash; ⇧⌘⌫ remove from folder | Done | shortcuts.rs `edit.remove.trash`, `edit.remove.folder` | local |
+| Delete (Windows) / ⌘⌫ trash; ⇧⌘⌫ remove from folder | Done | ⌘⌫ and the forward-delete key trash; ⇧⌘⌫ removes from the folder | local |
 | ⌘T add tags, ⇧⌘C / ⇧⌘V copy and paste tags, ⇧D add to last folder, ⌘D duplicate | Done | `organize.tag.*`, `organize.folder.addLast` ⇧D, `edit.duplicate` ⌘D | local |
 | ⇧⌘L lock the folder now, ⌥⌘L lock the app | Done | `edit.folder.lock` ⇧⌘L and `app.lock` ⌥⌘L | local |
 | Hold Z for the hover preview | Done | app.rs:2703, hover.rs | local |
@@ -244,7 +244,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | --- | --- | --- | --- |
 | Show-sidebar button when the sidebar is hidden | Done | app.rs:2006-2012 | local |
 | Back / Forward buttons | Done | app.rs:2013-2018 | local |
-| Title for the current view, "Search results", or "N folders selected" | Done | `logic::TreeSel`; the title reads "N folders selected" while several are picked | local |
+| Title for the current view, "Search results", or "N folders selected" | Partial | Title, "Search results" and "N folders selected"; no breadcrumb, no result count, active filters ignored | local |
 | Right-click the title for an ancestor jump menu | Missing |  | local |
 | Thumbnail size slider with − and + | Done | app.rs:2085-2109 | local |
 | Refresh button in the Random view | Partial | R and View ▸ Shuffle Again reshuffle; no on-screen Refresh button | local |
@@ -277,10 +277,10 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Double-click a folder to expand or collapse (preference: or rename) | Done | `Prefs::sidebar_double_click`, folders and smart folders | local |
 | Select several folders with ⌘ or ⇧ click to see their combined items | Done | `logic::TreeSel` (⌘ toggles, ⇧ ranges among visible rows), `folders_ui`; the grid shows the union under the global sort | local |
 | Filter field at the bottom of the sidebar | Done | app.rs:1656, 1719-1736. No ⌥⇧F key | local |
-| "Go to Folder" button | Done | Opens the quick switcher | local |
+| "Go to Folder" button | Done | Sidebar header ⇄ button opening the quick switcher, in Eagle's order (Create Folder, Go to Folder, Hide) | local |
 | Resize the sidebar by dragging its edge | Done | 200–480 pt, kept across launches | local |
 | Background task status: "Processing" or "Paused" palette analysis with Pause / Resume | Missing |  | local |
-| Drop zone hint: "Drag and drop folder here to import" | Done | Hints over the grid, the sidebar and a folder row while files are dragged in | local |
+| Drop zone hint: "Drag and drop folder here to import" | Done | Falcon's own hint text over the grid, the sidebar and folder rows while files are dragged in | local |
 
 ---
 
@@ -294,18 +294,18 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Grid layout Fit or Fill option | Done | `Display.fill`, `draw_image_cover`; hover playback still works in Fill | local |
 | Thumbnail Speed vs Quality (load originals for large tiles) | Done | Layout panel option, Quality by default as Eagle; large jpg/png/webp/bmp cards show the original up to 1600 px through a bounded `Tier::Card` cache (16 entries) | local |
 | Sort-by choices in the layout panel, global and per folder, including Manual, Duration and Random | Done | Global sort with Duration and Random (`OrderBy::ALL`); a folder's own sort adds Manual in the panel (`own_sort_menu`) | local |
-| Toggle Show Name under thumbnails | Done | `Display.name`, default on | local |
-| Toggle item info, choosing Dimensions / File Size / Tags / Rating / Date Modified / Date Created | Done | `logic::caption_info` with Eagle's six types and fallbacks (duration for media, size without preview, dash for no tags, stars, import time for dates) | local |
-| Toggle the file extension in the name | Done | `logic::caption_name` | local |
+| Toggle Show Name under thumbnails | Partial | `Display.name`; no caption in Justified, which Eagle captions | local |
+| Toggle item info, choosing Dimensions / File Size / Tags / Rating / Date Modified / Date Created | Partial | `logic::caption_info` with Eagle's six types; no caption in Justified, and no font-weight or URL-domain fallbacks | local |
+| Toggle the file extension in the name | Partial | `logic::caption_name`; no caption in Justified | local |
 | Toggle the extension label badge | Done | `Display.ext_badge` | local |
-| Toggle the comment-count badge | Done | `Display.comments` | local |
-| Show subfolder contents in a folder | Done | `logic::folder_members`; search and filters widen too; the strip lists every descendant and manual drag is off | local |
+| Toggle the comment-count badge | Done | `Display.comments` on cards and in List rows (26 px gutter) | local |
+| Show subfolder contents in a folder | Done | View menu, ⌥⌘7, the layout panel, the strip switch and the folder context menu | local |
 | Show sidebar and Show inspector switches in the layout panel | Done | `layout_panel.rs` | local |
 | Refresh button in the layout panel | Done | Flushes, re-reads the library from disk, forgets textures and reshuffles | local |
 | List layout with configurable columns and click-to-sort headers | Done | `layout_panel::list_header`, `logic::ListColumns`, `header_sort`: Eagle's seven columns, click sorts (writes the folder's sort inside a folder), right-click picks columns | local |
 | Subfolder cards above a folder's items, with covers | Done | covers.rs:65-140 | local |
-| Collapse the subfolder strip | Done | Click the strip heading (`Display.strip_collapsed`) | local |
-| Rename a subfolder card by double-clicking its name | Done | covers.rs `strip_rename`; a single click on the card body still opens the folder (Eagle selects) | local |
+| Collapse the subfolder strip | Partial | Click the strip heading; the strip is absent in the List layout | local |
+| Rename a subfolder card by double-clicking its name | Partial | Double-click the card name; the strip is absent in the List layout | local |
 | Thumbnail background (checkerboard for transparency, etc.) | Done | Card menu Thumbnail Background ▸ None/Black/Gray/White/Checkerboard, item key `background` with Eagle's values (`logic::ThumbBg`, `Action::Background`); drawn in grid, list and viewer | local |
 | Hover zoom button and hold-Z preview | Done | app.rs:2680-2743, hover.rs | local |
 | Video, GIF and audio play on hover in the grid | Partial | GIF and animated WebP cards play in place while hovered (`anim.rs` `Cards`, ⌥ keeps them still); video and audio don't | local |
@@ -335,9 +335,9 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| Drag items onto a sidebar folder | Done | `logic::folder_drop`: inside a folder the drop moves the items out of it, ⌥ adds; from other views it adds; trashed items come back (`Action::DropOnFolder`, one undo step). A locked target isn't asked for its password | local |
+| Drag items onto a sidebar folder | Partial | `logic::folder_drop` move/add rules with ⌥ and the toast; no password prompt for a locked target, and removal only from the open folder rather than every selected folder | local |
 | Toast after a drop ("N items moved to Folder", with a link to the folder) | Done | `flash_folder` toast with the folder name as a link (`toast.rs` `Toast.link`) | local |
-| Drag items onto a Quick Access folder | Done | Quick Access rows take item drops (move/add rules as the tree) | local |
+| Drag items onto a Quick Access folder | Partial | Drops accepted; same locked-folder and multi-folder gaps as sidebar rows | local |
 | Drag items onto a subfolder card | Done | Same `DropOnFolder` path as sidebar rows, with the bulk gate | local |
 | Drag items onto the Trash | Done | app.rs:1764-1767 | local |
 | Drag folders to reorder or nest, with insertion lines | Done | organize_ui.rs:254-266 | local |
@@ -349,7 +349,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Drag files from Finder onto the grid to import into the open folder | Done | app.rs:3601-3606, 852-862 | local |
 | Drag files from Finder onto a specific sidebar folder | Done | `import_ui.rs` `drop_files` hit-tests the drop against folder rows (`drop_pos.rs`); files go into that folder, folders are ignored, as Eagle's `onDropFolder` | local |
 | Drag a Finder folder onto the sidebar to import it with its folder tree | Done | `folder_import.rs` plan and `import_ui.rs` `import_folder_trees`: a drop on the sidebar's empty space makes a top-level folder tree and opens it; on the grid it imports flat, as Eagle's `onDropContainer` does | local |
-| Drop an .eaglepack onto the window | Done | Dropped packs open the import preview (`preview_pack`) | local |
+| Drop an .eaglepack onto the window | Done | Grid, sidebar folder rows (into that folder) and empty sidebar space (into the open folder), as Eagle's `onDropSidebar` | local |
 | Drop an image or URL from a browser | Missing |  | online/plugin |
 | Drag tags onto tag groups or the starred list; ⌥ copies instead of moving | Missing | Cross-ref organising | local |
 | Drag ghost showing the item count | Done | app.rs:3732-3740 | local |
@@ -370,7 +370,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Closing the window keeps the app running (Dock icon stays); reopen from the Dock | Done | Closing hides falcon (`NSApp hide:`, so the collect and preview windows hide too); the Dock icon or reopening brings it back; ⌘Q quits | local |
 | Menu bar status icon: Show Eagle, Capture Area / Window / Full Screen, Quit | Missing | Captures cross-ref import | local |
 | Lock screen for the whole app, with Touch ID | Done | Password and a Use Touch ID button (`touch_id.rs`) | local |
-| Loading screen while a library opens (progress messages) | Done | `Library::open_with_progress` behind a loading screen for opens started in the app; restoring at launch still blocks | local |
+| Loading screen while a library opens (progress messages) | Partial | `Library::open_with_progress` for opens started in the app; Try Again / Select Another Path, the open after creating a library and launch restore still block | local |
 | Resizable inspector | Done | Drag its inner edge; kept across launches | local |
 | Several libraries open in one window (falcon only) | Done | app.rs:624-676, workspaces.rs (extra) | local |
 | Floating collect window (falcon only) | Done | collect.rs (extra) | local |
@@ -419,7 +419,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Empty search: "Nothing Found, maybe another keyword" | Done | Tailored empty state | local |
 | Empty Trash text | Done | Tailored empty state | local |
 | Uncategorized and Untagged intro and "done" states | Done | Tailored intro and done states | local |
-| No tags yet / no uncategorized tags | Done | All Tags page empty state | local |
+| No tags yet / no uncategorized tags | Done | "No Tags Yet", plus the all-grouped notice in Tag Group mode (`empty_tags_filed`); falcon has no separate Uncategorized tags view | local |
 | Duplicates: none found | Done | duplicates_view.rs:199-207 | local |
 | Locked-folder unlock screen | Partial | Password unlock screen (organize_ui.rs:676). No Touch ID | local |
 
@@ -630,12 +630,12 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Size slider with zoom-in and zoom-out buttons | Done | `F/app/font_view.rs`: 50–1000% slider with − and +, ⌘=/⌘−/⌘0/⌘9, modifier-wheel and pinch | local |
 | Tabs: Article, Waterfall, Alphabet, Other (info) | Done | `font_view.rs` tabs Article / Waterfall / Alphabet / Info, remembered in app state | local |
 | Colour themes for the specimen (auto, light, dark, purple, yellow) | Done | auto, light, dark, purple, yellow | local |
-| Font info panel (PostScript, full name, family, version, designer, maker, description, copyright, trademark, glyph count) | Done | `fontmeta::FontInfo`, `info_rows` with Use as File Name on the names | local |
-| Rename the file from the PostScript, full or family name | Done | `Op::Rename` from the info panel or the header name; undoable | local |
-| Activate or deactivate (install) the font | Partial | `F/font_install.rs` writes and removes only in `~/Library/Fonts/Falcon/`; fonts in Eagle's `EagleApp/` show as "Activated by Eagle" and are left alone; both folders count as installed for the filter and rules. Eagle doesn't see falcon-activated fonts; activation from the context menu or for several fonts not checked | local |
+| Font info panel (PostScript, full name, family, version, designer, maker, description, copyright, trademark, glyph count) | Done | `fontmeta::FontInfo`, `info_rows`; also for fonts egui can't parse, around a QuickLook specimen | local |
+| Rename the file from the PostScript, full or family name | Done | `Op::Rename` from the info panel or header; also for fonts egui can't parse | local |
+| Activate or deactivate (install) the font | Partial | `font_install.rs` into `~/Library/Fonts/Falcon/` (Eagle's folder left alone), with a confirmation Eagle doesn't show; also for fonts egui can't parse | local |
 | Change the sample language | Done | Language menu writing `fontMetas.preferLng` (`Library::set_font_language`), redrawing the specimen thumbnail | local |
 | Number keys rate the font from inside the viewer | Done | `digits_rate` in `keyboard`: font, video, audio and text viewers rate; the image viewer keeps 0/1 for zoom | local |
-| Fonts egui can't read (some woff2, CFF) | Partial | Falls back to the image viewer (`F/app/media_view.rs:88-90`, `:189`) | local |
+| Fonts egui can't read (some woff2, CFF) | Done | Font-viewer header (rename, Activate, PostScript name), a Specimen tab (QuickLook render, else the thumbnail) and an Info tab | local |
 
 ### 8. Text (.txt) editor
 
@@ -643,7 +643,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | --- | --- | --- | --- |
 | View text in the app | Done | `app/text_view.rs` in the central viewer panel, `textdoc.rs` rules; non-UTF-8 or files over 2 MB open read-only | local |
 | Edit the text in place, auto-saved | Done | `Library::save_text` (`crates/falcon-library/src/text.rs`) writes atomically 500 ms after typing stops, on blur, ⌘S and leaving; refreshes `size`, `mtime`, `lastModified`; empty text is never saved, as Eagle | local |
-| Edit the title (rename) at the top of the page | Done | `Action::RenameItem` on blur/Enter; Eagle 4.0.0 has this commented out | local |
+| Edit the title (rename) at the top of the page | Partial | `Action::RenameItem` on blur/Enter; Eagle 4.0.0 ships this commented out, so it is a documented difference | local |
 | Zoom the text size (wheel and buttons) | Done | Eagle's five sizes 14–42 pt; ⌘=/⌘−, ⌘0/⌘9, ⌘-wheel/pinch and bar buttons; size kept in `Saved.text_zoom` | local |
 | Reloads when the file changes outside | Done | One `stat` a second, reload on an mtime change unless typing is pending; F5 reloads | local |
 | Links in the text open in the browser | Done | http(s)/www. links underlined, ⌘-click opens through `open_with::open_url`; Eagle's handler never fires | local |
@@ -982,7 +982,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Folder password: create with hint, change, remove, Lock Now | Done | `OU:270`, `OU:1067`, `O:202` | local |
 | Locked folder hides its items and subfolders until unlocked; unlock screen shows the hint | Done | `O:160` hidden_folders, `OU:676` unlock_screen | local |
 | Unlock a folder with Touch ID | Missing | none | local |
-| Folder description, edited in the inspector | Done | `scope_inspector` in app.rs keeps a `folder_edit` buffer and saves on blur through `Action::SetFolderDescription` (`edit.rs` set_folder_description), one undo step. Eagle saves a second after typing stops | local |
+| Folder description, edited in the inspector | Done | Saves 1 s after typing stops and on blur, one undo step (`Action::SetFolderDescription`) | local |
 | Rename a folder from the inspector name field | Done | `scope_inspector`: Return or blur saves through `Action::RenameFolder`; an emptied name reverts | local |
 | Folder auto-tagging: tags added to every item put in the folder, including the parent folders' tags | Done | `crates/falcon-library/src/autotag.rs` (own tags then each parent's, deduped, in Eagle's order); applied on import, paste, Add to Folder, the inspector picker and drops. `extendTags` is derived, as Eagle does, not stored | local |
 | Folder settings dialog (name plus auto-tags), Cmd+Shift+R | Done | `organize_ui.rs` auto_tag_dialog; `shortcuts.rs` `edit.folder.setting`; saving appends the tags to the folder's items, as Eagle does | local |
@@ -1015,7 +1015,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Batch rename, recolour or delete several smart folders | Done | Multi-smart-folder menu in `folders_ui`, looping the `smart.rs` calls in one undo step | local |
 | Export a smart folder | Done | Smart folder menu Export ▸ directory or `.eaglepack` (`export::plan_smart`, `PackSource::Smart`) | local |
 | Rule: name, URL, note, with equals, contains, excludes, begins with, ends with, empty, not empty | Done | `smart.rs` text rules; every method is in the dialog for each text property. Begins/ends-with are anchored regexes as in Eagle | local |
-| Rule: regex method | Done | `smart.rs` uses the `regex` crate, lower-casing pattern and text as Eagle does; no look-around or backreferences (documented in `docs/src/smart-folders.md`) | local |
+| Rule: regex method | Partial | `smart.rs` uses the `regex` crate, lower-casing as Eagle; no look-around or backreferences (documented difference) | local |
 | Rule: folder name | Done | `SM:111`, `A:243` | local |
 | Rule: folders (in any, all, equal, excludes, empty, not empty) | Done | `smart.rs`; the dialog has a folder checklist (`organize_ui::rule_fields_ui`) | local |
 | Rule: tags (any, all, equal, excludes, empty, not empty) | Done | `SM:124`, `A:244` (typed list, no tag picker) | local |
@@ -1237,7 +1237,7 @@ Two cross-cutting facts explain many rows:
 | Auto-import skips `.tmp` files, tiny files and unsupported types, and waits until a copy has finished | Done | `auto_import::skip` and `Settle` (size and mtime unchanged for 3 s); any extension is accepted, as a drop is | local |
 | Import an Eagle Package (`.eaglepack`) from the File menu or by opening the file | Done | File ▸ Import submenu, the switcher, a drop, and Finder Open With / Dock drop through `open_files.rs` and the bundle's document types | local |
 | Confirm the disk space an `.eaglepack` will use before importing it | Done | `preview_pack` confirmation | local |
-| When an `.eaglepack` holds items already in the library, ask "N repeated files, import anyway?" | Done | Duplicate prompt; "Don't Import" imports without the duplicates, as Eagle | local |
+| When an `.eaglepack` holds items already in the library, ask "N repeated files, import anyway?" | Done | Count in the title, Import / Leave Them Out, Esc imports everything, as Eagle | local |
 | Merge another Eagle library into the current one (folders and items), refusing the library already open | Done | `crates/falcon-library/src/library_merge.rs`: Eagle's id matching for folders, smart folders and tag groups; item folders copied in the background with progress and Stop; the open library is refused | local |
 | Import an Inboard backup folder (`InboardBackup.json`), with its folders recreated | Done | `ImportOptions::trashed` and `added_at`; folders recreated | local |
 | Import a Pixave library | Missing | — | local |
@@ -1517,9 +1517,9 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 
 Rows marked "not counted" are features Eagle 4.0.0 does not have.
 
-- **Done:** 164, including 5 where falcon goes beyond Eagle and 1 with a small difference.
+- **Done:** 162, including 5 where falcon goes beyond Eagle and 1 with a small difference.
 - **Partial:** 10.
-- **Missing:** 64, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
+- **Missing:** 63, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
 - **Different on purpose:** 1 (the API listens on localhost only).
 
 ### Ranked Missing and Partial local items
