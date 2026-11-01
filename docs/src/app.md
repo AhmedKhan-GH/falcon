@@ -379,7 +379,7 @@ These are the defaults. All but the arrows, Esc, Tab, Z and the viewer's C, 0, 1
 | ⇧⌘R | Folder settings (name and auto-tags) for the open folder, unless it is locked (Eagle's Set Current Folder, `edit.folder.setting`) |
 | ⌘= and ⌘− | Zoom the grid's cards, or zoom the image in the viewer |
 | ⌘⇧N | New folder, right after the open folder among its siblings, or at the top level when no folder is open (as Eagle) |
-| ⌥N | New subfolder of the open folder |
+| ⌥N | New subfolder of the open folder, first among its siblings (as Eagle) |
 | ⇧⌥⌘N | New smart folder |
 | ⌥⇧N | New text file: an empty "Untitled.txt" item in the open folder (with its auto-tags), opened in the text viewer with the cursor in the text (Eagle's fixed key; rebindable in falcon) |
 | ⇧⌘⌫ | Remove the selection from the open folder, then select the next item; as in Eagle there is no prompt, and an item left in no folder becomes Uncategorized |
