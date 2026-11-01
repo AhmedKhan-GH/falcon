@@ -1,0 +1,47 @@
+//! Platforms without PDFKit: opening fails cleanly, so the viewer shows
+//! the item's preview instead.
+
+use std::path::Path;
+
+use crate::{Bitmap, Error, Hit, OutlineEntry, Result, SearchOptions, Selection};
+
+/// Never constructed off macOS.
+pub struct Document {
+    _private: (),
+}
+
+impl Document {
+    pub fn open(_path: &Path) -> Result<Document> {
+        Err(Error("the PDF reader needs macOS".into()))
+    }
+    pub fn page_count(&self) -> usize {
+        0
+    }
+    pub fn title(&self) -> Option<String> {
+        None
+    }
+    pub fn page_size(&self, _i: usize) -> Option<(f64, f64)> {
+        None
+    }
+    pub fn page_sizes(&self) -> Vec<(f64, f64)> {
+        Vec::new()
+    }
+    pub fn render(&self, _i: usize, _scale: f64, _max_px: usize) -> Result<Bitmap> {
+        Err(Error("the PDF reader needs macOS".into()))
+    }
+    pub fn thumbnail(&self, _i: usize, _max_px: usize) -> Result<Bitmap> {
+        Err(Error("the PDF reader needs macOS".into()))
+    }
+    pub fn text(&self, _i: usize) -> String {
+        String::new()
+    }
+    pub fn search(&self, _text: &str, _options: SearchOptions) -> Vec<Hit> {
+        Vec::new()
+    }
+    pub fn selection(&self, _page: usize, _from: (f64, f64), _to: (f64, f64)) -> Selection {
+        Selection::default()
+    }
+    pub fn outline(&self) -> Vec<OutlineEntry> {
+        Vec::new()
+    }
+}
