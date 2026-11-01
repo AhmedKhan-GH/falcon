@@ -22,6 +22,9 @@ use crate::ui::widgets::{
     rating, tag_chip_removable, wide_button, window_drag,
 };
 
+/// Seconds after the last keystroke that a folder description saves.
+const DESC_SAVE_DELAY: f64 = 1.0;
+
 pub(crate) mod tag_picker;
 
 /// The saved name and description of a folder, or of a smart folder.
@@ -116,8 +119,9 @@ impl App {
         let shown = folder.as_ref().map(|f| (f.id.clone(), f.name.clone(), f.description.clone(), false)).or_else(|| smart.map(|(i, n, d)| (i, n, d, true)));
         self.flush_folder_edit(lib, shown.as_ref().map(|s| s.0.as_str()));
         if let Some((id, saved_name, saved_desc, is_smart)) = &shown {
-            // A folder's name and description save when the field loses
-            // focus (Return does that for the name), as one undo step each.
+            // A folder's name saves when the field loses focus (Return does
+            // that), its description then or a second after typing stops,
+            // as one undo step each.
             // An emptied name goes back to the saved one, as in Eagle. A
             // smart folder's are edited the same way.
             if self.ws.folder_edit.is_none() {
@@ -135,7 +139,17 @@ impl App {
                 name.clone_from(saved_name);
             }
             let r = field(ui, desc, "Description", 54.0, true, "scope-desc");
-            if r.lost_focus() {
+            // The description also saves a second after typing stops, as
+            // Eagle's does.
+            let typed_at = r.id.with("typed-at");
+            let now = ui.input(|i| i.time);
+            if r.changed() {
+                ui.data_mut(|d| d.insert_temp(typed_at, now));
+                ui.ctx().request_repaint_after(std::time::Duration::from_secs_f64(DESC_SAVE_DELAY));
+            }
+            let due = r.has_focus() && ui.data(|d| d.get_temp::<f64>(typed_at)).is_some_and(|t| now - t >= DESC_SAVE_DELAY);
+            if r.lost_focus() || due {
+                ui.data_mut(|d| d.remove::<f64>(typed_at));
                 if desc != saved_desc {
                     let (id, text) = (id.clone(), desc.clone());
                     self.ws.actions.push(if *is_smart { Action::SetSmartDescription(id, text) } else { Action::SetFolderDescription(id, text) });
