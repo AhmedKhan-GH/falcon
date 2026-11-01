@@ -418,6 +418,72 @@ pub fn folder_index(roots: &[Folder]) -> FolderIndex {
 }
 
 // ---------------------------------------------------------------------------
+// Name ranking (filter searches and Go to Folder)
+
+/// How well `word` matches `text` by Eagle's quick-search score (the
+/// string_score method): 1 for identical strings, 0 when the letters of
+/// `word` do not all appear in order, otherwise a score rewarding letters
+/// that follow each other, start a word or keep their case, and a shared
+/// first letter. Lengths and positions are in UTF-16 units, as in
+/// JavaScript.
+pub fn string_score(text: &str, word: &str) -> f64 {
+    if text == word {
+        return 1.0;
+    }
+    if word.is_empty() {
+        return 0.0;
+    }
+    let s: Vec<u16> = text.encode_utf16().collect();
+    let ls: Vec<u16> = text.to_lowercase().encode_utf16().collect();
+    let w: Vec<u16> = word.encode_utf16().collect();
+    let lw: Vec<u16> = word.to_lowercase().encode_utf16().collect();
+    let mut running = 0.0;
+    let mut start = 0usize;
+    for (i, &c) in lw.iter().enumerate() {
+        let Some(found) = ls.get(start..).and_then(|rest| rest.iter().position(|&x| x == c)).map(|p| p + start) else {
+            return 0.0;
+        };
+        let mut score = if found == start {
+            0.7
+        } else {
+            let after_space = found > 0 && s.get(found - 1) == Some(&(' ' as u16));
+            if after_space { 0.9 } else { 0.1 }
+        };
+        if s.get(found).is_some() && s.get(found) == w.get(i) {
+            score += 0.1;
+        }
+        running += score;
+        start = found + 1;
+    }
+    let mut total = 0.5 * (running / s.len() as f64 + running / w.len() as f64);
+    if lw.first() == ls.first() && total < 0.85 {
+        total += 0.15;
+    }
+    total
+}
+
+/// A name as Eagle compares it when ranking: decomposed, without
+/// combining accents, lower-cased.
+pub fn rank_key(name: &str) -> String {
+    use unicode_normalization::UnicodeNormalization;
+    name.nfkd().filter(|c| !('\u{300}'..='\u{36f}').contains(c)).collect::<String>().to_lowercase()
+}
+
+/// Ranks `names` against a typed keyword as Eagle's tag and folder filter
+/// searches and Go to Folder do: the keyword loses its spaces, both sides
+/// go through [`rank_key`], names scoring 0 are dropped and the rest are
+/// ordered best first (ties keep their order). Returns indices into
+/// `names`. (Eagle also scores the pinyin of Chinese names; falcon does
+/// not.)
+pub fn rank_names<'a>(names: impl IntoIterator<Item = &'a str>, keyword: &str) -> Vec<usize> {
+    let key = rank_key(keyword).replace(' ', "");
+    let mut scored: Vec<(usize, f64)> =
+        names.into_iter().enumerate().map(|(n, name)| (n, string_score(&rank_key(name), &key))).filter(|(_, sc)| *sc > 0.0).collect();
+    scored.sort_by(|a, b| b.1.total_cmp(&a.1));
+    scored.into_iter().map(|(n, _)| n).collect()
+}
+
+// ---------------------------------------------------------------------------
 // Filter panel
 
 /// How the tag and folder filters combine their lists.
@@ -1701,6 +1767,29 @@ mod tests {
         assert_eq!((c["png"], c["mp4"], c["video"], c["youtube"], c["url"]), (2, 1, 1, 1, 1));
         assert!(!c.contains_key("audio"));
         assert_eq!(type_options(items.iter()), ["TTF", "mp4", "png", "url", "font", "video", "audio", "youtube", "vimeo", "bilibili"]);
+    }
+
+    #[test]
+    fn string_scores() {
+        assert_eq!(string_score("hello", "hello"), 1.0);
+        assert_eq!(string_score("hello", ""), 0.0);
+        assert_eq!(string_score("hello", "hz"), 0.0);
+        // "he": 0.7+0.1 each -> running 1.6; 0.5*(1.6/5 + 1.6/2) = 0.56; +0.15.
+        assert!((string_score("hello", "he") - 0.71).abs() < 1e-9);
+        // An acronym letter after a space scores like two consecutive ones.
+        assert!(string_score("hello world", "hw") > string_score("hello xworld", "hw"));
+        assert!(string_score("Hello", "h") < string_score("hello", "h"), "same case scores more");
+    }
+
+    #[test]
+    fn names_rank_best_first() {
+        let names = ["Travel Photos", "photos", "Phones", "Café Art", "misc"];
+        let r = rank_names(names, "photos");
+        assert_eq!(r[0], 1, "the exact name first");
+        assert!(r.contains(&0) && !r.contains(&2) && !r.contains(&4));
+        assert_eq!(rank_names(names, "cafe"), [3], "accents fold");
+        assert_eq!(rank_names(names, "travel ph")[0], 0, "spaces in the keyword are dropped");
+        assert!(rank_names(names, "").is_empty());
     }
 
     #[test]
