@@ -36,6 +36,7 @@ mod organize;
 mod textdoc;
 mod toast;
 mod theme;
+mod ui;
 mod library_icons;
 mod watch;
 mod workspaces;
