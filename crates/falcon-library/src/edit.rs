@@ -16,7 +16,7 @@ use crate::ids;
 use crate::model::{Comment, Folder, FolderOrder, ICON_COLORS, Item, SavedFilter, TagGroup};
 
 /// How many recent tags Eagle keeps in `historyTags`.
-const HISTORY_LIMIT: usize = 120;
+pub const HISTORY_LIMIT: usize = 120;
 
 impl Library {
     /// Saves `item` over the stored item with the same id.

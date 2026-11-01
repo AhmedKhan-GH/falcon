@@ -23,6 +23,7 @@ pub mod rename;
 pub mod search;
 pub mod smart;
 pub mod smart_draft;
+pub mod tagging;
 pub mod tempo;
 pub mod text;
 pub mod undo;

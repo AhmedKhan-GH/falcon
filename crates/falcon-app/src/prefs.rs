@@ -111,6 +111,9 @@ pub struct Prefs {
     /// Eagle's `notification.notification.when.autoImport`: a notice when
     /// files from the watched folder start importing.
     pub notify_auto_import: bool,
+    /// The tag picker's own settings (its gear menu), as Eagle keeps them
+    /// for its tag panel.
+    pub tag_picker: crate::tags::PickerPrefs,
 }
 
 /// What the wheel does over a playing video.
@@ -227,6 +230,7 @@ impl Default for Prefs {
             auto_import: false,
             auto_import_path: None,
             notify_auto_import: true,
+            tag_picker: Default::default(),
         }
     }
 }

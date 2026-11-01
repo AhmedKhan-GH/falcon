@@ -36,6 +36,7 @@ mod import_ui;
 mod folders_ui;
 mod layout_panel;
 mod text_view;
+mod tag_picker;
 #[path = "comments.rs"]
 mod comments;
 #[path = "covers.rs"]
@@ -139,8 +140,12 @@ enum Action {
     UpdateSmart(String, String, Vec<serde_json::Value>),
     RenameTag(String, String),
     MoveFolder(String, Option<String>),
-    /// Adds and/or removes a tag on several items.
-    BatchTag(Vec<String>, Option<String>, Option<String>),
+    /// Tags added to items by the tag picker (`Library::add_tags_to_items`);
+    /// new tags created while the picker shows a group join it:
+    /// `(group id, new tags)`.
+    AddTags(Vec<String>, Vec<String>, Option<(String, Vec<String>)>),
+    /// Tags taken off items (`Library::remove_tags_from_items`).
+    RemoveTags(Vec<String>, Vec<String>),
     BatchRating(Vec<String>, u64),
     QuickAdd(&'static str, String),
     QuickRemove(String),
@@ -364,7 +369,6 @@ struct EditBuf {
     name: String,
     notes: String,
     url: String,
-    new_tag: String,
 }
 
 /// Uncommitted folder inspector text: `(folder id, name, description)`.
@@ -433,8 +437,8 @@ struct Workspace {
     cards: crate::anim::Cards,
     /// Focus the inspector's title field next frame (F2).
     focus_title: bool,
-    /// Tag typed into the multi-selection inspector.
-    batch_tag: String,
+    /// The tag picker (`tag_picker.rs`).
+    picker: tag_picker::TagPicker,
     progress: Arc<Mutex<Progress>>,
     /// Imported files found already in the library, waiting to be asked
     /// about (`import_dupes`), and the dialog asking.
@@ -519,7 +523,7 @@ impl Workspace {
             gif_player: false,
             cards: Default::default(),
             focus_title: false,
-            batch_tag: String::new(),
+            picker: Default::default(),
             progress: Arc::new(Mutex::new(Progress::default())),
             dupes: Default::default(),
             dup_dialog: None,
@@ -1339,7 +1343,9 @@ impl App {
             )
         });
         if esc {
-            if self.ws.viewer.is_some() {
+            if self.ws.picker.open {
+                self.ws.picker.open = false;
+            } else if self.ws.viewer.is_some() {
                 self.ws.viewer = None;
             } else {
                 self.ws.selected.clear();
@@ -1832,28 +1838,11 @@ impl App {
                     }
                     lib.move_folder(&id, parent.as_deref())
                 }
-                Action::BatchTag(ids, add, remove) => {
-                    let mut r = Ok(());
-                    for id in &ids {
-                        let Some(mut item) = lib.item(id).cloned() else { continue };
-                        let before = item.tags.clone();
-                        if let Some(t) = &remove {
-                            item.tags.retain(|x| x != t);
-                        }
-                        if let Some(t) = &add
-                            && !item.tags.contains(t)
-                        {
-                            item.tags.push(t.clone());
-                        }
-                        if item.tags != before {
-                            r = r.and(lib.update_item(item));
-                        }
-                    }
-                    if let Some(t) = add {
-                        r = r.and(lib.record_tag_use(&[t]));
-                    }
-                    r
-                }
+                Action::AddTags(ids, tags, group) => lib.add_tags_to_items(&ids, &tags).and_then(|_| match group {
+                    Some((g, new)) if !new.is_empty() => lib.add_tags_to_group(&g, &new),
+                    _ => Ok(()),
+                }),
+                Action::RemoveTags(ids, tags) => lib.remove_tags_from_items(&ids, &tags).map(|_| ()),
                 Action::BatchRating(ids, star) => {
                     let mut r = Ok(());
                     for id in &ids {
@@ -2051,8 +2040,8 @@ fn action_label(action: &Action) -> String {
         Action::StarTag(_, true) => "Star tag".into(),
         Action::StarTag(_, false) => "Unstar tag".into(),
         Action::MoveFolder(..) => "Move folder".into(),
-        Action::BatchTag(ids, Some(_), _) => format!("Tag {}", ids.len()),
-        Action::BatchTag(ids, None, _) => format!("Untag {}", ids.len()),
+        Action::AddTags(ids, ..) => format!("Tag {}", ids.len()),
+        Action::RemoveTags(ids, _) => format!("Untag {}", ids.len()),
         Action::BatchRating(ids, _) => format!("Rate {}", ids.len()),
         Action::QuickAdd(..) => "Add to Quick Access".into(),
         Action::QuickRemove(_) => "Remove from Quick Access".into(),
@@ -4022,32 +4011,10 @@ impl App {
         }
         ui.vertical_centered(|ui| ui.label(RichText::new(format!("{n} items selected")).size(15.0)));
 
-        // Tags every selected item shares; adding applies to all.
+        // Tags every selected item shares; the picker adds to all.
         heading(ui, "Tags");
-        let mut common: Vec<String> = items.first().map(|i| i.tags.clone()).unwrap_or_default();
-        common.retain(|t| items.iter().all(|i| i.tags.contains(t)));
-        ui.horizontal_wrapped(|ui| {
-            ui.spacing_mut().item_spacing = vec2(6.0, 6.0);
-            for tag in &common {
-                if chip(ui, tag, true).clicked() {
-                    self.ws.actions.push(Action::BatchTag(ids.clone(), None, Some(tag.clone())));
-                }
-            }
-            let buf = &mut self.ws.batch_tag;
-            let r = ui.add(
-                TextEdit::singleline(buf)
-                    .id_salt("batch-tag")
-                    .hint_text(RichText::new("Add tag to all").color(t::p().text_muted))
-                    .font(font(13.0))
-                    .frame(egui::Frame::NONE)
-                    .desired_width(120.0),
-            );
-            if r.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) && !buf.trim().is_empty() {
-                self.ws.actions.push(Action::BatchTag(ids.clone(), Some(buf.trim().to_string()), None));
-                buf.clear();
-                r.request_focus();
-            }
-        });
+        let common = crate::tags::common_tags(&items);
+        self.tag_field(ui, lib, &common, &ids);
 
         heading(ui, "Folders");
         let add = ui.add(egui::Button::new(RichText::new(format!("{}  Add All to Folder", ic::PLUS)).size(12.0).color(t::p().text_muted)).frame(false));
@@ -4079,6 +4046,34 @@ impl App {
         }
     }
 
+    /// The inspector's tags: a chip per tag (its × takes the tag off `ids`)
+    /// and the button that opens the tag picker, as in Eagle.
+    fn tag_field(&mut self, ui: &mut Ui, lib: &Library, tags: &[String], ids: &[String]) {
+        let mut remove = None;
+        let mut open = None;
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = vec2(6.0, 6.0);
+            for tag in tags {
+                if tag_chip_removable(ui, tag, App::tag_dot(lib, tag)).clicked() {
+                    remove = Some(tag.clone());
+                }
+            }
+            let label = if tags.is_empty() { format!("{}  Add Tags", ic::PLUS) } else { ic::PLUS.to_string() };
+            let b = ui.add(egui::Button::new(RichText::new(label).size(12.0).color(t::p().text_muted)).frame(false));
+            let b = b.on_hover_text("Add tags");
+            if b.clicked() {
+                open = Some(b.rect.left_center());
+            }
+        });
+        if let Some(tag) = remove {
+            self.ws.actions.push(Action::RemoveTags(ids.to_vec(), vec![tag]));
+        }
+        if let Some(at) = open {
+            let ctx = ui.ctx().clone();
+            self.open_tag_picker(&ctx, Some(at));
+        }
+    }
+
     fn item_inspector(&mut self, ui: &mut Ui, lib: &mut Library, item: Item) {
         if self.ws.edit.as_ref().is_none_or(|e| e.id != item.id) {
             self.ws.edit = Some(EditBuf {
@@ -4086,7 +4081,6 @@ impl App {
                 name: item.name.clone(),
                 notes: item.annotation.clone(),
                 url: item.url.clone(),
-                new_tag: String::new(),
             });
         }
         let w = ui.available_width();
@@ -4163,40 +4157,7 @@ impl App {
 
         // Tags.
         heading(ui, "Tags");
-        let mut remove_tag = None;
-        let mut add_tag = None;
-        ui.horizontal_wrapped(|ui| {
-            ui.spacing_mut().item_spacing = vec2(6.0, 6.0);
-            for tag in &item.tags {
-                if chip(ui, tag, true).clicked() {
-                    remove_tag = Some(tag.clone());
-                }
-            }
-            let te = TextEdit::singleline(&mut edit.new_tag)
-                .id_salt("new-tag")
-                .hint_text(RichText::new("New tag").color(t::p().text_muted))
-                .font(font(13.0))
-                .frame(egui::Frame::NONE)
-                .desired_width(90.0);
-            let r = ui.add(te);
-            if r.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) && !edit.new_tag.trim().is_empty() {
-                add_tag = Some(edit.new_tag.trim().to_string());
-                edit.new_tag.clear();
-                r.request_focus();
-            }
-        });
-        if let Some(tag) = remove_tag {
-            let mut it = changed.clone().unwrap_or_else(|| item.clone());
-            it.tags.retain(|x| *x != tag);
-            changed = Some(it);
-        }
-        if let Some(tag) = add_tag.clone()
-            && !item.tags.contains(&tag)
-        {
-            let mut it = changed.clone().unwrap_or_else(|| item.clone());
-            it.tags.push(tag);
-            changed = Some(it);
-        }
+        self.tag_field(ui, lib, &item.tags, std::slice::from_ref(&item.id));
 
         // Folders.
         heading(ui, "Folders");
@@ -4282,9 +4243,6 @@ impl App {
         if let Some(it) = changed {
             match lib.update_item(it) {
                 Ok(()) => {
-                    if let Some(tag) = add_tag {
-                        let _ = lib.record_tag_use(&[tag]);
-                    }
                     if let Some(e) = self.ws.edit.as_mut() {
                         e.name = lib.item(&item.id).map_or(e.name.clone(), |i| i.name.clone());
                     }
@@ -4377,6 +4335,24 @@ fn rating(ui: &mut Ui, star: u64) -> Option<u64> {
         }
     }
     out
+}
+
+/// An inspector tag chip with the colour dot of its group; clicking it
+/// takes the tag off.
+fn tag_chip_removable(ui: &mut Ui, text: &str, dot: Option<Color32>) -> Response {
+    let g = galley(ui, text, font(12.0), t::p().text, 180.0);
+    let dot_w = if dot.is_some() { 11.0 } else { 0.0 };
+    let (rect, resp) = ui.allocate_exact_size(vec2(g.size().x + 30.0 + dot_w, 22.0), Sense::click());
+    let fill = if resp.hovered() { t::p().button_hover } else { t::p().button };
+    ui.painter().rect_filled(rect, CornerRadius::same(5), fill);
+    if let Some(c) = dot {
+        ui.painter().circle_filled(Pos2::new(rect.left() + 10.0, rect.center().y), 3.5, c);
+    }
+    ui.painter().galley(Pos2::new(rect.left() + 8.0 + dot_w, rect.center().y - g.size().y / 2.0), g, t::p().text);
+    if resp.hovered() {
+        icon(ui, Pos2::new(rect.right() - 10.0, rect.center().y), ic::X, 10.0, t::p().text_muted);
+    }
+    resp.on_hover_text("Click to remove")
 }
 
 fn chip(ui: &mut Ui, text: &str, removable: bool) -> Response {
@@ -4787,6 +4763,7 @@ impl App {
             self.smart_dialog_ui(&ctx, lib);
         }
         self.organize_dialogs(&ctx, lib);
+        self.tag_picker_ui(&ctx, lib);
         self.folder_dialogs(&ctx, lib);
         self.collect_duplicates();
         self.duplicate_dialog(&ctx, lib);
