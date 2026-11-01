@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 85 | 55 | 131 | 9 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 88 | 55 | 128 | 9 |
 | Viewers and file formats | 81 | 31 | 78 | 7 |
 | Search, filters and organising | 127 | 30 | 65 | 3 |
-| Import, export, library, preferences and integrations | 65 | 28 | 119 | 26 |
-| **Total** | 358 | 144 | 393 | 45 |
+| Import, export, library, preferences and integrations | 77 | 23 | 112 | 26 |
+| **Total** | 373 | 139 | 383 | 45 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -28,9 +28,9 @@ These are bugs, not missing features. The first four can lose data or edits.
 
 1. ~~Every viewer opens inside the window between the sidebar and inspector in Eagle, with a toolbar button that hides both. Falcon does this only for PDFs.~~ Fixed: every viewer draws in the central panel, with the panels button, ⌥⌘3 and Tab.
 2. No application menu bar.
-3. Preferences: 4 panes and 6 settings against Eagle's 13 panes and about 80 settings.
+3. Preferences: 4 panes and 9 settings against Eagle's 13 panes and about 80 settings.
 4. The full-size image is capped at 3072 px.
-5. Folder import flattens structure; no import error list.
+5. ~~Folder import flattens structure; no duplicate check on import; no import error list.~~ Fixed.
 6. No export of items or folders, and no CSV export.
 7. Many shortcuts missing (ratings, T, F, ⌘J Go to Folder, ⌘1–7 views, Home and End, ⇧+arrows, ⌘D and more).
 8. No marquee selection, no multi-select of folders, no grid display options.
@@ -325,7 +325,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | ⇧ + arrows extend the selection | Missing |  | local |
 | Right-click an unselected item selects it first | Done | app.rs:2504-2506 | local |
 | After moving items out of a folder or to the Trash, the next item is selected | Missing | The selection is just pruned (app.rs:3622-3625) | local |
-| Auto-select items after import | Missing |  | local |
+| Auto-select items after import | Done | `Prefs::auto_select` (on by default): up to 1,000 new items shown in the view | local |
 | Selected item is scrolled into view during keyboard moves | Done | app.rs:1134, 2468-2479 | local |
 | Several items selected: the inspector shows a summary with batch tag, rating and trash | Done | app.rs:2938-3018 | local |
 
@@ -347,8 +347,8 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Drag items within a manually sorted folder to reorder them | Done | organize_ui.rs:616 | local |
 | Drag items out to Finder or other apps | Done | app.rs:3699-3730 | local |
 | Drag files from Finder onto the grid to import into the open folder | Done | app.rs:3601-3606, 852-862 | local |
-| Drag files from Finder onto a specific sidebar folder | Missing | Drops always go to the open scope | local |
-| Drag a Finder folder onto the sidebar to import it with its folder tree | Missing | Folders are flattened into the open scope (app.rs:871-879) | local |
+| Drag files from Finder onto a specific sidebar folder | Done | `import_ui.rs` `drop_files` hit-tests the drop against folder rows (`drop_pos.rs`); files go into that folder, folders are ignored, as Eagle's `onDropFolder` | local |
+| Drag a Finder folder onto the sidebar to import it with its folder tree | Done | `folder_import.rs` plan and `import_ui.rs` `import_folder_trees`: a drop on the sidebar's empty space makes a top-level folder tree and opens it; on the grid it imports flat, as Eagle's `onDropContainer` does | local |
 | Drop an .eaglepack onto the window | Missing | Cross-ref import | local |
 | Drop an image or URL from a browser | Missing |  | online/plugin |
 | Drag tags onto tag groups or the starred list; ⌥ copies instead of moving | Missing | Cross-ref organising | local |
@@ -1218,12 +1218,12 @@ Two cross-cutting facts explain many rows:
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | Drag files from Finder onto the main window to import them into the current folder | Done | `crates/falcon-app/src/app.rs:3600-3605` (dropped files go to `import`); the folder comes from `scope_folders` `app.rs:857` | local |
-| Drag a folder onto the sidebar to import it with its subfolder tree recreated as Eagle folders | Partial | `app.rs:864-878` walks folders but imports every file **flat** into the current folder. No Eagle folders are created, so the structure is lost | local |
-| Import Folders from a file dialog (several folders, structure kept) | Missing | No file or folder picker for import. `rfd` is used only for create or open library and custom thumbnails (`app.rs:780,791`, `image_edit.rs:140`) | local |
-| Warning before importing a very large folder ("contains N items, continue?") | Missing | No confirmation; any folder is walked | local |
-| Refuse folders deeper than 15 levels or with 100k+ files | Missing | No limits | local |
+| Drag a folder onto the sidebar to import it with its subfolder tree recreated as Eagle folders | Done | `crates/falcon-library/src/folder_import.rs` (walk, plan, `create_folders`); `import_ui.rs` `import_folder_trees` | local |
+| Import Folders from a file dialog (several folders, structure kept) | Done | `import_ui.rs` `run_import_request`; Import Folders… and Import Files… in the library switcher and on the empty All and folder pages | local |
+| Warning before importing a very large folder ("contains N items, continue?") | Done | `folder_import::verdict`: 2,000 files or more ask first, as Eagle | local |
+| Refuse folders deeper than 15 levels or with 100k+ files | Done | `folder_import::verdict`, Eagle's numbers | local |
 | Dropping or picking a `.library` folder opens it as a library instead of importing it | Done | `logic::split_libraries` separates `*.library` paths before the import walk in `import_into`; the first opens through the sandbox-guarded `App::open`, the rest are named in a toast. Like Eagle, a `.library` nested inside a dropped folder is not special-cased | local |
-| A Pixave `.pxvlibrary` folder is skipped by folder import | Missing | Not special-cased | local |
+| A Pixave `.pxvlibrary` folder is skipped by folder import | Done | `folder_import.rs` walk (everywhere, not only the dialog) | local |
 | Paste files copied in Finder (⌘V) | Done | `app.rs:961-967` (`arboard` file list) | local |
 | Paste a copied bitmap image as a new PNG item | Done | `app.rs:968-977` (named "Pasted image <date>") | local |
 | Paste a URL from the clipboard: an image URL is downloaded, a web page is saved as a bookmark | Missing | `paste_into` handles only files and images | online |
@@ -1256,19 +1256,19 @@ Two cross-cutting facts explain many rows:
 | --- | --- | --- | --- |
 | Copy the original into `images/<ID>.info`, keep the source mtime, make a thumbnail and palette | Done | `crates/falcon-library/src/import.rs:79-147,173-207` | local |
 | Imports run in the background with a progress display | Done | `app.rs:888-938` (background thread and progress bar) | local |
-| Upload queue panel listing failed imports with reasons (download failed, timeout, cannot decode and so on), plus Retry All, Copy to Clipboard and Clear All | Partial | Falcon shows only "Added N, M failed" (`app.rs:924`). There is no per-file list, reason, retry or copy | local |
+| Upload queue panel listing failed imports with reasons (download failed, timeout, cannot decode and so on), plus Retry All, Copy to Clipboard and Clear All | Done | `import::Failure` / `FailKind` per file; `import_ui.rs` `error_panel` with Retry All, Copy to Clipboard (the files), Clear All; opened from a toast. Local-file reasons only | local |
 | "Import Successful, N image(s) imported" notification | Partial | In-window flash only (`app.rs:924-925`), no system notification | local |
 | Duplicate check on import (Eagle's metadata key), with a dialog offering Import, Don't Import, Keep both, Use existing file and Apply to all | Done | `import_check.rs` (same size and extension, then a BLAKE3 hash of the whole file), `crates/falcon-app/src/import_dupes.rs`, `app/dupes_ui.rs`: Eagle's two choices (use existing, keep both), Import, close = don't import, apply to all. One thumbnail shown, not two | local |
 | Setting: notify me when importing duplicates | Done | `Prefs::notify_duplicates`, on by default; off imports duplicates silently as Eagle does | local |
 | Folder auto-tagging: tags set on a folder are added to every item imported or pasted into it | Done | `ImportOptions::folder_auto_tags`, set by `Prefs::import_options`; applied in `commit_import` | local |
 | Screenshot auto-tag ("Screenshot" tag) | Missing | No screenshots | local |
 | Add IPTC and XMP keywords as tags (setting) | Done | `prefs.rs:24,327`; `import.rs:121-123` | local |
-| Font style tag (Regular, Bold, Italic) added on import (setting) | Partial | Always on: `ImportOptions::font_weight_tag` defaults to true (`import.rs:54`) and has no switch in Preferences | local |
-| Auto-select the new items after import (setting) | Missing | The selection is not changed after an import | local |
-| Unsupported formats are refused with an "unsupported format" dialog | Partial | Falcon imports any non-empty file. Unknown types get no thumbnail (`import.rs:302-303`), and nothing is refused or reported | local |
+| Font style tag (Regular, Bold, Italic) added on import (setting) | Done | `Prefs::font_style_tags` in the Preview pane, on by default | local |
+| Auto-select the new items after import (setting) | Done | `Prefs::auto_select`, on by default; selects the new items shown in the view and scrolls to a single one | local |
+| Unsupported formats are refused with an "unsupported format" dialog | Done | `import::is_recognized`: like Eagle, only extensionless files and unfinished browser downloads (`.crdownload`, `.part`, `.download`) are refused, into the error list; every other type imports | local |
 | Empty files are refused (except `.txt`) | Done | `import.rs:88-90` | local |
 | Hidden files are skipped during folder walks | Done | `app.rs:149-151,872-876` | local |
-| Not-enough-disk-space check before copying | Missing | No check; a copy failure shows as a failed count | local |
+| Not-enough-disk-space check before copying | Done | Eagle has no pre-copy check on import either; ENOSPC is reported per file as "Not enough disk space" in the error list | local |
 | Filename sanitising and length limit | Done | `import.rs:411-430` | local |
 | Cut mode: files staged in app data (pasted or downloaded) are moved, not copied | Done | Pasted temp files are deleted after import (`app.rs:893-897`) | local |
 | Choose where a screenshot or extension item is saved (collect prompt) | Missing | The collect window exists, but nothing triggers it, since there is no extension or capture | local |
@@ -1373,7 +1373,7 @@ Eagle panes (`app/js/preferences.js:659-788`): General, Sidebar, Controls, Previ
 | General: keep the Dock icon after the window closes | Missing | — | local |
 | General: launch at login | Missing | — | local |
 | General: GPU acceleration | Missing | — | local |
-| General: auto-select items after import | Missing | — | local |
+| General: auto-select items after import | Done | `Prefs::auto_select` | local |
 | General: notify on duplicate import | Done | `Prefs::notify_duplicates` | local |
 | General: ask where to save items from the extension | Missing | — | local |
 | General: @2x screenshots | Missing | — | local |
@@ -1399,7 +1399,7 @@ Eagle panes (`app/js/preferences.js:659-788`): General, Sidebar, Controls, Previ
 | Preview: loop clips shorter than 30 s | Partial | Always on (`video_view.rs:26-27,146-147`); no switch | local |
 | Preview: autoplay GIF, WebP and AVIF in the grid | Missing | — | local |
 | Preview: advanced GIF viewer | Missing | — | local |
-| Preview: automatic font style tags | Partial | Always on (`import.rs:54`) | local |
+| Preview: automatic font style tags | Done | `Prefs::font_style_tags` | local |
 | **Screenshot:** format PNG, JPG or WebP | Missing | — | local |
 | Screenshot: quality | Missing | — | local |
 | Screenshot: enable the global shortcut, plus area, window and full-screen shortcuts | Missing | — | local |
@@ -1517,9 +1517,9 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 
 Rows marked "not counted" are features Eagle 4.0.0 does not have.
 
-- **Done:** 65, including 5 where falcon goes beyond Eagle and 1 with a small difference.
-- **Partial:** 28.
-- **Missing:** 145, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
+- **Done:** 77, including 5 where falcon goes beyond Eagle and 1 with a small difference.
+- **Partial:** 23.
+- **Missing:** 138, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
 - **Different on purpose:** 1 (the API listens on localhost only).
 
 ### Ranked Missing and Partial local items
