@@ -239,7 +239,11 @@ pub enum FolderOrder {
 
 impl From<crate::search::OrderBy> for FolderOrder {
     fn from(o: crate::search::OrderBy) -> Self {
-        FolderOrder::By(o)
+        match o {
+            crate::search::OrderBy::Duration => FolderOrder::Duration,
+            crate::search::OrderBy::Random => FolderOrder::Random,
+            o => FolderOrder::By(o),
+        }
     }
 }
 
@@ -257,8 +261,8 @@ impl FolderOrder {
             FolderOrder::By(O::Btime) => "BTIME",
             FolderOrder::By(O::Mtime) => "MTIME",
             FolderOrder::By(O::Tags) => "TAGS",
-            FolderOrder::Duration => "DURATION",
-            FolderOrder::Random => "RANDOM",
+            FolderOrder::Duration | FolderOrder::By(O::Duration) => "DURATION",
+            FolderOrder::Random | FolderOrder::By(O::Random) => "RANDOM",
             FolderOrder::Manual => "MANUAL",
         }
     }

@@ -313,33 +313,24 @@ pub fn own_order(order_by: Option<&str>, increase: Option<bool>) -> Option<(Fold
 }
 
 /// The key `logic::visible` should sort by in a view with its own sort:
-/// keys the main list knows pass through; duration, random and manual
+/// keys the main list knows (duration included) pass through; random and manual
 /// start from import order and are finished by [`finish_order`].
 pub fn base_key(own: Option<(FolderOrder, bool)>, global: (OrderBy, bool)) -> (OrderBy, bool) {
     match own {
         Some((FolderOrder::By(k), inc)) => (k, inc),
-        Some((FolderOrder::Manual, _)) => (OrderBy::Import, true),
+        Some((FolderOrder::Duration, inc)) => (OrderBy::Duration, inc),
         Some(_) => (OrderBy::Import, true),
         None => global,
     }
 }
 
 /// Applies the keys the main list can't sort by. Random shuffles by
-/// `seed` (fixed for one visit); duration sorts by length, shortest first
-/// when `increase`, items without one last. Manual sorts by each item's
+/// `seed` (fixed for one visit). Manual sorts by each item's
 /// hand-arranged position in `folder` ([`search::sort_manual`]); outside a
 /// folder it keeps the incoming order.
 pub fn finish_order(order: &mut [usize], items: &[Item], own: Option<(FolderOrder, bool)>, folder: Option<&str>, seed: u64) {
     match own {
         Some((FolderOrder::Random, _)) => order.sort_by_key(|&i| shuffle_key(seed, &items[i].id)),
-        Some((FolderOrder::Duration, inc)) => order.sort_by(|&a, &b| {
-            match (search::duration(&items[a]), search::duration(&items[b])) {
-                (Some(x), Some(y)) => if inc { x.total_cmp(&y) } else { y.total_cmp(&x) },
-                (Some(_), None) => std::cmp::Ordering::Less,
-                (None, Some(_)) => std::cmp::Ordering::Greater,
-                (None, None) => std::cmp::Ordering::Equal,
-            }
-        }),
         Some((FolderOrder::Manual, inc)) => {
             let Some(folder) = folder else { return };
             let mut refs: Vec<&Item> = order.iter().map(|&i| &items[i]).collect();
@@ -734,11 +725,11 @@ mod tests {
     #[test]
     fn duration_and_random_finish_the_order() {
         let items = vec![item("a", &[], Some(30.0)), item("b", &[], None), item("c", &[], Some(5.5)), item("d", &[], Some(12.0))];
+        // Duration is the main sort's key (search::sort); finishing leaves it.
+        assert_eq!(base_key(Some((FolderOrder::Duration, false)), (OrderBy::Name, true)), (OrderBy::Duration, false));
         let mut o = vec![0, 1, 2, 3];
         finish_order(&mut o, &items, Some((FolderOrder::Duration, true)), None, 0);
-        assert_eq!(o, [2, 3, 0, 1]);
-        finish_order(&mut o, &items, Some((FolderOrder::Duration, false)), None, 0);
-        assert_eq!(o, [0, 3, 2, 1]);
+        assert_eq!(o, [0, 1, 2, 3]);
         let mut r1 = vec![0, 1, 2, 3];
         let mut r2 = vec![3, 2, 1, 0];
         finish_order(&mut r1, &items, Some((FolderOrder::Random, true)), None, 42);

@@ -857,6 +857,8 @@ impl App {
     pub(super) fn grid_order(&mut self, lib: &Library, only: Option<&HashSet<String>>) -> Vec<usize> {
         let own = self.own_sort(lib).and_then(|o| o.1);
         let (key, inc) = organize::base_key(own, (self.ws.sort, self.ws.increase));
+        // The global Random sort is finished like a folder's own.
+        let finish = own.or((self.ws.sort == falcon_library::search::OrderBy::Random).then_some((FolderOrder::Random, self.ws.increase)));
         // Picked folders show their items together: everything the caller's
         // `only` set lets through. With Show Subfolder Content one open
         // folder lists its members, those of its subfolders included.
@@ -881,7 +883,7 @@ impl App {
                 }
             };
             let folder = if let Scope::Folder(id) = &scope { Some(id.as_str()) } else { None };
-            organize::finish_order(&mut order, lib.items(), own, folder, seed);
+            organize::finish_order(&mut order, lib.items(), finish, folder, seed);
         }
         // Eagle puts items pinned in the open folder first, unless the
         // folder is sorted at random.

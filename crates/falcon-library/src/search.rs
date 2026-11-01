@@ -1321,10 +1321,16 @@ pub enum OrderBy {
     Btime,
     Mtime,
     Tags,
+    /// Video and audio length in whole seconds; items without one count
+    /// as 0.
+    Duration,
+    /// Shuffled: [`sort`] keeps the incoming order and the caller shuffles.
+    Random,
 }
 
 impl OrderBy {
-    pub const ALL: [OrderBy; 9] = [
+    /// Every key of the global sort menu, in Eagle's order.
+    pub const ALL: [OrderBy; 11] = [
         OrderBy::Import,
         OrderBy::Btime,
         OrderBy::Mtime,
@@ -1334,6 +1340,8 @@ impl OrderBy {
         OrderBy::Resolution,
         OrderBy::Rating,
         OrderBy::Tags,
+        OrderBy::Duration,
+        OrderBy::Random,
     ];
 
     pub fn label(self) -> &'static str {
@@ -1347,6 +1355,8 @@ impl OrderBy {
             OrderBy::Resolution => "Dimensions",
             OrderBy::Rating => "Rating",
             OrderBy::Tags => "Tags",
+            OrderBy::Duration => "Duration",
+            OrderBy::Random => "Random",
         }
     }
 
@@ -1410,6 +1420,12 @@ pub fn sort(items: &mut [&Item], order: OrderBy, increase: bool) {
         OrderBy::FileSize => a.size.cmp(&b.size),
         OrderBy::Rating => star(a).cmp(&star(b)),
         OrderBy::Tags => natural_cmp(a.tags.first().map_or("", |s| s), b.tags.first().map_or("", |s| s)),
+        // Eagle: `parseInt(duration) || 0`, shortest first.
+        OrderBy::Duration => {
+            let secs = |i: &Item| duration(i).filter(|d| d.is_finite()).map_or(0, |d| d.trunc() as i64);
+            secs(a).cmp(&secs(b))
+        }
+        OrderBy::Random => Ordering::Equal,
     });
     if !increase {
         items.reverse();
@@ -1790,6 +1806,26 @@ mod tests {
         assert_eq!(rank_names(names, "cafe"), [3], "accents fold");
         assert_eq!(rank_names(names, "travel ph")[0], 0, "spaces in the keyword are dropped");
         assert!(rank_names(names, "").is_empty());
+    }
+
+    #[test]
+    fn duration_sort_counts_missing_as_zero() {
+        let clip = |name: &str, d: Option<f64>| {
+            let mut v = serde_json::json!({"name": name});
+            if let Some(d) = d {
+                v["duration"] = d.into();
+            }
+            item(v)
+        };
+        let items = [clip("a", Some(30.9)), clip("b", None), clip("c", Some(5.5)), clip("d", Some(30.1))];
+        let mut refs: Vec<&Item> = items.iter().collect();
+        sort(&mut refs, OrderBy::Duration, true);
+        assert_eq!(refs.iter().map(|i| i.name.as_str()).collect::<Vec<_>>(), ["b", "c", "a", "d"], "whole seconds, stable");
+        sort(&mut refs, OrderBy::Duration, false);
+        assert_eq!(refs.iter().map(|i| i.name.as_str()).collect::<Vec<_>>(), ["d", "a", "c", "b"]);
+        let mut refs: Vec<&Item> = items.iter().collect();
+        sort(&mut refs, OrderBy::Random, true);
+        assert_eq!(refs[0].name, "a", "random leaves the order to the caller");
     }
 
     #[test]
