@@ -97,10 +97,10 @@ impl App {
         self.imports.request = Some(Request::Files { folders });
     }
 
-    /// Under "No items" in All or an empty folder, an Import Folders…
+    /// Under the empty message in All or an empty folder, an Import Folders…
     /// button, as on Eagle's empty views: from All the folders go to the
     /// top level, from a folder inside it.
-    pub(super) fn empty_import_button(&mut self, ui: &mut eframe::egui::Ui, area: Rect) {
+    pub(super) fn empty_import_button(&mut self, ui: &mut eframe::egui::Ui, centre: Pos2) {
         let parent = match &self.ws.scope {
             Scope::All => None,
             Scope::Folder(id) => Some(id.clone()),
@@ -109,7 +109,7 @@ impl App {
         if !self.ws.query.trim().is_empty() {
             return;
         }
-        let at = Rect::from_center_size(area.center() + eframe::egui::vec2(0.0, 34.0), eframe::egui::vec2(160.0, 26.0));
+        let at = Rect::from_center_size(centre, eframe::egui::vec2(160.0, 26.0));
         if ui.put(at, eframe::egui::Button::new("Import Folders…")).clicked() {
             self.imports.request = Some(Request::Folders { parent });
         }

@@ -36,6 +36,10 @@ The app opens libraries with `Library::open_or_restore` (see [Backups](library-f
 
 The Rename dialog for several items is Eagle's: a name template (default `Untitled - %N`, then the last one used) with counters `%N`…`%NNNN`, dates `%D`, `%M` (file modified) and `%B` (created) in five forms, `%T` tags and `%F` folder names (each sorted and joined with `-`) and `*` the original name, counting from Start at; or a find and replace (plain text or `/pattern/flags`). A case change applies to either, a preview lists every new name, and ten or more items ask first. As in Eagle, templated names lose `/`, `%` and emoji, and an emptied name keeps the original; the library then makes the name safe for a file and renames the original and its thumbnail.
 
+## Empty views
+
+An empty grid says why, with an icon, a title and a line of text (`crates/falcon-app/src/app/empty_view.rs`, where the wording and rules are tested). While a search or any filter is active it reads "No Matches". Otherwise All, Recently Used and Random say "Drop Files Here" with an Import Folders… button, and so does a folder with no subfolders (a folder with subfolders shows only its subfolder cards, and a locked one its lock screen). A smart folder with no matches says so. Uncategorized and Untagged explain what gathers there, or say "All Sorted" and "All Tagged" when the library has items and none are left. The Trash says it is empty. The All Tags page says "No Tags Yet" when the library has no tags, and "No Matches" when its filter finds none.
+
 ## Date, duration, BPM, camera and font filters
 
 Five chips follow the existing ones in the filter bar. They set the `imported`, `modified`, `created`, `duration`, `bpm`, `cameras` and `font` rules of the library's `Filter` (see [Search and filters](search.md)), so the grid applies them like any other rule. The code is in `crates/falcon-app/src/app/filters_ui.rs`, with the parsing and labels in `logic.rs` (BPM's are in `filters_ui.rs`).

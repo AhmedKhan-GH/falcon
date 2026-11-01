@@ -41,6 +41,7 @@ mod pdf_view;
 mod modes;
 mod preview_window;
 mod import_ui;
+mod empty_view;
 mod folders_ui;
 mod layout_panel;
 mod text_view;
@@ -3552,8 +3553,7 @@ impl App {
         }
         self.subfolder_strip(ui, lib);
         if items.is_empty() {
-            ui.painter().text(area.center(), Align2::CENTER_CENTER, "No items", font(15.0), t::p().text_muted);
-            self.empty_import_button(ui, area);
+            self.empty_view(ui, lib, area);
             return;
         }
         if self.ws.layout == Layout::List {
@@ -4144,6 +4144,12 @@ impl App {
                 self.tag_page_controls(ui);
             });
             ui.add_space(14.0);
+            if tags.is_empty() && starred.is_empty() {
+                let top = ui.cursor().top();
+                let rest = Rect::from_min_max(Pos2::new(ui.max_rect().left(), top), ui.max_rect().right_bottom());
+                self.empty_tags(ui, rest, !filter.is_empty());
+                return;
+            }
             if self.tags_by_group() {
                 self.tag_groups_page(ui, lib, &filter);
                 return;
