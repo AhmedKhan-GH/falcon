@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 83 | 56 | 132 | 9 |
-| Viewers and file formats | 63 | 31 | 96 | 7 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 85 | 55 | 131 | 9 |
+| Viewers and file formats | 81 | 31 | 78 | 7 |
 | Search, filters and organising | 127 | 30 | 65 | 3 |
 | Import, export, library, preferences and integrations | 65 | 28 | 119 | 26 |
-| **Total** | 338 | 145 | 412 | 45 |
+| **Total** | 358 | 144 | 393 | 45 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -26,7 +26,7 @@ These are bugs, not missing features. The first four can lose data or edits.
 
 ## Biggest gaps
 
-1. Every viewer opens inside the window between the sidebar and inspector in Eagle, with a toolbar button that hides both. Falcon does this only for PDFs.
+1. ~~Every viewer opens inside the window between the sidebar and inspector in Eagle, with a toolbar button that hides both. Falcon does this only for PDFs.~~ Fixed: every viewer draws in the central panel, with the panels button, ⌥⌘3 and Tab.
 2. No application menu bar.
 3. Preferences: 4 panes and 6 settings against Eagle's 13 panes and about 80 settings.
 4. The full-size image is capped at 3072 px.
@@ -98,7 +98,7 @@ Overall finding: falcon has **no application menu bar**. There is no `muda` or m
 | View: Open in New Window (⌘O) | Missing | See §9 | local |
 | View: Open With Default App (⇧↩), Open with Other App, Reveal in Finder (⌘↩) | Done | open_ui.rs:33-46, shortcuts.rs:104-105 | local |
 | View: Open Link in Browser (⇧⌘O) | Missing | No key or menu item opens the item's source URL | local |
-| View: show or hide Sidebar (⌥⌘1), Inspector (⌥⌘2), both (⌥⌘3) | Partial | ⌥⌘1 and ⌥⌘2 work (shortcuts.rs:98-99). No toggle for both, and Tab does not toggle them | local |
+| View: show or hide Sidebar (⌥⌘1), Inspector (⌥⌘2), both (⌥⌘3) | Done | shortcuts.rs `view.toggle.sidebar`, `view.toggle.inspector`, `view.toggle.all`; Tab also toggles both; all work in the viewer too | local |
 | View: Show Name (⌥⌘4), Show Item Info (⌥⌘5), Show Comment count (⌥⌘6) | Missing | Captions are fixed (app.rs:2620-2641) | local |
 | View: Show Subfolder Content (⌥⌘7) | Missing | A folder shows only its own items (logic.rs:125) | local |
 | View: Enter / Leave Presentation Mode (F5) | Missing | No slideshow | local |
@@ -202,7 +202,7 @@ Eagle defaults come from prefs `shortcuts.keybinds` (rebindable) and from the ha
 | ⌘E export, ⇧⌘E export .eaglepack, ⇧E export as format | Missing | Cross-ref export | local |
 | ⌘1–⌘7 sidebar views | Missing |  | local |
 | ⌥1–⌥4 layouts | Done | shortcuts.rs `view.layout.*`, in Eagle's order | local |
-| ⌥⌘1–⌥⌘8 panel and caption toggles plus Navigator | Partial | Only ⌥⌘1 and ⌥⌘2 | local |
+| ⌥⌘1–⌥⌘8 panel and caption toggles plus Navigator | Partial | ⌥⌘1, ⌥⌘2 and ⌥⌘3; no caption toggles or Navigator | local |
 | ⇧T always on top, F5 slideshow, ⌥⌘G grayscale | Missing |  | local |
 | ⌘O open in new window, ⇧⌘O open link | Missing |  | local |
 | ⇧↩ default app, ⌘↩ reveal | Done | shortcuts.rs:104-105 | local |
@@ -212,7 +212,7 @@ Eagle defaults come from prefs `shortcuts.keybinds` (rebindable) and from the ha
 | T opens the tag panel, F opens the folder panel, J opens Go to Folder, G opens Actions, P opens Plugins | Missing |  | local |
 | R reshuffles the Random view | Missing | Clicking Random again reshuffles (app.rs:797-799) | local |
 | `*` or `/` expand or collapse every folder | Missing |  | local |
-| Tab toggles all panels | Missing |  | local |
+| Tab toggles all panels | Done | Fixed key in shortcuts.rs FIXED, when no text field has focus (`logic::toggle_all`) | local |
 | Space opens the quick preview (preference: preview, native Quick Look, or page down) | Partial | Space toggles the viewer (app.rs:1088-1095). No Quick Look option and no page-down option | local |
 | ⇧Space pages up | Missing |  | local |
 | Enter toggles the viewer | Done | Enter is an alias of Viewer (shortcuts.rs:95) | local |
@@ -462,24 +462,24 @@ Paths: `E/` = `eagle-src/app/app/`, `i18n` = `eagle-src/app/i18n/en.js`, `F/` = 
 
 In Eagle, every viewer opens in the same place. Detail mode is a single `content-panel detail-mode` whose left edge is the sidebar width and whose right edge is the inspector width (`E/index.html:1007`), and every viewer type sits inside it as an `ng-switch` branch (`E/index.html:1268-1545`). So images, GIFs, RAW, TIFF, TGA, SVG, video, audio, fonts, text, PDF, 3D models, special formats, web pages and plugin viewers **all open inside the main window with the sidebar and inspector still visible**. A toggle button in the viewer toolbar (`toggle-all-btn`, `appmenu.view>toggleAll`) hides or shows both panels. Separately, "Open in New Window" (`Context.Open.New.Window`, `view.file.opennewwindow` = Cmd+O, middle click by default) opens a standalone preview window (`E/preview-window.html`), and Space opens a lighter "inline" quick preview (`keyspace: preview`, `E/app.bundle.js:33595`).
 
-In falcon, only the PDF reader keeps the panels. `fn viewer` sets the drawing rect to the central area for PDFs and to the whole window for everything else (`F/app.rs:3392`).
+Falcon now does the same: `fn viewer` draws every viewer in the central panel, replacing the toolbar, filter bar and grid as Eagle's detail mode does (`index.html:554` hides Eagle's toolbar in detail mode).
 
 | Viewer | Eagle placement | Falcon placement | Falcon status |
 | --- | --- | --- | --- |
-| Image (jpg/png/webp/bmp/avif/heic…) | Inside main window, sidebar and inspector kept (`index.html:1007`, `:1515`) | Whole window covers sidebar and inspector (`F/app.rs:3392`, `:3413`) | Missing |
-| GIF | Inside main window (`index.html:1306`) | Whole window (`F/app.rs:3392`) | Missing |
-| RAW | Inside main window (`index.html:1327`) | Whole window | Missing |
-| TIFF / TGA | Inside main window (`index.html:1398`, `:1419`) | Whole window | Missing |
-| SVG | Inside main window (`index.html:1496`) | Whole window | Missing |
-| Video | Inside main window (`index.html:1343`) | Whole window (`F/app/video_view.rs:257`) | Missing |
-| Audio | Inside main window (`index.html:1366`, `:1377`) | Whole window (`F/app/media_view.rs:91`) | Missing |
-| Font | Inside main window (`index.html:1388`) | Whole window (`F/app/media_view.rs:91`) | Missing |
-| Text (.txt) | Inside main window (`index.html:1393`) | Whole window, as a still render | Missing |
+| Image (jpg/png/webp/bmp/avif/heic…) | Inside main window, sidebar and inspector kept (`index.html:1007`, `:1515`) | Central panel between sidebar and inspector (`F/app.rs` `fn viewer`, `viewer_ui`) | Done |
+| GIF | Inside main window (`index.html:1306`) | Central panel between sidebar and inspector (`F/app.rs` `fn viewer`, `viewer_ui`) | Done |
+| RAW | Inside main window (`index.html:1327`) | Central panel between sidebar and inspector (`F/app.rs` `fn viewer`, `viewer_ui`) | Done |
+| TIFF / TGA | Inside main window (`index.html:1398`, `:1419`) | Central panel between sidebar and inspector (`F/app.rs` `fn viewer`, `viewer_ui`) | Done |
+| SVG | Inside main window (`index.html:1496`) | Central panel between sidebar and inspector (`F/app.rs` `fn viewer`, `viewer_ui`) | Done |
+| Video | Inside main window (`index.html:1343`) | Central panel between sidebar and inspector (`F/app.rs` `fn viewer`, `viewer_ui`) | Done |
+| Audio | Inside main window (`index.html:1366`, `:1377`) | Central panel between sidebar and inspector (`F/app.rs` `fn viewer`, `viewer_ui`) | Done |
+| Font | Inside main window (`index.html:1388`) | Central panel between sidebar and inspector (`F/app.rs` `fn viewer`, `viewer_ui`) | Done |
+| Text (.txt) | Inside main window (`index.html:1393`) | Central panel between sidebar and inspector (`F/app.rs` `fn viewer`, `viewer_ui`), as a still render | Partial |
 | PDF | Inside main window (`index.html:1301`) | Central area, sidebar and inspector kept (`F/app.rs:3392`, `F/app/pdf_view.rs:958`) | Done (macOS only) |
-| 3D model | Inside main window (`index.html:1443`) | Whole window, as a still render | Missing |
-| Special formats (PSD, AI, Office…) | Inside main window (`index.html:1448`) | Whole window | Missing |
-| Web page (url/html/mhtml) | Inside main window (`index.html:1491`) | Whole window, as a still render | Missing |
-| Toggle sidebar and inspector from inside the viewer | `toggle-all-btn` in the detail toolbar (`index.html:1015`) | No such control in any viewer | Missing |
+| 3D model | Inside main window (`index.html:1443`) | Central panel between sidebar and inspector (`F/app.rs` `fn viewer`, `viewer_ui`), as a still render | Partial |
+| Special formats (PSD, AI, Office…) | Inside main window (`index.html:1448`) | Central panel between sidebar and inspector (`F/app.rs` `fn viewer`, `viewer_ui`), as a QuickLook render | Partial |
+| Web page (url/html/mhtml) | Inside main window (`index.html:1491`) | Central panel between sidebar and inspector (`F/app.rs` `fn viewer`, `viewer_ui`), as a still render | Partial |
+| Toggle sidebar and inspector from inside the viewer | `toggle-all-btn` in the detail toolbar (`index.html:1015`) | Panels button in every viewer bar and the main toolbar (`App::panels_button`, `logic::toggle_all`), ⌥⌘3 and Tab; both-on/both-off like Eagle | Done |
 | Separate preview window | `preview-window.html`, `Context.Open.New.Window` | No second viewer window (only the collect window uses a viewport, `F/collect.rs:84`) | Missing |
 | Space quick preview (inline mode) | Inline overlay with prev/next arrows, counter and exit button (`index.html:1242-1254`, `app.bundle.js:33612`) | Space opens the same full viewer (`F/app.rs:1092`) | Partial |
 
@@ -490,18 +490,18 @@ In falcon, only the PDF reader keeps the panels. `fn viewer` sets the drawing re
 | Open an item by double-click or Enter | Done | `F/app.rs:2545` | local |
 | Preference: double-click opens in the default app instead | Missing | No such preference (`F/prefs.rs:21`) | local |
 | Exit with Esc or the back button | Done | `F/app.rs:1077`, back button `F/app.rs:3481` | local |
-| Exit by double-clicking the viewer background | Partial | In falcon, double-clicking resets the zoom instead (`F/app.rs:3458`) | local |
-| Position counter "n / total" in the toolbar | Missing | The bar shows only the name (`F/app.rs:3483`) | local |
-| Previous and next buttons in the toolbar | Missing | Arrow keys only (`F/app.rs:1110`) | local |
+| Exit by double-clicking the viewer background | Done | Double-click anywhere in the image viewer closes it, except in crop or comment mode, as Eagle's `dblclickContentPanel`; video, audio, PDF and font don't, as in Eagle | local |
+| Position counter "n / total" in the toolbar | Done | `logic::viewer_counter`, drawn after the back button in `media_view::top_bar` | local |
+| Previous and next buttons in the toolbar | Done | Bar buttons and arrows share `App::viewer_step`; disabled at the ends | local |
 | Previous and next with the arrow keys | Done | `F/app.rs:1110-1135` | local |
-| "Already the first item" and "Already the last item" tips | Missing | Clamps without saying so (`F/app.rs:1127`) | local |
+| "Already the first item" and "Already the last item" tips | Done | Status note over the viewer for about 1.2 s (`logic::Edge`) | local |
 | Mouse gesture: right-drag left or right moves to the previous or next item | Missing | None | local |
 | Mouse gesture: right-drag up or down zooms | Missing | None | local |
-| Right-click in the viewer opens the item context menu | Missing | The viewer canvas has no context menu (`F/app.rs:3441`) | local |
+| Right-click in the viewer opens the item context menu | Done | `App::item_menu` reused by the image viewer and the audio/font background; video and PDF have none (Eagle's PDF is an iframe, a click on video toggles playback) | local |
 | Middle-click in the viewer opens the plugin panel | Missing | No plugins | online/plugin |
 | Pinned plugins and plugin button in the viewer toolbar | Missing | No plugins | online/plugin |
 | Open in default app / Open With from the viewer | Done | `F/app/open_ui.rs:109`, used at `F/app.rs:3486` and `F/app/media_view.rs:79` | local |
-| "Cannot preview" page with an "Open With Other Application" button | Partial | Shows an extension placeholder (`F/app.rs:3471`, `F/app.rs:2867`); the bar's open button is the only action | local |
+| "Cannot preview" page with an "Open With Other Application" button | Done | Icon, name, a line of text and an Open With Another App button; the page's menu has Open, Open With and Show in Finder; shown only when neither render nor thumbnail exists | local |
 | "Image too large to preview" page (TIFF/HEIC/TGA above the pixel limit) | Partial | No message; falcon decodes at most 3072 px (`F/loader.rs:26`) so large files still show, downscaled | local |
 | Unsupported format suggests a plugin from the plugin center | Missing | No plugins | online/plugin |
 | Presentation (slideshow) mode: full screen, panels hidden | Missing | No full-screen or presentation mode anywhere in falcon | local |
@@ -510,7 +510,7 @@ In falcon, only the PDF reader keeps the panels. `fn viewer` sets the drawing re
 | Transparent-area display preference (grid or no grid) | Missing | None | local |
 | Grayscale preview toggle | Missing | None (falcon's "grayscale" is only a search filter, `FL/search.rs:487`) | local |
 | Navigator (minimap) while zoomed | Missing | None | local |
-| Viewer keys follow the shortcut table (zoom, crop, rotate, flip) | Partial | Only player keys are rebindable (`F/shortcuts.rs:122-134`); viewer zoom is hard-coded to 0/1/+/- (`F/app.rs:3508`) | local |
+| Viewer keys follow the shortcut table (zoom, crop, rotate, flip) | Partial | Zoom keys are rebindable (`view.zoom.*`); crop, rotate and flip keys are still fixed | local |
 
 ### 2. Image viewer (jpg, png, webp, bmp, avif, heic, jxl, ico and the like)
 
@@ -521,9 +521,9 @@ In falcon, only the PDF reader keeps the panels. `fn viewer` sets the drawing re
 | Long images (very tall or wide) open fitted to width for scrolling | Missing | Always fits the whole image | local |
 | Zoom slider (5–200%) in the toolbar | Missing | Only plus and minus buttons and a % label (`F/app.rs:3487-3494`) | local |
 | Zoom presets menu (5%–800%, Actual Size, Zoom to Fit) from the % label | Missing | The % label is plain text (`F/app.rs:3491`) | local |
-| Zoom in and out buttons and keys | Partial | Buttons and unmodified +/- (`F/app.rs:3487-3529`); Eagle's Cmd+=/Cmd+- do nothing in the viewer (`F/app.rs:1024` is grid only) | local |
-| Actual size (100%) | Partial | "1:1" button and the 1 key (`F/app.rs:3497`, `:3518`); Cmd+0 not bound | local |
-| Zoom to fit | Partial | "Fit" button and the 0 key (`F/app.rs:3503`, `:3515`); Cmd+9 not bound | local |
+| Zoom in and out buttons and keys | Done | ⌘= and ⌘− act on the viewer while it is open (`logic::view_zoom`); unmodified + and − still work | local |
+| Actual size (100%) | Done | "1:1" button, the 1 key and ⌘0 (`view.zoom.actual`) | local |
+| Zoom to fit | Done | "Fit" button, the 0 key and ⌘9 (`view.zoom.fit`) | local |
 | Fit to window edge toggle (backtick key) | Missing | No fill-to-edge mode | local |
 | Pinch zoom around the pointer | Done | `F/app.rs:3440-3450` | local |
 | Mouse-wheel behaviour preference (scroll, zoom, or previous/next) | Partial | The wheel always zooms (`F/app.rs:3442`); Eagle's default is scroll, and there is no paging option | local |
@@ -545,7 +545,7 @@ In falcon, only the PDF reader keeps the panels. `fn viewer` sets the drawing re
 | Hovering a region shows its note | Done | Tooltip on hover (`F/comments.rs:290`) | local |
 | Comment count badge on grid cards | Done | `F/comments.rs:180` (always on; no toggle) | local |
 | Default viewer mode preference (preview or comment) | Missing | Always opens in preview mode | local |
-| Copy, copy path and copy link from the viewer menu | Missing | No viewer context menu; copy is grid only (`F/app.rs:1036`) | local |
+| Copy, copy path and copy link from the viewer menu | Partial | Copy File Path is in the viewer's right-click menu; no copy or copy link | local |
 
 ### 3. GIF and animated images
 
