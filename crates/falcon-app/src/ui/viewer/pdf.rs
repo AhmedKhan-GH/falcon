@@ -750,6 +750,8 @@ enum Req {
     Select(u64, usize, (f64, f64), (f64, f64)),
     /// A password to try on a locked document.
     Password(String),
+    /// Write attachment `usize` to the file chosen.
+    Save(usize, PathBuf),
 }
 
 enum Reply {
@@ -762,6 +764,8 @@ enum Reply {
     Selected(u64, falcon_pdf::Selection),
     /// A page's links, sent once, with its first picture.
     Links(usize, Vec<Link>),
+    /// An attachment was written (to the path) or couldn't be.
+    Saved(Result<PathBuf, String>),
 }
 
 /// A selection request: serial, page, drag start and end.
@@ -773,6 +777,7 @@ struct Pending {
     queue: VecDeque<Job>,
     search: Option<(u64, String, SearchOptions)>,
     select: Option<SelectReq>,
+    saves: Vec<(usize, PathBuf)>,
 }
 
 impl Pending {
@@ -782,11 +787,12 @@ impl Pending {
             Req::Search(g, s, o) => self.search = Some((g, s, o)),
             Req::Select(g, p, a, b) => self.select = Some((g, p, a, b)),
             Req::Password(_) => {}
+            Req::Save(i, path) => self.saves.push((i, path)),
         }
     }
 
     fn idle(&self) -> bool {
-        self.queue.is_empty() && self.search.is_none() && self.select.is_none()
+        self.queue.is_empty() && self.search.is_none() && self.select.is_none() && self.saves.is_empty()
     }
 }
 
@@ -827,7 +833,13 @@ fn work(path: &Path, rx: &Receiver<Req>, tx: &Sender<Reply>, ctx: &egui::Context
             }
         }
     };
-    let info = DocInfo { pdf: doc.info(), linearized: std::fs::File::open(path).ok().is_some_and(is_linearized), password };
+    let info = DocInfo {
+        pdf: doc.info(),
+        linearized: std::fs::File::open(path).ok().is_some_and(is_linearized),
+        password,
+        attachments: doc.attachments(),
+        layers: doc.layers(),
+    };
     if !send(Reply::Opened { sizes: doc.page_sizes(), outline: doc.outline(), info: Box::new(info) }) {
         return;
     }
@@ -850,7 +862,9 @@ fn work(path: &Path, rx: &Receiver<Req>, tx: &Sender<Reply>, ctx: &egui::Context
                 Err(TryRecvError::Disconnected) => return,
             }
         }
-        let reply = if let Some((g, page, a, b)) = p.select.take() {
+        let reply = if let Some((i, dest)) = p.saves.pop() {
+            Reply::Saved(doc.attachment_data(i).map_err(|e| e.0).and_then(|bytes| std::fs::write(&dest, bytes).map(|()| dest).map_err(|e| e.to_string())))
+        } else if let Some((g, page, a, b)) = p.select.take() {
             Reply::Selected(g, doc.selection(page, a, b))
         } else if let Some((g, text, o)) = p.search.take() {
             Reply::Found(g, doc.search(&text, o))
@@ -908,6 +922,10 @@ struct DocInfo {
     linearized: bool,
     /// The password that opened it, for printing.
     password: Option<String>,
+    /// The embedded files and the optional content groups, for the
+    /// sidebar's Attachments and Layers lists.
+    attachments: Vec<falcon_pdf::Attachment>,
+    layers: Vec<falcon_pdf::Layer>,
 }
 
 /// Whether a PDF file is linearized ("fast web view"): its first object,
@@ -948,11 +966,13 @@ struct Selecting {
     rects: Vec<falcon_pdf::Rect>,
 }
 
-/// The sidebar's two lists, as in pdf.js's sidebar.
+/// The sidebar's lists, as in pdf.js's sidebar.
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) enum Tab {
     Thumbnails,
     Outline,
+    Attachments,
+    Layers,
 }
 
 /// One open document.
@@ -1008,6 +1028,8 @@ struct Open {
     print: bool,
     /// The pages are drawn for the grayscale preview.
     gray: bool,
+    /// A note for the app's toast (an attachment saved or not).
+    notice: Option<String>,
 }
 
 impl Open {
@@ -1054,6 +1076,7 @@ impl Open {
             outline_shown: None,
             print: false,
             gray: false,
+            notice: None,
         }
     }
 
@@ -1147,6 +1170,12 @@ impl Open {
                 }
                 Ok(Reply::Links(page, links)) => {
                     self.links.insert(page, links);
+                }
+                Ok(Reply::Saved(r)) => {
+                    self.notice = Some(match r {
+                        Ok(path) => format!("Saved {}", path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned())),
+                        Err(e) => format!("Can't save the attachment: {e}"),
+                    });
                 }
                 Ok(Reply::Selected(g, s)) => {
                     if g == self.sel.serial {
@@ -1500,6 +1529,9 @@ impl App {
             if present {
                 self.toggle_presentation(ctx);
             }
+            if let Some(note) = self.pdf.open.as_mut().and_then(|o| o.notice.take()) {
+                self.flash(note);
+            }
             if let Some(o) = self.pdf.open.as_mut().filter(|o| o.properties) {
                 properties_dialog(o, ctx, item);
             }
@@ -1820,6 +1852,58 @@ fn side_panel(o: &mut Open, ui: &mut Ui, side: Rect, tab: Tab, jobs: &mut Vec<Jo
                 o.go_to(p);
             }
         }
+        Tab::Attachments => {
+            // pdf.js's attachments list: a click saves the file.
+            let mut save = None;
+            egui::ScrollArea::vertical().id_salt("pdf-attachments").auto_shrink([false, false]).show(&mut child, |ui| {
+                if o.info.attachments.is_empty() {
+                    ui.add_space(8.0);
+                    ui.label(egui::RichText::new("No attachments").font(font(12.0)).color(t::p().text_muted));
+                }
+                for (n, a) in o.info.attachments.iter().enumerate() {
+                    ui.horizontal(|ui| {
+                        ui.add_space(8.0);
+                        let size = a.size.map(|b| format!("  {}", crate::logic::format_size(b))).unwrap_or_default();
+                        let text = egui::RichText::new(format!("{}{size}", a.name)).font(font(12.0)).color(t::p().text);
+                        let resp = ui.push_id(("attachment", n), |ui| ui.add(egui::Label::new(text).truncate().sense(Sense::click()))).inner;
+                        let tip = a.description.as_deref().map_or_else(|| "Save the attachment…".to_string(), |d| format!("{d}\nClick to save it"));
+                        if resp.on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text(tip).clicked() {
+                            save = Some((n, a.name.clone()));
+                        }
+                    });
+                }
+            });
+            if let Some((n, name)) = save
+                && let Some(dest) = rfd::FileDialog::new().set_title("Save Attachment").set_file_name(name).save_file()
+            {
+                let _ = o.tx.send(Req::Save(n, dest));
+            }
+        }
+        Tab::Layers => {
+            // pdf.js's layers list. PDFKit draws the document's default
+            // configuration only, so the list shows which layers that has
+            // on without switching them.
+            egui::ScrollArea::vertical().id_salt("pdf-layers").auto_shrink([false, false]).show(&mut child, |ui| {
+                if o.info.layers.is_empty() {
+                    ui.add_space(8.0);
+                    ui.label(egui::RichText::new("No layers").font(font(12.0)).color(t::p().text_muted));
+                    return;
+                }
+                for l in &o.info.layers {
+                    ui.horizontal(|ui| {
+                        ui.add_space(8.0);
+                        let (mark, color) = if l.visible { ("●", t::p().text) } else { ("○", t::p().text_muted) };
+                        ui.label(egui::RichText::new(mark).font(font(11.0)).color(color));
+                        ui.add(egui::Label::new(egui::RichText::new(&l.name).font(font(12.0)).color(color)).truncate());
+                    });
+                }
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    ui.add_space(8.0);
+                    ui.add(egui::Label::new(egui::RichText::new("Shown as the document sets them; macOS's PDF engine can't switch layers.").font(font(11.0)).color(t::p().text_muted)).wrap());
+                });
+            });
+        }
     }
 }
 
@@ -1911,6 +1995,16 @@ fn toolbar(o: &mut Open, ui: &mut Ui, bar: Rect, right: f32, mut sidebar: Option
             }
             if ui.selectable_label(sidebar == Some(Tab::Outline), "Outline").clicked() {
                 sidebar = Some(Tab::Outline);
+                ui.close();
+            }
+            // As pdf.js, the lists a document lacks can't be picked.
+            let (has_files, has_layers) = (!o.info.attachments.is_empty(), !o.info.layers.is_empty());
+            if ui.add_enabled(has_files, egui::Button::selectable(sidebar == Some(Tab::Attachments), "Attachments")).clicked() {
+                sidebar = Some(Tab::Attachments);
+                ui.close();
+            }
+            if ui.add_enabled(has_layers, egui::Button::selectable(sidebar == Some(Tab::Layers), "Layers")).clicked() {
+                sidebar = Some(Tab::Layers);
                 ui.close();
             }
         });

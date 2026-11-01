@@ -120,6 +120,27 @@ pub struct Link {
     pub target: LinkTarget,
 }
 
+/// A file embedded in the document, as pdf.js's attachments list shows
+/// them: from the catalog's EmbeddedFiles name tree, then the pages'
+/// file attachment annotations.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Attachment {
+    /// The file name it was embedded under.
+    pub name: String,
+    /// The size its parameters state, in bytes, if any.
+    pub size: Option<u64>,
+    /// The description it carries, if any.
+    pub description: Option<String>,
+}
+
+/// An optional content group ("layer"), as pdf.js's layers list shows
+/// them, with whether the document's default configuration shows it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Layer {
+    pub name: String,
+    pub visible: bool,
+}
+
 /// A document's metadata, for a Document Properties dialog. Dates are
 /// seconds since 1970.
 #[derive(Clone, Debug, Default, PartialEq)]

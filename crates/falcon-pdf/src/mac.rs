@@ -25,7 +25,7 @@ use objc2::AnyThread;
 use objc2::runtime::AnyObject;
 use objc2::rc::{Retained, autoreleasepool};
 use objc2_core_foundation::{CGPoint, CGRect, CGSize};
-use objc2_core_graphics::{CGBitmapContextCreate, CGColorSpace, CGContext, CGImageAlphaInfo, CGImageByteOrderInfo, CGInterpolationQuality};
+use objc2_core_graphics::{CGBitmapContextCreate, CGColorSpace, CGContext, CGImageAlphaInfo, CGImageByteOrderInfo, CGInterpolationQuality, CGPDFDocument};
 use objc2_foundation::{NSArray, NSDate, NSPoint, NSString, NSStringCompareOptions, NSURL};
 use objc2_pdf_kit::{
     PDFActionGoTo, PDFActionURL, PDFDestination, PDFDisplayBox, PDFDocument, PDFDocumentAttribute, PDFDocumentAuthorAttribute,
@@ -34,7 +34,7 @@ use objc2_pdf_kit::{
 };
 
 use crate::geom::{self, PageGeom};
-use crate::{Bitmap, Error, Hit, Info, Link, LinkTarget, NEEDS_PASSWORD, OutlineEntry, Rect, Result, SearchOptions, Selection, WRONG_PASSWORD, render_size};
+use crate::{Attachment, Bitmap, Error, Hit, Info, Layer, Link, LinkTarget, NEEDS_PASSWORD, OutlineEntry, Rect, Result, SearchOptions, Selection, WRONG_PASSWORD, render_size};
 
 /// Search stops collecting after this many matches.
 const MAX_HITS: usize = 10_000;
@@ -278,6 +278,41 @@ impl Document {
         })
     }
 
+    /// The files embedded in the document: the catalog's EmbeddedFiles
+    /// name tree, then each page's file attachment annotations. PDFKit has
+    /// no API for them, so this reads the document's objects through Core
+    /// Graphics (`documentRef`).
+    pub fn attachments(&self) -> Vec<Attachment> {
+        autoreleasepool(|_| self.with_catalog(|cat, doc| catalog::embedded(cat, doc).into_iter().map(|(a, _)| a).collect()).unwrap_or_default())
+    }
+
+    /// The bytes of attachment `i` of [`Document::attachments`].
+    pub fn attachment_data(&self, i: usize) -> Result<Vec<u8>> {
+        autoreleasepool(|_| {
+            self.with_catalog(|cat, doc| catalog::embedded(cat, doc).into_iter().nth(i).and_then(|(_, stream)| catalog::stream_bytes(stream)))
+                .flatten()
+                .ok_or_else(|| err("the attachment can't be read"))
+        })
+    }
+
+    /// The optional content groups ("layers") and whether the default
+    /// configuration shows each. PDFKit always draws that configuration,
+    /// so they can be listed but not switched.
+    pub fn layers(&self) -> Vec<Layer> {
+        autoreleasepool(|_| self.with_catalog(|cat, _| catalog::layers(cat)).unwrap_or_default())
+    }
+
+    /// Runs `f` on the document's catalog dictionary and its Core Graphics
+    /// document, if it has them.
+    fn with_catalog<T>(&self, f: impl FnOnce(catalog::Dict, &CGPDFDocument) -> T) -> Option<T> {
+        // SAFETY: owned; one thread. The CGPDFDocument is retained for the
+        // whole call, so the catalog and every object reached from it live
+        // at least as long.
+        let doc = unsafe { self.doc.documentRef() }?;
+        let cat = CGPDFDocument::catalog(Some(&doc));
+        (!cat.is_null()).then(|| f(cat, &doc))
+    }
+
     /// Page `i`'s link annotations: their areas and where they go (a page
     /// of this document or a URL). Links to other files are left out.
     pub fn links(&self, i: usize) -> Vec<Link> {
@@ -474,3 +509,185 @@ mod tests {
         assert!(e.0.contains("main thread"), "{e}");
     }
 }
+
+/// Reading the document's own objects through Core Graphics' CGPDF
+/// functions: the embedded files and the optional content groups, which
+/// PDFKit doesn't expose.
+///
+/// Every pointer here is borrowed from a `CGPDFDocument` the caller keeps
+/// retained for the whole walk (`Document::with_catalog`), and is checked
+/// for null before use. Walks are capped in depth and count, so a
+/// malformed or cyclic tree ends.
+mod catalog {
+    use std::ffi::CStr;
+    use std::ptr::{self, NonNull};
+
+    use objc2_core_graphics::{
+        CGPDFArray, CGPDFArrayRef, CGPDFDataFormat, CGPDFDictionary, CGPDFDictionaryRef, CGPDFDocument, CGPDFInteger, CGPDFPage, CGPDFStream,
+        CGPDFStreamRef, CGPDFString, CGPDFStringRef,
+    };
+
+    use crate::{Attachment, Layer};
+
+    pub type Dict = CGPDFDictionaryRef;
+
+    const MAX_DEPTH: usize = 32;
+    const MAX_ITEMS: usize = 10_000;
+
+    fn key(k: &CStr) -> NonNull<std::ffi::c_char> {
+        NonNull::new(k.as_ptr().cast_mut()).expect("a C string literal is never null")
+    }
+
+    fn dict(d: Dict, k: &CStr) -> Option<Dict> {
+        let mut out: Dict = ptr::null_mut();
+        // SAFETY: `d` is a live dictionary (see the module notes); `out` is
+        // a local the call writes.
+        (unsafe { CGPDFDictionary::dictionary(d, key(k), &mut out) } && !out.is_null()).then_some(out)
+    }
+
+    fn array(d: Dict, k: &CStr) -> Option<CGPDFArrayRef> {
+        let mut out: CGPDFArrayRef = ptr::null_mut();
+        // SAFETY: as `dict`.
+        (unsafe { CGPDFDictionary::array(d, key(k), &mut out) } && !out.is_null()).then_some(out)
+    }
+
+    fn stream(d: Dict, k: &CStr) -> Option<CGPDFStreamRef> {
+        let mut out: CGPDFStreamRef = ptr::null_mut();
+        // SAFETY: as `dict`.
+        (unsafe { CGPDFDictionary::stream(d, key(k), &mut out) } && !out.is_null()).then_some(out)
+    }
+
+    fn integer(d: Dict, k: &CStr) -> Option<i64> {
+        let mut out: CGPDFInteger = 0;
+        // SAFETY: as `dict`.
+        unsafe { CGPDFDictionary::integer(d, key(k), &mut out) }.then_some(out as i64)
+    }
+
+    fn name(d: Dict, k: &CStr) -> Option<String> {
+        let mut out: *const std::ffi::c_char = ptr::null();
+        // SAFETY: as `dict`; a name is a NUL-terminated string owned by the
+        // document.
+        (unsafe { CGPDFDictionary::name(d, key(k), &mut out) } && !out.is_null()).then(|| unsafe { CStr::from_ptr(out) }.to_string_lossy().into_owned())
+    }
+
+    fn text(s: CGPDFStringRef) -> Option<String> {
+        // SAFETY: `s` is a live string object of the document, or null.
+        (!s.is_null()).then(|| unsafe { CGPDFString::text_string(s) }).flatten().map(|cf| cf.to_string())
+    }
+
+    fn string(d: Dict, k: &CStr) -> Option<String> {
+        let mut out: CGPDFStringRef = ptr::null_mut();
+        // SAFETY: as `dict`.
+        if unsafe { CGPDFDictionary::string(d, key(k), &mut out) } { text(out) } else { None }
+    }
+
+    fn len(a: CGPDFArrayRef) -> usize {
+        // SAFETY: `a` is a live array of the document.
+        unsafe { CGPDFArray::count(a) }.min(MAX_ITEMS)
+    }
+
+    fn array_dict(a: CGPDFArrayRef, i: usize) -> Option<Dict> {
+        let mut out: Dict = ptr::null_mut();
+        // SAFETY: `a` is live and `i` is below its count.
+        (unsafe { CGPDFArray::dictionary(a, i, &mut out) } && !out.is_null()).then_some(out)
+    }
+
+    fn array_string(a: CGPDFArrayRef, i: usize) -> Option<String> {
+        let mut out: CGPDFStringRef = ptr::null_mut();
+        // SAFETY: as `array_dict`.
+        if unsafe { CGPDFArray::string(a, i, &mut out) } { text(out) } else { None }
+    }
+
+    /// A file specification's attachment: its name, size and description,
+    /// and the stream holding its bytes.
+    fn file_spec(spec: Dict, fallback: Option<String>) -> Option<(Attachment, CGPDFStreamRef)> {
+        let ef = dict(spec, c"EF")?;
+        let data = stream(ef, c"UF").or_else(|| stream(ef, c"F"))?;
+        let name = string(spec, c"UF").or_else(|| string(spec, c"F")).or(fallback).unwrap_or_else(|| "attachment".into());
+        // SAFETY: `data` is a live stream of the document.
+        let params = dict(unsafe { CGPDFStream::dictionary(data) }, c"Params");
+        let size = params.and_then(|p| integer(p, c"Size")).and_then(|n| u64::try_from(n).ok());
+        Some((Attachment { name, size, description: string(spec, c"Desc") }, data))
+    }
+
+    /// One node of the EmbeddedFiles name tree and its kids.
+    fn name_tree(node: Dict, depth: usize, out: &mut Vec<(Attachment, CGPDFStreamRef)>) {
+        if depth > MAX_DEPTH || out.len() >= MAX_ITEMS {
+            return;
+        }
+        if let Some(names) = array(node, c"Names") {
+            for i in (0..len(names)).step_by(2) {
+                if let Some(spec) = array_dict(names, i + 1)
+                    && let Some(a) = file_spec(spec, array_string(names, i))
+                {
+                    out.push(a);
+                }
+            }
+        }
+        if let Some(kids) = array(node, c"Kids") {
+            for i in 0..len(kids) {
+                if let Some(kid) = array_dict(kids, i) {
+                    name_tree(kid, depth + 1, out);
+                }
+            }
+        }
+    }
+
+    /// Every embedded file, in pdf.js's order: the name tree, then the
+    /// pages' file attachment annotations.
+    pub fn embedded(cat: Dict, doc: &CGPDFDocument) -> Vec<(Attachment, CGPDFStreamRef)> {
+        let mut out = Vec::new();
+        if let Some(tree) = dict(cat, c"Names").and_then(|n| dict(n, c"EmbeddedFiles")) {
+            name_tree(tree, 0, &mut out);
+        }
+        for n in 1..=CGPDFDocument::number_of_pages(Some(doc)) {
+            let Some(page) = CGPDFDocument::page(Some(doc), n) else { continue };
+            let pd = CGPDFPage::dictionary(Some(&page));
+            if pd.is_null() {
+                continue;
+            }
+            let Some(annots) = array(pd, c"Annots") else { continue };
+            for i in 0..len(annots) {
+                if out.len() >= MAX_ITEMS {
+                    return out;
+                }
+                if let Some(a) = array_dict(annots, i)
+                    && name(a, c"Subtype").as_deref() == Some("FileAttachment")
+                    && let Some(spec) = dict(a, c"FS")
+                    && let Some(f) = file_spec(spec, string(a, c"Contents"))
+                {
+                    out.push(f);
+                }
+            }
+        }
+        out
+    }
+
+    /// The bytes of an embedded file's stream, decoded.
+    pub fn stream_bytes(s: CGPDFStreamRef) -> Option<Vec<u8>> {
+        let mut format = CGPDFDataFormat::Raw;
+        // SAFETY: `s` is a live stream of the document; `format` is a local.
+        unsafe { CGPDFStream::data(s, &mut format) }.map(|d| d.to_vec())
+    }
+
+    /// The optional content groups, in the document's order, each visible
+    /// unless the default configuration turns it off (its base state, then
+    /// its ON and OFF lists). Groups are matched by object identity: Core
+    /// Graphics hands out one dictionary per indirect object.
+    pub fn layers(cat: Dict) -> Vec<Layer> {
+        let Some(props) = dict(cat, c"OCProperties") else { return Vec::new() };
+        let Some(groups) = array(props, c"OCGs") else { return Vec::new() };
+        let config = dict(props, c"D");
+        let base_on = config.and_then(|d| name(d, c"BaseState")).is_none_or(|s| s != "OFF");
+        let listed = |k: &CStr| -> Vec<Dict> { config.and_then(|d| array(d, k)).map(|a| (0..len(a)).filter_map(|i| array_dict(a, i)).collect()).unwrap_or_default() };
+        let (on, off) = (listed(c"ON"), listed(c"OFF"));
+        (0..len(groups))
+            .filter_map(|i| array_dict(groups, i))
+            .map(|g| {
+                let visible = if base_on { !off.contains(&g) } else { on.contains(&g) };
+                Layer { name: string(g, c"Name").unwrap_or_default(), visible }
+            })
+            .collect()
+    }
+}
+

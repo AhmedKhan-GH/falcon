@@ -308,3 +308,59 @@ fn reads_a_downloaded_books_pdf() {
     eprintln!("{}: {} pages, opened in {opened:?}, page {} rendered {}×{} in {:?}", pdf.display(), doc.page_count(), mid + 1, b.width, b.height, start.elapsed() - opened);
     assert!(doc.page_count() > 0);
 }
+
+#[test]
+fn attachments_and_layers_are_listed() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("extras.pdf");
+    let notes = "hello from notes";
+    let data = "a,b\n1,2\n";
+    write_objects(
+        &path,
+        &[
+            // 1 catalog: an EmbeddedFiles name tree and two layers, the second off.
+            "<< /Type /Catalog /Pages 2 0 R /Names << /EmbeddedFiles << /Names [(notes.txt) 5 0 R] >> >> /OCProperties << /OCGs [7 0 R 8 0 R] /D << /OFF [8 0 R] >> >> >>".into(),
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".into(),
+            // 3 the page, with a file attachment annotation.
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R /Annots [9 0 R] >>".into(),
+            "<< /Length 0 >>\nstream\n\nendstream".into(),
+            // 5 a file spec and 6 its stream.
+            "<< /Type /Filespec /F (notes.txt) /UF (notes.txt) /Desc (Some notes) /EF << /F 6 0 R >> >>".into(),
+            format!("<< /Type /EmbeddedFile /Length {} /Params << /Size {} >> >>\nstream\n{notes}\nendstream", notes.len(), notes.len()),
+            "<< /Type /OCG /Name (Background) >>".into(),
+            "<< /Type /OCG /Name (Draft marks) >>".into(),
+            // 9 the annotation, 10 its file spec, 11 its stream.
+            "<< /Type /Annot /Subtype /FileAttachment /Rect [10 10 30 30] /FS 10 0 R /Contents (Data) >>".into(),
+            "<< /Type /Filespec /F (data.csv) /EF << /F 11 0 R >> >>".into(),
+            format!("<< /Type /EmbeddedFile /Length {} >>\nstream\n{data}\nendstream", data.len()),
+        ],
+    );
+    let doc = Document::open(&path).unwrap();
+    let names: Vec<String> = doc.attachments().into_iter().map(|a| a.name).collect();
+    assert_eq!(names, ["notes.txt", "data.csv"]);
+    let first = &doc.attachments()[0];
+    assert_eq!(first.size, Some(notes.len() as u64));
+    assert_eq!(first.description.as_deref(), Some("Some notes"));
+    assert_eq!(doc.attachment_data(0).unwrap(), notes.as_bytes());
+    assert_eq!(doc.attachment_data(1).unwrap(), data.as_bytes());
+    assert!(doc.attachment_data(2).is_err());
+    let layers: Vec<(String, bool)> = doc.layers().into_iter().map(|l| (l.name, l.visible)).collect();
+    assert_eq!(layers, [("Background".to_string(), true), ("Draft marks".to_string(), false)]);
+}
+
+#[test]
+fn plain_documents_have_no_attachments_or_layers() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("plain.pdf");
+    write_objects(
+        &path,
+        &[
+            "<< /Type /Catalog /Pages 2 0 R >>".into(),
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".into(),
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] >>".into(),
+        ],
+    );
+    let doc = Document::open(&path).unwrap();
+    assert!(doc.attachments().is_empty());
+    assert!(doc.layers().is_empty());
+}

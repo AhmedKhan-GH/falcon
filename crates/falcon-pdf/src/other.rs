@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use crate::{Bitmap, Error, Hit, Info, Link, OutlineEntry, Result, SearchOptions, Selection};
+use crate::{Attachment, Bitmap, Error, Hit, Info, Layer, Link, OutlineEntry, Result, SearchOptions, Selection};
 
 /// Printing needs macOS's PDFKit.
 pub fn print(_path: &Path, _password: Option<&str>, _title: &str) -> Result<bool> {
@@ -56,6 +56,15 @@ impl Document {
         Vec::new()
     }
     pub fn links(&self, _i: usize) -> Vec<Link> {
+        Vec::new()
+    }
+    pub fn attachments(&self) -> Vec<Attachment> {
+        Vec::new()
+    }
+    pub fn attachment_data(&self, _i: usize) -> Result<Vec<u8>> {
+        Err(Error("PDF needs macOS".into()))
+    }
+    pub fn layers(&self) -> Vec<Layer> {
         Vec::new()
     }
 }
