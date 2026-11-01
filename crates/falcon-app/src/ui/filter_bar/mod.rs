@@ -314,6 +314,13 @@ impl App {
         let color_text = &mut self.ws.color_text;
         egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
             ui.set_min_width(230.0);
+            let mut rgb = f.color.map_or(DEFAULT_PICKER_RGB, |q| q.rgb);
+            if super::color_picker::sv_hue_picker(ui, ui.make_persistent_id("filter_color_picker"), &mut rgb) {
+                let acc = f.color.map_or(20.0, |q| q.accuracy);
+                f.color = Some(ColorQuery { rgb, accuracy: acc });
+                *color_text = logic::hex(rgb);
+            }
+            ui.add_space(8.0);
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing = vec2(6.0, 6.0);
                 for c in PRESET_COLORS {
@@ -338,6 +345,11 @@ impl App {
                 {
                     let acc = f.color.map_or(20.0, |q| q.accuracy);
                     f.color = Some(ColorQuery { rgb, accuracy: acc });
+                }
+                let (sw, _) = ui.allocate_exact_size(Vec2::splat(20.0), Sense::hover());
+                match f.color {
+                    Some(q) => ui.painter().rect_filled(sw, 4.0, Color32::from_rgb(q.rgb[0], q.rgb[1], q.rgb[2])),
+                    None => ui.painter().rect_stroke(sw, 4.0, Stroke::new(1.0, t::p().text_disabled), egui::StrokeKind::Inside),
                 }
             });
             if let Some(q) = f.color.as_mut() {
@@ -634,6 +646,9 @@ impl App {
         }
     }
 }
+
+/// Where the picker starts when no colour is set.
+const DEFAULT_PICKER_RGB: [u8; 3] = [0x32, 0x97, 0xff];
 
 /// Colours offered in the colour filter, like Eagle's swatch row.
 pub(crate) const PRESET_COLORS: [[u8; 3]; 14] = [

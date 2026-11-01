@@ -190,6 +190,8 @@ The font rule is not a family picker. It has two choices, activated and deactiva
 - `DurationUnit::to_seconds` converts the min and max fields.
 - These helpers build the panel's options: `distinct_cameras`, `month_counts`, `duration_range`, `installed_font_keys_in` with `font_dirs` (Eagle's `EagleApp/` and falcon's `Falcon/` under `~/Library/Fonts`, the second a deliberate difference), and `distinct_font_families` (`fontMetas.fontFamily`, a falcon extra).
 
+The Color filter's menu opens with a picker: a square where the horizontal position sets saturation and the vertical position sets brightness for the current hue, and a vertical strip beside it that sets the hue. Dragging either one changes the filter colour as it moves, and the hue is kept when the brightness reaches black. Below it are the swatches, then the hex field with a small square showing the current colour, the accuracy slider, the Grayscale only box and Clear.
+
 ## Colour search (observed)
 
 Eagle compares the query colour with the item's two dominant palette colours, then with any colour marked as the item's primary colour.

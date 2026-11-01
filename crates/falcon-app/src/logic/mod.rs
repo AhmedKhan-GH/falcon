@@ -28,6 +28,7 @@ mod drops;
 mod viewer;
 mod image_viewer;
 mod display;
+mod color;
 mod viewer3d;
 
 pub use scope::*;
@@ -43,6 +44,7 @@ pub use drops::*;
 pub use viewer::*;
 pub use image_viewer::*;
 pub use display::*;
+pub use color::*;
 pub use viewer3d::*;
 
 #[cfg(test)]
