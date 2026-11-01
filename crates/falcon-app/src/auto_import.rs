@@ -82,6 +82,18 @@ impl Sig {
 }
 
 /// Files seen in the folder and since when each has been unchanged.
+/// The app's side of auto-import, kept in `App`.
+#[derive(Default)]
+pub struct AutoImport {
+    /// The thread watching the shown library's auto-import folder.
+    pub watcher: Option<Watcher>,
+    /// Files it has handed over, shared with the thread and saved.
+    pub imported: Arc<Mutex<Imported>>,
+    /// A folder that couldn't be watched and was reported, so it isn't
+    /// checked again until the preferences change.
+    pub refused: Option<PathBuf>,
+}
+
 #[derive(Debug, Default)]
 pub struct Settle {
     files: HashMap<PathBuf, (Sig, Instant)>,

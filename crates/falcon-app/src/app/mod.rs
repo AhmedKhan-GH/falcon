@@ -135,29 +135,20 @@ pub struct App {
     pub(crate) text_zoom: u8,
     /// Inspector sections folded away (`Folds`).
     pub(crate) folds: Folds,
-    /// The thread watching the shown library's auto-import folder.
-    pub(crate) auto_import: Option<crate::auto_import::Watcher>,
-    /// Files it has handed over, shared with the thread and saved.
-    pub(crate) auto_imported: Arc<Mutex<crate::auto_import::Imported>>,
-    /// A folder that couldn't be watched and was reported, so it isn't
-    /// checked again until the preferences change.
-    pub(crate) auto_import_refused: Option<PathBuf>,
+    /// The auto-import folder's watcher and what it has handed over
+    /// (`auto_import.rs`).
+    pub(crate) auto_import: crate::auto_import::AutoImport,
     /// Presentation mode and the other View modes (`modes.rs`).
     pub(crate) modes: crate::ui::viewer::modes::Modes,
     /// The item open in its own window (`preview_window.rs`).
     pub(crate) preview: Option<crate::ui::viewer::preview_window::PreviewWin>,
 
-    /// The About window is open, and its icon once loaded (`about.rs`).
-    pub(crate) about: bool,
-    pub(crate) about_icon: Option<egui::TextureHandle>,
+    /// The About window (`about.rs`).
+    pub(crate) about: crate::ui::dialogs::about::AboutWindow,
     /// What the arrow keys act on (Eagle's focus zones).
     pub(crate) zone: logic::Zone,
-    /// The views of the sidebar's visible rows this frame, top to bottom,
-    /// for ↑ and ↓ while the sidebar has the keys.
-    pub(crate) side_rows: Vec<Scope>,
-    /// The row the keys last opened, and whether to scroll it into view.
-    pub(crate) side_cursor: Option<usize>,
-    pub(crate) side_reveal: bool,
+    /// The sidebar rows the arrow keys walk (`ui/sidebar`).
+    pub(crate) side: crate::ui::sidebar::SidebarKeys,
     /// A notice to acknowledge (`library_ui.rs`).
     pub(crate) alert: Option<crate::ui::dialogs::library_notices::Alert>,
     /// Reload the shown library from disk next frame: a `metadata.json`
@@ -232,18 +223,13 @@ impl App {
             refresh: false,
             text_zoom: 0,
             folds: Folds::default(),
-            auto_import: None,
-            auto_imported: Arc::default(),
-            auto_import_refused: None,
+            auto_import: Default::default(),
             modes: Default::default(),
             preview: None,
 
-            about: false,
-            about_icon: None,
+            about: Default::default(),
             zone: logic::Zone::Content,
-            side_rows: Vec::new(),
-            side_cursor: None,
-            side_reveal: false,
+            side: Default::default(),
             alert: None,
             conflict_reload: false,
             missing: None,
@@ -287,7 +273,7 @@ impl App {
         app.image.edge = saved.zoom_edge.unwrap_or(false);
         app.folds = saved.folds;
         app.text_zoom = saved.text_zoom.unwrap_or(0).min(crate::textdoc::ZOOM_LEVELS - 1);
-        app.auto_imported = Arc::new(Mutex::new(saved.auto_imported));
+        app.auto_import.imported = Arc::new(Mutex::new(saved.auto_imported));
         app.font_look = saved.font_look.unwrap_or_default();
         app.modes.hide_navigator = saved.hide_navigator.unwrap_or(false);
         app.recent_items = saved.recent_items;

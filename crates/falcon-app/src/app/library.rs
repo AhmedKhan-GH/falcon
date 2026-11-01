@@ -290,7 +290,7 @@ impl App {
         self.show_inspector = d.panels.inspector;
         self.shortcuts = d.keys;
         // A folder refused before is checked again.
-        self.auto_import_refused = None;
+        self.auto_import.refused = None;
         self.share_with_server();
         if restart {
             self.start_server();

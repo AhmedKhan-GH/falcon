@@ -546,7 +546,7 @@ impl App {
             zoom_edge: Some(self.image.edge),
             text_zoom: Some(self.text_zoom),
             folds: self.folds,
-            auto_imported: self.auto_imported.lock().unwrap_or_else(|p| p.into_inner()).clone(),
+            auto_imported: self.auto_import.imported.lock().unwrap_or_else(|p| p.into_inner()).clone(),
             font_look: Some(self.font_look),
             hide_navigator: Some(self.modes.hide_navigator),
             recent_items: self.recent_items.clone(),

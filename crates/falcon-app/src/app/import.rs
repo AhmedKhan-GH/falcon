@@ -515,23 +515,23 @@ impl App {
             (Some(_), Some(root)) => self.prefs.auto_import_dir(root),
             _ => None,
         };
-        if self.auto_import.as_ref().map(|w| &w.dir) != want.as_ref() && self.auto_import_refused != want {
-            self.auto_import = None;
+        if self.auto_import.watcher.as_ref().map(|w| &w.dir) != want.as_ref() && self.auto_import.refused != want {
+            self.auto_import.watcher = None;
             if let Some(dir) = want {
                 let chosen = self.prefs.auto_import_path.clone().unwrap_or_default();
                 match crate::prefs::auto_import_refusal(&chosen) {
                     Some(why) => {
                         self.flash(format!("Auto-import is paused. {why}"));
-                        self.auto_import_refused = Some(dir);
+                        self.auto_import.refused = Some(dir);
                     }
                     None => {
                         let ctx = self.ctx.clone();
-                        self.auto_import = crate::auto_import::Watcher::start(dir, self.auto_imported.clone(), move || ctx.request_repaint());
+                        self.auto_import.watcher = crate::auto_import::Watcher::start(dir, self.auto_import.imported.clone(), move || ctx.request_repaint());
                     }
                 }
             }
         }
-        let batches = self.auto_import.as_ref().map(|w| w.take()).unwrap_or_default();
+        let batches = self.auto_import.watcher.as_ref().map(|w| w.take()).unwrap_or_default();
         for files in batches {
             if self.prefs.tells_auto_import() {
                 let n = files.len();

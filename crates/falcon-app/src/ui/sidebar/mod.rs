@@ -15,6 +15,17 @@ use crate::logic::{self, NavCounts, Scope};
 use crate::theme::{self as t, font};
 use crate::ui::widgets::{galley, icon, icon_button, window_drag};
 
+/// The sidebar's rows for the arrow keys.
+#[derive(Default)]
+pub(crate) struct SidebarKeys {
+    /// The views of the sidebar's visible rows this frame, top to bottom,
+    /// for ↑ and ↓ while the sidebar has the keys.
+    pub(crate) rows: Vec<Scope>,
+    /// The row the keys last opened, and whether to scroll it into view.
+    pub(crate) cursor: Option<usize>,
+    pub(crate) reveal: bool,
+}
+
 pub(crate) struct SidebarCtx<'a> {
     pub(crate) folder_counts: &'a HashMap<String, usize>,
     pub(crate) nav: &'a NavCounts,
@@ -222,7 +233,7 @@ impl App {
         let full = ui.max_rect();
         self.imports.sidebar = Some(full);
         self.imports.folder_rows.clear();
-        self.side_rows.clear();
+        self.side.rows.clear();
         self.ws.folders.begin_rows();
         let p = ui.painter().clone();
         p.rect_filled(full, 0.0, t::p().panel);
@@ -460,11 +471,11 @@ impl App {
     /// Notes a visible sidebar row for the arrow keys, and scrolls it into
     /// view when the keys just opened it.
     pub(crate) fn side_row(&mut self, scope: Scope, resp: &Response) {
-        if self.side_reveal && self.side_cursor == Some(self.side_rows.len()) {
+        if self.side.reveal && self.side.cursor == Some(self.side.rows.len()) {
             resp.scroll_to_me(None);
-            self.side_reveal = false;
+            self.side.reveal = false;
         }
-        self.side_rows.push(scope);
+        self.side.rows.push(scope);
     }
 
     /// The count shown beside a sidebar row: none when zero, or when

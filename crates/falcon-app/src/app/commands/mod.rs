@@ -93,7 +93,7 @@ impl App {
         }
         // The duplicate dialog and Go to Folder take Return, Esc and the
         // arrows for themselves.
-        if self.prefs_window.open || self.about || self.ws.dup_dialog.is_some() || self.quick.is_open() || ctx.memory(|m| m.focused().is_some()) {
+        if self.prefs_window.open || self.about.open || self.ws.dup_dialog.is_some() || self.quick.is_open() || ctx.memory(|m| m.focused().is_some()) {
             return;
         }
         pressed.retain(|c| *c != C::Preferences);
@@ -200,10 +200,10 @@ impl App {
         // ← and → collapse or expand the open folder (or every picked one).
         if self.zone == logic::Zone::Sidebar && self.show_sidebar && self.ws.viewer.is_none() && !shift {
             if up || down {
-                if let Some(i) = logic::sidebar_step(&self.side_rows, self.side_cursor, &self.ws.scope, down) {
-                    let scope = self.side_rows[i].clone();
-                    self.side_cursor = Some(i);
-                    self.side_reveal = true;
+                if let Some(i) = logic::sidebar_step(&self.side.rows, self.side.cursor, &self.ws.scope, down) {
+                    let scope = self.side.rows[i].clone();
+                    self.side.cursor = Some(i);
+                    self.side.reveal = true;
                     self.go(scope);
                 }
                 return;
@@ -662,7 +662,7 @@ impl App {
             C::Navigator => self.modes.hide_navigator = !self.modes.hide_navigator,
             C::OpenNewWindow => self.open_preview_window(),
 
-            C::About => self.about = true,
+            C::About => self.about.open = true,
             C::DebugReport => self.export_debug_report(ctx),
             C::ErrorLogs => {
                 if let Some(p) = crate::errlog::ensure() {
