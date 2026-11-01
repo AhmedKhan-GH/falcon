@@ -1,0 +1,348 @@
+//! Checks falcon-video against real AVFoundation on clips written here by
+//! AVFoundation itself (24 frames at 12 fps, red for the first second and
+//! blue for the second; one with a silent audio track, one without).
+//!
+//! AVPlayer is main-thread-only, so this test runs without the libtest
+//! harness: `main` is the process's main thread and pumps its run loop
+//! while the player loads, the way the app's event loop does.
+
+#[cfg(not(target_os = "macos"))]
+fn main() {
+    println!("skipped: AVFoundation is macOS only");
+}
+
+#[cfg(target_os = "macos")]
+fn main() {
+    mac::run();
+}
+
+#[cfg(target_os = "macos")]
+mod mac {
+    use std::path::Path;
+    use std::ptr::{self, NonNull};
+    use std::time::{Duration, Instant};
+
+    use falcon_video::{Frame, Video, frame_at, probe};
+    use objc2::rc::Retained;
+    use objc2::runtime::AnyObject;
+    use objc2_av_foundation::{
+        AVAssetWriter, AVAssetWriterInput, AVAssetWriterInputPixelBufferAdaptor, AVAssetWriterStatus, AVFileTypeMPEG4, AVFileTypeQuickTimeMovie,
+        AVMediaTypeAudio, AVMediaTypeVideo, AVVideoCodecKey, AVVideoCodecTypeH264, AVVideoHeightKey, AVVideoWidthKey,
+    };
+    use objc2_core_audio_types::{AudioStreamBasicDescription, kAudioFormatFlagIsPacked, kAudioFormatFlagIsSignedInteger, kAudioFormatLinearPCM, kAudioFormatMPEG4AAC};
+    use objc2_core_foundation::{CFRetained, CGAffineTransform};
+    use objc2_core_media::{
+        CMAudioFormatDescriptionCreate, CMAudioSampleBufferCreateReadyWithPacketDescriptions, CMBlockBuffer, CMFormatDescription, CMSampleBuffer, CMTime,
+        kCMBlockBufferAssureMemoryNowFlag,
+    };
+    use objc2_core_video::{
+        CVPixelBuffer, CVPixelBufferCreate, CVPixelBufferGetBaseAddress, CVPixelBufferGetBytesPerRow, CVPixelBufferLockBaseAddress, CVPixelBufferLockFlags,
+        CVPixelBufferUnlockBaseAddress, kCVPixelFormatType_32BGRA,
+    };
+    use objc2_foundation::{NSCopying, NSDate, NSDictionary, NSNumber, NSRunLoop, NSString, NSURL, ns_string};
+
+    const W: usize = 160;
+    const H: usize = 120;
+    const FPS: i32 = 12;
+    const FRAMES: i64 = 24;
+    const RATE: f64 = 44_100.0;
+
+    fn dict(pairs: &[(&NSString, Retained<AnyObject>)]) -> Retained<NSDictionary<NSString, AnyObject>> {
+        let keys: Vec<&NSString> = pairs.iter().map(|p| p.0).collect();
+        let values: Vec<&AnyObject> = pairs.iter().map(|p| &*p.1).collect();
+        NSDictionary::from_slices(&keys, &values)
+    }
+
+    fn num(n: f64) -> Retained<AnyObject> {
+        NSNumber::new_f64(n).into()
+    }
+
+    /// A BGRA picture filled with `top` over its upper half and `bottom`
+    /// over the rest.
+    fn picture(top: [u8; 4], bottom: [u8; 4]) -> CFRetained<CVPixelBuffer> {
+        let mut out: *mut CVPixelBuffer = ptr::null_mut();
+        unsafe {
+            assert_eq!(CVPixelBufferCreate(None, W, H, kCVPixelFormatType_32BGRA, None, NonNull::from(&mut out)), 0);
+            let pb = CFRetained::from_raw(NonNull::new(out).unwrap());
+            CVPixelBufferLockBaseAddress(&pb, CVPixelBufferLockFlags(0));
+            let stride = CVPixelBufferGetBytesPerRow(&pb);
+            let base = CVPixelBufferGetBaseAddress(&pb) as *mut u8;
+            let bytes = std::slice::from_raw_parts_mut(base, stride * H);
+            for (y, row) in bytes.chunks_exact_mut(stride).enumerate() {
+                let bgra = if y < H / 2 { top } else { bottom };
+                for px in row[..W * 4].as_chunks_mut::<4>().0 {
+                    px.copy_from_slice(&bgra);
+                }
+            }
+            CVPixelBufferUnlockBaseAddress(&pb, CVPixelBufferLockFlags(0));
+            pb
+        }
+    }
+
+    /// `frames` samples of mono 16-bit silence starting at `start` samples.
+    fn silence(format: &CMFormatDescription, start: i64, frames: usize) -> CFRetained<CMSampleBuffer> {
+        unsafe {
+            let len = frames * 2;
+            let mut block: *mut CMBlockBuffer = ptr::null_mut();
+            let s = CMBlockBuffer::create_with_memory_block(None, ptr::null_mut(), len, None, ptr::null(), 0, len, kCMBlockBufferAssureMemoryNowFlag, NonNull::from(&mut block));
+            assert_eq!(s, 0);
+            let block = CFRetained::from_raw(NonNull::new(block).unwrap());
+            assert_eq!(CMBlockBuffer::fill_data_bytes(0, &block, 0, len), 0);
+            let mut sample: *mut CMSampleBuffer = ptr::null_mut();
+            let s = CMAudioSampleBufferCreateReadyWithPacketDescriptions(None, &block, format, frames as isize, CMTime::new(start, RATE as i32), ptr::null(), NonNull::from(&mut sample));
+            assert_eq!(s, 0);
+            CFRetained::from_raw(NonNull::new(sample).unwrap())
+        }
+    }
+
+    const RED: [u8; 4] = [0, 0, 255, 255];
+    const BLUE: [u8; 4] = [255, 0, 0, 255];
+
+    /// Writes the test clip; `audio` adds a silent AAC track. A `portrait`
+    /// clip is stored red over blue and tagged to be shown turned a quarter
+    /// turn clockwise, as phones tag upright recordings.
+    fn write_clip(path: &Path, audio: bool, portrait: bool) {
+        let url = NSURL::fileURLWithPath(&NSString::from_str(path.to_str().unwrap()));
+        unsafe {
+            let kind = if path.extension().is_some_and(|e| e == "mp4") { AVFileTypeMPEG4 } else { AVFileTypeQuickTimeMovie };
+            let writer = AVAssetWriter::assetWriterWithURL_fileType_error(&url, kind.unwrap()).expect("writer");
+            let settings = dict(&[
+                (AVVideoCodecKey.unwrap(), AVVideoCodecTypeH264.unwrap().copy().into()),
+                (AVVideoWidthKey.unwrap(), num(W as f64)),
+                (AVVideoHeightKey.unwrap(), num(H as f64)),
+            ]);
+            let video = AVAssetWriterInput::assetWriterInputWithMediaType_outputSettings(AVMediaTypeVideo.unwrap(), Some(&settings));
+            let adaptor = AVAssetWriterInputPixelBufferAdaptor::assetWriterInputPixelBufferAdaptorWithAssetWriterInput_sourcePixelBufferAttributes(&video, None);
+            // Real-time mode keeps the encoder from holding a lookahead of
+            // frames, which otherwise stalls a clip this short.
+            video.setExpectsMediaDataInRealTime(true);
+            if portrait {
+                video.setTransform(CGAffineTransform { a: 0.0, b: 1.0, c: -1.0, d: 0.0, tx: H as f64, ty: 0.0 });
+            }
+            assert!(writer.canAddInput(&video));
+            writer.addInput(&video);
+
+            let pcm = AudioStreamBasicDescription {
+                mSampleRate: RATE,
+                mFormatID: kAudioFormatLinearPCM,
+                mFormatFlags: kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked,
+                mBytesPerPacket: 2,
+                mFramesPerPacket: 1,
+                mBytesPerFrame: 2,
+                mChannelsPerFrame: 1,
+                mBitsPerChannel: 16,
+                mReserved: 0,
+            };
+            let mut format: *const CMFormatDescription = ptr::null();
+            assert_eq!(CMAudioFormatDescriptionCreate(None, NonNull::from(&pcm), 0, ptr::null(), 0, ptr::null(), None, NonNull::from(&mut format)), 0);
+            let format = CFRetained::from_raw(NonNull::new(format as *mut CMFormatDescription).unwrap());
+            let sound = audio.then(|| {
+                let settings = dict(&[
+                    (ns_string!("AVFormatIDKey"), num(kAudioFormatMPEG4AAC as f64)),
+                    (ns_string!("AVSampleRateKey"), num(RATE)),
+                    (ns_string!("AVNumberOfChannelsKey"), num(1.0)),
+                ]);
+                let input = AVAssetWriterInput::assetWriterInputWithMediaType_outputSettings(AVMediaTypeAudio.unwrap(), Some(&settings));
+                assert!(writer.canAddInput(&input));
+                writer.addInput(&input);
+                input
+            });
+
+            assert!(writer.startWriting(), "{:?}", writer.error());
+            writer.startSessionAtSourceTime(CMTime::new(0, FPS));
+            let chunk = (RATE / 10.0) as usize;
+            let total = (RATE * FRAMES as f64 / FPS as f64) as i64;
+            let (mut frame, mut sample) = (0i64, if audio { 0 } else { total });
+            let deadline = Instant::now() + Duration::from_secs(20);
+            while frame < FRAMES || sample < total {
+                assert!(Instant::now() < deadline, "writer stalled at frame {frame}, sample {sample}: {:?} {:?}", writer.status(), writer.error());
+                let mut progressed = false;
+                // Feed whichever track is behind, so the writer can interleave.
+                let video_turn = sample >= total || (frame < FRAMES && (frame as f64 / FPS as f64) <= sample as f64 / RATE);
+                if video_turn && video.isReadyForMoreMediaData() {
+                    let (top, bottom) = if portrait { (RED, BLUE) } else if frame < FRAMES / 2 { (RED, RED) } else { (BLUE, BLUE) };
+                    assert!(adaptor.appendPixelBuffer_withPresentationTime(&picture(top, bottom), CMTime::new(frame, FPS)), "{:?}", writer.error());
+                    frame += 1;
+                    progressed = true;
+                } else if !video_turn && let Some(input) = &sound && input.isReadyForMoreMediaData() {
+                    let n = chunk.min((total - sample) as usize);
+                    assert!(input.appendSampleBuffer(&silence(&format, sample, n)), "{:?}", writer.error());
+                    sample += n as i64;
+                    progressed = true;
+                }
+                if !progressed {
+                    pump(0.005);
+                }
+            }
+            video.markAsFinished();
+            if let Some(input) = &sound {
+                input.markAsFinished();
+            }
+            let block = block2::RcBlock::new(|| {});
+            writer.finishWritingWithCompletionHandler(&block);
+            let deadline = Instant::now() + Duration::from_secs(20);
+            while writer.status() == AVAssetWriterStatus::Writing {
+                assert!(Instant::now() < deadline, "finishing stalled");
+                pump(0.01);
+            }
+            assert_eq!(writer.status(), AVAssetWriterStatus::Completed, "{:?}", writer.error());
+        }
+    }
+
+    /// Runs the main run loop for `secs`, as the app's event loop would.
+    fn pump(secs: f64) {
+        NSRunLoop::currentRunLoop().runUntilDate(&NSDate::dateWithTimeIntervalSinceNow(secs));
+    }
+
+    /// Pumps until `done` holds or `secs` pass.
+    fn wait_for(secs: f64, mut done: impl FnMut() -> bool) -> bool {
+        let deadline = Instant::now() + Duration::from_secs_f64(secs);
+        while Instant::now() < deadline {
+            if done() {
+                return true;
+            }
+            pump(0.01);
+        }
+        done()
+    }
+
+    fn is_red(f: &Frame) -> bool {
+        let [r, g, b] = f.mean();
+        r > 180.0 && g < 70.0 && b < 70.0
+    }
+
+    fn is_blue(f: &Frame) -> bool {
+        let [r, g, b] = f.mean();
+        b > 180.0 && r < 70.0 && g < 70.0
+    }
+
+    fn check(name: &str, ok: bool, detail: impl std::fmt::Debug) {
+        if ok {
+            println!("ok   {name}");
+        } else {
+            panic!("FAIL {name}: {detail:?}");
+        }
+    }
+
+    /// The next frame the player hands out, within a few seconds.
+    fn next_frame(v: &mut Video) -> Option<Frame> {
+        let mut got = None;
+        wait_for(5.0, || {
+            got = v.frame();
+            got.is_some()
+        });
+        got
+    }
+
+    pub fn run() {
+        let dir = tempfile::tempdir().unwrap();
+        let (silent, sound) = (dir.path().join("silent.mov"), dir.path().join("sound.mp4"));
+        write_clip(&silent, false, false);
+        write_clip(&sound, true, false);
+
+        for (path, audio) in [(&silent, false), (&sound, true)] {
+            let name = path.file_name().unwrap().to_string_lossy();
+            let info = probe(path).expect("probe");
+            check(&format!("{name}: duration is 2 s"), (info.duration - 2.0).abs() < 0.1, info.duration);
+            check(&format!("{name}: size is {W}x{H}"), (info.width, info.height) == (W as u32, H as u32), (info.width, info.height));
+            check(&format!("{name}: has_audio is {audio}"), info.has_audio == audio, info.has_audio);
+            check(&format!("{name}: 12 fps"), (info.fps - 12.0).abs() < 0.5, info.fps);
+            check(&format!("{name}: no rotation"), info.turns == 0, info.turns);
+            let first = frame_at(path, 0.0).expect("first frame");
+            check(&format!("{name}: first frame is red"), is_red(&first) && (first.width, first.height) == (W, H), first.mean());
+            let later = frame_at(path, 1.5).expect("frame at 1.5 s");
+            check(&format!("{name}: frame at 1.5 s is blue"), is_blue(&later), later.mean());
+        }
+
+        // Files that aren't video fail cleanly everywhere.
+        let text = dir.path().join("notes.mp4");
+        std::fs::write(&text, b"not a video at all").unwrap();
+        let missing = dir.path().join("missing.mov");
+        for p in [&text, &missing, &dir.path().to_path_buf()] {
+            check(&format!("{} is refused", p.display()), probe(p).is_err() && frame_at(p, 0.0).is_err() && Video::open(p).is_err(), probe(p));
+        }
+
+        // The player is main-thread-only and says so elsewhere.
+        let p = silent.clone();
+        let off_main = std::thread::spawn(move || Video::open(&p).err().map(|e| e.0)).join().unwrap();
+        check("Video::open off the main thread fails", off_main.is_some(), off_main);
+
+        let mut v = Video::open(&silent).expect("open");
+        check("player info matches probe", v.info().duration > 1.9 && v.info().width == W as u32 && !v.info().has_audio, v.info());
+        check("player becomes ready", wait_for(5.0, || v.is_ready()), v.error());
+        let f = next_frame(&mut v);
+        check("player's first frame is red", f.as_ref().is_some_and(is_red), f.map(|f| f.mean()));
+
+        v.seek(1.5);
+        check("seek moves the playhead", wait_for(3.0, || (v.current_time() - 1.5).abs() < 0.01), v.current_time());
+        let f = next_frame(&mut v);
+        check("frame after seeking to 1.5 s is blue", f.as_ref().is_some_and(is_blue), f.map(|f| f.mean()));
+
+        v.seek(0.5);
+        wait_for(3.0, || (v.current_time() - 0.5).abs() < 0.01);
+        let t0 = v.current_time();
+        v.step(1);
+        check("step(1) moves one frame forward", wait_for(3.0, || (v.current_time() - (t0 + 1.0 / 12.0)).abs() < 0.01), (t0, v.current_time()));
+        v.step(-1);
+        check("step(-1) moves back", wait_for(3.0, || (v.current_time() - t0).abs() < 0.01), (t0, v.current_time()));
+        check("stepping pauses", !v.is_playing(), v.is_playing());
+
+        // Playback advances the clock and stops at the end unless looping.
+        v.seek(0.0);
+        wait_for(2.0, || v.current_time() < 0.01);
+        v.play();
+        check("play advances", wait_for(3.0, || v.current_time() > 0.3), v.current_time());
+        v.pause();
+        let t = v.current_time();
+        pump(0.3);
+        check("pause holds the playhead", (v.current_time() - t).abs() < 0.05, (t, v.current_time()));
+
+        v.set_rate(2.0);
+        v.seek(1.5);
+        wait_for(2.0, || (v.current_time() - 1.5).abs() < 0.01);
+        v.play();
+        let stopped = wait_for(4.0, || {
+            v.tick();
+            !v.is_playing()
+        });
+        check("without loop, playback stops at the end", stopped && v.current_time() > 1.8, v.current_time());
+
+        v.set_looping(true);
+        v.set_rate(1.0);
+        v.seek(1.7);
+        wait_for(2.0, || (v.current_time() - 1.7).abs() < 0.01);
+        v.play();
+        let looped = wait_for(4.0, || {
+            v.tick();
+            v.current_time() < 1.0 && v.current_time() > 0.0
+        });
+        check("with loop, playback starts again from the top", looped && v.is_playing(), v.current_time());
+        drop(v);
+
+        // A clip with sound opens and plays too.
+        let mut v = Video::open(&sound).expect("open sound clip");
+        check("sound clip becomes ready", wait_for(5.0, || v.is_ready()), v.error());
+        v.set_volume(0.0);
+        v.play();
+        check("sound clip plays", wait_for(3.0, || v.current_time() > 0.2), v.current_time());
+        drop(v);
+
+        // A clip tagged with a rotation is shown upright: stored red over
+        // blue, turned clockwise it reads blue on the left, red on the right.
+        let portrait = dir.path().join("portrait.mov");
+        write_clip(&portrait, false, true);
+        let info = probe(&portrait).expect("probe portrait");
+        check("portrait: size is turned", (info.width, info.height, info.turns) == (H as u32, W as u32, 1), &info);
+        let upright = |f: &Frame| {
+            let (l, r) = (f.pixel(f.width / 4, f.height / 2), f.pixel(f.width * 3 / 4, f.height / 2));
+            (f.width, f.height) == (H, W) && l[2] > 180 && l[0] < 70 && r[0] > 180 && r[2] < 70
+        };
+        let still = frame_at(&portrait, 0.5).expect("portrait frame");
+        check("portrait: decoded frame is upright", upright(&still), (still.width, still.height));
+        let mut v = Video::open(&portrait).expect("open portrait");
+        wait_for(5.0, || v.is_ready());
+        let f = next_frame(&mut v);
+        check("portrait: player frame is upright", f.as_ref().is_some_and(upright), f.map(|f| (f.width, f.height)));
+        println!("all AVFoundation checks passed");
+    }
+}

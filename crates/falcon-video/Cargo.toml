@@ -1,0 +1,27 @@
+[package]
+name = "falcon-video"
+description = "Video decoding and playback for falcon through AVFoundation"
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+edition.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = "0.3"
+objc2-av-foundation = { version = "0.3", features = ["objc2-core-media", "objc2-core-video", "objc2-core-graphics"] }
+objc2-core-media = { version = "0.3", features = ["objc2-core-audio-types"] }
+objc2-core-video = "0.3"
+objc2-core-foundation = "0.3"
+objc2-core-graphics = "0.3"
+block2 = "0.6"
+
+[dev-dependencies]
+tempfile = "3"
+
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+objc2-core-audio-types = "0.3"
+
+[[test]]
+name = "avfoundation"
+harness = false

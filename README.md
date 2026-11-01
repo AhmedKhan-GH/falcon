@@ -139,6 +139,7 @@ cargo run -p falcon -- serve ~/Pictures/Inspiration.library     # local HTTP API
 |---|---|
 | `falcon-library` | The library format: loading and byte-identical saving, import, thumbnails (WebP), colour palettes (median cut), editing, search, smart folders |
 | `falcon-server` | A local JSON HTTP API for scripts and tools, also built into the app |
+| `falcon-video` | Video playback and frame decoding through macOS's AVFoundation, used by the app's viewer |
 | `falcon-app` | The desktop app, drawn with egui |
 | `falcon` | The command-line tool |
 
