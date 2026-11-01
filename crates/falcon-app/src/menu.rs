@@ -82,6 +82,8 @@ pub struct State {
     pub grayscale: bool,
     /// The image viewer's navigator shows when zoomed in.
     pub navigator: bool,
+    /// A folder has been used for Add to Last Used Folder.
+    pub last_folder: bool,
 }
 
 impl State {
@@ -143,6 +145,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::Rate(_) => any || (s.library && s.viewer),
         C::AddTags | C::TagPanel | C::CopyTags | C::ClearTags => any,
         C::PasteTags => any && s.tag_clipboard,
+        C::AddToLastFolder => (any || (s.library && s.viewer)) && s.last_folder,
         C::FlipHorizontal => s.library && s.flippable,
         C::RotateLeft => s.library && s.rotatable,
         C::Crop => s.library && s.croppable,
@@ -317,6 +320,7 @@ pub static MENUS: &[(&str, &[Entry])] = &[
         "Organize",
         &[
             item("Add Tags…", Command::AddTags),
+            item("Add to Last Used Folder", Command::AddToLastFolder),
             SEP,
             item("No Rating", Command::Rate(0)),
             item("1 Star", Command::Rate(1)),
@@ -842,10 +846,12 @@ mod tests {
             docs: true,
             lockable: true,
             tag_clipboard: true,
+            last_folder: true,
             ..Default::default()
         };
         assert!(!enabled(Command::PasteTags, &State { tag_clipboard: false, ..full.clone() }), "Paste Tags needs copied tags");
         assert!(!enabled(Command::LockApp, &State::default()), "Lock needs a password");
+        assert!(!enabled(Command::AddToLastFolder, &State { last_folder: false, ..full.clone() }), "Add to Last Used Folder needs a used folder");
         for it in items().iter() {
             let s = match it.cmd {
                 Command::Reshuffle => State { scope: ScopeKind::Random, ..full.clone() },

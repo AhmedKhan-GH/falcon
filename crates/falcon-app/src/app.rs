@@ -49,6 +49,7 @@ mod covers;
 mod crop;
 #[path = "image_edit.rs"]
 mod image_edit;
+mod item_cmds;
 
 /// Grid geometry, measured from Eagle at 1280 x 800.
 const GRID_PAD_X: f32 = 17.0;
@@ -76,6 +77,9 @@ struct Saved {
     show_inspector: Option<bool>,
     collapsed: Vec<String>,
     recent: Vec<PathBuf>,
+    /// Folder ids items were last added to, newest first (Eagle's
+    /// `recentMoveFolders`), for Add to Last Used Folder.
+    recent_folders: Vec<String>,
     /// The one layout falcon kept before layouts were remembered per view;
     /// now only the fallback for a library with none of its own.
     layout: Option<Layout>,
@@ -630,6 +634,8 @@ pub struct App {
     open_apps: crate::open_with::AppCache,
     /// Recently opened libraries, newest first.
     recent: Vec<PathBuf>,
+    /// Folders items were last added to, newest first (`item_cmds.rs`).
+    recent_folders: Vec<String>,
     /// What to open once the frame is done (it replaces the library being
     /// drawn).
     switch_to: Option<Switch>,
@@ -698,6 +704,7 @@ impl App {
             fetches: Default::default(),
             open_apps: Default::default(),
             recent: Vec::new(),
+            recent_folders: Vec::new(),
             switch_to: None,
             prefs: Default::default(),
             prefs_window: Default::default(),
@@ -729,6 +736,7 @@ impl App {
         app.show_inspector = saved.show_inspector.unwrap_or(true);
         app.ws.collapsed = saved.collapsed.into_iter().collect();
         app.recent = saved.recent.into_iter().filter(|p| p.is_dir()).collect();
+        app.recent_folders = saved.recent_folders;
         app.legacy_layout = saved.layout;
         app.layouts = saved.layouts;
         app.display = saved.display;
@@ -1527,6 +1535,7 @@ impl App {
             modal: self.prefs_window.open || self.ws.dup_dialog.is_some() || self.lock.is_locked(),
             lockable: self.prefs.app_lock.is_some(),
             tag_clipboard: self.copied_tags.is_some(),
+            last_folder: !self.recent_folders.is_empty(),
             text: ctx.egui_wants_keyboard_input(),
             viewer: self.ws.viewer.is_some(),
             selected: self.ws.selected.len(),
@@ -1757,6 +1766,7 @@ impl App {
                 let on = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
                 ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!on));
             }
+            C::AddToLastFolder => self.add_to_last_used(self.acted_on()),
             C::Duplicate => {
                 if let Some(id) = self.acted_on().into_iter().next() {
                     self.ws.actions.push(Action::Edit(image_edit::Op::Duplicate(id)));
@@ -1918,6 +1928,7 @@ impl App {
                 Action::RenameFolder(id, name) => lib.rename_folder(&id, &name),
                 Action::SetFolderDescription(id, text) => lib.set_folder_description(&id, &text),
                 Action::AddToFolder(ids, fid) => {
+                    self.note_folder_use(std::slice::from_ref(&fid));
                     let n = ids.len();
                     let mut r = Ok(());
                     for id in ids {
@@ -1932,6 +1943,7 @@ impl App {
                     r
                 }
                 Action::DropOnFolder(ids, fid, op) => {
+                    self.note_folder_use(std::slice::from_ref(&fid));
                     let mut r = Ok(());
                     let mut moved = Vec::new();
                     let tags = falcon_library::autotag::folder_auto_tags(&lib.metadata.folders, &fid);
@@ -3600,6 +3612,16 @@ impl App {
                 }
             });
         });
+        let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::AddToLastFolder);
+        let last = item_cmds::last_used(&self.recent_folders, |id| logic::find_folder(&lib.metadata.folders, id).is_some());
+        let tip = last.as_deref().and_then(|id| logic::find_folder(&lib.metadata.folders, id)).map(|f| f.name.clone());
+        let b = ui.add_enabled(last.is_some(), egui::Button::new("Add to Last Used Folder").shortcut_text(keys));
+        if b.clicked() {
+            self.add_to_last_used(targets.to_vec());
+        }
+        if let Some(name) = tip {
+            b.on_hover_text(name);
+        }
         // Eagle's Copy Tags and Paste Tags.
         let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::CopyTags);
         if ui.add(egui::Button::new("Copy Tags").shortcut_text(keys)).clicked() {
@@ -4630,6 +4652,7 @@ impl App {
             self.ws.scroll_to = Some(item.id.clone());
         }
         if let Some(fid) = add_folder {
+            self.note_folder_use(std::slice::from_ref(&fid));
             let mut it = changed.clone().unwrap_or_else(|| item.clone());
             // Eagle's folder picker in the inspector adds auto-tags too.
             if falcon_library::autotag::join_folder(&mut it, &lib.metadata.folders, &fid) {
@@ -4955,6 +4978,7 @@ impl eframe::App for App {
             show_inspector: Some(self.show_inspector),
             collapsed: self.ws.collapsed.iter().cloned().collect(),
             recent: self.recent.clone(),
+            recent_folders: self.recent_folders.clone(),
             layout: self.legacy_layout,
             layouts: self.layouts.clone(),
             display: self.display.clone(),
