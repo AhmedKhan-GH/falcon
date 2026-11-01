@@ -42,7 +42,7 @@ pub(crate) enum Method {
 
 /// Which items a scan looks at.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-enum Range {
+pub(crate) enum Range {
     #[default]
     All,
     /// The list the page was opened from.
@@ -127,6 +127,19 @@ impl Duplicates {
         }
     }
 
+    /// Switches to `range` when it has items, dropping results of another
+    /// range so the page asks for a new scan.
+    fn use_range(&mut self, range: Range) {
+        let before = self.range;
+        self.range = range;
+        if self.range_ids().is_some_and(|ids| ids.is_empty()) {
+            self.range = before;
+        }
+        if self.range != before {
+            self.groups = None;
+        }
+    }
+
     /// The ids the current range covers (`None` for every item).
     fn range_ids(&self) -> Option<HashSet<String>> {
         let (_, order, selected) = self.came_from.as_ref()?;
@@ -140,6 +153,16 @@ impl Duplicates {
     /// A finished merge, for the summary.
     pub(crate) fn merged(&mut self, report: MergeReport) {
         self.report = Some(report);
+    }
+}
+
+impl App {
+    /// Opens the Duplicates page set to scan `range` (the New… menu's Find
+    /// Duplicates scopes).
+    pub(crate) fn find_duplicates_in(&mut self, range: Range) {
+        self.ws.viewer = None;
+        self.go(Scope::Duplicates);
+        self.ws.duplicates.use_range(range);
     }
 }
 

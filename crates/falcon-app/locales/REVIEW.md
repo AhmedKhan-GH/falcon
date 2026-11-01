@@ -165,6 +165,7 @@ The core words, so every file uses one term for one thing.
 - "Export as {format}…", the 3D viewer's export menu, replacing the two
   fixed OBJ and STL entries; {format} is GLB, glTF, OBJ, PLY or STL and is
   not translated (machine-written).
+- "Current List", "Selected" and "Settings…", the New… menu's Find Duplicates scopes and Auto-Import entry (machine-written).
 
 ## Reviewed
 
