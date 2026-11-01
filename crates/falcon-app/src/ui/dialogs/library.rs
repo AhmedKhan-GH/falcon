@@ -10,6 +10,7 @@ use falcon_library::Library;
 use crate::app::App;
 use crate::theme::{self as t, Theme, font};
 use crate::icons as ic;
+use crate::locale::{tr, trf};
 use crate::ui::widgets::{wide_button, window_drag};
 
 /// Characters a library name may not contain.
@@ -27,8 +28,8 @@ pub enum NameError {
 impl std::fmt::Display for NameError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            NameError::Empty => "The name can't be empty.",
-            NameError::Symbols => "The name can't contain symbols such as % ^ & * # @ or slashes.",
+            NameError::Empty => tr("The name can't be empty."),
+            NameError::Symbols => tr("The name can't contain symbols such as % ^ & * # @ or slashes."),
         })
     }
 }
@@ -174,7 +175,7 @@ impl App {
     /// Returns whether the dialog stays open.
     fn pick_folder_for(&mut self, dlg: &mut Create, name: String) -> bool {
         let folder = rfd::FileDialog::new()
-            .set_title("Choose where to keep the library")
+            .set_title(tr("Choose where to keep the library"))
             .set_directory(falcon_library::sandbox::default_root())
             .pick_folder();
         let Some(folder) = folder else {
@@ -196,12 +197,12 @@ impl App {
         if dest.exists() {
             dlg.warn = None;
             dlg.name = name;
-            dlg.error = Some("A library already exists there. Create again and pick another folder, or change the name.".to_string());
+            dlg.error = Some(tr("A library already exists there. Create again and pick another folder, or change the name.").to_string());
             return true;
         }
         match falcon_library::sandbox::guard(&dest).and_then(|()| Library::create(&dest)) {
             Ok(_) => self.open(dest),
-            Err(e) => self.flash(format!("Could not create the library: {e}")),
+            Err(e) => self.flash(trf("Could not create the library: {error}", &[("error", &e)])),
         }
         false
     }
@@ -232,11 +233,11 @@ impl App {
                 ui.add_space(70.0);
                 ui.label(RichText::new("Falcon").size(32.0).color(t::p().text));
                 ui.add_space(12.0);
-                ui.label(RichText::new("Collect, organise and find images and other files in an Eagle-format library.").size(14.0).color(t::p().text_muted));
+                ui.label(RichText::new(tr("Collect, organise and find images and other files in an Eagle-format library.")).size(14.0).color(t::p().text_muted));
             }
             Step::Look => {
                 ui.add_space(30.0);
-                ui.label(RichText::new("Choose a look").size(20.0).color(t::p().text));
+                ui.label(RichText::new(tr("Choose a look")).size(20.0).color(t::p().text));
                 ui.add_space(14.0);
                 ui.horizontal_wrapped(|ui| {
                     ui.spacing_mut().item_spacing = vec2(10.0, 12.0);
@@ -248,13 +249,13 @@ impl App {
                     }
                 });
                 ui.add_space(10.0);
-                ui.label(RichText::new("You can change this later in Preferences.").size(12.0).color(t::p().text_muted));
+                ui.label(RichText::new(tr("You can change this later in Preferences.")).size(12.0).color(t::p().text_muted));
             }
             Step::Library => {
                 ui.add_space(20.0);
-                ui.label(RichText::new("Create your library").size(20.0).color(t::p().text));
+                ui.label(RichText::new(tr("Create your library")).size(20.0).color(t::p().text));
                 ui.add_space(12.0);
-                let field = ui.add(egui::TextEdit::singleline(&mut self.dialogs.welcome.name).hint_text("Library name").desired_width(w));
+                let field = ui.add(egui::TextEdit::singleline(&mut self.dialogs.welcome.name).hint_text(tr("Library name")).desired_width(w));
                 let enter = field.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
                 if let Some(e) = &self.dialogs.welcome.error {
                     ui.label(RichText::new(e).size(12.0).color(t::p().icon_red));
@@ -269,7 +270,7 @@ impl App {
                     }
                 });
                 ui.add_space(10.0);
-                let create = ui.add(egui::Button::new(RichText::new("Create Library").color(egui::Color32::WHITE)).fill(t::p().primary)).clicked();
+                let create = ui.add(egui::Button::new(RichText::new(tr("Create Library")).color(egui::Color32::WHITE)).fill(t::p().primary)).clicked();
                 if create || enter {
                     match validate_library_name(&self.dialogs.welcome.name) {
                         Ok(clean) => {
@@ -281,9 +282,9 @@ impl App {
                     }
                 }
                 ui.add_space(8.0);
-                ui.label(RichText::new("The library is a folder stored on this Mac. Back it up as you would any other files.").size(12.0).color(t::p().text_muted));
+                ui.label(RichText::new(tr("The library is a folder stored on this Mac. Back it up as you would any other files.")).size(12.0).color(t::p().text_muted));
                 ui.add_space(6.0);
-                if ui.link("Open Existing Library…").clicked() {
+                if ui.link(tr("Open Existing Library…")).clicked() {
                     self.pick_library();
                 }
             }
@@ -297,11 +298,11 @@ impl App {
             ui.painter().circle_filled(c, 4.0, color);
         }
         let mut f = ui.new_child(egui::UiBuilder::new().max_rect(foot).layout(egui::Layout::left_to_right(egui::Align::Center)));
-        if step != Step::Welcome && f.button("Back").clicked() {
+        if step != Step::Welcome && f.button(tr("Back")).clicked() {
             self.dialogs.welcome.step = step.back();
         }
         let mut n = ui.new_child(egui::UiBuilder::new().max_rect(foot).layout(egui::Layout::right_to_left(egui::Align::Center)));
-        if step != Step::Library && n.button("Next").clicked() {
+        if step != Step::Library && n.button(tr("Next")).clicked() {
             self.dialogs.welcome.step = step.next();
         }
     }
@@ -335,21 +336,21 @@ fn warning_modal(ctx: &egui::Context, folder: &Path) -> Option<Warning> {
     let mut out = None;
     let modal = egui::Modal::new(egui::Id::unique("library-folder-warning")).show(ctx, |ui| {
         ui.set_width(340.0);
-        ui.label(RichText::new("Keep the library here?").size(15.0));
+        ui.label(RichText::new(tr("Keep the library here?")).size(15.0));
         ui.add_space(4.0);
         ui.label(
-            RichText::new(format!(
-                "{} is a folder where files are often cleared out by hand or by the system. A library kept there could be deleted by accident.",
-                folder.display()
+            RichText::new(trf(
+                "{path} is a folder where files are often cleared out by hand or by the system. A library kept there could be deleted by accident.",
+                &[("path", &folder.display())],
             ))
             .color(t::p().text_muted),
         );
         ui.add_space(10.0);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui.button(RichText::new("Save Anyway").color(t::p().icon_red)).clicked() {
+            if ui.button(RichText::new(tr("Save Anyway")).color(t::p().icon_red)).clicked() {
                 out = Some(Warning::Anyway);
             }
-            if ui.button("Choose Another").clicked() {
+            if ui.button(tr("Choose Another")).clicked() {
                 out = Some(Warning::Another);
             }
         });
@@ -365,11 +366,11 @@ fn name_modal(ctx: &egui::Context, dlg: &mut Create) -> Option<bool> {
     let mut out = None;
     let modal = egui::Modal::new(egui::Id::unique("create-library")).show(ctx, |ui| {
         ui.set_width(340.0);
-        ui.label(RichText::new("Create a Library").size(15.0));
+        ui.label(RichText::new(tr("Create a Library")).size(15.0));
         ui.add_space(4.0);
-        ui.label(RichText::new("Enter a name for the library, then pick the folder to keep it in.").color(t::p().text_muted));
+        ui.label(RichText::new(tr("Enter a name for the library, then pick the folder to keep it in.")).color(t::p().text_muted));
         ui.add_space(8.0);
-        let field = ui.add(egui::TextEdit::singleline(&mut dlg.name).hint_text("Library name").desired_width(f32::INFINITY));
+        let field = ui.add(egui::TextEdit::singleline(&mut dlg.name).hint_text(tr("Library name")).desired_width(f32::INFINITY));
         if dlg.focus {
             field.request_focus();
             dlg.focus = false;
@@ -380,10 +381,10 @@ fn name_modal(ctx: &egui::Context, dlg: &mut Create) -> Option<bool> {
         }
         ui.add_space(10.0);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui.button(RichText::new("Create").color(egui::Color32::WHITE)).clicked() {
+            if ui.button(RichText::new(tr("Create")).color(egui::Color32::WHITE)).clicked() {
                 out = Some(true);
             }
-            if ui.button("Cancel").clicked() {
+            if ui.button(tr("Cancel")).clicked() {
                 out = Some(false);
             }
         });
@@ -403,13 +404,13 @@ impl App {
         window_drag(ui, Rect::from_min_size(r.min, vec2(r.width(), t::BAR_HEIGHT)), "empty");
         ui.painter().rect_filled(r, 0.0, t::p().main);
         let c = r.center();
-        ui.painter().text(c - vec2(0.0, 40.0), Align2::CENTER_CENTER, "Open an Eagle library", font(18.0), t::p().text);
+        ui.painter().text(c - vec2(0.0, 40.0), Align2::CENTER_CENTER, tr("Open an Eagle library"), font(18.0), t::p().text);
         if let Some(e) = &self.error {
             ui.painter().text(c - vec2(0.0, 14.0), Align2::CENTER_CENTER, e, font(12.0), t::p().text_muted);
         }
         let b = Rect::from_center_size(c + vec2(0.0, 24.0), vec2(180.0, 32.0));
         let mut child = ui.new_child(egui::UiBuilder::new().max_rect(b));
-        if wide_button(&mut child, ic::FOLDER_OPEN, "Choose Library…", true).clicked() {
+        if wide_button(&mut child, ic::FOLDER_OPEN, tr("Choose Library…"), true).clicked() {
             self.pick_library();
         }
     }

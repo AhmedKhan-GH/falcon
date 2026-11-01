@@ -12,6 +12,7 @@ use falcon_library::Library;
 
 use crate::app::App;
 use crate::icons as ic;
+use crate::locale::{tr, tr_key, tr_n, tr_nf, trf};
 use crate::logic::{self, Scope};
 use crate::theme::{self as t, font};
 use crate::ui::widgets::{galley, wide_button};
@@ -107,7 +108,8 @@ impl Default for FormatDraft {
 /// A background export's counters.
 #[derive(Default)]
 struct Job {
-    verb: &'static str,
+    /// Packing a .eaglepack rather than copying files.
+    packing: bool,
     total: usize,
     done: usize,
     failed: usize,
@@ -145,8 +147,11 @@ pub(crate) fn plural(n: usize, one: &str) -> String {
 
 /// What an export says when done: "Exported 3 items" (and failures).
 fn exported(done: usize, failed: usize) -> String {
-    let base = format!("Exported {}", plural(done, "item"));
-    if failed > 0 { format!("{base}, {failed} failed") } else { base }
+    if failed > 0 {
+        tr_nf(done, "Exported {n} item, {failed} failed", "Exported {n} items, {failed} failed", &[("failed", &failed)])
+    } else {
+        tr_n(done, "Exported {n} item", "Exported {n} items")
+    }
 }
 
 /// The save dialog for a pack, suggesting `<name>.eaglepack` (Eagle drops
@@ -154,11 +159,11 @@ fn exported(done: usize, failed: usize) -> String {
 fn pick_pack(name: &str) -> Option<PathBuf> {
     let name = name.trim_start_matches('.').replace('/', " ");
     let name = if name.trim().is_empty() { "Untitled".to_string() } else { name };
-    rfd::FileDialog::new().set_title("Export as .eaglepack").add_filter("Eagle Package", &["eaglepack"]).set_file_name(format!("{name}.eaglepack")).save_file()
+    rfd::FileDialog::new().set_title(tr("Export as .eaglepack")).add_filter("Eagle Package", &["eaglepack"]).set_file_name(format!("{name}.eaglepack")).save_file()
 }
 
 fn pick_folder() -> Option<PathBuf> {
-    rfd::FileDialog::new().set_title("Export to Computer").set_can_create_directories(true).pick_folder()
+    rfd::FileDialog::new().set_title(tr("Export to Computer")).set_can_create_directories(true).pick_folder()
 }
 
 impl App {
@@ -179,35 +184,36 @@ impl App {
         let mut go = None;
         let modal = egui::Modal::new(egui::Id::unique("export-format")).show(ctx, |ui| {
             ui.set_width(340.0);
-            ui.label(RichText::new("Export in Format").size(15.0));
+            ui.label(RichText::new(tr("Export in Format")).size(15.0));
             ui.add_space(4.0);
             let skipped = ids.len() - n;
-            let mut note = format!("{} will be converted.", plural(n, "image"));
+            let mut note = tr_n(n, "{n} image will be converted.", "{n} images will be converted.");
             if skipped > 0 {
-                note.push_str(&format!(" {} that {} not images will be skipped.", plural(skipped, "item"), if skipped == 1 { "is" } else { "are" }));
+                note.push(' ');
+                note.push_str(&tr_n(skipped, "{n} item that is not an image will be skipped.", "{n} items that are not images will be skipped."));
             }
             ui.label(RichText::new(note).color(t::p().text_muted));
             ui.add_space(8.0);
             egui::Grid::new("export-format-grid").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
-                ui.label("Format");
+                ui.label(tr("Format"));
                 ui.horizontal(|ui| {
                     for f in Format::ALL {
                         ui.selectable_value(&mut d.format, f, f.label());
                     }
                 });
                 ui.end_row();
-                ui.label("Quality");
+                ui.label(tr("Quality"));
                 ui.add_enabled(d.format.lossy(), egui::Slider::new(&mut d.quality, 1..=100));
                 ui.end_row();
-                ui.label("Longest side");
+                ui.label(tr("Longest side"));
                 ui.horizontal(|ui| {
                     let text = match (d.custom, d.longest) {
-                        (true, _) => "Custom".to_string(),
+                        (true, _) => tr("Custom").to_string(),
                         (false, Some(px)) => format!("{px} px"),
-                        (false, None) => "Original size".to_string(),
+                        (false, None) => tr("Original size").to_string(),
                     };
                     egui::ComboBox::from_id_salt("export-format-size").selected_text(text).show_ui(ui, |ui| {
-                        if ui.selectable_label(!d.custom && d.longest.is_none(), "Original size").clicked() {
+                        if ui.selectable_label(!d.custom && d.longest.is_none(), tr("Original size")).clicked() {
                             (d.custom, d.longest) = (false, None);
                         }
                         for px in SIZES {
@@ -215,7 +221,7 @@ impl App {
                                 (d.custom, d.longest) = (false, Some(px));
                             }
                         }
-                        if ui.selectable_label(d.custom, "Custom").clicked() {
+                        if ui.selectable_label(d.custom, tr("Custom")).clicked() {
                             d.custom = true;
                             d.longest.get_or_insert(1600);
                         }
@@ -228,13 +234,13 @@ impl App {
                 });
                 ui.end_row();
             });
-            ui.label(RichText::new("Images are only made smaller, never larger.").color(t::p().text_muted).size(12.0));
+            ui.label(RichText::new(tr("Images are only made smaller, never larger.")).color(t::p().text_muted).size(12.0));
             ui.add_space(10.0);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.add_enabled(n > 0, egui::Button::new("Export…")).clicked() {
+                if ui.add_enabled(n > 0, egui::Button::new(tr("Export…"))).clicked() {
                     go = Some(true);
                 }
-                if ui.button("Cancel").clicked() {
+                if ui.button(tr("Cancel")).clicked() {
                     go = Some(false);
                 }
             });
@@ -257,18 +263,18 @@ impl App {
             return;
         }
         let keep = export::plan_converted(lib, &ids, &dest, d.format, Collision::KeepBoth);
-        let detail = format!(
-            "{} in “{}” {} the same name as an exported image.",
-            plural(clashes, "file"),
-            dest.display(),
-            if clashes == 1 { "has" } else { "have" }
+        let detail = tr_nf(
+            clashes,
+            "{n} file in “{path}” has the same name as an exported image.",
+            "{n} files in “{path}” have the same name as an exported image.",
+            &[("path", &dest.display())],
         );
-        self.ws.export.clash = Some(Clash { replace, keep, title: "Some files already exist".into(), detail, files: true, convert: Some(convert) });
+        self.ws.export.clash = Some(Clash { replace, keep, title: tr("Some files already exist").into(), detail, files: true, convert: Some(convert) });
     }
 
     fn handle_export(&mut self, lib: &Library, req: Request) {
         if self.export_busy() {
-            self.flash("An export is still running");
+            self.flash(tr("An export is still running"));
             return;
         }
         match req {
@@ -284,13 +290,13 @@ impl App {
                     return;
                 }
                 let keep = export::plan_items(lib, &ids, &dest, Collision::KeepBoth);
-                let detail = format!(
-                    "{} in “{}” {} the same name as an exported item.",
-                    plural(clashes, "file"),
-                    dest.display(),
-                    if clashes == 1 { "has" } else { "have" }
+                let detail = tr_nf(
+                    clashes,
+                    "{n} file in “{path}” has the same name as an exported item.",
+                    "{n} files in “{path}” have the same name as an exported item.",
+                    &[("path", &dest.display())],
                 );
-                self.ws.export.clash = Some(Clash { replace, keep, title: "Some files already exist".into(), detail, files: true, convert: None });
+                self.ws.export.clash = Some(Clash { replace, keep, title: tr("Some files already exist").into(), detail, files: true, convert: None });
             }
             Request::Tree(target) => {
                 let hidden = crate::organize::hidden_folders(&lib.metadata.folders, &self.ws.org.unlocked);
@@ -307,11 +313,11 @@ impl App {
                 }
                 let Some(keep) = plan(&dest, Collision::KeepBoth) else { return };
                 let name = replace.top.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-                let detail = format!(
-                    "“{}” already has a folder named “{name}”. Replace overwrites files of the same names inside it; Keep Both numbers the new copies.",
-                    dest.display()
+                let detail = trf(
+                    "“{path}” already has a folder named “{name}”. Replace overwrites files of the same names inside it; Keep Both numbers the new copies.",
+                    &[("path", &dest.display()), ("name", &name)],
                 );
-                self.ws.export.clash = Some(Clash { replace, keep, title: "The folder already exists".into(), detail, files: false, convert: None });
+                self.ws.export.clash = Some(Clash { replace, keep, title: tr("The folder already exists").into(), detail, files: false, convert: None });
             }
             Request::Trees(ids) => {
                 let hidden = crate::organize::hidden_folders(&lib.metadata.folders, &self.ws.org.unlocked);
@@ -329,26 +335,27 @@ impl App {
                     return;
                 }
                 let keep = plan(&dest, Collision::KeepBoth);
-                let detail = format!(
-                    "“{}” already has {} named {}. Replace overwrites files of the same names inside; Keep Both numbers the new copies.",
-                    dest.display(),
-                    if present.len() == 1 { "a folder" } else { "folders" },
-                    present.iter().map(|n| format!("“{n}”")).collect::<Vec<_>>().join(", ")
+                let names = present.iter().map(|n| format!("“{n}”")).collect::<Vec<_>>().join(", ");
+                let detail = tr_nf(
+                    present.len(),
+                    "“{path}” already has a folder named {names}. Replace overwrites files of the same names inside; Keep Both numbers the new copies.",
+                    "“{path}” already has folders named {names}. Replace overwrites files of the same names inside; Keep Both numbers the new copies.",
+                    &[("path", &dest.display()), ("names", &names)],
                 );
-                self.ws.export.clash = Some(Clash { replace, keep, title: "Some folders already exist".into(), detail, files: false, convert: None });
+                self.ws.export.clash = Some(Clash { replace, keep, title: tr("Some folders already exist").into(), detail, files: false, convert: None });
             }
             Request::Csv(ids) => {
                 if ids.is_empty() {
                     return;
                 }
-                let picked = rfd::FileDialog::new().set_title("Export to CSV").add_filter("CSV", &["csv"]).set_file_name("falcon-export.csv").save_file();
+                let picked = rfd::FileDialog::new().set_title(tr("Export to CSV")).add_filter("CSV", &["csv"]).set_file_name("falcon-export.csv").save_file();
                 let Some(dest) = picked else { return };
                 match export::write_csv(lib, &ids, &dest) {
                     Ok(n) => {
-                        self.flash(format!("Exported {} to CSV", plural(n, "item")));
+                        self.flash(tr_n(n, "Exported {n} item to CSV", "Exported {n} items to CSV"));
                         crate::open_with::reveal(&[dest]);
                     }
-                    Err(e) => self.flash_error(format!("Export failed: {e}")),
+                    Err(e) => self.flash_error(trf("Export failed: {error}", &[("error", &e)])),
                 }
             }
             Request::Copy(kind, ids) => self.copy_variant(lib, kind, &ids),
@@ -356,7 +363,7 @@ impl App {
                 if ids.iter().filter_map(|id| lib.item(id)).any(export::convertible) {
                     self.ws.export.format_for = Some(ids);
                 } else {
-                    self.flash("Only images can be exported in another format");
+                    self.flash(tr("Only images can be exported in another format"));
                 }
             }
             Request::PackItems(ids) => {
@@ -391,39 +398,39 @@ impl App {
             let mut files = vec![first.original_path(lib.root())];
             files.extend(first.thumbnail_path(lib.root()));
             if files.iter().any(|f| crate::icloud::is_dataless(f)) {
-                self.flash("This item is still in iCloud; open it once to download it, then copy again");
+                self.flash(tr("This item is still in iCloud; open it once to download it, then copy again"));
                 return;
             }
         }
         let text = match kind {
-            CopyKind::Path => Some((export::paths_text(lib, &items), plural(n, "path"))),
-            CopyKind::FolderPath => Some((export::folder_paths_text(lib, &items), plural(n, "folder path"))),
-            CopyKind::Name => Some((items.iter().map(|i| i.name.as_str()).collect::<Vec<_>>().join("\n"), plural(n, "name"))),
+            CopyKind::Path => Some((export::paths_text(lib, &items), tr_n(n, "Copied {n} path", "Copied {n} paths"))),
+            CopyKind::FolderPath => Some((export::folder_paths_text(lib, &items), tr_n(n, "Copied {n} folder path", "Copied {n} folder paths"))),
+            CopyKind::Name => Some((items.iter().map(|i| i.name.as_str()).collect::<Vec<_>>().join("\n"), tr_n(n, "Copied {n} name", "Copied {n} names"))),
             CopyKind::Link => {
                 let port = self.api_link_port();
-                Some((items.iter().map(|i| crate::links::api_item_link(port, &i.id)).collect::<Vec<_>>().join("\n"), plural(n, "link")))
+                Some((items.iter().map(|i| crate::links::api_item_link(port, &i.id)).collect::<Vec<_>>().join("\n"), tr_n(n, "Copied {n} link", "Copied {n} links")))
             }
-            CopyKind::EagleLink => Some((items.iter().map(|i| crate::links::item_link(&i.id)).collect::<Vec<_>>().join("\n"), plural(n, "Eagle link"))),
+            CopyKind::EagleLink => Some((items.iter().map(|i| crate::links::item_link(&i.id)).collect::<Vec<_>>().join("\n"), tr_n(n, "Copied {n} Eagle link", "Copied {n} Eagle links"))),
             CopyKind::SourceUrl => {
                 let links: Vec<&str> = items.iter().map(|i| i.url.trim()).filter(|u| !u.is_empty()).collect();
                 if links.is_empty() {
-                    self.flash(if n == 1 { "This item has no source URL" } else { "These items have no source URL" });
+                    self.flash(if n == 1 { tr("This item has no source URL") } else { tr("These items have no source URL") });
                     return;
                 }
-                Some((links.join("\n"), plural(links.len(), "link")))
+                Some((links.join("\n"), tr_n(links.len(), "Copied {n} link", "Copied {n} links")))
             }
             CopyKind::Base64 => match export::data_url(lib, first) {
-                Some(url) => Some((url, "Base64".to_string())),
+                Some(url) => Some((url, tr("Copied Base64").to_string())),
                 None => {
-                    self.flash("No image to copy");
+                    self.flash(tr("No image to copy"));
                     return;
                 }
             },
             CopyKind::Thumbnail => None,
         };
-        if let Some((text, what)) = text {
+        if let Some((text, message)) = text {
             self.ctx.copy_text(text);
-            self.flash_brief(format!("Copied {what}"));
+            self.flash_brief(message);
             return;
         }
         // Copy Thumbnail.
@@ -437,7 +444,13 @@ impl App {
             let files: Vec<PathBuf> = items.iter().map(|i| i.thumbnail_path(lib.root()).unwrap_or_else(|| i.original_path(lib.root()))).collect();
             clip.set().file_list(&files).is_ok()
         };
-        self.flash_brief(if !ok { "No thumbnail to copy".to_string() } else if n == 1 { "Copied thumbnail".to_string() } else { format!("Copied {}", plural(n, "thumbnail")) });
+        self.flash_brief(if !ok {
+            tr("No thumbnail to copy").to_string()
+        } else if n == 1 {
+            tr("Copied thumbnail").to_string()
+        } else {
+            tr_n(n, "Copied {n} thumbnail", "Copied {n} thumbnails")
+        });
     }
 
     /// The Copy (the files), Copy File Path and Copy submenu entries of the
@@ -448,19 +461,19 @@ impl App {
             self.copy_items(targets);
         }
         let mut ask = |kind| self.ws.export.request = Some(Request::Copy(kind, targets.to_vec()));
-        if ui.button("Copy File Path").clicked() {
+        if ui.button(tr("Copy File Path")).clicked() {
             ask(CopyKind::Path);
         }
-        crate::ui::menus::search::submenu(ui, "Copy", |ui| {
+        crate::ui::menus::search::submenu(ui, tr("Copy"), |ui| {
             ui.set_min_width(160.0);
             for (label, kind) in [
-                ("Link", CopyKind::Link),
-                ("Eagle Link", CopyKind::EagleLink),
-                ("Source URL", CopyKind::SourceUrl),
-                ("Folder Path", CopyKind::FolderPath),
-                ("Thumbnail", CopyKind::Thumbnail),
+                (tr_key("Link"), CopyKind::Link),
+                (tr_key("Eagle Link"), CopyKind::EagleLink),
+                (tr_key("Source URL"), CopyKind::SourceUrl),
+                (tr_key("Folder Path"), CopyKind::FolderPath),
+                (tr_key("Thumbnail"), CopyKind::Thumbnail),
             ] {
-                if ui.button(label).clicked() {
+                if ui.button(tr(label)).clicked() {
                     ask(kind);
                 }
             }
@@ -468,7 +481,7 @@ impl App {
             if ui.add_enabled(targets.len() == 1, egui::Button::new("Base64")).clicked() {
                 ask(CopyKind::Base64);
             }
-            if ui.button("Name").clicked() {
+            if ui.button(tr("Name")).clicked() {
                 ask(CopyKind::Name);
             }
         });
@@ -481,12 +494,12 @@ impl App {
         let plan = match pack::plan_pack(lib, source) {
             Ok(p) => p,
             Err(e) => {
-                self.flash_error(format!("Export failed: {e}"));
+                self.flash_error(trf("Export failed: {error}", &[("error", &e)]));
                 return;
             }
         };
         if plan.is_empty() && matches!(source, PackSource::Smart(_)) {
-            self.flash("Nothing to export");
+            self.flash(tr("Nothing to export"));
             return;
         }
         if self.operation_running() {
@@ -494,7 +507,7 @@ impl App {
         }
         let Some(dest) = pick_pack(name) else { return };
         let name = dest.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        let h = self.ws.op.start(&self.ctx, "Exporting Eagle Package", plan.len().max(1), true);
+        let h = self.ws.op.start(&self.ctx, tr("Exporting Eagle Package"), plan.len().max(1), true);
         h.step(0, name);
         std::thread::spawn(move || {
             // Stopping leaves nothing behind: the archive is built in a
@@ -505,8 +518,8 @@ impl App {
             });
             h.finish(match result {
                 Ok(Some(n)) => Outcome { message: exported(n, 0), reveal: vec![dest], ..Default::default() },
-                Ok(None) => Outcome { message: "Export cancelled".into(), ..Default::default() },
-                Err(e) => Outcome { error: Some(format!("Export failed: {e}")), ..Default::default() },
+                Ok(None) => Outcome { message: tr("Export cancelled").into(), ..Default::default() },
+                Err(e) => Outcome { error: Some(trf("Export failed: {error}", &[("error", &e)])), ..Default::default() },
             });
         });
     }
@@ -522,13 +535,13 @@ impl App {
             ui.label(RichText::new(detail).color(t::p().text_muted));
             ui.add_space(10.0);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button(RichText::new("Replace").color(t::p().icon_red)).clicked() {
+                if ui.button(RichText::new(tr("Replace")).color(t::p().icon_red)).clicked() {
                     choice = Some(Some(Collision::Replace));
                 }
-                if ui.button("Keep Both").clicked() {
+                if ui.button(tr("Keep Both")).clicked() {
                     choice = Some(Some(Collision::KeepBoth));
                 }
-                if ui.button("Cancel").clicked() {
+                if ui.button(tr("Cancel")).clicked() {
                     choice = Some(None);
                 }
             });
@@ -554,11 +567,11 @@ impl App {
     /// plan's top folder.
     fn start_copy(&mut self, plan: Plan, files: bool, convert: Option<Convert>) {
         if plan.steps.is_empty() {
-            self.flash("Nothing to export");
+            self.flash(tr("Nothing to export"));
             return;
         }
         let job = self.ws.export.job.clone();
-        *job.lock().unwrap_or_else(|p| p.into_inner()) = Job { verb: "Exporting", total: plan.steps.len(), running: true, ..Default::default() };
+        *job.lock().unwrap_or_else(|p| p.into_inner()) = Job { packing: false, total: plan.steps.len(), running: true, ..Default::default() };
         let ctx = self.ctx.clone();
         std::thread::spawn(move || {
             let on_step = |step: &export::Step, ok: bool| {
@@ -582,7 +595,7 @@ impl App {
                     let reveal = if !files || written.len() > 500 { vec![plan.top.clone()] } else { written.clone() };
                     (exported(written.len(), failed), reveal)
                 }
-                Err(e) => (format!("Export failed: {e}"), Vec::new()),
+                Err(e) => (trf("Export failed: {error}", &[("error", &e)]), Vec::new()),
             });
             drop(j);
             ctx.request_repaint();
@@ -592,13 +605,13 @@ impl App {
     /// The export progress bar, drawn where the import bar goes; reports
     /// the result once the worker is done.
     pub(crate) fn export_bar(&mut self, ui: &mut Ui, rect: Rect) -> bool {
-        let (verb, total, done, current, finished) = {
+        let (packing, total, done, current, finished) = {
             let mut j = self.ws.export.job.lock().unwrap_or_else(|p| p.into_inner());
             let finished = j.finished.take();
             if finished.is_some() {
                 j.running = false;
             }
-            (j.verb, j.total, j.done, j.current.clone(), finished)
+            (j.packing, j.total, j.done, j.current.clone(), finished)
         };
         if let Some((msg, reveal)) = finished {
             self.flash(msg);
@@ -615,7 +628,11 @@ impl App {
         let f = done as f32 / total as f32;
         let fill = Rect::from_min_max(track.min, Pos2::new(track.left() + track.width() * f, track.bottom()));
         p.rect_filled(fill, CornerRadius::same(2), t::p().primary);
-        let text = format!("{verb} {done} of {total}  ·  {current}");
+        let text = if packing {
+            trf("Packing {done} of {total}  ·  {current}", &[("done", &done), ("total", &total), ("current", &current)])
+        } else {
+            trf("Exporting {done} of {total}  ·  {current}", &[("done", &done), ("total", &total), ("current", &current)])
+        };
         let g = galley(ui, &text, font(12.0), t::p().text_muted, rect.width() - 40.0);
         p.galley(Pos2::new(rect.left() + GRID_PAD_X, rect.top() + 3.0), g, t::p().text_muted);
         true
@@ -658,16 +675,16 @@ impl App {
     /// the folder is locked).
     pub(crate) fn tree_export_menu(&mut self, ui: &mut Ui, target: Target, enabled: bool) {
         ui.add_enabled_ui(enabled, |ui| {
-            crate::ui::menus::search::submenu(ui, "Export", |ui| self.tree_export_entries(ui, &target));
+            crate::ui::menus::search::submenu(ui, tr("Export"), |ui| self.tree_export_entries(ui, &target));
         });
     }
 
     fn tree_export_entries(&mut self, ui: &mut Ui, target: &Target) {
         ui.set_min_width(200.0);
-        if ui.button("Export to Computer…").clicked() {
+        if ui.button(tr("Export to Computer…")).clicked() {
             self.ws.export.request = Some(Request::Tree(target.clone()));
         }
-        if ui.button("Export as .eaglepack…").clicked() {
+        if ui.button(tr("Export as .eaglepack…")).clicked() {
             self.ws.export.request = Some(Request::PackTree(target.clone()));
         }
     }
@@ -681,12 +698,12 @@ impl App {
             Scope::Smart(id) => Some(Target::Smart(id.clone())),
             _ => None,
         };
-        let resp = wide_button(ui, ic::EXPORT, "Export", target.is_some());
+        let resp = wide_button(ui, ic::EXPORT, tr("Export"), target.is_some());
         let Some(target) = target else { return };
         egui::Popup::menu(&resp).show(|ui| {
             self.tree_export_entries(ui, &target);
             // The items shown, as filtered and sorted.
-            if ui.add_enabled(!self.ws.order.is_empty(), egui::Button::new("Export to CSV…")).clicked() {
+            if ui.add_enabled(!self.ws.order.is_empty(), egui::Button::new(tr("Export to CSV…"))).clicked() {
                 self.ws.export.request = Some(Request::Csv(self.ws.order.clone()));
             }
         });
@@ -694,18 +711,18 @@ impl App {
 
     /// The Export submenu of the item context menu.
     pub(crate) fn item_export_menu(&mut self, ui: &mut Ui, targets: &[String]) {
-        crate::ui::menus::search::submenu(ui, "Export", |ui| {
+        crate::ui::menus::search::submenu(ui, tr("Export"), |ui| {
             ui.set_min_width(200.0);
-            if ui.button("Export to Computer…").clicked() {
+            if ui.button(tr("Export to Computer…")).clicked() {
                 self.ws.export.request = Some(Request::Items(targets.to_vec()));
             }
-            if ui.button("Export as .eaglepack…").clicked() {
+            if ui.button(tr("Export as .eaglepack…")).clicked() {
                 self.ws.export.request = Some(Request::PackItems(targets.to_vec()));
             }
-            if ui.button("Export in Format…").clicked() {
+            if ui.button(tr("Export in Format…")).clicked() {
                 self.ws.export.request = Some(Request::Format(targets.to_vec()));
             }
-            if ui.button("Export to CSV…").clicked() {
+            if ui.button(tr("Export to CSV…")).clicked() {
                 self.ws.export.request = Some(Request::Csv(targets.to_vec()));
             }
         });

@@ -14,6 +14,7 @@ use falcon_library::pack::{self, PackPreview};
 use falcon_library::{Error, Library};
 
 use crate::app::{App, Workspace, import, lock};
+use crate::locale::{tr, tr_n, tr_nf, trf};
 use crate::watch::Change;
 use crate::theme as t;
 use crate::ui::widgets::window_drag;
@@ -35,18 +36,17 @@ impl Alert {
 pub(crate) fn alert_for(e: &Error) -> Option<Alert> {
     match e {
         Error::NewerLibrary { path, version } => Some(Alert::new(
-            "Made by a newer Eagle",
-            format!(
-                "{} was last saved by Eagle {version}. Falcon reads libraries up to Eagle {}, so it won't open or change this one. Open it in Eagle, or use a newer falcon.",
-                name(path),
-                falcon_library::library::APP_VERSION
+            tr("Made by a newer Eagle"),
+            trf(
+                "{name} was last saved by Eagle {version}. Falcon reads libraries up to Eagle {supported}, so it won't open or change this one. Open it in Eagle, or use a newer falcon.",
+                &[("name", &name(path)), ("version", version), ("supported", &falcon_library::library::APP_VERSION)],
             ),
         )),
         Error::SyncConflict(path) => Some(Alert::new(
-            "Library changed elsewhere",
-            format!(
-                "Another app or a sync service changed {} while it was open here, so falcon didn't save over it. The library was reloaded from disk; the last change made here may need doing again.",
-                name(path)
+            tr("Library changed elsewhere"),
+            trf(
+                "Another app or a sync service changed {name} while it was open here, so falcon didn't save over it. The library was reloaded from disk; the last change made here may need doing again.",
+                &[("name", &name(path))],
             ),
         )),
         _ => None,
@@ -72,7 +72,7 @@ impl App {
             ui.add_space(4.0);
             ui.label(RichText::new(&a.body).color(t::p().text_muted));
             ui.add_space(10.0);
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| ui.button("OK").clicked()).inner
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| ui.button(tr("OK")).clicked()).inner
         });
         if modal.inner || modal.should_close() {
             self.alert = None;
@@ -114,7 +114,7 @@ impl App {
                 }
             }
             Err(e) => {
-                let alert = alert_for(&e).unwrap_or_else(|| Alert::new("Library closed", format!("Falcon couldn't read the library again: {e}")));
+                let alert = alert_for(&e).unwrap_or_else(|| Alert::new(tr("Library closed"), trf("Falcon couldn't read the library again: {error}", &[("error", &e)])));
                 self.close_workspace(self.others.slot());
                 self.show_alert(alert);
             }
@@ -172,9 +172,9 @@ impl App {
         for (root, warnings) in storage {
             let text = warnings.iter().map(crate::storage::Warning::message).collect::<Vec<_>>().join(" ");
             if warnings.iter().any(crate::storage::Warning::is_serious) {
-                self.show_alert(Alert::new(format!("{} may not save changes", name(&root)), text));
+                self.show_alert(Alert::new(trf("{name} may not save changes", &[("name", &name(&root))]), text));
             } else {
-                self.flash(format!("{}: {text}", name(&root)));
+                self.flash(trf("{name}: {text}", &[("name", &name(&root)), ("text", &text)]));
             }
         }
         for root in vanished {
@@ -242,19 +242,19 @@ impl App {
     /// Create a New Library (plus Close in the dialog).
     fn missing_contents(&mut self, ui: &mut egui::Ui, dialog: bool) {
         let Some(path) = self.missing.clone() else { return };
-        ui.label(RichText::new("Library not found").size(17.0).color(t::p().text));
+        ui.label(RichText::new(tr("Library not found")).size(17.0).color(t::p().text));
         ui.add_space(4.0);
-        ui.label(RichText::new(format!("There is no library folder at {}. It may have been moved, renamed or deleted, or its drive isn't connected.", crate::workspaces::tilde(&path))).color(t::p().text_muted));
+        ui.label(RichText::new(trf("There is no library folder at {path}. It may have been moved, renamed or deleted, or its drive isn't connected.", &[("path", &crate::workspaces::tilde(&path))])).color(t::p().text_muted));
         ui.add_space(12.0);
         ui.horizontal(|ui| {
-            if ui.button("Try Again").clicked() {
+            if ui.button(tr("Try Again")).clicked() {
                 self.open(path.clone());
                 if self.missing.is_some() {
-                    self.flash("The library is still missing");
+                    self.flash(tr("The library is still missing"));
                 }
             }
-            if ui.button("Select Another Path…").clicked() {
-                if let Some(p) = rfd::FileDialog::new().set_title("Open Eagle Library").set_directory(falcon_library::sandbox::default_root()).pick_folder() {
+            if ui.button(tr("Select Another Path…")).clicked() {
+                if let Some(p) = rfd::FileDialog::new().set_title(tr("Open Eagle Library")).set_directory(falcon_library::sandbox::default_root()).pick_folder() {
                     self.open(p);
                 }
                 if self.missing.is_none() {
@@ -262,14 +262,14 @@ impl App {
                     crate::workspaces::remove_from_list(&mut self.recent, &path);
                 }
             }
-            if dialog && ui.button("Close").clicked() {
+            if dialog && ui.button(tr("Close")).clicked() {
                 self.missing = None;
             }
         });
         ui.add_space(10.0);
         ui.horizontal(|ui| {
-            ui.label(RichText::new("Can't find it?").size(12.0).color(t::p().text_muted));
-            if ui.link(RichText::new("Create a new library").size(12.0)).clicked() {
+            ui.label(RichText::new(tr("Can't find it?")).size(12.0).color(t::p().text_muted));
+            if ui.link(RichText::new(tr("Create a new library")).size(12.0)).clicked() {
                 self.new_library();
             }
         });
@@ -293,17 +293,17 @@ impl App {
         if self.merge.is_some() {
             return;
         }
-        let Some(source) = rfd::FileDialog::new().set_title("Choose a Library to Merge In").set_directory(falcon_library::sandbox::default_root()).pick_folder() else {
+        let Some(source) = rfd::FileDialog::new().set_title(tr("Choose a Library to Merge In")).set_directory(falcon_library::sandbox::default_root()).pick_folder() else {
             return;
         };
         if let Err(e) = falcon_library::sandbox::guard(&source) {
-            self.show_alert(Alert::new("Can't merge that library", e.to_string()));
+            self.show_alert(Alert::new(tr("Can't merge that library"), e.to_string()));
             return;
         }
         let planned = merge::plan(&lock(&shared), &source);
         match planned {
             Ok(plan) => self.merge = Some(Merge::Confirm { into, plan: Box::new(plan) }),
-            Err(e) => self.show_alert(Alert::new("Can't merge that library", e.to_string())),
+            Err(e) => self.show_alert(Alert::new(tr("Can't merge that library"), e.to_string())),
         }
     }
 
@@ -317,21 +317,23 @@ impl App {
                 let mut answer = None;
                 let modal = egui::Modal::new(egui::Id::unique("merge-confirm")).show(ctx, |ui| {
                     ui.set_width(360.0);
-                    ui.label(RichText::new(format!("Merge {} into {}?", name(&plan.source), name(&into))).size(15.0));
+                    ui.label(RichText::new(trf("Merge {source} into {library}?", &[("source", &name(&plan.source)), ("library", &name(&into))])).size(15.0));
                     ui.add_space(4.0);
-                    let body = format!(
-                        "{} and {} from {} will be added. Folders, smart folders and tag groups already here are kept as they are, and so are items already here.",
-                        plural(folders, "top-level folder"),
-                        plural(items, "item"),
-                        crate::workspaces::tilde(&plan.source)
+                    let body = trf(
+                        "{folders} and {items} from {path} will be added. Folders, smart folders and tag groups already here are kept as they are, and so are items already here.",
+                        &[
+                            ("folders", &tr_n(folders, "{n} top-level folder", "{n} top-level folders")),
+                            ("items", &tr_n(items, "{n} item", "{n} items")),
+                            ("path", &crate::workspaces::tilde(&plan.source)),
+                        ],
                     );
                     ui.label(RichText::new(body).color(t::p().text_muted));
                     ui.add_space(10.0);
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.button("Merge").clicked() {
+                        if ui.button(tr("Merge")).clicked() {
                             answer = Some(true);
                         }
-                        if ui.button("Cancel").clicked() {
+                        if ui.button(tr("Cancel")).clicked() {
                             answer = Some(false);
                         }
                     });
@@ -355,12 +357,12 @@ impl App {
                     let n = done.load(Ordering::Relaxed);
                     egui::Modal::new(egui::Id::unique("merge-progress")).show(ctx, |ui| {
                         ui.set_width(320.0);
-                        ui.label(RichText::new(format!("Merging {}", name(&plan.source))).size(15.0));
+                        ui.label(RichText::new(trf("Merging {name}", &[("name", &name(&plan.source))])).size(15.0));
                         ui.add_space(6.0);
-                        ui.add(egui::ProgressBar::new(n as f32 / total as f32).text(format!("{n} of {}", plan.item_dirs.len())));
+                        ui.add(egui::ProgressBar::new(n as f32 / total as f32).text(trf("{done} of {total}", &[("done", &n), ("total", &plan.item_dirs.len())])));
                         ui.add_space(8.0);
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.add_enabled(!cancel.load(Ordering::Relaxed), egui::Button::new("Stop")).clicked() {
+                            if ui.add_enabled(!cancel.load(Ordering::Relaxed), egui::Button::new(tr("Stop"))).clicked() {
                                 cancel.store(true, Ordering::Relaxed);
                             }
                         });
@@ -379,16 +381,26 @@ impl App {
         let result = lock(&shared).finish_merge(plan, copied);
         match result {
             Ok(r) => {
-                let mut body = format!("Added {}, {} and {} from {}.", plural(r.items, "item"), plural(r.folders, "folder"), plural(r.smart_folders + r.tag_groups, "smart folder or tag group"), name(&plan.source));
+                let mut body = trf(
+                    "Added {items}, {folders} and {others} from {name}.",
+                    &[
+                        ("items", &tr_n(r.items, "{n} item", "{n} items")),
+                        ("folders", &tr_n(r.folders, "{n} folder", "{n} folders")),
+                        ("others", &tr_n(r.smart_folders + r.tag_groups, "{n} smart folder or tag group", "{n} smart folders or tag groups")),
+                        ("name", &name(&plan.source)),
+                    ],
+                );
                 if failed > 0 {
-                    body.push_str(&format!(" {} could not be copied.", plural(failed, "item")));
+                    body.push(' ');
+                    body.push_str(&tr_n(failed, "{n} item could not be copied.", "{n} items could not be copied."));
                 }
                 if copied.len() < plan.item_dirs.len() && failed == 0 {
-                    body.push_str(" Items already in this library were left as they are.");
+                    body.push(' ');
+                    body.push_str(tr("Items already in this library were left as they are."));
                 }
-                self.show_alert(Alert::new("Merge finished", body));
+                self.show_alert(Alert::new(tr("Merge finished"), body));
             }
-            Err(e) => self.show_alert(Alert::new("Merge not finished", format!("The items were copied, but the folders couldn't be saved: {e}"))),
+            Err(e) => self.show_alert(Alert::new(tr("Merge not finished"), trf("The items were copied, but the folders couldn't be saved: {error}", &[("error", &e)]))),
         }
     }
 }
@@ -409,10 +421,6 @@ fn start_copy(ctx: &egui::Context, into: PathBuf, plan: MergePlan) -> Merge {
     Merge::Copying { into, plan, done, cancel, rx }
 }
 
-fn plural(n: usize, what: &str) -> String {
-    if n == 1 { format!("1 {what}") } else { format!("{n} {what}s") }
-}
-
 /// Importing an `.eaglepack`: Eagle confirms the disk space it takes,
 /// then asks about items the library already has.
 pub(crate) enum PackAsk {
@@ -426,7 +434,7 @@ impl App {
         if self.ws.lib.is_none() {
             return;
         }
-        if let Some(path) = rfd::FileDialog::new().set_title("Import Eagle Package").add_filter("Eagle Package", &["eaglepack"]).pick_file() {
+        if let Some(path) = rfd::FileDialog::new().set_title(tr("Import Eagle Package")).add_filter("Eagle Package", &["eaglepack"]).pick_file() {
             let folder = self.scope_folders().into_iter().next();
             self.preview_pack_import(path, folder);
         }
@@ -439,7 +447,7 @@ impl App {
         let preview = pack::preview_pack(&lock(&shared), &path);
         match preview {
             Ok(preview) => self.pack_ask = Some(PackAsk::Space { path, folder, preview }),
-            Err(e) => self.show_alert(Alert::new("Can't import the package", format!("It may be incomplete or damaged; export or download it again. ({e})"))),
+            Err(e) => self.show_alert(Alert::new(tr("Can't import the package"), trf("It may be incomplete or damaged; export or download it again. ({error})", &[("error", &e)]))),
         }
     }
 
@@ -447,16 +455,21 @@ impl App {
         let Some(ask) = self.pack_ask.take() else { return };
         let (title, body, yes, no) = match &ask {
             PackAsk::Space { path, preview, .. } => (
-                format!("Import {}?", name(path)),
-                format!("{} will take up {} of disk space in this library.", plural(preview.items, "item"), crate::logic::format_size(preview.bytes)),
-                "Import",
-                "Cancel",
+                trf("Import {name}?", &[("name", &name(path))]),
+                tr_nf(
+                    preview.items,
+                    "{n} item will take up {size} of disk space in this library.",
+                    "{n} items will take up {size} of disk space in this library.",
+                    &[("size", &crate::logic::format_size(preview.bytes))],
+                ),
+                tr("Import"),
+                tr("Cancel"),
             ),
             PackAsk::Duplicates { preview, .. } => (
-                format!("{} already in the library", plural(preview.duplicates, "item")),
-                "They look like items already here. Import them anyway, or leave them out and import the rest.".to_string(),
-                "Import",
-                "Leave Them Out",
+                tr_n(preview.duplicates, "{n} item already in the library", "{n} items already in the library"),
+                tr("They look like items already here. Import them anyway, or leave them out and import the rest.").to_string(),
+                tr("Import"),
+                tr("Leave Them Out"),
             ),
         };
         let mut answer = None;
@@ -494,15 +507,15 @@ impl App {
     /// the images, with their names, tags, links, trashed state and dates.
     pub(crate) fn import_inboard_dialog(&mut self) {
         let Some(shared) = self.ws.lib.clone() else { return };
-        let Some(dir) = rfd::FileDialog::new().set_title("Choose an Inboard Backup Folder").pick_folder() else { return };
+        let Some(dir) = rfd::FileDialog::new().set_title(tr("Choose an Inboard Backup Folder")).pick_folder() else { return };
         let backup = match falcon_library::inboard::read(&dir) {
             Ok(b) => b,
             Err(_) if !falcon_library::inboard::is_backup(&dir) => {
-                self.show_alert(Alert::new("Not an Inboard backup", format!("{} has no {}.", crate::workspaces::tilde(&dir), falcon_library::inboard::INDEX)));
+                self.show_alert(Alert::new(tr("Not an Inboard backup"), trf("{path} has no {file}.", &[("path", &crate::workspaces::tilde(&dir)), ("file", &falcon_library::inboard::INDEX)])));
                 return;
             }
             Err(e) => {
-                self.show_alert(Alert::new("Can't read the Inboard backup", e.to_string()));
+                self.show_alert(Alert::new(tr("Can't read the Inboard backup"), e.to_string()));
                 return;
             }
         };
@@ -514,7 +527,7 @@ impl App {
                     Ok(id) => ids.push(id),
                     Err(e) => {
                         drop(lib);
-                        self.show_alert(Alert::new("Can't import the Inboard backup", format!("A folder couldn't be created: {e}")));
+                        self.show_alert(Alert::new(tr("Can't import the Inboard backup"), trf("A folder couldn't be created: {error}", &[("error", &e)])));
                         return;
                     }
                 }
@@ -539,9 +552,12 @@ impl App {
                 import::Job { path: it.file.clone(), opts }
             })
             .collect();
-        let mut note = format!("Importing {} and {} from Inboard", plural(jobs.len(), "image"), plural(ids.len(), "folder"));
+        let mut note = trf(
+            "Importing {images} and {folders} from Inboard",
+            &[("images", &tr_n(jobs.len(), "{n} image", "{n} images")), ("folders", &tr_n(ids.len(), "{n} folder", "{n} folders"))],
+        );
         if backup.missing > 0 {
-            note.push_str(&format!("; {} missing from the backup", plural(backup.missing, "file")));
+            note = trf("{note}; {files} missing from the backup", &[("note", &note), ("files", &tr_n(backup.missing, "{n} file", "{n} files"))]);
         }
         self.flash(note);
         self.spawn_import(jobs);
@@ -557,15 +573,15 @@ impl App {
         let mut answer = None;
         let modal = egui::Modal::new(egui::Id::unique("empty-cache")).show(ctx, |ui| {
             ui.set_width(340.0);
-            ui.label(RichText::new("Empty cache and reload?").size(15.0));
+            ui.label(RichText::new(tr("Empty cache and reload?")).size(15.0));
             ui.add_space(4.0);
-            ui.label(RichText::new("Falcon reads the whole library from disk again, rebuilds mtime.json from the items and redraws every thumbnail. A large library takes a while.").color(t::p().text_muted));
+            ui.label(RichText::new(tr("Falcon reads the whole library from disk again, rebuilds mtime.json from the items and redraws every thumbnail. A large library takes a while.")).color(t::p().text_muted));
             ui.add_space(10.0);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button("Empty Cache and Reload").clicked() {
+                if ui.button(tr("Empty Cache and Reload")).clicked() {
                     answer = Some(true);
                 }
-                if ui.button("Cancel").clicked() {
+                if ui.button(tr("Cancel")).clicked() {
                     answer = Some(false);
                 }
             });
@@ -586,7 +602,7 @@ impl App {
     fn empty_cache_and_reload(&mut self) {
         let (Some(shared), Some(root)) = (self.ws.lib.clone(), self.ws.root.clone()) else { return };
         if let Err(e) = self.ws.flush_and_backup() {
-            self.flash(format!("Could not save: {e}"));
+            self.flash(trf("Could not save: {error}", &[("error", &e)]));
             return;
         }
         let fresh = falcon_library::sandbox::guard(&root).and_then(|()| Library::open_or_restore(&root)).and_then(|(mut lib, _)| lib.rebuild_mtime().map(|()| lib));
@@ -607,11 +623,11 @@ impl App {
                 self.ws.redo.clear();
                 self.ws.edit = None;
                 self.ws.folder_edit = None;
-                self.flash("Library reloaded");
+                self.flash(tr("Library reloaded"));
             }
             Err(e) => match alert_for(&e) {
                 Some(a) => self.show_alert(a),
-                None => self.flash(format!("Could not reload: {e}")),
+                None => self.flash(trf("Could not reload: {error}", &[("error", &e)])),
             },
         }
     }
@@ -672,7 +688,7 @@ impl App {
         let l = self.loading.as_ref()?;
         let (done, total) = (l.done.load(Ordering::Relaxed), l.total.load(Ordering::Relaxed));
         let (line, frac) = loading_status(done, total);
-        Some((format!("Opening {}", name(&l.path)), line, frac))
+        Some((trf("Opening {name}", &[("name", &name(&l.path))]), line, frac))
     }
 
     /// The loading screen, when no library is open.
@@ -715,11 +731,11 @@ impl App {
 /// item folders read (`total` 0: still listing them).
 fn loading_status(done: usize, total: usize) -> (String, Option<f32>) {
     if total == 0 {
-        ("Reading the library…".to_string(), None)
+        (tr("Reading the library…").to_string(), None)
     } else if done >= total {
-        ("Almost there…".to_string(), Some(1.0))
+        (tr("Almost there…").to_string(), Some(1.0))
     } else {
-        (format!("Reading items: {done} of {total}"), Some(done as f32 / total as f32))
+        (trf("Reading items: {done} of {total}", &[("done", &done), ("total", &total)]), Some(done as f32 / total as f32))
     }
 }
 
@@ -733,12 +749,6 @@ mod tests {
         assert_eq!(loading_status(0, 0), ("Reading the library…".to_string(), None));
         assert_eq!(loading_status(50, 200), ("Reading items: 50 of 200".to_string(), Some(0.25)));
         assert_eq!(loading_status(200, 200).0, "Almost there…");
-    }
-
-    #[test]
-    fn plurals() {
-        assert_eq!(plural(1, "item"), "1 item");
-        assert_eq!(plural(0, "folder"), "0 folders");
     }
 
     #[test]
