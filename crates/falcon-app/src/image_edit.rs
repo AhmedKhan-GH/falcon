@@ -47,6 +47,8 @@ pub enum Op {
     RenameItems(Vec<(String, String)>),
     /// Make the copied picture (a file or image data) the item's thumbnail.
     ClipboardThumbnail(String),
+    /// Ask for a file, confirm, then make it the item's original.
+    ReplaceFile(String),
 }
 
 impl Op {
@@ -74,6 +76,7 @@ impl Op {
             Op::Pin(ids, _, false) => format!("Unpin {}", ids.len()),
             Op::RenameItems(v) => format!("Rename {} items", v.len()),
             Op::ClipboardThumbnail(_) => "Set custom thumbnail".into(),
+            Op::ReplaceFile(_) => "Replace with file".into(),
         }
     }
 }
@@ -142,6 +145,9 @@ impl App {
             if thumbnail::has_custom_thumbnail(item) && ui.button("Reset Thumbnail").clicked() {
                 self.ws.actions.push(Action::Edit(Op::ResetCustomThumbnail(item.id.clone())));
             }
+        }
+        if single && ui.button("Replace with File…").clicked() {
+            self.ws.actions.push(Action::Edit(Op::ReplaceFile(item.id.clone())));
         }
         let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::RefreshThumbnail);
         if ui.add(egui::Button::new("Refresh Thumbnail").shortcut_text(keys)).clicked() {
@@ -233,6 +239,26 @@ impl App {
                 r?;
                 self.ws.loader.forget(&id);
                 self.flash("Thumbnail set");
+                Ok(())
+            }
+            Op::ReplaceFile(id) => {
+                if self.local_only(lib, std::slice::from_ref(&id)).is_empty() {
+                    return Ok(());
+                }
+                let Some(path) = rfd::FileDialog::new().set_title("Replace with File").pick_file() else { return Ok(()) };
+                let file = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+                let answer = rfd::MessageDialog::new()
+                    .set_level(rfd::MessageLevel::Warning)
+                    .set_title("Replace with File")
+                    .set_description(format!("The item's file becomes a copy of “{file}”. Its name, tags, folders and notes stay; the current file is deleted."))
+                    .set_buttons(rfd::MessageButtons::OkCancelCustom("Replace".into(), "Cancel".into()))
+                    .show();
+                if !matches!(answer, rfd::MessageDialogResult::Custom(ref b) if b == "Replace") && answer != rfd::MessageDialogResult::Ok {
+                    return Ok(());
+                }
+                lib.replace_original(&id, &path)?;
+                self.ws.loader.forget(&id);
+                self.flash("File replaced");
                 Ok(())
             }
             Op::RenameItems(names) => {
