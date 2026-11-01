@@ -3,6 +3,7 @@
 use eframe::egui::{self, Align, ColorImage, Layout, RichText, TextureHandle, TextureOptions, vec2};
 
 use crate::app::App;
+use crate::locale::{tr, trf};
 use crate::theme as t;
 
 /// The About window: whether it is open, and the icon once loaded.
@@ -41,14 +42,14 @@ impl App {
                 }
                 ui.add_space(8.0);
                 ui.label(RichText::new("Falcon").size(20.0).color(t::p().text));
-                ui.label(RichText::new("Desktop asset manager for Eagle libraries").color(t::p().text_muted));
-                ui.label(RichText::new(format!("Version {}", env!("CARGO_PKG_VERSION"))).color(t::p().text_muted));
+                ui.label(RichText::new(tr("Desktop asset manager for Eagle libraries")).color(t::p().text_muted));
+                ui.label(RichText::new(trf("Version {version}", &[("version", &env!("CARGO_PKG_VERSION"))])).color(t::p().text_muted));
                 ui.add_space(14.0);
-                if ui.button("OK").clicked() {
+                if ui.button(tr("OK")).clicked() {
                     close = true;
                 }
                 ui.add_space(18.0);
-                ui.label(RichText::new("Licensed under MIT or Apache-2.0").size(11.0).color(t::p().text_muted));
+                ui.label(RichText::new(tr("Licensed under MIT or Apache-2.0")).size(11.0).color(t::p().text_muted));
             });
         });
         if close || modal.should_close() {

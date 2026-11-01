@@ -6,6 +6,8 @@
 //! stretched BLAKE3 digest, not in Eagle's reversible base64. It guards the
 //! window only: the library files stay readable, as they do with Eagle's.
 
+use crate::locale::tr_key;
+
 /// Hash rounds, so guessing a password costs more than one hash each.
 const ROUNDS: u32 = 20_000;
 
@@ -60,13 +62,13 @@ fn fresh_salt() -> String {
     h.finalize().to_hex()[..32].to_string()
 }
 
-/// Checks a new password typed twice.
+/// Checks a new password typed twice. The error is a key for `tr`.
 pub fn check_new(new: &str, again: &str) -> Result<(), &'static str> {
     if new.is_empty() {
-        return Err("Enter a password.");
+        return Err(tr_key("Enter a password."));
     }
     if new != again {
-        return Err("The passwords don't match.");
+        return Err(tr_key("The passwords don't match."));
     }
     Ok(())
 }

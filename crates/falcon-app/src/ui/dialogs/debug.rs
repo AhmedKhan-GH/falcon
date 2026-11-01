@@ -4,6 +4,7 @@
 use falcon_library::model::Folder;
 
 use crate::app::{App, lock};
+use crate::locale::{tr, trf};
 use crate::debug_report::{self as report, Info, LibraryInfo};
 
 fn count_folders(folders: &[Folder]) -> usize {
@@ -12,7 +13,7 @@ fn count_folders(folders: &[Folder]) -> usize {
 
 impl App {
     pub(crate) fn export_debug_report(&mut self, ctx: &eframe::egui::Context) {
-        let mut dialog = rfd::FileDialog::new().set_title("Export Debug Report").set_file_name("Falcon Debug Report.zip");
+        let mut dialog = rfd::FileDialog::new().set_title(tr("Export Debug Report")).set_file_name("Falcon Debug Report.zip");
         if let Some(desktop) = std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join("Desktop")) {
             dialog = dialog.set_directory(desktop);
         }
@@ -22,10 +23,10 @@ impl App {
         match report::export(&info, root.as_deref(), &dest) {
             Ok(()) => {
                 crate::open_with::reveal(&[dest]);
-                self.flash("Exported the debug report");
+                self.flash(tr("Exported the debug report"));
             }
             Err(e) => {
-                self.flash_error(format!("Could not export the debug report: {e}"));
+                self.flash_error(trf("Could not export the debug report: {error}", &[("error", &e)]));
             }
         }
     }

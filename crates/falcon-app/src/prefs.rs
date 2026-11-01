@@ -9,6 +9,7 @@ use std::ops::RangeInclusive;
 use eframe::egui::{self, Align2, Color32, CornerRadius, Key, Modifiers, RichText, Sense, Stroke, Ui, vec2};
 
 use crate::applock::{self, Secret};
+use crate::locale::{tr, tr_key, trf};
 use crate::logic::Scope;
 use crate::shortcuts::{Recorder, Shortcuts};
 use crate::theme::{self as t, Theme, font};
@@ -485,20 +486,20 @@ pub fn theme_to_restore(applied: Theme, shown: Theme) -> Option<Theme> {
 /// Why a first API port is unusable, if it is.
 pub fn port_error(first: u16) -> Option<String> {
     if first < 1024 {
-        return Some("Use a port of 1024 or higher".into());
+        return Some(tr("Use a port of 1024 or higher").to_string());
     }
     let Some(last) = first.checked_add(PORT_SPAN - 1) else {
-        return Some(format!("Use a port of {} or lower", u16::MAX - (PORT_SPAN - 1)));
+        return Some(trf("Use a port of {port} or lower", &[("port", &(u16::MAX - (PORT_SPAN - 1)))]));
     };
     if (first..=last).contains(&EAGLE_PORT) {
-        return Some(format!("{first}–{last} would include Eagle's port {EAGLE_PORT}"));
+        return Some(trf("{first}–{last} would include Eagle's port {port}", &[("first", &first), ("last", &last), ("port", &EAGLE_PORT)]));
     }
     None
 }
 
 /// Parses the port field.
 pub fn parse_port(text: &str) -> Result<u16, String> {
-    let p: u16 = text.trim().parse().map_err(|_| "Enter a number from 1024 to 65531".to_string())?;
+    let p: u16 = text.trim().parse().map_err(|_| tr("Enter a number from 1024 to 65531").to_string())?;
     match port_error(p) {
         Some(e) => Err(e),
         None => Ok(p),
@@ -551,17 +552,18 @@ impl Section {
         Section::Developer,
     ];
 
+    /// The English name, a key for `tr` (also what the search matches).
     pub fn label(self) -> &'static str {
         match self {
-            Section::General => "General",
-            Section::Sidebar => "Sidebar",
-            Section::Controls => "Controls",
-            Section::Preview => "Preview",
-            Section::Shortcuts => "Shortcuts",
-            Section::Notification => "Notification",
-            Section::Password => "Password",
-            Section::AutoImport => "Auto-Import",
-            Section::Developer => "Developer",
+            Section::General => tr_key("General"),
+            Section::Sidebar => tr_key("Sidebar"),
+            Section::Controls => tr_key("Controls"),
+            Section::Preview => tr_key("Preview"),
+            Section::Shortcuts => tr_key("Shortcuts"),
+            Section::Notification => tr_key("Notification"),
+            Section::Password => tr_key("Password"),
+            Section::AutoImport => tr_key("Auto-Import"),
+            Section::Developer => tr_key("Developer"),
         }
     }
 
@@ -651,7 +653,8 @@ impl Page<'_> {
 
     /// Draws a titled block of settings if it matches the search.
     pub fn block(&mut self, title: &str, keywords: &[&str], add: impl FnOnce(&mut Ui)) {
-        let mut fields = vec![self.pane.label(), title];
+        let shown = tr(title);
+        let mut fields = vec![self.pane.label(), tr(self.pane.label()), title, shown];
         fields.extend_from_slice(keywords);
         if !matches(&self.query, &fields) {
             return;
@@ -659,12 +662,12 @@ impl Page<'_> {
         if self.searching() && !self.headed {
             self.headed = true;
             self.ui.add_space(if self.hits == 0 { 4.0 } else { 8.0 });
-            self.ui.label(RichText::new(self.pane.label().to_uppercase()).size(11.0).color(t::p().text_muted));
+            self.ui.label(RichText::new(tr(self.pane.label()).to_uppercase()).size(11.0).color(t::p().text_muted));
         }
         self.hits += 1;
         let ui = &mut *self.ui;
         ui.add_space(4.0);
-        ui.label(RichText::new(title).strong().size(13.0));
+        ui.label(RichText::new(shown).strong().size(13.0));
         ui.add_space(2.0);
         ui.indent(title, add);
         ui.add_space(10.0);
@@ -732,7 +735,7 @@ impl Window {
             let inner = body.shrink2(vec2(0.0, 8.0)).with_max_x(body.right() - 8.0);
             ui.painter().rect(inner, CornerRadius::same(8), t::p().main, Stroke::new(1.0, t::p().divider), egui::StrokeKind::Inside);
             let header = egui::Rect::from_min_size(inner.min, vec2(inner.width(), t::BAR_HEIGHT));
-            let heading = if searching { "Search" } else { self.section.label() };
+            let heading = if searching { tr("Search") } else { tr(self.section.label()) };
             ui.painter().text(header.left_center() + vec2(16.0, 0.0), Align2::LEFT_CENTER, heading, font(14.0), t::p().text);
             let x = egui::Rect::from_center_size(header.right_center() - vec2(24.0, 0.0), vec2(24.0, 24.0));
             let xr = ui.interact(x, ui.scope_id().with("close"), Sense::click());
@@ -759,8 +762,8 @@ impl Window {
                 if searching && hits == 0 {
                     ui.add_space(40.0);
                     ui.vertical_centered(|ui| {
-                        ui.label(RichText::new("No settings match").size(14.0).color(t::p().text));
-                        note(ui, "Try another word, or clear the search to browse the panes.");
+                        ui.label(RichText::new(tr("No settings match")).size(14.0).color(t::p().text));
+                        note(ui, tr("Try another word, or clear the search to browse the panes."));
                     });
                 }
                 goto
@@ -773,9 +776,9 @@ impl Window {
             ui.painter().hline(footer.x_range(), footer.top(), Stroke::new(1.0, t::p().divider));
             let mut f = ui.new_child(egui::UiBuilder::new().max_rect(footer.shrink2(vec2(16.0, 10.0))).layout(egui::Layout::right_to_left(egui::Align::Center)));
             let valid = port.is_ok();
-            let save = f.add_enabled(valid, egui::Button::new(RichText::new("Save").color(Color32::WHITE)).fill(t::p().primary)).clicked();
-            let apply = f.add_enabled(valid, egui::Button::new("Apply")).clicked();
-            close |= f.button("Cancel").clicked();
+            let save = f.add_enabled(valid, egui::Button::new(RichText::new(tr("Save")).color(Color32::WHITE)).fill(t::p().primary)).clicked();
+            let apply = f.add_enabled(valid, egui::Button::new(tr("Apply"))).clicked();
+            close |= f.button(tr("Cancel")).clicked();
             if (save || apply || (save_key && valid))
                 && let Ok(p) = port
             {
@@ -819,8 +822,8 @@ impl Window {
         if p.searching() {
             // The shortcut list has its own search, in its pane.
             let mut go = false;
-            p.block("Keyboard shortcuts", &["keys", "hotkey", "chord", "key bindings"], |ui| {
-                go = ui.button("Show the Shortcuts pane").clicked();
+            p.block(tr_key("Keyboard shortcuts"), &["keys", "hotkey", "chord", "key bindings"], |ui| {
+                go = ui.button(tr("Show the Shortcuts pane")).clicked();
             });
             if go {
                 p.goto = Some(Section::Shortcuts);
@@ -832,10 +835,10 @@ impl Window {
 
     fn nav(&mut self, ui: &mut Ui) {
         let (title, _) = ui.allocate_exact_size(vec2(ui.available_width(), t::BAR_HEIGHT), Sense::hover());
-        ui.painter().text(title.left_center(), Align2::LEFT_CENTER, "Preferences", font(14.0), t::p().text);
+        ui.painter().text(title.left_center(), Align2::LEFT_CENTER, tr("Preferences"), font(14.0), t::p().text);
         let search = ui.add(
             egui::TextEdit::singleline(&mut self.query)
-                .hint_text(RichText::new(format!("{}  Search", crate::icons::MAGNIFYING_GLASS)).color(t::p().text_muted))
+                .hint_text(RichText::new(format!("{}  {}", crate::icons::MAGNIFYING_GLASS, tr("Search"))).color(t::p().text_muted))
                 .desired_width(f32::INFINITY),
         );
         if search.changed() {
@@ -860,7 +863,7 @@ impl Window {
             };
             ui.painter().rect_filled(rect, CornerRadius::same(6), fill);
             ui.painter().text(rect.left_center() + vec2(14.0, 0.0), Align2::CENTER_CENTER, s.icon(), font(15.0), t::p().text);
-            ui.painter().text(rect.left_center() + vec2(30.0, 0.0), Align2::LEFT_CENTER, s.label(), font(13.0), t::p().text);
+            ui.painter().text(rect.left_center() + vec2(30.0, 0.0), Align2::LEFT_CENTER, tr(s.label()), font(13.0), t::p().text);
             if resp.clicked() {
                 self.section = s;
                 self.query.clear();
@@ -877,7 +880,7 @@ fn note(ui: &mut Ui, text: &str) {
 /// General: appearance, the window, and how imports behave.
 fn general(p: &mut Page, d: &mut Draft) {
     let keywords = ["theme", "colour", "color", "dark", "light", "gray", "blue", "purple", "auto", "zoom", "size", "scale", "interface", "counts", "badge", "sidebar", "numbers"];
-    p.block("Appearance", &keywords, |ui| {
+    p.block(tr_key("Appearance"), &keywords, |ui| {
         ui.horizontal(|ui| {
             for theme in Theme::all() {
                 if ui.selectable_value(&mut d.prefs.theme, theme, theme.to_string()).changed() {
@@ -888,7 +891,7 @@ fn general(p: &mut Page, d: &mut Draft) {
         });
         ui.add_space(4.0);
         ui.horizontal(|ui| {
-            ui.label("Interface zoom");
+            ui.label(tr("Interface zoom"));
             let before = d.prefs.ui_zoom;
             egui::ComboBox::from_id_salt("ui-zoom").selected_text(format!("{}%", d.prefs.ui_zoom)).show_ui(ui, |ui| {
                 for z in ZOOM_STEPS {
@@ -900,9 +903,9 @@ fn general(p: &mut Page, d: &mut Draft) {
                 ui.ctx().set_zoom_factor(zoom_factor(d.prefs.ui_zoom));
             }
         });
-        ui.checkbox(&mut d.prefs.sidebar_counts, "Show item counts in the sidebar");
+        ui.checkbox(&mut d.prefs.sidebar_counts, tr("Show item counts in the sidebar"));
     });
-    p.block(crate::locale::tr("Language"), &["language", "locale", "translation", "english", "chinese", "japanese", "korean", "german", "spanish", "russian"], |ui| {
+    p.block(tr_key("Language"), &["language", "locale", "translation", "english", "chinese", "japanese", "korean", "german", "spanish", "russian"], |ui| {
         let before = d.prefs.language;
         egui::ComboBox::from_id_salt("language").selected_text(d.prefs.language.label()).show_ui(ui, |ui| {
             for l in crate::locale::Language::all() {
@@ -916,123 +919,123 @@ fn general(p: &mut Page, d: &mut Draft) {
             crate::locale::set(lang);
         }
     });
-    p.block("Window", &["sidebar", "inspector", "panel", "show"], |ui| {
-        ui.checkbox(&mut d.panels.sidebar, "Show the sidebar");
-        ui.checkbox(&mut d.panels.inspector, "Show the inspector");
+    p.block(tr_key("Window"), &["sidebar", "inspector", "panel", "show"], |ui| {
+        ui.checkbox(&mut d.panels.sidebar, tr("Show the sidebar"));
+        ui.checkbox(&mut d.panels.inspector, tr("Show the inspector"));
     });
-    p.block("Importing", &["import", "collect", "keywords", "iptc", "xmp", "tags", "duplicate", "already", "select", "new items"], |ui| {
-        ui.checkbox(&mut d.prefs.auto_select, "Select the new items after importing");
-        ui.checkbox(&mut d.prefs.notify_duplicates, "Ask what to do when an imported file is already in the library");
-        note(ui, "When off, such files are imported as new items.");
-        ui.checkbox(&mut d.prefs.keywords_as_tags, "Add IPTC and XMP keywords as tags when importing images");
+    p.block(tr_key("Importing"), &["import", "collect", "keywords", "iptc", "xmp", "tags", "duplicate", "already", "select", "new items"], |ui| {
+        ui.checkbox(&mut d.prefs.auto_select, tr("Select the new items after importing"));
+        ui.checkbox(&mut d.prefs.notify_duplicates, tr("Ask what to do when an imported file is already in the library"));
+        note(ui, tr("When off, such files are imported as new items."));
+        ui.checkbox(&mut d.prefs.keywords_as_tags, tr("Add IPTC and XMP keywords as tags when importing images"));
     });
 }
 
 /// Sidebar: what double-clicking does, and which sections are shown.
 fn sidebar(p: &mut Page, d: &mut Draft) {
-    p.block("Double-clicking a folder", &["double click", "rename", "expand", "collapse", "folder"], |ui| {
-        ui.radio_value(&mut d.prefs.sidebar_double_click, SidebarDoubleClick::Rename, "Renames it");
-        ui.radio_value(&mut d.prefs.sidebar_double_click, SidebarDoubleClick::Collapse, "Expands or collapses it");
+    p.block(tr_key("Double-clicking a folder"), &["double click", "rename", "expand", "collapse", "folder"], |ui| {
+        ui.radio_value(&mut d.prefs.sidebar_double_click, SidebarDoubleClick::Rename, tr("Renames it"));
+        ui.radio_value(&mut d.prefs.sidebar_double_click, SidebarDoubleClick::Collapse, tr("Expands or collapses it"));
     });
     let keywords = ["sections", "show", "hide", "uncategorized", "untagged", "recently used", "random", "quick access", "smart folders", "folders"];
-    p.block("Sections", &keywords, |ui| {
+    p.block(tr_key("Sections"), &keywords, |ui| {
         let s = &mut d.prefs.sidebar;
-        ui.checkbox(&mut s.uncategorized, "Uncategorized");
-        ui.checkbox(&mut s.untagged, "Untagged");
-        ui.checkbox(&mut s.recent, "Recently Used");
-        ui.checkbox(&mut s.random, "Random");
-        ui.checkbox(&mut s.quick_access, "Quick Access");
-        ui.checkbox(&mut s.smart_folders, "Smart Folders");
-        ui.checkbox(&mut s.folders, "Folders");
+        ui.checkbox(&mut s.uncategorized, tr("Uncategorized"));
+        ui.checkbox(&mut s.untagged, tr("Untagged"));
+        ui.checkbox(&mut s.recent, tr("Recently Used"));
+        ui.checkbox(&mut s.random, tr("Random"));
+        ui.checkbox(&mut s.quick_access, tr("Quick Access"));
+        ui.checkbox(&mut s.smart_folders, tr("Smart Folders"));
+        ui.checkbox(&mut s.folders, tr("Folders"));
     });
 }
 
 /// Controls: what the mouse and the keyboard do.
 fn controls(p: &mut Page, d: &mut Draft) {
-    p.block("Mouse", &["hover", "zoom button", "cards", "double click", "open", "default app", "wheel", "scroll", "middle", "new window"], |ui| {
-        ui.label("Zoom button on hovered cards");
-        ui.radio_value(&mut d.prefs.hover_zoom, true, "Show");
-        ui.radio_value(&mut d.prefs.hover_zoom, false, "Hide");
-        note(ui, "Holding Z shows the preview either way.");
+    p.block(tr_key("Mouse"), &["hover", "zoom button", "cards", "double click", "open", "default app", "wheel", "scroll", "middle", "new window"], |ui| {
+        ui.label(tr("Zoom button on hovered cards"));
+        ui.radio_value(&mut d.prefs.hover_zoom, true, tr("Show"));
+        ui.radio_value(&mut d.prefs.hover_zoom, false, tr("Hide"));
+        note(ui, tr("Holding Z shows the preview either way."));
         ui.add_space(6.0);
-        ui.label("Double-clicking an item");
-        ui.radio_value(&mut d.prefs.double_click, DoubleClick::Viewer, "Opens it in falcon");
-        ui.radio_value(&mut d.prefs.double_click, DoubleClick::External, "Opens it in its default app");
+        ui.label(tr("Double-clicking an item"));
+        ui.radio_value(&mut d.prefs.double_click, DoubleClick::Viewer, tr("Opens it in falcon"));
+        ui.radio_value(&mut d.prefs.double_click, DoubleClick::External, tr("Opens it in its default app"));
         ui.add_space(6.0);
         use crate::logic::WheelMode;
-        ui.label("The wheel over an image in the viewer");
-        ui.radio_value(&mut d.prefs.viewer_wheel, WheelMode::Scroll, "Scrolls it");
-        ui.radio_value(&mut d.prefs.viewer_wheel, WheelMode::Zoom, "Zooms it");
-        ui.radio_value(&mut d.prefs.viewer_wheel, WheelMode::Paging, "Goes to the previous or next item");
-        note(ui, "With ⌘, ⌃ or ⌥, or a pinch, it zooms either way.");
+        ui.label(tr("The wheel over an image in the viewer"));
+        ui.radio_value(&mut d.prefs.viewer_wheel, WheelMode::Scroll, tr("Scrolls it"));
+        ui.radio_value(&mut d.prefs.viewer_wheel, WheelMode::Zoom, tr("Zooms it"));
+        ui.radio_value(&mut d.prefs.viewer_wheel, WheelMode::Paging, tr("Goes to the previous or next item"));
+        note(ui, tr("With ⌘, ⌃ or ⌥, or a pinch, it zooms either way."));
         ui.add_space(6.0);
-        ui.label("The wheel button on an item");
-        ui.radio_value(&mut d.prefs.middle_button, MiddleButton::NewWindow, "Opens it in a new window");
-        ui.radio_value(&mut d.prefs.middle_button, MiddleButton::Nothing, "Does nothing");
-        note(ui, "Audio files never open in a new window. In the viewer it enters or leaves presentation mode either way.");
+        ui.label(tr("The wheel button on an item"));
+        ui.radio_value(&mut d.prefs.middle_button, MiddleButton::NewWindow, tr("Opens it in a new window"));
+        ui.radio_value(&mut d.prefs.middle_button, MiddleButton::Nothing, tr("Does nothing"));
+        note(ui, tr("Audio files never open in a new window. In the viewer it enters or leaves presentation mode either way."));
     });
-    p.block("Keyboard", &["space", "spacebar", "preview", "quick look", "scroll"], |ui| {
-        ui.label("Space in the grid");
-        ui.radio_value(&mut d.prefs.space, SpaceKey::Preview, "Opens the viewer");
+    p.block(tr_key("Keyboard"), &["space", "spacebar", "preview", "quick look", "scroll"], |ui| {
+        ui.label(tr("Space in the grid"));
+        ui.radio_value(&mut d.prefs.space, SpaceKey::Preview, tr("Opens the viewer"));
         if cfg!(target_os = "macos") {
-            ui.radio_value(&mut d.prefs.space, SpaceKey::QuickLook, "Shows Quick Look");
+            ui.radio_value(&mut d.prefs.space, SpaceKey::QuickLook, tr("Shows Quick Look"));
         }
-        ui.radio_value(&mut d.prefs.space, SpaceKey::Scroll, "Scrolls down a page");
-        note(ui, "In the viewer Space still closes it, or plays and pauses media.");
+        ui.radio_value(&mut d.prefs.space, SpaceKey::Scroll, tr("Scrolls down a page"));
+        note(ui, tr("In the viewer Space still closes it, or plays and pauses media."));
     });
 }
 
 /// Preview: how the viewer shows each kind of file. Eagle's order is
 /// image, video, GIF, then fonts.
 fn preview(p: &mut Page, d: &mut Draft) {
-    p.block("Image", &["image", "zoom", "actual size", "fit", "pixel", "pixelated", "smooth", "remember", "last", "transparency", "checkerboard", "grid", "rotate", "flip", "mirror"], |ui| {
-        ui.checkbox(&mut d.prefs.open_actual_size, "Open images at actual size instead of fitting them to the window");
-        ui.checkbox(&mut d.prefs.pixelated, "Show sharp pixels when an image is enlarged");
-        ui.checkbox(&mut d.prefs.remember_zoom, "Reopen an image at the zoom and position it was left at");
-        ui.checkbox(&mut d.prefs.transparency_grid, "Show a checkerboard behind transparent areas");
+    p.block(tr_key("Image"), &["image", "zoom", "actual size", "fit", "pixel", "pixelated", "smooth", "remember", "last", "transparency", "checkerboard", "grid", "rotate", "flip", "mirror"], |ui| {
+        ui.checkbox(&mut d.prefs.open_actual_size, tr("Open images at actual size instead of fitting them to the window"));
+        ui.checkbox(&mut d.prefs.pixelated, tr("Show sharp pixels when an image is enlarged"));
+        ui.checkbox(&mut d.prefs.remember_zoom, tr("Reopen an image at the zoom and position it was left at"));
+        ui.checkbox(&mut d.prefs.transparency_grid, tr("Show a checkerboard behind transparent areas"));
         ui.add_space(4.0);
-        ui.label("Rotating and flipping the image in the viewer");
-        ui.radio_value(&mut d.prefs.rotate_mode, RotateMode::Write, "Writes to the file");
-        ui.radio_value(&mut d.prefs.rotate_mode, RotateMode::Preview, "Changes the preview only");
-        note(ui, "The card menu in the grid always writes to the file.");
+        ui.label(tr("Rotating and flipping the image in the viewer"));
+        ui.radio_value(&mut d.prefs.rotate_mode, RotateMode::Write, tr("Writes to the file"));
+        ui.radio_value(&mut d.prefs.rotate_mode, RotateMode::Preview, tr("Changes the preview only"));
+        note(ui, tr("The card menu in the grid always writes to the file."));
     });
     let keywords = ["video", "movie", "wheel", "scroll", "progress", "volume", "stretch", "fill", "autoplay", "play", "position", "resume", "loop", "short", "hover", "preview", "scrub"];
-    p.block("Video", &keywords, |ui| {
+    p.block(tr_key("Video"), &keywords, |ui| {
         let v = &mut d.prefs;
-        ui.label("Scrolling over a video");
-        ui.radio_value(&mut v.video_scroll, VideoScroll::Progress, "Moves through it");
-        ui.radio_value(&mut v.video_scroll, VideoScroll::Volume, "Changes the volume");
+        ui.label(tr("Scrolling over a video"));
+        ui.radio_value(&mut v.video_scroll, VideoScroll::Progress, tr("Moves through it"));
+        ui.radio_value(&mut v.video_scroll, VideoScroll::Volume, tr("Changes the volume"));
         ui.add_space(4.0);
-        ui.checkbox(&mut v.video_fill, "Stretch videos to fill the viewer");
-        ui.checkbox(&mut v.video_autoplay, "Play videos when they open");
-        ui.checkbox(&mut v.video_resume, "Resume where each video was left");
-        ui.checkbox(&mut v.video_loop_short, "Always loop clips of 30 seconds or less");
-        ui.checkbox(&mut v.video_hover, "Play a preview on hovered video cards");
-        note(ui, "Moving the pointer across the card moves through the clip.");
+        ui.checkbox(&mut v.video_fill, tr("Stretch videos to fill the viewer"));
+        ui.checkbox(&mut v.video_autoplay, tr("Play videos when they open"));
+        ui.checkbox(&mut v.video_resume, tr("Resume where each video was left"));
+        ui.checkbox(&mut v.video_loop_short, tr("Always loop clips of 30 seconds or less"));
+        ui.checkbox(&mut v.video_hover, tr("Play a preview on hovered video cards"));
+        note(ui, tr("Moving the pointer across the card moves through the clip."));
     });
-    p.block("GIF", &["gif", "player", "frame", "animation", "autoplay", "hover", "webp", "avif"], |ui| {
-        ui.checkbox(&mut d.prefs.always_play_animated, "Always play GIFs and animated WebPs and AVIFs in the grid");
-        ui.checkbox(&mut d.prefs.gif_player, "Always use the frame-by-frame player for GIFs");
-        note(ui, "Cards play while hovered either way; hold ⌥ to keep one still.");
+    p.block(tr_key("GIF"), &["gif", "player", "frame", "animation", "autoplay", "hover", "webp", "avif"], |ui| {
+        ui.checkbox(&mut d.prefs.always_play_animated, tr("Always play GIFs and animated WebPs and AVIFs in the grid"));
+        ui.checkbox(&mut d.prefs.gif_player, tr("Always use the frame-by-frame player for GIFs"));
+        note(ui, tr("Cards play while hovered either way; hold ⌥ to keep one still."));
     });
-    p.block("Fonts", &["font", "style", "regular", "bold", "italic", "tags", "import"], |ui| {
-        ui.checkbox(&mut d.prefs.font_style_tags, "Add style tags (Regular, Bold, Italic) when importing fonts");
+    p.block(tr_key("Fonts"), &["font", "style", "regular", "bold", "italic", "tags", "import"], |ui| {
+        ui.checkbox(&mut d.prefs.font_style_tags, tr("Add style tags (Regular, Bold, Italic) when importing fonts"));
     });
 }
 
 /// Notification: which notices falcon shows.
 fn notification(p: &mut Page, d: &mut Draft) {
-    p.block("Pop-ups", &["notice", "notification", "pop-up", "duplicate", "already", "import", "added", "finished", "auto-import", "watched"], |ui| {
+    p.block(tr_key("Pop-ups"), &["notice", "notification", "pop-up", "duplicate", "already", "import", "added", "finished", "auto-import", "watched"], |ui| {
         let n = &mut d.prefs;
-        ui.checkbox(&mut n.notifications, "Show notices");
+        ui.checkbox(&mut n.notifications, tr("Show notices"));
         ui.add_enabled_ui(n.notifications, |ui| {
             ui.indent("notices", |ui| {
-                ui.checkbox(&mut n.notify_duplicates, "Ask what to do when an imported file is already in the library");
-                ui.checkbox(&mut n.notify_import_done, "Say how many items an import added");
-                ui.checkbox(&mut n.notify_auto_import, "Say when files from the auto-import folder start importing");
+                ui.checkbox(&mut n.notify_duplicates, tr("Ask what to do when an imported file is already in the library"));
+                ui.checkbox(&mut n.notify_import_done, tr("Say how many items an import added"));
+                ui.checkbox(&mut n.notify_auto_import, tr("Say when files from the auto-import folder start importing"));
             });
         });
-        note(ui, "Import failures are always reported. falcon plays no sound effects.");
+        note(ui, tr("Import failures are always reported. falcon plays no sound effects."));
     });
 }
 
@@ -1140,7 +1143,7 @@ struct PasswordForm {
 fn submit_password(form: &PasswordForm, current: Option<&Secret>) -> Result<Option<Secret>, &'static str> {
     let Some(mode) = form.mode else { return Ok(current.cloned()) };
     if mode != PasswordMode::Set && !current.is_some_and(|s| s.matches(&form.old)) {
-        return Err(if mode == PasswordMode::Remove { "The password is wrong." } else { "The old password is wrong." });
+        return Err(if mode == PasswordMode::Remove { tr_key("The password is wrong.") } else { tr_key("The old password is wrong.") });
     }
     if mode == PasswordMode::Remove {
         return Ok(None);
@@ -1176,27 +1179,27 @@ fn touch_id_switch(ui: &mut Ui, d: &mut Draft, form: &mut PasswordForm) {
 /// Password: lock falcon behind a password.
 fn password(p: &mut Page, d: &mut Draft, form: &mut PasswordForm) {
     let keywords = ["password", "lock", "privacy", "security", "launch", "hint"];
-    p.block("App password", &keywords, |ui| {
+    p.block(tr_key("App password"), &keywords, |ui| {
         let set = d.prefs.app_lock.is_some();
         if !set {
             let mut on = form.mode == Some(PasswordMode::Set);
-            if ui.checkbox(&mut on, "Lock falcon with a password").changed() {
+            if ui.checkbox(&mut on, tr("Lock falcon with a password")).changed() {
                 *form = PasswordForm { mode: on.then_some(PasswordMode::Set), ..Default::default() };
             }
         } else if form.mode.is_none() {
-            ui.label("falcon asks for its password when it opens, and after Lock Now (⌥⌘L).");
+            ui.label(tr("falcon asks for its password when it opens, and after Lock Now (⌥⌘L)."));
             ui.horizontal(|ui| {
-                if ui.button("Change Password…").clicked() {
+                if ui.button(tr("Change Password…")).clicked() {
                     *form = PasswordForm { mode: Some(PasswordMode::Change), hint: d.prefs.app_lock.as_ref().map(|s| s.hint.clone()).unwrap_or_default(), ..Default::default() };
                 }
-                if ui.button("Remove Password…").clicked() {
+                if ui.button(tr("Remove Password…")).clicked() {
                     *form = PasswordForm { mode: Some(PasswordMode::Remove), ..Default::default() };
                 }
             });
             touch_id_switch(ui, d, form);
         }
         let Some(mode) = form.mode else {
-            note(ui, "The password guards this window only; it is kept in falcon's settings, not in the library.");
+            note(ui, tr("The password guards this window only; it is kept in falcon's settings, not in the library."));
             return;
         };
         ui.add_space(4.0);
@@ -1207,21 +1210,21 @@ fn password(p: &mut Page, d: &mut Draft, form: &mut PasswordForm) {
             });
         };
         if mode != PasswordMode::Set {
-            field(ui, if mode == PasswordMode::Remove { "Password" } else { "Old password" }, &mut form.old, true);
+            field(ui, if mode == PasswordMode::Remove { tr("Password") } else { tr("Old password") }, &mut form.old, true);
         }
         if mode != PasswordMode::Remove {
-            field(ui, "New password", &mut form.new, true);
-            field(ui, "Again", &mut form.again, true);
-            field(ui, "Hint (optional)", &mut form.hint, false);
+            field(ui, tr("New password"), &mut form.new, true);
+            field(ui, tr("Again"), &mut form.again, true);
+            field(ui, tr("Hint (optional)"), &mut form.hint, false);
         }
         if let Some(e) = form.error {
-            ui.label(RichText::new(e).size(11.0).color(t::p().icon_red));
+            ui.label(RichText::new(tr(e)).size(11.0).color(t::p().icon_red));
         }
         ui.horizontal(|ui| {
             let label = match mode {
-                PasswordMode::Set => "Set Password",
-                PasswordMode::Change => "Change Password",
-                PasswordMode::Remove => "Remove Password",
+                PasswordMode::Set => tr("Set Password"),
+                PasswordMode::Change => tr("Change Password"),
+                PasswordMode::Remove => tr("Remove Password"),
             };
             if ui.button(label).clicked() {
                 match submit_password(form, d.prefs.app_lock.as_ref()) {
@@ -1232,11 +1235,11 @@ fn password(p: &mut Page, d: &mut Draft, form: &mut PasswordForm) {
                     Err(e) => form.error = Some(e),
                 }
             }
-            if mode != PasswordMode::Set && ui.button("Cancel").clicked() {
+            if mode != PasswordMode::Set && ui.button(tr("Cancel")).clicked() {
                 *form = PasswordForm::default();
             }
         });
-        note(ui, "Takes effect when you Save or Apply.");
+        note(ui, tr("Takes effect when you Save or Apply."));
     });
 }
 

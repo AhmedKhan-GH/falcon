@@ -10,6 +10,7 @@ use eframe::egui::{self, Align2, Color32, CornerRadius, Pos2, Rect, Sense, Strok
 use falcon_library::import::ImportOptions;
 use falcon_library::model::Folder;
 
+use crate::locale::{tr, tr_nf, trf};
 use crate::shortcuts::{Command, Shortcuts};
 use crate::theme::{self as t, font};
 
@@ -263,7 +264,7 @@ impl Collect {
     /// Returns what was dropped or pasted on it.
     pub fn show(&mut self, ctx: &egui::Context, folders: Option<&[FolderRow]>, state: &mut State, pool: &TagPool, keys: &Shortcuts) -> Option<Event> {
         let mut builder = egui::ViewportBuilder::default()
-            .with_title("Collect")
+            .with_title(tr("Collect"))
             .with_inner_size(SIZE)
             .with_resizable(false)
             .with_decorations(false)
@@ -310,7 +311,7 @@ impl Collect {
         if drag.drag_started() {
             ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
         }
-        p.text(header.left_center() + vec2(14.0, 0.0), Align2::LEFT_CENTER, "Collect", font(13.0), t::p().text);
+        p.text(header.left_center() + vec2(14.0, 0.0), Align2::LEFT_CENTER, tr("Collect"), font(13.0), t::p().text);
         let x = Rect::from_center_size(header.right_center() - vec2(20.0, 0.0), vec2(22.0, 22.0));
         let xr = ui.interact(x, ui.scope_id().with("close"), Sense::click());
         if xr.hovered() {
@@ -326,7 +327,7 @@ impl Collect {
         let (fill, edge) = if hovering { (t::p().primary.gamma_multiply(0.15), t::p().primary) } else { (t::p().main, t::p().guide) };
         p.rect(zone, CornerRadius::same(8), fill, Stroke::new(1.0, edge), egui::StrokeKind::Inside);
         let enabled = folders.is_some();
-        let (line1, line2) = if enabled { ("Drop files here", "or paste with ⌘V") } else { ("No library open", "") };
+        let (line1, line2) = if enabled { (tr("Drop files here"), tr("or paste with ⌘V")) } else { (tr("No library open"), "") };
         p.text(zone.center() - vec2(0.0, 20.0), Align2::CENTER_CENTER, crate::icons::TRAY_ARROW_DOWN, font(22.0), if hovering { t::p().primary } else { t::p().text_muted });
         p.text(zone.center() + vec2(0.0, 6.0), Align2::CENTER_CENTER, line1, font(13.0), t::p().text);
         p.text(zone.center() + vec2(0.0, 24.0), Align2::CENTER_CENTER, line2, font(11.5), t::p().text_muted);
@@ -336,20 +337,20 @@ impl Collect {
         let area = Rect::from_min_max(Pos2::new(full.left() + 12.0, zone.bottom() + 8.0), Pos2::new(full.right() - 12.0, full.bottom() - status_h));
         let mut c = ui.new_child(egui::UiBuilder::new().max_rect(area));
         let muted = |s: &str| egui::RichText::new(s.to_string()).size(12.0).color(t::p().text_muted);
-        c.label(muted("Name"));
-        c.add(egui::TextEdit::singleline(&mut self.meta.name).hint_text("Used when one file is collected").desired_width(f32::INFINITY));
+        c.label(muted(tr("Name")));
+        c.add(egui::TextEdit::singleline(&mut self.meta.name).hint_text(tr("Used when one file is collected")).desired_width(f32::INFINITY));
         c.add_space(4.0);
-        c.label(muted("Description"));
+        c.label(muted(tr("Description")));
         c.add(egui::TextEdit::multiline(&mut self.meta.description).desired_rows(2).desired_width(f32::INFINITY));
         c.add_space(4.0);
-        c.label(muted("Tags"));
+        c.label(muted(tr("Tags")));
         self.tag_editor(&mut c, pool);
         c.add_space(6.0);
 
         let mut event = None;
-        c.label(muted("Save to"));
+        c.label(muted(tr("Save to")));
         if let Some(rows) = folders {
-            let search = c.add(egui::TextEdit::singleline(&mut self.filter).hint_text("Search folders").desired_width(f32::INFINITY));
+            let search = c.add(egui::TextEdit::singleline(&mut self.filter).hint_text(tr("Search folders")).desired_width(f32::INFINITY));
             c.add_space(4.0);
             let list = lines(rows, state.selected, state.recent, &self.filter);
             if search.lost_focus() && c.input(|i| i.key_pressed(egui::Key::Enter)) {
@@ -362,7 +363,7 @@ impl Collect {
                 for line in &list {
                     match line {
                         Line::NoFolder => {
-                            if folder_row(ui, "No folder", 0, state.selected.is_empty(), false).clicked() {
+                            if folder_row(ui, tr("No folder"), 0, state.selected.is_empty(), false).clicked() {
                                 state.selected.clear();
                             }
                         }
@@ -373,7 +374,7 @@ impl Collect {
                                 toggle_folder(state.selected, &r.id, additive);
                             }
                             resp.context_menu(|ui| {
-                                if ui.button("Remove from Recent").clicked() {
+                                if ui.button(tr("Remove from Recent")).clicked() {
                                     remove = Some(r.id.clone());
                                     ui.close();
                                 }
@@ -392,7 +393,7 @@ impl Collect {
                             }
                         }
                         Line::Create(name) => {
-                            if folder_row(ui, &format!("New Folder “{name}”"), 0, false, false).clicked() {
+                            if folder_row(ui, &trf("New Folder “{name}”", &[("name", name)]), 0, false, false).clicked() {
                                 event = Some(Event::CreateFolder(name.clone()));
                             }
                         }
@@ -422,18 +423,33 @@ impl Collect {
             return event;
         }
         let chosen = target(rows, state.selected);
-        let name = match chosen.as_slice() {
-            [] => "the library".to_string(),
-            [one] => rows.iter().find(|r| r.id == *one).map_or_else(String::new, |r| r.name.clone()),
-            many => format!("{} folders", many.len()),
+        enum Target {
+            Library,
+            Folder(String),
+            Folders(usize),
+        }
+        let dest = match chosen.as_slice() {
+            [] => Target::Library,
+            [one] => Target::Folder(rows.iter().find(|r| r.id == *one).map_or_else(String::new, |r| r.name.clone())),
+            many => Target::Folders(many.len()),
         };
         if !dropped.is_empty() {
             let n = dropped.len();
-            self.status = Some((format!("Adding {n} item{} to {name}", if n == 1 { "" } else { "s" }), now));
+            let msg = match &dest {
+                Target::Library => tr_nf(n, "Adding {n} item to the library", "Adding {n} items to the library", &[]),
+                Target::Folder(f) => tr_nf(n, "Adding {n} item to {folder}", "Adding {n} items to {folder}", &[("folder", f)]),
+                Target::Folders(c) => tr_nf(n, "Adding {n} item to {count} folders", "Adding {n} items to {count} folders", &[("count", c)]),
+            };
+            self.status = Some((msg, now));
             return Some(Event::Files(dropped));
         }
         if pasted && !typing {
-            self.status = Some((format!("Pasting into {name}"), now));
+            let msg = match &dest {
+                Target::Library => tr("Pasting into the library").to_string(),
+                Target::Folder(f) => trf("Pasting into {folder}", &[("folder", f)]),
+                Target::Folders(c) => trf("Pasting into {count} folders", &[("count", c)]),
+            };
+            self.status = Some((msg, now));
             return Some(Event::Paste);
         }
         None
@@ -454,7 +470,7 @@ impl Collect {
         if let Some(i) = gone {
             self.meta.tags.remove(i);
         }
-        let resp = ui.add(egui::TextEdit::singleline(&mut self.tag_input).hint_text("Add a tag").desired_width(f32::INFINITY));
+        let resp = ui.add(egui::TextEdit::singleline(&mut self.tag_input).hint_text(tr("Add a tag")).desired_width(f32::INFINITY));
         let comma = self.tag_input.contains(',');
         let enter = resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
         if comma || enter {
