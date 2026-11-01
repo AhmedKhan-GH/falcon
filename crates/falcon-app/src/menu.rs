@@ -84,7 +84,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::SwitchLibrary | C::CollectWindow | C::Preferences | C::CloseWindow | C::Minimize | C::FullScreen => true,
         C::NextLibrary | C::PreviousLibrary => s.libraries > 1,
         C::Page(_) => s.library,
-        C::Scroll(_) | C::SelectFirst | C::SelectLast => grid,
+        C::Scroll(_) | C::SelectFirst | C::SelectLast | C::ToggleFolders => grid,
         C::ParentFolder => grid && s.parent,
         C::Reshuffle => grid && s.scope == ScopeKind::Random,
         C::Rate(_) => any || (s.library && s.viewer),

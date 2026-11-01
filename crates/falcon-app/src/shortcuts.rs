@@ -90,6 +90,8 @@ pub enum Command {
     Reshuffle,
     /// Open the parent of the open folder or smart folder.
     ParentFolder,
+    /// Expand or collapse every folder in the sidebar.
+    ToggleFolders,
 }
 
 /// How a scroll command moves the grid.
@@ -260,6 +262,8 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::SelectFirst, id: "view.select.first", group: "Go", label: "Select the first item", default: k(CMD, Key::ArrowUp), aliases: &[] },
     Spec { cmd: Command::SelectLast, id: "view.select.last", group: "Go", label: "Select the last item", default: k(CMD, Key::ArrowDown), aliases: &[] },
     Spec { cmd: Command::ParentFolder, id: "go.parent", group: "Go", label: "Open the parent folder", default: k(ALT, Key::ArrowUp), aliases: &[] },
+    // Eagle binds * and / outside its keybind table; * is ⇧8 on a US keyboard.
+    Spec { cmd: Command::ToggleFolders, id: "go.folders.toggle", group: "Go", label: "Expand or collapse all folders", default: k(NONE, Key::Slash), aliases: &[KeyboardShortcut::new(SHIFT, Key::Num8)] },
     // Eagle binds R outside its keybind table.
     Spec { cmd: Command::Reshuffle, id: "view.random.refresh", group: "Go", label: "Shuffle the Random page again", default: k(NONE, Key::R), aliases: &[] },
     // Eagle binds 0–5 outside its keybind table (`organize.rating.*` have no default).
@@ -797,6 +801,9 @@ mod tests {
         assert_eq!(keys.resolve(Key::ArrowUp, CMD), Some(Command::SelectFirst));
         assert_eq!(keys.resolve(Key::ArrowDown, CMD), Some(Command::SelectLast));
         assert_eq!(keys.resolve(Key::ArrowUp, ALT), Some(Command::ParentFolder));
+        assert_eq!(keys.resolve(Key::Slash, Modifiers::NONE), Some(Command::ToggleFolders));
+        assert_eq!(keys.resolve(Key::Num8, SHIFT), Some(Command::ToggleFolders));
+        assert_eq!(keys.resolve(Key::Num8, Modifiers::NONE), None);
         // Plain ↑ ↓ stay fixed selection moves.
         assert_eq!(keys.resolve(Key::ArrowUp, Modifiers::NONE), None);
     }

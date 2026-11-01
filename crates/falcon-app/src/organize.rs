@@ -37,6 +37,31 @@ impl Node for SmartFolder {
     }
 }
 
+/// Expands or collapses every node with children, as Eagle's `*` and `/`
+/// do: everything opens if the reference node is collapsed, else
+/// everything closes. The reference is the open node's parent, or the
+/// first top-level node.
+pub fn toggle_all<T: Node>(roots: &[T], open: Option<&str>, collapsed: &mut HashSet<String>) {
+    fn each<T: Node>(list: &[T], f: &mut impl FnMut(&str)) {
+        for n in list {
+            if !n.kids().is_empty() {
+                f(n.id());
+                each(n.kids(), f);
+            }
+        }
+    }
+    let parent = open.and_then(|id| locate(roots, id)).and_then(|(p, _)| p);
+    let Some(reference) = parent.or(roots.first().map(Node::id)) else { return };
+    let expand = collapsed.contains(reference);
+    each(roots, &mut |id| {
+        if expand {
+            collapsed.remove(id);
+        } else {
+            collapsed.insert(id.to_string());
+        }
+    });
+}
+
 /// Finds a node anywhere in the tree.
 pub fn find<'a, T: Node>(roots: &'a [T], id: &str) -> Option<&'a T> {
     roots.iter().find_map(|n| if n.id() == id { Some(n) } else { find(n.kids(), id) })
@@ -503,6 +528,24 @@ pub fn add_typed_tags(tags: &mut Vec<String>, typed: &str) -> bool {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn toggle_all_follows_the_reference_node() {
+        let tree = vec![folder("a", vec![folder("a1", vec![folder("a1x", vec![])])]), folder("b", vec![folder("b1", vec![])]), folder("c", vec![])];
+        let mut collapsed = HashSet::new();
+        // Everything is open, so everything with children closes.
+        toggle_all(&tree, None, &mut collapsed);
+        assert_eq!(collapsed, ["a", "a1", "b"].map(String::from).into());
+        // Now the first is closed, so everything opens.
+        toggle_all(&tree, None, &mut collapsed);
+        assert!(collapsed.is_empty());
+        // With b1 open, its parent b decides: b is closed, so all open.
+        collapsed.insert("b".into());
+        toggle_all(&tree, Some("b1"), &mut collapsed);
+        assert!(collapsed.is_empty());
+        toggle_all(&[] as &[Folder], None, &mut collapsed);
+        assert!(collapsed.is_empty());
+    }
 
     fn folder(id: &str, children: Vec<Folder>) -> Folder {
         let v = json!({

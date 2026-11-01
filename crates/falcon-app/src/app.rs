@@ -1285,6 +1285,15 @@ impl App {
                     self.go(up);
                 }
             }
+            C::ToggleFolders => {
+                let Some(shared) = self.ws.lib.clone() else { return };
+                let lib = lock(&shared);
+                match &self.ws.scope {
+                    Scope::Smart(id) => crate::organize::toggle_all(&lib.smart_folders(), Some(id), &mut self.ws.collapsed),
+                    Scope::Folder(id) => crate::organize::toggle_all(&lib.metadata.folders, Some(id), &mut self.ws.collapsed),
+                    _ => crate::organize::toggle_all(&lib.metadata.folders, None, &mut self.ws.collapsed),
+                }
+            }
             C::Page(p) => {
                 self.ws.viewer = None;
                 self.go(p.scope());
