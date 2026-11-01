@@ -1354,6 +1354,8 @@ fn organize_label(a: &organize_ui::OrgAction) -> String {
         O::DeleteFilter(_) => "Remove saved filter".into(),
         O::MoveFilter(..) => "Move saved filter".into(),
         O::MoveManual(_, ids, _) => format!("Reorder {}", ids.len()),
+        O::CreateSmartGroup(_) => "New smart folder group".into(),
+        O::RenameSmart(..) => "Rename smart folder".into(),
     }
 }
 
@@ -1650,8 +1652,9 @@ impl App {
                         continue;
                     };
                     let (glyph, name, scope, count) = if kind == "smartFolder" {
-                        let Some(sf) = smart.iter().find(|s| s.id == id) else { continue };
-                        (ic::FOLDER_STAR, sf.name.clone(), Scope::Smart(id.to_string()), lib.smart_folder_items(id).len())
+                        let Some(sf) = crate::organize::find(&smart, id) else { continue };
+                        let count = if sf.is_group() { 0 } else { lib.smart_folder_items(id).len() };
+                        (organize_ui::smart_look(sf), sf.name.clone(), Scope::Smart(id.to_string()), count)
                     } else {
                         let Some(f) = logic::find_folder(&lib.metadata.folders, id) else { continue };
                         (ic::FOLDER, f.name.clone(), Scope::Folder(id.to_string()), cx.folder_counts.get(id).copied().unwrap_or(0))
@@ -1669,9 +1672,7 @@ impl App {
                 }
                 ui.add_space(8.0);
             }
-            if section_with_add(ui, "Smart Folders", "Create Smart Folder") {
-                self.ws.smart_dialog = Some(SmartDraft::default());
-            }
+            self.smart_section(ui);
             let smart = lib.smart_folders();
             for sf in &smart {
                 self.smart_row(ui, lib, &smart, sf, 0, &quick);
@@ -1898,13 +1899,6 @@ fn smart_name(lib: &Library, id: &str) -> String {
 }
 
 /// A section header with a + button that shows on hover, like Eagle's.
-fn section_with_add(ui: &mut Ui, title: &str, tip: &str) -> bool {
-    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 25.0), Sense::hover());
-    ui.painter().text(Pos2::new(rect.left() + 20.0, rect.center().y), Align2::LEFT_CENTER, title, font(13.0), t::p().text_muted);
-    let hovered = resp.hovered() || ui.rect_contains_pointer(rect);
-    hovered && icon_button(ui, Pos2::new(rect.right() - 24.0, rect.center().y), ic::PLUS, 15.0, true, tip).clicked()
-}
-
 fn section(ui: &mut Ui, title: &str) -> Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 25.0), Sense::hover());
     ui.painter().text(

@@ -340,6 +340,16 @@ fn shuffle_key(seed: u64, id: &str) -> u64 {
     h.finish()
 }
 
+/// The icon name a smart folder is drawn with: its own, else `grid` for a
+/// group (the icon Eagle gives new groups), else none (the smart folder
+/// icon).
+pub fn smart_icon(sf: &SmartFolder) -> Option<&str> {
+    match sf.icon.as_deref().filter(|i| !i.is_empty()) {
+        None if sf.is_group() => Some("grid"),
+        icon => icon,
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Tag groups
 
@@ -646,6 +656,27 @@ mod tests {
         assert!(!manual_noop(&order, &mv(&["b"]), Some("d")));
         assert!(!manual_noop(&order, &mv(&["a", "c"]), Some("d")), "a gap closes up");
         assert!(!manual_noop(&order, &mv(&["a"]), None));
+    }
+
+    #[test]
+    fn groups_fall_back_to_the_grid_icon() {
+        let sf = |icon: Option<&str>, cond: serde_json::Value| SmartFolder {
+            id: "s".into(),
+            name: "s".into(),
+            conditions: serde_json::from_value(cond).unwrap(),
+            children: Vec::new(),
+            icon: icon.map(str::to_string),
+            icon_color: None,
+            description: String::new(),
+            order_by: None,
+            sort_increase: None,
+        };
+        let rule = json!([{"match": "AND", "rules": []}]);
+        assert_eq!(smart_icon(&sf(None, json!([]))), Some("grid"));
+        assert_eq!(smart_icon(&sf(Some(""), json!([]))), Some("grid"));
+        assert_eq!(smart_icon(&sf(Some("rocket"), json!([]))), Some("rocket"));
+        assert_eq!(smart_icon(&sf(None, rule.clone())), None);
+        assert_eq!(smart_icon(&sf(Some("grid"), rule)), Some("grid"));
     }
 
     fn group(id: &str, name: &str, tags: &[&str]) -> TagGroup {

@@ -29,6 +29,8 @@ pub(super) struct OrgState {
     filter_name: Option<(Option<usize>, String)>,
     /// Open the rename field of the next tag group created.
     rename_new_group: bool,
+    /// Smart folder being renamed in the sidebar, with the text so far.
+    smart_rename: Option<(String, String)>,
 }
 
 /// A tag dragged on the All Tags page.
@@ -79,6 +81,9 @@ pub(super) enum OrgAction {
     /// Items dropped at a new place in a folder's hand-made order:
     /// folder, items, and the item they now sit before (`None`: the end).
     MoveManual(String, Vec<String>, Option<String>),
+    /// A new smart folder group, "Untitled", in a parent or at the top.
+    CreateSmartGroup(Option<String>),
+    RenameSmart(String, String),
 }
 
 /// Which stored sort the toolbar's sort menu edits.
@@ -213,6 +218,12 @@ pub(super) fn lock_badge(ui: &Ui, row: Rect, shut: bool, has_count: bool) {
     icon(ui, Pos2::new(x, row.center().y), glyph, 13.0, t::p().text_muted);
 }
 
+/// A smart folder's sidebar glyph: its own icon, else the grid for a group
+/// (Eagle gives new groups the `grid` icon) or the smart folder icon.
+pub(super) fn smart_look(sf: &SmartFolder) -> &'static str {
+    folder_icons::smart_glyph(organize::smart_icon(sf))
+}
+
 // ---------------------------------------------------------------------------
 // Folder rows
 
@@ -299,12 +310,19 @@ impl App {
     pub(super) fn smart_row(&mut self, ui: &mut Ui, lib: &Library, roots: &[SmartFolder], sf: &SmartFolder, depth: usize, quick: &HashSet<String>) -> Option<Rect> {
         let has_children = !sf.children.is_empty();
         let open = has_children && !self.ws.collapsed.contains(&sf.id);
-        let count = lib.smart_folder_items(&sf.id).len();
+        let group = sf.is_group();
+        // A group shows no count, as in Eagle.
+        let count = if group { 0 } else { lib.smart_folder_items(&sf.id).len() };
         let active = self.ws.scope == Scope::Smart(sf.id.clone());
-        let glyph = folder_icons::smart_glyph(sf.icon.as_deref());
+        let glyph = smart_look(sf);
         let tint = folder_icons::color(sf.icon_color.as_deref()).unwrap_or(t::p().text);
-        let resp = sidebar_row_tinted(ui, depth, glyph, tint, &sf.name, (count > 0).then_some(count), active, has_children.then_some(open));
+        let renaming = self.ws.org.smart_rename.as_ref().is_some_and(|(id, _)| *id == sf.id);
+        let label = if renaming { "" } else { sf.name.as_str() };
+        let resp = sidebar_row_tinted(ui, depth, glyph, tint, label, (count > 0).then_some(count), active, has_children.then_some(open));
         let row = resp.rect;
+        if renaming {
+            self.smart_rename_field(ui, row, depth, sf);
+        }
         if resp.drag_started() {
             resp.dnd_set_drag_payload(DragSmart(sf.id.clone()));
         }
@@ -321,9 +339,15 @@ impl App {
         resp.context_menu(|ui| {
             ui.set_min_width(180.0);
             if ui.button("New Subfolder…").clicked() {
-                self.ws.smart_dialog = Some(SmartDraft { parent: Some(sf.id.clone()), orig_parent: Some(sf.id.clone()), icon: sf.icon.clone(), color: sf.icon_color.clone(), ..Default::default() });
+                // A group's children start with the folder icon, not the grid.
+                let (icon, color) = if group { (None, None) } else { (sf.icon.clone(), sf.icon_color.clone()) };
+                self.ws.smart_dialog = Some(SmartDraft { parent: Some(sf.id.clone()), orig_parent: Some(sf.id.clone()), icon, color, ..Default::default() });
             }
-            if ui.button("Edit…").clicked() {
+            if ui.button("Rename").clicked() {
+                self.ws.org.smart_rename = Some((sf.id.clone(), sf.name.clone()));
+            }
+            // A group has no rules to edit.
+            if !group && ui.button("Edit Rules…").clicked() {
                 let parent = organize::locate(roots, &sf.id).and_then(|(p, _)| p).map(str::to_string);
                 let mut d = SmartDraft::from_folder(sf);
                 d.parent.clone_from(&parent);
@@ -359,7 +383,8 @@ impl App {
                 ui.close();
             }
             ui.separator();
-            if ui.button(RichText::new("Delete Smart Folder").color(t::p().icon_red)).clicked() {
+            let delete = if group { "Delete Smart Folder Group" } else { "Delete Smart Folder" };
+            if ui.button(RichText::new(delete).color(t::p().icon_red)).clicked() {
                 self.ws.actions.push(Action::DeleteSmart(sf.id.clone()));
             }
         });
@@ -390,6 +415,53 @@ impl App {
         Some(row)
     }
 
+    /// The inline rename field over a smart folder's sidebar row. Enter or
+    /// leaving the field saves, Escape cancels.
+    fn smart_rename_field(&mut self, ui: &mut Ui, row: Rect, depth: usize, sf: &SmartFolder) {
+        let r = Rect::from_min_max(Pos2::new(row.left() + icon_x(depth) + 12.0, row.top() + 3.0), Pos2::new(row.right() - 14.0, row.bottom() - 3.0));
+        ui.painter().rect_filled(r, CornerRadius::same(4), t::p().field);
+        ui.painter().rect_stroke(r, CornerRadius::same(4), Stroke::new(1.0, t::p().primary), StrokeKind::Inside);
+        let Some((_, buf)) = self.ws.org.smart_rename.as_mut() else { return };
+        let te = ui.put(
+            r.shrink2(vec2(4.0, 0.0)),
+            TextEdit::singleline(buf).id_salt(("smart-rename", &sf.id)).frame(egui::Frame::NONE).margin(egui::Margin::ZERO).font(font(13.5)).align(Align2::LEFT_CENTER),
+        );
+        if !te.has_focus() && !te.lost_focus() {
+            te.request_focus();
+        }
+        let cancel = ui.input(|i| i.key_pressed(Key::Escape));
+        if (te.lost_focus() || cancel)
+            && let Some((id, name)) = self.ws.org.smart_rename.take()
+        {
+            let name = name.trim().to_string();
+            if !cancel && !name.is_empty() && name != sf.name {
+                self.ws.actions.push(org(OrgAction::RenameSmart(id, name)));
+            }
+        }
+    }
+
+    /// The Smart Folders heading. Its + button (shown on hover) opens
+    /// Eagle's menu: a new smart folder, or a new smart folder group.
+    pub(super) fn smart_section(&mut self, ui: &mut Ui) {
+        let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 25.0), Sense::hover());
+        ui.painter().text(Pos2::new(rect.left() + 20.0, rect.center().y), Align2::LEFT_CENTER, "Smart Folders", font(13.0), t::p().text_muted);
+        let menu_id = ui.make_persistent_id("smart-add-menu");
+        let menu_open = egui::Popup::is_id_open(ui.ctx(), menu_id);
+        if !(menu_open || resp.hovered() || ui.rect_contains_pointer(rect)) {
+            return;
+        }
+        let btn = icon_button(ui, Pos2::new(rect.right() - 24.0, rect.center().y), ic::PLUS, 15.0, true, "New Smart Folder");
+        egui::Popup::menu(&btn).id(menu_id).show(|ui| {
+            ui.set_min_width(200.0);
+            if ui.button(format!("{}  New Smart Folder…", ic::FOLDER_STAR)).clicked() {
+                self.ws.smart_dialog = Some(SmartDraft::default());
+            }
+            if ui.button(format!("{}  New Smart Folder Group", folder_icons::glyph(Some("grid"), false))).clicked() {
+                self.ws.actions.push(org(OrgAction::CreateSmartGroup(None)));
+            }
+        });
+    }
+
     /// The smart folder dialog's parent, icon and colour rows.
     pub(super) fn smart_dialog_extras(ui: &mut Ui, d: &mut SmartDraft, lib: &Library) {
         let roots = lib.smart_folders();
@@ -402,7 +474,7 @@ impl App {
                     d.parent = None;
                 }
                 for (f, depth) in &choices {
-                    let label = format!("{}{}", "    ".repeat(*depth), f.name);
+                    let label = format!("{}{}  {}", "    ".repeat(*depth), smart_look(f), f.name);
                     if ui.selectable_label(d.parent.as_deref() == Some(f.id.as_str()), label).clicked() {
                         d.parent = Some(f.id.clone());
                     }
@@ -1017,6 +1089,18 @@ impl App {
             OrgAction::DeleteFilter(i) => lib.delete_saved_filter(i),
             OrgAction::MoveFilter(i, to) => lib.reorder_saved_filter(i, to),
             OrgAction::MoveManual(folder, ids, before) => lib.move_items_manually(&folder, &ids, before.as_deref()),
+            OrgAction::CreateSmartGroup(parent) => {
+                // Eagle names it "Untitled", opens it and starts a rename.
+                let id = lib.create_smart_folder_group(parent.as_deref(), "Untitled")?;
+                if let Some(p) = parent {
+                    self.ws.collapsed.remove(&p);
+                }
+                self.ws.org.smart_rename = Some((id.clone(), "Untitled".into()));
+                self.ws.scope = Scope::Smart(id);
+                self.ws.selected.clear();
+                Ok(())
+            }
+            OrgAction::RenameSmart(id, name) => lib.rename_smart_folder(&id, &name),
         }
     }
 }

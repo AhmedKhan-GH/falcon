@@ -47,6 +47,7 @@ Falcon's API, all on `Library`:
 | `create_smart_folder_in(parent, name, conditions)` | Same, or appends a nested entry in the dialog shape with `parent` |
 | `create_smart_folder_group(parent, name)` | Appends a smart folder group (see below) |
 | `update_smart_folder(id, name, conditions)` | Edits at any depth and stamps `modificationTime` |
+| `rename_smart_folder(id, name)` | Changes only `name` (cut to 1024 characters), at any depth, as Eagle's sidebar rename does: `modificationTime` is left alone |
 | `move_smart_folder(id, parent, index)` | Moves to a position among the new siblings. Sets `parent`, or removes it at the top level. Refuses cycles |
 | `set_smart_folder_icon(id, icon, color)` | `None` removes a key. New keys go right after `id` on top-level entries, as Eagle's save places them, and at the end of nested ones |
 | `set_smart_folder_order(id, order, increase)` | Sets or clears `orderBy` and `sortIncrease` |

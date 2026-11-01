@@ -360,6 +360,15 @@ impl Library {
         self.save_metadata()
     }
 
+    /// Renames a smart folder (at any depth) in place, as Eagle's sidebar
+    /// rename does: only `name` changes (cut to 1024 characters), and
+    /// `modificationTime` is left alone.
+    pub fn rename_smart_folder(&mut self, id: &str, name: &str) -> Result<()> {
+        let Some(v) = find_smart(&mut self.metadata.smart_folders, id) else { return Err(self.no_smart(id)) };
+        v["name"] = json!(display_name(name));
+        self.save_metadata()
+    }
+
     /// Removes a smart folder (at any depth) with its children.
     pub fn delete_smart_folder(&mut self, id: &str) -> Result<()> {
         remove_smart(&mut self.metadata.smart_folders, id);
@@ -564,5 +573,11 @@ mod tests {
         assert!(sf[0].is_group() && sf[0].children[0].is_group() && !sf[0].children[1].is_group());
         assert_eq!(sf[0].children[1].id, png);
         assert!(lib.smart_folder_items(&g).is_empty(), "an empty library has nothing to show");
+
+        let before = std::fs::read_to_string(lib.root().join("metadata.json")).unwrap();
+        lib.rename_smart_folder(&inner, "Renamed").unwrap();
+        let after = std::fs::read_to_string(lib.root().join("metadata.json")).unwrap();
+        assert_eq!(after, before.replace(r#""name":"Inner""#, r#""name":"Renamed""#), "only the name changes");
+        assert!(lib.rename_smart_folder("NOPE", "x").is_err());
     }
 }
