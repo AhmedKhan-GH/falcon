@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 201 | 32 | 38 | 9 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 203 | 32 | 36 | 9 |
 | Viewers and file formats | 157 | 22 | 11 | 7 |
 | Search, filters and organising | 189 | 14 | 19 | 3 |
-| Import, export, library, preferences and integrations | 130 | 17 | 65 | 26 |
-| **Total** | 677 | 85 | 133 | 45 |
+| Import, export, library, preferences and integrations | 154 | 12 | 46 | 26 |
+| **Total** | 703 | 80 | 112 | 45 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -349,7 +349,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Drag files from Finder onto the grid to import into the open folder | Done | app.rs:3601-3606, 852-862 | local |
 | Drag files from Finder onto a specific sidebar folder | Done | `import_ui.rs` `drop_files` hit-tests the drop against folder rows (`drop_pos.rs`); files go into that folder, folders are ignored, as Eagle's `onDropFolder` | local |
 | Drag a Finder folder onto the sidebar to import it with its folder tree | Done | `folder_import.rs` plan and `import_ui.rs` `import_folder_trees`: a drop on the sidebar's empty space makes a top-level folder tree and opens it; on the grid it imports flat, as Eagle's `onDropContainer` does | local |
-| Drop an .eaglepack onto the window | Missing | Cross-ref import | local |
+| Drop an .eaglepack onto the window | Done | Dropped packs open the import preview (`preview_pack`) | local |
 | Drop an image or URL from a browser | Missing |  | online/plugin |
 | Drag tags onto tag groups or the starred list; ⌥ copies instead of moving | Missing | Cross-ref organising | local |
 | Drag ghost showing the item count | Done | app.rs:3732-3740 | local |
@@ -370,7 +370,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Closing the window keeps the app running (Dock icon stays); reopen from the Dock | Done | Closing hides falcon (`NSApp hide:`, so the collect and preview windows hide too); the Dock icon or reopening brings it back; ⌘Q quits | local |
 | Menu bar status icon: Show Eagle, Capture Area / Window / Full Screen, Quit | Missing | Captures cross-ref import | local |
 | Lock screen for the whole app, with Touch ID | Partial | Password lock (`applock.rs`, ⌥⌘L); no Touch ID | local |
-| Loading screen while a library opens (progress messages) | Missing | Opening is synchronous (app.rs:595-618) | local |
+| Loading screen while a library opens (progress messages) | Done | `Library::open_with_progress` behind a loading screen for opens started in the app; restoring at launch still blocks | local |
 | Resizable inspector | Done | Drag its inner edge; kept across launches | local |
 | Several libraries open in one window (falcon only) | Done | app.rs:624-676, workspaces.rs (extra) | local |
 | Floating collect window (falcon only) | Done | collect.rs (extra) | local |
@@ -1235,11 +1235,11 @@ Two cross-cutting facts explain many rows:
 | Watched auto-import folder: files dropped into it are imported automatically | Done | `crates/falcon-app/src/auto_import.rs`, `import_ui::auto_import_tick`: polls `<chosen>/<library name>` every 2 s and imports settled files into the root through `spawn_import`; files are left in place and remembered (Eagle deletes them) | local |
 | Auto-import rejects network drives and missing paths | Done | `auto_import::is_network_volume` (`NSURLVolumeIsLocalKey`), `prefs::auto_import_refusal`; a vanished folder pauses with a notice | local |
 | Auto-import skips `.tmp` files, tiny files and unsupported types, and waits until a copy has finished | Done | `auto_import::skip` and `Settle` (size and mtime unchanged for 3 s); any extension is accepted, as a drop is | local |
-| Import an Eagle Package (`.eaglepack`) from the File menu or by opening the file | Partial | Library and CLI only: `crates/falcon-library/src/pack.rs:108` `import_pack`, `src/main.rs:73-84,138-142`. No app entry point. Dropping a pack on the window imports the `.eaglepack` file as an item | local |
-| Confirm the disk space an `.eaglepack` will use before importing it | Missing | — | local |
-| When an `.eaglepack` holds items already in the library, ask "N repeated files, import anyway?" | Partial | CLI flag `--skip-duplicates` (`pack.rs:50`, `main.rs:82`); no prompt | local |
-| Merge another Eagle library into the current one (folders and items), refusing the library already open | Missing | — | local |
-| Import an Inboard backup folder (`InboardBackup.json`), with its folders recreated | Missing | — | local |
+| Import an Eagle Package (`.eaglepack`) from the File menu or by opening the file | Done | File ▸ Import submenu, the switcher and a drop; Finder Open With is still not registered | local |
+| Confirm the disk space an `.eaglepack` will use before importing it | Done | `preview_pack` confirmation | local |
+| When an `.eaglepack` holds items already in the library, ask "N repeated files, import anyway?" | Done | Duplicate prompt; "Don't Import" imports without the duplicates, as Eagle | local |
+| Merge another Eagle library into the current one (folders and items), refusing the library already open | Done | `crates/falcon-library/src/library_merge.rs`: Eagle's id matching for folders, smart folders and tag groups; item folders copied in the background with progress and Stop; the open library is refused | local |
+| Import an Inboard backup folder (`InboardBackup.json`), with its folders recreated | Done | `ImportOptions::trashed` and `added_at`; folders recreated | local |
 | Import a Pixave library | Missing | — | local |
 | Import from Billfish | — (not counted) | — | — |
 | Import from Pinterest | Missing | — | online |
@@ -1279,10 +1279,10 @@ Two cross-cutting facts explain many rows:
 | --- | --- | --- | --- |
 | A small floating window that stays on top and takes drops and pastes | Done | `crates/falcon-app/src/collect.rs:83-95` (always on top, borderless) | local |
 | Choose the destination folder, with search | Done | `collect.rs:28-54` (flattened tree with search) | local |
-| Send to several folders at once | Missing | One folder only (`collect.rs:50`) | local |
-| Recent folders list | Missing | — | local |
-| Create a new folder from the collect window | Missing | — | local |
-| Set name, description and tags before collecting (tag picker with recent, starred and recommended tags) | Missing | Falcon's collect window has no metadata fields | local |
+| Send to several folders at once | Done | Collect window | local |
+| Recent folders list | Done | Collect window | local |
+| Create a new folder from the collect window | Done | Collect window | local |
+| Set name, description and tags before collecting (tag picker with recent, starred and recommended tags) | Done | Collect window with starred, recent and all tags (no recommended tags); `ImportOptions::name` | local |
 | Toggle the collect prompt over the API (`/api/preferences/collect/on`, `/off`) | Done | `preferences/collect/on|off` served; `Handle::set_preferences`; the app keeps the flag | local |
 | Window position remembered between launches | Done | `collect.rs:65-67` | local |
 
@@ -1319,40 +1319,40 @@ Two cross-cutting facts explain many rows:
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | Create a library | Done | `app.rs:779-788`; `crates/falcon-library/src/library.rs:98-122` | local |
-| Create-library dialog with a name field, name validation and folder choice | Partial | Falcon uses a plain save dialog defaulting to `Untitled.library`. It has no name validation, though it adds `.library` | local |
-| Warn when creating a library in Desktop, Documents or Downloads | Missing | — | local |
+| Create-library dialog with a name field, name validation and folder choice | Done | Eagle's forbidden characters, folder picker | local |
+| Warn when creating a library in Desktop, Documents or Downloads | Done | Desktop and Downloads, as Eagle (substring match) | local |
 | Refuse a path that already holds a library | Done | `library.rs:101-106` refuses any existing path | local |
 | Refuse libraries inside the app's install folder | Missing | — | local |
 | Open an existing library | Done | `app.rs:790-794,594-618` | local |
 | Reject a folder that is not a library | Done | `library.rs:53-55` (`NotALibrary`), shown in the empty state (`app.rs:3537-3539`) | local |
 | Switch library (⌘L) through a switcher listing libraries | Done | `app.rs:998-1001,1607-1650` | local |
 | Recent libraries history | Done | `crates/falcon-app/src/workspaces.rs:119-129`, `app.rs:1627-1635` (10 entries, `app.rs:1436`) | local |
-| Clear library history | Missing | — | local |
-| Remove one library from the list | Missing | — | local |
-| Delete a library folder from the list menu | Missing | — | local |
-| Set or remove a library icon (`icon.png`) | Missing | The API serves an `icon.png` (`v2.rs:920-925`), but the app cannot set one; the sidebar always shows a generic icon (`app.rs:1597-1599`) | local |
+| Clear library history | Done | Switcher menu | local |
+| Remove one library from the list | Done | Switcher menu; missing libraries are kept and shown dimmed | local |
+| Delete a library folder from the list menu | Missing | Not an Eagle feature: its "Delete folder" string is the Remove Icon confirmation; not built, on data-safety grounds | local |
+| Set or remove a library icon (`icon.png`) | Done | `library_icon.rs`: shorter side scaled to 64 px, written atomically; Change Icon / Remove Icon in the switcher | local |
 | Warn before switching while tasks run (Force Switch), or block while an AI action runs | Missing | Imports keep running against their own shared library handle; there is no prompt | local |
 | Several libraries open at once | Done (beyond Eagle) | `workspaces.rs` (several workspaces), `app.rs:621-689` | local |
 | Show the library in Finder | Done | `app.rs:1643-1645` | local |
-| Missing-library screen with Try Again, Select another path and Create a new library | Partial | The empty state shows the error text and "Choose Library…" (`app.rs:3533-3545`); restore silently drops missing libraries (`workspaces.rs:103`). No retry and no relocate flow | local |
-| Relocate a library that moved | Partial | Only by reopening it through Open Library | local |
+| Missing-library screen with Try Again, Select another path and Create a new library | Done | At launch, from a missing recent entry, and when an open library vanishes | local |
+| Relocate a library that moved | Done | Select Another Path; the old path leaves the history | local |
 | Rename a library | — (not counted) | — | — |
-| Refuse a library made by a newer Eagle and prompt to update | Missing | `Library::open` never checks `applicationVersion` (`library.rs:51-93`) | local |
+| Refuse a library made by a newer Eagle and prompt to update | Done | Version check against 4.0.0 with Eagle's ordering; an alert, since falcon has no updater | local |
 | Automatic `metadata.json` backups (on change and every 30 minutes, up to 100 kept) | Done | `crates/falcon-app/src/backups.rs` schedules a backup 1 s after a metadata write and every 30 minutes, run off the UI thread by `run_backups` in app.rs; `flush_and_backup` takes a waiting one when a library closes or the app saves state. Written by `backup::backup_library` | local |
 | Restore a damaged `metadata.json` from the newest good backup on open | Done | `App::open` and `follow_api_switch` use `Library::open_or_restore`; `restored_note` names the backup used in the toast. The HTTP API's own `library/switch` still uses `Library::open` | local |
-| Keep a per-library backup copy in app data (`eagle-backup/<hash>.json`) | Missing | — | local |
-| Empty cache and reload the library (forced rebuild) | Missing | Falcon keeps no library cache, but has no "reload from disk" either | local |
+| Keep a per-library backup copy in app data (`eagle-backup/<hash>.json`) | Done | `~/Library/Application Support/Falcon/eagle-backup/<hash>.json` with Eagle's FNV-1a path hash, written with every new backup | local |
+| Empty cache and reload the library (forced rebuild) | Done | Rebuilds `mtime.json` from the items as Eagle does | local |
 | Repair tool "Clear Invalid Content" (removes empty or broken item folders, then reloads) | Partial | Unreadable items are skipped and reported on open (`library.rs:63-73`, `app.rs:607-610`), but cannot be cleaned up | local |
 | Refresh thumbnails for the selection | Done | `crates/falcon-app/src/image_edit.rs:104-106,151-171` | local |
 | Refresh the palette for the selection | Done | `image_edit.rs:107-109` | local |
-| Detect external changes to `metadata.json` and `mtime.json` (sync tools) and reload | Missing | No file watching; changes made by other apps appear only after reopening | local |
-| Cloud-sync conflict detection (disk copy newer than memory, so warn and reload) | Missing | — | local |
+| Detect external changes to `metadata.json` and `mtime.json` (sync tools) and reload | Done | `sync.rs`, `watch.rs`: polled every 4 s, parsed off the UI thread, nothing written back; a vanished folder closes the library | local |
+| Cloud-sync conflict detection (disk copy newer than memory, so warn and reload) | Done | Every metadata write first reads the disk copy and refuses if it is newer (`Error::SyncConflict`); the app alerts and reloads | local |
 | iCloud placeholder handling (`.icloud` names, files not yet downloaded) | Done | `crates/falcon-app/src/icloud.rs` (dataless detection, background download, wait screen in `app/open_ui.rs:128-180`) | local |
 | "File not found, sync may be in progress" hint for missing originals | Partial | iCloud files are handled; other missing originals get no specific hint | local |
-| Library storage health warnings (read-only path, slow disk, NTFS on macOS, permission errors) | Missing | — | local |
-| Library loading progress screen | Missing | `Library::open` runs on the UI thread with no progress (`app.rs:601`) | local |
+| Library storage health warnings (read-only path, slow disk, NTFS on macOS, permission errors) | Done | Read-only file, no write permission, slow disk (falcon's own 1.5 s round-trip threshold), NTFS volume | local |
+| Library loading progress screen | Done | `Library::open_with_progress` | local |
 | Library stats (item count, size, trash count) | Partial | Sidebar counts (`app.rs:1744-1745`) and folder inspector items and size (`app.rs:2925-2928`); CLI `info` prints items, trash, folders and tags (`src/main.rs:112-121`). No library-wide stats in the app | local |
-| Welcome or onboarding flow (theme, extension install, create library) | Missing | Plain empty state (`app.rs:3531-3546`) | local |
+| Welcome or onboarding flow (theme, extension install, create library) | Done | First-launch welcome with theme choice and create or open; no extension step | local |
 | Password lock for the whole app: password, hint, Lock Now (⌥⌘L), Touch ID unlock | Partial | `crates/falcon-app/src/applock.rs`: password with hint, salted BLAKE3 digest in app state, lock screen at launch, ⌥⌘L. No Touch ID | local |
 
 ### 6. Preferences (every pane and setting)
@@ -1517,9 +1517,9 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 
 Rows marked "not counted" are features Eagle 4.0.0 does not have.
 
-- **Done:** 130, including 5 where falcon goes beyond Eagle and 1 with a small difference.
-- **Partial:** 17.
-- **Missing:** 91, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
+- **Done:** 154, including 5 where falcon goes beyond Eagle and 1 with a small difference.
+- **Partial:** 12.
+- **Missing:** 72, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
 - **Different on purpose:** 1 (the API listens on localhost only).
 
 ### Ranked Missing and Partial local items
@@ -1553,5 +1553,5 @@ Ranked by how often a user would hit the gap, and the risk if they do.
 25. **General settings are missing**: language, UI zoom, vibrancy, launch at login, Dock icon, menu bar icon, GPU, auto-select after import.
 26. **Localisation**: English only, against Eagle's eight languages.
 27. **Library safety checks are missing**: newer-version refusal, warnings for Desktop or Documents paths, read-only paths and slow disks, disk-space checks, and confirmation for large folders or deep trees.
-28. **"Empty cache and reload" and "Clear Invalid Content" are missing.** Damaged items are skipped and reported, but cannot be cleaned.
+28. ~~"Empty cache and reload" is missing.~~ Fixed; "Clear Invalid Content" is not built (damaged items are skipped and reported).
 29. **Smaller gaps**: library loading progress, welcome flow, Preferences search, remembering the last pane, the Share sheet, WebP conversion, saving the current video frame, the menu bar icon, Inboard and Pixave importers, the API playground, debug report and error logs, the plugin system and plugin development, and colour-space selection.
