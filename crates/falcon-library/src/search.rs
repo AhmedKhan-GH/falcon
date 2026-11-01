@@ -610,6 +610,90 @@ pub fn type_group(ext: &str) -> Option<&'static str> {
     })
 }
 
+/// The web-video site of a bookmark (`medium`: youtube, vimeo, bilibili).
+pub fn medium(item: &Item) -> Option<&str> {
+    item.extra.get("medium").and_then(|v| v.as_str()).filter(|m| !m.is_empty())
+}
+
+/// The type filter's built-in groups, after the extensions in its list.
+pub const TYPE_GROUPS: [&str; 6] = ["font", "video", "audio", "youtube", "vimeo", "bilibili"];
+
+/// Whether an item passes the type filter's included types, in Eagle's
+/// order and with its early answers: its own extension wins; otherwise
+/// the first included `video` or `audio` group decides by itself (so
+/// including both video and audio lets only videos through), a `url`
+/// entry takes bookmarks without a site, a site name its bookmarks, and
+/// the Office groups and `font` follow.
+pub fn type_included(includes: &[String], item: &Item) -> bool {
+    let has = |t: &str| includes.iter().any(|x| x == t);
+    let ext = item.ext.as_str();
+    let group = type_group(ext);
+    if has(ext) {
+        return true;
+    }
+    if has("video") {
+        return group == Some("video");
+    }
+    let site = medium(item);
+    if has("url") && ext == "url" && site.is_none() {
+        return true;
+    }
+    for s in ["youtube", "vimeo", "bilibili"] {
+        if has(s) && ext == "url" && site == Some(s) {
+            return true;
+        }
+    }
+    if has("audio") {
+        return group == Some("audio");
+    }
+    for g in ["powerpoint", "word", "excel"] {
+        if has(g) && group == Some(g) {
+            return true;
+        }
+    }
+    has("font") && group == Some("font")
+}
+
+/// Whether one of the type filter's excluded types covers an item.
+pub fn type_excluded(excludes: &[String], item: &Item) -> bool {
+    let has = |t: &str| excludes.iter().any(|x| x == t);
+    let ext = item.ext.as_str();
+    let site = medium(item);
+    has(ext)
+        || type_group(ext).is_some_and(has)
+        || (ext == "url" && site.is_none() && has("url"))
+        || (ext == "url" && site.is_some_and(has))
+}
+
+/// How many items each option of the type filter covers: by extension, or
+/// by site for web-video bookmarks, as Eagle counts them, plus the font,
+/// video and audio groups (which Eagle lists but never counts, so its
+/// panel hides them).
+pub fn type_counts<'a>(items: impl IntoIterator<Item = &'a Item>) -> HashMap<String, usize> {
+    let mut out: HashMap<String, usize> = HashMap::new();
+    for i in items {
+        *out.entry(medium(i).unwrap_or(&i.ext).to_string()).or_default() += 1;
+        if let Some(g @ ("font" | "video" | "audio")) = type_group(&i.ext) {
+            *out.entry(g.to_string()).or_default() += 1;
+        }
+    }
+    out
+}
+
+/// The type filter's options: the extensions present, in code-unit order,
+/// then the built-in groups not already listed.
+pub fn type_options<'a>(items: impl IntoIterator<Item = &'a Item>) -> Vec<String> {
+    let exts: HashSet<&str> = items.into_iter().map(|i| i.ext.as_str()).collect();
+    let mut out: Vec<String> = exts.into_iter().map(String::from).collect();
+    out.sort_by(|a, b| js_cmp(a, b));
+    for g in TYPE_GROUPS {
+        if !out.iter().any(|x| x == g) {
+            out.push(g.to_string());
+        }
+    }
+    out
+}
+
 /// The filter panel's rules. Every active rule must pass.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Filter {
@@ -662,12 +746,10 @@ impl Filter {
     /// Whether `item` passes every rule; for a colour rule also returns the
     /// distance Eagle sorts by.
     pub fn check(&self, item: &Item) -> Option<f64> {
-        let ext = item.ext.as_str();
-        let typed = |list: &[String]| list.iter().any(|t| t == ext || type_group(ext) == Some(t.as_str()));
-        if !self.types.is_empty() && !typed(&self.types) {
+        if !self.types.is_empty() && !type_included(&self.types, item) {
             return None;
         }
-        if typed(&self.exclude_types) {
+        if type_excluded(&self.exclude_types, item) {
             return None;
         }
         let within = |r: (Option<u64>, Option<u64>), v: u64| r.0.is_none_or(|a| v >= a) && r.1.is_none_or(|b| v <= b);
@@ -1594,6 +1676,31 @@ mod tests {
         assert_eq!(c.get(&Shape::Square), Some(&1));
         assert_eq!((c.get(&Shape::Ratio16x9), c.get(&Shape::Ratio4x3)), (Some(&1), Some(&1)));
         assert_eq!(c.get(&Shape::Portrait), None);
+    }
+
+    #[test]
+    fn type_rule_follows_eagles_order() {
+        let of = |ext: &str| item(serde_json::json!({"ext": ext}));
+        let site = |m: &str| item(serde_json::json!({"ext": "url", "medium": m}));
+        let v = |s: &[&str]| s.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        assert!(type_included(&v(&["png"]), &of("png")));
+        assert!(type_included(&v(&["video"]), &of("mp4")) && !type_included(&v(&["video"]), &of("png")));
+        assert!(!type_included(&v(&["video", "audio"]), &of("mp3")), "video decides alone, as in Eagle");
+        assert!(type_included(&v(&["video", "mp3"]), &of("mp3")), "an extension still wins");
+        assert!(type_included(&v(&["audio", "font"]), &of("wav")) && !type_included(&v(&["audio", "font"]), &of("ttf")));
+        assert!(type_included(&v(&["font"]), &of("woff2")));
+        assert!(type_included(&v(&["youtube"]), &site("youtube")) && !type_included(&v(&["youtube"]), &site("vimeo")));
+        assert!(type_included(&v(&["url"]), &site("vimeo")), "the url extension itself matches");
+        assert!(type_included(&v(&["word"]), &of("docx")));
+        assert!(type_excluded(&v(&["video"]), &of("mov")) && !type_excluded(&v(&["video"]), &of("png")));
+        assert!(type_excluded(&v(&["bilibili"]), &site("bilibili")) && !type_excluded(&v(&["bilibili"]), &of("url")));
+        assert!(type_excluded(&v(&["url"]), &of("url")) && type_excluded(&v(&["url"]), &site("youtube")));
+
+        let items = [of("png"), of("png"), of("mp4"), site("youtube"), of("url"), of("TTF")];
+        let c = type_counts(items.iter());
+        assert_eq!((c["png"], c["mp4"], c["video"], c["youtube"], c["url"]), (2, 1, 1, 1, 1));
+        assert!(!c.contains_key("audio"));
+        assert_eq!(type_options(items.iter()), ["TTF", "mp4", "png", "url", "font", "video", "audio", "youtube", "vimeo", "bilibili"]);
     }
 
     #[test]
