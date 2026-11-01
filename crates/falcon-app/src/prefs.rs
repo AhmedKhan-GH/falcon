@@ -85,6 +85,9 @@ pub struct Prefs {
     /// Eagle's `habits.gifViewer`: always show the frame-by-frame player
     /// for GIFs in the viewer.
     pub gif_player: bool,
+    /// Eagle's `habits.alwaysPlayGIF`: GIFs and animated WebPs play in the
+    /// grid without being hovered.
+    pub always_play_animated: bool,
 }
 
 /// What the wheel does over a playing video.
@@ -192,6 +195,7 @@ impl Default for Prefs {
             notify_import_done: true,
             app_lock: None,
             gif_player: false,
+            always_play_animated: false,
         }
     }
 }
@@ -740,8 +744,10 @@ fn preview(p: &mut Page, d: &mut Draft) {
         ui.checkbox(&mut v.video_resume, "Resume where each video was left");
         ui.checkbox(&mut v.video_loop_short, "Always loop clips of 30 seconds or less");
     });
-    p.block("GIF", &["gif", "player", "frame", "animation"], |ui| {
+    p.block("GIF", &["gif", "player", "frame", "animation", "autoplay", "hover", "webp"], |ui| {
+        ui.checkbox(&mut d.prefs.always_play_animated, "Always play GIFs and animated WebPs in the grid");
         ui.checkbox(&mut d.prefs.gif_player, "Always use the frame-by-frame player for GIFs");
+        note(ui, "Cards play while hovered either way; hold ⌥ to keep one still.");
     });
     p.block("Fonts", &["font", "style", "regular", "bold", "italic", "tags", "import"], |ui| {
         ui.checkbox(&mut d.prefs.font_style_tags, "Add style tags (Regular, Bold, Italic) when importing fonts");
@@ -893,6 +899,7 @@ mod tests {
     fn defaults() {
         let p = Prefs::default();
         assert!(p.hover_zoom, "Eagle's hoverZoom defaults to on");
+        assert!(!p.gif_player && !p.always_play_animated, "Eagle's gifViewer and alwaysPlayGIF default to off");
         assert!(!p.keywords_as_tags, "Eagle's IPTC defaults to off");
         assert!(p.notify_duplicates, "Eagle's repeatImage notification defaults to on");
         assert!(p.auto_select, "Eagle's autoSelect defaults to on");

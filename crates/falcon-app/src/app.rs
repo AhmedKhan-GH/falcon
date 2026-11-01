@@ -395,6 +395,8 @@ struct Workspace {
     /// The GIF player turned on with the viewer's toolbar button, until
     /// the viewer closes (Eagle's `usingGifPlayer`).
     gif_player: bool,
+    /// Animated grid cards and hover previews playing (see `anim.rs`).
+    cards: crate::anim::Cards,
     /// Focus the inspector's title field next frame (F2).
     focus_title: bool,
     /// Tag typed into the multi-selection inspector.
@@ -477,6 +479,7 @@ impl Workspace {
             smart_dialog: None,
             view: ViewState::default(),
             gif_player: false,
+            cards: Default::default(),
             focus_title: false,
             batch_tag: String::new(),
             progress: Arc::new(Mutex::new(Progress::default())),
@@ -3057,6 +3060,7 @@ impl App {
 
     fn grid(&mut self, ui: &mut Ui, lib: &Library) {
         let area = ui.max_rect();
+        self.ws.cards.begin(ui.ctx().cumulative_frame_nr());
         let scroll_by = self.ws.scroll.take();
         let order = self.scope_order(lib);
         if let Some(gate) = self.scope_gate(lib) {
@@ -3158,6 +3162,7 @@ impl App {
                     double_clicked = Some(item.id.clone());
                 }
                 let selected = self.ws.selected.contains(&item.id);
+                self.card_anim(ui, lib, item, card, resp.hovered());
                 match layout {
                     Layout::List => self.list_row(ui, lib, item, card, selected, resp.hovered(), n),
                     _ => self.card(ui, lib, item, card, caption, selected, resp.hovered()),
@@ -3264,7 +3269,8 @@ impl App {
     /// image's shape).
     fn draw_image(&mut self, ui: &Ui, lib: &Library, item: &Item, rect: Rect, fill: bool) {
         let failed = self.ws.loader.has_failed(&item.id, Tier::Grid);
-        match self.ws.loader.get(&item.id, Tier::Grid).cloned() {
+        let playing = self.ws.cards.texture(&item.id).cloned();
+        match playing.or_else(|| self.ws.loader.get(&item.id, Tier::Grid).cloned()) {
             Some(tex) => {
                 let natural = if item.width > 0 && item.height > 0 { vec2(item.width as f32, item.height as f32) } else { tex.size_vec2() };
                 let scale = (rect.width() / natural.x).min(rect.height() / natural.y);
@@ -3402,7 +3408,10 @@ impl App {
             ctx.request_repaint_after(std::time::Duration::from_secs_f64(wait));
         }
         let fade = ctx.animate_bool_with_time(egui::Id::unique("hover-preview-fade"), self.ws.hover.shown().is_some(), 0.15);
-        let Some((item, card, _)) = hovered.filter(|h| self.ws.hover.shown() == Some(h.0.id.as_str())) else { return };
+        let Some((item, card, _)) = hovered.filter(|h| self.ws.hover.shown() == Some(h.0.id.as_str())) else {
+            self.ws.cards.close_popup();
+            return;
+        };
         let grid = self.ws.loader.get(&item.id, Tier::Grid).cloned();
         let natural = match (item.width, item.height, &grid) {
             (w, h, _) if w > 0 && h > 0 => vec2(w as f32, h as f32),
@@ -3411,6 +3420,11 @@ impl App {
         };
         let window = ctx.content_rect();
         let rect = hover::preview_rect(card, natural, window, f32::INFINITY);
+        // GIFs and animated WebPs play in the preview.
+        if let Some(tex) = self.hover_anim(&ctx, lib, item, rect) {
+            hover::paint(&ctx, window, rect, tex.id(), t::p().panel, fade);
+            return;
+        }
         let original = hover::wants_original(&item.ext, item.width, item.height, rect.size() * ctx.pixels_per_point(), hover::GRID_SIDE);
         let full = if original {
             if let Some(j) = job_for(item, lib.root(), Tier::Full) {

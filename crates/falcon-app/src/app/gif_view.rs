@@ -2,9 +2,13 @@
 //! and pause, frame steps, the frame counter, a scrub bar with a loop range
 //! and frame thumbnails, the speed menu and a menu to set the frame as the
 //! thumbnail. It shows for GIFs when the toolbar button or the "advanced
-//! GIF viewer" preference turns it on. Frames come from `anim.rs`.
+//! GIF viewer" preference turns it on. Also here: GIF and animated WebP
+//! cards playing in the grid while hovered (or always, with Eagle's
+//! "always play" preference), and in the hover preview. Frames come from
+//! `anim.rs`.
 
-use eframe::egui::{self, Align2, Color32, CornerRadius, Event, Pos2, Rect, Response, RichText, Sense, Stroke, Ui, Vec2, vec2};
+use eframe::egui::{self, Align2, Color32, CornerRadius, Event, Pos2, Rect, Response, RichText, Sense, Stroke, TextureHandle, Ui, Vec2, vec2};
+use falcon_library::Library;
 use falcon_library::model::Item;
 
 use super::image_edit::Op;
@@ -85,6 +89,8 @@ impl App {
             self.ws.gif_player = false;
             return;
         }
+        // The grid is hidden: its cards stop.
+        self.ws.cards.clear();
         let ext = self.ws.view.file.extension().map(|e| e.to_string_lossy().into_owned()).unwrap_or_default();
         let ready = self.ws.view.anim.as_ref().is_some_and(|a| a.state == State::Ready);
         if !ready || !self.gif_player_on(&ext) || self.prefs_window.open || ctx.memory(|m| m.focused().is_some()) {
@@ -316,5 +322,36 @@ impl App {
         if let Some((_, img)) = player.take_export() {
             self.ws.actions.push(Action::Edit(Op::FrameThumbnail(item.id.clone(), img)));
         }
+    }
+
+    /// Keeps a GIF or WebP card playing while it is hovered (⌥ keeps it
+    /// still), or always with the preference on, as in Eagle.
+    pub(super) fn card_anim(&mut self, ui: &Ui, lib: &Library, item: &Item, card: Rect, hovered: bool) {
+        let Some(kind) = anim::card_kind(&item.ext) else { return };
+        let alt = ui.input(|i| i.modifiers.alt);
+        if !(self.prefs.always_play_animated || hovered && !alt) || !self.ws.cards.may_play(&item.id) {
+            return;
+        }
+        let path = item.original_path(lib.root());
+        // An original still in iCloud stays a still rather than download.
+        if !self.ws.cards.playing(&item.id) && crate::icloud::is_dataless(&path) {
+            return;
+        }
+        let ctx = ui.ctx();
+        let side = ((card.width().max(card.height()) * ctx.pixels_per_point()).ceil() as u32).next_multiple_of(64).min(1024);
+        let (frame, now) = (ctx.cumulative_frame_nr(), ctx.input(|i| i.time));
+        self.ws.cards.play(ctx, &item.id, path, kind, side, frame, now);
+    }
+
+    /// The frame of a GIF or animated WebP shown in the hover preview at
+    /// `rect`, while it plays.
+    pub(super) fn hover_anim(&mut self, ctx: &egui::Context, lib: &Library, item: &Item, rect: Rect) -> Option<TextureHandle> {
+        let kind = anim::card_kind(&item.ext)?;
+        let path = item.original_path(lib.root());
+        if crate::icloud::is_dataless(&path) {
+            return None;
+        }
+        let side = ((rect.size().max_elem() * ctx.pixels_per_point()).ceil() as u32).min(2048);
+        self.ws.cards.popup(ctx, &item.id, path, kind, side, ctx.input(|i| i.time)).cloned()
     }
 }

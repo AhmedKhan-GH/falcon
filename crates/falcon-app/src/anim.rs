@@ -11,7 +11,7 @@
 //! ranges, speed steps and the scrub bar's mapping are pure functions with
 //! tests.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 
@@ -36,6 +36,13 @@ pub fn kind(ext: &str) -> Option<Kind> {
         "png" => Some(Kind::Png),
         _ => None,
     }
+}
+
+/// The format of a grid card that plays when hovered, as in Eagle: GIFs
+/// and WebPs (which play only if animated). Eagle also plays animated AVIF,
+/// which falcon can't decode.
+pub fn card_kind(ext: &str) -> Option<Kind> {
+    kind(ext).filter(|k| *k != Kind::Png)
 }
 
 /// A frame's delay as browsers (and so Eagle's viewer) show it: delays of
@@ -1076,6 +1083,99 @@ impl Player {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Grid cards
+
+/// Most cards playing at once.
+pub const MAX_CARDS: usize = 24;
+
+impl Opts {
+    /// For a grid card or hover preview drawn `side` pixels across.
+    pub fn card(side: u32, frame_budget: usize) -> Opts {
+        Opts { max_side: Some(side.max(16)), frame_budget, checkpoint_budget: 8 << 20 }
+    }
+}
+
+/// The players of grid cards (the hovered card's, or every visible
+/// animated card's when "always play" is on) and of the hover preview.
+#[derive(Default)]
+pub struct Cards {
+    /// Each player with the frame it was last drawn in.
+    players: HashMap<String, (Player, u64)>,
+    popup: Option<(String, Player)>,
+    /// Items found to be stills, never tried again.
+    stills: HashSet<String>,
+}
+
+impl Cards {
+    /// Drops the players of cards not drawn in the frame before `frame`.
+    pub fn begin(&mut self, frame: u64) {
+        self.players.retain(|_, (_, f)| *f + 1 >= frame);
+    }
+
+    /// Drops every player (the grid is hidden).
+    pub fn clear(&mut self) {
+        self.players.clear();
+        self.popup = None;
+    }
+
+    /// Whether card `id` may start playing: not a known still, and room
+    /// for another player.
+    pub fn may_play(&self, id: &str) -> bool {
+        !self.stills.contains(id) && (self.players.contains_key(id) || self.players.len() < MAX_CARDS)
+    }
+
+    /// Whether card `id` has a player already.
+    pub fn playing(&self, id: &str) -> bool {
+        self.players.contains_key(id)
+    }
+
+    /// Keeps card `id` playing in `frame`, starting it if needed.
+    #[allow(clippy::too_many_arguments)]
+    pub fn play(&mut self, ctx: &egui::Context, id: &str, path: PathBuf, kind: Kind, side: u32, frame: u64, now: f64) {
+        if !self.may_play(id) {
+            return;
+        }
+        let (p, f) = self.players.entry(id.to_string()).or_insert_with(|| (Player::open(ctx, path, kind, Opts::card(side, 24 << 20)), frame));
+        *f = frame;
+        p.update(now);
+        if matches!(p.state, State::Still | State::Failed(_)) {
+            self.players.remove(id);
+            self.stills.insert(id.to_string());
+        }
+    }
+
+    /// The frame to draw on card `id`, while it plays.
+    pub fn texture(&self, id: &str) -> Option<&egui::TextureHandle> {
+        self.players.get(id).filter(|(p, _)| p.state == State::Ready).and_then(|(p, _)| p.texture())
+    }
+
+    /// Plays item `id` in the hover preview, `side` pixels across, and
+    /// returns the frame to draw.
+    pub fn popup(&mut self, ctx: &egui::Context, id: &str, path: PathBuf, kind: Kind, side: u32, now: f64) -> Option<&egui::TextureHandle> {
+        if self.stills.contains(id) {
+            return None;
+        }
+        if self.popup.as_ref().is_none_or(|(p, _)| p != id) {
+            self.popup = Some((id.to_string(), Player::open(ctx, path, kind, Opts::card(side, 64 << 20))));
+        }
+        let (_, p) = self.popup.as_mut()?;
+        p.update(now);
+        if matches!(p.state, State::Still | State::Failed(_)) {
+            self.stills.insert(id.to_string());
+            self.popup = None;
+            return None;
+        }
+        let (_, p) = self.popup.as_ref()?;
+        if p.state == State::Ready { p.texture() } else { None }
+    }
+
+    /// Drops the hover preview's player.
+    pub fn close_popup(&mut self) {
+        self.popup = None;
+    }
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
@@ -1417,6 +1517,35 @@ pub(crate) mod tests {
         assert_eq!(thumb, Some([THUMB_SIDE as usize, THUMB_SIDE as usize / 2]));
         let (i, img) = export.unwrap();
         assert_eq!((i, img.dimensions()), (3, (400, 200)));
+    }
+
+    #[test]
+    fn cards_play_until_left_and_remember_stills() {
+        let dir = tempfile::tempdir().unwrap();
+        let gif = dir.path().join("a.gif");
+        write_gif(&gif, 40, 30, 6, 5);
+        let still = dir.path().join("s.webp");
+        let pic = &pictures(8, 8, 1)[0];
+        std::fs::write(&still, &*webp::Encoder::from_rgba(pic, 8, 8).encode(80.0)).unwrap();
+        let ctx = egui::Context::default();
+        let mut cards = Cards::default();
+        let start = std::time::Instant::now();
+        let mut frame = 1;
+        while (cards.texture("g").is_none() || cards.playing("s")) && start.elapsed().as_secs() < 10 {
+            cards.begin(frame);
+            cards.play(&ctx, "g", gif.clone(), Kind::Gif, 20, frame, 0.0);
+            cards.play(&ctx, "s", still.clone(), Kind::WebP, 20, frame, 0.0);
+            frame += 1;
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        // Scaled to the card's size.
+        assert_eq!(cards.texture("g").map(|t| t.size()), Some([20, 15]));
+        assert!(!cards.may_play("s"), "a still is not tried again");
+        // A card not drawn for a frame stops.
+        cards.begin(frame + 1);
+        assert!(!cards.playing("g"));
+        assert_eq!(card_kind("PNG"), None);
+        assert_eq!(card_kind("webp"), Some(Kind::WebP));
     }
 
     #[test]
