@@ -18,7 +18,7 @@ use crate::app::App;
 use crate::icons as ic;
 use crate::logic::{self, DragAction, Projection, UpAxis, ViewZoom};
 use crate::model3d::gpu::SceneCallback;
-use crate::model3d::{ModelView, Settings, Shading};
+use crate::model3d::{ModelView, Settings, Shading, ViewerTheme};
 use crate::theme::{self as t, font, mono};
 use crate::ui::viewer::audio::{bar_name, bar_shell};
 use crate::ui::widgets::{galley, icon_button};
@@ -79,7 +79,7 @@ impl App {
             return false;
         }
         let ui = &mut crate::ui::widgets::viewer_ui(parent, screen, "model-viewer");
-        let bg = self.model3d.settings.background.map_or(t::p().main, rgb);
+        let bg = self.model3d.settings.effective_background().map_or(t::p().main, rgb);
         ui.painter().rect_filled(screen, 0.0, bg);
         let bar = Rect::from_min_size(screen.min, vec2(screen.width(), t::BAR_HEIGHT));
         let area = Rect::from_min_max(Pos2::new(screen.left(), bar.bottom()), screen.max);
@@ -140,11 +140,11 @@ impl App {
         let radius = view.radius();
         let proj = view.camera.projection(settings.projection, aspect, radius);
         let view_proj = math::mul(&proj, &view.camera.view());
-        let bg = settings.background.unwrap_or_else(|| {
+        let bg = settings.effective_background().unwrap_or_else(|| {
             let c = t::p().main;
             [c.r(), c.g(), c.b()]
         });
-        let clear = settings.background.map_or([0.0; 4], |c| [f64::from(c[0]) / 255.0, f64::from(c[1]) / 255.0, f64::from(c[2]) / 255.0, 1.0]);
+        let clear = settings.effective_background().map_or([0.0; 4], |c| [f64::from(c[0]) / 255.0, f64::from(c[1]) / 255.0, f64::from(c[2]) / 255.0, 1.0]);
         let callback = SceneCallback {
             target,
             size,
@@ -163,8 +163,16 @@ impl App {
         resp.context_menu(|ui| {
             self.item_menu(ui, lib, item, std::slice::from_ref(&item.id));
         });
+        if settings.measuring {
+            self.model_measure(ui, &resp, area, &view_proj, &settings);
+        } else if let Some(v) = self.model3d.view.as_mut() {
+            v.picks.clear();
+        }
         if self.model3d.settings.info {
             self.model_details(ui, area);
+        }
+        if self.model3d.settings.tree {
+            self.model_tree(ui, item, area, aspect);
         }
     }
 
@@ -189,26 +197,27 @@ impl App {
         if rect.left() < area.left() + 12.0 || rect.bottom() > area.bottom() {
             return;
         }
+        let (panel, text, muted, divider) = crate::ui::viewer::model_tools::panel_colors(self.model3d.settings.theme);
         let p = ui.painter();
-        p.rect_filled(rect, CornerRadius::same(6), t::p().panel.gamma_multiply(0.92));
-        p.rect_stroke(rect, CornerRadius::same(6), Stroke::new(1.0, t::p().divider), egui::StrokeKind::Inside);
+        p.rect_filled(rect, CornerRadius::same(6), panel);
+        p.rect_stroke(rect, CornerRadius::same(6), Stroke::new(1.0, divider), egui::StrokeKind::Inside);
         let mut y = rect.top() + 8.0 + line / 2.0;
         for (k, v) in rows {
-            p.text(Pos2::new(rect.left() + 12.0, y), Align2::LEFT_CENTER, k, font(12.0), t::p().text_muted);
-            p.text(Pos2::new(rect.right() - 12.0, y), Align2::RIGHT_CENTER, v, mono(12.0), t::p().text_value);
+            p.text(Pos2::new(rect.left() + 12.0, y), Align2::LEFT_CENTER, k, font(12.0), muted);
+            p.text(Pos2::new(rect.right() - 12.0, y), Align2::RIGHT_CENTER, v, mono(12.0), text);
             y += line;
         }
         if shown > 0 {
             y += line * 0.5;
-            p.text(Pos2::new(rect.left() + 12.0, y), Align2::LEFT_CENTER, "Materials", font(12.0), t::p().text_muted);
+            p.text(Pos2::new(rect.left() + 12.0, y), Align2::LEFT_CENTER, "Materials", font(12.0), muted);
             for (name, c) in mats.iter().take(shown) {
                 y += line;
                 let sw = Rect::from_center_size(Pos2::new(rect.left() + 18.0, y), vec2(10.0, 10.0));
                 let col = Color32::from_rgb((c[0] * 255.0) as u8, (c[1] * 255.0) as u8, (c[2] * 255.0) as u8);
                 p.rect_filled(sw, CornerRadius::same(2), col);
                 let name = if name.is_empty() { "No Name" } else { name.as_str() };
-                let g = galley(ui, name, font(12.0), t::p().text_value, PANEL_WIDTH - 44.0);
-                p.galley(Pos2::new(rect.left() + 30.0, y - g.size().y / 2.0), g, t::p().text_value);
+                let g = galley(ui, name, font(12.0), text, PANEL_WIDTH - 44.0);
+                p.galley(Pos2::new(rect.left() + 30.0, y - g.size().y / 2.0), g, text);
             }
         }
     }
@@ -226,8 +235,38 @@ impl App {
                 self.model_settings_menu(ui, aspect);
             });
             right -= 30.0;
+            // Create Snapshot and Export, as in Eagle's viewer toolbar.
+            if icon_button(ui, Pos2::new(right - 13.0, cy), ic::CAMERA, 16.0, true, "Create Snapshot (PNG of the view)").clicked() {
+                let ppp = ui.ctx().pixels_per_point();
+                let size = [(area.width() * ppp).round().max(1.0) as u32, (area.height() * ppp).round().max(1.0) as u32];
+                self.model_snapshot(item, size, aspect);
+            }
+            right -= 30.0;
+            let export = icon_button(ui, Pos2::new(right - 13.0, cy), ic::EXPORT, 16.0, true, "Export Model");
+            let mut format = None;
+            egui::Popup::menu(&export).show(|ui| {
+                ui.set_min_width(170.0);
+                if ui.button("Export as OBJ…").clicked() {
+                    format = Some(m3d::export::Format::Obj);
+                }
+                if ui.button("Export as STL…").clicked() {
+                    format = Some(m3d::export::Format::Stl);
+                }
+            });
+            if let Some(f) = format {
+                self.model_export(item, f);
+            }
+            right -= 30.0;
             let s = &mut self.model3d.settings;
-            let (r, x) = bar_toggle(ui, right, cy, "Details", s.info, "Show the model's details");
+            let (r, x) = bar_toggle(ui, right, cy, "Measure", s.measuring, "Measure: click two points on the model");
+            if r.clicked() {
+                s.measuring = !s.measuring;
+            }
+            let (r, x) = bar_toggle(ui, x, cy, "Tree", s.tree, "Show the files, meshes and materials");
+            if r.clicked() {
+                s.tree = !s.tree;
+            }
+            let (r, x) = bar_toggle(ui, x, cy, "Details", s.info, "Show the model's details");
             if r.clicked() {
                 s.info = !s.info;
             }
@@ -307,10 +346,16 @@ impl App {
             ui.color_edit_button_srgb(&mut s.default_color);
             ui.label("Default Colour");
         });
+        ui.label(egui::RichText::new("Theme").color(t::p().text_muted));
+        ui.horizontal(|ui| {
+            ui.selectable_value(&mut s.theme, ViewerTheme::Auto, "Auto");
+            ui.selectable_value(&mut s.theme, ViewerTheme::Light, "Light");
+            ui.selectable_value(&mut s.theme, ViewerTheme::Dark, "Dark");
+        });
         ui.separator();
         let reset = ui.button("Reset to Default").clicked();
         if reset {
-            *s = Settings { info: s.info, ..Settings::default() };
+            *s = Settings { info: s.info, tree: s.tree, measuring: s.measuring, ..Settings::default() };
         }
         let up_changed = s.up != before.up;
         if let Some(v) = self.model3d.view.as_mut() {

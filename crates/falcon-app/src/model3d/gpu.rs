@@ -517,7 +517,7 @@ mod tests {
             clear: [0.0; 4],
             view_proj: falcon_library::model3d::math::mul(&proj, &camera.view()),
             light: camera.light_direction(),
-            mesh: Some(Vertices::new(&super::super::mesh_vertices(&model, super::super::Shading::Flat, [0.8; 3]))),
+            mesh: Some(Vertices::new(&super::super::mesh_vertices(&model, super::super::Shading::Flat, [0.8; 3], &[]))),
             lines: Some(Lines { vertices: Vertices::new(&lines), edges: 0..2, grid: 2..2, axes: 2..2 }),
             edges: true,
             grid: false,

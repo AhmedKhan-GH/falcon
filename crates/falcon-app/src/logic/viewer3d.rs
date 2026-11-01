@@ -190,6 +190,26 @@ impl Camera {
         }
     }
 
+    /// The ray through the point (`x`, `y`) of the view in normalised
+    /// device coordinates (−1..1, y up), for picking: (origin, unit
+    /// direction). Perspective rays start at the eye; orthographic ones are
+    /// parallel, starting on the eye's plane.
+    pub fn ray(&self, mode: Projection, aspect: f32, x: f32, y: f32) -> (V3, V3) {
+        let (f, r, u) = self.basis();
+        let t = (FOV_DEG.to_radians() / 2.0).tan();
+        match mode {
+            Projection::Perspective => {
+                let d = math::add(f, math::add(math::scale(r, x * t * aspect), math::scale(u, y * t)));
+                (self.eye, math::normalize(d))
+            }
+            Projection::Orthographic => {
+                let h = self.distance() * t;
+                let o = math::add(self.eye, math::add(math::scale(r, x * h * aspect), math::scale(u, y * h)));
+                (o, f)
+            }
+        }
+    }
+
     /// The direction from the scene towards the eye, for the light.
     pub fn light_direction(&self) -> V3 {
         math::normalize(math::sub(self.eye, self.center))
@@ -199,6 +219,18 @@ impl Camera {
     pub fn flipped(&self) -> Camera {
         Camera { up: math::scale(self.up, -1.0), ..*self }
     }
+}
+
+/// Where the point `p` lands in `rect` (`[x0, y0, x1, y1]`, y down) through
+/// the camera matrix `vp`; `None` behind the eye.
+pub fn screen_point(vp: &M4, p: V3, rect: [f32; 4]) -> Option<[f32; 2]> {
+    let v = [p[0], p[1], p[2], 1.0];
+    let c: [f32; 4] = std::array::from_fn(|r| (0..4).map(|k| vp[k][r] * v[k]).sum());
+    if c[3] <= 1e-9 {
+        return None;
+    }
+    let (x, y) = (c[0] / c[3], c[1] / c[3]);
+    Some([rect[0] + (x * 0.5 + 0.5) * (rect[2] - rect[0]), rect[1] + (0.5 - y * 0.5) * (rect[3] - rect[1])])
 }
 
 /// How far from the centre the eye sits for a sphere of `radius` to fill a
@@ -460,5 +492,27 @@ mod viewer3d_tests {
         assert_eq!(detail_number(1.23456), "1.23");
         assert_eq!(detail_number(-0.001), "0");
         assert_eq!(detail_number(f64::NAN), "-");
+    }
+
+    #[test]
+    fn rays_go_through_the_points_they_project_from() {
+        for mode in [Projection::Perspective, Projection::Orthographic] {
+            let cam = Camera { eye: [1.0, 2.0, 5.0], center: [0.0, 0.5, 0.0], up: [0.0, 1.0, 0.0] };
+            let aspect = 1.6;
+            let vp = math::mul(&cam.projection(mode, aspect, 1.0), &cam.view());
+            let rect = [0.0, 0.0, 160.0, 100.0];
+            let p = [0.3, 0.2, -0.4];
+            let s = screen_point(&vp, p, rect).unwrap();
+            let (x, y) = (s[0] / 80.0 - 1.0, 1.0 - s[1] / 50.0);
+            let (o, d) = cam.ray(mode, aspect, x, y);
+            // The point lies on the ray: its offset from the origin is along d.
+            let off = math::sub(p, o);
+            let along = math::dot(off, d);
+            let miss = math::length(math::sub(off, math::scale(d, along)));
+            assert!(miss < 1e-3, "{mode:?}: {miss}");
+        }
+        let cam = Camera::home(UpAxis::Y);
+        let vp = math::mul(&cam.projection(Projection::Perspective, 1.0, 1.0), &cam.view());
+        assert!(screen_point(&vp, math::scale(cam.eye, 2.0), [0.0, 0.0, 1.0, 1.0]).is_none(), "behind the eye");
     }
 }

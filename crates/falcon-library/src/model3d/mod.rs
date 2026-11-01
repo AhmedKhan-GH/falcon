@@ -6,6 +6,7 @@
 //! FBX, 3DS, DAE and IFC are not read; those items keep their QuickLook
 //! still.
 
+pub mod export;
 pub mod geom;
 pub mod gltf;
 pub mod math;

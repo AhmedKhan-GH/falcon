@@ -58,10 +58,37 @@ pub fn render(model: &Model, size: u32) -> RgbaImage {
 
     let mut target = Target { size: s, depth: vec![f32::INFINITY; (s * s) as usize], color: vec![[0; 4]; (s * s) as usize] };
     for mesh in &model.meshes {
-        draw_mesh(&mut target, mesh, &vp, near, dir);
+        draw_mesh(&mut target, mesh, &vp, near, dir, DEFAULT_COLOR);
     }
     downsample(&target, &mut out);
     out
+}
+
+/// Draws `meshes` as the viewer shows them: a `w` x `h` picture through
+/// the camera matrix `vp` (projection times view, clip depth 0..1), lit
+/// from `to_eye` (unit, towards the camera), meshes without a colour in
+/// `default_color`, on a transparent background. The viewer's snapshot.
+///
+/// The square rasterizer draws a square of the longer side with the
+/// picture's window scaled into its middle, which is then cut out.
+pub fn render_view<'a>(meshes: impl IntoIterator<Item = &'a Mesh>, w: u32, h: u32, vp: &math::M4, to_eye: V3, default_color: V3) -> RgbaImage {
+    let (w, h) = (w.max(1), h.max(1));
+    let side = w.max(h);
+    let (sx, sy) = (w as f32 / side as f32, h as f32 / side as f32);
+    let mut m = *vp;
+    for col in &mut m {
+        col[0] *= sx;
+        col[1] *= sy;
+    }
+    let s = side * SS;
+    let mut target = Target { size: s, depth: vec![f32::INFINITY; (s * s) as usize], color: vec![[0; 4]; (s * s) as usize] };
+    for mesh in meshes {
+        // Clip w is the distance in front of the eye (1 for orthographic).
+        draw_mesh(&mut target, mesh, &m, 1e-6, to_eye, default_color);
+    }
+    let mut square = RgbaImage::new(side, side);
+    downsample(&target, &mut square);
+    image::imageops::crop_imm(&square, (side - w) / 2, (side - h) / 2, w, h).to_image()
 }
 
 struct Target {
@@ -94,9 +121,9 @@ fn pack(c: V3) -> [u8; 4] {
     [b(c[0]), b(c[1]), b(c[2]), 255]
 }
 
-fn draw_mesh(t: &mut Target, mesh: &Mesh, vp: &math::M4, near: f32, to_eye: V3) {
+fn draw_mesh(t: &mut Target, mesh: &Mesh, vp: &math::M4, near: f32, to_eye: V3, default_color: V3) {
     let verts = project(mesh, vp, near, t.size as f32);
-    let base = mesh.material.as_ref().map_or(DEFAULT_COLOR, |m| m.color);
+    let base = mesh.material.as_ref().map_or(default_color, |m| m.color);
     let colors = mesh.colors.as_deref();
     let normals = mesh.normals.as_deref();
     let size = t.size as i64;
@@ -367,5 +394,24 @@ mod tests {
         let out = trim_and_pad(&img, PADDING).unwrap();
         assert!(out.width() > 2 * PADDING && out.width() <= CANVAS + 2 * PADDING);
         assert!(t.elapsed().as_secs_f32() < 5.0);
+    }
+
+    #[test]
+    fn views_render_at_their_own_shape() {
+        let eye = [0.5, 0.5, 4.0];
+        let view = math::look_at(eye, [0.5, 0.5, 0.5], [0.0, 1.0, 0.0]);
+        let proj = math::perspective(FOV_DEG.to_radians(), 2.0, 0.1, 10.0);
+        let vp = math::mul(&proj, &view);
+        let model = cube_model();
+        let img = render_view(&model.meshes, 80, 40, &vp, [0.0, 0.0, 1.0], [1.0, 0.0, 0.0]);
+        assert_eq!(img.dimensions(), (80, 40));
+        let mid = img.get_pixel(40, 20);
+        assert_eq!(mid[3], 255);
+        assert!(mid[0] > mid[1].saturating_add(150) && mid[1] == mid[2], "the default colour is used: {mid:?}");
+        // Seen square-on, the cube is as tall as it is wide on the picture.
+        let wide = (0..80).filter(|&x| img.get_pixel(x, 20)[3] > 128).count() as i32;
+        let tall = (0..40).filter(|&y| img.get_pixel(40, y)[3] > 128).count() as i32;
+        assert!((wide - tall).abs() <= 2, "{wide} x {tall}");
+        assert_eq!(img.get_pixel(0, 0)[3], 0);
     }
 }

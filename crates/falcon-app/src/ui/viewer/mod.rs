@@ -8,6 +8,7 @@ pub(crate) mod font;
 pub(crate) mod gif;
 pub(crate) mod image;
 pub(crate) mod model;
+pub(crate) mod model_tools;
 pub(crate) mod modes;
 pub(crate) mod open;
 pub(crate) mod pdf;

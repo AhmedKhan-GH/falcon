@@ -28,6 +28,17 @@ pub(crate) enum Shading {
     Smooth,
 }
 
+/// The viewer's colour theme (the setting Eagle's viewer calls dark mode):
+/// follow falcon's theme, or force light or dark. It sets the background
+/// (unless one is chosen) and the panels' colours.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub(crate) enum ViewerTheme {
+    #[default]
+    Auto,
+    Light,
+    Dark,
+}
+
 /// The viewer's display settings, kept across models while falcon runs,
 /// as Eagle's viewer keeps them.
 #[derive(Clone, Debug, PartialEq)]
@@ -50,6 +61,11 @@ pub(crate) struct Settings {
     pub background: Option<[u8; 3]>,
     /// The colour of meshes without one, Eagle's (200, 200, 200).
     pub default_color: [u8; 3],
+    pub theme: ViewerTheme,
+    /// The model tree navigator (files, meshes, materials) on the left.
+    pub tree: bool,
+    /// The measure tool: clicks on the model pick points.
+    pub measuring: bool,
 }
 
 impl Default for Settings {
@@ -67,7 +83,23 @@ impl Default for Settings {
             info: true,
             background: None,
             default_color: [200, 200, 200],
+            theme: ViewerTheme::Auto,
+            tree: false,
+            measuring: false,
         }
+    }
+}
+
+impl Settings {
+    /// The background drawn: the chosen colour, else the theme's (white
+    /// for light, Eagle's dark grey for dark), else `None` (the viewer's
+    /// own, following falcon's theme).
+    pub fn effective_background(&self) -> Option<[u8; 3]> {
+        self.background.or(match self.theme {
+            ViewerTheme::Auto => None,
+            ViewerTheme::Light => Some([255, 255, 255]),
+            ViewerTheme::Dark => Some([42, 43, 46]),
+        })
     }
 }
 
@@ -105,10 +137,13 @@ fn unit(c: [u8; 3]) -> V3 {
 
 /// The triangles of `model` as a plain triangle list (no index buffer),
 /// with a normal and colour per corner: vertex colours first, then the
-/// material's, then `default_color`.
-pub(crate) fn mesh_vertices(model: &Model, shading: Shading, default_color: V3) -> Vec<f32> {
+/// material's, then `default_color`. Meshes marked in `hidden` are left out.
+pub(crate) fn mesh_vertices(model: &Model, shading: Shading, default_color: V3, hidden: &[bool]) -> Vec<f32> {
     let mut out = Vec::with_capacity(model.triangle_count() * 3 * VERTEX_FLOATS);
-    for mesh in &model.meshes {
+    for (k, mesh) in model.meshes.iter().enumerate() {
+        if hidden.get(k) == Some(&true) {
+            continue;
+        }
         let smooth = match shading {
             Shading::Flat => None,
             Shading::Smooth => Some(geom::smooth_normals(mesh)),
@@ -160,13 +195,19 @@ pub(crate) struct Lines {
 /// What a line buffer was built from, so it is rebuilt only on change.
 #[derive(Clone, PartialEq)]
 struct LinesKey {
-    edges: Option<([u8; 3], u32)>,
+    edges: Option<([u8; 3], u32, Vec<bool>)>,
     grid: Option<(UpAxis, [u8; 3])>,
     axes: bool,
 }
 
 /// What the background read sends back.
 type Loaded = Result<(Arc<Model>, Stats), String>;
+
+/// What the triangle data was built from: shading, default colour and the
+/// hidden meshes.
+type MeshKey = (Shading, [u8; 3], Vec<bool>);
+/// A feature edge and the mesh it belongs to.
+type MeshEdge = (usize, [V3; 2]);
 
 /// A model being read or shown.
 pub(crate) struct ModelView {
@@ -178,10 +219,15 @@ pub(crate) struct ModelView {
     pub camera: Camera,
     /// The camera still has to be fitted (once the view's size is known).
     pub needs_fit: bool,
-    mesh: Option<((Shading, [u8; 3]), Vertices)>,
-    /// Feature edges by threshold (in hundredths of a degree).
-    edges: Option<(u32, Arc<Vec<[V3; 2]>>)>,
+    mesh: Option<(MeshKey, Vertices)>,
+    /// Feature edges by threshold (in hundredths of a degree), with the
+    /// mesh each belongs to.
+    edges: Option<(u32, Arc<Vec<MeshEdge>>)>,
     lines: Option<(LinesKey, Lines)>,
+    /// Meshes hidden in the tree navigator, by index.
+    pub hidden: Vec<bool>,
+    /// The measure tool's picked points (at most two).
+    pub picks: Vec<m3d::export::Hit>,
 }
 
 impl ModelView {
@@ -209,6 +255,8 @@ impl ModelView {
             mesh: None,
             edges: None,
             lines: None,
+            hidden: Vec::new(),
+            picks: Vec::new(),
         };
         if let Err(e) = spawned {
             view.loading = None;
@@ -234,12 +282,51 @@ impl ModelView {
         false
     }
 
-    /// Fits the model in a view `aspect` wide per unit high.
+    /// Fits the visible meshes in a view `aspect` wide per unit high.
     pub fn fit(&mut self, aspect: f32) {
-        if let Some((c, r)) = self.model.as_ref().and_then(|m| m.bounding_sphere()) {
+        let all: Vec<usize> = (0..self.model.as_ref().map_or(0, |m| m.meshes.len())).filter(|&k| !self.is_hidden(k)).collect();
+        self.fit_meshes(&all, aspect);
+        self.needs_fit = false;
+    }
+
+    /// Fits the meshes `which` (indices) in the view.
+    pub fn fit_meshes(&mut self, which: &[usize], aspect: f32) {
+        let Some(model) = &self.model else { return };
+        let part = Model { meshes: which.iter().filter_map(|&k| model.meshes.get(k).cloned()).collect() };
+        if let Some((c, r)) = part.bounding_sphere() {
             self.camera.fit(c, r, aspect);
         }
-        self.needs_fit = false;
+    }
+
+    pub fn is_hidden(&self, k: usize) -> bool {
+        self.hidden.get(k) == Some(&true)
+    }
+
+    /// Shows or hides mesh `k`.
+    pub fn set_hidden(&mut self, k: usize, hide: bool) {
+        let n = self.model.as_ref().map_or(0, |m| m.meshes.len());
+        self.hidden.resize(n, false);
+        if let Some(h) = self.hidden.get_mut(k) {
+            *h = hide;
+        }
+        self.picks.retain(|p| p.mesh != k || !hide);
+    }
+
+    /// Shows only the meshes for which `keep` holds; when exactly those are
+    /// already the visible ones, shows every mesh again (a second isolate
+    /// undoes the first).
+    pub fn isolate(&mut self, keep: impl Fn(usize) -> bool) {
+        let n = self.model.as_ref().map_or(0, |m| m.meshes.len());
+        let want: Vec<bool> = (0..n).map(|k| !keep(k)).collect();
+        let now: Vec<bool> = (0..n).map(|k| self.is_hidden(k)).collect();
+        self.hidden = if now == want { vec![false; n] } else { want };
+        let hidden = self.hidden.clone();
+        self.picks.retain(|p| hidden.get(p.mesh) != Some(&true));
+    }
+
+    /// The visible meshes, for export and snapshots.
+    pub fn visible_meshes(&self) -> Vec<&m3d::Mesh> {
+        self.model.iter().flat_map(|m| m.meshes.iter().enumerate()).filter(|(k, _)| !self.is_hidden(*k)).map(|(_, m)| m).collect()
     }
 
     /// Goes back to the home view for `up` and fits.
@@ -256,9 +343,9 @@ impl ModelView {
     /// default colour changes.
     pub fn mesh(&mut self, settings: &Settings) -> Option<Vertices> {
         let model = self.model.as_ref()?;
-        let key = (settings.shading, settings.default_color);
+        let key = (settings.shading, settings.default_color, self.hidden.clone());
         if self.mesh.as_ref().is_none_or(|(k, _)| *k != key) {
-            let v = Vertices::new(&mesh_vertices(model, settings.shading, unit(settings.default_color)));
+            let v = Vertices::new(&mesh_vertices(model, settings.shading, unit(settings.default_color), &self.hidden));
             self.mesh = Some((key, v));
         }
         self.mesh.as_ref().map(|(_, v)| v.clone())
@@ -269,7 +356,7 @@ impl ModelView {
         let model = self.model.clone()?;
         let threshold = (settings.edge_threshold.clamp(0.0, 180.0) * 100.0).round() as u32;
         let key = LinesKey {
-            edges: settings.edges.then_some((settings.edge_color, threshold)),
+            edges: settings.edges.then_some((settings.edge_color, threshold, self.hidden.clone())),
             grid: settings.grid.then_some((settings.up, background)),
             axes: settings.axes,
         };
@@ -277,13 +364,15 @@ impl ModelView {
             return self.lines.as_ref().map(|(_, l)| l.clone());
         }
         let mut floats = Vec::new();
-        if let Some((color, t)) = key.edges {
-            if self.edges.as_ref().is_none_or(|(k, _)| *k != t) {
-                let segs: Vec<[V3; 2]> = model.meshes.iter().flat_map(|m| geom::feature_edges(m, t as f32 / 100.0)).collect();
-                self.edges = Some((t, Arc::new(segs)));
+        if let Some((color, t, hidden)) = &key.edges {
+            if self.edges.as_ref().is_none_or(|(k, _)| k != t) {
+                let segs: Vec<MeshEdge> =
+                    model.meshes.iter().enumerate().flat_map(|(k, m)| geom::feature_edges(m, *t as f32 / 100.0).into_iter().map(move |s| (k, s))).collect();
+                self.edges = Some((*t, Arc::new(segs)));
             }
             if let Some((_, segs)) = &self.edges {
-                line_vertices(&mut floats, segs, unit(color));
+                let shown: Vec<[V3; 2]> = segs.iter().filter(|(k, _)| hidden.get(*k) != Some(&true)).map(|(_, s)| *s).collect();
+                line_vertices(&mut floats, &shown, unit(*color));
             }
         }
         let e = (floats.len() / VERTEX_FLOATS) as u32;
@@ -339,27 +428,27 @@ mod tests {
     #[test]
     fn vertices_take_the_nearest_colour() {
         let grey = [0.5; 3];
-        let v = mesh_vertices(&tri(None, None), Shading::Flat, grey);
+        let v = mesh_vertices(&tri(None, None), Shading::Flat, grey, &[]);
         assert_eq!(v.len(), 3 * VERTEX_FLOATS);
         assert_eq!(&v[6..9], &grey);
         let red = Material { name: "r".into(), color: [1.0, 0.0, 0.0], opacity: 1.0 };
-        let v = mesh_vertices(&tri(None, Some(red.clone())), Shading::Flat, grey);
+        let v = mesh_vertices(&tri(None, Some(red.clone())), Shading::Flat, grey, &[]);
         assert_eq!(&v[6..9], &[1.0, 0.0, 0.0]);
-        let v = mesh_vertices(&tri(Some(vec![[0.0, 1.0, 0.0]; 3]), Some(red)), Shading::Flat, grey);
+        let v = mesh_vertices(&tri(Some(vec![[0.0, 1.0, 0.0]; 3]), Some(red)), Shading::Flat, grey, &[]);
         assert_eq!(&v[6..9], &[0.0, 1.0, 0.0]);
     }
 
     #[test]
     fn shading_picks_the_normals() {
         // Flat: the face normal. Auto and Smooth: the file's, normalised.
-        let flat = mesh_vertices(&tri(None, None), Shading::Flat, [1.0; 3]);
+        let flat = mesh_vertices(&tri(None, None), Shading::Flat, [1.0; 3], &[]);
         assert_eq!(&flat[3..6], &[0.0, 0.0, 1.0]);
         let mut m = tri(None, None);
         m.meshes[0].normals = Some(vec![[0.0, 3.0, 0.0]; 3]);
-        assert_eq!(&mesh_vertices(&m, Shading::Auto, [1.0; 3])[3..6], &[0.0, 1.0, 0.0]);
-        assert_eq!(&mesh_vertices(&m, Shading::Flat, [1.0; 3])[3..6], &[0.0, 0.0, 1.0]);
+        assert_eq!(&mesh_vertices(&m, Shading::Auto, [1.0; 3], &[])[3..6], &[0.0, 1.0, 0.0]);
+        assert_eq!(&mesh_vertices(&m, Shading::Flat, [1.0; 3], &[])[3..6], &[0.0, 0.0, 1.0]);
         m.meshes[0].normals = None;
-        assert_eq!(&mesh_vertices(&m, Shading::Auto, [1.0; 3])[3..6], &[0.0, 0.0, 1.0]);
+        assert_eq!(&mesh_vertices(&m, Shading::Auto, [1.0; 3], &[])[3..6], &[0.0, 0.0, 1.0]);
     }
 
     #[test]
@@ -375,10 +464,37 @@ mod tests {
     }
 
     #[test]
+    fn the_theme_sets_the_background_unless_one_is_chosen() {
+        let mut s = Settings::default();
+        assert_eq!(s.effective_background(), None);
+        s.theme = ViewerTheme::Dark;
+        assert_eq!(s.effective_background(), Some([42, 43, 46]));
+        s.background = Some([1, 2, 3]);
+        assert_eq!(s.effective_background(), Some([1, 2, 3]));
+    }
+
+    #[test]
     fn defaults_follow_eagle() {
         let s = Settings::default();
         assert!(!s.edges && !s.grid && !s.axes && s.fixed_up);
         assert_eq!((s.edge_color, s.edge_threshold, s.default_color), ([0, 0, 0], 1.0, [200, 200, 200]));
         assert_eq!(s.up, UpAxis::Y);
+    }
+
+    #[test]
+    fn hidden_meshes_are_left_out_and_isolate_toggles() {
+        let mut m = tri(None, None);
+        m.meshes.push(m.meshes[0].clone());
+        assert_eq!(mesh_vertices(&m, Shading::Flat, [1.0; 3], &[true, false]).len(), 3 * VERTEX_FLOATS);
+        let ctx = eframe::egui::Context::default();
+        let mut v = ModelView::open(&ctx, "x", std::path::PathBuf::from("/nonexistent/x.obj"), "obj", UpAxis::Y);
+        v.model = Some(Arc::new(m));
+        v.isolate(|k| k == 1);
+        assert!(v.is_hidden(0) && !v.is_hidden(1));
+        assert_eq!(v.visible_meshes().len(), 1);
+        v.isolate(|k| k == 1);
+        assert!(!v.is_hidden(0) && !v.is_hidden(1), "isolating the same again shows everything");
+        v.set_hidden(0, true);
+        assert!(v.is_hidden(0));
     }
 }
