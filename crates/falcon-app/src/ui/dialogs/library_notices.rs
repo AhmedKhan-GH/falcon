@@ -482,8 +482,8 @@ impl App {
             (PackAsk::Space { path, folder, .. }, Some(true)) => self.start_pack_import(path, folder, false),
             (PackAsk::Space { .. }, Some(false)) => {}
             (PackAsk::Duplicates { path, folder, .. }, Some(keep)) => self.start_pack_import(path, folder, !keep),
-            // Closing the duplicates question cancels, as Esc does in Eagle.
-            (PackAsk::Duplicates { .. }, None) if closed => {}
+            // Dismissing Eagle's duplicates question (Esc) imports everything.
+            (PackAsk::Duplicates { path, folder, .. }, None) if closed => self.start_pack_import(path, folder, false),
             (ask, None) => self.pack_ask = Some(ask),
         }
     }
