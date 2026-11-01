@@ -1,6 +1,6 @@
 # Roadmap
 
-Falcon is early alpha. This is what is done and what comes next, roughly in order.
+Falcon is early alpha. This is what is done and what comes next, roughly in order. [PARITY.md](PARITY.md) is the full feature-by-feature comparison with Eagle; it is the source of truth for what's left, and many local features listed there are not on this page yet.
 
 ## Done
 
