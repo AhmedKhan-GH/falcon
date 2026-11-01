@@ -67,3 +67,13 @@ Libraries built into falcon beyond ordinary Rust crates from crates.io, with the
 | hashlink | 0.9.1 | MIT OR Apache-2.0 | [github.com/kyren/hashlink](https://github.com/kyren/hashlink) | rusqlite's statement cache |
 | fallible-iterator | 0.3.0 | MIT OR Apache-2.0 | [github.com/sfackler/rust-fallible-iterator](https://github.com/sfackler/rust-fallible-iterator) | rusqlite dependency |
 | fallible-streaming-iterator | 0.1.9 | MIT OR Apache-2.0 | [github.com/sfackler/fallible-streaming-iterator](https://github.com/sfackler/fallible-streaming-iterator) | rusqlite dependency |
+| symphonia, symphonia-core, symphonia-metadata, symphonia-utils-xiph | 0.5.5 | MPL-2.0 | [github.com/pdeljanov/Symphonia](https://github.com/pdeljanov/Symphonia) | Audio decoding (`falcon_library::audio`): playback, seeking, waveforms, durations, tempo |
+| symphonia-bundle-mp3, symphonia-bundle-flac | 0.5.5 | MPL-2.0 | [github.com/pdeljanov/Symphonia](https://github.com/pdeljanov/Symphonia) | MP3 and FLAC |
+| symphonia-codec-aac, symphonia-codec-adpcm, symphonia-codec-alac, symphonia-codec-pcm, symphonia-codec-vorbis | 0.5.5 | MPL-2.0 | [github.com/pdeljanov/Symphonia](https://github.com/pdeljanov/Symphonia) | AAC-LC, ADPCM, ALAC, PCM and Vorbis |
+| symphonia-format-caf, symphonia-format-isomp4, symphonia-format-ogg, symphonia-format-riff | 0.5.5 | MPL-2.0 | [github.com/pdeljanov/Symphonia](https://github.com/pdeljanov/Symphonia) | CAF, MP4/M4A, Ogg, WAV and AIFF containers |
+| opus-decoder | 0.1.1 | MIT OR Apache-2.0 | [github.com/TadeuszWolfGang/Rusopus](https://github.com/TadeuszWolfGang/Rusopus) | Opus, pure Rust (`crates/falcon-library/src/audio/opus.rs`) |
+| rodio | 0.23.0 | MIT OR Apache-2.0 | [github.com/RustAudio/rodio](https://github.com/RustAudio/rodio) | Audio output on the default device |
+
+Symphonia is covered by the Mozilla Public License 2.0 (<https://mozilla.org/MPL/2.0/>). Falcon uses it unmodified, as published on crates.io; the source code of every MPL-covered file is available from the repository above and from each crate's page on crates.io (for example <https://crates.io/crates/symphonia/0.5.5>). Falcon's own files are not covered by the MPL.
+
+The audio test fixtures in `crates/falcon-library/testdata/audio` were made for falcon's tests from a synthesised tone. Some were encoded with the pure-Rust `rusty_mp3` 1.0.5 and `rusty_vorbis` 0.1.2 encoders (Apache-2.0, [github.com/Remade-With-Rust/remade_ffmpeg_rs](https://github.com/Remade-With-Rust/remade_ffmpeg_rs)), which are not linked into falcon, and the rest with macOS `afconvert`.

@@ -2,6 +2,7 @@
 
 pub mod actions;
 pub mod add_to_library;
+pub mod audio;
 pub mod autotag;
 pub mod backup;
 pub mod duplicates;

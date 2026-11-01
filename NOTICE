@@ -20,6 +20,15 @@ Third-party material:
   The rusqlite developers (https://github.com/rusqlite/rusqlite).
 - SQLite 3.46.0, bundled through libsqlite3-sys, in the public domain
   (https://www.sqlite.org/copyright.html).
+- Symphonia 0.5.5 (symphonia and its core, metadata, xiph, mp3, flac, aac,
+  adpcm, alac, pcm, vorbis, caf, isomp4, ogg and riff crates), Mozilla
+  Public License 2.0, copyright (c) the Project Symphonia Developers. Used
+  unmodified; the source of the MPL-covered files is available at
+  https://github.com/pdeljanov/Symphonia and on crates.io. See
+  https://mozilla.org/MPL/2.0/.
+- opus-decoder 0.1.1, MIT or Apache-2.0,
+  https://github.com/TadeuszWolfGang/Rusopus.
+- rodio 0.23.0, MIT or Apache-2.0, https://github.com/RustAudio/rodio.
 
 "Eagle" is a trademark of its respective owner. Falcon is not affiliated
 with, endorsed by or sponsored by Eagle or its developers.

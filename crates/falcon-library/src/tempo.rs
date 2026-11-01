@@ -9,8 +9,6 @@
 
 use std::path::Path;
 
-use symphonia::core::audio::SampleBuffer;
-use symphonia::core::codecs::DecoderOptions;
 
 use crate::media;
 
@@ -57,32 +55,13 @@ pub fn bpm(path: &Path, ext: &str) -> Option<f64> {
 /// Decodes the mono mix of an audio file, stopping after `seconds` when
 /// given.
 fn mono(path: &Path, ext: &str, seconds: Option<f64>) -> Option<(Vec<f32>, u32)> {
-    let mut format = media::open_audio(path, ext)?;
-    let track = format.default_track()?;
-    let id = track.id;
-    let rate = track.codec_params.sample_rate?;
+    let mut source = crate::audio::open(path, ext).ok()?;
+    let rate = source.sample_rate();
     let max = seconds.map_or(usize::MAX, |s| (s * f64::from(rate)) as usize);
-    let mut decoder = symphonia::default::get_codecs().make(&track.codec_params, &DecoderOptions::default()).ok()?;
     let mut out = Vec::new();
-    let mut buf: Option<SampleBuffer<f32>> = None;
     while out.len() < max {
-        let Ok(packet) = format.next_packet() else { break };
-        if packet.track_id() != id {
-            continue;
-        }
-        let decoded = match decoder.decode(&packet) {
-            Ok(d) => d,
-            Err(symphonia::core::errors::Error::DecodeError(_)) => continue,
-            Err(_) => break,
-        };
-        let spec = *decoded.spec();
-        let channels = spec.channels.count().max(1);
-        let sb = match &mut buf {
-            Some(b) if b.capacity() >= decoded.capacity() * channels => b,
-            _ => buf.insert(SampleBuffer::new(decoded.capacity() as u64, spec)),
-        };
-        sb.copy_interleaved_ref(decoded);
-        out.extend(sb.samples().chunks(channels).map(|f| f.iter().sum::<f32>() / channels as f32));
+        let Some(block) = source.next_block() else { break };
+        out.extend(block.frames().map(|f| f.iter().sum::<f32>() / f.len() as f32));
     }
     out.truncate(max);
     Some((out, rate))

@@ -6,10 +6,6 @@
 use std::path::Path;
 
 use image::{Rgba, RgbaImage};
-use symphonia::core::audio::SampleBuffer;
-use symphonia::core::codecs::DecoderOptions;
-
-use crate::media;
 
 /// Size Eagle records for an audio item and draws its waveform at.
 pub const WIDTH: u32 = 280;
@@ -24,31 +20,12 @@ const BLOCK: usize = 256;
 /// Decodes an audio file and returns `buckets` (min, max) pairs of the mono
 /// mix, in -1..=1. `None` if it can't be decoded.
 pub fn peaks(path: &Path, ext: &str, buckets: usize) -> Option<Vec<(f32, f32)>> {
-    let mut format = media::open_audio(path, ext)?;
-    let track = format.default_track()?;
-    let id = track.id;
-    let mut decoder = symphonia::default::get_codecs().make(&track.codec_params, &DecoderOptions::default()).ok()?;
+    let mut source = crate::audio::open(path, ext).ok()?;
     let mut blocks: Vec<(f32, f32)> = Vec::new();
     let (mut lo, mut hi, mut n) = (f32::MAX, f32::MIN, 0usize);
-    let mut buf: Option<SampleBuffer<f32>> = None;
-    while let Ok(packet) = format.next_packet() {
-        if packet.track_id() != id {
-            continue;
-        }
-        let decoded = match decoder.decode(&packet) {
-            Ok(d) => d,
-            Err(symphonia::core::errors::Error::DecodeError(_)) => continue,
-            Err(_) => break,
-        };
-        let spec = *decoded.spec();
-        let channels = spec.channels.count().max(1);
-        let sb = match &mut buf {
-            Some(b) if b.capacity() >= decoded.capacity() * channels => b,
-            _ => buf.insert(SampleBuffer::new(decoded.capacity() as u64, spec)),
-        };
-        sb.copy_interleaved_ref(decoded);
-        for frame in sb.samples().chunks(channels) {
-            let s = frame.iter().sum::<f32>() / channels as f32;
+    while let Some(block) = source.next_block() {
+        for frame in block.frames() {
+            let s = frame.iter().sum::<f32>() / frame.len() as f32;
             lo = lo.min(s);
             hi = hi.max(s);
             n += 1;

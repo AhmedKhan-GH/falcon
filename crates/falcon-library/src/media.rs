@@ -5,19 +5,19 @@ use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 
-use symphonia::core::formats::FormatOptions;
-use symphonia::core::io::MediaSourceStream;
-use symphonia::core::meta::MetadataOptions;
-use symphonia::core::probe::Hint;
 
 /// Eagle's audio formats.
 pub const AUDIO_EXTENSIONS: [&str; 6] = ["mp3", "wav", "flac", "ogg", "aac", "m4a"];
+/// Audio formats falcon also treats as audio (viewer, hover playback,
+/// waveform thumbnail, duration, the Audio type filter) because it decodes
+/// them, though Eagle 4 handles them as plain files.
+pub const EXTRA_AUDIO_EXTENSIONS: [&str; 5] = ["opus", "aiff", "aif", "aifc", "caf"];
 /// Eagle's video formats.
 pub const VIDEO_EXTENSIONS: [&str; 18] =
     ["ts", "3gp", "360", "afx", "vap", "eva", "mp4", "mov", "m4v", "webm", "mkv", "avi", "wmv", "mpg", "mts", "flv", "m2ts", "f4v"];
 
 pub fn is_audio(ext: &str) -> bool {
-    AUDIO_EXTENSIONS.contains(&ext)
+    AUDIO_EXTENSIONS.contains(&ext) || EXTRA_AUDIO_EXTENSIONS.contains(&ext)
 }
 
 pub fn is_video(ext: &str) -> bool {
@@ -25,7 +25,7 @@ pub fn is_video(ext: &str) -> bool {
 }
 
 /// The duration in seconds of an audio or video file falcon can read:
-/// the audio formats through symphonia, and ISO-media video (mp4, mov,
+/// the audio formats through [`crate::audio`], and ISO-media video (mp4, mov,
 /// m4v, 3gp, f4v) from its movie header.
 pub fn duration(path: &Path, ext: &str) -> Option<f64> {
     if is_audio(ext) {
@@ -37,43 +37,32 @@ pub fn duration(path: &Path, ext: &str) -> Option<f64> {
     None
 }
 
-/// Opens an audio file with symphonia.
-pub(crate) fn open_audio(path: &Path, ext: &str) -> Option<Box<dyn symphonia::core::formats::FormatReader>> {
-    let file = File::open(path).ok()?;
-    let mss = MediaSourceStream::new(Box::new(file), Default::default());
-    let mut hint = Hint::new();
-    hint.with_extension(ext);
-    let probed = symphonia::default::get_probe()
-        .format(&hint, mss, &FormatOptions { enable_gapless: true, ..Default::default() }, &MetadataOptions::default())
-        .ok()?;
-    Some(probed.format)
-}
-
-/// An audio file's length from its frame count, or by adding up packet
+/// An audio file's length: from its header, or by adding up packet
 /// durations when the header doesn't say (an MP3 without a Xing header).
+/// `None` when the file doesn't decode (see [`crate::audio`]).
 pub fn audio_duration(path: &Path, ext: &str) -> Option<f64> {
-    let mut format = open_audio(path, ext)?;
+    let source = crate::audio::open(path, ext).ok()?;
+    if let Some(d) = source.duration() {
+        return Some(d);
+    }
+    drop(source);
+    let mut format = crate::audio::open_format(path, ext).ok()?;
     let track = format.default_track()?;
     let id = track.id;
     let params = track.codec_params.clone();
-    let seconds = |frames: u64| -> Option<f64> {
-        if let Some(tb) = params.time_base {
-            let t = tb.calc_time(frames);
-            Some(t.seconds as f64 + t.frac)
-        } else {
-            params.sample_rate.map(|sr| frames as f64 / f64::from(sr))
-        }
-    };
-    if let Some(n) = params.n_frames {
-        return seconds(n).filter(|d| *d > 0.0);
-    }
     let mut total = 0u64;
     while let Ok(p) = format.next_packet() {
         if p.track_id() == id {
             total += p.dur;
         }
     }
-    seconds(total).filter(|d| *d > 0.0)
+    let secs = if let Some(tb) = params.time_base {
+        let t = tb.calc_time(total);
+        t.seconds as f64 + t.frac
+    } else {
+        total as f64 / f64::from(params.sample_rate?)
+    };
+    (secs > 0.0).then_some(secs)
 }
 
 /// Reads `moov/mvhd` and returns duration ÷ timescale.

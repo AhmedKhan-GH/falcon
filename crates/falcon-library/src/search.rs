@@ -662,12 +662,13 @@ pub fn shape_counts<'a>(items: impl IntoIterator<Item = &'a Item>) -> HashMap<Sh
     out
 }
 
-/// Eagle's file-type groups for the type filter.
+/// Eagle's file-type groups for the type filter (audio also takes the
+/// formats falcon plays beyond Eagle's, [`crate::media::is_audio`]).
 pub fn type_group(ext: &str) -> Option<&'static str> {
     Some(match ext {
         "ts" | "3gp" | "360" | "afx" | "vap" | "eva" | "mp4" | "mov" | "m4v" | "webm" | "mkv" | "avi" | "wmv"
         | "mpg" | "mts" | "flv" | "m2ts" | "f4v" => "video",
-        "mp3" | "wav" | "flac" | "ogg" | "aac" | "m4a" => "audio",
+        e if crate::media::is_audio(e) => "audio",
         "ttf" | "otf" | "ttc" | "woff" | "woff2" => "font",
         "ppt" | "pptx" | "potx" => "powerpoint",
         "doc" | "docx" => "word",
