@@ -44,6 +44,11 @@ pub struct Prefs {
     pub collect_folder: Option<String>,
     /// Eagle's `theme.css`: the colour theme.
     pub theme: Theme,
+    /// Eagle's `general.zoom`: the size of the whole interface, in percent
+    /// (`ZOOM_STEPS`).
+    pub ui_zoom: u16,
+    /// Eagle's `general.showSidebarBadge`: item counts beside sidebar rows.
+    pub sidebar_counts: bool,
 }
 
 impl Default for Prefs {
@@ -58,8 +63,19 @@ impl Default for Prefs {
             api_port: falcon_server::DEFAULT_PORT,
             collect_folder: None,
             theme: Theme::Dark,
+            ui_zoom: 100,
+            sidebar_counts: true,
         }
     }
+}
+
+/// The interface sizes offered, in percent: Eagle's list up to 150%.
+pub const ZOOM_STEPS: [u16; 8] = [50, 75, 80, 90, 100, 110, 125, 150];
+
+/// egui's zoom factor for an interface size in percent, kept within
+/// 50–150%.
+pub fn zoom_factor(percent: u16) -> f32 {
+    f32::from(percent.clamp(ZOOM_STEPS[0], ZOOM_STEPS[ZOOM_STEPS.len() - 1])) / 100.0
 }
 
 impl Prefs {
@@ -68,6 +84,7 @@ impl Prefs {
         if port_error(self.api_port).is_some() {
             self.api_port = Prefs::default().api_port;
         }
+        self.ui_zoom = self.ui_zoom.clamp(ZOOM_STEPS[0], ZOOM_STEPS[ZOOM_STEPS.len() - 1]);
         self
     }
 
@@ -230,8 +247,10 @@ pub struct Window {
     draft: Option<Draft>,
     port_text: String,
     recorder: Recorder,
-    /// The theme last saved or applied; a previewed one reverts to it.
+    /// The theme and interface size last saved or applied; previewed
+    /// ones revert to them.
     applied_theme: Theme,
+    applied_zoom: u16,
 }
 
 /// Size of the window, close to Eagle's.
@@ -285,6 +304,7 @@ impl Window {
     pub fn show_with(&mut self, draft: Draft) {
         self.port_text = draft.prefs.api_port.to_string();
         self.applied_theme = draft.prefs.theme;
+        self.applied_zoom = draft.prefs.ui_zoom;
         self.draft = Some(draft);
         self.open = true;
         self.query.clear();
@@ -387,6 +407,7 @@ impl Window {
             {
                 draft.prefs.api_port = p;
                 self.applied_theme = draft.prefs.theme;
+                self.applied_zoom = draft.prefs.ui_zoom;
                 result = Some(draft.clone());
                 close |= save || save_key;
             }
@@ -395,6 +416,7 @@ impl Window {
             if let Some(theme) = theme_to_restore(self.applied_theme, t::current()) {
                 t::set_theme(ctx, theme);
             }
+            ctx.set_zoom_factor(zoom_factor(self.applied_zoom));
             self.close();
         } else {
             self.draft = Some(draft);
@@ -475,7 +497,8 @@ fn note(ui: &mut Ui, text: &str) {
 
 /// General: appearance, the window, and how imports behave.
 fn general(p: &mut Page, d: &mut Draft) {
-    p.block("Appearance", &["theme", "colour", "color", "dark", "light", "gray", "blue", "purple", "auto"], |ui| {
+    let keywords = ["theme", "colour", "color", "dark", "light", "gray", "blue", "purple", "auto", "zoom", "size", "scale", "interface", "counts", "badge", "sidebar", "numbers"];
+    p.block("Appearance", &keywords, |ui| {
         ui.horizontal(|ui| {
             for theme in Theme::all() {
                 if ui.selectable_value(&mut d.prefs.theme, theme, theme.to_string()).changed() {
@@ -484,6 +507,21 @@ fn general(p: &mut Page, d: &mut Draft) {
                 }
             }
         });
+        ui.add_space(4.0);
+        ui.horizontal(|ui| {
+            ui.label("Interface zoom");
+            let before = d.prefs.ui_zoom;
+            egui::ComboBox::from_id_salt("ui-zoom").selected_text(format!("{}%", d.prefs.ui_zoom)).show_ui(ui, |ui| {
+                for z in ZOOM_STEPS {
+                    ui.selectable_value(&mut d.prefs.ui_zoom, z, format!("{z}%"));
+                }
+            });
+            if d.prefs.ui_zoom != before {
+                // Previewed at once, like the theme; Cancel switches back.
+                ui.ctx().set_zoom_factor(zoom_factor(d.prefs.ui_zoom));
+            }
+        });
+        ui.checkbox(&mut d.prefs.sidebar_counts, "Show item counts in the sidebar");
     });
     p.block("Window", &["sidebar", "inspector", "panel", "show"], |ui| {
         ui.checkbox(&mut d.panels.sidebar, "Show the sidebar");
@@ -650,6 +688,19 @@ mod tests {
         assert_eq!(saved_theme(Some(&Mem(None))), Theme::Dark);
         assert_eq!(saved_theme(Some(&Mem(Some("garbage".into())))), Theme::Dark);
         assert_eq!(saved_theme(None), Theme::Dark);
+    }
+
+    #[test]
+    fn zoom_stays_in_range() {
+        assert_eq!(Prefs::default().ui_zoom, 100, "Eagle's zoom defaults to 100%");
+        assert!(Prefs::default().sidebar_counts, "Eagle's showSidebarBadge defaults to on");
+        assert_eq!(zoom_factor(100), 1.0);
+        assert_eq!(zoom_factor(125), 1.25);
+        assert_eq!(zoom_factor(10), 0.5);
+        assert_eq!(zoom_factor(400), 1.5);
+        assert_eq!(Prefs { ui_zoom: 300, ..Default::default() }.sanitized().ui_zoom, 150);
+        assert_eq!(Prefs { ui_zoom: 0, ..Default::default() }.sanitized().ui_zoom, 50);
+        assert!(ZOOM_STEPS.windows(2).all(|w| w[0] < w[1]) && ZOOM_STEPS.contains(&100));
     }
 
     #[test]

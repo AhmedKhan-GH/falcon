@@ -366,14 +366,14 @@ impl App {
         let open = has_children && !self.ws.collapsed.contains(&sf.id);
         let group = sf.is_group();
         // A group shows no count, as in Eagle.
-        let count = if group { 0 } else { lib.smart_folder_items(&sf.id).len() };
+        let count = if group || !self.prefs.sidebar_counts { 0 } else { lib.smart_folder_items(&sf.id).len() };
         let active = self.tree_active(super::folders_ui::Tree::Smart, &sf.id);
         self.ws.folders.row(super::folders_ui::Tree::Smart, &sf.id);
         let glyph = smart_look(sf);
         let tint = folder_icons::color(sf.icon_color.as_deref()).unwrap_or(t::p().text);
         let renaming = self.ws.org.smart_rename.as_ref().is_some_and(|(id, _)| *id == sf.id);
         let label = if renaming { "" } else { sf.name.as_str() };
-        let resp = sidebar_row_tinted(ui, depth, glyph, tint, label, (count > 0).then_some(count), active, has_children.then_some(open));
+        let resp = sidebar_row_tinted(ui, depth, glyph, tint, label, self.badge(count), active, has_children.then_some(open));
         let row = resp.rect;
         if renaming {
             self.smart_rename_field(ui, row, depth, sf);

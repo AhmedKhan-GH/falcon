@@ -617,6 +617,10 @@ impl App {
         app.recent = saved.recent.into_iter().filter(|p| p.is_dir()).collect();
         app.ws.layout = saved.layout.unwrap_or_default();
         app.prefs = saved.prefs.sanitized();
+        // The interface size is a preference, as in Eagle, so egui's own
+        // ⌘+ and ⌘− (which falcon uses to zoom the grid) must not change it.
+        cc.egui_ctx.options_mut(|o| o.zoom_with_keyboard = false);
+        cc.egui_ctx.set_zoom_factor(crate::prefs::zoom_factor(app.prefs.ui_zoom));
         app.prefs_window.set_pane(saved.prefs_pane);
         app.shortcuts = saved.shortcuts;
         app.collect.pos = saved.collect_pos.map(Pos2::from);
@@ -832,6 +836,7 @@ impl App {
         let folder = self.prefs.collect_folder.take();
         self.prefs = d.prefs;
         self.prefs.collect_folder = folder;
+        self.ctx.set_zoom_factor(crate::prefs::zoom_factor(self.prefs.ui_zoom));
         self.show_sidebar = d.panels.sidebar;
         self.show_inspector = d.panels.inspector;
         self.shortcuts = d.keys;
@@ -2155,7 +2160,7 @@ impl App {
                         (ic::FOLDER, f.name.clone(), Scope::Folder(id.to_string()), cx.folder_counts.get(id).copied().unwrap_or(0))
                     };
                     let active = self.ws.scope == scope;
-                    let resp = sidebar_row(ui, 0, glyph, &name, (count > 0).then_some(count), active, None);
+                    let resp = sidebar_row(ui, 0, glyph, &name, self.badge(count), active, None);
                     if kind != "smartFolder" {
                         self.imports.note_row(ui, resp.rect, id);
                     }
@@ -2210,6 +2215,12 @@ impl App {
         );
     }
 
+    /// The count shown beside a sidebar row: none when zero, or when
+    /// Preferences turns counts off.
+    pub(super) fn badge(&self, count: usize) -> Option<usize> {
+        (count > 0 && self.prefs.sidebar_counts).then_some(count)
+    }
+
     fn nav_rows(&mut self, ui: &mut Ui, cx: &SidebarCtx) {
         let n = cx.nav;
         let entries: [(&str, &str, Scope, usize); 8] = [
@@ -2227,7 +2238,7 @@ impl App {
                 (Scope::Random(_), Scope::Random(_)) => true,
                 (a, b) => a == b,
             };
-            let resp = sidebar_row(ui, 0, glyph, label, (count > 0).then_some(count), active, None);
+            let resp = sidebar_row(ui, 0, glyph, label, self.badge(count), active, None);
             if scope == Scope::Trash {
                 resp.context_menu(|ui| {
                     if ui.add_enabled(n.trash > 0, egui::Button::new("Empty Trash")).clicked() {
@@ -2258,7 +2269,7 @@ impl App {
         let open = has_children && (!filter.is_empty() || !self.ws.collapsed.contains(&f.id));
         let active = self.tree_active(folders_ui::Tree::Folders, &f.id);
         self.ws.folders.row(folders_ui::Tree::Folders, &f.id);
-        let count = cx.folder_counts.get(&f.id).copied().filter(|_| !shut);
+        let count = cx.folder_counts.get(&f.id).copied().filter(|_| !shut && self.prefs.sidebar_counts);
         let (glyph, tint) = App::folder_look(f, open);
         let renaming = self.ws.renaming.as_ref().is_some_and(|(id, _)| *id == f.id);
         let label = if renaming { "" } else { f.name.as_str() };
