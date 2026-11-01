@@ -145,6 +145,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::Rate(_) => any || (s.library && s.viewer),
         C::AddTags | C::TagPanel | C::CopyTags | C::ClearTags => any,
         C::PasteTags => any && s.tag_clipboard,
+        C::CustomThumbnail | C::ClipboardThumbnail => s.library && (s.viewer || s.selected == 1),
         C::AddToLastFolder => (any || (s.library && s.viewer)) && s.last_folder,
         C::FlipHorizontal => s.library && s.flippable,
         C::RotateLeft => s.library && s.rotatable,
@@ -285,6 +286,10 @@ pub static MENUS: &[(&str, &[Entry])] = &[
                 ],
             ),
             item("Refresh Thumbnail", Command::RefreshThumbnail),
+            Entry::Sub(
+                "Custom Thumbnail",
+                &[item("From a File…", Command::CustomThumbnail), item("From the Clipboard", Command::ClipboardThumbnail)],
+            ),
             SEP,
             Entry::Sub(
                 "Move Folder",

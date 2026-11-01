@@ -93,6 +93,9 @@ pub enum Command {
     NewTextFile,
     /// Organize ▸ Add to Last Used Folder.
     AddToLastFolder,
+    /// Edit ▸ Custom Thumbnail: from a file, or from the clipboard.
+    CustomThumbnail,
+    ClipboardThumbnail,
     /// Edit ▸ Duplicate: a copy of the item, kept next to it.
     Duplicate,
     /// Remake the selected items' thumbnails.
@@ -294,6 +297,8 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::SelectAll, id: "edit.select.all", group: "Edit", label: "Select all", default: k(CMD, Key::A), aliases: &[] },
     Spec { cmd: Command::Rename, id: "edit.rename", group: "Edit", label: "Rename the selected item", default: k(CMD, Key::R), aliases: &[KeyboardShortcut::new(NONE, Key::F2)] },
     Spec { cmd: Command::Copy, id: "edit.copy", group: "Edit", label: "Copy the selected files", default: k(CMD, Key::C), aliases: &[] },
+    Spec { cmd: Command::CustomThumbnail, id: "edit.thumbnail.custom.file", group: "Edit", label: "Custom thumbnail from a file", default: k(CMD_ALT, Key::T), aliases: &[] },
+    Spec { cmd: Command::ClipboardThumbnail, id: "edit.thumbnail.custom.clipboard", group: "Edit", label: "Custom thumbnail from the clipboard", default: k(CMD_ALT_SHIFT, Key::T), aliases: &[] },
     Spec { cmd: Command::Duplicate, id: "edit.duplicate", group: "Edit", label: "Duplicate the item", default: k(CMD, Key::D), aliases: &[] },
     Spec { cmd: Command::RefreshThumbnail, id: "edit.thumbnail.refresh", group: "Edit", label: "Refresh the thumbnails", default: k(CMD_ALT, Key::R), aliases: &[] },
     Spec { cmd: Command::Crop, id: "edit.image.crop", group: "Edit", label: "Crop the image (again to save)", default: k(SHIFT, Key::C), aliases: &[] },

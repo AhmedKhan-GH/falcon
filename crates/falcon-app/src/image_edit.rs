@@ -45,6 +45,8 @@ pub enum Op {
     Pin(Vec<String>, Vec<String>, bool),
     /// New names for items (the Rename dialog).
     RenameItems(Vec<(String, String)>),
+    /// Make the copied picture (a file or image data) the item's thumbnail.
+    ClipboardThumbnail(String),
 }
 
 impl Op {
@@ -71,6 +73,7 @@ impl Op {
             Op::Pin(ids, _, true) => format!("Pin {} to the top", ids.len()),
             Op::Pin(ids, _, false) => format!("Unpin {}", ids.len()),
             Op::RenameItems(v) => format!("Rename {} items", v.len()),
+            Op::ClipboardThumbnail(_) => "Set custom thumbnail".into(),
         }
     }
 }
@@ -128,8 +131,13 @@ impl App {
             self.ws.actions.push(Action::Edit(Op::SetFolderCover(fid.clone(), item.id.clone())));
         }
         if single && thumbnail::custom_thumbnail_allowed(&item.ext) {
-            if ui.button("Set Custom Thumbnail…").clicked() {
+            let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::CustomThumbnail);
+            if ui.add(egui::Button::new("Set Custom Thumbnail…").shortcut_text(keys)).clicked() {
                 self.ws.actions.push(Action::Edit(Op::PickCustomThumbnail(item.id.clone())));
+            }
+            let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::ClipboardThumbnail);
+            if ui.add(egui::Button::new("Custom Thumbnail from Clipboard").shortcut_text(keys)).clicked() {
+                self.ws.actions.push(Action::Edit(Op::ClipboardThumbnail(item.id.clone())));
             }
             if thumbnail::has_custom_thumbnail(item) && ui.button("Reset Thumbnail").clicked() {
                 self.ws.actions.push(Action::Edit(Op::ResetCustomThumbnail(item.id.clone())));
@@ -213,6 +221,18 @@ impl App {
                 let n = lib.set_pinned(&ids, &folders, pin, now)?;
                 let s = if n == 1 { "" } else { "s" };
                 self.flash(if pin { format!("Pinned {n} item{s} to the top") } else { format!("Unpinned {n} item{s}") });
+                Ok(())
+            }
+            Op::ClipboardThumbnail(id) => {
+                let Some(picture) = clipboard_picture() else {
+                    self.flash("No picture on the clipboard");
+                    return Ok(());
+                };
+                let r = lib.set_custom_thumbnail(&id, picture.path());
+                drop(picture);
+                r?;
+                self.ws.loader.forget(&id);
+                self.flash("Thumbnail set");
                 Ok(())
             }
             Op::RenameItems(names) => {
@@ -425,6 +445,51 @@ impl App {
     }
 }
 
+/// A picture copied to the clipboard, as a file to read: a copied
+/// jpg, png, gif, bmp or webp file as it is (Eagle's list), else image data
+/// written to a temporary PNG, removed when this is dropped.
+enum Picture {
+    File(std::path::PathBuf),
+    Temp(std::path::PathBuf),
+}
+
+impl Picture {
+    fn path(&self) -> &std::path::Path {
+        match self {
+            Picture::File(p) | Picture::Temp(p) => p,
+        }
+    }
+}
+
+impl Drop for Picture {
+    fn drop(&mut self) {
+        if let Picture::Temp(p) = self {
+            let _ = std::fs::remove_file(p);
+        }
+    }
+}
+
+/// Whether a copied file can be a thumbnail as it is.
+fn clipboard_thumbnail_file(path: &std::path::Path) -> bool {
+    let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+    matches!(ext.as_str(), "jpg" | "jpeg" | "png" | "gif" | "bmp" | "webp")
+}
+
+fn clipboard_picture() -> Option<Picture> {
+    let mut clip = arboard::Clipboard::new().ok()?;
+    if let Ok(files) = clip.get().file_list()
+        && let Some(f) = files.into_iter().find(|f| clipboard_thumbnail_file(f))
+    {
+        return Some(Picture::File(f));
+    }
+    let img = clip.get_image().ok()?;
+    let buf = image::RgbaImage::from_raw(img.width as u32, img.height as u32, img.bytes.into_owned())?;
+    let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos());
+    let tmp = Picture::Temp(super::tempfile_dir().ok()?.join(format!("thumbnail-{stamp}.png")));
+    buf.save_with_format(tmp.path(), image::ImageFormat::Png).ok()?;
+    Some(tmp)
+}
+
 /// The targets whose format `allow` accepts (`can_rotate`, `can_flip`);
 /// `ext_of` looks an item's extension up.
 pub fn editable(targets: &[String], ext_of: impl Fn(&str) -> Option<String>, allow: fn(&str) -> bool) -> Vec<String> {
@@ -440,6 +505,17 @@ pub fn flip_for_click(shift: bool) -> Flip {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn copied_files_usable_as_thumbnails_follow_eagles_list() {
+        use std::path::Path;
+        for ok in ["a.jpg", "b.PNG", "c.gif", "d.bmp", "e.webp", "f.jpeg"] {
+            assert!(clipboard_thumbnail_file(Path::new(ok)), "{ok}");
+        }
+        for no in ["a.tif", "b.svg", "c", "d.psd"] {
+            assert!(!clipboard_thumbnail_file(Path::new(no)), "{no}");
+        }
+    }
 
     #[test]
     fn flip_targets_follow_the_format() {

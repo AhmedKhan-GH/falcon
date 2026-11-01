@@ -1797,6 +1797,17 @@ impl App {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!on));
             }
             C::AddToLastFolder => self.add_to_last_used(self.acted_on()),
+            C::CustomThumbnail | C::ClipboardThumbnail => {
+                let Some(id) = self.acted_on().into_iter().next() else { return };
+                let allowed = self.ws.lib.clone().is_some_and(|s| lock(&s).item(&id).is_some_and(|i| thumbnail::custom_thumbnail_allowed(&i.ext)));
+                if !allowed {
+                    self.flash("This file is its own thumbnail");
+                } else if cmd == C::CustomThumbnail {
+                    self.ws.actions.push(Action::Edit(image_edit::Op::PickCustomThumbnail(id)));
+                } else {
+                    self.ws.actions.push(Action::Edit(image_edit::Op::ClipboardThumbnail(id)));
+                }
+            }
             C::Duplicate => {
                 if let Some(id) = self.acted_on().into_iter().next() {
                     self.ws.actions.push(Action::Edit(image_edit::Op::Duplicate(id)));
