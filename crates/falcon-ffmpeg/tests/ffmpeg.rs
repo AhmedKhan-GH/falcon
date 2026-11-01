@@ -2,14 +2,15 @@
 //! `scripts/build-ffmpeg.sh` has installed it into `target/ffmpeg`
 //! (`build.rs` sets `ffmpeg_built`); otherwise they are ignored.
 //!
-//! The clips are AVI files written here, byte by byte: uncompressed BGR
-//! pictures and 16-bit PCM sound, so no encoder is needed (the build has
-//! none) and every pixel's value is known. Frame `i` is coloured
+//! The clips are AVI files written by `falcon_ffmpeg::testing`, byte by
+//! byte: uncompressed BGR pictures and 16-bit PCM sound, so no encoder is
+//! needed (the build has none) and every pixel's value is known. Frame `i` is coloured
 //! [`color`]`(i)` over its top three quarters and white below.
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+use falcon_ffmpeg::testing::Clip;
 use falcon_ffmpeg::{Frame, Player, ffi, frame_at, probe, thumbnail};
 
 const W: u32 = 64;
@@ -28,112 +29,9 @@ fn index_of(f: &Frame) -> u32 {
     (u32::from(f.pixel(0, 0)[0]).saturating_sub(10) + 3) / 7
 }
 
-fn le16(v: &mut Vec<u8>, x: u16) {
-    v.extend_from_slice(&x.to_le_bytes());
-}
-fn le32(v: &mut Vec<u8>, x: u32) {
-    v.extend_from_slice(&x.to_le_bytes());
-}
-
-fn chunk(id: &[u8; 4], data: &[u8]) -> Vec<u8> {
-    let mut v = id.to_vec();
-    le32(&mut v, data.len() as u32);
-    v.extend_from_slice(data);
-    if data.len() % 2 == 1 {
-        v.push(0);
-    }
-    v
-}
-
-fn list(kind: &[u8; 4], content: &[u8]) -> Vec<u8> {
-    let mut data = kind.to_vec();
-    data.extend_from_slice(content);
-    chunk(b"LIST", &data)
-}
-
-/// Writes an AVI of [`FRAMES`] frames at [`FPS`], `W`×`H`, with a 440 Hz
-/// stereo tone when `audio`. `pixel(i, y)` colours row `y` of frame `i`.
 fn write_avi(path: &Path, audio: bool, pixel: impl Fn(u32, u32) -> [u8; 3]) {
-    let frame_bytes = W * H * 3;
-    let per_frame = RATE / FPS;
-    let streams = if audio { 2 } else { 1 };
-
-    let mut avih = Vec::new();
-    for x in [1_000_000 / FPS, 0, 0, 0x10, FRAMES, 0, streams, frame_bytes, W, H, 0, 0, 0, 0] {
-        le32(&mut avih, x);
-    }
-    let mut strh = b"vids".to_vec();
-    strh.extend_from_slice(&[0; 4]);
-    for x in [0u32, 0, 0, 1, FPS, 0, FRAMES, frame_bytes, u32::MAX, 0] {
-        le32(&mut strh, x);
-    }
-    for x in [0u16, 0, W as u16, H as u16] {
-        le16(&mut strh, x);
-    }
-    let mut strf = Vec::new();
-    for x in [40, W, H] {
-        le32(&mut strf, x);
-    }
-    le16(&mut strf, 1);
-    le16(&mut strf, 24);
-    for x in [0, frame_bytes, 0, 0, 0, 0] {
-        le32(&mut strf, x);
-    }
-    let mut hdrl = chunk(b"avih", &avih);
-    hdrl.extend(list(b"strl", &[chunk(b"strh", &strh), chunk(b"strf", &strf)].concat()));
-    if audio {
-        let mut ah = b"auds".to_vec();
-        ah.extend_from_slice(&[0; 4]);
-        for x in [0u32, 0, 0, 4, RATE * 4, 0, per_frame * FRAMES, per_frame * 4, u32::MAX, 4] {
-            le32(&mut ah, x);
-        }
-        ah.extend_from_slice(&[0; 8]);
-        let mut af = Vec::new();
-        le16(&mut af, 1);
-        le16(&mut af, 2);
-        le32(&mut af, RATE);
-        le32(&mut af, RATE * 4);
-        le16(&mut af, 4);
-        le16(&mut af, 16);
-        le16(&mut af, 0);
-        hdrl.extend(list(b"strl", &[chunk(b"strh", &ah), chunk(b"strf", &af)].concat()));
-    }
-
-    let mut movi = Vec::new();
-    let mut idx = Vec::new();
-    let mut add = |movi: &mut Vec<u8>, id: &[u8; 4], data: &[u8]| {
-        idx.extend_from_slice(id);
-        le32(&mut idx, 0x10);
-        le32(&mut idx, movi.len() as u32 + 4);
-        le32(&mut idx, data.len() as u32);
-        movi.extend(chunk(id, data));
-    };
-    for i in 0..FRAMES {
-        // Bottom-up rows of BGR.
-        let mut px = Vec::with_capacity(frame_bytes as usize);
-        for row in (0..H).rev() {
-            let [r, g, b] = pixel(i, row);
-            for _ in 0..W {
-                px.extend_from_slice(&[b, g, r]);
-            }
-        }
-        add(&mut movi, b"00db", &px);
-        if audio {
-            let mut pcm = Vec::new();
-            for n in 0..per_frame {
-                let t = f64::from(i * per_frame + n) / f64::from(RATE);
-                let s = ((t * 440.0 * std::f64::consts::TAU).sin() * 8000.0) as i16;
-                pcm.extend_from_slice(&s.to_le_bytes());
-                pcm.extend_from_slice(&s.to_le_bytes());
-            }
-            add(&mut movi, b"01wb", &pcm);
-        }
-    }
-    let mut body = b"AVI ".to_vec();
-    body.extend(list(b"hdrl", &hdrl));
-    body.extend(list(b"movi", &movi));
-    body.extend(chunk(b"idx1", &idx));
-    std::fs::write(path, chunk(b"RIFF", &body)).unwrap();
+    let clip = Clip { width: W, height: H, frames: FRAMES, fps: FPS, audio_rate: audio.then_some(RATE) };
+    std::fs::write(path, clip.avi(pixel)).unwrap();
 }
 
 /// The standard clip: coloured frames with a white bottom quarter.

@@ -21,6 +21,7 @@ mod frame;
 mod media;
 mod player;
 pub mod sync;
+pub mod testing;
 
 pub use frame::Frame;
 pub use media::{Grabber, frame_at, probe, thumbnail};
