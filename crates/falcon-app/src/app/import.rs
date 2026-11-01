@@ -26,6 +26,15 @@ pub(crate) struct ImportError {
     pub opts: ImportOptions,
 }
 
+/// Removes the failed import at `i` and returns the job that tries it
+/// again: the same file with the folders and tags it had.
+fn take_retry(errors: &mut Vec<ImportError>, i: usize) -> Option<Job> {
+    (i < errors.len()).then(|| {
+        let e = errors.remove(i);
+        Job { path: e.failure.path, opts: e.opts }
+    })
+}
+
 /// One file to import and the options to import it with.
 pub(crate) struct Job {
     pub path: PathBuf,
@@ -281,12 +290,13 @@ impl App {
             return;
         }
         let mut remove = None;
+        let mut retry_one = None;
         let (mut close, mut retry, mut copy) = (false, false, false);
         let modal = egui::Modal::new(egui::Id::unique("import-errors")).show(ctx, |ui| {
             ui.set_width(680.0);
             ui.label(RichText::new(trf("Failed imports ({n})", &[("n", &errors.len())])).size(15.0));
             ui.add_space(6.0);
-            let cols = [190.0, 250.0, 200.0];
+            let cols = [160.0, 210.0, 170.0];
             ui.horizontal(|ui| {
                 for (w, h) in cols.iter().zip([tr("Name"), tr("Source"), tr("Reason")]) {
                     ui.add_sized(vec2(*w, 18.0), egui::Label::new(RichText::new(h).size(12.0).color(t::p().text_muted)).truncate());
@@ -302,9 +312,16 @@ impl App {
                         let src = f.path.parent().map(|d| d.display().to_string()).unwrap_or_default();
                         let link = ui.add_sized(vec2(cols[1], 22.0), egui::Label::new(RichText::new(&src).color(t::p().text_muted)).truncate().sense(egui::Sense::click()));
                         if link.on_hover_text(trf("{path}\nClick to show in Finder", &[("path", &f.path.display())])).clicked() {
-                            let _ = std::process::Command::new("open").arg("-R").arg(&f.path).spawn();
+                            crate::open_with::reveal(std::slice::from_ref(&f.path));
                         }
                         ui.add_sized(vec2(cols[2], 22.0), egui::Label::new(f.kind.describe()).truncate()).on_hover_text(&f.detail);
+                        if ui.small_button(crate::icons::ARROW_CLOCKWISE).on_hover_text(tr("Retry this file")).clicked() {
+                            retry_one = Some(i);
+                        }
+                        let exists = f.path.exists();
+                        if ui.add_enabled(exists, egui::Button::new(crate::icons::FOLDER_OPEN).small()).on_hover_text(tr("Show in Finder")).clicked() {
+                            crate::open_with::reveal(std::slice::from_ref(&f.path));
+                        }
                         if ui.small_button(crate::icons::X).on_hover_text(tr("Remove from the list")).clicked() {
                             remove = Some(i);
                         }
@@ -327,6 +344,15 @@ impl App {
             let mut errors = errors.clone();
             errors.remove(i);
             self.set_import_errors(errors);
+        }
+        if let Some(i) = retry_one {
+            // The row leaves the list as the file is queued again, to the
+            // folders it had; if it fails again the row comes back.
+            let mut rest = errors.clone();
+            if let Some(job) = take_retry(&mut rest, i) {
+                self.set_import_errors(rest);
+                self.spawn_import(vec![job]);
+            }
         }
         if copy {
             let paths: Vec<PathBuf> = errors.iter().map(|e| e.failure.path.clone()).collect();
@@ -744,5 +770,28 @@ impl App {
                 self.import_into(vec![path], folders);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn error(name: &str, folder: &str) -> ImportError {
+        let path = PathBuf::from(name);
+        let failure = Failure::new(&path, &falcon_library::Error::Sandbox("bad".into()));
+        ImportError { failure, opts: ImportOptions { folders: vec![folder.into()], ..ImportOptions::default() } }
+    }
+
+    #[test]
+    fn retry_takes_one_row_with_its_folders() {
+        let mut errors = vec![error("/a.png", "F1"), error("/b.png", "F2")];
+        let job = take_retry(&mut errors, 1).expect("row exists");
+        assert_eq!(job.path, PathBuf::from("/b.png"));
+        assert_eq!(job.opts.folders, vec!["F2".to_string()]);
+        assert_eq!(errors.len(), 1);
+        assert_eq!(errors[0].failure.path, PathBuf::from("/a.png"));
+        assert!(take_retry(&mut errors, 5).is_none());
+        assert_eq!(errors.len(), 1);
     }
 }

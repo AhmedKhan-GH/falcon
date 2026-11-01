@@ -156,6 +156,7 @@ The core words, so every file uses one term for one thing.
   %N" (translated, since they fill the field the user edits), the
   Developer and Auto-Import panes' long explanations, and the Russian
   "Label: N" phrasing used where agreement with a count is awkward.
+- Machine-written: "Retry this file" (the failed-imports list's per-row retry button).
 
 - "Enter the password of “{name}” to put the items in it", the prompt when
   items are dropped onto a locked folder (machine-written).
