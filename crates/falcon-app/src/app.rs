@@ -158,6 +158,8 @@ enum Action {
     Background(Vec<String>, Option<logic::ThumbBg>),
     /// An item renamed from the text viewer's title.
     RenameItem(String, String),
+    /// File ▸ New ▸ Text File, into these folders.
+    NewTextFile(Vec<String>),
     /// The duplicate dialog's answer for these held files.
     ResolveDuplicates(Vec<crate::import_dupes::Pending>, crate::import_dupes::Choice),
 }
@@ -1545,6 +1547,10 @@ impl App {
                 }
             }
             C::NewSmartFolder => self.ws.smart_dialog = Some(SmartDraft::default()),
+            C::NewTextFile => {
+                let folders = self.scope_folders();
+                self.ws.actions.push(Action::NewTextFile(folders));
+            }
             C::Copy => self.copy_selection(),
             C::Paste => self.paste(),
             C::ToggleFilter => self.ws.show_filter = !self.ws.show_filter,
@@ -1898,6 +1904,7 @@ impl App {
                     }
                     r
                 }
+                Action::NewTextFile(folders) => self.new_text_file(lib, folders),
                 Action::RenameItem(id, name) => match lib.item(&id).cloned() {
                     Some(mut item) => {
                         item.name = name;
@@ -2039,6 +2046,7 @@ fn action_label(action: &Action) -> String {
         Action::Edit(op) => op.label(),
         Action::Folders(a) => a.label(),
         Action::RenameItem(..) => "Rename".into(),
+        Action::NewTextFile(_) => "New text file".into(),
     }
 }
 

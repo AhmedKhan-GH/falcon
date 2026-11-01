@@ -87,6 +87,8 @@ pub enum Command {
     /// File ▸ New Subfolder (inside the open folder) and New Smart Folder.
     NewSubfolder,
     NewSmartFolder,
+    /// File ▸ New ▸ Text File: an empty `.txt` item, opened in the viewer.
+    NewTextFile,
     /// Remake the selected items' thumbnails.
     RefreshThumbnail,
     /// Take the selection out of the open folder.
@@ -223,6 +225,7 @@ const CTRL: Modifiers = Modifiers::CTRL;
 const CTRL_SHIFT: Modifiers = Modifiers { shift: true, ..Modifiers::CTRL };
 const CMD_SHIFT_ALT: Modifiers = Modifiers { shift: true, alt: true, ..Modifiers::COMMAND };
 const CTRL_CMD: Modifiers = Modifiers { ctrl: true, ..Modifiers::COMMAND };
+const ALT_SHIFT: Modifiers = Modifiers { alt: true, shift: true, ..Modifiers::NONE };
 
 /// Every rebindable command with its default. Arrow keys, Escape and the
 /// held Z of the hover preview stay fixed (see `FIXED`).
@@ -267,6 +270,8 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::NewFolder, id: "file.create.folder", group: "File", label: "New folder", default: k(CMD_SHIFT, Key::N), aliases: &[] },
     Spec { cmd: Command::NewSubfolder, id: "file.create.subfolder", group: "File", label: "New subfolder", default: k(ALT, Key::N), aliases: &[] },
     Spec { cmd: Command::NewSmartFolder, id: "file.create.smartfolder", group: "File", label: "New smart folder", default: k(CMD_SHIFT_ALT, Key::N), aliases: &[] },
+    // falcon's own id: Eagle binds ⌥⇧N outside its keybind table.
+    Spec { cmd: Command::NewTextFile, id: "file.create.txt", group: "File", label: "New text file", default: k(ALT_SHIFT, Key::N), aliases: &[] },
     Spec { cmd: Command::CollectWindow, id: "file.collect.window", group: "File", label: "Show or hide the collect window", default: k(CMD_SHIFT, Key::K), aliases: &[] },
     Spec { cmd: Command::SwitchLibrary, id: "library.switch", group: "Library", label: "Open the library switcher", default: k(CMD, Key::L), aliases: &[] },
     // falcon's own: Eagle shows one library at a time.

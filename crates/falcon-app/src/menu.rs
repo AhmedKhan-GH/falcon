@@ -106,6 +106,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::Forward => grid && s.forward,
         C::Find | C::ToggleFilter | C::NewFolder | C::NewSmartFolder => grid,
         C::NewSubfolder => grid && s.scope == ScopeKind::Folder,
+        C::NewTextFile => s.library,
         // The panels can be toggled anywhere, the viewer included.
         C::ToggleSidebar | C::ToggleInspector | C::ToggleAll => true,
         // In the viewer they zoom the image, else the grid.
@@ -209,6 +210,8 @@ pub static MENUS: &[(&str, &[Entry])] = &[
     (
         "File",
         &[
+            Entry::Sub("New", &[item("Text File", Command::NewTextFile)]),
+            SEP,
             item("New Folder", Command::NewFolder),
             item("New Subfolder", Command::NewSubfolder),
             item("New Smart Folder…", Command::NewSmartFolder),

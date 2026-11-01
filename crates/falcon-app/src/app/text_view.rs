@@ -52,6 +52,8 @@ pub(super) struct TextView {
     wheel_at: f64,
     /// The title being edited.
     title: String,
+    /// Put the cursor in the text on the next frame (a new text file).
+    focus: bool,
 }
 
 fn modified(path: &Path) -> Option<SystemTime> {
@@ -73,6 +75,7 @@ impl TextView {
             polled: 0.0,
             wheel_at: f64::NEG_INFINITY,
             title: String::new(),
+            focus: false,
         };
         v.read(path);
         v
@@ -266,6 +269,9 @@ impl App {
                         .layouter(&mut layouter)
                         .show(ui);
                     let r = &out.response.response;
+                    if std::mem::take(&mut view.focus) {
+                        r.request_focus();
+                    }
                     if r.changed() {
                         view.autosave.edited(now);
                     }
@@ -342,5 +348,27 @@ impl App {
         if gone {
             self.ws.text = None;
         }
+    }
+
+    /// File ▸ New ▸ Text File, as Eagle's `newFileFromTemplate("txt")`:
+    /// an empty file named "Untitled.txt" is imported into the open folder
+    /// (taking its auto-tags), then opened in the viewer with the cursor in
+    /// the text. The blank file is made in a temporary folder of its own
+    /// and removed once imported.
+    pub(super) fn new_text_file(&mut self, lib: &mut Library, folders: Vec<String>) -> falcon_library::Result<()> {
+        let dir = std::env::temp_dir().join("falcon-new").join(falcon_library::ids::new_id());
+        let file = dir.join(textdoc::NEW_FILE_NAME);
+        let made = std::fs::create_dir_all(&dir).and_then(|()| std::fs::write(&file, b""));
+        let id = made.map_err(|source| falcon_library::Error::Io { path: file.clone(), source }).and_then(|()| lib.import_file(&file, &self.prefs.import_options(folders)));
+        let _ = std::fs::remove_dir_all(&dir);
+        let id = id?;
+        let mut view = TextView::open(&id, &lib.item(&id).map(|i| i.original_path(lib.root())).unwrap_or_default());
+        view.focus = true;
+        self.ws.text = Some(view);
+        self.ws.viewer = Some(id.clone());
+        self.ws.selected = vec![id.clone()];
+        self.ws.anchor = Some(id.clone());
+        self.ws.scroll_to = Some(id);
+        Ok(())
     }
 }
