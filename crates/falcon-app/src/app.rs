@@ -484,6 +484,8 @@ pub struct App {
     focus_search: bool,
     /// Set while a drag out of the window is in progress.
     native_drag: Arc<std::sync::atomic::AtomicBool>,
+    /// Background downloads of iCloud originals (`icloud.rs`).
+    fetches: crate::icloud::Fetches,
     /// Open With lists by extension (`open_with.rs`).
     open_apps: crate::open_with::AppCache,
     /// Recently opened libraries, newest first.
@@ -518,6 +520,7 @@ impl App {
             show_inspector: true,
             focus_search: false,
             native_drag: Arc::default(),
+            fetches: Default::default(),
             open_apps: Default::default(),
             recent: Vec::new(),
             switch_to: None,
@@ -1439,9 +1442,11 @@ fn lock(s: &Shared) -> std::sync::MutexGuard<'_, Library> {
 /// `path`, or a plain tile when it can't be decoded. Always valid PNG, since
 /// the drag crate panics on an image AppKit can't load.
 fn drag_image(path: &std::path::Path) -> Vec<u8> {
-    let img = thumbnail::decode(path)
+    // A picture still in iCloud would hold the drag until it downloads.
+    let decoded = if crate::icloud::is_dataless(path) { None } else { thumbnail::decode(path).ok() };
+    let img = decoded
         .map(|i| i.thumbnail(128, 128))
-        .unwrap_or_else(|_| image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(96, 96, image::Rgba([60, 61, 64, 255]))));
+        .unwrap_or_else(|| image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(96, 96, image::Rgba([60, 61, 64, 255]))));
     let mut out = std::io::Cursor::new(Vec::new());
     if img.to_rgba8().write_to(&mut out, image::ImageFormat::Png).is_err() {
         return Vec::new();
@@ -3374,11 +3379,15 @@ impl App {
         if self.ws.view.id != id {
             self.ws.view = ViewState { id: id.clone(), file: item.original_path(lib.root()), ..Default::default() };
         }
+        let screen = ui.max_rect();
+        // An original still in iCloud downloads in the background first.
+        if self.icloud_viewer(ctx, lib, item, screen) {
+            return;
+        }
         if item.ext == "gif" && self.ws.view.started.is_none() {
             self.ws.view.frames = gif_frames(ctx, &item.original_path(lib.root()));
             self.ws.view.started = Some(Instant::now());
         }
-        let screen = ui.max_rect();
         if self.video_viewer(ctx, lib, item, screen) || self.media_viewer(ctx, lib, item, screen) {
             return;
         }
@@ -3667,6 +3676,7 @@ impl eframe::App for App {
             self.audio.stop();
         }
         self.video.keep_only(self.ws.viewer.as_deref());
+        self.fetches.prune((self.ws.view.id.as_str() == self.ws.viewer.as_deref().unwrap_or_default()).then_some(self.ws.view.file.as_path()));
         // Items dragged past the window edge become a macOS file drag, so
         // they can be dropped into Finder or other apps, as from Eagle.
         if let Some(d) = egui::DragAndDrop::payload::<DragItems>(&ctx)

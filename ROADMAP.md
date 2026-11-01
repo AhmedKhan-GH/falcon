@@ -20,6 +20,7 @@ Falcon is early alpha. This is what is done and what comes next, roughly in orde
 - [x] Tag groups
 - [x] Undo
 - [x] Open in Default App and Open With
+- [x] Dataless iCloud originals download in the background
 - [ ] Windows and Linux builds
 - [ ] Signed, notarised macOS releases
 

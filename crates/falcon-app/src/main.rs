@@ -3,6 +3,7 @@ mod collect;
 mod folder_icons;
 mod audio;
 mod hover;
+mod icloud;
 mod icons;
 mod loader;
 mod logic;

@@ -150,6 +150,10 @@ impl App {
                 Ok(())
             }
             Op::RefreshThumbnail(ids) => {
+                let ids = self.local_only(lib, &ids);
+                if ids.is_empty() {
+                    return Ok(());
+                }
                 let (mut done, mut custom) = (0, 0);
                 let mut r = Ok(());
                 for id in &ids {
@@ -168,6 +172,10 @@ impl App {
                 r
             }
             Op::RefreshPalette(ids) => {
+                let ids = self.local_only(lib, &ids);
+                if ids.is_empty() {
+                    return Ok(());
+                }
                 let mut done = 0;
                 let mut r = Ok(());
                 for id in &ids {
@@ -187,6 +195,7 @@ impl App {
                 Ok(())
             }
             Op::Rotate(ids, turns) => {
+                let ids = self.local_only(lib, &ids);
                 let mut r = Ok(());
                 for id in &ids {
                     if lib.item(id).is_some_and(|i| transform::can_rotate(&i.ext)) {
@@ -197,6 +206,7 @@ impl App {
                 r
             }
             Op::Flip(ids, flip) => {
+                let ids = self.local_only(lib, &ids);
                 let mut r = Ok(());
                 for id in &ids {
                     if lib.item(id).is_some_and(|i| transform::can_flip(&i.ext)) {
@@ -207,6 +217,9 @@ impl App {
                 r
             }
             Op::Crop(id, rect) => {
+                if self.local_only(lib, std::slice::from_ref(&id)).is_empty() {
+                    return Ok(());
+                }
                 let r = lib.crop_item(&id, rect);
                 self.ws.loader.forget(&id);
                 r

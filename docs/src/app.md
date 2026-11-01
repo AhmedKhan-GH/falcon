@@ -383,7 +383,7 @@ The viewer bar has Rotate Left and Rotate Right and a Flip button for jpg, png, 
 
 ## Open in other apps
 
-The card menu has Open in Default App (⇧↩), Open With and Show in Finder (⌘↩); the inspector has an Open in Default App button above Show in Finder; every viewer's bar (image, audio, video, font, and anything else that calls `App::viewer_open_button`) has an open icon at the right with a caret that lists Open With. Files are handed to `/usr/bin/open` on a short-lived thread (`open_with.rs`): it needs no permission, never reads the file, and the UI never waits. The Open With list comes from `NSWorkspace URLsForApplicationsToOpenURL:` (macOS 12 and later; earlier systems get only the default from `URLForApplicationToOpenURL:`), asked about an empty stand-in file with the same extension in a temp folder, because LaunchServices answers nothing for a missing path, and cached per extension.
+The card menu has Open in Default App (⇧↩), Open With and Show in Finder (⌘↩); the inspector has an Open in Default App button above Show in Finder; every viewer's bar (image, audio, video, font, and anything else that calls `App::viewer_open_button`) has an open icon at the right with a caret that lists Open With. Files are handed to `/usr/bin/open` on a short-lived thread (`open_with.rs`): it needs no permission, never reads the file (so a dataless iCloud original is fetched by the app that opens it), and the UI never waits. The Open With list comes from `NSWorkspace URLsForApplicationsToOpenURL:` (macOS 12 and later; earlier systems get only the default from `URLForApplicationToOpenURL:`), asked about an empty stand-in file with the same extension in a temp folder, because LaunchServices answers nothing for a missing path, and cached per extension.
 
 | | Eagle | Seen or inferred | falcon |
 |---|---|---|---|
@@ -393,6 +393,26 @@ The card menu has Open in Default App (⇧↩), Open With and Show in Finder (�
 | Open With list | A submenu on macOS, for one item only: the default first, labelled "(Default)" and followed by a separator, then the others by name; Eagle itself left out. Built by a helper (`launchHandler`) run on an empty temp file with the item's extension, cached per extension | Seen (`get-associated-application`) | The same order, label and separator, falcon's own bundle left out, one entry per bundle path and per name |
 | Opening in an app | `open -a APP FILE`, with a 10 s timeout | Seen (`openWithApplicationPath`) | `open -a APP -- FILE`, not waited on |
 | Default app | Sent to the main process (`open-with-default`) | Seen (the message); inferred (Electron's `shell.openPath`) | `open -- FILE…` |
+
+## iCloud Drive
+
+Libraries kept in iCloud Drive with Optimise Mac Storage on have most originals and thumbnails evicted: `ls -lO` shows the flags `compressed,dataless` (seen on a real library), `stat` still reports the full size, and the first read blocks until iCloud has downloaded the file. `icloud.rs` tells these apart from `stat` alone: the `SF_DATALESS` bit (`0x40000000`) of `st_flags`, or a missing file with iCloud's older `.NAME.icloud` placeholder beside it.
+
+Opening such an item in the viewer shows "Downloading from iCloud…" over the dimmed preview, with a moving bar, while a background thread asks iCloud for the file (`NSFileManager startDownloadingUbiquitousItemAtURL:error:`) and checks every 250 ms until the flag clears; then the item opens as usual (image, GIF, audio, video, font or PDF). An error from `NSURLUbiquitousItemDownloadingErrorKey`, or no answer within 20 minutes, shows the reason and a Try Again button. Files the ubiquity API refuses (another file provider) get a background read of their first byte instead. Moving to another item or closing the viewer stops the polling but never cancels or evicts anything at the system level. Progress is not shown as a percentage: NSURL has no progress key, and `NSMetadataQuery`'s would need a query per file (inferred to be not worth it). Local files take the same path as before with one extra `stat`.
+
+Where originals are read:
+
+| Where | Thread | With a dataless file |
+|---|---|---|
+| Grid, preview and full-size decodes, QuickLook renders (`loader.rs`) | Loader workers | A worker waits for the download; the UI does not |
+| Viewer: GIF frames, `Video::open`, audio decoding, font specimen, PDF | UI | Held behind the download screen until local |
+| Waveforms, duplicate scan, background imports | Background threads | Wait in their own thread |
+| HTTP API | Server thread | `/api/item/thumbnail` returns a path and reads nothing. The add-from-path routes import while holding the library lock, so adding a dataless file through the API still holds the window until it has downloaded (not yet handled) |
+| Rotate, flip, crop, Refresh Thumbnail, Refresh Palette | UI | Items still in iCloud are skipped, their download starts, and the status line says to try again |
+| Drag out | UI | The drag image falls back to a plain square instead of reading a dataless thumbnail; the files are passed by path |
+| ⌘C, Open in Default App, Open With, Show in Finder | UI | Paths only, never read |
+
+How long downloads take depends on the file and the link (inferred: seconds for a thumbnail, minutes for a several-hundred-megabyte book).
 
 ## Folder covers
 
