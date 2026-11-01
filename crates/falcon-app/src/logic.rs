@@ -175,6 +175,23 @@ pub fn visible(
     increase: bool,
     only: Option<&HashSet<String>>,
 ) -> Vec<usize> {
+    visible_in(items, roots, scope, query, &search::SearchScope::default(), filter, order, increase, only)
+}
+
+#[allow(clippy::too_many_arguments)]
+/// [`visible`] searching only the parts of each item `parts` turns on (the
+/// search box's Search Scope menu).
+pub fn visible_in(
+    items: &[Item],
+    roots: &[Folder],
+    scope: &Scope,
+    query: &str,
+    parts: &search::SearchScope,
+    filter: &Filter,
+    order: OrderBy,
+    increase: bool,
+    only: Option<&HashSet<String>>,
+) -> Vec<usize> {
     let index = search::folder_index(roots);
     let q = Query::parse(query);
     let qlen = query.trim().chars().count();
@@ -183,7 +200,7 @@ pub fn visible(
         .enumerate()
         .filter(|(_, i)| in_scope(i, scope) && only.is_none_or(|o| o.contains(&i.id)))
         .filter_map(|(n, i)| {
-            let cost = if q.is_empty() { 0 } else { q.fuzzy_score(&search::search_text(i, &index, qlen))? };
+            let cost = if q.is_empty() { 0 } else { q.fuzzy_score(&search::search_text_in(i, &index, qlen, parts))? };
             filter.check(i).map(|d| (n, d, cost))
         })
         .collect();

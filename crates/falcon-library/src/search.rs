@@ -305,31 +305,103 @@ fn prefix_distance(term: &[char], word: &[char], max: usize) -> Option<usize> {
     (best <= max).then_some(best)
 }
 
-/// The lower-cased text Eagle searches for an item: name, `.ext`, url (for
-/// queries of two or more characters), notes, tags, and the name and
-/// description of each folder the item is in.
+/// Which parts of an item the search box looks at: Eagle's Search Scope
+/// menu. Everything is on by default. An item's text content, camera and
+/// font names are always searched, whatever the scope.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct SearchScope {
+    pub name: bool,
+    pub folder_name: bool,
+    pub folder_desc: bool,
+    pub ext: bool,
+    pub tags: bool,
+    pub url: bool,
+    /// Region and video comments.
+    pub comments: bool,
+    /// The item's note (`annotation`).
+    pub note: bool,
+}
+
+impl Default for SearchScope {
+    fn default() -> Self {
+        SearchScope { name: true, folder_name: true, folder_desc: true, ext: true, tags: true, url: true, comments: true, note: true }
+    }
+}
+
+/// [`search_text_in`] with every part of the scope on.
 pub fn search_text(item: &Item, folders: &FolderIndex, query_len: usize) -> String {
+    search_text_in(item, folders, query_len, &SearchScope::default())
+}
+
+/// The lower-cased text Eagle searches for an item: its text content
+/// (`text`, kept for text files) and camera (`rawMetas.camera`), then, as
+/// `scope` allows, the name, `.ext`, url (for queries of two or more
+/// characters), note and comments; a font's full name (the `zh` entry
+/// first, else `en`) and, for queries of three or more characters, its
+/// whole `fontMetas` as JSON; then tags and the name and description of
+/// each folder the item is in.
+pub fn search_text_in(item: &Item, folders: &FolderIndex, query_len: usize, scope: &SearchScope) -> String {
     let mut s = String::with_capacity(128);
     let mut push = |x: &str| {
         s.push(' ');
         s.push_str(x);
     };
-    push(&item.name);
-    push(&format!(".{}", item.ext));
-    if query_len >= 2 {
-        push(&item.url);
-    }
-    push(&item.annotation);
-    for t in &item.tags {
+    if let Some(t) = item.extra.get("text").and_then(|v| v.as_str()) {
         push(t);
     }
-    for f in &item.folders {
-        if let Some((name, desc)) = folders.get(f) {
-            push(name);
-            push(desc);
+    if let Some(c) = camera(item) {
+        push(c);
+    }
+    if scope.name {
+        push(&item.name);
+    }
+    if scope.ext && !item.ext.is_empty() {
+        push(&format!(".{}", item.ext));
+    }
+    if scope.url && query_len >= 2 {
+        push(&item.url);
+    }
+    if scope.note {
+        push(&item.annotation);
+    }
+    if scope.comments {
+        for t in comment_texts(item) {
+            push(t);
+        }
+    }
+    if type_group(&item.ext) == Some("font")
+        && let Some(metas) = item.extra.get("fontMetas")
+    {
+        let full = |lang: &str| metas.get("fullName").and_then(|m| m.get(lang)).and_then(|v| v.as_str()).filter(|n| !n.is_empty());
+        push(full("zh").or_else(|| full("en")).unwrap_or(""));
+        if query_len > 2 && metas.get("postScriptName").is_some_and(|v| !v.is_null()) {
+            push(&metas.to_string());
+        }
+    }
+    if scope.tags {
+        for t in &item.tags {
+            push(t);
+        }
+    }
+    if scope.folder_name || scope.folder_desc {
+        for f in &item.folders {
+            if let Some((name, desc)) = folders.get(f) {
+                if scope.folder_name {
+                    push(name);
+                }
+                if scope.folder_desc {
+                    push(desc);
+                }
+            }
         }
     }
     s.to_lowercase()
+}
+
+/// The text of each of an item's comments (`comments[].annotation`).
+pub fn comment_texts(item: &Item) -> impl Iterator<Item = &str> {
+    item.extra.get("comments").and_then(|v| v.as_array()).into_iter().flatten().filter_map(|c| c.get("annotation").and_then(|a| a.as_str()))
 }
 
 /// Folder id to (name, description).
@@ -1358,6 +1430,39 @@ mod tests {
         assert!(on.check(&other).is_none() && off.check(&other).is_some());
         assert!(on.check(&photo).is_none() && off.check(&photo).is_none());
         assert_eq!(distinct_font_families([&other, &font, &photo, &font]), ["Arial", "Inter"]);
+    }
+
+    #[test]
+    fn search_text_parts_and_scope() {
+        let mut folders = FolderIndex::new();
+        folders.insert("F".into(), ("Trips".into(), "Summer holidays".into()));
+        let photo = item(serde_json::json!({
+            "name": "Beach", "url": "https://example.org", "annotation": "sunset note", "tags": ["sand"], "folders": ["F"],
+            "comments": [{"id": "c", "annotation": "Look at the Boat", "x": 0}],
+            "rawMetas": {"camera": "Nikon Z6"}
+        }));
+        let text = search_text(&photo, &folders, 5);
+        for part in ["beach", ".jpg", "example.org", "sunset note", "look at the boat", "nikon z6", "sand", "trips", "summer holidays"] {
+            assert!(text.contains(part), "{part} in {text}");
+        }
+        assert!(!search_text(&photo, &folders, 1).contains("example.org"), "urls need two characters");
+        let off = SearchScope { comments: false, tags: false, folder_desc: false, name: false, ..Default::default() };
+        let text = search_text_in(&photo, &folders, 5, &off);
+        assert!(!text.contains("boat") && !text.contains("sand") && !text.contains("summer") && !text.contains("beach"));
+        assert!(text.contains("trips") && text.contains("nikon z6"), "folder names stay, and the camera is always searched");
+
+        let doc = item(serde_json::json!({"ext": "txt", "text": "Chapter One"}));
+        let none = SearchScope { name: false, folder_name: false, folder_desc: false, ext: false, tags: false, url: false, comments: false, note: false };
+        assert!(search_text_in(&doc, &folders, 3, &none).contains("chapter one"), "text content is always searched");
+
+        let font = item(serde_json::json!({"ext": "ttf", "fontMetas": {
+            "fullName": {"en": "Inter Bold"}, "postScriptName": {"en": "Inter-Bold"}}}));
+        assert!(search_text(&font, &folders, 2).contains("inter bold"));
+        assert!(!search_text(&font, &folders, 2).contains("inter-bold"), "the metadata needs three characters");
+        assert!(search_text(&font, &folders, 3).contains("inter-bold"));
+        let zh = item(serde_json::json!({"ext": "otf", "fontMetas": {"fullName": {"en": "Song", "zh": "宋体"}}}));
+        let t = search_text(&zh, &folders, 3);
+        assert!(t.contains("宋体") && !t.contains("song"), "the zh name wins; no postScriptName, no JSON");
     }
 
     #[test]
