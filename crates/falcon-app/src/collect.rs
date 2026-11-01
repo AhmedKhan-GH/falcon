@@ -247,8 +247,8 @@ pub enum Event {
     CreateFolder(String),
     /// Save the waiting screenshot into the chosen folders.
     Save(Pending),
-    /// Drop waiting screenshots (Discard, or the window closed).
-    Discard(Vec<Pending>),
+    /// Drop the waiting screenshot (Discard).
+    Discard(Pending),
 }
 
 #[derive(Default)]
@@ -342,14 +342,18 @@ impl Collect {
         if std::mem::take(&mut self.raise) {
             ctx.send_viewport_cmd_to(id, egui::ViewportCommand::Focus);
         }
-        let event = ctx.show_viewport_immediate(id, builder, |ui, _class| self.contents(ui, folders, state, pool, keys));
-        // Closing the window drops what waits in it, as Eagle's does.
-        if !self.open && !self.pending.is_empty() {
-            let gone = std::mem::take(&mut self.pending);
-            self.clear_meta();
-            return Some(Event::Discard(gone));
+        ctx.show_viewport_immediate(id, builder, |ui, _class| self.contents(ui, folders, state, pool, keys))
+    }
+
+    /// The screenshots left waiting in a closed window (closed by ×, Esc,
+    /// ⌘⇧K or the app lock), which are dropped as Eagle's window drops its
+    /// item.
+    pub fn take_abandoned(&mut self) -> Vec<Pending> {
+        if self.open || self.pending.is_empty() {
+            return Vec::new();
         }
-        event
+        self.clear_meta();
+        std::mem::take(&mut self.pending)
     }
 
     fn contents(&mut self, ui: &mut Ui, folders: Option<&[FolderRow]>, state: &mut State, pool: &TagPool, keys: &Shortcuts) -> Option<Event> {
@@ -517,7 +521,7 @@ impl Collect {
         match decided {
             Some(false) => {
                 if let Some(p) = self.next_pending() {
-                    return Some(Event::Discard(vec![p]));
+                    return Some(Event::Discard(p));
                 }
             }
             Some(true) if folders.is_some() => {

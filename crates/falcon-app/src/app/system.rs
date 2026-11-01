@@ -53,6 +53,9 @@ impl App {
             }
         }
         self.capture_tick();
+        for shot in self.collect.take_abandoned() {
+            let _ = std::fs::remove_file(&shot.path);
+        }
     }
 
     /// A global key or a menu bar icon item. While falcon is locked only

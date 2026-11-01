@@ -46,10 +46,8 @@ impl App {
                 self.collect_extra = None;
                 collect::push_recent(&mut self.prefs.collect_recent, &target);
             }
-            Some(collect::Event::Discard(shots)) => {
-                for s in shots {
-                    let _ = std::fs::remove_file(&s.path);
-                }
+            Some(collect::Event::Discard(shot)) => {
+                let _ = std::fs::remove_file(&shot.path);
             }
             Some(e @ (collect::Event::Files(_) | collect::Event::Paste)) => {
                 self.collect_extra = Some(self.collect.meta.clone());

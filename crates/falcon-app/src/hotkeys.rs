@@ -5,8 +5,8 @@
 //! app-wide hot keys) and queues the presses for the app's next frame.
 //!
 //! The capture keys are registered only while Preferences ▸ Screenshot ▸
-//! "Enable screenshot shortcuts" is on, as in Eagle; Show falcon and
-//! Bring up falcon and search always are, once bound (they have no
+//! "Use the screenshot keys" is on, as in Eagle; Show falcon and Show
+//! falcon and focus the search always are, once bound (they have no
 //! default).
 
 use eframe::egui::{Key, KeyboardShortcut, Modifiers};
