@@ -88,6 +88,8 @@ pub enum Command {
     RemoveFromFolder,
     /// Shuffle the Random page again.
     Reshuffle,
+    /// Open the parent of the open folder or smart folder.
+    ParentFolder,
 }
 
 /// How a scroll command moves the grid.
@@ -257,6 +259,7 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::Scroll(Scroll::PageDown), id: "view.scroll.nextpage", group: "Go", label: "Scroll down a page", default: k(NONE, Key::PageDown), aliases: &[] },
     Spec { cmd: Command::SelectFirst, id: "view.select.first", group: "Go", label: "Select the first item", default: k(CMD, Key::ArrowUp), aliases: &[] },
     Spec { cmd: Command::SelectLast, id: "view.select.last", group: "Go", label: "Select the last item", default: k(CMD, Key::ArrowDown), aliases: &[] },
+    Spec { cmd: Command::ParentFolder, id: "go.parent", group: "Go", label: "Open the parent folder", default: k(ALT, Key::ArrowUp), aliases: &[] },
     // Eagle binds R outside its keybind table.
     Spec { cmd: Command::Reshuffle, id: "view.random.refresh", group: "Go", label: "Shuffle the Random page again", default: k(NONE, Key::R), aliases: &[] },
     // Eagle binds 0–5 outside its keybind table (`organize.rating.*` have no default).
@@ -793,6 +796,7 @@ mod tests {
         assert_eq!(keys.resolve(Key::PageDown, Modifiers::NONE), Some(Command::Scroll(Scroll::PageDown)));
         assert_eq!(keys.resolve(Key::ArrowUp, CMD), Some(Command::SelectFirst));
         assert_eq!(keys.resolve(Key::ArrowDown, CMD), Some(Command::SelectLast));
+        assert_eq!(keys.resolve(Key::ArrowUp, ALT), Some(Command::ParentFolder));
         // Plain ↑ ↓ stay fixed selection moves.
         assert_eq!(keys.resolve(Key::ArrowUp, Modifiers::NONE), None);
     }

@@ -31,6 +31,8 @@ pub struct State {
     pub scope: ScopeKind,
     pub back: bool,
     pub forward: bool,
+    /// The open folder or smart folder has a parent.
+    pub parent: bool,
     pub layout: Layout,
     pub sidebar: bool,
     pub inspector: bool,
@@ -83,6 +85,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::NextLibrary | C::PreviousLibrary => s.libraries > 1,
         C::Page(_) => s.library,
         C::Scroll(_) | C::SelectFirst | C::SelectLast => grid,
+        C::ParentFolder => grid && s.parent,
         C::Reshuffle => grid && s.scope == ScopeKind::Random,
         C::Rate(_) => any || (s.library && s.viewer),
         C::Player(_) => false,

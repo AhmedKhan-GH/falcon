@@ -167,6 +167,16 @@ struct Progress {
     added: Vec<String>,
 }
 
+/// The parent of the open folder or smart folder, as a scope.
+fn parent_scope(scope: &Scope, lib: &Library) -> Option<Scope> {
+    use crate::organize::locate;
+    match scope {
+        Scope::Folder(id) => locate(&lib.metadata.folders, id).and_then(|(p, _)| p).map(|p| Scope::Folder(p.to_string())),
+        Scope::Smart(id) => locate(&lib.smart_folders(), id).and_then(|(p, _)| p.map(|p| Scope::Smart(p.to_string()))),
+        _ => None,
+    }
+}
+
 /// The toast after a rating key or menu item.
 fn rated_note(stars: u8) -> String {
     match stars {
@@ -326,6 +336,9 @@ struct Workspace {
     order: Vec<String>,
     columns: usize,
     scroll_to: Option<String>,
+    /// Where ⌥↑ goes: the open folder's (or smart folder's) parent.
+    /// Refreshed each frame while the library is locked.
+    up: Option<Scope>,
     /// A Home, End, Page Up or Page Down for the grid, applied next frame.
     scroll: Option<crate::shortcuts::Scroll>,
     /// Images needed this frame, handed to the loader once at the end.
@@ -407,6 +420,7 @@ impl Workspace {
             columns: 1,
             scroll_to: None,
             scroll: None,
+            up: None,
             frame_jobs: Vec::new(),
             actions: Vec::new(),
             renaming: None,
@@ -1045,14 +1059,15 @@ impl App {
         if done {
             return;
         }
-        // ⌘ or ⌥ with ← → is Back or Forward, not a selection move.
+        // With ⌘ or ⌥ the arrows are commands (Back, Forward, first and
+        // last item, parent folder), not selection moves.
         let (left, right, up, down, esc) = ctx.input(|i| {
             let plain = !i.modifiers.command && !i.modifiers.alt;
             (
                 plain && i.key_pressed(Key::ArrowLeft),
                 plain && i.key_pressed(Key::ArrowRight),
-                i.key_pressed(Key::ArrowUp),
-                i.key_pressed(Key::ArrowDown),
+                plain && i.key_pressed(Key::ArrowUp),
+                plain && i.key_pressed(Key::ArrowDown),
                 i.key_pressed(Key::Escape),
             )
         });
@@ -1113,6 +1128,7 @@ impl App {
             },
             back: !self.ws.back.is_empty(),
             forward: !self.ws.forward.is_empty(),
+            parent: self.ws.up.is_some(),
             layout: self.ws.layout,
             sidebar: self.show_sidebar,
             inspector: self.show_inspector,
@@ -1263,6 +1279,11 @@ impl App {
                 self.ws.scope = Scope::Random(fastrand_seed());
                 self.ws.selected.clear();
                 self.ws.anchor = None;
+            }
+            C::ParentFolder => {
+                if let Some(up) = self.ws.up.clone() {
+                    self.go(up);
+                }
             }
             C::Page(p) => {
                 self.ws.viewer = None;
@@ -4059,6 +4080,7 @@ impl eframe::App for App {
         let mut guard = lock(&shared);
         let lib: &mut Library = &mut guard;
         self.begin_frame_edits(lib);
+        self.ws.up = parent_scope(&self.ws.scope, lib);
         // Items can vanish under the selection (deleted here or over the API).
         if self.ws.selected.iter().any(|id| lib.item(id).is_none()) {
             self.ws.selected.retain(|id| lib.item(id).is_some());
