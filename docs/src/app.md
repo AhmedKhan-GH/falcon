@@ -396,7 +396,7 @@ These are the defaults. All but the arrows, Esc, Tab, Z and the viewer's C, 0, 1
 | ⌘⌥1 and ⌘⌥2 | Show or hide the sidebar and the inspector, in the grid and in the viewer |
 | ⌘⌥3 and Tab | Show or hide both panels together: both show when the sidebar is hidden, otherwise both hide (Eagle's `view.toggle.all`; Tab is fixed and does nothing while a text field has focus) |
 | ⌥1 to ⌥4 | Waterfall, Justified, Grid and List layouts, as in Eagle; the layout is remembered for the open folder or smart folder, else for the library's other pages |
-| ⌥⌘4, ⌥⌘5 and ⌥⌘6 | Show or hide the names, the item info and the comment counts on cards (Eagle's `view.toggle.listname`, `listmetas` and `listannotation`) |
+| ⌥⌘4, ⌥⌘5 and ⌥⌘6 | Show or hide the names, the item info and the comment counts on cards (in the List layout the count is a disc at the right of the row) (Eagle's `view.toggle.listname`, `listmetas` and `listannotation`) |
 | ⌥⌘7 | Show Subfolder Content: a folder also lists the items of its subfolders (Eagle's `view.toggle.subfolder`) |
 | Esc | Leave presentation mode, else close the viewer, or clear the selection |
 | ⌘O | Open the viewer's item, or the first selected, in a window of its own (Eagle's `view.file.opennewwindow`) |

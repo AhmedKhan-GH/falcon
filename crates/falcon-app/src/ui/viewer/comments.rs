@@ -179,11 +179,15 @@ pub fn supports_regions(item: &Item) -> bool {
 
 /// Eagle's comment count: a blue disc with the number at a card's top right.
 pub fn count_badge(ui: &Ui, tile: Rect, item: &Item) {
+    count_disc(ui, Pos2::new(tile.right() - 15.0, tile.top() + 15.0), item);
+}
+
+/// The same disc centred on `c`, for a list row's right edge.
+pub fn count_disc(ui: &Ui, c: Pos2, item: &Item) {
     let Some(serde_json::Value::Array(list)) = item.extra.get("comments") else { return };
     if list.is_empty() {
         return;
     }
-    let c = Pos2::new(tile.right() - 15.0, tile.top() + 15.0);
     let p = ui.painter();
     p.circle_filled(c, 10.0, t::p().primary);
     p.circle_stroke(c, 10.0, Stroke::new(1.0, Color32::WHITE));

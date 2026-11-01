@@ -27,11 +27,14 @@ pub(crate) const GRID_PAD_TOP: f32 = 4.0;
 pub(crate) const GRID_GAP: f32 = 8.0;
 pub(crate) const ROW_GAP: f32 = 10.0;
 
+/// The width kept free at a list row's right for its comment count.
+const LIST_COUNT_GUTTER: f32 = 26.0;
+
 /// Where the list layout's columns start in a row (after the thumbnail)
 /// and how wide they are together.
 pub(crate) fn list_span(row: Rect) -> (f32, f32) {
     let thumb = row.height() - 10.0;
-    (row.left() + 6.0 + thumb + 12.0, row.width() - thumb - 18.0)
+    (row.left() + 6.0 + thumb + 12.0, row.width() - thumb - 18.0 - LIST_COUNT_GUTTER)
 }
 
 impl App {
@@ -448,6 +451,9 @@ impl App {
         }
         self.draw_image(ui, lib, item, thumb.shrink(2.0), false);
         let cy = row.center().y;
+        if self.display.comment_badge {
+            crate::ui::viewer::comments::count_disc(ui, Pos2::new(row.right() - 18.0, cy), item);
+        }
         let (x0, span) = list_span(row);
         for (col, at, w) in self.display.columns.spans() {
             let (x, cw) = (x0 + span * at, span * w - 8.0);
