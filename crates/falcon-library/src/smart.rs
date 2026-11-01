@@ -577,7 +577,14 @@ mod tests {
         let before = std::fs::read_to_string(lib.root().join("metadata.json")).unwrap();
         lib.rename_smart_folder(&inner, "Renamed").unwrap();
         let after = std::fs::read_to_string(lib.root().join("metadata.json")).unwrap();
-        assert_eq!(after, before.replace(r#""name":"Inner""#, r#""name":"Renamed""#), "only the name changes");
+        // The library's own modificationTime moves on every save (and can
+        // land on a later millisecond), so compare everything but that.
+        let strip = |s: &str| {
+            let mut v: serde_json::Value = serde_json::from_str(s).unwrap();
+            v.as_object_mut().unwrap().shift_remove("modificationTime");
+            v.to_string() // keeps key order, so reordering still fails
+        };
+        assert_eq!(strip(&after), strip(&before.replace(r#""name":"Inner""#, r#""name":"Renamed""#)), "only the name changes");
         assert!(lib.rename_smart_folder("NOPE", "x").is_err());
     }
 }
