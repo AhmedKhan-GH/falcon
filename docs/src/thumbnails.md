@@ -75,6 +75,17 @@ From the viewer's `rotateImage`, `cropImage` and `saveCrop`, `js/utils/rotateIma
 - **Afterwards.** Eagle refreshes the thumbnail (see above), which updates `size`, `btime`, `mtime`, `width`, `height`, the thumbnail and the palette. The item edit also bumps `lastModified`; `modificationTime` stays. Folder covers that show the item are redrawn.
 - **Undo.** There is none. The overwritten pixels are gone.
 
+### Flip (observed)
+
+From the viewer's `flipImage` and `js/utils/flipImage.js`:
+
+- **Where.** The flip button in the viewer's toolbar mirrors horizontally. With ⇧ held while clicking, it mirrors vertically. For video and audio the same button only mirrors the player. The file is written under the same `imageRotateMode: write` preference as rotation. Otherwise only the view flips.
+- **JPEG is lossless.** Only the EXIF Orientation tag changes, from lookup tables for horizontal, vertical and both-ways flips: horizontal maps 1↔2, 3↔4, 5↔6, 7↔8, and vertical maps 1↔4, 2↔3, 5↔8, 6↔7. A missing tag counts as 1. The file is written to `<file>.tmp` first, then over the original.
+- **PNG, WebP and BMP are re-encoded.** The image is loaded, drawn mirrored on a canvas and exported in the same format (quality 1 for WebP, a canvas-to-BMP helper for BMP). AVIF is accepted, then fails because it can't be written. Other formats are refused. Eagle doesn't check for animation here (inferred: an APNG would lose its frames).
+- **Afterwards.** Eagle queues `regenerate-thumbnail` for the item, as rotation does.
+
+Falcon's `Library::flip_item(id, Flip::Horizontal | Flip::Vertical)` follows this, with rotation's in-place semantics. A JPEG gets `transform::flip_orientation`, which composes the mirror with the current orientation and reproduces Eagle's tables. PNG, WebP and BMP are mirrored and re-encoded with the same encoders falcon uses for rotation. Animated PNG and WebP are refused rather than flattened. The item is then refreshed (size, times, dimensions, thumbnail, palette), `lastModified` is bumped, and the open undo transaction is marked irreversible. `transform::can_flip(ext)` lists jpg, jpeg, png, webp and bmp.
+
 ## How falcon does it
 
 The `thumbnail` module holds the rules as plain functions: `plan_raster`, `plan_svg`, `target_size`, `max_side`, `resize` and `encode`.

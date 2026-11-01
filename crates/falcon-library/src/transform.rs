@@ -1,4 +1,5 @@
-//! Rotating and cropping an item's original file, following Eagle's viewer.
+//! Rotating, flipping and cropping an item's original file, following
+//! Eagle's viewer.
 //!
 //! Eagle rewrites the original in place and keeps its name. A JPEG is turned
 //! losslessly by changing its EXIF orientation; PNG, WebP and BMP are drawn
@@ -36,6 +37,21 @@ pub fn can_rotate(ext: &str) -> bool {
     matches!(ext.to_lowercase().as_str(), "jpg" | "jpeg" | "png" | "webp" | "bmp")
 }
 
+/// A mirror direction for [`Library::flip_item`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Flip {
+    /// Left and right swap.
+    Horizontal,
+    /// Top and bottom swap.
+    Vertical,
+}
+
+/// Formats Eagle's flip button writes to disk (AVIF is accepted by Eagle
+/// but fails when written, and falcon can't encode it).
+pub fn can_flip(ext: &str) -> bool {
+    can_rotate(ext)
+}
+
 /// Formats Eagle's crop tool works on.
 pub fn can_crop(ext: &str) -> bool {
     matches!(ext.to_lowercase().as_str(), "jpg" | "jpeg" | "png" | "webp")
@@ -68,6 +84,35 @@ impl Library {
                 1 => img.rotate90(),
                 2 => img.rotate180(),
                 _ => img.rotate270(),
+            };
+            encode_like(&img, &ext, &data).map_err(|e| self.invalid(e))?
+        };
+        self.rewrite(item, &raw, &out)
+    }
+
+    /// Mirrors an item's original as shown (EXIF orientation applied). Like
+    /// rotating, a JPEG only gets a new EXIF orientation and keeps its
+    /// pixels; PNG, WebP and BMP are drawn mirrored and re-encoded. The
+    /// item is refreshed (size, dimensions, thumbnail, palette) and the
+    /// open undo transaction marked irreversible. Animated PNG and WebP
+    /// are refused.
+    pub fn flip_item(&mut self, id: &str, flip: Flip) -> Result<()> {
+        let item = self.item(id).cloned().ok_or_else(|| self.invalid(format!("no item {id}")))?;
+        let ext = item.ext.to_lowercase();
+        if !can_flip(&ext) {
+            return Err(self.invalid(format!("falcon can't flip .{} files", item.ext)));
+        }
+        let raw = item.original_path(self.root());
+        let data = fs::read(&raw).map_err(|e| Error::io(&raw, e))?;
+        let out = if ext == "jpg" || ext == "jpeg" {
+            let current = jpeg_orientation(&data).ok_or_else(|| self.invalid("not a JPEG file"))?;
+            set_jpeg_orientation(&data, flip_orientation(current, flip)).ok_or_else(|| self.invalid("cannot write the JPEG's orientation"))?
+        } else {
+            self.refuse_animated(&data)?;
+            let img = thumbnail::decode(&raw).map_err(|e| self.invalid(e.to_string()))?;
+            let img = match flip {
+                Flip::Horizontal => img.fliph(),
+                Flip::Vertical => img.flipv(),
             };
             encode_like(&img, &ext, &data).map_err(|e| self.invalid(e))?
         };
@@ -211,6 +256,19 @@ pub fn turn_orientation(o: u16, turns: u8) -> u16 {
         (true, 1) => 7,
         (true, 2) => 4,
         _ => 5,
+    }
+}
+
+/// The orientation after mirroring an image shown with orientation `o`.
+/// A horizontal mirror of a turned image is the mirrored image turned the
+/// other way; a vertical mirror is a horizontal one plus a half turn.
+pub fn flip_orientation(o: u16, flip: Flip) -> u16 {
+    let (mirrored, q) = orientation_parts(o);
+    let back = (4 - q) % 4;
+    let base = if mirrored { turn_orientation(1, back) } else { turn_orientation(2, back) };
+    match flip {
+        Flip::Horizontal => base,
+        Flip::Vertical => turn_orientation(base, 2),
     }
 }
 
@@ -423,6 +481,62 @@ mod tests {
         for o in 1..=8 {
             assert_eq!(turn_orientation(turn_orientation(o, 1), 3), o);
         }
+    }
+
+    #[test]
+    fn flip_orientations_match_eagles_tables() {
+        // Eagle's lookup tables for orientations 1 to 8.
+        let horizontal = [2, 1, 4, 3, 6, 5, 8, 7];
+        let vertical = [4, 3, 2, 1, 8, 7, 6, 5];
+        for o in 1..=8u16 {
+            assert_eq!(flip_orientation(o, Flip::Horizontal), horizontal[o as usize - 1], "H {o}");
+            assert_eq!(flip_orientation(o, Flip::Vertical), vertical[o as usize - 1], "V {o}");
+        }
+    }
+
+    #[test]
+    fn flipping_a_png_mirrors_its_pixels() {
+        let src = picture(600, 400);
+        let png = encode(&src, ImageFormat::Png);
+        let (_tmp, mut lib, id) = library_with("wide.png", &png);
+        let before = lib.item(&id).unwrap().clone();
+        let order = keys(&lib, &id);
+        lib.begin_transaction("Flip");
+        lib.flip_item(&id, Flip::Horizontal).unwrap();
+        assert!(lib.end_transaction().unwrap().irreversible);
+        let after = lib.item(&id).unwrap().clone();
+        assert_eq!((after.width, after.height), (600, 400));
+        assert!(after.last_modified > before.last_modified && !after.palettes.is_empty());
+        assert_eq!(keys(&lib, &id), order);
+        let img = thumbnail::decode(&after.original_path(lib.root())).unwrap().to_rgb8();
+        assert_eq!(img.get_pixel(0, 0), src.get_pixel(599, 0));
+        assert_eq!(img.get_pixel(10, 300), src.get_pixel(589, 300));
+        lib.flip_item(&id, Flip::Vertical).unwrap();
+        let img = thumbnail::decode(&after.original_path(lib.root())).unwrap().to_rgb8();
+        assert_eq!(img.get_pixel(0, 0), src.get_pixel(599, 399));
+    }
+
+    #[test]
+    fn flipping_a_jpeg_only_changes_its_orientation() {
+        let src = picture(300, 200);
+        let jpg = encode(&src, ImageFormat::Jpeg);
+        let (_tmp, mut lib, id) = library_with("photo.jpg", &jpg);
+        lib.flip_item(&id, Flip::Horizontal).unwrap();
+        let item = lib.item(&id).unwrap().clone();
+        let data = fs::read(item.original_path(lib.root())).unwrap();
+        assert_eq!(jpeg_orientation(&data), Some(2));
+        let pixels = |b: &[u8]| image::load_from_memory(b).unwrap().to_rgb8();
+        assert!(pixels(&data).into_raw() == pixels(&jpg).into_raw(), "the compressed image is untouched");
+        // Shown mirrored: the left edge now holds what was on the right.
+        let shown = thumbnail::decode(&item.original_path(lib.root())).unwrap().to_rgb8();
+        let stored = pixels(&jpg);
+        assert_eq!(shown.get_pixel(0, 100), stored.get_pixel(299, 100));
+        assert_eq!((item.width, item.height), (300, 200));
+        lib.flip_item(&id, Flip::Vertical).unwrap();
+        assert_eq!(jpeg_orientation(&fs::read(item.original_path(lib.root())).unwrap()), Some(3));
+        let gif = encode(&picture(10, 10), ImageFormat::Gif);
+        let (_tmp, mut lib, id) = library_with("a.gif", &gif);
+        assert!(lib.flip_item(&id, Flip::Horizontal).is_err());
     }
 
     #[test]
