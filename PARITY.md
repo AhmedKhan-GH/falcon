@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 144 | 42 | 85 | 9 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 150 | 42 | 79 | 9 |
 | Viewers and file formats | 115 | 25 | 50 | 7 |
-| Search, filters and organising | 140 | 29 | 53 | 3 |
+| Search, filters and organising | 148 | 28 | 46 | 3 |
 | Import, export, library, preferences and integrations | 115 | 19 | 78 | 26 |
-| **Total** | 514 | 115 | 266 | 45 |
+| **Total** | 528 | 114 | 253 | 45 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -34,7 +34,7 @@ These are bugs, not missing features. The first four can lose data or edits.
 6. ~~No export of items or folders, and no CSV export.~~ Fixed.
 7. Shortcuts still missing: T, F, ⌘J Go to Folder, ⇧+arrows, ⌘D, ⌘T and the tag clipboard, ⇧D, ⇧T, F5, ⌘O and more (see §3).
 8. ~~No marquee selection, no multi-select of folders, no grid display options.~~ Fixed.
-9. No tag picker or suggestions.
+9. ~~No tag picker or suggestions.~~ Fixed.
 10. ~~No GIF player controls, no animated WebP, no GIF hover previews.~~ Fixed; still no animated AVIF (no decoder) and no hover playback for video or audio.
 11. No interactive 3D viewer; ~~text editor~~ fixed; the font viewer is still partial.
 12. ~~No watched import folder.~~ Fixed. No reload on outside changes, no sync-conflict detection, no screen capture.
@@ -87,7 +87,7 @@ Overall finding: falcon now has a native menu bar (`crates/falcon-app/src/menu.r
 | Find: Add to Folders… (⇧⌘J, a searchable folder picker that can create folders) | Partial | A plain scrolling submenu in the item context menu (app.rs:2520). No search, no new folder and no key | local |
 | Organize: Add To Last Used Folder (⇧D) | Missing | No record of recently used folders | local |
 | Organize: Rate 0–5 stars from the menu and keys | Done | Organize menu and the 0–5 keys (`organize.rating.*`) with a toast; in the viewer the bare digits keep their zoom meaning | local |
-| Organize: Add Tags… (⌘T), Copy Tags (⇧⌘C), Paste Tags (⇧⌘V), Clear Tags | Missing | No tag-panel key and no tag clipboard | local |
+| Organize: Add Tags… (⌘T), Copy Tags (⇧⌘C), Paste Tags (⇧⌘V), Clear Tags | Done | Organize menu; shortcuts.rs `organize.tag.*` (Clear Tags unbound by default, as Eagle) | local |
 | View: Always on Top (⇧T) | Missing | Only the collect window floats (collect.rs:89). The main window cannot | local |
 | View: jump to All / Uncategorized / Untagged / Recent / Random / All Tags / Trash (⌘1–⌘7) | Done | shortcuts.rs `view.all` … in Eagle's View menu order; from the viewer they close it first | local |
 | View: layout Waterfall / Justified / Grid / List with checkmarks (⌥1–⌥4) | Done | ⌥1–⌥4 in Eagle's order; View menu entries with checkmarks (`menu.rs` `validateMenuItem`) | local |
@@ -131,7 +131,7 @@ Cross-references (not counted): File ▸ Import Folders / Links / Eagle Package 
 | Item: Copy (files) | Partial | ⌘C works (app.rs:942). Not in the menu | local |
 | Item: Copy File Path | Done | `export_ui.rs` `copy_variant`, every selected item | local |
 | Item: Copy… ▸ Link, Folder path, Thumbnail, Base64, Name | Done | `export_ui.rs` `item_copy_menu`; Link copies the item's source URL | local |
-| Item: Copy Tags / Paste Tags | Missing |  | local |
+| Item: Copy Tags / Paste Tags | Done | `item_menu` in app.rs | local |
 | Item: Combine Images (several selected) | Missing |  | local |
 | Item: Duplicate | Missing |  | local |
 | Item: Search by Image ▸ Google / Bing / Yandex / TinEye / SauceNAO | Missing |  | online/plugin |
@@ -178,12 +178,12 @@ Cross-references (not counted): File ▸ Import Folders / Links / Eagle Package 
 | **List-view column header** right-click picks columns (tags, dimensions, rating, extension, file size, date added) | Done | `layout_panel::list_header` | local |
 | **Toolbar title** right-click lists the ancestor folders to jump to | Missing |  | local |
 | **Tag** (All Tags page): Rename / Star / Move to Group / Remove from Group / Remove | Done | app.rs:2849-2861, organize_ui.rs:919-940 | local |
-| Tag: Filter items with the tag(s), Merge N tags (several selected), Add to several groups | Partial | Clicking a tag opens its items (app.rs:2845) and renaming onto an existing tag merges. No multi-select merge and no menu entry | local |
+| Tag: Filter items with the tag(s), Merge N tags (several selected), Add to several groups | Done | `tags_menu` in app.rs, `merge_dialog` (2–5 tags as Eagle), `Library::merge_tags`, `add_tags_to_group_too` | local |
 | **Tag group**: Rename / Remove | Done | organize_ui.rs:820-845, which adds description, move and colour | local |
-| Tag group: Find items with any tag in the group | Missing |  | local |
-| **Tag list sort**: A>Z / Z>A / by count / group by Alphabet or Groups | Partial | Group-by toggle only (organize_ui.rs:722-730) | local |
+| Tag group: Find items with any tag in the group | Done | Group heading menu, `filter_any_tags` | local |
+| **Tag list sort**: A>Z / Z>A / by count / group by Alphabet or Groups | Done | All Tags page sort menu (per session) | local |
 | **Palette swatch** (inspector): Find similar colour, copy as HEX / RGB / RGBA / HSL / HSV / HWB / CMYK, set as primary | Missing | Not found in the inspector code | local |
-| **Inspector tag input**: Copy / Paste / Clear All Tags | Missing |  | local |
+| **Inspector tag input**: Copy / Paste / Clear All Tags | Done | `tag_area_menu` in `app/tag_picker.rs` | local |
 
 ---
 
@@ -209,7 +209,7 @@ Eagle defaults come from prefs `shortcuts.keybinds` (rebindable) and from the ha
 | ⌥⌘S reveal, ⌥⌘D duplicate (view) | Missing |  | local |
 | Home / End / PageUp / PageDown scroll the grid; ⌘↑ / ⌘↓ jump to top or bottom | Done | `run_command` scroll offsets; ⌘↑ / ⌘↓ also select the first or last item, where Eagle only scrolls | local |
 | 0–5 set the rating of the selection | Done | shortcuts.rs `organize.rating.*`, grid only; toast "Rated N stars" | local |
-| T opens the tag panel, F opens the folder panel, J opens Go to Folder, G opens Actions, P opens Plugins | Missing |  | local |
+| T opens the tag panel, F opens the folder panel, J opens Go to Folder, G opens Actions, P opens Plugins | Partial | T opens the tag picker (`organize.tag.panel`); no F, J, G or P | local |
 | R reshuffles the Random view | Done | shortcuts.rs; in place, without a history step | local |
 | `*` or `/` expand or collapse every folder | Done | Eagle's `toggleAllFolders` rule (smart folders when one is open); `*` is the ⇧8 alias chord | local |
 | Tab toggles all panels | Done | Fixed key in shortcuts.rs FIXED, when no text field has focus (`logic::toggle_all`) | local |
@@ -228,7 +228,7 @@ Eagle defaults come from prefs `shortcuts.keybinds` (rebindable) and from the ha
 | ⌘Z undo | Done | app.rs:992 | local |
 | ⌘A select all, ⌘C copy | Done | shortcuts.rs:110-112 | local |
 | Delete (Windows) / ⌘⌫ trash; ⇧⌘⌫ remove from folder | Done | shortcuts.rs `edit.remove.trash`, `edit.remove.folder` | local |
-| ⌘T add tags, ⇧⌘C / ⇧⌘V copy and paste tags, ⇧D add to last folder, ⌘D duplicate | Missing |  | local |
+| ⌘T add tags, ⇧⌘C / ⇧⌘V copy and paste tags, ⇧D add to last folder, ⌘D duplicate | Partial | ⌘T, ⇧⌘C and ⇧⌘V done (`organize.tag.*`); no ⇧D or ⌘D | local |
 | ⇧⌘L lock the folder now, ⌥⌘L lock the app | Partial | ⌥⌘L locks the app (`app.lock`); no ⇧⌘L for the folder | local |
 | Hold Z for the hover preview | Done | app.rs:2703, hover.rs | local |
 | Global shortcuts: Show Eagle, Bring up Eagle and search, screen captures (⌥⌘E) | Missing | Captures cross-ref import | local |
@@ -1043,19 +1043,19 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | All Tags page: every tag with its count, filter box, A-Z sections | Done | `A:2745` tag_page | local |
 | Click a tag to show its items | Done | `A:2840` Scope::Tag | local |
 | Rename a tag everywhere (items, history, starred, groups) | Done | `A:2853`, `E:131` | local |
-| Merge tags: select several and merge them into one name | Partial | Renaming a tag to an existing name merges two at a time (`E:131`); no multi-select merge dialog | local |
+| Merge tags: select several and merge them into one name | Done | `Library::merge_tags` through the merge dialog, 2–5 tags; rename to an existing name still merges two | local |
 | Delete a tag (with confirmation) | Done | `A:2860`, `E:169` | local |
 | Star and unstar tags; Starred section | Done | `A:2856`, `E:187`, `A:2751` | local |
-| Select several tags (click, Shift, Cmd, rubber band) and act on all | Missing | single-tag actions only | local |
+| Select several tags (click, Shift, Cmd, rubber band) and act on all | Partial | Click, ⌘ and ⇧ picks with the tag menu acting on all (`tags.rs`); no rubber band | local |
 | Tag groups: create, rename, colour, description, reorder, delete | Done | `OU:722`-`900`, `E:214`-`330` | local |
 | Move a tag to a group, remove from group, drag a tag onto a group | Done | `OU:919` tag_group_menu, DragTag | local |
-| Add a tag to more than one group | Missing | Only "Move to Group" (`OU:921`) | local |
-| Find items with any tag in a group | Missing | none | local |
+| Add a tag to more than one group | Done | Add to Group keeps the tag's other groups (`add_tags_to_group_too`) | local |
+| Find items with any tag in a group | Done | Group heading menu | local |
 | Tag sidebar: All, Starred, Uncategorized (tags in no group), Groups | Partial | Toggle between A-Z and group view (`OU:724`); falcon lists "Ungrouped" tags in group view, but there are no separate Starred or Uncategorized pages | local |
-| Sort tags by name or count, group by alphabet or groups | Partial | Grouping only; no sort by count | local |
+| Sort tags by name or count, group by alphabet or groups | Done | All Tags page sort menu | local |
 | Tag group colour dot on chips | Done | `A:2827` tag_dot | local |
-| Recent tag history (last 120 used) kept in tags.json | Done | `E:197` record_tag_use | local |
-| Clear tag history | Missing | none | local |
+| Recent tag history (last 120 used) kept in tags.json | Done | `tagging.rs` `add_tags_to_items` and `push_history`: each added tag moves to the front, 120 kept, a tag removed from its last item leaves the history | local |
+| Clear tag history | Done | Button on the All Tags page, `Library::clear_tag_history` | local |
 
 ### 9. Inspector (one item)
 
@@ -1072,9 +1072,9 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Note editing | Done | `A:3092` | local |
 | URL editing, validated as Eagle does | Partial | Saved without validation (`A:3098`) | local |
 | Open Link in Browser button | Missing | none | local |
-| Tags: chips, remove, type a new tag | Done | `A:3107` | local |
-| Tag picker with Selected, Starred, Recent, Recommended and groups, search, column sizes | Missing | Plain text field with no suggestions or autocomplete. History is recorded but never shown. | local |
-| Copy, paste and clear an item's tags | Missing | none | local |
+| Tags: chips, remove, type a new tag | Done | `tag_field`: chips with × and a + that opens the picker, where typing happens, as Eagle | local |
+| Tag picker with Selected, Starred, Recent, Recommended and groups, search, column sizes | Done | `app/tag_picker.rs`, `tags.rs`: search and ranking, Starred, Recent (latest 12 in use), Recommended, groups with a Tab sidebar, settings; no Pinyin or jieba search, no dragging or resizing | local |
+| Copy, paste and clear an item's tags | Done | `Library::paste_tags`, `clear_tags`; one undo step and a notice | local |
 | Folders: chips, remove, Add Category | Done | `folder_chip` in app.rs; removal is the × on the chip | local |
 | Click a folder chip to open that folder | Done | `folder_chip` in app.rs: the click opens the folder with the item still selected and scrolled to; the tooltip shows the folder path | local |
 | Folder picker with search, Recent, Selected and create-new | Partial | Flat scrolling list (`A:3159`) | local |
@@ -1090,10 +1090,10 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | Preview stack and "N items selected" | Done | `A:2943` | local |
-| Add a tag to all; remove a tag they share | Done | `A:2964`, Action::BatchTag | local |
+| Add a tag to all; remove a tag they share | Done | The picker and the chip × for several items | local |
 | Add all to a folder | Done | `A:2988` | local |
 | Show the folders they share, remove all from one | Missing | none | local |
-| Edit the name, note or URL of all at once ("Multiple titles", "multiple URLs") | Missing | none | local |
+| Edit the name, note or URL of all at once ("Multiple titles", "multiple URLs") | Done | `set_notes`, `set_urls` from the multi-item inspector; Eagle has no batch name either | local |
 | Rate all | Done | `A:3003`, Action::BatchRating | local |
 | Total size | Done | `A:3007` | local |
 | Batch rename with a template (%NN, $D, original name, tags, folders, index, date) and find/replace with regex | Missing | none | local |
@@ -1175,7 +1175,7 @@ Ranked by user impact. Data-loss and silent-mismatch bugs come first, then every
 7. **No size or dimensions filter chips.** The engine supports them, but there's no UI.
 8. **No Comment filter, and comments, camera, text content and fonts aren't searched.** There's also no Search Scope menu.
 9. **The smart folder dialog** has no date picker and shows no live hit count.
-10. **No tag picker.** No suggestions, recent or starred tags, autocomplete or copy/paste/clear tags in the inspector.
+10. ~~No tag picker.~~ Fixed.
 11. **No exclude, search or tag-group options in the Tag, Folder and Type filters.** Also no type groups (video, audio, font...).
 12. **Remove from current folder is missing**, and so is the "remove from folder or trash" prompt for items in several folders.
 13. ~~No Show Subfolder Content toggle.~~ Fixed.
@@ -1186,7 +1186,7 @@ Ranked by user impact. Data-loss and silent-mismatch bugs come first, then every
 18. **Missing folder command**: Add to Last Used Folder (New Folder Below, New Folder with Selection, Duplicate, Move Folder dialog and Move Up/Down/Top/Bottom are done).
 19. **Emoji folder icons don't show.** A new folder doesn't inherit the parent's icon or colour, and there's no reset cover.
 20. **No Pin to Top for items, and no Open File Location.**
-21. **Tag manager gaps**: no multi-select merge, no adding a tag to several groups, no "find items with tags in group", no Uncategorized tags page, no sort by count, no clear tag history.
+21. **Tag manager gaps**: no Uncategorized or Starred tag pages, no rubber-band tag selection, and rename or merge don't reach folder auto-tags or smart-folder rules.
 22. **Quick Access can't be reordered, dragged into, or used as a drop target.**
 23. **Filter bar gaps**: no Filter Lock toggle (falcon always keeps the filter and search when switching views), no add or pin filters, no ratio shapes (4:3, 16:9, custom), no counts for type, shape and rating.
 24. **Global sort lacks Duration and Random.**
