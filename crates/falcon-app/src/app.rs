@@ -124,6 +124,39 @@ struct Saved {
     search: crate::search_state::SearchPrefs,
     /// Recently Used, per library (`recent.rs`).
     recent_items: crate::recent::RecentItems,
+    /// Which inspector sections are folded away, for every library.
+    folds: Folds,
+}
+
+/// An inspector section whose title folds it away.
+#[derive(Clone, Copy)]
+enum Fold {
+    Properties,
+    Tags,
+    Folders,
+    Comments,
+}
+
+/// The inspector sections the user folded away. Saved as "closed" flags so
+/// state from before they could fold, and a new section, start expanded.
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone, Copy, PartialEq, Debug)]
+#[serde(default)]
+struct Folds {
+    properties: bool,
+    tags: bool,
+    folders: bool,
+    comments: bool,
+}
+
+impl Folds {
+    fn closed(&mut self, which: Fold) -> &mut bool {
+        match which {
+            Fold::Properties => &mut self.properties,
+            Fold::Tags => &mut self.tags,
+            Fold::Folders => &mut self.folders,
+            Fold::Comments => &mut self.comments,
+        }
+    }
 }
 
 /// A rubber-band selection in progress: where it started, in the grid's
@@ -710,6 +743,8 @@ pub struct App {
     refresh: bool,
     /// The text viewer's zoom level, kept across items and launches.
     text_zoom: u8,
+    /// Inspector sections folded away (`Folds`).
+    folds: Folds,
     /// The thread watching the shown library's auto-import folder.
     auto_import: Option<crate::auto_import::Watcher>,
     /// Files it has handed over, shared with the thread and saved.
@@ -771,6 +806,7 @@ impl App {
             display: Default::default(),
             refresh: false,
             text_zoom: 0,
+            folds: Folds::default(),
             auto_import: None,
             auto_imported: Arc::default(),
             auto_import_refused: None,
@@ -806,6 +842,7 @@ impl App {
         app.video.resume = saved.video_positions;
         app.pdf.set_marks(saved.pdf_marks);
         app.image.edge = saved.zoom_edge.unwrap_or(false);
+        app.folds = saved.folds;
         app.text_zoom = saved.text_zoom.unwrap_or(0).min(crate::textdoc::ZOOM_LEVELS - 1);
         app.auto_imported = Arc::new(Mutex::new(saved.auto_imported));
         app.font_look = saved.font_look.unwrap_or_default();
@@ -4245,6 +4282,21 @@ impl App {
         });
     }
 
+    /// A section title that folds the section away when clicked, with an
+    /// arrow that points right when it is folded. True while it is shown.
+    /// The state is shared by the three inspectors and every library.
+    fn fold_heading(&mut self, ui: &mut Ui, which: Fold, text: &str) -> bool {
+        let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 18.0), Sense::click());
+        let closed = self.folds.closed(which);
+        if resp.clicked() {
+            *closed = !*closed;
+        }
+        let color = if resp.hovered() { t::p().text } else { t::p().text_muted };
+        icon(ui, Pos2::new(rect.left() + 6.0, rect.center().y), if *closed { ic::CARET_RIGHT } else { ic::CARET_DOWN }, 10.0, color);
+        ui.painter().text(rect.left_center() + vec2(16.0, 0.0), Align2::LEFT_CENTER, text, font(13.0), color);
+        !*closed
+    }
+
     /// Saves text typed into the folder inspector when its fields went away
     /// with focus still in them (the scope or the selection changed), unless
     /// they are still shown for folder `shown`.
@@ -4299,12 +4351,13 @@ impl App {
         divider(ui);
         let items: Vec<&Item> = self.ws.order.iter().filter_map(|id| lib.item(id)).collect();
         let size: u64 = items.iter().map(|i| i.size).sum();
-        heading(ui, "Properties");
-        prop(ui, "Items", &items.len().to_string());
-        prop(ui, "Size", &logic::format_size(size));
-        if let Some(f) = &folder {
-            prop(ui, "Date Imported", &logic::format_ms(f.modification_time));
-            prop(ui, "Password", if f.password.is_empty() { "None" } else { "Set" });
+        if self.fold_heading(ui, Fold::Properties, "Properties") {
+            prop(ui, "Items", &items.len().to_string());
+            prop(ui, "Size", &logic::format_size(size));
+            if let Some(f) = &folder {
+                prop(ui, "Date Imported", &logic::format_ms(f.modification_time));
+                prop(ui, "Password", if f.password.is_empty() { "None" } else { "Set" });
+            }
         }
         ui.add_space(4.0);
         self.scope_export_button(ui, lib);
@@ -4361,32 +4414,35 @@ impl App {
         }
 
         // Tags every selected item shares; the picker adds to all.
-        heading(ui, "Tags");
-        let common = crate::tags::common_tags(&items);
-        self.tag_field(ui, lib, &common, &ids);
+        if self.fold_heading(ui, Fold::Tags, "Tags") {
+            let common = crate::tags::common_tags(&items);
+            self.tag_field(ui, lib, &common, &ids);
+        }
 
-        heading(ui, "Folders");
-        let add = ui.add(egui::Button::new(RichText::new(format!("{}  Add All to Folder", ic::PLUS)).size(12.0).color(t::p().text_muted)).frame(false));
-        egui::Popup::menu(&add).show(|ui| {
-            ui.set_min_width(200.0);
-            egui::ScrollArea::vertical().max_height(320.0).show(ui, |ui| {
-                for f in lib.all_folders() {
-                    if ui.button(&f.name).clicked() {
-                        self.ws.actions.push(Action::AddToFolder(ids.clone(), f.id.clone()));
+        if self.fold_heading(ui, Fold::Folders, "Folders") {
+            let add = ui.add(egui::Button::new(RichText::new(format!("{}  Add All to Folder", ic::PLUS)).size(12.0).color(t::p().text_muted)).frame(false));
+            egui::Popup::menu(&add).show(|ui| {
+                ui.set_min_width(200.0);
+                egui::ScrollArea::vertical().max_height(320.0).show(ui, |ui| {
+                    for f in lib.all_folders() {
+                        if ui.button(&f.name).clicked() {
+                            self.ws.actions.push(Action::AddToFolder(ids.clone(), f.id.clone()));
+                        }
                     }
-                }
+                });
             });
-        });
+        }
 
         divider(ui);
-        heading(ui, "Properties");
-        let stars: HashSet<u64> = items.iter().map(|i| i.extra.get("star").and_then(|v| v.as_u64()).unwrap_or(0)).collect();
-        let shown = if stars.len() == 1 { stars.into_iter().next().unwrap_or(0) } else { 0 };
-        if let Some(star) = rating(ui, shown) {
-            self.ws.actions.push(Action::BatchRating(ids.clone(), star));
+        if self.fold_heading(ui, Fold::Properties, "Properties") {
+            let stars: HashSet<u64> = items.iter().map(|i| i.extra.get("star").and_then(|v| v.as_u64()).unwrap_or(0)).collect();
+            let shown = if stars.len() == 1 { stars.into_iter().next().unwrap_or(0) } else { 0 };
+            if let Some(star) = rating(ui, shown) {
+                self.ws.actions.push(Action::BatchRating(ids.clone(), star));
+            }
+            prop(ui, "Items", &n.to_string());
+            prop(ui, "Size", &logic::format_size(size));
         }
-        prop(ui, "Items", &n.to_string());
-        prop(ui, "Size", &logic::format_size(size));
         ui.add_space(4.0);
         let trash = self.ws.scope == Scope::Trash;
         let label = if trash { "Restore All" } else { "Move All to Trash" };
@@ -4626,37 +4682,40 @@ impl App {
         }
 
         // Tags.
-        heading(ui, "Tags");
-        self.tag_field(ui, lib, &item.tags, std::slice::from_ref(&item.id));
+        if self.fold_heading(ui, Fold::Tags, "Tags") {
+            self.tag_field(ui, lib, &item.tags, std::slice::from_ref(&item.id));
+        }
 
         // Folders.
-        heading(ui, "Folders");
+        let folders_open = self.fold_heading(ui, Fold::Folders, "Folders");
         let mut remove_folder = None;
         let mut open_folder = None;
         let mut add_folder = None;
-        ui.horizontal_wrapped(|ui| {
-            ui.spacing_mut().item_spacing = vec2(6.0, 6.0);
-            for fid in &item.folders {
-                let name = logic::find_folder(&lib.metadata.folders, fid).map_or_else(|| fid.clone(), |f| f.name.clone());
-                let path = logic::folder_path(&lib.metadata.folders, fid).unwrap_or_else(|| name.clone());
-                match folder_chip(ui, &name, &path) {
-                    Some(ChipClick::Remove) => remove_folder = Some(fid.clone()),
-                    Some(ChipClick::Open) => open_folder = Some(fid.clone()),
-                    None => {}
-                }
-            }
-            let add = ui.add(egui::Button::new(RichText::new(format!("{}  Add Category", ic::PLUS)).size(12.0).color(t::p().text_muted)).frame(false));
-            egui::Popup::menu(&add).show(|ui| {
-                ui.set_min_width(200.0);
-                egui::ScrollArea::vertical().max_height(320.0).show(ui, |ui| {
-                    for f in lib.all_folders() {
-                        if !item.folders.contains(&f.id) && ui.button(&f.name).clicked() {
-                            add_folder = Some(f.id.clone());
-                        }
+        if folders_open {
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing = vec2(6.0, 6.0);
+                for fid in &item.folders {
+                    let name = logic::find_folder(&lib.metadata.folders, fid).map_or_else(|| fid.clone(), |f| f.name.clone());
+                    let path = logic::folder_path(&lib.metadata.folders, fid).unwrap_or_else(|| name.clone());
+                    match folder_chip(ui, &name, &path) {
+                        Some(ChipClick::Remove) => remove_folder = Some(fid.clone()),
+                        Some(ChipClick::Open) => open_folder = Some(fid.clone()),
+                        None => {}
                     }
+                }
+                let add = ui.add(egui::Button::new(RichText::new(format!("{}  Add Category", ic::PLUS)).size(12.0).color(t::p().text_muted)).frame(false));
+                egui::Popup::menu(&add).show(|ui| {
+                    ui.set_min_width(200.0);
+                    egui::ScrollArea::vertical().max_height(320.0).show(ui, |ui| {
+                        for f in lib.all_folders() {
+                            if !item.folders.contains(&f.id) && ui.button(&f.name).clicked() {
+                                add_folder = Some(f.id.clone());
+                            }
+                        }
+                    });
                 });
             });
-        });
+        }
         if let Some(fid) = remove_folder {
             let mut it = changed.clone().unwrap_or_else(|| item.clone());
             it.folders.retain(|x| *x != fid);
@@ -4682,30 +4741,31 @@ impl App {
 
         self.comment_list(ui, &item);
         divider(ui);
-        heading(ui, "Properties");
-        let star = item.extra.get("star").and_then(|v| v.as_u64()).unwrap_or(0);
-        if let Some(new_star) = rating(ui, star) {
-            let mut it = changed.clone().unwrap_or_else(|| item.clone());
-            if new_star == 0 {
-                it.extra.remove("star");
-            } else {
-                it.extra.insert("star".into(), new_star.into());
+        if self.fold_heading(ui, Fold::Properties, "Properties") {
+            let star = item.extra.get("star").and_then(|v| v.as_u64()).unwrap_or(0);
+            if let Some(new_star) = rating(ui, star) {
+                let mut it = changed.clone().unwrap_or_else(|| item.clone());
+                if new_star == 0 {
+                    it.extra.remove("star");
+                } else {
+                    it.extra.insert("star".into(), new_star.into());
+                }
+                changed = Some(it);
             }
-            changed = Some(it);
+            if item.width > 0 {
+                prop(ui, "Dimensions", &format!("{} × {}", item.width, item.height));
+            }
+            prop(ui, "Size", &logic::format_size(item.size));
+            let type_row = prop(ui, "Type", &item.ext.to_uppercase());
+            let type_hit = ui.interact(type_row.rect, ui.scope_id().with("type-row"), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text("Click to change the extension");
+            if type_hit.clicked() {
+                self.ws.ext_dialog = Some(ext_ui::ExtDialog { id: item.id.clone(), current: item.ext.to_lowercase(), text: item.ext.clone(), uid: egui::Id::unique("change-extension"), focused: false });
+            }
+            prop(ui, "Date Imported", &logic::format_ms(item.modification_time));
+            prop(ui, "Date Created", &logic::format_ms(item.btime));
+            prop(ui, "Date Modified", &logic::format_ms(item.mtime));
+            media_view::media_props(ui, &item);
         }
-        if item.width > 0 {
-            prop(ui, "Dimensions", &format!("{} × {}", item.width, item.height));
-        }
-        prop(ui, "Size", &logic::format_size(item.size));
-        let type_row = prop(ui, "Type", &item.ext.to_uppercase());
-        let type_hit = ui.interact(type_row.rect, ui.scope_id().with("type-row"), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text("Click to change the extension");
-        if type_hit.clicked() {
-            self.ws.ext_dialog = Some(ext_ui::ExtDialog { id: item.id.clone(), current: item.ext.to_lowercase(), text: item.ext.clone(), uid: egui::Id::unique("change-extension"), focused: false });
-        }
-        prop(ui, "Date Imported", &logic::format_ms(item.modification_time));
-        prop(ui, "Date Created", &logic::format_ms(item.btime));
-        prop(ui, "Date Modified", &logic::format_ms(item.mtime));
-        media_view::media_props(ui, &item);
         ui.add_space(4.0);
         if wide_button(ui, ic::ARROW_SQUARE_OUT, "Open in Default App", true).clicked() {
             let files = [item.original_path(lib.root())];
@@ -4780,11 +4840,6 @@ impl App {
 fn divider(ui: &mut Ui) {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 9.0), Sense::hover());
     ui.painter().hline(rect.x_range(), rect.center().y, Stroke::new(1.0, t::p().divider));
-}
-
-fn heading(ui: &mut Ui, text: &str) {
-    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 18.0), Sense::hover());
-    ui.painter().text(rect.left_center(), Align2::LEFT_CENTER, text, font(13.0), t::p().text_muted);
 }
 
 fn prop(ui: &mut Ui, key: &str, value: &str) -> Response {
@@ -5022,6 +5077,7 @@ impl eframe::App for App {
             pdf_marks: self.pdf.marks(),
             zoom_edge: Some(self.image.edge),
             text_zoom: Some(self.text_zoom),
+            folds: self.folds,
             auto_imported: self.auto_imported.lock().unwrap_or_else(|p| p.into_inner()).clone(),
             font_look: Some(self.font_look),
             hide_navigator: Some(self.modes.hide_navigator),
@@ -5427,6 +5483,21 @@ mod tests {
         assert_eq!(saved.tile, Some(150.0));
         let (libs, active) = crate::workspaces::restore(&saved.libraries, saved.active, saved.library.as_deref(), |_| true);
         assert_eq!((libs, active), (vec![PathBuf::from("/x/A.library")], 0));
+    }
+
+    #[test]
+    fn folded_inspector_sections_default_to_open_and_are_kept() {
+        let mut m = Memory::default();
+        m.set_string_raw(r#"(tile: Some(150.0))"#);
+        let saved: Saved = eframe::get_value(&m, eframe::APP_KEY).unwrap();
+        assert_eq!(saved.folds, super::Folds::default());
+        m.set_string_raw(r#"(folds: (tags: true))"#);
+        let mut saved: Saved = eframe::get_value(&m, eframe::APP_KEY).unwrap();
+        assert!(*saved.folds.closed(super::Fold::Tags));
+        assert!(!*saved.folds.closed(super::Fold::Properties));
+        eframe::set_value(&mut m, eframe::APP_KEY, &saved);
+        let back: Saved = eframe::get_value(&m, eframe::APP_KEY).unwrap();
+        assert_eq!(back.folds, saved.folds);
     }
 
     #[test]

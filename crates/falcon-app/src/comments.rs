@@ -11,7 +11,7 @@ use eframe::egui::{self, Align2, Color32, CornerRadius, Key, Pos2, Rect, Sense, 
 use falcon_library::model::{Comment, Item};
 
 use super::image_edit::{Draft, Op};
-use super::{Action, App, heading, icon_button};
+use super::{Action, App, Fold, icon_button};
 use super::crop::{Handle, hit, to_image, to_screen};
 use crate::icons as ic;
 use crate::theme::{self as t, font, mono};
@@ -429,7 +429,9 @@ impl App {
         if comments.is_empty() {
             return;
         }
-        heading(ui, &format!("Comments ({})", comments.len()));
+        if !self.fold_heading(ui, Fold::Comments, &format!("Comments ({})", comments.len())) {
+            return;
+        }
         let w = ui.available_width();
         for (n, c) in comments.iter().enumerate() {
             let editing = self.ws.tools.list_edit.as_ref().is_some_and(|(i, id, _)| *i == item.id && *id == c.id);
