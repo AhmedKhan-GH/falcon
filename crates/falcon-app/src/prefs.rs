@@ -25,9 +25,9 @@ pub const PORT_SPAN: u16 = 5;
 #[serde(default)]
 pub struct Prefs {
     /// Eagle's Dock icon option: closing the main window hides falcon and
-    /// keeps its Dock icon (the default). Off, closing the window quits,
-    /// because falcon has no menu bar icon and a hidden Dock icon would
-    /// leave no way back to the app.
+    /// keeps its Dock icon (the default). Off, closing the window also
+    /// takes falcon out of the Dock while the menu bar icon is shown, and
+    /// quits otherwise, since nothing would bring it back (`dock.rs`).
     pub keep_dock_icon: bool,
     /// Eagle's `habits.hoverZoom`: the zoom button on hovered cards.
     pub hover_zoom: bool,
@@ -1087,7 +1087,7 @@ fn general(p: &mut Page, d: &mut Draft, login: &crate::login_item::Status) {
         let usable = !matches!(login, Status::Unavailable(_));
         ui.add_enabled(usable, egui::Checkbox::new(&mut d.launch_at_login, "Open Falcon when you log in"));
         ui.checkbox(&mut d.prefs.keep_dock_icon, "Keep Falcon in the Dock after closing its window");
-        note(ui, "When off, closing the window quits Falcon, since it has no menu bar icon to open it again.");
+        note(ui, "When off, closing the window takes Falcon out of the Dock while its menu bar icon is shown, and quits it otherwise.");
         match login {
             Status::NeedsApproval => note(ui, "Allow Falcon in System Settings ▸ General ▸ Login Items."),
             Status::Unavailable(why) => note(ui, why),

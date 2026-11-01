@@ -379,14 +379,27 @@ impl eframe::App for App {
     fn ui(&mut self, ui: &mut Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         // The red button or ⌘W on the window: like Eagle, falcon stays
-        // in the Dock and comes back when its icon is clicked, unless
-        // Preferences turned that off (then the close goes through).
-        if ctx.input(|i| i.viewport().close_requested()) && self.prefs.keep_dock_icon && crate::dock::keep_running_hidden() {
-            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-            self.hover_media.stop_all();
-            for ws in std::iter::once(&mut self.ws).chain(self.others.parked_mut()) {
-                let _ = ws.flush_and_backup();
+        // in the Dock and comes back when its icon is clicked. With the
+        // Dock icon option off it leaves the Dock too while the menu bar
+        // icon is shown, else the close goes through and quits (`dock.rs`).
+        let mut left_dock = false;
+        if ctx.input(|i| i.viewport().close_requested()) {
+            let action = crate::dock::close_action(self.prefs.keep_dock_icon, self.prefs.menu_icon, crate::dock::CAN_HIDE);
+            if action != crate::dock::CloseAction::Quit && crate::dock::keep_running_hidden() {
+                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                if action == crate::dock::CloseAction::HideFromDock {
+                    crate::dock::set_in_dock(false);
+                    left_dock = true;
+                }
+                self.hover_media.stop_all();
+                for ws in std::iter::once(&mut self.ws).chain(self.others.parked_mut()) {
+                    let _ = ws.flush_and_backup();
+                }
             }
+        }
+        // Opened again some other way (Finder, a link): back in the Dock.
+        if !left_dock && !crate::dock::in_dock() && ctx.input(|i| i.viewport().focused == Some(true)) {
+            crate::dock::set_in_dock(true);
         }
         self.system_tick(&ctx);
         // Eagle stops hover playback when its window is hidden. Hiding
