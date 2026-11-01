@@ -38,6 +38,11 @@ impl App {
         if self.ws.view.id != id {
             self.ws.view = ViewState { id: id.clone(), file: item.original_path(lib.root()), ..Default::default() };
         }
+        // A middle click anywhere in the viewer enters or leaves
+        // presentation mode, as Eagle's `onDetailClick`, in every viewer.
+        if middle_clicked_in(ctx, screen) {
+            self.toggle_presentation(ctx);
+        }
         // An original still in iCloud downloads in the background first.
         if self.icloud_viewer(parent, lib, item, screen) {
             return;
@@ -104,4 +109,11 @@ impl App {
             self.open_menu(ui, std::slice::from_ref(&file));
         });
     }
+}
+
+/// Whether the middle button was clicked over `screen` this frame (not
+/// over a menu or popup above it).
+fn middle_clicked_in(ctx: &egui::Context, screen: Rect) -> bool {
+    let over_popup = ctx.pointer_interact_pos().and_then(|p| ctx.layer_id_at(p)).is_some_and(|l| l.order != egui::Order::Background && l.order != egui::Order::Middle);
+    !over_popup && ctx.input(|i| i.pointer.button_clicked(egui::PointerButton::Middle) && i.pointer.interact_pos().is_some_and(|p| screen.contains(p)))
 }

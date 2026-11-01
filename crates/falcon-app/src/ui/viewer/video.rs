@@ -724,6 +724,8 @@ impl App {
             self.frame_tool(item, tool);
         }
         let (fill, wheel_volume) = (self.prefs.video_fill, self.prefs.video_scroll == crate::prefs::VideoScroll::Volume);
+        let presenting = self.modes.presenting;
+        let mut present = false;
         let vs = &mut self.video;
         let Some(v) = vs.player.as_mut() else { return };
         v.tick();
@@ -923,12 +925,11 @@ impl App {
         x += 22.0;
         p.text(Pos2::new(x, cy), Align2::LEFT_CENTER, logic::time_label(pos, duration), mono(12.5), t::p().text_value);
 
-        // Full screen at the right end; Eagle's button starts its full-screen
-        // presentation, falcon's fills the screen with the window.
-        let fs = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
-        let (glyph, tip) = if fs { (ic::CORNERS_IN, "Exit Full Screen") } else { (ic::CORNERS_OUT, "Full Screen") };
+        // Full screen at the right end: as Eagle's, it enters (or leaves)
+        // presentation mode.
+        let (glyph, tip) = if presenting { (ic::CORNERS_IN, "Exit Full Screen") } else { (ic::CORNERS_OUT, "Full Screen") };
         if icon_button(ui, Pos2::new(right - 6.0, cy), glyph, 17.0, true, tip).clicked() {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!fs));
+            present = true;
         }
         let vol = Rect::from_min_size(Pos2::new(right - 34.0 - 90.0, cy - 10.0), vec2(90.0, 20.0));
         let mut level = if vs.muted { 0.0 } else { vs.volume };
@@ -1001,6 +1002,9 @@ impl App {
             ctx.request_repaint_after(std::time::Duration::from_millis(60));
         }
         canvas.context_menu(|ui| self.video_menu(ui, lib, item));
+        if present {
+            self.toggle_presentation(ctx);
+        }
     }
 
     /// The small box for writing a timed comment, above the control bar.
