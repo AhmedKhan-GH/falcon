@@ -109,6 +109,10 @@ pub enum Command {
     /// and Eagle's bare T.
     AddTags,
     TagPanel,
+    /// Organize ▸ Copy Tags, Paste Tags and Clear Tags (Eagle's tag clipboard).
+    CopyTags,
+    PasteTags,
+    ClearTags,
     // Menu bar entries with no row in `TABLE` (no rebindable key).
     Undo,
     Redo,
@@ -348,6 +352,10 @@ pub const TABLE: &[Spec] = &[
     // Tags: Organize ▸ Add Tags… and Eagle's T, bound outside its keybind table (falcon's own id).
     Spec { cmd: Command::AddTags, id: "organize.tag.add", group: "Tags", label: "Add tags to the selection", default: k(CMD, Key::T), aliases: &[] },
     Spec { cmd: Command::TagPanel, id: "organize.tag.panel", group: "Tags", label: "Open the tag picker", default: k(NONE, Key::T), aliases: &[] },
+    Spec { cmd: Command::CopyTags, id: "organize.tag.copy", group: "Tags", label: "Copy the selection's tags", default: k(CMD_SHIFT, Key::C), aliases: &[] },
+    Spec { cmd: Command::PasteTags, id: "organize.tag.paste", group: "Tags", label: "Paste tags onto the selection", default: k(CMD_SHIFT, Key::V), aliases: &[] },
+    // Unbound by default, as in Eagle.
+    Spec { cmd: Command::ClearTags, id: "organize.tag.clear", group: "Tags", label: "Clear the selection's tags", default: None, aliases: &[] },
 ];
 
 /// Keys that cannot be rebound, listed in the Shortcuts section.
@@ -938,6 +946,10 @@ mod tests {
         assert_eq!(keys.resolve(Key::T, Modifiers::NONE), Some(Command::TagPanel));
         assert_eq!(keys.resolve(Key::T, ALT), None);
         assert_eq!(spec(Command::AddTags).id, "organize.tag.add");
+        assert_eq!(keys.resolve(Key::C, CMD_SHIFT), Some(Command::CopyTags));
+        assert_eq!(keys.resolve(Key::V, CMD_SHIFT), Some(Command::PasteTags));
+        assert_eq!(keys.resolve(Key::C, CMD_ALT_SHIFT), Some(Command::CopyFolderPath));
+        assert_eq!(keys.binding(Command::ClearTags), None);
     }
 
     #[test]

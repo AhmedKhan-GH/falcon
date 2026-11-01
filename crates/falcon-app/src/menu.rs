@@ -72,6 +72,8 @@ pub struct State {
     pub docs: bool,
     /// An app password is set, so falcon can be locked.
     pub lockable: bool,
+    /// Tags have been copied (Copy Tags), so Paste Tags can act.
+    pub tag_clipboard: bool,
 }
 
 impl State {
@@ -131,7 +133,8 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::ParentFolder => grid && s.parent,
         C::Reshuffle => grid && s.scope == ScopeKind::Random,
         C::Rate(_) => any || (s.library && s.viewer),
-        C::AddTags | C::TagPanel => any,
+        C::AddTags | C::TagPanel | C::CopyTags | C::ClearTags => any,
+        C::PasteTags => any && s.tag_clipboard,
         C::FlipHorizontal => s.library && s.flippable,
         C::RotateLeft => s.library && s.rotatable,
         C::Crop => s.library && s.croppable,
@@ -300,6 +303,10 @@ pub static MENUS: &[(&str, &[Entry])] = &[
             item("3 Stars", Command::Rate(3)),
             item("4 Stars", Command::Rate(4)),
             item("5 Stars", Command::Rate(5)),
+            SEP,
+            item("Copy Tags", Command::CopyTags),
+            item("Paste Tags", Command::PasteTags),
+            item("Clear Tags", Command::ClearTags),
         ],
     ),
     (
@@ -806,8 +813,10 @@ mod tests {
             croppable: true,
             docs: true,
             lockable: true,
+            tag_clipboard: true,
             ..Default::default()
         };
+        assert!(!enabled(Command::PasteTags, &State { tag_clipboard: false, ..full.clone() }), "Paste Tags needs copied tags");
         assert!(!enabled(Command::LockApp, &State::default()), "Lock needs a password");
         for it in items().iter() {
             let s = match it.cmd {

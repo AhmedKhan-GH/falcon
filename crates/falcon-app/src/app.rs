@@ -146,6 +146,9 @@ enum Action {
     AddTags(Vec<String>, Vec<String>, Option<(String, Vec<String>)>),
     /// Tags taken off items (`Library::remove_tags_from_items`).
     RemoveTags(Vec<String>, Vec<String>),
+    /// Paste Tags and Clear Tags (`Library::paste_tags`, `clear_tags`).
+    PasteTags(Vec<String>, Vec<String>),
+    ClearTags(Vec<String>),
     BatchRating(Vec<String>, u64),
     QuickAdd(&'static str, String),
     QuickRemove(String),
@@ -587,6 +590,9 @@ pub struct App {
     show_sidebar: bool,
     show_inspector: bool,
     focus_search: bool,
+    /// Eagle's in-app tag clipboard (Copy Tags), shared by the open
+    /// libraries; the text also goes to the system clipboard.
+    copied_tags: Option<Vec<String>>,
     /// Set while a drag out of the window is in progress.
     native_drag: Arc<std::sync::atomic::AtomicBool>,
     /// Background downloads of iCloud originals (`icloud.rs`).
@@ -651,6 +657,7 @@ impl App {
             show_sidebar: true,
             show_inspector: true,
             focus_search: false,
+            copied_tags: None,
             native_drag: Arc::default(),
             imports: Default::default(),
             fetches: Default::default(),
@@ -1410,6 +1417,7 @@ impl App {
             library: self.ws.lib.is_some(),
             modal: self.prefs_window.open || self.ws.dup_dialog.is_some() || self.lock.is_locked(),
             lockable: self.prefs.app_lock.is_some(),
+            tag_clipboard: self.copied_tags.is_some(),
             text: ctx.egui_wants_keyboard_input(),
             viewer: self.ws.viewer.is_some(),
             selected: self.ws.selected.len(),
@@ -1611,6 +1619,19 @@ impl App {
                 }
             }
             C::AddTags | C::TagPanel => self.open_tag_picker(ctx, None),
+            C::CopyTags => {
+                if let Some(l) = self.ws.lib.clone() {
+                    let ids = self.acted_on();
+                    let tags = {
+                        let lib = lock(&l);
+                        let items: Vec<&Item> = ids.iter().filter_map(|id| lib.item(id)).collect();
+                        crate::tags::common_tags(&items)
+                    };
+                    self.copy_tags(ctx, tags);
+                }
+            }
+            C::PasteTags => self.paste_tags(self.acted_on()),
+            C::ClearTags => self.ws.actions.push(Action::ClearTags(self.acted_on())),
             C::Rate(n) => {
                 let ids = self.acted_on();
                 self.ws.actions.push(Action::BatchRating(ids, n.into()));
@@ -1844,6 +1865,8 @@ impl App {
                     _ => Ok(()),
                 }),
                 Action::RemoveTags(ids, tags) => lib.remove_tags_from_items(&ids, &tags).map(|_| ()),
+                Action::PasteTags(ids, tags) => lib.paste_tags(&ids, &tags).map(|n| self.flash(format!("Pasted {} to {}", export_ui::plural(tags.len(), "tag"), export_ui::plural(n, "item")))),
+                Action::ClearTags(ids) => lib.clear_tags(&ids).map(|n| self.flash(format!("Cleared the tags of {}", export_ui::plural(n, "item")))),
                 Action::BatchRating(ids, star) => {
                     let mut r = Ok(());
                     for id in &ids {
@@ -2043,6 +2066,8 @@ fn action_label(action: &Action) -> String {
         Action::MoveFolder(..) => "Move folder".into(),
         Action::AddTags(ids, ..) => format!("Tag {}", ids.len()),
         Action::RemoveTags(ids, _) => format!("Untag {}", ids.len()),
+        Action::PasteTags(ids, _) => format!("Paste tags to {}", ids.len()),
+        Action::ClearTags(ids) => format!("Clear tags of {}", ids.len()),
         Action::BatchRating(ids, _) => format!("Rate {}", ids.len()),
         Action::QuickAdd(..) => "Add to Quick Access".into(),
         Action::QuickRemove(_) => "Remove from Quick Access".into(),
@@ -3424,6 +3449,18 @@ impl App {
                 }
             });
         });
+        // Eagle's Copy Tags and Paste Tags.
+        let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::CopyTags);
+        if ui.add(egui::Button::new("Copy Tags").shortcut_text(keys)).clicked() {
+            let items: Vec<&Item> = targets.iter().filter_map(|id| lib.item(id)).collect();
+            let tags = crate::tags::common_tags(&items);
+            let ctx = ui.ctx().clone();
+            self.copy_tags(&ctx, tags);
+        }
+        let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::PasteTags);
+        if ui.add_enabled(self.copied_tags.is_some(), egui::Button::new("Paste Tags").shortcut_text(keys)).clicked() {
+            self.paste_tags(targets.to_vec());
+        }
         // Eagle offers it for several items.
         if targets.len() > 1 && self.ws.scope != Scope::Trash && ui.button(format!("New Folder with {} Items…", targets.len())).clicked() {
             self.ws.folders.new_with = Some((targets.to_vec(), String::new()));
@@ -4047,17 +4084,77 @@ impl App {
         }
     }
 
+    /// Copy Tags: keeps `tags` as the tag clipboard and puts them on the
+    /// system clipboard one per line, as Eagle does. Nothing to copy keeps
+    /// the old clipboard.
+    fn copy_tags(&mut self, ctx: &egui::Context, tags: Vec<String>) {
+        if tags.is_empty() {
+            self.flash("No tags to copy");
+            return;
+        }
+        ctx.copy_text(tags.join("\n"));
+        self.flash(format!("Copied {}", export_ui::plural(tags.len(), "tag")));
+        self.copied_tags = Some(tags);
+    }
+
+    /// Paste Tags: the copied tags go onto `ids`, after their own.
+    fn paste_tags(&mut self, ids: Vec<String>) {
+        if let Some(tags) = self.copied_tags.clone()
+            && !ids.is_empty()
+        {
+            self.ws.actions.push(Action::PasteTags(ids, tags));
+        }
+    }
+
+    /// The menu of the inspector's tag area (Eagle's tag input menu):
+    /// copy, paste and clear the tags of `ids`, or for one chip `tag`,
+    /// show its items, copy just it, or paste.
+    fn tag_area_menu(&mut self, ui: &mut Ui, tags: &[String], ids: &[String], tag: Option<&str>) {
+        use crate::shortcuts::Command as C;
+        ui.set_min_width(190.0);
+        if let Some(tag) = tag {
+            if ui.button("Show Items with This Tag").clicked() {
+                self.go(Scope::Tag(tag.to_string()));
+            }
+            if ui.button("Copy Tag").clicked() {
+                let ctx = ui.ctx().clone();
+                self.copy_tags(&ctx, vec![tag.to_string()]);
+            }
+        } else {
+            let keys = self.shortcut_text(ui.ctx(), C::CopyTags);
+            if ui.add_enabled(!tags.is_empty(), egui::Button::new("Copy Tags").shortcut_text(keys)).clicked() {
+                let ctx = ui.ctx().clone();
+                self.copy_tags(&ctx, tags.to_vec());
+            }
+        }
+        let keys = self.shortcut_text(ui.ctx(), C::PasteTags);
+        if ui.add_enabled(self.copied_tags.is_some(), egui::Button::new("Paste Tags").shortcut_text(keys)).clicked() {
+            self.paste_tags(ids.to_vec());
+        }
+        if tag.is_none() {
+            ui.separator();
+            let keys = self.shortcut_text(ui.ctx(), C::ClearTags);
+            if ui.add_enabled(!tags.is_empty(), egui::Button::new("Clear Tags").shortcut_text(keys)).clicked() {
+                self.ws.actions.push(Action::ClearTags(ids.to_vec()));
+            }
+        }
+    }
+
     /// The inspector's tags: a chip per tag (its × takes the tag off `ids`)
     /// and the button that opens the tag picker, as in Eagle.
     fn tag_field(&mut self, ui: &mut Ui, lib: &Library, tags: &[String], ids: &[String]) {
         let mut remove = None;
         let mut open = None;
-        ui.horizontal_wrapped(|ui| {
+        // The area senses clicks behind its chips: right-clicking between
+        // them offers copy, paste and clear.
+        let area = ui.scope_builder(egui::UiBuilder::new().sense(Sense::click()), |ui| ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing = vec2(6.0, 6.0);
             for tag in tags {
-                if tag_chip_removable(ui, tag, App::tag_dot(lib, tag)).clicked() {
+                let chip = tag_chip_removable(ui, tag, App::tag_dot(lib, tag));
+                if chip.clicked() {
                     remove = Some(tag.clone());
                 }
+                chip.context_menu(|ui| self.tag_area_menu(ui, tags, ids, Some(tag)));
             }
             let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::TagPanel);
             let label = if tags.is_empty() { format!("{}  Add Tags", ic::PLUS) } else { ic::PLUS.to_string() };
@@ -4066,7 +4163,8 @@ impl App {
             if b.clicked() {
                 open = Some(b.rect.left_center());
             }
-        });
+        }));
+        area.response.context_menu(|ui| self.tag_area_menu(ui, tags, ids, None));
         if let Some(tag) = remove {
             self.ws.actions.push(Action::RemoveTags(ids.to_vec(), vec![tag]));
         }

@@ -82,6 +82,35 @@ impl Library {
         }
         Ok(changed)
     }
+
+    /// Eagle's Paste Tags: appends the copied tags each item lacks, in
+    /// order, leaving the history alone. Returns how many items changed.
+    pub fn paste_tags(&mut self, ids: &[String], tags: &[String]) -> Result<usize> {
+        let mut changed = 0;
+        for id in ids {
+            let Some(mut item) = self.item(id).cloned() else { continue };
+            if crate::autotag::append_new(&mut item.tags, tags) {
+                self.update_item(item)?;
+                changed += 1;
+            }
+        }
+        Ok(changed)
+    }
+
+    /// Eagle's Clear Tags: empties the items' tags, leaving the history
+    /// alone. Returns how many items had tags.
+    pub fn clear_tags(&mut self, ids: &[String]) -> Result<usize> {
+        let mut changed = 0;
+        for id in ids {
+            let Some(mut item) = self.item(id).cloned() else { continue };
+            if !item.tags.is_empty() {
+                item.tags.clear();
+                self.update_item(item)?;
+                changed += 1;
+            }
+        }
+        Ok(changed)
+    }
 }
 
 #[cfg(test)]
@@ -159,5 +188,23 @@ pub(crate) mod tests {
         // `b` is still on A2; `z` was not touched.
         assert_eq!(lib.tags.history_tags, s(&["b", "z"]));
         assert_eq!(Library::open(lib.root()).unwrap().tags.history_tags, s(&["b", "z"]));
+    }
+
+    #[test]
+    fn paste_appends_without_duplicates_and_clear_empties() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut lib = library(tmp.path(), &[&["b", "x"], &[], &["a", "b"]]);
+        lib.record_tag_use(&s(&["h"])).unwrap();
+        let all = s(&["A1", "A2", "A3"]);
+        assert_eq!(lib.paste_tags(&all, &s(&["a", "b"])).unwrap(), 2);
+        assert_eq!(lib.item("A1").unwrap().tags, s(&["b", "x", "a"]));
+        assert_eq!(lib.item("A2").unwrap().tags, s(&["a", "b"]));
+        assert_eq!(lib.item("A3").unwrap().tags, s(&["a", "b"]));
+        assert_eq!(lib.clear_tags(&s(&["A1", "A2", "missing"])).unwrap(), 2);
+        let reopened = Library::open(lib.root()).unwrap();
+        assert!(reopened.item("A1").unwrap().tags.is_empty());
+        assert_eq!(reopened.item("A3").unwrap().tags, s(&["a", "b"]));
+        assert_eq!(reopened.tags.history_tags, s(&["h"]), "paste and clear leave the history");
+        assert_eq!(lib.clear_tags(&s(&["A1"])).unwrap(), 0);
     }
 }

@@ -122,7 +122,7 @@ fn merge_plans(dest: &std::path::Path, plans: impl Iterator<Item = Plan>, how: C
     all
 }
 
-fn plural(n: usize, one: &str) -> String {
+pub(super) fn plural(n: usize, one: &str) -> String {
     if n == 1 { format!("1 {one}") } else { format!("{n} {one}s") }
 }
 
