@@ -179,3 +179,30 @@ pub fn parse(bytes: &[u8], ext: &str, side: &dyn Fn(&str) -> Option<Vec<u8>>) ->
         other => Err(ParseError(format!("cannot read .{other} models"))),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn load_reads_files_and_their_neighbours() {
+        let dir = tempfile::tempdir().unwrap();
+        let sub = dir.path().join("models");
+        std::fs::create_dir(&sub).unwrap();
+        std::fs::write(sub.join("cube.mtl"), "newmtl red\nKd 1 0 0\n").unwrap();
+        // A material library outside the model's folder is not read.
+        std::fs::write(dir.path().join("outside.mtl"), "newmtl blue\nKd 0 0 1\n").unwrap();
+        let obj = "mtllib cube.mtl\nmtllib ../outside.mtl\nv 0 0 0\nv 1 0 0\nv 0 1 0\nusemtl red\nf 1 2 3\nusemtl blue\nf 1 3 2\n";
+        std::fs::write(sub.join("Cube.OBJ"), obj).unwrap();
+        let m = load(&sub.join("Cube.OBJ"), "OBJ").unwrap();
+        assert_eq!(m.meshes.len(), 2);
+        assert_eq!(m.meshes[0].material.as_ref().unwrap().color, [1.0, 0.0, 0.0]);
+        assert_eq!(m.meshes[1].material.as_ref().unwrap().color, DEFAULT_COLOR, "../ is refused");
+        // ASCII STL through the same door.
+        std::fs::write(sub.join("t.stl"), "solid t\nfacet normal 0 0 1\nouter loop\nvertex 0 0 0\nvertex 1 0 0\nvertex 0 1 0\nendloop\nendfacet\nendsolid t\n").unwrap();
+        assert_eq!(load(&sub.join("t.stl"), "stl").unwrap().triangle_count(), 1);
+        assert!(load(&sub.join("missing.ply"), "ply").is_err());
+        assert!(parse(b"", "fbx", &|_| None).is_err());
+        assert!(is_supported("GLB") && !is_supported("fbx") && !is_supported("dae"));
+    }
+}
