@@ -79,6 +79,77 @@ pub fn walk(dir: &Path) -> Tree {
     tree
 }
 
+impl Tree {
+    /// How deep the tree goes and how many files it holds.
+    pub fn stats(&self) -> Stats {
+        let mut out = Stats { depth: 0, files: 0 };
+        let mut stack = vec![(self, 1)];
+        while let Some((node, depth)) = stack.pop() {
+            out.depth = out.depth.max(depth);
+            out.files += node.files.len();
+            stack.extend(node.folders.iter().map(|c| (c, depth + 1)));
+        }
+        out
+    }
+
+    /// Every file in the tree, folder by folder.
+    pub fn all_files(&self) -> Vec<PathBuf> {
+        let mut out = Vec::new();
+        let mut stack = vec![self];
+        while let Some(node) = stack.pop() {
+            out.extend(node.files.iter().cloned());
+            stack.extend(node.folders.iter().rev());
+        }
+        out
+    }
+}
+
+/// The size of a walked tree.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Stats {
+    /// Levels of folders, counting the walked folder itself as 1.
+    pub depth: usize,
+    /// Files at every level.
+    pub files: usize,
+}
+
+/// From this many files Eagle asks before importing a folder.
+pub const WARN_FILES: usize = 2_000;
+/// Eagle refuses a folder with this many files or more...
+pub const MAX_FILES: usize = 100_000;
+/// ...or this many levels of folders or more.
+pub const MAX_DEPTH: usize = 15;
+
+/// Whether a folder may be imported, after Eagle's limits in
+/// `uploadFolderToSidebar`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Verdict {
+    /// Import it.
+    Import,
+    /// Ask first: it holds this many files.
+    Confirm(usize),
+    /// Too deep or too many files to import.
+    Refuse,
+}
+
+/// Eagle's limits: 15 levels or more, or 100,000 files or more, are
+/// refused; 2,000 files or more need a confirmation.
+pub fn verdict(stats: Stats) -> Verdict {
+    if stats.depth >= MAX_DEPTH || stats.files >= MAX_FILES {
+        Verdict::Refuse
+    } else if stats.files >= WARN_FILES {
+        Verdict::Confirm(stats.files)
+    } else {
+        Verdict::Import
+    }
+}
+
+/// Pixave libraries, which folder import skips as Eagle's Import Folders
+/// does.
+pub fn is_pixave_library(path: &Path) -> bool {
+    path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("pxvlibrary"))
+}
+
 /// A folder to create for an imported tree.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NewFolder {
@@ -215,6 +286,46 @@ mod tests {
         let tree = walk(&top);
         assert_eq!(names(&tree.files), ["a.png"]);
         assert!(tree.folders.is_empty());
+    }
+
+    #[test]
+    fn stats_count_levels_and_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        let tree = walk(&sample(tmp.path()));
+        assert_eq!(tree.stats(), Stats { depth: 3, files: 6 }, "Photos / Trip 2 / Day 1; junk and hidden files don't count");
+        assert_eq!(names(&tree.all_files()), ["a.png", "b.png", "deck.key", "y.jpg", "z.jpg", "x.jpg"]);
+        assert_eq!(walk(&tmp.path().join("missing")).stats(), Stats { depth: 1, files: 0 });
+    }
+
+    #[test]
+    fn limits_follow_eagle() {
+        let v = |depth, files| verdict(Stats { depth, files });
+        assert_eq!(v(14, 1_999), Verdict::Import);
+        assert_eq!(v(1, 2_000), Verdict::Confirm(2_000));
+        assert_eq!(v(14, 99_999), Verdict::Confirm(99_999));
+        assert_eq!(v(15, 1), Verdict::Refuse);
+        assert_eq!(v(1, 100_000), Verdict::Refuse);
+    }
+
+    #[test]
+    fn deep_trees_are_refused() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut dir = tmp.path().join("L1");
+        for i in 2..=15 {
+            dir = dir.join(format!("L{i}"));
+        }
+        touch(&dir.join("deep.png"));
+        let tree = walk(&tmp.path().join("L1"));
+        assert_eq!(tree.stats(), Stats { depth: 15, files: 1 });
+        assert_eq!(verdict(tree.stats()), Verdict::Refuse);
+        assert_eq!(verdict(walk(&tmp.path().join("L1/L2")).stats()), Verdict::Import, "14 levels are fine");
+    }
+
+    #[test]
+    fn pixave_libraries_are_recognised() {
+        assert!(is_pixave_library(Path::new("/x/Mine.pxvlibrary")));
+        assert!(is_pixave_library(Path::new("/x/Mine.PXVLibrary")));
+        assert!(!is_pixave_library(Path::new("/x/Mine.library")));
     }
 
     #[test]

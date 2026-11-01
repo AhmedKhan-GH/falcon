@@ -866,8 +866,10 @@ impl App {
         let mut stack = paths;
         while let Some(p) = stack.pop() {
             if p.is_dir() {
-                if let Ok(rd) = std::fs::read_dir(&p) {
-                    stack.extend(rd.flatten().map(|e| e.path()).filter(|p| !is_hidden(p)));
+                // Flattened, as Eagle's grid drop does. The walk skips
+                // junk and won't follow a folder link into a loop.
+                if !falcon_library::folder_import::is_pixave_library(&p) {
+                    files.extend(falcon_library::folder_import::walk(&p).all_files());
                 }
             } else if !is_hidden(&p) {
                 files.push(p);
@@ -3886,6 +3888,7 @@ impl eframe::App for App {
         if let Some(d) = self.prefs_window.show(&ctx) {
             self.apply_preferences(d);
         }
+        self.import_dialogs(&ctx);
         if self.collect.open {
             self.collect_window(&ctx);
         }

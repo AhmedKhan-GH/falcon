@@ -5,12 +5,18 @@
 use std::path::PathBuf;
 
 use eframe::egui::{Pos2, Rect};
-use falcon_library::folder_import;
+use falcon_library::folder_import::{self, Verdict};
 use falcon_library::import::ImportOptions;
 
 use super::{App, lock, tempfile_dir};
 use crate::drop_pos::{self, Target};
 use crate::logic::{self, Scope};
+use crate::theme as t;
+
+/// A path's last component, for messages.
+fn display_name(path: &std::path::Path) -> String {
+    path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned())
+}
 
 /// One file to import and the options to import it with.
 pub(super) struct Job {
@@ -28,6 +34,17 @@ pub(super) struct Imports {
     /// A file dialog to show once the frame is done and the library lock
     /// is released.
     pub request: Option<Request>,
+    /// Large folders waiting for the user to confirm their import.
+    pub pending: Vec<Pending>,
+    /// Names of folders refused for their size, to be told about.
+    pub refused: Vec<String>,
+}
+
+/// A walked folder with 2,000 files or more, imported only once confirmed.
+pub(super) struct Pending {
+    pub tree: folder_import::Tree,
+    pub parent: Option<String>,
+    pub files: usize,
 }
 
 /// An import file dialog, asked for during the frame.
@@ -142,20 +159,41 @@ impl App {
     /// Imports each directory as an Eagle folder of the same name inside
     /// `parent` (or at the top level), with its subfolders recreated and
     /// every file in the folder that mirrors its own, as Eagle's
-    /// `uploadFolderToSidebar` does. The last new folder is opened.
+    /// `uploadFolderToSidebar` does. Eagle's limits apply to each folder:
+    /// 15 levels or 100,000 files refuse it, 2,000 files ask first.
+    /// Pixave libraries are skipped.
     pub(super) fn import_folder_trees(&mut self, mut dirs: Vec<PathBuf>, parent: Option<String>) {
-        if dirs.is_empty() {
+        let pixave = dirs.iter().filter(|d| folder_import::is_pixave_library(d)).count();
+        dirs.retain(|d| !folder_import::is_pixave_library(d));
+        if pixave > 0 {
+            self.flash(format!("Skipped {pixave} Pixave librar{}", if pixave == 1 { "y" } else { "ies" }));
+        }
+        dirs.sort_by(|a, b| falcon_library::search::natural_cmp(&a.to_string_lossy(), &b.to_string_lossy()));
+        let mut ready = Vec::new();
+        for dir in dirs {
+            let tree = folder_import::walk(&dir);
+            match folder_import::verdict(tree.stats()) {
+                Verdict::Import => ready.push(tree),
+                Verdict::Confirm(files) => self.imports.pending.push(Pending { tree, parent: parent.clone(), files }),
+                Verdict::Refuse => self.imports.refused.push(display_name(&dir)),
+            }
+        }
+        self.import_trees(ready, parent);
+    }
+
+    /// Creates the folders for walked trees and imports their files; the
+    /// last new folder is opened.
+    fn import_trees(&mut self, trees: Vec<folder_import::Tree>, parent: Option<String>) {
+        if trees.is_empty() {
             return;
         }
         let Some(shared) = self.ws.lib.clone() else { return };
-        dirs.sort_by(|a, b| falcon_library::search::natural_cmp(&a.to_string_lossy(), &b.to_string_lossy()));
         let mut jobs = Vec::new();
         let mut opened = None;
-        for dir in dirs {
-            let tree = folder_import::walk(&dir);
+        for tree in trees {
             let plan = folder_import::plan(&tree, parent.as_deref(), falcon_library::ids::new_id);
             if let Err(e) = lock(&shared).create_folders(&plan.folders) {
-                self.flash(format!("Couldn't import {}: {e}", dir.display()));
+                self.flash(format!("Couldn't import {}: {e}", tree.dir.display()));
                 continue;
             }
             opened = plan.root().map(String::from);
@@ -165,6 +203,64 @@ impl App {
             self.go(Scope::Folder(id));
         }
         self.spawn_import(jobs);
+    }
+
+    /// The large-folder confirmation and the too-large notice, one at a
+    /// time. Drawn before the library is locked for the frame, since
+    /// confirming creates folders.
+    pub(super) fn import_dialogs(&mut self, ctx: &eframe::egui::Context) {
+        use eframe::egui::{self, RichText};
+        if let Some(p) = self.imports.pending.first() {
+            let name = display_name(&p.tree.dir);
+            let files = p.files;
+            let mut choice = None;
+            let modal = egui::Modal::new(egui::Id::unique("import-large-folder")).show(ctx, |ui| {
+                ui.set_width(340.0);
+                ui.label(RichText::new("Import a large folder?").size(15.0));
+                ui.add_space(4.0);
+                ui.label(RichText::new(format!("“{name}” holds {files} files. Importing them all may take a while.")).color(t::p().text_muted));
+                ui.add_space(10.0);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.button("Import").clicked() {
+                        choice = Some(true);
+                    }
+                    if ui.button("Cancel").clicked() {
+                        choice = Some(false);
+                    }
+                });
+            });
+            if modal.should_close() && choice.is_none() {
+                choice = Some(false);
+            }
+            if let Some(go) = choice {
+                let p = self.imports.pending.remove(0);
+                if go {
+                    self.import_trees(vec![p.tree], p.parent);
+                }
+            }
+            return;
+        }
+        if let Some(name) = self.imports.refused.first().cloned() {
+            let mut close = false;
+            let modal = egui::Modal::new(egui::Id::unique("import-refused-folder")).show(ctx, |ui| {
+                ui.set_width(340.0);
+                ui.label(RichText::new("This folder is too large to import").size(15.0));
+                ui.add_space(4.0);
+                let detail = format!(
+                    "“{name}” has {} or more levels of folders, or {} or more files. Import its subfolders one at a time instead.",
+                    folder_import::MAX_DEPTH,
+                    folder_import::MAX_FILES
+                );
+                ui.label(RichText::new(detail).color(t::p().text_muted));
+                ui.add_space(10.0);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    close = ui.button("Close").clicked();
+                });
+            });
+            if close || modal.should_close() {
+                self.imports.refused.remove(0);
+            }
+        }
     }
 
     /// Stages each file without the library lock and commits it under it,
