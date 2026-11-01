@@ -10,6 +10,7 @@ use falcon_library::search::{self, Clock, DateField, DateFilter, DatePreset, Dur
 
 use super::filter_chip;
 use crate::app::App;
+use crate::locale::{tr, tr_key};
 use crate::search_state::FilterKind;
 use crate::logic;
 use crate::theme as t;
@@ -70,7 +71,7 @@ impl MediaFilterUi {
     }
 }
 
-const DATE_TABS: [(DateField, &str); 3] = [(DateField::Imported, "Imported"), (DateField::Modified, "Modified"), (DateField::Created, "Created")];
+const DATE_TABS: [(DateField, &str); 3] = [(DateField::Imported, tr_key("Imported")), (DateField::Modified, tr_key("Modified")), (DateField::Created, tr_key("Created"))];
 
 fn date_rule(f: &mut search::Filter, field: DateField) -> &mut DateFilter {
     match field {
@@ -104,16 +105,16 @@ impl App {
                     let t = |v: Option<u64>| v.map(|n| n.to_string()).unwrap_or_default();
                     (fui.w_min, fui.w_max, fui.h_min, fui.h_max) = (t(f.width.0), t(f.width.1), t(f.height.0), t(f.height.1));
                 }
-                let resp = filter_chip(ui, "Dimensions", dimensions_summary(f.width, f.height));
+                let resp = filter_chip(ui, tr("Dimensions"), dimensions_summary(f.width, f.height));
                 menu(&resp, |ui| {
                     ui.set_min_width(200.0);
                     let mut changed = false;
                     for (name, lo, hi) in [("W", &mut fui.w_min, &mut fui.w_max), ("H", &mut fui.h_min, &mut fui.h_max)] {
                         ui.horizontal(|ui| {
                             ui.label(name);
-                            changed |= ui.add(TextEdit::singleline(lo).desired_width(64.0).hint_text("Min")).changed();
+                            changed |= ui.add(TextEdit::singleline(lo).desired_width(64.0).hint_text(tr("Min"))).changed();
                             ui.label("–");
-                            changed |= ui.add(TextEdit::singleline(hi).desired_width(64.0).hint_text("Max")).changed();
+                            changed |= ui.add(TextEdit::singleline(hi).desired_width(64.0).hint_text(tr("Max"))).changed();
                             muted(ui, "px");
                         });
                     }
@@ -121,7 +122,7 @@ impl App {
                         f.width = (parse_whole(&fui.w_min), parse_whole(&fui.w_max));
                         f.height = (parse_whole(&fui.h_min), parse_whole(&fui.h_max));
                     }
-                    if (f.width, f.height) != ((None, None), (None, None)) && ui.button("Clear").clicked() {
+                    if (f.width, f.height) != ((None, None), (None, None)) && ui.button(tr("Clear")).clicked() {
                         f.width = (None, None);
                         f.height = (None, None);
                         (fui.w_min, fui.w_max, fui.h_min, fui.h_max) = Default::default();
@@ -137,14 +138,14 @@ impl App {
                     fui.size_max = kb(f.size.1);
                     fui.size_mb = false;
                 }
-                let resp = filter_chip(ui, "Size", size_summary(f.size, fui.size_mb));
+                let resp = filter_chip(ui, tr("Size"), size_summary(f.size, fui.size_mb));
                 menu(&resp, |ui| {
                     ui.set_min_width(220.0);
                     let mut changed = false;
                     ui.horizontal(|ui| {
-                        changed |= ui.add(TextEdit::singleline(&mut fui.size_min).desired_width(64.0).hint_text("Min")).changed();
+                        changed |= ui.add(TextEdit::singleline(&mut fui.size_min).desired_width(64.0).hint_text(tr("Min"))).changed();
                         ui.label("–");
-                        changed |= ui.add(TextEdit::singleline(&mut fui.size_max).desired_width(64.0).hint_text("Max")).changed();
+                        changed |= ui.add(TextEdit::singleline(&mut fui.size_max).desired_width(64.0).hint_text(tr("Max"))).changed();
                         let before = fui.size_mb;
                         egui::ComboBox::from_id_salt("size-unit").width(56.0).selected_text(if fui.size_mb { "MB" } else { "KB" }).show_ui(ui, |ui| {
                             ui.selectable_value(&mut fui.size_mb, false, "KB");
@@ -155,7 +156,7 @@ impl App {
                     if changed {
                         f.size = (parse_size(&fui.size_min, fui.size_mb), parse_size(&fui.size_max, fui.size_mb));
                     }
-                    if f.size != (None, None) && ui.button("Clear").clicked() {
+                    if f.size != (None, None) && ui.button(tr("Clear")).clicked() {
                         f.size = (None, None);
                         fui.size_min.clear();
                         fui.size_max.clear();
@@ -164,7 +165,7 @@ impl App {
             }
             FilterKind::Comment => {
                 // Comment: the same menu as Notes and URL, over an item's comments.
-                let resp = filter_chip(ui, "Comment", text_filter_summary(&f.comments));
+                let resp = filter_chip(ui, tr("Comment"), text_filter_summary(&f.comments));
                 menu(&resp, |ui| super::text_filter_menu(ui, &mut f.comments, &mut fui.comment_text));
             }
             FilterKind::Date => {
@@ -173,16 +174,16 @@ impl App {
                 let active: Vec<usize> = (0..3).filter(|&n| rules[n].is_active()).collect();
                 let value = match active.as_slice() {
                     [] => None,
-                    [n] => logic::date_summary(rules[*n]).map(|s| format!("{} {s}", DATE_TABS[*n].1)),
+                    [n] => logic::date_summary(rules[*n]).map(|s| format!("{} {s}", tr(DATE_TABS[*n].1))),
                     many => Some(many.len().to_string()),
                 };
-                let resp = filter_chip(ui, "Date", value);
+                let resp = filter_chip(ui, tr("Date"), value);
                 menu(&resp, |ui| {
                     ui.set_min_width(240.0);
                     ui.horizontal(|ui| {
                         for (n, (_, name)) in DATE_TABS.iter().enumerate() {
                             let dot = if date_rule(f, DATE_TABS[n].0).is_active() { " •" } else { "" };
-                            if ui.selectable_label(fui.date_tab == n, format!("{name}{dot}")).clicked() {
+                            if ui.selectable_label(fui.date_tab == n, format!("{}{dot}", tr(name))).clicked() {
                                 fui.date_tab = n;
                             }
                         }
@@ -195,7 +196,7 @@ impl App {
                     for p in DatePreset::ALL {
                         let n = live().filter(|i| p.matches(field.value(i) as i64, clock)).count();
                         let mut on = rule.presets.contains(&p);
-                        if ui.checkbox(&mut on, format!("{}  ({n})", logic::preset_label(p))).changed() {
+                        if ui.checkbox(&mut on, format!("{}  ({n})", tr(logic::preset_label(p)))).changed() {
                             if on {
                                 rule.presets.insert(p);
                             } else {
@@ -204,7 +205,7 @@ impl App {
                         }
                     }
                     ui.separator();
-                    muted(ui, "Range");
+                    muted(ui, tr("Range"));
                     ui.horizontal(|ui| {
                         let a = ui.add(TextEdit::singleline(&mut fui.from[tab]).desired_width(92.0).hint_text("2026-01-01"));
                         ui.label("–");
@@ -216,7 +217,7 @@ impl App {
                     let months = search::month_counts(live(), field);
                     if !months.is_empty() {
                         ui.separator();
-                        muted(ui, "Months");
+                        muted(ui, tr("Months"));
                         egui::ScrollArea::vertical().id_salt("date-months").max_height(220.0).show(ui, |ui| {
                             for (m, n) in months {
                                 let mut on = rule.months.contains(&m);
@@ -230,7 +231,7 @@ impl App {
                             }
                         });
                     }
-                    if rule.is_active() && ui.button("Clear").clicked() {
+                    if rule.is_active() && ui.button(tr("Clear")).clicked() {
                         *rule = DateFilter::default();
                         fui.from[tab].clear();
                         fui.to[tab].clear();
@@ -241,7 +242,7 @@ impl App {
                 // Duration: min and max with a unit, like Eagle's size field.
                 let range = search::duration_range(live());
                 if range.is_some() || f.duration != (None, None) {
-                    let resp = filter_chip(ui, "Duration", logic::duration_summary(f.duration));
+                    let resp = filter_chip(ui, tr("Duration"), logic::duration_summary(f.duration));
                     menu(&resp, |ui| {
                         ui.set_min_width(240.0);
                         let mut changed = false;
@@ -261,11 +262,11 @@ impl App {
                                 });
                             changed |= before != fui.dur_unit;
                         });
-                        muted(ui, "A number in the unit, or a time such as 1:30");
+                        muted(ui, tr("A number in the unit, or a time such as 1:30"));
                         if changed {
                             f.duration = (logic::parse_duration(&fui.dur_min, fui.dur_unit), logic::parse_duration(&fui.dur_max, fui.dur_unit));
                         }
-                        if f.duration != (None, None) && ui.button("Clear").clicked() {
+                        if f.duration != (None, None) && ui.button(tr("Clear")).clicked() {
                             f.duration = (None, None);
                             fui.dur_min.clear();
                             fui.dur_max.clear();
@@ -282,12 +283,12 @@ impl App {
                         fui.bpm_min = f.bpm.0.map(|b| b.trunc().to_string()).unwrap_or_default();
                         fui.bpm_max = f.bpm.1.map(|b| b.trunc().to_string()).unwrap_or_default();
                     }
-                    let resp = filter_chip(ui, "BPM", bpm_summary(f.bpm));
+                    let resp = filter_chip(ui, tr("BPM"), bpm_summary(f.bpm));
                     menu(&resp, |ui| {
                         ui.set_min_width(160.0);
                         let mut changed = false;
                         ui.horizontal(|ui| {
-                            let (lo, hi) = tempo.map_or(("Min".to_string(), "Max".to_string()), |(a, b)| (a.trunc().to_string(), b.trunc().to_string()));
+                            let (lo, hi) = tempo.map_or((tr("Min").to_string(), tr("Max").to_string()), |(a, b)| (a.trunc().to_string(), b.trunc().to_string()));
                             changed |= ui.add(TextEdit::singleline(&mut fui.bpm_min).desired_width(56.0).hint_text(lo)).changed();
                             ui.label("–");
                             changed |= ui.add(TextEdit::singleline(&mut fui.bpm_max).desired_width(56.0).hint_text(hi)).changed();
@@ -295,7 +296,7 @@ impl App {
                         if changed {
                             f.bpm = (parse_bpm(&fui.bpm_min), parse_bpm(&fui.bpm_max));
                         }
-                        if f.bpm != (None, None) && ui.button("Clear").clicked() {
+                        if f.bpm != (None, None) && ui.button(tr("Clear")).clicked() {
                             f.bpm = (None, None);
                             fui.bpm_min.clear();
                             fui.bpm_max.clear();
@@ -312,7 +313,7 @@ impl App {
                         1 => f.cameras.iter().next().cloned(),
                         n => Some(n.to_string()),
                     };
-                    let resp = filter_chip(ui, "Camera", value);
+                    let resp = filter_chip(ui, tr("Camera"), value);
                     menu(&resp, |ui| {
                         ui.set_min_width(220.0);
                         egui::ScrollArea::vertical().id_salt("cameras").max_height(300.0).show(ui, |ui| {
@@ -337,22 +338,22 @@ impl App {
                     let keys = fui.font_keys.get_or_insert_with(|| search::installed_font_keys_in(&search::font_dirs()));
                     let value = match &f.font {
                         FontFilter::Off => None,
-                        FontFilter::Activated(_) => Some("Activated".to_string()),
-                        FontFilter::Deactivated(_) => Some("Deactivated".to_string()),
+                        FontFilter::Activated(_) => Some(tr("Activated").to_string()),
+                        FontFilter::Deactivated(_) => Some(tr("Deactivated").to_string()),
                     };
-                    let resp = filter_chip(ui, "Font", value);
+                    let resp = filter_chip(ui, tr("Font"), value);
                     menu(&resp, |ui| {
                         ui.set_min_width(200.0);
                         let (on, off) = logic::font_counts(items, keys);
                         let mut act = matches!(f.font, FontFilter::Activated(_));
                         let mut deact = matches!(f.font, FontFilter::Deactivated(_));
-                        if ui.checkbox(&mut act, format!("Activated  ({on})")).changed() {
+                        if ui.checkbox(&mut act, format!("{}  ({on})", tr("Activated"))).changed() {
                             f.font = if act { FontFilter::Activated(keys.clone()) } else { FontFilter::Off };
                         }
-                        if ui.checkbox(&mut deact, format!("Deactivated  ({off})")).changed() {
+                        if ui.checkbox(&mut deact, format!("{}  ({off})", tr("Deactivated"))).changed() {
                             f.font = if deact { FontFilter::Deactivated(keys.clone()) } else { FontFilter::Off };
                         }
-                        muted(ui, "Activated: installed by Eagle in ~/Library/Fonts/EagleApp");
+                        muted(ui, tr("Activated: installed by Eagle in ~/Library/Fonts/EagleApp"));
                     });
                 }
             }
@@ -395,7 +396,7 @@ impl App {
     /// The Shape chip: every shape the library has (or that is ticked)
     /// with its count, plus a Custom W:H option.
     pub(crate) fn shape_chip(ui: &mut Ui, f: &mut search::Filter, fui: &mut MediaFilterUi, counts: &HashMap<Shape, usize>) {
-        let resp = filter_chip(ui, "Shape", shape_summary(&f.shapes, f.custom_shape));
+        let resp = filter_chip(ui, tr("Shape"), shape_summary(&f.shapes, f.custom_shape));
         menu(&resp, |ui| {
             ui.set_min_width(200.0);
             for shape in Shape::ALL {
@@ -410,7 +411,7 @@ impl App {
                 }
             }
             let mut custom = f.custom_shape.is_some();
-            if ui.checkbox(&mut custom, "Custom").changed() {
+            if ui.checkbox(&mut custom, tr("Custom")).changed() {
                 f.custom_shape = custom.then(|| fui.custom_last.unwrap_or((4.0, 3.0)));
             }
             if let Some((mut w, mut h)) = f.custom_shape {
@@ -424,9 +425,9 @@ impl App {
                         fui.custom_last = Some((w, h));
                     }
                 });
-                muted(ui, "A side left at 0 is not used");
+                muted(ui, tr("A side left at 0 is not used"));
             }
-            if (!f.shapes.is_empty() || f.custom_shape.is_some()) && ui.button("Clear").clicked() {
+            if (!f.shapes.is_empty() || f.custom_shape.is_some()) && ui.button(tr("Clear")).clicked() {
                 f.shapes.clear();
                 f.custom_shape = None;
             }
@@ -439,17 +440,17 @@ impl App {
     /// search looks at, remembered across launches.
     pub(crate) fn search_scope_menu(&mut self, ui: &mut Ui) {
         ui.set_min_width(190.0);
-        muted(ui, "Search in");
+        muted(ui, tr("Search in"));
         let s = &mut self.search.scope;
         for (on, label) in [
-            (&mut s.name, "Name"),
-            (&mut s.folder_name, "Folder Name"),
-            (&mut s.folder_desc, "Folder Description"),
-            (&mut s.ext, "Extension"),
-            (&mut s.tags, "Tags"),
-            (&mut s.url, "URL"),
-            (&mut s.comments, "Comments"),
-            (&mut s.note, "Notes"),
+            (&mut s.name, tr("Name")),
+            (&mut s.folder_name, tr("Folder Name")),
+            (&mut s.folder_desc, tr("Folder Description")),
+            (&mut s.ext, tr("Extension")),
+            (&mut s.tags, tr("Tags")),
+            (&mut s.url, tr("URL")),
+            (&mut s.comments, tr("Comments")),
+            (&mut s.note, tr("Notes")),
         ] {
             ui.checkbox(on, label);
         }
@@ -541,8 +542,8 @@ pub fn size_summary(r: (Option<u64>, Option<u64>), mb: bool) -> Option<String> {
 pub fn text_filter_summary(t: &TextFilter) -> Option<String> {
     match t {
         TextFilter::Off => None,
-        TextFilter::Has => Some("Has".into()),
-        TextFilter::No => Some("None".into()),
+        TextFilter::Has => Some(tr("Has").into()),
+        TextFilter::No => Some(tr("None").into()),
         TextFilter::Keywords(k) => Some(k.join(", ")),
     }
 }
@@ -550,11 +551,11 @@ pub fn text_filter_summary(t: &TextFilter) -> Option<String> {
 /// The name of a shape option in the Shape chip.
 pub fn shape_label(s: Shape) -> &'static str {
     match s {
-        Shape::Landscape => "Horizontal",
-        Shape::Portrait => "Vertical",
-        Shape::Square => "Square",
-        Shape::PanoramicLandscape => "Panoramic Horizontal",
-        Shape::PanoramicPortrait => "Panoramic Vertical",
+        Shape::Landscape => tr("Horizontal"),
+        Shape::Portrait => tr("Vertical"),
+        Shape::Square => tr("Square"),
+        Shape::PanoramicLandscape => tr("Panoramic Horizontal"),
+        Shape::PanoramicPortrait => tr("Panoramic Vertical"),
         Shape::Ratio4x3 => "4:3",
         Shape::Ratio3x4 => "3:4",
         Shape::Ratio16x9 => "16:9",

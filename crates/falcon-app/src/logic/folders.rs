@@ -1,6 +1,7 @@
 //! Folders: tree lookups and counts, dropping items on a folder, selecting rows in
 //! the folder tree, and cleaning folder names.
 
+use crate::locale::tr_n;
 use std::collections::{HashMap, HashSet};
 use falcon_library::model::{Folder, Item};
 use super::scope::Scope;
@@ -91,12 +92,10 @@ pub fn apply_folder_drop(item: &mut Item, target: &str, drop: &FolderDrop, auto_
 /// The notice after a folder drop up to the folder name ("Moved 3 items to");
 /// the toast shows the name as a link.
 pub fn folder_drop_lead(drop: &FolderDrop, n: usize) -> String {
-    let verb = match drop {
-        FolderDrop::Move(_) => "Moved",
-        FolderDrop::Add => "Added",
-    };
-    let noun = if n == 1 { "item" } else { "items" };
-    format!("{verb} {n} {noun} to")
+    match drop {
+        FolderDrop::Move(_) => tr_n(n, "Moved {n} item to", "Moved {n} items to"),
+        FolderDrop::Add => tr_n(n, "Added {n} item to", "Added {n} items to"),
+    }
 }
 
 /// Several sidebar folders, or several smart folders, picked with ⌘ and ⇧

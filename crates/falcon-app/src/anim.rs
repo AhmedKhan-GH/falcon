@@ -20,6 +20,8 @@ use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use eframe::egui;
 use image::RgbaImage;
 
+use crate::locale::{tr, trf};
+
 /// The formats a [`Player`] reads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
@@ -284,7 +286,7 @@ impl GifIndex {
         let err = |e: std::io::Error| e.to_string();
         let head: [u8; 6] = w.bytes().map_err(err)?;
         if &head[..3] != b"GIF" {
-            return Err("not a GIF".into());
+            return Err(tr("not a GIF").into());
         }
         let (sw, sh) = (w.u16().map_err(err)?, w.u16().map_err(err)?);
         let [packed, _bg, _aspect] = w.bytes().map_err(err)?;
@@ -374,10 +376,10 @@ impl GifSource {
         let index = GifIndex::read(std::io::BufReader::new(file.try_clone().map_err(|e| e.to_string())?))?;
         let (w, h) = (u32::from(index.w), u32::from(index.h));
         if w == 0 || h == 0 || u64::from(w) * u64::from(h) > MAX_PIXELS {
-            return Err(format!("unsupported GIF size {w}×{h}"));
+            return Err(trf("unsupported GIF size {w}×{h}", &[("w", &w), ("h", &h)]));
         }
         if index.frames.is_empty() {
-            return Err("no frames".into());
+            return Err(tr("no frames").into());
         }
         let mut options = gif::DecodeOptions::new();
         options.set_color_output(gif::ColorOutput::RGBA);
@@ -507,7 +509,7 @@ impl Source for GifSource {
 
     fn frame(&mut self, i: usize) -> Result<RgbaImage, String> {
         if i >= self.index.frames.len() {
-            return Err(format!("no frame {i}"));
+            return Err(trf("no frame {i}", &[("i", &i)]));
         }
         // Going back, or far ahead: start from the nearest snapshot.
         if i < self.next || i - self.next > self.every {
@@ -656,13 +658,13 @@ impl Source for SeqSource {
         }
         let frames = self.frames.as_mut().expect("started above");
         while self.next <= i {
-            let f = frames.next().ok_or_else(|| format!("no frame {i}"))?.map_err(|e| e.to_string());
+            let f = frames.next().ok_or_else(|| trf("no frame {i}", &[("i", &i)]))?.map_err(|e| e.to_string());
             self.next += 1;
             if self.next > i {
                 return f.map(image::Frame::into_buffer);
             }
         }
-        Err(format!("no frame {i}"))
+        Err(trf("no frame {i}", &[("i", &i)]))
     }
 }
 

@@ -7,6 +7,8 @@ use std::collections::BTreeMap;
 
 use falcon_library::search::SearchScope;
 
+use crate::locale::tr_key;
+
 /// One filter of the filter bar, in Eagle's default bar order. falcon's
 /// Date chip stands for Eagle's Date Added and Date Modified filters (it
 /// has a tab for each, and one for Date Created).
@@ -72,25 +74,25 @@ impl FilterKind {
         }
     }
 
-    /// The chip's name.
+    /// The chip's name, in English; show it with `tr`.
     pub fn label(self) -> &'static str {
         match self {
-            FilterKind::Color => "Color",
-            FilterKind::Tags => "Tags",
-            FilterKind::Folders => "Folders",
-            FilterKind::Shape => "Shape",
-            FilterKind::Rating => "Rating",
-            FilterKind::Types => "Type",
-            FilterKind::Dimensions => "Dimensions",
-            FilterKind::Duration => "Duration",
-            FilterKind::Size => "Size",
-            FilterKind::Comment => "Comment",
-            FilterKind::Note => "Notes",
-            FilterKind::Url => "URL",
-            FilterKind::Date => "Date",
-            FilterKind::Font => "Font",
-            FilterKind::Bpm => "BPM",
-            FilterKind::Camera => "Camera",
+            FilterKind::Color => tr_key("Color"),
+            FilterKind::Tags => tr_key("Tags"),
+            FilterKind::Folders => tr_key("Folders"),
+            FilterKind::Shape => tr_key("Shape"),
+            FilterKind::Rating => tr_key("Rating"),
+            FilterKind::Types => tr_key("Type"),
+            FilterKind::Dimensions => tr_key("Dimensions"),
+            FilterKind::Duration => tr_key("Duration"),
+            FilterKind::Size => tr_key("Size"),
+            FilterKind::Comment => tr_key("Comment"),
+            FilterKind::Note => tr_key("Notes"),
+            FilterKind::Url => tr_key("URL"),
+            FilterKind::Date => tr_key("Date"),
+            FilterKind::Font => tr_key("Font"),
+            FilterKind::Bpm => tr_key("BPM"),
+            FilterKind::Camera => tr_key("Camera"),
         }
     }
 

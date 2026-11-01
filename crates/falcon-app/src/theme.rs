@@ -11,6 +11,7 @@ use std::sync::Arc;
 #[cfg(not(test))]
 use std::sync::atomic::{AtomicU8, Ordering};
 
+use crate::locale::tr;
 use eframe::egui::{self, Color32, CornerRadius, FontData, FontDefinitions, FontFamily, FontId, Stroke};
 
 const fn rgb(hex: u32) -> Color32 {
@@ -120,13 +121,13 @@ impl Theme {
 impl std::fmt::Display for Theme {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            Theme::Dark => "Dark",
-            Theme::Light => "Light",
-            Theme::Gray => "Gray",
-            Theme::Blue => "Blue",
-            Theme::Purple => "Purple",
-            Theme::Lightgray => "Lightgray",
-            Theme::Auto => "Auto",
+            Theme::Dark => tr("Dark"),
+            Theme::Light => tr("Light"),
+            Theme::Gray => tr("Gray"),
+            Theme::Blue => tr("Blue"),
+            Theme::Purple => tr("Purple"),
+            Theme::Lightgray => tr("Lightgray"),
+            Theme::Auto => tr("Auto"),
         })
     }
 }

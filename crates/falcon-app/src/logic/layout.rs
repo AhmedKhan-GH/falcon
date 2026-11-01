@@ -1,6 +1,7 @@
 //! Item layouts: the grid, waterfall, justified and list placement maths, and the
 //! per-folder layout choice.
 
+use crate::locale::tr;
 use std::collections::HashMap;
 use super::scope::Scope;
 
@@ -23,10 +24,10 @@ impl Layout {
 
     pub fn label(self) -> &'static str {
         match self {
-            Layout::Waterfall => "Waterfall",
-            Layout::Justified => "Justified",
-            Layout::Grid => "Grid",
-            Layout::List => "List",
+            Layout::Waterfall => tr("Waterfall"),
+            Layout::Justified => tr("Justified"),
+            Layout::Grid => tr("Grid"),
+            Layout::List => tr("List"),
         }
     }
 

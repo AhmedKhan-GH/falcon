@@ -1,6 +1,7 @@
 //! Scopes (the sidebar's views), the fixed navigation counts, and filtering,
 //! sorting and shuffling items into the visible list.
 
+use crate::locale::tr;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use falcon_library::model::{Folder, Item};
@@ -61,17 +62,17 @@ impl Scope {
     /// Title shown in the toolbar and inspector.
     pub fn title(&self, roots: &[Folder]) -> String {
         match self {
-            Scope::All => "All".into(),
-            Scope::Uncategorized => "Uncategorized".into(),
-            Scope::Untagged => "Untagged".into(),
-            Scope::Recent => "Recently Used".into(),
-            Scope::Random(_) => "Random".into(),
-            Scope::AllTags => "All Tags".into(),
-            Scope::Duplicates => "Duplicates".into(),
-            Scope::Trash => "Trash".into(),
-            Scope::Folder(id) => find_folder(roots, id).map_or_else(|| "Folder".into(), |f| f.name.clone()),
+            Scope::All => tr("All").into(),
+            Scope::Uncategorized => tr("Uncategorized").into(),
+            Scope::Untagged => tr("Untagged").into(),
+            Scope::Recent => tr("Recently Used").into(),
+            Scope::Random(_) => tr("Random").into(),
+            Scope::AllTags => tr("All Tags").into(),
+            Scope::Duplicates => tr("Duplicates").into(),
+            Scope::Trash => tr("Trash").into(),
+            Scope::Folder(id) => find_folder(roots, id).map_or_else(|| tr("Folder").into(), |f| f.name.clone()),
             Scope::Tag(t) => t.clone(),
-            Scope::Smart(_) => "Smart Folder".into(),
+            Scope::Smart(_) => tr("Smart Folder").into(),
         }
     }
 }

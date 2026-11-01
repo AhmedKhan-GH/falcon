@@ -16,6 +16,8 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+use crate::locale::trf;
+
 /// Eagle opens at most this many files at once.
 pub const MAX_OPEN: usize = 40;
 /// Files shown at once in Finder: each one can open its own Finder window,
@@ -46,7 +48,7 @@ impl AppEntry {
 }
 
 pub fn default_label(name: &str, default: bool) -> String {
-    if default { format!("{name} (Default)") } else { name.to_string() }
+    if default { trf("{name} (Default)", &[("name", &name)]) } else { name.to_string() }
 }
 
 /// The shown name of an app bundle: its file name without `.app`.

@@ -1,6 +1,8 @@
 //! The detail viewer's shell: the span between the panels, the title bar inset,
 //! the counter and stepping between items.
 
+use crate::locale::tr;
+
 /// Room the macOS window buttons need at the left of a bar that starts at
 /// the window's left edge.
 pub const TRAFFIC_LIGHTS: f32 = 72.0;
@@ -45,8 +47,8 @@ impl Edge {
     /// The note the viewer shows when a step can go no further.
     pub fn note(self) -> &'static str {
         match self {
-            Edge::First => "This is the first item",
-            Edge::Last => "This is the last item",
+            Edge::First => tr("This is the first item"),
+            Edge::Last => tr("This is the last item"),
         }
     }
 }

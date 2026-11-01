@@ -1,6 +1,7 @@
 //! Display options (Eagle's layout panel): captions, list columns, thumbnail
 //! backgrounds and subfolder cards.
 
+use crate::locale::tr;
 use std::collections::HashSet;
 use falcon_library::model::{Folder, Item};
 use falcon_library::search::{self, OrderBy};
@@ -28,12 +29,12 @@ impl InfoType {
 
     pub fn label(self) -> &'static str {
         match self {
-            InfoType::Dimensions => "Dimensions",
-            InfoType::FileSize => "File Size",
-            InfoType::Tags => "Tags",
-            InfoType::Rating => "Rating",
-            InfoType::Modified => "Date Modified",
-            InfoType::Created => "Date Created",
+            InfoType::Dimensions => tr("Dimensions"),
+            InfoType::FileSize => tr("File Size"),
+            InfoType::Tags => tr("Tags"),
+            InfoType::Rating => tr("Rating"),
+            InfoType::Modified => tr("Date Modified"),
+            InfoType::Created => tr("Date Created"),
         }
     }
 }
@@ -180,13 +181,13 @@ impl ListColumn {
 
     pub fn label(self) -> &'static str {
         match self {
-            ListColumn::Name => "Name",
-            ListColumn::Tags => "Tags",
-            ListColumn::Dimensions => "Dimensions",
-            ListColumn::Rating => "Rating",
-            ListColumn::Type => "Type",
-            ListColumn::Size => "File Size",
-            ListColumn::Imported => "Date Imported",
+            ListColumn::Name => tr("Name"),
+            ListColumn::Tags => tr("Tags"),
+            ListColumn::Dimensions => tr("Dimensions"),
+            ListColumn::Rating => tr("Rating"),
+            ListColumn::Type => tr("Type"),
+            ListColumn::Size => tr("File Size"),
+            ListColumn::Imported => tr("Date Imported"),
         }
     }
 
@@ -316,10 +317,10 @@ impl ThumbBg {
 
     pub fn label(self) -> &'static str {
         match self {
-            ThumbBg::Dark => "Black",
-            ThumbBg::Gray => "Gray",
-            ThumbBg::Light => "White",
-            ThumbBg::Grid => "Checkerboard",
+            ThumbBg::Dark => tr("Black"),
+            ThumbBg::Gray => tr("Gray"),
+            ThumbBg::Light => tr("White"),
+            ThumbBg::Grid => tr("Checkerboard"),
         }
     }
 

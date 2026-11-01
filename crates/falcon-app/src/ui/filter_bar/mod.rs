@@ -15,6 +15,7 @@ mod reorder;
 
 use crate::app::App;
 use crate::icons as ic;
+use crate::locale::{tr, trf};
 use crate::logic;
 use crate::search_state::FilterKind;
 use crate::theme::{self as t, font};
@@ -140,7 +141,7 @@ fn pick_row(ui: &mut Ui, indent: f32, label: &str, count: Option<usize>, pick: P
     if let Some(n) = count {
         p.text(egui::pos2(rect.right() - 6.0, rect.center().y), egui::Align2::RIGHT_CENTER, n.to_string(), egui::FontId::proportional(12.0), t::p().text_muted);
     }
-    let resp = resp.on_hover_text("Click to include, right-click to exclude");
+    let resp = resp.on_hover_text(tr("Click to include, right-click to exclude"));
     if resp.clicked() {
         Some(next_pick(pick, false))
     } else if resp.secondary_clicked() {
@@ -151,7 +152,7 @@ fn pick_row(ui: &mut Ui, indent: f32, label: &str, count: Option<usize>, pick: P
 }
 
 fn search_box(ui: &mut Ui, text: &mut String) {
-    ui.add(TextEdit::singleline(text).hint_text(format!("{}  Search", ic::MAGNIFYING_GLASS)).desired_width(f32::INFINITY));
+    ui.add(TextEdit::singleline(text).hint_text(format!("{}  {}", ic::MAGNIFYING_GLASS, tr("Search"))).desired_width(f32::INFINITY));
 }
 
 fn muted(ui: &mut Ui, text: &str) {
@@ -191,13 +192,13 @@ pub fn folders_with_depth(roots: &[Folder]) -> Vec<(&Folder, usize)> {
 /// capitals.
 pub fn type_label(t: &str) -> String {
     match t {
-        "font" => "Font".into(),
-        "video" => "Video".into(),
-        "audio" => "Audio".into(),
+        "font" => tr("Font").into(),
+        "video" => tr("Video").into(),
+        "audio" => tr("Audio").into(),
         "youtube" => "YouTube".into(),
         "vimeo" => "Vimeo".into(),
         "bilibili" => "Bilibili".into(),
-        "url" => "Bookmark".into(),
+        "url" => tr("Bookmark").into(),
         ext => ext.to_uppercase(),
     }
 }
@@ -241,7 +242,7 @@ impl App {
         self.add_filter_button(ui, lib);
 
         if self.ws.filter.is_active() {
-            let clear = ui.add(egui::Button::new(RichText::new(format!("{}  Clear", ic::X)).color(t::p().text_muted)).frame(false));
+            let clear = ui.add(egui::Button::new(RichText::new(format!("{}  {}", ic::X, tr("Clear"))).color(t::p().text_muted)).frame(false));
             if clear.clicked() {
                 self.reset_filter();
             }
@@ -249,7 +250,7 @@ impl App {
         if self.ws.filter.is_active() || !self.ws.query.trim().is_empty() {
             let locked = self.ws.filter_ui.locked;
             let (glyph, color) = if locked { (ic::LOCK_SIMPLE, t::p().primary) } else { (ic::LOCK_SIMPLE_OPEN, t::p().text_muted) };
-            let tip = if locked { "Locked: the filter and search stay when you open another view" } else { "Lock the filter and search so they stay when you open another view" };
+            let tip = if locked { tr("Locked: the filter and search stay when you open another view") } else { tr("Lock the filter and search so they stay when you open another view") };
             if ui.add(egui::Button::new(RichText::new(glyph).color(color)).frame(false)).on_hover_text(tip).clicked() {
                 self.ws.filter_ui.locked = !locked;
             }
@@ -260,7 +261,7 @@ impl App {
     /// The + button: every filter the library can use, each with a pin
     /// that keeps it in the bar; clicking a name opens that filter.
     fn add_filter_button(&mut self, ui: &mut Ui, lib: &Library) {
-        let resp = ui.add(egui::Button::new(RichText::new(ic::PLUS).color(t::p().text_muted)).frame(false)).on_hover_text("Add a filter to the bar");
+        let resp = ui.add(egui::Button::new(RichText::new(ic::PLUS).color(t::p().text_muted)).frame(false)).on_hover_text(tr("Add a filter to the bar"));
         egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
             ui.set_min_width(200.0);
             for kind in self.search.ordered() {
@@ -270,10 +271,10 @@ impl App {
                 ui.horizontal(|ui| {
                     let pinned = self.search.is_pinned(kind);
                     let pin = RichText::new(ic::PUSH_PIN).color(if pinned { t::p().primary } else { t::p().text_disabled });
-                    if ui.add(egui::Button::new(pin).frame(false)).on_hover_text(if pinned { "Unpin from the bar" } else { "Pin to the bar" }).clicked() {
+                    if ui.add(egui::Button::new(pin).frame(false)).on_hover_text(if pinned { tr("Unpin from the bar") } else { tr("Pin to the bar") }).clicked() {
                         self.search.set_pinned(kind, !pinned);
                     }
-                    if ui.add(egui::Button::new(kind.label()).frame(false).min_size(vec2(140.0, 0.0))).clicked() {
+                    if ui.add(egui::Button::new(tr(kind.label())).frame(false).min_size(vec2(140.0, 0.0))).clicked() {
                         self.ws.filter_ui.open_chip = Some(kind);
                         ui.close();
                     }
@@ -295,7 +296,7 @@ impl App {
             FilterKind::Types => self.types_chip(ui, lib),
             FilterKind::Note | FilterKind::Url => {
                 let (f, text) = if kind == FilterKind::Note { (&mut self.ws.filter.note, &mut self.ws.note_text) } else { (&mut self.ws.filter.url, &mut self.ws.url_text) };
-                let resp = filter_chip(ui, kind.label(), media::text_filter_summary(f));
+                let resp = filter_chip(ui, tr(kind.label()), media::text_filter_summary(f));
                 egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| text_filter_menu(ui, f, text));
             }
             _ => self.media_chip(ui, lib, kind),
@@ -306,10 +307,10 @@ impl App {
         let f = &mut self.ws.filter;
         let value = match (f.color, f.grayscale) {
             (Some(c), _) => Some(logic::hex(c.rgb)),
-            (None, true) => Some("Grayscale".to_string()),
+            (None, true) => Some(tr("Grayscale").to_string()),
             (None, false) => None,
         };
-        let resp = filter_chip(ui, "Color", value);
+        let resp = filter_chip(ui, tr("Color"), value);
         let color_text = &mut self.ws.color_text;
         egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
             ui.set_min_width(230.0);
@@ -331,7 +332,7 @@ impl App {
             });
             ui.add_space(6.0);
             ui.horizontal(|ui| {
-                ui.label("Hex");
+                ui.label(tr("Hex"));
                 if ui.add(TextEdit::singleline(color_text).desired_width(90.0).hint_text("#FF0000")).changed()
                     && let Some(rgb) = parse_hex(color_text)
                 {
@@ -341,15 +342,15 @@ impl App {
             });
             if let Some(q) = f.color.as_mut() {
                 ui.horizontal(|ui| {
-                    ui.label("Accuracy");
+                    ui.label(tr("Accuracy"));
                     // Eagle draws the slider reversed: right is stricter.
                     let mut strict = 45.0 - q.accuracy;
                     ui.add(egui::Slider::new(&mut strict, 5.0..=40.0).show_value(false));
                     q.accuracy = 45.0 - strict;
                 });
             }
-            ui.checkbox(&mut f.grayscale, "Grayscale only");
-            if ui.button("Clear").clicked() {
+            ui.checkbox(&mut f.grayscale, tr("Grayscale only"));
+            if ui.button(tr("Clear")).clicked() {
                 f.color = None;
                 f.grayscale = false;
                 color_text.clear();
@@ -368,9 +369,9 @@ impl App {
         let fui = &mut self.ws.filter_ui;
         let mut inc: Vec<&str> = f.tags.includes.iter().map(String::as_str).collect();
         if f.tags.empty {
-            inc.insert(0, "Untagged");
+            inc.insert(0, tr("Untagged"));
         }
-        let resp = filter_chip(ui, "Tags", pick_summary(inc, f.tags.excludes.iter().map(String::as_str)));
+        let resp = filter_chip(ui, tr("Tags"), pick_summary(inc, f.tags.excludes.iter().map(String::as_str)));
         egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
             ui.set_min_width(380.0);
             ui.horizontal(|ui| {
@@ -388,11 +389,11 @@ impl App {
                 ui.vertical(|ui| {
                     ui.set_width(120.0);
                     let row = |ui: &mut Ui, on: bool, label: String| ui.add(egui::Button::selectable(on, label).min_size(vec2(118.0, 0.0)));
-                    if row(ui, fui.tag_view == TagView::All, format!("All Tags  {}", order.len())).clicked() {
+                    if row(ui, fui.tag_view == TagView::All, trf("All Tags  {n}", &[("n", &order.len())])).clicked() {
                         fui.tag_view = TagView::All;
                     }
                     let n_sel = f.tags.includes.len() + f.tags.excludes.len();
-                    if n_sel > 0 && row(ui, fui.tag_view == TagView::Selected, format!("Selected  {n_sel}")).clicked() {
+                    if n_sel > 0 && row(ui, fui.tag_view == TagView::Selected, trf("Selected  {n}", &[("n", &n_sel)])).clicked() {
                         fui.tag_view = TagView::Selected;
                     }
                     for g in groups {
@@ -421,12 +422,12 @@ impl App {
                     egui::ScrollArea::vertical().id_salt("filter-tags").max_height(300.0).show(ui, |ui| {
                         if fui.tag_view == TagView::All && keyword.is_empty() && (untagged > 0 || f.tags.empty) {
                             let now = if f.tags.empty { Pick::In } else { Pick::Off };
-                            if let Some(p) = pick_row(ui, 0.0, "Untagged", Some(untagged), now) {
+                            if let Some(p) = pick_row(ui, 0.0, tr("Untagged"), Some(untagged), now) {
                                 f.tags.empty = p == Pick::In;
                             }
                         }
                         if list.is_empty() {
-                            muted(ui, "No tags");
+                            muted(ui, tr("No tags"));
                         }
                         for &i in &list {
                             let (name, n) = &tags[i];
@@ -438,7 +439,7 @@ impl App {
                     if group.is_some() && !list.is_empty() {
                         let all = list.iter().all(|&i| f.tags.includes.contains(&tags[i].0));
                         let mut on = all;
-                        if ui.checkbox(&mut on, "Select all").changed() {
+                        if ui.checkbox(&mut on, tr("Select all")).changed() {
                             for &i in &list {
                                 let name = &tags[i].0;
                                 set_pick(&mut f.tags.includes, &mut f.tags.excludes, name, if on { Pick::In } else { Pick::Off });
@@ -449,8 +450,8 @@ impl App {
             });
             ui.separator();
             ui.horizontal(|ui| {
-                muted(ui, "Click to include, right-click to exclude");
-                if f.tags.is_active() && ui.button("Clear").clicked() {
+                muted(ui, tr("Click to include, right-click to exclude"));
+                if f.tags.is_active() && ui.button(tr("Clear")).clicked() {
                     f.tags.includes.clear();
                     f.tags.excludes.clear();
                     f.tags.empty = false;
@@ -480,12 +481,12 @@ impl App {
         let mut inc: Vec<String> = f.folders.includes.iter().map(|id| name_of(id)).collect();
         let mut exc: Vec<String> = f.folders.excludes.iter().map(|id| name_of(id)).collect();
         if f.folders.empty {
-            inc.insert(0, "Uncategorized".into());
+            inc.insert(0, tr("Uncategorized").into());
         }
         if f.folders.exclude_empty {
-            exc.insert(0, "Uncategorized".into());
+            exc.insert(0, tr("Uncategorized").into());
         }
-        let resp = filter_chip(ui, "Folders", pick_summary(inc.iter().map(String::as_str), exc.iter().map(String::as_str)));
+        let resp = filter_chip(ui, tr("Folders"), pick_summary(inc.iter().map(String::as_str), exc.iter().map(String::as_str)));
         egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
             ui.set_min_width(260.0);
             logic_picker(ui, &mut f.folders.logic);
@@ -508,13 +509,13 @@ impl App {
                     } else {
                         Pick::Off
                     };
-                    if let Some(p) = pick_row(ui, 0.0, "Uncategorized", Some(loose), now) {
+                    if let Some(p) = pick_row(ui, 0.0, tr("Uncategorized"), Some(loose), now) {
                         f.folders.empty = p == Pick::In;
                         f.folders.exclude_empty = p == Pick::Out;
                     }
                 }
                 if rows.is_empty() {
-                    muted(ui, "Nothing found");
+                    muted(ui, tr("Nothing found"));
                 }
                 for (fo, depth) in rows {
                     let n = counts.get(fo.id.as_str()).copied().unwrap_or(0);
@@ -525,8 +526,8 @@ impl App {
             });
             ui.separator();
             ui.horizontal(|ui| {
-                muted(ui, "Click to include, right-click to exclude");
-                if f.folders.is_active() && ui.button("Clear").clicked() {
+                muted(ui, tr("Click to include, right-click to exclude"));
+                if f.folders.is_active() && ui.button(tr("Clear")).clicked() {
                     f.folders = SetFilter { logic: f.folders.logic, ..Default::default() };
                 }
             });
@@ -544,8 +545,8 @@ impl App {
         let f = &mut self.ws.filter;
         let mut stars: Vec<u8> = f.ratings.iter().copied().collect();
         stars.sort_unstable_by(|a, b| b.cmp(a));
-        let value = (!stars.is_empty()).then(|| stars.iter().map(|&n| if n == 0 { "None".to_string() } else { "★".repeat(n as usize) }).collect::<Vec<_>>().join(", "));
-        let resp = filter_chip(ui, "Rating", value);
+        let value = (!stars.is_empty()).then(|| stars.iter().map(|&n| if n == 0 { tr("None").to_string() } else { "★".repeat(n as usize) }).collect::<Vec<_>>().join(", "));
+        let resp = filter_chip(ui, tr("Rating"), value);
         egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
             ui.set_min_width(160.0);
             let mut any = false;
@@ -555,7 +556,7 @@ impl App {
                     continue;
                 }
                 any = true;
-                let label = if n == 0 { "None".to_string() } else { "★".repeat(n as usize) };
+                let label = if n == 0 { tr("None").to_string() } else { "★".repeat(n as usize) };
                 if ui.checkbox(&mut on, format!("{label}  ({})", counts[n as usize])).changed() {
                     if on {
                         f.ratings.insert(n);
@@ -565,7 +566,7 @@ impl App {
                 }
             }
             if !any {
-                muted(ui, "Nothing found");
+                muted(ui, tr("Nothing found"));
             }
         });
     }
@@ -584,7 +585,7 @@ impl App {
                 let exc = f.exclude_types.iter().map(|t| format!("-{}", type_label(t)));
                 inc.chain(exc).collect::<Vec<_>>().join(",")
             });
-        let resp = filter_chip(ui, "Type", value);
+        let resp = filter_chip(ui, tr("Type"), value);
         egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
             ui.set_min_width(220.0);
             search_box(ui, &mut fui.type_search);
@@ -610,13 +611,13 @@ impl App {
                     }
                 }
                 if shown == 0 {
-                    muted(ui, "Nothing found");
+                    muted(ui, tr("Nothing found"));
                 }
             });
             ui.separator();
             ui.horizontal(|ui| {
-                muted(ui, "Click to include, right-click to exclude");
-                if (!f.types.is_empty() || !f.exclude_types.is_empty()) && ui.button("Clear").clicked() {
+                muted(ui, tr("Click to include, right-click to exclude"));
+                if (!f.types.is_empty() || !f.exclude_types.is_empty()) && ui.button(tr("Clear")).clicked() {
                     f.types.clear();
                     f.exclude_types.clear();
                 }
@@ -689,7 +690,7 @@ pub(crate) fn filter_chip(ui: &mut Ui, label: &str, value: Option<String>) -> Re
 
 pub(crate) fn logic_picker(ui: &mut Ui, logic: &mut Logic) {
     ui.horizontal(|ui| {
-        for (l, name) in [(Logic::Or, "Any"), (Logic::And, "All"), (Logic::Equal, "Exact")] {
+        for (l, name) in [(Logic::Or, tr("Any")), (Logic::And, tr("All")), (Logic::Equal, tr("Exact"))] {
             if ui.selectable_label(*logic == l, name).clicked() {
                 *logic = l;
             }
@@ -699,15 +700,15 @@ pub(crate) fn logic_picker(ui: &mut Ui, logic: &mut Logic) {
 
 pub(crate) fn text_filter_menu(ui: &mut Ui, f: &mut TextFilter, keywords: &mut String) {
     ui.set_min_width(200.0);
-    for (opt, name) in [(TextFilter::Off, "Any"), (TextFilter::Has, "Has"), (TextFilter::No, "None")] {
+    for (opt, name) in [(TextFilter::Off, tr("Any")), (TextFilter::Has, tr("Has")), (TextFilter::No, tr("None"))] {
         let on = std::mem::discriminant(f) == std::mem::discriminant(&opt);
         if ui.selectable_label(on, name).clicked() {
             *f = opt;
         }
     }
     ui.separator();
-    ui.label(RichText::new("Contains").color(t::p().text_muted).size(12.0));
-    if ui.add(TextEdit::singleline(keywords).hint_text("keyword, keyword")).changed() {
+    ui.label(RichText::new(tr("Contains")).color(t::p().text_muted).size(12.0));
+    if ui.add(TextEdit::singleline(keywords).hint_text(tr("keyword, keyword"))).changed() {
         let words: Vec<String> = keywords.split(',').map(|w| w.trim().to_string()).filter(|w| !w.is_empty()).collect();
         *f = if words.is_empty() { TextFilter::Off } else { TextFilter::Keywords(words) };
     }
