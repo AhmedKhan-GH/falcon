@@ -6,6 +6,7 @@ mod hover;
 mod icons;
 mod loader;
 mod logic;
+mod open_with;
 mod prefs;
 mod shortcuts;
 mod organize;

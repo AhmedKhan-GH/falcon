@@ -31,6 +31,8 @@ pub enum Command {
     LayoutJustified,
     LayoutWaterfall,
     LayoutList,
+    OpenDefault,
+    RevealInFinder,
     Preferences,
     CollectWindow,
     SwitchLibrary,
@@ -99,6 +101,8 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::LayoutJustified, id: "view.layout.justified", group: "View", label: "Justified layout", default: k(ALT, Key::Num2), alias: None },
     Spec { cmd: Command::LayoutWaterfall, id: "view.layout.waterfall", group: "View", label: "Waterfall layout", default: k(ALT, Key::Num3), alias: None },
     Spec { cmd: Command::LayoutList, id: "view.layout.list", group: "View", label: "List layout", default: k(ALT, Key::Num4), alias: None },
+    Spec { cmd: Command::OpenDefault, id: "view.file.opendefault", group: "View", label: "Open in the default app", default: k(SHIFT, Key::Enter), alias: None },
+    Spec { cmd: Command::RevealInFinder, id: "view.file.openfinder", group: "View", label: "Show in Finder", default: k(CMD, Key::Enter), alias: None },
     Spec { cmd: Command::Back, id: "go.back", group: "Navigate", label: "Back", default: k(CMD, Key::OpenBracket), alias: None },
     Spec { cmd: Command::Forward, id: "go.forward", group: "Navigate", label: "Forward", default: k(CMD, Key::CloseBracket), alias: None },
     Spec { cmd: Command::Find, id: "find.search.current", group: "Find", label: "Focus search", default: k(CMD, Key::F), alias: None },
@@ -591,6 +595,16 @@ mod tests {
             assert_eq!(keys.resolve(key, CMD_SHIFT), Some(cmd), "{key:?}");
         }
         assert_eq!(keys.resolve(Key::OpenBracket, Modifiers::COMMAND), Some(Command::Back));
+    }
+
+    #[test]
+    fn open_keys_beat_the_viewer_enter() {
+        let s = Shortcuts::default();
+        assert_eq!(s.resolve(Key::Enter, Modifiers::NONE), Some(Command::Viewer));
+        assert_eq!(s.resolve(Key::Enter, Modifiers::SHIFT), Some(Command::OpenDefault));
+        assert_eq!(s.resolve(Key::Enter, Modifiers::COMMAND), Some(Command::RevealInFinder));
+        assert_eq!(spec(Command::OpenDefault).id, "view.file.opendefault");
+        assert_eq!(format(&s.binding(Command::RevealInFinder).unwrap()), parse("CmdOrCtrl + Enter").map(|c| format(&c)).unwrap());
     }
 
     #[test]

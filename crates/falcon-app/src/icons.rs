@@ -4,6 +4,7 @@
 pub const ARROW_CLOCKWISE: &str = "\u{E036}";
 pub const ARROW_COUNTER_CLOCKWISE: &str = "\u{E038}";
 pub const ARROWS_LEFT_RIGHT: &str = "\u{E0A0}";
+pub const ARROW_SQUARE_OUT: &str = "\u{E5DE}";
 pub const BOOKMARK_SIMPLE: &str = "\u{E0EA}";
 pub const CAMERA: &str = "\u{E10E}";
 pub const CARET_DOWN: &str = "\u{E136}";

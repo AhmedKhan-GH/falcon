@@ -25,6 +25,7 @@ mod duplicates_view;
 mod filters_ui;
 mod media_view;
 mod video_view;
+mod open_ui;
 #[path = "comments.rs"]
 mod comments;
 #[path = "covers.rs"]
@@ -157,6 +158,8 @@ struct ViewState {
     /// Decoded GIF frames with their delays in seconds.
     frames: Vec<(egui::TextureHandle, f32)>,
     started: Option<Instant>,
+    /// The item's original, for the bar's open button.
+    file: PathBuf,
 }
 
 /// Decodes up to 300 GIF frames into textures.
@@ -481,6 +484,8 @@ pub struct App {
     focus_search: bool,
     /// Set while a drag out of the window is in progress.
     native_drag: Arc<std::sync::atomic::AtomicBool>,
+    /// Open With lists by extension (`open_with.rs`).
+    open_apps: crate::open_with::AppCache,
     /// Recently opened libraries, newest first.
     recent: Vec<PathBuf>,
     /// What to open once the frame is done (it replaces the library being
@@ -513,6 +518,7 @@ impl App {
             show_inspector: true,
             focus_search: false,
             native_drag: Arc::default(),
+            open_apps: Default::default(),
             recent: Vec::new(),
             switch_to: None,
             prefs: Default::default(),
@@ -1038,6 +1044,10 @@ impl App {
         }
         if on(C::Paste) && self.ws.viewer.is_none() {
             self.paste();
+            return;
+        }
+        if on(C::OpenDefault) || on(C::RevealInFinder) {
+            self.open_keys(on(C::OpenDefault));
             return;
         }
         let (left, right, up, down, esc) = ctx.input(|i| {
@@ -2491,9 +2501,7 @@ impl App {
                     if ui.button("Open").clicked() {
                         opened = Some(item.id.clone());
                     }
-                    if ui.button("Show in Finder").clicked() {
-                        let _ = std::process::Command::new("open").arg("-R").arg(item.original_path(lib.root())).spawn();
-                    }
+                    self.open_menu(ui, &open_ui::originals(lib, &targets));
                     if ui.button("Copy File Path").clicked() {
                         ui.ctx().copy_text(item.original_path(lib.root()).display().to_string());
                     }
@@ -3174,6 +3182,10 @@ impl App {
         prop(ui, "Date Modified", &logic::format_ms(item.mtime));
         media_view::media_props(ui, &item);
         ui.add_space(4.0);
+        if wide_button(ui, ic::ARROW_SQUARE_OUT, "Open in Default App", true).clicked() {
+            crate::open_with::open_default(&[item.original_path(lib.root())]);
+        }
+        ui.add_space(4.0);
         if wide_button(ui, ic::EXPORT, "Show in Finder", true).clicked() {
             let _ = std::process::Command::new("open").arg("-R").arg(item.original_path(lib.root())).spawn();
         }
@@ -3360,11 +3372,11 @@ impl App {
             return;
         };
         if self.ws.view.id != id {
-            self.ws.view = ViewState { id: id.clone(), ..Default::default() };
-            if item.ext == "gif" {
-                self.ws.view.frames = gif_frames(ctx, &item.original_path(lib.root()));
-                self.ws.view.started = Some(Instant::now());
-            }
+            self.ws.view = ViewState { id: id.clone(), file: item.original_path(lib.root()), ..Default::default() };
+        }
+        if item.ext == "gif" && self.ws.view.started.is_none() {
+            self.ws.view.frames = gif_frames(ctx, &item.original_path(lib.root()));
+            self.ws.view.started = Some(Instant::now());
         }
         let screen = ui.max_rect();
         if self.video_viewer(ctx, lib, item, screen) || self.media_viewer(ctx, lib, item, screen) {
@@ -3448,7 +3460,8 @@ impl App {
             let name = format!("{}.{}", item.name, item.ext);
             let g = galley(ui, &name, font(14.0), t::p().text, 360.0);
             p.galley(Pos2::new(bar.left() + 120.0, cy - g.size().y / 2.0), g, t::p().text);
-            let mut x = bar.right() - 24.0;
+            let file = self.ws.view.file.clone();
+            let mut x = self.viewer_open_button(ui, bar.right() - 12.0, cy, &file) - 14.0;
             if icon_button(ui, Pos2::new(x, cy), ic::PLUS, 15.0, true, "Zoom In (+)").clicked() {
                 self.ws.view.zoom = Some((scale * 1.25).min(32.0));
             }

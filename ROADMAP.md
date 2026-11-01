@@ -19,6 +19,7 @@ Falcon is early alpha. This is what is done and what comes next, roughly in orde
 - [x] Video playback in the viewer
 - [x] Tag groups
 - [x] Undo
+- [x] Open in Default App and Open With
 - [ ] Windows and Linux builds
 - [ ] Signed, notarised macOS releases
 

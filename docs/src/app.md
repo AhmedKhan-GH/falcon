@@ -134,6 +134,8 @@ These are the defaults. All but the arrows, Esc, Z and the viewer's C, ⇧R and 
 | ⌘L | Open the library menu (Eagle's `library.switch`) |
 | ⌘⇧[ and ⌘⇧] | Previous and next open library (falcon's own) |
 | ⌘, | Preferences |
+| ⇧↩ | Open the selected items (or the viewer's item) in their default apps (Eagle's `view.file.opendefault`) |
+| ⌘↩ | Show the selected items (or the viewer's item) in Finder (Eagle's `view.file.openfinder`) |
 | C | In the viewer, turn comment mode on or off (Esc also leaves it) |
 | ⇧R | In the viewer, rotate the image left |
 | ⇧F | In the viewer, flip the image horizontally |
@@ -378,6 +380,19 @@ What Eagle does, from the viewer's `comment-item` and `comments-container` direc
 ## Rotate, flip and crop
 
 The viewer bar has Rotate Left and Rotate Right and a Flip button for jpg, png, webp and bmp, and Crop for jpg, png and webp. Flip mirrors horizontally, or vertically with ⇧ held while clicking, and ⇧F flips horizontally, as Eagle's single flip button and `edit.image.flip` shortcut (`Shift + F`) do (seen in `preview-window.js` and `default-preferences.js`). Eagle's button also mirrors a playing video; falcon's appears for images only. The card menu offers Flip Horizontal and Flip Vertical as two entries, for every selected item in those formats. All of these rewrite the original (see [Crop and rotate](thumbnails.md#crop-and-rotate-observed)). The crop tool starts on the whole image. Drag its edges or corners, or drag inside it to move it; the size in pixels shows underneath. Save asks for confirmation, then overwrites the original. These edits can't be undone, so they clear the undo history. The rectangle math is in `crop.rs`.
+
+## Open in other apps
+
+The card menu has Open in Default App (⇧↩), Open With and Show in Finder (⌘↩); the inspector has an Open in Default App button above Show in Finder; every viewer's bar (image, audio, video, font, and anything else that calls `App::viewer_open_button`) has an open icon at the right with a caret that lists Open With. Files are handed to `/usr/bin/open` on a short-lived thread (`open_with.rs`): it needs no permission, never reads the file, and the UI never waits. The Open With list comes from `NSWorkspace URLsForApplicationsToOpenURL:` (macOS 12 and later; earlier systems get only the default from `URLForApplicationToOpenURL:`), asked about an empty stand-in file with the same extension in a temp folder, because LaunchServices answers nothing for a missing path, and cached per extension.
+
+| | Eagle | Seen or inferred | falcon |
+|---|---|---|---|
+| Menu entries | Card menu and View menu: Open in Default App, Open in Other App, Reveal in Finder, plus Open in New Window and Open URL | Seen (`app.bundle.js`) | Open in Default App, Open With, Show in Finder in the card menu; no separate window or URL entry here |
+| Keys | `view.file.opendefault` `Shift + Enter`, `view.file.openfinder` `CmdOrCtrl + Enter`, `view.file.openother` unbound, `view.file.opennewwindow` `CmdOrCtrl + O` | Seen (`default-preferences.js`) | ⇧↩ and ⌘↩, rebindable; no Open With key |
+| Several items | Opens up to 40 selected files, each in its default app | Seen (`openFilesWithDefault`) | The same cap; one `open` call for all |
+| Open With list | A submenu on macOS, for one item only: the default first, labelled "(Default)" and followed by a separator, then the others by name; Eagle itself left out. Built by a helper (`launchHandler`) run on an empty temp file with the item's extension, cached per extension | Seen (`get-associated-application`) | The same order, label and separator, falcon's own bundle left out, one entry per bundle path and per name |
+| Opening in an app | `open -a APP FILE`, with a 10 s timeout | Seen (`openWithApplicationPath`) | `open -a APP -- FILE`, not waited on |
+| Default app | Sent to the main process (`open-with-default`) | Seen (the message); inferred (Electron's `shell.openPath`) | `open -- FILE…` |
 
 ## Folder covers
 

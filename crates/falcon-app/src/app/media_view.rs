@@ -58,7 +58,8 @@ fn sample(item: &Item) -> String {
     .to_string()
 }
 
-/// The bar above the audio and font viewers: back and the item's name.
+/// The bar above the audio, font and video viewers: back, the item's
+/// name and the open button.
 pub(super) fn top_bar(app: &mut App, ui: &mut Ui, item: &Item, bar: Rect) {
     let p = ui.painter().clone();
     p.rect_filled(bar, 0.0, t::p().main);
@@ -70,6 +71,10 @@ pub(super) fn top_bar(app: &mut App, ui: &mut Ui, item: &Item, bar: Rect) {
     let name = format!("{}.{}", item.name, item.ext);
     let g = galley(ui, &name, font(14.0), t::p().text, 360.0);
     p.galley(Pos2::new(bar.left() + 120.0, cy - g.size().y / 2.0), g, t::p().text);
+    if app.ws.view.id == item.id {
+        let file = app.ws.view.file.clone();
+        app.viewer_open_button(ui, bar.right() - 12.0, cy, &file);
+    }
 }
 
 impl App {
