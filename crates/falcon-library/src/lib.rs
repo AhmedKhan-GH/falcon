@@ -45,4 +45,5 @@ pub mod import_check;
 pub mod thumbnail;
 pub mod transform;
 pub mod waveform;
+pub mod webp_convert;
 pub mod weblink;
