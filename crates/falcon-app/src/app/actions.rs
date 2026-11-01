@@ -15,6 +15,11 @@ use crate::logic::{self, Scope};
 /// An action on this many items or more asks first (Eagle's bulk confirm).
 pub(crate) const BULK_CONFIRM: usize = 100;
 
+/// Whether an action on `n` items asks first.
+pub(crate) fn needs_confirm(n: usize, threshold: usize) -> bool {
+    n >= threshold
+}
+
 /// Library changes requested while drawing, applied at the end of a frame.
 pub(crate) enum Action {
     CreateFolder { parent: Option<String> },
@@ -28,6 +33,9 @@ pub(crate) enum Action {
     SetFolderDescription(String, String),
     SetSmartDescription(String, String),
     AddToFolder(Vec<String>, String),
+    /// Original files to open in the default app (true) or show in Finder
+    /// (false); queued through `push_bulk` when there are several.
+    OpenFiles(Vec<std::path::PathBuf>, bool),
     /// Items dropped on a sidebar folder: moved out of the open folder, or
     /// added (`logic::folder_drop`).
     DropOnFolder(Vec<String>, String, logic::FolderDrop),
@@ -110,6 +118,7 @@ pub(crate) fn action_label(action: &Action) -> String {
         Action::SetFolderDescription(..) => "Edit folder description".into(),
         Action::SetSmartDescription(..) => "Edit smart folder description".into(),
         Action::AddToFolder(ids, _) => format!("Add {} to folder", ids.len()),
+        Action::OpenFiles(files, _) => format!("Open {} files", files.len()),
         Action::DropOnFolder(ids, _, logic::FolderDrop::Move(_)) => format!("Move {} to folder", ids.len()),
         Action::DropOnFolder(ids, _, logic::FolderDrop::Add) => format!("Add {} to folder", ids.len()),
         Action::Trash(ids, true) => format!("Move {} to Trash", ids.len()),
@@ -197,7 +206,13 @@ impl App {
     /// Queues `action`, which changes `n` items, as Eagle does: at once for
     /// fewer than `BULK_CONFIRM`, else after the user confirms the dialog.
     pub(crate) fn push_bulk(&mut self, n: usize, action: Action) {
-        if n < BULK_CONFIRM {
+        self.push_bulk_at(n, BULK_CONFIRM, action);
+    }
+
+    /// Like `push_bulk` with its own `threshold` (deleting folders asks from
+    /// 50 items).
+    pub(crate) fn push_bulk_at(&mut self, n: usize, threshold: usize, action: Action) {
+        if !needs_confirm(n, threshold) {
             self.ws.actions.push(action);
             return;
         }
@@ -373,6 +388,15 @@ impl App {
                     self.ws.org.tag_sel = vec![into.clone()];
                     self.flash_undo(format!("Merged {} into “{into}” on {}", crate::ui::dialogs::export::plural(tags.len(), "tag"), crate::ui::dialogs::export::plural(n, "item")));
                 }),
+                Action::OpenFiles(files, default) => {
+                    if default {
+                        crate::open_with::open_default(&files);
+                        self.used(&files);
+                    } else {
+                        crate::open_with::reveal(&files);
+                    }
+                    Ok(())
+                }
                 Action::ClearTagHistory => lib.clear_tag_history().map(|_| self.flash("Cleared the tag history")),
                 Action::DeletePermanently(ids) => {
                     self.select_after_removal(&ids);
@@ -562,6 +586,15 @@ impl App {
 #[cfg(test)]
 mod undo_tests {
     use super::*;
+
+    #[test]
+    fn confirm_threshold() {
+        assert!(!needs_confirm(99, BULK_CONFIRM));
+        assert!(needs_confirm(100, BULK_CONFIRM));
+        assert!(!needs_confirm(49, 50));
+        assert!(needs_confirm(50, 50));
+        assert_eq!(action_label(&Action::OpenFiles(vec!["/a".into(), "/b".into()], false)), "Open 2 files");
+    }
 
     #[test]
     fn undo_labels() {

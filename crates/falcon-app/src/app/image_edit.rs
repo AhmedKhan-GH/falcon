@@ -124,7 +124,7 @@ impl App {
             let folders: Vec<String> = if picked.is_empty() { vec![fid.clone()] } else { picked.clone() };
             let pinned = item_ops::all_pinned(targets.iter().filter_map(|id| lib.item(id)), fid);
             if ui.button(if pinned { "Unpin from Top" } else { "Pin to Top" }).clicked() {
-                self.ws.actions.push(Action::Edit(Op::Pin(targets.to_vec(), folders, !pinned)));
+                self.push_bulk(targets.len(), Action::Edit(Op::Pin(targets.to_vec(), folders, !pinned)));
             }
         }
         if single

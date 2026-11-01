@@ -9,7 +9,7 @@ use eframe::egui::{self, Align2, CornerRadius, Pos2, Rect, Sense, Ui, vec2};
 use falcon_library::Library;
 use falcon_library::model::Item;
 
-use crate::app::App;
+use crate::app::{Action, App};
 use crate::loader::Tier;
 use crate::ui::widgets::{icon, icon_button};
 use crate::icloud::FetchState;
@@ -35,15 +35,28 @@ impl App {
     pub(crate) fn open_menu(&mut self, ui: &mut Ui, files: &[PathBuf]) {
         let def = self.shortcut_text(ui.ctx(), Command::OpenDefault);
         if ui.add(egui::Button::new("Open in Default App").shortcut_text(def)).clicked() {
-            open_with::open_default(files);
-            self.used(files);
+            self.open_files(files, true);
         }
         if let [file] = files {
             ui.menu_button("Open With", |ui| self.open_with_list(ui, file));
         }
         let reveal = self.shortcut_text(ui.ctx(), Command::RevealInFinder);
         if ui.add(egui::Button::new("Show in Finder").shortcut_text(reveal)).clicked() {
-            open_with::reveal(files);
+            self.open_files(files, false);
+        }
+    }
+
+    /// Opens (`default`) or reveals `files`; several ask first when there are many.
+    fn open_files(&mut self, files: &[PathBuf], default: bool) {
+        if let [_] = files {
+            if default {
+                open_with::open_default(files);
+                self.used(files);
+            } else {
+                open_with::reveal(files);
+            }
+        } else {
+            self.push_bulk(files.len(), Action::OpenFiles(files.to_vec(), default));
         }
     }
 
@@ -66,12 +79,7 @@ impl App {
                 None => originals(&lib, &self.ws.selected),
             }
         };
-        if default {
-            open_with::open_default(&files);
-            self.used(&files);
-        } else {
-            open_with::reveal(&files);
-        }
+        self.open_files(&files, default);
     }
 
     /// Actions that read originals or thumbnails on this thread (rotate,

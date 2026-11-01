@@ -116,7 +116,7 @@ impl App {
             self.leave_viewed(&ids);
             self.select_after_removal(&ids);
         }
-        self.ws.actions.push(Action::AddToFolder(ids, fid));
+        self.push_bulk(ids.len(), Action::AddToFolder(ids, fid));
     }
 
     /// Eagle's Rename for the selection: one item renames in the

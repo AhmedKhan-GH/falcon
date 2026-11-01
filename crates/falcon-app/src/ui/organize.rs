@@ -1395,7 +1395,7 @@ impl App {
         let holding: Vec<&falcon_library::model::TagGroup> = groups.iter().filter(|g| tags.iter().any(|t| g.tags.contains(t))).collect();
         if ui.add_enabled(!holding.is_empty(), egui::Button::new("Remove from Group")).clicked() {
             for g in holding {
-                self.ws.actions.push(org(OrgAction::RemoveFromGroup(g.id.clone(), tags.to_vec())));
+                self.push_bulk(tags.len(), org(OrgAction::RemoveFromGroup(g.id.clone(), tags.to_vec())));
             }
         }
     }

@@ -18,6 +18,9 @@ use std::path::{Path, PathBuf};
 
 /// Eagle opens at most this many files at once.
 pub const MAX_OPEN: usize = 40;
+/// Files shown at once in Finder: each one can open its own Finder window,
+/// so a large selection would bury the desktop in windows.
+pub const MAX_REVEAL: usize = 31;
 
 /// An app that can open a file.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -87,7 +90,7 @@ pub fn open_args(files: &[PathBuf], app: Option<&Path>) -> Vec<std::ffi::OsStrin
 /// The `open` arguments that show `files` selected in Finder.
 pub fn reveal_args(files: &[PathBuf]) -> Vec<std::ffi::OsString> {
     let mut args: Vec<std::ffi::OsString> = vec!["-R".into(), "--".into()];
-    args.extend(files.iter().take(MAX_OPEN).map(|f| f.as_os_str().to_owned()));
+    args.extend(files.iter().take(MAX_REVEAL).map(|f| f.as_os_str().to_owned()));
     args
 }
 
@@ -287,6 +290,7 @@ mod tests {
         assert_eq!(s(reveal_args(&files[..1])), ["-R", "--", "/l/images/A.info/-odd.png"]);
         let many: Vec<PathBuf> = (0..100).map(|n| PathBuf::from(format!("/f{n}"))).collect();
         assert_eq!(open_args(&many, None).len(), MAX_OPEN + 1);
+        assert_eq!(reveal_args(&many).len(), MAX_REVEAL + 2);
     }
 
     #[cfg(target_os = "macos")]

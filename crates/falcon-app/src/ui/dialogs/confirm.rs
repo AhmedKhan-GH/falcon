@@ -8,6 +8,12 @@ use crate::app::{Action, App, Confirm};
 use crate::logic;
 use crate::theme as t;
 
+/// The live items in `ids` and all their subfolders, each counted once.
+fn folder_items(lib: &Library, ids: &[String]) -> usize {
+    let tree: std::collections::HashSet<String> = ids.iter().flat_map(|id| logic::folder_tree(&lib.metadata.folders, id)).collect();
+    lib.items().iter().filter(|i| !i.is_deleted && i.folders.iter().any(|f| tree.contains(f))).count()
+}
+
 impl App {
     /// The open `Confirm` dialog; its button queues the action.
     pub(crate) fn confirm_dialog(&mut self, ctx: &egui::Context, lib: &Library) {
@@ -73,8 +79,11 @@ impl App {
                 ui.add_space(10.0);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui.button(RichText::new(label).color(t::p().icon_red)).clicked() {
-                        self.ws.actions.push(match c.clone() {
-                            Confirm::DeleteFolders(ids) => Action::Folders(crate::ui::sidebar::folders::FolderAction::Delete(ids, self.ws.folders.trash_items)),
+                        if let Confirm::DeleteFolders(ids) = &c {
+                            let n = folder_items(lib, ids);
+                            self.push_bulk_at(n, 50, Action::Folders(crate::ui::sidebar::folders::FolderAction::Delete(ids.clone(), self.ws.folders.trash_items)));
+                        } else {
+                            self.ws.actions.push(match c.clone() {
                             Confirm::DeleteSmarts(ids) => Action::Folders(crate::ui::sidebar::folders::FolderAction::DeleteSmart(ids)),
                             Confirm::DeleteItems(ids) => Action::DeletePermanently(ids),
                             Confirm::EmptyTrash => Action::EmptyTrash,
@@ -82,7 +91,9 @@ impl App {
                             Confirm::RestoreAll => Action::Trash(lib.items().iter().filter(|i| i.is_deleted).map(|i| i.id.clone()).collect(), false),
                             Confirm::DeleteTags(t) => Action::DeleteTags(t),
                             Confirm::ClearTagHistory => Action::ClearTagHistory,
-                        });
+                            Confirm::DeleteFolders(_) => return,
+                            });
+                        }
                         self.ws.confirm = None;
                     }
                     if ui.button("Cancel").clicked() {
@@ -103,9 +114,9 @@ impl App {
             let mut answer = None;
             let modal = egui::Modal::new(egui::Id::unique("bulk")).show(ctx, |ui| {
                 ui.set_width(320.0);
-                ui.label(RichText::new(format!("Change {n} items?")).size(15.0));
+                ui.label(RichText::new("Many items at once").size(15.0));
                 ui.add_space(4.0);
-                ui.label(RichText::new("Everything selected is changed at once.").color(t::p().text_muted));
+                ui.label(RichText::new(format!("{n} items will be affected. Go ahead?")).color(t::p().text_muted));
                 ui.add_space(10.0);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui.button("OK").clicked() {
