@@ -862,7 +862,27 @@ impl App {
         }
     }
 
+    /// Imports `paths` into the shown library. A `*.library` folder among
+    /// them is opened instead, never imported (only the first, if several).
     fn import_into(&mut self, paths: Vec<PathBuf>, folders: Vec<String>) {
+        let (libraries, paths) = logic::split_libraries(paths);
+        self.import_files(paths, folders);
+        if let Some(first) = libraries.first() {
+            self.open(first.clone());
+            let opened = self.position_of(first).is_some();
+            let others = libraries.len() - 1;
+            if opened && others > 0 {
+                let name = first.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+                let s = if others == 1 { "y was" } else { "ies were" };
+                self.flash(format!("Opened {name}; {others} other librar{s} left closed (one opens at a time)"));
+            }
+        }
+    }
+
+    fn import_files(&mut self, paths: Vec<PathBuf>, folders: Vec<String>) {
+        if paths.is_empty() {
+            return;
+        }
         let Some(shared) = self.ws.lib.clone() else { return };
         let opts = self.prefs.import_options(folders);
         let mut files = Vec::new();
