@@ -16,6 +16,7 @@ use falcon_library::Library;
 use falcon_library::model::Item;
 
 use crate::app::App;
+use crate::gesture::Outcome;
 use crate::loader::{Tier, job_for};
 use crate::logic;
 use crate::theme as t;
@@ -288,8 +289,8 @@ impl App {
 
     /// The font viewer in the window, drawn by the main viewer's code on the
     /// window's own state (swapped in for the call, as is the zoom key, which
-    /// belongs to the main viewer). False while egui can't draw the font
-    /// (the thumbnail shows then).
+    /// belongs to the main viewer). False until the font is ready (the
+    /// thumbnail shows meanwhile).
     fn preview_font(&mut self, ui: &mut Ui, lib: &Library, item: &Item, full: Rect, fv: &mut crate::ui::viewer::font::FontView) -> bool {
         let ctx = ui.ctx().clone();
         std::mem::swap(&mut self.ws.font_view, fv);
@@ -462,12 +463,12 @@ impl PreviewWin {
             self.pan += resp.drag_delta();
             self.zoom.get_or_insert(scale);
         }
-        // Right-drag up or down zooms about where it was pressed, as in the
-        // main viewer. The window shows one item, so swipes have nowhere to go.
+        // Right-drag up or down zooms about where it was pressed and a
+        // quick sideways swipe steps through the window's items, as in the
+        // main viewer.
         let now = self.zoom.unwrap_or(fit);
-        if let (Some(new), _) = crate::ui::viewer::image::drive_gesture(ui, resp, &mut self.gesture, now)
-            && let Some(g) = &self.gesture
-        {
+        let (zoomed, swipe) = crate::ui::viewer::image::drive_gesture(ui, resp, &mut self.gesture, now);
+        if let (Some(new), Some(g)) = (zoomed, &self.gesture) {
             let off = g.start - (full.center() + self.pan);
             self.pan += off - off * (new / now);
             self.zoom = Some(new);
@@ -489,6 +490,18 @@ impl PreviewWin {
         }
         if !hide_navigator {
             self.navigator(ui, tex.as_ref(), natural, r, full);
+        }
+        if let Some(g) = &self.gesture {
+            crate::ui::viewer::image::paint_trail(&ui.painter().with_clip_rect(full), g);
+        }
+        // The next frame shows the new item.
+        match swipe {
+            Outcome::Next => self.step(1),
+            Outcome::Prev => self.step(-1),
+            Outcome::None => {}
+        }
+        if swipe != Outcome::None {
+            ui.ctx().request_repaint();
         }
         scale
     }
