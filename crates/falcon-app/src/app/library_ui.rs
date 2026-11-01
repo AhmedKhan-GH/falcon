@@ -1,11 +1,13 @@
 //! Library-level notices and recovery: the alert box for libraries falcon
 //! can't use (made by a newer Eagle, changed elsewhere while open), and
-//! reloading a library from disk after a sync conflict.
+//! reloading a library from disk after a sync conflict, and taking in
+//! changes other apps make to open libraries (`watch.rs`).
 
 use eframe::egui::{self, RichText};
 use falcon_library::{Error, Library};
 
-use super::{App, lock};
+use super::{App, Workspace, lock};
+use crate::watch::Change;
 use crate::theme as t;
 
 /// A message that needs acknowledging, shown in a modal.
@@ -109,6 +111,80 @@ impl App {
                 self.show_alert(alert);
             }
         }
+    }
+}
+
+impl App {
+    /// Applies what the libraries' watchers saw: a newer `metadata.json`
+    /// replaces the folder tree (and the undo history, which no longer
+    /// fits it), items added, edited or deleted elsewhere appear, change
+    /// or go, and a library whose folder vanished closes.
+    pub(super) fn apply_outside_changes(&mut self) {
+        let mut vanished = Vec::new();
+        for ws in std::iter::once(&mut self.ws).chain(self.others.parked_mut()) {
+            let changes = ws.watch.as_ref().map(|w| w.drain()).unwrap_or_default();
+            if changes.is_empty() {
+                continue;
+            }
+            let Some(shared) = ws.lib.clone() else { continue };
+            let mut lib = lock(&shared);
+            for change in changes {
+                match change {
+                    Change::Metadata(m) => {
+                        if lib.take_external_metadata(*m) {
+                            ws.undo.clear();
+                            ws.redo.clear();
+                            ws.folder_edit = None;
+                        }
+                    }
+                    Change::Mtime(index) => {
+                        let got = lib.sync_items(&index);
+                        for id in got.changed.iter().chain(&got.removed) {
+                            ws.loader.forget(id);
+                        }
+                        if ws.edit.as_ref().is_some_and(|e| got.changed.contains(&e.id) || got.removed.contains(&e.id)) {
+                            ws.edit = None;
+                        }
+                    }
+                    Change::Missing => vanished.extend(ws.root.clone()),
+                }
+            }
+        }
+        for root in vanished {
+            if let Some(i) = self.position_of(&root) {
+                self.close_vanished(i);
+            }
+            self.library_gone(root);
+        }
+    }
+
+    /// Closes the workspace at switcher position `i` whose library folder
+    /// is gone, without the flush and backup a normal close does (their
+    /// writes would fail, or recreate files in a folder that moved).
+    fn close_vanished(&mut self, i: usize) {
+        let closed = match self.others.close(&mut self.ws, i) {
+            Some(w) => w,
+            None if i == self.others.slot() => {
+                let mut empty = Workspace::new(&self.ctx, None);
+                (empty.sort, empty.increase, empty.layout) = (self.ws.sort, self.ws.increase, self.ws.layout);
+                std::mem::replace(&mut self.ws, empty)
+            }
+            None => return,
+        };
+        if let Some(shared) = &closed.lib {
+            // Nothing pending may be written to where the library was.
+            lock(shared).discard_pending_writes();
+        }
+        drop(closed);
+        self.serve_active();
+    }
+
+    /// Says that the library at `root` can no longer be found.
+    pub(super) fn library_gone(&mut self, root: std::path::PathBuf) {
+        self.show_alert(Alert::new(
+            "Library missing",
+            format!("{} can't be found at {}. It may have been moved, renamed or deleted.", name(&root), crate::workspaces::tilde(&root)),
+        ));
     }
 }
 

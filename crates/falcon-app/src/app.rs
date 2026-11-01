@@ -598,13 +598,21 @@ struct Workspace {
     export: export_ui::ExportState,
     /// Folders and smart folders picked with ⌘ and ⇧ (`folders_ui`).
     folders: folders_ui::FolderUi,
+    /// Polls the library for changes made by other apps (`watch.rs`).
+    watch: Option<crate::watch::Watcher>,
 }
 
 impl Workspace {
     /// A fresh workspace for `lib` (or the empty window when `None`).
     fn new(ctx: &egui::Context, lib: Option<Shared>) -> Self {
+        let root = lib.as_ref().map(|l| lock(l).root().to_path_buf());
+        let watch = root.clone().map(|r| {
+            let ctx = ctx.clone();
+            crate::watch::Watcher::start(r, move || ctx.request_repaint())
+        });
         Workspace {
-            root: lib.as_ref().map(|l| lock(l).root().to_path_buf()),
+            root,
+            watch,
             lib,
             loader: Loader::new(ctx),
             scope: Scope::All,
@@ -5634,6 +5642,7 @@ impl App {
         }
 
         self.run_backups();
+        self.apply_outside_changes();
         let dropped: Vec<PathBuf> = ctx.input(|i| i.raw.dropped_files.iter().map(|f| f.path().to_path_buf()).collect());
         // Our own items dragged out and back in must not import twice.
         let dragging_out = self.native_drag.load(std::sync::atomic::Ordering::Relaxed);
