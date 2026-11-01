@@ -43,6 +43,8 @@ pub enum Op {
     Duplicate(String),
     /// Pin items to the top of these folders (`true`) or unpin them.
     Pin(Vec<String>, Vec<String>, bool),
+    /// New names for items (the Rename dialog).
+    RenameItems(Vec<(String, String)>),
 }
 
 impl Op {
@@ -68,6 +70,7 @@ impl Op {
             Op::Duplicate(_) => "Duplicate item".into(),
             Op::Pin(ids, _, true) => format!("Pin {} to the top", ids.len()),
             Op::Pin(ids, _, false) => format!("Unpin {}", ids.len()),
+            Op::RenameItems(v) => format!("Rename {} items", v.len()),
         }
     }
 }
@@ -210,6 +213,17 @@ impl App {
                 let n = lib.set_pinned(&ids, &folders, pin, now)?;
                 let s = if n == 1 { "" } else { "s" };
                 self.flash(if pin { format!("Pinned {n} item{s} to the top") } else { format!("Unpinned {n} item{s}") });
+                Ok(())
+            }
+            Op::RenameItems(names) => {
+                let mut done = 0;
+                for (id, name) in names {
+                    let Some(mut item) = lib.item(&id).cloned() else { continue };
+                    item.name = name;
+                    lib.update_item(item)?;
+                    done += 1;
+                }
+                self.flash(format!("Renamed {done} {}", if done == 1 { "item" } else { "items" }));
                 Ok(())
             }
             Op::ResetCustomThumbnail(id) => {

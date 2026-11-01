@@ -642,6 +642,9 @@ pub struct App {
     recent: Vec<PathBuf>,
     /// Folders items were last added to, newest first (`item_cmds.rs`).
     recent_folders: Vec<String>,
+    /// The Rename dialog for several items, and the template it used last.
+    item_rename: Option<item_cmds::ItemRename>,
+    rename_template: String,
     /// What to open once the frame is done (it replaces the library being
     /// drawn).
     switch_to: Option<Switch>,
@@ -711,6 +714,8 @@ impl App {
             open_apps: Default::default(),
             recent: Vec::new(),
             recent_folders: Vec::new(),
+            item_rename: None,
+            rename_template: "Untitled - %N".into(),
             switch_to: None,
             prefs: Default::default(),
             prefs_window: Default::default(),
@@ -1538,7 +1543,7 @@ impl App {
         use crate::shortcuts::Page;
         crate::menu::State {
             library: self.ws.lib.is_some(),
-            modal: self.prefs_window.open || self.ws.dup_dialog.is_some() || self.lock.is_locked(),
+            modal: self.prefs_window.open || self.ws.dup_dialog.is_some() || self.lock.is_locked() || self.item_rename.is_some() || self.ws.ext_dialog.is_some(),
             lockable: self.prefs.app_lock.is_some(),
             tag_clipboard: self.copied_tags.is_some(),
             last_folder: !self.recent_folders.is_empty(),
@@ -1689,10 +1694,7 @@ impl App {
             C::Back if viewer => self.ws.viewer = None,
             C::Back => self.go_back(),
             C::Forward => self.go_forward(),
-            C::Rename => {
-                self.show_inspector = true;
-                self.ws.focus_title = true;
-            }
+            C::Rename => self.rename_items(self.ws.selected.clone()),
             C::Find => self.focus_search = true,
             C::FolderSettings => {
                 if let Scope::Folder(id) = &self.ws.scope {
@@ -3680,6 +3682,16 @@ impl App {
         if ui.add_enabled(self.copied_tags.is_some(), egui::Button::new("Paste Tags").shortcut_text(keys)).clicked() {
             self.paste_tags(targets.to_vec());
         }
+        if self.ws.scope != Scope::Trash {
+            let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::Rename);
+            let label = if targets.len() > 1 { format!("Rename {} Items…", targets.len()) } else { "Rename".into() };
+            if ui.add(egui::Button::new(label).shortcut_text(keys)).clicked() {
+                if targets.len() == 1 {
+                    self.ws.selected = targets.to_vec();
+                }
+                self.rename_items(targets.to_vec());
+            }
+        }
         if targets.len() == 1 {
             let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::Duplicate);
             if ui.add(egui::Button::new("Duplicate").shortcut_text(keys)).clicked() {
@@ -5309,6 +5321,7 @@ impl App {
         self.tag_picker_ui(&ctx, lib);
         self.folder_dialogs(&ctx, lib);
         self.ext_dialog(&ctx);
+        self.item_rename_dialog(&ctx, lib);
         self.collect_duplicates();
         self.duplicate_dialog(&ctx, lib);
         self.export_dialogs(&ctx, lib);

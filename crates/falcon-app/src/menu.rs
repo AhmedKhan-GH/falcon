@@ -113,7 +113,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::Trash => any,
         C::RemoveFromFolder => any && s.scope == ScopeKind::Folder,
         C::OpenDefault | C::OpenLink | C::RevealInFinder | C::RefreshThumbnail | C::Duplicate => any || (s.library && s.viewer),
-        C::Rename => grid && s.selected == 1,
+        C::Rename => grid && s.selected > 0,
         C::Back => s.viewer || (s.library && s.back),
         C::Forward => grid && s.forward,
         C::Find | C::ToggleFilter | C::NewFolder | C::NewSmartFolder => grid,
@@ -763,7 +763,7 @@ mod tests {
     fn selection_rules() {
         assert!(!enabled(Command::Rename, &grid(0)));
         assert!(enabled(Command::Rename, &grid(1)));
-        assert!(!enabled(Command::Rename, &grid(2)));
+        assert!(enabled(Command::Rename, &grid(2)), "several items open the Rename dialog");
         assert!(!enabled(Command::Copy, &grid(0)));
         assert!(enabled(Command::Trash, &grid(2)));
         assert!(enabled(Command::Viewer, &grid(1)));
