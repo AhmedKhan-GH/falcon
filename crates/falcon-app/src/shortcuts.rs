@@ -594,6 +594,11 @@ pub fn display(ctx: &egui::Context, c: &KeyboardShortcut) -> String {
     ctx.format_shortcut(&KeyboardShortcut::new(canon(c.modifiers), c.logical_key))
 }
 
+/// Whether the shortcut list's search shows `s`, whose chord reads `chord`.
+fn listed(query: &str, s: &Spec, chord: &str) -> bool {
+    crate::prefs::matches(query, &[s.group, s.label, s.id, chord])
+}
+
 /// How long a rejected chord's "Used by" note stays, as in Eagle.
 const CONFLICT_SECS: f64 = 1.5;
 
@@ -605,6 +610,8 @@ pub struct Recorder {
     /// A rejected chord: the command being set, the one using it, and when.
     conflict: Option<(Command, Command, f64)>,
     confirm_reset: bool,
+    /// Filters the list by command name, group or chord.
+    query: String,
 }
 
 impl Recorder {
@@ -658,11 +665,24 @@ impl Recorder {
         if self.conflict.is_some() {
             ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));
         }
+        ui.add_space(4.0);
+        if ui
+            .add(egui::TextEdit::singleline(&mut self.query).hint_text(RichText::new(format!("{}  Search shortcuts", crate::icons::MAGNIFYING_GLASS)).color(t::p().text_muted)).desired_width(240.0))
+            .changed()
+        {
+            self.recording = None;
+        }
         let mut group = "";
+        let mut shown = 0;
         for s in TABLE {
+            let chord = keys.binding(s.cmd).map(|c| display(ui.ctx(), &c)).unwrap_or_default();
+            if !listed(&self.query, s, &chord) {
+                continue;
+            }
+            shown += 1;
             if s.group != group {
                 group = s.group;
-                ui.add_space(if s.cmd == TABLE[0].cmd { 4.0 } else { 10.0 });
+                ui.add_space(if shown == 1 { 4.0 } else { 10.0 });
                 ui.label(RichText::new(group).strong().size(13.0));
             }
             let (row, _) = ui.allocate_exact_size(vec2(ui.available_width(), 30.0), Sense::hover());
@@ -708,9 +728,16 @@ impl Recorder {
                 }
             }
         }
-        ui.add_space(10.0);
-        ui.label(RichText::new("Fixed").strong().size(13.0));
-        for (k, what) in FIXED {
+        let fixed: Vec<_> = FIXED.iter().filter(|(k, what)| crate::prefs::matches(&self.query, &["Fixed", k, what])).collect();
+        if shown == 0 && fixed.is_empty() {
+            ui.add_space(12.0);
+            ui.label(RichText::new("No shortcuts match").color(t::p().text_muted));
+        }
+        if !fixed.is_empty() {
+            ui.add_space(10.0);
+            ui.label(RichText::new("Fixed").strong().size(13.0));
+        }
+        for (k, what) in fixed {
             let (row, _) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::hover());
             ui.painter().text(row.left_center() + vec2(12.0, 0.0), Align2::LEFT_CENTER, *what, font(13.0), t::p().text_muted);
             ui.painter().text(row.right_center() - vec2(75.0, 0.0), Align2::CENTER_CENTER, *k, font(12.5), t::p().text_muted);
@@ -753,6 +780,16 @@ mod tests {
         assert_eq!(ids.len(), TABLE.len(), "ids are unique");
         let cmds: HashSet<_> = TABLE.iter().map(|s| s.cmd).collect();
         assert_eq!(cmds.len(), TABLE.len(), "each command appears once");
+    }
+
+    #[test]
+    fn shortcut_search() {
+        let hits = |q: &str| TABLE.iter().filter(|s| listed(q, s, &s.default.map(|c| format(&c)).unwrap_or_default())).map(|s| s.cmd).collect::<Vec<_>>();
+        assert_eq!(hits(""), TABLE.iter().map(|s| s.cmd).collect::<Vec<_>>());
+        assert!(hits("zoom in").contains(&Command::ZoomIn));
+        assert!(hits("ZOOM").contains(&Command::ZoomOut));
+        assert!(hits("player").iter().all(|c| matches!(c, Command::Player(_))), "a group's name finds its commands");
+        assert!(hits("nothing like this").is_empty());
     }
 
     #[test]
