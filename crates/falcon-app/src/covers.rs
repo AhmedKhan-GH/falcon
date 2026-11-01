@@ -58,10 +58,13 @@ pub fn cover<'a>(items: &'a [Item], folder: &Folder, order: OrderBy, increase: b
 const CARD_W: f32 = 150.0;
 const THUMB_H: f32 = 100.0;
 const STRIP_H: f32 = THUMB_H + 56.0;
+const HEADING_H: f32 = 24.0;
 
 impl App {
     /// Cards for the open folder's subfolders, above its items, as in
-    /// Eagle's folder view. Takes no space outside a folder with children.
+    /// Eagle's folder view, under a heading with the Show Subfolder Content
+    /// switch. With that on, every folder under it gets a card. Takes no
+    /// space outside a folder with children.
     pub(super) fn subfolder_strip(&mut self, ui: &mut Ui, lib: &Library) {
         let Scope::Folder(id) = &self.ws.scope else { return };
         let Some(folder) = logic::find_folder(&lib.metadata.folders, id) else { return };
@@ -71,11 +74,20 @@ impl App {
         let locked = locked_folders(&lib.metadata.folders);
         let mut open = None;
         let width = ui.available_width();
+        ui.allocate_ui(vec2(width, HEADING_H), |ui| {
+            ui.horizontal_centered(|ui| {
+                ui.add_space(17.0);
+                ui.label(egui::RichText::new(format!("Subfolders ({})", folder.children.len())).color(t::p().text_muted).size(12.5));
+                ui.add_space(12.0);
+                ui.checkbox(&mut self.display.subfolders, egui::RichText::new("Show subfolder contents").size(12.5));
+            });
+        });
+        let cards = logic::subfolder_cards(folder, self.display.subfolders);
         ui.allocate_ui(vec2(width, STRIP_H), |ui| {
             egui::ScrollArea::horizontal().id_salt(("subfolders", &folder.id)).auto_shrink([false, true]).show(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.add_space(17.0);
-                    for child in &folder.children {
+                    for child in cards {
                         let (rect, resp) = ui.allocate_exact_size(vec2(CARD_W, STRIP_H - 8.0), Sense::click());
                         let thumb = Rect::from_min_size(rect.min + vec2(0.0, 6.0), vec2(CARD_W, THUMB_H));
                         let p = ui.painter();

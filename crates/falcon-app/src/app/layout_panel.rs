@@ -94,6 +94,7 @@ impl App {
         switch_row(ui, "Show Extension", &mut d.show_ext);
         switch_row(ui, "Show Extension Label", &mut d.ext_badge);
         switch_row(ui, "Show Comment Count", &mut d.comment_badge);
+        switch_row(ui, "Show Subfolder Content", &mut d.subfolders);
         ui.separator();
         switch_row(ui, "Show Sidebar", &mut self.show_sidebar);
         switch_row(ui, "Show Inspector", &mut self.show_inspector);

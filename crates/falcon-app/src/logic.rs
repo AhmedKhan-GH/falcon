@@ -23,7 +23,7 @@ pub enum Scope {
     Duplicates,
     Trash,
     /// Items placed directly in a folder (Eagle hides subfolder content by
-    /// default).
+    /// default; with it shown the grid passes the members as `only`).
     Folder(String),
     Tag(String),
     /// A smart folder's matches.
@@ -1917,11 +1917,13 @@ pub struct Display {
     pub comment_badge: bool,
     /// Grid layout: the image fills its square (cropped) instead of fitting.
     pub fill: bool,
+    /// A folder also shows the items of all its subfolders.
+    pub subfolders: bool,
 }
 
 impl Default for Display {
     fn default() -> Self {
-        Display { show_name: true, show_info: true, info: InfoType::Dimensions, show_ext: true, ext_badge: true, comment_badge: true, fill: false }
+        Display { show_name: true, show_info: true, info: InfoType::Dimensions, show_ext: true, ext_badge: true, comment_badge: true, fill: false, subfolders: false }
     }
 }
 
@@ -1989,6 +1991,39 @@ pub fn layout_key(scope: &Scope, root: &str) -> String {
 /// `fallback` (falcon's single layout from before), else Justified.
 pub fn layout_for(saved: &HashMap<String, Layout>, scope: &Scope, root: &str, fallback: Option<Layout>) -> Layout {
     saved.get(&layout_key(scope, root)).or_else(|| saved.get(root)).copied().or(fallback).unwrap_or(Layout::Justified)
+}
+
+/// `id` and the ids of every folder under it; empty when there is no
+/// such folder.
+pub fn folder_tree(roots: &[Folder], id: &str) -> HashSet<String> {
+    let mut out = HashSet::new();
+    if let Some(f) = find_folder(roots, id) {
+        f.walk(&mut |c| {
+            out.insert(c.id.clone());
+        });
+    }
+    out
+}
+
+/// Ids of the live items a folder view shows: those placed in the folder,
+/// and with `subfolders` (Eagle's Show Subfolder Content) also those in
+/// any folder under it.
+pub fn folder_members(items: &[Item], roots: &[Folder], id: &str, subfolders: bool) -> HashSet<String> {
+    let tree = if subfolders { folder_tree(roots, id) } else { HashSet::from([id.to_string()]) };
+    items.iter().filter(|i| !i.is_deleted && i.folders.iter().any(|f| tree.contains(f))).map(|i| i.id.clone()).collect()
+}
+
+/// The subfolders a folder view shows as cards: its children, or with
+/// `subfolders` every folder under it, depth first, as Eagle lists them.
+pub fn subfolder_cards(folder: &Folder, subfolders: bool) -> Vec<&Folder> {
+    if !subfolders {
+        return folder.children.iter().collect();
+    }
+    let mut out = Vec::new();
+    for c in &folder.children {
+        c.walk(&mut |f| out.push(f));
+    }
+    out
 }
 
 #[cfg(test)]
@@ -2066,5 +2101,36 @@ mod display_tests {
         saved.insert(layout_key(&folder, "/lib"), Layout::Waterfall);
         assert_eq!(layout_for(&saved, &folder, "/lib", None), Layout::Waterfall);
         assert_eq!(layout_for(&saved, &Scope::All, "/other", None), Layout::Justified);
+    }
+
+    #[test]
+    fn subfolder_content_widens_a_folder() {
+        let mut top = Folder::new("T", "Top", 0);
+        let mut mid = Folder::new("M", "Mid", 0);
+        mid.children.push(Folder::new("L", "Leaf", 0));
+        top.children.push(mid);
+        top.children.push(Folder::new("S", "Side", 0));
+        let roots = vec![top, Folder::new("O", "Other", 0)];
+        let mk = |id: &str, folders: &[&str], deleted: bool| {
+            let mut it = item();
+            it.id = id.into();
+            it.folders = folders.iter().map(|s| s.to_string()).collect();
+            it.is_deleted = deleted;
+            it
+        };
+        let items = vec![mk("a", &["T"], false), mk("b", &["M"], false), mk("c", &["L", "T"], false), mk("d", &["O"], false), mk("e", &["L"], true)];
+        let sorted = |set: HashSet<String>| {
+            let mut v: Vec<String> = set.into_iter().collect();
+            v.sort();
+            v
+        };
+        assert_eq!(sorted(folder_members(&items, &roots, "T", false)), ["a", "c"]);
+        assert_eq!(sorted(folder_members(&items, &roots, "T", true)), ["a", "b", "c"], "trashed items stay out");
+        assert_eq!(sorted(folder_members(&items, &roots, "M", true)), ["b", "c"]);
+        assert_eq!(sorted(folder_tree(&roots, "M")), ["L", "M"]);
+        assert!(folder_tree(&roots, "nope").is_empty());
+        let names = |v: Vec<&Folder>| v.into_iter().map(|f| f.id.as_str()).collect::<Vec<_>>().join(",");
+        assert_eq!(names(subfolder_cards(&roots[0], false)), "M,S");
+        assert_eq!(names(subfolder_cards(&roots[0], true)), "M,L,S");
     }
 }

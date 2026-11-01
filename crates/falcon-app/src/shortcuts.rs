@@ -101,6 +101,8 @@ pub enum Command {
     ToggleName,
     ToggleInfo,
     ToggleComments,
+    /// Show Subfolder Content (Eagle's ⌥⌘7).
+    ToggleSubfolders,
     // Menu bar entries with no row in `TABLE` (no rebindable key).
     Undo,
     Redo,
@@ -333,6 +335,7 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::ToggleName, id: "view.toggle.listname", group: "View", label: "Show or hide names", default: k(CMD_ALT, Key::Num4), aliases: &[] },
     Spec { cmd: Command::ToggleInfo, id: "view.toggle.listmetas", group: "View", label: "Show or hide item info", default: k(CMD_ALT, Key::Num5), aliases: &[] },
     Spec { cmd: Command::ToggleComments, id: "view.toggle.listannotation", group: "View", label: "Show or hide comment counts", default: k(CMD_ALT, Key::Num6), aliases: &[] },
+    Spec { cmd: Command::ToggleSubfolders, id: "view.toggle.subfolder", group: "View", label: "Show or hide subfolder content", default: k(CMD_ALT, Key::Num7), aliases: &[] },
 ];
 
 /// Keys that cannot be rebound, listed in the Shortcuts section.
@@ -1212,6 +1215,7 @@ mod tests {
         assert_eq!(keys.resolve(Key::Num4, CMD_ALT), Some(Command::ToggleName));
         assert_eq!(keys.resolve(Key::Num5, CMD_ALT), Some(Command::ToggleInfo));
         assert_eq!(keys.resolve(Key::Num6, CMD_ALT), Some(Command::ToggleComments));
+        assert_eq!(keys.resolve(Key::Num7, CMD_ALT), Some(Command::ToggleSubfolders));
         // ⌥4 alone is still the List layout.
         assert_eq!(keys.resolve(Key::Num4, ALT), Some(Command::LayoutList));
     }

@@ -58,6 +58,8 @@ pub struct State {
     pub show_name: bool,
     pub show_info: bool,
     pub show_comments: bool,
+    /// Show Subfolder Content is on.
+    pub subfolders: bool,
     pub fullscreen: bool,
     /// Open libraries.
     pub libraries: usize,
@@ -132,7 +134,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::RotateLeft => s.library && s.rotatable,
         C::Crop => s.library && s.croppable,
         C::Documentation => s.docs,
-        C::ToggleName | C::ToggleInfo | C::ToggleComments => s.library,
+        C::ToggleName | C::ToggleInfo | C::ToggleComments | C::ToggleSubfolders => s.library,
         C::Player(_) => false,
     }
 }
@@ -151,6 +153,7 @@ pub enum Check {
     Name,
     Info,
     Comments,
+    Subfolders,
 }
 
 impl Check {
@@ -167,6 +170,7 @@ impl Check {
             Check::Name => s.show_name,
             Check::Info => s.show_info,
             Check::Comments => s.show_comments,
+            Check::Subfolders => s.subfolders,
         }
     }
 }
@@ -311,6 +315,7 @@ pub static MENUS: &[(&str, &[Entry])] = &[
             checked("Show Name", Command::ToggleName, Check::Name),
             checked("Show Item Info", Command::ToggleInfo, Check::Info),
             checked("Show Comment Count", Command::ToggleComments, Check::Comments),
+            checked("Show Subfolder Content", Command::ToggleSubfolders, Check::Subfolders),
             SEP,
             item("Scroll to Top", Command::Scroll(Scroll::Top)),
             item("Scroll to Bottom", Command::Scroll(Scroll::Bottom)),

@@ -846,8 +846,16 @@ impl App {
         let own = self.own_sort(lib).and_then(|o| o.1);
         let (key, inc) = organize::base_key(own, (self.ws.sort, self.ws.increase));
         // Picked folders show their items together: everything the caller's
-        // `only` set lets through.
-        let scope = if self.ws.folders.combined() { Scope::All } else { self.ws.scope.clone() };
+        // `only` set lets through. With Show Subfolder Content one open
+        // folder lists its members, those of its subfolders included.
+        let members = match &self.ws.scope {
+            Scope::Folder(id) if self.display.subfolders && !self.ws.folders.combined() => {
+                Some(logic::folder_members(lib.items(), &lib.metadata.folders, id, true))
+            }
+            _ => None,
+        };
+        let scope = if self.ws.folders.combined() || members.is_some() { Scope::All } else { self.ws.scope.clone() };
+        let only = members.as_ref().or(only);
         let mut order = logic::visible(lib.items(), &lib.metadata.folders, &scope, &self.ws.query, &self.ws.filter, key, inc, only);
         // Random and duration re-sort only a plain listing (no search or
         // colour ranking to keep).
@@ -871,7 +879,8 @@ impl App {
     /// (see [`organize::manual_sortable`]).
     pub(super) fn manual_folder(&self, lib: &Library) -> Option<String> {
         let Scope::Folder(id) = &self.ws.scope else { return None };
-        if self.ws.folders.combined() {
+        // Items from subfolders have no place in this folder's order.
+        if self.ws.folders.combined() || self.display.subfolders {
             return None;
         }
         let own = self.own_sort(lib).and_then(|o| o.1);

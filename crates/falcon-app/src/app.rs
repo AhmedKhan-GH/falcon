@@ -1364,6 +1364,7 @@ impl App {
             show_name: self.display.show_name,
             show_info: self.display.show_info,
             show_comments: self.display.comment_badge,
+            subfolders: self.display.subfolders,
             libraries: self.others.len(),
         }
     }
@@ -1623,6 +1624,7 @@ impl App {
             C::ToggleName => self.display.show_name = !self.display.show_name,
             C::ToggleInfo => self.display.show_info = !self.display.show_info,
             C::ToggleComments => self.display.comment_badge = !self.display.comment_badge,
+            C::ToggleSubfolders => self.display.subfolders = !self.display.subfolders,
         }
     }
 
