@@ -23,6 +23,7 @@ use crate::theme::{self as t, font, mono};
 
 mod organize_ui;
 mod dupes_ui;
+mod export_ui;
 mod duplicates_view;
 mod filters_ui;
 mod media_view;
@@ -356,6 +357,8 @@ struct Workspace {
     tools: image_edit::Tools,
     /// When `metadata.json` is next backed up (see `backups.rs`).
     backup: crate::backups::Schedule,
+    /// Export requests, prompts and the background copy (`export_ui`).
+    export: export_ui::ExportState,
 }
 
 impl Workspace {
@@ -414,6 +417,7 @@ impl Workspace {
             duplicates: Default::default(),
             tools: Default::default(),
             backup: crate::backups::Schedule::new(Instant::now()),
+            export: Default::default(),
         }
     }
 
@@ -993,6 +997,7 @@ impl App {
             }
         }
         // The panel toggles are global, as Eagle's View menu items are;
+        self.export_keys(&on);
         // Tab is Eagle's fixed key for both panels.
         if on(C::ToggleSidebar) {
             self.show_sidebar = !self.show_sidebar;
@@ -2761,6 +2766,7 @@ impl App {
             });
         });
         self.edit_menu(ui, item, targets, lib);
+        self.item_export_menu(ui, targets);
         ui.separator();
         if self.ws.scope == Scope::Trash {
             if ui.button("Restore").clicked() {
@@ -3969,7 +3975,7 @@ impl eframe::App for App {
                 let mut grid_top = bar.bottom();
                 let pb = Rect::from_min_size(Pos2::new(full.left(), grid_top), vec2(full.width(), 26.0));
                 let mut pui = ui.new_child(egui::UiBuilder::new().max_rect(pb));
-                if self.progress_bar(&mut pui, pb) {
+                if self.progress_bar(&mut pui, pb) || self.export_bar(&mut pui, pb) {
                     grid_top = pb.bottom();
                 }
                 if self.ws.show_filter {
@@ -4058,6 +4064,7 @@ impl eframe::App for App {
         self.organize_dialogs(&ctx, lib);
         self.collect_duplicates();
         self.duplicate_dialog(&ctx, lib);
+        self.export_dialogs(&ctx, lib);
         if let Some(c) = self.ws.confirm.clone() {
             let (title, detail, label) = match &c {
                 Confirm::DeleteFolder(id) => {

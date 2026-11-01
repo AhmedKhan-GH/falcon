@@ -6,6 +6,7 @@ pub mod duplicates;
 pub mod edit;
 pub mod error;
 pub mod exif;
+pub mod export;
 pub mod fontmeta;
 pub mod fontpreview;
 pub mod folder_import;

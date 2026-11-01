@@ -51,6 +51,8 @@ pub enum Command {
     FolderBottom,
     /// Eagle's Set Current Folder: the open folder's name and auto-tags.
     FolderSettings,
+    /// File ▸ Export (`App::export_keys`).
+    ExportComputer,
     /// A key of the video player (`App::video_keys` reads these).
     Player(PlayerKey),
 }
@@ -161,6 +163,8 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::Player(PlayerKey::Speed(false)), id: "player.speed.down", group: PLAYER, label: "Slower", default: k(SHIFT, Key::Comma), aliases: &[] },
     // falcon's own id: Eagle handles N outside its keybind table.
     Spec { cmd: Command::Player(PlayerKey::AddComment), id: "player.comment.add", group: PLAYER, label: "Add a comment at the current time", default: k(NONE, Key::N), aliases: &[] },
+    // Export and copy-out (`App::export_keys`).
+    Spec { cmd: Command::ExportComputer, id: "file.export.item.computer", group: "Export", label: "Export to Computer", default: k(CMD, Key::E), aliases: &[] },
 ];
 
 /// Keys that cannot be rebound, listed in the Shortcuts section.

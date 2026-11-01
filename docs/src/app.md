@@ -186,6 +186,7 @@ These are the defaults. All but the arrows, Esc, Tab, Z and the viewer's C, ⇧R
 | ⌘= and ⌘− | Zoom the grid's cards, or zoom the image in the viewer |
 | ⌘⇧N | New folder |
 | ⌘C and ⌘V | Copy the selected files, or paste files or images |
+| ⌘E | Export the selected items' originals to a folder (see Export and copy-out) |
 | ⌘Z and ⇧⌘Z | Undo and redo library edits, up to 100 steps. Each frame's edits are one step, named after what was done ("Undid: Move 3 to Trash"). Deleting permanently or emptying the Trash can't be undone and clears the history. Text fields keep their own undo while focused |
 | ⌘⇧F | Show or hide the filter bar |
 | ⌘⌥1 and ⌘⌥2 | Show or hide the sidebar and the inspector, in the grid and in the viewer |
@@ -500,6 +501,16 @@ Eagle shows covers only on the subfolder cards at the top of a folder's content 
 - Eagle writes no cover file. A crop clears the cached covers of the item's folders so they redraw.
 
 falcon draws the subfolder cards in the Waterfall, Justified and Grid layouts with the same rule (`covers.rs`). Locked folders show a folder icon instead of a cover.
+
+## Export and copy-out
+
+Export to Computer (⌘E, or Export ▸ Export to Computer… in the item menu) copies the selected items' originals into a folder chosen in a dialog. Each file keeps its name, `<name>.<ext>`, and its modification time. Names that clash within the export, ignoring case, are numbered as Eagle numbers them: two `pic.png` become `pic-1.png` and `pic-2.png`, padded to the widest number (`pic-01.png` … `pic-10.png`).
+
+When files of the same names are already in the folder, falcon asks first, saying how many. **Replace** overwrites them. **Keep Both** leaves them and numbers the new copies, with the file already there counting as the first (`pic.png` exists, so the copy is `pic-2.png`). Eagle's prompt offers only Overwrite or Cancel, and its item export then numbers the copies anyway; its folder export overwrites.
+
+The copy runs on a background thread with a progress bar under the toolbar ("Exporting 3 of 10"). Each file is written under a temporary name beside its destination and renamed into place, so a failed copy never leaves half a file. When it ends, falcon says "Exported N items" (with any failures) and, as Eagle does, shows the files in Finder, or the folder when there are more than 500.
+
+Where files go and how they are named is worked out in `falcon_library::export` (a `Plan`, with tests); `app/export_ui.rs` asks, runs and reports. Exports write only inside the folder picked in the dialog.
 
 ## Running it
 
