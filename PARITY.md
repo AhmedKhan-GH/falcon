@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 121 | 47 | 103 | 9 |
-| Viewers and file formats | 107 | 26 | 57 | 7 |
-| Search, filters and organising | 139 | 29 | 54 | 3 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 144 | 40 | 87 | 9 |
+| Viewers and file formats | 108 | 26 | 56 | 7 |
+| Search, filters and organising | 140 | 29 | 53 | 3 |
 | Import, export, library, preferences and integrations | 111 | 19 | 82 | 26 |
-| **Total** | 478 | 121 | 296 | 45 |
+| **Total** | 503 | 114 | 278 | 45 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -33,7 +33,7 @@ These are bugs, not missing features. The first four can lose data or edits.
 5. ~~Folder import flattens structure; no duplicate check on import; no import error list.~~ Fixed.
 6. ~~No export of items or folders, and no CSV export.~~ Fixed.
 7. Shortcuts still missing: T, F, ⌘J Go to Folder, ⇧+arrows, ⌘D, ⌘T and the tag clipboard, ⇧D, ⇧T, F5, ⌘O and more (see §3).
-8. No marquee selection, no grid display options. ~~No multi-select of folders.~~ Fixed.
+8. ~~No marquee selection, no multi-select of folders, no grid display options.~~ Fixed.
 9. No tag picker or suggestions.
 10. ~~No GIF player controls, no animated WebP, no GIF hover previews.~~ Fixed; still no animated AVIF (no decoder) and no hover playback for video or audio.
 11. No interactive 3D viewer, text editor or full font viewer.
@@ -99,8 +99,8 @@ Overall finding: falcon now has a native menu bar (`crates/falcon-app/src/menu.r
 | View: Open With Default App (⇧↩), Open with Other App, Reveal in Finder (⌘↩) | Done | open_ui.rs:33-46, shortcuts.rs:104-105 | local |
 | View: Open Link in Browser (⇧⌘O) | Missing | No key or menu item opens the item's source URL | local |
 | View: show or hide Sidebar (⌥⌘1), Inspector (⌥⌘2), both (⌥⌘3) | Done | shortcuts.rs `view.toggle.sidebar`, `view.toggle.inspector`, `view.toggle.all`; Tab also toggles both; all work in the viewer too | local |
-| View: Show Name (⌥⌘4), Show Item Info (⌥⌘5), Show Comment count (⌥⌘6) | Missing | Captions are fixed (app.rs:2620-2641) | local |
-| View: Show Subfolder Content (⌥⌘7) | Missing | A folder shows only its own items (logic.rs:125) | local |
+| View: Show Name (⌥⌘4), Show Item Info (⌥⌘5), Show Comment count (⌥⌘6) | Done | shortcuts.rs `view.toggle.listname/listmetas/listannotation`, View menu checkmarks, `logic::Display` | local |
+| View: Show Subfolder Content (⌥⌘7) | Done | `view.toggle.subfolder`, `logic::folder_members`, `grid_order` in organize_ui.rs; the layout panel and the strip heading have the switch too | local |
 | View: Enter / Leave Presentation Mode (F5) | Missing | No slideshow | local |
 | Actions menu: user-defined Actions, each with its own shortcut | Missing | The toolbar ⚡ button is drawn but disabled (app.rs:2038) | local |
 | Window: Toggle Full Screen, Minimize, Close Window (⌘W) | Done | ⌃⌘F, ⌘M and ⌘W through eframe viewport commands; ⌘W closes the viewer first, then the window (which quits falcon, like the red button) | local |
@@ -175,7 +175,7 @@ Cross-references (not counted): File ▸ Import Folders / Links / Eagle Package 
 | **Sidebar / panel edges**: Toggle Sidebar / Inspector / both | Missing | Buttons only (app.rs:1585, 3644) | local |
 | **Folders heading**: Sort folders by title | Done | app.rs:1713-1715 | local |
 | **Empty grid** right-click opens the layout and sort panel | Missing | The background only clears the selection (app.rs:2490-2493) | local |
-| **List-view column header** right-click picks columns (tags, dimensions, rating, extension, file size, date added) | Missing | List columns are fixed (app.rs:2645-2678) | local |
+| **List-view column header** right-click picks columns (tags, dimensions, rating, extension, file size, date added) | Done | `layout_panel::list_header` | local |
 | **Toolbar title** right-click lists the ancestor folders to jump to | Missing |  | local |
 | **Tag** (All Tags page): Rename / Star / Move to Group / Remove from Group / Remove | Done | app.rs:2849-2861, organize_ui.rs:919-940 | local |
 | Tag: Filter items with the tag(s), Merge N tags (several selected), Add to several groups | Partial | Clicking a tag opens its items (app.rs:2845) and renaming onto an existing tag merges. No multi-select merge and no menu entry | local |
@@ -202,7 +202,7 @@ Eagle defaults come from prefs `shortcuts.keybinds` (rebindable) and from the ha
 | ⌘E export, ⇧⌘E export .eaglepack, ⇧E export as format | Done | shortcuts.rs Export group | local |
 | ⌘1–⌘7 sidebar views | Done | shortcuts.rs `view.all`, `view.unfiled`, … | local |
 | ⌥1–⌥4 layouts | Done | shortcuts.rs `view.layout.*`, in Eagle's order | local |
-| ⌥⌘1–⌥⌘8 panel and caption toggles plus Navigator | Partial | ⌥⌘1, ⌥⌘2 and ⌥⌘3; no caption toggles or Navigator | local |
+| ⌥⌘1–⌥⌘8 panel and caption toggles plus Navigator | Partial | ⌥⌘1–⌥⌘7; no Navigator | local |
 | ⇧T always on top, F5 slideshow, ⌥⌘G grayscale | Missing |  | local |
 | ⌘O open in new window, ⇧⌘O open link | Missing |  | local |
 | ⇧↩ default app, ⌘↩ reveal | Done | shortcuts.rs:104-105 | local |
@@ -219,7 +219,7 @@ Eagle defaults come from prefs `shortcuts.keybinds` (rebindable) and from the ha
 | Esc closes panel, slideshow or viewer, otherwise clears the selection | Done | app.rs:1076-1081 | local |
 | Arrow keys move the selection; ←→ step in the viewer | Done | app.rs:1105-1135 | local |
 | WASD as arrow keys | Missing |  | local |
-| ⇧ + arrows extend the selection | Missing |  | local |
+| ⇧ + arrows extend the selection | Done | `logic::extend_selection`: ⇧←/→ grow or shrink from the anchor; ⇧↑/↓ only in List layout, as Eagle | local |
 | Arrow keys move through the sidebar tree when it has focus (focus zones: content / sidebar / tags) | Missing |  | local |
 | ⌫ goes back (or leaves the viewer); ⌥← / ⌥→ and ⌘← / ⌘→ move through history | Done | shortcuts.rs `go.back` (⌫, ⌘←, ⌥←) and `go.forward` (⌘→, ⌥→); in the viewer ⌫ leaves it (app.rs `keyboard`) | local |
 | ⌥↑ opens the parent folder | Done | Of the open folder or smart folder | local |
@@ -248,7 +248,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Right-click the title for an ancestor jump menu | Missing |  | local |
 | Thumbnail size slider with − and + | Done | app.rs:2085-2109 | local |
 | Refresh button in the Random view | Missing |  | local |
-| Layout and sort panel button | Partial | Popup with layout, sort and direction (app.rs:2111-2148). See §6 for the missing options | local |
+| Layout and sort panel button | Done | `app/layout_panel.rs` in Eagle's order (layout, Fit/Fill, sort, Show Name/Info/Extension/Label/Comments/Subfolders, sidebar and inspector, Refresh); no Speed/Quality | local |
 | Filter button with an active state | Done | app.rs:2034, 2043-2049 | local |
 | Search field with a scope menu (Tags / URL / Comment / Note) and a search-by-image camera | Partial | Field works (app.rs:2061). The ▾ and 📷 are decoration only, the camera is disabled. Cross-ref search | local |
 | Actions button | Missing | Drawn disabled (app.rs:2038) | local |
@@ -289,24 +289,24 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | Four layouts: Waterfall, Justified, Grid, List | Done | logic.rs:224-262 | local |
-| Default layout is Justified | Partial | Falcon defaults to Waterfall (logic.rs:226) | local |
-| Layout remembered per folder | Partial | Per open library only (app.rs:352, Saved.layout) | local |
-| Grid layout Fit or Fill option | Missing | Grid always fits (app.rs:2585-2595) | local |
+| Default layout is Justified | Done | `logic::Layout` default, `logic::layout_for` | local |
+| Layout remembered per folder | Done | `logic::layout_key`: per folder or smart folder, else per library (`Saved.layouts`), as Eagle's `eagle.list.layout.<id>` | local |
+| Grid layout Fit or Fill option | Done | `Display.fill`, `draw_image_cover`; hover playback still works in Fill | local |
 | Thumbnail Speed vs Quality (load originals for large tiles) | Missing |  | local |
 | Sort-by choices in the layout panel, global and per folder, including Manual, Duration and Random | Partial | Global sort lacks Duration, Random and Manual (search.rs:1026). Per-folder sort exists (organize_ui.rs:563-660). Cross-ref search | local |
-| Toggle Show Name under thumbnails | Missing | Always on for Waterfall and Grid | local |
-| Toggle item info, choosing Dimensions / File Size / Tags / Rating / Date Modified / Date Created | Partial | Always shows dimensions (app.rs:2633-2641). No toggle and no choice | local |
-| Toggle the file extension in the name | Missing | Name always includes the extension (app.rs:2623) | local |
-| Toggle the extension label badge | Partial | Badge always on (app.rs:2614) | local |
-| Toggle the comment-count badge | Partial | Always on (comments.rs:180) | local |
-| Show subfolder contents in a folder | Missing |  | local |
-| Show sidebar and Show inspector switches in the layout panel | Missing | They are in Preferences ▸ Window instead (prefs.rs:322-325) | local |
-| Refresh button in the layout panel | Missing |  | local |
-| List layout with configurable columns and click-to-sort headers | Partial | Fixed columns: name, type, size, dimensions, date (app.rs:2645-2678). No header row and no sorting by column | local |
+| Toggle Show Name under thumbnails | Done | `Display.name`, default on | local |
+| Toggle item info, choosing Dimensions / File Size / Tags / Rating / Date Modified / Date Created | Done | `logic::caption_info` with Eagle's six types and fallbacks (duration for media, size without preview, dash for no tags, stars, import time for dates) | local |
+| Toggle the file extension in the name | Done | `logic::caption_name` | local |
+| Toggle the extension label badge | Done | `Display.ext_badge` | local |
+| Toggle the comment-count badge | Done | `Display.comments` | local |
+| Show subfolder contents in a folder | Done | `logic::folder_members`; search and filters widen too; the strip lists every descendant and manual drag is off | local |
+| Show sidebar and Show inspector switches in the layout panel | Done | `layout_panel.rs` | local |
+| Refresh button in the layout panel | Done | Flushes, re-reads the library from disk, forgets textures and reshuffles | local |
+| List layout with configurable columns and click-to-sort headers | Done | `layout_panel::list_header`, `logic::ListColumns`, `header_sort`: Eagle's seven columns, click sorts (writes the folder's sort inside a folder), right-click picks columns | local |
 | Subfolder cards above a folder's items, with covers | Done | covers.rs:65-140 | local |
-| Collapse the subfolder strip | Missing |  | local |
-| Rename a subfolder card by double-clicking its name | Missing | Double-click opens the folder | local |
-| Thumbnail background (checkerboard for transparency, etc.) | Missing |  | local |
+| Collapse the subfolder strip | Done | Click the strip heading (`Display.strip_collapsed`) | local |
+| Rename a subfolder card by double-clicking its name | Done | covers.rs `strip_rename`; a single click on the card body still opens the folder (Eagle selects) | local |
+| Thumbnail background (checkerboard for transparency, etc.) | Done | Card menu Thumbnail Background ▸ None/Black/Gray/White/Checkerboard, item key `background` with Eagle's values (`logic::ThumbBg`, `Action::Background`); drawn in grid, list and viewer | local |
 | Hover zoom button and hold-Z preview | Done | app.rs:2680-2743, hover.rs | local |
 | Video, GIF and audio play on hover in the grid | Partial | GIF and animated WebP cards play in place while hovered (`anim.rs` `Cards`, ⌥ keeps them still); video and audio don't | local |
 | Pinned items stay at the top of a folder | Missing |  | local |
@@ -320,11 +320,11 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | Click selects one, ⌘-click toggles, ⇧-click selects a range | Done | app.rs:829-850 | local |
-| Drag a rectangle over empty space to select (rubber band) | Missing | No marquee | local |
+| Drag a rectangle over empty space to select (rubber band) | Done | `logic::rect_hits`, `marquee_selection`, `edge_scroll` in all four layouts; ⌘ XORs; ⇧ adds (Eagle nearly replaces) | local |
 | ⌘A / Esc / click on empty space | Done | app.rs:1082, 1076, 2575 | local |
-| ⇧ + arrows extend the selection | Missing |  | local |
+| ⇧ + arrows extend the selection | Done | `logic::extend_selection`: ⇧←/→ grow or shrink from the anchor; ⇧↑/↓ only in List layout, as Eagle | local |
 | Right-click an unselected item selects it first | Done | app.rs:2504-2506 | local |
-| After moving items out of a folder or to the Trash, the next item is selected | Missing | The selection is just pruned (app.rs:3622-3625) | local |
+| After moving items out of a folder or to the Trash, the next item is selected | Done | `App::select_after_removal` for trash, restore, delete, Remove from Folder and drops | local |
 | Auto-select items after import | Done | `Prefs::auto_select` (on by default): up to 1,000 new items shown in the view | local |
 | Selected item is scrolled into view during keyboard moves | Done | app.rs:1134, 2468-2479 | local |
 | Several items selected: the inspector shows a summary with batch tag, rating and trash | Done | app.rs:2938-3018 | local |
@@ -431,16 +431,16 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 2. Shortcuts missing: T (tags), F (folders), ⌘J Go to Folder, ⇧-arrows, ⌘T and copy/paste tags, ⇧D last folder, ⌘D duplicate, ⇧T always on top, F5, ⌘O new window.
 3. ~~Layout, history and rename keys differ from Eagle.~~ Fixed; what remains is Home/End/PgUp/PgDn, ⌘1–7 and the other missing keys in §3.
 4. ~~Dragging items between folders adds them instead of moving them.~~ Fixed; the drop toast still has no link to the folder.
-5. No rubber-band (marquee) selection.
+5. ~~No rubber-band (marquee) selection.~~ Fixed.
 6. Item context menu gaps: Rename / batch rename, Copy ▸ (link, folder path, thumbnail, base64, name), Copy / Paste Tags, Duplicate, Remove from this Folder, Open File Location, Pin to Top, New Folder with Selection, Add to Last Used Folder, Share, thumbnail background, custom thumbnail from clipboard, Replace with File, Combine Images.
-7. Grid display options missing: show or hide name, info type, extension, extension label and comment badge; Fit / Fill; Speed / Quality; Show Subfolder Contents.
+7. Grid display options: only Thumbnail Speed / Quality is missing.
 8. Go to Folder quick switcher (⌘J), and Add to Folders as a searchable picker instead of a flat list.
 9. No multi-folder selection in the sidebar.
 10. Open in New Window (preview window with always-on-top, opacity and navigator), plus main-window Always on Top.
 11. Presentation / slideshow mode (F5) and grayscale preview.
 12. Folder context menu gaps: New Folder (sibling), Move Folder dialog, Expand/Collapse submenu, Duplicate, Copy Link, Show Subfolder Content. Also no menu at all on subfolder cards, and no menu for several folders.
 13. Fixed-width sidebar and inspector (Eagle's are resizable). Sidebar sections don't collapse. Nav entries can't be hidden.
-14. List layout: no column header, no column chooser, no sort-by-column.
+14. ~~List layout: no column header, no column chooser, no sort-by-column.~~ Fixed.
 15. Empty states are a single "No items"; no welcome flow; the no-library screen lacks Create Library.
 16. Toast system: no UNDO button, no links, no import error list, no dock progress, no time remaining.
 17. Drag and drop gaps: files onto a specific sidebar folder, a Finder folder onto the sidebar (keeping its tree), items onto Quick Access or subfolder cards, Quick Access reorder.
@@ -506,7 +506,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Unsupported format suggests a plugin from the plugin center | Missing | No plugins | online/plugin |
 | Presentation (slideshow) mode: full screen, panels hidden | Missing | No full-screen or presentation mode anywhere in falcon | local |
 | Always on top | Missing | Only the collect window is always on top (`F/collect.rs:89`) | local |
-| Thumbnail background per item (none, black, gray, white, grid) used in the viewer and grid | Missing | The viewer always fills with the theme colour (`F/app.rs:3418`) | local |
+| Thumbnail background per item (none, black, gray, white, grid) used in the viewer and grid | Done | `paint_thumb_bg` from the item's `background` key; wins over the transparency-grid preference | local |
 | Transparent-area display preference (grid or no grid) | Done | `prefs.transparency_grid`, off by default as Eagle | local |
 | Grayscale preview toggle | Missing | None (falcon's "grayscale" is only a search filter, `FL/search.rs:487`) | local |
 | Navigator (minimap) while zoomed | Missing | None | local |
@@ -986,7 +986,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Rename a folder from the inspector name field | Done | `scope_inspector`: Return or blur saves through `Action::RenameFolder`; an emptied name reverts | local |
 | Folder auto-tagging: tags added to every item put in the folder, including the parent folders' tags | Done | `crates/falcon-library/src/autotag.rs` (own tags then each parent's, deduped, in Eagle's order); applied on import, paste, Add to Folder, the inspector picker and drops. `extendTags` is derived, as Eagle does, not stored | local |
 | Folder settings dialog (name plus auto-tags), Cmd+Shift+R | Done | `organize_ui.rs` auto_tag_dialog; `shortcuts.rs` `edit.folder.setting`; saving appends the tags to the folder's items, as Eagle does | local |
-| Show Subfolder Content (folder view includes descendants' items) | Missing | Folder scope is direct items only (`L:126`) | local |
+| Show Subfolder Content (folder view includes descendants' items) | Done | `logic::folder_members`, ⌥⌘7 | local |
 | Subfolder strip with covers at the top of a folder | Done | `covers.rs:65` subfolder_strip | local |
 | Folder item counts | Done | `L:67` folder_counts | local |
 | Folder inspector: item count, size, date imported, password state | Done | `A:2926` | local |
@@ -1178,7 +1178,7 @@ Ranked by user impact. Data-loss and silent-mismatch bugs come first, then every
 10. **No tag picker.** No suggestions, recent or starred tags, autocomplete or copy/paste/clear tags in the inspector.
 11. **No exclude, search or tag-group options in the Tag, Folder and Type filters.** Also no type groups (video, audio, font...).
 12. **Remove from current folder is missing**, and so is the "remove from folder or trash" prompt for items in several folders.
-13. **No Show Subfolder Content toggle.**
+13. ~~No Show Subfolder Content toggle.~~ Fixed.
 14. **Batch rename of items is missing**, and so is batch name/note/URL editing for several items (folders can be batch-renamed).
 15. **Duplicates can't merge.** Folders, tags, notes and links aren't combined; there's no best-copy pick, no scope (current list or selected), and no remove-from-results.
 16. **No Go to Folder quick search.**
