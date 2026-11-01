@@ -12,6 +12,7 @@
 //! - `drops`: manual reordering drops.
 //! - `viewer`: the detail viewer's shell.
 //! - `image_viewer`: image viewer zoom, fitting, tiling, navigator, grayscale.
+//! - `viewer3d`: the 3D model viewer's camera, navigation, grid and axes.
 //! - `display`: display options, list columns, thumbnail backgrounds, subfolder cards.
 
 mod scope;
@@ -27,6 +28,7 @@ mod drops;
 mod viewer;
 mod image_viewer;
 mod display;
+mod viewer3d;
 
 pub use scope::*;
 pub use format::*;
@@ -41,6 +43,8 @@ pub use drops::*;
 pub use viewer::*;
 pub use image_viewer::*;
 pub use display::*;
+#[allow(unused_imports)]
+pub use viewer3d::*;
 
 #[cfg(test)]
 pub(crate) mod test_util {

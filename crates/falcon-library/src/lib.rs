@@ -19,6 +19,7 @@ pub mod keywords;
 pub mod media;
 pub mod library_merge;
 pub mod model;
+pub mod model3d;
 pub mod pack;
 pub mod sandbox;
 pub mod palette;
