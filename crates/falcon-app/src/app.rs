@@ -89,6 +89,7 @@ struct DragFolder(String);
 enum Action {
     CreateFolder { parent: Option<String> },
     RenameFolder(String, String),
+    SetFolderDescription(String, String),
     DeleteFolder(String),
     AddToFolder(Vec<String>, String),
     /// Items dropped on a sidebar folder: moved out of the open folder, or
@@ -350,6 +351,9 @@ struct EditBuf {
     new_tag: String,
 }
 
+/// Uncommitted folder inspector text: `(folder id, name, description)`.
+type FolderEditBuf = (String, String, String);
+
 /// Everything that belongs to one open library: the library itself, where
 /// the user is in it, what is selected, its undo history, its dialogs and
 /// its image caches. The app draws one workspace at a time.
@@ -380,6 +384,7 @@ struct Workspace {
     collapsed: HashSet<String>,
     folder_filter: String,
     edit: Option<EditBuf>,
+    folder_edit: Option<FolderEditBuf>,
     status: Option<(String, Instant)>,
     /// Ids in grid order, refreshed every frame.
     order: Vec<String>,
@@ -452,6 +457,7 @@ impl Workspace {
             collapsed: HashSet::new(),
             folder_filter: String::new(),
             edit: None,
+            folder_edit: None,
             status: None,
             order: Vec::new(),
             columns: 1,
@@ -1225,6 +1231,7 @@ impl App {
                     self.ws.renaming = Some((id, "New Folder".into()));
                 }),
                 Action::RenameFolder(id, name) => lib.rename_folder(&id, &name),
+                Action::SetFolderDescription(id, text) => lib.set_folder_description(&id, &text),
                 Action::DeleteFolder(id) => {
                     if self.ws.scope == Scope::Folder(id.clone()) {
                         self.ws.scope = Scope::All;
@@ -1390,6 +1397,7 @@ impl App {
                             push_capped(to, inverse);
                             // Reload the inspector's text from the restored item.
                             self.ws.edit = None;
+                            self.ws.folder_edit = None;
                             self.flash(format!("{}: {label}", if undo { "Undid" } else { "Redid" }));
                         }
                         Err(e) => self.flash(format!("Could not save: {e}")),
@@ -1459,6 +1467,7 @@ fn action_label(action: &Action) -> String {
     match action {
         Action::CreateFolder { .. } => "New folder".into(),
         Action::RenameFolder(..) => "Rename folder".into(),
+        Action::SetFolderDescription(..) => "Edit folder description".into(),
         Action::DeleteFolder(_) => "Delete folder".into(),
         Action::AddToFolder(ids, _) => format!("Add {} to folder", ids.len()),
         Action::DropOnFolder(ids, _, logic::FolderDrop::Move(_)) => format!("Move {} to folder", ids.len()),
@@ -1534,6 +1543,7 @@ mod undo_tests {
     fn undo_labels() {
         assert_eq!(action_label(&Action::Trash(vec!["a".into(), "b".into(), "c".into()], true)), "Move 3 to Trash");
         assert_eq!(action_label(&Action::RenameFolder("f".into(), "x".into())), "Rename folder");
+        assert_eq!(action_label(&Action::SetFolderDescription("f".into(), "x".into())), "Edit folder description");
         assert_eq!(undo_label(&[]), "Edit item");
         assert_eq!(undo_label(&["Rename folder".into()]), "Rename folder");
         assert_eq!(undo_label(&["New folder".into(), "Tag 2".into(), "Rate 2".into()]), "New folder and 2 more");
@@ -3033,6 +3043,9 @@ impl App {
         let mut ui = ui.new_child(egui::UiBuilder::new().max_rect(body));
         egui::ScrollArea::vertical().id_salt("inspector").auto_shrink([false, false]).show(&mut ui, |ui| {
             ui.spacing_mut().item_spacing.y = 9.0;
+            if !self.ws.selected.is_empty() {
+                self.flush_folder_edit(lib, None);
+            }
             match self.ws.selected.len() {
                 0 => self.scope_inspector(ui, lib),
                 1 => {
@@ -3046,16 +3059,56 @@ impl App {
         });
     }
 
+    /// Saves text typed into the folder inspector when its fields went away
+    /// with focus still in them (the scope or the selection changed), unless
+    /// they are still shown for folder `shown`.
+    fn flush_folder_edit(&mut self, lib: &Library, shown: Option<&str>) {
+        let Some((id, name, desc)) = self.ws.folder_edit.take_if(|(id, ..)| shown != Some(id.as_str())) else { return };
+        let Some(old) = logic::find_folder(&lib.metadata.folders, &id) else { return };
+        if !name.trim().is_empty() && name.trim() != old.name {
+            self.ws.actions.push(Action::RenameFolder(id.clone(), name.trim().to_string()));
+        }
+        if desc != old.description {
+            self.ws.actions.push(Action::SetFolderDescription(id, desc));
+        }
+    }
+
     fn scope_inspector(&mut self, ui: &mut Ui, lib: &Library) {
         let folder = match &self.ws.scope {
             Scope::Folder(id) => logic::find_folder(&lib.metadata.folders, id).cloned(),
             _ => None,
         };
-        let mut name = self.ws.scope.title(&lib.metadata.folders);
-        let mut desc = folder.as_ref().map(|f| f.description.clone()).unwrap_or_default();
-        field(ui, &mut name, "Name", 33.0, false, "scope-name");
-        if folder.is_some() {
-            field(ui, &mut desc, "Description", 33.0, false, "scope-desc");
+        self.flush_folder_edit(lib, folder.as_ref().map(|f| f.id.as_str()));
+        if let Some(f) = &folder {
+            // A folder's name and description save when the field loses
+            // focus (Return does that for the name), as one undo step each.
+            // An emptied name goes back to the saved one, as in Eagle.
+            if self.ws.folder_edit.is_none() {
+                self.ws.folder_edit = Some((f.id.clone(), f.name.clone(), f.description.clone()));
+            }
+            let (_, name, desc) = self.ws.folder_edit.as_mut().expect("set above");
+            let r = field(ui, name, "Name", 33.0, false, "scope-name");
+            if r.lost_focus() {
+                let typed = name.trim();
+                if !typed.is_empty() && typed != f.name {
+                    self.ws.actions.push(Action::RenameFolder(f.id.clone(), typed.to_string()));
+                }
+            } else if !r.has_focus() {
+                // Follow renames made elsewhere, and undo.
+                *name = f.name.clone();
+            }
+            let r = field(ui, desc, "Description", 54.0, true, "scope-desc");
+            if r.lost_focus() {
+                if *desc != f.description {
+                    self.ws.actions.push(Action::SetFolderDescription(f.id.clone(), desc.clone()));
+                }
+            } else if !r.has_focus() {
+                *desc = f.description.clone();
+            }
+        } else {
+            // Other scopes have fixed names.
+            let mut name = self.ws.scope.title(&lib.metadata.folders);
+            ui.add_enabled_ui(false, |ui| field(ui, &mut name, "Name", 33.0, false, "scope-name"));
         }
         divider(ui);
         let items: Vec<&Item> = self.ws.order.iter().filter_map(|id| lib.item(id)).collect();

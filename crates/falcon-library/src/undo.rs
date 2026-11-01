@@ -452,6 +452,40 @@ mod tests {
         assert_eq!(on_disk.metadata.folders, tree);
     }
 
+    /// The folder inspector's name and description edits change only those
+    /// two keys of the folder in `metadata.json` (plus the file's own
+    /// `modificationTime`, which every save stamps), and one undo step
+    /// restores them.
+    #[test]
+    fn folder_name_and_description_round_trip() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (mut lib, _, _) = setup(tmp.path());
+        let f = lib.create_folder(None, "One").unwrap();
+        let meta = lib.root().join("metadata.json");
+        // The file without its top-level save time.
+        let read = || {
+            let mut v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&meta).unwrap()).unwrap();
+            v.as_object_mut().unwrap().shift_remove("modificationTime").expect("save time");
+            v.to_string()
+        };
+        let before = read();
+        assert_eq!(before.matches(r#""name":"One","description":"""#).count(), 1, "{before}");
+        let t = tx(&mut lib, |lib| {
+            lib.rename_folder(&f, "Uno").unwrap();
+            lib.set_folder_description(&f, "Line one\nline \"two\"").unwrap();
+        });
+        let after = read();
+        assert_eq!(after, before.replace(r#""name":"One","description":"""#, r#""name":"Uno","description":"Line one\nline \"two\"""#));
+        let reopened = Library::open(lib.root()).unwrap();
+        let folder = &reopened.all_folders()[0];
+        assert_eq!((folder.name.as_str(), folder.description.as_str()), ("Uno", "Line one\nline \"two\""));
+        let redo = lib.revert(t).unwrap();
+        assert_eq!(read(), before);
+        lib.revert(redo).unwrap();
+        assert_eq!(read(), after);
+        assert!(lib.set_folder_description("missing", "x").is_err());
+    }
+
     #[test]
     fn tag_group_edits_undo() {
         let tmp = tempfile::tempdir().unwrap();
