@@ -6,14 +6,25 @@ Eagle has no search index. Every search is a linear pass over the items held in 
 
 Eagle joins an item's searchable text into one lower-case string and tests each term as a substring. The text includes:
 
+- the text content of a text item, and the camera (`rawMetas.camera`), always
 - the name
 - the extension with a leading dot, such as `.png`
 - the URL, only for queries of at least 2 characters
 - the notes
+- the text of every comment, region and video comments alike
+- for a font, its full name (the `zh` entry first, else `en`), and, for queries of at least 3 characters, its whole `fontMetas` as JSON
 - the tags
 - the name and description of every folder the item is in
 
 There is no accent folding: `e` doesn't match `é`.
+
+### Search Scope (observed)
+
+The caret beside the magnifier in the search box opens the Search Scope menu. It has a checkbox each for Name, Folder Name, Folder Description, Extension, Tags, URL, Comments and Notes, all on by default. An unchecked part is left out of the search text. The text content, camera and font names are not in the menu and are always searched. falcon remembers the choice across launches, shared by every library (`SearchScope`, kept by `crates/falcon-app/src/search_state.rs`). `search_text_in` builds the text for a scope, and `search_text` uses every part.
+
+### Search All
+
+⌥⌘F (Find ▸ Search All) leaves the viewer, opens the All page and focuses the search box, so the search covers the whole library.
 
 The query syntax:
 
@@ -51,7 +62,20 @@ Eagle has no typo tolerance. falcon's app adds it on top of Eagle's matching (`Q
 - **Order:** exact matches come first, in the chosen sort order. Typo matches follow, fewest total edits first, and in the chosen sort order within the same count.
 - **Speed:** a word is skipped without computing the distance when the term has more letters missing from the word entirely than its allowance. On 20,000 synthetic items a search takes 6–12 ms in a release build.
 
-## Filter panel (observed)
+## Filter bar
+
+The bar under the toolbar shows one chip for each filter that is pinned or on. Eagle's default pins are Color, Tags, Folders, Shape, Rating and Type. The + button lists every filter the library can use, each with a pin that keeps it in the bar or takes it out, and clicking a name opens that filter. Duration, BPM, Camera and Font are only listed when some item has a value for them. The pins are remembered across launches with the search scope.
+
+A filter that is on always shows its chip, pinned or not, and a chip opened from the + menu or a key stays until its menu closes. The code is in `crates/falcon-app/src/app/filter_bar.rs` and `filters_ui.rs`.
+
+- **Clear** appears while any rule is on. It switches every rule off and also releases the Lock, as Eagle's reset does. The search text stays.
+- **Clear Filter** (⇧⌥⌘F, Find ▸ Clear Filter) does the same as the Clear button.
+- **Lock** appears while a rule or a search is on. Opening another view (a folder, a smart folder, a tag, All, the Trash, going back or forward) switches every filter rule off and empties the search box, unless the Lock is on. Opening the view that is already open changes nothing.
+- **Filter Sidebar** (⌥⇧F) shows the sidebar and focuses its folder filter box.
+
+Find ▸ Open Filter and the keys ⌥F (Folders), ⌥T (Tags), ⌥C (Color), ⌥S (Shape), ⌥R (Rating), ⌥D (Date) and ⌥E (Type) show the filter bar and open one filter's menu. The Size, Dimensions, Duration, Comment, Notes, URL, Font, BPM and Camera rows exist in the menu and under Preferences, Shortcuts, and have no key.
+
+## Filter rules (observed)
 
 Every active rule must pass.
 
@@ -59,11 +83,55 @@ Every active rule must pass.
 - **Type:** accepts an extension, or a group such as video, audio, font, word, excel or powerpoint.
 - **Size, width and height:** inclusive ranges.
 - **Rating:** any of the selected star values, with 0 meaning unrated.
-- **Shape:**
-  - landscape and portrait
-  - square
-  - panoramic, when one side is at least 2.5 times the other
-- **Notes and URL:** has a value, has no value, or contains all of the given keywords.
+- **Shape:** see below.
+- **Notes, URL and Comment:** has a value, has no value, or contains all of the given keywords.
+
+### Comment (observed)
+
+The rule reads an item's region and video comments (`comments[].annotation`). Has needs at least one comment, None needs no comment, and Keywords needs every keyword, case-insensitively, to occur in one of the comments (not necessarily the same one). Notes and URL use the same three choices over one text.
+
+### Size and Dimensions (observed)
+
+- Size takes a minimum and a maximum in KB or MB (1 KB is 1024 bytes, 1 MB 1,048,576 bytes). A bound may have a fraction; it is converted to bytes and truncated to a whole byte.
+- Dimensions takes a minimum and a maximum for the width and for the height, in whole pixels (fractions are truncated).
+- Each bound is inclusive and an empty bound is open.
+
+### Shape (observed)
+
+| Shape | Passes when |
+|---|---|
+| Landscape, Portrait, Square | width greater than, less than or equal to the height |
+| Panoramic (landscape and portrait) | the long side is at least 2.5 times the short one |
+| 4:3, 3:4, 16:9, 9:16 | `width / height` equals the ratio exactly, as floating-point numbers |
+| Custom W:H | `width / height` equals `W / H` exactly |
+
+- The ratios compare floats for equality, so 1366 × 768 is not 16:9 and 1920 × 1080 is.
+- In the custom ratio a side left at 0 (unset) lets every item through.
+- The ticked shapes are OR-ed, the custom ratio included.
+- The menu lists a shape with its count and hides one with no items (unless it is ticked). `shape_counts` counts as Eagle does: only items with a width that are not audio or fonts, each in exactly one of landscape, portrait, square, panoramic landscape and panoramic portrait, and in at most one of the four ratios.
+- Rating and Type hide options with a count of 0 in the same way (unless the option is on).
+
+### Tags chip
+
+The menu has the Any, All and Exact choice and a search box. Without a search, tags in a tag group come first, in the order of their first group, then the others, each in plain code-unit order. With a search the tags are ranked by name (see Name ranking below). A sidebar in the menu switches between All Tags, Selected (the included and excluded ones) and each tag group that has tags in the list. Untagged is a row of its own on the All Tags page. Select all, on a group's page, includes every tag listed there. A click includes a tag and a right-click excludes it. The chip reads the included names, then the excluded ones with a leading minus.
+
+### Folders chip
+
+The menu lists the folders that hold items, in tree order and indented by depth, with their counts, and Uncategorized first. A search box ranks them by name and shows them flat. A click includes a folder and a right-click excludes it, Uncategorized included. Excluding Uncategorized is `SetFilter::exclude_empty`, which drops items that are in no folder under Any, All and Exact alike. Under Any, an item passes when it has an included folder, even if it also has an excluded one, or when excludes are set and it has none of them; with `exclude_empty` set, an item in no folder counts as excluded. All and Exact need every included folder and none of the excluded ones.
+
+### Type filter (observed)
+
+`type_included` follows Eagle's order and its early answers:
+
+1. An item whose own extension is included passes.
+2. If the video group is included, the answer is final: the item passes only if it is a video. So including both video and audio lets only videos through.
+3. A `url` entry takes bookmarks without a site. The youtube, vimeo and bilibili entries take bookmarks whose `medium` is that site.
+4. If the audio group is included, the answer is final: the item passes only if it is audio.
+5. The word, excel and powerpoint groups, then font.
+
+An excluded extension or group, or an excluded `url` or site, removes an item. The video group holds ts, 3gp, mp4, mov, m4v, webm, mkv, avi and similar; audio holds mp3, wav, flac, ogg, aac and m4a; font holds ttf, otf, ttc, woff and woff2.
+
+The menu lists the extensions present, in code-unit order, then the built-in groups, with counts and a search box. A bookmark with a site counts under the site. Eagle lists the font, video and audio groups but never counts them, so its panel hides them. falcon counts them (`type_counts`), so they show.
 
 ### Dates (observed)
 
@@ -130,6 +198,18 @@ Matching items are sorted by CIE76 distance, closest first.
 
 Falcon's CIEDE2000 implementation is checked against the published reference values from Sharma et al. One of Eagle's branches, for mostly white backgrounds, can never run as the code is written. Falcon nests it inside the dominant-colour test, which is what it appears to be meant for. That is **inferred**.
 
+## Name ranking (observed)
+
+Eagle's tag and folder filter searches, and Go to Folder, rank names with a quick-search score (`string_score`). It is 1 for identical strings and 0 when the letters of the keyword don't all appear in the name in order. Otherwise it rewards letters that follow each other, letters that start a word and letters whose case matches, plus a bonus for a shared first letter. Lengths and positions count UTF-16 units, as in JavaScript.
+
+`rank_names` applies it as Eagle does:
+
+- Spaces are dropped from the keyword.
+- Both sides are decomposed (NFKD), stripped of combining accents and lower-cased, so `e` finds `é`.
+- Names that score 0 are dropped, and the rest are ordered best first, with ties keeping their order.
+
+Eagle also scores the pinyin of Chinese names and matches traditional against simplified characters. falcon implements neither.
+
 ## Sorting (observed)
 
 | Key | Natural direction |
@@ -137,5 +217,29 @@ Falcon's CIEDE2000 implementation is checked against the published reference val
 | Date Imported (the default), Created, Modified | newest first |
 | Title, Extension, Tags | A–Z, with numbers compared by value (`img2` before `img10`) |
 | Size, Dimensions, Rating | smallest first |
+| Duration | shortest first, by whole seconds (`parseInt`), with a missing duration as 0 |
+| Random | shuffled once per visit |
 
 Eagle's `sortIncrease` flag reverses this direction when it is off. The Trash is always sorted by deletion time, newest first.
+
+## Saved filters
+
+A saved filter stores the filter's rules and the search text in `saved-filters.json` (see [Library format](library-format.md)). Applying one replaces the whole filter and the search, and refills the fields of the filter menus. The rules falcon reads and writes include:
+
+- comments, under `annotation` (has, none or keywords)
+- the ratio shapes `43`, `34`, `169` and `916`, and the custom ratio as `custom` with `width` and `height`
+- excluded Uncategorized, as `folder.excludes.NoFolders`, next to the excluded folder ids
+- tags, folders, type, size, dimensions, rating, notes, URL, colour, dates, duration, BPM, camera and font
+
+Only Eagle's AI searches, `image` and `semantic`, are skipped, and applying a filter that has them shows a notice that names them.
+
+## Go to Folder
+
+⌘J (Find ▸ Go to Folder…) and a bare J open a switcher near the top of the window. Pressing the key again closes it, and reopening it keeps the last keyword, selected. The code is in `crates/falcon-app/src/quick_switch.rs` and `app/quick_switch_ui.rs`.
+
+- **Tabs:** Folders, Tags, Smart Folders and Items. Tab moves to the next tab and ⇧Tab to the previous one, both wrapping.
+- **No keyword:** the Folders and Smart Folders tabs list the whole tree in order, indented by depth, with the parent's name muted at the right. The Tags tab lists tags with grouped ones first, then the others, each in plain string order. The Items tab lists every item that is not in the Trash.
+- **Recents:** when there are more than 15 folders (more than 10 smart folders) and some history, up to 10 recently opened ones that still exist come first. They are listed again in the tree below, so they show twice.
+- **With a keyword:** folders, smart folders and tags are ranked by name (see Name ranking) and shown flat. Items are searched with the same search text and query syntax as the search box, with no typo tolerance.
+- **Keys:** ↑ and ↓ move the highlight, Return opens the highlighted row and closes the switcher, Esc closes it, and a click opens a row. A folder or smart folder opens as a view; a tag opens its page; an item opens the first of its folders that exists (else All) with the item selected and scrolled into view.
+- **History:** opening a folder or a smart folder moves it to the front of its list, which keeps the latest 200 and is remembered across launches with the other search settings, shared by every library.
