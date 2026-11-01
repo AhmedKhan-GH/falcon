@@ -4,6 +4,7 @@ mod app;
 mod applock;
 mod backups;
 mod capture;
+mod clip_image;
 mod collect;
 mod colors;
 mod dock;

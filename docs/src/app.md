@@ -1025,7 +1025,7 @@ The item menu's Copy, Copy File Path and Copy submenu entries (also in the image
 
 | Entry | Key | What is copied |
 |---|---|---|
-| Copy | ⌘C | The originals, as files (`App::copy_items`) |
+| Copy | ⌘C | The originals, as files (`App::copy_items`). One jpg, jpeg, png or bmp also goes as its pixels, as Eagle does: `clip_image::copy` puts the image data (`public.png` or `public.jpeg`, plus `public.tiff`; a bmp as TIFF only), the original's `public.file-url` and `NSFilenamesPboardType` on the general pasteboard at once, so an image editor pastes pixels and Finder pastes the file. Several items, other formats and originals still in iCloud (copying the pixels reads the file) go as files only, and so does a single picture when the pasteboard refuses it |
 | Copy File Path | ⌥⌘C | Each original's path, one per line |
 | Copy ▸ Link | unbound | Each item's local API link, `http://localhost:<port>/item?id=<id>`, one per line, as Eagle's Copy Link writes it with its own port. The port is the running API's, else the first one set in Preferences; the API answers the link with a redirect to the item's `eagle://` link |
 | Copy ▸ Eagle Link | unbound | Each item's `eagle://item/<id>` link, one per line, which opens the item in falcon (see [HTTP API](http-api.md#eagle-links)) |

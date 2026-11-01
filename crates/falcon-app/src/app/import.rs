@@ -695,15 +695,25 @@ impl App {
         self.copy_items(&ids);
     }
 
-    /// Puts the originals of `ids` on the clipboard as files.
+    /// Puts the originals of `ids` on the clipboard as files; one jpg, png or
+    /// bmp also as its pixels (`clip_image`).
     pub(crate) fn copy_items(&mut self, ids: &[String]) {
         let Some(shared) = self.ws.lib.clone() else { return };
         let paths: Vec<PathBuf> = {
             let lib = lock(&shared);
             ids.iter().filter_map(|id| lib.item(id)).map(|i| i.original_path(lib.root())).collect()
         };
-        if let Ok(mut clip) = arboard::Clipboard::new()
-            && clip.set().file_list(&paths).is_ok()
+        // One jpg, png or bmp goes as pixels and a file reference together.
+        // Never for an original still in iCloud: copying the pixels reads it.
+        let pixels = match paths.as_slice() {
+            [p] => {
+                let kind = p.extension().and_then(|e| e.to_str()).and_then(crate::clip_image::pixel_type);
+                kind.is_some() && p.is_file() && !crate::icloud::is_dataless(p) && crate::clip_image::copy(p).is_ok()
+            }
+            _ => false,
+        };
+        if pixels
+            || arboard::Clipboard::new().is_ok_and(|mut clip| clip.set().file_list(&paths).is_ok())
         {
             self.used(&paths);
             self.flash_brief(tr_n(paths.len(), "Copied {n} file", "Copied {n} files"));
