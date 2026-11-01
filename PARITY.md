@@ -7,10 +7,10 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
 | Main window: menus, shortcuts, toolbar, sidebar, layouts | 257 | 6 | 9 | 8 |
-| Viewers and file formats | 186 | 14 | 3 | 5 |
+| Viewers and file formats | 187 | 13 | 3 | 5 |
 | Search, filters and organising | 216 | 1 | 4 | 3 |
 | Import, export, library, preferences and integrations | 190 | 3 | 16 | 26 |
-| **Total** | 849 | 24 | 32 | 42 |
+| **Total** | 850 | 23 | 32 | 42 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -66,7 +66,7 @@ Overall finding: falcon now has a native menu bar (`crates/falcon-app/src/menu.r
 | App menu: Color Space (sRGB / Display P3 / Unmanaged) | Missing | Not feasible: egui/wgpu draw in the surface's colour space with no per-document colour management; no sRGB/P3 switch to offer | local |
 | App menu: Hide, Hide Others, Quit | Done | Supplied by winit's default macOS app menu (main.rs uses eframe defaults) | local |
 | App menu: Check for Updates, Register / Unregister, Manage devices | Missing | Not applicable to falcon | online/plugin |
-| File: New… (⌘N), a searchable menu of folder, smart folder, imports, duplicates and new documents from templates (Sketch, PSD, AI, XD, TXT, Word, PPT, Excel, Keynote, Pages, Numbers, MindNode, XMind) | Partial | File ▸ New…, ⌘N (`file.create.new`) and the sidebar +: type-to-filter menu with New Folder, New Subfolder, New Smart Folder…, Import Folders / Files / Eagle Package…, Find Duplicates and Text Document; Eagle's 12 template documents listed disabled; no "current list"/"selected" duplicate scopes, link import or auto-import entries | local |
+| File: New… (⌘N), a searchable menu of folder, smart folder, imports, duplicates and new documents from templates (Sketch, PSD, AI, XD, TXT, Word, PPT, Excel, Keynote, Pages, Numbers, MindNode, XMind) | Partial | File ▸ New…, ⌘N (`file.create.new`) and the sidebar +: type-to-filter menu with New Folder, New Subfolder, New Smart Folder…, Import Folders / Files / Eagle Package…, Find Duplicates ▸ All Items / Current List / Selected (disabled when the list is empty or fewer than two items are selected), Auto-Import ▸ Settings… (opens the Auto-Import pane, with the watched folder shown while on) and Text Document; Eagle's 11 other template documents listed disabled (they need Eagle's template files); no Import Links entry (falcon has no link import); Pinterest and ArtStation are online | local |
 | File: New Folder (⇧⌘N) | Done | A sibling right after the open folder, or top level when none is open, as Eagle's `newFolder` (`Action::CreateSibling`) | local |
 | File: New Subfolder (⌥N) | Done | ⌥N, File menu and folder menu; inserted first among its siblings, as Eagle | local |
 | File: New Smart Folder (⇧⌥⌘N) | Done | shortcuts.rs; opens the smart folder dialog | local |
@@ -115,7 +115,7 @@ Cross-references (not counted): File ▸ Import Folders / Links / Eagle Package 
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| Every context menu has a type-to-filter search box with keyword matching | Partial | `ui/menus/search.rs` on the item, folder, smart folder, tag, tag group, palette, New, filter + and saved-filter menus incl. submenus; the macOS Help menu searches itself. Missing: Eagle's inspector Help button menu (no such button) and a few nested menus (Change Icon, rename Insert/Number/Date, Add/Move to Group) | local |
+| Every context menu has a type-to-filter search box with keyword matching | Partial | `ui/menus/search.rs` on the item, folder, smart folder, tag, tag group, palette, New, filter + and saved-filter menus incl. submenus, Change Icon (searched by icon name), Add/Move to Group and the rename Insert / Number / Date menus (`ui/menus/insert.rs`); the macOS Help menu searches itself. Missing: Eagle's inspector Help button menu (falcon has no such button; its entries are mostly online links and the local ones are in the app menu) | local |
 | **Item**: Restore (in the Trash) | Done | app.rs:2531-2534, which also offers Delete Permanently | local |
 | Item: Open Item(s) in New Window | Done | Card menu opens all its targets in one window stepping with ←/→; middle click opens its card | local |
 | Item: Open With Default App / Open With ▸ apps / Reveal in Finder | Done | open_ui.rs:33-46 | local |
@@ -696,7 +696,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Measure tool | Done | Distance, angle and distance between parallel faces (`ui/viewer/model.rs`) | local |
 | Model tree navigator (files, meshes, materials) and details sidebar | Done | Files, meshes (hide, isolate, fit one), materials, plus the details panel | local |
 | Settings: background colour, edge display, dark theme | Done | Background colour, edges with colour and angle, default colour, Auto/Light/Dark theme, Reset | local |
-| Export model and create snapshot | Partial | Viewer menu exports OBJ+MTL, STL, GLB, glTF and PLY (`export::Format::ALL`); the snapshot draws edges, grid and axes; OFF and 3DM are not built | local |
+| Export model and create snapshot | Done | Viewer menu exports GLB, glTF, OFF, OBJ+MTL, PLY and STL (`export::Format::ALL`, round-trip tests incl. OFF); the snapshot draws edges, grid and axes. 3DM is not built: proprietary Rhino format | local |
 | Esc/←/→ still exit or move between items | Done | The shared viewer shell handles Esc, ← and → | local |
 
 ### 11. Special formats viewed as images (PSD, PSB, AI, EPS, XD, Sketch, Figma, Affinity, C4D, Blender, SketchUp, DWG, CDR, Clip, InDesign, Office, iWork, XMind, MindNode, OmniGraffle, HDR, EXR, ICO, ICNS, DDS)
@@ -704,7 +704,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | Shown as a zoomable image of the thumbnail | Done | Image viewer falls back to the preview tier (`F/app.rs:3427-3429`) | local |
-| Higher-resolution render made on demand for PSD, PSB, AI, PPT, PPTX, POTX | Partial | One larger QuickLook render (up to 8192 px, tiled) when zoomed past the 3072 px tier, macOS only; Eagle re-renders at every zoom | local |
+| Higher-resolution render made on demand for PSD, PSB, AI, PPT, PPTX, POTX | Partial | Zoomed past the 3072 px tier the page is re-rendered through QuickLook at the shown size after the view rests 0.4 s, visible part only, one page render kept per item (`logic::quicklook_region`); macOS only. Gaps: past the 8192² pixel cap the last render is magnified (QuickLook renders whole pages only) and the separate preview window keeps the 3072 px render | local |
 | Comments on special formats | Done | `F/comments.rs:169` | local |
 | Custom thumbnail shown in the viewer for formats with no preview | Done | The custom thumbnail is the viewer's picture for formats with no picture of their own | local |
 | HDR/EXR rendered with tone mapping and exposure | Done | `falcon_library::hdr`: linear decode, Reinhard tone mapping as Eagle (fixed exposure 1.0 there); falcon adds an exposure slider | local |
