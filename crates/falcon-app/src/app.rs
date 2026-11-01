@@ -4069,10 +4069,13 @@ fn paint_thumb_bg(p: &egui::Painter, rect: Rect, bg: logic::ThumbBg) {
     };
     match bg {
         B::Dark => plain(Color32::BLACK),
-        B::Gray => plain(Color32::from_gray(0x77)),
+        // Eagle's box-container styles: #888 at half opacity, and a white
+        // checkerboard of #e0e0e0 squares 5 px wide (two 45° gradients on a
+        // 10 px tile).
+        B::Gray => plain(Color32::from_rgba_unmultiplied(0x88, 0x88, 0x88, 128)),
         B::Light => plain(Color32::WHITE),
         B::Grid => {
-            const CELL: f32 = 10.0;
+            const CELL: f32 = 5.0;
             let vis = rect.intersect(p.clip_rect());
             if !vis.is_positive() {
                 return;
@@ -4086,7 +4089,7 @@ fn paint_thumb_bg(p: &egui::Painter, rect: Rect, bg: logic::ThumbBg) {
                         continue;
                     }
                     let cell = Rect::from_min_size(rect.min + vec2(col as f32 * CELL, row as f32 * CELL), Vec2::splat(CELL)).intersect(vis);
-                    p.rect_filled(cell, 0.0, Color32::from_gray(0xcc));
+                    p.rect_filled(cell, 0.0, Color32::from_gray(0xe0));
                 }
             }
         }
