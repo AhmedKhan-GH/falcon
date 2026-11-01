@@ -179,19 +179,39 @@ Falcon: `Item::manual_order(folder)` reads the value as a number, `Item::manual_
 
 An object that maps item IDs to ms times, ending with `"all"`. In the fixture it lists only 32 of the 91 items, yet `all` is 91. So `all` is the library's total item count, not the number of entries.
 
+Eagle's Empty Cache and Reload reads the library again and rewrites `mtime.json` from what it read. Falcon's `Library::rebuild_mtime()` does the same from the items in memory: one entry per item that has a `lastModified`, in id order, then `all` set to the item count.
+
 ## Encoding (observed)
 
 Eagle writes compact JSON with no trailing newline and keeps keys in insertion order.
 
 ## How falcon does it
 
-`falcon_library::Library::open` loads every JSON file into typed structs. `Library::save_to` writes them back out.
+`falcon_library::Library::open` checks the library's version (see [Newer libraries and outside changes](#newer-libraries-and-outside-changes)) and loads every JSON file into typed structs. `Library::save_to` writes them back out.
 
 - **Lossless:** unknown keys are kept in an `extra` map on each struct.
 - **Number format:** `ratio` stays a raw `serde_json::Number`, so `45` isn't rewritten as `45.0`.
 - **Key order:** each item remembers whether `width` came before `height`.
 
 Together these make every JSON file in the test fixture re-serialize byte-for-byte, which the `round_trips_byte_identically` test checks.
+
+## Newer libraries and outside changes
+
+**Version check.** `metadata.json` carries the `applicationVersion` of the Eagle that last saved it. Falcon reads and writes the format of Eagle 4.0.0 (`library::APP_VERSION`), and `Library::open` refuses a library whose `applicationVersion` is newer, with `Error::NewerLibrary`, as Eagle refuses a library from a newer release and asks for an update. Versions are ordered the way Eagle orders them (`compare_versions`): an optional leading `v`, then up to four dot-separated numbers compared as numbers (`10.0.0` is newer than `4.0.0`, and a missing number counts as 0, so `4` equals `4.0.0`). A `-prerelease` part sorts before the release itself (`4.0.0-beta.2` is older than `4.0.0`, `5.0.0-beta` is still newer than `4.0.0`), its dot-separated parts compare as numbers when both are numbers and as text otherwise, and a shorter list sorts first. A `+build` suffix is ignored. A version that can't be read is not refused.
+
+**Write guard.** `Library::write_metadata_file` is the one place `metadata.json` is written while a library is open. Before writing, it reads the file on disk and refuses, writing nothing, when
+
+- the disk copy's `applicationVersion` is newer than 4.0.0 (`Error::NewerLibrary`), or
+- the disk copy's `modificationTime` is later than the one falcon last read or wrote (`Error::SyncConflict`). Another app or a sync tool saved the file in the meantime, and writing would lose its changes.
+
+A disk copy that can't be read or parsed is overwritten. Falcon's own writes set the remembered time, so they never conflict with themselves. A refused write sets a flag that `Library::take_conflict()` returns once, and the app uses it to reload the library from disk (see [Several libraries](app.md#several-libraries)). In batched mode the refusal comes at the flush, and the pending set is dropped rather than retried. Every caller of the library trips the guard, the HTTP API included.
+
+**Picking up outside changes.** Eagle polls `metadata.json` and `mtime.json` every 4 seconds with `fs.watchFile`, and falcon polls the same two files at the same interval (`crates/falcon-library/src/sync.rs`; the app's polling thread is `crates/falcon-app/src/watch.rs`). The thread compares file times and, when one moved, reads and parses that file off the UI thread. A file caught half written doesn't parse and is read again on the next poll. An empty `mtime.json` is ignored, as in Eagle, because it is being rewritten. Applying a change is quick and happens with the library locked, and it never writes, since the changes are already on disk.
+
+- **`metadata.json` changed:** `Library::take_external_metadata` takes it only when its `modificationTime` is later than the one in memory. The folder tree, smart folders, quick access and tag groups it holds replace the ones in memory, including edits still waiting in batched mode, and its time becomes the base later writes are checked against.
+- **`mtime.json` changed:** `Library::sync_items` compares it with the stamps in memory. An id falcon doesn't hold is a new item and is read from its `metadata.json`. A larger stamp is an edited item, read again. When the `all` count differs from the number of items held, `images/` is listed to drop items whose folder is gone and to add folders the index missed. An item that can't be read yet, because a sync is still copying it, waits for the next poll. A pending write of an item that was replaced is dropped, since the disk copy is newer.
+- **Falcon's own writes** come back through the same path and change nothing, since their stamps are the ones in memory.
+- **A vanished library folder** is reported once, and `Library::discard_pending_writes()` drops everything batched mode was holding, so nothing is written to where the library used to be.
 
 ## Backups
 
@@ -206,7 +226,7 @@ Eagle keeps snapshots of the library `metadata.json` in `backup/`. Only that one
 | Unchanged check | observed | Skipped when the newest backup has the same **size** as `metadata.json` (the content isn't compared) |
 | Which files count | observed | Any name containing `backup-`; sorted by name, newest first |
 | Rotation | observed | At most 100. Eagle trims the list it read before copying to its newest 99, so with the new copy 100 remain. Trimming also runs when the copy was skipped |
-| Second copy | observed | Eagle also copies `metadata.json` to `eagle-backup/<hash of library path>.json` in its app-data folder. falcon doesn't (it is outside the library) |
+| Second copy | observed | Eagle also copies `metadata.json` to `eagle-backup/<hash of library path>.json` in its app-data folder, replacing the file whenever it writes a new backup into an existing `backup/` list (not for the very first one) |
 | Recovery | observed | When `metadata.json` exists but can't be read or parsed (or has no `applicationVersion`), Eagle walks the backups newest first, skips empty ones and ones that don't parse or lack a truthy `modificationTime`, keeps the damaged file as `backup/metadata.json.damaged-<ms>`, and copies the first good backup over `metadata.json`. A missing `metadata.json` is reported as a missing library instead |
 
 ### How falcon does it
@@ -214,6 +234,32 @@ Eagle keeps snapshots of the library `metadata.json` in `backup/`. Only that one
 `falcon_library::backup` follows the table. `Library::backup_metadata()` takes a backup now (returning `None` when skipped), `Library::backups()` lists them newest first, and `Library::restore_metadata_from_backup(path)` restores a chosen one. `Library::open_or_restore(path)` opens a library and, when `metadata.json` can't be read or parsed, restores the newest usable backup first, as Eagle does on launch. falcon also requires the backup to load as a `LibraryMetadata`, slightly stricter than Eagle's `modificationTime` check (inferred to be harmless: a backup without the standard keys would break Eagle too).
 
 `Library::save_metadata` and `Library::flush` do not take backups, because Eagle doesn't back up on each write. `FlushReport::wants_backup()` says when a flush wrote `mtime.json` or `metadata.json`. Callers take the backup with `backup_metadata()`, or `backup::backup_library(root)`, which needs only the library folder and so can run on another thread while the library is in use (a `metadata.json` caught mid-write doesn't parse and is skipped). `falcon backup <library>` takes one by hand; the app schedules them (see [Saving](app.md#saving)).
+
+The second copy lives outside the library. `backup::app_data_backup_name(root)` names it `<hash>.json`, where `<hash>` is the 32-bit FNV-1a hash of the library path (no trailing slash) over its UTF-16 code units, as 8 lowercase hex digits, the same name Eagle gives it. The app keeps these in `eagle-backup/` inside its own app data folder, `~/Library/Application Support/Falcon/eagle-backup/` on macOS, and `backup::backup_library_with(root, app_backups)` replaces the library's copy with every new backup. A failure there is ignored, as in Eagle, and the copy is written through a temporary file and a rename so a reader never sees half a file. Nothing is written for a library whose folder is gone, so a backup never recreates a moved or deleted library.
+
+## Merging libraries
+
+Eagle's Library ▸ Import Library merges another library into the open one. Falcon's `falcon_library::library_merge` follows it:
+
+- **Refusals:** the library that is open is refused, a folder without `metadata.json` (or with one that doesn't parse) is not a library, and a library from a newer Eagle is refused as on open.
+- **Folders:** a top-level folder whose id the open library already has is not added again, and its subfolders go through the same test inside the existing one. New folders come in with their whole subtree.
+- **Smart folders and tag groups:** those whose id is already present are skipped and the rest are appended.
+- **Items:** every `images/<id>.info` folder the open library lacks is copied verbatim, and ones it has are left alone. The items keep their folder ids, which the merged tree now contains.
+
+Falcon differs from Eagle in two small ways. It copies only `*.info` folders, not stray files in `images/`. And a new folder's descendants whose ids already exist elsewhere in the open library are merged into those instead of being added a second time, so the tree never holds one id twice. Each item folder is copied under a temporary name and renamed into place, so an interrupted merge never leaves half an item.
+
+The work is split so the app stays responsive. `merge::plan(&lib, source)` reads the other library and reports what would come in (`MergePlan::counts()`). `merge::copy_items` needs no lock on the open library, runs on a background thread, reports progress, can be cancelled and returns the folders copied, with the reason for any that failed. `Library::finish_merge` then merges the folder tree, saves `metadata.json` and registers the copied items in memory and in `mtime.json`, returning a `MergeReport` of folders, smart folders, tag groups and items added.
+
+## Inboard backups
+
+Eagle's File ▸ Import ▸ Inboard reads a backup folder made by the Inboard app, and `falcon_library::inboard` reads it the same way. The folder holds `InboardBackup.json`, with `folders` (each with a `title`) and `items`, plus the files in `images/` and `screenshots/`.
+
+- **Folders:** one top-level folder is created per Inboard folder, all of them and in order. When two share a title, items go to the later one (`inboard::folder_map`).
+- **Items:** only items whose `type` is `"image"` are imported. The file is the last component of the item's `path`, looked up in `screenshots/` when that path runs through a `/screenshots/` folder and in `images/` otherwise. An image whose file isn't in the backup is counted as missing (`InboardBackup::missing`) and skipped.
+- **What an item keeps:** Inboard's `title` as its name, its `tags`, its `url`, its trashed state (`isTrashed` other than 0, or `true`) and its `date` as the date added. A numeric `date` is read as milliseconds, and a string as RFC 3339 or `YYYY-MM-DD HH:MM:SS ±ZZZZ`.
+- **Folders of an item:** its `folders` are Inboard folder titles, mapped to the new folder ids; titles that match no folder are dropped.
+
+`inboard::is_backup(dir)` says whether a folder has the index, and `inboard::read(dir)` returns the folders and importable items. The import itself goes through the ordinary import path, so duplicate handling and thumbnails are the same as for other files.
 
 ## Undo
 
@@ -282,7 +328,7 @@ Refs.eaglepack           a zip archive, entries stored without compression
 
 ### How falcon does it
 
-The app writes packs on a background thread, so the work is split in two: `plan_pack(&lib, source)` builds `pack.json` and the list of item folders into a `PackPlan` that holds no reference to the library, and `write_pack(&plan, dest, on_item)` writes it, reporting each item folder added. `falcon_library::pack::export_pack(&lib, PackSource::Items(ids) | PackSource::Folder(id) | PackSource::Smart(id), dest)` does both and writes a pack following the table, using the `zip` crate with stored entries and each file's time and Unix mode. `import_pack(&mut lib, pack, &PackImportOptions { folder, skip_duplicates })` imports one and returns the new item ids. Item files are moved in as they are (thumbnail included), not re-imported, as Eagle does. Differences from Eagle, all inferred to be harmless:
+The app writes packs on a background thread, so the work is split in two: `plan_pack(&lib, source)` builds `pack.json` and the list of item folders into a `PackPlan` that holds no reference to the library, and `write_pack(&plan, dest, on_item)` writes it, reporting each item folder added. `falcon_library::pack::export_pack(&lib, PackSource::Items(ids) | PackSource::Folder(id) | PackSource::Smart(id), dest)` does both and writes a pack following the table, using the `zip` crate with stored entries and each file's time and Unix mode. `preview_pack(&lib, pack)` reads a pack without extracting it, as Eagle does before it asks: it opens the zip, adds up the uncompressed size of every entry, parses `pack.json` and counts how many of its items look like untrashed items already in the library, using the same duplicate key as `skip_duplicates`. It returns a `PackPreview` of `items`, `duplicates` and `bytes`, and fails with `Error::Pack` when the file isn't a zip or `pack.json` is missing or has no `images` list. `import_pack(&mut lib, pack, &PackImportOptions { folder, skip_duplicates })` imports one and returns the new item ids. Item files are moved in as they are (thumbnail included), not re-imported, as Eagle does. Differences from Eagle, all inferred to be harmless:
 
 - falcon drops item `folders` ids that don't exist after import, where Eagle would write `null` or keep a dangling id.
 - An item whose `<ID>.info` folder is missing from the pack is skipped; Eagle still lists it, with no files.
