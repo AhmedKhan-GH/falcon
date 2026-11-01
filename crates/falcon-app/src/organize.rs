@@ -5,6 +5,7 @@
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 
+use falcon_library::edit::SubfolderSort;
 use falcon_library::model::{Folder, FolderOrder, Item, TagGroup};
 use falcon_library::search::{self, OrderBy};
 use falcon_library::smart::SmartFolder;
@@ -351,6 +352,26 @@ pub fn smart_icon(sf: &SmartFolder) -> Option<&str> {
 }
 
 // ---------------------------------------------------------------------------
+// Sorting folders by title
+
+/// The folder menu's Sort By entries, in Eagle's order: this level A to Z
+/// and Z to A, then every level A to Z and Z to A.
+pub const FOLDER_TITLE_SORTS: [(&str, SubfolderSort); 4] = [
+    ("Title, This Level (A→Z)", SubfolderSort { descending: false, all_levels: false }),
+    ("Title, This Level (Z→A)", SubfolderSort { descending: true, all_levels: false }),
+    ("Title, All Levels (A→Z)", SubfolderSort { descending: false, all_levels: true }),
+    ("Title, All Levels (Z→A)", SubfolderSort { descending: true, all_levels: true }),
+];
+
+/// The list [`falcon_library::Library::sort_subfolders`] should sort for
+/// a Sort By entry picked on a folder whose parent is `parent` (`None`:
+/// the top level). As in Eagle, "this level" is the folder's own level
+/// (it and its siblings), and "all levels" is the whole tree from the top.
+pub fn title_sort_parent(parent: Option<&str>, sort: SubfolderSort) -> Option<&str> {
+    if sort.all_levels { None } else { parent }
+}
+
+// ---------------------------------------------------------------------------
 // Tag groups
 
 /// One group on the All Tags page with its member tags and their counts
@@ -656,6 +677,17 @@ mod tests {
         assert!(!manual_noop(&order, &mv(&["b"]), Some("d")));
         assert!(!manual_noop(&order, &mv(&["a", "c"]), Some("d")), "a gap closes up");
         assert!(!manual_noop(&order, &mv(&["a"]), None));
+    }
+
+    #[test]
+    fn title_sorts_follow_eagles_menu() {
+        let s = FOLDER_TITLE_SORTS.map(|(_, s)| (s.all_levels, s.descending));
+        assert_eq!(s, [(false, false), (false, true), (true, false), (true, true)]);
+        let this = FOLDER_TITLE_SORTS[1].1;
+        let all = FOLDER_TITLE_SORTS[2].1;
+        assert_eq!(title_sort_parent(Some("p"), this), Some("p"), "this level is the folder's siblings");
+        assert_eq!(title_sort_parent(None, this), None);
+        assert_eq!(title_sort_parent(Some("p"), all), None, "all levels start at the top");
     }
 
     #[test]

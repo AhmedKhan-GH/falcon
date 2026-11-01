@@ -1356,6 +1356,7 @@ fn organize_label(a: &organize_ui::OrgAction) -> String {
         O::MoveManual(_, ids, _) => format!("Reorder {}", ids.len()),
         O::CreateSmartGroup(_) => "New smart folder group".into(),
         O::RenameSmart(..) => "Rename smart folder".into(),
+        O::SortFolders(..) => "Sort folders by title".into(),
     }
 }
 
@@ -1685,6 +1686,9 @@ impl App {
             if let Some(d) = header.dnd_release_payload::<DragFolder>() {
                 self.ws.actions.push(Action::MoveFolder(d.0.clone(), None));
             }
+            header.context_menu(|ui| {
+                self.folder_title_sort_menu(ui, None);
+            });
             let filter = self.ws.folder_filter.trim().to_lowercase();
             for f in &lib.metadata.folders {
                 self.folder_row(ui, lib, f, 0, &cx, &filter);
@@ -1821,7 +1825,7 @@ impl App {
             if depth > 0 && ui.button("Move to Top Level").clicked() {
                 self.ws.actions.push(Action::MoveFolder(f.id.clone(), None));
             }
-            self.folder_menu_extras(ui, f);
+            self.folder_menu_extras(ui, lib, f);
             ui.separator();
             if ui.button(RichText::new("Delete Folder").color(t::p().icon_red)).clicked() {
                 self.ws.confirm = Some(Confirm::DeleteFolder(f.id.clone()));
@@ -1899,8 +1903,9 @@ fn smart_name(lib: &Library, id: &str) -> String {
 }
 
 /// A section header with a + button that shows on hover, like Eagle's.
+/// A sidebar section heading. It senses clicks so it can carry a menu.
 fn section(ui: &mut Ui, title: &str) -> Response {
-    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 25.0), Sense::hover());
+    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 25.0), Sense::click());
     ui.painter().text(
         Pos2::new(rect.left() + 20.0, rect.center().y),
         Align2::LEFT_CENTER,

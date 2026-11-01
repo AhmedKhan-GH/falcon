@@ -6,6 +6,7 @@
 use super::*;
 use crate::folder_icons;
 use crate::organize::{self, DropZone};
+use falcon_library::edit::SubfolderSort;
 use falcon_library::model::{FolderOrder, SavedFilter};
 use falcon_library::smart::SmartFolder;
 
@@ -31,6 +32,9 @@ pub(super) struct OrgState {
     rename_new_group: bool,
     /// Smart folder being renamed in the sidebar, with the text so far.
     smart_rename: Option<(String, String)>,
+    /// A sort of folders by title waiting for its confirmation: the
+    /// parent whose children are sorted (`None`: the top level).
+    sort_confirm: Option<(Option<String>, SubfolderSort)>,
 }
 
 /// A tag dragged on the All Tags page.
@@ -84,6 +88,8 @@ pub(super) enum OrgAction {
     /// A new smart folder group, "Untitled", in a parent or at the top.
     CreateSmartGroup(Option<String>),
     RenameSmart(String, String),
+    /// Sorts the children of a folder (`None`: the top level) by title.
+    SortFolders(Option<String>, SubfolderSort),
 }
 
 /// Which stored sort the toolbar's sort menu edits.
@@ -250,7 +256,7 @@ impl App {
 
     /// The folder context menu entries falcon adds: password, item sort,
     /// icon and colour.
-    pub(super) fn folder_menu_extras(&mut self, ui: &mut Ui, f: &Folder) {
+    pub(super) fn folder_menu_extras(&mut self, ui: &mut Ui, lib: &Library, f: &Folder) {
         let shut = organize::is_shut(f, &self.ws.org.unlocked);
         ui.menu_button("Password", |ui| {
             let mut open = |mode| {
@@ -280,6 +286,8 @@ impl App {
                 }
             }
         });
+        let parent = organize::locate(&lib.metadata.folders, &f.id).and_then(|(p, _)| p).map(str::to_string);
+        self.folder_title_sort_menu(ui, parent.as_deref());
         ui.menu_button("Sort Items By", |ui| {
             ui.set_min_width(180.0);
             let cur = organize::own_order(f.order_by.as_deref(), f.sort_increase);
@@ -299,6 +307,22 @@ impl App {
             self.ws.actions.push(org(OrgAction::FolderIcon(f.id.clone(), f.icon.clone(), color)));
             ui.close();
         }
+    }
+}
+
+impl App {
+    /// The Sort By submenu that orders folders by title, for a folder whose
+    /// parent is `parent` (`None`: on the top level, or the Folders
+    /// heading). Asks first, as Eagle does.
+    pub(super) fn folder_title_sort_menu(&mut self, ui: &mut Ui, parent: Option<&str>) {
+        ui.menu_button("Sort By", |ui| {
+            ui.set_min_width(200.0);
+            for (label, sort) in organize::FOLDER_TITLE_SORTS {
+                if ui.button(label).clicked() {
+                    self.ws.org.sort_confirm = Some((organize::title_sort_parent(parent, sort).map(str::to_string), sort));
+                }
+            }
+        });
     }
 }
 
@@ -910,6 +934,32 @@ impl App {
     pub(super) fn organize_dialogs(&mut self, ctx: &egui::Context, lib: &Library) {
         self.password_dialog(ctx, lib);
         self.filter_name_dialog(ctx, lib);
+        if let Some((parent, sort)) = self.ws.org.sort_confirm.clone() {
+            let what = match (&parent, sort.all_levels) {
+                (_, true) => "every folder".to_string(),
+                (None, false) => "the top-level folders".to_string(),
+                (Some(p), false) => format!("the folders in “{}”", logic::find_folder(&lib.metadata.folders, p).map_or("", |f| f.name.as_str())),
+            };
+            let modal = egui::Modal::new(egui::Id::unique("sort-folders")).show(ctx, |ui| {
+                ui.set_width(320.0);
+                ui.label(RichText::new(format!("Sort {what} by title?")).size(15.0));
+                ui.add_space(4.0);
+                ui.label(RichText::new("Their hand-made order is replaced.").color(t::p().text_muted));
+                ui.add_space(10.0);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.button("Sort by Title").clicked() {
+                        self.ws.actions.push(org(OrgAction::SortFolders(parent.clone(), sort)));
+                        self.ws.org.sort_confirm = None;
+                    }
+                    if ui.button("Cancel").clicked() {
+                        self.ws.org.sort_confirm = None;
+                    }
+                });
+            });
+            if modal.should_close() {
+                self.ws.org.sort_confirm = None;
+            }
+        }
         if let Some(id) = self.ws.org.group_delete.clone() {
             let name = lib.metadata.tags_groups.iter().find(|g| g.id == id).map_or_else(String::new, |g| g.name.clone());
             let modal = egui::Modal::new(egui::Id::unique("group-delete")).show(ctx, |ui| {
@@ -1101,6 +1151,7 @@ impl App {
                 Ok(())
             }
             OrgAction::RenameSmart(id, name) => lib.rename_smart_folder(&id, &name),
+            OrgAction::SortFolders(parent, sort) => lib.sort_subfolders(parent.as_deref(), sort),
         }
     }
 }
