@@ -30,7 +30,6 @@ pub enum FilterKind {
     Camera,
 }
 
-#[allow(dead_code)]
 impl FilterKind {
     pub const ALL: [FilterKind; 16] = [
         FilterKind::Color,
@@ -117,10 +116,9 @@ pub struct SearchPrefs {
 }
 
 /// How many folders (and smart folders) Go to Folder remembers, as Eagle.
-#[allow(dead_code)]
+#[allow(dead_code)] // Go to Folder uses it next
 pub const HISTORY_LEN: usize = 200;
 
-#[allow(dead_code)]
 impl SearchPrefs {
     pub fn is_pinned(&self, kind: FilterKind) -> bool {
         self.pinned.get(kind.id()).copied().unwrap_or_else(|| kind.pinned_by_default())

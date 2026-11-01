@@ -627,9 +627,8 @@ pub struct SavedFilterQuery {
     pub filter: crate::search::Filter,
     /// The search text saved with the filter.
     pub keyword: Option<String>,
-    /// Active rules falcon cannot express yet, by their rule key
-    /// (`annotation`, `image`, `semantic`, `shape.43`,
-    /// `folder.excludes.NoFolders`, ...).
+    /// Active rules falcon cannot express, by their rule key (`image` and
+    /// `semantic`, Eagle's AI searches).
     pub unsupported: Vec<String>,
 }
 

@@ -19,7 +19,7 @@ use crate::colors;
 use crate::icons as ic;
 use crate::loader::{Loader, Tier, job_for};
 use crate::logic::{self, Layout, NavCounts, Scope};
-use falcon_library::search::{self, ColorQuery, Filter, Logic, OrderBy, TextFilter};
+use falcon_library::search::{ColorQuery, Filter, Logic, OrderBy, TextFilter};
 use crate::theme::{self as t, font, mono};
 
 mod organize_ui;
@@ -27,6 +27,7 @@ mod dupes_ui;
 mod export_ui;
 mod duplicates_view;
 mod filters_ui;
+mod filter_bar;
 mod find_cmds;
 mod media_view;
 mod font_view;
@@ -1162,6 +1163,7 @@ impl App {
         self.ws.forward.clear();
         self.ws.selected.clear();
         self.ws.anchor = None;
+        self.view_changed();
     }
 
     /// The shown library's path, the key its pages share a layout under.
@@ -1217,6 +1219,7 @@ impl App {
             self.ws.forward.push(std::mem::replace(&mut self.ws.scope, s));
             self.ws.selected.clear();
             self.ws.folders.clear();
+            self.view_changed();
         }
     }
 
@@ -1225,6 +1228,7 @@ impl App {
             self.ws.back.push(std::mem::replace(&mut self.ws.scope, s));
             self.ws.selected.clear();
             self.ws.folders.clear();
+            self.view_changed();
         }
     }
 
@@ -3261,176 +3265,6 @@ fn text_filter_menu(ui: &mut Ui, f: &mut TextFilter, keywords: &mut String) {
     if ui.add(TextEdit::singleline(keywords).hint_text("keyword, keyword")).changed() {
         let words: Vec<String> = keywords.split(',').map(|w| w.trim().to_string()).filter(|w| !w.is_empty()).collect();
         *f = if words.is_empty() { TextFilter::Off } else { TextFilter::Keywords(words) };
-    }
-}
-
-impl App {
-    fn filter_bar(&mut self, ui: &mut Ui, lib: &Library) {
-        let r = ui.max_rect();
-        ui.painter().hline(r.x_range(), r.bottom() - 0.5, Stroke::new(1.0, t::p().divider));
-        let inner = r.shrink2(vec2(GRID_PAD_X, 7.0));
-        let mut row = ui.new_child(egui::UiBuilder::new().max_rect(inner).layout(egui::Layout::left_to_right(egui::Align::Center)));
-        let ui = &mut row;
-        ui.spacing_mut().item_spacing.x = 6.0;
-        let f = &mut self.ws.filter;
-
-        let color_val = f.color.map(|c| logic::hex(c.rgb));
-        let resp = filter_chip(ui, "Color", color_val);
-        let color_text = &mut self.ws.color_text;
-        egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
-            ui.set_min_width(230.0);
-            ui.horizontal_wrapped(|ui| {
-                ui.spacing_mut().item_spacing = vec2(6.0, 6.0);
-                for c in PRESET_COLORS {
-                    let (rect, hit) = ui.allocate_exact_size(Vec2::splat(22.0), Sense::click());
-                    ui.painter().circle_filled(rect.center(), 10.0, Color32::from_rgb(c[0], c[1], c[2]));
-                    ui.painter().circle_stroke(rect.center(), 10.0, Stroke::new(1.0, t::p().divider));
-                    if f.color.is_some_and(|q| q.rgb == c) {
-                        ui.painter().circle_stroke(rect.center(), 12.5, Stroke::new(1.5, t::p().primary));
-                    }
-                    if hit.clicked() {
-                        let acc = f.color.map_or(20.0, |q| q.accuracy);
-                        f.color = Some(ColorQuery { rgb: c, accuracy: acc });
-                        *color_text = logic::hex(c);
-                    }
-                }
-            });
-            ui.add_space(6.0);
-            ui.horizontal(|ui| {
-                ui.label("Hex");
-                if ui.add(TextEdit::singleline(color_text).desired_width(90.0).hint_text("#FF0000")).changed()
-                    && let Some(rgb) = parse_hex(color_text)
-                {
-                    let acc = f.color.map_or(20.0, |q| q.accuracy);
-                    f.color = Some(ColorQuery { rgb, accuracy: acc });
-                }
-            });
-            if let Some(q) = f.color.as_mut() {
-                ui.horizontal(|ui| {
-                    ui.label("Accuracy");
-                    // Eagle draws the slider reversed: right is stricter.
-                    let mut strict = 45.0 - q.accuracy;
-                    ui.add(egui::Slider::new(&mut strict, 5.0..=40.0).show_value(false));
-                    q.accuracy = 45.0 - strict;
-                });
-            }
-            ui.checkbox(&mut f.grayscale, "Grayscale only");
-            if ui.button("Clear").clicked() {
-                f.color = None;
-                f.grayscale = false;
-                color_text.clear();
-            }
-        });
-
-        let tags = logic::tag_counts(lib.items());
-        let tv = (!f.tags.includes.is_empty() || f.tags.empty).then(|| {
-            let n = f.tags.includes.len() + usize::from(f.tags.empty);
-            if n == 1 { f.tags.includes.first().cloned().unwrap_or_else(|| "Untagged".into()) } else { format!("{n}") }
-        });
-        let resp = filter_chip(ui, "Tags", tv);
-        egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
-            ui.set_min_width(220.0);
-            logic_picker(ui, &mut f.tags.logic);
-            ui.separator();
-            ui.checkbox(&mut f.tags.empty, "Untagged");
-            egui::ScrollArea::vertical().max_height(300.0).show(ui, |ui| {
-                for (tag, n) in &tags {
-                    let mut on = f.tags.includes.contains(tag);
-                    if ui.checkbox(&mut on, format!("{tag}  ({n})")).changed() {
-                        if on {
-                            f.tags.includes.push(tag.clone());
-                        } else {
-                            f.tags.includes.retain(|x| x != tag);
-                        }
-                    }
-                }
-            });
-        });
-
-        let fv = (!f.folders.includes.is_empty()).then(|| f.folders.includes.len().to_string());
-        let resp = filter_chip(ui, "Folders", fv);
-        egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
-            ui.set_min_width(220.0);
-            logic_picker(ui, &mut f.folders.logic);
-            ui.separator();
-            ui.checkbox(&mut f.folders.empty, "Uncategorized");
-            egui::ScrollArea::vertical().max_height(300.0).show(ui, |ui| {
-                for folder in lib.all_folders() {
-                    let mut on = f.folders.includes.contains(&folder.id);
-                    if ui.checkbox(&mut on, &folder.name).changed() {
-                        if on {
-                            f.folders.includes.push(folder.id.clone());
-                        } else {
-                            f.folders.includes.retain(|x| *x != folder.id);
-                        }
-                    }
-                }
-            });
-        });
-
-        let counts = search::shape_counts(lib.items().iter().filter(|i| !i.is_deleted));
-        Self::shape_chip(ui, f, &mut self.ws.filter_ui, &counts);
-
-        let rv = (!f.ratings.is_empty()).then(|| f.ratings.len().to_string());
-        let resp = filter_chip(ui, "Rating", rv);
-        egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
-            for n in (0..=5u8).rev() {
-                let label = if n == 0 { "Unrated".to_string() } else { "★".repeat(n as usize) };
-                let mut on = f.ratings.contains(&n);
-                if ui.checkbox(&mut on, label).changed() {
-                    if on {
-                        f.ratings.insert(n);
-                    } else {
-                        f.ratings.remove(&n);
-                    }
-                }
-            }
-        });
-
-        let mut exts: Vec<String> = lib.items().iter().map(|i| i.ext.clone()).collect::<HashSet<_>>().into_iter().collect();
-        exts.sort();
-        let yv = (!f.types.is_empty()).then(|| {
-            if f.types.len() == 1 { f.types[0].to_uppercase() } else { f.types.len().to_string() }
-        });
-        let resp = filter_chip(ui, "Type", yv);
-        egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
-            for ext in &exts {
-                let mut on = f.types.contains(ext);
-                if ui.checkbox(&mut on, ext.to_uppercase()).changed() {
-                    if on {
-                        f.types.push(ext.clone());
-                    } else {
-                        f.types.retain(|x| x != ext);
-                    }
-                }
-            }
-        });
-
-        let label = |t: &TextFilter| match t {
-            TextFilter::Off => None,
-            TextFilter::Has => Some("Has".to_string()),
-            TextFilter::No => Some("None".to_string()),
-            TextFilter::Keywords(k) => Some(k.join(", ")),
-        };
-        let note_kw = &mut self.ws.note_text;
-        let resp = filter_chip(ui, "Notes", label(&f.note));
-        egui::Popup::menu(&resp)
-            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
-            .show(|ui| text_filter_menu(ui, &mut f.note, note_kw));
-        let url_kw = &mut self.ws.url_text;
-        let resp = filter_chip(ui, "URL", label(&f.url));
-        egui::Popup::menu(&resp)
-            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
-            .show(|ui| text_filter_menu(ui, &mut f.url, url_kw));
-        self.media_filter_chips(ui, lib);
-
-        if self.ws.filter.is_active() {
-            let clear = ui.add(egui::Button::new(RichText::new(format!("{}  Clear", ic::X)).color(t::p().text_muted)).frame(false));
-            if clear.clicked() {
-                self.reset_filter();
-            }
-        }
-        self.saved_filters_menu(ui, lib);
     }
 }
 

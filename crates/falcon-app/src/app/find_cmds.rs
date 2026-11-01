@@ -18,8 +18,10 @@ impl App {
         self.focus_folder_filter = true;
     }
 
-    /// Clear Filter: every filter rule off, as the bar's Clear does (the search text stays).
+    /// Clear Filter: every filter rule off and the Lock released, as
+    /// Eagle's reset does (the search text stays).
     pub(super) fn reset_filter(&mut self) {
+        self.ws.filter_ui.locked = false;
         self.ws.filter = Filter::default();
         self.clear_media_filter_text();
         self.ws.color_text.clear();

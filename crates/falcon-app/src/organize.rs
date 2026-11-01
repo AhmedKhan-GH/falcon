@@ -493,11 +493,8 @@ pub fn unsupported_names(keys: &[String]) -> Vec<&'static str> {
     let mut out: Vec<&'static str> = Vec::new();
     for k in keys {
         let name = match k.as_str() {
-            "annotation" => "comments",
             "image" => "image search",
             "semantic" => "semantic search",
-            "folder.excludes.NoFolders" => "excluding uncategorized",
-            s if s.starts_with("shape.") => "aspect ratio",
             _ => "other rules",
         };
         if !out.contains(&name) {
@@ -879,8 +876,8 @@ mod tests {
 
     #[test]
     fn unsupported_rules_have_plain_names() {
-        let keys: Vec<String> = ["annotation", "shape.43", "shape.169", "folder.excludes.NoFolders"].iter().map(|s| s.to_string()).collect();
-        assert_eq!(unsupported_names(&keys), ["comments", "aspect ratio", "excluding uncategorized"]);
+        let keys: Vec<String> = ["semantic", "image", "semantic", "bogus"].iter().map(|s| s.to_string()).collect();
+        assert_eq!(unsupported_names(&keys), ["semantic search", "image search", "other rules"]);
     }
 
     #[test]
