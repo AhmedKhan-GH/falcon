@@ -23,12 +23,12 @@ mod geom;
 #[cfg(target_os = "macos")]
 mod mac;
 #[cfg(target_os = "macos")]
-pub use mac::Document;
+pub use mac::{Document, print};
 
 #[cfg(not(target_os = "macos"))]
 mod other;
 #[cfg(not(target_os = "macos"))]
-pub use other::Document;
+pub use other::{Document, print};
 
 /// An RGBA picture, 8 bits per channel, rows top to bottom, opaque.
 #[derive(Clone, Debug, PartialEq)]

@@ -5,6 +5,11 @@ use std::path::Path;
 
 use crate::{Bitmap, Error, Hit, Info, Link, OutlineEntry, Result, SearchOptions, Selection};
 
+/// Printing needs macOS's PDFKit.
+pub fn print(_path: &Path, _password: Option<&str>, _title: &str) -> Result<bool> {
+    Err(Error("printing needs macOS".into()))
+}
+
 /// Never constructed off macOS.
 pub struct Document {
     _private: (),

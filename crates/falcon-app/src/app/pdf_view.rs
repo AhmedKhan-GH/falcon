@@ -656,6 +656,8 @@ pub enum PdfKey {
     ZoomReset,
     /// Turn the pages a quarter clockwise (1) or anticlockwise (-1).
     Rotate(i8),
+    /// Print the document (⌘P).
+    Print,
     /// The hand tool (true) or the text selection tool.
     Hand(bool),
 }
@@ -680,6 +682,7 @@ pub fn key_action(key: Key, m: Modifiers, find_focused: bool, find_open: bool) -
     if cmd {
         return match key {
             Key::F if !m.shift => Some(PdfKey::Find),
+            Key::P if !m.shift => Some(PdfKey::Print),
             Key::G => Some(PdfKey::FindNext(!m.shift)),
             Key::Equals | Key::Plus => Some(PdfKey::ZoomIn),
             Key::Minus => Some(PdfKey::ZoomOut),
@@ -821,7 +824,7 @@ fn work(path: &Path, rx: &Receiver<Req>, tx: &Sender<Reply>, ctx: &egui::Context
             }
         }
     };
-    let info = DocInfo { pdf: doc.info(), linearized: std::fs::File::open(path).ok().is_some_and(is_linearized) };
+    let info = DocInfo { pdf: doc.info(), linearized: std::fs::File::open(path).ok().is_some_and(is_linearized), password };
     if !send(Reply::Opened { sizes: doc.page_sizes(), outline: doc.outline(), info: Box::new(info) }) {
         return;
     }
@@ -894,6 +897,8 @@ struct DocInfo {
     pdf: falcon_pdf::Info,
     /// "Fast web view": the file is linearized.
     linearized: bool,
+    /// The password that opened it, for printing.
+    password: Option<String>,
 }
 
 /// Whether a PDF file is linearized ("fast web view"): its first object,
@@ -990,6 +995,8 @@ struct Open {
     properties: bool,
     /// The outline entry last highlighted, to scroll to a new one.
     outline_shown: Option<usize>,
+    /// Print was asked for this frame.
+    print: bool,
 }
 
 impl Open {
@@ -1034,6 +1041,7 @@ impl Open {
             password: String::new(),
             properties: false,
             outline_shown: None,
+            print: false,
         }
     }
 
@@ -1193,6 +1201,7 @@ impl Open {
             PdfKey::ZoomOut => self.zoom = Zoom::Percent(zoom_step(self.zoom_factor(), false)),
             PdfKey::ZoomReset => self.zoom = Zoom::Auto,
             PdfKey::Rotate(d) => self.rotate(d),
+            PdfKey::Print => self.print = true,
             PdfKey::Hand(on) => {
                 self.hand = on;
                 if on {
@@ -1467,6 +1476,14 @@ impl App {
             }
             if let Some(o) = self.pdf.open.as_mut().filter(|o| o.properties) {
                 properties_dialog(o, ctx, item);
+            }
+            // PDFKit's print panel, on this (the main) thread; it is modal.
+            if let Some(o) = self.pdf.open.as_mut().filter(|o| o.print) {
+                o.print = false;
+                let title = o.info.pdf.title.clone().unwrap_or_else(|| item.name.clone());
+                if let Err(e) = falcon_pdf::print(&item.original_path(lib.root()), o.info.password.as_deref(), &title) {
+                    self.flash(format!("Can't print: {e}"));
+                }
             }
             super::media_view::bar_name(ui, item, bar, name_x, right);
         }
@@ -1963,6 +1980,10 @@ pub fn page_size_text(w_pt: f32, h_pt: f32) -> String {
 fn tools_menu(o: &mut Open, ui: &mut Ui) {
     ui.set_min_width(220.0);
     let row = |ui: &mut Ui, label: &str, on: bool, key: &str| ui.add(egui::Button::new(label).selected(on).shortcut_text(key)).clicked();
+    if row(ui, "Print…", false, "⌘P") {
+        o.act(PdfKey::Print);
+        ui.close();
+    }
     if row(ui, "Presentation Mode", false, "F5") {
         o.present = true;
         ui.close();
@@ -2365,6 +2386,7 @@ mod tests {
         assert_eq!(key_action(Key::H, none, false, false), Some(PdfKey::Hand(true)));
         assert_eq!(key_action(Key::S, none, false, false), Some(PdfKey::Hand(false)));
         assert_eq!(key_action(Key::R, none, true, true), None, "typing in the find field");
+        assert_eq!(key_action(Key::P, cmd, false, false), Some(PdfKey::Print));
     }
 
     #[test]

@@ -344,6 +344,31 @@ impl Document {
     }
 }
 
+/// Prints the PDF at `path` (unlocked with `password` if it has one)
+/// through PDFKit's print operation: the system print panel, then the job
+/// named `title`. Must run on the main thread, which it blocks while the
+/// panel is up; returns whether it printed (false if cancelled). Fails off
+/// the main thread, for an unreadable file, or when the PDF forbids
+/// printing.
+pub fn print(path: &Path, password: Option<&str>, title: &str) -> Result<bool> {
+    let mtm = objc2::MainThreadMarker::new().ok_or_else(|| err("printing needs the main thread"))?;
+    let doc = Document::open_with_password(path, password)?;
+    autoreleasepool(|_| {
+        // SAFETY: owned; this (main) thread opened the document just now.
+        if !unsafe { doc.doc.allowsPrinting() } {
+            return Err(err("this PDF does not allow printing"));
+        }
+        let info = objc2_app_kit::NSPrintInfo::sharedPrintInfo();
+        // SAFETY: owned, plain; main thread (`mtm`).
+        let op = unsafe { doc.doc.printOperationForPrintInfo_scalingMode_autoRotate(Some(&info), objc2_pdf_kit::PDFPrintScalingMode::PageScaleDownToFit, true, mtm) }
+            .ok_or_else(|| err("PDFKit made no print job"))?;
+        op.setJobTitle(Some(&NSString::from_str(title)));
+        op.setShowsPrintPanel(true);
+        op.setShowsProgressPanel(true);
+        Ok(op.runOperation())
+    })
+}
+
 /// A metadata value as text: a string, or a list of strings (keywords)
 /// joined by commas; blank values count as none.
 fn text_of(v: &AnyObject) -> Option<String> {
@@ -437,5 +462,15 @@ mod tests {
         assert_eq!(doc.page_count(), 1);
         assert!(doc.info().encrypted);
         assert!(!Error("no file".into()).needs_password());
+    }
+
+    #[test]
+    fn printing_needs_the_main_thread() {
+        // The test harness runs tests on other threads.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("plain.pdf");
+        plain_pdf(&path);
+        let e = print(&path, None, "x").err().unwrap();
+        assert!(e.0.contains("main thread"), "{e}");
     }
 }
