@@ -54,20 +54,18 @@ pub(crate) mod covers;
 pub(crate) use crate::ui::inspector::tag_picker;
 
 // Viewer.
-pub(crate) mod media_view;
-pub(crate) mod font_view;
-pub(crate) mod image_view;
-pub(crate) mod video_view;
-pub(crate) mod gif_view;
-pub(crate) mod open_ui;
-pub(crate) mod pdf_view;
-pub(crate) mod modes;
-pub(crate) mod preview_window;
-pub(crate) mod text_view;
-#[path = "../comments.rs"]
-pub(crate) mod comments;
-#[path = "../crop.rs"]
-pub(crate) mod crop;
+pub(crate) use crate::ui::viewer::audio as media_view;
+pub(crate) use crate::ui::viewer::font as font_view;
+pub(crate) use crate::ui::viewer::image as image_view;
+pub(crate) use crate::ui::viewer::video as video_view;
+pub(crate) use crate::ui::viewer::gif as gif_view;
+pub(crate) use crate::ui::viewer::open as open_ui;
+pub(crate) use crate::ui::viewer::pdf as pdf_view;
+pub(crate) use crate::ui::viewer::modes;
+pub(crate) use crate::ui::viewer::preview_window;
+pub(crate) use crate::ui::viewer::text as text_view;
+pub(crate) use crate::ui::viewer::comments;
+pub(crate) use crate::ui::viewer::crop;
 
 // Dialogs and menus.
 pub(crate) mod about;

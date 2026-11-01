@@ -19,7 +19,8 @@ use falcon_library::Library;
 use falcon_library::model::Item;
 use falcon_pdf::{Document, Hit, Link, LinkTarget, OutlineEntry, SearchOptions};
 
-use super::{App, icon_button};
+use crate::app::App;
+use crate::ui::widgets::icon_button;
 use crate::icons as ic;
 use crate::theme::{self as t, font, mono};
 
@@ -1425,7 +1426,7 @@ impl App {
         }
         self.pdf.ensure(ctx, lib, item);
         {
-            let ui = &mut super::viewer_ui(parent, screen, "pdf-viewer");
+            let ui = &mut crate::ui::widgets::viewer_ui(parent, screen, "pdf-viewer");
             ui.painter().rect_filled(screen, 0.0, t::p().main);
             let bar = Rect::from_min_size(screen.min, vec2(screen.width(), t::BAR_HEIGHT));
             let mut area = Rect::from_min_max(Pos2::new(screen.left(), bar.bottom()), screen.max);
@@ -1463,7 +1464,7 @@ impl App {
                     Status::Locked(wrong) => password_prompt(o, ui, area, wrong),
                 }
             }
-            let (name_x, mut right) = super::media_view::bar_shell(self, ui, item, bar);
+            let (name_x, mut right) = crate::ui::viewer::audio::bar_shell(self, ui, item, bar);
             let mut present = false;
             if let Some(o) = self.pdf.open.as_mut().filter(|o| o.status == Status::Ready) {
                 let (tab, left) = toolbar(o, ui, bar, right - 8.0, self.pdf.sidebar);
@@ -1485,7 +1486,7 @@ impl App {
                     self.flash(format!("Can't print: {e}"));
                 }
             }
-            super::media_view::bar_name(ui, item, bar, name_x, right);
+            crate::ui::viewer::audio::bar_name(ui, item, bar, name_x, right);
         }
         true
     }

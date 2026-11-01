@@ -10,9 +10,10 @@
 use eframe::egui::{self, Align2, Color32, CornerRadius, Key, Pos2, Rect, Sense, Stroke, StrokeKind, TextEdit, Ui, Vec2, text::LayoutJob, vec2};
 use falcon_library::model::{Comment, Item};
 
-use super::image_edit::{Draft, Op};
-use super::{Action, App, Fold, icon_button};
-use super::crop::{Handle, hit, to_image, to_screen};
+use crate::app::image_edit::{Draft, Op};
+use crate::app::{Action, App, Fold};
+use crate::ui::widgets::icon_button;
+use crate::ui::viewer::crop::{Handle, hit, to_image, to_screen};
 use crate::icons as ic;
 use crate::theme::{self as t, font, mono};
 

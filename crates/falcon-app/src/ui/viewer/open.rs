@@ -9,7 +9,9 @@ use eframe::egui::{self, Align2, CornerRadius, Pos2, Rect, Sense, Ui, vec2};
 use falcon_library::Library;
 use falcon_library::model::Item;
 
-use super::{App, Tier, icon, icon_button};
+use crate::app::App;
+use crate::loader::Tier;
+use crate::ui::widgets::{icon, icon_button};
 use crate::icloud::FetchState;
 use crate::icons as ic;
 use crate::open_with;
@@ -51,14 +53,14 @@ impl App {
     /// Preferences says so).
     pub(crate) fn quick_look(&mut self) {
         let Some(shared) = self.ws.lib.clone() else { return };
-        let files = originals(&super::lock(&shared), &self.ws.selected);
+        let files = originals(&crate::app::lock(&shared), &self.ws.selected);
         open_with::quick_look(&files);
     }
 
     pub(crate) fn open_keys(&mut self, default: bool) {
         let Some(shared) = self.ws.lib.clone() else { return };
         let files = {
-            let lib = super::lock(&shared);
+            let lib = crate::app::lock(&shared);
             match &self.ws.viewer {
                 Some(id) => originals(&lib, std::slice::from_ref(id)),
                 None => originals(&lib, &self.ws.selected),
@@ -146,7 +148,7 @@ impl App {
         }
         let preview = self.ws.loader.get(&item.id, Tier::Preview).cloned();
         {
-            let ui = &mut super::viewer_ui(parent, screen, "icloud-viewer");
+            let ui = &mut crate::ui::widgets::viewer_ui(parent, screen, "icloud-viewer");
             let p = ui.painter().clone();
             p.rect_filled(screen, 0.0, t::p().main);
             let bar = Rect::from_min_size(screen.min, vec2(screen.width(), t::BAR_HEIGHT));
@@ -184,7 +186,7 @@ impl App {
                 }
                 FetchState::Local => {}
             }
-            super::media_view::top_bar(self, ui, item, bar);
+            crate::ui::viewer::audio::top_bar(self, ui, item, bar);
         }
         true
     }
@@ -212,7 +214,7 @@ mod tests {
     #[test]
     fn the_open_icon_is_in_the_icon_font() {
         use skrifa::MetadataProvider;
-        let font = skrifa::FontRef::new(include_bytes!("../../assets/Phosphor-Light.ttf")).unwrap();
+        let font = skrifa::FontRef::new(include_bytes!("../../../assets/Phosphor-Light.ttf")).unwrap();
         let ch = ic::ARROW_SQUARE_OUT.chars().next().unwrap();
         let gid = font.charmap().map(ch).expect("glyph");
         assert_ne!(gid, skrifa::GlyphId::NOTDEF);

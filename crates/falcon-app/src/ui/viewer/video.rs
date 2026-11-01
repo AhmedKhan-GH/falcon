@@ -11,9 +11,10 @@ use falcon_library::model::{Comment, Item};
 use falcon_library::{Library, media};
 use falcon_video::Video;
 
-use super::comments::{plain_text, time_label as comment_time};
-use super::image_edit::Op;
-use super::{Action, App, icon_button};
+use crate::ui::viewer::comments::{plain_text, time_label as comment_time};
+use crate::app::image_edit::Op;
+use crate::app::{Action, App};
+use crate::ui::widgets::icon_button;
 use crate::icons as ic;
 use crate::shortcuts::{Command, FrameTool, PlayerKey};
 use crate::logic;
@@ -579,7 +580,7 @@ impl App {
                 let size = tex.size_vec2() * (thumb.width() / tex.size_vec2().max_elem());
                 egui::Image::new((tex.id(), size)).paint_at(ui, Rect::from_center_size(thumb.center(), size));
             }
-            None => super::ext_placeholder(ui, thumb, &item.ext),
+            None => crate::ui::widgets::ext_placeholder(ui, thumb, &item.ext),
         }
         if let Some(j) = crate::loader::job_for(item, lib.root(), crate::loader::Tier::Preview) {
             self.ws.frame_jobs.push(j);
@@ -614,13 +615,13 @@ impl App {
             }
             FrameTool::Save => {
                 let jpeg = falcon_library::thumbnail::jpeg(&image::DynamicImage::ImageRgba8(img), 95);
-                let Ok(dir) = super::tempfile_dir() else { return };
+                let Ok(dir) = crate::app::tempfile_dir() else { return };
                 let path = dir.join(format!("{}.jpg", frame_item_name(&item.name, at)));
                 // The import thread deletes the staged file once it has it.
                 if jpeg.is_ok_and(|b| std::fs::write(&path, b).is_ok()) {
                     let mut opts = self.prefs.import_options(item.folders.clone());
                     opts.url = item.url.clone();
-                    self.spawn_import(vec![super::import_ui::Job { path, opts }]);
+                    self.spawn_import(vec![crate::app::import_ui::Job { path, opts }]);
                 }
             }
         }
@@ -686,23 +687,23 @@ impl App {
             self.video.close();
         }
         if self.video.failed.contains(&item.id) || !self.video.open(lib, item, &self.prefs) {
-            let ui = &mut super::viewer_ui(parent, screen, "video-viewer");
+            let ui = &mut crate::ui::widgets::viewer_ui(parent, screen, "video-viewer");
             ui.painter().rect_filled(screen, 0.0, t::p().main);
             let bar = Rect::from_min_size(screen.min, vec2(screen.width(), t::BAR_HEIGHT));
             let area = Rect::from_min_max(Pos2::new(screen.left(), bar.bottom()), screen.max);
             self.cannot_play(ui, lib, item, area);
-            super::media_view::top_bar(self, ui, item, bar);
+            crate::ui::viewer::audio::top_bar(self, ui, item, bar);
             return true;
         }
         {
-            let ui = &mut super::viewer_ui(parent, screen, "video-viewer");
+            let ui = &mut crate::ui::widgets::viewer_ui(parent, screen, "video-viewer");
             ui.painter().rect_filled(screen, 0.0, t::p().main);
             let bar = Rect::from_min_size(screen.min, vec2(screen.width(), t::BAR_HEIGHT));
             let area = Rect::from_min_max(Pos2::new(screen.left(), bar.bottom()), screen.max);
             ui.interact(area, ui.scope_id().with("video-bg"), Sense::click());
             self.video_view(ctx, ui, lib, item, area);
             // Flip and rotate in the bar, as in Eagle's viewer toolbar.
-            let (name_x, mut right) = super::media_view::bar_shell(self, ui, item, bar);
+            let (name_x, mut right) = crate::ui::viewer::audio::bar_shell(self, ui, item, bar);
             let cy = bar.center().y;
             let tip = "Rotate Left (⇧R)\n⇧-click: Rotate Right";
             if icon_button(ui, Pos2::new(right - 4.0, cy), ic::ARROW_COUNTER_CLOCKWISE, 17.0, true, tip).clicked() {
@@ -713,7 +714,7 @@ impl App {
                 self.video.flipped = !self.video.flipped;
             }
             right -= 30.0;
-            super::media_view::bar_name(ui, item, bar, name_x, right);
+            crate::ui::viewer::audio::bar_name(ui, item, bar, name_x, right);
         }
         true
     }

@@ -6,7 +6,8 @@ use eframe::egui::{self, Color32, Pos2, Rect, Sense, Ui, Vec2, vec2};
 use falcon_library::Library;
 use falcon_library::model::Item;
 
-use super::{App, ext_placeholder};
+use crate::app::App;
+use crate::ui::widgets::ext_placeholder;
 use crate::loader::{Tier, job_for};
 use crate::logic;
 use crate::theme as t;

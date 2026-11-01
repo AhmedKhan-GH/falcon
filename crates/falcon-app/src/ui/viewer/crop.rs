@@ -6,8 +6,9 @@ use eframe::egui::{self, Color32, CornerRadius, Pos2, Rect, Sense, Stroke, Strok
 use falcon_library::model::Item;
 use falcon_library::transform::{self, PixelRect};
 
-use super::image_edit::Op;
-use super::{App, Action, icon_button};
+use crate::app::image_edit::Op;
+use crate::app::{Action, App};
+use crate::ui::widgets::icon_button;
 use crate::icons as ic;
 use crate::theme::{self as t, font, mono};
 
@@ -358,7 +359,7 @@ impl App {
         if transform::can_flip(&item.ext) {
             let tip = "Flip Horizontal (⇧F)\n⇧-click: Flip Vertical";
             if icon_button(ui, Pos2::new(x, cy), ic::FLIP_HORIZONTAL, 17.0, true, tip).clicked() {
-                let flip = super::image_edit::flip_for_click(ui.input(|i| i.modifiers.shift));
+                let flip = crate::app::image_edit::flip_for_click(ui.input(|i| i.modifiers.shift));
                 self.flip_request(vec![item.id.clone()], flip);
             }
             x -= 30.0;

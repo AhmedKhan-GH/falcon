@@ -10,8 +10,9 @@ use falcon_library::fontpreview::Specimen;
 use falcon_library::model::Item;
 use falcon_library::{Library, search};
 
-use super::image_edit::Op;
-use super::{Action, App, icon_button};
+use crate::app::image_edit::Op;
+use crate::app::{Action, App};
+use crate::ui::widgets::icon_button;
 use crate::icons as ic;
 use crate::logic::ViewZoom;
 use crate::theme::{self as t, font, mono};

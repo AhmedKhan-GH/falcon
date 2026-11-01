@@ -15,8 +15,8 @@ use eframe::egui::{self, Galley, Key, Margin, Modifiers, Pos2, Rect, RichText, S
 use falcon_library::Library;
 use falcon_library::model::Item;
 
-use super::App;
-use super::media_view::{bar_name, bar_shell};
+use crate::app::App;
+use crate::ui::viewer::audio::{bar_name, bar_shell};
 use crate::icons as ic;
 use crate::logic::ViewZoom;
 use crate::textdoc::{self, Autosave};
@@ -156,7 +156,7 @@ impl App {
         }
         let ctx = parent.ctx().clone();
         let now = ctx.input(|i| i.time);
-        let ui = &mut super::viewer_ui(parent, screen, "text-viewer");
+        let ui = &mut crate::ui::widgets::viewer_ui(parent, screen, "text-viewer");
         ui.painter().rect_filled(screen, 0.0, t::p().main);
         let bar = Rect::from_min_size(screen.min, vec2(screen.width(), t::BAR_HEIGHT));
         let area = Rect::from_min_max(Pos2::new(screen.left(), bar.bottom()), screen.max);
@@ -305,7 +305,7 @@ impl App {
             crate::open_with::open_url(&url);
         }
         if let Some(name) = rename {
-            self.ws.actions.push(super::Action::RenameItem(item.id.clone(), name));
+            self.ws.actions.push(crate::app::Action::RenameItem(item.id.clone(), name));
         }
         if let Some(wait) = self.ws.text.as_ref().and_then(|v| v.autosave.wait(now)) {
             ctx.request_repaint_after(std::time::Duration::from_secs_f64(wait));
@@ -314,7 +314,7 @@ impl App {
         // The bar: the shared buttons, then the text size at the right.
         let (left, mut right) = bar_shell(self, ui, item, bar);
         let cy = bar.center().y;
-        if super::icon_button(ui, Pos2::new(right - 12.0, cy), ic::PLUS, 15.0, zoom + 1 < textdoc::ZOOM_LEVELS, "Larger text (⌘=)").clicked() {
+        if crate::ui::widgets::icon_button(ui, Pos2::new(right - 12.0, cy), ic::PLUS, 15.0, zoom + 1 < textdoc::ZOOM_LEVELS, "Larger text (⌘=)").clicked() {
             zoom = textdoc::zoom_step(zoom, true);
         }
         let label = format!("{}%", (scale * 100.0).round());
@@ -325,7 +325,7 @@ impl App {
         if reset.on_hover_text("Smallest text (⌘0)").clicked() {
             zoom = 0;
         }
-        if super::icon_button(ui, Pos2::new(lx - 14.0, cy), ic::MINUS, 15.0, zoom > 0, "Smaller text (⌘−)").clicked() {
+        if crate::ui::widgets::icon_button(ui, Pos2::new(lx - 14.0, cy), ic::MINUS, 15.0, zoom > 0, "Smaller text (⌘−)").clicked() {
             zoom = textdoc::zoom_step(zoom, false);
         }
         right = lx - 30.0;

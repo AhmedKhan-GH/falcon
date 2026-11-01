@@ -8,7 +8,8 @@ use eframe::egui::{
 use falcon_library::model::Item;
 use falcon_library::{Library, fontmeta, media, search, waveform};
 
-use super::{App, galley, icon_button, window_drag};
+use crate::app::App;
+use crate::ui::widgets::{galley, icon_button, window_drag};
 use crate::icons as ic;
 use crate::logic;
 use crate::theme::{self as t, font, mono};
@@ -89,7 +90,7 @@ impl App {
             return false;
         }
         {
-            let ui = &mut super::viewer_ui(parent, screen, "media-viewer");
+            let ui = &mut crate::ui::widgets::viewer_ui(parent, screen, "media-viewer");
             ui.painter().rect_filled(screen, 0.0, t::p().main);
             let bar = Rect::from_min_size(screen.min, vec2(screen.width(), t::BAR_HEIGHT));
             let area = Rect::from_min_max(Pos2::new(screen.left(), bar.bottom()), screen.max);
@@ -201,11 +202,11 @@ impl App {
         // The volume tip, as in the video viewer.
         let now = ctx.input(|i| i.time);
         if self.audio.tip_seen.is_some_and(|seen| seen != self.audio.volume) {
-            self.audio.tip_until = now + super::video_view::TIP_SECS;
+            self.audio.tip_until = now + crate::ui::viewer::video::TIP_SECS;
         }
         self.audio.tip_seen = Some(self.audio.volume);
         if now < self.audio.tip_until {
-            super::video_view::volume_tip(&p, Pos2::new(area.right() - 12.0, area.top() + 12.0), (self.audio.volume * 100.0).round() as u32);
+            crate::ui::viewer::video::volume_tip(&p, Pos2::new(area.right() - 12.0, area.top() + 12.0), (self.audio.volume * 100.0).round() as u32);
             ctx.request_repaint_after(std::time::Duration::from_secs_f64((self.audio.tip_until - now).max(0.01)));
         }
         if let Some(e) = &self.audio.error {
@@ -222,43 +223,43 @@ impl App {
 /// item has them: `duration`, `bpm`, `rawMetas` and `fontMetas`.
 pub(crate) fn media_props(ui: &mut Ui, item: &Item) {
     if let Some(d) = search::duration(item) {
-        super::prop(ui, "Duration", &logic::format_duration(d));
+        crate::ui::widgets::prop(ui, "Duration", &logic::format_duration(d));
     }
     if let Some(b) = search::bpm(item) {
         // As stored (`119.985`), as Eagle's inspector shows it.
-        super::prop(ui, "BPM", &b.to_string());
+        crate::ui::widgets::prop(ui, "BPM", &b.to_string());
     }
     if let Some(raw) = item.extra.get("rawMetas") {
         let text = |k: &str| raw.get(k).and_then(|v| v.as_str()).filter(|s| !s.is_empty()).map(String::from);
         if let Some(c) = search::camera(item) {
-            super::prop(ui, "Camera", c);
+            crate::ui::widgets::prop(ui, "Camera", c);
         }
         if let Some(ms) = raw.get("timestamp").and_then(|v| v.as_u64()).filter(|&t| t > 0) {
-            super::prop(ui, "Date Taken", &logic::format_ms(ms));
+            crate::ui::widgets::prop(ui, "Date Taken", &logic::format_ms(ms));
         }
         if let Some(iso) = raw.get("isoSpeed").and_then(|v| v.as_u64()) {
-            super::prop(ui, "ISO", &iso.to_string());
+            crate::ui::widgets::prop(ui, "ISO", &iso.to_string());
         }
         for (k, label) in [("focalLength", "Focal Length"), ("shutter", "Shutter"), ("aperture", "Aperture")] {
             if let Some(v) = text(k) {
-                super::prop(ui, label, &v);
+                crate::ui::widgets::prop(ui, label, &v);
             }
         }
     }
     if let Some(metas) = item.extra.get("fontMetas").and_then(|m| m.as_object()) {
         if let Some(f) = search::font_family(item) {
-            super::prop(ui, "Family", f);
+            crate::ui::widgets::prop(ui, "Family", f);
         }
         let style = metas.get("weight").and_then(|v| v.as_str()).map_or_else(|| fontmeta::weight(metas), String::from);
-        super::prop(ui, "Style", &style);
+        crate::ui::widgets::prop(ui, "Style", &style);
         if let Some(ps) = search::font_name(item, "postScriptName") {
-            super::prop(ui, "PostScript", ps);
+            crate::ui::widgets::prop(ui, "PostScript", ps);
         }
         if let Some(v) = search::font_name(item, "version") {
-            super::prop(ui, "Version", v);
+            crate::ui::widgets::prop(ui, "Version", v);
         }
         if let Some(n) = metas.get("numGlyphs").and_then(|v| v.as_u64()) {
-            super::prop(ui, "Glyphs", &n.to_string());
+            crate::ui::widgets::prop(ui, "Glyphs", &n.to_string());
         }
     }
 }

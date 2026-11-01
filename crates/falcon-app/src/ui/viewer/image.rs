@@ -9,7 +9,9 @@ use eframe::egui::{self, Color32, ColorImage, Pos2, Rect, Sense, TextureHandle, 
 use falcon_library::{Library, thumbnail};
 use falcon_library::model::Item;
 
-use super::{App, ext_placeholder, media_view};
+use crate::app::App;
+use crate::ui::viewer::audio;
+use crate::ui::widgets::ext_placeholder;
 use crate::loader::{Tier, job_for, original_job};
 use crate::logic;
 use crate::theme::{self as t, mono};
@@ -35,7 +37,7 @@ pub(crate) struct ImageState {
     nav_grab: Vec2,
     /// The preview-only rotation and flip of the image shown; reset when the
     /// viewer moves to another item or closes.
-    pub tf: super::crop::ViewTransform,
+    pub tf: crate::ui::viewer::crop::ViewTransform,
 }
 
 /// Side of a checkerboard square, in points.
@@ -206,7 +208,7 @@ impl App {
             && (tex.is_some() || has_original)
             && r.intersects(area)
         {
-            super::paint_thumb_bg(clip.painter(), r, bg);
+            crate::ui::widgets::paint_thumb_bg(clip.painter(), r, bg);
         } else if self.prefs.transparency_grid && (tex.is_some() || has_original) && r.intersects(area) {
             let checker = self.image.checker.get_or_insert_with(|| {
                 let (a, b) = (Color32::WHITE, Color32::from_gray(0xcc));
@@ -251,7 +253,7 @@ impl App {
         }
 
         // The bar on top: back and name, then zoom and the tools.
-        let (name_x, right) = media_view::bar_shell(self, ui, item, bar);
+        let (name_x, right) = audio::bar_shell(self, ui, item, bar);
         let cy = bar.center().y;
         use crate::shortcuts::Command as C;
         let tip = |label: &str, fixed: &str, cmd: C| match self.shortcuts.binding(cmd) {
@@ -314,7 +316,7 @@ impl App {
         }
         let tools_x = self.gif_toggle_button(ui, item, x, cy);
         let tools_left = self.edit_bar(ui, item, tools_x, cy);
-        media_view::bar_name(ui, item, bar, name_x, tools_left);
+        audio::bar_name(ui, item, bar, name_x, tools_left);
 
         if let Some(z) = zoom {
             self.ws.view.zoom = logic::view_zoom(z, scale);
@@ -422,8 +424,8 @@ impl App {
             logic::TOO_LARGE_PIXELS / 1_000_000
         );
         self.notice_lines(ui, area, "Too large to preview", &line);
-        let (name_x, right) = media_view::bar_shell(self, ui, item, bar);
-        media_view::bar_name(ui, item, bar, name_x, right);
+        let (name_x, right) = audio::bar_shell(self, ui, item, bar);
+        audio::bar_name(ui, item, bar, name_x, right);
     }
 }
 
@@ -447,7 +449,7 @@ fn zoom_slider(ui: &mut Ui, track: Rect, pos: f32) -> Option<f32> {
 }
 
 /// Draws texture `tex` over `r` turned and mirrored by `tf`.
-fn paint_transformed(painter: &egui::Painter, tex: egui::TextureId, r: Rect, tf: super::crop::ViewTransform) {
+fn paint_transformed(painter: &egui::Painter, tex: egui::TextureId, r: Rect, tf: crate::ui::viewer::crop::ViewTransform) {
     let corners = [r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom()];
     let mut mesh = egui::Mesh::with_texture(tex);
     for (pos, (u, v)) in corners.into_iter().zip(tf.uv_corners()) {

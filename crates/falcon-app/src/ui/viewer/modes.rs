@@ -5,7 +5,7 @@
 
 use eframe::egui;
 
-use super::App;
+use crate::app::App;
 
 /// The modes' state, kept by the app.
 #[derive(Default)]

@@ -11,8 +11,9 @@ use eframe::egui::{self, Align2, Color32, CornerRadius, Event, Pos2, Rect, Respo
 use falcon_library::Library;
 use falcon_library::model::Item;
 
-use super::image_edit::Op;
-use super::{Action, App, icon_button};
+use crate::app::image_edit::Op;
+use crate::app::{Action, App};
+use crate::ui::widgets::icon_button;
 use crate::anim::{self, State};
 use crate::icons as ic;
 use crate::shortcuts::{Command, PlayerKey};
