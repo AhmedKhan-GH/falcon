@@ -49,6 +49,11 @@ pub struct ImportOptions {
     /// A name for the item, in place of the file's own. The file's
     /// extension is kept. Meant for a single file (default None).
     pub name: Option<String>,
+    /// Import the item straight into the trash (Inboard's trashed items).
+    pub trashed: bool,
+    /// The item's date added (`modificationTime`, ms) in place of the
+    /// import time, for items brought over from another app.
+    pub added_at: Option<u64>,
 }
 
 impl Default for ImportOptions {
@@ -64,6 +69,8 @@ impl Default for ImportOptions {
             keywords_as_tags: false,
             folder_auto_tags: false,
             name: None,
+            trashed: false,
+            added_at: None,
         }
     }
 }
@@ -184,6 +191,8 @@ pub struct Staged {
     dir: tempfile::TempDir,
     /// [`ImportOptions::folder_auto_tags`], applied at commit.
     auto_tags: bool,
+    /// [`ImportOptions::added_at`].
+    added_at: Option<u64>,
 }
 
 impl Staged {
@@ -235,7 +244,7 @@ pub fn stage(path: impl AsRef<Path>, opts: &ImportOptions) -> Result<Staged> {
         ext,
         tags: opts.tags.clone(),
         folders: opts.folders.clone(),
-        is_deleted: false,
+        is_deleted: opts.trashed,
         url: opts.url.clone(),
         annotation: opts.annotation.clone(),
         modification_time: 0,
@@ -274,7 +283,7 @@ pub fn stage(path: impl AsRef<Path>, opts: &ImportOptions) -> Result<Staged> {
     if item.remove_thumbnail == Some(true) {
         let _ = fs::remove_file(&thumb);
     }
-    Ok(Staged { item, dir, auto_tags: opts.folder_auto_tags })
+    Ok(Staged { item, dir, auto_tags: opts.folder_auto_tags, added_at: opts.added_at })
 }
 
 impl Library {
@@ -302,7 +311,7 @@ impl Library {
     /// Moves a staged import into `images/<ID>.info/`, stamps its times and
     /// writes its `metadata.json` and `mtime.json`.
     pub fn commit_import(&mut self, staged: Staged) -> Result<String> {
-        let Staged { mut item, dir, auto_tags } = staged;
+        let Staged { mut item, dir, auto_tags, added_at } = staged;
         let known = self.folder_ids();
         item.folders.retain(|f| known.contains(f.as_str()));
         if auto_tags {
@@ -327,7 +336,10 @@ impl Library {
                     }
                 }
             }
-            item.modification_time = self.next_import_time(now_ms());
+            item.modification_time = match added_at {
+                Some(t) => t,
+                None => self.next_import_time(now_ms()),
+            };
             item.last_modified = now_ms().max(item.modification_time);
             self.register_item(item.clone())
         })();
@@ -593,6 +605,15 @@ mod tests {
         let item = import("raw.txt", b"hi", &named);
         assert_eq!((item.name.as_str(), item.ext.as_str()), ("My note", "txt"));
         assert_eq!(import("raw.txt", b"hi", &ImportOptions::default()).name, "raw");
+    }
+
+    #[test]
+    fn items_from_another_app_keep_their_trash_state_and_date() {
+        let opts = ImportOptions { trashed: true, added_at: Some(1_520_139_967_000), ..Default::default() };
+        let item = import("old.txt", b"hi", &opts);
+        assert!(item.is_deleted);
+        assert_eq!(item.modification_time, 1_520_139_967_000);
+        assert!(!import("new.txt", b"hi", &ImportOptions::default()).is_deleted);
     }
 
     /// Imports into a fresh library; also returns the thumbnail's size.

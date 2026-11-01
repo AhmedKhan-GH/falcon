@@ -3137,6 +3137,9 @@ impl App {
             if ui.button("Import Eagle Package…").clicked() {
                 self.import_pack_dialog();
             }
+            if ui.button("Import Inboard Backup…").clicked() {
+                self.import_inboard_dialog();
+            }
             ui.separator();
             if ui.button(if self.collect.open { "Hide Collect Window" } else { "Show Collect Window" }).clicked() {
                 self.collect.toggle();

@@ -13,7 +13,7 @@ use falcon_library::library_merge::{self as merge, MergePlan};
 use falcon_library::pack::{self, PackPreview};
 use falcon_library::{Error, Library};
 
-use super::{App, Workspace, lock};
+use super::{App, Workspace, import_ui, lock};
 use crate::watch::Change;
 use crate::theme as t;
 
@@ -477,6 +477,65 @@ impl App {
             }
             Err(e) => self.show_alert(Alert::new("Can't import the package", format!("It may be incomplete or damaged; export or download it again. ({e})"))),
         }
+    }
+}
+
+impl App {
+    /// File ▸ Import ▸ Inboard Backup…: one folder per Inboard folder, then
+    /// the images, with their names, tags, links, trashed state and dates.
+    pub(super) fn import_inboard_dialog(&mut self) {
+        let Some(shared) = self.ws.lib.clone() else { return };
+        let Some(dir) = rfd::FileDialog::new().set_title("Choose an Inboard Backup Folder").pick_folder() else { return };
+        let backup = match falcon_library::inboard::read(&dir) {
+            Ok(b) => b,
+            Err(_) if !falcon_library::inboard::is_backup(&dir) => {
+                self.show_alert(Alert::new("Not an Inboard backup", format!("{} has no {}.", crate::workspaces::tilde(&dir), falcon_library::inboard::INDEX)));
+                return;
+            }
+            Err(e) => {
+                self.show_alert(Alert::new("Can't read the Inboard backup", e.to_string()));
+                return;
+            }
+        };
+        let mut ids = Vec::new();
+        {
+            let mut lib = lock(&shared);
+            for title in &backup.folders {
+                match lib.create_folder(None, title) {
+                    Ok(id) => ids.push(id),
+                    Err(e) => {
+                        drop(lib);
+                        self.show_alert(Alert::new("Can't import the Inboard backup", format!("A folder couldn't be created: {e}")));
+                        return;
+                    }
+                }
+            }
+        }
+        let map = falcon_library::inboard::folder_map(&backup.folders, &ids);
+        let jobs: Vec<import_ui::Job> = backup
+            .items
+            .iter()
+            .map(|it| {
+                let folders: Vec<String> = it.folders.iter().filter_map(|t| map.get(t).cloned()).collect();
+                let mut opts = self.prefs.import_options(folders);
+                for t in &it.tags {
+                    if !opts.tags.contains(t) {
+                        opts.tags.push(t.clone());
+                    }
+                }
+                opts.url = it.url.clone();
+                opts.name = (!it.name.trim().is_empty()).then(|| it.name.clone());
+                opts.trashed = it.trashed;
+                opts.added_at = it.added_at;
+                import_ui::Job { path: it.file.clone(), opts }
+            })
+            .collect();
+        let mut note = format!("Importing {} and {} from Inboard", plural(jobs.len(), "image"), plural(ids.len(), "folder"));
+        if backup.missing > 0 {
+            note.push_str(&format!("; {} missing from the backup", plural(backup.missing, "file")));
+        }
+        self.flash(note);
+        self.spawn_import(jobs);
     }
 }
 
