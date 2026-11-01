@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 88 | 55 | 128 | 9 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 91 | 55 | 125 | 9 |
 | Viewers and file formats | 81 | 31 | 78 | 7 |
-| Search, filters and organising | 127 | 30 | 65 | 3 |
-| Import, export, library, preferences and integrations | 77 | 23 | 112 | 26 |
-| **Total** | 373 | 139 | 383 | 45 |
+| Search, filters and organising | 129 | 30 | 63 | 3 |
+| Import, export, library, preferences and integrations | 91 | 21 | 100 | 26 |
+| **Total** | 392 | 137 | 366 | 45 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -31,7 +31,7 @@ These are bugs, not missing features. The first four can lose data or edits.
 3. Preferences: 4 panes and 9 settings against Eagle's 13 panes and about 80 settings.
 4. The full-size image is capped at 3072 px.
 5. ~~Folder import flattens structure; no duplicate check on import; no import error list.~~ Fixed.
-6. No export of items or folders, and no CSV export.
+6. ~~No export of items or folders, and no CSV export.~~ Fixed.
 7. Many shortcuts missing (ratings, T, F, ⌘J Go to Folder, ⌘1–7 views, Home and End, ⇧+arrows, ⌘D and more).
 8. No marquee selection, no multi-select of folders, no grid display options.
 9. No tag picker or suggestions.
@@ -73,8 +73,8 @@ Overall finding: falcon has **no application menu bar**. There is no `muda` or m
 | Edit: Undo / Redo | Done | ⌘Z and ⇧⌘Z with a capped transaction history (app.rs:992, 1262-1300) | local |
 | Edit: Cut / Copy / Paste / Select All | Partial | ⌘C copies files (app.rs:942), ⌘V imports the clipboard (app.rs:956) and ⌘A selects all. There is no menu entry and no Cut | local |
 | Edit: Rename (⌘R on macOS) | Partial | ⌘R, with F2 as an alias (shortcuts.rs `edit.rename`). It only focuses the inspector title for one item. Eagle renames several items in a batch dialog | local |
-| Edit: Copy File Path (⌥⌘C) | Partial | Item context menu only (app.rs:2515). No key | local |
-| Edit: Copy Folder Path (⌥⇧⌘C), Copy Eagle Link, Copy Thumbnail, Copy Base64, Copy Name | Missing | None of these copy variants exist | local |
+| Edit: Copy File Path (⌥⌘C) | Done | Key and item menu copy every selected path, one per line (`export_ui.rs` `copy_variant`) | local |
+| Edit: Copy Folder Path (⌥⇧⌘C), Copy Eagle Link, Copy Thumbnail, Copy Base64, Copy Name | Partial | All but Copy Eagle Link (`export_ui.rs` `item_copy_menu`); Copy Folder Path copies the items' `.info` folders as Eagle does. Falcon doesn't register `eagle://` | local |
 | Edit: Duplicate item (⌘D) | Missing | No duplicate-item action | local |
 | Edit: Refresh Thumbnail (⌥⌘R), Custom thumbnail from a file (⌥⌘T), Reset custom thumbnail | Partial | Context menu only (image_edit.rs:96-106). No keys | local |
 | Edit: Custom thumbnail from the clipboard (⇧⌥⌘T) | Missing | Choosing a file is the only option | local |
@@ -129,8 +129,8 @@ Cross-references (not counted): File ▸ Import Folders / Links / Eagle Package 
 | Item: New Folder with Selection (N items) | Missing |  | local |
 | Item: Rename / Rename N Items (batch rename dialog) | Missing | Not in the context menu. Only F2 on one item via the inspector | local |
 | Item: Copy (files) | Partial | ⌘C works (app.rs:942). Not in the menu | local |
-| Item: Copy File Path | Done | app.rs:2515-2517 copies the clicked item's path only, not every selected one | local |
-| Item: Copy… ▸ Link, Folder path, Thumbnail, Base64, Name | Missing |  | local |
+| Item: Copy File Path | Done | `export_ui.rs` `copy_variant`, every selected item | local |
+| Item: Copy… ▸ Link, Folder path, Thumbnail, Base64, Name | Done | `export_ui.rs` `item_copy_menu`; Link copies the item's source URL | local |
 | Item: Copy Tags / Paste Tags | Missing |  | local |
 | Item: Combine Images (several selected) | Missing |  | local |
 | Item: Duplicate | Missing |  | local |
@@ -199,7 +199,7 @@ Eagle defaults come from prefs `shortcuts.keybinds` (rebindable) and from the ha
 | ⌘F search, ⇧⌘F toggle filter | Done | shortcuts.rs:108-109 | local |
 | ⌥⌘F search all, ⌥⇧F filter sidebar, ⇧⌥⌘F reset filter, ⌥F / ⌥T / ⌥C / ⌥S / ⌥R / ⌥D / ⌥E open one filter | Missing |  | local |
 | ⌘L switch library | Done | shortcuts.rs:117, app.rs:998 | local |
-| ⌘E export, ⇧⌘E export .eaglepack, ⇧E export as format | Missing | Cross-ref export | local |
+| ⌘E export, ⇧⌘E export .eaglepack, ⇧E export as format | Done | shortcuts.rs Export group | local |
 | ⌘1–⌘7 sidebar views | Missing |  | local |
 | ⌥1–⌥4 layouts | Done | shortcuts.rs `view.layout.*`, in Eagle's order | local |
 | ⌥⌘1–⌥⌘8 panel and caption toggles plus Navigator | Partial | ⌥⌘1, ⌥⌘2 and ⌥⌘3; no caption toggles or Navigator | local |
@@ -992,7 +992,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Folder inspector: item count, size, date imported, password state | Done | `A:2926` | local |
 | Folder inspector: set, change or remove password buttons | Partial | Shows only "Set" or "None"; the actions are in the context menu | local |
 | Copy Folder Link (eagle:// link) | Missing | Cross-ref: API/links agent | local |
-| Export folder (computer, .eaglepack) | Missing | Disabled button (`A:2935`). Cross-ref: export agent. | local |
+| Export folder (computer, .eaglepack) | Done | Folder menu Export ▸ … and the inspector's Export button (`export_ui.rs` `tree_export_menu`, `scope_export_button`) | local |
 | Clear Invalid Content (empty or broken folders) | Missing | Cross-ref: library agent | local |
 
 ### 7. Smart folders
@@ -1013,7 +1013,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Editing a smart folder keeps its other conditions and rules | Done | Untouched conditions and rules are written back verbatim, edited ones keep their unknown keys, and rules the dialog can't show stay as read-only Unsupported rows until deleted (`smart_draft.rs`, test `eagle_smart_folder_survives_an_edit`) | local |
 | Live "N items found" count while editing rules | Missing | none | local |
 | Batch rename, recolour or delete several smart folders | Missing | no multi-select | local |
-| Export a smart folder | Missing | Cross-ref: export agent | local |
+| Export a smart folder | Done | Smart folder menu Export ▸ directory or `.eaglepack` (`export::plan_smart`, `PackSource::Smart`) | local |
 | Rule: name, URL, note, with equals, contains, excludes, begins with, ends with, empty, not empty | Done | `smart.rs` text rules; every method is in the dialog for each text property. Begins/ends-with are anchored regexes as in Eagle | local |
 | Rule: regex method | Done | `smart.rs` uses the `regex` crate, lower-casing pattern and text as Eagle does; no look-around or backreferences (documented in `docs/src/smart-folders.md`) | local |
 | Rule: folder name | Done | `SM:111`, `A:243` | local |
@@ -1290,24 +1290,24 @@ Two cross-cutting facts explain many rows:
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| Export to Computer: copy the selected originals to a chosen folder (⌘E) | Missing | The folder inspector has an **Export** button, but it is disabled (`app.rs:2935`, `wide_button(..., false)`) | local |
-| Export a folder, subfolder or smart folder to the computer as a directory tree | Missing | — | local |
-| Overwrite prompts when exported files or folders already exist | Missing | — | local |
-| Export selected items as `.eaglepack` (⇧⌘E) | Partial | CLI and library only: `pack.rs:56`, `src/main.rs:61-72,129-136`. Not in the app | local |
-| Export a folder (with subfolders) as `.eaglepack` | Partial | CLI `--folder` (`PackSource::Folder`, `pack.rs:37`); not in the app | local |
-| Export a smart folder as `.eaglepack` | Missing | `PackSource` has only Items and Folder (`pack.rs:33-38`) | local |
-| Export in a chosen format and size (custom export) | Missing | — | local |
-| Export metadata to CSV (ID, name, extension, size, URL, notes, tags, folders, comments and so on) | Missing | — | local |
-| "Export Successful, N item(s) exported" notification | Missing | — | local |
+| Export to Computer: copy the selected originals to a chosen folder (⌘E) | Done | `crates/falcon-library/src/export.rs` `plan_items` and `copy`; background job with a progress bar; Eagle's `name-1.ext` numbering; reveals the files when done | local |
+| Export a folder, subfolder or smart folder to the computer as a directory tree | Done | `export::plan_folder` / `plan_smart`; locked subfolders are left out | local |
+| Overwrite prompts when exported files or folders already exist | Done | Replace / Keep Both / Cancel (`export_ui.rs`); Eagle offers Overwrite or Cancel | local |
+| Export selected items as `.eaglepack` (⇧⌘E) | Done | `export_ui.rs`; `pack.rs` `plan_pack` / `write_pack` run off the UI thread | local |
+| Export a folder (with subfolders) as `.eaglepack` | Done | Folder menu and inspector button | local |
+| Export a smart folder as `.eaglepack` | Done | `pack.rs` `PackSource::Smart`: one flat folder, as Eagle 4; CLI `export --smart` | local |
+| Export in a chosen format and size (custom export) | Done | ⇧E, Export ▸ Export in Format…: JPG, PNG, WebP, quality, longest side (`export::plan_converted`). Eagle's dialog is a plugin outside its source, so the options are falcon's own | local |
+| Export metadata to CSV (ID, name, extension, size, URL, notes, tags, folders, comments and so on) | Done | `export::csv`: Eagle's 16 columns in order, BOM and `\n` line ends, falcon's own headers; item menu and inspector | local |
+| "Export Successful, N item(s) exported" notification | Partial | In-window message plus a Finder reveal; no system notification | local |
 | Drag items out to Finder or other apps | Done | `app.rs:489,1451,3714` (`native_drag`, `drag_image`, `drag::start_drag`) | local |
 | Copy the selected files to the clipboard (⌘C) | Done | `app.rs:941-953` | local |
-| Copy File Path (⌥⌘C) | Partial | Context-menu entry for the clicked item only (`app.rs:2517-2519`); no shortcut, one path only | local |
-| Copy folder path (⌥⇧⌘C) | Missing | — | local |
-| Copy Name | Missing | — | local |
-| Copy Thumbnail (as an image) | Missing | — | local |
-| Copy Base64 | Missing | — | local |
+| Copy File Path (⌥⌘C) | Done | All selected items, one per line (`export_ui.rs`) | local |
+| Copy folder path (⌥⇧⌘C) | Done | The selected items' `<id>.info` folders, as Eagle | local |
+| Copy Name | Done | `export_ui.rs` `item_copy_menu` | local |
+| Copy Thumbnail (as an image) | Done | One item: image on the clipboard; several: the thumbnail files, as Eagle | local |
+| Copy Base64 | Done | One item: data URL of the original for jpg/png/webp/gif, else of the thumbnail | local |
 | Copy Eagle Link (`eagle://item/<id>`) | Missing | — | local |
-| Copy Link (the item's source URL) | Missing | — | local |
+| Copy Link (the item's source URL) | Done | `edit.copy.sourceurl`; Eagle's own Copy Link copies its local API link instead | local |
 | Copy the image to the clipboard as pixels plus file reference (the AppleScript helper) | Partial | Falcon copies a file list only (`app.rs:948-949`) | local |
 | macOS Share sheet for items | Missing | — | local |
 | Add selected items to another library (from the recent list, or choose a path) | Missing | — | local |
@@ -1517,9 +1517,9 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 
 Rows marked "not counted" are features Eagle 4.0.0 does not have.
 
-- **Done:** 77, including 5 where falcon goes beyond Eagle and 1 with a small difference.
-- **Partial:** 23.
-- **Missing:** 138, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
+- **Done:** 91, including 5 where falcon goes beyond Eagle and 1 with a small difference.
+- **Partial:** 21.
+- **Missing:** 126, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
 - **Different on purpose:** 1 (the API listens on localhost only).
 
 ### Ranked Missing and Partial local items
