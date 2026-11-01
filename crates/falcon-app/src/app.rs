@@ -19,7 +19,7 @@ use crate::colors;
 use crate::icons as ic;
 use crate::loader::{Loader, Tier, job_for};
 use crate::logic::{self, Layout, NavCounts, Scope};
-use falcon_library::search::{ColorQuery, Filter, Logic, OrderBy, Shape, TextFilter};
+use falcon_library::search::{self, ColorQuery, Filter, Logic, OrderBy, TextFilter};
 use crate::theme::{self as t, font, mono};
 
 mod organize_ui;
@@ -3368,26 +3368,8 @@ impl App {
             });
         });
 
-        let sv = (!f.shapes.is_empty()).then(|| f.shapes.len().to_string());
-        let resp = filter_chip(ui, "Shape", sv);
-        egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
-            for (shape, name) in [
-                (Shape::Landscape, "Landscape"),
-                (Shape::Portrait, "Portrait"),
-                (Shape::Square, "Square"),
-                (Shape::PanoramicLandscape, "Panoramic Landscape"),
-                (Shape::PanoramicPortrait, "Panoramic Portrait"),
-            ] {
-                let mut on = f.shapes.contains(&shape);
-                if ui.checkbox(&mut on, name).changed() {
-                    if on {
-                        f.shapes.insert(shape);
-                    } else {
-                        f.shapes.remove(&shape);
-                    }
-                }
-            }
-        });
+        let counts = search::shape_counts(lib.items().iter().filter(|i| !i.is_deleted));
+        Self::shape_chip(ui, f, &mut self.ws.filter_ui, &counts);
 
         let rv = (!f.ratings.is_empty()).then(|| f.ratings.len().to_string());
         let resp = filter_chip(ui, "Rating", rv);

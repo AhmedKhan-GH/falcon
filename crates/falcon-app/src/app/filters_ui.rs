@@ -2,11 +2,11 @@
 //! and filters chapter of the docs). Everything goes through
 //! [`Filter`], so `logic::visible` applies it.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use eframe::egui::{self, RichText, TextEdit, Ui};
 use falcon_library::Library;
-use falcon_library::search::{self, Clock, DateField, DateFilter, DatePreset, DurationUnit, FontFilter};
+use falcon_library::search::{self, Clock, DateField, DateFilter, DatePreset, DurationUnit, FontFilter, Shape, TextFilter};
 
 use super::{App, filter_chip};
 use crate::logic;
@@ -28,6 +28,19 @@ pub(super) struct MediaFilterUi {
     dur_unit: DurationUnit,
     bpm_min: String,
     bpm_max: String,
+    /// Width and height bounds as typed: min and max for each.
+    w_min: String,
+    w_max: String,
+    h_min: String,
+    h_max: String,
+    size_min: String,
+    size_max: String,
+    /// The Size chip's unit is MB (otherwise KB).
+    size_mb: bool,
+    /// Keywords typed into the Comment chip.
+    pub(super) comment_text: String,
+    /// The custom shape's W and H last used, restored when it is ticked again.
+    custom_last: Option<(f64, f64)>,
     /// Keys of the fonts activated through Eagle, read once.
     font_keys: Option<HashSet<String>>,
 }
@@ -67,6 +80,73 @@ impl App {
         let live = || items.iter().filter(|i| !i.is_deleted);
         let fui = &mut self.ws.filter_ui;
         let f = &mut self.ws.filter;
+
+        // Dimensions: width and height bounds in pixels.
+        let dims = (f.width, f.height);
+        if dims_fields_stale(&fui.w_min, &fui.w_max, &fui.h_min, &fui.h_max, dims) {
+            let t = |v: Option<u64>| v.map(|n| n.to_string()).unwrap_or_default();
+            (fui.w_min, fui.w_max, fui.h_min, fui.h_max) = (t(f.width.0), t(f.width.1), t(f.height.0), t(f.height.1));
+        }
+        let resp = filter_chip(ui, "Dimensions", dimensions_summary(f.width, f.height));
+        menu(&resp, |ui| {
+            ui.set_min_width(200.0);
+            let mut changed = false;
+            for (name, lo, hi) in [("W", &mut fui.w_min, &mut fui.w_max), ("H", &mut fui.h_min, &mut fui.h_max)] {
+                ui.horizontal(|ui| {
+                    ui.label(name);
+                    changed |= ui.add(TextEdit::singleline(lo).desired_width(64.0).hint_text("Min")).changed();
+                    ui.label("–");
+                    changed |= ui.add(TextEdit::singleline(hi).desired_width(64.0).hint_text("Max")).changed();
+                    muted(ui, "px");
+                });
+            }
+            if changed {
+                f.width = (parse_whole(&fui.w_min), parse_whole(&fui.w_max));
+                f.height = (parse_whole(&fui.h_min), parse_whole(&fui.h_max));
+            }
+            if (f.width, f.height) != ((None, None), (None, None)) && ui.button("Clear").clicked() {
+                f.width = (None, None);
+                f.height = (None, None);
+                (fui.w_min, fui.w_max, fui.h_min, fui.h_max) = Default::default();
+            }
+        });
+
+        // Size: file size in KB or MB.
+        if size_fields_stale(&fui.size_min, &fui.size_max, fui.size_mb, f.size) {
+            // A saved filter set the rule: show its bounds in KB.
+            let kb = |v: Option<u64>| v.map(|b| format!("{}", b as f64 / 1024.0)).unwrap_or_default();
+            fui.size_min = kb(f.size.0);
+            fui.size_max = kb(f.size.1);
+            fui.size_mb = false;
+        }
+        let resp = filter_chip(ui, "Size", size_summary(f.size, fui.size_mb));
+        menu(&resp, |ui| {
+            ui.set_min_width(220.0);
+            let mut changed = false;
+            ui.horizontal(|ui| {
+                changed |= ui.add(TextEdit::singleline(&mut fui.size_min).desired_width(64.0).hint_text("Min")).changed();
+                ui.label("–");
+                changed |= ui.add(TextEdit::singleline(&mut fui.size_max).desired_width(64.0).hint_text("Max")).changed();
+                let before = fui.size_mb;
+                egui::ComboBox::from_id_salt("size-unit").width(56.0).selected_text(if fui.size_mb { "MB" } else { "KB" }).show_ui(ui, |ui| {
+                    ui.selectable_value(&mut fui.size_mb, false, "KB");
+                    ui.selectable_value(&mut fui.size_mb, true, "MB");
+                });
+                changed |= before != fui.size_mb;
+            });
+            if changed {
+                f.size = (parse_size(&fui.size_min, fui.size_mb), parse_size(&fui.size_max, fui.size_mb));
+            }
+            if f.size != (None, None) && ui.button("Clear").clicked() {
+                f.size = (None, None);
+                fui.size_min.clear();
+                fui.size_max.clear();
+            }
+        });
+
+        // Comment: the same menu as Notes and URL, over an item's comments.
+        let resp = filter_chip(ui, "Comment", text_filter_summary(&f.comments));
+        menu(&resp, |ui| super::text_filter_menu(ui, &mut f.comments, &mut fui.comment_text));
 
         // Date: one chip with a tab per timestamp, to keep the bar short.
         let rules = [&f.imported, &f.modified, &f.created];
@@ -279,6 +359,50 @@ impl App {
         let secs = |v: Option<f64>| v.map(|s| s.to_string()).unwrap_or_default();
         fui.dur_min = secs(f.duration.0);
         fui.dur_max = secs(f.duration.1);
+        if let TextFilter::Keywords(k) = &f.comments {
+            fui.comment_text = k.join(", ");
+        }
+    }
+
+    /// The Shape chip: every shape the library has (or that is ticked)
+    /// with its count, plus a Custom W:H option.
+    pub(super) fn shape_chip(ui: &mut Ui, f: &mut search::Filter, fui: &mut MediaFilterUi, counts: &HashMap<Shape, usize>) {
+        let resp = filter_chip(ui, "Shape", shape_summary(&f.shapes, f.custom_shape));
+        menu(&resp, |ui| {
+            ui.set_min_width(200.0);
+            for shape in Shape::ALL {
+                let n = counts.get(&shape).copied().unwrap_or(0);
+                let mut on = f.shapes.contains(&shape);
+                if (n > 0 || on) && ui.checkbox(&mut on, format!("{}  ({n})", shape_label(shape))).changed() {
+                    if on {
+                        f.shapes.insert(shape);
+                    } else {
+                        f.shapes.remove(&shape);
+                    }
+                }
+            }
+            let mut custom = f.custom_shape.is_some();
+            if ui.checkbox(&mut custom, "Custom").changed() {
+                f.custom_shape = custom.then(|| fui.custom_last.unwrap_or((4.0, 3.0)));
+            }
+            if let Some((mut w, mut h)) = f.custom_shape {
+                ui.horizontal(|ui| {
+                    ui.label("W");
+                    let a = ui.add(egui::DragValue::new(&mut w).range(0.0..=f64::MAX).speed(0.1));
+                    ui.label("H");
+                    let b = ui.add(egui::DragValue::new(&mut h).range(0.0..=f64::MAX).speed(0.1));
+                    if a.changed() || b.changed() {
+                        f.custom_shape = Some((w, h));
+                        fui.custom_last = Some((w, h));
+                    }
+                });
+                muted(ui, "A side left at 0 is not used");
+            }
+            if (!f.shapes.is_empty() || f.custom_shape.is_some()) && ui.button("Clear").clicked() {
+                f.shapes.clear();
+                f.custom_shape = None;
+            }
+        });
     }
 }
 
@@ -345,6 +469,91 @@ fn bpm_fields_stale(min: &str, max: &str, range: (Option<f64>, Option<f64>)) -> 
     (parse_bpm(min), parse_bpm(max)) != (t(range.0), t(range.1))
 }
 
+/// A whole-number bound as typed, read like `$.isNumeric(text)` then
+/// `parseInt(text)`: the trimmed text must be a finite number, which is cut
+/// toward zero; negatives become 0.
+pub fn parse_whole(text: &str) -> Option<u64> {
+    let v: f64 = text.trim().parse().ok().filter(|v: &f64| v.is_finite())?;
+    Some(v.trunc().max(0.0) as u64)
+}
+
+/// A file size bound as typed in KB or MB (fractions allowed), in bytes cut
+/// toward zero. `None` for text that is not a finite non-negative number.
+pub fn parse_size(text: &str, mb: bool) -> Option<u64> {
+    let v: f64 = text.trim().parse().ok().filter(|v: &f64| v.is_finite() && *v >= 0.0)?;
+    let unit = if mb { 1_048_576.0 } else { 1024.0 };
+    Some((v * unit).trunc() as u64)
+}
+
+fn range_text(prefix: &str, (lo, hi): (Option<String>, Option<String>), sep: &str) -> Option<String> {
+    let p = |s: String| if prefix.is_empty() { s } else { format!("{prefix} {s}") };
+    match (lo, hi) {
+        (None, None) => None,
+        (Some(a), None) => Some(p(format!("\u{2265} {a}"))),
+        (None, Some(b)) => Some(p(format!("\u{2264} {b}"))),
+        (Some(a), Some(b)) => Some(p(format!("{a}{sep}{b}"))),
+    }
+}
+
+/// The Dimensions chip's value: `W ≥ 100, H 200–800`.
+pub fn dimensions_summary(w: (Option<u64>, Option<u64>), h: (Option<u64>, Option<u64>)) -> Option<String> {
+    let part = |name: &str, r: (Option<u64>, Option<u64>)| range_text(name, (r.0.map(|n| n.to_string()), r.1.map(|n| n.to_string())), "\u{2013}");
+    let parts: Vec<String> = [part("W", w), part("H", h)].into_iter().flatten().collect();
+    (!parts.is_empty()).then(|| parts.join(", "))
+}
+
+/// The Size chip's value in the unit the user picked: `≥ 2 MB`, `10–500 KB`.
+pub fn size_summary(r: (Option<u64>, Option<u64>), mb: bool) -> Option<String> {
+    let (div, unit) = if mb { (1_048_576.0, "MB") } else { (1024.0, "KB") };
+    let n = |b: u64| format!("{}", b as f64 / div);
+    range_text("", (r.0.map(n), r.1.map(n)), "\u{2013}").map(|s| format!("{s} {unit}"))
+}
+
+/// A Notes/URL/Comment chip's value: Has, None or the keywords.
+pub fn text_filter_summary(t: &TextFilter) -> Option<String> {
+    match t {
+        TextFilter::Off => None,
+        TextFilter::Has => Some("Has".into()),
+        TextFilter::No => Some("None".into()),
+        TextFilter::Keywords(k) => Some(k.join(", ")),
+    }
+}
+
+/// The name of a shape option in the Shape chip.
+pub fn shape_label(s: Shape) -> &'static str {
+    match s {
+        Shape::Landscape => "Horizontal",
+        Shape::Portrait => "Vertical",
+        Shape::Square => "Square",
+        Shape::PanoramicLandscape => "Panoramic Horizontal",
+        Shape::PanoramicPortrait => "Panoramic Vertical",
+        Shape::Ratio4x3 => "4:3",
+        Shape::Ratio3x4 => "3:4",
+        Shape::Ratio16x9 => "16:9",
+        Shape::Ratio9x16 => "9:16",
+    }
+}
+
+/// The Shape chip's value: the ticked options in menu order, the custom
+/// one as `W:H`.
+pub fn shape_summary(shapes: &HashSet<Shape>, custom: Option<(f64, f64)>) -> Option<String> {
+    let mut parts: Vec<String> = Shape::ALL.into_iter().filter(|s| shapes.contains(s)).map(|s| shape_label(s).to_string()).collect();
+    if let Some((w, h)) = custom {
+        parts.push(format!("{w}:{h}"));
+    }
+    (!parts.is_empty()).then(|| parts.join(", "))
+}
+
+type Bound = (Option<u64>, Option<u64>);
+
+fn dims_fields_stale(wl: &str, wh: &str, hl: &str, hh: &str, (w, h): (Bound, Bound)) -> bool {
+    ((parse_whole(wl), parse_whole(wh)), (parse_whole(hl), parse_whole(hh))) != (w, h)
+}
+
+fn size_fields_stale(min: &str, max: &str, mb: bool, r: (Option<u64>, Option<u64>)) -> bool {
+    (parse_size(min, mb), parse_size(max, mb)) != r
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -378,5 +587,66 @@ mod tests {
         assert!(!bpm_fields_stale("128", "", (Some(128.5), None)), "a saved fraction is truncated");
         assert!(bpm_fields_stale("", "", (Some(90.0), None)), "a saved filter set a bound");
         assert!(bpm_fields_stale("90", "", (None, None)), "the rule was cleared");
+    }
+
+    #[test]
+    fn whole_numbers_like_is_numeric_parse_int() {
+        assert_eq!(parse_whole("100"), Some(100));
+        assert_eq!(parse_whole(" 99.9 "), Some(99));
+        assert_eq!(parse_whole("-5"), Some(0));
+        assert_eq!(parse_whole("-0.5"), Some(0));
+        assert_eq!(parse_whole("1e3"), Some(1000));
+        assert_eq!(parse_whole("12px"), None);
+        assert_eq!(parse_whole(""), None);
+        assert_eq!(parse_whole("inf"), None);
+        assert_eq!(parse_whole("NaN"), None);
+    }
+
+    #[test]
+    fn sizes_in_kb_and_mb() {
+        assert_eq!(parse_size("2", false), Some(2048));
+        assert_eq!(parse_size("1.5", true), Some(1_572_864));
+        assert_eq!(parse_size(" 0.0005 ", false), Some(0));
+        assert_eq!(parse_size("1.0009765625", false), Some(1025));
+        assert_eq!(parse_size("-1", false), None);
+        assert_eq!(parse_size("x", true), None);
+        assert_eq!(parse_size("inf", true), None);
+    }
+
+    #[test]
+    fn dimension_and_size_chip_values() {
+        assert_eq!(dimensions_summary((None, None), (None, None)), None);
+        assert_eq!(dimensions_summary((Some(100), None), (None, None)).as_deref(), Some("W \u{2265} 100"));
+        assert_eq!(dimensions_summary((Some(100), Some(200)), (None, Some(800))).as_deref(), Some("W 100\u{2013}200, H \u{2264} 800"));
+        assert_eq!(size_summary((None, None), true), None);
+        assert_eq!(size_summary((Some(2_097_152), None), true).as_deref(), Some("\u{2265} 2 MB"));
+        assert_eq!(size_summary((Some(10_240), Some(512_000)), false).as_deref(), Some("10\u{2013}500 KB"));
+        assert_eq!(size_summary((None, Some(3072)), false).as_deref(), Some("\u{2264} 3 KB"));
+        assert_eq!(size_summary((None, Some(1_572_864)), true).as_deref(), Some("\u{2264} 1.5 MB"));
+    }
+
+    #[test]
+    fn stale_fields_follow_the_rule() {
+        assert!(!dims_fields_stale("", "", "", "", ((None, None), (None, None))));
+        assert!(!dims_fields_stale("100", "", "", "9.5", ((Some(100), None), (None, Some(9)))));
+        assert!(dims_fields_stale("", "", "", "", ((Some(1), None), (None, None))));
+        assert!(!size_fields_stale("2", "", true, (Some(2_097_152), None)));
+        assert!(size_fields_stale("2", "", false, (Some(2_097_152), None)));
+        assert!(size_fields_stale("2", "", false, (None, None)));
+    }
+
+    #[test]
+    fn text_and_shape_chip_values() {
+        assert_eq!(text_filter_summary(&TextFilter::Off), None);
+        assert_eq!(text_filter_summary(&TextFilter::Has).as_deref(), Some("Has"));
+        assert_eq!(text_filter_summary(&TextFilter::No).as_deref(), Some("None"));
+        assert_eq!(text_filter_summary(&TextFilter::Keywords(vec!["a".into(), "b".into()])).as_deref(), Some("a, b"));
+        let none = HashSet::new();
+        assert_eq!(shape_summary(&none, None), None);
+        let two: HashSet<Shape> = [Shape::Ratio16x9, Shape::Landscape].into_iter().collect();
+        assert_eq!(shape_summary(&two, None).as_deref(), Some("Horizontal, 16:9"));
+        assert_eq!(shape_summary(&none, Some((2.35, 1.0))).as_deref(), Some("2.35:1"));
+        assert_eq!(shape_summary(&two, Some((4.0, 3.0))).as_deref(), Some("Horizontal, 16:9, 4:3"));
+        assert_eq!(shape_label(Shape::PanoramicPortrait), "Panoramic Vertical");
     }
 }
