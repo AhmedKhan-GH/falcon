@@ -1,7 +1,9 @@
 //! Writing a model back out, for the viewer's Export: Wavefront OBJ (with
-//! an MTL of the material colours) and binary STL. Only what falcon holds
-//! is written: positions, normals where the file had them, triangles and
-//! material colours.
+//! an MTL of the material colours), binary STL, glTF 2.0 (binary GLB, or a
+//! `.gltf` with its buffer embedded) and binary PLY. Only what falcon holds
+//! is written: positions, normals where the file had them, vertex colours,
+//! triangles and material colours. OFF and 3DM, which Eagle's viewer also
+//! writes, are not.
 
 use super::math::{self, V3};
 use super::{Mesh, geom};
@@ -11,13 +13,24 @@ use super::{Mesh, geom};
 pub enum Format {
     Obj,
     Stl,
+    /// glTF 2.0 in one binary file.
+    Glb,
+    /// glTF 2.0 as JSON with the buffer embedded as a data URI.
+    Gltf,
+    Ply,
 }
 
 impl Format {
+    /// In the order of Eagle's viewer's Export menu where it has them.
+    pub const ALL: [Format; 5] = [Format::Glb, Format::Gltf, Format::Obj, Format::Ply, Format::Stl];
+
     pub fn ext(self) -> &'static str {
         match self {
             Format::Obj => "obj",
             Format::Stl => "stl",
+            Format::Glb => "glb",
+            Format::Gltf => "gltf",
+            Format::Ply => "ply",
         }
     }
 }
@@ -101,11 +114,189 @@ pub fn stl<'a>(meshes: impl IntoIterator<Item = &'a Mesh>) -> Vec<u8> {
     out
 }
 
+/// A colour channel from the sRGB values falcon keeps to the linear ones
+/// glTF stores (the reader's `srgb` undone).
+fn linear(c: f32) -> f32 {
+    let c = c.clamp(0.0, 1.0);
+    if c <= 0.040_45 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) }
+}
+
+/// The JSON document and binary buffer of a glTF 2.0 asset holding
+/// `meshes`, one node and mesh each, with 32-bit indices and the buffer
+/// `uri` (`None` for a GLB, whose buffer is its BIN chunk).
+fn gltf_parts<'a>(meshes: impl IntoIterator<Item = &'a Mesh>, uri: impl FnOnce(&[u8]) -> Option<String>) -> (serde_json::Value, Vec<u8>) {
+    use serde_json::{Value, json};
+    let mut bin: Vec<u8> = Vec::new();
+    let (mut views, mut accessors, mut gl_meshes, mut nodes, mut materials) = (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::<Value>::new());
+    let mut mat_names: Vec<String> = Vec::new();
+    // Appends floats or indices as a buffer view and an accessor; returns its index.
+    let mut push = |bin: &mut Vec<u8>, bytes: Vec<u8>, count: usize, ty: &str, component: u32, target: u32, minmax: Option<(V3, V3)>| {
+        while !bin.len().is_multiple_of(4) {
+            bin.push(0);
+        }
+        views.push(json!({"buffer": 0, "byteOffset": bin.len(), "byteLength": bytes.len(), "target": target}));
+        bin.extend_from_slice(&bytes);
+        let mut a = json!({"bufferView": views.len() - 1, "componentType": component, "count": count, "type": ty});
+        if let Some((lo, hi)) = minmax {
+            a["min"] = json!(lo);
+            a["max"] = json!(hi);
+        }
+        accessors.push(a);
+        accessors.len() - 1
+    };
+    let floats = |vs: &[V3]| vs.iter().flatten().flat_map(|c| c.to_le_bytes()).collect::<Vec<u8>>();
+    for (k, m) in meshes.into_iter().enumerate() {
+        if m.positions.is_empty() || m.indices.is_empty() {
+            continue;
+        }
+        let lo = m.positions.iter().fold([f32::INFINITY; 3], |a, p| [a[0].min(p[0]), a[1].min(p[1]), a[2].min(p[2])]);
+        let hi = m.positions.iter().fold([f32::NEG_INFINITY; 3], |a, p| [a[0].max(p[0]), a[1].max(p[1]), a[2].max(p[2])]);
+        const ARRAY: u32 = 34962;
+        const ELEMENTS: u32 = 34963;
+        const FLOAT: u32 = 5126;
+        let mut attrs = serde_json::Map::new();
+        attrs.insert("POSITION".into(), json!(push(&mut bin, floats(&m.positions), m.positions.len(), "VEC3", FLOAT, ARRAY, Some((lo, hi)))));
+        if let Some(ns) = m.normals.as_ref().filter(|n| n.len() == m.positions.len()) {
+            attrs.insert("NORMAL".into(), json!(push(&mut bin, floats(ns), ns.len(), "VEC3", FLOAT, ARRAY, None)));
+        }
+        if let Some(cs) = m.colors.as_ref().filter(|c| c.len() == m.positions.len()) {
+            let lin: Vec<V3> = cs.iter().map(|c| c.map(linear)).collect();
+            attrs.insert("COLOR_0".into(), json!(push(&mut bin, floats(&lin), lin.len(), "VEC3", FLOAT, ARRAY, None)));
+        }
+        let idx: Vec<u8> = m.indices.iter().flat_map(|i| i.to_le_bytes()).collect();
+        let indices = push(&mut bin, idx, m.indices.len(), "SCALAR", 5125, ELEMENTS, None);
+        let mut prim = json!({"attributes": attrs, "indices": indices, "mode": 4});
+        if let Some(mat) = &m.material {
+            let at = mat_names.iter().position(|n| *n == mat.name).unwrap_or_else(|| {
+                let c = mat.color.map(linear);
+                let mut v = json!({"name": mat.name, "pbrMetallicRoughness": {"baseColorFactor": [c[0], c[1], c[2], mat.opacity.clamp(0.0, 1.0)], "metallicFactor": 0.0}});
+                if mat.opacity < 1.0 {
+                    v["alphaMode"] = json!("BLEND");
+                }
+                materials.push(v);
+                mat_names.push(mat.name.clone());
+                materials.len() - 1
+            });
+            prim["material"] = json!(at);
+        }
+        let name = if m.name.trim().is_empty() { format!("mesh{}", k + 1) } else { m.name.clone() };
+        gl_meshes.push(json!({"name": name, "primitives": [prim]}));
+        nodes.push(json!({"name": name, "mesh": gl_meshes.len() - 1}));
+    }
+    while !bin.len().is_multiple_of(4) {
+        bin.push(0);
+    }
+    let mut buffer = json!({"byteLength": bin.len()});
+    if let Some(u) = uri(&bin) {
+        buffer["uri"] = json!(u);
+    }
+    let mut doc = json!({
+        "asset": {"version": "2.0", "generator": "Falcon"},
+        "scene": 0,
+        "scenes": [{"nodes": (0..nodes.len()).collect::<Vec<_>>()}],
+        "nodes": nodes,
+        "meshes": gl_meshes,
+    });
+    if !bin.is_empty() {
+        doc["buffers"] = json!([buffer]);
+        doc["bufferViews"] = json!(views);
+        doc["accessors"] = json!(accessors);
+    }
+    if !materials.is_empty() {
+        doc["materials"] = json!(materials);
+    }
+    (doc, bin)
+}
+
+/// A binary glTF (GLB) of `meshes`: the 12-byte header, the JSON chunk
+/// (padded with spaces) and the BIN chunk.
+pub fn glb<'a>(meshes: impl IntoIterator<Item = &'a Mesh>) -> Vec<u8> {
+    let (doc, bin) = gltf_parts(meshes, |_| None);
+    let mut json = serde_json::to_vec(&doc).unwrap_or_default();
+    while !json.len().is_multiple_of(4) {
+        json.push(b' ');
+    }
+    let total = 12 + 8 + json.len() + if bin.is_empty() { 0 } else { 8 + bin.len() };
+    let mut out = Vec::with_capacity(total);
+    out.extend_from_slice(b"glTF");
+    out.extend_from_slice(&2u32.to_le_bytes());
+    out.extend_from_slice(&(total as u32).to_le_bytes());
+    out.extend_from_slice(&(json.len() as u32).to_le_bytes());
+    out.extend_from_slice(b"JSON");
+    out.extend_from_slice(&json);
+    if !bin.is_empty() {
+        out.extend_from_slice(&(bin.len() as u32).to_le_bytes());
+        out.extend_from_slice(b"BIN\0");
+        out.extend_from_slice(&bin);
+    }
+    out
+}
+
+/// A `.gltf` of `meshes`: the JSON with its buffer as a base64 data URI.
+pub fn gltf<'a>(meshes: impl IntoIterator<Item = &'a Mesh>) -> String {
+    use base64::Engine;
+    let (doc, _) = gltf_parts(meshes, |bin| Some(format!("data:application/octet-stream;base64,{}", base64::engine::general_purpose::STANDARD.encode(bin))));
+    serde_json::to_string_pretty(&doc).unwrap_or_default()
+}
+
+/// Binary little-endian PLY of `meshes` merged into one: positions, normals
+/// when every mesh has them, and colours (vertex colours, else the mesh's
+/// material colour, else the viewer's default) when any mesh has either;
+/// then the triangles.
+pub fn ply<'a>(meshes: impl IntoIterator<Item = &'a Mesh>) -> Vec<u8> {
+    let meshes: Vec<&Mesh> = meshes.into_iter().filter(|m| !m.positions.is_empty()).collect();
+    let vertices: usize = meshes.iter().map(|m| m.positions.len()).sum();
+    let faces: usize = meshes.iter().map(|m| m.triangle_count()).sum();
+    let normals = !meshes.is_empty() && meshes.iter().all(|m| m.normals.as_ref().is_some_and(|n| n.len() == m.positions.len()));
+    let colors = meshes.iter().any(|m| m.colors.is_some() || m.material.is_some());
+    let mut head = format!("ply\nformat binary_little_endian 1.0\ncomment Exported by Falcon\nelement vertex {vertices}\nproperty float x\nproperty float y\nproperty float z\n");
+    if normals {
+        head.push_str("property float nx\nproperty float ny\nproperty float nz\n");
+    }
+    if colors {
+        head.push_str("property uchar red\nproperty uchar green\nproperty uchar blue\n");
+    }
+    head.push_str(&format!("element face {faces}\nproperty list uchar int vertex_indices\nend_header\n"));
+    let mut out = head.into_bytes();
+    let byte = |c: f32| (c.clamp(0.0, 1.0) * 255.0).round() as u8;
+    for m in &meshes {
+        let fallback = m.material.as_ref().map_or(super::DEFAULT_COLOR, |mat| mat.color);
+        for (i, p) in m.positions.iter().enumerate() {
+            for c in p {
+                out.extend_from_slice(&c.to_le_bytes());
+            }
+            if normals && let Some(n) = m.normals.as_ref().and_then(|ns| ns.get(i)) {
+                for c in n {
+                    out.extend_from_slice(&c.to_le_bytes());
+                }
+            }
+            if colors {
+                let c = m.colors.as_ref().and_then(|cs| cs.get(i)).copied().unwrap_or(fallback);
+                out.extend(c.map(byte));
+            }
+        }
+    }
+    let mut base = 0u32;
+    for m in &meshes {
+        for t in m.indices.as_chunks::<3>().0 {
+            out.push(3);
+            for i in t {
+                out.extend_from_slice(&((base + i) as i32).to_le_bytes());
+            }
+        }
+        base += m.positions.len() as u32;
+    }
+    out
+}
+
 /// Writes `meshes` to `path` in `format`; an OBJ gets its MTL next to it
 /// (same name, `.mtl`) when it has materials.
 pub fn write<'a>(meshes: impl IntoIterator<Item = &'a Mesh>, format: Format, path: &std::path::Path) -> std::io::Result<()> {
     match format {
         Format::Stl => std::fs::write(path, stl(meshes)),
+        Format::Glb => std::fs::write(path, glb(meshes)),
+        Format::Gltf => std::fs::write(path, gltf(meshes)),
+        Format::Ply => std::fs::write(path, ply(meshes)),
         Format::Obj => {
             let mtl_path = path.with_extension("mtl");
             let mtl_name = mtl_path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
@@ -212,6 +403,73 @@ mod tests {
         let back = super::super::parse(&bytes, "stl", &|_| None).unwrap();
         assert_eq!(back.triangle_count(), 12);
         assert_eq!(back.bounds(), Some(([0.0; 3], [1.0; 3])));
+    }
+
+    fn painted() -> (Mesh, Mesh) {
+        let mut a = cube(true);
+        a.name = "box".into();
+        a.material = Some(Material { name: "red".into(), color: [0.8, 0.2, 0.1], opacity: 1.0 });
+        a.normals = Some(a.indices.as_chunks::<3>().0.iter().flat_map(|t| {
+            let n = geom::face_normal(a.positions[t[0] as usize], a.positions[t[1] as usize], a.positions[t[2] as usize]);
+            [n; 3]
+        }).collect());
+        let mut b = cube(false);
+        b.positions.iter_mut().for_each(|p| p[0] += 2.0);
+        b.colors = Some(vec![[0.0, 1.0, 0.5]; b.positions.len()]);
+        (a, b)
+    }
+
+    fn close(a: V3, b: V3) -> bool {
+        (0..3).all(|i| (a[i] - b[i]).abs() < 2e-3)
+    }
+
+    #[test]
+    fn glb_round_trips_through_the_reader() {
+        let (a, b) = painted();
+        let bytes = glb([&a, &b]);
+        assert_eq!(&bytes[..4], b"glTF");
+        assert_eq!(u32::from_le_bytes(bytes[8..12].try_into().unwrap()) as usize, bytes.len());
+        assert_eq!(bytes.len() % 4, 0);
+        let back = super::super::parse(&bytes, "glb", &|_| None).unwrap();
+        assert_eq!((back.meshes.len(), back.triangle_count(), back.vertex_count()), (2, 24, a.positions.len() + b.positions.len()));
+        assert_eq!(back.meshes[0].name, "box");
+        let mat = back.meshes[0].material.as_ref().unwrap();
+        assert!(close(mat.color, [0.8, 0.2, 0.1]), "sRGB survives the linear store: {:?}", mat.color);
+        assert!(back.meshes[0].normals.is_some());
+        assert!(close(back.meshes[1].colors.as_ref().unwrap()[0], [0.0, 1.0, 0.5]));
+        assert_eq!(back.bounds(), Some(([0.0; 3], [3.0, 1.0, 1.0])));
+        // Nothing visible still makes a well-formed file.
+        let empty = glb(std::iter::empty());
+        assert_eq!(u32::from_le_bytes(empty[8..12].try_into().unwrap()) as usize, empty.len());
+    }
+
+    #[test]
+    fn gltf_embeds_its_buffer() {
+        let (a, b) = painted();
+        let text = gltf([&a, &b]);
+        assert!(text.contains("data:application/octet-stream;base64,"));
+        let back = super::super::parse(text.as_bytes(), "gltf", &|_| None).unwrap();
+        assert_eq!(back.triangle_count(), 24);
+        assert!(close(back.meshes[0].material.as_ref().unwrap().color, [0.8, 0.2, 0.1]));
+    }
+
+    #[test]
+    fn ply_round_trips_through_the_reader() {
+        let (a, b) = painted();
+        let bytes = ply([&a, &b]);
+        let head = String::from_utf8_lossy(&bytes[..bytes.windows(11).position(|w| w == b"end_header\n").unwrap()]).into_owned();
+        assert!(head.contains(&format!("element vertex {}\n", a.positions.len() + b.positions.len())));
+        assert!(!head.contains("nx"), "one mesh has no normals, so none are written");
+        let back = super::super::parse(&bytes, "ply", &|_| None).unwrap();
+        assert_eq!(back.triangle_count(), 24);
+        let cs = back.meshes[0].colors.as_ref().unwrap();
+        assert!(close(cs[0], [204.0 / 255.0, 51.0 / 255.0, 26.0 / 255.0]), "the material colour per vertex: {:?}", cs[0]);
+        assert!(close(cs[a.positions.len()], [0.0, 1.0, 128.0 / 255.0]));
+        assert_eq!(back.bounds(), Some(([0.0; 3], [3.0, 1.0, 1.0])));
+        // A plain mesh writes positions and faces only.
+        let plain = ply([&cube(false)]);
+        assert!(!String::from_utf8_lossy(&plain).contains("red"));
+        assert_eq!(super::super::parse(&plain, "ply", &|_| None).unwrap().triangle_count(), 12);
     }
 
     #[test]
