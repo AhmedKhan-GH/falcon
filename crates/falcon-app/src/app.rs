@@ -198,6 +198,8 @@ pub struct Launch {
     pub search: Option<String>,
     pub color: Option<String>,
     pub tags: bool,
+    /// `eagle://folder/…` and `eagle://smart-folder/…` links to open.
+    pub links: Vec<crate::links::Link>,
 }
 
 /// A library change requested from the library menu or a shortcut,
@@ -782,7 +784,39 @@ impl App {
         if launch.tags {
             app.ws.scope = Scope::AllTags;
         }
+        for link in launch.links {
+            app.follow_link(link);
+        }
+        crate::links::set_repaint(&app.ctx);
         app
+    }
+
+    /// Opens an `eagle://` link in the shown library, as Eagle does: an
+    /// item opens in the viewer inside its first folder (or All), a folder
+    /// or smart folder is shown. Ids the library doesn't have are ignored.
+    fn follow_link(&mut self, link: crate::links::Link) {
+        use crate::links::Link;
+        let Some(shared) = self.ws.lib.clone() else { return };
+        let target = {
+            let lib = lock(&shared);
+            match &link {
+                Link::Item(id) => lib.item(id).map(|i| match i.folders.first().filter(|f| logic::find_folder(&lib.metadata.folders, f).is_some()) {
+                    Some(f) => Scope::Folder(f.clone()),
+                    None => Scope::All,
+                }),
+                Link::Folder(id) => logic::find_folder(&lib.metadata.folders, id).map(|_| Scope::Folder(id.clone())),
+                Link::Smart(id) => lib.smart_folders().iter().any(|f| smart_has(f, id)).then(|| Scope::Smart(id.clone())),
+            }
+        };
+        let Some(scope) = target else { return };
+        self.go(scope);
+        if let Link::Item(id) = link {
+            self.ws.selected = vec![id.clone()];
+            self.ws.anchor = Some(id.clone());
+            self.ws.scroll_to = Some(id.clone());
+            self.ws.viewer = Some(id);
+        }
+        self.ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
     }
 
     /// Opens the library at `path` in a workspace of its own and shows it,
@@ -2267,6 +2301,11 @@ fn library_label(path: &std::path::Path) -> LayoutJob {
     job.append(&name, 0.0, egui::TextFormat::simple(font(13.0), t::p().text));
     job.append(&format!("\n{dir}"), 0.0, egui::TextFormat::simple(font(11.0), t::p().text_muted));
     job
+}
+
+/// Whether smart folder `f` or one below it has id `id`.
+fn smart_has(f: &falcon_library::smart::SmartFolder, id: &str) -> bool {
+    f.id == id || f.children.iter().any(|c| smart_has(c, id))
 }
 
 /// Most libraries kept in the recent list.
@@ -4910,6 +4949,9 @@ impl App {
         }
         self.follow_api_switch();
         self.follow_api_preferences();
+        for link in crate::links::take() {
+            self.follow_link(link);
+        }
         if std::mem::take(&mut self.refresh) {
             self.refresh_library();
         }

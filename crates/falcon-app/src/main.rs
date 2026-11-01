@@ -9,6 +9,7 @@ mod font_install;
 mod audio;
 mod auto_import;
 mod hover;
+mod links;
 mod icloud;
 mod icons;
 mod import_dupes;
@@ -30,6 +31,8 @@ use std::path::PathBuf;
 fn main() -> eframe::Result {
     // Only libraries in the sandbox folder open, never real ones.
     falcon_library::sandbox::enforce(falcon_library::sandbox::default_root());
+    // Before the event loop, so the link that launched the app arrives.
+    links::install();
     // `falcon-app [LIBRARY] [ITEM]`, where ITEM is an id or Eagle's
     // `eagle://item/<id>` link, opened in the viewer.
     let initial = std::env::args_os().nth(1).map(PathBuf::from);
@@ -49,7 +52,11 @@ fn main() -> eframe::Result {
             "--search" => launch.search = args.next(),
             "--color" => launch.color = args.next(),
             _ if std::path::Path::new(&a).exists() => launch.import.push(PathBuf::from(a)),
-            _ => launch.items.push(a.trim_start_matches("eagle://item/").to_string()),
+            _ => match links::parse(&a) {
+                Some(links::Link::Item(id)) => launch.items.push(id),
+                Some(link) => launch.links.push(link),
+                None => launch.items.push(a),
+            },
         }
     }
     let options = eframe::NativeOptions {
