@@ -1217,9 +1217,14 @@ mod tests {
 
     /// Eagle's macOS keybind ids that falcon has an action for, with
     /// Eagle's default (empty is unbound). Ids falcon lacks an action for
-    /// (global capture, link and site importers, reverse image search,
-    /// image merge, the import-date filter) are not listed.
+    /// (link and site importers, reverse image search, image merge, the
+    /// import-date filter) are not listed.
     const EAGLE_IDS: &[(&str, &str)] = &[
+        ("global.show.eagle", ""),
+        ("global.show.search", ""),
+        ("global.capture.area", "Command + Alt + E"),
+        ("global.capture.window", ""),
+        ("global.capture.full", ""),
         ("file.create.new", "Command + N"),
         ("file.create.folder", "Command + Shift + N"),
         ("file.create.subfolder", "Alt + N"),
