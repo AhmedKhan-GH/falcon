@@ -38,6 +38,8 @@ pub enum Command {
     LayoutList,
     OpenDefault,
     RevealInFinder,
+    /// Eagle's View ▸ Open Link: the source link of the items.
+    OpenLink,
     Preferences,
     /// Lock falcon behind its password (Preferences ▸ Password).
     LockApp,
@@ -281,6 +283,7 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::LayoutList, id: "view.layout.list", group: "View", label: "List layout", default: k(ALT, Key::Num4), aliases: &[] },
     Spec { cmd: Command::OpenDefault, id: "view.file.opendefault", group: "View", label: "Open in the default app", default: k(SHIFT, Key::Enter), aliases: &[] },
     Spec { cmd: Command::RevealInFinder, id: "view.file.openfinder", group: "View", label: "Show in Finder", default: k(CMD, Key::Enter), aliases: &[] },
+    Spec { cmd: Command::OpenLink, id: "view.file.openlink", group: "View", label: "Open the source link", default: k(CMD_SHIFT, Key::O), aliases: &[] },
     // Eagle: ⌫ goes back (or leaves the viewer), and ⌘←/⌘→ and ⌥←/⌥→
     // step through the history.
     Spec { cmd: Command::Back, id: "go.back", group: "Navigate", label: "Back", default: k(NONE, Key::Backspace), aliases: &[KeyboardShortcut::new(CMD, Key::ArrowLeft), KeyboardShortcut::new(ALT, Key::ArrowLeft)] },

@@ -1616,6 +1616,27 @@ impl App {
     }
 
     /// The items a command acts on: the viewer's item, or the selection.
+    /// Opens the source links of the acted-on items (Eagle's cap is 50).
+    fn open_links(&mut self) {
+        let Some(shared) = self.ws.lib.clone() else { return };
+        let targets: Vec<_> = {
+            let lib = lock(&shared);
+            self.acted_on()
+                .iter()
+                .filter_map(|id| lib.item(id))
+                .filter(|it| !it.url.is_empty())
+                .take(50)
+                .filter_map(|it| crate::urls::link_target(&it.url, |p| std::path::Path::new(p).exists()))
+                .collect()
+        };
+        if targets.is_empty() {
+            self.flash("No link to open");
+        }
+        for t in &targets {
+            crate::urls::open_link(t);
+        }
+    }
+
     fn acted_on(&self) -> Vec<String> {
         match &self.ws.viewer {
             Some(id) => vec![id.clone()],
@@ -1712,6 +1733,7 @@ impl App {
             C::LayoutList => self.set_layout(Layout::List),
             C::OpenDefault => self.open_keys(true),
             C::RevealInFinder => self.open_keys(false),
+            C::OpenLink => self.open_links(),
             C::SelectAll => self.ws.selected = self.ws.order.clone(),
             C::Viewer if viewer => self.ws.viewer = None,
             C::Viewer => match self.prefs.space {
@@ -4585,6 +4607,7 @@ impl App {
         }
 
         let mut changed: Option<Item> = None;
+        let link_keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::OpenLink);
         let edit = self.ws.edit.as_mut().unwrap();
         let r = field(ui, &mut edit.name, "Title", 33.0, false, "item-name");
         if std::mem::take(&mut self.ws.focus_title) {
@@ -4602,10 +4625,24 @@ impl App {
             changed = Some(it);
         }
         let r = field(ui, &mut edit.url, "http://", 33.0, false, "item-url");
+        let mut open_link = false;
+        if !item.url.is_empty() || !edit.url.is_empty() {
+            let at = Pos2::new(r.rect.right() - 18.0, r.rect.center().y);
+            let tip = format!("Open Link ({link_keys})");
+            open_link = icon_button(ui, at, ic::ARROW_SQUARE_OUT, 16.0, true, &tip).clicked();
+        }
         if r.lost_focus() && edit.url != item.url {
-            let mut it = changed.clone().unwrap_or_else(|| item.clone());
-            it.url = edit.url.trim().to_string();
-            changed = Some(it);
+            if crate::urls::url_accepted(edit.url.trim(), |p| std::path::Path::new(p).exists()) {
+                let mut it = changed.clone().unwrap_or_else(|| item.clone());
+                it.url = edit.url.trim().to_string();
+                changed = Some(it);
+            } else {
+                edit.url = item.url.clone();
+                self.ws.status = Some(("Not a valid link".into(), Instant::now()));
+            }
+        }
+        if open_link && let Some(t) = crate::urls::link_target(&item.url, |p| std::path::Path::new(p).exists()) {
+            crate::urls::open_link(&t);
         }
 
         // Tags.
