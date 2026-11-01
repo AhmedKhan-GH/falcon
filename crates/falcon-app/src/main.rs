@@ -17,6 +17,7 @@ mod menu;
 mod open_with;
 mod prefs;
 mod shortcuts;
+mod subtitles;
 mod tags;
 mod organize;
 mod textdoc;

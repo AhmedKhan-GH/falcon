@@ -236,6 +236,8 @@ pub(super) struct VideoState {
     /// from the viewer bar's rotate and flip buttons; the file is untouched.
     turns: u8,
     flipped: bool,
+    /// The open clip's subtitles, from a `.vtt` or `.srt` beside it.
+    subs: Vec<crate::subtitles::Cue>,
 }
 
 impl Default for VideoState {
@@ -260,6 +262,7 @@ impl Default for VideoState {
             tip_until: 0.0,
             turns: 0,
             flipped: false,
+            subs: Vec::new(),
         }
     }
 }
@@ -301,6 +304,7 @@ impl VideoState {
         self.tip_until = 0.0;
         self.turns = 0;
         self.flipped = false;
+        self.subs.clear();
     }
 
     /// The positions to save, with the open clip's current one.
@@ -344,6 +348,9 @@ impl VideoState {
         }
         self.id = item.id.clone();
         self.player = Some(v);
+        // Eagle shows the first of `<name>.vtt` and `<name>.srt` it finds.
+        let original = item.original_path(lib.root());
+        self.subs = crate::subtitles::sidecars(&original).iter().find_map(|p| crate::subtitles::load(p)).unwrap_or_default();
         true
     }
 }
@@ -589,8 +596,35 @@ impl App {
                 ui.close();
             }
         }
+        if ui.button("Load Subtitles…").clicked() {
+            ui.close();
+            self.load_subtitles(lib, item);
+        }
         ui.separator();
         self.item_menu(ui, lib, item, std::slice::from_ref(&item.id));
+    }
+
+    /// Eagle's "Load Subtitles": a chosen `.srt` or `.vtt` is copied into
+    /// the item's folder as `<name>.<ext>`, where the viewer finds it next
+    /// time, and shown at once.
+    fn load_subtitles(&mut self, lib: &Library, item: &Item) {
+        let picked = rfd::FileDialog::new().set_title("Load Subtitles").add_filter("Subtitles", &["srt", "vtt"]).pick_file();
+        let Some(src) = picked else { return };
+        let Some(cues) = crate::subtitles::load(&src) else {
+            self.flash("No subtitles found in that file");
+            return;
+        };
+        let ext = src.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+        let dest = item.original_path(lib.root()).with_extension(&ext);
+        if src != dest
+            && let Err(e) = std::fs::copy(&src, &dest)
+        {
+            self.flash(format!("Couldn't copy the subtitles: {e}"));
+            return;
+        }
+        if self.video.loaded() == Some(item.id.as_str()) {
+            self.video.subs = cues;
+        }
     }
 
     /// Draws the viewer for a video and returns true: the player, or
@@ -679,6 +713,20 @@ impl App {
             None => {
                 p.text(stage.center(), Align2::CENTER_CENTER, "Loading…", font(13.0), t::p().text_muted);
                 ctx.request_repaint_after(std::time::Duration::from_millis(16));
+            }
+        }
+        // Subtitles over the bottom of the picture, white on a dark band.
+        if let Some(text) = crate::subtitles::showing(&vs.subs, pos) {
+            // Each line centred on its own band, the last one near the bottom.
+            let size = (shown.height() / 18.0).clamp(14.0, 30.0);
+            let wrap = (shown.width() - 40.0).max(80.0);
+            let galleys: Vec<_> = text.lines().map(|l| p.layout(l.to_string(), font(size), Color32::WHITE, wrap)).collect();
+            let mut bottom = shown.bottom().min(stage.bottom()) - size * 0.8;
+            for g in galleys.into_iter().rev() {
+                let r = Rect::from_center_size(Pos2::new(shown.center().x, bottom - g.size().y / 2.0 - 3.0), g.size() + vec2(16.0, 6.0));
+                p.rect_filled(r, CornerRadius::same(4), Color32::from_black_alpha(170));
+                p.galley(r.min + vec2(8.0, 3.0), g, Color32::WHITE);
+                bottom = r.top();
             }
         }
         // Clicking the picture plays or pauses; scrolling seeks, or sets
