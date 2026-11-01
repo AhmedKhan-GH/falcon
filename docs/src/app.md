@@ -240,6 +240,19 @@ What Eagle does, from `app/pdf-viewer/` (pdf.js 3.1.81 with Eagle's edits in `we
 | Document properties | Tools ▸ Document Properties: file name and size, title, author, subject, keywords, creation and modification dates, creator, producer, PDF version, page count, page size (with the paper name and orientation) and fast web view | Seen | The same fields from PDFKit's document attributes and version (`Document::info`), the item's name and size, the current page's size in inches with Letter, Legal, Tabloid, A4 or A3 and the orientation (`pdf_view::page_size_text`), fast web view from the `/Linearized` dictionary at the start of the file, and whether it has a password |
 | Comments | No region comments on PDFs: mousedown on the image is ignored for `pdf` | Seen | Same: the reader takes no comments |
 
+## Web page viewer
+
+What Eagle does, from the `url|html|mhtml` branch of the detail view in `index.html` and `getURLSrc` in `app.bundle.js`:
+
+| Part | Eagle | Status | Falcon |
+|---|---|---|---|
+| Engine | An Electron `<web-view>` filling the viewer, loading a bookmark's stored `url` (YouTube and Vimeo bookmarks load their embed player) or the local file's address for HTML and MHTML | Seen | On macOS a `WKWebView` (`webview.rs`), created through the Objective-C runtime and added over the window's content view, placed over the viewer's area every frame in AppKit points (following panel resizes, egui's zoom and the display's scale). A frame that doesn't draw a web item hides it and blanks the page, so sound stops when the viewer closes or moves on; an egui menu, popup, window or modal over its area hides it until it closes. Hiding gives the keyboard back to egui. Files dropped on the page go to the import, not to the page. YouTube and Vimeo bookmarks load the page itself, not the embed player |
+| Which page | `.url` bookmarks | Seen | `.url` and `.webloc` load the item's URL, else the address read from the file (`weblink::read`); only http and https addresses load, other links (files, scripts, app schemes) show a still. HTML loads from its file with read access to its own folder |
+| MHTML | Rendered by Chromium | Seen | WebKit on macOS doesn't read MHTML, so it is a still: the QuickLook render of the file, fitted, with a line saying so and an Open in Default App button |
+| Bar | The web view's controls: title, address, back, forward, reload, stop while loading, copy URL and open in the default browser (`webviewControl` in `app.bundle.js`) | Seen | The viewer bar with back, forward, reload (stop while loading), Copy URL and Open in Browser at the right, the page's title and its current address, muted, at the left. The still mode keeps Copy URL and Open in Browser (or Open in Default App) |
+| Elsewhere | — | — | Off macOS, or without WebKit, every web item is a still |
+| Keyboard | — | — | While the page has the keyboard (after a click on it), egui's keys such as Esc and the arrows go to the page; a click outside the page gives them back |
+
 ## Duplicates
 
 The sidebar's Duplicates entry (after All Tags) opens a page that works like Eagle's duplicate panel. Pick a method, **Identical Files** (byte-identical originals) or **Similar Pictures** (perceptual hash), and what to scan: All Items, the view the page was opened from (its items in grid order), or the items that were selected there (two or more). Scan runs on a background thread with a progress bar. Changing the method or the range clears the results.

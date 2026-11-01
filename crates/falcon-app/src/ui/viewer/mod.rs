@@ -12,6 +12,7 @@ pub(crate) mod pdf;
 pub(crate) mod preview_window;
 pub(crate) mod text;
 pub(crate) mod video;
+pub(crate) mod web;
 
 use eframe::egui::{self, Align2, Pos2, Rect, Ui, Vec2, vec2};
 use falcon_library::Library;
@@ -54,6 +55,7 @@ impl App {
         if self.text_viewer(parent, lib, item, screen)
             || self.video_viewer(parent, lib, item, screen)
             || self.pdf_viewer(parent, lib, item, screen)
+            || self.web_viewer(parent, lib, item, screen)
             || self.media_viewer(parent, lib, item, screen)
         {
             return;

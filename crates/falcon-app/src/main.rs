@@ -39,6 +39,7 @@ mod theme;
 mod ui;
 mod library_icons;
 mod watch;
+mod webview;
 mod workspaces;
 
 use std::path::PathBuf;

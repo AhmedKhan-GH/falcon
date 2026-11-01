@@ -117,6 +117,8 @@ pub struct App {
     pub(crate) font_look: crate::ui::viewer::font::FontLook,
     /// The PDF reader for the viewer (`ui/viewer/pdf.rs`).
     pub(crate) pdf: crate::ui::viewer::pdf::PdfState,
+    /// The web viewer's native page (macOS).
+    pub(crate) web: crate::webview::WebView,
     /// The image viewer's zoom mode and remembered views (`ui/viewer/image.rs`).
     pub(crate) image: crate::ui::viewer::image::ImageState,
     /// Drop targets and other import state (`import.rs`).
@@ -215,6 +217,7 @@ impl App {
             video: Default::default(),
             font_look: Default::default(),
             pdf: Default::default(),
+            web: Default::default(),
             image: Default::default(),
             menu_bar: Default::default(),
             layouts: HashMap::new(),
@@ -355,6 +358,8 @@ impl eframe::App for App {
             self.menu_clicks(&ctx);
             self.draw(ui, frame);
         }
+        // The web page sits over the viewer only in frames that asked for it.
+        self.web.sync(&ctx, frame);
         let state = self.menu_state(&ctx);
         self.menu_bar.sync(&ctx, &self.shortcuts, &state);
     }
