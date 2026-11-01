@@ -131,7 +131,10 @@ impl App {
             let bar = Rect::from_min_size(screen.min, vec2(screen.width(), t::BAR_HEIGHT));
             let area = Rect::from_min_max(Pos2::new(screen.left(), bar.bottom()), screen.max);
             // Swallow clicks on the background so the grid below never gets them.
-            ui.interact(area, ui.scope_id().with("media-bg"), Sense::click());
+            let bg = ui.interact(area, ui.scope_id().with("media-bg"), Sense::click());
+            bg.context_menu(|ui| {
+                self.item_menu(ui, lib, item, std::slice::from_ref(&item.id));
+            });
             if audio {
                 self.audio_view(ctx, ui, lib, item, area);
             } else {

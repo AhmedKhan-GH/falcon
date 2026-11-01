@@ -1116,6 +1116,7 @@ impl App {
             if self.ws.scope == Scope::Trash {
                 self.ws.confirm = Some(Confirm::DeleteItems(ids));
             } else {
+                self.leave_viewed(&ids);
                 self.ws.actions.push(Action::Trash(ids, true));
             }
         }
@@ -2667,37 +2668,10 @@ impl App {
                 if resp.secondary_clicked() && !self.ws.selected.contains(&item.id) {
                     self.ws.selected = vec![item.id.clone()];
                 }
-                let scope_is_trash = self.ws.scope == Scope::Trash;
                 let targets: Vec<String> = if self.ws.selected.contains(&item.id) { self.ws.selected.clone() } else { vec![item.id.clone()] };
                 resp.context_menu(|ui| {
-                    ui.set_min_width(200.0);
-                    if ui.button("Open").clicked() {
+                    if self.item_menu(ui, lib, item, &targets) {
                         opened = Some(item.id.clone());
-                    }
-                    self.open_menu(ui, &open_ui::originals(lib, &targets));
-                    if ui.button("Copy File Path").clicked() {
-                        ui.ctx().copy_text(item.original_path(lib.root()).display().to_string());
-                    }
-                    ui.menu_button("Add to Folder", |ui| {
-                        egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
-                            for f in lib.all_folders() {
-                                if ui.button(&f.name).clicked() {
-                                    self.ws.actions.push(Action::AddToFolder(targets.clone(), f.id.clone()));
-                                }
-                            }
-                        });
-                    });
-                    self.edit_menu(ui, item, &targets, lib);
-                    ui.separator();
-                    if scope_is_trash {
-                        if ui.button("Restore").clicked() {
-                            self.ws.actions.push(Action::Trash(targets.clone(), false));
-                        }
-                        if ui.button(RichText::new("Delete Permanently").color(t::p().icon_red)).clicked() {
-                            self.ws.confirm = Some(Confirm::DeleteItems(targets.clone()));
-                        }
-                    } else if ui.button("Move to Trash").clicked() {
-                        self.ws.actions.push(Action::Trash(targets.clone(), true));
                     }
                 });
                 if resp.clicked() {
@@ -2735,6 +2709,60 @@ impl App {
         if let Some(id) = opened {
             self.ws.viewer = Some(id);
         }
+    }
+
+    /// The item context menu, for a grid card or the item in the viewer.
+    /// `targets` are the items it acts on. Returns true when Open was
+    /// chosen (the grid's menu only; the viewer's has no Open).
+    fn item_menu(&mut self, ui: &mut Ui, lib: &Library, item: &Item, targets: &[String]) -> bool {
+        let in_viewer = self.ws.viewer.as_deref() == Some(item.id.as_str());
+        let mut opened = false;
+        ui.set_min_width(200.0);
+        if !in_viewer && ui.button("Open").clicked() {
+            opened = true;
+        }
+        self.open_menu(ui, &open_ui::originals(lib, targets));
+        if ui.button("Copy File Path").clicked() {
+            ui.ctx().copy_text(item.original_path(lib.root()).display().to_string());
+        }
+        ui.menu_button("Add to Folder", |ui| {
+            egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
+                for f in lib.all_folders() {
+                    if ui.button(&f.name).clicked() {
+                        self.ws.actions.push(Action::AddToFolder(targets.to_vec(), f.id.clone()));
+                    }
+                }
+            });
+        });
+        self.edit_menu(ui, item, targets, lib);
+        ui.separator();
+        if self.ws.scope == Scope::Trash {
+            if ui.button("Restore").clicked() {
+                self.leave_viewed(targets);
+                self.ws.actions.push(Action::Trash(targets.to_vec(), false));
+            }
+            if ui.button(RichText::new("Delete Permanently").color(t::p().icon_red)).clicked() {
+                self.ws.confirm = Some(Confirm::DeleteItems(targets.to_vec()));
+            }
+        } else if ui.button("Move to Trash").clicked() {
+            self.leave_viewed(targets);
+            self.ws.actions.push(Action::Trash(targets.to_vec(), true));
+        }
+        opened
+    }
+
+    /// Before `ids` leave the grid (trashed or restored), moves the viewer
+    /// off them to the next item, or the previous one at the end, or
+    /// closes it when none is left.
+    fn leave_viewed(&mut self, ids: &[String]) {
+        let Some(cur) = self.ws.viewer.clone() else { return };
+        if !ids.contains(&cur) {
+            return;
+        }
+        let at = self.ws.order.iter().position(|x| *x == cur).unwrap_or(0);
+        let after = self.ws.order.iter().skip(at + 1).find(|x| !ids.contains(x));
+        let before = self.ws.order.iter().take(at).rev().find(|x| !ids.contains(x));
+        self.ws.viewer = after.or(before).cloned();
     }
 
     /// Draws an item's image into `rect`: fitted without enlarging (grid),
@@ -3663,6 +3691,10 @@ impl App {
                 self.ws.view.zoom = Some(scale);
             }
         }
+        // Right-click opens the item's menu, as on its card.
+        resp.context_menu(|ui| {
+            self.item_menu(ui, lib, item, std::slice::from_ref(&id));
+        });
         // Double-clicking the picture or the space around it leaves the
         // viewer, as in Eagle (not while cropping or marking regions).
         if resp.double_clicked() && self.ws.tools.crop.is_none() && !self.ws.tools.comment_mode {
