@@ -4,3 +4,4 @@
 //! `crate::app` and the feature modules at the crate root.
 
 pub(crate) mod widgets;
+pub(crate) mod toast;
