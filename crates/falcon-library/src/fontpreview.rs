@@ -89,6 +89,12 @@ fn escape(s: &str) -> String {
 pub fn render(data: &[u8], metas: &Map<String, Value>) -> Option<DynamicImage> {
     let sfnt = fontmeta::sfnt(data)?.into_owned();
     let face = fontmeta::parse(&sfnt)?;
+    // A WOFF 2 font with packed glyphs unpacks without outlines; drawing it
+    // would give a blank card.
+    let t = face.tables();
+    if t.glyf.is_none() && t.cff.is_none() && t.cff2.is_none() {
+        return None;
+    }
     let upm = f32::from(face.units_per_em());
     let (asc, desc) = (f32::from(face.ascender()) / upm, -f32::from(face.descender()) / upm);
     let mut db = usvg::fontdb::Database::new();

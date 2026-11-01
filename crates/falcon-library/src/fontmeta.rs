@@ -139,21 +139,37 @@ fn utf16_be(bytes: &[u8]) -> String {
     String::from_utf16_lossy(&units)
 }
 
-/// Unpacks a WOFF 1 file into the plain sfnt it wraps; other data is
-/// returned as is. WOFF 2 is not supported.
+/// Unpacks a WOFF or WOFF 2 file into the plain sfnt it wraps; other data
+/// is returned as is. From WOFF 2, tables stored with a transform (the
+/// packed `glyf`/`loca` and `hmtx`) are left out: metadata needs only the
+/// names, `maxp`, `cmap` and the other plain tables.
 pub fn sfnt(data: &[u8]) -> Option<Cow<'_, [u8]>> {
-    if data.get(..4) != Some(b"wOFF") {
-        return Some(Cow::Borrowed(data));
+    match data.get(..4) {
+        Some(b"wOFF") => woff1_tables(data).map(|(flavor, t)| Cow::Owned(build_sfnt(flavor, &t))),
+        Some(b"wOF2") => woff2_tables(data).map(|(flavor, t)| Cow::Owned(build_sfnt(flavor, &t))),
+        _ => Some(Cow::Borrowed(data)),
     }
-    let u16_at = |o: usize| data.get(o..o + 2).map(|b| u16::from_be_bytes([b[0], b[1]]));
-    let u32_at = |o: usize| data.get(o..o + 4).map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]));
-    let flavor = u32_at(4)?;
-    let num = u16_at(12)?;
+}
+
+fn be16(data: &[u8], o: usize) -> Option<u16> {
+    data.get(o..o + 2).map(|b| u16::from_be_bytes([b[0], b[1]]))
+}
+
+fn be32(data: &[u8], o: usize) -> Option<u32> {
+    data.get(o..o + 4).map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]))
+}
+
+/// One table for [`build_sfnt`]: tag, checksum, bytes.
+type Table = (u32, u32, Vec<u8>);
+
+fn woff1_tables(data: &[u8]) -> Option<(u32, Vec<Table>)> {
+    let flavor = be32(data, 4)?;
+    let num = be16(data, 12)?;
     let mut tables = Vec::with_capacity(num.into());
     for i in 0..usize::from(num) {
         let e = 44 + i * 20;
-        let tag = u32_at(e)?;
-        let (off, comp, orig, sum) = (u32_at(e + 4)? as usize, u32_at(e + 8)? as usize, u32_at(e + 12)? as usize, u32_at(e + 16)?);
+        let tag = be32(data, e)?;
+        let (off, comp, orig, sum) = (be32(data, e + 4)? as usize, be32(data, e + 8)? as usize, be32(data, e + 12)? as usize, be32(data, e + 16)?);
         let raw = data.get(off..off.checked_add(comp)?)?;
         let bytes = if comp < orig { miniz_oxide::inflate::decompress_to_vec_zlib(raw).ok()? } else { raw.to_vec() };
         if bytes.len() != orig {
@@ -161,6 +177,106 @@ pub fn sfnt(data: &[u8]) -> Option<Cow<'_, [u8]>> {
         }
         tables.push((tag, sum, bytes));
     }
+    Some((flavor, tables))
+}
+
+/// Tags a WOFF 2 directory entry can name by index (from the WOFF 2
+/// specification).
+const WOFF2_TAGS: [&[u8; 4]; 63] = [
+    b"cmap", b"head", b"hhea", b"hmtx", b"maxp", b"name", b"OS/2", b"post", b"cvt ", b"fpgm", b"glyf", b"loca", b"prep", b"CFF ", b"VORG",
+    b"EBDT", b"EBLC", b"gasp", b"hdmx", b"kern", b"LTSH", b"PCLT", b"VDMX", b"vhea", b"vmtx", b"BASE", b"GDEF", b"GPOS", b"GSUB", b"EBSC",
+    b"JSTF", b"MATH", b"CBDT", b"CBLC", b"COLR", b"CPAL", b"SVG ", b"sbix", b"acnt", b"avar", b"bdat", b"bloc", b"bsln", b"cvar", b"fdsc",
+    b"feat", b"fmtx", b"fvar", b"gvar", b"hsty", b"just", b"lcar", b"mort", b"morx", b"opbd", b"prop", b"trak", b"Zapf", b"Silf", b"Glat",
+    b"Gloc", b"Feat", b"Sill",
+];
+
+/// A WOFF 2 `UIntBase128`: big-endian groups of 7 bits, at most five bytes,
+/// no leading zero group.
+fn base128(data: &[u8], at: &mut usize) -> Option<u32> {
+    let mut v: u32 = 0;
+    for i in 0..5 {
+        let b = *data.get(*at)?;
+        *at += 1;
+        if i == 0 && b == 0x80 {
+            return None;
+        }
+        if v & 0xFE00_0000 != 0 {
+            return None;
+        }
+        v = (v << 7) | u32::from(b & 0x7F);
+        if b & 0x80 == 0 {
+            return Some(v);
+        }
+    }
+    None
+}
+
+/// Reads a single-font WOFF 2 file's untransformed tables. Collections are
+/// not read.
+fn woff2_tables(data: &[u8]) -> Option<(u32, Vec<Table>)> {
+    use std::io::Read;
+    let flavor = be32(data, 4)?;
+    if &flavor.to_be_bytes() == b"ttcf" {
+        return None;
+    }
+    let num = usize::from(be16(data, 12)?);
+    let compressed_len = be32(data, 20)? as usize;
+    let mut at = 48;
+    // (tag, stored length, keep)
+    let mut entries = Vec::with_capacity(num);
+    for _ in 0..num {
+        let flags = *data.get(at)?;
+        at += 1;
+        let tag = match usize::from(flags & 0x3F) {
+            63 => {
+                let t = be32(data, at)?;
+                at += 4;
+                t
+            }
+            i => u32::from_be_bytes(*WOFF2_TAGS[i]),
+        };
+        let version = flags >> 6;
+        let orig = base128(data, &mut at)?;
+        let glyf_or_loca = &tag.to_be_bytes() == b"glyf" || &tag.to_be_bytes() == b"loca";
+        // Version 0 is the transform for glyf and loca, the null transform
+        // for every other table; glyf and loca use 3 for "none".
+        let transformed = if glyf_or_loca { version != 3 } else { version != 0 };
+        let stored = if transformed { base128(data, &mut at)? } else { orig };
+        entries.push((tag, stored as usize, !transformed));
+    }
+    let total: usize = entries.iter().try_fold(0usize, |acc, e| acc.checked_add(e.1))?;
+    let stream = data.get(at..at.checked_add(compressed_len)?)?;
+    let mut raw = Vec::with_capacity(total.min(64 << 20));
+    brotli_decompressor::Decompressor::new(stream, 4096).take(total as u64).read_to_end(&mut raw).ok()?;
+    if raw.len() != total {
+        return None;
+    }
+    let mut tables = Vec::new();
+    let mut off = 0;
+    for (tag, len, keep) in entries {
+        let bytes = &raw[off..off + len];
+        off += len;
+        if keep {
+            tables.push((tag, checksum(bytes), bytes.to_vec()));
+        }
+    }
+    tables.sort_by_key(|t| t.0);
+    Some((flavor, tables))
+}
+
+/// The sfnt table checksum: the sum of big-endian words, zero-padded.
+fn checksum(bytes: &[u8]) -> u32 {
+    bytes.chunks(4).fold(0u32, |sum, c| {
+        let mut w = [0u8; 4];
+        w[..c.len()].copy_from_slice(c);
+        sum.wrapping_add(u32::from_be_bytes(w))
+    })
+}
+
+/// Lays out an sfnt file: the offset table, the directory, then each table
+/// padded to four bytes.
+fn build_sfnt(flavor: u32, tables: &[Table]) -> Vec<u8> {
+    let num = tables.len() as u16;
     let mut pow = 1u16;
     let mut log = 0u16;
     while pow * 2 <= num {
@@ -169,25 +285,26 @@ pub fn sfnt(data: &[u8]) -> Option<Cow<'_, [u8]>> {
     }
     let mut out = Vec::new();
     out.extend_from_slice(&flavor.to_be_bytes());
-    for v in [num, pow * 16, log, num * 16 - pow * 16] {
+    for v in [num, pow * 16, log, (num * 16).saturating_sub(pow * 16)] {
         out.extend_from_slice(&v.to_be_bytes());
     }
     let mut offset = 12 + tables.len() * 16;
-    for (tag, sum, bytes) in &tables {
+    for (tag, sum, bytes) in tables {
         out.extend_from_slice(&tag.to_be_bytes());
         out.extend_from_slice(&sum.to_be_bytes());
         out.extend_from_slice(&(offset as u32).to_be_bytes());
         out.extend_from_slice(&(bytes.len() as u32).to_be_bytes());
         offset += bytes.len().div_ceil(4) * 4;
     }
-    for (_, _, bytes) in &tables {
+    for (_, _, bytes) in tables {
         out.extend_from_slice(bytes);
         out.resize(out.len().div_ceil(4) * 4, 0);
     }
-    Some(Cow::Owned(out))
+    out
 }
 
-/// Parses a font file (ttf, otf, woff, or the first face of a ttc/otc).
+/// Parses a font file (ttf, otf, or the first face of a ttc/otc); unpack
+/// WOFF and WOFF 2 with [`sfnt`] first.
 pub fn parse(data: &[u8]) -> Option<Face<'_>> {
     Face::parse(data, 0).ok()
 }
@@ -359,5 +476,124 @@ mod tests {
         let a = font_metas(&data, "X").unwrap();
         let b = font_metas(&woff, "X").unwrap();
         assert_eq!(a, b);
+    }
+
+    /// A Brotli stream of stored (uncompressed) meta-blocks, which every
+    /// decoder must accept: a one-bit window header, then per block ISLAST=0,
+    /// four nibbles of length - 1, ISUNCOMPRESSED=1, padding and the bytes,
+    /// then an empty last block.
+    fn brotli_stored(data: &[u8]) -> Vec<u8> {
+        let mut out = Vec::new();
+        let mut first = true;
+        for chunk in data.chunks(65536) {
+            let len = (chunk.len() - 1) as u32;
+            // Bits, least significant first.
+            let (bits, n) = if first { ((len << 4) | (1 << 20), 21) } else { ((len << 3) | (1 << 19), 20) };
+            first = false;
+            for i in 0..(n as usize).div_ceil(8) {
+                out.push((bits >> (8 * i)) as u8);
+            }
+            out.extend_from_slice(chunk);
+        }
+        // ISLAST=1, ISLASTEMPTY=1 (after the window bit if nothing came first).
+        out.push(if first { 0b110 } else { 0b11 });
+        out
+    }
+
+    fn base128_bytes(mut v: u32) -> Vec<u8> {
+        let mut groups = vec![(v & 0x7F) as u8];
+        v >>= 7;
+        while v > 0 {
+            groups.push((v & 0x7F) as u8 | 0x80);
+            v >>= 7;
+        }
+        groups.reverse();
+        groups
+    }
+
+    /// Wraps a font's tables in WOFF 2. `glyf` and `loca` are stored either
+    /// plainly (transform 3) or as if transformed (version 0, with junk data
+    /// the reader must skip).
+    fn woff2(data: &[u8], transform_glyf: bool) -> Vec<u8> {
+        let face = ttf_parser::RawFace::parse(data, 0).unwrap();
+        let mut dir = Vec::new();
+        let mut stream = Vec::new();
+        for r in face.table_records {
+            let raw = &data[r.offset as usize..(r.offset + r.length) as usize];
+            let tag = r.tag.to_bytes();
+            let index = [b"cmap", b"head", b"hhea", b"hmtx", b"maxp", b"name"].iter().position(|t| **t == tag);
+            let glyf_or_loca = &tag == b"glyf" || &tag == b"loca";
+            let version: u8 = if glyf_or_loca && !transform_glyf { 3 } else { 0 };
+            dir.push((version << 6) | index.map_or(63, |i| i as u8));
+            if index.is_none() {
+                dir.extend_from_slice(&tag);
+            }
+            dir.extend(base128_bytes(r.length));
+            if glyf_or_loca && transform_glyf {
+                let junk = if &tag == b"glyf" { vec![7u8; 100] } else { Vec::new() };
+                dir.extend(base128_bytes(junk.len() as u32));
+                stream.extend(junk);
+            } else {
+                stream.extend_from_slice(raw);
+            }
+        }
+        let comp = brotli_stored(&stream);
+        let mut out = b"wOF2".to_vec();
+        out.extend_from_slice(&data[..4]);
+        out.extend_from_slice(&0u32.to_be_bytes()); // length, patched below
+        out.extend_from_slice(&face.table_records.len().to_be_bytes());
+        out.extend_from_slice(&[0, 0]);
+        out.extend_from_slice(&(data.len() as u32).to_be_bytes());
+        out.extend_from_slice(&(comp.len() as u32).to_be_bytes());
+        out.resize(48, 0);
+        out.extend(dir);
+        out.extend(comp);
+        let n = out.len() as u32;
+        out[8..12].copy_from_slice(&n.to_be_bytes());
+        out
+    }
+
+    #[test]
+    fn base128_reads_the_spec_examples() {
+        let read = |b: &[u8]| base128(b, &mut 0);
+        assert_eq!(read(&[0x3F]), Some(63));
+        assert_eq!(read(&[0x81, 0x00]), Some(128));
+        assert_eq!(read(&base128_bytes(1_234_567)), Some(1_234_567));
+        assert_eq!(read(&[0x80, 0x01]), None, "leading zero group");
+        assert_eq!(read(&[0xFF; 6]), None, "too long");
+    }
+
+    #[test]
+    fn woff2_names_match_the_plain_font() {
+        let Ok(data) = std::fs::read("/System/Library/Fonts/Supplemental/Arial.ttf") else { return };
+        let plain = font_metas(&data, "X").unwrap();
+        for transform in [false, true] {
+            let packed = woff2(&data, transform);
+            assert_eq!(font_metas(&packed, "X").as_ref(), Some(&plain), "transformed glyf: {transform}");
+        }
+        // A broken stream is refused rather than misread.
+        let mut bad = woff2(&data, false);
+        let len = bad.len();
+        bad.truncate(len - 1000);
+        assert!(font_metas(&bad, "X").is_none());
+    }
+
+    #[test]
+    fn woff2_imports_with_font_metas() {
+        let Ok(data) = std::fs::read("/System/Library/Fonts/Supplemental/Arial.ttf") else { return };
+        let tmp = tempfile::tempdir().unwrap();
+        let mut lib = crate::Library::create(tmp.path().join("F.library")).unwrap();
+        let src = tmp.path().join("Arial.woff2");
+        std::fs::write(&src, woff2(&data, false)).unwrap();
+        let id = lib.import_file(&src, &crate::import::ImportOptions::default()).unwrap();
+        let item = lib.item(&id).unwrap();
+        let metas = item.extra.get("fontMetas").and_then(Value::as_object).unwrap();
+        assert_eq!(first_value(metas, "fontFamily"), Some("Arial"));
+        assert!(item.tags.iter().any(|t| t == "Regular"), "{:?}", item.tags);
+        assert_eq!((item.width, item.height), (600, 600), "the specimen was drawn");
+        // Packed glyphs: names still read, but there is nothing to draw.
+        let packed = woff2(&data, true);
+        let m = font_metas(&packed, "X").unwrap();
+        assert!(crate::fontpreview::render(&packed, &m).is_none());
     }
 }

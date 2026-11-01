@@ -47,6 +47,7 @@ Eagle's thumbnail modules (`app/js/thumbs/`) also add keys for some formats. New
 - A font with no names gets a random `postScriptName` and `fullName`. One with no PostScript name uses its `uniqueID`.
 - With the "auto tag" font preference, which is on by default, the weight is also pushed onto `tags`.
 - Fonts opentype.js can't parse (collections, woff2) go through a second parser, Typr, which writes a different fixed set of keys, every one with only an `en` value.
+- **WOFF 2 in Eagle 4.0 (observed in code, result inferred):** woff2 is routed to the font handler, but neither the bundled opentype.js 0.11 nor its Typr build has a WOFF 2 reader (neither looks for the `wOF2` signature). Both parses are inferred to fail, so a woff2 item gets no `fontMetas` and no weight tag.
 
 ### IPTC keywords (observed)
 
@@ -113,7 +114,9 @@ Eagle stores no content hash in item JSON and never hashes file bytes. Its dupli
   - Values can differ slightly from a browser's, for example around MP3 encoder padding.
 - **Video sizes.** `resolutionWidth` and `resolutionHeight` copy the item's `width` and `height`.
 - **`fontMetas`.**
-  - Read with `ttf-parser` (ttf, otf, the first face of ttc or otc) and falcon's own WOFF 1 unpacker. woff2 is not read.
+  - Read with `ttf-parser` (ttf, otf, the first face of ttc or otc) after falcon's own WOFF 1 and WOFF 2 unpackers (`fontmeta::sfnt`).
+  - WOFF 2 goes further than Eagle: falcon writes the same opentype.js-shaped `fontMetas` (and weight tag) as for the plain font. The Brotli stream is decoded with `brotli-decompressor`, and the tables are rebuilt into an sfnt. Tables stored with a WOFF 2 transform (the packed `glyf` and `loca`, and a transformed `hmtx`) are left out, since names, `maxp` and `cmap` are all metadata needs. WOFF 2 collections are not read.
+  - A TrueType woff2 with packed glyphs therefore has no outlines for the 600×600 specimen. Its thumbnail falls back to QuickLook. CFF-flavoured woff2 and woff2 files with plain `glyf` get the specimen.
   - Language codes cover the common Windows and Mac Roman languages. Records in other languages or Mac encodings are skipped, where opentype.js would decode them.
   - Collections get the opentype.js shape, not Typr's.
   - Eagle's MD5 fallback for fonts with a family name but no English PostScript name is not reproduced.

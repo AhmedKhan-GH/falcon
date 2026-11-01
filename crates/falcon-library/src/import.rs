@@ -386,8 +386,8 @@ fn add_keyword_tags(tags: &mut Vec<String>, keywords: Vec<String>) {
     *tags = all;
 }
 
-/// Font formats whose metadata falcon reads (WOFF 2 is not supported).
-pub const FONT_EXTENSIONS: [&str; 5] = ["ttf", "otf", "ttc", "otc", "woff"];
+/// Font formats whose metadata falcon reads.
+pub const FONT_EXTENSIONS: [&str; 6] = ["ttf", "otf", "ttc", "otc", "woff", "woff2"];
 
 /// Turns a file stem into an item name: forbidden characters removed, trimmed,
 /// NFC-normalised, shortened to fit the file system, `_` if nothing is left.
