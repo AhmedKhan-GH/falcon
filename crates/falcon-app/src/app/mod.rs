@@ -52,13 +52,13 @@ mod library_ui;
 mod text_view;
 mod tag_picker;
 mod library_dialogs;
-#[path = "comments.rs"]
+#[path = "../comments.rs"]
 mod comments;
-#[path = "covers.rs"]
+#[path = "../covers.rs"]
 mod covers;
-#[path = "crop.rs"]
+#[path = "../crop.rs"]
 mod crop;
-#[path = "image_edit.rs"]
+#[path = "../image_edit.rs"]
 mod image_edit;
 mod item_cmds;
 
