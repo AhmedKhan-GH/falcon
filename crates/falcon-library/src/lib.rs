@@ -9,6 +9,7 @@ pub mod exif;
 pub mod export;
 pub mod fontmeta;
 pub mod fontpreview;
+pub mod hdr;
 pub mod folder_import;
 pub mod library;
 pub mod manual;

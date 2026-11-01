@@ -575,6 +575,17 @@ pub fn redrawn(root: &Path, mut item: crate::model::Item) -> crate::Result<crate
 mod tests {
     use super::*;
 
+    #[test]
+    fn tga_decodes_by_extension() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("x.tga");
+        let img = image::RgbaImage::from_fn(5, 3, |x, y| image::Rgba([x as u8 * 40, y as u8 * 80, 7, 200]));
+        img.save(&path).unwrap();
+        let back = decode(&path).unwrap().into_rgba8();
+        assert_eq!(back.dimensions(), (5, 3));
+        assert_eq!(*back.get_pixel(3, 2), image::Rgba([120, 160, 7, 200]));
+    }
+
     fn jpeg(w: u32, h: u32) -> Vec<u8> {
         let mut out = Vec::new();
         let img = image::RgbImage::from_pixel(w, h, image::Rgb([200, 30, 30]));
