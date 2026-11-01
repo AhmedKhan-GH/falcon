@@ -3,6 +3,8 @@
 //! markers on the seek bar (see the desktop app chapter of the docs).
 
 use std::collections::HashSet;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex, mpsc};
 
 use eframe::egui::{self, Align2, Color32, CornerRadius, Event, Key, Pos2, Rect, Sense, Stroke, TextEdit, TextureHandle, Ui, Vec2, vec2};
 use falcon_library::model::{Comment, Item};
@@ -25,6 +27,75 @@ const SPEAKER: &str = "\u{E44A}";
 const CONTROLS: f32 = 84.0;
 /// Eagle loops clips this short (in seconds) whatever the loop setting.
 const SHORT_CLIP: f64 = 30.0;
+/// Width of the seek bar's hover thumbnail, in points.
+const PREVIEW_WIDTH: f32 = 160.0;
+
+/// The seek bar's hover thumbnail: a worker thread with its own image
+/// generator decodes small pictures of the clip, always the latest time
+/// asked for (older requests waiting in the channel are skipped).
+struct SeekPreview {
+    tx: mpsc::Sender<f64>,
+    /// The newest picture decoded and the time it shows.
+    got: Arc<Mutex<Option<(f64, falcon_video::Frame)>>>,
+    texture: Option<TextureHandle>,
+    /// The last time sent to the worker.
+    asked: Option<f64>,
+}
+
+impl SeekPreview {
+    fn start(ctx: &egui::Context, path: PathBuf) -> SeekPreview {
+        let (tx, rx) = mpsc::channel::<f64>();
+        let got = Arc::new(Mutex::new(None));
+        let (out, ctx) = (got.clone(), ctx.clone());
+        std::thread::spawn(move || {
+            // Twice the drawn width, for Retina screens.
+            let Ok(grabber) = falcon_video::Grabber::open(&path, (PREVIEW_WIDTH * 2.0) as u32) else { return };
+            // Ends when the viewer drops the sender.
+            while let Ok(mut t) = rx.recv() {
+                while let Ok(newer) = rx.try_recv() {
+                    t = newer;
+                }
+                if let Ok(f) = grabber.grab(t) {
+                    *out.lock().unwrap_or_else(|p| p.into_inner()) = Some((t, f));
+                    ctx.request_repaint();
+                }
+            }
+        });
+        SeekPreview { tx, got, texture: None, asked: None }
+    }
+
+    /// Asks for the picture at `t` unless the last request was close by.
+    fn ask(&mut self, t: f64, step: f64) {
+        if needs_request(t, self.asked, step) {
+            self.asked = Some(t);
+            let _ = self.tx.send(t);
+        }
+    }
+
+    /// The newest picture as a texture, uploading it if it is new.
+    fn texture(&mut self, ctx: &egui::Context) -> Option<&TextureHandle> {
+        if let Some((_, f)) = self.got.lock().unwrap_or_else(|p| p.into_inner()).take() {
+            let img = color_image(&f);
+            match &mut self.texture {
+                Some(tex) => tex.set(img, egui::TextureOptions::LINEAR),
+                None => self.texture = Some(ctx.load_texture("video-seek-preview", img, egui::TextureOptions::LINEAR)),
+            }
+        }
+        self.texture.as_ref()
+    }
+}
+
+/// Whether the hover thumbnail should be decoded again for time `t`: it
+/// moved at least `step` seconds from the last request, or there was none.
+pub fn needs_request(t: f64, asked: Option<f64>, step: f64) -> bool {
+    asked.is_none_or(|a| (t - a).abs() >= step)
+}
+
+/// The left edge of a box `w` wide centred on `x`, kept between `left` and
+/// `right`.
+pub fn bubble_left(x: f32, w: f32, left: f32, right: f32) -> f32 {
+    (x - w / 2.0).min(right - w).max(left)
+}
 
 /// A timed comment being written or edited in the viewer.
 struct Draft {
@@ -61,6 +132,8 @@ pub(super) struct VideoState {
     pending: Option<(String, f64)>,
     /// A frame tool asked for by a key, run while the viewer draws.
     tool: Option<FrameTool>,
+    /// The seek bar's hover thumbnail, started on first hover.
+    preview: Option<SeekPreview>,
 }
 
 impl Default for VideoState {
@@ -78,6 +151,7 @@ impl Default for VideoState {
             draft: None,
             pending: None,
             tool: None,
+            preview: None,
         }
     }
 }
@@ -112,6 +186,7 @@ impl VideoState {
         self.draft = None;
         self.scrub_resume = None;
         self.tool = None;
+        self.preview = None;
     }
 
     /// The positions to save, with the open clip's current one.
@@ -520,6 +595,32 @@ impl App {
             });
         }
 
+        // Hovering or dragging on the bar shows the picture at that moment
+        // above it, with the time, as Eagle's seek bar does.
+        if let Some(px) = pointer.filter(|_| (hot && near.is_none()) || seek.dragged())
+            && duration > 0.0
+        {
+            let at = logic::seek_time(px.x, left, width, duration);
+            let path = item.original_path(lib.root());
+            let preview = vs.preview.get_or_insert_with(|| SeekPreview::start(ctx, path));
+            let frame = if info.fps > 0.0 { 1.0 / f64::from(info.fps) } else { 0.04 };
+            preview.ask(at, (duration / 400.0).max(frame));
+            let aspect = if info.width > 0 && info.height > 0 { info.height as f32 / info.width as f32 } else { 9.0 / 16.0 };
+            let size = vec2(PREVIEW_WIDTH, (PREVIEW_WIDTH * aspect).min(PREVIEW_WIDTH * 1.5));
+            let x0 = bubble_left(px.x, size.x, area.left() + 8.0, area.right() - 8.0);
+            let pic = Rect::from_min_size(Pos2::new(x0, track_y - 22.0 - size.y), size);
+            let top = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, ui.scope_id().with("video-seek-preview")));
+            top.rect_filled(pic.expand(2.0), CornerRadius::same(4), Color32::from_black_alpha(220));
+            if let Some(tex) = preview.texture(ctx) {
+                top.image(tex.id(), pic, Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)), Color32::WHITE);
+            }
+            let label = logic::format_duration(at);
+            let g = top.layout_no_wrap(label, mono(11.5), Color32::WHITE);
+            let lr = Rect::from_center_size(Pos2::new(pic.center().x, pic.bottom() - 10.0), g.size() + vec2(8.0, 2.0));
+            top.rect_filled(lr, CornerRadius::same(3), Color32::from_black_alpha(170));
+            top.galley(lr.min + vec2(4.0, 1.0), g, Color32::WHITE);
+        }
+
         // Buttons: play, skips, frame steps and time on the left; comment,
         // speed, loop and volume on the right.
         let cy = controls.top() + 54.0;
@@ -761,6 +862,23 @@ mod tests {
         assert_eq!(marker_at(0.0, &[], 100.0, 0.0, 1000.0, 5.0), None);
         // A clip of unknown length puts every marker at the start.
         assert_eq!(marker_at(1.0, &times, 0.0, 0.0, 1000.0, 5.0), Some(0));
+    }
+
+    #[test]
+    fn hover_thumbnails_are_asked_for_sparingly() {
+        assert!(needs_request(3.0, None, 0.5));
+        assert!(!needs_request(3.2, Some(3.0), 0.5));
+        assert!(needs_request(3.5, Some(3.0), 0.5));
+        assert!(needs_request(2.4, Some(3.0), 0.5), "moving back counts too");
+    }
+
+    #[test]
+    fn hover_bubbles_stay_on_screen() {
+        assert_eq!(bubble_left(500.0, 160.0, 0.0, 1000.0), 420.0);
+        assert_eq!(bubble_left(10.0, 160.0, 0.0, 1000.0), 0.0);
+        assert_eq!(bubble_left(990.0, 160.0, 0.0, 1000.0), 840.0);
+        // Wider than the room: pinned to the left edge.
+        assert_eq!(bubble_left(50.0, 160.0, 0.0, 100.0), 0.0);
     }
 
     #[test]

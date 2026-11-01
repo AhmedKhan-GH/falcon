@@ -17,6 +17,18 @@ pub fn frame_at(_path: &Path, _secs: f64) -> Result<Frame> {
 }
 
 /// Never constructed off macOS.
+pub struct Grabber;
+
+impl Grabber {
+    pub fn open(_path: &Path, _max_side: u32) -> Result<Grabber> {
+        unsupported()
+    }
+    pub fn grab(&self, _secs: f64) -> Result<Frame> {
+        unsupported()
+    }
+}
+
+/// Never constructed off macOS.
 pub struct Video {
     info: Info,
 }

@@ -6,6 +6,8 @@
 //!
 //! - [`probe`] reads a file's duration, display size and audio track.
 //! - [`frame_at`] decodes the frame at a time, on any thread.
+//! - [`Grabber`] decodes small pictures of one file again and again, for
+//!   previews such as the seek bar's hover thumbnail.
 //! - [`Video`] plays a file with sound and hands out each new frame as RGBA
 //!   pixels for the caller to upload as a texture. It lives on the main
 //!   thread, as AVFoundation's player requires.
@@ -18,12 +20,12 @@ mod pixels;
 #[cfg(target_os = "macos")]
 mod mac;
 #[cfg(target_os = "macos")]
-pub use mac::{Video, frame_at, probe};
+pub use mac::{Grabber, Video, frame_at, probe};
 
 #[cfg(not(target_os = "macos"))]
 mod other;
 #[cfg(not(target_os = "macos"))]
-pub use other::{Video, frame_at, probe};
+pub use other::{Grabber, Video, frame_at, probe};
 
 pub use pixels::{Frame, quarter_turns};
 

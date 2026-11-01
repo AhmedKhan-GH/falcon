@@ -128,6 +128,42 @@ fn frame_of(asset: &AVAsset, secs: f64) -> Result<Frame> {
     cg_to_frame(&image)
 }
 
+/// Decodes small pictures of one file quickly, for previews such as the
+/// seek bar's hover thumbnail: one image generator kept open, pictures no
+/// larger than `max_side` on their long side.
+///
+/// Usable from any thread, but not `Send`: open it on the thread that uses it.
+pub struct Grabber {
+    generator: Retained<AVAssetImageGenerator>,
+}
+
+impl Grabber {
+    /// Opens `path` for grabbing; fails for anything [`probe`] refuses.
+    pub fn open(path: &Path, max_side: u32) -> Result<Grabber> {
+        let asset = asset(path)?;
+        info(&asset)?;
+        let side = f64::from(max_side.max(1));
+        // SAFETY: owned, plain. AVAssetImageGenerator is usable from any thread.
+        let generator = unsafe {
+            let g = AVAssetImageGenerator::assetImageGeneratorWithAsset(&asset);
+            g.setAppliesPreferredTrackTransform(true);
+            g.setMaximumSize(CGSize::new(side, side));
+            g.setRequestedTimeToleranceBefore(zero());
+            g.setRequestedTimeToleranceAfter(zero());
+            g
+        };
+        Ok(Grabber { generator })
+    }
+
+    /// The picture at `secs`, scaled down to fit the size given to `open`.
+    #[allow(deprecated)] // The synchronous image call blocks, which is what callers want.
+    pub fn grab(&self, secs: f64) -> Result<Frame> {
+        // SAFETY: owned, plain.
+        let image = unsafe { self.generator.copyCGImageAtTime_actualTime_error(time(secs), ptr::null_mut()) }.map_err(|e| err(e.localizedDescription().to_string()))?;
+        cg_to_frame(&image)
+    }
+}
+
 /// Draws a CGImage into an RGBA buffer of its own size.
 fn cg_to_frame(image: &CGImage) -> Result<Frame> {
     let (w, h) = (CGImage::width(Some(image)), CGImage::height(Some(image)));

@@ -22,7 +22,7 @@ mod mac {
     use std::ptr::{self, NonNull};
     use std::time::{Duration, Instant};
 
-    use falcon_video::{Frame, Video, frame_at, probe};
+    use falcon_video::{Frame, Grabber, Video, frame_at, probe};
     use objc2::rc::Retained;
     use objc2::runtime::AnyObject;
     use objc2_av_foundation::{
@@ -252,6 +252,15 @@ mod mac {
             check(&format!("{name}: first frame is red"), is_red(&first) && (first.width, first.height) == (W, H), first.mean());
             let later = frame_at(path, 1.5).expect("frame at 1.5 s");
             check(&format!("{name}: frame at 1.5 s is blue"), is_blue(&later), later.mean());
+            // A grabber off the main thread gives small pictures, many times.
+            let p = path.to_path_buf();
+            let (small, again) = std::thread::spawn(move || {
+                let g = Grabber::open(&p, 40).expect("grabber");
+                (g.grab(0.2).expect("grab"), g.grab(1.7).expect("grab again"))
+            })
+            .join()
+            .unwrap();
+            check(&format!("{name}: grabbed pictures fit 40 px"), (small.width, small.height) == (40, 30) && is_red(&small) && is_blue(&again), (small.width, small.height));
         }
 
         // Files that aren't video fail cleanly everywhere.
@@ -259,7 +268,7 @@ mod mac {
         std::fs::write(&text, b"not a video at all").unwrap();
         let missing = dir.path().join("missing.mov");
         for p in [&text, &missing, &dir.path().to_path_buf()] {
-            check(&format!("{} is refused", p.display()), probe(p).is_err() && frame_at(p, 0.0).is_err() && Video::open(p).is_err(), probe(p));
+            check(&format!("{} is refused", p.display()), probe(p).is_err() && frame_at(p, 0.0).is_err() && Video::open(p).is_err() && Grabber::open(p, 40).is_err(), probe(p));
         }
 
         // The player is main-thread-only and says so elsewhere.
