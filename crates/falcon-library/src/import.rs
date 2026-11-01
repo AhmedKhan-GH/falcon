@@ -12,7 +12,7 @@ use unicode_normalization::UnicodeNormalization;
 use crate::error::{Error, Result};
 use crate::library::Library;
 use crate::model::Item;
-use crate::{exif, fontmeta, fontpreview, ids, keywords, media, palette, tempo, thumbnail, waveform};
+use crate::{exif, fontmeta, fontpreview, ids, keywords, media, palette, tempo, thumbnail, waveform, weblink};
 
 /// Longest file name Eagle allows inside an `.info` folder, in bytes.
 const MAX_FILE_NAME: usize = 255;
@@ -504,9 +504,13 @@ fn quicklook_thumbnail(item: &mut Item, raw: &Path, thumb: &Path, max: u32) -> O
 /// in the order Eagle assigns them: `rawMetas` for RAW photos,
 /// `resolutionWidth`, `resolutionHeight` and `duration` for video,
 /// `duration` then `bpm` (when a beat is found) for audio, and `fontMetas`
-/// for fonts.
+/// for fonts. A `.url` or `.webloc` file's address becomes the item's URL so
+/// the viewer can open it; a URL given in the options wins.
 fn file_metadata(item: &mut Item, raw: &Path, opts: &ImportOptions) {
     let ext = item.ext.clone();
+    if item.url.is_empty() && weblink::is_link_file(&ext) {
+        item.url = weblink::read(raw).unwrap_or_default();
+    }
     if (exif::is_raw(&ext) || (opts.camera_metadata_all_photos && exif::EXIF_EXTENSIONS.contains(&ext.as_str())))
         && let Some(meta) = exif::read(raw)
     {
@@ -646,6 +650,28 @@ mod tests {
         .unwrap();
         file_metadata(&mut item, &src, opts);
         item
+    }
+
+    #[test]
+    fn link_files_set_the_item_url() {
+        let none = ImportOptions::default();
+        let url = metadata_only("go.url", b"[InternetShortcut]\r\nURL=https://example.com/a\r\n", &none);
+        assert_eq!(url.url, "https://example.com/a");
+        let xml = b"<plist><dict><key>URL</key><string>https://example.com/w?a=1&amp;b=2</string></dict></plist>";
+        assert_eq!(metadata_only("go.webloc", xml, &none).url, "https://example.com/w?a=1&b=2");
+        assert_eq!(metadata_only("empty.url", b"[InternetShortcut]\n", &none).url, "");
+        assert_eq!(metadata_only("note.txt", b"[InternetShortcut]\nURL=https://example.com/\n", &none).url, "");
+
+        // An item that already has a URL (from `opts.url`) keeps it.
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("go.url");
+        fs::write(&src, "[InternetShortcut]\nURL=https://example.com/a\n").unwrap();
+        let mut item = metadata_only("x.txt", b"hi", &none);
+        item.ext = "url".into();
+        item.url = "https://given.example/".into();
+        let given = ImportOptions { url: item.url.clone(), ..Default::default() };
+        file_metadata(&mut item, &src, &given);
+        assert_eq!(item.url, "https://given.example/");
     }
 
     #[test]
