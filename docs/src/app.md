@@ -230,9 +230,9 @@ These are the defaults. All but the arrows, Esc, Tab, Z and the viewer's C, ⇧R
 | Key | Action |
 |---|---|
 | Space (or ↩) | Open or close the viewer. With audio or video in the viewer, or a GIF with the frame player showing, Space plays or pauses instead (Esc or ↩ closes) |
-| ← → ↑ ↓ | Move the selection, or go to the next item in the viewer (with a PDF, ↑ ↓ scroll the document). With ⌘ or ⌥, ← and → go back and forward instead (see below) |
+| ← → ↑ ↓ | Move the selection (with ⇧, extend it; see Selection), or go to the next item in the viewer (with a PDF, ↑ ↓ scroll the document). With ⌘ or ⌥, ← and → go back and forward instead (see below) |
 | ⌘A | Select all |
-| ⌘⌫ | Move to the Trash, or delete permanently when in the Trash |
+| ⌘⌫ | Move to the Trash, or delete permanently when in the Trash; the next item is then selected |
 | ⌘R (or F2) | Rename the selected item |
 | ⌘F | Focus search |
 | ⌫, ⌘← and ⌥← | Back. In the viewer, ⌫ closes the viewer (as in Eagle) and the two arrow chords do nothing; with a video playing, ⌘← still skips in the video. None of the three acts while a text field has focus |
@@ -341,6 +341,10 @@ The toolbar's layout button opens a panel after Eagle's (`layout-panel.html`, se
 Click selects one item, ⌘-click adds or removes one, ⇧-click selects the range from the last clicked item, and a click on empty space clears the selection.
 
 Dragging over empty grid space draws a rubber band, in every layout, as Eagle's `rect-select` does (seen): every card the band touches is selected, replacing the selection; with ⌘ held when the drag starts, each touched card flips (selected ones drop out); with ⇧, touched cards join the selection (Eagle keeps the selection when a ⇧ drag starts but drops what the band leaves as it moves, so ⇧ acts nearly like a plain drag there; falcon adds, as Finder does). Shrinking the band gives back what it no longer touches. Held within 24 px of the grid's top or bottom edge (or past it), the band scrolls the grid. A drag that starts on a card still drags items. The rules are `logic::marquee_selection` and `logic::rect_hits`.
+
+⇧→ and ⇧← extend the selection one item at a time, as Eagle's multiple select does: the selected run grows at its end away from the anchor (the item last clicked or moved to), and shrinks back toward the anchor when it already reaches past it on the other side. ⇧↓ and ⇧↑ do the same in the List layout; in the other layouts they do nothing, as in Eagle (`logic::extend_selection`).
+
+When the selected items leave the grid (moved to the Trash, restored or deleted from the Trash, removed from the open folder, or dragged onto another folder, which moves them out), the item after them is selected, or the one before at the end of the grid, as Eagle does. Items dragged into a subfolder the view shows (with Show Subfolder Content on) stay selected.
 
 ## Hover preview
 

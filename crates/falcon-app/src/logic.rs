@@ -2209,6 +2209,29 @@ pub fn edge_scroll(y: f32, top: f32, bottom: f32) -> f32 {
     }
 }
 
+/// ⇧→ (`forward`) or ⇧← on the selection, as Eagle's multiple select
+/// does: the selected run grows by one item at its end away from the
+/// anchor (the last item clicked or moved to), or shrinks back toward the
+/// anchor when it already reaches past it on the other side. Returns the
+/// new selection and the item to scroll to, or `None` when nothing is
+/// selected or the run is at the end of the grid.
+pub fn extend_selection(order: &[String], selected: &[String], anchor: Option<&str>, forward: bool) -> Option<(Vec<String>, String)> {
+    let pos: Vec<usize> = selected.iter().filter_map(|id| order.iter().position(|x| x == id)).collect();
+    let (start, end) = (*pos.iter().min()?, *pos.iter().max()?);
+    let a = anchor.and_then(|a| order.iter().position(|x| x == a)).unwrap_or(if forward { start } else { end });
+    let mut out = selected.to_vec();
+    let (drop, add) = if forward { (start < a, end + 1) } else { (end > a, start.wrapping_sub(1)) };
+    if drop {
+        let gone = if forward { start } else { end };
+        out.retain(|id| *id != order[gone]);
+        let near = if forward { gone + 1 } else { gone - 1 };
+        return Some((out, order[near].clone()));
+    }
+    let id = order.get(add)?.clone();
+    out.push(id.clone());
+    Some((out, id))
+}
+
 #[cfg(test)]
 mod selection_tests {
     use super::*;
@@ -2246,5 +2269,27 @@ mod selection_tests {
         assert_eq!(edge_scroll(50.0, 100.0, 500.0), -16.0, "past the top");
         assert_eq!(edge_scroll(300.0, 100.0, 500.0), 0.0);
         assert_eq!(edge_scroll(490.0, 100.0, 500.0), 16.0);
+    }
+
+    #[test]
+    fn shift_arrows_grow_and_shrink_the_run() {
+        let order = ids(&["a", "b", "c", "d", "e"]);
+        // From c: ⇧→ twice grows to e, then stops at the end.
+        let (s1, to) = extend_selection(&order, &ids(&["c"]), Some("c"), true).unwrap();
+        assert_eq!((s1.clone(), to.as_str()), (ids(&["c", "d"]), "d"));
+        let (s2, _) = extend_selection(&order, &s1, Some("c"), true).unwrap();
+        assert_eq!(s2, ids(&["c", "d", "e"]));
+        assert_eq!(extend_selection(&order, &s2, Some("c"), true), None);
+        // ⇧← shrinks back toward the anchor, then grows past it.
+        let (s3, to) = extend_selection(&order, &s2, Some("c"), false).unwrap();
+        assert_eq!((s3, to.as_str()), (ids(&["c", "d"]), "d"));
+        let (s4, _) = extend_selection(&order, &ids(&["c"]), Some("c"), false).unwrap();
+        assert_eq!(s4, ids(&["c", "b"]));
+        let (s5, to) = extend_selection(&order, &s4, Some("c"), true).unwrap();
+        assert_eq!((s5, to.as_str()), (ids(&["c"]), "c"), "⇧→ drops b first");
+        assert_eq!(extend_selection(&order, &ids(&["a"]), Some("a"), false), None, "at the start");
+        assert_eq!(extend_selection(&order, &[], None, true), None);
+        // No anchor: the run grows away from its first (or last) item.
+        assert_eq!(extend_selection(&order, &ids(&["b"]), None, true).unwrap().0, ids(&["b", "c"]));
     }
 }

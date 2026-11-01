@@ -1285,7 +1285,7 @@ impl App {
         }
         // With ⌘ or ⌥ the arrows are commands (Back, Forward, first and
         // last item, parent folder), not selection moves.
-        let (left, right, up, down, esc) = ctx.input(|i| {
+        let (left, right, up, down, esc, shift) = ctx.input(|i| {
             let plain = !i.modifiers.command && !i.modifiers.alt;
             (
                 plain && i.key_pressed(Key::ArrowLeft),
@@ -1293,6 +1293,7 @@ impl App {
                 plain && i.key_pressed(Key::ArrowUp),
                 plain && i.key_pressed(Key::ArrowDown),
                 i.key_pressed(Key::Escape),
+                i.modifiers.shift,
             )
         });
         if esc {
@@ -1307,6 +1308,25 @@ impl App {
                 (true, _) => self.viewer_step(-1),
                 (_, true) => self.viewer_step(1),
                 _ => {}
+            }
+            return;
+        }
+        // ⇧← and ⇧→ grow or shrink the selection; ⇧↑ and ⇧↓ do the same
+        // in the list layout and nothing in the others, as in Eagle.
+        if shift && (left || right || up || down) && !self.ws.selected.is_empty() {
+            let list = self.ws.layout == Layout::List;
+            let forward = match (left, right, up, down) {
+                (true, ..) => Some(false),
+                (_, true, ..) => Some(true),
+                (_, _, true, _) if list => Some(false),
+                (.., true) if list => Some(true),
+                _ => None,
+            };
+            if let Some(forward) = forward
+                && let Some((sel, to)) = logic::extend_selection(&self.ws.order, &self.ws.selected, self.ws.anchor.as_deref(), forward)
+            {
+                self.ws.selected = sel;
+                self.ws.scroll_to = Some(to);
             }
             return;
         }
@@ -1726,10 +1746,13 @@ impl App {
                             moved.push(id);
                         }
                     }
-                    // Moved items leave the open folder, so leave nothing
-                    // selected that is no longer shown.
-                    if matches!(op, logic::FolderDrop::Move(_)) {
-                        self.ws.selected.retain(|s| !moved.contains(&s));
+                    // Moved items leave the open folder (unless they went into
+                    // a subfolder it shows): the next item is selected.
+                    let shown_below = self.display.subfolders
+                        && matches!(&self.ws.scope, Scope::Folder(open) if logic::folder_tree(&lib.metadata.folders, open).contains(&fid));
+                    if matches!(op, logic::FolderDrop::Move(_)) && !shown_below {
+                        let moved: Vec<String> = moved.into_iter().cloned().collect();
+                        self.select_after_removal(&moved);
                     }
                     let name = logic::find_folder(&lib.metadata.folders, &fid).map_or_else(String::new, |f| f.name.clone());
                     self.flash(logic::folder_drop_notice(&op, ids.len(), &name));
@@ -1809,7 +1832,7 @@ impl App {
                 Action::DeleteTag(tag) => lib.delete_tag(&tag).map(|n| self.flash(format!("Removed “{tag}” from {n} items"))),
                 Action::StarTag(tag, on) => lib.set_tag_starred(&tag, on),
                 Action::DeletePermanently(ids) => {
-                    self.ws.selected.retain(|s| !ids.contains(s));
+                    self.select_after_removal(&ids);
                     let r = lib.delete_permanently(&ids);
                     self.flash(format!("Deleted {}", ids.len()));
                     r
@@ -1819,7 +1842,12 @@ impl App {
                     self.flash(format!("Deleted {n}"));
                 }),
                 Action::Trash(ids, trash) => {
-                    self.ws.selected.retain(|s| !ids.contains(s));
+                    // The Duplicates page keeps its own selection rules.
+                    if self.ws.scope == Scope::Duplicates {
+                        self.ws.selected.retain(|s| !ids.contains(s));
+                    } else {
+                        self.select_after_removal(&ids);
+                    }
                     let r = lib.set_trashed(&ids, trash);
                     self.flash(if trash { format!("Moved {} to Trash", ids.len()) } else { format!("Restored {}", ids.len()) });
                     r
@@ -3347,7 +3375,7 @@ impl App {
                 let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::RemoveFromFolder);
                 if ui.add(egui::Button::new("Remove from Folder").shortcut_text(keys)).clicked() {
                     self.leave_viewed(targets);
-                    self.ws.selected.retain(|s| !targets.contains(s));
+                    self.select_after_removal(targets);
                     self.ws.actions.push(Action::RemoveFromFolder(targets.to_vec(), fid));
                 }
             }
@@ -3357,6 +3385,21 @@ impl App {
             }
         }
         opened
+    }
+
+    /// After `ids` leave the grid (trashed, restored, deleted or moved out
+    /// of the open folder): when they were the whole selection, selects the
+    /// item after them (or before, at the end), as Eagle does; otherwise
+    /// just drops them from the selection.
+    fn select_after_removal(&mut self, ids: &[String]) {
+        if self.ws.selected.is_empty() || self.ws.selected.iter().any(|s| !ids.contains(s)) {
+            self.ws.selected.retain(|s| !ids.contains(s));
+            return;
+        }
+        let next = logic::next_after_removal(&self.ws.order, ids);
+        self.ws.selected = next.iter().cloned().collect();
+        self.ws.anchor.clone_from(&next);
+        self.ws.scroll_to = next;
     }
 
     /// Before `ids` leave the grid (trashed or restored), moves the viewer

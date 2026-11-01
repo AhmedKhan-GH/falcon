@@ -341,6 +341,7 @@ pub const TABLE: &[Spec] = &[
 /// Keys that cannot be rebound, listed in the Shortcuts section.
 pub const FIXED: &[(&str, &str)] = &[
     ("← → ↑ ↓", "Move the selection, or step through the viewer"),
+    ("⇧ ← →", "Extend the selection (also ⇧ ↑ ↓ in the list layout)"),
     ("Esc", "Close the viewer, or clear the selection"),
     ("0 / 1 / + / −", "Viewer: zoom to fit, actual size, zoom in, zoom out"),
     ("Tab", "Show or hide the sidebar and inspector (no text field focused)"),
