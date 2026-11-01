@@ -123,6 +123,20 @@ impl Repeat {
     }
 }
 
+/// Formats Eagle hands to its bundled mpv player because Chromium can't
+/// play them; macOS can't either, and falcon has no second player.
+const NEEDS_OTHER_PLAYER: [&str; 6] = ["mkv", "webm", "avi", "wmv", "flv", "360"];
+
+/// The line under the title of the "can't play" page.
+pub fn cannot_play_line(ext: &str) -> String {
+    let ext = ext.to_lowercase();
+    if NEEDS_OTHER_PLAYER.contains(&ext.as_str()) {
+        format!("macOS can't play .{ext} videos, and Falcon has no player of its own for them. Try opening it in another app.")
+    } else {
+        "macOS couldn't play this video. Try opening it in another app.".to_string()
+    }
+}
+
 /// The quarter turns after a press of the rotate button or ⇧R: Eagle turns
 /// the picture a quarter anticlockwise, or clockwise on a ⇧-click.
 pub fn rotate_step(turns: u8, clockwise: bool) -> u8 {
@@ -190,7 +204,7 @@ pub(super) struct VideoState {
     /// The item the player belongs to.
     id: String,
     player: Option<Video>,
-    /// Items AVFoundation can't play; the image viewer shows them instead.
+    /// Items AVFoundation can't play; the "can't play" page shows instead.
     failed: HashSet<String>,
     texture: Option<TextureHandle>,
     /// 0..=1, saved between launches, as Eagle saves its player volume.
@@ -500,6 +514,28 @@ impl App {
         }
     }
 
+    /// Eagle's "can't play this file" page: the thumbnail (or the type's
+    /// placeholder), the name, a line saying why, and Open With.
+    fn cannot_play(&mut self, ui: &mut Ui, lib: &Library, item: &Item, area: Rect) {
+        let resp = ui.interact(area, ui.scope_id().with("video-cannot-play"), Sense::click());
+        resp.context_menu(|ui| {
+            self.item_menu(ui, lib, item, std::slice::from_ref(&item.id));
+        });
+        let thumb = Rect::from_center_size(area.center() - vec2(0.0, 70.0), Vec2::splat(150.0));
+        match self.ws.loader.get(&item.id, crate::loader::Tier::Preview).cloned() {
+            Some(tex) => {
+                let size = tex.size_vec2() * (thumb.width() / tex.size_vec2().max_elem());
+                egui::Image::new((tex.id(), size)).paint_at(ui, Rect::from_center_size(thumb.center(), size));
+            }
+            None => super::ext_placeholder(ui, thumb, &item.ext),
+        }
+        if let Some(j) = crate::loader::job_for(item, lib.root(), crate::loader::Tier::Preview) {
+            self.ws.frame_jobs.push(j);
+        }
+        let name = format!("{}.{}", item.name, item.ext);
+        self.notice_lines(ui, area, &name, &cannot_play_line(&item.ext));
+    }
+
     /// Eagle's frame tools on the picture at the playhead, decoded at the
     /// clip's full size: make it the thumbnail, copy it, or add it to the
     /// library as a new JPEG item named after the video and the time, in
@@ -557,12 +593,27 @@ impl App {
         self.item_menu(ui, lib, item, std::slice::from_ref(&item.id));
     }
 
-    /// Draws the viewer for a video AVFoundation can play and returns true;
-    /// false for anything else (the image viewer shows it).
+    /// Draws the viewer for a video and returns true: the player, or
+    /// Eagle's "can't play" page when AVFoundation refuses the file. False
+    /// for anything that isn't a video.
     pub(super) fn video_viewer(&mut self, parent: &mut Ui, lib: &Library, item: &Item, screen: Rect) -> bool {
         let ctx = &parent.ctx().clone();
-        if !media::is_video(&item.ext.to_lowercase()) || self.video.failed.contains(&item.id) || !self.video.open(lib, item, &self.prefs) {
+        if !media::is_video(&item.ext.to_lowercase()) {
             return false;
+        }
+        // A file that opened but then failed to load gives up the player.
+        if self.video.loaded() == Some(item.id.as_str()) && self.video.player.as_ref().is_some_and(|v| v.error().is_some()) {
+            self.video.failed.insert(item.id.clone());
+            self.video.close();
+        }
+        if self.video.failed.contains(&item.id) || !self.video.open(lib, item, &self.prefs) {
+            let ui = &mut super::viewer_ui(parent, screen, "video-viewer");
+            ui.painter().rect_filled(screen, 0.0, t::p().main);
+            let bar = Rect::from_min_size(screen.min, vec2(screen.width(), t::BAR_HEIGHT));
+            let area = Rect::from_min_max(Pos2::new(screen.left(), bar.bottom()), screen.max);
+            self.cannot_play(ui, lib, item, area);
+            super::media_view::top_bar(self, ui, item, bar);
+            return true;
         }
         {
             let ui = &mut super::viewer_ui(parent, screen, "video-viewer");
@@ -623,12 +674,9 @@ impl App {
         let natural = if vs.turns % 2 == 1 { vec2(natural.y, natural.x) } else { natural };
         let fit = ((stage.width() - 80.0) / natural.x).min((stage.height() - 40.0) / natural.y).clamp(0.01, if fill { f32::INFINITY } else { 1.0 });
         let shown = Rect::from_center_size(stage.center(), natural * fit);
-        match (&vs.texture, v.error()) {
-            (_, Some(e)) => {
-                p.text(stage.center(), Align2::CENTER_CENTER, format!("Can't play this video: {e}"), font(13.0), t::p().text_muted);
-            }
-            (Some(tex), None) => paint_turned(ui, tex, shown, corner_uvs(vs.turns, vs.flipped)),
-            (None, None) => {
+        match &vs.texture {
+            Some(tex) => paint_turned(ui, tex, shown, corner_uvs(vs.turns, vs.flipped)),
+            None => {
                 p.text(stage.center(), Align2::CENTER_CENTER, "Loading…", font(13.0), t::p().text_muted);
                 ctx.request_repaint_after(std::time::Duration::from_millis(16));
             }
@@ -1019,6 +1067,13 @@ mod tests {
         assert_eq!(marker_at(0.0, &[], 100.0, 0.0, 1000.0, 5.0), None);
         // A clip of unknown length puts every marker at the start.
         assert_eq!(marker_at(1.0, &times, 0.0, 0.0, 1000.0, 5.0), Some(0));
+    }
+
+    #[test]
+    fn cannot_play_lines_name_the_format() {
+        assert!(cannot_play_line("MKV").contains(".mkv videos"));
+        assert!(cannot_play_line("avi").contains("no player of its own"));
+        assert!(cannot_play_line("mp4").starts_with("macOS couldn't play this video"));
     }
 
     #[test]
