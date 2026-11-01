@@ -1,6 +1,7 @@
 //! The sidebar: the library switcher, the navigation rows, Quick Access and the folder and smart folder trees.
 
 pub(crate) mod folders;
+mod task_status;
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -302,6 +303,7 @@ impl App {
         let gw = g.size().x;
         p.galley(Pos2::new(full.left() + 44.0, lib_row.center().y - g.size().y / 2.0), g, t::p().text);
         icon(ui, Pos2::new(full.left() + 44.0 + gw + 10.0, lib_row.center().y), ic::CARET_UP_DOWN, 12.0, t::p().text);
+        self.task_status(ui, Pos2::new(full.left() + 44.0 + gw + 32.0, lib_row.center().y));
         let current = lib.root().to_path_buf();
         if std::mem::take(&mut self.open_switcher) {
             egui::Popup::open_id(ui.ctx(), egui::Popup::default_response_id(&resp));

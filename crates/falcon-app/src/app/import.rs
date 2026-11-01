@@ -496,6 +496,10 @@ impl App {
         let dupes = self.prefs.asks_duplicates().then(|| self.ws.dupes.clone());
         std::thread::spawn(move || {
             for Job { path: f, opts } in jobs {
+                // Paused from the sidebar: wait before the next file.
+                while progress.lock().unwrap_or_else(|p| p.into_inner()).paused {
+                    std::thread::sleep(crate::tasks::PAUSE_POLL);
+                }
                 // A file already in the library is held for the duplicate
                 // dialog (`import_dupes`) instead of being committed.
                 let result = crate::import_dupes::import_one(&f, &opts, &shared, dupes.as_ref());

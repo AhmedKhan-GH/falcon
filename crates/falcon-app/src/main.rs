@@ -44,6 +44,7 @@ mod subtitles;
 mod storage;
 mod tag_view;
 mod tags;
+mod tasks;
 mod organize;
 mod text_cards;
 mod textdoc;

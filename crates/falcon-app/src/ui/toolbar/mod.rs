@@ -202,9 +202,9 @@ impl App {
     pub(crate) fn progress_bar(&mut self, ui: &mut Ui, rect: Rect) -> bool {
         let snapshot = {
             let pr = self.ws.progress.lock().unwrap_or_else(|p| p.into_inner());
-            (pr.total, pr.done, pr.failed, pr.current.clone())
+            (pr.total, pr.done, pr.failed, pr.current.clone(), pr.paused)
         };
-        let (total, done, failed, current) = snapshot;
+        let (total, done, failed, current, paused) = snapshot;
         if total == 0 {
             return false;
         }
@@ -230,7 +230,11 @@ impl App {
         let f = done as f32 / total as f32;
         let fill = Rect::from_min_max(track.min, Pos2::new(track.left() + track.width() * f, track.bottom()));
         p.rect_filled(fill, CornerRadius::same(2), t::p().primary);
-        let text = trf("Importing {done} of {total}  ·  {current}", &[("done", &done), ("total", &total), ("current", &current)]);
+        let text = if paused {
+            format!("Paused at {done} of {total}")
+        } else {
+            trf("Importing {done} of {total}  ·  {current}", &[("done", &done), ("total", &total), ("current", &current)])
+        };
         let g = galley(ui, &text, font(12.0), t::p().text_muted, rect.width() - 40.0);
         p.galley(Pos2::new(rect.left() + GRID_PAD_X, rect.top() + 3.0), g, t::p().text_muted);
         true

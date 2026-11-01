@@ -185,6 +185,9 @@ pub(crate) struct Progress {
     pub(crate) errors: Vec<import::ImportError>,
     /// Ids of the items added in this batch, for auto-select.
     pub(crate) added: Vec<String>,
+    /// The queue waits before its next file (the sidebar's task status,
+    /// `tasks.rs`).
+    pub(crate) paused: bool,
 }
 
 /// Zoom, pan and animation of the image viewer.

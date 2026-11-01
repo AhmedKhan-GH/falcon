@@ -478,6 +478,10 @@ Short notes appear in a small rounded box at the bottom centre of the window (in
 
 The import error box and the progress bars are separate and unchanged.
 
+### Background task status
+
+Eagle shows a small spinner beside the library name while its background queue (colour analysis of new items) has work; its tooltip reads Processing or Paused with the number left, and a click pauses or resumes the queue. falcon analyses colours as part of each import, so its queue is the import thread: while files are left, a turning ring sits beside the library name (`ui/sidebar/task_status.rs`, rules in `tasks.rs`) with the same tooltip. Clicking it pauses the queue before its next file (the file being imported finishes), shows a resume glyph and turns the strip under the toolbar to "Paused at N of M"; clicking again resumes. Thumbnail refreshes run behind their own progress window with Cancel and are not part of this queue.
+
 ## Several libraries
 
 Falcon can keep several libraries open in one window and switch between them; Eagle can't. Each open library is a workspace with all of its own state: where you are (scope, back and forward history, search, filters, sort and layout), the selection, the viewer, its undo and redo stacks, open dialogs and its image caches. Switching keeps all of it. Global state stays shared: Preferences, shortcuts, the recent list, zoom, panel visibility, the collect window and the HTTP API server.
