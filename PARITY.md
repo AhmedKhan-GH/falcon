@@ -35,7 +35,7 @@ These are bugs, not missing features. The first four can lose data or edits.
 7. Shortcuts still missing: T, F, ⌘J Go to Folder, ⇧+arrows, ⌘D, ⌘T and the tag clipboard, ⇧D, ⇧T, F5, ⌘O and more (see §3).
 8. ~~No marquee selection, no multi-select of folders, no grid display options.~~ Fixed.
 9. ~~No tag picker or suggestions.~~ Fixed.
-10. ~~No GIF player controls, no animated WebP, no GIF hover previews.~~ Fixed; still no animated AVIF (no decoder) and no hover playback for video or audio.
+10. ~~No GIF player controls, no animated WebP or AVIF, no GIF hover previews.~~ Fixed (AVIF on macOS); still no hover playback for video or audio.
 11. No interactive 3D viewer; ~~text editor~~ fixed; the font viewer is still partial.
 12. ~~No watched import folder.~~ Fixed. No reload on outside changes, no sync-conflict detection, no screen capture.
 13. English only; Eagle ships 8 languages.
@@ -478,7 +478,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | PDF | Inside main window (`index.html:1301`) | Central area, sidebar and inspector kept (`F/app.rs:3392`, `F/app/pdf_view.rs:958`) | Done (macOS only) |
 | 3D model | Inside main window (`index.html:1443`) | Central panel between sidebar and inspector (`F/app.rs` `fn viewer`, `viewer_ui`), as a still render | Partial |
 | Special formats (PSD, AI, Office…) | Inside main window (`index.html:1448`) | Central panel between sidebar and inspector (`F/app.rs` `fn viewer`, `viewer_ui`), as a QuickLook render | Partial |
-| Web page (url/html/mhtml) | Inside main window (`index.html:1491`) | Central panel between sidebar and inspector (`F/app.rs` `fn viewer`, `viewer_ui`), as a still render | Partial |
+| Web page (url/html/mhtml) | Inside main window (`index.html:1491`) | Central panel; live WKWebView for url/html on macOS, MHTML as a still | Partial |
 | Toggle sidebar and inspector from inside the viewer | `toggle-all-btn` in the detail toolbar (`index.html:1015`) | Panels button in every viewer bar and the main toolbar (`App::panels_button`, `logic::toggle_all`), ⌥⌘3 and Tab; both-on/both-off like Eagle | Done |
 | Separate preview window | `preview-window.html`, `Context.Open.New.Window` | No second viewer window (only the collect window uses a viewport, `F/collect.rs:84`) | Missing |
 | Space quick preview (inline mode) | Inline overlay with prev/next arrows, counter and exit button (`index.html:1242-1254`, `app.bundle.js:33612`) | Space opens the same full viewer (`F/app.rs:1092`) | Partial |
@@ -552,7 +552,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | GIF plays in the viewer | Done | `F/anim.rs` streams every frame from disk on a background thread with a bounded frame window (66 MB peak on a 5,000-frame GIF) | local |
-| Animated WebP, AVIF and APNG play in the viewer | Partial | WebP and APNG through `anim.rs` `SeqSource`; no AVIF decoder is available offline | local |
+| Animated WebP, AVIF and APNG play in the viewer | Partial | WebP and APNG through `anim.rs`; animated AVIF through ImageIO (`anim::Kind::ImageIo`) on macOS only | local |
 | Frame-by-frame GIF player toggle | Done | `F/app/gif_view.rs` `gif_toggle_button`; `prefs.gif_player` (off by default, as Eagle's `habits.gifViewer`) | local |
 | Play and pause (Space) | Done | `gif_view.rs` `gif_keys`, read before the viewer's keys so Space doesn't close it while the player shows | local |
 | Previous and next frame ([ and ]) | Done | The rebindable Player keys; ⇧[ / ⇧] step ten frames | local |
@@ -716,15 +716,15 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | SVG drawn as vectors, sharp at any zoom | Done | `thumbnail::render_svg_region` re-renders the visible part at screen resolution 0.15 s after the view holds still (`logic::svg_region`) | local |
 | TIFF viewer (multi-page aware, worker decode) | Partial | Decoded at full resolution when zoomed (`Tier::Original`), QuickLook fallback; not multi-page | local |
 | TGA viewer | Partial | QuickLook still | local |
-| HEIC/HEIF viewer | Partial | QuickLook still | local |
+| HEIC/HEIF viewer | Partial | Full resolution, orientation and tiles through ImageIO (`crates/falcon-library/src/imageio.rs`) on macOS; QuickLook still elsewhere | local |
 
 ### 13. Web pages (url, html, mhtml)
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| Live web page inside the viewer | Missing | QuickLook still at best | online/plugin |
-| Back, forward, reload, copy URL, open in browser | Missing | None | online/plugin |
-| Local .html/.mhtml rendered | Partial | QuickLook still of the HTML | local |
+| Live web page inside the viewer | Done | `webview.rs` / `ui/viewer/web.rs`: a WKWebView over the central panel on macOS (http/https only); still mode elsewhere | online/plugin |
+| Back, forward, reload, copy URL, open in browser | Done | The web viewer bar on macOS (title, URL, back, forward, reload/stop, Copy URL, Open in Browser) | online/plugin |
+| Local .html/.mhtml rendered | Partial | HTML loads live in the WKWebView; MHTML is a QuickLook still with Open in Default App (WebKit on macOS can't read it) | local |
 
 ### 14. Plugin viewers
 
@@ -753,8 +753,8 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Hold Z over a card for an instant preview | Done | `F/app.rs:2702-2704`, `F/hover.rs:397` | local |
 | Preview loads the original for raster formats | Done | `F/hover.rs:26`, `F/app.rs:2730-2736` | local |
 | Animated GIF plays inside the hover preview | Done | `gif_view.rs` `hover_anim`, `anim.rs` `Cards::popup` | local |
-| GIF and animated images play when hovered in the grid | Done | GIF and animated WebP (`card_anim`, `Cards::play`); no AVIF | local |
-| Preference: always autoplay GIF/WebP/AVIF in the grid | Done | `prefs.always_play_animated` (off by default, as Eagle's `habits.alwaysPlayGIF`); no AVIF | local |
+| GIF and animated images play when hovered in the grid | Done | GIF, animated WebP and (macOS) animated AVIF (`card_anim`, `Cards::play`) | local |
+| Preference: always autoplay GIF/WebP/AVIF in the grid | Done | `prefs.always_play_animated` (off by default, as Eagle); AVIF on macOS | local |
 | Video hover preview: autoplays, moving the pointer scrubs, progress bar and time | Missing | Video cards have no hover behaviour (`F/hover.rs:28-31` only removes the zoom button) | local |
 | Mute toggle on the video hover preview, remembered | Missing | None | local |
 | Audio hover preview: plays, click to seek, progress | Missing | None | local |
@@ -773,9 +773,9 @@ Eagle columns come from `config.js` (`SUPPORT_FORMATS_DARWIN`), `E/js/thumbs/thu
 | gif | GIF viewer with frame player | Decoded (first frame) | Animated, all frames, frame player |
 | bmp | Image viewer | Decoded | Image viewer |
 | svg | Vector image viewer | Rendered (resvg) | Rasterised at up to 3072 px |
-| avif | Image viewer, animates | QL | QL still |
-| jxl | Image viewer | QL (macOS 14+) | QL still |
-| heic, heif, hif | Image viewer | QL | QL still |
+| avif | Image viewer, animates | QL | Image viewer, full res, animates (macOS ImageIO) |
+| jxl | Image viewer | QL (macOS 14+) | Image viewer, full res (ImageIO, macOS 14+) |
+| heic, heif, hif | Image viewer | QL | Image viewer, full res (ImageIO, macOS) |
 | tif, tiff | TIFF viewer | QL | QL still |
 | tga | TGA viewer | QL | QL still |
 | ico | Image of thumbnail | QL | QL still |
@@ -808,7 +808,7 @@ Eagle columns come from `config.js` (`SUPPORT_FORMATS_DARWIN`), `E/js/thumbs/thu
 | webm, mkv, avi, wmv, mpg, flv, f4v | HTML5 player or mpv fallback | QL if available | AVFoundation if it can, else a still |
 | 360, afx, eva, vap | Video player | QL if available | AVFoundation if it can, else a still |
 | glb, obj, fbx, 3ds, 3mf, dae, ifc, ply, stl | Interactive 3D viewer | QL if available (obj/stl/ply/dae usually; fbx/ifc/glb rarely) | QL still |
-| url | Live web view | QL (generic) | QL still |
+| url | Live web view | QL (generic) | Live WKWebView (macOS); `.url`/`.webloc` addresses read on import |
 | html, mhtml | Live web view | QL | QL still |
 
 ### 18. Ranked list of local Missing and Partial items
@@ -819,7 +819,7 @@ Ranked by how often a user would notice them.
 2. **No toggle for sidebar and inspector inside the viewer (Missing)** (`toggle-all-btn`).
 3. **Image resolution capped at 3072 px (Partial).** Zooming into large photos and SVGs is soft (`F/loader.rs:26`).
 4. ~~No GIF frame player.~~ Fixed.
-5. **Animated AVIF doesn't animate** (no decoder offline); WebP and APNG do.
+5. ~~Animated AVIF doesn't animate.~~ Fixed on macOS through ImageIO; WebP and APNG everywhere.
 6. **No video hover-scrub preview in the grid (Missing).** Also missing: audio hover playback. GIF and WebP cards do play on hover.
 7. **No video frame tools (Missing).** You can't set a frame as the thumbnail, copy it or save it.
 8. **No fallback player for mkv, avi, wmv, flv or webm (Missing).**
@@ -1397,7 +1397,7 @@ Eagle panes (`app/js/preferences.js:659-788`): General, Sidebar, Controls, Previ
 | Preview: video autoplay | Done | `Prefs::video_autoplay` | local |
 | Preview: remember the playback position | Done | `Prefs::video_resume`, saved per item across launches | local |
 | Preview: loop clips shorter than 30 s | Done | `Prefs::video_loop_short` | local |
-| Preview: autoplay GIF, WebP and AVIF in the grid | Done | `prefs.always_play_animated`; no AVIF | local |
+| Preview: autoplay GIF, WebP and AVIF in the grid | Done | `prefs.always_play_animated`; AVIF on macOS | local |
 | Preview: advanced GIF viewer | Done | `prefs.gif_player` | local |
 | Preview: automatic font style tags | Done | `Prefs::font_style_tags` | local |
 | **Screenshot:** format PNG, JPG or WebP | Missing | — | local |
