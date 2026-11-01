@@ -1322,6 +1322,41 @@ pub struct TileSpan {
     pub padded: [usize; 4],
 }
 
+/// Whether an image is "long" (a tall strip such as a web page capture)
+/// by Eagle's `smartZoom` rule: at least 960 px wide and over 1.8 times as
+/// tall as wide, or at least 320 px wide and over 2.7 times as tall. Eagle
+/// has no such rule for wide images.
+pub fn is_long_image(w: f32, h: f32) -> bool {
+    (w >= 960.0 && w * 1.8 < h) || (w >= 320.0 && w * 2.7 < h)
+}
+
+/// The scale Eagle gives an image named `name` (without extension) for
+/// its pixel density: `@2x` shows at 50%, `@3x` at 33%, `@1.5x` at 67%,
+/// `@0.5x` at 200%.
+pub fn density_scale(name: &str) -> Option<f32> {
+    [("@2x", 0.5), ("@3x", 1.0 / 3.0), ("@1.5x", 2.0 / 3.0), ("@0.5x", 2.0)].into_iter().find(|(s, _)| name.ends_with(s)).map(|(_, v)| v)
+}
+
+/// How an image opens ("Smart Zoom"): the scale, and the vertical offset of
+/// its centre from the view's centre. It fits inside `view` less `margin`
+/// on each side, never enlarged; a long image fills the width instead and
+/// opens at its top, for scrolling down; an `@2x`-style name opens at its
+/// density's scale when that fits.
+pub fn smart_fit(natural: (f32, f32), view: (f32, f32), margin: f32, name: &str) -> (f32, f32) {
+    let (w, h) = (natural.0.max(1.0), natural.1.max(1.0));
+    let (vw, vh) = ((view.0 - 2.0 * margin).max(1.0), (view.1 - 2.0 * margin).max(1.0));
+    let fit = (vw / w).min(vh / h);
+    let mut scale = fit.min(1.0);
+    if is_long_image(w, h) {
+        scale = (view.0 / w).min(1.0);
+    }
+    if let Some(d) = density_scale(name) {
+        scale = if w * d <= view.0 && h * d <= view.1 { d } else { fit };
+    }
+    let top = ((h * scale - view.1) / 2.0).max(0.0);
+    (scale, top)
+}
+
 /// Pixel count above which Eagle shows its "too large" page instead of a
 /// TIFF, HEIC or TGA (`MAX_DIMENSION` in `index.html`).
 pub const TOO_LARGE_PIXELS: u64 = 120_000_000;
@@ -1363,6 +1398,34 @@ mod image_viewer_tests {
         assert!(!wants_original("gif", 12000, 6000.0), "animations are the player's");
         assert!(!wants_original("psd", 12000, 6000.0), "no decoder");
         assert!(wants_original("tiff", 9000, 4000.0));
+    }
+
+    #[test]
+    fn long_images_by_eagles_ratios() {
+        assert!(is_long_image(1000.0, 1801.0));
+        assert!(!is_long_image(1000.0, 1800.0));
+        assert!(!is_long_image(959.0, 2000.0), "under 960 wide needs 2.7x");
+        assert!(is_long_image(400.0, 1081.0));
+        assert!(!is_long_image(319.0, 5000.0));
+        assert!(!is_long_image(8000.0, 1000.0), "wide strips aren't long");
+    }
+
+    #[test]
+    fn smart_fit_fits_long_images_to_the_width_at_the_top() {
+        // An ordinary image fits inside the margins, never enlarged.
+        assert_eq!(smart_fit((2000.0, 1000.0), (1040.0, 600.0), 20.0, "a"), (0.5, 0.0));
+        assert_eq!(smart_fit((200.0, 100.0), (1040.0, 600.0), 20.0, "a"), (1.0, 0.0));
+        // A web page capture fills the width and opens at its top: its
+        // centre sits half the overflow below the view's centre.
+        let (scale, top) = smart_fit((1500.0, 9000.0), (1000.0, 800.0), 20.0, "page");
+        assert!((scale - 1000.0 / 1500.0).abs() < 1e-6);
+        assert!((top - (6000.0 - 800.0) / 2.0).abs() < 1e-3);
+        // Narrower than the view, a long image shows at 100%.
+        assert_eq!(smart_fit((400.0, 2000.0), (1000.0, 800.0), 20.0, "x").0, 1.0);
+        // @2x opens at half size when that fits.
+        assert_eq!(smart_fit((1200.0, 800.0), (1000.0, 800.0), 20.0, "shot@2x").0, 0.5);
+        assert_eq!(density_scale("icon@3x"), Some(1.0 / 3.0));
+        assert_eq!(density_scale("plain"), None);
     }
 
     #[test]

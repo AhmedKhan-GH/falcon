@@ -39,7 +39,7 @@ impl App {
         } else {
             tex.as_ref().map_or(Vec2::splat(512.0), |t| t.size_vec2())
         };
-        let fit = ((area.width() - 80.0) / natural.x).min((area.height() - 80.0) / natural.y).min(1.0);
+        let (fit, fit_top) = logic::smart_fit((natural.x, natural.y), (area.width(), area.height()), 40.0, &item.name);
         let scale = self.ws.view.zoom.unwrap_or(fit);
 
         // Scroll or pinch over the picture zooms around the pointer;
@@ -81,7 +81,7 @@ impl App {
         }
         let scale = self.ws.view.zoom.unwrap_or(fit);
         if self.ws.view.zoom.is_none() {
-            self.ws.view.pan = Vec2::ZERO;
+            self.ws.view.pan = vec2(0.0, fit_top);
         }
         let r = Rect::from_center_size(area.center() + self.ws.view.pan, natural * scale);
         let mut clip = ui.new_child(egui::UiBuilder::new().max_rect(area));
