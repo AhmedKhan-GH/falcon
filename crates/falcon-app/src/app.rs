@@ -260,7 +260,8 @@ struct ViewState {
     /// Scale relative to the image's pixels; `None` fits the window.
     zoom: Option<f32>,
     pan: Vec2,
-    /// The animation playing, for GIFs (see `anim.rs`).
+    /// The animation playing, for GIFs, animated WebPs and APNGs (see
+    /// `anim.rs`).
     anim: Option<crate::anim::Player>,
     /// The item's original, for the bar's open button.
     file: PathBuf,

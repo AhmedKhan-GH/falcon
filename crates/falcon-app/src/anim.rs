@@ -1,11 +1,13 @@
 //! Animated images as a stream of frames, decoded on a background thread.
 //!
-//! A [`Player`] opens a GIF, indexes its frames and their delays in a cheap
+//! A [`Player`] opens a GIF, animated WebP or APNG. For a GIF it indexes its frames and their delays in a cheap
 //! first pass (walking the file's blocks, decompressing nothing), and asks
 //! its worker thread for the frames around the playhead; the worker reads
 //! each frame from the file as it is needed. Only a bounded window of
 //! decoded frames, plus canvas snapshots for seeking, is ever held, so a GIF
-//! of thousands of frames costs about as much memory as one of a few dozen. Frame timing, loop
+//! of thousands of frames costs about as much memory as one of a few dozen.
+//! WebP and APNG frame counts and delays come from their chunk headers, and
+//! their frames are decoded in order by the `image` crate. Frame timing, loop
 //! ranges, speed steps and the scrub bar's mapping are pure functions with
 //! tests.
 
@@ -20,12 +22,18 @@ use image::RgbaImage;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
     Gif,
+    WebP,
+    /// PNG, animated when it is an APNG.
+    Png,
 }
 
-/// The animated format of an extension, if falcon animates it.
+/// The format of an extension falcon may animate. WebP and PNG files are
+/// often stills; their players then report [`State::Still`].
 pub fn kind(ext: &str) -> Option<Kind> {
     match ext.to_lowercase().as_str() {
         "gif" => Some(Kind::Gif),
+        "webp" => Some(Kind::WebP),
+        "png" => Some(Kind::Png),
         _ => None,
     }
 }
@@ -504,9 +512,173 @@ impl Source for GifSource {
     }
 }
 
+/// Size and frame delays (ms) of an animated WebP, from its chunk headers;
+/// `None` for a still WebP or anything else.
+fn webp_info(r: impl std::io::BufRead + std::io::Seek) -> Option<((u32, u32), Vec<u32>)> {
+    let mut w = Walker { r, pos: 0 };
+    let head: [u8; 12] = w.bytes().ok()?;
+    if &head[..4] != b"RIFF" || &head[8..] != b"WEBP" {
+        return None;
+    }
+    let u24 = |b: &[u8]| u32::from(b[0]) | u32::from(b[1]) << 8 | u32::from(b[2]) << 16;
+    let mut size = None;
+    let mut delays = Vec::new();
+    while let Ok(c) = w.bytes::<8>() {
+        let len = u32::from_le_bytes([c[4], c[5], c[6], c[7]]);
+        let padded = i64::from(len) + i64::from(len & 1);
+        let mut used = 0;
+        match &c[..4] {
+            b"VP8X" if len >= 10 => {
+                let x: [u8; 10] = w.bytes().ok()?;
+                if x[0] & 0x02 == 0 {
+                    return None;
+                }
+                size = Some((u24(&x[4..7]) + 1, u24(&x[7..10]) + 1));
+                used = 10;
+            }
+            b"ANMF" if len >= 16 => {
+                let a: [u8; 16] = w.bytes().ok()?;
+                delays.push(u24(&a[12..15]));
+                used = 16;
+            }
+            // Image data before any VP8X chunk: a simple, still WebP.
+            b"VP8 " | b"VP8L" if size.is_none() => return None,
+            _ => {}
+        }
+        if w.r.seek_relative(padded - used).is_err() {
+            break;
+        }
+    }
+    Some((size?, delays)).filter(|(_, d)| !d.is_empty())
+}
+
+/// Size and frame delays (ms) of an animated PNG, from its `acTL` and
+/// `fcTL` chunks; `None` for a still PNG or anything else.
+fn apng_info(r: impl std::io::BufRead + std::io::Seek) -> Option<((u32, u32), Vec<u32>)> {
+    let mut w = Walker { r, pos: 0 };
+    let sig: [u8; 8] = w.bytes().ok()?;
+    if &sig != b"\x89PNG\r\n\x1a\n" {
+        return None;
+    }
+    let be = |b: &[u8]| u32::from_be_bytes([b[0], b[1], b[2], b[3]]);
+    let (mut size, mut animated) = (None, false);
+    let mut delays = Vec::new();
+    while let Ok(c) = w.bytes::<8>() {
+        let len = be(&c[..4]);
+        let mut used = 0;
+        match &c[4..] {
+            b"IHDR" if len >= 8 => {
+                let d: [u8; 8] = w.bytes().ok()?;
+                size = Some((be(&d[..4]), be(&d[4..])));
+                used = 8;
+            }
+            b"acTL" => animated = true,
+            b"fcTL" if len >= 26 => {
+                let d: [u8; 26] = w.bytes().ok()?;
+                let num = u32::from(u16::from_be_bytes([d[20], d[21]]));
+                let den = match u16::from_be_bytes([d[22], d[23]]) {
+                    0 => 100,
+                    n => u32::from(n),
+                };
+                delays.push(num * 1000 / den);
+                used = 26;
+            }
+            // `acTL` must come before the image data.
+            b"IDAT" if !animated => return None,
+            b"IEND" => break,
+            _ => {}
+        }
+        if w.r.seek_relative(i64::from(len) - used + 4).is_err() {
+            break;
+        }
+    }
+    Some((size?, delays)).filter(|(_, d)| animated && !d.is_empty())
+}
+
+/// An animated WebP or PNG, decoded in order by the `image` crate (which
+/// composites the frames). Going back starts again from the first frame.
+struct SeqSource {
+    path: PathBuf,
+    kind: Kind,
+    size: (u32, u32),
+    delays: Vec<u32>,
+    frames: Option<image::Frames<'static>>,
+    next: usize,
+}
+
+impl SeqSource {
+    /// Reads the headers of `path`; `Ok(None)` when it isn't animated.
+    fn open(path: &Path, kind: Kind) -> Result<Option<SeqSource>, String> {
+        let r = std::io::BufReader::new(std::fs::File::open(path).map_err(|e| e.to_string())?);
+        let info = match kind {
+            Kind::WebP => webp_info(r),
+            _ => apng_info(r),
+        };
+        Ok(info.map(|(size, delays)| SeqSource { path: path.to_path_buf(), kind, size, delays, frames: None, next: 0 }))
+    }
+
+    fn start(&self) -> Result<image::Frames<'static>, String> {
+        use image::AnimationDecoder;
+        let r = std::io::BufReader::new(std::fs::File::open(&self.path).map_err(|e| e.to_string())?);
+        let e = |e: image::ImageError| e.to_string();
+        Ok(match self.kind {
+            Kind::WebP => image::codecs::webp::WebPDecoder::new(r).map_err(e)?.into_frames(),
+            _ => image::codecs::png::PngDecoder::new(r).map_err(e)?.apng().map_err(e)?.into_frames(),
+        })
+    }
+}
+
+impl Source for SeqSource {
+    fn size(&self) -> (u32, u32) {
+        self.size
+    }
+
+    fn delays(&self) -> &[u32] {
+        &self.delays
+    }
+
+    fn frame(&mut self, i: usize) -> Result<RgbaImage, String> {
+        if self.frames.is_none() || i < self.next {
+            self.frames = Some(self.start()?);
+            self.next = 0;
+        }
+        let frames = self.frames.as_mut().expect("started above");
+        while self.next <= i {
+            let f = frames.next().ok_or_else(|| format!("no frame {i}"))?.map_err(|e| e.to_string());
+            self.next += 1;
+            if self.next > i {
+                return f.map(image::Frame::into_buffer);
+            }
+        }
+        Err(format!("no frame {i}"))
+    }
+}
+
+/// A file with no animation: one frame, never decoded (the image viewer
+/// shows it as a still).
+struct StillSource;
+
+impl Source for StillSource {
+    fn size(&self) -> (u32, u32) {
+        (0, 0)
+    }
+
+    fn delays(&self) -> &[u32] {
+        &[0]
+    }
+
+    fn frame(&mut self, _: usize) -> Result<RgbaImage, String> {
+        Err("a still".into())
+    }
+}
+
 fn open_source(path: &Path, kind: Kind, budget: usize) -> Result<Box<dyn Source>, String> {
     match kind {
         Kind::Gif => Ok(Box::new(GifSource::open(path, budget)?)),
+        Kind::WebP | Kind::Png => match SeqSource::open(path, kind)? {
+            Some(s) => Ok(Box::new(s)),
+            None => Ok(Box::new(StillSource)),
+        },
     }
 }
 
@@ -1111,6 +1283,114 @@ pub(crate) mod tests {
             std::thread::sleep(std::time::Duration::from_millis(2));
         }
         assert!(p.frames.contains_key(&10));
+    }
+
+    /// `n` frames of a `w`×`h` picture whose colour changes each frame.
+    fn pictures(w: u32, h: u32, n: usize) -> Vec<Vec<u8>> {
+        (0..n).map(|k| (0..w * h).flat_map(|p| [(k * 40) as u8, (p % 256) as u8, 200, 255]).collect()).collect()
+    }
+
+    fn write_webp(path: &Path, w: u32, h: u32, delays: &[i32]) {
+        let config = webp::WebPConfig::new().unwrap();
+        let pics = pictures(w, h, delays.len());
+        let mut enc = webp::AnimEncoder::new(w, h, &config);
+        let mut t = 0;
+        for (pic, d) in pics.iter().zip(delays) {
+            enc.add_frame(webp::AnimFrame::from_rgba(pic, w, h, t));
+            t += d;
+        }
+        std::fs::write(path, &*enc.encode()).unwrap();
+    }
+
+    fn write_apng(path: &Path, w: u32, h: u32, delays: &[(u16, u16)]) {
+        let file = std::fs::File::create(path).unwrap();
+        let mut enc = png::Encoder::new(file, w, h);
+        enc.set_color(png::ColorType::Rgba);
+        enc.set_animated(delays.len() as u32, 0).unwrap();
+        let mut writer = enc.write_header().unwrap();
+        for (pic, &(num, den)) in pictures(w, h, delays.len()).iter().zip(delays) {
+            writer.set_frame_delay(num, den).unwrap();
+            writer.write_image_data(pic).unwrap();
+        }
+        writer.finish().unwrap();
+    }
+
+    fn open_seq(path: &Path, kind: Kind) -> SeqSource {
+        SeqSource::open(path, kind).unwrap().expect("animated")
+    }
+
+    #[test]
+    fn animated_webp_frames() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("a.webp");
+        write_webp(&path, 16, 10, &[40, 90, 250]);
+        let mut src = open_seq(&path, Kind::WebP);
+        assert_eq!(src.size(), (16, 10));
+        // libwebp gives the last frame its encoder's default length.
+        assert_eq!(&src.delays()[..2], &[40, 90]);
+        assert_eq!(src.delays().len(), 3);
+        let f2 = src.frame(2).unwrap();
+        let f0 = src.frame(0).unwrap();
+        assert_eq!(f2.dimensions(), (16, 10));
+        assert!(f0 != f2);
+        assert!(src.frame(0).unwrap() == f0);
+        assert!(src.frame(3).is_err());
+        // A still WebP has no animation.
+        let still = dir.path().join("s.webp");
+        let pic = &pictures(8, 8, 1)[0];
+        std::fs::write(&still, &*webp::Encoder::from_rgba(pic, 8, 8).encode(80.0)).unwrap();
+        assert!(SeqSource::open(&still, Kind::WebP).unwrap().is_none());
+    }
+
+    #[test]
+    fn apng_frames() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("a.png");
+        write_apng(&path, 12, 9, &[(1, 10), (25, 1000), (3, 0)]);
+        let mut src = open_seq(&path, Kind::Png);
+        assert_eq!(src.size(), (12, 9));
+        assert_eq!(src.delays(), &[100, 25, 30], "a zero denominator means hundredths");
+        let f1 = src.frame(1).unwrap();
+        assert_eq!(f1.dimensions(), (12, 9));
+        assert!(src.frame(0).unwrap() != f1);
+        assert!(src.frame(2).is_ok());
+        // A still PNG has none.
+        let still = dir.path().join("s.png");
+        image::RgbaImage::new(4, 4).save(&still).unwrap();
+        assert!(SeqSource::open(&still, Kind::Png).unwrap().is_none());
+        let ctx = egui::Context::default();
+        let mut p = Player::open(&ctx, still, Kind::Png, Opts::viewer());
+        let start = std::time::Instant::now();
+        while p.state == State::Opening && start.elapsed().as_secs() < 5 {
+            p.update(0.0);
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        assert_eq!(p.state, State::Still);
+    }
+
+    #[test]
+    fn webp_and_apng_play() {
+        let dir = tempfile::tempdir().unwrap();
+        let webp = dir.path().join("a.webp");
+        write_webp(&webp, 16, 10, &[40, 40, 40, 40]);
+        let apng = dir.path().join("a.png");
+        write_apng(&apng, 16, 10, &[(4, 100); 4]);
+        for (path, kind) in [(webp, Kind::WebP), (apng, Kind::Png)] {
+            let ctx = egui::Context::default();
+            let mut p = Player::open(&ctx, path, kind, Opts::viewer());
+            let (mut now, start) = (0.0, std::time::Instant::now());
+            let mut seen = std::collections::HashSet::new();
+            while seen.len() < 4 && start.elapsed().as_secs() < 10 {
+                p.update(now);
+                if p.texture().is_some() {
+                    seen.insert(p.frame());
+                }
+                now += 0.02;
+                std::thread::sleep(std::time::Duration::from_millis(2));
+            }
+            assert_eq!(p.state, State::Ready, "{kind:?}");
+            assert_eq!(seen.len(), 4, "{kind:?} played {seen:?}");
+        }
     }
 
     #[test]

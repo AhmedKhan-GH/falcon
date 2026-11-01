@@ -21,7 +21,7 @@ rfd = "0.17.2"
 lru = "0.19.0"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 serde_json = "1"
-image = { version = "0.25", default-features = false, features = ["gif", "png"] }
+image = { version = "0.25", default-features = false, features = ["gif", "png", "webp"] }
 gif = "0.14"
 arboard = "3"
 drag = "2.1"
@@ -37,3 +37,5 @@ objc2-app-kit = { version = "0.3", default-features = false, features = ["std", 
 [dev-dependencies]
 serde_json = "1"
 tempfile = "3"
+webp = "0.3.1"
+png = "0.18"
