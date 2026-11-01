@@ -1199,8 +1199,8 @@ impl ColorQuery {
         ColorQuery { rgb, accuracy: 20.0 }
     }
 
-    /// Eagle's match on the two dominant palette colours; `Some(distance)`
-    /// when the item matches.
+    /// Eagle's match on the two dominant palette colours, then on any
+    /// colour marked as primary; `Some(distance)` when the item matches.
     pub fn distance(&self, item: &Item) -> Option<f64> {
         let p = &item.palettes;
         let ratio = |i: usize| p.get(i).and_then(|c| c.ratio.as_f64()).unwrap_or(0.0);
@@ -1237,7 +1237,13 @@ impl ColorQuery {
         {
             return Some(d);
         }
-        None
+        // A colour marked as the item's primary one (`marked`, set from the
+        // inspector's palette) matches within a fixed ΔE2000 of 30, whatever
+        // its share or the accuracy, as in Eagle.
+        p.iter().filter(|c| c.extra.get(crate::item_ops::MARKED_KEY).and_then(serde_json::Value::as_bool) == Some(true)).find_map(|c| {
+            let l = lab(c.color);
+            (delta_e00(q, l) < 30.0).then(|| delta_e76(q, l))
+        })
     }
 }
 
@@ -1580,6 +1586,25 @@ mod tests {
             v[k] = x.clone();
         }
         serde_json::from_value(v).unwrap()
+    }
+
+    #[test]
+    fn a_marked_primary_colour_matches_past_the_dominant_ones() {
+        let palettes = |marked: bool| {
+            item(serde_json::json!({"palettes": [
+                {"color": [250, 250, 250], "ratio": 60},
+                {"color": [20, 20, 20], "ratio": 30},
+                {"color": [200, 30, 30], "ratio": 5, "marked": marked},
+            ]}))
+        };
+        let red = ColorQuery::new([210, 40, 40]);
+        assert_eq!(red.distance(&palettes(false)), None);
+        let d = red.distance(&palettes(true)).expect("the marked red matches");
+        assert!(d > 0.0 && d < 30.0, "{d}");
+        // Far colours stay out even when marked; the strict accuracy
+        // doesn't apply to the marked colour.
+        assert_eq!(ColorQuery::new([30, 30, 220]).distance(&palettes(true)), None);
+        assert!(ColorQuery { rgb: [210, 40, 40], accuracy: 5.0 }.distance(&palettes(true)).is_some());
     }
 
     const NOW: i64 = 1_760_000_000_000;

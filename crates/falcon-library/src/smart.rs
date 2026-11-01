@@ -17,7 +17,7 @@ use crate::error::Result;
 use crate::ids;
 use crate::library::Library;
 use crate::model::{FolderOrder, Item};
-use crate::search::{self, ColorQuery, FolderIndex};
+use crate::search::{self, FolderIndex};
 
 /// A smart folder, read from its JSON entry.
 #[derive(Debug, Clone, PartialEq)]
@@ -281,7 +281,14 @@ fn smart_color(item: &Item, rgb: [u8; 3], acc: f64) -> bool {
     if p.iter().take(2).any(|c| c.color == rgb) {
         return true;
     }
-    ColorQuery { rgb, accuracy: acc }.distance(item).is_some()
+    // Only the two dominant colours, each over a third of the image: no
+    // white-background fallback and no primary (`marked`) colour, unlike
+    // the filter bar's colour search.
+    let q = search::lab(rgb);
+    p.iter().take(2).enumerate().any(|(i, c)| {
+        let l = search::lab(c.color);
+        ratio(i) > 33.0 && search::delta_e00(q, l) < acc && search::delta_e76(q, l) < acc + 50.0
+    })
 }
 
 fn hex(s: &str) -> Option<[u8; 3]> {

@@ -192,11 +192,14 @@ The font rule is not a family picker. It has two choices, activated and deactiva
 
 ## Colour search (observed)
 
-Eagle compares the query colour with the item's two dominant palette colours only.
+Eagle compares the query colour with the item's two dominant palette colours, then with any colour marked as the item's primary colour.
 
 1. Items with no palette, or whose first colour covers less than 25%, never match.
 2. An exact RGB match with either of the two colours matches at once.
 3. Otherwise both colours are converted to CIELAB. A colour matches when its CIEDE2000 difference is below the accuracy setting (default 20, range 5–40) and its CIE76 difference is below the accuracy plus 50. Each dominant colour is only tested if it covers more than 33%.
+4. Failing those, a palette colour marked as primary (`marked: true`, set with the inspector palette's Primary Colour toggle) matches when its CIEDE2000 difference is below 30, whatever its share of the image and whatever the accuracy setting. Its CIE76 distance is the sort key. Rule 1 still applies first.
+
+Smart folder colour rules don't look at the primary colour, and have no white-background branch; see the Smart folders chapter.
 
 Matching items are sorted by CIE76 distance, closest first.
 

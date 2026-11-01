@@ -108,7 +108,7 @@ Rules by property. Number rules take `value: [a, b]`, with `b` used only by `bet
 | `type` | `equal`, `unequal` | An extension or a type group |
 | `rating` | `equal`, `unequal`, `contain` | No star, 0 and `"none"` all mean unrated. `contain` takes the stars as text (`"35"`); any `none` in it matches every item |
 | `shape` | `equal`, `unequal` | `custom` compares the item's ratio with the rule's `width` and `height` |
-| `color` | `similar`, `accuracy`, `grayscale` | A stricter colour test than the filter panel's |
+| `color` | `similar`, `accuracy`, `grayscale` | A stricter colour test than the filter panel's: the first colour must cover at least 33% and be within 96 of the query on each RGB channel; then an exact match with either dominant colour, or a CIEDE2000 difference under 20 (`similar`) or 10 (`accuracy`) and a CIE76 difference under that plus 50, for each of the two dominant colours that covers more than 33%. The primary (`marked`) colour and the filter's white-background fallback don't count, as in Eagle |
 | `fontActivated` | `activate`, `deactivate` | Whether the font is activated through Eagle, by the key `<postScriptName>_.<ext>` (see [Font](./search.md#font-observed)). An item without `fontMetas` fails both |
 
 Eagle's quirks are kept:
