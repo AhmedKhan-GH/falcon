@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 121 | 46 | 104 | 9 |
-| Viewers and file formats | 83 | 30 | 77 | 7 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 121 | 47 | 103 | 9 |
+| Viewers and file formats | 95 | 30 | 65 | 7 |
 | Search, filters and organising | 139 | 29 | 54 | 3 |
-| Import, export, library, preferences and integrations | 104 | 19 | 89 | 26 |
-| **Total** | 447 | 124 | 324 | 45 |
+| Import, export, library, preferences and integrations | 106 | 19 | 87 | 26 |
+| **Total** | 461 | 125 | 309 | 45 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -35,7 +35,7 @@ These are bugs, not missing features. The first four can lose data or edits.
 7. Shortcuts still missing: T, F, ⌘J Go to Folder, ⇧+arrows, ⌘D, ⌘T and the tag clipboard, ⇧D, ⇧T, F5, ⌘O and more (see §3).
 8. No marquee selection, no grid display options. ~~No multi-select of folders.~~ Fixed.
 9. No tag picker or suggestions.
-10. No GIF player controls, no animated WebP or AVIF, no hover previews for video, audio or GIFs.
+10. ~~No GIF player controls, no animated WebP, no GIF hover previews.~~ Fixed; still no animated AVIF (no decoder) and no hover playback for video or audio.
 11. No interactive 3D viewer, text editor or full font viewer.
 12. No watched import folder, no reload on outside changes, no sync-conflict detection, no screen capture.
 13. English only; Eagle ships 8 languages.
@@ -308,7 +308,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Rename a subfolder card by double-clicking its name | Missing | Double-click opens the folder | local |
 | Thumbnail background (checkerboard for transparency, etc.) | Missing |  | local |
 | Hover zoom button and hold-Z preview | Done | app.rs:2680-2743, hover.rs | local |
-| Video, GIF and audio play on hover in the grid | Missing | Cross-ref viewer | local |
+| Video, GIF and audio play on hover in the grid | Partial | GIF and animated WebP cards play in place while hovered (`anim.rs` `Cards`, ⌥ keeps them still); video and audio don't | local |
 | Pinned items stay at the top of a folder | Missing |  | local |
 | Manual drag order in a folder | Done | organize_ui.rs:616-675 | local |
 | Missing-file or long-path hint on broken thumbnails | Partial | Extension placeholder only (app.rs:2867) | local |
@@ -551,16 +551,16 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| GIF plays in the viewer | Partial | Plays the first 300 frames on a loop (`F/app.rs:169-186`, `:3423-3434`); longer GIFs are cut short | local |
-| Animated WebP, AVIF and APNG play in the viewer | Missing | WebP is decoded as one still (`FL/thumbnail.rs:121`); only `.gif` is animated (`F/app.rs:3397`) | local |
-| Frame-by-frame GIF player toggle | Missing | None | local |
-| Play and pause (Space) | Missing | Space closes the viewer (`F/app.rs:1088`) | local |
-| Previous and next frame ([ and ]) | Missing | Player keys only act on video (`F/app/video_view.rs:202`) | local |
-| Frame counter (current / total) | Missing | None | local |
-| Scrub through frames on a progress bar, with a frame thumbnail on hover | Missing | None | local |
-| Playback speed 0.25x–8x | Missing | None | local |
-| Loop range (A-B) set on the progress bar, and reset | Missing | None | local |
-| Set current frame as the GIF's thumbnail | Missing | None | local |
+| GIF plays in the viewer | Done | `F/anim.rs` streams every frame from disk on a background thread with a bounded frame window (66 MB peak on a 5,000-frame GIF) | local |
+| Animated WebP, AVIF and APNG play in the viewer | Partial | WebP and APNG through `anim.rs` `SeqSource`; no AVIF decoder is available offline | local |
+| Frame-by-frame GIF player toggle | Done | `F/app/gif_view.rs` `gif_toggle_button`; `prefs.gif_player` (off by default, as Eagle's `habits.gifViewer`) | local |
+| Play and pause (Space) | Done | `gif_view.rs` `gif_keys`, read before the viewer's keys so Space doesn't close it while the player shows | local |
+| Previous and next frame ([ and ]) | Done | The rebindable Player keys; ⇧[ / ⇧] step ten frames | local |
+| Frame counter (current / total) | Done | Padded counter in the player bar | local |
+| Scrub through frames on a progress bar, with a frame thumbnail on hover | Done | `gif_view.rs`; scrolling over the bar steps frames | local |
+| Playback speed 0.25x–8x | Done | Eagle's eleven steps; ⇧. / ⇧, also change it | local |
+| Loop range (A-B) set on the progress bar, and reset | Done | Drag handles at both ends of the bar; Reset in the more menu | local |
+| Set current frame as the GIF's thumbnail | Done | `FL/thumbnail.rs` `set_frame_thumbnail` writes `<name>_thumbnail.png` (short side ≤ 480 px) and recomputes the palette, no `customThumbnail` key, as Eagle | local |
 | Comments on GIFs | Done | `F/comments.rs:169` allows GIFs | local |
 
 ### 4. RAW photos (arw, cr2, cr3, nef, dng, raf, orf, rw2 and others)
@@ -752,9 +752,9 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Hover zoom button on cards, enlarged preview after 200 ms | Done | `F/hover.rs:10`, `F/app.rs:2680-2743` | local |
 | Hold Z over a card for an instant preview | Done | `F/app.rs:2702-2704`, `F/hover.rs:397` | local |
 | Preview loads the original for raster formats | Done | `F/hover.rs:26`, `F/app.rs:2730-2736` | local |
-| Animated GIF plays inside the hover preview | Missing | The preview is a still texture (`F/app.rs:2738`) | local |
-| GIF and animated images play when hovered in the grid | Missing | Grid cards are always still (`F/app.rs:2582`) | local |
-| Preference: always autoplay GIF/WebP/AVIF in the grid | Missing | None | local |
+| Animated GIF plays inside the hover preview | Done | `gif_view.rs` `hover_anim`, `anim.rs` `Cards::popup` | local |
+| GIF and animated images play when hovered in the grid | Done | GIF and animated WebP (`card_anim`, `Cards::play`); no AVIF | local |
+| Preference: always autoplay GIF/WebP/AVIF in the grid | Done | `prefs.always_play_animated` (off by default, as Eagle's `habits.alwaysPlayGIF`); no AVIF | local |
 | Video hover preview: autoplays, moving the pointer scrubs, progress bar and time | Missing | Video cards have no hover behaviour (`F/hover.rs:28-31` only removes the zoom button) | local |
 | Mute toggle on the video hover preview, remembered | Missing | None | local |
 | Audio hover preview: plays, click to seek, progress | Missing | None | local |
@@ -768,9 +768,9 @@ Eagle columns come from `config.js` (`SUPPORT_FORMATS_DARWIN`), `E/js/thumbs/thu
 | Format | Eagle viewer | Falcon thumbnail | Falcon viewer |
 | --- | --- | --- | --- |
 | jpg, jpeg, jfif, jpe, insp | Image viewer, full res | Decoded | Image viewer (cap 3072 px) |
-| png | Image viewer | Decoded | Image viewer |
-| webp | Image viewer, animates | Decoded (first frame) | Image viewer, still only |
-| gif | GIF viewer with frame player | Decoded (first frame) | Animated, 300-frame limit, no controls |
+| png | Image viewer | Decoded | Image viewer (APNG animates) |
+| webp | Image viewer, animates | Decoded (first frame) | Image viewer, animates |
+| gif | GIF viewer with frame player | Decoded (first frame) | Animated, all frames, frame player |
 | bmp | Image viewer | Decoded | Image viewer |
 | svg | Vector image viewer | Rendered (resvg) | Rasterised at up to 3072 px |
 | avif | Image viewer, animates | QL | QL still |
@@ -818,9 +818,9 @@ Ranked by how often a user would notice them.
 1. **Viewers cover the whole window (Missing).** In Eagle, every viewer opens between the sidebar and inspector (`index.html:1007`). Falcon does this only for PDFs (`F/app.rs:3392`). This affects image, GIF, video, audio, font, text, 3D and special-format viewing.
 2. **No toggle for sidebar and inspector inside the viewer (Missing)** (`toggle-all-btn`).
 3. **Image resolution capped at 3072 px (Partial).** Zooming into large photos and SVGs is soft (`F/loader.rs:26`).
-4. **No GIF frame player (Missing).** No pause, frame steps, scrubbing, speed, A-B loop range or set-as-thumbnail. GIFs also stop at 300 frames.
-5. **Animated WebP, AVIF and APNG don't animate (Missing).**
-6. **No video hover-scrub preview in the grid (Missing).** Also missing: audio hover playback and GIF hover playback.
+4. ~~No GIF frame player.~~ Fixed.
+5. **Animated AVIF doesn't animate** (no decoder offline); WebP and APNG do.
+6. **No video hover-scrub preview in the grid (Missing).** Also missing: audio hover playback. GIF and WebP cards do play on hover.
 7. **No video frame tools (Missing).** You can't set a frame as the thumbnail, copy it or save it.
 8. **No fallback player for mkv, avi, wmv, flv or webm (Missing).**
 9. **No interactive 3D model viewer (Missing).**
@@ -1397,8 +1397,8 @@ Eagle panes (`app/js/preferences.js:659-788`): General, Sidebar, Controls, Previ
 | Preview: video autoplay | Done | `Prefs::video_autoplay` | local |
 | Preview: remember the playback position | Done | `Prefs::video_resume`, saved per item across launches | local |
 | Preview: loop clips shorter than 30 s | Done | `Prefs::video_loop_short` | local |
-| Preview: autoplay GIF, WebP and AVIF in the grid | Missing | — | local |
-| Preview: advanced GIF viewer | Missing | — | local |
+| Preview: autoplay GIF, WebP and AVIF in the grid | Done | `prefs.always_play_animated`; no AVIF | local |
+| Preview: advanced GIF viewer | Done | `prefs.gif_player` | local |
 | Preview: automatic font style tags | Done | `Prefs::font_style_tags` | local |
 | **Screenshot:** format PNG, JPG or WebP | Missing | — | local |
 | Screenshot: quality | Missing | — | local |
@@ -1517,9 +1517,9 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 
 Rows marked "not counted" are features Eagle 4.0.0 does not have.
 
-- **Done:** 104, including 5 where falcon goes beyond Eagle and 1 with a small difference.
+- **Done:** 106, including 5 where falcon goes beyond Eagle and 1 with a small difference.
 - **Partial:** 19.
-- **Missing:** 115, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
+- **Missing:** 113, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
 - **Different on purpose:** 1 (the API listens on localhost only).
 
 ### Ranked Missing and Partial local items
