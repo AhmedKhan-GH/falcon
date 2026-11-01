@@ -113,6 +113,49 @@ impl Library {
     }
 }
 
+/// The longest note Eagle keeps, in characters.
+pub const NOTE_MAX_CHARS: usize = 20480;
+
+/// Notes and links on several items at once, as Eagle's inspector edits
+/// them when more than one item is selected.
+impl Library {
+    /// Sets the note (`annotation`) of every item, cut to 20480 characters.
+    /// Returns how many items changed.
+    pub fn set_notes(&mut self, ids: &[String], note: &str) -> Result<usize> {
+        let note: String = note.chars().take(NOTE_MAX_CHARS).collect();
+        self.set_each(ids, |i| {
+            let changed = i.annotation != note;
+            if changed {
+                i.annotation = note.clone();
+            }
+            changed
+        })
+    }
+
+    /// Sets the source URL of every item. Returns how many items changed.
+    pub fn set_urls(&mut self, ids: &[String], url: &str) -> Result<usize> {
+        self.set_each(ids, |i| {
+            let changed = i.url != url;
+            if changed {
+                i.url = url.to_string();
+            }
+            changed
+        })
+    }
+
+    fn set_each(&mut self, ids: &[String], mut change: impl FnMut(&mut crate::model::Item) -> bool) -> Result<usize> {
+        let mut n = 0;
+        for id in ids {
+            let Some(mut item) = self.item(id).cloned() else { continue };
+            if change(&mut item) {
+                self.update_item(item)?;
+                n += 1;
+            }
+        }
+        Ok(n)
+    }
+}
+
 /// The tag manager's commands on several tags at once.
 impl Library {
     /// Eagle's Merge Tags: renames each of `tags` to `into` everywhere
@@ -301,6 +344,23 @@ pub(crate) mod tests {
         lib.record_tag_use(&s(&["c"])).unwrap();
         lib.clear_tag_history().unwrap();
         assert_eq!(tags_json(&lib), r#"{"historyTags":[],"starredTags":[]}"#);
+    }
+
+    #[test]
+    fn notes_and_urls_for_several_items() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut lib = library(tmp.path(), &[&[], &[], &[]]);
+        let two = s(&["A1", "A2"]);
+        assert_eq!(lib.set_notes(&two, "hello").unwrap(), 2);
+        assert_eq!(lib.set_notes(&two, "hello").unwrap(), 0, "unchanged items are not rewritten");
+        assert_eq!(lib.set_urls(&s(&["A2", "A3"]), "https://example.com/a").unwrap(), 2);
+        let reopened = Library::open(lib.root()).unwrap();
+        assert_eq!(reopened.item("A1").unwrap().annotation, "hello");
+        assert_eq!(reopened.item("A3").unwrap().annotation, "");
+        assert_eq!(reopened.item("A2").unwrap().url, "https://example.com/a");
+        assert_eq!(reopened.item("A1").unwrap().url, "");
+        lib.set_notes(&two, &"x".repeat(30000)).unwrap();
+        assert_eq!(lib.item("A1").unwrap().annotation.chars().count(), NOTE_MAX_CHARS);
     }
 
     #[test]

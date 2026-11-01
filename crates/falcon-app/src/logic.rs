@@ -120,6 +120,13 @@ pub fn nav_counts(items: &[Item]) -> NavCounts {
 }
 
 /// Live tags with their item counts, sorted by name.
+/// What a field shows for several items: their common value, or nothing
+/// when they differ (Eagle's `calculateUrl` and `calculateAnnotation`).
+pub fn shared_text<'a>(mut values: impl Iterator<Item = &'a str>) -> &'a str {
+    let Some(first) = values.next() else { return "" };
+    if values.all(|v| v == first) { first } else { "" }
+}
+
 pub fn tag_counts(items: &[Item]) -> Vec<(String, usize)> {
     let mut map: HashMap<&str, usize> = HashMap::new();
     for i in items.iter().filter(|i| !i.is_deleted) {
@@ -725,6 +732,13 @@ mod folder_drop_tests {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn shared_text_is_common_or_empty() {
+        assert_eq!(shared_text(["a", "a"].into_iter()), "a");
+        assert_eq!(shared_text(["a", "b"].into_iter()), "");
+        assert_eq!(shared_text(std::iter::empty()), "");
+    }
+
     use super::*;
     use serde_json::json;
 

@@ -146,6 +146,9 @@ enum Action {
     AddTags(Vec<String>, Vec<String>, Option<(String, Vec<String>)>),
     /// Tags taken off items (`Library::remove_tags_from_items`).
     RemoveTags(Vec<String>, Vec<String>),
+    /// The note or URL of several items (`Library::set_notes`, `set_urls`).
+    SetNotes(Vec<String>, String),
+    SetUrls(Vec<String>, String),
     /// Paste Tags and Clear Tags (`Library::paste_tags`, `clear_tags`).
     PasteTags(Vec<String>, Vec<String>),
     ClearTags(Vec<String>),
@@ -379,6 +382,15 @@ struct EditBuf {
     url: String,
 }
 
+/// Uncommitted multi-selection inspector text: the items, then the note
+/// and URL as shown (their shared value, or empty) and as typed.
+struct MultiEditBuf {
+    ids: Vec<String>,
+    shown: (String, String),
+    notes: String,
+    url: String,
+}
+
 /// Uncommitted folder inspector text: `(folder id, name, description)`.
 type FolderEditBuf = (String, String, String);
 
@@ -412,6 +424,7 @@ struct Workspace {
     collapsed: HashSet<String>,
     folder_filter: String,
     edit: Option<EditBuf>,
+    multi_edit: Option<MultiEditBuf>,
     folder_edit: Option<FolderEditBuf>,
     status: Option<(String, Instant)>,
     /// Ids in grid order, refreshed every frame.
@@ -512,6 +525,7 @@ impl Workspace {
             collapsed: HashSet::new(),
             folder_filter: String::new(),
             edit: None,
+            multi_edit: None,
             folder_edit: None,
             status: None,
             order: Vec::new(),
@@ -1873,6 +1887,8 @@ impl App {
                 }),
                 Action::RemoveTags(ids, tags) => lib.remove_tags_from_items(&ids, &tags).map(|_| ()),
                 Action::PasteTags(ids, tags) => lib.paste_tags(&ids, &tags).map(|n| self.flash(format!("Pasted {} to {}", export_ui::plural(tags.len(), "tag"), export_ui::plural(n, "item")))),
+                Action::SetNotes(ids, note) => lib.set_notes(&ids, &note).map(|_| ()),
+                Action::SetUrls(ids, url) => lib.set_urls(&ids, &url).map(|_| ()),
                 Action::ClearTags(ids) => lib.clear_tags(&ids).map(|n| self.flash(format!("Cleared the tags of {}", export_ui::plural(n, "item")))),
                 Action::BatchRating(ids, star) => {
                     let mut r = Ok(());
@@ -1997,6 +2013,7 @@ impl App {
                             push_capped(to, inverse);
                             // Reload the inspector's text from the restored item.
                             self.ws.edit = None;
+                            self.ws.multi_edit = None;
                             self.ws.folder_edit = None;
                             self.flash(format!("{}: {label}", if undo { "Undid" } else { "Redid" }));
                         }
@@ -2092,6 +2109,8 @@ fn action_label(action: &Action) -> String {
         Action::RemoveTags(ids, _) => format!("Untag {}", ids.len()),
         Action::PasteTags(ids, _) => format!("Paste tags to {}", ids.len()),
         Action::ClearTags(ids) => format!("Clear tags of {}", ids.len()),
+        Action::SetNotes(ids, _) => format!("Edit the notes of {}", ids.len()),
+        Action::SetUrls(ids, _) => format!("Edit the URLs of {}", ids.len()),
         Action::BatchRating(ids, _) => format!("Rate {}", ids.len()),
         Action::QuickAdd(..) => "Add to Quick Access".into(),
         Action::QuickRemove(_) => "Remove from Quick Access".into(),
@@ -4145,6 +4164,31 @@ impl App {
             }
         }
         ui.vertical_centered(|ui| ui.label(RichText::new(format!("{n} items selected")).size(15.0)));
+
+        // Eagle's multi-selection inspector has no name field, but the note
+        // and URL apply to every item: each shows the value they share, or
+        // nothing when they differ.
+        let shown = (
+            logic::shared_text(items.iter().map(|i| i.annotation.as_str())).to_string(),
+            logic::shared_text(items.iter().map(|i| i.url.as_str())).to_string(),
+        );
+        if self.ws.multi_edit.as_ref().is_none_or(|m| m.ids != ids || (m.shown != shown && !ui.ctx().egui_wants_keyboard_input())) {
+            self.ws.multi_edit = Some(MultiEditBuf { ids: ids.clone(), notes: shown.0.clone(), url: shown.1.clone(), shown: shown.clone() });
+        }
+        let m = self.ws.multi_edit.as_mut().unwrap();
+        let notes_hint = if shown.0.is_empty() && items.iter().any(|i| !i.annotation.is_empty()) { "Multiple notes" } else { "Notes..." };
+        let r = field(ui, &mut m.notes, notes_hint, 54.0, true, "multi-notes");
+        if r.lost_focus() && m.notes != m.shown.0 {
+            self.ws.actions.push(Action::SetNotes(ids.clone(), m.notes.clone()));
+            m.shown.0 = m.notes.clone();
+        }
+        let url_hint = if shown.1.is_empty() && items.iter().any(|i| !i.url.is_empty()) { "Multiple URLs" } else { "http://" };
+        let r = field(ui, &mut m.url, url_hint, 33.0, false, "multi-url");
+        if r.lost_focus() && m.url.trim() != m.shown.1 {
+            m.url = m.url.trim().to_string();
+            self.ws.actions.push(Action::SetUrls(ids.clone(), m.url.clone()));
+            m.shown.1 = m.url.clone();
+        }
 
         // Tags every selected item shares; the picker adds to all.
         heading(ui, "Tags");
