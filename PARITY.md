@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 110 | 47 | 114 | 9 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 118 | 45 | 108 | 9 |
 | Viewers and file formats | 81 | 31 | 78 | 7 |
-| Search, filters and organising | 129 | 30 | 63 | 3 |
+| Search, filters and organising | 139 | 29 | 54 | 3 |
 | Import, export, library, preferences and integrations | 91 | 21 | 100 | 26 |
-| **Total** | 411 | 129 | 355 | 45 |
+| **Total** | 429 | 126 | 340 | 45 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -33,7 +33,7 @@ These are bugs, not missing features. The first four can lose data or edits.
 5. ~~Folder import flattens structure; no duplicate check on import; no import error list.~~ Fixed.
 6. ~~No export of items or folders, and no CSV export.~~ Fixed.
 7. Shortcuts still missing: T, F, ⌘J Go to Folder, ⇧+arrows, ⌘D, ⌘T and the tag clipboard, ⇧D, ⇧T, F5, ⌘O and more (see §3).
-8. No marquee selection, no multi-select of folders, no grid display options.
+8. No marquee selection, no grid display options. ~~No multi-select of folders.~~ Fixed.
 9. No tag picker or suggestions.
 10. No GIF player controls, no animated WebP or AVIF, no hover previews for video, audio or GIFs.
 11. No interactive 3D viewer, text editor or full font viewer.
@@ -80,7 +80,7 @@ Overall finding: falcon now has a native menu bar (`crates/falcon-app/src/menu.r
 | Edit: Custom thumbnail from the clipboard (⇧⌥⌘T) | Missing | Choosing a file is the only option | local |
 | Edit ▸ Move Folder: Up, Down, To Top, To Bottom (⌘] ⌘[ ⇧⌘] ⇧⌘[) | Done | Keys and Edit menu entries move the open folder or smart folder among its siblings, undoably (`organize::arrange`) | local |
 | Edit ▸ Edit Image: Horizontal Flip (⇧F), Rotate (⇧R), Crop (⇧C), Combine Images (⇧⌘M) | Partial | Edit ▸ Edit Image menu has Flip, Rotate and Crop; ⇧R and ⇧F work in the viewer. No ⇧C key and no Combine Images | local |
-| Edit ▸ Edit Folder: Set Current Folder (⇧⌘R), Move Folder, Password create / edit / remove / lock (⇧⌘L) | Partial | Password items are in the folder context menu (organize_ui.rs:270-296). No menu, no keys, no Move Folder dialog and no folder-settings shortcut | local |
+| Edit ▸ Edit Folder: Set Current Folder (⇧⌘R), Move Folder, Password create / edit / remove / lock (⇧⌘L) | Partial | ⇧⌘R opens Folder Settings; Edit ▸ Move Folder… opens the picker dialog (`Command::MoveFolder`, no default key as Eagle). Passwords are still context-menu only, no ⇧⌘L | local |
 | Edit: Remove from current folder (⇧⌘⌫) | Done | shortcuts.rs `edit.remove.folder`, menu and card menu; one undo step, no prompt (Eagle's `removeFromFolder` asks nothing) | local |
 | Edit: Move to Trash (⌘⌫) | Done | shortcuts.rs:114, app.rs:1095-1102 | local |
 | Find: Go to Folder (⌘J or J), a quick-switch dialog with Folders / Smart Folders / Tags tabs | Missing | No quick switcher | local |
@@ -126,7 +126,7 @@ Cross-references (not counted): File ▸ Import Folders / Links / Eagle Package 
 | Item: Share (macOS share sheet) | Missing |  | local |
 | Item: Pin to Top / Unpin from Top inside a folder | Missing | No pinning | local |
 | Item: Set as Folder Cover | Done | image_edit.rs:90-95 | local |
-| Item: New Folder with Selection (N items) | Missing |  | local |
+| Item: New Folder with Selection (N items) | Done | `folders_ui` `new_with_dialog`: creates the folder and adds the selected items | local |
 | Item: Rename / Rename N Items (batch rename dialog) | Missing | Not in the context menu. Only F2 on one item via the inspector | local |
 | Item: Copy (files) | Partial | ⌘C works (app.rs:942). Not in the menu | local |
 | Item: Copy File Path | Done | `export_ui.rs` `copy_variant`, every selected item | local |
@@ -146,9 +146,9 @@ Cross-references (not counted): File ▸ Import Folders / Links / Eagle Package 
 | Item: Remove from this Folder | Done | Card menu entry and ⇧⌘⌫ | local |
 | Item: Move to Trash | Done | app.rs:2538 | local |
 | Item (falcon only): Rotate Left / Right, Flip H / V, Crop… | Done | image_edit.rs:110-132 (falcon extra) | local |
-| **Folder**: New Folder (sibling) | Missing | Only New Subfolder | local |
+| **Folder**: New Folder (sibling) | Done | `Action::CreateSibling`, right after the clicked folder under the same parent | local |
 | Folder: New Subfolder | Done | app.rs:1836 | local |
-| Folder: Move Folder… (picker dialog) | Partial | Drag, or "Move to Top Level" (app.rs:1849) | local |
+| Folder: Move Folder… (picker dialog) | Done | `folders_ui` `move_dialog` with destination search; `Library::move_folders` (above, into or below a target) | local |
 | Folder: Add to / Remove from Quick Access | Done | app.rs:1842-1848 | local |
 | Folder: Rename | Done | Inline rename (app.rs:1839, 1797-1823) | local |
 | Folder: Copy Link (eagle:// folder link) | Missing |  | local |
@@ -156,14 +156,14 @@ Cross-references (not counted): File ▸ Import Folders / Links / Eagle Package 
 | Folder: Password ▸ Create / Edit / Remove / Lock Now | Done | organize_ui.rs:270-296 | local |
 | Folder: Sort By ▸ Title A-Z / Z-A, current level or all levels | Done | organize_ui.rs:327-336 (falcon asks to confirm, like Eagle) | local |
 | Folder: Expand/Collapse ▸ this folder, same level, all folders | Missing | Caret click and double-click only | local |
-| Folder: Duplicate | Missing |  | local |
+| Folder: Duplicate | Done | `Library::duplicate_folder`: copy placed after the original, new ids, no password, no items | local |
 | Folder: Show Subfolder Content | Missing |  | local |
 | Folder: Change Icon… and colour row | Done | organize_ui.rs:308-320 | local |
 | Folder: item sort for this folder (Order By) | Done | "Sort Items By" (organize_ui.rs:300) | local |
-| Folder: Remove Folder | Done | "Delete Folder" with a confirmation (app.rs:1852) | local |
-| **Several folders selected**: menu with batch rename, shared order, move, quick access, export, icon, colour, remove | Missing | Only one folder can be selected | local |
+| Folder: Remove Folder | Done | Asks only when the folder has items or subfolders, with a ticked "trash the items too" box that can be unticked; disabled while locked | local |
+| **Several folders selected**: menu with batch rename, shared order, move, quick access, export, icon, colour, remove | Done | `multi_folder_menu` in `folders_ui`: batch rename (Eagle's templates, `rename.rs`), shared sort, Move Folder…, Quick Access, Export to Computer, icon and colour for all, remove. Falcon's icon grid instead of emoji | local |
 | **Smart folder**: New Smart Folder (sibling) / New Subfolder / Rename / Edit Rules / Quick Access / Change Icon / Remove | Done | organize_ui.rs:372-423 | local |
-| Smart folder: Duplicate | Missing |  | local |
+| Smart folder: Duplicate | Done | `smart::duplicate_smart_folder`: deep copy placed before the original, `parent` keys fixed | local |
 | Smart folder: Refresh | Missing | Smart folders refresh live, so this matters less | local |
 | **Smart Folders heading +**: New Smart Folder / New Group | Done | organize_ui.rs:488-505 | local |
 | **Quick Access item**: Remove from Quick Access | Done | app.rs:1692-1696 | local |
@@ -244,7 +244,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | --- | --- | --- | --- |
 | Show-sidebar button when the sidebar is hidden | Done | app.rs:2006-2012 | local |
 | Back / Forward buttons | Done | app.rs:2013-2018 | local |
-| Title for the current view, "Search results", or "N folders selected" | Partial | Title and Search results (app.rs:2019-2028). No multi-folder text | local |
+| Title for the current view, "Search results", or "N folders selected" | Done | `logic::TreeSel`; the title reads "N folders selected" while several are picked | local |
 | Right-click the title for an ancestor jump menu | Missing |  | local |
 | Thumbnail size slider with − and + | Done | app.rs:2085-2109 | local |
 | Refresh button in the Random view | Missing |  | local |
@@ -275,7 +275,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Smart Folders tree with groups, nesting, icons, colours, counts | Done | organize_ui.rs:340-450 | local |
 | Folder tree with carets, guide lines, icon and colour tints, counts, lock badge | Done | app.rs:1778-1890 | local |
 | Double-click a folder to expand or collapse (preference: or rename) | Partial | Collapse only (app.rs:1867). No rename option | local |
-| Select several folders with ⌘ or ⇧ click to see their combined items | Missing |  | local |
+| Select several folders with ⌘ or ⇧ click to see their combined items | Done | `logic::TreeSel` (⌘ toggles, ⇧ ranges among visible rows), `folders_ui`; the grid shows the union under the global sort | local |
 | Filter field at the bottom of the sidebar | Done | app.rs:1656, 1719-1736. No ⌥⇧F key | local |
 | "Go to Folder" button | Missing |  | local |
 | Resize the sidebar by dragging its edge | Missing | Fixed width (app.rs:3624-3631) | local |
@@ -959,23 +959,23 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | --- | --- | --- | --- |
 | New folder (sidebar +, shortcut) | Done | `A:1590`, Command::NewFolder | local |
 | New subfolder | Done | `A:1836` | local |
-| New Folder Below (sibling) | Missing | Only subfolder or top level | local |
-| A new child or sibling inherits the parent's icon and colour | Missing | `E:416` create_folder sets neither | local |
+| New Folder Below (sibling) | Done | `Action::CreateSibling` | local |
+| A new child or sibling inherits the parent's icon and colour | Done | `edit.rs` `create_folder` copies `icon` and `iconColor` from the parent | local |
 | Rename (inline) | Done | `A:1839` | local |
-| Batch rename selected folders | Missing | none | local |
+| Batch rename selected folders | Done | `Library::rename_folders` with Eagle's templates (`crates/falcon-library/src/rename.rs`), preview dialog, asks first from 10 folders | local |
 | Delete a folder and its subfolders | Done | `A:1855`, `E:507` | local |
-| Delete-folder checkbox "Move items within folders to Trash too" (on by default, can be unticked) | Partial | Always trashes items left in no folder (`E:523`); no way to keep them | local |
-| Delete several selected folders at once | Missing | No multi-select in the folder tree | local |
+| Delete-folder checkbox "Move items within folders to Trash too" (on by default, can be unticked) | Done | `Library::delete_folders(keep_items)`; the dialog's box is ticked by default | local |
+| Delete several selected folders at once | Done | `Library::delete_folders`, one undo step; Quick Access entries removed | local |
 | Move a folder by dragging (above, below, into) | Done | `OU:255` folder_drop, `O:135` tree_drop | local |
 | Confirmation dialog when dropping a folder | Partial | Moves without asking | local |
-| Move Folder dialog with destination search | Missing | Only drag and "Move to Top Level" (`A:1848`) | local |
+| Move Folder dialog with destination search | Done | `folders_ui` `move_dialog`; no create-folder-from-search | local |
 | Move Up, Down, To Top, To Bottom | Missing | Cross-ref: menus agent | local |
 | Sort folders by title for this level or all levels, A-Z or Z-A, with confirmation | Done | `OU:327`, `O:352`, `OU:1025` confirm | local |
-| Duplicate a folder | Missing | none | local |
+| Duplicate a folder | Done | `Library::duplicate_folder` | local |
 | Folder icon from the named icon set | Done | `OU:309` icon_grid, `folder_icons.rs:171` | local |
 | Folder icon as an emoji | Missing | Unknown icon strings fall back to the plain folder (`folder_icons.rs:171`), so emoji icons set in Eagle don't show | local |
 | Folder colour (8 colours or none), also tinting the guide line | Done | `OU:321` color_row, `A:1881` | local |
-| Change icon or colour of several selected folders | Missing | no multi-select | local |
+| Change icon or colour of several selected folders | Done | `Library::set_folders_icon` from the multi-folder menu | local |
 | Folder cover: set an item as cover | Done | `image_edit.rs:92`, `E:465` | local |
 | Folder cover: falls back to the first item, then to subfolders | Done | `covers.rs:44` | local |
 | Reset a folder cover | Missing | `E:465` accepts None, but no UI calls it | local |
@@ -1007,12 +1007,12 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Icon and colour | Done | `OU:408`, `SM:417` | local |
 | Smart folder's own sort | Done | `OU:400`, `SM:429` | local |
 | Add to Quick Access | Done | `OU:394` | local |
-| Duplicate a smart folder | Missing | none | local |
+| Duplicate a smart folder | Done | `smart::duplicate_smart_folder` | local |
 | Description | Missing | Read (`SM:30`) but not editable | local |
 | Several conditions, each with its own Any/All and true/false (NOT), AND-ed together | Done | `smart_draft.rs` drafts/conditions and `organize_ui::smart_conditions_ui`: every condition is edited, each with must/must-not and all/any | local |
 | Editing a smart folder keeps its other conditions and rules | Done | Untouched conditions and rules are written back verbatim, edited ones keep their unknown keys, and rules the dialog can't show stay as read-only Unsupported rows until deleted (`smart_draft.rs`, test `eagle_smart_folder_survives_an_edit`) | local |
 | Live "N items found" count while editing rules | Missing | none | local |
-| Batch rename, recolour or delete several smart folders | Missing | no multi-select | local |
+| Batch rename, recolour or delete several smart folders | Done | Multi-smart-folder menu in `folders_ui`, looping the `smart.rs` calls in one undo step | local |
 | Export a smart folder | Done | Smart folder menu Export ▸ directory or `.eaglepack` (`export::plan_smart`, `PackSource::Smart`) | local |
 | Rule: name, URL, note, with equals, contains, excludes, begins with, ends with, empty, not empty | Done | `smart.rs` text rules; every method is in the dialog for each text property. Begins/ends-with are anchored regexes as in Eagle | local |
 | Rule: regex method | Done | `smart.rs` uses the `regex` crate, lower-casing pattern and text as Eagle does; no look-around or backreferences (documented in `docs/src/smart-folders.md`) | local |
@@ -1179,11 +1179,11 @@ Ranked by user impact. Data-loss and silent-mismatch bugs come first, then every
 11. **No exclude, search or tag-group options in the Tag, Folder and Type filters.** Also no type groups (video, audio, font...).
 12. **Remove from current folder is missing**, and so is the "remove from folder or trash" prompt for items in several folders.
 13. **No Show Subfolder Content toggle.**
-14. **Batch rename is missing**, and so is batch name/note/URL editing for several items.
+14. **Batch rename of items is missing**, and so is batch name/note/URL editing for several items (folders can be batch-renamed).
 15. **Duplicates can't merge.** Folders, tags, notes and links aren't combined; there's no best-copy pick, no scope (current list or selected), and no remove-from-results.
 16. **No Go to Folder quick search.**
-17. **No multi-select of folders**, so no delete, move, recolour or batch rename of several folders. The same goes for smart folders.
-18. **Missing folder commands**: New Folder Below, New Folder with Selection, Add to Last Used Folder, Duplicate folder or smart folder, Move Folder dialog, Move Up/Down/Top/Bottom.
+17. ~~No multi-select of folders.~~ Fixed, for folders and smart folders.
+18. **Missing folder command**: Add to Last Used Folder (New Folder Below, New Folder with Selection, Duplicate, Move Folder dialog and Move Up/Down/Top/Bottom are done).
 19. **Emoji folder icons don't show.** A new folder doesn't inherit the parent's icon or colour, and there's no reset cover.
 20. **No Pin to Top for items, and no Open File Location.**
 21. **Tag manager gaps**: no multi-select merge, no adding a tag to several groups, no "find items with tags in group", no Uncategorized tags page, no sort by count, no clear tag history.
@@ -1194,7 +1194,7 @@ Ranked by user impact. Data-loss and silent-mismatch bugs come first, then every
 26. **Palette gaps**: no "Set as Primary Colour", and copy is HEX only (no RGB or RGBA).
 27. **No change-extension in the inspector.** URL isn't validated and there's no Open Link button.
 28. **Recently Used isn't a list of opened items.** Random has no refresh key. Uncategorized ignores stale folder ids.
-29. **Folder deletion can't keep items.** The trash checkbox is fixed on, there's no move confirmation, and Touch ID unlock is missing.
+29. **Folder deletion**: the trash checkbox can now be unticked; there's no move confirmation, and Touch ID unlock is missing.
 30. **Search extras**: no Search All, no Chinese traditional/simplified matching, no pinyin sidebar search. Falcon's own fuzzy matching is a deviation from Eagle.
 31. **Minor UI gaps**: no expand/collapse all folders, no collapsible inspector sections, no bulk-action confirm, no Restore All command, no smart folder description, and the double-click preference is ignored.
 
