@@ -231,7 +231,7 @@ Eagle defaults come from prefs `shortcuts.keybinds` (rebindable) and from the ha
 | ⌘T add tags, ⇧⌘C / ⇧⌘V copy and paste tags, ⇧D add to last folder, ⌘D duplicate | Done | `organize.tag.*`, `organize.folder.addLast` ⇧D, `edit.duplicate` ⌘D | local |
 | ⇧⌘L lock the folder now, ⌥⌘L lock the app | Done | `edit.folder.lock` ⇧⌘L and `app.lock` ⌥⌘L | local |
 | Hold Z for the hover preview | Done | app.rs:2703, hover.rs | local |
-| Global shortcuts: Show Eagle, Bring up Eagle and search, screen captures (⌥⌘E) | Done | `hotkeys.rs` (Carbon `RegisterEventHotKey`): Show falcon, Show falcon and search, captures with ⌥⌘E default and the per-mode keys; released while Preferences is open; ANSI key positions | local |
+| Global shortcuts: Show Eagle, Bring up Eagle and search, screen captures (⌥⌘E) | Done | `hotkeys.rs` (Carbon `RegisterEventHotKey`): Show falcon, Show falcon and search, the captures with Eagle's ⌥⌘E chord; **off by default** (a deliberate change: Eagle usually owns ⌥⌘E on the user's Mac); a refused chord is shown in orange on its row and re-registered when the switch or chord changes | local |
 | Falcon extras: ⇧⌘K collect window, ⌃Tab / ⌃⇧Tab next or previous open library | Done | shortcuts.rs `file.collect.window`, `library.next`, `library.previous` (falcon only) | local |
 
 Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute, C comment mode) belong to the viewer audit. Falcon has the player table at shortcuts.rs:122-134.
@@ -1402,7 +1402,7 @@ Eagle panes (`app/js/preferences.js:659-788`): General, Sidebar, Controls, Previ
 | Preview: automatic font style tags | Done | `Prefs::font_style_tags` | local |
 | **Screenshot:** format PNG, JPG or WebP | Done | Screenshot pane: PNG / JPG / WebP, default PNG | local |
 | Screenshot: quality | Done | High 90 / Medium 80 / Low 70, shown for JPG and WebP | local |
-| Screenshot: enable the global shortcut, plus area, window and full-screen shortcuts | Done | Enable switch plus the area / window / full-screen rows, recordable in the pane (`Recorder::rows`) | local |
+| Screenshot: enable the global shortcut, plus area, window and full-screen shortcuts | Done | Enable switch (default off, where Eagle's is on, because Eagle owns ⌥⌘E) plus the area / window / full-screen rows, recordable in the pane; refused chords shown on the row | local |
 | Screenshot: ask where to save | Done | Collect-window prompt for area and window shots | local |
 | Screenshot: notify when taken | Done | System notification when bundled (`notify.rs`) | local |
 | Screenshot: auto-tag "Screenshot" | Done | "Screenshot" tag | local |
