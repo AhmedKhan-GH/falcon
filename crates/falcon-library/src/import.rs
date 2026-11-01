@@ -478,6 +478,12 @@ fn drawn_thumbnail(ext: &str, raw: &Path) -> Option<(DynamicImage, u32, u32)> {
         let img = fontpreview::render(&data, &metas)?;
         return Some((img, fontpreview::SIZE, fontpreview::SIZE));
     }
+    if crate::model3d::is_supported(ext) {
+        // Eagle draws models itself; on failure QuickLook gets its turn.
+        let img = crate::model3d::raster::thumbnail(raw, ext)?;
+        let (w, h) = img.dimensions();
+        return Some((DynamicImage::ImageRgba8(img), w, h));
+    }
     None
 }
 

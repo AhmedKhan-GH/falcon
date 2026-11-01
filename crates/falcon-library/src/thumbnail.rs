@@ -45,8 +45,11 @@ pub fn is_supported(ext: &str) -> bool {
 
 /// The short-side limit for `ext`: 320 for ordinary images, 512 for icon
 /// formats, 480 for documents, design files and other large-canvas formats.
+/// 3D models are not scaled down: Eagle keeps its 1080 render (plus the
+/// padding) as is.
 pub fn max_side(ext: &str) -> u32 {
     match ext {
+        e if crate::model3d::EXTENSIONS.contains(&e) => crate::model3d::raster::CANVAS + 2 * crate::model3d::raster::PADDING,
         "ico" | "icns" => 512,
         "pdf" | "doc" | "docx" | "xls" | "xlsx" | "ppt" | "pptx" | "psd" | "ai" | "eps" | "hdr" | "exr" | "dds"
         | "cr3" => 480,
