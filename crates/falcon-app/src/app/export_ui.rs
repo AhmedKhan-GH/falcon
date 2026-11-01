@@ -11,6 +11,15 @@ use falcon_library::export::{self, Collision, Plan};
 pub(super) enum Request {
     /// Export to Computer: these items' originals.
     Items(Vec<String>),
+    /// Export to Computer: a folder or smart folder as a directory.
+    Tree(Target),
+}
+
+/// A folder or smart folder to export.
+#[derive(Clone)]
+pub(super) enum Target {
+    Folder(String),
+    Smart(String),
 }
 
 /// Two plans for the same export, waiting for the user to choose how to
@@ -95,6 +104,27 @@ impl App {
                     if clashes == 1 { "has" } else { "have" }
                 );
                 self.ws.export.clash = Some(Clash { replace, keep, title: "Some files already exist".into(), detail, files: true });
+            }
+            Request::Tree(target) => {
+                let hidden = crate::organize::hidden_folders(&lib.metadata.folders, &self.ws.org.unlocked);
+                let plan = |dest: &std::path::Path, how| match &target {
+                    Target::Folder(id) => export::plan_folder(lib, id, dest, how, &hidden),
+                    Target::Smart(id) => export::plan_smart(lib, id, dest, how, &hidden),
+                };
+                let Some(dest) = pick_folder() else { return };
+                let Some(replace) = plan(&dest, Collision::Replace) else { return };
+                // Eagle asks when the folder's directory is already there.
+                if !replace.top.exists() {
+                    self.start_copy(replace, false);
+                    return;
+                }
+                let Some(keep) = plan(&dest, Collision::KeepBoth) else { return };
+                let name = replace.top.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                let detail = format!(
+                    "“{}” already has a folder named “{name}”. Replace overwrites files of the same names inside it; Keep Both numbers the new copies.",
+                    dest.display()
+                );
+                self.ws.export.clash = Some(Clash { replace, keep, title: "The folder already exists".into(), detail, files: false });
             }
         }
     }
@@ -210,6 +240,35 @@ impl App {
         if on(C::ExportComputer) && !self.ws.selected.is_empty() {
             self.ws.export.request = Some(Request::Items(self.ws.selected.clone()));
         }
+    }
+
+    /// The Export submenu of a folder or smart folder menu (disabled while
+    /// the folder is locked).
+    pub(super) fn tree_export_menu(&mut self, ui: &mut Ui, target: Target, enabled: bool) {
+        ui.add_enabled_ui(enabled, |ui| {
+            ui.menu_button("Export", |ui| self.tree_export_entries(ui, &target));
+        });
+    }
+
+    fn tree_export_entries(&mut self, ui: &mut Ui, target: &Target) {
+        ui.set_min_width(200.0);
+        if ui.button("Export to Computer…").clicked() {
+            self.ws.export.request = Some(Request::Tree(target.clone()));
+        }
+    }
+
+    /// The inspector's Export button for the open folder or smart folder.
+    pub(super) fn scope_export_button(&mut self, ui: &mut Ui, lib: &Library) {
+        let target = match &self.ws.scope {
+            Scope::Folder(id) => logic::find_folder(&lib.metadata.folders, id)
+                .filter(|f| !crate::organize::is_shut(f, &self.ws.org.unlocked))
+                .map(|f| Target::Folder(f.id.clone())),
+            Scope::Smart(id) => Some(Target::Smart(id.clone())),
+            _ => None,
+        };
+        let resp = wide_button(ui, ic::EXPORT, "Export", target.is_some());
+        let Some(target) = target else { return };
+        egui::Popup::menu(&resp).show(|ui| self.tree_export_entries(ui, &target));
     }
 
     /// The Export submenu of the item context menu.

@@ -425,6 +425,7 @@ impl App {
                     self.ws.actions.push(org(OrgAction::SmartOrder(sf.id.clone(), v)));
                 }
             });
+            self.tree_export_menu(ui, super::export_ui::Target::Smart(sf.id.clone()), true);
             ui.separator();
             ui.menu_button("Change Icon", |ui| {
                 if let Some(icon) = icon_grid(ui, sf.icon.as_deref(), tint, true) {

@@ -2000,6 +2000,7 @@ impl App {
                 self.ws.actions.push(Action::MoveFolder(f.id.clone(), None));
             }
             self.folder_menu_extras(ui, lib, f);
+            self.tree_export_menu(ui, export_ui::Target::Folder(f.id.clone()), !shut);
             ui.separator();
             if ui.button(RichText::new("Delete Folder").color(t::p().icon_red)).clicked() {
                 self.ws.confirm = Some(Confirm::DeleteFolder(f.id.clone()));
@@ -3196,7 +3197,7 @@ impl App {
             prop(ui, "Password", if f.password.is_empty() { "None" } else { "Set" });
         }
         ui.add_space(4.0);
-        wide_button(ui, ic::EXPORT, "Export", false);
+        self.scope_export_button(ui, lib);
     }
 
     fn multi_inspector(&mut self, ui: &mut Ui, lib: &Library, n: usize) {

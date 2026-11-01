@@ -17,7 +17,8 @@ use filetime::FileTime;
 
 use crate::error::{Error, Result};
 use crate::library::Library;
-use crate::model::Item;
+use crate::model::{Folder, Item};
+use crate::smart::SmartFolder;
 
 /// What to do when a file of the same name is already in the destination.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -128,6 +129,74 @@ pub fn plan_items(lib: &Library, ids: &[String], dest: &Path, how: Collision) ->
     let mut plan = Plan { dirs: vec![dest.to_path_buf()], steps: Vec::new(), top: dest.to_path_buf(), overwrite: how == Collision::Replace };
     add_steps(&mut plan, lib.root(), &items, dest, &listing(dest), how);
     plan
+}
+
+/// The directory name for a folder, cleaned up as Eagle does on the Mac:
+/// tabs and runs of spaces become one space, `:` `/` and `\\` become
+/// spaces, the ends are trimmed and a trailing dot is dropped. A name left
+/// empty becomes "Untitled".
+pub fn folder_dir_name(name: &str) -> String {
+    let spaced: String = name.chars().map(|c| if matches!(c, ':' | '/' | '\\' | '\0') || c.is_whitespace() { ' ' } else { c }).collect();
+    let mut out = spaced.split(' ').filter(|w| !w.is_empty()).collect::<Vec<_>>().join(" ");
+    while out.ends_with('.') {
+        out.pop();
+    }
+    let out = out.trim_end().to_string();
+    if out.is_empty() { "Untitled".into() } else { out }
+}
+
+/// Plans exporting the folder `id` as a directory tree under `dest`: a
+/// directory per folder and subfolder, each holding the originals of the
+/// live items filed directly in it (an item in two folders is copied into
+/// both). Items in any folder of `hidden` (locked ones) are left out, as
+/// are hidden subfolders. Sibling folders whose names clean up to the same
+/// directory share it. `None` if there is no such folder.
+pub fn plan_folder(lib: &Library, id: &str, dest: &Path, how: Collision, hidden: &HashSet<String>) -> Option<Plan> {
+    let folder = lib.all_folders().into_iter().find(|f| f.id == id)?;
+    let top = dest.join(folder_dir_name(&folder.name));
+    let mut dirs: Vec<(PathBuf, Vec<&Item>)> = Vec::new();
+    let mut by_folder: HashMap<&str, Vec<&Item>> = HashMap::new();
+    for item in lib.items().iter().filter(|i| !i.is_deleted && !i.folders.iter().any(|f| hidden.contains(f))) {
+        for f in &item.folders {
+            by_folder.entry(f.as_str()).or_default().push(item);
+        }
+    }
+    fn walk<'a>(f: &'a Folder, dir: PathBuf, by_folder: &HashMap<&str, Vec<&'a Item>>, hidden: &HashSet<String>, dirs: &mut Vec<(PathBuf, Vec<&'a Item>)>) {
+        let items = by_folder.get(f.id.as_str()).cloned().unwrap_or_default();
+        match dirs.iter_mut().find(|(d, _)| *d == dir) {
+            Some((_, list)) => list.extend(items),
+            None => dirs.push((dir.clone(), items)),
+        }
+        for c in f.children.iter().filter(|c| !hidden.contains(&c.id)) {
+            walk(c, dir.join(folder_dir_name(&c.name)), by_folder, hidden, dirs);
+        }
+    }
+    walk(folder, top.clone(), &by_folder, hidden, &mut dirs);
+    let mut plan = Plan { dirs: Vec::new(), steps: Vec::new(), top, overwrite: how == Collision::Replace };
+    for (dir, mut items) in dirs {
+        let mut seen = HashSet::new();
+        items.retain(|i| seen.insert(i.id.as_str()));
+        add_steps(&mut plan, lib.root(), &items, &dir, &listing(&dir), how);
+        plan.dirs.push(dir);
+    }
+    Some(plan)
+}
+
+/// Plans exporting the smart folder `id` as one flat directory under
+/// `dest` holding the originals of its items (Eagle exports a smart folder
+/// without its subfolders). Items in `hidden` folders are left out. `None`
+/// if there is no such smart folder.
+pub fn plan_smart(lib: &Library, id: &str, dest: &Path, how: Collision, hidden: &HashSet<String>) -> Option<Plan> {
+    let name = find_smart(&lib.smart_folders(), id)?.name.clone();
+    let top = dest.join(folder_dir_name(&name));
+    let items: Vec<&Item> = lib.smart_folder_items(id).into_iter().filter(|i| !i.folders.iter().any(|f| hidden.contains(f))).collect();
+    let mut plan = Plan { dirs: vec![top.clone()], steps: Vec::new(), top: top.clone(), overwrite: how == Collision::Replace };
+    add_steps(&mut plan, lib.root(), &items, &top, &listing(&top), how);
+    Some(plan)
+}
+
+fn find_smart<'a>(list: &'a [SmartFolder], id: &str) -> Option<&'a SmartFolder> {
+    list.iter().find_map(|s| if s.id == id { Some(s) } else { find_smart(&s.children, id) })
 }
 
 fn add_steps(plan: &mut Plan, root: &Path, items: &[&Item], dir: &Path, existing: &HashSet<String>, how: Collision) {
@@ -270,6 +339,66 @@ mod tests {
         run(&replace, |_, _| {}).unwrap();
         assert_ne!(fs::read(out.join("other.png")).unwrap(), b"mine");
         assert_eq!(fs::read(out.join("other.png")).unwrap(), fs::read(out.join("other-2.png")).unwrap());
+    }
+
+    #[test]
+    fn folder_names_are_cleaned_like_eagle() {
+        assert_eq!(folder_dir_name("  a\tb  c "), "a b c");
+        assert_eq!(folder_dir_name("x/y:z\\w"), "x y z w");
+        assert_eq!(folder_dir_name("dots..."), "dots");
+        assert_eq!(folder_dir_name(" / "), "Untitled");
+    }
+
+    #[test]
+    fn folders_export_as_a_tree() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut lib, ids) = library(dir.path());
+        let top = lib.create_folder(None, "Refs: old").unwrap();
+        let child = lib.create_folder(Some(&top), "Inner").unwrap();
+        let twin = lib.create_folder(Some(&top), "Inner").unwrap();
+        let locked = lib.create_folder(Some(&top), "Secret").unwrap();
+        let file = |lib: &mut Library, id: &str, folders: &[&String]| {
+            let mut item = lib.item(id).unwrap().clone();
+            item.folders = folders.iter().map(|f| f.to_string()).collect();
+            lib.update_item(item).unwrap();
+        };
+        file(&mut lib, &ids[0], &[&top, &child]);
+        file(&mut lib, &ids[1], &[&locked]);
+        file(&mut lib, &ids[2], &[&twin]);
+        let out = dir.path().join("out");
+        let hidden: HashSet<String> = [locked.clone()].into();
+        let plan = plan_folder(&lib, &top, &out, Collision::KeepBoth, &hidden).unwrap();
+        let root = out.join("Refs old");
+        assert_eq!(plan.top, root);
+        assert_eq!(plan.dirs, [root.clone(), root.join("Inner")]);
+        let to: Vec<_> = plan.steps.iter().map(|s| s.to.strip_prefix(&out).unwrap().to_path_buf()).collect();
+        // The two "Inner" folders share a directory, so their pics are numbered.
+        assert_eq!(to, [PathBuf::from("Refs old/pic.png"), PathBuf::from("Refs old/Inner/pic-1.png"), PathBuf::from("Refs old/Inner/pic-2.png")]);
+        run(&plan, |_, _| {}).unwrap();
+        assert!(root.join("Inner/pic-2.png").is_file());
+
+        // Unlocked, the locked folder comes too.
+        let plan = plan_folder(&lib, &top, &out, Collision::Replace, &HashSet::new()).unwrap();
+        assert!(plan.dirs.contains(&root.join("Secret")));
+        assert_eq!(plan.clashes(), 3);
+        assert!(plan_folder(&lib, "NOPE", &out, Collision::Replace, &HashSet::new()).is_none());
+    }
+
+    #[test]
+    fn smart_folders_export_flat() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut lib, ids) = library(dir.path());
+        let rule = serde_json::json!({"rules": [{"property": "name", "method": "contain", "value": "pic"}], "match": "AND", "boolean": "TRUE"});
+        let id = lib.create_smart_folder("Pics", vec![rule]).unwrap();
+        assert_eq!(lib.smart_folder_items(&id).len(), 2);
+        let out = dir.path().join("out");
+        let plan = plan_smart(&lib, &id, &out, Collision::KeepBoth, &HashSet::new()).unwrap();
+        assert_eq!(plan.dirs, [out.join("Pics")]);
+        let got: HashSet<_> = plan.steps.iter().map(|s| (s.id.clone(), s.to.parent().unwrap().to_path_buf())).collect();
+        assert_eq!(got, [(ids[0].clone(), out.join("Pics")), (ids[2].clone(), out.join("Pics"))].into());
+        let names: HashSet<_> = plan.steps.iter().map(|s| s.to.file_name().unwrap().to_string_lossy().into_owned()).collect();
+        assert_eq!(names, ["pic-1.png".to_string(), "pic-2.png".to_string()].into());
+        assert!(plan_smart(&lib, "NOPE", &out, Collision::KeepBoth, &HashSet::new()).is_none());
     }
 
     #[test]
