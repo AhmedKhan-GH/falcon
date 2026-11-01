@@ -110,7 +110,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::Redo => s.text || (s.library && s.redo),
         C::Trash => any,
         C::RemoveFromFolder => any && s.scope == ScopeKind::Folder,
-        C::OpenDefault | C::RevealInFinder | C::RefreshThumbnail => any || (s.library && s.viewer),
+        C::OpenDefault | C::RevealInFinder | C::RefreshThumbnail | C::Duplicate => any || (s.library && s.viewer),
         C::Rename => grid && s.selected == 1,
         C::Back => s.viewer || (s.library && s.back),
         C::Forward => grid && s.forward,
@@ -269,6 +269,7 @@ pub static MENUS: &[(&str, &[Entry])] = &[
             item("Select All", Command::SelectAll),
             SEP,
             item("Rename", Command::Rename),
+            item("Duplicate", Command::Duplicate),
             Entry::Sub(
                 "Copy Details",
                 &[

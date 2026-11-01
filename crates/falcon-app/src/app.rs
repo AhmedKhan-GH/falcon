@@ -1756,6 +1756,11 @@ impl App {
                 let on = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
                 ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!on));
             }
+            C::Duplicate => {
+                if let Some(id) = self.acted_on().into_iter().next() {
+                    self.ws.actions.push(Action::Edit(image_edit::Op::Duplicate(id)));
+                }
+            }
             C::RefreshThumbnail => {
                 let ids = self.acted_on();
                 self.ws.actions.push(Action::Edit(image_edit::Op::RefreshThumbnail(ids)));
@@ -3605,6 +3610,12 @@ impl App {
         let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::PasteTags);
         if ui.add_enabled(self.copied_tags.is_some(), egui::Button::new("Paste Tags").shortcut_text(keys)).clicked() {
             self.paste_tags(targets.to_vec());
+        }
+        if targets.len() == 1 {
+            let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::Duplicate);
+            if ui.add(egui::Button::new("Duplicate").shortcut_text(keys)).clicked() {
+                self.ws.actions.push(Action::Edit(image_edit::Op::Duplicate(item.id.clone())));
+            }
         }
         // Eagle offers it for several items.
         if targets.len() > 1 && self.ws.scope != Scope::Trash && ui.button(format!("New Folder with {} Items…", targets.len())).clicked() {

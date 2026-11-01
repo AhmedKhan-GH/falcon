@@ -89,6 +89,8 @@ pub enum Command {
     NewSmartFolder,
     /// File ▸ New ▸ Text File: an empty `.txt` item, opened in the viewer.
     NewTextFile,
+    /// Edit ▸ Duplicate: a copy of the item, kept next to it.
+    Duplicate,
     /// Remake the selected items' thumbnails.
     RefreshThumbnail,
     /// Take the selection out of the open folder.
@@ -286,6 +288,7 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::SelectAll, id: "edit.select.all", group: "Edit", label: "Select all", default: k(CMD, Key::A), aliases: &[] },
     Spec { cmd: Command::Rename, id: "edit.rename", group: "Edit", label: "Rename the selected item", default: k(CMD, Key::R), aliases: &[KeyboardShortcut::new(NONE, Key::F2)] },
     Spec { cmd: Command::Copy, id: "edit.copy", group: "Edit", label: "Copy the selected files", default: k(CMD, Key::C), aliases: &[] },
+    Spec { cmd: Command::Duplicate, id: "edit.duplicate", group: "Edit", label: "Duplicate the item", default: k(CMD, Key::D), aliases: &[] },
     Spec { cmd: Command::RefreshThumbnail, id: "edit.thumbnail.refresh", group: "Edit", label: "Refresh the thumbnails", default: k(CMD_ALT, Key::R), aliases: &[] },
     Spec { cmd: Command::Paste, id: "edit.paste", group: "Edit", label: "Paste files or an image", default: k(CMD, Key::V), aliases: &[] },
     Spec { cmd: Command::Trash, id: "edit.remove.trash", group: "Edit", label: "Move to the Trash", default: k(CMD, Key::Backspace), aliases: &[] },

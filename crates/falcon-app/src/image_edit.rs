@@ -37,6 +37,8 @@ pub enum Op {
     Rename(String, String),
     /// Set a font's sample language (`fontMetas.preferLng`).
     FontLanguage(String, String),
+    /// Eagle's Duplicate: a copy of the item under a new id.
+    Duplicate(String),
 }
 
 impl Op {
@@ -58,6 +60,7 @@ impl Op {
             Op::FrameThumbnail(..) | Op::VideoThumbnail(..) => "Set frame as thumbnail".into(),
             Op::Rename(..) => "Rename".into(),
             Op::FontLanguage(..) => "Change sample language".into(),
+            Op::Duplicate(_) => "Duplicate item".into(),
         }
     }
 }
@@ -178,6 +181,11 @@ impl App {
             Op::FontLanguage(id, lang) => {
                 lib.set_font_language(&id, &lang)?;
                 self.ws.loader.forget(&id);
+                Ok(())
+            }
+            Op::Duplicate(id) => {
+                lib.duplicate_item(&id)?;
+                self.flash("Duplicated");
                 Ok(())
             }
             Op::ResetCustomThumbnail(id) => {
