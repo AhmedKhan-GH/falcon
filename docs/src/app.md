@@ -253,6 +253,31 @@ What Eagle does, from the `url|html|mhtml` branch of the detail view in `index.h
 | Elsewhere | — | — | Off macOS, or without WebKit, every web item is a still |
 | Keyboard | — | — | While the page has the keyboard (after a click on it), egui's keys such as Esc and the arrows go to the page; a click outside the page gives them back |
 
+## 3D model viewer
+
+Opening an obj, stl, ply, glb, gltf or 3mf item shows the model in an interactive viewer in the central panel, like the other viewers, with the shared bar (panels, back, counter, open, previous and next; Esc and ← → work as usual). The readers and geometry are `crates/falcon-library/src/model3d/` (one file per format, `geom.rs` for normals, edges, details and lighting, `math.rs` for vectors and matrices). The camera maths are `crates/falcon-app/src/logic/viewer3d.rs`, the viewer's state and vertex data `crates/falcon-app/src/model3d/`, the wgpu drawing `model3d/gpu.rs` and the viewer itself `ui/viewer/model.rs`. fbx, 3ds, dae and ifc are not read, so those items keep their QuickLook still, as does any model that fails to read. Without the wgpu renderer every 3D item shows its still.
+
+What Eagle does: it embeds the Online 3D Viewer in an iframe (`index.html` near line 1443, `model-viewer/`) and forwards Esc, ← and → to the main window. The rows below come from that viewer's behaviour.
+
+| Question | Eagle | Seen or inferred | falcon |
+|---|---|---|---|
+| Formats | fbx, obj, 3ds, 3mf, dae, ifc, ply, stl, glb | Seen | obj (with MTL colours), stl (ASCII and binary), ply (ASCII and binary, vertex colours), glb and gltf (positions, normals, indices, vertex colours, base colour; no textures), 3mf (meshes, components, base materials and colour groups). The rest show their still |
+| Opening view | Y up, the eye above, in front and to the left (direction (−1.5, 2, 3)), 45° field of view, fitted so the bounding sphere fills the shorter side | Seen | Same |
+| Mouse | Left drag orbits (half a degree per pixel), ⇧ or right or middle drag pans (0.001 of the distance per pixel), ⌃ drag zooms, the wheel moves a tenth of the distance per step | Seen | Same, plus a trackpad pinch. Right click without dragging opens the item menu |
+| Orbit | Fixed up vector by default, never past straight up or down; free orbit as an option; flip up vector; Y or Z up | Seen | Same, in the settings menu. Changing the up axis goes back to the opening view |
+| Camera | Perspective or orthographic | Seen | Same; orthographic keeps the size seen at the centre |
+| Fit | A toolbar button fits the model to the window | Seen | The fit button in the bar and ⌘0 (⌘= and ⌘− zoom a wheel step) |
+| Lighting | Grey ambient and a grey directional light from the camera (0x888888 each) on Phong materials, default colour (200, 200, 200) | Seen | Same light strengths and default colour, both sides of a face lit, a faint highlight. The default colour can be changed |
+| Background | Eagle forces the viewer's dark mode, whose background is transparent, so Eagle's own viewer background shows; a background colour can be picked | Seen | The viewer's background by default; a custom colour in the settings menu |
+| Edges | "Show Edges", off by default, black, 1° angle threshold, with colour and threshold settings | Seen | Same: the edges where faces meet at more than the threshold, plus open edges, drawn over the faces. Colour and angle (0 to 90°) in the settings menu |
+| Grid and axes | Not in Eagle's build | Seen | Extra, off by default: a grid on the floor under the model (round steps, three radii out) and X, Y and Z axes in red, green and blue |
+| Shading | Normals from the file, flat faces otherwise | Inferred | Auto (the same), Flat or Smooth (area-weighted normals over welded vertices) |
+| Details | A sidebar with Vertices, Triangles, Size X/Y/Z, Volume (closed meshes only), Surface and the materials | Seen | A details panel over the scene with the same rows and the materials with their colours; Details in the bar hides it |
+| Mesh tree, export, snapshot | A navigator listing files, materials and meshes (hide, isolate, fit one), export to other formats and a snapshot | Seen | Not done |
+| Settings kept | In the viewer's cookies | Seen | For as long as falcon runs |
+
+The model is read on a background thread; the viewer shows "Loading model…" meanwhile. Drawing goes through an `egui_wgpu` paint callback: the scene is drawn into the callback's own 4× multisampled colour and depth textures (lines on top of slightly pushed-back faces), resolved, and copied into egui's pass with premultiplied alpha. Material opacity and textures are ignored. A GPU test (`draws_a_cube_when_a_gpu_is_present`) renders a cube through the whole path when an adapter is available.
+
 ## Duplicates
 
 The sidebar's Duplicates entry (after All Tags) opens a page that works like Eagle's duplicate panel. Pick a method, **Identical Files** (byte-identical originals) or **Similar Pictures** (perceptual hash), and what to scan: All Items, the view the page was opened from (its items in grid order), or the items that were selected there (two or more). Scan runs on a background thread with a progress bar. Changing the method or the range clears the results.
