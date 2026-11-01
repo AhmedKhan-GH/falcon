@@ -55,7 +55,8 @@ pub fn guard(path: &Path) -> crate::Result<()> {
 /// Whether `path` (which may not exist yet) lies inside `root`, after
 /// resolving symlinks and `..` so neither can lead outside it.
 fn inside(root: &Path, path: &Path) -> bool {
-    let mut existing = path.to_path_buf();
+    // A relative path is relative to the working directory.
+    let Ok(mut existing) = std::path::absolute(path) else { return false };
     let mut rest = Vec::new();
     while !existing.exists() {
         match (existing.file_name().map(ToOwned::to_owned), existing.parent()) {
@@ -93,6 +94,7 @@ mod tests {
         assert!(!inside(&root, &tmp.path().join("Real.library")));
         assert!(!inside(&root, &root.join("../Real.library")));
         assert!(!inside(&root, &root.join("Missing/../../Real.library")));
+        assert!(!inside(&root, std::path::Path::new("")));
         #[cfg(unix)]
         {
             std::os::unix::fs::symlink(tmp.path().join("Real.library"), root.join("Link.library")).unwrap();

@@ -124,13 +124,13 @@ cargo run --release -p falcon-app          # choose or create a library on first
 scripts/bundle.sh                          # build target/release/Falcon.app
 ```
 
-The command-line tool works on any library:
+While falcon is in development, the app and the command-line tool only open libraries inside `~/Falcon Sandbox` (set `FALCON_SANDBOX` to use another folder). Copy a library there to try falcon on it.
 
 ```sh
-cargo run -p falcon -- new ~/Pictures/Inspiration.library
-cargo run -p falcon -- import ~/Pictures/Inspiration.library photo.jpg --tag moodboard
-cargo run -p falcon -- info ~/Pictures/Inspiration.library
-cargo run -p falcon -- serve ~/Pictures/Inspiration.library     # local HTTP API on 127.0.0.1:41596
+cargo run -p falcon -- new ~/"Falcon Sandbox"/Inspiration.library
+cargo run -p falcon -- import ~/"Falcon Sandbox"/Inspiration.library photo.jpg --tag moodboard
+cargo run -p falcon -- info ~/"Falcon Sandbox"/Inspiration.library
+cargo run -p falcon -- serve ~/"Falcon Sandbox"/Inspiration.library     # local HTTP API on 127.0.0.1:41596
 ```
 
 ## Under the hood
