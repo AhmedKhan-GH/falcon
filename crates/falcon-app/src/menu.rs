@@ -152,7 +152,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::RotateLeft => s.library && s.rotatable,
         C::Crop => s.library && s.croppable,
         C::Documentation => s.docs,
-        C::ErrorLogs => true,
+        C::ErrorLogs | C::About => true,
         C::ToggleName | C::ToggleInfo | C::ToggleComments | C::ToggleSubfolders => s.library,
         C::AlwaysOnTop => true,
         C::Grayscale | C::Navigator => s.library,
@@ -230,6 +230,9 @@ const fn checked(label: &'static str, cmd: Command, check: Check) -> Entry {
 }
 
 const SEP: Entry = Entry::Separator;
+
+/// Replaces winit's stock About item, first in the application menu.
+pub static ABOUT: &[Entry] = &[item("About Falcon", Command::About)];
 
 /// Added to the application menu, after About.
 pub static APP: &[Entry] = &[item("Preferences…", Command::Preferences), item("Lock Falcon", Command::LockApp)];
@@ -446,7 +449,7 @@ pub static MENUS: &[(&str, &[Entry])] = &[
     ),
 ];
 
-/// Every item, the application menu's first, in menu order. An item's
+/// Every item, About first, in menu order. An item's
 /// index here (found by address, which is why the menus are statics)
 /// gives its tag in the AppKit menu.
 pub fn items() -> &'static [&'static Item] {
@@ -462,6 +465,7 @@ pub fn items() -> &'static [&'static Item] {
     static ITEMS: std::sync::OnceLock<Vec<&'static Item>> = std::sync::OnceLock::new();
     ITEMS.get_or_init(|| {
         let mut out = Vec::new();
+        walk(ABOUT, &mut out);
         walk(APP, &mut out);
         for (_, entries) in MENUS {
             walk(entries, &mut out);
@@ -713,13 +717,25 @@ mod mac {
         }
         let all = items();
         if let Some(app_menu) = main.itemAtIndex(0).and_then(|i| i.submenu()) {
+            // winit's stock About is the untagged first item. It is
+            // replaced on the first build; a later build finds our own
+            // About there (tagged) and only rebuilds the tagged items.
+            let stock_about = app_menu.itemAtIndex(0).is_some_and(|it| it.tag() < TAG_SEPARATOR);
             for i in (0..app_menu.numberOfItems()).rev() {
                 if app_menu.itemAtIndex(i).is_some_and(|it| it.tag() >= TAG_SEPARATOR) {
                     app_menu.removeItemAtIndex(i);
                 }
             }
-            // After About.
-            let mut at = app_menu.numberOfItems().min(1);
+            if stock_about {
+                app_menu.removeItemAtIndex(0);
+            }
+            let mut at = 0;
+            for e in super::ABOUT {
+                if let Entry::Item(it) = e {
+                    app_menu.insertItem_atIndex(&menu_item(mtm, &target, keys, all, it), at);
+                    at += 1;
+                }
+            }
             let sep = NSMenuItem::separatorItem(mtm);
             sep.setTag(TAG_SEPARATOR);
             app_menu.insertItem_atIndex(&sep, at);
@@ -969,6 +985,21 @@ mod tests {
         let on = State { library: true, presenting: true, ..Default::default() };
         assert!(enabled(Command::Presentation, &on));
         assert!(Check::Presentation.on(&on));
+    }
+
+    #[test]
+    fn about_comes_first_and_always_acts() {
+        assert_eq!(items()[0].cmd, Command::About);
+        assert_eq!(items()[0].label, "About Falcon");
+        assert!(enabled(Command::About, &State::default()));
+        assert!(enabled(Command::ErrorLogs, &State::default()));
+    }
+
+    #[test]
+    fn help_menu_lists_documentation_and_logs() {
+        let help = MENUS.iter().find(|m| m.0 == "Help").unwrap().1;
+        let labels: Vec<&str> = help.iter().map(|e| if let Entry::Item(i) = e { i.label } else { "-" }).collect();
+        assert_eq!(labels, ["Falcon Documentation", "-", "Error Logs"]);
     }
 
     #[test]

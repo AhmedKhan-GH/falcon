@@ -23,6 +23,7 @@ use crate::logic::{self, Layout, NavCounts, Scope};
 use falcon_library::search::{ColorQuery, Filter, Logic, OrderBy, TextFilter};
 use crate::theme::{self as t, font, mono};
 
+mod about;
 mod organize_ui;
 mod dupes_ui;
 mod export_ui;
@@ -783,6 +784,10 @@ pub struct App {
     modes: modes::Modes,
     /// The item open in its own window (`preview_window.rs`).
     preview: Option<preview_window::PreviewWin>,
+
+    /// The About window is open, and its icon once loaded (`about.rs`).
+    about: bool,
+    about_icon: Option<egui::TextureHandle>,
 }
 
 impl App {
@@ -840,6 +845,9 @@ impl App {
             auto_import_refused: None,
             modes: Default::default(),
             preview: None,
+
+            about: false,
+            about_icon: None,
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
         app.tile = saved.tile.unwrap_or(app.tile).clamp(TILE_MIN, TILE_MAX);
@@ -1556,7 +1564,7 @@ impl App {
         }
         // The duplicate dialog and Go to Folder take Return, Esc and the
         // arrows for themselves.
-        if self.prefs_window.open || self.ws.dup_dialog.is_some() || self.quick.is_open() || ctx.memory(|m| m.focused().is_some()) {
+        if self.prefs_window.open || self.about || self.ws.dup_dialog.is_some() || self.quick.is_open() || ctx.memory(|m| m.focused().is_some()) {
             return;
         }
         pressed.retain(|c| *c != C::Preferences);
@@ -2094,6 +2102,7 @@ impl App {
             C::Navigator => self.modes.hide_navigator = !self.modes.hide_navigator,
             C::OpenNewWindow => self.open_preview_window(),
 
+            C::About => self.about = true,
             C::ErrorLogs => {
                 if let Some(p) = crate::errlog::ensure() {
                     crate::open_with::open_default(&[p]);
@@ -5363,6 +5372,7 @@ impl App {
             self.apply_preferences(d);
         }
         self.import_dialogs(&ctx);
+        self.about_ui(&ctx);
         if self.collect.open {
             self.collect_window(&ctx);
         }

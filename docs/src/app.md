@@ -267,7 +267,7 @@ On macOS falcon has a native menu bar, built with AppKit in `crates/falcon-app/s
 
 | Menu | Items |
 |---|---|
-| Falcon | winit's About, Services, Hide, Hide Others, Show All and Quit, plus Preferences… and Lock Falcon after About |
+| Falcon | About Falcon (falcon's own, in place of winit's), Services, Hide, Hide Others, Show All and Quit, plus Preferences… and Lock Falcon after About |
 | File | New ▸ Text File, New Folder, New Subfolder, New Smart Folder…, Import Folders…, Import Files…, Export ▸ (To Computer…, As .eaglepack…, In Another Format…, To CSV…), Open Library…, Close Window |
 | Edit | Undo, Redo, Cut, Copy, Paste, Select All, Rename, Duplicate, Copy Details ▸ (File Paths, Folder Paths, Names, Source URLs, Thumbnail, Base64), Refresh Thumbnail, Custom Thumbnail ▸ (From a File…, From the Clipboard), Move Folder ▸ (Up, Down, To the Top, To the Bottom), Edit Image ▸ (Flip Horizontally, Rotate Left, Crop…), Folder Settings…, Move Folder…, Remove from Folder, Move to Trash |
 | Find | Search, Search All, Filter Sidebar, Go to Folder…, then Filter Bar, Clear Filter and an Open Filter ▸ submenu (Color, Tags, Folders, Shape, Rating, Type, Date, Dimensions, Size, Duration, Comment, Notes, URL, Font, BPM, Camera), then Find Duplicates |
@@ -280,6 +280,10 @@ On macOS falcon has a native menu bar, built with AppKit in `crates/falcon-app/s
 - An item is enabled when its command can act, by the same rules the keys follow (`menu::enabled`): Rename needs a selection and no viewer, Add to Last Used Folder a folder used before, Custom Thumbnail one item, Remove from Folder a selection inside a folder, the Move Folder ▸ entries an open folder or smart folder and not several picked ones (as in Eagle), Move Folder… picked folders or an open folder (it moves the picked ones if any, as Eagle's does), Parent Folder a folder with a parent, Shuffle Again the Random page, Next and Previous Library a second open library, the Edit Image entries an image of a kind falcon can flip, rotate or crop. Lock Falcon needs an app password. Everything is disabled while Preferences is open or falcon is locked. The open page, the layout, the caption switches, the sidebar, the inspector, the filter bar, the viewer, presentation mode, Always on Top, Grayscale, Navigator and full screen carry checkmarks. The app hands the menu a fresh state only when it changes; AppKit reads it when a menu opens.
 - Keys stay with egui. Every falcon menu has a delegate that tells AppKit it has no key equivalents, so a key press never fires an item: egui gets it as before, text fields keep ⌘C, ⌘V, ⌘A, ⌘Z, ⌘← and the rest, and bare keys such as R or the digits still type. Should AppKit fire an item from a key anyway (the application menu has no such delegate, so ⌘, comes this way), falcon turns it back into the key egui would have had. Clicking an item runs the same `App::run_command` as its key. Undo, Redo, Cut, Copy, Paste and Select All act on a focused text field when there is one.
 - Left out because falcon can't do them yet: File ▸ New… (only its Text File template is in New ▸), the link and site importers and folder exports from the menu, Duplicate, custom thumbnails from the menu, the rest of Edit Folder (passwords), Add to Folders…, Open Link, the caption toggles, Lock and Color Space, and the online Help items.
+
+### About
+
+Falcon ▸ About Falcon opens a small window centred over the app: the app icon, the name, "Desktop asset manager for Eagle libraries", the version (from the crate version) and a line saying the code is licensed under MIT or Apache-2.0. OK, Esc or a click outside closes it. While it is open the menu commands wait, as they do behind Preferences. On the first menu build falcon removes winit's stock About item and inserts its own at the top of the application menu (`menu::ABOUT`); it is always enabled.
 
 ### Error logs
 

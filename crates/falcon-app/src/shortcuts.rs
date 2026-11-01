@@ -154,6 +154,7 @@ pub enum Command {
     /// Eagle's Open in New Window: the item in a window of its own.
     OpenNewWindow,
     ErrorLogs,
+    About,
 }
 
 /// How a scroll command moves the grid.
@@ -1056,7 +1057,7 @@ mod tests {
     #[test]
     fn menu_only_commands_have_no_keys() {
         let keys = Shortcuts::default();
-        for cmd in [Command::Undo, Command::Import, Command::Documentation, Command::ErrorLogs] {
+        for cmd in [Command::Undo, Command::Import, Command::Documentation, Command::ErrorLogs, Command::About] {
             assert!(find_spec(cmd).is_none());
             assert_eq!(keys.binding(cmd), None);
             assert!(keys.chords(cmd).is_empty());
