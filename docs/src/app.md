@@ -437,6 +437,7 @@ Edits stay in a draft until Save (also ⌘↩) or Apply; Cancel, the close butto
 | Preview | Sharp pixels when an image is enlarged | `habits.renderBehavior`, `non-pixelated` by default; `pixelated` turns smoothing off from 200% up (also on grid thumbnails) | Off by default. When on, the viewer's full render and full-resolution tiles are drawn with nearest-neighbour sampling whenever enlarged on screen (egui fixes sampling per texture, so it starts above 100% of screen pixels rather than at 200%); shrinking stays smooth. Grid thumbnails stay smooth |
 | Preview | Reopen an image at the zoom and position it was left at | `habits.rememberLastZoom`, on by default; kept in memory (`lastItemStates`), skipped in fit-to-edge mode | Same: per item, for the session, not in fit-to-edge mode |
 | Preview | Checkerboard behind transparent areas | `habits.transparency`, `hide` by default | Off by default; when on, a white and light grey checkerboard of 8 pt squares is drawn under the picture |
+| Auto-Import | Import files added to a folder automatically; Choose Folder…; Open Folder | `autoImport.enable` (off) and `autoImport.path` (empty). Turning it on with no folder opens the folder picker, and cancelling it leaves it off; a folder on a network drive is refused with a warning; Open the folder opens it in Finder when it exists. A saved folder that no longer exists is forgotten and auto-import turned off | Same defaults and rules (`prefs::auto_import`, `auto_import::is_network_volume`). The pane also says which folder the shown library watches (see [Auto-import](import.md#auto-import)) |
 | Developer | Run the HTTP API, first port | Eagle always serves on 41595 and only has an API token setting | On by default, from 41596; tries five ports. Ports whose range would include 41595, or below 1024, are refused. Changing either restarts the API |
 | Developer | API token | Eagle 4.0.0's preferences can generate and copy an API token (`developer.apiToken`), but nothing in its readable source checks it | No token; falcon keeps the Host check |
 
@@ -446,7 +447,7 @@ What Eagle does, from `js/default-preferences.js`, `preferences.html`, `js/prefe
 - The window's sidebar (200 pt wide, 32 pt rows) has General and Sidebar, then Controls, Preview (the `habits` group), Screenshot and Shortcuts, then Notification, Password and Auto-Import, then the AI panels. A search box filters every panel by keywords.
 - Save applies and closes, Apply applies and stays open, Cancel and Esc revert (including a previewed theme or zoom), ⌘↩ saves.
 - The window's own size is set in Eagle's main process, which is not in the readable bundle; falcon's 720 × 500 pt is a guess (inferred).
-- Not built in falcon: language, vibrancy, menu bar and Dock icon options, launch at login, GPU, the collect modal, screenshots, the middle button, image rotate mode, sound effects, Touch ID, auto-import, proxy, the AI and MCP panes and the API token.
+- Not built in falcon: language, vibrancy, menu bar and Dock icon options, launch at login, GPU, the collect modal, screenshots, the middle button, image rotate mode, sound effects, Touch ID, proxy, the AI and MCP panes and the API token.
 
 ## Themes
 

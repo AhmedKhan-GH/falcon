@@ -102,6 +102,12 @@ pub struct Prefs {
     /// Eagle's `habits.transparency` "show": a checkerboard behind
     /// transparent images.
     pub transparency_grid: bool,
+    /// Eagle's `autoImport.enable`: import files added to the watched
+    /// folder (`auto_import.rs`).
+    pub auto_import: bool,
+    /// Eagle's `autoImport.path`: the chosen folder. Each library watches
+    /// the folder named after it inside this one.
+    pub auto_import_path: Option<std::path::PathBuf>,
 }
 
 /// What the wheel does over a playing video.
@@ -215,6 +221,8 @@ impl Default for Prefs {
             pixelated: false,
             remember_zoom: true,
             transparency_grid: false,
+            auto_import: false,
+            auto_import_path: None,
         }
     }
 }
@@ -235,6 +243,12 @@ impl Prefs {
             self.api_port = Prefs::default().api_port;
         }
         self.ui_zoom = self.ui_zoom.clamp(ZOOM_STEPS[0], ZOOM_STEPS[ZOOM_STEPS.len() - 1]);
+        // As in Eagle, a chosen folder that is gone is forgotten and
+        // auto-import turned off.
+        if self.auto_import_path.as_ref().is_some_and(|p| !p.is_dir()) {
+            self.auto_import_path = None;
+            self.auto_import = false;
+        }
         self
     }
 
@@ -349,11 +363,22 @@ pub enum Section {
     Shortcuts,
     Notification,
     Password,
+    AutoImport,
     Developer,
 }
 
 impl Section {
-    pub const ALL: [Section; 8] = [Section::General, Section::Sidebar, Section::Controls, Section::Preview, Section::Shortcuts, Section::Notification, Section::Password, Section::Developer];
+    pub const ALL: [Section; 9] = [
+        Section::General,
+        Section::Sidebar,
+        Section::Controls,
+        Section::Preview,
+        Section::Shortcuts,
+        Section::Notification,
+        Section::Password,
+        Section::AutoImport,
+        Section::Developer,
+    ];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -364,6 +389,7 @@ impl Section {
             Section::Shortcuts => "Shortcuts",
             Section::Notification => "Notification",
             Section::Password => "Password",
+            Section::AutoImport => "Auto-Import",
             Section::Developer => "Developer",
         }
     }
@@ -377,6 +403,7 @@ impl Section {
             Section::Shortcuts => crate::icons::KEYBOARD,
             Section::Notification => crate::icons::BELL,
             Section::Password => crate::icons::LOCK_SIMPLE,
+            Section::AutoImport => crate::icons::TRAY_ARROW_DOWN,
             Section::Developer => crate::icons::CODE,
         }
     }
@@ -387,7 +414,7 @@ impl Section {
         match self {
             Section::General | Section::Sidebar => 0,
             Section::Controls | Section::Preview | Section::Shortcuts => 1,
-            Section::Notification | Section::Password => 2,
+            Section::Notification | Section::Password | Section::AutoImport => 2,
             Section::Developer => 3,
         }
     }
@@ -419,6 +446,10 @@ pub struct Window {
     /// ones revert to them.
     applied_theme: Theme,
     applied_zoom: u16,
+    /// The shown library's folder, for the Auto-Import pane.
+    pub library: Option<std::path::PathBuf>,
+    /// Why the folder last picked for auto-import was refused.
+    auto_import_note: Option<String>,
 }
 
 /// Size of the window, close to Eagle's.
@@ -478,6 +509,7 @@ impl Window {
         self.query.clear();
         self.recorder.stop();
         self.password = PasswordForm::default();
+        self.auto_import_note = None;
     }
 
     pub fn close(&mut self) {
@@ -603,6 +635,7 @@ impl Window {
             Section::Shortcuts => self.shortcuts(p, d),
             Section::Notification => notification(p, d),
             Section::Password => password(p, d, &mut self.password),
+            Section::AutoImport => auto_import(p, d, self.library.as_deref(), &mut self.auto_import_note),
             Section::Developer => developer(p, d, &mut self.port_text, port_error),
         }
     }
@@ -801,6 +834,64 @@ fn notification(p: &mut Page, d: &mut Draft) {
     });
 }
 
+/// Whether a folder can be watched for auto-import, and why not.
+pub fn auto_import_refusal(path: &std::path::Path) -> Option<String> {
+    if crate::auto_import::is_network_volume(path) {
+        Some("Auto-import doesn't work with network drives. Choose a folder on this Mac or a drive attached to it.".into())
+    } else if !path.is_dir() {
+        Some(format!("{} doesn't exist.", path.display()))
+    } else {
+        None
+    }
+}
+
+/// Auto-Import: a folder whose new files are imported by themselves.
+fn auto_import(p: &mut Page, d: &mut Draft, library: Option<&std::path::Path>, refused: &mut Option<String>) {
+    let keywords = ["auto", "import", "watch", "monitor", "folder", "drop", "automatic", "inbox"];
+    p.block("Auto-import", &keywords, |ui| {
+        let was = d.prefs.auto_import;
+        ui.checkbox(&mut d.prefs.auto_import, "Import files added to a folder automatically");
+        let mut choose = d.prefs.auto_import && !was && d.prefs.auto_import_path.is_none();
+        ui.add_space(4.0);
+        ui.horizontal(|ui| {
+            let shown = d.prefs.auto_import_path.as_ref().map_or_else(|| "No folder chosen".to_string(), |p| p.display().to_string());
+            ui.add(egui::Label::new(RichText::new(shown).color(t::p().text_value)).truncate());
+        });
+        ui.horizontal(|ui| {
+            choose |= ui.button("Choose Folder…").clicked();
+            let chosen = d.prefs.auto_import_path.clone().filter(|p| p.is_dir());
+            let open = ui.add_enabled(chosen.is_some(), egui::Button::new("Open Folder")).on_hover_text("Shows the chosen folder in Finder");
+            if open.clicked()
+                && let Some(dir) = chosen
+            {
+                crate::open_with::open_default(&[dir]);
+            }
+        });
+        if choose {
+            if let Some(dir) = rfd::FileDialog::new().set_title("Choose a Folder to Watch").set_can_create_directories(true).pick_folder() {
+                *refused = auto_import_refusal(&dir);
+                if refused.is_none() {
+                    d.prefs.auto_import_path = Some(dir);
+                }
+            }
+            // As in Eagle, turning it on without picking a folder leaves it off.
+            if d.prefs.auto_import_path.is_none() {
+                d.prefs.auto_import = false;
+            }
+        }
+        if let Some(why) = refused.as_deref() {
+            ui.label(RichText::new(why).size(11.0).color(t::p().icon_red));
+        }
+        ui.add_space(4.0);
+        let target = match (library, &d.prefs.auto_import_path) {
+            (Some(root), Some(chosen)) => format!("Files dropped into {} are imported into this library.", crate::auto_import::watch_dir(chosen, root).display()),
+            _ => "Each library watches the folder named after it inside the chosen folder (\"Books\" for Books.library).".to_string(),
+        };
+        note(ui, &target);
+        note(ui, "New files are imported once they stop growing; the originals stay where they are. Files under 1 KB, temporary (.tmp) files and files without an extension are skipped.");
+    });
+}
+
 /// What the Password pane is asking for.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum PasswordMode {
@@ -942,6 +1033,18 @@ mod tests {
         assert!(p.auto_select, "Eagle's autoSelect defaults to on");
         assert!(p.font_style_tags, "Eagle's font autoTag defaults to on");
         assert_eq!(p.api_ports(), Some(41596..=41600));
+        assert!(!p.auto_import && p.auto_import_path.is_none(), "Eagle's autoImport defaults to off with no folder");
+    }
+
+    #[test]
+    fn a_vanished_auto_import_folder_is_forgotten() {
+        let tmp = tempfile::tempdir().unwrap();
+        let kept = Prefs { auto_import: true, auto_import_path: Some(tmp.path().to_path_buf()), ..Default::default() }.sanitized();
+        assert!(kept.auto_import && kept.auto_import_path.is_some());
+        let gone = Prefs { auto_import: true, auto_import_path: Some(tmp.path().join("gone")), ..Default::default() }.sanitized();
+        assert!(!gone.auto_import && gone.auto_import_path.is_none());
+        assert!(auto_import_refusal(&tmp.path().join("gone")).is_some());
+        assert!(auto_import_refusal(tmp.path()).is_none());
     }
 
     #[test]
@@ -1119,7 +1222,7 @@ mod tests {
     #[test]
     fn panes_follow_eagles_order() {
         let labels: Vec<_> = Section::ALL.iter().map(|s| s.label()).collect();
-        assert_eq!(labels, ["General", "Sidebar", "Controls", "Preview", "Shortcuts", "Notification", "Password", "Developer"]);
+        assert_eq!(labels, ["General", "Sidebar", "Controls", "Preview", "Shortcuts", "Notification", "Password", "Auto-Import", "Developer"]);
         let groups: Vec<_> = Section::ALL.iter().map(|s| s.group()).collect();
         assert!(groups.windows(2).all(|w| w[0] <= w[1]), "groups are contiguous");
         let s: Section = serde_json::from_str(r#""preview""#).unwrap();

@@ -885,6 +885,7 @@ impl App {
     fn open_preferences(&mut self) {
         let panels = crate::prefs::Panels { sidebar: self.show_sidebar, inspector: self.show_inspector };
         self.prefs_window.show_with(crate::prefs::Draft { prefs: self.prefs.clone(), panels, keys: self.shortcuts.clone() });
+        self.prefs_window.library = self.ws.root.clone();
     }
 
     /// Lock Now: hides everything behind the lock screen, stopping playback

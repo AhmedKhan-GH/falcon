@@ -6,6 +6,7 @@ mod collect;
 mod drop_pos;
 mod folder_icons;
 mod audio;
+mod auto_import;
 mod hover;
 mod icloud;
 mod icons;
