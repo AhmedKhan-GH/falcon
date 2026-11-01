@@ -34,6 +34,7 @@ mod open_ui;
 mod pdf_view;
 mod import_ui;
 mod folders_ui;
+mod layout_panel;
 #[path = "comments.rs"]
 mod comments;
 #[path = "covers.rs"]
@@ -47,7 +48,6 @@ mod image_edit;
 const GRID_PAD_X: f32 = 17.0;
 const GRID_PAD_TOP: f32 = 4.0;
 const GRID_GAP: f32 = 8.0;
-const CARD_TEXT: f32 = 46.0;
 const ROW_GAP: f32 = 10.0;
 const TILE_MIN: f32 = 80.0;
 const TILE_MAX: f32 = 400.0;
@@ -70,7 +70,14 @@ struct Saved {
     show_inspector: Option<bool>,
     collapsed: Vec<String>,
     recent: Vec<PathBuf>,
+    /// The one layout falcon kept before layouts were remembered per view;
+    /// now only the fallback for a library with none of its own.
     layout: Option<Layout>,
+    /// Layouts by folder or smart folder id, or by library path for the
+    /// other pages (`logic::layout_for`).
+    layouts: HashMap<String, Layout>,
+    /// The grid display options of the layout panel.
+    display: logic::Display,
     prefs: crate::prefs::Prefs,
     /// The Preferences pane shown last.
     prefs_pane: crate::prefs::Section,
@@ -575,6 +582,14 @@ pub struct App {
     imports: import_ui::Imports,
     /// The macOS menu bar (`menu.rs`).
     menu_bar: crate::menu::Bar,
+    /// Layouts remembered per view, the fallback from before, and the
+    /// display options (see `layout_panel.rs`).
+    layouts: HashMap<String, Layout>,
+    legacy_layout: Option<Layout>,
+    display: logic::Display,
+    /// Reload the shown library from disk next frame (the layout panel's
+    /// Refresh).
+    refresh: bool,
 }
 
 impl App {
@@ -608,6 +623,10 @@ impl App {
             pdf: Default::default(),
             image: Default::default(),
             menu_bar: Default::default(),
+            layouts: HashMap::new(),
+            legacy_layout: None,
+            display: Default::default(),
+            refresh: false,
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
         app.tile = saved.tile.unwrap_or(app.tile).clamp(TILE_MIN, TILE_MAX);
@@ -617,7 +636,9 @@ impl App {
         app.show_inspector = saved.show_inspector.unwrap_or(true);
         app.ws.collapsed = saved.collapsed.into_iter().collect();
         app.recent = saved.recent.into_iter().filter(|p| p.is_dir()).collect();
-        app.ws.layout = saved.layout.unwrap_or_default();
+        app.legacy_layout = saved.layout;
+        app.layouts = saved.layouts;
+        app.display = saved.display;
         app.prefs = saved.prefs.sanitized();
         // The interface size is a preference, as in Eagle, so egui's own
         // ⌘+ and ⌘− (which falcon uses to zoom the grid) must not change it.
@@ -958,6 +979,54 @@ impl App {
         self.ws.forward.clear();
         self.ws.selected.clear();
         self.ws.anchor = None;
+    }
+
+    /// The shown library's path, the key its pages share a layout under.
+    fn root_key(&self) -> String {
+        self.ws.root.as_ref().map(|r| r.to_string_lossy().into_owned()).unwrap_or_default()
+    }
+
+    /// Puts the layout the current view opens in into `ws.layout`.
+    fn sync_layout(&mut self) {
+        self.ws.layout = logic::layout_for(&self.layouts, &self.ws.scope, &self.root_key(), self.legacy_layout);
+    }
+
+    /// Switches the current view to `layout` and remembers it for this
+    /// folder or smart folder, or for the library's other pages, as Eagle
+    /// does.
+    fn set_layout(&mut self, layout: Layout) {
+        self.layouts.insert(logic::layout_key(&self.ws.scope, &self.root_key()), layout);
+        self.ws.layout = layout;
+    }
+
+    /// The layout panel's Refresh: writes anything pending, reads the shown
+    /// library again from disk, decodes its thumbnails again and reshuffles
+    /// random orders, keeping the view and selection.
+    fn refresh_library(&mut self) {
+        let (Some(shared), Some(root)) = (self.ws.lib.clone(), self.ws.root.clone()) else { return };
+        if let Err(e) = self.ws.flush_and_backup() {
+            self.flash(format!("Could not save: {e}"));
+            return;
+        }
+        match falcon_library::sandbox::guard(&root).and_then(|()| Library::open_or_restore(&root)) {
+            Ok((fresh, _)) => {
+                let ids: Vec<String> = {
+                    let mut lib = lock(&shared);
+                    let ids = lib.items().iter().map(|i| i.id.clone()).collect();
+                    *lib = fresh;
+                    ids
+                };
+                for id in &ids {
+                    self.ws.loader.forget(id);
+                }
+                self.ws.org.reshuffle();
+                if let Scope::Random(_) = self.ws.scope {
+                    self.ws.scope = Scope::Random(fastrand_seed());
+                }
+                self.flash("Refreshed");
+            }
+            Err(e) => self.flash(format!("Could not refresh: {e}")),
+        }
     }
 
     fn go_back(&mut self) {
@@ -1420,10 +1489,10 @@ impl App {
             C::Copy => self.copy_selection(),
             C::Paste => self.paste(),
             C::ToggleFilter => self.ws.show_filter = !self.ws.show_filter,
-            C::LayoutGrid => self.ws.layout = Layout::Grid,
-            C::LayoutJustified => self.ws.layout = Layout::Justified,
-            C::LayoutWaterfall => self.ws.layout = Layout::Waterfall,
-            C::LayoutList => self.ws.layout = Layout::List,
+            C::LayoutGrid => self.set_layout(Layout::Grid),
+            C::LayoutJustified => self.set_layout(Layout::Justified),
+            C::LayoutWaterfall => self.set_layout(Layout::Waterfall),
+            C::LayoutList => self.set_layout(Layout::List),
             C::OpenDefault => self.open_keys(true),
             C::RevealInFinder => self.open_keys(false),
             C::SelectAll => self.ws.selected = self.ws.order.clone(),
@@ -2637,7 +2706,7 @@ impl App {
         let icons_left = ix - 20.0;
 
         let own = self.own_sort(lib);
-        egui::Popup::menu(&layout).show(|ui| self.layout_menu(ui, own));
+        egui::Popup::menu(&layout).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| self.layout_panel(ui, own));
         if filter.clicked() {
             self.ws.show_filter = !self.ws.show_filter;
         }
@@ -2733,38 +2802,6 @@ impl App {
         let kx = track.left() + f * track.width();
         p.line_segment([Pos2::new(track.left(), y), Pos2::new(kx, y)], Stroke::new(2.0, t::p().text_muted));
         p.circle_filled(Pos2::new(kx, y), 7.0, Color32::WHITE);
-    }
-
-    fn layout_menu(&mut self, ui: &mut Ui, own: Option<(organize_ui::OrderTarget, Option<(falcon_library::model::FolderOrder, bool)>)>) {
-        ui.set_min_width(190.0);
-        ui.label(RichText::new("Layout").color(t::p().text_muted).size(12.0));
-        for l in Layout::ALL {
-            let mark = if l == self.ws.layout { ic::CHECK } else { " " };
-            if ui.button(format!("{mark}  {}", l.label())).clicked() {
-                self.ws.layout = l;
-            }
-        }
-        ui.separator();
-        // A folder or smart folder owns the sort while it is open.
-        if let Some((target, cur)) = own {
-            self.own_sort_menu(ui, target, cur);
-            return;
-        }
-        ui.label(RichText::new("Sort by").color(t::p().text_muted).size(12.0));
-        for k in OrderBy::ALL {
-            let mark = if k == self.ws.sort { ic::CHECK } else { " " };
-            if ui.button(format!("{mark}  {}", k.label())).clicked() {
-                self.ws.sort = k;
-            }
-        }
-        ui.separator();
-        let labels = if self.ws.sort.is_time() { ["Newest First", "Oldest First"] } else { ["Ascending", "Descending"] };
-        for (inc, label) in [(true, labels[0]), (false, labels[1])] {
-            let mark = if inc == self.ws.increase { ic::CHECK } else { " " };
-            if ui.button(format!("{mark}  {label}")).clicked() {
-                self.ws.increase = inc;
-            }
-        }
     }
 }
 
@@ -3077,6 +3114,7 @@ impl App {
             self.unlock_screen(ui, gate, lib);
             return;
         }
+        self.sync_layout();
         let items: Vec<&Item> = order.iter().map(|&i| &lib.items()[i]).collect();
         let new_order: Vec<String> = items.iter().map(|i| i.id.clone()).collect();
         let order_changed = self.ws.hover.shown().is_some() && self.ws.order != new_order;
@@ -3103,7 +3141,7 @@ impl App {
             .iter()
             .map(|i| if i.width > 0 && i.height > 0 { i.width as f32 / i.height as f32 } else { 1.0 })
             .collect();
-        let caption = if layout.has_caption() { CARD_TEXT } else { 0.0 };
+        let caption = logic::caption_height(layout, &self.display);
         let (places, content_h, cols) = logic::place(layout, &aspects, width, self.tile, GRID_GAP, caption, ROW_GAP);
         self.ws.columns = cols;
         let total_h = GRID_PAD_TOP + content_h + 20.0;
@@ -3293,16 +3331,38 @@ impl App {
         }
     }
 
+    /// Draws an item's image so it covers `rect`, cropping what overflows
+    /// (the grid layout's Fill mode).
+    fn draw_image_cover(&mut self, ui: &Ui, lib: &Library, item: &Item, rect: Rect) {
+        let failed = self.ws.loader.has_failed(&item.id, Tier::Grid);
+        let playing = self.ws.cards.texture(&item.id).cloned();
+        match playing.or_else(|| self.ws.loader.get(&item.id, Tier::Grid).cloned()) {
+            Some(tex) => {
+                let size = tex.size_vec2();
+                let s = (rect.width() / size.x).max(rect.height() / size.y);
+                let uv = Rect::from_center_size(Pos2::new(0.5, 0.5), vec2(rect.width() / (size.x * s), rect.height() / (size.y * s)));
+                egui::Image::new((tex.id(), rect.size())).uv(uv).corner_radius(4).paint_at(ui, rect);
+            }
+            None if failed || job_for(item, lib.root(), Tier::Grid).is_none() => ext_placeholder(ui, rect, &item.ext),
+            None => {}
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn card(&mut self, ui: &Ui, lib: &Library, item: &Item, card: Rect, caption: f32, selected: bool, hovered: bool) {
         let tile = Rect::from_min_max(card.min, Pos2::new(card.right(), card.bottom() - caption));
         let grid = self.ws.layout == Layout::Grid;
+        let d = self.display.clone();
         let p = ui.painter().clone();
         if grid {
             p.rect_filled(tile, t::RADIUS, t::p().main);
             let border = if hovered { t::p().card_hover } else { t::p().card_border };
             p.rect_stroke(tile, t::RADIUS, Stroke::new(1.0, border), StrokeKind::Inside);
-            self.draw_image(ui, lib, item, tile.shrink(6.0), false);
+            if d.fill {
+                self.draw_image_cover(ui, lib, item, tile.shrink(1.0));
+            } else {
+                self.draw_image(ui, lib, item, tile.shrink(6.0), false);
+            }
         } else {
             p.rect_filled(tile, CornerRadius::same(4), t::p().field);
             self.draw_image(ui, lib, item, tile, true);
@@ -3310,30 +3370,43 @@ impl App {
                 p.rect_stroke(tile, CornerRadius::same(4), Stroke::new(1.0, t::p().card_hover), StrokeKind::Inside);
             }
         }
-        badge(ui, tile.min + vec2(5.0, 5.0), &item.ext);
-        comments::count_badge(ui, tile, item);
+        if d.ext_badge {
+            badge(ui, tile.min + vec2(5.0, 5.0), &item.ext);
+        }
+        if d.comment_badge {
+            comments::count_badge(ui, tile, item);
+        }
         if selected {
             p.rect_stroke(tile.expand(1.0), CornerRadius::same(7), Stroke::new(2.5, t::p().primary), StrokeKind::Inside);
         }
         if caption == 0.0 {
             return;
         }
-        let name = format!("{}.{}", item.name, item.ext);
-        let g = galley(ui, &name, font(13.0), t::p().text, tile.width());
-        let y = tile.bottom() + 14.0;
-        if selected {
-            let pill = Rect::from_center_size(Pos2::new(tile.center().x, y), vec2(g.size().x + 10.0, 19.0));
-            p.rect_filled(pill, CornerRadius::same(4), t::p().primary);
+        let mut y = tile.bottom() + 14.0;
+        if d.show_name {
+            let name = logic::caption_name(item, d.show_ext);
+            let g = galley(ui, &name, font(13.0), t::p().text, tile.width());
+            if selected {
+                let pill = Rect::from_center_size(Pos2::new(tile.center().x, y), vec2(g.size().x + 10.0, 19.0));
+                p.rect_filled(pill, CornerRadius::same(4), t::p().primary);
+            }
+            p.galley(Pos2::new(tile.center().x - g.size().x / 2.0, y - g.size().y / 2.0), g, t::p().text);
+            y += 18.0;
         }
-        p.galley(Pos2::new(tile.center().x - g.size().x / 2.0, y - g.size().y / 2.0), g, t::p().text);
-        if item.width > 0 && item.height > 0 {
-            p.text(
-                Pos2::new(tile.center().x, tile.bottom() + 32.0),
-                Align2::CENTER_CENTER,
-                format!("{} × {}", item.width, item.height),
-                font(12.0),
-                t::p().text_muted,
-            );
+        if d.show_info {
+            match logic::caption_info(item, d.info) {
+                logic::Info::Text(text) => {
+                    let g = galley(ui, &text, font(12.0), t::p().text_muted, tile.width());
+                    p.galley(Pos2::new(tile.center().x - g.size().x / 2.0, y - g.size().y / 2.0), g, t::p().text_muted);
+                }
+                logic::Info::Stars(n) => {
+                    for i in 0..5u8 {
+                        let color = if i < n { t::p().icon_yellow } else { t::p().text_disabled };
+                        let x = tile.center().x + (f32::from(i) - 2.0) * 12.0;
+                        p.text(Pos2::new(x, y), Align2::CENTER_CENTER, "★", font(11.0), color);
+                    }
+                }
+            }
         }
     }
 
@@ -4228,7 +4301,9 @@ impl eframe::App for App {
             show_inspector: Some(self.show_inspector),
             collapsed: self.ws.collapsed.iter().cloned().collect(),
             recent: self.recent.clone(),
-            layout: Some(self.ws.layout),
+            layout: self.legacy_layout,
+            layouts: self.layouts.clone(),
+            display: self.display.clone(),
             prefs: self.prefs.clone(),
             prefs_pane: self.prefs_window.pane(),
             shortcuts: self.shortcuts.clone(),
@@ -4271,6 +4346,10 @@ impl App {
             ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
         }
         self.follow_api_switch();
+        if std::mem::take(&mut self.refresh) {
+            self.refresh_library();
+        }
+        self.sync_layout();
         t::follow_system(&ctx);
         self.ws.loader.poll(&ctx);
         let title = match &self.ws.root {

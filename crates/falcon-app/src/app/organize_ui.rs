@@ -45,6 +45,13 @@ pub(super) struct OrgState {
     pub settings_request: Option<String>,
 }
 
+impl OrgState {
+    /// Forgets the random folder sort's seed, so it shuffles again.
+    pub(super) fn reshuffle(&mut self) {
+        self.seed = None;
+    }
+}
+
 /// The folder settings dialog: the folder's name and auto-tags as edited
 /// so far, and the text in the tag field.
 struct AutoTagDraft {

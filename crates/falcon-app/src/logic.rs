@@ -240,9 +240,9 @@ pub fn hex(rgb: [u8; 3]) -> String {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub enum Layout {
     /// Columns of equal width; each card keeps its image's shape.
-    #[default]
     Waterfall,
-    /// Rows of equal height filling the width.
+    /// Rows of equal height filling the width (Eagle's default).
+    #[default]
     Justified,
     /// Square cards.
     Grid,
@@ -1864,5 +1864,207 @@ mod clean_name_tests {
         assert_eq!(clean_folder_name("a/b:c\\d"), "a b c d");
         assert_eq!(clean_folder_name("a / b"), "a   b", "slashes go after the spaces are squeezed");
         assert_eq!(clean_folder_name(" / "), "");
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Display options (Eagle's layout panel)
+
+/// What the second caption line under a card shows (Eagle's item info).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+pub enum InfoType {
+    /// Width × height, or the length of a video or audio file, or the file
+    /// size of an item without a preview.
+    #[default]
+    Dimensions,
+    FileSize,
+    Tags,
+    Rating,
+    Modified,
+    Created,
+}
+
+impl InfoType {
+    pub const ALL: [InfoType; 6] = [InfoType::Dimensions, InfoType::FileSize, InfoType::Tags, InfoType::Rating, InfoType::Modified, InfoType::Created];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            InfoType::Dimensions => "Dimensions",
+            InfoType::FileSize => "File Size",
+            InfoType::Tags => "Tags",
+            InfoType::Rating => "Rating",
+            InfoType::Modified => "Date Modified",
+            InfoType::Created => "Date Created",
+        }
+    }
+}
+
+/// The grid display options, kept for the whole app as Eagle keeps them
+/// (its `eagle.list.*` local storage), with Eagle's defaults.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct Display {
+    /// The name line under waterfall and grid cards.
+    pub show_name: bool,
+    /// The info line under waterfall and grid cards, and what it shows.
+    pub show_info: bool,
+    pub info: InfoType,
+    /// The extension at the end of the name.
+    pub show_ext: bool,
+    /// The extension label at a card's top left.
+    pub ext_badge: bool,
+    /// The comment count at a card's top right.
+    pub comment_badge: bool,
+    /// Grid layout: the image fills its square (cropped) instead of fitting.
+    pub fill: bool,
+}
+
+impl Default for Display {
+    fn default() -> Self {
+        Display { show_name: true, show_info: true, info: InfoType::Dimensions, show_ext: true, ext_badge: true, comment_badge: true, fill: false }
+    }
+}
+
+/// Height of the name and info lines under a card in `layout`.
+pub fn caption_height(layout: Layout, d: &Display) -> f32 {
+    if !layout.has_caption() {
+        return 0.0;
+    }
+    match (d.show_name, d.show_info) {
+        (true, true) => 46.0,
+        (false, false) => 0.0,
+        _ => 28.0,
+    }
+}
+
+/// The name under a card: with its extension, unless that is hidden.
+pub fn caption_name(item: &Item, show_ext: bool) -> String {
+    if show_ext && !item.ext.is_empty() { format!("{}.{}", item.name, item.ext) } else { item.name.clone() }
+}
+
+/// The info line under a card.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Info {
+    Text(String),
+    /// Five stars, this many lit.
+    Stars(u8),
+}
+
+/// The info line of `item` for `info`, as Eagle fills it: tags joined (a
+/// dash when none), dates as the inspector prints them, and for
+/// dimensions the length of a video or audio file, or the size of a file
+/// without a preview.
+pub fn caption_info(item: &Item, info: InfoType) -> Info {
+    let stamp = |t: u64| format_ms(if t > 0 { t } else { item.modification_time });
+    Info::Text(match info {
+        InfoType::Dimensions => {
+            if let Some(d) = search::duration(item).filter(|d| *d > 0.0) {
+                format_duration(d)
+            } else if item.width > 0 && item.height > 0 && item.extra.get("noPreview").and_then(|v| v.as_bool()) != Some(true) {
+                format!("{} × {}", item.width, item.height)
+            } else {
+                format_size(item.size)
+            }
+        }
+        InfoType::FileSize => format_size(item.size),
+        InfoType::Tags if item.tags.is_empty() => "-".into(),
+        InfoType::Tags => item.tags.join(", "),
+        InfoType::Rating => return Info::Stars(item.extra.get("star").and_then(|v| v.as_u64()).unwrap_or(0).min(5) as u8),
+        InfoType::Modified => stamp(item.mtime),
+        InfoType::Created => stamp(item.btime),
+    })
+}
+
+/// The key a view's layout is remembered under, as Eagle keys it: the
+/// folder's or smart folder's id, else the library (`root`) for every
+/// other page.
+pub fn layout_key(scope: &Scope, root: &str) -> String {
+    match scope {
+        Scope::Folder(id) | Scope::Smart(id) => id.clone(),
+        _ => root.to_string(),
+    }
+}
+
+/// The layout a view opens in: its own, else the library's, else
+/// `fallback` (falcon's single layout from before), else Justified.
+pub fn layout_for(saved: &HashMap<String, Layout>, scope: &Scope, root: &str, fallback: Option<Layout>) -> Layout {
+    saved.get(&layout_key(scope, root)).or_else(|| saved.get(root)).copied().or(fallback).unwrap_or(Layout::Justified)
+}
+
+#[cfg(test)]
+mod display_tests {
+    use super::*;
+
+    fn item() -> Item {
+        serde_json::from_value(serde_json::json!({
+            "id": "A", "name": "photo", "size": 2048, "btime": 0, "mtime": 0, "ext": "png", "tags": [], "folders": [],
+            "isDeleted": false, "url": "", "annotation": "", "modificationTime": 1, "height": 20, "width": 30,
+            "lastModified": 1, "palettes": []
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn defaults_are_eagles() {
+        let d = Display::default();
+        assert!(d.show_name && d.show_info && d.show_ext && d.ext_badge && d.comment_badge && !d.fill);
+        assert_eq!(d.info, InfoType::Dimensions);
+        // Old saved state without the field reads as the default.
+        let d: Display = serde_json::from_str(r#"{"show_name":false}"#).unwrap();
+        assert!(!d.show_name && d.show_info);
+    }
+
+    #[test]
+    fn caption_lines_follow_the_toggles() {
+        let mut d = Display::default();
+        assert_eq!(caption_height(Layout::Grid, &d), 46.0);
+        assert_eq!(caption_height(Layout::Justified, &d), 0.0, "justified rows have no caption");
+        d.show_info = false;
+        assert_eq!(caption_height(Layout::Waterfall, &d), 28.0);
+        d.show_name = false;
+        assert_eq!(caption_height(Layout::Waterfall, &d), 0.0);
+        let it = item();
+        assert_eq!(caption_name(&it, true), "photo.png");
+        assert_eq!(caption_name(&it, false), "photo");
+    }
+
+    #[test]
+    fn info_per_type() {
+        let mut it = item();
+        let text = |it: &Item, t| match caption_info(it, t) {
+            Info::Text(s) => s,
+            Info::Stars(n) => format!("{n} stars"),
+        };
+        assert_eq!(text(&it, InfoType::Dimensions), "30 × 20");
+        assert_eq!(text(&it, InfoType::FileSize), "2 KB");
+        assert_eq!(text(&it, InfoType::Tags), "-");
+        it.tags = vec!["a".into(), "b".into()];
+        assert_eq!(text(&it, InfoType::Tags), "a, b");
+        assert_eq!(text(&it, InfoType::Rating), "0 stars");
+        it.extra.insert("star".into(), 4.into());
+        assert_eq!(text(&it, InfoType::Rating), "4 stars");
+        // No file dates: the import time stands in, as in Eagle.
+        assert_eq!(text(&it, InfoType::Modified), format_ms(1));
+        it.btime = 5;
+        assert_eq!(text(&it, InfoType::Created), format_ms(5));
+        it.extra.insert("duration".into(), 83.0.into());
+        assert_eq!(text(&it, InfoType::Dimensions), "1:23");
+        it.extra.remove("duration");
+        it.extra.insert("noPreview".into(), true.into());
+        assert_eq!(text(&it, InfoType::Dimensions), "2 KB");
+    }
+
+    #[test]
+    fn layouts_are_remembered_per_folder_then_per_library() {
+        let mut saved = HashMap::new();
+        let folder = Scope::Folder("F".into());
+        assert_eq!(layout_for(&saved, &Scope::All, "/lib", None), Layout::Justified, "Eagle's default");
+        assert_eq!(layout_for(&saved, &Scope::All, "/lib", Some(Layout::Grid)), Layout::Grid);
+        saved.insert(layout_key(&Scope::All, "/lib"), Layout::List);
+        assert_eq!(layout_for(&saved, &Scope::Trash, "/lib", None), Layout::List, "every page shares the library's");
+        assert_eq!(layout_for(&saved, &folder, "/lib", None), Layout::List, "a folder without its own");
+        saved.insert(layout_key(&folder, "/lib"), Layout::Waterfall);
+        assert_eq!(layout_for(&saved, &folder, "/lib", None), Layout::Waterfall);
+        assert_eq!(layout_for(&saved, &Scope::All, "/other", None), Layout::Justified);
     }
 }
