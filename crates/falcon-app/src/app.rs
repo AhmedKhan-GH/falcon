@@ -33,6 +33,7 @@ mod video_view;
 mod gif_view;
 mod open_ui;
 mod pdf_view;
+mod modes;
 mod import_ui;
 mod folders_ui;
 mod layout_panel;
@@ -664,6 +665,8 @@ pub struct App {
     /// A folder that couldn't be watched and was reported, so it isn't
     /// checked again until the preferences change.
     auto_import_refused: Option<PathBuf>,
+    /// Presentation mode and the other View modes (`modes.rs`).
+    modes: modes::Modes,
 }
 
 impl App {
@@ -707,6 +710,7 @@ impl App {
             auto_import: None,
             auto_imported: Arc::default(),
             auto_import_refused: None,
+            modes: Default::default(),
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
         app.tile = saved.tile.unwrap_or(app.tile).clamp(TILE_MIN, TILE_MAX);
@@ -1320,6 +1324,11 @@ impl App {
         // item, as in Eagle's text editor (only reached while neither its
         // text nor its title has focus).
         let text = viewer && self.ws.text.as_ref().is_some_and(|v| self.ws.viewer.as_deref() == Some(v.id.as_str()));
+        // There F5 reads the file again (as in Eagle's editor) instead of
+        // entering presentation mode.
+        if text && ctx.input(|i| i.key_pressed(Key::F5)) {
+            pressed.retain(|c| *c != C::Presentation);
+        }
         // In the font, video and audio viewers the digits rate the item too,
         // as in Eagle.
         let open = self.ws.viewer.as_deref();
@@ -1383,6 +1392,9 @@ impl App {
         if esc {
             if self.ws.picker.open {
                 self.ws.picker.open = false;
+            } else if self.modes.presenting {
+                // Esc leaves presentation mode first, keeping the viewer, as in Eagle.
+                self.leave_presentation(ctx);
             } else if self.ws.scope == Scope::AllTags && !self.ws.org.tag_sel.is_empty() {
                 self.ws.org.tag_sel.clear();
             } else if self.ws.viewer.is_some() {
@@ -1486,6 +1498,7 @@ impl App {
             show_comments: self.display.comment_badge,
             subfolders: self.display.subfolders,
             libraries: self.others.len(),
+            presenting: self.modes.presenting,
         }
     }
 
@@ -1758,6 +1771,7 @@ impl App {
                     crate::open_with::open_default(&[p.to_path_buf()]);
                 }
             }
+            C::Presentation => self.toggle_presentation(ctx),
             C::Player(_) => {}
             C::ToggleName => self.display.show_name = !self.display.show_name,
             C::ToggleInfo => self.display.show_info = !self.display.show_info,
@@ -3537,6 +3551,15 @@ impl App {
             });
         }
         self.item_export_menu(ui, targets);
+        // Eagle's Enter / Leave Presentation Mode.
+        let label = if self.modes.presenting { "Leave Presentation Mode" } else { "Enter Presentation Mode" };
+        let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::Presentation);
+        if ui.add(egui::Button::new(label).shortcut_text(keys)).clicked() {
+            if !in_viewer && !self.modes.presenting {
+                self.ws.viewer = Some(item.id.clone());
+            }
+            self.toggle_presentation(ui.ctx());
+        }
         ui.separator();
         if self.ws.scope == Scope::Trash {
             if ui.button("Restore").clicked() {
@@ -4826,6 +4849,7 @@ impl App {
             self.refresh_library();
         }
         self.sync_layout();
+        self.follow_modes(&ctx);
         t::follow_system(&ctx);
         self.ws.loader.poll(&ctx);
         let title = match &self.ws.root {
@@ -4884,7 +4908,8 @@ impl App {
             self.ws.scroll_to = Some(id);
         }
 
-        if self.show_sidebar {
+        let (show_sidebar, show_inspector) = self.panels_shown();
+        if show_sidebar {
             egui::Panel::left("sidebar")
                 .exact_size(t::SIDEBAR_WIDTH)
                 .resizable(false)
@@ -4892,7 +4917,7 @@ impl App {
                 .frame(egui::Frame::NONE)
                 .show(ui, |ui| self.sidebar(ui, lib));
         }
-        if self.show_inspector {
+        if show_inspector {
             egui::Panel::right("inspector")
                 .exact_size(t::INSPECTOR_WIDTH)
                 .resizable(false)
@@ -4911,10 +4936,15 @@ impl App {
                 let (l, r) = logic::viewer_span(
                     window.left(),
                     window.right(),
-                    self.show_sidebar.then_some(t::SIDEBAR_WIDTH),
-                    self.show_inspector.then_some(t::INSPECTOR_WIDTH),
+                    show_sidebar.then_some(t::SIDEBAR_WIDTH),
+                    show_inspector.then_some(t::INSPECTOR_WIDTH),
                 );
-                let screen = Rect::from_x_y_ranges(l..=r, full.y_range()).intersect(full);
+                let mut screen = Rect::from_x_y_ranges(l..=r, full.y_range()).intersect(full);
+                // Presenting, the viewer's bar sits above the window, out
+                // of sight, and the picture has the whole screen.
+                if self.modes.presenting {
+                    screen.min.y -= t::BAR_HEIGHT;
+                }
                 self.viewer(ui, lib, screen);
             }
             if self.ws.viewer.is_none() {

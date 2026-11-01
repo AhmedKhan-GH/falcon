@@ -1,0 +1,76 @@
+//! Window and viewer modes from Eagle's View menu: presentation
+//! (slideshow) mode (see the desktop app chapter of the docs).
+
+use eframe::egui;
+
+use super::App;
+
+/// The modes' state, kept by the app.
+#[derive(Default)]
+pub(super) struct Modes {
+    /// Presentation mode: the viewer fills the screen, without the panels
+    /// or its bar, as Eagle's `isSlideshowMode`.
+    pub presenting: bool,
+    /// Whether the window was already full screen when presentation began,
+    /// so leaving puts it back as it was.
+    was_fullscreen: bool,
+    /// The window has been seen full screen since presentation began; it
+    /// leaving full screen after that (the green button, ⌃⌘F) ends it.
+    seen_fullscreen: bool,
+}
+
+impl App {
+    /// Eagle's Enter / Leave Presentation Mode (F5, middle click in the
+    /// viewer): the selected item opens in the viewer, the window goes
+    /// full screen and the panels and the viewer's bar hide.
+    pub(super) fn toggle_presentation(&mut self, ctx: &egui::Context) {
+        if self.modes.presenting {
+            self.leave_presentation(ctx);
+            return;
+        }
+        if self.ws.viewer.is_none() {
+            let Some(first) = self.ws.selected.first().cloned() else { return };
+            self.ws.viewer = Some(first);
+        }
+        let fullscreen = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
+        self.modes = Modes { presenting: true, was_fullscreen: fullscreen, seen_fullscreen: fullscreen };
+        if !fullscreen {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(true));
+        }
+    }
+
+    /// Ends presentation mode, leaving full screen unless the window was
+    /// full screen before. The viewer stays open, as in Eagle.
+    pub(super) fn leave_presentation(&mut self, ctx: &egui::Context) {
+        if !self.modes.presenting {
+            return;
+        }
+        self.modes.presenting = false;
+        if !self.modes.was_fullscreen {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(false));
+        }
+    }
+
+    /// Once a frame: presentation ends when the viewer closes or the window
+    /// leaves full screen by other means, as Eagle's `leave-full-screen`.
+    pub(super) fn follow_modes(&mut self, ctx: &egui::Context) {
+        if !self.modes.presenting {
+            return;
+        }
+        let fullscreen = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
+        if self.ws.viewer.is_none() {
+            self.leave_presentation(ctx);
+        } else if fullscreen {
+            self.modes.seen_fullscreen = true;
+        } else if self.modes.seen_fullscreen {
+            self.modes.presenting = false;
+        }
+    }
+
+    /// Whether the sidebar and the inspector show now (never while
+    /// presenting).
+    pub(super) fn panels_shown(&self) -> (bool, bool) {
+        let p = self.modes.presenting;
+        (self.show_sidebar && !p, self.show_inspector && !p)
+    }
+}

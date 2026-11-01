@@ -125,6 +125,8 @@ pub enum Command {
     Crop,
     WindowZoom,
     Documentation,
+    /// Eagle's Enter / Leave Presentation Mode: the viewer full screen.
+    Presentation,
 }
 
 /// How a scroll command moves the grid.
@@ -374,6 +376,7 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::PasteTags, id: "organize.tag.paste", group: "Tags", label: "Paste tags onto the selection", default: k(CMD_SHIFT, Key::V), aliases: &[] },
     // Unbound by default, as in Eagle.
     Spec { cmd: Command::ClearTags, id: "organize.tag.clear", group: "Tags", label: "Clear the selection's tags", default: None, aliases: &[] },
+    Spec { cmd: Command::Presentation, id: "view.toggle.slideshow", group: "View", label: "Enter or leave presentation mode", default: k(NONE, Key::F5), aliases: &[] },
 ];
 
 /// Keys that cannot be rebound, listed in the Shortcuts section.
@@ -968,6 +971,13 @@ mod tests {
         assert_eq!(keys.resolve(Key::V, CMD_SHIFT), Some(Command::PasteTags));
         assert_eq!(keys.resolve(Key::C, CMD_ALT_SHIFT), Some(Command::CopyFolderPath));
         assert_eq!(keys.binding(Command::ClearTags), None);
+    }
+
+    #[test]
+    fn eagle_view_mode_keys() {
+        let keys = Shortcuts::default();
+        assert_eq!(keys.resolve(Key::F5, Modifiers::NONE), Some(Command::Presentation));
+        assert_eq!(spec(Command::Presentation).id, "view.toggle.slideshow");
     }
 
     #[test]

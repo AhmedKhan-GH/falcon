@@ -74,6 +74,8 @@ pub struct State {
     pub lockable: bool,
     /// Tags have been copied (Copy Tags), so Paste Tags can act.
     pub tag_clipboard: bool,
+    /// Presentation mode is on.
+    pub presenting: bool,
 }
 
 impl State {
@@ -140,6 +142,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::Crop => s.library && s.croppable,
         C::Documentation => s.docs,
         C::ToggleName | C::ToggleInfo | C::ToggleComments | C::ToggleSubfolders => s.library,
+        C::Presentation => s.library && (s.viewer || s.selected > 0 || s.presenting),
         C::Player(_) => false,
     }
 }
@@ -159,6 +162,7 @@ pub enum Check {
     Info,
     Comments,
     Subfolders,
+    Presentation,
 }
 
 impl Check {
@@ -176,6 +180,7 @@ impl Check {
             Check::Info => s.show_info,
             Check::Comments => s.show_comments,
             Check::Subfolders => s.subfolders,
+            Check::Presentation => s.presenting,
         }
     }
 }
@@ -349,6 +354,7 @@ pub static MENUS: &[(&str, &[Entry])] = &[
             checked("Sidebar", Command::ToggleSidebar, Check::Sidebar),
             checked("Inspector", Command::ToggleInspector, Check::Inspector),
             item("Show or Hide Both Panels", Command::ToggleAll),
+            checked("Presentation Mode", Command::Presentation, Check::Presentation),
             SEP,
             item("Back", Command::Back),
             item("Forward", Command::Forward),
@@ -884,6 +890,16 @@ mod tests {
         for sel in [objc2::sel!(falconMenuItem:), objc2::sel!(validateMenuItem:), objc2::sel!(menuHasKeyEquivalent:forEvent:target:action:)] {
             assert!(class.instance_method(sel).is_some(), "{sel:?}");
         }
+    }
+
+    #[test]
+    fn presentation_needs_an_item() {
+        assert!(!enabled(Command::Presentation, &grid(0)));
+        assert!(enabled(Command::Presentation, &grid(1)));
+        assert!(enabled(Command::Presentation, &State { library: true, viewer: true, ..Default::default() }));
+        let on = State { library: true, presenting: true, ..Default::default() };
+        assert!(enabled(Command::Presentation, &on));
+        assert!(Check::Presentation.on(&on));
     }
 
     #[test]

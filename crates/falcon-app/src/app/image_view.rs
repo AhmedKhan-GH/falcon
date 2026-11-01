@@ -126,6 +126,11 @@ impl App {
         resp.context_menu(|ui| {
             self.item_menu(ui, lib, item, std::slice::from_ref(&id));
         });
+        // A middle click enters or leaves presentation mode, as Eagle's
+        // `onDetailClick`.
+        if resp.middle_clicked() {
+            self.toggle_presentation(ui.ctx());
+        }
         // Double-clicking the picture or the space around it leaves the
         // viewer, as in Eagle (not while cropping or marking regions).
         if resp.double_clicked() && self.ws.tools.crop.is_none() && !self.ws.tools.comment_mode {
