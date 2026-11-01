@@ -140,8 +140,32 @@ impl WebView {
 
     /// Places, shows or hides the web view after the frame is drawn.
     pub fn sync(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
-        let want = self.want.take();
         #[cfg(target_os = "macos")]
+        self.sync_with(ctx, |n| n.attach(frame));
+        #[cfg(not(target_os = "macos"))]
+        {
+            self.want = None;
+            let _ = (ctx, frame);
+        }
+    }
+
+    /// The same for a further window (a preview window), found by its
+    /// title: egui hands an immediate viewport no window handle, so the
+    /// NSWindow is looked up the way the window's opacity is set. Until
+    /// the window exists the page waits.
+    pub fn sync_window(&mut self, ctx: &egui::Context, title: &str) {
+        #[cfg(target_os = "macos")]
+        self.sync_with(ctx, |n| n.attach_titled(title));
+        #[cfg(not(target_os = "macos"))]
+        {
+            self.want = None;
+            let _ = (ctx, title);
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    fn sync_with(&mut self, ctx: &egui::Context, attach: impl FnOnce(&mac::Native) -> bool) {
+        let want = self.want.take();
         {
             let Some(want) = want else {
                 if let Some(n) = &self.native {
@@ -156,7 +180,8 @@ impl WebView {
                 self.native = mac::Native::new();
             }
             let Some(n) = &self.native else { return };
-            if !n.attach(frame) {
+            if !attach(n) {
+                ctx.request_repaint_after(std::time::Duration::from_millis(100));
                 return;
             }
             if self.loaded.as_deref() != Some(&want.key) {
@@ -171,10 +196,6 @@ impl WebView {
             }
             // The title and the back and forward buttons follow the page.
             ctx.request_repaint_after(std::time::Duration::from_millis(300));
-        }
-        #[cfg(not(target_os = "macos"))]
-        {
-            let _ = (want, ctx, frame);
         }
     }
 
@@ -290,15 +311,35 @@ mod mac {
             let Ok(handle) = frame.window_handle() else { return false };
             let RawWindowHandle::AppKit(h) = handle.as_raw() else { return false };
             let content = h.ns_view.as_ptr().cast::<AnyObject>();
-            // SAFETY: `ns_view` is winit's live content view; superview
-            // and addSubview: are NSView methods.
+            // SAFETY: `ns_view` is winit's live content view.
+            unsafe { self.attach_to(content) };
+            true
+        }
+
+        /// Puts the web view on the content view of the window titled
+        /// `title`; false while there is no such window.
+        pub fn attach_titled(&self, title: &str) -> bool {
+            let Some(mtm) = MainThreadMarker::new() else { return false };
+            let app = objc2_app_kit::NSApplication::sharedApplication(mtm);
+            let Some(window) = app.windows().iter().find(|w| w.title().to_string() == title) else { return false };
+            let Some(content) = window.contentView() else { return false };
+            let content = Retained::as_ptr(&content).cast::<AnyObject>().cast_mut();
+            // SAFETY: the window's live content view, retained by the
+            // window for the duration of the call.
+            unsafe { self.attach_to(content) };
+            true
+        }
+
+        /// # Safety
+        /// `content` must be a live NSView.
+        unsafe fn attach_to(&self, content: *mut AnyObject) {
+            // SAFETY: superview and addSubview: are NSView methods on live views.
             unsafe {
                 let parent: *mut AnyObject = msg_send![&*self.view, superview];
                 if parent != content {
                     let _: () = msg_send![&*content, addSubview: &*self.view];
                 }
             }
-            true
         }
 
         fn superview(&self) -> Option<Retained<AnyObject>> {

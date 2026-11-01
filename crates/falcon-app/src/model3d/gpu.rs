@@ -101,6 +101,10 @@ fn to_linear(c: f32) -> f32 {
 
 /// One frame of the scene, as the UI hands it over.
 pub(crate) struct SceneCallback {
+    /// Which view draws: 0 for the main viewer, 1 for the preview windows.
+    /// Each keeps its own GPU objects, so the main viewer and a preview
+    /// window showing models don't upload over each other every frame.
+    pub slot: u64,
     /// egui's framebuffer format.
     pub target: wgpu::TextureFormat,
     /// The view's size in physical pixels.
@@ -138,7 +142,13 @@ struct Targets {
     blit_group: wgpu::BindGroup,
 }
 
-/// The GPU objects, kept in egui's callback resources across frames.
+/// The GPU objects of each view (by [`SceneCallback::slot`]), kept in
+/// egui's callback resources across frames. Every window shares egui's
+/// one wgpu device, so a preview window's scene draws the same way.
+#[derive(Default)]
+struct Slots(std::collections::HashMap<u64, Gpu>);
+
+/// The GPU objects of one view.
 struct Gpu {
     target: wgpu::TextureFormat,
     uniform: wgpu::Buffer,
@@ -368,10 +378,14 @@ impl CallbackTrait for SceneCallback {
         if self.size[0] == 0 || self.size[1] == 0 {
             return Vec::new();
         }
-        if resources.get::<Gpu>().is_none_or(|g| g.target != self.target) {
-            resources.insert(Gpu::new(device, self.target));
+        if resources.get::<Slots>().is_none() {
+            resources.insert(Slots::default());
         }
-        let Some(gpu) = resources.get_mut::<Gpu>() else { return Vec::new() };
+        let Some(slots) = resources.get_mut::<Slots>() else { return Vec::new() };
+        if slots.0.get(&self.slot).is_none_or(|g| g.target != self.target) {
+            slots.0.insert(self.slot, Gpu::new(device, self.target));
+        }
+        let Some(gpu) = slots.0.get_mut(&self.slot) else { return Vec::new() };
         gpu.ensure_targets(device, self.size);
         match &self.mesh {
             Some(v) => upload(device, queue, &mut gpu.mesh, v),
@@ -419,7 +433,7 @@ impl CallbackTrait for SceneCallback {
     }
 
     fn paint(&self, _info: eframe::egui::PaintCallbackInfo, pass: &mut wgpu::RenderPass<'static>, resources: &CallbackResources) {
-        let Some(gpu) = resources.get::<Gpu>() else { return };
+        let Some(gpu) = resources.get::<Slots>().and_then(|s| s.0.get(&self.slot)) else { return };
         let Some(t) = &gpu.targets else { return };
         if t.size != self.size {
             return;
@@ -512,6 +526,7 @@ mod tests {
         let mut lines = Vec::new();
         super::super::line_vertices(&mut lines, &[[[0.0; 3], [1.0, 0.0, 0.0]]], [1.0, 0.0, 0.0]);
         let cb = SceneCallback {
+            slot: 0,
             target: target_format,
             size,
             clear: [0.0; 4],

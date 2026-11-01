@@ -147,6 +147,7 @@ impl App {
         });
         let clear = settings.effective_background().map_or([0.0; 4], |c| [f64::from(c[0]) / 255.0, f64::from(c[1]) / 255.0, f64::from(c[2]) / 255.0, 1.0]);
         let callback = SceneCallback {
+            slot: u64::from(self.preview_drawing.is_some()),
             target,
             size,
             clear,
@@ -160,10 +161,16 @@ impl App {
         };
         ui.painter().add(callback.shape(area));
 
-        // Right click without a drag opens the item menu, as on the other viewers.
-        resp.context_menu(|ui| {
-            self.item_menu(ui, lib, item, std::slice::from_ref(&item.id));
-        });
+        // Right click without a drag opens the item menu, as on the other
+        // viewers; in a preview window, the window's own menu (it takes the
+        // scene's response).
+        if self.preview_drawing.is_some() {
+            self.model3d.scene_resp = Some(resp.clone());
+        } else {
+            resp.context_menu(|ui| {
+                self.item_menu(ui, lib, item, std::slice::from_ref(&item.id));
+            });
+        }
         if settings.measuring {
             self.model_measure(ui, &resp, area, &view_proj, &settings);
         } else if let Some(v) = self.model3d.view.as_mut() {

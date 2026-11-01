@@ -34,8 +34,13 @@ pub(crate) fn bar_shell(app: &mut App, ui: &mut Ui, item: &Item, bar: Rect) -> (
     let cy = bar.center().y;
     // Leave room for the window buttons only when the bar starts at the
     // window's left edge (no sidebar beside it).
-    let counter = logic::viewer_counter(&app.ws.order, &item.id);
     let mut x = bar.left() + logic::bar_inset(bar.left() <= ui.ctx().content_rect().left() + 1.0);
+    // A preview window steps through its own items and closes itself:
+    // the main viewer's buttons stay out of its bar.
+    if app.preview_drawing.is_some() {
+        return (x, bar.right() - 8.0);
+    }
+    let counter = logic::viewer_counter(&app.ws.order, &item.id);
     app.panels_button(ui, Pos2::new(x, cy));
     x += 28.0;
     if icon_button(ui, Pos2::new(x, cy), ic::CARET_LEFT, 17.0, true, tr("Back (Esc)")).clicked() {

@@ -165,6 +165,9 @@ pub struct App {
     pub(crate) preview: Vec<crate::ui::viewer::preview_window::PreviewWin>,
     /// Numbers preview windows so each has its own viewport.
     pub(crate) preview_serial: u64,
+    /// The serial of the preview window being drawn, while one is: the
+    /// shared viewers (3D, web) then leave out the main viewer's controls.
+    pub(crate) preview_drawing: Option<u64>,
 
     /// The About window (`about.rs`).
     pub(crate) about: crate::ui::dialogs::about::AboutWindow,
@@ -267,6 +270,7 @@ impl App {
             modes: Default::default(),
             preview: Vec::new(),
             preview_serial: 0,
+            preview_drawing: None,
 
             about: Default::default(),
             zone: logic::Zone::Content,

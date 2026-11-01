@@ -12,6 +12,10 @@ pub enum Kind {
     Pdf,
     /// A font: the main viewer's specimen page.
     Font,
+    /// A 3D model falcon reads: the main viewer's model viewer.
+    Model,
+    /// A bookmark or web page: the main viewer's web view.
+    Web,
     /// A picture (or a type with only its thumbnail): the zoomable canvas.
     Picture,
 }
@@ -29,6 +33,10 @@ pub fn kind_of(ext: &str) -> Kind {
         Kind::Pdf
     } else if falcon_library::search::type_group(&ext) == Some("font") {
         Kind::Font
+    } else if falcon_library::model3d::is_supported(&ext) {
+        Kind::Model
+    } else if crate::webview::is_web(&ext) {
+        Kind::Web
     } else {
         Kind::Picture
     }
@@ -80,6 +88,11 @@ mod tests {
         assert_eq!(kind_of("png"), Kind::Picture);
         assert_eq!(kind_of("ttf"), Kind::Font);
         assert_eq!(kind_of("OTF"), Kind::Font);
+        assert_eq!(kind_of("glb"), Kind::Model);
+        assert_eq!(kind_of("STL"), Kind::Model);
+        assert_eq!(kind_of("fbx"), Kind::Picture, "3D formats falcon can't read show their still");
+        assert_eq!(kind_of("url"), Kind::Web);
+        assert_eq!(kind_of("html"), Kind::Web);
         assert_eq!(kind_of(""), Kind::Picture);
     }
 

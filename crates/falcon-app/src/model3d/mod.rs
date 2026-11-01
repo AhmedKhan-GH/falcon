@@ -399,11 +399,14 @@ pub(crate) struct Model3dState {
     pub target: Option<wgpu::TextureFormat>,
     pub settings: Settings,
     pub view: Option<ModelView>,
+    /// The scene's response while a preview window draws a model, for the
+    /// window's right-click menu.
+    pub scene_resp: Option<eframe::egui::Response>,
 }
 
 impl Model3dState {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Model3dState {
-        Model3dState { target: cc.wgpu_render_state.as_ref().map(|r| r.target_format), settings: Settings::default(), view: None }
+        Model3dState { target: cc.wgpu_render_state.as_ref().map(|r| r.target_format), settings: Settings::default(), view: None, scene_resp: None }
     }
 }
 

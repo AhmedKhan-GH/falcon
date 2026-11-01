@@ -2,7 +2,10 @@
 //! their own, stepped with ← and →, a further eframe viewport like the
 //! collect window; each open makes another window. Pictures zoom and pan
 //! (with the navigator and preview-only rotate and flip); video, audio,
-//! text and PDF files get a viewer of the window's own; the window can stay
+//! text and PDF files get a viewer of the window's own; fonts, 3D models
+//! and web pages get the main viewer's, drawn on the window's own state
+//! (the 3D scene through the same wgpu callback, which every window
+//! shares; the page in a `WKWebView` put on this window); the window can stay
 //! on top, be made translucent, show in grayscale and copy the item (see
 //! the desktop app chapter).
 
@@ -40,10 +43,17 @@ enum Pane {
     /// The font viewer, with a state of its own so the main viewer's font
     /// page isn't disturbed.
     Font(Box<crate::ui::viewer::font::FontView>),
+    /// The 3D viewer, with the window's own model and camera (`None` until
+    /// the viewer opens it).
+    Model(Option<Box<crate::model3d::ModelView>>),
+    /// The web viewer, with a web view of the window's own.
+    Web(Box<crate::webview::WebView>),
 }
 
 impl Pane {
-    fn open(ctx: &egui::Context, lib: &Library, item: &Item, autoplay: bool) -> Pane {
+    /// The viewer for `item`; `gpu` says whether windows draw with wgpu
+    /// (the 3D viewer needs it).
+    fn open(ctx: &egui::Context, lib: &Library, item: &Item, autoplay: bool, gpu: bool) -> Pane {
         let file = item.original_path(lib.root());
         match kind_of(&item.ext) {
             Kind::Video => players::VideoPane::open(&file, autoplay).map_or(Pane::Picture, Pane::Video),
@@ -51,7 +61,9 @@ impl Pane {
             Kind::Text => Pane::Text(players::TextPane::open(&file)),
             Kind::Pdf => Pane::Pdf(pdf::PdfPane::open(ctx, file)),
             Kind::Font => Pane::Font(Box::default()),
-            Kind::Picture => Pane::Picture,
+            Kind::Model if gpu => Pane::Model(None),
+            Kind::Web => Pane::Web(Box::default()),
+            Kind::Model | Kind::Picture => Pane::Picture,
         }
     }
 }
@@ -205,7 +217,7 @@ impl App {
             return;
         }
         if matches!(pw.pane, Pane::Pending) {
-            pw.pane = Pane::open(&ctx, lib, item, self.prefs.video_autoplay);
+            pw.pane = Pane::open(&ctx, lib, item, self.prefs.video_autoplay, self.model3d.target.is_some());
         }
         // The opacity belongs to the NSWindow, found by its title.
         let want = (pw.title(item), pw.opacity);
@@ -243,6 +255,8 @@ impl App {
             }
             Pane::Pdf(p) => p.show(ui, full, gray),
             Pane::Font(fv) => self.preview_font(ui, lib, item, full, fv),
+            Pane::Model(mv) => self.preview_model(ui, lib, item, full, mv, pw.serial),
+            Pane::Web(wv) => self.preview_web(ui, lib, item, full, wv, pw.serial),
             Pane::Pending | Pane::Picture => false,
         };
         if !pw.custom {
@@ -254,9 +268,11 @@ impl App {
             }
         }
 
-        // Eagle's window menu, from a right-click.
+        // Eagle's window menu, from a right-click (over a model, on the
+        // scene, which takes the clicks).
         let mut act = None;
-        resp.context_menu(|ui| act = self.window_menu(ui, pw, item, &file));
+        let menu_on = self.model3d.scene_resp.take().filter(|_| matches!(pw.pane, Pane::Model(_))).unwrap_or(resp);
+        menu_on.context_menu(|ui| act = self.window_menu(ui, pw, item, &file));
         match act {
             Some(Act::CopyFile) => self.copy_preview_file(item, &file),
             Some(Act::CopyFrame) => {
@@ -286,6 +302,40 @@ impl App {
             None => {}
         }
         self.ws.loader.set_grayscale(gray);
+        // The page goes on this window once its menus are known (one over
+        // the page hides it).
+        let title = pw.title(item);
+        if let Pane::Web(wv) = &mut pw.pane {
+            wv.sync_window(&ctx, &title);
+        }
+    }
+
+    /// The 3D viewer in the window: the main viewer's code on the window's
+    /// own model and camera (swapped in for the call, as are the zoom key
+    /// and the bar's main-viewer buttons). False when the model can't be
+    /// shown (the still shows then).
+    fn preview_model(&mut self, ui: &mut Ui, lib: &Library, item: &Item, full: Rect, mv: &mut Option<Box<crate::model3d::ModelView>>, serial: u64) -> bool {
+        let mut own = mv.take().map(|b| *b);
+        std::mem::swap(&mut self.model3d.view, &mut own);
+        let zoom_key = self.ws.view.zoom_key.take();
+        self.preview_drawing = Some(serial);
+        let shown = self.model_viewer(ui, lib, item, full);
+        self.preview_drawing = None;
+        self.ws.view.zoom_key = zoom_key;
+        std::mem::swap(&mut self.model3d.view, &mut own);
+        *mv = own.map(Box::new);
+        shown
+    }
+
+    /// The web viewer in the window, on a web view of the window's own,
+    /// placed on this window after the frame (`WebView::sync_window`).
+    fn preview_web(&mut self, ui: &mut Ui, lib: &Library, item: &Item, full: Rect, wv: &mut crate::webview::WebView, serial: u64) -> bool {
+        std::mem::swap(&mut self.web, wv);
+        self.preview_drawing = Some(serial);
+        let shown = self.web_viewer(ui, lib, item, full);
+        self.preview_drawing = None;
+        std::mem::swap(&mut self.web, wv);
+        shown
     }
 
     /// The font viewer in the window, drawn by the main viewer's code on the
