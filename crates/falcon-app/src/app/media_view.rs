@@ -58,10 +58,11 @@ fn sample(item: &Item) -> String {
     .to_string()
 }
 
-/// The bar every viewer shares: back and the item's name at the left, the
-/// open button at the right. Returns where the name starts and the x left
-/// of what was drawn on the right, so a viewer can add its own controls
-/// there before `bar_name` fits the name into what is left.
+/// The bar every viewer shares: the panels button, back and the item's
+/// name at the left, the open button at the right. Returns where the name
+/// starts and the x left of what was drawn on the right, so a viewer can
+/// add its own controls there before `bar_name` fits the name into what
+/// is left.
 pub(super) fn bar_shell(app: &mut App, ui: &mut Ui, item: &Item, bar: Rect) -> (f32, f32) {
     let p = ui.painter().clone();
     p.rect_filled(bar, 0.0, t::p().main);
@@ -69,7 +70,9 @@ pub(super) fn bar_shell(app: &mut App, ui: &mut Ui, item: &Item, bar: Rect) -> (
     let cy = bar.center().y;
     // Leave room for the window buttons only when the bar starts at the
     // window's left edge (no sidebar beside it).
-    let x = bar.left() + logic::bar_inset(bar.left() <= ui.ctx().content_rect().left() + 1.0);
+    let mut x = bar.left() + logic::bar_inset(bar.left() <= ui.ctx().content_rect().left() + 1.0);
+    app.panels_button(ui, Pos2::new(x, cy));
+    x += 28.0;
     if icon_button(ui, Pos2::new(x, cy), ic::CARET_LEFT, 17.0, true, "Back (Esc)").clicked() {
         app.ws.viewer = None;
     }

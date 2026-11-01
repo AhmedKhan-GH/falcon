@@ -26,6 +26,8 @@ pub enum Command {
     Paste,
     ToggleSidebar,
     ToggleInspector,
+    /// Eagle's View ▸ Sidebar / Inspector: both panels at once.
+    ToggleAll,
     ToggleFilter,
     LayoutGrid,
     LayoutJustified,
@@ -108,6 +110,7 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::ZoomOut, id: "view.zoom.out", group: "View", label: "Zoom out", default: k(CMD, Key::Minus), aliases: &[] },
     Spec { cmd: Command::ToggleSidebar, id: "view.toggle.sidebar", group: "View", label: "Show or hide the sidebar", default: k(CMD_ALT, Key::Num1), aliases: &[] },
     Spec { cmd: Command::ToggleInspector, id: "view.toggle.inspector", group: "View", label: "Show or hide the inspector", default: k(CMD_ALT, Key::Num2), aliases: &[] },
+    Spec { cmd: Command::ToggleAll, id: "view.toggle.all", group: "View", label: "Show or hide the sidebar and inspector", default: k(CMD_ALT, Key::Num3), aliases: &[] },
     // Eagle's ⌥1 is Waterfall and ⌥3 the square Grid (its keybind names say the opposite).
     Spec { cmd: Command::LayoutWaterfall, id: "view.layout.waterfall", group: "View", label: "Waterfall layout", default: k(ALT, Key::Num1), aliases: &[] },
     Spec { cmd: Command::LayoutJustified, id: "view.layout.justified", group: "View", label: "Justified layout", default: k(ALT, Key::Num2), aliases: &[] },
@@ -159,6 +162,7 @@ pub const TABLE: &[Spec] = &[
 pub const FIXED: &[(&str, &str)] = &[
     ("← → ↑ ↓", "Move the selection, or step through the viewer"),
     ("Esc", "Close the viewer, or clear the selection"),
+    ("Tab", "Show or hide the sidebar and inspector (no text field focused)"),
     ("Hold Z", "Hover preview of the card under the pointer"),
 ];
 
@@ -633,6 +637,15 @@ mod tests {
         // Plain Tab and ⇧Tab stay with egui's focus moves.
         assert_eq!(keys.resolve(Key::Tab, Modifiers::NONE), None);
         assert_eq!(keys.resolve(Key::Tab, Modifiers::SHIFT), None);
+    }
+
+    #[test]
+    fn panel_toggle_keys() {
+        let keys = Shortcuts::default();
+        assert_eq!(keys.resolve(Key::Num1, CMD_ALT), Some(Command::ToggleSidebar));
+        assert_eq!(keys.resolve(Key::Num2, CMD_ALT), Some(Command::ToggleInspector));
+        assert_eq!(keys.resolve(Key::Num3, CMD_ALT), Some(Command::ToggleAll));
+        assert_eq!(spec(Command::ToggleAll).id, "view.toggle.all");
     }
 
     #[test]

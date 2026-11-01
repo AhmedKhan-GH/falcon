@@ -999,6 +999,19 @@ impl App {
                 self.switch_to = Some(Switch::Focus(self.others.step(false)));
             }
         }
+        // The panel toggles are global, as Eagle's View menu items are;
+        // Tab is Eagle's fixed key for both panels.
+        if on(C::ToggleSidebar) {
+            self.show_sidebar = !self.show_sidebar;
+        }
+        if on(C::ToggleInspector) {
+            self.show_inspector = !self.show_inspector;
+        }
+        if on(C::ToggleAll) || ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Tab)) {
+            self.toggle_panels();
+            // Tab must not also hand keyboard focus to the first widget.
+            ctx.memory_mut(|m| m.move_focus(egui::FocusDirection::None));
+        }
         // In the viewer, Back from ⌫ leaves it, as in Eagle; the arrow
         // chords of Back do nothing there.
         if self.ws.viewer.is_some() && on(C::Back) && !ctx.input(|i| i.key_pressed(Key::ArrowLeft)) {
@@ -1045,12 +1058,6 @@ impl App {
             }
             if on(C::Copy) && !self.ws.selected.is_empty() {
                 self.copy_selection();
-            }
-            if on(C::ToggleSidebar) {
-                self.show_sidebar = !self.show_sidebar;
-            }
-            if on(C::ToggleInspector) {
-                self.show_inspector = !self.show_inspector;
             }
             if on(C::ToggleFilter) {
                 self.ws.show_filter = !self.ws.show_filter;
@@ -2095,14 +2102,9 @@ impl App {
         let bar = ui.max_rect();
         window_drag(ui, bar, "toolbar");
         let cy = bar.center().y;
-        let mut x = bar.left() + 22.0;
-        if !self.show_sidebar {
-            x += 72.0; // room for the traffic lights
-            if icon_button(ui, Pos2::new(x, cy), ic::SIDEBAR_SIMPLE, 18.0, true, "Show sidebar").clicked() {
-                self.show_sidebar = true;
-            }
-            x += 30.0;
-        }
+        let mut x = bar.left() + logic::bar_inset(!self.show_sidebar);
+        self.panels_button(ui, Pos2::new(x, cy));
+        x += 30.0;
         if icon_button(ui, Pos2::new(x, cy), ic::CARET_LEFT, 17.0, !self.ws.back.is_empty(), "").clicked() {
             self.go_back();
         }
@@ -2149,6 +2151,37 @@ impl App {
             self.zoom_slider(ui, Pos2::new(zx, cy));
         }
         ui.painter().hline(bar.x_range(), bar.bottom() - 0.5, Stroke::new(1.0, t::p().main));
+    }
+
+    /// Shows or hides the sidebar and inspector together (Eagle's
+    /// `toggleAll`).
+    fn toggle_panels(&mut self) {
+        (self.show_sidebar, self.show_inspector) = logic::toggle_all(self.show_sidebar, self.show_inspector);
+    }
+
+    /// The panels button at the left of the toolbar and the viewer bar:
+    /// a click shows or hides both panels; its menu toggles each one.
+    fn panels_button(&mut self, ui: &mut Ui, center: Pos2) {
+        use crate::shortcuts::{Command as C, display};
+        let key = |cmd: C| self.shortcuts.binding(cmd).map(|c| display(ui.ctx(), &c)).unwrap_or_default();
+        let (all, side, insp) = (key(C::ToggleAll), key(C::ToggleSidebar), key(C::ToggleInspector));
+        let tip = if all.is_empty() { "Sidebar and Inspector (Tab)".to_string() } else { format!("Sidebar and Inspector (Tab, {all})") };
+        let resp = icon_button(ui, center, ic::SIDEBAR_SIMPLE, 18.0, true, &tip);
+        if resp.clicked() {
+            self.toggle_panels();
+        }
+        resp.context_menu(|ui| {
+            ui.set_min_width(220.0);
+            if ui.add(egui::Button::new("Sidebar and Inspector").shortcut_text("Tab")).clicked() {
+                self.toggle_panels();
+            }
+            if ui.add(egui::Button::selectable(self.show_sidebar, "Sidebar").shortcut_text(side)).clicked() {
+                self.show_sidebar = !self.show_sidebar;
+            }
+            if ui.add(egui::Button::selectable(self.show_inspector, "Inspector").shortcut_text(insp)).clicked() {
+                self.show_inspector = !self.show_inspector;
+            }
+        });
     }
 
     fn search_field(&mut self, ui: &mut Ui, rect: Rect) {

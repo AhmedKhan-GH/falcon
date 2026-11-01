@@ -1196,9 +1196,28 @@ pub fn bar_inset(at_window_edge: bool) -> f32 {
     if at_window_edge { 20.0 + TRAFFIC_LIGHTS + 6.0 } else { 20.0 }
 }
 
+/// Eagle's toggle for both panels: shows both when the sidebar is hidden,
+/// otherwise hides both. Takes and returns (sidebar shown, inspector
+/// shown).
+pub fn toggle_all(sidebar: bool, _inspector: bool) -> (bool, bool) {
+    if sidebar { (false, false) } else { (true, true) }
+}
+
 #[cfg(test)]
 mod viewer_shell_tests {
     use super::*;
+
+    #[test]
+    fn toggle_all_follows_the_sidebar() {
+        assert_eq!(toggle_all(true, true), (false, false));
+        assert_eq!(toggle_all(false, false), (true, true));
+        // Mixed states go by the sidebar, as in Eagle.
+        assert_eq!(toggle_all(true, false), (false, false));
+        assert_eq!(toggle_all(false, true), (true, true));
+        // Twice gets back to both shown or both hidden.
+        let (s, i) = toggle_all(true, false);
+        assert_eq!(toggle_all(s, i), (true, true));
+    }
 
     #[test]
     fn viewer_sits_between_the_panels() {
