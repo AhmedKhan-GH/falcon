@@ -2754,9 +2754,7 @@ impl App {
             opened = true;
         }
         self.open_menu(ui, &open_ui::originals(lib, targets));
-        if ui.button("Copy File Path").clicked() {
-            ui.ctx().copy_text(item.original_path(lib.root()).display().to_string());
-        }
+        self.item_copy_menu(ui, targets);
         ui.menu_button("Add to Folder", |ui| {
             egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
                 for f in lib.all_folders() {

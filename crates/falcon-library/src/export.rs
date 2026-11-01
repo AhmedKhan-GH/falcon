@@ -340,6 +340,61 @@ pub fn write_csv(lib: &Library, ids: &[String], dest: &Path) -> Result<usize> {
     Ok(ids.iter().filter(|id| lib.item(id).is_some()).count())
 }
 
+// ---------------------------------------------------------------------------
+// Copy variants
+
+/// Lines for Copy File Path: each item's original, one per line, as Eagle
+/// copies them.
+pub fn paths_text(lib: &Library, items: &[&Item]) -> String {
+    items.iter().map(|i| i.original_path(lib.root()).display().to_string()).collect::<Vec<_>>().join("\n")
+}
+
+/// Lines for Copy Folder Path: each item's `<id>.info` folder with a
+/// trailing slash, as Eagle copies them.
+pub fn folder_paths_text(lib: &Library, items: &[&Item]) -> String {
+    items.iter().map(|i| format!("{}/", i.info_dir(lib.root()).display())).collect::<Vec<_>>().join("\n")
+}
+
+/// The MIME subtype Eagle uses for an original it copies as Base64 itself;
+/// other kinds are copied as their thumbnail.
+fn base64_type(ext: &str) -> Option<&'static str> {
+    Some(match ext.to_lowercase().as_str() {
+        "jpg" | "jpeg" | "jpe" | "jfif" | "insp" => "jpeg",
+        "png" => "png",
+        "webp" => "webp",
+        "gif" => "gif",
+        _ => return None,
+    })
+}
+
+/// Copy Base64: a `data:` URL of the item's original when it is a JPEG,
+/// PNG, WebP or GIF, else of its thumbnail (whose real format is sniffed:
+/// Eagle's thumbnails are WebP inside a `.png` name). `None` when there is
+/// neither.
+pub fn data_url(lib: &Library, item: &Item) -> Option<String> {
+    use base64::Engine;
+    let (bytes, kind) = match base64_type(&item.ext) {
+        Some(kind) => (fs::read(item.original_path(lib.root())).ok()?, kind),
+        None => {
+            let bytes = fs::read(item.thumbnail_path(lib.root())?).ok()?;
+            let kind = match image::guess_format(&bytes) {
+                Ok(image::ImageFormat::WebP) => "webp",
+                Ok(image::ImageFormat::Jpeg) => "jpeg",
+                _ => "png",
+            };
+            (bytes, kind)
+        }
+    };
+    Some(format!("data:image/{kind};base64,{}", base64::engine::general_purpose::STANDARD.encode(bytes)))
+}
+
+/// Copy Thumbnail: the item's thumbnail decoded, or, for an item without
+/// one, its original if that is an image.
+pub fn thumbnail_image(lib: &Library, item: &Item) -> Option<image::RgbaImage> {
+    let path = item.thumbnail_path(lib.root()).unwrap_or_else(|| item.original_path(lib.root()));
+    crate::thumbnail::decode(&path).ok().map(|i| i.to_rgba8())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -541,6 +596,43 @@ mod tests {
             ids[1], item.size, csv_time(item.last_modified), csv_field(&path)
         );
         assert_eq!(row, want);
+    }
+
+    #[test]
+    fn copy_texts_and_data_urls() {
+        use base64::Engine;
+        let dir = tempfile::tempdir().unwrap();
+        let (mut lib, ids) = library(dir.path());
+        let items: Vec<&Item> = ids.iter().filter_map(|id| lib.item(id)).collect();
+        let paths = paths_text(&lib, &items);
+        assert_eq!(paths.lines().count(), 3);
+        assert!(paths.lines().next().unwrap().ends_with("/pic.png"));
+        let folders = folder_paths_text(&lib, &items[..1]);
+        assert_eq!(folders, format!("{}/", items[0].info_dir(lib.root()).display()));
+
+        // A PNG is copied as itself.
+        let url = data_url(&lib, items[0]).unwrap();
+        let b64 = url.strip_prefix("data:image/png;base64,").unwrap();
+        let bytes = base64::engine::general_purpose::STANDARD.decode(b64).unwrap();
+        assert_eq!(bytes, fs::read(items[0].original_path(lib.root())).unwrap());
+        assert_eq!(thumbnail_image(&lib, items[0]).unwrap().dimensions(), (8, 8));
+
+        // Another kind falls back to its thumbnail, or to nothing.
+        let mut other = items[1].clone();
+        let info = other.info_dir(lib.root());
+        fs::remove_file(other.original_path(lib.root())).unwrap();
+        fs::write(info.join("other.txt"), b"hello").unwrap();
+        other.ext = "txt".into();
+        lib.update_item(other.clone()).unwrap();
+        let thumb = info.join("other_thumbnail.png");
+        let webp = webp::Encoder::from_rgba(&[255; 16], 2, 2).encode(80.0).to_vec();
+        fs::write(&thumb, &webp).unwrap();
+        let other = lib.item(&ids[1]).unwrap();
+        assert!(data_url(&lib, other).unwrap().starts_with("data:image/webp;base64,"));
+        assert_eq!(thumbnail_image(&lib, other).unwrap().dimensions(), (2, 2));
+        fs::remove_file(&thumb).unwrap();
+        assert!(data_url(&lib, other).is_none());
+        assert!(thumbnail_image(&lib, other).is_none());
     }
 
     #[test]

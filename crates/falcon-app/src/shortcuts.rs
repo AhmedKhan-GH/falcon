@@ -55,6 +55,13 @@ pub enum Command {
     ExportComputer,
     ExportPack,
     ExportCsv,
+    /// Edit ▸ Copy variants (`App::export_keys`).
+    CopyPath,
+    CopyFolderPath,
+    CopyName,
+    CopyLink,
+    CopyThumbnail,
+    CopyBase64,
     /// A key of the video player (`App::video_keys` reads these).
     Player(PlayerKey),
 }
@@ -103,6 +110,7 @@ const NONE: Modifiers = Modifiers::NONE;
 const CMD: Modifiers = Modifiers::COMMAND;
 const CMD_SHIFT: Modifiers = Modifiers { shift: true, ..Modifiers::COMMAND };
 const CMD_ALT: Modifiers = Modifiers { alt: true, ..Modifiers::COMMAND };
+const CMD_ALT_SHIFT: Modifiers = Modifiers { alt: true, shift: true, ..Modifiers::COMMAND };
 const ALT: Modifiers = Modifiers::ALT;
 const SHIFT: Modifiers = Modifiers::SHIFT;
 /// The Mac's ⌃ key (on other systems ⌘ chords already use Ctrl).
@@ -170,6 +178,13 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::ExportPack, id: "file.export.item.eaglepack", group: "Export", label: "Export as .eaglepack", default: k(CMD_SHIFT, Key::E), aliases: &[] },
     // Unbound by default, as in Eagle.
     Spec { cmd: Command::ExportCsv, id: "file.export.csv", group: "Export", label: "Export to CSV", default: None, aliases: &[] },
+    Spec { cmd: Command::CopyPath, id: "edit.copy.path", group: "Copy", label: "Copy file paths", default: k(CMD_ALT, Key::C), aliases: &[] },
+    Spec { cmd: Command::CopyFolderPath, id: "edit.copy.folderpath", group: "Copy", label: "Copy item folder paths", default: k(CMD_ALT_SHIFT, Key::C), aliases: &[] },
+    Spec { cmd: Command::CopyName, id: "edit.copy.name", group: "Copy", label: "Copy names", default: None, aliases: &[] },
+    // falcon's own id: Eagle's Copy Link entry copies its local item link.
+    Spec { cmd: Command::CopyLink, id: "edit.copy.sourceurl", group: "Copy", label: "Copy source URLs", default: None, aliases: &[] },
+    Spec { cmd: Command::CopyThumbnail, id: "edit.copy.thumbnail", group: "Copy", label: "Copy thumbnail", default: None, aliases: &[] },
+    Spec { cmd: Command::CopyBase64, id: "edit.copy.base64", group: "Copy", label: "Copy as Base64", default: None, aliases: &[] },
 ];
 
 /// Keys that cannot be rebound, listed in the Shortcuts section.

@@ -188,6 +188,8 @@ These are the defaults. All but the arrows, Esc, Tab, Z and the viewer's C, ⇧R
 | ⌘C and ⌘V | Copy the selected files, or paste files or images |
 | ⌘E | Export the selected items' originals to a folder (see Export and copy-out) |
 | ⇧⌘E | Export the selected items as an `.eaglepack` |
+| ⌥⌘C | Copy the selected items' file paths, one per line |
+| ⌥⇧⌘C | Copy the selected items' `<id>.info` folder paths, one per line |
 | ⌘Z and ⇧⌘Z | Undo and redo library edits, up to 100 steps. Each frame's edits are one step, named after what was done ("Undid: Move 3 to Trash"). Deleting permanently or emptying the Trash can't be undone and clears the history. Text fields keep their own undo while focused |
 | ⌘⇧F | Show or hide the filter bar |
 | ⌘⌥1 and ⌘⌥2 | Show or hide the sidebar and the inspector, in the grid and in the viewer |
@@ -489,6 +491,8 @@ Where originals are read:
 | Rotate, flip, crop, Refresh Thumbnail, Refresh Palette | UI | Items still in iCloud are skipped, their download starts, and the status line says to try again |
 | Drag out | UI | The drag image falls back to a plain square instead of reading a dataless thumbnail; the files are passed by path |
 | ⌘C, Open in Default App, Open With, Show in Finder | UI | Paths only, never read |
+| Export to Computer, Export as .eaglepack | Background thread | The copy waits in its own thread |
+| Copy ▸ Base64, Copy ▸ Thumbnail (one item) | UI | Refused with a message while the file is in iCloud |
 
 How long downloads take depends on the file and the link (inferred: seconds for a thumbnail, minutes for a several-hundred-megabyte book).
 
@@ -516,6 +520,19 @@ A folder, a subfolder or a smart folder exports the same way from its menu (Expo
 Export as .eaglepack (⇧⌘E, or the Export submenu of the item, folder and smart folder menus and of the inspector's Export button) asks where to save, suggesting `Untitled.eaglepack` for items and `<folder name>.eaglepack` for a folder, then writes the pack on a background thread ("Packing 3 of 10") and shows it in Finder. Items are packed with their folders cleared, a folder with its subfolders, and a smart folder as one plain folder of its items; an empty smart folder exports nothing, as in Eagle. The format is described in [Export (`.eaglepack`)](library-format.md#export-eaglepack).
 
 Export to CSV (the item menu's Export submenu, the inspector's Export button for the items shown in the open folder or smart folder, or a key that is unbound by default, as in Eagle, which then takes the selection or else every item shown) saves one row of metadata per item. The columns follow Eagle's order: id, name, extension, width, height, duration, source URL, notes, comments (one per line), tags and folder names (each joined with ", "), size in bytes, rating, import and modification times as `YYYY-MM-DD HH:MM:SS` in UTC, and the original's path. Zero or missing numbers are left empty, as in Eagle. The header text is falcon's own. A field is quoted, with quotes doubled, only when it holds a comma, a quote or a line break; lines end in `\n` and the file is UTF-8 with a byte order mark, as Eagle writes it. Finder then shows the file. The writer is `export::csv` in the library, a few lines with no CSV crate.
+
+The item menu's Copy File Path entry and Copy submenu put text or images on the clipboard, for every selected item as Eagle does:
+
+| Entry | Key | What is copied |
+|---|---|---|
+| Copy File Path | ⌥⌘C | Each original's path, one per line |
+| Copy ▸ Link | unbound | Each item's source URL, one per line; items without one are skipped, and a message says when none has one. Eagle's Copy Link copies its own local item link instead; falcon has no item link (Copy Eagle Link is left out because falcon doesn't register `eagle://`) |
+| Copy ▸ Folder Path | ⌥⇧⌘C | Each item's `<id>.info` folder with a trailing slash, one per line, as Eagle copies it |
+| Copy ▸ Thumbnail | unbound | One item: its thumbnail as an image (the original for an image with no thumbnail). Several: their thumbnail files as files, as Eagle copies them |
+| Copy ▸ Base64 | unbound | One item only (disabled for several, as in Eagle): a `data:image/…;base64,` URL of the original for JPEG, PNG, WebP and GIF, otherwise of the thumbnail, whose real format (usually WebP) names the type. Eagle labels every thumbnail `webp` |
+| Copy ▸ Name | unbound | Each item's name, one per line |
+
+Base64 and a single thumbnail read the file on the window's thread, so an item still in iCloud is refused with a message instead of holding the window. The unbound copies can be given keys under Preferences → Shortcuts (Eagle's `edit.copy.*` ids; Link has falcon's own, `edit.copy.sourceurl`).
 
 Where files go and how they are named is worked out in `falcon_library::export` (a `Plan`, with tests); `app/export_ui.rs` asks, runs and reports. Exports write only inside the folder picked in the dialog.
 

@@ -21,6 +21,25 @@ pub(super) enum Request {
     PackTree(Target),
     /// Export to CSV: these items' metadata.
     Csv(Vec<String>),
+    /// One of the Copy variants, for these items.
+    Copy(CopyKind, Vec<String>),
+}
+
+/// What the Copy variants put on the clipboard (Eagle's Edit ▸ Copy …).
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub(super) enum CopyKind {
+    /// Each original's path, one per line.
+    Path,
+    /// Each item's `<id>.info` folder, one per line.
+    FolderPath,
+    Name,
+    /// The items' source URLs.
+    Link,
+    /// The first item's thumbnail as an image; several items' thumbnail
+    /// files as files, as Eagle copies them.
+    Thumbnail,
+    /// The first item as a `data:` URL.
+    Base64,
 }
 
 /// A folder or smart folder to export.
@@ -156,6 +175,7 @@ impl App {
                     Err(e) => self.flash(format!("Export failed: {e}")),
                 }
             }
+            Request::Copy(kind, ids) => self.copy_variant(lib, kind, &ids),
             Request::PackItems(ids) => {
                 if !ids.is_empty() {
                     self.start_pack(lib, PackSource::Items(&ids), "Untitled");
@@ -170,6 +190,83 @@ impl App {
                 self.start_pack(lib, PackSource::Smart(&id), &name);
             }
         }
+    }
+
+    fn copy_variant(&mut self, lib: &Library, kind: CopyKind, ids: &[String]) {
+        let items: Vec<&Item> = ids.iter().filter_map(|id| lib.item(id)).collect();
+        let Some(first) = items.first() else { return };
+        let n = items.len();
+        // Base64 and a single thumbnail read files on this thread; one still
+        // in iCloud would hold the window until it downloads.
+        if matches!(kind, CopyKind::Base64 | CopyKind::Thumbnail) && n == 1 {
+            let mut files = vec![first.original_path(lib.root())];
+            files.extend(first.thumbnail_path(lib.root()));
+            if files.iter().any(|f| crate::icloud::is_dataless(f)) {
+                self.flash("This item is still in iCloud; open it once to download it, then copy again");
+                return;
+            }
+        }
+        let text = match kind {
+            CopyKind::Path => Some((export::paths_text(lib, &items), plural(n, "path"))),
+            CopyKind::FolderPath => Some((export::folder_paths_text(lib, &items), plural(n, "folder path"))),
+            CopyKind::Name => Some((items.iter().map(|i| i.name.as_str()).collect::<Vec<_>>().join("\n"), plural(n, "name"))),
+            CopyKind::Link => {
+                let links: Vec<&str> = items.iter().map(|i| i.url.trim()).filter(|u| !u.is_empty()).collect();
+                if links.is_empty() {
+                    self.flash(if n == 1 { "This item has no source URL" } else { "These items have no source URL" });
+                    return;
+                }
+                Some((links.join("\n"), plural(links.len(), "link")))
+            }
+            CopyKind::Base64 => match export::data_url(lib, first) {
+                Some(url) => Some((url, "Base64".to_string())),
+                None => {
+                    self.flash("No image to copy");
+                    return;
+                }
+            },
+            CopyKind::Thumbnail => None,
+        };
+        if let Some((text, what)) = text {
+            self.ctx.copy_text(text);
+            self.flash(format!("Copied {what}"));
+            return;
+        }
+        // Copy Thumbnail.
+        let Ok(mut clip) = arboard::Clipboard::new() else { return };
+        let ok = if n == 1 {
+            export::thumbnail_image(lib, first).is_some_and(|img| {
+                let (w, h) = img.dimensions();
+                clip.set_image(arboard::ImageData { width: w as usize, height: h as usize, bytes: img.into_raw().into() }).is_ok()
+            })
+        } else {
+            let files: Vec<PathBuf> = items.iter().map(|i| i.thumbnail_path(lib.root()).unwrap_or_else(|| i.original_path(lib.root()))).collect();
+            clip.set().file_list(&files).is_ok()
+        };
+        self.flash(if !ok { "No thumbnail to copy".to_string() } else if n == 1 { "Copied thumbnail".to_string() } else { format!("Copied {}", plural(n, "thumbnail")) });
+    }
+
+    /// The Copy File Path entry and Copy submenu of the item menu.
+    pub(super) fn item_copy_menu(&mut self, ui: &mut Ui, targets: &[String]) {
+        let mut ask = |kind| self.ws.export.request = Some(Request::Copy(kind, targets.to_vec()));
+        if ui.button("Copy File Path").clicked() {
+            ask(CopyKind::Path);
+        }
+        ui.menu_button("Copy", |ui| {
+            ui.set_min_width(160.0);
+            for (label, kind) in [("Link", CopyKind::Link), ("Folder Path", CopyKind::FolderPath), ("Thumbnail", CopyKind::Thumbnail)] {
+                if ui.button(label).clicked() {
+                    ask(kind);
+                }
+            }
+            // One item only, as in Eagle.
+            if ui.add_enabled(targets.len() == 1, egui::Button::new("Base64")).clicked() {
+                ask(CopyKind::Base64);
+            }
+            if ui.button("Name").clicked() {
+                ask(CopyKind::Name);
+            }
+        });
     }
 
     /// Asks where to save a pack of `source`, then writes it on a
@@ -318,6 +415,18 @@ impl App {
         }
         if on(C::ExportPack) && !self.ws.selected.is_empty() {
             self.ws.export.request = Some(Request::PackItems(self.ws.selected.clone()));
+        }
+        for (c, kind) in [
+            (C::CopyPath, CopyKind::Path),
+            (C::CopyFolderPath, CopyKind::FolderPath),
+            (C::CopyName, CopyKind::Name),
+            (C::CopyLink, CopyKind::Link),
+            (C::CopyThumbnail, CopyKind::Thumbnail),
+            (C::CopyBase64, CopyKind::Base64),
+        ] {
+            if on(c) && !self.ws.selected.is_empty() {
+                self.ws.export.request = Some(Request::Copy(kind, self.ws.selected.clone()));
+            }
         }
         // The selection, or else every item shown.
         if on(C::ExportCsv) {
