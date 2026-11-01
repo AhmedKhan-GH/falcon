@@ -49,3 +49,7 @@ pub const LOCK_SIMPLE_OPEN: &str = "\u{E30A}";
 pub const FLIP_HORIZONTAL: &str = "\u{ED6A}";
 pub const BELL: &str = "\u{E0CE}";
 pub const MOUSE: &str = "\u{E33A}";
+pub const SPEAKER_HIGH: &str = "\u{E44A}";
+pub const SPEAKER_LOW: &str = "\u{E44C}";
+pub const SPEAKER_NONE: &str = "\u{E44E}";
+pub const SPEAKER_X: &str = "\u{E45C}";

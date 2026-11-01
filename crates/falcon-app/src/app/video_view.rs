@@ -85,6 +85,55 @@ impl SeekPreview {
     }
 }
 
+/// How long the volume tip stays up after the last change, in seconds.
+const TIP_SECS: f64 = 1.0;
+/// How often a held skip button repeats, in seconds (Eagle's 100 ms).
+const REPEAT_SECS: f64 = 0.1;
+
+/// A button that acts once when pressed and again every [`REPEAT_SECS`]
+/// while held, as Eagle's skip buttons do.
+#[derive(Default)]
+pub struct Repeat {
+    next: Option<f64>,
+}
+
+impl Repeat {
+    /// Whether to act this frame, given whether the button is held at time
+    /// `now` (seconds).
+    pub fn fire(&mut self, held: bool, now: f64) -> bool {
+        match (held, self.next) {
+            (false, _) => {
+                self.next = None;
+                false
+            }
+            (true, None) => {
+                self.next = Some(now + REPEAT_SECS);
+                true
+            }
+            (true, Some(at)) if now >= at => {
+                self.next = Some(at + REPEAT_SECS);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    pub fn held(&self) -> bool {
+        self.next.is_some()
+    }
+}
+
+/// Eagle's volume tip icon for a level in percent: 0 off, 1 under 30%,
+/// 2 under 100%, 3 at full volume.
+pub fn volume_level(percent: u32) -> u8 {
+    match percent {
+        0 => 0,
+        1..=29 => 1,
+        30..=99 => 2,
+        _ => 3,
+    }
+}
+
 /// Whether the hover thumbnail should be decoded again for time `t`: it
 /// moved at least `step` seconds from the last request, or there was none.
 pub fn needs_request(t: f64, asked: Option<f64>, step: f64) -> bool {
@@ -134,6 +183,13 @@ pub(super) struct VideoState {
     tool: Option<FrameTool>,
     /// The seek bar's hover thumbnail, started on first hover.
     preview: Option<SeekPreview>,
+    /// The back and forward buttons, which repeat while held.
+    back: Repeat,
+    forward: Repeat,
+    /// The volume and mute last drawn, to notice changes for the tip.
+    tip_seen: Option<(f32, bool)>,
+    /// Until when (egui time) the volume tip shows.
+    tip_until: f64,
 }
 
 impl Default for VideoState {
@@ -152,6 +208,10 @@ impl Default for VideoState {
             pending: None,
             tool: None,
             preview: None,
+            back: Repeat::default(),
+            forward: Repeat::default(),
+            tip_seen: None,
+            tip_until: 0.0,
         }
     }
 }
@@ -187,6 +247,10 @@ impl VideoState {
         self.scrub_resume = None;
         self.tool = None;
         self.preview = None;
+        self.back = Repeat::default();
+        self.forward = Repeat::default();
+        self.tip_seen = None;
+        self.tip_until = 0.0;
     }
 
     /// The positions to save, with the open clip's current one.
@@ -631,13 +695,21 @@ impl App {
         if presp.on_hover_text("Play/Pause (Space)").clicked() {
             v.toggle();
         }
+        // Back and forward act on press and repeat while held (Eagle: 2% of
+        // the clip, at most 10 s back and 20 s forward).
+        let now = ctx.input(|i| i.time);
         let mut x = play.right() + 20.0;
-        if icon_button(ui, Pos2::new(x, cy), ic::ARROW_COUNTER_CLOCKWISE, 16.0, true, "Back (⌘←)").clicked() {
-            v.seek(pos - skip_step(duration, 10.0));
+        let held = icon_button(ui, Pos2::new(x, cy), ic::ARROW_COUNTER_CLOCKWISE, 16.0, true, "Back (⌘←)").is_pointer_button_down_on();
+        if vs.back.fire(held, now) {
+            v.seek(v.current_time() - skip_step(duration, 10.0));
         }
         x += 28.0;
-        if icon_button(ui, Pos2::new(x, cy), ic::ARROW_CLOCKWISE, 16.0, true, "Forward (⌘→)").clicked() {
-            v.seek(pos + skip_step(duration, 20.0));
+        let held = icon_button(ui, Pos2::new(x, cy), ic::ARROW_CLOCKWISE, 16.0, true, "Forward (⌘→)").is_pointer_button_down_on();
+        if vs.forward.fire(held, now) {
+            v.seek(v.current_time() + skip_step(duration, 20.0));
+        }
+        if vs.back.held() || vs.forward.held() {
+            ctx.request_repaint_after(std::time::Duration::from_millis(16));
         }
         x += 28.0;
         if icon_button(ui, Pos2::new(x, cy), ic::CARET_LEFT, 15.0, true, "Previous Frame ([)").clicked() {
@@ -696,6 +768,25 @@ impl App {
         if icon_button(ui, cp, ic::CHAT_CIRCLE, 16.0, true, "Add Comment at Current Time (N)").clicked() {
             v.pause();
             vs.draft = Some(Draft { item: item.id.clone(), id: None, at: pos, text: String::new(), focus: true });
+        }
+
+        // The volume tip at the stage's top right for a second after any
+        // change (keys, wheel, slider, mute), as Eagle's player shows it.
+        let level = (vs.volume, vs.muted);
+        if vs.tip_seen.is_some_and(|seen| seen != level) {
+            vs.tip_until = now + TIP_SECS;
+        }
+        vs.tip_seen = Some(level);
+        if now < vs.tip_until {
+            let percent = if vs.muted { 0 } else { (vs.volume * 100.0).round() as u32 };
+            let glyph = [ic::SPEAKER_X, ic::SPEAKER_NONE, ic::SPEAKER_LOW, ic::SPEAKER_HIGH][usize::from(volume_level(percent))];
+            let g = p.layout_no_wrap(format!("{percent}%"), font(12.0), Color32::WHITE);
+            let size = vec2(8.0 + 22.0 + 2.0 + g.size().x + 12.0, 30.0);
+            let r = Rect::from_min_size(Pos2::new(stage.right() - 12.0 - size.x, stage.top() + 12.0), size);
+            p.rect_filled(r, CornerRadius::same(8), Color32::from_black_alpha(178));
+            p.text(Pos2::new(r.left() + 19.0, r.center().y), Align2::CENTER_CENTER, glyph, font(18.0), Color32::WHITE);
+            p.galley(Pos2::new(r.left() + 32.0, r.center().y - g.size().y / 2.0), g, Color32::WHITE);
+            ctx.request_repaint_after(std::time::Duration::from_secs_f64((vs.tip_until - now).max(0.01)));
         }
 
         if vs.draft.as_ref().is_some_and(|d| d.item == item.id) {
@@ -862,6 +953,26 @@ mod tests {
         assert_eq!(marker_at(0.0, &[], 100.0, 0.0, 1000.0, 5.0), None);
         // A clip of unknown length puts every marker at the start.
         assert_eq!(marker_at(1.0, &times, 0.0, 0.0, 1000.0, 5.0), Some(0));
+    }
+
+    #[test]
+    fn held_buttons_repeat_every_tenth_of_a_second() {
+        let mut r = Repeat::default();
+        assert!(!r.fire(false, 0.0));
+        assert!(r.fire(true, 1.0), "acts on press");
+        assert!(!r.fire(true, 1.05));
+        assert!(r.fire(true, 1.1));
+        assert!(!r.fire(true, 1.15));
+        assert!(r.fire(true, 1.21));
+        assert!(r.held());
+        assert!(!r.fire(false, 1.3), "release stops it");
+        assert!(!r.held());
+        assert!(r.fire(true, 5.0), "a new press acts at once");
+    }
+
+    #[test]
+    fn volume_tip_levels() {
+        assert_eq!([0, 1, 29, 30, 99, 100].map(volume_level), [0, 1, 1, 2, 2, 3]);
     }
 
     #[test]
