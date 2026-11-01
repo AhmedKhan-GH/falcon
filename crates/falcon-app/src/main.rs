@@ -35,6 +35,7 @@ mod open_files;
 mod model3d;
 mod open_with;
 mod prefs;
+mod progress_eta;
 mod share;
 mod quick_switch;
 mod search_state;

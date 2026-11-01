@@ -255,3 +255,7 @@ With Preferences ▸ Auto-Import on and a folder chosen (`autoImport.enable`, `a
 - The skip rules are Eagle's (`auto_import::skip`): `.tmp` anywhere in the name, folders, no extension, `.url`, 1,000 bytes or smaller (SVGs: empty). falcon also skips hidden files (`.DS_Store`, `._` files) and unfinished browser downloads, as its drops do, and imports any other format, as a drop does, where Eagle takes only its supported formats.
 - The files of each pass go through the usual background import into the library's root with no folders or tags, so the duplicate check, IPTC keywords, font style tags and the failed-imports list apply. Names are cleaned as for any import (forbidden characters); `%` and emoji are kept.
 - With notices on and "Say when files from the auto-import folder start importing" on (both default), each pass shows "Importing N files from the auto-import folder".
+
+## Progress bar
+
+A bar under the toolbar shows a running import: "Importing 3 of 10  ·  About 20 s left  ·  name.jpg". The time left is a straight-line guess from how long the finished items took (`progress_eta.rs`). It appears once one item is done and two seconds have passed, rounds seconds to the nearest five above ten, and then counts in minutes, or hours and minutes. The bar repaints once a second, so the guess keeps moving while a large file is still being read.

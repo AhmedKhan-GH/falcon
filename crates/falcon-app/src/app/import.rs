@@ -489,6 +489,9 @@ impl App {
         let progress = self.ws.progress.clone();
         {
             let mut pr = progress.lock().unwrap_or_else(|p| p.into_inner());
+            if pr.total == 0 {
+                pr.started = Some(std::time::Instant::now());
+            }
             pr.total += jobs.len();
         }
         let ctx = self.ctx.clone();

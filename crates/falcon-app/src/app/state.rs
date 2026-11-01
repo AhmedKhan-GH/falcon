@@ -191,6 +191,8 @@ pub(crate) struct Progress {
     /// The queue waits before its next file (the sidebar's task status,
     /// `tasks.rs`).
     pub(crate) paused: bool,
+    /// When the batch started (total went from zero), for the time left.
+    pub(crate) started: Option<std::time::Instant>,
 }
 
 /// Zoom, pan and animation of the image viewer.
