@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 216 | 24 | 31 | 9 |
-| Viewers and file formats | 156 | 24 | 10 | 7 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 219 | 23 | 29 | 9 |
+| Viewers and file formats | 166 | 21 | 3 | 7 |
 | Search, filters and organising | 197 | 11 | 14 | 3 |
-| Import, export, library, preferences and integrations | 157 | 10 | 45 | 26 |
-| **Total** | 726 | 69 | 100 | 45 |
+| Import, export, library, preferences and integrations | 159 | 10 | 43 | 26 |
+| **Total** | 741 | 65 | 89 | 45 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -94,7 +94,7 @@ Overall finding: falcon now has a native menu bar (`crates/falcon-app/src/menu.r
 | View: Scroll to Top / Bottom / Page Up / Page Down (Home, End, PgUp, PgDn) | Done | Home, End, Page Up and Page Down scroll the grid (a page is the view less 72 px, as Eagle); ⌘↑ / ⌘↓ select the first or last item | local |
 | View: Zoom In / Out (⌘= / ⌘-) | Done | Thumbnail size (shortcuts.rs:96-97, app.rs:1024-1029) | local |
 | View: Actual Size (⌘0) / Zoom to Fit (⌘9) | Partial | The viewer has 0 for fit and 1 for actual size, without ⌘ (app.rs:3510). No ⌘0 or ⌘9 | local |
-| View: Grayscale preview (⌥⌘G) | Partial | Image viewer, animations and the preview window desaturate on the loader workers (`logic::grayscale_rgba`); not the grid, video or PDF | local |
+| View: Grayscale preview (⌥⌘G) | Done | Every loader tier incl. grid cards, animations, video frames, PDF pages, font specimen and the preview window (`logic::grayscale_rgba`); custom thumbnails gray too, unlike Eagle | local |
 | View: Open in New Window (⌘O) | Done | `preview_window.rs`, a second viewport; see §15 for what the window lacks | local |
 | View: Open With Default App (⇧↩), Open with Other App, Reveal in Finder (⌘↩) | Done | open_ui.rs:33-46, shortcuts.rs:104-105 | local |
 | View: Open Link in Browser (⇧⌘O) | Done | `view.file.openlink`, `urls.rs` (web URL or file path) | local |
@@ -292,7 +292,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Default layout is Justified | Done | `logic::Layout` default, `logic::layout_for` | local |
 | Layout remembered per folder | Done | `logic::layout_key`: per folder or smart folder, else per library (`Saved.layouts`), as Eagle's `eagle.list.layout.<id>` | local |
 | Grid layout Fit or Fill option | Done | `Display.fill`, `draw_image_cover`; hover playback still works in Fill | local |
-| Thumbnail Speed vs Quality (load originals for large tiles) | Missing |  | local |
+| Thumbnail Speed vs Quality (load originals for large tiles) | Done | Layout panel option, Quality by default as Eagle; large jpg/png/webp/bmp cards show the original up to 1600 px through a bounded `Tier::Card` cache (16 entries) | local |
 | Sort-by choices in the layout panel, global and per folder, including Manual, Duration and Random | Partial | Global sort lacks Duration, Random and Manual (search.rs:1026). Per-folder sort exists (organize_ui.rs:563-660). Cross-ref search | local |
 | Toggle Show Name under thumbnails | Done | `Display.name`, default on | local |
 | Toggle item info, choosing Dimensions / File Size / Tags / Rating / Date Modified / Date Created | Done | `logic::caption_info` with Eagle's six types and fallbacks (duration for media, size without preview, dash for no tags, stars, import time for dates) | local |
@@ -365,7 +365,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Full screen | Done | ⌃⌘F and Window ▸ Full Screen, plus the green button | local |
 | Always on top for the main window | Done | `modes.rs` | local |
 | Open items in a separate preview window: own titlebar always-on-top toggle, opacity 10–100%, navigator, zoom presets 5–800%, grayscale, rotate / flip, copy, copy path / link, Reveal in Eagle | Missing |  | local |
-| Middle-click opens an item in a new window (preference) | Missing |  | local |
+| Middle-click opens an item in a new window (preference) | Done | `Prefs::middle_button` (new window, default, or nothing); never for audio, as Eagle | local |
 | Presentation / slideshow mode | Done | `modes.rs`; `ViewportCommand::Fullscreen`, panels and bar hidden | local |
 | Closing the window keeps the app running (Dock icon stays); reopen from the Dock | Done | Closing hides falcon (`NSApp hide:`, so the collect and preview windows hide too); the Dock icon or reopening brings it back; ⌘Q quits | local |
 | Menu bar status icon: Show Eagle, Capture Area / Window / Full Screen, Quit | Missing | Captures cross-ref import | local |
@@ -488,7 +488,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | Open an item by double-click or Enter | Done | `F/app.rs:2545` | local |
-| Preference: double-click opens in the default app instead | Missing | No such preference (`F/prefs.rs:21`) | local |
+| Preference: double-click opens in the default app instead | Done | `Prefs::double_click` (Controls pane) | local |
 | Exit with Esc or the back button | Done | `F/app.rs:1077`, back button `F/app.rs:3481` | local |
 | Exit by double-clicking the viewer background | Done | Double-click anywhere in the image viewer closes it, except in crop or comment mode, as Eagle's `dblclickContentPanel`; video, audio, PDF and font don't, as in Eagle | local |
 | Position counter "n / total" in the toolbar | Done | `logic::viewer_counter`, drawn after the back button in `media_view::top_bar` | local |
@@ -508,9 +508,9 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Always on top | Done | ⇧T (`modes.rs`) | local |
 | Thumbnail background per item (none, black, gray, white, grid) used in the viewer and grid | Done | `paint_thumb_bg` from the item's `background` key; wins over the transparency-grid preference | local |
 | Transparent-area display preference (grid or no grid) | Done | `prefs.transparency_grid`, off by default as Eagle | local |
-| Grayscale preview toggle | Partial | Image viewer, animations and preview window; not video, PDF or fonts | local |
+| Grayscale preview toggle | Done | Image, GIF, video, PDF, font, grid and the preview window; ⌥⌘G, View menu and item menu | local |
 | Navigator (minimap) while zoomed | Done | Eagle's 120 px box, 16 px inset, shown by its overflow rule; click centres, drag pans (`logic::navigator_*`); ⌥⌘8 and View ▸ Navigator | local |
-| Viewer keys follow the shortcut table (zoom, crop, rotate, flip) | Partial | Zoom and crop keys are rebindable; rotate and flip stay fixed | local |
+| Viewer keys follow the shortcut table (zoom, crop, rotate, flip) | Done | `view.zoom.*`, `edit.image.crop`, `edit.image.rotate` ⇧R, `edit.image.flip` ⇧F (Eagle's ids); the keys act only while a viewer is open | local |
 
 ### 2. Image viewer (jpg, png, webp, bmp, avif, heic, jxl, ico and the like)
 
@@ -544,8 +544,8 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Comment badges, delete X, resize handles, count badge on the toolbar button | Done | `F/comments.rs:213-318` | local |
 | Hovering a region shows its note | Done | Tooltip on hover (`F/comments.rs:290`) | local |
 | Comment count badge on grid cards | Done | `F/comments.rs:180` (always on; no toggle) | local |
-| Default viewer mode preference (preview or comment) | Missing | Always opens in preview mode | local |
-| Copy, copy path and copy link from the viewer menu | Partial | Copy File Path is in the viewer's right-click menu; no copy or copy link | local |
+| Default viewer mode preference (preview or comment) | Missing | Eagle declares `habits.defaultMode` but never reads it; not applicable | local |
+| Copy, copy path and copy link from the viewer menu | Done | The viewer's right-click menu is the item menu: Copy (files), Copy File Path, Copy ▸ Link (Eagle's local API link) / Eagle Link / Source URL | local |
 
 ### 3. GIF and animated images
 
@@ -594,7 +594,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Preference: vertical wheel controls volume instead | Missing | No setting | local |
 | Remember the last playback position | Done | `Prefs::video_resume`; positions saved per item id in app state (`Positions`, latest 500), across launches | local |
 | Stretch video to fill the window | Done | `Prefs::video_fill` | local |
-| Full-screen button | Done | Control-bar button toggling window full screen (Eagle's toggles its presentation mode) | local |
+| Full-screen button | Done | Enters presentation mode, as Eagle's does | local |
 | Flip and rotate the video (viewer toolbar) | Done | `rotate_step`, `corner_uvs`; view only, also ⇧R / ⇧F (⇧-click rotates clockwise) | local |
 | Timed notes: add a note at the current time | Done | `F/app/video_view.rs:453-458`, N key `F/shortcuts.rs:134` | local |
 | Timed notes shown as markers on the seek bar; click to jump, edit, delete | Done | `F/app/video_view.rs:351-381` | local |
@@ -665,8 +665,8 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Sidebar with page thumbnails | Done | `F/app/pdf_view.rs:1132-1163` | local |
 | Sidebar outline (bookmarks) | Done | `F/app/pdf_view.rs:1164-1192` | local |
 | Highlight the outline entry for the current page | Done | `pdf_view.rs` outline follows the page and scrolls to it | local |
-| Sidebar attachments list | Missing | None | local |
-| Sidebar layers (optional content) | Missing | None | local |
+| Sidebar attachments list | Done | `falcon_pdf::Document::attachments` through CGPDF (EmbeddedFiles tree and file annotations); click saves the file | local |
+| Sidebar layers (optional content) | Partial | Listed with their default visibility (`Document::layers`); not switchable, PDFKit draws only the default configuration | local |
 | Find bar with previous/next, match count | Done | `F/app/pdf_view.rs:1286-1332` | local |
 | Find option: match case | Done | `F/app/pdf_view.rs:1310-1312` | local |
 | Find option: highlight all | Done | All hits always drawn (`F/app/pdf_view.rs:1059-1064`); no toggle | local |
@@ -714,7 +714,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | SVG drawn as vectors, sharp at any zoom | Done | `thumbnail::render_svg_region` re-renders the visible part at screen resolution 0.15 s after the view holds still (`logic::svg_region`) | local |
-| TIFF viewer (multi-page aware, worker decode) | Partial | Decoded at full resolution when zoomed (`Tier::Original`), QuickLook fallback; not multi-page | local |
+| TIFF viewer (multi-page aware, worker decode) | Done | `tiff_pages.rs`: pages counted on a worker, `‹ 2 / 5 ›` in the bar, PageUp/PageDown; Eagle's own TIFF viewer decodes only the first page | local |
 | TGA viewer | Partial | QuickLook still | local |
 | HEIC/HEIF viewer | Partial | Full resolution, orientation and tiles through ImageIO (`crates/falcon-library/src/imageio.rs`) on macOS; QuickLook still elsewhere | local |
 
@@ -736,13 +736,13 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| Open one or more items in their own window (Cmd+O, middle click) | Partial | ⌘O opens one item in one window; no middle click | local |
-| Same viewers in the window (image, GIF, RAW, video, font, text, PDF, 3D, web, plugin) | Partial | Images; other types show their thumbnail | local |
-| Window opacity 10%–100% | Missing | None | local |
+| Open one or more items in their own window (Cmd+O, middle click) | Partial | ⌘O and middle click (preference) open one item per window; no multi-item opening | local |
+| Same viewers in the window (image, GIF, RAW, video, font, text, PDF, 3D, web, plugin) | Partial | Image, GIF, video, audio, text and PDF are real viewers in the window; fonts, 3D and web show the thumbnail | local |
+| Window opacity 10%–100% | Done | NSWindow `alphaValue` from the window menu | local |
 | Always on top toggle in the window | Done | Preview window menu | local |
-| Navigator, grayscale, rotate, flip in the window menu | Partial | Grayscale only | local |
-| Copy, copy path, copy link, reveal in Finder, open in default app | Partial | Copy Link, Reveal in Finder and Open in Default App in the preview window; no Copy or Copy Path | local |
-| Copy or save the current video frame | Missing | None | local |
+| Navigator, grayscale, rotate, flip in the window menu | Done | Preview window menu; rotate and flip change the preview only | local |
+| Copy, copy path, copy link, reveal in Finder, open in default app | Done | Copy, Copy File Path, Copy ▸ Link / Eagle Link, Reveal in Finder, Open in Default App | local |
+| Copy or save the current video frame | Done | Preview window video player: Copy Frame, Save Frame… | local |
 | Reveal in Eagle (select the item in the main window) | Done | Show in Falcon | local |
 
 ### 16. Grid hover behaviours
@@ -755,9 +755,9 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Animated GIF plays inside the hover preview | Done | `gif_view.rs` `hover_anim`, `anim.rs` `Cards::popup` | local |
 | GIF and animated images play when hovered in the grid | Done | GIF, animated WebP and (macOS) animated AVIF (`card_anim`, `Cards::play`) | local |
 | Preference: always autoplay GIF/WebP/AVIF in the grid | Done | `prefs.always_play_animated` (off by default, as Eagle); AVIF on macOS | local |
-| Video hover preview: autoplays, moving the pointer scrubs, progress bar and time | Missing | Video cards have no hover behaviour (`F/hover.rs:28-31` only removes the zoom button) | local |
+| Video hover preview: autoplays, moving the pointer scrubs, progress bar and time | Partial | 48-picture strip from `falcon_video::Grabber` on a worker: 500 ms delay, scrub, resume after 200 ms rest, bar and time; no sound (`Prefs::video_hover`, on by default) | local |
 | Mute toggle on the video hover preview, remembered | Missing | None | local |
-| Audio hover preview: plays, click to seek, progress | Missing | None | local |
+| Audio hover preview: plays, click to seek, progress | Partial | Separate hover player after 200 ms, progress tint, click to seek, remembered play switch; doesn't stop when the window hides | local |
 | YouTube, Vimeo and Bilibili hover previews for bookmarked links | Missing | None | online/plugin |
 | Text files show their text on the card | Missing | Extension placeholder (`F/app.rs:2593`) | local |
 
@@ -1384,7 +1384,7 @@ Eagle panes (`app/js/preferences.js:659-788`): General, Sidebar, Controls, Previ
 | **Controls:** mouse wheel in the viewer scrolls, pages to previous or next, or zooms | Done | `prefs.wheel` | local |
 | Controls: hover zoom button on cards | Done | `prefs.rs:331-337` | local |
 | Controls: double-clicking an item opens it in Eagle or in the default app | Done | `Prefs::double_click` | local |
-| Controls: middle button does nothing, opens a new window or runs a plugin | Missing | — | local |
+| Controls: middle button does nothing, opens a new window or runs a plugin | Done | `Prefs::middle_button`: new window or nothing (plugins don't exist) | local |
 | Controls: spacebar previews, opens Quick Look or scrolls the list | Done | `Prefs::space` | local |
 | **Preview:** zoom rendering smooth or pixelated | Done | `prefs.pixelated` | local |
 | Preview: remember the last zoom and position | Done | `prefs.remember_zoom` | local |
@@ -1392,7 +1392,7 @@ Eagle panes (`app/js/preferences.js:659-788`): General, Sidebar, Controls, Previ
 | Preview: rotation applies to the file or to the preview only | Missing | Rotation always writes the file (`image_edit.rs:113-118`); no preview-only mode | local |
 | Preview: transparency grid on or off | Done | `prefs.transparency_grid` | local |
 | Preview: video vertical scroll controls progress or volume | Done | `Prefs::video_scroll` | local |
-| Preview: video hover preview | Missing | Falcon has no video hover-play; `hover.rs` is the still-image preview | local |
+| Preview: video hover preview | Done | `Prefs::video_hover`, on by default | local |
 | Preview: stretch video to fit the window | Done | `Prefs::video_fill` | local |
 | Preview: video autoplay | Done | `Prefs::video_autoplay` | local |
 | Preview: remember the playback position | Done | `Prefs::video_resume`, saved per item across launches | local |
@@ -1517,9 +1517,9 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 
 Rows marked "not counted" are features Eagle 4.0.0 does not have.
 
-- **Done:** 157, including 5 where falcon goes beyond Eagle and 1 with a small difference.
+- **Done:** 159, including 5 where falcon goes beyond Eagle and 1 with a small difference.
 - **Partial:** 10.
-- **Missing:** 71, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
+- **Missing:** 69, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
 - **Different on purpose:** 1 (the API listens on localhost only).
 
 ### Ranked Missing and Partial local items
