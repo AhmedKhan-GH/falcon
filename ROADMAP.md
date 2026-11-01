@@ -17,6 +17,7 @@ Falcon is early alpha. This is what is done and what comes next, roughly in orde
 - [x] Per-folder sort, colours and icons
 - [x] Audio playback in the viewer
 - [x] Video playback in the viewer
+- [x] PDF reader in the viewer
 - [x] Tag groups
 - [x] Undo
 - [x] Open in Default App and Open With

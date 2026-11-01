@@ -1658,6 +1658,7 @@ dependencies = [
  "drag",
  "eframe",
  "falcon-library",
+ "falcon-pdf",
  "falcon-server",
  "falcon-video",
  "image",

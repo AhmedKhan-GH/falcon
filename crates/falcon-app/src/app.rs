@@ -26,6 +26,7 @@ mod filters_ui;
 mod media_view;
 mod video_view;
 mod open_ui;
+mod pdf_view;
 #[path = "comments.rs"]
 mod comments;
 #[path = "covers.rs"]
@@ -72,6 +73,8 @@ struct Saved {
     video_volume: Option<f32>,
     video_loop: Option<bool>,
     video_muted: Option<bool>,
+    /// The PDF reader's last page and zoom of recent documents.
+    pdf_marks: Vec<pdf_view::Mark>,
 }
 
 /// Ids being dragged from the grid.
@@ -502,6 +505,8 @@ pub struct App {
     audio: crate::audio::Audio,
     /// Video playback for the viewer (`video_view.rs`).
     video: video_view::VideoState,
+    /// The PDF reader for the viewer (`pdf_view.rs`).
+    pdf: pdf_view::PdfState,
 }
 
 impl App {
@@ -530,6 +535,7 @@ impl App {
             collect: Default::default(),
             audio: Default::default(),
             video: Default::default(),
+            pdf: Default::default(),
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
         app.tile = saved.tile.unwrap_or(app.tile).clamp(TILE_MIN, TILE_MAX);
@@ -546,6 +552,7 @@ impl App {
         app.video.volume = saved.video_volume.unwrap_or(1.0).clamp(0.0, 1.0);
         app.video.looping = saved.video_loop.unwrap_or(false);
         app.video.muted = saved.video_muted.unwrap_or(false);
+        app.pdf.set_marks(saved.pdf_marks);
         // Reopen the libraries that were open, then the one given on the
         // command line (focused if it was already open).
         let (libraries, active) = crate::workspaces::restore(&saved.libraries, saved.active, saved.library.as_deref(), |p| p.is_dir());
@@ -3388,7 +3395,7 @@ impl App {
             self.ws.view.frames = gif_frames(ctx, &item.original_path(lib.root()));
             self.ws.view.started = Some(Instant::now());
         }
-        if self.video_viewer(ctx, lib, item, screen) || self.media_viewer(ctx, lib, item, screen) {
+        if self.video_viewer(ctx, lib, item, screen) || self.pdf_viewer(ctx, lib, item, screen) || self.media_viewer(ctx, lib, item, screen) {
             return;
         }
         egui::Area::new(egui::Id::unique("viewer")).fixed_pos(screen.min).order(egui::Order::Foreground).show(ctx, |ui| {
@@ -3557,6 +3564,7 @@ impl eframe::App for App {
             video_volume: Some(self.video.volume),
             video_loop: Some(self.video.looping),
             video_muted: Some(self.video.muted),
+            pdf_marks: self.pdf.marks(),
         };
         eframe::set_value(storage, eframe::APP_KEY, &saved);
     }
@@ -3589,6 +3597,7 @@ impl eframe::App for App {
         if !dropped.is_empty() && !dragging_out {
             self.import(dropped);
         }
+        self.pdf_keys(&ctx);
         self.video_keys(&ctx);
         self.edit_keys(&ctx);
         self.keyboard(&ctx);
@@ -3677,6 +3686,7 @@ impl eframe::App for App {
         }
         self.video.keep_only(self.ws.viewer.as_deref());
         self.fetches.prune((self.ws.view.id.as_str() == self.ws.viewer.as_deref().unwrap_or_default()).then_some(self.ws.view.file.as_path()));
+        self.pdf.keep_only(self.ws.viewer.as_deref());
         // Items dragged past the window edge become a macOS file drag, so
         // they can be dropped into Finder or other apps, as from Eagle.
         if let Some(d) = egui::DragAndDrop::payload::<DragItems>(&ctx)

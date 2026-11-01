@@ -18,7 +18,7 @@
 | Filter bar | Colour (presets, hex value, accuracy, grayscale), tags, folders, shape, rating, type, notes, URL, date, duration, BPM, camera and font (see below), and saved filters |
 | Grid | Four layouts. **Waterfall** (the default): equal columns, each card keeping its image's shape. **Justified**: rows of equal height. **Grid**: square cards. **List**: rows showing type, size, dimensions and date. Cards have type badges. Supports multi-select, drag (inside the app, or out to Finder and other apps), a context menu and a hover preview (see below) |
 | Inspector | **One item:** preview, palette (click a colour to search for it), editable title, notes and URL, tags, folders, comments (edit and delete; click a region comment to show it, or a timed comment to play the video from its moment), rating and properties (with duration, BPM as stored (`119.985`, as Eagle's inspector shows it), camera facts from `rawMetas`, and font family, style, PostScript name, version and glyph count when the item has them). **Several items:** a preview stack, shared tags, add a tag to all, add all to a folder, a shared rating, trash all |
-| Viewer | Zoom around the pointer, pan, fit (0), actual size (1), + and −, animated GIFs, and full-size QuickLook renders. Video plays with a control bar and timed comments, audio plays over its waveform and fonts show a live specimen; images take region comments, rotate, flip and crop (see below) |
+| Viewer | Zoom around the pointer, pan, fit (0), actual size (1), + and −, animated GIFs, and full-size QuickLook renders. Video plays with a control bar and timed comments, PDFs open in a scrolling reader with find and text selection, audio plays over its waveform and fonts show a live specimen; images take region comments, rotate, flip and crop (see below) |
 | Card menu | Besides Open, Show in Finder and the folder and Trash entries: Set as Folder Cover (inside a folder), Set Custom Thumbnail… and Reset Thumbnail, Refresh Thumbnail, Refresh Palette, Rotate Left and Right, Flip Horizontal and Vertical, and Crop… (opens the viewer with the crop tool) |
 | Folder view | Cards for the folder's subfolders above its items, each with its cover, name and counts. Click one to open it |
 | All Tags | A tag manager with a filter, starred tags, rename, merge and delete, grouped A-Z or by tag group |
@@ -91,6 +91,33 @@ What Eagle does, from the `mediaElement` and `mpvMediaElement` directives and th
 | Adding | The note button or N pauses and asks for the text in a dialog at the bottom of the window; an empty text adds nothing | Seen | The comment button or N pauses and opens a box above the control bar (Save, Cancel, ⌘↩, Esc); an empty text adds nothing |
 | Inspector | Comments listed with their times; clicking one seeks the video there, editing seeks and pauses first, deleting offers an undo notice | Seen | Listed with their times; clicking one opens the video at that moment; edit and delete as for region comments (⌘Z undoes) |
 
+## PDF viewer
+
+Opening a PDF shows it in a reader instead of the image viewer: the pages in one continuous vertical column, with zoom, page navigation, find, text selection and a thumbnail/outline sidebar. Pages are drawn by macOS's PDFKit through the `falcon-pdf` crate (`crates/falcon-pdf`), which keeps every Objective-C call in one module and hands the app RGBA pictures. The reader is in `crates/falcon-app/src/app/pdf_view.rs`.
+
+The file is opened, rendered, searched and selected only on a worker thread, never on the UI thread, so a PDF whose contents are still in iCloud (or a 1,000-page book) can't freeze the window. While it opens the viewer says "Opening…", or "Downloading from iCloud…" when the file is dataless (its `SF_DATALESS` flag is set, read without starting a download; `pdf_view::icloud_only` is the one place to switch to a shared iCloud helper). A file PDFKit can't read, or a password-protected one, shows a line saying why. Off macOS the image viewer shows the preview instead.
+
+Rendering: the UI asks the worker for the pages in view and one on either side, at the screen's pixel density rounded up to steps of about 4%, so pages are never blurry at rest. Each page picture is capped at 16 MP (pdf.js's own canvas cap), so past roughly 400% on a Retina screen a page is shown enlarged rather than re-rendered sharper. Pictures live as textures in an LRU cache of 128 MP for pages and 16 MP for thumbnails. While the zoom is moving, pages keep their old picture scaled; 160 ms after it stops they are rendered again at the new scale.
+
+What Eagle does, from `app/pdf-viewer/` (pdf.js 3.1.81 with Eagle's edits in `web/viewer.html` and `web/viewer.js`) and the detail view in `app.bundle.js` and `index.html`:
+
+| Question | Eagle | Seen or inferred | falcon |
+|---|---|---|---|
+| Engine | pdf.js in an iframe (`pdf-viewer/web/viewer.html?path=…&locale=…&theme=…`), the same in the main window and the preview window | Seen | PDFKit, drawn by egui |
+| Toolbar | pdf.js's: sidebar toggle, find, previous/next page, page number and count, zoom out/in and the zoom menu, print and the Tools menu. Eagle hides Open, Download/Save and the annotation editor buttons (`style="display: none"`) | Seen | Sidebar toggle, find, previous/next page, page number field and count, zoom out, zoom menu, zoom in. No print and no Tools menu |
+| Tools menu | Kept: presentation mode, first/last page, rotate clockwise and anticlockwise, text-select and hand tools, page/vertical/horizontal/wrapped scrolling, spreads (none/odd/even), document properties | Seen | Not built: falcon has vertical scrolling without spreads, the text tool only, and no rotation or presentation mode |
+| Layout | pdf.js defaults: vertical scrolling, no spreads, pages centred on the viewer background | Seen | Same: one column, 10 pt between pages, centred |
+| Zoom | pdf.js's menu: Automatic (default), Actual Size, Page Fit, Page Width, 50–400%; zoom steps ×1.1 between 10% and 1000%. Automatic is page width, page fit for landscape pages, never above 125%; 100% shows a point as 4/3 CSS pixels | Seen | Same choices, steps, limits and meaning of 100%; pinch or ⌘-scroll zooms around the pointer |
+| Sidebar | pdf.js's thumbnails, outline, attachments and layers, hidden on open unless the document or the view history asks for it (`sidebarViewOnLoad` −1) | Seen | Hidden on open; the sidebar button shows thumbnails, and its right-click menu switches to the outline. No attachments or layers |
+| Find | pdf.js's find bar (⌘F) with Highlight All, Match Case, Match Diacritics and Whole Words checkboxes, all off by default; ↩ and ⇧↩ or ⌘G and ⇧⌘G step through matches and wrap; the count shows "n of m" | Seen | ⌘F opens a find bar under the toolbar: query, previous/next, match case, "n of m". All matches are always highlighted (as with Highlight All on), the current one stronger; diacritics are ignored; a new search starts from the current page. No whole-words option |
+| Text | pdf.js's text layer (`textLayerMode` 1): drag to select, ⌘C copies | Seen | Drag on a page to select its text (within that page), ⌘C copies, a click clears |
+| Links | Clicks on links in the document open in the default browser (`shell.openExternal`) | Seen | Not handled: links are not clickable |
+| Keys | pdf.js's: n/j and p/k turn pages, Home/End and ⌘↑/⌘↓ go to the ends, ⌘+/⌘−/⌘0 zoom, ⌘F and ⌘G find, r and ⇧R rotate. Eagle's page adds a keyup listener that posts Esc, ← and → to the app, which close the viewer and move to the previous or next item | Seen | n/j, p/k, Home/End, ⌘↑/⌘↓, ↑/↓ (scroll a line), Page Up/Down, ⌘+/⌘−/⌘0, ⌘F, ⌘G/⇧⌘G. ← and → move between items and Esc closes, as in Eagle; Esc closes the find bar first when it is open, and ← → stay in the find field while it has focus. Space closes the viewer as for images (in Eagle it scrolls once the iframe has focus) |
+| Remembered | pdf.js's view history in local storage (`pdfjs.history`, 20 files by fingerprint): page, zoom, scroll position, rotation, sidebar and scroll/spread modes, restored on open (`viewOnLoad` 0) | Seen | The last page and zoom of the 20 most recent PDFs, by item id, saved with the app's state and restored on open |
+| Theme | `theme` in the URL: "light" picks pdf.js's light theme, anything else its dark one, which only recolours the frame (body `#2A2A2E`); pages stay white, never inverted | Seen | Pages are white on the viewer's background colour of the current theme |
+| Large files | pdf.js defaults: range requests and streaming on, auto-fetch on (`disableRange`, `disableStream`, `disableAutoFetch` all false); renders the visible pages and the next one, keeping at least 10 page canvases | Seen (settings); inferred (that ranges matter little for a local file URL) | PDFKit reads the file lazily; the visible pages and one either side are rendered, in a pixel-budgeted cache |
+| Comments | No region comments on PDFs: mousedown on the image is ignored for `pdf` | Seen | Same: the reader takes no comments |
+
 ## Duplicates
 
 The sidebar's Duplicates entry (after All Tags) opens a page that scans the library on a background thread, with a progress bar, and lists the groups it finds. Each group is a row of thumbnails labelled "Identical files" or "Similar pictures (within N of 64 bits)"; each thumbnail shows its size (identical) or its distance in bits from the first (similar), and the first is marked "Kept". Clicking selects as in the grid (⌘ and ⇧ work, and the inspector follows), double-clicking opens the viewer. **Select All but First** selects every member except the first of each group (never an item that is the first of another group), and **Move N to Trash** trashes the selection through the usual trash action, so ⌘Z undoes it. The similarity slider sets how many of the 64 perceptual-hash bits may differ (10 by default, right is stricter) and scans again. The code is in `crates/falcon-app/src/app/duplicates_view.rs`, with the grouping rules in `logic.rs`.
@@ -115,7 +142,7 @@ These are the defaults. All but the arrows, Esc, Z and the viewer's C, ⇧R and 
 | Key | Action |
 |---|---|
 | Space (or ↩) | Open or close the viewer. With audio or video in the viewer, Space plays or pauses instead (Esc or ↩ closes) |
-| ← → ↑ ↓ | Move the selection, or go to the next item in the viewer |
+| ← → ↑ ↓ | Move the selection, or go to the next item in the viewer (with a PDF, ↑ ↓ scroll the document) |
 | ⌘A | Select all |
 | ⌘⌫ | Move to the Trash, or delete permanently when in the Trash |
 | F2 | Rename the selected item |
@@ -145,6 +172,10 @@ These are the defaults. All but the arrows, Esc, Z and the viewer's C, ⇧R and 
 | `[` and `]` (with ⇧, ten) | With video in the viewer, previous or next frame |
 | ⇧, and ⇧. | With video in the viewer, slower or faster |
 | N | With video in the viewer, add a comment at the current time |
+| n/j and p/k, Home and End | With a PDF in the viewer, next and previous page, first and last page (⌘↑ and ⌘↓ too); ↑ ↓ and Page Up/Down scroll |
+| ⌘+, ⌘− and ⌘0 | With a PDF in the viewer, zoom in, out and back to Automatic |
+| ⌘F, ⌘G and ⇧⌘G | With a PDF in the viewer, find in the document and step through matches (↩ and ⇧↩ in the find field) |
+| ⌘C | With text selected in a PDF, copy it |
 
 ## Saving
 
