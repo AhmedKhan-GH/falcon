@@ -1,6 +1,6 @@
 //! UI-independent logic for organising: drop targets in the sidebar trees,
 //! locked folders, a folder's own sort, tag group sections and saved
-//! filters. The egui code in `app.rs` only draws and dispatches.
+//! filters. The egui code in `ui/organize.rs` only draws and dispatches.
 
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};

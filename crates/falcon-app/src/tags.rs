@@ -1,6 +1,6 @@
 //! The tag picker's decisions, after Eagle's tag select panel: which tags
 //! it lists and in which sections, how typed text finds and ranks them,
-//! where the arrow keys go, and the tags it recommends. `app/tag_picker.rs`
+//! where the arrow keys go, and the tags it recommends. `ui/inspector/tag_picker.rs`
 //! draws it.
 
 use std::collections::{HashMap, HashSet};

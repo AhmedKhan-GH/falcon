@@ -1,5 +1,5 @@
 //! The viewer for audio and font items: a waveform with playback controls
-//! here, and the font viewer in `font_view.rs` (see the desktop app chapter
+//! here, and the font viewer in `ui/viewer/font.rs` (see the desktop app chapter
 //! of the docs).
 
 use eframe::egui::{

@@ -34,7 +34,7 @@ pub(crate) struct SidebarCtx<'a> {
 }
 
 /// Outlines a sidebar row while grid items are dragged over it (folders
-/// dragged in the tree get insertion lines instead, see `organize_ui`).
+/// dragged in the tree get insertion lines instead, see `ui/organize.rs`).
 pub(crate) fn drop_highlight(ui: &Ui, resp: &Response, depth: usize) {
     if resp.dnd_hover_payload::<DragItems>().is_some() {
         let r = resp.rect;

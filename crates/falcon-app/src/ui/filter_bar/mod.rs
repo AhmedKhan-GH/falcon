@@ -1,7 +1,7 @@
 //! The filter bar: the chips the user pinned (or that are on), the + menu
 //! that pins them, Clear, the Lock and the saved filters (see the Search
 //! and filters chapter of the docs). The Color, Tags, Folders, Rating,
-//! Type, Notes and URL chips live here; the others in `filters_ui.rs`.
+//! Type, Notes and URL chips live here; the others in `ui/filter_bar/media.rs`.
 
 use std::collections::HashMap;
 

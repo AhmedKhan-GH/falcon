@@ -353,9 +353,9 @@ pub(crate) struct Workspace {
     pub(crate) cards: crate::anim::Cards,
     /// Focus the inspector's title field next frame (F2).
     pub(crate) focus_title: bool,
-    /// The Change Extension dialog (`ext_ui.rs`).
+    /// The Change Extension dialog (`ui/dialogs/ext.rs`).
     pub(crate) ext_dialog: Option<crate::ui::dialogs::ext::ExtDialog>,
-    /// The tag picker (`tag_picker.rs`).
+    /// The tag picker (`ui/inspector/tag_picker.rs`).
     pub(crate) picker: crate::ui::inspector::tag_picker::TagPicker,
     pub(crate) progress: Arc<Mutex<Progress>>,
     /// Imported files found already in the library, waiting to be asked
@@ -376,7 +376,7 @@ pub(crate) struct Workspace {
     pub(crate) undo_root: Option<PathBuf>,
     /// Labels of the actions applied this frame, naming its transaction.
     pub(crate) frame_labels: Vec<String>,
-    /// Unlocked folders and the organising dialogs (see `organize_ui`).
+    /// Unlocked folders and the organising dialogs (see `ui/organize.rs`).
     pub(crate) org: crate::ui::organize::OrgState,
     /// Text typed into the Date, Duration, Camera and Font chips.
     pub(crate) filter_ui: crate::ui::filter_bar::media::MediaFilterUi,
@@ -387,13 +387,13 @@ pub(crate) struct Workspace {
     pub(crate) text: Option<crate::ui::viewer::text::TextView>,
     /// The Duplicates page's hash cache and results.
     pub(crate) duplicates: crate::ui::grid::duplicates::Duplicates,
-    /// Comment mode, crop tool and comment editing (`image_edit.rs`).
+    /// Comment mode, crop tool and comment editing (`app/image_edit.rs`).
     pub(crate) tools: image_edit::Tools,
     /// When `metadata.json` is next backed up (see `backups.rs`).
     pub(crate) backup: crate::backups::Schedule,
-    /// Export requests, prompts and the background copy (`export_ui`).
+    /// Export requests, prompts and the background copy (`ui/dialogs/export.rs`).
     pub(crate) export: crate::ui::dialogs::export::ExportState,
-    /// Folders and smart folders picked with ⌘ and ⇧ (`folders_ui`).
+    /// Folders and smart folders picked with ⌘ and ⇧ (`ui/sidebar/folders.rs`).
     pub(crate) folders: crate::ui::sidebar::folders::FolderUi,
     /// Polls the library for changes made by other apps (`watch.rs`).
     pub(crate) watch: Option<crate::watch::Watcher>,

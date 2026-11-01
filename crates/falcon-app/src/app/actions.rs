@@ -71,11 +71,11 @@ pub(crate) enum Action {
     /// Edit ▸ Move Folder on the open folder or smart folder.
     Arrange(crate::organize::Arrange),
     /// Folder icons, sorts, passwords and reordering, nested smart
-    /// folders, tag groups and saved filters (see `organize_ui`).
+    /// folders, tag groups and saved filters (see `ui/organize.rs`).
     Organize(crate::ui::organize::OrgAction),
-    /// Thumbnails, palettes, covers, rotate, crop and comments (`image_edit.rs`).
+    /// Thumbnails, palettes, covers, rotate, crop and comments (`app/image_edit.rs`).
     Edit(image_edit::Op),
-    /// Several folders at once, Move Folder and folder deletion (`folders_ui`).
+    /// Several folders at once, Move Folder and folder deletion (`ui/sidebar/folders.rs`).
     Folders(crate::ui::sidebar::folders::FolderAction),
     /// Sets or removes the thumbnail background of these items.
     Background(Vec<String>, Option<logic::ThumbBg>),

@@ -59,7 +59,7 @@ pub struct App {
     pub(crate) focus_search: bool,
     /// Focus the sidebar's folder filter next frame (Find ▸ Filter Sidebar).
     pub(crate) focus_folder_filter: bool,
-    /// Go to Folder (`quick_switch_ui.rs`).
+    /// Go to Folder (`ui/dialogs/quick_switch.rs`).
     pub(crate) quick: crate::ui::dialogs::quick_switch::QuickSwitch,
     /// Eagle's in-app tag clipboard (Copy Tags), shared by the open
     /// libraries; the text also goes to the system clipboard.
@@ -72,7 +72,7 @@ pub struct App {
     pub(crate) open_apps: crate::open_with::AppCache,
     /// Recently opened libraries, newest first.
     pub(crate) recent: Vec<PathBuf>,
-    /// Folders items were last added to, newest first (`item_cmds.rs`).
+    /// Folders items were last added to, newest first (`app/commands/items.rs`).
     pub(crate) recent_folders: Vec<String>,
     /// The Rename dialog for several items, and the template it used last.
     pub(crate) item_rename: Option<commands::items::ItemRename>,
@@ -111,20 +111,20 @@ pub struct App {
     pub(crate) collect_extra: Option<crate::collect::Meta>,
     /// Audio playback for the viewer.
     pub(crate) audio: crate::audio::Audio,
-    /// Video playback for the viewer (`video_view.rs`).
+    /// Video playback for the viewer (`ui/viewer/video.rs`).
     pub(crate) video: crate::ui::viewer::video::VideoState,
     /// The font viewer's tab and theme, kept across fonts and launches.
     pub(crate) font_look: crate::ui::viewer::font::FontLook,
-    /// The PDF reader for the viewer (`pdf_view.rs`).
+    /// The PDF reader for the viewer (`ui/viewer/pdf.rs`).
     pub(crate) pdf: crate::ui::viewer::pdf::PdfState,
-    /// The image viewer's zoom mode and remembered views (`image_view.rs`).
+    /// The image viewer's zoom mode and remembered views (`ui/viewer/image.rs`).
     pub(crate) image: crate::ui::viewer::image::ImageState,
     /// Drop targets and other import state (`import.rs`).
     pub(crate) imports: import::Imports,
     /// The macOS menu bar (`menu.rs`).
     pub(crate) menu_bar: crate::menu::Bar,
     /// Layouts remembered per view, the fallback from before, and the
-    /// display options (see `layout_panel.rs`).
+    /// display options (see `ui/toolbar/layout_panel.rs`).
     pub(crate) layouts: HashMap<String, Layout>,
     pub(crate) legacy_layout: Option<Layout>,
     pub(crate) display: logic::Display,
@@ -138,9 +138,9 @@ pub struct App {
     /// The auto-import folder's watcher and what it has handed over
     /// (`auto_import.rs`).
     pub(crate) auto_import: crate::auto_import::AutoImport,
-    /// Presentation mode and the other View modes (`modes.rs`).
+    /// Presentation mode and the other View modes (`ui/viewer/modes.rs`).
     pub(crate) modes: crate::ui::viewer::modes::Modes,
-    /// The item open in its own window (`preview_window.rs`).
+    /// The item open in its own window (`ui/viewer/preview_window.rs`).
     pub(crate) preview: Option<crate::ui::viewer::preview_window::PreviewWin>,
 
     /// The About window (`about.rs`).
@@ -149,20 +149,20 @@ pub struct App {
     pub(crate) zone: logic::Zone,
     /// The sidebar rows the arrow keys walk (`ui/sidebar`).
     pub(crate) side: crate::ui::sidebar::SidebarKeys,
-    /// A notice to acknowledge (`library_ui.rs`).
+    /// A notice to acknowledge (`ui/dialogs/library_notices.rs`).
     pub(crate) alert: Option<crate::ui::dialogs::library_notices::Alert>,
     /// Reload the shown library from disk next frame: a `metadata.json`
     /// write was refused because the file changed elsewhere.
     pub(crate) conflict_reload: bool,
     /// A library that can't be found, for the missing-library screen.
     pub(crate) missing: Option<PathBuf>,
-    /// A merge of another library in progress (`library_ui.rs`).
+    /// A merge of another library in progress (`ui/dialogs/library_notices.rs`).
     pub(crate) merge: Option<crate::ui::dialogs::library_notices::Merge>,
     /// An `.eaglepack` import waiting for an answer.
     pub(crate) pack_ask: Option<crate::ui::dialogs::library_notices::PackAsk>,
     /// Empty Cache and Reload is asking for confirmation.
     pub(crate) confirm_reload: bool,
-    /// A library being read on a background thread (`library_ui.rs`).
+    /// A library being read on a background thread (`ui/dialogs/library_notices.rs`).
     pub(crate) loading: Option<crate::ui::dialogs::library_notices::Loading>,
 }
 

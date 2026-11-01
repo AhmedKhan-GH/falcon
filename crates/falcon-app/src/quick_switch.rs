@@ -1,5 +1,5 @@
 //! Go to Folder, Eagle's quick switcher: which rows each tab lists for a
-//! typed keyword, and how Tab moves between the tabs. `app/quick_switch_ui.rs`
+//! typed keyword, and how Tab moves between the tabs. `ui/dialogs/quick_switch.rs`
 //! draws it.
 
 use std::collections::HashMap;

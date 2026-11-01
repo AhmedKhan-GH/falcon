@@ -1,6 +1,6 @@
 //! The status toast: one short message at a time, with how long it stays,
 //! an optional Undo button and an optional link to a folder. Drawing lives in
-//! `app.rs`; this module holds the pure model so it can be tested.
+//! `ui/toast.rs`; this module holds the pure model so it can be tested.
 
 use std::time::Instant;
 

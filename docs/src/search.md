@@ -66,7 +66,7 @@ Eagle has no typo tolerance. falcon's app adds it on top of Eagle's matching (`Q
 
 The bar under the toolbar shows one chip for each filter that is pinned or on. Eagle's default pins are Color, Tags, Folders, Shape, Rating and Type. The + button lists every filter the library can use, each with a pin that keeps it in the bar or takes it out, and clicking a name opens that filter. Duration, BPM, Camera and Font are only listed when some item has a value for them. The pins are remembered across launches with the search scope.
 
-A filter that is on always shows its chip, pinned or not, and a chip opened from the + menu or a key stays until its menu closes. The code is in `crates/falcon-app/src/app/filter_bar.rs` and `filters_ui.rs`.
+A filter that is on always shows its chip, pinned or not, and a chip opened from the + menu or a key stays until its menu closes. The code is in `crates/falcon-app/src/ui/filter_bar/mod.rs` and `ui/filter_bar/media.rs`.
 
 - **Clear** appears while any rule is on. It switches every rule off and also releases the Lock, as Eagle's reset does. The search text stays.
 - **Clear Filter** (⇧⌥⌘F, Find ▸ Clear Filter) does the same as the Clear button.
@@ -235,7 +235,7 @@ Only Eagle's AI searches, `image` and `semantic`, are skipped, and applying a fi
 
 ## Go to Folder
 
-⌘J (Find ▸ Go to Folder…) and a bare J open a switcher near the top of the window. Pressing the key again closes it, and reopening it keeps the last keyword, selected. The code is in `crates/falcon-app/src/quick_switch.rs` and `app/quick_switch_ui.rs`.
+⌘J (Find ▸ Go to Folder…) and a bare J open a switcher near the top of the window. Pressing the key again closes it, and reopening it keeps the last keyword, selected. The code is in `crates/falcon-app/src/quick_switch.rs` and `ui/dialogs/quick_switch.rs`.
 
 - **Tabs:** Folders, Tags, Smart Folders and Items. Tab moves to the next tab and ⇧Tab to the previous one, both wrapping.
 - **No keyword:** the Folders and Smart Folders tabs list the whole tree in order, indented by depth, with the parent's name muted at the right. The Tags tab lists tags with grouped ones first, then the others, each in plain string order. The Items tab lists every item that is not in the Trash.
