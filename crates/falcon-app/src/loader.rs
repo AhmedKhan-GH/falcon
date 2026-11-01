@@ -16,6 +16,9 @@ pub enum Tier {
     Grid,
     Preview,
     Full,
+    /// A grid card larger than the grid tier's render, decoded from the
+    /// original when the layout panel's Thumbnail option is Quality.
+    Card,
     /// The original at its full resolution, cut into tiles; only for the
     /// item in the viewer (see [`Loader::original`]).
     Original,
@@ -27,6 +30,7 @@ impl Tier {
             Tier::Grid => 512,
             Tier::Preview => 1024,
             Tier::Full => crate::logic::FULL_TIER_SIDE,
+            Tier::Card => crate::logic::CARD_TIER_SIDE,
             Tier::Original => u32::MAX,
         }
     }
@@ -36,6 +40,8 @@ impl Tier {
             Tier::Grid => 900,
             Tier::Preview => 24,
             Tier::Full => 4,
+            // At most 16 × 1600 × 1600 × 4 bytes, about 160 MB.
+            Tier::Card => 16,
             Tier::Original => 1,
         }
     }
@@ -91,6 +97,14 @@ pub fn original_job(item: &Item, root: &std::path::Path, tile: usize) -> Option<
 pub fn tiff_page_job(item: &Item, root: &std::path::Path, page: usize) -> Job {
     let key = (format!("{}#page{page}", item.id), Tier::Full);
     Job { key, path: item.original_path(root), svg: false, quicklook: false, tile: 0, region: None, raw: false, page }
+}
+
+/// The job decoding `item`'s original for a large grid card, for the
+/// formats Eagle swaps in (`logic::quality_card_format`).
+pub fn card_job(item: &Item, root: &std::path::Path) -> Option<Job> {
+    let ext = item.ext.to_lowercase();
+    crate::logic::quality_card_format(&ext)
+        .then(|| Job { key: (item.id.clone(), Tier::Card), path: item.original_path(root), svg: false, quicklook: false, tile: 0, region: None, raw: false, page: 0 })
 }
 
 /// Picks the file to decode for `item`: the thumbnail when it exists (unless
@@ -247,7 +261,7 @@ impl Loader {
                 }
             });
         }
-        let caches = [Tier::Grid, Tier::Preview, Tier::Full]
+        let caches = [Tier::Grid, Tier::Preview, Tier::Full, Tier::Card]
             .into_iter()
             .map(|t| (t, LruCache::new(NonZeroUsize::new(t.capacity()).unwrap())))
             .collect();

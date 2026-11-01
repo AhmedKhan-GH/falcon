@@ -62,6 +62,10 @@ pub struct Display {
     pub columns: ListColumns,
     /// The subfolder cards above a folder's items are folded away.
     pub strip_collapsed: bool,
+    /// The layout panel's Thumbnail option: Quality (Eagle's default,
+    /// `eagle.list.show.originalImageWhenLarge`) shows large cards from
+    /// their originals; Speed keeps the thumbnails.
+    pub quality: bool,
     /// Hovered audio cards start playing (Eagle's `listAudioAutoPlay`,
     /// switched by the play button on the card).
     pub audio_autoplay: bool,
@@ -69,7 +73,7 @@ pub struct Display {
 
 impl Default for Display {
     fn default() -> Self {
-        Display { show_name: true, show_info: true, info: InfoType::Dimensions, show_ext: true, ext_badge: true, comment_badge: true, fill: false, subfolders: false, columns: ListColumns::default(), strip_collapsed: false, audio_autoplay: true }
+        Display { show_name: true, show_info: true, info: InfoType::Dimensions, show_ext: true, ext_badge: true, comment_badge: true, fill: false, subfolders: false, columns: ListColumns::default(), strip_collapsed: false, quality: true, audio_autoplay: true }
     }
 }
 
@@ -341,10 +345,39 @@ pub fn set_thumb_bg(item: &mut Item, bg: Option<ThumbBg>) -> bool {
     item.extra.get("background") != before.as_ref()
 }
 
+
+/// Largest side of a large card's picture decoded from its original.
+pub const CARD_TIER_SIDE: u32 = 1600;
+
+/// The formats whose large cards show the original in Quality mode, as
+/// Eagle's `enlargeThumbnails` swaps them (jpg, png, webp, bmp, jfif).
+pub fn quality_card_format(ext: &str) -> bool {
+    matches!(ext, "jpg" | "jpeg" | "png" | "webp" | "bmp" | "jfif")
+}
+
+/// Whether a card drawn `shown_px` physical pixels on its long side should
+/// show its original: Quality is on, the format is one Eagle swaps, and the
+/// card is drawn larger than the grid render (`grid_side` pixels), which
+/// would otherwise be enlarged. Eagle swaps once its tile height passes
+/// 600 px; falcon's tiles stop at 400 points, so it asks the question
+/// directly.
+pub fn wants_card_original(quality: bool, ext: &str, shown_px: f32, grid_side: f32) -> bool {
+    quality && quality_card_format(ext) && shown_px > grid_side
+}
+
 #[cfg(test)]
 mod display_tests {
     use super::*;
     use std::collections::HashMap;
+
+    #[test]
+    fn large_cards_show_originals_in_quality_mode() {
+        assert!(wants_card_original(true, "jpg", 800.0, 512.0));
+        assert!(!wants_card_original(true, "jpg", 400.0, 512.0), "small cards keep the thumbnail");
+        assert!(!wants_card_original(false, "jpg", 800.0, 512.0), "Speed keeps thumbnails");
+        assert!(!wants_card_original(true, "gif", 800.0, 512.0), "only the formats Eagle swaps");
+        assert!(Display::default().quality, "Eagle defaults to Quality");
+    }
     use crate::logic::scope::Scope;
     use crate::logic::format::format_ms;
     use crate::logic::layout::{Layout, layout_for, layout_key};

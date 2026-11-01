@@ -242,6 +242,10 @@ impl App {
         ui.ctx().data_mut(|d| d.insert_temp(ui.scope_id().with("grid-offset"), offset));
         self.hover_preview(ui, lib, hovered, scrolled, order_changed || clicked.is_some() || opened.is_some());
         self.ws.frame_jobs.extend(jobs);
+        // Thumbnails first; large cards' originals after them.
+        let (cards, rest): (Vec<_>, Vec<_>) = std::mem::take(&mut self.ws.frame_jobs).into_iter().partition(|j| j.key.1 == Tier::Card);
+        self.ws.frame_jobs = rest;
+        self.ws.frame_jobs.extend(cards);
         if let Some(id) = middle {
             self.used_item(&id);
             self.preview = Some(crate::ui::viewer::preview_window::PreviewWin::new(id));
@@ -291,13 +295,40 @@ impl App {
         self.ws.viewer = after.or(before).cloned();
     }
 
+    /// The layout panel's Quality option: a card drawn larger than its grid
+    /// render shows its original instead (decoded at up to
+    /// `logic::CARD_TIER_SIDE`), once loaded. Asks for it while wanted.
+    fn large_card(&mut self, ui: &Ui, lib: &Library, item: &Item, rect: Rect) -> Option<egui::TextureHandle> {
+        let shown_px = rect.size().max_elem() * ui.ctx().pixels_per_point();
+        // An original no bigger than the grid render has nothing to add.
+        if item.width.max(item.height) as f32 <= crate::hover::GRID_SIDE {
+            return None;
+        }
+        if !logic::wants_card_original(self.display.quality, &item.ext.to_lowercase(), shown_px, crate::hover::GRID_SIDE) {
+            return None;
+        }
+        if let Some(tex) = self.ws.loader.get(&item.id, Tier::Card) {
+            return Some(tex.clone());
+        }
+        let path = item.original_path(lib.root());
+        // An original still in iCloud isn't downloaded for a card.
+        if !self.ws.loader.has_failed(&item.id, Tier::Card)
+            && !crate::icloud::is_dataless(&path)
+            && let Some(j) = crate::loader::card_job(item, lib.root())
+        {
+            self.ws.frame_jobs.push(j);
+        }
+        None
+    }
+
     /// Draws an item's image into `rect`: fitted without enlarging (grid),
     /// or filling it exactly (waterfall and justified boxes already have the
     /// image's shape).
     pub(crate) fn draw_image(&mut self, ui: &Ui, lib: &Library, item: &Item, rect: Rect, fill: bool) {
         let failed = self.ws.loader.has_failed(&item.id, Tier::Grid);
         let playing = self.ws.cards.texture(&item.id).cloned();
-        match playing.or_else(|| self.ws.loader.get(&item.id, Tier::Grid).cloned()) {
+        let large = self.large_card(ui, lib, item, rect);
+        match playing.or(large).or_else(|| self.ws.loader.get(&item.id, Tier::Grid).cloned()) {
             Some(tex) => {
                 let natural = if item.width > 0 && item.height > 0 { vec2(item.width as f32, item.height as f32) } else { tex.size_vec2() };
                 let scale = (rect.width() / natural.x).min(rect.height() / natural.y);
@@ -316,7 +347,8 @@ impl App {
     pub(crate) fn draw_image_cover(&mut self, ui: &Ui, lib: &Library, item: &Item, rect: Rect) {
         let failed = self.ws.loader.has_failed(&item.id, Tier::Grid);
         let playing = self.ws.cards.texture(&item.id).cloned();
-        match playing.or_else(|| self.ws.loader.get(&item.id, Tier::Grid).cloned()) {
+        let large = self.large_card(ui, lib, item, rect);
+        match playing.or(large).or_else(|| self.ws.loader.get(&item.id, Tier::Grid).cloned()) {
             Some(tex) => {
                 let size = tex.size_vec2();
                 let s = (rect.width() / size.x).max(rect.height() / size.y);
