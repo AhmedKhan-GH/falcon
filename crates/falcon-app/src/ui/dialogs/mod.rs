@@ -13,3 +13,4 @@ pub(crate) mod collect;
 pub(crate) mod confirm;
 pub(crate) mod history;
 pub(crate) mod smart;
+pub(crate) mod add_to_folders;

@@ -17,6 +17,7 @@ mod urls;
 mod icloud;
 mod icons;
 mod links;
+mod folder_picker;
 mod import_dupes;
 mod loader;
 mod logic;

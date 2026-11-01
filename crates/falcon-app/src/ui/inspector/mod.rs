@@ -242,16 +242,9 @@ impl App {
                     }
                 }
                 let add = ui.add(egui::Button::new(RichText::new(format!("{}  Add All to Folder", ic::PLUS)).size(12.0).color(t::p().text_muted)).frame(false));
-                egui::Popup::menu(&add).show(|ui| {
-                    ui.set_min_width(200.0);
-                    egui::ScrollArea::vertical().max_height(320.0).show(ui, |ui| {
-                        for f in lib.all_folders() {
-                            if ui.button(&f.name).clicked() {
-                                self.push_bulk(ids.len(), Action::AddToFolder(ids.clone(), f.id.clone()));
-                            }
-                        }
-                    });
-                });
+                if add.clicked() {
+                    self.open_add_to_folders(lib, ids.clone());
+                }
             });
             if let Some(fid) = remove_folder {
                 self.ws.actions.push(Action::RemoveFromFolder(ids.clone(), fid));
@@ -523,7 +516,7 @@ impl App {
         let folders_open = self.fold_heading(ui, Fold::Folders, "Folders");
         let mut remove_folder = None;
         let mut open_folder = None;
-        let mut add_folder = None;
+        let mut pick_folders = false;
         if folders_open {
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing = vec2(6.0, 6.0);
@@ -537,16 +530,10 @@ impl App {
                     }
                 }
                 let add = ui.add(egui::Button::new(RichText::new(format!("{}  Add Category", ic::PLUS)).size(12.0).color(t::p().text_muted)).frame(false));
-                egui::Popup::menu(&add).show(|ui| {
-                    ui.set_min_width(200.0);
-                    egui::ScrollArea::vertical().max_height(320.0).show(ui, |ui| {
-                        for f in lib.all_folders() {
-                            if !item.folders.contains(&f.id) && ui.button(&f.name).clicked() {
-                                add_folder = Some(f.id.clone());
-                            }
-                        }
-                    });
-                });
+                // The Add to Folders picker, as Eagle's folder panel.
+                if add.clicked() {
+                    pick_folders = true;
+                }
             });
         }
         if let Some(fid) = remove_folder {
@@ -563,13 +550,8 @@ impl App {
             self.ws.anchor = Some(item.id.clone());
             self.ws.scroll_to = Some(item.id.clone());
         }
-        if let Some(fid) = add_folder {
-            self.note_folder_use(std::slice::from_ref(&fid));
-            let mut it = changed.clone().unwrap_or_else(|| item.clone());
-            // Eagle's folder picker in the inspector adds auto-tags too.
-            if falcon_library::autotag::join_folder(&mut it, &lib.metadata.folders, &fid) {
-                changed = Some(it);
-            }
+        if pick_folders {
+            self.open_add_to_folders(lib, vec![item.id.clone()]);
         }
 
         self.comment_list(ui, &item);

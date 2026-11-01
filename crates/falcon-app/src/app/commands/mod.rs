@@ -554,6 +554,12 @@ impl App {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!on));
             }
             C::AddToLastFolder => self.add_to_last_used(self.acted_on()),
+            C::AddToFolders => {
+                if let Some(l) = self.ws.lib.clone() {
+                    let ids = self.acted_on();
+                    self.open_add_to_folders(&lock(&l), ids);
+                }
+            }
             C::CustomThumbnail | C::ClipboardThumbnail => {
                 let Some(id) = self.acted_on().into_iter().next() else { return };
                 let allowed = self.ws.lib.clone().is_some_and(|s| lock(&s).item(&id).is_some_and(|i| thumbnail::custom_thumbnail_allowed(&i.ext)));

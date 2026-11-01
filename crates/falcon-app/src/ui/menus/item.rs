@@ -29,15 +29,12 @@ impl App {
             self.location_menu(ui, lib, item);
         }
         self.item_copy_menu(ui, targets);
-        ui.menu_button("Add to Folder", |ui| {
-            egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
-                for f in lib.all_folders() {
-                    if ui.button(&f.name).clicked() {
-                        self.push_bulk(targets.len(), Action::AddToFolder(targets.to_vec(), f.id.clone()));
-                    }
-                }
-            });
-        });
+        if self.ws.scope != Scope::Trash {
+            let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::AddToFolders);
+            if ui.add(egui::Button::new("Add to Folders…").shortcut_text(keys)).clicked() {
+                self.open_add_to_folders(lib, targets.to_vec());
+            }
+        }
         let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::AddToLastFolder);
         let last = commands::items::last_used(&self.recent_folders, |id| logic::find_folder(&lib.metadata.folders, id).is_some());
         let tip = last.as_deref().and_then(|id| logic::find_folder(&lib.metadata.folders, id)).map(|f| f.name.clone());

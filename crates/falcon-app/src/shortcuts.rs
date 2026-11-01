@@ -101,6 +101,8 @@ pub enum Command {
     NewTextFile,
     /// Organize ▸ Add to Last Used Folder.
     AddToLastFolder,
+    /// Find ▸ Add to Folders…: the folder picker for the selection.
+    AddToFolders,
     /// Edit ▸ Custom Thumbnail: from a file, or from the clipboard.
     CustomThumbnail,
     ClipboardThumbnail,
@@ -445,6 +447,7 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::CopyTags, id: "organize.tag.copy", group: "Tags", label: "Copy the selection's tags", default: k(CMD_SHIFT, Key::C), aliases: &[] },
     Spec { cmd: Command::PasteTags, id: "organize.tag.paste", group: "Tags", label: "Paste tags onto the selection", default: k(CMD_SHIFT, Key::V), aliases: &[] },
     // Unbound by default, as in Eagle.
+    Spec { cmd: Command::AddToFolders, id: "find.add.to", group: "Find", label: "Add the selection to folders", default: k(CMD_SHIFT, Key::J), aliases: &[] },
     Spec { cmd: Command::AddToLastFolder, id: "organize.folder.addLast", group: "Organize", label: "Add to the last used folder", default: k(SHIFT, Key::D), aliases: &[] },
     Spec { cmd: Command::ClearTags, id: "organize.tag.clear", group: "Tags", label: "Clear the selection's tags", default: None, aliases: &[] },
     Spec { cmd: Command::Presentation, id: "view.toggle.slideshow", group: "View", label: "Enter or leave presentation mode", default: k(NONE, Key::F5), aliases: &[] },

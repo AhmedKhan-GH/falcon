@@ -40,6 +40,10 @@ pub(crate) struct FolderUi {
     pub trash_items: bool,
     /// New Folder with Selection: the items, and the name typed so far.
     pub new_with: Option<(Vec<String>, String)>,
+    /// The Add to Folders picker (`ui/dialogs/add_to_folders.rs`), and its
+    /// "take them out of the open folder" box, kept between openings.
+    pub picker: Option<crate::folder_picker::Picker>,
+    pub picker_remove: bool,
 }
 
 /// The batch rename dialog as filled in so far.
@@ -103,6 +107,11 @@ pub(crate) enum FolderAction {
     DuplicateSmart(String),
     /// A new top-level folder with this name, holding these items.
     CreateWith(String, Vec<String>),
+    /// The Add to Folders picker's save: these items join the first
+    /// folders and leave the second.
+    Categorize(Vec<String>, Vec<String>, Vec<String>),
+    /// A folder made in the picker, and whether it starts ticked.
+    PickerCreate(String, crate::folder_picker::NewPlace, bool),
 }
 
 impl FolderAction {
@@ -123,6 +132,8 @@ impl FolderAction {
             FolderAction::Duplicate(_) => "Duplicate folder".into(),
             FolderAction::DuplicateSmart(_) => "Duplicate smart folder".into(),
             FolderAction::CreateWith(_, items) => format!("New folder with {} items", items.len()),
+            FolderAction::Categorize(items, ..) => format!("Add {} to folders", items.len()),
+            FolderAction::PickerCreate(..) => "New folder".into(),
         }
     }
 }
@@ -440,6 +451,7 @@ impl App {
         self.rename_dialog(ctx, lib);
         self.move_dialog(ctx, lib);
         self.new_with_dialog(ctx);
+        self.add_to_folders_dialog(ctx, lib);
     }
 
     /// New Folder with Selection: asks for the name of the folder the
@@ -888,6 +900,73 @@ impl App {
                 self.go(Scope::Folder(id));
                 r
             }
+            FolderAction::Categorize(items, add, remove) => self.categorize(lib, &items, &add, &remove),
+            FolderAction::PickerCreate(name, place, check) => {
+                use crate::folder_picker::NewPlace;
+                let (parent, index) = match &place {
+                    NewPlace::Top => (None, Some(0)),
+                    NewPlace::Inside(p) => (Some(p.clone()), None),
+                    NewPlace::After(of) => match crate::organize::locate(&lib.metadata.folders, of) {
+                        Some((p, at)) => (p.map(str::to_string), Some(at + 1)),
+                        None => (None, Some(0)),
+                    },
+                };
+                let id = lib.create_folder(parent.as_deref(), &name)?;
+                if let Some(at) = index {
+                    lib.reorder_folder(&id, parent.as_deref(), at)?;
+                }
+                if let Some(p) = self.ws.folders.picker.as_mut() {
+                    if check {
+                        p.checked.insert(id.clone());
+                    }
+                    if let Some(parent) = parent {
+                        p.expanded.insert(parent);
+                    }
+                }
+                Ok(())
+            }
         }
+    }
+}
+
+impl App {
+    /// Files `items` into the folders `add` (with their auto-tags) and out
+    /// of `remove`, as the Add to Folders picker's save does; items that
+    /// leave the open view hand the selection on.
+    fn categorize(&mut self, lib: &mut Library, items: &[String], add: &[String], remove: &[String]) -> falcon_library::Result<()> {
+        let mut r = Ok(());
+        for id in items {
+            let Some(mut item) = lib.item(id).cloned() else { continue };
+            let mut changed = false;
+            for f in add {
+                changed |= falcon_library::autotag::join_folder(&mut item, &lib.metadata.folders, f);
+            }
+            let before = item.folders.len();
+            item.folders.retain(|f| !remove.contains(f));
+            changed |= item.folders.len() != before;
+            if changed {
+                r = r.and(lib.update_item(item));
+            }
+        }
+        self.note_folder_use(add);
+        let leaves = match &self.ws.scope {
+            Scope::Folder(open) => remove.contains(open),
+            Scope::Uncategorized => !add.is_empty(),
+            _ => false,
+        };
+        if leaves {
+            self.leave_viewed(items);
+            self.select_after_removal(items);
+        }
+        let n = crate::ui::dialogs::export::plural(items.len(), "item");
+        match add {
+            [one] => {
+                let name = logic::find_folder(&lib.metadata.folders, one).map_or_else(String::new, |f| f.name.clone());
+                self.flash_folder(format!("Added {n} to"), &name, one, true);
+            }
+            [] => self.flash_undo(format!("Took {n} out of {}", crate::ui::dialogs::export::plural(remove.len(), "folder"))),
+            _ => self.flash_undo(format!("Added {n} to {} folders", add.len())),
+        }
+        r
     }
 }
