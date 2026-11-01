@@ -381,14 +381,10 @@ impl App {
         self.ws.actions.push(Action::PlaceQuick(kind, id, target.to_string(), zone == DropZone::After));
     }
 
-    /// The folder context menu entries falcon adds: password, item sort,
-    /// icon and colour.
-    pub(crate) fn folder_menu_extras(&mut self, ui: &mut Ui, lib: &Library, f: &Folder) {
+    /// The Password submenu of a folder's context menu, in the sidebar and
+    /// on a subfolder card.
+    pub(crate) fn folder_password_menu(&mut self, ui: &mut Ui, f: &Folder) {
         let shut = organize::is_shut(f, &self.ws.org.unlocked);
-        // Eagle disables its auto-tag entry while the folder is locked.
-        if ui.add_enabled(!shut, egui::Button::new("Auto-Tags…")).on_hover_text("Name and auto-tags (⇧⌘R)").clicked() {
-            self.open_folder_settings(f);
-        }
         ui.menu_button("Password", |ui| {
             let mut open = |mode| {
                 self.ws.org.password = Some(PasswordDraft {
@@ -417,6 +413,17 @@ impl App {
                 }
             }
         });
+    }
+
+    /// The folder context menu entries falcon adds: password, item sort,
+    /// icon and colour.
+    pub(crate) fn folder_menu_extras(&mut self, ui: &mut Ui, lib: &Library, f: &Folder) {
+        let shut = organize::is_shut(f, &self.ws.org.unlocked);
+        // Eagle disables its auto-tag entry while the folder is locked.
+        if ui.add_enabled(!shut, egui::Button::new("Auto-Tags…")).on_hover_text("Name and auto-tags (⇧⌘R)").clicked() {
+            self.open_folder_settings(f);
+        }
+        self.folder_password_menu(ui, f);
         let parent = organize::locate(&lib.metadata.folders, &f.id).and_then(|(p, _)| p).map(str::to_string);
         self.folder_title_sort_menu(ui, parent.as_deref());
         ui.menu_button("Sort Items By", |ui| {
@@ -1496,7 +1503,7 @@ impl App {
 
 impl App {
     /// The password, saved filter name and group delete dialogs.
-    fn open_folder_settings(&mut self, f: &Folder) {
+    pub(crate) fn open_folder_settings(&mut self, f: &Folder) {
         self.ws.org.auto_tag = Some(AutoTagDraft { id: f.id.clone(), name: f.name.clone(), tags: f.tags.clone(), typed: String::new() });
     }
 

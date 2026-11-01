@@ -101,7 +101,7 @@ impl App {
                         let thumb = Rect::from_min_size(rect.min + vec2(0.0, 6.0), vec2(CARD_W, THUMB_H));
                         let p = ui.painter();
                         p.rect_filled(thumb, t::RADIUS, t::p().field);
-                        let border = if resp.hovered() { t::p().card_hover } else { t::p().card_border };
+                        let border = if resp.hovered() || resp.context_menu_opened() { t::p().card_hover } else { t::p().card_border };
                         p.rect_stroke(thumb, t::RADIUS, Stroke::new(1.0, border), StrokeKind::Inside);
                         if child.is_locked() {
                             p.text(thumb.center(), Align2::CENTER_CENTER, crate::icons::FOLDER, font(30.0), t::p().text_disabled);
@@ -162,6 +162,27 @@ impl App {
                         if resp.double_clicked() || resp.clicked() {
                             open = Some(child.id.clone());
                         }
+                        let shut = crate::organize::is_shut(child, &self.ws.org.unlocked);
+                        resp.context_menu(|ui| {
+                            ui.set_min_width(180.0);
+                            if ui.add_enabled(!shut, egui::Button::new("Rename")).clicked() {
+                                self.ws.strip_rename = Some((child.id.clone(), child.name.clone()));
+                            }
+                            if ui.add_enabled(!shut, egui::Button::new("Auto-Tags…")).clicked() {
+                                self.open_folder_settings(child);
+                            }
+                            self.folder_password_menu(ui, child);
+                            if !shut {
+                                ui.separator();
+                                self.tree_export_menu(ui, crate::ui::dialogs::export::Target::Folder(child.id.clone()), true);
+                            }
+                            ui.separator();
+                            let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::Trash);
+                            let delete = egui::Button::new(egui::RichText::new("Delete Folder").color(t::p().icon_red)).shortcut_text(keys);
+                            if ui.add_enabled(!shut, delete).clicked() {
+                                self.ask_delete_folders(lib, vec![child.id.clone()]);
+                            }
+                        });
                         ui.add_space(4.0);
                     }
                 });
