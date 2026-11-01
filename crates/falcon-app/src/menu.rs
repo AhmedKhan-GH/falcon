@@ -76,6 +76,8 @@ pub struct State {
     pub tag_clipboard: bool,
     /// Presentation mode is on.
     pub presenting: bool,
+    /// The main window floats above other apps' windows.
+    pub on_top: bool,
 }
 
 impl State {
@@ -142,6 +144,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::Crop => s.library && s.croppable,
         C::Documentation => s.docs,
         C::ToggleName | C::ToggleInfo | C::ToggleComments | C::ToggleSubfolders => s.library,
+        C::AlwaysOnTop => true,
         C::Presentation => s.library && (s.viewer || s.selected > 0 || s.presenting),
         C::Player(_) => false,
     }
@@ -163,6 +166,7 @@ pub enum Check {
     Comments,
     Subfolders,
     Presentation,
+    AlwaysOnTop,
 }
 
 impl Check {
@@ -181,6 +185,7 @@ impl Check {
             Check::Comments => s.show_comments,
             Check::Subfolders => s.subfolders,
             Check::Presentation => s.presenting,
+            Check::AlwaysOnTop => s.on_top,
         }
     }
 }
@@ -317,6 +322,8 @@ pub static MENUS: &[(&str, &[Entry])] = &[
     (
         "View",
         &[
+            checked("Always on Top", Command::AlwaysOnTop, Check::AlwaysOnTop),
+            SEP,
             checked("All Items", Command::Page(Page::All), Check::Page(Page::All)),
             checked("Uncategorized", Command::Page(Page::Uncategorized), Check::Page(Page::Uncategorized)),
             checked("Untagged", Command::Page(Page::Untagged), Check::Page(Page::Untagged)),
@@ -776,9 +783,10 @@ mod tests {
         let titles: Vec<&str> = MENUS.iter().map(|m| m.0).collect();
         assert_eq!(titles, ["File", "Edit", "Find", "Organize", "View", "Window", "Help"]);
         let keys = Shortcuts::default();
-        // The View pages are ⌘1 to ⌘7, top to bottom.
+        // Always on Top comes first, then the View pages, ⌘1 to ⌘7.
         let view = MENUS.iter().find(|m| m.0 == "View").unwrap().1;
-        let pages: Vec<String> = view.iter().take(7).filter_map(|e| if let Entry::Item(i) = e { chord(i.cmd, &keys).map(|c| crate::shortcuts::format(&c)) } else { None }).collect();
+        assert!(matches!(&view[0], Entry::Item(i) if i.cmd == Command::AlwaysOnTop));
+        let pages: Vec<String> = view.iter().skip(2).take(7).filter_map(|e| if let Entry::Item(i) = e { chord(i.cmd, &keys).map(|c| crate::shortcuts::format(&c)) } else { None }).collect();
         assert_eq!(pages, (1..=7).map(|n| format!("Command + {n}")).collect::<Vec<_>>());
     }
 

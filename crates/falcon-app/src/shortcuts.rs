@@ -127,6 +127,8 @@ pub enum Command {
     Documentation,
     /// Eagle's Enter / Leave Presentation Mode: the viewer full screen.
     Presentation,
+    /// Eagle's View ▸ Always on Top for the main window.
+    AlwaysOnTop,
 }
 
 /// How a scroll command moves the grid.
@@ -377,6 +379,7 @@ pub const TABLE: &[Spec] = &[
     // Unbound by default, as in Eagle.
     Spec { cmd: Command::ClearTags, id: "organize.tag.clear", group: "Tags", label: "Clear the selection's tags", default: None, aliases: &[] },
     Spec { cmd: Command::Presentation, id: "view.toggle.slideshow", group: "View", label: "Enter or leave presentation mode", default: k(NONE, Key::F5), aliases: &[] },
+    Spec { cmd: Command::AlwaysOnTop, id: "view.alwaysOnTop", group: "View", label: "Keep the window on top", default: k(SHIFT, Key::T), aliases: &[] },
 ];
 
 /// Keys that cannot be rebound, listed in the Shortcuts section.
@@ -978,6 +981,9 @@ mod tests {
         let keys = Shortcuts::default();
         assert_eq!(keys.resolve(Key::F5, Modifiers::NONE), Some(Command::Presentation));
         assert_eq!(spec(Command::Presentation).id, "view.toggle.slideshow");
+        assert_eq!(keys.resolve(Key::T, Modifiers::SHIFT), Some(Command::AlwaysOnTop));
+        // Bare T is the tag picker's.
+        assert_eq!(keys.resolve(Key::T, Modifiers::NONE), Some(Command::TagPanel));
     }
 
     #[test]

@@ -1,5 +1,6 @@
 //! Window and viewer modes from Eagle's View menu: presentation
-//! (slideshow) mode (see the desktop app chapter of the docs).
+//! (slideshow) mode and Always on Top (see the desktop app chapter of the
+//! docs).
 
 use eframe::egui;
 
@@ -17,6 +18,9 @@ pub(super) struct Modes {
     /// The window has been seen full screen since presentation began; it
     /// leaving full screen after that (the green button, ⌃⌘F) ends it.
     seen_fullscreen: bool,
+    /// The main window floats above other windows (Eagle's
+    /// `isAlwaysOnTop`, off at every launch).
+    pub on_top: bool,
 }
 
 impl App {
@@ -33,7 +37,7 @@ impl App {
             self.ws.viewer = Some(first);
         }
         let fullscreen = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
-        self.modes = Modes { presenting: true, was_fullscreen: fullscreen, seen_fullscreen: fullscreen };
+        self.modes = Modes { presenting: true, was_fullscreen: fullscreen, seen_fullscreen: fullscreen, ..std::mem::take(&mut self.modes) };
         if !fullscreen {
             ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(true));
         }
@@ -65,6 +69,14 @@ impl App {
         } else if self.modes.seen_fullscreen {
             self.modes.presenting = false;
         }
+    }
+
+    /// Eagle's Always on Top (⇧T): the main window's level, through
+    /// eframe's `ViewportCommand::WindowLevel`.
+    pub(super) fn toggle_on_top(&mut self, ctx: &egui::Context) {
+        self.modes.on_top = !self.modes.on_top;
+        let level = if self.modes.on_top { egui::WindowLevel::AlwaysOnTop } else { egui::WindowLevel::Normal };
+        ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(level));
     }
 
     /// Whether the sidebar and the inspector show now (never while

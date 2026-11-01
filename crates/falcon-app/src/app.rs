@@ -1499,6 +1499,7 @@ impl App {
             subfolders: self.display.subfolders,
             libraries: self.others.len(),
             presenting: self.modes.presenting,
+            on_top: self.modes.on_top,
         }
     }
 
@@ -1772,6 +1773,7 @@ impl App {
                 }
             }
             C::Presentation => self.toggle_presentation(ctx),
+            C::AlwaysOnTop => self.toggle_on_top(ctx),
             C::Player(_) => {}
             C::ToggleName => self.display.show_name = !self.display.show_name,
             C::ToggleInfo => self.display.show_info = !self.display.show_info,
