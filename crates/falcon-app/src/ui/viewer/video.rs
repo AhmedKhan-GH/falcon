@@ -500,9 +500,12 @@ impl App {
             }
             return;
         }
-        // ⇧R and ⇧F turn and mirror the picture, as Eagle's image keys do
-        // for a video; they never touch the file.
-        let (rotate, flip) = ctx.input_mut(|i| (i.consume_key(egui::Modifiers::SHIFT, Key::R), i.consume_key(egui::Modifiers::SHIFT, Key::F)));
+        // The rotate and flip keys of the table (⇧R and ⇧F by default) turn
+        // and mirror the picture, as Eagle's image keys do for a video; they
+        // never touch the file. Taken here so `keyboard` doesn't also run them.
+        use crate::shortcuts::Command as C;
+        let take = |cmd: C| self.shortcuts.chords(cmd).iter().any(|c| ctx.input_mut(|i| i.consume_shortcut(c)));
+        let (rotate, flip) = (take(C::RotateLeft), take(C::FlipHorizontal));
         if rotate {
             self.video.turns = rotate_step(self.video.turns, false);
         }
@@ -718,12 +721,14 @@ impl App {
             // Flip and rotate in the bar, as in Eagle's viewer toolbar.
             let (name_x, mut right) = crate::ui::viewer::audio::bar_shell(self, ui, item, bar);
             let cy = bar.center().y;
-            let tip = "Rotate Left (⇧R)\n⇧-click: Rotate Right";
-            if icon_button(ui, Pos2::new(right - 4.0, cy), ic::ARROW_COUNTER_CLOCKWISE, 17.0, true, tip).clicked() {
+            let keyed = |label: &str, cmd| self.shortcuts.tooltip(ui.ctx(), label, cmd);
+            let tip = format!("{}\n⇧-click: Rotate Right", keyed("Rotate Left", crate::shortcuts::Command::RotateLeft));
+            let flip_tip = keyed("Flip", crate::shortcuts::Command::FlipHorizontal);
+            if icon_button(ui, Pos2::new(right - 4.0, cy), ic::ARROW_COUNTER_CLOCKWISE, 17.0, true, &tip).clicked() {
                 self.video.turns = rotate_step(self.video.turns, ui.input(|i| i.modifiers.shift));
             }
             right -= 30.0;
-            if icon_button(ui, Pos2::new(right - 4.0, cy), ic::FLIP_HORIZONTAL, 17.0, true, "Flip (⇧F)").clicked() {
+            if icon_button(ui, Pos2::new(right - 4.0, cy), ic::FLIP_HORIZONTAL, 17.0, true, &flip_tip).clicked() {
                 self.video.flipped = !self.video.flipped;
             }
             right -= 30.0;

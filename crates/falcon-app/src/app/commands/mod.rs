@@ -97,6 +97,12 @@ impl App {
             return;
         }
         pressed.retain(|c| *c != C::Preferences);
+        // The rotate and flip keys act on the viewed item only, as Eagle's
+        // handlers act on its current item; the menu still edits a grid
+        // selection.
+        if self.ws.viewer.is_none() {
+            pressed.retain(|c| !matches!(c, C::RotateLeft | C::FlipHorizontal));
+        }
         if ctx.input(|i| i.modifiers.command && i.key_pressed(Key::Z)) {
             self.ws.undo_request = Some(!ctx.input(|i| i.modifiers.shift));
         }

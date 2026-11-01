@@ -356,6 +356,8 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::Duplicate, id: "edit.duplicate", group: "Edit", label: "Duplicate the item", default: k(CMD, Key::D), aliases: &[] },
     Spec { cmd: Command::RefreshThumbnail, id: "edit.thumbnail.refresh", group: "Edit", label: "Refresh the thumbnails", default: k(CMD_ALT, Key::R), aliases: &[] },
     Spec { cmd: Command::Crop, id: "edit.image.crop", group: "Edit", label: "Crop the image (again to save)", default: k(SHIFT, Key::C), aliases: &[] },
+    Spec { cmd: Command::RotateLeft, id: "edit.image.rotate", group: "Edit", label: "Rotate the image left (viewer: also a video's picture)", default: k(SHIFT, Key::R), aliases: &[] },
+    Spec { cmd: Command::FlipHorizontal, id: "edit.image.flip", group: "Edit", label: "Flip the image horizontally (viewer: also a video's picture)", default: k(SHIFT, Key::F), aliases: &[] },
     Spec { cmd: Command::Paste, id: "edit.paste", group: "Edit", label: "Paste files or an image", default: k(CMD, Key::V), aliases: &[] },
     Spec { cmd: Command::Trash, id: "edit.remove.trash", group: "Edit", label: "Move to the Trash", default: k(CMD, Key::Backspace), aliases: &[] },
     Spec { cmd: Command::RemoveFromFolder, id: "edit.remove.folder", group: "Edit", label: "Remove from the open folder", default: k(CMD_SHIFT, Key::Backspace), aliases: &[] },
@@ -579,6 +581,14 @@ impl Shortcuts {
             }
         }
         best.map(|b| b.0)
+    }
+
+    /// `label` with the key bound to `cmd` after it, as tooltips show it.
+    pub fn tooltip(&self, ctx: &egui::Context, label: &str, cmd: Command) -> String {
+        match self.binding(cmd) {
+            Some(c) => format!("{label} ({})", display(ctx, &c)),
+            None => label.to_string(),
+        }
     }
 
     /// The commands pressed this frame.
@@ -916,6 +926,19 @@ impl Recorder {
 mod tests {
     use super::*;
     use std::collections::HashSet;
+
+    #[test]
+    fn rotate_and_flip_follow_the_table() {
+        let mut keys = Shortcuts::default();
+        assert_eq!(keys.resolve(Key::R, Modifiers::SHIFT), Some(Command::RotateLeft));
+        assert_eq!(keys.resolve(Key::F, Modifiers::SHIFT), Some(Command::FlipHorizontal));
+        assert_eq!(keys.set(Command::RotateLeft, parse("Shift + L")), Ok(()));
+        assert_eq!(keys.resolve(Key::L, Modifiers::SHIFT), Some(Command::RotateLeft));
+        assert_ne!(keys.resolve(Key::R, Modifiers::SHIFT), Some(Command::RotateLeft));
+        assert_eq!(keys.set(Command::FlipHorizontal, None), Ok(()));
+        assert!(keys.chords(Command::FlipHorizontal).is_empty());
+        assert_ne!(keys.resolve(Key::F, Modifiers::SHIFT), Some(Command::FlipHorizontal));
+    }
 
     #[test]
     fn defaults_are_unique() {

@@ -346,19 +346,20 @@ impl App {
             }
             x -= 30.0;
         }
+        let keyed = |label: &str, cmd| self.shortcuts.tooltip(ui.ctx(), label, cmd);
+        let (rotate_tip, flip_tip) = (keyed("Rotate Left", crate::shortcuts::Command::RotateLeft), format!("{}\n⇧-click: Flip Vertical", keyed("Flip Horizontal", crate::shortcuts::Command::FlipHorizontal)));
         if transform::can_rotate(&item.ext) {
             if icon_button(ui, Pos2::new(x, cy), ic::ARROW_CLOCKWISE, 17.0, true, "Rotate Right").clicked() {
                 self.rotate_request(vec![item.id.clone()], 1);
             }
             x -= 30.0;
-            if icon_button(ui, Pos2::new(x, cy), ic::ARROW_COUNTER_CLOCKWISE, 17.0, true, "Rotate Left (⇧R)").clicked() {
+            if icon_button(ui, Pos2::new(x, cy), ic::ARROW_COUNTER_CLOCKWISE, 17.0, true, &rotate_tip).clicked() {
                 self.rotate_request(vec![item.id.clone()], -1);
             }
             x -= 30.0;
         }
         if transform::can_flip(&item.ext) {
-            let tip = "Flip Horizontal (⇧F)\n⇧-click: Flip Vertical";
-            if icon_button(ui, Pos2::new(x, cy), ic::FLIP_HORIZONTAL, 17.0, true, tip).clicked() {
+            if icon_button(ui, Pos2::new(x, cy), ic::FLIP_HORIZONTAL, 17.0, true, &flip_tip).clicked() {
                 let flip = crate::app::image_edit::flip_for_click(ui.input(|i| i.modifiers.shift));
                 self.flip_request(vec![item.id.clone()], flip);
             }

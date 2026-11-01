@@ -374,8 +374,9 @@ impl App {
 
     /// Keys for the viewer's tools, read before the app's own shortcuts so
     /// Esc and Enter act on the crop tool rather than close the viewer: C
-    /// toggles comment mode, ⇧R rotates left, ⇧F flips horizontally (as
-    /// Eagle's flip shortcut does).
+    /// toggles comment mode. Rotate left and flip are table commands
+    /// (`edit.image.rotate`, `edit.image.flip`) that `keyboard` runs on the
+    /// viewer's item, as it does Crop.
     pub(crate) fn edit_keys(&mut self, ctx: &egui::Context) {
         if self.ws.viewer.is_none() {
             self.ws.tools.crop = None;
@@ -418,16 +419,10 @@ impl App {
         }
         // ⇧C opens the crop tool (a command); it isn't the bare C of comment mode.
         let shift_c = ctx.input(|i| i.modifiers.shift && i.key_pressed(Key::C));
-        let (c, rotate, flip) = ctx.input_mut(|i| (!shift_c && i.consume_key(none, Key::C), i.consume_key(Modifiers::SHIFT, Key::R), i.consume_key(Modifiers::SHIFT, Key::F)));
+        let c = ctx.input_mut(|i| !shift_c && i.consume_key(none, Key::C));
         if c {
             self.ws.tools.comment_mode = !self.ws.tools.comment_mode;
             self.ws.tools.draft = None;
-        }
-        if rotate && let Some(id) = self.ws.viewer.clone() {
-            self.rotate_request(vec![id], -1);
-        }
-        if flip && let Some(id) = self.ws.viewer.clone() {
-            self.flip_request(vec![id], Flip::Horizontal);
         }
         if self.ws.tools.comment_mode && ctx.input_mut(|i| i.consume_key(none, Key::Escape)) {
             self.ws.tools.comment_mode = false;
