@@ -238,6 +238,17 @@ impl App {
         self.spawn_import(jobs);
     }
 
+    /// Mirrors the background import queue on the Dock icon (the tile
+    /// keeps what it shows, so this costs nothing while it is unchanged).
+    /// Cleared when the queue is empty or no library is open.
+    pub(crate) fn dock_import_progress(&self) {
+        let queue = self.ws.lib.as_ref().and_then(|_| {
+            let pr = self.ws.progress.lock().unwrap_or_else(|p| p.into_inner());
+            crate::tasks::status(pr.total, pr.done, pr.paused).map(|_| (pr.done, pr.total))
+        });
+        crate::dock_progress::set_import(queue);
+    }
+
     /// The failed imports so far.
     fn import_errors(&self) -> Vec<ImportError> {
         self.ws.progress.lock().unwrap_or_else(|p| p.into_inner()).errors.clone()

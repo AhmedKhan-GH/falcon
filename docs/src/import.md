@@ -259,3 +259,7 @@ With Preferences ▸ Auto-Import on and a folder chosen (`autoImport.enable`, `a
 ## Progress bar
 
 A bar under the toolbar shows a running import: "Importing 3 of 10  ·  About 20 s left  ·  name.jpg". The time left is a straight-line guess from how long the finished items took (`progress_eta.rs`). It appears once one item is done and two seconds have passed, rounds seconds to the nearest five above ten, and then counts in minutes, or hours and minutes. The bar repaints once a second, so the guess keeps moving while a large file is still being read.
+
+## Dock progress
+
+While the background import queue runs (the one the sidebar's task status shows as Processing or Paused), the Dock icon carries a progress bar along its bottom edge, the share of files finished, as Eagle's `setProgressBar` does. Like Eagle, the bar goes away once the import is 97% done, and it is cleared when the queue empties or the library closes. The progress modal (`ui/dialogs/progress.rs`) drives the same tile through its own slot: while the modal is shown it wins, and when it ends an import still running takes the tile back. `dock_progress::set_import(Some((done, total)))` is the import's slot; the combining rule is the pure `dock_progress::combine`, and the tile is only redrawn when the combined value changes.

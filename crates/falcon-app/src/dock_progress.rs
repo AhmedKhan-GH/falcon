@@ -4,9 +4,76 @@
 
 /// What the Dock tile shows: `None` clears it, `Some(None)` is an operation
 /// whose size isn't known yet (an empty bar), `Some(Some(f))` is a fraction
-/// from 0 to 1. Call from the main thread only; other threads do nothing.
+/// from 0 to 1. This is the progress modal's slot; the background import has
+/// its own (`set_import`) and the tile shows both combined. Call from the
+/// main thread only; other threads do nothing.
 pub(crate) fn set(progress: Option<Option<f32>>) {
-    imp::set(progress);
+    slots::with(|s| s.modal = progress);
+    slots::apply();
+}
+
+/// The background import's share of the tile: `Some((done, total))` while
+/// files are being imported, `None` when the queue is empty. The progress
+/// modal (`set`) wins while it is shown; otherwise the tile shows this
+/// fraction. Call from the main thread only.
+pub(crate) fn set_import(progress: Option<(usize, usize)>) {
+    slots::with(|s| s.import = import_fraction(progress));
+    slots::apply();
+}
+
+/// Eagle hides the Dock bar once an import is 97% done (and when it ends).
+const IMPORT_HIDE_AT: f32 = 0.97;
+
+/// The fraction the Dock tile shows for an import of `done` of `total`
+/// files, or `None` for no bar (an empty queue, or nearly finished).
+fn import_fraction(progress: Option<(usize, usize)>) -> Option<f32> {
+    let (done, total) = progress?;
+    if total == 0 || done >= total {
+        return None;
+    }
+    let f = done as f32 / total as f32;
+    (f < IMPORT_HIDE_AT).then_some(f)
+}
+
+/// What the tile shows given the progress modal's state and the import's:
+/// the modal while it is shown, else the import, else nothing.
+fn combine(modal: Option<Option<f32>>, import: Option<f32>) -> Option<Option<f32>> {
+    modal.or(import.map(Some))
+}
+
+mod slots {
+    use std::cell::RefCell;
+
+    #[derive(Default)]
+    pub(super) struct Slots {
+        pub modal: Option<Option<f32>>,
+        pub import: Option<f32>,
+        /// What was last handed to AppKit, to skip repeats.
+        pub applied: Option<Option<f32>>,
+    }
+
+    thread_local! {
+        static SLOTS: RefCell<Slots> = RefCell::new(Slots::default());
+    }
+
+    pub(super) fn with(f: impl FnOnce(&mut Slots)) {
+        SLOTS.with(|s| f(&mut s.borrow_mut()));
+    }
+
+    /// Shows the combined state if it changed since last time.
+    pub(super) fn apply() {
+        let shown = SLOTS.with(|s| {
+            let mut s = s.borrow_mut();
+            let c = super::combine(s.modal, s.import);
+            (c != s.applied).then(|| {
+                s.applied = c;
+                c
+            })
+        });
+        if let Some(c) = shown {
+            super::imp::set(c);
+        }
+    }
 }
 
 /// The bar's value, 0 to 100, for a fraction.
@@ -78,6 +145,25 @@ mod imp {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_modal_wins_over_the_import() {
+        assert_eq!(super::combine(Some(Some(0.2)), Some(0.8)), Some(Some(0.2)));
+        assert_eq!(super::combine(Some(None), Some(0.8)), Some(None));
+        assert_eq!(super::combine(None, Some(0.8)), Some(Some(0.8)));
+        assert_eq!(super::combine(None, None), None);
+    }
+
+    #[test]
+    fn the_import_bar_shows_until_it_is_nearly_done() {
+        assert_eq!(super::import_fraction(None), None);
+        assert_eq!(super::import_fraction(Some((0, 0))), None);
+        assert_eq!(super::import_fraction(Some((5, 10))), Some(0.5));
+        assert_eq!(super::import_fraction(Some((0, 4))), Some(0.0));
+        assert_eq!(super::import_fraction(Some((97, 100))), None);
+        assert_eq!(super::import_fraction(Some((96, 100))), Some(0.96));
+        assert_eq!(super::import_fraction(Some((10, 10))), None);
+    }
+
     #[test]
     fn percent_is_clamped() {
         assert_eq!(super::percent(0.5), 50.0);

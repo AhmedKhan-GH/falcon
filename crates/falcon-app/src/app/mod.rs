@@ -499,6 +499,7 @@ impl App {
         self.tools_dialogs(&ctx);
         self.pack_dialogs(&ctx);
         self.progress_modal(&ctx);
+        self.dock_import_progress();
         self.reload_confirm(&ctx);
         self.clear_history_dialog(&ctx);
         self.force_close_dialog(&ctx);
