@@ -24,6 +24,11 @@ pub const PORT_SPAN: u16 = 5;
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Debug)]
 #[serde(default)]
 pub struct Prefs {
+    /// Eagle's Dock icon option: closing the main window hides falcon and
+    /// keeps its Dock icon (the default). Off, closing the window quits,
+    /// because falcon has no menu bar icon and a hidden Dock icon would
+    /// leave no way back to the app.
+    pub keep_dock_icon: bool,
     /// Eagle's `habits.hoverZoom`: the zoom button on hovered cards.
     pub hover_zoom: bool,
     /// Eagle's `general.IPTC`: add IPTC/XMP keywords as tags on import.
@@ -288,6 +293,7 @@ impl SidebarSections {
 impl Default for Prefs {
     fn default() -> Self {
         Prefs {
+            keep_dock_icon: true,
             hover_zoom: true,
             keywords_as_tags: false,
             notify_duplicates: true,
@@ -1080,6 +1086,8 @@ fn general(p: &mut Page, d: &mut Draft, login: &crate::login_item::Status) {
         use crate::login_item::Status;
         let usable = !matches!(login, Status::Unavailable(_));
         ui.add_enabled(usable, egui::Checkbox::new(&mut d.launch_at_login, "Open Falcon when you log in"));
+        ui.checkbox(&mut d.prefs.keep_dock_icon, "Keep Falcon in the Dock after closing its window");
+        note(ui, "When off, closing the window quits Falcon, since it has no menu bar icon to open it again.");
         match login {
             Status::NeedsApproval => note(ui, "Allow Falcon in System Settings ▸ General ▸ Login Items."),
             Status::Unavailable(why) => note(ui, why),
@@ -1637,6 +1645,13 @@ mod tests {
             self.0 = None;
         }
         fn flush(&mut self) {}
+    }
+
+    #[test]
+    fn old_saved_state_keeps_the_dock_icon() {
+        let old: Prefs = serde_json::from_str(r#"{"hover_zoom":false}"#).unwrap();
+        assert!(old.keep_dock_icon);
+        assert!(Prefs::default().keep_dock_icon);
     }
 
     #[test]

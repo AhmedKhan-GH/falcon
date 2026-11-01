@@ -5,6 +5,8 @@
 //! The window is not closed but the app is hidden, which AppKit undoes by
 //! itself whenever the app is activated again, so no reopen handler is
 //! needed. Quit (⌘Q) never asks the window to close and still quits.
+//! Preferences ▸ General can turn this off (`Prefs::keep_dock_icon`), and
+//! closing the window then quits the app.
 
 /// Hides the app in answer to a close request. Returns whether it did;
 /// where it can't (other platforms), the window closes as before.
