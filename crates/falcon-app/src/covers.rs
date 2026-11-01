@@ -63,8 +63,9 @@ const HEADING_H: f32 = 24.0;
 impl App {
     /// Cards for the open folder's subfolders, above its items, as in
     /// Eagle's folder view, under a heading with the Show Subfolder Content
-    /// switch. With that on, every folder under it gets a card. Takes no
-    /// space outside a folder with children.
+    /// switch. With that on, every folder under it gets a card. Clicking
+    /// the heading folds the cards away (for every folder, as in Eagle).
+    /// Takes no space outside a folder with children.
     pub(super) fn subfolder_strip(&mut self, ui: &mut Ui, lib: &Library) {
         let Scope::Folder(id) = &self.ws.scope else { return };
         let Some(folder) = logic::find_folder(&lib.metadata.folders, id) else { return };
@@ -77,11 +78,18 @@ impl App {
         ui.allocate_ui(vec2(width, HEADING_H), |ui| {
             ui.horizontal_centered(|ui| {
                 ui.add_space(17.0);
-                ui.label(egui::RichText::new(format!("Subfolders ({})", folder.children.len())).color(t::p().text_muted).size(12.5));
+                let caret = if self.display.strip_collapsed { crate::icons::CARET_RIGHT } else { crate::icons::CARET_DOWN };
+                let heading = egui::RichText::new(format!("Subfolders ({})  {caret}", folder.children.len())).color(t::p().text_muted).size(12.5);
+                if ui.add(egui::Label::new(heading).sense(Sense::click())).on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
+                    self.display.strip_collapsed = !self.display.strip_collapsed;
+                }
                 ui.add_space(12.0);
                 ui.checkbox(&mut self.display.subfolders, egui::RichText::new("Show subfolder contents").size(12.5));
             });
         });
+        if self.display.strip_collapsed {
+            return;
+        }
         let cards = logic::subfolder_cards(folder, self.display.subfolders);
         ui.allocate_ui(vec2(width, STRIP_H), |ui| {
             egui::ScrollArea::horizontal().id_salt(("subfolders", &folder.id)).auto_shrink([false, true]).show(ui, |ui| {

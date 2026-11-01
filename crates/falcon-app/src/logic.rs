@@ -1921,11 +1921,13 @@ pub struct Display {
     pub subfolders: bool,
     /// The list layout's optional columns.
     pub columns: ListColumns,
+    /// The subfolder cards above a folder's items are folded away.
+    pub strip_collapsed: bool,
 }
 
 impl Default for Display {
     fn default() -> Self {
-        Display { show_name: true, show_info: true, info: InfoType::Dimensions, show_ext: true, ext_badge: true, comment_badge: true, fill: false, subfolders: false, columns: ListColumns::default() }
+        Display { show_name: true, show_info: true, info: InfoType::Dimensions, show_ext: true, ext_badge: true, comment_badge: true, fill: false, subfolders: false, columns: ListColumns::default(), strip_collapsed: false }
     }
 }
 
