@@ -1005,7 +1005,7 @@ Eagle shows covers only on the subfolder cards at the top of a folder's content 
 - A folder with neither takes the cover of its first subfolder that has one.
 - Eagle writes no cover file. A crop clears the cached covers of the item's folders so they redraw.
 
-falcon draws the subfolder cards in the Waterfall, Justified and Grid layouts with the same rule (`ui/grid/covers.rs`). Locked folders show a folder icon instead of a cover.
+falcon draws the subfolder cards in the Waterfall, Justified and Grid layouts with the same rule (`ui/grid/covers.rs`). Locked folders show a folder icon instead of a cover. In the List layout Eagle turns the cards into full-width rows (`_list-layout.scss`, seen): a square cover a third of the zoom tall (at least 30 pt), the name, the item and subfolder counts and the folder's date at the right, with alternate rows shaded. falcon draws the same rows, with the same heading, fold, rename by double-click, drop target and right-click menu as the cards; the rows scroll on their own once they would take more than 40% of the grid's height (Eagle scrolls them with the items).
 
 ## Export and copy-out
 
