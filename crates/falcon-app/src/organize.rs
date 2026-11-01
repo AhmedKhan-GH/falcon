@@ -381,6 +381,8 @@ pub struct TagSection {
     pub id: String,
     pub name: String,
     pub color: Option<String>,
+    /// The group's description, empty when it has none.
+    pub description: String,
     pub tags: Vec<(String, usize)>,
 }
 
@@ -398,11 +400,30 @@ pub fn tag_sections(counts: &[(String, usize)], groups: &[TagGroup], filter: &st
         let all = matches(&g.name);
         let tags: Vec<(String, usize)> = g.tags.iter().filter(|t| all || matches(t)).map(|t| (t.clone(), count(t))).collect();
         if filter.is_empty() || !tags.is_empty() {
-            out.push(TagSection { id: g.id.clone(), name: g.name.clone(), color: g.color.clone(), tags });
+            let description = g.description.clone().unwrap_or_default();
+            out.push(TagSection { id: g.id.clone(), name: g.name.clone(), color: g.color.clone(), description, tags });
         }
     }
     let rest = counts.iter().filter(|(t, _)| !grouped.contains(t) && matches(t)).cloned().collect();
     (out, rest)
+}
+
+/// The index to pass to `Library::reorder_tag_group` when the group
+/// `dragged` is dropped before (or `after`) the group `target`: the place
+/// among the other groups once `dragged` has left its own. `None` when the
+/// drop changes nothing or names an unknown group.
+pub fn group_drop(groups: &[TagGroup], dragged: &str, target: &str, after: bool) -> Option<usize> {
+    let from = groups.iter().position(|g| g.id == dragged)?;
+    let to = groups.iter().position(|g| g.id == target)?;
+    let dest = if after { to + 1 } else { to };
+    let index = if from < dest { dest - 1 } else { dest };
+    (index != from).then_some(index)
+}
+
+/// A tag group description as Eagle keeps it: one line (line breaks
+/// become spaces) without surrounding spaces.
+pub fn clean_description(text: &str) -> String {
+    text.replace("\r\n", " ").replace(['\r', '\n'], " ").trim().to_string()
 }
 
 /// The group a tag is filed in, if any.
@@ -677,6 +698,34 @@ mod tests {
         assert!(!manual_noop(&order, &mv(&["b"]), Some("d")));
         assert!(!manual_noop(&order, &mv(&["a", "c"]), Some("d")), "a gap closes up");
         assert!(!manual_noop(&order, &mv(&["a"]), None));
+    }
+
+    #[test]
+    fn tag_groups_reorder_by_drop() {
+        let groups = vec![group("a", "A", &[]), group("b", "B", &[]), group("c", "C", &[]), group("d", "D", &[])];
+        assert_eq!(group_drop(&groups, "a", "c", false), Some(1), "a lands between b and c");
+        assert_eq!(group_drop(&groups, "a", "c", true), Some(2));
+        assert_eq!(group_drop(&groups, "d", "a", false), Some(0));
+        assert_eq!(group_drop(&groups, "c", "a", true), Some(1));
+        assert_eq!(group_drop(&groups, "a", "d", true), Some(3));
+        assert_eq!(group_drop(&groups, "b", "c", false), None, "already there");
+        assert_eq!(group_drop(&groups, "b", "a", true), None);
+        assert_eq!(group_drop(&groups, "b", "b", true), None);
+        assert_eq!(group_drop(&groups, "x", "a", true), None);
+        // Each index is what reorder_tag_group expects: remove, then insert.
+        for (d, t, after) in [("a", "c", false), ("d", "b", true), ("b", "d", false)] {
+            let at = group_drop(&groups, d, t, after).unwrap();
+            let mut ids: Vec<&str> = groups.iter().map(|g| g.id.as_str()).filter(|id| *id != d).collect();
+            ids.insert(at, d);
+            let pos = |x: &str| ids.iter().position(|i| *i == x).unwrap();
+            if after {
+                assert_eq!(pos(d), pos(t) + 1, "{d} after {t}");
+            } else {
+                assert_eq!(pos(d) + 1, pos(t), "{d} before {t}");
+            }
+        }
+        assert_eq!(clean_description("  Line one\nline two\r\nthree "), "Line one line two three");
+        assert_eq!(clean_description("\n"), "");
     }
 
     #[test]

@@ -35,11 +35,17 @@ pub(super) struct OrgState {
     /// A sort of folders by title waiting for its confirmation: the
     /// parent whose children are sorted (`None`: the top level).
     sort_confirm: Option<(Option<String>, SubfolderSort)>,
+    /// Tag group whose description is being edited, with the text so far.
+    group_describe: Option<(String, String)>,
 }
 
 /// A tag dragged on the All Tags page.
 #[derive(Clone)]
 struct DragTag(String);
+
+/// A tag group heading dragged on the All Tags page.
+#[derive(Clone)]
+struct DragGroup(String);
 
 /// A smart folder dragged in the sidebar.
 #[derive(Clone)]
@@ -90,6 +96,9 @@ pub(super) enum OrgAction {
     RenameSmart(String, String),
     /// Sorts the children of a folder (`None`: the top level) by title.
     SortFolders(Option<String>, SubfolderSort),
+    /// Moves a tag group to an index (counted without it).
+    MoveGroup(String, usize),
+    GroupDescription(String, String),
 }
 
 /// Which stored sort the toolbar's sort menu edits.
@@ -760,7 +769,8 @@ impl App {
     /// dragged tags, and a menu to rename, recolour or delete it. `None`
     /// is the ungrouped section; dropping there takes a tag out of its group.
     fn tag_group_header(&mut self, ui: &mut Ui, lib: &Library, sec: Option<&organize::TagSection>, n: usize) {
-        let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
+        let sense = if sec.is_some() { Sense::click_and_drag() } else { Sense::click() };
+        let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), sense);
         let x = rect.left() + GRID_PAD_X + 2.0;
         let cy = rect.center().y;
         let dot = sec.and_then(|s| folder_icons::color(s.color.as_deref())).unwrap_or(t::p().icon_none);
@@ -800,13 +810,27 @@ impl App {
             }
         }
         let Some(s) = sec else { return };
+        self.group_heading_drag(ui, lib, &resp, s);
+        self.group_description(ui, s);
         if resp.double_clicked() {
             self.ws.org.group_rename = Some((s.id.clone(), s.name.clone()));
         }
+        let groups = &lib.metadata.tags_groups;
+        let pos = groups.iter().position(|g| g.id == s.id).unwrap_or(0);
         resp.context_menu(|ui| {
             ui.set_min_width(200.0);
             if ui.button("Rename").clicked() {
                 self.ws.org.group_rename = Some((s.id.clone(), s.name.clone()));
+            }
+            let label = if s.description.is_empty() { "Add Description…" } else { "Edit Description…" };
+            if ui.button(label).clicked() {
+                self.ws.org.group_describe = Some((s.id.clone(), s.description.clone()));
+            }
+            if ui.add_enabled(pos > 0, egui::Button::new("Move Up")).clicked() {
+                self.ws.actions.push(org(OrgAction::MoveGroup(s.id.clone(), pos - 1)));
+            }
+            if ui.add_enabled(pos + 1 < groups.len(), egui::Button::new("Move Down")).clicked() {
+                self.ws.actions.push(org(OrgAction::MoveGroup(s.id.clone(), pos + 1)));
             }
             if let Some(c) = color_row(ui, s.color.as_deref()) {
                 self.ws.actions.push(org(OrgAction::GroupColor(s.id.clone(), c)));
@@ -821,6 +845,62 @@ impl App {
                 }
             }
         });
+    }
+
+    /// Reorders groups by dragging their headings: the top half of another
+    /// heading drops before it, the bottom half after, shown by a line.
+    fn group_heading_drag(&mut self, ui: &Ui, lib: &Library, resp: &Response, s: &organize::TagSection) {
+        if resp.drag_started() {
+            resp.dnd_set_drag_payload(DragGroup(s.id.clone()));
+        }
+        let Some(d) = resp.dnd_hover_payload::<DragGroup>().filter(|d| d.0 != s.id) else { return };
+        let Some(y) = ui.ctx().pointer_latest_pos().map(|p| p.y) else { return };
+        let r = resp.rect;
+        let after = organize::drop_zone(r.top(), r.height(), y, false) == DropZone::After;
+        let line_y = if after { r.bottom() - 0.5 } else { r.top() + 0.5 };
+        let x0 = r.left() + GRID_PAD_X;
+        ui.painter().hline(x0..=r.right() - GRID_PAD_X, line_y, Stroke::new(1.5, t::p().primary));
+        ui.painter().circle_stroke(Pos2::new(x0, line_y), 2.5, Stroke::new(1.5, t::p().primary));
+        if resp.dnd_release_payload::<DragGroup>().is_some()
+            && let Some(index) = organize::group_drop(&lib.metadata.tags_groups, &d.0, &s.id, after)
+        {
+            self.ws.actions.push(org(OrgAction::MoveGroup(d.0.clone(), index)));
+        }
+    }
+
+    /// A group's description under its heading in muted text, or the field
+    /// editing it. Leaving the field saves a changed text; Escape cancels.
+    /// Double-click the text to edit it.
+    fn group_description(&mut self, ui: &mut Ui, s: &organize::TagSection) {
+        let editing = self.ws.org.group_describe.as_ref().is_some_and(|(id, _)| *id == s.id);
+        if !editing && s.description.is_empty() {
+            return;
+        }
+        ui.horizontal(|ui| {
+            ui.add_space(GRID_PAD_X + 20.0);
+            let width = (ui.available_width() - GRID_PAD_X - 20.0).max(80.0);
+            if let (true, Some((_, buf))) = (editing, self.ws.org.group_describe.as_mut()) {
+                let te = ui.add(TextEdit::multiline(buf).id_salt(("group-describe", &s.id)).hint_text("Add a description").desired_rows(2).desired_width(width).font(font(13.0)));
+                if !te.has_focus() && !te.lost_focus() {
+                    te.request_focus();
+                }
+                let cancel = ui.input(|i| i.key_pressed(Key::Escape));
+                if (te.lost_focus() || cancel)
+                    && let Some((id, text)) = self.ws.org.group_describe.take()
+                {
+                    let text = organize::clean_description(&text);
+                    if !cancel && text != s.description {
+                        self.ws.actions.push(org(OrgAction::GroupDescription(id, text)));
+                    }
+                }
+            } else {
+                let label = ui.add(egui::Label::new(RichText::new(&s.description).size(13.0).color(t::p().text_muted)).wrap().sense(Sense::click()));
+                if label.double_clicked() {
+                    self.ws.org.group_describe = Some((s.id.clone(), s.description.clone()));
+                }
+            }
+        });
+        ui.add_space(2.0);
     }
 
     /// Lets a tag chip be dragged onto a group heading.
@@ -1152,6 +1232,8 @@ impl App {
             }
             OrgAction::RenameSmart(id, name) => lib.rename_smart_folder(&id, &name),
             OrgAction::SortFolders(parent, sort) => lib.sort_subfolders(parent.as_deref(), sort),
+            OrgAction::MoveGroup(id, index) => lib.reorder_tag_group(&id, index),
+            OrgAction::GroupDescription(id, text) => lib.set_tag_group_description(&id, &text),
         }
     }
 }

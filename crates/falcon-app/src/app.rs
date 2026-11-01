@@ -1357,6 +1357,8 @@ fn organize_label(a: &organize_ui::OrgAction) -> String {
         O::CreateSmartGroup(_) => "New smart folder group".into(),
         O::RenameSmart(..) => "Rename smart folder".into(),
         O::SortFolders(..) => "Sort folders by title".into(),
+        O::MoveGroup(..) => "Move tag group".into(),
+        O::GroupDescription(..) => "Describe tag group".into(),
     }
 }
 
