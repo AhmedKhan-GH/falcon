@@ -10,6 +10,7 @@ use falcon_library::{Library, thumbnail};
 use falcon_library::model::Item;
 
 use crate::app::App;
+use crate::gesture::{Gesture, Outcome};
 use crate::ui::viewer::audio;
 use crate::ui::widgets::ext_placeholder;
 use crate::loader::{Tier, job_for, original_job};
@@ -41,6 +42,8 @@ pub(crate) struct ImageState {
     /// The HDR/EXR exposure in stops (the bar's slider); reset to 0 when the
     /// viewer moves to another item.
     pub exposure: f32,
+    /// A right- or middle-button drag in progress (`crate::gesture`).
+    gesture: Option<Gesture>,
 }
 
 /// Side of a checkerboard square, in points.
@@ -86,7 +89,6 @@ impl App {
         } else {
             logic::smart_fit((natural.x, natural.y), (area.width(), area.height()), 40.0, &item.name)
         };
-        self.ws.loader.set_pixelated(self.prefs.pixelated);
         self.ws.loader.set_grayscale(self.modes.grayscale);
         // A newly opened image starts where it was left, at actual size, or
         // fitted, by the preferences; "fit to window edge" overrides both,
@@ -101,6 +103,7 @@ impl App {
                 None => {}
             }
         }
+        self.ws.loader.set_pixelated(self.prefs.pixelated);
         let scale = self.ws.view.zoom.unwrap_or(fit);
 
         // The wheel scrolls, zooms or pages by the preference; pinching (or
@@ -136,11 +139,25 @@ impl App {
                 ui.ctx().request_repaint_after(std::time::Duration::from_secs_f32(logic::PAGE_REST));
             }
         }
-        if resp.dragged() {
+        if resp.dragged_by(egui::PointerButton::Primary) {
             self.ws.view.pan += resp.drag_delta();
             if self.ws.view.zoom.is_none() {
                 self.ws.view.zoom = Some(scale);
             }
+        }
+        // Right-drag up or down zooms about where it was pressed; a quick
+        // sideways swipe steps to the next or previous item.
+        let now = self.ws.view.zoom.unwrap_or(fit);
+        let (zoomed, outcome) = drive_gesture(ui, &resp, &mut self.image.gesture, now);
+        if let (Some(new), Some(g)) = (zoomed, &self.image.gesture) {
+            let off = g.start - (area.center() + self.ws.view.pan);
+            self.ws.view.pan += off - off * (new / now);
+            self.ws.view.zoom = Some(new);
+        }
+        match outcome {
+            Outcome::Next => self.viewer_step(1),
+            Outcome::Prev => self.viewer_step(-1),
+            Outcome::None => {}
         }
         // Right-click opens the item's menu, as on its card.
         resp.context_menu(|ui| {
@@ -252,6 +269,9 @@ impl App {
         }
         self.edit_overlay(ui, item, r, area);
         self.navigator(ui, tex.as_ref(), natural, r, area);
+        if let Some(g) = &self.image.gesture {
+            paint_trail(&ui.painter().with_clip_rect(area), g);
+        }
         if let Some(gif_bar) = gif_bar {
             self.gif_toolbar(ui, item, gif_bar, &resp);
         }
@@ -406,12 +426,21 @@ impl App {
     /// over its pixel limit: the thumbnail, a line giving the limit, and
     /// the Open With button. No full render is attempted.
     fn too_large(&mut self, ui: &mut Ui, lib: &Library, item: &Item, bar: Rect, area: Rect) {
-        let resp = ui.interact(area, ui.scope_id().with("viewer-canvas"), Sense::click());
+        let resp = ui.interact(area, ui.scope_id().with("viewer-canvas"), Sense::click_and_drag());
         resp.context_menu(|ui| {
             self.item_menu(ui, lib, item, std::slice::from_ref(&item.id));
         });
         if resp.double_clicked() {
             self.ws.viewer = None;
+        }
+        // Swipes step here too; there is no picture to zoom.
+        match drive_gesture(ui, &resp, &mut self.image.gesture, 1.0).1 {
+            Outcome::Next => self.viewer_step(1),
+            Outcome::Prev => self.viewer_step(-1),
+            Outcome::None => {}
+        }
+        if let Some(g) = &self.image.gesture {
+            paint_trail(&ui.painter().with_clip_rect(area), g);
         }
         let thumb = Rect::from_center_size(area.center() - vec2(0.0, 70.0), Vec2::splat(150.0));
         match self.ws.loader.get(&item.id, Tier::Preview).cloned() {
@@ -436,6 +465,49 @@ impl App {
         });
         let (name_x, right) = audio::bar_shell(self, ui, item, bar);
         audio::bar_name(ui, item, bar, name_x, right);
+    }
+}
+
+/// Feeds a right- or middle-button drag on `resp` to `gesture`, the zoom
+/// being `zoom` now: returns the zoom the drag asks for, if any, and what
+/// its release asks for. A click without a drag never reaches here (egui
+/// reports it as a click, which opens the menu).
+pub(crate) fn drive_gesture(ui: &Ui, resp: &egui::Response, gesture: &mut Option<Gesture>, zoom: f32) -> (Option<f32>, Outcome) {
+    use egui::PointerButton::{Middle, Secondary};
+    let (time, origin, latest) = ui.input(|i| (i.time, i.pointer.press_origin(), i.pointer.latest_pos()));
+    if (resp.drag_started_by(Secondary) || resp.drag_started_by(Middle))
+        && let Some(at) = origin
+    {
+        *gesture = Some(Gesture::press(at, time, zoom));
+    }
+    let Some(g) = gesture.as_mut() else { return (None, Outcome::None) };
+    let mut zoomed = None;
+    if (resp.dragged_by(Secondary) || resp.dragged_by(Middle))
+        && let Some(at) = latest
+    {
+        zoomed = g.moved(at);
+        ui.ctx().request_repaint();
+    }
+    if resp.drag_stopped() || !ui.input(|i| i.pointer.button_down(Secondary) || i.pointer.button_down(Middle)) {
+        let outcome = latest.map_or(Outcome::None, |at| g.release(at, time, zoomed.unwrap_or(zoom)));
+        *gesture = None;
+        return (zoomed, outcome);
+    }
+    (zoomed, Outcome::None)
+}
+
+/// The swipe's feedback: a trail of dots behind the pointer, growing and
+/// firming towards it, while a sideways gesture is under way.
+pub(crate) fn paint_trail(painter: &egui::Painter, g: &Gesture) {
+    if !g.swiping() {
+        return;
+    }
+    let n = g.trail.len().max(1) as f32;
+    let reach = (g.trail.last().map_or(0.0, |p| (p.x - g.start.x).abs()) / 10.0 + 6.0).min(24.0);
+    for (i, p) in g.trail.iter().enumerate() {
+        let f = (i + 1) as f32 / n;
+        let c = t::p().primary;
+        painter.circle(*p, reach * f * f, c.gamma_multiply(0.15 * f), egui::Stroke::new(1.5, c.gamma_multiply(0.45 * f)));
     }
 }
 

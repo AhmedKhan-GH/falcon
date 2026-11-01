@@ -12,6 +12,7 @@ mod debug_report;
 mod errlog;
 mod folder_icons;
 mod font_install;
+mod gesture;
 mod audio;
 mod auto_import;
 mod hotkeys;

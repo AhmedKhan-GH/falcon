@@ -77,6 +77,8 @@ pub(crate) struct PreviewWin {
     pane: Pane,
     /// A viewer of the window's own is drawing (not the picture).
     custom: bool,
+    /// A right- or middle-button drag on the picture (`crate::gesture`).
+    gesture: Option<crate::gesture::Gesture>,
 }
 
 impl PreviewWin {
@@ -97,6 +99,7 @@ impl PreviewWin {
             nav_grab: Vec2::ZERO,
             pane: Pane::Pending,
             custom: false,
+            gesture: None,
         }
     }
 
@@ -427,9 +430,19 @@ impl PreviewWin {
             }
             self.zoom = Some(new);
         }
-        if resp.dragged() {
+        if resp.dragged_by(egui::PointerButton::Primary) {
             self.pan += resp.drag_delta();
             self.zoom.get_or_insert(scale);
+        }
+        // Right-drag up or down zooms about where it was pressed, as in the
+        // main viewer. The window shows one item, so swipes have nowhere to go.
+        let now = self.zoom.unwrap_or(fit);
+        if let (Some(new), _) = crate::ui::viewer::image::drive_gesture(ui, resp, &mut self.gesture, now)
+            && let Some(g) = &self.gesture
+        {
+            let off = g.start - (full.center() + self.pan);
+            self.pan += off - off * (new / now);
+            self.zoom = Some(new);
         }
         if resp.double_clicked() {
             self.zoom = None;
