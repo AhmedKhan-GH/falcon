@@ -491,6 +491,14 @@ pub fn unsupported_names(keys: &[String]) -> Vec<&'static str> {
     out
 }
 
+/// Adds the tags typed into the auto-tag field to `tags`: the text is split
+/// at commas and line breaks, each part trimmed, and empty parts and tags
+/// already listed are skipped. Returns whether anything was added.
+pub fn add_typed_tags(tags: &mut Vec<String>, typed: &str) -> bool {
+    let parts: Vec<String> = typed.split([',', '\n', '\r']).map(str::trim).filter(|t| !t.is_empty()).map(String::from).collect();
+    falcon_library::autotag::append_new(tags, &parts)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -839,5 +847,13 @@ mod tests {
     fn unsupported_rules_have_plain_names() {
         let keys: Vec<String> = ["annotation", "shape.43", "shape.169", "folder.excludes.NoFolders"].iter().map(|s| s.to_string()).collect();
         assert_eq!(unsupported_names(&keys), ["comments", "aspect ratio", "excluding uncategorized"]);
+    }
+
+    #[test]
+    fn typed_tags_split_at_commas() {
+        let mut tags = vec!["a".to_string()];
+        assert!(add_typed_tags(&mut tags, " b, a ,,c\nd "));
+        assert_eq!(tags, ["a", "b", "c", "d"]);
+        assert!(!add_typed_tags(&mut tags, " , b"));
     }
 }

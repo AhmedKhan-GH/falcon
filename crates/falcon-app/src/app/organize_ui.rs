@@ -38,6 +38,20 @@ pub(super) struct OrgState {
     sort_confirm: Option<(Option<String>, SubfolderSort)>,
     /// Tag group whose description is being edited, with the text so far.
     group_describe: Option<(String, String)>,
+    /// The folder settings (auto-tag) dialog.
+    auto_tag: Option<AutoTagDraft>,
+    /// ⇧⌘R asked for the open folder's settings; opened once the library
+    /// is at hand.
+    pub settings_request: Option<String>,
+}
+
+/// The folder settings dialog: the folder's name and auto-tags as edited
+/// so far, and the text in the tag field.
+struct AutoTagDraft {
+    id: String,
+    name: String,
+    tags: Vec<String>,
+    typed: String,
 }
 
 /// A tag dragged on the All Tags page.
@@ -100,6 +114,8 @@ pub(super) enum OrgAction {
     /// Moves a tag group to an index (counted without it).
     MoveGroup(String, usize),
     GroupDescription(String, String),
+    /// The folder settings dialog's Save: folder, name, auto-tags.
+    FolderSettings(String, String, Vec<String>),
 }
 
 /// Which stored sort the toolbar's sort menu edits.
@@ -268,6 +284,10 @@ impl App {
     /// icon and colour.
     pub(super) fn folder_menu_extras(&mut self, ui: &mut Ui, lib: &Library, f: &Folder) {
         let shut = organize::is_shut(f, &self.ws.org.unlocked);
+        // Eagle disables its auto-tag entry while the folder is locked.
+        if ui.add_enabled(!shut, egui::Button::new("Auto-Tags…")).on_hover_text("Name and auto-tags (⇧⌘R)").clicked() {
+            self.open_folder_settings(f);
+        }
         ui.menu_button("Password", |ui| {
             let mut open = |mode| {
                 self.ws.org.password = Some(PasswordDraft {
@@ -1226,7 +1246,18 @@ impl App {
 
 impl App {
     /// The password, saved filter name and group delete dialogs.
+    fn open_folder_settings(&mut self, f: &Folder) {
+        self.ws.org.auto_tag = Some(AutoTagDraft { id: f.id.clone(), name: f.name.clone(), tags: f.tags.clone(), typed: String::new() });
+    }
+
     pub(super) fn organize_dialogs(&mut self, ctx: &egui::Context, lib: &Library) {
+        if let Some(id) = self.ws.org.settings_request.take()
+            && let Some(f) = logic::find_folder(&lib.metadata.folders, &id)
+            && !organize::is_shut(f, &self.ws.org.unlocked)
+        {
+            self.open_folder_settings(f);
+        }
+        self.auto_tag_dialog(ctx, lib);
         self.password_dialog(ctx, lib);
         self.filter_name_dialog(ctx, lib);
         if let Some((parent, sort)) = self.ws.org.sort_confirm.clone() {
@@ -1349,6 +1380,76 @@ impl App {
         }
     }
 
+    /// Folder settings, after Eagle's auto-tag dialog: the folder's name and
+    /// the tags added to items put into it. Saving a changed list also adds
+    /// the folder's tags to the items already in it or in its subfolders.
+    fn auto_tag_dialog(&mut self, ctx: &egui::Context, lib: &Library) {
+        let Some(mut d) = self.ws.org.auto_tag.take() else { return };
+        let Some(folder) = logic::find_folder(&lib.metadata.folders, &d.id) else { return };
+        let inherited: Vec<String> = falcon_library::autotag::folder_auto_tags(&lib.metadata.folders, &d.id).into_iter().filter(|t| !folder.tags.contains(t)).collect();
+        let mut keep = true;
+        let modal = egui::Modal::new(egui::Id::unique("folder-settings")).show(ctx, |ui| {
+            ui.set_width(360.0);
+            ui.label(RichText::new("Folder Settings").size(15.0));
+            ui.add_space(6.0);
+            ui.label(RichText::new("Name").size(12.0).color(t::p().text_muted));
+            let name = ui.add(TextEdit::singleline(&mut d.name).char_limit(1024).desired_width(f32::INFINITY));
+            let save_key = |ui: &Ui| ui.input(|i| i.modifiers.command && i.key_pressed(Key::Enter));
+            let mut save = name.has_focus() && save_key(ui);
+            ui.add_space(8.0);
+            ui.label(RichText::new("Tags added to items put in this folder").size(12.0).color(t::p().text_muted));
+            let mut remove = None;
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing = vec2(4.0, 4.0);
+                for (n, tag) in d.tags.iter().enumerate() {
+                    if chip(ui, tag, true).clicked() {
+                        remove = Some(n);
+                    }
+                }
+            });
+            if let Some(n) = remove {
+                d.tags.remove(n);
+            }
+            let field = ui.add(TextEdit::singleline(&mut d.typed).hint_text("Add a tag (Return or comma)").desired_width(f32::INFINITY));
+            if field.has_focus() && save_key(ui) {
+                save = true;
+            }
+            if d.typed.contains(',') || (field.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter))) {
+                organize::add_typed_tags(&mut d.tags, &d.typed);
+                d.typed.clear();
+                if !save {
+                    field.request_focus();
+                }
+            }
+            if !inherited.is_empty() {
+                ui.add_space(4.0);
+                ui.label(RichText::new(format!("Also added from the folders above: {}", inherited.join(", "))).size(11.0).color(t::p().text_muted));
+            }
+            ui.add_space(4.0);
+            ui.label(RichText::new("Saving a changed list adds these tags to the items already in the folder and its subfolders. Tags you remove stay on those items.").size(11.0).color(t::p().text_muted));
+            ui.add_space(8.0);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.button("Save").clicked() || save {
+                    organize::add_typed_tags(&mut d.tags, &d.typed);
+                    let name = if d.name.trim().is_empty() { folder.name.clone() } else { d.name.clone() };
+                    if name != folder.name || d.tags != folder.tags {
+                        self.ws.actions.push(org(OrgAction::FolderSettings(d.id.clone(), name, d.tags.clone())));
+                    }
+                    keep = false;
+                }
+                if ui.button("Cancel").clicked() {
+                    keep = false;
+                }
+            });
+        });
+        if modal.should_close() {
+            keep = false;
+        }
+        if keep {
+            self.ws.org.auto_tag = Some(d);
+        }
+    }
+
     fn filter_name_dialog(&mut self, ctx: &egui::Context, lib: &Library) {
         let Some((index, mut name)) = self.ws.org.filter_name.take() else { return };
         let mut keep = true;
@@ -1449,6 +1550,16 @@ impl App {
             OrgAction::SortFolders(parent, sort) => lib.sort_subfolders(parent.as_deref(), sort),
             OrgAction::MoveGroup(id, index) => lib.reorder_tag_group(&id, index),
             OrgAction::GroupDescription(id, text) => lib.set_tag_group_description(&id, &text),
+            OrgAction::FolderSettings(id, name, tags) => {
+                if logic::find_folder(&lib.metadata.folders, &id).is_some_and(|f| f.name != name) {
+                    lib.rename_folder(&id, &name)?;
+                }
+                let n = lib.set_folder_auto_tags(&id, &tags)?;
+                if n > 0 {
+                    self.flash(format!("Added the folder's tags to {n} item{}", if n == 1 { "" } else { "s" }));
+                }
+                Ok(())
+            }
         }
     }
 }

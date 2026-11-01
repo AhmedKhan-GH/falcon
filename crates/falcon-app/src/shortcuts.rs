@@ -44,6 +44,8 @@ pub enum Command {
     FolderDown,
     FolderTop,
     FolderBottom,
+    /// Eagle's Set Current Folder: the open folder's name and auto-tags.
+    FolderSettings,
     /// A key of the video player (`App::video_keys` reads these).
     Player(PlayerKey),
 }
@@ -130,6 +132,7 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::FolderDown, id: "edit.folder.arrange.down", group: "Edit", label: "Move folder down", default: k(CMD, Key::OpenBracket), aliases: &[] },
     Spec { cmd: Command::FolderTop, id: "edit.folder.arrange.top", group: "Edit", label: "Move folder to the top", default: k(CMD_SHIFT, Key::CloseBracket), aliases: &[KeyboardShortcut::new(CMD_SHIFT, Key::CloseCurlyBracket)] },
     Spec { cmd: Command::FolderBottom, id: "edit.folder.arrange.bottom", group: "Edit", label: "Move folder to the bottom", default: k(CMD_SHIFT, Key::OpenBracket), aliases: &[KeyboardShortcut::new(CMD_SHIFT, Key::OpenCurlyBracket)] },
+    Spec { cmd: Command::FolderSettings, id: "edit.folder.setting", group: "Edit", label: "Folder settings (name and auto-tags)", default: k(CMD_SHIFT, Key::R), aliases: &[] },
     Spec { cmd: Command::NewFolder, id: "file.create.folder", group: "File", label: "New folder", default: k(CMD_SHIFT, Key::N), aliases: &[] },
     Spec { cmd: Command::CollectWindow, id: "file.collect.window", group: "File", label: "Show or hide the collect window", default: k(CMD_SHIFT, Key::K), aliases: &[] },
     Spec { cmd: Command::SwitchLibrary, id: "library.switch", group: "Library", label: "Open the library switcher", default: k(CMD, Key::L), aliases: &[] },

@@ -1008,6 +1008,11 @@ impl App {
             if on(C::Forward) {
                 self.go_forward();
             }
+            if on(C::FolderSettings)
+                && let Scope::Folder(id) = &self.ws.scope
+            {
+                self.ws.org.settings_request = Some(id.clone());
+            }
             use crate::organize::Arrange;
             for (c, how) in [(C::FolderUp, Arrange::Up), (C::FolderDown, Arrange::Down), (C::FolderTop, Arrange::Top), (C::FolderBottom, Arrange::Bottom)] {
                 if on(c) && matches!(self.ws.scope, Scope::Folder(_) | Scope::Smart(_)) {
@@ -1432,6 +1437,7 @@ fn organize_label(a: &organize_ui::OrgAction) -> String {
         O::SortFolders(..) => "Sort folders by title".into(),
         O::MoveGroup(..) => "Move tag group".into(),
         O::GroupDescription(..) => "Describe tag group".into(),
+        O::FolderSettings(..) => "Change folder settings".into(),
     }
 }
 
