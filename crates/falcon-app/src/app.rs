@@ -146,6 +146,14 @@ struct Progress {
     current: String,
 }
 
+/// What the toast says when opening a library restored its damaged
+/// `metadata.json` from `backup` (see `Library::open_or_restore`).
+fn restored_note(backup: &std::path::Path) -> String {
+    let lib = backup.parent().and_then(std::path::Path::parent).and_then(|p| p.file_stem()).map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    let name = backup.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    format!("{lib}'s metadata.json was damaged and was restored from backup/{name}; the damaged file was kept in backup/")
+}
+
 fn is_hidden(p: &std::path::Path) -> bool {
     p.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.'))
 }
@@ -598,15 +606,22 @@ impl App {
             crate::workspaces::remember(&mut self.recent, &path, RECENT_LIMIT);
             return;
         }
-        match falcon_library::sandbox::guard(&path).and_then(|()| Library::open(&path)) {
-            Ok(lib) => {
+        match falcon_library::sandbox::guard(&path).and_then(|()| Library::open_or_restore(&path)) {
+            Ok((lib, restored)) => {
                 let skipped = lib.skipped.len();
                 self.add_workspace(Arc::new(Mutex::new(lib)));
                 crate::workspaces::remember(&mut self.recent, &path, RECENT_LIMIT);
                 self.error = None;
+                let mut notes = Vec::new();
+                if let Some(backup) = restored {
+                    notes.push(restored_note(&backup));
+                }
                 if skipped > 0 {
                     let s = if skipped == 1 { "" } else { "s" };
-                    self.flash(format!("{skipped} item{s} couldn't be read and are hidden; their files are untouched"));
+                    notes.push(format!("{skipped} item{s} couldn't be read and are hidden; their files are untouched"));
+                }
+                if !notes.is_empty() {
+                    self.flash(notes.join(". "));
                 }
             }
             Err(e) => {
@@ -693,8 +708,10 @@ impl App {
             return;
         }
         let existing = self.position_of(&now);
-        match Library::open(&was) {
-            Ok(back) => {
+        let mut note = None;
+        match Library::open_or_restore(&was) {
+            Ok((back, restored)) => {
+                note = restored.as_deref().map(restored_note);
                 let new = std::mem::replace(&mut *lock(&shared), back);
                 match existing {
                     // The open workspace's copy is the one with its edits.
@@ -718,7 +735,10 @@ impl App {
         }
         crate::workspaces::remember(&mut self.recent, &now, RECENT_LIMIT);
         let name = now.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-        self.flash(format!("Switched to {name} over the API"));
+        match note {
+            Some(note) => self.flash(format!("Switched to {name} over the API. {note}")),
+            None => self.flash(format!("Switched to {name} over the API")),
+        }
         self.serve_active();
     }
 
@@ -3693,7 +3713,8 @@ impl eframe::App for App {
             self.grid(&mut g, lib);
 
             if let Some((msg, at)) = &self.ws.status {
-                if at.elapsed().as_secs_f32() < 3.0 {
+                // Long messages (a restored backup, say) stay up longer.
+                if at.elapsed().as_secs_f32() < (msg.chars().count() as f32 / 20.0).max(3.0) {
                     let gal = galley(ui, msg, font(13.0), t::p().text, 400.0);
                     let r = Rect::from_center_size(Pos2::new(full.center().x, full.bottom() - 30.0), gal.size() + vec2(24.0, 14.0));
                     ui.painter().rect_filled(r, CornerRadius::same(8), t::p().row_selected);
@@ -3828,7 +3849,7 @@ impl eframe::App for App {
 
 #[cfg(test)]
 mod tests {
-    use super::drag_image;
+    use super::{drag_image, restored_note};
     use super::Saved;
     use std::collections::HashMap;
     use std::path::{Path, PathBuf};
@@ -3876,6 +3897,12 @@ mod tests {
         fn set_string_raw(&mut self, ron: &str) {
             eframe::Storage::set_string(self, eframe::APP_KEY, ron.to_string());
         }
+    }
+
+    #[test]
+    fn restore_note_names_the_library_and_backup() {
+        let note = restored_note(Path::new("/s/Photos.library/backup/backup-2026-10-26 02.15.25.310.json"));
+        assert_eq!(note, "Photos's metadata.json was damaged and was restored from backup/backup-2026-10-26 02.15.25.310.json; the damaged file was kept in backup/");
     }
 
     fn is_png(bytes: &[u8]) -> bool {

@@ -10,6 +10,8 @@
 
 While falcon is in development, the app and the `falcon` CLI only open libraries inside `~/Falcon Sandbox`. Set `FALCON_SANDBOX` to use another folder. Opening, creating or switching to a library anywhere else (including over the HTTP API's `library/switch`) fails with a message saying so, and the Open and Create dialogs start in the sandbox. To work on a real library, copy it into the sandbox first.
 
+The app opens libraries with `Library::open_or_restore` (see [Backups](library-format.md#backups)): when a library's `metadata.json` can't be read or parsed, the newest usable backup in its `backup/` folder replaces it before the library loads, and a message names the backup used and says the damaged file was kept in `backup/`. This covers the switcher, Open Library, libraries reopened on launch, dropped libraries and the library the app reopens after an API `library/switch`. The HTTP API's own `library/switch` still uses `Library::open`, so a damaged library fails there.
+
 ## What it does
 
 | Area | Features |
