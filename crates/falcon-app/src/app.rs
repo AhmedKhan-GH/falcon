@@ -86,6 +86,9 @@ struct Saved {
     video_positions: video_view::Positions,
     /// The PDF reader's last page and zoom of recent documents.
     pdf_marks: Vec<pdf_view::Mark>,
+    /// The image viewer's "fit to window edge" mode, kept like Eagle's
+    /// `eagle.viewer.lastZoomMode`.
+    zoom_edge: Option<bool>,
 }
 
 /// Ids being dragged from the grid.
@@ -566,6 +569,8 @@ pub struct App {
     video: video_view::VideoState,
     /// The PDF reader for the viewer (`pdf_view.rs`).
     pdf: pdf_view::PdfState,
+    /// The image viewer's zoom mode and remembered views (`image_view.rs`).
+    image: image_view::ImageState,
     /// Drop targets and other import state (`import_ui.rs`).
     imports: import_ui::Imports,
     /// The macOS menu bar (`menu.rs`).
@@ -601,6 +606,7 @@ impl App {
             audio: Default::default(),
             video: Default::default(),
             pdf: Default::default(),
+            image: Default::default(),
             menu_bar: Default::default(),
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
@@ -626,6 +632,7 @@ impl App {
         app.video.muted = saved.video_muted.unwrap_or(false);
         app.video.resume = saved.video_positions;
         app.pdf.set_marks(saved.pdf_marks);
+        app.image.edge = saved.zoom_edge.unwrap_or(false);
         // Reopen the libraries that were open, then the one given on the
         // command line (focused if it was already open).
         let (libraries, active) = crate::workspaces::restore(&saved.libraries, saved.active, saved.library.as_deref(), |p| p.is_dir());
@@ -1165,6 +1172,7 @@ impl App {
                         Key::Num1 => Some(Z::Actual),
                         Key::Plus | Key::Equals => Some(Z::In),
                         Key::Minus => Some(Z::Out),
+                        Key::Backtick => Some(Z::Edge),
                         _ => None,
                     },
                     _ => None,
@@ -4230,6 +4238,7 @@ impl eframe::App for App {
             video_muted: Some(self.video.muted),
             video_positions: self.video.positions(),
             pdf_marks: self.pdf.marks(),
+            zoom_edge: Some(self.image.edge),
         };
         eframe::set_value(storage, eframe::APP_KEY, &saved);
     }

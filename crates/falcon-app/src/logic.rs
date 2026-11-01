@@ -1270,16 +1270,54 @@ pub enum ViewZoom {
     Out,
     Actual,
     Fit,
+    /// Toggle "fit to window edge" (Eagle's backtick key).
+    Edge,
 }
 
 /// The viewer's zoom after `cmd` from `scale` (`None`: fit the window).
 pub fn view_zoom(cmd: ViewZoom, scale: f32) -> Option<f32> {
     match cmd {
-        ViewZoom::In => Some((scale * 1.25).min(32.0)),
-        ViewZoom::Out => Some((scale / 1.25).max(0.02)),
+        ViewZoom::In => Some((scale * 1.25).min(ZOOM_MAX)),
+        ViewZoom::Out => Some((scale / 1.25).max(ZOOM_MIN)),
         ViewZoom::Actual => Some(1.0),
-        ViewZoom::Fit => None,
+        ViewZoom::Fit | ViewZoom::Edge => None,
     }
+}
+
+/// The image viewer's zoom range, Eagle's 5% to 800% (`zoom_MIN`, `zoom_MAX`).
+pub const ZOOM_MIN: f32 = 0.05;
+pub const ZOOM_MAX: f32 = 8.0;
+
+/// The zoom menu's sizes, in percent (Eagle's `openRatioContextMenu`).
+pub const ZOOM_PRESETS: [u32; 11] = [5, 10, 25, 50, 100, 125, 150, 200, 300, 400, 800];
+
+/// The zoom slider's range. Its positions run 5 to 200; above 100 each
+/// step is 7%, so the right end is 800% (Eagle's `getRatioExp`).
+pub const SLIDER_RANGE: (f32, f32) = (5.0, 200.0);
+
+/// Zoom (1.0 = 100%) at slider position `v`.
+pub fn slider_zoom(v: f32) -> f32 {
+    let v = v.clamp(SLIDER_RANGE.0, SLIDER_RANGE.1);
+    (if v > 100.0 { 100.0 + (v - 100.0) * 7.0 } else { v }) / 100.0
+}
+
+/// Slider position of `zoom`.
+pub fn zoom_slider_pos(zoom: f32) -> f32 {
+    let pct = zoom * 100.0;
+    (if pct > 100.0 { (pct - 100.0) / 7.0 + 100.0 } else { pct }).clamp(SLIDER_RANGE.0, SLIDER_RANGE.1)
+}
+
+/// The zoom at slider position `v`, snapped to 25, 50, 100, 125, 150, 175
+/// or 200% when within 3% of one, as Eagle's slider does.
+pub fn slider_zoom_snapped(v: f32) -> f32 {
+    let pct = slider_zoom(v) * 100.0;
+    [25.0, 50.0, 100.0, 125.0, 150.0, 175.0, 200.0].into_iter().find(|s: &f32| (pct - s).abs() <= 3.0).unwrap_or(pct) / 100.0
+}
+
+/// "Fit to window edge" (Eagle's `zoomFitEdge`): the whole image fills the
+/// view, enlarged if it is smaller.
+pub fn edge_fit(natural: (f32, f32), view: (f32, f32)) -> f32 {
+    (view.0 / natural.0.max(1.0)).min(view.1 / natural.1.max(1.0)).clamp(ZOOM_MIN, ZOOM_MAX)
 }
 
 // ---- Image viewer: resolution, fitting and zoom ----
@@ -1401,6 +1439,32 @@ mod image_viewer_tests {
     }
 
     #[test]
+    fn slider_runs_to_800_percent_and_snaps() {
+        assert_eq!(slider_zoom(5.0), 0.05);
+        assert_eq!(slider_zoom(100.0), 1.0);
+        assert_eq!(slider_zoom(200.0), 8.0);
+        assert_eq!(slider_zoom(150.0), 4.5);
+        assert_eq!(slider_zoom(0.0), 0.05, "clamped to the range");
+        for z in [0.05, 0.5, 1.0, 2.0, 8.0] {
+            assert!((slider_zoom(zoom_slider_pos(z)) - z).abs() < 1e-5);
+        }
+        assert_eq!(zoom_slider_pos(20.0), 200.0);
+        // Within 3% of a snap point the slider lands on it.
+        assert_eq!(slider_zoom_snapped(52.0), 0.5);
+        assert_eq!(slider_zoom_snapped(55.0), 0.55);
+        assert_eq!(slider_zoom_snapped(zoom_slider_pos(1.98)), 2.0);
+        assert_eq!(ZOOM_PRESETS.first(), Some(&5));
+        assert_eq!(ZOOM_PRESETS.last(), Some(&800));
+    }
+
+    #[test]
+    fn edge_fit_enlarges_to_the_view() {
+        assert_eq!(edge_fit((200.0, 100.0), (1000.0, 800.0)), 5.0);
+        assert_eq!(edge_fit((4000.0, 1000.0), (1000.0, 800.0)), 0.25);
+        assert_eq!(edge_fit((10.0, 10.0), (1000.0, 800.0)), ZOOM_MAX);
+    }
+
+    #[test]
     fn long_images_by_eagles_ratios() {
         assert!(is_long_image(1000.0, 1801.0));
         assert!(!is_long_image(1000.0, 1800.0));
@@ -1469,8 +1533,9 @@ mod viewer_shell_tests {
     fn viewer_zoom_steps_and_limits() {
         assert_eq!(view_zoom(ViewZoom::In, 1.0), Some(1.25));
         assert_eq!(view_zoom(ViewZoom::Out, 1.25), Some(1.0));
-        assert_eq!(view_zoom(ViewZoom::In, 30.0), Some(32.0));
-        assert_eq!(view_zoom(ViewZoom::Out, 0.021), Some(0.02));
+        assert_eq!(view_zoom(ViewZoom::In, 7.0), Some(8.0));
+        assert_eq!(view_zoom(ViewZoom::Out, 0.051), Some(0.05));
+        assert_eq!(view_zoom(ViewZoom::Edge, 2.0), None);
         assert_eq!(view_zoom(ViewZoom::Actual, 0.3), Some(1.0));
         assert_eq!(view_zoom(ViewZoom::Fit, 4.0), None);
     }

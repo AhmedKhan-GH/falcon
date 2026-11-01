@@ -2,15 +2,22 @@
 //! controls in the bar, and the full-resolution original drawn in tiles
 //! when zoomed in past the full tier (see the desktop app chapter).
 
-use eframe::egui::{self, Align2, Color32, Pos2, Rect, Sense, TextureHandle, Ui, Vec2, vec2};
+use eframe::egui::{self, Color32, Pos2, Rect, Sense, TextureHandle, Ui, Vec2, vec2};
 use falcon_library::{Library, thumbnail};
 use falcon_library::model::Item;
 
-use super::{App, ext_placeholder, icon_button, media_view};
-use crate::icons as ic;
+use super::{App, ext_placeholder, media_view};
 use crate::loader::{Tier, job_for, original_job};
 use crate::logic;
 use crate::theme::{self as t, mono};
+
+/// The image viewer's state that outlives one item.
+#[derive(Default)]
+pub(super) struct ImageState {
+    /// "Fit to window edge" (backtick): every image opens filling the view,
+    /// enlarged if small, until switched off or Zoom to Fit is chosen.
+    pub edge: bool,
+}
 
 impl App {
     /// Draws the picture `tex` (a frame of an animation, the full render or
@@ -33,13 +40,16 @@ impl App {
             self.too_large(ui, lib, item, bar, area);
             return;
         }
-        let p = ui.painter().clone();
         let natural = if item.width > 0 && item.height > 0 {
             vec2(item.width as f32, item.height as f32)
         } else {
             tex.as_ref().map_or(Vec2::splat(512.0), |t| t.size_vec2())
         };
-        let (fit, fit_top) = logic::smart_fit((natural.x, natural.y), (area.width(), area.height()), 40.0, &item.name);
+        let (fit, fit_top) = if self.image.edge {
+            (logic::edge_fit((natural.x, natural.y), (area.width(), area.height())), 0.0)
+        } else {
+            logic::smart_fit((natural.x, natural.y), (area.width(), area.height()), 40.0, &item.name)
+        };
         let scale = self.ws.view.zoom.unwrap_or(fit);
 
         // Scroll or pinch over the picture zooms around the pointer;
@@ -56,7 +66,7 @@ impl App {
             1.0
         };
         if factor != 1.0 {
-            let new = (scale * factor).clamp(0.02, 32.0);
+            let new = (scale * factor).clamp(logic::ZOOM_MIN, logic::ZOOM_MAX);
             if let Some(pos) = pointer {
                 let center = area.center() + self.ws.view.pan;
                 let off = pos - center;
@@ -139,35 +149,72 @@ impl App {
             Some(c) => format!("{label} ({fixed}, {})", crate::shortcuts::display(ui.ctx(), &c)),
             None => format!("{label} ({fixed})"),
         };
-        let (t_in, t_out, t_actual, t_fit) =
-            (tip("Zoom In", "+", C::ZoomIn), tip("Zoom Out", "−", C::ZoomOut), tip("Actual Size", "1", C::ZoomActual), tip("Zoom to Fit", "0", C::ZoomFit));
+        let (t_zoom, t_actual, t_edge) = (
+            "Zoom sizes. Right-click switches between actual size and fit".to_string(),
+            tip("Actual Size", "1", C::ZoomActual),
+            "Fit to Window Edge (`)".to_string(),
+        );
         let mut zoom = self.ws.view.zoom_key.take();
-        let mut x = right - 14.0;
-        if icon_button(ui, Pos2::new(x, cy), ic::PLUS, 15.0, true, &t_in).clicked() {
-            zoom = Some(logic::ViewZoom::In);
+        // Eagle's detail toolbar: the zoom slider and its % label (a menu of
+        // sizes; right-click toggles actual size and fit), Actual Size, and
+        // the fit-to-edge toggle.
+        let mut x = right - 30.0;
+        if ui.put(Rect::from_center_size(Pos2::new(x, cy), vec2(40.0, 24.0)), egui::Button::new("Fit").selected(self.image.edge)).on_hover_text(t_edge).clicked() {
+            zoom = Some(logic::ViewZoom::Edge);
         }
-        x -= 28.0;
-        p.text(Pos2::new(x, cy), Align2::CENTER_CENTER, format!("{:.0}%", scale * 100.0), mono(12.0), t::p().text_value);
-        x -= 30.0;
-        if icon_button(ui, Pos2::new(x, cy), ic::MINUS, 15.0, true, &t_out).clicked() {
-            zoom = Some(logic::ViewZoom::Out);
-        }
-        x -= 40.0;
-        let actual = ui.put(Rect::from_center_size(Pos2::new(x, cy), vec2(46.0, 24.0)), egui::Button::new("1:1"));
-        if actual.on_hover_text(t_actual).clicked() {
+        x -= 48.0;
+        if ui.put(Rect::from_center_size(Pos2::new(x, cy), vec2(40.0, 24.0)), egui::Button::new("1:1")).on_hover_text(t_actual).clicked() {
             zoom = Some(logic::ViewZoom::Actual);
         }
         x -= 50.0;
-        if ui.put(Rect::from_center_size(Pos2::new(x, cy), vec2(46.0, 24.0)), egui::Button::new("Fit")).on_hover_text(t_fit).clicked() {
-            zoom = Some(logic::ViewZoom::Fit);
+        let label = ui.put(
+            Rect::from_center_size(Pos2::new(x, cy), vec2(50.0, 24.0)),
+            egui::Button::new(egui::RichText::new(format!("{:.0}%", scale * 100.0)).font(mono(12.0)).color(t::p().text_value)).frame(false),
+        );
+        let mut picked = None;
+        egui::Popup::menu(&label).show(|ui| {
+            ui.set_min_width(150.0);
+            for pct in logic::ZOOM_PRESETS {
+                if ui.add(egui::Button::new(format!("{pct}%")).selected((scale * 100.0).round() as u32 == pct)).clicked() {
+                    picked = Some(pct as f32 / 100.0);
+                }
+            }
+            ui.separator();
+            if ui.button("Actual Size").clicked() {
+                zoom = Some(logic::ViewZoom::Actual);
+            }
+            if ui.button("Zoom to Fit").clicked() {
+                zoom = Some(logic::ViewZoom::Fit);
+            }
+        });
+        let label = label.on_hover_text(t_zoom);
+        if label.secondary_clicked() {
+            zoom = Some(if (scale - 1.0).abs() > 1e-3 { logic::ViewZoom::Actual } else { logic::ViewZoom::Fit });
         }
-        let tools_x = self.gif_toggle_button(ui, item, x - 50.0, cy);
+        x -= 25.0;
+        let track = Rect::from_min_max(Pos2::new(x - 110.0, cy - 9.0), Pos2::new(x, cy + 9.0));
+        if let Some(v) = zoom_slider(ui, track, logic::zoom_slider_pos(scale)) {
+            picked = Some(logic::slider_zoom_snapped(v));
+        }
+        // The GIF frame player's toggle sits left of the slider.
+        x = track.left() - 20.0;
+        // Sizes from the menu and slider zoom about the view's centre.
+        if let Some(new) = picked {
+            self.ws.view.pan *= new / scale;
+            self.ws.view.zoom = Some(new);
+        }
+        let tools_x = self.gif_toggle_button(ui, item, x, cy);
         let tools_left = self.edit_bar(ui, item, tools_x, cy);
         media_view::bar_name(ui, item, bar, name_x, tools_left);
 
         if let Some(z) = zoom {
             self.ws.view.zoom = logic::view_zoom(z, scale);
-            if matches!(z, logic::ViewZoom::Actual | logic::ViewZoom::Fit) {
+            match z {
+                logic::ViewZoom::Edge => self.image.edge = !self.image.edge,
+                logic::ViewZoom::Fit => self.image.edge = false,
+                _ => {}
+            }
+            if matches!(z, logic::ViewZoom::Actual | logic::ViewZoom::Fit | logic::ViewZoom::Edge) {
                 self.ws.view.pan = Vec2::ZERO;
             }
         }
@@ -207,4 +254,23 @@ impl App {
         let (name_x, right) = media_view::bar_shell(self, ui, item, bar);
         media_view::bar_name(ui, item, bar, name_x, right);
     }
+}
+
+/// The viewer's zoom slider over `track` at position `pos` (see
+/// `logic::SLIDER_RANGE`); returns the position dragged or clicked to.
+fn zoom_slider(ui: &mut Ui, track: Rect, pos: f32) -> Option<f32> {
+    let (lo, hi) = logic::SLIDER_RANGE;
+    let resp = ui.interact(track, ui.scope_id().with("viewer-zoom-slider"), Sense::click_and_drag());
+    let picked = resp
+        .interact_pointer_pos()
+        .filter(|_| resp.dragged() || resp.clicked())
+        .map(|p| lo + ((p.x - track.left()) / track.width()).clamp(0.0, 1.0) * (hi - lo));
+    let f = ((picked.unwrap_or(pos) - lo) / (hi - lo)).clamp(0.0, 1.0);
+    let p = ui.painter();
+    let y = track.center().y;
+    p.line_segment([Pos2::new(track.left(), y), Pos2::new(track.right(), y)], egui::Stroke::new(2.0, t::p().divider));
+    let kx = track.left() + f * track.width();
+    p.line_segment([Pos2::new(track.left(), y), Pos2::new(kx, y)], egui::Stroke::new(2.0, t::p().text_muted));
+    p.circle_filled(Pos2::new(kx, y), 6.0, Color32::WHITE);
+    picked
 }
