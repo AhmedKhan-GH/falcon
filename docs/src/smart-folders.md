@@ -71,23 +71,40 @@ Any entry without conditions behaves as a group:
 ## Evaluation (observed)
 
 - **Conditions:** all of them must pass. `boolean: "FALSE"` negates one.
-- **Rules in a condition:** combined by `match`, which is `AND` or `OR`.
+- **Rules in a condition:** combined by `match`. `AND` stops at the first rule that fails and `OR` at the first that passes; any other value needs every rule to pass. A condition with an empty `rules` list passes.
+- **Errors:** Eagle's whole test fails, negated condition or not, when it reaches a rule whose property it doesn't know, or a condition without `rules`. Falcon does the same.
 - **Nesting:** a child must also pass every one of its ancestors' conditions, so it narrows its parent. Moving a child out of its parent stops the narrowing.
 - **No conditions:** a smart folder without conditions is a group and shows the union of its children (see below).
-- **Rule types:**
-  - text: name, notes, URL, folder name
-  - numbers: width, height, file size, BPM (an item without `bpm` never matches)
-  - dates
-  - sets: tags, folders
-  - type, rating, shape
-  - a stricter colour test than the filter panel's
+
+Rules by property. Number rules take `value: [a, b]`, with `b` used only by `between`. Date rules take ms timestamps, except `within`, whose `a` counts days.
+
+| Property | Methods | Notes |
+|---|---|---|
+| `name`, `url`, `annotation` (note), `folderName` | `equal`, `contain`, `uncontain`, `startWith`, `endWith`, `regex`, `empty`, `not-empty` | Text and value are lower-cased. An empty value fails every method but `empty` and `not-empty`. `folderName` passes when any of the item's folders passes; an item in no folder fails |
+| `camera` | the text methods | `rawMetas.camera`, lower-cased. A photo without a camera fails every method, `empty` included |
+| `comments` | the text methods | `empty` and `not-empty` look at the `comments` list. The others test every comment's `annotation` joined together, without lower-casing and without refusing an empty value. An item without the key fails them |
+| `width`, `height`, `bpm` | `=`, `>=`, `<=`, `>`, `<`, `between` | An item without `bpm` never matches |
+| `fileSize` | the number methods | `unit` `kb` divides by 1024, anything else by 1024² |
+| `duration` | the number methods | `duration` in seconds; `unit` `h` or `m` converts it to hours or minutes, anything else keeps seconds. No duration never matches |
+| `iso` | the number methods | Integer parse (JavaScript `parseInt`) of `rawMetas.isoSpeed` and of the value |
+| `aperture`, `focalLength` | the number methods | The first number in `rawMetas.aperture` (`f/2.8`) or `rawMetas.focalLength` (`50.0 mm`) |
+| `shutter` | the number methods | The second number in `rawMetas.shutter`: 250 for `1/250.0 sec`. A whole-second exposure (`2.0 sec`) has no second number and never matches |
+| `createTime` (date added), `btime` (created), `mtime` (modified) | `on`, `before`, `after`, `between`, `within` | `btime` and `mtime` fall back to `modificationTime`. `before` and the end of `between` include the following 24 hours. `on` compares local calendar days |
+| `timestamp` (date taken) | the date methods | Integer parse of `rawMetas.timestamp` |
+| `tags`, `folders` | `union`, `intersection`, `equal`, `identity`, `empty`, `not-empty` | Folder ids for `folders` |
+| `type` | `equal`, `unequal` | An extension or a type group |
+| `rating` | `equal`, `unequal`, `contain` | No star, 0 and `"none"` all mean unrated. `contain` takes the stars as text (`"35"`); any `none` in it matches every item |
+| `shape` | `equal`, `unequal` | `custom` compares the item's ratio with the rule's `width` and `height` |
+| `color` | `similar`, `accuracy`, `grayscale` | A stricter colour test than the filter panel's |
+| `fontActivated` | `activate`, `deactivate` | Whether the font is activated through Eagle, by the key `<postScriptName>_.<ext>` (see [Font](./search.md#font-observed)). An item without `fontMetas` fails both |
 
 Eagle's quirks are kept:
 - **File size units:** any unit other than `kb` is treated as MB.
-- **Start and end matches:** `startWith` and `endWith` match without escaping the value.
+- **Start and end matches:** `startWith` and `endWith` build a case-insensitive regex from `^` plus the value and the value plus `$`, without escaping, so the value is a pattern there too.
+- **Lower-cased patterns:** for the lower-cased properties the regex pattern is lower-cased with the text, so `\D` acts as `\d`.
 
 ## How falcon differs
 
-- **Regex rules:** falcon has no regex engine, so these fall back to a substring test.
-- **The `on` date rule:** falcon compares UTC days, while Eagle uses local days.
+- **Regex engine:** Eagle runs JavaScript `RegExp`; falcon runs the Rust `regex` crate. It has no look-around or backreferences, so a pattern using them fails to compile and never matches (in Eagle it works). `\w`, `\d`, `\b` and case folding are Unicode-aware, where JavaScript without the `u` flag is ASCII-only. An invalid `regex` pattern fails the rule in both, but Eagle fails its whole test on an invalid `startWith` or `endWith` pattern, where falcon fails only that rule.
+- **Installed fonts:** like Eagle, falcon counts a font as installed when a file named after it is in Eagle's font folder (`~/Library/Fonts/EagleApp`, read once per evaluation). Fonts installed any other way count as not installed in both. Falcon has no font activation of its own and no such folder on other systems, so there every font is "not installed".
 - **The app's dialog:** it creates top-level smart folders with one condition. Nesting, icons and moves are in the library API but not yet in the app.
