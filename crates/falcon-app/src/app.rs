@@ -24,6 +24,7 @@ use falcon_library::search::{ColorQuery, Filter, Logic, OrderBy, TextFilter};
 use crate::theme::{self as t, font, mono};
 
 mod about;
+mod debug_ui;
 mod organize_ui;
 mod dupes_ui;
 mod export_ui;
@@ -2103,6 +2104,7 @@ impl App {
             C::OpenNewWindow => self.open_preview_window(),
 
             C::About => self.about = true,
+            C::DebugReport => self.export_debug_report(ctx),
             C::ErrorLogs => {
                 if let Some(p) = crate::errlog::ensure() {
                     crate::open_with::open_default(&[p]);

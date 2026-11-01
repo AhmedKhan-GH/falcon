@@ -5,6 +5,7 @@ mod backups;
 mod collect;
 mod colors;
 mod drop_pos;
+mod debug_report;
 mod errlog;
 mod folder_icons;
 mod font_install;

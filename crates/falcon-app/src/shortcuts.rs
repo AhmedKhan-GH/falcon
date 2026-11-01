@@ -155,6 +155,7 @@ pub enum Command {
     OpenNewWindow,
     ErrorLogs,
     About,
+    DebugReport,
 }
 
 /// How a scroll command moves the grid.
@@ -1057,7 +1058,7 @@ mod tests {
     #[test]
     fn menu_only_commands_have_no_keys() {
         let keys = Shortcuts::default();
-        for cmd in [Command::Undo, Command::Import, Command::Documentation, Command::ErrorLogs, Command::About] {
+        for cmd in [Command::Undo, Command::Import, Command::Documentation, Command::ErrorLogs, Command::About, Command::DebugReport] {
             assert!(find_spec(cmd).is_none());
             assert_eq!(keys.binding(cmd), None);
             assert!(keys.chords(cmd).is_empty());

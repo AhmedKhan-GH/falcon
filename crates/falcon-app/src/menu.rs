@@ -152,7 +152,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::RotateLeft => s.library && s.rotatable,
         C::Crop => s.library && s.croppable,
         C::Documentation => s.docs,
-        C::ErrorLogs | C::About => true,
+        C::ErrorLogs | C::About | C::DebugReport => true,
         C::ToggleName | C::ToggleInfo | C::ToggleComments | C::ToggleSubfolders => s.library,
         C::AlwaysOnTop => true,
         C::Grayscale | C::Navigator => s.library,
@@ -445,6 +445,8 @@ pub static MENUS: &[(&str, &[Entry])] = &[
             item("Falcon Documentation", Command::Documentation),
             SEP,
             item("Error Logs", Command::ErrorLogs),
+            SEP,
+            item("Export Debug Report…", Command::DebugReport),
         ],
     ),
 ];
@@ -999,7 +1001,7 @@ mod tests {
     fn help_menu_lists_documentation_and_logs() {
         let help = MENUS.iter().find(|m| m.0 == "Help").unwrap().1;
         let labels: Vec<&str> = help.iter().map(|e| if let Entry::Item(i) = e { i.label } else { "-" }).collect();
-        assert_eq!(labels, ["Falcon Documentation", "-", "Error Logs"]);
+        assert_eq!(labels, ["Falcon Documentation", "-", "Error Logs", "-", "Export Debug Report…"]);
     }
 
     #[test]
