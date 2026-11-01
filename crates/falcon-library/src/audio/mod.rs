@@ -8,18 +8,21 @@
 //! pure-Rust `opus-decoder` crate for Opus (in Ogg or CAF). Formats with no
 //! FOSS pure-Rust decoder (WMA, APE, AMR) don't open: [`open`] returns an
 //! [`AudioError`] and callers fall back (the viewer shows the reason, the
-//! waveform is flat, no duration is stored). A later backend (FFmpeg,
-//! loaded at runtime) can implement [`AudioSource`] and be tried after
-//! symphonia in [`open`] without the callers changing.
+//! waveform is flat, no duration is stored). When an LGPL FFmpeg is
+//! installed (`falcon-ffmpeg`, loaded at run time), [`open`] tries it after
+//! symphonia, which covers those formats and the soundtracks of video
+//! files.
 
 mod adts;
 mod edit;
+mod ffmpeg;
 mod native;
 mod opus;
 
 use std::fmt;
 use std::path::Path;
 
+pub use ffmpeg::FfmpegSource;
 pub use native::SymphoniaSource;
 pub(crate) use native::open_format;
 
@@ -89,7 +92,11 @@ impl std::error::Error for AudioError {}
 /// Opens an audio file (`ext` is a hint; the contents decide). Backends
 /// are tried in turn; the first error is kept when none can.
 pub fn open(path: &Path, ext: &str) -> Result<Box<dyn AudioSource>, AudioError> {
-    SymphoniaSource::open(path, ext).map(|s| Box::new(s) as Box<dyn AudioSource>)
+    match SymphoniaSource::open(path, ext) {
+        Ok(s) => Ok(Box::new(s)),
+        Err(AudioError::Io(e)) => Err(AudioError::Io(e)),
+        Err(e) => FfmpegSource::open(path).map(|s| Box::new(s) as Box<dyn AudioSource>).map_err(|_| e),
+    }
 }
 
 /// Audio formats that decode, by extension, with the codecs each may hold.
@@ -107,8 +114,8 @@ pub const DECODED: [(&str, &str); 11] = [
     ("caf", "PCM, ALAC, AAC-LC, FLAC, Opus, A-law, µ-law"),
 ];
 
-/// Audio formats with no FOSS pure-Rust decoder, left for a runtime-loaded
-/// FFmpeg backend.
+/// Audio formats with no FOSS pure-Rust decoder: they decode only through
+/// the FFmpeg backend, when FFmpeg is installed.
 pub const GAPS: [&str; 4] = ["wma", "ape", "amr", "awb"];
 
 #[cfg(test)]

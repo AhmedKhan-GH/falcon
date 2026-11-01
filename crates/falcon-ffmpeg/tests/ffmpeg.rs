@@ -232,6 +232,31 @@ fn sound_drives_the_clock() {
 
 #[test]
 #[cfg_attr(not(ffmpeg_built), ignore = "needs scripts/build-ffmpeg.sh")]
+fn sound_alone_decodes_and_seeks() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = clip(dir.path(), true);
+    let mut a = falcon_ffmpeg::AudioFile::open(&path).unwrap();
+    assert!((a.duration() - 1.0).abs() < 0.05);
+    let all: Vec<f32> = std::iter::from_fn(|| a.next_sample()).collect();
+    // One second of stereo at 48 kHz, within a resampler's few samples.
+    assert!((all.len() as i64 - 96_000).abs() < 400, "{}", all.len());
+    let peak = all.iter().fold(0f32, |m, s| m.max(s.abs()));
+    assert!((0.2..0.3).contains(&peak), "the tone peaks at 8000 / 32768: {peak}");
+    a.seek(0.75).unwrap();
+    assert_eq!(a.position(), 0.75);
+    let mut rest = 0;
+    while let Some(b) = a.next_block() {
+        rest += b.len();
+    }
+    assert!((rest as i64 - 24_000).abs() < 1000, "a quarter second is left: {rest}");
+    assert!((a.position() - 1.0).abs() < 0.02, "{}", a.position());
+    let silent = dir.path().join("silent.avi");
+    write_avi(&silent, false, |i, _| color(i));
+    assert!(falcon_ffmpeg::AudioFile::open(&silent).is_err());
+}
+
+#[test]
+#[cfg_attr(not(ffmpeg_built), ignore = "needs scripts/build-ffmpeg.sh")]
 fn struct_layouts_match_the_installed_headers() {
     use std::mem::offset_of;
     use ffi::*;

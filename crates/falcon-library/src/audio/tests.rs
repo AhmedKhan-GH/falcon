@@ -189,6 +189,10 @@ fn unsupported_files_fall_back_without_panicking() {
         let p = dir.path().join(name);
         std::fs::write(&p, bytes).unwrap();
         let ext = name.rsplit('.').next().unwrap();
+        if ext == "amr" && falcon_ffmpeg::available() {
+            // A valid AMR header with one frame: FFmpeg's backend reads it.
+            continue;
+        }
         assert_eq!(open(&p, ext).err(), Some(AudioError::UnknownFormat), "{name}");
         assert!(waveform::peaks(&p, ext, 10).is_none());
         assert!(media::audio_duration(&p, ext).is_none());
@@ -196,10 +200,32 @@ fn unsupported_files_fall_back_without_panicking() {
     let missing = open(&dir.path().join("gone.mp3"), "mp3").err().unwrap();
     assert!(matches!(missing, AudioError::Io(_)), "{missing:?}");
     for ext in GAPS {
-        assert!(!media::is_audio(ext), "{ext} is left to a future backend");
+        assert!(!media::is_audio(ext), "{ext} decodes only through FFmpeg");
     }
     for (ext, _) in DECODED {
         assert!(media::is_audio(ext), "{ext}");
     }
 }
 
+
+#[test]
+fn video_soundtracks_decode_through_ffmpeg_when_installed() {
+    if !falcon_ffmpeg::available() {
+        eprintln!("skipped: FFmpeg is not installed (scripts/build-ffmpeg.sh)");
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path().join("clip.avi");
+    let clip = falcon_ffmpeg::testing::Clip { width: 16, height: 16, frames: 20, fps: 20, audio_rate: Some(8000) };
+    std::fs::write(&p, clip.avi(|_, _| [0, 0, 0])).unwrap();
+    let mut s = open(&p, "avi").expect("FFmpeg decodes the soundtrack");
+    assert_eq!((s.backend(), s.channels(), s.sample_rate()), ("ffmpeg", 2, 48_000));
+    assert!((s.duration().unwrap() - 1.0).abs() < 0.05);
+    assert_eq!(s.seek(0.5).unwrap(), 0.5);
+    let mut frames = 0;
+    while let Some(b) = s.next_block() {
+        frames += b.frames().count();
+    }
+    assert!((frames as i64 - 24_000).abs() < 500, "half a second at 48 kHz: {frames}");
+    assert!((s.position() - 1.0).abs() < 0.02);
+}

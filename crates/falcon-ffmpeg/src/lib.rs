@@ -14,7 +14,9 @@
 //! - [`Player`] plays a file: worker threads decode ahead, the owner takes
 //!   each frame when it is due, and [`AudioOut`] carries the sound to the
 //!   caller's audio output, which drives the clock.
+//! - [`AudioFile`] decodes a file's sound alone, for audio players.
 
+mod audio_file;
 mod decode;
 pub mod ffi;
 mod frame;
@@ -23,6 +25,7 @@ mod player;
 pub mod sync;
 pub mod testing;
 
+pub use audio_file::AudioFile;
 pub use frame::Frame;
 pub use media::{Grabber, frame_at, probe, thumbnail};
 pub use player::{AudioOut, Player};
