@@ -88,9 +88,30 @@ The core words, so every file uses one term for one thing.
 - Short labels that are ambiguous out of context: *Zoom* (the window
   command), *Grid* (layout), *Size* (file size vs. dimensions), *Open*
   (verb), *None*, *Fixed* (the shortcut heading: keys that can't be
-  changed).
-- Russian plural forms (`one`/`few`/`many`) of every count.
-- Long sentences in Preferences, which must fit a 520-point-wide pane.
+  changed), *Clear*, *Remove*, *Merge*, *Set*, *Fit*/*Fill*, *Starred*,
+  *Inside* (a smart folder's parent row), *Has*/*None* (text filters),
+  *Min*/*Max*, *Source*/*Reason* (failed-import columns), *recent*.
+- Sentences split across widgets, whose word order can't change: the
+  smart-folder rule row ("Items" / "must match" / "all" / "any" / "of
+  these rules", and the method words *is*, *on*, *and*, *days*,
+  *between*), and the radio choices that finish the line above them in
+  Preferences ("The wheel over an image in the viewer" + "Scrolls it").
+- Fragments followed by a folder link: "Added {n} items to", "Moved {n}
+  items to", "Added {n} to"; the translations end with a connector.
+- Counts placed inside other sentences ("{folders} and {items} from
+  {path} will be added…", "Added {items}, {folders} and {others} from
+  {name}.", "Importing {images} and {folders} from Inboard", the
+  duplicate review footer): Russian case after the count and Japanese
+  and Korean particles after a placeholder (와(과), 을(를)) need a
+  speaker's eye.
+- Russian plural forms (`one`/`few`/`many`) of every count, and the
+  forms used to avoid declining a name ("в папки: {count}", "в команде
+  «{command}»").
+- macOS terms chosen per language: de *Ablage*, *Darstellung*,
+  *Einsetzen*, *Im Dock ablegen*; ja *しまう*; zh *拷贝*/*拷貝* (Copy)
+  beside *创建副本*/*複製* (Duplicate); es *Edición*, *Visualización*.
+- Long sentences in Preferences and the storage and iCloud warnings,
+  which must fit a 520-point-wide pane, especially in de, ru, ja and ko.
 
 ## Reviewed
 
