@@ -58,6 +58,16 @@ From the context menu's "Custom Thumbnail" entries and the background window's `
 - Grid cards with a custom thumbnail get a `custom-thumbnail` CSS class. The viewer and the plugin API use the thumbnail in place of the original for formats Eagle can't show itself.
 - Refresh Thumbnail skips an item whose `customThumbnail` is set. "Reset Thumbnail" (shown only when it is set) deletes the key and then refreshes the thumbnail.
 
+### GIF frame thumbnails (observed)
+
+From the GIF player's "set as thumbnail" command and the background window's `regenerate-gif-thumbnail` handler:
+
+- The frame on screen is drawn on a canvas. When its short side is over 480 px it is scaled so the short side is 480; smaller frames are kept at their size.
+- The canvas is exported as PNG (`toDataURL()` with no type) and written to `<name>_thumbnail.png`, replacing the thumbnail.
+- The palette is computed again from that file. Nothing else in the item changes: no `customThumbnail`, and `width`, `height` and `noThumbnail` are left alone, so Refresh Thumbnail later draws the first frame again.
+
+Falcon's `Library::set_frame_thumbnail(id, &frame)` does the same, with `thumbnail::frame_thumbnail_size` for the size (Catmull-Rom scaling, where Chromium's canvas scaling may differ by a few levels) and the `image` crate's PNG encoder.
+
 ### Refresh Thumbnail (observed)
 
 The `regenerate-thumbnail` queue reads the original's size, birth time and mtime again (`size`, `btime`, `mtime`), then runs the same per-format generator as import, so `width`, `height` and the flags are measured again. The palette is then queued the same way as at import. A format Eagle no longer recognises loses its thumbnail, `palettes`, `width` and `height` and gets `noPreview: true`. When a re-measured image becomes small enough for `noThumbnail`, the jpg generator sets the flag but does not delete the old thumbnail file (inferred harmless, since Eagle then shows the original).
