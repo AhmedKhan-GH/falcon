@@ -72,6 +72,8 @@ pub enum Command {
     /// Select the first or last item (⌘↑, ⌘↓).
     SelectFirst,
     SelectLast,
+    /// Set the rating of the selection (0 removes it).
+    Rate(u8),
 }
 
 /// How a scroll command moves the grid.
@@ -235,6 +237,13 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::Scroll(Scroll::PageDown), id: "view.scroll.nextpage", group: "Go", label: "Scroll down a page", default: k(NONE, Key::PageDown), aliases: &[] },
     Spec { cmd: Command::SelectFirst, id: "view.select.first", group: "Go", label: "Select the first item", default: k(CMD, Key::ArrowUp), aliases: &[] },
     Spec { cmd: Command::SelectLast, id: "view.select.last", group: "Go", label: "Select the last item", default: k(CMD, Key::ArrowDown), aliases: &[] },
+    // Eagle binds 0–5 outside its keybind table (`organize.rating.*` have no default).
+    Spec { cmd: Command::Rate(0), id: "organize.rating.0", group: "Organize", label: "Remove the rating", default: k(NONE, Key::Num0), aliases: &[] },
+    Spec { cmd: Command::Rate(1), id: "organize.rating.1", group: "Organize", label: "Rate 1 star", default: k(NONE, Key::Num1), aliases: &[] },
+    Spec { cmd: Command::Rate(2), id: "organize.rating.2", group: "Organize", label: "Rate 2 stars", default: k(NONE, Key::Num2), aliases: &[] },
+    Spec { cmd: Command::Rate(3), id: "organize.rating.3", group: "Organize", label: "Rate 3 stars", default: k(NONE, Key::Num3), aliases: &[] },
+    Spec { cmd: Command::Rate(4), id: "organize.rating.4", group: "Organize", label: "Rate 4 stars", default: k(NONE, Key::Num4), aliases: &[] },
+    Spec { cmd: Command::Rate(5), id: "organize.rating.5", group: "Organize", label: "Rate 5 stars", default: k(NONE, Key::Num5), aliases: &[] },
     Spec { cmd: Command::Player(PlayerKey::Toggle), id: "player.playAndPause", group: PLAYER, label: "Play or pause", default: k(NONE, Key::Space), aliases: &[] },
     Spec { cmd: Command::Player(PlayerKey::Frames(-1)), id: "player.prev1frame", group: PLAYER, label: "Previous frame", default: k(NONE, Key::OpenBracket), aliases: &[] },
     Spec { cmd: Command::Player(PlayerKey::Frames(1)), id: "player.next1frame", group: PLAYER, label: "Next frame", default: k(NONE, Key::CloseBracket), aliases: &[] },
@@ -351,7 +360,9 @@ impl Shortcuts {
         let mut best: Option<(Command, u8)> = None;
         for s in TABLE.iter().filter(|s| s.group != PLAYER) {
             for c in self.chords(s.cmd) {
-                if c.logical_key == key && pressed.matches_logically(c.modifiers) {
+                // A bare key (a digit, R, /) is not also its ⌥ chord.
+                let bare_with_alt = c.modifiers.is_none() && pressed.alt;
+                if c.logical_key == key && pressed.matches_logically(c.modifiers) && !bare_with_alt {
                     let n = weight(c.modifiers);
                     if best.is_none_or(|(_, b)| n > b) {
                         best = Some((s.cmd, n));
@@ -773,6 +784,19 @@ mod tests {
     }
 
     #[test]
+    fn digits_rate() {
+        let keys = Shortcuts::default();
+        let digits = [Key::Num0, Key::Num1, Key::Num2, Key::Num3, Key::Num4, Key::Num5];
+        for (n, key) in digits.into_iter().enumerate() {
+            assert_eq!(keys.resolve(key, Modifiers::NONE), Some(Command::Rate(n as u8)));
+        }
+        // ⌥1 is a layout, and ⌥5 (no binding) is not 5.
+        assert_eq!(keys.resolve(Key::Num1, ALT), Some(Command::LayoutWaterfall));
+        assert_eq!(keys.resolve(Key::Num5, ALT), None);
+        assert_eq!(keys.resolve(Key::Num6, Modifiers::NONE), None);
+    }
+
+    #[test]
     fn library_switch_keys() {
         let keys = Shortcuts::default();
         assert_eq!(keys.resolve(Key::L, Modifiers::COMMAND), Some(Command::SwitchLibrary));
@@ -799,7 +823,7 @@ mod tests {
         assert_eq!(keys.resolve(Key::Minus, CMD), Some(Command::ZoomOut));
         assert_eq!(keys.resolve(Key::Num0, CMD), Some(Command::ZoomActual));
         assert_eq!(keys.resolve(Key::Num9, CMD), Some(Command::ZoomFit));
-        assert_eq!(keys.resolve(Key::Num0, Modifiers::NONE), None, "plain 0 stays the viewer's fixed key");
+        assert_eq!(keys.resolve(Key::Num0, Modifiers::NONE), Some(Command::Rate(0)), "plain 0 rates; in the viewer it stays the fixed fit key (`keyboard` drops Rate there)");
     }
 
     #[test]

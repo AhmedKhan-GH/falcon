@@ -163,6 +163,15 @@ struct Progress {
     added: Vec<String>,
 }
 
+/// The toast after a rating key or menu item.
+fn rated_note(stars: u8) -> String {
+    match stars {
+        0 => "Removed the rating".into(),
+        1 => "Rated 1 star".into(),
+        n => format!("Rated {n} stars"),
+    }
+}
+
 /// What the toast says when opening a library restored its damaged
 /// `metadata.json` from `backup` (see `Library::open_or_restore`).
 fn restored_note(backup: &std::path::Path) -> String {
@@ -1019,6 +1028,11 @@ impl App {
             self.audio.toggle();
             pressed.retain(|c| *c != C::Viewer);
         }
+        // In the viewer the bare digits are its own keys (0 fits, 1 is
+        // actual size); the menu still rates there.
+        if viewer {
+            pressed.retain(|c| !matches!(c, C::Rate(_)));
+        }
         // These take the whole key press: the fixed keys wait a frame.
         let done = audio || pressed.iter().any(|c| matches!(c, C::Paste | C::OpenDefault | C::RevealInFinder | C::Viewer) || (*c == C::Back && viewer));
         for cmd in pressed {
@@ -1199,6 +1213,14 @@ impl App {
                     self.ws.anchor = Some(id.clone());
                     self.ws.scroll_to = Some(id);
                 }
+            }
+            C::Rate(n) => {
+                let ids = match &self.ws.viewer {
+                    Some(id) => vec![id.clone()],
+                    None => self.ws.selected.clone(),
+                };
+                self.ws.actions.push(Action::BatchRating(ids, n.into()));
+                self.flash(rated_note(n));
             }
             C::Page(p) => {
                 self.ws.viewer = None;
@@ -4176,8 +4198,15 @@ impl eframe::App for App {
 
 #[cfg(test)]
 mod tests {
-    use super::{drag_image, restored_note};
+    use super::{drag_image, rated_note, restored_note};
     use super::Saved;
+
+    #[test]
+    fn rating_toasts() {
+        assert_eq!(rated_note(0), "Removed the rating");
+        assert_eq!(rated_note(1), "Rated 1 star");
+        assert_eq!(rated_note(3), "Rated 3 stars");
+    }
     use std::collections::HashMap;
     use std::path::{Path, PathBuf};
 

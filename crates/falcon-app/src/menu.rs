@@ -80,6 +80,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::NextLibrary | C::PreviousLibrary => s.libraries > 1,
         C::Page(_) => s.library,
         C::Scroll(_) | C::SelectFirst | C::SelectLast => grid,
+        C::Rate(_) => any || (s.library && s.viewer),
         C::Player(_) => false,
     }
 }
