@@ -64,6 +64,8 @@ pub struct State {
     pub croppable: bool,
     /// The book in `docs/` is on this machine.
     pub docs: bool,
+    /// An app password is set, so falcon can be locked.
+    pub lockable: bool,
 }
 
 impl State {
@@ -114,6 +116,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
             grid && matches!(s.scope, ScopeKind::Folder | ScopeKind::Smart) && s.picked_folders < 2 && s.picked_smart < 2
         }
         C::MoveFolder => grid && (s.scope == ScopeKind::Folder || s.picked_folders > 0),
+        C::LockApp => s.lockable,
         C::SwitchLibrary | C::CollectWindow | C::Preferences | C::CloseWindow | C::Minimize | C::FullScreen | C::WindowZoom => true,
         C::NextLibrary | C::PreviousLibrary => s.libraries > 1,
         C::Page(_) | C::Import | C::ImportFolders | C::FindDuplicates => s.library,
@@ -183,7 +186,7 @@ const fn checked(label: &'static str, cmd: Command, check: Check) -> Entry {
 const SEP: Entry = Entry::Separator;
 
 /// Added to the application menu, after About.
-pub static APP: &[Entry] = &[item("Preferences…", Command::Preferences)];
+pub static APP: &[Entry] = &[item("Preferences…", Command::Preferences), item("Lock Falcon", Command::LockApp)];
 
 /// The menus after the application menu, after Eagle's (without its
 /// Library and Actions menus), with only what falcon can do.
@@ -776,8 +779,10 @@ mod tests {
             rotatable: true,
             croppable: true,
             docs: true,
+            lockable: true,
             ..Default::default()
         };
+        assert!(!enabled(Command::LockApp, &State::default()), "Lock needs a password");
         for it in items().iter() {
             let s = match it.cmd {
                 Command::Reshuffle => State { scope: ScopeKind::Random, ..full.clone() },

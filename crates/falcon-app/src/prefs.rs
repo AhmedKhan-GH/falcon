@@ -8,6 +8,7 @@ use std::ops::RangeInclusive;
 
 use eframe::egui::{self, Align2, Color32, CornerRadius, Key, Modifiers, RichText, Sense, Stroke, Ui, vec2};
 
+use crate::applock::{self, Secret};
 use crate::logic::Scope;
 use crate::shortcuts::{Recorder, Shortcuts};
 use crate::theme::{self as t, Theme, font};
@@ -79,6 +80,8 @@ pub struct Prefs {
     /// The "Added N" note when an import finishes (falcon's own; failures
     /// are always reported).
     pub notify_import_done: bool,
+    /// Eagle's `privacy.*`: the app password, if one is set (`applock`).
+    pub app_lock: Option<Secret>,
 }
 
 /// What the wheel does over a playing video.
@@ -184,6 +187,7 @@ impl Default for Prefs {
             video_loop_short: true,
             notifications: true,
             notify_import_done: true,
+            app_lock: None,
         }
     }
 }
@@ -317,11 +321,12 @@ pub enum Section {
     Preview,
     Shortcuts,
     Notification,
+    Password,
     Developer,
 }
 
 impl Section {
-    pub const ALL: [Section; 7] = [Section::General, Section::Sidebar, Section::Controls, Section::Preview, Section::Shortcuts, Section::Notification, Section::Developer];
+    pub const ALL: [Section; 8] = [Section::General, Section::Sidebar, Section::Controls, Section::Preview, Section::Shortcuts, Section::Notification, Section::Password, Section::Developer];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -331,6 +336,7 @@ impl Section {
             Section::Preview => "Preview",
             Section::Shortcuts => "Shortcuts",
             Section::Notification => "Notification",
+            Section::Password => "Password",
             Section::Developer => "Developer",
         }
     }
@@ -343,6 +349,7 @@ impl Section {
             Section::Preview => crate::icons::EYE,
             Section::Shortcuts => crate::icons::KEYBOARD,
             Section::Notification => crate::icons::BELL,
+            Section::Password => crate::icons::LOCK_SIMPLE,
             Section::Developer => crate::icons::CODE,
         }
     }
@@ -353,7 +360,7 @@ impl Section {
         match self {
             Section::General | Section::Sidebar => 0,
             Section::Controls | Section::Preview | Section::Shortcuts => 1,
-            Section::Notification => 2,
+            Section::Notification | Section::Password => 2,
             Section::Developer => 3,
         }
     }
@@ -380,6 +387,7 @@ pub struct Window {
     draft: Option<Draft>,
     port_text: String,
     recorder: Recorder,
+    password: PasswordForm,
     /// The theme and interface size last saved or applied; previewed
     /// ones revert to them.
     applied_theme: Theme,
@@ -442,6 +450,7 @@ impl Window {
         self.open = true;
         self.query.clear();
         self.recorder.stop();
+        self.password = PasswordForm::default();
     }
 
     pub fn close(&mut self) {
@@ -566,6 +575,7 @@ impl Window {
             Section::Preview => preview(p, d),
             Section::Shortcuts => self.shortcuts(p, d),
             Section::Notification => notification(p, d),
+            Section::Password => password(p, d, &mut self.password),
             Section::Developer => developer(p, d, &mut self.port_text, port_error),
         }
     }
@@ -743,6 +753,105 @@ fn notification(p: &mut Page, d: &mut Draft) {
             });
         });
         note(ui, "Import failures are always reported. falcon plays no sound effects.");
+    });
+}
+
+/// What the Password pane is asking for.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum PasswordMode {
+    Set,
+    Change,
+    Remove,
+}
+
+/// The Password pane's fields.
+#[derive(Default)]
+struct PasswordForm {
+    mode: Option<PasswordMode>,
+    old: String,
+    new: String,
+    again: String,
+    hint: String,
+    error: Option<&'static str>,
+}
+
+/// Checks the Password pane's form against the current password and
+/// returns what it changes the stored password to.
+fn submit_password(form: &PasswordForm, current: Option<&Secret>) -> Result<Option<Secret>, &'static str> {
+    let Some(mode) = form.mode else { return Ok(current.cloned()) };
+    if mode != PasswordMode::Set && !current.is_some_and(|s| s.matches(&form.old)) {
+        return Err(if mode == PasswordMode::Remove { "The password is wrong." } else { "The old password is wrong." });
+    }
+    if mode == PasswordMode::Remove {
+        return Ok(None);
+    }
+    applock::check_new(&form.new, &form.again)?;
+    Ok(Some(Secret::new(&form.new, &form.hint)))
+}
+
+/// Password: lock falcon behind a password.
+fn password(p: &mut Page, d: &mut Draft, form: &mut PasswordForm) {
+    let keywords = ["password", "lock", "privacy", "security", "launch", "hint"];
+    p.block("App password", &keywords, |ui| {
+        let set = d.prefs.app_lock.is_some();
+        if !set {
+            let mut on = form.mode == Some(PasswordMode::Set);
+            if ui.checkbox(&mut on, "Lock falcon with a password").changed() {
+                *form = PasswordForm { mode: on.then_some(PasswordMode::Set), ..Default::default() };
+            }
+        } else if form.mode.is_none() {
+            ui.label("falcon asks for its password when it opens, and after Lock Now (⌥⌘L).");
+            ui.horizontal(|ui| {
+                if ui.button("Change Password…").clicked() {
+                    *form = PasswordForm { mode: Some(PasswordMode::Change), hint: d.prefs.app_lock.as_ref().map(|s| s.hint.clone()).unwrap_or_default(), ..Default::default() };
+                }
+                if ui.button("Remove Password…").clicked() {
+                    *form = PasswordForm { mode: Some(PasswordMode::Remove), ..Default::default() };
+                }
+            });
+        }
+        let Some(mode) = form.mode else {
+            note(ui, "The password guards this window only; it is kept in falcon's settings, not in the library.");
+            return;
+        };
+        ui.add_space(4.0);
+        let field = |ui: &mut Ui, label: &str, text: &mut String, secret: bool| {
+            ui.horizontal(|ui| {
+                ui.add_sized([130.0, 20.0], egui::Label::new(label));
+                ui.add(egui::TextEdit::singleline(text).password(secret).desired_width(200.0));
+            });
+        };
+        if mode != PasswordMode::Set {
+            field(ui, if mode == PasswordMode::Remove { "Password" } else { "Old password" }, &mut form.old, true);
+        }
+        if mode != PasswordMode::Remove {
+            field(ui, "New password", &mut form.new, true);
+            field(ui, "Again", &mut form.again, true);
+            field(ui, "Hint (optional)", &mut form.hint, false);
+        }
+        if let Some(e) = form.error {
+            ui.label(RichText::new(e).size(11.0).color(t::p().icon_red));
+        }
+        ui.horizontal(|ui| {
+            let label = match mode {
+                PasswordMode::Set => "Set Password",
+                PasswordMode::Change => "Change Password",
+                PasswordMode::Remove => "Remove Password",
+            };
+            if ui.button(label).clicked() {
+                match submit_password(form, d.prefs.app_lock.as_ref()) {
+                    Ok(secret) => {
+                        d.prefs.app_lock = secret;
+                        *form = PasswordForm::default();
+                    }
+                    Err(e) => form.error = Some(e),
+                }
+            }
+            if mode != PasswordMode::Set && ui.button("Cancel").clicked() {
+                *form = PasswordForm::default();
+            }
+        });
+        note(ui, "Takes effect when you Save or Apply.");
     });
 }
 
@@ -931,6 +1040,21 @@ mod tests {
     }
 
     #[test]
+    fn password_form() {
+        let form = |mode, old: &str, new: &str, again: &str| PasswordForm { mode: Some(mode), old: old.into(), new: new.into(), again: again.into(), hint: "tip".into(), error: None };
+        assert_eq!(Prefs::default().app_lock, None, "Eagle's privacy lock defaults to off");
+        assert_eq!(submit_password(&PasswordForm::default(), None), Ok(None));
+        let set = submit_password(&form(PasswordMode::Set, "", "pw", "pw"), None).unwrap().unwrap();
+        assert!(set.matches("pw") && set.hint == "tip");
+        assert!(submit_password(&form(PasswordMode::Set, "", "pw", "px"), None).is_err());
+        assert!(submit_password(&form(PasswordMode::Change, "bad", "new", "new"), Some(&set)).is_err());
+        let changed = submit_password(&form(PasswordMode::Change, "pw", "new", "new"), Some(&set)).unwrap().unwrap();
+        assert!(changed.matches("new") && !changed.matches("pw"));
+        assert!(submit_password(&form(PasswordMode::Remove, "bad", "", ""), Some(&set)).is_err());
+        assert_eq!(submit_password(&form(PasswordMode::Remove, "pw", "", ""), Some(&set)), Ok(None));
+    }
+
+    #[test]
     fn search_matches_every_word() {
         assert!(matches("", &["General", "Appearance"]));
         assert!(matches("  ", &["General"]));
@@ -944,7 +1068,7 @@ mod tests {
     #[test]
     fn panes_follow_eagles_order() {
         let labels: Vec<_> = Section::ALL.iter().map(|s| s.label()).collect();
-        assert_eq!(labels, ["General", "Sidebar", "Controls", "Preview", "Shortcuts", "Notification", "Developer"]);
+        assert_eq!(labels, ["General", "Sidebar", "Controls", "Preview", "Shortcuts", "Notification", "Password", "Developer"]);
         let groups: Vec<_> = Section::ALL.iter().map(|s| s.group()).collect();
         assert!(groups.windows(2).all(|w| w[0] <= w[1]), "groups are contiguous");
         let s: Section = serde_json::from_str(r#""preview""#).unwrap();

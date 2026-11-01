@@ -1,4 +1,5 @@
 mod app;
+mod applock;
 mod backups;
 mod collect;
 mod drop_pos;

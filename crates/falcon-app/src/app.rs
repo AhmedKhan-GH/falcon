@@ -564,6 +564,8 @@ pub struct App {
     switch_to: Option<Switch>,
     prefs: crate::prefs::Prefs,
     prefs_window: crate::prefs::Window,
+    /// The app lock (Preferences ▸ Password).
+    lock: crate::applock::Lock,
     shortcuts: crate::shortcuts::Shortcuts,
     /// The small always-on-top drop window (see `collect.rs`).
     collect: crate::collect::Collect,
@@ -602,6 +604,7 @@ impl App {
             switch_to: None,
             prefs: Default::default(),
             prefs_window: Default::default(),
+            lock: Default::default(),
             shortcuts: Default::default(),
             collect: Default::default(),
             audio: Default::default(),
@@ -624,6 +627,7 @@ impl App {
         cc.egui_ctx.options_mut(|o| o.zoom_with_keyboard = false);
         cc.egui_ctx.set_zoom_factor(crate::prefs::zoom_factor(app.prefs.ui_zoom));
         app.prefs_window.set_pane(saved.prefs_pane);
+        app.lock = crate::applock::Lock::at_launch(app.prefs.app_lock.as_ref());
         app.shortcuts = saved.shortcuts;
         app.collect.pos = saved.collect_pos.map(Pos2::from);
         app.video.volume = saved.video_volume.unwrap_or(1.0).clamp(0.0, 1.0);
@@ -829,6 +833,66 @@ impl App {
     fn open_preferences(&mut self) {
         let panels = crate::prefs::Panels { sidebar: self.show_sidebar, inspector: self.show_inspector };
         self.prefs_window.show_with(crate::prefs::Draft { prefs: self.prefs.clone(), panels, keys: self.shortcuts.clone() });
+    }
+
+    /// Lock Now: hides everything behind the lock screen, stopping playback
+    /// and closing Preferences and the collect window.
+    fn lock_now(&mut self) {
+        if !self.lock.lock(self.prefs.app_lock.as_ref()) {
+            return;
+        }
+        self.video.keep_only(None);
+        self.audio.stop();
+        self.prefs_window.close();
+        if self.collect.open {
+            self.collect.toggle();
+        }
+    }
+
+    /// The lock screen: the password field, its hint and Unlock.
+    fn lock_screen(&mut self, ui: &mut Ui) {
+        let rect = ui.max_rect();
+        let ctx = ui.ctx().clone();
+        if ctx.cumulative_frame_nr() == 0 {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+        }
+        t::follow_system(&ctx);
+        egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t::p().main)).show(ui, |ui| {
+            window_drag(ui, Rect::from_min_size(rect.min, vec2(rect.width(), t::BAR_HEIGHT)), "lock");
+            let card = Rect::from_center_size(rect.center(), vec2(300.0, 220.0));
+            let mut c = ui.new_child(egui::UiBuilder::new().max_rect(card).layout(egui::Layout::top_down(egui::Align::Center)));
+            c.label(RichText::new(ic::LOCK_SIMPLE).font(font(40.0)).color(t::p().text_muted));
+            c.add_space(8.0);
+            c.label(RichText::new("Falcon is locked").size(16.0).color(t::p().text));
+            c.add_space(12.0);
+            let field = c.add(
+                TextEdit::singleline(&mut self.lock.typed)
+                    .password(true)
+                    .hint_text(RichText::new("Password").color(t::p().text_muted))
+                    .desired_width(220.0)
+                    .id_salt("lock-password"),
+            );
+            if !field.has_focus() && !field.lost_focus() {
+                field.request_focus();
+            }
+            let enter = field.lost_focus() && ctx.input(|i| i.key_pressed(Key::Enter));
+            c.add_space(8.0);
+            let unlock = c.add(egui::Button::new(RichText::new("Unlock").color(Color32::WHITE)).fill(t::p().primary).min_size(vec2(220.0, 0.0))).clicked();
+            if (enter || unlock) && self.lock.try_unlock(self.prefs.app_lock.as_ref()) {
+                return;
+            }
+            if self.lock.failed {
+                c.label(RichText::new("Wrong password").size(12.0).color(t::p().icon_red));
+            }
+            let hint = self.prefs.app_lock.as_ref().map(|s| s.hint.clone()).unwrap_or_default();
+            if !hint.is_empty() {
+                if self.lock.show_hint {
+                    c.label(RichText::new(hint).size(12.0).color(t::p().text_muted));
+                } else if c.link(RichText::new("Show hint").size(12.0)).clicked() {
+                    self.lock.show_hint = true;
+                }
+            }
+        });
     }
 
     /// Takes the Preferences window's Save or Apply.
@@ -1197,7 +1261,8 @@ impl App {
         use crate::shortcuts::Page;
         crate::menu::State {
             library: self.ws.lib.is_some(),
-            modal: self.prefs_window.open || self.ws.dup_dialog.is_some(),
+            modal: self.prefs_window.open || self.ws.dup_dialog.is_some() || self.lock.is_locked(),
+            lockable: self.prefs.app_lock.is_some(),
             text: ctx.egui_wants_keyboard_input(),
             viewer: self.ws.viewer.is_some(),
             selected: self.ws.selected.len(),
@@ -1288,6 +1353,7 @@ impl App {
         let viewer = self.ws.viewer.is_some();
         match cmd {
             C::Preferences => self.open_preferences(),
+            C::LockApp => self.lock_now(),
             C::CollectWindow => self.collect.toggle(),
             C::SwitchLibrary => {
                 if self.ws.lib.is_some() {
@@ -4283,8 +4349,14 @@ impl eframe::App for App {
 
     fn ui(&mut self, ui: &mut Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
-        self.menu_clicks(&ctx);
-        self.draw(ui, frame);
+        if self.lock.is_locked() {
+            // Nothing but the lock screen acts while locked.
+            let _ = crate::menu::take_clicks();
+            self.lock_screen(ui);
+        } else {
+            self.menu_clicks(&ctx);
+            self.draw(ui, frame);
+        }
         let state = self.menu_state(&ctx);
         self.menu_bar.sync(&ctx, &self.shortcuts, &state);
     }

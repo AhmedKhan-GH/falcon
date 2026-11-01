@@ -39,6 +39,8 @@ pub enum Command {
     OpenDefault,
     RevealInFinder,
     Preferences,
+    /// Lock falcon behind its password (Preferences ▸ Password).
+    LockApp,
     CollectWindow,
     SwitchLibrary,
     NextLibrary,
@@ -265,6 +267,7 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::NextLibrary, id: "library.next", group: "Library", label: "Next open library", default: k(CTRL, Key::Tab), aliases: &[] },
     Spec { cmd: Command::PreviousLibrary, id: "library.previous", group: "Library", label: "Previous open library", default: k(CTRL_SHIFT, Key::Tab), aliases: &[] },
     Spec { cmd: Command::Preferences, id: "app.preferences", group: "App", label: "Preferences", default: k(CMD, Key::Comma), aliases: &[] },
+    Spec { cmd: Command::LockApp, id: "app.lock", group: "App", label: "Lock falcon", default: k(CMD_ALT, Key::L), aliases: &[] },
     // Eagle's View ▸ All … Trash.
     Spec { cmd: Command::Page(Page::All), id: "view.all", group: "Go", label: "Show All", default: k(CMD, Key::Num1), aliases: &[] },
     Spec { cmd: Command::Page(Page::Uncategorized), id: "view.unfiled", group: "Go", label: "Show Uncategorized", default: k(CMD, Key::Num2), aliases: &[] },
