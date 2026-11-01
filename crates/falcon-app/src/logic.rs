@@ -1919,11 +1919,13 @@ pub struct Display {
     pub fill: bool,
     /// A folder also shows the items of all its subfolders.
     pub subfolders: bool,
+    /// The list layout's optional columns.
+    pub columns: ListColumns,
 }
 
 impl Default for Display {
     fn default() -> Self {
-        Display { show_name: true, show_info: true, info: InfoType::Dimensions, show_ext: true, ext_badge: true, comment_badge: true, fill: false, subfolders: false }
+        Display { show_name: true, show_info: true, info: InfoType::Dimensions, show_ext: true, ext_badge: true, comment_badge: true, fill: false, subfolders: false, columns: ListColumns::default() }
     }
 }
 
@@ -2024,6 +2026,136 @@ pub fn subfolder_cards(folder: &Folder, subfolders: bool) -> Vec<&Folder> {
         c.walk(&mut |f| out.push(f));
     }
     out
+}
+
+/// A column of the list layout, in Eagle's header order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ListColumn {
+    Name,
+    Tags,
+    Dimensions,
+    Rating,
+    Type,
+    Size,
+    Imported,
+}
+
+impl ListColumn {
+    pub const ALL: [ListColumn; 7] =
+        [ListColumn::Name, ListColumn::Tags, ListColumn::Dimensions, ListColumn::Rating, ListColumn::Type, ListColumn::Size, ListColumn::Imported];
+    /// The columns that can be hidden, in the order of Eagle's header menu.
+    pub const OPTIONAL: [ListColumn; 6] = [ListColumn::Tags, ListColumn::Dimensions, ListColumn::Rating, ListColumn::Type, ListColumn::Size, ListColumn::Imported];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            ListColumn::Name => "Name",
+            ListColumn::Tags => "Tags",
+            ListColumn::Dimensions => "Dimensions",
+            ListColumn::Rating => "Rating",
+            ListColumn::Type => "Type",
+            ListColumn::Size => "File Size",
+            ListColumn::Imported => "Date Imported",
+        }
+    }
+
+    /// The sort a click on the column's header picks.
+    pub fn sort_key(self) -> OrderBy {
+        match self {
+            ListColumn::Name => OrderBy::Name,
+            ListColumn::Tags => OrderBy::Tags,
+            ListColumn::Dimensions => OrderBy::Resolution,
+            ListColumn::Rating => OrderBy::Rating,
+            ListColumn::Type => OrderBy::Ext,
+            ListColumn::Size => OrderBy::FileSize,
+            ListColumn::Imported => OrderBy::Import,
+        }
+    }
+
+    /// The column's share of the row's width.
+    fn weight(self) -> f32 {
+        match self {
+            ListColumn::Name => 3.0,
+            ListColumn::Tags => 2.0,
+            ListColumn::Imported => 1.4,
+            _ => 1.0,
+        }
+    }
+}
+
+/// Which optional list columns show, with Eagle's defaults (its
+/// `eagle.list.layout.settings`): tags and rating hidden.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct ListColumns {
+    pub tags: bool,
+    pub dimensions: bool,
+    pub rating: bool,
+    pub ext: bool,
+    pub size: bool,
+    pub imported: bool,
+}
+
+impl Default for ListColumns {
+    fn default() -> Self {
+        ListColumns { tags: false, dimensions: true, rating: false, ext: true, size: true, imported: true }
+    }
+}
+
+impl ListColumns {
+    /// The switch for an optional column (the name always shows).
+    pub fn flag(&mut self, c: ListColumn) -> Option<&mut bool> {
+        match c {
+            ListColumn::Name => None,
+            ListColumn::Tags => Some(&mut self.tags),
+            ListColumn::Dimensions => Some(&mut self.dimensions),
+            ListColumn::Rating => Some(&mut self.rating),
+            ListColumn::Type => Some(&mut self.ext),
+            ListColumn::Size => Some(&mut self.size),
+            ListColumn::Imported => Some(&mut self.imported),
+        }
+    }
+
+    /// The shown columns with each one's left edge and width as fractions
+    /// of the row.
+    pub fn spans(&self) -> Vec<(ListColumn, f32, f32)> {
+        let mut c = self.clone();
+        let shown: Vec<ListColumn> = ListColumn::ALL.into_iter().filter(|&k| c.flag(k).is_none_or(|on| *on)).collect();
+        let total: f32 = shown.iter().map(|k| k.weight()).sum();
+        let mut x = 0.0;
+        shown
+            .into_iter()
+            .map(|k| {
+                let w = k.weight() / total;
+                let span = (k, x, w);
+                x += w;
+                span
+            })
+            .collect()
+    }
+}
+
+/// A list cell's content.
+pub fn list_cell(item: &Item, col: ListColumn, show_ext: bool) -> Info {
+    match col {
+        ListColumn::Name => Info::Text(caption_name(item, show_ext)),
+        ListColumn::Tags => caption_info(item, InfoType::Tags),
+        ListColumn::Dimensions => Info::Text(if item.width > 0 && item.height > 0 { format!("{} × {}", item.width, item.height) } else { "-".into() }),
+        ListColumn::Rating => caption_info(item, InfoType::Rating),
+        ListColumn::Type => Info::Text(item.ext.to_uppercase()),
+        ListColumn::Size => Info::Text(format_size(item.size)),
+        ListColumn::Imported => Info::Text(format_ms(item.modification_time)),
+    }
+}
+
+/// The sort after a click on a list header, as Eagle's: the column already
+/// sorted by flips its direction, any other sorts by it, increasing.
+/// `current` is the view's sort key and direction (`None`: a folder that
+/// follows the global sort).
+pub fn header_sort(current: Option<(OrderBy, bool)>, clicked: OrderBy) -> (OrderBy, bool) {
+    match current {
+        Some((k, inc)) if k == clicked => (k, !inc),
+        _ => (clicked, true),
+    }
 }
 
 #[cfg(test)]
@@ -2291,5 +2423,22 @@ mod selection_tests {
         assert_eq!(extend_selection(&order, &[], None, true), None);
         // No anchor: the run grows away from its first (or last) item.
         assert_eq!(extend_selection(&order, &ids(&["b"]), None, true).unwrap().0, ids(&["b", "c"]));
+    }
+
+    #[test]
+    fn list_columns_and_header_sort() {
+        let mut cols = ListColumns::default();
+        let names = |c: &ListColumns| c.spans().into_iter().map(|s| s.0.label()).collect::<Vec<_>>();
+        assert_eq!(names(&cols), ["Name", "Dimensions", "Type", "File Size", "Date Imported"], "Eagle's default columns");
+        *cols.flag(ListColumn::Tags).unwrap() = true;
+        *cols.flag(ListColumn::Size).unwrap() = false;
+        assert_eq!(names(&cols), ["Name", "Tags", "Dimensions", "Type", "Date Imported"]);
+        assert!(cols.flag(ListColumn::Name).is_none(), "the name always shows");
+        let spans = cols.spans();
+        let end = spans.last().map(|s| s.1 + s.2).unwrap();
+        assert!((end - 1.0).abs() < 1e-5, "the columns fill the row");
+        assert_eq!(header_sort(Some((OrderBy::Name, true)), OrderBy::Name), (OrderBy::Name, false));
+        assert_eq!(header_sort(Some((OrderBy::Name, false)), OrderBy::FileSize), (OrderBy::FileSize, true));
+        assert_eq!(header_sort(None, OrderBy::Import), (OrderBy::Import, true));
     }
 }

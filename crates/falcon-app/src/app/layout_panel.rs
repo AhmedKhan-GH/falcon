@@ -128,4 +128,58 @@ impl App {
             self.ws.increase = i == 0;
         }
     }
+
+    /// The list layout's header: a click on a column sorts by it (again
+    /// flips the direction), in the open folder's or smart folder's own
+    /// sort or else the global one; a right-click picks the columns.
+    pub(super) fn list_header(&mut self, ui: &mut Ui, lib: &Library) {
+        let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 28.0), Sense::click());
+        let row = Rect::from_min_max(Pos2::new(rect.left() + GRID_PAD_X, rect.top()), Pos2::new(rect.right() - GRID_PAD_X, rect.top() + 44.0));
+        let own = self.own_sort(lib);
+        let current = match &own {
+            Some((_, Some((FolderOrder::By(k), inc)))) => Some((*k, *inc)),
+            Some(_) => None,
+            None => Some((self.ws.sort, self.ws.increase)),
+        };
+        let (x0, span) = list_span(row);
+        let cy = rect.center().y;
+        let mut picked = None;
+        for (col, at, w) in self.display.columns.spans() {
+            let cell = Rect::from_min_max(Pos2::new(x0 + span * at - 4.0, rect.top()), Pos2::new(x0 + span * (at + w) - 4.0, rect.bottom()));
+            let r = ui.interact(cell, ui.scope_id().with(("list-header", col.label())), Sense::click());
+            let active = current.is_some_and(|c| c.0 == col.sort_key());
+            if r.hovered() {
+                ui.painter().rect_filled(cell.shrink2(vec2(0.0, 3.0)), t::RADIUS, t::p().row_hover);
+            }
+            let color = if active { t::p().text } else { t::p().text_muted };
+            let g = galley(ui, col.label(), font(12.0), color, cell.width() - 24.0);
+            let gw = g.size().x;
+            ui.painter().galley(Pos2::new(cell.left() + 4.0, cy - g.size().y / 2.0), g, color);
+            if active {
+                let arrow = if current.is_some_and(|c| c.1) { ic::CARET_DOWN } else { ic::CARET_UP };
+                icon(ui, Pos2::new(cell.left() + gw + 14.0, cy), arrow, 11.0, color);
+            }
+            if r.clicked() {
+                picked = Some(logic::header_sort(current, col.sort_key()));
+            }
+            r.context_menu(|ui| self.column_menu(ui));
+        }
+        resp.context_menu(|ui| self.column_menu(ui));
+        ui.painter().hline(rect.x_range().shrink(GRID_PAD_X), rect.bottom() - 0.5, Stroke::new(1.0, t::p().divider));
+        let Some((key, inc)) = picked else { return };
+        match own {
+            Some((OrderTarget::Folder(id), _)) => self.ws.actions.push(Action::Organize(super::organize_ui::OrgAction::FolderOrder(id, Some((FolderOrder::By(key), inc))))),
+            Some((OrderTarget::Smart(id), _)) => self.ws.actions.push(Action::Organize(super::organize_ui::OrgAction::SmartOrder(id, Some((FolderOrder::By(key), inc))))),
+            None => (self.ws.sort, self.ws.increase) = (key, inc),
+        }
+    }
+
+    /// The header's menu: which optional columns show.
+    fn column_menu(&mut self, ui: &mut Ui) {
+        for col in logic::ListColumn::OPTIONAL {
+            if let Some(on) = self.display.columns.flag(col) {
+                ui.checkbox(on, col.label());
+            }
+        }
+    }
 }

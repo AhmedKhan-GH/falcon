@@ -2882,6 +2882,13 @@ fn parse_hex(s: &str) -> Option<[u8; 3]> {
     Some([(v >> 16) as u8, (v >> 8) as u8, v as u8])
 }
 
+/// Where the list layout's columns start in a row (after the thumbnail)
+/// and how wide they are together.
+fn list_span(row: Rect) -> (f32, f32) {
+    let thumb = row.height() - 10.0;
+    (row.left() + 6.0 + thumb + 12.0, row.width() - thumb - 18.0)
+}
+
 /// A filter chip: muted when off, primary-tinted with its value when on.
 fn filter_chip(ui: &mut Ui, label: &str, value: Option<String>) -> Response {
     let text = match &value {
@@ -3180,6 +3187,9 @@ impl App {
             ui.painter().text(area.center(), Align2::CENTER_CENTER, "No items", font(15.0), t::p().text_muted);
             self.empty_import_button(ui, area);
             return;
+        }
+        if self.ws.layout == Layout::List {
+            self.list_header(ui, lib);
         }
 
         let layout = self.ws.layout;
@@ -3515,8 +3525,8 @@ impl App {
         }
     }
 
-    /// One row of the list layout: thumbnail, name, type, size, dimensions
-    /// and import date.
+    /// One row of the list layout: thumbnail, then the shown columns
+    /// (`logic::ListColumns`), lined up with the header.
     #[allow(clippy::too_many_arguments)]
     fn list_row(&mut self, ui: &Ui, lib: &Library, item: &Item, row: Rect, selected: bool, hovered: bool, n: usize) {
         let p = ui.painter().clone();
@@ -3532,22 +3542,22 @@ impl App {
         p.rect_filled(thumb, CornerRadius::same(4), t::p().field);
         self.draw_image(ui, lib, item, thumb.shrink(2.0), false);
         let cy = row.center().y;
-        let w = row.width();
-        let cols = [(0.0, 0.46), (0.46, 0.12), (0.58, 0.12), (0.70, 0.14), (0.84, 0.16)];
-        let x = |i: usize| thumb.right() + 12.0 + (w - thumb.width() - 18.0) * cols[i].0;
-        let cw = |i: usize| (w - thumb.width() - 18.0) * cols[i].1 - 8.0;
-        let name = format!("{}.{}", item.name, item.ext);
-        let g = galley(ui, &name, font(13.0), t::p().text, cw(0));
-        p.galley(Pos2::new(x(0), cy - g.size().y / 2.0), g, t::p().text);
-        let cells = [
-            item.ext.to_uppercase(),
-            logic::format_size(item.size),
-            if item.width > 0 { format!("{} × {}", item.width, item.height) } else { String::new() },
-            logic::format_ms(item.modification_time),
-        ];
-        for (i, text) in cells.iter().enumerate() {
-            let g = galley(ui, text, font(12.0), t::p().text_muted, cw(i + 1));
-            p.galley(Pos2::new(x(i + 1), cy - g.size().y / 2.0), g, t::p().text_muted);
+        let (x0, span) = list_span(row);
+        for (col, at, w) in self.display.columns.spans() {
+            let (x, cw) = (x0 + span * at, span * w - 8.0);
+            let (size, color) = if col == logic::ListColumn::Name { (13.0, t::p().text) } else { (12.0, t::p().text_muted) };
+            match logic::list_cell(item, col, self.display.show_ext) {
+                logic::Info::Text(text) => {
+                    let g = galley(ui, &text, font(size), color, cw);
+                    p.galley(Pos2::new(x, cy - g.size().y / 2.0), g, color);
+                }
+                logic::Info::Stars(lit) => {
+                    for i in 0..5u8 {
+                        let c = if i < lit { t::p().icon_yellow } else { t::p().text_disabled };
+                        p.text(Pos2::new(x + f32::from(i) * 12.0, cy), Align2::LEFT_CENTER, "★", font(11.0), c);
+                    }
+                }
+            }
         }
     }
 

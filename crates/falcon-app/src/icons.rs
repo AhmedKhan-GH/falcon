@@ -10,6 +10,7 @@ pub const CAMERA: &str = "\u{E10E}";
 pub const CARET_DOWN: &str = "\u{E136}";
 pub const CARET_LEFT: &str = "\u{E138}";
 pub const CARET_RIGHT: &str = "\u{E13A}";
+pub const CARET_UP: &str = "\u{E13C}";
 pub const CARET_UP_DOWN: &str = "\u{E140}";
 pub const CHAT_CIRCLE: &str = "\u{E168}";
 pub const CHECK: &str = "\u{E182}";
