@@ -42,6 +42,21 @@ pub enum Error {
         /// Why it was refused.
         reason: String,
     },
+    /// The library was written by a newer Eagle than the one falcon
+    /// matches ([`crate::library::APP_VERSION`]); Eagle refuses to open it
+    /// and asks for an update.
+    #[error("{path} was made by Eagle {version}, newer than the Eagle {supported} format falcon reads; update falcon to open it", supported = crate::library::APP_VERSION)]
+    NewerLibrary {
+        /// The library folder.
+        path: PathBuf,
+        /// Its `applicationVersion`.
+        version: String,
+    },
+    /// `metadata.json` on disk is newer than the copy in memory: another
+    /// app or a sync tool changed it since falcon read it. The write was
+    /// refused, as Eagle refuses it; reload the library.
+    #[error("{0} was changed by another app or device since falcon read it; reload the library")]
+    SyncConflict(PathBuf),
     /// An `.eaglepack` could not be written or read.
     #[error("eaglepack {path}: {reason}")]
     Pack {

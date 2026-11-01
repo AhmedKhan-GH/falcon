@@ -262,7 +262,14 @@ impl Library {
             report.mtime = true;
         }
         if self.dirty.metadata {
-            write_json(&root.join("metadata.json"), &self.metadata)?;
+            if let Err(e) = self.write_metadata_file() {
+                // A refused write (sync conflict, newer Eagle) is not
+                // retried: the caller reloads the library from disk.
+                if matches!(e, crate::Error::SyncConflict(_) | crate::Error::NewerLibrary { .. }) {
+                    self.dirty.metadata = false;
+                }
+                return Err(e);
+            }
             report.metadata = true;
         }
         if self.dirty.tags {

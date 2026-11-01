@@ -17,6 +17,11 @@ const TAGS: &str = "tags.json";
 const FILTERS: &str = "saved-filters.json";
 const IMAGES: &str = "images";
 
+/// The Eagle release whose library format falcon reads and writes. A
+/// library whose `applicationVersion` is newer is refused, as that Eagle
+/// refuses it.
+pub const APP_VERSION: &str = "4.0.0";
+
 /// An Eagle library loaded into memory (item payload files stay on disk).
 #[derive(Debug, Clone)]
 pub struct Library {
@@ -44,6 +49,12 @@ pub struct Library {
     pub(crate) write_mode: WriteMode,
     /// Writes held back in [`WriteMode::Batched`] until [`Library::flush`].
     pub(crate) dirty: Dirty,
+    /// `modificationTime` of `metadata.json` as falcon last read or wrote
+    /// it. A file on disk with a later one was changed by someone else.
+    pub(crate) disk_stamp: u64,
+    /// Set when a `metadata.json` write was refused (see
+    /// [`Library::take_conflict`]).
+    conflict: bool,
 }
 
 impl Library {
@@ -54,6 +65,9 @@ impl Library {
             return Err(Error::NotALibrary(root));
         }
         let metadata: LibraryMetadata = read_json(&root.join(METADATA))?;
+        if is_newer_than_app(&metadata.application_version) {
+            return Err(Error::NewerLibrary { path: root, version: metadata.application_version });
+        }
         let mtime = read_json(&root.join(MTIME))?;
         let tags: Tags = read_json(&root.join(TAGS))?;
         let saved_filters: Vec<SavedFilter> = read_json(&root.join(FILTERS))?;
@@ -76,6 +90,7 @@ impl Library {
         skipped.sort();
         items.sort_by(|a, b| a.id.cmp(&b.id));
         let committed = Committed { metadata: metadata.clone(), tags: tags.clone(), saved_filters: saved_filters.clone() };
+        let disk_stamp = metadata.modification_time;
         Ok(Library {
             root,
             metadata,
@@ -89,6 +104,8 @@ impl Library {
             committed,
             write_mode: WriteMode::Immediate,
             dirty: Dirty::default(),
+            disk_stamp,
+            conflict: false,
         })
     }
 
@@ -111,7 +128,7 @@ impl Library {
             quick_access: Vec::new(),
             tags_groups: Vec::new(),
             modification_time: now,
-            application_version: "4.0.0".into(),
+            application_version: APP_VERSION.into(),
             extra: Default::default(),
         };
         write_json(&root.join(METADATA), &metadata)?;
@@ -258,6 +275,38 @@ impl Library {
         self.write_mtime()
     }
 
+    /// Writes the in-memory `metadata` to `metadata.json`, the one place
+    /// that file is written while the library is open. Like Eagle, it
+    /// first reads the file on disk and refuses (writing nothing) when it
+    /// was made by a newer Eagle or its `modificationTime` is later than
+    /// the one falcon last read or wrote, which means another app or a
+    /// sync tool changed it meanwhile ([`Error::SyncConflict`]). A file
+    /// that can't be read or parsed is overwritten.
+    pub(crate) fn write_metadata_file(&mut self) -> Result<()> {
+        let path = self.root.join(METADATA);
+        if let Some(disk) = fs::read(&path).ok().and_then(|b| serde_json::from_slice::<DiskStamp>(&b).ok()) {
+            if disk.application_version.as_deref().is_some_and(is_newer_than_app) {
+                self.conflict = true;
+                return Err(Error::NewerLibrary { path: self.root.clone(), version: disk.application_version.unwrap_or_default() });
+            }
+            if disk.modification_time.is_some_and(|t| t > self.disk_stamp) {
+                self.conflict = true;
+                return Err(Error::SyncConflict(self.root.clone()));
+            }
+        }
+        write_json(&path, &self.metadata)?;
+        self.disk_stamp = self.metadata.modification_time;
+        Ok(())
+    }
+
+    /// Whether a `metadata.json` write was refused since the last call
+    /// because the file on disk changed under falcon (or a newer Eagle
+    /// wrote it). The app then reloads the library from disk, as Eagle
+    /// does; any caller of the library (the HTTP API included) can trip it.
+    pub fn take_conflict(&mut self) -> bool {
+        std::mem::take(&mut self.conflict)
+    }
+
     /// Writes `mtime.json`, or marks it dirty in batched mode.
     fn write_mtime(&mut self) -> Result<()> {
         match self.write_mode {
@@ -293,6 +342,66 @@ impl Item {
     }
 }
 
+/// The two keys of `metadata.json` checked before it is overwritten.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DiskStamp {
+    modification_time: Option<u64>,
+    application_version: Option<String>,
+}
+
+/// Whether a library written by Eagle `version` is too new for falcon.
+/// Unparseable versions are not refused.
+pub fn is_newer_than_app(version: &str) -> bool {
+    compare_versions(APP_VERSION, version) == Some(std::cmp::Ordering::Less)
+}
+
+/// Orders two version strings the way Eagle's version check does: an
+/// optional leading `v`, dot-separated numbers (missing ones count as 0),
+/// then an optional `-prerelease` that sorts before the release itself
+/// (its dot-separated parts compare as numbers when both are numeric, else
+/// as text, and fewer parts sort first). `+build` is ignored. `None` when
+/// either isn't a version.
+pub fn compare_versions(a: &str, b: &str) -> Option<std::cmp::Ordering> {
+    use std::cmp::Ordering;
+    fn parse(v: &str) -> Option<(Vec<u64>, Option<Vec<&str>>)> {
+        let v = v.trim();
+        let v = v.strip_prefix('v').unwrap_or(v);
+        let v = v.split('+').next()?;
+        let (main, pre) = match v.split_once('-') {
+            Some((m, p)) => (m, Some(p.split('.').collect::<Vec<_>>())),
+            None => (v, None),
+        };
+        let nums = main.split('.').map(|p| p.parse::<u64>().ok()).collect::<Option<Vec<_>>>()?;
+        (!nums.is_empty() && nums.len() <= 4).then_some((nums, pre))
+    }
+    let (na, pa) = parse(a)?;
+    let (nb, pb) = parse(b)?;
+    for i in 0..na.len().max(nb.len()) {
+        match na.get(i).unwrap_or(&0).cmp(nb.get(i).unwrap_or(&0)) {
+            Ordering::Equal => {}
+            o => return Some(o),
+        }
+    }
+    Some(match (pa, pb) {
+        (None, None) => Ordering::Equal,
+        (None, Some(_)) => Ordering::Greater,
+        (Some(_), None) => Ordering::Less,
+        (Some(x), Some(y)) => {
+            for (p, q) in x.iter().zip(&y) {
+                let o = match (p.parse::<u64>(), q.parse::<u64>()) {
+                    (Ok(m), Ok(n)) => m.cmp(&n),
+                    _ => p.cmp(q),
+                };
+                if o != Ordering::Equal {
+                    return Some(o);
+                }
+            }
+            x.len().cmp(&y.len())
+        }
+    })
+}
+
 fn read_json<T: DeserializeOwned>(path: &Path) -> Result<T> {
     let bytes = fs::read(path).map_err(|e| Error::io(path, e))?;
     serde_json::from_slice(&bytes).map_err(|e| Error::json(path, e))
@@ -319,4 +428,86 @@ fn copy_recursive(src: &Path, dst: &Path) -> Result<()> {
         fs::copy(src, dst).map_err(|e| Error::io(src, e))?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cmp::Ordering::*;
+
+    #[test]
+    fn versions_compare_like_eagle() {
+        assert_eq!(compare_versions("4.0.0", "4.0.0"), Some(Equal));
+        assert_eq!(compare_versions("4.0.0", "4.0.1"), Some(Less));
+        assert_eq!(compare_versions("4.0.0", "4.1"), Some(Less));
+        assert_eq!(compare_versions("4.0.0", "4"), Some(Equal));
+        assert_eq!(compare_versions("4.0.0", "3.0.10"), Some(Greater));
+        assert_eq!(compare_versions("4.0.0", "10.0.0"), Some(Less), "numeric, not text");
+        assert_eq!(compare_versions("4.0.0", "4.0.0-beta.2"), Some(Greater));
+        assert_eq!(compare_versions("4.0.0-beta.10", "4.0.0-beta.2"), Some(Greater));
+        assert_eq!(compare_versions("4.0.0-alpha", "4.0.0-beta"), Some(Less));
+        assert_eq!(compare_versions("v4.0.0", "4.0.0+build7"), Some(Equal));
+        assert_eq!(compare_versions("4.0.0", "build 20"), None);
+        assert_eq!(compare_versions("4.0.0", ""), None);
+        assert!(is_newer_than_app("4.0.1"));
+        assert!(is_newer_than_app("5.0.0-beta"));
+        assert!(!is_newer_than_app("4.0.0"));
+        assert!(!is_newer_than_app("3.0.0"));
+        assert!(!is_newer_than_app("nonsense"));
+    }
+
+    fn set_disk_metadata(root: &Path, edit: impl FnOnce(&mut serde_json::Value)) {
+        let path = root.join(METADATA);
+        let mut v: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        edit(&mut v);
+        fs::write(path, serde_json::to_vec(&v).unwrap()).unwrap();
+    }
+
+    #[test]
+    fn refuses_a_library_from_a_newer_eagle() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("New.library");
+        Library::create(&root).unwrap();
+        set_disk_metadata(&root, |v| v["applicationVersion"] = "4.1.0".into());
+        match Library::open(&root) {
+            Err(Error::NewerLibrary { version, .. }) => assert_eq!(version, "4.1.0"),
+            other => panic!("expected NewerLibrary, got {other:?}"),
+        }
+        set_disk_metadata(&root, |v| v["applicationVersion"] = "3.0.5".into());
+        assert!(Library::open(&root).is_ok());
+    }
+
+    #[test]
+    fn metadata_writes_refuse_a_newer_copy_on_disk() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("Sync.library");
+        let mut lib = Library::create(&root).unwrap();
+        lib.create_folder(None, "Mine").unwrap();
+        // Our own writes never conflict with themselves.
+        lib.create_folder(None, "Mine too").unwrap();
+        // Another device saves later.
+        let later = lib.metadata.modification_time + 60_000;
+        set_disk_metadata(&root, |v| {
+            v["modificationTime"] = later.into();
+            v["folders"] = serde_json::json!([]);
+        });
+        let before = fs::read(root.join(METADATA)).unwrap();
+        assert!(matches!(lib.create_folder(None, "Lost"), Err(Error::SyncConflict(_))));
+        assert!(lib.take_conflict());
+        assert!(!lib.take_conflict(), "taken once");
+        assert_eq!(fs::read(root.join(METADATA)).unwrap(), before, "nothing written");
+
+        // Batched writes are refused at flush, and not retried.
+        let mut lib = Library::open(&root).unwrap();
+        lib.set_write_mode(WriteMode::Batched).unwrap();
+        lib.create_folder(None, "Pending").unwrap();
+        set_disk_metadata(&root, |v| v["modificationTime"] = (later + 60_000).into());
+        assert!(matches!(lib.flush(), Err(Error::SyncConflict(_))));
+        assert!(!lib.has_pending_writes());
+
+        // A newer Eagle's file is never overwritten either.
+        let mut lib = Library::open(&root).unwrap();
+        set_disk_metadata(&root, |v| v["applicationVersion"] = "9.0.0".into());
+        assert!(matches!(lib.create_folder(None, "No"), Err(Error::NewerLibrary { .. })));
+    }
 }

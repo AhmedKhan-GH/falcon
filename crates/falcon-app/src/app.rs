@@ -48,6 +48,7 @@ mod empty_view;
 mod drop_hint;
 mod folders_ui;
 mod layout_panel;
+mod library_ui;
 mod text_view;
 mod tag_picker;
 #[path = "comments.rs"]
@@ -804,6 +805,11 @@ pub struct App {
     /// The row the keys last opened, and whether to scroll it into view.
     side_cursor: Option<usize>,
     side_reveal: bool,
+    /// A notice to acknowledge (`library_ui.rs`).
+    alert: Option<library_ui::Alert>,
+    /// Reload the shown library from disk next frame: a `metadata.json`
+    /// write was refused because the file changed elsewhere.
+    conflict_reload: bool,
 }
 
 impl App {
@@ -870,6 +876,8 @@ impl App {
             side_rows: Vec::new(),
             side_cursor: None,
             side_reveal: false,
+            alert: None,
+            conflict_reload: false,
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
         app.tile = saved.tile.unwrap_or(app.tile).clamp(TILE_MIN, TILE_MAX);
@@ -1005,7 +1013,10 @@ impl App {
                 }
             }
             Err(e) => {
-                if self.ws.lib.is_some() {
+                if let Some(alert) = library_ui::alert_for(&e) {
+                    crate::errlog::error(&format!("Could not open the library: {e}"));
+                    self.show_alert(alert);
+                } else if self.ws.lib.is_some() {
                     self.flash_error(format!("Could not open the library: {e}"));
                 } else {
                     crate::errlog::error(&format!("Could not open the library: {e}"));
@@ -5456,6 +5467,9 @@ impl App {
         if std::mem::take(&mut self.refresh) {
             self.refresh_library();
         }
+        if std::mem::take(&mut self.conflict_reload) {
+            self.reload_after_conflict();
+        }
         self.sync_layout();
         self.follow_modes(&ctx);
         t::follow_system(&ctx);
@@ -5489,6 +5503,7 @@ impl App {
         if self.collect.open {
             self.collect_window(&ctx);
         }
+        self.alert_modal(&ctx);
 
         let Some(shared) = self.ws.lib.clone() else {
             egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| self.empty_state(ui));
@@ -5853,6 +5868,7 @@ impl App {
         self.preview_window(&ctx, lib);
         self.apply_actions(lib);
         self.end_frame_edits(lib);
+        self.check_conflict(lib);
         self.ws.loader.keep_original(self.ws.viewer.as_deref());
         self.ws.loader.want(std::mem::take(&mut self.ws.frame_jobs));
         drop(guard);

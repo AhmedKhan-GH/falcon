@@ -61,6 +61,7 @@ impl Library {
         // starts from here.
         self.committed.metadata = self.metadata.clone();
         self.dirty.metadata = false;
+        self.disk_stamp = self.metadata.modification_time;
         Ok(())
     }
 

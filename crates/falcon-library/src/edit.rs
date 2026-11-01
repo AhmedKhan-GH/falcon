@@ -794,7 +794,7 @@ impl Library {
         if self.batching(|d| d.metadata = true) {
             return Ok(());
         }
-        write_json(&self.root().join("metadata.json"), &self.metadata)
+        self.write_metadata_file()
     }
 
     /// Writes `tags.json` like [`Library::save_metadata`] writes metadata.
