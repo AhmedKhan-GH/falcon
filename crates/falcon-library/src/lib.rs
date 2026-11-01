@@ -24,6 +24,7 @@ pub mod search;
 pub mod smart;
 pub mod smart_draft;
 pub mod tempo;
+pub mod text;
 pub mod undo;
 
 pub use error::{Error, Result};

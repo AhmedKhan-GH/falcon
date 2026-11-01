@@ -17,6 +17,7 @@ mod open_with;
 mod prefs;
 mod shortcuts;
 mod organize;
+mod textdoc;
 mod theme;
 mod workspaces;
 

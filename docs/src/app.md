@@ -52,7 +52,7 @@ What Eagle does, from `js/directives/filter-item-import.html`, `filter-item-mtim
 
 ## Viewer layout
 
-Every viewer (image, GIF, RAW, SVG, video, audio, font, PDF, the cannot-preview page and the iCloud wait screen) opens in the middle of the window, in place of the toolbar, filter bar and grid, with the sidebar and the inspector still beside it, as Eagle's detail mode does. The inspector shows the viewed item: the selection follows it as you step through, so closing the viewer leaves the grid on that item. The viewer draws only inside its own rect, and its scroll, pinch, clicks and menus act only there. The span is `logic::viewer_span`; the bar is `media_view::bar_shell`, shared by every viewer.
+Every viewer (image, GIF, RAW, SVG, video, audio, font, text, PDF, the cannot-preview page and the iCloud wait screen) opens in the middle of the window, in place of the toolbar, filter bar and grid, with the sidebar and the inspector still beside it, as Eagle's detail mode does. The inspector shows the viewed item: the selection follows it as you step through, so closing the viewer leaves the grid on that item. The viewer draws only inside its own rect, and its scroll, pinch, clicks and menus act only there. The span is `logic::viewer_span`; the bar is `media_view::bar_shell`, shared by every viewer.
 
 What Eagle does, from the detail mode in `index.html` and `app.bundle.js`:
 
@@ -103,6 +103,23 @@ What Eagle does, from `js/directives/audio-media-element.js`, its video.js setup
 | Font viewer | A separate page with tabs for alphabet, article, waterfall (72 down to 12 px, edits mirrored on every line) and font information; a size slider from 31.25 to 625; editable text; light, dark and colour themes; an Activate button | Seen | One scrolling page: the sample text, editable in place, at a size from 12 to 200 pt; a waterfall of the same text from 72 down to 12 pt; and the character set. Font information is in the inspector. No themes, no activation |
 | Rendering | Chromium with the font loaded as a web font | Seen | The font file (WOFF unpacked to sfnt; the first face of a collection) is added to egui's fonts under its own family the first time it is viewed, and stays for the session. Fonts egui's parser rejects, and WOFF2, fall back to the image viewer showing the specimen thumbnail |
 | Sample text | Translated sample paragraphs per language | Seen | falcon's own short sample, in the script the font supports (Latin, Chinese, Japanese or Korean, chosen like the specimen thumbnail). Text you type stays as you move between fonts until Reset Text |
+
+## Text viewer
+
+Opening a text item (`.txt`) shows its text on a page in the viewer, editable in place, instead of a QuickLook picture. The drawing is `crates/falcon-app/src/app/text_view.rs`, the rules (when to save, how a file is read) are `crates/falcon-app/src/textdoc.rs`, and the save itself is `Library::save_text` in `crates/falcon-library/src/text.rs`.
+
+What Eagle does, from `text-editor/text-editor.js`, `text-editor.html` and its stylesheet:
+
+| Question | Eagle | Seen or inferred | falcon |
+|---|---|---|---|
+| Page | A page at most 920 px wide, centred, 30 px of padding; body text 14 px with 1.6 line spacing, wrapped, white on the dark themes and near-black on the light ones | Seen | The same page, drawn with egui in the theme's text colour on the viewer's background, with the item's name above the text |
+| Editing | The body is a plain-text editable area; Tab inserts a tab, Esc leaves the editor | Seen | An egui multi-line editor; Tab inserts a tab, Esc leaves the editor (a second Esc closes the viewer) |
+| Undo | The browser's own undo inside the editor | Seen | egui's undo inside the editor (⌘Z and ⇧⌘Z while it has focus). Saves are not library undo steps |
+| When it saves | 500 ms after the last key press, when the editor loses focus, on ⌘S, and before the viewer closes | Seen | The same, and also when the viewer moves to another item, the library closes or the app quits |
+| How it saves | Writes the text to `<name>.txt.<ms>` beside the original, then moves it over the original | Seen | Same |
+| Empty text | Never saved, so clearing a note leaves the file as it was | Seen | Same |
+| Item metadata | Not touched: `size` and `mtime` keep their import values | Seen | `size` and `mtime` are refreshed from the new file and `lastModified` moves on, as with every item edit; `btime` and `modificationTime` stay |
+| Encoding | Read and written as UTF-8 | Seen | UTF-8 (a byte order mark is kept). A file that isn't UTF-8, or is larger than 2 MB, opens read-only with a note, so saving can't change bytes falcon can't show |
 
 ## Video viewer
 

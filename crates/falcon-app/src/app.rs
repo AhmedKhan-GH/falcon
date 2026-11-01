@@ -35,6 +35,7 @@ mod pdf_view;
 mod import_ui;
 mod folders_ui;
 mod layout_panel;
+mod text_view;
 #[path = "comments.rs"]
 mod comments;
 #[path = "covers.rs"]
@@ -452,6 +453,8 @@ struct Workspace {
     /// Waveforms for the viewer, and its font specimen.
     waveforms: crate::audio::Waveforms,
     font_view: media_view::FontView,
+    /// The text item open in the viewer and its unsaved typing.
+    text: Option<text_view::TextView>,
     /// The Duplicates page's hash cache and results.
     duplicates: duplicates_view::Duplicates,
     /// Comment mode, crop tool and comment editing (`image_edit.rs`).
@@ -524,6 +527,7 @@ impl Workspace {
             filter_ui: Default::default(),
             waveforms: Default::default(),
             font_view: Default::default(),
+            text: None,
             duplicates: Default::default(),
             tools: Default::default(),
             backup: crate::backups::Schedule::new(Instant::now()),
@@ -537,6 +541,9 @@ impl Workspace {
     /// its state (also on quit), and a background copy might not finish.
     fn flush_and_backup(&mut self) -> falcon_library::Result<()> {
         let Some(l) = self.lib.clone() else { return Ok(()) };
+        if let Some(text) = &mut self.text {
+            text.save(&mut lock(&l))?;
+        }
         let report = lock(&l).flush()?;
         if report.wants_backup() {
             self.backup.changed(Instant::now());
@@ -4406,7 +4413,11 @@ impl App {
         {
             self.ws.view.anim = Some(crate::anim::Player::open(ctx, item.original_path(lib.root()), kind, crate::anim::Opts::viewer()));
         }
-        if self.video_viewer(parent, lib, item, screen) || self.pdf_viewer(parent, lib, item, screen) || self.media_viewer(parent, lib, item, screen) {
+        if self.text_viewer(parent, lib, item, screen)
+            || self.video_viewer(parent, lib, item, screen)
+            || self.pdf_viewer(parent, lib, item, screen)
+            || self.media_viewer(parent, lib, item, screen)
+        {
             return;
         }
         let ui = &mut viewer_ui(parent, screen, "viewer");
@@ -4789,6 +4800,7 @@ impl App {
                 self.ws.confirm = None;
             }
         }
+        self.text_saves(lib, ctx.input(|i| i.time));
         self.apply_actions(lib);
         self.end_frame_edits(lib);
         self.ws.loader.keep_original(self.ws.viewer.as_deref());
