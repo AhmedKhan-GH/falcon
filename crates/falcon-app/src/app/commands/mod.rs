@@ -13,8 +13,9 @@ use falcon_library::model::Item;
 use falcon_library::{Library, thumbnail};
 
 use super::{
-    Action, App, BULK_CONFIRM, Confirm, SmartDraft, Switch, TILE_MAX, TILE_MIN, fastrand_seed, image_edit, lock,
+    Action, App, BULK_CONFIRM, Confirm, SmartDraft, Switch, TILE_MAX, TILE_MIN, image_edit, lock,
 };
+use super::navigation::fastrand_seed;
 use crate::logic::{self, Layout, Scope};
 
 /// The input events a key press of `chord` makes, as egui-winit sends

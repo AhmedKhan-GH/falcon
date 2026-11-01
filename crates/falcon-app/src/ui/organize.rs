@@ -10,7 +10,8 @@ use falcon_library::model::Folder;
 use falcon_library::smart_draft::{self, ConditionDraft};
 use falcon_library::Library;
 
-use crate::app::{Action, App, Confirm, DragFolder, DragItems, DragQuick, GRID_GAP, GRID_PAD_TOP, GRID_PAD_X, SmartDraft, fastrand_seed, filter_chip};
+use crate::app::{Action, App, Confirm, DragFolder, DragItems, DragQuick, GRID_GAP, GRID_PAD_TOP, GRID_PAD_X, SmartDraft, filter_chip};
+use crate::app::navigation::fastrand_seed;
 use crate::ui::sidebar::{caret_rect, icon_x, sidebar_row_tinted};
 use falcon_library::search::{OrderBy, TextFilter};
 use crate::icons as ic;

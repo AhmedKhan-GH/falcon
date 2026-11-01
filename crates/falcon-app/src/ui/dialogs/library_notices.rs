@@ -13,7 +13,7 @@ use falcon_library::library_merge::{self as merge, MergePlan};
 use falcon_library::pack::{self, PackPreview};
 use falcon_library::{Error, Library};
 
-use crate::app::{App, Workspace, import_ui, lock};
+use crate::app::{App, Workspace, import, lock};
 use crate::watch::Change;
 use crate::theme as t;
 use crate::ui::widgets::window_drag;
@@ -534,7 +534,7 @@ impl App {
             }
         }
         let map = falcon_library::inboard::folder_map(&backup.folders, &ids);
-        let jobs: Vec<import_ui::Job> = backup
+        let jobs: Vec<import::Job> = backup
             .items
             .iter()
             .map(|it| {
@@ -549,7 +549,7 @@ impl App {
                 opts.name = (!it.name.trim().is_empty()).then(|| it.name.clone());
                 opts.trashed = it.trashed;
                 opts.added_at = it.added_at;
-                import_ui::Job { path: it.file.clone(), opts }
+                import::Job { path: it.file.clone(), opts }
             })
             .collect();
         let mut note = format!("Importing {} and {} from Inboard", plural(jobs.len(), "image"), plural(ids.len(), "folder"));

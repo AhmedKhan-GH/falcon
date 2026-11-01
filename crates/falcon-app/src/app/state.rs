@@ -14,7 +14,7 @@ use falcon_library::smart_draft::{self, ConditionDraft};
 use falcon_library::undo::Transaction;
 
 use super::{
-    Action, App, Shared, duplicates_view, export_ui, ext_ui, filters_ui, folders_ui, font_view, gif_view, image_edit, import_ui,
+    Action, App, Shared, duplicates_view, export_ui, ext_ui, filters_ui, folders_ui, font_view, gif_view, image_edit, import,
     lock, organize_ui, pdf_view, tag_picker, text_view, video_view,
 };
 use crate::loader::Loader;
@@ -181,8 +181,8 @@ pub(crate) struct Progress {
     pub(crate) failed: usize,
     pub(crate) current: String,
     /// Every failed import since the list was last cleared, kept across
-    /// batches like Eagle's error list (`import_ui.rs` shows it).
-    pub(crate) errors: Vec<import_ui::ImportError>,
+    /// batches like Eagle's error list (`import.rs` shows it).
+    pub(crate) errors: Vec<import::ImportError>,
     /// Ids of the items added in this batch, for auto-select.
     pub(crate) added: Vec<String>,
 }

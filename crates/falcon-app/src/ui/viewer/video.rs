@@ -615,13 +615,13 @@ impl App {
             }
             FrameTool::Save => {
                 let jpeg = falcon_library::thumbnail::jpeg(&image::DynamicImage::ImageRgba8(img), 95);
-                let Ok(dir) = crate::app::tempfile_dir() else { return };
+                let Ok(dir) = crate::app::import::tempfile_dir() else { return };
                 let path = dir.join(format!("{}.jpg", frame_item_name(&item.name, at)));
                 // The import thread deletes the staged file once it has it.
                 if jpeg.is_ok_and(|b| std::fs::write(&path, b).is_ok()) {
                     let mut opts = self.prefs.import_options(item.folders.clone());
                     opts.url = item.url.clone();
-                    self.spawn_import(vec![crate::app::import_ui::Job { path, opts }]);
+                    self.spawn_import(vec![crate::app::import::Job { path, opts }]);
                 }
             }
         }

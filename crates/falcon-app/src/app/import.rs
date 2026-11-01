@@ -8,7 +8,7 @@ use eframe::egui::{Pos2, Rect};
 use falcon_library::folder_import::{self, Verdict};
 use falcon_library::import::{Failure, ImportOptions};
 
-use super::{App, lock, tempfile_dir};
+use super::{App, lock};
 use crate::drop_pos::{self, Target};
 use crate::logic::{self, Scope};
 use crate::theme as t;
@@ -539,6 +539,131 @@ impl App {
             }
             let opts = self.prefs.import_options(Vec::new());
             self.spawn_import(files.into_iter().map(|path| Job { path, opts: opts.clone() }).collect());
+        }
+    }
+}
+
+pub(crate) fn is_hidden(p: &std::path::Path) -> bool {
+    p.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.'))
+}
+
+/// A private folder for clipboard images before they are imported.
+pub(crate) fn tempfile_dir() -> std::io::Result<PathBuf> {
+    let dir = std::env::temp_dir().join("falcon-paste");
+    std::fs::create_dir_all(&dir)?;
+    Ok(dir)
+}
+
+impl App {
+    /// Imports files and folders on a background thread: each file is
+    /// staged without the library lock, then committed under it, so the
+    /// window stays responsive. Progress shows under the toolbar.
+    pub(crate) fn import(&mut self, paths: Vec<PathBuf>) {
+        let folders = self.scope_folders();
+        self.import_into(paths, folders);
+    }
+
+    /// The folder new items join: the one being viewed, if any.
+    pub(crate) fn scope_folders(&self) -> Vec<String> {
+        match &self.ws.scope {
+            Scope::Folder(id) => vec![id.clone()],
+            _ => Vec::new(),
+        }
+    }
+
+    /// Imports `paths` into the shown library. A `*.library` folder among
+    /// them is opened instead, never imported (only the first, if several).
+    pub(crate) fn import_into(&mut self, paths: Vec<PathBuf>, folders: Vec<String>) {
+        let (libraries, paths) = logic::split_libraries(paths);
+        // A dropped or opened .eaglepack is imported as a package, not as
+        // a file (the first one; Eagle takes one at a time).
+        let (packs, paths): (Vec<PathBuf>, Vec<PathBuf>) = paths.into_iter().partition(|p| p.is_file() && p.extension().is_some_and(|e| e.eq_ignore_ascii_case("eaglepack")));
+        if let Some(first) = packs.into_iter().next() {
+            self.start_pack_import(first, folders.first().cloned());
+        }
+        self.import_files(paths, folders);
+        if let Some(first) = libraries.first() {
+            self.open(first.clone());
+            let opened = self.position_of(first).is_some();
+            let others = libraries.len() - 1;
+            if opened && others > 0 {
+                let name = first.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+                let s = if others == 1 { "y was" } else { "ies were" };
+                self.flash(format!("Opened {name}; {others} other librar{s} left closed (one opens at a time)"));
+            }
+        }
+    }
+
+    pub(crate) fn import_files(&mut self, paths: Vec<PathBuf>, folders: Vec<String>) {
+        let extra = self.collect_extra.clone();
+        if paths.is_empty() {
+            return;
+        }
+        if self.ws.lib.is_none() {
+            return;
+        }
+        let mut files = Vec::new();
+        let mut stack = paths;
+        while let Some(p) = stack.pop() {
+            if p.is_dir() {
+                // Flattened, as Eagle's grid drop does. The walk skips
+                // junk and won't follow a folder link into a loop.
+                if !falcon_library::folder_import::is_pixave_library(&p) {
+                    files.extend(falcon_library::folder_import::walk(&p).all_files());
+                }
+            } else if !is_hidden(&p) {
+                files.push(p);
+            }
+        }
+        if files.is_empty() {
+            return;
+        }
+        files.sort();
+        let mut opts = self.prefs.import_options(folders);
+        if let Some(meta) = &extra {
+            meta.apply(&mut opts, files.len());
+        }
+        self.spawn_import(files.into_iter().map(|path| Job { path, opts: opts.clone() }).collect());
+    }
+
+    /// ⌘C: puts the selected originals on the clipboard as files.
+    pub(crate) fn copy_selection(&mut self) {
+        let Some(shared) = self.ws.lib.clone() else { return };
+        let paths: Vec<PathBuf> = {
+            let lib = lock(&shared);
+            self.ws.selected.iter().filter_map(|id| lib.item(id)).map(|i| i.original_path(lib.root())).collect()
+        };
+        if let Ok(mut clip) = arboard::Clipboard::new()
+            && clip.set().file_list(&paths).is_ok()
+        {
+            self.used(&paths);
+            self.flash_brief(format!("Copied {} file{}", paths.len(), if paths.len() == 1 { "" } else { "s" }));
+        }
+    }
+
+    /// ⌘V in the grid: imports copied files, or a copied image as a PNG.
+    pub(crate) fn paste(&mut self) {
+        let folders = self.scope_folders();
+        self.paste_into(folders);
+    }
+
+    pub(crate) fn paste_into(&mut self, folders: Vec<String>) {
+        let Ok(mut clip) = arboard::Clipboard::new() else { return };
+        if let Ok(files) = clip.get().file_list()
+            && !files.is_empty()
+        {
+            self.import_into(files, folders);
+            return;
+        }
+        if let Ok(img) = clip.get_image() {
+            let Some(buf) = image::RgbaImage::from_raw(img.width as u32, img.height as u32, img.bytes.into_owned()) else { return };
+            let Ok(dir) = tempfile_dir() else { return };
+            let stamp = chrono::Local::now().format("%Y-%m-%d at %H.%M.%S");
+            let path = dir.join(format!("Pasted image {stamp}.png"));
+            // The import thread deletes the file once it has copied it in.
+            if buf.save(&path).is_ok() {
+                self.import_into(vec![path], folders);
+            }
         }
     }
 }

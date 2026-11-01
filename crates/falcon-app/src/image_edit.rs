@@ -511,7 +511,7 @@ fn clipboard_picture() -> Option<Picture> {
     let img = clip.get_image().ok()?;
     let buf = image::RgbaImage::from_raw(img.width as u32, img.height as u32, img.bytes.into_owned())?;
     let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos());
-    let tmp = Picture::Temp(super::tempfile_dir().ok()?.join(format!("thumbnail-{stamp}.png")));
+    let tmp = Picture::Temp(super::import::tempfile_dir().ok()?.join(format!("thumbnail-{stamp}.png")));
     buf.save_with_format(tmp.path(), image::ImageFormat::Png).ok()?;
     Some(tmp)
 }
