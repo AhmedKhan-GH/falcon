@@ -357,6 +357,66 @@ pub fn remember(marks: &mut Vec<Mark>, mark: Mark) {
     }
 }
 
+/// A point on a page `size` points big (as the file shows it) once the
+/// page is turned `turns` quarter turns clockwise for viewing (pdf.js's
+/// Rotate Clockwise, which only changes the view).
+pub fn turn_point(p: (f64, f64), size: (f64, f64), turns: u8) -> (f64, f64) {
+    let ((x, y), (w, h)) = (p, size);
+    match turns % 4 {
+        1 => (h - y, x),
+        2 => (w - x, h - y),
+        3 => (y, w - x),
+        _ => (x, y),
+    }
+}
+
+/// The inverse of [`turn_point`]: a point on the turned page back on the
+/// page as the file shows it.
+pub fn unturn_point(p: (f64, f64), size: (f64, f64), turns: u8) -> (f64, f64) {
+    let ((x, y), (w, h)) = (p, size);
+    match turns % 4 {
+        1 => (y, h - x),
+        2 => (w - x, h - y),
+        3 => (w - y, x),
+        _ => (x, y),
+    }
+}
+
+/// A page's size once turned.
+pub fn turn_size(size: (f32, f32), turns: u8) -> (f32, f32) {
+    if turns % 2 == 1 { (size.1, size.0) } else { size }
+}
+
+/// A rectangle on a page `size` big, on the turned page.
+pub fn turn_rect(r: &falcon_pdf::Rect, size: (f64, f64), turns: u8) -> falcon_pdf::Rect {
+    let (ax, ay) = turn_point((r.x, r.y), size, turns);
+    let (bx, by) = turn_point((r.x + r.w, r.y + r.h), size, turns);
+    falcon_pdf::Rect { x: ax.min(bx), y: ay.min(by), w: (ax - bx).abs(), h: (ay - by).abs() }
+}
+
+/// A page picture turned `turns` quarter turns clockwise.
+pub fn turn_bitmap(b: falcon_pdf::Bitmap, turns: u8) -> falcon_pdf::Bitmap {
+    let turns = turns % 4;
+    if turns == 0 {
+        return b;
+    }
+    let (w, h) = (b.width, b.height);
+    let (nw, nh) = if turns % 2 == 1 { (h, w) } else { (w, h) };
+    let mut out = vec![0u8; b.rgba.len()];
+    for y in 0..h {
+        for x in 0..w {
+            let (nx, ny) = match turns {
+                1 => (h - 1 - y, x),
+                2 => (w - 1 - x, h - 1 - y),
+                _ => (y, w - 1 - x),
+            };
+            let (s, d) = ((y * w + x) * 4, (ny * nw + nx) * 4);
+            out[d..d + 4].copy_from_slice(&b.rgba[s..s + 4]);
+        }
+    }
+    falcon_pdf::Bitmap { width: nw, height: nh, rgba: out }
+}
+
 /// What a key does in the reader.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum PdfKey {
@@ -372,11 +432,16 @@ pub enum PdfKey {
     ZoomIn,
     ZoomOut,
     ZoomReset,
+    /// Turn the pages a quarter clockwise (1) or anticlockwise (-1).
+    Rotate(i8),
+    /// The hand tool (true) or the text selection tool.
+    Hand(bool),
 }
 
 /// The reader's keys, after pdf.js: n/j and p/k turn pages, Home/End and
 /// ⌘↑/⌘↓ go to the ends, ↑/↓ and Page Up/Down scroll, ⌘+/⌘−/⌘0 zoom,
-/// ⌘F finds and ⌘G/⇧⌘G (or ↩/⇧↩ in the find field) step through hits.
+/// ⌘F finds and ⌘G/⇧⌘G (or ↩/⇧↩ in the find field) step through hits,
+/// r and ⇧R turn the pages, s and h pick the text and hand tools.
 /// ←/→, Space and Esc (with find closed) are left to the viewer, which
 /// moves between items or closes, as Eagle forwards them from its reader.
 pub fn key_action(key: Key, m: Modifiers, find_focused: bool, find_open: bool) -> Option<PdfKey> {
@@ -408,6 +473,9 @@ pub fn key_action(key: Key, m: Modifiers, find_focused: bool, find_open: bool) -
     match key {
         Key::N | Key::J if !m.shift => Some(PdfKey::NextPage),
         Key::P | Key::K if !m.shift => Some(PdfKey::PrevPage),
+        Key::R => Some(PdfKey::Rotate(if m.shift { -1 } else { 1 })),
+        Key::S if !m.shift => Some(PdfKey::Hand(false)),
+        Key::H if !m.shift => Some(PdfKey::Hand(true)),
         Key::Home => Some(PdfKey::First),
         Key::End => Some(PdfKey::Last),
         Key::ArrowDown => Some(PdfKey::Lines(1.0)),
@@ -443,6 +511,8 @@ pub fn icloud_only(path: &Path) -> bool {
 struct Job {
     page: usize,
     key: i32,
+    /// Quarter turns the picture is drawn turned by.
+    turns: u8,
 }
 
 enum Req {
@@ -546,7 +616,7 @@ fn work(path: &Path, rx: &Receiver<Req>, tx: &Sender<Reply>, ctx: &egui::Context
                 let cap = (MAX_PAGE_PIXELS / (w * h).max(1.0)).sqrt();
                 doc.render(job.page, key_scale(job.key).min(cap), max_side)
             };
-            Reply::Page(job, bitmap.ok())
+            Reply::Page(job, bitmap.ok().map(|b| turn_bitmap(b, job.turns)))
         } else {
             continue;
         };
@@ -629,6 +699,14 @@ struct Open {
     page_text: String,
     find: Find,
     sel: Selecting,
+    /// Quarter turns clockwise the pages are shown at (view only), and
+    /// the turns last laid out.
+    turns: u8,
+    laid_turns: u8,
+    /// The hand tool: dragging pans instead of selecting text.
+    hand: bool,
+    /// Tools ▸ Presentation Mode was chosen this frame.
+    present: bool,
 }
 
 impl Open {
@@ -661,7 +739,29 @@ impl Open {
             page_text: "1".into(),
             find: Find::default(),
             sel: Selecting::default(),
+            turns: 0,
+            laid_turns: 0,
+            hand: false,
+            present: false,
         }
+    }
+
+    /// The pages' sizes as shown, turned.
+    fn shown_sizes(&self) -> Vec<(f32, f32)> {
+        self.sizes.iter().map(|&s| turn_size(s, self.turns)).collect()
+    }
+
+    /// Turns every page a quarter clockwise (`delta` 1) or anticlockwise
+    /// (-1), as pdf.js's Rotate: pictures are drawn again turned, the
+    /// selection is dropped and the current page stays.
+    fn rotate(&mut self, delta: i8) {
+        self.turns = (i16::from(self.turns) + i16::from(delta)).rem_euclid(4) as u8;
+        self.pages = PageCache::new(PAGE_BUDGET);
+        self.thumbs = PageCache::new(THUMB_BUDGET);
+        self.broken.clear();
+        self.sent.clear();
+        self.sel = Selecting { serial: self.sel.serial, ..Default::default() };
+        self.restore = Some(self.current);
     }
 
     fn mark(&self) -> Mark {
@@ -681,6 +781,7 @@ impl Open {
                     }
                 }
                 Ok(Reply::Failed(e)) => self.status = Status::Failed(e),
+                Ok(Reply::Page(job, _)) if job.turns != self.turns => {}
                 Ok(Reply::Page(job, Some(b))) => {
                     let img = egui::ColorImage::from_rgba_unmultiplied([b.width, b.height], &b.rgba);
                     let tex = ctx.load_texture(format!("pdf-{}-{}", job.page, job.key), img, egui::TextureOptions::LINEAR);
@@ -771,6 +872,13 @@ impl Open {
             PdfKey::ZoomIn => self.zoom = Zoom::Percent(zoom_step(self.zoom_factor(), true)),
             PdfKey::ZoomOut => self.zoom = Zoom::Percent(zoom_step(self.zoom_factor(), false)),
             PdfKey::ZoomReset => self.zoom = Zoom::Auto,
+            PdfKey::Rotate(d) => self.rotate(d),
+            PdfKey::Hand(on) => {
+                self.hand = on;
+                if on {
+                    self.sel = Selecting { serial: self.sel.serial, ..Default::default() };
+                }
+            }
         }
     }
 
@@ -831,12 +939,14 @@ impl Open {
     /// reading position (or the point under the pointer for a pinch).
     fn relayout(&mut self, view: Vec2) {
         self.view = view;
-        let reference = self.sizes.get(self.current).copied().unwrap_or((612.0, 792.0));
+        let sizes = self.shown_sizes();
+        let reference = sizes.get(self.current).copied().unwrap_or((612.0, 792.0));
         let scale = self.zoom.resolve(reference, view);
-        if (scale - self.scale).abs() < 1e-4 && self.layout.tops.len() == self.sizes.len() {
+        if (scale - self.scale).abs() < 1e-4 && self.layout.tops.len() == self.sizes.len() && self.laid_turns == self.turns {
             return;
         }
-        let new = layout(&self.sizes, scale, GAP);
+        self.laid_turns = self.turns;
+        let new = layout(&sizes, scale, GAP);
         if self.scale > 0.0 && self.jump.is_none() && !self.layout.tops.is_empty() {
             let ratio = scale / self.scale;
             self.jump = Some(match self.zoom_at.take() {
@@ -1000,10 +1110,15 @@ impl App {
                 }
             }
             let (name_x, mut right) = super::media_view::bar_shell(self, ui, item, bar);
+            let mut present = false;
             if let Some(o) = self.pdf.open.as_mut().filter(|o| o.status == Status::Ready) {
                 let (tab, left) = toolbar(o, ui, bar, right - 8.0, self.pdf.sidebar);
                 self.pdf.sidebar = tab;
                 right = left;
+                present = std::mem::take(&mut o.present);
+            }
+            if present {
+                self.toggle_presentation(ctx);
             }
             super::media_view::bar_name(ui, item, bar, name_x, right);
         }
@@ -1030,6 +1145,7 @@ fn pages(o: &mut Open, ui: &mut Ui, area: Rect, jobs: &mut Vec<Job>) {
     let key = scale_key(o.scale * UNIT * ppp);
     let settled = o.changed.elapsed() >= SETTLE;
     let k = o.scale * UNIT;
+    let turns = o.turns;
 
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(area));
     child.set_clip_rect(area);
@@ -1056,7 +1172,11 @@ fn pages(o: &mut Open, ui: &mut Ui, area: Rect, jobs: &mut Vec<Job>) {
             } else if o.broken.contains(&i) {
                 p.text(r.center(), Align2::CENTER_CENTER, "Can't draw this page", font(12.0), Color32::from_gray(120));
             }
-            let to_screen = |rc: &falcon_pdf::Rect| Rect::from_min_size(r.min + vec2(rc.x as f32 * k, rc.y as f32 * k), vec2(rc.w as f32 * k, rc.h as f32 * k));
+            let raw = (f64::from(o.sizes[i].0), f64::from(o.sizes[i].1));
+            let to_screen = |rc: &falcon_pdf::Rect| {
+                let rc = turn_rect(rc, raw, turns);
+                Rect::from_min_size(r.min + vec2(rc.x as f32 * k, rc.y as f32 * k), vec2(rc.w as f32 * k, rc.h as f32 * k))
+            };
             for (n, hit) in o.find.hits.iter().enumerate().filter(|(_, h)| h.page == i) {
                 let color = if o.find.current == Some(n) { Color32::from_rgba_unmultiplied(255, 140, 0, 130) } else { Color32::from_rgba_unmultiplied(255, 220, 0, 90) };
                 for rc in &hit.rects {
@@ -1075,20 +1195,32 @@ fn pages(o: &mut Open, ui: &mut Ui, area: Rect, jobs: &mut Vec<Job>) {
         let order = (a..=b).chain(a.checked_sub(1)).chain((b + 1 < n).then_some(b + 1));
         for i in order {
             if !o.broken.contains(&i) && !o.pages.contains((i, key)) && (settled || !o.pages.has_page(i)) {
-                jobs.push(Job { page: i, key });
+                jobs.push(Job { page: i, key, turns });
             }
         }
 
-        // Dragging over a page selects its text; a click clears it.
+        // Dragging over a page selects its text (or, with the hand tool,
+        // pans); a click clears the selection.
         let screen_view = Rect::from_min_size(origin + viewport.min.to_vec2(), viewport.size());
         let resp = ui.interact(screen_view, ui.scope_id().with("pdf-select"), Sense::click_and_drag());
+        if o.hand {
+            if resp.dragged() {
+                o.jump = Some(o.offset - resp.drag_delta());
+            }
+            if resp.hovered() || resp.dragged() {
+                ui.ctx().set_cursor_icon(if resp.dragged() { egui::CursorIcon::Grabbing } else { egui::CursorIcon::Grab });
+            }
+            return;
+        }
+        // A point on page `i` as the file shows it, from a screen position.
         let at = |o: &Open, pos: Pos2, page: Option<usize>| -> Option<(usize, (f64, f64))> {
             let c = pos - origin;
             let i = page.or_else(|| o.layout.page_at(c.y))?;
-            let (w, h) = o.sizes[i];
+            let (w, h) = turn_size(o.sizes[i], turns);
             let x = ((c.x - o.layout.left(i, cw)) / k).clamp(0.0, w);
             let y = ((c.y - o.layout.tops[i]) / k).clamp(0.0, h);
-            Some((i, (f64::from(x), f64::from(y))))
+            let raw = (f64::from(o.sizes[i].0), f64::from(o.sizes[i].1));
+            Some((i, unturn_point((f64::from(x), f64::from(y)), raw, turns)))
         };
         if resp.hovered()
             && let Some(pos) = resp.hover_pos()
@@ -1131,8 +1263,10 @@ fn side_panel(o: &mut Open, ui: &mut Ui, side: Rect, tab: Tab, jobs: &mut Vec<Jo
     child.set_clip_rect(list);
     match tab {
         Tab::Thumbnails => {
-            let widest = o.sizes.iter().map(|s| s.0).fold(1.0f32, f32::max);
-            let tl = layout(&o.sizes, THUMB_W / (widest * UNIT), 26.0);
+            let sizes = o.shown_sizes();
+            let widest = sizes.iter().map(|s| s.0).fold(1.0f32, f32::max);
+            let tl = layout(&sizes, THUMB_W / (widest * UNIT), 26.0);
+            let turns = o.turns;
             let current = o.current;
             let mut go = None;
             egui::ScrollArea::vertical().id_salt("pdf-thumbs").auto_shrink([false, false]).show_viewport(&mut child, |ui, viewport| {
@@ -1148,7 +1282,7 @@ fn side_panel(o: &mut Open, ui: &mut Ui, side: Rect, tab: Tab, jobs: &mut Vec<Jo
                         Some(tex) => {
                             p.image(tex.id(), r, Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)), Color32::WHITE);
                         }
-                        None => jobs.push(Job { page: i, key: THUMB_KEY }),
+                        None => jobs.push(Job { page: i, key: THUMB_KEY, turns }),
                     }
                     let stroke = if i == current { Stroke::new(2.0, t::p().primary) } else { Stroke::new(1.0, t::p().divider) };
                     p.rect_stroke(r.expand(2.0), 2.0, stroke, egui::StrokeKind::Outside);
@@ -1197,8 +1331,12 @@ fn side_panel(o: &mut Open, ui: &mut Ui, side: Rect, tab: Tab, jobs: &mut Vec<Jo
 /// sidebar choice and the x left of the controls.
 fn toolbar(o: &mut Open, ui: &mut Ui, bar: Rect, right: f32, mut sidebar: Option<Tab>) -> (Option<Tab>, f32) {
     let cy = bar.center().y;
-    let mut x = right - 8.0;
     let p = ui.painter().clone();
+    // pdf.js's Tools menu, at the right end as in its toolbar.
+    let menu = Rect::from_center_size(Pos2::new(right - 24.0, cy), vec2(48.0, 24.0));
+    let mut mui = ui.new_child(egui::UiBuilder::new().max_rect(menu));
+    egui::containers::menu::MenuButton::new(egui::RichText::new("Tools").font(font(12.0))).ui(&mut mui, |ui| tools_menu(o, ui));
+    let mut x = menu.left() - 16.0;
     if icon_button(ui, Pos2::new(x, cy), ic::PLUS, 15.0, o.zoom_factor() < MAX_ZOOM, "Zoom In (⌘+)").clicked() {
         o.act(PdfKey::ZoomIn);
     }
@@ -1281,6 +1419,43 @@ fn toolbar(o: &mut Open, ui: &mut Ui, bar: Rect, right: f32, mut sidebar: Option
         });
     }
     (sidebar, x - 16.0)
+}
+
+/// The entries of pdf.js's Tools menu that Eagle keeps and PDFKit allows.
+fn tools_menu(o: &mut Open, ui: &mut Ui) {
+    ui.set_min_width(220.0);
+    let row = |ui: &mut Ui, label: &str, on: bool, key: &str| ui.add(egui::Button::new(label).selected(on).shortcut_text(key)).clicked();
+    if row(ui, "Presentation Mode", false, "F5") {
+        o.present = true;
+        ui.close();
+    }
+    ui.separator();
+    if row(ui, "Go to First Page", false, "Home") {
+        o.act(PdfKey::First);
+        ui.close();
+    }
+    if row(ui, "Go to Last Page", false, "End") {
+        o.act(PdfKey::Last);
+        ui.close();
+    }
+    ui.separator();
+    if row(ui, "Rotate Clockwise", false, "R") {
+        o.act(PdfKey::Rotate(1));
+        ui.close();
+    }
+    if row(ui, "Rotate Counterclockwise", false, "⇧R") {
+        o.act(PdfKey::Rotate(-1));
+        ui.close();
+    }
+    ui.separator();
+    if row(ui, "Text Selection Tool", !o.hand, "S") {
+        o.act(PdfKey::Hand(false));
+        ui.close();
+    }
+    if row(ui, "Hand Tool", o.hand, "H") {
+        o.act(PdfKey::Hand(true));
+        ui.close();
+    }
 }
 
 /// The find bar under the top bar's right end: the query, previous/next,
@@ -1542,6 +1717,46 @@ mod tests {
         assert_eq!(key_action(Key::Enter, none, true, true), Some(PdfKey::FindNext(true)));
         assert_eq!(key_action(Key::Enter, Modifiers::SHIFT, true, true), Some(PdfKey::FindNext(false)));
         assert_eq!(key_action(Key::Escape, none, true, true), Some(PdfKey::CloseFind));
+        // pdf.js's r / ⇧R rotate and s / h pick the tool.
+        assert_eq!(key_action(Key::R, none, false, false), Some(PdfKey::Rotate(1)));
+        assert_eq!(key_action(Key::R, Modifiers::SHIFT, false, false), Some(PdfKey::Rotate(-1)));
+        assert_eq!(key_action(Key::H, none, false, false), Some(PdfKey::Hand(true)));
+        assert_eq!(key_action(Key::S, none, false, false), Some(PdfKey::Hand(false)));
+        assert_eq!(key_action(Key::R, none, true, true), None, "typing in the find field");
+    }
+
+    #[test]
+    fn view_rotation_turns_points_and_rects() {
+        let size = (100.0, 200.0);
+        for t in 0..4 {
+            for p in [(0.0, 0.0), (10.0, 20.0), (100.0, 200.0)] {
+                let q = unturn_point(turn_point(p, size, t), size, t);
+                assert!((q.0 - p.0).abs() < 1e-9 && (q.1 - p.1).abs() < 1e-9, "turns {t}");
+            }
+        }
+        // Turned clockwise, the top-left corner goes to the top-right.
+        assert_eq!(turn_point((0.0, 0.0), size, 1), (200.0, 0.0));
+        assert_eq!(turn_point((0.0, 0.0), size, 3), (0.0, 100.0));
+        assert_eq!(turn_size((100.0, 200.0), 1), (200.0, 100.0));
+        assert_eq!(turn_size((100.0, 200.0), 2), (100.0, 200.0));
+        let r = falcon_pdf::Rect { x: 10.0, y: 20.0, w: 30.0, h: 5.0 };
+        assert_eq!(turn_rect(&r, size, 1), falcon_pdf::Rect { x: 175.0, y: 10.0, w: 5.0, h: 30.0 });
+        assert_eq!(turn_rect(&r, size, 0), r);
+    }
+
+    #[test]
+    fn page_pictures_turn() {
+        // 2 x 1: red, green.
+        let b = falcon_pdf::Bitmap { width: 2, height: 1, rgba: vec![255, 0, 0, 255, 0, 255, 0, 255] };
+        let cw = turn_bitmap(b.clone(), 1);
+        assert_eq!((cw.width, cw.height), (1, 2));
+        assert_eq!(cw.pixel(0, 0), [255, 0, 0, 255]);
+        assert_eq!(cw.pixel(0, 1), [0, 255, 0, 255]);
+        let ccw = turn_bitmap(b.clone(), 3);
+        assert_eq!(ccw.pixel(0, 0), [0, 255, 0, 255]);
+        let half = turn_bitmap(b.clone(), 2);
+        assert_eq!(half.pixel(0, 0), [0, 255, 0, 255]);
+        assert_eq!(turn_bitmap(b.clone(), 4), b);
     }
 
     #[test]
