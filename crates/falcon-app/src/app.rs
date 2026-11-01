@@ -1118,6 +1118,14 @@ impl App {
         }
     }
 
+    /// The items a command acts on: the viewer's item, or the selection.
+    fn acted_on(&self) -> Vec<String> {
+        match &self.ws.viewer {
+            Some(id) => vec![id.clone()],
+            None => self.ws.selected.clone(),
+        }
+    }
+
     /// Runs one command, from a key press or a menu click. A command that
     /// can't act now (`menu::enabled`) does nothing. Called before the
     /// frame locks the library, which some commands lock themselves.
@@ -1221,10 +1229,7 @@ impl App {
                 }
             }
             C::Rate(n) => {
-                let ids = match &self.ws.viewer {
-                    Some(id) => vec![id.clone()],
-                    None => self.ws.selected.clone(),
-                };
+                let ids = self.acted_on();
                 self.ws.actions.push(Action::BatchRating(ids, n.into()));
                 self.flash(rated_note(n));
             }
@@ -1234,6 +1239,10 @@ impl App {
             C::FullScreen => {
                 let on = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
                 ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!on));
+            }
+            C::RefreshThumbnail => {
+                let ids = self.acted_on();
+                self.ws.actions.push(Action::Edit(image_edit::Op::RefreshThumbnail(ids)));
             }
             C::Page(p) => {
                 self.ws.viewer = None;

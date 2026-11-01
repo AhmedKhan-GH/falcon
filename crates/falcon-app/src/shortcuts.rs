@@ -82,6 +82,8 @@ pub enum Command {
     /// File ▸ New Subfolder (inside the open folder) and New Smart Folder.
     NewSubfolder,
     NewSmartFolder,
+    /// Remake the selected items' thumbnails.
+    RefreshThumbnail,
 }
 
 /// How a scroll command moves the grid.
@@ -216,6 +218,7 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::SelectAll, id: "edit.select.all", group: "Edit", label: "Select all", default: k(CMD, Key::A), aliases: &[] },
     Spec { cmd: Command::Rename, id: "edit.rename", group: "Edit", label: "Rename the selected item", default: k(CMD, Key::R), aliases: &[KeyboardShortcut::new(NONE, Key::F2)] },
     Spec { cmd: Command::Copy, id: "edit.copy", group: "Edit", label: "Copy the selected files", default: k(CMD, Key::C), aliases: &[] },
+    Spec { cmd: Command::RefreshThumbnail, id: "edit.thumbnail.refresh", group: "Edit", label: "Refresh the thumbnails", default: k(CMD_ALT, Key::R), aliases: &[] },
     Spec { cmd: Command::Paste, id: "edit.paste", group: "Edit", label: "Paste files or an image", default: k(CMD, Key::V), aliases: &[] },
     Spec { cmd: Command::Trash, id: "edit.remove.trash", group: "Edit", label: "Move to the Trash", default: k(CMD, Key::Backspace), aliases: &[] },
     // Eagle's Edit ▸ Move Folder accelerators. ⇧ may or may not turn the
@@ -878,6 +881,7 @@ mod tests {
             assert_eq!(keys.resolve(key, CMD_SHIFT), Some(cmd), "{key:?}");
         }
         assert_eq!(keys.resolve(Key::R, CMD), Some(Command::Rename));
+        assert_eq!(keys.resolve(Key::R, CMD_ALT), Some(Command::RefreshThumbnail));
         assert_eq!(keys.resolve(Key::F2, Modifiers::NONE), Some(Command::Rename));
     }
 

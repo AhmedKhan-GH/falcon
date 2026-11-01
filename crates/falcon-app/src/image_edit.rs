@@ -101,7 +101,8 @@ impl App {
                 self.ws.actions.push(Action::Edit(Op::ResetCustomThumbnail(item.id.clone())));
             }
         }
-        if ui.button("Refresh Thumbnail").clicked() {
+        let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::RefreshThumbnail);
+        if ui.add(egui::Button::new("Refresh Thumbnail").shortcut_text(keys)).clicked() {
             self.ws.actions.push(Action::Edit(Op::RefreshThumbnail(targets.to_vec())));
         }
         if ui.button("Refresh Palette").clicked() {

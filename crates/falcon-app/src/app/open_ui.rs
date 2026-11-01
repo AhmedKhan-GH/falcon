@@ -24,7 +24,7 @@ pub(super) fn originals(lib: &Library, ids: &[String]) -> Vec<PathBuf> {
 }
 
 impl App {
-    fn shortcut_text(&self, ctx: &egui::Context, cmd: Command) -> String {
+    pub(super) fn shortcut_text(&self, ctx: &egui::Context, cmd: Command) -> String {
         self.shortcuts.binding(cmd).map(|c| shortcuts::display(ctx, &c)).unwrap_or_default()
     }
 
