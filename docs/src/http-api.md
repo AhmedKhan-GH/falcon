@@ -100,6 +100,7 @@ Eagle has one library open per window, and its API serves that library; `library
 - **Library routes only:** routes that aren't about library data (AI search, plugins, script injection, collect preferences, window control) are left out.
 - **Application info:** it reports version and platform, nothing else.
 - **Imports:** `addFromPath` and v2 `item/add` reply after the import has run, so a returned id exists. Eagle makes up the id, replies, and imports later. A failed single `item/add` therefore throws in falcon, and a batch lists only the ids that imported.
+- **Import locking:** the add routes (`addFromPath(s)`, `addFromURL(s)`, v2 `item/add`) read, thumbnail and analyse each source before taking the library lock, and lock only briefly to look up folders and to commit, as the app's own import does. Downloads for `addFromURL(s)` also run unlocked. A slow or dataless iCloud source therefore stalls only its own request; the app, which shares the library, keeps drawing.
 - **Bookmarks:** `item/add` with `bookmarkURL` throws `bookmarks are not supported`.
 - **Thumbnail routes:** `item/setCustomThumbnail` and `item/refreshThumbnail` aren't served yet.
 - **Colours:** folder, smart-folder and tag-group colours must be one of Eagle's eight names; anything else throws. `""` or `null` means the default and removes the key. Eagle stores whatever it is given.

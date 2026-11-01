@@ -397,3 +397,59 @@ fn wrong_method_and_unknown_route() {
     // limit 0 falls back to the default page size.
     assert_eq!(e.ok_get("/api/v2/tag/get?limit=0")["limit"], 50);
 }
+
+/// A PNG of noise, which compresses badly and so is slow to decode.
+fn noisy_png(path: &Path, side: u32) {
+    let mut seed = 0x2545_f491_u32 ^ side;
+    RgbImage::from_fn(side, side, |_, _| {
+        seed ^= seed << 13;
+        seed ^= seed >> 17;
+        seed ^= seed << 5;
+        let [r, g, b, _] = seed.to_le_bytes();
+        Rgb([r, g, b])
+    })
+    .save(path)
+    .unwrap();
+}
+
+#[test]
+fn imports_leave_the_library_unlocked_while_staging() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::time::{Duration, Instant};
+
+    let e = env();
+    let paths: Vec<String> = (0..4)
+        .map(|n| {
+            let p = e.tmp.path().join(format!("big{n}.png"));
+            noisy_png(&p, 600);
+            p.display().to_string()
+        })
+        .collect();
+
+    // Stands in for the app, which locks the library every frame.
+    let stop = Arc::new(AtomicBool::new(false));
+    let watcher = {
+        let (lib, stop) = (e.lib.clone(), stop.clone());
+        std::thread::spawn(move || {
+            let mut longest = Duration::ZERO;
+            while !stop.load(Ordering::Relaxed) {
+                let t = Instant::now();
+                drop(lib.lock().unwrap_or_else(|p| p.into_inner()));
+                longest = longest.max(t.elapsed());
+                std::thread::sleep(Duration::from_millis(2));
+            }
+            longest
+        })
+    };
+    let t = Instant::now();
+    let ids = e.ok_post("/api/item/addFromPaths", json!({"paths": paths}));
+    let took = t.elapsed();
+    stop.store(true, Ordering::Relaxed);
+    let longest = watcher.join().unwrap();
+
+    assert_eq!(ids.as_array().unwrap().len(), 4, "{ids}");
+    // Holding the lock across the request would make one wait as long as
+    // the whole request; brief commits keep every wait a small part of it.
+    assert!(took > Duration::from_millis(50), "staging too fast to tell: {took:?}");
+    assert!(longest * 4 < took, "waited {longest:?} for the lock during a {took:?} import");
+}

@@ -10,6 +10,7 @@
 //! - it serves library routes only;
 //! - application info reports version and platform only;
 //! - imports finish before the reply, so returned ids always exist;
+//! - imports read their source without holding the library lock;
 //! - library history is the libraries this server has served, newest first.
 
 mod rules;
@@ -17,7 +18,7 @@ mod v2;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use base64::Engine;
 use falcon_library::import::ImportOptions;
@@ -415,10 +416,10 @@ fn route(lib: &Shared, state: &State, method: &Method, path: &str, args: &Map<St
     if !methods.contains(method) {
         return Reply::WrongMethod;
     }
-    let mut lib = match lib.lock() {
-        Ok(l) => l,
-        Err(p) => p.into_inner(),
-    };
+    if let Some(reply) = import_route(lib, path, args) {
+        return reply;
+    }
+    let mut lib = lock(lib);
     let lib = &mut *lib;
 
     match path {
@@ -536,7 +537,6 @@ fn route(lib: &Shared, state: &State, method: &Method, path: &str, args: &Map<St
         "/api/v2/smartFolder/remove" => v2::remove_smart_folder(lib, args),
         "/api/v2/smartFolder/getItems" => v2::smart_folder_items(lib, args),
         "/api/v2/smartFolder/getRules" => Reply::Data(rules::schema()),
-        "/api/v2/item/add" => v2::add_item(lib, args),
         "/api/v2/item/update" => v2::update_item(lib, args),
         "/api/v2/item/getComments" => v2::get_comments(lib, args),
         "/api/v2/item/addComment" => v2::add_comment(lib, args),
@@ -545,53 +545,6 @@ fn route(lib: &Shared, state: &State, method: &Method, path: &str, args: &Map<St
         "/api/v2/folder/create" => v2::create_folder(lib, args),
         "/api/v2/folder/update" => v2::update_folder(lib, args),
 
-        "/api/item/addFromPath" => {
-            let Some(p) = s(args, "path") else { return Reply::Fail("Missing required parameters.".into()) };
-            match add_path(lib, PathBuf::from(p), args, args) {
-                Ok(id) => Reply::Data(json!(id)),
-                Err(e) => Reply::Fail(e),
-            }
-        }
-        "/api/item/addFromPaths" => {
-            let entries: Vec<Map<String, Value>> = match (args.get("items"), args.get("paths")) {
-                (Some(Value::Array(items)), _) => items.iter().filter_map(|v| v.as_object().cloned()).collect(),
-                (_, Some(Value::Array(paths))) => paths
-                    .iter()
-                    .filter_map(|p| p.as_str())
-                    .map(|p| {
-                        let mut m = Map::new();
-                        m.insert("path".into(), json!(p));
-                        m
-                    })
-                    .collect(),
-                _ => return Reply::BadRequest,
-            };
-            let mut ids = Vec::new();
-            for e in entries {
-                if let Some(p) = s(&e, "path")
-                    && let Ok(id) = add_path(lib, PathBuf::from(p), &e, args)
-                {
-                    ids.push(id);
-                }
-            }
-            Reply::Data(json!(ids))
-        }
-        "/api/item/addFromURL" => {
-            let Some(url) = s(args, "url") else { return Reply::Fail("Missing required parameters.".into()) };
-            match add_url(lib, url, args, args) {
-                Ok(_) => Reply::Empty,
-                Err(e) => Reply::Fail(e),
-            }
-        }
-        "/api/item/addFromURLs" => {
-            let Some(Value::Array(items)) = args.get("items") else { return Reply::Fail("Missing required parameters.".into()) };
-            for e in items.iter().filter_map(Value::as_object) {
-                if let Some(url) = s(e, "url") {
-                    let _ = add_url(lib, url, e, args);
-                }
-            }
-            Reply::Empty
-        }
         "/api/item/update" => {
             let Some(mut item) = s(args, "id").and_then(|id| lib.item(id)).cloned() else {
                 return Reply::Fail("File does not exist.".into());
@@ -672,6 +625,67 @@ fn route(lib: &Shared, state: &State, method: &Method, path: &str, args: &Map<St
     }
 }
 
+/// Locks the library, taking it over from a holder that panicked.
+fn lock(lib: &Shared) -> MutexGuard<'_, Library> {
+    lib.lock().unwrap_or_else(|p| p.into_inner())
+}
+
+/// The add routes. They lock the library only briefly (see [`add_path`]),
+/// so the app sharing it stays responsive while a source is read.
+fn import_route(lib: &Shared, path: &str, args: &Map<String, Value>) -> Option<Reply> {
+    Some(match path {
+        "/api/item/addFromPath" => {
+            let Some(p) = s(args, "path") else { return Some(Reply::Fail("Missing required parameters.".into())) };
+            match add_path(lib, PathBuf::from(p), args, args) {
+                Ok(id) => Reply::Data(json!(id)),
+                Err(e) => Reply::Fail(e),
+            }
+        }
+        "/api/item/addFromPaths" => {
+            let entries: Vec<Map<String, Value>> = match (args.get("items"), args.get("paths")) {
+                (Some(Value::Array(items)), _) => items.iter().filter_map(|v| v.as_object().cloned()).collect(),
+                (_, Some(Value::Array(paths))) => paths
+                    .iter()
+                    .filter_map(|p| p.as_str())
+                    .map(|p| {
+                        let mut m = Map::new();
+                        m.insert("path".into(), json!(p));
+                        m
+                    })
+                    .collect(),
+                _ => return Some(Reply::BadRequest),
+            };
+            let mut ids = Vec::new();
+            for e in entries {
+                if let Some(p) = s(&e, "path")
+                    && let Ok(id) = add_path(lib, PathBuf::from(p), &e, args)
+                {
+                    ids.push(id);
+                }
+            }
+            Reply::Data(json!(ids))
+        }
+        "/api/item/addFromURL" => {
+            let Some(url) = s(args, "url") else { return Some(Reply::Fail("Missing required parameters.".into())) };
+            match add_url(lib, url, args, args) {
+                Ok(_) => Reply::Empty,
+                Err(e) => Reply::Fail(e),
+            }
+        }
+        "/api/item/addFromURLs" => {
+            let Some(Value::Array(items)) = args.get("items") else { return Some(Reply::Fail("Missing required parameters.".into())) };
+            for e in items.iter().filter_map(Value::as_object) {
+                if let Some(url) = s(e, "url") {
+                    let _ = add_url(lib, url, e, args);
+                }
+            }
+            Reply::Empty
+        }
+        "/api/v2/item/add" => v2::add_item(lib, args),
+        _ => return None,
+    })
+}
+
 fn folder_reply(lib: &Library, id: &str) -> Reply {
     match lib.all_folders().into_iter().find(|f| f.id == id) {
         Some(f) => Reply::Data(folder_json(f)),
@@ -690,11 +704,20 @@ fn thumbnail_path(lib: &Library, item: &Item) -> String {
 }
 
 /// Imports a file with the metadata Eagle's add routes accept.
-fn add_path(lib: &mut Library, path: PathBuf, item: &Map<String, Value>, outer: &Map<String, Value>) -> Result<String, String> {
-    let mut folders = folder_ids(lib, item);
-    if folders.is_empty() {
-        folders = folder_ids(lib, outer);
-    }
+///
+/// The library is locked twice, briefly: to look up the folders, then to
+/// commit. The source is read, thumbnailed and analysed in between, unlocked,
+/// because the app locks the same library every frame and a dataless iCloud
+/// source blocks until it has downloaded.
+fn add_path(lib: &Shared, path: PathBuf, item: &Map<String, Value>, outer: &Map<String, Value>) -> Result<String, String> {
+    let folders = {
+        let lib = lock(lib);
+        let mut folders = folder_ids(&lib, item);
+        if folders.is_empty() {
+            folders = folder_ids(&lib, outer);
+        }
+        folders
+    };
     let opts = ImportOptions {
         folders,
         tags: strings(item, "tags"),
@@ -703,7 +726,9 @@ fn add_path(lib: &mut Library, path: PathBuf, item: &Map<String, Value>, outer: 
         url: s(item, "website").unwrap_or("").to_string(),
         ..Default::default()
     };
-    let id = lib.import_file(&path, &opts).map_err(|e| e.to_string())?;
+    let staged = falcon_library::import::stage(&path, &opts).map_err(|e| e.to_string())?;
+    let mut lib = lock(lib);
+    let id = lib.commit_import(staged).map_err(|e| e.to_string())?;
     let mut changed = lib.item(&id).cloned().ok_or("import failed")?;
     let mut dirty = false;
     if let Some(name) = s(item, "name") {
@@ -724,8 +749,9 @@ fn add_path(lib: &mut Library, path: PathBuf, item: &Map<String, Value>, outer: 
     Ok(id)
 }
 
-/// Downloads an http(s) or data URL to a temporary file and imports it.
-fn add_url(lib: &mut Library, url: &str, item: &Map<String, Value>, outer: &Map<String, Value>) -> Result<String, String> {
+/// Downloads an http(s) or data URL to a temporary file and imports it,
+/// all without holding the library lock until the commit.
+fn add_url(lib: &Shared, url: &str, item: &Map<String, Value>, outer: &Map<String, Value>) -> Result<String, String> {
     let (bytes, ext) = if let Some(rest) = url.strip_prefix("data:") {
         let (meta, data) = rest.split_once(',').ok_or("Invalid data URL.")?;
         let ext = meta.split(';').next().and_then(|m| m.split('/').nth(1)).unwrap_or("png");

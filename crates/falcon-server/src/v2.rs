@@ -13,7 +13,7 @@ use falcon_library::model::{Comment, Folder, Item};
 use falcon_library::{Library, ids};
 use serde_json::{Map, Number, Value, json};
 
-use super::{Reply, folder_json, item_json, paginate, s, strings, tag_objects};
+use super::{Reply, Shared, folder_json, item_json, paginate, s, strings, tag_objects};
 use crate::rules::{self, truthy};
 
 /// Eagle's cap on names, notes and descriptions, in UTF-16 units.
@@ -295,7 +295,7 @@ fn add_entry(e: &Map<String, Value>, batch: bool) -> Map<String, Value> {
     m
 }
 
-fn add_one(lib: &mut Library, e: &Map<String, Value>, batch: bool) -> Result<String, String> {
+fn add_one(lib: &Shared, e: &Map<String, Value>, batch: bool) -> Result<String, String> {
     let m = add_entry(e, batch);
     let none = Map::new();
     if e.contains_key("bookmarkURL") {
@@ -318,7 +318,7 @@ fn add_one(lib: &mut Library, e: &Map<String, Value>, batch: bool) -> Result<Str
 }
 
 /// `/api/v2/item/add`: `{id}` for one entry, `{ids}` for `items`.
-pub(crate) fn add_item(lib: &mut Library, args: &Map<String, Value>) -> Reply {
+pub(crate) fn add_item(lib: &Shared, args: &Map<String, Value>) -> Reply {
     if let Some(Value::Array(items)) = args.get("items") {
         if items.len() > MAX_ARRAY {
             return fail(format!("Batch limit exceeded: max {MAX_ARRAY} items per request, got {}", items.len()));
