@@ -139,7 +139,7 @@ A folder's `tags` key holds its auto-tags. Eagle's code calls the list it applie
 - **`duration`.**
   - Audio is read with `falcon_library::audio`: the length the container gives, after trimming encoder priming (MP3 gapless headers, the MP4 edit list or `iTunSMPB`, the CAF packet table, the Opus pre-skip), or by adding up packet durations when the header has no count. Raw AAC is counted frame by frame. A file that doesn't decode gets no `duration`. Falcon also stores it for opus, aiff, aif, aifc and caf, which Eagle imports as plain files.
   - mp4, mov, m4v, 3gp and f4v are read from the `mvhd` box (duration ÷ timescale).
-  - Other video formats fall back to Spotlight (`mdls`), which knows nothing about files in temporary folders.
+  - Other video formats are read through FFmpeg when it is installed (see [Video playback](video.md)), then fall back to Spotlight (`mdls`), which knows nothing about files in temporary folders.
   - Values can differ slightly from a browser's, for example around MP3 encoder padding.
 - **Video sizes.** `resolutionWidth` and `resolutionHeight` copy the item's `width` and `height`.
 - **`bpm`.** `tempo::bpm(path, ext)` estimates the tempo with falcon's own method rather than Eagle's beat tracker, over the same opening stretch (`tempo::analysed_seconds`):

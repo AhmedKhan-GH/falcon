@@ -17,6 +17,7 @@
 
 - [The desktop app](app.md)
 - [Actions](actions.md)
+- [Video playback and the FFmpeg fallback](video.md)
 - [Localisation](localisation.md)
 
 # Reference

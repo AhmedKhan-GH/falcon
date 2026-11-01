@@ -32,7 +32,8 @@ This builds the API docs with `cargo doc` and serves the book at <http://localho
 | `falcon-library` | Reading and writing `.library` folders: import, thumbnails, palettes, metadata, editing, search, smart folders, duplicates, undo, backups, `.eaglepack` files and the sandbox check |
 | `falcon-server` | Eagle's local HTTP API |
 | `falcon-app` | The desktop app, built with egui |
-| `falcon-video` | Probing, decoding and playing video through AVFoundation |
+| `falcon-video` | Probing, decoding and playing video through AVFoundation, falling back to `falcon-ffmpeg` |
+| `falcon-ffmpeg` | The fallback video decoder and player over an LGPL FFmpeg opened at run time (see [Video playback](video.md)) |
 | `falcon-pdf` | PDF pages, text, search and selection through PDFKit |
 | `falcon` | Command-line tool: `new`, `import`, `folder`, `info`, `backup`, `export`, `import-pack`, `serve` |
 
