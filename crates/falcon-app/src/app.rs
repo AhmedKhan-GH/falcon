@@ -115,6 +115,8 @@ struct Saved {
     font_look: Option<font_view::FontLook>,
     /// The image viewer's navigator is hidden (Eagle's `isHideNavigator`).
     hide_navigator: Option<bool>,
+    /// Search scope, pinned filters and Go to Folder history.
+    search: crate::search_state::SearchPrefs,
 }
 
 /// A rubber-band selection in progress: where it started, in the grid's
@@ -649,6 +651,8 @@ pub struct App {
     /// drawn).
     switch_to: Option<Switch>,
     prefs: crate::prefs::Prefs,
+    /// Search scope, pinned filters and Go to Folder history.
+    search: crate::search_state::SearchPrefs,
     prefs_window: crate::prefs::Window,
     /// The app lock (Preferences ▸ Password).
     lock: crate::applock::Lock,
@@ -718,6 +722,7 @@ impl App {
             rename_template: "Untitled - %N".into(),
             switch_to: None,
             prefs: Default::default(),
+            search: Default::default(),
             prefs_window: Default::default(),
             lock: Default::default(),
             shortcuts: Default::default(),
@@ -752,6 +757,7 @@ impl App {
         app.layouts = saved.layouts;
         app.display = saved.display;
         app.prefs = saved.prefs.sanitized();
+        app.search = saved.search;
         // The interface size is a preference, as in Eagle, so egui's own
         // ⌘+ and ⌘− (which falcon uses to zoom the grid) must not change it.
         cc.egui_ctx.options_mut(|o| o.zoom_with_keyboard = false);
@@ -3110,6 +3116,9 @@ impl App {
         p.rect_stroke(rect, t::FIELD_RADIUS, Stroke::new(1.0, t::p().field_border), StrokeKind::Inside);
         icon(ui, Pos2::new(rect.left() + 14.0, rect.center().y), ic::MAGNIFYING_GLASS, 16.0, t::p().text);
         icon(ui, Pos2::new(rect.left() + 28.0, rect.center().y + 1.0), ic::CARET_DOWN, 9.0, t::p().text_muted);
+        let caret = Rect::from_min_max(Pos2::new(rect.left() + 2.0, rect.top()), Pos2::new(rect.left() + 38.0, rect.bottom()));
+        let scope_resp = ui.interact(caret, ui.scope_id().with("search-scope"), Sense::click()).on_hover_text("Search Scope");
+        egui::Popup::menu(&scope_resp).show(|ui| self.search_scope_menu(ui));
         icon(ui, Pos2::new(rect.right() - 17.0, rect.center().y), ic::CAMERA, 17.0, t::p().text_disabled);
         let inner = Rect::from_min_max(Pos2::new(rect.left() + 40.0, rect.top()), Pos2::new(rect.right() - 32.0, rect.bottom()));
         let resp = ui.put(
@@ -5078,6 +5087,7 @@ impl eframe::App for App {
             layouts: self.layouts.clone(),
             display: self.display.clone(),
             prefs: self.prefs.clone(),
+            search: self.search.clone(),
             prefs_pane: self.prefs_window.pane(),
             shortcuts: self.shortcuts.clone(),
             collect_pos: self.collect.pos.map(<[f32; 2]>::from),

@@ -279,6 +279,28 @@ impl App {
     }
 }
 
+impl App {
+    /// The search box's Search Scope menu: which parts of each item the
+    /// search looks at, remembered across launches.
+    pub(super) fn search_scope_menu(&mut self, ui: &mut Ui) {
+        ui.set_min_width(190.0);
+        muted(ui, "Search in");
+        let s = &mut self.search.scope;
+        for (on, label) in [
+            (&mut s.name, "Name"),
+            (&mut s.folder_name, "Folder Name"),
+            (&mut s.folder_desc, "Folder Description"),
+            (&mut s.ext, "Extension"),
+            (&mut s.tags, "Tags"),
+            (&mut s.url, "URL"),
+            (&mut s.comments, "Comments"),
+            (&mut s.note, "Notes"),
+        ] {
+            ui.checkbox(on, label);
+        }
+    }
+}
+
 fn unit_label(u: DurationUnit) -> &'static str {
     match u {
         DurationUnit::Seconds => "s",

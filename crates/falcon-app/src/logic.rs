@@ -160,11 +160,9 @@ fn shuffle_key(seed: u64, id: &str) -> u64 {
     h.finish()
 }
 
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
-/// Indices into `items` that pass the scope, the search query and the filter
-/// panel, in Eagle's order. A colour filter sorts by colour distance. The
-/// query is matched with typo tolerance; exact matches come first, then
-/// typo matches by number of edits, each group in that order.
+/// [`visible_in`] with every part of each item searched.
 pub fn visible(
     items: &[Item],
     roots: &[Folder],
@@ -179,8 +177,12 @@ pub fn visible(
 }
 
 #[allow(clippy::too_many_arguments)]
-/// [`visible`] searching only the parts of each item `parts` turns on (the
-/// search box's Search Scope menu).
+/// Indices into `items` that pass the scope, the search query and the filter
+/// panel, in Eagle's order. A colour filter sorts by colour distance. The
+/// query is matched with typo tolerance; exact matches come first, then
+/// typo matches by number of edits, each group in that order.
+/// Only the parts of each item `parts` turns on are searched (the search
+/// box's Search Scope menu).
 pub fn visible_in(
     items: &[Item],
     roots: &[Folder],
