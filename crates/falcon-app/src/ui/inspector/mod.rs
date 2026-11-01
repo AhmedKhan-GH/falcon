@@ -167,15 +167,45 @@ impl App {
         let items: Vec<&Item> = self.ws.order.iter().filter_map(|id| lib.item(id)).collect();
         let size: u64 = items.iter().map(|i| i.size).sum();
         if self.fold_heading(ui, Fold::Properties, tr("Properties")) {
-            prop(ui, tr("Items"), &items.len().to_string());
-            prop(ui, tr("Size"), &logic::format_size(size));
+            // A locked folder keeps its count and size to itself.
+            let shut = folder.as_ref().is_some_and(|f| crate::organize::is_shut(f, &self.ws.org.unlocked));
+            if !shut {
+                prop(ui, tr("Items"), &items.len().to_string());
+                prop(ui, tr("Size"), &logic::format_size(size));
+            }
             if let Some(f) = &folder {
                 prop(ui, tr("Date Imported"), &logic::format_ms(f.modification_time));
-                prop(ui, tr("Password"), if f.password.is_empty() { tr("None") } else { tr("Set") });
+                self.password_row(ui, f);
             }
         }
         ui.add_space(4.0);
         self.scope_export_button(ui, lib);
+    }
+
+    /// The folder inspector's Password row: Create when there is none,
+    /// Change and Remove when one is set (for a single folder shown).
+    fn password_row(&mut self, ui: &mut Ui, f: &falcon_library::model::Folder) {
+        use crate::ui::organize::PasswordMode;
+        let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 13.0), Sense::hover());
+        ui.painter().text(rect.left_center(), Align2::LEFT_CENTER, tr("Password"), font(12.0), t::p().text);
+        let mut cell = ui.new_child(egui::UiBuilder::new().max_rect(Rect::from_min_max(Pos2::new(rect.left() + 90.0, rect.top()), rect.right_bottom())).layout(egui::Layout::left_to_right(egui::Align::Center)));
+        cell.spacing_mut().item_spacing.x = 2.0;
+        let link = |ui: &mut Ui, text: &str| ui.add(egui::Button::new(RichText::new(text).size(12.0).color(t::p().primary)).frame(false)).on_hover_cursor(egui::CursorIcon::PointingHand).clicked();
+        if f.password.is_empty() {
+            if link(&mut cell, tr("Create")) {
+                self.open_password(f, PasswordMode::New);
+            }
+        } else if self.ws.folders.sel.is_multi() {
+            cell.label(RichText::new(tr("Set")).size(12.0).color(t::p().text_value));
+        } else {
+            if link(&mut cell, tr("Change")) {
+                self.open_password(f, PasswordMode::Change);
+            }
+            cell.label(RichText::new("|").size(12.0).color(t::p().text_muted));
+            if link(&mut cell, tr("Remove")) {
+                self.open_password(f, PasswordMode::Remove);
+            }
+        }
     }
 
     pub(crate) fn multi_inspector(&mut self, ui: &mut Ui, lib: &Library, n: usize) {

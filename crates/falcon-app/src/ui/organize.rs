@@ -104,7 +104,7 @@ struct DragGroup(String);
 pub(crate) struct DragSmart(String);
 
 #[derive(Clone, Copy, PartialEq)]
-enum PasswordMode {
+pub(crate) enum PasswordMode {
     New,
     Change,
     Remove,
@@ -388,7 +388,7 @@ impl App {
     /// The Password submenu of a folder's context menu, in the sidebar and
     /// on a subfolder card.
     /// Opens the password dialog for `f`.
-    fn open_password(&mut self, f: &Folder, mode: PasswordMode) {
+    pub(crate) fn open_password(&mut self, f: &Folder, mode: PasswordMode) {
         self.ws.org.password = Some(PasswordDraft {
             id: f.id.clone(),
             mode,
