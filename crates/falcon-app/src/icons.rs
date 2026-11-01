@@ -53,3 +53,5 @@ pub const SPEAKER_HIGH: &str = "\u{E44A}";
 pub const SPEAKER_LOW: &str = "\u{E44C}";
 pub const SPEAKER_NONE: &str = "\u{E44E}";
 pub const SPEAKER_X: &str = "\u{E45C}";
+pub const CORNERS_IN: &str = "\u{E1CE}";
+pub const CORNERS_OUT: &str = "\u{E1D0}";

@@ -136,7 +136,9 @@ What Eagle does, from the `mediaElement` and `mpvMediaElement` directives and th
 | Question | Eagle | Seen or inferred | falcon |
 |---|---|---|---|
 | Player | video.js over an HTML video element, falling back to a bundled mpv when the element can't decode the file (no size or duration, or no frame within 1.5 s of playing) | Seen | AVFoundation's AVPlayer, with frames copied out of an `AVPlayerItemVideoOutput` each time the window draws. No second player: what macOS can't play shows its thumbnail |
-| Control bar | Play, back and forward, time, progress bar, volume, playback rate, loop, note (add comment) and full screen | Seen | Play, back, forward, previous and next frame, elapsed / total, add comment, speed, loop, mute and volume. No full screen |
+| Control bar | Play, back and forward, time, progress bar, volume, playback rate, loop, note (add comment) and full screen | Seen | Play, back, forward, previous and next frame, elapsed / total, add comment, speed, loop, mute, volume and full screen |
+| Full screen | The button toggles Eagle's presentation mode (full screen with the panels hidden, `toggle-slideshow`); in a preview window it makes that window full screen | Seen | The button puts the window in full screen or takes it out (the same as Window ▸ Enter Full Screen); the sidebar and inspector stay as they were (Tab hides them) |
+| Flip and rotate | Flip and Rotate buttons in the viewer toolbar, also on ⇧F and ⇧R. Rotate turns the picture a quarter anticlockwise, or clockwise on a ⇧-click; flip mirrors it left to right. CSS transforms only; the file is untouched | Seen | Same buttons in the viewer bar and the same keys, drawn by turning the picture's texture coordinates. The view resets when another item opens (inferred: Eagle reuses its video element, so its turn may carry over) |
 | Picture | Fitted to the window and never enlarged past the video's own size (`max-width`/`max-height` set to the video size), unless the Zoom to Fill preference is on | Seen | Fitted and never enlarged, unless Preferences ▸ Preview stretches videos to fill the viewer. The size comes from the file, so records with `width` and `height` of 0 still show at the right shape. Rotated phone clips are shown upright |
 | Start | Plays at once (`video.autoPlay`, on by default) and resumes where the item was left (`video.rememberPosition`, on), kept per item in local storage | Seen | Plays at once unless Preferences turns autoplay off, and resumes where the item was left unless that is off; positions are saved per item in the app state across launches (the latest 500). A clip left at its end starts from the top |
 | Loop | Clips of 30 s or less always loop (`video.loopShortVideo`, on); longer ones follow the loop button, whose state is saved | Seen | Same, and short-clip looping can be turned off in Preferences; the loop setting is saved with the app's state |
@@ -318,6 +320,7 @@ These are the defaults. All but the arrows, Esc, Tab, Z and the viewer's C, ⇧R
 | `[` and `]` (with ⇧, ten) | With video in the viewer, previous or next frame |
 | ⇧, and ⇧. | With video in the viewer, slower or faster |
 | N | With video in the viewer, add a comment at the current time |
+| ⇧R and ⇧F | With video in the viewer, turn the picture a quarter anticlockwise or mirror it (view only; on images they rotate and flip the file) |
 | ⇧C and ⇧S | With video in the viewer, copy the current frame, or save it to the library as a new item ("Set current frame as thumbnail" has no default key) |
 | n/j and p/k, Home and End | With a PDF in the viewer, next and previous page, first and last page (⌘↑ and ⌘↓ too); ↑ ↓ and Page Up/Down scroll |
 | ⌘+, ⌘− and ⌘0 | With a PDF in the viewer, zoom in, out and back to Automatic |

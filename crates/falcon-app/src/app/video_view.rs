@@ -123,6 +123,34 @@ impl Repeat {
     }
 }
 
+/// The quarter turns after a press of the rotate button or ⇧R: Eagle turns
+/// the picture a quarter anticlockwise, or clockwise on a ⇧-click.
+pub fn rotate_step(turns: u8, clockwise: bool) -> u8 {
+    (turns + if clockwise { 1 } else { 3 }) % 4
+}
+
+/// Texture coordinates for the shown picture's corners (top left, top
+/// right, bottom right, bottom left) when it is mirrored left to right if
+/// `flip` and then turned `turns` quarter turns clockwise, as Eagle's CSS
+/// `rotate(…) scaleX(-1)` does.
+pub fn corner_uvs(turns: u8, flip: bool) -> [Pos2; 4] {
+    let base = if flip { [(1.0, 0.0), (0.0, 0.0), (0.0, 1.0), (1.0, 1.0)] } else { [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)] };
+    std::array::from_fn(|i| {
+        let (u, v) = base[(i + 4 - usize::from(turns % 4)) % 4];
+        Pos2::new(u, v)
+    })
+}
+
+/// Paints `tex` over `rect` with the corners' texture coordinates `uvs`.
+fn paint_turned(ui: &Ui, tex: &TextureHandle, rect: Rect, uvs: [Pos2; 4]) {
+    let mut mesh = egui::Mesh::with_texture(tex.id());
+    for (pos, uv) in [rect.left_top(), rect.right_top(), rect.right_bottom(), rect.left_bottom()].into_iter().zip(uvs) {
+        mesh.vertices.push(egui::epaint::Vertex { pos, uv, color: Color32::WHITE });
+    }
+    mesh.indices.extend([0, 1, 2, 0, 2, 3]);
+    ui.painter().add(egui::Shape::mesh(mesh));
+}
+
 /// Eagle's volume tip icon for a level in percent: 0 off, 1 under 30%,
 /// 2 under 100%, 3 at full volume.
 pub fn volume_level(percent: u32) -> u8 {
@@ -190,6 +218,10 @@ pub(super) struct VideoState {
     tip_seen: Option<(f32, bool)>,
     /// Until when (egui time) the volume tip shows.
     tip_until: f64,
+    /// The picture's view turn (clockwise quarter turns) and mirroring,
+    /// from the viewer bar's rotate and flip buttons; the file is untouched.
+    turns: u8,
+    flipped: bool,
 }
 
 impl Default for VideoState {
@@ -212,6 +244,8 @@ impl Default for VideoState {
             forward: Repeat::default(),
             tip_seen: None,
             tip_until: 0.0,
+            turns: 0,
+            flipped: false,
         }
     }
 }
@@ -251,6 +285,8 @@ impl VideoState {
         self.forward = Repeat::default();
         self.tip_seen = None;
         self.tip_until = 0.0;
+        self.turns = 0;
+        self.flipped = false;
     }
 
     /// The positions to save, with the open clip's current one.
@@ -408,6 +444,15 @@ impl App {
         if self.ws.viewer.is_none() || self.video.loaded() != self.ws.viewer.as_deref() || self.prefs_window.open || ctx.memory(|m| m.focused().is_some()) {
             return;
         }
+        // ⇧R and ⇧F turn and mirror the picture, as Eagle's image keys do
+        // for a video; they never touch the file.
+        let (rotate, flip) = ctx.input_mut(|i| (i.consume_key(egui::Modifiers::SHIFT, Key::R), i.consume_key(egui::Modifiers::SHIFT, Key::F)));
+        if rotate {
+            self.video.turns = rotate_step(self.video.turns, false);
+        }
+        if flip {
+            self.video.flipped = !self.video.flipped;
+        }
         let mut pressed = Vec::new();
         ctx.input_mut(|i| {
             i.events.retain(|e| match e {
@@ -526,7 +571,19 @@ impl App {
             let area = Rect::from_min_max(Pos2::new(screen.left(), bar.bottom()), screen.max);
             ui.interact(area, ui.scope_id().with("video-bg"), Sense::click());
             self.video_view(ctx, ui, lib, item, area);
-            super::media_view::top_bar(self, ui, item, bar);
+            // Flip and rotate in the bar, as in Eagle's viewer toolbar.
+            let (name_x, mut right) = super::media_view::bar_shell(self, ui, item, bar);
+            let cy = bar.center().y;
+            let tip = "Rotate Left (⇧R)\n⇧-click: Rotate Right";
+            if icon_button(ui, Pos2::new(right - 4.0, cy), ic::ARROW_COUNTER_CLOCKWISE, 17.0, true, tip).clicked() {
+                self.video.turns = rotate_step(self.video.turns, ui.input(|i| i.modifiers.shift));
+            }
+            right -= 30.0;
+            if icon_button(ui, Pos2::new(right - 4.0, cy), ic::FLIP_HORIZONTAL, 17.0, true, "Flip (⇧F)").clicked() {
+                self.video.flipped = !self.video.flipped;
+            }
+            right -= 30.0;
+            super::media_view::bar_name(ui, item, bar, name_x, right);
         }
         true
     }
@@ -562,13 +619,15 @@ impl App {
             (Some(tex), _, _) => tex.size_vec2(),
             _ => Vec2::splat(1.0),
         };
+        // A quarter turn swaps the picture's sides.
+        let natural = if vs.turns % 2 == 1 { vec2(natural.y, natural.x) } else { natural };
         let fit = ((stage.width() - 80.0) / natural.x).min((stage.height() - 40.0) / natural.y).clamp(0.01, if fill { f32::INFINITY } else { 1.0 });
         let shown = Rect::from_center_size(stage.center(), natural * fit);
         match (&vs.texture, v.error()) {
             (_, Some(e)) => {
                 p.text(stage.center(), Align2::CENTER_CENTER, format!("Can't play this video: {e}"), font(13.0), t::p().text_muted);
             }
-            (Some(tex), None) => egui::Image::new((tex.id(), shown.size())).paint_at(ui, shown),
+            (Some(tex), None) => paint_turned(ui, tex, shown, corner_uvs(vs.turns, vs.flipped)),
             (None, None) => {
                 p.text(stage.center(), Align2::CENTER_CENTER, "Loading…", font(13.0), t::p().text_muted);
                 ctx.request_repaint_after(std::time::Duration::from_millis(16));
@@ -722,7 +781,14 @@ impl App {
         x += 22.0;
         p.text(Pos2::new(x, cy), Align2::LEFT_CENTER, logic::time_label(pos, duration), mono(12.5), t::p().text_value);
 
-        let vol = Rect::from_min_size(Pos2::new(right - 90.0, cy - 10.0), vec2(90.0, 20.0));
+        // Full screen at the right end; Eagle's button starts its full-screen
+        // presentation, falcon's fills the screen with the window.
+        let fs = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
+        let (glyph, tip) = if fs { (ic::CORNERS_IN, "Exit Full Screen") } else { (ic::CORNERS_OUT, "Full Screen") };
+        if icon_button(ui, Pos2::new(right - 6.0, cy), glyph, 17.0, true, tip).clicked() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!fs));
+        }
+        let vol = Rect::from_min_size(Pos2::new(right - 34.0 - 90.0, cy - 10.0), vec2(90.0, 20.0));
         let mut level = if vs.muted { 0.0 } else { vs.volume };
         let mut vui = ui.new_child(egui::UiBuilder::new().max_rect(vol));
         vui.spacing_mut().slider_width = 90.0;
@@ -953,6 +1019,30 @@ mod tests {
         assert_eq!(marker_at(0.0, &[], 100.0, 0.0, 1000.0, 5.0), None);
         // A clip of unknown length puts every marker at the start.
         assert_eq!(marker_at(1.0, &times, 0.0, 0.0, 1000.0, 5.0), Some(0));
+    }
+
+    #[test]
+    fn rotate_turns_anticlockwise_unless_shifted() {
+        assert_eq!(rotate_step(0, false), 3);
+        assert_eq!(rotate_step(3, false), 2);
+        assert_eq!(rotate_step(0, true), 1);
+        assert_eq!(rotate_step(3, true), 0);
+    }
+
+    #[test]
+    fn turned_and_mirrored_corners() {
+        let p = |u: f32, v: f32| Pos2::new(u, v);
+        assert_eq!(corner_uvs(0, false), [p(0.0, 0.0), p(1.0, 0.0), p(1.0, 1.0), p(0.0, 1.0)]);
+        // A clockwise quarter turn puts the picture's bottom left at the top left.
+        assert_eq!(corner_uvs(1, false)[0], p(0.0, 1.0));
+        assert_eq!(corner_uvs(2, false)[0], p(1.0, 1.0));
+        assert_eq!(corner_uvs(3, false)[0], p(1.0, 0.0));
+        // Mirroring swaps left and right.
+        assert_eq!(corner_uvs(0, true), [p(1.0, 0.0), p(0.0, 0.0), p(0.0, 1.0), p(1.0, 1.0)]);
+        // Mirrored then turned: what was the top right ends at the top right
+        // after a half turn of the mirrored picture (rotate(180) scaleX(-1)
+        // is a vertical flip).
+        assert_eq!(corner_uvs(2, true), [p(0.0, 1.0), p(1.0, 1.0), p(1.0, 0.0), p(0.0, 0.0)]);
     }
 
     #[test]
