@@ -55,6 +55,36 @@ pub struct Prefs {
     pub sidebar_double_click: SidebarDoubleClick,
     /// Eagle's `sidebar.*`: which sidebar sections are shown.
     pub sidebar: SidebarSections,
+    /// Eagle's `habits.doubleclick`: whether double-clicking an item opens
+    /// it in falcon's viewer or in its default app.
+    pub double_click: DoubleClick,
+    /// Eagle's `habits.keyspace`: what the viewer key (Space unless
+    /// rebound) does outside the viewer.
+    pub space: SpaceKey,
+}
+
+/// What double-clicking an item in the grid does.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum DoubleClick {
+    /// Opens it in falcon's viewer (Eagle's default).
+    #[default]
+    Viewer,
+    /// Opens it in its default app.
+    External,
+}
+
+/// What Space does in the grid.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum SpaceKey {
+    /// Opens the selected item in falcon's viewer (Eagle's default).
+    #[default]
+    Preview,
+    /// Shows the selected items in macOS Quick Look.
+    QuickLook,
+    /// Scrolls the grid down a page.
+    Scroll,
 }
 
 /// What double-clicking a sidebar folder does.
@@ -117,6 +147,8 @@ impl Default for Prefs {
             sidebar_counts: true,
             sidebar_double_click: SidebarDoubleClick::default(),
             sidebar: SidebarSections::default(),
+            double_click: DoubleClick::default(),
+            space: SpaceKey::default(),
         }
     }
 }
@@ -612,11 +644,24 @@ fn sidebar(p: &mut Page, d: &mut Draft) {
 
 /// Controls: what the mouse and the keyboard do.
 fn controls(p: &mut Page, d: &mut Draft) {
-    p.block("Mouse", &["hover", "zoom button", "cards", "double click", "middle button", "wheel", "scroll"], |ui| {
+    p.block("Mouse", &["hover", "zoom button", "cards", "double click", "open", "default app", "wheel", "scroll"], |ui| {
         ui.label("Zoom button on hovered cards");
         ui.radio_value(&mut d.prefs.hover_zoom, true, "Show");
         ui.radio_value(&mut d.prefs.hover_zoom, false, "Hide");
         note(ui, "Holding Z shows the preview either way.");
+        ui.add_space(6.0);
+        ui.label("Double-clicking an item");
+        ui.radio_value(&mut d.prefs.double_click, DoubleClick::Viewer, "Opens it in falcon");
+        ui.radio_value(&mut d.prefs.double_click, DoubleClick::External, "Opens it in its default app");
+    });
+    p.block("Keyboard", &["space", "spacebar", "preview", "quick look", "scroll"], |ui| {
+        ui.label("Space in the grid");
+        ui.radio_value(&mut d.prefs.space, SpaceKey::Preview, "Opens the viewer");
+        if cfg!(target_os = "macos") {
+            ui.radio_value(&mut d.prefs.space, SpaceKey::QuickLook, "Shows Quick Look");
+        }
+        ui.radio_value(&mut d.prefs.space, SpaceKey::Scroll, "Scrolls down a page");
+        note(ui, "In the viewer Space still closes it, or plays and pauses media.");
     });
 }
 
@@ -790,6 +835,15 @@ mod tests {
         let p: Prefs = serde_json::from_str(r#"{"sidebar":{"folders":false},"sidebar_double_click":"rename"}"#).unwrap();
         assert!(!p.sidebar.folders && p.sidebar.quick_access);
         assert_eq!(p.sidebar_double_click, SidebarDoubleClick::Rename);
+    }
+
+    #[test]
+    fn control_defaults() {
+        let p = Prefs::default();
+        assert_eq!(p.double_click, DoubleClick::Viewer, "Eagle's doubleclick defaults to internal");
+        assert_eq!(p.space, SpaceKey::Preview, "Eagle's keyspace defaults to preview");
+        let p: Prefs = serde_json::from_str(r#"{"double_click":"external","space":"quicklook"}"#).unwrap();
+        assert_eq!((p.double_click, p.space), (DoubleClick::External, SpaceKey::QuickLook));
     }
 
     #[test]

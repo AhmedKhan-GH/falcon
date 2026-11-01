@@ -1357,7 +1357,11 @@ impl App {
             C::RevealInFinder => self.open_keys(false),
             C::SelectAll => self.ws.selected = self.ws.order.clone(),
             C::Viewer if viewer => self.ws.viewer = None,
-            C::Viewer => self.ws.viewer = self.ws.selected.first().cloned(),
+            C::Viewer => match self.prefs.space {
+                crate::prefs::SpaceKey::Preview => self.ws.viewer = self.ws.selected.first().cloned(),
+                crate::prefs::SpaceKey::QuickLook => self.quick_look(),
+                crate::prefs::SpaceKey::Scroll => self.ws.scroll = Some(crate::shortcuts::Scroll::PageDown),
+            },
             C::Trash => {
                 let ids = self.ws.selected.clone();
                 if self.ws.scope == Scope::Trash {
@@ -3057,6 +3061,7 @@ impl App {
         let mut jobs = Vec::new();
         let mut clicked: Option<(String, Modifiers)> = None;
         let mut opened: Option<String> = None;
+        let mut double_clicked: Option<String> = None;
         let mut bg_clicked = false;
         let mut hovered: Option<(&Item, Rect, bool)> = None;
         let manual = self.manual_folder(lib);
@@ -3091,7 +3096,7 @@ impl App {
                     clicked = Some((item.id.clone(), ui.input(|i| i.modifiers)));
                 }
                 if resp.double_clicked() {
-                    opened = Some(item.id.clone());
+                    double_clicked = Some(item.id.clone());
                 }
                 let selected = self.ws.selected.contains(&item.id);
                 match layout {
@@ -3119,7 +3124,11 @@ impl App {
         } else if bg_clicked {
             self.ws.selected.clear();
         }
-        if let Some(id) = opened {
+        if let Some(id) = &double_clicked
+            && self.prefs.double_click == crate::prefs::DoubleClick::External
+        {
+            crate::open_with::open_default(&open_ui::originals(lib, std::slice::from_ref(id)));
+        } else if let Some(id) = opened.or(double_clicked) {
             self.ws.viewer = Some(id);
         }
     }

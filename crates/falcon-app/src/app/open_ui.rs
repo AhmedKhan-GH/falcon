@@ -46,6 +46,14 @@ impl App {
 
     /// ⇧↩ and ⌘↩: open the viewer's item, or the selection, in its default
     /// app (`default`) or show it in Finder.
+    /// Shows the selected items' originals in Quick Look (Space, when
+    /// Preferences says so).
+    pub(super) fn quick_look(&mut self) {
+        let Some(shared) = self.ws.lib.clone() else { return };
+        let files = originals(&super::lock(&shared), &self.ws.selected);
+        open_with::quick_look(&files);
+    }
+
     pub(super) fn open_keys(&mut self, default: bool) {
         let Some(shared) = self.ws.lib.clone() else { return };
         let files = {

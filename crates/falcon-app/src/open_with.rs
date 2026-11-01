@@ -111,6 +111,20 @@ pub fn open_in(app: &Path, files: &[PathBuf]) {
     }
 }
 
+/// Shows the files in macOS Quick Look (`qlmanage -p`), which stays open
+/// until closed. Never reads the files itself.
+pub fn quick_look(files: &[PathBuf]) {
+    if files.is_empty() || !cfg!(target_os = "macos") {
+        return;
+    }
+    let mut args: Vec<std::ffi::OsString> = vec!["-p".into()];
+    args.extend(files.iter().take(MAX_OPEN).map(|f| f.as_os_str().to_owned()));
+    std::thread::spawn(move || {
+        use std::process::Stdio;
+        let _ = std::process::Command::new("/usr/bin/qlmanage").args(args).stdout(Stdio::null()).stderr(Stdio::null()).status();
+    });
+}
+
 /// Shows the files in Finder.
 pub fn reveal(files: &[PathBuf]) {
     if !files.is_empty() {
