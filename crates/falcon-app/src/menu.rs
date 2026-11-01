@@ -54,6 +54,10 @@ pub struct State {
     pub sidebar: bool,
     pub inspector: bool,
     pub filter: bool,
+    /// The layout panel's name, info and comment count switches.
+    pub show_name: bool,
+    pub show_info: bool,
+    pub show_comments: bool,
     pub fullscreen: bool,
     /// Open libraries.
     pub libraries: usize,
@@ -128,6 +132,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::RotateLeft => s.library && s.rotatable,
         C::Crop => s.library && s.croppable,
         C::Documentation => s.docs,
+        C::ToggleName | C::ToggleInfo | C::ToggleComments => s.library,
         C::Player(_) => false,
     }
 }
@@ -143,6 +148,9 @@ pub enum Check {
     Filter,
     Viewer,
     FullScreen,
+    Name,
+    Info,
+    Comments,
 }
 
 impl Check {
@@ -156,6 +164,9 @@ impl Check {
             Check::Filter => s.filter,
             Check::Viewer => s.viewer,
             Check::FullScreen => s.fullscreen,
+            Check::Name => s.show_name,
+            Check::Info => s.show_info,
+            Check::Comments => s.show_comments,
         }
     }
 }
@@ -296,6 +307,10 @@ pub static MENUS: &[(&str, &[Entry])] = &[
             checked("Justified", Command::LayoutJustified, Check::Layout(Layout::Justified)),
             checked("Grid", Command::LayoutGrid, Check::Layout(Layout::Grid)),
             checked("List", Command::LayoutList, Check::Layout(Layout::List)),
+            SEP,
+            checked("Show Name", Command::ToggleName, Check::Name),
+            checked("Show Item Info", Command::ToggleInfo, Check::Info),
+            checked("Show Comment Count", Command::ToggleComments, Check::Comments),
             SEP,
             item("Scroll to Top", Command::Scroll(Scroll::Top)),
             item("Scroll to Bottom", Command::Scroll(Scroll::Bottom)),
@@ -857,5 +872,15 @@ mod tests {
         assert!(enabled(Command::SwitchLibrary, &s));
         assert!(!enabled(Command::NewFolder, &s));
         assert!(!enabled(Command::NextLibrary, &s));
+    }
+
+    #[test]
+    fn caption_switches_carry_checkmarks() {
+        let s = State { show_name: true, show_info: false, ..grid(0) };
+        assert!(Check::Name.on(&s));
+        assert!(!Check::Info.on(&s));
+        assert!(!Check::Comments.on(&s));
+        assert!(enabled(Command::ToggleInfo, &s));
+        assert!(!enabled(Command::ToggleInfo, &State::default()), "needs a library");
     }
 }

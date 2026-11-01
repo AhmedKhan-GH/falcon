@@ -97,6 +97,10 @@ pub enum Command {
     ParentFolder,
     /// Expand or collapse every folder in the sidebar.
     ToggleFolders,
+    /// The layout panel's caption and badge switches (Eagle's ⌥⌘4–⌥⌘6).
+    ToggleName,
+    ToggleInfo,
+    ToggleComments,
     // Menu bar entries with no row in `TABLE` (no rebindable key).
     Undo,
     Redo,
@@ -325,6 +329,10 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::CopyLink, id: "edit.copy.sourceurl", group: "Copy", label: "Copy source URLs", default: None, aliases: &[] },
     Spec { cmd: Command::CopyThumbnail, id: "edit.copy.thumbnail", group: "Copy", label: "Copy thumbnail", default: None, aliases: &[] },
     Spec { cmd: Command::CopyBase64, id: "edit.copy.base64", group: "Copy", label: "Copy as Base64", default: None, aliases: &[] },
+    // The layout panel's switches (Eagle's `view.toggle.list*`).
+    Spec { cmd: Command::ToggleName, id: "view.toggle.listname", group: "View", label: "Show or hide names", default: k(CMD_ALT, Key::Num4), aliases: &[] },
+    Spec { cmd: Command::ToggleInfo, id: "view.toggle.listmetas", group: "View", label: "Show or hide item info", default: k(CMD_ALT, Key::Num5), aliases: &[] },
+    Spec { cmd: Command::ToggleComments, id: "view.toggle.listannotation", group: "View", label: "Show or hide comment counts", default: k(CMD_ALT, Key::Num6), aliases: &[] },
 ];
 
 /// Keys that cannot be rebound, listed in the Shortcuts section.
@@ -1196,5 +1204,15 @@ mod tests {
         assert_eq!(p(&[Key::A], none), None);
         // Player keys never come out of the global resolver.
         assert_eq!(keys.resolve(Key::N, none), None);
+    }
+
+    #[test]
+    fn caption_switch_keys_are_eagles() {
+        let keys = Shortcuts::default();
+        assert_eq!(keys.resolve(Key::Num4, CMD_ALT), Some(Command::ToggleName));
+        assert_eq!(keys.resolve(Key::Num5, CMD_ALT), Some(Command::ToggleInfo));
+        assert_eq!(keys.resolve(Key::Num6, CMD_ALT), Some(Command::ToggleComments));
+        // ⌥4 alone is still the List layout.
+        assert_eq!(keys.resolve(Key::Num4, ALT), Some(Command::LayoutList));
     }
 }

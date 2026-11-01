@@ -1361,6 +1361,9 @@ impl App {
             sidebar: self.show_sidebar,
             inspector: self.show_inspector,
             filter: self.ws.show_filter,
+            show_name: self.display.show_name,
+            show_info: self.display.show_info,
+            show_comments: self.display.comment_badge,
             libraries: self.others.len(),
         }
     }
@@ -1617,6 +1620,9 @@ impl App {
                 }
             }
             C::Player(_) => {}
+            C::ToggleName => self.display.show_name = !self.display.show_name,
+            C::ToggleInfo => self.display.show_info = !self.display.show_info,
+            C::ToggleComments => self.display.comment_badge = !self.display.comment_badge,
         }
     }
 
