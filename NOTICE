@@ -9,6 +9,11 @@ Third-party material:
   copyright (c) 2023 Phosphor Icons. See crates/falcon-app/assets/PHOSPHOR-LICENSE-MIT.
 - The screenshots in docs/images show public-domain artworks from the
   Art Institute of Chicago, released under CC0. See ATTRIBUTION.md.
+- ufbx 0.18.0 (https://github.com/ufbx/ufbx), the FBX reader, MIT license
+  (or public domain), copyright (c) 2020 Samuli Raivio. Compiled from the
+  C source vendored by the ufbx Rust crate.
+- ufbx Rust crate 0.8.0 (https://github.com/ufbx/ufbx-rust), MIT OR PDDL-1.0,
+  copyright (c) Samuli Raivio.
 
 "Eagle" is a trademark of its respective owner. Falcon is not affiliated
 with, endorsed by or sponsored by Eagle or its developers.

@@ -51,3 +51,12 @@ The screenshots in this repository show falcon at work on a demo library of publ
 | Just Dessert | William Michael Harnett | 1891 | [artic.edu](https://www.artic.edu/artworks/44065) |
 | Fish (Still Life) | Édouard Manet | 1864 | [artic.edu](https://www.artic.edu/artworks/44892) |
 | Sea View, Calm Weather (Vue de mer, temps calme) | Édouard Manet | 1864 | [artic.edu](https://www.artic.edu/artworks/81535) |
+
+# Third-party code
+
+Libraries built into falcon beyond ordinary Rust crates from crates.io, with their versions, licences and sources.
+
+| Component | Version | Licence | Source | Used for |
+|---|---|---|---|---|
+| ufbx (C library, vendored by the `ufbx` crate and compiled with `cc`) | 0.18.0 | MIT (or public domain, at the user's choice) | https://github.com/ufbx/ufbx | Reading FBX models (`crates/falcon-library/src/model3d/fbx.rs`) |
+| `ufbx` Rust bindings | 0.8.0 | MIT OR PDDL-1.0 | https://github.com/ufbx/ufbx-rust | Rust interface to the ufbx C library |

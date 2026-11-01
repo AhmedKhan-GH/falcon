@@ -268,13 +268,26 @@ What Eagle does, from the `url|html|mhtml` branch of the detail view in `index.h
 
 ## 3D model viewer
 
-Opening an obj, stl, ply, glb, gltf or 3mf item shows the model in an interactive viewer in the central panel, like the other viewers, with the shared bar (panels, back, counter, open, previous and next; Esc and ← → work as usual). The readers and geometry are `crates/falcon-library/src/model3d/` (one file per format, `geom.rs` for normals, edges, details and lighting, `math.rs` for vectors and matrices). The camera maths are `crates/falcon-app/src/logic/viewer3d.rs`, the viewer's state and vertex data `crates/falcon-app/src/model3d/`, the wgpu drawing `model3d/gpu.rs` and the viewer itself `ui/viewer/model.rs`. fbx, 3ds, dae and ifc are not read, so those items keep their QuickLook still, as does any model that fails to read. Without the wgpu renderer every 3D item shows its still.
+Opening an obj, stl, ply, glb, gltf, 3mf or fbx item shows the model in an interactive viewer in the central panel, like the other viewers, with the shared bar (panels, back, counter, open, previous and next; Esc and ← → work as usual). The readers and geometry are `crates/falcon-library/src/model3d/` (one file per format, `geom.rs` for normals, edges, details and lighting, `math.rs` for vectors and matrices). The camera maths are `crates/falcon-app/src/logic/viewer3d.rs`, the viewer's state and vertex data `crates/falcon-app/src/model3d/`, the wgpu drawing `model3d/gpu.rs` and the viewer itself `ui/viewer/model.rs`. 3ds, dae and ifc are not read, so those items keep their QuickLook still, as does any model that fails to read. Without the wgpu renderer every 3D item shows its still.
+
+### FBX
+
+FBX files, binary and ASCII, are read by `model3d/fbx.rs` with the ufbx C library (MIT, https://github.com/ufbx/ufbx) through the `ufbx` crate, which compiles the vendored C source with `cc`.
+
+- Every node with a mesh is drawn, with its world transform applied. Each material the node uses becomes one mesh in the tree, named after the node.
+- Polygons are split into triangles with ufbx's triangulation, which handles concave faces. Normals come from the file, or ufbx generates them when the file has none.
+- Each material gives its diffuse colour (times the diffuse factor) and opacity. Textures and UVs are not read, because falcon's model has no texture path, so a textured material shows its colour only.
+- The scene is converted to the viewer's convention: right-handed, Y up. Sizes are in centimetres, the FBX default unit. The file's `UnitScaleFactor` is applied, so a model saved in metres still reads in centimetres, and a Z-up file stands upright.
+- Skinned meshes are shown in their bind pose. Blend shapes, animation, cameras, lights, NURBS, vertex colours and external files are skipped.
+- A broken file is an error, never a crash. ufbx's memory is capped (1 GiB while parsing, 2 GiB for the scene), node nesting is limited to 256 levels and output to 50 million vertices. The file is always parsed as FBX, so an OBJ renamed to .fbx is refused. An FBX without triangles is an error, like the other formats.
+- The thumbnail at import, the Details panel, the mesh tree, measuring, snapshots and export work as for the other formats.
+- The tests build a small box FBX in both encodings in code (ufbx can't write files) and check the triangles, material, transform, generated normals, unit scale, Z-up conversion, empty scenes and truncated or corrupt files.
 
 What Eagle does: it embeds the Online 3D Viewer in an iframe (`index.html` near line 1443, `model-viewer/`) and forwards Esc, ← and → to the main window. The rows below come from that viewer's behaviour.
 
 | Question | Eagle | Seen or inferred | falcon |
 |---|---|---|---|
-| Formats | fbx, obj, 3ds, 3mf, dae, ifc, ply, stl, glb | Seen | obj (with MTL colours), stl (ASCII and binary), ply (ASCII and binary, vertex colours), glb and gltf (positions, normals, indices, vertex colours, base colour; no textures), 3mf (meshes, components, base materials and colour groups). The rest show their still |
+| Formats | fbx, obj, 3ds, 3mf, dae, ifc, ply, stl, glb | Seen | obj (with MTL colours), stl (ASCII and binary), ply (ASCII and binary, vertex colours), glb and gltf (positions, normals, indices, vertex colours, base colour; no textures), 3mf (meshes, components, base materials and colour groups), fbx (binary and ASCII, all mesh nodes, material colours, unit and axis conversion; no textures, bind pose only). The rest show their still |
 | Opening view | Y up, the eye above, in front and to the left (direction (−1.5, 2, 3)), 45° field of view, fitted so the bounding sphere fills the shorter side | Seen | Same |
 | Mouse | Left drag orbits (half a degree per pixel), ⇧ or right or middle drag pans (0.001 of the distance per pixel), ⌃ drag zooms, the wheel moves a tenth of the distance per step | Seen | Same, plus a trackpad pinch. Right click without dragging opens the item menu |
 | Orbit | Fixed up vector by default, never past straight up or down; free orbit as an option; flip up vector; Y or Z up | Seen | Same, in the settings menu. Changing the up axis goes back to the opening view |

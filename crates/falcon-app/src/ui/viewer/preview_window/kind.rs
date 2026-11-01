@@ -90,7 +90,8 @@ mod tests {
         assert_eq!(kind_of("OTF"), Kind::Font);
         assert_eq!(kind_of("glb"), Kind::Model);
         assert_eq!(kind_of("STL"), Kind::Model);
-        assert_eq!(kind_of("fbx"), Kind::Picture, "3D formats falcon can't read show their still");
+        assert_eq!(kind_of("FBX"), Kind::Model);
+        assert_eq!(kind_of("dae"), Kind::Picture, "3D formats falcon can't read show their still");
         assert_eq!(kind_of("url"), Kind::Web);
         assert_eq!(kind_of("html"), Kind::Web);
         assert_eq!(kind_of(""), Kind::Picture);

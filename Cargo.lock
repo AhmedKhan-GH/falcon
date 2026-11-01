@@ -1718,6 +1718,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "ttf-parser",
+ "ufbx",
  "unicode-normalization",
  "webp",
  "zip",
@@ -5600,6 +5601,15 @@ dependencies = [
  "memoffset",
  "tempfile",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "ufbx"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "006f50cbf54d8b0559d17f4f3ec5b576546493faaaf7f9c1e107ca400980e1c2"
+dependencies = [
+ "cc",
 ]
 
 [[package]]
