@@ -542,6 +542,7 @@
   "Enter password": "輸入密碼",
   "Enter the new password again": "再次輸入新密碼",
   "Enter the password again": "再次輸入密碼",
+  "Enter the password of “{name}” to put the items in it": "輸入「{name}」的密碼以將項目放入其中",
   "Error Logs": "錯誤記錄",
   "Even Spreads": "偶數跨頁",
   "Every item has a tag.": "每個項目都有標籤。",

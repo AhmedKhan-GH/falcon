@@ -13,6 +13,7 @@ pub(crate) mod inspector;
 pub(crate) mod viewer;
 pub(crate) mod grid;
 pub(crate) mod drop_hint;
+pub(crate) mod drop_unlock;
 pub(crate) mod toolbar;
 pub(crate) mod filter_bar;
 pub(crate) mod dialogs;

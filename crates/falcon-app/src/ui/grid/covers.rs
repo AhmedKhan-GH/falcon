@@ -250,10 +250,8 @@ impl App {
             ui.painter().rect_filled(target, radius, t::p().primary.gamma_multiply(0.25));
             ui.painter().rect_stroke(target, radius, Stroke::new(1.5, t::p().primary), StrokeKind::Inside);
         }
-        if let Some(d) = resp.dnd_release_payload::<crate::app::DragItems>()
-            && let Some(op) = logic::folder_drop(&self.ws.scope, &child.id, ui.input(|i| i.modifiers.alt))
-        {
-            self.push_bulk(d.0.len(), Action::DropOnFolder(d.0.clone(), child.id.clone(), op));
+        if let Some(d) = resp.dnd_release_payload::<crate::app::DragItems>() {
+            self.drop_items_on_folder(ui, lib, &d.0, &child.id);
         }
         let shut = crate::organize::is_shut(child, &self.ws.org.unlocked);
         resp.context_menu(|ui| {

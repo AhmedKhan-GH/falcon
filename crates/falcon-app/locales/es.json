@@ -577,6 +577,7 @@
   "Enter password": "Introduce la contraseña",
   "Enter the new password again": "Vuelve a introducir la contraseña nueva",
   "Enter the password again": "Vuelve a introducir la contraseña",
+  "Enter the password of “{name}” to put the items in it": "Introduce la contraseña de «{name}» para añadirle los elementos",
   "Error Logs": "Registros de errores",
   "Even Spreads": "Páginas enfrentadas pares",
   "Every item has a tag.": "Todos los elementos tienen etiqueta.",

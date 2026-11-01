@@ -93,6 +93,9 @@ pub(crate) struct OrgState {
     pub tag_scroll: Option<f32>,
     /// The merge dialog: the tags and the name typed so far.
     pub merge: Option<(Vec<String>, String)>,
+    /// Items dropped onto a locked folder, waiting for its password
+    /// (`ui/drop_unlock.rs`).
+    pub drop_unlock: Option<crate::ui::drop_unlock::DropUnlock>,
 }
 
 impl OrgState {
@@ -1723,6 +1726,7 @@ impl App {
         }
         self.auto_tag_dialog(ctx, lib);
         self.password_dialog(ctx, lib);
+        self.drop_unlock_dialog(ctx, lib);
         self.filter_name_dialog(ctx, lib);
         if let Some((parent, sort)) = self.ws.org.sort_confirm.clone() {
             let question = match (&parent, sort.all_levels) {

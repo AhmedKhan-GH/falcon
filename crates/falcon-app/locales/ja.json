@@ -542,6 +542,7 @@
   "Enter password": "パスワードを入力",
   "Enter the new password again": "新しいパスワードをもう一度入力",
   "Enter the password again": "パスワードをもう一度入力",
+  "Enter the password of “{name}” to put the items in it": "項目を入れるには「{name}」のパスワードを入力してください",
   "Error Logs": "エラーログ",
   "Even Spreads": "偶数見開き",
   "Every item has a tag.": "すべてのアイテムにタグが付いています。",

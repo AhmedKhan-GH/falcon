@@ -542,6 +542,7 @@
   "Enter password": "输入密码",
   "Enter the new password again": "再次输入新密码",
   "Enter the password again": "再次输入密码",
+  "Enter the password of “{name}” to put the items in it": "输入“{name}”的密码以将项目放入其中",
   "Error Logs": "错误日志",
   "Even Spreads": "偶数跨页",
   "Every item has a tag.": "每个项目都有标签。",

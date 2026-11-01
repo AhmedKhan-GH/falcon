@@ -157,6 +157,9 @@ The core words, so every file uses one term for one thing.
   Developer and Auto-Import panes' long explanations, and the Russian
   "Label: N" phrasing used where agreement with a count is awkward.
 
+- "Enter the password of “{name}” to put the items in it", the prompt when
+  items are dropped onto a locked folder (machine-written).
+
 ## Reviewed
 
 Nothing yet.

@@ -542,6 +542,7 @@
   "Enter password": "비밀번호 입력",
   "Enter the new password again": "새 비밀번호를 다시 입력",
   "Enter the password again": "비밀번호를 다시 입력",
+  "Enter the password of “{name}” to put the items in it": "항목을 넣으려면 '{name}'의 암호를 입력하세요",
   "Error Logs": "오류 로그",
   "Even Spreads": "짝수 펼침면",
   "Every item has a tag.": "모든 항목에 태그가 있습니다.",

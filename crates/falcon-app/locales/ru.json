@@ -612,6 +612,7 @@
   "Enter password": "Введите пароль",
   "Enter the new password again": "Введите новый пароль ещё раз",
   "Enter the password again": "Введите пароль ещё раз",
+  "Enter the password of “{name}” to put the items in it": "Введите пароль папки «{name}», чтобы поместить в неё объекты",
   "Error Logs": "Журналы ошибок",
   "Even Spreads": "Развороты с чётных",
   "Every item has a tag.": "У каждого элемента есть тег.",

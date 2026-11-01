@@ -577,6 +577,7 @@
   "Enter password": "Passwort eingeben",
   "Enter the new password again": "Neues Passwort erneut eingeben",
   "Enter the password again": "Passwort erneut eingeben",
+  "Enter the password of “{name}” to put the items in it": "Geben Sie das Passwort von „{name}“ ein, um die Objekte hineinzulegen",
   "Error Logs": "Fehlerprotokolle",
   "Even Spreads": "Gerade Doppelseiten",
   "Every item has a tag.": "Jedes Objekt hat einen Tag.",

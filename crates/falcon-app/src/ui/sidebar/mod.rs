@@ -440,10 +440,8 @@ impl App {
                     self.quick_drop(ui, lib, &resp, id);
                     if kind == "folder" {
                         drop_highlight(ui, &resp, 0);
-                        if let Some(d) = resp.dnd_release_payload::<DragItems>()
-                            && let Some(op) = logic::folder_drop(&self.ws.scope, id, ui.input(|i| i.modifiers.alt))
-                        {
-                            self.push_bulk(d.0.len(), Action::DropOnFolder(d.0.clone(), id.to_string(), op));
+                        if let Some(d) = resp.dnd_release_payload::<DragItems>() {
+                            self.drop_items_on_folder(ui, lib, &d.0, id);
                         }
                     }
                     if resp.clicked() {
@@ -664,10 +662,8 @@ impl App {
             resp.dnd_set_drag_payload(DragFolder(f.id.clone()));
         }
         drop_highlight(ui, &resp, depth);
-        if let Some(d) = resp.dnd_release_payload::<DragItems>()
-            && let Some(op) = logic::folder_drop(&self.ws.scope, &f.id, ui.input(|i| i.modifiers.alt))
-        {
-            self.push_bulk(d.0.len(), Action::DropOnFolder(d.0.clone(), f.id.clone(), op));
+        if let Some(d) = resp.dnd_release_payload::<DragItems>() {
+            self.drop_items_on_folder(ui, lib, &d.0, &f.id);
         }
         self.folder_drop(ui, lib, &resp, f, depth);
         let pinned = cx.quick.contains(&f.id);

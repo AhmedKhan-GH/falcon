@@ -75,9 +75,9 @@ pub fn folder_counts(items: &[Item]) -> HashMap<String, usize> {
 /// `classifySelected`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FolderDrop {
-    /// Take the items out of this folder (the open one) and put them in
-    /// the target.
-    Move(String),
+    /// Take the items out of these folders (the open one, or every folder
+    /// picked in the sidebar) and put them in the target.
+    Move(Vec<String>),
     /// Put the items in the target as well, keeping their other folders.
     Add,
 }
@@ -86,10 +86,20 @@ pub enum FolderDrop {
 /// folder a drop moves the items to the target and ⌥ adds them instead;
 /// from every other view (All, a tag, a smart folder, the Trash…) it adds.
 /// Dropping on the folder that is open changes nothing (`None`).
+#[cfg(test)]
 pub fn folder_drop(scope: &Scope, target: &str, alt: bool) -> Option<FolderDrop> {
+    folder_drop_picked(scope, &[], target, alt)
+}
+
+/// [`folder_drop`] while `picked` folders are selected in the sidebar
+/// (⌘- or ⇧-clicks). With two or more picked, a drop without ⌥ takes the
+/// items out of every picked folder, as Eagle does with its selected
+/// folders, whichever view is open.
+pub fn folder_drop_picked(scope: &Scope, picked: &[String], target: &str, alt: bool) -> Option<FolderDrop> {
     match scope {
+        _ if picked.len() > 1 && !alt => Some(FolderDrop::Move(picked.to_vec())),
         Scope::Folder(open) if open == target => None,
-        Scope::Folder(open) if !alt => Some(FolderDrop::Move(open.clone())),
+        Scope::Folder(open) if !alt => Some(FolderDrop::Move(vec![open.clone()])),
         _ => Some(FolderDrop::Add),
     }
 }
@@ -101,8 +111,8 @@ pub fn folder_drop(scope: &Scope, target: &str, alt: bool) -> Option<FolderDrop>
 pub fn apply_folder_drop(item: &mut Item, target: &str, drop: &FolderDrop, auto_tags: &[String]) -> bool {
     let before = (item.folders.clone(), item.is_deleted, item.tags.len());
     falcon_library::autotag::append_new(&mut item.tags, auto_tags);
-    if let FolderDrop::Move(open) = drop {
-        item.folders.retain(|f| f != open);
+    if let FolderDrop::Move(from) = drop {
+        item.folders.retain(|f| !from.contains(f));
     }
     if !item.folders.iter().any(|f| f == target) {
         item.folders.push(target.to_string());
@@ -245,7 +255,7 @@ mod folder_drop_tests {
     #[test]
     fn a_folder_moves_and_alt_adds() {
         let open = Scope::Folder("A".into());
-        assert_eq!(folder_drop(&open, "B", false), Some(FolderDrop::Move("A".into())));
+        assert_eq!(folder_drop(&open, "B", false), Some(FolderDrop::Move(vec!["A".into()])));
         assert_eq!(folder_drop(&open, "B", true), Some(FolderDrop::Add));
     }
 
@@ -267,10 +277,10 @@ mod folder_drop_tests {
     #[test]
     fn applying_a_move() {
         let mut it = item(&["A", "C"], false);
-        assert!(apply_folder_drop(&mut it, "B", &FolderDrop::Move("A".into()), &[]));
+        assert!(apply_folder_drop(&mut it, "B", &FolderDrop::Move(vec!["A".into()]), &[]));
         assert_eq!(it.folders, ["C", "B"]);
         // Already there and not in the open folder: nothing to write.
-        assert!(!apply_folder_drop(&mut it, "B", &FolderDrop::Move("A".into()), &[]));
+        assert!(!apply_folder_drop(&mut it, "B", &FolderDrop::Move(vec!["A".into()]), &[]));
         assert_eq!(it.folders, ["C", "B"]);
     }
 
@@ -299,8 +309,22 @@ mod folder_drop_tests {
     }
 
     #[test]
+    fn several_picked_folders_all_lose_the_items() {
+        let picked = vec!["A".to_string(), "C".to_string()];
+        let open = Scope::Folder("A".into());
+        assert_eq!(folder_drop_picked(&open, &picked, "B", false), Some(FolderDrop::Move(picked.clone())));
+        // ⌥ still only adds; one picked folder is the plain rule.
+        assert_eq!(folder_drop_picked(&open, &picked, "B", true), Some(FolderDrop::Add));
+        assert_eq!(folder_drop_picked(&open, &picked[..1], "A", false), None);
+        // Dropping on one of the picked folders: out of the others, kept in it.
+        let mut it = item(&["A", "C", "D"], false);
+        assert!(apply_folder_drop(&mut it, "C", &FolderDrop::Move(picked), &[]));
+        assert_eq!(it.folders, ["D", "C"]);
+    }
+
+    #[test]
     fn notices() {
-        assert_eq!(folder_drop_lead(&FolderDrop::Move("A".into()), 3), "Moved 3 items to");
+        assert_eq!(folder_drop_lead(&FolderDrop::Move(vec!["A".into()]), 3), "Moved 3 items to");
         assert_eq!(folder_drop_lead(&FolderDrop::Add, 1), "Added 1 item to");
     }
 }
