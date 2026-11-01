@@ -279,7 +279,7 @@ impl App {
 
     pub(crate) fn open_preferences(&mut self) {
         let panels = crate::prefs::Panels { sidebar: self.show_sidebar, inspector: self.show_inspector };
-        self.prefs_window.show_with(crate::prefs::Draft { prefs: self.prefs.clone(), panels, keys: self.shortcuts.clone() });
+        self.prefs_window.show_with(crate::prefs::Draft { prefs: self.prefs.clone(), panels, keys: self.shortcuts.clone(), launch_at_login: crate::login_item::status().is_on() });
         self.prefs_window.library = self.ws.root.clone();
     }
 
@@ -316,6 +316,12 @@ impl App {
         self.show_sidebar = d.panels.sidebar;
         self.show_inspector = d.panels.inspector;
         self.shortcuts = d.keys;
+        if d.launch_at_login != crate::login_item::status().is_on() {
+            if let Err(e) = crate::login_item::set(d.launch_at_login) {
+                self.flash_error(format!("Could not change opening at login: {e}"));
+            }
+            self.prefs_window.refresh_login();
+        }
         // A folder refused before is checked again.
         self.auto_import.refused = None;
         self.share_with_server();

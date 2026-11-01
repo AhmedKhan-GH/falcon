@@ -589,6 +589,9 @@ pub struct Draft {
     pub prefs: Prefs,
     pub panels: Panels,
     pub keys: Shortcuts,
+    /// Open falcon at login. Not a preference: the system keeps it
+    /// (`login_item`), and it is read when the window opens.
+    pub launch_at_login: bool,
 }
 
 /// The panes, in Eagle's order. Eagle's AI, MCP and Proxy panes have no
@@ -698,6 +701,8 @@ pub struct Window {
     pub library: Option<std::path::PathBuf>,
     /// Why the folder last picked for auto-import was refused.
     auto_import_note: Option<String>,
+    /// The login item as read when the window opened or last applied.
+    login: crate::login_item::Status,
 }
 
 /// Size of the window, close to Eagle's.
@@ -749,7 +754,13 @@ impl Page<'_> {
 }
 
 impl Window {
+    /// Reads the login item again, after Save or Apply changed it.
+    pub fn refresh_login(&mut self) {
+        self.login = crate::login_item::status();
+    }
+
     pub fn show_with(&mut self, draft: Draft) {
+        self.login = crate::login_item::status();
         self.port_text = draft.prefs.api_port.to_string();
         self.applied_theme = draft.prefs.theme;
         self.applied_zoom = draft.prefs.ui_zoom;
@@ -900,7 +911,7 @@ impl Window {
     /// Draws one pane's blocks.
     fn pane_ui(&mut self, p: &mut Page, d: &mut Draft, port_error: Option<&String>) {
         match p.pane {
-            Section::General => general(p, d),
+            Section::General => general(p, d, &self.login),
             Section::Sidebar => sidebar(p, d),
             Section::Controls => controls(p, d),
             Section::Preview => preview(p, d),
@@ -1017,7 +1028,7 @@ fn note(ui: &mut Ui, text: &str) {
 }
 
 /// General: appearance, the window, and how imports behave.
-fn general(p: &mut Page, d: &mut Draft) {
+fn general(p: &mut Page, d: &mut Draft, login: &crate::login_item::Status) {
     let keywords = ["theme", "colour", "color", "dark", "light", "gray", "blue", "purple", "auto", "zoom", "size", "scale", "interface", "counts", "badge", "sidebar", "numbers"];
     p.block(tr_key("Appearance"), &keywords, |ui| {
         ui.horizontal(|ui| {
@@ -1063,6 +1074,16 @@ fn general(p: &mut Page, d: &mut Draft) {
         ui.checkbox(&mut d.panels.inspector, tr("Show the inspector"));
         if cfg!(target_os = "macos") {
             ui.checkbox(&mut d.prefs.menu_icon, tr("Show the falcon icon in the menu bar"));
+        }
+    });
+    p.block("Startup", &["startup", "login", "log in", "open at login", "launch", "start", "dock", "close", "quit"], |ui| {
+        use crate::login_item::Status;
+        let usable = !matches!(login, Status::Unavailable(_));
+        ui.add_enabled(usable, egui::Checkbox::new(&mut d.launch_at_login, "Open Falcon when you log in"));
+        match login {
+            Status::NeedsApproval => note(ui, "Allow Falcon in System Settings ▸ General ▸ Login Items."),
+            Status::Unavailable(why) => note(ui, why),
+            _ => {}
         }
     });
     p.block(tr_key("Importing"), &["import", "collect", "keywords", "iptc", "xmp", "tags", "duplicate", "already", "select", "new items", "retina", "2x", "@2x", "screenshot"], |ui| {
@@ -1828,7 +1849,7 @@ mod tests {
         assert!(w.live_keys().is_none(), "closed");
         let prefs = Prefs { screenshot_shortcuts: true, ..Prefs::default() };
         let keys = Shortcuts::default();
-        w.show_with(Draft { prefs, panels: Panels { sidebar: true, inspector: true }, keys: keys.clone() });
+        w.show_with(Draft { prefs, panels: Panels { sidebar: true, inspector: true }, keys: keys.clone(), launch_at_login: false });
         let (live, on) = w.live_keys().unwrap();
         assert!(on && *live == keys);
         assert!(!w.recording());

@@ -24,6 +24,7 @@ mod icloud;
 mod icons;
 mod install_dir;
 mod links;
+mod login_item;
 mod folder_picker;
 mod import_dupes;
 mod loader;
