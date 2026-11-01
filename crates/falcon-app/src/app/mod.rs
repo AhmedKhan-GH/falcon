@@ -391,22 +391,6 @@ pub(crate) fn lock(s: &Shared) -> std::sync::MutexGuard<'_, Library> {
     s.lock().unwrap_or_else(|p| p.into_inner())
 }
 
-/// The picture shown under the pointer while dragging out: a 128 px PNG of
-/// `path`, or a plain tile when it can't be decoded. Always valid PNG, since
-/// the drag crate panics on an image AppKit can't load.
-pub(crate) fn drag_image(path: &std::path::Path) -> Vec<u8> {
-    // A picture still in iCloud would hold the drag until it downloads.
-    let decoded = if crate::icloud::is_dataless(path) { None } else { thumbnail::decode(path).ok() };
-    let img = decoded
-        .map(|i| i.thumbnail(128, 128))
-        .unwrap_or_else(|| image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(96, 96, image::Rgba([60, 61, 64, 255]))));
-    let mut out = std::io::Cursor::new(Vec::new());
-    if img.to_rgba8().write_to(&mut out, image::ImageFormat::Png).is_err() {
-        return Vec::new();
-    }
-    out.into_inner()
-}
-
 // ---------------------------------------------------------------------------
 // Sidebar
 
@@ -654,48 +638,7 @@ impl App {
         self.video.keep_only(self.ws.viewer.as_deref());
         self.fetches.prune((self.ws.view.id.as_str() == self.ws.viewer.as_deref().unwrap_or_default()).then_some(self.ws.view.file.as_path()));
         self.pdf.keep_only(self.ws.viewer.as_deref());
-        // Items dragged past the window edge become a macOS file drag, so
-        // they can be dropped into Finder or other apps, as from Eagle.
-        if let Some(d) = egui::DragAndDrop::payload::<DragItems>(&ctx)
-            && ctx.pointer_latest_pos().is_some_and(|p| !ctx.content_rect().contains(p))
-            && !self.native_drag.load(std::sync::atomic::Ordering::Relaxed)
-        {
-            let files: Vec<PathBuf> = d.0.iter().filter_map(|id| lib.item(id)).map(|i| i.original_path(lib.root())).collect();
-            let preview = d.0.first().and_then(|id| lib.item(id)).map(|i| {
-                i.thumbnail_path(lib.root()).unwrap_or_else(|| i.original_path(lib.root()))
-            });
-            egui::DragAndDrop::clear_payload(&ctx);
-            if let Some(image) = preview.filter(|_| !files.is_empty()).map(|p| drag_image(&p)) {
-                let flag = self.native_drag.clone();
-                flag.store(true, std::sync::atomic::Ordering::Relaxed);
-                let done = flag.clone();
-                let ctx2 = ctx.clone();
-                let started = drag::start_drag(
-                    &*frame,
-                    drag::DragItem::Files(files),
-                    drag::Image::Raw(image),
-                    move |_, _| {
-                        done.store(false, std::sync::atomic::Ordering::Relaxed);
-                        ctx2.request_repaint();
-                    },
-                    drag::Options::default(),
-                );
-                if let Err(e) = started {
-                    flag.store(false, std::sync::atomic::Ordering::Relaxed);
-                    self.flash_error(format!("Could not drag out: {e}"));
-                }
-            }
-        }
-        if let Some(d) = egui::DragAndDrop::payload::<DragItems>(&ctx)
-            && let Some(pos) = ctx.pointer_latest_pos()
-        {
-            let text = if d.0.len() == 1 { "1 item".to_string() } else { format!("{} items", d.0.len()) };
-            let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("drag-ghost")));
-            let g = painter.layout_no_wrap(text, font(12.0), Color32::WHITE);
-            let r = Rect::from_min_size(pos + vec2(12.0, 12.0), g.size() + vec2(16.0, 8.0));
-            painter.rect_filled(r, CornerRadius::same(10), t::p().primary);
-            painter.galley(r.min + vec2(8.0, 4.0), g, Color32::WHITE);
-        }
+        self.drag_out(&ctx, frame, lib);
         if self.ws.smart_dialog.is_some() {
             self.smart_dialog_ui(&ctx, lib);
         }
@@ -708,120 +651,8 @@ impl App {
         self.collect_duplicates();
         self.duplicate_dialog(&ctx, lib);
         self.export_dialogs(&ctx, lib);
-        if let Some(c) = self.ws.confirm.clone() {
-            let (title, detail, label) = match &c {
-                Confirm::DeleteFolders(ids) => {
-                    let title = match ids.as_slice() {
-                        [one] => format!("Delete “{}”?", logic::find_folder(&lib.metadata.folders, one).map_or("", |f| f.name.as_str())),
-                        _ => format!("Delete {} folders?", ids.len()),
-                    };
-                    (title, "Subfolders are deleted too.".to_string(), "Delete")
-                }
-                Confirm::DeleteSmarts(ids) => (
-                    format!("Delete {} smart folders?", ids.len()),
-                    "Only the smart folders go; the items they show stay.".to_string(),
-                    "Delete",
-                ),
-                Confirm::DeleteItems(ids) => (
-                    format!("Delete {} item{} permanently?", ids.len(), if ids.len() == 1 { "" } else { "s" }),
-                    "The files are removed from the library and cannot be restored.".to_string(),
-                    "Delete",
-                ),
-                Confirm::DeleteTags(tags) => (
-                    if let [one] = tags.as_slice() { format!("Delete the tag “{one}”?") } else { format!("Delete {} tags?", tags.len()) },
-                    "They are removed from every item. The items themselves stay.".to_string(),
-                    if tags.len() == 1 { "Delete Tag" } else { "Delete Tags" },
-                ),
-                Confirm::ClearTagHistory => (
-                    "Clear the tag history?".to_string(),
-                    "The tag picker's Recent tags start over. Tags stay on their items.".to_string(),
-                    "Clear",
-                ),
-                Confirm::EmptyTrash => {
-                    let n = lib.items().iter().filter(|i| i.is_deleted).count();
-                    (format!("Empty the Trash ({n})?"), "The files are removed from the library and cannot be restored.".to_string(), "Empty Trash")
-                }
-                Confirm::TrashInFolder(ids, _) => (
-                    format!("Move {} to Trash?", export_ui::plural(ids.len(), "item")),
-                    "Some of them are in other folders as well.".to_string(),
-                    if self.trash_folder_only { "Remove" } else { "Move to Trash" },
-                ),
-                Confirm::RestoreAll => {
-                    let n = lib.items().iter().filter(|i| i.is_deleted).count();
-                    (format!("Restore all {n} items in the Trash?"), "They go back to their folders. ⌘Z puts them back in the Trash.".to_string(), "Restore All")
-                }
-            };
-            let modal = egui::Modal::new(egui::Id::unique("confirm")).show(&ctx, |ui| {
-                ui.set_width(320.0);
-                ui.label(RichText::new(title).size(15.0));
-                ui.add_space(4.0);
-                ui.label(RichText::new(detail).color(t::p().text_muted));
-                if matches!(c, Confirm::TrashInFolder(..)) {
-                    ui.add_space(6.0);
-                    ui.radio_value(&mut self.trash_folder_only, true, "Only take them out of this folder")
-                        .on_hover_text("Items in no other folder still go to the Trash");
-                    ui.radio_value(&mut self.trash_folder_only, false, "Move them all to the Trash");
-                }
-                if matches!(c, Confirm::DeleteFolders(_)) {
-                    ui.add_space(6.0);
-                    ui.checkbox(&mut self.ws.folders.trash_items, "Move the items to the Trash as well")
-                        .on_hover_text("Items that are also in another folder stay. Untick to keep every item.");
-                }
-                ui.add_space(10.0);
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button(RichText::new(label).color(t::p().icon_red)).clicked() {
-                        self.ws.actions.push(match c.clone() {
-                            Confirm::DeleteFolders(ids) => Action::Folders(folders_ui::FolderAction::Delete(ids, self.ws.folders.trash_items)),
-                            Confirm::DeleteSmarts(ids) => Action::Folders(folders_ui::FolderAction::DeleteSmart(ids)),
-                            Confirm::DeleteItems(ids) => Action::DeletePermanently(ids),
-                            Confirm::EmptyTrash => Action::EmptyTrash,
-                            Confirm::TrashInFolder(ids, fid) => Action::TrashInFolder(ids, fid, self.trash_folder_only),
-                            Confirm::RestoreAll => Action::Trash(lib.items().iter().filter(|i| i.is_deleted).map(|i| i.id.clone()).collect(), false),
-                            Confirm::DeleteTags(t) => Action::DeleteTags(t),
-                            Confirm::ClearTagHistory => Action::ClearTagHistory,
-                        });
-                        self.ws.confirm = None;
-                    }
-                    if ui.button("Cancel").clicked() {
-                        self.ws.confirm = None;
-                    }
-                });
-            });
-            if modal.should_close() {
-                self.ws.confirm = None;
-            }
-        }
-        if let Some((n, _)) = &self.ws.bulk {
-            let n = *n;
-            let mut answer = None;
-            let modal = egui::Modal::new(egui::Id::unique("bulk")).show(&ctx, |ui| {
-                ui.set_width(320.0);
-                ui.label(RichText::new(format!("Change {n} items?")).size(15.0));
-                ui.add_space(4.0);
-                ui.label(RichText::new("Everything selected is changed at once.").color(t::p().text_muted));
-                ui.add_space(10.0);
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("OK").clicked() {
-                        answer = Some(true);
-                    }
-                    if ui.button("Cancel").clicked() {
-                        answer = Some(false);
-                    }
-                });
-            });
-            if modal.should_close() {
-                answer = Some(false);
-            }
-            match answer {
-                Some(true) => {
-                    if let Some((_, actions)) = self.ws.bulk.take() {
-                        self.ws.actions.extend(actions);
-                    }
-                }
-                Some(false) => self.ws.bulk = None,
-                None => {}
-            }
-        }
+        self.confirm_dialog(&ctx, lib);
+        self.bulk_dialog(&ctx);
         self.text_saves(lib, ctx.input(|i| i.time));
         self.preview_window(&ctx, lib);
         self.apply_actions(lib);
@@ -841,29 +672,5 @@ impl App {
         }
         self.run_import_request();
         self.auto_import_tick();
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::drag_image;
-
-    fn is_png(bytes: &[u8]) -> bool {
-        image::load_from_memory_with_format(bytes, image::ImageFormat::Png).is_ok()
-    }
-
-    #[test]
-    fn drag_images_are_always_valid_png() {
-        let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/Assets.library");
-        if let Ok(lib) = falcon_library::Library::open(&fixture)
-            && let Some(thumb) = lib.items().iter().find_map(|i| i.thumbnail_path(lib.root()))
-        {
-            assert!(is_png(&drag_image(&thumb)), "WebP thumbnail");
-        }
-        let dir = tempfile::tempdir().unwrap();
-        let txt = dir.path().join("notes.txt");
-        std::fs::write(&txt, "hello").unwrap();
-        assert!(is_png(&drag_image(&txt)), "undecodable file");
-        assert!(is_png(&drag_image(&dir.path().join("missing.png"))), "missing file");
     }
 }

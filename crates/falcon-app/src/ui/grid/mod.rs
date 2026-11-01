@@ -17,6 +17,7 @@ use crate::app::{comments, open_ui};
 
 pub(crate) mod covers;
 pub(crate) mod duplicates;
+pub(crate) mod drag_out;
 pub(crate) mod empty;
 mod tags_page;
 

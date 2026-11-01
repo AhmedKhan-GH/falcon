@@ -10,5 +10,6 @@ pub(crate) mod library_notices;
 pub(crate) mod quick_switch;
 pub(crate) mod app_lock;
 pub(crate) mod collect;
+pub(crate) mod confirm;
 pub(crate) mod history;
 pub(crate) mod smart;
