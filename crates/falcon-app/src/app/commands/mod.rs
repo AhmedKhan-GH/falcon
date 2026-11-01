@@ -86,7 +86,14 @@ impl App {
         // else gives them back to the grid, as in Eagle.
         if let Some(pos) = ctx.input(|i| i.pointer.any_pressed().then(|| i.pointer.press_origin()).flatten()) {
             let side = self.show_sidebar && self.imports.sidebar.is_some_and(|r| r.contains(pos));
-            self.zone = if side { logic::Zone::Sidebar } else { logic::Zone::Content };
+            let tags = self.ws.scope == Scope::AllTags && self.ws.org.tag_sidebar.is_some_and(|r| r.contains(pos));
+            self.zone = if side {
+                logic::Zone::Sidebar
+            } else if tags {
+                logic::Zone::Tags
+            } else {
+                logic::Zone::Content
+            };
         }
         if pressed.contains(&C::Preferences) && !self.prefs_window.open {
             self.open_preferences();
@@ -190,6 +197,31 @@ impl App {
                 self.ws.viewer = None;
             } else {
                 self.ws.selected.clear();
+            }
+        }
+        // On the All Tags page, as in Eagle: → in the sidebar moves to the
+        // page's tag sidebar ("tags" zone), ← there moves back, and ↑ and ↓
+        // there open the list above or below.
+        if self.ws.scope == Scope::AllTags && self.ws.viewer.is_none() && !shift {
+            if self.zone == logic::Zone::Tags {
+                if left && self.show_sidebar {
+                    self.zone = logic::Zone::Sidebar;
+                }
+                if (up || down)
+                    && let Some(l) = self.ws.lib.clone()
+                {
+                    let next = crate::tag_view::step(&self.ws.org.tag_view, &lock(&l).metadata.tags_groups, down);
+                    if let Some(v) = next {
+                        self.open_tag_view(v);
+                        self.ws.org.tag_reveal = true;
+                    }
+                }
+                if left || right || up || down {
+                    return;
+                }
+            } else if self.zone == logic::Zone::Sidebar && right {
+                self.zone = logic::Zone::Tags;
+                return;
             }
         }
         // The sidebar has the keys: ↑ and ↓ open the row above or below,
@@ -522,6 +554,22 @@ impl App {
                 crate::prefs::SpaceKey::Preview | crate::prefs::SpaceKey::QuickLook => {}
                 crate::prefs::SpaceKey::Scroll => self.ws.scroll = Some(crate::shortcuts::Scroll::PageDown),
             },
+            // On the All Tags page ⌘⌫ deletes the open tag group from the
+            // tag sidebar, or takes the picked tags out of the open group,
+            // as Eagle's delete does there.
+            C::Trash if self.ws.scope == Scope::AllTags => {
+                if let crate::tag_view::TagView::Group(id) = self.ws.org.tag_view.clone()
+                    && let Some(l) = self.ws.lib.clone()
+                {
+                    let lib = lock(&l);
+                    if self.zone == logic::Zone::Tags {
+                        self.ask_delete_tag_group(&lib, &id);
+                    } else if !self.ws.org.tag_sel.is_empty() {
+                        let tags = self.ws.org.tag_sel.clone();
+                        self.push_bulk(tags.len(), crate::ui::organize::org(crate::ui::organize::OrgAction::RemoveFromGroup(id, tags)));
+                    }
+                }
+            }
             C::Trash => {
                 let ids = self.ws.selected.clone();
                 if self.ws.scope == Scope::Trash {

@@ -138,10 +138,13 @@ impl App {
     }
 
     /// The All Tags page's message when it has no tags to list, or none
-    /// match the page's filter.
-    pub(crate) fn empty_tags(&self, ui: &Ui, area: Rect, filtering: bool) {
+    /// match the page's filter. `all_filed` is the Uncategorized list
+    /// emptied by filing every tag in a group.
+    pub(crate) fn empty_tags(&self, ui: &Ui, area: Rect, filtering: bool, all_filed: bool) {
         let e = if filtering {
             Empty { icon: ic::MAGNIFYING_GLASS, title: tr_key("No Matches"), body: tr_key("Try another keyword."), import: false }
+        } else if all_filed {
+            Empty { icon: ic::FOLDER_DASHED, title: tr_key("All Filed"), body: tr_key("Every tag is in a tag group."), import: false }
         } else {
             Empty {
                 icon: ic::TAG_SIMPLE,

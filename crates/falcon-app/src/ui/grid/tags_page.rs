@@ -9,21 +9,51 @@ use crate::icons as ic;
 use crate::locale::{tr, tr_n};
 use crate::logic::{self, Scope};
 use crate::theme::{self as t, font};
+use crate::tag_view::{self, TagView};
 use crate::ui::widgets::{galley, icon};
 use super::GRID_PAD_X;
+use super::tag_sidebar::TAG_SIDEBAR_WIDTH;
 
 impl App {
     pub(crate) fn tag_page(&mut self, ui: &mut Ui, lib: &Library) {
+        let mut counts = logic::tag_counts(lib.items());
+        self.ws.org.tag_sort.apply(&mut counts);
+        let full = ui.available_rect_before_wrap();
+        let side = Rect::from_min_size(full.min, vec2(TAG_SIDEBAR_WIDTH, full.height()));
+        self.tag_sidebar(ui, lib, side, &counts);
+        let content = Rect::from_min_max(Pos2::new(side.right(), full.top()), full.max);
+        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(content));
+        self.tag_list(&mut child, lib, counts);
+        ui.advance_cursor_after_rect(full);
+    }
+
+    /// The list the sidebar opened: every tag, the ones in no group, the
+    /// starred ones or one group's, filtered by the page's box and sorted.
+    fn tag_list(&mut self, ui: &mut Ui, lib: &Library, counts: Vec<(String, usize)>) {
         let filter = self.ws.tag_filter.trim().to_lowercase();
-        let mut tags: Vec<(String, usize)> =
-            logic::tag_counts(lib.items()).into_iter().filter(|(t, _)| filter.is_empty() || t.to_lowercase().contains(&filter)).collect();
+        let groups = &lib.metadata.tags_groups;
+        let view = tag_view::valid(&self.ws.org.tag_view, groups);
+        let group = match &view {
+            TagView::Group(id) => groups.iter().find(|g| &g.id == id),
+            _ => None,
+        };
+        let listed = match &view {
+            TagView::All => counts.clone(),
+            TagView::Uncategorized => tag_view::uncategorized(&counts, groups),
+            TagView::Starred => tag_view::starred(&counts, &lib.tags.starred_tags),
+            TagView::Group(_) => group.map(|g| tag_view::group_tags(&counts, g)).unwrap_or_default(),
+        };
+        let mut tags: Vec<(String, usize)> = listed.into_iter().filter(|(t, _)| filter.is_empty() || t.to_lowercase().contains(&filter)).collect();
         let sort = self.ws.org.tag_sort;
-        sort.apply(&mut tags);
         // The order the chips were drawn in last frame is what ⇧-click spans.
         self.ws.org.tag_order_shown = std::mem::take(&mut self.ws.org.tag_order);
-        self.ws.org.tag_sel.retain(|t| tags.iter().any(|(x, _)| x == t) || lib.tags.starred_tags.contains(t));
-        let starred: Vec<(String, usize)> =
-            lib.tags.starred_tags.iter().filter_map(|s| tags.iter().find(|(t, _)| t == s).cloned()).collect();
+        let all_view = view == TagView::All;
+        self.ws.org.tag_sel.retain(|t| tags.iter().any(|(x, _)| x == t) || (all_view && lib.tags.starred_tags.contains(t)));
+        let starred: Vec<(String, usize)> = if all_view {
+            lib.tags.starred_tags.iter().filter_map(|s| tags.iter().find(|(t, _)| t == s).cloned()).collect()
+        } else {
+            Vec::new()
+        };
         egui::ScrollArea::vertical().id_salt("tags-page").auto_shrink([false, false]).show(ui, |ui| {
             ui.add_space(12.0);
             ui.horizontal(|ui| {
@@ -45,16 +75,38 @@ impl App {
                 );
                 ui.add_space(12.0);
                 ui.label(RichText::new(tr_n(tags.len(), "{n} tag", "{n} tags")).color(t::p().text_muted));
-                self.tag_page_controls(ui);
+                self.tag_page_controls(ui, all_view);
             });
             ui.add_space(14.0);
+            // A group's list keeps its heading (and description) when empty.
+            if let Some(g) = group {
+                let sec = crate::organize::TagSection {
+                    id: g.id.clone(),
+                    name: g.name.clone(),
+                    color: g.color.clone(),
+                    description: g.description.clone().unwrap_or_default(),
+                    tags: tags.clone(),
+                };
+                self.tag_group_header(ui, lib, Some(&sec), tags.len());
+                self.tag_chips(ui, lib, &tags);
+                return;
+            }
             if tags.is_empty() && starred.is_empty() {
                 let top = ui.cursor().top();
                 let rest = Rect::from_min_max(Pos2::new(ui.max_rect().left(), top), ui.max_rect().right_bottom());
-                self.empty_tags(ui, rest, !filter.is_empty());
+                let all_filed = view == TagView::Uncategorized && !counts.is_empty();
+                self.empty_tags(ui, rest, !filter.is_empty(), all_filed);
                 return;
             }
-            if self.tags_by_group() {
+            if view == TagView::Starred {
+                ui.horizontal(|ui| {
+                    ui.add_space(GRID_PAD_X + 2.0);
+                    ui.label(RichText::new(format!("{}  {}  ({})", ic::STAR, tr("Starred"), tags.len())).size(14.0).color(t::p().text_muted));
+                });
+                self.tag_chips(ui, lib, &tags);
+                return;
+            }
+            if all_view && self.tags_by_group() {
                 self.tag_groups_page(ui, lib, &filter);
                 return;
             }
@@ -124,7 +176,7 @@ impl App {
         let dot_w = if dot.is_some() { 14.0 } else { 0.0 };
         let size = vec2(name_g.size().x + count_g.size().x + 30.0 + dot_w, 28.0);
         let (rect, resp) = ui.allocate_exact_size(size, Sense::click_and_drag());
-        App::tag_chip_drag(&resp, tag);
+        self.tag_chip_drag(&resp, tag);
         self.ws.org.tag_order.push(tag.to_string());
         let picked = self.ws.org.tag_sel.iter().any(|t| t == tag);
         let fill = if picked {

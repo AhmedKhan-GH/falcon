@@ -45,7 +45,7 @@ pub(crate) struct OrgState {
     /// All Tags shows tag groups instead of A-Z.
     by_group: bool,
     /// Tag group being renamed, with the text so far.
-    group_rename: Option<(String, String)>,
+    pub(crate) group_rename: Option<(String, String)>,
     /// Tag group waiting for its delete to be confirmed.
     group_delete: Option<String>,
     /// Saved filter name dialog: `None` saves a new one, `Some(i)` renames.
@@ -75,6 +75,13 @@ pub(crate) struct OrgState {
     pub tag_order_shown: Vec<String>,
     /// The All Tags page's sort.
     pub tag_sort: crate::tags::TagSort,
+    /// The list the All Tags page shows (its sidebar, `tag_view.rs`).
+    pub tag_view: crate::tag_view::TagView,
+    /// Where the All Tags page's sidebar was drawn last frame, for the
+    /// "tags" focus zone; `None` when it isn't shown.
+    pub tag_sidebar: Option<Rect>,
+    /// Scroll the open list's sidebar row into view (after an arrow key).
+    pub tag_reveal: bool,
     /// The merge dialog: the tags and the name typed so far.
     pub merge: Option<(Vec<String>, String)>,
 }
@@ -83,6 +90,11 @@ impl OrgState {
     /// Forgets the random folder sort's seed, so it shuffles again.
     pub(crate) fn reshuffle(&mut self) {
         self.seed = None;
+    }
+
+    /// Opens the next new tag group's name for typing (and its list).
+    pub(crate) fn rename_new_group(&mut self) {
+        self.rename_new_group = true;
     }
 }
 
@@ -95,13 +107,14 @@ struct AutoTagDraft {
     typed: String,
 }
 
-/// A tag dragged on the All Tags page.
+/// Tags dragged on the All Tags page (the picked ones, or the one
+/// dragged when it isn't picked).
 #[derive(Clone)]
-struct DragTag(String);
+pub(crate) struct DragTag(pub Vec<String>);
 
 /// A tag group heading dragged on the All Tags page.
 #[derive(Clone)]
-struct DragGroup(String);
+pub(crate) struct DragGroup(pub String);
 
 /// A smart folder dragged in the sidebar.
 #[derive(Clone)]
@@ -168,7 +181,7 @@ pub(crate) enum OrderTarget {
     Smart(String),
 }
 
-fn org(a: OrgAction) -> Action {
+pub(crate) fn org(a: OrgAction) -> Action {
     Action::Organize(a)
 }
 
@@ -1281,17 +1294,19 @@ impl App {
 
 impl App {
     /// The All Tags page's mode switch and New Group button.
-    pub(crate) fn tag_page_controls(&mut self, ui: &mut Ui) {
+    pub(crate) fn tag_page_controls(&mut self, ui: &mut Ui, all: bool) {
         ui.add_space(12.0);
-        ui.label(RichText::new(tr("Group by")).color(t::p().text_muted));
-        if ui.selectable_label(!self.ws.org.by_group, tr("Alphabet")).clicked() {
-            self.ws.org.by_group = false;
-        }
-        if ui.selectable_label(self.ws.org.by_group, tr("Tag Group")).clicked() {
-            self.ws.org.by_group = true;
+        // Grouping applies to the All list; the others are one list each.
+        if all {
+            ui.label(RichText::new(tr("Group by")).color(t::p().text_muted));
+            if ui.selectable_label(!self.ws.org.by_group, tr("Alphabet")).clicked() {
+                self.ws.org.by_group = false;
+            }
+            if ui.selectable_label(self.ws.org.by_group, tr("Tag Group")).clicked() {
+                self.ws.org.by_group = true;
+            }
         }
         if ui.button(format!("{}  {}", ic::PLUS, tr("New Group"))).clicked() {
-            self.ws.org.by_group = true;
             self.ws.org.rename_new_group = true;
             self.ws.actions.push(org(OrgAction::CreateGroup(Vec::new())));
         }
@@ -1334,7 +1349,7 @@ impl App {
         self.tag_chips(ui, lib, &rest);
     }
 
-    fn tag_chips(&mut self, ui: &mut Ui, lib: &Library, tags: &[(String, usize)]) {
+    pub(crate) fn tag_chips(&mut self, ui: &mut Ui, lib: &Library, tags: &[(String, usize)]) {
         ui.add_space(2.0);
         ui.horizontal_wrapped(|ui| {
             ui.add_space(GRID_PAD_X);
@@ -1349,7 +1364,7 @@ impl App {
     /// A group's heading: colour dot, name and count, a drop target for
     /// dragged tags, and a menu to rename, recolour or delete it. `None`
     /// is the ungrouped section; dropping there takes a tag out of its group.
-    fn tag_group_header(&mut self, ui: &mut Ui, lib: &Library, sec: Option<&organize::TagSection>, n: usize) {
+    pub(crate) fn tag_group_header(&mut self, ui: &mut Ui, lib: &Library, sec: Option<&organize::TagSection>, n: usize) {
         let sense = if sec.is_some() { Sense::click_and_drag() } else { Sense::click() };
         let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), sense);
         let x = rect.left() + GRID_PAD_X + 2.0;
@@ -1359,33 +1374,21 @@ impl App {
             ui.painter().circle_filled(Pos2::new(x + 5.0, cy), 5.0, dot);
         }
         let tx = if sec.is_some() { x + 18.0 } else { x };
-        let renaming = sec.is_some_and(|s| self.ws.org.group_rename.as_ref().is_some_and(|(id, _)| *id == s.id));
-        if let (true, Some(s)) = (renaming, sec) {
-            let (_, buf) = self.ws.org.group_rename.as_mut().unwrap();
-            let te = ui.put(Rect::from_min_size(Pos2::new(tx, rect.top() + 1.0), vec2(220.0, 22.0)), TextEdit::singleline(buf).id_salt(("group-rename", &s.id)).font(font(14.0)));
-            if !te.has_focus() && !te.lost_focus() {
-                te.request_focus();
-            }
-            let cancel = ui.input(|i| i.key_pressed(Key::Escape));
-            if te.lost_focus() || cancel {
-                let (id, name) = self.ws.org.group_rename.take().unwrap();
-                if !cancel && !name.trim().is_empty() && name.trim() != s.name {
-                    self.ws.actions.push(org(OrgAction::RenameGroup(id, name.trim().to_string())));
-                }
-            }
-        } else {
-            let title = sec.map_or(tr("Ungrouped"), |s| s.name.as_str());
-            ui.painter().text(Pos2::new(tx, cy), Align2::LEFT_CENTER, format!("{title}  ({n})"), font(14.0), t::p().text_muted);
-        }
+        // Renaming happens in the page's sidebar row (`tag_sidebar.rs`).
+        let title = sec.map_or(tr("Ungrouped"), |s| s.name.as_str());
+        ui.painter().text(Pos2::new(tx, cy), Align2::LEFT_CENTER, format!("{title}  ({n})"), font(14.0), t::p().text_muted);
         if resp.dnd_hover_payload::<DragTag>().is_some() {
             ui.painter().rect_stroke(rect.shrink2(vec2(GRID_PAD_X - 6.0, 0.0)), t::RADIUS, Stroke::new(1.5, t::p().primary), StrokeKind::Inside);
         }
         if let Some(d) = resp.dnd_release_payload::<DragTag>() {
             match sec {
-                Some(s) => self.ws.actions.push(org(OrgAction::AddToGroup(s.id.clone(), vec![d.0.clone()]))),
+                // As on the sidebar's group rows, ⌥ files them in the group
+                // as well instead of moving them.
+                Some(s) if ui.input(|i| i.modifiers.alt) => self.ws.actions.push(org(OrgAction::AddToGroupToo(s.id.clone(), d.0.clone()))),
+                Some(s) => self.ws.actions.push(org(OrgAction::AddToGroup(s.id.clone(), d.0.clone()))),
                 None => {
-                    if let Some(g) = organize::group_of(&lib.metadata.tags_groups, &d.0) {
-                        self.ws.actions.push(org(OrgAction::RemoveFromGroup(g.id.clone(), vec![d.0.clone()])));
+                    for g in lib.metadata.tags_groups.iter().filter(|g| d.0.iter().any(|t| g.tags.contains(t))) {
+                        self.ws.actions.push(org(OrgAction::RemoveFromGroup(g.id.clone(), d.0.clone())));
                     }
                 }
             }
@@ -1396,41 +1399,52 @@ impl App {
         if resp.double_clicked() {
             self.ws.org.group_rename = Some((s.id.clone(), s.name.clone()));
         }
+        resp.context_menu(|ui| self.tag_group_context_menu(ui, lib, &s.id));
+    }
+
+    /// A tag group's menu (its heading on the page and its sidebar row):
+    /// find its items, rename, describe, move, colour, delete.
+    pub(crate) fn tag_group_context_menu(&mut self, ui: &mut Ui, lib: &Library, id: &str) {
         let groups = &lib.metadata.tags_groups;
-        let pos = groups.iter().position(|g| g.id == s.id).unwrap_or(0);
-        resp.context_menu(|ui| {
-            ui.set_min_width(200.0);
-            let tags = groups.get(pos).map(|g| g.tags.clone()).unwrap_or_default();
-            if ui.add_enabled(!tags.is_empty(), egui::Button::new(tr("Find Items with These Tags"))).clicked() {
-                self.filter_any_tags(tags);
-            }
-            ui.separator();
-            if ui.button(tr("Rename")).clicked() {
-                self.ws.org.group_rename = Some((s.id.clone(), s.name.clone()));
-            }
-            let label = if s.description.is_empty() { tr("Add Description…") } else { tr("Edit Description…") };
-            if ui.button(label).clicked() {
-                self.ws.org.group_describe = Some((s.id.clone(), s.description.clone()));
-            }
-            if ui.add_enabled(pos > 0, egui::Button::new(tr("Move Up"))).clicked() {
-                self.ws.actions.push(org(OrgAction::MoveGroup(s.id.clone(), pos - 1)));
-            }
-            if ui.add_enabled(pos + 1 < groups.len(), egui::Button::new(tr("Move Down"))).clicked() {
-                self.ws.actions.push(org(OrgAction::MoveGroup(s.id.clone(), pos + 1)));
-            }
-            if let Some(c) = color_row(ui, s.color.as_deref()) {
-                self.ws.actions.push(org(OrgAction::GroupColor(s.id.clone(), c)));
-                ui.close();
-            }
-            ui.separator();
-            if ui.button(RichText::new(tr("Delete Group")).color(t::p().icon_red)).clicked() {
-                if s.tags.is_empty() {
-                    self.ws.actions.push(org(OrgAction::DeleteGroup(s.id.clone())));
-                } else {
-                    self.ws.org.group_delete = Some(s.id.clone());
-                }
-            }
-        });
+        let Some(pos) = groups.iter().position(|g| g.id == id) else { return };
+        let g = &groups[pos];
+        let description = g.description.clone().unwrap_or_default();
+        ui.set_min_width(200.0);
+        if ui.add_enabled(!g.tags.is_empty(), egui::Button::new(tr("Find Items with These Tags"))).clicked() {
+            self.filter_any_tags(g.tags.clone());
+        }
+        ui.separator();
+        if ui.button(tr("Rename")).clicked() {
+            self.ws.org.group_rename = Some((g.id.clone(), g.name.clone()));
+        }
+        let label = if description.is_empty() { tr("Add Description…") } else { tr("Edit Description…") };
+        if ui.button(label).clicked() {
+            self.ws.org.group_describe = Some((g.id.clone(), description));
+        }
+        if ui.add_enabled(pos > 0, egui::Button::new(tr("Move Up"))).clicked() {
+            self.ws.actions.push(org(OrgAction::MoveGroup(g.id.clone(), pos - 1)));
+        }
+        if ui.add_enabled(pos + 1 < groups.len(), egui::Button::new(tr("Move Down"))).clicked() {
+            self.ws.actions.push(org(OrgAction::MoveGroup(g.id.clone(), pos + 1)));
+        }
+        if let Some(c) = color_row(ui, g.color.as_deref()) {
+            self.ws.actions.push(org(OrgAction::GroupColor(g.id.clone(), c)));
+            ui.close();
+        }
+        ui.separator();
+        if ui.button(RichText::new(tr("Delete Group")).color(t::p().icon_red)).clicked() {
+            self.ask_delete_tag_group(lib, id);
+        }
+    }
+
+    /// Deletes a tag group, asking first when it holds tags.
+    pub(crate) fn ask_delete_tag_group(&mut self, lib: &Library, id: &str) {
+        let Some(g) = lib.metadata.tags_groups.iter().find(|g| g.id == id) else { return };
+        if g.tags.is_empty() {
+            self.ws.actions.push(org(OrgAction::DeleteGroup(g.id.clone())));
+        } else {
+            self.ws.org.group_delete = Some(g.id.clone());
+        }
     }
 
     /// Reorders groups by dragging their headings: the top half of another
@@ -1489,10 +1503,17 @@ impl App {
         ui.add_space(2.0);
     }
 
-    /// Lets a tag chip be dragged onto a group heading.
-    pub(crate) fn tag_chip_drag(resp: &Response, tag: &str) {
+    /// Lets a tag chip be dragged onto a group heading or a sidebar row:
+    /// the picked tags go when it is one of them, else it alone (and it
+    /// becomes the pick), as in Eagle.
+    pub(crate) fn tag_chip_drag(&mut self, resp: &Response, tag: &str) {
         if resp.drag_started() {
-            resp.dnd_set_drag_payload(DragTag(tag.to_string()));
+            let tags = crate::tag_view::dragged(&self.ws.org.tag_sel, tag);
+            if !self.ws.org.tag_sel.iter().any(|t| t == tag) {
+                self.ws.org.tag_sel = tags.clone();
+                self.ws.org.tag_anchor = Some(tag.to_string());
+            }
+            resp.dnd_set_drag_payload(DragTag(tags));
         }
     }
 
@@ -1942,6 +1963,10 @@ impl App {
                     lib.add_tags_to_group(&id, &tags)?;
                 }
                 if std::mem::take(&mut self.ws.org.rename_new_group) {
+                    // As Eagle's New Group: the page opens the new group,
+                    // with its name ready to type.
+                    self.ws.org.tag_view = crate::tag_view::TagView::Group(id.clone());
+                    self.ws.org.tag_sel.clear();
                     self.ws.org.group_rename = Some((id, name));
                 }
                 Ok(())

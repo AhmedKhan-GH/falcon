@@ -41,6 +41,7 @@ mod shortcuts;
 mod smart_count;
 mod subtitles;
 mod storage;
+mod tag_view;
 mod tags;
 mod organize;
 mod textdoc;

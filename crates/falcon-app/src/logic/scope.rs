@@ -16,6 +16,9 @@ pub enum Zone {
     #[default]
     Content,
     Sidebar,
+    /// The All Tags page's own sidebar (All, Uncategorized, Starred,
+    /// groups).
+    Tags,
 }
 
 /// The sidebar row ↑ (or ↓ with `down`) opens, as an index into `rows`,

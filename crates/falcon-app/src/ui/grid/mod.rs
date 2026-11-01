@@ -19,6 +19,7 @@ pub(crate) mod duplicates;
 pub(crate) mod drag_out;
 pub(crate) mod empty;
 mod hover_media;
+mod tag_sidebar;
 mod tags_page;
 
 /// Grid geometry, measured from Eagle at 1280 x 800.
