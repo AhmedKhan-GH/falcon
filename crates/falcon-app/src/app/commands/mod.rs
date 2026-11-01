@@ -286,7 +286,7 @@ impl App {
         use crate::shortcuts::Page;
         crate::menu::State {
             library: self.ws.lib.is_some(),
-            modal: self.prefs_window.open || self.ws.dup_dialog.is_some() || self.lock.is_locked() || self.item_rename.is_some() || self.ws.ext_dialog.is_some() || self.quick.is_open(),
+            modal: self.prefs_window.open || self.ws.dup_dialog.is_some() || self.lock.is_locked() || self.item_rename.is_some() || self.ws.ext_dialog.is_some() || self.quick.is_open() || self.ws.folders.picker.is_some(),
             lockable: self.prefs.app_lock.is_some(),
             tag_clipboard: self.copied_tags.is_some(),
             last_folder: !self.recent_folders.is_empty(),
