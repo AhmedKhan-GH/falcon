@@ -26,9 +26,9 @@ impl Notice {
         Notice { title: title.into(), body: body.into() }
     }
 
-    /// A screenshot went into the library (Eagle's "Screenshot captured").
+    /// A screenshot went into the library.
     pub fn captured(name: &str) -> Self {
-        Notice::new("Screenshot captured", name)
+        Notice::new("Screenshot added", name)
     }
 
     /// An import finished with `added` new items.
@@ -131,7 +131,7 @@ mod tests {
     fn wording() {
         assert_eq!(Notice::imported(1).body, "1 item added to the library");
         assert_eq!(Notice::imported(3).body, "3 items added to the library");
-        assert_eq!(Notice::captured("Screenshot - 2026-11-01 09.05.07").title, "Screenshot captured");
+        assert_eq!(Notice::captured("Screenshot - 2026-11-01 09.05.07").title, "Screenshot added");
         assert_eq!(Notice::exported("Exported 2 items").body, "Exported 2 items");
     }
 }

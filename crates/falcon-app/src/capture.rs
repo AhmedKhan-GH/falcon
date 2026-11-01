@@ -29,9 +29,9 @@ impl Mode {
     /// The menu bar icon's item for this mode.
     pub fn label(self) -> &'static str {
         match self {
-            Mode::Area => "Capture Area",
-            Mode::Window => "Capture Window",
-            Mode::Full => "Capture Full Screen",
+            Mode::Area => "Screenshot of an Area",
+            Mode::Window => "Screenshot of a Window",
+            Mode::Full => "Screenshot of the Screen",
         }
     }
 }

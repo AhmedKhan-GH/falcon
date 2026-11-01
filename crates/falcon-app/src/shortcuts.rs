@@ -318,10 +318,10 @@ const ALT_SHIFT: Modifiers = Modifiers { alt: true, shift: true, ..Modifiers::NO
 pub const TABLE: &[Spec] = &[
     // Eagle's global keys: only the area capture has a default (⌥⌘E).
     Spec { cmd: Command::ShowFalcon, id: "global.show.eagle", group: GLOBAL, label: "Show falcon", default: None, aliases: &[] },
-    Spec { cmd: Command::ShowSearch, id: "global.show.search", group: GLOBAL, label: "Bring up falcon and search", default: None, aliases: &[] },
-    Spec { cmd: Command::Capture(crate::capture::Mode::Area), id: "global.capture.area", group: GLOBAL, label: "Capture an area", default: k(CMD_ALT, Key::E), aliases: &[] },
-    Spec { cmd: Command::Capture(crate::capture::Mode::Window), id: "global.capture.window", group: GLOBAL, label: "Capture a window", default: None, aliases: &[] },
-    Spec { cmd: Command::Capture(crate::capture::Mode::Full), id: "global.capture.full", group: GLOBAL, label: "Capture the full screen", default: None, aliases: &[] },
+    Spec { cmd: Command::ShowSearch, id: "global.show.search", group: GLOBAL, label: "Show falcon and focus the search", default: None, aliases: &[] },
+    Spec { cmd: Command::Capture(crate::capture::Mode::Area), id: "global.capture.area", group: GLOBAL, label: "Screenshot of an area", default: k(CMD_ALT, Key::E), aliases: &[] },
+    Spec { cmd: Command::Capture(crate::capture::Mode::Window), id: "global.capture.window", group: GLOBAL, label: "Screenshot of a window", default: None, aliases: &[] },
+    Spec { cmd: Command::Capture(crate::capture::Mode::Full), id: "global.capture.full", group: GLOBAL, label: "Screenshot of the screen", default: None, aliases: &[] },
     Spec { cmd: Command::Viewer, id: "view.viewer", group: "View", label: "Open or close the viewer", default: k(NONE, Key::Space), aliases: &[KeyboardShortcut::new(NONE, Key::Enter)] },
     Spec { cmd: Command::ZoomIn, id: "view.zoom.in", group: "View", label: "Zoom in", default: k(CMD, Key::Equals), aliases: &[KeyboardShortcut::new(CMD, Key::Plus)] },
     Spec { cmd: Command::ZoomOut, id: "view.zoom.out", group: "View", label: "Zoom out", default: k(CMD, Key::Minus), aliases: &[] },

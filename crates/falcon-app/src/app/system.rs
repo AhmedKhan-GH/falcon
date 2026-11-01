@@ -67,7 +67,7 @@ impl App {
     }
 
     /// Brings the main window to the front, with the search box focused
-    /// when `search` (Eagle's "Bring up Eagle and search").
+    /// when `search` (Eagle's `global.show.search`).
     pub(crate) fn show_falcon(&mut self, ctx: &egui::Context, search: bool) {
         crate::dock::bring_to_front();
         ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));

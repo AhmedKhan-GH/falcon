@@ -227,7 +227,7 @@ mod tests {
     #[test]
     fn menu_follows_eagle() {
         let labels: Vec<_> = MENU.iter().filter_map(|e| if let Entry::Item(c) = e { Some(c.label()) } else { None }).collect();
-        assert_eq!(labels, ["Show Falcon", "Capture Area", "Capture Window", "Capture Full Screen", "Quit Falcon"]);
+        assert_eq!(labels, ["Show Falcon", "Screenshot of an Area", "Screenshot of a Window", "Screenshot of the Screen", "Quit Falcon"]);
     }
 
     #[test]
