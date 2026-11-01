@@ -1466,6 +1466,7 @@
   "very close to": "매우 가까움",
   "{app} Document": "{app} 문서",
   "{chord} can't be used for “{command}”: another app has it": "{chord} 키는 ‘{command}’에 사용할 수 없습니다. 다른 앱이 사용 중입니다",
+  "{chord} is taken by another app": "{chord} 키는 다른 앱이 사용 중입니다",
   "{done} of {total}": "{done}/{total}",
   "{first} and {n} more": "{first} 외 {n}건",
   "{first}–{last} would include Eagle's port {port}": "{first}–{last}에 Eagle의 포트 {port}이(가) 포함됩니다",

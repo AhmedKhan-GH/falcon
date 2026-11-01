@@ -5,9 +5,13 @@
 //! app-wide hot keys) and queues the presses for the app's next frame.
 //!
 //! The capture keys are registered only while Preferences ▸ Screenshot ▸
-//! "Use the screenshot keys" is on, as in Eagle; Show falcon and Show
-//! falcon and focus the search always are, once bound (they have no
-//! default).
+//! "Use the screenshot keys" is on, which is off by default (Eagle has it
+//! on, but Eagle itself usually holds ⌥⌘E on the same Mac); the area key
+//! keeps Eagle's ⌥⌘E, so turning the switch on gives Eagle's layout. Show
+//! falcon and Show falcon and focus the search are registered once bound
+//! (they have no default). A chord another app holds is refused by the
+//! system; Preferences shows it on the key's row (`Recorder::refused`)
+//! and tries again when the switch or the chord changes.
 
 use eframe::egui::{Key, KeyboardShortcut, Modifiers};
 
@@ -141,14 +145,29 @@ pub struct Outcome {
     pub refused: Vec<(Command, KeyboardShortcut)>,
 }
 
+/// Registers a set of chords in place of the last one and returns the
+/// ones the system refused. The app uses Carbon (`platform::register`);
+/// tests inject their own.
+pub type Registrar = Box<dyn FnMut(&eframe::egui::Context, &[(Command, KeyboardShortcut)]) -> Vec<(Command, KeyboardShortcut)>>;
+
 /// The registered keys. Keeps what it registered and changes the system's
-/// set only when the wanted set changes.
+/// set only when the wanted set changes (a switched-on capture key, a new
+/// chord), which is also when a refused key is tried again.
 #[derive(Default)]
 pub struct HotKeys {
     current: Vec<(Command, KeyboardShortcut)>,
+    /// The chords the last registration refused, until the next one.
+    refused: Vec<(Command, KeyboardShortcut)>,
+    registrar: Option<Registrar>,
 }
 
 impl HotKeys {
+    /// Keys registered through `registrar` instead of the system.
+    #[cfg(test)]
+    pub fn with_registrar(registrar: Registrar) -> Self {
+        HotKeys { registrar: Some(registrar), ..Default::default() }
+    }
+
     /// Registers `wanted` in place of the current set when they differ;
     /// returns what happened then, or `None` when nothing changed. Call on
     /// the main thread.
@@ -156,9 +175,18 @@ impl HotKeys {
         if wanted == self.current {
             return None;
         }
-        let refused = platform::register(ctx, &wanted);
+        let refused = match &mut self.registrar {
+            Some(r) => r(ctx, &wanted),
+            None => platform::register(ctx, &wanted),
+        };
         self.current = wanted;
+        self.refused.clone_from(&refused);
         Some(Outcome { refused })
+    }
+
+    /// The chords another app holds, from the last registration.
+    pub fn refused(&self) -> &[(Command, KeyboardShortcut)] {
+        &self.refused
     }
 }
 
@@ -382,5 +410,42 @@ mod tests {
         keys.set(Command::ShowFalcon, crate::shortcuts::parse("Ctrl + Alt + Space")).unwrap();
         let order: Vec<_> = wanted(&keys, true).iter().map(|w| w.0).collect();
         assert_eq!(order, [Command::ShowFalcon, Command::Capture(Mode::Area), Command::Capture(Mode::Window)]);
+    }
+
+    /// A registrar that refuses `taken` and records each call.
+    fn fake(taken: Vec<KeyboardShortcut>, calls: std::rc::Rc<std::cell::RefCell<Vec<Vec<Command>>>>) -> HotKeys {
+        HotKeys::with_registrar(Box::new(move |_ctx, wanted| {
+            calls.borrow_mut().push(wanted.iter().map(|w| w.0).collect());
+            wanted.iter().filter(|w| taken.contains(&w.1)).copied().collect()
+        }))
+    }
+
+    #[test]
+    fn a_refused_key_stays_refused_until_the_set_changes() {
+        let ctx = eframe::egui::Context::default();
+        let calls = std::rc::Rc::default();
+        let area = crate::shortcuts::parse("Command + Alt + E").unwrap();
+        let mut hk = fake(vec![area], std::rc::Rc::clone(&calls));
+        let keys = Shortcuts::default();
+        // Off by default: nothing to register, nothing refused.
+        assert_eq!(hk.sync(&ctx, wanted(&keys, false)), None);
+        assert!(hk.refused().is_empty());
+        // Switched on: Eagle holds ⌥⌘E.
+        let out = hk.sync(&ctx, wanted(&keys, true)).unwrap();
+        assert_eq!(out.refused, [(Command::Capture(Mode::Area), area)]);
+        assert_eq!(hk.refused(), out.refused.as_slice());
+        // The same set again is not registered again, and stays refused.
+        assert_eq!(hk.sync(&ctx, wanted(&keys, true)), None);
+        assert_eq!(hk.refused().len(), 1);
+        assert_eq!(calls.borrow().len(), 1);
+        // A new chord is tried at once and succeeds.
+        let mut moved = keys.clone();
+        moved.set(Command::Capture(Mode::Area), crate::shortcuts::parse("Ctrl + Alt + E")).unwrap();
+        let out = hk.sync(&ctx, wanted(&moved, true)).unwrap();
+        assert!(out.refused.is_empty() && hk.refused().is_empty());
+        // Switching off and on again retries the old chord.
+        hk.sync(&ctx, wanted(&keys, false));
+        assert!(!hk.sync(&ctx, wanted(&keys, true)).unwrap().refused.is_empty());
+        assert_eq!(calls.borrow().len(), 4);
     }
 }

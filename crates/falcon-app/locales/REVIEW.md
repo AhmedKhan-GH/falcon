@@ -124,6 +124,8 @@ The core words, so every file uses one term for one thing.
   the three thumbnail hints, "(second key)", "Set the first selected item
   as the folder cover"), machine-written in one pass; "{app}" stands for
   an app name (Word, Keynote, …) and is not translated.
+- "{chord} is taken by another app", the note on a global key's row
+  when another app holds its chord (machine-written).
 
 ## Reviewed
 

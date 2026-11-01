@@ -30,10 +30,25 @@ impl App {
     /// queued, and brings in finished screenshots.
     pub(crate) fn system_tick(&mut self, ctx: &egui::Context) {
         let captures_on = self.prefs.screenshot_shortcuts;
-        // The recorder in Preferences must get the keys, so they are let
-        // go while it is open.
-        let wanted = if self.prefs_window.open { Vec::new() } else { crate::hotkeys::wanted(&self.shortcuts, captures_on) };
-        if let Some(out) = self.system.hotkeys.sync(ctx, wanted)
+        // While Preferences is open the keys follow what is being edited,
+        // so a chord another app holds shows on its row at once and is
+        // tried again when the switch or the chord changes; Cancel brings
+        // back the saved ones. A row waiting for a key press gets every
+        // key, so they are let go meanwhile.
+        let wanted = if self.prefs_window.recording() {
+            Vec::new()
+        } else {
+            match self.prefs_window.live_keys() {
+                Some((keys, on)) => crate::hotkeys::wanted(keys, on),
+                None => crate::hotkeys::wanted(&self.shortcuts, captures_on),
+            }
+        };
+        let outcome = self.system.hotkeys.sync(ctx, wanted);
+        self.prefs_window.set_refused(self.system.hotkeys.refused());
+        // Outside Preferences (at launch, or after Save) a note says so;
+        // inside, the row does.
+        if !self.prefs_window.open
+            && let Some(out) = outcome
             && let Some((cmd, chord)) = out.refused.first()
         {
             let label = crate::shortcuts::spec(*cmd).label;

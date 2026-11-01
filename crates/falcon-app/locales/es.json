@@ -1527,6 +1527,7 @@
   "very close to": "muy cercano a",
   "{app} Document": "Documento de {app}",
   "{chord} can't be used for “{command}”: another app has it": "{chord} no se puede usar para «{command}»: otra app ya lo usa",
+  "{chord} is taken by another app": "Otra app ya usa {chord}",
   "{done} of {total}": "{done} de {total}",
   "{first} and {n} more": "{first} y {n} más",
   "{first}–{last} would include Eagle's port {port}": "{first}–{last} incluiría el puerto {port} de Eagle",

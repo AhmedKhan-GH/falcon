@@ -830,9 +830,22 @@ pub struct Recorder {
     confirm_reset: bool,
     /// Filters the list by command name, group or chord.
     query: String,
+    /// Global keys the system refused (another app holds the chord), set
+    /// by the app each frame; their rows say so (`hotkeys.rs`).
+    pub refused: Vec<(Command, KeyboardShortcut)>,
+}
+
+/// The note a refused global key's row shows.
+pub fn refused_note(chord: &str) -> String {
+    crate::locale::trf("{chord} is taken by another app", &[("chord", &chord)])
 }
 
 impl Recorder {
+    /// Whether a row is waiting for a key press.
+    pub fn is_recording(&self) -> bool {
+        self.recording.is_some()
+    }
+
     pub fn stop(&mut self) {
         *self = Recorder::default();
     }
@@ -899,7 +912,17 @@ impl Recorder {
         if let Some((_, other, _)) = self.conflict.filter(|c| c.0 == s.cmd) {
             let note = trf("Used by {command}", &[("command", &tr(spec(other).label))]);
             p.text(button.left_center() - vec2(10.0, 0.0), Align2::RIGHT_CENTER, note, font(11.5), egui::Color32::from_rgb(0xff, 0xb0, 0x40));
-        } else if !keys.is_default(s.cmd) {
+        } else {
+            let mut left = button.left();
+            if !keys.is_default(s.cmd) {
+                left -= 30.0;
+            }
+            if let Some((_, chord)) = self.refused.iter().find(|r| r.0 == s.cmd) {
+                let note = refused_note(&display(ui.ctx(), chord));
+                p.text(egui::pos2(left - 10.0, button.center().y), Align2::RIGHT_CENTER, note, font(11.5), egui::Color32::from_rgb(0xff, 0xb0, 0x40));
+            }
+        }
+        if self.conflict.is_none_or(|c| c.0 != s.cmd) && !keys.is_default(s.cmd) {
             let r = egui::Rect::from_center_size(button.left_center() - vec2(16.0, 0.0), vec2(22.0, 22.0));
             let reset = ui.interact(r, ui.scope_id().with((s.id, "reset")), Sense::click()).on_hover_text(tr("Use the default"));
             if reset.hovered() {
@@ -1774,5 +1797,10 @@ mod tests {
         keys.set(Command::ShowFalcon, parse("Ctrl + Alt + Shift + K")).unwrap();
         assert_eq!(keys.resolve(chord.logical_key, chord.modifiers), None);
         assert_eq!(keys.resolve(Key::K, Modifiers { ctrl: true, alt: true, shift: true, ..Modifiers::NONE }), None);
+    }
+
+    #[test]
+    fn refused_note_names_the_chord() {
+        assert_eq!(refused_note("⌥⌘E"), "⌥⌘E is taken by another app");
     }
 }

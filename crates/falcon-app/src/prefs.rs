@@ -155,7 +155,8 @@ pub struct Prefs {
     /// (`capture::QUALITIES`).
     pub screenshot_quality: u8,
     /// Eagle's `screencapture.shortcutsEnable`: the global capture keys
-    /// are registered (`hotkeys.rs`).
+    /// are registered (`hotkeys.rs`). Off by default, unlike Eagle's, so
+    /// falcon doesn't take ⌥⌘E from a running Eagle.
     pub screenshot_shortcuts: bool,
     /// Eagle's `general.showCaptureCollectModal`: an area or window
     /// screenshot opens the collect window to choose where it goes.
@@ -333,7 +334,7 @@ impl Default for Prefs {
             language: crate::locale::Language::Auto,
             screenshot_format: crate::capture::Format::Png,
             screenshot_quality: crate::capture::DEFAULT_QUALITY,
-            screenshot_shortcuts: true,
+            screenshot_shortcuts: false,
             screenshot_ask: false,
             notify_capture: true,
             screenshot_tag: true,
@@ -759,6 +760,26 @@ impl Window {
         self.recorder.stop();
         self.password = PasswordForm::default();
         self.auto_import_note = None;
+    }
+
+    /// The keys and the capture-key switch being edited, while the window
+    /// is open, so the global keys follow them at once and a refused one
+    /// shows on its row before Save.
+    pub fn live_keys(&self) -> Option<(&Shortcuts, bool)> {
+        self.draft.as_ref().filter(|_| self.open).map(|d| (&d.keys, d.prefs.screenshot_shortcuts))
+    }
+
+    /// Whether a shortcut row is waiting for a key press (the global keys
+    /// are let go so it gets them).
+    pub fn recording(&self) -> bool {
+        self.recorder.is_recording()
+    }
+
+    /// The global keys the system refused, for their rows.
+    pub fn set_refused(&mut self, refused: &[(crate::shortcuts::Command, egui::KeyboardShortcut)]) {
+        if self.recorder.refused != refused {
+            self.recorder.refused = refused.to_vec();
+        }
     }
 
     pub fn close(&mut self) {
@@ -1744,7 +1765,9 @@ mod tests {
         use crate::capture::{Format, Mode};
         let p = Prefs::default();
         assert_eq!((p.screenshot_format, p.screenshot_quality), (Format::Png, 90));
-        assert!(p.screenshot_shortcuts && !p.screenshot_ask && p.notify_capture && p.screenshot_tag);
+        // Eagle's but one: the global capture keys start off, so a running
+        // Eagle keeps ⌥⌘E.
+        assert!(!p.screenshot_shortcuts && !p.screenshot_ask && p.notify_capture && p.screenshot_tag);
         assert!(!p.screenshot_clipboard && p.screenshot_retina && p.menu_icon && p.notify_export_done);
         assert!(p.tells_capture(Mode::Area));
     }
@@ -1786,7 +1809,7 @@ mod tests {
         let p: Prefs = serde_json::from_str(r#"{"hover_zoom":false,"api_port":42000}"#).unwrap();
         let d = Prefs::default();
         assert_eq!((p.screenshot_format, p.screenshot_quality), (d.screenshot_format, 90));
-        assert!(p.screenshot_shortcuts && !p.screenshot_ask && p.notify_capture && p.screenshot_tag);
+        assert!(!p.screenshot_shortcuts && !p.screenshot_ask && p.notify_capture && p.screenshot_tag);
         assert!(!p.screenshot_clipboard && p.screenshot_retina && p.menu_icon && p.notify_export_done);
     }
 
@@ -1795,5 +1818,26 @@ mod tests {
         use crate::capture::{Format, Options};
         let p = Prefs { screenshot_format: Format::Webp, screenshot_quality: 80, screenshot_retina: false, screenshot_clipboard: true, ..Prefs::default() };
         assert_eq!(p.capture_options(), Options { format: Format::Webp, quality: 80, retina: false, clipboard: true });
+    }
+
+    #[test]
+    fn the_window_hands_out_live_keys_and_takes_refusals() {
+        use crate::capture::Mode;
+        use crate::shortcuts::Command;
+        let mut w = Window::default();
+        assert!(w.live_keys().is_none(), "closed");
+        let prefs = Prefs { screenshot_shortcuts: true, ..Prefs::default() };
+        let keys = Shortcuts::default();
+        w.show_with(Draft { prefs, panels: Panels { sidebar: true, inspector: true }, keys: keys.clone() });
+        let (live, on) = w.live_keys().unwrap();
+        assert!(on && *live == keys);
+        assert!(!w.recording());
+        let area = crate::shortcuts::parse("Command + Alt + E").unwrap();
+        w.set_refused(&[(Command::Capture(Mode::Area), area)]);
+        assert_eq!(w.recorder.refused, [(Command::Capture(Mode::Area), area)]);
+        w.set_refused(&[]);
+        assert!(w.recorder.refused.is_empty());
+        w.close();
+        assert!(w.live_keys().is_none());
     }
 }

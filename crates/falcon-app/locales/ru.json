@@ -1586,6 +1586,7 @@
   "very close to": "очень близок к",
   "{app} Document": "Документ {app}",
   "{chord} can't be used for “{command}”: another app has it": "{chord} нельзя назначить команде «{command}»: сочетание занято другим приложением",
+  "{chord} is taken by another app": "{chord} занято другим приложением",
   "{done} of {total}": "{done} из {total}",
   "{first} and {n} more": "{first} и ещё {n}",
   "{first}–{last} would include Eagle's port {port}": "{first}–{last} включает порт Eagle {port}",
