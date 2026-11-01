@@ -19,6 +19,7 @@ pub mod model;
 pub mod pack;
 pub mod sandbox;
 pub mod palette;
+pub mod rename;
 pub mod search;
 pub mod smart;
 pub mod smart_draft;

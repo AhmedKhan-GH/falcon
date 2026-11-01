@@ -5,6 +5,7 @@
 //! Renaming also renames the original and its thumbnail inside the `.info`
 //! folder; the folder itself keeps its ID name.
 
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -501,16 +502,35 @@ impl Library {
             .is_some_and(|f| f.is_locked() && encode_password(password).is_some_and(|e| e == f.password))
     }
 
-    /// Deletes a folder and its subfolders. Items that were in them lose
-    /// those folder ids; items left in no folder go to the trash, as Eagle
-    /// does (without a `deletedTime`).
+    /// Deletes a folder and its subfolders, moving items left in no folder
+    /// to the trash (see [`Library::delete_folders`]).
     pub fn delete_folder(&mut self, id: &str) -> Result<()> {
-        let removed = remove(&mut self.metadata.folders, id).ok_or_else(|| self.missing(id))?;
-        let mut gone = Vec::new();
-        removed.walk(&mut |f| gone.push(f.id.clone()));
+        self.delete_folders(&[id.to_string()], true)
+    }
+
+    /// Deletes folders with their subfolders, and unpins them from Quick
+    /// Access. Items that were in them lose those folder ids. With
+    /// `trash_items` (Eagle's "move the items to the trash too", on by
+    /// default), an item left in no folder goes to the trash, without a
+    /// `deletedTime` as Eagle does; an item still in another folder stays.
+    /// Without it every item stays. An id inside another deleted folder
+    /// goes with it; an unknown id is refused before anything changes.
+    pub fn delete_folders(&mut self, ids: &[String], trash_items: bool) -> Result<()> {
+        let known = self.folder_ids();
+        if let Some(id) = ids.iter().find(|id| !known.contains(id.as_str())) {
+            return Err(self.missing(id));
+        }
+        let mut gone = HashSet::new();
+        for id in ids {
+            if let Some(removed) = remove(&mut self.metadata.folders, id) {
+                removed.walk(&mut |f| {
+                    gone.insert(f.id.clone());
+                });
+            }
+        }
         self.metadata
             .quick_access
-            .retain(|q| q.get("id").and_then(|v| v.as_str()).is_none_or(|i| !gone.iter().any(|g| g == i)));
+            .retain(|q| q.get("id").and_then(|v| v.as_str()).is_none_or(|i| !gone.contains(i)));
         self.save_metadata()?;
         let affected: Vec<Item> = self
             .items()
@@ -520,12 +540,116 @@ impl Library {
             .collect();
         for mut item in affected {
             item.folders.retain(|f| !gone.contains(f));
-            if item.folders.is_empty() {
+            if trash_items && item.folders.is_empty() {
                 item.is_deleted = true;
             }
             self.update_item(item)?;
         }
         Ok(())
+    }
+
+    /// Renames several folders, `(id, new name)` each, in one save, as
+    /// Eagle's batch rename does. Like [`Library::rename_folder`] it leaves
+    /// `modificationTime` alone and drops a stale `pinyin`. An unknown id
+    /// is refused before anything changes.
+    pub fn rename_folders(&mut self, names: &[(String, String)]) -> Result<()> {
+        let known = self.folder_ids();
+        if let Some((id, _)) = names.iter().find(|(id, _)| !known.contains(id.as_str())) {
+            return Err(self.missing(id));
+        }
+        for (id, name) in names {
+            let f = find_mut(&mut self.metadata.folders, id).expect("checked above");
+            f.name = display_name(name);
+            f.pinyin = None;
+        }
+        self.save_metadata()
+    }
+
+    /// Gives several folders the same icon and/or colour in one save, as
+    /// Eagle's commands for selected folders do. `None` leaves that key as
+    /// each folder has it; `Some(None)` removes it.
+    pub fn restyle_folders(&mut self, ids: &[String], icon: Option<Option<&str>>, color: Option<Option<&str>>) -> Result<()> {
+        self.check_color(color.flatten())?;
+        self.expect_folders(ids)?;
+        for id in ids {
+            let f = find_mut(&mut self.metadata.folders, id).expect("checked above");
+            if let Some(i) = icon {
+                f.icon = i.map(str::to_string);
+            }
+            if let Some(c) = color {
+                f.icon_color = c.map(str::to_string);
+            }
+        }
+        self.save_metadata()
+    }
+
+    /// Gives several folders the same item sort in one save, as Eagle's
+    /// menu for selected folders does: `None` removes `orderBy` and
+    /// `sortIncrease`; a key keeps each folder's direction, ascending
+    /// when it had none.
+    pub fn set_folders_order(&mut self, ids: &[String], order: Option<FolderOrder>) -> Result<()> {
+        self.expect_folders(ids)?;
+        for id in ids {
+            let f = find_mut(&mut self.metadata.folders, id).expect("checked above");
+            f.order_by = order.map(|o| o.as_str().to_string());
+            f.sort_increase = order.map(|_| f.sort_increase.unwrap_or(true));
+        }
+        self.save_metadata()
+    }
+
+    /// Sets the sort direction of several folders in one save.
+    pub fn set_folders_increase(&mut self, ids: &[String], increase: bool) -> Result<()> {
+        self.expect_folders(ids)?;
+        for id in ids {
+            find_mut(&mut self.metadata.folders, id).expect("checked above").sort_increase = Some(increase);
+        }
+        self.save_metadata()
+    }
+
+    /// Moves several folders above, into or below `target` in one save, as
+    /// Eagle's Move Folder dialog does. They keep their order in the tree
+    /// (top to bottom); above and below they become the target's siblings
+    /// in that order, into it they follow its last child. A folder whose
+    /// parent moves too stays inside it. Moving onto one of the moved
+    /// folders, or into a moved folder's descendant, is refused, and
+    /// nothing changes on any error.
+    pub fn move_folders(&mut self, ids: &[String], target: &str, place: FolderPlace) -> Result<()> {
+        self.expect_folders(ids)?;
+        if !self.folder_ids().contains(target) {
+            return Err(self.missing(target));
+        }
+        let path = folder_path(&self.metadata.folders, target);
+        if ids.iter().any(|id| path.contains(&id.as_str())) {
+            return Err(self.invalid("cannot move a folder into itself"));
+        }
+        let picked: HashSet<&str> = ids.iter().map(String::as_str).collect();
+        let parents = parent_map(&self.metadata.folders);
+        // Tree order, leaving out folders whose parent moves with them.
+        let movers: Vec<String> = self
+            .all_folders()
+            .into_iter()
+            .filter(|f| picked.contains(f.id.as_str()) && !parents[f.id.as_str()].is_some_and(|p| picked.contains(p)))
+            .map(|f| f.id.clone())
+            .collect();
+        let moved: Vec<Folder> = movers.iter().map(|id| remove(&mut self.metadata.folders, id).expect("checked above")).collect();
+        let (siblings, at) = match place {
+            FolderPlace::Into => {
+                let kids = &mut find_mut(&mut self.metadata.folders, target).expect("checked above").children;
+                let end = kids.len();
+                (kids, end)
+            }
+            FolderPlace::Above | FolderPlace::Below => {
+                let parent = parent_map(&self.metadata.folders)[target].map(str::to_string);
+                let list = match parent {
+                    None => &mut self.metadata.folders,
+                    Some(p) => &mut find_mut(&mut self.metadata.folders, &p).expect("parent exists").children,
+                };
+                let i = list.iter().position(|f| f.id == target).expect("target is in its parent");
+                (list, if place == FolderPlace::Below { i + 1 } else { i })
+            }
+        };
+        siblings.splice(at..at, moved);
+        self.save_metadata()
     }
 
     /// Moves a folder under `parent` (or to the root), at the end of its new
@@ -626,6 +750,15 @@ impl Library {
         write_json(&self.root().join("tags.json"), &self.tags)
     }
 
+    /// Refuses a list naming a folder that doesn't exist.
+    fn expect_folders(&self, ids: &[String]) -> Result<()> {
+        let known = self.folder_ids();
+        match ids.iter().find(|id| !known.contains(id.as_str())) {
+            Some(id) => Err(self.missing(id)),
+            None => Ok(()),
+        }
+    }
+
     fn missing(&self, id: &str) -> Error {
         Error::Import { path: self.root().to_path_buf(), reason: format!("no folder {id}") }
     }
@@ -641,6 +774,39 @@ impl Library {
             _ => Ok(()),
         }
     }
+}
+
+/// Where [`Library::move_folders`] puts folders, next to the target.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FolderPlace {
+    Above,
+    Into,
+    Below,
+}
+
+/// Each folder's parent id (`None` at the top level).
+fn parent_map(roots: &[Folder]) -> HashMap<&str, Option<&str>> {
+    fn go<'a>(list: &'a [Folder], parent: Option<&'a str>, out: &mut HashMap<&'a str, Option<&'a str>>) {
+        for f in list {
+            out.insert(&f.id, parent);
+            go(&f.children, Some(&f.id), out);
+        }
+    }
+    let mut out = HashMap::new();
+    go(roots, None, &mut out);
+    out
+}
+
+/// Ids from the top level down to `id`, `id` included.
+fn folder_path<'a>(roots: &'a [Folder], id: &str) -> Vec<&'a str> {
+    let parents = parent_map(roots);
+    let mut path = Vec::new();
+    let mut cur = parents.get_key_value(id).map(|(k, _)| *k);
+    while let Some(c) = cur {
+        path.push(c);
+        cur = parents[c];
+    }
+    path
 }
 
 fn find_mut<'a>(folders: &'a mut [Folder], id: &str) -> Option<&'a mut Folder> {
@@ -733,6 +899,163 @@ mod tests {
         assert_eq!(order, [c.as_str(), b.as_str(), a.as_str()]);
         let reopened = Library::open(lib.root()).unwrap();
         assert_eq!(reopened.metadata.tags_groups[2].description.as_deref(), Some(""));
+    }
+
+    /// A library with three imported PNGs.
+    fn with_items(dir: &std::path::Path) -> (Library, Vec<String>) {
+        let mut lib = Library::create(dir.join("B.library")).unwrap();
+        let mut ids = Vec::new();
+        for n in 0..3 {
+            let path = dir.join(format!("{n}.png"));
+            image::RgbImage::from_pixel(4, 4, image::Rgb([n * 80, 20, 20])).save(&path).unwrap();
+            ids.push(lib.import_file(&path, &crate::import::ImportOptions::default()).unwrap());
+        }
+        (lib, ids)
+    }
+
+    fn file_into(lib: &mut Library, item: &str, folders: &[&String]) {
+        let mut i = lib.item(item).unwrap().clone();
+        i.folders = folders.iter().map(|f| f.to_string()).collect();
+        lib.update_item(i).unwrap();
+    }
+
+    fn names(l: &[Folder]) -> Vec<String> {
+        l.iter().map(|f| f.name.clone()).collect()
+    }
+
+    #[test]
+    fn deleting_several_folders_trashes_or_keeps_items() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (mut lib, items) = with_items(tmp.path());
+        let a = lib.create_folder(None, "A").unwrap();
+        let a1 = lib.create_folder(Some(&a), "A1").unwrap();
+        let b = lib.create_folder(None, "B").unwrap();
+        let c = lib.create_folder(None, "C").unwrap();
+        lib.add_quick_access("folder", &a1).unwrap();
+        lib.add_quick_access("folder", &c).unwrap();
+        file_into(&mut lib, &items[0], &[&a1]);
+        file_into(&mut lib, &items[1], &[&a, &b]);
+        file_into(&mut lib, &items[2], &[&b, &c]);
+
+        // Keeping the items: they only lose the folders.
+        lib.delete_folders(&[a.clone(), b.clone()], false).unwrap();
+        let kept = Library::open(lib.root()).unwrap();
+        assert_eq!(names(&kept.metadata.folders), ["C"]);
+        assert!(kept.item(&items[0]).unwrap().folders.is_empty());
+        assert!(kept.items().iter().all(|i| !i.is_deleted));
+        assert_eq!(kept.item(&items[2]).unwrap().folders, std::slice::from_ref(&c));
+        assert_eq!(kept.metadata.quick_access.len(), 1, "the subfolder is unpinned");
+
+        // Trashing: items left in no folder go, the one still in C stays.
+        let tmp = tempfile::tempdir().unwrap();
+        let (mut lib, items) = with_items(tmp.path());
+        let a = lib.create_folder(None, "A").unwrap();
+        let a1 = lib.create_folder(Some(&a), "A1").unwrap();
+        let b = lib.create_folder(None, "B").unwrap();
+        let c = lib.create_folder(None, "C").unwrap();
+        file_into(&mut lib, &items[0], &[&a1]);
+        file_into(&mut lib, &items[1], &[&a, &b]);
+        file_into(&mut lib, &items[2], &[&b, &c]);
+        // A1 is inside A: naming both is fine.
+        lib.delete_folders(&[a1.clone(), a.clone(), b.clone()], true).unwrap();
+        let got = Library::open(lib.root()).unwrap();
+        assert!(got.item(&items[0]).unwrap().is_deleted);
+        assert!(got.item(&items[1]).unwrap().is_deleted);
+        assert!(!got.item(&items[2]).unwrap().is_deleted);
+        assert!(got.item(&items[0]).unwrap().extra.get("deletedTime").is_none(), "as Eagle, no deletedTime");
+
+        let before = lib.metadata.folders.clone();
+        assert!(lib.delete_folders(&[c.clone(), "NOPE".into()], true).is_err());
+        assert_eq!(lib.metadata.folders, before, "nothing changes on an unknown id");
+    }
+
+    #[test]
+    fn batch_rename_restyle_and_sort() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut lib = Library::create(tmp.path().join("R.library")).unwrap();
+        let a = lib.create_folder(None, "A").unwrap();
+        let b = lib.create_folder(Some(&a), "B").unwrap();
+        let c = lib.create_folder(None, "C").unwrap();
+        let stamp = lib.metadata.folders[0].modification_time;
+        lib.set_folder_order(&c, Some(FolderOrder::By(crate::search::OrderBy::Name)), false).unwrap();
+
+        lib.rename_folders(&[(a.clone(), "Cafe\u{301} 1".into()), (b.clone(), "Two".into())]).unwrap();
+        let got = Library::open(lib.root()).unwrap();
+        assert_eq!(got.metadata.folders[0].name, "Caf\u{e9} 1", "NFC as Eagle saves");
+        assert_eq!(got.metadata.folders[0].children[0].name, "Two");
+        assert_eq!(got.metadata.folders[0].modification_time, stamp);
+        assert!(lib.rename_folders(&[(c.clone(), "X".into()), ("NOPE".into(), "Y".into())]).is_err());
+        assert_eq!(lib.metadata.folders[1].name, "C");
+
+        let all = [a.clone(), b.clone(), c.clone()];
+        lib.restyle_folders(&all, None, Some(Some("red"))).unwrap();
+        lib.restyle_folders(&all[..2], Some(Some("star")), None).unwrap();
+        let got = Library::open(lib.root()).unwrap();
+        let f = got.all_folders();
+        assert_eq!((f[0].icon.as_deref(), f[0].icon_color.as_deref()), (Some("star"), Some("red")));
+        assert_eq!((f[2].icon.as_deref(), f[2].icon_color.as_deref()), (None, Some("red")));
+        assert!(lib.restyle_folders(&all, None, Some(Some("mauve"))).is_err());
+        lib.restyle_folders(&all, Some(None), Some(None)).unwrap();
+        let text = std::fs::read_to_string(lib.root().join("metadata.json")).unwrap();
+        assert!(!text.contains("iconColor") && !text.contains("\"icon\""), "keys removed: {text}");
+
+        // A shared key keeps each folder's direction; Global Settings drops both keys.
+        lib.set_folders_order(&all, Some(FolderOrder::By(crate::search::OrderBy::FileSize))).unwrap();
+        let f = lib.all_folders();
+        assert_eq!(f.iter().map(|f| f.sort_increase).collect::<Vec<_>>(), [Some(true), Some(true), Some(false)]);
+        assert!(f.iter().all(|f| f.order_by.as_deref() == Some("FILESIZE")), "{:?}", f.iter().map(|f| &f.order_by).collect::<Vec<_>>());
+        lib.set_folders_increase(&all, false).unwrap();
+        assert!(lib.all_folders().iter().all(|f| f.sort_increase == Some(false)));
+        lib.set_folders_order(&all, None).unwrap();
+        let text = std::fs::read_to_string(lib.root().join("metadata.json")).unwrap();
+        assert!(!text.contains("orderBy") && !text.contains("sortIncrease"));
+    }
+
+    #[test]
+    fn moving_several_folders() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut lib = Library::create(tmp.path().join("M.library")).unwrap();
+        let a = lib.create_folder(None, "A").unwrap();
+        let a1 = lib.create_folder(Some(&a), "A1").unwrap();
+        let a2 = lib.create_folder(Some(&a), "A2").unwrap();
+        let b = lib.create_folder(None, "B").unwrap();
+        let c = lib.create_folder(None, "C").unwrap();
+        let d = lib.create_folder(None, "D").unwrap();
+        let tree = |l: &Library| -> Vec<String> {
+            fn go(list: &[Folder], depth: usize, out: &mut Vec<String>) {
+                for f in list {
+                    out.push(format!("{}{}", " ".repeat(depth), f.name));
+                    go(&f.children, depth + 1, out);
+                }
+            }
+            let mut out = Vec::new();
+            go(&l.metadata.folders, 0, &mut out);
+            out
+        };
+
+        // One undo step puts everything back.
+        let start = tree(&lib);
+        lib.begin_transaction("move");
+        lib.move_folders(&[c.clone(), d.clone()], &a, FolderPlace::Into).unwrap();
+        let t = lib.end_transaction().unwrap();
+        lib.revert(t).unwrap();
+        assert_eq!(tree(&Library::open(lib.root()).unwrap()), start);
+
+        // Picked in any order, they keep their tree order: A2 then C.
+        lib.move_folders(&[c.clone(), a2.clone()], &b, FolderPlace::Above).unwrap();
+        assert_eq!(tree(&lib), ["A", " A1", "A2", "C", "B", "D"]);
+        lib.move_folders(&[a2.clone(), d.clone()], &a1, FolderPlace::Below).unwrap();
+        assert_eq!(tree(&lib), ["A", " A1", " A2", " D", "C", "B"]);
+        // Into: after the last child. A moves with its children; A1, whose
+        // parent moves too, stays inside it.
+        lib.move_folders(&[a1.clone(), a.clone()], &b, FolderPlace::Into).unwrap();
+        assert_eq!(tree(&Library::open(lib.root()).unwrap()), ["C", "B", " A", "  A1", "  A2", "  D"]);
+
+        let before = tree(&lib);
+        assert!(lib.move_folders(std::slice::from_ref(&b), &a2, FolderPlace::Into).is_err(), "into its own descendant");
+        assert!(lib.move_folders(&[b.clone(), c.clone()], &c, FolderPlace::Above).is_err(), "onto a moved folder");
+        assert!(lib.move_folders(std::slice::from_ref(&c), "NOPE", FolderPlace::Above).is_err());
+        assert_eq!(tree(&lib), before);
     }
 
     #[test]
