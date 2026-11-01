@@ -481,12 +481,12 @@ pub const TABLE: &[Spec] = &[
 
 /// Keys that cannot be rebound, listed in the Shortcuts section.
 pub const FIXED: &[(&str, &str)] = &[
-    ("← → ↑ ↓", "Move the selection, or step through the viewer"),
-    ("⇧ ← →", "Extend the selection (also ⇧ ↑ ↓ in the list layout)"),
-    ("Esc", "Close the viewer, or clear the selection"),
-    ("0 / 1 / + / −", "Viewer: zoom to fit, actual size, zoom in, zoom out"),
-    ("Tab", "Show or hide the sidebar and inspector (no text field focused)"),
-    ("Hold Z", "Hover preview of the card under the pointer"),
+    ("← → ↑ ↓", crate::locale::tr_key("Move the selection, or step through the viewer")),
+    ("⇧ ← →", crate::locale::tr_key("Extend the selection (also ⇧ ↑ ↓ in the list layout)")),
+    ("Esc", crate::locale::tr_key("Close the viewer, or clear the selection")),
+    ("0 / 1 / + / −", crate::locale::tr_key("Viewer: zoom to fit, actual size, zoom in, zoom out")),
+    ("Tab", crate::locale::tr_key("Show or hide the sidebar and inspector (no text field focused)")),
+    (crate::locale::tr_key("Hold Z"), crate::locale::tr_key("Hover preview of the card under the pointer")),
 ];
 
 /// The row of a command; menu-only commands (Undo, Import, …) have none.
@@ -760,7 +760,8 @@ pub fn display(ctx: &egui::Context, c: &KeyboardShortcut) -> String {
 
 /// Whether the shortcut list's search shows `s`, whose chord reads `chord`.
 fn listed(query: &str, s: &Spec, chord: &str) -> bool {
-    crate::prefs::matches(query, &[s.group, s.label, s.id, chord])
+    use crate::locale::tr;
+    crate::prefs::matches(query, &[tr(s.group), tr(s.label), s.label, s.id, chord])
 }
 
 /// How long a rejected chord's "Used by" note stays, as in Eagle.
@@ -820,6 +821,7 @@ impl Recorder {
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui, keys: &mut Shortcuts) {
+        use crate::locale::{tr, trf};
         use crate::theme::{self as t, font};
         use egui::{Align2, CornerRadius, RichText, Sense, Stroke, vec2};
         let now = ui.input(|i| i.time);
@@ -831,7 +833,7 @@ impl Recorder {
         }
         ui.add_space(4.0);
         if ui
-            .add(egui::TextEdit::singleline(&mut self.query).hint_text(RichText::new(format!("{}  Search shortcuts", crate::icons::MAGNIFYING_GLASS)).color(t::p().text_muted)).desired_width(240.0))
+            .add(egui::TextEdit::singleline(&mut self.query).hint_text(RichText::new(format!("{}  {}", crate::icons::MAGNIFYING_GLASS, tr("Search shortcuts"))).color(t::p().text_muted)).desired_width(240.0))
             .changed()
         {
             self.recording = None;
@@ -847,11 +849,11 @@ impl Recorder {
             if s.group != group {
                 group = s.group;
                 ui.add_space(if shown == 1 { 4.0 } else { 10.0 });
-                ui.label(RichText::new(group).strong().size(13.0));
+                ui.label(RichText::new(tr(group)).strong().size(13.0));
             }
             let (row, _) = ui.allocate_exact_size(vec2(ui.available_width(), 30.0), Sense::hover());
             let p = ui.painter();
-            p.text(row.left_center() + vec2(12.0, 0.0), Align2::LEFT_CENTER, s.label, font(13.0), t::p().text);
+            p.text(row.left_center() + vec2(12.0, 0.0), Align2::LEFT_CENTER, tr(s.label), font(13.0), t::p().text);
             let button = egui::Rect::from_min_size(egui::pos2(row.right() - 150.0, row.top() + 3.0), vec2(150.0, 24.0));
             let resp = ui.interact(button, ui.scope_id().with(s.id), Sense::click());
             let active = self.recording == Some(s.cmd);
@@ -859,9 +861,9 @@ impl Recorder {
             let stroke = if active { Stroke::new(1.0, t::p().primary) } else { Stroke::NONE };
             p.rect(button, CornerRadius::same(6), fill, stroke, egui::StrokeKind::Inside);
             let (text, color) = match (active, keys.binding(s.cmd)) {
-                (true, _) => ("Type a shortcut".to_string(), t::p().text_muted),
+                (true, _) => (tr("Type a shortcut").to_string(), t::p().text_muted),
                 (false, Some(c)) => (display(ui.ctx(), &c), t::p().text),
-                (false, None) => ("None".to_string(), t::p().text_disabled),
+                (false, None) => (tr("None").to_string(), t::p().text_disabled),
             };
             p.text(button.center(), Align2::CENTER_CENTER, text, font(12.5), color);
             if resp.clicked() {
@@ -869,11 +871,11 @@ impl Recorder {
                 self.conflict = None;
             }
             if let Some((_, other, _)) = self.conflict.filter(|c| c.0 == s.cmd) {
-                let note = format!("Used by {}", spec(other).label);
+                let note = trf("Used by {command}", &[("command", &tr(spec(other).label))]);
                 p.text(button.left_center() - vec2(10.0, 0.0), Align2::RIGHT_CENTER, note, font(11.5), egui::Color32::from_rgb(0xff, 0xb0, 0x40));
             } else if !keys.is_default(s.cmd) {
                 let r = egui::Rect::from_center_size(button.left_center() - vec2(16.0, 0.0), vec2(22.0, 22.0));
-                let reset = ui.interact(r, ui.scope_id().with((s.id, "reset")), Sense::click()).on_hover_text("Use the default");
+                let reset = ui.interact(r, ui.scope_id().with((s.id, "reset")), Sense::click()).on_hover_text(tr("Use the default"));
                 if reset.hovered() {
                     p.rect_filled(r, CornerRadius::same(5), t::p().button_hover);
                 }
@@ -892,33 +894,33 @@ impl Recorder {
                 }
             }
         }
-        let fixed: Vec<_> = FIXED.iter().filter(|(k, what)| crate::prefs::matches(&self.query, &["Fixed", k, what])).collect();
+        let fixed: Vec<_> = FIXED.iter().filter(|(k, what)| crate::prefs::matches(&self.query, &[tr("Fixed"), tr(k), tr(what), what])).collect();
         if shown == 0 && fixed.is_empty() {
             ui.add_space(12.0);
-            ui.label(RichText::new("No shortcuts match").color(t::p().text_muted));
+            ui.label(RichText::new(tr("No shortcuts match")).color(t::p().text_muted));
         }
         if !fixed.is_empty() {
             ui.add_space(10.0);
-            ui.label(RichText::new("Fixed").strong().size(13.0));
+            ui.label(RichText::new(tr("Fixed")).strong().size(13.0));
         }
         for (k, what) in fixed {
             let (row, _) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::hover());
-            ui.painter().text(row.left_center() + vec2(12.0, 0.0), Align2::LEFT_CENTER, *what, font(13.0), t::p().text_muted);
-            ui.painter().text(row.right_center() - vec2(75.0, 0.0), Align2::CENTER_CENTER, *k, font(12.5), t::p().text_muted);
+            ui.painter().text(row.left_center() + vec2(12.0, 0.0), Align2::LEFT_CENTER, tr(what), font(13.0), t::p().text_muted);
+            ui.painter().text(row.right_center() - vec2(75.0, 0.0), Align2::CENTER_CENTER, tr(k), font(12.5), t::p().text_muted);
         }
         ui.add_space(12.0);
         ui.separator();
         ui.horizontal(|ui| {
             if self.confirm_reset {
-                ui.label("Restore every shortcut to its default?");
-                if ui.button("Restore").clicked() {
+                ui.label(tr("Restore every shortcut to its default?"));
+                if ui.button(tr("Restore")).clicked() {
                     keys.0.clear();
                     self.stop();
                 }
-                if ui.button("Cancel").clicked() {
+                if ui.button(tr("Cancel")).clicked() {
                     self.confirm_reset = false;
                 }
-            } else if ui.add_enabled(!keys.0.is_empty(), egui::Button::new("Restore Defaults")).clicked() {
+            } else if ui.add_enabled(!keys.0.is_empty(), egui::Button::new(tr("Restore Defaults"))).clicked() {
                 self.confirm_reset = true;
             }
         });

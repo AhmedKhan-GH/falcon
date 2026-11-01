@@ -212,6 +212,36 @@ fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
+/// Labels kept in tables, translated where they are shown: the menu bar
+/// and the shortcut list.
+fn table_keys() -> Vec<&'static str> {
+    use crate::menu::Entry;
+    fn walk(entries: &[Entry], out: &mut Vec<&'static str>) {
+        for e in entries {
+            match e {
+                Entry::Item(i) => out.push(i.label),
+                Entry::Sub(t, sub) => {
+                    out.push(t);
+                    walk(sub, out);
+                }
+                Entry::Separator => {}
+            }
+        }
+    }
+    let mut keys = Vec::new();
+    walk(crate::menu::ABOUT, &mut keys);
+    walk(crate::menu::APP, &mut keys);
+    for (title, entries) in crate::menu::MENUS {
+        keys.push(title);
+        walk(entries, &mut keys);
+    }
+    for s in crate::shortcuts::TABLE {
+        keys.push(s.group);
+        keys.push(s.label);
+    }
+    keys
+}
+
 /// Every key the code uses.
 fn code_keys() -> BTreeMap<String, Found> {
     let mut files = Vec::new();
@@ -222,6 +252,9 @@ fn code_keys() -> BTreeMap<String, Found> {
         let text = std::fs::read_to_string(&f).unwrap();
         let name = f.strip_prefix(&src).unwrap().display().to_string();
         keys_in(&text, &name, &mut out);
+    }
+    for k in table_keys() {
+        add(&mut out, k.to_string(), Found::Text, "tables", 0);
     }
     out
 }

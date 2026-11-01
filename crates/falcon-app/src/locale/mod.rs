@@ -260,7 +260,6 @@ pub fn tr(key: &str) -> &str {
 
 /// Marks a string in a `const` or `static` table as a key, so the
 /// catalogue lists it; it is translated where it is shown, with `tr`.
-#[allow(dead_code)] // Until the first callers land.
 pub const fn tr_key(key: &'static str) -> &'static str {
     key
 }

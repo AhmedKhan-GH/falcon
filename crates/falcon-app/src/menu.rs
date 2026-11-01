@@ -593,18 +593,20 @@ pub struct Click {
 /// The menu bar as last built and refreshed.
 #[derive(Default)]
 pub struct Bar {
-    built: Option<Shortcuts>,
+    /// The bindings and language the menus were last built with.
+    built: Option<(Shortcuts, crate::locale::Lang)>,
     state: Option<State>,
 }
 
 impl Bar {
     /// Builds the menus on the first call and again when the bindings
-    /// change, and hands the state to the items' validation when it
+    /// or the language change, and hands the state to the items' validation when it
     /// changes. Call on the main thread.
     pub fn sync(&mut self, ctx: &eframe::egui::Context, keys: &Shortcuts, state: &State) {
-        if self.built.as_ref() != Some(keys) {
+        let lang = crate::locale::current();
+        if self.built.as_ref().is_none_or(|(k, l)| k != keys || *l != lang) {
             mac::build(ctx, keys);
-            self.built = Some(keys.clone());
+            self.built = Some((keys.clone(), lang));
         }
         if self.state.as_ref() != Some(state) {
             mac::set_state(state.clone());
@@ -646,6 +648,7 @@ mod mac {
     use objc2_foundation::{NSString, NSUserDefaults};
 
     use super::{Click, Entry, State, items, key_equivalent};
+    use crate::locale::tr;
     use crate::shortcuts::Shortcuts;
 
     /// Item tags are this plus the item's index in `items()`.
@@ -789,7 +792,7 @@ mod mac {
         for (title, entries) in super::MENUS {
             let menu = submenu(mtm, &target, keys, all, title, entries);
             let top = NSMenuItem::new(mtm);
-            top.setTitle(&NSString::from_str(title));
+            top.setTitle(&NSString::from_str(tr(title)));
             top.setSubmenu(Some(&menu));
             main.addItem(&top);
             match *title {
@@ -801,7 +804,7 @@ mod mac {
     }
 
     fn submenu(mtm: MainThreadMarker, target: &Target, keys: &Shortcuts, all: &[&super::Item], title: &str, entries: &'static [Entry]) -> Retained<NSMenu> {
-        let menu = NSMenu::initWithTitle(NSMenu::alloc(mtm), &NSString::from_str(title));
+        let menu = NSMenu::initWithTitle(NSMenu::alloc(mtm), &NSString::from_str(tr(title)));
         menu.setDelegate(Some(ProtocolObject::from_ref(target)));
         for e in entries {
             match e {
@@ -809,7 +812,7 @@ mod mac {
                 Entry::Separator => menu.addItem(&NSMenuItem::separatorItem(mtm)),
                 Entry::Sub(t, sub) => {
                     let item = NSMenuItem::new(mtm);
-                    item.setTitle(&NSString::from_str(t));
+                    item.setTitle(&NSString::from_str(tr(t)));
                     item.setSubmenu(Some(&submenu(mtm, target, keys, all, t, sub)));
                     menu.addItem(&item);
                 }
@@ -823,7 +826,7 @@ mod mac {
         let ke = super::chord(it.cmd, keys).as_ref().and_then(key_equivalent);
         let key = NSString::from_str(ke.as_ref().map_or("", |k| k.key.as_str()));
         // SAFETY: the action is a method of `target`, which takes the item.
-        let item = unsafe { NSMenuItem::initWithTitle_action_keyEquivalent(NSMenuItem::alloc(mtm), &NSString::from_str(it.label), Some(sel!(falconMenuItem:)), &key) };
+        let item = unsafe { NSMenuItem::initWithTitle_action_keyEquivalent(NSMenuItem::alloc(mtm), &NSString::from_str(tr(it.label)), Some(sel!(falconMenuItem:)), &key) };
         if let Some(k) = ke {
             let mut mask = NSEventModifierFlags::empty();
             for (on, flag) in [(k.command, NSEventModifierFlags::Command), (k.shift, NSEventModifierFlags::Shift), (k.alt, NSEventModifierFlags::Option), (k.ctrl, NSEventModifierFlags::Control)] {

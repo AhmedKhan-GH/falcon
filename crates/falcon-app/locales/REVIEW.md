@@ -1,0 +1,97 @@
+# Translations to review
+
+Every translation in this folder was written for falcon by a language
+model, not by a native speaker, and none was copied from another app. All
+of them should be read by a fluent speaker before a release; the list
+below says what each file covers and where a reviewer should look first.
+
+When a string is reviewed, nothing needs to change here unless a whole
+language has been checked: then move it to "Reviewed" with the date and
+the reviewer.
+
+## Conventions
+
+- German addresses the user as *Sie*; Spanish uses neutral imperatives
+  and infinitives for commands (*Mover a la papelera*), no *tú*/*usted*.
+- Japanese and Korean use polite forms in sentences (です/ます, 합니다/하세요)
+  and nouns or plain verbs in menu items; Japanese uses full-width
+  punctuation (、。（）「」) and the menu ellipsis `…`.
+- Chinese uses full-width punctuation (，。：（）) and no space between
+  Chinese and Latin text or numbers, except around placeholders that
+  stand for names.
+- Placeholders such as `{n}`, `{name}` and `{folder}` are kept exactly;
+  `…` at the end of a menu item (it opens a dialog) is kept.
+- Product and file names stay as they are: Falcon, Eagle, Finder,
+  Quick Look, .eaglepack, CSV, Base64, IPTC, XMP, BPM, URL.
+
+## Glossary
+
+The core words, so every file uses one term for one thing.
+
+| English | de | es | ja | ko | ru | zh_CN | zh_TW |
+|---|---|---|---|---|---|---|---|
+| Library | Mediathek | Biblioteca | ライブラリ | 라이브러리 | Библиотека | 资源库 | 資料庫 |
+| Item | Objekt | Elemento | アイテム | 항목 | Элемент | 项目 | 項目 |
+| Folder | Ordner | Carpeta | フォルダ | 폴더 | Папка | 文件夹 | 資料夾 |
+| Subfolder | Unterordner | Subcarpeta | サブフォルダ | 하위 폴더 | Вложенная папка | 子文件夹 | 子資料夾 |
+| Smart Folder | Intelligenter Ordner | Carpeta inteligente | スマートフォルダ | 스마트 폴더 | Смарт-папка | 智能文件夹 | 智慧型資料夾 |
+| Tag | Tag | Etiqueta | タグ | 태그 | Тег | 标签 | 標籤 |
+| Tag group | Tag-Gruppe | Grupo de etiquetas | タググループ | 태그 그룹 | Группа тегов | 标签组 | 標籤群組 |
+| Auto-tags | Auto-Tags | Etiquetas automáticas | 自動タグ | 자동 태그 | Автотеги | 自动标签 | 自動標籤 |
+| Uncategorized | Ohne Ordner | Sin carpeta | 未分類 | 미분류 | Без папки | 未分类 | 未分類 |
+| Untagged | Ohne Tags | Sin etiquetas | タグなし | 태그 없음 | Без тегов | 无标签 | 無標籤 |
+| Recently Used | Zuletzt verwendet | Usados recientemente | 最近使った項目 | 최근 사용 | Недавние | 最近使用 | 最近使用 |
+| Random | Zufällig | Aleatorio | ランダム | 무작위 | Случайные | 随机 | 隨機 |
+| All Items | Alle Objekte | Todos los elementos | すべてのアイテム | 모든 항목 | Все элементы | 全部项目 | 所有項目 |
+| All Tags | Alle Tags | Todas las etiquetas | すべてのタグ | 모든 태그 | Все теги | 全部标签 | 所有標籤 |
+| Quick Access | Schnellzugriff | Acceso rápido | クイックアクセス | 빠른 접근 | Быстрый доступ | 快速访问 | 快速存取 |
+| Trash | Papierkorb | Papelera | ゴミ箱 | 휴지통 | Корзина | 废纸篓 | 垃圾桶 |
+| Sidebar | Seitenleiste | Barra lateral | サイドバー | 사이드바 | Боковая панель | 边栏 | 側邊欄 |
+| Inspector | Informationen | Inspector | インスペクタ | 속성 패널 | Инспектор | 检查器 | 檢閱器 |
+| Viewer | Betrachter | Visor | ビューア | 뷰어 | Просмотрщик | 查看器 | 檢視器 |
+| Filter / Filter bar | Filter / Filterleiste | Filtro / Barra de filtros | フィルタ / フィルタバー | 필터 / 필터 막대 | Фильтр / Панель фильтров | 筛选 / 筛选栏 | 篩選 / 篩選列 |
+| Search | Suchen | Buscar | 検索 | 검색 | Поиск | 搜索 | 搜尋 |
+| Preferences | Einstellungen | Preferencias | 環境設定 | 환경설정 | Настройки | 偏好设置 | 偏好設定 |
+| Import / Export | Importieren / Exportieren | Importar / Exportar | 読み込む / 書き出す | 가져오기 / 내보내기 | Импорт / Экспорт | 导入 / 导出 | 匯入 / 匯出 |
+| Thumbnail | Miniatur | Miniatura | サムネール | 썸네일 | Миниатюра | 缩略图 | 縮圖 |
+| Rating | Bewertung | Valoración | 評価 | 별점 | Рейтинг | 评分 | 評分 |
+| Comment (on an image) | Kommentar | Comentario | コメント | 코멘트 | Комментарий | 批注 | 註解 |
+| Notes | Notizen | Notas | メモ | 메모 | Заметки | 备注 | 備註 |
+| Source URL | Quell-URL | URL de origen | ソースURL | 출처 URL | URL источника | 来源网址 | 來源網址 |
+| Duplicate (verb) | Duplizieren | Duplicar | 複製 | 복제 | Дублировать | 创建副本 | 複製 |
+| Duplicates (found) | Duplikate | Duplicados | 重複 | 중복 항목 | Дубликаты | 重复项 | 重複項目 |
+| Collect window | Sammelfenster | Ventana de captura | 収集ウインドウ | 수집 창 | Окно сбора | 收集窗口 | 收集視窗 |
+| Waterfall / Justified / Grid / List | Wasserfall / Blocksatz / Raster / Liste | Cascada / Justificado / Cuadrícula / Lista | ウォーターフォール / 両端揃え / グリッド / リスト | 워터폴 / 양쪽 맞춤 / 격자 / 목록 | Каскад / По ширине / Сетка / Список | 瀑布流 / 自适应 / 网格 / 列表 | 瀑布流 / 自適應 / 網格 / 列表 |
+| Rename | Umbenennen | Renombrar | 名前を変更 | 이름 변경 | Переименовать | 重命名 | 重新命名 |
+| Move to Trash | In den Papierkorb legen | Mover a la papelera | ゴミ箱に入れる | 휴지통으로 이동 | Переместить в корзину | 移到废纸篓 | 丟到垃圾桶 |
+| Restore | Wiederherstellen | Restaurar | 元に戻す | 복원 | Восстановить | 恢复 | 回復 |
+| Cancel / OK | Abbrechen / OK | Cancelar / Aceptar | キャンセル / OK | 취소 / 확인 | Отмена / ОК | 取消 / 好 | 取消 / 好 |
+| Undo / Redo | Widerrufen / Wiederholen | Deshacer / Rehacer | 取り消す / やり直す | 실행 취소 / 실행 복귀 | Отменить / Повторить | 撤销 / 重做 | 還原 / 重做 |
+| Shortcut | Tastenkürzel | Atajo | ショートカット | 단축키 | Сочетание клавиш | 快捷键 | 快速鍵 |
+| Show in Finder | Im Finder zeigen | Mostrar en Finder | Finderで表示 | Finder에서 보기 | Показать в Finder | 在访达中显示 | 在 Finder 中顯示 |
+| Presentation mode | Präsentationsmodus | Modo presentación | プレゼンテーションモード | 프레젠테이션 모드 | Режим презентации | 演示模式 | 簡報模式 |
+
+## Files
+
+| File | Keys | State |
+|---|---|---|
+| de.json | all | machine-written, unreviewed |
+| es.json | all | machine-written, unreviewed |
+| ja.json | all | machine-written, unreviewed |
+| ko.json | all | machine-written, unreviewed |
+| ru.json | all | machine-written, unreviewed |
+| zh_CN.json | all | machine-written, unreviewed |
+| zh_TW.json | all | machine-written, unreviewed |
+
+## Look at first
+
+- Short labels that are ambiguous out of context: *Zoom* (the window
+  command), *Grid* (layout), *Size* (file size vs. dimensions), *Open*
+  (verb), *None*, *Fixed* (the shortcut heading: keys that can't be
+  changed).
+- Russian plural forms (`one`/`few`/`many`) of every count.
+- Long sentences in Preferences, which must fit a 520-point-wide pane.
+
+## Reviewed
+
+Nothing yet.
