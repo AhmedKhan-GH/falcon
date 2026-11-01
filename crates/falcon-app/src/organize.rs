@@ -270,6 +270,15 @@ pub fn is_shut(f: &Folder, unlocked: &HashSet<String>) -> bool {
     f.is_locked() && !unlocked.contains(&f.id)
 }
 
+/// Applies a Touch ID answer to the folder it was asked for: on success
+/// only that folder joins `unlocked`. Returns whether it unlocked.
+pub fn touch_unlock(folder: &str, ok: bool, unlocked: &mut HashSet<String>) -> bool {
+    if ok {
+        unlocked.insert(folder.to_string());
+    }
+    ok
+}
+
 /// The outermost still-locked folder on the way to `id` (itself
 /// included): the folder whose password must be typed to browse `id`.
 pub fn lock_gate<'a>(roots: &'a [Folder], id: &str, unlocked: &HashSet<String>) -> Option<&'a Folder> {
@@ -558,6 +567,15 @@ pub fn add_typed_tags(tags: &mut Vec<String>, typed: &str) -> bool {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn touch_id_unlocks_only_the_asked_folder() {
+        let mut open = HashSet::new();
+        assert!(!touch_unlock("a", false, &mut open));
+        assert!(open.is_empty());
+        assert!(touch_unlock("a", true, &mut open));
+        assert_eq!(open, HashSet::from(["a".to_string()]));
+    }
 
     #[test]
     fn toggle_with_children_sets_the_node_and_its_direct_children() {

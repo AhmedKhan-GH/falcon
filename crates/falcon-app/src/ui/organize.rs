@@ -36,6 +36,10 @@ pub(crate) struct OrgState {
     unlock_text: String,
     unlock_error: bool,
     password: Option<PasswordDraft>,
+    /// A Touch ID request for a locked folder: its ticket and the folder.
+    touch: Option<(u64, String)>,
+    /// The last Touch ID request did not unlock.
+    touch_failed: bool,
     /// The scope a random folder sort was shuffled for, and its seed.
     seed: Option<(Scope, u64)>,
     /// All Tags shows tag groups instead of A-Z.
@@ -1244,6 +1248,31 @@ impl App {
             }
             self.ws.org.unlock_text.clear();
         }
+        // Touch ID is offered whenever this Mac can use it.
+        if crate::touch_id::available() {
+            let br = Rect::from_center_size(Pos2::new(c.x, r.bottom() + 22.0), vec2(220.0, 26.0));
+            let label = RichText::new(format!("{}  {}", ic::LOCK_SIMPLE_OPEN, tr("Unlock with Touch ID"))).color(t::p().text);
+            if ui.put(br, egui::Button::new(label).min_size(br.size())).on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
+                // A new request replaces one still waiting (also one the
+                // app lock started, whose answer would never come here).
+                self.ws.org.touch_failed = false;
+                let reason = trf("unlock the folder “{name}”", &[("name", &gate.name)]);
+                self.ws.org.touch = crate::touch_id::start(&reason, ui.ctx()).map(|t| (t, gate.id.clone()));
+                self.ws.org.touch_failed = self.ws.org.touch.is_none();
+            }
+            if self.ws.org.touch_failed {
+                ui.painter().text(Pos2::new(c.x, br.bottom() + 12.0), Align2::CENTER_CENTER, tr("Touch ID didn't unlock the folder"), font(12.0), t::p().icon_red);
+            }
+        }
+    }
+
+    /// Takes a Touch ID answer for a locked folder, whichever folder is
+    /// open by now; only the folder it was asked for is unlocked.
+    pub(crate) fn poll_folder_touch_id(&mut self) {
+        let Some((ticket, id)) = self.ws.org.touch.clone() else { return };
+        let Some(ok) = crate::touch_id::poll(ticket) else { return };
+        self.ws.org.touch = None;
+        self.ws.org.touch_failed = !organize::touch_unlock(&id, ok, &mut self.ws.org.unlocked);
     }
 }
 
@@ -1628,6 +1657,7 @@ impl App {
 
     pub(crate) fn organize_dialogs(&mut self, ctx: &egui::Context, lib: &Library) {
         self.merge_dialog(ctx);
+        self.poll_folder_touch_id();
         if let Some(id) = self.ws.org.settings_request.take()
             && let Some(f) = logic::find_folder(&lib.metadata.folders, &id)
             && !organize::is_shut(f, &self.ws.org.unlocked)
