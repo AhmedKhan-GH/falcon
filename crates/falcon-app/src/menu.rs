@@ -109,7 +109,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::FolderUp | C::FolderDown | C::FolderTop | C::FolderBottom => grid && matches!(s.scope, ScopeKind::Folder | ScopeKind::Smart),
         C::SwitchLibrary | C::CollectWindow | C::Preferences | C::CloseWindow | C::Minimize | C::FullScreen | C::WindowZoom => true,
         C::NextLibrary | C::PreviousLibrary => s.libraries > 1,
-        C::Page(_) | C::Import | C::FindDuplicates => s.library,
+        C::Page(_) | C::Import | C::ImportFolders | C::FindDuplicates => s.library,
         C::Scroll(_) | C::SelectFirst | C::SelectLast | C::ToggleFolders => grid,
         C::ParentFolder => grid && s.parent,
         C::Reshuffle => grid && s.scope == ScopeKind::Random,
@@ -188,7 +188,17 @@ pub static MENUS: &[(&str, &[Entry])] = &[
             item("New Subfolder", Command::NewSubfolder),
             item("New Smart Folder…", Command::NewSmartFolder),
             SEP,
+            item("Import Folders…", Command::ImportFolders),
             item("Import Files…", Command::Import),
+            Entry::Sub(
+                "Export",
+                &[
+                    item("To Computer…", Command::ExportComputer),
+                    item("As .eaglepack…", Command::ExportPack),
+                    item("In Another Format…", Command::ExportFormat),
+                    item("To CSV…", Command::ExportCsv),
+                ],
+            ),
             SEP,
             item("Open Library…", Command::SwitchLibrary),
             SEP,
@@ -207,7 +217,17 @@ pub static MENUS: &[(&str, &[Entry])] = &[
             item("Select All", Command::SelectAll),
             SEP,
             item("Rename", Command::Rename),
-            item("Copy File Path", Command::CopyPath),
+            Entry::Sub(
+                "Copy Details",
+                &[
+                    item("File Paths", Command::CopyPath),
+                    item("Folder Paths", Command::CopyFolderPath),
+                    item("Names", Command::CopyName),
+                    item("Source URLs", Command::CopyLink),
+                    item("Thumbnail", Command::CopyThumbnail),
+                    item("Base64", Command::CopyBase64),
+                ],
+            ),
             item("Refresh Thumbnail", Command::RefreshThumbnail),
             SEP,
             Entry::Sub(
@@ -224,6 +244,7 @@ pub static MENUS: &[(&str, &[Entry])] = &[
                 "Edit Image",
                 &[item("Flip Horizontally", Command::FlipHorizontal), item("Rotate Left", Command::RotateLeft), item("Crop…", Command::Crop)],
             ),
+            item("Folder Settings…", Command::FolderSettings),
             SEP,
             item("Remove from Folder", Command::RemoveFromFolder),
             item("Move to Trash", Command::Trash),
@@ -274,6 +295,8 @@ pub static MENUS: &[(&str, &[Entry])] = &[
             SEP,
             item("Zoom In", Command::ZoomIn),
             item("Zoom Out", Command::ZoomOut),
+            item("Actual Size", Command::ZoomActual),
+            item("Zoom to Fit", Command::ZoomFit),
             SEP,
             checked("Viewer", Command::Viewer, Check::Viewer),
             item("Open With Default App", Command::OpenDefault),
@@ -281,6 +304,7 @@ pub static MENUS: &[(&str, &[Entry])] = &[
             SEP,
             checked("Sidebar", Command::ToggleSidebar, Check::Sidebar),
             checked("Inspector", Command::ToggleInspector, Check::Inspector),
+            item("Show or Hide Both Panels", Command::ToggleAll),
             SEP,
             item("Back", Command::Back),
             item("Forward", Command::Forward),
@@ -743,6 +767,7 @@ mod tests {
             let s = match it.cmd {
                 Command::Reshuffle => State { scope: ScopeKind::Random, ..full.clone() },
                 Command::Cut => State { text: true, ..full.clone() },
+                Command::ZoomActual | Command::ZoomFit => State { viewer: true, ..full.clone() },
                 _ => full.clone(),
             };
             assert!(enabled(it.cmd, &s), "{} never acts", it.label);

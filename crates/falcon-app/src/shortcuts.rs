@@ -97,6 +97,7 @@ pub enum Command {
     Redo,
     Cut,
     Import,
+    ImportFolders,
     FindDuplicates,
     FlipHorizontal,
     RotateLeft,

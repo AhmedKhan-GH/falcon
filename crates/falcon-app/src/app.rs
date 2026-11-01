@@ -1406,6 +1406,7 @@ impl App {
             // Only for a focused text field (`text_command`).
             C::Cut => {}
             C::Import => self.import_files_dialog(),
+            C::ImportFolders => self.import_folders_dialog(),
             C::FindDuplicates => {
                 self.ws.viewer = None;
                 self.go(Scope::Duplicates);
