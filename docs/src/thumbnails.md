@@ -106,6 +106,7 @@ The `thumbnail` module holds the rules as plain functions: `plan_raster`, `plan_
 - **Resizing.** One Lanczos3 resize straight to the target, with no halving steps. Pixels differ slightly from Eagle's.
 - **Encoding.** The `webp` crate (libwebp) at quality 75, always with an alpha channel. Past 16383 px, `image`'s JPEG encoder at quality 70.
 - **SVG.** Rendered with `resvg`, directly at the target size. System fonts are not loaded, so text in an SVG does not render. A small SVG is rendered at its natural size, because its thumbnail only feeds the palette. Width and height are the SVG's own size, rounded up.
+- **Text.** A `.txt` file gets no thumbnail, as in Eagle. Its importer (`thumbs/txt.js`) instead stores the start of the text in the item record under `text`: the first 32 Ki UTF-16 code units, read as UTF-8. falcon does the same (`falcon_library::text::preview`, cut at a character boundary), writes the record in Eagle's key order for text items (no `width`, `height` or `palettes`; `text` just before `lastModified`), refreshes `text` when the editor saves, and reads it again on Refresh Thumbnail. The grid draws the card from it (see [The desktop app](app.md)).
 - **Reading back.** `thumbnail::decode` sniffs the content, so it reads a thumbnail even though its name ends in `.png`.
 - **QuickLook.** Formats falcon can't decode are rendered with `qlmanage`. A render that takes more than 30 seconds is abandoned, since qlmanage can hang on malformed files.
 - **Audio.**

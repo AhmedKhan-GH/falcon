@@ -7,12 +7,53 @@
 //! `mtime` go stale; falcon refreshes them (and `lastModified`, as every
 //! item edit does) so the inspector and size filters stay right. `btime`
 //! and `modificationTime` keep their values.
+//!
+//! A text item also carries the start of its text in the item record, under
+//! the `text` key, as Eagle's text importer writes it: the grid draws the
+//! card from it instead of a thumbnail (there is no `_thumbnail.png`), and
+//! search reads it. [`preview`] makes that value.
 
 use std::fs;
-use std::io::Write;
+use std::io::{Read, Write};
+use std::path::Path;
 
 use crate::error::{Error, Result};
 use crate::library::Library;
+
+/// The item key holding the start of a text item's text.
+pub const TEXT_KEY: &str = "text";
+
+/// How much text the record keeps: 32 Ki UTF-16 code units, as Eagle's
+/// importer cuts it.
+pub const PREVIEW_UNITS: usize = 32 * 1024;
+
+/// The keys of a text item's `metadata.json` in the order Eagle writes
+/// them: no `width`, `height` or `palettes`, and `text` just before
+/// `lastModified`.
+pub const RECORD_KEYS: [&str; 14] =
+    ["id", "name", "size", "btime", "mtime", "ext", "tags", "folders", "isDeleted", "url", "annotation", "modificationTime", "text", "lastModified"];
+
+/// The start of `text` that fits in [`PREVIEW_UNITS`] UTF-16 code units,
+/// never splitting a character.
+pub fn cut(text: &str) -> &str {
+    let mut units = 0;
+    for (at, c) in text.char_indices() {
+        units += c.len_utf16();
+        if units > PREVIEW_UNITS {
+            return &text[..at];
+        }
+    }
+    text
+}
+
+/// The value of [`TEXT_KEY`] for the text file at `path`: its start, read
+/// as UTF-8 with invalid bytes replaced, as Eagle reads it.
+pub fn preview(path: &Path) -> std::io::Result<String> {
+    // Every character takes at most 4 bytes, so this is always enough.
+    let mut bytes = Vec::new();
+    fs::File::open(path)?.take(PREVIEW_UNITS as u64 * 4).read_to_end(&mut bytes)?;
+    Ok(cut(&String::from_utf8_lossy(&bytes)).to_string())
+}
 
 impl Library {
     /// Replaces the text of the `.txt` item `id` with `text` and refreshes
@@ -44,6 +85,8 @@ impl Library {
         let meta = fs::metadata(&raw).map_err(|e| Error::io(&raw, e))?;
         item.size = meta.len();
         item.mtime = meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(item.mtime, |d| d.as_millis() as u64);
+        // The card shows the new text.
+        item.extra.insert(TEXT_KEY.into(), cut(text).into());
         let journal = self.journal.take();
         let r = self.update_item(item);
         self.journal = journal;
@@ -93,6 +136,33 @@ mod tests {
         let raw = lib.item(&id).unwrap().original_path(lib.root());
         assert_eq!(fs::read_to_string(raw).unwrap(), "keep me");
         assert!(lib.save_text("nope", "x").is_err());
+    }
+
+    #[test]
+    fn saving_puts_the_new_text_on_the_card() {
+        let (_tmp, mut lib, id) = library_with_text("first");
+        assert_eq!(lib.item(&id).unwrap().extra[TEXT_KEY], "first");
+        lib.save_text(&id, "second draft").unwrap();
+        let reopened = Library::open(lib.root()).unwrap();
+        assert_eq!(reopened.item(&id).unwrap().extra[TEXT_KEY], "second draft");
+    }
+
+    #[test]
+    fn the_preview_stops_at_32_ki_utf16_units_without_splitting_a_character() {
+        let ascii = "a".repeat(PREVIEW_UNITS + 10);
+        assert_eq!(cut(&ascii).len(), PREVIEW_UNITS);
+        // An emoji takes two units: the one that would straddle the limit goes.
+        let wide = format!("{}{}", "a".repeat(PREVIEW_UNITS - 1), "😀");
+        assert_eq!(cut(&wide), "a".repeat(PREVIEW_UNITS - 1));
+        assert_eq!(cut("short"), "short");
+    }
+
+    #[test]
+    fn the_preview_reads_invalid_bytes_as_replacement_characters() {
+        let tmp = tempfile::tempdir().unwrap();
+        let p = tmp.path().join("x.txt");
+        fs::write(&p, b"ok \xff end").unwrap();
+        assert_eq!(preview(&p).unwrap(), "ok \u{fffd} end");
     }
 
     #[test]

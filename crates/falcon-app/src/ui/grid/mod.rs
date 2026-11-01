@@ -21,6 +21,7 @@ pub(crate) mod empty;
 mod hover_media;
 mod tag_sidebar;
 mod tags_page;
+mod text_card;
 
 /// Grid geometry, measured from Eagle at 1280 x 800.
 pub(crate) const GRID_PAD_X: f32 = 17.0;
@@ -329,6 +330,9 @@ impl App {
     /// or filling it exactly (waterfall and justified boxes already have the
     /// image's shape).
     pub(crate) fn draw_image(&mut self, ui: &Ui, lib: &Library, item: &Item, rect: Rect, fill: bool) {
+        if item.ext == "txt" {
+            return self.text_card(ui, lib, item, rect);
+        }
         let failed = self.ws.loader.has_failed(&item.id, Tier::Grid);
         let playing = self.ws.cards.texture(&item.id).cloned();
         let large = self.large_card(ui, lib, item, rect);
@@ -349,6 +353,9 @@ impl App {
     /// Draws an item's image so it covers `rect`, cropping what overflows
     /// (the grid layout's Fill mode).
     pub(crate) fn draw_image_cover(&mut self, ui: &Ui, lib: &Library, item: &Item, rect: Rect) {
+        if item.ext == "txt" {
+            return self.text_card(ui, lib, item, rect);
+        }
         let failed = self.ws.loader.has_failed(&item.id, Tier::Grid);
         let playing = self.ws.cards.texture(&item.id).cloned();
         let large = self.large_card(ui, lib, item, rect);

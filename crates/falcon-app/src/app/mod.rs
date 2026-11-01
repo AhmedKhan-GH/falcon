@@ -179,6 +179,8 @@ pub struct App {
     pub(crate) loading: Option<crate::ui::dialogs::library_notices::Loading>,
     /// The global keys, the menu bar icon and screen capture (`system.rs`).
     pub(crate) system: system::System,
+    /// Smaller main-window state (`shell.rs`): text cards' cache.
+    pub(crate) shell: crate::shell::Shell,
 }
 
 impl App {
@@ -235,6 +237,7 @@ impl App {
             model3d: crate::model3d::Model3dState::new(cc),
             tiff: Default::default(),
             hover_media: Default::default(),
+            shell: Default::default(),
             menu_bar: Default::default(),
             layouts: HashMap::new(),
             legacy_layout: None,

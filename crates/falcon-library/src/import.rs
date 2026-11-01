@@ -283,6 +283,10 @@ pub fn stage(path: impl AsRef<Path>, opts: &ImportOptions) -> Result<Staged> {
     if item.remove_thumbnail == Some(true) {
         let _ = fs::remove_file(&thumb);
     }
+    if item.ext == "txt" {
+        set_text(&mut item, &raw);
+        item.key_order = crate::model::KeyOrder(crate::text::RECORD_KEYS.iter().map(|k| k.to_string()).collect());
+    }
     Ok(Staged { item, dir, auto_tags: opts.folder_auto_tags, added_at: opts.added_at })
 }
 
@@ -362,6 +366,10 @@ impl Library {
 /// skips audio. Returns false, with `item` unchanged, when nothing could be
 /// drawn.
 pub(crate) fn redraw(item: &mut Item, raw: &Path, thumb: &Path) -> bool {
+    // A text item has no thumbnail; its card is drawn from its text.
+    if item.ext == "txt" {
+        return set_text(item, raw);
+    }
     let tmp = thumb.with_file_name(".falcon-redraw_thumbnail.png");
     let _ = fs::remove_file(&tmp);
     let mut next = item.clone();
@@ -399,6 +407,19 @@ pub(crate) fn redraw(item: &mut Item, raw: &Path, thumb: &Path) -> bool {
     }
     *item = next;
     true
+}
+
+/// Reads the start of a text item's file into its record (see
+/// [`crate::text`]). False, with `item` unchanged, when the file can't be
+/// read.
+fn set_text(item: &mut Item, raw: &Path) -> bool {
+    match crate::text::preview(raw) {
+        Ok(text) => {
+            item.extra.insert(crate::text::TEXT_KEY.into(), text.into());
+            true
+        }
+        Err(_) => false,
+    }
 }
 
 /// Where the palette should be computed from.
@@ -777,6 +798,38 @@ mod tests {
         assert!((bpm - 120.0).abs() <= 1.0, "{bpm}");
         let keys: Vec<&str> = item.extra.keys().map(String::as_str).collect();
         assert_eq!(keys, ["duration", "bpm"]);
+    }
+
+    #[test]
+    fn text_files_keep_their_text_in_eagles_record_layout() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("T.library");
+        let mut lib = Library::create(&root).unwrap();
+        let src = tmp.path().join("Notes.txt");
+        fs::write(&src, "Line one\nLine two\n").unwrap();
+        let id = lib.import_file(&src, &ImportOptions::default()).unwrap();
+        let item = lib.item(&id).unwrap().clone();
+        assert_eq!(item.extra["text"], "Line one\nLine two\n");
+        assert!(item.thumbnail_path(lib.root()).is_none_or(|p| !p.exists()), "no thumbnail file");
+        let json: Value = serde_json::from_slice(&fs::read(item.info_dir(lib.root()).join("metadata.json")).unwrap()).unwrap();
+        let written: Vec<&str> = json.as_object().unwrap().keys().map(|k| k.as_str()).collect();
+        assert_eq!(written, crate::text::RECORD_KEYS);
+
+        // An empty file (File ▸ New ▸ Text File) gets an empty text.
+        let empty = tmp.path().join("Untitled.txt");
+        fs::write(&empty, "").unwrap();
+        let id2 = lib.import_file(&empty, &ImportOptions::default()).unwrap();
+        assert_eq!(lib.item(&id2).unwrap().extra["text"], "");
+
+        // Refresh Thumbnail reads the text again, also for an item that
+        // had none (imported by an older falcon).
+        let raw = item.original_path(lib.root());
+        fs::write(&raw, "Rewritten").unwrap();
+        let mut stale = lib.item(&id).unwrap().clone();
+        stale.extra.shift_remove("text");
+        lib.update_item(stale).unwrap();
+        assert!(lib.refresh_thumbnail(&id).unwrap());
+        assert_eq!(Library::open(&root).unwrap().item(&id).unwrap().extra["text"], "Rewritten");
     }
 
     #[test]
