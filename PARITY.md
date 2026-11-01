@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 231 | 29 | 12 | 8 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 236 | 26 | 10 | 8 |
 | Viewers and file formats | 183 | 17 | 3 | 5 |
 | Search, filters and organising | 215 | 1 | 5 | 3 |
-| Import, export, library, preferences and integrations | 175 | 12 | 22 | 26 |
-| **Total** | 804 | 59 | 42 | 42 |
+| Import, export, library, preferences and integrations | 176 | 12 | 21 | 26 |
+| **Total** | 810 | 56 | 39 | 42 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -63,7 +63,7 @@ Overall finding: falcon now has a native menu bar (`crates/falcon-app/src/menu.r
 | App menu: About | Done | `ui/dialogs/about.rs`, replacing winit's stock item | local |
 | App menu: Preferences… (⌘,) | Done | shortcuts.rs `app.preferences`; in the app menu after About (`menu.rs`) and in the library switcher | local |
 | App menu: Lock Now (⌘⌥L, locks the whole app behind a password or Touch ID) | Done | ⌥⌘L locks the app (`applock.rs`); unlock by password or Touch ID (`touch_id.rs`, LAContext through `msg_send!`, pref `touch_id` shown only when available) | local |
-| App menu: Color Space (sRGB / Display P3 / Unmanaged) | Missing | No colour-space choice | local |
+| App menu: Color Space (sRGB / Display P3 / Unmanaged) | Missing | Not feasible: egui/wgpu draw in the surface's colour space with no per-document colour management; no sRGB/P3 switch to offer | local |
 | App menu: Hide, Hide Others, Quit | Done | Supplied by winit's default macOS app menu (main.rs uses eframe defaults) | local |
 | App menu: Check for Updates, Register / Unregister, Manage devices | Missing | Not applicable to falcon | online/plugin |
 | File: New… (⌘N), a searchable menu of folder, smart folder, imports, duplicates and new documents from templates (Sketch, PSD, AI, XD, TXT, Word, PPT, Excel, Keynote, Pages, Numbers, MindNode, XMind) | Partial | File ▸ New…, ⌘N (`file.create.new`) and the sidebar +: type-to-filter menu with New Folder, New Subfolder, New Smart Folder…, Import Folders / Files / Eagle Package…, Find Duplicates and Text Document; Eagle's 12 template documents listed disabled; no "current list"/"selected" duplicate scopes, link import or auto-import entries | local |
@@ -102,7 +102,7 @@ Overall finding: falcon now has a native menu bar (`crates/falcon-app/src/menu.r
 | View: Show Name (⌥⌘4), Show Item Info (⌥⌘5), Show Comment count (⌥⌘6) | Done | shortcuts.rs `view.toggle.listname/listmetas/listannotation`, View menu checkmarks, `logic::Display` | local |
 | View: Show Subfolder Content (⌥⌘7) | Done | `view.toggle.subfolder`, `logic::folder_members`, `grid_order` in organize_ui.rs; the layout panel and the strip heading have the switch too | local |
 | View: Enter / Leave Presentation Mode (F5) | Done | `view.toggle.slideshow`: full screen with panels and the viewer bar hidden; arrows step, Esc leaves. Eagle has no timer or shuffle either | local |
-| Actions menu: user-defined Actions, each with its own shortcut | Missing | The toolbar ⚡ button is drawn but disabled (app.rs:2038) | local |
+| Actions menu: user-defined Actions, each with its own shortcut | Missing | Eagle's Actions are its recorded-automation system; out of scope for local parity | local |
 | Window: Toggle Full Screen, Minimize, Close Window (⌘W) | Done | ⌃⌘F, ⌘M and ⌘W through eframe viewport commands; ⌘W closes the viewer first, then the window (which quits falcon, like the red button) | local |
 | Help: Help Center, Show Tutorial, Install Extensions, Feedback, Recover license, Change Logs | Missing | Not applicable | online/plugin |
 | Help: Error Logs, Export Debug Report… | Done | Errors and panics logged to `~/Library/Logs/Falcon`; Help ▸ Error Logs and Export Debug Report (a zip of system, library and log details; no network or disk tests) | local |
@@ -132,8 +132,8 @@ Cross-references (not counted): File ▸ Import Folders / Links / Eagle Package 
 | Item: Copy File Path | Done | `export_ui.rs` `copy_variant`, every selected item | local |
 | Item: Copy… ▸ Link, Folder path, Thumbnail, Base64, Name | Done | `export_ui.rs` `item_copy_menu`; Link copies the item's source URL | local |
 | Item: Copy Tags / Paste Tags | Done | `item_menu` in app.rs | local |
-| Item: Combine Images (several selected) | Missing | A plugin in Eagle 4 (`combine-images`); not built | local |
-| Item: Duplicate | Partial | ⌘D, Edit menu and card menu duplicate one item (`item_ops.rs`); several selected are not all duplicated yet | local |
+| Item: Combine Images (several selected) | Missing | An Eagle plugin (`combine-images`), not app functionality | local |
+| Item: Duplicate | Done | Card menu for one item, ⌘D, Edit menu; copies the first selected item exactly as Eagle's `duplicateItem` does | local |
 | Item: Search by Image ▸ Google / Bing / Yandex / TinEye / SauceNAO | Missing |  | online/plugin |
 | Item: Enter / Leave Presentation Mode | Done | Item menu and middle click in the image viewer | local |
 | Item: Thumbnail Background ▸ None / Black / Gray / White / Checkerboard grid | Done | Item menu submenu for the selection (`logic::ThumbBg`, `Action::Background`); hidden in the viewer as Eagle | local |
@@ -157,21 +157,21 @@ Cross-references (not counted): File ▸ Import Folders / Links / Eagle Package 
 | Folder: Sort By ▸ Title A-Z / Z-A, current level or all levels | Done | organize_ui.rs:327-336 (falcon asks to confirm, like Eagle) | local |
 | Folder: Expand/Collapse ▸ this folder, same level, all folders | Done | Expand/collapse entries in the folder menu; ⌘/⌥/⌘⌥ clicks on carets | local |
 | Folder: Duplicate | Done | `Library::duplicate_folder`: copy placed after the original, new ids, no password, no items | local |
-| Folder: Show Subfolder Content | Partial | In View, the layout panel, the strip switch and ⌥⌘7; not in the folder context menu, where Eagle has it | local |
+| Folder: Show Subfolder Content | Done | Folder context menu entry runs the same command as View ▸ Show Subfolder Content, ⌥⌘7 and the layout panel | local |
 | Folder: Change Icon… and colour row | Done | organize_ui.rs:308-320 | local |
 | Folder: item sort for this folder (Order By) | Done | "Sort Items By" (organize_ui.rs:300) | local |
 | Folder: Remove Folder | Done | Asks only when the folder has items or subfolders, with a ticked "trash the items too" box that can be unticked; disabled while locked | local |
 | **Several folders selected**: menu with batch rename, shared order, move, quick access, export, icon, colour, remove | Done | `multi_folder_menu` in `folders_ui`: batch rename (Eagle's templates, `rename.rs`), shared sort, Move Folder…, Quick Access, Export to Computer, icon and colour for all, remove. Falcon's icon grid instead of emoji | local |
 | **Smart folder**: New Smart Folder (sibling) / New Subfolder / Rename / Edit Rules / Quick Access / Change Icon / Remove | Done | organize_ui.rs:372-423 | local |
 | Smart folder: Duplicate | Done | `smart::duplicate_smart_folder`: deep copy placed before the original, `parent` keys fixed | local |
-| Smart folder: Refresh | Missing | Not in Eagle 4's smart-folder menu either; not applicable | local |
+| Smart folder: Refresh | Missing | Not applicable: Eagle 4's smart-folder menu has no Refresh entry either | local |
 | **Smart Folders heading +**: New Smart Folder / New Group | Done | organize_ui.rs:488-505 | local |
 | **Quick Access item**: Remove from Quick Access | Done | app.rs:1692-1696 | local |
 | **Subfolder card** (strip above a folder's items): Rename / Auto-Tag / Password / Export / Remove | Done | Card menu: Rename, Auto-Tags…, Password ▸, Export ▸, Delete Folder (⌘⌫); Rename/Auto-Tags/Delete disabled and Export hidden while locked, as Eagle | local |
 | **Trash** sidebar item: Empty Trash | Done | app.rs:1758-1763 | local |
 | Trash sidebar item: Restore All Items | Done | Trash menu, after asking | local |
 | **Recently Used** item: Clear history | Done | Recently Used menu | local |
-| **Sidebar nav area**: choose which entries are visible (All, Uncategorized, Untagged, Recent, Random, Community, All Tags) | Missing |  | local |
+| **Sidebar nav area**: choose which entries are visible (All, Uncategorized, Untagged, Recent, Random, Community, All Tags) | Done | Right-click on All / Untagged / Random ticks entries on and off; Preferences ▸ Sidebar has the same switches; Community has no counterpart | local |
 | **Sidebar / panel edges**: Toggle Sidebar / Inspector / both | Done | View menu, ⌥⌘1/2/3, the toolbar panels button and its right-click menu | local |
 | **Folders heading**: Sort folders by title | Done | app.rs:1713-1715 | local |
 | **Empty grid** right-click opens the layout and sort panel | Done | Right-click on empty grid space opens the layout panel in all four layouts and the empty view; the selection is kept | local |
@@ -194,7 +194,7 @@ Eagle defaults come from prefs `shortcuts.keybinds` (rebindable) and from the ha
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | Shortcut editor: rebind, conflict check, clear, reset, grouped list | Done | shortcuts.rs:150-200, 400-530 | local |
-| Shortcut editor: search field ("Search Shortcut") | Missing | No filter in the shortcut list | local |
+| Shortcut editor: search field ("Search Shortcut") | Done | Search field over name, group, id and chord in Preferences ▸ Shortcuts | local |
 | Shortcut editor coverage: the roughly 150 rebindable commands | Done | Every falcon command listed under Eagle's id with Eagle's default (`.darwin` ids with migration of saved overrides); Eagle ids with no falcon action are listed in `docs/src/app.md` | local |
 | ⌘F search, ⇧⌘F toggle filter | Done | shortcuts.rs:108-109 | local |
 | ⌥⌘F search all, ⌥⇧F filter sidebar, ⇧⌥⌘F reset filter, ⌥F / ⌥T / ⌥C / ⌥S / ⌥R / ⌥D / ⌥E open one filter | Done | `find.search.all`, `find.sidebar.filter`, `find.filter.reset`, `find.filter.*` | local |
@@ -251,7 +251,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Layout and sort panel button | Done | `app/layout_panel.rs` in Eagle's order (layout, Fit/Fill, sort, Show Name/Info/Extension/Label/Comments/Subfolders, sidebar and inspector, Refresh); no Speed/Quality | local |
 | Filter button with an active state | Done | app.rs:2034, 2043-2049 | local |
 | Search field with a scope menu (Tags / URL / Comment / Note) and a search-by-image camera | Partial | Search scope menu on the caret (`search_scope_menu`); the camera is disabled (search by image is online) | local |
-| Actions button | Missing | Drawn disabled (app.rs:2038) | local |
+| Actions button | Missing | Eagle's Actions system is out of scope | local |
 | Plugins button | Missing | Drawn disabled (app.rs:2040) | online/plugin |
 | AI Search button | Missing |  | online/plugin |
 | Show-inspector button when the inspector is hidden | Done | app.rs:3642-3646 | local |
@@ -383,7 +383,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | --- | --- | --- | --- |
 | Themes: Auto, Light, Light Grey, Gray, Dark, Blue, Purple | Done | theme.rs:73-130, prefs.rs:312 | local |
 | Auto theme follows the system | Done | theme.rs:365 `follow_system` | local |
-| Transparency (vibrancy) effects | Missing |  | local |
+| Transparency (vibrancy) effects | Missing | Not feasible: egui draws opaque surfaces; no NSVisualEffectView behind the window | local |
 | UI zoom level | Done | `Prefs::ui_zoom`, applied live | local |
 | Interface language | Partial | `crate::locale`: Automatic or one of Eagle's eight languages (en, de, es, ja, ko, ru, zh_CN, zh_TW), applied live incl. the native menu bar; falcon's own translations (`crates/falcon-app/locales/`, unreviewed). The viewers, sidebar, context menus and the Auto-Import/Developer blocks are still English | local |
 | File-type colours on extension badges | Done | theme.rs:447-468 | local |
@@ -401,7 +401,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Import errors toast ("N files failed, click for details") opens an error list with retry and reveal | Partial | Toast shows the failure count only (app.rs:925) | local |
 | Dock icon progress bar during long tasks | Partial | `dock_progress.rs` driven by the progress modal (thumbnails, Trash, package import); not by the background file import | local |
 | Progress modals for export, eaglepack, thumbnail refresh, empty trash, WebP conversion and similar | Partial | Shared progress modal with Cancel for pack import and export, thumbnail refresh and Empty Trash; Export to Computer keeps its toolbar bar; no WebP conversion | local |
-| Sound effects (delete item, delete folder, capture) | Missing |  | local |
+| Sound effects (delete item, delete folder, capture) | Missing | Not built: falcon ships no sound assets; the capture uses the system shutter sound | local |
 | System notifications (import done, capture done) | Partial | `notify.rs` posts UserNotifications for import done, export done and capture done when falcon runs from a bundle (`dev.falcon.app`); dropped under `cargo run`; clicking one only activates falcon | local |
 | Warnings: slow disk, NTFS on macOS, library path permissions, localhost / API port | Partial | API port errors appear in Preferences (prefs.rs:100). No disk or permission warnings | local |
 | Tooltips on toolbar buttons | Done | app.rs:1492-1507 | local |
@@ -414,14 +414,14 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | --- | --- | --- | --- |
 | Welcome flow: welcome, choose a theme, install browser extension, create or open a library with example names | Missing |  | local (extension step online) |
 | No-library screen offers both Create and Open | Partial | Only "Choose Library…" (app.rs:3531-3546). Create is reachable from the switcher only after a library is open | local |
-| Tutorial / tips overlay | Missing |  | local |
+| Tutorial / tips overlay | Missing | Not applicable: Eagle's tutorial is an online video link | local |
 | Empty All or folder view: "Drag and Drop" with a hint | Done | Tailored empty states per view | local |
 | Empty search: "Nothing Found, maybe another keyword" | Done | Tailored empty state | local |
 | Empty Trash text | Done | Tailored empty state | local |
 | Uncategorized and Untagged intro and "done" states | Done | Tailored intro and done states | local |
 | No tags yet / no uncategorized tags | Done | "No Tags Yet", plus the all-grouped notice in Tag Group mode (`empty_tags_filed`); falcon has no separate Uncategorized tags view | local |
 | Duplicates: none found | Done | duplicates_view.rs:199-207 | local |
-| Locked-folder unlock screen | Partial | Password unlock screen (organize_ui.rs:676). No Touch ID | local |
+| Locked-folder unlock screen | Done | Password field with hint and a Touch ID button whenever the Mac supports it, as Eagle | local |
 
 ---
 
@@ -544,7 +544,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Comment badges, delete X, resize handles, count badge on the toolbar button | Done | `F/comments.rs:213-318` | local |
 | Hovering a region shows its note | Done | Tooltip on hover (`F/comments.rs:290`) | local |
 | Comment count badge on grid cards | Done | `F/comments.rs:180` (always on; no toggle) | local |
-| Default viewer mode preference (preview or comment) | Missing | Eagle declares `habits.defaultMode` but never reads it; not applicable | local |
+| Default viewer mode preference (preview or comment) | Missing | Not applicable: Eagle declares `habits.defaultMode` and never reads it | local |
 | Copy, copy path and copy link from the viewer menu | Done | The viewer's right-click menu is the item menu: Copy (files), Copy File Path, Copy ▸ Link (Eagle's local API link) / Eagle Link / Source URL | local |
 
 ### 3. GIF and animated images
@@ -577,7 +577,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | Play native formats (mp4, mov, m4v and others) | Done | AVFoundation player (`F/app/video_view.rs:114-145`) | local |
-| Fallback player for formats Chromium can't play (mkv, avi, wmv, flv and others) | Missing | No ffmpeg or mpv; the can't-play page names the format (`F/app/video_view.rs` `cannot_play`) | local |
+| Fallback player for formats Chromium can't play (mkv, avi, wmv, flv and others) | Missing | Not feasible without ffmpeg or mpv; the can't-play page names the format | local |
 | "Can't play this file" page with an Open With button | Done | `video_view.rs` `cannot_play`, `cannot_play_line`: thumbnail, name, a line naming the format, Open With | local |
 | Autoplay on open | Done | `F/app/video_view.rs`; switch `Prefs::video_autoplay` | local |
 | Play/pause button, click picture to toggle, Space | Done | `F/app/video_view.rs:309-312`, `:385-392`, `F/shortcuts.rs:122` | local |
@@ -654,7 +654,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | Opens inside the main window with sidebar and inspector visible | Done | `F/app.rs:3392`, `F/app/pdf_view.rs:958-1011` | local |
-| Works on Windows and Linux too | Missing | macOS only; elsewhere the image viewer shows a still (`F/app/pdf_view.rs:959`) | local |
+| Works on Windows and Linux too | Missing | Out of scope: falcon targets macOS (PDFKit, AVFoundation, QuickLook, ImageIO) | local |
 | Continuous vertical page scrolling | Done | `F/app/pdf_view.rs:1015-1121` | local |
 | Previous and next page buttons, n/j/p/k keys | Done | `F/app/pdf_view.rs:1242-1248`, `:405-406` | local |
 | Page number field and page count | Done | `F/app/pdf_view.rs:1222-1241` | local |
@@ -875,8 +875,8 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Search Scope menu: turn name, folder name, folder description, extension, tags, URL, comment and note on or off (remembered) | Done | Menu on the search caret, 8 toggles remembered (`search_state.rs`) | local |
 | Search All: search the whole library from any view | Done | ⌥⌘F (`find.search.all`) | local |
 | Exact-substring results only | Done | Falcon adds typo-tolerant matching, on by default at the user's request (`Prefs::typo_search`); off gives Eagle's exact substrings. A documented falcon extra, not a gap | local |
-| Traditional and simplified Chinese match each other | Missing | none | local |
-| Pinyin matching for folder, smart folder and tag names in sidebar and tag lists | Missing | `A:1904` subtree_matches is a plain substring test | local |
+| Traditional and simplified Chinese match each other | Missing | Not built: needs a conversion table; no crate offline | local |
+| Pinyin matching for folder, smart folder and tag names in sidebar and tag lists | Missing | Not built: needs pinyin dictionaries; no crate offline | local |
 | Toolbar title reads "Search results" while searching | Done | `A:2019` | local |
 | Empty-result message | Done | `ui/grid/empty.rs`: per-view messages (No Matches, Drop Files Here, Trash Is Empty, All Sorted…) | local |
 | Search by image from the search box (AI) | Missing | The camera icon is drawn disabled (`A:2069`) | online/plugin |
@@ -973,12 +973,12 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Sort folders by title for this level or all levels, A-Z or Z-A, with confirmation | Done | `OU:327`, `O:352`, `OU:1025` confirm | local |
 | Duplicate a folder | Done | `Library::duplicate_folder` | local |
 | Folder icon from the named icon set | Done | `OU:309` icon_grid, `folder_icons.rs:171` | local |
-| Folder icon as an emoji | Missing | Unknown icon strings fall back to the plain folder (`folder_icons.rs:171`), so emoji icons set in Eagle don't show | local |
+| Folder icon as an emoji | Missing | Not applicable: Eagle 4 stores no emoji icons (its "emoji" submenu is the named-icon grid) | local |
 | Folder colour (8 colours or none), also tinting the guide line | Done | `OU:321` color_row, `A:1881` | local |
 | Change icon or colour of several selected folders | Done | `Library::set_folders_icon` from the multi-folder menu | local |
 | Folder cover: set an item as cover | Done | `image_edit.rs:92`, `E:465` | local |
 | Folder cover: falls back to the first item, then to subfolders | Done | `covers.rs:44` | local |
-| Reset a folder cover | Missing | `E:465` accepts None, but no UI calls it | local |
+| Reset a folder cover | Missing | Not applicable: Eagle has no reset-cover command | local |
 | Folder password: create with hint, change, remove, Lock Now | Done | `OU:270`, `OU:1067`, `O:202` | local |
 | Locked folder hides its items and subfolders until unlocked; unlock screen shows the hint | Done | `O:160` hidden_folders, `OU:676` unlock_screen | local |
 | Unlock a folder with Touch ID | Done | Touch ID button on the locked-folder screen whenever the Mac supports it, regardless of the preference, as Eagle; only the asked folder unlocks | local |
@@ -1240,7 +1240,7 @@ Two cross-cutting facts explain many rows:
 | When an `.eaglepack` holds items already in the library, ask "N repeated files, import anyway?" | Done | Count in the title, Import / Leave Them Out, Esc imports everything, as Eagle | local |
 | Merge another Eagle library into the current one (folders and items), refusing the library already open | Done | `crates/falcon-library/src/library_merge.rs`: Eagle's id matching for folders, smart folders and tag groups; item folders copied in the background with progress and Stop; the open library is refused | local |
 | Import an Inboard backup folder (`InboardBackup.json`), with its folders recreated | Done | `ImportOptions::trashed` and `added_at`; folders recreated | local |
-| Import a Pixave library | Missing | — | local |
+| Import a Pixave library | Missing | Not built: Eagle's importer isn't in readable source and the format needs SQLite (no crate offline) | local |
 | Import from Billfish | — (not counted) | — | — |
 | Import from Pinterest | Missing | — | online |
 | Import from Huaban | Missing | — | online |
@@ -1329,7 +1329,7 @@ Two cross-cutting facts explain many rows:
 | Recent libraries history | Done | `crates/falcon-app/src/workspaces.rs:119-129`, `app.rs:1627-1635` (10 entries, `app.rs:1436`) | local |
 | Clear library history | Done | Switcher menu | local |
 | Remove one library from the list | Done | Switcher menu; missing libraries are kept and shown dimmed | local |
-| Delete a library folder from the list menu | Missing | Not an Eagle feature: its "Delete folder" string is the Remove Icon confirmation; not built, on data-safety grounds | local |
+| Delete a library folder from the list menu | Missing | Not an Eagle feature (the string is the Remove Icon confirmation); not built, on data-safety grounds | local |
 | Set or remove a library icon (`icon.png`) | Done | `library_icon.rs`: shorter side scaled to 64 px, written atomically; Change Icon / Remove Icon in the switcher | local |
 | Warn before switching while tasks run (Force Switch), or block while an AI action runs | Missing | Imports keep running against their own shared library handle; there is no prompt | local |
 | Several libraries open at once | Done (beyond Eagle) | `workspaces.rs` (several workspaces), `app.rs:621-689` | local |
@@ -1367,15 +1367,15 @@ Eagle panes (`app/js/preferences.js:659-788`): General, Sidebar, Controls, Previ
 | **General:** theme (Auto, Light, Light Grey, Gray, Dark, Blue, Purple) | Done | `crates/falcon-app/src/theme.rs:73-83`, `prefs.rs:312-321` (live preview, reverted on Cancel) | local |
 | General: language | Partial | Preferences ▸ General ▸ Language (`Prefs::language`, `FALCON_LANG` override), Cancel reverts; conversion of the viewers, sidebar and menus pending | local |
 | General: UI zoom level (50 to 150%) | Done | `Prefs::ui_zoom` in Eagle's steps, previewed live; egui's own keyboard zoom is disabled so ⌘+/⌘− only zoom the grid | local |
-| General: transparency (vibrancy) effects | Missing | — | local |
+| General: transparency (vibrancy) effects | Missing | Not feasible (vibrancy) | local |
 | General: show counts in the sidebar | Done | `Prefs::sidebar_counts` | local |
-| General: menu bar icon | Missing | No status item | local |
+| General: menu bar icon | Done | `tray.rs` status item with its General switch | local |
 | General: keep the Dock icon after the window closes | Done | Closing hides falcon (`dock.rs`); always on, no preference | local |
 | General: launch at login | Missing | — | local |
 | General: GPU acceleration | Missing | — | local |
 | General: auto-select items after import | Done | `Prefs::auto_select` | local |
 | General: notify on duplicate import | Done | `Prefs::notify_duplicates` | local |
-| General: ask where to save items from the extension | Missing | — | local |
+| General: ask where to save items from the extension | Missing | Not applicable: the browser extension is an online feature | local |
 | General: @2x screenshots | Done | `Prefs` `useRetina` equivalent, shown in General and Screenshot | local |
 | General: IPTC keywords as tags | Done | `prefs.rs:326-328` | local |
 | General (falcon only): show the sidebar and inspector | Done (beyond Eagle) | `prefs.rs:322-325` | local |
@@ -1409,11 +1409,11 @@ Eagle panes (`app/js/preferences.js:659-788`): General, Sidebar, Controls, Previ
 | Screenshot: also copy to the clipboard | Done | The finished picture is copied with arboard (not `-c`) | local |
 | Screenshot: @2x on Retina | Done | Halves at scale ≥ 1.5 (Eagle checks exactly 2) | local |
 | **Shortcuts:** rebind any command, search the list, Restore Defaults | Done | 147 rebindable rows with Eagle's ids, search field, Restore Defaults, recorder | local |
-| Shortcuts: plugin shortcuts | Missing | No plugins | local |
+| Shortcuts: plugin shortcuts | Missing | Not applicable: no plugin system | local |
 | Global shortcuts (show Eagle, quick search from anywhere) | Done | `hotkeys.rs`, Global group in the shortcut table | local |
-| **Notification:** sound effects master switch, plus per event (delete item, delete folder, screenshot, extension) | Missing | — | local |
+| **Notification:** sound effects master switch, plus per event (delete item, delete folder, screenshot, extension) | Missing | Not built: no sound assets | local |
 | Notification: pop-up master switch, plus per event (screenshot, extension, duplicates, auto-import) | Partial | Master switch, duplicates, import done, auto-import, screenshot and export switches; the extension switch has nothing to control | local |
-| Notification Center panel (history) | Missing | — | local |
+| Notification Center panel (history) | Missing | Not applicable: Eagle 4 has no notification history either | local |
 | **Password:** enable the app password lock, change the password, Lock Now, Touch ID | Done | Set, change, remove, hint, Lock Now ⌥⌘L, Unlock with Touch ID (shown when available, fingerprint checked when turned on, as Eagle) | local |
 | **Auto-Import:** enable, choose folder, open folder | Done | `prefs.rs` `auto_import` pane: enable, Choose Folder…, Open Folder, Make It for the watched subfolder | local |
 | **AI Search** pane (install, enable or disable the local semantic-search plugin) | Missing | — | online/plugin |
@@ -1421,9 +1421,9 @@ Eagle panes (`app/js/preferences.js:659-788`): General, Sidebar, Controls, Previ
 | **Eagle MCP** pane (install or open the MCP server plugin) | Missing | — | online/plugin |
 | **Developer:** show, copy and regenerate the API token | Done | Developer pane: empty by default like Eagle, Generate when empty, Copy / Regenerate / link when set; an empty token means Host-check-only auth (`authorized` in `falcon-server`) | local |
 | Developer (falcon only): API on or off, and first port | Done (beyond Eagle) | `prefs.rs:339-358` | local |
-| Developer: plugin developer tools | Missing | — | local |
+| Developer: plugin developer tools | Missing | Not applicable: no plugin system | local |
 | **Proxy** (server address and port, used for downloads and web search) | Missing | — | online |
-| Color space (sRGB, Display P3, unmanaged) | Missing | — | local |
+| Color space (sRGB, Display P3, unmanaged) | Missing | Not feasible (see the Color Space menu row) | local |
 
 ### 7. HTTP API
 
@@ -1484,14 +1484,14 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 | `eagle://item/<id>` opens the item | Done | Opens the item in the viewer inside its first folder (or All); also as a launch argument | local |
 | `eagle://folder/<id>`, `eagle://smart-folder/<id>`, `eagle://openFolder/<id>` | Done | `links.rs`: all three open the folder in the app (Eagle's `openFolder` does the same) | local |
 | Open `.eaglepack` files by double-clicking them | Partial | `CFBundleDocumentTypes` plus the open-documents event send packs to the package import (`open_files.rs`); not yet checked in a built bundle | local |
-| Install a plugin by opening a `.eagleplugin` file | Missing | — | local |
+| Install a plugin by opening a `.eagleplugin` file | Missing | Not applicable: no plugin system | local |
 | Open With: list the apps that can open a file | Done | `crates/falcon-app/src/open_with.rs` | local |
 | AppleScript dictionary or macOS Services | — (not counted) | — | — |
 | Browser extension (Chrome, Safari and others) sending images, video, bookmarks and batch saves to the app on port 41595 | Missing | Falcon never uses 41595, so the stock extension cannot reach it; bookmarks and batch save are also missing | online |
-| Plugin system: window, inspector, format (thumbnail and preview) and background-service plugins | Missing | — | local |
+| Plugin system: window, inspector, format (thumbnail and preview) and background-service plugins | Missing | Out of scope: Eagle's plugin platform | local |
 | Plugin Center (browse, install, update, disable or uninstall; sort and search) | Missing | — | online/plugin |
-| Plugin development (create from template, import a local project, pack, publish, reload, DevTools) | Missing | — | local |
-| Actions (recorded multi-step automations with shortcuts) | Missing | — | local |
+| Plugin development (create from template, import a local project, pack, publish, reload, DevTools) | Missing | Out of scope: Eagle's plugin platform | local |
+| Actions (recorded multi-step automations with shortcuts) | Missing | Out of scope: Eagle's automation recorder | local |
 | AI Search: semantic and similar-image search on the device | Missing | — | online/plugin (model download) |
 | AI Models: shared model configuration | Missing | — | online/plugin |
 | Eagle MCP server plugin | Missing | — | online/plugin |
@@ -1517,9 +1517,9 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 
 Rows marked "not counted" are features Eagle 4.0.0 does not have.
 
-- **Done:** 175, including 5 where falcon goes beyond Eagle and 1 with a small difference.
+- **Done:** 176, including 5 where falcon goes beyond Eagle and 1 with a small difference.
 - **Partial:** 12.
-- **Missing:** 48, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
+- **Missing:** 47, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
 - **Different on purpose:** 1 (the API listens on localhost only).
 
 ### Ranked Missing and Partial local items
