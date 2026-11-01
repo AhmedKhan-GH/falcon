@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 160 | 43 | 68 | 9 |
-| Viewers and file formats | 152 | 24 | 14 | 7 |
-| Search, filters and organising | 148 | 28 | 46 | 3 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 175 | 40 | 56 | 9 |
+| Viewers and file formats | 157 | 22 | 11 | 7 |
+| Search, filters and organising | 154 | 28 | 40 | 3 |
 | Import, export, library, preferences and integrations | 129 | 17 | 66 | 26 |
-| **Total** | 589 | 112 | 194 | 45 |
+| **Total** | 615 | 107 | 173 | 45 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -72,20 +72,20 @@ Overall finding: falcon now has a native menu bar (`crates/falcon-app/src/menu.r
 | File: New Smart Folder (⇧⌥⌘N) | Done | shortcuts.rs; opens the smart folder dialog | local |
 | Edit: Undo / Redo | Done | ⌘Z and ⇧⌘Z with a capped transaction history; Edit menu entries go to a focused text field first | local |
 | Edit: Cut / Copy / Paste / Select All | Partial | Menu entries exist and act on a focused text field; ⌘C copies files, ⌘V imports, ⌘A selects all. Cut works only in text fields | local |
-| Edit: Rename (⌘R on macOS) | Partial | ⌘R, with F2 as an alias (shortcuts.rs `edit.rename`). It only focuses the inspector title for one item. Eagle renames several items in a batch dialog | local |
+| Edit: Rename (⌘R on macOS) | Done | ⌘R (F2 alias): one item renames through the inspector title; several open the Rename N Items dialog with Eagle's templates (`rename.rs`) | local |
 | Edit: Copy File Path (⌥⌘C) | Done | Key and item menu copy every selected path, one per line (`export_ui.rs` `copy_variant`) | local |
 | Edit: Copy Folder Path (⌥⇧⌘C), Copy Eagle Link, Copy Thumbnail, Copy Base64, Copy Name | Partial | All but Copy Eagle Link (`export_ui.rs` `item_copy_menu`); Copy Folder Path copies the items' `.info` folders as Eagle does. Falcon doesn't register `eagle://` | local |
-| Edit: Duplicate item (⌘D) | Missing | No duplicate-item action | local |
-| Edit: Refresh Thumbnail (⌥⌘R), Custom thumbnail from a file (⌥⌘T), Reset custom thumbnail | Partial | ⌥⌘R and its menu entry (`run_command`); custom thumbnail from a file is context-menu only, no ⌥⌘T | local |
-| Edit: Custom thumbnail from the clipboard (⇧⌥⌘T) | Missing | Choosing a file is the only option | local |
+| Edit: Duplicate item (⌘D) | Done | `item_ops.rs` duplicate: a byte-identical metadata copy with a new id, keeping `modificationTime` as Eagle; ⌘D, Edit menu, card menu | local |
+| Edit: Refresh Thumbnail (⌥⌘R), Custom thumbnail from a file (⌥⌘T), Reset custom thumbnail | Done | ⌥⌘R, ⌥⌘T and Edit ▸ Custom Thumbnail submenu | local |
+| Edit: Custom thumbnail from the clipboard (⇧⌥⌘T) | Done | Clipboard image or copied file | local |
 | Edit ▸ Move Folder: Up, Down, To Top, To Bottom (⌘] ⌘[ ⇧⌘] ⇧⌘[) | Done | Keys and Edit menu entries move the open folder or smart folder among its siblings, undoably (`organize::arrange`) | local |
-| Edit ▸ Edit Image: Horizontal Flip (⇧F), Rotate (⇧R), Crop (⇧C), Combine Images (⇧⌘M) | Partial | Edit ▸ Edit Image menu has Flip, Rotate and Crop; ⇧R and ⇧F work in the viewer. No ⇧C key and no Combine Images | local |
+| Edit ▸ Edit Image: Horizontal Flip (⇧F), Rotate (⇧R), Crop (⇧C), Combine Images (⇧⌘M) | Partial | Flip, Rotate and Crop (⇧C, `edit.image.crop`) in the menu and keys; Combine Images is a plugin in Eagle 4, not built | local |
 | Edit ▸ Edit Folder: Set Current Folder (⇧⌘R), Move Folder, Password create / edit / remove / lock (⇧⌘L) | Partial | ⇧⌘R opens Folder Settings; Edit ▸ Move Folder… opens the picker dialog (`Command::MoveFolder`, no default key as Eagle). Passwords are still context-menu only, no ⇧⌘L | local |
 | Edit: Remove from current folder (⇧⌘⌫) | Done | shortcuts.rs `edit.remove.folder`, menu and card menu; one undo step, no prompt (Eagle's `removeFromFolder` asks nothing) | local |
 | Edit: Move to Trash (⌘⌫) | Done | shortcuts.rs:114, app.rs:1095-1102 | local |
 | Find: Go to Folder (⌘J or J), a quick-switch dialog with Folders / Smart Folders / Tags tabs | Missing | No quick switcher | local |
 | Find: Add to Folders… (⇧⌘J, a searchable folder picker that can create folders) | Partial | A plain scrolling submenu in the item context menu (app.rs:2520). No search, no new folder and no key | local |
-| Organize: Add To Last Used Folder (⇧D) | Missing | No record of recently used folders | local |
+| Organize: Add To Last Used Folder (⇧D) | Done | `organize.folder.addLast`: 50 recent folders kept app-wide, as Eagle's localStorage list | local |
 | Organize: Rate 0–5 stars from the menu and keys | Done | Organize menu and the 0–5 keys (`organize.rating.*`) with a toast; in the viewer the bare digits keep their zoom meaning | local |
 | Organize: Add Tags… (⌘T), Copy Tags (⇧⌘C), Paste Tags (⇧⌘V), Clear Tags | Done | Organize menu; shortcuts.rs `organize.tag.*` (Clear Tags unbound by default, as Eagle) | local |
 | View: Always on Top (⇧T) | Done | `modes.rs` `toggle_on_top` through `ViewportCommand::WindowLevel`; View menu checkmark; off at launch as Eagle | local |
@@ -97,7 +97,7 @@ Overall finding: falcon now has a native menu bar (`crates/falcon-app/src/menu.r
 | View: Grayscale preview (⌥⌘G) | Partial | Image viewer, animations and the preview window desaturate on the loader workers (`logic::grayscale_rgba`); not the grid, video or PDF | local |
 | View: Open in New Window (⌘O) | Done | `preview_window.rs`, a second viewport; see §15 for what the window lacks | local |
 | View: Open With Default App (⇧↩), Open with Other App, Reveal in Finder (⌘↩) | Done | open_ui.rs:33-46, shortcuts.rs:104-105 | local |
-| View: Open Link in Browser (⇧⌘O) | Missing | No key or menu item opens the item's source URL | local |
+| View: Open Link in Browser (⇧⌘O) | Done | `view.file.openlink`, `urls.rs` (web URL or file path) | local |
 | View: show or hide Sidebar (⌥⌘1), Inspector (⌥⌘2), both (⌥⌘3) | Done | shortcuts.rs `view.toggle.sidebar`, `view.toggle.inspector`, `view.toggle.all`; Tab also toggles both; all work in the viewer too | local |
 | View: Show Name (⌥⌘4), Show Item Info (⌥⌘5), Show Comment count (⌥⌘6) | Done | shortcuts.rs `view.toggle.listname/listmetas/listannotation`, View menu checkmarks, `logic::Display` | local |
 | View: Show Subfolder Content (⌥⌘7) | Done | `view.toggle.subfolder`, `logic::folder_members`, `grid_order` in organize_ui.rs; the layout panel and the strip heading have the switch too | local |
@@ -119,30 +119,30 @@ Cross-references (not counted): File ▸ Import Folders / Links / Eagle Package 
 | **Item**: Restore (in the Trash) | Done | app.rs:2531-2534, which also offers Delete Permanently | local |
 | Item: Open Item(s) in New Window | Done | Item menu; one item per window | local |
 | Item: Open With Default App / Open With ▸ apps / Reveal in Finder | Done | open_ui.rs:33-46 | local |
-| Item: Open File Location ▸ All or one of the item's folders (jumps to the item there) | Missing |  | local |
+| Item: Open File Location ▸ All or one of the item's folders (jumps to the item there) | Done | Card menu; jumps to the item in that view | local |
 | Item: Plugin ▸ recent plugins | Missing |  | online/plugin |
-| Item: Add To Last Used Folder | Missing |  | local |
+| Item: Add To Last Used Folder | Done | Card menu, ⇧D | local |
 | Item: Add to Folders… (picker panel) | Partial | Flat list submenu (app.rs:2520-2528) | local |
-| Item: Share (macOS share sheet) | Missing |  | local |
-| Item: Pin to Top / Unpin from Top inside a folder | Missing | No pinning | local |
+| Item: Share (macOS share sheet) | Done | `share.rs` through `NSSharingServicePicker` at runtime | local |
+| Item: Pin to Top / Unpin from Top inside a folder | Done | `item_ops.rs`: item key `pinned: {folderId: ms}`; pinned items sort first unless the folder is sorted at random; no pin badge on cards yet | local |
 | Item: Set as Folder Cover | Done | image_edit.rs:90-95 | local |
 | Item: New Folder with Selection (N items) | Done | `folders_ui` `new_with_dialog`: creates the folder and adds the selected items | local |
-| Item: Rename / Rename N Items (batch rename dialog) | Missing | Not in the context menu. Only F2 on one item via the inspector | local |
+| Item: Rename / Rename N Items (batch rename dialog) | Done | Rename N Items dialog (`rename.rs`, incl. `%F`), asks first at 10+ items; one item uses the inspector title | local |
 | Item: Copy (files) | Partial | ⌘C works (app.rs:942). Not in the menu | local |
 | Item: Copy File Path | Done | `export_ui.rs` `copy_variant`, every selected item | local |
 | Item: Copy… ▸ Link, Folder path, Thumbnail, Base64, Name | Done | `export_ui.rs` `item_copy_menu`; Link copies the item's source URL | local |
 | Item: Copy Tags / Paste Tags | Done | `item_menu` in app.rs | local |
-| Item: Combine Images (several selected) | Missing |  | local |
+| Item: Combine Images (several selected) | Missing | A plugin in Eagle 4 (`combine-images`); not built | local |
 | Item: Duplicate | Missing |  | local |
 | Item: Search by Image ▸ Google / Bing / Yandex / TinEye / SauceNAO | Missing |  | online/plugin |
 | Item: Enter / Leave Presentation Mode | Done | Item menu and middle click in the image viewer | local |
 | Item: Thumbnail Background ▸ None / Black / Gray / White / Checkerboard grid | Missing |  | local |
 | Item: Grayscale preview toggle | Done | Item menu | local |
 | Item: More ▸ custom thumbnail (file) / reset | Done | image_edit.rs:96-103 | local |
-| Item: More ▸ custom thumbnail from the clipboard | Missing |  | local |
+| Item: More ▸ custom thumbnail from the clipboard | Done | ⇧⌥⌘T and the card menu | local |
 | Item: More ▸ Refresh Thumbnail | Done | image_edit.rs:104 | local |
 | Item: More ▸ Re-analyze colors | Done | Labelled "Refresh Palette" (image_edit.rs:107) | local |
-| Item: More ▸ Replace with File… | Missing |  | local |
+| Item: More ▸ Replace with File… | Done | Confirmation, copy in, swap with a `.bk` kept until synced, thumbnail redrawn (`item_ops.rs`) | local |
 | Item: Remove from this Folder | Done | Card menu entry and ⇧⌘⌫ | local |
 | Item: Move to Trash | Done | app.rs:2538 | local |
 | Item (falcon only): Rotate Left / Right, Flip H / V, Crop… | Done | image_edit.rs:110-132 (falcon extra) | local |
@@ -182,7 +182,7 @@ Cross-references (not counted): File ▸ Import Folders / Links / Eagle Package 
 | **Tag group**: Rename / Remove | Done | organize_ui.rs:820-845, which adds description, move and colour | local |
 | Tag group: Find items with any tag in the group | Done | Group heading menu, `filter_any_tags` | local |
 | **Tag list sort**: A>Z / Z>A / by count / group by Alphabet or Groups | Done | All Tags page sort menu (per session) | local |
-| **Palette swatch** (inspector): Find similar colour, copy as HEX / RGB / RGBA / HSL / HSV / HWB / CMYK, set as primary | Missing | Not found in the inspector code | local |
+| **Palette swatch** (inspector): Find similar colour, copy as HEX / RGB / RGBA / HSL / HSV / HWB / CMYK, set as primary | Done | Find Similar, copy as HEX/RGB/RGBA/HSL/HSV/HWB/CMYK (`colors.rs`), Primary Colour toggle with a ring on the primary swatch | local |
 | **Inspector tag input**: Copy / Paste / Clear All Tags | Done | `tag_area_menu` in `app/tag_picker.rs` | local |
 
 ---
@@ -204,7 +204,7 @@ Eagle defaults come from prefs `shortcuts.keybinds` (rebindable) and from the ha
 | ⌥1–⌥4 layouts | Done | shortcuts.rs `view.layout.*`, in Eagle's order | local |
 | ⌥⌘1–⌥⌘8 panel and caption toggles plus Navigator | Done | ⌥⌘1–⌥⌘7 and ⌥⌘8 Navigator (`view.toggle.navigator`) | local |
 | ⇧T always on top, F5 slideshow, ⌥⌘G grayscale | Done | shortcuts.rs `view.alwaysOnTop`, `view.toggle.slideshow`, `view.grayscale` | local |
-| ⌘O open in new window, ⇧⌘O open link | Partial | ⌘O (`view.file.opennewwindow`); no ⇧⌘O | local |
+| ⌘O open in new window, ⇧⌘O open link | Done | `view.file.opennewwindow`, `view.file.openlink` | local |
 | ⇧↩ default app, ⌘↩ reveal | Done | shortcuts.rs:104-105 | local |
 | ⌥⌘S reveal, ⌥⌘D duplicate (view) | Missing |  | local |
 | Home / End / PageUp / PageDown scroll the grid; ⌘↑ / ⌘↓ jump to top or bottom | Done | `run_command` scroll offsets; ⌘↑ / ⌘↓ also select the first or last item, where Eagle only scrolls | local |
@@ -510,7 +510,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Transparent-area display preference (grid or no grid) | Done | `prefs.transparency_grid`, off by default as Eagle | local |
 | Grayscale preview toggle | Partial | Image viewer, animations and preview window; not video, PDF or fonts | local |
 | Navigator (minimap) while zoomed | Done | Eagle's 120 px box, 16 px inset, shown by its overflow rule; click centres, drag pans (`logic::navigator_*`); ⌥⌘8 and View ▸ Navigator | local |
-| Viewer keys follow the shortcut table (zoom, crop, rotate, flip) | Partial | Zoom keys are rebindable (`view.zoom.*`); crop, rotate and flip keys are still fixed | local |
+| Viewer keys follow the shortcut table (zoom, crop, rotate, flip) | Partial | Zoom and crop keys are rebindable; rotate and flip stay fixed | local |
 
 ### 2. Image viewer (jpg, png, webp, bmp, avif, heic, jxl, ico and the like)
 
@@ -533,13 +533,13 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Shows the original at full resolution | Done | `Tier::Original` in `loader.rs`: the original decoded on a worker and cut into ≤ 2048 px tiles within the GPU limit, kept only for the viewed item (`keep_original`); jpg, png, webp, bmp, tiff and RAW previews | local |
 | EXIF orientation applied in the viewer | Done | `FL/thumbnail.rs:121-130` | local |
 | Rotate | Done | `F/crop.rs:242-250`, Shift+R `F/image_edit.rs:281` | local |
-| Rotation mode preference (preview only, or write to file) | Partial | Always writes to the file (`FL/transform.rs:65`); no preview-only mode | local |
+| Rotation mode preference (preview only, or write to file) | Done | `imageRotateMode` preference, default Write; preview mode only changes how the viewer draws | local |
 | Horizontal flip (Shift+F), vertical flip | Done | `F/crop.rs:251-258`, Shift-click flips vertically (`F/image_edit.rs:332`) | local |
 | Rotate and flip limited to jpg/png/webp/bmp (flip also avif) | Done | `FL/transform.rs:36-53` | local |
-| Crop tool (jpg/png/webp) with handles | Partial | Crop with handles and Save/Cancel (`F/crop.rs:144-232`); no Shift+C key | local |
-| Crop width and height number fields | Missing | No numeric entry (`F/crop.rs:203`) | local |
-| Crop "Save As" (keeps the original, adds a new item) | Missing | Only "Replace Original" (`F/crop.rs:211`) | local |
-| Live crop size readout | Missing | None | local |
+| Crop tool (jpg/png/webp) with handles | Done | Crop with handles, ⇧C, W/H fields, Save / Save As / Cancel (`crop.rs`); in-place writes keep a `.bk` until synced, as Eagle | local |
+| Crop width and height number fields | Done | `crop.rs` bar fields | local |
+| Crop "Save As" (keeps the original, adds a new item) | Done | `crop_item_as_new`: same name, tags, folders, URL and rating, dated `modificationTime + 1` (Eagle +0.1); note not carried | local |
+| Live crop size readout | Done | `x: y: W: H:` shown while dragging | local |
 | Comment mode: draw rectangle regions with notes (C key) | Done | `F/comments.rs:201-320`, C key `F/image_edit.rs:277` | local |
 | Comment badges, delete X, resize handles, count badge on the toolbar button | Done | `F/comments.rs:213-318` | local |
 | Hovering a region shows its note | Done | Tooltip on hover (`F/comments.rs:290`) | local |
@@ -1065,12 +1065,12 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Colour palette swatches | Done | `A:3053` | local |
 | Click a swatch to find items of similar colour | Done | `A:3066` | local |
 | Copy the colour as HEX, RGB or RGBA | Partial | Right-click copies HEX only (`A:3071`) | local |
-| Set a palette colour as the primary colour (`marked`) | Missing | none; `marked` is also ignored when colour-matching | local |
+| Set a palette colour as the primary colour (`marked`) | Partial | Stored as Eagle writes it (`marked` true/false); colour search still ignores it | local |
 | Re-analyse colours | Done | `image_edit.rs:107` Refresh Palette | local |
 | Name (title) editing | Done | `A:3082` | local |
-| Click the extension to change it | Missing | Type is display-only (`A:3200`) | local |
+| Click the extension to change it | Done | Inspector Type row opens a checking dialog; only the original is renamed, as Eagle | local |
 | Note editing | Done | `A:3092` | local |
-| URL editing, validated as Eagle does | Partial | Saved without validation (`A:3098`) | local |
+| URL editing, validated as Eagle does | Done | `urls.rs` `url_accepted`: web URLs and existing paths, as Eagle; Open Link icon beside the field | local |
 | Open Link in Browser button | Missing | none | local |
 | Tags: chips, remove, type a new tag | Done | `tag_field`: chips with × and a + that opens the picker, where typing happens, as Eagle | local |
 | Tag picker with Selected, Starred, Recent, Recommended and groups, search, column sizes | Done | `app/tag_picker.rs`, `tags.rs`: search and ranking, Starred, Recent (latest 12 in use), Recommended, groups with a Tab sidebar, settings; no Pinyin or jieba search, no dragging or resizing | local |
@@ -1096,15 +1096,15 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Edit the name, note or URL of all at once ("Multiple titles", "multiple URLs") | Done | `set_notes`, `set_urls` from the multi-item inspector; Eagle has no batch name either | local |
 | Rate all | Done | `A:3003`, Action::BatchRating | local |
 | Total size | Done | `A:3007` | local |
-| Batch rename with a template (%NN, $D, original name, tags, folders, index, date) and find/replace with regex | Missing | none | local |
+| Batch rename with a template (%NN, $D, original name, tags, folders, index, date) and find/replace with regex | Done | Rename N Items dialog (`rename.rs`): `%NN`, dates, original name, tags, folders, `%F`, index, find/replace | local |
 | Confirm bulk actions on many items | Missing | none | local |
 | New Folder with Selection | Missing | none | local |
 | Add To Last Used Folder | Missing | none | local |
 | Remove from the current folder | Missing | Only through the × on the single-item inspector chip | local |
-| Pin items to the top of a folder | Missing | none | local |
-| Open File Location (show the item in All or in one of its folders) | Missing | none | local |
+| Pin items to the top of a folder | Done | `item_ops.rs` pin/unpin | local |
+| Open File Location (show the item in All or in one of its folders) | Done | Card menu | local |
 | Rating shortcuts (keys 0-5) | Missing | No rating keys in `shortcuts.rs`. Cross-ref: shortcuts agent. | local |
-| Duplicate item | Missing | Cross-ref: shell/menus agent | local |
+| Duplicate item | Done | ⌘D, `item_ops.rs` | local |
 
 ### 11. Duplicates
 
@@ -1183,16 +1183,16 @@ Ranked by user impact. Data-loss and silent-mismatch bugs come first, then every
 15. **Duplicates can't merge.** Folders, tags, notes and links aren't combined; there's no best-copy pick, no scope (current list or selected), and no remove-from-results.
 16. **No Go to Folder quick search.**
 17. ~~No multi-select of folders.~~ Fixed, for folders and smart folders.
-18. **Missing folder command**: Add to Last Used Folder (New Folder Below, New Folder with Selection, Duplicate, Move Folder dialog and Move Up/Down/Top/Bottom are done).
+18. ~~Missing folder commands.~~ Fixed, including Add to Last Used Folder.
 19. **Emoji folder icons don't show.** A new folder doesn't inherit the parent's icon or colour, and there's no reset cover.
-20. **No Pin to Top for items, and no Open File Location.**
+20. ~~No Pin to Top for items, and no Open File Location.~~ Fixed.
 21. **Tag manager gaps**: no Uncategorized or Starred tag pages, no rubber-band tag selection, and rename or merge don't reach folder auto-tags or smart-folder rules.
 22. **Quick Access can't be reordered, dragged into, or used as a drop target.**
 23. **Filter bar gaps**: no Filter Lock toggle (falcon always keeps the filter and search when switching views), no add or pin filters, no ratio shapes (4:3, 16:9, custom), no counts for type, shape and rating.
 24. **Global sort lacks Duration and Random.**
 25. **Rating gaps**: no rating shortcuts (0-5) and no rating toast.
-26. **Palette gaps**: no "Set as Primary Colour", and copy is HEX only (no RGB or RGBA).
-27. **No change-extension in the inspector.** URL isn't validated and there's no Open Link button.
+26. ~~Palette gaps.~~ Fixed; colour search still ignores the primary colour.
+27. ~~No change-extension in the inspector; URL isn't validated; no Open Link button.~~ Fixed.
 28. **Recently Used isn't a list of opened items.** Random has no refresh key. Uncategorized ignores stale folder ids.
 29. **Folder deletion**: the trash checkbox can now be unticked; there's no move confirmation, and Touch ID unlock is missing.
 30. **Search extras**: no Search All, no Chinese traditional/simplified matching, no pinyin sidebar search. Falcon's own fuzzy matching is a deviation from Eagle.
