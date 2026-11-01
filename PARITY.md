@@ -37,7 +37,7 @@ These are bugs, not missing features. The first four can lose data or edits.
 7. Shortcuts still missing: T, F, ⌘J Go to Folder, ⇧+arrows, ⌘D, ⌘T and the tag clipboard, ⇧D, ⇧T, F5, ⌘O and more (see §3).
 8. ~~No marquee selection, no multi-select of folders, no grid display options.~~ Fixed.
 9. ~~No tag picker or suggestions.~~ Fixed.
-10. ~~No GIF player controls, no animated WebP or AVIF, no GIF hover previews.~~ Fixed (AVIF on macOS); still no hover playback for video or audio.
+10. ~~No GIF player controls, no animated WebP or AVIF, no GIF hover previews.~~ Fixed (AVIF on macOS); hover playback for video and audio is in.
 11. ~~No interactive 3D viewer, text editor or full font viewer.~~ Fixed for obj/stl/ply/glb/gltf/3mf/fbx/dae/3ds and tessellated ifc (triangulated and polygonal face sets, faceted breps); ifc with only swept, CSG or b-spline geometry stays a still.
 12. ~~No watched import folder, no reload on outside changes, no sync-conflict detection, no screen capture.~~ Fixed.
 13. ~~English only; Eagle ships 8 languages.~~ Fixed: the whole interface in all eight (machine-written translations, pending a native read).
@@ -610,7 +610,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| Waveform display | Done | `F/app/media_view.rs:114-136` | local |
+| Waveform display | Done | `waveform::peaks` on `falcon_library::audio`, the same decoder as playback, for all six Eagle formats plus opus, aiff and caf (`ui/viewer/audio.rs`) | local |
 | Click or drag the waveform to seek | Done | `F/app/media_view.rs:137-148` | local |
 | Autoplay on open | Done | `F/app/media_view.rs:107` | local |
 | Play/pause button and Space | Done | `F/app/media_view.rs:151-160`, `F/app.rs:1084` | local |
@@ -620,7 +620,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Volume keys (Cmd+Up/Down) | Done | `video_view.rs` `audio_action`: the Player key table drives the audio player | local |
 | Skip back and forward keys (Cmd+Left/Right) | Done | `audio_action` | local |
 | Playback speed (menu and Shift+. / Shift+,) | Done | `Audio::set_speed`, `MENU_RATES` 0.5–2× in the menu, 0.25–8× by key; pitch follows speed | local |
-| m4a playback | Done | `F/audio.rs:48` via rodio mp4 | local |
+| m4a playback | Done | `falcon_library::audio` (symphonia isomp4): AAC-LC, ALAC, FLAC and Opus in m4a with the edit list and iTunSMPB priming trimmed, through `audio.rs` `Stream` | local |
 | BPM and duration in the inspector | Done | `F/app/media_view.rs:306-313` | local |
 
 ### 7. Font viewer
@@ -757,9 +757,9 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Animated GIF plays inside the hover preview | Done | `gif_view.rs` `hover_anim`, `anim.rs` `Cards::popup` | local |
 | GIF and animated images play when hovered in the grid | Done | GIF, animated WebP and (macOS) animated AVIF (`card_anim`, `Cards::play`) | local |
 | Preference: always autoplay GIF/WebP/AVIF in the grid | Done | `prefs.always_play_animated` (off by default, as Eagle); AVIF on macOS | local |
-| Video hover preview: autoplays, moving the pointer scrubs, progress bar and time | Partial | Picture strip with scrub, rest-resume, bar and time; sound through rodio for AAC in MP4/MOV when unmuted, unheard so far; other codecs silent | local |
+| Video hover preview: autoplays, moving the pointer scrubs, progress bar and time | Partial | Picture strip with scrub, rest-resume, bar and time; sound through `falcon_library::audio` (AAC, ALAC, Opus, FLAC and MP3 tracks in MP4/MOV, priming trimmed) when unmuted, not yet heard by hand; other containers silent | local |
 | Mute toggle on the video hover preview, remembered | Done | `Display::video_muted`, muted by default as Eagle; sound through the shared hover audio player when unmuted | local |
-| Audio hover preview: plays, click to seek, progress | Done | Plays after 200 ms, click to seek, progress; stops when the window hides or is minimised | local |
+| Audio hover preview: plays, click to seek, progress | Done | Plays after 200 ms, click to seek, progress; stops when the window hides or is minimised; every audio format falcon decodes, with the decoded length when the record has none | local |
 | YouTube, Vimeo and Bilibili hover previews for bookmarked links | Missing | None | online/plugin |
 | Text files show their text on the card | Done | Eagle's `text` key written at import in Eagle's key order (first 32 Ki UTF-16 units), updated on save, drawn as name plus up to 50 lines; `.txt` only, as Eagle | local |
 
@@ -805,7 +805,7 @@ Eagle columns come from `config.js` (`SUPPORT_FORMATS_DARWIN`), `E/js/thumbs/thu
 | pdf | pdf.js reader in main window | QL | PDFKit reader in main window (macOS) |
 | txt | Editable text editor | None | QL still |
 | ttf, otf, ttc, woff, woff2, otc | Font viewer | Drawn specimen 600×600 | Font viewer (falls back if egui can't read the font) |
-| mp3, wav, ogg, flac, aac, m4a | Audio player with waveform | Drawn waveform 280×140 | Audio player with waveform |
+| mp3, wav, ogg, flac, aac, m4a | Audio player with waveform | Drawn waveform 280×140 | Audio player with waveform; all decode through `falcon_library::audio` (ADTS with MPEG-2 headers and Ogg Opus included); falcon also plays opus, aiff, aif, aifc and caf, which Eagle treats as plain files |
 | mp4, mov, m4v, 3gp, ts, mts, m2ts | HTML5 video player, mpv fallback | QL | AVFoundation player |
 | webm, mkv, avi, wmv, mpg, flv, f4v | HTML5 player or mpv fallback | QL if available | AVFoundation if it can, else a still |
 | 360, afx, eva, vap | Video player | QL if available | AVFoundation if it can, else a still |
@@ -837,7 +837,7 @@ Ranked by how often a user would notice them.
 18. **Remember last zoom and position per item, and persist video position across launches (Missing / Partial).**
 19. **PDF gaps (Missing).** No page rotation, hand tool, scroll and spread modes, presentation, print, document properties, password prompt, links, attachments, layers, current outline item, or whole-word and diacritics search. The reader is also macOS only.
 20. **Crop gaps (Missing).** No width and height fields, no Save As, no size readout and no Shift+C.
-21. **Audio gaps (Missing).** No speed control, and no volume or skip keys.
+21. ~~Audio gaps.~~ Fixed: speed control, volume and skip keys are in (see the audio viewer rows).
 22. **Font viewer gaps**: fonts egui can't read (some woff2, CFF) still fall back to the image viewer.
 23. **Space opens the full viewer instead of Eagle's inline quick preview (Partial).**
 24. **No position counter, prev/next buttons or first/last-item tips in the viewer bar (Missing).**
