@@ -1657,6 +1657,7 @@ dependencies = [
  "image",
  "kamadak-exif",
  "miniz_oxide 0.8.9",
+ "num-bigint",
  "resvg",
  "serde",
  "serde_json",

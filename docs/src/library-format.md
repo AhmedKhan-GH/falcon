@@ -141,6 +141,18 @@ Every comment change saves the whole item, so the item's own `lastModified` and 
 
 Falcon models these as `model::Comment`. `Item::comments()` and `Item::set_comments()` read and write the key without moving it or any other key in `extra`. On `Library`, `add_comment` fills in the id and time, and keeps timed notes sorted (a new note goes after others at the same time). `update_comment` replaces a comment by id, and `delete_comment` removes one. Falcon re-serialises each comment in Eagle's key order: `id`, region or `duration`, `annotation`, `lastModified`, then unknown keys.
 
+### Manual order (observed in code)
+
+A folder sorted `MANUAL` keeps its hand-arranged order in each item's optional `order` object: `order[<folder id>]` is a **decimal string**, such as `"1789479235636.5"`. JavaScript adds the key the first time an item is dragged, so it comes after the keys the item started with. A new folder id goes at the end of the object.
+
+- **Sorting:** the `MANUAL` sort compares these values **as strings**, largest first. An item with no entry (or an empty one) uses its `modificationTime` turned into a string, so undragged items fall in import order, newest first. `sortIncrease: false` reverses the list. As strings, `"999"` sorts above `"1000"`. This never matters for real timestamps, which all have 13 digits.
+- **Dragging:** Eagle works in exact decimals (a big-number library). Divisions round to 20 places, with halves rounded away from zero. Values are written in the shortest form (`toPrecision()` with no argument, so `"2500"`, not `"2500.0"`). Dropping *n* items between neighbours `prev` and `next` sets `middle = (prev + next) / 2` and `step = (middle - next) / n`. The last dragged item gets `middle`, and each earlier one gets `middle + step × k`, which moves towards `prev`. Before the first item, `prev` is the first item's value + 1 (- 1 when descending). After the last item, `next` is the last value - 1 (+ 1 when descending). A neighbour with no entry counts as its `modificationTime`.
+- **Collisions:** before placing, Eagle checks whether two of the other items share a value. If they do, every item *i* (counting from 0 in the current view) that has an entry gets `value - i × 10^-(digits in the view's item count + 1)`. The step is a JavaScript float multiplication, float noise included (`0.01 × 57` gives `0.5700000000000001`). Eagle reads the direction flag here before it is set, so the values always step down.
+- **Side effects:** dragged items save as an ordinary edit (`lastModified` bumped). A folder that wasn't on `MANUAL` switches to `MANUAL` with `sortIncrease: true`.
+- Dropping onto one of the dragged items, or into a view with no other items, throws in Eagle, so nothing changes.
+
+Falcon: `Item::manual_order(folder)` reads the value as a number, `Item::manual_sort_key(folder)` gives the string the sort compares, and `Item::set_manual_order` writes one. `search::sort_manual(items, folder, increase)` is the `MANUAL` sort. `Library::move_items_manually(folder, ids, before)` moves items as a block before another item (`None` for the end), using the same decimal arithmetic (`manual::Dec`) and collision handling. It works out the order over all untrashed items in the folder, where Eagle uses the items currently shown (inferred to be the same when no filter is on). Moving items that aren't in the folder, or placing them before one of themselves, is refused.
+
 ## `mtime.json` (observed)
 
 An object that maps item IDs to ms times, ending with `"all"`. In the fixture it lists only 32 of the 91 items, yet `all` is 91. So `all` is the library's total item count, not the number of entries.

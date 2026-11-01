@@ -1100,6 +1100,21 @@ pub fn sort(items: &mut [&Item], order: OrderBy, increase: bool) {
     }
 }
 
+/// Sorts items by their hand-arranged order in `folder` (a folder's
+/// `MANUAL` sort): `order[folder]` compared as text, larger first, with
+/// `modificationTime` standing in for items that have no entry, as Eagle
+/// does. Reversed when `increase` is false. Stable.
+pub fn sort_manual(items: &mut [&Item], folder: &str, increase: bool) {
+    let mut keyed: Vec<(String, &Item)> = items.iter().map(|i| (i.manual_sort_key(folder), *i)).collect();
+    keyed.sort_by(|a, b| b.0.cmp(&a.0));
+    for (slot, (_, item)) in items.iter_mut().zip(keyed) {
+        *slot = item;
+    }
+    if !increase {
+        items.reverse();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
