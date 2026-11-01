@@ -1203,9 +1203,24 @@ pub fn toggle_all(sidebar: bool, _inspector: bool) -> (bool, bool) {
     if sidebar { (false, false) } else { (true, true) }
 }
 
+/// The viewer bar's counter: the item's place in the grid order, from 1,
+/// and the number of items.
+pub fn viewer_counter(order: &[String], id: &str) -> Option<(usize, usize)> {
+    order.iter().position(|x| x == id).map(|n| (n + 1, order.len()))
+}
+
 #[cfg(test)]
 mod viewer_shell_tests {
     use super::*;
+
+    #[test]
+    fn counter_counts_from_one() {
+        let order: Vec<String> = ["a", "b", "c"].iter().map(|s| s.to_string()).collect();
+        assert_eq!(viewer_counter(&order, "a"), Some((1, 3)));
+        assert_eq!(viewer_counter(&order, "c"), Some((3, 3)));
+        assert_eq!(viewer_counter(&order, "z"), None);
+        assert_eq!(viewer_counter(&[], "a"), None);
+    }
 
     #[test]
     fn toggle_all_follows_the_sidebar() {
