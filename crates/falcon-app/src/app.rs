@@ -410,6 +410,8 @@ struct Workspace {
     actions: Vec<Action>,
     /// Folder being renamed in the sidebar, with the text typed so far.
     renaming: Option<(String, String)>,
+    /// Subfolder card being renamed above the grid, with the text so far.
+    strip_rename: Option<(String, String)>,
     confirm: Option<Confirm>,
     smart_dialog: Option<SmartDraft>,
     view: ViewState,
@@ -497,6 +499,7 @@ impl Workspace {
             frame_jobs: Vec::new(),
             actions: Vec::new(),
             renaming: None,
+            strip_rename: None,
             confirm: None,
             smart_dialog: None,
             view: ViewState::default(),

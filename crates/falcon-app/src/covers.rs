@@ -7,12 +7,12 @@
 
 use std::collections::HashSet;
 
-use eframe::egui::{self, Align2, CornerRadius, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, vec2};
+use eframe::egui::{self, Align2, CornerRadius, Key, Pos2, Rect, Sense, Stroke, StrokeKind, TextEdit, Ui, vec2};
 use falcon_library::Library;
 use falcon_library::model::{Folder, Item};
 use falcon_library::search::{self, OrderBy};
 
-use super::{App, ext_placeholder, galley};
+use super::{Action, App, ext_placeholder, galley};
 use crate::loader::{Tier, job_for};
 use crate::logic::{self, Scope};
 use crate::theme::{self as t, font};
@@ -121,8 +121,36 @@ impl App {
                         } else {
                             p.text(thumb.center(), Align2::CENTER_CENTER, crate::icons::FOLDER, font(30.0), t::p().text_disabled);
                         }
-                        let g = galley(ui, &child.name, font(13.0), t::p().text, CARD_W);
-                        ui.painter().galley(Pos2::new(rect.left(), thumb.bottom() + 6.0), g, t::p().text);
+                        // The name: a double-click renames the folder, as in Eagle.
+                        let name_rect = Rect::from_min_size(Pos2::new(rect.left(), thumb.bottom() + 4.0), vec2(CARD_W, 19.0));
+                        let renaming = self.ws.strip_rename.as_ref().is_some_and(|(id, _)| *id == child.id);
+                        if renaming {
+                            ui.painter().rect_filled(name_rect, CornerRadius::same(4), t::p().field);
+                            ui.painter().rect_stroke(name_rect, CornerRadius::same(4), Stroke::new(1.0, t::p().primary), StrokeKind::Inside);
+                            let (_, buf) = self.ws.strip_rename.as_mut().unwrap();
+                            let te = ui.put(
+                                name_rect,
+                                TextEdit::singleline(buf).id_salt(("strip-rename", &child.id)).frame(egui::Frame::NONE).margin(egui::Margin::symmetric(4, 0)).font(font(13.0)),
+                            );
+                            if !te.has_focus() && !te.lost_focus() {
+                                te.request_focus();
+                            }
+                            let cancel = ui.input(|i| i.key_pressed(Key::Escape));
+                            if te.lost_focus() || cancel {
+                                let (id, name) = self.ws.strip_rename.take().unwrap();
+                                let name = name.trim().to_string();
+                                if !cancel && !name.is_empty() && name != child.name {
+                                    self.ws.actions.push(Action::RenameFolder(id, name));
+                                }
+                            }
+                        } else {
+                            let g = galley(ui, &child.name, font(13.0), t::p().text, CARD_W);
+                            ui.painter().galley(Pos2::new(rect.left(), thumb.bottom() + 6.0), g, t::p().text);
+                            let name_resp = ui.interact(name_rect, ui.scope_id().with(("strip-name", &child.id)), Sense::click());
+                            if name_resp.double_clicked() {
+                                self.ws.strip_rename = Some((child.id.clone(), child.name.clone()));
+                            }
+                        }
                         let count = lib.items().iter().filter(|i| !i.is_deleted && i.folders.contains(&child.id)).count();
                         let mut meta = format!("{count} items");
                         if !child.children.is_empty() {
