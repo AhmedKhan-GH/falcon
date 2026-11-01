@@ -122,6 +122,8 @@ pub struct App {
     pub(crate) web: crate::webview::WebView,
     /// The image viewer's zoom mode and remembered views (`ui/viewer/image.rs`).
     pub(crate) image: crate::ui::viewer::image::ImageState,
+    /// The 3D model viewer (`model3d/`, `ui/viewer/model.rs`).
+    pub(crate) model3d: crate::model3d::Model3dState,
     /// Drop targets and other import state (`import.rs`).
     pub(crate) imports: import::Imports,
     /// The macOS menu bar (`menu.rs`).
@@ -220,6 +222,7 @@ impl App {
             pdf: Default::default(),
             web: Default::default(),
             image: Default::default(),
+            model3d: crate::model3d::Model3dState::new(cc),
             menu_bar: Default::default(),
             layouts: HashMap::new(),
             legacy_layout: None,

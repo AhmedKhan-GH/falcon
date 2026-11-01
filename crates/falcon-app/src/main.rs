@@ -24,6 +24,7 @@ mod loader;
 mod logic;
 mod menu;
 mod open_files;
+mod model3d;
 mod open_with;
 mod prefs;
 mod share;

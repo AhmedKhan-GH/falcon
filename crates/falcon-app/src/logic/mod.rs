@@ -43,7 +43,6 @@ pub use drops::*;
 pub use viewer::*;
 pub use image_viewer::*;
 pub use display::*;
-#[allow(unused_imports)]
 pub use viewer3d::*;
 
 #[cfg(test)]

@@ -6,6 +6,7 @@ pub(crate) mod crop;
 pub(crate) mod font;
 pub(crate) mod gif;
 pub(crate) mod image;
+pub(crate) mod model;
 pub(crate) mod modes;
 pub(crate) mod open;
 pub(crate) mod pdf;
@@ -56,6 +57,7 @@ impl App {
             || self.video_viewer(parent, lib, item, screen)
             || self.pdf_viewer(parent, lib, item, screen)
             || self.web_viewer(parent, lib, item, screen)
+            || self.model_viewer(parent, lib, item, screen)
             || self.media_viewer(parent, lib, item, screen)
         {
             return;

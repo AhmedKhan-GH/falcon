@@ -21,9 +21,6 @@
 //!
 //! Matrices are column-major with clip depth 0..1 (`model3d::math`).
 
-// The viewer that uses these lands in a later commit.
-#![allow(dead_code)]
-
 use falcon_library::model3d::math::{self, M4, V3};
 
 /// The vertical field of view, in degrees.
