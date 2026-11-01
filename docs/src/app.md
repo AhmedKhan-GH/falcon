@@ -2,7 +2,7 @@
 
 `falcon-app` is falcon's version of Eagle's main window, built with egui. Its look comes from Eagle itself:
 
-- **Colours:** dark is sampled from Eagle's window and its dark-theme stylesheet (`style/base/_color.scss`). For example, the content area is `#17191d`, the panels `#1f2023` and the accent `#3297ff`. Light, gray, blue and purple are worked out from the stylesheets (see Themes below).
+- **Colours:** dark is sampled from Eagle's window and its dark-theme stylesheet (`style/base/_color.scss`). For example, the content area is `#17191d`, the panels `#1f2023` and the accent `#3297ff`. Light, lightgray, gray, blue and purple are worked out from the stylesheets, and Auto follows the macOS appearance (see Themes below).
 - **Fonts and icons:** SF Pro for text, plus Phosphor Light icons, which are MIT-licensed and close to Eagle's line icons.
 - **Measurements:** taken from Eagle at 1280 × 800: 240 pt panels, a 48 pt toolbar, 27 pt sidebar rows and 139 pt cards.
 
@@ -165,7 +165,7 @@ What Eagle does, from its `js/hover-preview.js`, `style/components/_hover-previe
 
 | Section | Setting | Eagle | falcon |
 |---|---|---|---|
-| General | Theme: Light, Gray, Dark, Blue, Purple | `theme` (`{name, color, css}`), default `DARK`; the picker also offers Auto and Lightgray | Stored as `theme` under Eagle's `css` names; picking one previews it at once, Cancel or Esc switch back. No Auto or Lightgray |
+| General | Theme: Auto, Light, Lightgray, Gray, Dark, Blue, Purple | `theme` (`{name, color, css}`), default `DARK`; Auto is `{name: "Auto", css: "auto"}` | Stored as `theme` under Eagle's `css` names (`auto`, `lightgray`, …); picking one previews it at once, Cancel or Esc switch back |
 | General | Show the sidebar, show the inspector | View menu toggles, not preferences | Same flags as the panel buttons |
 | General | Add IPTC and XMP keywords as tags | `general.IPTC`, off by default | Same: every import from the app (drops, ⌘V, files passed to the app, the collect window) reads it (see [IPTC keywords](import.md)) |
 | Preview | Hover zoom | `habits.hoverZoom`, on by default; off removes the zoom button, but holding Z still works | Same |
@@ -177,15 +177,20 @@ What Eagle does, from `js/default-preferences.js`, `preferences.html`, `js/prefe
 - The window's sidebar (200 pt wide, 32 pt rows) has General and Sidebar, then Controls, Preview (the `habits` group), Screenshot and Shortcuts, then Notification, Password and Auto-Import, then the AI panels. A search box filters every panel by keywords.
 - Save applies and closes, Apply applies and stays open, Cancel and Esc revert (including a previewed theme or zoom), ⌘↩ saves.
 - The window's own size is set in Eagle's main process, which is not in the readable bundle; falcon's 720 × 500 pt is a guess (inferred).
-- Not built in falcon: the Auto and Lightgray themes, interface zoom, language, the sidebar item toggles, scroll and double-click habits, notifications, screenshots, password lock, auto-import, proxy and the preference search.
+- Not built in falcon: interface zoom, language, the sidebar item toggles, scroll and double-click habits, notifications, screenshots, password lock, auto-import, proxy and the preference search.
 
 ## Themes
 
-Eagle has seven theme choices: Auto, Light, Lightgray, Gray, Dark, Blue and Purple, in that order in `js/preferences.js` (observed). falcon offers the five fixed ones in the same order. The code is in `crates/falcon-app/src/theme.rs`:
+Eagle has seven theme choices: Auto, Light, Lightgray, Gray, Dark, Blue and Purple, in that order in `js/preferences.js` (observed). falcon offers all seven in the same order. The code is in `crates/falcon-app/src/theme.rs`:
 - `Theme` is the choice.
 - `Palette` holds one theme's colours.
 - `p()` returns the current palette.
 - `set_theme` switches it and restyles egui.
+- `follow_system` runs once a frame and keeps Auto in step with macOS.
+
+**Auto (observed in `js/preferences.js` and `app.bundle.js`).** Eagle stores Auto as `{name: "Auto", css: "auto"}` and never puts `auto` on `body`. Wherever it needs the theme, it asks Electron's `nativeTheme.shouldUseDarkColors`: true shows **gray**, false shows **light** (not dark, and not lightgray). The Preferences window listens for `nativeTheme`'s `updated` event, and the main window recomputes it when the theme changes.
+
+falcon resolves Auto the same way, from egui's system theme (`Context::system_theme`, filled from winit's `ThemeChanged` and the event loop's appearance at start-up). When the appearance is not known yet, Auto shows gray, matching egui's dark fallback. Under Auto, falcon sets egui's theme preference to System, so the window is not pinned to an appearance and macOS changes reach egui (winit drops `ThemeChanged` while a window has its own appearance, and egui pins it for a fixed Light or Dark preference). egui's dark style gets gray's colours and its light style light's, so egui swaps its widgets by itself, and `follow_system` updates the palette `p()` returns. Neither step asks for any permission. With a fixed theme `follow_system` is one atomic load.
 
 **Where the colours come from (observed in `style/base/_color.scss`).** `body[theme=…]` sets `--color-theme`:
 - dark `#18191c`
@@ -193,10 +198,11 @@ Eagle has seven theme choices: Auto, Light, Lightgray, Gray, Dark, Blue and Purp
 - blue `#0d1630`
 - purple `#1C1424`
 - light `--color-white` (`#ffffff`; the map's `color-theme-light #f3f4f6` is not used by it)
+- lightgray `--color-theme-lightgray` (`#e3e4e6`)
 
-The four dark themes share one block, and light has its own:
+The four dark themes share one block, and light and lightgray share another (`body[theme=light], body[theme=lightgray]`, and the `light` mixin in `style/_mixins.scss` covers both). So lightgray is light's overlays, text, `#0072ef` primary and folder colours on a grey base:
 
-| Variable | Dark family | Light |
+| Variable | Dark family | Light and lightgray |
 |---|---|---|
 | foreground (text, hover and active overlays) | `--color-lightgray` `#f8f9fb` | `--color-dark` `#2c2f32` |
 | `--color-primary` | `#3297FF` | `#0072ef` |
@@ -221,30 +227,36 @@ A worked example, gray's selected row:
 1. panel = 3% `#f8f9fb` over `#37383c` = 0.03 × (248, 249, 251) + 0.97 × (55, 56, 60) = (60.8, 61.8, 65.7), which rounds to `#3d3e42`.
 2. selected row = 10% `#f8f9fb` over that = 0.10 × (248, 249, 251) + 0.90 × (61, 62, 66) = (79.7, 80.7, 84.5), which rounds to `#505155`.
 
-Only dark was checked against Eagle's window. The other four were not sampled from a running Eagle, because switching its theme would mean changing Eagle's preferences and taking screenshots. Treat their colours as stylesheet-derived. Dark keeps its sampled values, which is why it differs slightly from the model (for example, `main` `#17191d` against the stylesheet's `#18191c`).
+The same for lightgray, whose foreground is `--color-dark` `#2c2f32` = (44, 47, 50) on `#e3e4e6` = (227, 228, 230):
+1. panel = 0.03 × (44, 47, 50) + 0.97 × (227, 228, 230) = (221.5, 222.6, 224.6), which rounds to `#dedfe1`.
+2. selected row = 0.10 × (44, 47, 50) + 0.90 × (222, 223, 225) = (204.2, 205.4, 207.5), which rounds to `#cccdd0`.
+3. field = 50% white over the panel = 0.5 × (255, 255, 255) + 0.5 × (222, 223, 225) = (238.5, 239, 240), which rounds to `#efeff0`; the search field is 50% white over main, `#f1f2f3`.
+4. muted text = 60% `#2c2f32` over the panel = (115.2, 117.4, 119.4), which rounds to `#737578`. On the selected row it reaches 2.9:1, a little under the 3:1 falcon's tests ask of the other themes, so the test allows 2.8 on rows and buttons.
 
-| Constant | Dark (sampled) | Light | Gray | Blue | Purple | Layer |
-|---|---|---|---|---|---|---|
-| `MAIN` | `#17191d` | `#ffffff` | `#37383c` | `#0d1630` | `#1c1424` | `--color-theme` (observed) |
-| `PANEL` | `#1f2023` | `#f9f9f9` | `#3d3e42` | `#141d36` | `#231b2a` | sidebar 3% over main |
-| `DIVIDER` | `#303134` | `#e0e0e0` | `#4d4d51` | `#272f46` | `#352d3b` | border over panel |
-| `ROW_SELECTED` | `#353639` | `#e5e5e5` | `#505155` | `#2b334a` | `#38313f` | active 10% over panel |
-| `ROW_HOVER` | `#2a2b2e` | `#efefef` | `#46474b` | `#1f2840` | `#2e2634` | hover 5% over panel |
-| `FIELD` | `#19191d` | `#fcfcfc` | `#313235` | `#10172b` | `#1c1622` | input over panel |
-| `FIELD_BORDER` | `#2c2d30` | `#e3e3e3` | `#414245` | `#232a3c` | `#2e2934` | border over field |
-| `SEARCH` | `#131416` | `#ffffff` | `#2c2d30` | `#0a1226` | `#16101d` | input over main |
-| `BUTTON` | `#2b2c2f` | `#efefef` | `#46474b` | `#1f2840` | `#2e2634` | hover 5% over panel |
-| `BUTTON_HOVER` | `#343538` | `#e5e5e5` | `#505155` | `#2b334a` | `#38313f` | active 10% over panel |
-| `CARD_BORDER` | `#242528` | `#e6e6e6` | `#414246` | `#19223a` | `#27202f` | card ring over main |
-| `CARD_HOVER` | `#3a3b3e` | `#dfe0e0` | `#545559` | `#30384e` | `#3d3644` | foreground 15% over main |
-| `GUIDE` | `#37383b` | `#e0e0e1` | `#505155` | `#2d354b` | `#3a3341` | "none" colour 15% over panel |
-| `TEXT` | `#f8f9fb` | `#2c2f32` | `#f8f9fb` | `#f8f9fb` | `#f8f9fb` | `--color-text-primary` (observed) |
-| `TEXT_MUTED` | `#a2a2a4` | `#7e8082` | `#adaeb1` | `#9da1ac` | `#a3a0a7` | text 60% (`-tertiary`) over panel |
-| `TEXT_VALUE` | `#cdced0` | `#55575a` | `#d3d4d6` | `#cacdd4` | `#cdcdd1` | text 80% over panel |
-| `TEXT_DISABLED` | `#5a5b5e` | `#c0c1c2` | `#717275` | `#535a6d` | `#5e5965` | text 30% over main |
-| `PRIMARY` | `#3297ff` | `#0072ef` | `#3297ff` | `#3297ff` | `#3297ff` | `--color-primary` (observed) |
-| `BRAND` | `#0072ef` | `#0072ef` | `#0072ef` | `#0072ef` | `#0072ef` | `--color-brand` (observed) |
-| `ICON_RED` … `ICON_PINK`, `ICON_NONE` | dark set | light set | dark set | dark set | dark set | the two `$colors` maps (observed) |
+Only dark was checked against Eagle's window. The other five were not sampled from a running Eagle, because switching its theme would mean changing Eagle's preferences and taking screenshots. Treat their colours as stylesheet-derived. Dark keeps its sampled values, which is why it differs slightly from the model (for example, `main` `#17191d` against the stylesheet's `#18191c`).
+
+| Constant | Dark (sampled) | Light | Lightgray | Gray | Blue | Purple | Layer |
+|---|---|---|---|---|---|---|---|
+| `MAIN` | `#17191d` | `#ffffff` | `#e3e4e6` | `#37383c` | `#0d1630` | `#1c1424` | `--color-theme` (observed) |
+| `PANEL` | `#1f2023` | `#f9f9f9` | `#dedfe1` | `#3d3e42` | `#141d36` | `#231b2a` | sidebar 3% over main |
+| `DIVIDER` | `#303134` | `#e0e0e0` | `#c8c9cb` | `#4d4d51` | `#272f46` | `#352d3b` | border over panel |
+| `ROW_SELECTED` | `#353639` | `#e5e5e5` | `#cccdd0` | `#505155` | `#2b334a` | `#38313f` | active 10% over panel |
+| `ROW_HOVER` | `#2a2b2e` | `#efefef` | `#d5d6d8` | `#46474b` | `#1f2840` | `#2e2634` | hover 5% over panel |
+| `FIELD` | `#19191d` | `#fcfcfc` | `#efeff0` | `#313235` | `#10172b` | `#1c1622` | input over panel |
+| `FIELD_BORDER` | `#2c2d30` | `#e3e3e3` | `#d7d7d8` | `#414245` | `#232a3c` | `#2e2934` | border over field |
+| `SEARCH` | `#131416` | `#ffffff` | `#f1f2f3` | `#2c2d30` | `#0a1226` | `#16101d` | input over main |
+| `BUTTON` | `#2b2c2f` | `#efefef` | `#d5d6d8` | `#46474b` | `#1f2840` | `#2e2634` | hover 5% over panel |
+| `BUTTON_HOVER` | `#343538` | `#e5e5e5` | `#cccdd0` | `#505155` | `#2b334a` | `#38313f` | active 10% over panel |
+| `CARD_BORDER` | `#242528` | `#e6e6e6` | `#cccdcf` | `#414246` | `#19223a` | `#27202f` | card ring over main |
+| `CARD_HOVER` | `#3a3b3e` | `#dfe0e0` | `#c8c9cb` | `#545559` | `#30384e` | `#3d3644` | foreground 15% over main |
+| `GUIDE` | `#37383b` | `#e0e0e1` | `#c9cacd` | `#505155` | `#2d354b` | `#3a3341` | "none" colour 15% over panel |
+| `TEXT` | `#f8f9fb` | `#2c2f32` | `#2c2f32` | `#f8f9fb` | `#f8f9fb` | `#f8f9fb` | `--color-text-primary` (observed) |
+| `TEXT_MUTED` | `#a2a2a4` | `#7e8082` | `#737578` | `#adaeb1` | `#9da1ac` | `#a3a0a7` | text 60% (`-tertiary`) over panel |
+| `TEXT_VALUE` | `#cdced0` | `#55575a` | `#505255` | `#d3d4d6` | `#cacdd4` | `#cdcdd1` | text 80% over panel |
+| `TEXT_DISABLED` | `#5a5b5e` | `#c0c1c2` | `#acaeb0` | `#717275` | `#535a6d` | `#5e5965` | text 30% over main |
+| `PRIMARY` | `#3297ff` | `#0072ef` | `#0072ef` | `#3297ff` | `#3297ff` | `#3297ff` | `--color-primary` (observed) |
+| `BRAND` | `#0072ef` | `#0072ef` | `#0072ef` | `#0072ef` | `#0072ef` | `#0072ef` | `--color-brand` (observed) |
+| `ICON_RED` … `ICON_PINK`, `ICON_NONE` | dark set | light set | light set | dark set | dark set | dark set | the two `$colors` maps (observed) |
 
 **How the code reads colours.** Drawing code asks for the current palette with `t::p()` (`t::p().main`, `t::p().text_muted`, …), a static lookup that is cheap enough per card. The `pub const` colours in `theme.rs` are the dark values and only seed the dark palette. A few greys that used to be hard-coded for a dark background (the toolbar icon tint, the zoom slider, list zebra rows, the type placeholder, swatch rings and the delete-button red) now read the palette too, so they stay readable on light. Overlays drawn on images, on the primary colour or on black scrims keep their fixed white, as they do not sit on a theme surface.
 

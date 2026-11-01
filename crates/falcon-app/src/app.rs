@@ -3530,6 +3530,7 @@ impl eframe::App for App {
             ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
         }
         self.follow_api_switch();
+        t::follow_system(&ctx);
         self.ws.loader.poll(&ctx);
         let title = match &self.ws.root {
             Some(r) => r.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default(),

@@ -1,7 +1,7 @@
 //! Eagle's themes: colours for dark (sampled from Eagle's window and
-//! stylesheets) and for light, gray, blue and purple (worked out from the
-//! stylesheets, see `docs/src/app.md`), SF Pro as the UI font, Phosphor
-//! Light for icons.
+//! stylesheets) and for light, lightgray, gray, blue and purple (worked out
+//! from the stylesheets, see `docs/src/app.md`), Auto (gray or light after
+//! the macOS appearance), SF Pro as the UI font, Phosphor Light for icons.
 //!
 //! Drawing code reads the current colours with `p()`. The `pub const`
 //! colours below are the dark theme's and are kept until every use has
@@ -65,7 +65,9 @@ pub const ICON_PINK: Color32 = rgb(0xff99cc);
 /// The uncoloured swatch.
 pub const ICON_NONE: Color32 = rgb(0xbdbec0);
 
-/// Eagle's themes, saved under Eagle's names (`body[theme=…]`).
+/// Eagle's themes, saved under Eagle's names (`body[theme=…]`, and `auto`).
+/// The order of the variants indexes `PALETTES`; Auto, which has no
+/// palette of its own, comes last.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum Theme {
@@ -75,27 +77,43 @@ pub enum Theme {
     Gray,
     Blue,
     Purple,
+    Lightgray,
+    /// Gray while macOS is in dark mode, light otherwise, as in Eagle.
+    Auto,
 }
 
 impl Theme {
     /// In the order Eagle's Preferences lists them.
-    pub fn all() -> [Theme; 5] {
-        [Theme::Light, Theme::Gray, Theme::Dark, Theme::Blue, Theme::Purple]
+    pub fn all() -> [Theme; 7] {
+        [Theme::Auto, Theme::Light, Theme::Lightgray, Theme::Gray, Theme::Dark, Theme::Blue, Theme::Purple]
     }
 
+    /// The fixed theme shown for this choice when the system appearance is
+    /// `system`. Auto picks gray or light like Eagle; with the appearance
+    /// unknown it picks gray, matching egui's dark fallback.
+    pub fn resolve(self, system: Option<egui::Theme>) -> Theme {
+        match (self, system) {
+            (Theme::Auto, Some(egui::Theme::Light)) => Theme::Light,
+            (Theme::Auto, _) => Theme::Gray,
+            (fixed, _) => fixed,
+        }
+    }
+
+    /// The theme's colours; Auto's are those it shows in dark mode.
     pub const fn palette(self) -> Palette {
         match self {
             Theme::Dark => DARK,
             Theme::Light => LIGHT,
-            Theme::Gray => GRAY,
+            Theme::Gray | Theme::Auto => GRAY,
             Theme::Blue => BLUE,
             Theme::Purple => PURPLE,
+            Theme::Lightgray => LIGHTGRAY,
         }
     }
 
     /// Whether egui's light defaults suit this theme.
     pub fn is_light(self) -> bool {
-        self == Theme::Light
+        matches!(self, Theme::Light | Theme::Lightgray)
     }
 }
 
@@ -107,6 +125,8 @@ impl std::fmt::Display for Theme {
             Theme::Gray => "Gray",
             Theme::Blue => "Blue",
             Theme::Purple => "Purple",
+            Theme::Lightgray => "Lightgray",
+            Theme::Auto => "Auto",
         })
     }
 }
@@ -229,7 +249,22 @@ pub const LIGHT: Palette = palette(
         0xe0e0e1, 0x2c2f32, 0x7e8082, 0x55575a, 0xc0c1c2,
     ],
     rgb(0x0072ef),
-    [rgb(0xe55245), rgb(0xcc782f), rgb(0xc29343), rgb(0x548164), rgb(0x0097a7), rgb(0x3987bf), rgb(0x8a67ab), rgb(0xcc6699), rgb(0x50555b)],
+    LIGHT_ICONS,
+);
+
+/// The folder colours of Eagle's light themes (light, lightgray).
+const LIGHT_ICONS: [Color32; 9] =
+    [rgb(0xe55245), rgb(0xcc782f), rgb(0xc29343), rgb(0x548164), rgb(0x0097a7), rgb(0x3987bf), rgb(0x8a67ab), rgb(0xcc6699), rgb(0x50555b)];
+
+/// Lightgray: the light family (`body[theme=lightgray]` shares light's
+/// block and folder colours) on a `#e3e4e6` base.
+pub const LIGHTGRAY: Palette = palette(
+    [
+        0xe3e4e6, 0xdedfe1, 0xc8c9cb, 0xcccdd0, 0xd5d6d8, 0xefeff0, 0xd7d7d8, 0xf1f2f3, 0xd5d6d8, 0xcccdd0, 0xcccdcf, 0xc8c9cb,
+        0xc9cacd, 0x2c2f32, 0x737578, 0x505255, 0xacaeb0,
+    ],
+    rgb(0x0072ef),
+    LIGHT_ICONS,
 );
 
 /// The dark-family palettes put `--color-lightgray` overlays on their
@@ -254,8 +289,8 @@ pub const PURPLE: Palette = dark_family([
     0x3a3341, 0xf8f9fb, 0xa3a0a7, 0xcdcdd1, 0x5e5965,
 ]);
 
-/// Every palette, indexed by `Theme as usize`.
-static PALETTES: [Palette; 5] = [DARK, LIGHT, GRAY, BLUE, PURPLE];
+/// Every fixed theme's palette, indexed by `Theme as usize`.
+static PALETTES: [Palette; 6] = [DARK, LIGHT, GRAY, BLUE, PURPLE, LIGHTGRAY];
 
 impl Theme {
     fn from_index(i: u8) -> Theme {
@@ -264,93 +299,126 @@ impl Theme {
             2 => Theme::Gray,
             3 => Theme::Blue,
             4 => Theme::Purple,
+            5 => Theme::Lightgray,
+            6 => Theme::Auto,
             _ => Theme::Dark,
         }
     }
 }
 
-/// The theme in use. An atomic rather than a lock: `p()` is read many
-/// times per frame.
+/// The chosen theme and the fixed theme it shows (they differ only for
+/// Auto). Atomics rather than a lock: `p()` is read many times per frame.
 #[cfg(not(test))]
-static CURRENT: AtomicU8 = AtomicU8::new(Theme::Dark as u8);
+static CHOSEN: AtomicU8 = AtomicU8::new(Theme::Dark as u8);
+#[cfg(not(test))]
+static SHOWN: AtomicU8 = AtomicU8::new(Theme::Dark as u8);
 
 #[cfg(not(test))]
-fn load() -> Theme {
-    Theme::from_index(CURRENT.load(Ordering::Relaxed))
+fn load() -> (Theme, Theme) {
+    (Theme::from_index(CHOSEN.load(Ordering::Relaxed)), Theme::from_index(SHOWN.load(Ordering::Relaxed)))
 }
 
 #[cfg(not(test))]
-fn store(theme: Theme) {
-    CURRENT.store(theme as u8, Ordering::Relaxed);
+fn store(chosen: Theme, shown: Theme) {
+    CHOSEN.store(chosen as u8, Ordering::Relaxed);
+    SHOWN.store(shown as u8, Ordering::Relaxed);
 }
 
 // Tests run in parallel threads; a theme per thread keeps one test's
 // `set_theme` from changing the colours another test reads.
 #[cfg(test)]
 thread_local! {
-    static CURRENT: std::cell::Cell<Theme> = const { std::cell::Cell::new(Theme::Dark) };
+    static CURRENT: std::cell::Cell<(Theme, Theme)> = const { std::cell::Cell::new((Theme::Dark, Theme::Dark)) };
 }
 
 #[cfg(test)]
-fn load() -> Theme {
+fn load() -> (Theme, Theme) {
     CURRENT.with(|c| c.get())
 }
 
 #[cfg(test)]
-fn store(theme: Theme) {
-    CURRENT.with(|c| c.set(theme));
+fn store(chosen: Theme, shown: Theme) {
+    CURRENT.with(|c| c.set((chosen, shown)));
 }
 
 /// The current theme's colours.
 pub fn p() -> &'static Palette {
-    &PALETTES[current() as usize]
+    &PALETTES[load().1 as usize]
 }
 
-/// The current theme.
+/// The chosen theme (possibly Auto).
 pub fn current() -> Theme {
-    load()
+    load().0
 }
 
 /// Switches to `theme`: later `p()` calls return its colours, and egui's
 /// own widgets are restyled to match.
 pub fn set_theme(ctx: &egui::Context, theme: Theme) {
-    store(theme);
+    store(theme, theme.resolve(ctx.system_theme()));
     apply_visuals(ctx, theme);
     ctx.request_repaint();
 }
 
-/// Points egui's visuals at a theme's palette. Both of egui's styles get
-/// the same colours; egui's light defaults are the starting point for the
-/// light theme so widgets falcon doesn't colour itself match.
+/// Called once a frame: under Auto, picks up a change of the macOS
+/// appearance. egui swaps its own styles by itself (see `apply_visuals`);
+/// this keeps `p()` in step. Other themes cost one atomic load.
+pub fn follow_system(ctx: &egui::Context) {
+    let (chosen, shown) = load();
+    if chosen != Theme::Auto {
+        return;
+    }
+    let now = chosen.resolve(ctx.system_theme());
+    if now != shown {
+        store(chosen, now);
+        ctx.request_repaint();
+    }
+}
+
+/// Points egui's visuals at a theme's palette. A fixed theme gives both of
+/// egui's styles the same colours and pins the window's appearance. Auto
+/// leaves the window following macOS (so its appearance changes reach
+/// egui as `RawInput::system_theme`) and gives egui's dark style gray's
+/// colours and its light style light's, so egui switches between them.
 fn apply_visuals(ctx: &egui::Context, theme: Theme) {
+    if theme == Theme::Auto {
+        ctx.set_theme(egui::ThemePreference::System);
+        ctx.style_mut_of(egui::Theme::Dark, |s| style_for(s, Theme::Auto.resolve(Some(egui::Theme::Dark))));
+        ctx.style_mut_of(egui::Theme::Light, |s| style_for(s, Theme::Auto.resolve(Some(egui::Theme::Light))));
+    } else {
+        ctx.set_theme(if theme.is_light() { egui::Theme::Light } else { egui::Theme::Dark });
+        ctx.all_styles_mut(|s| style_for(s, theme));
+    }
+}
+
+/// Restyles one of egui's styles for a fixed theme. egui's light defaults
+/// are the starting point for the light themes so widgets falcon doesn't
+/// colour itself match.
+fn style_for(s: &mut egui::Style, theme: Theme) {
     let pal = theme.palette();
-    ctx.set_theme(if theme.is_light() { egui::Theme::Light } else { egui::Theme::Dark });
-    ctx.all_styles_mut(|s| {
-        s.visuals = if theme.is_light() { egui::Visuals::light() } else { egui::Visuals::dark() };
-        let v = &mut s.visuals;
-        v.panel_fill = pal.main;
-        v.window_fill = pal.panel;
-        v.extreme_bg_color = pal.field;
-        v.faint_bg_color = pal.panel;
-        v.override_text_color = Some(pal.text);
-        v.selection.bg_fill = pal.primary.gamma_multiply(0.45);
-        v.selection.stroke = Stroke::new(1.0, pal.primary);
-        v.hyperlink_color = pal.text_value;
-        v.window_corner_radius = CornerRadius::same(10);
-        v.window_stroke = Stroke::new(1.0, pal.divider);
-        v.menu_corner_radius = CornerRadius::same(8);
-        v.text_cursor.stroke = Stroke::new(1.5, pal.primary);
-        for w in [&mut v.widgets.inactive, &mut v.widgets.hovered, &mut v.widgets.active, &mut v.widgets.open] {
-            w.corner_radius = RADIUS;
-            w.bg_stroke = Stroke::NONE;
-        }
-        v.widgets.noninteractive.bg_stroke = Stroke::new(1.0, pal.divider);
-        v.widgets.inactive.weak_bg_fill = pal.button;
-        v.widgets.inactive.bg_fill = pal.button;
-        v.widgets.hovered.weak_bg_fill = pal.button_hover;
-        v.widgets.hovered.bg_fill = pal.button_hover;
-        v.widgets.active.weak_bg_fill = pal.row_selected;
-    });
+    s.visuals = if theme.is_light() { egui::Visuals::light() } else { egui::Visuals::dark() };
+    let v = &mut s.visuals;
+    v.panel_fill = pal.main;
+    v.window_fill = pal.panel;
+    v.extreme_bg_color = pal.field;
+    v.faint_bg_color = pal.panel;
+    v.override_text_color = Some(pal.text);
+    v.selection.bg_fill = pal.primary.gamma_multiply(0.45);
+    v.selection.stroke = Stroke::new(1.0, pal.primary);
+    v.hyperlink_color = pal.text_value;
+    v.window_corner_radius = CornerRadius::same(10);
+    v.window_stroke = Stroke::new(1.0, pal.divider);
+    v.menu_corner_radius = CornerRadius::same(8);
+    v.text_cursor.stroke = Stroke::new(1.5, pal.primary);
+    for w in [&mut v.widgets.inactive, &mut v.widgets.hovered, &mut v.widgets.active, &mut v.widgets.open] {
+        w.corner_radius = RADIUS;
+        w.bg_stroke = Stroke::NONE;
+    }
+    v.widgets.noninteractive.bg_stroke = Stroke::new(1.0, pal.divider);
+    v.widgets.inactive.weak_bg_fill = pal.button;
+    v.widgets.inactive.bg_fill = pal.button;
+    v.widgets.hovered.weak_bg_fill = pal.button_hover;
+    v.widgets.hovered.bg_fill = pal.button_hover;
+    v.widgets.active.weak_bg_fill = pal.row_selected;
 }
 
 pub const RADIUS: CornerRadius = CornerRadius::same(6);
@@ -457,6 +525,11 @@ mod tests {
         0.2126 * lin(c.r()) + 0.7152 * lin(c.g()) + 0.0722 * lin(c.b())
     }
 
+    /// The fixed theme on screen: the chosen one, or what Auto resolved to.
+    fn shown() -> Theme {
+        load().1
+    }
+
     fn contrast(a: Color32, b: Color32) -> f32 {
         let (x, y) = (luminance(a), luminance(b));
         (x.max(y) + 0.05) / (x.min(y) + 0.05)
@@ -469,7 +542,10 @@ mod tests {
             for (name, bg) in [("main", p.main), ("panel", p.panel), ("field", p.field), ("search", p.search), ("row_selected", p.row_selected), ("button", p.button)] {
                 assert!(contrast(p.text, bg) > 7.0, "{theme} text on {name}: {}", contrast(p.text, bg));
                 assert!(contrast(p.text_value, bg) > 4.5, "{theme} value on {name}");
-                assert!(contrast(p.text_muted, bg) > 3.0, "{theme} muted on {name}");
+                // Lightgray's muted text on its 10% overlays (selected
+                // rows, buttons) comes out of the stylesheet at 2.9:1.
+                let muted = if matches!(name, "row_selected" | "button") { 2.8 } else { 3.0 };
+                assert!(contrast(p.text_muted, bg) > muted, "{theme} muted on {name}: {}", contrast(p.text_muted, bg));
             }
             assert!((luminance(p.text) - luminance(p.main)).abs() > 0.5, "{theme}");
             // Disabled and muted text sit between the background and the text.
@@ -503,8 +579,71 @@ mod tests {
     fn palettes_line_up_with_themes() {
         for theme in Theme::all() {
             assert_eq!(Theme::from_index(theme as u8), theme);
-            assert_eq!(PALETTES[theme as usize], theme.palette());
+            if theme != Theme::Auto {
+                assert_eq!(PALETTES[theme as usize], theme.palette());
+            }
         }
+        assert_eq!(PALETTES.len(), Theme::all().len() - 1);
+    }
+
+    #[test]
+    fn auto_follows_the_system_appearance_like_eagle() {
+        assert_eq!(Theme::Auto.resolve(Some(egui::Theme::Dark)), Theme::Gray);
+        assert_eq!(Theme::Auto.resolve(Some(egui::Theme::Light)), Theme::Light);
+        assert_eq!(Theme::Auto.resolve(None), Theme::Gray);
+        for theme in Theme::all().into_iter().filter(|&t| t != Theme::Auto) {
+            for system in [None, Some(egui::Theme::Dark), Some(egui::Theme::Light)] {
+                assert_eq!(theme.resolve(system), theme);
+            }
+        }
+    }
+
+    #[test]
+    fn lightgray_is_a_light_theme_on_its_own_base() {
+        assert!(Theme::Lightgray.is_light());
+        assert_eq!(LIGHTGRAY.main, rgb(0xe3e4e6));
+        assert_eq!(LIGHTGRAY.text, LIGHT.text);
+        assert_eq!(LIGHTGRAY.primary, LIGHT.primary);
+        assert_eq!(LIGHTGRAY.icon_red, LIGHT.icon_red);
+        // Darker than light everywhere but the text and the accents.
+        assert!(luminance(LIGHTGRAY.main) < luminance(LIGHT.main));
+        assert!(luminance(LIGHTGRAY.panel) < luminance(LIGHT.panel));
+        assert!(contrast(LIGHTGRAY.text, LIGHTGRAY.main) > 10.0);
+        assert!(contrast(LIGHTGRAY.primary, LIGHTGRAY.main) > 3.0);
+    }
+
+    #[test]
+    fn eagles_names_for_the_new_themes() {
+        assert_eq!(serde_json::to_string(&Theme::Auto).unwrap(), "\"auto\"");
+        assert_eq!(serde_json::to_string(&Theme::Lightgray).unwrap(), "\"lightgray\"");
+        assert_eq!(serde_json::from_str::<Theme>("\"lightgray\"").unwrap(), Theme::Lightgray);
+        assert_eq!(Theme::all()[0], Theme::Auto);
+    }
+
+    #[test]
+    fn auto_switches_with_the_system_each_frame() {
+        let ctx = egui::Context::default();
+        set_theme(&ctx, Theme::Auto);
+        assert_eq!(current(), Theme::Auto);
+        assert_eq!(shown(), Theme::Gray);
+        assert_eq!(*p(), GRAY);
+        assert_eq!(ctx.options(|o| o.theme_preference), egui::ThemePreference::System);
+        // egui holds gray for dark mode and light for light mode.
+        assert_eq!(ctx.style_of(egui::Theme::Dark).visuals.panel_fill, GRAY.main);
+        assert_eq!(ctx.style_of(egui::Theme::Light).visuals.panel_fill, LIGHT.main);
+        for (system, want) in [(egui::Theme::Light, Theme::Light), (egui::Theme::Dark, Theme::Gray)] {
+            let input = egui::RawInput { system_theme: Some(system), ..Default::default() };
+            ctx.run_ui(input, |_| {}).textures_delta.clear();
+            follow_system(&ctx);
+            assert_eq!(shown(), want);
+            assert_eq!(*p(), want.palette());
+            assert_eq!(current(), Theme::Auto);
+        }
+        // A fixed theme ignores the system.
+        set_theme(&ctx, Theme::Blue);
+        ctx.run_ui(egui::RawInput { system_theme: Some(egui::Theme::Light), ..Default::default() }, |_| {}).textures_delta.clear();
+        follow_system(&ctx);
+        assert_eq!(shown(), Theme::Blue);
     }
 
     #[test]
@@ -518,9 +657,10 @@ mod tests {
     #[test]
     fn set_theme_switches_the_palette() {
         let ctx = egui::Context::default();
-        for theme in [Theme::Light, Theme::Purple, Theme::Dark] {
+        for theme in [Theme::Light, Theme::Lightgray, Theme::Purple, Theme::Dark] {
             set_theme(&ctx, theme);
             assert_eq!(current(), theme);
+            assert_eq!(shown(), theme);
             assert_eq!(*p(), theme.palette());
             assert_eq!(ctx.global_style().visuals.panel_fill, theme.palette().main);
             assert_eq!(ctx.global_style().visuals.dark_mode, !theme.is_light());
