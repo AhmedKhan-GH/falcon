@@ -14,6 +14,7 @@ pub mod library;
 pub mod manual;
 pub mod merge;
 pub mod ids;
+pub mod library_icon;
 pub mod keywords;
 pub mod media;
 pub mod model;

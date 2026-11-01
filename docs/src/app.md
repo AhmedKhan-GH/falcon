@@ -12,6 +12,8 @@ While falcon is in development, the app and the `falcon` CLI only open libraries
 
 The app opens libraries with `Library::open_or_restore` (see [Backups](library-format.md#backups)): when a library's `metadata.json` can't be read or parsed, the newest usable backup in its `backup/` folder replaces it before the library loads, and a message names the backup used and says the damaged file was kept in `backup/`. This covers the switcher, Open Library, libraries reopened on launch, dropped libraries and the library the app reopens after an API `library/switch`. The HTTP API's own `library/switch` still uses `Library::open`, so a damaged library fails there.
 
+The library switcher (the library name at the top of the sidebar, or ⌘L) lists the open libraries, then the recent ones that are not open. Each row shows the library's `icon.png` at its left, or a folder glyph when there is none; the sidebar's library row shows the same icon. Right-clicking a row, or the ⋯ button on it, opens a menu with Change Icon… (pick a jpg, jpeg, png, webp or gif; it is scaled to 64 px on its shorter side and saved as the library's `icon.png`), Remove Icon (only when there is one; asks Remove or Cancel), and Show in Finder.
+
 ## What it does
 
 | Area | Features |

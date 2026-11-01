@@ -35,6 +35,7 @@ mod organize;
 mod textdoc;
 mod toast;
 mod theme;
+mod library_icons;
 mod workspaces;
 
 use std::path::PathBuf;

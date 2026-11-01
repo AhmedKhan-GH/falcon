@@ -55,3 +55,5 @@ pub const SPEAKER_NONE: &str = "\u{E44E}";
 pub const SPEAKER_X: &str = "\u{E45C}";
 pub const CORNERS_IN: &str = "\u{E1CE}";
 pub const CORNERS_OUT: &str = "\u{E1D0}";
+pub const DOTS_THREE: &str = "\u{E1FE}";
+pub const WARNING: &str = "\u{E4E0}";

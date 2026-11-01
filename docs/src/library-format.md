@@ -10,12 +10,15 @@ Assets.library/
 ├── saved-filters.json
 ├── backup/              JSON snapshots
 ├── Icon                 empty file (the macOS custom-icon marker)
+├── icon.png             the library's own icon (optional)
 └── images/
     └── <ID>.info/
         ├── metadata.json            one item
         ├── <name>.<ext>             the original file
         └── <name>_thumbnail.png     only for some items
 ```
+
+`icon.png` is the picture the library switcher shows beside the library's name. Falcon's Change Icon scales the chosen image so its shorter side is 64 px, saves it as PNG next to the library's other files and renames it over `icon.png`, so an old icon is never left half written. Remove Icon deletes the file. Both go through the sandbox check. The HTTP API serves the same file.
 
 ## Library `metadata.json` (observed)
 

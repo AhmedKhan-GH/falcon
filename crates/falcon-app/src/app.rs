@@ -743,6 +743,8 @@ pub struct App {
     /// items viewed from it don't jump to the top under the user (opening
     /// the page again refreshes it).
     recent_shown: Option<(PathBuf, Vec<String>)>,
+    /// The libraries' `icon.png` textures.
+    lib_icons: crate::library_icons::LibraryIcons,
     /// What to open once the frame is done (it replaces the library being
     /// drawn).
     switch_to: Option<Switch>,
@@ -844,6 +846,7 @@ impl App {
             recent_items: Default::default(),
             view_timer: Default::default(),
             recent_shown: None,
+            lib_icons: Default::default(),
             switch_to: None,
             prefs: Default::default(),
             search: Default::default(),
@@ -2708,11 +2711,12 @@ mod undo_tests {
 type Shared = falcon_server::Shared;
 
 /// A switcher row: the library's name over its folder, dimmed.
-fn library_label(path: &std::path::Path) -> LayoutJob {
+fn library_label(path: &std::path::Path, dim: bool) -> LayoutJob {
     let name = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
     let dir = path.parent().map(crate::workspaces::tilde).unwrap_or_default();
     let mut job = LayoutJob::default();
-    job.append(&name, 0.0, egui::TextFormat::simple(font(13.0), t::p().text));
+    let main = if dim { t::p().text_muted } else { t::p().text };
+    job.append(&name, 0.0, egui::TextFormat::simple(font(13.0), main));
     job.append(&format!("\n{dir}"), 0.0, egui::TextFormat::simple(font(11.0), t::p().text_muted));
     job
 }
@@ -2720,6 +2724,17 @@ fn library_label(path: &std::path::Path) -> LayoutJob {
 /// Whether smart folder `f` or one below it has id `id`.
 fn smart_has(f: &falcon_library::smart::SmartFolder, id: &str) -> bool {
     f.id == id || f.children.iter().any(|c| smart_has(c, id))
+}
+
+/// Paints a library icon filling `rect` (a centred square crop of the image)
+/// with rounded corners.
+fn paint_library_icon(ui: &Ui, rect: Rect, tex: &egui::TextureHandle, radius: u8) {
+    let [w, h] = tex.size();
+    let (w, h) = (w.max(1) as f32, h.max(1) as f32);
+    let side = w.min(h);
+    let (ux, uy) = ((1.0 - side / w) / 2.0, (1.0 - side / h) / 2.0);
+    let uv = Rect::from_min_max(Pos2::new(ux, uy), Pos2::new(1.0 - ux, 1.0 - uy));
+    egui::Image::from_texture(tex).uv(uv).corner_radius(radius).paint_at(ui, rect);
 }
 
 /// Most libraries kept in the recent list.
@@ -2870,6 +2885,65 @@ struct SidebarCtx<'a> {
 }
 
 impl App {
+    /// The small icon at the left of a switcher row: the library's
+    /// `icon.png`, or a folder glyph (a warning for a missing folder).
+    fn switcher_icon(&mut self, ui: &mut Ui, root: &std::path::Path, missing: bool) {
+        let (rect, _) = ui.allocate_exact_size(Vec2::splat(20.0), Sense::hover());
+        if missing {
+            icon(ui, rect.center(), ic::WARNING, 16.0, t::p().text_muted);
+        } else if let Some(tex) = self.lib_icons.get(ui.ctx(), root) {
+            paint_library_icon(ui, rect, &tex, 4);
+        } else {
+            icon(ui, rect.center(), ic::FOLDER, 16.0, t::p().text_muted);
+        }
+    }
+
+    /// The menu for a library in the switcher (right-click or the ⋯ button).
+    fn library_menu(&mut self, ui: &mut Ui, root: &std::path::Path, missing: bool) {
+        if !missing {
+            if ui.button("Change Icon…").clicked() {
+                ui.close();
+                self.change_library_icon(root);
+            }
+            if falcon_library::library_icon::icon_path(root).is_some() {
+                ui.menu_button("Remove Icon", |ui| {
+                    ui.label("Remove this library's icon?");
+                    if ui.button("Remove").clicked() {
+                        ui.close();
+                        self.remove_library_icon(root);
+                    }
+                    if ui.button("Cancel").clicked() {
+                        ui.close();
+                    }
+                });
+            }
+        }
+        if ui.add_enabled(!missing, egui::Button::new("Show in Finder")).clicked() {
+            ui.close();
+            let _ = std::process::Command::new("open").arg("-R").arg(root).spawn();
+        }
+    }
+
+    /// Asks for an image and makes it the library's icon.
+    fn change_library_icon(&mut self, root: &std::path::Path) {
+        let Some(src) = rfd::FileDialog::new().set_title("Choose Library Icon").add_filter("Images", &["jpg", "jpeg", "png", "webp", "gif"]).pick_file() else {
+            return;
+        };
+        let done = falcon_library::sandbox::guard(root).and_then(|()| falcon_library::library_icon::set_icon(root, &src));
+        self.lib_icons.forget(root);
+        if let Err(e) = done {
+            self.flash(format!("Couldn't change the icon: {e}"));
+        }
+    }
+
+    fn remove_library_icon(&mut self, root: &std::path::Path) {
+        let done = falcon_library::sandbox::guard(root).and_then(|()| falcon_library::library_icon::remove_icon(root));
+        self.lib_icons.forget(root);
+        if let Err(e) = done {
+            self.flash(format!("Couldn't remove the icon: {e}"));
+        }
+    }
+
     fn sidebar(&mut self, ui: &mut Ui, lib: &Library) {
         let full = ui.max_rect();
         self.imports.sidebar = Some(full);
@@ -2899,8 +2973,13 @@ impl App {
         let lib_row = Rect::from_min_size(Pos2::new(full.left(), header.bottom()), vec2(full.width(), 30.0));
         let resp = ui.interact(lib_row, ui.scope_id().with("library"), Sense::click());
         let ic_rect = Rect::from_center_size(Pos2::new(full.left() + 29.0, lib_row.center().y), Vec2::splat(22.0));
-        p.rect_filled(ic_rect, CornerRadius::same(5), t::p().brand);
-        icon(ui, ic_rect.center(), ic::FOLDER, 14.0, Color32::WHITE);
+        match self.lib_icons.get(ui.ctx(), lib.root()) {
+            Some(tex) => paint_library_icon(ui, ic_rect, &tex, 5),
+            None => {
+                p.rect_filled(ic_rect, CornerRadius::same(5), t::p().brand);
+                icon(ui, ic_rect.center(), ic::FOLDER, 14.0, Color32::WHITE);
+            }
+        }
         let name = lib.root().file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
         let g = galley(ui, &name, font(15.0), t::p().text, full.width() - 80.0);
         let gw = g.size().x;
@@ -2917,10 +2996,13 @@ impl App {
             let slot = self.others.slot();
             for (i, p) in open.iter().enumerate() {
                 ui.horizontal(|ui| {
-                    let row = ui.add(egui::Button::selectable(i == slot, library_label(p)).min_size(vec2(220.0, 0.0)));
+                    self.switcher_icon(ui, p, false);
+                    let row = ui.add(egui::Button::selectable(i == slot, library_label(p, false)).min_size(vec2(200.0, 0.0)));
+                    row.context_menu(|ui| self.library_menu(ui, p, false));
                     if row.on_hover_text(p.display().to_string()).clicked() && i != slot {
                         self.switch_to = Some(Switch::Focus(i));
                     }
+                    ui.menu_button(ic::DOTS_THREE, |ui| self.library_menu(ui, p, false)).response.on_hover_text("More");
                     if ui.small_button(ic::X).on_hover_text("Close Library").clicked() {
                         self.switch_to = Some(Switch::Close(i));
                     }
@@ -2931,9 +3013,17 @@ impl App {
                 ui.separator();
                 ui.label(RichText::new("Recent").color(t::p().text_muted).size(12.0));
                 for p in recent {
-                    if ui.add(egui::Button::new(library_label(&p)).min_size(vec2(220.0, 0.0))).on_hover_text(p.display().to_string()).clicked() {
-                        self.switch_to = Some(Switch::Open(p));
-                    }
+                    let missing = !p.is_dir();
+                    ui.horizontal(|ui| {
+                        self.switcher_icon(ui, &p, missing);
+                        let row = ui.add(egui::Button::new(library_label(&p, missing)).min_size(vec2(200.0, 0.0)));
+                        row.context_menu(|ui| self.library_menu(ui, &p, missing));
+                        let tip = if missing { format!("The folder can't be found: {}", p.display()) } else { p.display().to_string() };
+                        if row.on_hover_text(tip).clicked() {
+                            self.switch_to = Some(Switch::Open(p.clone()));
+                        }
+                        ui.menu_button(ic::DOTS_THREE, |ui| self.library_menu(ui, &p, missing)).response.on_hover_text("More");
+                    });
                 }
             }
             ui.separator();
