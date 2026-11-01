@@ -134,18 +134,15 @@ pub fn decode(path: &Path) -> Result<DynamicImage, ThumbError> {
 }
 
 /// The largest JPEG preview embedded in a RAW photo, turned by the file's
-/// EXIF orientation when it has one. Eagle's RAW viewer shows the preview
-/// dcraw extracts; falcon finds the same kind of picture by scanning for
+/// EXIF orientation when it has one (from its TIFF IFDs, RAF's preview
+/// EXIF or CR3's `CMT1`; see [`crate::exif::orientation`]). Eagle's RAW
+/// viewer shows the preview dcraw extracts; falcon finds the same kind of picture by scanning for
 /// baseline or progressive 8-bit JPEG streams and keeping the one with the
 /// most pixels (the camera's full-size preview rather than its thumbnail).
 pub fn raw_preview(data: &[u8]) -> Result<DynamicImage, ThumbError> {
     let (start, _) = embedded_jpegs(data).into_iter().max_by_key(|&(_, px)| px).ok_or_else(|| ThumbError("no embedded preview".into()))?;
     let mut img = image::load_from_memory_with_format(&data[start..], image::ImageFormat::Jpeg).map_err(ThumbError::new)?;
-    let orientation = ::exif::Reader::new()
-        .read_raw(data.to_vec())
-        .ok()
-        .and_then(|e| e.get_field(::exif::Tag::Orientation, ::exif::In::PRIMARY).and_then(|f| f.value.get_uint(0)))
-        .and_then(|v| image::metadata::Orientation::from_exif(v as u8));
+    let orientation = crate::exif::orientation(data).and_then(|v| image::metadata::Orientation::from_exif(v as u8));
     if let Some(o) = orientation {
         img.apply_orientation(o);
     }
@@ -599,6 +596,32 @@ mod tests {
         let img = raw_preview(&raw).unwrap();
         assert_eq!((img.width(), img.height()), (64, 32));
         assert!(raw_preview(&[0u8; 100]).is_err());
+    }
+
+    /// RAF and CR3 previews are turned by the orientation in their own
+    /// containers (the preview's EXIF, the Canon `CMT1` block).
+    #[test]
+    fn raw_previews_follow_raf_and_cr3_orientation() {
+        // A little-endian TIFF whose one IFD entry is Orientation = `o`.
+        let tiff = |o: u16| [&b"II*\0\x08\0\0\0\x01\0\x12\x01\x03\0\x01\0\0\0"[..], &o.to_le_bytes(), &[0; 6]].concat();
+        let mut preview = jpeg(64, 32);
+        let t = tiff(6);
+        let app1 = [&[0xFF, 0xE1][..], &((t.len() + 8) as u16).to_be_bytes(), b"Exif\0\0", &t].concat();
+        preview.splice(2..2, app1);
+        let mut raf = b"FUJIFILMCCD-RAW 0201FF383501".to_vec();
+        raf.resize(100, 0);
+        raf[84..88].copy_from_slice(&100u32.to_be_bytes());
+        raf[88..92].copy_from_slice(&(preview.len() as u32).to_be_bytes());
+        raf.extend_from_slice(&preview);
+        let img = raw_preview(&raf).unwrap();
+        assert_eq!((img.width(), img.height()), (32, 64));
+
+        let mp4 = |kind: &[u8], payload: &[u8]| [&((payload.len() + 8) as u32).to_be_bytes()[..], kind, payload].concat();
+        let uuid = [0x85, 0xC0, 0xB6, 0x87, 0x82, 0x0F, 0x11, 0xE0, 0x81, 0x11, 0xF4, 0xCE, 0x46, 0x2B, 0x6A, 0x48];
+        let canon = [&uuid[..], &mp4(b"CMT1", &tiff(8))].concat();
+        let cr3 = [mp4(b"ftyp", b"crx \0\0\0\x01crx isom"), mp4(b"moov", &mp4(b"uuid", &canon)), mp4(b"mdat", &jpeg(64, 32))].concat();
+        let img = raw_preview(&cr3).unwrap();
+        assert_eq!((img.width(), img.height()), (32, 64));
     }
 
     #[test]

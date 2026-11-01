@@ -189,6 +189,13 @@ pub fn read(path: &Path) -> Option<CameraMeta> {
     from_blocks(&exif_blocks(&data))
 }
 
+/// The EXIF orientation (1-8) of a photo file's main image, read from the
+/// same places as [`read`]: the TIFF IFDs of TIFF-based RAW files, the EXIF
+/// of the JPEG preview inside RAF, and the `CMT1` block of CR3.
+pub fn orientation(data: &[u8]) -> Option<u32> {
+    field(&exif_blocks(data), Tag::Orientation.number())?.value.get_uint(0).filter(|v| (1..=8).contains(v))
+}
+
 fn from_blocks(exif: &[::exif::Exif]) -> Option<CameraMeta> {
     if exif.is_empty() {
         return None;
@@ -406,8 +413,33 @@ pub(crate) mod tests {
             serde_json::to_string(&m.to_raw_metas()).unwrap(),
             format!(r#"{{"timestamp":{t},"camera":"Canon EOS R5","isoSpeed":800,"focalLength":"85.0 mm","shutter":"1/1000.0 sec","aperture":"f/4.0"}}"#)
         );
+        assert_eq!(orientation(&cr3), None);
         // Without the Canon box there is nothing to read.
         let bare = [mp4_box(b"ftyp", b"crx \0\0\0\x01crx isom"), mp4_box(b"moov", &mp4_box(b"trak", &[0; 16]))].concat();
         assert_eq!(read_bytes("y.cr3", &bare), None);
+    }
+
+    /// Orientation comes out of RAF's JPEG preview and CR3's `CMT1`, as well
+    /// as plain TIFF-based files.
+    #[test]
+    fn orientation_of_raf_cr3_and_tiff() {
+        let turned = tiff(&[ascii(0x010F, "X"), (0x0112, 3, 1, 6u16.to_le_bytes().to_vec())]);
+        assert_eq!(orientation(&turned), Some(6));
+        let mut jpeg = vec![0xFF, 0xD8, 0xFF, 0xE1];
+        jpeg.extend_from_slice(&((turned.len() + 8) as u16).to_be_bytes());
+        jpeg.extend_from_slice(b"Exif\0\0");
+        jpeg.extend_from_slice(&turned);
+        jpeg.extend_from_slice(&[0xFF, 0xD9]);
+        let mut raf = b"FUJIFILMCCD-RAW 0201FF383501".to_vec();
+        raf.resize(100, 0);
+        raf[84..88].copy_from_slice(&100u32.to_be_bytes());
+        raf[88..92].copy_from_slice(&(jpeg.len() as u32).to_be_bytes());
+        raf.extend_from_slice(&jpeg);
+        assert_eq!(orientation(&raf), Some(6));
+        let canon = [&CANON_UUID[..], &mp4_box(b"CMT1", &tiff(&[(0x0112, 3, 1, 8u16.to_le_bytes().to_vec())]))].concat();
+        let cr3 = [mp4_box(b"ftyp", b"crx \0\0\0\x01crx isom"), mp4_box(b"moov", &mp4_box(b"uuid", &canon))].concat();
+        assert_eq!(orientation(&cr3), Some(8));
+        // Out-of-range values are ignored.
+        assert_eq!(orientation(&tiff(&[(0x0112, 3, 1, 9u16.to_le_bytes().to_vec())])), None);
     }
 }
