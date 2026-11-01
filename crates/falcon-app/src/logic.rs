@@ -102,7 +102,20 @@ pub struct NavCounts {
     pub tags: usize,
 }
 
-pub fn nav_counts(items: &[Item]) -> NavCounts {
+/// Whether an item belongs in Uncategorized, as Eagle decides it: no
+/// folders, or a single folder id that names no folder (left behind when
+/// a folder was deleted elsewhere). Two stale ids don't count, as in Eagle.
+pub fn uncategorized(item: &Item, known: &impl Fn(&str) -> bool) -> bool {
+    match item.folders.as_slice() {
+        [] => true,
+        [only] => !only.is_empty() && !known(only),
+        _ => false,
+    }
+}
+
+pub fn nav_counts(items: &[Item], roots: &[Folder]) -> NavCounts {
+    let index = search::folder_index(roots);
+    let known = |id: &str| index.contains_key(id);
     let mut c = NavCounts::default();
     let mut tags = HashSet::new();
     for i in items {
@@ -111,7 +124,7 @@ pub fn nav_counts(items: &[Item]) -> NavCounts {
             continue;
         }
         c.all += 1;
-        c.uncategorized += usize::from(i.folders.is_empty());
+        c.uncategorized += usize::from(uncategorized(i, &known));
         c.untagged += usize::from(i.tags.is_empty());
         tags.extend(i.tags.iter());
     }
@@ -139,12 +152,12 @@ pub fn tag_counts(items: &[Item]) -> Vec<(String, usize)> {
     v
 }
 
-fn in_scope(item: &Item, scope: &Scope) -> bool {
+fn in_scope(item: &Item, scope: &Scope, index: &search::FolderIndex) -> bool {
     match scope {
         Scope::Trash => item.is_deleted,
         _ if item.is_deleted => false,
         Scope::All | Scope::Recent | Scope::Random(_) | Scope::AllTags | Scope::Duplicates => true,
-        Scope::Uncategorized => item.folders.is_empty(),
+        Scope::Uncategorized => uncategorized(item, &|id| index.contains_key(id)),
         Scope::Untagged => item.tags.is_empty(),
         Scope::Folder(id) => item.folders.iter().any(|f| f == id),
         Scope::Tag(t) => item.tags.iter().any(|x| x == t),
@@ -200,7 +213,7 @@ pub fn visible_in(
     let hits: Vec<(usize, f64, usize)> = items
         .iter()
         .enumerate()
-        .filter(|(_, i)| in_scope(i, scope) && only.is_none_or(|o| o.contains(&i.id)))
+        .filter(|(_, i)| in_scope(i, scope, &index) && only.is_none_or(|o| o.contains(&i.id)))
         .filter_map(|(n, i)| {
             let cost = if q.is_empty() { 0 } else { q.fuzzy_score(&search::search_text_in(i, &index, qlen, parts))? };
             filter.check(i).map(|d| (n, d, cost))
@@ -850,8 +863,19 @@ mod tests {
 
     #[test]
     fn nav_counts_cover_fixed_entries() {
-        let (_, items) = fixture();
-        assert_eq!(nav_counts(&items), NavCounts { all: 4, uncategorized: 1, untagged: 1, trash: 1, tags: 3 });
+        let (roots, items) = fixture();
+        assert_eq!(nav_counts(&items, &roots), NavCounts { all: 4, uncategorized: 1, untagged: 1, trash: 1, tags: 3 });
+    }
+
+    #[test]
+    fn uncategorized_counts_one_stale_folder_id() {
+        let (roots, mut items) = fixture();
+        items.push(item("6", "orphan", &["Gone"], &["red"], false, 60, 3, 3));
+        items.push(item("7", "two-stale", &["Gone", "Lost"], &["red"], false, 70, 4, 4));
+        items.push(item("8", "stale-and-live", &["Gone", "A"], &["red"], false, 80, 5, 5));
+        assert_eq!(nav_counts(&items, &roots).uncategorized, 2);
+        let v = visible(&items, &roots, &Scope::Uncategorized, "", &Filter::default(), OrderBy::Name, true, None);
+        assert_eq!(names(&items, &v), ["loose", "orphan"]);
     }
 
     #[test]
