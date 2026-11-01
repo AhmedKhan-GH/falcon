@@ -7,3 +7,4 @@ pub(crate) mod widgets;
 pub(crate) mod toast;
 pub(crate) mod organize;
 pub(crate) mod sidebar;
+pub(crate) mod inspector;

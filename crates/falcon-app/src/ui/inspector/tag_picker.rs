@@ -3,7 +3,17 @@
 //! highlighted tag (or creates the typed ones), clicking a tag the items
 //! have takes it off. The decisions live in `crate::tags`.
 
-use super::*;
+use std::collections::HashSet;
+
+use eframe::egui::{self, Color32, CornerRadius, Key, Modifiers, Pos2, Rect, RichText, Sense, Stroke, TextEdit, Ui, Vec2, vec2};
+use falcon_library::Library;
+use falcon_library::model::Item;
+
+use crate::app::{Action, App};
+use crate::logic;
+use crate::icons as ic;
+use crate::theme::{self as t, font};
+use crate::ui::widgets::{galley, icon};
 use crate::tags::{self, Dir, Kind, Pick, Side};
 
 /// The panel's size, as Eagle opens it.
