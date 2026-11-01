@@ -3728,9 +3728,20 @@ impl App {
         let r = Rect::from_center_size(area.center() + self.ws.view.pan, natural * scale);
         let mut clip = ui.new_child(egui::UiBuilder::new().max_rect(area));
         clip.set_clip_rect(area);
+        // Without a full render the thumbnail stands in; with neither, the
+        // format can't be previewed.
+        let full_failed = self.ws.loader.has_failed(&id, Tier::Full) || job_for(item, lib.root(), Tier::Full).is_none();
+        let preview_job = if full_failed { job_for(item, lib.root(), Tier::Preview) } else { None };
+        let no_preview = full_failed && (preview_job.is_none() || self.ws.loader.has_failed(&id, Tier::Preview));
         match &tex {
             Some(tex) => egui::Image::new((tex.id(), r.size())).paint_at(&clip, r),
+            None if no_preview => self.cannot_preview(&mut clip, item, area),
             None => ext_placeholder(&clip, Rect::from_center_size(area.center(), Vec2::splat(260.0)), &item.ext),
+        }
+        if tex.is_none()
+            && let Some(j) = preview_job
+        {
+            self.ws.frame_jobs.push(j);
         }
         self.edit_overlay(ui, item, r, area);
 
@@ -3776,6 +3787,24 @@ impl App {
         if let Some(j) = job_for(item, lib.root(), Tier::Full) {
             self.ws.frame_jobs.push(j);
         }
+    }
+
+    /// Eagle's "cannot preview" page: the file's type, a line saying so
+    /// and a button listing the apps that can open it.
+    fn cannot_preview(&mut self, ui: &mut Ui, item: &Item, area: Rect) {
+        let c = area.center();
+        ext_placeholder(ui, Rect::from_center_size(c - vec2(0.0, 70.0), Vec2::splat(150.0)), &item.ext);
+        let name = format!("{}.{}", item.name, item.ext);
+        let g = galley(ui, &name, font(15.0), t::p().text, (area.width() - 40.0).max(1.0));
+        ui.painter().galley(Pos2::new(c.x - g.size().x / 2.0, c.y + 14.0), g, t::p().text);
+        let line = "Falcon can't show a preview of this file. Try opening it in another app.";
+        ui.painter().text(c + vec2(0.0, 48.0), Align2::CENTER_CENTER, line, font(12.5), t::p().text_muted);
+        let b = ui.put(Rect::from_center_size(c + vec2(0.0, 84.0), vec2(210.0, 28.0)), egui::Button::new("Open With Another App…"));
+        let file = self.ws.view.file.clone();
+        egui::Popup::menu(&b).show(|ui| {
+            ui.set_min_width(200.0);
+            self.open_menu(ui, std::slice::from_ref(&file));
+        });
     }
 
     fn empty_state(&mut self, ui: &mut Ui) {
