@@ -10,3 +10,4 @@ pub(crate) mod sidebar;
 pub(crate) mod inspector;
 pub(crate) mod viewer;
 pub(crate) mod grid;
+pub(crate) mod drop_hint;

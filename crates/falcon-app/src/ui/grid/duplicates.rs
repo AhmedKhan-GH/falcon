@@ -17,9 +17,11 @@ use falcon_library::merge::{self, Choices, Merge, MergeReport};
 use falcon_library::model::Item;
 use falcon_library::{Library, thumbnail};
 
-use super::{Action, App, GRID_PAD_X, Scope, export_ui::plural};
+use crate::app::export_ui::plural;
+use crate::app::{Action, App};
+use crate::ui::grid::GRID_PAD_X;
 use crate::loader::{Tier, job_for};
-use crate::logic::{self, DupGroup};
+use crate::logic::{self, DupGroup, Scope};
 use crate::theme::{self as t, font, mono};
 
 /// Phosphor's copy glyph, for the sidebar entry.
@@ -383,7 +385,7 @@ impl App {
                     } else if self.ws.selected.contains(id) {
                         p.rect_stroke(cell, 6.0, Stroke::new(1.5, t::p().text_muted), StrokeKind::Outside);
                     }
-                    let name = super::galley(ui, &format!("{}{}.{}", if kept { "Kept · " } else { "" }, item.name, item.ext), font(11.0), t::p().text, THUMB);
+                    let name = crate::ui::widgets::galley(ui, &format!("{}{}.{}", if kept { "Kept · " } else { "" }, item.name, item.ext), font(11.0), t::p().text, THUMB);
                     p.galley(Pos2::new(cell.left(), cell.bottom() + 4.0), name, t::p().text);
                     let mut meta = format!("{} · {}", item.ext.to_uppercase(), logic::format_size(item.size));
                     if !g.exact && n > 0 {

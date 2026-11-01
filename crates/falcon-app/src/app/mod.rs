@@ -45,11 +45,7 @@ pub(crate) mod layout_panel;
 
 // Grid.
 pub(crate) use crate::ui::grid::{GRID_GAP, GRID_PAD_TOP, GRID_PAD_X, list_span};
-pub(crate) mod duplicates_view;
-pub(crate) mod empty_view;
-pub(crate) mod drop_hint;
-#[path = "../covers.rs"]
-pub(crate) mod covers;
+pub(crate) use crate::ui::grid::duplicates as duplicates_view;
 
 // Inspector.
 pub(crate) use crate::ui::inspector::tag_picker;

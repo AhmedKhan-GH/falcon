@@ -15,6 +15,9 @@ use crate::theme::{self as t, font};
 use crate::ui::widgets::{badge, ext_placeholder, galley, paint_thumb_bg};
 use crate::app::{comments, open_ui};
 
+pub(crate) mod covers;
+pub(crate) mod duplicates;
+pub(crate) mod empty;
 mod tags_page;
 
 /// Grid geometry, measured from Eagle at 1280 x 800.

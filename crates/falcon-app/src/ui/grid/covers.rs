@@ -12,7 +12,8 @@ use falcon_library::Library;
 use falcon_library::model::{Folder, Item};
 use falcon_library::search::{self, OrderBy};
 
-use super::{Action, App, ext_placeholder, galley};
+use crate::app::{Action, App};
+use crate::ui::widgets::{ext_placeholder, galley};
 use crate::loader::{Tier, job_for};
 use crate::logic::{self, Scope};
 use crate::theme::{self as t, font};

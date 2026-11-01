@@ -4,7 +4,7 @@
 
 use eframe::egui::{self, Color32, CornerRadius, LayerId, Order, Rect, Stroke, StrokeKind, vec2};
 
-use super::App;
+use crate::app::App;
 use crate::drop_pos::{self, Target};
 use crate::theme::{self as t, font};
 

@@ -7,10 +7,11 @@ use eframe::egui::text::LayoutJob;
 use eframe::egui::{self, Align, Rect, TextFormat, Ui};
 use falcon_library::Library;
 
-use super::{App, icon};
+use crate::app::App;
 use crate::icons as ic;
 use crate::logic::Scope;
 use crate::theme::{self as t, font};
+use crate::ui::widgets::icon;
 
 /// Which view is empty.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
