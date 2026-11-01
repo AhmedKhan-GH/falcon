@@ -28,6 +28,16 @@ pub const ZOOM_MIN: f32 = 0.05;
 
 pub const ZOOM_MAX: f32 = 8.0;
 
+/// The zoom from which the "pixelated" preference draws sharp pixels:
+/// Eagle adds its pixelated rendering only from 200% of the image's size.
+pub const PIXELATED_FROM: f32 = 2.0;
+
+/// Whether the viewer samples nearest at `zoom` (points per image pixel)
+/// with the preference `on`.
+pub fn pixelated_at(on: bool, zoom: f32) -> bool {
+    on && zoom >= PIXELATED_FROM - 1e-4
+}
+
 /// The zoom menu's sizes, in percent (Eagle's `openRatioContextMenu`).
 pub const ZOOM_PRESETS: [u32; 11] = [5, 10, 25, 50, 100, 125, 150, 200, 300, 400, 800];
 
@@ -503,6 +513,14 @@ mod image_viewer_tests {
 #[cfg(test)]
 mod zoom_tests {
     use super::*;
+
+    #[test]
+    fn pixelated_from_200_percent() {
+        assert!(!pixelated_at(true, 1.5));
+        assert!(pixelated_at(true, 2.0));
+        assert!(pixelated_at(true, 4.0));
+        assert!(!pixelated_at(false, 4.0));
+    }
 
     #[test]
     fn viewer_zoom_steps_and_limits() {

@@ -344,7 +344,11 @@ impl Loader {
                 }
                 Some(Pixels::Tiled { size, tiles }) => {
                     self.stale.remove(&d.key);
-                    self.original = None;
+                    // The same item's old tiles stay up while the new ones
+                    // upload (after a sampling or exposure change).
+                    if self.original.as_ref().is_some_and(|o| o.id != d.key.0) {
+                        self.original = None;
+                    }
                     self.staged = Some(Staged { original: Original { id: d.key.0, size, tiles: Vec::new() }, rest: tiles });
                     self.upload_staged(ctx);
                 }
@@ -397,16 +401,20 @@ impl Loader {
         }
     }
 
-    /// Switches the viewer's renders between sharp and smooth enlarging;
-    /// on a change they are dropped and decoded again. Sampling is chosen
-    /// at upload, so decodes in flight come out right.
+    /// Switches the viewer's renders between sharp and smooth enlarging.
+    /// Sampling is fixed when a texture is uploaded, so on a change what is
+    /// cached is marked stale and made again, still shown until the new
+    /// textures arrive (zooming across 200% doesn't blank the view).
+    /// Decodes in flight are uploaded with the new sampling.
     pub fn set_pixelated(&mut self, on: bool) {
         if self.pixelated == on {
             return;
         }
         self.pixelated = on;
-        self.caches.get_mut(&Tier::Full).unwrap().clear();
-        self.original = None;
+        self.stale.extend(self.caches[&Tier::Full].iter().map(|(id, _)| (id.clone(), Tier::Full)));
+        if let Some(o) = &self.original {
+            self.stale.insert((o.id.clone(), Tier::Original));
+        }
         self.staged = None;
     }
 

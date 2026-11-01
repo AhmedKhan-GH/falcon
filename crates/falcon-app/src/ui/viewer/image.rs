@@ -103,7 +103,6 @@ impl App {
                 None => {}
             }
         }
-        self.ws.loader.set_pixelated(self.prefs.pixelated);
         let scale = self.ws.view.zoom.unwrap_or(fit);
 
         // The wheel scrolls, zooms or pages by the preference; pinching (or
@@ -172,6 +171,8 @@ impl App {
         if self.ws.view.zoom.is_none() {
             self.ws.view.pan = vec2(0.0, fit_top);
         }
+        // Sharp pixels from 200% on, as Eagle switches at that zoom.
+        self.ws.loader.set_pixelated(logic::pixelated_at(self.prefs.pixelated, scale));
         let r = Rect::from_center_size(area.center() + self.ws.view.pan, natural * scale);
         let mut clip = ui.new_child(egui::UiBuilder::new().max_rect(area));
         clip.set_clip_rect(area);

@@ -239,7 +239,12 @@ impl App {
             Pane::Pending | Pane::Picture => false,
         };
         if !pw.custom {
-            pw.picture(ui, &resp, tex, item, full, self.modes.hide_navigator);
+            let scale = pw.picture(ui, &resp, tex, item, full, self.modes.hide_navigator);
+            // The loader's sampling is shared: the main viewer's zoom rules
+            // while it is open.
+            if self.ws.viewer.is_none() {
+                self.ws.loader.set_pixelated(logic::pixelated_at(self.prefs.pixelated, scale));
+            }
         }
 
         // Eagle's window menu, from a right-click.
@@ -409,7 +414,8 @@ impl PreviewWin {
 impl PreviewWin {
     /// The zoomable picture (or the thumbnail of a type with no viewer of
     /// its own) with its navigator.
-    fn picture(&mut self, ui: &mut Ui, resp: &egui::Response, tex: Option<TextureHandle>, item: &Item, full: Rect, hide_navigator: bool) {
+    /// Returns the zoom it was drawn at.
+    fn picture(&mut self, ui: &mut Ui, resp: &egui::Response, tex: Option<TextureHandle>, item: &Item, full: Rect, hide_navigator: bool) -> f32 {
         let ctx = ui.ctx().clone();
         let tf = self.tf;
         let natural = if item.width > 0 && item.height > 0 {
@@ -462,6 +468,7 @@ impl PreviewWin {
         if !hide_navigator {
             self.navigator(ui, tex.as_ref(), natural, r, full);
         }
+        scale
     }
 
     /// The navigator of the image viewer: while the picture overflows the
