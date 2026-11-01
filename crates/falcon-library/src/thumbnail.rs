@@ -130,6 +130,67 @@ pub fn decode(path: &Path) -> Result<DynamicImage, ThumbError> {
     Ok(img)
 }
 
+/// The largest JPEG preview embedded in a RAW photo, turned by the file's
+/// EXIF orientation when it has one. Eagle's RAW viewer shows the preview
+/// dcraw extracts; falcon finds the same kind of picture by scanning for
+/// baseline or progressive 8-bit JPEG streams and keeping the one with the
+/// most pixels (the camera's full-size preview rather than its thumbnail).
+pub fn raw_preview(data: &[u8]) -> Result<DynamicImage, ThumbError> {
+    let (start, _) = embedded_jpegs(data).into_iter().max_by_key(|&(_, px)| px).ok_or_else(|| ThumbError("no embedded preview".into()))?;
+    let mut img = image::load_from_memory_with_format(&data[start..], image::ImageFormat::Jpeg).map_err(ThumbError::new)?;
+    let orientation = ::exif::Reader::new()
+        .read_raw(data.to_vec())
+        .ok()
+        .and_then(|e| e.get_field(::exif::Tag::Orientation, ::exif::In::PRIMARY).and_then(|f| f.value.get_uint(0)))
+        .and_then(|v| image::metadata::Orientation::from_exif(v as u8));
+    if let Some(o) = orientation {
+        img.apply_orientation(o);
+    }
+    Ok(img)
+}
+
+/// Start offsets and pixel counts of the JPEG streams in `data` whose
+/// headers parse up to a baseline or progressive 8-bit frame.
+fn embedded_jpegs(data: &[u8]) -> Vec<(usize, u64)> {
+    data.windows(3)
+        .enumerate()
+        .filter(|(_, w)| *w == [0xFF, 0xD8, 0xFF])
+        .filter_map(|(i, _)| jpeg_frame_pixels(&data[i..]).map(|px| (i, px)))
+        .collect()
+}
+
+/// Walks a JPEG's marker segments from its SOI to the frame header and
+/// returns width x height for an 8-bit SOF0, SOF1 or SOF2 frame.
+fn jpeg_frame_pixels(jpeg: &[u8]) -> Option<u64> {
+    let mut at = 2;
+    for _ in 0..64 {
+        if *jpeg.get(at)? != 0xFF {
+            return None;
+        }
+        let marker = *jpeg.get(at + 1)?;
+        match marker {
+            0xFF => at += 1,
+            0x01 | 0xD0..=0xD7 => at += 2,
+            0xC0..=0xC2 => {
+                let f = jpeg.get(at + 4..at + 9)?;
+                let (h, w) = (u16::from_be_bytes([f[1], f[2]]), u16::from_be_bytes([f[3], f[4]]));
+                return (f[0] == 8 && w > 0 && h > 0).then_some(u64::from(w) * u64::from(h));
+            }
+            // Lossless, hierarchical or arithmetic frames, or the image data
+            // before any frame: not a preview picture.
+            0xC3 | 0xC5..=0xC7 | 0xC9..=0xCB | 0xCD..=0xCF | 0xD8 | 0xD9 | 0xDA => return None,
+            _ => {
+                let len = u16::from_be_bytes([*jpeg.get(at + 2)?, *jpeg.get(at + 3)?]) as usize;
+                if len < 2 {
+                    return None;
+                }
+                at += 2 + len;
+            }
+        }
+    }
+    None
+}
+
 /// Long side of QuickLook renders, matching the size Eagle reports for
 /// documents such as PDFs.
 pub const QUICKLOOK_SIZE: u32 = 1024;
@@ -443,6 +504,29 @@ impl crate::Library {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn jpeg(w: u32, h: u32) -> Vec<u8> {
+        let mut out = Vec::new();
+        let img = image::RgbImage::from_pixel(w, h, image::Rgb([200, 30, 30]));
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 80).encode_image(&img).unwrap();
+        out
+    }
+
+    #[test]
+    fn raw_previews_are_the_largest_embedded_jpeg() {
+        // A stand-in RAW: header bytes, a small thumbnail, sensor data with a
+        // stray FF D8 FF, then the full-size preview.
+        let mut raw = b"II*\0junk".to_vec();
+        raw.extend(jpeg(16, 8));
+        raw.extend([0x12, 0xFF, 0xD8, 0xFF, 0xC3, 0x00, 0x0B, 0x10, 0x00, 0x40, 0x00, 0x40]);
+        raw.extend(vec![7u8; 1000]);
+        raw.extend(jpeg(64, 32));
+        raw.extend(vec![9u8; 100]);
+        assert_eq!(embedded_jpegs(&raw).len(), 2, "the lossless frame is skipped");
+        let img = raw_preview(&raw).unwrap();
+        assert_eq!((img.width(), img.height()), (64, 32));
+        assert!(raw_preview(&[0u8; 100]).is_err());
+    }
 
     #[test]
     fn svg_regions_render_only_the_part_asked_for() {

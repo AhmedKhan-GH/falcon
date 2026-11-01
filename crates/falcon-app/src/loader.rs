@@ -54,6 +54,8 @@ pub struct Job {
     tile: usize,
     /// For an SVG zoomed in: the visible part to render sharp.
     region: Option<Region>,
+    /// A RAW photo: show its embedded preview (QuickLook if it has none).
+    raw: bool,
 }
 
 /// The part of an SVG on screen: fractions of the drawing
@@ -79,7 +81,7 @@ pub struct SvgPatch {
 pub fn original_job(item: &Item, root: &std::path::Path, tile: usize) -> Option<Job> {
     let ext = item.ext.to_lowercase();
     crate::logic::full_resolution(&ext)
-        .then(|| Job { key: (item.id.clone(), Tier::Original), path: item.original_path(root), svg: false, quicklook: false, tile, region: None })
+        .then(|| Job { key: (item.id.clone(), Tier::Original), path: item.original_path(root), svg: false, quicklook: false, tile, region: None, raw: falcon_library::exif::is_raw(&ext) })
 }
 
 /// Picks the file to decode for `item`: the thumbnail when it exists (unless
@@ -88,8 +90,12 @@ pub fn job_for(item: &Item, root: &std::path::Path, tier: Tier) -> Option<Job> {
     let ext = item.ext.to_lowercase();
     let supported = thumbnail::is_supported(&ext);
     let original = supported.then(|| item.original_path(root));
+    if tier == Tier::Full && falcon_library::exif::is_raw(&ext) {
+        let quicklook = cfg!(target_os = "macos");
+        return Some(Job { key: (item.id.clone(), tier), path: item.original_path(root), svg: false, quicklook, tile: 0, region: None, raw: true });
+    }
     if tier == Tier::Full && !supported && cfg!(target_os = "macos") {
-        return Some(Job { key: (item.id.clone(), tier), path: item.original_path(root), svg: false, quicklook: true, tile: 0, region: None });
+        return Some(Job { key: (item.id.clone(), tier), path: item.original_path(root), svg: false, quicklook: true, tile: 0, region: None, raw: false });
     }
     let (path, svg) = match (tier, item.thumbnail_path(root), original) {
         (Tier::Full, _, Some(o)) => (o, ext == "svg"),
@@ -97,7 +103,7 @@ pub fn job_for(item: &Item, root: &std::path::Path, tier: Tier) -> Option<Job> {
         (_, None, Some(o)) => (o, ext == "svg"),
         (_, None, None) => return None,
     };
-    Some(Job { key: (item.id.clone(), tier), path, svg, quicklook: false, tile: 0, region: None })
+    Some(Job { key: (item.id.clone(), tier), path, svg, quicklook: false, tile: 0, region: None, raw: false })
 }
 
 struct Shared {
@@ -436,7 +442,13 @@ fn decode(job: &Job) -> Option<Pixels> {
         return decode_tiled(job);
     }
     let max = job.key.1.max_side();
-    let img = if job.quicklook {
+    let img = if job.raw {
+        match raw_preview(&job.path) {
+            Some(img) => img,
+            None if job.quicklook => thumbnail::quicklook(&job.path, max).ok()?,
+            None => return None,
+        }
+    } else if job.quicklook {
         thumbnail::quicklook(&job.path, max).ok()?
     } else if job.svg {
         let data = std::fs::read(&job.path).ok()?;
@@ -449,10 +461,16 @@ fn decode(job: &Job) -> Option<Pixels> {
     Some(Pixels::Whole(ColorImage::from_rgba_unmultiplied([rgba.width() as usize, rgba.height() as usize], rgba.as_raw())))
 }
 
+/// A RAW photo's embedded JPEG preview.
+fn raw_preview(path: &std::path::Path) -> Option<image::DynamicImage> {
+    thumbnail::raw_preview(&std::fs::read(path).ok()?).ok()
+}
+
 /// Decodes the original at full size and cuts it into tiles, all on the
 /// worker; the UI thread only uploads them.
 fn decode_tiled(job: &Job) -> Option<Pixels> {
-    let rgba = thumbnail::decode(&job.path).ok()?.into_rgba8();
+    let img = if job.raw { raw_preview(&job.path)? } else { thumbnail::decode(&job.path).ok()? };
+    let rgba = img.into_rgba8();
     let (w, h) = (rgba.width() as usize, rgba.height() as usize);
     let raw = rgba.as_raw();
     let tiles = crate::logic::tile_spans(w, h, job.tile)
@@ -487,7 +505,7 @@ mod tests {
     }
 
     fn original(path: PathBuf, tile: usize) -> Job {
-        Job { key: ("x".into(), Tier::Original), path, svg: false, quicklook: false, tile, region: None }
+        Job { key: ("x".into(), Tier::Original), path, svg: false, quicklook: false, tile, region: None, raw: false }
     }
 
     #[test]
