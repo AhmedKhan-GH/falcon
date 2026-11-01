@@ -610,10 +610,12 @@ pub fn folder_drop(scope: &Scope, target: &str, alt: bool) -> Option<FolderDrop>
 }
 
 /// Applies a folder drop to one item: it leaves the open folder on a move,
-/// joins the target, and comes out of the Trash. Returns whether the item
-/// changed.
-pub fn apply_folder_drop(item: &mut Item, target: &str, drop: &FolderDrop) -> bool {
-    let before = (item.folders.clone(), item.is_deleted);
+/// joins the target, gets the target's `auto_tags` it lacks (even when it
+/// was in the target already, as in Eagle) and comes out of the Trash.
+/// Returns whether the item changed.
+pub fn apply_folder_drop(item: &mut Item, target: &str, drop: &FolderDrop, auto_tags: &[String]) -> bool {
+    let before = (item.folders.clone(), item.is_deleted, item.tags.len());
+    falcon_library::autotag::append_new(&mut item.tags, auto_tags);
     if let FolderDrop::Move(open) = drop {
         item.folders.retain(|f| f != open);
     }
@@ -621,7 +623,7 @@ pub fn apply_folder_drop(item: &mut Item, target: &str, drop: &FolderDrop) -> bo
         item.folders.push(target.to_string());
     }
     item.is_deleted = false;
-    (item.folders.clone(), item.is_deleted) != before
+    (item.folders.clone(), item.is_deleted, item.tags.len()) != before
 }
 
 /// The notice after a folder drop: "Moved 3 items to Logos".
@@ -674,24 +676,35 @@ mod folder_drop_tests {
     #[test]
     fn applying_a_move() {
         let mut it = item(&["A", "C"], false);
-        assert!(apply_folder_drop(&mut it, "B", &FolderDrop::Move("A".into())));
+        assert!(apply_folder_drop(&mut it, "B", &FolderDrop::Move("A".into()), &[]));
         assert_eq!(it.folders, ["C", "B"]);
         // Already there and not in the open folder: nothing to write.
-        assert!(!apply_folder_drop(&mut it, "B", &FolderDrop::Move("A".into())));
+        assert!(!apply_folder_drop(&mut it, "B", &FolderDrop::Move("A".into()), &[]));
         assert_eq!(it.folders, ["C", "B"]);
     }
 
     #[test]
     fn applying_an_add() {
         let mut it = item(&["A"], false);
-        assert!(apply_folder_drop(&mut it, "B", &FolderDrop::Add));
+        assert!(apply_folder_drop(&mut it, "B", &FolderDrop::Add, &[]));
         assert_eq!(it.folders, ["A", "B"]);
-        assert!(!apply_folder_drop(&mut it, "B", &FolderDrop::Add));
+        assert!(!apply_folder_drop(&mut it, "B", &FolderDrop::Add, &[]));
         // A trashed item already in the folder still comes back.
         let mut gone = item(&["B"], true);
-        assert!(apply_folder_drop(&mut gone, "B", &FolderDrop::Add));
+        assert!(apply_folder_drop(&mut gone, "B", &FolderDrop::Add, &[]));
         assert!(!gone.is_deleted);
         assert_eq!(gone.folders, ["B"]);
+    }
+
+    #[test]
+    fn a_drop_adds_auto_tags_even_when_already_filed() {
+        let tags = ["k".to_string(), "new".to_string()];
+        let mut it = item(&["B"], false);
+        it.tags = vec!["k".into()];
+        // Nothing moves, but the missing auto-tag is still added.
+        assert!(apply_folder_drop(&mut it, "B", &FolderDrop::Add, &tags));
+        assert_eq!((it.folders.as_slice(), it.tags.as_slice()), (["B".to_string()].as_slice(), tags.as_slice()));
+        assert!(!apply_folder_drop(&mut it, "B", &FolderDrop::Add, &tags));
     }
 
     #[test]

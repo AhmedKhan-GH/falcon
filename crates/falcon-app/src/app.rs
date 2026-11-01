@@ -1154,10 +1154,8 @@ impl App {
                     let mut r = Ok(());
                     for id in ids {
                         if let Some(mut item) = lib.item(&id).cloned()
-                            && !item.folders.contains(&fid)
+                            && falcon_library::autotag::join_folder(&mut item, &lib.metadata.folders, &fid)
                         {
-                            item.folders.push(fid.clone());
-                            item.is_deleted = false;
                             r = r.and(lib.update_item(item));
                         }
                     }
@@ -1168,9 +1166,10 @@ impl App {
                 Action::DropOnFolder(ids, fid, op) => {
                     let mut r = Ok(());
                     let mut moved = Vec::new();
+                    let tags = falcon_library::autotag::folder_auto_tags(&lib.metadata.folders, &fid);
                     for id in &ids {
                         if let Some(mut item) = lib.item(id).cloned()
-                            && logic::apply_folder_drop(&mut item, &fid, &op)
+                            && logic::apply_folder_drop(&mut item, &fid, &op, &tags)
                         {
                             r = r.and(lib.update_item(item));
                             moved.push(id);
@@ -3280,8 +3279,10 @@ impl App {
         }
         if let Some(fid) = add_folder {
             let mut it = changed.clone().unwrap_or_else(|| item.clone());
-            it.folders.push(fid);
-            changed = Some(it);
+            // Eagle's folder picker in the inspector adds auto-tags too.
+            if falcon_library::autotag::join_folder(&mut it, &lib.metadata.folders, &fid) {
+                changed = Some(it);
+            }
         }
 
         self.comment_list(ui, &item);

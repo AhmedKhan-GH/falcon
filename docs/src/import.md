@@ -73,6 +73,17 @@ Eagle stores no content hash in item JSON and never hashes file bytes. Its dupli
 - svg, tif, tiff and trashed items are skipped.
 - Images without a palette fall back to size, width, height and extension.
 
+### Folder auto-tags (seen)
+
+A folder's `tags` key holds its auto-tags. Eagle's code calls the list it applies `extendTags`; it is worked out at run time (`getExtendTags`) and deleted before `metadata.json` is written, so it is not a setting.
+
+- The list is the folder's own tags, then its parent's, then the grandparent's and so on to the top level. Only the first copy of each tag is kept, and the result is reversed. A folder with tags `[d, e]` under `[c, b]` under `[a, b]` applies `[a, b, c, e, d]`.
+- Importing or pasting files into a folder in Eagle's window appends the list to the item's tags and removes repeats. Importing into several folders (the add-from-URLs path) joins each folder's list in turn.
+- Adding items to a folder (the inspector's folder picker, Add to Folder) appends the tags an item lacks, but only when the item was not already in that folder.
+- Dropping items onto a folder appends the missing tags to every dropped item, even one already in the folder.
+- Eagle's API `addFromPath` and `addFromPaths` don't apply auto-tags; `addFromURL(s)` do.
+- There is no preference for any of this.
+
 ### Timestamps
 
 - `btime` and `mtime` are the file's own times (observed).
@@ -97,6 +108,7 @@ Eagle stores no content hash in item JSON and never hashes file bytes. Its dupli
 - **Palette.** Taken from the decoded thumbnail, so it sees the same WebP artefacts Eagle's analyser sees. `palette: false` skips it.
 - **Timestamps.** `modificationTime` is the later of the current time and the previous import's value plus 1 ms, tracked on the `Library`, so it is strictly increasing across calls. `lastModified` is read after the palette is done.
 - **mtime.json.** Updated and written after every import, not debounced. The entry is set to `lastModified`, and `all` becomes the count of loaded items. Existing entries that are missing from the file are left missing.
+- **Folder auto-tags.** With `ImportOptions::folder_auto_tags` on, `commit_import` appends the auto-tags of the item's folders (`autotag::auto_tags_for`) to its tags, skipping tags it already has, in the same write. It is off by default, as for Eagle's `addFromPath`; the app turns it on for every import (drops, ⌘V, the collect window). The list is computed from the folders' `tags` by `autotag::folder_auto_tags`, which follows Eagle's order exactly; a cached `extendTags` key in a file is ignored.
 - **Not done.** Library `metadata.json` is not touched, no backup is taken, and stars and concurrency are not implemented.
 
 ### Format metadata in falcon

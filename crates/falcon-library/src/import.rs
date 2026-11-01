@@ -41,6 +41,11 @@ pub struct ImportOptions {
     /// Add embedded IPTC keywords and XMP `dc:subject` entries as tags, like
     /// Eagle's IPTC preference (default false, as in Eagle).
     pub keywords_as_tags: bool,
+    /// Add the auto-tags of the folders in `folders` (and their parents'),
+    /// as Eagle does for items imported or pasted into a folder in its
+    /// window (default false: Eagle's API leaves them off). See
+    /// [`crate::autotag`].
+    pub folder_auto_tags: bool,
 }
 
 impl Default for ImportOptions {
@@ -54,6 +59,7 @@ impl Default for ImportOptions {
             font_weight_tag: true,
             camera_metadata_all_photos: false,
             keywords_as_tags: false,
+            folder_auto_tags: false,
         }
     }
 }
@@ -65,6 +71,8 @@ impl Default for ImportOptions {
 pub struct Staged {
     item: Item,
     dir: tempfile::TempDir,
+    /// [`ImportOptions::folder_auto_tags`], applied at commit.
+    auto_tags: bool,
 }
 
 impl Staged {
@@ -143,7 +151,7 @@ pub fn stage(path: impl AsRef<Path>, opts: &ImportOptions) -> Result<Staged> {
     if item.remove_thumbnail == Some(true) {
         let _ = fs::remove_file(&thumb);
     }
-    Ok(Staged { item, dir })
+    Ok(Staged { item, dir, auto_tags: opts.folder_auto_tags })
 }
 
 impl Library {
@@ -171,9 +179,12 @@ impl Library {
     /// Moves a staged import into `images/<ID>.info/`, stamps its times and
     /// writes its `metadata.json` and `mtime.json`.
     pub fn commit_import(&mut self, staged: Staged) -> Result<String> {
-        let Staged { mut item, dir } = staged;
+        let Staged { mut item, dir, auto_tags } = staged;
         let known = self.folder_ids();
         item.folders.retain(|f| known.contains(f.as_str()));
+        if auto_tags {
+            crate::autotag::append_new(&mut item.tags, &crate::autotag::auto_tags_for(&self.metadata.folders, &item.folders));
+        }
         let mut id = ids::new_id();
         while self.root().join("images").join(format!("{id}.info")).exists() {
             id = ids::new_id();

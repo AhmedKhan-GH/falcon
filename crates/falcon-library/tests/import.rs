@@ -343,3 +343,23 @@ fn folders_move_and_quick_access() {
     lib.delete_folder(&a).unwrap();
     assert!(Library::open(&dest).unwrap().metadata.quick_access.is_empty());
 }
+
+#[test]
+fn folder_auto_tags_on_import() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut lib = Library::create(tmp.path().join("Auto.library")).unwrap();
+    let top = lib.create_folder(None, "Top").unwrap();
+    let sub = lib.create_folder(Some(&top), "Sub").unwrap();
+    lib.set_folder_auto_tags(&top, &["a".into(), "shared".into()]).unwrap();
+    lib.set_folder_auto_tags(&sub, &["b".into(), "shared".into()]).unwrap();
+    let src = tmp.path().join("a.png");
+    make_png(&src, 10, 10);
+    let on = ImportOptions { folders: vec![sub.clone()], tags: vec!["mine".into(), "b".into()], folder_auto_tags: true, ..opts() };
+    let id = lib.import_file(&src, &on).unwrap();
+    // [b, shared] + [a, shared] → [b, shared, a] → reversed, appended.
+    assert_eq!(lib.item(&id).unwrap().tags, ["mine", "b", "a", "shared"]);
+    // Off (the default, like Eagle's API): only the given tags.
+    let off = ImportOptions { folders: vec![sub], tags: vec!["mine".into()], ..opts() };
+    let id = lib.import_file(&src, &off).unwrap();
+    assert_eq!(lib.item(&id).unwrap().tags, ["mine"]);
+}

@@ -57,9 +57,10 @@ impl Prefs {
     }
 
     /// How the app imports into `folders`: everything as Eagle defaults
-    /// it, plus the keyword preference.
+    /// it, plus the keyword preference. Items take the folders' auto-tags,
+    /// as they do when imported or pasted in Eagle's window.
     pub fn import_options(&self, folders: Vec<String>) -> falcon_library::import::ImportOptions {
-        falcon_library::import::ImportOptions { folders, keywords_as_tags: self.keywords_as_tags, ..Default::default() }
+        falcon_library::import::ImportOptions { folders, keywords_as_tags: self.keywords_as_tags, folder_auto_tags: true, ..Default::default() }
     }
 
     /// The ports to try for the API, or None when it is off.
@@ -374,6 +375,7 @@ mod tests {
         let mut p = Prefs::default();
         let o = p.import_options(vec!["F1".into()]);
         assert_eq!((o.folders.as_slice(), o.keywords_as_tags, o.palette), (["F1".to_string()].as_slice(), false, true));
+        assert!(o.folder_auto_tags, "items imported in the window take folder auto-tags");
         p.keywords_as_tags = true;
         assert!(p.import_options(Vec::new()).keywords_as_tags);
     }
