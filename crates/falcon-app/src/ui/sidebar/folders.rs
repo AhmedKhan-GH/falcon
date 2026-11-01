@@ -3,8 +3,18 @@
 //! and its dialogs (batch rename, Move Folder, delete). The selection rules
 //! live in `logic::TreeSel`, the edits in `falcon_library::edit`.
 
-use super::*;
-use super::organize_ui::{color_row, icon_grid, sort_entries};
+use std::collections::HashSet;
+
+use eframe::egui::{self, Key, Modifiers, Pos2, Rect, RichText, Sense, TextEdit, Ui, vec2};
+use falcon_library::model::Folder;
+use falcon_library::Library;
+
+use crate::app::{Action, App, Confirm, export_ui};
+use crate::icons as ic;
+use crate::logic::{self, Scope};
+use crate::theme::{self as t, font};
+use crate::ui::widgets::{galley, icon};
+use crate::ui::organize::{color_row, icon_grid, sort_entries};
 use crate::folder_icons;
 use crate::logic::TreeSel;
 use falcon_library::edit::FolderPlace;
