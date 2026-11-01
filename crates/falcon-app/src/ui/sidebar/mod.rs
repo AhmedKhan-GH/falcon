@@ -718,6 +718,13 @@ impl App {
             }
             self.tree_export_menu(ui, crate::ui::dialogs::export::Target::Folder(f.id.clone()), !shut);
             ui.separator();
+            // The same switch as the View menu's (Eagle shows it checked).
+            let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::ToggleSubfolders);
+            let mark = if self.display.subfolders { crate::icons::CHECK } else { " " };
+            if ui.add(egui::Button::new(format!("{mark}  Show Subfolder Content")).shortcut_text(keys)).clicked() {
+                self.run_command(&ui.ctx().clone(), crate::shortcuts::Command::ToggleSubfolders);
+            }
+            ui.separator();
             if ui.add_enabled(!shut, egui::Button::new(RichText::new("Delete Folder").color(t::p().icon_red))).clicked() {
                 self.ask_delete_folders(lib, vec![f.id.clone()]);
             }
