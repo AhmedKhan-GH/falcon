@@ -33,6 +33,7 @@ mod image_view;
 mod video_view;
 mod gif_view;
 mod open_ui;
+mod ext_ui;
 mod pdf_view;
 mod modes;
 mod preview_window;
@@ -140,6 +141,8 @@ enum Action {
     /// Items taken out of a folder (Edit ▸ Remove from Folder).
     RemoveFromFolder(Vec<String>, String),
     RenameFolder(String, String),
+    /// Item id and new extension (the inspector's Type row).
+    SetExtension(String, String),
     SetFolderDescription(String, String),
     AddToFolder(Vec<String>, String),
     /// Items dropped on a sidebar folder: moved out of the open folder, or
@@ -472,6 +475,8 @@ struct Workspace {
     cards: crate::anim::Cards,
     /// Focus the inspector's title field next frame (F2).
     focus_title: bool,
+    /// The Change Extension dialog (`ext_ui.rs`).
+    ext_dialog: Option<ext_ui::ExtDialog>,
     /// The tag picker (`tag_picker.rs`).
     picker: tag_picker::TagPicker,
     progress: Arc<Mutex<Progress>>,
@@ -559,6 +564,7 @@ impl Workspace {
             gif_player: false,
             cards: Default::default(),
             focus_title: false,
+            ext_dialog: None,
             picker: Default::default(),
             progress: Arc::new(Mutex::new(Progress::default())),
             dupes: Default::default(),
@@ -1948,6 +1954,14 @@ impl App {
                     r
                 }
                 Action::RenameFolder(id, name) => lib.rename_folder(&id, &name),
+                Action::SetExtension(id, ext) => {
+                    let r = lib.set_extension(&id, &ext);
+                    if r.is_ok() {
+                        self.ws.loader.forget(&id);
+                        self.flash(format!("Extension changed to .{ext}"));
+                    }
+                    r
+                }
                 Action::SetFolderDescription(id, text) => lib.set_folder_description(&id, &text),
                 Action::AddToFolder(ids, fid) => {
                     self.note_folder_use(std::slice::from_ref(&fid));
@@ -2221,6 +2235,7 @@ fn action_label(action: &Action) -> String {
         Action::CreateFolder { .. } | Action::CreateSibling(_) => "New folder".into(),
         Action::RemoveFromFolder(ids, _) => format!("Remove {} from folder", ids.len()),
         Action::RenameFolder(..) => "Rename folder".into(),
+        Action::SetExtension(..) => "Change extension".into(),
         Action::SetFolderDescription(..) => "Edit folder description".into(),
         Action::AddToFolder(ids, _) => format!("Add {} to folder", ids.len()),
         Action::DropOnFolder(ids, _, logic::FolderDrop::Move(_)) => format!("Move {} to folder", ids.len()),
@@ -2310,6 +2325,7 @@ mod undo_tests {
     fn undo_labels() {
         assert_eq!(action_label(&Action::Trash(vec!["a".into(), "b".into(), "c".into()], true)), "Move 3 to Trash");
         assert_eq!(action_label(&Action::RenameFolder("f".into(), "x".into())), "Rename folder");
+        assert_eq!(action_label(&Action::SetExtension("i".into(), "png".into())), "Change extension");
         assert_eq!(action_label(&Action::SetFolderDescription("f".into(), "x".into())), "Edit folder description");
         assert_eq!(undo_label(&[]), "Edit item");
         assert_eq!(undo_label(&["Rename folder".into()]), "Rename folder");
@@ -4717,7 +4733,11 @@ impl App {
             prop(ui, "Dimensions", &format!("{} × {}", item.width, item.height));
         }
         prop(ui, "Size", &logic::format_size(item.size));
-        prop(ui, "Type", &item.ext.to_uppercase());
+        let type_row = prop(ui, "Type", &item.ext.to_uppercase());
+        let type_hit = ui.interact(type_row.rect, ui.scope_id().with("type-row"), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text("Click to change the extension");
+        if type_hit.clicked() {
+            self.ws.ext_dialog = Some(ext_ui::ExtDialog { id: item.id.clone(), current: item.ext.to_lowercase(), text: item.ext.clone(), uid: egui::Id::unique("change-extension"), focused: false });
+        }
         prop(ui, "Date Imported", &logic::format_ms(item.modification_time));
         prop(ui, "Date Created", &logic::format_ms(item.btime));
         prop(ui, "Date Modified", &logic::format_ms(item.mtime));
@@ -4801,12 +4821,13 @@ fn heading(ui: &mut Ui, text: &str) {
     ui.painter().text(rect.left_center(), Align2::LEFT_CENTER, text, font(13.0), t::p().text_muted);
 }
 
-fn prop(ui: &mut Ui, key: &str, value: &str) {
-    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 13.0), Sense::hover());
+fn prop(ui: &mut Ui, key: &str, value: &str) -> Response {
+    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 13.0), Sense::hover());
     let p = ui.painter();
     p.text(rect.left_center(), Align2::LEFT_CENTER, key, font(12.0), t::p().text);
     let g = galley(ui, value, mono(12.0), t::p().text_value, rect.width() - 90.0);
     p.galley(Pos2::new(rect.left() + 90.0, rect.center().y - g.size().y / 2.0), g, t::p().text_value);
+    resp
 }
 
 /// Rating row: five stars; clicking the current rating clears it.
@@ -5276,6 +5297,7 @@ impl App {
         self.organize_dialogs(&ctx, lib);
         self.tag_picker_ui(&ctx, lib);
         self.folder_dialogs(&ctx, lib);
+        self.ext_dialog(&ctx);
         self.collect_duplicates();
         self.duplicate_dialog(&ctx, lib);
         self.export_dialogs(&ctx, lib);
