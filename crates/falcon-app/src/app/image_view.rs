@@ -33,6 +33,9 @@ pub(super) struct ImageState {
     svg_view: Option<([f32; 4], [u32; 2], Instant)>,
     /// Where in the navigator's frame a drag took hold, from its centre.
     nav_grab: Vec2,
+    /// The preview-only rotation and flip of the image shown; reset when the
+    /// viewer moves to another item or closes.
+    pub tf: super::crop::ViewTransform,
 }
 
 /// Side of a checkerboard square, in points.
@@ -59,10 +62,14 @@ impl App {
             self.too_large(ui, lib, item, bar, area);
             return;
         }
+        if self.image.opened != id {
+            self.image.tf = Default::default();
+        }
+        let tf = self.image.tf;
         let natural = if item.width > 0 && item.height > 0 {
-            vec2(item.width as f32, item.height as f32)
+            tf.size(item.width as f32, item.height as f32)
         } else {
-            tex.as_ref().map_or(Vec2::splat(512.0), |t| t.size_vec2())
+            tex.as_ref().map_or(Vec2::splat(512.0), |t| tf.size(t.size_vec2().x, t.size_vec2().y))
         };
         let (fit, fit_top) = if self.image.edge {
             (logic::edge_fit((natural.x, natural.y), (area.width(), area.height())), 0.0)
@@ -154,6 +161,7 @@ impl App {
         let shown_px = r.width().max(r.height()) * ui.ctx().pixels_per_point();
         let tile = logic::tile_side(ui.ctx().input(|i| i.max_texture_side));
         if !animated
+            && tf.is_identity()
             && logic::wants_original(&ext, natural.x.max(natural.y) as u32, shown_px)
             && let Some(j) = original_job(item, lib.root(), tile)
         {
@@ -162,7 +170,7 @@ impl App {
         // An SVG enlarged past its render is drawn again, sharp, for the part
         // on screen once the view holds still.
         let mut patch = None;
-        if ext == "svg" && tex.as_ref().is_some_and(|t| shown_px > t.size_vec2().max_elem()) {
+        if ext == "svg" && tf.is_identity() && tex.as_ref().is_some_and(|t| shown_px > t.size_vec2().max_elem()) {
             let max = ui.ctx().input(|i| i.max_texture_side).min(8192) as u32;
             let region = logic::svg_region([r.min.x, r.min.y, r.max.x, r.max.y], [area.min.x, area.min.y, area.max.x, area.max.y], ui.ctx().pixels_per_point(), max);
             if let Some((rect, size)) = region {
@@ -184,7 +192,7 @@ impl App {
             });
         }
         let full_px = tex.as_ref().map_or(0.0, |t| t.size_vec2().max_elem());
-        let original = self.ws.loader.original(&id).filter(|o| !animated && shown_px > full_px && o.size[0].max(o.size[1]) as f32 > full_px);
+        let original = self.ws.loader.original(&id).filter(|o| !animated && tf.is_identity() && shown_px > full_px && o.size[0].max(o.size[1]) as f32 > full_px);
 
         // Without a full render the thumbnail stands in; with neither, the
         // format can't be previewed.
@@ -225,6 +233,7 @@ impl App {
                     paint_except(clip.painter(), tex.id(), r, hole);
                     clip.painter().image(patch_tex, hole, Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)), Color32::WHITE);
                 }
+                None if !tf.is_identity() && !animated => paint_transformed(clip.painter(), tex.id(), r, tf),
                 None => egui::Image::new((tex.id(), r.size())).paint_at(&clip, r),
             },
             (None, None) if no_preview => self.cannot_preview(&mut clip, item, area),
@@ -435,6 +444,17 @@ fn zoom_slider(ui: &mut Ui, track: Rect, pos: f32) -> Option<f32> {
     p.line_segment([Pos2::new(track.left(), y), Pos2::new(kx, y)], egui::Stroke::new(2.0, t::p().text_muted));
     p.circle_filled(Pos2::new(kx, y), 6.0, Color32::WHITE);
     picked
+}
+
+/// Draws texture `tex` over `r` turned and mirrored by `tf`.
+fn paint_transformed(painter: &egui::Painter, tex: egui::TextureId, r: Rect, tf: super::crop::ViewTransform) {
+    let corners = [r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom()];
+    let mut mesh = egui::Mesh::with_texture(tex);
+    for (pos, (u, v)) in corners.into_iter().zip(tf.uv_corners()) {
+        mesh.vertices.push(egui::epaint::Vertex { pos, uv: Pos2::new(u, v), color: Color32::WHITE });
+    }
+    mesh.indices = vec![0, 1, 2, 0, 2, 3];
+    painter.add(egui::Shape::mesh(mesh));
 }
 
 /// Draws texture `tex` stretched over `r`, except inside `hole`: the bands

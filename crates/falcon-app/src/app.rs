@@ -1858,11 +1858,11 @@ impl App {
                 match cmd {
                     C::FlipHorizontal => {
                         let ids = image_edit::editable(&ids, ext_of, transform::can_flip);
-                        self.ws.actions.push(Action::Edit(image_edit::Op::Flip(ids, transform::Flip::Horizontal)));
+                        self.flip_request(ids, transform::Flip::Horizontal);
                     }
                     C::RotateLeft => {
                         let ids = image_edit::editable(&ids, ext_of, transform::can_rotate);
-                        self.ws.actions.push(Action::Edit(image_edit::Op::Rotate(ids, -1)));
+                        self.rotate_request(ids, -1);
                     }
                     _ => {
                         if self.ws.tools.crop.is_some() {

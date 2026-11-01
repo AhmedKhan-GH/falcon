@@ -133,6 +133,52 @@ pub fn set_size(rect: Rect, width: Option<u32>, height: Option<u32>, bounds: Vec
     Rect::from_min_size(rect.min, vec2(w, h))
 }
 
+/// A rotation and mirror of the picture the viewer draws, without touching
+/// the file (the "preview only" rotate mode). The picture is mirrored
+/// horizontally first when `mirror` is set, then turned clockwise by `turns`
+/// quarter turns.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ViewTransform {
+    /// Clockwise quarter turns, 0 to 3.
+    pub turns: u8,
+    pub mirror: bool,
+}
+
+impl ViewTransform {
+    pub fn is_identity(self) -> bool {
+        self == ViewTransform::default()
+    }
+
+    /// After `n` more clockwise quarter turns (negative: anticlockwise).
+    pub fn rotated(self, n: i32) -> ViewTransform {
+        ViewTransform { turns: (self.turns as i32 + n).rem_euclid(4) as u8, ..self }
+    }
+
+    /// After mirroring what is on screen left to right.
+    pub fn flipped_h(self) -> ViewTransform {
+        ViewTransform { turns: (4 - self.turns) % 4, mirror: !self.mirror }
+    }
+
+    /// After mirroring what is on screen top to bottom (a left-right mirror
+    /// and a half turn).
+    pub fn flipped_v(self) -> ViewTransform {
+        self.flipped_h().rotated(2)
+    }
+
+    /// The size the picture is drawn at, from its file size.
+    pub fn size(self, w: f32, h: f32) -> Vec2 {
+        if self.turns % 2 == 1 { vec2(h, w) } else { vec2(w, h) }
+    }
+
+    /// Where each corner of the drawn rectangle (top-left, top-right,
+    /// bottom-right, bottom-left) reads the texture, as (u, v).
+    pub fn uv_corners(self) -> [(f32, f32); 4] {
+        let base = if self.mirror { [(1.0, 0.0), (0.0, 0.0), (0.0, 1.0), (1.0, 1.0)] } else { [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)] };
+        let k = self.turns as usize % 4;
+        std::array::from_fn(|i| base[(i + 4 - k) % 4])
+    }
+}
+
 /// The crop tool's state while it is open.
 #[derive(Debug, Clone)]
 pub struct CropState {
@@ -301,11 +347,11 @@ impl App {
         }
         if transform::can_rotate(&item.ext) {
             if icon_button(ui, Pos2::new(x, cy), ic::ARROW_CLOCKWISE, 17.0, true, "Rotate Right").clicked() {
-                self.ws.actions.push(Action::Edit(Op::Rotate(vec![item.id.clone()], 1)));
+                self.rotate_request(vec![item.id.clone()], 1);
             }
             x -= 30.0;
             if icon_button(ui, Pos2::new(x, cy), ic::ARROW_COUNTER_CLOCKWISE, 17.0, true, "Rotate Left (⇧R)").clicked() {
-                self.ws.actions.push(Action::Edit(Op::Rotate(vec![item.id.clone()], -1)));
+                self.rotate_request(vec![item.id.clone()], -1);
             }
             x -= 30.0;
         }
@@ -313,16 +359,42 @@ impl App {
             let tip = "Flip Horizontal (⇧F)\n⇧-click: Flip Vertical";
             if icon_button(ui, Pos2::new(x, cy), ic::FLIP_HORIZONTAL, 17.0, true, tip).clicked() {
                 let flip = super::image_edit::flip_for_click(ui.input(|i| i.modifiers.shift));
-                self.ws.actions.push(Action::Edit(Op::Flip(vec![item.id.clone()], flip)));
+                self.flip_request(vec![item.id.clone()], flip);
             }
             x -= 30.0;
         }
         x
     }
 
-    /// Opens the crop tool on the whole image.
+    /// Rotates `ids` by `turns` quarter turns: in the preview-only mode, if
+    /// they are just the image in the viewer, only how it is drawn; else the
+    /// files.
+    pub(super) fn rotate_request(&mut self, ids: Vec<String>, turns: i32) {
+        if self.preview_only(&ids) {
+            self.image.tf = self.image.tf.rotated(turns);
+        } else {
+            self.ws.actions.push(Action::Edit(Op::Rotate(ids, turns)));
+        }
+    }
+
+    /// Mirrors `ids`, as [`App::rotate_request`] rotates them.
+    pub(super) fn flip_request(&mut self, ids: Vec<String>, flip: transform::Flip) {
+        if self.preview_only(&ids) {
+            self.image.tf = if flip == transform::Flip::Horizontal { self.image.tf.flipped_h() } else { self.image.tf.flipped_v() };
+        } else {
+            self.ws.actions.push(Action::Edit(Op::Flip(ids, flip)));
+        }
+    }
+
+    fn preview_only(&self, ids: &[String]) -> bool {
+        self.prefs.rotate_mode == crate::prefs::RotateMode::Preview && matches!((ids, &self.ws.viewer), ([a], Some(v)) if a == v)
+    }
+
+    /// Opens the crop tool on the whole image. A preview-only rotation is
+    /// dropped first: the rectangle is in file pixels.
     pub(super) fn start_crop(&mut self, item: &Item) {
         if item.width > 0 && item.height > 0 && transform::can_crop(&item.ext) {
+            self.image.tf = ViewTransform::default();
             self.ws.tools.comment_mode = false;
             self.ws.tools.crop = Some(CropState::new(item.width as f32, item.height as f32));
         }
@@ -383,6 +455,37 @@ mod tests {
         // Zero becomes one pixel.
         assert_eq!(set_size(start, Some(0), Some(0), bounds), r(100.0, 50.0, 1.0, 1.0));
         assert_eq!(set_size(start, None, None, bounds), start);
+    }
+
+    #[test]
+    fn view_transforms_compose() {
+        let id = ViewTransform::default();
+        assert!(id.is_identity());
+        assert_eq!(id.rotated(1).rotated(1).rotated(2), id);
+        assert_eq!(id.rotated(-1), ViewTransform { turns: 3, mirror: false });
+        // A flip twice is nothing, in either direction and after turns.
+        assert!(id.flipped_h().flipped_h().is_identity());
+        assert!(id.flipped_v().flipped_v().is_identity());
+        assert!(id.rotated(1).flipped_h().flipped_h().rotated(-1).is_identity());
+        // Both mirrors are a half turn.
+        assert_eq!(id.flipped_h().flipped_v(), id.rotated(2));
+        // On-screen flips: after a quarter turn, ⇧F still mirrors left to right.
+        let t = id.rotated(1).flipped_h();
+        assert_eq!(t, ViewTransform { turns: 3, mirror: true });
+    }
+
+    #[test]
+    fn view_transform_sizes_and_corners() {
+        assert_eq!(ViewTransform::default().size(30.0, 10.0), vec2(30.0, 10.0));
+        assert_eq!(ViewTransform::default().rotated(1).size(30.0, 10.0), vec2(10.0, 30.0));
+        assert_eq!(ViewTransform::default().rotated(2).size(30.0, 10.0), vec2(30.0, 10.0));
+        assert_eq!(ViewTransform::default().flipped_h().rotated(3).size(30.0, 10.0), vec2(10.0, 30.0));
+        // Identity reads the texture as is; a clockwise turn shows its bottom-left at the top-left.
+        assert_eq!(ViewTransform::default().uv_corners(), [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]);
+        assert_eq!(ViewTransform::default().rotated(1).uv_corners()[0], (0.0, 1.0));
+        assert_eq!(ViewTransform::default().flipped_h().uv_corners()[0], (1.0, 0.0));
+        // A vertical flip shows the bottom row at the top.
+        assert_eq!(ViewTransform::default().flipped_v().uv_corners(), [(0.0, 1.0), (1.0, 1.0), (1.0, 0.0), (0.0, 0.0)]);
     }
 
     #[test]

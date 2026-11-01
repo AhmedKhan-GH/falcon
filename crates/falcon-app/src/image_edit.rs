@@ -143,19 +143,19 @@ impl App {
         let rotatable = editable(targets, ext_of, transform::can_rotate);
         if !rotatable.is_empty() {
             if ui.button("Rotate Left").clicked() {
-                self.ws.actions.push(Action::Edit(Op::Rotate(rotatable.clone(), -1)));
+                self.rotate_request(rotatable.clone(), -1);
             }
             if ui.button("Rotate Right").clicked() {
-                self.ws.actions.push(Action::Edit(Op::Rotate(rotatable, 1)));
+                self.rotate_request(rotatable, 1);
             }
         }
         let flippable = editable(targets, ext_of, transform::can_flip);
         if !flippable.is_empty() {
             if ui.button("Flip Horizontal").clicked() {
-                self.ws.actions.push(Action::Edit(Op::Flip(flippable.clone(), Flip::Horizontal)));
+                self.flip_request(flippable.clone(), Flip::Horizontal);
             }
             if ui.button("Flip Vertical").clicked() {
-                self.ws.actions.push(Action::Edit(Op::Flip(flippable, Flip::Vertical)));
+                self.flip_request(flippable, Flip::Vertical);
             }
         }
         if single && transform::can_crop(&item.ext) && ui.button("Crop…").clicked() {
@@ -319,6 +319,7 @@ impl App {
             self.ws.tools.draw_start = None;
             self.ws.tools.region_drag = None;
             self.ws.tools.item.clear();
+            self.image.tf = Default::default();
             return;
         }
         if ctx.memory(|m| m.focused().is_some()) {
@@ -359,10 +360,10 @@ impl App {
             self.ws.tools.draft = None;
         }
         if rotate && let Some(id) = self.ws.viewer.clone() {
-            self.ws.actions.push(Action::Edit(Op::Rotate(vec![id], -1)));
+            self.rotate_request(vec![id], -1);
         }
         if flip && let Some(id) = self.ws.viewer.clone() {
-            self.ws.actions.push(Action::Edit(Op::Flip(vec![id], Flip::Horizontal)));
+            self.flip_request(vec![id], Flip::Horizontal);
         }
         if self.ws.tools.comment_mode && ctx.input_mut(|i| i.consume_key(none, Key::Escape)) {
             self.ws.tools.comment_mode = false;
@@ -381,9 +382,18 @@ impl App {
             self.ws.tools.draw_start = None;
             self.ws.tools.region_drag = None;
         }
+        let turned = !self.image.tf.is_identity();
         if self.ws.tools.crop_next.as_deref() == Some(item.id.as_str()) {
             self.ws.tools.crop_next = None;
             self.start_crop(item);
+        }
+        // The overlays work in file pixels, so they wait for a preview-only
+        // rotation to be undone (the crop tool drops it) and draw next frame.
+        if turned {
+            if self.ws.tools.crop.is_some() {
+                ui.ctx().request_repaint();
+            }
+            return;
         }
         if !self.crop_overlay(ui, item, shown, area) {
             self.comment_overlay(ui, item, shown, area);

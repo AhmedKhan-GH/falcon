@@ -107,6 +107,9 @@ pub struct Prefs {
     /// Eagle's `habits.rememberLastZoom`: reopen an image at the zoom and
     /// position it was left at (for the session).
     pub remember_zoom: bool,
+    /// Eagle's `imageRotateMode`: whether rotating and flipping the image
+    /// shown in the viewer only changes the preview or rewrites the file.
+    pub rotate_mode: RotateMode,
     /// Eagle's `habits.transparency` "show": a checkerboard behind
     /// transparent images.
     pub transparency_grid: bool,
@@ -143,6 +146,17 @@ pub enum DoubleClick {
     Viewer,
     /// Opens it in its default app.
     External,
+}
+
+/// What the viewer's rotate and flip do (Eagle's `imageRotateMode`).
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum RotateMode {
+    /// Only the viewer's drawing changes; the file is left alone.
+    Preview,
+    /// The file is rewritten (Eagle's default).
+    #[default]
+    Write,
 }
 
 /// What Space does in the grid.
@@ -236,6 +250,7 @@ impl Default for Prefs {
             open_actual_size: false,
             pixelated: false,
             remember_zoom: true,
+            rotate_mode: RotateMode::default(),
             transparency_grid: false,
             auto_import: false,
             auto_import_path: None,
@@ -898,11 +913,16 @@ fn controls(p: &mut Page, d: &mut Draft) {
 /// Preview: how the viewer shows each kind of file. Eagle's order is
 /// image, video, GIF, then fonts.
 fn preview(p: &mut Page, d: &mut Draft) {
-    p.block("Image", &["image", "zoom", "actual size", "fit", "pixel", "pixelated", "smooth", "remember", "last", "transparency", "checkerboard", "grid"], |ui| {
+    p.block("Image", &["image", "zoom", "actual size", "fit", "pixel", "pixelated", "smooth", "remember", "last", "transparency", "checkerboard", "grid", "rotate", "flip", "mirror"], |ui| {
         ui.checkbox(&mut d.prefs.open_actual_size, "Open images at actual size instead of fitting them to the window");
         ui.checkbox(&mut d.prefs.pixelated, "Show sharp pixels when an image is enlarged");
         ui.checkbox(&mut d.prefs.remember_zoom, "Reopen an image at the zoom and position it was left at");
         ui.checkbox(&mut d.prefs.transparency_grid, "Show a checkerboard behind transparent areas");
+        ui.add_space(4.0);
+        ui.label("Rotating and flipping the image in the viewer");
+        ui.radio_value(&mut d.prefs.rotate_mode, RotateMode::Write, "Writes to the file");
+        ui.radio_value(&mut d.prefs.rotate_mode, RotateMode::Preview, "Changes the preview only");
+        note(ui, "The card menu in the grid always writes to the file.");
     });
     let keywords = ["video", "movie", "wheel", "scroll", "progress", "volume", "stretch", "fill", "autoplay", "play", "position", "resume", "loop", "short"];
     p.block("Video", &keywords, |ui| {
@@ -1176,6 +1196,14 @@ mod tests {
     use super::*;
 
     #[test]
+    fn rotate_mode_loads_old_prefs() {
+        let p: Prefs = serde_json::from_str(r#"{"remember_zoom":false}"#).unwrap();
+        assert_eq!(p.rotate_mode, RotateMode::Write);
+        let p: Prefs = serde_json::from_str(r#"{"rotate_mode":"preview"}"#).unwrap();
+        assert_eq!(p.rotate_mode, RotateMode::Preview);
+    }
+
+    #[test]
     fn defaults() {
         let p = Prefs::default();
         assert!(p.hover_zoom, "Eagle's hoverZoom defaults to on");
@@ -1184,6 +1212,7 @@ mod tests {
         assert!(!p.open_actual_size, "Eagle's defaultRatio defaults to auto");
         assert!(!p.pixelated, "Eagle's renderBehavior defaults to non-pixelated");
         assert!(p.remember_zoom, "Eagle's rememberLastZoom defaults to on");
+        assert_eq!(p.rotate_mode, RotateMode::Write, "Eagle's imageRotateMode defaults to write");
         assert!(!p.transparency_grid, "Eagle's transparency defaults to hide");
         assert!(!p.keywords_as_tags, "Eagle's IPTC defaults to off");
         assert!(p.notify_duplicates, "Eagle's repeatImage notification defaults to on");
