@@ -493,23 +493,8 @@ impl crate::Library {
     /// is set. Refuses files over 10 MB, pictures falcon can't decode, and
     /// items whose format is its own thumbnail.
     pub fn set_custom_thumbnail(&mut self, id: &str, image: &Path) -> crate::Result<()> {
-        let mut item = self.item(id).cloned().ok_or_else(|| self.invalid(format!("no item {id}")))?;
-        if !custom_thumbnail_allowed(&item.ext) {
-            return Err(self.invalid(format!("a .{} file is its own thumbnail", item.ext)));
-        }
-        let size = fs::metadata(image).map_err(|e| crate::Error::io(image, e))?.len();
-        if size > CUSTOM_THUMBNAIL_MAX_BYTES {
-            return Err(self.invalid("a custom thumbnail can be at most 10 MB"));
-        }
-        let img = decode(image).map_err(|e| self.invalid(format!("cannot read {}: {e}", image.display())))?;
-        let dest = self.info_dir(&item).join(format!("{}_thumbnail.png", item.name));
-        fs::copy(image, &dest).map_err(|e| crate::Error::io(&dest, e))?;
-        item.width = img.width().into();
-        item.height = img.height().into();
-        item.palettes = crate::palette::extract(&img);
-        item.no_thumbnail = None;
-        item.extra.shift_remove("noPreview");
-        item.extra.insert(CUSTOM_THUMBNAIL_KEY.into(), true.into());
+        let item = self.item(id).cloned().ok_or_else(|| self.invalid(format!("no item {id}")))?;
+        let item = custom_thumbnailed(self.root(), item, image)?;
         self.update_item(item)
     }
 
@@ -538,15 +523,52 @@ impl crate::Library {
 
     /// Re-reads the original's file times and redraws thumbnail and palette,
     /// then saves the item.
-    pub(crate) fn redraw_item(&mut self, mut item: crate::model::Item) -> crate::Result<()> {
-        let raw = item.original_path(self.root());
-        crate::import::restat(&mut item, &raw)?;
-        let thumb = self.info_dir(&item).join(format!("{}_thumbnail.png", item.name));
-        if !crate::import::redraw(&mut item, &raw, &thumb) {
-            return Err(self.invalid(format!("cannot draw a thumbnail for {}.{}", item.name, item.ext)));
-        }
+    pub(crate) fn redraw_item(&mut self, item: crate::model::Item) -> crate::Result<()> {
+        let item = redrawn(self.root(), item)?;
         self.update_item(item)
     }
+}
+
+fn refused(root: &Path, reason: impl Into<String>) -> crate::Error {
+    crate::Error::Import { path: root.to_path_buf(), reason: reason.into() }
+}
+
+/// The file work of [`crate::Library::set_custom_thumbnail`], without the
+/// library: checks `image`, copies it over the thumbnail of `item` (in the
+/// library at `root`) and returns the item as it should be saved. Lets a
+/// caller that shares the library read and write files without holding
+/// its lock.
+pub fn custom_thumbnailed(root: &Path, mut item: crate::model::Item, image: &Path) -> crate::Result<crate::model::Item> {
+    if !custom_thumbnail_allowed(&item.ext) {
+        return Err(refused(root, format!("a .{} file is its own thumbnail", item.ext)));
+    }
+    let size = fs::metadata(image).map_err(|e| crate::Error::io(image, e))?.len();
+    if size > CUSTOM_THUMBNAIL_MAX_BYTES {
+        return Err(refused(root, "a custom thumbnail can be at most 10 MB"));
+    }
+    let img = decode(image).map_err(|e| refused(root, format!("cannot read {}: {e}", image.display())))?;
+    let dest = item.info_dir(root).join(format!("{}_thumbnail.png", item.name));
+    fs::copy(image, &dest).map_err(|e| crate::Error::io(&dest, e))?;
+    item.width = img.width().into();
+    item.height = img.height().into();
+    item.palettes = crate::palette::extract(&img);
+    item.no_thumbnail = None;
+    item.extra.shift_remove("noPreview");
+    item.extra.insert(CUSTOM_THUMBNAIL_KEY.into(), true.into());
+    Ok(item)
+}
+
+/// The file work of Refresh Thumbnail, without the library: re-reads the
+/// original's file times, redraws thumbnail and palette, and returns the
+/// item as it should be saved.
+pub fn redrawn(root: &Path, mut item: crate::model::Item) -> crate::Result<crate::model::Item> {
+    let raw = item.original_path(root);
+    crate::import::restat(&mut item, &raw)?;
+    let thumb = item.info_dir(root).join(format!("{}_thumbnail.png", item.name));
+    if !crate::import::redraw(&mut item, &raw, &thumb) {
+        return Err(refused(root, format!("cannot draw a thumbnail for {}.{}", item.name, item.ext)));
+    }
+    Ok(item)
 }
 
 #[cfg(test)]
