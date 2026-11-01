@@ -5390,6 +5390,14 @@ impl eframe::App for App {
 
     fn ui(&mut self, ui: &mut Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        // The red button or ⌘W on the window: like Eagle, falcon stays
+        // in the Dock and comes back when its icon is clicked.
+        if ctx.input(|i| i.viewport().close_requested()) && crate::dock::keep_running_hidden() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            for ws in std::iter::once(&mut self.ws).chain(self.others.parked_mut()) {
+                let _ = ws.flush_and_backup();
+            }
+        }
         if self.lock.is_locked() {
             // Nothing but the lock screen acts while locked.
             let _ = crate::menu::take_clicks();

@@ -4,6 +4,7 @@ mod applock;
 mod backups;
 mod collect;
 mod colors;
+mod dock;
 mod drop_pos;
 mod debug_report;
 mod errlog;

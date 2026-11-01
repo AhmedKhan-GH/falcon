@@ -371,7 +371,7 @@ These are the defaults. All but the arrows, Esc, Tab, Z and the viewer's C, ⇧R
 | R | On the Random page, shuffle again (no history step) |
 | ⇧⌘C and ⇧⌘V | Copy the selection's tags (the tags all of them share) and paste them onto the selection (see [Copying tags](#copying-tags)). Clear Tags has no key by default, as in Eagle |
 | ⌘T and T | Open the [tag picker](#tag-picker) for the selection (or the viewer's item) at the pointer: Eagle's Organize ▸ Add Tags (`organize.tag.add`) and its bare T. T only acts when no text field has focus |
-| ⌘W | Close the viewer if it is open, otherwise the window (which quits falcon, as the red button does) |
+| ⌘W | Close the viewer if it is open, otherwise the window. As with the red button, falcon keeps running in the Dock, as Eagle does on macOS: it hides (finishing any pending saves first), and clicking its Dock icon or opening it again brings the window back. ⌘Q quits (`crates/falcon-app/src/dock.rs`) |
 | ⌘M and ⌃⌘F | Minimise the window, and enter or leave full screen |
 | ⇧↩ | Open the selected items (or the viewer's item) in their default apps (Eagle's `view.file.opendefault`) |
 | ⌘↩ | Show the selected items (or the viewer's item) in Finder (Eagle's `view.file.openfinder`) |
