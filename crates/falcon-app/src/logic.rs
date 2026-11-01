@@ -140,6 +140,19 @@ pub fn shared_text<'a>(mut values: impl Iterator<Item = &'a str>) -> &'a str {
     if values.all(|v| v == first) { first } else { "" }
 }
 
+/// The folders every one of `items` is in, in the first item's order and
+/// each once (Eagle's multi-selection inspector shows a chip for these).
+pub fn shared_folders(items: &[&Item]) -> Vec<String> {
+    let Some(first) = items.first() else { return Vec::new() };
+    let mut out: Vec<String> = Vec::new();
+    for f in &first.folders {
+        if !out.contains(f) && items.iter().all(|i| i.folders.contains(f)) {
+            out.push(f.clone());
+        }
+    }
+    out
+}
+
 pub fn tag_counts(items: &[Item]) -> Vec<(String, usize)> {
     let mut map: HashMap<&str, usize> = HashMap::new();
     for i in items.iter().filter(|i| !i.is_deleted) {
@@ -785,6 +798,20 @@ mod tests {
 
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn shared_folders_follow_the_first_item() {
+        let it = |id: &str, f: &[&str]| item(id, id, f, &[], false, 0, 1, 1);
+        let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        let a = it("a", &["x", "y", "z", "y"]);
+        let b = it("b", &["z", "x"]);
+        let c = it("c", &["q"]);
+        assert!(shared_folders(&[]).is_empty());
+        assert_eq!(shared_folders(&[&a]), s(&["x", "y", "z"]));
+        assert_eq!(shared_folders(&[&a, &b]), s(&["x", "z"]));
+        assert_eq!(shared_folders(&[&b, &a]), s(&["z", "x"]));
+        assert!(shared_folders(&[&a, &b, &c]).is_empty());
+    }
 
     #[test]
     fn selection_after_removal() {

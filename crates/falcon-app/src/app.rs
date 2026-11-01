@@ -4420,17 +4420,39 @@ impl App {
         }
 
         if self.fold_heading(ui, Fold::Folders, "Folders") {
-            let add = ui.add(egui::Button::new(RichText::new(format!("{}  Add All to Folder", ic::PLUS)).size(12.0).color(t::p().text_muted)).frame(false));
-            egui::Popup::menu(&add).show(|ui| {
-                ui.set_min_width(200.0);
-                egui::ScrollArea::vertical().max_height(320.0).show(ui, |ui| {
-                    for f in lib.all_folders() {
-                        if ui.button(&f.name).clicked() {
-                            self.ws.actions.push(Action::AddToFolder(ids.clone(), f.id.clone()));
-                        }
+            // A chip for each folder all of them are in; the × takes all of
+            // them out, as for one item.
+            let mut remove_folder = None;
+            let mut open_folder = None;
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing = vec2(6.0, 6.0);
+                for fid in logic::shared_folders(&items) {
+                    let Some(f) = logic::find_folder(&lib.metadata.folders, &fid) else { continue };
+                    let path = logic::folder_path(&lib.metadata.folders, &fid).unwrap_or_else(|| f.name.clone());
+                    match folder_chip(ui, &f.name, &path) {
+                        Some(ChipClick::Remove) => remove_folder = Some(fid),
+                        Some(ChipClick::Open) => open_folder = Some(fid),
+                        None => {}
                     }
+                }
+                let add = ui.add(egui::Button::new(RichText::new(format!("{}  Add All to Folder", ic::PLUS)).size(12.0).color(t::p().text_muted)).frame(false));
+                egui::Popup::menu(&add).show(|ui| {
+                    ui.set_min_width(200.0);
+                    egui::ScrollArea::vertical().max_height(320.0).show(ui, |ui| {
+                        for f in lib.all_folders() {
+                            if ui.button(&f.name).clicked() {
+                                self.ws.actions.push(Action::AddToFolder(ids.clone(), f.id.clone()));
+                            }
+                        }
+                    });
                 });
             });
+            if let Some(fid) = remove_folder {
+                self.ws.actions.push(Action::RemoveFromFolder(ids.clone(), fid));
+            }
+            if let Some(fid) = open_folder {
+                self.go(Scope::Folder(fid));
+            }
         }
 
         divider(ui);
