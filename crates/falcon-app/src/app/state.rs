@@ -360,6 +360,8 @@ pub(crate) struct Workspace {
     pub(crate) gif_player: bool,
     /// Animated grid cards and hover previews playing (see `anim.rs`).
     pub(crate) cards: crate::anim::Cards,
+    /// Pin badge and broken-thumbnail state of the cards (see `ui/grid/hints.rs`).
+    pub(crate) card_hints: crate::ui::grid::CardHints,
     /// Focus the inspector's title field next frame (F2).
     pub(crate) focus_title: bool,
     /// The Change Extension dialog (`ui/dialogs/ext.rs`).
@@ -469,6 +471,7 @@ impl Workspace {
             view: ViewState::default(),
             gif_player: false,
             cards: Default::default(),
+            card_hints: Default::default(),
             focus_title: false,
             ext_dialog: None,
             picker: Default::default(),

@@ -108,6 +108,19 @@ pub(crate) fn badge(ui: &Ui, top_left: Pos2, ext: &str) {
     p.galley(Pos2::new(rect.left() + 3.0, rect.center().y - g.size().y / 2.0), g, Color32::WHITE);
 }
 
+/// Side of the square pin badge.
+pub(crate) const PIN_BADGE: f32 = 18.0;
+
+/// The badge on an item pinned to the top of the open folder: a pin on a
+/// dark translucent square.
+pub(crate) fn pin_badge(ui: &Ui, top_left: Pos2) {
+    let rect = Rect::from_min_size(top_left, Vec2::splat(PIN_BADGE));
+    let p = ui.painter();
+    p.rect_filled(rect, CornerRadius::same(4), Color32::from_black_alpha(128));
+    p.rect_stroke(rect, CornerRadius::same(4), Stroke::new(1.0, Color32::from_white_alpha(38)), StrokeKind::Inside);
+    icon(ui, rect.center(), ic::PUSH_PIN, 12.0, Color32::WHITE);
+}
+
 pub(crate) fn divider(ui: &mut Ui) {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 9.0), Sense::hover());
     ui.painter().hline(rect.x_range(), rect.center().y, Stroke::new(1.0, t::p().divider));

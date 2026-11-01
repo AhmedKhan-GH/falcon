@@ -12,12 +12,14 @@ use crate::icons as ic;
 use crate::loader::{Tier, job_for};
 use crate::logic::{self, Layout, Scope};
 use crate::theme::{self as t, font};
-use crate::ui::widgets::{badge, ext_placeholder, galley, paint_thumb_bg};
+use crate::ui::widgets::{PIN_BADGE, badge, ext_placeholder, galley, paint_thumb_bg, pin_badge};
 
 pub(crate) mod covers;
 pub(crate) mod duplicates;
 pub(crate) mod drag_out;
 pub(crate) mod empty;
+pub(crate) use hints::CardHints;
+mod hints;
 mod hover_media;
 mod tag_sidebar;
 mod tags_page;
@@ -81,6 +83,7 @@ impl App {
             return;
         }
         self.sync_layout();
+        self.update_card_hints(lib);
         let items: Vec<&Item> = order.iter().map(|&i| &lib.items()[i]).collect();
         let new_order: Vec<String> = items.iter().map(|i| i.id.clone()).collect();
         let order_changed = self.ws.hover.shown().is_some() && self.ws.order != new_order;
@@ -400,8 +403,13 @@ impl App {
                 p.rect_stroke(tile, CornerRadius::same(4), Stroke::new(1.0, t::p().card_hover), StrokeKind::Inside);
             }
         }
+        let mut badge_x = 5.0;
+        if self.shows_pin(item) {
+            pin_badge(ui, tile.min + vec2(badge_x, 5.0));
+            badge_x += PIN_BADGE + 2.0;
+        }
         if d.ext_badge {
-            badge(ui, tile.min + vec2(5.0, 5.0), &item.ext);
+            badge(ui, tile.min + vec2(badge_x, 5.0), &item.ext);
         }
         if d.comment_badge {
             crate::ui::viewer::comments::count_badge(ui, tile, item);
@@ -464,8 +472,14 @@ impl App {
             crate::ui::viewer::comments::count_disc(ui, Pos2::new(row.right() - 18.0, cy), item);
         }
         let (x0, span) = list_span(row);
+        let pinned = self.shows_pin(item);
         for (col, at, w) in self.display.columns.spans() {
-            let (x, cw) = (x0 + span * at, span * w - 8.0);
+            let (mut x, mut cw) = (x0 + span * at, span * w - 8.0);
+            if pinned && col == logic::ListColumn::Name {
+                pin_badge(ui, Pos2::new(x, cy - PIN_BADGE / 2.0));
+                x += PIN_BADGE + 4.0;
+                cw -= PIN_BADGE + 4.0;
+            }
             let (size, color) = if col == logic::ListColumn::Name { (13.0, t::p().text) } else { (12.0, t::p().text_muted) };
             match logic::list_cell(item, col, self.display.show_ext) {
                 logic::Info::Text(text) => {

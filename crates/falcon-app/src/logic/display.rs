@@ -370,6 +370,14 @@ pub fn wants_card_original(quality: bool, ext: &str, shown_px: f32, grid_side: f
     quality && quality_card_format(ext) && shown_px > grid_side
 }
 
+/// Whether `item` is pinned to the top of the folder being viewed, which
+/// is when Eagle draws the pin badge: only for the one open folder (none
+/// when several are picked together) and not while that folder's own sort
+/// is Random, which ignores pins.
+pub fn pinned_here(item: &Item, scope_folder: Option<&str>, random_sort: bool) -> bool {
+    !random_sort && scope_folder.is_some_and(|f| falcon_library::item_ops::pinned_at(item, f).is_some())
+}
+
 #[cfg(test)]
 mod display_tests {
     use super::*;
@@ -528,5 +536,18 @@ mod display_tests {
         assert!(!it.extra.contains_key("background"), "none removes the key, as Eagle does");
         it.extra.insert("background".into(), "plaid".into());
         assert_eq!(ThumbBg::of(&it), None);
+    }
+
+    #[test]
+    fn pin_badge_only_in_the_pinned_folder() {
+        let item = |pinned: serde_json::Value| -> Item {
+            serde_json::from_value(serde_json::json!({"id": "A", "name": "a", "size": 1, "btime": 1, "mtime": 1, "ext": "png", "tags": [], "folders": ["F"], "isDeleted": false, "url": "", "annotation": "", "modificationTime": 1, "height": 1, "width": 1, "lastModified": 1, "palettes": [], "pinned": pinned})).unwrap()
+        };
+        let it = item(serde_json::json!({"F": 1700000000000.0, "G": 0}));
+        assert!(pinned_here(&it, Some("F"), false));
+        assert!(!pinned_here(&it, Some("F"), true), "random sort hides it");
+        assert!(!pinned_here(&it, Some("G"), false), "a zero stamp is not a pin");
+        assert!(!pinned_here(&it, Some("H"), false));
+        assert!(!pinned_here(&it, None, false), "other views and combined folders show none");
     }
 }
