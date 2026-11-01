@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 257 | 6 | 9 | 8 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 258 | 6 | 8 | 8 |
 | Viewers and file formats | 187 | 13 | 3 | 5 |
 | Search, filters and organising | 216 | 1 | 2 | 3 |
-| Import, export, library, preferences and integrations | 190 | 3 | 15 | 26 |
-| **Total** | 850 | 23 | 29 | 42 |
+| Import, export, library, preferences and integrations | 190 | 4 | 14 | 26 |
+| **Total** | 851 | 24 | 27 | 42 |
 
 Rows marked **Not wanted (user decision)** (3) are Eagle features the user chose not to have in falcon; they are counted outside the local Missing total.
 ## Fix first
@@ -403,7 +403,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Import errors toast ("N files failed, click for details") opens an error list with retry and reveal | Done | Toast opens the panel: per-file Retry and Reveal (Eagle has only Retry All and click-to-reveal), Retry All, Copy, Clear All; a failed paste can't be retried (temp file gone) | local |
 | Dock icon progress bar during long tasks | Done | `dock_progress.rs` from the progress modal and the background import (finished/total, hidden from 97% as Eagle) | local |
 | Progress modals for export, eaglepack, thumbnail refresh, empty trash, WebP conversion and similar | Done | Shared modal with Cancel for pack import/export, thumbnail refresh, Empty Trash, Export to Computer and Export in Format (`export::run` takes a cancel flag); WebP conversion has its own confirm and runs per item | local |
-| Sound effects (delete item, delete folder, capture) | Missing | Not built: falcon ships no sound assets; the capture uses the system shutter sound | local |
+| Sound effects (delete item, delete folder, capture) | Done | falcon's own synthesised sounds (`sounds.rs`, no assets) through the viewer's output stream with Eagle's 500 ms debounce. Item and folder deletes play from the action reducer, so every entry point is covered (Trash, Remove from Folder, folders, smart folders, tags, tag-group removal, permanent delete, Empty Trash; Restore is silent). Screenshots follow Eagle's rule in every mode (full screen always, area and window only with their notice, none with the collect window; `screencapture -x` so the system shutter no longer plays on top). Duplicates, a failed import batch and the auto-import notice play under the master switch | local |
 | System notifications (import done, capture done) | Done | `notify.rs` posts UserNotifications for import, export and capture done; they need the bundled app (`dev.falcon.app`), which is how falcon is run; clicking one activates falcon | local |
 | Warnings: slow disk, NTFS on macOS, library path permissions, localhost / API port | Done | Read-only file, no write permission, slow disk, NTFS, plus a lasting alert when no API port is free or `localhost:<port>` can't be reached | local |
 | Tooltips on toolbar buttons | Done | app.rs:1492-1507 | local |
@@ -451,7 +451,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 20. Right-click on the empty grid (layout panel), right-click on the title (ancestor jump), ⌥↑ to the parent folder, R to reshuffle Random and a refresh button.
 21. Video, GIF and audio hover-play in the grid.
 22. Window: closing now hides falcon (whole app) and the Dock icon brings it back; Full Screen and the app lock exist.
-23. Smaller items: Color Space menu, vibrancy, sound effects, palette-analysis status indicator, shortcut-list search is done, Error Logs / Debug Report are done.
+23. Smaller items: Color Space menu, vibrancy, ~~sound effects~~ (done), palette-analysis status indicator, shortcut-list search is done, Error Logs / Debug Report are done.
 
 ## Viewers and file formats
 
@@ -1413,7 +1413,7 @@ Eagle panes (`app/js/preferences.js:659-788`): General, Sidebar, Controls, Previ
 | **Shortcuts:** rebind any command, search the list, Restore Defaults | Done | 147 rebindable rows with Eagle's ids, search field, Restore Defaults, recorder | local |
 | Shortcuts: plugin shortcuts | Missing | Not applicable: no plugin system | local |
 | Global shortcuts (show Eagle, quick search from anywhere) | Done | `hotkeys.rs`, Global group in the shortcut table | local |
-| **Notification:** sound effects master switch, plus per event (delete item, delete folder, screenshot, extension) | Missing | Not built: no sound assets | local |
+| **Notification:** sound effects master switch, plus per event (delete item, delete folder, screenshot, extension) | Partial | Preferences ▸ Notification: Play sound effects master switch plus delete item, delete folder and screenshot switches, Eagle's defaults (all on), persisted as `Prefs::sounds`, reported in `application/info` as `notification.soundEffect`. Gap: the extension switch is kept and reported but not shown, since falcon has no browser extension | local |
 | Notification: pop-up master switch, plus per event (screenshot, extension, duplicates, auto-import) | Done | Master switch plus duplicates, import done, auto-import, screenshot and export switches; the extension event has no local counterpart | local |
 | Notification Center panel (history) | Missing | Not applicable: Eagle 4 has no notification history either | local |
 | **Password:** enable the app password lock, change the password, Lock Now, Touch ID | Done | Set, change, remove, hint, Lock Now ⌥⌘L, Unlock with Touch ID (shown when available, fingerprint checked when turned on, as Eagle) | local |
@@ -1520,8 +1520,8 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 Rows marked "not counted" are features Eagle 4.0.0 does not have.
 
 - **Done:** 190, including 5 where falcon goes beyond Eagle and 1 with a small difference.
-- **Partial:** 3.
-- **Missing:** 41, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
+- **Partial:** 4.
+- **Missing:** 40, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
 - **Different on purpose:** 1 (the API listens on localhost only).
 
 ### Ranked Missing and Partial local items
@@ -1551,7 +1551,7 @@ Ranked by how often a user would hit the gap, and the risk if they do.
 21. **Hard-coded behaviours need preference switches**: font style tag, video autoplay, loop short clips, hover video preview, saved playback position, sidebar counts.
 22. **Missing Controls and Preview settings**: middle button, and the image settings not yet wired (see §6).
 23. **Sidebar pane is missing**: show or hide sections, and double-click to rename or collapse.
-24. **Notifications and sounds are missing**: system pop-ups and sound effects per event, and the Notification Center.
+24. **Notifications**: system pop-ups and sound effects per event are done; the Notification Center is still open.
 25. **General settings are missing**: language, UI zoom, vibrancy, launch at login, Dock icon, menu bar icon, GPU, auto-select after import.
 26. **Localisation**: English only, against Eagle's eight languages.
 27. **Library safety checks are missing**: newer-version refusal, warnings for Desktop or Documents paths, read-only paths and slow disks, disk-space checks, and confirmation for large folders or deep trees.
