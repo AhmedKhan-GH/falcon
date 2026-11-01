@@ -4,11 +4,13 @@ pub(crate) mod layout_panel;
 
 use eframe::egui::{self, Align2, Color32, CornerRadius, Pos2, Rect, RichText, Sense, Stroke, StrokeKind, TextEdit, Ui, Vec2, vec2};
 use falcon_library::Library;
+use falcon_library::model::FolderOrder;
 
 use crate::app::{App, Progress, TILE_MAX, TILE_MIN};
 use crate::icons as ic;
 use crate::locale::{tr, trf};
 use crate::logic::{self, Scope};
+use crate::shortcuts::Command;
 use crate::theme::{self as t, font};
 use crate::ui::widgets::{galley, icon, icon_button, window_drag};
 use crate::ui::grid::GRID_PAD_X;
@@ -47,8 +49,19 @@ impl App {
         let search = Rect::from_min_size(Pos2::new(bar.right() - 18.0 - 178.0, cy - 15.0), vec2(178.0, 30.0));
         self.search_field(ui, search);
         let mut ix = search.left() - 20.0;
+        let own = self.own_sort(lib);
         let filter = icon_button(ui, Pos2::new(ix, cy), ic::FUNNEL, 18.0, true, tr("Filter"));
         ix -= 26.0;
+        // Random, and a folder sorted at random, offer a new shuffle.
+        let refresh = matches!(self.ws.scope, Scope::Random(_)) || matches!(own, Some((_, Some((FolderOrder::Random, _)))));
+        if refresh {
+            let tip = self.shortcuts.tooltip(ui.ctx(), "Refresh", Command::Reshuffle);
+            if icon_button(ui, Pos2::new(ix, cy), ic::ARROW_CLOCKWISE, 18.0, true, &tip).clicked() {
+                let ctx = ui.ctx().clone();
+                self.run_command(&ctx, Command::Reshuffle);
+            }
+            ix -= 26.0;
+        }
         let layout = icon_button(ui, Pos2::new(ix, cy), ic::LAYOUT, 18.0, true, tr("Layout and sort"));
         ix -= 26.0;
         icon_button(ui, Pos2::new(ix, cy), ic::LIGHTNING, 18.0, false, tr("Actions"));
@@ -56,7 +69,6 @@ impl App {
         icon_button(ui, Pos2::new(ix, cy), ic::PUZZLE_PIECE, 18.0, false, tr("Plugins"));
         let icons_left = ix - 20.0;
 
-        let own = self.own_sort(lib);
         egui::Popup::menu(&layout).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| self.layout_panel(ui, own));
         if filter.clicked() {
             self.ws.show_filter = !self.ws.show_filter;

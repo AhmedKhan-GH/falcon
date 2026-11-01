@@ -427,7 +427,7 @@ These are the defaults. All but the arrows, Esc, Tab, Z and the viewer's C, 0, 1
 | ⌘↑ and ⌘↓ | Select the first or last item and scroll to it (with video in the viewer they are still the volume keys) |
 | 0 to 5 | Set the rating of the selection (0 removes it), with a toast such as "Rated 3 stars". In every viewer the digits rate the open item, as in Eagle (the image viewer's zoom keys are ⌘0 and ⌘9); in the text viewer only while neither the text nor the title has focus, as in Eagle's text editor |
 | ⌥⌘R | Refresh the thumbnails of the selection (or the viewer's item) |
-| R | On the Random page, shuffle again (no history step) |
+| R | On the Random page, or in a folder or smart folder sorted at random, shuffle again (no history step); the toolbar shows a Refresh button for it there, left of the filter button, as Eagle's does |
 | ⇧⌘C and ⇧⌘V | Copy the selection's tags (the tags all of them share) and paste them onto the selection (see [Copying tags](#copying-tags)). Clear Tags has no key by default, as in Eagle |
 | ⌘T and T | Open the [tag picker](#tag-picker) for the selection (or the viewer's item) at the pointer: Eagle's Organize ▸ Add Tags (`organize.tag.add`) and its bare T. T only acts when no text field has focus |
 | ⌘W | Close the viewer if it is open, otherwise the window. As with the red button, falcon keeps running in the Dock, as Eagle does on macOS: it hides (finishing any pending saves first), and clicking its Dock icon or opening it again brings the window back. ⌘Q quits (`crates/falcon-app/src/dock.rs`) |
