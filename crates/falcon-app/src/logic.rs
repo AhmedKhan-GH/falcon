@@ -1545,9 +1545,70 @@ pub fn grayscale_rgba(rgba: &mut [u8]) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Viewer modes: the navigator
+
+/// Side of the navigator's square box and its inset from the view's
+/// bottom-right corner, in points (Eagle's `.smooth_zoom_navigator`).
+pub const NAVIGATOR_SIDE: f32 = 120.0;
+pub const NAVIGATOR_INSET: f32 = 16.0;
+/// The visible-area frame never gets smaller than this, in points.
+pub const NAVIGATOR_MIN_FRAME: f32 = 8.0;
+
+/// Whether the navigator shows for a picture drawn `shown` big in a view
+/// `view` big: once it overflows the view, by Eagle's test (97% of its
+/// width wider than the view, or taller than it).
+pub fn navigator_shown(shown: (f32, f32), view: (f32, f32)) -> bool {
+    shown.0 * 0.97 > view.0 || shown.1 > view.1
+}
+
+/// Where the picture sits in the navigator's box: fitted inside a square
+/// of `side`, centred. Returns `[x, y, w, h]` from the box's top-left.
+pub fn navigator_picture(natural: (f32, f32), side: f32) -> [f32; 4] {
+    let (w, h) = (natural.0.max(1.0), natural.1.max(1.0));
+    let (pw, ph) = if w >= h { (side, side * h / w) } else { (side * w / h, side) };
+    [(side - pw) / 2.0, (side - ph) / 2.0, pw, ph]
+}
+
+/// The part of the picture on screen, as fractions of it
+/// (`[x0, y0, x1, y1]`, within 0..1), for a picture drawn at `picture` and
+/// a view at `view` (both `[x0, y0, x1, y1]` on screen).
+pub fn visible_part(picture: [f32; 4], view: [f32; 4]) -> [f32; 4] {
+    let (w, h) = ((picture[2] - picture[0]).max(1e-6), (picture[3] - picture[1]).max(1e-6));
+    let fx = |x: f32| ((x - picture[0]) / w).clamp(0.0, 1.0);
+    let fy = |y: f32| ((y - picture[1]) / h).clamp(0.0, 1.0);
+    [fx(view[0]), fy(view[1]), fx(view[2]), fy(view[3])]
+}
+
+/// The viewer's pan (the picture's centre from the view's centre) that
+/// puts the point at fractions `(fx, fy)` of a picture drawn `shown` big in
+/// the middle of the view, as a click on Eagle's navigator does.
+pub fn pan_to_show(fx: f32, fy: f32, shown: (f32, f32)) -> (f32, f32) {
+    (shown.0 * (0.5 - fx.clamp(0.0, 1.0)), shown.1 * (0.5 - fy.clamp(0.0, 1.0)))
+}
+
 #[cfg(test)]
 mod viewer_mode_tests {
     use super::*;
+
+    #[test]
+    fn navigator_maths() {
+        // Shows once the picture overflows the view.
+        assert!(!navigator_shown((800.0, 600.0), (1000.0, 700.0)));
+        assert!(navigator_shown((1040.0, 600.0), (1000.0, 700.0)));
+        assert!(!navigator_shown((1020.0, 600.0), (1000.0, 700.0)), "within Eagle's 3%");
+        assert!(navigator_shown((800.0, 701.0), (1000.0, 700.0)));
+        // A wide picture fills the box's width and sits in the middle.
+        assert_eq!(navigator_picture((400.0, 200.0), 120.0), [0.0, 30.0, 120.0, 60.0]);
+        assert_eq!(navigator_picture((100.0, 200.0), 120.0), [30.0, 0.0, 60.0, 120.0]);
+        // The right half of a picture twice the view's width, top to bottom.
+        assert_eq!(visible_part([-1000.0, 0.0, 1000.0, 500.0], [0.0, 0.0, 1000.0, 500.0]), [0.5, 0.0, 1.0, 1.0]);
+        assert_eq!(visible_part([0.0, 0.0, 100.0, 100.0], [-50.0, 25.0, 50.0, 200.0]), [0.0, 0.25, 0.5, 1.0]);
+        // Centring the middle needs no pan; the left edge pans right.
+        assert_eq!(pan_to_show(0.5, 0.5, (2000.0, 1000.0)), (0.0, 0.0));
+        assert_eq!(pan_to_show(0.0, 1.0, (2000.0, 1000.0)), (1000.0, -500.0));
+        assert_eq!(pan_to_show(-3.0, 0.25, (2000.0, 1000.0)), (1000.0, 250.0));
+    }
 
     #[test]
     fn grayscale_uses_css_luminance() {

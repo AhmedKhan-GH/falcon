@@ -106,6 +106,8 @@ struct Saved {
     auto_imported: crate::auto_import::Imported,
     /// The font viewer's tab and theme.
     font_look: Option<font_view::FontLook>,
+    /// The image viewer's navigator is hidden (Eagle's `isHideNavigator`).
+    hide_navigator: Option<bool>,
 }
 
 /// A rubber-band selection in progress: where it started, in the grid's
@@ -741,6 +743,7 @@ impl App {
         app.text_zoom = saved.text_zoom.unwrap_or(0).min(crate::textdoc::ZOOM_LEVELS - 1);
         app.auto_imported = Arc::new(Mutex::new(saved.auto_imported));
         app.font_look = saved.font_look.unwrap_or_default();
+        app.modes.hide_navigator = saved.hide_navigator.unwrap_or(false);
         // Reopen the libraries that were open, then the one given on the
         // command line (focused if it was already open).
         let (libraries, active) = crate::workspaces::restore(&saved.libraries, saved.active, saved.library.as_deref(), |p| p.is_dir());
@@ -1501,6 +1504,7 @@ impl App {
             presenting: self.modes.presenting,
             on_top: self.modes.on_top,
             grayscale: self.modes.grayscale,
+            navigator: !self.modes.hide_navigator,
         }
     }
 
@@ -1776,6 +1780,7 @@ impl App {
             C::Presentation => self.toggle_presentation(ctx),
             C::AlwaysOnTop => self.toggle_on_top(ctx),
             C::Grayscale => self.modes.grayscale = !self.modes.grayscale,
+            C::Navigator => self.modes.hide_navigator = !self.modes.hide_navigator,
             C::Player(_) => {}
             C::ToggleName => self.display.show_name = !self.display.show_name,
             C::ToggleInfo => self.display.show_info = !self.display.show_info,
@@ -3555,6 +3560,13 @@ impl App {
             });
         }
         self.item_export_menu(ui, targets);
+        // Eagle's Navigator toggle, in the viewer.
+        if in_viewer {
+            let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::Navigator);
+            if ui.add(egui::Button::new("Navigator").selected(!self.modes.hide_navigator).shortcut_text(keys)).clicked() {
+                self.modes.hide_navigator = !self.modes.hide_navigator;
+            }
+        }
         // Eagle's grayscale preview toggle; the menu stays open, as Eagle's
         // entry does.
         let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::Grayscale);
@@ -4829,6 +4841,7 @@ impl eframe::App for App {
             text_zoom: Some(self.text_zoom),
             auto_imported: self.auto_imported.lock().unwrap_or_else(|p| p.into_inner()).clone(),
             font_look: Some(self.font_look),
+            hide_navigator: Some(self.modes.hide_navigator),
         };
         eframe::set_value(storage, eframe::APP_KEY, &saved);
     }

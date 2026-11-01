@@ -80,6 +80,8 @@ pub struct State {
     pub on_top: bool,
     /// The grayscale preview is on.
     pub grayscale: bool,
+    /// The image viewer's navigator shows when zoomed in.
+    pub navigator: bool,
 }
 
 impl State {
@@ -147,7 +149,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::Documentation => s.docs,
         C::ToggleName | C::ToggleInfo | C::ToggleComments | C::ToggleSubfolders => s.library,
         C::AlwaysOnTop => true,
-        C::Grayscale => s.library,
+        C::Grayscale | C::Navigator => s.library,
         C::Presentation => s.library && (s.viewer || s.selected > 0 || s.presenting),
         C::Player(_) => false,
     }
@@ -171,6 +173,7 @@ pub enum Check {
     Presentation,
     AlwaysOnTop,
     Grayscale,
+    Navigator,
 }
 
 impl Check {
@@ -191,6 +194,7 @@ impl Check {
             Check::Presentation => s.presenting,
             Check::AlwaysOnTop => s.on_top,
             Check::Grayscale => s.grayscale,
+            Check::Navigator => s.navigator,
         }
     }
 }
@@ -359,6 +363,7 @@ pub static MENUS: &[(&str, &[Entry])] = &[
             item("Actual Size", Command::ZoomActual),
             item("Zoom to Fit", Command::ZoomFit),
             checked("Grayscale", Command::Grayscale, Check::Grayscale),
+            checked("Navigator", Command::Navigator, Check::Navigator),
             SEP,
             checked("Viewer", Command::Viewer, Check::Viewer),
             item("Open With Default App", Command::OpenDefault),

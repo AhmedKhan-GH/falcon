@@ -1,5 +1,6 @@
 //! Window and viewer modes from Eagle's View menu: presentation
-//! (slideshow) mode, Always on Top and the grayscale preview (see the desktop app chapter of the
+//! (slideshow) mode, Always on Top, the grayscale preview and the
+//! navigator toggle (see the desktop app chapter of the
 //! docs).
 
 use eframe::egui;
@@ -24,6 +25,9 @@ pub(super) struct Modes {
     /// Grayscale preview (Eagle's `isGrayscaleMode`, off at every launch):
     /// the viewer's pictures are drawn desaturated.
     pub grayscale: bool,
+    /// The image viewer's navigator is hidden (Eagle's `isHideNavigator`,
+    /// kept between launches as Eagle keeps it in local storage).
+    pub hide_navigator: bool,
 }
 
 impl App {

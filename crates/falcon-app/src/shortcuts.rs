@@ -131,6 +131,8 @@ pub enum Command {
     AlwaysOnTop,
     /// Eagle's View ▸ Grayscale: the viewer's pictures desaturated.
     Grayscale,
+    /// Show or hide the image viewer's navigator.
+    Navigator,
 }
 
 /// How a scroll command moves the grid.
@@ -383,6 +385,7 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::Presentation, id: "view.toggle.slideshow", group: "View", label: "Enter or leave presentation mode", default: k(NONE, Key::F5), aliases: &[] },
     Spec { cmd: Command::AlwaysOnTop, id: "view.alwaysOnTop", group: "View", label: "Keep the window on top", default: k(SHIFT, Key::T), aliases: &[] },
     Spec { cmd: Command::Grayscale, id: "view.grayscale", group: "View", label: "Grayscale preview", default: k(CMD_ALT, Key::G), aliases: &[] },
+    Spec { cmd: Command::Navigator, id: "view.toggle.navigator", group: "View", label: "Show or hide the navigator (viewer)", default: k(CMD_ALT, Key::Num8), aliases: &[] },
 ];
 
 /// Keys that cannot be rebound, listed in the Shortcuts section.
@@ -988,6 +991,7 @@ mod tests {
         // Bare T is the tag picker's.
         assert_eq!(keys.resolve(Key::T, Modifiers::NONE), Some(Command::TagPanel));
         assert_eq!(keys.resolve(Key::G, CMD_ALT), Some(Command::Grayscale));
+        assert_eq!(keys.resolve(Key::Num8, CMD_ALT), Some(Command::Navigator));
     }
 
     #[test]

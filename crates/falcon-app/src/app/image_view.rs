@@ -31,6 +31,8 @@ pub(super) struct ImageState {
     checker: Option<TextureHandle>,
     /// The visible part of a zoomed-in SVG and since when it has held still.
     svg_view: Option<([f32; 4], [u32; 2], Instant)>,
+    /// Where in the navigator's frame a drag took hold, from its centre.
+    nav_grab: Vec2,
 }
 
 /// Side of a checkerboard square, in points.
@@ -234,6 +236,7 @@ impl App {
             self.ws.frame_jobs.push(j);
         }
         self.edit_overlay(ui, item, r, area);
+        self.navigator(ui, tex.as_ref(), natural, r, area);
         if let Some(gif_bar) = gif_bar {
             self.gif_toolbar(ui, item, gif_bar, &resp);
         }
@@ -321,6 +324,65 @@ impl App {
         if self.prefs.remember_zoom && !self.image.edge && self.ws.viewer.as_deref() == Some(id.as_str()) {
             self.image.views.insert(id, (self.ws.view.zoom, self.ws.view.pan));
         }
+    }
+
+    /// Eagle's navigator: while the picture overflows the view, a small
+    /// copy of it in the bottom-right corner with a frame around the part
+    /// on screen. Clicking it centres the view there; dragging moves the
+    /// frame (and the view) along. Hidden by the Navigator toggle (⌥⌘8).
+    fn navigator(&mut self, ui: &Ui, tex: Option<&TextureHandle>, natural: Vec2, r: Rect, area: Rect) {
+        let Some(tex) = tex else { return };
+        if self.modes.hide_navigator || !logic::navigator_shown((r.width(), r.height()), (area.width(), area.height())) {
+            return;
+        }
+        let side = logic::NAVIGATOR_SIDE;
+        let inset = Vec2::splat(logic::NAVIGATOR_INSET + side);
+        let boxr = Rect::from_min_size(area.max - inset, Vec2::splat(side));
+        let [px, py, pw, ph] = logic::navigator_picture((natural.x, natural.y), side);
+        let pic = Rect::from_min_size(boxr.min + vec2(px, py), vec2(pw, ph));
+        let [x0, y0, x1, y1] = logic::visible_part([r.min.x, r.min.y, r.max.x, r.max.y], [area.min.x, area.min.y, area.max.x, area.max.y]);
+        let frame = Rect::from_min_max(pic.lerp_inside(vec2(x0, y0)), pic.lerp_inside(vec2(x1, y1)));
+        let frame = Rect::from_center_size(frame.center(), frame.size().max(Vec2::splat(logic::NAVIGATOR_MIN_FRAME)));
+
+        let resp = ui.interact(boxr, ui.scope_id().with("viewer-navigator"), Sense::click_and_drag());
+        if resp.drag_started() || resp.clicked() {
+            let at = ui.input(|i| i.pointer.press_origin()).or(resp.interact_pointer_pos());
+            self.image.nav_grab = at.filter(|p| frame.contains(*p)).map_or(Vec2::ZERO, |p| p - frame.center());
+        }
+        if (resp.dragged() || resp.clicked())
+            && let Some(p) = resp.interact_pointer_pos()
+        {
+            let f = (p - self.image.nav_grab - pic.min) / pic.size();
+            let pan = logic::pan_to_show(f.x, f.y, (r.width(), r.height()));
+            let (px, py) = logic::clamp_pan(pan, (r.width(), r.height()), (area.width(), area.height()));
+            self.ws.view.pan = vec2(px, py);
+            self.ws.view.zoom = Some(r.width() / natural.x.max(1.0));
+            ui.ctx().request_repaint();
+        }
+        if resp.hovered() {
+            ui.ctx().set_cursor_icon(if frame.contains(resp.hover_pos().unwrap_or_default()) { egui::CursorIcon::Move } else { egui::CursorIcon::Default });
+        }
+
+        let p = ui.painter().with_clip_rect(area);
+        let round = egui::CornerRadius::same(6);
+        p.rect_filled(boxr, round, Color32::from_black_alpha(102));
+        p.image(tex.id(), pic, Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)), Color32::from_white_alpha(230));
+        // The picture outside the frame is dimmed.
+        let dim = Color32::from_black_alpha(153);
+        for part in [
+            Rect::from_min_max(pic.min, Pos2::new(pic.max.x, frame.min.y)),
+            Rect::from_min_max(Pos2::new(pic.min.x, frame.max.y), pic.max),
+            Rect::from_min_max(Pos2::new(pic.min.x, frame.min.y), Pos2::new(frame.min.x, frame.max.y)),
+            Rect::from_min_max(Pos2::new(frame.max.x, frame.min.y), Pos2::new(pic.max.x, frame.max.y)),
+        ] {
+            let part = part.intersect(pic);
+            if part.is_positive() {
+                p.rect_filled(part, 0.0, dim);
+            }
+        }
+        let frame_round = (frame.size().min_elem() / 2.0).min(6.0);
+        p.rect_stroke(frame, frame_round, egui::Stroke::new(1.0, Color32::WHITE), egui::StrokeKind::Inside);
+        p.rect_stroke(boxr, round, egui::Stroke::new(1.0, Color32::from_white_alpha(38)), egui::StrokeKind::Inside);
     }
 
     /// Eagle's "too large to preview" page for TIFF, HEIC and TGA images
