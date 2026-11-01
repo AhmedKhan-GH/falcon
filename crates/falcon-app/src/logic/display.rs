@@ -370,6 +370,28 @@ pub fn wants_card_original(quality: bool, ext: &str, shown_px: f32, grid_side: f
     quality && quality_card_format(ext) && shown_px > grid_side
 }
 
+/// Paths this long (in characters) can't be previewed on some systems,
+/// which Eagle blames for a missing thumbnail.
+pub const LONG_PATH: usize = 260;
+
+/// What to tell the user about a thumbnail that couldn't be drawn, for the
+/// card's tooltip. `load_failed` is whether the loader gave up on it;
+/// `path_len` the length of the thumbnail's path in characters. Nothing for
+/// a card that hasn't failed, so formats with no preview keep a plain
+/// placeholder.
+pub fn broken_thumb_hint(load_failed: bool, path_len: usize, original_exists: bool, thumb_exists: bool) -> Option<&'static str> {
+    if !load_failed {
+        return None;
+    }
+    Some(if path_len >= LONG_PATH {
+        "The file name or path is too long to preview. Rename the file or move the library to a shorter path."
+    } else if !original_exists && !thumb_exists {
+        "This file wasn't found. If a sync service manages the library, wait until syncing is complete."
+    } else {
+        "This file couldn't be read for a preview."
+    })
+}
+
 /// Whether `item` is pinned to the top of the folder being viewed, which
 /// is when Eagle draws the pin badge: only for the one open folder (none
 /// when several are picked together) and not while that folder's own sort
@@ -549,5 +571,14 @@ mod display_tests {
         assert!(!pinned_here(&it, Some("G"), false), "a zero stamp is not a pin");
         assert!(!pinned_here(&it, Some("H"), false));
         assert!(!pinned_here(&it, None, false), "other views and combined folders show none");
+    }
+
+    #[test]
+    fn broken_thumbnail_hints() {
+        assert_eq!(broken_thumb_hint(false, 300, false, false), None);
+        assert!(broken_thumb_hint(true, 260, true, true).unwrap().contains("too long"));
+        assert!(broken_thumb_hint(true, 259, false, false).unwrap().contains("wasn't found"));
+        assert!(broken_thumb_hint(true, 40, true, false).unwrap().contains("couldn't be read"));
+        assert!(broken_thumb_hint(true, 40, false, true).unwrap().contains("couldn't be read"));
     }
 }

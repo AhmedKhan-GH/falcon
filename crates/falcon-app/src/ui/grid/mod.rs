@@ -12,7 +12,7 @@ use crate::icons as ic;
 use crate::loader::{Tier, job_for};
 use crate::logic::{self, Layout, Scope};
 use crate::theme::{self as t, font};
-use crate::ui::widgets::{PIN_BADGE, badge, ext_placeholder, galley, paint_thumb_bg, pin_badge};
+use crate::ui::widgets::{PIN_BADGE, badge, broken_mark, ext_placeholder, galley, paint_thumb_bg, pin_badge};
 
 pub(crate) mod covers;
 pub(crate) mod duplicates;
@@ -225,6 +225,9 @@ impl App {
                     middle = Some(item.id.clone());
                 }
                 let selected = self.ws.selected.contains(&item.id);
+                if let Some(hint) = self.broken_hint(ui, lib, item) {
+                    resp.clone().on_hover_text(hint);
+                }
                 self.card_anim(ui, lib, item, card, resp.hovered());
                 match layout {
                     Layout::List => self.list_row(ui, lib, item, card, selected, resp.hovered(), n),
@@ -349,7 +352,12 @@ impl App {
                 let r = Rect::from_center_size(rect.center(), natural * scale);
                 egui::Image::new((tex.id(), r.size())).corner_radius(4).paint_at(ui, r);
             }
-            None if failed || job_for(item, lib.root(), Tier::Grid).is_none() => ext_placeholder(ui, rect, &item.ext),
+            None if failed || job_for(item, lib.root(), Tier::Grid).is_none() => {
+                ext_placeholder(ui, rect, &item.ext);
+                if failed {
+                    broken_mark(ui, rect);
+                }
+            }
             None => {}
         }
     }
@@ -370,7 +378,12 @@ impl App {
                 let uv = Rect::from_center_size(Pos2::new(0.5, 0.5), vec2(rect.width() / (size.x * s), rect.height() / (size.y * s)));
                 egui::Image::new((tex.id(), rect.size())).uv(uv).corner_radius(4).paint_at(ui, rect);
             }
-            None if failed || job_for(item, lib.root(), Tier::Grid).is_none() => ext_placeholder(ui, rect, &item.ext),
+            None if failed || job_for(item, lib.root(), Tier::Grid).is_none() => {
+                ext_placeholder(ui, rect, &item.ext);
+                if failed {
+                    broken_mark(ui, rect);
+                }
+            }
             None => {}
         }
     }

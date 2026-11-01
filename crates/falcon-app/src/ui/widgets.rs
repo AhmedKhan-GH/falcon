@@ -121,6 +121,13 @@ pub(crate) fn pin_badge(ui: &Ui, top_left: Pos2) {
     icon(ui, rect.center(), ic::PUSH_PIN, 12.0, Color32::WHITE);
 }
 
+/// A small warning mark in the corner of a placeholder whose preview is
+/// broken, sized to the picture.
+pub(crate) fn broken_mark(ui: &Ui, rect: Rect) {
+    let size = (rect.width().min(rect.height()) * 0.2).clamp(11.0, 16.0);
+    icon(ui, rect.right_bottom() - Vec2::splat(size * 0.8), ic::WARNING, size, t::p().icon_yellow);
+}
+
 pub(crate) fn divider(ui: &mut Ui) {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 9.0), Sense::hover());
     ui.painter().hline(rect.x_range(), rect.center().y, Stroke::new(1.0, t::p().divider));
