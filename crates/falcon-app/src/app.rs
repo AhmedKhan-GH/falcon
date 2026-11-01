@@ -3602,6 +3602,9 @@ impl App {
             opened = true;
         }
         self.open_menu(ui, &open_ui::originals(lib, targets));
+        if targets.len() == 1 && self.ws.scope != Scope::Trash {
+            self.location_menu(ui, lib, item);
+        }
         self.item_copy_menu(ui, targets);
         ui.menu_button("Add to Folder", |ui| {
             egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
