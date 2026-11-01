@@ -144,6 +144,16 @@ impl Library {
         out
     }
 
+    /// Rebuilds `mtime.json` from the items in memory, as Eagle's Empty
+    /// Cache and Reload does after reading the library again: one entry
+    /// per item with a `lastModified`, in id order, then `all` (the item
+    /// count, as falcon always writes it).
+    pub fn rebuild_mtime(&mut self) -> Result<()> {
+        self.mtime.entries = self.items().iter().filter(|i| i.last_modified > 0).map(|i| (i.id.clone(), i.last_modified)).collect();
+        self.mtime.all = Some(self.items().len() as u64);
+        self.write_mtime()
+    }
+
     /// Drops every write batched mode is holding back, for a library whose
     /// folder is gone: writing them would fail, or put files where the
     /// library used to be.
@@ -210,6 +220,21 @@ mod tests {
         let src = lib.root().parent().unwrap().join(name);
         fs::write(&src, name.as_bytes()).unwrap();
         lib.import_file(&src, &ImportOptions::default()).unwrap()
+    }
+
+    #[test]
+    fn rebuilds_a_broken_index() {
+        let (_d, mut lib) = library();
+        let a = import(&mut lib, "a.txt");
+        let b = import(&mut lib, "b.txt");
+        fs::write(lib.root().join("mtime.json"), b"{\"bogus\":1}").unwrap();
+        let mut fresh = Library::open(lib.root()).unwrap();
+        fresh.rebuild_mtime().unwrap();
+        let disk = read_mtime(lib.root()).unwrap();
+        let mut want = vec![(a.clone(), lib.item(&a).unwrap().last_modified), (b.clone(), lib.item(&b).unwrap().last_modified)];
+        want.sort();
+        assert_eq!(disk.entries, want);
+        assert_eq!(disk.all, Some(2));
     }
 
     #[test]

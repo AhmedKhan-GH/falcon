@@ -840,6 +840,8 @@ pub struct App {
     merge: Option<library_ui::Merge>,
     /// An `.eaglepack` import waiting for an answer.
     pack_ask: Option<library_ui::PackAsk>,
+    /// Empty Cache and Reload is asking for confirmation.
+    confirm_reload: bool,
 }
 
 impl App {
@@ -916,6 +918,7 @@ impl App {
             missing: None,
             merge: None,
             pack_ask: None,
+            confirm_reload: false,
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
         app.welcomed = library_dialogs::already_welcomed(saved.welcomed, saved.recent.len(), saved.libraries.len(), saved.library.is_some());
@@ -3123,6 +3126,9 @@ impl App {
             }
             if ui.button("Merge Another Library…").clicked() {
                 self.switch_to = Some(Switch::Merge);
+            }
+            if ui.button("Empty Cache and Reload…").clicked() {
+                self.confirm_reload = true;
             }
             if ui.button("Show in Finder").clicked() {
                 let _ = std::process::Command::new("open").arg("-R").arg(&current).spawn();
@@ -5694,6 +5700,7 @@ impl App {
         }
         self.merge_dialogs(&ctx);
         self.pack_dialogs(&ctx);
+        self.reload_confirm(&ctx);
         self.alert_modal(&ctx);
         if self.ws.lib.is_some() {
             self.missing_modal(&ctx);

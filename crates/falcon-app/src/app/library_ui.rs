@@ -539,6 +539,75 @@ impl App {
     }
 }
 
+impl App {
+    /// Library ▸ Empty Cache and Reload: asks first, as Eagle does.
+    pub(super) fn reload_confirm(&mut self, ctx: &egui::Context) {
+        if !self.confirm_reload {
+            return;
+        }
+        let mut answer = None;
+        let modal = egui::Modal::new(egui::Id::unique("empty-cache")).show(ctx, |ui| {
+            ui.set_width(340.0);
+            ui.label(RichText::new("Empty cache and reload?").size(15.0));
+            ui.add_space(4.0);
+            ui.label(RichText::new("Falcon reads the whole library from disk again, rebuilds mtime.json from the items and redraws every thumbnail. A large library takes a while.").color(t::p().text_muted));
+            ui.add_space(10.0);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.button("Empty Cache and Reload").clicked() {
+                    answer = Some(true);
+                }
+                if ui.button("Cancel").clicked() {
+                    answer = Some(false);
+                }
+            });
+        });
+        if modal.should_close() {
+            answer = Some(false);
+        }
+        if let Some(go) = answer {
+            self.confirm_reload = false;
+            if go {
+                self.empty_cache_and_reload();
+            }
+        }
+    }
+
+    /// Writes what is pending, reads the shown library again, rebuilds its
+    /// `mtime.json` and drops every decoded thumbnail and preview.
+    fn empty_cache_and_reload(&mut self) {
+        let (Some(shared), Some(root)) = (self.ws.lib.clone(), self.ws.root.clone()) else { return };
+        if let Err(e) = self.ws.flush_and_backup() {
+            self.flash(format!("Could not save: {e}"));
+            return;
+        }
+        let fresh = falcon_library::sandbox::guard(&root).and_then(|()| Library::open_or_restore(&root)).and_then(|(mut lib, _)| lib.rebuild_mtime().map(|()| lib));
+        match fresh {
+            Ok(fresh) => {
+                let ids: Vec<String> = {
+                    let mut lib = lock(&shared);
+                    let mut ids: Vec<String> = lib.items().iter().map(|i| i.id.clone()).collect();
+                    ids.extend(fresh.items().iter().map(|i| i.id.clone()));
+                    *lib = fresh;
+                    ids
+                };
+                for id in &ids {
+                    self.ws.loader.forget(id);
+                }
+                self.ws.duplicates = Default::default();
+                self.ws.undo.clear();
+                self.ws.redo.clear();
+                self.ws.edit = None;
+                self.ws.folder_edit = None;
+                self.flash("Library reloaded");
+            }
+            Err(e) => match alert_for(&e) {
+                Some(a) => self.show_alert(a),
+                None => self.flash(format!("Could not reload: {e}")),
+            },
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
