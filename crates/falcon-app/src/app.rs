@@ -168,7 +168,7 @@ fn is_hidden(p: &std::path::Path) -> bool {
     p.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.'))
 }
 
-/// Zoom, pan and animation of the full-window viewer.
+/// Zoom, pan and animation of the image viewer.
 #[derive(Default)]
 struct ViewState {
     /// Item the state belongs to; reset when another item opens.

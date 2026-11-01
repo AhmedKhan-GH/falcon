@@ -81,8 +81,9 @@ pub(super) fn bar_shell(app: &mut App, ui: &mut Ui, item: &Item, bar: Rect) -> (
     // Eagle's "n / total" counter.
     if let Some((n, total)) = counter {
         let g = ui.painter().layout_no_wrap(format!("{n} / {total}"), mono(12.0), t::p().text_value);
-        p.galley(Pos2::new(x, cy - g.size().y / 2.0), g.clone(), t::p().text_value);
-        x += g.size().x + 14.0;
+        let w = g.size().x;
+        p.galley(Pos2::new(x, cy - g.size().y / 2.0), g, t::p().text_value);
+        x += w + 14.0;
     }
     // Previous and next at the right end, as in Eagle.
     let (first, last) = counter.map_or((true, true), |(n, total)| (n == 1, n == total));
@@ -130,7 +131,7 @@ impl App {
             ui.painter().rect_filled(screen, 0.0, t::p().main);
             let bar = Rect::from_min_size(screen.min, vec2(screen.width(), t::BAR_HEIGHT));
             let area = Rect::from_min_max(Pos2::new(screen.left(), bar.bottom()), screen.max);
-            // Swallow clicks on the background so the grid below never gets them.
+            // The background's right-click opens the item menu.
             let bg = ui.interact(area, ui.scope_id().with("media-bg"), Sense::click());
             bg.context_menu(|ui| {
                 self.item_menu(ui, lib, item, std::slice::from_ref(&item.id));
