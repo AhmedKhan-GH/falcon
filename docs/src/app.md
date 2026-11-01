@@ -187,6 +187,7 @@ These are the defaults. All but the arrows, Esc, Tab, Z and the viewer's C, ⇧R
 | ⌘⇧N | New folder |
 | ⌘C and ⌘V | Copy the selected files, or paste files or images |
 | ⌘E | Export the selected items' originals to a folder (see Export and copy-out) |
+| ⇧⌘E | Export the selected items as an `.eaglepack` |
 | ⌘Z and ⇧⌘Z | Undo and redo library edits, up to 100 steps. Each frame's edits are one step, named after what was done ("Undid: Move 3 to Trash"). Deleting permanently or emptying the Trash can't be undone and clears the history. Text fields keep their own undo while focused |
 | ⌘⇧F | Show or hide the filter bar |
 | ⌘⌥1 and ⌘⌥2 | Show or hide the sidebar and the inspector, in the grid and in the viewer |
@@ -511,6 +512,8 @@ When files of the same names are already in the folder, falcon asks first, sayin
 The copy runs on a background thread with a progress bar under the toolbar ("Exporting 3 of 10"). Each file is written under a temporary name beside its destination and renamed into place, so a failed copy never leaves half a file. When it ends, falcon says "Exported N items" (with any failures) and, as Eagle does, shows the files in Finder, or the folder when there are more than 500.
 
 A folder, a subfolder or a smart folder exports the same way from its menu (Export ▸ Export to Computer…) or from the inspector's Export button while it is open. A folder becomes a directory tree under the chosen folder: one directory per folder and subfolder, holding the originals of the items filed directly in it, so an item in two folders is copied into both. Directory names are cleaned up as Eagle does on the Mac (tabs and runs of spaces become one space, `:`, `/` and `\` become spaces, a trailing dot goes, and an empty name becomes "Untitled"). Two sibling folders whose names clean up alike share a directory, with clashing files numbered. Items in a locked folder that hasn't been unlocked are left out, and the menu entry is disabled on a locked folder, as in Eagle. A smart folder becomes one flat directory of its items, without its subfolders, as in Eagle. When the folder's directory already exists, falcon asks the same Replace / Keep Both question; both export into the existing directory. When the copy ends, Finder shows the new directory.
+
+Export as .eaglepack (⇧⌘E, or the Export submenu of the item, folder and smart folder menus and of the inspector's Export button) asks where to save, suggesting `Untitled.eaglepack` for items and `<folder name>.eaglepack` for a folder, then writes the pack on a background thread ("Packing 3 of 10") and shows it in Finder. Items are packed with their folders cleared, a folder with its subfolders, and a smart folder as one plain folder of its items; an empty smart folder exports nothing, as in Eagle. The format is described in [Export (`.eaglepack`)](library-format.md#export-eaglepack).
 
 Where files go and how they are named is worked out in `falcon_library::export` (a `Plan`, with tests); `app/export_ui.rs` asks, runs and reports. Exports write only inside the folder picked in the dialog.
 

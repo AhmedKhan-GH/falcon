@@ -64,8 +64,11 @@ enum Command {
         /// Pack file to write
         out: PathBuf,
         /// Export this folder and its subfolders
-        #[arg(long, conflicts_with = "items", required_unless_present = "items")]
+        #[arg(long, conflicts_with_all = ["items", "smart"], required_unless_present_any = ["items", "smart"])]
         folder: Option<String>,
+        /// Export this smart folder's items as one folder
+        #[arg(long, conflicts_with = "items")]
+        smart: Option<String>,
         /// Item ids to export
         items: Vec<String>,
     },
@@ -142,11 +145,12 @@ fn run(cli: Cli) -> falcon_library::Result<()> {
                 None => println!("no backup written (same size as the newest backup, or metadata.json is damaged)"),
             }
         }
-        Command::Export { library, out, folder, items } => {
+        Command::Export { library, out, folder, smart, items } => {
             let lib = Library::open(library)?;
-            let source = match &folder {
-                Some(id) => PackSource::Folder(id),
-                None => PackSource::Items(&items),
+            let source = match (&folder, &smart) {
+                (Some(id), _) => PackSource::Folder(id),
+                (None, Some(id)) => PackSource::Smart(id),
+                (None, None) => PackSource::Items(&items),
             };
             let count = export_pack(&lib, source, &out)?;
             println!("{} ({count} items)", out.display());

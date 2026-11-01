@@ -5,6 +5,7 @@
 
 use super::*;
 use falcon_library::export::{self, Collision, Plan};
+use falcon_library::pack::{self, PackSource};
 
 /// An export asked for from a menu or a key, handled once the frame has
 /// the library (`App::export_dialogs`).
@@ -13,6 +14,11 @@ pub(super) enum Request {
     Items(Vec<String>),
     /// Export to Computer: a folder or smart folder as a directory.
     Tree(Target),
+    /// Export as .eaglepack: these items.
+    PackItems(Vec<String>),
+    /// Export as .eaglepack: a folder with its subfolders, or a smart
+    /// folder as one folder.
+    PackTree(Target),
 }
 
 /// A folder or smart folder to export.
@@ -64,6 +70,14 @@ fn plural(n: usize, one: &str) -> String {
 fn exported(done: usize, failed: usize) -> String {
     let base = format!("Exported {}", plural(done, "item"));
     if failed > 0 { format!("{base}, {failed} failed") } else { base }
+}
+
+/// The save dialog for a pack, suggesting `<name>.eaglepack` (Eagle drops
+/// a leading dot from the name and falls back to "Untitled").
+fn pick_pack(name: &str) -> Option<PathBuf> {
+    let name = name.trim_start_matches('.').replace('/', " ");
+    let name = if name.trim().is_empty() { "Untitled".to_string() } else { name };
+    rfd::FileDialog::new().set_title("Export as .eaglepack").add_filter("Eagle Package", &["eaglepack"]).set_file_name(format!("{name}.eaglepack")).save_file()
 }
 
 fn pick_folder() -> Option<PathBuf> {
@@ -126,7 +140,53 @@ impl App {
                 );
                 self.ws.export.clash = Some(Clash { replace, keep, title: "The folder already exists".into(), detail, files: false });
             }
+            Request::PackItems(ids) => {
+                if !ids.is_empty() {
+                    self.start_pack(lib, PackSource::Items(&ids), "Untitled");
+                }
+            }
+            Request::PackTree(Target::Folder(id)) => {
+                let name = logic::find_folder(&lib.metadata.folders, &id).map(|f| f.name.clone()).unwrap_or_default();
+                self.start_pack(lib, PackSource::Folder(&id), &name);
+            }
+            Request::PackTree(Target::Smart(id)) => {
+                let name = crate::organize::find(&lib.smart_folders(), &id).map(|f| f.name.clone()).unwrap_or_default();
+                self.start_pack(lib, PackSource::Smart(&id), &name);
+            }
         }
+    }
+
+    /// Asks where to save a pack of `source`, then writes it on a
+    /// background thread. As in Eagle, an empty smart folder exports
+    /// nothing.
+    fn start_pack(&mut self, lib: &Library, source: PackSource<'_>, name: &str) {
+        let plan = match pack::plan_pack(lib, source) {
+            Ok(p) => p,
+            Err(e) => {
+                self.flash(format!("Export failed: {e}"));
+                return;
+            }
+        };
+        if plan.is_empty() && matches!(source, PackSource::Smart(_)) {
+            self.flash("Nothing to export");
+            return;
+        }
+        let Some(dest) = pick_pack(name) else { return };
+        let job = self.ws.export.job.clone();
+        let current = dest.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        *job.lock().unwrap_or_else(|p| p.into_inner()) = Job { verb: "Packing", total: plan.len().max(1), running: true, current, ..Default::default() };
+        let ctx = self.ctx.clone();
+        std::thread::spawn(move || {
+            let result = pack::write_pack(&plan, &dest, |n| {
+                job.lock().unwrap_or_else(|p| p.into_inner()).done = n;
+                ctx.request_repaint();
+            });
+            job.lock().unwrap_or_else(|p| p.into_inner()).finished = Some(match result {
+                Ok(n) => (exported(n, 0), vec![dest]),
+                Err(e) => (format!("Export failed: {e}"), Vec::new()),
+            });
+            ctx.request_repaint();
+        });
     }
 
     fn clash_dialog(&mut self, ctx: &egui::Context) {
@@ -240,6 +300,9 @@ impl App {
         if on(C::ExportComputer) && !self.ws.selected.is_empty() {
             self.ws.export.request = Some(Request::Items(self.ws.selected.clone()));
         }
+        if on(C::ExportPack) && !self.ws.selected.is_empty() {
+            self.ws.export.request = Some(Request::PackItems(self.ws.selected.clone()));
+        }
     }
 
     /// The Export submenu of a folder or smart folder menu (disabled while
@@ -254,6 +317,9 @@ impl App {
         ui.set_min_width(200.0);
         if ui.button("Export to Computer…").clicked() {
             self.ws.export.request = Some(Request::Tree(target.clone()));
+        }
+        if ui.button("Export as .eaglepack…").clicked() {
+            self.ws.export.request = Some(Request::PackTree(target.clone()));
         }
     }
 
@@ -277,6 +343,9 @@ impl App {
             ui.set_min_width(200.0);
             if ui.button("Export to Computer…").clicked() {
                 self.ws.export.request = Some(Request::Items(targets.to_vec()));
+            }
+            if ui.button("Export as .eaglepack…").clicked() {
+                self.ws.export.request = Some(Request::PackItems(targets.to_vec()));
             }
         });
     }

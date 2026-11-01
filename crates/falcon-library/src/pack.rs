@@ -36,6 +36,30 @@ pub enum PackSource<'a> {
     Items(&'a [String]),
     /// A folder, its subfolders and every untrashed item in any of them.
     Folder(&'a str),
+    /// A smart folder's items, packed as one folder without subfolders:
+    /// Eagle gives the folder a new id, keeps the smart folder's name,
+    /// description and icon, and files every item in it.
+    Smart(&'a str),
+}
+
+/// A pack worked out but not yet written (see [`plan_pack`]). It holds no
+/// reference to the library, so it can be written on another thread.
+#[derive(Debug, Clone)]
+pub struct PackPlan {
+    root: PathBuf,
+    pack_json: Vec<u8>,
+    ids: Vec<String>,
+}
+
+impl PackPlan {
+    /// The number of items in the pack.
+    pub fn len(&self) -> usize {
+        self.ids.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.ids.is_empty()
+    }
 }
 
 /// Settings for [`import_pack`].
@@ -54,6 +78,17 @@ pub struct PackImportOptions {
 /// items in it. The archive is checked after writing and removed if it
 /// can't be read back.
 pub fn export_pack(lib: &Library, source: PackSource<'_>, dest: &Path) -> Result<usize> {
+    let plan = plan_pack(lib, source).map_err(|e| match e {
+        Error::Pack { reason, .. } => Error::Pack { path: dest.to_path_buf(), reason },
+        e => e,
+    })?;
+    write_pack(&plan, dest, |_| {})
+}
+
+/// Works out the contents of a pack of `source`: the `pack.json` and the
+/// item folders to add.
+pub fn plan_pack(lib: &Library, source: PackSource<'_>) -> Result<PackPlan> {
+    let dest = lib.root();
     let refuse = |reason: String| Error::Pack { path: dest.to_path_buf(), reason };
     let mut images: Vec<(u64, Value)> = Vec::new();
     let mut folder_record = None;
@@ -68,6 +103,18 @@ pub fn export_pack(lib: &Library, source: PackSource<'_>, dest: &Path) -> Result
                 images.push((item.modification_time, to_record(item)?));
             }
             folder_record = Some(clone_tree(folder));
+        }
+        PackSource::Smart(id) => {
+            let record = find_smart_record(&lib.metadata.smart_folders, id).ok_or_else(|| refuse(format!("no smart folder {id}")))?;
+            let new_id = ids::new_id();
+            for item in lib.smart_folder_items(id) {
+                let mut record = to_record(item)?;
+                if let Value::Object(m) = &mut record {
+                    m.insert("folders".into(), json!([new_id]));
+                }
+                images.push((item.modification_time, record));
+            }
+            folder_record = Some(clone_smart(record, &new_id));
         }
         PackSource::Items(ids) => {
             let mut seen = HashSet::new();
@@ -93,14 +140,20 @@ pub fn export_pack(lib: &Library, source: PackSource<'_>, dest: &Path) -> Result
         pack.insert("folder".into(), f);
     }
     let pack_json = serde_json::to_vec(&pack).map_err(|e| Error::json(dest, e))?;
+    Ok(PackPlan { root: lib.root().to_path_buf(), pack_json, ids: images.iter().map(|(_, v)| record_id(v)).collect() })
+}
 
+/// Writes a planned pack to `dest`, calling `on_item` with the number of
+/// item folders added so far, and returns the number of items. The archive
+/// is written beside `dest`, checked and only then moved into place.
+pub fn write_pack(plan: &PackPlan, dest: &Path, on_item: impl FnMut(usize)) -> Result<usize> {
+    let refuse = |reason: String| Error::Pack { path: dest.to_path_buf(), reason };
     let parent = dest.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new("."));
     let mut tmp = tempfile::NamedTempFile::new_in(parent).map_err(|e| Error::io(parent, e))?;
-    let entries = write_zip(lib, tmp.as_file_mut(), &pack_json, images.iter().map(|(_, v)| record_id(v)))
-        .map_err(|e| refuse(e.to_string()))?;
+    let entries = write_zip(&plan.root, tmp.as_file_mut(), &plan.pack_json, &plan.ids, on_item).map_err(|e| refuse(e.to_string()))?;
     verify(tmp.path(), entries).map_err(refuse)?;
     tmp.persist(dest).map_err(|e| Error::io(dest, e.error))?;
-    Ok(images.len())
+    Ok(plan.ids.len())
 }
 
 /// Imports the pack at `pack` into `lib` and returns the new item ids.
@@ -228,6 +281,50 @@ fn clone_tree(f: &Folder) -> Value {
     Value::Object(m)
 }
 
+/// The smart folder `id`'s record in `metadata.json`, at any depth.
+fn find_smart_record<'a>(list: &'a [Value], id: &str) -> Option<&'a Value> {
+    list.iter().find_map(|v| {
+        if v.get("id").and_then(Value::as_str) == Some(id) {
+            Some(v)
+        } else {
+            find_smart_record(v.get("children").and_then(Value::as_array).map_or(&[][..], Vec::as_slice), id)
+        }
+    })
+}
+
+/// The folder a smart folder becomes in a pack: Eagle copies it with the
+/// same keys as a folder ([`clone_tree`]), under a new id and with no
+/// children.
+fn clone_smart(v: &Value, new_id: &str) -> Value {
+    let get = |k: &str| v.get(k).filter(|x| !x.is_null());
+    let mut m = Map::new();
+    m.insert("id".into(), json!(new_id));
+    m.insert("name".into(), get("name").cloned().unwrap_or(json!("")));
+    m.insert("description".into(), get("description").filter(|d| truthy(d)).cloned().unwrap_or(json!("")));
+    m.insert("children".into(), json!([]));
+    if let Some(t) = get("modificationTime") {
+        m.insert("modificationTime".into(), t.clone());
+    }
+    m.insert("tags".into(), get("tags").filter(|t| truthy(t)).cloned().unwrap_or(json!([])));
+    for key in ["extendTags", "icon", "iconColor", "pinyin"] {
+        if let Some(x) = get(key) {
+            m.insert(key.into(), x.clone());
+        }
+    }
+    m.insert("password".into(), json!(""));
+    m.insert("passwordTips".into(), json!(""));
+    if let Some(x) = get("coverId") {
+        m.insert("coverId".into(), x.clone());
+    }
+    if let Some(order_by) = get("orderBy").filter(|o| truthy(o)) {
+        m.insert("orderBy".into(), order_by.clone());
+        if let Some(x) = v.get("sortIncrease") {
+            m.insert("sortIncrease".into(), x.clone());
+        }
+    }
+    Value::Object(m)
+}
+
 /// Gives a pack folder and its children new ids, expands them and points
 /// their covers at the new item ids, filling keys falcon's model requires.
 fn remap_folder(v: &mut Value, folder_ids: &mut HashMap<String, String>, item_ids: &HashMap<String, String>, fresh_id: &mut impl FnMut() -> String) {
@@ -272,18 +369,18 @@ fn duplicate_key(item: &Item) -> Option<String> {
     }
 }
 
-fn write_zip(lib: &Library, file: &mut File, pack_json: &[u8], ids: impl Iterator<Item = String>) -> io::Result<usize> {
+fn write_zip(root: &Path, file: &mut File, pack_json: &[u8], ids: &[String], mut on_item: impl FnMut(usize)) -> io::Result<usize> {
     let mut zip = ZipWriter::new(file);
     let base = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
     let mut entries = 1;
     zip.start_file(PACK_JSON, base.last_modified_time(zip_time(SystemTime::now())).unix_permissions(0o644))?;
     zip.write_all(pack_json)?;
-    for id in ids {
-        let dir = lib.root().join("images").join(format!("{id}.info"));
-        if !dir.is_dir() {
-            continue;
+    for (n, id) in ids.iter().enumerate() {
+        let dir = root.join("images").join(format!("{id}.info"));
+        if dir.is_dir() {
+            entries += add_dir(&mut zip, base, &dir, &format!("{id}.info/"))?;
         }
-        entries += add_dir(&mut zip, base, &dir, &format!("{id}.info/"))?;
+        on_item(n + 1);
     }
     zip.finish()?;
     Ok(entries)
@@ -544,6 +641,38 @@ mod tests {
         assert_eq!(reopened.item(&new[0]).unwrap().folders, vec![tree.id.clone()]);
         assert_eq!(reopened.item(&new[1]).unwrap().folders, vec![tree.children[0].id.clone()]);
         assert!(reopened.mtime.entries.iter().any(|(id, _)| *id == new[0]));
+    }
+
+    #[test]
+    fn smart_folder_pack_is_one_flat_folder() {
+        let mut s = setup();
+        let rule = json!({"rules": [{"property": "tags", "method": "union", "value": ["t0", "t1"]}], "match": "OR"});
+        let smart = s.lib.create_smart_folder("Tagged", vec![rule]).unwrap();
+        let out = s.root.join("tagged.eaglepack");
+        let plan = plan_pack(&s.lib, PackSource::Smart(&smart)).unwrap();
+        assert_eq!(plan.len(), 2);
+        let mut seen = Vec::new();
+        assert_eq!(write_pack(&plan, &out, |n| seen.push(n)).unwrap(), 2);
+        assert_eq!(seen, [1, 2]);
+
+        let (pack, _) = read_pack(&out);
+        let folder = &pack["folder"];
+        let new_id = folder["id"].as_str().unwrap();
+        assert_ne!(new_id, smart);
+        assert_eq!(folder["name"], json!("Tagged"));
+        assert_eq!(folder["children"], json!([]));
+        let keys: Vec<_> = folder.as_object().unwrap().keys().cloned().collect();
+        assert_eq!(keys, ["id", "name", "description", "children", "modificationTime", "tags", "password", "passwordTips"]);
+        assert!(pack["images"].as_array().unwrap().iter().all(|i| i["folders"] == json!([new_id])));
+
+        let mut other = Library::create(s.root.join("B.library")).unwrap();
+        let new = import_pack(&mut other, &out, &PackImportOptions::default()).unwrap();
+        assert_eq!(new.len(), 2);
+        let reopened = Library::open(other.root()).unwrap();
+        let tree = &reopened.metadata.folders[0];
+        assert_eq!((tree.name.as_str(), tree.children.len()), ("Tagged", 0));
+        assert!(new.iter().all(|id| reopened.item(id).unwrap().folders == vec![tree.id.clone()]));
+        assert!(plan_pack(&s.lib, PackSource::Smart("NOPE")).is_err());
     }
 
     #[test]

@@ -53,6 +53,7 @@ pub enum Command {
     FolderSettings,
     /// File ▸ Export (`App::export_keys`).
     ExportComputer,
+    ExportPack,
     /// A key of the video player (`App::video_keys` reads these).
     Player(PlayerKey),
 }
@@ -165,6 +166,7 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::Player(PlayerKey::AddComment), id: "player.comment.add", group: PLAYER, label: "Add a comment at the current time", default: k(NONE, Key::N), aliases: &[] },
     // Export and copy-out (`App::export_keys`).
     Spec { cmd: Command::ExportComputer, id: "file.export.item.computer", group: "Export", label: "Export to Computer", default: k(CMD, Key::E), aliases: &[] },
+    Spec { cmd: Command::ExportPack, id: "file.export.item.eaglepack", group: "Export", label: "Export as .eaglepack", default: k(CMD_SHIFT, Key::E), aliases: &[] },
 ];
 
 /// Keys that cannot be rebound, listed in the Shortcuts section.

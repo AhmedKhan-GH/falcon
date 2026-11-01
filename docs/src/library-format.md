@@ -266,16 +266,15 @@ Refs.eaglepack           a zip archive, entries stored without compression
 | Import: folders | observed | A folder pack's tree is added to the library and item `folders` are mapped to the new ids. A pack of items dropped on a folder goes into that folder; otherwise items keep their `folders` |
 | Import: records | observed | Each item's `metadata.json` is rewritten from its `pack.json` record with the new `id` and `modificationTime` = now + index; `lastModified` is kept |
 | Import: duplicates | observed | Eagle asks whether to skip items that match existing ones by its duplicate key: for most images `size + width + height + ext`, for videos `size + duration`; SVG, TIFF and some other kinds never match |
-| Smart folders | observed | Exporting a smart folder writes a folder pack of its matching items, but those items' `folders` don't point into the exported tree, so they import with no folder. Smart folder rules are never carried |
+| Smart folders | observed | Exporting a smart folder writes a folder pack of its matching untrashed items. `folder` is the smart folder copied with the folder keys above under a new id, with no `children` (subfolders are not carried), and every item's `folders` is set to that new id, so the items import into one plain folder. Smart folder rules are never carried |
 
 ### How falcon does it
 
-`falcon_library::pack::export_pack(&lib, PackSource::Items(ids) | PackSource::Folder(id), dest)` writes a pack following the table, using the `zip` crate with stored entries and each file's time and Unix mode. `import_pack(&mut lib, pack, &PackImportOptions { folder, skip_duplicates })` imports one and returns the new item ids. Item files are moved in as they are (thumbnail included), not re-imported, as Eagle does. Differences from Eagle, all inferred to be harmless:
+The app writes packs on a background thread, so the work is split in two: `plan_pack(&lib, source)` builds `pack.json` and the list of item folders into a `PackPlan` that holds no reference to the library, and `write_pack(&plan, dest, on_item)` writes it, reporting each item folder added. `falcon_library::pack::export_pack(&lib, PackSource::Items(ids) | PackSource::Folder(id) | PackSource::Smart(id), dest)` does both and writes a pack following the table, using the `zip` crate with stored entries and each file's time and Unix mode. `import_pack(&mut lib, pack, &PackImportOptions { folder, skip_duplicates })` imports one and returns the new item ids. Item files are moved in as they are (thumbnail included), not re-imported, as Eagle does. Differences from Eagle, all inferred to be harmless:
 
 - falcon drops item `folders` ids that don't exist after import, where Eagle would write `null` or keep a dangling id.
 - An item whose `<ID>.info` folder is missing from the pack is skipped; Eagle still lists it, with no files.
 - A record without `isDeleted` (an exported trashed item) is written back with `"isDeleted": false`, since falcon's item model requires the key.
 - The duplicate key covers images and videos only; audio and font keys are not implemented.
-- Smart folder export isn't offered.
 
-The CLI has `falcon export <library> <out.eaglepack> [--folder ID | ITEM...]` and `falcon import-pack <library> <pack> [--folder ID] [--skip-duplicates]`.
+The CLI has `falcon export <library> <out.eaglepack> [--folder ID | --smart ID | ITEM...]` and `falcon import-pack <library> <pack> [--folder ID] [--skip-duplicates]`.
