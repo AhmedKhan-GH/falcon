@@ -110,6 +110,10 @@ pub struct SearchPrefs {
     /// Pins the user changed, by [`FilterKind::id`]; the others keep
     /// [`FilterKind::pinned_by_default`].
     pub pinned: BTreeMap<String, bool>,
+    /// The filter list in the order the user dragged it into, by
+    /// [`FilterKind::id`] (Eagle's `eagle.filter.toolbar.orders`); empty
+    /// means the default order.
+    pub order: Vec<String>,
     /// Folders and smart folders opened from Go to Folder, newest first.
     pub folder_history: Vec<String>,
     pub smart_history: Vec<String>,
@@ -130,6 +134,36 @@ impl SearchPrefs {
         } else {
             self.pinned.insert(kind.id().to_string(), on);
         }
+    }
+
+    /// Every filter once: those named in `order` first, in that order
+    /// (unknown ids and repeats ignored), then the rest in default order.
+    pub fn ordered(&self) -> Vec<FilterKind> {
+        let mut out: Vec<FilterKind> = Vec::with_capacity(FilterKind::ALL.len());
+        for id in &self.order {
+            if let Some(k) = FilterKind::ALL.into_iter().find(|k| k.id() == id)
+                && !out.contains(&k)
+            {
+                out.push(k);
+            }
+        }
+        let rest: Vec<FilterKind> = FilterKind::ALL.into_iter().filter(|k| !out.contains(k)).collect();
+        out.extend(rest);
+        out
+    }
+
+    /// Moves `kind` to just before `before` (`None`: to the end) and
+    /// stores the whole list, as Eagle does; the default order stores
+    /// nothing.
+    pub fn move_kind(&mut self, kind: FilterKind, before: Option<FilterKind>) {
+        if before == Some(kind) {
+            return;
+        }
+        let mut list = self.ordered();
+        list.retain(|k| *k != kind);
+        let at = before.and_then(|b| list.iter().position(|k| *k == b)).unwrap_or(list.len());
+        list.insert(at, kind);
+        self.order = if list == FilterKind::ALL { Vec::new() } else { list.iter().map(|k| k.id().to_string()).collect() };
     }
 }
 
@@ -181,5 +215,45 @@ mod tests {
         let old: SearchPrefs = serde_json::from_str("{}").unwrap();
         assert_eq!(old, SearchPrefs::default());
         assert!(old.scope.comments);
+    }
+
+    #[test]
+    fn order_defaults_and_tolerates_bad_lists() {
+        let mut p = SearchPrefs::default();
+        assert_eq!(p.ordered(), FilterKind::ALL);
+        p.order = ["bpm", "nope", "tags", "bpm"].map(String::from).to_vec();
+        let o = p.ordered();
+        assert_eq!(o.len(), FilterKind::ALL.len());
+        assert_eq!(&o[..2], [FilterKind::Bpm, FilterKind::Tags]);
+        assert_eq!(o[2], FilterKind::Color);
+        assert_eq!(o.iter().collect::<std::collections::HashSet<_>>().len(), o.len());
+    }
+
+    #[test]
+    fn moving_a_kind_stores_the_full_order() {
+        let mut p = SearchPrefs::default();
+        p.move_kind(FilterKind::Color, Some(FilterKind::Rating));
+        assert_eq!(&p.ordered()[..4], [FilterKind::Tags, FilterKind::Folders, FilterKind::Shape, FilterKind::Color]);
+        assert_eq!(p.order.len(), FilterKind::ALL.len());
+        p.move_kind(FilterKind::Rating, Some(FilterKind::Tags));
+        assert_eq!(p.ordered()[0], FilterKind::Rating);
+        p.move_kind(FilterKind::Rating, None);
+        assert_eq!(p.ordered().last(), Some(&FilterKind::Rating));
+        p.move_kind(FilterKind::Rating, Some(FilterKind::Types));
+        p.move_kind(FilterKind::Color, Some(FilterKind::Tags));
+        assert!(p.order.is_empty());
+        assert_eq!(p.ordered(), FilterKind::ALL);
+        p.move_kind(FilterKind::Color, Some(FilterKind::Color));
+        assert!(p.order.is_empty());
+    }
+
+    #[test]
+    fn order_round_trips_and_is_optional() {
+        let mut p = SearchPrefs::default();
+        p.move_kind(FilterKind::Camera, Some(FilterKind::Color));
+        let json = serde_json::to_string(&p).unwrap();
+        assert_eq!(serde_json::from_str::<SearchPrefs>(&json).unwrap(), p);
+        let old: SearchPrefs = serde_json::from_str(r#"{"pinned":{"size":true}}"#).unwrap();
+        assert!(old.order.is_empty());
     }
 }

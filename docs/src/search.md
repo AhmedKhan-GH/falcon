@@ -64,7 +64,7 @@ Eagle has no typo tolerance. falcon's app adds it on top of Eagle's matching (`Q
 
 ## Filter bar
 
-The bar under the toolbar shows one chip for each filter that is pinned or on. Eagle's default pins are Color, Tags, Folders, Shape, Rating and Type. The + button lists every filter the library can use, each with a pin that keeps it in the bar or takes it out, and clicking a name opens that filter. Duration, BPM, Camera and Font are only listed when some item has a value for them. The pins are remembered across launches with the search scope.
+The bar under the toolbar shows one chip for each filter that is pinned or on. Eagle's default pins are Color, Tags, Folders, Shape, Rating and Type. The + button lists every filter the library can use, each with a pin that keeps it in the bar or takes it out, and clicking a name opens that filter. Duration, BPM, Camera and Font are only listed when some item has a value for them. The pins are remembered across launches with the search scope. Chips can be dragged sideways to reorder them (a press starts a drag once the pointer has moved 10 points, so a click still opens the chip); the new order, kept as the full list of filters as Eagle's `eagle.filter.toolbar.orders` does, is remembered across launches and is also the order of the + menu.
 
 A filter that is on always shows its chip, pinned or not, and a chip opened from the + menu or a key stays until its menu closes. The code is in `crates/falcon-app/src/ui/filter_bar/mod.rs` and `ui/filter_bar/media.rs`.
 

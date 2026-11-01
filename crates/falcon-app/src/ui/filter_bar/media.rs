@@ -22,6 +22,11 @@ pub(crate) struct MediaFilterUi {
     /// A chip shown because its menu was opened from the + menu or a key,
     /// though it is not pinned; it goes when the menu closes.
     pub(crate) showing: Option<crate::search_state::FilterKind>,
+    /// A chip the primary button went down on, and where; becomes a drag
+    /// after the pointer moves (see `reorder.rs`).
+    pub(crate) press: Option<(crate::search_state::FilterKind, eframe::egui::Pos2)>,
+    /// The chip being dragged to a new place.
+    pub(crate) dragging: Option<crate::search_state::FilterKind>,
     /// The bar's Lock: keep the filter and search when another view opens.
     pub(crate) locked: bool,
     /// Text typed into the Tags, Folders and Type chips' search boxes.

@@ -11,6 +11,7 @@ use falcon_library::model::{Folder, Item, TagGroup};
 use falcon_library::search::{self, ColorQuery, Filter, FontFilter, Logic, SetFilter, TextFilter};
 
 pub(crate) mod media;
+mod reorder;
 
 use crate::app::App;
 use crate::icons as ic;
@@ -214,27 +215,29 @@ impl App {
         if request.is_some() {
             self.ws.filter_ui.showing = request;
         }
-        for kind in FilterKind::ALL {
+        let mut drawn: Vec<(FilterKind, egui::Rect)> = Vec::new();
+        for kind in self.search.ordered() {
             let shown = kind_active(&self.ws.filter, kind)
                 || self.ws.filter_ui.showing == Some(kind)
                 || (self.search.is_pinned(kind) && kind_applicable(kind, live()));
             if !shown {
                 continue;
             }
-            let open = ui
-                .push_id(kind.id(), |ui| {
-                    let popup = ui.next_auto_id().with("popup");
-                    if request == Some(kind) {
-                        egui::Popup::open_id(ui.ctx(), popup);
-                    }
-                    self.chip(ui, lib, kind);
-                    egui::Popup::is_id_open(ui.ctx(), popup)
-                })
-                .inner;
+            let drawn_chip = ui.push_id(kind.id(), |ui| {
+                let popup = ui.next_auto_id().with("popup");
+                if request == Some(kind) {
+                    egui::Popup::open_id(ui.ctx(), popup);
+                }
+                self.chip(ui, lib, kind);
+                egui::Popup::is_id_open(ui.ctx(), popup)
+            });
+            drawn.push((kind, drawn_chip.response.rect));
+            let open = drawn_chip.inner;
             if !open && request != Some(kind) && self.ws.filter_ui.showing == Some(kind) {
                 self.ws.filter_ui.showing = None;
             }
         }
+        self.reorder_chips(ui, &drawn);
         self.add_filter_button(ui, lib);
 
         if self.ws.filter.is_active() {
@@ -260,7 +263,7 @@ impl App {
         let resp = ui.add(egui::Button::new(RichText::new(ic::PLUS).color(t::p().text_muted)).frame(false)).on_hover_text("Add a filter to the bar");
         egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
             ui.set_min_width(200.0);
-            for kind in FilterKind::ALL {
+            for kind in self.search.ordered() {
                 if !kind_applicable(kind, lib.items().iter().filter(|i| !i.is_deleted)) {
                     continue;
                 }
