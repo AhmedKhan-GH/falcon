@@ -46,6 +46,9 @@ pub struct ImportOptions {
     /// window (default false: Eagle's API leaves them off). See
     /// [`crate::autotag`].
     pub folder_auto_tags: bool,
+    /// A name for the item, in place of the file's own. The file's
+    /// extension is kept. Meant for a single file (default None).
+    pub name: Option<String>,
 }
 
 impl Default for ImportOptions {
@@ -60,6 +63,7 @@ impl Default for ImportOptions {
             camera_metadata_all_photos: false,
             keywords_as_tags: false,
             folder_auto_tags: false,
+            name: None,
         }
     }
 }
@@ -217,7 +221,10 @@ pub fn stage(path: impl AsRef<Path>, opts: &ImportOptions) -> Result<Staged> {
     // Not every filesystem records a birth time; fall back to the mtime.
     let btime_ms = meta.created().ok().map_or(mtime_ms, |t| to_ms(Some(t)));
     let stem = src.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-    let name = sanitize_name(&stem, &ext);
+    let name = match opts.name.as_deref().map(|n| sanitize_name(n, &ext)) {
+        Some(n) if !n.is_empty() => n,
+        _ => sanitize_name(&stem, &ext),
+    };
 
     let mut item = Item {
         id: String::new(),
@@ -578,6 +585,14 @@ mod tests {
 
     fn import(file: &str, bytes: &[u8], opts: &ImportOptions) -> Item {
         import_with_thumb(file, bytes, opts).0
+    }
+
+    #[test]
+    fn a_given_name_replaces_the_file_name_and_keeps_the_extension() {
+        let named = ImportOptions { name: Some(" My: note ".into()), ..Default::default() };
+        let item = import("raw.txt", b"hi", &named);
+        assert_eq!((item.name.as_str(), item.ext.as_str()), ("My note", "txt"));
+        assert_eq!(import("raw.txt", b"hi", &ImportOptions::default()).name, "raw");
     }
 
     /// Imports into a fresh library; also returns the thumbnail's size.

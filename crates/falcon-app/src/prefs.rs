@@ -52,6 +52,11 @@ pub struct Prefs {
     /// The folder the collect window adds items to (None: no folder).
     /// Chosen in the collect window itself.
     pub collect_folder: Option<String>,
+    /// The folders the collect window adds items to. Older saved state
+    /// has only `collect_folder`, which `collect::migrate` moves here.
+    pub collect_folders: Vec<String>,
+    /// Folder ids the collect window used lately, newest first.
+    pub collect_recent: Vec<String>,
     /// Eagle's `theme.css`: the colour theme.
     pub theme: Theme,
     /// Eagle's `general.zoom`: the size of the whole interface, in percent
@@ -229,6 +234,8 @@ impl Default for Prefs {
             api_token: String::new(),
             show_collect_modal: false,
             collect_folder: None,
+            collect_folders: Vec::new(),
+            collect_recent: Vec::new(),
             theme: Theme::Dark,
             ui_zoom: 100,
             sidebar_counts: true,
@@ -1449,6 +1456,12 @@ mod tests {
         let p: Prefs = serde_json::from_str(old).unwrap();
         assert!(!p.hover_zoom && p.keywords_as_tags && !p.notify_duplicates && !p.auto_select && !p.font_style_tags && !p.api_enabled);
         assert_eq!((p.api_port, p.collect_folder.as_deref(), p.theme), (42000, Some("F1"), Theme::Blue));
+        assert!(p.collect_folders.is_empty() && p.collect_recent.is_empty());
+        let mut p = p;
+        crate::collect::migrate(&mut p.collect_folders, &mut p.collect_folder);
+        assert_eq!((p.collect_folders.as_slice(), p.collect_folder.as_deref()), (&["F1".to_string()][..], None));
+        let new: Prefs = serde_json::from_str(r#"{"collect_folders":["A","B"],"collect_recent":["B"]}"#).unwrap();
+        assert_eq!((new.collect_folders.len(), new.collect_recent.len()), (2, 1));
         // And the same through eframe's RON storage, as the app saves it.
         #[derive(serde::Deserialize)]
         struct Saved {

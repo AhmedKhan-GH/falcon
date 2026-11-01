@@ -767,6 +767,9 @@ pub struct App {
     shortcuts: crate::shortcuts::Shortcuts,
     /// The small always-on-top drop window (see `collect.rs`).
     collect: crate::collect::Collect,
+    /// Name, description and tags the collect window adds to the import
+    /// it is starting; set only for that call.
+    collect_extra: Option<crate::collect::Meta>,
     /// Audio playback for the viewer.
     audio: crate::audio::Audio,
     /// Video playback for the viewer (`video_view.rs`).
@@ -867,6 +870,7 @@ impl App {
             lock: Default::default(),
             shortcuts: Default::default(),
             collect: Default::default(),
+            collect_extra: None,
             audio: Default::default(),
             video: Default::default(),
             font_look: Default::default(),
@@ -1259,8 +1263,12 @@ impl App {
         // The collect folder is chosen in the collect window, which may
         // have changed it while Preferences was open.
         let folder = self.prefs.collect_folder.take();
+        let chosen = std::mem::take(&mut self.prefs.collect_folders);
+        let recent = std::mem::take(&mut self.prefs.collect_recent);
         self.prefs = d.prefs;
         self.prefs.collect_folder = folder;
+        self.prefs.collect_folders = chosen;
+        self.prefs.collect_recent = recent;
         self.ctx.set_zoom_factor(crate::prefs::zoom_factor(self.prefs.ui_zoom));
         self.show_sidebar = d.panels.sidebar;
         self.show_inspector = d.panels.inspector;
@@ -1280,12 +1288,42 @@ impl App {
     /// chosen folder.
     fn collect_window(&mut self, ctx: &egui::Context) {
         use crate::collect;
-        let folders = self.ws.lib.as_ref().map(|l| collect::flatten(&lock(l).metadata.folders));
-        let event = self.collect.show(ctx, folders.as_deref(), &mut self.prefs.collect_folder, &self.shortcuts);
-        let target = folders.as_deref().and_then(|f| collect::target(f, self.prefs.collect_folder.as_deref())).into_iter().collect();
+        collect::migrate(&mut self.prefs.collect_folders, &mut self.prefs.collect_folder);
+        let (folders, pool) = match self.ws.lib.as_ref() {
+            Some(l) => {
+                let lib = lock(l);
+                let pool = collect::TagPool {
+                    starred: lib.tags.starred_tags.clone(),
+                    history: lib.tags.history_tags.clone(),
+                    all: logic::tag_counts(lib.items()).into_iter().map(|(t, _)| t).collect(),
+                };
+                (Some(collect::flatten(&lib.metadata.folders)), pool)
+            }
+            None => (None, collect::TagPool::default()),
+        };
+        let mut state = collect::State { selected: &mut self.prefs.collect_folders, recent: &mut self.prefs.collect_recent };
+        let event = self.collect.show(ctx, folders.as_deref(), &mut state, &pool, &self.shortcuts);
+        let target = folders.as_deref().map(|f| collect::target(f, &self.prefs.collect_folders)).unwrap_or_default();
         match event {
-            Some(collect::Event::Files(paths)) => self.import_into(paths, target),
-            Some(collect::Event::Paste) => self.paste_into(target),
+            Some(collect::Event::CreateFolder(name)) => {
+                if let Some(l) = self.ws.lib.clone() {
+                    let made = lock(&l).create_folder(None, &name);
+                    match made {
+                        Ok(id) => self.prefs.collect_folders.push(id),
+                        Err(e) => self.flash(format!("Could not create the folder: {e}")),
+                    }
+                }
+            }
+            Some(e @ (collect::Event::Files(_) | collect::Event::Paste)) => {
+                self.collect_extra = Some(self.collect.meta.clone());
+                match e {
+                    collect::Event::Files(paths) => self.import_into(paths, target.clone()),
+                    _ => self.paste_into(target.clone()),
+                }
+                self.collect_extra = None;
+                self.collect.clear_meta();
+                collect::push_recent(&mut self.prefs.collect_recent, &target);
+            }
             None => {}
         }
     }
@@ -1480,6 +1518,7 @@ impl App {
     }
 
     fn import_files(&mut self, paths: Vec<PathBuf>, folders: Vec<String>) {
+        let extra = self.collect_extra.clone();
         if paths.is_empty() {
             return;
         }
@@ -1503,7 +1542,10 @@ impl App {
             return;
         }
         files.sort();
-        let opts = self.prefs.import_options(folders);
+        let mut opts = self.prefs.import_options(folders);
+        if let Some(meta) = &extra {
+            meta.apply(&mut opts, files.len());
+        }
         self.spawn_import(files.into_iter().map(|path| import_ui::Job { path, opts: opts.clone() }).collect());
     }
 

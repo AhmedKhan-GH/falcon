@@ -644,7 +644,14 @@ What Eagle does, from `js/default-preferences.js`, `js/preferences.js`, `js/serv
 
 ## Collect window
 
-⌘⇧K, or Show Collect Window in the library menu, opens a small (280 × 360 pt) borderless window that floats above all other apps. Files dropped on it, or pasted into it with ⌘V (copied files or image data), go through the normal background import into the folder picked in its list ("No folder" by default; a search box narrows the list by any part of a folder's path). The choice is saved with the preferences, and a folder that is missing from the open library counts as no folder. Drag the header to move it; ×, Esc or ⌘⇧K close it. Its position is remembered between launches. The code is in `crates/falcon-app/src/collect.rs`.
+⌘⇧K, or Show Collect Window in the library menu, opens a small (300 × 600 pt) borderless window that floats above all other apps. Files dropped on it, or pasted into it with ⌘V (copied files or image data), go through the normal background import into the folders picked in its list.
+
+- **Folders:** a click picks just that folder; ⌘-click adds a folder to the pick or takes it out. Picked rows show a check mark. With nothing picked, items go to the library root ("No folder" clears the pick). The pick is saved with the preferences, and picked folders missing from the open library are ignored. A search box narrows the list by any part of a folder's path.
+- **Recent:** after each collect the destination folders move to the front of a list of the last 20. When there are recent or picked folders, and the library has more folders than that, the list opens with a Recent block (picked folders first, then up to five recent ones, each shown with its full path), a line, and then every folder in tree order. While searching, the Recent block is filtered too, and folders in it are left out of the list below. Right-click a row in the block and choose Remove from Recent to drop it.
+- **New folder:** when the search text is not empty and no folder is named exactly that, the last row reads New Folder "text". Clicking it, or pressing Enter when it is the only row, makes a top-level folder with that name, picks it and clears the search. Creating it this way is not an undo step.
+- **Name, description and tags:** the fields above the list apply to what is collected next. Name is used only when exactly one file is collected (the file's extension stays). Description becomes the item's annotation. In the tag field, Enter or a comma adds a tag; each tag chip has a × to remove it; while typing, up to eight suggestions from the library appear (starred tags first, then recently used, then the rest) and a click adds one. Pasting uses the same fields. The three fields are cleared after each collect; the folder pick stays.
+
+Drag the header to move it; ×, Esc or ⌘⇧K close it (Esc first leaves a field being typed in). Its position is remembered between launches. The code is in `crates/falcon-app/src/collect.rs`; the name goes through `ImportOptions::name`.
 
 It is a second OS window (an egui immediate viewport with `with_always_on_top` and `with_decorations(false)`). In eframe 0.37 each viewport has its own winit window and input, and `WindowEvent::DroppedFile` lands in that viewport's `raw.dropped_files`, so drops work on it directly; no fallback was needed. On a backend without multiple viewports egui draws it as a panel inside the main window instead, and drops there go to the main window's import.
 
@@ -654,7 +661,7 @@ What Eagle's collect window is, from `collect-window/` and `js/background.js` (s
 - Left side (240 pt): the image preview with its dimensions, a 1–5 rating, an editable title and description, and tags. Right side: a searchable folder list with recent folders first, multi-select and creating a folder; choosing a folder saves the item there with the folder's auto-tags and closes the window.
 - The window is frameless with 8 pt rounded corners on a translucent background. Its size, position and always-on-top setting are set in Eagle's main process, which is not in the readable bundle (inferred: small, centred, on top).
 
-falcon keeps the folder chooser and the always-on-top window but works as a drop target, because falcon has no browser extension or screenshots yet. Not built: per-item title, description, rating and tags, recent folders, multi-select, creating a folder from the window, and dropping images straight from a browser (macOS hands winit only file drops, so browser image drags that carry no file are ignored).
+falcon keeps the folder chooser and the always-on-top window but works as a drop target, because falcon has no browser extension or screenshots yet. Not built: the rating, a preview of the item, and dropping images straight from a browser (macOS hands winit only file drops, so browser image drags that carry no file are ignored).
 
 ## Organising
 
