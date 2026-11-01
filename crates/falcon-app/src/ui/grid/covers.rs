@@ -162,6 +162,16 @@ impl App {
                         if resp.double_clicked() || resp.clicked() {
                             open = Some(child.id.clone());
                         }
+                        // Items dragged from the grid drop onto the card, as on a sidebar row.
+                        if resp.dnd_hover_payload::<crate::app::DragItems>().is_some() {
+                            ui.painter().rect_filled(thumb, t::RADIUS, t::p().primary.gamma_multiply(0.25));
+                            ui.painter().rect_stroke(thumb, t::RADIUS, Stroke::new(1.5, t::p().primary), StrokeKind::Inside);
+                        }
+                        if let Some(d) = resp.dnd_release_payload::<crate::app::DragItems>()
+                            && let Some(op) = logic::folder_drop(&self.ws.scope, &child.id, ui.input(|i| i.modifiers.alt))
+                        {
+                            self.push_bulk(d.0.len(), Action::DropOnFolder(d.0.clone(), child.id.clone(), op));
+                        }
                         let shut = crate::organize::is_shut(child, &self.ws.org.unlocked);
                         resp.context_menu(|ui| {
                             ui.set_min_width(180.0);
