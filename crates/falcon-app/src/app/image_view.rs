@@ -184,7 +184,14 @@ impl App {
         let preview_job = if full_failed { job_for(item, lib.root(), Tier::Preview) } else { None };
         let no_preview = full_failed && (preview_job.is_none() || self.ws.loader.has_failed(&id, Tier::Preview));
         let has_original = original.is_some();
-        if self.prefs.transparency_grid && (tex.is_some() || has_original) && r.intersects(area) {
+        // The item's own thumbnail background wins over the preference.
+        let item_bg = crate::logic::ThumbBg::of(item);
+        if let Some(bg) = item_bg
+            && (tex.is_some() || has_original)
+            && r.intersects(area)
+        {
+            super::paint_thumb_bg(clip.painter(), r, bg);
+        } else if self.prefs.transparency_grid && (tex.is_some() || has_original) && r.intersects(area) {
             let checker = self.image.checker.get_or_insert_with(|| {
                 let (a, b) = (Color32::WHITE, Color32::from_gray(0xcc));
                 ui.ctx().load_texture("viewer-checker", ColorImage::new([2, 2], vec![a, b, b, a]), TextureOptions::NEAREST_REPEAT)

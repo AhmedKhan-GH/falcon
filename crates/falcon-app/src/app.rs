@@ -151,6 +151,8 @@ enum Action {
     Edit(image_edit::Op),
     /// Several folders at once, Move Folder and folder deletion (`folders_ui`).
     Folders(folders_ui::FolderAction),
+    /// Sets or removes the thumbnail background of these items.
+    Background(Vec<String>, Option<logic::ThumbBg>),
     /// The duplicate dialog's answer for these held files.
     ResolveDuplicates(Vec<crate::import_dupes::Pending>, crate::import_dupes::Choice),
 }
@@ -1867,6 +1869,16 @@ impl App {
                 }
                 Action::Edit(op) => self.apply_edit(lib, op),
                 Action::Folders(a) => self.apply_folder_action(lib, a),
+                Action::Background(ids, bg) => {
+                    let mut r = Ok(());
+                    for id in &ids {
+                        let Some(mut item) = lib.item(id).cloned() else { continue };
+                        if logic::set_thumb_bg(&mut item, bg) {
+                            r = r.and(lib.update_item(item));
+                        }
+                    }
+                    r
+                }
             };
             if let Err(e) = result {
                 self.flash(format!("Could not save: {e}"));
@@ -1975,6 +1987,7 @@ fn action_label(action: &Action) -> String {
         Action::DropOnFolder(ids, _, logic::FolderDrop::Move(_)) => format!("Move {} to folder", ids.len()),
         Action::DropOnFolder(ids, _, logic::FolderDrop::Add) => format!("Add {} to folder", ids.len()),
         Action::Trash(ids, true) => format!("Move {} to Trash", ids.len()),
+        Action::Background(ids, _) => format!("Set the thumbnail background of {}", ids.len()),
         Action::Trash(ids, false) => format!("Restore {}", ids.len()),
         Action::DeletePermanently(ids) => format!("Delete {}", ids.len()),
         Action::EmptyTrash => "Empty Trash".into(),
@@ -3373,6 +3386,20 @@ impl App {
             self.ws.folders.new_with = Some((targets.to_vec(), String::new()));
         }
         self.edit_menu(ui, item, targets, lib);
+        if !in_viewer {
+            let cur = logic::ThumbBg::of(item);
+            ui.menu_button("Thumbnail Background", |ui| {
+                if ui.add(egui::Button::selectable(cur.is_none(), "None")).clicked() {
+                    self.ws.actions.push(Action::Background(targets.to_vec(), None));
+                }
+                ui.separator();
+                for bg in logic::ThumbBg::ALL {
+                    if ui.add(egui::Button::selectable(cur == Some(bg), bg.label())).clicked() {
+                        self.ws.actions.push(Action::Background(targets.to_vec(), Some(bg)));
+                    }
+                }
+            });
+        }
         self.item_export_menu(ui, targets);
         ui.separator();
         if self.ws.scope == Scope::Trash {
@@ -3476,6 +3503,9 @@ impl App {
             p.rect_filled(tile, t::RADIUS, t::p().main);
             let border = if hovered { t::p().card_hover } else { t::p().card_border };
             p.rect_stroke(tile, t::RADIUS, Stroke::new(1.0, border), StrokeKind::Inside);
+            if let Some(bg) = logic::ThumbBg::of(item) {
+                paint_thumb_bg(&p, tile.shrink(1.0), bg);
+            }
             if d.fill {
                 self.draw_image_cover(ui, lib, item, tile.shrink(1.0));
             } else {
@@ -3483,6 +3513,9 @@ impl App {
             }
         } else {
             p.rect_filled(tile, CornerRadius::same(4), t::p().field);
+            if let Some(bg) = logic::ThumbBg::of(item) {
+                paint_thumb_bg(&p, tile, bg);
+            }
             self.draw_image(ui, lib, item, tile, true);
             if hovered && !selected {
                 p.rect_stroke(tile, CornerRadius::same(4), Stroke::new(1.0, t::p().card_hover), StrokeKind::Inside);
@@ -3543,6 +3576,9 @@ impl App {
         }
         let thumb = Rect::from_min_size(Pos2::new(row.left() + 6.0, row.top() + 5.0), Vec2::splat(row.height() - 10.0));
         p.rect_filled(thumb, CornerRadius::same(4), t::p().field);
+        if let Some(bg) = logic::ThumbBg::of(item) {
+            paint_thumb_bg(&p, thumb, bg);
+        }
         self.draw_image(ui, lib, item, thumb.shrink(2.0), false);
         let cy = row.center().y;
         let (x0, span) = list_span(row);
@@ -3758,6 +3794,39 @@ impl App {
             }
         });
         resp.on_hover_text("Click to show items · right-click to rename, star or delete. Renaming to an existing tag merges them.");
+    }
+}
+
+/// Paints an item's thumbnail background into `rect`: a plain colour, or
+/// a checkerboard clipped to what is visible.
+fn paint_thumb_bg(p: &egui::Painter, rect: Rect, bg: logic::ThumbBg) {
+    use logic::ThumbBg as B;
+    let plain = |c| {
+        p.rect_filled(rect, 0.0, c);
+    };
+    match bg {
+        B::Dark => plain(Color32::BLACK),
+        B::Gray => plain(Color32::from_gray(0x77)),
+        B::Light => plain(Color32::WHITE),
+        B::Grid => {
+            const CELL: f32 = 10.0;
+            let vis = rect.intersect(p.clip_rect());
+            if !vis.is_positive() {
+                return;
+            }
+            p.rect_filled(vis, 0.0, Color32::WHITE);
+            let (c0, r0) = (((vis.left() - rect.left()) / CELL).floor() as i64, ((vis.top() - rect.top()) / CELL).floor() as i64);
+            let (c1, r1) = (((vis.right() - rect.left()) / CELL).ceil() as i64, ((vis.bottom() - rect.top()) / CELL).ceil() as i64);
+            for row in r0..r1 {
+                for col in c0..c1 {
+                    if (row + col) % 2 == 0 {
+                        continue;
+                    }
+                    let cell = Rect::from_min_size(rect.min + vec2(col as f32 * CELL, row as f32 * CELL), Vec2::splat(CELL)).intersect(vis);
+                    p.rect_filled(cell, 0.0, Color32::from_gray(0xcc));
+                }
+            }
+        }
     }
 }
 

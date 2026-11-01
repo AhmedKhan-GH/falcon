@@ -2160,6 +2160,61 @@ pub fn header_sort(current: Option<(OrderBy, bool)>, clicked: OrderBy) -> (Order
     }
 }
 
+/// What is drawn behind an item's image in the grid and the viewer
+/// (Eagle's per-item `background`; no key means none).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ThumbBg {
+    Dark,
+    Gray,
+    Light,
+    /// A checkerboard, for transparency.
+    Grid,
+}
+
+impl ThumbBg {
+    pub const ALL: [ThumbBg; 4] = [ThumbBg::Dark, ThumbBg::Gray, ThumbBg::Light, ThumbBg::Grid];
+
+    /// The value Eagle stores in the item's `background`.
+    pub fn key(self) -> &'static str {
+        match self {
+            ThumbBg::Dark => "dark",
+            ThumbBg::Gray => "gray",
+            ThumbBg::Light => "light",
+            ThumbBg::Grid => "grid",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            ThumbBg::Dark => "Black",
+            ThumbBg::Gray => "Gray",
+            ThumbBg::Light => "White",
+            ThumbBg::Grid => "Checkerboard",
+        }
+    }
+
+    /// An item's background; an unknown value is none.
+    pub fn of(item: &Item) -> Option<ThumbBg> {
+        let v = item.extra.get("background")?.as_str()?;
+        ThumbBg::ALL.into_iter().find(|b| b.key() == v)
+    }
+}
+
+/// Sets (or with `None` removes) an item's `background`, as Eagle does;
+/// returns whether it changed.
+pub fn set_thumb_bg(item: &mut Item, bg: Option<ThumbBg>) -> bool {
+    let before = item.extra.get("background").cloned();
+    match bg {
+        Some(b) => {
+            item.extra.insert("background".into(), b.key().into());
+        }
+        None => {
+            item.extra.remove("background");
+        }
+    }
+    item.extra.get("background") != before.as_ref()
+}
+
 #[cfg(test)]
 mod display_tests {
     use super::*;
@@ -2442,5 +2497,23 @@ mod selection_tests {
         assert_eq!(header_sort(Some((OrderBy::Name, true)), OrderBy::Name), (OrderBy::Name, false));
         assert_eq!(header_sort(Some((OrderBy::Name, false)), OrderBy::FileSize), (OrderBy::FileSize, true));
         assert_eq!(header_sort(None, OrderBy::Import), (OrderBy::Import, true));
+    }
+
+    #[test]
+    fn thumbnail_backgrounds_use_eagles_key() {
+        let mut it: Item = serde_json::from_value(serde_json::json!({
+            "id": "A", "name": "n", "size": 1, "btime": 0, "mtime": 0, "ext": "png", "tags": [], "folders": [],
+            "isDeleted": false, "url": "", "annotation": "", "modificationTime": 1, "lastModified": 1
+        }))
+        .unwrap();
+        assert_eq!(ThumbBg::of(&it), None);
+        assert!(set_thumb_bg(&mut it, Some(ThumbBg::Grid)));
+        assert_eq!(it.extra.get("background").and_then(|v| v.as_str()), Some("grid"));
+        assert_eq!(ThumbBg::of(&it), Some(ThumbBg::Grid));
+        assert!(!set_thumb_bg(&mut it, Some(ThumbBg::Grid)), "no change");
+        assert!(set_thumb_bg(&mut it, None));
+        assert!(!it.extra.contains_key("background"), "none removes the key, as Eagle does");
+        it.extra.insert("background".into(), "plaid".into());
+        assert_eq!(ThumbBg::of(&it), None);
     }
 }
