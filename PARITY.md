@@ -7,10 +7,10 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
 | Main window: menus, shortcuts, toolbar, sidebar, layouts | 216 | 24 | 31 | 9 |
-| Viewers and file formats | 156 | 23 | 11 | 7 |
+| Viewers and file formats | 156 | 24 | 10 | 7 |
 | Search, filters and organising | 197 | 11 | 14 | 3 |
 | Import, export, library, preferences and integrations | 157 | 10 | 45 | 26 |
-| **Total** | 726 | 68 | 101 | 45 |
+| **Total** | 726 | 69 | 100 | 45 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -36,7 +36,7 @@ These are bugs, not missing features. The first four can lose data or edits.
 8. ~~No marquee selection, no multi-select of folders, no grid display options.~~ Fixed.
 9. ~~No tag picker or suggestions.~~ Fixed.
 10. ~~No GIF player controls, no animated WebP or AVIF, no GIF hover previews.~~ Fixed (AVIF on macOS); still no hover playback for video or audio.
-11. No interactive 3D viewer; ~~text editor~~ fixed; the font viewer is still partial.
+11. ~~No interactive 3D viewer, text editor or full font viewer.~~ Fixed for obj/stl/ply/glb/gltf/3mf; fbx, 3ds, dae and ifc stay stills.
 12. ~~No watched import folder.~~ Fixed. No reload on outside changes, no sync-conflict detection, no screen capture.
 13. English only; Eagle ships 8 languages.
 
@@ -476,7 +476,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Font | Inside main window (`index.html:1388`) | Central panel between sidebar and inspector (`F/app.rs` `fn viewer`, `viewer_ui`) | Done |
 | Text (.txt) | Inside main window (`index.html:1393`) | Central panel between sidebar and inspector (`F/app.rs` `fn viewer`, `viewer_ui`), as a still render | Partial |
 | PDF | Inside main window (`index.html:1301`) | Central area, sidebar and inspector kept (`F/app.rs:3392`, `F/app/pdf_view.rs:958`) | Done (macOS only) |
-| 3D model | Inside main window (`index.html:1443`) | Central panel between sidebar and inspector (`F/app.rs` `fn viewer`, `viewer_ui`), as a still render | Partial |
+| 3D model | Inside main window (`index.html:1443`) | Central panel, interactive for obj/stl/ply/glb/gltf/3mf, a still for fbx/3ds/dae/ifc | Partial |
 | Special formats (PSD, AI, Office…) | Inside main window (`index.html:1448`) | Central panel between sidebar and inspector (`F/app.rs` `fn viewer`, `viewer_ui`), as a QuickLook render | Partial |
 | Web page (url/html/mhtml) | Inside main window (`index.html:1491`) | Central panel; live WKWebView for url/html on macOS, MHTML as a still | Partial |
 | Toggle sidebar and inspector from inside the viewer | `toggle-all-btn` in the detail toolbar (`index.html:1015`) | Panels button in every viewer bar and the main toolbar (`App::panels_button`, `logic::toggle_all`), ⌥⌘3 and Tab; both-on/both-off like Eagle | Done |
@@ -689,7 +689,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| Interactive 3D view (orbit, pan, zoom) | Missing | Shows a still QuickLook render if macOS can make one (`F/loader.rs:56-57`) | local |
+| Interactive 3D view (orbit, pan, zoom) | Partial | `falcon_library::model3d` readers (obj+mtl, stl, ply, glb/gltf, 3mf) and an `egui_wgpu` callback viewer (`ui/viewer/model.rs`): Eagle's camera, mouse mapping, lighting, edges, details; grid/axes extras; thumbnails rendered at import. fbx, 3ds, dae and ifc stay QuickLook stills; no mesh tree, export, snapshot or textures | local |
 | Fit model to window | Missing | None | local |
 | Up-axis (Y/Z), flip up vector, fixed or free orbit | Missing | None | local |
 | Perspective or orthographic camera | Missing | None | local |
