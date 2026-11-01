@@ -154,6 +154,8 @@ pub struct App {
     pub(crate) text_zoom: u8,
     /// Inspector sections folded away (`Folds`).
     pub(crate) folds: Folds,
+    /// The All Tags page's sort and grouping (`TagLook`).
+    pub(crate) tag_look: crate::tags::TagLook,
     /// The auto-import folder's watcher and what it has handed over
     /// (`auto_import.rs`).
     pub(crate) auto_import: crate::auto_import::AutoImport,
@@ -257,6 +259,7 @@ impl App {
             refresh: false,
             text_zoom: 0,
             folds: Folds::default(),
+            tag_look: Default::default(),
             auto_import: Default::default(),
             modes: Default::default(),
             preview: Vec::new(),
@@ -313,6 +316,7 @@ impl App {
         app.pdf.set_marks(saved.pdf_marks);
         app.image.edge = saved.zoom_edge.unwrap_or(false);
         app.folds = saved.folds;
+        app.tag_look = saved.tag_look;
         app.text_zoom = saved.text_zoom.unwrap_or(0).min(crate::textdoc::ZOOM_LEVELS - 1);
         app.auto_import.imported = Arc::new(Mutex::new(saved.auto_imported));
         app.font_look = saved.font_look.unwrap_or_default();

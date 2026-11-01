@@ -42,8 +42,6 @@ pub(crate) struct OrgState {
     touch_failed: bool,
     /// The scope a random folder sort was shuffled for, and its seed.
     seed: Option<(Scope, u64)>,
-    /// All Tags shows tag groups instead of A-Z.
-    by_group: bool,
     /// Tag group being renamed, with the text so far.
     pub(crate) group_rename: Option<(String, String)>,
     /// Tag group waiting for its delete to be confirmed.
@@ -73,8 +71,6 @@ pub(crate) struct OrgState {
     pub tag_anchor: Option<String>,
     pub tag_order: Vec<String>,
     pub tag_order_shown: Vec<String>,
-    /// The All Tags page's sort.
-    pub tag_sort: crate::tags::TagSort,
     /// The list the All Tags page shows (its sidebar, `tag_view.rs`).
     pub tag_view: crate::tag_view::TagView,
     /// Where the All Tags page's sidebar was drawn last frame, for the
@@ -1323,23 +1319,23 @@ impl App {
         // Grouping applies to the All list; the others are one list each.
         if all {
             ui.label(RichText::new(tr("Group by")).color(t::p().text_muted));
-            if ui.selectable_label(!self.ws.org.by_group, tr("Alphabet")).clicked() {
-                self.ws.org.by_group = false;
+            if ui.selectable_label(!self.tag_look.by_group, tr("Alphabet")).clicked() {
+                self.tag_look.by_group = false;
             }
-            if ui.selectable_label(self.ws.org.by_group, tr("Tag Group")).clicked() {
-                self.ws.org.by_group = true;
+            if ui.selectable_label(self.tag_look.by_group, tr("Tag Group")).clicked() {
+                self.tag_look.by_group = true;
             }
         }
         if ui.button(format!("{}  {}", ic::PLUS, tr("New Group"))).clicked() {
             self.ws.org.rename_new_group = true;
             self.ws.actions.push(org(OrgAction::CreateGroup(Vec::new())));
         }
-        ui.menu_button(trf("Sort: {sort}", &[("sort", &self.ws.org.tag_sort.label())]), |ui| {
+        ui.menu_button(trf("Sort: {sort}", &[("sort", &self.tag_look.sort.label())]), |ui| {
             ui.set_min_width(180.0);
             for s in crate::tags::TagSort::ALL {
-                let mark = if s == self.ws.org.tag_sort { ic::CHECK } else { " " };
+                let mark = if s == self.tag_look.sort { ic::CHECK } else { " " };
                 if ui.button(format!("{mark}  {}", s.label())).clicked() {
-                    self.ws.org.tag_sort = s;
+                    self.tag_look.sort = s;
                 }
             }
         });
@@ -1350,7 +1346,7 @@ impl App {
 
     /// Whether the page shows tag groups.
     pub(crate) fn tags_by_group(&self) -> bool {
-        self.ws.org.by_group
+        self.tag_look.by_group
     }
 
     /// The All Tags page in tag-group mode: one section per group, then
@@ -1358,7 +1354,7 @@ impl App {
     pub(crate) fn tag_groups_page(&mut self, ui: &mut Ui, lib: &Library, filter: &str) {
         // The sort orders the ungrouped tags; groups keep their own order.
         let mut counts = logic::tag_counts(lib.items());
-        self.ws.org.tag_sort.apply(&mut counts);
+        self.tag_look.sort.apply(&mut counts);
         let (sections, rest) = organize::tag_sections(&counts, &lib.metadata.tags_groups, filter);
         for sec in &sections {
             self.tag_group_header(ui, lib, Some(sec), sec.tags.len());
@@ -1579,7 +1575,7 @@ impl App {
                 ui.separator();
             }
             if ui.button(tr("New Group…")).clicked() {
-                self.ws.org.by_group = true;
+                self.tag_look.by_group = true;
                 self.ws.org.rename_new_group = true;
                 self.ws.actions.push(org(OrgAction::CreateGroup(tags.to_vec())));
             }

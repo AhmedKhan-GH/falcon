@@ -17,7 +17,7 @@ use super::tag_sidebar::TAG_SIDEBAR_WIDTH;
 impl App {
     pub(crate) fn tag_page(&mut self, ui: &mut Ui, lib: &Library) {
         let mut counts = logic::tag_counts(lib.items());
-        self.ws.org.tag_sort.apply(&mut counts);
+        self.tag_look.sort.apply(&mut counts);
         let full = ui.available_rect_before_wrap();
         let side = Rect::from_min_size(full.min, vec2(TAG_SIDEBAR_WIDTH, full.height()));
         self.tag_sidebar(ui, lib, side, &counts);
@@ -44,7 +44,7 @@ impl App {
             TagView::Group(_) => group.map(|g| tag_view::group_tags(&counts, g)).unwrap_or_default(),
         };
         let mut tags: Vec<(String, usize)> = listed.into_iter().filter(|(t, _)| filter.is_empty() || t.to_lowercase().contains(&filter)).collect();
-        let sort = self.ws.org.tag_sort;
+        let sort = self.tag_look.sort;
         // The order the chips were drawn in last frame is what ⇧-click spans.
         self.ws.org.tag_order_shown = std::mem::take(&mut self.ws.org.tag_order);
         let all_view = view == TagView::All;

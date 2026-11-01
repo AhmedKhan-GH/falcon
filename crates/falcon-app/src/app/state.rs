@@ -90,6 +90,8 @@ pub(crate) struct Saved {
     pub(crate) recent_items: crate::recent::RecentItems,
     /// Which inspector sections are folded away, for every library.
     pub(crate) folds: Folds,
+    /// The All Tags page's sort and grouping, for every library.
+    pub(crate) tag_look: crate::tags::TagLook,
     /// The welcome flow was finished.
     pub(crate) welcomed: bool,
 }
@@ -572,6 +574,7 @@ impl App {
             font_look: Some(self.font_look),
             hide_navigator: Some(self.modes.hide_navigator),
             recent_items: self.recent_items.clone(),
+            tag_look: self.tag_look,
             welcomed: self.welcomed,
         };
         eframe::set_value(storage, eframe::APP_KEY, &saved);
@@ -640,6 +643,19 @@ mod tests {
         eframe::set_value(&mut m, eframe::APP_KEY, &saved);
         let back: Saved = eframe::get_value(&m, eframe::APP_KEY).unwrap();
         assert_eq!(back.folds, saved.folds);
+    }
+
+    #[test]
+    fn tag_page_sort_and_grouping_are_kept() {
+        use crate::tags::{TagLook, TagSort};
+        let mut m = Memory::default();
+        m.set_string_raw(r#"(tile: Some(150.0))"#);
+        let saved: Saved = eframe::get_value(&m, eframe::APP_KEY).unwrap();
+        assert_eq!(saved.tag_look, TagLook { sort: TagSort::NameUp, by_group: false });
+        let saved = Saved { tag_look: TagLook { sort: TagSort::CountDown, by_group: true }, ..Default::default() };
+        eframe::set_value(&mut m, eframe::APP_KEY, &saved);
+        let back: Saved = eframe::get_value(&m, eframe::APP_KEY).unwrap();
+        assert_eq!(back.tag_look, saved.tag_look);
     }
 
     #[test]

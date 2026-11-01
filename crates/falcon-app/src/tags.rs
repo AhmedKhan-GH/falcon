@@ -521,8 +521,19 @@ pub fn can_merge(n: usize) -> bool {
     (2..=5).contains(&n)
 }
 
+/// How the All Tags page lists tags: its sort and whether it groups by tag
+/// group. Eagle keeps both in app-wide settings (`TAGS_SORT_BY`,
+/// `TAGS_SORT_INCREASE`, `TAGS_GROUP_BY`), so they follow the user across
+/// libraries and launches.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct TagLook {
+    pub sort: TagSort,
+    pub by_group: bool,
+}
+
 /// The All Tags page's sort (Eagle's tag list menu).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub enum TagSort {
     #[default]
     NameUp,
