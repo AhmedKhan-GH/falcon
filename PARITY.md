@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 219 | 23 | 29 | 9 |
-| Viewers and file formats | 166 | 21 | 3 | 7 |
-| Search, filters and organising | 197 | 11 | 14 | 3 |
-| Import, export, library, preferences and integrations | 159 | 10 | 43 | 26 |
-| **Total** | 741 | 65 | 89 | 45 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 227 | 23 | 21 | 9 |
+| Viewers and file formats | 171 | 23 | -4 | 7 |
+| Search, filters and organising | 208 | 7 | 7 | 3 |
+| Import, export, library, preferences and integrations | 164 | 10 | 38 | 26 |
+| **Total** | 770 | 63 | 62 | 45 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -128,15 +128,15 @@ Cross-references (not counted): File ▸ Import Folders / Links / Eagle Package 
 | Item: Set as Folder Cover | Done | image_edit.rs:90-95 | local |
 | Item: New Folder with Selection (N items) | Done | `folders_ui` `new_with_dialog`: creates the folder and adds the selected items | local |
 | Item: Rename / Rename N Items (batch rename dialog) | Done | Rename N Items dialog (`rename.rs`, incl. `%F`), asks first at 10+ items; one item uses the inspector title | local |
-| Item: Copy (files) | Partial | ⌘C works (app.rs:942). Not in the menu | local |
+| Item: Copy (files) | Done | Edit ▸ Copy, the item menu's Copy and ⌘C copy the selected files (`ui/dialogs/export.rs` `copy_items`) | local |
 | Item: Copy File Path | Done | `export_ui.rs` `copy_variant`, every selected item | local |
 | Item: Copy… ▸ Link, Folder path, Thumbnail, Base64, Name | Done | `export_ui.rs` `item_copy_menu`; Link copies the item's source URL | local |
 | Item: Copy Tags / Paste Tags | Done | `item_menu` in app.rs | local |
 | Item: Combine Images (several selected) | Missing | A plugin in Eagle 4 (`combine-images`); not built | local |
-| Item: Duplicate | Missing |  | local |
+| Item: Duplicate | Partial | ⌘D, Edit menu and card menu duplicate one item (`item_ops.rs`); several selected are not all duplicated yet | local |
 | Item: Search by Image ▸ Google / Bing / Yandex / TinEye / SauceNAO | Missing |  | online/plugin |
 | Item: Enter / Leave Presentation Mode | Done | Item menu and middle click in the image viewer | local |
-| Item: Thumbnail Background ▸ None / Black / Gray / White / Checkerboard grid | Missing |  | local |
+| Item: Thumbnail Background ▸ None / Black / Gray / White / Checkerboard grid | Done | Item menu submenu for the selection (`logic::ThumbBg`, `Action::Background`); hidden in the viewer as Eagle | local |
 | Item: Grayscale preview toggle | Done | Item menu | local |
 | Item: More ▸ custom thumbnail (file) / reset | Done | image_edit.rs:96-103 | local |
 | Item: More ▸ custom thumbnail from the clipboard | Done | ⇧⌥⌘T and the card menu | local |
@@ -172,7 +172,7 @@ Cross-references (not counted): File ▸ Import Folders / Links / Eagle Package 
 | Trash sidebar item: Restore All Items | Done | Trash menu, after asking | local |
 | **Recently Used** item: Clear history | Done | Recently Used menu | local |
 | **Sidebar nav area**: choose which entries are visible (All, Uncategorized, Untagged, Recent, Random, Community, All Tags) | Missing |  | local |
-| **Sidebar / panel edges**: Toggle Sidebar / Inspector / both | Missing | Buttons only (app.rs:1585, 3644) | local |
+| **Sidebar / panel edges**: Toggle Sidebar / Inspector / both | Done | View menu, ⌥⌘1/2/3, the toolbar panels button and its right-click menu | local |
 | **Folders heading**: Sort folders by title | Done | app.rs:1713-1715 | local |
 | **Empty grid** right-click opens the layout and sort panel | Missing | The background only clears the selection (app.rs:2490-2493) | local |
 | **List-view column header** right-click picks columns (tags, dimensions, rating, extension, file size, date added) | Done | `layout_panel::list_header` | local |
@@ -247,10 +247,10 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Title for the current view, "Search results", or "N folders selected" | Done | `logic::TreeSel`; the title reads "N folders selected" while several are picked | local |
 | Right-click the title for an ancestor jump menu | Missing |  | local |
 | Thumbnail size slider with − and + | Done | app.rs:2085-2109 | local |
-| Refresh button in the Random view | Missing |  | local |
+| Refresh button in the Random view | Partial | R and View ▸ Shuffle Again reshuffle; no on-screen Refresh button | local |
 | Layout and sort panel button | Done | `app/layout_panel.rs` in Eagle's order (layout, Fit/Fill, sort, Show Name/Info/Extension/Label/Comments/Subfolders, sidebar and inspector, Refresh); no Speed/Quality | local |
 | Filter button with an active state | Done | app.rs:2034, 2043-2049 | local |
-| Search field with a scope menu (Tags / URL / Comment / Note) and a search-by-image camera | Partial | Field works (app.rs:2061). The ▾ and 📷 are decoration only, the camera is disabled. Cross-ref search | local |
+| Search field with a scope menu (Tags / URL / Comment / Note) and a search-by-image camera | Partial | Search scope menu on the caret (`search_scope_menu`); the camera is disabled (search by image is online) | local |
 | Actions button | Missing | Drawn disabled (app.rs:2038) | local |
 | Plugins button | Missing | Drawn disabled (app.rs:2040) | online/plugin |
 | AI Search button | Missing |  | online/plugin |
@@ -293,7 +293,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Layout remembered per folder | Done | `logic::layout_key`: per folder or smart folder, else per library (`Saved.layouts`), as Eagle's `eagle.list.layout.<id>` | local |
 | Grid layout Fit or Fill option | Done | `Display.fill`, `draw_image_cover`; hover playback still works in Fill | local |
 | Thumbnail Speed vs Quality (load originals for large tiles) | Done | Layout panel option, Quality by default as Eagle; large jpg/png/webp/bmp cards show the original up to 1600 px through a bounded `Tier::Card` cache (16 entries) | local |
-| Sort-by choices in the layout panel, global and per folder, including Manual, Duration and Random | Partial | Global sort lacks Duration, Random and Manual (search.rs:1026). Per-folder sort exists (organize_ui.rs:563-660). Cross-ref search | local |
+| Sort-by choices in the layout panel, global and per folder, including Manual, Duration and Random | Done | Global sort with Duration and Random (`OrderBy::ALL`); a folder's own sort adds Manual in the panel (`own_sort_menu`) | local |
 | Toggle Show Name under thumbnails | Done | `Display.name`, default on | local |
 | Toggle item info, choosing Dimensions / File Size / Tags / Rating / Date Modified / Date Created | Done | `logic::caption_info` with Eagle's six types and fallbacks (duration for media, size without preview, dash for no tags, stars, import time for dates) | local |
 | Toggle the file extension in the name | Done | `logic::caption_name` | local |
@@ -309,7 +309,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Thumbnail background (checkerboard for transparency, etc.) | Done | Card menu Thumbnail Background ▸ None/Black/Gray/White/Checkerboard, item key `background` with Eagle's values (`logic::ThumbBg`, `Action::Background`); drawn in grid, list and viewer | local |
 | Hover zoom button and hold-Z preview | Done | app.rs:2680-2743, hover.rs | local |
 | Video, GIF and audio play on hover in the grid | Partial | GIF and animated WebP cards play in place while hovered (`anim.rs` `Cards`, ⌥ keeps them still); video and audio don't | local |
-| Pinned items stay at the top of a folder | Missing |  | local |
+| Pinned items stay at the top of a folder | Done | `item_ops::pinned_first` for the open folder unless sorted at random; Pin to Top / Unpin in the card menu; no pin badge on cards | local |
 | Manual drag order in a folder | Done | organize_ui.rs:616-675 | local |
 | Missing-file or long-path hint on broken thumbnails | Partial | Extension placeholder only (app.rs:2867) | local |
 
@@ -336,7 +336,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | Drag items onto a sidebar folder | Done | `logic::folder_drop`: inside a folder the drop moves the items out of it, ⌥ adds; from other views it adds; trashed items come back (`Action::DropOnFolder`, one undo step). A locked target isn't asked for its password | local |
-| Toast after a drop ("N items moved to Folder", with a link to the folder) | Partial | `logic::folder_drop_notice` shows "Moved N items to Folder" / "Added …". No link; falcon's toast has no actions | local |
+| Toast after a drop ("N items moved to Folder", with a link to the folder) | Done | `flash_folder` toast with the folder name as a link (`toast.rs` `Toast.link`) | local |
 | Drag items onto a Quick Access folder | Done | Quick Access rows take item drops (move/add rules as the tree) | local |
 | Drag items onto a subfolder card | Done | Same `DropOnFolder` path as sidebar rows, with the bulk gate | local |
 | Drag items onto the Trash | Done | app.rs:1764-1767 | local |
@@ -384,7 +384,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Themes: Auto, Light, Light Grey, Gray, Dark, Blue, Purple | Done | theme.rs:73-130, prefs.rs:312 | local |
 | Auto theme follows the system | Done | theme.rs:365 `follow_system` | local |
 | Transparency (vibrancy) effects | Missing |  | local |
-| UI zoom level | Missing | Cross-ref preferences | local |
+| UI zoom level | Done | `Prefs::ui_zoom`, applied live | local |
 | Interface language | Missing | English only. Cross-ref preferences | local |
 | File-type colours on extension badges | Done | theme.rs:447-468 | local |
 
@@ -396,10 +396,10 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | --- | --- | --- | --- |
 | Toast messages (rename, remove, rate, copy path, pin and so on) | Done | `toast.rs`: brief, normal, undoable and error kinds with Eagle's durations; errors also go to the log | local |
 | UNDO button on toasts | Done | `toast.rs` undoable kind | local |
-| Clickable links in toasts (open the folder) | Missing |  | local |
+| Clickable links in toasts (open the folder) | Done | `Toast.link` on the folder add and drop toasts | local |
 | Import progress bar with count and time remaining | Partial | Count and file name (app.rs:911-940). No time remaining and no cancel | local |
 | Import errors toast ("N files failed, click for details") opens an error list with retry and reveal | Partial | Toast shows the failure count only (app.rs:925) | local |
-| Dock icon progress bar during long tasks | Missing |  | local |
+| Dock icon progress bar during long tasks | Partial | `dock_progress.rs` driven by the progress modal (thumbnails, Trash, package import); not by the background file import | local |
 | Progress modals for export, eaglepack, thumbnail refresh, empty trash, WebP conversion and similar | Partial | Shared progress modal with Cancel for pack import and export, thumbnail refresh and Empty Trash; Export to Computer keeps its toolbar bar; no WebP conversion | local |
 | Sound effects (delete item, delete folder, capture) | Missing |  | local |
 | System notifications (import done, capture done) | Missing | Cross-ref import | local |
@@ -591,7 +591,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Volume slider, mute, volume keys (Cmd+Up/Down), remembered | Done | `F/app/video_view.rs:412-430`, `F/shortcuts.rs:127-128` | local |
 | Volume / seek tip overlay while adjusting | Done | `volume_tip`, top right for 1 s; Eagle has no seek tip either | local |
 | Wheel over the picture seeks; Shift/Alt+wheel seeks horizontally | Done | `F/app/video_view.rs`; `Prefs::video_scroll` can make the wheel change the volume instead | local |
-| Preference: vertical wheel controls volume instead | Missing | No setting | local |
+| Preference: vertical wheel controls volume instead | Done | `VideoScroll::Volume` preference, applied in `ui/viewer/video.rs` | local |
 | Remember the last playback position | Done | `Prefs::video_resume`; positions saved per item id in app state (`Positions`, latest 500), across launches | local |
 | Stretch video to fill the window | Done | `Prefs::video_fill` | local |
 | Full-screen button | Done | Enters presentation mode, as Eagle's does | local |
@@ -690,14 +690,14 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | Interactive 3D view (orbit, pan, zoom) | Partial | `falcon_library::model3d` readers (obj+mtl, stl, ply, glb/gltf, 3mf) and an `egui_wgpu` callback viewer (`ui/viewer/model.rs`): Eagle's camera, mouse mapping, lighting, edges, details; grid/axes extras; thumbnails rendered at import. fbx, 3ds, dae and ifc stay QuickLook stills; no mesh tree, export, snapshot or textures | local |
-| Fit model to window | Missing | None | local |
-| Up-axis (Y/Z), flip up vector, fixed or free orbit | Missing | None | local |
-| Perspective or orthographic camera | Missing | None | local |
+| Fit model to window | Done | Fit button (⌘0), `viewer3d::fit` | local |
+| Up-axis (Y/Z), flip up vector, fixed or free orbit | Done | Settings menu: Y/Z up, Flip, Fixed Up Vector / Free Orbit | local |
+| Perspective or orthographic camera | Done | Settings menu: Perspective / Orthographic | local |
 | Measure tool | Missing | None | local |
-| Model tree navigator (files, meshes, materials) and details sidebar | Missing | None | local |
-| Settings: background colour, edge display, dark theme | Missing | None | local |
+| Model tree navigator (files, meshes, materials) and details sidebar | Partial | Details panel with materials; no tree of files or meshes | local |
+| Settings: background colour, edge display, dark theme | Partial | Background colour, edges with colour and angle, default colour, Reset; no dark-theme setting | local |
 | Export model and create snapshot | Missing | None | local |
-| Esc/←/→ still exit or move between items | Missing | n/a without a viewer | local |
+| Esc/←/→ still exit or move between items | Done | The shared viewer shell handles Esc, ← and → | local |
 
 ### 11. Special formats viewed as images (PSD, PSB, AI, EPS, XD, Sketch, Figma, Affinity, C4D, Blender, SketchUp, DWG, CDR, Clip, InDesign, Office, iWork, XMind, MindNode, OmniGraffle, HDR, EXR, ICO, ICNS, DDS)
 
@@ -878,7 +878,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Traditional and simplified Chinese match each other | Missing | none | local |
 | Pinyin matching for folder, smart folder and tag names in sidebar and tag lists | Missing | `A:1904` subtree_matches is a plain substring test | local |
 | Toolbar title reads "Search results" while searching | Done | `A:2019` | local |
-| Empty-result message | Partial | Plain "No items" (`A:2449`) | local |
+| Empty-result message | Done | `ui/grid/empty.rs`: per-view messages (No Matches, Drop Files Here, Trash Is Empty, All Sorted…) | local |
 | Search by image from the search box (AI) | Missing | The camera icon is drawn disabled (`A:2069`) | online/plugin |
 
 ### 2. Filter bar (general)
@@ -941,9 +941,9 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | All, Uncategorized, Untagged, All Tags and Trash, with counts | Done | `A:1740` nav_rows, `L:88` nav_counts | local |
-| Uncategorized also counts items whose only folder no longer exists | Partial | Falcon checks `folders.is_empty()` only (`L:123`) | local |
+| Uncategorized also counts items whose only folder no longer exists | Done | `logic::scope::uncategorized`: no folders, or exactly one id that names no folder, as Eagle | local |
 | Random view | Done | `L:19` Scope::Random | local |
-| Random refresh button (key R) | Partial | Clicking Random again reshuffles (`A:797`); no button or key | local |
+| Random refresh button (key R) | Partial | R key and View ▸ Shuffle Again; no on-screen button | local |
 | Recently Used: items the user recently opened | Done | Opened items, newest first; trashed items listed too, as Eagle | local |
 | Filter sidebar items | Done | Folders and smart folders filtered, Quick Access not (as Eagle); headers with no match hide; ⌥⇧F focuses the field | local |
 | Go to Folder: quick-search folders, smart folders and tags, with history | Done | `app/goto.rs`-style dialog with history; also an Items tab as Eagle 4 | local |
@@ -951,7 +951,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Quick Access: reorder by dragging, drag a folder in to add it | Done | Entries keep their whole JSON object when moved | local |
 | Quick Access: drop items on a row to add them to that folder | Done | Drop target rows | local |
 | Expand/collapse a folder, all folders, or the same level | Done | Expand/collapse entries in the folder and smart folder menus; ⌘, ⌥ and ⌘⌥ clicks on carets | local |
-| Double-click on a sidebar row renames or collapses, per preference | Partial | Always collapses | local |
+| Double-click on a sidebar row renames or collapses, per preference | Done | `Prefs::sidebar_double_click` for folder and smart folder rows | local |
 
 ### 6. Folders
 
@@ -969,7 +969,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Move a folder by dragging (above, below, into) | Done | `OU:255` folder_drop, `O:135` tree_drop | local |
 | Confirmation dialog when dropping a folder | Done | Eagle asks nothing on a drag either; only its Move Folder dialog confirms, which falcon's does | local |
 | Move Folder dialog with destination search | Done | `folders_ui` `move_dialog`; Eagle's doesn't create a folder from the search either | local |
-| Move Up, Down, To Top, To Bottom | Missing | Cross-ref: menus agent | local |
+| Move Up, Down, To Top, To Bottom | Done | Edit ▸ Move Folder ▸ Up / Down / To the Top / To the Bottom and ⌘] ⌘[ ⇧⌘] ⇧⌘[ (`Action::Arrange`); not in the folder context menu | local |
 | Sort folders by title for this level or all levels, A-Z or Z-A, with confirmation | Done | `OU:327`, `O:352`, `OU:1025` confirm | local |
 | Duplicate a folder | Done | `Library::duplicate_folder` | local |
 | Folder icon from the named icon set | Done | `OU:309` icon_grid, `folder_icons.rs:171` | local |
@@ -1064,14 +1064,14 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Preview; double-click to open | Done | `A:3034` | local |
 | Colour palette swatches | Done | `A:3053` | local |
 | Click a swatch to find items of similar colour | Done | `A:3066` | local |
-| Copy the colour as HEX, RGB or RGBA | Partial | Right-click copies HEX only (`A:3071`) | local |
+| Copy the colour as HEX, RGB or RGBA | Done | Swatch right-click: HEX, RGB, RGBA, HSL, HSV, HWB, CMYK (`colors.rs`) | local |
 | Set a palette colour as the primary colour (`marked`) | Partial | Stored as Eagle writes it (`marked` true/false); colour search still ignores it | local |
 | Re-analyse colours | Done | `image_edit.rs:107` Refresh Palette | local |
 | Name (title) editing | Done | `A:3082` | local |
 | Click the extension to change it | Done | Inspector Type row opens a checking dialog; only the original is renamed, as Eagle | local |
 | Note editing | Done | `A:3092` | local |
 | URL editing, validated as Eagle does | Done | `urls.rs` `url_accepted`: web URLs and existing paths, as Eagle; Open Link icon beside the field | local |
-| Open Link in Browser button | Missing | none | local |
+| Open Link in Browser button | Done | Open Link button beside the URL field, View ▸ Open Link in Browser, ⇧⌘O | local |
 | Tags: chips, remove, type a new tag | Done | `tag_field`: chips with × and a + that opens the picker, where typing happens, as Eagle | local |
 | Tag picker with Selected, Starred, Recent, Recommended and groups, search, column sizes | Done | `app/tag_picker.rs`, `tags.rs`: search and ranking, Starred, Recent (latest 12 in use), Recommended, groups with a Tab sidebar, settings; no Pinyin or jieba search, no dragging or resizing | local |
 | Copy, paste and clear an item's tags | Done | `Library::paste_tags`, `clear_tags`; one undo step and a notice | local |
@@ -1083,7 +1083,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Dimensions, size, type, date imported, created, modified | Done | `A:3196`-`3203` | local |
 | Duration and BPM | Done | `media_view.rs:284` | local |
 | EXIF: camera, ISO, aperture, focal length, shutter, timestamp | Done | `media_view.rs:292` | local |
-| Collapse or expand inspector sections | Missing | Always expanded | local |
+| Collapse or expand inspector sections | Done | `fold_heading` on Properties, Tags, Folders in every inspector and Comments in the viewer | local |
 
 ### 10. Batch editing (several items selected)
 
@@ -1103,7 +1103,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Remove from the current folder | Done | ⇧⌘⌫, Edit menu and card menu | local |
 | Pin items to the top of a folder | Done | `item_ops.rs` pin/unpin | local |
 | Open File Location (show the item in All or in one of its folders) | Done | Card menu | local |
-| Rating shortcuts (keys 0-5) | Missing | No rating keys in `shortcuts.rs`. Cross-ref: shortcuts agent. | local |
+| Rating shortcuts (keys 0-5) | Done | `organize.rating.*` keys 0–5 with a toast | local |
 | Duplicate item | Done | ⌘D, `item_ops.rs` | local |
 
 ### 11. Duplicates
@@ -1140,9 +1140,9 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | --- | --- | --- | --- |
 | Region comments on images: draw, move, resize, edit, delete | Done | `comments.rs` | local |
 | Timed comments on videos | Done | `video_view.rs:472` | local |
-| Filter by comments | Missing | see section 3 | local |
-| Search comment text | Missing | see section 1 | local |
-| Smart folder rule on comments | Missing | see section 7 | local |
+| Filter by comments | Done | Comment filter chip (`FilterKind::Comment`), Find menu, ⌥-key | local |
+| Search comment text | Done | `search_text_in` includes comment texts when the Comments scope is on (default on) | local |
+| Smart folder rule on comments | Done | `smart.rs` `comments_rule`, offered in the dialog | local |
 
 ### 14. Saved filters
 
@@ -1309,10 +1309,10 @@ Two cross-cutting facts explain many rows:
 | Copy Eagle Link (`eagle://item/<id>`) | Done | Copy ▸ Eagle Link in the item menu, Edit ▸ Copy Details, `edit.copy.eaglelink` (unbound, as Eagle) | local |
 | Copy Link (the item's source URL) | Done | Copy ▸ Link copies Eagle's local API link per item (`edit.copy.link`); the source URL keeps its own entry (`edit.copy.sourceurl`) | local |
 | Copy the image to the clipboard as pixels plus file reference (the AppleScript helper) | Partial | Falcon copies a file list only (`app.rs:948-949`) | local |
-| macOS Share sheet for items | Missing | — | local |
+| macOS Share sheet for items | Done | Share… in the item menu over the selected files (`share.rs`, `NSSharingServicePicker`) | local |
 | Add selected items to another library (from the recent list, or choose a path) | Missing | — | local |
 | Convert items to WebP to save space | Missing | — | local |
-| Save the current video frame as an item or copy it | Missing | Not in the video viewer's actions; see the viewers audit | local |
+| Save the current video frame as an item or copy it | Done | Video right-click menu and ⇧S / ⇧C; also in the preview window | local |
 
 ### 5. Library management
 
@@ -1370,7 +1370,7 @@ Eagle panes (`app/js/preferences.js:659-788`): General, Sidebar, Controls, Previ
 | General: transparency (vibrancy) effects | Missing | — | local |
 | General: show counts in the sidebar | Done | `Prefs::sidebar_counts` | local |
 | General: menu bar icon | Missing | No status item | local |
-| General: keep the Dock icon after the window closes | Missing | — | local |
+| General: keep the Dock icon after the window closes | Done | Closing hides falcon (`dock.rs`); always on, no preference | local |
 | General: launch at login | Missing | — | local |
 | General: GPU acceleration | Missing | — | local |
 | General: auto-select items after import | Done | `Prefs::auto_select` | local |
@@ -1389,7 +1389,7 @@ Eagle panes (`app/js/preferences.js:659-788`): General, Sidebar, Controls, Previ
 | **Preview:** zoom rendering smooth or pixelated | Done | `prefs.pixelated` | local |
 | Preview: remember the last zoom and position | Done | `prefs.remember_zoom` | local |
 | Preview: default image size, smart zoom or original | Done | `prefs.open_actual_size` | local |
-| Preview: rotation applies to the file or to the preview only | Missing | Rotation always writes the file (`image_edit.rs:113-118`); no preview-only mode | local |
+| Preview: rotation applies to the file or to the preview only | Done | `RotateMode` preference in the Image block; preview mode only changes the on-screen transform | local |
 | Preview: transparency grid on or off | Done | `prefs.transparency_grid` | local |
 | Preview: video vertical scroll controls progress or volume | Done | `Prefs::video_scroll` | local |
 | Preview: video hover preview | Done | `Prefs::video_hover`, on by default | local |
@@ -1408,7 +1408,7 @@ Eagle panes (`app/js/preferences.js:659-788`): General, Sidebar, Controls, Previ
 | Screenshot: auto-tag "Screenshot" | Missing | — | local |
 | Screenshot: also copy to the clipboard | Missing | — | local |
 | Screenshot: @2x on Retina | Missing | — | local |
-| **Shortcuts:** rebind any command, search the list, Restore Defaults | Partial | Recorder, search field and Restore Defaults (`shortcuts.rs`); only falcon's 60-odd commands | local |
+| **Shortcuts:** rebind any command, search the list, Restore Defaults | Done | 147 rebindable rows with Eagle's ids, search field, Restore Defaults, recorder | local |
 | Shortcuts: plugin shortcuts | Missing | No plugins | local |
 | Global shortcuts (show Eagle, quick search from anywhere) | Missing | — | local |
 | **Notification:** sound effects master switch, plus per event (delete item, delete folder, screenshot, extension) | Missing | — | local |
@@ -1483,7 +1483,7 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 | `eagle://` URL scheme registered with macOS | Done | `CFBundleURLTypes` in `scripts/bundle.sh`; `links.rs` handles the get-URL Apple event | local |
 | `eagle://item/<id>` opens the item | Done | Opens the item in the viewer inside its first folder (or All); also as a launch argument | local |
 | `eagle://folder/<id>`, `eagle://smart-folder/<id>`, `eagle://openFolder/<id>` | Done | `links.rs`: all three open the folder in the app (Eagle's `openFolder` does the same) | local |
-| Open `.eaglepack` files by double-clicking them | Missing | — | local |
+| Open `.eaglepack` files by double-clicking them | Partial | `CFBundleDocumentTypes` plus the open-documents event send packs to the package import (`open_files.rs`); not yet checked in a built bundle | local |
 | Install a plugin by opening a `.eagleplugin` file | Missing | — | local |
 | Open With: list the apps that can open a file | Done | `crates/falcon-app/src/open_with.rs` | local |
 | AppleScript dictionary or macOS Services | — (not counted) | — | — |
@@ -1517,9 +1517,9 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 
 Rows marked "not counted" are features Eagle 4.0.0 does not have.
 
-- **Done:** 159, including 5 where falcon goes beyond Eagle and 1 with a small difference.
+- **Done:** 164, including 5 where falcon goes beyond Eagle and 1 with a small difference.
 - **Partial:** 10.
-- **Missing:** 69, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
+- **Missing:** 64, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
 - **Different on purpose:** 1 (the API listens on localhost only).
 
 ### Ranked Missing and Partial local items
