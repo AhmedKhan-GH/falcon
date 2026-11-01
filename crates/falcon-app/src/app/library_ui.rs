@@ -179,12 +179,71 @@ impl App {
         self.serve_active();
     }
 
-    /// Says that the library at `root` can no longer be found.
+    /// The library at `root` can no longer be found: the missing-library
+    /// screen takes over (a dialog over another open library).
     pub(super) fn library_gone(&mut self, root: std::path::PathBuf) {
-        self.show_alert(Alert::new(
-            "Library missing",
-            format!("{} can't be found at {}. It may have been moved, renamed or deleted.", name(&root), crate::workspaces::tilde(&root)),
-        ));
+        self.missing = Some(root);
+    }
+
+    /// The missing-library screen, when no library is open.
+    pub(super) fn missing_page(&mut self, ui: &mut egui::Ui) {
+        let r = ui.max_rect();
+        super::window_drag(ui, egui::Rect::from_min_size(r.min, egui::vec2(r.width(), t::BAR_HEIGHT)), "missing");
+        ui.painter().rect_filled(r, 0.0, t::p().main);
+        let card = egui::Rect::from_center_size(r.center(), egui::vec2(420.0, 240.0));
+        let mut c = ui.new_child(egui::UiBuilder::new().max_rect(card).layout(egui::Layout::top_down(egui::Align::Center)));
+        c.label(RichText::new(crate::icons::FOLDER_OPEN).font(t::font(40.0)).color(t::p().text_muted));
+        c.add_space(6.0);
+        self.missing_contents(&mut c, false);
+    }
+
+    /// The same, as a dialog while other libraries are open.
+    pub(super) fn missing_modal(&mut self, ctx: &egui::Context) {
+        if self.missing.is_none() {
+            return;
+        }
+        let modal = egui::Modal::new(egui::Id::unique("library-missing")).show(ctx, |ui| {
+            ui.set_width(380.0);
+            ui.vertical_centered(|ui| self.missing_contents(ui, true));
+        });
+        if modal.should_close() {
+            self.missing = None;
+        }
+    }
+
+    /// Title, path and the ways out: Try Again, Select Another Path…, and
+    /// Create a New Library (plus Close in the dialog).
+    fn missing_contents(&mut self, ui: &mut egui::Ui, dialog: bool) {
+        let Some(path) = self.missing.clone() else { return };
+        ui.label(RichText::new("Library not found").size(17.0).color(t::p().text));
+        ui.add_space(4.0);
+        ui.label(RichText::new(format!("There is no library folder at {}. It may have been moved, renamed or deleted, or its drive isn't connected.", crate::workspaces::tilde(&path))).color(t::p().text_muted));
+        ui.add_space(12.0);
+        ui.horizontal(|ui| {
+            if ui.button("Try Again").clicked() {
+                self.open(path.clone());
+                if self.missing.is_some() {
+                    self.flash("The library is still missing");
+                }
+            }
+            if ui.button("Select Another Path…").clicked() {
+                self.pick_library();
+                if self.missing.is_none() {
+                    // Found elsewhere: the old place leaves the history.
+                    crate::workspaces::remove_from_list(&mut self.recent, &path);
+                }
+            }
+            if dialog && ui.button("Close").clicked() {
+                self.missing = None;
+            }
+        });
+        ui.add_space(10.0);
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("Can't find it?").size(12.0).color(t::p().text_muted));
+            if ui.link(RichText::new("Create a new library").size(12.0)).clicked() {
+                self.new_library();
+            }
+        });
     }
 }
 

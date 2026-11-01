@@ -832,6 +832,8 @@ pub struct App {
     /// Reload the shown library from disk next frame: a `metadata.json`
     /// write was refused because the file changed elsewhere.
     conflict_reload: bool,
+    /// A library that can't be found, for the missing-library screen.
+    missing: Option<PathBuf>,
 }
 
 impl App {
@@ -905,6 +907,7 @@ impl App {
             side_reveal: false,
             alert: None,
             conflict_reload: false,
+            missing: None,
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
         app.welcomed = library_dialogs::already_welcomed(saved.welcomed, saved.recent.len(), saved.libraries.len(), saved.library.is_some());
@@ -947,6 +950,7 @@ impl App {
         app.recent_items = saved.recent_items;
         // Reopen the libraries that were open, then the one given on the
         // command line (focused if it was already open).
+        app.missing = crate::workspaces::missing_shown(&saved.libraries, saved.active, saved.library.as_deref(), |p| p.is_dir());
         let (libraries, active) = crate::workspaces::restore(&saved.libraries, saved.active, saved.library.as_deref(), |p| p.is_dir());
         for p in libraries {
             app.open(p);
@@ -1029,6 +1033,7 @@ impl App {
                 crate::workspaces::remember(&mut self.recent, &path, RECENT_LIMIT);
                 self.error = None;
                 self.welcomed = true;
+                self.missing = None;
                 let mut notes = Vec::new();
                 if let Some(backup) = restored {
                     notes.push(restored_note(&backup));
@@ -1041,6 +1046,7 @@ impl App {
                     self.flash(notes.join(". "));
                 }
             }
+            Err(_) if !path.exists() => self.library_gone(path),
             Err(e) => {
                 if let Some(alert) = library_ui::alert_for(&e) {
                     crate::errlog::error(&format!("Could not open the library: {e}"));
@@ -5664,9 +5670,18 @@ impl App {
             self.collect_window(&ctx);
         }
         self.alert_modal(&ctx);
+        if self.ws.lib.is_some() {
+            self.missing_modal(&ctx);
+        }
 
         let Some(shared) = self.ws.lib.clone() else {
-            egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| self.empty_or_welcome(ui));
+            egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| {
+                if self.missing.is_some() {
+                    self.missing_page(ui);
+                } else {
+                    self.empty_or_welcome(ui);
+                }
+            });
             return;
         };
         let mut guard = lock(&shared);

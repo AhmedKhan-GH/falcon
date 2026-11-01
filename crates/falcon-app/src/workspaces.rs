@@ -116,6 +116,14 @@ pub fn restore(libraries: &[PathBuf], active: Option<usize>, library: Option<&Pa
     (kept, index)
 }
 
+/// The library that was being shown when falcon last quit, if `exists`
+/// says it is gone: launch shows the missing-library screen for it, as
+/// Eagle does, instead of silently leaving it out.
+pub fn missing_shown(libraries: &[PathBuf], active: Option<usize>, library: Option<&Path>, exists: impl Fn(&Path) -> bool) -> Option<PathBuf> {
+    let shown = if libraries.is_empty() { library } else { active.and_then(|i| libraries.get(i)).map(PathBuf::as_path).or(library) };
+    shown.filter(|p| !exists(p)).map(Path::to_path_buf)
+}
+
 /// Adds `path` to the front of the recent list (at most `cap` long).
 pub fn remember(recent: &mut Vec<PathBuf>, path: &Path, cap: usize) {
     recent.retain(|p| p != path);
@@ -165,6 +173,16 @@ mod tests {
 
     fn paths(names: &[&str]) -> Vec<PathBuf> {
         names.iter().map(PathBuf::from).collect()
+    }
+
+    #[test]
+    fn the_shown_library_missing_at_launch_is_reported() {
+        let libs = paths(&["/a", "/b"]);
+        let gone = |p: &Path| p != Path::new("/b");
+        assert_eq!(missing_shown(&libs, Some(1), None, gone), Some(PathBuf::from("/b")));
+        assert_eq!(missing_shown(&libs, Some(0), None, gone), None, "a hidden one just isn't reopened");
+        assert_eq!(missing_shown(&[], None, Some(Path::new("/b")), gone), Some(PathBuf::from("/b")));
+        assert_eq!(missing_shown(&[], None, None, gone), None);
     }
 
     #[test]
