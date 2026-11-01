@@ -62,6 +62,46 @@ pub fn toggle_all<T: Node>(roots: &[T], open: Option<&str>, collapsed: &mut Hash
     });
 }
 
+/// Sets whether `n` is open, leaving nodes without children out of the
+/// set (a leaf has no open state).
+fn set_open<T: Node>(n: &T, expand: bool, collapsed: &mut HashSet<String>) {
+    if n.kids().is_empty() {
+        return;
+    }
+    if expand {
+        collapsed.remove(n.id());
+    } else {
+        collapsed.insert(n.id().to_string());
+    }
+}
+
+/// Flips one node, then gives each of its direct children the same state,
+/// as Eagle's expand or collapse of a folder does: everything opens if
+/// the node is collapsed, else closes.
+pub fn toggle_with_children<T: Node>(roots: &[T], id: &str, collapsed: &mut HashSet<String>) {
+    let Some(n) = find(roots, id) else { return };
+    let expand = collapsed.contains(id);
+    set_open(n, expand, collapsed);
+    for k in n.kids() {
+        set_open(k, expand, collapsed);
+    }
+}
+
+/// Gives every sibling of a node (the node included, at its parent's level
+/// or the top) the state the node is not in now, as Eagle's same-level
+/// expand or collapse does.
+pub fn toggle_level<T: Node>(roots: &[T], id: &str, collapsed: &mut HashSet<String>) {
+    let Some((parent, _)) = locate(roots, id) else { return };
+    let level = match parent.and_then(|p| find(roots, p)) {
+        Some(p) => p.kids(),
+        None => roots,
+    };
+    let expand = collapsed.contains(id);
+    for n in level {
+        set_open(n, expand, collapsed);
+    }
+}
+
 /// Finds a node anywhere in the tree.
 pub fn find<'a, T: Node>(roots: &'a [T], id: &str) -> Option<&'a T> {
     roots.iter().find_map(|n| if n.id() == id { Some(n) } else { find(n.kids(), id) })
@@ -516,6 +556,40 @@ pub fn add_typed_tags(tags: &mut Vec<String>, typed: &str) -> bool {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn toggle_with_children_sets_the_node_and_its_direct_children() {
+        let tree = vec![folder("a", vec![folder("a1", vec![folder("a1x", vec![])]), folder("a2", vec![]), folder("a3", vec![folder("a3x", vec![])])]), folder("b", vec![folder("b1", vec![])])];
+        let mut collapsed = HashSet::new();
+        // Open, so a and its children with kids close; a2 is a leaf and stays out.
+        toggle_with_children(&tree, "a", &mut collapsed);
+        assert_eq!(collapsed, ["a", "a1", "a3"].map(String::from).into());
+        // Now collapsed, so they open again.
+        toggle_with_children(&tree, "a", &mut collapsed);
+        assert!(collapsed.is_empty());
+        // Grandchildren are untouched, and a leaf or unknown id does nothing.
+        collapsed.insert("a1x".into());
+        toggle_with_children(&tree, "a1x", &mut collapsed);
+        toggle_with_children(&tree, "nope", &mut collapsed);
+        assert_eq!(collapsed, ["a1x"].map(String::from).into());
+    }
+
+    #[test]
+    fn toggle_level_sets_every_sibling() {
+        let tree = vec![folder("a", vec![folder("a1", vec![folder("a1x", vec![])]), folder("a2", vec![]), folder("a3", vec![folder("a3x", vec![])])]), folder("b", vec![folder("b1", vec![])]), folder("c", vec![])];
+        let mut collapsed = HashSet::new();
+        // Top level: a and b close, c is a leaf; deeper nodes stay open.
+        toggle_level(&tree, "b", &mut collapsed);
+        assert_eq!(collapsed, ["a", "b"].map(String::from).into());
+        // b is collapsed, so the whole level opens.
+        toggle_level(&tree, "a", &mut collapsed);
+        assert!(collapsed.is_empty());
+        // Inside a: the clicked node decides, for a's children only.
+        toggle_level(&tree, "a3", &mut collapsed);
+        assert_eq!(collapsed, ["a1", "a3"].map(String::from).into());
+        toggle_level(&tree, "a1", &mut collapsed);
+        assert!(collapsed.is_empty());
+    }
 
     #[test]
     fn toggle_all_follows_the_reference_node() {

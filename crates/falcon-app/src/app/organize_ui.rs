@@ -299,6 +299,48 @@ impl App {
         }
     }
 
+    /// The expand and collapse entries of a tree row's menu (and the whole
+    /// menu of its caret): the row and its children, its level, or all.
+    pub(super) fn expand_menu<T: organize::Node>(&mut self, ui: &mut Ui, roots: &[T], id: &str) {
+        ui.set_min_width(180.0);
+        if ui.button("Expand or Collapse This One").on_hover_text("This item and the ones directly inside it (⌥-click the arrow)").clicked() {
+            organize::toggle_with_children(roots, id, &mut self.ws.collapsed);
+        }
+        if ui.button("Expand or Collapse This Level").on_hover_text("Everything beside it (⌘-click the arrow)").clicked() {
+            organize::toggle_level(roots, id, &mut self.ws.collapsed);
+        }
+        let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::ToggleFolders);
+        if ui.add(egui::Button::new("Expand or Collapse All").shortcut_text(keys)).on_hover_text("Every item in the tree (⌥⌘-click the arrow)").clicked() {
+            organize::toggle_all(roots, Some(id), &mut self.ws.collapsed);
+        }
+    }
+
+    /// A click on a row's arrow: ⌥⌘ does all, ⌘ the level, ⌥ the row and
+    /// its children, and a plain click just the row.
+    pub(super) fn caret_click<T: organize::Node>(&mut self, ui: &Ui, roots: &[T], id: &str) {
+        let m = ui.input(|i| i.modifiers);
+        match (m.command, m.alt) {
+            (true, true) => organize::toggle_all(roots, Some(id), &mut self.ws.collapsed),
+            (true, false) => organize::toggle_level(roots, id, &mut self.ws.collapsed),
+            (false, true) => organize::toggle_with_children(roots, id, &mut self.ws.collapsed),
+            (false, false) => {
+                if !self.ws.collapsed.remove(id) {
+                    self.ws.collapsed.insert(id.to_string());
+                }
+            }
+        }
+    }
+
+    /// Whether a right-click on the row landed on its arrow, remembered
+    /// while the menu stays open.
+    pub(super) fn caret_menu(ui: &Ui, resp: &Response, on_caret: bool) -> bool {
+        let key = resp.id.with("caret-menu");
+        if resp.secondary_clicked() {
+            ui.data_mut(|d| d.insert_temp(key, on_caret));
+        }
+        ui.data(|d| d.get_temp::<bool>(key)).unwrap_or(false)
+    }
+
     /// Drops onto a Quick Access row, as Eagle does: another pinned row, a
     /// folder or a smart folder lands above the row when released over its
     /// top half and below it over the bottom half, with an insertion line.
@@ -434,7 +476,13 @@ impl App {
             self.ws.actions.push(org(OrgAction::MoveSmart(d.0.clone(), parent, index)));
         }
         let pinned = quick.contains(&sf.id);
+        let on_caret = has_children && resp.interact_pointer_pos().is_some_and(|p| caret_rect(row, depth).contains(p));
+        let caret_menu = Self::caret_menu(ui, &resp, on_caret);
         resp.context_menu(|ui| {
+            if caret_menu {
+                self.expand_menu(ui, roots, &sf.id);
+                return;
+            }
             if self.ws.folders.smart.is_multi() && self.ws.folders.smart.contains(&sf.id) {
                 self.multi_smart_menu(ui, lib, pinned);
                 return;
@@ -478,6 +526,8 @@ impl App {
             }
             self.tree_export_menu(ui, super::export_ui::Target::Smart(sf.id.clone()), true);
             ui.separator();
+            self.expand_menu(ui, roots, &sf.id);
+            ui.separator();
             ui.menu_button("Change Icon", |ui| {
                 if let Some(icon) = icon_grid(ui, sf.icon.as_deref(), tint, true) {
                     self.ws.actions.push(org(OrgAction::SmartIcon(sf.id.clone(), icon, sf.icon_color.clone())));
@@ -497,9 +547,7 @@ impl App {
         if resp.clicked() {
             let caret = caret_rect(row, depth);
             if has_children && resp.interact_pointer_pos().is_some_and(|p| caret.contains(p)) {
-                if !self.ws.collapsed.remove(&sf.id) {
-                    self.ws.collapsed.insert(sf.id.clone());
-                }
+                self.caret_click(ui, roots, &sf.id);
             } else if !self.tree_click(super::folders_ui::Tree::Smart, &sf.id, ui.input(|i| i.modifiers)) {
                 self.go(Scope::Smart(sf.id.clone()));
             }

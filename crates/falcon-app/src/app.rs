@@ -2926,7 +2926,13 @@ impl App {
         }
         self.folder_drop(ui, lib, &resp, f, depth);
         let pinned = cx.quick.contains(&f.id);
+        let on_caret = has_children && resp.interact_pointer_pos().is_some_and(|p| caret_rect(row_rect, depth).contains(p));
+        let caret_menu = Self::caret_menu(ui, &resp, on_caret);
         resp.context_menu(|ui| {
+            if caret_menu {
+                self.expand_menu(ui, &lib.metadata.folders, &f.id);
+                return;
+            }
             if self.ws.folders.sel.is_multi() && self.ws.folders.sel.contains(&f.id) {
                 self.multi_folder_menu(ui, lib, f, pinned);
                 return;
@@ -2959,6 +2965,8 @@ impl App {
             }
             self.folder_menu_extras(ui, lib, f);
             ui.separator();
+            self.expand_menu(ui, &lib.metadata.folders, &f.id);
+            ui.separator();
             // Eagle disables Duplicate on a locked folder.
             if ui.add_enabled(!shut, egui::Button::new("Duplicate")).clicked() {
                 self.ws.actions.push(Action::Folders(folders_ui::FolderAction::Duplicate(f.id.clone())));
@@ -2972,9 +2980,7 @@ impl App {
         if resp.clicked() {
             let caret = caret_rect(row_rect, depth);
             if has_children && resp.interact_pointer_pos().is_some_and(|p| caret.contains(p)) {
-                if !self.ws.collapsed.remove(&f.id) {
-                    self.ws.collapsed.insert(f.id.clone());
-                }
+                self.caret_click(ui, &lib.metadata.folders, &f.id);
             } else if !self.tree_click(folders_ui::Tree::Folders, &f.id, ui.input(|i| i.modifiers)) {
                 self.go(Scope::Folder(f.id.clone()));
             }
