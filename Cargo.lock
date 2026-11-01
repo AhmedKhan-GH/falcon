@@ -1692,6 +1692,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "falcon-ffmpeg"
+version = "0.1.0"
+dependencies = [
+ "libloading",
+ "tempfile",
+]
+
+[[package]]
 name = "falcon-library"
 version = "0.1.0"
 dependencies = [

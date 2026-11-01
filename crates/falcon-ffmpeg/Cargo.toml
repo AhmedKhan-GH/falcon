@@ -1,0 +1,13 @@
+[package]
+name = "falcon-ffmpeg"
+description = "Fallback video decoding for falcon through an LGPL FFmpeg loaded at run time"
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+libloading = "0.8"
+
+[dev-dependencies]
+tempfile = "3"
