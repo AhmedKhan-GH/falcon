@@ -119,6 +119,8 @@ pub enum Command {
     CopyTags,
     PasteTags,
     ClearTags,
+    /// Edit ▸ Edit Image ▸ Crop… (Eagle's ⇧C; again to save).
+    Crop,
     // Menu bar entries with no row in `TABLE` (no rebindable key).
     Undo,
     Redo,
@@ -128,7 +130,6 @@ pub enum Command {
     FindDuplicates,
     FlipHorizontal,
     RotateLeft,
-    Crop,
     WindowZoom,
     Documentation,
     /// Eagle's Enter / Leave Presentation Mode: the viewer full screen.
@@ -295,6 +296,7 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::Copy, id: "edit.copy", group: "Edit", label: "Copy the selected files", default: k(CMD, Key::C), aliases: &[] },
     Spec { cmd: Command::Duplicate, id: "edit.duplicate", group: "Edit", label: "Duplicate the item", default: k(CMD, Key::D), aliases: &[] },
     Spec { cmd: Command::RefreshThumbnail, id: "edit.thumbnail.refresh", group: "Edit", label: "Refresh the thumbnails", default: k(CMD_ALT, Key::R), aliases: &[] },
+    Spec { cmd: Command::Crop, id: "edit.image.crop", group: "Edit", label: "Crop the image (again to save)", default: k(SHIFT, Key::C), aliases: &[] },
     Spec { cmd: Command::Paste, id: "edit.paste", group: "Edit", label: "Paste files or an image", default: k(CMD, Key::V), aliases: &[] },
     Spec { cmd: Command::Trash, id: "edit.remove.trash", group: "Edit", label: "Move to the Trash", default: k(CMD, Key::Backspace), aliases: &[] },
     Spec { cmd: Command::RemoveFromFolder, id: "edit.remove.folder", group: "Edit", label: "Remove from the open folder", default: k(CMD_SHIFT, Key::Backspace), aliases: &[] },
@@ -1018,12 +1020,20 @@ mod tests {
     #[test]
     fn menu_only_commands_have_no_keys() {
         let keys = Shortcuts::default();
-        for cmd in [Command::Undo, Command::Import, Command::Crop, Command::Documentation] {
+        for cmd in [Command::Undo, Command::Import, Command::Documentation] {
             assert!(find_spec(cmd).is_none());
             assert_eq!(keys.binding(cmd), None);
             assert!(keys.chords(cmd).is_empty());
             assert!(keys.is_default(cmd));
         }
+    }
+
+    #[test]
+    fn shift_c_crops() {
+        let keys = Shortcuts::default();
+        assert_eq!(keys.resolve(Key::C, Modifiers::SHIFT), Some(Command::Crop));
+        assert_eq!(keys.resolve(Key::C, Modifiers::NONE), None);
+        assert_eq!(keys.resolve(Key::C, CMD_SHIFT), Some(Command::CopyTags));
     }
 
     #[test]
@@ -1244,6 +1254,10 @@ mod tests {
                 // ⌘↑ and ⌘↓ change the volume in a playing video and
                 // select the first or last item elsewhere.
                 assert_eq!(global, Some(if up { Command::SelectFirst } else { Command::SelectLast }));
+            } else if s.id == "player.thumbnail.copy" {
+                // ⇧C copies a playing video's frame and crops an image
+                // elsewhere; Eagle gives both the same default.
+                assert_eq!(global, Some(Command::Crop));
             } else {
                 // A global chord that only matches loosely (⌘[ for [) is no clash.
                 assert!(global.is_none_or(|g| !keys.chords(g).iter().any(|x| same(*x, Some(c)))), "{} clashes with {global:?}", s.id);

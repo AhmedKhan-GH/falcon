@@ -340,6 +340,7 @@ These are the defaults. All but the arrows, Esc, Tab, Z and the viewer's C, ⇧R
 | C | In the viewer, turn comment mode on or off (Esc also leaves it) |
 | ⇧R | In the viewer, rotate the image left |
 | ⇧F | In the viewer, flip the image horizontally |
+| ⇧C | Opens the crop tool on the viewer's image, or on the one selected item (opening the viewer); while cropping, it saves (then confirm), as Enter does. Rebindable as `edit.image.crop` |
 | Enter and Esc | While cropping, save (then confirm) or cancel |
 | ⌘← and ⌘→ | With video or audio in the viewer, skip back or forward 2% of its length, at most 10 s |
 | ⌘↑ and ⌘↓ | With video or audio in the viewer, volume up or down 5% |
@@ -698,7 +699,7 @@ What Eagle does, from the viewer's `comment-item` and `comments-container` direc
 
 ## Rotate, flip and crop
 
-The viewer bar has Rotate Left and Rotate Right and a Flip button for jpg, png, webp and bmp, and Crop for jpg, png and webp. Flip mirrors horizontally, or vertically with ⇧ held while clicking, and ⇧F flips horizontally, as Eagle's single flip button and `edit.image.flip` shortcut (`Shift + F`) do (seen in `preview-window.js` and `default-preferences.js`). Eagle's button also mirrors a playing video; falcon's appears for images only. The card menu offers Flip Horizontal and Flip Vertical as two entries, for every selected item in those formats. All of these rewrite the original (see [Crop and rotate](thumbnails.md#crop-and-rotate-observed)). The crop tool starts on the whole image. Drag its edges or corners, or drag inside it to move it; the size in pixels shows underneath. Save asks for confirmation, then overwrites the original. These edits can't be undone, so they clear the undo history. The rectangle math is in `crop.rs`.
+The viewer bar has Rotate Left and Rotate Right and a Flip button for jpg, png, webp and bmp, and Crop for jpg, png and webp. Flip mirrors horizontally, or vertically with ⇧ held while clicking, and ⇧F flips horizontally, as Eagle's single flip button and `edit.image.flip` shortcut (`Shift + F`) do (seen in `preview-window.js` and `default-preferences.js`). Eagle's button also mirrors a playing video; falcon's appears for images only. The card menu offers Flip Horizontal and Flip Vertical as two entries, for every selected item in those formats. All of these rewrite the original (see [Crop and rotate](thumbnails.md#crop-and-rotate-observed)). The crop tool starts on the whole image. Drag its edges or corners, or drag inside it to move it; while you drag, `x:… y:…, W:… H:…` in pixels shows underneath. The bar has width and height fields showing the rectangle's size; type a number and press Enter (or leave the field) to resize it from its top-left corner, kept inside the image (Enter in the width field moves to the height field, Esc reverts, and while a field has focus the crop keys don't act). Save asks for confirmation, then overwrites the original. Save As crops into a new item instead (`Library::crop_item_as_new`), leaves the original alone, needs no confirmation, closes the viewer and selects the new item. ⇧C opens the tool and, while it is open, saves. These edits can't be undone, so they clear the undo history. The rectangle math is in `crop.rs`.
 
 ## Open in other apps
 

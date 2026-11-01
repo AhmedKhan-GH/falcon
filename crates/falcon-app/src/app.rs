@@ -1865,7 +1865,12 @@ impl App {
                         self.ws.actions.push(Action::Edit(image_edit::Op::Rotate(ids, -1)));
                     }
                     _ => {
-                        if let [id] = image_edit::editable(&ids, ext_of, transform::can_crop).as_slice() {
+                        if self.ws.tools.crop.is_some() {
+                            // The crop key again saves.
+                            if let Some(c) = self.ws.tools.crop.as_mut() {
+                                c.confirming = true;
+                            }
+                        } else if let [id] = image_edit::editable(&ids, ext_of, transform::can_crop).as_slice() {
                             self.ws.viewer = Some(id.clone());
                             self.ws.tools.crop_next = Some(id.clone());
                         }

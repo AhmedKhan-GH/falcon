@@ -121,6 +121,18 @@ pub fn pixel_rect(r: Rect) -> PixelRect {
     PixelRect { x, y, width: right.saturating_sub(x).max(1), height: bottom.saturating_sub(y).max(1) }
 }
 
+/// The crop rectangle after the width and height fields are committed:
+/// `width` and `height` (whole pixels, `None` to keep a side) replace the
+/// sides, each at least 1 and at most the image size, and the top-left corner
+/// stays put with the rectangle inside the image.
+pub fn set_size(rect: Rect, width: Option<u32>, height: Option<u32>, bounds: Vec2) -> Rect {
+    let w = width.map_or(rect.width(), |w| w as f32).clamp(MIN_SIDE, bounds.x.max(MIN_SIDE));
+    let h = height.map_or(rect.height(), |h| h as f32).clamp(MIN_SIDE, bounds.y.max(MIN_SIDE));
+    let w = w.min((bounds.x - rect.min.x).max(MIN_SIDE));
+    let h = h.min((bounds.y - rect.min.y).max(MIN_SIDE));
+    Rect::from_min_size(rect.min, vec2(w, h))
+}
+
 /// The crop tool's state while it is open.
 #[derive(Debug, Clone)]
 pub struct CropState {
@@ -130,11 +142,13 @@ pub struct CropState {
     pub drag: Option<(Handle, Rect)>,
     /// Asking before the original is overwritten.
     pub confirming: bool,
+    /// Text being typed in the width and height fields, while they have focus.
+    pub fields: [Option<String>; 2],
 }
 
 impl CropState {
     pub fn new(w: f32, h: f32) -> CropState {
-        CropState { rect: Rect::from_min_size(Pos2::ZERO, vec2(w, h)), drag: None, confirming: false }
+        CropState { rect: Rect::from_min_size(Pos2::ZERO, vec2(w, h)), drag: None, confirming: false, fields: [None, None] }
     }
 }
 
@@ -188,14 +202,18 @@ impl App {
             crop.drag = None;
         }
 
-        // Size readout under the rectangle.
-        let px = pixel_rect(crop.rect);
-        let label = format!("{} × {}", px.width, px.height);
-        let at = Pos2::new(screen.center().x, (screen.bottom() + 16.0).min(area.bottom() - 12.0));
-        let g = ui.painter().layout_no_wrap(label, mono(12.0), t::p().text);
-        let bg = Rect::from_center_size(at, g.size() + vec2(12.0, 6.0));
-        p.rect_filled(bg, CornerRadius::same(4), Color32::from_black_alpha(180));
-        p.galley(bg.min + vec2(6.0, 3.0), g, t::p().text);
+        // Position and size readout under the rectangle, during a drag only.
+        if crop.drag.is_some() {
+            let px = pixel_rect(crop.rect);
+            let label = format!("x:{} y:{}, W:{} H:{}", px.x, px.y, px.width, px.height);
+            let g = ui.painter().layout_no_wrap(label, mono(12.0), t::p().text);
+            let half = g.size().x / 2.0 + 6.0;
+            let x = screen.center().x.clamp(area.left() + half.min(area.width() / 2.0), area.right() - half.min(area.width() / 2.0));
+            let at = Pos2::new(x, (screen.bottom() + 16.0).min(area.bottom() - 12.0));
+            let bg = Rect::from_center_size(at, g.size() + vec2(12.0, 6.0));
+            p.rect_filled(bg, CornerRadius::same(4), Color32::from_black_alpha(180));
+            p.galley(bg.min + vec2(6.0, 3.0), g, t::p().text);
+        }
         true
     }
 
@@ -223,13 +241,51 @@ impl App {
             ui.painter().galley(Pos2::new(left, cy - g.size().y / 2.0), g, t::p().text_muted);
             left - 8.0
         } else {
-            if button(ui, right, 70.0, "Save", true).on_hover_text("Save (Enter)").clicked() {
+            if button(ui, right, 70.0, "Save", true).on_hover_text("Save (Enter, ⇧C)").clicked() {
                 crop.confirming = true;
             }
-            if button(ui, right - 78.0, 70.0, "Cancel", false).on_hover_text("Cancel (Esc)").clicked() {
+            if button(ui, right - 78.0, 80.0, "Save As", false).on_hover_text("Save the crop as a new item").clicked() {
+                let rect = pixel_rect(crop.rect);
+                self.ws.actions.push(Action::Edit(Op::CropAsNew(item.id.clone(), rect)));
                 self.ws.tools.crop = None;
+                return right - 166.0;
             }
-            right - 156.0
+            if button(ui, right - 166.0, 70.0, "Cancel", false).on_hover_text("Cancel (Esc)").clicked() {
+                self.ws.tools.crop = None;
+                return right - 244.0;
+            }
+            // Width and height of the rectangle in image pixels.
+            let bounds = vec2(item.width as f32, item.height as f32);
+            let px = pixel_rect(crop.rect);
+            let mut edited = [None, None];
+            let mut x = right - 244.0;
+            for (i, (name, value)) in [("W", px.width), ("H", px.height)].into_iter().enumerate().rev() {
+                let id = ui.make_persistent_id(("crop-field", i));
+                let mut text = crop.fields[i].clone().unwrap_or_else(|| value.to_string());
+                let r = Rect::from_center_size(Pos2::new(x - 28.0, cy), vec2(56.0, 24.0));
+                let resp = ui.put(r, egui::TextEdit::singleline(&mut text).id(id).font(mono(12.0)).align(egui::Align2::CENTER_CENTER));
+                if resp.has_focus() || resp.lost_focus() {
+                    crop.fields[i] = Some(text.clone());
+                }
+                if resp.lost_focus() {
+                    let escaped = ui.input(|inp| inp.key_pressed(egui::Key::Escape));
+                    if !escaped {
+                        edited[i] = text.trim().parse::<u32>().ok();
+                    }
+                    crop.fields[i] = None;
+                    // Enter in the width field moves on to the height field.
+                    if i == 0 && ui.input(|inp| inp.key_pressed(egui::Key::Enter)) {
+                        ui.memory_mut(|m| m.request_focus(ui.make_persistent_id(("crop-field", 1))));
+                    }
+                }
+                let g = ui.painter().layout_no_wrap(name.into(), font(12.0), t::p().text_muted);
+                ui.painter().galley(Pos2::new(r.left() - 4.0 - g.size().x, cy - g.size().y / 2.0), g, t::p().text_muted);
+                x = r.left() - 22.0;
+            }
+            if edited.iter().any(Option::is_some) {
+                crop.rect = set_size(crop.rect, edited[0], edited[1], bounds);
+            }
+            x
         }
     }
 
@@ -314,6 +370,19 @@ mod tests {
         assert_eq!(drag(start, Handle::W, vec2(1000.0, 0.0), bounds).width(), MIN_SIDE);
         assert_eq!(drag(start, Handle::SE, vec2(5000.0, 5000.0), bounds), r(100.0, 100.0, 900.0, 400.0));
         assert_eq!(drag(start, Handle::NW, vec2(-10.0, -10.0), bounds), r(90.0, 90.0, 310.0, 210.0));
+    }
+
+    #[test]
+    fn typed_sizes_keep_the_corner_and_stay_inside() {
+        let bounds = vec2(1000.0, 500.0);
+        let start = r(100.0, 50.0, 300.0, 200.0);
+        assert_eq!(set_size(start, Some(400), None, bounds), r(100.0, 50.0, 400.0, 200.0));
+        assert_eq!(set_size(start, None, Some(100), bounds), r(100.0, 50.0, 300.0, 100.0));
+        // Too large: to the image edge from the corner.
+        assert_eq!(set_size(start, Some(5000), Some(5000), bounds), r(100.0, 50.0, 900.0, 450.0));
+        // Zero becomes one pixel.
+        assert_eq!(set_size(start, Some(0), Some(0), bounds), r(100.0, 50.0, 1.0, 1.0));
+        assert_eq!(set_size(start, None, None, bounds), start);
     }
 
     #[test]

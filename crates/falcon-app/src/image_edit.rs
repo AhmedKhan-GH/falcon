@@ -23,6 +23,8 @@ pub enum Op {
     /// Items and clockwise quarter turns (negative: anticlockwise).
     Rotate(Vec<String>, i32),
     Crop(String, PixelRect),
+    /// Import the crop as a new item and leave the original alone.
+    CropAsNew(String, PixelRect),
     AddComment(String, Comment),
     UpdateComment(String, Comment),
     /// Item id, comment id.
@@ -54,6 +56,7 @@ impl Op {
             Op::SetFolderCover(..) => "Set folder cover".into(),
             Op::Rotate(..) => "Rotate".into(),
             Op::Crop(..) => "Crop".into(),
+            Op::CropAsNew(..) => "Crop as new item".into(),
             Op::AddComment(..) => "Add comment".into(),
             Op::UpdateComment(..) => "Edit comment".into(),
             Op::DeleteComment(..) => "Delete comment".into(),
@@ -289,6 +292,16 @@ impl App {
                 self.ws.loader.forget(&id);
                 r
             }
+            Op::CropAsNew(id, rect) => {
+                let new = lib.crop_item_as_new(&id, rect)?;
+                self.ws.tools.crop = None;
+                self.ws.viewer = None;
+                self.ws.selected = vec![new.clone()];
+                self.ws.anchor = Some(new.clone());
+                self.ws.scroll_to = Some(new);
+                self.flash("Saved the crop as a new item");
+                Ok(())
+            }
             Op::AddComment(id, c) => lib.add_comment(&id, c).map(|_| ()),
             Op::UpdateComment(id, c) => lib.update_comment(&id, c),
             Op::DeleteComment(id, cid) => lib.delete_comment(&id, &cid),
@@ -338,7 +351,9 @@ impl App {
             }
             return;
         }
-        let (c, rotate, flip) = ctx.input_mut(|i| (i.consume_key(none, Key::C), i.consume_key(Modifiers::SHIFT, Key::R), i.consume_key(Modifiers::SHIFT, Key::F)));
+        // ⇧C opens the crop tool (a command); it isn't the bare C of comment mode.
+        let shift_c = ctx.input(|i| i.modifiers.shift && i.key_pressed(Key::C));
+        let (c, rotate, flip) = ctx.input_mut(|i| (!shift_c && i.consume_key(none, Key::C), i.consume_key(Modifiers::SHIFT, Key::R), i.consume_key(Modifiers::SHIFT, Key::F)));
         if c {
             self.ws.tools.comment_mode = !self.ws.tools.comment_mode;
             self.ws.tools.draft = None;
