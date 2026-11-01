@@ -4,7 +4,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use eframe::egui::{self, Align2, Color32, CornerRadius, Event, Key, Modifiers, Pos2, Rect, Sense, Stroke, TextEdit, TextureHandle, Ui, Vec2, vec2};
+use eframe::egui::{self, Align2, Color32, CornerRadius, Event, Key, Pos2, Rect, Sense, Stroke, TextEdit, TextureHandle, Ui, Vec2, vec2};
 use falcon_library::model::{Comment, Item};
 use falcon_library::{Library, media};
 use falcon_video::Video;
@@ -13,6 +13,7 @@ use super::comments::{plain_text, time_label as comment_time};
 use super::image_edit::Op;
 use super::{Action, App, icon_button};
 use crate::icons as ic;
+use crate::shortcuts::PlayerKey;
 use crate::logic;
 use crate::theme::{self as t, font, mono};
 
@@ -48,7 +49,8 @@ pub(super) struct VideoState {
     pub volume: f32,
     /// The saved loop setting for clips over 30 s (Eagle's loop button).
     pub looping: bool,
-    muted: bool,
+    /// Saved with the volume and the loop setting.
+    pub muted: bool,
     /// Where each item was left this session, to resume there.
     resume: HashMap<String, f64>,
     /// Whether to play again once a seek-bar drag ends.
@@ -182,47 +184,6 @@ pub fn marker_at(x: f32, times: &[f64], duration: f64, left: f32, width: f32, sl
         .map(|(n, _)| n)
 }
 
-/// A player key, as Eagle binds them by default.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum PlayerKey {
-    Toggle,
-    /// Frames to step (negative: back).
-    Frames(i32),
-    /// Skip back (false) or forward (true) by [`skip_step`].
-    Skip(bool),
-    Volume(bool),
-    Speed(bool),
-    AddComment,
-}
-
-/// The player action for a key press. `keys` holds the logical key and,
-/// when known, the physical one, so Shift+[ works whether the keyboard
-/// reports `[` or `{`.
-pub fn player_key(keys: &[Key], m: Modifiers) -> Option<PlayerKey> {
-    let plain = !m.command && !m.alt && !m.ctrl;
-    for &k in keys {
-        let action = match k {
-            Key::Space if plain && !m.shift => Some(PlayerKey::Toggle),
-            Key::N if plain && !m.shift => Some(PlayerKey::AddComment),
-            Key::OpenBracket if plain => Some(PlayerKey::Frames(if m.shift { -10 } else { -1 })),
-            Key::CloseBracket if plain => Some(PlayerKey::Frames(if m.shift { 10 } else { 1 })),
-            Key::OpenCurlyBracket if plain => Some(PlayerKey::Frames(-10)),
-            Key::CloseCurlyBracket if plain => Some(PlayerKey::Frames(10)),
-            Key::Period if plain && m.shift => Some(PlayerKey::Speed(true)),
-            Key::Comma if plain && m.shift => Some(PlayerKey::Speed(false)),
-            Key::ArrowUp if m.command && !m.shift => Some(PlayerKey::Volume(true)),
-            Key::ArrowDown if m.command && !m.shift => Some(PlayerKey::Volume(false)),
-            Key::ArrowRight if m.command && !m.shift => Some(PlayerKey::Skip(true)),
-            Key::ArrowLeft if m.command && !m.shift => Some(PlayerKey::Skip(false)),
-            _ => None,
-        };
-        if action.is_some() {
-            return action;
-        }
-    }
-    None
-}
-
 /// Builds the egui picture for a decoded frame.
 fn color_image(f: &falcon_video::Frame) -> egui::ColorImage {
     let pixels = f.rgba.as_chunks::<4>().0.iter().map(|p| Color32::from_rgb(p[0], p[1], p[2])).collect();
@@ -246,7 +207,7 @@ impl App {
             i.events.retain(|e| match e {
                 Event::Key { key, physical_key, pressed: true, modifiers, .. } => {
                     let keys: Vec<Key> = std::iter::once(*key).chain(*physical_key).collect();
-                    match player_key(&keys, *modifiers) {
+                    match self.shortcuts.player(&keys, *modifiers) {
                         Some(k) => {
                             pressed.push(k);
                             false
@@ -620,30 +581,6 @@ mod tests {
         assert_eq!(marker_at(0.0, &[], 100.0, 0.0, 1000.0, 5.0), None);
         // A clip of unknown length puts every marker at the start.
         assert_eq!(marker_at(1.0, &times, 0.0, 0.0, 1000.0, 5.0), Some(0));
-    }
-
-    #[test]
-    fn eagle_player_keys() {
-        let none = Modifiers::NONE;
-        let shift = Modifiers::SHIFT;
-        let cmd = Modifiers { command: true, mac_cmd: true, ..Default::default() };
-        assert_eq!(player_key(&[Key::Space], none), Some(PlayerKey::Toggle));
-        assert_eq!(player_key(&[Key::Space], cmd), None);
-        assert_eq!(player_key(&[Key::N], none), Some(PlayerKey::AddComment));
-        assert_eq!(player_key(&[Key::OpenBracket], none), Some(PlayerKey::Frames(-1)));
-        assert_eq!(player_key(&[Key::CloseBracket], none), Some(PlayerKey::Frames(1)));
-        assert_eq!(player_key(&[Key::OpenCurlyBracket, Key::OpenBracket], shift), Some(PlayerKey::Frames(-10)));
-        assert_eq!(player_key(&[Key::CloseBracket], shift), Some(PlayerKey::Frames(10)));
-        assert_eq!(player_key(&[Key::Period], shift), Some(PlayerKey::Speed(true)));
-        assert_eq!(player_key(&[Key::Comma], shift), Some(PlayerKey::Speed(false)));
-        assert_eq!(player_key(&[Key::Period], none), None);
-        assert_eq!(player_key(&[Key::ArrowUp], cmd), Some(PlayerKey::Volume(true)));
-        assert_eq!(player_key(&[Key::ArrowDown], cmd), Some(PlayerKey::Volume(false)));
-        assert_eq!(player_key(&[Key::ArrowRight], cmd), Some(PlayerKey::Skip(true)));
-        assert_eq!(player_key(&[Key::ArrowLeft], cmd), Some(PlayerKey::Skip(false)));
-        // Plain arrows stay with the viewer (previous and next item).
-        assert_eq!(player_key(&[Key::ArrowLeft], none), None);
-        assert_eq!(player_key(&[Key::A], none), None);
     }
 
     #[test]

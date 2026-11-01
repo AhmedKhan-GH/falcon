@@ -1,7 +1,9 @@
 //! Rebindable keyboard shortcuts, after Eagle's `shortcuts.keybinds`
 //! preference: a table of commands with default chords, user overrides
 //! stored as Eagle-style accelerator strings ("Command + Shift + N"),
-//! conflict checks and Reset.
+//! conflict checks and Reset. The Player group's keys act only while a
+//! video plays in the viewer, so, as in Eagle, they conflict only with
+//! each other.
 
 use std::collections::BTreeMap;
 
@@ -34,6 +36,30 @@ pub enum Command {
     SwitchLibrary,
     NextLibrary,
     PreviousLibrary,
+    /// A key of the video player (`App::video_keys` reads these).
+    Player(PlayerKey),
+}
+
+/// What a video player key does (Eagle's `player.*` keybinds).
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum PlayerKey {
+    Toggle,
+    /// Frames to step (negative: back).
+    Frames(i32),
+    /// Skip back (false) or forward (true) 2% of the clip.
+    Skip(bool),
+    Volume(bool),
+    Speed(bool),
+    AddComment,
+}
+
+/// The group whose keys only act in the video player.
+pub const PLAYER: &str = "Player";
+
+/// Whether two rows can conflict: Eagle checks a chord only against the
+/// rows of the same conflict group (`player` or `all`).
+fn same_scope(a: &Spec, b: &Spec) -> bool {
+    (a.group == PLAYER) == (b.group == PLAYER)
 }
 
 /// One row of the shortcut table.
@@ -59,6 +85,7 @@ const CMD: Modifiers = Modifiers::COMMAND;
 const CMD_SHIFT: Modifiers = Modifiers { shift: true, ..Modifiers::COMMAND };
 const CMD_ALT: Modifiers = Modifiers { alt: true, ..Modifiers::COMMAND };
 const ALT: Modifiers = Modifiers::ALT;
+const SHIFT: Modifiers = Modifiers::SHIFT;
 
 /// Every rebindable command with its default. Arrow keys, Escape and the
 /// held Z of the hover preview stay fixed (see `FIXED`).
@@ -88,6 +115,19 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::NextLibrary, id: "library.next", group: "Library", label: "Next open library", default: k(CMD_SHIFT, Key::CloseBracket), alias: k(CMD_SHIFT, Key::CloseCurlyBracket) },
     Spec { cmd: Command::PreviousLibrary, id: "library.previous", group: "Library", label: "Previous open library", default: k(CMD_SHIFT, Key::OpenBracket), alias: k(CMD_SHIFT, Key::OpenCurlyBracket) },
     Spec { cmd: Command::Preferences, id: "app.preferences", group: "App", label: "Preferences", default: k(CMD, Key::Comma), alias: None },
+    Spec { cmd: Command::Player(PlayerKey::Toggle), id: "player.playAndPause", group: PLAYER, label: "Play or pause", default: k(NONE, Key::Space), alias: None },
+    Spec { cmd: Command::Player(PlayerKey::Frames(-1)), id: "player.prev1frame", group: PLAYER, label: "Previous frame", default: k(NONE, Key::OpenBracket), alias: None },
+    Spec { cmd: Command::Player(PlayerKey::Frames(1)), id: "player.next1frame", group: PLAYER, label: "Next frame", default: k(NONE, Key::CloseBracket), alias: None },
+    Spec { cmd: Command::Player(PlayerKey::Frames(-10)), id: "player.prev10frame", group: PLAYER, label: "Back 10 frames", default: k(SHIFT, Key::OpenBracket), alias: None },
+    Spec { cmd: Command::Player(PlayerKey::Frames(10)), id: "player.next10frame", group: PLAYER, label: "Forward 10 frames", default: k(SHIFT, Key::CloseBracket), alias: None },
+    Spec { cmd: Command::Player(PlayerKey::Volume(true)), id: "player.volume.increase", group: PLAYER, label: "Volume up", default: k(CMD, Key::ArrowUp), alias: None },
+    Spec { cmd: Command::Player(PlayerKey::Volume(false)), id: "player.volume.decrease", group: PLAYER, label: "Volume down", default: k(CMD, Key::ArrowDown), alias: None },
+    Spec { cmd: Command::Player(PlayerKey::Skip(true)), id: "player.step.forward", group: PLAYER, label: "Skip forward", default: k(CMD, Key::ArrowRight), alias: None },
+    Spec { cmd: Command::Player(PlayerKey::Skip(false)), id: "player.step.backward", group: PLAYER, label: "Skip back", default: k(CMD, Key::ArrowLeft), alias: None },
+    Spec { cmd: Command::Player(PlayerKey::Speed(true)), id: "player.speed.up", group: PLAYER, label: "Faster", default: k(SHIFT, Key::Period), alias: None },
+    Spec { cmd: Command::Player(PlayerKey::Speed(false)), id: "player.speed.down", group: PLAYER, label: "Slower", default: k(SHIFT, Key::Comma), alias: None },
+    // falcon's own id: Eagle handles N outside its keybind table.
+    Spec { cmd: Command::Player(PlayerKey::AddComment), id: "player.comment.add", group: PLAYER, label: "Add a comment at the current time", default: k(NONE, Key::N), alias: None },
 ];
 
 /// Keys that cannot be rebound, listed in the Shortcuts section.
@@ -154,16 +194,19 @@ impl Shortcuts {
         self.0.remove(spec(cmd).id);
     }
 
-    /// Another command whose chords include `chord`.
+    /// Another command of the same conflict group whose chords include
+    /// `chord`.
     pub fn conflict(&self, cmd: Command, chord: KeyboardShortcut) -> Option<Command> {
-        TABLE.iter().map(|s| s.cmd).filter(|&c| c != cmd).find(|&c| self.chords(c).iter().any(|x| same(*x, Some(chord))))
+        let me = spec(cmd);
+        TABLE.iter().filter(|s| s.cmd != cmd && same_scope(s, me)).map(|s| s.cmd).find(|&c| self.chords(c).iter().any(|x| same(*x, Some(chord))))
     }
 
-    /// The command a key press triggers. When several match (⌘F and ⌘⇧F
-    /// for ⌘⇧F), the chord with the most modifiers wins.
+    /// The command a key press triggers, outside the Player group. When
+    /// several match (⌘F and ⌘⇧F for ⌘⇧F), the chord with the most
+    /// modifiers wins.
     pub fn resolve(&self, key: Key, pressed: Modifiers) -> Option<Command> {
         let mut best: Option<(Command, u8)> = None;
-        for s in TABLE {
+        for s in TABLE.iter().filter(|s| s.group != PLAYER) {
             for c in self.chords(s.cmd) {
                 if c.logical_key == key && pressed.matches_logically(c.modifiers) {
                     let n = weight(c.modifiers);
@@ -179,6 +222,24 @@ impl Shortcuts {
     /// The commands pressed this frame.
     pub fn pressed(&self, input: &egui::InputState) -> Vec<Command> {
         input.events.iter().filter_map(press).filter_map(|(key, m)| self.resolve(key, m)).collect()
+    }
+
+    /// The player key a press triggers. `keys` holds the logical key and,
+    /// when known, the physical one, so ⇧[ works whether the keyboard
+    /// reports `[` or `{`. Modifiers must match exactly, as Electron's
+    /// accelerators do, so ⇧[ is not also [.
+    pub fn player(&self, keys: &[Key], pressed: Modifiers) -> Option<PlayerKey> {
+        let p = normalize(pressed);
+        for &key in keys {
+            for s in TABLE.iter().filter(|s| s.group == PLAYER) {
+                if self.chords(s.cmd).iter().any(|c| c.logical_key == key && canon(c.modifiers) == p)
+                    && let Command::Player(k) = s.cmd
+                {
+                    return Some(k);
+                }
+            }
+        }
+        None
     }
 }
 
@@ -427,7 +488,7 @@ impl Recorder {
                     // The default may now clash with a chord given to
                     // another command; that command gives way.
                     if let Some(c) = keys.binding(s.cmd) {
-                        for other in TABLE.iter().filter(|o| o.cmd != s.cmd) {
+                        for other in TABLE.iter().filter(|o| o.cmd != s.cmd && same_scope(o, s)) {
                             if keys.chords(other.cmd).iter().any(|x| same(*x, Some(c))) {
                                 let _ = keys.set(other.cmd, None);
                             }
@@ -469,10 +530,12 @@ mod tests {
 
     #[test]
     fn defaults_are_unique() {
+        // Within each conflict group; the player's Space overrides the
+        // viewer's while a video plays.
         let mut seen = HashSet::new();
         for s in TABLE {
             for c in s.default.iter().chain(s.alias.iter()) {
-                assert!(seen.insert(format(c)), "{} reuses {}", s.id, format(c));
+                assert!(seen.insert((s.group == PLAYER, format(c))), "{} reuses {}", s.id, format(c));
             }
         }
         let ids: HashSet<_> = TABLE.iter().map(|s| s.id).collect();
@@ -637,5 +700,66 @@ mod tests {
         assert_eq!(json, r#"{"edit.rename":"Command + R"}"#);
         let back: Shortcuts = serde_json::from_str(&json).unwrap();
         assert_eq!(back, keys);
+    }
+
+    #[test]
+    fn player_keys_only_clash_with_the_viewer_key() {
+        let keys = Shortcuts::default();
+        for s in TABLE.iter().filter(|s| s.group == PLAYER) {
+            let c = s.default.unwrap();
+            let global = keys.resolve(c.logical_key, c.modifiers);
+            if s.cmd == Command::Player(PlayerKey::Toggle) {
+                assert_eq!(global, Some(Command::Viewer));
+            } else {
+                // A global chord that only matches loosely (⌘[ for [) is no clash.
+                assert!(global.is_none_or(|g| !keys.chords(g).iter().any(|x| same(*x, Some(c)))), "{} clashes with {global:?}", s.id);
+            }
+        }
+        // ⌘[ and ⌘] stay Back and Forward; the player's [ and ] are bare.
+        assert_eq!(keys.resolve(Key::OpenBracket, Modifiers::COMMAND), Some(Command::Back));
+        assert_eq!(keys.player(&[Key::OpenBracket], Modifiers::COMMAND), None);
+    }
+
+    #[test]
+    fn player_conflicts_stay_in_the_group() {
+        let mut keys = Shortcuts::default();
+        // ⌘F is Find, but the player may use it.
+        assert_eq!(keys.set(Command::Player(PlayerKey::Toggle), parse("Command + F")), Ok(()));
+        assert_eq!(keys.player(&[Key::F], Modifiers::COMMAND), Some(PlayerKey::Toggle));
+        assert_eq!(keys.resolve(Key::F, Modifiers::COMMAND), Some(Command::Find));
+        // ⌘↑ is the player's volume, so another player key can't take it…
+        assert_eq!(keys.set(Command::Player(PlayerKey::AddComment), parse("Command + Up")), Err(Command::Player(PlayerKey::Volume(true))));
+        // …but a global command can.
+        assert_eq!(keys.set(Command::Rename, parse("Command + Up")), Ok(()));
+        assert_eq!(keys.0.get("player.playAndPause").map(String::as_str), Some("Command + F"));
+    }
+
+    #[test]
+    fn eagle_player_keys() {
+        let keys = Shortcuts::default();
+        let p = |k: &[Key], m: Modifiers| keys.player(k, m);
+        let none = Modifiers::NONE;
+        let shift = Modifiers::SHIFT;
+        let cmd = Modifiers { command: true, mac_cmd: true, ..Default::default() };
+        assert_eq!(p(&[Key::Space], none), Some(PlayerKey::Toggle));
+        assert_eq!(p(&[Key::Space], cmd), None);
+        assert_eq!(p(&[Key::N], none), Some(PlayerKey::AddComment));
+        assert_eq!(p(&[Key::N], shift), None);
+        assert_eq!(p(&[Key::OpenBracket], none), Some(PlayerKey::Frames(-1)));
+        assert_eq!(p(&[Key::CloseBracket], none), Some(PlayerKey::Frames(1)));
+        assert_eq!(p(&[Key::OpenCurlyBracket, Key::OpenBracket], shift), Some(PlayerKey::Frames(-10)));
+        assert_eq!(p(&[Key::CloseBracket], shift), Some(PlayerKey::Frames(10)));
+        assert_eq!(p(&[Key::Period], shift), Some(PlayerKey::Speed(true)));
+        assert_eq!(p(&[Key::Comma], shift), Some(PlayerKey::Speed(false)));
+        assert_eq!(p(&[Key::Period], none), None);
+        assert_eq!(p(&[Key::ArrowUp], cmd), Some(PlayerKey::Volume(true)));
+        assert_eq!(p(&[Key::ArrowDown], cmd), Some(PlayerKey::Volume(false)));
+        assert_eq!(p(&[Key::ArrowRight], cmd), Some(PlayerKey::Skip(true)));
+        assert_eq!(p(&[Key::ArrowLeft], cmd), Some(PlayerKey::Skip(false)));
+        // Plain arrows stay with the viewer (previous and next item).
+        assert_eq!(p(&[Key::ArrowLeft], none), None);
+        assert_eq!(p(&[Key::A], none), None);
+        // Player keys never come out of the global resolver.
+        assert_eq!(keys.resolve(Key::N, none), None);
     }
 }

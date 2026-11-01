@@ -67,9 +67,10 @@ struct Saved {
     collect_pos: Option<[f32; 2]>,
     /// Changed keyboard shortcuts (see `shortcuts.rs`).
     shortcuts: crate::shortcuts::Shortcuts,
-    /// The video player's volume and loop setting.
+    /// The video player's volume, loop setting and mute.
     video_volume: Option<f32>,
     video_loop: Option<bool>,
+    video_muted: Option<bool>,
 }
 
 /// Ids being dragged from the grid.
@@ -535,6 +536,7 @@ impl App {
         app.collect.pos = saved.collect_pos.map(Pos2::from);
         app.video.volume = saved.video_volume.unwrap_or(1.0).clamp(0.0, 1.0);
         app.video.looping = saved.video_loop.unwrap_or(false);
+        app.video.muted = saved.video_muted.unwrap_or(false);
         // Reopen the libraries that were open, then the one given on the
         // command line (focused if it was already open).
         let (libraries, active) = crate::workspaces::restore(&saved.libraries, saved.active, saved.library.as_deref(), |p| p.is_dir());
@@ -3526,6 +3528,7 @@ impl eframe::App for App {
             collect_pos: self.collect.pos.map(<[f32; 2]>::from),
             video_volume: Some(self.video.volume),
             video_loop: Some(self.video.looping),
+            video_muted: Some(self.video.muted),
         };
         eframe::set_value(storage, eframe::APP_KEY, &saved);
     }
