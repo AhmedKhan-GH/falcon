@@ -116,7 +116,6 @@ pub struct SearchPrefs {
 }
 
 /// How many folders (and smart folders) Go to Folder remembers, as Eagle.
-#[allow(dead_code)] // Go to Folder uses it next
 pub const HISTORY_LEN: usize = 200;
 
 impl SearchPrefs {
@@ -136,7 +135,6 @@ impl SearchPrefs {
 
 /// Puts `id` first in a Go to Folder history, without repeats, keeping at
 /// most [`HISTORY_LEN`].
-#[allow(dead_code)]
 pub fn push_history(list: &mut Vec<String>, id: &str) {
     list.retain(|x| x != id);
     list.insert(0, id.to_string());

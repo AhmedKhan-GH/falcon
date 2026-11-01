@@ -29,6 +29,7 @@ mod duplicates_view;
 mod filters_ui;
 mod filter_bar;
 mod find_cmds;
+mod quick_switch_ui;
 mod media_view;
 mod font_view;
 mod image_view;
@@ -635,6 +636,8 @@ pub struct App {
     focus_search: bool,
     /// Focus the sidebar's folder filter next frame (Find ▸ Filter Sidebar).
     focus_folder_filter: bool,
+    /// Go to Folder (`quick_switch_ui.rs`).
+    quick: quick_switch_ui::QuickSwitch,
     /// Eagle's in-app tag clipboard (Copy Tags), shared by the open
     /// libraries; the text also goes to the system clipboard.
     copied_tags: Option<Vec<String>>,
@@ -716,6 +719,7 @@ impl App {
             show_inspector: true,
             focus_search: false,
             focus_folder_filter: false,
+            quick: Default::default(),
             copied_tags: None,
             native_drag: Arc::default(),
             imports: Default::default(),
@@ -1404,8 +1408,9 @@ impl App {
         if pressed.contains(&C::Preferences) && !self.prefs_window.open {
             self.open_preferences();
         }
-        // The duplicate dialog takes Return and Esc for itself.
-        if self.prefs_window.open || self.ws.dup_dialog.is_some() || ctx.memory(|m| m.focused().is_some()) {
+        // The duplicate dialog and Go to Folder take Return, Esc and the
+        // arrows for themselves.
+        if self.prefs_window.open || self.ws.dup_dialog.is_some() || self.quick.is_open() || ctx.memory(|m| m.focused().is_some()) {
             return;
         }
         pressed.retain(|c| *c != C::Preferences);
@@ -1557,7 +1562,7 @@ impl App {
         use crate::shortcuts::Page;
         crate::menu::State {
             library: self.ws.lib.is_some(),
-            modal: self.prefs_window.open || self.ws.dup_dialog.is_some() || self.lock.is_locked() || self.item_rename.is_some() || self.ws.ext_dialog.is_some(),
+            modal: self.prefs_window.open || self.ws.dup_dialog.is_some() || self.lock.is_locked() || self.item_rename.is_some() || self.ws.ext_dialog.is_some() || self.quick.is_open(),
             lockable: self.prefs.app_lock.is_some(),
             tag_clipboard: self.copied_tags.is_some(),
             last_folder: !self.recent_folders.is_empty(),
@@ -1714,6 +1719,7 @@ impl App {
             C::FilterSidebar => self.focus_filter_sidebar(),
             C::ResetFilter => self.reset_filter(),
             C::OpenFilter(kind) => self.open_filter(kind),
+            C::QuickSwitch | C::QuickSwitchKey => self.quick.toggle(),
             C::FolderSettings => {
                 if let Scope::Folder(id) = &self.ws.scope {
                     self.ws.org.settings_request = Some(id.clone());
@@ -5163,6 +5169,7 @@ impl App {
         }
         self.organize_dialogs(&ctx, lib);
         self.tag_picker_ui(&ctx, lib);
+        self.quick_switch_ui(&ctx, lib);
         self.folder_dialogs(&ctx, lib);
         self.ext_dialog(&ctx);
         self.item_rename_dialog(&ctx, lib);

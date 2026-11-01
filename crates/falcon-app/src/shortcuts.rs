@@ -136,6 +136,9 @@ pub enum Command {
     ResetFilter,
     /// Opens one filter of the filter bar.
     OpenFilter(crate::search_state::FilterKind),
+    /// Go to Folder (Eagle's ⌘J) and its bare J.
+    QuickSwitch,
+    QuickSwitchKey,
     FlipHorizontal,
     RotateLeft,
     WindowZoom,
@@ -302,6 +305,9 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::SearchAll, id: "find.search.all", group: "Find", label: "Search the whole library", default: k(CMD_ALT, Key::F), aliases: &[] },
     Spec { cmd: Command::FilterSidebar, id: "find.sidebar.filter", group: "Find", label: "Filter the sidebar", default: k(ALT_SHIFT, Key::F), aliases: &[] },
     Spec { cmd: Command::ResetFilter, id: "find.filter.reset", group: "Find", label: "Clear the filter", default: k(CMD_SHIFT_ALT, Key::F), aliases: &[] },
+    // Go to Folder: ⌘J, and Eagle's J, bound outside its keybind table (falcon's own id).
+    Spec { cmd: Command::QuickSwitch, id: "find.quicksearch", group: "Find", label: "Go to a folder, tag or smart folder", default: k(CMD, Key::J), aliases: &[] },
+    Spec { cmd: Command::QuickSwitchKey, id: "find.quicksearch.key", group: "Find", label: "Go to a folder (single key)", default: k(NONE, Key::J), aliases: &[] },
     Spec { cmd: Command::OpenFilter(crate::search_state::FilterKind::Folders), id: "find.filter.folder", group: "Find", label: "Open the folder filter", default: k(ALT, Key::F), aliases: &[] },
     Spec { cmd: Command::OpenFilter(crate::search_state::FilterKind::Tags), id: "find.filter.tag", group: "Find", label: "Open the tag filter", default: k(ALT, Key::T), aliases: &[] },
     Spec { cmd: Command::OpenFilter(crate::search_state::FilterKind::Color), id: "find.filter.color", group: "Find", label: "Open the color filter", default: k(ALT, Key::C), aliases: &[] },
@@ -1367,5 +1373,14 @@ mod tests {
         assert_eq!(keys.resolve(Key::T, Modifiers::NONE), Some(Command::TagPanel));
         assert_eq!(keys.resolve(Key::R, Modifiers::NONE), Some(Command::Reshuffle));
         assert_eq!(keys.resolve(Key::R, ALT), Some(Command::OpenFilter(FilterKind::Rating)));
+    }
+
+    #[test]
+    fn go_to_folder_keys() {
+        let keys = Shortcuts::default();
+        assert_eq!(keys.resolve(Key::J, CMD), Some(Command::QuickSwitch));
+        assert_eq!(keys.resolve(Key::J, Modifiers::NONE), Some(Command::QuickSwitchKey));
+        assert_eq!(spec(Command::QuickSwitch).id, "find.quicksearch");
+        assert_eq!(spec(Command::QuickSwitchKey).id, "find.quicksearch.key");
     }
 }

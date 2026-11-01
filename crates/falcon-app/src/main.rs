@@ -21,6 +21,7 @@ mod menu;
 mod open_with;
 mod prefs;
 mod share;
+mod quick_switch;
 mod search_state;
 mod shortcuts;
 mod subtitles;
