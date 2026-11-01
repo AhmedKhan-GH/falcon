@@ -153,12 +153,22 @@ impl App {
             Target::Grid => self.import(paths),
             Target::Folder(id) => {
                 let (libraries, rest) = logic::split_libraries(paths);
+                let (packs, rest) = split_packs(rest);
                 let files: Vec<PathBuf> = rest.into_iter().filter(|p| !p.is_dir()).collect();
                 self.import_into(libraries, Vec::new());
+                if let Some(first) = packs.into_iter().next() {
+                    self.preview_pack_import(first, Some(id.clone()));
+                }
                 self.import_files(files, vec![id]);
             }
             Target::Sidebar => {
                 let (libraries, rest) = logic::split_libraries(paths);
+                // Eagle's `onDropSidebar` sends a pack to the open folder.
+                let (packs, rest) = split_packs(rest);
+                if let Some(first) = packs.into_iter().next() {
+                    let folder = self.scope_folders().into_iter().next();
+                    self.preview_pack_import(first, folder);
+                }
                 let (dirs, files): (Vec<PathBuf>, Vec<PathBuf>) = rest.into_iter().partition(|p| p.is_dir());
                 self.import_into(libraries, Vec::new());
                 if dirs.is_empty() && !files.is_empty() {
@@ -579,6 +589,11 @@ pub(crate) fn tempfile_dir() -> std::io::Result<PathBuf> {
     Ok(dir)
 }
 
+/// Splits the `.eaglepack` files off `paths`.
+fn split_packs(paths: Vec<PathBuf>) -> (Vec<PathBuf>, Vec<PathBuf>) {
+    paths.into_iter().partition(|p| p.is_file() && p.extension().is_some_and(|e| e.eq_ignore_ascii_case("eaglepack")))
+}
+
 impl App {
     /// Imports files and folders on a background thread: each file is
     /// staged without the library lock, then committed under it, so the
@@ -602,7 +617,7 @@ impl App {
         let (libraries, paths) = logic::split_libraries(paths);
         // A dropped or opened .eaglepack is imported as a package, not as
         // a file (the first one; Eagle takes one at a time).
-        let (packs, paths): (Vec<PathBuf>, Vec<PathBuf>) = paths.into_iter().partition(|p| p.is_file() && p.extension().is_some_and(|e| e.eq_ignore_ascii_case("eaglepack")));
+        let (packs, paths) = split_packs(paths);
         if let Some(first) = packs.into_iter().next() {
             self.preview_pack_import(first, folders.first().cloned());
         }
