@@ -362,7 +362,7 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::RotateLeft, id: "edit.image.rotate", group: "Edit", label: "Rotate the image left (viewer: also a video's picture)", default: k(SHIFT, Key::R), aliases: &[] },
     Spec { cmd: Command::FlipHorizontal, id: "edit.image.flip", group: "Edit", label: "Flip the image horizontally (viewer: also a video's picture)", default: k(SHIFT, Key::F), aliases: &[] },
     Spec { cmd: Command::Paste, id: "edit.paste", group: "Edit", label: "Paste files or an image", default: k(CMD, Key::V), aliases: &[] },
-    Spec { cmd: Command::Trash, id: "edit.remove.trash", group: "Edit", label: "Move to the Trash", default: k(CMD, Key::Backspace), aliases: &[] },
+    Spec { cmd: Command::Trash, id: "edit.remove.trash", group: "Edit", label: "Move to the Trash", default: k(CMD, Key::Backspace), aliases: &[KeyboardShortcut::new(NONE, Key::Delete)] },
     Spec { cmd: Command::RemoveFromFolder, id: "edit.remove.folder", group: "Edit", label: "Remove from the open folder", default: k(CMD_SHIFT, Key::Backspace), aliases: &[] },
     // Eagle's Edit ▸ Move Folder accelerators. ⇧ may or may not turn the
     // bracket into a brace before it reaches us.
@@ -1178,6 +1178,8 @@ mod tests {
         assert_eq!(keys.resolve(Key::Backspace, Modifiers { shift: true, ..cmd }), Some(Command::RemoveFromFolder));
         assert_eq!(keys.resolve(Key::ArrowLeft, Modifiers::NONE), None);
         assert_eq!(keys.chords(Command::Back).len(), 3);
+        // The forward-delete key is Eagle's fixed `del` key for the Trash.
+        assert_eq!(keys.resolve(Key::Delete, Modifiers::NONE), Some(Command::Trash));
     }
 
     #[test]

@@ -361,7 +361,7 @@ These are the defaults. All but the arrows, Esc, Tab, Z and the viewer's C, 0, 1
 | ← → ↑ ↓ in the sidebar | After a click in the sidebar the arrows act there, as in Eagle's focus zones: ↑ and ↓ open the row above or below (the fixed entries, Quick Access, smart folders and folders, in the order shown, scrolling it into view), ← collapses and → expands the open folder or smart folder, or every picked folder. A click anywhere else hands the arrows back to the grid. Eagle's third zone, the tag groups of the All Tags page, is not there |
 | ⇧Space | Scroll up a page (outside the viewer) |
 | ⌘A | Select all |
-| ⌘⌫ | Move to the Trash, or delete permanently when in the Trash; the next item is then selected |
+| ⌘⌫ or ⌦ | Move to the Trash, or delete permanently when in the Trash; the next item is then selected |
 | ⌘R (or F2) | Rename the selected item in the inspector, or open the Rename dialog for several |
 | ⌘D | Duplicate the selected item (or the viewer's) |
 | ⇧⌘J | Add to Folders… (the folder picker for the selection) |
