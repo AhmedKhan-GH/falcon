@@ -44,6 +44,9 @@ pub(crate) struct FolderUi {
     /// "take them out of the open folder" box, kept between openings.
     pub picker: Option<crate::folder_picker::Picker>,
     pub picker_remove: bool,
+    /// The open folder's password state: `None` without one, else whether
+    /// it is shut (locked and not unlocked). Kept for the menu bar.
+    pub open_lock: Option<bool>,
 }
 
 /// The batch rename dialog as filled in so far.
@@ -452,6 +455,12 @@ impl App {
         self.move_dialog(ctx, lib);
         self.new_with_dialog(ctx);
         self.add_to_folders_dialog(ctx, lib);
+        self.ws.folders.open_lock = match &self.ws.scope {
+            Scope::Folder(id) => logic::find_folder(&lib.metadata.folders, id)
+                .filter(|f| f.is_locked())
+                .map(|f| crate::organize::is_shut(f, &self.ws.org.unlocked)),
+            _ => None,
+        };
     }
 
     /// New Folder with Selection: asks for the name of the folder the

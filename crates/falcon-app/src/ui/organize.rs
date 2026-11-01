@@ -59,6 +59,9 @@ pub(crate) struct OrgState {
     /// ⇧⌘R asked for the open folder's settings; opened once the library
     /// is at hand.
     pub settings_request: Option<String>,
+    /// An Edit ▸ Folder Password command for this folder, run once the
+    /// library is at hand.
+    pub password_request: Option<(String, crate::shortcuts::Command)>,
     /// Tags picked on the All Tags page, the last one clicked, and the
     /// chips in the order drawn (this frame, and the last one's for ⇧).
     pub tag_sel: Vec<String>,
@@ -383,20 +386,23 @@ impl App {
 
     /// The Password submenu of a folder's context menu, in the sidebar and
     /// on a subfolder card.
+    /// Opens the password dialog for `f`.
+    fn open_password(&mut self, f: &Folder, mode: PasswordMode) {
+        self.ws.org.password = Some(PasswordDraft {
+            id: f.id.clone(),
+            mode,
+            old: String::new(),
+            new: String::new(),
+            again: String::new(),
+            hint: if mode == PasswordMode::Change { f.password_tips.clone() } else { String::new() },
+            error: None,
+        });
+    }
+
     pub(crate) fn folder_password_menu(&mut self, ui: &mut Ui, f: &Folder) {
         let shut = organize::is_shut(f, &self.ws.org.unlocked);
         ui.menu_button("Password", |ui| {
-            let mut open = |mode| {
-                self.ws.org.password = Some(PasswordDraft {
-                    id: f.id.clone(),
-                    mode,
-                    old: String::new(),
-                    new: String::new(),
-                    again: String::new(),
-                    hint: if mode == PasswordMode::Change { f.password_tips.clone() } else { String::new() },
-                    error: None,
-                });
-            };
+            let mut open = |mode| self.open_password(f, mode);
             if !f.is_locked() {
                 if ui.button("Create Password…").clicked() {
                     open(PasswordMode::New);
@@ -408,7 +414,8 @@ impl App {
                 if ui.button("Remove Password…").clicked() {
                     open(PasswordMode::Remove);
                 }
-                if ui.add_enabled(!shut, egui::Button::new("Lock Now")).clicked() {
+                let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::LockFolder);
+                if ui.add_enabled(!shut, egui::Button::new("Lock Now").shortcut_text(keys)).clicked() {
                     self.ws.org.unlocked.remove(&f.id);
                 }
             }
@@ -1518,6 +1525,20 @@ impl App {
             && !organize::is_shut(f, &self.ws.org.unlocked)
         {
             self.open_folder_settings(f);
+        }
+        if let Some((id, cmd)) = self.ws.org.password_request.take()
+            && let Some(f) = logic::find_folder(&lib.metadata.folders, &id)
+        {
+            use crate::shortcuts::Command as C;
+            match (cmd, f.is_locked()) {
+                (C::LockFolder, true) => {
+                    self.ws.org.unlocked.remove(&id);
+                }
+                (C::FolderPasswordNew, false) => self.open_password(f, PasswordMode::New),
+                (C::FolderPasswordChange, true) => self.open_password(f, PasswordMode::Change),
+                (C::FolderPasswordRemove, true) => self.open_password(f, PasswordMode::Remove),
+                _ => {}
+            }
         }
         self.auto_tag_dialog(ctx, lib);
         self.password_dialog(ctx, lib);

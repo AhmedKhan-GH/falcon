@@ -290,6 +290,8 @@ impl App {
             lockable: self.prefs.app_lock.is_some(),
             tag_clipboard: self.copied_tags.is_some(),
             last_folder: !self.recent_folders.is_empty(),
+            folder_password: self.ws.folders.open_lock.is_some(),
+            folder_unlocked: self.ws.folders.open_lock == Some(false),
             text: ctx.egui_wants_keyboard_input(),
             viewer: self.ws.viewer.is_some(),
             selected: self.ws.selected.len(),
@@ -450,6 +452,11 @@ impl App {
             C::ResetFilter => self.reset_filter(),
             C::OpenFilter(kind) => self.open_filter(kind),
             C::QuickSwitch | C::QuickSwitchKey => self.quick.toggle(),
+            C::FolderPasswordNew | C::FolderPasswordChange | C::FolderPasswordRemove | C::LockFolder => {
+                if let Scope::Folder(id) = &self.ws.scope {
+                    self.ws.org.password_request = Some((id.clone(), cmd));
+                }
+            }
             C::FolderSettings => {
                 if let Scope::Folder(id) = &self.ws.scope {
                     self.ws.org.settings_request = Some(id.clone());

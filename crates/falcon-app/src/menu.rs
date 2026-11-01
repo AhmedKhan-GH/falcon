@@ -85,6 +85,9 @@ pub struct State {
     pub navigator: bool,
     /// A folder has been used for Add to Last Used Folder.
     pub last_folder: bool,
+    /// The open folder has a password, and it is unlocked for now.
+    pub folder_password: bool,
+    pub folder_unlocked: bool,
 }
 
 impl State {
@@ -150,6 +153,9 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::CustomThumbnail | C::ClipboardThumbnail => s.library && (s.viewer || s.selected == 1),
         C::AddToLastFolder => (any || (s.library && s.viewer)) && s.last_folder,
         C::AddToFolders => any || (s.library && s.viewer),
+        C::FolderPasswordNew => grid && s.scope == ScopeKind::Folder && !s.folder_password,
+        C::FolderPasswordChange | C::FolderPasswordRemove => grid && s.scope == ScopeKind::Folder && s.folder_password,
+        C::LockFolder => grid && s.scope == ScopeKind::Folder && s.folder_password && s.folder_unlocked,
         C::FlipHorizontal => s.library && s.flippable,
         C::RotateLeft => s.library && s.rotatable,
         C::Crop => s.library && s.croppable,
@@ -323,6 +329,16 @@ pub static MENUS: &[(&str, &[Entry])] = &[
                 &[item("Flip Horizontally", Command::FlipHorizontal), item("Rotate Left", Command::RotateLeft), item("Crop…", Command::Crop)],
             ),
             item("Folder Settings…", Command::FolderSettings),
+            Entry::Sub(
+                "Folder Password",
+                &[
+                    item("Create…", Command::FolderPasswordNew),
+                    item("Change…", Command::FolderPasswordChange),
+                    item("Remove…", Command::FolderPasswordRemove),
+                    SEP,
+                    item("Lock Now", Command::LockFolder),
+                ],
+            ),
             item("Move Folder…", Command::MoveFolder),
             SEP,
             item("Remove from Folder", Command::RemoveFromFolder),
@@ -924,11 +940,19 @@ mod tests {
         assert!(!enabled(Command::PasteTags, &State { tag_clipboard: false, ..full.clone() }), "Paste Tags needs copied tags");
         assert!(!enabled(Command::LockApp, &State::default()), "Lock needs a password");
         assert!(!enabled(Command::AddToLastFolder, &State { last_folder: false, ..full.clone() }), "Add to Last Used Folder needs a used folder");
+        let locked = State { folder_password: true, ..full.clone() };
+        assert!(!enabled(Command::FolderPasswordNew, &locked), "a folder has one password");
+        assert!(enabled(Command::FolderPasswordRemove, &locked));
+        assert!(!enabled(Command::LockFolder, &locked), "Lock Now needs the folder unlocked");
+        assert!(!enabled(Command::LockFolder, &State { scope: ScopeKind::Smart, folder_password: true, folder_unlocked: true, ..full.clone() }));
         for it in items().iter() {
             let s = match it.cmd {
                 Command::Reshuffle => State { scope: ScopeKind::Random, ..full.clone() },
                 Command::Cut => State { text: true, ..full.clone() },
                 Command::ZoomActual | Command::ZoomFit => State { viewer: true, ..full.clone() },
+                Command::FolderPasswordChange | Command::FolderPasswordRemove | Command::LockFolder => {
+                    State { folder_password: true, folder_unlocked: true, ..full.clone() }
+                }
                 _ => full.clone(),
             };
             assert!(enabled(it.cmd, &s), "{} never acts", it.label);
