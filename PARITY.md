@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 241 | 21 | 10 | 8 |
-| Viewers and file formats | 184 | 16 | 3 | 5 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 249 | 13 | 10 | 8 |
+| Viewers and file formats | 185 | 15 | 3 | 5 |
 | Search, filters and organising | 216 | 1 | 4 | 3 |
 | Import, export, library, preferences and integrations | 189 | 4 | 16 | 26 |
-| **Total** | 830 | 42 | 33 | 42 |
+| **Total** | 839 | 33 | 33 | 42 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -244,7 +244,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | --- | --- | --- | --- |
 | Show-sidebar button when the sidebar is hidden | Done | app.rs:2006-2012 | local |
 | Back / Forward buttons | Done | app.rs:2013-2018 | local |
-| Title for the current view, "Search results", or "N folders selected" | Partial | Title, "Search results" and "N folders selected"; no breadcrumb, no result count, active filters ignored | local |
+| Title for the current view, "Search results", or "N folders selected" | Done | Page, folder or smart folder name stays during a search, then "Search results (N)" when a search or filter narrows the view; clicking the name clears both; path tooltip and ancestor menu | local |
 | Right-click the title for an ancestor jump menu | Done | Toolbar title ancestor menu | local |
 | Thumbnail size slider with − and + | Done | app.rs:2085-2109 | local |
 | Refresh button in the Random view | Done | Button on the Random page and in folders or smart folders sorted at random, plus R and View ▸ Shuffle Again | local |
@@ -294,9 +294,9 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Grid layout Fit or Fill option | Done | `Display.fill`, `draw_image_cover`; hover playback still works in Fill | local |
 | Thumbnail Speed vs Quality (load originals for large tiles) | Done | Layout panel option, Quality by default as Eagle; large jpg/png/webp/bmp cards show the original up to 1600 px through a bounded `Tier::Card` cache (16 entries) | local |
 | Sort-by choices in the layout panel, global and per folder, including Manual, Duration and Random | Done | Global sort with Duration and Random (`OrderBy::ALL`); a folder's own sort adds Manual in the panel (`own_sort_menu`) | local |
-| Toggle Show Name under thumbnails | Partial | `Display.name`; no caption in Justified, which Eagle captions | local |
-| Toggle item info, choosing Dimensions / File Size / Tags / Rating / Date Modified / Date Created | Partial | `logic::caption_info` with Eagle's six types; no caption in Justified, and no font-weight or URL-domain fallbacks | local |
-| Toggle the file extension in the name | Partial | `logic::caption_name`; no caption in Justified | local |
+| Toggle Show Name under thumbnails | Done | `Display.name` in Waterfall, Justified and Grid (Justified rows get the caption band, `logic/layout.rs`) | local |
+| Toggle item info, choosing Dimensions / File Size / Tags / Rating / Date Modified / Date Created | Done | `logic::caption_info` with Eagle's six types and its fallbacks: duration, font weight, bookmark domain, size for documents/3D/design types; in Justified too | local |
+| Toggle the file extension in the name | Done | `logic::caption_name`, in Justified too | local |
 | Toggle the extension label badge | Done | `Display.ext_badge` | local |
 | Toggle the comment-count badge | Done | `Display.comments` on cards and in List rows (26 px gutter) | local |
 | Show subfolder contents in a folder | Done | View menu, ⌥⌘7, the layout panel, the strip switch and the folder context menu | local |
@@ -304,8 +304,8 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Refresh button in the layout panel | Done | Flushes, re-reads the library from disk, forgets textures and reshuffles | local |
 | List layout with configurable columns and click-to-sort headers | Done | `layout_panel::list_header`, `logic::ListColumns`, `header_sort`: Eagle's seven columns, click sorts (writes the folder's sort inside a folder), right-click picks columns | local |
 | Subfolder cards above a folder's items, with covers | Done | covers.rs:65-140 | local |
-| Collapse the subfolder strip | Partial | Click the strip heading; the strip is absent in the List layout | local |
-| Rename a subfolder card by double-clicking its name | Partial | Double-click the card name; the strip is absent in the List layout | local |
+| Collapse the subfolder strip | Done | Click the heading in the card strip and in the List layout's subfolder rows | local |
+| Rename a subfolder card by double-clicking its name | Done | Double-click the name on cards and List rows | local |
 | Thumbnail background (checkerboard for transparency, etc.) | Done | Card menu Thumbnail Background ▸ None/Black/Gray/White/Checkerboard, item key `background` with Eagle's values (`logic::ThumbBg`, `Action::Background`); drawn in grid, list and viewer | local |
 | Hover zoom button and hold-Z preview | Done | app.rs:2680-2743, hover.rs | local |
 | Video, GIF and audio play on hover in the grid | Partial | GIF and animated WebP cards play in place while hovered (`anim.rs` `Cards`, ⌥ keeps them still); video and audio don't | local |
@@ -400,7 +400,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Import progress bar with count and time remaining | Done | "Importing 3 of 10 · About 20 s left · name" (hidden while paused); Pause/Resume on the sidebar spinner | local |
 | Import errors toast ("N files failed, click for details") opens an error list with retry and reveal | Partial | Toast shows the failure count only (app.rs:925) | local |
 | Dock icon progress bar during long tasks | Partial | `dock_progress.rs` driven by the progress modal (thumbnails, Trash, package import); not by the background file import | local |
-| Progress modals for export, eaglepack, thumbnail refresh, empty trash, WebP conversion and similar | Partial | Shared progress modal with Cancel for pack import and export, thumbnail refresh and Empty Trash; Export to Computer keeps its toolbar bar; no WebP conversion | local |
+| Progress modals for export, eaglepack, thumbnail refresh, empty trash, WebP conversion and similar | Done | Shared modal with Cancel for pack import/export, thumbnail refresh, Empty Trash, Export to Computer and Export in Format (`export::run` takes a cancel flag); WebP conversion has its own confirm and runs per item | local |
 | Sound effects (delete item, delete folder, capture) | Missing | Not built: falcon ships no sound assets; the capture uses the system shutter sound | local |
 | System notifications (import done, capture done) | Done | `notify.rs` posts UserNotifications for import, export and capture done; they need the bundled app (`dev.falcon.app`), which is how falcon is run; clicking one activates falcon | local |
 | Warnings: slow disk, NTFS on macOS, library path permissions, localhost / API port | Done | Read-only file, no write permission, slow disk, NTFS, plus a lasting alert when no API port is free or `localhost:<port>` can't be reached | local |
@@ -413,7 +413,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | Welcome flow: welcome, choose a theme, install browser extension, create or open a library with example names | Missing |  | local (extension step online) |
-| No-library screen offers both Create and Open | Partial | Only "Choose Library…" (app.rs:3531-3546). Create is reachable from the switcher only after a library is open | local |
+| No-library screen offers both Create and Open | Done | Create Library and Open Library with a hint (`ui/dialogs/library.rs`), through the sandbox guard | local |
 | Tutorial / tips overlay | Missing | Not applicable: Eagle's tutorial is an online video link | local |
 | Empty All or folder view: "Drag and Drop" with a hint | Done | Tailored empty states per view | local |
 | Empty search: "Nothing Found, maybe another keyword" | Done | Tailored empty state | local |
@@ -568,7 +568,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | RAW viewer shows the thumbnail, then the embedded full preview | Done | `thumbnail::raw_preview` extracts the largest embedded baseline or progressive JPEG, turned by EXIF orientation; QuickLook fallback on macOS | local |
-| EXIF orientation for RAW | Partial | TIFF-based files, ORF/RW2, RAF (its JPEG preview's EXIF) and CR3 (`CMT1`) through `exif::orientation`; CRW, MRW and X3F containers not parsed | local |
+| EXIF orientation for RAW | Done | TIFF-based files, ORF/RW2, RAF, CR3, and CRW (CIFF), MRW and X3F containers (`exif.rs`); the CRW 90/270 mapping is from format knowledge, not a real file | local |
 | Camera metadata (camera, ISO, focal length, shutter, aperture, date) | Done | `F/app/media_view.rs:315-333` (when `rawMetas` exists) | local |
 | Zoom, comments on RAW | Done | Same image viewer and `F/comments.rs:169` | local |
 
@@ -696,7 +696,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Measure tool | Done | Distance, angle and distance between parallel faces (`ui/viewer/model.rs`) | local |
 | Model tree navigator (files, meshes, materials) and details sidebar | Done | Files, meshes (hide, isolate, fit one), materials, plus the details panel | local |
 | Settings: background colour, edge display, dark theme | Done | Background colour, edges with colour and angle, default colour, Auto/Light/Dark theme, Reset | local |
-| Export model and create snapshot | Partial | OBJ+MTL and binary STL export, PNG snapshot of the faces (no edges, grid or axes); Eagle's viewer also writes glTF, PLY, OFF and 3DM | local |
+| Export model and create snapshot | Partial | `model3d/export.rs` writes OBJ+MTL, STL, GLB, glTF and PLY; the viewer menu offers OBJ and STL only so far; snapshot without edges/grid/axes; no OFF or 3DM | local |
 | Esc/←/→ still exit or move between items | Done | The shared viewer shell handles Esc, ← and → | local |
 
 ### 11. Special formats viewed as images (PSD, PSB, AI, EPS, XD, Sketch, Figma, Affinity, C4D, Blender, SketchUp, DWG, CDR, Clip, InDesign, Office, iWork, XMind, MindNode, OmniGraffle, HDR, EXR, ICO, ICNS, DDS)
@@ -1331,7 +1331,7 @@ Two cross-cutting facts explain many rows:
 | Remove one library from the list | Done | Switcher menu; missing libraries are kept and shown dimmed | local |
 | Delete a library folder from the list menu | Missing | Not an Eagle feature (the string is the Remove Icon confirmation); not built, on data-safety grounds | local |
 | Set or remove a library icon (`icon.png`) | Done | `library_icon.rs`: shorter side scaled to 64 px, written atomically; Change Icon / Remove Icon in the switcher | local |
-| Warn before switching while tasks run (Force Switch), or block while an AI action runs | Partial | Falcon's switching keeps tasks running in the parked library, so the warning ("Stop Tasks and Close") is on Close Library; export copies can't be cancelled and are waited for; no AI actions exist | local |
+| Warn before switching while tasks run (Force Switch), or block while an AI action runs | Partial | "Stop Tasks and Close" on Close Library and on Quit (exports stop too); falcon's switching keeps tasks running by design, so no switch warning; no AI actions exist | local |
 | Several libraries open at once | Done (beyond Eagle) | `workspaces.rs` (several workspaces), `app.rs:621-689` | local |
 | Show the library in Finder | Done | `app.rs:1643-1645` | local |
 | Missing-library screen with Try Again, Select another path and Create a new library | Done | At launch, from a missing recent entry, and when an open library vanishes | local |
