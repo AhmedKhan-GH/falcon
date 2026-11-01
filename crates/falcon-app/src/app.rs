@@ -1188,6 +1188,10 @@ impl App {
             C::ExportComputer | C::ExportPack | C::ExportCsv | C::ExportFormat | C::CopyPath | C::CopyFolderPath | C::CopyName | C::CopyLink | C::CopyThumbnail | C::CopyBase64 => {
                 self.export_keys(&|c| c == cmd);
             }
+            C::Page(p) => {
+                self.ws.viewer = None;
+                self.go(p.scope());
+            }
             C::Player(_) => {}
         }
     }

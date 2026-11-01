@@ -65,6 +65,35 @@ pub enum Command {
     CopyBase64,
     /// A key of the video player (`App::video_keys` reads these).
     Player(PlayerKey),
+    /// Show a sidebar page (Eagle's View ▸ All … Trash, ⌘1–⌘7).
+    Page(Page),
+}
+
+/// The sidebar pages ⌘1–⌘7 open, in the order of Eagle's View menu.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum Page {
+    All,
+    Uncategorized,
+    Untagged,
+    Recent,
+    Random,
+    AllTags,
+    Trash,
+}
+
+impl Page {
+    pub fn scope(self) -> crate::logic::Scope {
+        use crate::logic::Scope;
+        match self {
+            Page::All => Scope::All,
+            Page::Uncategorized => Scope::Uncategorized,
+            Page::Untagged => Scope::Untagged,
+            Page::Recent => Scope::Recent,
+            Page::Random => Scope::Random(0),
+            Page::AllTags => Scope::AllTags,
+            Page::Trash => Scope::Trash,
+        }
+    }
 }
 
 /// What a video player key does (Eagle's `player.*` keybinds).
@@ -161,6 +190,14 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::NextLibrary, id: "library.next", group: "Library", label: "Next open library", default: k(CTRL, Key::Tab), aliases: &[] },
     Spec { cmd: Command::PreviousLibrary, id: "library.previous", group: "Library", label: "Previous open library", default: k(CTRL_SHIFT, Key::Tab), aliases: &[] },
     Spec { cmd: Command::Preferences, id: "app.preferences", group: "App", label: "Preferences", default: k(CMD, Key::Comma), aliases: &[] },
+    // Eagle's View ▸ All … Trash.
+    Spec { cmd: Command::Page(Page::All), id: "view.all", group: "Go", label: "Show All", default: k(CMD, Key::Num1), aliases: &[] },
+    Spec { cmd: Command::Page(Page::Uncategorized), id: "view.unfiled", group: "Go", label: "Show Uncategorized", default: k(CMD, Key::Num2), aliases: &[] },
+    Spec { cmd: Command::Page(Page::Untagged), id: "view.untagged", group: "Go", label: "Show Untagged", default: k(CMD, Key::Num3), aliases: &[] },
+    Spec { cmd: Command::Page(Page::Recent), id: "view.recent", group: "Go", label: "Show Recently Used", default: k(CMD, Key::Num4), aliases: &[] },
+    Spec { cmd: Command::Page(Page::Random), id: "view.random", group: "Go", label: "Show Random", default: k(CMD, Key::Num5), aliases: &[] },
+    Spec { cmd: Command::Page(Page::AllTags), id: "view.alltags", group: "Go", label: "Show All Tags", default: k(CMD, Key::Num6), aliases: &[] },
+    Spec { cmd: Command::Page(Page::Trash), id: "view.trash", group: "Go", label: "Show the Trash", default: k(CMD, Key::Num7), aliases: &[] },
     Spec { cmd: Command::Player(PlayerKey::Toggle), id: "player.playAndPause", group: PLAYER, label: "Play or pause", default: k(NONE, Key::Space), aliases: &[] },
     Spec { cmd: Command::Player(PlayerKey::Frames(-1)), id: "player.prev1frame", group: PLAYER, label: "Previous frame", default: k(NONE, Key::OpenBracket), aliases: &[] },
     Spec { cmd: Command::Player(PlayerKey::Frames(1)), id: "player.next1frame", group: PLAYER, label: "Next frame", default: k(NONE, Key::CloseBracket), aliases: &[] },
@@ -658,6 +695,19 @@ mod tests {
         assert_eq!(parse(""), None);
         assert_eq!(parse("Hyper + A"), None);
         assert_eq!(parse("Command + Nope"), None);
+    }
+
+    #[test]
+    fn page_keys_follow_eagles_view_menu() {
+        let keys = Shortcuts::default();
+        let digits = [Key::Num1, Key::Num2, Key::Num3, Key::Num4, Key::Num5, Key::Num6, Key::Num7];
+        let pages = [Page::All, Page::Uncategorized, Page::Untagged, Page::Recent, Page::Random, Page::AllTags, Page::Trash];
+        for (key, page) in digits.into_iter().zip(pages) {
+            assert_eq!(keys.resolve(key, CMD), Some(Command::Page(page)), "{key:?}");
+        }
+        // ⌥1 is still a layout and ⌥⌘1 the sidebar.
+        assert_eq!(keys.resolve(Key::Num1, ALT), Some(Command::LayoutWaterfall));
+        assert_eq!(keys.resolve(Key::Num1, CMD_ALT), Some(Command::ToggleSidebar));
     }
 
     #[test]

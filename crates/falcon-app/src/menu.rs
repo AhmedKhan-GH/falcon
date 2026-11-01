@@ -78,6 +78,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::FolderUp | C::FolderDown | C::FolderTop | C::FolderBottom => grid && matches!(s.scope, ScopeKind::Folder | ScopeKind::Smart),
         C::SwitchLibrary | C::CollectWindow | C::Preferences => true,
         C::NextLibrary | C::PreviousLibrary => s.libraries > 1,
+        C::Page(_) => s.library,
         C::Player(_) => false,
     }
 }
