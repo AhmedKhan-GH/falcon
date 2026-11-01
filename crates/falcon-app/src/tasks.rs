@@ -4,6 +4,8 @@
 //! separate palette queue), a spinner shows how many are left, and a click
 //! pauses the queue between files or resumes it.
 
+use crate::locale::{tr, trf};
+
 /// What the status shows, if anything.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Status {
@@ -15,13 +17,13 @@ pub struct Status {
 impl Status {
     /// The tooltip: the state and the number of files left.
     pub fn label(&self) -> String {
-        let what = if self.paused { "Paused" } else { "Processing" };
-        format!("{what} ({})", self.left)
+        let n: &dyn std::fmt::Display = &self.left;
+        if self.paused { trf("Paused ({n})", &[("n", n)]) } else { trf("Processing ({n})", &[("n", n)]) }
     }
 
     /// The hint for a click.
     pub fn action(&self) -> &'static str {
-        if self.paused { "Click to resume" } else { "Click to pause" }
+        if self.paused { tr("Click to resume") } else { tr("Click to pause") }
     }
 }
 

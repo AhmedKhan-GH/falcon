@@ -384,11 +384,11 @@ pub fn broken_thumb_hint(load_failed: bool, path_len: usize, original_exists: bo
         return None;
     }
     Some(if path_len >= LONG_PATH {
-        "The file name or path is too long to preview. Rename the file or move the library to a shorter path."
+        crate::locale::tr("The file name or path is too long to preview. Rename the file or move the library to a shorter path.")
     } else if !original_exists && !thumb_exists {
-        "This file wasn't found. If a sync service manages the library, wait until syncing is complete."
+        crate::locale::tr("This file wasn't found. If a sync service manages the library, wait until syncing is complete.")
     } else {
-        "This file couldn't be read for a preview."
+        crate::locale::tr("This file couldn't be read for a preview.")
     })
 }
 

@@ -283,7 +283,7 @@ impl App {
         if icon_button(ui, Pos2::new(r - 51.0, cy), ic::ARROWS_LEFT_RIGHT, 18.0, true, &tip).clicked() {
             self.quick.toggle();
         }
-        let add_tip = self.shortcuts.tooltip(ui.ctx(), "Add", crate::shortcuts::Command::NewMenu);
+        let add_tip = self.shortcuts.tooltip(ui.ctx(), crate::locale::tr("Add"), crate::shortcuts::Command::NewMenu);
         let add = icon_button(ui, Pos2::new(r - 79.0, cy), ic::PLUS, 18.0, true, &add_tip);
         if add.clicked() {
             self.toggle_new_menu(ui.ctx());

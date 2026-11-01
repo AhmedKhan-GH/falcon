@@ -8,24 +8,13 @@
 use eframe::egui::{self, Id, Pos2, Rect, Ui};
 
 use crate::app::App;
+use crate::locale::{tr, tr_key, trf};
 use crate::logic::Scope;
 use crate::shortcuts::Command;
 
-/// Eagle's blank documents that need a template file, in its order.
-pub const NO_TEMPLATE: [&str; 12] = [
-    "Sketch Document",
-    "Photoshop Document",
-    "Illustrator Document",
-    "XD Document",
-    "Word Document",
-    "PowerPoint Document",
-    "Excel Document",
-    "Keynote Document",
-    "Pages Document",
-    "Numbers Document",
-    "MindNode Document",
-    "XMind Document",
-];
+/// The apps of Eagle's blank documents that need a template file, in its
+/// order.
+pub const NO_TEMPLATE: [&str; 12] = ["Sketch", "Photoshop", "Illustrator", "XD", "Word", "PowerPoint", "Excel", "Keynote", "Pages", "Numbers", "MindNode", "XMind"];
 
 /// The menu's popup, shared by every way of opening it.
 fn popup_id() -> Id {
@@ -81,23 +70,23 @@ impl App {
         let in_folder = matches!(self.ws.scope, Scope::Folder(_));
         let mut entry = |app: &App, ui: &mut Ui, label: &str, cmd: Command, enabled: bool| {
             let keys = app.shortcut_text(ui.ctx(), cmd);
-            if ui.add_enabled(enabled, egui::Button::new(label).shortcut_text(keys)).clicked() {
+            if ui.add_enabled(enabled, egui::Button::new(tr(label)).shortcut_text(keys)).clicked() {
                 chosen = Some(cmd);
             }
         };
-        entry(self, ui, "New Folder", Command::NewFolder, true);
-        entry(self, ui, "New Subfolder", Command::NewSubfolder, in_folder);
-        entry(self, ui, "New Smart Folder…", Command::NewSmartFolder, true);
+        entry(self, ui, tr_key("New Folder"), Command::NewFolder, true);
+        entry(self, ui, tr_key("New Subfolder"), Command::NewSubfolder, in_folder);
+        entry(self, ui, tr_key("New Smart Folder…"), Command::NewSmartFolder, true);
         ui.separator();
-        entry(self, ui, "Import Folders…", Command::ImportFolders, true);
-        entry(self, ui, "Import Files…", Command::Import, true);
-        entry(self, ui, "Import Eagle Package…", Command::ImportPack, true);
-        entry(self, ui, "Find Duplicates", Command::FindDuplicates, true);
+        entry(self, ui, tr_key("Import Folders…"), Command::ImportFolders, true);
+        entry(self, ui, tr_key("Import Files…"), Command::Import, true);
+        entry(self, ui, tr_key("Import Eagle Package…"), Command::ImportPack, true);
+        entry(self, ui, tr_key("Find Duplicates"), Command::FindDuplicates, true);
         ui.separator();
-        entry(self, ui, "Text Document", Command::NewTextFile, true);
-        crate::ui::menus::search::submenu(ui, "Other Documents", |ui| {
-            for label in NO_TEMPLATE {
-                ui.add_enabled(false, egui::Button::new(label)).on_disabled_hover_text("Not available: falcon has no template file for this format");
+        entry(self, ui, tr_key("Text Document"), Command::NewTextFile, true);
+        crate::ui::menus::search::submenu(ui, tr("Other Documents"), |ui| {
+            for app in NO_TEMPLATE {
+                ui.add_enabled(false, egui::Button::new(trf("{app} Document", &[("app", &app)]))).on_disabled_hover_text(tr("Not available: falcon has no template file for this format"));
             }
         });
         chosen
@@ -111,6 +100,6 @@ mod tests {
     #[test]
     fn the_unavailable_templates_are_eagles_twelve() {
         assert_eq!(NO_TEMPLATE.len(), 12);
-        assert!(!NO_TEMPLATE.contains(&"Text Document"), "the text document is offered");
+        assert!(!NO_TEMPLATE.contains(&"Text"), "the text document is offered");
     }
 }

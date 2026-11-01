@@ -235,7 +235,7 @@ impl App {
         let fill = Rect::from_min_max(track.min, Pos2::new(track.left() + track.width() * f, track.bottom()));
         p.rect_filled(fill, CornerRadius::same(2), t::p().primary);
         let text = if paused {
-            format!("Paused at {done} of {total}")
+            trf("Paused at {done} of {total}", &[("done", &done), ("total", &total)])
         } else {
             trf("Importing {done} of {total}  ·  {current}", &[("done", &done), ("total", &total), ("current", &current)])
         };

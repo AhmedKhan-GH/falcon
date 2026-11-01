@@ -117,6 +117,13 @@ The core words, so every file uses one term for one thing.
   icon's menu, the collect window's waiting screenshot, "Screenshot
   added", "Import finished", "Export finished"), machine-written in one
   pass; "Screenshot" is also the English tag name, which stays English.
+- The New… menu, the import queue's status, the broken-thumbnail hints and
+  the new shortcut labels (Add, New…, Other Documents, "{app} Document",
+  Text Document, "Not available: falcon has no template file…", Processing
+  / Paused ({n}), Click to pause / resume, "Paused at {done} of {total}",
+  the three thumbnail hints, "(second key)", "Set the first selected item
+  as the folder cover"), machine-written in one pass; "{app}" stands for
+  an app name (Word, Keynote, …) and is not translated.
 
 ## Reviewed
 
