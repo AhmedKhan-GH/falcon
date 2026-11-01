@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 118 | 45 | 108 | 9 |
-| Viewers and file formats | 81 | 31 | 78 | 7 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 121 | 46 | 104 | 9 |
+| Viewers and file formats | 83 | 30 | 77 | 7 |
 | Search, filters and organising | 139 | 29 | 54 | 3 |
-| Import, export, library, preferences and integrations | 91 | 21 | 100 | 26 |
-| **Total** | 429 | 126 | 340 | 45 |
+| Import, export, library, preferences and integrations | 104 | 19 | 89 | 26 |
+| **Total** | 447 | 124 | 324 | 45 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -28,7 +28,7 @@ These are bugs, not missing features. The first four can lose data or edits.
 
 1. ~~Every viewer opens inside the window between the sidebar and inspector in Eagle, with a toolbar button that hides both. Falcon does this only for PDFs.~~ Fixed: every viewer draws in the central panel, with the panels button, ⌥⌘3 and Tab.
 2. ~~No application menu bar.~~ Fixed: native File / Edit / Find / Organize / View / Window / Help menus with live shortcuts; no Actions menu.
-3. Preferences: 4 panes and 9 settings against Eagle's 13 panes and about 80 settings.
+3. Preferences: 8 panes and about 30 settings against Eagle's 13 panes and about 80 settings; the rest are listed in §6.
 4. The full-size image is capped at 3072 px.
 5. ~~Folder import flattens structure; no duplicate check on import; no import error list.~~ Fixed.
 6. ~~No export of items or folders, and no CSV export.~~ Fixed.
@@ -62,7 +62,7 @@ Overall finding: falcon now has a native menu bar (`crates/falcon-app/src/menu.r
 | A menubar with File / Edit / Find / Organize / View / Actions / Window / Help menus, each item showing its live shortcut | Partial | Native AppKit menus in `crates/falcon-app/src/menu.rs` (File, Edit, Find, Organize, View, Window, Help) with live shortcuts, enabled rules and checkmarks; clicks run through `App::run_command`. No Actions menu; only commands falcon has | local |
 | App menu: About | Partial | Only winit's stock About panel. No Eagle-style About window | local |
 | App menu: Preferences… (⌘,) | Done | shortcuts.rs `app.preferences`; in the app menu after About (`menu.rs`) and in the library switcher | local |
-| App menu: Lock Now (⌘⌥L, locks the whole app behind a password or Touch ID) | Missing | Only per-folder passwords exist (organize_ui.rs:270). There is no app lock screen | local |
+| App menu: Lock Now (⌘⌥L, locks the whole app behind a password or Touch ID) | Partial | ⌥⌘L locks the app behind the password set in Preferences ▸ Password (`applock.rs`, `app.lock`); in the app menu. No Touch ID | local |
 | App menu: Color Space (sRGB / Display P3 / Unmanaged) | Missing | No colour-space choice | local |
 | App menu: Hide, Hide Others, Quit | Done | Supplied by winit's default macOS app menu (main.rs uses eframe defaults) | local |
 | App menu: Check for Updates, Register / Unregister, Manage devices | Missing | Not applicable to falcon | online/plugin |
@@ -213,7 +213,7 @@ Eagle defaults come from prefs `shortcuts.keybinds` (rebindable) and from the ha
 | R reshuffles the Random view | Done | shortcuts.rs; in place, without a history step | local |
 | `*` or `/` expand or collapse every folder | Done | Eagle's `toggleAllFolders` rule (smart folders when one is open); `*` is the ⇧8 alias chord | local |
 | Tab toggles all panels | Done | Fixed key in shortcuts.rs FIXED, when no text field has focus (`logic::toggle_all`) | local |
-| Space opens the quick preview (preference: preview, native Quick Look, or page down) | Partial | Space toggles the viewer (app.rs:1088-1095). No Quick Look option and no page-down option | local |
+| Space opens the quick preview (preference: preview, native Quick Look, or page down) | Done | `Prefs::space`: viewer, Quick Look (`open_with::quick_look`, `qlmanage -p`) or page down | local |
 | ⇧Space pages up | Missing |  | local |
 | Enter toggles the viewer | Done | Enter is an alias of Viewer (shortcuts.rs:95) | local |
 | Esc closes panel, slideshow or viewer, otherwise clears the selection | Done | app.rs:1076-1081 | local |
@@ -229,7 +229,7 @@ Eagle defaults come from prefs `shortcuts.keybinds` (rebindable) and from the ha
 | ⌘A select all, ⌘C copy | Done | shortcuts.rs:110-112 | local |
 | Delete (Windows) / ⌘⌫ trash; ⇧⌘⌫ remove from folder | Done | shortcuts.rs `edit.remove.trash`, `edit.remove.folder` | local |
 | ⌘T add tags, ⇧⌘C / ⇧⌘V copy and paste tags, ⇧D add to last folder, ⌘D duplicate | Missing |  | local |
-| ⇧⌘L lock the folder now, ⌥⌘L lock the app | Missing |  | local |
+| ⇧⌘L lock the folder now, ⌥⌘L lock the app | Partial | ⌥⌘L locks the app (`app.lock`); no ⇧⌘L for the folder | local |
 | Hold Z for the hover preview | Done | app.rs:2703, hover.rs | local |
 | Global shortcuts: Show Eagle, Bring up Eagle and search, screen captures (⌥⌘E) | Missing | Captures cross-ref import | local |
 | Falcon extras: ⇧⌘K collect window, ⌃Tab / ⌃⇧Tab next or previous open library | Done | shortcuts.rs `file.collect.window`, `library.next`, `library.previous` (falcon only) | local |
@@ -268,13 +268,13 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Nav entries: All, Uncategorized, Untagged, Recently Used, Random, All Tags, Trash, each with a count | Done | app.rs:1740-1776, which adds Duplicates | local |
 | Recently Used lists items the user recently opened | Partial | Falcon sorts by last modified (logic.rs:170), not by what was opened | local |
 | Community entry | Missing |  | online/plugin |
-| Show or hide each nav entry (context menu and preferences) | Missing |  | local |
-| Show or hide the count badges | Missing | Counts always show | local |
+| Show or hide each nav entry (context menu and preferences) | Partial | Preferences ▸ Sidebar (`SidebarSections`); no context menu | local |
+| Show or hide the count badges | Done | `Prefs::sidebar_counts` | local |
 | Quick Access section | Done | app.rs:1670-1699 | local |
 | Section headers (Quick Access / Smart Folders / Folders) collapse on click and show a count | Partial | Folders shows a count (app.rs:1704). The headers do not collapse (app.rs:1931) | local |
 | Smart Folders tree with groups, nesting, icons, colours, counts | Done | organize_ui.rs:340-450 | local |
 | Folder tree with carets, guide lines, icon and colour tints, counts, lock badge | Done | app.rs:1778-1890 | local |
-| Double-click a folder to expand or collapse (preference: or rename) | Partial | Collapse only (app.rs:1867). No rename option | local |
+| Double-click a folder to expand or collapse (preference: or rename) | Done | `Prefs::sidebar_double_click`, folders and smart folders | local |
 | Select several folders with ⌘ or ⇧ click to see their combined items | Done | `logic::TreeSel` (⌘ toggles, ⇧ ranges among visible rows), `folders_ui`; the grid shows the union under the global sort | local |
 | Filter field at the bottom of the sidebar | Done | app.rs:1656, 1719-1736. No ⌥⇧F key | local |
 | "Go to Folder" button | Missing |  | local |
@@ -579,7 +579,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Play native formats (mp4, mov, m4v and others) | Done | AVFoundation player (`F/app/video_view.rs:114-145`) | local |
 | Fallback player for formats Chromium can't play (mkv, avi, wmv, flv and others) | Missing | AVFoundation failures fall back to a still image (`F/app/video_view.rs:254`) | local |
 | "Can't play this file" page with an Open With button | Partial | Error text in the stage (`F/app/video_view.rs:300`) | local |
-| Autoplay on open | Done | `F/app/video_view.rs:141` (no setting) | local |
+| Autoplay on open | Done | `F/app/video_view.rs`; switch `Prefs::video_autoplay` | local |
 | Play/pause button, click picture to toggle, Space | Done | `F/app/video_view.rs:309-312`, `:385-392`, `F/shortcuts.rs:122` | local |
 | Seek bar with drag scrubbing | Done | `F/app/video_view.rs:320-349` | local |
 | Hover thumbnail on the seek bar (preview frame under the pointer) | Missing | None | local |
@@ -587,13 +587,13 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Frame step back and forward, 1 and 10 frames | Done | Buttons and [ ] Shift+[ Shift+] (`F/app/video_view.rs:402-408`, `F/shortcuts.rs:123-126`) | local |
 | Playback speed menu 0.25x–8x and Shift+. / Shift+, | Done | `F/app/video_view.rs:441-452`, `F/shortcuts.rs:131-132` | local |
 | Loop toggle, remembered | Done | `F/app/video_view.rs:431-439` | local |
-| Always loop clips shorter than 30 s | Done | `F/app/video_view.rs:148` (no setting) | local |
+| Always loop clips shorter than 30 s | Done | `F/app/video_view.rs`; switch `Prefs::video_loop_short` | local |
 | Volume slider, mute, volume keys (Cmd+Up/Down), remembered | Done | `F/app/video_view.rs:412-430`, `F/shortcuts.rs:127-128` | local |
 | Volume / seek tip overlay while adjusting | Missing | None | local |
-| Wheel over the picture seeks; Shift/Alt+wheel seeks horizontally | Done | `F/app/video_view.rs:313-318`, `:166` | local |
+| Wheel over the picture seeks; Shift/Alt+wheel seeks horizontally | Done | `F/app/video_view.rs`; `Prefs::video_scroll` can make the wheel change the volume instead | local |
 | Preference: vertical wheel controls volume instead | Missing | No setting | local |
-| Remember the last playback position | Partial | Resumes within the session only (`F/app/video_view.rs:55`, `:102-104`) | local |
-| Stretch video to fill the window | Missing | Always fits without enlarging (`F/app/video_view.rs:286-292`) | local |
+| Remember the last playback position | Done | `Prefs::video_resume`; positions saved per item id in app state (`Positions`, latest 500), across launches | local |
+| Stretch video to fill the window | Done | `Prefs::video_fill` | local |
 | Full-screen button | Missing | None | local |
 | Flip and rotate the video (viewer toolbar) | Missing | None | local |
 | Timed notes: add a note at the current time | Done | `F/app/video_view.rs:453-458`, N key `F/shortcuts.rs:134` | local |
@@ -1353,7 +1353,7 @@ Two cross-cutting facts explain many rows:
 | Library loading progress screen | Missing | `Library::open` runs on the UI thread with no progress (`app.rs:601`) | local |
 | Library stats (item count, size, trash count) | Partial | Sidebar counts (`app.rs:1744-1745`) and folder inspector items and size (`app.rs:2925-2928`); CLI `info` prints items, trash, folders and tags (`src/main.rs:112-121`). No library-wide stats in the app | local |
 | Welcome or onboarding flow (theme, extension install, create library) | Missing | Plain empty state (`app.rs:3531-3546`) | local |
-| Password lock for the whole app: password, hint, Lock Now (⌥⌘L), Touch ID unlock | Missing | Only folder passwords exist (cross-ref organise, `organize.rs:160-176`) | local |
+| Password lock for the whole app: password, hint, Lock Now (⌥⌘L), Touch ID unlock | Partial | `crates/falcon-app/src/applock.rs`: password with hint, salted BLAKE3 digest in app state, lock screen at launch, ⌥⌘L. No Touch ID | local |
 
 ### 6. Preferences (every pane and setting)
 
@@ -1362,13 +1362,13 @@ Eagle panes (`app/js/preferences.js:659-788`): General, Sidebar, Controls, Previ
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | Preferences window with Save, Apply and Cancel | Done | `prefs.rs:250-263` | local |
-| Search box across preferences | Missing | — | local |
-| Remember the last open pane | Missing | `Window::section` resets each launch (`prefs.rs:173`) | local |
+| Search box across preferences | Done | `prefs.rs` `matches` over every pane's blocks | local |
+| Remember the last open pane | Done | `Saved.prefs_pane` | local |
 | **General:** theme (Auto, Light, Light Grey, Gray, Dark, Blue, Purple) | Done | `crates/falcon-app/src/theme.rs:73-83`, `prefs.rs:312-321` (live preview, reverted on Cancel) | local |
 | General: language | Missing | English only (no i18n code) | local |
-| General: UI zoom level (50 to 150%) | Missing | — | local |
+| General: UI zoom level (50 to 150%) | Done | `Prefs::ui_zoom` in Eagle's steps, previewed live; egui's own keyboard zoom is disabled so ⌘+/⌘− only zoom the grid | local |
 | General: transparency (vibrancy) effects | Missing | — | local |
-| General: show counts in the sidebar | Partial | Counts always shown (`app.rs:1744-1745`); no switch | local |
+| General: show counts in the sidebar | Done | `Prefs::sidebar_counts` | local |
 | General: menu bar icon | Missing | No status item | local |
 | General: keep the Dock icon after the window closes | Missing | — | local |
 | General: launch at login | Missing | — | local |
@@ -1379,24 +1379,24 @@ Eagle panes (`app/js/preferences.js:659-788`): General, Sidebar, Controls, Previ
 | General: @2x screenshots | Missing | — | local |
 | General: IPTC keywords as tags | Done | `prefs.rs:326-328` | local |
 | General (falcon only): show the sidebar and inspector | Done (beyond Eagle) | `prefs.rs:322-325` | local |
-| **Sidebar:** double-clicking a sidebar item renames it or expands and collapses it | Missing | — | local |
-| Sidebar: show or hide Uncategorized, Untagged, Recently Used, Random, Community, Quick Access, Smart Folders and Folders | Missing | Sections are fixed (`app.rs:1744-1747`) | local |
+| **Sidebar:** double-clicking a sidebar item renames it or expands and collapses it | Done | `Prefs::sidebar_double_click` (default: expand/collapse) | local |
+| Sidebar: show or hide Uncategorized, Untagged, Recently Used, Random, Community, Quick Access, Smart Folders and Folders | Done | `SidebarSections`, all on by default; no Community entry | local |
 | **Controls:** mouse wheel in the viewer scrolls, pages to previous or next, or zooms | Missing | No setting (viewer behaviour is cross-ref viewers) | local |
 | Controls: hover zoom button on cards | Done | `prefs.rs:331-337` | local |
-| Controls: double-clicking an item opens it in Eagle or in the default app | Missing | No setting | local |
+| Controls: double-clicking an item opens it in Eagle or in the default app | Done | `Prefs::double_click` | local |
 | Controls: middle button does nothing, opens a new window or runs a plugin | Missing | — | local |
-| Controls: spacebar previews, opens Quick Look or scrolls the list | Missing | — | local |
+| Controls: spacebar previews, opens Quick Look or scrolls the list | Done | `Prefs::space` | local |
 | **Preview:** zoom rendering smooth or pixelated | Missing | — | local |
 | Preview: remember the last zoom and position | Missing | — | local |
 | Preview: default image size, smart zoom or original | Missing | — | local |
 | Preview: rotation applies to the file or to the preview only | Missing | Rotation always writes the file (`image_edit.rs:113-118`); no preview-only mode | local |
 | Preview: transparency grid on or off | Missing | — | local |
-| Preview: video vertical scroll controls progress or volume | Missing | — | local |
-| Preview: video hover preview | Partial | Hover preview exists (`crates/falcon-app/src/hover.rs`) but cannot be switched off | local |
-| Preview: stretch video to fit the window | Missing | — | local |
-| Preview: video autoplay | Partial | Always autoplays (`app/video_view.rs:112`); no switch | local |
-| Preview: remember the playback position | Partial | Resumes within a session only (`video_view.rs:54-55`); not saved; no switch | local |
-| Preview: loop clips shorter than 30 s | Partial | Always on (`video_view.rs:26-27,146-147`); no switch | local |
+| Preview: video vertical scroll controls progress or volume | Done | `Prefs::video_scroll` | local |
+| Preview: video hover preview | Missing | Falcon has no video hover-play; `hover.rs` is the still-image preview | local |
+| Preview: stretch video to fit the window | Done | `Prefs::video_fill` | local |
+| Preview: video autoplay | Done | `Prefs::video_autoplay` | local |
+| Preview: remember the playback position | Done | `Prefs::video_resume`, saved per item across launches | local |
+| Preview: loop clips shorter than 30 s | Done | `Prefs::video_loop_short` | local |
 | Preview: autoplay GIF, WebP and AVIF in the grid | Missing | — | local |
 | Preview: advanced GIF viewer | Missing | — | local |
 | Preview: automatic font style tags | Done | `Prefs::font_style_tags` | local |
@@ -1408,13 +1408,13 @@ Eagle panes (`app/js/preferences.js:659-788`): General, Sidebar, Controls, Previ
 | Screenshot: auto-tag "Screenshot" | Missing | — | local |
 | Screenshot: also copy to the clipboard | Missing | — | local |
 | Screenshot: @2x on Retina | Missing | — | local |
-| **Shortcuts:** rebind any command, search the list, Restore Defaults | Partial | Recorder and rebinding exist (`prefs.rs:246`, `crates/falcon-app/src/shortcuts.rs`), but only for falcon's ~40 commands (`shortcuts.rs:100-140`); search and Restore Defaults are cross-ref shell | local |
+| **Shortcuts:** rebind any command, search the list, Restore Defaults | Partial | Recorder, search field and Restore Defaults (`shortcuts.rs`); only falcon's 60-odd commands | local |
 | Shortcuts: plugin shortcuts | Missing | No plugins | local |
 | Global shortcuts (show Eagle, quick search from anywhere) | Missing | — | local |
 | **Notification:** sound effects master switch, plus per event (delete item, delete folder, screenshot, extension) | Missing | — | local |
-| Notification: pop-up master switch, plus per event (screenshot, extension, duplicates, auto-import) | Missing | Only in-window status flashes | local |
+| Notification: pop-up master switch, plus per event (screenshot, extension, duplicates, auto-import) | Partial | "Show notices" master switch gating the duplicate dialog and the import-done note; screenshot, extension and auto-import don't exist | local |
 | Notification Center panel (history) | Missing | — | local |
-| **Password:** enable the app password lock, change the password, Lock Now, Touch ID | Missing | — | local |
+| **Password:** enable the app password lock, change the password, Lock Now, Touch ID | Partial | Set, change, remove, hint, Lock Now ⌥⌘L (`applock.rs`); no Touch ID | local |
 | **Auto-Import:** enable, choose folder, open folder | Missing | — | local |
 | **AI Search** pane (install, enable or disable the local semantic-search plugin) | Missing | — | online/plugin |
 | **AI Models** pane (shared API keys for OpenAI, Anthropic, Gemini and so on) | Missing | — | online/plugin |
@@ -1517,9 +1517,9 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 
 Rows marked "not counted" are features Eagle 4.0.0 does not have.
 
-- **Done:** 91, including 5 where falcon goes beyond Eagle and 1 with a small difference.
-- **Partial:** 21.
-- **Missing:** 126, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
+- **Done:** 104, including 5 where falcon goes beyond Eagle and 1 with a small difference.
+- **Partial:** 19.
+- **Missing:** 115, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
 - **Different on purpose:** 1 (the API listens on localhost only).
 
 ### Ranked Missing and Partial local items
@@ -1544,10 +1544,10 @@ Ranked by how often a user would hit the gap, and the risk if they do.
 16. **Unsupported formats are imported silently** instead of being refused with a message.
 17. **The collect window is thin**: no multi-folder, recent folders, new folder, name, description or tags.
 18. **Library list management is missing**: clear history, remove from list, library icon, and the missing-library retry or relocate screen.
-19. **No app password lock** (Lock Now, Touch ID).
+19. **App password lock** has no Touch ID.
 20. **Missing API routes**: `folder/unlock`, `item/setCustomThumbnail`, `item/refreshThumbnail`, `item/refreshPalette` (v1 and v2), `preferences/collect/on|off`, and the `/item`, `/folder` and `/smart-folder` redirects. There is no token auth, and `library/history` is per server rather than the app's recent list.
 21. **Hard-coded behaviours need preference switches**: font style tag, video autoplay, loop short clips, hover video preview, saved playback position, sidebar counts.
-22. **Missing Controls and Preview settings**: wheel behaviour, double-click target, middle button, spacebar, pixelated zoom, remember zoom, default ratio, rotate preview-only, transparency grid, video scroll target, stretch video, GIF autoplay, GIF viewer.
+22. **Missing Controls and Preview settings**: middle button, and the image settings not yet wired (see §6).
 23. **Sidebar pane is missing**: show or hide sections, and double-click to rename or collapse.
 24. **Notifications and sounds are missing**: system pop-ups and sound effects per event, and the Notification Center.
 25. **General settings are missing**: language, UI zoom, vibrancy, launch at login, Dock icon, menu bar icon, GPU, auto-select after import.
