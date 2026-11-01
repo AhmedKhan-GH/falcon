@@ -16,7 +16,7 @@ use falcon_library::model::Item;
 
 use crate::app::App;
 use crate::icons as ic;
-use crate::locale::{tr, tr_key};
+use crate::locale::{tr, tr_key, trf};
 use crate::logic::{self, DragAction, Projection, UpAxis, ViewZoom};
 use crate::model3d::gpu::SceneCallback;
 use crate::model3d::{ModelView, Settings, Shading, ViewerTheme};
@@ -39,6 +39,15 @@ fn bar_toggle(ui: &mut Ui, right: f32, cy: f32, label: &str, on: bool, tip: &str
     let color = if on { t::p().primary } else if resp.hovered() { t::p().text } else { t::p().text_value };
     ui.painter().text(rect.center(), Align2::CENTER_CENTER, label, font(12.5), color);
     (resp, rect.left() - 4.0)
+}
+
+/// A format's name in the Export menu: its extension in capitals, glTF
+/// as it is written.
+fn format_label(f: m3d::export::Format) -> String {
+    match f {
+        m3d::export::Format::Gltf => "glTF".to_string(),
+        f => f.ext().to_uppercase(),
+    }
 }
 
 fn rgb(c: [u8; 3]) -> Color32 {
@@ -254,11 +263,10 @@ impl App {
             let mut format = None;
             egui::Popup::menu(&export).show(|ui| {
                 ui.set_min_width(170.0);
-                if ui.button(tr("Export as OBJ…")).clicked() {
-                    format = Some(m3d::export::Format::Obj);
-                }
-                if ui.button(tr("Export as STL…")).clicked() {
-                    format = Some(m3d::export::Format::Stl);
+                for f in m3d::export::Format::ALL {
+                    if ui.button(trf("Export as {format}…", &[("format", &format_label(f))])).clicked() {
+                        format = Some(f);
+                    }
                 }
             });
             if let Some(f) = format {

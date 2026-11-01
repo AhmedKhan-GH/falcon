@@ -162,6 +162,9 @@ The core words, so every file uses one term for one thing.
   items are dropped onto a locked folder (machine-written).
 - "Open the folder picker", the Preferences ▸ Shortcuts row of the bare F
   (machine-written).
+- "Export as {format}…", the 3D viewer's export menu, replacing the two
+  fixed OBJ and STL entries; {format} is GLB, glTF, OBJ, PLY or STL and is
+  not translated (machine-written).
 
 ## Reviewed
 
