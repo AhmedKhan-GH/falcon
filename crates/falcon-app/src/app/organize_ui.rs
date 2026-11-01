@@ -134,7 +134,7 @@ fn org(a: OrgAction) -> Action {
 
 /// Eagle's colour row: a "no colour" ring, then the eight colours. Returns
 /// the pick (`Some(None)` clears the colour).
-fn color_row(ui: &mut Ui, current: Option<&str>) -> Option<Option<String>> {
+pub(super) fn color_row(ui: &mut Ui, current: Option<&str>) -> Option<Option<String>> {
     let mut pick = None;
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 6.0;
@@ -164,7 +164,7 @@ fn color_row(ui: &mut Ui, current: Option<&str>) -> Option<Option<String>> {
 /// The icon picker: the default icon, then every icon Eagle offers, in a
 /// scrolling grid drawn in the current colour. Returns the pick
 /// (`Some(None)` is the default icon).
-fn icon_grid(ui: &mut Ui, current: Option<&str>, tint: Color32, smart: bool) -> Option<Option<String>> {
+pub(super) fn icon_grid(ui: &mut Ui, current: Option<&str>, tint: Color32, smart: bool) -> Option<Option<String>> {
     let mut pick = None;
     let default = if smart { ic::FOLDER_STAR } else { ic::FOLDER };
     egui::ScrollArea::vertical().id_salt("icon-grid").max_height(320.0).show(ui, |ui| {
@@ -192,7 +192,7 @@ fn icon_grid(ui: &mut Ui, current: Option<&str>, tint: Color32, smart: bool) -> 
 
 /// The item sort entries for a folder or smart folder: "Global Settings"
 /// (no own sort), the keys, then the direction. Returns the new setting.
-fn sort_entries(ui: &mut Ui, current: Option<(FolderOrder, bool)>, manual: bool, global: (OrderBy, bool)) -> Option<Option<(FolderOrder, bool)>> {
+pub(super) fn sort_entries(ui: &mut Ui, current: Option<(FolderOrder, bool)>, manual: bool, global: (OrderBy, bool)) -> Option<Option<(FolderOrder, bool)>> {
     let mut pick = None;
     let mark = |on: bool| if on { ic::CHECK } else { " " };
     if ui.button(format!("{}  Global Settings", mark(current.is_none()))).clicked() {
@@ -392,6 +392,10 @@ impl App {
         }
         let pinned = quick.contains(&sf.id);
         resp.context_menu(|ui| {
+            if self.ws.folders.smart.is_multi() && self.ws.folders.smart.contains(&sf.id) {
+                self.multi_smart_menu(ui, lib, pinned);
+                return;
+            }
             ui.set_min_width(180.0);
             if ui.button("New Subfolder…").clicked() {
                 // A group's children start with the folder icon, not the grid.

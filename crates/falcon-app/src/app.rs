@@ -99,7 +99,6 @@ enum Action {
     RemoveFromFolder(Vec<String>, String),
     RenameFolder(String, String),
     SetFolderDescription(String, String),
-    DeleteFolder(String),
     AddToFolder(Vec<String>, String),
     /// Items dropped on a sidebar folder: moved out of the open folder, or
     /// added (`logic::folder_drop`).
@@ -126,6 +125,8 @@ enum Action {
     Organize(organize_ui::OrgAction),
     /// Thumbnails, palettes, covers, rotate, crop and comments (`image_edit.rs`).
     Edit(image_edit::Op),
+    /// Several folders at once, Move Folder and folder deletion (`folders_ui`).
+    Folders(folders_ui::FolderAction),
     /// The duplicate dialog's answer for these held files.
     ResolveDuplicates(Vec<crate::import_dupes::Pending>, crate::import_dupes::Choice),
 }
@@ -331,7 +332,10 @@ impl SmartDraft {
 /// A destructive action waiting for the user to confirm it.
 #[derive(Clone)]
 enum Confirm {
-    DeleteFolder(String),
+    /// Folders to delete; the dialog asks whether their items go to the
+    /// Trash too.
+    DeleteFolders(Vec<String>),
+    DeleteSmarts(Vec<String>),
     DeleteItems(Vec<String>),
     EmptyTrash,
     DeleteTag(String),
@@ -1517,12 +1521,6 @@ impl App {
                 }
                 Action::RenameFolder(id, name) => lib.rename_folder(&id, &name),
                 Action::SetFolderDescription(id, text) => lib.set_folder_description(&id, &text),
-                Action::DeleteFolder(id) => {
-                    if self.ws.scope == Scope::Folder(id.clone()) {
-                        self.ws.scope = Scope::All;
-                    }
-                    lib.delete_folder(&id)
-                }
                 Action::AddToFolder(ids, fid) => {
                     let n = ids.len();
                     let mut r = Ok(());
@@ -1658,6 +1656,7 @@ impl App {
                     r
                 }
                 Action::Edit(op) => self.apply_edit(lib, op),
+                Action::Folders(a) => self.apply_folder_action(lib, a),
             };
             if let Err(e) = result {
                 self.flash(format!("Could not save: {e}"));
@@ -1762,7 +1761,6 @@ fn action_label(action: &Action) -> String {
         Action::RemoveFromFolder(ids, _) => format!("Remove {} from folder", ids.len()),
         Action::RenameFolder(..) => "Rename folder".into(),
         Action::SetFolderDescription(..) => "Edit folder description".into(),
-        Action::DeleteFolder(_) => "Delete folder".into(),
         Action::AddToFolder(ids, _) => format!("Add {} to folder", ids.len()),
         Action::DropOnFolder(ids, _, logic::FolderDrop::Move(_)) => format!("Move {} to folder", ids.len()),
         Action::DropOnFolder(ids, _, logic::FolderDrop::Add) => format!("Add {} to folder", ids.len()),
@@ -1788,6 +1786,7 @@ fn action_label(action: &Action) -> String {
         Action::ResolveDuplicates(files, crate::import_dupes::Choice::UseExisting) => format!("Use existing for {}", files.len()),
         Action::ResolveDuplicates(files, _) => format!("Import {}", files.len()),
         Action::Edit(op) => op.label(),
+        Action::Folders(a) => a.label(),
     }
 }
 
@@ -2299,6 +2298,10 @@ impl App {
         self.folder_drop(ui, lib, &resp, f, depth);
         let pinned = cx.quick.contains(&f.id);
         resp.context_menu(|ui| {
+            if self.ws.folders.sel.is_multi() && self.ws.folders.sel.contains(&f.id) {
+                self.multi_folder_menu(ui, lib, f, pinned);
+                return;
+            }
             ui.set_min_width(180.0);
             if ui.add_enabled(!shut, egui::Button::new("New Subfolder")).clicked() {
                 self.ws.actions.push(Action::CreateFolder { parent: Some(f.id.clone()) });
@@ -2319,8 +2322,8 @@ impl App {
             self.folder_menu_extras(ui, lib, f);
             self.tree_export_menu(ui, export_ui::Target::Folder(f.id.clone()), !shut);
             ui.separator();
-            if ui.button(RichText::new("Delete Folder").color(t::p().icon_red)).clicked() {
-                self.ws.confirm = Some(Confirm::DeleteFolder(f.id.clone()));
+            if ui.add_enabled(!shut, egui::Button::new(RichText::new("Delete Folder").color(t::p().icon_red))).clicked() {
+                self.ask_delete_folders(lib, vec![f.id.clone()]);
             }
         });
         if resp.clicked() {
@@ -4410,19 +4413,24 @@ impl App {
             self.smart_dialog_ui(&ctx, lib);
         }
         self.organize_dialogs(&ctx, lib);
+        self.folder_dialogs(&ctx, lib);
         self.collect_duplicates();
         self.duplicate_dialog(&ctx, lib);
         self.export_dialogs(&ctx, lib);
         if let Some(c) = self.ws.confirm.clone() {
             let (title, detail, label) = match &c {
-                Confirm::DeleteFolder(id) => {
-                    let name = logic::find_folder(&lib.metadata.folders, id).map_or_else(String::new, |f| f.name.clone());
-                    (
-                        format!("Delete “{name}”?"),
-                        "Its subfolders are deleted too. Items left in no folder move to the Trash.".to_string(),
-                        "Delete",
-                    )
+                Confirm::DeleteFolders(ids) => {
+                    let title = match ids.as_slice() {
+                        [one] => format!("Delete “{}”?", logic::find_folder(&lib.metadata.folders, one).map_or("", |f| f.name.as_str())),
+                        _ => format!("Delete {} folders?", ids.len()),
+                    };
+                    (title, "Subfolders are deleted too.".to_string(), "Delete")
                 }
+                Confirm::DeleteSmarts(ids) => (
+                    format!("Delete {} smart folders?", ids.len()),
+                    "Only the smart folders go; the items they show stay.".to_string(),
+                    "Delete",
+                ),
                 Confirm::DeleteItems(ids) => (
                     format!("Delete {} item{} permanently?", ids.len(), if ids.len() == 1 { "" } else { "s" }),
                     "The files are removed from the library and cannot be restored.".to_string(),
@@ -4443,11 +4451,17 @@ impl App {
                 ui.label(RichText::new(title).size(15.0));
                 ui.add_space(4.0);
                 ui.label(RichText::new(detail).color(t::p().text_muted));
+                if matches!(c, Confirm::DeleteFolders(_)) {
+                    ui.add_space(6.0);
+                    ui.checkbox(&mut self.ws.folders.trash_items, "Move the items to the Trash as well")
+                        .on_hover_text("Items that are also in another folder stay. Untick to keep every item.");
+                }
                 ui.add_space(10.0);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui.button(RichText::new(label).color(t::p().icon_red)).clicked() {
                         self.ws.actions.push(match c.clone() {
-                            Confirm::DeleteFolder(id) => Action::DeleteFolder(id),
+                            Confirm::DeleteFolders(ids) => Action::Folders(folders_ui::FolderAction::Delete(ids, self.ws.folders.trash_items)),
+                            Confirm::DeleteSmarts(ids) => Action::Folders(folders_ui::FolderAction::DeleteSmart(ids)),
                             Confirm::DeleteItems(ids) => Action::DeletePermanently(ids),
                             Confirm::EmptyTrash => Action::EmptyTrash,
                             Confirm::DeleteTag(t) => Action::DeleteTag(t),

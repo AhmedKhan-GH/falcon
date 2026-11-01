@@ -14,6 +14,9 @@ pub(super) enum Request {
     Items(Vec<String>),
     /// Export to Computer: a folder or smart folder as a directory.
     Tree(Target),
+    /// Export to Computer: several folders, each as a directory in the
+    /// one place picked.
+    Trees(Vec<String>),
     /// Export as .eaglepack: these items.
     PackItems(Vec<String>),
     /// Export as .eaglepack: a folder with its subfolders, or a smart
@@ -107,6 +110,16 @@ pub(super) struct ExportState {
     /// The items the Export in Format dialog is open for.
     format_for: Option<Vec<String>>,
     format: FormatDraft,
+}
+
+/// Several folder exports into `dest` as one, revealing `dest` when done.
+fn merge_plans(dest: &std::path::Path, plans: impl Iterator<Item = Plan>, how: Collision) -> Plan {
+    let mut all = Plan { dirs: Vec::new(), steps: Vec::new(), top: dest.to_path_buf(), overwrite: how == Collision::Replace };
+    for p in plans {
+        all.dirs.extend(p.dirs);
+        all.steps.extend(p.steps);
+    }
+    all
 }
 
 fn plural(n: usize, one: &str) -> String {
@@ -282,6 +295,30 @@ impl App {
                     dest.display()
                 );
                 self.ws.export.clash = Some(Clash { replace, keep, title: "The folder already exists".into(), detail, files: false, convert: None });
+            }
+            Request::Trees(ids) => {
+                let hidden = crate::organize::hidden_folders(&lib.metadata.folders, &self.ws.org.unlocked);
+                let plan = |dest: &std::path::Path, how| merge_plans(dest, ids.iter().filter_map(|id| export::plan_folder(lib, id, dest, how, &hidden)), how);
+                let Some(dest) = pick_folder() else { return };
+                let replace = plan(&dest, Collision::Replace);
+                let present: Vec<String> = replace
+                    .dirs
+                    .iter()
+                    .filter(|d| d.parent() == Some(dest.as_path()) && d.exists())
+                    .filter_map(|d| d.file_name().map(|n| n.to_string_lossy().into_owned()))
+                    .collect();
+                if present.is_empty() {
+                    self.start_copy(replace, false, None);
+                    return;
+                }
+                let keep = plan(&dest, Collision::KeepBoth);
+                let detail = format!(
+                    "“{}” already has {} named {}. Replace overwrites files of the same names inside; Keep Both numbers the new copies.",
+                    dest.display(),
+                    if present.len() == 1 { "a folder" } else { "folders" },
+                    present.iter().map(|n| format!("“{n}”")).collect::<Vec<_>>().join(", ")
+                );
+                self.ws.export.clash = Some(Clash { replace, keep, title: "Some folders already exist".into(), detail, files: false, convert: None });
             }
             Request::Csv(ids) => {
                 if ids.is_empty() {
