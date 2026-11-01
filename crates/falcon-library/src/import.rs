@@ -80,6 +80,12 @@ impl Staged {
     pub fn item(&self) -> &Item {
         &self.item
     }
+
+    /// The staged copy of the file.
+    pub fn original(&self) -> std::path::PathBuf {
+        let item = &self.item;
+        self.dir.path().join(if item.ext.is_empty() { item.name.clone() } else { format!("{}.{}", item.name, item.ext) })
+    }
 }
 
 /// Copies `path` into a staging folder with its mtime kept, then makes the

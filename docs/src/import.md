@@ -73,6 +73,15 @@ Eagle stores no content hash in item JSON and never hashes file bytes. Its dupli
 - svg, tif, tiff and trashed items are skipped.
 - Images without a palette fall back to size, width, height and extension.
 
+The key is used when files are imported (seen in `file-uploaded`, `isDuplicateImage` and the `duplicateModal` directive):
+
+- Each imported item whose key matches an item not in the Trash has the first 4,096,000 bytes of both files compared. When they are equal the new item, already written to the library, is held back from the list. The key alone (bmp, tga, txt and formats Eagle can't preview get an empty key) never counts.
+- When the upload queue has finished, the Duplicate File Alert opens. It shows the existing item ("Existing", with its first folder or Uncategorized) beside the new one, two radio choices, Use existing file (the default) and Keep both, an Apply all (N) box when more than one file is held, and an Import button. The close button or Esc is Don't Import. ⌘↩ and ⌘Esc answer for every file. A click outside does nothing.
+- **Use existing file:** the new item is deleted for good. Each of its folders the existing item isn't in is added to it, with that folder's auto-tags; folders and tags are de-duplicated, and the existing item's `modificationTime` becomes the new item's, so it sorts as just added. The new item's own tags and notes are not carried over.
+- **Keep both:** the new item stays.
+- **Don't Import:** the new item is deleted for good.
+- The preference `notification.notification.when.repeatImage` (Notify me when importing duplicates, under Notification) is on by default and also needs the notification master switch. When either is off, nothing is asked and duplicates are imported as new items.
+
 ### Folder auto-tags (seen)
 
 A folder's `tags` key holds its auto-tags. Eagle's code calls the list it applies `extendTags`; it is worked out at run time (`getExtendTags`) and deleted before `metadata.json` is written, so it is not a setting.
@@ -153,6 +162,10 @@ The `duplicates` module compares file contents instead of copying Eagle's metada
 - **Near copies.** `find_near_duplicates(lib, threshold)` takes a 64-bit perceptual hash of each item's thumbnail, or of the original for small images shown without one. The hash is a 32×32 grey DCT, keeping the 8×8 lowest frequencies, each compared with their median. Items within `threshold` bits are grouped, transitively. About 10 suits resized or recompressed copies.
 - **Cache.** The `_cached` variants take a `HashCache`, keyed by item id and invalidated when the original's size or mtime changes. `HashCache::save` and `load` keep it as JSON wherever the caller likes.
 - **Results.** Groups list item ids in library order.
+
+### The duplicate check on import in falcon
+
+`import_check` holds the library side. `Library::duplicate_candidates(size, ext)` lists items not in the Trash with the same size and extension (no file is read), and `import_check::same_file` compares a staged copy with them by BLAKE3 hash of the whole file, which is at least as strict as Eagle's 4 MB prefix compare. svg, tif, tiff, bmp, tga, txt and files without an extension are not checked. `Staged::original` gives the staged copy's path. `Library::use_existing_for_import(existing, folders)` is Use existing file: the item joins each folder it isn't in, with the folder's auto-tags, and its `modificationTime` becomes the import time. Unlike Eagle, falcon checks before committing, so a duplicate is never written to the library and nothing has to be deleted afterwards. The app's side (holding duplicates and asking) is described in [The desktop app](app.md).
 
 ### Keywords in falcon
 

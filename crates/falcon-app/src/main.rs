@@ -6,6 +6,7 @@ mod audio;
 mod hover;
 mod icloud;
 mod icons;
+mod import_dupes;
 mod loader;
 mod logic;
 mod open_with;

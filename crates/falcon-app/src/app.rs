@@ -22,6 +22,7 @@ use falcon_library::search::{ColorQuery, Filter, Logic, OrderBy, Shape, TextFilt
 use crate::theme::{self as t, font, mono};
 
 mod organize_ui;
+mod dupes_ui;
 mod duplicates_view;
 mod filters_ui;
 mod media_view;
@@ -118,6 +119,8 @@ enum Action {
     Organize(organize_ui::OrgAction),
     /// Thumbnails, palettes, covers, rotate, crop and comments (`image_edit.rs`).
     Edit(image_edit::Op),
+    /// The duplicate dialog's answer for these held files.
+    ResolveDuplicates(Vec<crate::import_dupes::Pending>, crate::import_dupes::Choice),
 }
 
 /// The starting view requested on the command line.
@@ -314,6 +317,10 @@ struct Workspace {
     /// Tag typed into the multi-selection inspector.
     batch_tag: String,
     progress: Arc<Mutex<Progress>>,
+    /// Imported files found already in the library, waiting to be asked
+    /// about (`import_dupes`), and the dialog asking.
+    dupes: crate::import_dupes::Queue,
+    dup_dialog: Option<crate::import_dupes::Dialog>,
     /// Tag being renamed on the All Tags page, with the new name so far.
     tag_rename: Option<(String, String)>,
     tag_filter: String,
@@ -382,6 +389,8 @@ impl Workspace {
             focus_title: false,
             batch_tag: String::new(),
             progress: Arc::new(Mutex::new(Progress::default())),
+            dupes: Default::default(),
+            dup_dialog: None,
             tag_rename: None,
             tag_filter: String::new(),
             hover: Default::default(),
@@ -868,9 +877,10 @@ impl App {
         }
         let ctx = self.ctx.clone();
         let scratch = tempfile_dir().ok();
+        let dupes = self.prefs.notify_duplicates.then(|| self.ws.dupes.clone());
         std::thread::spawn(move || {
             for f in files {
-                let result = falcon_library::import::stage(&f, &opts).and_then(|staged| lock(&shared).commit_import(staged));
+                let result = crate::import_dupes::import_one(&f, &opts, &shared, dupes.as_ref());
                 // Pasted images are staged in falcon's own temp folder; they
                 // are removed only now, after the import has read them.
                 if scratch.as_ref().is_some_and(|d| f.starts_with(d)) {
@@ -967,7 +977,8 @@ impl App {
         if on(C::Preferences) && !self.prefs_window.open {
             self.open_preferences();
         }
-        if self.prefs_window.open || ctx.memory(|m| m.focused().is_some()) {
+        // The duplicate dialog takes Return and Esc for itself.
+        if self.prefs_window.open || self.ws.dup_dialog.is_some() || ctx.memory(|m| m.focused().is_some()) {
             return;
         }
         if ctx.input(|i| i.modifiers.command && i.key_pressed(Key::Z)) {
@@ -1279,6 +1290,15 @@ impl App {
                     r
                 }
                 Action::Organize(a) => self.apply_organize(lib, a),
+                Action::ResolveDuplicates(files, choice) => {
+                    let n = files.len();
+                    let mut r = Ok(());
+                    for p in files {
+                        r = r.and(crate::import_dupes::resolve(lib, p, choice).map(|_| ()));
+                    }
+                    self.flash(crate::import_dupes::notice(choice, n));
+                    r
+                }
                 Action::Edit(op) => self.apply_edit(lib, op),
             };
             if let Err(e) = result {
@@ -1406,6 +1426,8 @@ fn action_label(action: &Action) -> String {
         Action::QuickAdd(..) => "Add to Quick Access".into(),
         Action::QuickRemove(_) => "Remove from Quick Access".into(),
         Action::Organize(a) => organize_label(a),
+        Action::ResolveDuplicates(files, crate::import_dupes::Choice::UseExisting) => format!("Use existing for {}", files.len()),
+        Action::ResolveDuplicates(files, _) => format!("Import {}", files.len()),
         Action::Edit(op) => op.label(),
     }
 }
@@ -3847,6 +3869,8 @@ impl eframe::App for App {
             self.smart_dialog_ui(&ctx, lib);
         }
         self.organize_dialogs(&ctx, lib);
+        self.collect_duplicates();
+        self.duplicate_dialog(&ctx, lib);
         if let Some(c) = self.ws.confirm.clone() {
             let (title, detail, label) = match &c {
                 Confirm::DeleteFolder(id) => {

@@ -23,6 +23,10 @@ pub struct Prefs {
     pub hover_zoom: bool,
     /// Eagle's `general.IPTC`: add IPTC/XMP keywords as tags on import.
     pub keywords_as_tags: bool,
+    /// Eagle's `notification.notification.when.repeatImage`: ask what to
+    /// do with imported files already in the library. Off imports them
+    /// as new items without asking, as Eagle does.
+    pub notify_duplicates: bool,
     /// Run the local HTTP API while a library is open.
     pub api_enabled: bool,
     /// The first port the API tries.
@@ -39,6 +43,7 @@ impl Default for Prefs {
         Prefs {
             hover_zoom: true,
             keywords_as_tags: false,
+            notify_duplicates: true,
             api_enabled: true,
             api_port: falcon_server::DEFAULT_PORT,
             collect_folder: None,
@@ -326,6 +331,8 @@ fn general(ui: &mut Ui, d: &mut Draft) {
     });
     block(ui, "Import", |ui| {
         ui.checkbox(&mut d.prefs.keywords_as_tags, "Add IPTC and XMP keywords as tags when importing images");
+        ui.checkbox(&mut d.prefs.notify_duplicates, "Ask what to do when an imported file is already in the library");
+        note(ui, "When off, such files are imported as new items.");
     });
 }
 
@@ -367,6 +374,7 @@ mod tests {
         let p = Prefs::default();
         assert!(p.hover_zoom, "Eagle's hoverZoom defaults to on");
         assert!(!p.keywords_as_tags, "Eagle's IPTC defaults to off");
+        assert!(p.notify_duplicates, "Eagle's repeatImage notification defaults to on");
         assert_eq!(p.api_ports(), Some(41596..=41600));
     }
 

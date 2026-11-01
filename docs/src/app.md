@@ -141,6 +141,12 @@ What Eagle does, from `js/directives/duplicate-scan-panel.html` and `.js` and th
 | Action | Merge: the kept item takes the group's combined tags, folders and notes (a merge editor lets you pick name, URL and notes), and the others go | Seen (merge); inferred (the others go to the Trash) | No merge: Move to Trash only, leaving the kept item's tags and folders as they were |
 | Stored hashes | None in item JSON | Seen | None; an in-memory cache for the session |
 
+## Duplicate check on import
+
+Every import from the app (drops, ⌘V, files passed to the app, the collect window) checks whether each file is already in the library, while the preference is on. The import thread stages the file without the library lock, takes the lock only to list items of the same size and extension, and compares the bytes with the lock released (`import_check`, see [Import](import.md)). A match is not committed: the staged copy is held in a queue and the thread goes on with the next file. When the batch has finished, the window takes the queue into a dialog; the thread never waits for the window. The code is in `crates/falcon-app/src/import_dupes.rs` (thread side and decisions, with tests) and `app/dupes_ui.rs` (the dialog).
+
+The dialog, "Already in the library (N)", shows the existing item's thumbnail, name and first folder, the new file's size and target folder, two choices, Use the existing item (the default) and Keep both, a "Do the same for all N files" box when more than one file is held, and Import and Don't Import buttons. Return imports with the chosen option and Esc skips; with ⌘ held either answers for every file. A click outside doesn't answer. Use the existing item puts the existing item in the import's folders with their auto-tags and moves its date added to now (`Library::use_existing_for_import`); if that item has been deleted or trashed meanwhile, the file is imported instead. Keep both commits the held copy as a new item. Don't Import drops it, removing the staged copy. Each answer is one undo step and shows a notice ("Used the existing items for 2 files"). Held files count as done in the progress bar's "Added N". Held files still waiting when their library is closed are dropped.
+
 ## Keys
 
 These are the defaults. All but the arrows, Esc, Z and the viewer's C, ⇧R and ⇧F can be changed under Preferences → Shortcuts (see Shortcut settings); the video keys are its Player group.
@@ -246,6 +252,7 @@ What Eagle does, from its `js/hover-preview.js`, `style/components/_hover-previe
 |---|---|---|---|
 | General | Theme: Auto, Light, Lightgray, Gray, Dark, Blue, Purple | `theme` (`{name, color, css}`), default `DARK`; Auto is `{name: "Auto", css: "auto"}` | Stored as `theme` under Eagle's `css` names (`auto`, `lightgray`, …); picking one previews it at once, Cancel or Esc switch back |
 | General | Show the sidebar, show the inspector | View menu toggles, not preferences | Same flags as the panel buttons |
+| General | Ask what to do when an imported file is already in the library | `notification.notification.when.repeatImage` (Notification ▸ Notify me when importing duplicates), on by default, and only while the notification master switch is on | On by default; when off, such files are imported as new items without asking, as in Eagle (see Duplicate check on import) |
 | General | Add IPTC and XMP keywords as tags | `general.IPTC`, off by default | Same: every import from the app (drops, ⌘V, files passed to the app, the collect window) reads it (see [IPTC keywords](import.md)) |
 | Preview | Hover zoom | `habits.hoverZoom`, on by default; off removes the zoom button, but holding Z still works | Same |
 | Developer | Run the HTTP API, first port | Eagle always serves on 41595 and only has an API token setting | On by default, from 41596; tries five ports. Ports whose range would include 41595, or below 1024, are refused. Changing either restarts the API |
