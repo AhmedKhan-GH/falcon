@@ -230,22 +230,22 @@ impl App {
         for action in std::mem::take(&mut self.ws.actions) {
             self.ws.frame_labels.push(action_label(&action));
             let result = match action {
-                Action::CreateFolder { parent } => lib.create_folder(parent.as_deref(), "New Folder").and_then(|id| {
+                Action::CreateFolder { parent } => lib.create_folder(parent.as_deref(), tr("Untitled")).and_then(|id| {
                     if let Some(p) = parent {
                         // Eagle puts a new subfolder first among its siblings.
                         lib.reorder_folder(&id, Some(&p), 0)?;
                         self.ws.collapsed.remove(&p);
                     }
-                    self.ws.renaming = Some((id, "New Folder".into()));
+                    self.ws.renaming = Some((id, tr("Untitled").into()));
                     Ok(())
                 }),
                 Action::CreateSibling(of) => match crate::organize::locate(&lib.metadata.folders, &of).map(|(p, at)| (p.map(str::to_string), at)) {
-                    Some((parent, at)) => lib.create_folder(parent.as_deref(), "New Folder").and_then(|id| {
+                    Some((parent, at)) => lib.create_folder(parent.as_deref(), tr("Untitled")).and_then(|id| {
                         lib.reorder_folder(&id, parent.as_deref(), at + 1)?;
                         if let Some(p) = &parent {
                             self.ws.collapsed.remove(p);
                         }
-                        self.ws.renaming = Some((id, "New Folder".into()));
+                        self.ws.renaming = Some((id, tr("Untitled").into()));
                         Ok(())
                     }),
                     None => Ok(()),

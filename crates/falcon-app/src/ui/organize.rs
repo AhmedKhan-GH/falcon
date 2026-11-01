@@ -2005,7 +2005,7 @@ impl App {
                 Ok(())
             }
             OrgAction::CreateGroup(tags) => {
-                let name = organize::fresh_name("New Group", lib.metadata.tags_groups.iter().map(|g| g.name.as_str()));
+                let name = organize::fresh_name(tr("tag_group::Untitled"), lib.metadata.tags_groups.iter().map(|g| g.name.as_str()));
                 let id = lib.create_tag_group(&name, &[], None)?;
                 if !tags.is_empty() {
                     // Filed tags move out of any other group, as a drag does.
@@ -2032,12 +2032,12 @@ impl App {
             OrgAction::MoveFilter(i, to) => lib.reorder_saved_filter(i, to),
             OrgAction::MoveManual(folder, ids, before) => lib.move_items_manually(&folder, &ids, before.as_deref()),
             OrgAction::CreateSmartGroup(parent) => {
-                // Eagle names it "Untitled", opens it and starts a rename.
-                let id = lib.create_smart_folder_group(parent.as_deref(), "Untitled")?;
+                // Eagle names it "Untitled" in the UI language, opens it and starts a rename.
+                let id = lib.create_smart_folder_group(parent.as_deref(), tr("Untitled"))?;
                 if let Some(p) = parent {
                     self.ws.collapsed.remove(&p);
                 }
-                self.ws.org.smart_rename = Some((id.clone(), "Untitled".into()));
+                self.ws.org.smart_rename = Some((id.clone(), tr("Untitled").into()));
                 self.ws.scope = Scope::Smart(id);
                 self.ws.selected.clear();
                 Ok(())

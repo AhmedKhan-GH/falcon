@@ -115,9 +115,12 @@ session.
 ## What stays English
 
 Every window, pane, menu, dialog, toast and viewer goes through the
-catalogue. What stays English is what isn't interface text: names falcon
-writes into a library ("New Folder", "Untitled", "Screenshot - …", saved
-filter and group defaults, frame snapshots), the debug report and the
+catalogue. The default name of a new folder, smart folder group and tag
+group ("Untitled") is translated, as Eagle translates its own, and the
+rename templates keep their tokens (`%N`, `%D`, `%T`…) fixed with only
+the menu labels translated, again as Eagle does. What stays English is
+what isn't interface text: the other names falcon writes into a library
+("Screenshot - …", saved filter defaults, frame snapshots), the debug report and the
 error log, product and format names (Eagle, Finder, PNG, BPM, ISO),
 units and symbols (px, MB, EV, ★), the font viewer's specimen texts and
 messages that come from macOS or a library error unchanged. The

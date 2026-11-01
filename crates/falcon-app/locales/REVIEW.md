@@ -166,6 +166,7 @@ The core words, so every file uses one term for one thing.
   fixed OBJ and STL entries; {format} is GLB, glTF, OFF, OBJ, PLY or STL and is
   not translated (machine-written).
 - "Current List", "Selected" and "Settings…", the New… menu's Find Duplicates scopes and Auto-Import entry (machine-written).
+- "Untitled" and "tag_group::Untitled", the default names of a new folder, smart folder group and tag group (machine-written).
 
 ## Reviewed
 
