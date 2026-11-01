@@ -36,6 +36,11 @@ use objc2_foundation::{NSDictionary, NSNumber, NSString, NSURL};
 use crate::pixels::{self, Frame, quarter_turns};
 use crate::{Error, Info, Result};
 
+/// Whether this is the main thread, where AVFoundation's player lives.
+pub fn on_main_thread() -> bool {
+    MainThreadMarker::new().is_some()
+}
+
 /// The timescale used for times we build: fine enough for any frame rate.
 const TIMESCALE: i32 = 600_000;
 

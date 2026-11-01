@@ -354,6 +354,38 @@ mod mac {
         wait_for(5.0, || v.is_ready());
         let f = next_frame(&mut v);
         check("portrait: player frame is upright", f.as_ref().is_some_and(upright), f.map(|f| (f.width, f.height)));
+        drop(v);
+
+        // The same H.264/AAC clips through the FFmpeg fallback, when it is
+        // installed (scripts/build-ffmpeg.sh): same facts, same pictures.
+        if falcon_ffmpeg::available() {
+            for path in [&silent, &sound] {
+                let name = path.file_name().unwrap().to_string_lossy();
+                let ours = falcon_ffmpeg::probe(path).expect("FFmpeg probe");
+                let system = probe(path).unwrap();
+                check(&format!("FFmpeg {name}: same facts"), (ours.width, ours.height, ours.has_audio, ours.turns) == (system.width, system.height, system.has_audio, 0) && (ours.duration - system.duration).abs() < 0.1, &ours);
+                let (first, later) = (falcon_ffmpeg::frame_at(path, 0.0).unwrap(), falcon_ffmpeg::frame_at(path, 1.5).unwrap());
+                check(&format!("FFmpeg {name}: red then blue"), is_red(&first) && is_blue(&later), (first.mean(), later.mean()));
+            }
+            let info = falcon_ffmpeg::probe(&portrait).unwrap();
+            check("FFmpeg portrait: size is turned", (info.width, info.height, info.turns) == (H as u32, W as u32, 1), &info);
+            let still = falcon_ffmpeg::frame_at(&portrait, 0.5).unwrap();
+            check("FFmpeg portrait: frame is upright", upright(&still), (still.width, still.height));
+            let (mut p, out) = falcon_ffmpeg::Player::open(&sound, true).unwrap();
+            check("FFmpeg sound.mp4: has a sound output", out.is_some(), ());
+            p.set_muted(true);
+            p.play();
+            let start = Instant::now();
+            let mut frames = 0;
+            while start.elapsed() < Duration::from_millis(600) {
+                p.tick();
+                frames += usize::from(p.frame().is_some());
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            check("FFmpeg sound.mp4: plays on the wall clock when muted", frames >= 5 && p.current_time() > 0.4, (frames, p.current_time()));
+        } else {
+            println!("skip FFmpeg checks: {:?}", falcon_ffmpeg::status().err());
+        }
         println!("all AVFoundation checks passed");
     }
 }

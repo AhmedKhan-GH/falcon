@@ -147,6 +147,14 @@ impl AudioOut {
     }
 }
 
+/// What the clocks need from the shared state.
+#[derive(Clone, Copy)]
+struct Snapshot {
+    /// Sound is playing (on, and not run out at the end).
+    audio: bool,
+    clock: Option<AudioClock>,
+}
+
 /// A playing file. Lives on the thread that draws it; dropping it stops
 /// the workers and ends its [`AudioOut`].
 pub struct Player {
@@ -392,35 +400,40 @@ impl Player {
     }
 
     /// The playhead in seconds.
-    pub fn current_time(&mut self) -> f64 {
+    pub fn current_time(&self) -> f64 {
         if let Some(t) = self.seeking {
             return t;
         }
         if !self.playing {
             return self.pos;
         }
-        let snapshot = {
-            let st = self.shared.lock();
-            (st.audio_on, st.demux_done, st.samples.is_empty(), st.clock)
-        };
-        let t = self.clock_from(snapshot);
-        t.clamp(0.0, self.info.duration.max(0.0))
+        self.read_clock(self.snapshot()).clamp(0.0, self.info.duration.max(0.0))
     }
 
-    /// The master clock's time from a snapshot of the shared state: the
-    /// audio clock while sound plays, else the wall clock, which takes over
-    /// from the audio clock where it stopped.
-    fn clock_from(&mut self, (audio_on, demux_done, empty, clock): (bool, bool, bool, Option<AudioClock>)) -> f64 {
+    fn snapshot(&self) -> Snapshot {
+        let st = self.shared.lock();
+        Snapshot { audio: st.audio_on && !(st.demux_done && st.samples.is_empty()), clock: st.clock }
+    }
+
+    /// The master clock's time: the audio clock while sound plays, else
+    /// the wall clock. Until [`Player::follow_clock`] hands over, a stopped
+    /// audio clock reads where it stopped.
+    fn read_clock(&self, s: Snapshot) -> f64 {
         let wall = self.shared.wall();
-        if audio_on && !(demux_done && empty) {
-            self.on_audio = true;
-            return clock.map_or(self.pos, |c| c.now(wall));
-        }
-        if self.on_audio {
-            self.on_audio = false;
-            self.wall.set(clock.map_or(self.pos, |c| c.now(wall)), wall);
+        if s.audio || self.on_audio {
+            return s.clock.map_or(self.pos, |c| c.now(wall));
         }
         self.wall.now(wall)
+    }
+
+    /// Notes which clock is the master; when the sound stops (it ended, or
+    /// was muted) the wall clock carries on from where the audio clock was.
+    fn follow_clock(&mut self, s: Snapshot) {
+        if self.on_audio && !s.audio {
+            let wall = self.shared.wall();
+            self.wall.set(s.clock.map_or(self.pos, |c| c.now(wall)), wall);
+        }
+        self.on_audio = s.audio;
     }
 
     fn at_end(&self) -> bool {
@@ -482,8 +495,9 @@ impl Player {
         if !self.playing {
             return None;
         }
-        let snapshot = (st.audio_on, st.demux_done, st.samples.is_empty(), st.clock);
-        let now = self.clock_from(snapshot);
+        let snapshot = Snapshot { audio: st.audio_on && !(st.demux_done && st.samples.is_empty()), clock: st.clock };
+        self.follow_clock(snapshot);
+        let now = self.read_clock(snapshot);
         let due = st.frames.pop_due(now);
         drop(st);
         let (_, f) = due?;
@@ -493,7 +507,7 @@ impl Player {
 
     /// The picture at the playhead at the clip's full size, decoded afresh
     /// so playback is not disturbed.
-    pub fn current_frame(&mut self) -> Result<Frame> {
+    pub fn current_frame(&self) -> Result<Frame> {
         let t = self.current_time();
         media::frame_at(&self.path, t)
     }

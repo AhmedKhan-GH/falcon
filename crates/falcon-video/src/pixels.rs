@@ -1,34 +1,7 @@
 //! Pixel conversions: the decoder's BGRA rows (with padding and a track
 //! rotation) into tightly packed RGBA.
 
-/// A decoded picture: `width * height` RGBA pixels, rows top to bottom,
-/// fully opaque.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Frame {
-    pub width: usize,
-    pub height: usize,
-    pub rgba: Vec<u8>,
-}
-
-impl Frame {
-    /// The RGBA of the pixel at `(x, y)`.
-    pub fn pixel(&self, x: usize, y: usize) -> [u8; 4] {
-        let i = (y * self.width + x) * 4;
-        [self.rgba[i], self.rgba[i + 1], self.rgba[i + 2], self.rgba[i + 3]]
-    }
-
-    /// The average RGB over the whole picture.
-    pub fn mean(&self) -> [f32; 3] {
-        let n = (self.width * self.height).max(1) as f32;
-        let mut sum = [0.0f32; 3];
-        for px in self.rgba.as_chunks::<4>().0 {
-            for c in 0..3 {
-                sum[c] += px[c] as f32;
-            }
-        }
-        sum.map(|s| s / n)
-    }
-}
+pub use falcon_ffmpeg::Frame;
 
 /// Clockwise quarter turns (0 to 3) for a track's affine transform
 /// `[a b c d]`: an iPhone portrait clip carries `[0 1 -1 0]`, one turn.

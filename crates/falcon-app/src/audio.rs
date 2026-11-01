@@ -240,6 +240,14 @@ impl Audio {
         self.track.as_ref().and_then(|t| t.duration)
     }
 
+    /// The output's mixer, opening the output if needed: the video
+    /// viewer's FFmpeg player plays its sound through it. `None` when there
+    /// is no audio output.
+    pub fn mixer(&mut self) -> Option<rodio::mixer::Mixer> {
+        self.open().ok()?;
+        self.device.as_ref().map(|d| d.mixer().clone())
+    }
+
     /// A handle on the loaded track's player, for pausing it from another
     /// thread (the window being hidden).
     pub fn handle(&self) -> Option<Arc<rodio::Player>> {

@@ -4,6 +4,10 @@ use std::path::Path;
 
 use crate::{Error, Frame, Info, Result};
 
+pub fn on_main_thread() -> bool {
+    true
+}
+
 fn unsupported<T>() -> Result<T> {
     Err(Error("video playback needs macOS".into()))
 }

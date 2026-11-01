@@ -41,9 +41,10 @@ pub(super) struct VideoPane {
 }
 
 impl VideoPane {
-    /// Opens the file; `None` if AVFoundation can't play it.
-    pub fn open(path: &Path, autoplay: bool) -> Option<VideoPane> {
-        let mut video = Video::open(path).ok()?;
+    /// Opens the file; `None` if neither AVFoundation nor FFmpeg can play
+    /// it. FFmpeg's sound goes to `mixer`.
+    pub fn open(path: &Path, autoplay: bool, mixer: Option<&rodio::mixer::Mixer>) -> Option<VideoPane> {
+        let mut video = Video::open_with(path, mixer).ok()?;
         if autoplay {
             video.play();
         }

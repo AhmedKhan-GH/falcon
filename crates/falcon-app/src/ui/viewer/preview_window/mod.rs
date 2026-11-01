@@ -52,11 +52,11 @@ enum Pane {
 
 impl Pane {
     /// The viewer for `item`; `gpu` says whether windows draw with wgpu
-    /// (the 3D viewer needs it).
-    fn open(ctx: &egui::Context, lib: &Library, item: &Item, autoplay: bool, gpu: bool) -> Pane {
+    /// (the 3D viewer needs it). A video FFmpeg plays sounds through `mixer`.
+    fn open(ctx: &egui::Context, lib: &Library, item: &Item, autoplay: bool, gpu: bool, mixer: Option<&rodio::mixer::Mixer>) -> Pane {
         let file = item.original_path(lib.root());
         match kind_of(&item.ext) {
-            Kind::Video => players::VideoPane::open(&file, autoplay).map_or(Pane::Picture, Pane::Video),
+            Kind::Video => players::VideoPane::open(&file, autoplay, mixer).map_or(Pane::Picture, Pane::Video),
             Kind::Audio => players::AudioPane::open(&file, item).map_or(Pane::Picture, Pane::Audio),
             Kind::Text => Pane::Text(players::TextPane::open(&file)),
             Kind::Pdf => Pane::Pdf(pdf::PdfPane::open(ctx, file)),
@@ -217,7 +217,8 @@ impl App {
             return;
         }
         if matches!(pw.pane, Pane::Pending) {
-            pw.pane = Pane::open(&ctx, lib, item, self.prefs.video_autoplay, self.model3d.target.is_some());
+            let mixer = (kind_of(&item.ext) == Kind::Video && falcon_video::ffmpeg_available()).then(|| self.audio.mixer()).flatten();
+            pw.pane = Pane::open(&ctx, lib, item, self.prefs.video_autoplay, self.model3d.target.is_some(), mixer.as_ref());
         }
         // The opacity belongs to the NSWindow, found by its title.
         let want = (pw.title(item), pw.opacity);

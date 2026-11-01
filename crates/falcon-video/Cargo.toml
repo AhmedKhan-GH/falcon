@@ -1,10 +1,14 @@
 [package]
 name = "falcon-video"
-description = "Video decoding and playback for falcon through AVFoundation"
+description = "Video decoding and playback for falcon through AVFoundation, with FFmpeg as the fallback"
 license.workspace = true
 repository.workspace = true
 version.workspace = true
 edition.workspace = true
+
+[dependencies]
+falcon-ffmpeg = { path = "../falcon-ffmpeg" }
+rodio = { version = "0.23", default-features = false }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"

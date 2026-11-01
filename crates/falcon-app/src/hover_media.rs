@@ -7,7 +7,8 @@
 //! Eagle plays the file itself in a `<video>` element. Falcon decodes a
 //! strip of small pictures of the clip instead, on a worker thread with a
 //! `falcon_video::Grabber` (AVFoundation's player lives on the main thread
-//! and hands out full-size frames, too heavy for a card), and steps
+//! and hands out full-size frames, too heavy for a card; formats macOS
+//! can't play are grabbed through the FFmpeg fallback), and steps
 //! through the strip in real time. Only the hovered card has a strip, and
 //! it is dropped when the pointer leaves, so memory stays at one strip of
 //! at most [`STRIP_FRAMES`] pictures of [`STRIP_MAX_SIDE`] pixels.

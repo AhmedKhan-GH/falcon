@@ -1,4 +1,5 @@
-//! The viewer for video items: the picture from `falcon-video`'s player,
+//! The viewer for video items: the picture from `falcon-video`'s player
+//! (AVFoundation, or FFmpeg for formats macOS can't play),
 //! a control bar under it, Eagle's player keys, and timed comments as
 //! markers on the seek bar (see the desktop app chapter of the docs).
 
@@ -137,15 +138,15 @@ impl Repeat {
     }
 }
 
-/// Formats Eagle hands to its bundled mpv player because Chromium can't
-/// play them; macOS can't either, and falcon has no second player.
-const NEEDS_OTHER_PLAYER: [&str; 6] = ["mkv", "webm", "avi", "wmv", "flv", "360"];
-
-/// The line under the title of the "can't play" page.
-pub fn cannot_play_line(ext: &str) -> String {
+/// The line under the title of the "can't play" page. `ffmpeg` says
+/// whether the FFmpeg fallback is installed: formats macOS can't play
+/// (Matroska, WebM, AVI, …) need it, as Eagle needs its bundled player.
+pub fn cannot_play_line(ext: &str, ffmpeg: bool) -> String {
     let ext = ext.to_lowercase();
-    if NEEDS_OTHER_PLAYER.contains(&ext.as_str()) {
-        trf("macOS can't play .{ext} videos, and Falcon has no player of its own for them. Try opening it in another app.", &[("ext", &ext)])
+    if ffmpeg {
+        tr("Neither macOS nor FFmpeg could play this video. Try opening it in another app.").to_string()
+    } else if falcon_video::needs_ffmpeg(&ext) {
+        trf("macOS can't play .{ext} videos, and the FFmpeg libraries Falcon plays them with weren't found. Try opening it in another app.", &[("ext", &ext)])
     } else {
         tr("macOS couldn't play this video. Try opening it in another app.").to_string()
     }
@@ -334,13 +335,14 @@ impl VideoState {
     }
 
     /// Opens `item`'s player, following the video preferences (autoplay,
-    /// resuming, looping short clips); false if AVFoundation can't play it.
-    fn open(&mut self, lib: &Library, item: &Item, prefs: &crate::prefs::Prefs) -> bool {
+    /// resuming, looping short clips); false if neither AVFoundation nor
+    /// FFmpeg can play it. FFmpeg's sound goes to `mixer`.
+    fn open(&mut self, lib: &Library, item: &Item, prefs: &crate::prefs::Prefs, mixer: Option<&rodio::mixer::Mixer>) -> bool {
         if self.player.is_some() && self.id == item.id {
             return true;
         }
         self.close();
-        let mut v = match Video::open(&item.original_path(lib.root())) {
+        let mut v = match Video::open_with(&item.original_path(lib.root()), mixer) {
             Ok(v) => v,
             Err(_) => {
                 self.failed.insert(item.id.clone());
@@ -603,7 +605,7 @@ impl App {
             self.ws.frame_jobs.push(j);
         }
         let name = format!("{}.{}", item.name, item.ext);
-        self.notice_lines(ui, area, &name, &cannot_play_line(&item.ext));
+        self.notice_lines(ui, area, &name, &cannot_play_line(&item.ext, falcon_video::ffmpeg_available()));
     }
 
     /// Eagle's frame tools on the picture at the playhead, decoded at the
@@ -703,7 +705,14 @@ impl App {
             self.video.failed.insert(item.id.clone());
             self.video.close();
         }
-        if self.video.failed.contains(&item.id) || !self.video.open(lib, item, &self.prefs) {
+        let unplayable = self.video.failed.contains(&item.id) || {
+            // FFmpeg's sound needs the audio output, opened only when a new
+            // file is about to be opened.
+            let opening = self.video.loaded() != Some(item.id.as_str()) && falcon_video::ffmpeg_available();
+            let mixer = opening.then(|| self.audio.mixer()).flatten();
+            !self.video.open(lib, item, &self.prefs, mixer.as_ref())
+        };
+        if unplayable {
             let ui = &mut crate::ui::widgets::viewer_ui(parent, screen, "video-viewer");
             ui.painter().rect_filled(screen, 0.0, t::p().main);
             let bar = Rect::from_min_size(screen.min, vec2(screen.width(), t::BAR_HEIGHT));
@@ -1187,9 +1196,10 @@ mod tests {
 
     #[test]
     fn cannot_play_lines_name_the_format() {
-        assert!(cannot_play_line("MKV").contains(".mkv videos"));
-        assert!(cannot_play_line("avi").contains("no player of its own"));
-        assert!(cannot_play_line("mp4").starts_with("macOS couldn't play this video"));
+        assert!(cannot_play_line("MKV", false).contains(".mkv videos"));
+        assert!(cannot_play_line("avi", false).contains("FFmpeg libraries"));
+        assert!(cannot_play_line("mp4", false).starts_with("macOS couldn't play this video"));
+        assert!(cannot_play_line("mkv", true).starts_with("Neither macOS nor FFmpeg"));
     }
 
     #[test]
