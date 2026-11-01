@@ -95,6 +95,15 @@ pub fn original_job(item: &Item, root: &std::path::Path, tile: usize) -> Option<
         .then(|| Job { key: (item.id.clone(), Tier::Original), path: item.original_path(root), svg: false, quicklook: false, tile, region: None, raw: falcon_library::exif::is_raw(&ext), page: 0, hdr: falcon_library::hdr::is_hdr(&ext) })
 }
 
+/// The job asking QuickLook for a render of `item` up to
+/// `logic::HIRES_QUICKLOOK_SIDE`, cut into tiles like an original, for the
+/// formats Eagle draws again natively when zoomed (`logic::hires_quicklook`).
+pub fn hires_job(item: &Item, root: &std::path::Path, tile: usize) -> Option<Job> {
+    let ext = item.ext.to_lowercase();
+    (crate::logic::hires_quicklook(&ext) && cfg!(target_os = "macos"))
+        .then(|| Job { key: (item.id.clone(), Tier::Original), path: item.original_path(root), svg: false, quicklook: true, tile, region: None, raw: false, page: 0, hdr: false })
+}
+
 /// The job decoding page `page` (0-based, above 0) of a multi-page TIFF at
 /// the full tier, kept under the key `<id>#page<n>`.
 pub fn tiff_page_job(item: &Item, root: &std::path::Path, page: usize) -> Job {
@@ -123,6 +132,13 @@ pub fn job_for(item: &Item, root: &std::path::Path, tier: Tier) -> Option<Job> {
     if tier == Tier::Full && (ext == "tga" || falcon_library::hdr::is_hdr(&ext)) {
         // Decoded by falcon itself (HDR and EXR tone mapped), not QuickLook.
         return Some(Job { key: (item.id.clone(), tier), path: item.original_path(root), svg: false, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: falcon_library::hdr::is_hdr(&ext) });
+    }
+    // A custom thumbnail stands for a format with no picture of its own.
+    if tier == Tier::Full
+        && crate::logic::custom_thumbnail_is_picture(&ext, thumbnail::has_custom_thumbnail(item))
+        && let Some(t) = item.thumbnail_path(root)
+    {
+        return Some(Job { key: (item.id.clone(), tier), path: t, svg: false, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: false });
     }
     if tier == Tier::Full && !supported && cfg!(target_os = "macos") {
         return Some(Job { key: (item.id.clone(), tier), path: item.original_path(root), svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false });
@@ -687,6 +703,8 @@ fn tone_mapped(job: &Job, max: u32, exposure: f32, linear: &Mutex<Option<(PathBu
 fn decode_tiled(job: &Job, exposure: f32, linear: &Mutex<Option<(PathBuf, u32, Arc<image::Rgba32FImage>)>>) -> Option<Pixels> {
     let img = if job.hdr {
         tone_mapped(job, u32::MAX, exposure, linear)?
+    } else if job.quicklook {
+        thumbnail::quicklook(&job.path, crate::logic::HIRES_QUICKLOOK_SIDE).ok()?
     } else if job.raw {
         raw_preview(&job.path)?
     } else if imageio(&job.path) {

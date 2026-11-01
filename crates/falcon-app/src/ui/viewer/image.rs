@@ -13,7 +13,7 @@ use crate::app::App;
 use crate::gesture::{Gesture, Outcome};
 use crate::ui::viewer::audio;
 use crate::ui::widgets::ext_placeholder;
-use crate::loader::{Tier, job_for, original_job};
+use crate::loader::{Tier, hires_job, job_for, original_job};
 use crate::logic;
 use crate::theme::{self as t, mono};
 
@@ -189,6 +189,15 @@ impl App {
             && logic::wants_original(&ext, natural.x.max(natural.y) as u32, shown_px)
             && let Some(j) = original_job(item, lib.root(), tile)
         {
+            self.ws.frame_jobs.push(j);
+        } else if !animated
+            && page_size.is_none()
+            && tf.is_identity()
+            && logic::wants_hires_render(&ext, natural.x.max(natural.y) as u32, shown_px)
+            && let Some(j) = hires_job(item, lib.root(), tile)
+        {
+            // PSD, AI and PowerPoint zoomed past the full tier: a larger
+            // QuickLook render, drawn like an original.
             self.ws.frame_jobs.push(j);
         }
         // An SVG enlarged past its render is drawn again, sharp, for the part

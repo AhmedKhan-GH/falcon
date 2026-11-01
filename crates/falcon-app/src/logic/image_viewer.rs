@@ -99,6 +99,44 @@ pub fn wants_original(ext: &str, natural_long: u32, shown_px: f32) -> bool {
     full_resolution(ext) && natural_long > FULL_TIER_SIDE && shown_px > FULL_TIER_SIDE as f32
 }
 
+/// Formats Eagle draws again natively at a larger size when zoomed in
+/// (its native viewer over the thumbnail); falcon asks QuickLook for a
+/// render up to [`HIRES_QUICKLOOK_SIDE`] instead.
+pub fn hires_quicklook(ext: &str) -> bool {
+    matches!(ext, "psd" | "psb" | "ai" | "ppt" | "pptx" | "potx")
+}
+
+/// The long side of the larger QuickLook render (a 256 MB picture at most).
+pub const HIRES_QUICKLOOK_SIDE: u32 = 8192;
+
+/// Whether to ask for the larger render: a format of
+/// [`hires_quicklook`] larger than the full tier, drawn larger than it.
+pub fn wants_hires_render(ext: &str, natural_long: u32, shown_px: f32) -> bool {
+    hires_quicklook(ext) && natural_long > FULL_TIER_SIDE && shown_px > FULL_TIER_SIDE as f32
+}
+
+/// The formats Eagle shows as a picture of their own (its special-format
+/// viewer list): for these a custom thumbnail doesn't replace the render.
+pub fn special_picture_format(ext: &str) -> bool {
+    matches!(
+        ext,
+        "hdr" | "exr" | "ico" | "graffle" | "xmind" | "mindnode" | "psd" | "psdt" | "indd" | "idml" | "indt" | "psb" | "xd" | "c4d" | "blend"
+            | "clip" | "skp" | "dwg" | "dds" | "prd" | "pxd" | "sketch" | "fig" | "afdesign" | "af" | "afpub" | "afphoto" | "ai" | "sketchraw"
+            | "icns" | "skt" | "eps" | "key" | "potx" | "pptx" | "ppt" | "docx" | "doc" | "pages" | "xlsx" | "xls" | "eddx" | "emmx" | "numbers"
+            | "cdr"
+    )
+}
+
+/// Whether the viewer shows the item's custom thumbnail as its picture:
+/// as in Eagle, when it has one and the format has no viewer or render of
+/// its own (not an image falcon decodes, a RAW, TGA, or a special format).
+pub fn custom_thumbnail_is_picture(ext: &str, has_custom: bool) -> bool {
+    has_custom
+        && !falcon_library::thumbnail::is_supported(ext)
+        && !full_resolution(ext)
+        && !special_picture_format(ext)
+}
+
 /// Side of the textures a full-resolution image is cut into. egui can't
 /// hold a texture larger than the GPU's limit (`max_texture_side`, 8192 or
 /// 16384 on Macs), and a smaller tile also keeps each upload short enough
@@ -513,6 +551,19 @@ mod image_viewer_tests {
 #[cfg(test)]
 mod zoom_tests {
     use super::*;
+
+    #[test]
+    fn larger_renders_and_custom_thumbnails() {
+        assert!(wants_hires_render("psd", 6000, 4000.0));
+        assert!(!wants_hires_render("psd", 3000, 4000.0), "the full tier already covers it");
+        assert!(!wants_hires_render("psd", 6000, 2000.0));
+        assert!(!wants_hires_render("sketch", 6000, 4000.0));
+        assert!(custom_thumbnail_is_picture("zip", true));
+        assert!(!custom_thumbnail_is_picture("zip", false));
+        assert!(!custom_thumbnail_is_picture("psd", true));
+        assert!(!custom_thumbnail_is_picture("png", true));
+        assert!(!custom_thumbnail_is_picture("cr3", true));
+    }
 
     #[test]
     fn pixelated_from_200_percent() {
