@@ -15,6 +15,7 @@ use falcon_library::undo::{Transaction, WriteMode};
 use falcon_library::smart_draft::{self, ConditionDraft};
 use falcon_library::{Library, thumbnail};
 
+use crate::colors;
 use crate::icons as ic;
 use crate::loader::{Loader, Tier, job_for};
 use crate::logic::{self, Layout, NavCounts, Scope};
@@ -4491,6 +4492,7 @@ impl App {
         if !item.palettes.is_empty() {
             let d = 16.0;
             let (row, _) = ui.allocate_exact_size(vec2(w, d), Sense::hover());
+            let mut toggle_primary: Option<(usize, bool)> = None;
             for (n, c) in item.palettes.iter().enumerate() {
                 let center = Pos2::new(row.left() + d / 2.0 + n as f32 * (d + 6.0), row.center().y);
                 if center.x + d / 2.0 > row.right() {
@@ -4498,7 +4500,12 @@ impl App {
                 }
                 let color = Color32::from_rgb(c.color[0], c.color[1], c.color[2]);
                 ui.painter().circle_filled(center, d / 2.0, color);
-                ui.painter().circle_stroke(center, d / 2.0, Stroke::new(1.0, t::p().divider));
+                let marked = c.extra.get(falcon_library::item_ops::MARKED_KEY).and_then(|v| v.as_bool()).unwrap_or(false);
+                if marked {
+                    ui.painter().circle_stroke(center, d / 2.0 + 1.0, Stroke::new(2.0, t::p().primary));
+                } else {
+                    ui.painter().circle_stroke(center, d / 2.0, Stroke::new(1.0, t::p().divider));
+                }
                 let hit = ui.interact(Rect::from_center_size(center, Vec2::splat(d)), ui.scope_id().with(("swatch", n)), Sense::click());
                 let hex = logic::hex(c.color);
                 if hit.clicked() {
@@ -4506,11 +4513,49 @@ impl App {
                     self.ws.color_text = hex.clone();
                     self.ws.show_filter = true;
                 }
-                if hit.secondary_clicked() {
-                    ui.ctx().copy_text(hex.clone());
-                    self.flash(format!("Copied {hex}"));
+                let mut similar = false;
+                hit.context_menu(|ui| {
+                    if ui.button("Find Similar Colours").clicked() {
+                        similar = true;
+                        ui.close();
+                    }
+                    ui.separator();
+                    let values = [
+                        colors::hex(c.color),
+                        colors::rgb(c.color),
+                        colors::rgba(c.color),
+                        colors::hsl(c.color),
+                        colors::hsv(c.color),
+                        colors::hwb(c.color),
+                        colors::cmyk(c.color),
+                    ];
+                    for (i, v) in values.iter().enumerate() {
+                        if i == 4 {
+                            ui.separator();
+                        }
+                        if ui.button(format!("Copy {v}")).clicked() {
+                            ui.ctx().copy_text(v.clone());
+                            self.flash(format!("Copied {v}"));
+                            ui.close();
+                        }
+                    }
+                    ui.separator();
+                    if ui.checkbox(&mut { marked }, "Primary Colour").clicked() {
+                        toggle_primary = Some((n, !marked));
+                        ui.close();
+                    }
+                });
+                if similar {
+                    self.ws.filter.color = Some(ColorQuery::new(c.color));
+                    self.ws.color_text = hex.clone();
+                    self.ws.show_filter = true;
                 }
-                hit.on_hover_text(format!("{hex}  ·  {}%\nClick to find similar colours, right-click to copy", c.ratio));
+                hit.on_hover_text(format!("{hex}  ·  {}%\nClick to find similar colours, right-click for more", c.ratio));
+            }
+            if let Some((n, on)) = toggle_primary
+                && let Err(e) = lib.set_palette_marked(&item.id, n, on)
+            {
+                self.flash(format!("Could not save: {e}"));
             }
         }
 

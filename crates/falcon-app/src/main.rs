@@ -3,6 +3,7 @@ mod app;
 mod applock;
 mod backups;
 mod collect;
+mod colors;
 mod drop_pos;
 mod folder_icons;
 mod font_install;
