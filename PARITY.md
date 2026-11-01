@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 215 | 35 | 22 | 8 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 215 | 36 | 21 | 8 |
 | Viewers and file formats | 171 | 23 | 9 | 5 |
 | Search, filters and organising | 207 | 8 | 7 | 3 |
-| Import, export, library, preferences and integrations | 162 | 10 | 37 | 26 |
-| **Total** | 755 | 76 | 75 | 42 |
+| Import, export, library, preferences and integrations | 162 | 11 | 36 | 26 |
+| **Total** | 755 | 78 | 73 | 42 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -38,7 +38,7 @@ These are bugs, not missing features. The first four can lose data or edits.
 10. ~~No GIF player controls, no animated WebP or AVIF, no GIF hover previews.~~ Fixed (AVIF on macOS); still no hover playback for video or audio.
 11. ~~No interactive 3D viewer, text editor or full font viewer.~~ Fixed for obj/stl/ply/glb/gltf/3mf; fbx, 3ds, dae and ifc stay stills.
 12. ~~No watched import folder.~~ Fixed. No reload on outside changes, no sync-conflict detection, no screen capture.
-13. English only; Eagle ships 8 languages.
+13. ~~English only.~~ Fixed in part: falcon's own translations into Eagle's eight languages with a live language preference; the viewers, sidebar and context menus still need converting.
 
 The full tables follow. Each section ends with that area's own ranked gap list.
 
@@ -385,7 +385,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Auto theme follows the system | Done | theme.rs:365 `follow_system` | local |
 | Transparency (vibrancy) effects | Missing |  | local |
 | UI zoom level | Done | `Prefs::ui_zoom`, applied live | local |
-| Interface language | Missing | English only. Cross-ref preferences | local |
+| Interface language | Partial | `crate::locale`: Automatic or one of Eagle's eight languages (en, de, es, ja, ko, ru, zh_CN, zh_TW), applied live incl. the native menu bar; falcon's own translations (`crates/falcon-app/locales/`, unreviewed). The viewers, sidebar, context menus and the Auto-Import/Developer blocks are still English | local |
 | File-type colours on extension badges | Done | theme.rs:447-468 | local |
 
 ---
@@ -1365,7 +1365,7 @@ Eagle panes (`app/js/preferences.js:659-788`): General, Sidebar, Controls, Previ
 | Search box across preferences | Done | `prefs.rs` `matches` over every pane's blocks | local |
 | Remember the last open pane | Done | `Saved.prefs_pane` | local |
 | **General:** theme (Auto, Light, Light Grey, Gray, Dark, Blue, Purple) | Done | `crates/falcon-app/src/theme.rs:73-83`, `prefs.rs:312-321` (live preview, reverted on Cancel) | local |
-| General: language | Missing | English only (no i18n code) | local |
+| General: language | Partial | Preferences ▸ General ▸ Language (`Prefs::language`, `FALCON_LANG` override), Cancel reverts; conversion of the viewers, sidebar and menus pending | local |
 | General: UI zoom level (50 to 150%) | Done | `Prefs::ui_zoom` in Eagle's steps, previewed live; egui's own keyboard zoom is disabled so ⌘+/⌘− only zoom the grid | local |
 | General: transparency (vibrancy) effects | Missing | — | local |
 | General: show counts in the sidebar | Done | `Prefs::sidebar_counts` | local |
@@ -1508,7 +1508,7 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| Eight UI languages: English, Simplified Chinese, Traditional Chinese, Japanese, Korean, Spanish, German and Russian (picked automatically from the system language, or set in Preferences) | `i18n/index.js` `supportLanguage`; `i18n/{en,zh_CN,zh_TW,ja_JP,ko_KR,es_ES,de_DE,ru_RU}.js`; collect window `locales/*.json`; PH `general.language` | Missing | All strings are hard-coded English; no i18n code (`grep language\ | locale` finds nothing in `crates/falcon-app/src`) | local |
+| Eight UI languages: English, Simplified Chinese, Traditional Chinese, Japanese, Korean, Spanish, German and Russian (picked automatically from the system language, or set in Preferences) | `i18n/index.js` `supportLanguage`; `i18n/{en,zh_CN,zh_TW,ja_JP,ko_KR,es_ES,de_DE,ru_RU}.js`; collect window `locales/*.json`; PH `general.language` | Partial | `crate::locale` with falcon's own catalogues for all eight (`crates/falcon-app/locales/`, machine-written, unreviewed), picked from the system language or set in Preferences, applied live incl. the menu bar; the viewers, sidebar, context menus and the Auto-Import/Developer blocks are still English | local |
 | Chinese pinyin search support (jieba dictionaries) | Missing | Model round-trips `pinyin` only | local |
 
 ---
@@ -1518,8 +1518,8 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 Rows marked "not counted" are features Eagle 4.0.0 does not have.
 
 - **Done:** 162, including 5 where falcon goes beyond Eagle and 1 with a small difference.
-- **Partial:** 10.
-- **Missing:** 63, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
+- **Partial:** 11.
+- **Missing:** 62, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
 - **Different on purpose:** 1 (the API listens on localhost only).
 
 ### Ranked Missing and Partial local items
