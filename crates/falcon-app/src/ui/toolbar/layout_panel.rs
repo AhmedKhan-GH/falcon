@@ -94,6 +94,15 @@ fn heading(ui: &mut Ui, text: &str) {
 }
 
 impl App {
+    /// Eagle's right-click on empty grid space: the layout panel, opened at
+    /// the pointer.
+    pub(crate) fn background_layout_menu(&mut self, resp: &egui::Response, lib: &Library) {
+        let own = self.own_sort(lib);
+        egui::Popup::context_menu(resp)
+            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+            .show(|ui| self.layout_panel(ui, own));
+    }
+
     pub(crate) fn layout_panel(&mut self, ui: &mut Ui, own: OwnSort) {
         ui.set_min_width(250.0);
         ui.set_max_width(250.0);

@@ -111,6 +111,9 @@ impl App {
     /// Says why the open view is empty, with an Import Folders… button
     /// where files can be added.
     pub(crate) fn empty_view(&mut self, ui: &mut Ui, lib: &Library, area: Rect) {
+        // Right-click on the empty space opens the layout panel, as over cards.
+        let space = ui.interact(ui.available_rect_before_wrap(), ui.scope_id().with("empty-space"), egui::Sense::click());
+        self.background_layout_menu(&space, lib);
         let view = match &self.ws.scope {
             Scope::All => View::All,
             Scope::Recent => View::Recent,

@@ -166,6 +166,7 @@ impl App {
             if bg.clicked() {
                 bg_clicked = true;
             }
+            self.background_layout_menu(&bg, lib);
             if bg.drag_started_by(egui::PointerButton::Primary)
                 && let Some(at) = ui.input(|i| i.pointer.press_origin())
             {
