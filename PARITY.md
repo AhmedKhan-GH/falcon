@@ -7,10 +7,10 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
 | Main window: menus, shortcuts, toolbar, sidebar, layouts | 259 | 7 | 6 | 8 |
-| Viewers and file formats | 187 | 13 | 3 | 5 |
+| Viewers and file formats | 187 | 14 | 2 | 5 |
 | Search, filters and organising | 216 | 1 | 2 | 3 |
 | Import, export, library, preferences and integrations | 190 | 5 | 13 | 26 |
-| **Total** | 852 | 26 | 24 | 42 |
+| **Total** | 852 | 27 | 23 | 42 |
 
 Rows marked **Not wanted (user decision)** (3) are Eagle features the user chose not to have in falcon; they are counted outside the local Missing total.
 ## Fix first
@@ -579,12 +579,12 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | Play native formats (mp4, mov, m4v and others) | Done | AVFoundation player (`F/app/video_view.rs:114-145`) | local |
-| Fallback player for formats Chromium can't play (mkv, avi, wmv, flv and others) | Missing | Not feasible without ffmpeg or mpv; the can't-play page names the format | local |
-| "Can't play this file" page with an Open With button | Done | `video_view.rs` `cannot_play`, `cannot_play_line`: thumbnail, name, a line naming the format, Open With | local |
+| Fallback player for formats Chromium can't play (mkv, avi, wmv, flv and others) | Partial | `falcon-ffmpeg` player behind `falcon_video::Video` in the viewer and the preview window, over an LGPL decode-only FFmpeg 7.1.5 built by `scripts/build-ffmpeg.sh` into `target/ffmpeg` (CONFIG_GPL 0, no encoders, muxers, network or filters; checked again at run time from each library's licence string) and loaded with `dlopen`, never linked; `scripts/bundle.sh` ships the five dylibs in Contents/Frameworks with the LGPL text in Resources/FFmpeg. Same viewer UI, seek-bar thumbnail, hover strip and hover sound, import thumbnail at Eagle's min(10 s, duration/3) and duration. Gaps: AV1 is not decoded (dav1d needs meson); pitch moves with speed (atempo lives in avfilter); Eagle's 1.5 s no-frame switch is not copied; without a built FFmpeg the can't-play page says the libraries weren't found | local |
+| "Can't play this file" page with an Open With button | Done | `video_view.rs` `cannot_play`, `cannot_play_line(ext, ffmpeg)`: thumbnail, name, a line saying neither macOS nor FFmpeg could play the file (or that the FFmpeg libraries weren't found), Open With | local |
 | Autoplay on open | Done | `F/app/video_view.rs`; switch `Prefs::video_autoplay` | local |
 | Play/pause button, click picture to toggle, Space | Done | `F/app/video_view.rs:309-312`, `:385-392`, `F/shortcuts.rs:122` | local |
 | Seek bar with drag scrubbing | Done | `F/app/video_view.rs:320-349` | local |
-| Hover thumbnail on the seek bar (preview frame under the pointer) | Done | `SeekPreview` fed by `falcon_video::Grabber` on a worker thread | local |
+| Hover thumbnail on the seek bar (preview frame under the pointer) | Done | `SeekPreview` fed by `falcon_video::Grabber` on a worker thread; the grabber falls back to FFmpeg for formats macOS can't read | local |
 | Skip back and forward buttons (2%, capped at 10 s / 20 s), hold to repeat | Done | `Repeat`: acts on press, repeats every 100 ms while held; 2% capped at 10 s back / 20 s forward | local |
 | Frame step back and forward, 1 and 10 frames | Done | Buttons and [ ] Shift+[ Shift+] (`F/app/video_view.rs:402-408`, `F/shortcuts.rs:123-126`) | local |
 | Playback speed menu 0.25x–8x and Shift+. / Shift+, | Done | `F/app/video_view.rs:441-452`, `F/shortcuts.rs:131-132` | local |
@@ -757,7 +757,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Animated GIF plays inside the hover preview | Done | `gif_view.rs` `hover_anim`, `anim.rs` `Cards::popup` | local |
 | GIF and animated images play when hovered in the grid | Done | GIF, animated WebP and (macOS) animated AVIF (`card_anim`, `Cards::play`) | local |
 | Preference: always autoplay GIF/WebP/AVIF in the grid | Done | `prefs.always_play_animated` (off by default, as Eagle); AVIF on macOS | local |
-| Video hover preview: autoplays, moving the pointer scrubs, progress bar and time | Partial | Picture strip with scrub, rest-resume, bar and time; sound through `falcon_library::audio` (AAC, ALAC, Opus, FLAC and MP3 tracks in MP4/MOV, priming trimmed) when unmuted, not yet heard by hand; other containers silent | local |
+| Video hover preview: autoplays, moving the pointer scrubs, progress bar and time | Partial | Picture strip with scrub, rest-resume, bar and time, through the FFmpeg grabber for FFmpeg-only formats; sound through `falcon_library::audio` (symphonia, then the FFmpeg backend), so mkv/webm/avi soundtracks play when unmuted and FFmpeg is installed; not yet heard by hand | local |
 | Mute toggle on the video hover preview, remembered | Done | `Display::video_muted`, muted by default as Eagle; sound through the shared hover audio player when unmuted | local |
 | Audio hover preview: plays, click to seek, progress | Done | Plays after 200 ms, click to seek, progress; stops when the window hides or is minimised; every audio format falcon decodes, with the decoded length when the record has none | local |
 | YouTube, Vimeo and Bilibili hover previews for bookmarked links | Missing | None | online/plugin |
@@ -806,9 +806,9 @@ Eagle columns come from `config.js` (`SUPPORT_FORMATS_DARWIN`), `E/js/thumbs/thu
 | txt | Editable text editor | None | QL still |
 | ttf, otf, ttc, woff, woff2, otc | Font viewer | Drawn specimen 600×600 | Font viewer (falls back if egui can't read the font) |
 | mp3, wav, ogg, flac, aac, m4a | Audio player with waveform | Drawn waveform 280×140 | Audio player with waveform; all decode through `falcon_library::audio` (ADTS with MPEG-2 headers and Ogg Opus included); falcon also plays opus, aiff, aif, aifc and caf, which Eagle treats as plain files |
-| mp4, mov, m4v, 3gp, ts, mts, m2ts | HTML5 video player, mpv fallback | QL | AVFoundation player |
-| webm, mkv, avi, wmv, mpg, flv, f4v | HTML5 player or mpv fallback | QL if available | AVFoundation if it can, else a still |
-| 360, afx, eva, vap | Video player | QL if available | AVFoundation if it can, else a still |
+| mp4, mov, m4v, 3gp, ts, mts, m2ts | HTML5 video player, mpv fallback | QL | AVFoundation player; FFmpeg player for what it refuses (ts, mts, m2ts) |
+| webm, mkv, avi, wmv, mpg, flv, f4v | HTML5 player or mpv fallback | QL if available | AVFoundation if it can, else the FFmpeg player when installed; FFmpeg thumbnail and duration at import |
+| 360, afx, eva, vap | Video player | QL if available | AVFoundation, else FFmpeg if it reads the container |
 | glb, obj, fbx, 3ds, 3mf, dae, ifc, ply, stl | Interactive 3D viewer | QL if available (obj/stl/ply/dae usually; fbx/ifc/glb rarely) | Interactive viewer and drawn thumbnail for glb/gltf, obj, fbx, 3mf, ply, stl, dae, 3ds and ifc with tessellated geometry; QL still for ifc without it |
 | url | Live web view | QL (generic) | Live WKWebView (macOS); `.url`/`.webloc` addresses read on import |
 | html, mhtml | Live web view | QL | QL still |
@@ -824,7 +824,7 @@ Ranked by how often a user would notice them.
 5. ~~Animated AVIF doesn't animate.~~ Fixed on macOS through ImageIO; WebP and APNG everywhere.
 6. **No video hover-scrub preview in the grid (Missing).** Also missing: audio hover playback. GIF and WebP cards do play on hover.
 7. **No video frame tools (Missing).** You can't set a frame as the thumbnail, copy it or save it.
-8. **No fallback player for mkv, avi, wmv, flv or webm (Missing).**
+8. ~~No fallback player for mkv, avi, wmv, flv or webm.~~ Fixed when FFmpeg is built (`scripts/build-ffmpeg.sh`); no AV1.
 9. ~~No interactive 3D model viewer.~~ Fixed for obj/stl/ply/glb/gltf/3mf/fbx/dae/3ds and tessellated ifc; ifc with only swept, CSG or b-spline geometry stays a still, and no format maps textures (dae and 3ds use a texture's average colour).
 10. **No text editor for .txt (Missing).** No editing, renaming, zoom or auto-reload, and cards don't show the text.
 11. **No viewer context menu or right-drag gestures (Missing).** Right-click menu, swipe to previous or next, drag to zoom.
