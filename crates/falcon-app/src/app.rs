@@ -3728,6 +3728,12 @@ impl App {
             }
             self.toggle_presentation(ui.ctx());
         }
+        if crate::share::AVAILABLE && self.ws.scope != Scope::Trash && ui.button("Share…").clicked() {
+            let files = open_ui::originals(lib, targets);
+            let at = ui.ctx().input(|i| i.pointer.interact_pos()).unwrap_or_default();
+            crate::share::share(&files, (at.x, at.y));
+            ui.close();
+        }
         ui.separator();
         if self.ws.scope == Scope::Trash {
             if ui.button("Restore").clicked() {

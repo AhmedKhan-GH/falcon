@@ -20,6 +20,7 @@ mod logic;
 mod menu;
 mod open_with;
 mod prefs;
+mod share;
 mod shortcuts;
 mod subtitles;
 mod tags;
