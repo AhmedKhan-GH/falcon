@@ -98,7 +98,7 @@ impl App {
         let c = area.center();
         ext_placeholder(ui, Rect::from_center_size(c - vec2(0.0, 70.0), Vec2::splat(150.0)), &item.ext);
         let name = format!("{}.{}", item.name, item.ext);
-        let line = if crate::icloud::is_missing(&item.original_path(root)) { tr(crate::icloud::MISSING_HINT) } else { tr("Falcon can't show a preview of this file. Try opening it in another app.") };
+        let line = if crate::icloud::is_missing(&item.original_path(root)) { tr("This file wasn't found. If a sync service manages the library, wait until syncing is complete.") } else { tr("Falcon can't show a preview of this file. Try opening it in another app.") };
         self.notice_lines(ui, area, &name, line);
     }
 

@@ -7,7 +7,6 @@ use eframe::egui::{self, Align2, CornerRadius, Key, Modifiers, Pos2, Rect, Sense
 use falcon_library::Library;
 use falcon_library::model::Item;
 
-use crate::locale::tr;
 use crate::app::{App, DragItems, Marquee};
 use crate::icons as ic;
 use crate::loader::{Tier, job_for};
@@ -233,11 +232,6 @@ impl App {
                 match layout {
                     Layout::List => self.list_row(ui, lib, item, card, selected, resp.hovered(), n),
                     _ => self.card(ui, lib, item, card, caption, selected, resp.hovered()),
-                }
-                // A picture that failed to load with its original gone: stat
-                // only while the pointer is on it.
-                if resp.hovered() && self.ws.loader.has_failed(&item.id, Tier::Grid) && crate::icloud::is_missing(&item.original_path(lib.root())) {
-                    resp.clone().on_hover_text(tr(crate::icloud::MISSING_HINT));
                 }
                 if resp.hovered() || self.hover_media.over_toggle(&item.id, ui.ctx().cumulative_frame_nr()) {
                     hovered = Some((item, card, self.zoom_button(ui, item, card, caption)));

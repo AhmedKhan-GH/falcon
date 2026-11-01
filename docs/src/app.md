@@ -994,7 +994,7 @@ Where originals are read:
 
 How long downloads take depends on the file and the link (inferred: seconds for a thumbnail, minutes for a several-hundred-megabyte book).
 
-A picture that cannot be drawn because its original is gone from disk (and is not an iCloud file waiting to download) says so: the card shows "File not found. If the library is synced, the sync may still be in progress." as its hover text, and the viewer shows the same line centred under the placeholder. Falcon looks at the disk only once the load has failed, and for a card only while the pointer is on it (`icloud::missing_hint`, `icloud::MISSING_HINT`).
+When the original of a picture is gone from disk (and is not an iCloud file waiting to download), the viewer says so under its placeholder, with the same words as the card's tooltip for a missing file: the file wasn't found, and a synced library may still be syncing (`icloud::is_missing`, `logic::broken_thumb_hint`).
 
 ## Folder covers
 
