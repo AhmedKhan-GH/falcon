@@ -905,7 +905,8 @@ impl App {
                         r = r.and(lib.update_item(it));
                     }
                 }
-                // Eagle opens the new folder.
+                // Eagle opens the new folder and makes it the last-used one.
+                self.note_folder_use(std::slice::from_ref(&id));
                 self.go(Scope::Folder(id));
                 r
             }
