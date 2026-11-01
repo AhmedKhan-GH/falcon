@@ -365,6 +365,9 @@ impl App {
             if ui.button("Empty Cache and Reload…").clicked() {
                 self.confirm_reload = true;
             }
+            if ui.button("Clear Invalid Content…").on_hover_text("Find empty or broken item folders and clean them up").clicked() {
+                self.clear_invalid_content();
+            }
             if ui.button("Show in Finder").clicked() {
                 let _ = std::process::Command::new("open").arg("-R").arg(&current).spawn();
             }
