@@ -10,6 +10,8 @@ pub enum Kind {
     Audio,
     Text,
     Pdf,
+    /// A font: the main viewer's specimen page.
+    Font,
     /// A picture (or a type with only its thumbnail): the zoomable canvas.
     Picture,
 }
@@ -25,6 +27,8 @@ pub fn kind_of(ext: &str) -> Kind {
         Kind::Text
     } else if ext == "pdf" {
         Kind::Pdf
+    } else if falcon_library::search::type_group(&ext) == Some("font") {
+        Kind::Font
     } else {
         Kind::Picture
     }
@@ -74,7 +78,8 @@ mod tests {
         assert_eq!(kind_of("txt"), Kind::Text);
         assert_eq!(kind_of("PDF"), Kind::Pdf);
         assert_eq!(kind_of("png"), Kind::Picture);
-        assert_eq!(kind_of("ttf"), Kind::Picture);
+        assert_eq!(kind_of("ttf"), Kind::Font);
+        assert_eq!(kind_of("OTF"), Kind::Font);
         assert_eq!(kind_of(""), Kind::Picture);
     }
 

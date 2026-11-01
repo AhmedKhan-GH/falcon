@@ -35,6 +35,9 @@ enum Pane {
     Audio(players::AudioPane),
     Text(players::TextPane),
     Pdf(pdf::PdfPane),
+    /// The font viewer, with a state of its own so the main viewer's font
+    /// page isn't disturbed.
+    Font(Box<crate::ui::viewer::font::FontView>),
 }
 
 impl Pane {
@@ -45,6 +48,7 @@ impl Pane {
             Kind::Audio => players::AudioPane::open(&file, item).map_or(Pane::Picture, Pane::Audio),
             Kind::Text => Pane::Text(players::TextPane::open(&file)),
             Kind::Pdf => Pane::Pdf(pdf::PdfPane::open(ctx, file)),
+            Kind::Font => Pane::Font(Box::default()),
             Kind::Picture => Pane::Picture,
         }
     }
@@ -236,6 +240,7 @@ impl App {
                 true
             }
             Pane::Pdf(p) => p.show(ui, full, gray),
+            Pane::Font(fv) => self.preview_font(ui, lib, item, full, fv),
             Pane::Pending | Pane::Picture => false,
         };
         if !pw.custom {
@@ -279,6 +284,23 @@ impl App {
             None => {}
         }
         self.ws.loader.set_grayscale(gray);
+    }
+
+    /// The font viewer in the window, drawn by the main viewer's code on the
+    /// window's own state (swapped in for the call, as is the zoom key, which
+    /// belongs to the main viewer). False while egui can't draw the font
+    /// (the thumbnail shows then).
+    fn preview_font(&mut self, ui: &mut Ui, lib: &Library, item: &Item, full: Rect, fv: &mut crate::ui::viewer::font::FontView) -> bool {
+        let ctx = ui.ctx().clone();
+        std::mem::swap(&mut self.ws.font_view, fv);
+        let zoom_key = self.ws.view.zoom_key.take();
+        let ready = self.font_ready(&ctx, lib, item);
+        if ready {
+            self.font_view(ui, lib, item, full);
+        }
+        self.ws.view.zoom_key = zoom_key;
+        std::mem::swap(&mut self.ws.font_view, fv);
+        ready
     }
 
     /// The window's right-click menu; returns what to do after it closes.
