@@ -223,6 +223,10 @@ impl App {
             self.ws.loader.forget(id);
         }
         if o.deleted {
+            // Empty Trash, which Eagle sounds as a folder delete.
+            if o.changed {
+                self.play_sound(crate::sounds::Sound::DeleteFolder);
+            }
             self.ws.selected.clear();
             self.ws.undo.clear();
             self.ws.redo.clear();

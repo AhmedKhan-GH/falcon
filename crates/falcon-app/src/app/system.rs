@@ -140,6 +140,9 @@ impl App {
             if self.prefs.tells_capture(shot.mode) {
                 crate::notify::post(&crate::notify::Notice::captured(&shot.name));
             }
+            if self.prefs.sounds_capture(shot.mode) {
+                self.play_sound(crate::sounds::Sound::Capture);
+            }
             let mut opts = self.prefs.import_options(Vec::new());
             opts.name = Some(shot.name);
             for t in tags {

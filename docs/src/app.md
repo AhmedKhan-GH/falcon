@@ -652,7 +652,8 @@ Edits stay in a draft until Save (also ⌘↩) or Apply; Cancel, the close butto
 | Screenshot | Copy screenshots to the clipboard too | `screencapture.autoWriteClipboard`, off by default | Same (`Prefs::screenshot_clipboard`) |
 | Screenshot | Keep full Retina resolution (@2x) | `screencapture.useRetina`, on by default | Same setting as in General |
 | Shortcuts | Rebinding commands | `shortcuts.keybinds` | See Shortcut settings |
-| Notification | Show notices, with: ask about duplicates; say how many items an import added; say when files from the auto-import folder start importing | `notification.notification.enable` gates its `when.*` items (screenshots, extension, repeatImage, autoImport) | Master switch, on by default. It gates the duplicate dialog and falcon's own "Added N" status note after an import (falcon's own event, on by default). The auto-import notice is Eagle's `when.autoImport`, on by default. Import failures are always reported. Sound effects (`notification.soundEffect`) are not built: falcon has no sounds |
+| Notification | Show notices, with: ask about duplicates; say how many items an import added; say when files from the auto-import folder start importing | `notification.notification.enable` gates its `when.*` items (screenshots, extension, repeatImage, autoImport) | Master switch, on by default. It gates the duplicate dialog and falcon's own "Added N" status note after an import (falcon's own event, on by default). The auto-import notice is Eagle's `when.autoImport`, on by default. Import failures are always reported |
+| Notification | Sound effects, with: delete item, delete folder, screenshot, extension | `notification.soundEffect.enable` gates `when.deleteImage`, `when.deleteFolder`, `when.screencapture` and `when.extension`, all `'true'` by default; the four checkboxes show only while the master switch is on. No preview buttons | "Play sound effects" with "When items are deleted", "When folders or tags are deleted" and "When a screenshot is added" under it (`Prefs::sounds`, `sounds::SoundPrefs`), all on by default and greyed out while the master switch is off. The extension switch is kept and reported by the API but not shown, since falcon has no browser extension. See Sound effects below |
 | Notification | Screenshot and export notifications | `when.screencapture` (on) is Eagle's screenshot pop-up; its "Export Successful" pop-up has no switch of its own that was found | "Show a notification for each screenshot" (`notify_capture`) and "Show a notification when an export finishes" (`notify_export_done`, falcon's own), both on by default and under the master switch. They post system notifications; see System notifications |
 | Password | Lock falcon with a password; change; remove; hint | `privacy.enable`, `privacy.password` (stored base64), `privacy.passwordTips`; Lock Now `app.lock` = ⌥⌘L; Touch ID | Set, change (needs the old password) and remove (needs the current one) in the pane, taking effect on Save or Apply. With a password set, falcon opens to a lock screen, and Lock Falcon (⌥⌘L, rebindable, also in the app menu, enabled only with a password) hides the window, stopping playback and closing Preferences and the collect window, until the password is typed; an optional hint shows on request. The password is stored in the app state as a salted, stretched BLAKE3 digest (`applock.rs`), never in a library, and is not reversible like Eagle's base64. It guards the window only; library files and the HTTP API stay reachable. On a Mac that can use Touch ID, the pane shows Unlock with Touch ID (Eagle's `privacy.enableTouchID`); turning it on asks for a fingerprint first and stays off if that fails, as Eagle's does. The lock screen then has a Use Touch ID button under the password field; the password always works too. `touch_id.rs` asks LocalAuthentication's `LAContext` (biometrics only, as Electron's `promptTouchID` does) through `msg_send!` with a reply block. Eagle also offers Touch ID on locked folders; falcon doesn't yet |
 | Preview | Hover zoom | `habits.hoverZoom`, on by default; off removes the zoom button, but holding Z still works | Same |
@@ -677,7 +678,26 @@ What Eagle does, from `js/default-preferences.js`, `preferences.html`, `js/prefe
 - Save applies and closes, Apply applies and stays open, Cancel and Esc revert (including a previewed theme or zoom), ⌘↩ saves.
 - The window's own size is set in Eagle's main process, which is not in the readable bundle; falcon's 720 × 500 pt is a guess (inferred).
 - Built in falcon since: the menu bar icon option, the collect modal for screenshots, and screenshots with their keys, format, quality, tag, clipboard and @2x settings.
-- Not built in falcon: vibrancy, GPU, sound effects, proxy, the AI and MCP panes.
+- Built in falcon since: sound effects (see below).
+- Not built in falcon: vibrancy, GPU, proxy, the AI and MCP panes.
+
+### Sound effects
+
+What Eagle does (seen in `app.bundle.js`, `js/background.js`, `progress.html` and `js/vendors/jquery-audio.js`):
+
+- It ships four short sounds: one for removals, one for duplicates, one for errors and a notification chime. Every sound goes through one player with a 500 ms leading-edge debounce shared by all of them: a call within 500 ms of the previous call is dropped and restarts the wait. Sounds play through the system output, so the Mac's volume and mute apply.
+- The removal sound plays under `when.deleteImage` for Move to Trash, Remove from Folder and deleting a folder's contents, and under `when.deleteFolder` for deleting folders and smart folders, deleting tags, taking tags out of a tag group, deleting items for good and emptying the Trash. One action on many items plays it once.
+- The screenshot sound plays when the screenshot has become an item, not when the shutter fires. A full-screen shot plays it directly; an area or window shot plays it with its "screenshot added" pop-up, so it is silent when pop-ups or their screenshot switch are off, and silent when the collect window opens instead.
+- `when.extension` covers the browser extension's saves and screenshots. The duplicate dialog, the first failed import of a batch, the auto-import notice and items added through the API with a notice follow only the master switch.
+
+How falcon does it (`crates/falcon-app/src/sounds.rs`, `app/sounds.rs`):
+
+- The sounds are falcon's own, synthesised on first use from short envelopes; no audio files ship. Delete item is a soft filtered-noise whoosh (180 ms), delete folder two lower tones (240 ms), the screenshot a two-click shutter of bright noise (150 ms), duplicates two short blips, a failed import a low tone and the auto-import notice two rising notes. Each peaks at about a third of full scale.
+- They are mixed into the viewer's rodio output stream (`Audio::play_clip`), which stays open for the session. If no sound or track has opened it yet, the first sound opens it on a worker thread and plays from there, so the window never waits; only an output device is ever opened. The viewer's volume slider doesn't affect them; the Mac's volume and mute do.
+- The 500 ms debounce is Eagle's, shared by every sound; a call the switches refuse doesn't count.
+- Every item and folder delete goes through the action reducer (`app/actions.rs`), which plays the matching sound once the change is saved: from the grid, the inspector, the context menus, the Edit menu, the keyboard, the viewer and the confirm dialogs alike. Move to Trash that asks first plays when it trashes; Empty Trash plays when it finishes; restoring is silent. Deleting a tag group plays nothing, as in Eagle.
+- Screenshots follow Eagle's rule (`Prefs::sounds_capture`) for every capture mode, whether started from a global key, the menu bar icon or a menu. `screencapture` now always runs with `-x`, so the system shutter sound never plays over falcon's.
+- The duplicate dialog opening, an import batch ending with failures and the auto-import notice play their sounds under the master switch alone. falcon has no browser extension, so nothing plays for `when.extension`, and the HTTP API's adds post no notice and play nothing.
 
 ## Themes
 
@@ -807,19 +827,21 @@ What Eagle does (seen in its shipped source, the keys and defaults under Prefere
 - On macOS an area is captured with `screencapture -x -i -o -t png` and a window with `-x -w -o -t png`, into a temporary PNG. The full screen is taken from the display under the pointer through Electron's desktop capturer.
 - The picture is converted to the chosen format and quality. When @2x is off on a scale-2 screen the picture is halved. The item is named "Screenshot - YYYY-MM-DD HH.mm.ss", gets the tag "Screenshot" when it has no tags and auto-tagging is on, and is copied to the clipboard when that is on.
 - A capture request is ignored while one is running, and it needs an open library.
-- An area or window screenshot opens the collect window when `showCaptureCollectModal` is on. Otherwise Eagle shows its own pop-up (when the notification master switch and the screenshot switch are on) and imports. A full-screen screenshot never opens the collect window and shows no pop-up; it plays a sound when sound effects are on.
+- An area or window screenshot opens the collect window when `showCaptureCollectModal` is on. Otherwise Eagle shows its own pop-up (when the notification master switch and the screenshot switch are on) and imports. A full-screen screenshot never opens the collect window and shows no pop-up; it plays a sound when sound effects are on. The sound of an area or window screenshot comes with its pop-up.
 
 How falcon does it (`crates/falcon-app/src/capture.rs`, `app/system.rs`):
 
 - A capture is started by a global key, a menu bar icon item or the same command from elsewhere. With no library open it says "Open a library to take screenshots into". A request while one is running is ignored. A locked falcon takes no screenshots.
-- The pointer's screen decides the scale (`backingScaleFactor`) and the screen number used by the full-screen mode. Area and window run `/usr/sbin/screencapture` with Eagle's arguments; the full screen runs `screencapture -D n -t png`, which keeps the system shutter sound because falcon has no sound effects of its own. A cancelled pick (Esc) leaves no file, and falcon then does nothing.
+- The pointer's screen decides the scale (`backingScaleFactor`) and the screen number used by the full-screen mode. Area and window run `/usr/sbin/screencapture` with Eagle's arguments; the full screen runs `screencapture -x -D n -t png`, silent like the others, since falcon plays its own capture sound (see Sound effects in the preferences section). A cancelled pick (Esc) leaves no file, and falcon then does nothing.
 - The PNG is written into `falcon-paste` in the system temp folder, the same folder pasted images use. It is converted with `falcon_library::export::convert_bytes` to the chosen format and quality (a PNG at full size is only renamed), halved on its longer side when "Keep full Retina resolution (@2x)" is off and the screen has a scale of 1.5 or more, and named "Screenshot - YYYY-MM-DD HH.mm.ss". Two shots in one second get " 2", " 3" and so on in the file name.
 - With "Copy screenshots to the clipboard too" on, the worker thread puts the picture on the clipboard as image data; a failure goes to the error log.
 - The screenshot then goes into the library root with the tag "Screenshot" (unless tagging is off) as an ordinary background import, with no folders; see Screenshots in the import chapter. With "Choose where each screenshot is saved" on it waits in the collect window instead, for an area or window shot only.
 - A failure shows "The screenshot failed: …" as an error note and is written to the error log.
 - The "Screenshot added" notification is posted for an area or window screenshot that goes straight in, when its switches are on. A batch that held only screenshots, imported straight in or saved from the collect window, does not also post "Import finished".
 
-Not built: Eagle's plugin and extension capture paths, and sounds.
+- The capture sound plays as the screenshot goes into the library, under the rules in Sound effects.
+
+Not built: Eagle's plugin and extension capture paths.
 
 ## Menu bar icon
 

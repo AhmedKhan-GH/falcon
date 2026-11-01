@@ -45,6 +45,7 @@ mod search_state;
 mod recent;
 mod shell;
 mod shortcuts;
+mod sounds;
 mod smart_count;
 mod subtitles;
 mod storage;

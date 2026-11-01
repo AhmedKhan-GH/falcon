@@ -229,6 +229,7 @@ impl App {
     pub(crate) fn apply_actions(&mut self, lib: &mut Library) {
         for action in std::mem::take(&mut self.ws.actions) {
             self.ws.frame_labels.push(action_label(&action));
+            let sound = super::sounds::action_sound(&action);
             let result = match action {
                 Action::CreateFolder { parent } => lib.create_folder(parent.as_deref(), tr("Untitled")).and_then(|id| {
                     if let Some(p) = parent {
@@ -440,6 +441,9 @@ impl App {
                             self.select_after_removal(&ids);
                             let r = lib.set_trashed(&ids, true);
                             self.flash(trf("Moved {n} to Trash", &[("n", &ids.len())]));
+                            if r.is_ok() {
+                                self.play_sound(crate::sounds::Sound::DeleteItem);
+                            }
                             r
                         }
                     }
@@ -502,8 +506,13 @@ impl App {
                     None => Ok(()),
                 },
             };
-            if let Err(e) = result {
-                self.flash_error(trf("Could not save: {e}", &[("e", &e)]));
+            match result {
+                Ok(()) => {
+                    if let Some(s) = sound {
+                        self.play_sound(s);
+                    }
+                }
+                Err(e) => self.flash_error(trf("Could not save: {e}", &[("e", &e)])),
             }
         }
     }

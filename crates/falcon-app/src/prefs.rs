@@ -187,6 +187,9 @@ pub struct Prefs {
     /// typos), listed after the exact matches. On by default; off gives
     /// Eagle's results (exact substrings only).
     pub typo_search: bool,
+    /// Eagle's `notification.soundEffect`: the master switch and the
+    /// per-event switches (`sounds.rs`).
+    pub sounds: crate::sounds::SoundPrefs,
 }
 
 /// What a middle click on a card in the grid does.
@@ -349,6 +352,7 @@ impl Default for Prefs {
             menu_icon: true,
             notify_export_done: true,
             typo_search: true,
+            sounds: Default::default(),
         }
     }
 }
@@ -421,6 +425,14 @@ impl Prefs {
     /// area or window one, as in Eagle (a full-screen one only sounds).
     pub fn tells_capture(&self, mode: crate::capture::Mode) -> bool {
         self.notifications && self.notify_capture && mode != crate::capture::Mode::Full
+    }
+
+    /// Whether a screenshot taken in `mode` sounds when it goes into the
+    /// library (before the sound switches): as in Eagle, a full-screen one
+    /// always does, an area or window one together with its notification,
+    /// and none that opens the collect window.
+    pub fn sounds_capture(&self, mode: crate::capture::Mode) -> bool {
+        !self.asks_capture(mode) && (mode == crate::capture::Mode::Full || self.tells_capture(mode))
     }
 
     /// Whether a screenshot taken in `mode` opens the collect window to
@@ -502,6 +514,15 @@ impl Prefs {
                 "alwaysPlayGIF": on(self.always_play_animated),
             },
             "notification": {
+                "soundEffect": {
+                    "enable": b(self.sounds.enabled),
+                    "when": {
+                        "deleteImage": b(self.sounds.delete_item),
+                        "deleteFolder": b(self.sounds.delete_folder),
+                        "screencapture": b(self.sounds.capture),
+                        "extension": b(self.sounds.extension),
+                    },
+                },
                 "notification": {
                     "enable": b(self.notifications),
                     "when": {"repeatImage": b(self.notify_duplicates), "autoImport": b(self.notify_auto_import)},
@@ -1199,8 +1220,20 @@ fn preview(p: &mut Page, d: &mut Draft) {
     });
 }
 
-/// Notification: which notices falcon shows.
+/// Notification: which sounds falcon plays and which notices it shows.
 fn notification(p: &mut Page, d: &mut Draft) {
+    p.block(tr_key("Sound effects"), &["sound", "effect", "audio", "delete", "item", "folder", "screenshot", "capture", "mute"], |ui| {
+        let s = &mut d.prefs.sounds;
+        ui.checkbox(&mut s.enabled, tr("Play sound effects"));
+        ui.add_enabled_ui(s.enabled, |ui| {
+            ui.indent("sounds", |ui| {
+                ui.checkbox(&mut s.delete_item, tr("When items are deleted"));
+                ui.checkbox(&mut s.delete_folder, tr("When folders or tags are deleted"));
+                ui.checkbox(&mut s.capture, tr("When a screenshot is added"));
+            });
+        });
+        note(ui, tr("Duplicate files, failed imports and auto-import notices also sound while sound effects are on. The sounds follow the Mac's output volume and mute."));
+    });
     p.block(tr_key("Pop-ups"), &["notice", "notification", "pop-up", "duplicate", "already", "import", "added", "finished", "auto-import", "watched", "screenshot", "capture", "export", "system"], |ui| {
         let n = &mut d.prefs;
         ui.checkbox(&mut n.notifications, tr("Show notices"));
@@ -1213,7 +1246,7 @@ fn notification(p: &mut Page, d: &mut Draft) {
                 ui.checkbox(&mut n.notify_export_done, tr("Show a notification when an export finishes"));
             });
         });
-        note(ui, tr("Import failures are always reported. Notifications for screenshots, imports and exports appear while falcon is in the background, in the app built by scripts/bundle.sh. falcon plays no sound effects."));
+        note(ui, tr("Import failures are always reported. Notifications for screenshots, imports and exports appear while falcon is in the background, in the app built by scripts/bundle.sh."));
     });
 }
 
@@ -1821,6 +1854,40 @@ mod tests {
         p.notify_capture = true;
         p.notifications = false;
         assert!(!p.tells_capture(Mode::Area), "the master switch wins");
+    }
+
+    #[test]
+    fn capture_sound_follows_eagle() {
+        use crate::capture::Mode;
+        let mut p = Prefs::default();
+        assert!(p.sounds_capture(Mode::Area) && p.sounds_capture(Mode::Window) && p.sounds_capture(Mode::Full));
+        // An area or window shot sounds with its notification only.
+        p.notifications = false;
+        assert!(!p.sounds_capture(Mode::Area) && !p.sounds_capture(Mode::Window));
+        assert!(p.sounds_capture(Mode::Full), "a full-screen shot sounds without a notification");
+        // A shot that opens the collect window is silent.
+        p.notifications = true;
+        p.screenshot_ask = true;
+        assert!(!p.sounds_capture(Mode::Area) && p.sounds_capture(Mode::Full));
+    }
+
+    #[test]
+    fn sound_prefs_persist_and_report() {
+        let mut p = Prefs::default();
+        p.sounds.enabled = false;
+        p.sounds.delete_folder = false;
+        let back: Prefs = serde_json::from_str(&serde_json::to_string(&p).unwrap()).unwrap();
+        assert_eq!(back.sounds, p.sounds);
+        // State saved before sound effects existed gets Eagle's defaults.
+        let old: Prefs = serde_json::from_str(r#"{"hover_zoom":false}"#).unwrap();
+        assert_eq!(old.sounds, crate::sounds::SoundPrefs::default());
+        let v = p.eagle_preferences();
+        let se = &v["notification"]["soundEffect"];
+        assert_eq!(se["enable"], "false");
+        assert_eq!(se["when"]["deleteFolder"], "false");
+        assert_eq!(se["when"]["deleteImage"], "true");
+        assert_eq!(se["when"]["screencapture"], "true");
+        assert_eq!(se["when"]["extension"], "true");
     }
 
     #[test]

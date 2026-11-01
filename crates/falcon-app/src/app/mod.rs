@@ -24,6 +24,7 @@ pub(crate) mod long_ops;
 pub(crate) mod navigation;
 pub(crate) mod open_queue;
 pub(crate) mod state;
+pub(crate) mod sounds;
 pub(crate) mod system;
 
 pub(crate) use actions::{Action, BULK_CONFIRM};
@@ -122,6 +123,8 @@ pub struct App {
     pub(crate) collect_extra: Option<crate::collect::Meta>,
     /// Audio playback for the viewer.
     pub(crate) audio: crate::audio::Audio,
+    /// The sound effects (`sounds.rs`), played through `audio`'s stream.
+    pub(crate) sounds: crate::sounds::SoundState,
     /// Video playback for the viewer (`ui/viewer/video.rs`).
     pub(crate) video: crate::ui::viewer::video::VideoState,
     /// The font viewer's tab and theme, kept across fonts and launches.
@@ -249,6 +252,7 @@ impl App {
             collect: Default::default(),
             collect_extra: None,
             audio: Default::default(),
+            sounds: Default::default(),
             video: Default::default(),
             font_look: Default::default(),
             pdf: Default::default(),

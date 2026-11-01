@@ -572,6 +572,7 @@ impl App {
                 let jobs: Vec<Job> = files.into_iter().map(|path| Job { path, opts: opts.clone() }).collect();
                 if self.ws.root.as_ref() == Some(&root) {
                     if self.prefs.tells_auto_import() {
+                        self.play_sound(crate::sounds::Sound::Notice);
                         let n = jobs.len();
                         self.flash(tr_n(n, "Importing {n} file from the auto-import folder", "Importing {n} files from the auto-import folder"));
                     }

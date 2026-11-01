@@ -27,6 +27,8 @@ impl App {
         if held.is_empty() {
             return;
         }
+        // Eagle sounds as its duplicate dialog opens.
+        self.play_sound(crate::sounds::Sound::Duplicate);
         match &mut self.ws.dup_dialog {
             Some(d) => d.extend(held),
             None => self.ws.dup_dialog = Some(Dialog::new(held)),

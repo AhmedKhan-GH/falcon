@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 
 use crate::locale::trf;
@@ -31,6 +31,9 @@ struct Track {
 pub struct Audio {
     /// The output stream, opened on first use and kept for the session.
     device: Option<rodio::MixerDeviceSink>,
+    /// The output stream being opened on a worker thread for a sound
+    /// effect, so the first one doesn't hold up the frame.
+    opening: Option<mpsc::Receiver<Result<rodio::MixerDeviceSink, String>>>,
     track: Option<Track>,
     /// Start again from the top at the end (Eagle's default).
     pub looping: bool,
@@ -55,8 +58,15 @@ pub const MENU_RATES: [f32; 7] = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
 
 impl Default for Audio {
     fn default() -> Self {
-        Audio { device: None, track: None, looping: true, volume: 1.0, error: None, speed: 1.0, duration: 0.0, tip_seen: None, tip_until: 0.0 }
+        Audio { device: None, opening: None, track: None, looping: true, volume: 1.0, error: None, speed: 1.0, duration: 0.0, tip_seen: None, tip_until: 0.0 }
     }
+}
+
+/// Opens the default output device's stream (output only).
+fn open_sink() -> Result<rodio::MixerDeviceSink, String> {
+    let mut d = rodio::DeviceSinkBuilder::open_default_sink().map_err(|e| e.to_string())?;
+    d.log_on_drop(false);
+    Ok(d)
 }
 
 fn decoder(path: &Path, ext: &str) -> Result<rodio::Decoder<BufReader<File>>, String> {
@@ -87,17 +97,9 @@ impl Audio {
         self.error = None;
         self.speed = 1.0;
         self.tip_seen = None;
-        if self.device.is_none() {
-            match rodio::DeviceSinkBuilder::open_default_sink() {
-                Ok(mut d) => {
-                    d.log_on_drop(false);
-                    self.device = Some(d);
-                }
-                Err(e) => {
-                    self.error = Some(trf("No audio output: {error}", &[("error", &e)]));
-                    return;
-                }
-            }
+        if let Err(e) = self.open() {
+            self.error = Some(trf("No audio output: {error}", &[("error", &e)]));
+            return;
         }
         let Some(device) = &self.device else { return };
         let source = match decoder(path, ext) {
@@ -114,6 +116,62 @@ impl Audio {
         }
         player.append(source);
         self.track = Some(Track { id: id.to_string(), path: path.to_path_buf(), ext: ext.to_string(), player });
+    }
+
+    /// Opens the default output stream unless it is open (waiting for one
+    /// a sound effect is opening); it stays open for the session.
+    fn open(&mut self) -> Result<(), String> {
+        self.adopt(true);
+        if self.device.is_none() {
+            self.device = Some(open_sink()?);
+        }
+        Ok(())
+    }
+
+    /// Takes the stream a worker opened, if it is ready (or once it is,
+    /// with `wait`).
+    fn adopt(&mut self, wait: bool) {
+        let Some(rx) = &self.opening else { return };
+        let got = if wait {
+            rx.recv().ok()
+        } else {
+            match rx.try_recv() {
+                Ok(r) => Some(r),
+                Err(mpsc::TryRecvError::Empty) => return,
+                Err(mpsc::TryRecvError::Disconnected) => None,
+            }
+        };
+        self.opening = None;
+        match got {
+            Some(Ok(d)) => self.device = Some(d),
+            Some(Err(e)) => crate::errlog::error(&format!("audio output: {e}")),
+            None => {}
+        }
+    }
+
+    /// Mixes a short mono clip (a sound effect, `sounds.rs`) into the
+    /// output stream, beside whatever track is playing, at full volume
+    /// whatever the player's. Never waits: the first clip opens the stream
+    /// on a worker thread and plays from there; one asked for while that
+    /// is under way is dropped.
+    pub fn play_clip(&mut self, rate: u32, samples: &[f32]) -> Result<(), String> {
+        let rate = std::num::NonZero::new(rate).ok_or("no sample rate")?;
+        let clip = rodio::buffer::SamplesBuffer::new(std::num::NonZero::<u16>::MIN, rate, samples.to_vec());
+        self.adopt(false);
+        if let Some(device) = &self.device {
+            device.mixer().add(clip);
+        } else if self.opening.is_none() {
+            let (tx, rx) = mpsc::channel();
+            std::thread::spawn(move || {
+                let r = open_sink();
+                if let Ok(d) = &r {
+                    d.mixer().add(clip);
+                }
+                let _ = tx.send(r);
+            });
+            self.opening = Some(rx);
+        }
+        Ok(())
     }
 
     /// A handle on the loaded track's player, for pausing it from another

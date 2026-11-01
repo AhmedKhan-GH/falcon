@@ -91,16 +91,16 @@ pub struct Options {
     pub clipboard: bool,
 }
 
-/// The arguments for `screencapture` writing a PNG to `path`. The area
-/// and window modes are silent and leave out the window shadow, as
-/// Eagle's are; the full-screen capture keeps the system's shutter sound
-/// (Eagle plays its own sound there and shows no notice) and takes the
-/// screen numbered `display` (1 is the main one).
+/// The arguments for `screencapture` writing a PNG to `path`. Every mode
+/// is silent (falcon plays its own capture sound, `sounds.rs`, as Eagle
+/// does); the area and window modes leave out the window shadow, as
+/// Eagle's do, and the full-screen one takes the screen numbered
+/// `display` (1 is the main one).
 pub fn args(mode: Mode, path: &Path, display: usize) -> Vec<OsString> {
     let mut a: Vec<OsString> = match mode {
         Mode::Area => vec!["-x".into(), "-i".into(), "-o".into()],
         Mode::Window => vec!["-x".into(), "-w".into(), "-o".into()],
-        Mode::Full => vec!["-D".into(), display.max(1).to_string().into()],
+        Mode::Full => vec!["-x".into(), "-D".into(), display.max(1).to_string().into()],
     };
     a.extend(["-t".into(), "png".into(), path.as_os_str().to_owned()]);
     a
@@ -323,8 +323,8 @@ mod tests {
         let s = |m, d| args(m, p, d).into_iter().map(|a| a.to_string_lossy().into_owned()).collect::<Vec<_>>().join(" ");
         assert_eq!(s(Mode::Area, 1), "-x -i -o -t png /tmp/x.png");
         assert_eq!(s(Mode::Window, 1), "-x -w -o -t png /tmp/x.png");
-        assert_eq!(s(Mode::Full, 2), "-D 2 -t png /tmp/x.png");
-        assert_eq!(s(Mode::Full, 0), "-D 1 -t png /tmp/x.png");
+        assert_eq!(s(Mode::Full, 2), "-x -D 2 -t png /tmp/x.png");
+        assert_eq!(s(Mode::Full, 0), "-x -D 1 -t png /tmp/x.png");
     }
 
     #[test]

@@ -167,6 +167,7 @@ The core words, so every file uses one term for one thing.
   not translated (machine-written).
 - "Current List", "Selected" and "Settings…", the New… menu's Find Duplicates scopes and Auto-Import entry (machine-written).
 - "Untitled" and "tag_group::Untitled", the default names of a new folder, smart folder group and tag group (machine-written).
+- Preferences ▸ Notification ▸ Sound effects: the block title, "Play sound effects", the three "When …" switches and the note under them, plus the shortened pop-ups note (its last sentence dropped), machine-written. "Sound effects" follows each system's own term (Toneffekte, 効果音, 효과음, 音效).
 
 ## Reviewed
 
