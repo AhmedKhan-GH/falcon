@@ -13,13 +13,15 @@
 //! - it serves library routes only (no script injection, plugins or AI);
 //! - imports finish before the reply, so returned ids always exist;
 //! - imports read their source without holding the library lock;
-//! - library history is the libraries this server has served, newest first.
+//! - library history is what the app hands over ([`Handle::set_history`]),
+//!   or else the libraries this server has served, newest first.
 
 mod rules;
 mod v2;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use base64::Engine;
@@ -39,11 +41,14 @@ const API_VERSION: &str = "4.0.0";
 
 pub type Shared = Arc<Mutex<Library>>;
 
-/// Server state beside the library: what `library/history` reports and
-/// the Developer token.
+/// Server state beside the library: what `library/history` reports, the
+/// Developer token and the preferences `application/info` reports.
 struct State {
     history: Mutex<Vec<String>>,
     token: Mutex<String>,
+    preferences: Mutex<Value>,
+    /// Set when a request changed `preferences` (`preferences/collect/*`).
+    preferences_changed: AtomicBool,
 }
 
 impl State {
@@ -51,6 +56,8 @@ impl State {
         State {
             history: Mutex::new(vec![root_of(lib)]),
             token: Mutex::new(String::new()),
+            preferences: Mutex::new(default_preferences()),
+            preferences_changed: AtomicBool::new(false),
         }
     }
 
@@ -70,6 +77,16 @@ impl State {
         let token = self.token.lock().unwrap_or_else(|p| p.into_inner());
         !token.is_empty() && *token == given
     }
+
+    fn preferences(&self) -> Value {
+        self.preferences.lock().unwrap_or_else(|p| p.into_inner()).clone()
+    }
+}
+
+/// The preferences reported before the app hands over its own: the keys
+/// the server itself reads, at Eagle's defaults.
+fn default_preferences() -> Value {
+    json!({"general": {"showCollectModal": "false"}, "developer": {"apiToken": ""}})
 }
 
 /// Serves the API until the process exits.
@@ -110,11 +127,34 @@ impl Handle {
         self.slot.lock().unwrap_or_else(|p| p.into_inner()).clone()
     }
 
+    /// Replaces what `library/history` reports (Eagle reports its recent
+    /// libraries list), newest first. Duplicates are dropped.
+    pub fn set_history(&self, paths: Vec<String>) {
+        let mut seen = HashSet::new();
+        let paths = paths.into_iter().filter(|p| seen.insert(p.clone())).collect();
+        *self.state.history.lock().unwrap_or_else(|p| p.into_inner()) = paths;
+    }
+
     /// Sets the Developer token. A request carrying it as `token` (in the
     /// query string, or in a POST body) is served whatever its `Host`
     /// header says. An empty token turns this off.
     pub fn set_token(&self, token: &str) {
         *self.state.token.lock().unwrap_or_else(|p| p.into_inner()) = token.to_string();
+    }
+
+    /// Sets the preferences `application/info` reports, in Eagle's shape
+    /// (`{"general": {...}, "developer": {...}, ...}`). Values are strings
+    /// where Eagle uses strings (`"true"`, `"false"`).
+    pub fn set_preferences(&self, preferences: Value) {
+        *self.state.preferences.lock().unwrap_or_else(|p| p.into_inner()) = preferences;
+        self.state.preferences_changed.store(false, Ordering::SeqCst);
+    }
+
+    /// The preferences, if a request changed them since the last call or
+    /// [`Handle::set_preferences`] (`preferences/collect/on` and `off` set
+    /// `general.showCollectModal`).
+    pub fn take_preferences(&self) -> Option<Value> {
+        self.state.preferences_changed.swap(false, Ordering::SeqCst).then(|| self.state.preferences())
     }
 }
 
@@ -388,6 +428,8 @@ fn route(lib: &Shared, state: &State, method: &Method, path: &str, args: &Map<St
         ("/api/folder/create", &[Post]),
         ("/api/folder/rename", &[Post]),
         ("/api/folder/update", &[Post]),
+        ("/api/preferences/collect/on", &[Get]),
+        ("/api/preferences/collect/off", &[Get]),
         ("/api/tag/all", &[Get]),
         ("/api/tag/list", &[Get]),
         ("/api/tag/listRecent", &[Get]),
@@ -449,12 +491,17 @@ fn route(lib: &Shared, state: &State, method: &Method, path: &str, args: &Map<St
     let lib = &mut *lib;
 
     match path {
-        "/" | "/api/application/info" => Reply::Data(json!({
-            "version": API_VERSION,
-            "prereleaseVersion": null,
-            "buildVersion": concat!("falcon-", env!("CARGO_PKG_VERSION")),
-            "platform": std::env::consts::OS,
-        })),
+        "/" | "/api/application/info" => {
+            let preferences = state.preferences();
+            Reply::Data(json!({
+                "version": API_VERSION,
+                "prereleaseVersion": null,
+                "buildVersion": concat!("falcon-", env!("CARGO_PKG_VERSION")),
+                "showCollectModal": preferences["general"]["showCollectModal"] == "true",
+                "platform": std::env::consts::OS,
+                "preferences": preferences,
+            }))
+        }
         "/api/v2/app/info" => Reply::Data(json!({
             "version": API_VERSION,
             "prereleaseVersion": null,
@@ -491,6 +538,16 @@ fn route(lib: &Shared, state: &State, method: &Method, path: &str, args: &Map<St
         "/api/folder/list" => Reply::Data(Value::Array(lib.metadata.folders.iter().map(folder_json).collect())),
         "/api/folder/listRecent" => {
             Reply::Data(Value::Array(lib.all_folders().into_iter().take(16).map(folder_json).collect()))
+        }
+        "/api/preferences/collect/on" | "/api/preferences/collect/off" => {
+            let on = path.ends_with("/on");
+            let mut prefs = state.preferences.lock().unwrap_or_else(|p| p.into_inner());
+            let Some(general) = prefs.get_mut("general").and_then(Value::as_object_mut) else {
+                return Reply::Fail("preferences file not exist.".into());
+            };
+            general.insert("showCollectModal".into(), json!(if on { "true" } else { "false" }));
+            state.preferences_changed.store(true, Ordering::SeqCst);
+            Reply::Empty
         }
         "/api/folder/create" => {
             let Some(name) = s(args, "folderName") else { return Reply::Fail("Missing required parameters.".into()) };

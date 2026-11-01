@@ -488,6 +488,10 @@ impl Env {
     }
 }
 
+fn keys(v: &Value) -> Vec<&str> {
+    v.as_object().unwrap().keys().map(String::as_str).collect()
+}
+
 #[test]
 fn token_auth() {
     let e = env();
@@ -526,4 +530,65 @@ fn token_auth() {
     denied(&v);
     assert_eq!(e.foreign("GET", "/api/library/info", None).0, 401);
     assert_eq!(e.get("/api/library/info").0, 200);
+}
+
+#[test]
+fn application_info_and_preferences() {
+    let e = env();
+    for path in ["/api/application/info", "/"] {
+        let d = e.ok_get(path);
+        assert_eq!(keys(&d), ["version", "prereleaseVersion", "buildVersion", "showCollectModal", "platform", "preferences"], "{path}");
+        assert_eq!(d["showCollectModal"], false);
+        assert_eq!(d["preferences"], json!({"general": {"showCollectModal": "false"}, "developer": {"apiToken": ""}}));
+    }
+    e.server.set_preferences(json!({"general": {"showCollectModal": "true", "x": "1"}}));
+    let d = e.ok_get("/api/application/info");
+    assert_eq!(d["showCollectModal"], true);
+    assert_eq!(d["preferences"], json!({"general": {"showCollectModal": "true", "x": "1"}}));
+    assert_eq!(keys(&e.ok_get("/api/v2/app/info")), ["version", "prereleaseVersion", "buildVersion", "platform"]);
+}
+
+#[test]
+fn collect_modal_preferences() {
+    let e = env();
+    assert_eq!(e.server.take_preferences(), None);
+    let (code, v) = e.get("/api/preferences/collect/on");
+    assert_eq!((code, v), (200, json!({"status": "success"})));
+    let d = e.ok_get("/api/application/info");
+    assert_eq!(d["showCollectModal"], true);
+    assert_eq!(d["preferences"]["general"]["showCollectModal"], "true");
+    let prefs = e.server.take_preferences().expect("changed");
+    assert_eq!(prefs["general"]["showCollectModal"], "true");
+    assert_eq!(e.server.take_preferences(), None);
+
+    let (code, v) = e.get("/api/preferences/collect/off");
+    assert_eq!((code, v), (200, json!({"status": "success"})));
+    let d = e.ok_get("/api/application/info");
+    assert_eq!(d["showCollectModal"], false);
+    assert_eq!(d["preferences"]["general"]["showCollectModal"], "false");
+    assert!(e.server.take_preferences().is_some());
+    assert_eq!(e.server.take_preferences(), None);
+
+    assert_eq!(e.post("/api/preferences/collect/on", json!({})).0, 405);
+
+    e.server.set_preferences(json!({}));
+    for p in ["on", "off"] {
+        let (code, v) = e.get(&format!("/api/preferences/collect/{p}"));
+        assert_eq!((code, v), (500, json!({"status": "error", "data": "preferences file not exist."})));
+    }
+    assert_eq!(e.server.take_preferences(), None);
+}
+
+#[test]
+fn library_history_is_set_by_the_app() {
+    let e = env();
+    let (a, b) = ("/libs/A.library".to_string(), "/libs/B.library".to_string());
+    e.server.set_history(vec![a.clone(), b.clone(), a.clone()]);
+    assert_eq!(e.ok_get("/api/library/history"), json!([a, b]));
+    let d = e.ok_get("/api/v2/library/history");
+    assert_eq!(d["data"], json!([a, b]));
+    assert_eq!(d["total"], 2);
+    assert_eq!(keys(&d), ["data", "total", "offset", "limit"]);
+    let d = e.ok_get("/api/v2/library/history?limit=1&offset=1");
+    assert_eq!((d["data"].clone(), d["total"].clone(), d["offset"].clone(), d["limit"].clone()), (json!([b]), json!(2), json!(1), json!(1)));
 }
