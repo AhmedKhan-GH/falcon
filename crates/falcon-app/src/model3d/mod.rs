@@ -192,6 +192,32 @@ pub(crate) struct Lines {
     pub axes: std::ops::Range<u32>,
 }
 
+impl Lines {
+    /// The segments of the parts `settings` shows (edges, grid, axes), each
+    /// with its colour, read back from the vertex data: the snapshot draws
+    /// them over the faces as the scene does.
+    pub fn shown(&self, settings: &Settings) -> Vec<([V3; 2], V3)> {
+        let floats: Vec<f32> = self.vertices.bytes.as_chunks::<4>().0.iter().map(|b| f32::from_ne_bytes(*b)).collect();
+        let vertex = |i: u32| {
+            let v = &floats[i as usize * VERTEX_FLOATS..][..VERTEX_FLOATS];
+            ([v[0], v[1], v[2]], [v[6], v[7], v[8]])
+        };
+        let mut out = Vec::new();
+        for (on, range) in [(settings.edges, &self.edges), (settings.grid, &self.grid), (settings.axes, &self.axes)] {
+            if !on || range.end as usize * VERTEX_FLOATS > floats.len() {
+                continue;
+            }
+            for i in range.clone().step_by(2) {
+                if i + 1 < range.end {
+                    let ((a, color), (b, _)) = (vertex(i), vertex(i + 1));
+                    out.push(([a, b], color));
+                }
+            }
+        }
+        out
+    }
+}
+
 /// What a line buffer was built from, so it is rebuilt only on change.
 #[derive(Clone, PartialEq)]
 struct LinesKey {
@@ -426,6 +452,23 @@ mod tests {
                 ..Default::default()
             }],
         }
+    }
+
+    #[test]
+    fn the_snapshot_reads_back_the_lines_shown() {
+        let mut floats = Vec::new();
+        line_vertices(&mut floats, &[[[0.0; 3], [1.0, 0.0, 0.0]]], [1.0, 0.0, 0.0]);
+        let e = (floats.len() / VERTEX_FLOATS) as u32;
+        line_vertices(&mut floats, &[[[0.0; 3], [0.0, 1.0, 0.0]], [[0.0; 3], [0.0, 0.0, 1.0]]], [0.5; 3]);
+        let g = (floats.len() / VERTEX_FLOATS) as u32;
+        let lines = Lines { vertices: Vertices::new(&floats), edges: 0..e, grid: e..g, axes: g..g };
+        let mut s = Settings { edges: true, grid: false, axes: true, ..Settings::default() };
+        assert_eq!(lines.shown(&s), [([[0.0; 3], [1.0, 0.0, 0.0]], [1.0, 0.0, 0.0])]);
+        s.grid = true;
+        assert_eq!(lines.shown(&s).len(), 3);
+        assert_eq!(lines.shown(&s)[2], ([[0.0; 3], [0.0, 0.0, 1.0]], [0.5; 3]));
+        s = Settings { edges: false, grid: false, axes: false, ..Settings::default() };
+        assert!(lines.shown(&s).is_empty());
     }
 
     #[test]

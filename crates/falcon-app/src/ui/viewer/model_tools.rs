@@ -224,15 +224,22 @@ impl App {
     }
 
     /// Saves a PNG of the current view at the view's pixel size, drawn by
-    /// the software rasterizer (faces only: edges, grid and axes are left
-    /// out), on the background when one is set or transparent otherwise.
+    /// the software rasterizer with the edges, grid and axes that are on,
+    /// on the background when one is set or transparent otherwise.
     pub(crate) fn model_snapshot(&mut self, item: &Item, size: [u32; 2], aspect: f32) {
         let settings = self.model3d.settings.clone();
-        let Some(view) = self.model3d.view.as_ref() else { return };
+        let Some(view) = self.model3d.view.as_mut() else { return };
         let Some(dest) = rfd::FileDialog::new().set_file_name(format!("{}.png", item.name)).add_filter("PNG", &["png"]).save_file() else { return };
         let vp = snapshot_matrix(view, &settings, aspect);
         let default = settings.default_color.map(|c| f32::from(c) / 255.0);
-        let mut img = raster::render_view(view.visible_meshes(), size[0], size[1], &vp, view.camera.light_direction(), default);
+        // The lines as the scene draws them (the grid's colour follows the
+        // background shown).
+        let bg = settings.effective_background().unwrap_or_else(|| {
+            let c = crate::theme::p().main;
+            [c.r(), c.g(), c.b()]
+        });
+        let lines = if settings.edges || settings.grid || settings.axes { view.lines(&settings, bg).map(|l| l.shown(&settings)).unwrap_or_default() } else { Vec::new() };
+        let mut img = raster::render_view_lines(view.visible_meshes(), &lines, size[0], size[1], &vp, view.camera.light_direction(), default);
         if let Some(bg) = settings.effective_background() {
             for px in img.pixels_mut() {
                 let a = f32::from(px[3]) / 255.0;

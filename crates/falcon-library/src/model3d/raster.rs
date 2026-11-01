@@ -68,10 +68,18 @@ pub fn render(model: &Model, size: u32) -> RgbaImage {
 /// the camera matrix `vp` (projection times view, clip depth 0..1), lit
 /// from `to_eye` (unit, towards the camera), meshes without a colour in
 /// `default_color`, on a transparent background. The viewer's snapshot.
+/// [`render_view_lines`] adds the viewer's lines.
 ///
 /// The square rasterizer draws a square of the longer side with the
 /// picture's window scaled into its middle, which is then cut out.
 pub fn render_view<'a>(meshes: impl IntoIterator<Item = &'a Mesh>, w: u32, h: u32, vp: &math::M4, to_eye: V3, default_color: V3) -> RgbaImage {
+    render_view_lines(meshes, &[], w, h, vp, to_eye, default_color)
+}
+
+/// [`render_view`] with line segments drawn over the faces, each in its
+/// colour, about a pixel wide and hidden where a face is in front of them
+/// (the edges, grid and axes the viewer shows).
+pub fn render_view_lines<'a>(meshes: impl IntoIterator<Item = &'a Mesh>, lines: &[([V3; 2], V3)], w: u32, h: u32, vp: &math::M4, to_eye: V3, default_color: V3) -> RgbaImage {
     let (w, h) = (w.max(1), h.max(1));
     let side = w.max(h);
     let (sx, sy) = (w as f32 / side as f32, h as f32 / side as f32);
@@ -86,9 +94,53 @@ pub fn render_view<'a>(meshes: impl IntoIterator<Item = &'a Mesh>, w: u32, h: u3
         // Clip w is the distance in front of the eye (1 for orthographic).
         draw_mesh(&mut target, mesh, &m, 1e-6, to_eye, default_color);
     }
+    for (seg, color) in lines {
+        draw_line(&mut target, *seg, &m, 1e-6, *color);
+    }
     let mut square = RgbaImage::new(side, side);
     downsample(&target, &mut square);
     image::imageops::crop_imm(&square, (side - w) / 2, (side - h) / 2, w, h).to_image()
+}
+
+/// How far in front of a face (in clip depth) a line on it still shows,
+/// as the viewer's GPU depth bias lets its edges show.
+const LINE_BIAS: f32 = 2e-4;
+
+/// Draws a segment into `t`, one sample per step along its longer axis and
+/// `SS` samples across (about a pixel once filtered down), depth-tested.
+/// A segment with an end behind the near plane is skipped.
+fn draw_line(t: &mut Target, seg: [V3; 2], vp: &math::M4, near: f32, color: V3) {
+    let size = t.size as f32;
+    let ends = seg.map(|p| {
+        let v = [p[0], p[1], p[2], 1.0];
+        let c: [f32; 4] = std::array::from_fn(|r| (0..4).map(|k| vp[k][r] * v[k]).sum());
+        (c[3] >= near && c.iter().all(|x| x.is_finite())).then(|| [(c[0] / c[3] * 0.5 + 0.5) * size, (0.5 - c[1] / c[3] * 0.5) * size, c[2] / c[3]])
+    });
+    let [Some(a), Some(b)] = ends else { return };
+    let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+    let steps = dx.abs().max(dy.abs()).ceil();
+    if !(steps.is_finite() && steps < LIMIT) {
+        return;
+    }
+    let steps = steps.max(1.0) as u32;
+    let across_x = dy.abs() > dx.abs();
+    let px = pack(color);
+    for i in 0..=steps {
+        let f = i as f32 / steps as f32;
+        let (x, y, z) = (a[0] + dx * f, a[1] + dy * f, a[2] + (b[2] - a[2]) * f);
+        for k in 0..SS as i64 {
+            let off = k - (SS as i64 - 1) / 2;
+            let (sx, sy) = if across_x { (x.floor() as i64 + off, y.floor() as i64) } else { (x.floor() as i64, y.floor() as i64 + off) };
+            if sx < 0 || sy < 0 || sx >= t.size as i64 || sy >= t.size as i64 {
+                continue;
+            }
+            let at = (sy * t.size as i64 + sx) as usize;
+            if z - LINE_BIAS <= t.depth[at] {
+                t.depth[at] = t.depth[at].min(z);
+                t.color[at] = px;
+            }
+        }
+    }
 }
 
 struct Target {
@@ -413,5 +465,24 @@ mod tests {
         let tall = (0..40).filter(|&y| img.get_pixel(40, y)[3] > 128).count() as i32;
         assert!((wide - tall).abs() <= 2, "{wide} x {tall}");
         assert_eq!(img.get_pixel(0, 0)[3], 0);
+    }
+
+    #[test]
+    fn lines_draw_over_faces_and_hide_behind_them() {
+        let eye = [0.5, 0.5, 4.0];
+        let view = math::look_at(eye, [0.5, 0.5, 0.5], [0.0, 1.0, 0.0]);
+        let proj = math::perspective(FOV_DEG.to_radians(), 1.0, 0.1, 10.0);
+        let vp = math::mul(&proj, &view);
+        let model = cube_model();
+        // Green across the front face; blue across the middle, behind the cube.
+        let lines = [([[0.0, 0.5, 1.0], [1.0, 0.5, 1.0]], [0.0, 1.0, 0.0]), ([[-3.0, 0.3, -0.5], [4.0, 0.3, -0.5]], [0.0, 0.0, 1.0])];
+        let img = render_view_lines(&model.meshes, &lines, 80, 80, &vp, [0.0, 0.0, 1.0], [1.0, 0.0, 0.0]);
+        let mid = img.get_pixel(40, 40);
+        assert!(mid[1] > 100 && mid[0] < 100, "the front line shows on the face: {mid:?}");
+        let row = (0..80).find(|&y| img.get_pixel(2, y)[2] > 100).expect("the back line shows beside the cube");
+        assert!(img.get_pixel(40, row)[2] < 100, "and is hidden behind it");
+        assert!(img.get_pixel(40, row)[0] > 100);
+        // Without lines it is the plain view.
+        assert_eq!(render_view_lines(&model.meshes, &[], 80, 80, &vp, [0.0, 0.0, 1.0], [1.0, 0.0, 0.0]), render_view(&model.meshes, 80, 80, &vp, [0.0, 0.0, 1.0], [1.0, 0.0, 0.0]));
     }
 }
