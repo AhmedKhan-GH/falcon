@@ -8,6 +8,7 @@ pub mod error;
 pub mod exif;
 pub mod fontmeta;
 pub mod fontpreview;
+pub mod folder_import;
 pub mod library;
 pub mod manual;
 pub mod ids;

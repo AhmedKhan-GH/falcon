@@ -176,3 +176,23 @@ The `duplicates` module compares file contents instead of copying Eagle's metada
 - tif and tiff: the IPTC (tag 33723) and XMP (tag 700) entries of the first IFD.
 
 IPTC keywords come first, then the XMP `dc:subject` items. Eagle's 200-character limit and `;` split apply to both. Falcon also drops empty parts, where Eagle would keep an empty tag. Reading `.jpeg`, XMP, PNG and TIFF goes beyond what Eagle does.
+
+## Importing folders
+
+### What Eagle does (observed in `app.bundle.js`)
+
+Where a folder from Finder is dropped decides what happens:
+
+| Drop target | Eagle handler | Result |
+|---|---|---|
+| The item grid | `onDropContainer` | Files, and every file inside dropped folders (walked flat), go into the open folder, or into no folder from All and the other views. No folders are created |
+| A folder row in the sidebar | `onDropFolder` | Dropped files go into that folder. Dropped folders are ignored |
+| The rest of the sidebar | `onDropSidebar` | Each dropped folder (sorted by name, numbers by value) goes through `uploadFolderToSidebar` with no parent, so its tree lands at the top level. Loose files are ignored |
+
+`uploadFolderToSidebar` walks the folder (`getFolderList`), then creates an Eagle folder named after the directory, with one child folder per subdirectory, children sorted by name with numbers compared by value. The new folders get no icon, tags or description. Each file is imported into the folder that mirrors its directory, and the new top folder is opened. Inside folders, junk files (`.DS_Store`, `Thumbs.db` and the like) are skipped, and Keynote, Pixelmator and MindNode packages (`.key`, `.pxd`, `.mindnode`) count as files rather than folders to walk into.
+
+### How falcon does it
+
+`folder_import::walk(dir)` reads a directory into a `Tree` (files and subfolders in natural name order). Hidden files (names starting with a dot) and junk (`Thumbs.db`, `Desktop.ini`, `Icon\r` and the like) are skipped, the three package types count as files, and symbolic links to folders are not followed, so a link cycle can't loop. `folder_import::plan(&tree, parent, new_id)` maps the tree to `NewFolder`s (parents first, siblings in order) and `(file, folder id)` pairs, and `Library::create_folders` adds the folders in one `metadata.json` write. Folder names are the directory names as the file system gives them, as in Eagle.
+
+The app follows Eagle's three drop targets. Because macOS sends no mouse moves while a drag from another app is over the window, the drop position is read from the system mouse location (`drop_pos.rs`) and compared with the sidebar's rect and visible folder rows from the last frame. Dropping only files on the empty part of the sidebar shows a hint instead of doing nothing silently. A `.library` among the dropped paths is opened wherever it lands. A package can't be imported by falcon yet (it isn't a regular file), so it is reported as a failed import.

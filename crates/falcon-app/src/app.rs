@@ -29,6 +29,7 @@ mod media_view;
 mod video_view;
 mod open_ui;
 mod pdf_view;
+mod import_ui;
 #[path = "comments.rs"]
 mod comments;
 #[path = "covers.rs"]
@@ -469,6 +470,8 @@ pub struct App {
     video: video_view::VideoState,
     /// The PDF reader for the viewer (`pdf_view.rs`).
     pdf: pdf_view::PdfState,
+    /// Drop targets and other import state (`import_ui.rs`).
+    imports: import_ui::Imports,
 }
 
 impl App {
@@ -487,6 +490,7 @@ impl App {
             show_inspector: true,
             focus_search: false,
             native_drag: Arc::default(),
+            imports: Default::default(),
             fetches: Default::default(),
             open_apps: Default::default(),
             recent: Vec::new(),
@@ -855,8 +859,9 @@ impl App {
         if paths.is_empty() {
             return;
         }
-        let Some(shared) = self.ws.lib.clone() else { return };
-        let opts = self.prefs.import_options(folders);
+        if self.ws.lib.is_none() {
+            return;
+        }
         let mut files = Vec::new();
         let mut stack = paths;
         while let Some(p) = stack.pop() {
@@ -872,32 +877,8 @@ impl App {
             return;
         }
         files.sort();
-        let progress = self.ws.progress.clone();
-        {
-            let mut pr = progress.lock().unwrap_or_else(|p| p.into_inner());
-            pr.total += files.len();
-        }
-        let ctx = self.ctx.clone();
-        let scratch = tempfile_dir().ok();
-        let dupes = self.prefs.notify_duplicates.then(|| self.ws.dupes.clone());
-        std::thread::spawn(move || {
-            for f in files {
-                let result = crate::import_dupes::import_one(&f, &opts, &shared, dupes.as_ref());
-                // Pasted images are staged in falcon's own temp folder; they
-                // are removed only now, after the import has read them.
-                if scratch.as_ref().is_some_and(|d| f.starts_with(d)) {
-                    let _ = std::fs::remove_file(&f);
-                }
-                let mut pr = progress.lock().unwrap_or_else(|p| p.into_inner());
-                pr.done += 1;
-                if result.is_err() {
-                    pr.failed += 1;
-                }
-                pr.current = f.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-                drop(pr);
-                ctx.request_repaint();
-            }
-        });
+        let opts = self.prefs.import_options(folders);
+        self.spawn_import(files.into_iter().map(|path| import_ui::Job { path, opts: opts.clone() }).collect());
     }
 
     /// The import progress bar; clears itself a moment after finishing.
@@ -1712,6 +1693,8 @@ struct SidebarCtx<'a> {
 impl App {
     fn sidebar(&mut self, ui: &mut Ui, lib: &Library) {
         let full = ui.max_rect();
+        self.imports.sidebar = Some(full);
+        self.imports.folder_rows.clear();
         let p = ui.painter().clone();
         p.rect_filled(full, 0.0, t::p().panel);
         p.vline(full.right() - 0.5, full.y_range(), Stroke::new(1.0, t::p().divider));
@@ -1825,6 +1808,9 @@ impl App {
                     };
                     let active = self.ws.scope == scope;
                     let resp = sidebar_row(ui, 0, glyph, &name, (count > 0).then_some(count), active, None);
+                    if kind != "smartFolder" {
+                        self.imports.note_row(ui, resp.rect, id);
+                    }
                     if resp.clicked() {
                         self.go(scope);
                     }
@@ -1929,6 +1915,7 @@ impl App {
         let label = if renaming { "" } else { f.name.as_str() };
         let resp = sidebar_row_tinted(ui, depth, glyph, tint, label, count, active, has_children.then_some(open));
         let row_rect = resp.rect;
+        self.imports.note_row(ui, row_rect, &f.id);
         if f.is_locked() && !renaming {
             organize_ui::lock_badge(ui, row_rect, shut, count.is_some());
         }
@@ -3882,7 +3869,7 @@ impl eframe::App for App {
         // Our own items dragged out and back in must not import twice.
         let dragging_out = self.native_drag.load(std::sync::atomic::Ordering::Relaxed);
         if !dropped.is_empty() && !dragging_out {
-            self.import(dropped);
+            self.drop_files(dropped, crate::drop_pos::at_drop(&ctx));
         }
         self.pdf_keys(&ctx);
         self.video_keys(&ctx);

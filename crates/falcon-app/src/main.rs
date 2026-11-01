@@ -1,6 +1,7 @@
 mod app;
 mod backups;
 mod collect;
+mod drop_pos;
 mod folder_icons;
 mod audio;
 mod hover;
