@@ -559,6 +559,121 @@ pub fn split_libraries(paths: Vec<std::path::PathBuf>) -> (Vec<std::path::PathBu
     paths.into_iter().partition(|p| is_library_path(p))
 }
 
+/// What dropping grid items onto a sidebar folder does, after Eagle's
+/// `classifySelected`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FolderDrop {
+    /// Take the items out of this folder (the open one) and put them in
+    /// the target.
+    Move(String),
+    /// Put the items in the target as well, keeping their other folders.
+    Add,
+}
+
+/// The drop's effect for the open `scope`, with ⌥ held or not. Inside a
+/// folder a drop moves the items to the target and ⌥ adds them instead;
+/// from every other view (All, a tag, a smart folder, the Trash…) it adds.
+/// Dropping on the folder that is open changes nothing (`None`).
+pub fn folder_drop(scope: &Scope, target: &str, alt: bool) -> Option<FolderDrop> {
+    match scope {
+        Scope::Folder(open) if open == target => None,
+        Scope::Folder(open) if !alt => Some(FolderDrop::Move(open.clone())),
+        _ => Some(FolderDrop::Add),
+    }
+}
+
+/// Applies a folder drop to one item: it leaves the open folder on a move,
+/// joins the target, and comes out of the Trash. Returns whether the item
+/// changed.
+pub fn apply_folder_drop(item: &mut Item, target: &str, drop: &FolderDrop) -> bool {
+    let before = (item.folders.clone(), item.is_deleted);
+    if let FolderDrop::Move(open) = drop {
+        item.folders.retain(|f| f != open);
+    }
+    if !item.folders.iter().any(|f| f == target) {
+        item.folders.push(target.to_string());
+    }
+    item.is_deleted = false;
+    (item.folders.clone(), item.is_deleted) != before
+}
+
+/// The notice after a folder drop: "Moved 3 items to Logos".
+pub fn folder_drop_notice(drop: &FolderDrop, n: usize, folder: &str) -> String {
+    let verb = match drop {
+        FolderDrop::Move(_) => "Moved",
+        FolderDrop::Add => "Added",
+    };
+    let noun = if n == 1 { "item" } else { "items" };
+    format!("{verb} {n} {noun} to {folder}")
+}
+
+#[cfg(test)]
+mod folder_drop_tests {
+    use super::*;
+    use serde_json::json;
+
+    fn item(folders: &[&str], deleted: bool) -> Item {
+        let v = json!({
+            "id": "I1", "name": "a", "size": 1, "btime": 0, "mtime": 0, "ext": "png",
+            "tags": [], "folders": folders, "isDeleted": deleted, "url": "",
+            "annotation": "", "modificationTime": 0, "height": 10, "width": 10,
+            "lastModified": 0, "palettes": []
+        });
+        Item::from_json_str(&v.to_string()).unwrap()
+    }
+
+    #[test]
+    fn a_folder_moves_and_alt_adds() {
+        let open = Scope::Folder("A".into());
+        assert_eq!(folder_drop(&open, "B", false), Some(FolderDrop::Move("A".into())));
+        assert_eq!(folder_drop(&open, "B", true), Some(FolderDrop::Add));
+    }
+
+    #[test]
+    fn other_views_add() {
+        for scope in [Scope::All, Scope::Uncategorized, Scope::Untagged, Scope::Recent, Scope::Random(3), Scope::Trash, Scope::Tag("t".into()), Scope::Smart("S".into())] {
+            assert_eq!(folder_drop(&scope, "B", false), Some(FolderDrop::Add), "{scope:?}");
+            assert_eq!(folder_drop(&scope, "B", true), Some(FolderDrop::Add), "{scope:?}");
+        }
+    }
+
+    #[test]
+    fn dropping_on_the_open_folder_does_nothing() {
+        let open = Scope::Folder("A".into());
+        assert_eq!(folder_drop(&open, "A", false), None);
+        assert_eq!(folder_drop(&open, "A", true), None);
+    }
+
+    #[test]
+    fn applying_a_move() {
+        let mut it = item(&["A", "C"], false);
+        assert!(apply_folder_drop(&mut it, "B", &FolderDrop::Move("A".into())));
+        assert_eq!(it.folders, ["C", "B"]);
+        // Already there and not in the open folder: nothing to write.
+        assert!(!apply_folder_drop(&mut it, "B", &FolderDrop::Move("A".into())));
+        assert_eq!(it.folders, ["C", "B"]);
+    }
+
+    #[test]
+    fn applying_an_add() {
+        let mut it = item(&["A"], false);
+        assert!(apply_folder_drop(&mut it, "B", &FolderDrop::Add));
+        assert_eq!(it.folders, ["A", "B"]);
+        assert!(!apply_folder_drop(&mut it, "B", &FolderDrop::Add));
+        // A trashed item already in the folder still comes back.
+        let mut gone = item(&["B"], true);
+        assert!(apply_folder_drop(&mut gone, "B", &FolderDrop::Add));
+        assert!(!gone.is_deleted);
+        assert_eq!(gone.folders, ["B"]);
+    }
+
+    #[test]
+    fn notices() {
+        assert_eq!(folder_drop_notice(&FolderDrop::Move("A".into()), 3, "Logos"), "Moved 3 items to Logos");
+        assert_eq!(folder_drop_notice(&FolderDrop::Add, 1, "Logos"), "Added 1 item to Logos");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

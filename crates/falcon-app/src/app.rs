@@ -91,6 +91,9 @@ enum Action {
     RenameFolder(String, String),
     DeleteFolder(String),
     AddToFolder(Vec<String>, String),
+    /// Items dropped on a sidebar folder: moved out of the open folder, or
+    /// added (`logic::folder_drop`).
+    DropOnFolder(Vec<String>, String, logic::FolderDrop),
     Trash(Vec<String>, bool),
     DeletePermanently(Vec<String>),
     EmptyTrash,
@@ -1228,6 +1231,26 @@ impl App {
                     self.flash(format!("Added {n} to {name}"));
                     r
                 }
+                Action::DropOnFolder(ids, fid, op) => {
+                    let mut r = Ok(());
+                    let mut moved = Vec::new();
+                    for id in &ids {
+                        if let Some(mut item) = lib.item(id).cloned()
+                            && logic::apply_folder_drop(&mut item, &fid, &op)
+                        {
+                            r = r.and(lib.update_item(item));
+                            moved.push(id);
+                        }
+                    }
+                    // Moved items leave the open folder, so leave nothing
+                    // selected that is no longer shown.
+                    if matches!(op, logic::FolderDrop::Move(_)) {
+                        self.ws.selected.retain(|s| !moved.contains(&s));
+                    }
+                    let name = logic::find_folder(&lib.metadata.folders, &fid).map_or_else(String::new, |f| f.name.clone());
+                    self.flash(logic::folder_drop_notice(&op, ids.len(), &name));
+                    r
+                }
                 Action::CreateSmart(name, conditions) => lib.create_smart_folder(&name, conditions).map(|id| {
                     self.ws.scope = Scope::Smart(id);
                     self.ws.selected.clear();
@@ -1411,6 +1434,8 @@ fn action_label(action: &Action) -> String {
         Action::RenameFolder(..) => "Rename folder".into(),
         Action::DeleteFolder(_) => "Delete folder".into(),
         Action::AddToFolder(ids, _) => format!("Add {} to folder", ids.len()),
+        Action::DropOnFolder(ids, _, logic::FolderDrop::Move(_)) => format!("Move {} to folder", ids.len()),
+        Action::DropOnFolder(ids, _, logic::FolderDrop::Add) => format!("Add {} to folder", ids.len()),
         Action::Trash(ids, true) => format!("Move {} to Trash", ids.len()),
         Action::Trash(ids, false) => format!("Restore {}", ids.len()),
         Action::DeletePermanently(ids) => format!("Delete {}", ids.len()),
@@ -1907,8 +1932,10 @@ impl App {
             resp.dnd_set_drag_payload(DragFolder(f.id.clone()));
         }
         drop_highlight(ui, &resp, depth);
-        if let Some(d) = resp.dnd_release_payload::<DragItems>() {
-            self.ws.actions.push(Action::AddToFolder(d.0.clone(), f.id.clone()));
+        if let Some(d) = resp.dnd_release_payload::<DragItems>()
+            && let Some(op) = logic::folder_drop(&self.ws.scope, &f.id, ui.input(|i| i.modifiers.alt))
+        {
+            self.ws.actions.push(Action::DropOnFolder(d.0.clone(), f.id.clone(), op));
         }
         self.folder_drop(ui, lib, &resp, f, depth);
         let pinned = cx.quick.contains(&f.id);
