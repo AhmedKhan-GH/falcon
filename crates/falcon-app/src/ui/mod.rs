@@ -9,3 +9,4 @@ pub(crate) mod organize;
 pub(crate) mod sidebar;
 pub(crate) mod inspector;
 pub(crate) mod viewer;
+pub(crate) mod grid;
