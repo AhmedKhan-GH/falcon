@@ -54,6 +54,7 @@ pub enum Command {
     /// File ▸ Export (`App::export_keys`).
     ExportComputer,
     ExportPack,
+    ExportCsv,
     /// A key of the video player (`App::video_keys` reads these).
     Player(PlayerKey),
 }
@@ -167,6 +168,8 @@ pub const TABLE: &[Spec] = &[
     // Export and copy-out (`App::export_keys`).
     Spec { cmd: Command::ExportComputer, id: "file.export.item.computer", group: "Export", label: "Export to Computer", default: k(CMD, Key::E), aliases: &[] },
     Spec { cmd: Command::ExportPack, id: "file.export.item.eaglepack", group: "Export", label: "Export as .eaglepack", default: k(CMD_SHIFT, Key::E), aliases: &[] },
+    // Unbound by default, as in Eagle.
+    Spec { cmd: Command::ExportCsv, id: "file.export.csv", group: "Export", label: "Export to CSV", default: None, aliases: &[] },
 ];
 
 /// Keys that cannot be rebound, listed in the Shortcuts section.

@@ -19,6 +19,8 @@ pub(super) enum Request {
     /// Export as .eaglepack: a folder with its subfolders, or a smart
     /// folder as one folder.
     PackTree(Target),
+    /// Export to CSV: these items' metadata.
+    Csv(Vec<String>),
 }
 
 /// A folder or smart folder to export.
@@ -139,6 +141,20 @@ impl App {
                     dest.display()
                 );
                 self.ws.export.clash = Some(Clash { replace, keep, title: "The folder already exists".into(), detail, files: false });
+            }
+            Request::Csv(ids) => {
+                if ids.is_empty() {
+                    return;
+                }
+                let picked = rfd::FileDialog::new().set_title("Export to CSV").add_filter("CSV", &["csv"]).set_file_name("falcon-export.csv").save_file();
+                let Some(dest) = picked else { return };
+                match export::write_csv(lib, &ids, &dest) {
+                    Ok(n) => {
+                        self.flash(format!("Exported {} to CSV", plural(n, "item")));
+                        crate::open_with::reveal(&[dest]);
+                    }
+                    Err(e) => self.flash(format!("Export failed: {e}")),
+                }
             }
             Request::PackItems(ids) => {
                 if !ids.is_empty() {
@@ -303,6 +319,11 @@ impl App {
         if on(C::ExportPack) && !self.ws.selected.is_empty() {
             self.ws.export.request = Some(Request::PackItems(self.ws.selected.clone()));
         }
+        // The selection, or else every item shown.
+        if on(C::ExportCsv) {
+            let ids = if self.ws.selected.is_empty() { self.ws.order.clone() } else { self.ws.selected.clone() };
+            self.ws.export.request = Some(Request::Csv(ids));
+        }
     }
 
     /// The Export submenu of a folder or smart folder menu (disabled while
@@ -334,7 +355,13 @@ impl App {
         };
         let resp = wide_button(ui, ic::EXPORT, "Export", target.is_some());
         let Some(target) = target else { return };
-        egui::Popup::menu(&resp).show(|ui| self.tree_export_entries(ui, &target));
+        egui::Popup::menu(&resp).show(|ui| {
+            self.tree_export_entries(ui, &target);
+            // The items shown, as filtered and sorted.
+            if ui.add_enabled(!self.ws.order.is_empty(), egui::Button::new("Export to CSV…")).clicked() {
+                self.ws.export.request = Some(Request::Csv(self.ws.order.clone()));
+            }
+        });
     }
 
     /// The Export submenu of the item context menu.
@@ -346,6 +373,9 @@ impl App {
             }
             if ui.button("Export as .eaglepack…").clicked() {
                 self.ws.export.request = Some(Request::PackItems(targets.to_vec()));
+            }
+            if ui.button("Export to CSV…").clicked() {
+                self.ws.export.request = Some(Request::Csv(targets.to_vec()));
             }
         });
     }

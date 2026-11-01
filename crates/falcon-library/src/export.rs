@@ -242,6 +242,104 @@ pub fn run(plan: &Plan, mut on_step: impl FnMut(&Step, bool)) -> Result<Vec<Path
     Ok(written)
 }
 
+// ---------------------------------------------------------------------------
+// CSV
+
+/// The CSV columns, in Eagle's order: id, name, extension, width, height,
+/// duration, source URL, notes, comments, tags, folders, size, rating,
+/// import time, modification time and the original's path. The header
+/// text is falcon's own.
+pub const CSV_HEADER: [&str; 16] = [
+    "Item ID",
+    "Name",
+    "File Type",
+    "Width (px)",
+    "Height (px)",
+    "Duration (s)",
+    "Source URL",
+    "Notes",
+    "Comments",
+    "Tags",
+    "Folders",
+    "Size (bytes)",
+    "Rating",
+    "Date Imported (UTC)",
+    "Date Modified (UTC)",
+    "Original Path",
+];
+
+/// One CSV field: quoted, with quotes doubled, when it holds a comma, a
+/// quote or a line break; as it is otherwise.
+pub fn csv_field(s: &str) -> String {
+    if s.contains([',', '"', '\n', '\r']) { format!("\"{}\"", s.replace('"', "\"\"")) } else { s.to_string() }
+}
+
+/// A time in ms since the epoch as Eagle's CSV writes it, `YYYY-MM-DD
+/// HH:MM:SS` in UTC; empty for 0.
+fn csv_time(ms: u64) -> String {
+    if ms == 0 {
+        return String::new();
+    }
+    chrono::DateTime::from_timestamp_millis(ms as i64).map(|t| t.format("%Y-%m-%d %H:%M:%S").to_string()).unwrap_or_default()
+}
+
+/// A number field: empty when missing or zero, as Eagle writes it.
+fn csv_number(v: Option<&serde_json::Value>) -> String {
+    match v {
+        Some(serde_json::Value::Number(n)) if n.as_f64().is_some_and(|f| f != 0.0) => n.to_string(),
+        _ => String::new(),
+    }
+}
+
+/// The CSV row for one item.
+pub fn csv_row(lib: &Library, item: &Item, folder_names: &HashMap<&str, &str>) -> Vec<String> {
+    let nonzero = |n: u64| if n == 0 { String::new() } else { n.to_string() };
+    let comments: Vec<String> = item.comments().into_iter().map(|c| c.annotation).collect();
+    let folders: Vec<&str> = item.folders.iter().map(|f| folder_names.get(f.as_str()).copied().unwrap_or(f.as_str())).collect();
+    vec![
+        item.id.clone(),
+        item.name.clone(),
+        item.ext.clone(),
+        nonzero(item.width),
+        nonzero(item.height),
+        csv_number(item.extra.get("duration")),
+        item.url.clone(),
+        item.annotation.clone(),
+        comments.join("\n"),
+        item.tags.join(", "),
+        folders.join(", "),
+        nonzero(item.size),
+        csv_number(item.extra.get("star")),
+        csv_time(item.modification_time),
+        csv_time(item.last_modified),
+        item.original_path(lib.root()).display().to_string(),
+    ]
+}
+
+/// The CSV text for `ids` (unknown ids skipped): a header and one row per
+/// item, lines joined with `\n`, preceded by a UTF-8 byte order mark so
+/// spreadsheet apps read it as UTF-8, as Eagle writes it.
+pub fn csv(lib: &Library, ids: &[String]) -> String {
+    let all = lib.all_folders();
+    let names: HashMap<&str, &str> = all.iter().map(|f| (f.id.as_str(), f.name.as_str())).collect();
+    let mut lines = vec![CSV_HEADER.iter().map(|h| csv_field(h)).collect::<Vec<_>>().join(",")];
+    for item in ids.iter().filter_map(|id| lib.item(id)) {
+        lines.push(csv_row(lib, item, &names).iter().map(|f| csv_field(f)).collect::<Vec<_>>().join(","));
+    }
+    format!("\u{feff}{}", lines.join("\n"))
+}
+
+/// Writes [`csv`] to `dest` (through a temporary file) and returns the
+/// number of rows.
+pub fn write_csv(lib: &Library, ids: &[String], dest: &Path) -> Result<usize> {
+    let text = csv(lib, ids);
+    let dir = dest.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new("."));
+    let mut tmp = tempfile::NamedTempFile::new_in(dir).map_err(|e| Error::io(dir, e))?;
+    std::io::Write::write_all(&mut tmp, text.as_bytes()).map_err(|e| Error::io(dest, e))?;
+    tmp.persist(dest).map_err(|e| Error::io(dest, e.error))?;
+    Ok(ids.iter().filter(|id| lib.item(id).is_some()).count())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -399,6 +497,50 @@ mod tests {
         let names: HashSet<_> = plan.steps.iter().map(|s| s.to.file_name().unwrap().to_string_lossy().into_owned()).collect();
         assert_eq!(names, ["pic-1.png".to_string(), "pic-2.png".to_string()].into());
         assert!(plan_smart(&lib, "NOPE", &out, Collision::KeepBoth, &HashSet::new()).is_none());
+    }
+
+    #[test]
+    fn csv_fields_are_quoted_only_when_needed() {
+        assert_eq!(csv_field("plain"), "plain");
+        assert_eq!(csv_field(""), "");
+        assert_eq!(csv_field("a, b"), "\"a, b\"");
+        assert_eq!(csv_field("say \"hi\""), "\"say \"\"hi\"\"\"");
+        assert_eq!(csv_field("two\nlines"), "\"two\nlines\"");
+        assert_eq!(csv_field("cr\r"), "\"cr\r\"");
+        assert_eq!(csv_field("日本語"), "日本語");
+        assert_eq!(csv_time(0), "");
+    }
+
+    #[test]
+    fn csv_has_a_row_per_item_in_eagles_column_order() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut lib, ids) = library(dir.path());
+        let folder = lib.create_folder(None, "Refs, old").unwrap();
+        let mut item = lib.item(&ids[1]).unwrap().clone();
+        item.tags = vec!["blue".into(), "logo".into()];
+        item.folders = vec![folder.clone(), "GONE".into()];
+        item.url = "https://example.com/a?b=1,2".into();
+        item.annotation = "line one\nline \"two\"".into();
+        item.modification_time = 1_700_000_000_123;
+        item.extra.insert("star".into(), serde_json::json!(4));
+        item.set_comments(&[crate::model::Comment::region(1, 2, 3, 4, "first"), crate::model::Comment::region(1, 2, 3, 4, "second")]);
+        lib.update_item(item).unwrap();
+
+        let out = dir.path().join("x.csv");
+        assert_eq!(write_csv(&lib, &[ids[1].clone(), "NOPE".into()], &out).unwrap(), 1);
+        let text = fs::read_to_string(&out).unwrap();
+        let body = text.strip_prefix('\u{feff}').expect("starts with a BOM");
+        assert!(!body.ends_with('\n'));
+        let (header, row) = body.split_once('\n').unwrap();
+        assert_eq!(header.split(',').count(), 16);
+        assert!(header.starts_with("Item ID,Name,File Type,"));
+        let item = lib.item(&ids[1]).unwrap();
+        let path = item.original_path(lib.root()).display().to_string();
+        let want = format!(
+            "{},other,png,8,8,,\"https://example.com/a?b=1,2\",\"line one\nline \"\"two\"\"\",\"first\nsecond\",\"blue, logo\",\"Refs, old, GONE\",{},4,2023-11-14 22:13:20,{},{}",
+            ids[1], item.size, csv_time(item.last_modified), csv_field(&path)
+        );
+        assert_eq!(row, want);
     }
 
     #[test]
