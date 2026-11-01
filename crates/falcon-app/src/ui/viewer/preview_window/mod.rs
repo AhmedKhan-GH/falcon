@@ -1,5 +1,6 @@
-//! Eagle's "Open in New Window" (⌘O): the item in a window of its own,
-//! a second eframe viewport like the collect window. Pictures zoom and pan
+//! Eagle's "Open in New Window" (⌘O): the selected items in a window of
+//! their own, stepped with ← and →, a further eframe viewport like the
+//! collect window; each open makes another window. Pictures zoom and pan
 //! (with the navigator and preview-only rotate and flip); video, audio,
 //! text and PDF files get a viewer of the window's own; the window can stay
 //! on top, be made translucent, show in grayscale and copy the item (see
@@ -52,7 +53,13 @@ impl Pane {
 /// The preview window's state. It owns its players, which stop when the
 /// item changes or the window closes.
 pub(crate) struct PreviewWin {
+    /// The item shown, one of `ids`.
     pub id: String,
+    /// The items the window steps through, and where `id` is among them.
+    ids: Vec<String>,
+    index: usize,
+    /// Tells this window's viewport apart from the others.
+    serial: u64,
     /// Scale relative to the image's pixels; `None` fits the window.
     zoom: Option<f32>,
     pan: Vec2,
@@ -73,9 +80,13 @@ pub(crate) struct PreviewWin {
 }
 
 impl PreviewWin {
-    pub fn new(id: String) -> PreviewWin {
+    /// A window over `ids`, which must not be empty, showing the first.
+    pub fn new(ids: Vec<String>, serial: u64) -> PreviewWin {
         PreviewWin {
-            id,
+            id: ids[0].clone(),
+            ids,
+            index: 0,
+            serial,
             zoom: None,
             pan: Vec2::ZERO,
             on_top: false,
@@ -88,6 +99,23 @@ impl PreviewWin {
             custom: false,
         }
     }
+
+    /// Moves `by` items along, stopping at either end as Eagle does. The
+    /// new item starts with a fresh view and viewer; Always on Top and the
+    /// opacity stay.
+    fn step(&mut self, by: isize) {
+        let next = self.index as isize + by;
+        if next < 0 || next as usize >= self.ids.len() || next as usize == self.index {
+            return;
+        }
+        let keep = PreviewWin { on_top: self.on_top, opacity: self.opacity, applied: self.applied.take(), ..PreviewWin::new(self.ids.clone(), self.serial) };
+        *self = PreviewWin { id: keep.ids[next as usize].clone(), index: next as usize, ..keep };
+    }
+}
+
+/// The items Eagle opens in a new window: every one given except audio.
+pub fn window_items(items: &[(String, String)]) -> Vec<String> {
+    items.iter().filter(|(_, ext)| !falcon_library::media::is_audio(&ext.to_lowercase())).map(|(id, _)| id.clone()).collect()
 }
 
 /// The window's first size for a picture `natural` big: the picture at
@@ -106,53 +134,72 @@ enum Act {
 }
 
 impl App {
-    /// Opens the item acted on (the viewer's, or the first selected) in
-    /// the preview window, replacing what it showed. Always on Top and the
-    /// opacity stay; the view, rotation and players start over.
+    /// Opens the items acted on (the viewer's, or every selected one) in a
+    /// new preview window.
     pub(crate) fn open_preview_window(&mut self) {
-        if let Some(id) = self.acted_on().into_iter().next() {
-            self.used_item(&id);
-            let mut next = PreviewWin::new(id);
-            if let Some(old) = &self.preview {
-                (next.on_top, next.opacity) = (old.on_top, old.opacity);
-            }
-            self.preview = Some(next);
-        }
+        let ids = self.acted_on();
+        let Some(shared) = self.ws.lib.clone() else { return };
+        let lib = crate::app::lock(&shared);
+        self.open_preview_items(&lib, &ids);
     }
 
-    /// Shows the preview window, if open, as its own OS window.
-    pub(crate) fn preview_window(&mut self, ctx: &egui::Context, lib: &Library) {
-        let Some(id) = self.preview.as_ref().map(|p| p.id.clone()) else { return };
-        let Some(item) = lib.item(&id).cloned() else {
-            self.preview = None;
+    /// Opens `ids`, less audio, in a new preview window, as Eagle's
+    /// `openInPreviewWindow` does, and records them as Recently Used.
+    pub(crate) fn open_preview_items(&mut self, lib: &Library, ids: &[String]) {
+        let items: Vec<(String, String)> = ids.iter().filter_map(|id| lib.item(id).map(|i| (id.clone(), i.ext.clone()))).collect();
+        let ids = window_items(&items);
+        if ids.is_empty() {
             return;
-        };
-        let natural = (item.width as f32, item.height as f32);
-        let builder = egui::ViewportBuilder::default()
-            .with_title(window_title(&item))
-            .with_inner_size(window_size(natural))
-            .with_min_inner_size([200.0, 150.0]);
-        let vid = egui::ViewportId::from_hash_of("falcon-preview");
-        ctx.show_viewport_immediate(vid, builder, |ui, _class| self.preview_contents(ui, lib, &item));
-        if self.preview.as_ref().is_some_and(|p| p.close) {
-            self.preview = None;
         }
+        for id in &ids {
+            self.used_item(id);
+        }
+        self.preview_serial += 1;
+        self.preview.push(PreviewWin::new(ids, self.preview_serial));
     }
 
-    fn preview_contents(&mut self, ui: &mut Ui, lib: &Library, item: &Item) {
+    /// Shows each open preview window as its own OS window.
+    pub(crate) fn preview_window(&mut self, ctx: &egui::Context, lib: &Library) {
+        let mut wins = std::mem::take(&mut self.preview);
+        wins.retain_mut(|pw| {
+            let Some(item) = lib.item(&pw.id).cloned() else { return false };
+            let natural = (item.width as f32, item.height as f32);
+            let builder = egui::ViewportBuilder::default()
+                .with_title(pw.title(&item))
+                .with_inner_size(window_size(natural))
+                .with_min_inner_size([200.0, 150.0]);
+            let vid = egui::ViewportId::from_hash_of(("falcon-preview", pw.serial));
+            ctx.show_viewport_immediate(vid, builder, |ui, _class| self.preview_contents(ui, lib, &item, pw));
+            !pw.close
+        });
+        // Windows opened while these were drawn come after them.
+        wins.append(&mut self.preview);
+        self.preview = wins;
+    }
+
+    fn preview_contents(&mut self, ui: &mut Ui, lib: &Library, item: &Item, pw: &mut PreviewWin) {
         let ctx = ui.ctx().clone();
         let full = ui.max_rect();
         ui.painter().rect_filled(full, 0.0, t::p().main);
         let (close, esc, cmd_w) = ctx.input(|i| (i.viewport().close_requested(), i.key_pressed(egui::Key::Escape), i.modifiers.command && i.key_pressed(egui::Key::W)));
-        let Some(mut pw) = self.preview.take() else { return };
         if close || esc || cmd_w {
             pw.close = true;
+        }
+        // ← and → step through the window's items (not while typing, nor
+        // in the text and PDF viewers, which use the arrows); the next
+        // frame shows the new item.
+        let typing = ctx.egui_wants_keyboard_input() || matches!(pw.pane, Pane::Text(_) | Pane::Pdf(_));
+        let (left, right) = ctx.input(|i| (i.key_pressed(egui::Key::ArrowLeft), i.key_pressed(egui::Key::ArrowRight)));
+        if pw.ids.len() > 1 && !typing && (left || right) {
+            pw.step(if right { 1 } else { -1 });
+            ctx.request_repaint();
+            return;
         }
         if matches!(pw.pane, Pane::Pending) {
             pw.pane = Pane::open(&ctx, lib, item, self.prefs.video_autoplay);
         }
         // The opacity belongs to the NSWindow, found by its title.
-        let want = (window_title(item), pw.opacity);
+        let want = (pw.title(item), pw.opacity);
         if pw.applied.as_ref() != Some(&want) {
             if opacity::set(&want.0, want.1) {
                 pw.applied = Some(want);
@@ -194,7 +241,7 @@ impl App {
 
         // Eagle's window menu, from a right-click.
         let mut act = None;
-        resp.context_menu(|ui| act = self.window_menu(ui, &mut pw, item, &file));
+        resp.context_menu(|ui| act = self.window_menu(ui, pw, item, &file));
         match act {
             Some(Act::CopyFile) => self.copy_preview_file(item, &file),
             Some(Act::CopyFrame) => {
@@ -224,7 +271,6 @@ impl App {
             None => {}
         }
         self.ws.loader.set_grayscale(gray);
-        self.preview = Some(pw);
     }
 
     /// The window's right-click menu; returns what to do after it closes.
@@ -350,6 +396,14 @@ fn window_title(item: &Item) -> String {
 }
 
 impl PreviewWin {
+    /// The window's title: the file name, with the position when the
+    /// window holds several items.
+    fn title(&self, item: &Item) -> String {
+        if self.ids.len() > 1 { format!("{} ({}/{})", window_title(item), self.index + 1, self.ids.len()) } else { window_title(item) }
+    }
+}
+
+impl PreviewWin {
     /// The zoomable picture (or the thumbnail of a type with no viewer of
     /// its own) with its navigator.
     fn picture(&mut self, ui: &mut Ui, resp: &egui::Response, tex: Option<TextureHandle>, item: &Item, full: Rect, hide_navigator: bool) {
@@ -471,5 +525,20 @@ mod tests {
         assert_eq!(window_size((4000.0, 2000.0)), vec2(1000.0, 500.0));
         assert_eq!(window_size((100.0, 50.0)), vec2(320.0, 240.0));
         assert_eq!(window_size((0.0, 0.0)), vec2(320.0, 240.0));
+    }
+
+    #[test]
+    fn audio_stays_out_and_steps_stop_at_the_ends() {
+        let items = [("a".to_string(), "png".to_string()), ("b".to_string(), "MP3".to_string()), ("c".to_string(), "mp4".to_string())];
+        let ids = window_items(&items);
+        assert_eq!(ids, ["a", "c"]);
+        let mut w = PreviewWin::new(ids, 1);
+        w.step(-1);
+        assert_eq!(w.id, "a");
+        (w.zoom, w.on_top, w.opacity) = (Some(2.0), true, 50);
+        w.step(1);
+        assert_eq!((w.id.as_str(), w.index, w.zoom, w.on_top, w.opacity), ("c", 1, None, true, 50));
+        w.step(1);
+        assert_eq!(w.id, "c");
     }
 }

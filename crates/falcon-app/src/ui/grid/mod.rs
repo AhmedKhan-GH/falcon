@@ -249,9 +249,9 @@ impl App {
         let (cards, rest): (Vec<_>, Vec<_>) = std::mem::take(&mut self.ws.frame_jobs).into_iter().partition(|j| j.key.1 == Tier::Card);
         self.ws.frame_jobs = rest;
         self.ws.frame_jobs.extend(cards);
+        // A middle click opens that one item, as Eagle's does.
         if let Some(id) = middle {
-            self.used_item(&id);
-            self.preview = Some(crate::ui::viewer::preview_window::PreviewWin::new(id));
+            self.open_preview_items(lib, &[id]);
         }
         if let Some((id, m)) = clicked {
             self.click(&id, m);

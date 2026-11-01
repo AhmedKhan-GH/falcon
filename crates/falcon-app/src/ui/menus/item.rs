@@ -96,8 +96,7 @@ impl App {
         // Eagle's Open Item in New Window.
         let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::OpenNewWindow);
         if ui.add(egui::Button::new("Open in New Window").shortcut_text(keys)).clicked() {
-            self.preview = Some(crate::ui::viewer::preview_window::PreviewWin::new(item.id.clone()));
-            self.used_item(&item.id);
+            self.open_preview_items(lib, targets);
         }
         // Eagle's Navigator toggle, in the viewer.
         if in_viewer {

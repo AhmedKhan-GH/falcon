@@ -149,8 +149,10 @@ pub struct App {
     pub(crate) auto_import: crate::auto_import::AutoImport,
     /// Presentation mode and the other View modes (`ui/viewer/modes.rs`).
     pub(crate) modes: crate::ui::viewer::modes::Modes,
-    /// The item open in its own window (`ui/viewer/preview_window.rs`).
-    pub(crate) preview: Option<crate::ui::viewer::preview_window::PreviewWin>,
+    /// The preview windows open, each with its items (`ui/viewer/preview_window/`).
+    pub(crate) preview: Vec<crate::ui::viewer::preview_window::PreviewWin>,
+    /// Numbers preview windows so each has its own viewport.
+    pub(crate) preview_serial: u64,
 
     /// The About window (`about.rs`).
     pub(crate) about: crate::ui::dialogs::about::AboutWindow,
@@ -238,7 +240,8 @@ impl App {
             folds: Folds::default(),
             auto_import: Default::default(),
             modes: Default::default(),
-            preview: None,
+            preview: Vec::new(),
+            preview_serial: 0,
 
             about: Default::default(),
             zone: logic::Zone::Content,
