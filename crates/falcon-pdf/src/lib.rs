@@ -104,9 +104,41 @@ pub struct Link {
     pub target: LinkTarget,
 }
 
+/// A document's metadata, for a Document Properties dialog. Dates are
+/// seconds since 1970.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Info {
+    pub title: Option<String>,
+    pub author: Option<String>,
+    pub subject: Option<String>,
+    pub keywords: Option<String>,
+    /// The application that made the original document.
+    pub creator: Option<String>,
+    /// The software that wrote the PDF.
+    pub producer: Option<String>,
+    pub created: Option<f64>,
+    pub modified: Option<f64>,
+    /// The PDF version, as (major, minor).
+    pub version: (i64, i64),
+    pub pages: usize,
+    pub encrypted: bool,
+}
+
+/// The message of the error [`Document::open`] returns for a PDF that needs
+/// a password, and of the one for a password that doesn't open it.
+pub const NEEDS_PASSWORD: &str = "the PDF is password-protected";
+pub const WRONG_PASSWORD: &str = "the password does not open this PDF";
+
 /// Why a document could not be opened or read.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Error(pub String);
+
+impl Error {
+    /// Whether opening failed only for want of the right password.
+    pub fn needs_password(&self) -> bool {
+        self.0 == NEEDS_PASSWORD || self.0 == WRONG_PASSWORD
+    }
+}
 
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

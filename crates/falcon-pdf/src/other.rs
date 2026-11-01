@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use crate::{Bitmap, Error, Hit, Link, OutlineEntry, Result, SearchOptions, Selection};
+use crate::{Bitmap, Error, Hit, Info, Link, OutlineEntry, Result, SearchOptions, Selection};
 
 /// Never constructed off macOS.
 pub struct Document {
@@ -13,6 +13,12 @@ pub struct Document {
 impl Document {
     pub fn open(_path: &Path) -> Result<Document> {
         Err(Error("the PDF reader needs macOS".into()))
+    }
+    pub fn open_with_password(_path: &Path, _password: Option<&str>) -> Result<Document> {
+        Err(Error("the PDF reader needs macOS".into()))
+    }
+    pub fn info(&self) -> Info {
+        Info::default()
     }
     pub fn page_count(&self) -> usize {
         0

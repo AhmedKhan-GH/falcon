@@ -728,11 +728,15 @@ enum Req {
     Want(Vec<Job>),
     Search(u64, String, SearchOptions),
     Select(u64, usize, (f64, f64), (f64, f64)),
+    /// A password to try on a locked document.
+    Password(String),
 }
 
 enum Reply {
-    Opened { sizes: Vec<(f64, f64)>, outline: Vec<OutlineEntry> },
+    Opened { sizes: Vec<(f64, f64)>, outline: Vec<OutlineEntry>, info: Box<DocInfo> },
     Failed(String),
+    /// The document needs a password (`true`: the last one tried failed).
+    Locked(bool),
     Page(Job, Option<falcon_pdf::Bitmap>),
     Found(u64, Vec<Hit>),
     Selected(u64, falcon_pdf::Selection),
@@ -757,6 +761,7 @@ impl Pending {
             Req::Want(jobs) => self.queue = jobs.into(),
             Req::Search(g, s, o) => self.search = Some((g, s, o)),
             Req::Select(g, p, a, b) => self.select = Some((g, p, a, b)),
+            Req::Password(_) => {}
         }
     }
 
@@ -779,14 +784,31 @@ fn work(path: &Path, rx: &Receiver<Req>, tx: &Sender<Reply>, ctx: &egui::Context
         ctx.request_repaint();
         ok
     };
-    let doc = match Document::open(path) {
-        Ok(d) => d,
-        Err(e) => {
-            send(Reply::Failed(e.0));
-            return;
+    // A locked document waits for passwords until one opens it.
+    let mut password: Option<String> = None;
+    let doc = loop {
+        match Document::open_with_password(path, password.as_deref()) {
+            Ok(d) => break d,
+            Err(e) if e.needs_password() => {
+                if !send(Reply::Locked(password.is_some())) {
+                    return;
+                }
+                password = loop {
+                    match rx.recv() {
+                        Ok(Req::Password(p)) => break Some(p),
+                        Ok(_) => {}
+                        Err(_) => return,
+                    }
+                };
+            }
+            Err(e) => {
+                send(Reply::Failed(e.0));
+                return;
+            }
         }
     };
-    if !send(Reply::Opened { sizes: doc.page_sizes(), outline: doc.outline() }) {
+    let info = DocInfo { pdf: doc.info(), linearized: std::fs::File::open(path).ok().is_some_and(is_linearized) };
+    if !send(Reply::Opened { sizes: doc.page_sizes(), outline: doc.outline(), info: Box::new(info) }) {
         return;
     }
     let mut p = Pending::default();
@@ -846,8 +868,26 @@ fn work(path: &Path, rx: &Receiver<Req>, tx: &Sender<Reply>, ctx: &egui::Context
 #[derive(Clone, Debug, PartialEq)]
 enum Status {
     Opening,
+    /// Waiting for a password (`true`: the last one was wrong).
+    Locked(bool),
     Ready,
     Failed(String),
+}
+
+/// What the Document Properties dialog shows beyond the item itself.
+#[derive(Clone, Debug, Default)]
+struct DocInfo {
+    pdf: falcon_pdf::Info,
+    /// "Fast web view": the file is linearized.
+    linearized: bool,
+}
+
+/// Whether a PDF file is linearized ("fast web view"): its first object,
+/// near the start of the file, is the linearization dictionary.
+pub fn is_linearized(mut file: impl std::io::Read) -> bool {
+    let mut head = [0u8; 1024];
+    let n = file.read(&mut head).unwrap_or(0);
+    head[..n].windows(11).any(|w| w == b"/Linearized")
 }
 
 #[derive(Default)]
@@ -927,6 +967,11 @@ struct Open {
     page_wheel: f32,
     /// Each page's links, once its first picture has been drawn.
     links: HashMap<usize, Vec<Link>>,
+    info: DocInfo,
+    /// The password being typed for a locked document.
+    password: String,
+    /// The Document Properties dialog is open.
+    properties: bool,
 }
 
 impl Open {
@@ -967,6 +1012,9 @@ impl Open {
             laid: None,
             page_wheel: 0.0,
             links: HashMap::new(),
+            info: DocInfo::default(),
+            password: String::new(),
+            properties: false,
         }
     }
 
@@ -1011,7 +1059,12 @@ impl Open {
     fn poll(&mut self, ctx: &egui::Context) {
         loop {
             match self.rx.try_recv() {
-                Ok(Reply::Opened { sizes, outline }) => {
+                Ok(Reply::Locked(wrong)) => {
+                    self.status = Status::Locked(wrong);
+                    self.password.clear();
+                }
+                Ok(Reply::Opened { sizes, outline, info }) => {
+                    self.info = *info;
                     self.sizes = sizes.into_iter().map(|(w, h)| (w as f32, h as f32)).collect();
                     self.outline = outline;
                     self.status = Status::Ready;
@@ -1378,6 +1431,7 @@ impl App {
                     Status::Failed(e) => {
                         ui.painter().text(area.center(), Align2::CENTER_CENTER, format!("Can't open this PDF: {e}"), font(13.0), t::p().text_muted);
                     }
+                    Status::Locked(wrong) => password_prompt(o, ui, area, wrong),
                 }
             }
             let (name_x, mut right) = super::media_view::bar_shell(self, ui, item, bar);
@@ -1390,6 +1444,9 @@ impl App {
             }
             if present {
                 self.toggle_presentation(ctx);
+            }
+            if let Some(o) = self.pdf.open.as_mut().filter(|o| o.properties) {
+                properties_dialog(o, ctx, item);
             }
             super::media_view::bar_name(ui, item, bar, name_x, right);
         }
@@ -1786,6 +1843,90 @@ fn toolbar(o: &mut Open, ui: &mut Ui, bar: Rect, right: f32, mut sidebar: Option
     (sidebar, x - 16.0)
 }
 
+/// The prompt for a locked document's password, in the middle of the
+/// reader.
+fn password_prompt(o: &mut Open, ui: &mut Ui, area: Rect, wrong: bool) {
+    let r = Rect::from_center_size(area.center(), vec2(340.0, 132.0));
+    let p = ui.painter().clone();
+    p.rect_filled(r, CornerRadius::same(10), t::p().panel);
+    p.rect_stroke(r, CornerRadius::same(10), Stroke::new(1.0, t::p().divider), egui::StrokeKind::Inside);
+    p.text(r.min + vec2(18.0, 22.0), Align2::LEFT_CENTER, "This PDF is locked", font(14.0), t::p().text);
+    let line = if wrong { "That password doesn't open it. Try again." } else { "Type its password to read it." };
+    p.text(r.min + vec2(18.0, 46.0), Align2::LEFT_CENTER, line, font(12.5), if wrong { t::p().icon_red } else { t::p().text_muted });
+    let field = Rect::from_min_size(r.min + vec2(18.0, 64.0), vec2(r.width() - 36.0, 24.0));
+    let id = Id::unique("pdf-password");
+    let mut fui = ui.new_child(egui::UiBuilder::new().max_rect(field));
+    let resp = fui.add(TextEdit::singleline(&mut o.password).id(id).password(true).font(font(12.5)).desired_width(field.width()));
+    if !ui.ctx().memory(|m| m.focused().is_some()) {
+        resp.request_focus();
+    }
+    let enter = resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
+    let button = Rect::from_min_size(Pos2::new(r.right() - 18.0 - 80.0, r.bottom() - 34.0), vec2(80.0, 24.0));
+    let open = ui.put(button, egui::Button::new("Open")).clicked();
+    if (enter || open) && !o.password.is_empty() {
+        let _ = o.tx.send(Req::Password(std::mem::take(&mut o.password)));
+        o.status = Status::Opening;
+    }
+}
+
+/// Document Properties: the file, its metadata and the current page's size.
+fn properties_dialog(o: &mut Open, ctx: &egui::Context, item: &Item) {
+    let i = &o.info.pdf;
+    let none = || "-".to_string();
+    let date = |t: Option<f64>| t.map_or_else(none, |s| crate::logic::date_time_text((s * 1000.0) as i64));
+    let size = o.sizes.get(o.current).map(|&s| turn_size(s, o.turns)).map_or_else(none, |(w, h)| page_size_text(w, h));
+    let rows: Vec<(&str, String)> = vec![
+        ("File", format!("{}.{}", item.name, item.ext)),
+        ("Size", format!("{} ({} bytes)", crate::logic::format_size(item.size), item.size)),
+        ("Title", i.title.clone().unwrap_or_else(none)),
+        ("Author", i.author.clone().unwrap_or_else(none)),
+        ("Subject", i.subject.clone().unwrap_or_else(none)),
+        ("Keywords", i.keywords.clone().unwrap_or_else(none)),
+        ("Created", date(i.created)),
+        ("Modified", date(i.modified)),
+        ("Application", i.creator.clone().unwrap_or_else(none)),
+        ("PDF producer", i.producer.clone().unwrap_or_else(none)),
+        ("PDF version", format!("{}.{}", i.version.0, i.version.1)),
+        ("Pages", i.pages.to_string()),
+        ("Page size", size),
+        ("Fast web view", if o.info.linearized { "Yes" } else { "No" }.to_string()),
+        ("Password", if i.encrypted { "Yes" } else { "No" }.to_string()),
+    ];
+    let modal = egui::Modal::new(Id::unique("pdf-properties")).show(ctx, |ui| {
+        ui.set_width(420.0);
+        ui.label(egui::RichText::new("Document Properties").size(15.0));
+        ui.add_space(8.0);
+        egui::Grid::new("pdf-properties-grid").num_columns(2).spacing(vec2(14.0, 5.0)).show(ui, |ui| {
+            for (k, v) in rows {
+                ui.label(egui::RichText::new(k).color(t::p().text_muted));
+                ui.add(egui::Label::new(egui::RichText::new(v).color(t::p().text)).wrap());
+                ui.end_row();
+            }
+        });
+        ui.add_space(10.0);
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| ui.button("Close").clicked()).inner
+    });
+    if modal.inner || modal.should_close() {
+        o.properties = false;
+    }
+}
+
+/// A page size as pdf.js's Document Properties gives it: inches, and the
+/// paper's name when it is a common one, then the orientation.
+pub fn page_size_text(w_pt: f32, h_pt: f32) -> String {
+    let (wi, hi) = (w_pt / 72.0, h_pt / 72.0);
+    let round = |v: f32| ((v * 100.0).round() / 100.0).to_string();
+    let orientation = if w_pt > h_pt { "Landscape" } else { "Portrait" };
+    // Paper sizes in points, short side first, matched within a point.
+    const PAPERS: [(&str, f32, f32); 5] = [("Letter", 612.0, 792.0), ("Legal", 612.0, 1008.0), ("Tabloid", 792.0, 1224.0), ("A4", 595.28, 841.89), ("A3", 841.89, 1190.55)];
+    let (short, long) = (w_pt.min(h_pt), w_pt.max(h_pt));
+    let name = PAPERS.iter().find(|p| (p.1 - short).abs() < 1.0 && (p.2 - long).abs() < 1.0).map(|p| p.0);
+    match name {
+        Some(n) => format!("{} × {} in ({n}, {orientation})", round(wi), round(hi)),
+        None => format!("{} × {} in ({orientation})", round(wi), round(hi)),
+    }
+}
+
 /// The entries of pdf.js's Tools menu that Eagle keeps and PDFKit allows.
 fn tools_menu(o: &mut Open, ui: &mut Ui) {
     ui.set_min_width(220.0);
@@ -1834,6 +1975,11 @@ fn tools_menu(o: &mut Open, ui: &mut Ui) {
             o.set_modes(o.scroll, spread);
             ui.close();
         }
+    }
+    ui.separator();
+    if row(ui, "Document Properties…", false, "") {
+        o.properties = true;
+        ui.close();
     }
 }
 
@@ -2185,6 +2331,15 @@ mod tests {
         let r = falcon_pdf::Rect { x: 10.0, y: 20.0, w: 30.0, h: 5.0 };
         assert_eq!(turn_rect(&r, size, 1), falcon_pdf::Rect { x: 175.0, y: 10.0, w: 5.0, h: 30.0 });
         assert_eq!(turn_rect(&r, size, 0), r);
+    }
+
+    #[test]
+    fn document_properties_text() {
+        assert_eq!(page_size_text(612.0, 792.0), "8.5 × 11 in (Letter, Portrait)");
+        assert_eq!(page_size_text(842.0, 595.0), "11.69 × 8.26 in (A4, Landscape)");
+        assert_eq!(page_size_text(300.0, 300.0), "4.17 × 4.17 in (Portrait)");
+        assert!(is_linearized(&b"%PDF-1.5\n%\xe2\xe3\n1 0 obj\n<< /Linearized 1 /L 1234 >>"[..]));
+        assert!(!is_linearized(&b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>"[..]));
     }
 
     #[test]

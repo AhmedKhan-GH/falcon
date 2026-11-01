@@ -392,6 +392,16 @@ pub fn day_text(t: u64) -> String {
     }
 }
 
+/// A local date and time for `ms` since 1970 ("2024-03-05 14:07"); empty
+/// for a time before 1970 or out of range.
+pub fn date_time_text(ms: i64) -> String {
+    use chrono::TimeZone;
+    match Some(ms).filter(|t| *t >= 0).and_then(|t| chrono::Local.timestamp_millis_opt(t).single()) {
+        Some(d) => d.format("%Y-%m-%d %H:%M").to_string(),
+        None => String::new(),
+    }
+}
+
 /// The calendar range of a date rule from the two day fields: both must be
 /// valid days, swapped if typed the wrong way round.
 pub fn day_range(from: &str, to: &str) -> Option<(u64, u64)> {

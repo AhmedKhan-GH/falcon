@@ -22,14 +22,19 @@
 use std::path::Path;
 
 use objc2::AnyThread;
+use objc2::runtime::AnyObject;
 use objc2::rc::{Retained, autoreleasepool};
 use objc2_core_foundation::{CGPoint, CGRect, CGSize};
 use objc2_core_graphics::{CGBitmapContextCreate, CGColorSpace, CGContext, CGImageAlphaInfo, CGImageByteOrderInfo, CGInterpolationQuality};
-use objc2_foundation::{NSPoint, NSString, NSStringCompareOptions, NSURL};
-use objc2_pdf_kit::{PDFActionGoTo, PDFActionURL, PDFDestination, PDFDisplayBox, PDFDocument, PDFDocumentTitleAttribute, PDFOutline, PDFPage, PDFSelection};
+use objc2_foundation::{NSArray, NSDate, NSPoint, NSString, NSStringCompareOptions, NSURL};
+use objc2_pdf_kit::{
+    PDFActionGoTo, PDFActionURL, PDFDestination, PDFDisplayBox, PDFDocument, PDFDocumentAttribute, PDFDocumentAuthorAttribute,
+    PDFDocumentCreationDateAttribute, PDFDocumentCreatorAttribute, PDFDocumentKeywordsAttribute, PDFDocumentModificationDateAttribute,
+    PDFDocumentProducerAttribute, PDFDocumentSubjectAttribute, PDFDocumentTitleAttribute, PDFOutline, PDFPage, PDFSelection,
+};
 
 use crate::geom::{self, PageGeom};
-use crate::{Bitmap, Error, Hit, Link, LinkTarget, OutlineEntry, Rect, Result, SearchOptions, Selection, render_size};
+use crate::{Bitmap, Error, Hit, Info, Link, LinkTarget, NEEDS_PASSWORD, OutlineEntry, Rect, Result, SearchOptions, Selection, WRONG_PASSWORD, render_size};
 
 /// Search stops collecting after this many matches.
 const MAX_HITS: usize = 10_000;
@@ -46,9 +51,17 @@ pub struct Document {
 
 impl Document {
     /// Opens a PDF. Fails cleanly for a missing file, a file that is not a
-    /// PDF, and a password-protected PDF. Reads the file synchronously, so
-    /// callers that must not block (the UI) call it on a worker thread.
+    /// PDF, and a password-protected PDF (with [`NEEDS_PASSWORD`]). Reads
+    /// the file synchronously, so callers that must not block (the UI) call
+    /// it on a worker thread.
     pub fn open(path: &Path) -> Result<Document> {
+        Self::open_with_password(path, None)
+    }
+
+    /// Opens a PDF, unlocking it with `password` if it has one. A locked
+    /// PDF fails with [`NEEDS_PASSWORD`] without a password and with
+    /// [`WRONG_PASSWORD`] when the password doesn't unlock it.
+    pub fn open_with_password(path: &Path, password: Option<&str>) -> Result<Document> {
         if !path.is_file() {
             return Err(err(format!("no file at {}", path.display())));
         }
@@ -58,10 +71,15 @@ impl Document {
             // SAFETY: owned; one thread (the result stays in this `Document`).
             let doc = unsafe { PDFDocument::initWithURL(PDFDocument::alloc(), &url) }.ok_or_else(|| err("not a PDF this system can read"))?;
             // SAFETY: owned; one thread.
-            let (locked, count) = unsafe { (doc.isLocked(), doc.pageCount()) };
-            if locked {
-                return Err(err("the PDF is password-protected"));
+            if unsafe { doc.isLocked() } {
+                let Some(pw) = password else { return Err(err(NEEDS_PASSWORD)) };
+                // SAFETY: owned; one thread.
+                if !unsafe { doc.unlockWithPassword(&NSString::from_str(pw)) } {
+                    return Err(err(WRONG_PASSWORD));
+                }
             }
+            // SAFETY: owned; one thread.
+            let count = unsafe { doc.pageCount() };
             Ok(Document { doc, count })
         })
     }
@@ -81,6 +99,33 @@ impl Document {
             let s = value.downcast::<NSString>().ok()?.to_string();
             let s = s.trim().to_string();
             (!s.is_empty()).then_some(s)
+        })
+    }
+
+    /// The document's metadata (title, author, dates, version and the like).
+    pub fn info(&self) -> Info {
+        autoreleasepool(|_| {
+            // SAFETY: owned; one thread.
+            let attrs = unsafe { self.doc.documentAttributes() };
+            let get = |key: &PDFDocumentAttribute| attrs.as_ref().and_then(|a| a.objectForKey(key));
+            // SAFETY: the attribute keys are framework constants set at load time.
+            let text = |key: &PDFDocumentAttribute| get(key).and_then(|v| text_of(&v));
+            let date = |key: &PDFDocumentAttribute| get(key).and_then(|v| v.downcast::<NSDate>().ok()).map(|d| d.timeIntervalSince1970());
+            unsafe {
+                Info {
+                    title: text(PDFDocumentTitleAttribute),
+                    author: text(PDFDocumentAuthorAttribute),
+                    subject: text(PDFDocumentSubjectAttribute),
+                    keywords: text(PDFDocumentKeywordsAttribute),
+                    creator: text(PDFDocumentCreatorAttribute),
+                    producer: text(PDFDocumentProducerAttribute),
+                    created: date(PDFDocumentCreationDateAttribute),
+                    modified: date(PDFDocumentModificationDateAttribute),
+                    version: (self.doc.majorVersion() as i64, self.doc.minorVersion() as i64),
+                    pages: self.count,
+                    encrypted: self.doc.isEncrypted(),
+                }
+            }
         })
     }
 
@@ -286,6 +331,19 @@ impl Document {
     }
 }
 
+/// A metadata value as text: a string, or a list of strings (keywords)
+/// joined by commas; blank values count as none.
+fn text_of(v: &AnyObject) -> Option<String> {
+    let s = if let Some(s) = v.downcast_ref::<NSString>() {
+        s.to_string()
+    } else {
+        let list = v.downcast_ref::<NSArray>()?;
+        list.iter().filter_map(|x| x.downcast_ref::<NSString>().map(|s| s.to_string())).collect::<Vec<_>>().join(", ")
+    };
+    let s = s.trim().to_string();
+    (!s.is_empty()).then_some(s)
+}
+
 /// One display rectangle per line of `sel` on `page`.
 fn line_rects(sel: &PDFSelection, page: &PDFPage) -> Vec<Rect> {
     let g = Document::geom(page);
@@ -300,4 +358,71 @@ fn line_rects(sel: &PDFSelection, page: &PDFPage) -> Vec<Rect> {
         }
     }
     rects
+}
+
+#[cfg(test)]
+mod tests {
+    use objc2_foundation::NSDictionary;
+    use objc2_pdf_kit::{PDFDocumentOwnerPasswordOption, PDFDocumentUserPasswordOption};
+
+    use super::*;
+
+    /// A one-page PDF with a title, written by hand.
+    fn plain_pdf(path: &Path) {
+        let objs = [
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>",
+            "<< /Title (Locked Book) /Author (Falcon) /Keywords (one two) >>",
+        ];
+        let mut out = b"%PDF-1.4\n".to_vec();
+        let mut offsets = Vec::new();
+        for (k, body) in objs.iter().enumerate() {
+            offsets.push(out.len());
+            out.extend_from_slice(format!("{} 0 obj\n{body}\nendobj\n", k + 1).as_bytes());
+        }
+        let xref = out.len();
+        out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
+        for o in offsets {
+            out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+        }
+        out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R /Info 4 0 R >>\nstartxref\n{xref}\n%%EOF\n", objs.len() + 1).as_bytes());
+        std::fs::write(path, out).unwrap();
+    }
+
+    #[test]
+    fn passwords_unlock_and_metadata_reads() {
+        let dir = tempfile::tempdir().unwrap();
+        let (plain, locked) = (dir.path().join("plain.pdf"), dir.path().join("locked.pdf"));
+        plain_pdf(&plain);
+        let info = Document::open(&plain).unwrap().info();
+        assert_eq!(info.title.as_deref(), Some("Locked Book"));
+        assert_eq!(info.author.as_deref(), Some("Falcon"));
+        assert_eq!((info.pages, info.encrypted), (1, false));
+        assert!(info.version.0 >= 1);
+        // PDFKit writes an encrypted copy with a user password.
+        autoreleasepool(|_| {
+            let url = NSURL::fileURLWithPath(&NSString::from_str(plain.to_str().unwrap()));
+            // SAFETY: owned, plain; this test's thread only; the option keys
+            // are framework constants.
+            unsafe {
+                let doc = PDFDocument::initWithURL(PDFDocument::alloc(), &url).unwrap();
+                let (user, owner) = (NSString::from_str("secret"), NSString::from_str("owner"));
+                let keys = [PDFDocumentUserPasswordOption, PDFDocumentOwnerPasswordOption];
+                let options = NSDictionary::from_slices(&keys, &[user.as_ref(), owner.as_ref()]);
+                let out = NSURL::fileURLWithPath(&NSString::from_str(locked.to_str().unwrap()));
+                assert!(doc.writeToURL_withOptions(&out, Some(&options)));
+            }
+        });
+        let e = Document::open(&locked).err().unwrap();
+        assert_eq!(e.0, NEEDS_PASSWORD);
+        assert!(e.needs_password());
+        let e = Document::open_with_password(&locked, Some("nope")).err().unwrap();
+        assert_eq!(e.0, WRONG_PASSWORD);
+        assert!(e.needs_password());
+        let doc = Document::open_with_password(&locked, Some("secret")).unwrap();
+        assert_eq!(doc.page_count(), 1);
+        assert!(doc.info().encrypted);
+        assert!(!Error("no file".into()).needs_password());
+    }
 }
