@@ -200,7 +200,11 @@ fn find_smart<'a>(list: &'a [SmartFolder], id: &str) -> Option<&'a SmartFolder> 
 }
 
 fn add_steps(plan: &mut Plan, root: &Path, items: &[&Item], dir: &Path, existing: &HashSet<String>, how: Collision) {
-    let names = name_files(&items.iter().map(|i| file_name(i)).collect::<Vec<_>>(), existing, how);
+    add_named_steps(plan, root, items, items.iter().map(|i| file_name(i)).collect(), dir, existing, how);
+}
+
+fn add_named_steps(plan: &mut Plan, root: &Path, items: &[&Item], names: Vec<String>, dir: &Path, existing: &HashSet<String>, how: Collision) {
+    let names = name_files(&names, existing, how);
     for (item, name) in items.iter().zip(names) {
         plan.steps.push(Step { id: item.id.clone(), from: item.original_path(root), to: dir.join(name) });
     }
@@ -240,6 +244,142 @@ pub fn run(plan: &Plan, mut on_step: impl FnMut(&Step, bool)) -> Result<Vec<Path
         on_step(step, ok);
     }
     Ok(written)
+}
+
+// ---------------------------------------------------------------------------
+// Export in a chosen format and size
+
+/// An image format to export to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Format {
+    Jpeg,
+    Png,
+    Webp,
+}
+
+impl Format {
+    pub const ALL: [Format; 3] = [Format::Jpeg, Format::Png, Format::Webp];
+
+    pub fn ext(self) -> &'static str {
+        match self {
+            Format::Jpeg => "jpg",
+            Format::Png => "png",
+            Format::Webp => "webp",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Format::Jpeg => "JPG",
+            Format::Png => "PNG",
+            Format::Webp => "WebP",
+        }
+    }
+
+    /// Whether the format takes a quality setting.
+    pub fn lossy(self) -> bool {
+        self != Format::Png
+    }
+}
+
+/// How to convert each image.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Convert {
+    pub format: Format,
+    /// 1 to 100, for JPG and WebP. WebP at 100 is lossless.
+    pub quality: u8,
+    /// Scale the image down so its longer side is at most this; never up.
+    pub longest: Option<u32>,
+}
+
+/// Whether an item's original can be converted: raster images falcon
+/// decodes, and SVG.
+pub fn convertible(item: &Item) -> bool {
+    matches!(item.ext.to_lowercase().as_str(), "png" | "jpg" | "jpeg" | "jfif" | "webp" | "gif" | "bmp" | "tif" | "tiff" | "ico" | "svg")
+}
+
+/// Plans exporting `ids` converted to `format` into `dest`: each file is
+/// named `<name>.<format ext>`, clashes handled as in [`plan_items`].
+/// Items that can't be converted are left out; see [`convertible`].
+pub fn plan_converted(lib: &Library, ids: &[String], dest: &Path, format: Format, how: Collision) -> Plan {
+    let mut seen = HashSet::new();
+    let items: Vec<&Item> = ids.iter().filter(|id| seen.insert(id.as_str())).filter_map(|id| lib.item(id)).filter(|i| convertible(i)).collect();
+    let names = items.iter().map(|i| format!("{}.{}", i.name.replace(['/', '\0'], " "), format.ext())).collect();
+    let mut plan = Plan { dirs: vec![dest.to_path_buf()], steps: Vec::new(), top: dest.to_path_buf(), overwrite: how == Collision::Replace };
+    add_named_steps(&mut plan, lib.root(), &items, names, dest, &listing(dest), how);
+    plan
+}
+
+/// Decodes an original (SVG rendered at its natural size), scales it down
+/// to `longest` if needed, and encodes it as `convert` asks.
+pub fn convert_bytes(from: &Path, convert: &Convert) -> std::result::Result<Vec<u8>, String> {
+    use image::{DynamicImage, ImageEncoder};
+    let is_svg = from.extension().is_some_and(|e| e.eq_ignore_ascii_case("svg"));
+    let mut img = if is_svg {
+        crate::thumbnail::render_svg(&fs::read(from).map_err(|e| e.to_string())?, None).map_err(|e| e.0)?
+    } else {
+        crate::thumbnail::decode(from).map_err(|e| e.0)?
+    };
+    if let Some(max) = convert.longest
+        && img.width().max(img.height()) > max
+    {
+        img = img.resize(max, max, image::imageops::FilterType::Lanczos3);
+    }
+    let quality = convert.quality.clamp(1, 100);
+    let mut out = Vec::new();
+    match convert.format {
+        Format::Jpeg => {
+            // JPEG has no alpha: transparent parts go on white.
+            let rgba = img.to_rgba8();
+            let rgb = image::RgbImage::from_fn(rgba.width(), rgba.height(), |x, y| {
+                let [r, g, b, a] = rgba.get_pixel(x, y).0;
+                let mix = |c: u8| ((u16::from(c) * u16::from(a) + 255 * (255 - u16::from(a))) / 255) as u8;
+                image::Rgb([mix(r), mix(g), mix(b)])
+            });
+            image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, quality).encode_image(&rgb).map_err(|e| e.to_string())?;
+        }
+        Format::Png => {
+            let img = if img.color().has_alpha() { DynamicImage::ImageRgba8(img.to_rgba8()) } else { DynamicImage::ImageRgb8(img.to_rgb8()) };
+            image::codecs::png::PngEncoder::new(&mut out).write_image(img.as_bytes(), img.width(), img.height(), img.color().into()).map_err(|e| e.to_string())?;
+        }
+        Format::Webp => {
+            let rgba = img.to_rgba8();
+            let enc = webp::Encoder::from_rgba(rgba.as_raw(), rgba.width(), rgba.height());
+            let mem = if quality >= 100 { enc.encode_lossless() } else { enc.encode(f32::from(quality)) };
+            out = mem.to_vec();
+        }
+    }
+    Ok(out)
+}
+
+/// Runs a [`plan_converted`] plan: each step's original is converted and
+/// written beside its destination, then renamed into place.
+pub fn run_converted(plan: &Plan, convert: &Convert, mut on_step: impl FnMut(&Step, bool)) -> Result<Vec<PathBuf>> {
+    for d in &plan.dirs {
+        fs::create_dir_all(d).map_err(|e| Error::io(d, e))?;
+    }
+    let mut written = Vec::new();
+    for step in &plan.steps {
+        let ok = convert_bytes(&step.from, convert).ok().is_some_and(|bytes| write_new(&step.to, &bytes, plan.overwrite).is_ok());
+        if ok {
+            written.push(step.to.clone());
+        }
+        on_step(step, ok);
+    }
+    Ok(written)
+}
+
+/// Writes `bytes` to `to` through a temporary file beside it.
+fn write_new(to: &Path, bytes: &[u8], overwrite: bool) -> Result<()> {
+    let dir = to.parent().unwrap_or(Path::new("."));
+    let mut tmp = tempfile::Builder::new().prefix(".falcon-export").tempfile_in(dir).map_err(|e| Error::io(dir, e))?;
+    std::io::Write::write_all(&mut tmp, bytes).map_err(|e| Error::io(to, e))?;
+    if overwrite {
+        tmp.persist(to).map_err(|e| Error::io(to, e.error))?;
+    } else {
+        tmp.persist_noclobber(to).map_err(|e| Error::io(to, e.error))?;
+    }
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -633,6 +773,56 @@ mod tests {
         fs::remove_file(&thumb).unwrap();
         assert!(data_url(&lib, other).is_none());
         assert!(thumbnail_image(&lib, other).is_none());
+    }
+
+    #[test]
+    fn images_convert_to_each_format_and_size() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("wide.png");
+        image::RgbaImage::from_fn(40, 20, |x, _| image::Rgba([200, 10, 10, if x < 20 { 0 } else { 255 }])).save(&src).unwrap();
+        for format in Format::ALL {
+            let convert = Convert { format, quality: 80, longest: Some(10) };
+            let bytes = convert_bytes(&src, &convert).unwrap();
+            let want = match format {
+                Format::Jpeg => image::ImageFormat::Jpeg,
+                Format::Png => image::ImageFormat::Png,
+                Format::Webp => image::ImageFormat::WebP,
+            };
+            assert_eq!(image::guess_format(&bytes).unwrap(), want);
+            let img = image::load_from_memory(&bytes).unwrap();
+            assert_eq!((img.width(), img.height()), (10, 5), "{format:?}");
+            if format == Format::Jpeg {
+                // The transparent half turns white, not black.
+                let p = img.to_rgb8().get_pixel(0, 2).0;
+                assert!(p.iter().all(|c| *c > 200), "{p:?}");
+            }
+        }
+        // Never enlarged; lossless WebP at 100.
+        let bytes = convert_bytes(&src, &Convert { format: Format::Webp, quality: 100, longest: Some(400) }).unwrap();
+        let img = image::load_from_memory(&bytes).unwrap();
+        assert_eq!((img.width(), img.height()), (40, 20));
+        assert_eq!(img.to_rgba8().get_pixel(30, 3).0, [200, 10, 10, 255]);
+        assert!(convert_bytes(&dir.path().join("missing.png"), &Convert { format: Format::Png, quality: 90, longest: None }).is_err());
+    }
+
+    #[test]
+    fn converted_exports_are_renamed_and_skip_other_kinds() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut lib, ids) = library(dir.path());
+        let mut other = lib.item(&ids[1]).unwrap().clone();
+        other.ext = "mp3".into();
+        lib.update_item(other).unwrap();
+        let out = dir.path().join("out");
+        let plan = plan_converted(&lib, &ids, &out, Format::Jpeg, Collision::KeepBoth);
+        let to: Vec<_> = plan.steps.iter().map(|s| s.to.file_name().unwrap().to_string_lossy().into_owned()).collect();
+        assert_eq!(to, ["pic-1.jpg", "pic-2.jpg"]);
+        let convert = Convert { format: Format::Jpeg, quality: 90, longest: None };
+        let written = run_converted(&plan, &convert, |_, _| {}).unwrap();
+        assert_eq!(written.len(), 2);
+        assert_eq!(image::guess_format(&fs::read(&written[0]).unwrap()).unwrap(), image::ImageFormat::Jpeg);
+        // pic.jpg itself is still free.
+        let again = plan_converted(&lib, &ids[..1], &out, Format::Jpeg, Collision::KeepBoth);
+        assert_eq!(again.steps[0].to, out.join("pic.jpg"));
     }
 
     #[test]

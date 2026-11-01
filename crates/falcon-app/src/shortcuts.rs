@@ -55,6 +55,7 @@ pub enum Command {
     ExportComputer,
     ExportPack,
     ExportCsv,
+    ExportFormat,
     /// Edit ▸ Copy variants (`App::export_keys`).
     CopyPath,
     CopyFolderPath,
@@ -176,6 +177,7 @@ pub const TABLE: &[Spec] = &[
     // Export and copy-out (`App::export_keys`).
     Spec { cmd: Command::ExportComputer, id: "file.export.item.computer", group: "Export", label: "Export to Computer", default: k(CMD, Key::E), aliases: &[] },
     Spec { cmd: Command::ExportPack, id: "file.export.item.eaglepack", group: "Export", label: "Export as .eaglepack", default: k(CMD_SHIFT, Key::E), aliases: &[] },
+    Spec { cmd: Command::ExportFormat, id: "file.export.item.as", group: "Export", label: "Export in a chosen format and size", default: k(SHIFT, Key::E), aliases: &[] },
     // Unbound by default, as in Eagle.
     Spec { cmd: Command::ExportCsv, id: "file.export.csv", group: "Export", label: "Export to CSV", default: None, aliases: &[] },
     Spec { cmd: Command::CopyPath, id: "edit.copy.path", group: "Copy", label: "Copy file paths", default: k(CMD_ALT, Key::C), aliases: &[] },

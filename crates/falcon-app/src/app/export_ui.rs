@@ -4,7 +4,7 @@
 //! in `falcon_library::export`; this module asks, runs and reports.
 
 use super::*;
-use falcon_library::export::{self, Collision, Plan};
+use falcon_library::export::{self, Collision, Convert, Format, Plan};
 use falcon_library::pack::{self, PackSource};
 
 /// An export asked for from a menu or a key, handled once the frame has
@@ -23,6 +23,8 @@ pub(super) enum Request {
     Csv(Vec<String>),
     /// One of the Copy variants, for these items.
     Copy(CopyKind, Vec<String>),
+    /// Export in a chosen format and size: open the dialog for these items.
+    Format(Vec<String>),
 }
 
 /// What the Copy variants put on the clipboard (Eagle's Edit ▸ Copy …).
@@ -59,6 +61,27 @@ struct Clash {
     detail: String,
     /// Show the copied files in Finder, not the top folder.
     files: bool,
+    /// Convert the images instead of copying them.
+    convert: Option<Convert>,
+}
+
+/// Longest-side presets of the Export in Format dialog.
+const SIZES: [u32; 6] = [4096, 2048, 1920, 1280, 1024, 512];
+
+/// The Export in Format dialog's choices. Kept between uses.
+#[derive(Clone)]
+struct FormatDraft {
+    format: Format,
+    quality: u8,
+    /// `None`: the original size.
+    longest: Option<u32>,
+    custom: bool,
+}
+
+impl Default for FormatDraft {
+    fn default() -> Self {
+        FormatDraft { format: Format::Jpeg, quality: 90, longest: None, custom: false }
+    }
 }
 
 /// A background export's counters.
@@ -81,6 +104,9 @@ pub(super) struct ExportState {
     pub request: Option<Request>,
     clash: Option<Clash>,
     job: Arc<Mutex<Job>>,
+    /// The items the Export in Format dialog is open for.
+    format_for: Option<Vec<String>>,
+    format: FormatDraft,
 }
 
 fn plural(n: usize, one: &str) -> String {
@@ -112,6 +138,102 @@ impl App {
             self.handle_export(lib, req);
         }
         self.clash_dialog(ctx);
+        self.format_dialog(ctx, lib);
+    }
+
+    /// Export in Format: format, quality and longest side, then a folder.
+    fn format_dialog(&mut self, ctx: &egui::Context, lib: &Library) {
+        let Some(ids) = self.ws.export.format_for.clone() else { return };
+        let n = ids.iter().filter_map(|id| lib.item(id)).filter(|i| export::convertible(i)).count();
+        let mut d = self.ws.export.format.clone();
+        let mut go = None;
+        let modal = egui::Modal::new(egui::Id::unique("export-format")).show(ctx, |ui| {
+            ui.set_width(340.0);
+            ui.label(RichText::new("Export in Format").size(15.0));
+            ui.add_space(4.0);
+            let skipped = ids.len() - n;
+            let mut note = format!("{} will be converted.", plural(n, "image"));
+            if skipped > 0 {
+                note.push_str(&format!(" {} that {} not images will be skipped.", plural(skipped, "item"), if skipped == 1 { "is" } else { "are" }));
+            }
+            ui.label(RichText::new(note).color(t::p().text_muted));
+            ui.add_space(8.0);
+            egui::Grid::new("export-format-grid").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
+                ui.label("Format");
+                ui.horizontal(|ui| {
+                    for f in Format::ALL {
+                        ui.selectable_value(&mut d.format, f, f.label());
+                    }
+                });
+                ui.end_row();
+                ui.label("Quality");
+                ui.add_enabled(d.format.lossy(), egui::Slider::new(&mut d.quality, 1..=100));
+                ui.end_row();
+                ui.label("Longest side");
+                ui.horizontal(|ui| {
+                    let text = match (d.custom, d.longest) {
+                        (true, _) => "Custom".to_string(),
+                        (false, Some(px)) => format!("{px} px"),
+                        (false, None) => "Original size".to_string(),
+                    };
+                    egui::ComboBox::from_id_salt("export-format-size").selected_text(text).show_ui(ui, |ui| {
+                        if ui.selectable_label(!d.custom && d.longest.is_none(), "Original size").clicked() {
+                            (d.custom, d.longest) = (false, None);
+                        }
+                        for px in SIZES {
+                            if ui.selectable_label(!d.custom && d.longest == Some(px), format!("{px} px")).clicked() {
+                                (d.custom, d.longest) = (false, Some(px));
+                            }
+                        }
+                        if ui.selectable_label(d.custom, "Custom").clicked() {
+                            d.custom = true;
+                            d.longest.get_or_insert(1600);
+                        }
+                    });
+                    if d.custom {
+                        let mut px = d.longest.unwrap_or(1600);
+                        ui.add(egui::DragValue::new(&mut px).range(16..=16384).suffix(" px"));
+                        d.longest = Some(px);
+                    }
+                });
+                ui.end_row();
+            });
+            ui.label(RichText::new("Images are only made smaller, never larger.").color(t::p().text_muted).size(12.0));
+            ui.add_space(10.0);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.add_enabled(n > 0, egui::Button::new("Export…")).clicked() {
+                    go = Some(true);
+                }
+                if ui.button("Cancel").clicked() {
+                    go = Some(false);
+                }
+            });
+        });
+        self.ws.export.format = d.clone();
+        if modal.should_close() && go.is_none() {
+            go = Some(false);
+        }
+        let Some(go) = go else { return };
+        self.ws.export.format_for = None;
+        if !go {
+            return;
+        }
+        let convert = Convert { format: d.format, quality: d.quality, longest: d.longest };
+        let Some(dest) = pick_folder() else { return };
+        let replace = export::plan_converted(lib, &ids, &dest, d.format, Collision::Replace);
+        let clashes = replace.clashes();
+        if clashes == 0 {
+            self.start_copy(replace, true, Some(convert));
+            return;
+        }
+        let keep = export::plan_converted(lib, &ids, &dest, d.format, Collision::KeepBoth);
+        let detail = format!(
+            "{} in “{}” {} the same name as an exported image.",
+            plural(clashes, "file"),
+            dest.display(),
+            if clashes == 1 { "has" } else { "have" }
+        );
+        self.ws.export.clash = Some(Clash { replace, keep, title: "Some files already exist".into(), detail, files: true, convert: Some(convert) });
     }
 
     fn handle_export(&mut self, lib: &Library, req: Request) {
@@ -128,7 +250,7 @@ impl App {
                 let replace = export::plan_items(lib, &ids, &dest, Collision::Replace);
                 let clashes = replace.clashes();
                 if clashes == 0 {
-                    self.start_copy(replace, true);
+                    self.start_copy(replace, true, None);
                     return;
                 }
                 let keep = export::plan_items(lib, &ids, &dest, Collision::KeepBoth);
@@ -138,7 +260,7 @@ impl App {
                     dest.display(),
                     if clashes == 1 { "has" } else { "have" }
                 );
-                self.ws.export.clash = Some(Clash { replace, keep, title: "Some files already exist".into(), detail, files: true });
+                self.ws.export.clash = Some(Clash { replace, keep, title: "Some files already exist".into(), detail, files: true, convert: None });
             }
             Request::Tree(target) => {
                 let hidden = crate::organize::hidden_folders(&lib.metadata.folders, &self.ws.org.unlocked);
@@ -150,7 +272,7 @@ impl App {
                 let Some(replace) = plan(&dest, Collision::Replace) else { return };
                 // Eagle asks when the folder's directory is already there.
                 if !replace.top.exists() {
-                    self.start_copy(replace, false);
+                    self.start_copy(replace, false, None);
                     return;
                 }
                 let Some(keep) = plan(&dest, Collision::KeepBoth) else { return };
@@ -159,7 +281,7 @@ impl App {
                     "“{}” already has a folder named “{name}”. Replace overwrites files of the same names inside it; Keep Both numbers the new copies.",
                     dest.display()
                 );
-                self.ws.export.clash = Some(Clash { replace, keep, title: "The folder already exists".into(), detail, files: false });
+                self.ws.export.clash = Some(Clash { replace, keep, title: "The folder already exists".into(), detail, files: false, convert: None });
             }
             Request::Csv(ids) => {
                 if ids.is_empty() {
@@ -176,6 +298,13 @@ impl App {
                 }
             }
             Request::Copy(kind, ids) => self.copy_variant(lib, kind, &ids),
+            Request::Format(ids) => {
+                if ids.iter().filter_map(|id| lib.item(id)).any(export::convertible) {
+                    self.ws.export.format_for = Some(ids);
+                } else {
+                    self.flash("Only images can be exported in another format");
+                }
+            }
             Request::PackItems(ids) => {
                 if !ids.is_empty() {
                     self.start_pack(lib, PackSource::Items(&ids), "Untitled");
@@ -330,8 +459,8 @@ impl App {
         let Some(choice) = choice else { return };
         let Some(c) = self.ws.export.clash.take() else { return };
         match choice {
-            Some(Collision::Replace) => self.start_copy(c.replace, c.files),
-            Some(Collision::KeepBoth) => self.start_copy(c.keep, c.files),
+            Some(Collision::Replace) => self.start_copy(c.replace, c.files, c.convert),
+            Some(Collision::KeepBoth) => self.start_copy(c.keep, c.files, c.convert),
             None => {}
         }
     }
@@ -340,9 +469,10 @@ impl App {
         self.ws.export.job.lock().unwrap_or_else(|p| p.into_inner()).running
     }
 
-    /// Runs a copy plan on a background thread. When it ends, Finder shows
-    /// the copied files (`files`) or the plan's top folder.
-    fn start_copy(&mut self, plan: Plan, files: bool) {
+    /// Runs a copy plan (or, with `convert`, a conversion) on a background
+    /// thread. When it ends, Finder shows the copied files (`files`) or the
+    /// plan's top folder.
+    fn start_copy(&mut self, plan: Plan, files: bool, convert: Option<Convert>) {
         if plan.steps.is_empty() {
             self.flash("Nothing to export");
             return;
@@ -351,14 +481,18 @@ impl App {
         *job.lock().unwrap_or_else(|p| p.into_inner()) = Job { verb: "Exporting", total: plan.steps.len(), running: true, ..Default::default() };
         let ctx = self.ctx.clone();
         std::thread::spawn(move || {
-            let result = export::run(&plan, |step, ok| {
+            let on_step = |step: &export::Step, ok: bool| {
                 let mut j = job.lock().unwrap_or_else(|p| p.into_inner());
                 j.done += 1;
                 j.failed += usize::from(!ok);
                 j.current = step.to.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
                 drop(j);
                 ctx.request_repaint();
-            });
+            };
+            let result = match &convert {
+                Some(c) => export::run_converted(&plan, c, on_step),
+                None => export::run(&plan, on_step),
+            };
             let mut j = job.lock().unwrap_or_else(|p| p.into_inner());
             j.finished = Some(match result {
                 Ok(written) => {
@@ -412,6 +546,9 @@ impl App {
         use crate::shortcuts::Command as C;
         if on(C::ExportComputer) && !self.ws.selected.is_empty() {
             self.ws.export.request = Some(Request::Items(self.ws.selected.clone()));
+        }
+        if on(C::ExportFormat) && !self.ws.selected.is_empty() {
+            self.ws.export.request = Some(Request::Format(self.ws.selected.clone()));
         }
         if on(C::ExportPack) && !self.ws.selected.is_empty() {
             self.ws.export.request = Some(Request::PackItems(self.ws.selected.clone()));
@@ -482,6 +619,9 @@ impl App {
             }
             if ui.button("Export as .eaglepack…").clicked() {
                 self.ws.export.request = Some(Request::PackItems(targets.to_vec()));
+            }
+            if ui.button("Export in Format…").clicked() {
+                self.ws.export.request = Some(Request::Format(targets.to_vec()));
             }
             if ui.button("Export to CSV…").clicked() {
                 self.ws.export.request = Some(Request::Csv(targets.to_vec()));
