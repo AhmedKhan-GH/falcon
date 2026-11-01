@@ -31,9 +31,10 @@ impl Layout {
         }
     }
 
-    /// Whether cards show the name and size under the image.
+    /// Whether cards show the name and info lines under the image. Every
+    /// card layout does, as Eagle's do; list rows show them as columns.
     pub fn has_caption(self) -> bool {
-        matches!(self, Layout::Waterfall | Layout::Grid)
+        !matches!(self, Layout::List)
     }
 }
 
@@ -43,8 +44,11 @@ pub type Place = [f32; 4];
 
 /// Places items with the given aspect ratios (width / height) in `width`.
 /// `size` is the zoom: column width for waterfall and grid, row height for
-/// justified. Returns the image boxes, the content height and the number of
-/// columns (for keyboard navigation).
+/// justified. `caption` is the band under each image (0 when the Display
+/// switches hide both lines); rows with a caption are `row_gap` apart,
+/// justified rows without one only `gap`, as Eagle packs them. Returns the
+/// image boxes, the content height and the number of columns (for keyboard
+/// navigation).
 pub fn place(layout: Layout, aspects: &[f32], width: f32, size: f32, gap: f32, caption: f32, row_gap: f32) -> (Vec<Place>, f32, usize) {
     let aspect = |a: f32| if a.is_finite() && a > 0.0 { a } else { 1.0 };
     match layout {
@@ -88,7 +92,9 @@ pub fn place(layout: Layout, aspects: &[f32], width: f32, size: f32, gap: f32, c
                         out.push([x, y, w, h]);
                         x += w + gap;
                     }
-                    y += h + gap;
+                    // The caption band sits under the row's images, so the
+                    // widths (from the images' shapes) don't change.
+                    y += h + if caption > 0.0 { caption + row_gap } else { gap };
                     rows += 1;
                     start = i + 1;
                     sum = 0.0;
@@ -151,6 +157,31 @@ mod tests {
         let first_row: f32 = places.iter().filter(|p| p[1] == 0.0).map(|p| p[2]).sum();
         assert!((first_row - 400.0).abs() < 0.01);
         assert!(places.iter().all(|p| (p[3] - 100.0).abs() < 0.01));
+    }
+
+    #[test]
+    fn justified_rows_leave_room_for_the_caption() {
+        let aspects = [1.0; 8];
+        let (bare, bare_h, _) = place(Layout::Justified, &aspects, 400.0, 100.0, 0.0, 0.0, 10.0);
+        let (cap, cap_h, _) = place(Layout::Justified, &aspects, 400.0, 100.0, 0.0, 46.0, 10.0);
+        // The same images in the same places across, each row 46 + 10 lower
+        // per row above it.
+        for (n, (b, c)) in bare.iter().zip(&cap).enumerate() {
+            assert_eq!((b[0], b[2], b[3]), (c[0], c[2], c[3]), "card {n}");
+            let row = (n / 4) as f32;
+            assert!((c[1] - (row * (100.0 + 46.0 + 10.0))).abs() < 0.01, "card {n} at {}", c[1]);
+        }
+        assert!((bare_h - 200.0).abs() < 0.01);
+        assert!((cap_h - 2.0 * 156.0).abs() < 0.01);
+        // A caption never overlaps the next row's images.
+        assert!(cap[4][1] >= cap[0][1] + cap[0][3] + 46.0);
+    }
+
+    #[test]
+    fn justified_without_caption_packs_rows_by_the_gap() {
+        let (p, h, _) = place(Layout::Justified, &[1.0; 8], 424.0, 100.0, 8.0, 0.0, 10.0);
+        assert!((p[4][1] - 108.0).abs() < 0.01, "rows are gap apart, not row_gap: {}", p[4][1]);
+        assert!((h - 216.0).abs() < 0.01);
     }
 
     #[test]

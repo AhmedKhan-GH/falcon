@@ -125,7 +125,7 @@ mod manual_drop_tests {
     }
 
     #[test]
-    fn justified_rows_have_no_caption() {
+    fn justified_rows_without_caption() {
         let (p, _, _) = place(Layout::Justified, &[1.5, 1.5, 1.0], 300.0, 100.0, GAP, 0.0, 10.0);
         let d = manual_drop(Layout::Justified, &p, 0.0, GAP, none, p[1][0] + 1.0, p[1][1] + 1.0).unwrap();
         assert_eq!((d.target, d.after), (1, false));
@@ -133,6 +133,15 @@ mod manual_drop_tests {
         let last = p[2];
         let d = manual_drop(Layout::Justified, &p, 0.0, GAP, none, last[0] + last[2] + 3.0, last[1] + 1.0).unwrap();
         assert_eq!((d.target, d.after), (2, true));
+    }
+
+    #[test]
+    fn justified_captions_take_drops() {
+        let (p, _, _) = place(Layout::Justified, &[1.5, 1.5, 1.0], 300.0, 100.0, GAP, CAP, 10.0);
+        let below = p[1][1] + p[1][3] + CAP / 2.0;
+        let d = manual_drop(Layout::Justified, &p, CAP, GAP, none, p[1][0] + 1.0, below).unwrap();
+        assert_eq!((d.target, d.after), (1, false), "the name under a card is part of it");
+        assert_eq!(d.bar[3], p[1][3] + CAP);
     }
 
     #[test]

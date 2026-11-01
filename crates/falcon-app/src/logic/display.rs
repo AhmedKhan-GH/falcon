@@ -44,9 +44,9 @@ impl InfoType {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
 pub struct Display {
-    /// The name line under waterfall and grid cards.
+    /// The name line under waterfall, justified and grid cards.
     pub show_name: bool,
-    /// The info line under waterfall and grid cards, and what it shows.
+    /// The info line under those cards, and what it shows.
     pub show_info: bool,
     pub info: InfoType,
     /// The extension at the end of the name.
@@ -107,17 +107,45 @@ pub enum Info {
     Stars(u8),
 }
 
+/// Documents, 3D models and design files whose Dimensions line shows the
+/// file size, as Eagle's does: their pixel size is only the preview's.
+const SIZE_NOT_DIMENSIONS: [&str; 38] = [
+    "mhtml", "html", "fbx", "obj", "glb", "3ds", "3mf", "dae", "ifc", "ply", "stl", "af", "afpub", "afdesign", "afphoto", "fig", "cdr", "skp", "dwg", "blend", "c4d",
+    "clip", "prd", "exr", "hdr", "skt", "ppt", "pptx", "potx", "docx", "doc", "xls", "xlsx", "eddx", "emmx", "number", "page", "txt",
+];
+
+/// The host of a web address, lower-cased (`https://Www.Example.com:8080/a`
+/// gives `www.example.com`); empty when there is none.
+pub fn url_domain(url: &str) -> String {
+    let rest = url.trim();
+    let rest = rest.find("://").map_or(rest, |i| &rest[i + 3..]);
+    let host = &rest[..rest.find(['/', '?', '#']).unwrap_or(rest.len())];
+    let host = host.rsplit('@').next().unwrap_or(host);
+    let host = if host.starts_with('[') { &host[..host.find(']').map_or(host.len(), |i| i + 1)] } else { &host[..host.find(':').unwrap_or(host.len())] };
+    host.to_lowercase()
+}
+
 /// The info line of `item` for `info`, as Eagle fills it: tags joined (a
 /// dash when none), dates as the inspector prints them, and for
-/// dimensions the length of a video or audio file, or the size of a file
-/// without a preview.
+/// dimensions the length of a video, audio or bookmark item, a font's
+/// weight, a bookmark's domain, or the size of a file without a preview
+/// or whose pixel size is only its preview's (documents, 3D models).
 pub fn caption_info(item: &Item, info: InfoType) -> Info {
     let stamp = |t: u64| format_ms(if t > 0 { t } else { item.modification_time });
     Info::Text(match info {
         InfoType::Dimensions => {
+            let ext = item.ext.to_lowercase();
+            let weight = item.extra.get("fontMetas").and_then(|m| m.get("weight")).and_then(|w| w.as_str()).filter(|w| !w.is_empty());
+            let no_preview = item.extra.get("noPreview").and_then(|v| v.as_bool()) == Some(true);
             if let Some(d) = search::duration(item).filter(|d| *d > 0.0) {
                 format_duration(d)
-            } else if item.width > 0 && item.height > 0 && item.extra.get("noPreview").and_then(|v| v.as_bool()) != Some(true) {
+            } else if let Some(w) = weight.filter(|_| falcon_library::import::FONT_EXTENSIONS.contains(&ext.as_str())) {
+                w.to_string()
+            } else if no_preview || SIZE_NOT_DIMENSIONS.contains(&ext.as_str()) {
+                format_size(item.size)
+            } else if ext == "url" {
+                url_domain(&item.url)
+            } else if item.width > 0 && item.height > 0 {
                 format!("{} × {}", item.width, item.height)
             } else {
                 format_size(item.size)
@@ -444,7 +472,8 @@ mod display_tests {
     fn caption_lines_follow_the_toggles() {
         let mut d = Display::default();
         assert_eq!(caption_height(Layout::Grid, &d), 46.0);
-        assert_eq!(caption_height(Layout::Justified, &d), 0.0, "justified rows have no caption");
+        assert_eq!(caption_height(Layout::Justified, &d), 46.0, "justified rows are captioned too, as in Eagle");
+        assert_eq!(caption_height(Layout::List, &d), 0.0, "list rows show names as a column");
         d.show_info = false;
         assert_eq!(caption_height(Layout::Waterfall, &d), 28.0);
         d.show_name = false;
@@ -452,6 +481,15 @@ mod display_tests {
         let it = item();
         assert_eq!(caption_name(&it, true), "photo.png");
         assert_eq!(caption_name(&it, false), "photo");
+    }
+
+    #[test]
+    fn domains_of_web_addresses() {
+        assert_eq!(url_domain("https://Www.Example.com:8080/a/b"), "www.example.com");
+        assert_eq!(url_domain("http://user:pw@host.io/x"), "host.io");
+        assert_eq!(url_domain("example.org/page#top"), "example.org");
+        assert_eq!(url_domain("http://[::1]:80/"), "[::1]");
+        assert_eq!(url_domain(""), "");
     }
 
     #[test]
@@ -477,6 +515,21 @@ mod display_tests {
         assert_eq!(text(&it, InfoType::Dimensions), "1:23");
         it.extra.remove("duration");
         it.extra.insert("noPreview".into(), true.into());
+        assert_eq!(text(&it, InfoType::Dimensions), "2 KB");
+        it.extra.remove("noPreview");
+        // A font shows its weight, a bookmark its site, a document its size.
+        it.ext = "otf".into();
+        assert_eq!(text(&it, InfoType::Dimensions), "30 × 20", "no fontMetas: the preview's size");
+        it.extra.insert("fontMetas".into(), serde_json::json!({"weight": "Bold Italic"}));
+        assert_eq!(text(&it, InfoType::Dimensions), "Bold Italic");
+        it.extra.remove("fontMetas");
+        it.ext = "url".into();
+        it.url = "https://Dribbble.com/shots/1?x=1".into();
+        assert_eq!(text(&it, InfoType::Dimensions), "dribbble.com");
+        it.extra.insert("duration".into(), 61.0.into());
+        assert_eq!(text(&it, InfoType::Dimensions), "1:01", "a video bookmark shows its length");
+        it.extra.remove("duration");
+        it.ext = "pptx".into();
         assert_eq!(text(&it, InfoType::Dimensions), "2 KB");
     }
 
