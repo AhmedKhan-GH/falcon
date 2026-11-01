@@ -11,6 +11,7 @@ use falcon_video::{Frame, Video};
 
 use super::kind::TEXT_LIMIT;
 use crate::audio::{Audio, Waveforms};
+use crate::locale::{tr, trf};
 use crate::logic;
 use crate::theme::{self as t, font, mono};
 use crate::ui::viewer::audio::{PAUSE, PLAY, PLAYED, WAVE};
@@ -95,7 +96,7 @@ impl VideoPane {
                 ui.painter().image(tex.id(), r, Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)), Color32::WHITE);
             }
             None => {
-                ui.painter().text(stage.center(), Align2::CENTER_CENTER, "Loading…", font(13.0), t::p().text_muted);
+                ui.painter().text(stage.center(), Align2::CENTER_CENTER, tr("Loading…"), font(13.0), t::p().text_muted);
                 ctx.request_repaint_after(std::time::Duration::from_millis(16));
             }
         }
@@ -161,7 +162,7 @@ impl AudioPane {
         let (unplayed, played) = (tint(WAVE, gray), tint(PLAYED, gray));
         match waveforms.get(&ctx, &item.id, path, &item.ext) {
             None => {
-                ui.painter().text(wave.center(), Align2::CENTER_CENTER, "Reading waveform…", font(13.0), t::p().text_muted);
+                ui.painter().text(wave.center(), Align2::CENTER_CENTER, tr("Reading waveform…"), font(13.0), t::p().text_muted);
             }
             Some(peaks) => {
                 let bars = (w / 3.0) as usize;
@@ -233,7 +234,7 @@ impl TextPane {
         let color = tint(t::p().text, gray);
         let mut inner = ui.new_child(egui::UiBuilder::new().max_rect(full.shrink(14.0)));
         if let Some(e) = &self.error {
-            inner.label(egui::RichText::new(format!("Can't read this file: {e}")).color(tint(t::p().text_muted, gray)));
+            inner.label(egui::RichText::new(trf("Can't read this file: {error}", &[("error", e)])).color(tint(t::p().text_muted, gray)));
             return;
         }
         egui::ScrollArea::vertical().auto_shrink(false).show(&mut inner, |ui| {

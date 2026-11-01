@@ -121,7 +121,7 @@ pub(crate) fn notice_text(ui: &mut Ui, area: Rect, title: &str, line: &str) -> e
     let g = galley(ui, title, font(15.0), t::p().text, (area.width() - 40.0).max(1.0));
     ui.painter().galley(Pos2::new(c.x - g.size().x / 2.0, c.y + 14.0), g, t::p().text);
     ui.painter().text(c + vec2(0.0, 48.0), Align2::CENTER_CENTER, line, font(12.5), t::p().text_muted);
-    ui.put(Rect::from_center_size(c + vec2(0.0, 84.0), vec2(210.0, 28.0)), egui::Button::new("Open With Another App…"))
+    ui.put(Rect::from_center_size(c + vec2(0.0, 84.0), vec2(210.0, 28.0)), egui::Button::new(tr("Open With Another App…")))
 }
 
 /// Whether the middle button was clicked over `screen` this frame (not

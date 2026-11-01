@@ -13,10 +13,10 @@
   "API on http://localhost:{port}": "API：http://localhost:{port}",
   "API stopped": "API 已停止",
   "About Falcon": "关于 Falcon",
-  "About {h} h {m} min left": "约剩余{h}小时{m}分钟",
-  "About {n} h left": "约剩余{n}小时",
-  "About {n} min left": "约剩余{n}分钟",
-  "About {n} s left": "约剩余{n}秒",
+  "About {h} h {m} min left": "约剩余 {h} 小时 {m} 分钟",
+  "About {n} h left": "约剩余 {n} 小时",
+  "About {n} min left": "约剩余 {n} 分钟",
+  "About {n} s left": "约剩余 {n} 秒",
   "Accuracy": "精确度",
   "Actions": "操作",
   "Activated": "已启用",
@@ -54,17 +54,17 @@
     "other": "添加{n}个项目"
   },
   "Add {n} items to {library}": {
-    "other": "将{n}个项目添加到{library}"
+    "other": "将 {n} 个项目添加到 {library}"
   },
   "Add {n} to folder": "将{n}个项目添加到文件夹",
   "Added the folder and {n} items to {target}": {
-    "other": "已将文件夹和{n}个项目添加到{target}"
+    "other": "已将文件夹和 {n} 个项目添加到 {target}"
   },
   "Added the folder's tags to {n} items": {
     "other": "已将文件夹的标签添加到{n}个项目"
   },
-  "Added the smart folder to {target}": "已将智能文件夹添加到{target}",
-  "Added the tag group to {target}": "已将标签组添加到{target}",
+  "Added the smart folder to {target}": "已将智能文件夹添加到 {target}",
+  "Added the tag group to {target}": "已将标签组添加到 {target}",
   "Added {count}": "已添加{count}项",
   "Added {count}, {failed} failed": "已添加{count}项，{failed}项失败",
   "Added {items}, {folders} and {others} from {name}.": "已从“{name}”添加{items}、{folders}和{others}。",
@@ -72,10 +72,10 @@
     "other": "已将{n}个项目添加到："
   },
   "Added {n} items to {target}": {
-    "other": "已将{n}个项目添加到{target}"
+    "other": "已将 {n} 个项目添加到 {target}"
   },
   "Added {n} items to {target}; it already had the folder": {
-    "other": "已将{n}个项目添加到{target}；该文件夹已存在"
+    "other": "已将 {n} 个项目添加到 {target}；该文件夹已存在"
   },
   "Added {n} to": "已添加{n}个到",
   "Adding {n} items to the library": {
@@ -137,6 +137,7 @@
   "BPM": "BPM",
   "Back": "返回",
   "Back 10 frames": "后退 10 帧",
+  "Background Colour": "背景颜色",
   "Base64": "Base64",
   "Black": "黑色",
   "Blue": "蓝色",
@@ -149,6 +150,7 @@
   "Can't merge that library": "无法合并该资源库",
   "Can't play this file: {error}": "无法播放此文件：{error}",
   "Can't read the Inboard backup": "无法读取 Inboard 备份",
+  "Can't read this file: {error}": "无法读取此文件：{error}",
   "Cancel": "取消",
   "Capitalize Words": "单词首字母大写",
   "Cards play while hovered either way; hold ⌥ to keep one still.": "无论哪种设置，悬停时卡片都会播放；按住 ⌥ 可让其保持静止。",
@@ -233,14 +235,15 @@
   "Convert": "转换",
   "Convert WebP": "转换 WebP",
   "Convert {n} WebP images to {format}": {
-    "other": "将{n}张 WebP 图片转换为{format}"
+    "other": "将 {n} 张 WebP 图片转换为 {format}"
   },
   "Converted {n} items to {format}": {
-    "other": "已将{n}个项目转换为{format}"
+    "other": "已将 {n} 个项目转换为 {format}"
   },
   "Converting WebP": "正在转换 WebP",
   "Copied Base64": "已拷贝 Base64",
   "Copied thumbnail": "已拷贝缩略图",
+  "Copied {name}": "已拷贝{name}",
   "Copied {n} Eagle links": {
     "other": "已拷贝{n}个 Eagle 链接"
   },
@@ -271,9 +274,11 @@
   "Copy Details": "拷贝详细信息",
   "Copy Eagle links": "拷贝 Eagle 链接",
   "Copy File Path": "拷贝文件路径",
+  "Copy Frame": "拷贝帧",
   "Copy Link": "拷贝链接",
   "Copy Tag": "复制标签",
   "Copy Tags": "复制标签",
+  "Copy URL": "拷贝网址",
   "Copy as Base64": "拷贝为 Base64",
   "Copy file paths": "拷贝文件路径",
   "Copy item folder paths": "拷贝项目文件夹路径",
@@ -287,7 +292,7 @@
   "Copy thumbnail": "拷贝缩略图",
   "Copy to Clipboard": "复制到剪贴板",
   "Copy {value}": "复制{value}",
-  "Copying to {library}": "正在拷贝到{library}",
+  "Copying to {library}": "正在拷贝到 {library}",
   "Could not change opening at login: {error}": "无法更改登录时打开：{error}",
   "Could not create the folder: {error}": "无法创建文件夹：{error}",
   "Could not create the library: {error}": "无法创建资源库：{error}",
@@ -302,6 +307,7 @@
   "Couldn't export the model: {error}": "无法导出模型：{error}",
   "Couldn't import {path}: {error}": "无法导入{path}：{error}",
   "Couldn't make a folder for the screenshot": "无法为截图创建文件夹",
+  "Couldn't save the frame: {error}": "无法存储帧：{error}",
   "Couldn't save the snapshot: {error}": "无法保存快照：{error}",
   "Count, High to Low": "数量从高到低",
   "Count, Low to High": "数量从低到高",
@@ -341,6 +347,7 @@
   "Deactivated": "未启用",
   "December": "12月",
   "Default": "默认",
+  "Default Colour": "默认颜色",
   "Delete": "删除",
   "Delete Folder": "删除文件夹",
   "Delete Group": "删除组",
@@ -383,6 +390,7 @@
   "Developer": "开发者",
   "Dimensions": "尺寸",
   "Discard": "丢弃",
+  "Display Settings": "显示设置",
   "Distance": "距离",
   "Do the same for all {n} files": "对全部{n}个文件执行相同操作",
   "Does nothing": "不执行任何操作",
@@ -402,7 +410,7 @@
   "Drop folders on the sidebar, or files on the grid or a folder": "请将文件夹拖到边栏，或将文件拖到网格或某个文件夹上",
   "Drop folders to import them with their subfolders": "拖放文件夹以连同子文件夹一起导入",
   "Dropped {n} items whose folders were gone.": {
-    "other": "已移除文件夹丢失的{n}个项目。"
+    "other": "已移除文件夹丢失的 {n} 个项目。"
   },
   "Duplicate": "创建副本",
   "Duplicate item": "创建项目副本",
@@ -496,7 +504,7 @@
   "Failed imports ({n})": "导入失败（{n}）",
   "Falcon Documentation": "Falcon 文档",
   "Falcon can't create files in the library folder ({why}), so changes may not be saved. Check the folder's permissions.": "Falcon 无法在资源库文件夹中创建文件（{why}），更改可能无法存储。请检查文件夹的权限。",
-  "Falcon can't show a preview of this file. Try opening it in another app.": "Falcon 无法显示此文件的预览。请尝试用其他 App 打开。",
+  "Falcon can't show a preview of this file. Try opening it in another app.": "Falcon 无法预览此文件。请尝试用其他 App 打开。",
   "Falcon can't show or edit this rule. Saving keeps it exactly as it is; remove it to drop it.": "Falcon 无法显示或编辑此规则。存储时会原样保留；移除后才会丢弃。",
   "Falcon couldn't read the library again: {error}": "Falcon 无法再次读取该资源库：{error}",
   "Falcon is locked": "Falcon 已锁定",
@@ -528,7 +536,10 @@
   "First Item": "第一个项目",
   "Fit": "适合",
   "Fit Mesh to Window": "网格适合窗口",
+  "Fit Model to Window (⌘0)": "使模型适合窗口 (⌘0)",
   "Fixed": "固定",
+  "Fixed Up Vector": "固定向上矢量",
+  "Flip": "翻转",
   "Flip Horizontal": "水平翻转",
   "Flip Horizontally": "水平翻转",
   "Flip Vertical": "垂直翻转",
@@ -557,9 +568,12 @@
   "Forward": "前进",
   "Forward 10 frames": "前进 10 帧",
   "Found {n} invalid entries": {
-    "other": "发现{n}个无效条目"
+    "other": "发现 {n} 个无效条目"
   },
   "Fr": "五",
+  "Frame copied": "已拷贝帧",
+  "Frame saved": "已存储帧",
+  "Free Orbit": "自由旋转",
   "From a File…": "从文件…",
   "From the Clipboard": "从剪贴板",
   "Full Screen": "全屏幕",
@@ -633,7 +647,7 @@
   "Importing Eagle Package": "正在导入 Eagle 包",
   "Importing into:": "导入到：",
   "Importing {done} of {total}  ·  {current}": "正在导入{done}/{total}  ·  {current}",
-  "Importing {done} of {total}  ·  {left}  ·  {current}": "正在导入{done}/{total}  ·  {left}  ·  {current}",
+  "Importing {done} of {total}  ·  {left}  ·  {current}": "正在导入 {done}/{total}  ·  {left}  ·  {current}",
   "Importing {images} and {folders} from Inboard": "正在从 Inboard 导入{images}和{folders}",
   "In Another Format…": "其他格式…",
   "In the library:": "资源库中：",
@@ -705,6 +719,8 @@
   "Links": "链接",
   "List": "列表",
   "List layout": "列表布局",
+  "Loading model…": "正在载入模型…",
+  "Loading…": "正在载入…",
   "Local API unavailable": "本地 API 不可用",
   "Lock Falcon": "锁定 Falcon",
   "Lock Now": "立即锁定",
@@ -715,7 +731,7 @@
   "Locked: the filter and search stay when you open another view": "已锁定：打开其他视图时保留筛选和搜索",
   "Longest side": "最长边",
   "Looked at {n} item folders; none is empty or broken.": {
-    "other": "已检查{n}个项目文件夹，没有空的或已损坏的。"
+    "other": "已检查 {n} 个项目文件夹，没有空的或已损坏的。"
   },
   "Looking for empty or broken item folders…": "正在查找空的或已损坏的项目文件夹…",
   "Low": "低",
@@ -797,13 +813,13 @@
   "Move {n} to Trash": "将{n}个项目移到废纸篓",
   "Move {n} to folder": "将{n}个项目移到文件夹",
   "Moved {n} empty item folders to the macOS Trash.": {
-    "other": "已将{n}个空的项目文件夹移到 macOS 废纸篓。"
+    "other": "已将 {n} 个空的项目文件夹移到 macOS 废纸篓。"
   },
   "Moved {n} items to": {
     "other": "已将{n}个项目移到："
   },
   "Moved {n} items with missing files to the Trash.": {
-    "other": "已将{n}个缺少文件的项目移到废纸篓。"
+    "other": "已将 {n} 个缺少文件的项目移到废纸篓。"
   },
   "Moved {n} to Trash": "已将{n}个项目移到废纸篓",
   "Moved {t} to Trash": "已将{t}个项目移到废纸篓",
@@ -907,6 +923,7 @@
   "Only take them out of this folder": "仅从此文件夹中移除",
   "Only the app bundle can open at login": "只有 App 包可以在登录时打开",
   "Only the smart folders go; the items they show stay.": "仅删除智能文件夹，其中显示的项目会保留。",
+  "Opacity": "不透明度",
   "Open": "打开",
   "Open Eagle Library": "打开 Eagle 资源库",
   "Open Existing Library…": "打开现有资源库…",
@@ -916,10 +933,12 @@
   "Open Library…": "打开资源库…",
   "Open Link ({keys})": "打开链接（{keys}）",
   "Open Link in Browser": "在浏览器中打开链接",
+  "Open With Another App…": "用其他 App 打开…",
   "Open With Default App": "用默认应用打开",
   "Open a library to take screenshots into": "请先打开资源库再截图",
   "Open an Eagle library": "打开 Eagle 资源库",
   "Open images at actual size instead of fitting them to the window": "以实际大小打开图片，而不是适应窗口",
+  "Open in Browser": "在浏览器中打开",
   "Open in Default App": "用默认应用打开",
   "Open in New Window": "在新窗口中打开",
   "Open in a new window": "在新窗口中打开",
@@ -963,12 +982,14 @@
   "Organize": "整理",
   "Original Name": "原名称",
   "Original size": "原始尺寸",
+  "Orthographic": "正交",
   "Other Documents": "其他文档",
   "Others": "其他",
   "PNG keeps every pixel; JPG and WebP files are smaller.": "PNG 保留每个像素；JPG 和 WebP 文件更小。",
   "Packing {done} of {total}  ·  {current}": "正在打包{done}/{total}  ·  {current}",
   "Page Down": "向下翻页",
   "Page Up": "向上翻页",
+  "Pages are shown as a picture on this system. Open it in the browser to browse it.": "在此系统上，网页以图片显示。请在浏览器中打开以浏览。",
   "Panoramic Horizontal": "横向全景",
   "Panoramic Vertical": "纵向全景",
   "Parallel faces": "平行面",
@@ -988,6 +1009,7 @@
   "Pasting into {folder}": "正在粘贴到{folder}",
   "Paused ({n})": "已暂停（{n}）",
   "Paused at {done} of {total}": "已暂停：{done} / {total}",
+  "Perspective": "透视",
   "Pick a date": "选择日期",
   "Pictures that look alike, at any size or format": "外观相似的图片，不限尺寸和格式",
   "Pin to Top": "固定到顶部",
@@ -1032,6 +1054,7 @@
   "Ratio W:H": "比例 宽:高",
   "Reading items: {done} of {total}": "正在读取项目：{done}/{total}",
   "Reading the library…": "正在读取资源库…",
+  "Reading waveform…": "正在读取波形…",
   "Reading {file}": "正在读取{file}",
   "Reason": "原因",
   "Recent": "最近",
@@ -1063,6 +1086,7 @@
     "other": "已刷新{n}个缩略图，保留{custom}个自定缩略图"
   },
   "Refreshing Thumbnails": "正在刷新缩略图",
+  "Reload": "重新载入",
   "Remove": "移除",
   "Remove Password": "移除密码",
   "Remove Password for “{name}”": "移除“{name}”的密码",
@@ -1115,6 +1139,7 @@
   },
   "Renames it": "重命名",
   "Rename…": "重命名…",
+  "Rendering…": "正在渲染…",
   "Reopen an image at the zoom and position it was left at": "重新打开图片时恢复上次的缩放和位置",
   "Reorder {n}": "重新排列{n}个项目",
   "Replace": "替换",
@@ -1127,6 +1152,7 @@
   "Reset Thumbnail": "重置缩略图",
   "Reset the custom thumbnail": "重置自定义缩略图",
   "Reset thumbnail": "重置缩略图",
+  "Reset to Default": "恢复默认设置",
   "Restore": "恢复",
   "Restore All": "全部恢复",
   "Restore Defaults": "恢复默认设置",
@@ -1148,6 +1174,7 @@
   "Sa": "六",
   "Save": "存储",
   "Save Anyway": "仍然存储",
+  "Save Frame…": "存储帧…",
   "Save Password": "存储密码",
   "Save This Filter": "存储此筛选",
   "Save This Filter…": "存储此筛选…",
@@ -1215,6 +1242,7 @@
   "Set the open folder's password": "为当前文件夹设置密码",
   "Set the thumbnail background of {n}": "设置{n}个项目的缩略图背景",
   "Settings": "设置",
+  "Shading": "着色",
   "Shape": "形状",
   "Share…": "共享…",
   "Shortcuts": "快捷键",
@@ -1223,6 +1251,7 @@
   "Show All Tags": "显示全部标签",
   "Show Comment Count": "显示批注数",
   "Show Counts": "显示数量",
+  "Show Edges": "显示边缘",
   "Show Extension": "显示扩展名",
   "Show Extension Label": "显示扩展名标签",
   "Show Falcon": "显示 Falcon",
@@ -1241,11 +1270,14 @@
   "Show Uncategorized": "显示未分类",
   "Show Untagged": "显示无标签",
   "Show a checkerboard behind transparent areas": "在透明区域后显示棋盘格",
+  "Show a grid under the model": "在模型下方显示网格",
   "Show a notification for each screenshot": "每次截图时显示通知",
   "Show a notification when an export finishes": "导出完成时显示通知",
+  "Show edges": "显示边缘",
   "Show falcon": "显示 falcon",
   "Show falcon and focus the search": "显示 falcon 并聚焦搜索",
   "Show hint": "显示提示",
+  "Show in Falcon": "在 Falcon 中显示",
   "Show in Finder": "在访达中显示",
   "Show in Finder (second key)": "在访达中显示（第二个按键）",
   "Show inspector": "显示检查器",
@@ -1269,9 +1301,11 @@
   "Show tag groups (Tab moves through them)": "显示标签组（按 Tab 键切换）",
   "Show the Shortcuts pane": "显示快捷键面板",
   "Show the Trash": "显示废纸篓",
+  "Show the X, Y and Z axes": "显示 X、Y、Z 轴",
   "Show the falcon icon in the menu bar": "在菜单栏中显示 falcon 图标",
   "Show the files, meshes and materials": "显示文件、网格和材质",
   "Show the inspector": "显示检查器",
+  "Show the model's details": "显示模型详细信息",
   "Show the sidebar": "显示边栏",
   "Shows Quick Look": "显示 Quick Look",
   "Shuffle Again": "重新随机",
@@ -1284,6 +1318,9 @@
   "Similar Pictures": "相似图片",
   "Similarity": "相似度",
   "Size": "大小",
+  "Size X": "尺寸 X",
+  "Size Y": "尺寸 Y",
+  "Size Z": "尺寸 Z",
   "Size:": "大小：",
   "Skip back": "快退",
   "Skip forward": "快进",
@@ -1328,10 +1365,10 @@
   "Stop": "停止",
   "Stop Tasks and Close": "停止任务并关闭",
   "Stopped after adding {done} of {n} items to {target}": {
-    "other": "已在向{target}添加{n}个项目中的{done}个后停止"
+    "other": "已在向 {target} 添加 {n} 个项目中的 {done} 个后停止"
   },
   "Stopped after converting {n} items to {format}": {
-    "other": "已将{n}个项目转换为{format}后停止"
+    "other": "已将 {n} 个项目转换为 {format} 后停止"
   },
   "Stopped after {added} of {n} items from {name}": {
     "other": "已在{name}的{n}个项目中完成{added}个后停止"
@@ -1341,6 +1378,7 @@
   "Su": "日",
   "Subfolders ({count})": "子文件夹（{count}）",
   "Subfolders are deleted too.": "子文件夹也会被删除。",
+  "Surface": "表面积",
   "Switched to {name} over the API": "已通过 API 切换到{name}",
   "Switched to {name} over the API. {note}": "已通过 API 切换到{name}。{note}",
   "Tag Group": "标签组",
@@ -1353,7 +1391,7 @@
   "Take them out of the open folder": "从当前文件夹中移出",
   "Takes effect when you Save or Apply.": "保存或应用后生效。",
   "Tall portrait": "高纵向",
-  "Tasks are still running in {library}. Closing it stops them. Work already done is kept.": "{library}中仍有任务在运行。关闭会停止这些任务，已完成的工作会保留。",
+  "Tasks are still running in {library}. Closing it stops them. Work already done is kept.": "{library} 中仍有任务在运行。关闭会停止这些任务，已完成的工作会保留。",
   "Text Document": "文本文档",
   "Text, or /pattern/flags": "文本，或 /模式/标志",
   "Th": "四",
@@ -1363,7 +1401,7 @@
   "The file isn't UTF-8 text, so it is shown read-only": "文件不是 UTF-8 文本，因此以只读方式显示",
   "The file name or path is too long to preview. Rename the file or move the library to a shorter path.": "文件名或路径过长，无法预览。请重命名文件，或将资源库移到更短的路径。",
   "The files are removed from the library and cannot be restored.": "文件将从资源库中移除，且无法恢复。",
-  "The files were copied, but {library} couldn't be updated: {error}. Opening it again picks the copied items up.": "文件已拷贝，但无法更新{library}：{error}。再次打开后会载入已拷贝的项目。",
+  "The files were copied, but {library} couldn't be updated: {error}. Opening it again picks the copied items up.": "文件已拷贝，但无法更新 {library}：{error}。再次打开后会载入已拷贝的项目。",
   "The folder already exists": "文件夹已存在",
   "The item's file becomes a copy of “{file}”. Its name, tags, folders and notes stay; the current file is deleted.": "项目的文件将变为“{file}”的副本。名称、标签、文件夹和备注会保留，当前文件将被删除。",
   "The items were copied, but the folders couldn't be saved: {error}": "项目已拷贝，但无法存储文件夹：{error}",
@@ -1372,8 +1410,8 @@
   "The library was reloaded.": "资源库已重新载入。",
   "The list can't be brought back. The files themselves are not touched.": "列表无法恢复。文件本身不受影响。",
   "The list of recent libraries is emptied, except for the libraries that are open now. This can't be undone. No library is deleted.": "最近使用的资源库列表将被清空，当前已打开的资源库除外。此操作无法撤销。不会删除任何资源库。",
-  "The local API couldn't start: ports {first}–{last} are all in use. Apps and browser extensions that talk to Falcon won't reach it. Choose another first port in Preferences ▸ Developer.": "本地 API 无法启动：端口{first}–{last}均已被占用。与 Falcon 通信的 App 和浏览器扩展将无法连接。请在“偏好设置 ▸ 开发者”中选择其他起始端口。",
-  "The local API is running on port {port} but can't be reached through localhost, so browser extensions can't reach Falcon. A proxy or VPN may be redirecting localhost.": "本地 API 正在端口{port}上运行，但无法通过 localhost 访问，因此浏览器扩展无法连接 Falcon。可能是代理或 VPN 重定向了 localhost。",
+  "The local API couldn't start: ports {first}–{last} are all in use. Apps and browser extensions that talk to Falcon won't reach it. Choose another first port in Preferences ▸ Developer.": "本地 API 无法启动：端口 {first}–{last} 均已被占用。与 Falcon 通信的 App 和浏览器扩展将无法连接。请在“偏好设置 ▸ 开发者”中选择其他起始端口。",
+  "The local API is running on port {port} but can't be reached through localhost, so browser extensions can't reach Falcon. A proxy or VPN may be redirecting localhost.": "本地 API 正在端口 {port} 上运行，但无法通过 localhost 访问，因此浏览器扩展无法连接 Falcon。可能是代理或 VPN 重定向了 localhost。",
   "The name can't be empty.": "名称不能为空。",
   "The name can't contain symbols such as % ^ & * # @ or slashes.": "名称不能包含 % ^ & * # @ 等符号或斜杠。",
   "The old password is wrong.": "旧密码不正确。",
@@ -1395,6 +1433,7 @@
   "They are removed from every item. The items themselves stay.": "它们将从所有项目中移除，项目本身会保留。",
   "They go back to their folders. ⌘Z puts them back in the Trash.": "它们会回到原来的文件夹。按 ⌘Z 可将其放回废纸篓。",
   "They look like items already here. Import them anyway, or leave them out and import the rest.": "它们看起来与已有的项目相同。可以照样导入，也可以排除它们并导入其余项目。",
+  "This bookmark has no address.": "此书签没有地址。",
   "This does not convert the file, and it may become unreadable.": "不会转换文件，文件可能因此无法读取。",
   "This file couldn't be read for a preview.": "无法读取此文件以生成预览。",
   "This file is its own thumbnail": "此文件本身就是缩略图",
@@ -1405,6 +1444,7 @@
   "This item and the ones directly inside it (⌥-click the arrow)": "此项及其直接子项（⌥-点按箭头）",
   "This item has no source URL": "此项目没有来源网址",
   "This item is still in iCloud; open it once to download it, then copy again": "此项目仍在 iCloud 中；请先打开一次以下载，然后再拷贝",
+  "This link isn't a web address, so it isn't opened here.": "此链接不是网址，因此不会在此处打开。",
   "This renames {n} items. Go ahead?": {
     "other": "这将重命名{n}个项目。要继续吗？"
   },
@@ -1427,6 +1467,7 @@
   "Trash": "废纸篓",
   "Trash Is Empty": "废纸篓为空",
   "Tree": "树",
+  "Triangles": "三角形",
   "Try Again": "重试",
   "Try another keyword or loosen the filters.": "请尝试其他关键词，或放宽筛选条件。",
   "Try another keyword.": "请尝试其他关键词。",
@@ -1437,6 +1478,7 @@
   "Type an extension": "请输入扩展名",
   "UPPER CASE": "大写",
   "URL": "URL",
+  "URL copied": "已拷贝网址",
   "Uncategorized": "未分类",
   "Uncategorized Items": "未分类项目",
   "Undid: {label}": "已撤销：{label}",
@@ -1465,6 +1507,7 @@
   "Untagged": "无标签",
   "Untagged Items": "无标签项目",
   "Up": "上",
+  "Up Vector": "向上矢量",
   "Use a port of 1024 or higher": "请使用 1024 或更大的端口",
   "Use a port of {port} or lower": "请使用不大于{port}的端口",
   "Use existing for {n}": "{n}个项目使用现有项目",
@@ -1480,17 +1523,20 @@
   "Used when one file is collected": "仅收集一个文件时使用",
   "Version {version}": "版本{version}",
   "Vertical": "纵向",
+  "Vertices": "顶点",
   "Video": "视频",
   "View": "显示",
   "Viewer": "查看器",
   "Viewer: zoom to fit, actual size, zoom in, zoom out": "查看器：适合窗口、实际大小、放大、缩小",
+  "Volume": "体积",
   "Volume down": "调低音量",
   "Volume up": "调高音量",
   "Wait for the current operation to finish": "请等待当前操作完成",
   "Waterfall": "瀑布流",
   "Waterfall layout": "瀑布流布局",
   "We": "三",
-  "WebP files are usually smaller, so the {format} files will take more space. Each WebP replaced goes to the Trash; animated WebPs are skipped.": "WebP 文件通常更小，因此{format}文件会占用更多空间。每个被替换的 WebP 会移到废纸篓；动画 WebP 会被跳过。",
+  "Web archives are shown as a picture. Open it in its own app to browse it.": "网页存档以图片显示。请在对应的 App 中打开以浏览。",
+  "WebP files are usually smaller, so the {format} files will take more space. Each WebP replaced goes to the Trash; animated WebPs are skipped.": "WebP 文件通常更小，因此 {format} 文件会占用更多空间。每个被替换的 WebP 会移到废纸篓；动画 WebP 会被跳过。",
   "When off, closing the window takes Falcon out of the Dock while its menu bar icon is shown, and quits it otherwise.": "关闭后，关闭窗口时：若显示菜单栏图标，Falcon 会从程序坞中移除，否则会退出。",
   "When off, screenshots taken on a Retina screen are saved at half size.": "关闭后，在 Retina 屏幕上截取的截图以一半尺寸保存。",
   "When off, such files are imported as new items.": "关闭时，此类文件将作为新项目导入。",
@@ -1503,9 +1549,11 @@
   "Writes to the file": "写入文件",
   "Written out": "文字形式",
   "Wrong password": "密码错误",
+  "Y Axis": "Y 轴",
   "Yesterday": "昨天",
   "You can change this later in Preferences.": "你可以稍后在偏好设置中更改。",
   "Z > A": "Z > A",
+  "Z Axis": "Z 轴",
   "Zoom": "缩放",
   "Zoom In": "放大",
   "Zoom Out": "缩小",
@@ -1548,6 +1596,14 @@
   "match::Any": "任一",
   "matches regex": "匹配正则表达式",
   "minutes": "分钟",
+  "model::Auto": "自动",
+  "model::Axes": "坐标轴",
+  "model::Camera": "相机",
+  "model::Details": "详细信息",
+  "model::Edges": "边缘",
+  "model::Flat": "平面",
+  "model::Grid": "网格",
+  "model::Smooth": "平滑",
   "must match": "须符合",
   "must not match": "不得符合",
   "no answer after {n} minutes": {
@@ -1583,7 +1639,7 @@
   "very close to": "非常接近",
   "{app} Document": "{app}文档",
   "{chord} can't be used for “{command}”: another app has it": "{chord}不能用于“{command}”：已被其他应用占用",
-  "{chord} is taken by another app": "{chord}已被其他应用占用",
+  "{chord} is taken by another app": "{chord} 已被其他应用占用",
   "{done} of {total}": "{done}/{total}",
   "{first} and {n} more": "{first}及另外{n}项",
   "{first}–{last} would include Eagle's port {port}": "{first}–{last}包含 Eagle 的端口{port}",
@@ -1591,19 +1647,19 @@
   "{hex}  ·  {ratio}%\nClick to find similar colours, right-click for more": "{hex}  ·  {ratio}%\n点按以查找相似颜色，右键查看更多",
   "{lib}'s metadata.json was damaged and was restored from backup/{name}; the damaged file was kept in backup/": "{lib}的 metadata.json 已损坏，已从 backup/{name}恢复；损坏的文件保留在 backup/ 中。",
   "{message}; skipped {n} items (animated)": {
-    "other": "{message}；已跳过{n}个项目（动画）"
+    "other": "{message}；已跳过 {n} 个项目（动画）"
   },
   "{message}; {n} items couldn't be converted ({reason})": {
-    "other": "{message}；{n}个项目无法转换（{reason}）"
+    "other": "{message}；{n} 个项目无法转换（{reason}）"
   },
   "{message}; {n} items couldn't be copied": {
-    "other": "{message}；{n}个项目无法拷贝"
+    "other": "{message}；{n} 个项目无法拷贝"
   },
   "{message}; {n} items were already there": {
-    "other": "{message}；{n}个项目已存在"
+    "other": "{message}；{n} 个项目已存在"
   },
   "{message}; {n} old WebP files couldn't go to the Trash and were left in their item folders": {
-    "other": "{message}；{n}个旧 WebP 文件无法移到废纸篓，已保留在其项目文件夹中"
+    "other": "{message}；{n} 个旧 WebP 文件无法移到废纸篓，已保留在其项目文件夹中"
   },
   "{month} {year}": "{year}年{month}",
   "{name} (Default)": "{name}（默认）",
@@ -1636,10 +1692,10 @@
     "other": "{n}个文件夹"
   },
   "{n} folders couldn't be moved to the Trash ({path}: {reason}).": {
-    "other": "{n}个文件夹无法移到废纸篓（{path}：{reason}）。"
+    "other": "{n} 个文件夹无法移到废纸篓（{path}：{reason}）。"
   },
   "{n} folders that belong to no item go to the macOS Trash.": {
-    "other": "{n}个不属于任何项目的文件夹会移到 macOS 废纸篓。"
+    "other": "{n} 个不属于任何项目的文件夹会移到 macOS 废纸篓。"
   },
   "{n} groups · tick the groups to merge": {
     "other": "{n}组 · 勾选要合并的组"
@@ -1682,7 +1738,7 @@
     "other": "{n}个非图片项目将被跳过。"
   },
   "{n} items whose folder is gone are dropped.": {
-    "other": "文件夹已丢失的{n}个项目会被移除。"
+    "other": "文件夹已丢失的 {n} 个项目会被移除。"
   },
   "{n} items will be affected. Go ahead?": {
     "other": "将影响{n}个项目。要继续吗？"
@@ -1691,7 +1747,7 @@
     "other": "{n}个项目将在此资源库中占用{size}磁盘空间。"
   },
   "{n} items with a missing or empty file go to the Trash.": {
-    "other": "{n}个文件缺失或为空的项目会移到废纸篓。"
+    "other": "{n} 个文件缺失或为空的项目会移到废纸篓。"
   },
   "{n} similar pictures, the best copy picked (within {bits} of 64 bits)": {
     "other": "{n}张相似图片，已选出最佳副本（64 位中相差不超过{bits}位）"

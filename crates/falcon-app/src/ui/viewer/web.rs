@@ -12,6 +12,7 @@ use falcon_library::model::Item;
 use crate::app::App;
 use crate::icons as ic;
 use crate::loader::{Tier, job_for};
+use crate::locale::tr;
 use crate::theme::{self as t, font, mono};
 use crate::ui::viewer::audio::bar_shell;
 use crate::ui::widgets::{ext_placeholder, galley, icon_button, viewer_ui};
@@ -44,9 +45,9 @@ impl App {
         // Open in Browser: the address, or the HTML file in its default
         // app (a browser); an MHTML archive opens in its own app.
         let (open_tip, can_open) = match &page {
-            Page::Local(_) => ("Open in Browser", true),
-            Page::Still { .. } if !matches!(item.ext.to_lowercase().as_str(), "url" | "webloc") => ("Open in Default App", true),
-            _ => ("Open in Browser", url.as_deref().is_some_and(is_web_address)),
+            Page::Local(_) => (tr("Open in Browser"), true),
+            Page::Still { .. } if !matches!(item.ext.to_lowercase().as_str(), "url" | "webloc") => (tr("Open in Default App"), true),
+            _ => (tr("Open in Browser"), url.as_deref().is_some_and(is_web_address)),
         };
         if icon_button(ui, Pos2::new(right - 13.0, cy), ic::GLOBE, 16.0, can_open, open_tip).clicked() {
             match (&page, &url) {
@@ -55,15 +56,15 @@ impl App {
             }
         }
         right -= 26.0;
-        if icon_button(ui, Pos2::new(right - 13.0, cy), ic::COPY, 15.0, url.is_some(), "Copy URL").clicked()
+        if icon_button(ui, Pos2::new(right - 13.0, cy), ic::COPY, 15.0, url.is_some(), tr("Copy URL")).clicked()
             && let Some(u) = &url
         {
             ui.ctx().copy_text(u.clone());
-            self.flash_brief("URL copied".to_string());
+            self.flash_brief(tr("URL copied"));
         }
         right -= 26.0;
         if live {
-            let (reload, tip) = if nav.loading { (ic::X, "Stop") } else { (ic::ARROW_CLOCKWISE, "Reload") };
+            let (reload, tip) = if nav.loading { (ic::X, tr("Stop")) } else { (ic::ARROW_CLOCKWISE, tr("Reload")) };
             if icon_button(ui, Pos2::new(right - 13.0, cy), reload, 15.0, true, tip).clicked() {
                 if nav.loading {
                     self.web.stop();
@@ -72,11 +73,11 @@ impl App {
                 }
             }
             right -= 26.0;
-            if icon_button(ui, Pos2::new(right - 13.0, cy), ic::ARROW_RIGHT, 15.0, nav.can_forward, "Forward").clicked() {
+            if icon_button(ui, Pos2::new(right - 13.0, cy), ic::ARROW_RIGHT, 15.0, nav.can_forward, tr("Forward")).clicked() {
                 self.web.forward();
             }
             right -= 26.0;
-            if icon_button(ui, Pos2::new(right - 13.0, cy), ic::ARROW_LEFT, 15.0, nav.can_back, "Back").clicked() {
+            if icon_button(ui, Pos2::new(right - 13.0, cy), ic::ARROW_LEFT, 15.0, nav.can_back, tr("Back")).clicked() {
                 self.web.back();
             }
             right -= 26.0;
@@ -84,7 +85,7 @@ impl App {
         title_and_url(ui, item, nav.title.as_deref(), url.as_deref(), bar, left, right - 8.0);
 
         if live {
-            ui.painter().text(area.center(), Align2::CENTER_CENTER, "Loading…", font(13.0), t::p().text_muted);
+            ui.painter().text(area.center(), Align2::CENTER_CENTER, tr("Loading…"), font(13.0), t::p().text_muted);
             self.web.want(Want { key: item.id.clone(), page, rect: area });
         } else {
             self.web_still(ui, lib, item, &page, area);
@@ -100,11 +101,11 @@ impl App {
         }
         let note = match page {
             Page::Still { url: Some(u) } if matches!(item.ext.to_lowercase().as_str(), "url" | "webloc") && !is_web_address(u) => {
-                "This link isn't a web address, so it isn't opened here."
+                tr("This link isn't a web address, so it isn't opened here.")
             }
-            Page::Still { url: None } if matches!(item.ext.to_lowercase().as_str(), "url" | "webloc") => "This bookmark has no address.",
-            Page::Still { .. } => "Web archives are shown as a picture. Open it in its own app to browse it.",
-            _ => "Pages are shown as a picture on this system. Open it in the browser to browse it.",
+            Page::Still { url: None } if matches!(item.ext.to_lowercase().as_str(), "url" | "webloc") => tr("This bookmark has no address."),
+            Page::Still { .. } => tr("Web archives are shown as a picture. Open it in its own app to browse it."),
+            _ => tr("Pages are shown as a picture on this system. Open it in the browser to browse it."),
         };
         let pic = Rect::from_min_max(area.min + vec2(24.0, 20.0), area.max - vec2(24.0, 52.0));
         let tex = self.ws.loader.get(&item.id, Tier::Full).cloned().or_else(|| self.ws.loader.get(&item.id, Tier::Preview).cloned());

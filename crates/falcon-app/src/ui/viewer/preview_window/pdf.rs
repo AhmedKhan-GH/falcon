@@ -11,6 +11,7 @@ use eframe::egui::{self, Align2, Color32, ColorImage, Pos2, Rect, TextureHandle,
 use falcon_pdf::{Bitmap, Document};
 
 use super::kind::{key_scale, render_key, step_page};
+use crate::locale::tr;
 use crate::theme::{self as t, font};
 
 /// Height of the page stepper along the bottom.
@@ -195,7 +196,7 @@ impl PdfPane {
             }
             None => {
                 ui.painter().rect_filled(rect, 0.0, Color32::WHITE);
-                ui.painter().text(rect.center(), Align2::CENTER_CENTER, "Rendering…", font(13.0), Color32::from_gray(120));
+                ui.painter().text(rect.center(), Align2::CENTER_CENTER, tr("Rendering…"), font(13.0), Color32::from_gray(120));
             }
         }
         true

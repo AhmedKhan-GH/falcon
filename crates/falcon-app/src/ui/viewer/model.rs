@@ -16,7 +16,7 @@ use falcon_library::model::Item;
 
 use crate::app::App;
 use crate::icons as ic;
-use crate::locale::tr;
+use crate::locale::{tr, tr_key};
 use crate::logic::{self, DragAction, Projection, UpAxis, ViewZoom};
 use crate::model3d::gpu::SceneCallback;
 use crate::model3d::{ModelView, Settings, Shading, ViewerTheme};
@@ -48,16 +48,16 @@ fn rgb(c: [u8; 3]) -> Color32 {
 /// The details Eagle's viewer lists, as (label, value) rows.
 pub(crate) fn detail_rows(s: &Stats) -> Vec<(&'static str, String)> {
     let mut rows = vec![
-        ("Vertices", s.vertices.to_string()),
-        ("Triangles", s.triangles.to_string()),
-        ("Size X", logic::detail_number(f64::from(s.size[0]))),
-        ("Size Y", logic::detail_number(f64::from(s.size[1]))),
-        ("Size Z", logic::detail_number(f64::from(s.size[2]))),
+        (tr_key("Vertices"), s.vertices.to_string()),
+        (tr_key("Triangles"), s.triangles.to_string()),
+        (tr_key("Size X"), logic::detail_number(f64::from(s.size[0]))),
+        (tr_key("Size Y"), logic::detail_number(f64::from(s.size[1]))),
+        (tr_key("Size Z"), logic::detail_number(f64::from(s.size[2]))),
     ];
     if let Some(v) = s.volume {
-        rows.push(("Volume", logic::detail_number(v)));
+        rows.push((tr_key("Volume"), logic::detail_number(v)));
     }
-    rows.push(("Surface", logic::detail_number(s.surface)));
+    rows.push((tr_key("Surface"), logic::detail_number(s.surface)));
     rows
 }
 
@@ -85,7 +85,7 @@ impl App {
         let bar = Rect::from_min_size(screen.min, vec2(screen.width(), t::BAR_HEIGHT));
         let area = Rect::from_min_max(Pos2::new(screen.left(), bar.bottom()), screen.max);
         if loading {
-            ui.painter().text(area.center(), Align2::CENTER_CENTER, "Loading model…", font(13.0), t::p().text_muted);
+            ui.painter().text(area.center(), Align2::CENTER_CENTER, tr("Loading model…"), font(13.0), t::p().text_muted);
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
         } else {
             self.model_scene(ui, lib, item, area);
@@ -204,19 +204,19 @@ impl App {
         p.rect_stroke(rect, CornerRadius::same(6), Stroke::new(1.0, divider), egui::StrokeKind::Inside);
         let mut y = rect.top() + 8.0 + line / 2.0;
         for (k, v) in rows {
-            p.text(Pos2::new(rect.left() + 12.0, y), Align2::LEFT_CENTER, k, font(12.0), muted);
+            p.text(Pos2::new(rect.left() + 12.0, y), Align2::LEFT_CENTER, tr(k), font(12.0), muted);
             p.text(Pos2::new(rect.right() - 12.0, y), Align2::RIGHT_CENTER, v, mono(12.0), text);
             y += line;
         }
         if shown > 0 {
             y += line * 0.5;
-            p.text(Pos2::new(rect.left() + 12.0, y), Align2::LEFT_CENTER, "Materials", font(12.0), muted);
+            p.text(Pos2::new(rect.left() + 12.0, y), Align2::LEFT_CENTER, tr("Materials"), font(12.0), muted);
             for (name, c) in mats.iter().take(shown) {
                 y += line;
                 let sw = Rect::from_center_size(Pos2::new(rect.left() + 18.0, y), vec2(10.0, 10.0));
                 let col = Color32::from_rgb((c[0] * 255.0) as u8, (c[1] * 255.0) as u8, (c[2] * 255.0) as u8);
                 p.rect_filled(sw, CornerRadius::same(2), col);
-                let name = if name.is_empty() { "No Name" } else { name.as_str() };
+                let name = if name.is_empty() { tr("No Name") } else { name.as_str() };
                 let g = galley(ui, name, font(12.0), text, PANEL_WIDTH - 44.0);
                 p.galley(Pos2::new(rect.left() + 30.0, y - g.size().y / 2.0), g, text);
             }
@@ -230,7 +230,7 @@ impl App {
         let cy = bar.center().y;
         let aspect = (area.width() / area.height().max(1.0)).max(1e-3);
         if ready {
-            let gear = icon_button(ui, Pos2::new(right - 13.0, cy), ic::GEAR, 16.0, true, "Display Settings");
+            let gear = icon_button(ui, Pos2::new(right - 13.0, cy), ic::GEAR, 16.0, true, tr("Display Settings"));
             egui::Popup::menu(&gear).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
                 ui.set_min_width(230.0);
                 self.model_settings_menu(ui, aspect);
@@ -267,23 +267,23 @@ impl App {
             if r.clicked() {
                 s.tree = !s.tree;
             }
-            let (r, x) = bar_toggle(ui, x, cy, "Details", s.info, "Show the model's details");
+            let (r, x) = bar_toggle(ui, x, cy, tr("model::Details"), s.info, tr("Show the model's details"));
             if r.clicked() {
                 s.info = !s.info;
             }
-            let (r, x) = bar_toggle(ui, x, cy, "Axes", s.axes, "Show the X, Y and Z axes");
+            let (r, x) = bar_toggle(ui, x, cy, tr("model::Axes"), s.axes, tr("Show the X, Y and Z axes"));
             if r.clicked() {
                 s.axes = !s.axes;
             }
-            let (r, x) = bar_toggle(ui, x, cy, "Grid", s.grid, "Show a grid under the model");
+            let (r, x) = bar_toggle(ui, x, cy, tr("model::Grid"), s.grid, tr("Show a grid under the model"));
             if r.clicked() {
                 s.grid = !s.grid;
             }
-            let (r, x) = bar_toggle(ui, x, cy, "Edges", s.edges, "Show edges");
+            let (r, x) = bar_toggle(ui, x, cy, tr("model::Edges"), s.edges, tr("Show edges"));
             if r.clicked() {
                 s.edges = !s.edges;
             }
-            if icon_button(ui, Pos2::new(x - 13.0, cy), ic::CORNERS_IN, 16.0, true, "Fit Model to Window (⌘0)").clicked()
+            if icon_button(ui, Pos2::new(x - 13.0, cy), ic::CORNERS_IN, 16.0, true, tr("Fit Model to Window (⌘0)")).clicked()
                 && let Some(v) = self.model3d.view.as_mut()
             {
                 v.fit(aspect);
@@ -298,40 +298,40 @@ impl App {
     fn model_settings_menu(&mut self, ui: &mut Ui, aspect: f32) {
         let s = &mut self.model3d.settings;
         let before = s.clone();
-        ui.label(egui::RichText::new("Shading").color(t::p().text_muted));
+        ui.label(egui::RichText::new(tr("Shading")).color(t::p().text_muted));
         ui.horizontal(|ui| {
-            ui.selectable_value(&mut s.shading, Shading::Auto, "Auto");
-            ui.selectable_value(&mut s.shading, Shading::Flat, "Flat");
-            ui.selectable_value(&mut s.shading, Shading::Smooth, "Smooth");
+            ui.selectable_value(&mut s.shading, Shading::Auto, tr("model::Auto"));
+            ui.selectable_value(&mut s.shading, Shading::Flat, tr("model::Flat"));
+            ui.selectable_value(&mut s.shading, Shading::Smooth, tr("model::Smooth"));
         });
-        ui.label(egui::RichText::new("Camera").color(t::p().text_muted));
+        ui.label(egui::RichText::new(tr("model::Camera")).color(t::p().text_muted));
         ui.horizontal(|ui| {
-            ui.selectable_value(&mut s.projection, Projection::Perspective, "Perspective");
-            ui.selectable_value(&mut s.projection, Projection::Orthographic, "Orthographic");
+            ui.selectable_value(&mut s.projection, Projection::Perspective, tr("Perspective"));
+            ui.selectable_value(&mut s.projection, Projection::Orthographic, tr("Orthographic"));
         });
-        ui.label(egui::RichText::new("Up Vector").color(t::p().text_muted));
+        ui.label(egui::RichText::new(tr("Up Vector")).color(t::p().text_muted));
         let mut flip = false;
         ui.horizontal(|ui| {
-            ui.selectable_value(&mut s.up, UpAxis::Y, "Y Axis");
-            ui.selectable_value(&mut s.up, UpAxis::Z, "Z Axis");
-            flip = ui.button("Flip").clicked();
+            ui.selectable_value(&mut s.up, UpAxis::Y, tr("Y Axis"));
+            ui.selectable_value(&mut s.up, UpAxis::Z, tr("Z Axis"));
+            flip = ui.button(tr("Flip")).clicked();
         });
         ui.horizontal(|ui| {
-            ui.selectable_value(&mut s.fixed_up, true, "Fixed Up Vector");
-            ui.selectable_value(&mut s.fixed_up, false, "Free Orbit");
+            ui.selectable_value(&mut s.fixed_up, true, tr("Fixed Up Vector"));
+            ui.selectable_value(&mut s.fixed_up, false, tr("Free Orbit"));
         });
         ui.separator();
-        ui.checkbox(&mut s.edges, "Show Edges");
+        ui.checkbox(&mut s.edges, tr("Show Edges"));
         ui.add_enabled_ui(s.edges, |ui| {
             ui.horizontal(|ui| {
                 ui.color_edit_button_srgb(&mut s.edge_color);
-                ui.add(egui::Slider::new(&mut s.edge_threshold, 0.0..=90.0).suffix("°").text("Angle"));
+                ui.add(egui::Slider::new(&mut s.edge_threshold, 0.0..=90.0).suffix("°").text(tr("Angle")));
             });
         });
         ui.separator();
         let mut custom = s.background.is_some();
         ui.horizontal(|ui| {
-            ui.checkbox(&mut custom, "Background Colour");
+            ui.checkbox(&mut custom, tr("Background Colour"));
             let mut c = s.background.unwrap_or([42, 43, 46]);
             if custom && ui.color_edit_button_srgb(&mut c).changed() {
                 s.background = Some(c);
@@ -345,7 +345,7 @@ impl App {
         }
         ui.horizontal(|ui| {
             ui.color_edit_button_srgb(&mut s.default_color);
-            ui.label("Default Colour");
+            ui.label(tr("Default Colour"));
         });
         ui.label(egui::RichText::new(tr("Theme")).color(t::p().text_muted));
         ui.horizontal(|ui| {
@@ -354,7 +354,7 @@ impl App {
             ui.selectable_value(&mut s.theme, ViewerTheme::Dark, tr("Dark"));
         });
         ui.separator();
-        let reset = ui.button("Reset to Default").clicked();
+        let reset = ui.button(tr("Reset to Default")).clicked();
         if reset {
             *s = Settings { info: s.info, tree: s.tree, measuring: s.measuring, ..Settings::default() };
         }

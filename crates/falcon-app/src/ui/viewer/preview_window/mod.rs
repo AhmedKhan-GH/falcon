@@ -18,6 +18,7 @@ use falcon_library::model::Item;
 use crate::app::App;
 use crate::gesture::Outcome;
 use crate::loader::{Tier, job_for};
+use crate::locale::{tr, tr_key, trf};
 use crate::logic;
 use crate::theme as t;
 use crate::ui::dialogs::export::{CopyKind, Request};
@@ -265,7 +266,7 @@ impl App {
                     let (w, h) = img.dimensions();
                     let data = arboard::ImageData { width: w as usize, height: h as usize, bytes: img.into_raw().into() };
                     if arboard::Clipboard::new().and_then(|mut c| c.set_image(data)).is_ok() {
-                        self.flash_brief("Frame copied");
+                        self.flash_brief(tr("Frame copied"));
                     }
                 }
             }
@@ -276,8 +277,8 @@ impl App {
                     let name = format!("{}.png", crate::ui::viewer::video::frame_item_name(&item.name, at));
                     if let Some(dest) = rfd::FileDialog::new().set_file_name(name).add_filter("PNG", &["png"]).save_file() {
                         match img.save(&dest) {
-                            Ok(()) => self.flash_brief("Frame saved"),
-                            Err(e) => self.flash_error(format!("Couldn't save the frame: {e}")),
+                            Ok(()) => self.flash_brief(tr("Frame saved")),
+                            Err(e) => self.flash_error(trf("Couldn't save the frame: {error}", &[("error", &e)])),
                         }
                     }
                 }
@@ -308,13 +309,13 @@ impl App {
     fn window_menu(&mut self, ui: &mut Ui, pw: &mut PreviewWin, item: &Item, file: &std::path::Path) -> Option<Act> {
         let mut act = None;
         ui.set_min_width(200.0);
-        if ui.add(egui::Button::new("Always on Top").selected(pw.on_top)).clicked() {
+        if ui.add(egui::Button::new(tr("Always on Top")).selected(pw.on_top)).clicked() {
             pw.on_top = !pw.on_top;
             let level = if pw.on_top { egui::WindowLevel::AlwaysOnTop } else { egui::WindowLevel::Normal };
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::WindowLevel(level));
             ui.close();
         }
-        ui.menu_button("Opacity", |ui| {
+        ui.menu_button(tr("Opacity"), |ui| {
             for pct in OPACITIES {
                 if ui.add(egui::Button::new(format!("{pct}%")).selected(pw.opacity == pct)).clicked() {
                     pw.opacity = pct;
@@ -322,52 +323,52 @@ impl App {
                 }
             }
         });
-        if ui.add(egui::Button::new("Grayscale").selected(self.modes.grayscale)).clicked() {
+        if ui.add(egui::Button::new(tr("Grayscale")).selected(self.modes.grayscale)).clicked() {
             self.modes.grayscale = !self.modes.grayscale;
             ui.close();
         }
         if !pw.custom {
             ui.separator();
-            if ui.button("Actual Size").clicked() {
+            if ui.button(tr("Actual Size")).clicked() {
                 pw.zoom = Some(1.0);
                 pw.pan = Vec2::ZERO;
                 ui.close();
             }
-            if ui.button("Zoom to Fit").clicked() {
+            if ui.button(tr("Zoom to Fit")).clicked() {
                 pw.zoom = None;
                 ui.close();
             }
-            if ui.add(egui::Button::new("Navigator").selected(!self.modes.hide_navigator)).clicked() {
+            if ui.add(egui::Button::new(tr("Navigator")).selected(!self.modes.hide_navigator)).clicked() {
                 self.modes.hide_navigator = !self.modes.hide_navigator;
                 ui.close();
             }
             ui.separator();
             for (label, to) in [
-                ("Rotate Left", pw.tf.rotated(-1)),
-                ("Rotate Right", pw.tf.rotated(1)),
-                ("Flip Horizontal", pw.tf.flipped_h()),
-                ("Flip Vertical", pw.tf.flipped_v()),
+                (tr_key("Rotate Left"), pw.tf.rotated(-1)),
+                (tr_key("Rotate Right"), pw.tf.rotated(1)),
+                (tr_key("Flip Horizontal"), pw.tf.flipped_h()),
+                (tr_key("Flip Vertical"), pw.tf.flipped_v()),
             ] {
-                if ui.button(label).clicked() {
+                if ui.button(tr(label)).clicked() {
                     pw.tf = to;
                     ui.close();
                 }
             }
         }
         ui.separator();
-        if ui.button("Copy").clicked() {
+        if ui.button(tr("Copy")).clicked() {
             act = Some(Act::CopyFile);
             ui.close();
         }
-        if ui.button("Copy File Path").clicked() {
+        if ui.button(tr("Copy File Path")).clicked() {
             self.ws.export.request = Some(Request::Copy(CopyKind::Path, vec![item.id.clone()]));
             ui.close();
         }
         // The links as the item menu copies them: Link is the local API
         // link, Eagle Link the `eagle://item/<id>` one.
-        ui.menu_button("Copy", |ui| {
-            for (label, kind) in [("Link", CopyKind::Link), ("Eagle Link", CopyKind::EagleLink)] {
-                if ui.button(label).clicked() {
+        ui.menu_button(tr("Copy"), |ui| {
+            for (label, kind) in [(tr_key("Link"), CopyKind::Link), (tr_key("Eagle Link"), CopyKind::EagleLink)] {
+                if ui.button(tr(label)).clicked() {
                     self.ws.export.request = Some(Request::Copy(kind, vec![item.id.clone()]));
                     ui.close();
                 }
@@ -375,25 +376,25 @@ impl App {
         });
         if matches!(pw.pane, Pane::Video(_)) {
             ui.separator();
-            if ui.button("Copy Frame").clicked() {
+            if ui.button(tr("Copy Frame")).clicked() {
                 act = Some(Act::CopyFrame);
                 ui.close();
             }
-            if ui.button("Save Frame…").clicked() {
+            if ui.button(tr("Save Frame…")).clicked() {
                 act = Some(Act::SaveFrame);
                 ui.close();
             }
         }
         ui.separator();
-        if ui.button("Open in Default App").clicked() {
+        if ui.button(tr("Open in Default App")).clicked() {
             crate::open_with::open_default(std::slice::from_ref(&file.to_path_buf()));
             ui.close();
         }
-        if ui.button("Show in Finder").clicked() {
+        if ui.button(tr("Show in Finder")).clicked() {
             crate::open_with::reveal(std::slice::from_ref(&file.to_path_buf()));
             ui.close();
         }
-        if ui.button("Show in Falcon").clicked() {
+        if ui.button(tr("Show in Falcon")).clicked() {
             // Eagle's Reveal in Eagle: the item selected in the main window.
             self.ws.viewer = None;
             self.ws.selected = vec![item.id.clone()];
@@ -403,7 +404,7 @@ impl App {
             ui.close();
         }
         ui.separator();
-        if ui.button("Close Window").clicked() {
+        if ui.button(tr("Close Window")).clicked() {
             pw.close = true;
             ui.close();
         }
@@ -417,7 +418,7 @@ impl App {
             && clip.set().file_list(&files).is_ok()
         {
             self.used(&files);
-            self.flash_brief(format!("Copied {}.{}", item.name, item.ext));
+            self.flash_brief(trf("Copied {name}", &[("name", &format!("{}.{}", item.name, item.ext))]));
         }
     }
 }
