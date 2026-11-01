@@ -8,6 +8,7 @@ use eframe::egui;
 use super::App;
 use super::import::{Job, tempfile_dir};
 use crate::capture::{self, Mode};
+use crate::locale::{tr, trf};
 use crate::shortcuts::Command;
 use crate::tray::Choice;
 
@@ -36,7 +37,8 @@ impl App {
             && let Some((cmd, chord)) = out.refused.first()
         {
             let label = crate::shortcuts::spec(*cmd).label;
-            self.flash_error(format!("{} can't be used for “{label}”: another app has it", crate::shortcuts::display(ctx, chord)));
+            let chord = crate::shortcuts::display(ctx, chord);
+            self.flash_error(trf("{chord} can't be used for “{command}”: another app has it", &[("chord", &chord), ("command", &tr(label))]));
         }
         self.system.tray.sync(ctx, self.prefs.menu_icon, &self.shortcuts, captures_on);
         for cmd in crate::hotkeys::take_pressed() {
@@ -86,11 +88,11 @@ impl App {
     /// library, and a request while one is being taken is ignored.
     pub(crate) fn start_capture(&mut self, mode: Mode) {
         if self.ws.lib.is_none() {
-            self.flash("Open a library to take screenshots into");
+            self.flash(tr("Open a library to take screenshots into"));
             return;
         }
         let Ok(dir) = tempfile_dir() else {
-            self.flash_error("Couldn't make a folder for the screenshot");
+            self.flash_error(tr("Couldn't make a folder for the screenshot"));
             return;
         };
         let ctx = self.ctx.clone();
@@ -106,7 +108,7 @@ impl App {
                 Ok(shot) => shot,
                 Err(e) => {
                     crate::errlog::error(&format!("screenshot: {e}"));
-                    self.flash_error(format!("The screenshot failed: {e}"));
+                    self.flash_error(trf("The screenshot failed: {error}", &[("error", &e)]));
                     continue;
                 }
             };

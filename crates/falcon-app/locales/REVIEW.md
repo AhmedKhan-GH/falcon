@@ -112,6 +112,11 @@ The core words, so every file uses one term for one thing.
   beside *创建副本*/*複製* (Duplicate); es *Edición*, *Visualización*.
 - Long sentences in Preferences and the storage and iCloud warnings,
   which must fit a 520-point-wide pane, especially in de, ru, ja and ko.
+- The screenshot, menu bar icon, global key and notification strings
+  (Preferences ▸ Screenshot, the Global shortcut group, the menu bar
+  icon's menu, the collect window's waiting screenshot, "Screenshot
+  added", "Import finished", "Export finished"), machine-written in one
+  pass; "Screenshot" is also the English tag name, which stays English.
 
 ## Reviewed
 

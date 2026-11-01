@@ -629,7 +629,7 @@ What Eagle does, from `js/default-preferences.js`, `preferences.html`, `js/prefe
 - Save applies and closes, Apply applies and stays open, Cancel and Esc revert (including a previewed theme or zoom), ⌘↩ saves.
 - The window's own size is set in Eagle's main process, which is not in the readable bundle; falcon's 720 × 500 pt is a guess (inferred).
 - Built in falcon since: the menu bar icon option, the collect modal for screenshots, and screenshots with their keys, format, quality, tag, clipboard and @2x settings.
-- Not built in falcon: language, vibrancy, the Dock icon option, launch at login, GPU, sound effects, Touch ID, proxy, the AI and MCP panes.
+- Not built in falcon: vibrancy, the Dock icon option, launch at login, GPU, sound effects, proxy, the AI and MCP panes.
 
 ## Themes
 

@@ -14,6 +14,8 @@
 //! The UserNotifications crate in the local cache binds an older objc2
 //! than the app's, so the few calls needed are sent by name instead.
 
+use crate::locale::{tr, tr_n};
+
 /// A notification: a title and a line of text.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Notice {
@@ -28,17 +30,17 @@ impl Notice {
 
     /// A screenshot went into the library.
     pub fn captured(name: &str) -> Self {
-        Notice::new("Screenshot added", name)
+        Notice::new(tr("Screenshot added"), name)
     }
 
     /// An import finished with `added` new items.
     pub fn imported(added: usize) -> Self {
-        Notice::new("Import finished", format!("{added} item{} added to the library", if added == 1 { "" } else { "s" }))
+        Notice::new(tr("Import finished"), tr_n(added, "{n} item added to the library", "{n} items added to the library"))
     }
 
     /// An export finished; `message` is the in-window note ("Exported 3 items").
     pub fn exported(message: &str) -> Self {
-        Notice::new("Export finished", message)
+        Notice::new(tr("Export finished"), message)
     }
 }
 

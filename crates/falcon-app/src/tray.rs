@@ -25,11 +25,13 @@ pub enum Choice {
 }
 
 impl Choice {
+    /// The item's English text, a key for `tr`.
     pub fn label(self) -> &'static str {
+        use crate::locale::tr_key;
         match self {
-            Choice::Show => "Show Falcon",
+            Choice::Show => tr_key("Show Falcon"),
             Choice::Capture(m) => m.label(),
-            Choice::Quit => "Quit Falcon",
+            Choice::Quit => tr_key("Quit Falcon"),
         }
     }
 
@@ -67,20 +69,21 @@ pub fn shown_key(choice: Choice, keys: &Shortcuts, captures: bool) -> Option<Key
 /// The icon as last put in the menu bar.
 #[derive(Default)]
 pub struct Tray {
-    /// The keys shown in the menu when it was built; `None` while hidden.
-    built: Option<Vec<Option<KeyboardShortcut>>>,
+    /// The keys shown in the menu and its language when it was built;
+    /// `None` while hidden.
+    built: Option<(Vec<Option<KeyboardShortcut>>, crate::locale::Lang)>,
 }
 
 impl Tray {
     /// Shows or hides the icon, rebuilding its menu when the keys it shows
-    /// change. Call on the main thread.
+    /// or the language change. Call on the main thread.
     pub fn sync(&mut self, ctx: &eframe::egui::Context, show: bool, keys: &Shortcuts, captures: bool) {
-        let want = show.then(|| MENU.iter().map(|e| if let Entry::Item(c) = e { shown_key(*c, keys, captures) } else { None }).collect::<Vec<_>>());
+        let want = show.then(|| (MENU.iter().map(|e| if let Entry::Item(c) = e { shown_key(*c, keys, captures) } else { None }).collect::<Vec<_>>(), crate::locale::current()));
         if want == self.built {
             return;
         }
         match &want {
-            Some(k) => platform::show(ctx, k),
+            Some((k, _)) => platform::show(ctx, k),
             None => platform::hide(),
         }
         self.built = want;
@@ -176,7 +179,7 @@ mod platform {
                     let ke = key.as_ref().and_then(key_equivalent);
                     let k = NSString::from_str(ke.as_ref().map_or("", |k| k.key.as_str()));
                     // SAFETY: the action is a method of `target`, which takes the item.
-                    let it = unsafe { NSMenuItem::initWithTitle_action_keyEquivalent(NSMenuItem::alloc(mtm), &NSString::from_str(choice.label()), Some(sel!(falconTrayItem:)), &k) };
+                    let it = unsafe { NSMenuItem::initWithTitle_action_keyEquivalent(NSMenuItem::alloc(mtm), &NSString::from_str(crate::locale::tr(choice.label())), Some(sel!(falconTrayItem:)), &k) };
                     if let Some(k) = ke {
                         let mut mask = NSEventModifierFlags::empty();
                         for (on, flag) in [(k.command, NSEventModifierFlags::Command), (k.shift, NSEventModifierFlags::Shift), (k.alt, NSEventModifierFlags::Option), (k.ctrl, NSEventModifierFlags::Control)] {

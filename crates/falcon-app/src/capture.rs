@@ -26,12 +26,13 @@ pub enum Mode {
 }
 
 impl Mode {
-    /// The menu bar icon's item for this mode.
+    /// The menu bar icon's item for this mode (a key for `tr`).
     pub fn label(self) -> &'static str {
+        use crate::locale::tr_key;
         match self {
-            Mode::Area => "Screenshot of an Area",
-            Mode::Window => "Screenshot of a Window",
-            Mode::Full => "Screenshot of the Screen",
+            Mode::Area => tr_key("Screenshot of an Area"),
+            Mode::Window => tr_key("Screenshot of a Window"),
+            Mode::Full => tr_key("Screenshot of the Screen"),
         }
     }
 }

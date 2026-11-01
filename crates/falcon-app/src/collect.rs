@@ -14,7 +14,7 @@ use eframe::egui::{self, Align2, Color32, CornerRadius, Pos2, Rect, Sense, Strok
 use falcon_library::import::ImportOptions;
 use falcon_library::model::Folder;
 
-use crate::locale::{tr, tr_nf, trf};
+use crate::locale::{tr, tr_n, tr_nf, trf};
 use crate::shortcuts::{Command, Shortcuts};
 use crate::theme::{self as t, font};
 
@@ -408,7 +408,7 @@ impl Collect {
         if let Some(first) = self.pending.first() {
             p.rect(zone, CornerRadius::same(8), t::p().main, Stroke::new(1.0, t::p().primary), egui::StrokeKind::Inside);
             let more = self.pending.len() - 1;
-            let title = if more == 0 { "Screenshot".to_string() } else { format!("Screenshot (and {more} more)") };
+            let title = if more == 0 { tr("Screenshot").to_string() } else { tr_n(more, "Screenshot (and {n} more)", "Screenshot (and {n} more)") };
             p.text(zone.left_top() + vec2(12.0, 16.0), Align2::LEFT_CENTER, title, font(13.0), t::p().text);
             let file = first.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
             let g = p.layout_no_wrap(file, font(11.5), t::p().text_muted);
@@ -416,10 +416,10 @@ impl Collect {
             let buttons = Rect::from_min_max(Pos2::new(zone.left() + 12.0, zone.bottom() - 34.0), Pos2::new(zone.right() - 12.0, zone.bottom() - 8.0));
             let mut b = ui.new_child(egui::UiBuilder::new().max_rect(buttons).layout(egui::Layout::right_to_left(egui::Align::Center)));
             let can_save = folders.is_some();
-            if b.add_enabled(can_save, egui::Button::new(egui::RichText::new("Save").color(Color32::WHITE)).fill(t::p().primary)).clicked() {
+            if b.add_enabled(can_save, egui::Button::new(egui::RichText::new(tr("Save")).color(Color32::WHITE)).fill(t::p().primary)).clicked() {
                 decided = Some(true);
             }
-            if b.button("Discard").clicked() {
+            if b.button(tr("Discard")).clicked() {
                 decided = Some(false);
             }
         } else {
@@ -529,7 +529,7 @@ impl Collect {
                 // screenshot's replace them in the fields.
                 let meta = self.meta.clone();
                 if let Some(p) = self.next_pending() {
-                    self.status = Some((format!("Saved {}", meta.name.trim()), now));
+                    self.status = Some((trf("Saved {name}", &[("name", &meta.name.trim())]), now));
                     self.saved_meta = Some(meta);
                     return Some(Event::Save(p));
                 }
@@ -541,7 +541,7 @@ impl Collect {
             return event;
         }
         if self.waiting() && (!dropped.is_empty() || (pasted && !typing)) {
-            self.status = Some(("Save or discard the screenshot first".into(), now));
+            self.status = Some((tr("Save or discard the screenshot first").into(), now));
             return None;
         }
         let chosen = target(rows, state.selected);
