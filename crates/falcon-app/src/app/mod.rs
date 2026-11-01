@@ -26,45 +26,58 @@ use crate::ui::widgets::{
     rating, tag_chip_removable, viewer_ui, wide_button, window_drag,
 };
 
-pub(crate) mod about;
-pub(crate) mod debug_ui;
+// The app core.
+pub(crate) mod actions;
+pub(crate) mod commands;
+pub(crate) mod state;
+pub(crate) mod import_ui;
+#[path = "../image_edit.rs"]
+pub(crate) mod image_edit;
+
+// Sidebar.
 pub(crate) mod organize_ui;
-pub(crate) mod dupes_ui;
-pub(crate) mod export_ui;
-pub(crate) mod duplicates_view;
-pub(crate) mod filters_ui;
+pub(crate) mod folders_ui;
+
+// Toolbar and filter bar.
 pub(crate) mod filter_bar;
-pub(crate) mod quick_switch_ui;
+pub(crate) mod filters_ui;
+pub(crate) mod layout_panel;
+
+// Grid.
+pub(crate) mod duplicates_view;
+pub(crate) mod empty_view;
+pub(crate) mod drop_hint;
+#[path = "../covers.rs"]
+pub(crate) mod covers;
+
+// Inspector.
+pub(crate) mod tag_picker;
+
+// Viewer.
 pub(crate) mod media_view;
 pub(crate) mod font_view;
 pub(crate) mod image_view;
 pub(crate) mod video_view;
 pub(crate) mod gif_view;
 pub(crate) mod open_ui;
-pub(crate) mod ext_ui;
 pub(crate) mod pdf_view;
 pub(crate) mod modes;
 pub(crate) mod preview_window;
-pub(crate) mod import_ui;
-pub(crate) mod empty_view;
-pub(crate) mod drop_hint;
-pub(crate) mod folders_ui;
-pub(crate) mod layout_panel;
-pub(crate) mod library_ui;
 pub(crate) mod text_view;
-pub(crate) mod tag_picker;
-pub(crate) mod library_dialogs;
 #[path = "../comments.rs"]
 pub(crate) mod comments;
-#[path = "../covers.rs"]
-pub(crate) mod covers;
 #[path = "../crop.rs"]
 pub(crate) mod crop;
-#[path = "../image_edit.rs"]
-pub(crate) mod image_edit;
-pub(crate) mod actions;
-pub(crate) mod commands;
-pub(crate) mod state;
+
+// Dialogs and menus.
+pub(crate) mod about;
+pub(crate) mod debug_ui;
+pub(crate) mod dupes_ui;
+pub(crate) mod export_ui;
+pub(crate) mod ext_ui;
+pub(crate) mod quick_switch_ui;
+pub(crate) mod library_ui;
+pub(crate) mod library_dialogs;
 
 pub(crate) use actions::{Action, BULK_CONFIRM};
 use commands::editable_now;
