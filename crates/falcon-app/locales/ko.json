@@ -8,6 +8,7 @@
   "A > Z": "A > Z",
   "A folder couldn't be created: {error}": "폴더를 만들 수 없습니다: {error}",
   "A library already exists there. Create again and pick another folder, or change the name.": "그 위치에 이미 라이브러리가 있습니다. 다시 만들어 다른 폴더를 선택하거나 이름을 바꾸세요.",
+  "A new folder right below this one": "이 폴더 바로 아래에 새 폴더 만들기",
   "A number in the unit, or a time such as 1:30": "단위에 맞는 숫자 또는 1:30 같은 시간",
   "A side left at 0 is not used": "0으로 둔 변은 사용되지 않습니다",
   "API on http://localhost:{port}": "API: http://localhost:{port}",
@@ -17,6 +18,7 @@
   "About {n} h left": "약 {n}시간 남음",
   "About {n} min left": "약 {n}분 남음",
   "About {n} s left": "약 {n}초 남음",
+  "Above": "위",
   "Accuracy": "정확도",
   "Actions": "동작",
   "Activated": "활성화됨",
@@ -50,6 +52,9 @@
   "Add to Other Library": "다른 라이브러리에 추가",
   "Add to Quick Access": "빠른 접근에 추가",
   "Add to the last used folder": "마지막으로 사용한 폴더에 추가",
+  "Add {n} folders to Quick Access": {
+    "other": "폴더 {n}개를 빠른 접근에 추가"
+  },
   "Add {n} items": {
     "other": "항목 {n}개 추가"
   },
@@ -57,6 +62,7 @@
     "other": "항목 {n}개를 {library}에 추가"
   },
   "Add {n} to folder": "{n}개를 폴더에 추가",
+  "Add {n} to folders": "{n}개를 폴더에 추가",
   "Added the folder and {n} items to {target}": {
     "other": "폴더와 항목 {n}개를 {target}에 추가했습니다"
   },
@@ -70,6 +76,9 @@
   "Added {items}, {folders} and {others} from {name}.": "{name}에서 {items}, {folders}, {others}을(를) 추가했습니다.",
   "Added {n} items to": {
     "other": "항목 {n}개 추가:"
+  },
+  "Added {n} items to {count} folders": {
+    "other": "항목 {n}개를 폴더 {count}개에 추가했습니다"
   },
   "Added {n} items to {target}": {
     "other": "항목 {n}개를 {target}에 추가했습니다"
@@ -139,6 +148,7 @@
   "Back 10 frames": "10프레임 뒤로",
   "Background Colour": "배경색",
   "Base64": "Base64",
+  "Below": "아래",
   "Black": "검정",
   "Blue": "블루",
   "Bookmark": "북마크",
@@ -158,14 +168,21 @@
   "Change": "변경",
   "Change Extension": "확장자 변경",
   "Change Icon": "아이콘 변경",
+  "Change Icon…": "아이콘 변경…",
   "Change Password": "비밀번호 변경",
   "Change Password for “{name}”": "“{name}” 비밀번호 변경",
   "Change Password…": "비밀번호 변경…",
   "Change extension": "확장자 변경",
   "Change folder settings": "폴더 설정 변경",
   "Change icon": "아이콘 변경",
+  "Change icon of {n} folders": {
+    "other": "폴더 {n}개의 아이콘 변경"
+  },
   "Change sample language": "샘플 언어 변경",
   "Change sort": "정렬 변경",
+  "Change sort of {n} folders": {
+    "other": "폴더 {n}개의 정렬 변경"
+  },
   "Change the open folder's password": "열린 폴더의 암호 변경",
   "Changes the preview only": "미리보기만 변경",
   "Changes the volume": "음량 변경",
@@ -173,6 +190,7 @@
   "Check Before Merging": "병합 전 확인",
   "Checkerboard": "체커보드",
   "Choose Another": "다른 위치 선택",
+  "Choose Library Icon": "라이브러리 아이콘 선택",
   "Choose Library…": "라이브러리 선택…",
   "Choose Thumbnail": "썸네일 선택",
   "Choose a Library to Add To": "추가할 라이브러리 선택",
@@ -187,9 +205,11 @@
   "Clear": "지우기",
   "Clear All": "모두 지우기",
   "Clear Filter": "필터 지우기",
+  "Clear History…": "기록 지우기…",
   "Clear Invalid Content…": "잘못된 콘텐츠 지우기…",
   "Clear Library History": "라이브러리 기록 지우기",
   "Clear Library History…": "라이브러리 기록 지우기…",
+  "Clear Recently Used": "최근 사용 지우기",
   "Clear Tag History…": "태그 기록 지우기…",
   "Clear Tags": "태그 지우기",
   "Clear tag history": "태그 기록 지우기",
@@ -215,6 +235,7 @@
   "Click to resume": "클릭하여 다시 시작",
   "Close": "닫기",
   "Close (Esc)": "닫기 (Esc)",
+  "Close Library": "라이브러리 닫기",
   "Close Library While Tasks Run": "작업 실행 중 라이브러리 닫기",
   "Close Window": "윈도우 닫기",
   "Close the viewer, or clear the selection": "뷰어를 닫거나 선택 해제",
@@ -303,10 +324,12 @@
   "Could not reload: {error}": "다시 불러올 수 없습니다: {error}",
   "Could not save: {error}": "저장하지 못했습니다: {error}",
   "Could not save: {e}": "저장할 수 없습니다: {e}",
+  "Couldn't change the icon: {error}": "아이콘을 변경할 수 없습니다: {error}",
   "Couldn't download from iCloud: {e}": "iCloud에서 다운로드할 수 없습니다: {e}",
   "Couldn't export the model: {error}": "모델을 내보낼 수 없습니다: {error}",
   "Couldn't import {path}: {error}": "{path}을(를) 가져올 수 없습니다: {error}",
   "Couldn't make a folder for the screenshot": "스크린샷용 폴더를 만들 수 없습니다",
+  "Couldn't remove the icon: {error}": "아이콘을 제거할 수 없습니다: {error}",
   "Couldn't save the frame: {error}": "프레임을 저장할 수 없습니다: {error}",
   "Couldn't save the snapshot: {error}": "스냅샷을 저장할 수 없습니다: {error}",
   "Count, High to Low": "개수 많은 순",
@@ -361,15 +384,23 @@
   "Delete tag group": "태그 그룹 삭제",
   "Delete the group “{name}”?": "“{name}” 그룹을 삭제할까요?",
   "Delete the tag “{tag}”?": "태그 “{tag}”을(를) 삭제할까요?",
+  "Delete {count} Folders": "폴더 {count}개 삭제",
+  "Delete {count} Smart Folders": "스마트 폴더 {count}개 삭제",
   "Delete {n}": "{n}개 삭제",
   "Delete {n} Tags": {
     "other": "태그 {n}개 삭제"
+  },
+  "Delete {n} folders": {
+    "other": "폴더 {n}개 삭제"
   },
   "Delete {n} folders?": {
     "other": "폴더 {n}개를 삭제할까요?"
   },
   "Delete {n} items permanently?": {
     "other": "항목 {n}개를 영구 삭제할까요?"
+  },
+  "Delete {n} smart folders": {
+    "other": "스마트 폴더 {n}개 삭제"
   },
   "Delete {n} smart folders?": {
     "other": "스마트 폴더 {n}개를 삭제할까요?"
@@ -413,7 +444,9 @@
     "other": "폴더가 없어진 항목 {n}개를 제외했습니다."
   },
   "Duplicate": "복제",
+  "Duplicate folder": "폴더 복제",
   "Duplicate item": "항목 복제",
+  "Duplicate smart folder": "스마트 폴더 복제",
   "Duplicate the item": "항목 복제",
   "Duplicate the item (second key)": "항목 복제 (두 번째 키)",
   "Duplicated": "복제했습니다",
@@ -549,6 +582,7 @@
   "Focal length (mm)": "초점 거리 (mm)",
   "Focus search": "검색창으로 이동",
   "Folder": "폴더",
+  "Folder %N": "폴더 %N",
   "Folder Description": "폴더 설명",
   "Folder Name": "폴더 이름",
   "Folder Password": "폴더 암호",
@@ -560,6 +594,7 @@
   "Folder settings (name and auto-tags)": "폴더 설정(이름과 자동 태그)",
   "Folder:": "폴더:",
   "Folders": "폴더",
+  "Folders ({count})": "폴더 ({count})",
   "Folders ({n})": "폴더({n})",
   "Font": "글꼴",
   "Fonts": "글꼴",
@@ -584,6 +619,8 @@
   "Global Settings": "전체 설정",
   "Global: {sort}": "전체: {sort}",
   "Go": "이동",
+  "Go to Folder": "폴더로 이동",
+  "Go to Folder  {keys}": "폴더로 이동  {keys}",
   "Go to Folder…": "폴더로 이동…",
   "Go to a folder (single key)": "폴더로 이동(한 키)",
   "Go to a folder, tag or smart folder": "폴더, 태그, 스마트 폴더로 이동",
@@ -606,7 +643,9 @@
   "Help": "도움말",
   "Hex": "Hex",
   "Hide": "숨기기",
+  "Hide Collect Window": "수집 창 가리기",
   "Hide inspector": "속성 패널 숨기기",
+  "Hide sidebar": "사이드바 가리기",
   "High": "높음",
   "Hint (optional)": "힌트(선택 사항)",
   "Hint: {hint}": "힌트: {hint}",
@@ -628,6 +667,7 @@
   "Import Files…": "파일 가져오기…",
   "Import Folders": "폴더 가져오기",
   "Import Folders…": "폴더 가져오기…",
+  "Import Inboard Backup…": "Inboard 백업 가져오기…",
   "Import a large folder?": "큰 폴더를 가져올까요?",
   "Import an Eagle package": "Eagle 패키지 가져오기",
   "Import an Inboard backup": "Inboard 백업 가져오기",
@@ -657,6 +697,7 @@
   "Inside": "위치",
   "Inspector": "속성 패널",
   "Interface zoom": "인터페이스 확대/축소",
+  "Into": "안",
   "Isolate (again to show all)": "분리(다시 누르면 모두 표시)",
   "It is on an NTFS drive. NTFS drivers on macOS are slow and less reliable; a drive formatted as APFS or exFAT works better.": "NTFS 드라이브에 있습니다. macOS의 NTFS 드라이버는 느리고 안정성이 떨어지므로 APFS 또는 exFAT로 포맷한 드라이브를 권장합니다.",
   "It may be incomplete or damaged; export or download it again. ({error})": "불완전하거나 손상되었을 수 있습니다. 다시 내보내거나 내려받으세요. ({error})",
@@ -746,6 +787,7 @@
   "Measure: click two points on the model": "측정: 모델의 두 점을 클릭하세요",
   "Medium": "보통",
   "Merge": "병합",
+  "Merge Another Library…": "다른 라이브러리 병합…",
   "Merge Library…": "라이브러리 병합…",
   "Merge another library into this one": "다른 라이브러리를 이 라이브러리에 병합",
   "Merge finished": "병합 완료",
@@ -784,10 +826,13 @@
   "Modified": "수정",
   "Month and day": "월과 일",
   "Months": "월",
+  "More": "더 보기",
   "Mouse": "마우스",
+  "Move": "이동",
   "Move All to Trash": "모두 휴지통으로 이동",
   "Move Down": "아래로 이동",
   "Move Folder": "폴더 이동",
+  "Move Folders…": "폴더 이동…",
   "Move Folder…": "폴더 이동…",
   "Move Up": "위로 이동",
   "Move folder": "폴더 이동",
@@ -807,11 +852,26 @@
   "Move to Top Level": "최상위로 이동",
   "Move to Trash": "휴지통으로 이동",
   "Move to the Trash": "휴지통으로 이동",
+  "Move {n} folders": {
+    "other": "폴더 {n}개 이동"
+  },
   "Move {n} items to Trash?": {
     "other": "항목 {n}개를 휴지통으로 이동할까요?"
   },
   "Move {n} to Trash": "{n}개를 휴지통으로 이동",
   "Move {n} to folder": "{n}개를 폴더로 이동",
+  "Move “{first}” above “{target}”?": "“{first}”을(를) “{target}” 위로 이동할까요?",
+  "Move “{first}” and {n} other folders above “{target}”?": {
+    "other": "“{first}” 외 폴더 {n}개를 “{target}” 위로 이동할까요?"
+  },
+  "Move “{first}” and {n} other folders below “{target}”?": {
+    "other": "“{first}” 외 폴더 {n}개를 “{target}” 아래로 이동할까요?"
+  },
+  "Move “{first}” and {n} other folders into “{target}”?": {
+    "other": "“{first}” 외 폴더 {n}개를 “{target}” 안으로 이동할까요?"
+  },
+  "Move “{first}” below “{target}”?": "“{first}”을(를) “{target}” 아래로 이동할까요?",
+  "Move “{first}” into “{target}”?": "“{first}”을(를) “{target}” 안으로 이동할까요?",
   "Moved {n} empty item folders to the macOS Trash.": {
     "other": "빈 항목 폴더 {n}개를 macOS 휴지통으로 이동했습니다."
   },
@@ -849,6 +909,9 @@
   "New Subfolder…": "새 하위 폴더…",
   "New Text File": "새 텍스트 파일",
   "New folder": "새 폴더",
+  "New folder with {n} items": {
+    "other": "항목 {n}개로 새 폴더"
+  },
   "New password": "새 비밀번호",
   "New smart folder": "새 스마트 폴더",
   "New smart folder group": "새 스마트 폴더 그룹",
@@ -869,6 +932,7 @@
   "No audio output: {error}": "오디오 출력 없음: {error}",
   "No colour": "색상 없음",
   "No folder": "폴더 없음",
+  "No folder matches": "일치하는 폴더 없음",
   "No folder used yet": "아직 사용한 폴더가 없습니다",
   "No folders": "폴더 없음",
   "No folders found": "폴더를 찾을 수 없음",
@@ -1038,6 +1102,7 @@
   "Purple": "퍼플",
   "Quality": "품질",
   "Quick Access": "빠른 접근",
+  "Quick Access ({count})": "빠른 접근 ({count})",
   "Quit Falcon": "Falcon 종료",
   "Random": "무작위",
   "Range": "범위",
@@ -1088,6 +1153,7 @@
   "Refreshing Thumbnails": "썸네일 새로 고치는 중",
   "Reload": "새로 고침",
   "Remove": "제거",
+  "Remove Icon": "아이콘 제거",
   "Remove Password": "비밀번호 제거",
   "Remove Password for “{name}”": "“{name}” 비밀번호 제거",
   "Remove Password…": "비밀번호 제거…",
@@ -1104,7 +1170,11 @@
   "Remove the open folder's password": "열린 폴더의 암호 제거",
   "Remove the rating": "별점 제거",
   "Remove this condition": "이 조건 제거",
+  "Remove this library's icon?": "이 라이브러리의 아이콘을 제거할까요?",
   "Remove this rule": "이 규칙 제거",
+  "Remove {n} folders from Quick Access": {
+    "other": "폴더 {n}개를 빠른 접근에서 제거"
+  },
   "Remove {n} from folder": "{n}개를 폴더에서 제거",
   "Removed the rating": "별점을 제거했습니다",
   "Removed {n} from the folder": "{n}개를 폴더에서 제거했습니다",
@@ -1122,11 +1192,22 @@
   "Rename tag": "태그 이름 변경",
   "Rename tag group": "태그 그룹 이름 변경",
   "Rename the selected item": "선택한 항목 이름 변경",
+  "Rename {count} Folders…": "폴더 {count}개 이름 변경…",
+  "Rename {count} Smart Folders…": "스마트 폴더 {count}개 이름 변경…",
+  "Rename {n} Folders": {
+    "other": "폴더 {n}개 이름 변경"
+  },
   "Rename {n} Items": {
     "other": "항목 {n}개 이름 변경"
   },
   "Rename {n} Items…": {
     "other": "항목 {n}개 이름 변경…"
+  },
+  "Rename {n} Smart Folders": {
+    "other": "스마트 폴더 {n}개 이름 변경"
+  },
+  "Rename {n} folders": {
+    "other": "폴더 {n}개 이름 변경"
   },
   "Rename {n} items": {
     "other": "항목 {n}개 이름 변경"
@@ -1155,6 +1236,7 @@
   "Reset to Default": "기본값으로 재설정",
   "Restore": "복원",
   "Restore All": "모두 복원",
+  "Restore All Items": "모든 항목 복원",
   "Restore Defaults": "기본값으로 복원",
   "Restore all {n} items in the Trash?": {
     "other": "휴지통의 항목 {n}개를 모두 복원할까요?"
@@ -1249,6 +1331,7 @@
   "Show": "표시",
   "Show All": "모두 보기",
   "Show All Tags": "모든 태그 보기",
+  "Show Collect Window": "수집 창 보기",
   "Show Comment Count": "코멘트 수 보기",
   "Show Counts": "개수 보기",
   "Show Edges": "모서리 보기",
@@ -1333,7 +1416,9 @@
   "Slower": "더 느리게",
   "Small": "작게",
   "Smart Folder": "스마트 폴더",
+  "Smart Folder %N": "스마트 폴더 %N",
   "Smart Folders": "스마트 폴더",
+  "Smart Folders ({count})": "스마트 폴더 ({count})",
   "Snapshot saved": "스냅샷을 저장했습니다",
   "Some files already exist": "일부 파일이 이미 있습니다",
   "Some folders already exist": "일부 폴더가 이미 있습니다",
@@ -1403,6 +1488,7 @@
   "The files are removed from the library and cannot be restored.": "파일이 라이브러리에서 제거되며 복원할 수 없습니다.",
   "The files were copied, but {library} couldn't be updated: {error}. Opening it again picks the copied items up.": "파일은 복사되었지만 {library}을(를) 업데이트하지 못했습니다: {error}. 다시 열면 복사된 항목이 반영됩니다.",
   "The folder already exists": "폴더가 이미 있습니다",
+  "The folder can't be found: {path}": "폴더를 찾을 수 없습니다: {path}",
   "The item's file becomes a copy of “{file}”. Its name, tags, folders and notes stay; the current file is deleted.": "항목의 파일이 “{file}”의 복사본으로 바뀝니다. 이름, 태그, 폴더, 메모는 유지되며 현재 파일은 삭제됩니다.",
   "The items were copied, but the folders couldn't be saved: {error}": "항목은 복사되었지만 폴더를 저장할 수 없습니다: {error}",
   "The library is a folder stored on this Mac. Back it up as you would any other files.": "라이브러리는 이 Mac에 저장되는 폴더입니다. 다른 파일처럼 백업해 두세요.",
@@ -1424,6 +1510,9 @@
   "The tag picker's Recent tags start over. Tags stay on their items.": "태그 선택기의 최근 태그가 초기화됩니다. 항목의 태그는 그대로 유지됩니다.",
   "The wheel button on an item": "항목 위에서 휠 버튼",
   "The wheel over an image in the viewer": "뷰어에서 이미지 위의 휠",
+  "The {n} selected items go into it.": {
+    "other": "선택한 항목 {n}개가 이 폴더에 들어갑니다."
+  },
   "Their files and details are copied into the other library. This library keeps them as they are.": "파일과 세부 정보가 다른 라이브러리로 복사됩니다. 이 라이브러리의 항목은 그대로 유지됩니다.",
   "Their hand-made order is replaced.": "직접 정한 순서는 바뀝니다.",
   "Theme": "테마",
@@ -1445,8 +1534,14 @@
   "This item has no source URL": "이 항목에는 출처 URL이 없습니다",
   "This item is still in iCloud; open it once to download it, then copy again": "이 항목은 아직 iCloud에 있습니다. 한 번 열어 내려받은 다음 다시 복사하세요",
   "This link isn't a web address, so it isn't opened here.": "이 링크는 웹 주소가 아니므로 여기서 열지 않습니다.",
+  "This renames {n} folders. Go ahead?": {
+    "other": "폴더 {n}개의 이름을 변경합니다. 계속할까요?"
+  },
   "This renames {n} items. Go ahead?": {
     "other": "항목 {n}개의 이름이 변경됩니다. 계속하시겠습니까?"
+  },
+  "This renames {n} smart folders. Go ahead?": {
+    "other": "스마트 폴더 {n}개의 이름을 변경합니다. 계속할까요?"
   },
   "Thumbnail": "썸네일",
   "Thumbnail Background": "썸네일 배경",
@@ -1461,6 +1556,9 @@
   "To the Bottom": "맨 아래로",
   "To the Top": "맨 위로",
   "Today": "오늘",
+  "Took {n} items out of {folders}": {
+    "other": "{folders}에서 항목 {n}개를 제외했습니다"
+  },
   "Top level": "최상위",
   "Touch ID didn't unlock Falcon": "Touch ID로 Falcon을 잠금 해제하지 못했습니다",
   "Touch ID didn't unlock the folder": "Touch ID로 폴더 잠금을 해제하지 못했습니다",
@@ -1627,6 +1725,7 @@
   "size::Custom": "사용자 지정",
   "stars, e.g. 35": "별 개수 (예: 35)",
   "starts with": "(으)로 시작",
+  "switcher::Open": "열려 있음",
   "tag, tag": "태그, 태그",
   "tags::All": "전체",
   "tags::Uncategorized": "그룹 없음",
@@ -1640,6 +1739,8 @@
   "{app} Document": "{app} 문서",
   "{chord} can't be used for “{command}”: another app has it": "{chord} 키는 ‘{command}’에 사용할 수 없습니다. 다른 앱이 사용 중입니다",
   "{chord} is taken by another app": "{chord} 키는 다른 앱이 사용 중입니다",
+  "{count} folders selected": "폴더 {count}개 선택됨",
+  "{count} smart folders selected": "스마트 폴더 {count}개 선택됨",
   "{done} of {total}": "{done}/{total}",
   "{first} and {n} more": "{first} 외 {n}건",
   "{first}–{last} would include Eagle's port {port}": "{first}–{last}에 Eagle의 포트 {port}이(가) 포함됩니다",

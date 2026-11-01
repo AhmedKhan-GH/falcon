@@ -8,6 +8,7 @@
   "A > Z": "A > Z",
   "A folder couldn't be created: {error}": "フォルダを作成できませんでした：{error}",
   "A library already exists there. Create again and pick another folder, or change the name.": "そこにはすでにライブラリがあります。もう一度作成して別のフォルダを選ぶか、名前を変更してください。",
+  "A new folder right below this one": "この下に新しいフォルダを作成",
   "A number in the unit, or a time such as 1:30": "単位に合わせた数値、または1:30のような時間",
   "A side left at 0 is not used": "0のままの辺は使用されません",
   "API on http://localhost:{port}": "API：http://localhost:{port}",
@@ -17,6 +18,7 @@
   "About {n} h left": "残り約{n}時間",
   "About {n} min left": "残り約{n}分",
   "About {n} s left": "残り約{n}秒",
+  "Above": "上",
   "Accuracy": "精度",
   "Actions": "アクション",
   "Activated": "有効",
@@ -50,6 +52,9 @@
   "Add to Other Library": "別のライブラリに追加",
   "Add to Quick Access": "クイックアクセスに追加",
   "Add to the last used folder": "最後に使ったフォルダに追加",
+  "Add {n} folders to Quick Access": {
+    "other": "{n}個のフォルダをクイックアクセスに追加"
+  },
   "Add {n} items": {
     "other": "{n}個のアイテムを追加"
   },
@@ -57,6 +62,7 @@
     "other": "{n}個のアイテムを{library}に追加"
   },
   "Add {n} to folder": "{n}件をフォルダに追加",
+  "Add {n} to folders": "{n}件をフォルダに追加",
   "Added the folder and {n} items to {target}": {
     "other": "フォルダと{n}個のアイテムを{target}に追加しました"
   },
@@ -70,6 +76,9 @@
   "Added {items}, {folders} and {others} from {name}.": "{name}から{items}、{folders}、{others}を追加しました。",
   "Added {n} items to": {
     "other": "{n}個のアイテムを追加："
+  },
+  "Added {n} items to {count} folders": {
+    "other": "{n}個のアイテムを{count}個のフォルダに追加しました"
   },
   "Added {n} items to {target}": {
     "other": "{n}個のアイテムを{target}に追加しました"
@@ -139,6 +148,7 @@
   "Back 10 frames": "10フレーム戻る",
   "Background Colour": "背景色",
   "Base64": "Base64",
+  "Below": "下",
   "Black": "黒",
   "Blue": "ブルー",
   "Bookmark": "ブックマーク",
@@ -158,14 +168,21 @@
   "Change": "変更",
   "Change Extension": "拡張子を変更",
   "Change Icon": "アイコンを変更",
+  "Change Icon…": "アイコンを変更…",
   "Change Password": "パスワードを変更",
   "Change Password for “{name}”": "「{name}」のパスワードを変更",
   "Change Password…": "パスワードを変更…",
   "Change extension": "拡張子を変更",
   "Change folder settings": "フォルダ設定を変更",
   "Change icon": "アイコンを変更",
+  "Change icon of {n} folders": {
+    "other": "{n}個のフォルダのアイコンを変更"
+  },
   "Change sample language": "サンプルの言語を変更",
   "Change sort": "並べ替えを変更",
+  "Change sort of {n} folders": {
+    "other": "{n}個のフォルダの並べ替えを変更"
+  },
   "Change the open folder's password": "開いているフォルダのパスワードを変更",
   "Changes the preview only": "プレビューのみ変更",
   "Changes the volume": "音量を変更",
@@ -173,6 +190,7 @@
   "Check Before Merging": "統合前に確認",
   "Checkerboard": "チェッカー",
   "Choose Another": "別の場所を選択",
+  "Choose Library Icon": "ライブラリのアイコンを選択",
   "Choose Library…": "ライブラリを選択…",
   "Choose Thumbnail": "サムネールを選択",
   "Choose a Library to Add To": "追加先のライブラリを選択",
@@ -187,9 +205,11 @@
   "Clear": "クリア",
   "Clear All": "すべて消去",
   "Clear Filter": "フィルタを解除",
+  "Clear History…": "履歴を消去…",
   "Clear Invalid Content…": "無効なコンテンツを削除…",
   "Clear Library History": "ライブラリ履歴を消去",
   "Clear Library History…": "ライブラリの履歴を消去…",
+  "Clear Recently Used": "最近使った項目を消去",
   "Clear Tag History…": "タグ履歴を消去…",
   "Clear Tags": "タグを消去",
   "Clear tag history": "タグ履歴を消去",
@@ -215,6 +235,7 @@
   "Click to resume": "クリックで再開",
   "Close": "閉じる",
   "Close (Esc)": "閉じる（Esc）",
+  "Close Library": "ライブラリを閉じる",
   "Close Library While Tasks Run": "タスクの実行中にライブラリを閉じる",
   "Close Window": "ウインドウを閉じる",
   "Close the viewer, or clear the selection": "ビューアを閉じる、または選択を解除",
@@ -303,10 +324,12 @@
   "Could not reload: {error}": "再読み込みできませんでした：{error}",
   "Could not save: {error}": "保存できませんでした：{error}",
   "Could not save: {e}": "保存できませんでした：{e}",
+  "Couldn't change the icon: {error}": "アイコンを変更できませんでした：{error}",
   "Couldn't download from iCloud: {e}": "iCloudからダウンロードできませんでした：{e}",
   "Couldn't export the model: {error}": "モデルを書き出せませんでした: {error}",
   "Couldn't import {path}: {error}": "{path}を読み込めませんでした：{error}",
   "Couldn't make a folder for the screenshot": "スクリーンショット用のフォルダを作れませんでした",
+  "Couldn't remove the icon: {error}": "アイコンを削除できませんでした：{error}",
   "Couldn't save the frame: {error}": "フレームを保存できませんでした：{error}",
   "Couldn't save the snapshot: {error}": "スナップショットを保存できませんでした: {error}",
   "Count, High to Low": "件数の多い順",
@@ -361,15 +384,23 @@
   "Delete tag group": "タググループを削除",
   "Delete the group “{name}”?": "グループ「{name}」を削除しますか？",
   "Delete the tag “{tag}”?": "タグ「{tag}」を削除しますか？",
+  "Delete {count} Folders": "{count}個のフォルダを削除",
+  "Delete {count} Smart Folders": "{count}個のスマートフォルダを削除",
   "Delete {n}": "{n}件を削除",
   "Delete {n} Tags": {
     "other": "{n}個のタグを削除"
+  },
+  "Delete {n} folders": {
+    "other": "{n}個のフォルダを削除"
   },
   "Delete {n} folders?": {
     "other": "{n}個のフォルダを削除しますか？"
   },
   "Delete {n} items permanently?": {
     "other": "{n}個のアイテムを完全に削除しますか？"
+  },
+  "Delete {n} smart folders": {
+    "other": "{n}個のスマートフォルダを削除"
   },
   "Delete {n} smart folders?": {
     "other": "{n}個のスマートフォルダを削除しますか？"
@@ -413,7 +444,9 @@
     "other": "フォルダがなくなっていた{n}個のアイテムを除外しました。"
   },
   "Duplicate": "複製",
+  "Duplicate folder": "フォルダを複製",
   "Duplicate item": "アイテムを複製",
+  "Duplicate smart folder": "スマートフォルダを複製",
   "Duplicate the item": "アイテムを複製",
   "Duplicate the item (second key)": "アイテムを複製（2つ目のキー）",
   "Duplicated": "複製しました",
@@ -549,6 +582,7 @@
   "Focal length (mm)": "焦点距離（mm）",
   "Focus search": "検索欄に移動",
   "Folder": "フォルダ",
+  "Folder %N": "フォルダ %N",
   "Folder Description": "フォルダの説明",
   "Folder Name": "フォルダ名",
   "Folder Password": "フォルダのパスワード",
@@ -560,6 +594,7 @@
   "Folder settings (name and auto-tags)": "フォルダ設定（名前と自動タグ）",
   "Folder:": "フォルダ：",
   "Folders": "フォルダ",
+  "Folders ({count})": "フォルダ（{count}）",
   "Folders ({n})": "フォルダ（{n}）",
   "Font": "フォント",
   "Fonts": "フォント",
@@ -584,6 +619,8 @@
   "Global Settings": "グローバル設定",
   "Global: {sort}": "グローバル：{sort}",
   "Go": "移動",
+  "Go to Folder": "フォルダへ移動",
+  "Go to Folder  {keys}": "フォルダへ移動  {keys}",
   "Go to Folder…": "フォルダへ移動…",
   "Go to a folder (single key)": "フォルダへ移動（1キー）",
   "Go to a folder, tag or smart folder": "フォルダ、タグ、スマートフォルダへ移動",
@@ -606,7 +643,9 @@
   "Help": "ヘルプ",
   "Hex": "Hex",
   "Hide": "非表示",
+  "Hide Collect Window": "収集ウインドウを隠す",
   "Hide inspector": "インスペクタを隠す",
+  "Hide sidebar": "サイドバーを隠す",
   "High": "高",
   "Hint (optional)": "ヒント（任意）",
   "Hint: {hint}": "ヒント：{hint}",
@@ -628,6 +667,7 @@
   "Import Files…": "ファイルを読み込む…",
   "Import Folders": "フォルダを読み込む",
   "Import Folders…": "フォルダを読み込む…",
+  "Import Inboard Backup…": "Inboardバックアップを読み込む…",
   "Import a large folder?": "大きなフォルダを読み込みますか？",
   "Import an Eagle package": "Eagleパッケージを読み込む",
   "Import an Inboard backup": "Inboardバックアップを読み込む",
@@ -657,6 +697,7 @@
   "Inside": "場所",
   "Inspector": "インスペクタ",
   "Interface zoom": "インターフェイスのズーム",
+  "Into": "中",
   "Isolate (again to show all)": "分離（もう一度ですべて表示）",
   "It is on an NTFS drive. NTFS drivers on macOS are slow and less reliable; a drive formatted as APFS or exFAT works better.": "NTFSドライブ上にあります。macOSのNTFSドライバは低速で信頼性も低いため、APFSまたはexFATでフォーマットしたドライブをおすすめします。",
   "It may be incomplete or damaged; export or download it again. ({error})": "不完全または破損している可能性があります。もう一度書き出すかダウンロードしてください。（{error}）",
@@ -746,6 +787,7 @@
   "Measure: click two points on the model": "計測: モデル上の 2 点をクリック",
   "Medium": "中",
   "Merge": "統合",
+  "Merge Another Library…": "別のライブラリを統合…",
   "Merge Library…": "ライブラリを統合…",
   "Merge another library into this one": "別のライブラリをこのライブラリに統合",
   "Merge finished": "統合が完了しました",
@@ -784,10 +826,13 @@
   "Modified": "更新",
   "Month and day": "月と日",
   "Months": "月",
+  "More": "その他",
   "Mouse": "マウス",
+  "Move": "移動",
   "Move All to Trash": "すべてゴミ箱に入れる",
   "Move Down": "下へ移動",
   "Move Folder": "フォルダを移動",
+  "Move Folders…": "フォルダを移動…",
   "Move Folder…": "フォルダを移動…",
   "Move Up": "上へ移動",
   "Move folder": "フォルダを移動",
@@ -807,11 +852,26 @@
   "Move to Top Level": "最上位へ移動",
   "Move to Trash": "ゴミ箱に入れる",
   "Move to the Trash": "ゴミ箱に入れる",
+  "Move {n} folders": {
+    "other": "{n}個のフォルダを移動"
+  },
   "Move {n} items to Trash?": {
     "other": "{n}個のアイテムをゴミ箱に入れますか？"
   },
   "Move {n} to Trash": "{n}件をゴミ箱に入れる",
   "Move {n} to folder": "{n}件をフォルダに移動",
+  "Move “{first}” above “{target}”?": "「{first}」を「{target}」の上に移動しますか？",
+  "Move “{first}” and {n} other folders above “{target}”?": {
+    "other": "「{first}」と他{n}個のフォルダを「{target}」の上に移動しますか？"
+  },
+  "Move “{first}” and {n} other folders below “{target}”?": {
+    "other": "「{first}」と他{n}個のフォルダを「{target}」の下に移動しますか？"
+  },
+  "Move “{first}” and {n} other folders into “{target}”?": {
+    "other": "「{first}」と他{n}個のフォルダを「{target}」の中に移動しますか？"
+  },
+  "Move “{first}” below “{target}”?": "「{first}」を「{target}」の下に移動しますか？",
+  "Move “{first}” into “{target}”?": "「{first}」を「{target}」の中に移動しますか？",
   "Moved {n} empty item folders to the macOS Trash.": {
     "other": "空のアイテムフォルダ{n}個をmacOSのゴミ箱に入れました。"
   },
@@ -849,6 +909,9 @@
   "New Subfolder…": "新規サブフォルダ…",
   "New Text File": "新規テキストファイル",
   "New folder": "新規フォルダ",
+  "New folder with {n} items": {
+    "other": "{n}個のアイテムで新規フォルダ"
+  },
   "New password": "新しいパスワード",
   "New smart folder": "新規スマートフォルダ",
   "New smart folder group": "新規スマートフォルダグループ",
@@ -869,6 +932,7 @@
   "No audio output: {error}": "オーディオ出力がありません：{error}",
   "No colour": "カラーなし",
   "No folder": "フォルダなし",
+  "No folder matches": "一致するフォルダはありません",
   "No folder used yet": "使用したフォルダはまだありません",
   "No folders": "フォルダなし",
   "No folders found": "フォルダが見つかりません",
@@ -1038,6 +1102,7 @@
   "Purple": "パープル",
   "Quality": "画質",
   "Quick Access": "クイックアクセス",
+  "Quick Access ({count})": "クイックアクセス（{count}）",
   "Quit Falcon": "Falcon を終了",
   "Random": "ランダム",
   "Range": "範囲",
@@ -1088,6 +1153,7 @@
   "Refreshing Thumbnails": "サムネールを更新しています",
   "Reload": "再読み込み",
   "Remove": "削除",
+  "Remove Icon": "アイコンを削除",
   "Remove Password": "パスワードを削除",
   "Remove Password for “{name}”": "「{name}」のパスワードを削除",
   "Remove Password…": "パスワードを削除…",
@@ -1104,7 +1170,11 @@
   "Remove the open folder's password": "開いているフォルダのパスワードを解除",
   "Remove the rating": "評価を削除",
   "Remove this condition": "この条件を削除",
+  "Remove this library's icon?": "このライブラリのアイコンを削除しますか？",
   "Remove this rule": "このルールを削除",
+  "Remove {n} folders from Quick Access": {
+    "other": "{n}個のフォルダをクイックアクセスから削除"
+  },
   "Remove {n} from folder": "{n}件をフォルダから削除",
   "Removed the rating": "評価を削除しました",
   "Removed {n} from the folder": "{n}件をフォルダから削除しました",
@@ -1122,11 +1192,22 @@
   "Rename tag": "タグ名を変更",
   "Rename tag group": "タググループ名を変更",
   "Rename the selected item": "選択したアイテムの名前を変更",
+  "Rename {count} Folders…": "{count}個のフォルダの名前を変更…",
+  "Rename {count} Smart Folders…": "{count}個のスマートフォルダの名前を変更…",
+  "Rename {n} Folders": {
+    "other": "{n}個のフォルダの名前を変更"
+  },
   "Rename {n} Items": {
     "other": "{n}件のアイテムの名前を変更"
   },
   "Rename {n} Items…": {
     "other": "{n}個のアイテムの名前を変更…"
+  },
+  "Rename {n} Smart Folders": {
+    "other": "{n}個のスマートフォルダの名前を変更"
+  },
+  "Rename {n} folders": {
+    "other": "{n}個のフォルダの名前を変更"
   },
   "Rename {n} items": {
     "other": "{n}件のアイテムの名前を変更"
@@ -1155,6 +1236,7 @@
   "Reset to Default": "デフォルトに戻す",
   "Restore": "元に戻す",
   "Restore All": "すべて元に戻す",
+  "Restore All Items": "すべてのアイテムを元に戻す",
   "Restore Defaults": "デフォルトに戻す",
   "Restore all {n} items in the Trash?": {
     "other": "ゴミ箱内の{n}個のアイテムをすべて元に戻しますか？"
@@ -1249,6 +1331,7 @@
   "Show": "表示",
   "Show All": "すべてを表示",
   "Show All Tags": "すべてのタグを表示",
+  "Show Collect Window": "収集ウインドウを表示",
   "Show Comment Count": "コメント数を表示",
   "Show Counts": "件数を表示",
   "Show Edges": "エッジを表示",
@@ -1333,7 +1416,9 @@
   "Slower": "遅く",
   "Small": "小",
   "Smart Folder": "スマートフォルダ",
+  "Smart Folder %N": "スマートフォルダ %N",
   "Smart Folders": "スマートフォルダ",
+  "Smart Folders ({count})": "スマートフォルダ（{count}）",
   "Snapshot saved": "スナップショットを保存しました",
   "Some files already exist": "一部のファイルがすでに存在します",
   "Some folders already exist": "一部のフォルダがすでに存在します",
@@ -1403,6 +1488,7 @@
   "The files are removed from the library and cannot be restored.": "ファイルはライブラリから削除され、元に戻せません。",
   "The files were copied, but {library} couldn't be updated: {error}. Opening it again picks the copied items up.": "ファイルはコピーされましたが、{library}を更新できませんでした：{error}。もう一度開くとコピーしたアイテムが反映されます。",
   "The folder already exists": "フォルダはすでに存在します",
+  "The folder can't be found: {path}": "フォルダが見つかりません：{path}",
   "The item's file becomes a copy of “{file}”. Its name, tags, folders and notes stay; the current file is deleted.": "アイテムのファイルは「{file}」のコピーになります。名前、タグ、フォルダ、メモはそのままで、現在のファイルは削除されます。",
   "The items were copied, but the folders couldn't be saved: {error}": "アイテムはコピーされましたが、フォルダを保存できませんでした：{error}",
   "The library is a folder stored on this Mac. Back it up as you would any other files.": "ライブラリはこのMacに保存されるフォルダです。ほかのファイルと同じようにバックアップしてください。",
@@ -1424,6 +1510,9 @@
   "The tag picker's Recent tags start over. Tags stay on their items.": "タグピッカーの最近使ったタグが空になります。アイテムのタグは残ります。",
   "The wheel button on an item": "アイテム上でのホイールボタン",
   "The wheel over an image in the viewer": "ビューアで画像上のホイールを回すと",
+  "The {n} selected items go into it.": {
+    "other": "選択した{n}個のアイテムがここに入ります。"
+  },
   "Their files and details are copied into the other library. This library keeps them as they are.": "ファイルと詳細情報が別のライブラリにコピーされます。このライブラリのアイテムは変更されません。",
   "Their hand-made order is replaced.": "手動で並べた順序は置き換えられます。",
   "Theme": "テーマ",
@@ -1445,8 +1534,14 @@
   "This item has no source URL": "このアイテムにはソースURLがありません",
   "This item is still in iCloud; open it once to download it, then copy again": "このアイテムはまだiCloudにあります。一度開いてダウンロードしてから、もう一度コピーしてください",
   "This link isn't a web address, so it isn't opened here.": "このリンクはWebアドレスではないため、ここでは開けません。",
+  "This renames {n} folders. Go ahead?": {
+    "other": "{n}個のフォルダの名前を変更します。続けますか？"
+  },
   "This renames {n} items. Go ahead?": {
     "other": "{n}件のアイテムの名前を変更します。続けますか？"
+  },
+  "This renames {n} smart folders. Go ahead?": {
+    "other": "{n}個のスマートフォルダの名前を変更します。続けますか？"
   },
   "Thumbnail": "サムネール",
   "Thumbnail Background": "サムネールの背景",
@@ -1461,6 +1556,9 @@
   "To the Bottom": "最下部へ",
   "To the Top": "最上部へ",
   "Today": "今日",
+  "Took {n} items out of {folders}": {
+    "other": "{folders}から{n}個のアイテムを除きました"
+  },
   "Top level": "最上位",
   "Touch ID didn't unlock Falcon": "Touch IDでFalconのロックを解除できませんでした",
   "Touch ID didn't unlock the folder": "Touch ID でフォルダのロックを解除できませんでした",
@@ -1627,6 +1725,7 @@
   "size::Custom": "カスタム",
   "stars, e.g. 35": "星の数（例：35）",
   "starts with": "で始まる",
+  "switcher::Open": "開いている",
   "tag, tag": "タグ, タグ",
   "tags::All": "すべて",
   "tags::Uncategorized": "未分類",
@@ -1640,6 +1739,8 @@
   "{app} Document": "{app} 書類",
   "{chord} can't be used for “{command}”: another app has it": "{chord} は「{command}」に使えません。別のアプリが使用しています",
   "{chord} is taken by another app": "{chord} は別のアプリが使用中です",
+  "{count} folders selected": "{count}個のフォルダを選択中",
+  "{count} smart folders selected": "{count}個のスマートフォルダを選択中",
   "{done} of {total}": "{done}/{total}",
   "{first} and {n} more": "{first}ほか{n}件",
   "{first}–{last} would include Eagle's port {port}": "{first}〜{last}にはEagleのポート{port}が含まれます",

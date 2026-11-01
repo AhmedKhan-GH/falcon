@@ -8,6 +8,7 @@
   "A > Z": "A > Z",
   "A folder couldn't be created: {error}": "No se pudo crear una carpeta: {error}",
   "A library already exists there. Create again and pick another folder, or change the name.": "Ya existe una biblioteca ahí. Vuelve a crearla y elige otra carpeta, o cambia el nombre.",
+  "A new folder right below this one": "Una carpeta nueva justo debajo de esta",
   "A number in the unit, or a time such as 1:30": "Un número en la unidad, o una hora como 1:30",
   "A side left at 0 is not used": "Un lado en 0 no se usa",
   "API on http://localhost:{port}": "API en http://localhost:{port}",
@@ -17,6 +18,7 @@
   "About {n} h left": "Quedan unas {n} h",
   "About {n} min left": "Quedan unos {n} min",
   "About {n} s left": "Quedan unos {n} s",
+  "Above": "Encima",
   "Accuracy": "Precisión",
   "Actions": "Acciones",
   "Activated": "Activado",
@@ -50,6 +52,10 @@
   "Add to Other Library": "Añadir a otra biblioteca",
   "Add to Quick Access": "Añadir a Acceso rápido",
   "Add to the last used folder": "Añadir a la última carpeta usada",
+  "Add {n} folders to Quick Access": {
+    "one": "Añadir carpeta a Acceso rápido",
+    "other": "Añadir {n} carpetas a Acceso rápido"
+  },
   "Add {n} items": {
     "one": "Añadir {n} elemento",
     "other": "Añadir {n} elementos"
@@ -59,6 +65,7 @@
     "other": "Añadir {n} elementos a {library}"
   },
   "Add {n} to folder": "Añadir {n} a la carpeta",
+  "Add {n} to folders": "Añadir {n} a carpetas",
   "Added the folder and {n} items to {target}": {
     "one": "Se añadieron la carpeta y {n} elemento a {target}",
     "other": "Se añadieron la carpeta y {n} elementos a {target}"
@@ -75,6 +82,10 @@
   "Added {n} items to": {
     "one": "{n} elemento añadido a",
     "other": "{n} elementos añadidos a"
+  },
+  "Added {n} items to {count} folders": {
+    "one": "{n} elemento añadido a {count} carpetas",
+    "other": "{n} elementos añadidos a {count} carpetas"
   },
   "Added {n} items to {target}": {
     "one": "Se añadió {n} elemento a {target}",
@@ -149,6 +160,7 @@
   "Back 10 frames": "Retroceder 10 fotogramas",
   "Background Colour": "Color de fondo",
   "Base64": "Base64",
+  "Below": "Debajo",
   "Black": "Negro",
   "Blue": "Azul",
   "Bookmark": "Marcador",
@@ -168,14 +180,23 @@
   "Change": "Cambiar",
   "Change Extension": "Cambiar extensión",
   "Change Icon": "Cambiar icono",
+  "Change Icon…": "Cambiar icono…",
   "Change Password": "Cambiar contraseña",
   "Change Password for “{name}”": "Cambiar contraseña de «{name}»",
   "Change Password…": "Cambiar contraseña…",
   "Change extension": "Cambiar extensión",
   "Change folder settings": "Cambiar ajustes de carpeta",
   "Change icon": "Cambiar icono",
+  "Change icon of {n} folders": {
+    "one": "Cambiar icono de la carpeta",
+    "other": "Cambiar icono de {n} carpetas"
+  },
   "Change sample language": "Cambiar idioma de muestra",
   "Change sort": "Cambiar orden",
+  "Change sort of {n} folders": {
+    "one": "Cambiar orden de la carpeta",
+    "other": "Cambiar orden de {n} carpetas"
+  },
   "Change the open folder's password": "Cambiar la contraseña de la carpeta abierta",
   "Changes the preview only": "Cambia solo la vista previa",
   "Changes the volume": "Cambia el volumen",
@@ -183,6 +204,7 @@
   "Check Before Merging": "Revisar antes de combinar",
   "Checkerboard": "Cuadros",
   "Choose Another": "Elegir otra",
+  "Choose Library Icon": "Elegir icono de la biblioteca",
   "Choose Library…": "Elegir biblioteca…",
   "Choose Thumbnail": "Elegir miniatura",
   "Choose a Library to Add To": "Elegir una biblioteca de destino",
@@ -197,9 +219,11 @@
   "Clear": "Limpiar",
   "Clear All": "Borrar todo",
   "Clear Filter": "Borrar filtro",
+  "Clear History…": "Borrar historial…",
   "Clear Invalid Content…": "Borrar contenido no válido…",
   "Clear Library History": "Borrar historial de bibliotecas",
   "Clear Library History…": "Borrar historial de bibliotecas…",
+  "Clear Recently Used": "Borrar usados recientemente",
   "Clear Tag History…": "Borrar historial de etiquetas…",
   "Clear Tags": "Quitar etiquetas",
   "Clear tag history": "Borrar historial de etiquetas",
@@ -226,6 +250,7 @@
   "Click to resume": "Hacer clic para reanudar",
   "Close": "Cerrar",
   "Close (Esc)": "Cerrar (Esc)",
+  "Close Library": "Cerrar biblioteca",
   "Close Library While Tasks Run": "Cerrar la biblioteca mientras hay tareas en curso",
   "Close Window": "Cerrar ventana",
   "Close the viewer, or clear the selection": "Cerrar el visor o anular la selección",
@@ -324,10 +349,12 @@
   "Could not reload: {error}": "No se pudo recargar: {error}",
   "Could not save: {error}": "No se pudo guardar: {error}",
   "Could not save: {e}": "No se pudo guardar: {e}",
+  "Couldn't change the icon: {error}": "No se pudo cambiar el icono: {error}",
   "Couldn't download from iCloud: {e}": "No se pudo descargar de iCloud: {e}",
   "Couldn't export the model: {error}": "No se pudo exportar el modelo: {error}",
   "Couldn't import {path}: {error}": "No se pudo importar {path}: {error}",
   "Couldn't make a folder for the screenshot": "No se pudo crear una carpeta para la captura",
+  "Couldn't remove the icon: {error}": "No se pudo quitar el icono: {error}",
   "Couldn't save the frame: {error}": "No se pudo guardar el fotograma: {error}",
   "Couldn't save the snapshot: {error}": "No se pudo guardar la captura: {error}",
   "Count, High to Low": "Cantidad, de mayor a menor",
@@ -382,10 +409,16 @@
   "Delete tag group": "Eliminar grupo de etiquetas",
   "Delete the group “{name}”?": "¿Eliminar el grupo «{name}»?",
   "Delete the tag “{tag}”?": "¿Eliminar la etiqueta “{tag}”?",
+  "Delete {count} Folders": "Eliminar {count} carpetas",
+  "Delete {count} Smart Folders": "Eliminar {count} carpetas inteligentes",
   "Delete {n}": "Eliminar {n}",
   "Delete {n} Tags": {
     "one": "Eliminar {n} etiqueta",
     "other": "Eliminar {n} etiquetas"
+  },
+  "Delete {n} folders": {
+    "one": "Eliminar carpeta",
+    "other": "Eliminar {n} carpetas"
   },
   "Delete {n} folders?": {
     "one": "¿Eliminar {n} carpeta?",
@@ -394,6 +427,10 @@
   "Delete {n} items permanently?": {
     "one": "¿Eliminar {n} elemento definitivamente?",
     "other": "¿Eliminar {n} elementos definitivamente?"
+  },
+  "Delete {n} smart folders": {
+    "one": "Eliminar carpeta inteligente",
+    "other": "Eliminar {n} carpetas inteligentes"
   },
   "Delete {n} smart folders?": {
     "one": "¿Eliminar {n} carpeta inteligente?",
@@ -441,7 +478,9 @@
     "other": "Se quitaron {n} elementos cuyas carpetas ya no existían."
   },
   "Duplicate": "Duplicar",
+  "Duplicate folder": "Duplicar carpeta",
   "Duplicate item": "Duplicar elemento",
+  "Duplicate smart folder": "Duplicar carpeta inteligente",
   "Duplicate the item": "Duplicar el elemento",
   "Duplicate the item (second key)": "Duplicar el elemento (segunda tecla)",
   "Duplicated": "Duplicado",
@@ -580,6 +619,7 @@
   "Focal length (mm)": "Distancia focal (mm)",
   "Focus search": "Ir al campo de búsqueda",
   "Folder": "Carpeta",
+  "Folder %N": "Carpeta %N",
   "Folder Description": "Descripción de carpeta",
   "Folder Name": "Nombre de carpeta",
   "Folder Password": "Contraseña de carpeta",
@@ -591,6 +631,7 @@
   "Folder settings (name and auto-tags)": "Ajustes de la carpeta (nombre y etiquetas automáticas)",
   "Folder:": "Carpeta:",
   "Folders": "Carpetas",
+  "Folders ({count})": "Carpetas ({count})",
   "Folders ({n})": "Carpetas ({n})",
   "Font": "Fuente",
   "Fonts": "Fuentes",
@@ -616,6 +657,8 @@
   "Global Settings": "Ajustes globales",
   "Global: {sort}": "Global: {sort}",
   "Go": "Ir",
+  "Go to Folder": "Ir a carpeta",
+  "Go to Folder  {keys}": "Ir a carpeta  {keys}",
   "Go to Folder…": "Ir a la carpeta…",
   "Go to a folder (single key)": "Ir a una carpeta (una tecla)",
   "Go to a folder, tag or smart folder": "Ir a una carpeta, etiqueta o carpeta inteligente",
@@ -639,7 +682,9 @@
   "Help": "Ayuda",
   "Hex": "Hex",
   "Hide": "Ocultar",
+  "Hide Collect Window": "Ocultar ventana de captura",
   "Hide inspector": "Ocultar inspector",
+  "Hide sidebar": "Ocultar barra lateral",
   "High": "Alta",
   "Hint (optional)": "Pista (opcional)",
   "Hint: {hint}": "Pista: {hint}",
@@ -661,6 +706,7 @@
   "Import Files…": "Importar archivos…",
   "Import Folders": "Importar carpetas",
   "Import Folders…": "Importar carpetas…",
+  "Import Inboard Backup…": "Importar copia de Inboard…",
   "Import a large folder?": "¿Importar una carpeta grande?",
   "Import an Eagle package": "Importar un paquete de Eagle",
   "Import an Inboard backup": "Importar una copia de seguridad de Inboard",
@@ -692,6 +738,7 @@
   "Inside": "Dentro de",
   "Inspector": "Inspector",
   "Interface zoom": "Zoom de la interfaz",
+  "Into": "Dentro",
   "Isolate (again to show all)": "Aislar (otra vez para mostrar todo)",
   "It is on an NTFS drive. NTFS drivers on macOS are slow and less reliable; a drive formatted as APFS or exFAT works better.": "Está en una unidad NTFS. Los controladores NTFS en macOS son lentos y menos fiables; una unidad con formato APFS o exFAT funciona mejor.",
   "It may be incomplete or damaged; export or download it again. ({error})": "Puede estar incompleto o dañado; expórtalo o descárgalo de nuevo. ({error})",
@@ -782,6 +829,7 @@
   "Measure: click two points on the model": "Medir: haz clic en dos puntos del modelo",
   "Medium": "Mediano",
   "Merge": "Combinar",
+  "Merge Another Library…": "Combinar otra biblioteca…",
   "Merge Library…": "Combinar biblioteca…",
   "Merge another library into this one": "Combinar otra biblioteca con esta",
   "Merge finished": "Combinación terminada",
@@ -827,10 +875,13 @@
   "Modified": "Modificado",
   "Month and day": "Mes y día",
   "Months": "Meses",
+  "More": "Más",
   "Mouse": "Ratón",
+  "Move": "Mover",
   "Move All to Trash": "Mover todo a la papelera",
   "Move Down": "Mover abajo",
   "Move Folder": "Mover carpeta",
+  "Move Folders…": "Mover carpetas…",
   "Move Folder…": "Mover carpeta…",
   "Move Up": "Mover arriba",
   "Move folder": "Mover carpeta",
@@ -850,12 +901,31 @@
   "Move to Top Level": "Mover al nivel superior",
   "Move to Trash": "Mover a la papelera",
   "Move to the Trash": "Mover a la papelera",
+  "Move {n} folders": {
+    "one": "Mover carpeta",
+    "other": "Mover {n} carpetas"
+  },
   "Move {n} items to Trash?": {
     "one": "¿Mover {n} elemento a la papelera?",
     "other": "¿Mover {n} elementos a la papelera?"
   },
   "Move {n} to Trash": "Mover {n} a la papelera",
   "Move {n} to folder": "Mover {n} a la carpeta",
+  "Move “{first}” above “{target}”?": "¿Mover “{first}” encima de “{target}”?",
+  "Move “{first}” and {n} other folders above “{target}”?": {
+    "one": "¿Mover “{first}” y {n} carpeta más encima de “{target}”?",
+    "other": "¿Mover “{first}” y otras {n} carpetas encima de “{target}”?"
+  },
+  "Move “{first}” and {n} other folders below “{target}”?": {
+    "one": "¿Mover “{first}” y {n} carpeta más debajo de “{target}”?",
+    "other": "¿Mover “{first}” y otras {n} carpetas debajo de “{target}”?"
+  },
+  "Move “{first}” and {n} other folders into “{target}”?": {
+    "one": "¿Mover “{first}” y {n} carpeta más dentro de “{target}”?",
+    "other": "¿Mover “{first}” y otras {n} carpetas dentro de “{target}”?"
+  },
+  "Move “{first}” below “{target}”?": "¿Mover “{first}” debajo de “{target}”?",
+  "Move “{first}” into “{target}”?": "¿Mover “{first}” dentro de “{target}”?",
   "Moved {n} empty item folders to the macOS Trash.": {
     "one": "Se movió {n} carpeta de elementos vacía a la papelera de macOS.",
     "other": "Se movieron {n} carpetas de elementos vacías a la papelera de macOS."
@@ -897,6 +967,10 @@
   "New Subfolder…": "Nueva subcarpeta…",
   "New Text File": "Nuevo archivo de texto",
   "New folder": "Carpeta nueva",
+  "New folder with {n} items": {
+    "one": "Carpeta nueva con {n} elemento",
+    "other": "Carpeta nueva con {n} elementos"
+  },
   "New password": "Contraseña nueva",
   "New smart folder": "Carpeta inteligente nueva",
   "New smart folder group": "Grupo de carpetas inteligentes nuevo",
@@ -917,6 +991,7 @@
   "No audio output: {error}": "Sin salida de audio: {error}",
   "No colour": "Sin color",
   "No folder": "Sin carpeta",
+  "No folder matches": "Ninguna carpeta coincide",
   "No folder used yet": "Aún no se ha usado ninguna carpeta",
   "No folders": "Sin carpetas",
   "No folders found": "No se encontraron carpetas",
@@ -1090,6 +1165,7 @@
   "Purple": "Morado",
   "Quality": "Calidad",
   "Quick Access": "Acceso rápido",
+  "Quick Access ({count})": "Acceso rápido ({count})",
   "Quit Falcon": "Salir de Falcon",
   "Random": "Aleatorio",
   "Range": "Rango",
@@ -1146,6 +1222,7 @@
   "Refreshing Thumbnails": "Actualizando miniaturas",
   "Reload": "Recargar",
   "Remove": "Quitar",
+  "Remove Icon": "Quitar icono",
   "Remove Password": "Quitar contraseña",
   "Remove Password for “{name}”": "Quitar contraseña de «{name}»",
   "Remove Password…": "Quitar contraseña…",
@@ -1162,7 +1239,12 @@
   "Remove the open folder's password": "Quitar la contraseña de la carpeta abierta",
   "Remove the rating": "Quitar la valoración",
   "Remove this condition": "Quitar esta condición",
+  "Remove this library's icon?": "¿Quitar el icono de esta biblioteca?",
   "Remove this rule": "Quitar esta regla",
+  "Remove {n} folders from Quick Access": {
+    "one": "Quitar carpeta de Acceso rápido",
+    "other": "Quitar {n} carpetas de Acceso rápido"
+  },
   "Remove {n} from folder": "Quitar {n} de la carpeta",
   "Removed the rating": "Valoración eliminada",
   "Removed {n} from the folder": "{n} quitados de la carpeta",
@@ -1181,6 +1263,12 @@
   "Rename tag": "Renombrar etiqueta",
   "Rename tag group": "Renombrar grupo de etiquetas",
   "Rename the selected item": "Renombrar el elemento seleccionado",
+  "Rename {count} Folders…": "Renombrar {count} carpetas…",
+  "Rename {count} Smart Folders…": "Renombrar {count} carpetas inteligentes…",
+  "Rename {n} Folders": {
+    "one": "Renombrar {n} carpeta",
+    "other": "Renombrar {n} carpetas"
+  },
   "Rename {n} Items": {
     "one": "Renombrar {n} elemento",
     "other": "Renombrar {n} elementos"
@@ -1188,6 +1276,14 @@
   "Rename {n} Items…": {
     "one": "Renombrar {n} elemento…",
     "other": "Renombrar {n} elementos…"
+  },
+  "Rename {n} Smart Folders": {
+    "one": "Renombrar {n} carpeta inteligente",
+    "other": "Renombrar {n} carpetas inteligentes"
+  },
+  "Rename {n} folders": {
+    "one": "Renombrar {n} carpeta",
+    "other": "Renombrar {n} carpetas"
   },
   "Rename {n} items": {
     "one": "Renombrar {n} elemento",
@@ -1219,6 +1315,7 @@
   "Reset to Default": "Restablecer valores",
   "Restore": "Restaurar",
   "Restore All": "Restaurar todo",
+  "Restore All Items": "Restaurar todos los elementos",
   "Restore Defaults": "Restaurar valores predeterminados",
   "Restore all {n} items in the Trash?": {
     "one": "¿Restaurar el elemento de la papelera?",
@@ -1317,6 +1414,7 @@
   "Show": "Mostrar",
   "Show All": "Mostrar todo",
   "Show All Tags": "Mostrar todas las etiquetas",
+  "Show Collect Window": "Mostrar ventana de captura",
   "Show Comment Count": "Mostrar número de comentarios",
   "Show Counts": "Mostrar recuentos",
   "Show Edges": "Mostrar aristas",
@@ -1404,7 +1502,9 @@
   "Slower": "Más lento",
   "Small": "Pequeño",
   "Smart Folder": "Carpeta inteligente",
+  "Smart Folder %N": "Carpeta inteligente %N",
   "Smart Folders": "Carpetas inteligentes",
+  "Smart Folders ({count})": "Carpetas inteligentes ({count})",
   "Snapshot saved": "Captura guardada",
   "Some files already exist": "Algunos archivos ya existen",
   "Some folders already exist": "Algunas carpetas ya existen",
@@ -1477,6 +1577,7 @@
   "The files are removed from the library and cannot be restored.": "Los archivos se eliminan de la biblioteca y no se pueden restaurar.",
   "The files were copied, but {library} couldn't be updated: {error}. Opening it again picks the copied items up.": "Los archivos se copiaron, pero no se pudo actualizar {library}: {error}. Al abrirla de nuevo se incorporan los elementos copiados.",
   "The folder already exists": "La carpeta ya existe",
+  "The folder can't be found: {path}": "No se encuentra la carpeta: {path}",
   "The item's file becomes a copy of “{file}”. Its name, tags, folders and notes stay; the current file is deleted.": "El archivo del elemento pasa a ser una copia de «{file}». Se conservan su nombre, etiquetas, carpetas y notas; el archivo actual se elimina.",
   "The items were copied, but the folders couldn't be saved: {error}": "Los elementos se copiaron, pero no se pudieron guardar las carpetas: {error}",
   "The library is a folder stored on this Mac. Back it up as you would any other files.": "La biblioteca es una carpeta guardada en este Mac. Haz copias de seguridad como con cualquier otro archivo.",
@@ -1498,6 +1599,10 @@
   "The tag picker's Recent tags start over. Tags stay on their items.": "Las etiquetas recientes del selector empiezan de cero. Las etiquetas se conservan en sus elementos.",
   "The wheel button on an item": "El botón de la rueda sobre un elemento",
   "The wheel over an image in the viewer": "La rueda sobre una imagen en el visor",
+  "The {n} selected items go into it.": {
+    "one": "El elemento seleccionado irá en ella.",
+    "other": "Los {n} elementos seleccionados irán en ella."
+  },
   "Their files and details are copied into the other library. This library keeps them as they are.": "Sus archivos y detalles se copian a la otra biblioteca. Esta biblioteca los conserva tal cual.",
   "Their hand-made order is replaced.": "Se reemplaza su orden manual.",
   "Theme": "Tema",
@@ -1519,9 +1624,17 @@
   "This item has no source URL": "Este elemento no tiene URL de origen",
   "This item is still in iCloud; open it once to download it, then copy again": "Este elemento sigue en iCloud; ábrelo una vez para descargarlo y vuelve a copiar",
   "This link isn't a web address, so it isn't opened here.": "Este enlace no es una dirección web, así que no se abre aquí.",
+  "This renames {n} folders. Go ahead?": {
+    "one": "Se renombrará {n} carpeta. ¿Continuar?",
+    "other": "Se renombrarán {n} carpetas. ¿Continuar?"
+  },
   "This renames {n} items. Go ahead?": {
     "one": "Se renombrará {n} elemento. ¿Continuar?",
     "other": "Se renombrarán {n} elementos. ¿Continuar?"
+  },
+  "This renames {n} smart folders. Go ahead?": {
+    "one": "Se renombrará {n} carpeta inteligente. ¿Continuar?",
+    "other": "Se renombrarán {n} carpetas inteligentes. ¿Continuar?"
   },
   "Thumbnail": "Miniatura",
   "Thumbnail Background": "Fondo de miniatura",
@@ -1536,6 +1649,10 @@
   "To the Bottom": "Al final",
   "To the Top": "Al principio",
   "Today": "Hoy",
+  "Took {n} items out of {folders}": {
+    "one": "{n} elemento quitado de {folders}",
+    "other": "{n} elementos quitados de {folders}"
+  },
   "Top level": "Nivel superior",
   "Touch ID didn't unlock Falcon": "Touch ID no desbloqueó Falcon",
   "Touch ID didn't unlock the folder": "Touch ID no ha desbloqueado la carpeta",
@@ -1706,6 +1823,7 @@
   "size::Custom": "Personalizado",
   "stars, e.g. 35": "estrellas, p. ej. 35",
   "starts with": "empieza por",
+  "switcher::Open": "Abiertas",
   "tag, tag": "etiqueta, etiqueta",
   "tags::All": "Todas",
   "tags::Uncategorized": "Sin grupo",
@@ -1719,6 +1837,8 @@
   "{app} Document": "Documento de {app}",
   "{chord} can't be used for “{command}”: another app has it": "{chord} no se puede usar para «{command}»: otra app ya lo usa",
   "{chord} is taken by another app": "Otra app ya usa {chord}",
+  "{count} folders selected": "{count} carpetas seleccionadas",
+  "{count} smart folders selected": "{count} carpetas inteligentes seleccionadas",
   "{done} of {total}": "{done} de {total}",
   "{first} and {n} more": "{first} y {n} más",
   "{first}–{last} would include Eagle's port {port}": "{first}–{last} incluiría el puerto {port} de Eagle",

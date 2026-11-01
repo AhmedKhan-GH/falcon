@@ -8,6 +8,7 @@
   "A > Z": "A > Z",
   "A folder couldn't be created: {error}": "無法建立資料夾：{error}",
   "A library already exists there. Create again and pick another folder, or change the name.": "該位置已有資料庫。請重新建立並選擇其他資料夾，或更改名稱。",
+  "A new folder right below this one": "在此資料夾正下方新增資料夾",
   "A number in the unit, or a time such as 1:30": "依所選單位輸入數字，或1:30這樣的時間",
   "A side left at 0 is not used": "保持為0的邊不列入篩選",
   "API on http://localhost:{port}": "API：http://localhost:{port}",
@@ -17,6 +18,7 @@
   "About {n} h left": "約剩餘 {n} 小時",
   "About {n} min left": "約剩餘 {n} 分鐘",
   "About {n} s left": "約剩餘 {n} 秒",
+  "Above": "上方",
   "Accuracy": "精確度",
   "Actions": "動作",
   "Activated": "已啟用",
@@ -50,6 +52,9 @@
   "Add to Other Library": "加入其他資料庫",
   "Add to Quick Access": "加入快速存取",
   "Add to the last used folder": "加入上次使用的資料夾",
+  "Add {n} folders to Quick Access": {
+    "other": "將{n}個資料夾加入快速存取"
+  },
   "Add {n} items": {
     "other": "加入{n}個項目"
   },
@@ -57,6 +62,7 @@
     "other": "將 {n} 個項目加入 {library}"
   },
   "Add {n} to folder": "將{n}個項目加入資料夾",
+  "Add {n} to folders": "將{n}項加入資料夾",
   "Added the folder and {n} items to {target}": {
     "other": "已將資料夾和 {n} 個項目加入 {target}"
   },
@@ -70,6 +76,9 @@
   "Added {items}, {folders} and {others} from {name}.": "已從「{name}」加入{items}、{folders}和{others}。",
   "Added {n} items to": {
     "other": "已將{n}個項目加入："
+  },
+  "Added {n} items to {count} folders": {
+    "other": "已將{n}個項目加入{count}個資料夾"
   },
   "Added {n} items to {target}": {
     "other": "已將 {n} 個項目加入 {target}"
@@ -139,6 +148,7 @@
   "Back 10 frames": "倒退 10 格",
   "Background Colour": "背景顏色",
   "Base64": "Base64",
+  "Below": "下方",
   "Black": "黑色",
   "Blue": "藍色",
   "Bookmark": "書籤",
@@ -158,14 +168,21 @@
   "Change": "更改",
   "Change Extension": "更改副檔名",
   "Change Icon": "更改圖示",
+  "Change Icon…": "更改圖示…",
   "Change Password": "更改密碼",
   "Change Password for “{name}”": "更改「{name}」的密碼",
   "Change Password…": "更改密碼…",
   "Change extension": "更改副檔名",
   "Change folder settings": "更改資料夾設定",
   "Change icon": "更改圖示",
+  "Change icon of {n} folders": {
+    "other": "更改{n}個資料夾的圖示"
+  },
   "Change sample language": "更改範例語言",
   "Change sort": "更改排序",
+  "Change sort of {n} folders": {
+    "other": "更改{n}個資料夾的排序"
+  },
   "Change the open folder's password": "更改目前資料夾的密碼",
   "Changes the preview only": "僅更改預覽",
   "Changes the volume": "調整音量",
@@ -173,6 +190,7 @@
   "Check Before Merging": "合併前檢查",
   "Checkerboard": "棋盤格",
   "Choose Another": "選擇其他位置",
+  "Choose Library Icon": "選擇資料庫圖示",
   "Choose Library…": "選擇資料庫…",
   "Choose Thumbnail": "選擇縮圖",
   "Choose a Library to Add To": "選擇要加入的資料庫",
@@ -187,9 +205,11 @@
   "Clear": "清除",
   "Clear All": "全部清除",
   "Clear Filter": "清除篩選",
+  "Clear History…": "清除歷史記錄…",
   "Clear Invalid Content…": "清除無效內容…",
   "Clear Library History": "清除資料庫記錄",
   "Clear Library History…": "清除資料庫記錄…",
+  "Clear Recently Used": "清除最近使用",
   "Clear Tag History…": "清除標籤記錄…",
   "Clear Tags": "清除標籤",
   "Clear tag history": "清除標籤記錄",
@@ -215,6 +235,7 @@
   "Click to resume": "點擊繼續",
   "Close": "關閉",
   "Close (Esc)": "關閉（Esc）",
+  "Close Library": "關閉資料庫",
   "Close Library While Tasks Run": "工作執行時關閉資料庫",
   "Close Window": "關閉視窗",
   "Close the viewer, or clear the selection": "關閉檢視器，或取消選取",
@@ -303,10 +324,12 @@
   "Could not reload: {error}": "無法重新載入：{error}",
   "Could not save: {error}": "無法儲存：{error}",
   "Could not save: {e}": "無法儲存：{e}",
+  "Couldn't change the icon: {error}": "無法更改圖示：{error}",
   "Couldn't download from iCloud: {e}": "無法從 iCloud 下載：{e}",
   "Couldn't export the model: {error}": "無法匯出模型：{error}",
   "Couldn't import {path}: {error}": "無法匯入{path}：{error}",
   "Couldn't make a folder for the screenshot": "無法為截圖建立檔案夾",
+  "Couldn't remove the icon: {error}": "無法移除圖示：{error}",
   "Couldn't save the frame: {error}": "無法儲存影格：{error}",
   "Couldn't save the snapshot: {error}": "無法儲存快照：{error}",
   "Count, High to Low": "數量由高到低",
@@ -361,15 +384,23 @@
   "Delete tag group": "刪除標籤群組",
   "Delete the group “{name}”?": "要刪除群組「{name}」嗎？",
   "Delete the tag “{tag}”?": "要刪除標籤「{tag}」嗎？",
+  "Delete {count} Folders": "刪除{count}個資料夾",
+  "Delete {count} Smart Folders": "刪除{count}個智慧型資料夾",
   "Delete {n}": "刪除{n}個項目",
   "Delete {n} Tags": {
     "other": "刪除{n}個標籤"
+  },
+  "Delete {n} folders": {
+    "other": "刪除{n}個資料夾"
   },
   "Delete {n} folders?": {
     "other": "要刪除{n}個資料夾嗎？"
   },
   "Delete {n} items permanently?": {
     "other": "要永久刪除{n}個項目嗎？"
+  },
+  "Delete {n} smart folders": {
+    "other": "刪除{n}個智慧型資料夾"
   },
   "Delete {n} smart folders?": {
     "other": "要刪除{n}個智慧型資料夾嗎？"
@@ -413,7 +444,9 @@
     "other": "已移除資料夾遺失的 {n} 個項目。"
   },
   "Duplicate": "複製",
+  "Duplicate folder": "複製資料夾",
   "Duplicate item": "複製項目",
+  "Duplicate smart folder": "複製智慧型資料夾",
   "Duplicate the item": "複製項目",
   "Duplicate the item (second key)": "複製項目（第二個按鍵）",
   "Duplicated": "已複製",
@@ -549,6 +582,7 @@
   "Focal length (mm)": "焦距 (mm)",
   "Focus search": "聚焦搜尋欄",
   "Folder": "資料夾",
+  "Folder %N": "資料夾 %N",
   "Folder Description": "資料夾描述",
   "Folder Name": "資料夾名稱",
   "Folder Password": "資料夾密碼",
@@ -560,6 +594,7 @@
   "Folder settings (name and auto-tags)": "資料夾設定（名稱和自動標籤）",
   "Folder:": "資料夾：",
   "Folders": "資料夾",
+  "Folders ({count})": "資料夾（{count}）",
   "Folders ({n})": "資料夾（{n}）",
   "Font": "字型",
   "Fonts": "字體",
@@ -584,6 +619,8 @@
   "Global Settings": "全域設定",
   "Global: {sort}": "全域：{sort}",
   "Go": "前往",
+  "Go to Folder": "前往資料夾",
+  "Go to Folder  {keys}": "前往資料夾  {keys}",
   "Go to Folder…": "前往資料夾…",
   "Go to a folder (single key)": "前往資料夾（單鍵）",
   "Go to a folder, tag or smart folder": "前往資料夾、標籤或智慧型資料夾",
@@ -606,7 +643,9 @@
   "Help": "輔助說明",
   "Hex": "Hex",
   "Hide": "隱藏",
+  "Hide Collect Window": "隱藏收集視窗",
   "Hide inspector": "隱藏檢閱器",
+  "Hide sidebar": "隱藏側邊欄",
   "High": "高",
   "Hint (optional)": "提示（選填）",
   "Hint: {hint}": "提示：{hint}",
@@ -628,6 +667,7 @@
   "Import Files…": "匯入檔案…",
   "Import Folders": "匯入資料夾",
   "Import Folders…": "匯入資料夾…",
+  "Import Inboard Backup…": "匯入 Inboard 備份…",
   "Import a large folder?": "要匯入大型資料夾嗎？",
   "Import an Eagle package": "匯入 Eagle 套件",
   "Import an Inboard backup": "匯入 Inboard 備份",
@@ -657,6 +697,7 @@
   "Inside": "位於",
   "Inspector": "檢閱器",
   "Interface zoom": "介面縮放",
+  "Into": "內部",
   "Isolate (again to show all)": "隔離（再次點擊顯示全部）",
   "It is on an NTFS drive. NTFS drivers on macOS are slow and less reliable; a drive formatted as APFS or exFAT works better.": "它位於 NTFS 磁碟上。macOS 上的 NTFS 驅動程式速度慢且不夠可靠，使用 APFS 或 exFAT 格式的磁碟效果更好。",
   "It may be incomplete or damaged; export or download it again. ({error})": "它可能不完整或已損毀，請重新匯出或下載。（{error}）",
@@ -746,6 +787,7 @@
   "Measure: click two points on the model": "測量：點擊模型上的兩個點",
   "Medium": "中",
   "Merge": "合併",
+  "Merge Another Library…": "合併其他資料庫…",
   "Merge Library…": "合併資料庫…",
   "Merge another library into this one": "將另一個資料庫合併到此資料庫",
   "Merge finished": "合併完成",
@@ -784,10 +826,13 @@
   "Modified": "修改",
   "Month and day": "月和日",
   "Months": "月份",
+  "More": "更多",
   "Mouse": "滑鼠",
+  "Move": "移動",
   "Move All to Trash": "全部丟到垃圾桶",
   "Move Down": "下移",
   "Move Folder": "移動資料夾",
+  "Move Folders…": "移動資料夾…",
   "Move Folder…": "移動資料夾…",
   "Move Up": "上移",
   "Move folder": "移動資料夾",
@@ -807,11 +852,26 @@
   "Move to Top Level": "移到最上層",
   "Move to Trash": "丟到垃圾桶",
   "Move to the Trash": "丟到垃圾桶",
+  "Move {n} folders": {
+    "other": "移動{n}個資料夾"
+  },
   "Move {n} items to Trash?": {
     "other": "要將{n}個項目丟到垃圾桶嗎？"
   },
   "Move {n} to Trash": "將{n}個項目丟到垃圾桶",
   "Move {n} to folder": "將{n}個項目移到資料夾",
+  "Move “{first}” above “{target}”?": "要將「{first}」移到「{target}」上方嗎？",
+  "Move “{first}” and {n} other folders above “{target}”?": {
+    "other": "要將「{first}」和另外{n}個資料夾移到「{target}」上方嗎？"
+  },
+  "Move “{first}” and {n} other folders below “{target}”?": {
+    "other": "要將「{first}」和另外{n}個資料夾移到「{target}」下方嗎？"
+  },
+  "Move “{first}” and {n} other folders into “{target}”?": {
+    "other": "要將「{first}」和另外{n}個資料夾移到「{target}」內部嗎？"
+  },
+  "Move “{first}” below “{target}”?": "要將「{first}」移到「{target}」下方嗎？",
+  "Move “{first}” into “{target}”?": "要將「{first}」移到「{target}」內部嗎？",
   "Moved {n} empty item folders to the macOS Trash.": {
     "other": "已將 {n} 個空的項目資料夾丟到 macOS 垃圾桶。"
   },
@@ -849,6 +909,9 @@
   "New Subfolder…": "新增子資料夾…",
   "New Text File": "新增文字檔",
   "New folder": "新增資料夾",
+  "New folder with {n} items": {
+    "other": "新增資料夾，含{n}個項目"
+  },
   "New password": "新密碼",
   "New smart folder": "新增智慧型資料夾",
   "New smart folder group": "新增智慧型資料夾群組",
@@ -869,6 +932,7 @@
   "No audio output: {error}": "沒有音訊輸出：{error}",
   "No colour": "無顏色",
   "No folder": "無資料夾",
+  "No folder matches": "沒有符合的資料夾",
   "No folder used yet": "尚未使用過資料夾",
   "No folders": "無資料夾",
   "No folders found": "找不到資料夾",
@@ -1038,6 +1102,7 @@
   "Purple": "紫色",
   "Quality": "品質",
   "Quick Access": "快速存取",
+  "Quick Access ({count})": "快速存取（{count}）",
   "Quit Falcon": "結束 Falcon",
   "Random": "隨機",
   "Range": "範圍",
@@ -1088,6 +1153,7 @@
   "Refreshing Thumbnails": "正在重新整理縮圖",
   "Reload": "重新載入",
   "Remove": "移除",
+  "Remove Icon": "移除圖示",
   "Remove Password": "移除密碼",
   "Remove Password for “{name}”": "移除「{name}」的密碼",
   "Remove Password…": "移除密碼…",
@@ -1104,7 +1170,11 @@
   "Remove the open folder's password": "移除目前資料夾的密碼",
   "Remove the rating": "移除評分",
   "Remove this condition": "移除此條件",
+  "Remove this library's icon?": "要移除此資料庫的圖示嗎？",
   "Remove this rule": "移除此規則",
+  "Remove {n} folders from Quick Access": {
+    "other": "將{n}個資料夾從快速存取移除"
+  },
   "Remove {n} from folder": "將{n}個項目從資料夾移除",
   "Removed the rating": "已移除評分",
   "Removed {n} from the folder": "已將{n}個項目從資料夾移除",
@@ -1122,11 +1192,22 @@
   "Rename tag": "重新命名標籤",
   "Rename tag group": "重新命名標籤群組",
   "Rename the selected item": "重新命名所選項目",
+  "Rename {count} Folders…": "重新命名{count}個資料夾…",
+  "Rename {count} Smart Folders…": "重新命名{count}個智慧型資料夾…",
+  "Rename {n} Folders": {
+    "other": "重新命名{n}個資料夾"
+  },
   "Rename {n} Items": {
     "other": "重新命名{n}個項目"
   },
   "Rename {n} Items…": {
     "other": "重新命名{n}個項目…"
+  },
+  "Rename {n} Smart Folders": {
+    "other": "重新命名{n}個智慧型資料夾"
+  },
+  "Rename {n} folders": {
+    "other": "重新命名{n}個資料夾"
   },
   "Rename {n} items": {
     "other": "重新命名{n}個項目"
@@ -1155,6 +1236,7 @@
   "Reset to Default": "回復預設值",
   "Restore": "回復",
   "Restore All": "全部回復",
+  "Restore All Items": "回復所有項目",
   "Restore Defaults": "回復預設值",
   "Restore all {n} items in the Trash?": {
     "other": "要回復垃圾桶中的全部{n}個項目嗎？"
@@ -1249,6 +1331,7 @@
   "Show": "顯示",
   "Show All": "顯示全部",
   "Show All Tags": "顯示所有標籤",
+  "Show Collect Window": "顯示收集視窗",
   "Show Comment Count": "顯示註解數",
   "Show Counts": "顯示數量",
   "Show Edges": "顯示邊緣",
@@ -1333,7 +1416,9 @@
   "Slower": "減慢",
   "Small": "小",
   "Smart Folder": "智慧型資料夾",
+  "Smart Folder %N": "智慧型資料夾 %N",
   "Smart Folders": "智慧型資料夾",
+  "Smart Folders ({count})": "智慧型資料夾（{count}）",
   "Snapshot saved": "快照已儲存",
   "Some files already exist": "部分檔案已存在",
   "Some folders already exist": "部分資料夾已存在",
@@ -1403,6 +1488,7 @@
   "The files are removed from the library and cannot be restored.": "檔案將從資料庫中移除，且無法回復。",
   "The files were copied, but {library} couldn't be updated: {error}. Opening it again picks the copied items up.": "檔案已拷貝，但無法更新 {library}：{error}。再次開啟後會載入已拷貝的項目。",
   "The folder already exists": "資料夾已存在",
+  "The folder can't be found: {path}": "找不到此資料夾：{path}",
   "The item's file becomes a copy of “{file}”. Its name, tags, folders and notes stay; the current file is deleted.": "項目的檔案將變為「{file}」的拷貝。名稱、標籤、資料夾和備註會保留，目前的檔案將被刪除。",
   "The items were copied, but the folders couldn't be saved: {error}": "項目已拷貝，但無法儲存資料夾：{error}",
   "The library is a folder stored on this Mac. Back it up as you would any other files.": "資料庫是儲存在這台 Mac 上的資料夾。請像備份其他檔案一樣備份它。",
@@ -1424,6 +1510,9 @@
   "The tag picker's Recent tags start over. Tags stay on their items.": "標籤選擇器中的「最近使用」將重新開始。項目上的標籤會保留。",
   "The wheel button on an item": "在項目上按下滾輪鍵",
   "The wheel over an image in the viewer": "在檢視器中，滾輪作用於圖片時",
+  "The {n} selected items go into it.": {
+    "other": "所選的{n}個項目將放入其中。"
+  },
   "Their files and details are copied into the other library. This library keeps them as they are.": "它們的檔案和詳細資訊會拷貝到另一個資料庫，目前資料庫中的項目保持不變。",
   "Their hand-made order is replaced.": "手動排列的順序將被取代。",
   "Theme": "主題",
@@ -1445,8 +1534,14 @@
   "This item has no source URL": "此項目沒有來源網址",
   "This item is still in iCloud; open it once to download it, then copy again": "此項目仍在 iCloud 中；請先打開一次以下載，然後再拷貝",
   "This link isn't a web address, so it isn't opened here.": "此連結不是網址，因此不會在此處開啟。",
+  "This renames {n} folders. Go ahead?": {
+    "other": "將重新命名{n}個資料夾。要繼續嗎？"
+  },
   "This renames {n} items. Go ahead?": {
     "other": "這將重新命名{n}個項目。要繼續嗎？"
+  },
+  "This renames {n} smart folders. Go ahead?": {
+    "other": "將重新命名{n}個智慧型資料夾。要繼續嗎？"
   },
   "Thumbnail": "縮圖",
   "Thumbnail Background": "縮圖背景",
@@ -1461,6 +1556,9 @@
   "To the Bottom": "移到最下方",
   "To the Top": "移到最上方",
   "Today": "今天",
+  "Took {n} items out of {folders}": {
+    "other": "已將{n}個項目從{folders}中移出"
+  },
   "Top level": "最上層",
   "Touch ID didn't unlock Falcon": "Touch ID 未能解鎖 Falcon",
   "Touch ID didn't unlock the folder": "Touch ID 未能解鎖資料夾",
@@ -1627,6 +1725,7 @@
   "size::Custom": "自訂",
   "stars, e.g. 35": "星級，如 35",
   "starts with": "開頭是",
+  "switcher::Open": "已開啟",
   "tag, tag": "標籤, 標籤",
   "tags::All": "全部",
   "tags::Uncategorized": "未分組",
@@ -1640,6 +1739,8 @@
   "{app} Document": "{app}文件",
   "{chord} can't be used for “{command}”: another app has it": "{chord}無法用於「{command}」：已被其他 App 佔用",
   "{chord} is taken by another app": "{chord} 已被其他 App 佔用",
+  "{count} folders selected": "已選擇{count}個資料夾",
+  "{count} smart folders selected": "已選擇{count}個智慧型資料夾",
   "{done} of {total}": "{done}/{total}",
   "{first} and {n} more": "{first}及另外{n}項",
   "{first}–{last} would include Eagle's port {port}": "{first}–{last}包含 Eagle 的連接埠{port}",

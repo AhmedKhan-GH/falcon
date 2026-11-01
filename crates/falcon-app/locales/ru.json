@@ -8,6 +8,7 @@
   "A > Z": "А > Я",
   "A folder couldn't be created: {error}": "Не удалось создать папку: {error}",
   "A library already exists there. Create again and pick another folder, or change the name.": "Здесь уже есть библиотека. Создайте заново и выберите другую папку или измените имя.",
+  "A new folder right below this one": "Новая папка сразу под этой",
   "A number in the unit, or a time such as 1:30": "Число в выбранной единице или время вида 1:30",
   "A side left at 0 is not used": "Сторона со значением 0 не учитывается",
   "API on http://localhost:{port}": "API: http://localhost:{port}",
@@ -17,6 +18,7 @@
   "About {n} h left": "Осталось около {n} ч",
   "About {n} min left": "Осталось около {n} мин",
   "About {n} s left": "Осталось около {n} с",
+  "Above": "Выше",
   "Accuracy": "Точность",
   "Actions": "Действия",
   "Activated": "Активирован",
@@ -50,6 +52,11 @@
   "Add to Other Library": "Добавить в другую библиотеку",
   "Add to Quick Access": "Добавить в быстрый доступ",
   "Add to the last used folder": "Добавить в последнюю использованную папку",
+  "Add {n} folders to Quick Access": {
+    "few": "Добавить {n} папки в быстрый доступ",
+    "many": "Добавить {n} папок в быстрый доступ",
+    "one": "Добавить {n} папку в быстрый доступ"
+  },
   "Add {n} items": {
     "few": "Добавить {n} элемента",
     "many": "Добавить {n} элементов",
@@ -61,6 +68,7 @@
     "one": "Добавить {n} элемент в {library}"
   },
   "Add {n} to folder": "Добавить в папку: {n}",
+  "Add {n} to folders": "Добавить {n} в папки",
   "Added the folder and {n} items to {target}": {
     "few": "В {target} добавлены папка и {n} элемента",
     "many": "В {target} добавлены папка и {n} элементов",
@@ -80,6 +88,11 @@
     "few": "Добавлено {n} элемента в",
     "many": "Добавлено {n} элементов в",
     "one": "Добавлен {n} элемент в"
+  },
+  "Added {n} items to {count} folders": {
+    "few": "Добавлено элементов: {n}, папок: {count}",
+    "many": "Добавлено элементов: {n}, папок: {count}",
+    "one": "Добавлено элементов: {n}, папок: {count}"
   },
   "Added {n} items to {target}": {
     "few": "В {target} добавлено {n} элемента",
@@ -159,6 +172,7 @@
   "Back 10 frames": "Назад на 10 кадров",
   "Background Colour": "Цвет фона",
   "Base64": "Base64",
+  "Below": "Ниже",
   "Black": "Чёрный",
   "Blue": "Синий",
   "Bookmark": "Закладка",
@@ -178,14 +192,25 @@
   "Change": "Изменить",
   "Change Extension": "Изменить расширение",
   "Change Icon": "Изменить значок",
+  "Change Icon…": "Изменить значок…",
   "Change Password": "Сменить пароль",
   "Change Password for “{name}”": "Смена пароля для «{name}»",
   "Change Password…": "Сменить пароль…",
   "Change extension": "Изменить расширение",
   "Change folder settings": "Изменить настройки папки",
   "Change icon": "Изменить значок",
+  "Change icon of {n} folders": {
+    "few": "Изменить значок {n} папок",
+    "many": "Изменить значок {n} папок",
+    "one": "Изменить значок {n} папки"
+  },
   "Change sample language": "Изменить язык образца",
   "Change sort": "Изменить сортировку",
+  "Change sort of {n} folders": {
+    "few": "Изменить сортировку {n} папок",
+    "many": "Изменить сортировку {n} папок",
+    "one": "Изменить сортировку {n} папки"
+  },
   "Change the open folder's password": "Изменить пароль открытой папки",
   "Changes the preview only": "Меняет только просмотр",
   "Changes the volume": "Меняет громкость",
@@ -193,6 +218,7 @@
   "Check Before Merging": "Проверка перед объединением",
   "Checkerboard": "Шахматный узор",
   "Choose Another": "Выбрать другую",
+  "Choose Library Icon": "Выбор значка библиотеки",
   "Choose Library…": "Выбрать библиотеку…",
   "Choose Thumbnail": "Выбор миниатюры",
   "Choose a Library to Add To": "Выберите библиотеку для добавления",
@@ -207,9 +233,11 @@
   "Clear": "Сбросить",
   "Clear All": "Очистить всё",
   "Clear Filter": "Сбросить фильтр",
+  "Clear History…": "Очистить историю…",
   "Clear Invalid Content…": "Удалить недействительное содержимое…",
   "Clear Library History": "Очистить историю библиотек",
   "Clear Library History…": "Очистить историю библиотек…",
+  "Clear Recently Used": "Очистить недавние",
   "Clear Tag History…": "Очистить историю тегов…",
   "Clear Tags": "Удалить теги",
   "Clear tag history": "Очистить историю тегов",
@@ -237,6 +265,7 @@
   "Click to resume": "Нажмите, чтобы продолжить",
   "Close": "Закрыть",
   "Close (Esc)": "Закрыть (Esc)",
+  "Close Library": "Закрыть библиотеку",
   "Close Library While Tasks Run": "Закрыть библиотеку, пока выполняются задачи",
   "Close Window": "Закрыть окно",
   "Close the viewer, or clear the selection": "Закрыть просмотрщик или снять выделение",
@@ -345,10 +374,12 @@
   "Could not reload: {error}": "Не удалось перезагрузить: {error}",
   "Could not save: {error}": "Не удалось сохранить: {error}",
   "Could not save: {e}": "Не удалось сохранить: {e}",
+  "Couldn't change the icon: {error}": "Не удалось изменить значок: {error}",
   "Couldn't download from iCloud: {e}": "Не удалось загрузить из iCloud: {e}",
   "Couldn't export the model: {error}": "Не удалось экспортировать модель: {error}",
   "Couldn't import {path}: {error}": "Не удалось импортировать {path}: {error}",
   "Couldn't make a folder for the screenshot": "Не удалось создать папку для снимка",
+  "Couldn't remove the icon: {error}": "Не удалось удалить значок: {error}",
   "Couldn't save the frame: {error}": "Не удалось сохранить кадр: {error}",
   "Couldn't save the snapshot: {error}": "Не удалось сохранить снимок: {error}",
   "Count, High to Low": "По количеству, по убыванию",
@@ -403,11 +434,18 @@
   "Delete tag group": "Удалить группу тегов",
   "Delete the group “{name}”?": "Удалить группу «{name}»?",
   "Delete the tag “{tag}”?": "Удалить тег «{tag}»?",
+  "Delete {count} Folders": "Удалить папки: {count}",
+  "Delete {count} Smart Folders": "Удалить смарт-папки: {count}",
   "Delete {n}": "Удалить: {n}",
   "Delete {n} Tags": {
     "few": "Удалить {n} тега",
     "many": "Удалить {n} тегов",
     "one": "Удалить {n} тег"
+  },
+  "Delete {n} folders": {
+    "few": "Удалить {n} папки",
+    "many": "Удалить {n} папок",
+    "one": "Удалить {n} папку"
   },
   "Delete {n} folders?": {
     "few": "Удалить {n} папки?",
@@ -418,6 +456,11 @@
     "few": "Удалить {n} элемента навсегда?",
     "many": "Удалить {n} элементов навсегда?",
     "one": "Удалить {n} элемент навсегда?"
+  },
+  "Delete {n} smart folders": {
+    "few": "Удалить {n} смарт-папки",
+    "many": "Удалить {n} смарт-папок",
+    "one": "Удалить {n} смарт-папку"
   },
   "Delete {n} smart folders?": {
     "few": "Удалить {n} смарт-папки?",
@@ -469,7 +512,9 @@
     "one": "Исключён {n} элемент, папка которого пропала."
   },
   "Duplicate": "Дублировать",
+  "Duplicate folder": "Дублировать папку",
   "Duplicate item": "Дублировать элемент",
+  "Duplicate smart folder": "Дублировать смарт-папку",
   "Duplicate the item": "Дублировать элемент",
   "Duplicate the item (second key)": "Дублировать элемент (вторая клавиша)",
   "Duplicated": "Продублировано",
@@ -611,6 +656,7 @@
   "Focal length (mm)": "Фокусное расстояние (мм)",
   "Focus search": "Перейти к поиску",
   "Folder": "Папка",
+  "Folder %N": "Папка %N",
   "Folder Description": "Описание папки",
   "Folder Name": "Имя папки",
   "Folder Password": "Пароль папки",
@@ -622,6 +668,7 @@
   "Folder settings (name and auto-tags)": "Настройки папки (название и автотеги)",
   "Folder:": "Папка:",
   "Folders": "Папки",
+  "Folders ({count})": "Папки ({count})",
   "Folders ({n})": "Папки ({n})",
   "Font": "Шрифт",
   "Fonts": "Шрифты",
@@ -648,6 +695,8 @@
   "Global Settings": "Общие настройки",
   "Global: {sort}": "Общая: {sort}",
   "Go": "Переход",
+  "Go to Folder": "Перейти к папке",
+  "Go to Folder  {keys}": "Перейти к папке  {keys}",
   "Go to Folder…": "Перейти к папке…",
   "Go to a folder (single key)": "Перейти к папке (одна клавиша)",
   "Go to a folder, tag or smart folder": "Перейти к папке, тегу или смарт-папке",
@@ -672,7 +721,9 @@
   "Help": "Справка",
   "Hex": "Hex",
   "Hide": "Скрыть",
+  "Hide Collect Window": "Скрыть окно сбора",
   "Hide inspector": "Скрыть инспектор",
+  "Hide sidebar": "Скрыть боковую панель",
   "High": "Высокое",
   "Hint (optional)": "Подсказка (необязательно)",
   "Hint: {hint}": "Подсказка: {hint}",
@@ -694,6 +745,7 @@
   "Import Files…": "Импортировать файлы…",
   "Import Folders": "Импорт папок",
   "Import Folders…": "Импорт папок…",
+  "Import Inboard Backup…": "Импортировать резервную копию Inboard…",
   "Import a large folder?": "Импортировать большую папку?",
   "Import an Eagle package": "Импортировать пакет Eagle",
   "Import an Inboard backup": "Импортировать резервную копию Inboard",
@@ -727,6 +779,7 @@
   "Inside": "Внутри",
   "Inspector": "Инспектор",
   "Interface zoom": "Масштаб интерфейса",
+  "Into": "Внутрь",
   "Isolate (again to show all)": "Изолировать (ещё раз — показать все)",
   "It is on an NTFS drive. NTFS drivers on macOS are slow and less reliable; a drive formatted as APFS or exFAT works better.": "Она находится на диске NTFS. Драйверы NTFS в macOS медленные и менее надёжные; диск в формате APFS или exFAT работает лучше.",
   "It may be incomplete or damaged; export or download it again. ({error})": "Возможно, он неполный или повреждён; экспортируйте или скачайте его заново. ({error})",
@@ -818,6 +871,7 @@
   "Measure: click two points on the model": "Измерение: щёлкните две точки на модели",
   "Medium": "Средний",
   "Merge": "Объединить",
+  "Merge Another Library…": "Объединить с другой библиотекой…",
   "Merge Library…": "Объединить библиотеку…",
   "Merge another library into this one": "Объединить другую библиотеку с этой",
   "Merge finished": "Объединение завершено",
@@ -870,10 +924,13 @@
   "Modified": "Изменено",
   "Month and day": "Месяц и день",
   "Months": "Месяцы",
+  "More": "Ещё",
   "Mouse": "Мышь",
+  "Move": "Переместить",
   "Move All to Trash": "Переместить все в корзину",
   "Move Down": "Переместить вниз",
   "Move Folder": "Переместить папку",
+  "Move Folders…": "Переместить папки…",
   "Move Folder…": "Переместить папку…",
   "Move Up": "Переместить вверх",
   "Move folder": "Переместить папку",
@@ -893,6 +950,11 @@
   "Move to Top Level": "Переместить на верхний уровень",
   "Move to Trash": "Переместить в корзину",
   "Move to the Trash": "Переместить в корзину",
+  "Move {n} folders": {
+    "few": "Переместить {n} папки",
+    "many": "Переместить {n} папок",
+    "one": "Переместить {n} папку"
+  },
   "Move {n} items to Trash?": {
     "few": "Переместить {n} элемента в корзину?",
     "many": "Переместить {n} элементов в корзину?",
@@ -900,6 +962,24 @@
   },
   "Move {n} to Trash": "Переместить в корзину: {n}",
   "Move {n} to folder": "Переместить в папку: {n}",
+  "Move “{first}” above “{target}”?": "Переместить «{first}» выше «{target}»?",
+  "Move “{first}” and {n} other folders above “{target}”?": {
+    "few": "Переместить «{first}» и ещё {n} папки выше «{target}»?",
+    "many": "Переместить «{first}» и ещё {n} папок выше «{target}»?",
+    "one": "Переместить «{first}» и ещё {n} папку выше «{target}»?"
+  },
+  "Move “{first}” and {n} other folders below “{target}”?": {
+    "few": "Переместить «{first}» и ещё {n} папки ниже «{target}»?",
+    "many": "Переместить «{first}» и ещё {n} папок ниже «{target}»?",
+    "one": "Переместить «{first}» и ещё {n} папку ниже «{target}»?"
+  },
+  "Move “{first}” and {n} other folders into “{target}”?": {
+    "few": "Переместить «{first}» и ещё {n} папки в «{target}»?",
+    "many": "Переместить «{first}» и ещё {n} папок в «{target}»?",
+    "one": "Переместить «{first}» и ещё {n} папку в «{target}»?"
+  },
+  "Move “{first}” below “{target}”?": "Переместить «{first}» ниже «{target}»?",
+  "Move “{first}” into “{target}”?": "Переместить «{first}» в «{target}»?",
   "Moved {n} empty item folders to the macOS Trash.": {
     "few": "{n} пустые папки элементов перемещены в корзину macOS.",
     "many": "{n} пустых папок элементов перемещено в корзину macOS.",
@@ -945,6 +1025,11 @@
   "New Subfolder…": "Новая вложенная папка…",
   "New Text File": "Новый текстовый файл",
   "New folder": "Новая папка",
+  "New folder with {n} items": {
+    "few": "Новая папка с {n} элементами",
+    "many": "Новая папка с {n} элементами",
+    "one": "Новая папка с {n} элементом"
+  },
   "New password": "Новый пароль",
   "New smart folder": "Новая смарт-папка",
   "New smart folder group": "Новая группа смарт-папок",
@@ -965,6 +1050,7 @@
   "No audio output: {error}": "Нет аудиовыхода: {error}",
   "No colour": "Без цвета",
   "No folder": "Без папки",
+  "No folder matches": "Нет подходящих папок",
   "No folder used yet": "Ещё нет использованных папок",
   "No folders": "Нет папок",
   "No folders found": "Папки не найдены",
@@ -1142,6 +1228,7 @@
   "Purple": "Фиолетовый",
   "Quality": "Качество",
   "Quick Access": "Быстрый доступ",
+  "Quick Access ({count})": "Быстрый доступ ({count})",
   "Quit Falcon": "Завершить Falcon",
   "Random": "Случайные",
   "Range": "Диапазон",
@@ -1204,6 +1291,7 @@
   "Refreshing Thumbnails": "Обновление миниатюр",
   "Reload": "Обновить",
   "Remove": "Удалить",
+  "Remove Icon": "Удалить значок",
   "Remove Password": "Удалить пароль",
   "Remove Password for “{name}”": "Удаление пароля для «{name}»",
   "Remove Password…": "Удалить пароль…",
@@ -1220,7 +1308,13 @@
   "Remove the open folder's password": "Удалить пароль открытой папки",
   "Remove the rating": "Убрать рейтинг",
   "Remove this condition": "Удалить это условие",
+  "Remove this library's icon?": "Удалить значок этой библиотеки?",
   "Remove this rule": "Удалить это правило",
+  "Remove {n} folders from Quick Access": {
+    "few": "Убрать {n} папки из быстрого доступа",
+    "many": "Убрать {n} папок из быстрого доступа",
+    "one": "Убрать {n} папку из быстрого доступа"
+  },
   "Remove {n} from folder": "Убрать из папки: {n}",
   "Removed the rating": "Оценка удалена",
   "Removed {n} from the folder": "Убрано из папки: {n}",
@@ -1240,6 +1334,13 @@
   "Rename tag": "Переименовать тег",
   "Rename tag group": "Переименовать группу тегов",
   "Rename the selected item": "Переименовать выбранный элемент",
+  "Rename {count} Folders…": "Переименовать папки: {count}…",
+  "Rename {count} Smart Folders…": "Переименовать смарт-папки: {count}…",
+  "Rename {n} Folders": {
+    "few": "Переименовать {n} папки",
+    "many": "Переименовать {n} папок",
+    "one": "Переименовать {n} папку"
+  },
   "Rename {n} Items": {
     "few": "Переименовать {n} элемента",
     "many": "Переименовать {n} элементов",
@@ -1249,6 +1350,16 @@
     "few": "Переименовать {n} элемента…",
     "many": "Переименовать {n} элементов…",
     "one": "Переименовать {n} элемент…"
+  },
+  "Rename {n} Smart Folders": {
+    "few": "Переименовать {n} смарт-папки",
+    "many": "Переименовать {n} смарт-папок",
+    "one": "Переименовать {n} смарт-папку"
+  },
+  "Rename {n} folders": {
+    "few": "Переименовать {n} папки",
+    "many": "Переименовать {n} папок",
+    "one": "Переименовать {n} папку"
   },
   "Rename {n} items": {
     "few": "Переименовать {n} элемента",
@@ -1283,6 +1394,7 @@
   "Reset to Default": "Сбросить настройки",
   "Restore": "Восстановить",
   "Restore All": "Восстановить все",
+  "Restore All Items": "Восстановить все элементы",
   "Restore Defaults": "Восстановить по умолчанию",
   "Restore all {n} items in the Trash?": {
     "few": "Восстановить все {n} элемента из корзины?",
@@ -1383,6 +1495,7 @@
   "Show": "Показать",
   "Show All": "Показать все",
   "Show All Tags": "Показать все теги",
+  "Show Collect Window": "Показать окно сбора",
   "Show Comment Count": "Показывать число комментариев",
   "Show Counts": "Показывать количество",
   "Show Edges": "Показывать рёбра",
@@ -1473,7 +1586,9 @@
   "Slower": "Медленнее",
   "Small": "Маленький",
   "Smart Folder": "Смарт-папка",
+  "Smart Folder %N": "Смарт-папка %N",
   "Smart Folders": "Смарт-папки",
+  "Smart Folders ({count})": "Смарт-папки ({count})",
   "Snapshot saved": "Снимок сохранён",
   "Some files already exist": "Некоторые файлы уже существуют",
   "Some folders already exist": "Некоторые папки уже существуют",
@@ -1549,6 +1664,7 @@
   "The files are removed from the library and cannot be restored.": "Файлы будут удалены из библиотеки без возможности восстановления.",
   "The files were copied, but {library} couldn't be updated: {error}. Opening it again picks the copied items up.": "Файлы скопированы, но обновить {library} не удалось: {error}. При повторном открытии скопированные элементы будут подхвачены.",
   "The folder already exists": "Папка уже существует",
+  "The folder can't be found: {path}": "Папка не найдена: {path}",
   "The item's file becomes a copy of “{file}”. Its name, tags, folders and notes stay; the current file is deleted.": "Файл элемента станет копией «{file}». Имя, теги, папки и заметки сохранятся; текущий файл будет удалён.",
   "The items were copied, but the folders couldn't be saved: {error}": "Элементы скопированы, но папки сохранить не удалось: {error}",
   "The library is a folder stored on this Mac. Back it up as you would any other files.": "Библиотека — это папка на этом Mac. Делайте её резервные копии, как и других файлов.",
@@ -1570,6 +1686,11 @@
   "The tag picker's Recent tags start over. Tags stay on their items.": "Список недавних тегов в выборе тегов начнётся заново. Теги на элементах останутся.",
   "The wheel button on an item": "Нажатие колеса мыши на элементе",
   "The wheel over an image in the viewer": "Колесо над изображением в просмотрщике",
+  "The {n} selected items go into it.": {
+    "few": "Выбранные элементы ({n}) попадут в неё.",
+    "many": "Выбранные элементы ({n}) попадут в неё.",
+    "one": "Выбранный элемент ({n}) попадёт в неё."
+  },
   "Their files and details are copied into the other library. This library keeps them as they are.": "Их файлы и сведения копируются в другую библиотеку. В этой библиотеке они остаются без изменений.",
   "Their hand-made order is replaced.": "Заданный вручную порядок будет заменён.",
   "Theme": "Тема",
@@ -1591,10 +1712,20 @@
   "This item has no source URL": "У этого элемента нет URL источника",
   "This item is still in iCloud; open it once to download it, then copy again": "Этот элемент ещё в iCloud; откройте его, чтобы загрузить, и скопируйте снова",
   "This link isn't a web address, so it isn't opened here.": "Эта ссылка не является веб-адресом и здесь не открывается.",
+  "This renames {n} folders. Go ahead?": {
+    "few": "Будут переименованы {n} папки. Продолжить?",
+    "many": "Будут переименованы {n} папок. Продолжить?",
+    "one": "Будет переименована {n} папка. Продолжить?"
+  },
   "This renames {n} items. Go ahead?": {
     "few": "Будет переименовано {n} элемента. Продолжить?",
     "many": "Будет переименовано {n} элементов. Продолжить?",
     "one": "Будет переименован {n} элемент. Продолжить?"
+  },
+  "This renames {n} smart folders. Go ahead?": {
+    "few": "Будут переименованы {n} смарт-папки. Продолжить?",
+    "many": "Будут переименованы {n} смарт-папок. Продолжить?",
+    "one": "Будет переименована {n} смарт-папка. Продолжить?"
   },
   "Thumbnail": "Миниатюра",
   "Thumbnail Background": "Фон миниатюры",
@@ -1609,6 +1740,11 @@
   "To the Bottom": "В конец",
   "To the Top": "В начало",
   "Today": "Сегодня",
+  "Took {n} items out of {folders}": {
+    "few": "Убрано элементов: {n}, из: {folders}",
+    "many": "Убрано элементов: {n}, из: {folders}",
+    "one": "Убрано элементов: {n}, из: {folders}"
+  },
   "Top level": "Верхний уровень",
   "Touch ID didn't unlock Falcon": "Touch ID не разблокировал Falcon",
   "Touch ID didn't unlock the folder": "Touch ID не разблокировал папку",
@@ -1783,6 +1919,7 @@
   "size::Custom": "Свой",
   "stars, e.g. 35": "звёзды, напр. 35",
   "starts with": "начинается с",
+  "switcher::Open": "Открытые",
   "tag, tag": "тег, тег",
   "tags::All": "Все",
   "tags::Uncategorized": "Без группы",
@@ -1796,6 +1933,8 @@
   "{app} Document": "Документ {app}",
   "{chord} can't be used for “{command}”: another app has it": "{chord} нельзя назначить команде «{command}»: сочетание занято другим приложением",
   "{chord} is taken by another app": "{chord} занято другим приложением",
+  "{count} folders selected": "Выбрано папок: {count}",
+  "{count} smart folders selected": "Выбрано смарт-папок: {count}",
   "{done} of {total}": "{done} из {total}",
   "{first} and {n} more": "{first} и ещё {n}",
   "{first}–{last} would include Eagle's port {port}": "{first}–{last} включает порт Eagle {port}",

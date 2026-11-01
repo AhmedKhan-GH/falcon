@@ -8,6 +8,7 @@
   "A > Z": "A > Z",
   "A folder couldn't be created: {error}": "A folder couldn't be created: {error}",
   "A library already exists there. Create again and pick another folder, or change the name.": "A library already exists there. Create again and pick another folder, or change the name.",
+  "A new folder right below this one": "A new folder right below this one",
   "A number in the unit, or a time such as 1:30": "A number in the unit, or a time such as 1:30",
   "A side left at 0 is not used": "A side left at 0 is not used",
   "API on http://localhost:{port}": "API on http://localhost:{port}",
@@ -17,6 +18,7 @@
   "About {n} h left": "About {n} h left",
   "About {n} min left": "About {n} min left",
   "About {n} s left": "About {n} s left",
+  "Above": "Above",
   "Accuracy": "Accuracy",
   "Actions": "Actions",
   "Activated": "Activated",
@@ -50,6 +52,10 @@
   "Add to Other Library": "Add to Other Library",
   "Add to Quick Access": "Add to Quick Access",
   "Add to the last used folder": "Add to the last used folder",
+  "Add {n} folders to Quick Access": {
+    "one": "Add folder to Quick Access",
+    "other": "Add {n} folders to Quick Access"
+  },
   "Add {n} items": {
     "one": "Add {n} item",
     "other": "Add {n} items"
@@ -59,6 +65,7 @@
     "other": "Add {n} items to {library}"
   },
   "Add {n} to folder": "Add {n} to folder",
+  "Add {n} to folders": "Add {n} to folders",
   "Added the folder and {n} items to {target}": {
     "one": "Added the folder and {n} item to {target}",
     "other": "Added the folder and {n} items to {target}"
@@ -75,6 +82,10 @@
   "Added {n} items to": {
     "one": "Added {n} item to",
     "other": "Added {n} items to"
+  },
+  "Added {n} items to {count} folders": {
+    "one": "Added {n} item to {count} folders",
+    "other": "Added {n} items to {count} folders"
   },
   "Added {n} items to {target}": {
     "one": "Added {n} item to {target}",
@@ -149,6 +160,7 @@
   "Back 10 frames": "Back 10 frames",
   "Background Colour": "Background Colour",
   "Base64": "Base64",
+  "Below": "Below",
   "Black": "Black",
   "Blue": "Blue",
   "Bookmark": "Bookmark",
@@ -168,14 +180,23 @@
   "Change": "Change",
   "Change Extension": "Change Extension",
   "Change Icon": "Change Icon",
+  "Change Icon…": "Change Icon…",
   "Change Password": "Change Password",
   "Change Password for “{name}”": "Change Password for “{name}”",
   "Change Password…": "Change Password…",
   "Change extension": "Change extension",
   "Change folder settings": "Change folder settings",
   "Change icon": "Change icon",
+  "Change icon of {n} folders": {
+    "one": "Change icon of folder",
+    "other": "Change icon of {n} folders"
+  },
   "Change sample language": "Change sample language",
   "Change sort": "Change sort",
+  "Change sort of {n} folders": {
+    "one": "Change sort of folder",
+    "other": "Change sort of {n} folders"
+  },
   "Change the open folder's password": "Change the open folder's password",
   "Changes the preview only": "Changes the preview only",
   "Changes the volume": "Changes the volume",
@@ -183,6 +204,7 @@
   "Check Before Merging": "Check Before Merging",
   "Checkerboard": "Checkerboard",
   "Choose Another": "Choose Another",
+  "Choose Library Icon": "Choose Library Icon",
   "Choose Library…": "Choose Library…",
   "Choose Thumbnail": "Choose Thumbnail",
   "Choose a Library to Add To": "Choose a Library to Add To",
@@ -197,9 +219,11 @@
   "Clear": "Clear",
   "Clear All": "Clear All",
   "Clear Filter": "Clear Filter",
+  "Clear History…": "Clear History…",
   "Clear Invalid Content…": "Clear Invalid Content…",
   "Clear Library History": "Clear Library History",
   "Clear Library History…": "Clear Library History…",
+  "Clear Recently Used": "Clear Recently Used",
   "Clear Tag History…": "Clear Tag History…",
   "Clear Tags": "Clear Tags",
   "Clear tag history": "Clear tag history",
@@ -226,6 +250,7 @@
   "Click to resume": "Click to resume",
   "Close": "Close",
   "Close (Esc)": "Close (Esc)",
+  "Close Library": "Close Library",
   "Close Library While Tasks Run": "Close Library While Tasks Run",
   "Close Window": "Close Window",
   "Close the viewer, or clear the selection": "Close the viewer, or clear the selection",
@@ -324,10 +349,12 @@
   "Could not reload: {error}": "Could not reload: {error}",
   "Could not save: {error}": "Could not save: {error}",
   "Could not save: {e}": "Could not save: {e}",
+  "Couldn't change the icon: {error}": "Couldn't change the icon: {error}",
   "Couldn't download from iCloud: {e}": "Couldn't download from iCloud: {e}",
   "Couldn't export the model: {error}": "Couldn't export the model: {error}",
   "Couldn't import {path}: {error}": "Couldn't import {path}: {error}",
   "Couldn't make a folder for the screenshot": "Couldn't make a folder for the screenshot",
+  "Couldn't remove the icon: {error}": "Couldn't remove the icon: {error}",
   "Couldn't save the frame: {error}": "Couldn't save the frame: {error}",
   "Couldn't save the snapshot: {error}": "Couldn't save the snapshot: {error}",
   "Count, High to Low": "Count, High to Low",
@@ -382,10 +409,16 @@
   "Delete tag group": "Delete tag group",
   "Delete the group “{name}”?": "Delete the group “{name}”?",
   "Delete the tag “{tag}”?": "Delete the tag “{tag}”?",
+  "Delete {count} Folders": "Delete {count} Folders",
+  "Delete {count} Smart Folders": "Delete {count} Smart Folders",
   "Delete {n}": "Delete {n}",
   "Delete {n} Tags": {
     "one": "Delete {n} Tag",
     "other": "Delete {n} Tags"
+  },
+  "Delete {n} folders": {
+    "one": "Delete folder",
+    "other": "Delete {n} folders"
   },
   "Delete {n} folders?": {
     "one": "Delete {n} folder?",
@@ -394,6 +427,10 @@
   "Delete {n} items permanently?": {
     "one": "Delete {n} item permanently?",
     "other": "Delete {n} items permanently?"
+  },
+  "Delete {n} smart folders": {
+    "one": "Delete smart folder",
+    "other": "Delete {n} smart folders"
   },
   "Delete {n} smart folders?": {
     "one": "Delete {n} smart folder?",
@@ -441,7 +478,9 @@
     "other": "Dropped {n} items whose folders were gone."
   },
   "Duplicate": "Duplicate",
+  "Duplicate folder": "Duplicate folder",
   "Duplicate item": "Duplicate item",
+  "Duplicate smart folder": "Duplicate smart folder",
   "Duplicate the item": "Duplicate the item",
   "Duplicate the item (second key)": "Duplicate the item (second key)",
   "Duplicated": "Duplicated",
@@ -580,6 +619,7 @@
   "Focal length (mm)": "Focal length (mm)",
   "Focus search": "Focus search",
   "Folder": "Folder",
+  "Folder %N": "Folder %N",
   "Folder Description": "Folder Description",
   "Folder Name": "Folder Name",
   "Folder Password": "Folder Password",
@@ -591,6 +631,7 @@
   "Folder settings (name and auto-tags)": "Folder settings (name and auto-tags)",
   "Folder:": "Folder:",
   "Folders": "Folders",
+  "Folders ({count})": "Folders ({count})",
   "Folders ({n})": "Folders ({n})",
   "Font": "Font",
   "Fonts": "Fonts",
@@ -616,6 +657,8 @@
   "Global Settings": "Global Settings",
   "Global: {sort}": "Global: {sort}",
   "Go": "Go",
+  "Go to Folder": "Go to Folder",
+  "Go to Folder  {keys}": "Go to Folder  {keys}",
   "Go to Folder…": "Go to Folder…",
   "Go to a folder (single key)": "Go to a folder (single key)",
   "Go to a folder, tag or smart folder": "Go to a folder, tag or smart folder",
@@ -639,7 +682,9 @@
   "Help": "Help",
   "Hex": "Hex",
   "Hide": "Hide",
+  "Hide Collect Window": "Hide Collect Window",
   "Hide inspector": "Hide inspector",
+  "Hide sidebar": "Hide sidebar",
   "High": "High",
   "Hint (optional)": "Hint (optional)",
   "Hint: {hint}": "Hint: {hint}",
@@ -661,6 +706,7 @@
   "Import Files…": "Import Files…",
   "Import Folders": "Import Folders",
   "Import Folders…": "Import Folders…",
+  "Import Inboard Backup…": "Import Inboard Backup…",
   "Import a large folder?": "Import a large folder?",
   "Import an Eagle package": "Import an Eagle package",
   "Import an Inboard backup": "Import an Inboard backup",
@@ -692,6 +738,7 @@
   "Inside": "Inside",
   "Inspector": "Inspector",
   "Interface zoom": "Interface zoom",
+  "Into": "Into",
   "Isolate (again to show all)": "Isolate (again to show all)",
   "It is on an NTFS drive. NTFS drivers on macOS are slow and less reliable; a drive formatted as APFS or exFAT works better.": "It is on an NTFS drive. NTFS drivers on macOS are slow and less reliable; a drive formatted as APFS or exFAT works better.",
   "It may be incomplete or damaged; export or download it again. ({error})": "It may be incomplete or damaged; export or download it again. ({error})",
@@ -782,6 +829,7 @@
   "Measure: click two points on the model": "Measure: click two points on the model",
   "Medium": "Medium",
   "Merge": "Merge",
+  "Merge Another Library…": "Merge Another Library…",
   "Merge Library…": "Merge Library…",
   "Merge another library into this one": "Merge another library into this one",
   "Merge finished": "Merge finished",
@@ -827,10 +875,13 @@
   "Modified": "Modified",
   "Month and day": "Month and day",
   "Months": "Months",
+  "More": "More",
   "Mouse": "Mouse",
+  "Move": "Move",
   "Move All to Trash": "Move All to Trash",
   "Move Down": "Move Down",
   "Move Folder": "Move Folder",
+  "Move Folders…": "Move Folders…",
   "Move Folder…": "Move Folder…",
   "Move Up": "Move Up",
   "Move folder": "Move folder",
@@ -850,12 +901,31 @@
   "Move to Top Level": "Move to Top Level",
   "Move to Trash": "Move to Trash",
   "Move to the Trash": "Move to the Trash",
+  "Move {n} folders": {
+    "one": "Move folder",
+    "other": "Move {n} folders"
+  },
   "Move {n} items to Trash?": {
     "one": "Move {n} item to Trash?",
     "other": "Move {n} items to Trash?"
   },
   "Move {n} to Trash": "Move {n} to Trash",
   "Move {n} to folder": "Move {n} to folder",
+  "Move “{first}” above “{target}”?": "Move “{first}” above “{target}”?",
+  "Move “{first}” and {n} other folders above “{target}”?": {
+    "one": "Move “{first}” and {n} other folder above “{target}”?",
+    "other": "Move “{first}” and {n} other folders above “{target}”?"
+  },
+  "Move “{first}” and {n} other folders below “{target}”?": {
+    "one": "Move “{first}” and {n} other folder below “{target}”?",
+    "other": "Move “{first}” and {n} other folders below “{target}”?"
+  },
+  "Move “{first}” and {n} other folders into “{target}”?": {
+    "one": "Move “{first}” and {n} other folder into “{target}”?",
+    "other": "Move “{first}” and {n} other folders into “{target}”?"
+  },
+  "Move “{first}” below “{target}”?": "Move “{first}” below “{target}”?",
+  "Move “{first}” into “{target}”?": "Move “{first}” into “{target}”?",
   "Moved {n} empty item folders to the macOS Trash.": {
     "one": "Moved {n} empty item folder to the macOS Trash.",
     "other": "Moved {n} empty item folders to the macOS Trash."
@@ -897,6 +967,10 @@
   "New Subfolder…": "New Subfolder…",
   "New Text File": "New Text File",
   "New folder": "New folder",
+  "New folder with {n} items": {
+    "one": "New folder with {n} item",
+    "other": "New folder with {n} items"
+  },
   "New password": "New password",
   "New smart folder": "New smart folder",
   "New smart folder group": "New smart folder group",
@@ -917,6 +991,7 @@
   "No audio output: {error}": "No audio output: {error}",
   "No colour": "No colour",
   "No folder": "No folder",
+  "No folder matches": "No folder matches",
   "No folder used yet": "No folder used yet",
   "No folders": "No folders",
   "No folders found": "No folders found",
@@ -1090,6 +1165,7 @@
   "Purple": "Purple",
   "Quality": "Quality",
   "Quick Access": "Quick Access",
+  "Quick Access ({count})": "Quick Access ({count})",
   "Quit Falcon": "Quit Falcon",
   "Random": "Random",
   "Range": "Range",
@@ -1146,6 +1222,7 @@
   "Refreshing Thumbnails": "Refreshing Thumbnails",
   "Reload": "Reload",
   "Remove": "Remove",
+  "Remove Icon": "Remove Icon",
   "Remove Password": "Remove Password",
   "Remove Password for “{name}”": "Remove Password for “{name}”",
   "Remove Password…": "Remove Password…",
@@ -1162,7 +1239,12 @@
   "Remove the open folder's password": "Remove the open folder's password",
   "Remove the rating": "Remove the rating",
   "Remove this condition": "Remove this condition",
+  "Remove this library's icon?": "Remove this library's icon?",
   "Remove this rule": "Remove this rule",
+  "Remove {n} folders from Quick Access": {
+    "one": "Remove folder from Quick Access",
+    "other": "Remove {n} folders from Quick Access"
+  },
   "Remove {n} from folder": "Remove {n} from folder",
   "Removed the rating": "Removed the rating",
   "Removed {n} from the folder": "Removed {n} from the folder",
@@ -1181,6 +1263,12 @@
   "Rename tag": "Rename tag",
   "Rename tag group": "Rename tag group",
   "Rename the selected item": "Rename the selected item",
+  "Rename {count} Folders…": "Rename {count} Folders…",
+  "Rename {count} Smart Folders…": "Rename {count} Smart Folders…",
+  "Rename {n} Folders": {
+    "one": "Rename {n} Folder",
+    "other": "Rename {n} Folders"
+  },
   "Rename {n} Items": {
     "one": "Rename {n} Item",
     "other": "Rename {n} Items"
@@ -1188,6 +1276,14 @@
   "Rename {n} Items…": {
     "one": "Rename {n} Item…",
     "other": "Rename {n} Items…"
+  },
+  "Rename {n} Smart Folders": {
+    "one": "Rename {n} Smart Folder",
+    "other": "Rename {n} Smart Folders"
+  },
+  "Rename {n} folders": {
+    "one": "Rename {n} folder",
+    "other": "Rename {n} folders"
   },
   "Rename {n} items": {
     "one": "Rename {n} item",
@@ -1219,6 +1315,7 @@
   "Reset to Default": "Reset to Default",
   "Restore": "Restore",
   "Restore All": "Restore All",
+  "Restore All Items": "Restore All Items",
   "Restore Defaults": "Restore Defaults",
   "Restore all {n} items in the Trash?": {
     "one": "Restore all {n} item in the Trash?",
@@ -1317,6 +1414,7 @@
   "Show": "Show",
   "Show All": "Show All",
   "Show All Tags": "Show All Tags",
+  "Show Collect Window": "Show Collect Window",
   "Show Comment Count": "Show Comment Count",
   "Show Counts": "Show Counts",
   "Show Edges": "Show Edges",
@@ -1404,7 +1502,9 @@
   "Slower": "Slower",
   "Small": "Small",
   "Smart Folder": "Smart Folder",
+  "Smart Folder %N": "Smart Folder %N",
   "Smart Folders": "Smart Folders",
+  "Smart Folders ({count})": "Smart Folders ({count})",
   "Snapshot saved": "Snapshot saved",
   "Some files already exist": "Some files already exist",
   "Some folders already exist": "Some folders already exist",
@@ -1477,6 +1577,7 @@
   "The files are removed from the library and cannot be restored.": "The files are removed from the library and cannot be restored.",
   "The files were copied, but {library} couldn't be updated: {error}. Opening it again picks the copied items up.": "The files were copied, but {library} couldn't be updated: {error}. Opening it again picks the copied items up.",
   "The folder already exists": "The folder already exists",
+  "The folder can't be found: {path}": "The folder can't be found: {path}",
   "The item's file becomes a copy of “{file}”. Its name, tags, folders and notes stay; the current file is deleted.": "The item's file becomes a copy of “{file}”. Its name, tags, folders and notes stay; the current file is deleted.",
   "The items were copied, but the folders couldn't be saved: {error}": "The items were copied, but the folders couldn't be saved: {error}",
   "The library is a folder stored on this Mac. Back it up as you would any other files.": "The library is a folder stored on this Mac. Back it up as you would any other files.",
@@ -1498,6 +1599,10 @@
   "The tag picker's Recent tags start over. Tags stay on their items.": "The tag picker's Recent tags start over. Tags stay on their items.",
   "The wheel button on an item": "The wheel button on an item",
   "The wheel over an image in the viewer": "The wheel over an image in the viewer",
+  "The {n} selected items go into it.": {
+    "one": "The {n} selected item goes into it.",
+    "other": "The {n} selected items go into it."
+  },
   "Their files and details are copied into the other library. This library keeps them as they are.": "Their files and details are copied into the other library. This library keeps them as they are.",
   "Their hand-made order is replaced.": "Their hand-made order is replaced.",
   "Theme": "Theme",
@@ -1519,9 +1624,17 @@
   "This item has no source URL": "This item has no source URL",
   "This item is still in iCloud; open it once to download it, then copy again": "This item is still in iCloud; open it once to download it, then copy again",
   "This link isn't a web address, so it isn't opened here.": "This link isn't a web address, so it isn't opened here.",
+  "This renames {n} folders. Go ahead?": {
+    "one": "This renames {n} folder. Go ahead?",
+    "other": "This renames {n} folders. Go ahead?"
+  },
   "This renames {n} items. Go ahead?": {
     "one": "This renames {n} item. Go ahead?",
     "other": "This renames {n} items. Go ahead?"
+  },
+  "This renames {n} smart folders. Go ahead?": {
+    "one": "This renames {n} smart folder. Go ahead?",
+    "other": "This renames {n} smart folders. Go ahead?"
   },
   "Thumbnail": "Thumbnail",
   "Thumbnail Background": "Thumbnail Background",
@@ -1536,6 +1649,10 @@
   "To the Bottom": "To the Bottom",
   "To the Top": "To the Top",
   "Today": "Today",
+  "Took {n} items out of {folders}": {
+    "one": "Took {n} item out of {folders}",
+    "other": "Took {n} items out of {folders}"
+  },
   "Top level": "Top level",
   "Touch ID didn't unlock Falcon": "Touch ID didn't unlock Falcon",
   "Touch ID didn't unlock the folder": "Touch ID didn't unlock the folder",
@@ -1706,6 +1823,7 @@
   "size::Custom": "Custom",
   "stars, e.g. 35": "stars, e.g. 35",
   "starts with": "starts with",
+  "switcher::Open": "Open",
   "tag, tag": "tag, tag",
   "tags::All": "All",
   "tags::Uncategorized": "Uncategorized",
@@ -1719,6 +1837,8 @@
   "{app} Document": "{app} Document",
   "{chord} can't be used for “{command}”: another app has it": "{chord} can't be used for “{command}”: another app has it",
   "{chord} is taken by another app": "{chord} is taken by another app",
+  "{count} folders selected": "{count} folders selected",
+  "{count} smart folders selected": "{count} smart folders selected",
   "{done} of {total}": "{done} of {total}",
   "{first} and {n} more": "{first} and {n} more",
   "{first}–{last} would include Eagle's port {port}": "{first}–{last} would include Eagle's port {port}",

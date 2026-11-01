@@ -8,6 +8,7 @@
   "A > Z": "A > Z",
   "A folder couldn't be created: {error}": "无法创建文件夹：{error}",
   "A library already exists there. Create again and pick another folder, or change the name.": "该位置已有资源库。请重新创建并选择其他文件夹，或更改名称。",
+  "A new folder right below this one": "在此文件夹正下方新建文件夹",
   "A number in the unit, or a time such as 1:30": "按所选单位输入数字，或1:30这样的时间",
   "A side left at 0 is not used": "保持为0的边不参与筛选",
   "API on http://localhost:{port}": "API：http://localhost:{port}",
@@ -17,6 +18,7 @@
   "About {n} h left": "约剩余 {n} 小时",
   "About {n} min left": "约剩余 {n} 分钟",
   "About {n} s left": "约剩余 {n} 秒",
+  "Above": "上方",
   "Accuracy": "精确度",
   "Actions": "操作",
   "Activated": "已启用",
@@ -50,6 +52,9 @@
   "Add to Other Library": "添加到其他资源库",
   "Add to Quick Access": "添加到快速访问",
   "Add to the last used folder": "添加到上次使用的文件夹",
+  "Add {n} folders to Quick Access": {
+    "other": "将{n}个文件夹添加到快速访问"
+  },
   "Add {n} items": {
     "other": "添加{n}个项目"
   },
@@ -57,6 +62,7 @@
     "other": "将 {n} 个项目添加到 {library}"
   },
   "Add {n} to folder": "将{n}个项目添加到文件夹",
+  "Add {n} to folders": "将{n}项添加到文件夹",
   "Added the folder and {n} items to {target}": {
     "other": "已将文件夹和 {n} 个项目添加到 {target}"
   },
@@ -70,6 +76,9 @@
   "Added {items}, {folders} and {others} from {name}.": "已从“{name}”添加{items}、{folders}和{others}。",
   "Added {n} items to": {
     "other": "已将{n}个项目添加到："
+  },
+  "Added {n} items to {count} folders": {
+    "other": "已将{n}个项目添加到{count}个文件夹"
   },
   "Added {n} items to {target}": {
     "other": "已将 {n} 个项目添加到 {target}"
@@ -139,6 +148,7 @@
   "Back 10 frames": "后退 10 帧",
   "Background Colour": "背景颜色",
   "Base64": "Base64",
+  "Below": "下方",
   "Black": "黑色",
   "Blue": "蓝色",
   "Bookmark": "书签",
@@ -158,14 +168,21 @@
   "Change": "更改",
   "Change Extension": "更改扩展名",
   "Change Icon": "更改图标",
+  "Change Icon…": "更改图标…",
   "Change Password": "更改密码",
   "Change Password for “{name}”": "更改“{name}”的密码",
   "Change Password…": "更改密码…",
   "Change extension": "更改扩展名",
   "Change folder settings": "更改文件夹设置",
   "Change icon": "更改图标",
+  "Change icon of {n} folders": {
+    "other": "更改{n}个文件夹的图标"
+  },
   "Change sample language": "更改示例语言",
   "Change sort": "更改排序",
+  "Change sort of {n} folders": {
+    "other": "更改{n}个文件夹的排序"
+  },
   "Change the open folder's password": "更改当前文件夹的密码",
   "Changes the preview only": "仅更改预览",
   "Changes the volume": "调节音量",
@@ -173,6 +190,7 @@
   "Check Before Merging": "合并前检查",
   "Checkerboard": "棋盘格",
   "Choose Another": "选择其他位置",
+  "Choose Library Icon": "选择资源库图标",
   "Choose Library…": "选择资源库…",
   "Choose Thumbnail": "选择缩略图",
   "Choose a Library to Add To": "选择要添加到的资源库",
@@ -187,9 +205,11 @@
   "Clear": "清除",
   "Clear All": "全部清除",
   "Clear Filter": "清除筛选",
+  "Clear History…": "清除历史记录…",
   "Clear Invalid Content…": "清除无效内容…",
   "Clear Library History": "清除资源库历史",
   "Clear Library History…": "清除资源库历史记录…",
+  "Clear Recently Used": "清除最近使用",
   "Clear Tag History…": "清除标签历史…",
   "Clear Tags": "清除标签",
   "Clear tag history": "清除标签历史",
@@ -215,6 +235,7 @@
   "Click to resume": "点击继续",
   "Close": "关闭",
   "Close (Esc)": "关闭（Esc）",
+  "Close Library": "关闭资源库",
   "Close Library While Tasks Run": "任务运行时关闭资源库",
   "Close Window": "关闭窗口",
   "Close the viewer, or clear the selection": "关闭查看器，或取消选择",
@@ -303,10 +324,12 @@
   "Could not reload: {error}": "无法重新载入：{error}",
   "Could not save: {error}": "无法保存：{error}",
   "Could not save: {e}": "无法存储：{e}",
+  "Couldn't change the icon: {error}": "无法更改图标：{error}",
   "Couldn't download from iCloud: {e}": "无法从 iCloud 下载：{e}",
   "Couldn't export the model: {error}": "无法导出模型：{error}",
   "Couldn't import {path}: {error}": "无法导入{path}：{error}",
   "Couldn't make a folder for the screenshot": "无法为截图创建文件夹",
+  "Couldn't remove the icon: {error}": "无法移除图标：{error}",
   "Couldn't save the frame: {error}": "无法存储帧：{error}",
   "Couldn't save the snapshot: {error}": "无法保存快照：{error}",
   "Count, High to Low": "数量从高到低",
@@ -361,15 +384,23 @@
   "Delete tag group": "删除标签组",
   "Delete the group “{name}”?": "要删除组“{name}”吗？",
   "Delete the tag “{tag}”?": "要删除标签“{tag}”吗？",
+  "Delete {count} Folders": "删除{count}个文件夹",
+  "Delete {count} Smart Folders": "删除{count}个智能文件夹",
   "Delete {n}": "删除{n}个项目",
   "Delete {n} Tags": {
     "other": "删除{n}个标签"
+  },
+  "Delete {n} folders": {
+    "other": "删除{n}个文件夹"
   },
   "Delete {n} folders?": {
     "other": "要删除{n}个文件夹吗？"
   },
   "Delete {n} items permanently?": {
     "other": "要永久删除{n}个项目吗？"
+  },
+  "Delete {n} smart folders": {
+    "other": "删除{n}个智能文件夹"
   },
   "Delete {n} smart folders?": {
     "other": "要删除{n}个智能文件夹吗？"
@@ -413,7 +444,9 @@
     "other": "已移除文件夹丢失的 {n} 个项目。"
   },
   "Duplicate": "创建副本",
+  "Duplicate folder": "创建文件夹副本",
   "Duplicate item": "创建项目副本",
+  "Duplicate smart folder": "创建智能文件夹副本",
   "Duplicate the item": "创建项目副本",
   "Duplicate the item (second key)": "复制项目（第二个按键）",
   "Duplicated": "已创建副本",
@@ -549,6 +582,7 @@
   "Focal length (mm)": "焦距 (mm)",
   "Focus search": "聚焦搜索栏",
   "Folder": "文件夹",
+  "Folder %N": "文件夹 %N",
   "Folder Description": "文件夹描述",
   "Folder Name": "文件夹名称",
   "Folder Password": "文件夹密码",
@@ -560,6 +594,7 @@
   "Folder settings (name and auto-tags)": "文件夹设置（名称和自动标签）",
   "Folder:": "文件夹：",
   "Folders": "文件夹",
+  "Folders ({count})": "文件夹（{count}）",
   "Folders ({n})": "文件夹（{n}）",
   "Font": "字体",
   "Fonts": "字体",
@@ -584,6 +619,8 @@
   "Global Settings": "全局设置",
   "Global: {sort}": "全局：{sort}",
   "Go": "前往",
+  "Go to Folder": "前往文件夹",
+  "Go to Folder  {keys}": "前往文件夹  {keys}",
   "Go to Folder…": "前往文件夹…",
   "Go to a folder (single key)": "前往文件夹（单键）",
   "Go to a folder, tag or smart folder": "前往文件夹、标签或智能文件夹",
@@ -606,7 +643,9 @@
   "Help": "帮助",
   "Hex": "Hex",
   "Hide": "隐藏",
+  "Hide Collect Window": "隐藏收集窗口",
   "Hide inspector": "隐藏检查器",
+  "Hide sidebar": "隐藏边栏",
   "High": "高",
   "Hint (optional)": "提示（可选）",
   "Hint: {hint}": "提示：{hint}",
@@ -628,6 +667,7 @@
   "Import Files…": "导入文件…",
   "Import Folders": "导入文件夹",
   "Import Folders…": "导入文件夹…",
+  "Import Inboard Backup…": "导入 Inboard 备份…",
   "Import a large folder?": "要导入大型文件夹吗？",
   "Import an Eagle package": "导入 Eagle 资源包",
   "Import an Inboard backup": "导入 Inboard 备份",
@@ -657,6 +697,7 @@
   "Inside": "位于",
   "Inspector": "检查器",
   "Interface zoom": "界面缩放",
+  "Into": "内部",
   "Isolate (again to show all)": "隔离（再次点击显示全部）",
   "It is on an NTFS drive. NTFS drivers on macOS are slow and less reliable; a drive formatted as APFS or exFAT works better.": "它位于 NTFS 磁盘上。macOS 上的 NTFS 驱动程序速度慢且不够可靠，使用 APFS 或 exFAT 格式的磁盘效果更好。",
   "It may be incomplete or damaged; export or download it again. ({error})": "它可能不完整或已损坏，请重新导出或下载。（{error}）",
@@ -746,6 +787,7 @@
   "Measure: click two points on the model": "测量：点击模型上的两个点",
   "Medium": "中",
   "Merge": "合并",
+  "Merge Another Library…": "合并其他资源库…",
   "Merge Library…": "合并资源库…",
   "Merge another library into this one": "将另一个资源库合并到此资源库",
   "Merge finished": "合并完成",
@@ -784,10 +826,13 @@
   "Modified": "修改",
   "Month and day": "月和日",
   "Months": "月份",
+  "More": "更多",
   "Mouse": "鼠标",
+  "Move": "移动",
   "Move All to Trash": "全部移到废纸篓",
   "Move Down": "下移",
   "Move Folder": "移动文件夹",
+  "Move Folders…": "移动文件夹…",
   "Move Folder…": "移动文件夹…",
   "Move Up": "上移",
   "Move folder": "移动文件夹",
@@ -807,11 +852,26 @@
   "Move to Top Level": "移到顶层",
   "Move to Trash": "移到废纸篓",
   "Move to the Trash": "移到废纸篓",
+  "Move {n} folders": {
+    "other": "移动{n}个文件夹"
+  },
   "Move {n} items to Trash?": {
     "other": "要将{n}个项目移到废纸篓吗？"
   },
   "Move {n} to Trash": "将{n}个项目移到废纸篓",
   "Move {n} to folder": "将{n}个项目移到文件夹",
+  "Move “{first}” above “{target}”?": "要将“{first}”移到“{target}”上方吗？",
+  "Move “{first}” and {n} other folders above “{target}”?": {
+    "other": "要将“{first}”和另外{n}个文件夹移到“{target}”上方吗？"
+  },
+  "Move “{first}” and {n} other folders below “{target}”?": {
+    "other": "要将“{first}”和另外{n}个文件夹移到“{target}”下方吗？"
+  },
+  "Move “{first}” and {n} other folders into “{target}”?": {
+    "other": "要将“{first}”和另外{n}个文件夹移到“{target}”内部吗？"
+  },
+  "Move “{first}” below “{target}”?": "要将“{first}”移到“{target}”下方吗？",
+  "Move “{first}” into “{target}”?": "要将“{first}”移到“{target}”内部吗？",
   "Moved {n} empty item folders to the macOS Trash.": {
     "other": "已将 {n} 个空的项目文件夹移到 macOS 废纸篓。"
   },
@@ -849,6 +909,9 @@
   "New Subfolder…": "新建子文件夹…",
   "New Text File": "新建文本文件",
   "New folder": "新建文件夹",
+  "New folder with {n} items": {
+    "other": "新建文件夹，含{n}个项目"
+  },
   "New password": "新密码",
   "New smart folder": "新建智能文件夹",
   "New smart folder group": "新建智能文件夹组",
@@ -869,6 +932,7 @@
   "No audio output: {error}": "没有音频输出：{error}",
   "No colour": "无颜色",
   "No folder": "无文件夹",
+  "No folder matches": "没有匹配的文件夹",
   "No folder used yet": "尚未使用过文件夹",
   "No folders": "无文件夹",
   "No folders found": "未找到文件夹",
@@ -1038,6 +1102,7 @@
   "Purple": "紫色",
   "Quality": "质量",
   "Quick Access": "快速访问",
+  "Quick Access ({count})": "快速访问（{count}）",
   "Quit Falcon": "退出 Falcon",
   "Random": "随机",
   "Range": "范围",
@@ -1088,6 +1153,7 @@
   "Refreshing Thumbnails": "正在刷新缩略图",
   "Reload": "重新载入",
   "Remove": "移除",
+  "Remove Icon": "移除图标",
   "Remove Password": "移除密码",
   "Remove Password for “{name}”": "移除“{name}”的密码",
   "Remove Password…": "移除密码…",
@@ -1104,7 +1170,11 @@
   "Remove the open folder's password": "移除当前文件夹的密码",
   "Remove the rating": "移除评分",
   "Remove this condition": "移除此条件",
+  "Remove this library's icon?": "要移除此资源库的图标吗？",
   "Remove this rule": "移除此规则",
+  "Remove {n} folders from Quick Access": {
+    "other": "将{n}个文件夹从快速访问移除"
+  },
   "Remove {n} from folder": "将{n}个项目从文件夹移除",
   "Removed the rating": "已移除评分",
   "Removed {n} from the folder": "已将{n}个项目从文件夹移除",
@@ -1122,11 +1192,22 @@
   "Rename tag": "重命名标签",
   "Rename tag group": "重命名标签组",
   "Rename the selected item": "重命名所选项目",
+  "Rename {count} Folders…": "重命名{count}个文件夹…",
+  "Rename {count} Smart Folders…": "重命名{count}个智能文件夹…",
+  "Rename {n} Folders": {
+    "other": "重命名{n}个文件夹"
+  },
   "Rename {n} Items": {
     "other": "重命名{n}个项目"
   },
   "Rename {n} Items…": {
     "other": "重命名{n}个项目…"
+  },
+  "Rename {n} Smart Folders": {
+    "other": "重命名{n}个智能文件夹"
+  },
+  "Rename {n} folders": {
+    "other": "重命名{n}个文件夹"
   },
   "Rename {n} items": {
     "other": "重命名{n}个项目"
@@ -1155,6 +1236,7 @@
   "Reset to Default": "恢复默认设置",
   "Restore": "恢复",
   "Restore All": "全部恢复",
+  "Restore All Items": "恢复所有项目",
   "Restore Defaults": "恢复默认设置",
   "Restore all {n} items in the Trash?": {
     "other": "要恢复废纸篓中的全部{n}个项目吗？"
@@ -1249,6 +1331,7 @@
   "Show": "显示",
   "Show All": "显示全部",
   "Show All Tags": "显示全部标签",
+  "Show Collect Window": "显示收集窗口",
   "Show Comment Count": "显示批注数",
   "Show Counts": "显示数量",
   "Show Edges": "显示边缘",
@@ -1333,7 +1416,9 @@
   "Slower": "减慢",
   "Small": "小",
   "Smart Folder": "智能文件夹",
+  "Smart Folder %N": "智能文件夹 %N",
   "Smart Folders": "智能文件夹",
+  "Smart Folders ({count})": "智能文件夹（{count}）",
   "Snapshot saved": "快照已保存",
   "Some files already exist": "部分文件已存在",
   "Some folders already exist": "部分文件夹已存在",
@@ -1403,6 +1488,7 @@
   "The files are removed from the library and cannot be restored.": "文件将从资源库中移除，且无法恢复。",
   "The files were copied, but {library} couldn't be updated: {error}. Opening it again picks the copied items up.": "文件已拷贝，但无法更新 {library}：{error}。再次打开后会载入已拷贝的项目。",
   "The folder already exists": "文件夹已存在",
+  "The folder can't be found: {path}": "找不到该文件夹：{path}",
   "The item's file becomes a copy of “{file}”. Its name, tags, folders and notes stay; the current file is deleted.": "项目的文件将变为“{file}”的副本。名称、标签、文件夹和备注会保留，当前文件将被删除。",
   "The items were copied, but the folders couldn't be saved: {error}": "项目已拷贝，但无法存储文件夹：{error}",
   "The library is a folder stored on this Mac. Back it up as you would any other files.": "资源库是存储在这台 Mac 上的文件夹。请像备份其他文件一样备份它。",
@@ -1424,6 +1510,9 @@
   "The tag picker's Recent tags start over. Tags stay on their items.": "标签选择器中的“最近使用”将重新开始。项目上的标签会保留。",
   "The wheel button on an item": "在项目上按下滚轮键",
   "The wheel over an image in the viewer": "在查看器中，滚轮作用于图片时",
+  "The {n} selected items go into it.": {
+    "other": "所选的{n}个项目将放入其中。"
+  },
   "Their files and details are copied into the other library. This library keeps them as they are.": "它们的文件和详细信息会拷贝到另一个资源库，当前资源库中的项目保持不变。",
   "Their hand-made order is replaced.": "手动排列的顺序将被替换。",
   "Theme": "主题",
@@ -1445,8 +1534,14 @@
   "This item has no source URL": "此项目没有来源网址",
   "This item is still in iCloud; open it once to download it, then copy again": "此项目仍在 iCloud 中；请先打开一次以下载，然后再拷贝",
   "This link isn't a web address, so it isn't opened here.": "此链接不是网址，因此不会在此处打开。",
+  "This renames {n} folders. Go ahead?": {
+    "other": "将重命名{n}个文件夹。要继续吗？"
+  },
   "This renames {n} items. Go ahead?": {
     "other": "这将重命名{n}个项目。要继续吗？"
+  },
+  "This renames {n} smart folders. Go ahead?": {
+    "other": "将重命名{n}个智能文件夹。要继续吗？"
   },
   "Thumbnail": "缩略图",
   "Thumbnail Background": "缩略图背景",
@@ -1461,6 +1556,9 @@
   "To the Bottom": "到底部",
   "To the Top": "到顶部",
   "Today": "今天",
+  "Took {n} items out of {folders}": {
+    "other": "已将{n}个项目从{folders}中移出"
+  },
   "Top level": "顶层",
   "Touch ID didn't unlock Falcon": "触控 ID 未能解锁 Falcon",
   "Touch ID didn't unlock the folder": "Touch ID 未能解锁文件夹",
@@ -1627,6 +1725,7 @@
   "size::Custom": "自定义",
   "stars, e.g. 35": "星级，如 35",
   "starts with": "开头是",
+  "switcher::Open": "已打开",
   "tag, tag": "标签, 标签",
   "tags::All": "全部",
   "tags::Uncategorized": "未分组",
@@ -1640,6 +1739,8 @@
   "{app} Document": "{app}文档",
   "{chord} can't be used for “{command}”: another app has it": "{chord}不能用于“{command}”：已被其他应用占用",
   "{chord} is taken by another app": "{chord} 已被其他应用占用",
+  "{count} folders selected": "已选择{count}个文件夹",
+  "{count} smart folders selected": "已选择{count}个智能文件夹",
   "{done} of {total}": "{done}/{total}",
   "{first} and {n} more": "{first}及另外{n}项",
   "{first}–{last} would include Eagle's port {port}": "{first}–{last}包含 Eagle 的端口{port}",

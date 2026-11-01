@@ -8,6 +8,7 @@
   "A > Z": "A > Z",
   "A folder couldn't be created: {error}": "Ein Ordner konnte nicht angelegt werden: {error}",
   "A library already exists there. Create again and pick another folder, or change the name.": "Dort existiert bereits eine Mediathek. Erstellen Sie erneut und wählen Sie einen anderen Ordner oder ändern Sie den Namen.",
+  "A new folder right below this one": "Ein neuer Ordner direkt unter diesem",
   "A number in the unit, or a time such as 1:30": "Zahl in der Einheit oder Zeit wie 1:30",
   "A side left at 0 is not used": "Eine Seite mit 0 wird nicht verwendet",
   "API on http://localhost:{port}": "API unter http://localhost:{port}",
@@ -17,6 +18,7 @@
   "About {n} h left": "Noch etwa {n} Std.",
   "About {n} min left": "Noch etwa {n} Min.",
   "About {n} s left": "Noch etwa {n} Sek.",
+  "Above": "Über",
   "Accuracy": "Genauigkeit",
   "Actions": "Aktionen",
   "Activated": "Aktiviert",
@@ -50,6 +52,10 @@
   "Add to Other Library": "Zu anderer Mediathek hinzufügen",
   "Add to Quick Access": "Zum Schnellzugriff hinzufügen",
   "Add to the last used folder": "Zum zuletzt verwendeten Ordner hinzufügen",
+  "Add {n} folders to Quick Access": {
+    "one": "Ordner zum Schnellzugriff hinzufügen",
+    "other": "{n} Ordner zum Schnellzugriff hinzufügen"
+  },
   "Add {n} items": {
     "one": "{n} Objekt hinzufügen",
     "other": "{n} Objekte hinzufügen"
@@ -59,6 +65,7 @@
     "other": "{n} Objekte zu {library} hinzufügen"
   },
   "Add {n} to folder": "{n} zum Ordner hinzufügen",
+  "Add {n} to folders": "{n} zu Ordnern hinzufügen",
   "Added the folder and {n} items to {target}": {
     "one": "Ordner und {n} Objekt zu {target} hinzugefügt",
     "other": "Ordner und {n} Objekte zu {target} hinzugefügt"
@@ -75,6 +82,10 @@
   "Added {n} items to": {
     "one": "{n} Objekt hinzugefügt zu",
     "other": "{n} Objekte hinzugefügt zu"
+  },
+  "Added {n} items to {count} folders": {
+    "one": "{n} Objekt zu {count} Ordnern hinzugefügt",
+    "other": "{n} Objekte zu {count} Ordnern hinzugefügt"
   },
   "Added {n} items to {target}": {
     "one": "{n} Objekt zu {target} hinzugefügt",
@@ -149,6 +160,7 @@
   "Back 10 frames": "10 Bilder zurück",
   "Background Colour": "Hintergrundfarbe",
   "Base64": "Base64",
+  "Below": "Unter",
   "Black": "Schwarz",
   "Blue": "Blau",
   "Bookmark": "Lesezeichen",
@@ -168,14 +180,23 @@
   "Change": "Ändern",
   "Change Extension": "Dateiendung ändern",
   "Change Icon": "Symbol ändern",
+  "Change Icon…": "Symbol ändern…",
   "Change Password": "Passwort ändern",
   "Change Password for “{name}”": "Passwort für „{name}“ ändern",
   "Change Password…": "Passwort ändern …",
   "Change extension": "Dateiendung ändern",
   "Change folder settings": "Ordnereinstellungen ändern",
   "Change icon": "Symbol ändern",
+  "Change icon of {n} folders": {
+    "one": "Symbol des Ordners ändern",
+    "other": "Symbol von {n} Ordnern ändern"
+  },
   "Change sample language": "Beispielsprache ändern",
   "Change sort": "Sortierung ändern",
+  "Change sort of {n} folders": {
+    "one": "Sortierung des Ordners ändern",
+    "other": "Sortierung von {n} Ordnern ändern"
+  },
   "Change the open folder's password": "Passwort des geöffneten Ordners ändern",
   "Changes the preview only": "Ändert nur die Vorschau",
   "Changes the volume": "Ändert die Lautstärke",
@@ -183,6 +204,7 @@
   "Check Before Merging": "Vor dem Zusammenführen prüfen",
   "Checkerboard": "Karomuster",
   "Choose Another": "Anderen wählen",
+  "Choose Library Icon": "Mediathek-Symbol wählen",
   "Choose Library…": "Mediathek wählen …",
   "Choose Thumbnail": "Miniatur wählen",
   "Choose a Library to Add To": "Mediathek zum Hinzufügen wählen",
@@ -197,9 +219,11 @@
   "Clear": "Zurücksetzen",
   "Clear All": "Alle löschen",
   "Clear Filter": "Filter zurücksetzen",
+  "Clear History…": "Verlauf löschen…",
   "Clear Invalid Content…": "Ungültige Inhalte entfernen…",
   "Clear Library History": "Mediathek-Verlauf löschen",
   "Clear Library History…": "Mediathek-Verlauf löschen…",
+  "Clear Recently Used": "Zuletzt verwendet leeren",
   "Clear Tag History…": "Tag-Verlauf löschen …",
   "Clear Tags": "Tags entfernen",
   "Clear tag history": "Tag-Verlauf löschen",
@@ -226,6 +250,7 @@
   "Click to resume": "Zum Fortsetzen klicken",
   "Close": "Schließen",
   "Close (Esc)": "Schließen (Esc)",
+  "Close Library": "Mediathek schließen",
   "Close Library While Tasks Run": "Mediathek schließen, während Aufgaben laufen",
   "Close Window": "Fenster schließen",
   "Close the viewer, or clear the selection": "Betrachter schließen oder Auswahl aufheben",
@@ -324,10 +349,12 @@
   "Could not reload: {error}": "Neu laden nicht möglich: {error}",
   "Could not save: {error}": "Speichern nicht möglich: {error}",
   "Could not save: {e}": "Sichern nicht möglich: {e}",
+  "Couldn't change the icon: {error}": "Das Symbol konnte nicht geändert werden: {error}",
   "Couldn't download from iCloud: {e}": "Laden aus iCloud nicht möglich: {e}",
   "Couldn't export the model: {error}": "Das Modell konnte nicht exportiert werden: {error}",
   "Couldn't import {path}: {error}": "{path} konnte nicht importiert werden: {error}",
   "Couldn't make a folder for the screenshot": "Kein Ordner für das Bildschirmfoto möglich",
+  "Couldn't remove the icon: {error}": "Das Symbol konnte nicht entfernt werden: {error}",
   "Couldn't save the frame: {error}": "Das Bild konnte nicht gesichert werden: {error}",
   "Couldn't save the snapshot: {error}": "Der Schnappschuss konnte nicht gespeichert werden: {error}",
   "Count, High to Low": "Anzahl, absteigend",
@@ -382,10 +409,16 @@
   "Delete tag group": "Tag-Gruppe löschen",
   "Delete the group “{name}”?": "Gruppe „{name}“ löschen?",
   "Delete the tag “{tag}”?": "Tag „{tag}“ löschen?",
+  "Delete {count} Folders": "{count} Ordner löschen",
+  "Delete {count} Smart Folders": "{count} intelligente Ordner löschen",
   "Delete {n}": "{n} löschen",
   "Delete {n} Tags": {
     "one": "{n} Tag löschen",
     "other": "{n} Tags löschen"
+  },
+  "Delete {n} folders": {
+    "one": "Ordner löschen",
+    "other": "{n} Ordner löschen"
   },
   "Delete {n} folders?": {
     "one": "{n} Ordner löschen?",
@@ -394,6 +427,10 @@
   "Delete {n} items permanently?": {
     "one": "{n} Objekt endgültig löschen?",
     "other": "{n} Objekte endgültig löschen?"
+  },
+  "Delete {n} smart folders": {
+    "one": "Intelligenten Ordner löschen",
+    "other": "{n} intelligente Ordner löschen"
   },
   "Delete {n} smart folders?": {
     "one": "{n} Intelligenten Ordner löschen?",
@@ -441,7 +478,9 @@
     "other": "{n} Objekte entfernt, deren Ordner fehlten."
   },
   "Duplicate": "Duplizieren",
+  "Duplicate folder": "Ordner duplizieren",
   "Duplicate item": "Objekt duplizieren",
+  "Duplicate smart folder": "Intelligenten Ordner duplizieren",
   "Duplicate the item": "Objekt duplizieren",
   "Duplicate the item (second key)": "Objekt duplizieren (zweite Taste)",
   "Duplicated": "Dupliziert",
@@ -580,6 +619,7 @@
   "Focal length (mm)": "Brennweite (mm)",
   "Focus search": "Suchfeld aktivieren",
   "Folder": "Ordner",
+  "Folder %N": "Ordner %N",
   "Folder Description": "Ordnerbeschreibung",
   "Folder Name": "Ordnername",
   "Folder Password": "Ordnerpasswort",
@@ -591,6 +631,7 @@
   "Folder settings (name and auto-tags)": "Ordnereinstellungen (Name und Auto-Tags)",
   "Folder:": "Ordner:",
   "Folders": "Ordner",
+  "Folders ({count})": "Ordner ({count})",
   "Folders ({n})": "Ordner ({n})",
   "Font": "Schrift",
   "Fonts": "Schriften",
@@ -616,6 +657,8 @@
   "Global Settings": "Globale Einstellungen",
   "Global: {sort}": "Global: {sort}",
   "Go": "Gehe zu",
+  "Go to Folder": "Zu Ordner gehen",
+  "Go to Folder  {keys}": "Zu Ordner gehen  {keys}",
   "Go to Folder…": "Gehe zu Ordner…",
   "Go to a folder (single key)": "Zu einem Ordner springen (einzelne Taste)",
   "Go to a folder, tag or smart folder": "Zu Ordner, Tag oder Intelligentem Ordner gehen",
@@ -639,7 +682,9 @@
   "Help": "Hilfe",
   "Hex": "Hex",
   "Hide": "Ausblenden",
+  "Hide Collect Window": "Sammelfenster ausblenden",
   "Hide inspector": "Informationen ausblenden",
+  "Hide sidebar": "Seitenleiste ausblenden",
   "High": "Hoch",
   "Hint (optional)": "Hinweis (optional)",
   "Hint: {hint}": "Hinweis: {hint}",
@@ -661,6 +706,7 @@
   "Import Files…": "Dateien importieren…",
   "Import Folders": "Ordner importieren",
   "Import Folders…": "Ordner importieren …",
+  "Import Inboard Backup…": "Inboard-Backup importieren…",
   "Import a large folder?": "Großen Ordner importieren?",
   "Import an Eagle package": "Eagle-Paket importieren",
   "Import an Inboard backup": "Inboard-Backup importieren",
@@ -692,6 +738,7 @@
   "Inside": "In",
   "Inspector": "Informationen",
   "Interface zoom": "Oberflächengröße",
+  "Into": "In",
   "Isolate (again to show all)": "Isolieren (erneut, um alle zu zeigen)",
   "It is on an NTFS drive. NTFS drivers on macOS are slow and less reliable; a drive formatted as APFS or exFAT works better.": "Sie liegt auf einem NTFS-Laufwerk. NTFS-Treiber unter macOS sind langsam und weniger zuverlässig; ein mit APFS oder exFAT formatiertes Laufwerk funktioniert besser.",
   "It may be incomplete or damaged; export or download it again. ({error})": "Es ist möglicherweise unvollständig oder beschädigt; exportieren oder laden Sie es erneut herunter. ({error})",
@@ -782,6 +829,7 @@
   "Measure: click two points on the model": "Messen: Klicken Sie auf zwei Punkte des Modells",
   "Medium": "Mittel",
   "Merge": "Zusammenführen",
+  "Merge Another Library…": "Andere Mediathek zusammenführen…",
   "Merge Library…": "Mediathek zusammenführen…",
   "Merge another library into this one": "Eine andere Mediathek in diese zusammenführen",
   "Merge finished": "Zusammenführen abgeschlossen",
@@ -827,10 +875,13 @@
   "Modified": "Geändert",
   "Month and day": "Monat und Tag",
   "Months": "Monate",
+  "More": "Mehr",
   "Mouse": "Maus",
+  "Move": "Verschieben",
   "Move All to Trash": "Alle in den Papierkorb legen",
   "Move Down": "Nach unten",
   "Move Folder": "Ordner verschieben",
+  "Move Folders…": "Ordner verschieben…",
   "Move Folder…": "Ordner verschieben…",
   "Move Up": "Nach oben",
   "Move folder": "Ordner bewegen",
@@ -850,12 +901,31 @@
   "Move to Top Level": "Auf oberste Ebene verschieben",
   "Move to Trash": "In den Papierkorb legen",
   "Move to the Trash": "In den Papierkorb legen",
+  "Move {n} folders": {
+    "one": "Ordner verschieben",
+    "other": "{n} Ordner verschieben"
+  },
   "Move {n} items to Trash?": {
     "one": "{n} Objekt in den Papierkorb legen?",
     "other": "{n} Objekte in den Papierkorb legen?"
   },
   "Move {n} to Trash": "{n} in den Papierkorb legen",
   "Move {n} to folder": "{n} in den Ordner bewegen",
+  "Move “{first}” above “{target}”?": "„{first}“ über „{target}“ verschieben?",
+  "Move “{first}” and {n} other folders above “{target}”?": {
+    "one": "„{first}“ und {n} weiteren Ordner über „{target}“ verschieben?",
+    "other": "„{first}“ und {n} weitere Ordner über „{target}“ verschieben?"
+  },
+  "Move “{first}” and {n} other folders below “{target}”?": {
+    "one": "„{first}“ und {n} weiteren Ordner unter „{target}“ verschieben?",
+    "other": "„{first}“ und {n} weitere Ordner unter „{target}“ verschieben?"
+  },
+  "Move “{first}” and {n} other folders into “{target}”?": {
+    "one": "„{first}“ und {n} weiteren Ordner in „{target}“ verschieben?",
+    "other": "„{first}“ und {n} weitere Ordner in „{target}“ verschieben?"
+  },
+  "Move “{first}” below “{target}”?": "„{first}“ unter „{target}“ verschieben?",
+  "Move “{first}” into “{target}”?": "„{first}“ in „{target}“ verschieben?",
   "Moved {n} empty item folders to the macOS Trash.": {
     "one": "{n} leerer Objektordner in den macOS-Papierkorb gelegt.",
     "other": "{n} leere Objektordner in den macOS-Papierkorb gelegt."
@@ -897,6 +967,10 @@
   "New Subfolder…": "Neuer Unterordner …",
   "New Text File": "Neue Textdatei",
   "New folder": "Neuer Ordner",
+  "New folder with {n} items": {
+    "one": "Neuer Ordner mit {n} Objekt",
+    "other": "Neuer Ordner mit {n} Objekten"
+  },
   "New password": "Neues Passwort",
   "New smart folder": "Neuer intelligenter Ordner",
   "New smart folder group": "Neue Gruppe intelligenter Ordner",
@@ -917,6 +991,7 @@
   "No audio output: {error}": "Keine Audioausgabe: {error}",
   "No colour": "Keine Farbe",
   "No folder": "Kein Ordner",
+  "No folder matches": "Kein Ordner passt",
   "No folder used yet": "Noch kein Ordner verwendet",
   "No folders": "Keine Ordner",
   "No folders found": "Keine Ordner gefunden",
@@ -1090,6 +1165,7 @@
   "Purple": "Lila",
   "Quality": "Qualität",
   "Quick Access": "Schnellzugriff",
+  "Quick Access ({count})": "Schnellzugriff ({count})",
   "Quit Falcon": "Falcon beenden",
   "Random": "Zufällig",
   "Range": "Zeitraum",
@@ -1146,6 +1222,7 @@
   "Refreshing Thumbnails": "Miniaturen werden aktualisiert",
   "Reload": "Neu laden",
   "Remove": "Entfernen",
+  "Remove Icon": "Symbol entfernen",
   "Remove Password": "Passwort entfernen",
   "Remove Password for “{name}”": "Passwort für „{name}“ entfernen",
   "Remove Password…": "Passwort entfernen …",
@@ -1162,7 +1239,12 @@
   "Remove the open folder's password": "Passwort des geöffneten Ordners entfernen",
   "Remove the rating": "Bewertung entfernen",
   "Remove this condition": "Diese Bedingung entfernen",
+  "Remove this library's icon?": "Symbol dieser Mediathek entfernen?",
   "Remove this rule": "Diese Regel entfernen",
+  "Remove {n} folders from Quick Access": {
+    "one": "Ordner aus dem Schnellzugriff entfernen",
+    "other": "{n} Ordner aus dem Schnellzugriff entfernen"
+  },
   "Remove {n} from folder": "{n} aus dem Ordner entfernen",
   "Removed the rating": "Bewertung entfernt",
   "Removed {n} from the folder": "{n} aus dem Ordner entfernt",
@@ -1181,6 +1263,12 @@
   "Rename tag": "Tag umbenennen",
   "Rename tag group": "Tag-Gruppe umbenennen",
   "Rename the selected item": "Ausgewähltes Objekt umbenennen",
+  "Rename {count} Folders…": "{count} Ordner umbenennen…",
+  "Rename {count} Smart Folders…": "{count} intelligente Ordner umbenennen…",
+  "Rename {n} Folders": {
+    "one": "{n} Ordner umbenennen",
+    "other": "{n} Ordner umbenennen"
+  },
   "Rename {n} Items": {
     "one": "{n} Objekt umbenennen",
     "other": "{n} Objekte umbenennen"
@@ -1188,6 +1276,14 @@
   "Rename {n} Items…": {
     "one": "{n} Objekt umbenennen …",
     "other": "{n} Objekte umbenennen …"
+  },
+  "Rename {n} Smart Folders": {
+    "one": "{n} intelligenten Ordner umbenennen",
+    "other": "{n} intelligente Ordner umbenennen"
+  },
+  "Rename {n} folders": {
+    "one": "{n} Ordner umbenennen",
+    "other": "{n} Ordner umbenennen"
   },
   "Rename {n} items": {
     "one": "{n} Objekt umbenennen",
@@ -1219,6 +1315,7 @@
   "Reset to Default": "Auf Standard zurücksetzen",
   "Restore": "Wiederherstellen",
   "Restore All": "Alle wiederherstellen",
+  "Restore All Items": "Alle Objekte wiederherstellen",
   "Restore Defaults": "Standardwerte wiederherstellen",
   "Restore all {n} items in the Trash?": {
     "one": "Das Objekt im Papierkorb wiederherstellen?",
@@ -1317,6 +1414,7 @@
   "Show": "Anzeigen",
   "Show All": "Alle zeigen",
   "Show All Tags": "Alle Tags zeigen",
+  "Show Collect Window": "Sammelfenster zeigen",
   "Show Comment Count": "Anzahl der Kommentare zeigen",
   "Show Counts": "Anzahl zeigen",
   "Show Edges": "Kanten zeigen",
@@ -1404,7 +1502,9 @@
   "Slower": "Langsamer",
   "Small": "Klein",
   "Smart Folder": "Intelligenter Ordner",
+  "Smart Folder %N": "Intelligenter Ordner %N",
   "Smart Folders": "Intelligente Ordner",
+  "Smart Folders ({count})": "Intelligente Ordner ({count})",
   "Snapshot saved": "Schnappschuss gespeichert",
   "Some files already exist": "Einige Dateien sind bereits vorhanden",
   "Some folders already exist": "Einige Ordner sind bereits vorhanden",
@@ -1477,6 +1577,7 @@
   "The files are removed from the library and cannot be restored.": "Die Dateien werden aus der Mediathek entfernt und können nicht wiederhergestellt werden.",
   "The files were copied, but {library} couldn't be updated: {error}. Opening it again picks the copied items up.": "Die Dateien wurden kopiert, aber {library} konnte nicht aktualisiert werden: {error}. Beim erneuten Öffnen werden die kopierten Objekte übernommen.",
   "The folder already exists": "Der Ordner ist bereits vorhanden",
+  "The folder can't be found: {path}": "Der Ordner wurde nicht gefunden: {path}",
   "The item's file becomes a copy of “{file}”. Its name, tags, folders and notes stay; the current file is deleted.": "Die Datei des Objekts wird zu einer Kopie von „{file}“. Name, Tags, Ordner und Notizen bleiben erhalten; die aktuelle Datei wird gelöscht.",
   "The items were copied, but the folders couldn't be saved: {error}": "Die Objekte wurden kopiert, die Ordner konnten aber nicht gesichert werden: {error}",
   "The library is a folder stored on this Mac. Back it up as you would any other files.": "Die Mediathek ist ein Ordner auf diesem Mac. Sichern Sie sie wie alle anderen Dateien.",
@@ -1498,6 +1599,10 @@
   "The tag picker's Recent tags start over. Tags stay on their items.": "Die zuletzt verwendeten Tags in der Tag-Auswahl beginnen von vorn. Die Tags bleiben an ihren Objekten.",
   "The wheel button on an item": "Die Mausradtaste auf einem Objekt",
   "The wheel over an image in the viewer": "Das Mausrad über einem Bild im Betrachter",
+  "The {n} selected items go into it.": {
+    "one": "Das ausgewählte Objekt kommt hinein.",
+    "other": "Die {n} ausgewählten Objekte kommen hinein."
+  },
   "Their files and details are copied into the other library. This library keeps them as they are.": "Die Dateien und Details werden in die andere Mediathek kopiert. Diese Mediathek behält sie unverändert.",
   "Their hand-made order is replaced.": "Die manuelle Reihenfolge wird ersetzt.",
   "Theme": "Design",
@@ -1519,9 +1624,17 @@
   "This item has no source URL": "Dieses Objekt hat keine Quell-URL",
   "This item is still in iCloud; open it once to download it, then copy again": "Dieses Objekt liegt noch in iCloud; öffnen Sie es einmal, um es zu laden, und kopieren Sie dann erneut",
   "This link isn't a web address, so it isn't opened here.": "Dieser Link ist keine Webadresse und wird hier nicht geöffnet.",
+  "This renames {n} folders. Go ahead?": {
+    "one": "Dadurch wird {n} Ordner umbenannt. Fortfahren?",
+    "other": "Dadurch werden {n} Ordner umbenannt. Fortfahren?"
+  },
   "This renames {n} items. Go ahead?": {
     "one": "Dadurch wird {n} Objekt umbenannt. Fortfahren?",
     "other": "Dadurch werden {n} Objekte umbenannt. Fortfahren?"
+  },
+  "This renames {n} smart folders. Go ahead?": {
+    "one": "Dadurch wird {n} intelligenter Ordner umbenannt. Fortfahren?",
+    "other": "Dadurch werden {n} intelligente Ordner umbenannt. Fortfahren?"
   },
   "Thumbnail": "Miniatur",
   "Thumbnail Background": "Miniaturhintergrund",
@@ -1536,6 +1649,10 @@
   "To the Bottom": "Ganz nach unten",
   "To the Top": "Ganz nach oben",
   "Today": "Heute",
+  "Took {n} items out of {folders}": {
+    "one": "{n} Objekt aus {folders} entfernt",
+    "other": "{n} Objekte aus {folders} entfernt"
+  },
   "Top level": "Oberste Ebene",
   "Touch ID didn't unlock Falcon": "Touch ID hat Falcon nicht entsperrt",
   "Touch ID didn't unlock the folder": "Touch ID hat den Ordner nicht entsperrt",
@@ -1706,6 +1823,7 @@
   "size::Custom": "Benutzerdefiniert",
   "stars, e.g. 35": "Sterne, z. B. 35",
   "starts with": "beginnt mit",
+  "switcher::Open": "Geöffnet",
   "tag, tag": "Tag, Tag",
   "tags::All": "Alle",
   "tags::Uncategorized": "Ohne Gruppe",
@@ -1719,6 +1837,8 @@
   "{app} Document": "{app}-Dokument",
   "{chord} can't be used for “{command}”: another app has it": "{chord} kann nicht für „{command}“ verwendet werden: Eine andere App nutzt die Tasten",
   "{chord} is taken by another app": "{chord} wird von einer anderen App genutzt",
+  "{count} folders selected": "{count} Ordner ausgewählt",
+  "{count} smart folders selected": "{count} intelligente Ordner ausgewählt",
   "{done} of {total}": "{done} von {total}",
   "{first} and {n} more": "{first} und {n} weitere",
   "{first}–{last} would include Eagle's port {port}": "{first}–{last} würde den Port {port} von Eagle einschließen",

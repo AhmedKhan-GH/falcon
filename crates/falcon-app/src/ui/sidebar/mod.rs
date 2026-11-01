@@ -11,9 +11,9 @@ use falcon_library::model::Folder;
 use falcon_library::smart::SmartFolder;
 use falcon_library::Library;
 
-use crate::locale::tr;
 use crate::app::{Action, App, Confirm, DragFolder, DragItems, DragQuick, Switch};
 use crate::icons as ic;
+use crate::locale::{tr, tr_key, trf};
 use crate::logic::{self, NavCounts, Scope};
 use crate::theme::{self as t, font};
 use crate::ui::widgets::{galley, icon, icon_button, window_drag};
@@ -61,7 +61,7 @@ pub(crate) fn caret_rect(row: Rect, depth: usize) -> Rect {
 }
 
 pub(crate) fn smart_name(lib: &Library, id: &str) -> String {
-    let mut name = String::from("Smart Folder");
+    let mut name = tr("Smart Folder").to_string();
     for sf in lib.smart_folders() {
         sf.walk(&mut Vec::new(), &mut |f, _| {
             if f.id == id {
@@ -106,11 +106,6 @@ pub(crate) fn smart_count(roots: &[SmartFolder]) -> usize {
 /// lowercased) in its name.
 pub(crate) fn smart_subtree_matches(s: &SmartFolder, filter: &str) -> bool {
     s.name.to_lowercase().contains(filter) || s.children.iter().any(|c| smart_subtree_matches(c, filter))
-}
-
-/// A heading's title with its count, shown only when there is something.
-fn counted(title: &str, n: usize) -> String {
-    if n > 0 { format!("{title} ({n})") } else { title.to_string() }
 }
 
 pub(crate) fn sidebar_row(
@@ -211,29 +206,29 @@ impl App {
     /// The menu for a library in the switcher (right-click or the ⋯ button).
     pub(crate) fn library_menu(&mut self, ui: &mut Ui, root: &std::path::Path, missing: bool) {
         if !missing {
-            if ui.button("Change Icon…").clicked() {
+            if ui.button(tr("Change Icon…")).clicked() {
                 ui.close();
                 self.change_library_icon(root);
             }
             if falcon_library::library_icon::icon_path(root).is_some() {
-                ui.menu_button("Remove Icon", |ui| {
-                    ui.label("Remove this library's icon?");
-                    if ui.button("Remove").clicked() {
+                ui.menu_button(tr("Remove Icon"), |ui| {
+                    ui.label(tr("Remove this library's icon?"));
+                    if ui.button(tr("Remove")).clicked() {
                         ui.close();
                         self.remove_library_icon(root);
                     }
-                    if ui.button("Cancel").clicked() {
+                    if ui.button(tr("Cancel")).clicked() {
                         ui.close();
                     }
                 });
             }
         }
-        if ui.add_enabled(!missing, egui::Button::new("Show in Finder")).clicked() {
+        if ui.add_enabled(!missing, egui::Button::new(tr("Show in Finder"))).clicked() {
             ui.close();
             let _ = std::process::Command::new("open").arg("-R").arg(root).spawn();
         }
         ui.separator();
-        if ui.button("Remove from List").clicked() {
+        if ui.button(tr("Remove from List")).clicked() {
             ui.close();
             crate::workspaces::remove_from_list(&mut self.recent, root);
         }
@@ -241,13 +236,13 @@ impl App {
 
     /// Asks for an image and makes it the library's icon.
     pub(crate) fn change_library_icon(&mut self, root: &std::path::Path) {
-        let Some(src) = rfd::FileDialog::new().set_title("Choose Library Icon").add_filter("Images", &["jpg", "jpeg", "png", "webp", "gif"]).pick_file() else {
+        let Some(src) = rfd::FileDialog::new().set_title(tr("Choose Library Icon")).add_filter(tr("Images"), &["jpg", "jpeg", "png", "webp", "gif"]).pick_file() else {
             return;
         };
         let done = falcon_library::sandbox::guard(root).and_then(|()| falcon_library::library_icon::set_icon(root, &src));
         self.lib_icons.forget(root);
         if let Err(e) = done {
-            self.flash(format!("Couldn't change the icon: {e}"));
+            self.flash(trf("Couldn't change the icon: {error}", &[("error", &e)]));
         }
     }
 
@@ -255,7 +250,7 @@ impl App {
         let done = falcon_library::sandbox::guard(root).and_then(|()| falcon_library::library_icon::remove_icon(root));
         self.lib_icons.forget(root);
         if let Err(e) = done {
-            self.flash(format!("Couldn't remove the icon: {e}"));
+            self.flash(trf("Couldn't remove the icon: {error}", &[("error", &e)]));
         }
     }
 
@@ -274,17 +269,17 @@ impl App {
         window_drag(ui, header, "sidebar");
         let cy = header.center().y;
         let r = full.right();
-        if icon_button(ui, Pos2::new(r - 24.0, cy), ic::SIDEBAR_SIMPLE, 18.0, true, "Hide sidebar").clicked() {
+        if icon_button(ui, Pos2::new(r - 24.0, cy), ic::SIDEBAR_SIMPLE, 18.0, true, tr("Hide sidebar")).clicked() {
             self.show_sidebar = false;
         }
         // Go to Folder opens the quick switcher, as Eagle's header button
         // does; the library name below switches libraries.
         let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::QuickSwitchKey);
-        let tip = if keys.is_empty() { "Go to Folder".to_owned() } else { format!("Go to Folder  {keys}") };
+        let tip = if keys.is_empty() { tr("Go to Folder").to_owned() } else { trf("Go to Folder  {keys}", &[("keys", &keys)]) };
         if icon_button(ui, Pos2::new(r - 51.0, cy), ic::ARROWS_LEFT_RIGHT, 18.0, true, &tip).clicked() {
             self.quick.toggle();
         }
-        let add_tip = self.shortcuts.tooltip(ui.ctx(), crate::locale::tr("Add"), crate::shortcuts::Command::NewMenu);
+        let add_tip = self.shortcuts.tooltip(ui.ctx(), tr("Add"), crate::shortcuts::Command::NewMenu);
         let add = icon_button(ui, Pos2::new(r - 79.0, cy), ic::PLUS, 18.0, true, &add_tip);
         if add.clicked() {
             self.toggle_new_menu(ui.ctx());
@@ -314,7 +309,7 @@ impl App {
         }
         egui::Popup::menu(&resp).show(|ui| {
             ui.set_min_width(260.0);
-            ui.label(RichText::new("Open").color(t::p().text_muted).size(12.0));
+            ui.label(RichText::new(tr("switcher::Open")).color(t::p().text_muted).size(12.0));
             let open: Vec<PathBuf> = self.others.iter(&self.ws).map(|w| w.root.clone().unwrap_or_default()).collect();
             let slot = self.others.slot();
             for (i, p) in open.iter().enumerate() {
@@ -325,8 +320,8 @@ impl App {
                     if row.on_hover_text(p.display().to_string()).clicked() && i != slot {
                         self.switch_to = Some(Switch::Focus(i));
                     }
-                    ui.menu_button(ic::DOTS_THREE, |ui| self.library_menu(ui, p, false)).response.on_hover_text("More");
-                    if ui.small_button(ic::X).on_hover_text("Close Library").clicked() {
+                    ui.menu_button(ic::DOTS_THREE, |ui| self.library_menu(ui, p, false)).response.on_hover_text(tr("More"));
+                    if ui.small_button(ic::X).on_hover_text(tr("Close Library")).clicked() {
                         self.switch_to = Some(Switch::Close(i));
                     }
                 });
@@ -334,62 +329,62 @@ impl App {
             let recent = crate::workspaces::not_open(&self.recent, &open);
             if !recent.is_empty() {
                 ui.separator();
-                ui.label(RichText::new("Recent").color(t::p().text_muted).size(12.0));
+                ui.label(RichText::new(tr("Recent")).color(t::p().text_muted).size(12.0));
                 for p in recent {
                     let missing = !p.is_dir();
                     ui.horizontal(|ui| {
                         self.switcher_icon(ui, &p, missing);
                         let row = ui.add(egui::Button::new(library_label(&p, missing)).min_size(vec2(200.0, 0.0)));
                         row.context_menu(|ui| self.library_menu(ui, &p, missing));
-                        let tip = if missing { format!("The folder can't be found: {}", p.display()) } else { p.display().to_string() };
+                        let tip = if missing { trf("The folder can't be found: {path}", &[("path", &p.display())]) } else { p.display().to_string() };
                         if row.on_hover_text(tip).clicked() {
                             self.switch_to = Some(Switch::Open(p.clone()));
                         }
-                        ui.menu_button(ic::DOTS_THREE, |ui| self.library_menu(ui, &p, missing)).response.on_hover_text("More");
+                        ui.menu_button(ic::DOTS_THREE, |ui| self.library_menu(ui, &p, missing)).response.on_hover_text(tr("More"));
                     });
                 }
-                if ui.button("Clear History…").clicked() {
+                if ui.button(tr("Clear History…")).clicked() {
                     ui.close();
                     self.clear_history_open = true;
                 }
             }
             ui.separator();
-            if ui.button("Open Library…").clicked() {
+            if ui.button(tr("Open Library…")).clicked() {
                 self.switch_to = Some(Switch::Pick);
             }
-            if ui.button("New Library…").clicked() {
+            if ui.button(tr("New Library…")).clicked() {
                 self.switch_to = Some(Switch::Create);
             }
-            if ui.button("Merge Another Library…").clicked() {
+            if ui.button(tr("Merge Another Library…")).clicked() {
                 self.switch_to = Some(Switch::Merge);
             }
-            if ui.button("Empty Cache and Reload…").clicked() {
+            if ui.button(tr("Empty Cache and Reload…")).clicked() {
                 self.confirm_reload = true;
             }
             if ui.button(tr("Clear Invalid Content…")).on_hover_text(tr("Find empty or broken item folders and clean them up")).clicked() {
                 self.clear_invalid_content();
             }
-            if ui.button("Show in Finder").clicked() {
+            if ui.button(tr("Show in Finder")).clicked() {
                 let _ = std::process::Command::new("open").arg("-R").arg(&current).spawn();
             }
             ui.separator();
-            if ui.button("Import Files…").clicked() {
+            if ui.button(tr("Import Files…")).clicked() {
                 self.import_files_dialog();
             }
-            if ui.button("Import Folders…").clicked() {
+            if ui.button(tr("Import Folders…")).clicked() {
                 self.import_folders_dialog();
             }
-            if ui.button("Import Eagle Package…").clicked() {
+            if ui.button(tr("Import Eagle Package…")).clicked() {
                 self.import_pack_dialog();
             }
-            if ui.button("Import Inboard Backup…").clicked() {
+            if ui.button(tr("Import Inboard Backup…")).clicked() {
                 self.import_inboard_dialog();
             }
             ui.separator();
-            if ui.button(if self.collect.open { "Hide Collect Window" } else { "Show Collect Window" }).clicked() {
+            if ui.button(if self.collect.open { tr("Hide Collect Window") } else { tr("Show Collect Window") }).clicked() {
                 self.collect.toggle();
             }
-            if ui.button("Preferences…").clicked() {
+            if ui.button(tr("Preferences…")).clicked() {
                 self.open_preferences();
             }
         });
@@ -413,7 +408,8 @@ impl App {
             ui.add_space(12.0);
             let shown = self.prefs.sidebar.clone();
             if shown.quick_access && !lib.metadata.quick_access.is_empty() {
-                let head = section(ui, &format!("Quick Access ({})", lib.metadata.quick_access.len()), self.sections.quick);
+                let quick_title = trf("Quick Access ({count})", &[("count", &lib.metadata.quick_access.len())]);
+                let head = section(ui, &quick_title, self.sections.quick);
                 if head.clicked() {
                     self.sections.quick = !self.sections.quick;
                 }
@@ -454,7 +450,7 @@ impl App {
                         self.go(scope);
                     }
                     resp.context_menu(|ui| {
-                        if ui.button("Remove from Quick Access").clicked() {
+                        if ui.button(tr("Remove from Quick Access")).clicked() {
                             self.ws.actions.push(Action::QuickRemove(id.to_string()));
                         }
                     });
@@ -465,7 +461,8 @@ impl App {
             if shown.smart_folders {
                 let smart = lib.smart_folders();
                 if filter.is_empty() || smart.iter().any(|s| smart_subtree_matches(s, &filter)) {
-                    let title = counted("Smart Folders", smart_count(&smart));
+                    let n = smart_count(&smart);
+                    let title = if n > 0 { trf("Smart Folders ({count})", &[("count", &n)]) } else { tr("Smart Folders").to_string() };
                     if self.smart_section(ui, &title, self.sections.smart) {
                         self.sections.smart = !self.sections.smart;
                     }
@@ -483,7 +480,7 @@ impl App {
                 return;
             }
             let total = lib.all_folders().len();
-            let header = section(ui, &counted("Folders", total), self.sections.folders);
+            let header = section(ui, &if total > 0 { trf("Folders ({count})", &[("count", &total)]) } else { tr("Folders").to_string() }, self.sections.folders);
             if header.clicked() {
                 self.sections.folders = !self.sections.folders;
             }
@@ -514,7 +511,7 @@ impl App {
                 .id_salt("folder-filter")
                 .frame(egui::Frame::NONE)
                 .margin(egui::Margin::ZERO)
-                .hint_text(RichText::new("Filter").color(t::p().text_muted))
+                .hint_text(RichText::new(tr("Filter")).color(t::p().text_muted))
                 .font(font(13.0))
                 .align(Align2::LEFT_CENTER)
                 .desired_width(inner.width() - 8.0),
@@ -543,14 +540,14 @@ impl App {
     pub(crate) fn nav_rows(&mut self, ui: &mut Ui, cx: &SidebarCtx) {
         let n = cx.nav;
         let entries: [(&str, &str, Scope, usize); 8] = [
-            (ic::IMAGES, "All", Scope::All, n.all),
-            (ic::FOLDER_DASHED, "Uncategorized", Scope::Uncategorized, n.uncategorized),
-            (ic::TAG_SIMPLE, "Untagged", Scope::Untagged, n.untagged),
-            (ic::CLOCK, "Recently Used", Scope::Recent, 0),
-            (ic::SHUFFLE, "Random", Scope::Random(0), 0),
-            (ic::BOOKMARK_SIMPLE, "All Tags", Scope::AllTags, n.tags),
-            (crate::ui::grid::duplicates::ICON, "Duplicates", Scope::Duplicates, 0),
-            (ic::TRASH, "Trash", Scope::Trash, n.trash),
+            (ic::IMAGES, tr_key("All"), Scope::All, n.all),
+            (ic::FOLDER_DASHED, tr_key("Uncategorized"), Scope::Uncategorized, n.uncategorized),
+            (ic::TAG_SIMPLE, tr_key("Untagged"), Scope::Untagged, n.untagged),
+            (ic::CLOCK, tr_key("Recently Used"), Scope::Recent, 0),
+            (ic::SHUFFLE, tr_key("Random"), Scope::Random(0), 0),
+            (ic::BOOKMARK_SIMPLE, tr_key("All Tags"), Scope::AllTags, n.tags),
+            (crate::ui::grid::duplicates::ICON, tr_key("Duplicates"), Scope::Duplicates, 0),
+            (ic::TRASH, tr_key("Trash"), Scope::Trash, n.trash),
         ];
         for (glyph, label, scope, count) in entries {
             if !self.prefs.sidebar.shows(&scope) {
@@ -560,13 +557,13 @@ impl App {
                 (Scope::Random(_), Scope::Random(_)) => true,
                 (a, b) => a == b,
             };
-            let resp = sidebar_row(ui, 0, glyph, label, self.badge(count), active, None);
+            let resp = sidebar_row(ui, 0, glyph, tr(label), self.badge(count), active, None);
             self.side_row(scope.clone(), &resp);
             if scope == Scope::Recent {
                 resp.context_menu(|ui| {
                     let root = self.ws.root.clone().unwrap_or_default();
                     let any = !self.recent_items.list(&root).is_empty();
-                    if ui.add_enabled(any, egui::Button::new("Clear Recently Used")).clicked() {
+                    if ui.add_enabled(any, egui::Button::new(tr("Clear Recently Used"))).clicked() {
                         self.recent_items.clear(&root);
                         self.recent_shown = None;
                         if self.ws.scope == Scope::Recent {
@@ -582,20 +579,20 @@ impl App {
                 egui::Popup::context_menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
                     ui.set_min_width(180.0);
                     let mut all = true;
-                    ui.add_enabled(false, egui::Checkbox::new(&mut all, "All"));
+                    ui.add_enabled(false, egui::Checkbox::new(&mut all, tr("All")));
                     let s = &mut self.prefs.sidebar;
-                    ui.checkbox(&mut s.uncategorized, "Uncategorized");
-                    ui.checkbox(&mut s.untagged, "Untagged");
-                    ui.checkbox(&mut s.recent, "Recently Used");
-                    ui.checkbox(&mut s.random, "Random");
+                    ui.checkbox(&mut s.uncategorized, tr("Uncategorized"));
+                    ui.checkbox(&mut s.untagged, tr("Untagged"));
+                    ui.checkbox(&mut s.recent, tr("Recently Used"));
+                    ui.checkbox(&mut s.random, tr("Random"));
                 });
             }
             if scope == Scope::Trash {
                 resp.context_menu(|ui| {
-                    if ui.add_enabled(n.trash > 0, egui::Button::new("Restore All Items")).clicked() {
+                    if ui.add_enabled(n.trash > 0, egui::Button::new(tr("Restore All Items"))).clicked() {
                         self.ws.confirm = Some(Confirm::RestoreAll);
                     }
-                    if ui.add_enabled(n.trash > 0, egui::Button::new("Empty Trash")).clicked() {
+                    if ui.add_enabled(n.trash > 0, egui::Button::new(tr("Empty Trash"))).clicked() {
                         self.ws.confirm = Some(Confirm::EmptyTrash);
                     }
                 });
@@ -689,38 +686,38 @@ impl App {
             }
             ui.set_min_width(180.0);
             let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::NewFolder);
-            if ui.add(egui::Button::new("New Folder").shortcut_text(keys)).on_hover_text("A new folder right below this one").clicked() {
+            if ui.add(egui::Button::new(tr("New Folder")).shortcut_text(keys)).on_hover_text(tr("A new folder right below this one")).clicked() {
                 self.ws.actions.push(Action::CreateSibling(f.id.clone()));
             }
-            if ui.add_enabled(!shut, egui::Button::new("New Subfolder")).clicked() {
+            if ui.add_enabled(!shut, egui::Button::new(tr("New Subfolder"))).clicked() {
                 self.ws.actions.push(Action::CreateFolder { parent: Some(f.id.clone()) });
             }
-            if ui.button("Move Folder…").clicked() {
+            if ui.button(tr("Move Folder…")).clicked() {
                 self.open_mover(vec![f.id.clone()]);
             }
             ui.separator();
             if pinned {
-                if ui.button("Remove from Quick Access").clicked() {
+                if ui.button(tr("Remove from Quick Access")).clicked() {
                     self.ws.actions.push(Action::QuickRemove(f.id.clone()));
                 }
-            } else if ui.button("Add to Quick Access").clicked() {
+            } else if ui.button(tr("Add to Quick Access")).clicked() {
                 self.ws.actions.push(Action::QuickAdd("folder", f.id.clone()));
             }
-            if depth > 0 && ui.button("Move to Top Level").clicked() {
+            if depth > 0 && ui.button(tr("Move to Top Level")).clicked() {
                 self.ws.actions.push(Action::MoveFolder(f.id.clone(), None));
             }
             ui.separator();
-            if ui.button("Rename").clicked() {
+            if ui.button(tr("Rename")).clicked() {
                 self.ws.renaming = Some((f.id.clone(), f.name.clone()));
             }
-            if ui.button("Copy Link").clicked() {
+            if ui.button(tr("Copy Link")).clicked() {
                 ui.ctx().copy_text(crate::links::api_folder_link(self.api_link_port(), &f.id));
-                self.flash_brief("Link copied");
+                self.flash_brief(tr("Link copied"));
             }
-            crate::ui::menus::search::submenu(ui, "Copy", |ui| {
-                if ui.button("Eagle Link").clicked() {
+            crate::ui::menus::search::submenu(ui, tr("Copy"), |ui| {
+                if ui.button(tr("Eagle Link")).clicked() {
                     ui.ctx().copy_text(crate::links::folder_link(&f.id));
-                    self.flash_brief("Link copied");
+                    self.flash_brief(tr("Link copied"));
                     ui.close();
                 }
             });
@@ -729,7 +726,7 @@ impl App {
             self.expand_menu(ui, &lib.metadata.folders, &f.id);
             ui.separator();
             // Eagle disables Duplicate on a locked folder.
-            if ui.add_enabled(!shut, egui::Button::new("Duplicate")).clicked() {
+            if ui.add_enabled(!shut, egui::Button::new(tr("Duplicate"))).clicked() {
                 self.ws.actions.push(Action::Folders(crate::ui::sidebar::folders::FolderAction::Duplicate(f.id.clone())));
             }
             self.tree_export_menu(ui, crate::ui::dialogs::export::Target::Folder(f.id.clone()), !shut);
@@ -738,11 +735,11 @@ impl App {
             // The same switch as the View menu's (Eagle shows it checked).
             let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::ToggleSubfolders);
             let mark = if self.display.subfolders { crate::icons::CHECK } else { " " };
-            if ui.add(egui::Button::new(format!("{mark}  Show Subfolder Content")).shortcut_text(keys)).clicked() {
+            if ui.add(egui::Button::new(format!("{mark}  {}", tr("Show Subfolder Content"))).shortcut_text(keys)).clicked() {
                 self.run_command(&ui.ctx().clone(), crate::shortcuts::Command::ToggleSubfolders);
             }
             ui.separator();
-            if ui.add_enabled(!shut, egui::Button::new(RichText::new("Delete Folder").color(t::p().icon_red))).clicked() {
+            if ui.add_enabled(!shut, egui::Button::new(RichText::new(tr("Delete Folder")).color(t::p().icon_red))).clicked() {
                 self.ask_delete_folders(lib, vec![f.id.clone()]);
             }
             })
@@ -818,11 +815,5 @@ mod tests {
         assert!(smart_subtree_matches(&tree, "work"));
         assert!(smart_subtree_matches(&tree, "cars"));
         assert!(!smart_subtree_matches(&tree, "boats"));
-    }
-
-    #[test]
-    fn heading_count_only_when_nonzero() {
-        assert_eq!(counted("Folders", 0), "Folders");
-        assert_eq!(counted("Folders", 3), "Folders (3)");
     }
 }

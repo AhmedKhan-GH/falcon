@@ -11,6 +11,7 @@ use falcon_library::Library;
 
 use crate::app::{Action, App, Confirm};
 use crate::icons as ic;
+use crate::locale::{tr, tr_key, tr_n, tr_nf, trf};
 use crate::logic::{self, Scope};
 use crate::theme::{self as t, font};
 use crate::ui::widgets::{galley, icon};
@@ -120,23 +121,22 @@ pub(crate) enum FolderAction {
 impl FolderAction {
     /// The undo name.
     pub fn label(&self) -> String {
-        let n = |v: &Vec<String>| if v.len() == 1 { "folder".to_string() } else { format!("{} folders", v.len()) };
         match self {
-            FolderAction::Rename(v) | FolderAction::RenameSmart(v) => format!("Rename {} folders", v.len()),
-            FolderAction::Move(v, ..) => format!("Move {}", n(v)),
-            FolderAction::Restyle(v, ..) | FolderAction::RestyleSmart(v, ..) => format!("Change icon of {}", n(v)),
+            FolderAction::Rename(v) | FolderAction::RenameSmart(v) => tr_n(v.len(), "Rename {n} folder", "Rename {n} folders"),
+            FolderAction::Move(v, ..) => tr_n(v.len(), "Move folder", "Move {n} folders"),
+            FolderAction::Restyle(v, ..) | FolderAction::RestyleSmart(v, ..) => tr_n(v.len(), "Change icon of folder", "Change icon of {n} folders"),
             FolderAction::Order(v, _) | FolderAction::Increase(v, _) | FolderAction::SmartOrder(v, _) | FolderAction::SmartIncrease(v, _) => {
-                format!("Change sort of {}", n(v))
+                tr_n(v.len(), "Change sort of folder", "Change sort of {n} folders")
             }
-            FolderAction::Delete(v, _) => format!("Delete {}", n(v)),
-            FolderAction::DeleteSmart(v) => format!("Delete {}", n(v).replace("folder", "smart folder")),
-            FolderAction::QuickAdd(_, v) => format!("Add {} to Quick Access", n(v)),
-            FolderAction::QuickRemove(v) => format!("Remove {} from Quick Access", n(v)),
-            FolderAction::Duplicate(_) => "Duplicate folder".into(),
-            FolderAction::DuplicateSmart(_) => "Duplicate smart folder".into(),
-            FolderAction::CreateWith(_, items) => format!("New folder with {} items", items.len()),
-            FolderAction::Categorize(items, ..) => format!("Add {} to folders", items.len()),
-            FolderAction::PickerCreate(..) => "New folder".into(),
+            FolderAction::Delete(v, _) => tr_n(v.len(), "Delete folder", "Delete {n} folders"),
+            FolderAction::DeleteSmart(v) => tr_n(v.len(), "Delete smart folder", "Delete {n} smart folders"),
+            FolderAction::QuickAdd(_, v) => tr_n(v.len(), "Add folder to Quick Access", "Add {n} folders to Quick Access"),
+            FolderAction::QuickRemove(v) => tr_n(v.len(), "Remove folder from Quick Access", "Remove {n} folders from Quick Access"),
+            FolderAction::Duplicate(_) => tr("Duplicate folder").into(),
+            FolderAction::DuplicateSmart(_) => tr("Duplicate smart folder").into(),
+            FolderAction::CreateWith(_, items) => tr_n(items.len(), "New folder with {n} item", "New folder with {n} items"),
+            FolderAction::Categorize(items, ..) => trf("Add {n} to folders", &[("n", &items.len())]),
+            FolderAction::PickerCreate(..) => tr("New folder").into(),
         }
     }
 }
@@ -260,9 +260,9 @@ impl App {
     pub(crate) fn combined_title(&self) -> Option<String> {
         let f = &self.ws.folders;
         if f.sel.is_multi() {
-            Some(format!("{} folders selected", f.sel.ids.len()))
+            Some(trf("{count} folders selected", &[("count", &f.sel.ids.len())]))
         } else if f.smart.is_multi() {
-            Some(format!("{} smart folders selected", f.smart.ids.len()))
+            Some(trf("{count} smart folders selected", &[("count", &f.smart.ids.len())]))
         } else {
             None
         }
@@ -297,20 +297,20 @@ impl App {
         let ids = self.ws.folders.sel.ids.clone();
         let folders: Vec<&Folder> = ids.iter().filter_map(|id| logic::find_folder(&lib.metadata.folders, id)).collect();
         if pinned {
-            if ui.button("Remove from Quick Access").clicked() {
+            if ui.button(tr("Remove from Quick Access")).clicked() {
                 self.ws.actions.push(act(FolderAction::QuickRemove(ids.clone())));
             }
-        } else if ui.button("Add to Quick Access").clicked() {
+        } else if ui.button(tr("Add to Quick Access")).clicked() {
             self.ws.actions.push(act(FolderAction::QuickAdd("folder", ids.clone())));
         }
         ui.separator();
-        if ui.button("Move Folders…").clicked() {
+        if ui.button(tr("Move Folders…")).clicked() {
             self.open_mover(ids.clone());
         }
-        if ui.button(format!("Rename {} Folders…", ids.len())).clicked() {
+        if ui.button(trf("Rename {count} Folders…", &[("count", &ids.len())])).clicked() {
             self.open_rename(Tree::Folders, ids.clone());
         }
-        crate::ui::menus::search::submenu(ui, "Sort Items By", |ui| {
+        crate::ui::menus::search::submenu(ui, tr("Sort Items By"), |ui| {
             ui.set_min_width(180.0);
             let cur = common_sort(folders.iter().map(|f| crate::organize::own_order(f.order_by.as_deref(), f.sort_increase)));
             if let Some(v) = sort_entries(ui, cur, false, (self.ws.sort, self.ws.increase)) {
@@ -324,8 +324,8 @@ impl App {
         // Eagle offers only Export to Computer here, and not from a locked row.
         let shut = crate::organize::is_shut(f, &self.ws.org.unlocked);
         ui.add_enabled_ui(!shut, |ui| {
-            crate::ui::menus::search::submenu(ui, "Export", |ui| {
-                if ui.button("Export to Computer…").clicked() {
+            crate::ui::menus::search::submenu(ui, tr("Export"), |ui| {
+                if ui.button(tr("Export to Computer…")).clicked() {
                     self.ws.export.request = Some(crate::ui::dialogs::export::Request::Trees(ids.clone()));
                 }
             });
@@ -334,7 +334,7 @@ impl App {
         let color = common_value(folders.iter().map(|f| f.icon_color.as_deref()));
         let icon = common_value(folders.iter().map(|f| f.icon.as_deref()));
         let tint = folder_icons::color(color.flatten()).unwrap_or(t::p().text);
-        ui.menu_button("Change Icon", |ui| {
+        ui.menu_button(tr("Change Icon"), |ui| {
             if let Some(pick) = icon_grid(ui, icon.flatten(), tint, false) {
                 self.ws.actions.push(act(FolderAction::Restyle(ids.clone(), Some(pick), None)));
                 ui.close();
@@ -345,7 +345,7 @@ impl App {
             ui.close();
         }
         ui.separator();
-        if ui.button(RichText::new(format!("Delete {} Folders", ids.len())).color(t::p().icon_red)).clicked() {
+        if ui.button(RichText::new(trf("Delete {count} Folders", &[("count", &ids.len())])).color(t::p().icon_red)).clicked() {
             self.ask_delete_folders(lib, ids);
         }
     }
@@ -357,7 +357,7 @@ impl App {
         let ids = self.ws.folders.smart.ids.clone();
         let roots = lib.smart_folders();
         let picked: Vec<&falcon_library::smart::SmartFolder> = ids.iter().filter_map(|id| crate::organize::find(&roots, id)).collect();
-        crate::ui::menus::search::submenu(ui, "Sort Items By", |ui| {
+        crate::ui::menus::search::submenu(ui, tr("Sort Items By"), |ui| {
             ui.set_min_width(180.0);
             let cur = common_sort(picked.iter().map(|f| crate::organize::own_order(f.order_by.as_deref(), f.sort_increase)));
             if let Some(v) = sort_entries(ui, cur, false, (self.ws.sort, self.ws.increase)) {
@@ -370,20 +370,20 @@ impl App {
         });
         ui.separator();
         if pinned {
-            if ui.button("Remove from Quick Access").clicked() {
+            if ui.button(tr("Remove from Quick Access")).clicked() {
                 self.ws.actions.push(act(FolderAction::QuickRemove(ids.clone())));
             }
-        } else if ui.button("Add to Quick Access").clicked() {
+        } else if ui.button(tr("Add to Quick Access")).clicked() {
             self.ws.actions.push(act(FolderAction::QuickAdd("smartFolder", ids.clone())));
         }
-        if ui.button(format!("Rename {} Smart Folders…", ids.len())).clicked() {
+        if ui.button(trf("Rename {count} Smart Folders…", &[("count", &ids.len())])).clicked() {
             self.open_rename(Tree::Smart, ids.clone());
         }
         ui.separator();
         let color = common_value(picked.iter().map(|f| f.icon_color.as_deref()));
         let icon = common_value(picked.iter().map(|f| f.icon.as_deref()));
         let tint = folder_icons::color(color.flatten()).unwrap_or(t::p().text);
-        ui.menu_button("Change Icon", |ui| {
+        ui.menu_button(tr("Change Icon"), |ui| {
             if let Some(pick) = icon_grid(ui, icon.flatten(), tint, true) {
                 self.ws.actions.push(act(FolderAction::RestyleSmart(ids.clone(), Some(pick), None)));
                 ui.close();
@@ -394,7 +394,7 @@ impl App {
             ui.close();
         }
         ui.separator();
-        if ui.button(RichText::new(format!("Delete {} Smart Folders", ids.len())).color(t::p().icon_red)).clicked() {
+        if ui.button(RichText::new(trf("Delete {count} Smart Folders", &[("count", &ids.len())])).color(t::p().icon_red)).clicked() {
             self.ws.confirm = Some(Confirm::DeleteSmarts(ids));
         }
     }
@@ -427,14 +427,14 @@ impl App {
 
     fn open_rename(&mut self, tree: Tree, ids: Vec<String>) {
         let template = match tree {
-            Tree::Folders => "Folder %N",
-            Tree::Smart => "Smart Folder %N",
+            Tree::Folders => tr("Folder %N"),
+            Tree::Smart => tr("Smart Folder %N"),
         };
         self.ws.folders.rename = Some(RenameDraft {
             tree,
             ids,
             replace: false,
-            template: template.into(),
+            template: template.to_string(),
             start: 1,
             find: String::new(),
             with: String::new(),
@@ -470,11 +470,11 @@ impl App {
         let mut keep = true;
         let modal = egui::Modal::new(egui::Id::unique("new-folder-with")).show(ctx, |ui| {
             ui.set_width(300.0);
-            ui.label(RichText::new("New Folder").size(15.0));
+            ui.label(RichText::new(tr("New Folder")).size(15.0));
             ui.add_space(2.0);
-            ui.label(RichText::new(format!("The {} selected items go into it.", items.len())).color(t::p().text_muted));
+            ui.label(RichText::new(tr_n(items.len(), "The {n} selected item goes into it.", "The {n} selected items go into it.")).color(t::p().text_muted));
             ui.add_space(6.0);
-            let te = ui.add(TextEdit::singleline(&mut name).hint_text("Folder name").desired_width(f32::INFINITY));
+            let te = ui.add(TextEdit::singleline(&mut name).hint_text(tr("Folder name")).desired_width(f32::INFINITY));
             if ui.memory(|m| m.focused().is_none()) {
                 te.request_focus();
             }
@@ -483,11 +483,11 @@ impl App {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let clean = logic::clean_folder_name(&name);
                 let ok = !clean.is_empty();
-                if (ui.add_enabled(ok, egui::Button::new("Create")).clicked() || (enter && ok)) && keep {
+                if (ui.add_enabled(ok, egui::Button::new(tr("Create"))).clicked() || (enter && ok)) && keep {
                     self.ws.actions.push(act(FolderAction::CreateWith(clean, items.clone())));
                     keep = false;
                 }
-                if ui.button("Cancel").clicked() {
+                if ui.button(tr("Cancel")).clicked() {
                     keep = false;
                 }
             });
@@ -527,43 +527,52 @@ impl App {
         let mut keep = true;
         let modal = egui::Modal::new(egui::Id::unique("batch-rename")).show(ctx, |ui| {
             ui.set_width(460.0);
-            let what = if d.tree == Tree::Folders { "Folders" } else { "Smart Folders" };
-            ui.label(RichText::new(format!("Rename {} {what}", previews.len())).size(15.0));
+            let title = if d.tree == Tree::Folders {
+                tr_n(previews.len(), "Rename {n} Folder", "Rename {n} Folders")
+            } else {
+                tr_n(previews.len(), "Rename {n} Smart Folder", "Rename {n} Smart Folders")
+            };
+            ui.label(RichText::new(title).size(15.0));
             ui.add_space(6.0);
             if d.confirming {
-                ui.label(format!("This renames {} {}. Go ahead?", previews.len(), what.to_lowercase()));
+                let ask = if d.tree == Tree::Folders {
+                    tr_n(previews.len(), "This renames {n} folder. Go ahead?", "This renames {n} folders. Go ahead?")
+                } else {
+                    tr_n(previews.len(), "This renames {n} smart folder. Go ahead?", "This renames {n} smart folders. Go ahead?")
+                };
+                ui.label(ask);
                 ui.add_space(10.0);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("Rename").clicked() {
+                    if ui.button(tr("Rename")).clicked() {
                         self.finish_rename(&d, &previews);
                         keep = false;
                     }
-                    if ui.button("Back").clicked() {
+                    if ui.button(tr("Back")).clicked() {
                         d.confirming = false;
                     }
                 });
                 return;
             }
             ui.horizontal(|ui| {
-                ui.selectable_value(&mut d.replace, false, "Format");
-                ui.selectable_value(&mut d.replace, true, "Replace Text");
+                ui.selectable_value(&mut d.replace, false, tr("Format"));
+                ui.selectable_value(&mut d.replace, true, tr("Replace Text"));
             });
             ui.add_space(4.0);
             if d.replace {
                 egui::Grid::new("rename-replace").num_columns(2).spacing([8.0, 6.0]).show(ui, |ui| {
-                    ui.label("Find");
-                    ui.add(TextEdit::singleline(&mut d.find).hint_text("Text, or /pattern/flags").desired_width(340.0));
+                    ui.label(tr("Find"));
+                    ui.add(TextEdit::singleline(&mut d.find).hint_text(tr("Text, or /pattern/flags")).desired_width(340.0));
                     ui.end_row();
-                    ui.label("Replace with");
+                    ui.label(tr("Replace with"));
                     ui.add(TextEdit::singleline(&mut d.with).desired_width(340.0));
                     ui.end_row();
                 });
             } else {
                 egui::Grid::new("rename-format").num_columns(2).spacing([8.0, 6.0]).show(ui, |ui| {
-                    ui.label("Name");
+                    ui.label(tr("Name"));
                     ui.horizontal(|ui| {
                         ui.add(TextEdit::singleline(&mut d.template).desired_width(270.0));
-                        ui.menu_button("Insert", |ui| {
+                        ui.menu_button(tr("Insert"), |ui| {
                             ui.set_min_width(200.0);
                             let mut pick = |ui: &mut Ui, label: &str, token: &str| {
                                 if ui.add(egui::Button::new(label).shortcut_text(token)).clicked() {
@@ -571,37 +580,37 @@ impl App {
                                     ui.close();
                                 }
                             };
-                            ui.menu_button("Number", |ui| {
+                            ui.menu_button(tr("Number"), |ui| {
                                 for (label, token) in [("1", "%N"), ("01", "%NN"), ("001", "%NNN"), ("0001", "%NNNN")] {
                                     pick(ui, label, token);
                                 }
                             });
-                            ui.menu_button("Date", |ui| {
-                                for (head, letter) in [("Today", 'D'), ("Modified", 'M'), ("Created", 'B')] {
-                                    ui.label(RichText::new(head).color(t::p().text_muted).size(12.0));
-                                    for (label, suffix) in [("Date", "1"), ("Month and day", "2"), ("Written out", "3"), ("Date and time", "HM"), ("Date and time with seconds", "HMS")] {
+                            ui.menu_button(tr("Date"), |ui| {
+                                for (head, letter) in [(tr_key("Today"), 'D'), (tr_key("Modified"), 'M'), (tr_key("Created"), 'B')] {
+                                    ui.label(RichText::new(tr(head)).color(t::p().text_muted).size(12.0));
+                                    for (label, suffix) in [(tr_key("Date"), "1"), (tr_key("Month and day"), "2"), (tr_key("Written out"), "3"), (tr_key("Date and time"), "HM"), (tr_key("Date and time with seconds"), "HMS")] {
                                         let token = match suffix {
                                             "1" => format!("%{letter}"),
                                             "2" => format!("%{letter}{letter}"),
                                             "3" => format!("%{letter}{letter}{letter}"),
                                             s => format!("%{letter}{s}"),
                                         };
-                                        pick(ui, label, &token);
+                                        pick(ui, tr(label), &token);
                                     }
                                 }
                             });
-                            pick(ui, "Tags", "%T");
-                            pick(ui, "Original Name", "*");
+                            pick(ui, tr("Tags"), "%T");
+                            pick(ui, tr("Original Name"), "*");
                         });
                     });
                     ui.end_row();
-                    ui.label("Start at");
+                    ui.label(tr("Start at"));
                     ui.add(egui::DragValue::new(&mut d.start).range(0..=999_999));
                     ui.end_row();
                 });
             }
             ui.horizontal(|ui| {
-                ui.label("Case");
+                ui.label(tr("Case"));
                 egui::ComboBox::from_id_salt("rename-case")
                     .selected_text(case_label(d.case))
                     .show_ui(ui, |ui| {
@@ -625,7 +634,7 @@ impl App {
             ui.separator();
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let ready = d.rename().is_ready() && !previews.is_empty();
-                if ui.add_enabled(ready, egui::Button::new("Rename")).clicked() {
+                if ui.add_enabled(ready, egui::Button::new(tr("Rename"))).clicked() {
                     if previews.len() >= RENAME_ASK {
                         d.confirming = true;
                     } else {
@@ -633,7 +642,7 @@ impl App {
                         keep = false;
                     }
                 }
-                if ui.button("Cancel").clicked() {
+                if ui.button(tr("Cancel")).clicked() {
                     keep = false;
                 }
             });
@@ -671,37 +680,43 @@ impl App {
         let mut keep = true;
         let modal = egui::Modal::new(egui::Id::unique("move-folders")).show(ctx, |ui| {
             ui.set_width(380.0);
-            ui.label(RichText::new("Move Folder").size(15.0));
+            ui.label(RichText::new(tr("Move Folder")).size(15.0));
             ui.add_space(6.0);
             if let Some((target, place)) = d.ask.clone() {
                 let first = name(&d.ids[0]);
-                let who = match d.ids.len() {
-                    1 => format!("“{first}”"),
-                    2 => format!("“{first}” and 1 other folder"),
-                    n => format!("“{first}” and {} other folders", n - 1),
+                let target_name = name(&target);
+                let others = d.ids.len() - 1;
+                let q = match place {
+                    FolderPlace::Above => match others {
+                        0 => trf("Move “{first}” above “{target}”?", &[("first", &first), ("target", &target_name)]),
+                        _ => tr_nf(others, "Move “{first}” and {n} other folder above “{target}”?", "Move “{first}” and {n} other folders above “{target}”?", &[("first", &first), ("target", &target_name)]),
+                    },
+                    FolderPlace::Into => match others {
+                        0 => trf("Move “{first}” into “{target}”?", &[("first", &first), ("target", &target_name)]),
+                        _ => tr_nf(others, "Move “{first}” and {n} other folder into “{target}”?", "Move “{first}” and {n} other folders into “{target}”?", &[("first", &first), ("target", &target_name)]),
+                    },
+                    FolderPlace::Below => match others {
+                        0 => trf("Move “{first}” below “{target}”?", &[("first", &first), ("target", &target_name)]),
+                        _ => tr_nf(others, "Move “{first}” and {n} other folder below “{target}”?", "Move “{first}” and {n} other folders below “{target}”?", &[("first", &first), ("target", &target_name)]),
+                    },
                 };
-                let where_ = match place {
-                    FolderPlace::Above => "above",
-                    FolderPlace::Into => "into",
-                    FolderPlace::Below => "below",
-                };
-                ui.label(format!("Move {who} {where_} “{}”?", name(&target)));
+                ui.label(q);
                 ui.add_space(10.0);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("Move").clicked() {
+                    if ui.button(tr("Move")).clicked() {
                         if place == FolderPlace::Into {
                             self.ws.collapsed.remove(&target);
                         }
                         self.ws.actions.push(act(FolderAction::Move(d.ids.clone(), target.clone(), place)));
                         keep = false;
                     }
-                    if ui.button("Back").clicked() {
+                    if ui.button(tr("Back")).clicked() {
                         d.ask = None;
                     }
                 });
                 return;
             }
-            let te = ui.add(TextEdit::singleline(&mut d.search).hint_text("Search folders").desired_width(f32::INFINITY));
+            let te = ui.add(TextEdit::singleline(&mut d.search).hint_text(tr("Search folders")).desired_width(f32::INFINITY));
             if ui.memory(|m| m.focused().is_none()) {
                 te.request_focus();
             }
@@ -711,7 +726,7 @@ impl App {
             move_rows(&lib.metadata.folders, 0, &d, &filter, &self.ws.org.unlocked, &mut rows);
             egui::ScrollArea::vertical().max_height(360.0).auto_shrink([false, true]).show(ui, |ui| {
                 if rows.is_empty() {
-                    ui.label(RichText::new("No folder matches").color(t::p().text_muted));
+                    ui.label(RichText::new(tr("No folder matches")).color(t::p().text_muted));
                 }
                 for (f, depth, moving) in rows {
                     self.move_row(ui, &mut d, f, depth, moving, filter.is_empty());
@@ -719,7 +734,7 @@ impl App {
             });
             ui.add_space(6.0);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button("Cancel").clicked() {
+                if ui.button(tr("Cancel")).clicked() {
                     keep = false;
                 }
             });
@@ -760,10 +775,10 @@ impl App {
             return;
         }
         let mut right = rect.right() - 4.0;
-        for (label, place) in [("Below", FolderPlace::Below), ("Into", FolderPlace::Into), ("Above", FolderPlace::Above)] {
+        for (label, place) in [(tr_key("Below"), FolderPlace::Below), (tr_key("Into"), FolderPlace::Into), (tr_key("Above"), FolderPlace::Above)] {
             let w = 48.0;
             let r = Rect::from_min_max(Pos2::new(right - w, rect.top() + 3.0), Pos2::new(right, rect.bottom() - 3.0));
-            if ui.put(r, egui::Button::new(RichText::new(label).size(12.0)).small()).clicked() {
+            if ui.put(r, egui::Button::new(RichText::new(tr(label)).size(12.0)).small()).clicked() {
                 d.ask = Some((f.id.clone(), place));
             }
             right -= w + 4.0;
@@ -800,10 +815,10 @@ fn common_value<'a>(mut values: impl Iterator<Item = Option<&'a str>>) -> Option
 
 fn case_label(c: TextCase) -> &'static str {
     match c {
-        TextCase::Keep => "As typed",
-        TextCase::Upper => "UPPER CASE",
-        TextCase::Lower => "lower case",
-        TextCase::Capitalize => "Capitalize Words",
+        TextCase::Keep => tr("As typed"),
+        TextCase::Upper => tr("UPPER CASE"),
+        TextCase::Lower => tr("lower case"),
+        TextCase::Capitalize => tr("Capitalize Words"),
     }
 }
 
@@ -968,14 +983,16 @@ impl App {
             self.leave_viewed(items);
             self.select_after_removal(items);
         }
-        let n = crate::ui::dialogs::export::plural(items.len(), "item");
         match add {
             [one] => {
                 let name = logic::find_folder(&lib.metadata.folders, one).map_or_else(String::new, |f| f.name.clone());
-                self.flash_folder(format!("Added {n} to"), &name, one, true);
+                self.flash_folder(tr_n(items.len(), "Added {n} item to", "Added {n} items to"), &name, one, true);
             }
-            [] => self.flash_undo(format!("Took {n} out of {}", crate::ui::dialogs::export::plural(remove.len(), "folder"))),
-            _ => self.flash_undo(format!("Added {n} to {} folders", add.len())),
+            [] => {
+                let folders = tr_n(remove.len(), "{n} folder", "{n} folders");
+                self.flash_undo(tr_nf(items.len(), "Took {n} item out of {folders}", "Took {n} items out of {folders}", &[("folders", &folders)]));
+            }
+            _ => self.flash_undo(tr_nf(items.len(), "Added {n} item to {count} folders", "Added {n} items to {count} folders", &[("count", &add.len())])),
         }
         r
     }
