@@ -224,7 +224,7 @@ impl App {
                     Layout::List => self.list_row(ui, lib, item, card, selected, resp.hovered(), n),
                     _ => self.card(ui, lib, item, card, caption, selected, resp.hovered()),
                 }
-                if resp.hovered() {
+                if resp.hovered() || self.hover_media.over_toggle(&item.id, ui.ctx().cumulative_frame_nr()) {
                     hovered = Some((item, card, self.zoom_button(ui, item, card, caption)));
                     self.card_media(ui, lib, item, card, caption, &resp);
                 }

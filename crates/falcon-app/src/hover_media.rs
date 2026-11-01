@@ -30,6 +30,9 @@ pub const LABEL_SECS: f64 = 0.6;
 /// Pictures in a video card's strip, and their largest side in pixels.
 pub const STRIP_FRAMES: usize = 48;
 pub const STRIP_MAX_SIDE: u32 = 640;
+/// How far (seconds) the sound may drift from the picture before it is
+/// moved back to it.
+pub const AUDIO_DRIFT: f64 = 0.3;
 
 /// The order the strip's pictures are decoded in: by bit-reversed index,
 /// so the first few spread over the whole clip and the gaps fill in after
@@ -69,6 +72,34 @@ pub fn advance(t: f64, dt: f64, duration: f64) -> f64 {
         return 0.0;
     }
     (t + dt.max(0.0)).rem_euclid(duration)
+}
+
+/// How far apart the sound at `audio` and the picture at `t` are, both
+/// looping over `duration` (just after a wrap they are close, not a whole
+/// clip apart).
+pub fn audio_drift(audio: f64, t: f64, duration: f64) -> f64 {
+    let d = (audio - t).abs();
+    if duration > 0.0 { d.min(duration - d.min(duration)) } else { d }
+}
+
+/// Whether the sound has to be moved to the picture's time.
+pub fn needs_reseek(audio: f64, t: f64, duration: f64) -> bool {
+    audio_drift(audio, t, duration) > AUDIO_DRIFT
+}
+
+/// The hover player's sound, reachable from the notification that the
+/// window was hidden (which comes while the app isn't drawing frames), and
+/// that hiding happened, for the next frame to end the previews.
+static SOUND: std::sync::Mutex<Option<Arc<rodio::Player>>> = std::sync::Mutex::new(None);
+static HIDDEN: AtomicBool = AtomicBool::new(false);
+
+/// The window was hidden or minimized: silences the hover sound at once
+/// and has the next frame end the previews.
+pub fn window_hidden() {
+    if let Some(p) = SOUND.lock().ok().and_then(|g| g.clone()) {
+        p.pause();
+    }
+    HIDDEN.store(true, Ordering::Relaxed);
 }
 
 enum Msg {
@@ -171,6 +202,9 @@ pub struct VideoHover {
     pub label_until: f64,
     /// The frame it was last drawn in.
     pub seen: u64,
+    /// Whether the sound was tried (a file that won't load stays silent
+    /// instead of being retried every frame).
+    pub sound_tried: bool,
 }
 
 /// The hovered audio card's playback.
@@ -188,13 +222,18 @@ pub struct HoverMedia {
     pub video: Option<VideoHover>,
     pub audio: Option<AudioHover>,
     pub player: crate::audio::Audio,
+    /// The card whose sound or play button the pointer was on in the last
+    /// frame, and that frame: the button covers the card, which then isn't
+    /// hovered, but its preview must go on.
+    toggle_over: Option<(String, u64)>,
 }
 
 impl HoverMedia {
     /// The hovered video card's state, started afresh for a new card.
     pub fn video_for(&mut self, id: &str, now: f64, frame: u64) -> &mut VideoHover {
         if self.video.as_ref().is_none_or(|v| v.id != id) {
-            self.video = Some(VideoHover { id: id.to_string(), since: now, strip: None, t: 0.0, last_x: None, moved_at: now, label_until: 0.0, seen: frame });
+            self.stop_video_sound();
+            self.video = Some(VideoHover { id: id.to_string(), since: now, strip: None, t: 0.0, last_x: None, moved_at: now, label_until: 0.0, seen: frame, sound_tried: false });
         }
         let v = self.video.as_mut().expect("just set");
         v.seen = frame;
@@ -217,13 +256,90 @@ impl HoverMedia {
     /// the frame before (the pointer left, or the grid is gone). Their
     /// strip is dropped and their track stops.
     pub fn begin(&mut self, frame: u64) {
+        if HIDDEN.swap(false, Ordering::Relaxed) {
+            self.stop_all();
+        }
+        if let Ok(mut g) = SOUND.lock() {
+            *g = self.player.handle();
+        }
         let stale = |seen: u64| seen + 1 < frame;
         if self.video.as_ref().is_some_and(|v| stale(v.seen)) {
+            self.stop_video_sound();
             self.video = None;
         }
         if self.audio.as_ref().is_some_and(|a| stale(a.seen)) {
             self.audio = None;
             self.player.stop();
+        }
+    }
+}
+
+impl HoverMedia {
+    /// Stops the sound of the video preview, if it is what the player holds.
+    fn stop_video_sound(&mut self) {
+        if let Some(v) = &self.video
+            && self.player.loaded() == Some(v.id.as_str())
+        {
+            self.player.stop();
+        }
+    }
+
+    /// Ends every preview and its sound (the window was hidden).
+    pub fn stop_all(&mut self) {
+        self.video = None;
+        self.audio = None;
+        self.player.stop();
+        self.toggle_over = None;
+    }
+
+    /// Notes that the pointer is on card `id`'s button in `frame`.
+    pub fn set_toggle_over(&mut self, id: &str, over: bool, frame: u64) {
+        if over {
+            self.toggle_over = Some((id.to_string(), frame));
+        } else if self.toggle_over.as_ref().is_some_and(|(i, _)| i == id) {
+            self.toggle_over = None;
+        }
+    }
+
+    /// Whether the pointer was on card `id`'s button in the frame before `frame`.
+    pub fn over_toggle(&self, id: &str, frame: u64) -> bool {
+        self.toggle_over.as_ref().is_some_and(|(i, f)| i == id && f + 1 >= frame)
+    }
+
+    /// Keeps the sound of the video preview of `id` in step with the
+    /// picture at `t`: silent while `muted`, paused while the pointer
+    /// scrubs (`playing` false), moved back to the picture when it drifts.
+    /// A file the player can't decode just stays silent.
+    #[allow(clippy::too_many_arguments)]
+    pub fn video_sound(&mut self, id: &str, path: &std::path::Path, ext: &str, muted: bool, playing: bool, t: f64, duration: f64, volume: f32) {
+        if muted {
+            if self.player.loaded() == Some(id) {
+                self.player.stop();
+            }
+            return;
+        }
+        if self.player.loaded() != Some(id) {
+            let Some(v) = self.video.as_mut().filter(|v| v.id == id && !v.sound_tried) else { return };
+            v.sound_tried = true;
+            self.player.looping = true;
+            self.player.volume = volume;
+            self.player.load(id, path, ext, false);
+            if self.player.loaded() != Some(id) {
+                return;
+            }
+            self.player.seek(t);
+        }
+        self.player.set_volume(volume);
+        self.player.tick();
+        if playing {
+            if needs_reseek(self.player.position(), t, duration) {
+                self.player.seek(t);
+            }
+            if !self.player.is_playing() {
+                self.player.toggle();
+            }
+        } else if self.player.is_playing() {
+            self.player.toggle();
         }
     }
 }
@@ -268,6 +384,27 @@ mod tests {
         assert_eq!(advance(1.0, 0.5, 10.0), 1.5);
         assert!((advance(9.8, 0.5, 10.0) - 0.3).abs() < 1e-9);
         assert_eq!(advance(3.0, 1.0, 0.0), 0.0);
+    }
+
+    #[test]
+    fn sound_follows_the_picture_within_a_third_of_a_second() {
+        assert!(!needs_reseek(5.1, 5.0, 10.0));
+        assert!(!needs_reseek(4.8, 5.0, 10.0));
+        assert!(needs_reseek(6.0, 5.0, 10.0), "after a scrub");
+        assert!(!needs_reseek(9.9, 0.1, 10.0), "across the loop point they are close");
+        assert!(needs_reseek(9.0, 0.1, 10.0));
+        assert!((audio_drift(9.9, 0.1, 10.0) - 0.2).abs() < 1e-9);
+    }
+
+    #[test]
+    fn stopping_all_clears_both_previews_and_the_button_memory() {
+        let mut h = HoverMedia::default();
+        h.video_for("a", 0.0, 1);
+        h.audio_for("x", 0.0, 1);
+        h.set_toggle_over("a", true, 1);
+        assert!(h.over_toggle("a", 2) && !h.over_toggle("a", 3) && !h.over_toggle("b", 2));
+        h.stop_all();
+        assert!(h.video.is_none() && h.audio.is_none() && h.player.loaded().is_none() && !h.over_toggle("a", 2));
     }
 
     #[test]

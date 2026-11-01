@@ -24,7 +24,7 @@ struct Track {
     id: String,
     path: PathBuf,
     ext: String,
-    player: rodio::Player,
+    player: Arc<rodio::Player>,
 }
 
 /// The viewer's audio player: one track at a time.
@@ -107,13 +107,19 @@ impl Audio {
                 return;
             }
         };
-        let player = rodio::Player::connect_new(device.mixer());
+        let player = Arc::new(rodio::Player::connect_new(device.mixer()));
         player.set_volume(self.volume);
         if !autoplay {
             player.pause();
         }
         player.append(source);
         self.track = Some(Track { id: id.to_string(), path: path.to_path_buf(), ext: ext.to_string(), player });
+    }
+
+    /// A handle on the loaded track's player, for pausing it from another
+    /// thread (the window being hidden).
+    pub fn handle(&self) -> Option<Arc<rodio::Player>> {
+        self.track.as_ref().map(|t| t.player.clone())
     }
 
     /// Stops and unloads the track.

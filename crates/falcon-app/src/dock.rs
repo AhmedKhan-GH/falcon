@@ -24,8 +24,31 @@ pub fn quit() {
     platform::quit();
 }
 
+/// Calls `f` whenever the app is hidden (⌘H, the red button) or the window
+/// is minimized, on the main thread. These come as AppKit notifications
+/// because eframe draws no frames for a hidden window, so nothing in the
+/// frame loop would notice.
+pub fn on_hidden(f: fn()) {
+    platform::on_hidden(f);
+}
+
 #[cfg(target_os = "macos")]
 mod platform {
+    use block2::RcBlock;
+    use objc2_app_kit::{NSApplicationDidHideNotification, NSWindowDidMiniaturizeNotification};
+    use objc2_foundation::{NSNotification, NSNotificationCenter};
+    use std::ptr::NonNull;
+
+    pub fn on_hidden(f: fn()) {
+        let center = NSNotificationCenter::defaultCenter();
+        for name in [unsafe { NSApplicationDidHideNotification }, unsafe { NSWindowDidMiniaturizeNotification }] {
+            let block = RcBlock::new(move |_: NonNull<NSNotification>| f());
+            // The observer lives as long as the app.
+            let observer = unsafe { center.addObserverForName_object_queue_usingBlock(Some(name), None, None, &block) };
+            std::mem::forget(observer);
+        }
+    }
+
     use objc2::MainThreadMarker;
     use objc2_app_kit::NSApplication;
 
@@ -51,6 +74,8 @@ mod platform {
 
 #[cfg(not(target_os = "macos"))]
 mod platform {
+    pub fn on_hidden(_: fn()) {}
+
     pub fn hide() -> bool {
         false
     }

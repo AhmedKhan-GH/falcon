@@ -95,15 +95,31 @@ impl App {
             _ => {}
         }
         v.last_x = pointer.map(|p| p.x).or(v.last_x);
-        let Some(tex) = strip.frame_at(v.t) else { return };
+        let (t_now, playing, label_until) = (v.t, now - v.moved_at >= hm::SCRUB_REST, v.label_until);
+        let (muted, volume) = (self.display.video_muted, self.video.volume);
+        let path = item.original_path(lib.root());
+        self.hover_media.video_sound(&item.id, &path, &item.ext.to_lowercase(), muted, playing, t_now, duration, volume);
+        let Some(strip) = self.hover_media.video.as_ref().and_then(|v| v.strip.as_ref()) else { return };
+        let Some(tex) = strip.frame_at(t_now) else { return };
         let p = ui.painter().with_clip_rect(pic.intersect(ui.clip_rect()));
         let uv = cover_uv(tex.size_vec2(), pic.size());
         p.rect_filled(pic, CornerRadius::same(4), Color32::BLACK);
         p.image(tex.id(), pic, uv, Color32::WHITE);
-        progress(&p, pic, v.t / duration);
-        if now < v.label_until {
-            time_pill(&p, pic, &logic::time_label(v.t, duration));
+        progress(&p, pic, t_now / duration);
+        if now < label_until {
+            time_pill(&p, pic, &logic::time_label(t_now, duration));
         }
+        // The speaker button: its click is the button's, not the card's.
+        let button = Rect::from_center_size(Pos2::new(pic.right() - 6.0 - 11.0, pic.bottom() - BAR - 6.0 - 11.0), Vec2::splat(22.0));
+        let b = ui.interact(button, ui.scope_id().with(("hover-video-mute", &item.id)), Sense::click());
+        p.circle_filled(button.center(), 11.0, if b.hovered() { t::p().primary } else { Color32::from_black_alpha(170) });
+        let glyph = if muted { crate::icons::SPEAKER_X } else { crate::icons::SPEAKER_HIGH };
+        p.text(button.center(), Align2::CENTER_CENTER, glyph, egui::FontId::new(13.0, t::fill_family()), Color32::WHITE);
+        let b = b.on_hover_text(if muted { "Unmute" } else { "Mute" });
+        if b.clicked() {
+            self.display.video_muted = !muted;
+        }
+        self.hover_media.set_toggle_over(&item.id, b.hovered() || b.is_pointer_button_down_on(), frame);
     }
 
     /// Eagle's audio hover preview: after a moment the track plays (unless
@@ -148,6 +164,8 @@ impl App {
         }
         let button = Rect::from_center_size(Pos2::new(pic.right() - 16.0, pic.top() + 16.0), Vec2::splat(24.0));
         let b = ui.interact(button, ui.scope_id().with(("hover-audio-play", &item.id)), Sense::click());
+        self.hover_media.set_toggle_over(&item.id, b.hovered() || b.is_pointer_button_down_on(), frame);
+        let player = &mut self.hover_media.player;
         let playing = player.is_playing();
         p.circle_filled(button.center(), 12.0, if b.hovered() { t::p().primary } else { Color32::from_black_alpha(170) });
         let glyph = if playing { crate::ui::viewer::audio::PAUSE } else { crate::ui::viewer::audio::PLAY };

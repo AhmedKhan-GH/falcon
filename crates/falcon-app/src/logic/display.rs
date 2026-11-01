@@ -70,11 +70,15 @@ pub struct Display {
     /// Hovered audio cards start playing (Eagle's `listAudioAutoPlay`,
     /// switched by the play button on the card).
     pub audio_autoplay: bool,
+    /// Hovered video cards play without sound (Eagle's
+    /// `eagle.list.video.muted`, default true, switched by the speaker
+    /// button on the preview).
+    pub video_muted: bool,
 }
 
 impl Default for Display {
     fn default() -> Self {
-        Display { show_name: true, show_info: true, info: InfoType::Dimensions, show_ext: true, ext_badge: true, comment_badge: true, fill: false, subfolders: false, columns: ListColumns::default(), strip_collapsed: false, quality: true, audio_autoplay: true }
+        Display { show_name: true, show_info: true, info: InfoType::Dimensions, show_ext: true, ext_badge: true, comment_badge: true, fill: false, subfolders: false, columns: ListColumns::default(), strip_collapsed: false, quality: true, audio_autoplay: true, video_muted: true }
     }
 }
 
@@ -400,6 +404,10 @@ mod display_tests {
         // Old saved state without the field reads as the default.
         let d: Display = serde_json::from_str(r#"{"show_name":false}"#).unwrap();
         assert!(!d.show_name && d.show_info);
+        assert!(d.video_muted && d.audio_autoplay, "hover previews start muted, audio playing");
+        let d = Display { video_muted: false, ..Display::default() };
+        let back: Display = serde_json::from_str(&serde_json::to_string(&d).unwrap()).unwrap();
+        assert!(!back.video_muted);
     }
 
     #[test]

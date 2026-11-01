@@ -265,6 +265,7 @@ impl App {
         app.ws.sort = saved.sort.as_deref().and_then(|l| OrderBy::ALL.into_iter().find(|o| o.label() == l)).unwrap_or(app.ws.sort);
         app.ws.increase = saved.increase.unwrap_or(app.ws.increase);
         app.show_sidebar = saved.show_sidebar.unwrap_or(true);
+        crate::dock::on_hidden(crate::hover_media::window_hidden);
         let clamp = |w: Option<f32>, default: f32| w.unwrap_or(default).clamp(*t::PANEL_WIDTHS.start(), *t::PANEL_WIDTHS.end());
         app.sidebar_width = clamp(saved.sidebar_width, t::SIDEBAR_WIDTH);
         app.inspector_width = clamp(saved.inspector_width, t::INSPECTOR_WIDTH);
@@ -368,11 +369,18 @@ impl eframe::App for App {
         // in the Dock and comes back when its icon is clicked.
         if ctx.input(|i| i.viewport().close_requested()) && crate::dock::keep_running_hidden() {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            self.hover_media.stop_all();
             for ws in std::iter::once(&mut self.ws).chain(self.others.parked_mut()) {
                 let _ = ws.flush_and_backup();
             }
         }
         self.system_tick(&ctx);
+        // Eagle stops hover playback when its window is hidden. Hiding
+        // the app and minimizing are caught by `dock::on_hidden`; this
+        // covers a viewport that reports itself minimized.
+        if ctx.input(|i| i.viewport().minimized) == Some(true) {
+            self.hover_media.stop_all();
+        }
         if self.lock.is_locked() {
             // Nothing but the lock screen acts while locked.
             let _ = crate::menu::take_clicks();
