@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 150 | 42 | 79 | 9 |
-| Viewers and file formats | 136 | 19 | 35 | 7 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 160 | 43 | 68 | 9 |
+| Viewers and file formats | 152 | 24 | 14 | 7 |
 | Search, filters and organising | 148 | 28 | 46 | 3 |
 | Import, export, library, preferences and integrations | 115 | 19 | 78 | 26 |
-| **Total** | 549 | 108 | 238 | 45 |
+| **Total** | 575 | 114 | 206 | 45 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -88,20 +88,20 @@ Overall finding: falcon now has a native menu bar (`crates/falcon-app/src/menu.r
 | Organize: Add To Last Used Folder (⇧D) | Missing | No record of recently used folders | local |
 | Organize: Rate 0–5 stars from the menu and keys | Done | Organize menu and the 0–5 keys (`organize.rating.*`) with a toast; in the viewer the bare digits keep their zoom meaning | local |
 | Organize: Add Tags… (⌘T), Copy Tags (⇧⌘C), Paste Tags (⇧⌘V), Clear Tags | Done | Organize menu; shortcuts.rs `organize.tag.*` (Clear Tags unbound by default, as Eagle) | local |
-| View: Always on Top (⇧T) | Missing | Only the collect window floats (collect.rs:89). The main window cannot | local |
+| View: Always on Top (⇧T) | Done | `modes.rs` `toggle_on_top` through `ViewportCommand::WindowLevel`; View menu checkmark; off at launch as Eagle | local |
 | View: jump to All / Uncategorized / Untagged / Recent / Random / All Tags / Trash (⌘1–⌘7) | Done | shortcuts.rs `view.all` … in Eagle's View menu order; from the viewer they close it first | local |
 | View: layout Waterfall / Justified / Grid / List with checkmarks (⌥1–⌥4) | Done | ⌥1–⌥4 in Eagle's order; View menu entries with checkmarks (`menu.rs` `validateMenuItem`) | local |
 | View: Scroll to Top / Bottom / Page Up / Page Down (Home, End, PgUp, PgDn) | Done | Home, End, Page Up and Page Down scroll the grid (a page is the view less 72 px, as Eagle); ⌘↑ / ⌘↓ select the first or last item | local |
 | View: Zoom In / Out (⌘= / ⌘-) | Done | Thumbnail size (shortcuts.rs:96-97, app.rs:1024-1029) | local |
 | View: Actual Size (⌘0) / Zoom to Fit (⌘9) | Partial | The viewer has 0 for fit and 1 for actual size, without ⌘ (app.rs:3510). No ⌘0 or ⌘9 | local |
-| View: Grayscale preview (⌥⌘G) | Missing | No grayscale toggle | local |
-| View: Open in New Window (⌘O) | Missing | See §9 | local |
+| View: Grayscale preview (⌥⌘G) | Partial | Image viewer, animations and the preview window desaturate on the loader workers (`logic::grayscale_rgba`); not the grid, video or PDF | local |
+| View: Open in New Window (⌘O) | Done | `preview_window.rs`, a second viewport; see §15 for what the window lacks | local |
 | View: Open With Default App (⇧↩), Open with Other App, Reveal in Finder (⌘↩) | Done | open_ui.rs:33-46, shortcuts.rs:104-105 | local |
 | View: Open Link in Browser (⇧⌘O) | Missing | No key or menu item opens the item's source URL | local |
 | View: show or hide Sidebar (⌥⌘1), Inspector (⌥⌘2), both (⌥⌘3) | Done | shortcuts.rs `view.toggle.sidebar`, `view.toggle.inspector`, `view.toggle.all`; Tab also toggles both; all work in the viewer too | local |
 | View: Show Name (⌥⌘4), Show Item Info (⌥⌘5), Show Comment count (⌥⌘6) | Done | shortcuts.rs `view.toggle.listname/listmetas/listannotation`, View menu checkmarks, `logic::Display` | local |
 | View: Show Subfolder Content (⌥⌘7) | Done | `view.toggle.subfolder`, `logic::folder_members`, `grid_order` in organize_ui.rs; the layout panel and the strip heading have the switch too | local |
-| View: Enter / Leave Presentation Mode (F5) | Missing | No slideshow | local |
+| View: Enter / Leave Presentation Mode (F5) | Done | `view.toggle.slideshow`: full screen with panels and the viewer bar hidden; arrows step, Esc leaves. Eagle has no timer or shuffle either | local |
 | Actions menu: user-defined Actions, each with its own shortcut | Missing | The toolbar ⚡ button is drawn but disabled (app.rs:2038) | local |
 | Window: Toggle Full Screen, Minimize, Close Window (⌘W) | Done | ⌃⌘F, ⌘M and ⌘W through eframe viewport commands; ⌘W closes the viewer first, then the window (which quits falcon, like the red button) | local |
 | Help: Help Center, Show Tutorial, Install Extensions, Feedback, Recover license, Change Logs | Missing | Not applicable | online/plugin |
@@ -117,7 +117,7 @@ Cross-references (not counted): File ▸ Import Folders / Links / Eagle Package 
 | --- | --- | --- | --- |
 | Every context menu has a type-to-filter search box with keyword matching | Missing | Plain egui context menus | local |
 | **Item**: Restore (in the Trash) | Done | app.rs:2531-2534, which also offers Delete Permanently | local |
-| Item: Open Item(s) in New Window | Missing |  | local |
+| Item: Open Item(s) in New Window | Done | Item menu; one item per window | local |
 | Item: Open With Default App / Open With ▸ apps / Reveal in Finder | Done | open_ui.rs:33-46 | local |
 | Item: Open File Location ▸ All or one of the item's folders (jumps to the item there) | Missing |  | local |
 | Item: Plugin ▸ recent plugins | Missing |  | online/plugin |
@@ -135,9 +135,9 @@ Cross-references (not counted): File ▸ Import Folders / Links / Eagle Package 
 | Item: Combine Images (several selected) | Missing |  | local |
 | Item: Duplicate | Missing |  | local |
 | Item: Search by Image ▸ Google / Bing / Yandex / TinEye / SauceNAO | Missing |  | online/plugin |
-| Item: Enter / Leave Presentation Mode | Missing |  | local |
+| Item: Enter / Leave Presentation Mode | Done | Item menu and middle click in the image viewer | local |
 | Item: Thumbnail Background ▸ None / Black / Gray / White / Checkerboard grid | Missing |  | local |
-| Item: Grayscale preview toggle | Missing |  | local |
+| Item: Grayscale preview toggle | Done | Item menu | local |
 | Item: More ▸ custom thumbnail (file) / reset | Done | image_edit.rs:96-103 | local |
 | Item: More ▸ custom thumbnail from the clipboard | Missing |  | local |
 | Item: More ▸ Refresh Thumbnail | Done | image_edit.rs:104 | local |
@@ -202,9 +202,9 @@ Eagle defaults come from prefs `shortcuts.keybinds` (rebindable) and from the ha
 | ⌘E export, ⇧⌘E export .eaglepack, ⇧E export as format | Done | shortcuts.rs Export group | local |
 | ⌘1–⌘7 sidebar views | Done | shortcuts.rs `view.all`, `view.unfiled`, … | local |
 | ⌥1–⌥4 layouts | Done | shortcuts.rs `view.layout.*`, in Eagle's order | local |
-| ⌥⌘1–⌥⌘8 panel and caption toggles plus Navigator | Partial | ⌥⌘1–⌥⌘7; no Navigator | local |
-| ⇧T always on top, F5 slideshow, ⌥⌘G grayscale | Missing |  | local |
-| ⌘O open in new window, ⇧⌘O open link | Missing |  | local |
+| ⌥⌘1–⌥⌘8 panel and caption toggles plus Navigator | Done | ⌥⌘1–⌥⌘7 and ⌥⌘8 Navigator (`view.toggle.navigator`) | local |
+| ⇧T always on top, F5 slideshow, ⌥⌘G grayscale | Done | shortcuts.rs `view.alwaysOnTop`, `view.toggle.slideshow`, `view.grayscale` | local |
+| ⌘O open in new window, ⇧⌘O open link | Partial | ⌘O (`view.file.opennewwindow`); no ⇧⌘O | local |
 | ⇧↩ default app, ⌘↩ reveal | Done | shortcuts.rs:104-105 | local |
 | ⌥⌘S reveal, ⌥⌘D duplicate (view) | Missing |  | local |
 | Home / End / PageUp / PageDown scroll the grid; ⌘↑ / ⌘↓ jump to top or bottom | Done | `run_command` scroll offsets; ⌘↑ / ⌘↓ also select the first or last item, where Eagle only scrolls | local |
@@ -363,10 +363,10 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Frameless window with traffic lights; drag the title area; double-click to zoom | Done | main.rs:45-51, app.rs:1510-1519 | local |
 | Remember window size and position | Done | eframe persistence (Cargo.toml `persistence` feature) | local |
 | Full screen | Partial | Through the OS green button only. No menu or key | local |
-| Always on top for the main window | Missing |  | local |
+| Always on top for the main window | Done | `modes.rs` | local |
 | Open items in a separate preview window: own titlebar always-on-top toggle, opacity 10–100%, navigator, zoom presets 5–800%, grayscale, rotate / flip, copy, copy path / link, Reveal in Eagle | Missing |  | local |
 | Middle-click opens an item in a new window (preference) | Missing |  | local |
-| Presentation / slideshow mode | Missing |  | local |
+| Presentation / slideshow mode | Done | `modes.rs`; `ViewportCommand::Fullscreen`, panels and bar hidden | local |
 | Closing the window keeps the app running (Dock icon stays); reopen from the Dock | Missing | Closing quits | local |
 | Menu bar status icon: Show Eagle, Capture Area / Window / Full Screen, Quit | Missing | Captures cross-ref import | local |
 | Lock screen for the whole app, with Touch ID | Missing |  | local |
@@ -504,12 +504,12 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | "Cannot preview" page with an "Open With Other Application" button | Done | Icon, name, a line of text and an Open With Another App button; the page's menu has Open, Open With and Show in Finder; shown only when neither render nor thumbnail exists | local |
 | "Image too large to preview" page (TIFF/HEIC/TGA above the pixel limit) | Done | `logic::too_large_to_preview` (Eagle's 120,000,000 px limit for tif/tiff/heic/heif/hif/tga without a custom thumbnail); `image_view.rs` `too_large` with the thumbnail and an Open With button | local |
 | Unsupported format suggests a plugin from the plugin center | Missing | No plugins | online/plugin |
-| Presentation (slideshow) mode: full screen, panels hidden | Missing | No full-screen or presentation mode anywhere in falcon | local |
-| Always on top | Missing | Only the collect window is always on top (`F/collect.rs:89`) | local |
+| Presentation (slideshow) mode: full screen, panels hidden | Done | F5, View menu, item menu, middle click; Esc leaves and keeps the viewer | local |
+| Always on top | Done | ⇧T (`modes.rs`) | local |
 | Thumbnail background per item (none, black, gray, white, grid) used in the viewer and grid | Done | `paint_thumb_bg` from the item's `background` key; wins over the transparency-grid preference | local |
 | Transparent-area display preference (grid or no grid) | Done | `prefs.transparency_grid`, off by default as Eagle | local |
-| Grayscale preview toggle | Missing | None (falcon's "grayscale" is only a search filter, `FL/search.rs:487`) | local |
-| Navigator (minimap) while zoomed | Missing | None | local |
+| Grayscale preview toggle | Partial | Image viewer, animations and preview window; not video, PDF or fonts | local |
+| Navigator (minimap) while zoomed | Done | Eagle's 120 px box, 16 px inset, shown by its overflow rule; click centres, drag pans (`logic::navigator_*`); ⌥⌘8 and View ▸ Navigator | local |
 | Viewer keys follow the shortcut table (zoom, crop, rotate, flip) | Partial | Zoom keys are rebindable (`view.zoom.*`); crop, rotate and flip keys are still fixed | local |
 
 ### 2. Image viewer (jpg, png, webp, bmp, avif, heic, jxl, ico and the like)
@@ -664,23 +664,23 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Pinch or Cmd+wheel zoom around the pointer | Done | `F/app/pdf_view.rs:1016-1023` | local |
 | Sidebar with page thumbnails | Done | `F/app/pdf_view.rs:1132-1163` | local |
 | Sidebar outline (bookmarks) | Done | `F/app/pdf_view.rs:1164-1192` | local |
-| Highlight the outline entry for the current page | Missing | None | local |
+| Highlight the outline entry for the current page | Done | `pdf_view.rs` outline follows the page and scrolls to it | local |
 | Sidebar attachments list | Missing | None | local |
 | Sidebar layers (optional content) | Missing | None | local |
 | Find bar with previous/next, match count | Done | `F/app/pdf_view.rs:1286-1332` | local |
 | Find option: match case | Done | `F/app/pdf_view.rs:1310-1312` | local |
 | Find option: highlight all | Done | All hits always drawn (`F/app/pdf_view.rs:1059-1064`); no toggle | local |
-| Find options: whole words, match diacritics | Missing | None | local |
+| Find options: whole words, match diacritics | Done | `falcon_pdf::is_whole_word`, find options menu | local |
 | Select text and copy it | Done | `F/app/pdf_view.rs:1080-1119`, copy `:946` | local |
-| Hand tool (drag to pan) | Missing | Dragging always selects text | local |
-| Rotate pages clockwise and counter-clockwise | Missing | Only honours the file's own rotation (`crates/falcon-pdf/src/geom.rs:20`) | local |
-| Scroll modes: page, vertical, horizontal, wrapped | Missing | Vertical only | local |
-| Spread modes: none, odd, even (two-page) | Missing | None | local |
-| Presentation mode (full screen) | Missing | None | local |
-| Print | Missing | None | local |
-| Document properties dialog | Missing | None | local |
-| Password-protected PDFs | Missing | No password prompt in `crates/falcon-pdf/src/mac.rs:51` | local |
-| Clickable internal and external links | Missing | Pages are drawn as pictures with no link layer | local |
+| Hand tool (drag to pan) | Done | Tools menu; keys s / h as pdf.js | local |
+| Rotate pages clockwise and counter-clockwise | Done | r / ⇧R, view only; find hits and selections follow | local |
+| Scroll modes: page, vertical, horizontal, wrapped | Done | Tools menu; page mode turns with n/p or the wheel at the page end; remembered per document | local |
+| Spread modes: none, odd, even (two-page) | Done | Tools menu; Page Fit and Page Width fit the spread | local |
+| Presentation mode (full screen) | Done | Tools ▸ Presentation Mode uses the app's presentation mode | local |
+| Print | Done | ⌘P / Tools ▸ Print… through `falcon_pdf::print` (`NSPrintOperation`, main thread, re-opened with the document's password) | local |
+| Document properties dialog | Done | Tools ▸ Document Properties: file, size, metadata, dates, version, pages, page size with paper names, fast web view, password | local |
+| Password-protected PDFs | Done | `Document::open_with_password` (`unlockWithPassword`); the worker asks the UI and retries | local |
+| Clickable internal and external links | Done | `Document::links` from PDFKit annotations: GoTo and URL actions; only http, https and mailto open | local |
 | Remember page and zoom per document | Done | `F/app/pdf_view.rs:343-358`, `:866-891` | local |
 | ←/→, Space and Esc still move between items or close | Done | `F/app/pdf_view.rs:377-381` | local |
 | Download, Open File, draw and free-text editing | n/a | Hidden in Eagle too | local |
@@ -736,14 +736,14 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| Open one or more items in their own window (Cmd+O, middle click) | Missing | None | local |
-| Same viewers in the window (image, GIF, RAW, video, font, text, PDF, 3D, web, plugin) | Missing | None | local |
+| Open one or more items in their own window (Cmd+O, middle click) | Partial | ⌘O opens one item in one window; no middle click | local |
+| Same viewers in the window (image, GIF, RAW, video, font, text, PDF, 3D, web, plugin) | Partial | Images; other types show their thumbnail | local |
 | Window opacity 10%–100% | Missing | None | local |
-| Always on top toggle in the window | Missing | None | local |
-| Navigator, grayscale, rotate, flip in the window menu | Missing | None | local |
-| Copy, copy path, copy link, reveal in Finder, open in default app | Missing | None | local |
+| Always on top toggle in the window | Done | Preview window menu | local |
+| Navigator, grayscale, rotate, flip in the window menu | Partial | Grayscale only | local |
+| Copy, copy path, copy link, reveal in Finder, open in default app | Partial | Reveal in Finder and Open in Default App only | local |
 | Copy or save the current video frame | Missing | None | local |
-| Reveal in Eagle (select the item in the main window) | Missing | None | local |
+| Reveal in Eagle (select the item in the main window) | Done | Show in Falcon | local |
 
 ### 16. Grid hover behaviours
 
