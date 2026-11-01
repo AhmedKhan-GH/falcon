@@ -263,6 +263,7 @@
   "Couldn't save the snapshot: {error}": "스냅샷을 저장할 수 없습니다: {error}",
   "Count, High to Low": "개수 많은 순",
   "Count, Low to High": "개수 적은 순",
+  "Counting…": "세는 중…",
   "Create": "만들기",
   "Create Library": "라이브러리 만들기",
   "Create Password for “{name}”": "“{name}” 비밀번호 만들기",
@@ -1485,6 +1486,9 @@
   },
   "{n} items couldn't be read and are hidden; their files are untouched": {
     "other": "항목 {n}개를 읽을 수 없어 숨겨졌습니다. 파일은 그대로입니다"
+  },
+  "{n} items found": {
+    "other": "{n}개 항목 찾음"
   },
   "{n} items selected": {
     "other": "항목 {n}개 선택됨"

@@ -263,6 +263,7 @@
   "Couldn't save the snapshot: {error}": "スナップショットを保存できませんでした: {error}",
   "Count, High to Low": "件数の多い順",
   "Count, Low to High": "件数の少ない順",
+  "Counting…": "数えています…",
   "Create": "作成",
   "Create Library": "ライブラリを作成",
   "Create Password for “{name}”": "「{name}」のパスワードを作成",
@@ -1485,6 +1486,9 @@
   },
   "{n} items couldn't be read and are hidden; their files are untouched": {
     "other": "{n}件のアイテムを読み込めなかったため非表示にしました。ファイルには変更を加えていません"
+  },
+  "{n} items found": {
+    "other": "{n} 件見つかりました"
   },
   "{n} items selected": {
     "other": "{n} 個のアイテムを選択中"

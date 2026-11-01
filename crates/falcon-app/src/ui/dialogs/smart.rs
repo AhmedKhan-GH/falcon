@@ -1,6 +1,6 @@
 //! The smart folder dialog: name and conditions of a smart folder.
 
-use eframe::egui::{self, RichText, TextEdit};
+use eframe::egui::{self, RichText, TextEdit, Ui};
 use falcon_library::Library;
 use falcon_library::smart_draft;
 
@@ -30,6 +30,7 @@ impl App {
                 ui.add_space(4.0);
                 ui.label(RichText::new(crate::ui::organize::smart_error(e)).color(t::p().icon_red));
             }
+            App::smart_live_count(ui, &mut d, result.as_ref().ok(), lib);
             ui.add_space(10.0);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let ok = !d.name.trim().is_empty() && !d.conditions.is_empty() && result.is_ok();
@@ -44,6 +45,20 @@ impl App {
                 if ui.button(tr("Cancel")).clicked() {
                     keep = false;
                 }
+                // The live count fills the rest of the row, at its left.
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    let text = match d.live.shown() {
+                        Some((n, current)) => {
+                            let c = if current { t::p().text_muted } else { t::p().text_disabled };
+                            Some(RichText::new(crate::smart_count::found_text(n)).color(c))
+                        }
+                        None if d.live.counting() => Some(RichText::new(crate::locale::tr("Counting…")).color(t::p().text_disabled)),
+                        None => None,
+                    };
+                    if let Some(text) = text {
+                        ui.label(text);
+                    }
+                });
             });
         });
         if modal.should_close() {
@@ -51,6 +66,26 @@ impl App {
         }
         if keep {
             self.ws.smart_dialog = Some(d);
+        }
+    }
+
+    /// Starts counting the rules shown, once they have settled, and asks
+    /// for a redraw when the wait is over (`smart_count.rs`).
+    fn smart_live_count(ui: &Ui, d: &mut crate::app::SmartDraft, conditions: Option<&Vec<serde_json::Value>>, lib: &Library) {
+        use crate::smart_count::{Snapshot, Step, key};
+        d.live.receive();
+        let k = conditions.filter(|c| !c.is_empty()).map(|c| key(c, d.parent.as_deref()));
+        match d.live.step(k.as_deref(), std::time::Instant::now()) {
+            Step::Wait(Some(after)) => ui.ctx().request_repaint_after(after),
+            Step::Wait(None) => {}
+            Step::Start(k) => {
+                let snapshot = || Snapshot {
+                    items: lib.items().to_vec(),
+                    folders: falcon_library::search::folder_index(&lib.metadata.folders),
+                    roots: lib.smart_folders(),
+                };
+                d.live.start(k, conditions.cloned().unwrap_or_default(), d.parent.clone(), snapshot, ui.ctx());
+            }
         }
     }
 }

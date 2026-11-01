@@ -38,6 +38,7 @@ mod quick_switch;
 mod search_state;
 mod recent;
 mod shortcuts;
+mod smart_count;
 mod subtitles;
 mod storage;
 mod tags;

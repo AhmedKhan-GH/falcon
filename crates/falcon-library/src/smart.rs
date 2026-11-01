@@ -492,6 +492,37 @@ fn set_rule(list: &[String], method: &str, value: &Value, tags: bool) -> bool {
     }
 }
 
+/// How many live items a smart folder with `conditions` would show inside
+/// `parent` (its ancestors' conditions apply too), for the dialog's live
+/// count while the rules are edited, as Eagle's dialog counts them. Empty
+/// conditions count nothing, as a group with no children shows nothing.
+pub fn count_draft(items: &[Item], folders: &FolderIndex, roots: &[SmartFolder], parent: Option<&str>, conditions: &[Value]) -> usize {
+    let mut ancestors: Vec<SmartFolder> = Vec::new();
+    if let Some(pid) = parent {
+        for r in roots {
+            r.walk(&mut Vec::new(), &mut |f, path| {
+                if f.id == pid {
+                    ancestors = path.iter().map(|p| (*p).clone()).chain(std::iter::once(f.clone())).collect();
+                }
+            });
+        }
+    }
+    let draft = SmartFolder {
+        id: String::new(),
+        name: String::new(),
+        conditions: conditions.to_vec(),
+        children: Vec::new(),
+        icon: None,
+        icon_color: None,
+        description: String::new(),
+        order_by: None,
+        sort_increase: None,
+    };
+    let refs: Vec<&SmartFolder> = ancestors.iter().collect();
+    let cx = Context::new(folders);
+    items.iter().filter(|i| contains(i, &draft, &refs, &cx)).count()
+}
+
 impl Library {
     /// The library's smart folders, top level first.
     pub fn smart_folders(&self) -> Vec<SmartFolder> {
@@ -779,6 +810,25 @@ mod tests {
 
     fn folder(conditions: Value) -> SmartFolder {
         SmartFolder::from_value(&json!({"id": "S", "name": "s", "conditions": conditions, "children": []})).unwrap()
+    }
+
+    #[test]
+    fn a_draft_counts_live_items_inside_its_parent() {
+        let items = vec![
+            item(json!({"id": "A"})),
+            item(json!({"id": "B", "name": "Blue Logo", "tags": ["logo"]})),
+            item(json!({"id": "C", "name": "Red Mark", "tags": ["red"]})),
+            item(json!({"id": "D", "isDeleted": true})),
+        ];
+        let roots = vec![SmartFolder::from_value(&json!({"id": "P", "name": "p", "children": [], "conditions": [
+            {"match": "AND", "rules": [{"property": "tags", "method": "union", "value": ["red"]}]}
+        ]})).unwrap()];
+        let fx = FolderIndex::new();
+        let logo = [json!({"match": "AND", "rules": [{"property": "name", "method": "contain", "value": "logo"}]})];
+        assert_eq!(count_draft(&items, &fx, &roots, None, &logo), 2);
+        assert_eq!(count_draft(&items, &fx, &roots, Some("P"), &logo), 1);
+        assert_eq!(count_draft(&items, &fx, &roots, Some("gone"), &logo), 2);
+        assert_eq!(count_draft(&items, &fx, &roots, None, &[]), 0);
     }
 
     #[test]

@@ -220,6 +220,8 @@ pub(crate) struct SmartDraft {
     pub(crate) orig_parent: Option<String>,
     pub(crate) icon: Option<String>,
     pub(crate) color: Option<String>,
+    /// The live "N items found" count (`smart_count.rs`).
+    pub(crate) live: crate::smart_count::LiveCount,
 }
 
 impl Default for SmartDraft {
@@ -232,6 +234,7 @@ impl Default for SmartDraft {
             orig_parent: None,
             icon: None,
             color: None,
+            live: Default::default(),
         }
     }
 }

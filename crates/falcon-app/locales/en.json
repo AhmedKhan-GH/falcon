@@ -278,6 +278,7 @@
   "Couldn't save the snapshot: {error}": "Couldn't save the snapshot: {error}",
   "Count, High to Low": "Count, High to Low",
   "Count, Low to High": "Count, Low to High",
+  "Counting…": "Counting…",
   "Create": "Create",
   "Create Library": "Create Library",
   "Create Password for “{name}”": "Create Password for “{name}”",
@@ -1567,6 +1568,10 @@
   "{n} items couldn't be read and are hidden; their files are untouched": {
     "one": "{n} item couldn't be read and is hidden; its file is untouched",
     "other": "{n} items couldn't be read and are hidden; their files are untouched"
+  },
+  "{n} items found": {
+    "one": "{n} item found",
+    "other": "{n} items found"
   },
   "{n} items selected": {
     "one": "{n} item selected",

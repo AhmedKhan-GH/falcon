@@ -278,6 +278,7 @@
   "Couldn't save the snapshot: {error}": "Der Schnappschuss konnte nicht gespeichert werden: {error}",
   "Count, High to Low": "Anzahl, absteigend",
   "Count, Low to High": "Anzahl, aufsteigend",
+  "Counting…": "Wird gezählt…",
   "Create": "Erstellen",
   "Create Library": "Mediathek erstellen",
   "Create Password for “{name}”": "Passwort für „{name}“ erstellen",
@@ -1567,6 +1568,10 @@
   "{n} items couldn't be read and are hidden; their files are untouched": {
     "one": "{n} Objekt konnte nicht gelesen werden und ist ausgeblendet; die Datei bleibt unverändert",
     "other": "{n} Objekte konnten nicht gelesen werden und sind ausgeblendet; die Dateien bleiben unverändert"
+  },
+  "{n} items found": {
+    "one": "{n} Objekt gefunden",
+    "other": "{n} Objekte gefunden"
   },
   "{n} items selected": {
     "one": "{n} Objekt ausgewählt",

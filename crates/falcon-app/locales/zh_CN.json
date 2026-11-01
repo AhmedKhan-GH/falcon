@@ -263,6 +263,7 @@
   "Couldn't save the snapshot: {error}": "无法保存快照：{error}",
   "Count, High to Low": "数量从高到低",
   "Count, Low to High": "数量从低到高",
+  "Counting…": "正在计数…",
   "Create": "创建",
   "Create Library": "创建资源库",
   "Create Password for “{name}”": "为“{name}”创建密码",
@@ -1485,6 +1486,9 @@
   },
   "{n} items couldn't be read and are hidden; their files are untouched": {
     "other": "有{n}个项目无法读取，已被隐藏；其文件未被改动"
+  },
+  "{n} items found": {
+    "other": "找到 {n} 个项目"
   },
   "{n} items selected": {
     "other": "已选择 {n} 个项目"

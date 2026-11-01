@@ -263,6 +263,7 @@
   "Couldn't save the snapshot: {error}": "無法儲存快照：{error}",
   "Count, High to Low": "數量由高到低",
   "Count, Low to High": "數量由低到高",
+  "Counting…": "正在計數…",
   "Create": "建立",
   "Create Library": "建立資料庫",
   "Create Password for “{name}”": "為「{name}」建立密碼",
@@ -1485,6 +1486,9 @@
   },
   "{n} items couldn't be read and are hidden; their files are untouched": {
     "other": "有{n}個項目無法讀取，已被隱藏；其檔案未被更動"
+  },
+  "{n} items found": {
+    "other": "找到 {n} 個項目"
   },
   "{n} items selected": {
     "other": "已選取 {n} 個項目"
