@@ -438,6 +438,8 @@ enum Confirm {
     DeleteSmarts(Vec<String>),
     DeleteItems(Vec<String>),
     EmptyTrash,
+    /// Trash ▸ Restore All Items.
+    RestoreAll,
     DeleteTags(Vec<String>),
     ClearTagHistory,
 }
@@ -2915,6 +2917,9 @@ impl App {
             }
             if scope == Scope::Trash {
                 resp.context_menu(|ui| {
+                    if ui.add_enabled(n.trash > 0, egui::Button::new("Restore All Items")).clicked() {
+                        self.ws.confirm = Some(Confirm::RestoreAll);
+                    }
                     if ui.add_enabled(n.trash > 0, egui::Button::new("Empty Trash")).clicked() {
                         self.ws.confirm = Some(Confirm::EmptyTrash);
                     }
@@ -5457,6 +5462,10 @@ impl App {
                     let n = lib.items().iter().filter(|i| i.is_deleted).count();
                     (format!("Empty the Trash ({n})?"), "The files are removed from the library and cannot be restored.".to_string(), "Empty Trash")
                 }
+                Confirm::RestoreAll => {
+                    let n = lib.items().iter().filter(|i| i.is_deleted).count();
+                    (format!("Restore all {n} items in the Trash?"), "They go back to their folders. ⌘Z puts them back in the Trash.".to_string(), "Restore All")
+                }
             };
             let modal = egui::Modal::new(egui::Id::unique("confirm")).show(&ctx, |ui| {
                 ui.set_width(320.0);
@@ -5476,6 +5485,7 @@ impl App {
                             Confirm::DeleteSmarts(ids) => Action::Folders(folders_ui::FolderAction::DeleteSmart(ids)),
                             Confirm::DeleteItems(ids) => Action::DeletePermanently(ids),
                             Confirm::EmptyTrash => Action::EmptyTrash,
+                            Confirm::RestoreAll => Action::Trash(lib.items().iter().filter(|i| i.is_deleted).map(|i| i.id.clone()).collect(), false),
                             Confirm::DeleteTags(t) => Action::DeleteTags(t),
                             Confirm::ClearTagHistory => Action::ClearTagHistory,
                         });
