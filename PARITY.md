@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 82 | 56 | 133 | 9 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 83 | 56 | 132 | 9 |
 | Viewers and file formats | 63 | 31 | 96 | 7 |
-| Search, filters and organising | 125 | 30 | 67 | 3 |
-| Import, export, library, preferences and integrations | 61 | 28 | 123 | 26 |
-| **Total** | 331 | 145 | 419 | 45 |
+| Search, filters and organising | 127 | 30 | 65 | 3 |
+| Import, export, library, preferences and integrations | 65 | 28 | 119 | 26 |
+| **Total** | 338 | 145 | 412 | 45 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -30,11 +30,11 @@ These are bugs, not missing features. The first four can lose data or edits.
 2. No application menu bar.
 3. Preferences: 4 panes and 6 settings against Eagle's 13 panes and about 80 settings.
 4. The full-size image is capped at 3072 px.
-5. Folder import flattens structure; no duplicate check on import; no import error list.
+5. Folder import flattens structure; no import error list.
 6. No export of items or folders, and no CSV export.
 7. Many shortcuts missing (ratings, T, F, ⌘J Go to Folder, ⌘1–7 views, Home and End, ⇧+arrows, ⌘D and more).
 8. No marquee selection, no multi-select of folders, no grid display options.
-9. Folder auto-tags aren't applied and have no editor; no tag picker or suggestions.
+9. No tag picker or suggestions.
 10. No GIF player controls, no animated WebP or AVIF, no hover previews for video, audio or GIFs.
 11. No interactive 3D viewer, text editor or full font viewer.
 12. No watched import folder, no reload on outside changes, no sync-conflict detection, no screen capture.
@@ -152,7 +152,7 @@ Cross-references (not counted): File ▸ Import Folders / Links / Eagle Package 
 | Folder: Add to / Remove from Quick Access | Done | app.rs:1842-1848 | local |
 | Folder: Rename | Done | Inline rename (app.rs:1839, 1797-1823) | local |
 | Folder: Copy Link (eagle:// folder link) | Missing |  | local |
-| Folder: Set Auto-Tag | Missing | Also an organising feature | local |
+| Folder: Set Auto-Tag | Done | "Auto-Tags…" in the folder menu and ⇧⌘R (`organize_ui.rs` auto_tag_dialog) | local |
 | Folder: Password ▸ Create / Edit / Remove / Lock Now | Done | organize_ui.rs:270-296 | local |
 | Folder: Sort By ▸ Title A-Z / Z-A, current level or all levels | Done | organize_ui.rs:327-336 (falcon asks to confirm, like Eagle) | local |
 | Folder: Expand/Collapse ▸ this folder, same level, all folders | Missing | Caret click and double-click only | local |
@@ -335,7 +335,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| Drag items onto a sidebar folder | Done | `logic::folder_drop`: inside a folder the drop moves the items out of it, ⌥ adds; from other views it adds; trashed items come back (`Action::DropOnFolder`, one undo step). A locked target isn't asked for its password and folder auto-tags aren't applied | local |
+| Drag items onto a sidebar folder | Done | `logic::folder_drop`: inside a folder the drop moves the items out of it, ⌥ adds; from other views it adds; trashed items come back (`Action::DropOnFolder`, one undo step). A locked target isn't asked for its password | local |
 | Toast after a drop ("N items moved to Folder", with a link to the folder) | Partial | `logic::folder_drop_notice` shows "Moved N items to Folder" / "Added …". No link; falcon's toast has no actions | local |
 | Drag items onto a Quick Access folder | Missing | Quick Access rows take no drops (app.rs:1688-1697) | local |
 | Drag items onto a subfolder card | Missing |  | local |
@@ -984,8 +984,8 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Unlock a folder with Touch ID | Missing | none | local |
 | Folder description, edited in the inspector | Done | `scope_inspector` in app.rs keeps a `folder_edit` buffer and saves on blur through `Action::SetFolderDescription` (`edit.rs` set_folder_description), one undo step. Eagle saves a second after typing stops | local |
 | Rename a folder from the inspector name field | Done | `scope_inspector`: Return or blur saves through `Action::RenameFolder`; an emptied name reverts | local |
-| Folder auto-tagging: tags added to every item put in the folder, including the parent folders' tags | Missing | No editor, and existing folder `tags` are ignored when items are added (`A:1156` AddToFolder) or imported into a folder. Eagle libraries with auto-tags behave differently in falcon. | local |
-| Folder settings dialog (name plus auto-tags), Cmd+Shift+R | Missing | none | local |
+| Folder auto-tagging: tags added to every item put in the folder, including the parent folders' tags | Done | `crates/falcon-library/src/autotag.rs` (own tags then each parent's, deduped, in Eagle's order); applied on import, paste, Add to Folder, the inspector picker and drops. `extendTags` is derived, as Eagle does, not stored | local |
+| Folder settings dialog (name plus auto-tags), Cmd+Shift+R | Done | `organize_ui.rs` auto_tag_dialog; `shortcuts.rs` `edit.folder.setting`; saving appends the tags to the folder's items, as Eagle does | local |
 | Show Subfolder Content (folder view includes descendants' items) | Missing | Folder scope is direct items only (`L:126`) | local |
 | Subfolder strip with covers at the top of a folder | Done | `covers.rs:65` subfolder_strip | local |
 | Folder item counts | Done | `L:67` folder_counts | local |
@@ -1167,7 +1167,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 Ranked by user impact. Data-loss and silent-mismatch bugs come first, then everyday organising, then niche items.
 
 1. ~~Editing a smart folder loses its rules.~~ Fixed.
-2. **Folder auto-tagging is ignored.** Folders' `tags` (and their parents') are not applied when items are added or imported, and there is no editor or settings dialog. Libraries made in Eagle behave differently.
+2. ~~Folder auto-tagging is ignored.~~ Fixed: applied everywhere items join a folder, with a settings dialog.
 3. ~~Smart folder rules always fail for comments, camera, ISO, aperture, focal length, shutter, duration, timestamp and font.~~ Fixed, with real regex and local-day "on".
 4. **Saved filters drop and skip rules.** Saving drops date, duration, camera and font. Applying skips them, plus comments, ratio shapes and excluding Uncategorized.
 5. ~~Folder description and inspector rename don't save.~~ Fixed.
@@ -1258,9 +1258,9 @@ Two cross-cutting facts explain many rows:
 | Imports run in the background with a progress display | Done | `app.rs:888-938` (background thread and progress bar) | local |
 | Upload queue panel listing failed imports with reasons (download failed, timeout, cannot decode and so on), plus Retry All, Copy to Clipboard and Clear All | Partial | Falcon shows only "Added N, M failed" (`app.rs:924`). There is no per-file list, reason, retry or copy | local |
 | "Import Successful, N image(s) imported" notification | Partial | In-window flash only (`app.rs:924-925`), no system notification | local |
-| Duplicate check on import (Eagle's metadata key), with a dialog offering Import, Don't Import, Keep both, Use existing file and Apply to all | Missing | `import_into` never checks. Duplicate finding exists only as a separate view (`app/duplicates_view.rs:107-108`, cross-ref organise) | local |
-| Setting: notify me when importing duplicates | Missing | — | local |
-| Folder auto-tagging: tags set on a folder are added to every item imported or pasted into it | Missing | `Prefs::import_options` passes no folder tags (`prefs.rs:61-63`); the model only round-trips `extendTags` (`crates/falcon-library/src/model.rs:58`) | local |
+| Duplicate check on import (Eagle's metadata key), with a dialog offering Import, Don't Import, Keep both, Use existing file and Apply to all | Done | `import_check.rs` (same size and extension, then a BLAKE3 hash of the whole file), `crates/falcon-app/src/import_dupes.rs`, `app/dupes_ui.rs`: Eagle's two choices (use existing, keep both), Import, close = don't import, apply to all. One thumbnail shown, not two | local |
+| Setting: notify me when importing duplicates | Done | `Prefs::notify_duplicates`, on by default; off imports duplicates silently as Eagle does | local |
+| Folder auto-tagging: tags set on a folder are added to every item imported or pasted into it | Done | `ImportOptions::folder_auto_tags`, set by `Prefs::import_options`; applied in `commit_import` | local |
 | Screenshot auto-tag ("Screenshot" tag) | Missing | No screenshots | local |
 | Add IPTC and XMP keywords as tags (setting) | Done | `prefs.rs:24,327`; `import.rs:121-123` | local |
 | Font style tag (Regular, Bold, Italic) added on import (setting) | Partial | Always on: `ImportOptions::font_weight_tag` defaults to true (`import.rs:54`) and has no switch in Preferences | local |
@@ -1374,7 +1374,7 @@ Eagle panes (`app/js/preferences.js:659-788`): General, Sidebar, Controls, Previ
 | General: launch at login | Missing | — | local |
 | General: GPU acceleration | Missing | — | local |
 | General: auto-select items after import | Missing | — | local |
-| General: notify on duplicate import | Missing | — | local |
+| General: notify on duplicate import | Done | `Prefs::notify_duplicates` | local |
 | General: ask where to save items from the extension | Missing | — | local |
 | General: @2x screenshots | Missing | — | local |
 | General: IPTC keywords as tags | Done | `prefs.rs:326-328` | local |
@@ -1517,9 +1517,9 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 
 Rows marked "not counted" are features Eagle 4.0.0 does not have.
 
-- **Done:** 61, including 5 where falcon goes beyond Eagle and 1 with a small difference.
+- **Done:** 65, including 5 where falcon goes beyond Eagle and 1 with a small difference.
 - **Partial:** 28.
-- **Missing:** 149, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
+- **Missing:** 145, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
 - **Different on purpose:** 1 (the API listens on localhost only).
 
 ### Ranked Missing and Partial local items
@@ -1528,13 +1528,13 @@ Ranked by how often a user would hit the gap, and the risk if they do.
 
 1. **Dropping a `.library` folder imports its insides as items.** It should open the library or be refused. This is a data hazard (`app.rs:864-878`).
 2. **Folder import keeps no structure.** Dropped folders are flattened into the current folder, and there is no "Import Folders" dialog.
-3. **No duplicate check on import.** There is no Import, Skip, Keep both or Use existing dialog, and no duplicate-notification setting.
+3. ~~No duplicate check on import.~~ Fixed.
 4. **Auto-backup and restore are not wired into the app.** Backups happen only through the CLI, and the app opens with `Library::open` rather than `open_or_restore`, so a damaged `metadata.json` makes the library unusable.
 5. **No Export to Computer for items or folders.** The Export button is disabled, and overwrite prompts are missing.
 6. **No external-change reload or sync-conflict detection.** Nothing watches `metadata.json` or `mtime.json`. This is risky with Dropbox, iCloud or a second app, including Eagle itself.
 7. **The import error panel is missing.** Falcon shows a count only, with no per-file reasons, retry or copy-out.
 8. **Watched auto-import folder is missing**, along with its preference pane.
-9. **Folder auto-tags are not applied on import or paste.**
+9. ~~Folder auto-tags are not applied on import or paste.~~ Fixed.
 10. **`.eaglepack` import and export are missing from the app** (CLI only). Smart-folder packs are missing entirely, and dropping a pack imports the pack file itself as an item.
 11. **Merge another library and Add to Other Library are missing.**
 12. **Screen capture is missing**: area, window and full screen, global shortcuts, and the whole Screenshot pane.
