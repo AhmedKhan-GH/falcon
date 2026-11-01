@@ -128,6 +128,24 @@ pub fn not_open(recent: &[PathBuf], open: &[PathBuf]) -> Vec<PathBuf> {
     recent.iter().filter(|p| !open.contains(p)).cloned().collect()
 }
 
+/// `recent` without `path`. An open library stays open; it just leaves the
+/// history.
+pub fn remove_from_list(recent: &mut Vec<PathBuf>, path: &Path) {
+    recent.retain(|p| p != path);
+}
+
+/// What is left of the history after Clear History: only the libraries that
+/// are open now, in switcher order.
+pub fn clear_history(_recent: &[PathBuf], open: &[PathBuf]) -> Vec<PathBuf> {
+    let mut kept: Vec<PathBuf> = Vec::new();
+    for p in open {
+        if !p.as_os_str().is_empty() && !kept.contains(p) {
+            kept.push(p.clone());
+        }
+    }
+    kept
+}
+
 /// A folder path for display, with the home folder shown as `~`.
 pub fn tilde(path: &Path) -> String {
     tilde_in(path, std::env::var_os("HOME").map(PathBuf::from).as_deref())
@@ -144,6 +162,28 @@ fn tilde_in(path: &Path, home: Option<&Path>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn paths(names: &[&str]) -> Vec<PathBuf> {
+        names.iter().map(PathBuf::from).collect()
+    }
+
+    #[test]
+    fn remove_from_list_drops_one_path() {
+        let mut r = paths(&["/a", "/b", "/c"]);
+        remove_from_list(&mut r, Path::new("/b"));
+        assert_eq!(r, paths(&["/a", "/c"]));
+        remove_from_list(&mut r, Path::new("/zzz"));
+        assert_eq!(r, paths(&["/a", "/c"]));
+    }
+
+    #[test]
+    fn clear_history_keeps_only_open_libraries_in_switcher_order() {
+        let recent = paths(&["/a", "/b", "/c", "/gone"]);
+        assert_eq!(clear_history(&recent, &paths(&["/c", "/a"])), paths(&["/c", "/a"]));
+        assert_eq!(clear_history(&recent, &[]), Vec::<PathBuf>::new());
+        // An open library that wasn't in the history stays listed.
+        assert_eq!(clear_history(&recent, &paths(&["/new"])), paths(&["/new"]));
+    }
 
     /// Parked letters with `a` active.
     fn ring(others: &[char]) -> (char, Parked<char>) {

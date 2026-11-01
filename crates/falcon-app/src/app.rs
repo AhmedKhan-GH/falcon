@@ -743,6 +743,8 @@ pub struct App {
     /// items viewed from it don't jump to the top under the user (opening
     /// the page again refreshes it).
     recent_shown: Option<(PathBuf, Vec<String>)>,
+    /// The Clear Library History dialog is showing.
+    clear_history_open: bool,
     /// The libraries' `icon.png` textures.
     lib_icons: crate::library_icons::LibraryIcons,
     /// What to open once the frame is done (it replaces the library being
@@ -846,6 +848,7 @@ impl App {
             recent_items: Default::default(),
             view_timer: Default::default(),
             recent_shown: None,
+            clear_history_open: false,
             lib_icons: Default::default(),
             switch_to: None,
             prefs: Default::default(),
@@ -892,7 +895,7 @@ impl App {
         app.show_inspector = saved.show_inspector.unwrap_or(true);
         app.quick_collapsed = saved.quick_collapsed;
         app.ws.collapsed = saved.collapsed.into_iter().collect();
-        app.recent = saved.recent.into_iter().filter(|p| p.is_dir()).collect();
+        app.recent = saved.recent;
         app.recent_folders = saved.recent_folders;
         app.legacy_layout = saved.layout;
         app.layouts = saved.layouts;
@@ -2922,6 +2925,11 @@ impl App {
             ui.close();
             let _ = std::process::Command::new("open").arg("-R").arg(root).spawn();
         }
+        ui.separator();
+        if ui.button("Remove from List").clicked() {
+            ui.close();
+            crate::workspaces::remove_from_list(&mut self.recent, root);
+        }
     }
 
     /// Asks for an image and makes it the library's icon.
@@ -3024,6 +3032,10 @@ impl App {
                         }
                         ui.menu_button(ic::DOTS_THREE, |ui| self.library_menu(ui, &p, missing)).response.on_hover_text("More");
                     });
+                }
+                if ui.button("Clear History…").clicked() {
+                    ui.close();
+                    self.clear_history_open = true;
                 }
             }
             ui.separator();
@@ -5839,6 +5851,28 @@ impl App {
         self.collect_duplicates();
         self.duplicate_dialog(&ctx, lib);
         self.export_dialogs(&ctx, lib);
+        if self.clear_history_open {
+            let modal = egui::Modal::new(egui::Id::unique("clear-library-history")).show(&ctx, |ui| {
+                ui.set_width(320.0);
+                ui.label(RichText::new("Clear Library History").size(15.0));
+                ui.add_space(4.0);
+                ui.label(RichText::new("The list of recent libraries is emptied, except for the libraries that are open now. This can't be undone. No library is deleted.").color(t::p().text_muted));
+                ui.add_space(10.0);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.button(RichText::new("Clear All").color(t::p().icon_red)).clicked() {
+                        let open: Vec<PathBuf> = self.others.iter(&self.ws).filter_map(|w| w.root.clone()).collect();
+                        self.recent = crate::workspaces::clear_history(&self.recent, &open);
+                        self.clear_history_open = false;
+                    }
+                    if ui.button("Cancel").clicked() {
+                        self.clear_history_open = false;
+                    }
+                });
+            });
+            if modal.should_close() {
+                self.clear_history_open = false;
+            }
+        }
         if let Some(c) = self.ws.confirm.clone() {
             let (title, detail, label) = match &c {
                 Confirm::DeleteFolders(ids) => {
