@@ -263,23 +263,25 @@ impl App {
     fn add_filter_button(&mut self, ui: &mut Ui, lib: &Library) {
         let resp = ui.add(egui::Button::new(RichText::new(ic::PLUS).color(t::p().text_muted)).frame(false)).on_hover_text(tr("Add a filter to the bar"));
         egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
-            ui.set_min_width(200.0);
-            for kind in self.search.ordered() {
-                if !kind_applicable(kind, lib.items().iter().filter(|i| !i.is_deleted)) {
-                    continue;
+            crate::ui::menus::search::show(ui, |ui| {
+                ui.set_min_width(200.0);
+                for kind in self.search.ordered() {
+                    if !kind_applicable(kind, lib.items().iter().filter(|i| !i.is_deleted)) {
+                        continue;
+                    }
+                    ui.horizontal(|ui| {
+                        let pinned = self.search.is_pinned(kind);
+                        let pin = RichText::new(ic::PUSH_PIN).color(if pinned { t::p().primary } else { t::p().text_disabled });
+                        if ui.add(egui::Button::new(pin).frame(false)).on_hover_text(if pinned { tr("Unpin from the bar") } else { tr("Pin to the bar") }).clicked() {
+                            self.search.set_pinned(kind, !pinned);
+                        }
+                        if ui.add(egui::Button::new(tr(kind.label())).frame(false).min_size(vec2(140.0, 0.0))).clicked() {
+                            self.ws.filter_ui.open_chip = Some(kind);
+                            ui.close();
+                        }
+                    });
                 }
-                ui.horizontal(|ui| {
-                    let pinned = self.search.is_pinned(kind);
-                    let pin = RichText::new(ic::PUSH_PIN).color(if pinned { t::p().primary } else { t::p().text_disabled });
-                    if ui.add(egui::Button::new(pin).frame(false)).on_hover_text(if pinned { tr("Unpin from the bar") } else { tr("Pin to the bar") }).clicked() {
-                        self.search.set_pinned(kind, !pinned);
-                    }
-                    if ui.add(egui::Button::new(tr(kind.label())).frame(false).min_size(vec2(140.0, 0.0))).clicked() {
-                        self.ws.filter_ui.open_chip = Some(kind);
-                        ui.close();
-                    }
-                });
-            }
+            });
         });
     }
 

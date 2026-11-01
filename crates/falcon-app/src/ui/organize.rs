@@ -1433,33 +1433,35 @@ impl App {
         let Some(pos) = groups.iter().position(|g| g.id == id) else { return };
         let g = &groups[pos];
         let description = g.description.clone().unwrap_or_default();
-        ui.set_min_width(200.0);
-        if ui.add_enabled(!g.tags.is_empty(), egui::Button::new(tr("Find Items with These Tags"))).clicked() {
-            self.filter_any_tags(g.tags.clone());
-        }
-        ui.separator();
-        if ui.button(tr("Rename")).clicked() {
-            self.ws.org.group_rename = Some((g.id.clone(), g.name.clone()));
-        }
-        let label = if description.is_empty() { tr("Add Description…") } else { tr("Edit Description…") };
-        if ui.button(label).clicked() {
-            self.ws.org.group_describe = Some((g.id.clone(), description));
-        }
-        if ui.add_enabled(pos > 0, egui::Button::new(tr("Move Up"))).clicked() {
-            self.ws.actions.push(org(OrgAction::MoveGroup(g.id.clone(), pos - 1)));
-        }
-        if ui.add_enabled(pos + 1 < groups.len(), egui::Button::new(tr("Move Down"))).clicked() {
-            self.ws.actions.push(org(OrgAction::MoveGroup(g.id.clone(), pos + 1)));
-        }
-        self.add_to_library_menu(ui, crate::ui::dialogs::add_to_library::AddWhat::TagGroup(g.id.clone()));
-        if let Some(c) = color_row(ui, g.color.as_deref()) {
-            self.ws.actions.push(org(OrgAction::GroupColor(g.id.clone(), c)));
-            ui.close();
-        }
-        ui.separator();
-        if ui.button(RichText::new(tr("Delete Group")).color(t::p().icon_red)).clicked() {
-            self.ask_delete_tag_group(lib, id);
-        }
+        crate::ui::menus::search::show(ui, |ui| {
+            ui.set_min_width(200.0);
+            if ui.add_enabled(!g.tags.is_empty(), egui::Button::new(tr("Find Items with These Tags"))).clicked() {
+                self.filter_any_tags(g.tags.clone());
+            }
+            ui.separator();
+            if ui.button(tr("Rename")).clicked() {
+                self.ws.org.group_rename = Some((g.id.clone(), g.name.clone()));
+            }
+            let label = if description.is_empty() { tr("Add Description…") } else { tr("Edit Description…") };
+            if ui.button(label).clicked() {
+                self.ws.org.group_describe = Some((g.id.clone(), description));
+            }
+            if ui.add_enabled(pos > 0, egui::Button::new(tr("Move Up"))).clicked() {
+                self.ws.actions.push(org(OrgAction::MoveGroup(g.id.clone(), pos - 1)));
+            }
+            if ui.add_enabled(pos + 1 < groups.len(), egui::Button::new(tr("Move Down"))).clicked() {
+                self.ws.actions.push(org(OrgAction::MoveGroup(g.id.clone(), pos + 1)));
+            }
+            self.add_to_library_menu(ui, crate::ui::dialogs::add_to_library::AddWhat::TagGroup(g.id.clone()));
+            if let Some(c) = color_row(ui, g.color.as_deref()) {
+                self.ws.actions.push(org(OrgAction::GroupColor(g.id.clone(), c)));
+                ui.close();
+            }
+            ui.separator();
+            if ui.button(RichText::new(tr("Delete Group")).color(t::p().icon_red)).clicked() {
+                self.ask_delete_tag_group(lib, id);
+            }
+        });
     }
 
     /// Deletes a tag group, asking first when it holds tags.
@@ -1638,36 +1640,40 @@ impl App {
         let n = lib.saved_filters.len();
         let resp = filter_chip(ui, &format!("{}  {}", ic::FLOPPY_DISK, tr("Saved")), None);
         egui::Popup::menu(&resp).show(|ui| {
-            ui.set_min_width(220.0);
-            let can_save = self.ws.filter.is_active() || !self.ws.query.trim().is_empty();
-            if ui.add_enabled(can_save, egui::Button::new(tr("Save This Filter…"))).clicked() {
-                let name = organize::fresh_name("Filter", lib.saved_filters.iter().map(|f| f.name.as_str()));
-                self.ws.org.filter_name = Some((None, name));
-            }
-            if n > 0 {
-                ui.separator();
-            }
-            for (i, sf) in lib.saved_filters.iter().enumerate() {
-                ui.horizontal(|ui| {
-                    if ui.add(egui::Button::new(&sf.name).frame(false).min_size(vec2(160.0, 0.0))).clicked() {
-                        self.apply_saved_filter(sf);
-                    }
-                    ui.menu_button("⋯", |ui| {
-                        if ui.button(tr("Rename…")).clicked() {
-                            self.ws.org.filter_name = Some((Some(i), sf.name.clone()));
+            crate::ui::menus::search::show(ui, |ui| {
+                ui.set_min_width(220.0);
+                let can_save = self.ws.filter.is_active() || !self.ws.query.trim().is_empty();
+                if ui.add_enabled(can_save, egui::Button::new(tr("Save This Filter…"))).clicked() {
+                    let name = organize::fresh_name("Filter", lib.saved_filters.iter().map(|f| f.name.as_str()));
+                    self.ws.org.filter_name = Some((None, name));
+                }
+                if n > 0 {
+                    ui.separator();
+                }
+                for (i, sf) in lib.saved_filters.iter().enumerate() {
+                    ui.horizontal(|ui| {
+                        if ui.add(egui::Button::new(&sf.name).frame(false).min_size(vec2(160.0, 0.0))).clicked() {
+                            self.apply_saved_filter(sf);
                         }
-                        if ui.add_enabled(i > 0, egui::Button::new(tr("Move Up"))).clicked() {
-                            self.ws.actions.push(org(OrgAction::MoveFilter(i, i - 1)));
-                        }
-                        if ui.add_enabled(i + 1 < n, egui::Button::new(tr("Move Down"))).clicked() {
-                            self.ws.actions.push(org(OrgAction::MoveFilter(i, i + 1)));
-                        }
-                        if ui.button(RichText::new(tr("Remove")).color(t::p().icon_red)).clicked() {
-                            self.ws.actions.push(org(OrgAction::DeleteFilter(i)));
+                        if !crate::ui::menus::search::filtering(ui) {
+                            crate::ui::menus::search::submenu(ui, "⋯", |ui| {
+                                if ui.button(tr("Rename…")).clicked() {
+                                    self.ws.org.filter_name = Some((Some(i), sf.name.clone()));
+                                }
+                                if ui.add_enabled(i > 0, egui::Button::new(tr("Move Up"))).clicked() {
+                                    self.ws.actions.push(org(OrgAction::MoveFilter(i, i - 1)));
+                                }
+                                if ui.add_enabled(i + 1 < n, egui::Button::new(tr("Move Down"))).clicked() {
+                                    self.ws.actions.push(org(OrgAction::MoveFilter(i, i + 1)));
+                                }
+                                if ui.button(RichText::new(tr("Remove")).color(t::p().icon_red)).clicked() {
+                                    self.ws.actions.push(org(OrgAction::DeleteFilter(i)));
+                                }
+                            });
                         }
                     });
-                });
-            }
+                }
+            });
         });
     }
 

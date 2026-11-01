@@ -1,5 +1,6 @@
 //! A type-to-filter search box on top of a context menu, after Eagle's
-//! searchable menus (item, folder, smart folder and tag).
+//! searchable menus (item, folder, smart folder, tag, tag group, palette
+//! swatch, New…, filter bar + and Saved).
 //!
 //! A menu wraps its body: `resp.context_menu(|ui| menu_search::show(ui,
 //! |ui| { … }))`. The body stays an ordinary egui menu; nothing in it
@@ -79,8 +80,7 @@ fn groups_key(layer: LayerId) -> Id {
 /// hidden body so its entries can be found, listed under `name`.
 pub fn submenu<R>(ui: &mut Ui, name: impl Into<String>, add: impl FnOnce(&mut Ui) -> R) -> Option<R> {
     let name: String = name.into();
-    let hidden: Option<LayerId> = ui.ctx().data(|d| d.get_temp(hidden_key()));
-    if hidden != Some(ui.layer_id()) {
+    if !filtering(ui) {
         let r = ui.menu_button(name, add);
         // Its button is no choice of its own, open or not.
         let key = buttons_key(ui.layer_id());
@@ -92,6 +92,14 @@ pub fn submenu<R>(ui: &mut Ui, name: impl Into<String>, add: impl FnOnce(&mut Ui
     let rect = inner.response.rect;
     ui.ctx().data_mut(|d| d.get_temp_mut_or_default::<Groups>(key).0.push((name, rect)));
     Some(inner.inner)
+}
+
+/// Whether [`show`] is filtering and `ui` is its hidden body, where a
+/// body can leave out controls that only make sense on screen (a
+/// per-row submenu whose entries would repeat for every row).
+pub fn filtering(ui: &Ui) -> bool {
+    let hidden: Option<LayerId> = ui.ctx().data(|d| d.get_temp(hidden_key()));
+    hidden == Some(ui.layer_id())
 }
 
 #[derive(Clone, Default)]

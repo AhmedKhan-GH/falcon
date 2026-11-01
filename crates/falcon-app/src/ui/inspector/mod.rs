@@ -469,35 +469,37 @@ impl App {
                 }
                 let mut similar = false;
                 hit.context_menu(|ui| {
-                    if ui.button(tr("Find Similar Colours")).clicked() {
-                        similar = true;
-                        ui.close();
-                    }
-                    ui.separator();
-                    let values = [
-                        colors::hex(c.color),
-                        colors::rgb(c.color),
-                        colors::rgba(c.color),
-                        colors::hsl(c.color),
-                        colors::hsv(c.color),
-                        colors::hwb(c.color),
-                        colors::cmyk(c.color),
-                    ];
-                    for (i, v) in values.iter().enumerate() {
-                        if i == 4 {
-                            ui.separator();
-                        }
-                        if ui.button(trf("Copy {value}", &[("value", &v)])).clicked() {
-                            ui.ctx().copy_text(v.clone());
-                            self.flash_brief(trf("Copied {value}", &[("value", &v)]));
+                    crate::ui::menus::search::show(ui, |ui| {
+                        if ui.button(tr("Find Similar Colours")).clicked() {
+                            similar = true;
                             ui.close();
                         }
-                    }
-                    ui.separator();
-                    if ui.checkbox(&mut { marked }, tr("Primary Colour")).clicked() {
-                        toggle_primary = Some((n, !marked));
-                        ui.close();
-                    }
+                        ui.separator();
+                        let values = [
+                            colors::hex(c.color),
+                            colors::rgb(c.color),
+                            colors::rgba(c.color),
+                            colors::hsl(c.color),
+                            colors::hsv(c.color),
+                            colors::hwb(c.color),
+                            colors::cmyk(c.color),
+                        ];
+                        for (i, v) in values.iter().enumerate() {
+                            if i == 4 {
+                                ui.separator();
+                            }
+                            if ui.button(trf("Copy {value}", &[("value", &v)])).clicked() {
+                                ui.ctx().copy_text(v.clone());
+                                self.flash_brief(trf("Copied {value}", &[("value", &v)]));
+                                ui.close();
+                            }
+                        }
+                        ui.separator();
+                        if ui.checkbox(&mut { marked }, tr("Primary Colour")).clicked() {
+                            toggle_primary = Some((n, !marked));
+                            ui.close();
+                        }
+                    });
                 });
                 if similar {
                     self.ws.filter.color = Some(ColorQuery::new(c.color));
