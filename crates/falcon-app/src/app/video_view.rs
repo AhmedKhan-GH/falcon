@@ -2,7 +2,7 @@
 //! a control bar under it, Eagle's player keys, and timed comments as
 //! markers on the seek bar (see the desktop app chapter of the docs).
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use eframe::egui::{self, Align2, Color32, CornerRadius, Event, Key, Pos2, Rect, Sense, Stroke, TextEdit, TextureHandle, Ui, Vec2, vec2};
 use falcon_library::model::{Comment, Item};
@@ -51,8 +51,9 @@ pub(super) struct VideoState {
     pub looping: bool,
     /// Saved with the volume and the loop setting.
     pub muted: bool,
-    /// Where each item was left this session, to resume there.
-    resume: HashMap<String, f64>,
+    /// Where items were left, oldest first, to resume there; saved between
+    /// launches as Eagle saves each item's position (`Positions`).
+    pub resume: Positions,
     /// Whether to play again once a seek-bar drag ends.
     scrub_resume: Option<bool>,
     draft: Option<Draft>,
@@ -70,7 +71,7 @@ impl Default for VideoState {
             volume: 1.0,
             looping: false,
             muted: false,
-            resume: HashMap::new(),
+            resume: Positions::default(),
             scrub_resume: None,
             draft: None,
             pending: None,
@@ -101,7 +102,7 @@ impl VideoState {
 
     fn close(&mut self) {
         if let Some(p) = self.player.take() {
-            self.resume.insert(std::mem::take(&mut self.id), resume_point(p.current_time(), p.info().duration));
+            self.resume.set(std::mem::take(&mut self.id), resume_point(p.current_time(), p.info().duration));
         }
         self.id.clear();
         self.texture = None;
@@ -109,9 +110,18 @@ impl VideoState {
         self.scrub_resume = None;
     }
 
-    /// Opens `item`'s player (autoplaying, as Eagle does by default); false
-    /// if AVFoundation can't play it.
-    fn open(&mut self, lib: &Library, item: &Item) -> bool {
+    /// The positions to save, with the open clip's current one.
+    pub fn positions(&self) -> Positions {
+        let mut all = self.resume.clone();
+        if let Some(p) = &self.player {
+            all.set(self.id.clone(), resume_point(p.current_time(), p.info().duration));
+        }
+        all
+    }
+
+    /// Opens `item`'s player, following the video preferences (autoplay,
+    /// resuming, looping short clips); false if AVFoundation can't play it.
+    fn open(&mut self, lib: &Library, item: &Item, prefs: &crate::prefs::Prefs) -> bool {
         if self.player.is_some() && self.id == item.id {
             return true;
         }
@@ -125,18 +135,20 @@ impl VideoState {
         };
         v.set_volume(self.volume);
         v.set_muted(self.muted);
-        v.set_looping(starts_looping(v.info().duration, self.looping));
+        v.set_looping(starts_looping(v.info().duration, self.looping, prefs.video_loop_short));
         let start = match self.pending.take() {
             Some((id, secs)) if id == item.id => Some(secs),
             other => {
                 self.pending = other;
-                self.resume.get(&item.id).copied()
+                self.resume.get(&item.id).filter(|_| prefs.video_resume)
             }
         };
         if let Some(s) = start.filter(|&s| s > 0.0) {
             v.seek(s);
         }
-        v.play();
+        if prefs.video_autoplay {
+            v.play();
+        }
         self.id = item.id.clone();
         self.player = Some(v);
         true
@@ -144,14 +156,53 @@ impl VideoState {
 }
 
 /// Whether a clip starts out looping: always when it is 30 s or shorter
-/// (Eagle's "loop short videos"), otherwise as last set.
-pub fn starts_looping(duration: f64, saved: bool) -> bool {
-    duration <= SHORT_CLIP || saved
+/// and Preferences loops short clips (Eagle's default), otherwise as last
+/// set.
+pub fn starts_looping(duration: f64, saved: bool, loop_short: bool) -> bool {
+    (loop_short && duration <= SHORT_CLIP) || saved
+}
+
+/// How many clips' positions are remembered; the oldest go first.
+const MAX_POSITIONS: usize = 500;
+
+/// Where each clip was left, by item id, oldest first.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug, PartialEq)]
+#[serde(transparent)]
+pub struct Positions(Vec<(String, f64)>);
+
+impl Positions {
+    pub fn get(&self, id: &str) -> Option<f64> {
+        self.0.iter().find(|(i, _)| i == id).map(|(_, s)| *s)
+    }
+
+    /// Records where `id` was left; a clip left at the start is forgotten.
+    pub fn set(&mut self, id: String, secs: f64) {
+        self.0.retain(|(i, _)| *i != id);
+        if secs > 0.0 && secs.is_finite() {
+            self.0.push((id, secs));
+        }
+        let extra = self.0.len().saturating_sub(MAX_POSITIONS);
+        self.0.drain(..extra);
+    }
+
+    #[cfg(test)]
+    fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
 }
 
 /// Where to resume a clip left at `pos`: from the top if it was at the end.
 pub fn resume_point(pos: f64, duration: f64) -> f64 {
     if pos >= duration - 0.5 { 0.0 } else { pos.max(0.0) }
+}
+
+/// The volume after a scroll of `delta` points over the picture, when
+/// Preferences has the wheel set the volume: up or right is louder, 5% a
+/// notch, small trackpad deltas a tenth of that.
+pub fn scroll_volume(delta: Vec2, volume: f32) -> f32 {
+    let d = if delta.y.abs() >= delta.x.abs() { delta.y } else { delta.x };
+    let step = 0.05 * (0.1 + 0.9 * (d.abs() / 100.0).min(1.0));
+    (volume + step * d.signum() * f32::from(u8::from(d != 0.0))).clamp(0.0, 1.0)
 }
 
 /// Eagle's skip: 2% of the clip, at most `cap` seconds (10 for the keys
@@ -252,7 +303,7 @@ impl App {
     /// false for anything else (the image viewer shows it).
     pub(super) fn video_viewer(&mut self, parent: &mut Ui, lib: &Library, item: &Item, screen: Rect) -> bool {
         let ctx = &parent.ctx().clone();
-        if !media::is_video(&item.ext.to_lowercase()) || self.video.failed.contains(&item.id) || !self.video.open(lib, item) {
+        if !media::is_video(&item.ext.to_lowercase()) || self.video.failed.contains(&item.id) || !self.video.open(lib, item, &self.prefs) {
             return false;
         }
         {
@@ -268,6 +319,7 @@ impl App {
     }
 
     fn video_view(&mut self, ctx: &egui::Context, ui: &mut Ui, item: &Item, area: Rect) {
+        let (fill, wheel_volume) = (self.prefs.video_fill, self.prefs.video_scroll == crate::prefs::VideoScroll::Volume);
         let vs = &mut self.video;
         let Some(v) = vs.player.as_mut() else { return };
         v.tick();
@@ -285,14 +337,16 @@ impl App {
         let p = ui.painter().clone();
 
         // The picture, fitted like an image but never enlarged (Eagle's
-        // default "fit" mode). Records without a size take the file's.
+        // default "fit" mode), or enlarged to fill the stage when
+        // Preferences stretches videos. Records without a size take the
+        // file's.
         let stage = Rect::from_min_max(area.min, Pos2::new(area.right(), area.bottom() - CONTROLS));
         let natural = match (&vs.texture, info.width, info.height) {
             (_, w, h) if w > 0 && h > 0 => vec2(w as f32, h as f32),
             (Some(tex), _, _) => tex.size_vec2(),
             _ => Vec2::splat(1.0),
         };
-        let fit = ((stage.width() - 80.0) / natural.x).min((stage.height() - 40.0) / natural.y).clamp(0.01, 1.0);
+        let fit = ((stage.width() - 80.0) / natural.x).min((stage.height() - 40.0) / natural.y).clamp(0.01, if fill { f32::INFINITY } else { 1.0 });
         let shown = Rect::from_center_size(stage.center(), natural * fit);
         match (&vs.texture, v.error()) {
             (_, Some(e)) => {
@@ -304,16 +358,26 @@ impl App {
                 ctx.request_repaint_after(std::time::Duration::from_millis(16));
             }
         }
-        // Clicking the picture plays or pauses; scrolling seeks.
+        // Clicking the picture plays or pauses; scrolling seeks, or sets
+        // the volume.
         let canvas = ui.interact(stage, ui.scope_id().with("video-canvas"), Sense::click());
         if canvas.clicked() {
             v.toggle();
         }
         if canvas.hovered() {
             let delta = ui.input(|i| i.smooth_scroll_delta);
-            let d = scroll_seek(delta, duration);
-            if d != 0.0 {
-                v.seek(pos + d);
+            if wheel_volume {
+                if delta != Vec2::ZERO {
+                    vs.volume = scroll_volume(delta, vs.volume);
+                    vs.muted = false;
+                    v.set_muted(false);
+                    v.set_volume(vs.volume);
+                }
+            } else {
+                let d = scroll_seek(delta, duration);
+                if d != 0.0 {
+                    v.seek(pos + d);
+                }
             }
         }
 
@@ -531,12 +595,48 @@ mod tests {
     use super::*;
 
     #[test]
+    fn positions_are_kept_per_item() {
+        let mut p = Positions::default();
+        p.set("A".into(), 12.5);
+        p.set("B".into(), 3.0);
+        assert_eq!((p.get("A"), p.get("B"), p.get("C")), (Some(12.5), Some(3.0), None));
+        p.set("A".into(), 20.0);
+        assert_eq!(p.get("A"), Some(20.0));
+        assert_eq!(p.0.last().map(|x| x.0.as_str()), Some("A"), "the latest moves to the end");
+        p.set("B".into(), 0.0);
+        assert_eq!(p.get("B"), None, "a clip left at the start is forgotten");
+        p.set("N".into(), f64::NAN);
+        assert_eq!(p.get("N"), None);
+        for n in 0..MAX_POSITIONS + 10 {
+            p.set(format!("x{n}"), 1.0);
+        }
+        assert_eq!(p.0.len(), MAX_POSITIONS);
+        assert_eq!(p.get("A"), None, "the oldest go first");
+        assert_eq!(p.get(&format!("x{}", MAX_POSITIONS + 9)), Some(1.0));
+        let json = serde_json::to_string(&Positions(vec![("A".into(), 1.5)])).unwrap();
+        assert_eq!(json, r#"[["A",1.5]]"#);
+    }
+
+    #[test]
+    fn wheel_volume() {
+        assert_eq!(scroll_volume(Vec2::ZERO, 0.5), 0.5);
+        assert!((scroll_volume(vec2(0.0, 200.0), 0.5) - 0.55).abs() < 1e-6, "scrolling up is louder");
+        assert!((scroll_volume(vec2(0.0, -100.0), 0.5) - 0.45).abs() < 1e-6);
+        assert_eq!(scroll_volume(vec2(0.0, 500.0), 0.98), 1.0);
+        assert_eq!(scroll_volume(vec2(0.0, -500.0), 0.01), 0.0);
+        let small = scroll_volume(vec2(0.0, 1.0), 0.5) - 0.5;
+        assert!(small > 0.0 && small < 0.01);
+    }
+
+    #[test]
     fn short_clips_always_loop() {
-        assert!(starts_looping(12.0, false));
-        assert!(starts_looping(30.0, false));
-        assert!(!starts_looping(30.5, false));
-        assert!(starts_looping(600.0, true));
-        assert!(starts_looping(0.0, false));
+        assert!(starts_looping(12.0, false, true));
+        assert!(starts_looping(30.0, false, true));
+        assert!(!starts_looping(30.5, false, true));
+        assert!(starts_looping(600.0, true, true));
+        assert!(starts_looping(0.0, false, true));
+        assert!(!starts_looping(12.0, false, false), "short clips loop only when Preferences says so");
+        assert!(starts_looping(12.0, true, false));
     }
 
     #[test]

@@ -80,6 +80,8 @@ struct Saved {
     video_volume: Option<f32>,
     video_loop: Option<bool>,
     video_muted: Option<bool>,
+    /// Where each video was left (Preferences ▸ Preview ▸ resume).
+    video_positions: video_view::Positions,
     /// The PDF reader's last page and zoom of recent documents.
     pdf_marks: Vec<pdf_view::Mark>,
 }
@@ -627,6 +629,7 @@ impl App {
         app.video.volume = saved.video_volume.unwrap_or(1.0).clamp(0.0, 1.0);
         app.video.looping = saved.video_loop.unwrap_or(false);
         app.video.muted = saved.video_muted.unwrap_or(false);
+        app.video.resume = saved.video_positions;
         app.pdf.set_marks(saved.pdf_marks);
         // Reopen the libraries that were open, then the one given on the
         // command line (focused if it was already open).
@@ -4265,6 +4268,7 @@ impl eframe::App for App {
             video_volume: Some(self.video.volume),
             video_loop: Some(self.video.looping),
             video_muted: Some(self.video.muted),
+            video_positions: self.video.positions(),
             pdf_marks: self.pdf.marks(),
         };
         eframe::set_value(storage, eframe::APP_KEY, &saved);

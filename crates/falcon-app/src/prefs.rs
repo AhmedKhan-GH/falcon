@@ -61,6 +61,28 @@ pub struct Prefs {
     /// Eagle's `habits.keyspace`: what the viewer key (Space unless
     /// rebound) does outside the viewer.
     pub space: SpaceKey,
+    /// Eagle's `habits.videoScrollBehavior`: whether the wheel over a video
+    /// seeks or sets the volume.
+    pub video_scroll: VideoScroll,
+    /// Eagle's `video.zoomFill`: enlarge videos to fill the viewer.
+    pub video_fill: bool,
+    /// Eagle's `video.autoPlay`: start playing when a video opens.
+    pub video_autoplay: bool,
+    /// Eagle's `video.rememberPosition`: resume where each video was left
+    /// (saved per item in the app state, as Eagle keeps it per item).
+    pub video_resume: bool,
+    /// Eagle's `video.loopShortVideo`: always loop clips of 30 s or less.
+    pub video_loop_short: bool,
+}
+
+/// What the wheel does over a playing video.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum VideoScroll {
+    /// Seeks (Eagle's default).
+    #[default]
+    Progress,
+    Volume,
 }
 
 /// What double-clicking an item in the grid does.
@@ -149,6 +171,11 @@ impl Default for Prefs {
             sidebar: SidebarSections::default(),
             double_click: DoubleClick::default(),
             space: SpaceKey::default(),
+            video_scroll: VideoScroll::default(),
+            video_fill: false,
+            video_autoplay: true,
+            video_resume: true,
+            video_loop_short: true,
         }
     }
 }
@@ -668,6 +695,18 @@ fn controls(p: &mut Page, d: &mut Draft) {
 /// Preview: how the viewer shows each kind of file. Eagle's order is
 /// image, video, GIF, then fonts.
 fn preview(p: &mut Page, d: &mut Draft) {
+    let keywords = ["video", "movie", "wheel", "scroll", "progress", "volume", "stretch", "fill", "autoplay", "play", "position", "resume", "loop", "short"];
+    p.block("Video", &keywords, |ui| {
+        let v = &mut d.prefs;
+        ui.label("Scrolling over a video");
+        ui.radio_value(&mut v.video_scroll, VideoScroll::Progress, "Moves through it");
+        ui.radio_value(&mut v.video_scroll, VideoScroll::Volume, "Changes the volume");
+        ui.add_space(4.0);
+        ui.checkbox(&mut v.video_fill, "Stretch videos to fill the viewer");
+        ui.checkbox(&mut v.video_autoplay, "Play videos when they open");
+        ui.checkbox(&mut v.video_resume, "Resume where each video was left");
+        ui.checkbox(&mut v.video_loop_short, "Always loop clips of 30 seconds or less");
+    });
     p.block("Fonts", &["font", "style", "regular", "bold", "italic", "tags", "import"], |ui| {
         ui.checkbox(&mut d.prefs.font_style_tags, "Add style tags (Regular, Bold, Italic) when importing fonts");
     });
@@ -844,6 +883,14 @@ mod tests {
         assert_eq!(p.space, SpaceKey::Preview, "Eagle's keyspace defaults to preview");
         let p: Prefs = serde_json::from_str(r#"{"double_click":"external","space":"quicklook"}"#).unwrap();
         assert_eq!((p.double_click, p.space), (DoubleClick::External, SpaceKey::QuickLook));
+    }
+
+    #[test]
+    fn video_defaults() {
+        let p = Prefs::default();
+        assert_eq!(p.video_scroll, VideoScroll::Progress, "Eagle's videoScrollBehavior defaults to progress");
+        assert!(!p.video_fill, "Eagle's zoomFill defaults to off");
+        assert!(p.video_autoplay && p.video_resume && p.video_loop_short, "Eagle's autoPlay, rememberPosition and loopShortVideo default to on");
     }
 
     #[test]
