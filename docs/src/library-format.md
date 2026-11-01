@@ -184,7 +184,7 @@ Eagle keeps snapshots of the library `metadata.json` in `backup/`. Only that one
 |---|---|---|
 | File name | observed | `backup-YYYY-MM-DD HH.mm.ss.SSS.json` in local time, with dots between the time fields, e.g. `backup-2026-10-26 02.15.25.310.json` (fixture and Eagle's code) |
 | Contents | observed | A byte copy of `metadata.json` |
-| When | observed | After Eagle rewrites `mtime.json` because something changed, and on a 30-minute timer. Not on every `metadata.json` write |
+| When | observed | After Eagle rewrites `mtime.json` because something changed (that rewrite is debounced by 1 s after the last change), and on a 30-minute timer while it runs. Not on every `metadata.json` write. There is no preference for it |
 | Damaged source | observed | No backup when `metadata.json` doesn't parse or has no truthy `applicationVersion` |
 | Unchanged check | observed | Skipped when the newest backup has the same **size** as `metadata.json` (the content isn't compared) |
 | Which files count | observed | Any name containing `backup-`; sorted by name, newest first |
@@ -196,7 +196,7 @@ Eagle keeps snapshots of the library `metadata.json` in `backup/`. Only that one
 
 `falcon_library::backup` follows the table. `Library::backup_metadata()` takes a backup now (returning `None` when skipped), `Library::backups()` lists them newest first, and `Library::restore_metadata_from_backup(path)` restores a chosen one. `Library::open_or_restore(path)` opens a library and, when `metadata.json` can't be read or parsed, restores the newest usable backup first, as Eagle does on launch. falcon also requires the backup to load as a `LibraryMetadata`, slightly stricter than Eagle's `modificationTime` check (inferred to be harmless: a backup without the standard keys would break Eagle too).
 
-`Library::save_metadata` does not take backups, because Eagle doesn't back up on each write. Callers (the app on change or a timer, or `falcon backup <library>`) call `backup_metadata()`.
+`Library::save_metadata` and `Library::flush` do not take backups, because Eagle doesn't back up on each write. `FlushReport::wants_backup()` says when a flush wrote `mtime.json` or `metadata.json`. Callers take the backup with `backup_metadata()`, or `backup::backup_library(root)`, which needs only the library folder and so can run on another thread while the library is in use (a `metadata.json` caught mid-write doesn't parse and is skipped). `falcon backup <library>` takes one by hand; the app schedules them (see [Saving](app.md#saving)).
 
 ## Undo
 
@@ -227,7 +227,7 @@ falcon keeps a real history. `Library::begin_transaction(label)` starts recordin
 
 ### How falcon does it
 
-`Library::set_write_mode(WriteMode::Batched)` makes the item, `mtime.json`, `metadata.json`, `tags.json` and `saved-filters.json` writers mark what is dirty instead of writing. `Library::flush()` then writes each dirty item once, `mtime.json` once, and each library-wide file once, and returns a `FlushReport`. Because every writer serialises the whole in-memory value, the bytes after a flush are the ones immediate mode would have written last. When `mtime.json` or `metadata.json` was written, the flush calls `backup_metadata()`, as Eagle backs up after rewriting `mtime.json` (falcon also counts a metadata write, inferred harmless: the backup is skipped when the size is unchanged). File renames and permanent deletes still happen at once. An item deleted before the flush is skipped. If a write fails, the pending set is kept for the next flush. Dropping a batched library with pending writes flushes it, ignoring errors. `WriteMode::Immediate` is the default, used by the CLI, the server and the tests. Switching back to it flushes first.
+`Library::set_write_mode(WriteMode::Batched)` makes the item, `mtime.json`, `metadata.json`, `tags.json` and `saved-filters.json` writers mark what is dirty instead of writing. `Library::flush()` then writes each dirty item once, `mtime.json` once, and each library-wide file once, and returns a `FlushReport`. Because every writer serialises the whole in-memory value, the bytes after a flush are the ones immediate mode would have written last. When `mtime.json` or `metadata.json` was written, `FlushReport::wants_backup()` is true, and the app schedules a backup, as Eagle backs up after rewriting `mtime.json` (falcon also counts a metadata write, inferred harmless: the backup is skipped when the size is unchanged). The flush itself takes no backup. File renames and permanent deletes still happen at once. An item deleted before the flush is skipped. If a write fails, the pending set is kept for the next flush. Dropping a batched library with pending writes flushes it, ignoring errors. `WriteMode::Immediate` is the default, used by the CLI, the server and the tests. Switching back to it flushes first.
 
 falcon writes JSON files in place rather than through a temporary file, as before.
 

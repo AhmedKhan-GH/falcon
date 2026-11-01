@@ -13,7 +13,6 @@
 //! whole in-memory value, so the last write wins either way.
 
 use std::collections::BTreeSet;
-use std::path::PathBuf;
 
 use crate::error::Result;
 use crate::library::{Library, write_json};
@@ -73,8 +72,15 @@ pub struct FlushReport {
     pub metadata: bool,
     pub tags: bool,
     pub saved_filters: bool,
-    /// The metadata backup taken after the flush, if one was written.
-    pub backup: Option<PathBuf>,
+}
+
+impl FlushReport {
+    /// Whether `mtime.json` or `metadata.json` was written. Eagle backs
+    /// the metadata up after it rewrites `mtime.json`, so callers that keep
+    /// backups (the app) schedule one when this is true.
+    pub fn wants_backup(&self) -> bool {
+        self.mtime || self.metadata
+    }
 }
 
 /// Files waiting for a flush in batched mode.
@@ -235,10 +241,9 @@ impl Library {
 
     /// Writes everything batched mode held back: each dirty item once, then
     /// `mtime.json`, `metadata.json`, `tags.json` and `saved-filters.json`
-    /// once each. When `mtime.json` or `metadata.json` was written, the
-    /// metadata is backed up as Eagle does after it rewrites `mtime.json`
-    /// (see [`Library::backup_metadata`]; it skips an unchanged size). On an
-    /// error the pending set is kept, so the next flush tries again.
+    /// once each. It takes no backup; [`FlushReport::wants_backup`] tells
+    /// the caller when to (see [`Library::backup_metadata`]). On an error
+    /// the pending set is kept, so the next flush tries again.
     pub fn flush(&mut self) -> Result<FlushReport> {
         let mut report = FlushReport::default();
         if !self.dirty.any() {
@@ -269,9 +274,6 @@ impl Library {
             report.saved_filters = true;
         }
         self.dirty = Dirty::default();
-        if report.mtime || report.metadata {
-            report.backup = self.backup_metadata()?;
-        }
         Ok(report)
     }
 }
@@ -296,7 +298,7 @@ mod tests {
     use crate::smart;
     use std::collections::BTreeMap;
     use std::fs;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     /// A new library with two imported PNGs, `a` and `b`.
     fn setup(dir: &Path) -> (Library, String, String) {
@@ -589,7 +591,9 @@ mod tests {
         let report = bat.flush().unwrap();
         assert_eq!(report.items, 2);
         assert!(report.mtime && report.metadata && report.tags && report.saved_filters);
-        assert!(report.backup.is_some());
+        assert!(report.wants_backup());
+        // Flushing never backs up by itself; the app schedules that.
+        assert!(bat.backups().unwrap().is_empty());
         assert!(!bat.has_pending_writes());
         assert_eq!(bat.flush().unwrap(), FlushReport::default());
 

@@ -40,7 +40,7 @@ impl Library {
     /// newest backup has the same size. Backups beyond the newest
     /// [`MAX_BACKUP_COUNT`] are deleted.
     pub fn backup_metadata(&self) -> Result<Option<PathBuf>> {
-        backup_at(self.root(), Local::now().naive_local())
+        backup_library(self.root())
     }
 
     /// Backup files in `backup/`, newest first (by name, as Eagle sorts).
@@ -79,6 +79,14 @@ impl Library {
             Err(e) => Err(e),
         }
     }
+}
+
+/// [`Library::backup_metadata`] for the library at `root`, without opening
+/// it. It only reads `metadata.json` and writes into `backup/`, so the app
+/// runs it on a background thread while the library stays in use: a
+/// `metadata.json` caught mid-write doesn't parse and is skipped.
+pub fn backup_library(root: &Path) -> Result<Option<PathBuf>> {
+    backup_at(root, Local::now().naive_local())
 }
 
 /// [`Library::backup_metadata`] at a given local time.

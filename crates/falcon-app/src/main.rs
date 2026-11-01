@@ -1,4 +1,5 @@
 mod app;
+mod backups;
 mod collect;
 mod folder_icons;
 mod audio;

@@ -185,7 +185,9 @@ These are the defaults. All but the arrows, Esc, Z and the viewer's C, ⇧R and 
 
 ## Saving
 
-The app opens libraries in batched write mode (see [Write batching](library-format.md#write-batching)): edits made during a frame, including those from the HTTP API and background imports since the last frame, are written together at the end of the frame, and a metadata backup follows when `mtime.json` or `metadata.json` changed. Pending writes are also flushed when a library is closed and, for every open library, when the app saves its state on quit. A failed write shows "Could not save".
+The app opens libraries in batched write mode (see [Write batching](library-format.md#write-batching)): edits made during a frame, including those from the HTTP API and background imports since the last frame, are written together at the end of the frame. Pending writes are also flushed when a library is closed and, for every open library, when the app saves its state (every 30 seconds and on quit). A failed write shows "Could not save".
+
+Metadata backups follow Eagle's timing (see [Backups](library-format.md#backups)). When a flush writes `mtime.json` or `metadata.json`, a backup is scheduled 1 second later, and each further write restarts the wait. Every open library is also backed up every 30 minutes. Both run `backup::backup_library` on a background thread, so the copy never blocks the window, and a library never has two running at once. The copy goes into the library's `backup/` folder, is skipped when the newest backup has the same size, and at most 100 are kept. When a library closes or the app saves its state with a backup still waiting, it is taken right away on the main thread so a quit doesn't lose it. The timing lives in `crates/falcon-app/src/backups.rs`, whose `Schedule` takes the time as an argument and has unit tests; nothing in the tests waits on a timer.
 
 Metadata backups have no setting: falcon backs up after a change the way Eagle does (Eagle has no preference for it either). An earlier "Back up metadata on change" checkbox that did nothing was removed; old saved state that has it still loads.
 

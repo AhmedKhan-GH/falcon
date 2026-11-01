@@ -418,6 +418,8 @@ struct Workspace {
     duplicates: duplicates_view::Duplicates,
     /// Comment mode, crop tool and comment editing (`image_edit.rs`).
     tools: image_edit::Tools,
+    /// When `metadata.json` is next backed up (see `backups.rs`).
+    backup: crate::backups::Schedule,
 }
 
 impl Workspace {
@@ -472,7 +474,26 @@ impl Workspace {
             font_view: Default::default(),
             duplicates: Default::default(),
             tools: Default::default(),
+            backup: crate::backups::Schedule::new(Instant::now()),
         }
+    }
+
+    /// Flushes pending writes and takes a backup now if a write is waiting
+    /// for one, on this thread: the library is closing or the app saving
+    /// its state (also on quit), and a background copy might not finish.
+    fn flush_and_backup(&mut self) -> falcon_library::Result<()> {
+        let Some(l) = self.lib.clone() else { return Ok(()) };
+        let report = lock(&l).flush()?;
+        if report.wants_backup() {
+            self.backup.changed(Instant::now());
+        }
+        if self.backup.take_pending()
+            && let Some(root) = &self.root
+            && let Err(e) = falcon_library::backup::backup_library(root)
+        {
+            eprintln!("falcon: metadata backup of {} failed: {e}", root.display());
+        }
+        Ok(())
     }
 }
 
@@ -669,7 +690,7 @@ impl App {
     /// Closes the open library at switcher position `i`, writing anything
     /// pending first. Closing the last one leaves the empty window.
     fn close_workspace(&mut self, i: usize) {
-        let closed = match self.others.close(&mut self.ws, i) {
+        let mut closed = match self.others.close(&mut self.ws, i) {
             Some(w) => w,
             None if i == self.others.slot() => {
                 let mut empty = Workspace::new(&self.ctx, None);
@@ -678,9 +699,7 @@ impl App {
             }
             None => return,
         };
-        if let Some(l) = &closed.lib
-            && let Err(e) = lock(l).flush()
-        {
+        if let Err(e) = closed.flush_and_backup() {
             self.flash(format!("Could not save: {e}"));
         }
         drop(closed);
@@ -1345,11 +1364,33 @@ impl App {
                 self.ws.redo.clear();
             }
         }
-        if lib.has_pending_writes()
-            && let Err(e) = lib.flush()
-        {
-            self.flash(format!("Could not save: {e}"));
+        if lib.has_pending_writes() {
+            match lib.flush() {
+                Ok(report) if report.wants_backup() => {
+                    self.ws.backup.changed(Instant::now());
+                    self.ctx.request_repaint_after(crate::backups::DEBOUNCE);
+                }
+                Ok(_) => {}
+                Err(e) => self.flash(format!("Could not save: {e}")),
+            }
         }
+    }
+
+    /// Starts each open library's metadata backup on a background thread
+    /// when it is due (a second after a write, and every 30 minutes), and
+    /// asks for a frame when the next one will be.
+    fn run_backups(&mut self) {
+        let now = Instant::now();
+        let mut wait = crate::backups::PERIOD;
+        for ws in std::iter::once(&mut self.ws).chain(self.others.parked_mut()) {
+            let (Some(_), Some(root)) = (&ws.lib, &ws.root) else { continue };
+            if let Some(running) = ws.backup.start(now) {
+                crate::backups::spawn(root.clone(), running);
+            }
+            wait = wait.min(ws.backup.wait(now));
+        }
+        // A backup that waits for a running one is retried shortly.
+        self.ctx.request_repaint_after(wait.max(std::time::Duration::from_millis(100)));
     }
 }
 
@@ -3587,9 +3628,10 @@ impl App {
 
 impl eframe::App for App {
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        // Also runs on quit: nothing batched may be left unwritten.
-        for l in std::iter::once(&self.ws).chain(self.others.parked_mut().map(|w| &*w)).filter_map(|w| w.lib.as_ref()) {
-            let _ = lock(l).flush();
+        // Also runs on quit: nothing batched may be left unwritten, and a
+        // write still waiting for its backup gets it now.
+        for ws in std::iter::once(&mut self.ws).chain(self.others.parked_mut()) {
+            let _ = ws.flush_and_backup();
         }
         let libraries: Vec<PathBuf> = self.others.iter(&self.ws).filter_map(|w| w.root.clone()).collect();
         let saved = Saved {
@@ -3637,6 +3679,7 @@ impl eframe::App for App {
             self.title = title;
         }
 
+        self.run_backups();
         let dropped: Vec<PathBuf> = ctx.input(|i| i.raw.dropped_files.iter().map(|f| f.path().to_path_buf()).collect());
         // Our own items dragged out and back in must not import twice.
         let dragging_out = self.native_drag.load(std::sync::atomic::Ordering::Relaxed);
@@ -3875,6 +3918,9 @@ mod tests {
     fn saved_state_from_one_library_still_loads() {
         // As saved before several libraries could be open (RON, as eframe stores it).
         let mut m = Memory::default();
+        // `backup_on_change` was a preference that did nothing (Eagle has
+        // none; backups always run) and was removed. State saved with it
+        // must still load.
         m.set_string_raw(r#"(library: Some("/x/A.library"), tile: Some(150.0), recent: ["/x/A.library", "/x/B.library"], prefs: (backup_on_change: true))"#);
         let saved: Saved = eframe::get_value(&m, eframe::APP_KEY).expect("old state parses");
         assert_eq!(saved.tile, Some(150.0));
