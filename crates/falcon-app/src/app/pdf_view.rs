@@ -453,6 +453,20 @@ pub fn parse_page(s: &str, count: usize) -> Option<usize> {
     (count > 0).then(|| (n.clamp(1, count as i64) - 1) as usize)
 }
 
+/// The outline entry for page `page`: the last entry pointing at it, else
+/// the last one pointing at an earlier page (the section it is in).
+pub fn current_outline(outline: &[OutlineEntry], page: usize) -> Option<usize> {
+    let mut best: Option<(usize, usize)> = None;
+    for (n, e) in outline.iter().enumerate() {
+        if let Some(p) = e.page.filter(|&p| p <= page)
+            && best.is_none_or(|(_, bp)| p >= bp)
+        {
+            best = Some((n, p));
+        }
+    }
+    best.map(|b| b.0)
+}
+
 /// The next (or previous) find hit, wrapping around the ends.
 pub fn step_hit(cur: Option<usize>, len: usize, forward: bool) -> Option<usize> {
     if len == 0 {
@@ -895,8 +909,10 @@ struct Find {
     open: bool,
     text: String,
     match_case: bool,
+    whole_words: bool,
+    match_diacritics: bool,
     /// The query last sent, to search again only when it changes.
-    sent: Option<(String, bool)>,
+    sent: Option<(String, SearchOptions)>,
     serial: u64,
     searching: bool,
     hits: Vec<Hit>,
@@ -972,6 +988,8 @@ struct Open {
     password: String,
     /// The Document Properties dialog is open.
     properties: bool,
+    /// The outline entry last highlighted, to scroll to a new one.
+    outline_shown: Option<usize>,
 }
 
 impl Open {
@@ -1015,6 +1033,7 @@ impl Open {
             info: DocInfo::default(),
             password: String::new(),
             properties: false,
+            outline_shown: None,
         }
     }
 
@@ -1211,7 +1230,8 @@ impl Open {
 
     /// Sends the latest search when the query changed.
     fn search_if_changed(&mut self) {
-        let q = (self.find.text.clone(), self.find.match_case);
+        let options = SearchOptions { match_case: self.find.match_case, whole_words: self.find.whole_words, match_diacritics: self.find.match_diacritics };
+        let q = (self.find.text.clone(), options);
         if self.find.sent.as_ref() == Some(&q) {
             return;
         }
@@ -1224,7 +1244,7 @@ impl Open {
             return;
         }
         self.find.searching = true;
-        let _ = self.tx.send(Req::Search(self.find.serial, q.0, SearchOptions { match_case: q.1 }));
+        let _ = self.tx.send(Req::Search(self.find.serial, q.0, q.1));
     }
 
     /// Asks for the latest drag selection when it moved and the last
@@ -1720,12 +1740,24 @@ fn side_panel(o: &mut Open, ui: &mut Ui, side: Rect, tab: Tab, jobs: &mut Vec<Jo
         }
         Tab::Outline => {
             let mut go = None;
+            // The entry for the current page is highlighted, and scrolled to
+            // when it changes.
+            let here = current_outline(&o.outline, o.current);
+            let reveal = here != o.outline_shown;
+            o.outline_shown = here;
             egui::ScrollArea::vertical().id_salt("pdf-outline").auto_shrink([false, false]).show(&mut child, |ui| {
                 if o.outline.is_empty() {
                     ui.add_space(8.0);
                     ui.label(egui::RichText::new("No outline").font(font(12.0)).color(t::p().text_muted));
                 }
                 for (n, e) in o.outline.iter().enumerate() {
+                    if here == Some(n) {
+                        let row = Rect::from_min_size(Pos2::new(list.left(), ui.cursor().top()), vec2(list.width(), ui.spacing().interact_size.y));
+                        ui.painter().rect_filled(row, 0.0, t::p().row_selected);
+                        if reveal {
+                            ui.scroll_to_rect(row, Some(egui::Align::Center));
+                        }
+                    }
                     ui.horizontal(|ui| {
                         ui.add_space(8.0 + 12.0 * e.depth.min(6) as f32);
                         let label = egui::Label::new(egui::RichText::new(&e.title).font(font(12.0)).color(t::p().text)).truncate().sense(Sense::click());
@@ -1984,9 +2016,9 @@ fn tools_menu(o: &mut Open, ui: &mut Ui) {
 }
 
 /// The find bar under the top bar's right end: the query, previous/next,
-/// match case and the hit count.
+/// match case, whole words, match diacritics and the hit count.
 fn find_bar(o: &mut Open, ui: &mut Ui, top_right: Pos2) {
-    let size = vec2(420.0, 36.0);
+    let size = vec2(540.0, 36.0);
     let r = Rect::from_min_size(Pos2::new(top_right.x - size.x, top_right.y), size);
     ui.interact(r, ui.scope_id().with("pdf-find-bg"), Sense::click());
     let p = ui.painter().clone();
@@ -2010,10 +2042,17 @@ fn find_bar(o: &mut Open, ui: &mut Ui, top_right: Pos2) {
         o.act(PdfKey::FindNext(true));
     }
     x += 18.0;
-    let case = Rect::from_min_size(Pos2::new(x, cy - 10.0), vec2(56.0, 20.0));
-    let mut cui = ui.new_child(egui::UiBuilder::new().max_rect(case));
-    cui.checkbox(&mut o.find.match_case, egui::RichText::new("Aa").font(font(12.0))).on_hover_text("Match Case");
-    x = case.right() + 4.0;
+    for (on, label, tip, w) in [
+        (&mut o.find.match_case, "Aa", "Match Case", 50.0),
+        (&mut o.find.whole_words, "Word", "Whole Words", 62.0),
+        (&mut o.find.match_diacritics, "é", "Match Diacritics (e doesn't find é)", 44.0),
+    ] {
+        let rect = Rect::from_min_size(Pos2::new(x, cy - 10.0), vec2(w, 20.0));
+        let mut cui = ui.new_child(egui::UiBuilder::new().max_rect(rect));
+        cui.checkbox(on, egui::RichText::new(label).font(font(12.0))).on_hover_text(tip);
+        x = rect.right() + 2.0;
+    }
+    x += 2.0;
     let status = if o.find.searching {
         "Searching…".to_string()
     } else if o.find.text.is_empty() {
@@ -2211,6 +2250,20 @@ mod tests {
         assert_eq!(parse_page("99", 10), Some(9));
         assert_eq!(parse_page("x", 10), None);
         assert_eq!(parse_page("1", 0), None);
+    }
+
+    #[test]
+    fn outline_entry_for_the_page() {
+        let e = |title: &str, depth, page| OutlineEntry { title: title.into(), depth, page };
+        let outline = vec![e("One", 0, Some(0)), e("One.a", 1, Some(2)), e("Two", 0, Some(5)), e("Link out", 0, None), e("Two.a", 1, Some(5))];
+        assert_eq!(current_outline(&outline, 0), Some(0));
+        assert_eq!(current_outline(&outline, 1), Some(0));
+        assert_eq!(current_outline(&outline, 3), Some(1));
+        // Two entries for page 6: the later, deeper one.
+        assert_eq!(current_outline(&outline, 5), Some(4));
+        assert_eq!(current_outline(&outline, 99), Some(4));
+        assert_eq!(current_outline(&outline[1..], 0), None);
+        assert_eq!(current_outline(&[], 3), None);
     }
 
     #[test]

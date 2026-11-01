@@ -132,7 +132,12 @@ fn searches_text_and_selections() {
     // The text sits 680 points up a 792-point page: about 112 down from the top.
     assert!(r.y > 80.0 && r.y < 115.0 && r.x > 100.0, "{r:?}");
     assert_eq!(doc.search("BRAVO", SearchOptions::default()).len(), 1);
-    assert!(doc.search("BRAVO", SearchOptions { match_case: true }).is_empty());
+    assert!(doc.search("BRAVO", SearchOptions { match_case: true, ..Default::default() }).is_empty());
+    // Whole words: "rav" is inside "bravo"; "bravo" stands alone.
+    let whole = SearchOptions { whole_words: true, ..Default::default() };
+    assert_eq!(doc.search("rav", SearchOptions::default()).len(), 1);
+    assert!(doc.search("rav", whole).is_empty());
+    assert_eq!(doc.search("bravo", whole).len(), 1);
     assert_eq!(doc.search("Page", SearchOptions::default()).iter().map(|h| h.page).collect::<Vec<_>>(), vec![0, 1, 2, 3, 4]);
     assert!(doc.search("", SearchOptions::default()).is_empty());
 

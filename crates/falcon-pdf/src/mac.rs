@@ -212,10 +212,15 @@ impl Document {
             return Vec::new();
         }
         autoreleasepool(|_| {
-            let mut flags = NSStringCompareOptions::DiacriticInsensitiveSearch;
+            let mut flags = NSStringCompareOptions::empty();
+            if !options.match_diacritics {
+                flags |= NSStringCompareOptions::DiacriticInsensitiveSearch;
+            }
             if !options.match_case {
                 flags |= NSStringCompareOptions::CaseInsensitiveSearch;
             }
+            // Each page's text as PDFKit counts it, for the whole-word test.
+            let mut texts: std::collections::HashMap<usize, Vec<u16>> = std::collections::HashMap::new();
             // SAFETY: owned, plain; one thread.
             let found = unsafe { self.doc.findString_withOptions(&NSString::from_str(text), flags) };
             let mut hits = Vec::new();
@@ -227,6 +232,14 @@ impl Document {
                     let index = unsafe { self.doc.indexForPage(&page) };
                     if index >= self.count {
                         continue;
+                    }
+                    if options.whole_words {
+                        // SAFETY: owned, plain; one thread; the page is one of the selection's.
+                        let range = unsafe { sel.rangeAtIndex_onPage(0, &page) };
+                        let text = texts.entry(index).or_insert_with(|| unsafe { page.string() }.map(|s| s.to_string().encode_utf16().collect()).unwrap_or_default());
+                        if !crate::is_whole_word(text, range.location, range.length) {
+                            continue;
+                        }
                     }
                     hits.push(Hit { page: index, rects: line_rects(&sel, &page) });
                 }

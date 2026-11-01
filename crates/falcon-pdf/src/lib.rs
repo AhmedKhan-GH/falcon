@@ -67,6 +67,22 @@ pub struct Hit {
 pub struct SearchOptions {
     /// Off by default, as in most readers: "Bravo" finds "bravo".
     pub match_case: bool,
+    /// Off by default: "e" finds "é".
+    pub match_diacritics: bool,
+    /// Only matches with no letter or digit right before or after them.
+    pub whole_words: bool,
+}
+
+/// Whether the match `start..start + len` (UTF-16 units, as PDFKit counts)
+/// in `text` stands as whole words: no letter, digit or underscore touches
+/// either end.
+pub fn is_whole_word(text: &[u16], start: usize, len: usize) -> bool {
+    let wordy = |i: usize| text.get(i).and_then(|&u| char::from_u32(u32::from(u))).is_some_and(|c| c.is_alphanumeric() || c == '_');
+    let end = start + len;
+    if len == 0 || end > text.len() {
+        return false;
+    }
+    !(start > 0 && wordy(start - 1) && wordy(start)) && !(end < text.len() && wordy(end) && wordy(end - 1))
 }
 
 /// The text under a drag selection and the rectangles to highlight.
@@ -172,6 +188,19 @@ mod tests {
         // Degenerate pages still give a 1×1 picture rather than nothing.
         assert_eq!(render_size((0.0, 0.0), 2.0, 100), (1, 1));
         assert_eq!(render_size((10.0, 10.0), -1.0, 100), (1, 1));
+    }
+
+    #[test]
+    fn whole_words() {
+        let t: Vec<u16> = "cat concat cat_ x-cat".encode_utf16().collect();
+        assert!(is_whole_word(&t, 0, 3));
+        assert!(!is_whole_word(&t, 7, 3), "inside concat");
+        assert!(!is_whole_word(&t, 11, 3), "before an underscore");
+        assert!(is_whole_word(&t, 18, 3), "after a hyphen, at the end");
+        assert!(!is_whole_word(&t, 18, 9));
+        assert!(!is_whole_word(&t, 0, 0));
+        // A match that starts or ends with a non-word character stands alone.
+        assert!(is_whole_word(&t, 17, 4));
     }
 
     #[test]
