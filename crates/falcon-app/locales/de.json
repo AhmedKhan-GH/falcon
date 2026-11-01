@@ -589,6 +589,7 @@
   "Import an Inboard backup": "Inboard-Backup importieren",
   "Import failures are always reported. Notifications for screenshots, imports and exports appear while falcon is in the background, in the app built by scripts/bundle.sh. falcon plays no sound effects.": "Fehler beim Importieren werden immer gemeldet. Mitteilungen zu Bildschirmfotos, Importen und Exporten erscheinen, während falcon im Hintergrund ist, in der mit scripts/bundle.sh gebauten App. falcon spielt keine Toneffekte.",
   "Import finished": "Import fertig",
+  "Import folders": "Ordner importieren",
   "Import {name}?": "{name} importieren?",
   "Import {n}": "{n} importieren",
   "Imported": "Importiert",

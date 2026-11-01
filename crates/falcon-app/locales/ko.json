@@ -565,6 +565,7 @@
   "Import an Inboard backup": "Inboard 백업 가져오기",
   "Import failures are always reported. Notifications for screenshots, imports and exports appear while falcon is in the background, in the app built by scripts/bundle.sh. falcon plays no sound effects.": "가져오기 실패는 항상 알려 줍니다. 스크린샷, 가져오기, 내보내기 알림은 scripts/bundle.sh로 만든 앱에서 falcon이 백그라운드에 있을 때 나타납니다. falcon은 효과음을 재생하지 않습니다.",
   "Import finished": "가져오기 완료",
+  "Import folders": "폴더 가져오기",
   "Import {name}?": "\"{name}\"을(를) 가져올까요?",
   "Import {n}": "{n}개 가져오기",
   "Imported": "가져옴",

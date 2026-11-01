@@ -144,7 +144,8 @@ impl App {
             if ui.add(egui::Button::new(tr("Custom Thumbnail from Clipboard")).shortcut_text(keys)).clicked() {
                 self.ws.actions.push(Action::Edit(Op::ClipboardThumbnail(item.id.clone())));
             }
-            if thumbnail::has_custom_thumbnail(item) && ui.button(tr("Reset Thumbnail")).clicked() {
+            let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::ResetThumbnail);
+            if thumbnail::has_custom_thumbnail(item) && ui.add(egui::Button::new(tr("Reset Thumbnail")).shortcut_text(keys)).clicked() {
                 self.ws.actions.push(Action::Edit(Op::ResetCustomThumbnail(item.id.clone())));
             }
         }

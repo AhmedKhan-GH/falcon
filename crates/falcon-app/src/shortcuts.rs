@@ -54,6 +54,8 @@ pub enum Command {
     MergeLibrary,
     ClearLibraryHistory,
     EmptyCacheReload,
+    /// File ▸ Import Folders…
+    ImportFolders,
     /// File ▸ Import submenu.
     ImportPack,
     ImportInboard,
@@ -159,7 +161,6 @@ pub enum Command {
     Redo,
     Cut,
     Import,
-    ImportFolders,
     FindDuplicates,
     SearchAll,
     FilterSidebar,
@@ -378,7 +379,7 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::OpenFilter(crate::search_state::FilterKind::Camera), id: "find.filter.camera", group: "Find", label: "Open the camera filter", default: None, aliases: &[] },
     Spec { cmd: Command::OpenFilter(crate::search_state::FilterKind::Font), id: "find.filter.fonts", group: "Find", label: "Open the font filter", default: None, aliases: &[] },
     Spec { cmd: Command::SelectAll, id: "edit.select.all", group: "Edit", label: "Select all", default: k(CMD, Key::A), aliases: &[] },
-    Spec { cmd: Command::Rename, id: "edit.rename", group: "Edit", label: "Rename the selected item", default: k(CMD, Key::R), aliases: &[KeyboardShortcut::new(NONE, Key::F2)] },
+    Spec { cmd: Command::Rename, id: "edit.rename.darwin", group: "Edit", label: "Rename the selected item", default: k(CMD, Key::R), aliases: &[KeyboardShortcut::new(NONE, Key::F2)] },
     Spec { cmd: Command::Copy, id: "edit.copy", group: "Edit", label: "Copy the selected files", default: k(CMD, Key::C), aliases: &[] },
     Spec { cmd: Command::CustomThumbnail, id: "edit.thumbnail.custom.file", group: "Edit", label: "Custom thumbnail from a file", default: k(CMD_ALT, Key::T), aliases: &[] },
     Spec { cmd: Command::ClipboardThumbnail, id: "edit.thumbnail.custom.clipboard", group: "Edit", label: "Custom thumbnail from the clipboard", default: k(CMD_ALT_SHIFT, Key::T), aliases: &[] },
@@ -389,8 +390,8 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::RotateLeft, id: "edit.image.rotate", group: "Edit", label: "Rotate the image left (viewer: also a video's picture)", default: k(SHIFT, Key::R), aliases: &[] },
     Spec { cmd: Command::FlipHorizontal, id: "edit.image.flip", group: "Edit", label: "Flip the image horizontally (viewer: also a video's picture)", default: k(SHIFT, Key::F), aliases: &[] },
     Spec { cmd: Command::Paste, id: "edit.paste", group: "Edit", label: "Paste files or an image", default: k(CMD, Key::V), aliases: &[] },
-    Spec { cmd: Command::Trash, id: "edit.remove.trash", group: "Edit", label: "Move to the Trash", default: k(CMD, Key::Backspace), aliases: &[KeyboardShortcut::new(NONE, Key::Delete)] },
-    Spec { cmd: Command::RemoveFromFolder, id: "edit.remove.folder", group: "Edit", label: "Remove from the open folder", default: k(CMD_SHIFT, Key::Backspace), aliases: &[] },
+    Spec { cmd: Command::Trash, id: "edit.remove.trash.darwin", group: "Edit", label: "Move to the Trash", default: k(CMD, Key::Backspace), aliases: &[KeyboardShortcut::new(NONE, Key::Delete)] },
+    Spec { cmd: Command::RemoveFromFolder, id: "edit.remove.folder.darwin", group: "Edit", label: "Remove from the open folder", default: k(CMD_SHIFT, Key::Backspace), aliases: &[] },
     // Eagle's Edit ▸ Move Folder accelerators. ⇧ may or may not turn the
     // bracket into a brace before it reaches us.
     Spec { cmd: Command::FolderUp, id: "edit.folder.arrange.up", group: "Edit", label: "Move folder up", default: k(CMD, Key::CloseBracket), aliases: &[] },
@@ -467,6 +468,7 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::MergeLibrary, id: "library.merge", group: "Library", label: "Merge another library into this one", default: None, aliases: &[] },
     Spec { cmd: Command::ClearLibraryHistory, id: "library.clearHistory", group: "Library", label: "Clear the library history", default: None, aliases: &[] },
     Spec { cmd: Command::EmptyCacheReload, id: "library.reload", group: "Library", label: "Empty the cache and reload the library", default: None, aliases: &[] },
+    Spec { cmd: Command::ImportFolders, id: "file.import.folders", group: "Import", label: "Import folders", default: None, aliases: &[] },
     Spec { cmd: Command::ImportPack, id: "file.import.eaglepack", group: "Import", label: "Import an Eagle package", default: None, aliases: &[] },
     Spec { cmd: Command::ImportInboard, id: "file.import.inboard", group: "Import", label: "Import an Inboard backup", default: None, aliases: &[] },
     Spec { cmd: Command::ExportComputer, id: "file.export.item.computer", group: "Export", label: "Export to Computer", default: k(CMD, Key::E), aliases: &[] },
@@ -533,7 +535,25 @@ pub fn spec(cmd: Command) -> &'static Spec {
 #[serde(transparent)]
 pub struct Shortcuts(pub BTreeMap<String, String>);
 
+/// Ids that earlier versions saved overrides under, with the Eagle id that
+/// replaced each. Applied by `Shortcuts::migrate` when the state loads.
+const RENAMED: &[(&str, &str)] = &[
+    ("edit.rename", "edit.rename.darwin"),
+    ("edit.remove.trash", "edit.remove.trash.darwin"),
+    ("edit.remove.folder", "edit.remove.folder.darwin"),
+];
+
 impl Shortcuts {
+    /// Moves overrides saved under an old id to the current one. An
+    /// override already saved under the new id wins.
+    pub fn migrate(&mut self) {
+        for (old, new) in RENAMED {
+            if let Some(chord) = self.0.remove(*old) {
+                self.0.entry((*new).to_string()).or_insert(chord);
+            }
+        }
+    }
+
     /// The chord bound to a command now, if any.
     pub fn binding(&self, cmd: Command) -> Option<KeyboardShortcut> {
         let s = find_spec(cmd)?;
@@ -1187,9 +1207,198 @@ mod tests {
     }
 
     #[test]
+    fn ids_are_unique() {
+        let ids: HashSet<_> = TABLE.iter().map(|s| s.id).collect();
+        assert_eq!(ids.len(), TABLE.len());
+    }
+
+    /// Eagle's macOS keybind ids that falcon has an action for, with
+    /// Eagle's default (empty is unbound). Ids falcon lacks an action for
+    /// (global capture, link and site importers, reverse image search,
+    /// image merge, the import-date filter, File ▸ New…) are not listed.
+    const EAGLE_IDS: &[(&str, &str)] = &[
+        ("file.create.folder", "Command + Shift + N"),
+        ("file.create.subfolder", "Alt + N"),
+        ("file.create.smartfolder", "Command + Shift + Alt + N"),
+        ("file.import.folders", ""),
+        ("file.import.eaglepack", ""),
+        ("file.export.item.eaglepack", "Command + Shift + E"),
+        ("file.export.item.computer", "Command + E"),
+        ("file.export.item.as", "Shift + E"),
+        ("file.export.csv", ""),
+        ("library.create", ""),
+        ("library.switch", "Command + L"),
+        ("edit.rename.darwin", "Command + R"),
+        ("edit.copy.path", "Command + Alt + C"),
+        ("edit.copy.folderpath", "Command + Alt + Shift + C"),
+        ("edit.copy.eaglelink", ""),
+        ("edit.copy.thumbnail", ""),
+        ("edit.copy.base64", ""),
+        ("edit.copy.name", ""),
+        ("edit.duplicate", "Command + D"),
+        ("edit.thumbnail.refresh", "Command + Alt + R"),
+        ("edit.thumbnail.custom.file", "Command + Alt + T"),
+        ("edit.thumbnail.custom.clipboard", "Command + Shift + Alt + T"),
+        ("edit.thumbnail.custom.reset", ""),
+        ("edit.image.flip", "Shift + F"),
+        ("edit.image.rotate", "Shift + R"),
+        ("edit.image.crop", "Shift + C"),
+        ("edit.folder.setting", "Command + Shift + R"),
+        ("edit.folder.password.create", ""),
+        ("edit.folder.password.change", ""),
+        ("edit.folder.password.reset", ""),
+        ("edit.folder.password.lock", "Command + Shift + L"),
+        ("edit.folder.move", ""),
+        ("edit.remove.folder.darwin", "Command + Shift + Backspace"),
+        ("edit.remove.trash.darwin", "Command + Backspace"),
+        ("view.alwaysOnTop", "Shift + T"),
+        ("find.search.current", "Command + F"),
+        ("find.search.all", "Command + Alt + F"),
+        ("find.sidebar.filter", "Alt + Shift + F"),
+        ("find.filter.toggle", "Command + Shift + F"),
+        ("find.filter.reset", "Command + Shift + Alt + F"),
+        ("find.filter.folder", "Alt + F"),
+        ("find.filter.tag", "Alt + T"),
+        ("find.filter.color", "Alt + C"),
+        ("find.filter.shape", "Alt + S"),
+        ("find.filter.rating", "Alt + R"),
+        ("find.filter.date", "Alt + D"),
+        ("find.filter.type", "Alt + E"),
+        ("find.filter.size", ""),
+        ("find.filter.resolution", ""),
+        ("find.filter.duration", ""),
+        ("find.filter.annotation", ""),
+        ("find.filter.note", ""),
+        ("find.filter.url", ""),
+        ("find.filter.bpm", ""),
+        ("find.filter.camera", ""),
+        ("find.filter.fonts", ""),
+        ("find.quicksearch", "Command + J"),
+        ("find.add.to", "Command + Shift + J"),
+        ("organize.folder.addLast", "Shift + D"),
+        ("organize.tag.add", "Command + T"),
+        ("organize.tag.copy", "Command + Shift + C"),
+        ("organize.tag.paste", "Command + Shift + V"),
+        ("organize.tag.clear", ""),
+        ("view.all", "Command + 1"),
+        ("view.unfiled", "Command + 2"),
+        ("view.untagged", "Command + 3"),
+        ("view.recent", "Command + 4"),
+        ("view.random", "Command + 5"),
+        ("view.alltags", "Command + 6"),
+        ("view.trash", "Command + 7"),
+        ("view.zoom.in", "Command + ="),
+        ("view.zoom.out", "Command + -"),
+        ("view.zoom.actual", "Command + 0"),
+        ("view.zoom.fit", "Command + 9"),
+        ("view.file.openlink", "Command + Shift + O"),
+        ("view.file.opendefault", "Shift + Enter"),
+        ("view.file.openfinder", "Command + Enter"),
+        ("view.file.opennewwindow", "Command + O"),
+        ("view.reveal.darwin", "Command + Alt + S"),
+        ("view.duplicate.darwin", "Command + Alt + D"),
+        ("view.scroll.home", "Home"),
+        ("view.scroll.end", "End"),
+        ("view.scroll.prevpage", "PageUp"),
+        ("view.scroll.nextpage", "PageDown"),
+        ("view.toggle.sidebar", "Command + Alt + 1"),
+        ("view.toggle.inspector", "Command + Alt + 2"),
+        ("view.toggle.all", "Command + Alt + 3"),
+        ("view.toggle.listname", "Command + Alt + 4"),
+        ("view.toggle.listmetas", "Command + Alt + 5"),
+        ("view.toggle.listannotation", "Command + Alt + 6"),
+        ("view.toggle.subfolder", "Command + Alt + 7"),
+        ("view.toggle.navigator", "Command + Alt + 8"),
+        ("view.grayscale", "Command + Alt + G"),
+        ("view.toggle.slideshow", "F5"),
+        ("player.volume.increase", "Command + Up"),
+        ("player.volume.decrease", "Command + Down"),
+        ("player.step.forward", "Command + Right"),
+        ("player.step.backward", "Command + Left"),
+        ("player.speed.up", "Shift + ."),
+        ("player.speed.down", "Shift + ,"),
+        ("player.playAndPause", "Space"),
+        ("player.prev1frame", "["),
+        ("player.next1frame", "]"),
+        ("player.prev10frame", "Shift + ["),
+        ("player.next10frame", "Shift + ]"),
+        ("player.thumbnail.set", ""),
+        ("player.thumbnail.copy", "Shift + C"),
+        ("player.thumbnail.save", "Shift + S"),
+        ("app.preferences", "Command + ,"),
+        ("app.lock", "Command + Alt + L"),
+    ];
+
+    /// Eagle ids whose falcon default differs on purpose: the rating
+    /// digits (Eagle hard-codes bare 0 to 5 outside its table) and the two
+    /// layout ids (Eagle's names are swapped against its keys; falcon's
+    /// ids name the layout, the defaults follow Eagle's keys).
+    const DIFFERENT_ON_PURPOSE: &[&str] = &[
+        "organize.rating.0",
+        "organize.rating.1",
+        "organize.rating.2",
+        "organize.rating.3",
+        "organize.rating.4",
+        "organize.rating.5",
+        "view.layout.grid",
+        "view.layout.justified",
+        "view.layout.waterfall",
+        "view.layout.list",
+    ];
+
+    #[test]
+    fn eagle_ids_are_in_the_table_with_eagles_defaults() {
+        for (id, chord) in EAGLE_IDS {
+            let s = TABLE.iter().find(|s| s.id == *id).unwrap_or_else(|| panic!("{id} has no row"));
+            assert!(!DIFFERENT_ON_PURPOSE.contains(id));
+            let want = if chord.is_empty() { None } else { Some(parse(chord).unwrap_or_else(|| panic!("parse {chord}"))) };
+            assert!(same_option(s.default, want), "{id}: default {:?}, Eagle {chord:?}", s.default.map(|c| format(&c)));
+        }
+        for id in DIFFERENT_ON_PURPOSE {
+            assert!(TABLE.iter().any(|s| s.id == *id), "{id}");
+        }
+    }
+
+    fn same_option(a: Option<KeyboardShortcut>, b: Option<KeyboardShortcut>) -> bool {
+        match (a, b) {
+            (None, None) => true,
+            (Some(a), b) => same(a, b),
+            _ => false,
+        }
+    }
+
+    #[test]
+    fn old_ids_move_to_eagles() {
+        let mut keys = Shortcuts(BTreeMap::from([
+            ("edit.rename".to_string(), "Command + K".to_string()),
+            ("edit.remove.trash".to_string(), String::new()),
+            ("edit.remove.folder".to_string(), "Command + Shift + X".to_string()),
+            ("edit.remove.folder.darwin".to_string(), "Command + Shift + Y".to_string()),
+            ("find.filter.tag".to_string(), "Alt + G".to_string()),
+        ]));
+        keys.migrate();
+        assert_eq!(keys.binding(Command::Rename), parse("Command + K"));
+        assert_eq!(keys.binding(Command::Trash), None, "an unbound command stays unbound");
+        assert_eq!(keys.binding(Command::RemoveFromFolder), parse("Command + Shift + Y"), "the new id wins");
+        assert_eq!(keys.0.get("find.filter.tag").map(String::as_str), Some("Alt + G"));
+        assert!(RENAMED.iter().all(|(old, _)| !keys.0.contains_key(*old)));
+        let before = keys.clone();
+        keys.migrate();
+        assert_eq!(keys, before, "migrating twice changes nothing");
+    }
+
+    #[test]
+    fn renamed_ids_point_at_table_rows() {
+        for (old, new) in RENAMED {
+            assert!(TABLE.iter().any(|s| s.id == *new), "{new}");
+            assert!(TABLE.iter().all(|s| s.id != *old), "{old} is still a row");
+        }
+    }
+
+    #[test]
     fn menu_only_commands_have_no_keys() {
         let keys = Shortcuts::default();
-        for cmd in [Command::Undo, Command::Import, Command::Documentation, Command::ErrorLogs, Command::About, Command::DebugReport] {
+        for cmd in [Command::Undo, Command::Redo, Command::Cut, Command::Import, Command::FindDuplicates, Command::WindowZoom, Command::Documentation, Command::ErrorLogs, Command::About, Command::DebugReport] {
             assert!(find_spec(cmd).is_none());
             assert_eq!(keys.binding(cmd), None);
             assert!(keys.chords(cmd).is_empty());
@@ -1337,13 +1546,13 @@ mod tests {
 
         let r = parse("Command + K").unwrap();
         assert_eq!(keys.set(Command::Rename, Some(r)), Ok(()));
-        assert_eq!(keys.0.get("edit.rename").map(String::as_str), Some("Command + K"));
+        assert_eq!(keys.0.get("edit.rename.darwin").map(String::as_str), Some("Command + K"));
         assert_eq!(keys.resolve(Key::K, Modifiers::COMMAND), Some(Command::Rename));
         assert_eq!(keys.resolve(Key::F2, Modifiers::NONE), None, "a changed binding drops the F2 alias");
 
         keys.set(Command::Rename, None).unwrap();
         assert_eq!(keys.binding(Command::Rename), None);
-        assert_eq!(keys.0.get("edit.rename").map(String::as_str), Some(""));
+        assert_eq!(keys.0.get("edit.rename.darwin").map(String::as_str), Some(""));
 
         keys.reset(Command::Rename);
         assert!(keys.0.is_empty());
@@ -1404,7 +1613,7 @@ mod tests {
         let mut keys = Shortcuts::default();
         keys.set(Command::Rename, parse("Command + K")).unwrap();
         let json = serde_json::to_string(&keys).unwrap();
-        assert_eq!(json, r#"{"edit.rename":"Command + K"}"#);
+        assert_eq!(json, r#"{"edit.rename.darwin":"Command + K"}"#);
         let back: Shortcuts = serde_json::from_str(&json).unwrap();
         assert_eq!(back, keys);
     }

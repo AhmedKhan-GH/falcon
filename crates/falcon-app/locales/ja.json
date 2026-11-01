@@ -565,6 +565,7 @@
   "Import an Inboard backup": "Inboardバックアップを読み込む",
   "Import failures are always reported. Notifications for screenshots, imports and exports appear while falcon is in the background, in the app built by scripts/bundle.sh. falcon plays no sound effects.": "読み込みの失敗は常に報告されます。スクリーンショット、読み込み、書き出しの通知は、scripts/bundle.sh で作ったアプリで falcon がバックグラウンドにあるときに表示されます。falcon は効果音を鳴らしません。",
   "Import finished": "読み込み完了",
+  "Import folders": "フォルダを読み込む",
   "Import {name}?": "「{name}」を読み込みますか？",
   "Import {n}": "{n}件を読み込む",
   "Imported": "読み込み",

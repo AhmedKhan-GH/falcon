@@ -292,6 +292,7 @@ impl App {
         app.prefs_window.set_pane(saved.prefs_pane);
         app.lock = crate::applock::Lock::at_launch(app.prefs.app_lock.as_ref());
         app.shortcuts = saved.shortcuts;
+        app.shortcuts.migrate();
         app.collect.pos = saved.collect_pos.map(Pos2::from);
         app.video.volume = saved.video_volume.unwrap_or(1.0).clamp(0.0, 1.0);
         app.video.looping = saved.video_loop.unwrap_or(false);

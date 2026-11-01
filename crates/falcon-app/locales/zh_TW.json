@@ -565,6 +565,7 @@
   "Import an Inboard backup": "匯入 Inboard 備份",
   "Import failures are always reported. Notifications for screenshots, imports and exports appear while falcon is in the background, in the app built by scripts/bundle.sh. falcon plays no sound effects.": "匯入失敗一律會回報。截圖、匯入與輸出的通知會在 falcon 位於背景時顯示，僅限以 scripts/bundle.sh 建置的 App。falcon 不播放音效。",
   "Import finished": "匯入完成",
+  "Import folders": "匯入資料夾",
   "Import {name}?": "匯入「{name}」？",
   "Import {n}": "匯入{n}個項目",
   "Imported": "匯入",
