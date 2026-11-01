@@ -180,6 +180,23 @@ The `duplicates` module compares file contents instead of copying Eagle's metada
 
 IPTC keywords come first, then the XMP `dc:subject` items. Eagle's 200-character limit and `;` split apply to both. Falcon also drops empty parts, where Eagle would keep an empty tag. Reading `.jpeg`, XMP, PNG and TIFF goes beyond what Eagle does.
 
+## Screenshots
+
+### What Eagle does (seen in its shipped source)
+
+A screenshot is captured to a temporary PNG, converted to the format and quality in Preferences ▸ Screenshot (`screencapture.format`, `screencapture.quality`), and halved when `screencapture.useRetina` is off on a scale-2 screen. The item is named "Screenshot - YYYY-MM-DD HH.mm.ss". It gets the tag "Screenshot" when it has no tags and `screencapture.autoTagging.enable` is on, and is copied to the clipboard when `screencapture.autoWriteClipboard` is on. An area or window screenshot opens the collect window first when `general.showCaptureCollectModal` is on, and the item is saved into the folders chosen there. Otherwise, and always for a full-screen screenshot, it is imported into the library without a folder.
+
+### How falcon does it
+
+`crates/falcon-app/src/capture.rs` makes the file and `app/system.rs` hands it to the import (see Screen capture in the app chapter).
+
+- **Name.** "Screenshot - YYYY-MM-DD HH.mm.ss" in local time, passed as `ImportOptions::name`. The staged file has the same name, with " 2", " 3" and so on added if two shots share a second, but the item keeps the name above.
+- **Tag.** "Screenshot" is put in `ImportOptions::tags` unless Preferences ▸ Screenshot turns tagging off. falcon adds it through the same tag helper the collect window uses, so it never doubles a tag typed there. (Eagle adds it only when the item has no tags; a screenshot has none at this point, so the result is the same.)
+- **Format and size.** The PNG from `screencapture` is converted with `export::convert_bytes` to PNG, JPG or WebP at quality 90, 80 or 70. A PNG at full size is only renamed. When "Keep the full pixel size" is off and the screen's scale is 1.5 or more (Eagle checks for exactly 2), the longer side is halved first.
+- **Where it goes.** The library root with no folders, so folder auto-tags have nothing to add. With "Choose where each screenshot is saved" on, an area or window screenshot waits in the collect window, and Save imports it into the folders picked there with the name and tags shown there. A full-screen screenshot never waits.
+- **Temp files.** The file is written to `falcon-paste` in the system temp folder. The import deletes it once it has copied it into the library, and Discard in the collect window deletes it. A cancelled capture leaves no file, a failed conversion removes the raw PNG, and a screenshot that arrives after the library closed is deleted.
+- **Same pipeline.** It is an ordinary background import: the duplicate check asks what to do when the picture is already in the library, and a failure goes to the failed-imports list. A batch that held only screenshots imported straight in does not post "Import finished", because the screenshot has its own notification; a screenshot saved from the collect window goes through the normal collect import and does post it.
+
 ## Importing folders
 
 ### What Eagle does (observed in `app.bundle.js`)
