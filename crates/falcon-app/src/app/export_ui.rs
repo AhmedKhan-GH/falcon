@@ -9,7 +9,7 @@ use falcon_library::pack::{self, PackSource};
 
 /// An export asked for from a menu or a key, handled once the frame has
 /// the library (`App::export_dialogs`).
-pub(super) enum Request {
+pub(crate) enum Request {
     /// Export to Computer: these items' originals.
     Items(Vec<String>),
     /// Export to Computer: a folder or smart folder as a directory.
@@ -32,7 +32,7 @@ pub(super) enum Request {
 
 /// What the Copy variants put on the clipboard (Eagle's Edit ▸ Copy …).
 #[derive(Clone, Copy, PartialEq, Debug)]
-pub(super) enum CopyKind {
+pub(crate) enum CopyKind {
     /// Each original's path, one per line.
     Path,
     /// Each item's `<id>.info` folder, one per line.
@@ -49,7 +49,7 @@ pub(super) enum CopyKind {
 
 /// A folder or smart folder to export.
 #[derive(Clone)]
-pub(super) enum Target {
+pub(crate) enum Target {
     Folder(String),
     Smart(String),
 }
@@ -103,7 +103,7 @@ struct Job {
 
 /// Export state kept per workspace.
 #[derive(Default)]
-pub(super) struct ExportState {
+pub(crate) struct ExportState {
     pub request: Option<Request>,
     clash: Option<Clash>,
     job: Arc<Mutex<Job>>,
@@ -122,7 +122,7 @@ fn merge_plans(dest: &std::path::Path, plans: impl Iterator<Item = Plan>, how: C
     all
 }
 
-pub(super) fn plural(n: usize, one: &str) -> String {
+pub(crate) fn plural(n: usize, one: &str) -> String {
     if n == 1 { format!("1 {one}") } else { format!("{n} {one}s") }
 }
 
@@ -146,7 +146,7 @@ fn pick_folder() -> Option<PathBuf> {
 
 impl App {
     /// Handles a pending export request and draws the export prompts.
-    pub(super) fn export_dialogs(&mut self, ctx: &egui::Context, lib: &Library) {
+    pub(crate) fn export_dialogs(&mut self, ctx: &egui::Context, lib: &Library) {
         if let Some(req) = self.ws.export.request.take() {
             self.handle_export(lib, req);
         }
@@ -413,7 +413,7 @@ impl App {
     }
 
     /// The Copy File Path entry and Copy submenu of the item menu.
-    pub(super) fn item_copy_menu(&mut self, ui: &mut Ui, targets: &[String]) {
+    pub(crate) fn item_copy_menu(&mut self, ui: &mut Ui, targets: &[String]) {
         let mut ask = |kind| self.ws.export.request = Some(Request::Copy(kind, targets.to_vec()));
         if ui.button("Copy File Path").clicked() {
             ask(CopyKind::Path);
@@ -548,7 +548,7 @@ impl App {
 
     /// The export progress bar, drawn where the import bar goes; reports
     /// the result once the worker is done.
-    pub(super) fn export_bar(&mut self, ui: &mut Ui, rect: Rect) -> bool {
+    pub(crate) fn export_bar(&mut self, ui: &mut Ui, rect: Rect) -> bool {
         let (verb, total, done, current, finished) = {
             let mut j = self.ws.export.job.lock().unwrap_or_else(|p| p.into_inner());
             let finished = j.finished.take();
@@ -579,7 +579,7 @@ impl App {
     }
 
     /// The export keys, read in `App::keyboard` (grid only).
-    pub(super) fn export_keys(&mut self, on: &impl Fn(crate::shortcuts::Command) -> bool) {
+    pub(crate) fn export_keys(&mut self, on: &impl Fn(crate::shortcuts::Command) -> bool) {
         use crate::shortcuts::Command as C;
         if on(C::ExportComputer) && !self.ws.selected.is_empty() {
             self.ws.export.request = Some(Request::Items(self.ws.selected.clone()));
@@ -611,7 +611,7 @@ impl App {
 
     /// The Export submenu of a folder or smart folder menu (disabled while
     /// the folder is locked).
-    pub(super) fn tree_export_menu(&mut self, ui: &mut Ui, target: Target, enabled: bool) {
+    pub(crate) fn tree_export_menu(&mut self, ui: &mut Ui, target: Target, enabled: bool) {
         ui.add_enabled_ui(enabled, |ui| {
             ui.menu_button("Export", |ui| self.tree_export_entries(ui, &target));
         });
@@ -628,7 +628,7 @@ impl App {
     }
 
     /// The inspector's Export button for the open folder or smart folder.
-    pub(super) fn scope_export_button(&mut self, ui: &mut Ui, lib: &Library) {
+    pub(crate) fn scope_export_button(&mut self, ui: &mut Ui, lib: &Library) {
         let target = match &self.ws.scope {
             Scope::Folder(id) => logic::find_folder(&lib.metadata.folders, id)
                 .filter(|f| !crate::organize::is_shut(f, &self.ws.org.unlocked))
@@ -648,7 +648,7 @@ impl App {
     }
 
     /// The Export submenu of the item context menu.
-    pub(super) fn item_export_menu(&mut self, ui: &mut Ui, targets: &[String]) {
+    pub(crate) fn item_export_menu(&mut self, ui: &mut Ui, targets: &[String]) {
         ui.menu_button("Export", |ui| {
             ui.set_min_width(200.0);
             if ui.button("Export to Computer…").clicked() {

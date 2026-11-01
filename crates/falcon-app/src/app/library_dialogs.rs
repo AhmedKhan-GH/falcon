@@ -131,7 +131,7 @@ impl State {
 
 impl App {
     /// Draws whichever create step is showing. Called once a frame.
-    pub(super) fn library_dialogs(&mut self, ctx: &egui::Context) {
+    pub(crate) fn library_dialogs(&mut self, ctx: &egui::Context) {
         let Some(mut dlg) = self.dialogs.create.take() else { return };
         let mut keep = true;
         let mut pick = dlg.pick.take();
@@ -208,7 +208,7 @@ impl App {
 impl App {
     /// The screen shown when no library is open: the welcome flow until it
     /// has been finished, the plain empty state otherwise or after an error.
-    pub(super) fn empty_or_welcome(&mut self, ui: &mut Ui) {
+    pub(crate) fn empty_or_welcome(&mut self, ui: &mut Ui) {
         if self.welcomed || self.error.is_some() {
             self.empty_state(ui);
         } else {

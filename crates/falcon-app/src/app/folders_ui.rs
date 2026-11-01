@@ -14,7 +14,7 @@ use falcon_library::rename::{Method, Rename, Subject, TextCase};
 /// Folders and smart folders picked in the sidebar, and the rows each
 /// tree showed, top to bottom, for ⇧-click ranges.
 #[derive(Default)]
-pub(super) struct FolderUi {
+pub(crate) struct FolderUi {
     pub sel: TreeSel,
     pub smart: TreeSel,
     /// Rows drawn in the last complete frame, and those drawn so far in
@@ -71,7 +71,7 @@ struct MoveDraft {
 
 /// Library changes queued by the commands for several folders, and by the
 /// Move Folder and delete dialogs.
-pub(super) enum FolderAction {
+pub(crate) enum FolderAction {
     Rename(Vec<(String, String)>),
     RenameSmart(Vec<(String, String)>),
     Move(Vec<String>, String, FolderPlace),
@@ -123,7 +123,7 @@ fn act(a: FolderAction) -> Action {
 
 /// Which sidebar tree a row belongs to.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum Tree {
+pub(crate) enum Tree {
     Folders,
     Smart,
 }
@@ -161,7 +161,7 @@ impl FolderUi {
 impl App {
     /// A click on a folder or smart folder row with ⌘ or ⇧ held. Returns
     /// false when neither is held, leaving the plain click to the caller.
-    pub(super) fn tree_click(&mut self, tree: Tree, id: &str, m: Modifiers) -> bool {
+    pub(crate) fn tree_click(&mut self, tree: Tree, id: &str, m: Modifiers) -> bool {
         if !m.command && !m.shift {
             return false;
         }
@@ -201,7 +201,7 @@ impl App {
 
     /// Whether a sidebar row shows as selected: picked, or, with nothing
     /// picked, the open scope.
-    pub(super) fn tree_active(&self, tree: Tree, id: &str) -> bool {
+    pub(crate) fn tree_active(&self, tree: Tree, id: &str) -> bool {
         let sel = match tree {
             Tree::Folders => &self.ws.folders.sel,
             Tree::Smart => &self.ws.folders.smart,
@@ -218,7 +218,7 @@ impl App {
 
     /// The items of every picked folder or smart folder, for the combined
     /// view; `None` when nothing is picked.
-    pub(super) fn combined_items(&self, lib: &Library) -> Option<HashSet<String>> {
+    pub(crate) fn combined_items(&self, lib: &Library) -> Option<HashSet<String>> {
         let f = &self.ws.folders;
         if !f.sel.ids.is_empty() {
             let picked: HashSet<&str> = f.sel.ids.iter().map(String::as_str).collect();
@@ -233,7 +233,7 @@ impl App {
     }
 
     /// The toolbar title while several folders or smart folders are picked.
-    pub(super) fn combined_title(&self) -> Option<String> {
+    pub(crate) fn combined_title(&self) -> Option<String> {
         let f = &self.ws.folders;
         if f.sel.is_multi() {
             Some(format!("{} folders selected", f.sel.ids.len()))
@@ -268,7 +268,7 @@ fn common_sort<'a>(mut sorts: impl Iterator<Item = Option<(FolderOrder, bool)>> 
 impl App {
     /// The context menu of a folder row while several folders are picked
     /// and it is one of them: Eagle's commands for the whole selection.
-    pub(super) fn multi_folder_menu(&mut self, ui: &mut Ui, lib: &Library, f: &Folder, pinned: bool) {
+    pub(crate) fn multi_folder_menu(&mut self, ui: &mut Ui, lib: &Library, f: &Folder, pinned: bool) {
         ui.set_min_width(200.0);
         let ids = self.ws.folders.sel.ids.clone();
         let folders: Vec<&Folder> = ids.iter().filter_map(|id| logic::find_folder(&lib.metadata.folders, id)).collect();
@@ -328,7 +328,7 @@ impl App {
 
     /// The context menu of a smart folder row while several are picked and
     /// it is one of them.
-    pub(super) fn multi_smart_menu(&mut self, ui: &mut Ui, lib: &Library, pinned: bool) {
+    pub(crate) fn multi_smart_menu(&mut self, ui: &mut Ui, lib: &Library, pinned: bool) {
         ui.set_min_width(200.0);
         let ids = self.ws.folders.smart.ids.clone();
         let roots = lib.smart_folders();
@@ -377,7 +377,7 @@ impl App {
 
     /// Asks before deleting folders, as Eagle does: locked folders are left
     /// out, and a single empty folder without subfolders goes at once.
-    pub(super) fn ask_delete_folders(&mut self, lib: &Library, ids: Vec<String>) {
+    pub(crate) fn ask_delete_folders(&mut self, lib: &Library, ids: Vec<String>) {
         let ids: Vec<String> = ids
             .into_iter()
             .filter(|id| logic::find_folder(&lib.metadata.folders, id).is_some_and(|f| !crate::organize::is_shut(f, &self.ws.org.unlocked)))
@@ -421,12 +421,12 @@ impl App {
 
     /// Opens Move Folder for these folders, with the sidebar's collapsed
     /// rows.
-    pub(super) fn open_mover(&mut self, ids: Vec<String>) {
+    pub(crate) fn open_mover(&mut self, ids: Vec<String>) {
         self.ws.folders.mover = Some(MoveDraft { ids, search: String::new(), collapsed: self.ws.collapsed.clone(), ask: None });
     }
 
     /// The batch rename and Move Folder dialogs.
-    pub(super) fn folder_dialogs(&mut self, ctx: &egui::Context, lib: &Library) {
+    pub(crate) fn folder_dialogs(&mut self, ctx: &egui::Context, lib: &Library) {
         self.rename_dialog(ctx, lib);
         self.move_dialog(ctx, lib);
         self.new_with_dialog(ctx);
@@ -778,7 +778,7 @@ fn case_label(c: TextCase) -> &'static str {
 
 impl App {
     /// Applies a queued multi-folder edit.
-    pub(super) fn apply_folder_action(&mut self, lib: &mut Library, a: FolderAction) -> falcon_library::Result<()> {
+    pub(crate) fn apply_folder_action(&mut self, lib: &mut Library, a: FolderAction) -> falcon_library::Result<()> {
         match a {
             FolderAction::Rename(names) => lib.rename_folders(&names),
             FolderAction::RenameSmart(names) => {

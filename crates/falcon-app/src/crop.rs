@@ -201,7 +201,7 @@ impl CropState {
 impl App {
     /// Draws the crop rectangle over the image at `shown` and handles its
     /// drags. Returns true while the tool is open, so the viewer doesn't pan.
-    pub(super) fn crop_overlay(&mut self, ui: &mut Ui, item: &Item, shown: Rect, area: Rect) -> bool {
+    pub(crate) fn crop_overlay(&mut self, ui: &mut Ui, item: &Item, shown: Rect, area: Rect) -> bool {
         let natural = vec2(item.width as f32, item.height as f32);
         let Some(crop) = self.ws.tools.crop.as_mut() else { return false };
         let p = ui.painter().clone().with_clip_rect(area);
@@ -265,7 +265,7 @@ impl App {
 
     /// The crop tool's controls in the viewer bar, right-aligned at `right`.
     /// Returns the x left of what it drew.
-    pub(super) fn crop_bar(&mut self, ui: &mut Ui, item: &Item, right: f32, cy: f32) -> f32 {
+    pub(crate) fn crop_bar(&mut self, ui: &mut Ui, item: &Item, right: f32, cy: f32) -> f32 {
         let Some(crop) = self.ws.tools.crop.as_mut() else { return right };
         let button = |ui: &mut Ui, x: f32, w: f32, label: &str, primary: bool| {
             let r = Rect::from_center_size(Pos2::new(x - w / 2.0, cy), vec2(w, 26.0));
@@ -337,7 +337,7 @@ impl App {
 
     /// Rotate and crop buttons for the viewer bar, laid out leftwards from
     /// `x`. Returns the x where the next control can go.
-    pub(super) fn rotate_crop_buttons(&mut self, ui: &mut Ui, item: &Item, mut x: f32, cy: f32) -> f32 {
+    pub(crate) fn rotate_crop_buttons(&mut self, ui: &mut Ui, item: &Item, mut x: f32, cy: f32) -> f32 {
         if transform::can_crop(&item.ext) {
             let open = self.ws.tools.crop.is_some();
             if icon_button(ui, Pos2::new(x, cy), ic::CROP, 17.0, !open, "Crop").clicked() && !open {
@@ -369,7 +369,7 @@ impl App {
     /// Rotates `ids` by `turns` quarter turns: in the preview-only mode, if
     /// they are just the image in the viewer, only how it is drawn; else the
     /// files.
-    pub(super) fn rotate_request(&mut self, ids: Vec<String>, turns: i32) {
+    pub(crate) fn rotate_request(&mut self, ids: Vec<String>, turns: i32) {
         if self.preview_only(&ids) {
             self.image.tf = self.image.tf.rotated(turns);
         } else {
@@ -378,7 +378,7 @@ impl App {
     }
 
     /// Mirrors `ids`, as [`App::rotate_request`] rotates them.
-    pub(super) fn flip_request(&mut self, ids: Vec<String>, flip: transform::Flip) {
+    pub(crate) fn flip_request(&mut self, ids: Vec<String>, flip: transform::Flip) {
         if self.preview_only(&ids) {
             self.image.tf = if flip == transform::Flip::Horizontal { self.image.tf.flipped_h() } else { self.image.tf.flipped_v() };
         } else {
@@ -392,7 +392,7 @@ impl App {
 
     /// Opens the crop tool on the whole image. A preview-only rotation is
     /// dropped first: the rectangle is in file pixels.
-    pub(super) fn start_crop(&mut self, item: &Item) {
+    pub(crate) fn start_crop(&mut self, item: &Item) {
         if item.width > 0 && item.height > 0 && transform::can_crop(&item.ext) {
             self.image.tf = ViewTransform::default();
             self.ws.tools.comment_mode = false;

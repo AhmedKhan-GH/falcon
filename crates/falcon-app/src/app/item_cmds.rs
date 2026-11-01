@@ -92,14 +92,14 @@ pub fn last_used(list: &[String], exists: impl Fn(&str) -> bool) -> Option<Strin
 
 impl App {
     /// Remembers folders items were just added to.
-    pub(super) fn note_folder_use(&mut self, ids: &[String]) {
+    pub(crate) fn note_folder_use(&mut self, ids: &[String]) {
         note_folders(&mut self.recent_folders, ids);
     }
 
     /// Eagle's Add to Last Used Folder (⇧D): the items join the folder
     /// they were last added to. On the Uncategorized page they leave the
     /// grid, so the selection moves on.
-    pub(super) fn add_to_last_used(&mut self, ids: Vec<String>) {
+    pub(crate) fn add_to_last_used(&mut self, ids: Vec<String>) {
         let Some(shared) = self.ws.lib.clone() else { return };
         let target = {
             let lib = super::lock(&shared);
@@ -121,7 +121,7 @@ impl App {
 
     /// Eagle's Rename for the selection: one item renames in the
     /// inspector's title field, several open the Rename dialog.
-    pub(super) fn rename_items(&mut self, ids: Vec<String>) {
+    pub(crate) fn rename_items(&mut self, ids: Vec<String>) {
         if ids.len() > 1 {
             self.item_rename = Some(ItemRename {
                 ids,
@@ -141,7 +141,7 @@ impl App {
 
     /// The Rename dialog for several items: a template with Eagle's tokens
     /// or a find and replace, a case change and a preview.
-    pub(super) fn item_rename_dialog(&mut self, ctx: &egui::Context, lib: &Library) {
+    pub(crate) fn item_rename_dialog(&mut self, ctx: &egui::Context, lib: &Library) {
         let Some(mut d) = self.item_rename.take() else { return };
         let items: Vec<&Item> = d.ids.iter().filter_map(|id| lib.item(id)).collect();
         let rename = d.rename();
@@ -279,7 +279,7 @@ impl App {
 
     /// Eagle's Open File Location submenu for one item: All, then each
     /// folder the item is in.
-    pub(super) fn location_menu(&mut self, ui: &mut Ui, lib: &Library, item: &Item) {
+    pub(crate) fn location_menu(&mut self, ui: &mut Ui, lib: &Library, item: &Item) {
         ui.menu_button("Open File Location", |ui| {
             if ui.button("All").clicked() {
                 self.open_item_location(&item.id, None);
@@ -299,7 +299,7 @@ impl App {
 
     /// Shows the item in All or in one of its folders, with the search and
     /// filters cleared so it is there, selected and scrolled to.
-    pub(super) fn open_item_location(&mut self, id: &str, folder: Option<String>) {
+    pub(crate) fn open_item_location(&mut self, id: &str, folder: Option<String>) {
         self.ws.filter = falcon_library::search::Filter::default();
         self.clear_media_filter_text();
         self.ws.color_text.clear();

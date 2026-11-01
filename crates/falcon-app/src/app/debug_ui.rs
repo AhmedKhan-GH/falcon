@@ -11,7 +11,7 @@ fn count_folders(folders: &[Folder]) -> usize {
 }
 
 impl App {
-    pub(super) fn export_debug_report(&mut self, ctx: &eframe::egui::Context) {
+    pub(crate) fn export_debug_report(&mut self, ctx: &eframe::egui::Context) {
         let mut dialog = rfd::FileDialog::new().set_title("Export Debug Report").set_file_name("Falcon Debug Report.zip");
         if let Some(desktop) = std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join("Desktop")) {
             dialog = dialog.set_directory(desktop);

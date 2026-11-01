@@ -57,7 +57,7 @@ fn heading(ui: &mut Ui, text: &str) {
 }
 
 impl App {
-    pub(super) fn layout_panel(&mut self, ui: &mut Ui, own: OwnSort) {
+    pub(crate) fn layout_panel(&mut self, ui: &mut Ui, own: OwnSort) {
         ui.set_min_width(250.0);
         ui.set_max_width(250.0);
         heading(ui, "Layout");
@@ -132,7 +132,7 @@ impl App {
     /// The list layout's header: a click on a column sorts by it (again
     /// flips the direction), in the open folder's or smart folder's own
     /// sort or else the global one; a right-click picks the columns.
-    pub(super) fn list_header(&mut self, ui: &mut Ui, lib: &Library) {
+    pub(crate) fn list_header(&mut self, ui: &mut Ui, lib: &Library) {
         let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 28.0), Sense::click());
         let row = Rect::from_min_max(Pos2::new(rect.left() + GRID_PAD_X, rect.top()), Pos2::new(rect.right() - GRID_PAD_X, rect.top() + 44.0));
         let own = self.own_sort(lib);

@@ -23,128 +23,128 @@ use crate::logic::{self, Layout, NavCounts, Scope};
 use falcon_library::search::{ColorQuery, Filter, Logic, OrderBy, TextFilter};
 use crate::theme::{self as t, font, mono};
 
-mod about;
-mod debug_ui;
-mod organize_ui;
-mod dupes_ui;
-mod export_ui;
-mod duplicates_view;
-mod filters_ui;
-mod filter_bar;
-mod find_cmds;
-mod quick_switch_ui;
-mod media_view;
-mod font_view;
-mod image_view;
-mod video_view;
-mod gif_view;
-mod open_ui;
-mod ext_ui;
-mod pdf_view;
-mod modes;
-mod preview_window;
-mod import_ui;
-mod empty_view;
-mod drop_hint;
-mod folders_ui;
-mod layout_panel;
-mod library_ui;
-mod text_view;
-mod tag_picker;
-mod library_dialogs;
+pub(crate) mod about;
+pub(crate) mod debug_ui;
+pub(crate) mod organize_ui;
+pub(crate) mod dupes_ui;
+pub(crate) mod export_ui;
+pub(crate) mod duplicates_view;
+pub(crate) mod filters_ui;
+pub(crate) mod filter_bar;
+pub(crate) mod find_cmds;
+pub(crate) mod quick_switch_ui;
+pub(crate) mod media_view;
+pub(crate) mod font_view;
+pub(crate) mod image_view;
+pub(crate) mod video_view;
+pub(crate) mod gif_view;
+pub(crate) mod open_ui;
+pub(crate) mod ext_ui;
+pub(crate) mod pdf_view;
+pub(crate) mod modes;
+pub(crate) mod preview_window;
+pub(crate) mod import_ui;
+pub(crate) mod empty_view;
+pub(crate) mod drop_hint;
+pub(crate) mod folders_ui;
+pub(crate) mod layout_panel;
+pub(crate) mod library_ui;
+pub(crate) mod text_view;
+pub(crate) mod tag_picker;
+pub(crate) mod library_dialogs;
 #[path = "../comments.rs"]
-mod comments;
+pub(crate) mod comments;
 #[path = "../covers.rs"]
-mod covers;
+pub(crate) mod covers;
 #[path = "../crop.rs"]
-mod crop;
+pub(crate) mod crop;
 #[path = "../image_edit.rs"]
-mod image_edit;
-mod item_cmds;
+pub(crate) mod image_edit;
+pub(crate) mod item_cmds;
 
 /// Grid geometry, measured from Eagle at 1280 x 800.
-const GRID_PAD_X: f32 = 17.0;
-const GRID_PAD_TOP: f32 = 4.0;
-const GRID_GAP: f32 = 8.0;
-const ROW_GAP: f32 = 10.0;
-const TILE_MIN: f32 = 80.0;
-const TILE_MAX: f32 = 400.0;
+pub(crate) const GRID_PAD_X: f32 = 17.0;
+pub(crate) const GRID_PAD_TOP: f32 = 4.0;
+pub(crate) const GRID_GAP: f32 = 8.0;
+pub(crate) const ROW_GAP: f32 = 10.0;
+pub(crate) const TILE_MIN: f32 = 80.0;
+pub(crate) const TILE_MAX: f32 = 400.0;
 /// An action on this many items or more asks first (Eagle's bulk confirm).
-const BULK_CONFIRM: usize = 100;
+pub(crate) const BULK_CONFIRM: usize = 100;
 
 /// What falcon remembers between launches, as Eagle does: the open
 /// libraries, zoom, sort and panel layout.
 #[derive(serde::Serialize, serde::Deserialize, Default)]
 #[serde(default)]
-struct Saved {
+pub(crate) struct Saved {
     /// The library being shown. Also all that state saved before several
     /// libraries could be open has (see `workspaces::restore`).
-    library: Option<PathBuf>,
+    pub(crate) library: Option<PathBuf>,
     /// Every open library, in switcher order, and which one is shown.
-    libraries: Vec<PathBuf>,
-    active: Option<usize>,
-    tile: Option<f32>,
-    sort: Option<String>,
-    increase: Option<bool>,
-    show_sidebar: Option<bool>,
-    show_inspector: Option<bool>,
+    pub(crate) libraries: Vec<PathBuf>,
+    pub(crate) active: Option<usize>,
+    pub(crate) tile: Option<f32>,
+    pub(crate) sort: Option<String>,
+    pub(crate) increase: Option<bool>,
+    pub(crate) show_sidebar: Option<bool>,
+    pub(crate) show_inspector: Option<bool>,
     /// Whether the Quick Access list is folded away, as Eagle remembers.
-    quick_collapsed: bool,
+    pub(crate) quick_collapsed: bool,
     /// Panel widths as last dragged.
-    sidebar_width: Option<f32>,
-    inspector_width: Option<f32>,
-    collapsed: Vec<String>,
-    recent: Vec<PathBuf>,
+    pub(crate) sidebar_width: Option<f32>,
+    pub(crate) inspector_width: Option<f32>,
+    pub(crate) collapsed: Vec<String>,
+    pub(crate) recent: Vec<PathBuf>,
     /// Folder ids items were last added to, newest first (Eagle's
     /// `recentMoveFolders`), for Add to Last Used Folder.
-    recent_folders: Vec<String>,
+    pub(crate) recent_folders: Vec<String>,
     /// The one layout falcon kept before layouts were remembered per view;
     /// now only the fallback for a library with none of its own.
-    layout: Option<Layout>,
+    pub(crate) layout: Option<Layout>,
     /// Layouts by folder or smart folder id, or by library path for the
     /// other pages (`logic::layout_for`).
-    layouts: HashMap<String, Layout>,
+    pub(crate) layouts: HashMap<String, Layout>,
     /// The grid display options of the layout panel.
-    display: logic::Display,
-    prefs: crate::prefs::Prefs,
+    pub(crate) display: logic::Display,
+    pub(crate) prefs: crate::prefs::Prefs,
     /// The Preferences pane shown last.
-    prefs_pane: crate::prefs::Section,
+    pub(crate) prefs_pane: crate::prefs::Section,
     /// Where the collect window was last.
-    collect_pos: Option<[f32; 2]>,
+    pub(crate) collect_pos: Option<[f32; 2]>,
     /// Changed keyboard shortcuts (see `shortcuts.rs`).
-    shortcuts: crate::shortcuts::Shortcuts,
+    pub(crate) shortcuts: crate::shortcuts::Shortcuts,
     /// The video player's volume, loop setting and mute.
-    video_volume: Option<f32>,
-    video_loop: Option<bool>,
-    video_muted: Option<bool>,
+    pub(crate) video_volume: Option<f32>,
+    pub(crate) video_loop: Option<bool>,
+    pub(crate) video_muted: Option<bool>,
     /// Where each video was left (Preferences ▸ Preview ▸ resume).
-    video_positions: video_view::Positions,
+    pub(crate) video_positions: video_view::Positions,
     /// The PDF reader's last page and zoom of recent documents.
-    pdf_marks: Vec<pdf_view::Mark>,
+    pub(crate) pdf_marks: Vec<pdf_view::Mark>,
     /// The image viewer's "fit to window edge" mode, kept like Eagle's
     /// `eagle.viewer.lastZoomMode`.
-    zoom_edge: Option<bool>,
+    pub(crate) zoom_edge: Option<bool>,
     /// The text viewer's text size (`textdoc::zoom_scale`).
-    text_zoom: Option<u8>,
+    pub(crate) text_zoom: Option<u8>,
     /// Files the auto-import folder has handed over (`auto_import.rs`).
-    auto_imported: crate::auto_import::Imported,
+    pub(crate) auto_imported: crate::auto_import::Imported,
     /// The font viewer's tab and theme.
-    font_look: Option<font_view::FontLook>,
+    pub(crate) font_look: Option<font_view::FontLook>,
     /// The image viewer's navigator is hidden (Eagle's `isHideNavigator`).
-    hide_navigator: Option<bool>,
+    pub(crate) hide_navigator: Option<bool>,
     /// Search scope, pinned filters and Go to Folder history.
-    search: crate::search_state::SearchPrefs,
+    pub(crate) search: crate::search_state::SearchPrefs,
     /// Recently Used, per library (`recent.rs`).
-    recent_items: crate::recent::RecentItems,
+    pub(crate) recent_items: crate::recent::RecentItems,
     /// Which inspector sections are folded away, for every library.
-    folds: Folds,
+    pub(crate) folds: Folds,
     /// The welcome flow was finished.
-    welcomed: bool,
+    pub(crate) welcomed: bool,
 }
 
 /// An inspector section whose title folds it away.
 #[derive(Clone, Copy)]
-enum Fold {
+pub(crate) enum Fold {
     Properties,
     Tags,
     Folders,
@@ -155,15 +155,15 @@ enum Fold {
 /// state from before they could fold, and a new section, start expanded.
 #[derive(serde::Serialize, serde::Deserialize, Default, Clone, Copy, PartialEq, Debug)]
 #[serde(default)]
-struct Folds {
-    properties: bool,
-    tags: bool,
-    folders: bool,
-    comments: bool,
+pub(crate) struct Folds {
+    pub(crate) properties: bool,
+    pub(crate) tags: bool,
+    pub(crate) folders: bool,
+    pub(crate) comments: bool,
 }
 
 impl Folds {
-    fn closed(&mut self, which: Fold) -> &mut bool {
+    pub(crate) fn closed(&mut self, which: Fold) -> &mut bool {
         match which {
             Fold::Properties => &mut self.properties,
             Fold::Tags => &mut self.tags,
@@ -175,26 +175,26 @@ impl Folds {
 
 /// A rubber-band selection in progress: where it started, in the grid's
 /// content space, and the selection it started from.
-struct Marquee {
-    start: Pos2,
-    base: Vec<String>,
-    mode: logic::MarqueeMode,
+pub(crate) struct Marquee {
+    pub(crate) start: Pos2,
+    pub(crate) base: Vec<String>,
+    pub(crate) mode: logic::MarqueeMode,
 }
 
 /// Ids being dragged from the grid.
 #[derive(Clone)]
-struct DragItems(Vec<String>);
+pub(crate) struct DragItems(pub(crate) Vec<String>);
 
 /// A folder being dragged in the sidebar.
 #[derive(Clone)]
-struct DragFolder(String);
+pub(crate) struct DragFolder(pub(crate) String);
 
 /// A Quick Access row being dragged, by the id it pins.
 #[derive(Clone)]
-struct DragQuick(String);
+pub(crate) struct DragQuick(pub(crate) String);
 
 /// Library changes requested while drawing, applied at the end of a frame.
-enum Action {
+pub(crate) enum Action {
     CreateFolder { parent: Option<String> },
     /// A new folder right after this one, among its siblings.
     CreateSibling(String),
@@ -284,7 +284,7 @@ pub struct Launch {
 
 /// A library change requested from the library menu or a shortcut,
 /// applied once the frame is done.
-enum Switch {
+pub(crate) enum Switch {
     Open(PathBuf),
     Pick,
     Create,
@@ -298,22 +298,22 @@ enum Switch {
 
 /// Background import counters.
 #[derive(Default)]
-struct Progress {
-    total: usize,
-    done: usize,
-    failed: usize,
-    current: String,
+pub(crate) struct Progress {
+    pub(crate) total: usize,
+    pub(crate) done: usize,
+    pub(crate) failed: usize,
+    pub(crate) current: String,
     /// Every failed import since the list was last cleared, kept across
     /// batches like Eagle's error list (`import_ui.rs` shows it).
-    errors: Vec<import_ui::ImportError>,
+    pub(crate) errors: Vec<import_ui::ImportError>,
     /// Ids of the items added in this batch, for auto-select.
-    added: Vec<String>,
+    pub(crate) added: Vec<String>,
 }
 
 /// The input events a key press of `chord` makes, as egui-winit sends
 /// them: ⌘C, ⌘X and ⌘V become clipboard events, and a bare printable key
 /// also types its character.
-fn key_events(chord: &egui::KeyboardShortcut) -> Vec<egui::Event> {
+pub(crate) fn key_events(chord: &egui::KeyboardShortcut) -> Vec<egui::Event> {
     let m = chord.modifiers;
     let modifiers = Modifiers { mac_cmd: m.command && cfg!(target_os = "macos"), ..m };
     let command_only = m.command && !m.shift && !m.alt && !m.ctrl;
@@ -337,7 +337,7 @@ fn key_events(chord: &egui::KeyboardShortcut) -> Vec<egui::Event> {
 
 /// Whether some of `ids` can be flipped, some rotated, and (one item)
 /// cropped.
-fn editable_now(ids: &[String], lib: &Library) -> [bool; 3] {
+pub(crate) fn editable_now(ids: &[String], lib: &Library) -> [bool; 3] {
     use falcon_library::transform::{can_crop, can_flip, can_rotate};
     let ext = |id: &String| lib.item(id).map(|i| i.ext.as_str());
     [
@@ -349,7 +349,7 @@ fn editable_now(ids: &[String], lib: &Library) -> [bool; 3] {
 
 /// The book in `docs/` next to the sources: the built one if there is
 /// one, else its source folder. `None` when falcon runs elsewhere.
-fn docs_path() -> Option<&'static std::path::Path> {
+pub(crate) fn docs_path() -> Option<&'static std::path::Path> {
     static DOCS: std::sync::OnceLock<Option<PathBuf>> = std::sync::OnceLock::new();
     DOCS.get_or_init(|| {
         let docs = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs");
@@ -359,7 +359,7 @@ fn docs_path() -> Option<&'static std::path::Path> {
 }
 
 /// The parent of the open folder or smart folder, as a scope.
-fn parent_scope(scope: &Scope, lib: &Library) -> Option<Scope> {
+pub(crate) fn parent_scope(scope: &Scope, lib: &Library) -> Option<Scope> {
     use crate::organize::locate;
     match scope {
         Scope::Folder(id) => locate(&lib.metadata.folders, id).and_then(|(p, _)| p).map(|p| Scope::Folder(p.to_string())),
@@ -369,7 +369,7 @@ fn parent_scope(scope: &Scope, lib: &Library) -> Option<Scope> {
 }
 
 /// The toast after a rating key or menu item.
-fn rated_note(stars: u8) -> String {
+pub(crate) fn rated_note(stars: u8) -> String {
     match stars {
         0 => "Removed the rating".into(),
         1 => "Rated 1 star".into(),
@@ -379,49 +379,49 @@ fn rated_note(stars: u8) -> String {
 
 /// What the toast says when opening a library restored its damaged
 /// `metadata.json` from `backup` (see `Library::open_or_restore`).
-fn restored_note(backup: &std::path::Path) -> String {
+pub(crate) fn restored_note(backup: &std::path::Path) -> String {
     let lib = backup.parent().and_then(std::path::Path::parent).and_then(|p| p.file_stem()).map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
     let name = backup.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
     format!("{lib}'s metadata.json was damaged and was restored from backup/{name}; the damaged file was kept in backup/")
 }
 
-fn is_hidden(p: &std::path::Path) -> bool {
+pub(crate) fn is_hidden(p: &std::path::Path) -> bool {
     p.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.'))
 }
 
 /// Zoom, pan and animation of the image viewer.
 #[derive(Default)]
-struct ViewState {
+pub(crate) struct ViewState {
     /// Item the state belongs to; reset when another item opens.
-    id: String,
+    pub(crate) id: String,
     /// Scale relative to the image's pixels; `None` fits the window.
-    zoom: Option<f32>,
-    pan: Vec2,
+    pub(crate) zoom: Option<f32>,
+    pub(crate) pan: Vec2,
     /// The animation playing, for GIFs, animated WebPs and APNGs (see
     /// `anim.rs`).
-    anim: Option<crate::anim::Player>,
+    pub(crate) anim: Option<crate::anim::Player>,
     /// The GIF player bar's drag state.
-    gif: gif_view::GifUi,
+    pub(crate) gif: gif_view::GifUi,
     /// The item's original, for the bar's open button.
-    file: PathBuf,
+    pub(crate) file: PathBuf,
     /// A zoom key pressed this frame, for the image viewer.
-    zoom_key: Option<logic::ViewZoom>,
+    pub(crate) zoom_key: Option<logic::ViewZoom>,
 }
 
 /// The smart-folder dialog's state.
 #[derive(Clone)]
-struct SmartDraft {
+pub(crate) struct SmartDraft {
     /// The smart folder being edited; `None` creates a new one.
-    editing: Option<String>,
-    name: String,
+    pub(crate) editing: Option<String>,
+    pub(crate) name: String,
     /// Every condition, in the editable form that writes back unchanged
     /// parts verbatim (see `falcon_library::smart_draft`).
-    conditions: Vec<ConditionDraft>,
+    pub(crate) conditions: Vec<ConditionDraft>,
     /// The parent smart folder (`None` is the top level), and where it was.
-    parent: Option<String>,
-    orig_parent: Option<String>,
-    icon: Option<String>,
-    color: Option<String>,
+    pub(crate) parent: Option<String>,
+    pub(crate) orig_parent: Option<String>,
+    pub(crate) icon: Option<String>,
+    pub(crate) color: Option<String>,
 }
 
 impl Default for SmartDraft {
@@ -440,7 +440,7 @@ impl Default for SmartDraft {
 
 impl SmartDraft {
     /// Fills the dialog from a stored smart folder, every condition included.
-    fn from_folder(sf: &falcon_library::smart::SmartFolder) -> SmartDraft {
+    pub(crate) fn from_folder(sf: &falcon_library::smart::SmartFolder) -> SmartDraft {
         SmartDraft {
             editing: Some(sf.id.clone()),
             name: sf.name.clone(),
@@ -454,7 +454,7 @@ impl SmartDraft {
 
 /// A destructive action waiting for the user to confirm it.
 #[derive(Clone)]
-enum Confirm {
+pub(crate) enum Confirm {
     /// Folders to delete; the dialog asks whether their items go to the
     /// Trash too.
     DeleteFolders(Vec<String>),
@@ -471,145 +471,145 @@ enum Confirm {
 }
 
 /// Uncommitted inspector text for one item.
-struct EditBuf {
-    id: String,
-    name: String,
-    notes: String,
-    url: String,
+pub(crate) struct EditBuf {
+    pub(crate) id: String,
+    pub(crate) name: String,
+    pub(crate) notes: String,
+    pub(crate) url: String,
 }
 
 /// Uncommitted multi-selection inspector text: the items, then the note
 /// and URL as shown (their shared value, or empty) and as typed.
-struct MultiEditBuf {
-    ids: Vec<String>,
-    shown: (String, String),
-    notes: String,
-    url: String,
+pub(crate) struct MultiEditBuf {
+    pub(crate) ids: Vec<String>,
+    pub(crate) shown: (String, String),
+    pub(crate) notes: String,
+    pub(crate) url: String,
 }
 
 /// Uncommitted folder inspector text: `(id, name, description, smart)`, for
 /// a folder or (`smart`) a smart folder.
-type FolderEditBuf = (String, String, String, bool);
+pub(crate) type FolderEditBuf = (String, String, String, bool);
 
 /// Everything that belongs to one open library: the library itself, where
 /// the user is in it, what is selected, its undo history, its dialogs and
 /// its image caches. The app draws one workspace at a time.
-struct Workspace {
-    lib: Option<Shared>,
+pub(crate) struct Workspace {
+    pub(crate) lib: Option<Shared>,
     /// `lib`'s root when it was opened here. The HTTP API can put another
     /// library into `lib` (`library/switch`); the app notices the change.
-    root: Option<PathBuf>,
-    loader: Loader,
-    scope: Scope,
-    back: Vec<Scope>,
-    forward: Vec<Scope>,
-    query: String,
-    sort: OrderBy,
-    layout: Layout,
+    pub(crate) root: Option<PathBuf>,
+    pub(crate) loader: Loader,
+    pub(crate) scope: Scope,
+    pub(crate) back: Vec<Scope>,
+    pub(crate) forward: Vec<Scope>,
+    pub(crate) query: String,
+    pub(crate) sort: OrderBy,
+    pub(crate) layout: Layout,
     /// Eagle's `sortIncrease`: time keys newest first, others ascending.
-    increase: bool,
-    filter: Filter,
-    show_filter: bool,
+    pub(crate) increase: bool,
+    pub(crate) filter: Filter,
+    pub(crate) show_filter: bool,
     /// Hex text typed into the colour filter.
-    color_text: String,
+    pub(crate) color_text: String,
     /// Keyword text typed into the Notes and URL filters.
-    note_text: String,
-    url_text: String,
-    selected: Vec<String>,
-    anchor: Option<String>,
-    viewer: Option<String>,
-    collapsed: HashSet<String>,
-    folder_filter: String,
-    edit: Option<EditBuf>,
-    multi_edit: Option<MultiEditBuf>,
-    folder_edit: Option<FolderEditBuf>,
-    status: Option<crate::toast::Toast>,
+    pub(crate) note_text: String,
+    pub(crate) url_text: String,
+    pub(crate) selected: Vec<String>,
+    pub(crate) anchor: Option<String>,
+    pub(crate) viewer: Option<String>,
+    pub(crate) collapsed: HashSet<String>,
+    pub(crate) folder_filter: String,
+    pub(crate) edit: Option<EditBuf>,
+    pub(crate) multi_edit: Option<MultiEditBuf>,
+    pub(crate) folder_edit: Option<FolderEditBuf>,
+    pub(crate) status: Option<crate::toast::Toast>,
     /// Ids in grid order, refreshed every frame.
-    order: Vec<String>,
-    columns: usize,
-    scroll_to: Option<String>,
+    pub(crate) order: Vec<String>,
+    pub(crate) columns: usize,
+    pub(crate) scroll_to: Option<String>,
     /// The rubber band being dragged over the grid, if any.
-    marquee: Option<Marquee>,
+    pub(crate) marquee: Option<Marquee>,
     /// Where ⌥↑ goes: the open folder's (or smart folder's) parent.
     /// Refreshed each frame while the library is locked.
-    up: Option<Scope>,
+    pub(crate) up: Option<Scope>,
     /// Whether some of the items acted on can be flipped, some rotated, and
     /// the one item cropped (for the menu bar). Refreshed with `up`.
-    editable: [bool; 3],
+    pub(crate) editable: [bool; 3],
     /// A Home, End, Page Up or Page Down for the grid, applied next frame.
-    scroll: Option<crate::shortcuts::Scroll>,
+    pub(crate) scroll: Option<crate::shortcuts::Scroll>,
     /// Images needed this frame, handed to the loader once at the end.
-    frame_jobs: Vec<crate::loader::Job>,
-    actions: Vec<Action>,
+    pub(crate) frame_jobs: Vec<crate::loader::Job>,
+    pub(crate) actions: Vec<Action>,
     /// Folder being renamed in the sidebar, with the text typed so far.
-    renaming: Option<(String, String)>,
+    pub(crate) renaming: Option<(String, String)>,
     /// Subfolder card being renamed above the grid, with the text so far.
-    strip_rename: Option<(String, String)>,
-    confirm: Option<Confirm>,
+    pub(crate) strip_rename: Option<(String, String)>,
+    pub(crate) confirm: Option<Confirm>,
     /// Actions held back until the bulk dialog is answered, with the number
     /// of items they change (`App::push_bulk`).
-    bulk: Option<(usize, Vec<Action>)>,
-    smart_dialog: Option<SmartDraft>,
-    view: ViewState,
+    pub(crate) bulk: Option<(usize, Vec<Action>)>,
+    pub(crate) smart_dialog: Option<SmartDraft>,
+    pub(crate) view: ViewState,
     /// The GIF player turned on with the viewer's toolbar button, until
     /// the viewer closes (Eagle's `usingGifPlayer`).
-    gif_player: bool,
+    pub(crate) gif_player: bool,
     /// Animated grid cards and hover previews playing (see `anim.rs`).
-    cards: crate::anim::Cards,
+    pub(crate) cards: crate::anim::Cards,
     /// Focus the inspector's title field next frame (F2).
-    focus_title: bool,
+    pub(crate) focus_title: bool,
     /// The Change Extension dialog (`ext_ui.rs`).
-    ext_dialog: Option<ext_ui::ExtDialog>,
+    pub(crate) ext_dialog: Option<ext_ui::ExtDialog>,
     /// The tag picker (`tag_picker.rs`).
-    picker: tag_picker::TagPicker,
-    progress: Arc<Mutex<Progress>>,
+    pub(crate) picker: tag_picker::TagPicker,
+    pub(crate) progress: Arc<Mutex<Progress>>,
     /// Imported files found already in the library, waiting to be asked
     /// about (`import_dupes`), and the dialog asking.
-    dupes: crate::import_dupes::Queue,
-    dup_dialog: Option<crate::import_dupes::Dialog>,
+    pub(crate) dupes: crate::import_dupes::Queue,
+    pub(crate) dup_dialog: Option<crate::import_dupes::Dialog>,
     /// Tag being renamed on the All Tags page, with the new name so far.
-    tag_rename: Option<(String, String)>,
-    tag_filter: String,
+    pub(crate) tag_rename: Option<(String, String)>,
+    pub(crate) tag_filter: String,
     /// The enlarged preview of a hovered card (see `hover.rs`).
-    hover: crate::hover::Hover,
+    pub(crate) hover: crate::hover::Hover,
     /// Edits that ⌘Z reverts, newest last, and what ⇧⌘Z redoes.
-    undo: Vec<Transaction>,
-    redo: Vec<Transaction>,
+    pub(crate) undo: Vec<Transaction>,
+    pub(crate) redo: Vec<Transaction>,
     /// ⌘Z (true) or ⇧⌘Z (false) pressed, applied once the library is locked.
-    undo_request: Option<bool>,
+    pub(crate) undo_request: Option<bool>,
     /// The library the undo history belongs to.
-    undo_root: Option<PathBuf>,
+    pub(crate) undo_root: Option<PathBuf>,
     /// Labels of the actions applied this frame, naming its transaction.
-    frame_labels: Vec<String>,
+    pub(crate) frame_labels: Vec<String>,
     /// Unlocked folders and the organising dialogs (see `organize_ui`).
-    org: organize_ui::OrgState,
+    pub(crate) org: organize_ui::OrgState,
     /// Text typed into the Date, Duration, Camera and Font chips.
-    filter_ui: filters_ui::MediaFilterUi,
+    pub(crate) filter_ui: filters_ui::MediaFilterUi,
     /// Waveforms for the viewer, and its font specimen.
-    waveforms: crate::audio::Waveforms,
-    font_view: font_view::FontView,
+    pub(crate) waveforms: crate::audio::Waveforms,
+    pub(crate) font_view: font_view::FontView,
     /// The text item open in the viewer and its unsaved typing.
-    text: Option<text_view::TextView>,
+    pub(crate) text: Option<text_view::TextView>,
     /// The Duplicates page's hash cache and results.
-    duplicates: duplicates_view::Duplicates,
+    pub(crate) duplicates: duplicates_view::Duplicates,
     /// Comment mode, crop tool and comment editing (`image_edit.rs`).
-    tools: image_edit::Tools,
+    pub(crate) tools: image_edit::Tools,
     /// When `metadata.json` is next backed up (see `backups.rs`).
-    backup: crate::backups::Schedule,
+    pub(crate) backup: crate::backups::Schedule,
     /// Export requests, prompts and the background copy (`export_ui`).
-    export: export_ui::ExportState,
+    pub(crate) export: export_ui::ExportState,
     /// Folders and smart folders picked with ⌘ and ⇧ (`folders_ui`).
-    folders: folders_ui::FolderUi,
+    pub(crate) folders: folders_ui::FolderUi,
     /// Polls the library for changes made by other apps (`watch.rs`).
-    watch: Option<crate::watch::Watcher>,
+    pub(crate) watch: Option<crate::watch::Watcher>,
     /// The storage checks run when the library opened (`storage.rs`),
     /// until their result is taken.
-    health: Option<std::sync::mpsc::Receiver<Vec<crate::storage::Warning>>>,
+    pub(crate) health: Option<std::sync::mpsc::Receiver<Vec<crate::storage::Warning>>>,
 }
 
 impl Workspace {
     /// A fresh workspace for `lib` (or the empty window when `None`).
-    fn new(ctx: &egui::Context, lib: Option<Shared>) -> Self {
+    pub(crate) fn new(ctx: &egui::Context, lib: Option<Shared>) -> Self {
         let root = lib.as_ref().map(|l| lock(l).root().to_path_buf());
         let watch = root.clone().map(|r| {
             let ctx = ctx.clone();
@@ -693,7 +693,7 @@ impl Workspace {
     /// Flushes pending writes and takes a backup now if a write is waiting
     /// for one, on this thread: the library is closing or the app saving
     /// its state (also on quit), and a background copy might not finish.
-    fn flush_and_backup(&mut self) -> falcon_library::Result<()> {
+    pub(crate) fn flush_and_backup(&mut self) -> falcon_library::Result<()> {
         let Some(l) = self.lib.clone() else { return Ok(()) };
         if let Some(text) = &mut self.text {
             text.save(&mut lock(&l))?;
@@ -713,145 +713,145 @@ impl Workspace {
 
 pub struct App {
     /// The library being drawn, with all its per-library state.
-    ws: Workspace,
+    pub(crate) ws: Workspace,
     /// The other open libraries, kept whole while hidden.
-    others: crate::workspaces::Parked<Workspace>,
+    pub(crate) others: crate::workspaces::Parked<Workspace>,
     /// The window title last sent, so it is only sent on change.
-    title: String,
+    pub(crate) title: String,
     /// Open the library switcher next frame (⌘L).
-    open_switcher: bool,
+    pub(crate) open_switcher: bool,
     /// The local HTTP API for the shown library, as Eagle runs it.
-    server: Option<falcon_server::Handle>,
-    ctx: egui::Context,
-    error: Option<String>,
-    tile: f32,
-    show_sidebar: bool,
-    show_inspector: bool,
+    pub(crate) server: Option<falcon_server::Handle>,
+    pub(crate) ctx: egui::Context,
+    pub(crate) error: Option<String>,
+    pub(crate) tile: f32,
+    pub(crate) show_sidebar: bool,
+    pub(crate) show_inspector: bool,
     /// The Quick Access list is folded to its header.
-    quick_collapsed: bool,
+    pub(crate) quick_collapsed: bool,
     /// The last answer to the Move to Trash question in a folder (take the
     /// items out of the folder only), kept while falcon runs, as Eagle does.
-    trash_folder_only: bool,
+    pub(crate) trash_folder_only: bool,
     /// The sidebar's and inspector's widths, dragged by their inner edge.
-    sidebar_width: f32,
-    inspector_width: f32,
-    focus_search: bool,
+    pub(crate) sidebar_width: f32,
+    pub(crate) inspector_width: f32,
+    pub(crate) focus_search: bool,
     /// Focus the sidebar's folder filter next frame (Find ▸ Filter Sidebar).
-    focus_folder_filter: bool,
+    pub(crate) focus_folder_filter: bool,
     /// Go to Folder (`quick_switch_ui.rs`).
-    quick: quick_switch_ui::QuickSwitch,
+    pub(crate) quick: quick_switch_ui::QuickSwitch,
     /// Eagle's in-app tag clipboard (Copy Tags), shared by the open
     /// libraries; the text also goes to the system clipboard.
-    copied_tags: Option<Vec<String>>,
+    pub(crate) copied_tags: Option<Vec<String>>,
     /// Set while a drag out of the window is in progress.
-    native_drag: Arc<std::sync::atomic::AtomicBool>,
+    pub(crate) native_drag: Arc<std::sync::atomic::AtomicBool>,
     /// Background downloads of iCloud originals (`icloud.rs`).
-    fetches: crate::icloud::Fetches,
+    pub(crate) fetches: crate::icloud::Fetches,
     /// Open With lists by extension (`open_with.rs`).
-    open_apps: crate::open_with::AppCache,
+    pub(crate) open_apps: crate::open_with::AppCache,
     /// Recently opened libraries, newest first.
-    recent: Vec<PathBuf>,
+    pub(crate) recent: Vec<PathBuf>,
     /// Folders items were last added to, newest first (`item_cmds.rs`).
-    recent_folders: Vec<String>,
+    pub(crate) recent_folders: Vec<String>,
     /// The Rename dialog for several items, and the template it used last.
-    item_rename: Option<item_cmds::ItemRename>,
-    rename_template: String,
+    pub(crate) item_rename: Option<item_cmds::ItemRename>,
+    pub(crate) rename_template: String,
     /// Items opened in each library, for Recently Used (`recent.rs`).
-    recent_items: crate::recent::RecentItems,
+    pub(crate) recent_items: crate::recent::RecentItems,
     /// How long the viewer has shown its item, so it counts as used.
-    view_timer: crate::recent::ViewTimer,
+    pub(crate) view_timer: crate::recent::ViewTimer,
     /// The Recently Used list as it was when the page was opened, so
     /// items viewed from it don't jump to the top under the user (opening
     /// the page again refreshes it).
-    recent_shown: Option<(PathBuf, Vec<String>)>,
+    pub(crate) recent_shown: Option<(PathBuf, Vec<String>)>,
     /// The Clear Library History dialog is showing.
-    clear_history_open: bool,
+    pub(crate) clear_history_open: bool,
     /// The libraries' `icon.png` textures.
-    lib_icons: crate::library_icons::LibraryIcons,
+    pub(crate) lib_icons: crate::library_icons::LibraryIcons,
     /// What to open once the frame is done (it replaces the library being
     /// drawn).
-    switch_to: Option<Switch>,
+    pub(crate) switch_to: Option<Switch>,
     /// The create-library dialog and its follow-up steps.
-    dialogs: library_dialogs::State,
+    pub(crate) dialogs: library_dialogs::State,
     /// Whether the welcome flow has been finished (or skipped by having
     /// used falcon before).
-    welcomed: bool,
-    prefs: crate::prefs::Prefs,
+    pub(crate) welcomed: bool,
+    pub(crate) prefs: crate::prefs::Prefs,
     /// Search scope, pinned filters and Go to Folder history.
-    search: crate::search_state::SearchPrefs,
-    prefs_window: crate::prefs::Window,
+    pub(crate) search: crate::search_state::SearchPrefs,
+    pub(crate) prefs_window: crate::prefs::Window,
     /// The app lock (Preferences ▸ Password).
-    lock: crate::applock::Lock,
-    shortcuts: crate::shortcuts::Shortcuts,
+    pub(crate) lock: crate::applock::Lock,
+    pub(crate) shortcuts: crate::shortcuts::Shortcuts,
     /// The small always-on-top drop window (see `collect.rs`).
-    collect: crate::collect::Collect,
+    pub(crate) collect: crate::collect::Collect,
     /// Name, description and tags the collect window adds to the import
     /// it is starting; set only for that call.
-    collect_extra: Option<crate::collect::Meta>,
+    pub(crate) collect_extra: Option<crate::collect::Meta>,
     /// Audio playback for the viewer.
-    audio: crate::audio::Audio,
+    pub(crate) audio: crate::audio::Audio,
     /// Video playback for the viewer (`video_view.rs`).
-    video: video_view::VideoState,
+    pub(crate) video: video_view::VideoState,
     /// The font viewer's tab and theme, kept across fonts and launches.
-    font_look: font_view::FontLook,
+    pub(crate) font_look: font_view::FontLook,
     /// The PDF reader for the viewer (`pdf_view.rs`).
-    pdf: pdf_view::PdfState,
+    pub(crate) pdf: pdf_view::PdfState,
     /// The image viewer's zoom mode and remembered views (`image_view.rs`).
-    image: image_view::ImageState,
+    pub(crate) image: image_view::ImageState,
     /// Drop targets and other import state (`import_ui.rs`).
-    imports: import_ui::Imports,
+    pub(crate) imports: import_ui::Imports,
     /// The macOS menu bar (`menu.rs`).
-    menu_bar: crate::menu::Bar,
+    pub(crate) menu_bar: crate::menu::Bar,
     /// Layouts remembered per view, the fallback from before, and the
     /// display options (see `layout_panel.rs`).
-    layouts: HashMap<String, Layout>,
-    legacy_layout: Option<Layout>,
-    display: logic::Display,
+    pub(crate) layouts: HashMap<String, Layout>,
+    pub(crate) legacy_layout: Option<Layout>,
+    pub(crate) display: logic::Display,
     /// Reload the shown library from disk next frame (the layout panel's
     /// Refresh).
-    refresh: bool,
+    pub(crate) refresh: bool,
     /// The text viewer's zoom level, kept across items and launches.
-    text_zoom: u8,
+    pub(crate) text_zoom: u8,
     /// Inspector sections folded away (`Folds`).
-    folds: Folds,
+    pub(crate) folds: Folds,
     /// The thread watching the shown library's auto-import folder.
-    auto_import: Option<crate::auto_import::Watcher>,
+    pub(crate) auto_import: Option<crate::auto_import::Watcher>,
     /// Files it has handed over, shared with the thread and saved.
-    auto_imported: Arc<Mutex<crate::auto_import::Imported>>,
+    pub(crate) auto_imported: Arc<Mutex<crate::auto_import::Imported>>,
     /// A folder that couldn't be watched and was reported, so it isn't
     /// checked again until the preferences change.
-    auto_import_refused: Option<PathBuf>,
+    pub(crate) auto_import_refused: Option<PathBuf>,
     /// Presentation mode and the other View modes (`modes.rs`).
-    modes: modes::Modes,
+    pub(crate) modes: modes::Modes,
     /// The item open in its own window (`preview_window.rs`).
-    preview: Option<preview_window::PreviewWin>,
+    pub(crate) preview: Option<preview_window::PreviewWin>,
 
     /// The About window is open, and its icon once loaded (`about.rs`).
-    about: bool,
-    about_icon: Option<egui::TextureHandle>,
+    pub(crate) about: bool,
+    pub(crate) about_icon: Option<egui::TextureHandle>,
     /// What the arrow keys act on (Eagle's focus zones).
-    zone: logic::Zone,
+    pub(crate) zone: logic::Zone,
     /// The views of the sidebar's visible rows this frame, top to bottom,
     /// for ↑ and ↓ while the sidebar has the keys.
-    side_rows: Vec<Scope>,
+    pub(crate) side_rows: Vec<Scope>,
     /// The row the keys last opened, and whether to scroll it into view.
-    side_cursor: Option<usize>,
-    side_reveal: bool,
+    pub(crate) side_cursor: Option<usize>,
+    pub(crate) side_reveal: bool,
     /// A notice to acknowledge (`library_ui.rs`).
-    alert: Option<library_ui::Alert>,
+    pub(crate) alert: Option<library_ui::Alert>,
     /// Reload the shown library from disk next frame: a `metadata.json`
     /// write was refused because the file changed elsewhere.
-    conflict_reload: bool,
+    pub(crate) conflict_reload: bool,
     /// A library that can't be found, for the missing-library screen.
-    missing: Option<PathBuf>,
+    pub(crate) missing: Option<PathBuf>,
     /// A merge of another library in progress (`library_ui.rs`).
-    merge: Option<library_ui::Merge>,
+    pub(crate) merge: Option<library_ui::Merge>,
     /// An `.eaglepack` import waiting for an answer.
-    pack_ask: Option<library_ui::PackAsk>,
+    pub(crate) pack_ask: Option<library_ui::PackAsk>,
     /// Empty Cache and Reload is asking for confirmation.
-    confirm_reload: bool,
+    pub(crate) confirm_reload: bool,
     /// A library being read on a background thread (`library_ui.rs`).
-    loading: Option<library_ui::Loading>,
+    pub(crate) loading: Option<library_ui::Loading>,
 }
 
 impl App {
@@ -1015,7 +1015,7 @@ impl App {
     /// Opens an `eagle://` link in the shown library, as Eagle does: an
     /// item opens in the viewer inside its first folder (or All), a folder
     /// or smart folder is shown. Ids the library doesn't have are ignored.
-    fn follow_link(&mut self, link: crate::links::Link) {
+    pub(crate) fn follow_link(&mut self, link: crate::links::Link) {
         use crate::links::Link;
         let Some(shared) = self.ws.lib.clone() else { return };
         let target = {
@@ -1042,7 +1042,7 @@ impl App {
 
     /// Opens the library at `path` in a workspace of its own and shows it,
     /// or shows it if it is already open.
-    fn open(&mut self, path: PathBuf) {
+    pub(crate) fn open(&mut self, path: PathBuf) {
         if let Some(i) = self.position_of(&path) {
             self.focus(i);
             crate::workspaces::remember(&mut self.recent, &path, RECENT_LIMIT);
@@ -1054,7 +1054,7 @@ impl App {
 
     /// Shows a library [`App::open`] or a background load
     /// (`library_ui::Loading`) read, or reports why it couldn't be read.
-    fn opened(&mut self, path: PathBuf, result: falcon_library::Result<(Library, Option<PathBuf>)>) {
+    pub(crate) fn opened(&mut self, path: PathBuf, result: falcon_library::Result<(Library, Option<PathBuf>)>) {
         match result {
             Ok((lib, restored)) => {
                 let skipped = lib.skipped.len();
@@ -1093,7 +1093,7 @@ impl App {
     /// Shows `lib` in a new workspace, after the open ones (or in place of
     /// the empty window). It starts with the shown library's sort and
     /// layout.
-    fn add_workspace(&mut self, lib: Shared) {
+    pub(crate) fn add_workspace(&mut self, lib: Shared) {
         let mut ws = Workspace::new(&self.ctx, Some(lib));
         ws.sort = self.ws.sort;
         ws.increase = self.ws.increase;
@@ -1109,12 +1109,12 @@ impl App {
     }
 
     /// Where the library at `path` sits in the switcher, if it is open.
-    fn position_of(&self, path: &std::path::Path) -> Option<usize> {
+    pub(crate) fn position_of(&self, path: &std::path::Path) -> Option<usize> {
         self.others.iter(&self.ws).position(|w| w.root.as_deref().is_some_and(|r| same_path(r, path)))
     }
 
     /// Shows the open library at switcher position `i`.
-    fn focus(&mut self, i: usize) {
+    pub(crate) fn focus(&mut self, i: usize) {
         if i == self.others.slot() {
             return;
         }
@@ -1125,7 +1125,7 @@ impl App {
 
     /// Closes the open library at switcher position `i`, writing anything
     /// pending first. Closing the last one leaves the empty window.
-    fn close_workspace(&mut self, i: usize) {
+    pub(crate) fn close_workspace(&mut self, i: usize) {
         let mut closed = match self.others.close(&mut self.ws, i) {
             Some(w) => w,
             None if i == self.others.slot() => {
@@ -1144,7 +1144,7 @@ impl App {
 
     /// Points the HTTP API at the shown library: swaps it into the running
     /// server, starts one if none runs, or stops it when nothing is open.
-    fn serve_active(&mut self) {
+    pub(crate) fn serve_active(&mut self) {
         match (&self.server, self.ws.lib.clone()) {
             (Some(h), Some(lib)) => {
                 h.set_library(lib);
@@ -1159,7 +1159,7 @@ impl App {
     /// workspace's slot. Give that slot its own library back and show the
     /// new one in a workspace of its own (an existing one if it is open),
     /// with fresh state and no undo history.
-    fn follow_api_switch(&mut self) {
+    pub(crate) fn follow_api_switch(&mut self) {
         let (Some(shared), Some(was)) = (self.ws.lib.clone(), self.ws.root.clone()) else { return };
         let now = lock(&shared).root().to_path_buf();
         if now == was {
@@ -1203,7 +1203,7 @@ impl App {
     /// (Re)starts the HTTP API for the shown library on the ports set in
     /// Preferences. Never Eagle's own port: clients of a running (or later
     /// started) Eagle must keep reaching Eagle.
-    fn start_server(&mut self) {
+    pub(crate) fn start_server(&mut self) {
         self.server = None;
         let (Some(shared), Some(ports)) = (self.ws.lib.clone(), self.prefs.api_ports()) else { return };
         let ctx = self.ctx.clone();
@@ -1220,7 +1220,7 @@ impl App {
     /// Hands the API what Eagle's reads from the app: the Developer token,
     /// the preferences `application/info` reports, and the recent
     /// libraries `library/history` lists.
-    fn share_with_server(&self) {
+    pub(crate) fn share_with_server(&self) {
         let Some(h) = &self.server else { return };
         h.set_token(&self.prefs.api_token);
         h.set_preferences(self.prefs.eagle_preferences());
@@ -1228,13 +1228,13 @@ impl App {
     }
 
     /// Keeps what the API changed in the preferences (`preferences/collect/*`).
-    fn follow_api_preferences(&mut self) {
+    pub(crate) fn follow_api_preferences(&mut self) {
         if let Some(v) = self.server.as_ref().and_then(|h| h.take_preferences()) {
             self.prefs.take_eagle_preferences(&v);
         }
     }
 
-    fn open_preferences(&mut self) {
+    pub(crate) fn open_preferences(&mut self) {
         let panels = crate::prefs::Panels { sidebar: self.show_sidebar, inspector: self.show_inspector };
         self.prefs_window.show_with(crate::prefs::Draft { prefs: self.prefs.clone(), panels, keys: self.shortcuts.clone() });
         self.prefs_window.library = self.ws.root.clone();
@@ -1242,7 +1242,7 @@ impl App {
 
     /// Lock Now: hides everything behind the lock screen, stopping playback
     /// and closing Preferences and the collect window.
-    fn lock_now(&mut self) {
+    pub(crate) fn lock_now(&mut self) {
         if !self.lock.lock(self.prefs.app_lock.as_ref()) {
             return;
         }
@@ -1255,7 +1255,7 @@ impl App {
     }
 
     /// The lock screen: the password field, its hint and Unlock.
-    fn lock_screen(&mut self, ui: &mut Ui) {
+    pub(crate) fn lock_screen(&mut self, ui: &mut Ui) {
         let rect = ui.max_rect();
         let ctx = ui.ctx().clone();
         if ctx.cumulative_frame_nr() == 0 {
@@ -1301,7 +1301,7 @@ impl App {
     }
 
     /// Takes the Preferences window's Save or Apply.
-    fn apply_preferences(&mut self, d: crate::prefs::Draft) {
+    pub(crate) fn apply_preferences(&mut self, d: crate::prefs::Draft) {
         let restart = self.prefs.api_changed(&d.prefs);
         // The collect folder is chosen in the collect window, which may
         // have changed it while Preferences was open.
@@ -1329,7 +1329,7 @@ impl App {
 
     /// Draws the collect window and imports what it receives into its
     /// chosen folder.
-    fn collect_window(&mut self, ctx: &egui::Context) {
+    pub(crate) fn collect_window(&mut self, ctx: &egui::Context) {
         use crate::collect;
         collect::migrate(&mut self.prefs.collect_folders, &mut self.prefs.collect_folder);
         let (folders, pool) = match self.ws.lib.as_ref() {
@@ -1373,7 +1373,7 @@ impl App {
 
     /// Library ▸ Clear Library History: asks first. Shown with or without
     /// a library open.
-    fn clear_history_dialog(&mut self, ctx: &egui::Context) {
+    pub(crate) fn clear_history_dialog(&mut self, ctx: &egui::Context) {
         if self.clear_history_open {
             let modal = egui::Modal::new(egui::Id::unique("clear-library-history")).show(ctx, |ui| {
                 ui.set_width(320.0);
@@ -1399,19 +1399,19 @@ impl App {
     }
 
     /// Opens the create-library dialog (`library_dialogs.rs`).
-    fn new_library(&mut self) {
+    pub(crate) fn new_library(&mut self) {
         self.dialogs.start_create();
     }
 
     /// Asks for a library and opens it in the background, with a loading
     /// screen.
-    fn pick_library(&mut self) {
+    pub(crate) fn pick_library(&mut self) {
         if let Some(p) = rfd::FileDialog::new().set_title("Open Eagle Library").set_directory(falcon_library::sandbox::default_root()).pick_folder() {
             self.open_in_background(p);
         }
     }
 
-    fn go(&mut self, scope: Scope) {
+    pub(crate) fn go(&mut self, scope: Scope) {
         let scope = match scope {
             Scope::Random(_) => Scope::Random(fastrand_seed()),
             s => s,
@@ -1435,19 +1435,19 @@ impl App {
     }
 
     /// The shown library's path, the key its pages share a layout under.
-    fn root_key(&self) -> String {
+    pub(crate) fn root_key(&self) -> String {
         self.ws.root.as_ref().map(|r| r.to_string_lossy().into_owned()).unwrap_or_default()
     }
 
     /// Puts the layout the current view opens in into `ws.layout`.
-    fn sync_layout(&mut self) {
+    pub(crate) fn sync_layout(&mut self) {
         self.ws.layout = logic::layout_for(&self.layouts, &self.ws.scope, &self.root_key(), self.legacy_layout);
     }
 
     /// Switches the current view to `layout` and remembers it for this
     /// folder or smart folder, or for the library's other pages, as Eagle
     /// does.
-    fn set_layout(&mut self, layout: Layout) {
+    pub(crate) fn set_layout(&mut self, layout: Layout) {
         self.layouts.insert(logic::layout_key(&self.ws.scope, &self.root_key()), layout);
         self.ws.layout = layout;
     }
@@ -1455,7 +1455,7 @@ impl App {
     /// The layout panel's Refresh: writes anything pending, reads the shown
     /// library again from disk, decodes its thumbnails again and reshuffles
     /// random orders, keeping the view and selection.
-    fn refresh_library(&mut self) {
+    pub(crate) fn refresh_library(&mut self) {
         let (Some(shared), Some(root)) = (self.ws.lib.clone(), self.ws.root.clone()) else { return };
         if let Err(e) = self.ws.flush_and_backup() {
             self.flash_error(format!("Could not save: {e}"));
@@ -1482,7 +1482,7 @@ impl App {
         }
     }
 
-    fn go_back(&mut self) {
+    pub(crate) fn go_back(&mut self) {
         if let Some(s) = self.ws.back.pop() {
             self.ws.forward.push(std::mem::replace(&mut self.ws.scope, s));
             self.ws.selected.clear();
@@ -1491,7 +1491,7 @@ impl App {
         }
     }
 
-    fn go_forward(&mut self) {
+    pub(crate) fn go_forward(&mut self) {
         if let Some(s) = self.ws.forward.pop() {
             self.ws.back.push(std::mem::replace(&mut self.ws.scope, s));
             self.ws.selected.clear();
@@ -1501,24 +1501,24 @@ impl App {
     }
 
     /// Shows a note for a few seconds; a new one replaces the old.
-    fn flash(&mut self, msg: impl Into<String>) {
+    pub(crate) fn flash(&mut self, msg: impl Into<String>) {
         self.ws.status = Some(Toast::new(msg, ToastKind::Info, Life::Normal));
     }
 
     /// A quick confirmation, such as "Copied 2 tags".
-    fn flash_brief(&mut self, msg: impl Into<String>) {
+    pub(crate) fn flash_brief(&mut self, msg: impl Into<String>) {
         self.ws.status = Some(Toast::new(msg, ToastKind::Info, Life::Brief));
     }
 
     /// A failure: a red mark before the text, and it stays longer.
-    fn flash_error(&mut self, msg: impl Into<String>) {
+    pub(crate) fn flash_error(&mut self, msg: impl Into<String>) {
         let msg = msg.into();
         crate::errlog::error(&msg);
         self.ws.status = Some(Toast::new(msg, ToastKind::Error, Life::Normal));
     }
 
     /// A note with an Undo button, for actions the undo history records.
-    fn flash_undo(&mut self, msg: impl Into<String>) {
+    pub(crate) fn flash_undo(&mut self, msg: impl Into<String>) {
         let mut t = Toast::new(msg, ToastKind::Info, Life::Undoable);
         t.undo = true;
         self.ws.status = Some(t);
@@ -1526,7 +1526,7 @@ impl App {
 
     /// A note that ends in the folder's name as a link that opens it.
     /// `msg` is the text before the name ("Added 3 items to").
-    fn flash_folder(&mut self, msg: impl Into<String>, folder_name: &str, folder_id: &str, undo: bool) {
+    pub(crate) fn flash_folder(&mut self, msg: impl Into<String>, folder_name: &str, folder_id: &str, undo: bool) {
         let mut t = Toast::new(msg, ToastKind::Info, if undo { Life::Undoable } else { Life::Normal });
         t.undo = undo;
         if !folder_name.is_empty() {
@@ -1536,7 +1536,7 @@ impl App {
     }
 
     /// Applies a click on the card at `id` with the given modifiers.
-    fn click(&mut self, id: &str, m: Modifiers) {
+    pub(crate) fn click(&mut self, id: &str, m: Modifiers) {
         if m.command {
             if let Some(p) = self.ws.selected.iter().position(|s| s == id) {
                 self.ws.selected.remove(p);
@@ -1559,13 +1559,13 @@ impl App {
     /// Imports files and folders on a background thread: each file is
     /// staged without the library lock, then committed under it, so the
     /// window stays responsive. Progress shows under the toolbar.
-    fn import(&mut self, paths: Vec<PathBuf>) {
+    pub(crate) fn import(&mut self, paths: Vec<PathBuf>) {
         let folders = self.scope_folders();
         self.import_into(paths, folders);
     }
 
     /// The folder new items join: the one being viewed, if any.
-    fn scope_folders(&self) -> Vec<String> {
+    pub(crate) fn scope_folders(&self) -> Vec<String> {
         match &self.ws.scope {
             Scope::Folder(id) => vec![id.clone()],
             _ => Vec::new(),
@@ -1574,7 +1574,7 @@ impl App {
 
     /// Imports `paths` into the shown library. A `*.library` folder among
     /// them is opened instead, never imported (only the first, if several).
-    fn import_into(&mut self, paths: Vec<PathBuf>, folders: Vec<String>) {
+    pub(crate) fn import_into(&mut self, paths: Vec<PathBuf>, folders: Vec<String>) {
         let (libraries, paths) = logic::split_libraries(paths);
         // A dropped or opened .eaglepack is imported as a package, not as
         // a file (the first one; Eagle takes one at a time).
@@ -1595,7 +1595,7 @@ impl App {
         }
     }
 
-    fn import_files(&mut self, paths: Vec<PathBuf>, folders: Vec<String>) {
+    pub(crate) fn import_files(&mut self, paths: Vec<PathBuf>, folders: Vec<String>) {
         let extra = self.collect_extra.clone();
         if paths.is_empty() {
             return;
@@ -1628,7 +1628,7 @@ impl App {
     }
 
     /// The import progress bar; clears itself a moment after finishing.
-    fn progress_bar(&mut self, ui: &mut Ui, rect: Rect) -> bool {
+    pub(crate) fn progress_bar(&mut self, ui: &mut Ui, rect: Rect) -> bool {
         let snapshot = {
             let pr = self.ws.progress.lock().unwrap_or_else(|p| p.into_inner());
             (pr.total, pr.done, pr.failed, pr.current.clone())
@@ -1665,7 +1665,7 @@ impl App {
     }
 
     /// ⌘C: puts the selected originals on the clipboard as files.
-    fn copy_selection(&mut self) {
+    pub(crate) fn copy_selection(&mut self) {
         let Some(shared) = self.ws.lib.clone() else { return };
         let paths: Vec<PathBuf> = {
             let lib = lock(&shared);
@@ -1682,26 +1682,26 @@ impl App {
     /// Records library originals that were opened or copied as Recently
     /// Used, as Eagle does for its open, Open With, new window and copy
     /// commands. Other files are ignored.
-    fn used(&mut self, files: &[PathBuf]) {
+    pub(crate) fn used(&mut self, files: &[PathBuf]) {
         if let Some(root) = self.ws.root.clone() {
             self.recent_items.add_many(&root, &crate::recent::item_ids(files));
         }
     }
 
     /// Records one item opened in the preview window as Recently Used.
-    fn used_item(&mut self, id: &str) {
+    pub(crate) fn used_item(&mut self, id: &str) {
         if let Some(root) = self.ws.root.clone() {
             self.recent_items.add(&root, id);
         }
     }
 
     /// ⌘V in the grid: imports copied files, or a copied image as a PNG.
-    fn paste(&mut self) {
+    pub(crate) fn paste(&mut self) {
         let folders = self.scope_folders();
         self.paste_into(folders);
     }
 
-    fn paste_into(&mut self, folders: Vec<String>) {
+    pub(crate) fn paste_into(&mut self, folders: Vec<String>) {
         let Ok(mut clip) = arboard::Clipboard::new() else { return };
         if let Ok(files) = clip.get().file_list()
             && !files.is_empty()
@@ -1724,7 +1724,7 @@ impl App {
     /// Key presses: rebindable commands go through the shortcut table
     /// (`shortcuts.rs`) to `run_command`, as menu clicks do; Tab, the
     /// viewer's plain zoom keys, the arrows and Esc are fixed.
-    fn keyboard(&mut self, ctx: &egui::Context) {
+    pub(crate) fn keyboard(&mut self, ctx: &egui::Context) {
         use crate::shortcuts::Command as C;
         let mut pressed = ctx.input(|i| self.shortcuts.pressed(i));
         // A click in the sidebar hands it the arrow keys; a click anywhere
@@ -1926,7 +1926,7 @@ impl App {
     }
 
     /// The state commands and the menu bar look at (see `menu.rs`).
-    fn menu_state(&self, ctx: &egui::Context) -> crate::menu::State {
+    pub(crate) fn menu_state(&self, ctx: &egui::Context) -> crate::menu::State {
         use crate::menu::ScopeKind;
         use crate::shortcuts::Page;
         crate::menu::State {
@@ -1979,7 +1979,7 @@ impl App {
 
     /// Menu bar clicks since the last frame. Runs before `keyboard`, so a
     /// key handed back to egui is seen this frame.
-    fn menu_clicks(&mut self, ctx: &egui::Context) {
+    pub(crate) fn menu_clicks(&mut self, ctx: &egui::Context) {
         for click in crate::menu::take_clicks() {
             if click.by_key {
                 // AppKit matched a key to an item; egui should have had it.
@@ -1996,7 +1996,7 @@ impl App {
     /// Edit ▸ Undo, Redo, Cut, Copy, Paste and Select All act on a focused
     /// text field: they become the events its keys would make. Returns
     /// whether the command went there.
-    fn text_command(&self, ctx: &egui::Context, cmd: crate::shortcuts::Command) -> bool {
+    pub(crate) fn text_command(&self, ctx: &egui::Context, cmd: crate::shortcuts::Command) -> bool {
         use crate::shortcuts::Command as C;
         if !ctx.egui_wants_keyboard_input() || self.prefs_window.open {
             return false;
@@ -2016,7 +2016,7 @@ impl App {
 
     /// Queues `action`, which changes `n` items, as Eagle does: at once for
     /// fewer than `BULK_CONFIRM`, else after the user confirms the dialog.
-    fn push_bulk(&mut self, n: usize, action: Action) {
+    pub(crate) fn push_bulk(&mut self, n: usize, action: Action) {
         if n < BULK_CONFIRM {
             self.ws.actions.push(action);
             return;
@@ -2032,7 +2032,7 @@ impl App {
 
     /// The items a command acts on: the viewer's item, or the selection.
     /// Opens the source links of the acted-on items (Eagle's cap is 50).
-    fn open_links(&mut self) {
+    pub(crate) fn open_links(&mut self) {
         let Some(shared) = self.ws.lib.clone() else { return };
         let targets: Vec<_> = {
             let lib = lock(&shared);
@@ -2052,7 +2052,7 @@ impl App {
         }
     }
 
-    fn acted_on(&self) -> Vec<String> {
+    pub(crate) fn acted_on(&self) -> Vec<String> {
         match &self.ws.viewer {
             Some(id) => vec![id.clone()],
             None => self.ws.selected.clone(),
@@ -2062,7 +2062,7 @@ impl App {
     /// Runs one command, from a key press or a menu click. A command that
     /// can't act now (`menu::enabled`) does nothing. Called before the
     /// frame locks the library, which some commands lock themselves.
-    fn run_command(&mut self, ctx: &egui::Context, cmd: crate::shortcuts::Command) {
+    pub(crate) fn run_command(&mut self, ctx: &egui::Context, cmd: crate::shortcuts::Command) {
         use crate::shortcuts::Command as C;
         if !crate::menu::enabled(cmd, &self.menu_state(ctx)) {
             return;
@@ -2341,7 +2341,7 @@ impl App {
     /// Shows the previous (`-1`) or next (`1`) item of the grid in the
     /// viewer; the selection follows. Past either end a note says so, as
     /// Eagle's viewer does.
-    fn viewer_step(&mut self, step: isize) {
+    pub(crate) fn viewer_step(&mut self, step: isize) {
         let Some(cur) = self.ws.viewer.clone() else { return };
         let at = self.ws.order.iter().position(|x| *x == cur);
         let next = match logic::viewer_step(self.ws.order.len(), at, step) {
@@ -2360,7 +2360,7 @@ impl App {
 }
 
 impl App {
-    fn apply_actions(&mut self, lib: &mut Library) {
+    pub(crate) fn apply_actions(&mut self, lib: &mut Library) {
         for action in std::mem::take(&mut self.ws.actions) {
             self.ws.frame_labels.push(action_label(&action));
             let result = match action {
@@ -2631,7 +2631,7 @@ impl App {
     /// Start of a frame with the library locked: batched writes on, a
     /// pending ⌘Z or ⇧⌘Z applied, and a transaction opened for the frame's
     /// edits.
-    fn begin_frame_edits(&mut self, lib: &mut Library) {
+    pub(crate) fn begin_frame_edits(&mut self, lib: &mut Library) {
         if self.ws.undo_root.as_deref() != Some(lib.root()) {
             self.ws.undo.clear();
             self.ws.redo.clear();
@@ -2667,7 +2667,7 @@ impl App {
 
     /// End of a frame: the frame's edits become one undo step (a permanent
     /// delete clears the history instead), and pending writes are flushed.
-    fn end_frame_edits(&mut self, lib: &mut Library) {
+    pub(crate) fn end_frame_edits(&mut self, lib: &mut Library) {
         let labels = std::mem::take(&mut self.ws.frame_labels);
         if let Some(mut tx) = lib.end_transaction() {
             if tx.irreversible {
@@ -2694,7 +2694,7 @@ impl App {
     /// Starts each open library's metadata backup on a background thread
     /// when it is due (a second after a write, and every 30 minutes), and
     /// asks for a frame when the next one will be.
-    fn run_backups(&mut self) {
+    pub(crate) fn run_backups(&mut self) {
         let now = Instant::now();
         let mut wait = crate::backups::PERIOD;
         for ws in std::iter::once(&mut self.ws).chain(self.others.parked_mut()) {
@@ -2710,9 +2710,9 @@ impl App {
 }
 
 /// Most undo steps kept.
-const UNDO_LIMIT: usize = 100;
+pub(crate) const UNDO_LIMIT: usize = 100;
 
-fn push_capped(stack: &mut Vec<Transaction>, tx: Transaction) {
+pub(crate) fn push_capped(stack: &mut Vec<Transaction>, tx: Transaction) {
     stack.push(tx);
     if stack.len() > UNDO_LIMIT {
         stack.remove(0);
@@ -2720,7 +2720,7 @@ fn push_capped(stack: &mut Vec<Transaction>, tx: Transaction) {
 }
 
 /// The undo name of an action, as "Undid: …" shows it.
-fn action_label(action: &Action) -> String {
+pub(crate) fn action_label(action: &Action) -> String {
     match action {
         Action::CreateFolder { .. } | Action::CreateSibling(_) => "New folder".into(),
         Action::RemoveFromFolder(ids, _) => format!("Remove {} from folder", ids.len()),
@@ -2771,7 +2771,7 @@ fn action_label(action: &Action) -> String {
 }
 
 /// The undo name of an organising action.
-fn organize_label(a: &organize_ui::OrgAction) -> String {
+pub(crate) fn organize_label(a: &organize_ui::OrgAction) -> String {
     use organize_ui::OrgAction as O;
     match a {
         O::FolderOrder(..) | O::SmartOrder(..) => "Change sort".into(),
@@ -2804,7 +2804,7 @@ fn organize_label(a: &organize_ui::OrgAction) -> String {
 
 /// Names a frame's undo step from its actions; a frame without actions
 /// only had inspector edits.
-fn undo_label(labels: &[String]) -> String {
+pub(crate) fn undo_label(labels: &[String]) -> String {
     match labels {
         [] => "Edit item".into(),
         [one] => one.clone(),
@@ -2843,10 +2843,10 @@ mod undo_tests {
     }
 }
 
-type Shared = falcon_server::Shared;
+pub(crate) type Shared = falcon_server::Shared;
 
 /// A switcher row: the library's name over its folder, dimmed.
-fn library_label(path: &std::path::Path, dim: bool) -> LayoutJob {
+pub(crate) fn library_label(path: &std::path::Path, dim: bool) -> LayoutJob {
     let name = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
     let dir = path.parent().map(crate::workspaces::tilde).unwrap_or_default();
     let mut job = LayoutJob::default();
@@ -2857,13 +2857,13 @@ fn library_label(path: &std::path::Path, dim: bool) -> LayoutJob {
 }
 
 /// Whether smart folder `f` or one below it has id `id`.
-fn smart_has(f: &falcon_library::smart::SmartFolder, id: &str) -> bool {
+pub(crate) fn smart_has(f: &falcon_library::smart::SmartFolder, id: &str) -> bool {
     f.id == id || f.children.iter().any(|c| smart_has(c, id))
 }
 
 /// Paints a library icon filling `rect` (a centred square crop of the image)
 /// with rounded corners.
-fn paint_library_icon(ui: &Ui, rect: Rect, tex: &egui::TextureHandle, radius: u8) {
+pub(crate) fn paint_library_icon(ui: &Ui, rect: Rect, tex: &egui::TextureHandle, radius: u8) {
     let [w, h] = tex.size();
     let (w, h) = (w.max(1) as f32, h.max(1) as f32);
     let side = w.min(h);
@@ -2873,22 +2873,22 @@ fn paint_library_icon(ui: &Ui, rect: Rect, tex: &egui::TextureHandle, radius: u8
 }
 
 /// Most libraries kept in the recent list.
-const RECENT_LIMIT: usize = 10;
+pub(crate) const RECENT_LIMIT: usize = 10;
 
 /// Whether two paths name the same library folder (exact, or after
 /// resolving symlinks and `..`).
-fn same_path(a: &std::path::Path, b: &std::path::Path) -> bool {
+pub(crate) fn same_path(a: &std::path::Path, b: &std::path::Path) -> bool {
     a == b || matches!((a.canonicalize(), b.canonicalize()), (Ok(x), Ok(y)) if x == y)
 }
 
-fn lock(s: &Shared) -> std::sync::MutexGuard<'_, Library> {
+pub(crate) fn lock(s: &Shared) -> std::sync::MutexGuard<'_, Library> {
     s.lock().unwrap_or_else(|p| p.into_inner())
 }
 
 /// The picture shown under the pointer while dragging out: a 128 px PNG of
 /// `path`, or a plain tile when it can't be decoded. Always valid PNG, since
 /// the drag crate panics on an image AppKit can't load.
-fn drag_image(path: &std::path::Path) -> Vec<u8> {
+pub(crate) fn drag_image(path: &std::path::Path) -> Vec<u8> {
     // A picture still in iCloud would hold the drag until it downloads.
     let decoded = if crate::icloud::is_dataless(path) { None } else { thumbnail::decode(path).ok() };
     let img = decoded
@@ -2902,20 +2902,20 @@ fn drag_image(path: &std::path::Path) -> Vec<u8> {
 }
 
 /// A private folder for clipboard images before they are imported.
-fn tempfile_dir() -> std::io::Result<PathBuf> {
+pub(crate) fn tempfile_dir() -> std::io::Result<PathBuf> {
     let dir = std::env::temp_dir().join("falcon-paste");
     std::fs::create_dir_all(&dir)?;
     Ok(dir)
 }
 
-fn fastrand_seed() -> u64 {
+pub(crate) fn fastrand_seed() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos() as u64)
 }
 
 // ---------------------------------------------------------------------------
 // Small painting helpers
 
-fn galley(ui: &Ui, text: &str, f: egui::FontId, color: Color32, max_w: f32) -> Arc<Galley> {
+pub(crate) fn galley(ui: &Ui, text: &str, f: egui::FontId, color: Color32, max_w: f32) -> Arc<Galley> {
     let mut job = LayoutJob::simple_singleline(text.to_string(), f, color);
     job.wrap.max_width = max_w.max(1.0);
     job.wrap.max_rows = 1;
@@ -2924,12 +2924,12 @@ fn galley(ui: &Ui, text: &str, f: egui::FontId, color: Color32, max_w: f32) -> A
     ui.painter().layout_job(job)
 }
 
-fn icon(ui: &Ui, center: Pos2, glyph: &str, size: f32, color: Color32) {
+pub(crate) fn icon(ui: &Ui, center: Pos2, glyph: &str, size: f32, color: Color32) {
     ui.painter().text(center, Align2::CENTER_CENTER, glyph, font(size), color);
 }
 
 /// A bare icon button, as in Eagle's toolbars.
-fn icon_button(ui: &mut Ui, center: Pos2, glyph: &str, size: f32, enabled: bool, tip: &str) -> Response {
+pub(crate) fn icon_button(ui: &mut Ui, center: Pos2, glyph: &str, size: f32, enabled: bool, tip: &str) -> Response {
     let rect = Rect::from_center_size(center, Vec2::splat(26.0));
     let resp = ui.interact(rect, ui.scope_id().with(("icon", glyph, center.x as i32)), Sense::click());
     let color = if !enabled {
@@ -2950,13 +2950,13 @@ fn icon_button(ui: &mut Ui, center: Pos2, glyph: &str, size: f32, enabled: bool,
 /// The layer a viewer draws in: a child of the central panel covering
 /// `screen` and clipped to it, so the viewer never paints over or takes
 /// input from the sidebar and inspector beside it.
-fn viewer_ui(parent: &mut Ui, screen: Rect, salt: &str) -> Ui {
+pub(crate) fn viewer_ui(parent: &mut Ui, screen: Rect, salt: &str) -> Ui {
     let mut ui = parent.new_child(egui::UiBuilder::new().max_rect(screen).id_salt(salt));
     ui.set_clip_rect(screen.intersect(parent.clip_rect()));
     ui
 }
 
-fn window_drag(ui: &Ui, rect: Rect, id: &str) {
+pub(crate) fn window_drag(ui: &Ui, rect: Rect, id: &str) {
     let resp = ui.interact(rect, ui.scope_id().with(("drag", id)), Sense::click_and_drag());
     if resp.drag_started() {
         ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
@@ -2968,7 +2968,7 @@ fn window_drag(ui: &Ui, rect: Rect, id: &str) {
 }
 
 /// A rounded input box with Eagle's field styling.
-fn field(ui: &mut Ui, value: &mut String, hint: &str, height: f32, multiline: bool, id: &str) -> Response {
+pub(crate) fn field(ui: &mut Ui, value: &mut String, hint: &str, height: f32, multiline: bool, id: &str) -> Response {
     // A frame around the editor, so the box always contains its text:
     // single-line fields clip at the edge, multi-line ones grow to fit.
     egui::Frame::new()
@@ -2999,7 +2999,7 @@ fn field(ui: &mut Ui, value: &mut String, hint: &str, height: f32, multiline: bo
 }
 
 /// A file-type label like Eagle's: translucent type colour, uppercase.
-fn badge(ui: &Ui, top_left: Pos2, ext: &str) {
+pub(crate) fn badge(ui: &Ui, top_left: Pos2, ext: &str) {
     let Some(c) = t::ext_color(ext) else { return };
     let g = galley(ui, &ext.to_uppercase(), font(10.0), Color32::from_white_alpha(204), 60.0);
     let rect = Rect::from_min_size(top_left, vec2(g.size().x + 6.0, 18.0));
@@ -3012,17 +3012,17 @@ fn badge(ui: &Ui, top_left: Pos2, ext: &str) {
 // ---------------------------------------------------------------------------
 // Sidebar
 
-struct SidebarCtx<'a> {
-    folder_counts: &'a HashMap<String, usize>,
-    nav: &'a NavCounts,
+pub(crate) struct SidebarCtx<'a> {
+    pub(crate) folder_counts: &'a HashMap<String, usize>,
+    pub(crate) nav: &'a NavCounts,
     /// Ids pinned to Quick Access.
-    quick: &'a HashSet<String>,
+    pub(crate) quick: &'a HashSet<String>,
 }
 
 impl App {
     /// The small icon at the left of a switcher row: the library's
     /// `icon.png`, or a folder glyph (a warning for a missing folder).
-    fn switcher_icon(&mut self, ui: &mut Ui, root: &std::path::Path, missing: bool) {
+    pub(crate) fn switcher_icon(&mut self, ui: &mut Ui, root: &std::path::Path, missing: bool) {
         let (rect, _) = ui.allocate_exact_size(Vec2::splat(20.0), Sense::hover());
         if missing {
             icon(ui, rect.center(), ic::WARNING, 16.0, t::p().text_muted);
@@ -3034,7 +3034,7 @@ impl App {
     }
 
     /// The menu for a library in the switcher (right-click or the ⋯ button).
-    fn library_menu(&mut self, ui: &mut Ui, root: &std::path::Path, missing: bool) {
+    pub(crate) fn library_menu(&mut self, ui: &mut Ui, root: &std::path::Path, missing: bool) {
         if !missing {
             if ui.button("Change Icon…").clicked() {
                 ui.close();
@@ -3065,7 +3065,7 @@ impl App {
     }
 
     /// Asks for an image and makes it the library's icon.
-    fn change_library_icon(&mut self, root: &std::path::Path) {
+    pub(crate) fn change_library_icon(&mut self, root: &std::path::Path) {
         let Some(src) = rfd::FileDialog::new().set_title("Choose Library Icon").add_filter("Images", &["jpg", "jpeg", "png", "webp", "gif"]).pick_file() else {
             return;
         };
@@ -3076,7 +3076,7 @@ impl App {
         }
     }
 
-    fn remove_library_icon(&mut self, root: &std::path::Path) {
+    pub(crate) fn remove_library_icon(&mut self, root: &std::path::Path) {
         let done = falcon_library::sandbox::guard(root).and_then(|()| falcon_library::library_icon::remove_icon(root));
         self.lib_icons.forget(root);
         if let Err(e) = done {
@@ -3084,7 +3084,7 @@ impl App {
         }
     }
 
-    fn sidebar(&mut self, ui: &mut Ui, lib: &Library) {
+    pub(crate) fn sidebar(&mut self, ui: &mut Ui, lib: &Library) {
         let full = ui.max_rect();
         self.imports.sidebar = Some(full);
         self.imports.folder_rows.clear();
@@ -3325,7 +3325,7 @@ impl App {
 
     /// Notes a visible sidebar row for the arrow keys, and scrolls it into
     /// view when the keys just opened it.
-    pub(super) fn side_row(&mut self, scope: Scope, resp: &Response) {
+    pub(crate) fn side_row(&mut self, scope: Scope, resp: &Response) {
         if self.side_reveal && self.side_cursor == Some(self.side_rows.len()) {
             resp.scroll_to_me(None);
             self.side_reveal = false;
@@ -3335,11 +3335,11 @@ impl App {
 
     /// The count shown beside a sidebar row: none when zero, or when
     /// Preferences turns counts off.
-    pub(super) fn badge(&self, count: usize) -> Option<usize> {
+    pub(crate) fn badge(&self, count: usize) -> Option<usize> {
         (count > 0 && self.prefs.sidebar_counts).then_some(count)
     }
 
-    fn nav_rows(&mut self, ui: &mut Ui, cx: &SidebarCtx) {
+    pub(crate) fn nav_rows(&mut self, ui: &mut Ui, cx: &SidebarCtx) {
         let n = cx.nav;
         let entries: [(&str, &str, Scope, usize); 8] = [
             (ic::IMAGES, "All", Scope::All, n.all),
@@ -3412,7 +3412,7 @@ impl App {
     /// One folder and, unless collapsed, its children. Returns whether
     /// anything was drawn (filtered folders are hidden with their subtree
     /// unless a descendant matches).
-    fn folder_row(&mut self, ui: &mut Ui, lib: &Library, f: &Folder, depth: usize, cx: &SidebarCtx, filter: &str) -> Option<Rect> {
+    pub(crate) fn folder_row(&mut self, ui: &mut Ui, lib: &Library, f: &Folder, depth: usize, cx: &SidebarCtx, filter: &str) -> Option<Rect> {
         if !filter.is_empty() && !subtree_matches(f, filter) {
             return None;
         }
@@ -3569,7 +3569,7 @@ impl App {
 
 /// Outlines a sidebar row while grid items are dragged over it (folders
 /// dragged in the tree get insertion lines instead, see `organize_ui`).
-fn drop_highlight(ui: &Ui, resp: &Response, depth: usize) {
+pub(crate) fn drop_highlight(ui: &Ui, resp: &Response, depth: usize) {
     if resp.dnd_hover_payload::<DragItems>().is_some() {
         let r = resp.rect;
         let bg = Rect::from_min_max(Pos2::new(r.left() + icon_x(depth) - 14.0, r.top() + 0.5), Pos2::new(r.right() - 11.0, r.bottom() - 0.5));
@@ -3578,20 +3578,20 @@ fn drop_highlight(ui: &Ui, resp: &Response, depth: usize) {
     }
 }
 
-fn subtree_matches(f: &Folder, filter: &str) -> bool {
+pub(crate) fn subtree_matches(f: &Folder, filter: &str) -> bool {
     f.name.to_lowercase().contains(filter) || f.children.iter().any(|c| subtree_matches(c, filter))
 }
 
 /// Horizontal centre of a row's icon at `depth`.
-fn icon_x(depth: usize) -> f32 {
+pub(crate) fn icon_x(depth: usize) -> f32 {
     29.0 + 20.0 * depth as f32
 }
 
-fn caret_rect(row: Rect, depth: usize) -> Rect {
+pub(crate) fn caret_rect(row: Rect, depth: usize) -> Rect {
     Rect::from_center_size(Pos2::new(row.left() + icon_x(depth) - 19.0, row.center().y), vec2(16.0, row.height()))
 }
 
-fn smart_name(lib: &Library, id: &str) -> String {
+pub(crate) fn smart_name(lib: &Library, id: &str) -> String {
     let mut name = String::from("Smart Folder");
     for sf in lib.smart_folders() {
         sf.walk(&mut Vec::new(), &mut |f, _| {
@@ -3605,7 +3605,7 @@ fn smart_name(lib: &Library, id: &str) -> String {
 
 /// A section header with a + button that shows on hover, like Eagle's.
 /// A sidebar section heading. It senses clicks so it can carry a menu.
-fn section(ui: &mut Ui, title: &str) -> Response {
+pub(crate) fn section(ui: &mut Ui, title: &str) -> Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 25.0), Sense::click());
     ui.painter().text(
         Pos2::new(rect.left() + 20.0, rect.center().y),
@@ -3617,7 +3617,7 @@ fn section(ui: &mut Ui, title: &str) -> Response {
     resp
 }
 
-fn sidebar_row(
+pub(crate) fn sidebar_row(
     ui: &mut Ui,
     depth: usize,
     glyph: &str,
@@ -3631,7 +3631,7 @@ fn sidebar_row(
 
 /// A sidebar row whose icon is drawn in `tint` (a folder's icon colour).
 #[allow(clippy::too_many_arguments)]
-fn sidebar_row_tinted(
+pub(crate) fn sidebar_row_tinted(
     ui: &mut Ui,
     depth: usize,
     glyph: &str,
@@ -3675,7 +3675,7 @@ fn sidebar_row_tinted(
 // Toolbar
 
 impl App {
-    fn toolbar(&mut self, ui: &mut Ui, lib: &Library) {
+    pub(crate) fn toolbar(&mut self, ui: &mut Ui, lib: &Library) {
         let bar = ui.max_rect();
         window_drag(ui, bar, "toolbar");
         let cy = bar.center().y;
@@ -3735,13 +3735,13 @@ impl App {
 
     /// Shows or hides the sidebar and inspector together (Eagle's
     /// `toggleAll`).
-    fn toggle_panels(&mut self) {
+    pub(crate) fn toggle_panels(&mut self) {
         (self.show_sidebar, self.show_inspector) = logic::toggle_all(self.show_sidebar, self.show_inspector);
     }
 
     /// The panels button at the left of the toolbar and the viewer bar:
     /// a click shows or hides both panels; its menu toggles each one.
-    fn panels_button(&mut self, ui: &mut Ui, center: Pos2) {
+    pub(crate) fn panels_button(&mut self, ui: &mut Ui, center: Pos2) {
         use crate::shortcuts::{Command as C, display};
         let key = |cmd: C| self.shortcuts.binding(cmd).map(|c| display(ui.ctx(), &c)).unwrap_or_default();
         let (all, side, insp) = (key(C::ToggleAll), key(C::ToggleSidebar), key(C::ToggleInspector));
@@ -3764,7 +3764,7 @@ impl App {
         });
     }
 
-    fn search_field(&mut self, ui: &mut Ui, rect: Rect) {
+    pub(crate) fn search_field(&mut self, ui: &mut Ui, rect: Rect) {
         let p = ui.painter();
         p.rect_filled(rect, t::FIELD_RADIUS, t::p().search);
         p.rect_stroke(rect, t::FIELD_RADIUS, Stroke::new(1.0, t::p().field_border), StrokeKind::Inside);
@@ -3791,7 +3791,7 @@ impl App {
         }
     }
 
-    fn zoom_slider(&mut self, ui: &mut Ui, left_center: Pos2) {
+    pub(crate) fn zoom_slider(&mut self, ui: &mut Ui, left_center: Pos2) {
         let cy = left_center.y;
         let x0 = left_center.x;
         if icon_button(ui, Pos2::new(x0, cy), ic::MINUS, 13.0, true, "").clicked() {
@@ -3822,7 +3822,7 @@ impl App {
 // Filter bar
 
 /// Colours offered in the colour filter, like Eagle's swatch row.
-const PRESET_COLORS: [[u8; 3]; 14] = [
+pub(crate) const PRESET_COLORS: [[u8; 3]; 14] = [
     [0xff, 0x3b, 0x30],
     [0xff, 0x95, 0x00],
     [0xff, 0xd6, 0x0a],
@@ -3839,7 +3839,7 @@ const PRESET_COLORS: [[u8; 3]; 14] = [
     [0x67, 0x95, 0x3f],
 ];
 
-fn parse_hex(s: &str) -> Option<[u8; 3]> {
+pub(crate) fn parse_hex(s: &str) -> Option<[u8; 3]> {
     let s = s.trim().trim_start_matches('#');
     if s.len() != 6 {
         return None;
@@ -3850,13 +3850,13 @@ fn parse_hex(s: &str) -> Option<[u8; 3]> {
 
 /// Where the list layout's columns start in a row (after the thumbnail)
 /// and how wide they are together.
-fn list_span(row: Rect) -> (f32, f32) {
+pub(crate) fn list_span(row: Rect) -> (f32, f32) {
     let thumb = row.height() - 10.0;
     (row.left() + 6.0 + thumb + 12.0, row.width() - thumb - 18.0)
 }
 
 /// A filter chip: muted when off, primary-tinted with its value when on.
-fn filter_chip(ui: &mut Ui, label: &str, value: Option<String>) -> Response {
+pub(crate) fn filter_chip(ui: &mut Ui, label: &str, value: Option<String>) -> Response {
     let text = match &value {
         Some(v) => format!("{label}: {v}"),
         None => label.to_string(),
@@ -3881,7 +3881,7 @@ fn filter_chip(ui: &mut Ui, label: &str, value: Option<String>) -> Response {
     resp
 }
 
-fn logic_picker(ui: &mut Ui, logic: &mut Logic) {
+pub(crate) fn logic_picker(ui: &mut Ui, logic: &mut Logic) {
     ui.horizontal(|ui| {
         for (l, name) in [(Logic::Or, "Any"), (Logic::And, "All"), (Logic::Equal, "Exact")] {
             if ui.selectable_label(*logic == l, name).clicked() {
@@ -3891,7 +3891,7 @@ fn logic_picker(ui: &mut Ui, logic: &mut Logic) {
     });
 }
 
-fn text_filter_menu(ui: &mut Ui, f: &mut TextFilter, keywords: &mut String) {
+pub(crate) fn text_filter_menu(ui: &mut Ui, f: &mut TextFilter, keywords: &mut String) {
     ui.set_min_width(200.0);
     for (opt, name) in [(TextFilter::Off, "Any"), (TextFilter::Has, "Has"), (TextFilter::No, "None")] {
         let on = std::mem::discriminant(f) == std::mem::discriminant(&opt);
@@ -3912,7 +3912,7 @@ fn text_filter_menu(ui: &mut Ui, f: &mut TextFilter, keywords: &mut String) {
 
 impl App {
     /// The scope's items in grid order, as indices into the library.
-    fn scope_order(&mut self, lib: &Library) -> Vec<usize> {
+    pub(crate) fn scope_order(&mut self, lib: &Library) -> Vec<usize> {
         let only: Option<HashSet<String>> = match &self.ws.scope {
             _ if self.ws.folders.combined() => self.combined_items(lib),
             Scope::Smart(id) => Some(lib.smart_folder_items(id).into_iter().map(|i| i.id.clone()).collect()),
@@ -3929,7 +3929,7 @@ impl App {
 
     /// Keeps `ws.order` current while the viewer hides the grid, so the
     /// viewer's stepping and counter follow edits and deletions.
-    fn refresh_order(&mut self, lib: &Library) {
+    pub(crate) fn refresh_order(&mut self, lib: &Library) {
         if self.scope_gate(lib).is_some() {
             self.ws.order.clear();
             return;
@@ -3938,7 +3938,7 @@ impl App {
         self.ws.order = order.iter().map(|&i| lib.items()[i].id.clone()).collect();
     }
 
-    fn grid(&mut self, ui: &mut Ui, lib: &Library) {
+    pub(crate) fn grid(&mut self, ui: &mut Ui, lib: &Library) {
         let area = ui.max_rect();
         self.ws.cards.begin(ui.ctx().cumulative_frame_nr());
         let scroll_by = self.ws.scroll.take();
@@ -4129,11 +4129,11 @@ impl App {
     /// `targets` are the items it acts on. Returns true when Open was
     /// chosen (the grid's menu only; the viewer's has no Open).
     /// The item context menu, with Eagle's search box on top.
-    fn item_menu(&mut self, ui: &mut Ui, lib: &Library, item: &Item, targets: &[String]) -> bool {
+    pub(crate) fn item_menu(&mut self, ui: &mut Ui, lib: &Library, item: &Item, targets: &[String]) -> bool {
         crate::menu_search::show(ui, |ui| self.item_menu_body(ui, lib, item, targets))
     }
 
-    fn item_menu_body(&mut self, ui: &mut Ui, lib: &Library, item: &Item, targets: &[String]) -> bool {
+    pub(crate) fn item_menu_body(&mut self, ui: &mut Ui, lib: &Library, item: &Item, targets: &[String]) -> bool {
         let in_viewer = self.ws.viewer.as_deref() == Some(item.id.as_str());
         let mut opened = false;
         ui.set_min_width(200.0);
@@ -4276,7 +4276,7 @@ impl App {
     /// of the open folder): when they were the whole selection, selects the
     /// item after them (or before, at the end), as Eagle does; otherwise
     /// just drops them from the selection.
-    fn select_after_removal(&mut self, ids: &[String]) {
+    pub(crate) fn select_after_removal(&mut self, ids: &[String]) {
         if self.ws.selected.is_empty() || self.ws.selected.iter().any(|s| !ids.contains(s)) {
             self.ws.selected.retain(|s| !ids.contains(s));
             return;
@@ -4290,7 +4290,7 @@ impl App {
     /// Before `ids` leave the grid (trashed or restored), moves the viewer
     /// off them to the next item, or the previous one at the end, or
     /// closes it when none is left.
-    fn leave_viewed(&mut self, ids: &[String]) {
+    pub(crate) fn leave_viewed(&mut self, ids: &[String]) {
         let Some(cur) = self.ws.viewer.clone() else { return };
         if !ids.contains(&cur) {
             return;
@@ -4304,7 +4304,7 @@ impl App {
     /// Draws an item's image into `rect`: fitted without enlarging (grid),
     /// or filling it exactly (waterfall and justified boxes already have the
     /// image's shape).
-    fn draw_image(&mut self, ui: &Ui, lib: &Library, item: &Item, rect: Rect, fill: bool) {
+    pub(crate) fn draw_image(&mut self, ui: &Ui, lib: &Library, item: &Item, rect: Rect, fill: bool) {
         let failed = self.ws.loader.has_failed(&item.id, Tier::Grid);
         let playing = self.ws.cards.texture(&item.id).cloned();
         match playing.or_else(|| self.ws.loader.get(&item.id, Tier::Grid).cloned()) {
@@ -4323,7 +4323,7 @@ impl App {
 
     /// Draws an item's image so it covers `rect`, cropping what overflows
     /// (the grid layout's Fill mode).
-    fn draw_image_cover(&mut self, ui: &Ui, lib: &Library, item: &Item, rect: Rect) {
+    pub(crate) fn draw_image_cover(&mut self, ui: &Ui, lib: &Library, item: &Item, rect: Rect) {
         let failed = self.ws.loader.has_failed(&item.id, Tier::Grid);
         let playing = self.ws.cards.texture(&item.id).cloned();
         match playing.or_else(|| self.ws.loader.get(&item.id, Tier::Grid).cloned()) {
@@ -4339,7 +4339,7 @@ impl App {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn card(&mut self, ui: &Ui, lib: &Library, item: &Item, card: Rect, caption: f32, selected: bool, hovered: bool) {
+    pub(crate) fn card(&mut self, ui: &Ui, lib: &Library, item: &Item, card: Rect, caption: f32, selected: bool, hovered: bool) {
         let tile = Rect::from_min_max(card.min, Pos2::new(card.right(), card.bottom() - caption));
         let grid = self.ws.layout == Layout::Grid;
         let d = self.display.clone();
@@ -4409,7 +4409,7 @@ impl App {
     /// One row of the list layout: thumbnail, then the shown columns
     /// (`logic::ListColumns`), lined up with the header.
     #[allow(clippy::too_many_arguments)]
-    fn list_row(&mut self, ui: &Ui, lib: &Library, item: &Item, row: Rect, selected: bool, hovered: bool, n: usize) {
+    pub(crate) fn list_row(&mut self, ui: &Ui, lib: &Library, item: &Item, row: Rect, selected: bool, hovered: bool, n: usize) {
         let p = ui.painter().clone();
         let bg = row.shrink2(vec2(0.0, 2.0));
         if selected {
@@ -4447,7 +4447,7 @@ impl App {
 
     /// Draws a hovered card's zoom button, as Eagle does, and says whether
     /// the pointer is on it.
-    fn zoom_button(&self, ui: &Ui, item: &Item, card: Rect, caption: f32) -> bool {
+    pub(crate) fn zoom_button(&self, ui: &Ui, item: &Item, card: Rect, caption: f32) -> bool {
         if !self.prefs.hover_zoom || !crate::hover::has_zoom_button(&item.ext) {
             return false;
         }
@@ -4465,7 +4465,7 @@ impl App {
 
     /// Eagle's hover preview: an enlarged image over the window after the
     /// pointer rests on a card's zoom button, or at once while Z is held.
-    fn hover_preview(&mut self, ui: &Ui, lib: &Library, hovered: Option<(&Item, Rect, bool)>, scrolled: bool, cancel: bool) {
+    pub(crate) fn hover_preview(&mut self, ui: &Ui, lib: &Library, hovered: Option<(&Item, Rect, bool)>, scrolled: bool, cancel: bool) {
         use crate::hover;
         let ctx = ui.ctx().clone();
         let (now, key, down) = ctx.input(|i| {
@@ -4520,7 +4520,7 @@ impl App {
         }
     }
 
-    fn tag_page(&mut self, ui: &mut Ui, lib: &Library) {
+    pub(crate) fn tag_page(&mut self, ui: &mut Ui, lib: &Library) {
         let filter = self.ws.tag_filter.trim().to_lowercase();
         let mut tags: Vec<(String, usize)> =
             logic::tag_counts(lib.items()).into_iter().filter(|(t, _)| filter.is_empty() || t.to_lowercase().contains(&filter)).collect();
@@ -4607,7 +4607,7 @@ impl App {
         });
     }
 
-    fn tag_chip(&mut self, ui: &mut Ui, lib: &Library, tag: &str, n: usize) {
+    pub(crate) fn tag_chip(&mut self, ui: &mut Ui, lib: &Library, tag: &str, n: usize) {
         let renaming = self.ws.tag_rename.as_ref().is_some_and(|(t, _)| t == tag);
         if renaming {
             let (_, buf) = self.ws.tag_rename.as_mut().unwrap();
@@ -4674,7 +4674,7 @@ impl App {
     }
 
     /// The menu of picked tags on the All Tags page, after Eagle's.
-    fn tags_menu(&mut self, ui: &mut Ui, lib: &Library, tags: &[String]) {
+    pub(crate) fn tags_menu(&mut self, ui: &mut Ui, lib: &Library, tags: &[String]) {
         ui.set_min_width(200.0);
         let n = tags.len();
         if ui.button(if n == 1 { "Show Items".to_string() } else { format!("Show Items with Any of {n} Tags") }).clicked() {
@@ -4710,7 +4710,7 @@ impl App {
 
     /// Eagle's Filter with Tags: All, with the tag filter set to any of
     /// `tags`.
-    fn filter_any_tags(&mut self, tags: Vec<String>) {
+    pub(crate) fn filter_any_tags(&mut self, tags: Vec<String>) {
         self.go(Scope::All);
         self.ws.filter.tags.includes = tags;
         self.ws.filter.tags.excludes.clear();
@@ -4722,7 +4722,7 @@ impl App {
 
 /// Paints an item's thumbnail background into `rect`: a plain colour, or
 /// a checkerboard clipped to what is visible.
-fn paint_thumb_bg(p: &egui::Painter, rect: Rect, bg: logic::ThumbBg) {
+pub(crate) fn paint_thumb_bg(p: &egui::Painter, rect: Rect, bg: logic::ThumbBg) {
     use logic::ThumbBg as B;
     let plain = |c| {
         p.rect_filled(rect, 0.0, c);
@@ -4756,7 +4756,7 @@ fn paint_thumb_bg(p: &egui::Painter, rect: Rect, bg: logic::ThumbBg) {
     }
 }
 
-fn ext_placeholder(ui: &Ui, rect: Rect, ext: &str) {
+pub(crate) fn ext_placeholder(ui: &Ui, rect: Rect, ext: &str) {
     let s = rect.width().min(rect.height()) * 0.42;
     let r = Rect::from_center_size(rect.center(), vec2(s * 0.8, s));
     icon(ui, r.center(), ic::FILE, s, t::p().text_disabled);
@@ -4773,7 +4773,7 @@ fn ext_placeholder(ui: &Ui, rect: Rect, ext: &str) {
 // Inspector
 
 impl App {
-    fn inspector(&mut self, ui: &mut Ui, lib: &mut Library) {
+    pub(crate) fn inspector(&mut self, ui: &mut Ui, lib: &mut Library) {
         let full = ui.max_rect();
         let p = ui.painter().clone();
         p.rect_filled(full, 0.0, t::p().panel);
@@ -4808,7 +4808,7 @@ impl App {
     /// A section title that folds the section away when clicked, with an
     /// arrow that points right when it is folded. True while it is shown.
     /// The state is shared by the three inspectors and every library.
-    fn fold_heading(&mut self, ui: &mut Ui, which: Fold, text: &str) -> bool {
+    pub(crate) fn fold_heading(&mut self, ui: &mut Ui, which: Fold, text: &str) -> bool {
         let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 18.0), Sense::click());
         let closed = self.folds.closed(which);
         if resp.clicked() {
@@ -4823,7 +4823,7 @@ impl App {
     /// Saves text typed into the folder inspector when its fields went away
     /// with focus still in them (the scope or the selection changed), unless
     /// they are still shown for folder `shown`.
-    fn flush_folder_edit(&mut self, lib: &Library, shown: Option<&str>) {
+    pub(crate) fn flush_folder_edit(&mut self, lib: &Library, shown: Option<&str>) {
         let Some((id, name, desc, smart)) = self.ws.folder_edit.take_if(|(id, ..)| shown != Some(id.as_str())) else { return };
         let Some((old_name, old_desc)) = folder_texts(lib, &id, smart) else { return };
         if !name.trim().is_empty() && name.trim() != old_name {
@@ -4834,7 +4834,7 @@ impl App {
         }
     }
 
-    fn scope_inspector(&mut self, ui: &mut Ui, lib: &Library) {
+    pub(crate) fn scope_inspector(&mut self, ui: &mut Ui, lib: &Library) {
         let folder = match &self.ws.scope {
             Scope::Folder(id) => logic::find_folder(&lib.metadata.folders, id).cloned(),
             _ => None,
@@ -4895,7 +4895,7 @@ impl App {
         self.scope_export_button(ui, lib);
     }
 
-    fn multi_inspector(&mut self, ui: &mut Ui, lib: &Library, n: usize) {
+    pub(crate) fn multi_inspector(&mut self, ui: &mut Ui, lib: &Library, n: usize) {
         let items: Vec<&Item> = self.ws.selected.iter().filter_map(|id| lib.item(id)).collect();
         let ids: Vec<String> = items.iter().map(|i| i.id.clone()).collect();
         let size: u64 = items.iter().map(|i| i.size).sum();
@@ -5019,7 +5019,7 @@ impl App {
     /// Copy Tags: keeps `tags` as the tag clipboard and puts them on the
     /// system clipboard one per line, as Eagle does. Nothing to copy keeps
     /// the old clipboard.
-    fn copy_tags(&mut self, ctx: &egui::Context, tags: Vec<String>) {
+    pub(crate) fn copy_tags(&mut self, ctx: &egui::Context, tags: Vec<String>) {
         if tags.is_empty() {
             self.flash_brief("No tags to copy");
             return;
@@ -5030,7 +5030,7 @@ impl App {
     }
 
     /// Paste Tags: the copied tags go onto `ids`, after their own.
-    fn paste_tags(&mut self, ids: Vec<String>) {
+    pub(crate) fn paste_tags(&mut self, ids: Vec<String>) {
         if let Some(tags) = self.copied_tags.clone()
             && !ids.is_empty()
         {
@@ -5041,7 +5041,7 @@ impl App {
     /// The menu of the inspector's tag area (Eagle's tag input menu):
     /// copy, paste and clear the tags of `ids`, or for one chip `tag`,
     /// show its items, copy just it, or paste.
-    fn tag_area_menu(&mut self, ui: &mut Ui, tags: &[String], ids: &[String], tag: Option<&str>) {
+    pub(crate) fn tag_area_menu(&mut self, ui: &mut Ui, tags: &[String], ids: &[String], tag: Option<&str>) {
         use crate::shortcuts::Command as C;
         ui.set_min_width(190.0);
         if let Some(tag) = tag {
@@ -5074,7 +5074,7 @@ impl App {
 
     /// The inspector's tags: a chip per tag (its × takes the tag off `ids`)
     /// and the button that opens the tag picker, as in Eagle.
-    fn tag_field(&mut self, ui: &mut Ui, lib: &Library, tags: &[String], ids: &[String]) {
+    pub(crate) fn tag_field(&mut self, ui: &mut Ui, lib: &Library, tags: &[String], ids: &[String]) {
         let mut remove = None;
         let mut open = None;
         // The area senses clicks behind its chips: right-clicking between
@@ -5106,7 +5106,7 @@ impl App {
         }
     }
 
-    fn item_inspector(&mut self, ui: &mut Ui, lib: &mut Library, item: Item) {
+    pub(crate) fn item_inspector(&mut self, ui: &mut Ui, lib: &mut Library, item: Item) {
         if self.ws.edit.as_ref().is_none_or(|e| e.id != item.id) {
             self.ws.edit = Some(EditBuf {
                 id: item.id.clone(),
@@ -5356,7 +5356,7 @@ impl App {
 }
 
 impl App {
-    fn smart_dialog_ui(&mut self, ctx: &egui::Context, lib: &Library) {
+    pub(crate) fn smart_dialog_ui(&mut self, ctx: &egui::Context, lib: &Library) {
         let Some(mut d) = self.ws.smart_dialog.take() else { return };
         let mut keep = true;
         let folders = organize_ui::folder_choices(&lib.metadata.folders);
@@ -5403,7 +5403,7 @@ impl App {
 }
 
 /// The saved name and description of a folder, or of a smart folder.
-fn folder_texts(lib: &Library, id: &str, smart: bool) -> Option<(String, String)> {
+pub(crate) fn folder_texts(lib: &Library, id: &str, smart: bool) -> Option<(String, String)> {
     if !smart {
         return logic::find_folder(&lib.metadata.folders, id).map(|f| (f.name.clone(), f.description.clone()));
     }
@@ -5414,16 +5414,16 @@ fn folder_texts(lib: &Library, id: &str, smart: bool) -> Option<(String, String)
 }
 
 /// The action that renames a folder or a smart folder from the inspector.
-fn rename_action(id: &str, name: &str, smart: bool) -> Action {
+pub(crate) fn rename_action(id: &str, name: &str, smart: bool) -> Action {
     if smart { Action::Organize(organize_ui::OrgAction::RenameSmart(id.to_string(), name.to_string())) } else { Action::RenameFolder(id.to_string(), name.to_string()) }
 }
 
-fn divider(ui: &mut Ui) {
+pub(crate) fn divider(ui: &mut Ui) {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 9.0), Sense::hover());
     ui.painter().hline(rect.x_range(), rect.center().y, Stroke::new(1.0, t::p().divider));
 }
 
-fn prop(ui: &mut Ui, key: &str, value: &str) -> Response {
+pub(crate) fn prop(ui: &mut Ui, key: &str, value: &str) -> Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 13.0), Sense::hover());
     let p = ui.painter();
     p.text(rect.left_center(), Align2::LEFT_CENTER, key, font(12.0), t::p().text);
@@ -5433,7 +5433,7 @@ fn prop(ui: &mut Ui, key: &str, value: &str) -> Response {
 }
 
 /// Rating row: five stars; clicking the current rating clears it.
-fn rating(ui: &mut Ui, star: u64) -> Option<u64> {
+pub(crate) fn rating(ui: &mut Ui, star: u64) -> Option<u64> {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 14.0), Sense::hover());
     ui.painter().text(rect.left_center(), Align2::LEFT_CENTER, "Rating", font(12.0), t::p().text);
     let mut out = None;
@@ -5453,7 +5453,7 @@ fn rating(ui: &mut Ui, star: u64) -> Option<u64> {
 
 /// An inspector tag chip with the colour dot of its group; clicking it
 /// takes the tag off.
-fn tag_chip_removable(ui: &mut Ui, text: &str, dot: Option<Color32>) -> Response {
+pub(crate) fn tag_chip_removable(ui: &mut Ui, text: &str, dot: Option<Color32>) -> Response {
     let g = galley(ui, text, font(12.0), t::p().text, 180.0);
     let dot_w = if dot.is_some() { 11.0 } else { 0.0 };
     let (rect, resp) = ui.allocate_exact_size(vec2(g.size().x + 30.0 + dot_w, 22.0), Sense::click());
@@ -5469,7 +5469,7 @@ fn tag_chip_removable(ui: &mut Ui, text: &str, dot: Option<Color32>) -> Response
     resp.on_hover_text("Click to remove")
 }
 
-fn chip(ui: &mut Ui, text: &str, removable: bool) -> Response {
+pub(crate) fn chip(ui: &mut Ui, text: &str, removable: bool) -> Response {
     let g = galley(ui, text, font(12.0), t::p().text, 180.0);
     let extra = if removable { 14.0 } else { 0.0 };
     let (rect, resp) = ui.allocate_exact_size(vec2(g.size().x + 16.0 + extra, 22.0), Sense::click());
@@ -5484,14 +5484,14 @@ fn chip(ui: &mut Ui, text: &str, removable: bool) -> Response {
 
 /// What a click on a folder chip asked for.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum ChipClick {
+pub(crate) enum ChipClick {
     Open,
     Remove,
 }
 
 /// The inspector's folder chip, like Eagle's: clicking it opens the folder,
 /// and its × (always shown, brighter under the pointer) removes the item.
-fn folder_chip(ui: &mut Ui, text: &str, path: &str) -> Option<ChipClick> {
+pub(crate) fn folder_chip(ui: &mut Ui, text: &str, path: &str) -> Option<ChipClick> {
     let g = galley(ui, text, font(12.0), t::p().text, 180.0);
     let (rect, resp) = ui.allocate_exact_size(vec2(g.size().x + 16.0 + 16.0, 22.0), Sense::click());
     let x = Rect::from_center_size(Pos2::new(rect.right() - 11.0, rect.center().y), vec2(18.0, 18.0));
@@ -5510,7 +5510,7 @@ fn folder_chip(ui: &mut Ui, text: &str, path: &str) -> Option<ChipClick> {
     click
 }
 
-fn wide_button(ui: &mut Ui, glyph: &str, label: &str, enabled: bool) -> Response {
+pub(crate) fn wide_button(ui: &mut Ui, glyph: &str, label: &str, enabled: bool) -> Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 28.0), Sense::click());
     let fill = if enabled && resp.hovered() { t::p().button_hover } else { t::p().button };
     ui.painter().rect_filled(rect, t::RADIUS, fill);
@@ -5530,7 +5530,7 @@ impl App {
     /// The open item's viewer, drawn by `parent` (the central panel) over
     /// `screen`: as in Eagle's detail mode it takes the place of the grid,
     /// between the sidebar and the inspector.
-    fn viewer(&mut self, parent: &mut Ui, lib: &Library, screen: Rect) {
+    pub(crate) fn viewer(&mut self, parent: &mut Ui, lib: &Library, screen: Rect) {
         let ctx = &parent.ctx().clone();
         let Some(id) = self.ws.viewer.clone() else { return };
         let Some(item) = lib.item(&id) else {
@@ -5583,7 +5583,7 @@ impl App {
 
     /// Eagle's "cannot preview" page: the file's type, a line saying so
     /// and a button listing the apps that can open it.
-    fn cannot_preview(&mut self, ui: &mut Ui, item: &Item, area: Rect) {
+    pub(crate) fn cannot_preview(&mut self, ui: &mut Ui, item: &Item, area: Rect) {
         let c = area.center();
         ext_placeholder(ui, Rect::from_center_size(c - vec2(0.0, 70.0), Vec2::splat(150.0)), &item.ext);
         let name = format!("{}.{}", item.name, item.ext);
@@ -5592,7 +5592,7 @@ impl App {
 
     /// The title, line and Open With button under the picture of a page
     /// shown instead of a preview.
-    fn notice_lines(&mut self, ui: &mut Ui, area: Rect, title: &str, line: &str) {
+    pub(crate) fn notice_lines(&mut self, ui: &mut Ui, area: Rect, title: &str, line: &str) {
         let c = area.center();
         let g = galley(ui, title, font(15.0), t::p().text, (area.width() - 40.0).max(1.0));
         ui.painter().galley(Pos2::new(c.x - g.size().x / 2.0, c.y + 14.0), g, t::p().text);
@@ -5605,7 +5605,7 @@ impl App {
         });
     }
 
-    fn empty_state(&mut self, ui: &mut Ui) {
+    pub(crate) fn empty_state(&mut self, ui: &mut Ui) {
         let r = ui.max_rect();
         window_drag(ui, Rect::from_min_size(r.min, vec2(r.width(), t::BAR_HEIGHT)), "empty");
         ui.painter().rect_filled(r, 0.0, t::p().main);
@@ -5699,7 +5699,7 @@ impl eframe::App for App {
 
 impl App {
     /// One frame of the main window.
-    fn draw(&mut self, ui: &mut Ui, frame: &mut eframe::Frame) {
+    pub(crate) fn draw(&mut self, ui: &mut Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         if ctx.cumulative_frame_nr() == 0 {
             // Come to the front on launch, like any Mac app.

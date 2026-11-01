@@ -16,7 +16,7 @@ use crate::theme::{self as t, mono};
 
 /// The image viewer's state that outlives one item.
 #[derive(Default)]
-pub(super) struct ImageState {
+pub(crate) struct ImageState {
     /// "Fit to window edge" (backtick): every image opens filling the view,
     /// enlarged if small, until switched off or Zoom to Fit is chosen.
     pub edge: bool,
@@ -46,7 +46,7 @@ impl App {
     /// the preview) in `area` under the viewer's `bar`, with its zoom
     /// controls, and the GIF frame player's bar in `gif_bar` when it is on.
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn image_canvas(
+    pub(crate) fn image_canvas(
         &mut self,
         ui: &mut Ui,
         lib: &Library,

@@ -108,7 +108,7 @@ fn paint(ui: &Ui, area: Rect, e: &Empty) -> egui::Pos2 {
 impl App {
     /// Says why the open view is empty, with an Import Folders… button
     /// where files can be added.
-    pub(super) fn empty_view(&mut self, ui: &mut Ui, lib: &Library, area: Rect) {
+    pub(crate) fn empty_view(&mut self, ui: &mut Ui, lib: &Library, area: Rect) {
         let view = match &self.ws.scope {
             Scope::All => View::All,
             Scope::Recent => View::Recent,
@@ -137,7 +137,7 @@ impl App {
 
     /// The All Tags page's message when it has no tags to list, or none
     /// match the page's filter.
-    pub(super) fn empty_tags(&self, ui: &Ui, area: Rect, filtering: bool) {
+    pub(crate) fn empty_tags(&self, ui: &Ui, area: Rect, filtering: bool) {
         let e = if filtering {
             Empty { icon: ic::MAGNIFYING_GLASS, title: "No Matches", body: "Try another keyword.", import: false }
         } else {

@@ -8,7 +8,7 @@ impl App {
     /// Moves held duplicates into the dialog once the running import has
     /// finished, so the dialog can count them all, as Eagle waits for its
     /// upload queue.
-    pub(super) fn collect_duplicates(&mut self) {
+    pub(crate) fn collect_duplicates(&mut self) {
         let idle = {
             let pr = self.ws.progress.lock().unwrap_or_else(|p| p.into_inner());
             pr.total == 0 || pr.done >= pr.total
@@ -28,7 +28,7 @@ impl App {
 
     /// Draws the duplicate dialog. Return imports with the chosen option,
     /// Esc skips the file; with ⌘, either answers for every file.
-    pub(super) fn duplicate_dialog(&mut self, ctx: &egui::Context, lib: &Library) {
+    pub(crate) fn duplicate_dialog(&mut self, ctx: &egui::Context, lib: &Library) {
         let Some(mut d) = self.ws.dup_dialog.take() else { return };
         let Some(first) = d.pending.front() else { return };
         let n = d.pending.len();

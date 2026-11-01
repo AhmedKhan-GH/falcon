@@ -14,7 +14,7 @@ const INDENT: f32 = 14.0;
 
 /// The switcher's state while it is open.
 #[derive(Default)]
-pub(super) struct QuickSwitch {
+pub(crate) struct QuickSwitch {
     open: bool,
     tab: Tab,
     keyword: String,
@@ -32,7 +32,7 @@ pub(super) struct QuickSwitch {
 impl QuickSwitch {
     /// Opens the switcher, or closes it when it is open. It keeps the last
     /// keyword, selected, as Eagle does.
-    pub(super) fn toggle(&mut self) {
+    pub(crate) fn toggle(&mut self) {
         if self.open {
             self.open = false;
         } else {
@@ -45,11 +45,11 @@ impl QuickSwitch {
         }
     }
 
-    pub(super) fn is_open(&self) -> bool {
+    pub(crate) fn is_open(&self) -> bool {
         self.open
     }
 
-    pub(super) fn close(&mut self) {
+    pub(crate) fn close(&mut self) {
         self.open = false;
     }
 
@@ -97,7 +97,7 @@ impl App {
         self.quick.close();
     }
 
-    pub(super) fn quick_switch_ui(&mut self, ctx: &egui::Context, lib: &Library) {
+    pub(crate) fn quick_switch_ui(&mut self, ctx: &egui::Context, lib: &Library) {
         if !self.quick.open {
             return;
         }

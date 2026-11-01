@@ -19,7 +19,7 @@ use crate::theme as t;
 
 /// A message that needs acknowledging, shown in a modal.
 #[derive(Clone, Debug, PartialEq)]
-pub(super) struct Alert {
+pub(crate) struct Alert {
     pub title: String,
     pub body: String,
 }
@@ -31,7 +31,7 @@ impl Alert {
 }
 
 /// The alert for an error that has one, else `None` (shown as a toast).
-pub(super) fn alert_for(e: &Error) -> Option<Alert> {
+pub(crate) fn alert_for(e: &Error) -> Option<Alert> {
     match e {
         Error::NewerLibrary { path, version } => Some(Alert::new(
             "Made by a newer Eagle",
@@ -58,12 +58,12 @@ fn name(path: &std::path::Path) -> String {
 
 impl App {
     /// Shows `alert` (replacing any shown).
-    pub(super) fn show_alert(&mut self, alert: Alert) {
+    pub(crate) fn show_alert(&mut self, alert: Alert) {
         self.alert = Some(alert);
     }
 
     /// The alert modal, if one is up.
-    pub(super) fn alert_modal(&mut self, ctx: &egui::Context) {
+    pub(crate) fn alert_modal(&mut self, ctx: &egui::Context) {
         let Some(a) = self.alert.clone() else { return };
         let modal = egui::Modal::new(egui::Id::unique("library-alert")).show(ctx, |ui| {
             ui.set_width(340.0);
@@ -80,7 +80,7 @@ impl App {
 
     /// After a frame's edits: if a `metadata.json` write was refused, as
     /// Eagle does, say so and reload the library from disk next frame.
-    pub(super) fn check_conflict(&mut self, lib: &mut Library) {
+    pub(crate) fn check_conflict(&mut self, lib: &mut Library) {
         if lib.take_conflict() {
             self.conflict_reload = true;
         }
@@ -89,7 +89,7 @@ impl App {
     /// Reloads the shown library from disk after a refused write. Pending
     /// writes other than the refused metadata go out first; a library that
     /// can no longer be opened (now made by a newer Eagle, or gone) closes.
-    pub(super) fn reload_after_conflict(&mut self) {
+    pub(crate) fn reload_after_conflict(&mut self) {
         let (Some(shared), Some(root)) = (self.ws.lib.clone(), self.ws.root.clone()) else { return };
         let _ = lock(&shared).flush();
         match falcon_library::sandbox::guard(&root).and_then(|()| Library::open(&root)) {
@@ -126,7 +126,7 @@ impl App {
     /// replaces the folder tree (and the undo history, which no longer
     /// fits it), items added, edited or deleted elsewhere appear, change
     /// or go, and a library whose folder vanished closes.
-    pub(super) fn apply_outside_changes(&mut self) {
+    pub(crate) fn apply_outside_changes(&mut self) {
         let mut vanished = Vec::new();
         let mut storage = Vec::new();
         for ws in std::iter::once(&mut self.ws).chain(self.others.parked_mut()) {
@@ -207,12 +207,12 @@ impl App {
 
     /// The library at `root` can no longer be found: the missing-library
     /// screen takes over (a dialog over another open library).
-    pub(super) fn library_gone(&mut self, root: std::path::PathBuf) {
+    pub(crate) fn library_gone(&mut self, root: std::path::PathBuf) {
         self.missing = Some(root);
     }
 
     /// The missing-library screen, when no library is open.
-    pub(super) fn missing_page(&mut self, ui: &mut egui::Ui) {
+    pub(crate) fn missing_page(&mut self, ui: &mut egui::Ui) {
         let r = ui.max_rect();
         super::window_drag(ui, egui::Rect::from_min_size(r.min, egui::vec2(r.width(), t::BAR_HEIGHT)), "missing");
         ui.painter().rect_filled(r, 0.0, t::p().main);
@@ -224,7 +224,7 @@ impl App {
     }
 
     /// The same, as a dialog while other libraries are open.
-    pub(super) fn missing_modal(&mut self, ctx: &egui::Context) {
+    pub(crate) fn missing_modal(&mut self, ctx: &egui::Context) {
         if self.missing.is_none() {
             return;
         }
@@ -276,7 +276,7 @@ impl App {
 }
 
 /// Merging another library into the shown one (`falcon_library::library_merge`).
-pub(super) enum Merge {
+pub(crate) enum Merge {
     /// Asking, with what would come in.
     Confirm { into: PathBuf, plan: Box<MergePlan> },
     /// Copying item folders on a background thread.
@@ -287,7 +287,7 @@ type Copied = (Vec<String>, Vec<(String, String)>);
 
 impl App {
     /// Library ▸ Merge Another Library…: pick a library and ask.
-    pub(super) fn merge_library(&mut self) {
+    pub(crate) fn merge_library(&mut self) {
         let (Some(shared), Some(into)) = (self.ws.lib.clone(), self.ws.root.clone()) else { return };
         if self.merge.is_some() {
             return;
@@ -308,7 +308,7 @@ impl App {
 
     /// The merge's confirmation and progress dialogs, and its last step
     /// once the copy is done.
-    pub(super) fn merge_dialogs(&mut self, ctx: &egui::Context) {
+    pub(crate) fn merge_dialogs(&mut self, ctx: &egui::Context) {
         let Some(state) = self.merge.take() else { return };
         self.merge = match state {
             Merge::Confirm { into, plan } => {
@@ -414,14 +414,14 @@ fn plural(n: usize, what: &str) -> String {
 
 /// Importing an `.eaglepack`: Eagle confirms the disk space it takes,
 /// then asks about items the library already has.
-pub(super) enum PackAsk {
+pub(crate) enum PackAsk {
     Space { path: PathBuf, folder: Option<String>, preview: PackPreview },
     Duplicates { path: PathBuf, folder: Option<String>, preview: PackPreview },
 }
 
 impl App {
     /// File ▸ Import ▸ Eagle Package…
-    pub(super) fn import_pack_dialog(&mut self) {
+    pub(crate) fn import_pack_dialog(&mut self) {
         if self.ws.lib.is_none() {
             return;
         }
@@ -433,7 +433,7 @@ impl App {
 
     /// Reads the pack and asks; `folder` takes every item of an items pack
     /// (a dropped pack goes into the folder it was dropped on).
-    pub(super) fn start_pack_import(&mut self, path: PathBuf, folder: Option<String>) {
+    pub(crate) fn start_pack_import(&mut self, path: PathBuf, folder: Option<String>) {
         let Some(shared) = self.ws.lib.clone() else { return };
         let preview = pack::preview_pack(&lock(&shared), &path);
         match preview {
@@ -442,7 +442,7 @@ impl App {
         }
     }
 
-    pub(super) fn pack_dialogs(&mut self, ctx: &egui::Context) {
+    pub(crate) fn pack_dialogs(&mut self, ctx: &egui::Context) {
         let Some(ask) = self.pack_ask.take() else { return };
         let (title, body, yes, no) = match &ask {
             PackAsk::Space { path, preview, .. } => (
@@ -504,7 +504,7 @@ impl App {
 impl App {
     /// File ▸ Import ▸ Inboard Backup…: one folder per Inboard folder, then
     /// the images, with their names, tags, links, trashed state and dates.
-    pub(super) fn import_inboard_dialog(&mut self) {
+    pub(crate) fn import_inboard_dialog(&mut self) {
         let Some(shared) = self.ws.lib.clone() else { return };
         let Some(dir) = rfd::FileDialog::new().set_title("Choose an Inboard Backup Folder").pick_folder() else { return };
         let backup = match falcon_library::inboard::read(&dir) {
@@ -562,7 +562,7 @@ impl App {
 
 impl App {
     /// Library ▸ Empty Cache and Reload: asks first, as Eagle does.
-    pub(super) fn reload_confirm(&mut self, ctx: &egui::Context) {
+    pub(crate) fn reload_confirm(&mut self, ctx: &egui::Context) {
         if !self.confirm_reload {
             return;
         }
@@ -630,7 +630,7 @@ impl App {
 }
 
 /// A library being read on a background thread, for the loading screen.
-pub(super) struct Loading {
+pub(crate) struct Loading {
     path: PathBuf,
     /// Item folders read so far, and how many there are (0 until the
     /// folder list is known).
@@ -642,7 +642,7 @@ pub(super) struct Loading {
 impl App {
     /// Opens the library at `path` on a background thread, showing a
     /// loading screen meanwhile (an open one is just shown).
-    pub(super) fn open_in_background(&mut self, path: PathBuf) {
+    pub(crate) fn open_in_background(&mut self, path: PathBuf) {
         if self.position_of(&path).is_some() || self.loading.is_some() {
             if self.loading.is_none() {
                 self.open(path);
@@ -666,7 +666,7 @@ impl App {
     }
 
     /// Takes a finished background load.
-    pub(super) fn poll_loading(&mut self) {
+    pub(crate) fn poll_loading(&mut self) {
         let Some(l) = &self.loading else { return };
         match l.rx.try_recv() {
             Ok(result) => {
@@ -688,7 +688,7 @@ impl App {
     }
 
     /// The loading screen, when no library is open.
-    pub(super) fn loading_page(&mut self, ui: &mut egui::Ui) {
+    pub(crate) fn loading_page(&mut self, ui: &mut egui::Ui) {
         let r = ui.max_rect();
         super::window_drag(ui, egui::Rect::from_min_size(r.min, egui::vec2(r.width(), t::BAR_HEIGHT)), "loading");
         ui.painter().rect_filled(r, 0.0, t::p().main);
@@ -698,7 +698,7 @@ impl App {
     }
 
     /// The same, as a dialog over the open library.
-    pub(super) fn loading_modal(&mut self, ctx: &egui::Context) {
+    pub(crate) fn loading_modal(&mut self, ctx: &egui::Context) {
         if self.loading.is_none() {
             return;
         }

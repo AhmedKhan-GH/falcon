@@ -17,7 +17,7 @@ fn load_icon(ctx: &egui::Context) -> Option<TextureHandle> {
 impl App {
     /// Draws the About window while `self.about` is set. Esc and a click
     /// outside close it, like the OK button.
-    pub(super) fn about_ui(&mut self, ctx: &egui::Context) {
+    pub(crate) fn about_ui(&mut self, ctx: &egui::Context) {
         if !self.about {
             return;
         }

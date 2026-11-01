@@ -23,14 +23,14 @@ use crate::logic::{self, DupGroup};
 use crate::theme::{self as t, font, mono};
 
 /// Phosphor's copy glyph, for the sidebar entry.
-pub(super) const ICON: &str = "\u{E1CA}";
+pub(crate) const ICON: &str = "\u{E1CA}";
 /// Default similarity threshold in differing hash bits (of 64).
 const THRESHOLD: u32 = 10;
 const THUMB: f32 = 120.0;
 
 /// What a scan looks for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub(super) enum Method {
+pub(crate) enum Method {
     /// Byte-identical originals.
     #[default]
     Same,
@@ -75,7 +75,7 @@ struct Review {
 }
 
 /// State of the page, kept while the app runs.
-pub(super) struct Duplicates {
+pub(crate) struct Duplicates {
     /// Hashes by item id, valid while the original's size and mtime stay
     /// the same. Kept in memory only, like Eagle, which stores none.
     cache: Arc<Mutex<HashCache>>,
@@ -117,7 +117,7 @@ impl Default for Duplicates {
 impl Duplicates {
     /// Notes the view the page is being opened from, so a scan can cover
     /// just its items or just the selection, as Eagle's panel can.
-    pub(super) fn opened_from(&mut self, scope: Scope, order: Vec<String>, selected: Vec<String>) {
+    pub(crate) fn opened_from(&mut self, scope: Scope, order: Vec<String>, selected: Vec<String>) {
         self.came_from = Some((scope, order, selected));
         // A range that no longer has items falls back to everything.
         if self.range_ids().is_some_and(|ids| ids.is_empty()) {
@@ -136,7 +136,7 @@ impl Duplicates {
     }
 
     /// A finished merge, for the summary.
-    pub(super) fn merged(&mut self, report: MergeReport) {
+    pub(crate) fn merged(&mut self, report: MergeReport) {
         self.report = Some(report);
     }
 }
@@ -263,7 +263,7 @@ impl App {
         });
     }
 
-    pub(super) fn duplicates_page(&mut self, ui: &mut Ui, lib: &Library) {
+    pub(crate) fn duplicates_page(&mut self, ui: &mut Ui, lib: &Library) {
         if self.ws.duplicates.root.as_deref().is_some_and(|r| r != lib.root()) {
             let d = &self.ws.duplicates;
             self.ws.duplicates = Duplicates { threshold: d.threshold, method: d.method, came_from: d.came_from.clone(), ..Default::default() };

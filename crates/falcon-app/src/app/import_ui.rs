@@ -20,20 +20,20 @@ fn display_name(path: &std::path::Path) -> String {
 
 /// A failed import, with the options to retry it with.
 #[derive(Debug, Clone)]
-pub(super) struct ImportError {
+pub(crate) struct ImportError {
     pub failure: Failure,
     pub opts: ImportOptions,
 }
 
 /// One file to import and the options to import it with.
-pub(super) struct Job {
+pub(crate) struct Job {
     pub path: PathBuf,
     pub opts: ImportOptions,
 }
 
 /// Import state that belongs to the window rather than a library.
 #[derive(Default)]
-pub(super) struct Imports {
+pub(crate) struct Imports {
     /// The sidebar's rect last frame (None while hidden), and its visible
     /// folder rows, to tell where a drop from Finder landed.
     pub sidebar: Option<Rect>,
@@ -54,7 +54,7 @@ pub(super) struct Imports {
 }
 
 /// A walked folder with 2,000 files or more, imported only once confirmed.
-pub(super) struct Pending {
+pub(crate) struct Pending {
     pub tree: folder_import::Tree,
     pub parent: Option<String>,
     pub files: usize,
@@ -62,7 +62,7 @@ pub(super) struct Pending {
 
 /// An import file dialog, asked for during the frame.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) enum Request {
+pub(crate) enum Request {
     /// Pick files; they go into `folders`.
     Files { folders: Vec<String> },
     /// Pick folders; each is imported with its tree inside `parent`.
@@ -100,7 +100,7 @@ impl App {
     /// Under the empty message in All or an empty folder, an Import Folders…
     /// button, as on Eagle's empty views: from All the folders go to the
     /// top level, from a folder inside it.
-    pub(super) fn empty_import_button(&mut self, ui: &mut eframe::egui::Ui, centre: Pos2) {
+    pub(crate) fn empty_import_button(&mut self, ui: &mut eframe::egui::Ui, centre: Pos2) {
         let parent = match &self.ws.scope {
             Scope::All => None,
             Scope::Folder(id) => Some(id.clone()),
@@ -117,7 +117,7 @@ impl App {
 
     /// Shows the dialog asked for during the frame, if any, and starts the
     /// import. Called with the library lock released.
-    pub(super) fn run_import_request(&mut self) {
+    pub(crate) fn run_import_request(&mut self) {
         let Some(request) = self.imports.request.take() else { return };
         if self.ws.lib.is_none() {
             return;
@@ -147,7 +147,7 @@ impl App {
     /// rest of the sidebar, folders are imported with their trees at the
     /// top level and loose files are ignored (`onDropSidebar`). A library
     /// among them is opened, wherever it lands.
-    pub(super) fn drop_files(&mut self, paths: Vec<PathBuf>, at: Option<Pos2>) {
+    pub(crate) fn drop_files(&mut self, paths: Vec<PathBuf>, at: Option<Pos2>) {
         let target = drop_pos::target(at, self.show_sidebar.then_some(self.imports.sidebar).flatten(), &self.imports.folder_rows);
         match target {
             Target::Grid => self.import(paths),
@@ -175,7 +175,7 @@ impl App {
     /// `uploadFolderToSidebar` does. Eagle's limits apply to each folder:
     /// 15 levels or 100,000 files refuse it, 2,000 files ask first.
     /// Pixave libraries are skipped.
-    pub(super) fn import_folder_trees(&mut self, mut dirs: Vec<PathBuf>, parent: Option<String>) {
+    pub(crate) fn import_folder_trees(&mut self, mut dirs: Vec<PathBuf>, parent: Option<String>) {
         let pixave = dirs.iter().filter(|d| folder_import::is_pixave_library(d)).count();
         dirs.retain(|d| !folder_import::is_pixave_library(d));
         if pixave > 0 {
@@ -230,7 +230,7 @@ impl App {
     /// While imports have failed, a notice under the toolbar ("3 files
     /// failed to import"), as Eagle's error toast: clicking it opens the
     /// list, its × clears the list after a confirmation.
-    pub(super) fn error_toast(&mut self, ui: &mut eframe::egui::Ui, top_center: Pos2) {
+    pub(crate) fn error_toast(&mut self, ui: &mut eframe::egui::Ui, top_center: Pos2) {
         use eframe::egui::{Align2, CornerRadius, Sense, Stroke, StrokeKind, vec2};
         let n = self.ws.progress.lock().unwrap_or_else(|p| p.into_inner()).errors.len();
         if n == 0 {
@@ -397,7 +397,7 @@ impl App {
     /// The large-folder confirmation and the too-large notice, one at a
     /// time. Drawn before the library is locked for the frame, since
     /// confirming creates folders.
-    pub(super) fn import_dialogs(&mut self, ctx: &eframe::egui::Context) {
+    pub(crate) fn import_dialogs(&mut self, ctx: &eframe::egui::Context) {
         use eframe::egui::{self, RichText};
         if let Some(added) = self.imports.select_after.take() {
             self.select_imported(added);
@@ -464,7 +464,7 @@ impl App {
     /// Stages each file without the library lock and commits it under it,
     /// on a background thread, so the window stays responsive. Progress
     /// shows under the toolbar.
-    pub(super) fn spawn_import(&mut self, jobs: Vec<Job>) {
+    pub(crate) fn spawn_import(&mut self, jobs: Vec<Job>) {
         if jobs.is_empty() {
             return;
         }
@@ -510,7 +510,7 @@ impl App {
     /// with no folders or tags, through the usual import so the duplicate
     /// check and the failed-imports list apply. A folder that can't be
     /// watched (gone, or on a network drive) is reported once.
-    pub(super) fn auto_import_tick(&mut self) {
+    pub(crate) fn auto_import_tick(&mut self) {
         let want = match (&self.ws.lib, &self.ws.root) {
             (Some(_), Some(root)) => self.prefs.auto_import_dir(root),
             _ => None,

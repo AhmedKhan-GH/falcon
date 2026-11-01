@@ -12,7 +12,7 @@ use crate::logic;
 use crate::theme as t;
 
 /// The preview window's state.
-pub(super) struct PreviewWin {
+pub(crate) struct PreviewWin {
     pub id: String,
     /// Scale relative to the image's pixels; `None` fits the window.
     zoom: Option<f32>,
@@ -39,7 +39,7 @@ pub fn window_size(natural: (f32, f32)) -> Vec2 {
 impl App {
     /// Opens the item acted on (the viewer's, or the first selected) in
     /// the preview window, replacing what it showed.
-    pub(super) fn open_preview_window(&mut self) {
+    pub(crate) fn open_preview_window(&mut self) {
         if let Some(id) = self.acted_on().into_iter().next() {
             self.used_item(&id);
             self.preview = Some(PreviewWin::new(id));
@@ -47,7 +47,7 @@ impl App {
     }
 
     /// Shows the preview window, if open, as its own OS window.
-    pub(super) fn preview_window(&mut self, ctx: &egui::Context, lib: &Library) {
+    pub(crate) fn preview_window(&mut self, ctx: &egui::Context, lib: &Library) {
         let Some(id) = self.preview.as_ref().map(|p| p.id.clone()) else { return };
         let Some(item) = lib.item(&id).cloned() else {
             self.preview = None;

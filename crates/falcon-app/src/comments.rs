@@ -198,7 +198,7 @@ fn wrapped(ui: &Ui, text: &str, size: f32, color: Color32, width: f32, rows: usi
 
 impl App {
     /// The comment button for the viewer bar at `x`; returns the next free x.
-    pub(super) fn comment_button(&mut self, ui: &mut Ui, item: &Item, x: f32, cy: f32) -> f32 {
+    pub(crate) fn comment_button(&mut self, ui: &mut Ui, item: &Item, x: f32, cy: f32) -> f32 {
         if !supports_regions(item) {
             return x;
         }
@@ -223,7 +223,7 @@ impl App {
     /// Region markers over the image at `shown`, and in comment mode the
     /// drawing of new regions and the note editor. Returns true while
     /// comment mode is on, so the viewer doesn't pan.
-    pub(super) fn comment_overlay(&mut self, ui: &mut Ui, item: &Item, shown: Rect, area: Rect) -> bool {
+    pub(crate) fn comment_overlay(&mut self, ui: &mut Ui, item: &Item, shown: Rect, area: Rect) -> bool {
         if !supports_regions(item) {
             return false;
         }
@@ -424,7 +424,7 @@ impl App {
     }
 
     /// The inspector's comment list with edit and delete.
-    pub(super) fn comment_list(&mut self, ui: &mut Ui, item: &Item) {
+    pub(crate) fn comment_list(&mut self, ui: &mut Ui, item: &Item) {
         let comments = item.comments();
         if comments.is_empty() {
             return;

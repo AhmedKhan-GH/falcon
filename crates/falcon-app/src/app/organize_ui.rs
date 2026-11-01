@@ -13,7 +13,7 @@ use falcon_library::smart_draft::{Kind, PROPERTIES, RATINGS, RuleDraft, RuleFiel
 
 /// State kept by the organising features.
 #[derive(Default)]
-pub(super) struct OrgState {
+pub(crate) struct OrgState {
     /// Locked folders opened with their password this session.
     pub unlocked: HashSet<String>,
     unlock_text: String,
@@ -57,7 +57,7 @@ pub(super) struct OrgState {
 
 impl OrgState {
     /// Forgets the random folder sort's seed, so it shuffles again.
-    pub(super) fn reshuffle(&mut self) {
+    pub(crate) fn reshuffle(&mut self) {
         self.seed = None;
     }
 }
@@ -81,7 +81,7 @@ struct DragGroup(String);
 
 /// A smart folder dragged in the sidebar.
 #[derive(Clone)]
-pub(super) struct DragSmart(String);
+pub(crate) struct DragSmart(String);
 
 #[derive(Clone, Copy, PartialEq)]
 enum PasswordMode {
@@ -101,7 +101,7 @@ struct PasswordDraft {
 }
 
 /// Library changes queued by the organising features.
-pub(super) enum OrgAction {
+pub(crate) enum OrgAction {
     FolderOrder(String, Option<(FolderOrder, bool)>),
     SmartOrder(String, Option<(FolderOrder, bool)>),
     FolderIcon(String, Option<String>, Option<String>),
@@ -139,7 +139,7 @@ pub(super) enum OrgAction {
 
 /// Which stored sort the toolbar's sort menu edits.
 #[derive(Clone)]
-pub(super) enum OrderTarget {
+pub(crate) enum OrderTarget {
     Folder(String),
     Smart(String),
 }
@@ -153,7 +153,7 @@ fn org(a: OrgAction) -> Action {
 
 /// Eagle's colour row: a "no colour" ring, then the eight colours. Returns
 /// the pick (`Some(None)` clears the colour).
-pub(super) fn color_row(ui: &mut Ui, current: Option<&str>) -> Option<Option<String>> {
+pub(crate) fn color_row(ui: &mut Ui, current: Option<&str>) -> Option<Option<String>> {
     let mut pick = None;
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 6.0;
@@ -183,7 +183,7 @@ pub(super) fn color_row(ui: &mut Ui, current: Option<&str>) -> Option<Option<Str
 /// The icon picker: the default icon, then every icon Eagle offers, in a
 /// scrolling grid drawn in the current colour. Returns the pick
 /// (`Some(None)` is the default icon).
-pub(super) fn icon_grid(ui: &mut Ui, current: Option<&str>, tint: Color32, smart: bool) -> Option<Option<String>> {
+pub(crate) fn icon_grid(ui: &mut Ui, current: Option<&str>, tint: Color32, smart: bool) -> Option<Option<String>> {
     let mut pick = None;
     let default = if smart { ic::FOLDER_STAR } else { ic::FOLDER };
     egui::ScrollArea::vertical().id_salt("icon-grid").max_height(320.0).show(ui, |ui| {
@@ -211,7 +211,7 @@ pub(super) fn icon_grid(ui: &mut Ui, current: Option<&str>, tint: Color32, smart
 
 /// The item sort entries for a folder or smart folder: "Global Settings"
 /// (no own sort), the keys, then the direction. Returns the new setting.
-pub(super) fn sort_entries(ui: &mut Ui, current: Option<(FolderOrder, bool)>, manual: bool, global: (OrderBy, bool)) -> Option<Option<(FolderOrder, bool)>> {
+pub(crate) fn sort_entries(ui: &mut Ui, current: Option<(FolderOrder, bool)>, manual: bool, global: (OrderBy, bool)) -> Option<Option<(FolderOrder, bool)>> {
     let mut pick = None;
     let mark = |on: bool| if on { ic::CHECK } else { " " };
     if ui.button(format!("{}  Global Settings", mark(current.is_none()))).clicked() {
@@ -263,7 +263,7 @@ fn tree_drop_feedback<P: Clone + Send + Sync + 'static>(ui: &Ui, resp: &Response
 
 /// A lock on a sidebar row of a folder with a password: closed while
 /// locked, open once unlocked this session.
-pub(super) fn lock_badge(ui: &Ui, row: Rect, shut: bool, has_count: bool) {
+pub(crate) fn lock_badge(ui: &Ui, row: Rect, shut: bool, has_count: bool) {
     let x = row.right() - if has_count { 52.0 } else { 24.0 };
     let glyph = if shut { ic::LOCK_SIMPLE } else { ic::LOCK_SIMPLE_OPEN };
     icon(ui, Pos2::new(x, row.center().y), glyph, 13.0, t::p().text_muted);
@@ -271,7 +271,7 @@ pub(super) fn lock_badge(ui: &Ui, row: Rect, shut: bool, has_count: bool) {
 
 /// A smart folder's sidebar glyph: its own icon, else the grid for a group
 /// (Eagle gives new groups the `grid` icon) or the smart folder icon.
-pub(super) fn smart_look(sf: &SmartFolder) -> &'static str {
+pub(crate) fn smart_look(sf: &SmartFolder) -> &'static str {
     folder_icons::smart_glyph(organize::smart_icon(sf))
 }
 
@@ -280,14 +280,14 @@ pub(super) fn smart_look(sf: &SmartFolder) -> &'static str {
 
 impl App {
     /// The folder's icon glyph and tint for its sidebar row.
-    pub(super) fn folder_look(f: &Folder, open: bool) -> (&'static str, Color32) {
+    pub(crate) fn folder_look(f: &Folder, open: bool) -> (&'static str, Color32) {
         (folder_icons::glyph(f.icon.as_deref(), open), folder_icons::color(f.icon_color.as_deref()).unwrap_or(t::p().text))
     }
 
     /// Reorder and nest by dragging a folder row: an insertion line in the
     /// top or bottom quarter, a highlight in the middle. Queues the move on
     /// release.
-    pub(super) fn folder_drop(&mut self, ui: &Ui, lib: &Library, resp: &Response, f: &Folder, depth: usize) {
+    pub(crate) fn folder_drop(&mut self, ui: &Ui, lib: &Library, resp: &Response, f: &Folder, depth: usize) {
         let zone = tree_drop_feedback::<DragFolder>(ui, resp, depth, true, |d| d.0 == f.id);
         if let (Some(zone), Some(d)) = (zone, resp.dnd_release_payload::<DragFolder>())
             && let Some((parent, index)) = organize::tree_drop(&lib.metadata.folders, &d.0, &f.id, zone)
@@ -301,7 +301,7 @@ impl App {
 
     /// The expand and collapse entries of a tree row's menu (and the whole
     /// menu of its caret): the row and its children, its level, or all.
-    pub(super) fn expand_menu<T: organize::Node>(&mut self, ui: &mut Ui, roots: &[T], id: &str) {
+    pub(crate) fn expand_menu<T: organize::Node>(&mut self, ui: &mut Ui, roots: &[T], id: &str) {
         ui.set_min_width(180.0);
         if ui.button("Expand or Collapse This One").on_hover_text("This item and the ones directly inside it (⌥-click the arrow)").clicked() {
             organize::toggle_with_children(roots, id, &mut self.ws.collapsed);
@@ -317,7 +317,7 @@ impl App {
 
     /// A click on a row's arrow: ⌥⌘ does all, ⌘ the level, ⌥ the row and
     /// its children, and a plain click just the row.
-    pub(super) fn caret_click<T: organize::Node>(&mut self, ui: &Ui, roots: &[T], id: &str) {
+    pub(crate) fn caret_click<T: organize::Node>(&mut self, ui: &Ui, roots: &[T], id: &str) {
         let m = ui.input(|i| i.modifiers);
         match (m.command, m.alt) {
             (true, true) => organize::toggle_all(roots, Some(id), &mut self.ws.collapsed),
@@ -333,7 +333,7 @@ impl App {
 
     /// Whether a right-click on the row landed on its arrow, remembered
     /// while the menu stays open.
-    pub(super) fn caret_menu(ui: &Ui, resp: &Response, on_caret: bool) -> bool {
+    pub(crate) fn caret_menu(ui: &Ui, resp: &Response, on_caret: bool) -> bool {
         let key = resp.id.with("caret-menu");
         if resp.secondary_clicked() {
             ui.data_mut(|d| d.insert_temp(key, on_caret));
@@ -344,7 +344,7 @@ impl App {
     /// Drops onto a Quick Access row, as Eagle does: another pinned row, a
     /// folder or a smart folder lands above the row when released over its
     /// top half and below it over the bottom half, with an insertion line.
-    pub(super) fn quick_drop(&mut self, ui: &Ui, lib: &Library, resp: &Response, target: &str) {
+    pub(crate) fn quick_drop(&mut self, ui: &Ui, lib: &Library, resp: &Response, target: &str) {
         let moved = tree_drop_feedback::<DragQuick>(ui, resp, 0, false, |d| d.0 == target)
             .zip(resp.dnd_release_payload::<DragQuick>())
             .map(|(z, d)| (z, d.0.clone(), None))
@@ -367,7 +367,7 @@ impl App {
 
     /// The folder context menu entries falcon adds: password, item sort,
     /// icon and colour.
-    pub(super) fn folder_menu_extras(&mut self, ui: &mut Ui, lib: &Library, f: &Folder) {
+    pub(crate) fn folder_menu_extras(&mut self, ui: &mut Ui, lib: &Library, f: &Folder) {
         let shut = organize::is_shut(f, &self.ws.org.unlocked);
         // Eagle disables its auto-tag entry while the folder is locked.
         if ui.add_enabled(!shut, egui::Button::new("Auto-Tags…")).on_hover_text("Name and auto-tags (⇧⌘R)").clicked() {
@@ -429,7 +429,7 @@ impl App {
     /// The Sort By submenu that orders folders by title, for a folder whose
     /// parent is `parent` (`None`: on the top level, or the Folders
     /// heading). Asks first, as Eagle does.
-    pub(super) fn folder_title_sort_menu(&mut self, ui: &mut Ui, parent: Option<&str>) {
+    pub(crate) fn folder_title_sort_menu(&mut self, ui: &mut Ui, parent: Option<&str>) {
         ui.menu_button("Sort By", |ui| {
             ui.set_min_width(200.0);
             for (label, sort) in organize::FOLDER_TITLE_SORTS {
@@ -446,7 +446,7 @@ impl App {
 
 impl App {
     /// One smart folder row and, unless collapsed, its children.
-    pub(super) fn smart_row(&mut self, ui: &mut Ui, lib: &Library, roots: &[SmartFolder], sf: &SmartFolder, depth: usize, quick: &HashSet<String>) -> Option<Rect> {
+    pub(crate) fn smart_row(&mut self, ui: &mut Ui, lib: &Library, roots: &[SmartFolder], sf: &SmartFolder, depth: usize, quick: &HashSet<String>) -> Option<Rect> {
         let has_children = !sf.children.is_empty();
         let open = has_children && !self.ws.collapsed.contains(&sf.id);
         let group = sf.is_group();
@@ -610,7 +610,7 @@ impl App {
 
     /// The Smart Folders heading. Its + button (shown on hover) opens
     /// Eagle's menu: a new smart folder, or a new smart folder group.
-    pub(super) fn smart_section(&mut self, ui: &mut Ui) {
+    pub(crate) fn smart_section(&mut self, ui: &mut Ui) {
         let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 25.0), Sense::hover());
         ui.painter().text(Pos2::new(rect.left() + 20.0, rect.center().y), Align2::LEFT_CENTER, "Smart Folders", font(13.0), t::p().text_muted);
         let menu_id = ui.make_persistent_id("smart-add-menu");
@@ -631,7 +631,7 @@ impl App {
     }
 
     /// The smart folder dialog's parent, icon and colour rows.
-    pub(super) fn smart_dialog_extras(ui: &mut Ui, d: &mut SmartDraft, lib: &Library) {
+    pub(crate) fn smart_dialog_extras(ui: &mut Ui, d: &mut SmartDraft, lib: &Library) {
         let roots = lib.smart_folders();
         let choices = organize::flatten(&roots, d.editing.as_deref());
         ui.horizontal(|ui| {
@@ -668,7 +668,7 @@ impl App {
 
     /// Queues the dialog's save: a new smart folder in its parent, or the
     /// edit plus any icon and parent change.
-    pub(super) fn save_smart_draft(&mut self, d: &SmartDraft, name: String, conditions: Vec<serde_json::Value>) {
+    pub(crate) fn save_smart_draft(&mut self, d: &SmartDraft, name: String, conditions: Vec<serde_json::Value>) {
         match d.editing.clone() {
             Some(id) => {
                 self.ws.actions.push(Action::UpdateSmart(id.clone(), name, conditions));
@@ -694,7 +694,7 @@ const MAX_CONDITIONS: usize = 30;
 const MAX_RULES: usize = 30;
 
 /// Every folder as `(id, name)`, in tree order, for the folders rule.
-pub(super) fn folder_choices(roots: &[Folder]) -> Vec<(String, String)> {
+pub(crate) fn folder_choices(roots: &[Folder]) -> Vec<(String, String)> {
     let mut out = Vec::new();
     for r in roots {
         r.walk(&mut |f| out.push((f.id.clone(), f.name.clone())));
@@ -704,7 +704,7 @@ pub(super) fn folder_choices(roots: &[Folder]) -> Vec<(String, String)> {
 
 /// The smart folder dialog's conditions: each with its must/must-not and
 /// all/any choice and its rules, AND-ed together.
-pub(super) fn smart_conditions_ui(ui: &mut Ui, conditions: &mut Vec<ConditionDraft>, folders: &[(String, String)]) {
+pub(crate) fn smart_conditions_ui(ui: &mut Ui, conditions: &mut Vec<ConditionDraft>, folders: &[(String, String)]) {
     let mut remove = None;
     let count = conditions.len();
     for (ci, c) in conditions.iter_mut().enumerate() {
@@ -908,7 +908,7 @@ fn rule_fields_ui(ui: &mut Ui, salt: (usize, usize), f: &mut RuleFields, folders
 impl App {
     /// The view's own sort target and setting, when browsing a folder or
     /// smart folder (which then owns the sort menu, as in Eagle).
-    pub(super) fn own_sort(&self, lib: &Library) -> Option<(OrderTarget, Option<(FolderOrder, bool)>)> {
+    pub(crate) fn own_sort(&self, lib: &Library) -> Option<(OrderTarget, Option<(FolderOrder, bool)>)> {
         // Several picked folders follow the global sort, as in Eagle.
         if self.ws.folders.combined() {
             return None;
@@ -930,7 +930,7 @@ impl App {
     /// Visible item indices for the grid: the scope, search and filter in
     /// the view's own sort (or the global one), without items in locked
     /// folders.
-    pub(super) fn grid_order(&mut self, lib: &Library, only: Option<&HashSet<String>>) -> Vec<usize> {
+    pub(crate) fn grid_order(&mut self, lib: &Library, only: Option<&HashSet<String>>) -> Vec<usize> {
         let own = self.own_sort(lib).and_then(|o| o.1);
         let (key, inc) = organize::base_key(own, (self.ws.sort, self.ws.increase));
         // The global Random sort is finished like a folder's own.
@@ -985,7 +985,7 @@ impl App {
 
     /// The folder whose items can be dragged into a new order right now
     /// (see [`organize::manual_sortable`]).
-    pub(super) fn manual_folder(&self, lib: &Library) -> Option<String> {
+    pub(crate) fn manual_folder(&self, lib: &Library) -> Option<String> {
         let Scope::Folder(id) = &self.ws.scope else { return None };
         // Items from subfolders have no place in this folder's order.
         if self.ws.folders.combined() || self.display.subfolders {
@@ -1000,7 +1000,7 @@ impl App {
     /// card (a bar between list rows), and queues the move on release.
     /// `places` are the cards in content space; `origin` is the content's
     /// top-left on screen.
-    pub(super) fn manual_drag(&mut self, ui: &Ui, folder: &str, places: &[logic::Place], caption: f32, origin: Pos2) {
+    pub(crate) fn manual_drag(&mut self, ui: &Ui, folder: &str, places: &[logic::Place], caption: f32, origin: Pos2) {
         let Some(d) = egui::DragAndDrop::payload::<DragItems>(ui.ctx()) else { return };
         let Some(pos) = ui.ctx().pointer_latest_pos().filter(|p| ui.clip_rect().contains(*p)) else { return };
         let order = &self.ws.order;
@@ -1028,7 +1028,7 @@ impl App {
     /// The sort part of the toolbar's layout menu while a folder or smart
     /// folder owns the sort: changes go to it. With "Global Settings" the
     /// direction still changes the global sort.
-    pub(super) fn own_sort_menu(&mut self, ui: &mut Ui, target: OrderTarget, cur: Option<(FolderOrder, bool)>) {
+    pub(crate) fn own_sort_menu(&mut self, ui: &mut Ui, target: OrderTarget, cur: Option<(FolderOrder, bool)>) {
         ui.label(RichText::new("Sort by (this folder)").color(t::p().text_muted).size(12.0));
         let manual = matches!(target, OrderTarget::Folder(_));
         let pick = sort_entries(ui, cur, manual, (self.ws.sort, self.ws.increase));
@@ -1052,7 +1052,7 @@ impl App {
 
     /// The locked folder that must be opened before the current scope
     /// shows anything.
-    pub(super) fn scope_gate<'a>(&self, lib: &'a Library) -> Option<&'a Folder> {
+    pub(crate) fn scope_gate<'a>(&self, lib: &'a Library) -> Option<&'a Folder> {
         match &self.ws.scope {
             Scope::Folder(id) => organize::lock_gate(&lib.metadata.folders, id, &self.ws.org.unlocked),
             _ => None,
@@ -1060,7 +1060,7 @@ impl App {
     }
 
     /// Eagle's unlock screen, shown in place of a locked folder's items.
-    pub(super) fn unlock_screen(&mut self, ui: &mut Ui, gate: &Folder, lib: &Library) {
+    pub(crate) fn unlock_screen(&mut self, ui: &mut Ui, gate: &Folder, lib: &Library) {
         let area = ui.max_rect();
         let c = area.center() - vec2(0.0, 60.0);
         icon(ui, c, ic::LOCK_SIMPLE, 48.0, t::p().text_muted);
@@ -1106,7 +1106,7 @@ impl App {
 
 impl App {
     /// The All Tags page's mode switch and New Group button.
-    pub(super) fn tag_page_controls(&mut self, ui: &mut Ui) {
+    pub(crate) fn tag_page_controls(&mut self, ui: &mut Ui) {
         ui.add_space(12.0);
         ui.label(RichText::new("Group by").color(t::p().text_muted));
         if ui.selectable_label(!self.ws.org.by_group, "Alphabet").clicked() {
@@ -1135,13 +1135,13 @@ impl App {
     }
 
     /// Whether the page shows tag groups.
-    pub(super) fn tags_by_group(&self) -> bool {
+    pub(crate) fn tags_by_group(&self) -> bool {
         self.ws.org.by_group
     }
 
     /// The All Tags page in tag-group mode: one section per group, then
     /// the tags in no group.
-    pub(super) fn tag_groups_page(&mut self, ui: &mut Ui, lib: &Library, filter: &str) {
+    pub(crate) fn tag_groups_page(&mut self, ui: &mut Ui, lib: &Library, filter: &str) {
         // The sort orders the ungrouped tags; groups keep their own order.
         let mut counts = logic::tag_counts(lib.items());
         self.ws.org.tag_sort.apply(&mut counts);
@@ -1310,21 +1310,21 @@ impl App {
     }
 
     /// Lets a tag chip be dragged onto a group heading.
-    pub(super) fn tag_chip_drag(resp: &Response, tag: &str) {
+    pub(crate) fn tag_chip_drag(resp: &Response, tag: &str) {
         if resp.drag_started() {
             resp.dnd_set_drag_payload(DragTag(tag.to_string()));
         }
     }
 
     /// The colour dot of a tag filed in a group (grey for an uncoloured group).
-    pub(super) fn tag_dot(lib: &Library, tag: &str) -> Option<Color32> {
+    pub(crate) fn tag_dot(lib: &Library, tag: &str) -> Option<Color32> {
         organize::group_of(&lib.metadata.tags_groups, tag).map(|g| folder_icons::color(g.color.as_deref()).unwrap_or(t::p().icon_none))
     }
 
     /// The tag menu's group entries for the picked `tags`: Add to Group
     /// (they also stay in their other groups), Move to Group (they leave
     /// them), New Group… and Remove from Group.
-    pub(super) fn tag_group_menu(&mut self, ui: &mut Ui, lib: &Library, tags: &[String]) {
+    pub(crate) fn tag_group_menu(&mut self, ui: &mut Ui, lib: &Library, tags: &[String]) {
         let groups = &lib.metadata.tags_groups;
         let in_all = |g: &falcon_library::model::TagGroup| tags.iter().all(|t| g.tags.contains(t));
         ui.add_enabled_ui(!groups.is_empty(), |ui| {
@@ -1366,7 +1366,7 @@ impl App {
 
     /// Eagle's merge dialog: the picked tags become one, named in a field
     /// that starts with the first tag's name.
-    pub(super) fn merge_dialog(&mut self, ctx: &egui::Context) {
+    pub(crate) fn merge_dialog(&mut self, ctx: &egui::Context) {
         let Some((tags, mut name)) = self.ws.org.merge.take() else { return };
         let mut keep = true;
         let modal = egui::Modal::new(egui::Id::unique("merge-tags")).show(ctx, |ui| {
@@ -1408,7 +1408,7 @@ impl App {
 impl App {
     /// The filter bar's saved filter menu: save the current filter, then
     /// the saved ones to apply, rename, move or delete.
-    pub(super) fn saved_filters_menu(&mut self, ui: &mut Ui, lib: &Library) {
+    pub(crate) fn saved_filters_menu(&mut self, ui: &mut Ui, lib: &Library) {
         let n = lib.saved_filters.len();
         let resp = filter_chip(ui, &format!("{}  Saved", ic::FLOPPY_DISK), None);
         egui::Popup::menu(&resp).show(|ui| {
@@ -1475,7 +1475,7 @@ impl App {
         self.ws.org.auto_tag = Some(AutoTagDraft { id: f.id.clone(), name: f.name.clone(), tags: f.tags.clone(), typed: String::new() });
     }
 
-    pub(super) fn organize_dialogs(&mut self, ctx: &egui::Context, lib: &Library) {
+    pub(crate) fn organize_dialogs(&mut self, ctx: &egui::Context, lib: &Library) {
         self.merge_dialog(ctx);
         if let Some(id) = self.ws.org.settings_request.take()
             && let Some(f) = logic::find_folder(&lib.metadata.folders, &id)
@@ -1718,7 +1718,7 @@ impl App {
 // Applying changes
 
 impl App {
-    pub(super) fn apply_organize(&mut self, lib: &mut Library, a: OrgAction) -> falcon_library::Result<()> {
+    pub(crate) fn apply_organize(&mut self, lib: &mut Library, a: OrgAction) -> falcon_library::Result<()> {
         match a {
             OrgAction::FolderOrder(id, v) => lib.set_folder_order(&id, v.map(|x| x.0), v.is_none_or(|x| x.1)),
             OrgAction::SmartOrder(id, v) => lib.set_smart_folder_order(&id, v.map(|x| x.0), v.is_none_or(|x| x.1)),

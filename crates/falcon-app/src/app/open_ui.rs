@@ -19,18 +19,18 @@ use crate::theme::{self as t, font};
 const CARET: &str = ic::CARET_DOWN;
 
 /// The originals of `ids`, in order, skipping ids not in the library.
-pub(super) fn originals(lib: &Library, ids: &[String]) -> Vec<PathBuf> {
+pub(crate) fn originals(lib: &Library, ids: &[String]) -> Vec<PathBuf> {
     ids.iter().filter_map(|id| lib.item(id)).map(|i| i.original_path(lib.root())).collect()
 }
 
 impl App {
-    pub(super) fn shortcut_text(&self, ctx: &egui::Context, cmd: Command) -> String {
+    pub(crate) fn shortcut_text(&self, ctx: &egui::Context, cmd: Command) -> String {
         self.shortcuts.binding(cmd).map(|c| shortcuts::display(ctx, &c)).unwrap_or_default()
     }
 
     /// Menu entries for `files`: Open in Default App (every file), Open
     /// With (one file, as in Eagle) and Show in Finder.
-    pub(super) fn open_menu(&mut self, ui: &mut Ui, files: &[PathBuf]) {
+    pub(crate) fn open_menu(&mut self, ui: &mut Ui, files: &[PathBuf]) {
         let def = self.shortcut_text(ui.ctx(), Command::OpenDefault);
         if ui.add(egui::Button::new("Open in Default App").shortcut_text(def)).clicked() {
             open_with::open_default(files);
@@ -49,13 +49,13 @@ impl App {
     /// app (`default`) or show it in Finder.
     /// Shows the selected items' originals in Quick Look (Space, when
     /// Preferences says so).
-    pub(super) fn quick_look(&mut self) {
+    pub(crate) fn quick_look(&mut self) {
         let Some(shared) = self.ws.lib.clone() else { return };
         let files = originals(&super::lock(&shared), &self.ws.selected);
         open_with::quick_look(&files);
     }
 
-    pub(super) fn open_keys(&mut self, default: bool) {
+    pub(crate) fn open_keys(&mut self, default: bool) {
         let Some(shared) = self.ws.lib.clone() else { return };
         let files = {
             let lib = super::lock(&shared);
@@ -75,7 +75,7 @@ impl App {
     /// Actions that read originals or thumbnails on this thread (rotate,
     /// flip, crop, refresh) skip items still in iCloud: their download
     /// starts and the status line says so. Returns the ids that can go ahead.
-    pub(super) fn local_only(&mut self, lib: &Library, ids: &[String]) -> Vec<String> {
+    pub(crate) fn local_only(&mut self, lib: &Library, ids: &[String]) -> Vec<String> {
         let ctx = self.ctx.clone();
         let mut waiting = 0;
         let ok: Vec<String> = ids
@@ -137,7 +137,7 @@ impl App {
     /// The viewer's screen while `item`'s original is still in iCloud: the
     /// preview (if cached) dimmed, a line of state and a bar. Returns true
     /// while it shows, so nothing reads the original on this thread.
-    pub(super) fn icloud_viewer(&mut self, parent: &mut Ui, lib: &Library, item: &Item, screen: Rect) -> bool {
+    pub(crate) fn icloud_viewer(&mut self, parent: &mut Ui, lib: &Library, item: &Item, screen: Rect) -> bool {
         let ctx = &parent.ctx().clone();
         let path = item.original_path(lib.root());
         let state = self.fetches.ensure(ctx, &path);
@@ -191,7 +191,7 @@ impl App {
 }
 
 /// The status line when an action skipped items still in iCloud.
-pub(super) fn waiting_message(n: usize) -> String {
+pub(crate) fn waiting_message(n: usize) -> String {
     if n == 1 {
         "Downloading 1 item from iCloud; try again once it is local".into()
     } else {

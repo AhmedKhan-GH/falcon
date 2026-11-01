@@ -8,7 +8,7 @@ use super::{Action, App};
 use crate::theme as t;
 
 /// The dialog as typed so far.
-pub(super) struct ExtDialog {
+pub(crate) struct ExtDialog {
     pub id: String,
     pub current: String,
     pub text: String,
@@ -19,7 +19,7 @@ pub(super) struct ExtDialog {
 }
 
 impl App {
-    pub(super) fn ext_dialog(&mut self, ctx: &egui::Context) {
+    pub(crate) fn ext_dialog(&mut self, ctx: &egui::Context) {
         let Some(mut d) = self.ws.ext_dialog.take() else { return };
         let mut keep = true;
         let modal = egui::Modal::new(d.uid).show(ctx, |ui| {

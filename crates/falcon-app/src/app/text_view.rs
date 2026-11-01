@@ -31,7 +31,7 @@ const LINE: f32 = 1.6;
 const TITLE: f32 = 20.0;
 
 /// The text on screen and what is known of the file under it.
-pub(super) struct TextView {
+pub(crate) struct TextView {
     /// The item shown; the state is dropped (after a last save) once the
     /// viewer shows something else.
     pub id: String,
@@ -146,7 +146,7 @@ fn link_at(galley: &Galley, text: &str, pos: egui::Vec2) -> Option<String> {
 impl App {
     /// Draws the viewer for a text item and returns true; false for any
     /// other item.
-    pub(super) fn text_viewer(&mut self, parent: &mut Ui, lib: &Library, item: &Item, screen: Rect) -> bool {
+    pub(crate) fn text_viewer(&mut self, parent: &mut Ui, lib: &Library, item: &Item, screen: Rect) -> bool {
         if !item.ext.eq_ignore_ascii_case("txt") {
             return false;
         }
@@ -337,7 +337,7 @@ impl App {
     /// Saves the text viewer's typing once it is due, or at once when the
     /// viewer has moved off the item (its state is then dropped). Runs
     /// each frame with the library locked.
-    pub(super) fn text_saves(&mut self, lib: &mut Library, now: f64) {
+    pub(crate) fn text_saves(&mut self, lib: &mut Library, now: f64) {
         let Some(view) = self.ws.text.as_mut() else { return };
         let gone = self.ws.viewer.as_deref() != Some(view.id.as_str());
         if (gone || view.save_now || view.autosave.due(now))
@@ -355,7 +355,7 @@ impl App {
     /// (taking its auto-tags), then opened in the viewer with the cursor in
     /// the text. The blank file is made in a temporary folder of its own
     /// and removed once imported.
-    pub(super) fn new_text_file(&mut self, lib: &mut Library, folders: Vec<String>) -> falcon_library::Result<()> {
+    pub(crate) fn new_text_file(&mut self, lib: &mut Library, folders: Vec<String>) -> falcon_library::Result<()> {
         // Typing in the text open now is saved before it is replaced.
         if let Some(open) = &mut self.ws.text {
             open.save(lib)?;

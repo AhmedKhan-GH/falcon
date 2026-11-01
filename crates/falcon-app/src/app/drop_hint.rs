@@ -9,7 +9,7 @@ use crate::drop_pos::{self, Target};
 use crate::theme::{self as t, font};
 
 impl App {
-    pub(super) fn drop_hint(&mut self, ctx: &egui::Context) {
+    pub(crate) fn drop_hint(&mut self, ctx: &egui::Context) {
         let dragging = ctx.input(|i| !i.raw.hovered_files.is_empty());
         let ours = self.native_drag.load(std::sync::atomic::Ordering::Relaxed);
         if !dragging || ours || self.ws.lib.is_none() {

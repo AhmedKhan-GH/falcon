@@ -66,7 +66,7 @@ impl App {
     /// switch. With that on, every folder under it gets a card. Clicking
     /// the heading folds the cards away (for every folder, as in Eagle).
     /// Takes no space outside a folder with children.
-    pub(super) fn subfolder_strip(&mut self, ui: &mut Ui, lib: &Library) {
+    pub(crate) fn subfolder_strip(&mut self, ui: &mut Ui, lib: &Library) {
         let Scope::Folder(id) = &self.ws.scope else { return };
         let Some(folder) = logic::find_folder(&lib.metadata.folders, id) else { return };
         if folder.children.is_empty() || self.ws.layout == logic::Layout::List {

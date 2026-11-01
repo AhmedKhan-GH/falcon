@@ -15,7 +15,7 @@ const GAP: f32 = 2.0;
 
 /// The picker's state while it is open.
 #[derive(Default)]
-pub(super) struct TagPicker {
+pub(crate) struct TagPicker {
     pub open: bool,
     keyword: String,
     /// The keyword the highlight was last chosen for.
@@ -44,7 +44,7 @@ enum Act {
 impl App {
     /// Opens the picker for the selection (or the item in the viewer),
     /// near `at` (the pointer when `None`). Opening it again keeps it.
-    pub(super) fn open_tag_picker(&mut self, ctx: &egui::Context, at: Option<Pos2>) {
+    pub(crate) fn open_tag_picker(&mut self, ctx: &egui::Context, at: Option<Pos2>) {
         let p = &mut self.ws.picker;
         if !p.open {
             p.keyword.clear();
@@ -65,7 +65,7 @@ impl App {
         p.highlight = None;
     }
 
-    pub(super) fn tag_picker_ui(&mut self, ctx: &egui::Context, lib: &Library) {
+    pub(crate) fn tag_picker_ui(&mut self, ctx: &egui::Context, lib: &Library) {
         if !self.ws.picker.open {
             return;
         }

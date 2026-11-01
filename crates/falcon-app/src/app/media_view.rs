@@ -25,7 +25,7 @@ const PLAYED: Color32 = Color32::from_rgb(waveform::COLOR[0], waveform::COLOR[1]
 /// Returns where the name starts and the x left of what was drawn on the
 /// right, so a viewer can add its own controls there before `bar_name`
 /// fits the name into what is left.
-pub(super) fn bar_shell(app: &mut App, ui: &mut Ui, item: &Item, bar: Rect) -> (f32, f32) {
+pub(crate) fn bar_shell(app: &mut App, ui: &mut Ui, item: &Item, bar: Rect) -> (f32, f32) {
     let p = ui.painter().clone();
     p.rect_filled(bar, 0.0, t::p().main);
     window_drag(ui, bar, "viewer");
@@ -64,7 +64,7 @@ pub(super) fn bar_shell(app: &mut App, ui: &mut Ui, item: &Item, bar: Rect) -> (
 }
 
 /// The item's name in the viewer bar, between `left` and `right`.
-pub(super) fn bar_name(ui: &Ui, item: &Item, bar: Rect, left: f32, right: f32) {
+pub(crate) fn bar_name(ui: &Ui, item: &Item, bar: Rect, left: f32, right: f32) {
     let name = format!("{}.{}", item.name, item.ext);
     let g = galley(ui, &name, font(14.0), t::p().text, (right - left - 12.0).clamp(0.0, 360.0));
     ui.painter().galley(Pos2::new(left, bar.center().y - g.size().y / 2.0), g, t::p().text);
@@ -72,7 +72,7 @@ pub(super) fn bar_name(ui: &Ui, item: &Item, bar: Rect, left: f32, right: f32) {
 
 /// The bar for viewers with no controls of their own in it (audio, font,
 /// video, the iCloud wait). Returns the x left of its right-hand buttons.
-pub(super) fn top_bar(app: &mut App, ui: &mut Ui, item: &Item, bar: Rect) -> f32 {
+pub(crate) fn top_bar(app: &mut App, ui: &mut Ui, item: &Item, bar: Rect) -> f32 {
     let (left, right) = bar_shell(app, ui, item, bar);
     bar_name(ui, item, bar, left, right);
     right
@@ -82,7 +82,7 @@ impl App {
     /// Draws the viewer for an audio item, or a font egui can read, and
     /// returns true; returns false for anything else, which the image
     /// viewer shows.
-    pub(super) fn media_viewer(&mut self, parent: &mut Ui, lib: &Library, item: &Item, screen: Rect) -> bool {
+    pub(crate) fn media_viewer(&mut self, parent: &mut Ui, lib: &Library, item: &Item, screen: Rect) -> bool {
         let ctx = &parent.ctx().clone();
         let audio = media::is_audio(&item.ext);
         if !audio && !self.font_ready(ctx, lib, item) {
@@ -220,7 +220,7 @@ impl App {
 
 /// The inspector rows for audio, video, camera and font metadata, when the
 /// item has them: `duration`, `bpm`, `rawMetas` and `fontMetas`.
-pub(super) fn media_props(ui: &mut Ui, item: &Item) {
+pub(crate) fn media_props(ui: &mut Ui, item: &Item) {
     if let Some(d) = search::duration(item) {
         super::prop(ui, "Duration", &logic::format_duration(d));
     }

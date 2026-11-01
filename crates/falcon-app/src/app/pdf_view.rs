@@ -941,7 +941,7 @@ struct Selecting {
 
 /// The sidebar's two lists, as in pdf.js's sidebar.
 #[derive(Clone, Copy, PartialEq)]
-pub(super) enum Tab {
+pub(crate) enum Tab {
     Thumbnails,
     Outline,
 }
@@ -1316,7 +1316,7 @@ impl Open {
 
 /// The reader's state: the open document, and what it remembers.
 #[derive(Default)]
-pub(super) struct PdfState {
+pub(crate) struct PdfState {
     open: Option<Open>,
     /// Last page and zoom of recent documents, newest last, saved between
     /// launches as pdf.js saves its view history.
@@ -1364,7 +1364,7 @@ impl PdfState {
     }
 }
 
-pub(super) fn is_pdf(item: &Item) -> bool {
+pub(crate) fn is_pdf(item: &Item) -> bool {
     item.ext.eq_ignore_ascii_case("pdf")
 }
 
@@ -1374,7 +1374,7 @@ pub(super) fn is_pdf(item: &Item) -> bool {
 impl App {
     /// The reader's keys, read before the app's own so ⌘F, ⌘C, zoom and
     /// the scrolling keys act on the document.
-    pub(super) fn pdf_keys(&mut self, ctx: &egui::Context) {
+    pub(crate) fn pdf_keys(&mut self, ctx: &egui::Context) {
         let Some(viewer) = self.ws.viewer.as_deref() else { return };
         let Some(o) = self.pdf.open.as_mut().filter(|o| o.id == viewer && o.status == Status::Ready) else { return };
         if self.prefs_window.open {
@@ -1418,7 +1418,7 @@ impl App {
 
     /// Draws the reader for a PDF item and returns true; false for anything
     /// else (and off macOS, where the image viewer shows the preview).
-    pub(super) fn pdf_viewer(&mut self, parent: &mut Ui, lib: &Library, item: &Item, screen: Rect) -> bool {
+    pub(crate) fn pdf_viewer(&mut self, parent: &mut Ui, lib: &Library, item: &Item, screen: Rect) -> bool {
         let ctx = &parent.ctx().clone();
         if !cfg!(target_os = "macos") || !is_pdf(item) {
             return false;

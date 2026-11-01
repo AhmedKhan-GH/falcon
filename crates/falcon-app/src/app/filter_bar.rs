@@ -198,7 +198,7 @@ pub fn type_label(t: &str) -> String {
 }
 
 impl App {
-    pub(super) fn filter_bar(&mut self, ui: &mut Ui, lib: &Library) {
+    pub(crate) fn filter_bar(&mut self, ui: &mut Ui, lib: &Library) {
         let r = ui.max_rect();
         ui.painter().hline(r.x_range(), r.bottom() - 0.5, Stroke::new(1.0, t::p().divider));
         let inner = r.shrink2(vec2(GRID_PAD_X, 7.0));
@@ -619,7 +619,7 @@ impl App {
 
     /// Opening another view clears the filter and the search, unless the
     /// bar's Lock is on (Eagle's `resetPage`).
-    pub(super) fn view_changed(&mut self) {
+    pub(crate) fn view_changed(&mut self) {
         if !self.ws.filter_ui.locked {
             self.reset_filter();
             self.ws.query.clear();

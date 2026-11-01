@@ -86,11 +86,11 @@ impl SeekPreview {
 }
 
 /// How long the volume tip stays up after the last change, in seconds.
-pub(super) const TIP_SECS: f64 = 1.0;
+pub(crate) const TIP_SECS: f64 = 1.0;
 
 /// Eagle's volume tip: the level's speaker and the percentage in a dark
 /// box whose top right corner is at `corner`.
-pub(super) fn volume_tip(p: &egui::Painter, corner: Pos2, percent: u32) {
+pub(crate) fn volume_tip(p: &egui::Painter, corner: Pos2, percent: u32) {
     let glyph = [ic::SPEAKER_X, ic::SPEAKER_NONE, ic::SPEAKER_LOW, ic::SPEAKER_HIGH][usize::from(volume_level(percent))];
     let g = p.layout_no_wrap(format!("{percent}%"), font(12.0), Color32::WHITE);
     let size = vec2(8.0 + 22.0 + 2.0 + g.size().x + 12.0, 30.0);
@@ -212,7 +212,7 @@ struct Draft {
 }
 
 /// The viewer's video player and what it remembers between items.
-pub(super) struct VideoState {
+pub(crate) struct VideoState {
     /// The item the player belongs to.
     id: String,
     player: Option<Video>,
@@ -473,7 +473,7 @@ fn timed(item: &Item) -> Vec<(usize, f64, Comment)> {
 impl App {
     /// Player keys while a video or an audio item is in the viewer, read
     /// before the app's own keys so Space and ⌘-arrows act on the player.
-    pub(super) fn video_keys(&mut self, ctx: &egui::Context) {
+    pub(crate) fn video_keys(&mut self, ctx: &egui::Context) {
         let viewer = self.ws.viewer.as_deref();
         let (video, audio) = (viewer.is_some() && self.video.loaded() == viewer, viewer.is_some() && self.audio.loaded() == viewer);
         if !(video || audio) || self.prefs_window.open || ctx.memory(|m| m.focused().is_some()) {
@@ -675,7 +675,7 @@ impl App {
     /// Draws the viewer for a video and returns true: the player, or
     /// Eagle's "can't play" page when AVFoundation refuses the file. False
     /// for anything that isn't a video.
-    pub(super) fn video_viewer(&mut self, parent: &mut Ui, lib: &Library, item: &Item, screen: Rect) -> bool {
+    pub(crate) fn video_viewer(&mut self, parent: &mut Ui, lib: &Library, item: &Item, screen: Rect) -> bool {
         let ctx = &parent.ctx().clone();
         if !media::is_video(&item.ext.to_lowercase()) {
             return false;

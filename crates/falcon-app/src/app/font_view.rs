@@ -103,7 +103,7 @@ pub struct FontLook {
 
 /// The font viewer's state for the font on screen.
 #[derive(Default)]
-pub(super) struct FontView {
+pub(crate) struct FontView {
     id: String,
     /// The family the font is registered under, or `None` if egui can't
     /// read it.
@@ -129,7 +129,7 @@ pub(super) struct FontView {
 
 /// Whether egui can parse a font, checked with the same parser it uses, as
 /// it panics on fonts it can't read.
-pub(super) fn egui_can_read(data: &[u8]) -> bool {
+pub(crate) fn egui_can_read(data: &[u8]) -> bool {
     skrifa::FontRef::from_index(data, 0).is_ok()
 }
 
@@ -236,7 +236,7 @@ fn metas(item: &Item) -> serde_json::Map<String, serde_json::Value> {
 impl App {
     /// Registers the font with egui the first time it is viewed; true once
     /// egui has it (a frame later).
-    pub(super) fn font_ready(&mut self, ctx: &egui::Context, lib: &Library, item: &Item) -> bool {
+    pub(crate) fn font_ready(&mut self, ctx: &egui::Context, lib: &Library, item: &Item) -> bool {
         if search::type_group(&item.ext) != Some("font") {
             return false;
         }
@@ -291,7 +291,7 @@ impl App {
         }
     }
 
-    pub(super) fn font_view(&mut self, ui: &mut Ui, lib: &Library, item: &Item, area: Rect) {
+    pub(crate) fn font_view(&mut self, ui: &mut Ui, lib: &Library, item: &Item, area: Rect) {
         let Some(family) = self.ws.font_view.family.clone() else { return };
         let look = self.font_look;
         let (bg, ink) = look.theme.colors().unwrap_or((t::p().main, t::p().text));
@@ -592,7 +592,7 @@ impl App {
 
     /// Whether the viewer shows this font in the font viewer (digits rate
     /// there rather than zoom).
-    pub(super) fn font_viewer_open(&self) -> bool {
+    pub(crate) fn font_viewer_open(&self) -> bool {
         self.ws.viewer.as_deref() == Some(self.ws.font_view.id.as_str()) && self.ws.font_view.family.is_some()
     }
 }

@@ -9,7 +9,7 @@ use super::App;
 
 /// The modes' state, kept by the app.
 #[derive(Default)]
-pub(super) struct Modes {
+pub(crate) struct Modes {
     /// Presentation mode: the viewer fills the screen, without the panels
     /// or its bar, as Eagle's `isSlideshowMode`.
     pub presenting: bool,
@@ -34,7 +34,7 @@ impl App {
     /// Eagle's Enter / Leave Presentation Mode (F5, middle click in the
     /// viewer): the selected item opens in the viewer, the window goes
     /// full screen and the panels and the viewer's bar hide.
-    pub(super) fn toggle_presentation(&mut self, ctx: &egui::Context) {
+    pub(crate) fn toggle_presentation(&mut self, ctx: &egui::Context) {
         if self.modes.presenting {
             self.leave_presentation(ctx);
             return;
@@ -52,7 +52,7 @@ impl App {
 
     /// Ends presentation mode, leaving full screen unless the window was
     /// full screen before. The viewer stays open, as in Eagle.
-    pub(super) fn leave_presentation(&mut self, ctx: &egui::Context) {
+    pub(crate) fn leave_presentation(&mut self, ctx: &egui::Context) {
         if !self.modes.presenting {
             return;
         }
@@ -64,7 +64,7 @@ impl App {
 
     /// Once a frame: presentation ends when the viewer closes or the window
     /// leaves full screen by other means, as Eagle's `leave-full-screen`.
-    pub(super) fn follow_modes(&mut self, ctx: &egui::Context) {
+    pub(crate) fn follow_modes(&mut self, ctx: &egui::Context) {
         if !self.modes.presenting {
             return;
         }
@@ -80,7 +80,7 @@ impl App {
 
     /// Eagle's Always on Top (⇧T): the main window's level, through
     /// eframe's `ViewportCommand::WindowLevel`.
-    pub(super) fn toggle_on_top(&mut self, ctx: &egui::Context) {
+    pub(crate) fn toggle_on_top(&mut self, ctx: &egui::Context) {
         self.modes.on_top = !self.modes.on_top;
         let level = if self.modes.on_top { egui::WindowLevel::AlwaysOnTop } else { egui::WindowLevel::Normal };
         ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(level));
@@ -88,7 +88,7 @@ impl App {
 
     /// Whether the sidebar and the inspector show now (never while
     /// presenting).
-    pub(super) fn panels_shown(&self) -> (bool, bool) {
+    pub(crate) fn panels_shown(&self) -> (bool, bool) {
         let p = self.modes.presenting;
         (self.show_sidebar && !p, self.show_inspector && !p)
     }

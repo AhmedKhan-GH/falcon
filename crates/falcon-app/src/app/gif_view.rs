@@ -23,7 +23,7 @@ const PAUSE: &str = "\u{E39E}";
 const FILM_STRIP: &str = "\u{E792}";
 const DOTS_THREE: &str = "\u{E1FE}";
 /// Height of the player's bar under the picture.
-pub(super) const BAR: f32 = 48.0;
+pub(crate) const BAR: f32 = 48.0;
 /// Scroll distance over the scrub bar that steps one frame.
 const WHEEL_STEP: f32 = 24.0;
 
@@ -37,7 +37,7 @@ enum Drag {
 
 /// The player bar's state for the open item.
 #[derive(Default)]
-pub(super) struct GifUi {
+pub(crate) struct GifUi {
     drag: Option<Drag>,
     /// Whether to play again when the drag ends.
     resume: bool,
@@ -56,7 +56,7 @@ impl App {
 
     /// The viewer's area split into the picture's part and, when the player
     /// shows, its bar along the bottom.
-    pub(super) fn gif_split(&self, item: &Item, area: Rect) -> (Rect, Option<Rect>) {
+    pub(crate) fn gif_split(&self, item: &Item, area: Rect) -> (Rect, Option<Rect>) {
         if !self.gif_player_on(&item.ext) {
             return (area, None);
         }
@@ -66,7 +66,7 @@ impl App {
 
     /// The viewer toolbar's button for the frame player (GIFs only), drawn
     /// at `x`; returns where the next tool goes.
-    pub(super) fn gif_toggle_button(&mut self, ui: &mut Ui, item: &Item, x: f32, cy: f32) -> f32 {
+    pub(crate) fn gif_toggle_button(&mut self, ui: &mut Ui, item: &Item, x: f32, cy: f32) -> f32 {
         if !is_gif(&item.ext) {
             return x;
         }
@@ -83,7 +83,7 @@ impl App {
 
     /// The player keys while the frame player shows, read before the app's
     /// own keys so Space plays and pauses instead of closing the viewer.
-    pub(super) fn gif_keys(&mut self, ctx: &egui::Context) {
+    pub(crate) fn gif_keys(&mut self, ctx: &egui::Context) {
         if self.ws.viewer.is_none() {
             // Eagle turns the player off when the viewer closes.
             self.ws.gif_player = false;
@@ -125,7 +125,7 @@ impl App {
 
     /// Draws the player's bar in `bar`. A click on the picture (`canvas`)
     /// plays or pauses, as in Eagle.
-    pub(super) fn gif_toolbar(&mut self, ui: &mut Ui, item: &Item, bar: Rect, canvas: &Response) {
+    pub(crate) fn gif_toolbar(&mut self, ui: &mut Ui, item: &Item, bar: Rect, canvas: &Response) {
         let tips = [
             ("Previous Frame", self.shortcut_text(ui.ctx(), Command::Player(PlayerKey::Frames(-1)))),
             ("Next Frame", self.shortcut_text(ui.ctx(), Command::Player(PlayerKey::Frames(1)))),
@@ -326,7 +326,7 @@ impl App {
 
     /// Keeps a GIF or WebP card playing while it is hovered (⌥ keeps it
     /// still), or always with the preference on, as in Eagle.
-    pub(super) fn card_anim(&mut self, ui: &Ui, lib: &Library, item: &Item, card: Rect, hovered: bool) {
+    pub(crate) fn card_anim(&mut self, ui: &Ui, lib: &Library, item: &Item, card: Rect, hovered: bool) {
         let Some(kind) = anim::card_kind(&item.ext) else { return };
         let alt = ui.input(|i| i.modifiers.alt);
         if !(self.prefs.always_play_animated || hovered && !alt) || !self.ws.cards.may_play(&item.id) {
@@ -345,7 +345,7 @@ impl App {
 
     /// The frame of a GIF or animated WebP shown in the hover preview at
     /// `rect`, while it plays.
-    pub(super) fn hover_anim(&mut self, ctx: &egui::Context, lib: &Library, item: &Item, rect: Rect) -> Option<TextureHandle> {
+    pub(crate) fn hover_anim(&mut self, ctx: &egui::Context, lib: &Library, item: &Item, rect: Rect) -> Option<TextureHandle> {
         let kind = anim::card_kind(&item.ext)?;
         let path = item.original_path(lib.root());
         if crate::icloud::is_dataless(&path) {

@@ -114,7 +114,7 @@ pub struct Tools {
 impl App {
     /// Card context-menu entries for these edits. `targets` are the items
     /// the menu acts on.
-    pub(super) fn edit_menu(&mut self, ui: &mut Ui, item: &Item, targets: &[String], lib: &Library) {
+    pub(crate) fn edit_menu(&mut self, ui: &mut Ui, item: &Item, targets: &[String], lib: &Library) {
         let single = targets.len() == 1;
         ui.separator();
         // Eagle's Pin to Top / Unpin from Top, inside a folder: every picked
@@ -183,7 +183,7 @@ impl App {
 
     /// Applies one edit. Thumbnails of changed items are dropped from the
     /// texture cache so the new pixels show.
-    pub(super) fn apply_edit(&mut self, lib: &mut Library, op: Op) -> falcon_library::Result<()> {
+    pub(crate) fn apply_edit(&mut self, lib: &mut Library, op: Op) -> falcon_library::Result<()> {
         match op {
             Op::PickCustomThumbnail(id) => {
                 let picked = rfd::FileDialog::new().set_title("Choose Thumbnail").add_filter("Images", &["jpg", "jpeg", "png", "bmp", "webp"]).pick_file();
@@ -372,7 +372,7 @@ impl App {
     /// Esc and Enter act on the crop tool rather than close the viewer: C
     /// toggles comment mode, ⇧R rotates left, ⇧F flips horizontally (as
     /// Eagle's flip shortcut does).
-    pub(super) fn edit_keys(&mut self, ctx: &egui::Context) {
+    pub(crate) fn edit_keys(&mut self, ctx: &egui::Context) {
         if self.ws.viewer.is_none() {
             self.ws.tools.crop = None;
             self.ws.tools.draft = None;
@@ -434,7 +434,7 @@ impl App {
     /// Everything these tools draw over the viewer's image (at `shown`,
     /// inside `area`). Their widgets sit above the viewer's canvas, so in
     /// comment mode and while cropping a drag draws instead of panning.
-    pub(super) fn edit_overlay(&mut self, ui: &mut Ui, item: &Item, shown: Rect, area: Rect) {
+    pub(crate) fn edit_overlay(&mut self, ui: &mut Ui, item: &Item, shown: Rect, area: Rect) {
         if self.ws.tools.item != item.id {
             self.ws.tools.item = item.id.clone();
             self.ws.tools.crop = None;
@@ -462,7 +462,7 @@ impl App {
 
     /// The tools' buttons in the viewer bar, leftwards from `x`. Returns
     /// the x left of them.
-    pub(super) fn edit_bar(&mut self, ui: &mut Ui, item: &Item, x: f32, cy: f32) -> f32 {
+    pub(crate) fn edit_bar(&mut self, ui: &mut Ui, item: &Item, x: f32, cy: f32) -> f32 {
         if self.ws.tools.crop.is_some() {
             return self.crop_bar(ui, item, x + 12.0, cy);
         }

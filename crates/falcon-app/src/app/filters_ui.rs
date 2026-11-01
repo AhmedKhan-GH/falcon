@@ -15,20 +15,20 @@ use crate::theme as t;
 
 /// Text typed into the new chips, kept between frames.
 #[derive(Default)]
-pub(super) struct MediaFilterUi {
+pub(crate) struct MediaFilterUi {
     /// A filter whose menu should open next frame (Find ▸ Open Filter and its keys).
-    pub(super) open_chip: Option<crate::search_state::FilterKind>,
+    pub(crate) open_chip: Option<crate::search_state::FilterKind>,
     /// A chip shown because its menu was opened from the + menu or a key,
     /// though it is not pinned; it goes when the menu closes.
-    pub(super) showing: Option<crate::search_state::FilterKind>,
+    pub(crate) showing: Option<crate::search_state::FilterKind>,
     /// The bar's Lock: keep the filter and search when another view opens.
-    pub(super) locked: bool,
+    pub(crate) locked: bool,
     /// Text typed into the Tags, Folders and Type chips' search boxes.
-    pub(super) tag_search: String,
-    pub(super) folder_search: String,
-    pub(super) type_search: String,
+    pub(crate) tag_search: String,
+    pub(crate) folder_search: String,
+    pub(crate) type_search: String,
     /// The Tags chip's sidebar: all tags, the selected ones, or a group.
-    pub(super) tag_view: super::filter_bar::TagView,
+    pub(crate) tag_view: super::filter_bar::TagView,
     /// The Date chip's tab: Imported, Modified or Created.
     date_tab: usize,
     /// Range fields per tab, as typed.
@@ -49,7 +49,7 @@ pub(super) struct MediaFilterUi {
     /// The Size chip's unit is MB (otherwise KB).
     size_mb: bool,
     /// Keywords typed into the Comment chip.
-    pub(super) comment_text: String,
+    pub(crate) comment_text: String,
     /// The custom shape's W and H last used, restored when it is ticked again.
     custom_last: Option<(f64, f64)>,
     /// Keys of the fonts activated through Eagle, read once.
@@ -59,7 +59,7 @@ pub(super) struct MediaFilterUi {
 impl MediaFilterUi {
     /// Reads Eagle's font folder again next time (after falcon activated
     /// or deactivated a font).
-    pub(super) fn forget_font_keys(&mut self) {
+    pub(crate) fn forget_font_keys(&mut self) {
         self.font_keys = None;
     }
 }
@@ -85,7 +85,7 @@ fn muted(ui: &mut Ui, text: &str) {
 impl App {
     /// One of the chips kept here (Dimensions, Size, Comment, Date,
     /// Duration, BPM, Camera, Font); the filter bar decides which show.
-    pub(super) fn media_chip(&mut self, ui: &mut Ui, lib: &Library, kind: FilterKind) {
+    pub(crate) fn media_chip(&mut self, ui: &mut Ui, lib: &Library, kind: FilterKind) {
         let items = lib.items();
         let live = || items.iter().filter(|i| !i.is_deleted);
         let fui = &mut self.ws.filter_ui;
@@ -356,14 +356,14 @@ impl App {
 
     /// Clears the text typed into the chips (the bar's Clear), keeping the
     /// Lock and any menu being opened.
-    pub(super) fn clear_media_filter_text(&mut self) {
+    pub(crate) fn clear_media_filter_text(&mut self) {
         let old = std::mem::take(&mut self.ws.filter_ui);
         self.ws.filter_ui = MediaFilterUi { font_keys: old.font_keys, locked: old.locked, open_chip: old.open_chip, showing: old.showing, ..Default::default() };
     }
 
     /// Refills the typed fields from the filter after a saved filter
     /// replaced it: date ranges as days, durations in seconds.
-    pub(super) fn sync_media_filter_text(&mut self) {
+    pub(crate) fn sync_media_filter_text(&mut self) {
         self.clear_media_filter_text();
         let f = &self.ws.filter;
         let fui = &mut self.ws.filter_ui;
@@ -388,7 +388,7 @@ impl App {
 
     /// The Shape chip: every shape the library has (or that is ticked)
     /// with its count, plus a Custom W:H option.
-    pub(super) fn shape_chip(ui: &mut Ui, f: &mut search::Filter, fui: &mut MediaFilterUi, counts: &HashMap<Shape, usize>) {
+    pub(crate) fn shape_chip(ui: &mut Ui, f: &mut search::Filter, fui: &mut MediaFilterUi, counts: &HashMap<Shape, usize>) {
         let resp = filter_chip(ui, "Shape", shape_summary(&f.shapes, f.custom_shape));
         menu(&resp, |ui| {
             ui.set_min_width(200.0);
@@ -431,7 +431,7 @@ impl App {
 impl App {
     /// The search box's Search Scope menu: which parts of each item the
     /// search looks at, remembered across launches.
-    pub(super) fn search_scope_menu(&mut self, ui: &mut Ui) {
+    pub(crate) fn search_scope_menu(&mut self, ui: &mut Ui) {
         ui.set_min_width(190.0);
         muted(ui, "Search in");
         let s = &mut self.search.scope;
