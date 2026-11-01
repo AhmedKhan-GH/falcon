@@ -5,7 +5,7 @@
 use eframe::egui::{self, Align2, CornerRadius, Key, Modifiers, Pos2, Rect, RichText, Sense, TextEdit, Vec2, vec2};
 use falcon_library::Library;
 
-use crate::app::{App};
+use crate::app::App;
 use crate::logic::{self, Scope};
 use crate::theme::{self as t, font};
 use crate::ui::widgets::{galley};

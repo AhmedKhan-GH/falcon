@@ -9,7 +9,7 @@ use eframe::egui::{self, Align2, Color32, CornerRadius, Key, Pos2, Rect, Respons
 use falcon_library::model::Folder;
 use falcon_library::Library;
 
-use crate::app::{Action, App, Confirm, DragFolder, DragItems, DragQuick, Switch, duplicates_view, export_ui, folders_ui, organize_ui};
+use crate::app::{Action, App, Confirm, DragFolder, DragItems, DragQuick, Switch};
 use crate::icons as ic;
 use crate::logic::{self, NavCounts, Scope};
 use crate::theme::{self as t, font};
@@ -374,7 +374,7 @@ impl App {
                     let (glyph, name, scope, count) = if kind == "smartFolder" {
                         let Some(sf) = crate::organize::find(&smart, id) else { continue };
                         let count = if sf.is_group() { 0 } else { lib.smart_folder_items(id).len() };
-                        (organize_ui::smart_look(sf), sf.name.clone(), Scope::Smart(id.to_string()), count)
+                        (crate::ui::organize::smart_look(sf), sf.name.clone(), Scope::Smart(id.to_string()), count)
                     } else {
                         let Some(f) = logic::find_folder(&lib.metadata.folders, id) else { continue };
                         (ic::FOLDER, f.name.clone(), Scope::Folder(id.to_string()), cx.folder_counts.get(id).copied().unwrap_or(0))
@@ -482,7 +482,7 @@ impl App {
             (ic::CLOCK, "Recently Used", Scope::Recent, 0),
             (ic::SHUFFLE, "Random", Scope::Random(0), 0),
             (ic::BOOKMARK_SIMPLE, "All Tags", Scope::AllTags, n.tags),
-            (duplicates_view::ICON, "Duplicates", Scope::Duplicates, 0),
+            (crate::ui::grid::duplicates::ICON, "Duplicates", Scope::Duplicates, 0),
             (ic::TRASH, "Trash", Scope::Trash, n.trash),
         ];
         for (glyph, label, scope, count) in entries {
@@ -554,8 +554,8 @@ impl App {
         let shut = crate::organize::is_shut(f, &self.ws.org.unlocked);
         let has_children = !f.children.is_empty() && !shut;
         let open = has_children && (!filter.is_empty() || !self.ws.collapsed.contains(&f.id));
-        let active = self.tree_active(folders_ui::Tree::Folders, &f.id);
-        self.ws.folders.row(folders_ui::Tree::Folders, &f.id);
+        let active = self.tree_active(crate::ui::sidebar::folders::Tree::Folders, &f.id);
+        self.ws.folders.row(crate::ui::sidebar::folders::Tree::Folders, &f.id);
         let count = cx.folder_counts.get(&f.id).copied().filter(|_| !shut && self.prefs.sidebar_counts);
         let (glyph, tint) = App::folder_look(f, open);
         let renaming = self.ws.renaming.as_ref().is_some_and(|(id, _)| *id == f.id);
@@ -565,7 +565,7 @@ impl App {
         let row_rect = resp.rect;
         self.imports.note_row(ui, row_rect, &f.id);
         if f.is_locked() && !renaming {
-            organize_ui::lock_badge(ui, row_rect, shut, count.is_some());
+            crate::ui::organize::lock_badge(ui, row_rect, shut, count.is_some());
         }
         if renaming {
             let r = Rect::from_min_max(
@@ -652,9 +652,9 @@ impl App {
             ui.separator();
             // Eagle disables Duplicate on a locked folder.
             if ui.add_enabled(!shut, egui::Button::new("Duplicate")).clicked() {
-                self.ws.actions.push(Action::Folders(folders_ui::FolderAction::Duplicate(f.id.clone())));
+                self.ws.actions.push(Action::Folders(crate::ui::sidebar::folders::FolderAction::Duplicate(f.id.clone())));
             }
-            self.tree_export_menu(ui, export_ui::Target::Folder(f.id.clone()), !shut);
+            self.tree_export_menu(ui, crate::ui::dialogs::export::Target::Folder(f.id.clone()), !shut);
             ui.separator();
             if ui.add_enabled(!shut, egui::Button::new(RichText::new("Delete Folder").color(t::p().icon_red))).clicked() {
                 self.ask_delete_folders(lib, vec![f.id.clone()]);
@@ -665,7 +665,7 @@ impl App {
             let caret = caret_rect(row_rect, depth);
             if has_children && resp.interact_pointer_pos().is_some_and(|p| caret.contains(p)) {
                 self.caret_click(ui, &lib.metadata.folders, &f.id);
-            } else if !self.tree_click(folders_ui::Tree::Folders, &f.id, ui.input(|i| i.modifiers)) {
+            } else if !self.tree_click(crate::ui::sidebar::folders::Tree::Folders, &f.id, ui.input(|i| i.modifiers)) {
                 self.go(Scope::Folder(f.id.clone()));
             }
         }

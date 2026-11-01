@@ -1,75 +1,27 @@
 //! The main window, laid out after Eagle's: sidebar, toolbar, card grid and
 //! inspector, with Eagle's dark theme.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use eframe::egui::{
-    self, Align2, Color32, CornerRadius, Key, Modifiers, Pos2, Rect, Response, RichText,
-    Sense, Stroke, StrokeKind, TextEdit, Ui, Vec2, text::LayoutJob, vec2,
-};
-use falcon_library::model::{Folder, Item};
-use falcon_library::smart_draft::{self, ConditionDraft};
-use falcon_library::{Library, thumbnail};
+use eframe::egui::{self, Pos2, Rect, Ui, vec2};
+use falcon_library::Library;
+use falcon_library::search::{ColorQuery, OrderBy};
 
-use crate::colors;
 use crate::icons as ic;
-use crate::toast::{Kind as ToastKind, Life, Toast};
-use crate::loader::{Tier, job_for};
-use crate::logic::{self, Layout, NavCounts, Scope};
-use falcon_library::search::{ColorQuery, Logic, OrderBy, TextFilter};
-use crate::theme::{self as t, font};
-use crate::ui::widgets::{
-    ChipClick, badge, chip, divider, ext_placeholder, field, folder_chip, galley, icon, icon_button, paint_thumb_bg, prop,
-    rating, tag_chip_removable, viewer_ui, wide_button, window_drag,
-};
+use crate::logic::{self, Layout, Scope};
+use crate::theme as t;
+use crate::ui::filter_bar::parse_hex;
+use crate::ui::widgets::{galley, icon_button};
 
-// The app core.
 pub(crate) mod actions;
 pub(crate) mod commands;
-pub(crate) mod state;
+pub(crate) mod image_edit;
 pub(crate) mod import;
 pub(crate) mod library;
 pub(crate) mod navigation;
-pub(crate) mod image_edit;
-
-// Sidebar.
-pub(crate) use crate::ui::organize as organize_ui;
-pub(crate) use crate::ui::sidebar::folders as folders_ui;
-pub(crate) use crate::ui::sidebar::{smart_has, smart_name};
-
-// Toolbar and filter bar.
-pub(crate) use crate::ui::filter_bar::media as filters_ui;
-pub(crate) use crate::ui::filter_bar::{filter_chip, parse_hex};
-
-// Grid.
-pub(crate) use crate::ui::grid::{GRID_GAP, GRID_PAD_TOP, GRID_PAD_X, list_span};
-pub(crate) use crate::ui::grid::duplicates as duplicates_view;
-
-// Inspector.
-pub(crate) use crate::ui::inspector::tag_picker;
-
-// Viewer.
-pub(crate) use crate::ui::viewer::audio as media_view;
-pub(crate) use crate::ui::viewer::font as font_view;
-pub(crate) use crate::ui::viewer::image as image_view;
-pub(crate) use crate::ui::viewer::video as video_view;
-pub(crate) use crate::ui::viewer::gif as gif_view;
-pub(crate) use crate::ui::viewer::open as open_ui;
-pub(crate) use crate::ui::viewer::pdf as pdf_view;
-pub(crate) use crate::ui::viewer::modes;
-pub(crate) use crate::ui::viewer::preview_window;
-pub(crate) use crate::ui::viewer::text as text_view;
-pub(crate) use crate::ui::viewer::comments;
-pub(crate) use crate::ui::viewer::crop;
-
-// Dialogs and menus.
-pub(crate) use crate::ui::dialogs::export as export_ui;
-pub(crate) use crate::ui::dialogs::ext as ext_ui;
-pub(crate) use crate::ui::dialogs::quick_switch as quick_switch_ui;
-pub(crate) use crate::ui::dialogs::library_notices as library_ui;
-pub(crate) use crate::ui::dialogs::library as library_dialogs;
+pub(crate) mod state;
 
 pub(crate) use actions::{Action, BULK_CONFIRM};
 use commands::editable_now;
@@ -108,7 +60,7 @@ pub struct App {
     /// Focus the sidebar's folder filter next frame (Find ▸ Filter Sidebar).
     pub(crate) focus_folder_filter: bool,
     /// Go to Folder (`quick_switch_ui.rs`).
-    pub(crate) quick: quick_switch_ui::QuickSwitch,
+    pub(crate) quick: crate::ui::dialogs::quick_switch::QuickSwitch,
     /// Eagle's in-app tag clipboard (Copy Tags), shared by the open
     /// libraries; the text also goes to the system clipboard.
     pub(crate) copied_tags: Option<Vec<String>>,
@@ -141,7 +93,7 @@ pub struct App {
     /// drawn).
     pub(crate) switch_to: Option<Switch>,
     /// The create-library dialog and its follow-up steps.
-    pub(crate) dialogs: library_dialogs::State,
+    pub(crate) dialogs: crate::ui::dialogs::library::State,
     /// Whether the welcome flow has been finished (or skipped by having
     /// used falcon before).
     pub(crate) welcomed: bool,
@@ -160,13 +112,13 @@ pub struct App {
     /// Audio playback for the viewer.
     pub(crate) audio: crate::audio::Audio,
     /// Video playback for the viewer (`video_view.rs`).
-    pub(crate) video: video_view::VideoState,
+    pub(crate) video: crate::ui::viewer::video::VideoState,
     /// The font viewer's tab and theme, kept across fonts and launches.
-    pub(crate) font_look: font_view::FontLook,
+    pub(crate) font_look: crate::ui::viewer::font::FontLook,
     /// The PDF reader for the viewer (`pdf_view.rs`).
-    pub(crate) pdf: pdf_view::PdfState,
+    pub(crate) pdf: crate::ui::viewer::pdf::PdfState,
     /// The image viewer's zoom mode and remembered views (`image_view.rs`).
-    pub(crate) image: image_view::ImageState,
+    pub(crate) image: crate::ui::viewer::image::ImageState,
     /// Drop targets and other import state (`import.rs`).
     pub(crate) imports: import::Imports,
     /// The macOS menu bar (`menu.rs`).
@@ -191,9 +143,9 @@ pub struct App {
     /// checked again until the preferences change.
     pub(crate) auto_import_refused: Option<PathBuf>,
     /// Presentation mode and the other View modes (`modes.rs`).
-    pub(crate) modes: modes::Modes,
+    pub(crate) modes: crate::ui::viewer::modes::Modes,
     /// The item open in its own window (`preview_window.rs`).
-    pub(crate) preview: Option<preview_window::PreviewWin>,
+    pub(crate) preview: Option<crate::ui::viewer::preview_window::PreviewWin>,
 
     /// The About window is open, and its icon once loaded (`about.rs`).
     pub(crate) about: bool,
@@ -207,20 +159,20 @@ pub struct App {
     pub(crate) side_cursor: Option<usize>,
     pub(crate) side_reveal: bool,
     /// A notice to acknowledge (`library_ui.rs`).
-    pub(crate) alert: Option<library_ui::Alert>,
+    pub(crate) alert: Option<crate::ui::dialogs::library_notices::Alert>,
     /// Reload the shown library from disk next frame: a `metadata.json`
     /// write was refused because the file changed elsewhere.
     pub(crate) conflict_reload: bool,
     /// A library that can't be found, for the missing-library screen.
     pub(crate) missing: Option<PathBuf>,
     /// A merge of another library in progress (`library_ui.rs`).
-    pub(crate) merge: Option<library_ui::Merge>,
+    pub(crate) merge: Option<crate::ui::dialogs::library_notices::Merge>,
     /// An `.eaglepack` import waiting for an answer.
-    pub(crate) pack_ask: Option<library_ui::PackAsk>,
+    pub(crate) pack_ask: Option<crate::ui::dialogs::library_notices::PackAsk>,
     /// Empty Cache and Reload is asking for confirmation.
     pub(crate) confirm_reload: bool,
     /// A library being read on a background thread (`library_ui.rs`).
-    pub(crate) loading: Option<library_ui::Loading>,
+    pub(crate) loading: Option<crate::ui::dialogs::library_notices::Loading>,
 }
 
 impl App {
@@ -301,7 +253,7 @@ impl App {
             loading: None,
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
-        app.welcomed = library_dialogs::already_welcomed(saved.welcomed, saved.recent.len(), saved.libraries.len(), saved.library.is_some());
+        app.welcomed = crate::ui::dialogs::library::already_welcomed(saved.welcomed, saved.recent.len(), saved.libraries.len(), saved.library.is_some());
         app.tile = saved.tile.unwrap_or(app.tile).clamp(TILE_MIN, TILE_MAX);
         app.ws.sort = saved.sort.as_deref().and_then(|l| OrderBy::ALL.into_iter().find(|o| o.label() == l)).unwrap_or(app.ws.sort);
         app.ws.increase = saved.increase.unwrap_or(app.ws.increase);
@@ -389,30 +341,6 @@ pub(crate) type Shared = falcon_server::Shared;
 pub(crate) fn lock(s: &Shared) -> std::sync::MutexGuard<'_, Library> {
     s.lock().unwrap_or_else(|p| p.into_inner())
 }
-
-// ---------------------------------------------------------------------------
-// Sidebar
-
-
-// ---------------------------------------------------------------------------
-// Toolbar
-
-
-// ---------------------------------------------------------------------------
-// Filter bar
-
-// ---------------------------------------------------------------------------
-// Grid
-
-
-// ---------------------------------------------------------------------------
-// Inspector
-
-
-
-// ---------------------------------------------------------------------------
-// Viewer and frame
-
 
 impl eframe::App for App {
     fn save(&mut self, storage: &mut dyn eframe::Storage) {

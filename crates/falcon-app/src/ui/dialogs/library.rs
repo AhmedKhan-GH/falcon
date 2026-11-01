@@ -397,6 +397,24 @@ fn name_modal(ctx: &egui::Context, dlg: &mut Create) -> Option<bool> {
     out
 }
 
+impl App {
+    pub(crate) fn empty_state(&mut self, ui: &mut Ui) {
+        let r = ui.max_rect();
+        window_drag(ui, Rect::from_min_size(r.min, vec2(r.width(), t::BAR_HEIGHT)), "empty");
+        ui.painter().rect_filled(r, 0.0, t::p().main);
+        let c = r.center();
+        ui.painter().text(c - vec2(0.0, 40.0), Align2::CENTER_CENTER, "Open an Eagle library", font(18.0), t::p().text);
+        if let Some(e) = &self.error {
+            ui.painter().text(c - vec2(0.0, 14.0), Align2::CENTER_CENTER, e, font(12.0), t::p().text_muted);
+        }
+        let b = Rect::from_center_size(c + vec2(0.0, 24.0), vec2(180.0, 32.0));
+        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(b));
+        if wide_button(&mut child, ic::FOLDER_OPEN, "Choose Library…", true).clicked() {
+            self.pick_library();
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -444,23 +462,5 @@ mod tests {
         assert!(already_welcomed(false, 1, 0, false));
         assert!(already_welcomed(false, 0, 2, false));
         assert!(already_welcomed(false, 0, 0, true));
-    }
-}
-
-impl App {
-    pub(crate) fn empty_state(&mut self, ui: &mut Ui) {
-        let r = ui.max_rect();
-        window_drag(ui, Rect::from_min_size(r.min, vec2(r.width(), t::BAR_HEIGHT)), "empty");
-        ui.painter().rect_filled(r, 0.0, t::p().main);
-        let c = r.center();
-        ui.painter().text(c - vec2(0.0, 40.0), Align2::CENTER_CENTER, "Open an Eagle library", font(18.0), t::p().text);
-        if let Some(e) = &self.error {
-            ui.painter().text(c - vec2(0.0, 14.0), Align2::CENTER_CENTER, e, font(12.0), t::p().text_muted);
-        }
-        let b = Rect::from_center_size(c + vec2(0.0, 24.0), vec2(180.0, 32.0));
-        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(b));
-        if wide_button(&mut child, ic::FOLDER_OPEN, "Choose Library…", true).clicked() {
-            self.pick_library();
-        }
     }
 }

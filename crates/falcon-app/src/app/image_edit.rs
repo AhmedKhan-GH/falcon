@@ -102,9 +102,9 @@ pub struct Tools {
     /// Start of a region being dragged, in image pixels.
     pub draw_start: Option<eframe::egui::Pos2>,
     /// A saved region being moved or resized.
-    pub region_drag: Option<super::comments::RegionDrag>,
+    pub region_drag: Option<crate::ui::viewer::comments::RegionDrag>,
     pub draft: Option<Draft>,
-    pub crop: Option<super::crop::CropState>,
+    pub crop: Option<crate::ui::viewer::crop::CropState>,
     /// Open the crop tool once the viewer shows this item.
     pub crop_next: Option<String>,
     /// Comment edited in the inspector: item id, comment id, text.
@@ -401,7 +401,7 @@ impl App {
                 }
             } else if enter {
                 if crop.confirming {
-                    let rect = super::crop::pixel_rect(crop.rect);
+                    let rect = crate::ui::viewer::crop::pixel_rect(crop.rect);
                     if let Some(id) = self.ws.viewer.clone() {
                         self.ws.actions.push(Action::Edit(Op::Crop(id, rect)));
                     }

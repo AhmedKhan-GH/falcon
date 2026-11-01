@@ -13,10 +13,7 @@ use falcon_library::search::{Filter, OrderBy};
 use falcon_library::smart_draft::{self, ConditionDraft};
 use falcon_library::undo::Transaction;
 
-use super::{
-    Action, App, Shared, duplicates_view, export_ui, ext_ui, filters_ui, folders_ui, font_view, gif_view, image_edit, import,
-    lock, organize_ui, pdf_view, tag_picker, text_view, video_view,
-};
+use super::{Action, App, Shared, image_edit, import, lock};
 use crate::loader::Loader;
 use crate::logic::{self, Layout, Scope};
 
@@ -70,9 +67,9 @@ pub(crate) struct Saved {
     pub(crate) video_loop: Option<bool>,
     pub(crate) video_muted: Option<bool>,
     /// Where each video was left (Preferences ▸ Preview ▸ resume).
-    pub(crate) video_positions: video_view::Positions,
+    pub(crate) video_positions: crate::ui::viewer::video::Positions,
     /// The PDF reader's last page and zoom of recent documents.
-    pub(crate) pdf_marks: Vec<pdf_view::Mark>,
+    pub(crate) pdf_marks: Vec<crate::ui::viewer::pdf::Mark>,
     /// The image viewer's "fit to window edge" mode, kept like Eagle's
     /// `eagle.viewer.lastZoomMode`.
     pub(crate) zoom_edge: Option<bool>,
@@ -81,7 +78,7 @@ pub(crate) struct Saved {
     /// Files the auto-import folder has handed over (`auto_import.rs`).
     pub(crate) auto_imported: crate::auto_import::Imported,
     /// The font viewer's tab and theme.
-    pub(crate) font_look: Option<font_view::FontLook>,
+    pub(crate) font_look: Option<crate::ui::viewer::font::FontLook>,
     /// The image viewer's navigator is hidden (Eagle's `isHideNavigator`).
     pub(crate) hide_navigator: Option<bool>,
     /// Search scope, pinned filters and Go to Folder history.
@@ -199,7 +196,7 @@ pub(crate) struct ViewState {
     /// `anim.rs`).
     pub(crate) anim: Option<crate::anim::Player>,
     /// The GIF player bar's drag state.
-    pub(crate) gif: gif_view::GifUi,
+    pub(crate) gif: crate::ui::viewer::gif::GifUi,
     /// The item's original, for the bar's open button.
     pub(crate) file: PathBuf,
     /// A zoom key pressed this frame, for the image viewer.
@@ -357,9 +354,9 @@ pub(crate) struct Workspace {
     /// Focus the inspector's title field next frame (F2).
     pub(crate) focus_title: bool,
     /// The Change Extension dialog (`ext_ui.rs`).
-    pub(crate) ext_dialog: Option<ext_ui::ExtDialog>,
+    pub(crate) ext_dialog: Option<crate::ui::dialogs::ext::ExtDialog>,
     /// The tag picker (`tag_picker.rs`).
-    pub(crate) picker: tag_picker::TagPicker,
+    pub(crate) picker: crate::ui::inspector::tag_picker::TagPicker,
     pub(crate) progress: Arc<Mutex<Progress>>,
     /// Imported files found already in the library, waiting to be asked
     /// about (`import_dupes`), and the dialog asking.
@@ -380,24 +377,24 @@ pub(crate) struct Workspace {
     /// Labels of the actions applied this frame, naming its transaction.
     pub(crate) frame_labels: Vec<String>,
     /// Unlocked folders and the organising dialogs (see `organize_ui`).
-    pub(crate) org: organize_ui::OrgState,
+    pub(crate) org: crate::ui::organize::OrgState,
     /// Text typed into the Date, Duration, Camera and Font chips.
-    pub(crate) filter_ui: filters_ui::MediaFilterUi,
+    pub(crate) filter_ui: crate::ui::filter_bar::media::MediaFilterUi,
     /// Waveforms for the viewer, and its font specimen.
     pub(crate) waveforms: crate::audio::Waveforms,
-    pub(crate) font_view: font_view::FontView,
+    pub(crate) font_view: crate::ui::viewer::font::FontView,
     /// The text item open in the viewer and its unsaved typing.
-    pub(crate) text: Option<text_view::TextView>,
+    pub(crate) text: Option<crate::ui::viewer::text::TextView>,
     /// The Duplicates page's hash cache and results.
-    pub(crate) duplicates: duplicates_view::Duplicates,
+    pub(crate) duplicates: crate::ui::grid::duplicates::Duplicates,
     /// Comment mode, crop tool and comment editing (`image_edit.rs`).
     pub(crate) tools: image_edit::Tools,
     /// When `metadata.json` is next backed up (see `backups.rs`).
     pub(crate) backup: crate::backups::Schedule,
     /// Export requests, prompts and the background copy (`export_ui`).
-    pub(crate) export: export_ui::ExportState,
+    pub(crate) export: crate::ui::dialogs::export::ExportState,
     /// Folders and smart folders picked with ⌘ and ⇧ (`folders_ui`).
-    pub(crate) folders: folders_ui::FolderUi,
+    pub(crate) folders: crate::ui::sidebar::folders::FolderUi,
     /// Polls the library for changes made by other apps (`watch.rs`).
     pub(crate) watch: Option<crate::watch::Watcher>,
     /// The storage checks run when the library opened (`storage.rs`),

@@ -10,7 +10,7 @@ use falcon_library::model::Folder;
 use falcon_library::smart_draft::{self, ConditionDraft};
 use falcon_library::Library;
 
-use crate::app::{Action, App, Confirm, DragFolder, DragItems, DragQuick, GRID_GAP, GRID_PAD_TOP, GRID_PAD_X, SmartDraft, filter_chip};
+use crate::app::{Action, App, Confirm, DragFolder, DragItems, DragQuick, SmartDraft};
 use crate::app::navigation::fastrand_seed;
 use crate::ui::sidebar::{caret_rect, icon_x, sidebar_row_tinted};
 use falcon_library::search::{OrderBy, TextFilter};
@@ -24,6 +24,8 @@ use falcon_library::edit::SubfolderSort;
 use falcon_library::model::{FolderOrder, SavedFilter};
 use falcon_library::smart::SmartFolder;
 use falcon_library::smart_draft::{Kind, PROPERTIES, RATINGS, RuleDraft, RuleFields, SHAPES};
+use crate::ui::filter_bar::filter_chip;
+use crate::ui::grid::{GRID_GAP, GRID_PAD_TOP, GRID_PAD_X};
 
 /// State kept by the organising features.
 #[derive(Default)]
@@ -466,8 +468,8 @@ impl App {
         let group = sf.is_group();
         // A group shows no count, as in Eagle.
         let count = if group || !self.prefs.sidebar_counts { 0 } else { lib.smart_folder_items(&sf.id).len() };
-        let active = self.tree_active(crate::app::folders_ui::Tree::Smart, &sf.id);
-        self.ws.folders.row(crate::app::folders_ui::Tree::Smart, &sf.id);
+        let active = self.tree_active(crate::ui::sidebar::folders::Tree::Smart, &sf.id);
+        self.ws.folders.row(crate::ui::sidebar::folders::Tree::Smart, &sf.id);
         let glyph = smart_look(sf);
         let tint = folder_icons::color(sf.icon_color.as_deref()).unwrap_or(t::p().text);
         let renaming = self.ws.org.smart_rename.as_ref().is_some_and(|(id, _)| *id == sf.id);
@@ -539,9 +541,9 @@ impl App {
                 }
             });
             if ui.button("Duplicate").clicked() {
-                self.ws.actions.push(Action::Folders(crate::app::folders_ui::FolderAction::DuplicateSmart(sf.id.clone())));
+                self.ws.actions.push(Action::Folders(crate::ui::sidebar::folders::FolderAction::DuplicateSmart(sf.id.clone())));
             }
-            self.tree_export_menu(ui, crate::app::export_ui::Target::Smart(sf.id.clone()), true);
+            self.tree_export_menu(ui, crate::ui::dialogs::export::Target::Smart(sf.id.clone()), true);
             ui.separator();
             self.expand_menu(ui, roots, &sf.id);
             ui.separator();
@@ -566,7 +568,7 @@ impl App {
             let caret = caret_rect(row, depth);
             if has_children && resp.interact_pointer_pos().is_some_and(|p| caret.contains(p)) {
                 self.caret_click(ui, roots, &sf.id);
-            } else if !self.tree_click(crate::app::folders_ui::Tree::Smart, &sf.id, ui.input(|i| i.modifiers)) {
+            } else if !self.tree_click(crate::ui::sidebar::folders::Tree::Smart, &sf.id, ui.input(|i| i.modifiers)) {
                 self.go(Scope::Smart(sf.id.clone()));
             }
         }

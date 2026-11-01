@@ -9,8 +9,9 @@ use eframe::egui;
 use falcon_library::Library;
 
 use super::navigation::fastrand_seed;
-use super::{App, Shared, Workspace, library_ui, lock, smart_has};
+use super::{App, Shared, Workspace, lock};
 use crate::logic::{self, Scope};
+use crate::ui::sidebar::smart_has;
 
 /// Most libraries kept in the recent list.
 pub(crate) const RECENT_LIMIT: usize = 10;
@@ -71,7 +72,7 @@ impl App {
     }
 
     /// Shows a library [`App::open`] or a background load
-    /// (`library_ui::Loading`) read, or reports why it couldn't be read.
+    /// (`crate::ui::dialogs::library_notices::Loading`) read, or reports why it couldn't be read.
     pub(crate) fn opened(&mut self, path: PathBuf, result: falcon_library::Result<(Library, Option<PathBuf>)>) {
         match result {
             Ok((lib, restored)) => {
@@ -95,7 +96,7 @@ impl App {
             }
             Err(_) if !path.exists() => self.library_gone(path),
             Err(e) => {
-                if let Some(alert) = library_ui::alert_for(&e) {
+                if let Some(alert) = crate::ui::dialogs::library_notices::alert_for(&e) {
                     crate::errlog::error(&format!("Could not open the library: {e}"));
                     self.show_alert(alert);
                 } else if self.ws.lib.is_some() {

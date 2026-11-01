@@ -13,7 +13,6 @@ use crate::loader::{Tier, job_for};
 use crate::logic::{self, Layout, Scope};
 use crate::theme::{self as t, font};
 use crate::ui::widgets::{badge, ext_placeholder, galley, paint_thumb_bg};
-use crate::app::{comments, open_ui};
 
 pub(crate) mod covers;
 pub(crate) mod duplicates;
@@ -241,7 +240,7 @@ impl App {
         if let Some(id) = &double_clicked
             && self.prefs.double_click == crate::prefs::DoubleClick::External
         {
-            let files = open_ui::originals(lib, std::slice::from_ref(id));
+            let files = crate::ui::viewer::open::originals(lib, std::slice::from_ref(id));
             crate::open_with::open_default(&files);
             self.used(&files);
         } else if let Some(id) = opened.or(double_clicked) {
@@ -347,7 +346,7 @@ impl App {
             badge(ui, tile.min + vec2(5.0, 5.0), &item.ext);
         }
         if d.comment_badge {
-            comments::count_badge(ui, tile, item);
+            crate::ui::viewer::comments::count_badge(ui, tile, item);
         }
         if selected {
             p.rect_stroke(tile.expand(1.0), CornerRadius::same(7), Stroke::new(2.5, t::p().primary), StrokeKind::Inside);

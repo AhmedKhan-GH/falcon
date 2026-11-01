@@ -12,12 +12,13 @@ use falcon_library::search::{self, ColorQuery, Filter, FontFilter, Logic, SetFil
 
 pub(crate) mod media;
 
-use crate::app::{App, GRID_PAD_X};
+use crate::app::App;
 use crate::icons as ic;
 use crate::logic;
 use crate::search_state::FilterKind;
 use crate::theme::{self as t, font};
 use crate::ui::widgets::{galley, icon};
+use crate::ui::grid::GRID_PAD_X;
 
 /// What the Tags chip's sidebar shows.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -630,58 +631,6 @@ impl App {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn rows_cycle_like_eagles_lists() {
-        assert_eq!(next_pick(Pick::Off, false), Pick::In);
-        assert_eq!(next_pick(Pick::In, false), Pick::Off);
-        assert_eq!(next_pick(Pick::Off, true), Pick::Out);
-        assert_eq!(next_pick(Pick::Out, true), Pick::Off);
-        assert_eq!(next_pick(Pick::In, true), Pick::Out);
-        assert_eq!(next_pick(Pick::Out, false), Pick::In);
-        let (mut inc, mut exc) = (vec!["a".to_string()], vec![]);
-        set_pick(&mut inc, &mut exc, "a", Pick::Out);
-        assert_eq!((inc.len(), exc), (0, vec!["a".to_string()]));
-    }
-
-    #[test]
-    fn chip_values_list_includes_then_excludes() {
-        assert_eq!(pick_summary(["a", "b"], ["c"]).as_deref(), Some("a,b,-c"));
-        assert_eq!(pick_summary([], []), None);
-    }
-
-    #[test]
-    fn tags_order_by_group_then_name() {
-        let tags: Vec<(String, usize)> = ["zeta", "Beta", "alpha", "gamma"].iter().map(|t| (t.to_string(), 1)).collect();
-        let group = |name: &str, tags: &[&str]| TagGroup {
-            id: name.into(),
-            name: name.into(),
-            tags: tags.iter().map(|t| t.to_string()).collect(),
-            color: None,
-            description: None,
-            extra: Default::default(),
-        };
-        let groups = [group("g1", &["gamma"]), group("g2", &["zeta", "alpha"])];
-        let names: Vec<&str> = tag_order(&tags, &groups).into_iter().map(|i| tags[i].0.as_str()).collect();
-        assert_eq!(names, ["gamma", "alpha", "zeta", "Beta"]);
-    }
-
-    #[test]
-    fn active_filters_by_kind() {
-        let mut f = Filter::default();
-        assert!(FilterKind::ALL.iter().all(|k| !kind_active(&f, *k)));
-        f.folders.exclude_empty = true;
-        f.custom_shape = Some((1.0, 1.0));
-        assert!(kind_active(&f, FilterKind::Folders) && kind_active(&f, FilterKind::Shape));
-        assert!(!kind_active(&f, FilterKind::Tags));
-        assert_eq!(type_label("youtube"), "YouTube");
-        assert_eq!(type_label("png"), "PNG");
-    }
-}
-
 /// Colours offered in the colour filter, like Eagle's swatch row.
 pub(crate) const PRESET_COLORS: [[u8; 3]; 14] = [
     [0xff, 0x3b, 0x30],
@@ -758,5 +707,57 @@ pub(crate) fn text_filter_menu(ui: &mut Ui, f: &mut TextFilter, keywords: &mut S
     if ui.add(TextEdit::singleline(keywords).hint_text("keyword, keyword")).changed() {
         let words: Vec<String> = keywords.split(',').map(|w| w.trim().to_string()).filter(|w| !w.is_empty()).collect();
         *f = if words.is_empty() { TextFilter::Off } else { TextFilter::Keywords(words) };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rows_cycle_like_eagles_lists() {
+        assert_eq!(next_pick(Pick::Off, false), Pick::In);
+        assert_eq!(next_pick(Pick::In, false), Pick::Off);
+        assert_eq!(next_pick(Pick::Off, true), Pick::Out);
+        assert_eq!(next_pick(Pick::Out, true), Pick::Off);
+        assert_eq!(next_pick(Pick::In, true), Pick::Out);
+        assert_eq!(next_pick(Pick::Out, false), Pick::In);
+        let (mut inc, mut exc) = (vec!["a".to_string()], vec![]);
+        set_pick(&mut inc, &mut exc, "a", Pick::Out);
+        assert_eq!((inc.len(), exc), (0, vec!["a".to_string()]));
+    }
+
+    #[test]
+    fn chip_values_list_includes_then_excludes() {
+        assert_eq!(pick_summary(["a", "b"], ["c"]).as_deref(), Some("a,b,-c"));
+        assert_eq!(pick_summary([], []), None);
+    }
+
+    #[test]
+    fn tags_order_by_group_then_name() {
+        let tags: Vec<(String, usize)> = ["zeta", "Beta", "alpha", "gamma"].iter().map(|t| (t.to_string(), 1)).collect();
+        let group = |name: &str, tags: &[&str]| TagGroup {
+            id: name.into(),
+            name: name.into(),
+            tags: tags.iter().map(|t| t.to_string()).collect(),
+            color: None,
+            description: None,
+            extra: Default::default(),
+        };
+        let groups = [group("g1", &["gamma"]), group("g2", &["zeta", "alpha"])];
+        let names: Vec<&str> = tag_order(&tags, &groups).into_iter().map(|i| tags[i].0.as_str()).collect();
+        assert_eq!(names, ["gamma", "alpha", "zeta", "Beta"]);
+    }
+
+    #[test]
+    fn active_filters_by_kind() {
+        let mut f = Filter::default();
+        assert!(FilterKind::ALL.iter().all(|k| !kind_active(&f, *k)));
+        f.folders.exclude_empty = true;
+        f.custom_shape = Some((1.0, 1.0));
+        assert!(kind_active(&f, FilterKind::Folders) && kind_active(&f, FilterKind::Shape));
+        assert!(!kind_active(&f, FilterKind::Tags));
+        assert_eq!(type_label("youtube"), "YouTube");
+        assert_eq!(type_label("png"), "PNG");
     }
 }

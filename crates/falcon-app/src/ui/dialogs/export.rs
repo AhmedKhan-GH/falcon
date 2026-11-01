@@ -10,13 +10,14 @@ use eframe::egui::{self, CornerRadius, Pos2, Rect, RichText, Ui};
 use falcon_library::model::Item;
 use falcon_library::Library;
 
-use crate::app::{App, GRID_PAD_X};
+use crate::app::App;
 use crate::icons as ic;
 use crate::logic::{self, Scope};
 use crate::theme::{self as t, font};
 use crate::ui::widgets::{galley, wide_button};
 use falcon_library::export::{self, Collision, Convert, Format, Plan};
 use falcon_library::pack::{self, PackSource};
+use crate::ui::grid::GRID_PAD_X;
 
 /// An export asked for from a menu or a key, handled once the frame has
 /// the library (`App::export_dialogs`).

@@ -4,7 +4,7 @@
 use eframe::egui::{self, RichText};
 use falcon_library::Library;
 
-use crate::app::{Action, App, Confirm, export_ui, folders_ui};
+use crate::app::{Action, App, Confirm};
 use crate::logic;
 use crate::theme as t;
 
@@ -45,7 +45,7 @@ impl App {
                     (format!("Empty the Trash ({n})?"), "The files are removed from the library and cannot be restored.".to_string(), "Empty Trash")
                 }
                 Confirm::TrashInFolder(ids, _) => (
-                    format!("Move {} to Trash?", export_ui::plural(ids.len(), "item")),
+                    format!("Move {} to Trash?", crate::ui::dialogs::export::plural(ids.len(), "item")),
                     "Some of them are in other folders as well.".to_string(),
                     if self.trash_folder_only { "Remove" } else { "Move to Trash" },
                 ),
@@ -54,7 +54,7 @@ impl App {
                     (format!("Restore all {n} items in the Trash?"), "They go back to their folders. ⌘Z puts them back in the Trash.".to_string(), "Restore All")
                 }
             };
-            let modal = egui::Modal::new(egui::Id::unique("confirm")).show(&ctx, |ui| {
+            let modal = egui::Modal::new(egui::Id::unique("confirm")).show(ctx, |ui| {
                 ui.set_width(320.0);
                 ui.label(RichText::new(title).size(15.0));
                 ui.add_space(4.0);
@@ -74,8 +74,8 @@ impl App {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui.button(RichText::new(label).color(t::p().icon_red)).clicked() {
                         self.ws.actions.push(match c.clone() {
-                            Confirm::DeleteFolders(ids) => Action::Folders(folders_ui::FolderAction::Delete(ids, self.ws.folders.trash_items)),
-                            Confirm::DeleteSmarts(ids) => Action::Folders(folders_ui::FolderAction::DeleteSmart(ids)),
+                            Confirm::DeleteFolders(ids) => Action::Folders(crate::ui::sidebar::folders::FolderAction::Delete(ids, self.ws.folders.trash_items)),
+                            Confirm::DeleteSmarts(ids) => Action::Folders(crate::ui::sidebar::folders::FolderAction::DeleteSmart(ids)),
                             Confirm::DeleteItems(ids) => Action::DeletePermanently(ids),
                             Confirm::EmptyTrash => Action::EmptyTrash,
                             Confirm::TrashInFolder(ids, fid) => Action::TrashInFolder(ids, fid, self.trash_folder_only),
@@ -101,7 +101,7 @@ impl App {
         if let Some((n, _)) = &self.ws.bulk {
             let n = *n;
             let mut answer = None;
-            let modal = egui::Modal::new(egui::Id::unique("bulk")).show(&ctx, |ui| {
+            let modal = egui::Modal::new(egui::Id::unique("bulk")).show(ctx, |ui| {
                 ui.set_width(320.0);
                 ui.label(RichText::new(format!("Change {n} items?")).size(15.0));
                 ui.add_space(4.0);

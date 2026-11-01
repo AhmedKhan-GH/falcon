@@ -4,14 +4,14 @@ use eframe::egui::{self, RichText, TextEdit};
 use falcon_library::Library;
 use falcon_library::smart_draft;
 
-use crate::app::{App, organize_ui};
+use crate::app::App;
 use crate::theme as t;
 
 impl App {
     pub(crate) fn smart_dialog_ui(&mut self, ctx: &egui::Context, lib: &Library) {
         let Some(mut d) = self.ws.smart_dialog.take() else { return };
         let mut keep = true;
-        let folders = organize_ui::folder_choices(&lib.metadata.folders);
+        let folders = crate::ui::organize::folder_choices(&lib.metadata.folders);
         let max_rules_height = (ctx.content_rect().height() - 320.0).max(160.0);
         let modal = egui::Modal::new(egui::Id::unique("smart-dialog")).show(ctx, |ui| {
             ui.set_width(660.0);
@@ -22,7 +22,7 @@ impl App {
             App::smart_dialog_extras(ui, &mut d, lib);
             ui.add_space(6.0);
             egui::ScrollArea::vertical().max_height(max_rules_height).auto_shrink([false, true]).show(ui, |ui| {
-                organize_ui::smart_conditions_ui(ui, &mut d.conditions, &folders);
+                crate::ui::organize::smart_conditions_ui(ui, &mut d.conditions, &folders);
             });
             let result = smart_draft::conditions(&d.conditions);
             if let Err(e) = &result {

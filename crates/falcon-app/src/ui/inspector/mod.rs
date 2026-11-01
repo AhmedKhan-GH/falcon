@@ -37,7 +37,7 @@ pub(crate) fn folder_texts(lib: &Library, id: &str, smart: bool) -> Option<(Stri
 
 /// The action that renames a folder or a smart folder from the inspector.
 pub(crate) fn rename_action(id: &str, name: &str, smart: bool) -> Action {
-    if smart { Action::Organize(crate::app::organize_ui::OrgAction::RenameSmart(id.to_string(), name.to_string())) } else { Action::RenameFolder(id.to_string(), name.to_string()) }
+    if smart { Action::Organize(crate::ui::organize::OrgAction::RenameSmart(id.to_string(), name.to_string())) } else { Action::RenameFolder(id.to_string(), name.to_string()) }
 }
 
 impl App {
@@ -293,7 +293,7 @@ impl App {
             return;
         }
         ctx.copy_text(tags.join("\n"));
-        self.flash_brief(format!("Copied {}", crate::app::export_ui::plural(tags.len(), "tag")));
+        self.flash_brief(format!("Copied {}", crate::ui::dialogs::export::plural(tags.len(), "tag")));
         self.copied_tags = Some(tags);
     }
 
@@ -592,12 +592,12 @@ impl App {
             let type_row = prop(ui, "Type", &item.ext.to_uppercase());
             let type_hit = ui.interact(type_row.rect, ui.scope_id().with("type-row"), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text("Click to change the extension");
             if type_hit.clicked() {
-                self.ws.ext_dialog = Some(crate::app::ext_ui::ExtDialog { id: item.id.clone(), current: item.ext.to_lowercase(), text: item.ext.clone(), uid: egui::Id::unique("change-extension"), focused: false });
+                self.ws.ext_dialog = Some(crate::ui::dialogs::ext::ExtDialog { id: item.id.clone(), current: item.ext.to_lowercase(), text: item.ext.clone(), uid: egui::Id::unique("change-extension"), focused: false });
             }
             prop(ui, "Date Imported", &logic::format_ms(item.modification_time));
             prop(ui, "Date Created", &logic::format_ms(item.btime));
             prop(ui, "Date Modified", &logic::format_ms(item.mtime));
-            crate::app::media_view::media_props(ui, &item);
+            crate::ui::viewer::audio::media_props(ui, &item);
         }
         ui.add_space(4.0);
         if wide_button(ui, ic::ARROW_SQUARE_OUT, "Open in Default App", true).clicked() {

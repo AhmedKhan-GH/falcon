@@ -9,7 +9,7 @@ use eframe::egui::{self, Key, Modifiers, Pos2, Rect, RichText, Sense, TextEdit, 
 use falcon_library::model::Folder;
 use falcon_library::Library;
 
-use crate::app::{Action, App, Confirm, export_ui};
+use crate::app::{Action, App, Confirm};
 use crate::icons as ic;
 use crate::logic::{self, Scope};
 use crate::theme::{self as t, font};
@@ -312,7 +312,7 @@ impl App {
         ui.add_enabled_ui(!shut, |ui| {
             ui.menu_button("Export", |ui| {
                 if ui.button("Export to Computer…").clicked() {
-                    self.ws.export.request = Some(export_ui::Request::Trees(ids.clone()));
+                    self.ws.export.request = Some(crate::ui::dialogs::export::Request::Trees(ids.clone()));
                 }
             });
         });

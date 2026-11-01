@@ -17,7 +17,7 @@ use falcon_library::merge::{self, Choices, Merge, MergeReport};
 use falcon_library::model::Item;
 use falcon_library::{Library, thumbnail};
 
-use crate::app::export_ui::plural;
+use crate::ui::dialogs::export::plural;
 use crate::app::{Action, App};
 use crate::ui::grid::GRID_PAD_X;
 use crate::loader::{Tier, job_for};

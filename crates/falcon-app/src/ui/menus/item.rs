@@ -4,7 +4,7 @@ use eframe::egui::{self, RichText, Ui};
 use falcon_library::Library;
 use falcon_library::model::Item;
 
-use crate::app::{Action, App, Confirm, commands, image_edit, open_ui, preview_window};
+use crate::app::{Action, App, Confirm, commands, image_edit};
 use crate::logic::{self, Scope};
 use crate::theme::{self as t};
 
@@ -24,7 +24,7 @@ impl App {
         if !in_viewer && ui.button("Open").clicked() {
             opened = true;
         }
-        self.open_menu(ui, &open_ui::originals(lib, targets));
+        self.open_menu(ui, &crate::ui::viewer::open::originals(lib, targets));
         if targets.len() == 1 && self.ws.scope != Scope::Trash {
             self.location_menu(ui, lib, item);
         }
@@ -99,7 +99,7 @@ impl App {
         // Eagle's Open Item in New Window.
         let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::OpenNewWindow);
         if ui.add(egui::Button::new("Open in New Window").shortcut_text(keys)).clicked() {
-            self.preview = Some(preview_window::PreviewWin::new(item.id.clone()));
+            self.preview = Some(crate::ui::viewer::preview_window::PreviewWin::new(item.id.clone()));
             self.used_item(&item.id);
         }
         // Eagle's Navigator toggle, in the viewer.
@@ -125,7 +125,7 @@ impl App {
             self.toggle_presentation(ui.ctx());
         }
         if crate::share::AVAILABLE && self.ws.scope != Scope::Trash && ui.button("Share…").clicked() {
-            let files = open_ui::originals(lib, targets);
+            let files = crate::ui::viewer::open::originals(lib, targets);
             let at = ui.ctx().input(|i| i.pointer.interact_pos()).unwrap_or_default();
             crate::share::share(&files, (at.x, at.y));
             ui.close();

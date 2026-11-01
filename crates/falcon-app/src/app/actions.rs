@@ -9,7 +9,7 @@ use falcon_library::Library;
 use falcon_library::model::Item;
 use falcon_library::undo::{Transaction, WriteMode};
 
-use super::{App, Confirm, export_ui, folders_ui, image_edit, organize_ui};
+use super::{App, Confirm, image_edit};
 use crate::logic::{self, Scope};
 
 /// An action on this many items or more asks first (Eagle's bulk confirm).
@@ -72,11 +72,11 @@ pub(crate) enum Action {
     Arrange(crate::organize::Arrange),
     /// Folder icons, sorts, passwords and reordering, nested smart
     /// folders, tag groups and saved filters (see `organize_ui`).
-    Organize(organize_ui::OrgAction),
+    Organize(crate::ui::organize::OrgAction),
     /// Thumbnails, palettes, covers, rotate, crop and comments (`image_edit.rs`).
     Edit(image_edit::Op),
     /// Several folders at once, Move Folder and folder deletion (`folders_ui`).
-    Folders(folders_ui::FolderAction),
+    Folders(crate::ui::sidebar::folders::FolderAction),
     /// Sets or removes the thumbnail background of these items.
     Background(Vec<String>, Option<logic::ThumbBg>),
     /// An item renamed from the text viewer's title.
@@ -152,8 +152,8 @@ pub(crate) fn action_label(action: &Action) -> String {
 }
 
 /// The undo name of an organising action.
-pub(crate) fn organize_label(a: &organize_ui::OrgAction) -> String {
-    use organize_ui::OrgAction as O;
+pub(crate) fn organize_label(a: &crate::ui::organize::OrgAction) -> String {
+    use crate::ui::organize::OrgAction as O;
     match a {
         O::FolderOrder(..) | O::SmartOrder(..) => "Change sort".into(),
         O::FolderIcon(..) | O::SmartIcon(..) => "Change icon".into(),
@@ -331,10 +331,10 @@ impl App {
                     _ => Ok(()),
                 }),
                 Action::RemoveTags(ids, tags) => lib.remove_tags_from_items(&ids, &tags).map(|_| ()),
-                Action::PasteTags(ids, tags) => lib.paste_tags(&ids, &tags).map(|n| self.flash_undo(format!("Pasted {} to {}", export_ui::plural(tags.len(), "tag"), export_ui::plural(n, "item")))),
+                Action::PasteTags(ids, tags) => lib.paste_tags(&ids, &tags).map(|n| self.flash_undo(format!("Pasted {} to {}", crate::ui::dialogs::export::plural(tags.len(), "tag"), crate::ui::dialogs::export::plural(n, "item")))),
                 Action::SetNotes(ids, note) => lib.set_notes(&ids, &note).map(|_| ()),
                 Action::SetUrls(ids, url) => lib.set_urls(&ids, &url).map(|_| ()),
-                Action::ClearTags(ids) => lib.clear_tags(&ids).map(|n| self.flash_undo(format!("Cleared the tags of {}", export_ui::plural(n, "item")))),
+                Action::ClearTags(ids) => lib.clear_tags(&ids).map(|n| self.flash_undo(format!("Cleared the tags of {}", crate::ui::dialogs::export::plural(n, "item")))),
                 Action::BatchRating(ids, star) => {
                     let mut r = Ok(());
                     for id in &ids {
@@ -359,8 +359,8 @@ impl App {
                 }),
                 Action::DeleteTags(tags) => lib.delete_tags(&tags).map(|n| {
                     self.ws.org.tag_sel.retain(|t| !tags.contains(t));
-                    let what = if let [one] = tags.as_slice() { format!("“{one}”") } else { export_ui::plural(tags.len(), "tag") };
-                    self.flash_undo(format!("Removed {what} from {}", export_ui::plural(n, "item")));
+                    let what = if let [one] = tags.as_slice() { format!("“{one}”") } else { crate::ui::dialogs::export::plural(tags.len(), "tag") };
+                    self.flash_undo(format!("Removed {what} from {}", crate::ui::dialogs::export::plural(n, "item")));
                 }),
                 Action::StarTags(tags, on) => lib.star_tags(&tags, on),
                 Action::MergeTags(tags, into) => lib.merge_tags(&tags, &into).map(|n| {
@@ -371,7 +371,7 @@ impl App {
                         self.ws.scope = Scope::Tag(into.clone());
                     }
                     self.ws.org.tag_sel = vec![into.clone()];
-                    self.flash_undo(format!("Merged {} into “{into}” on {}", export_ui::plural(tags.len(), "tag"), export_ui::plural(n, "item")));
+                    self.flash_undo(format!("Merged {} into “{into}” on {}", crate::ui::dialogs::export::plural(tags.len(), "tag"), crate::ui::dialogs::export::plural(n, "item")));
                 }),
                 Action::ClearTagHistory => lib.clear_tag_history().map(|_| self.flash("Cleared the tag history")),
                 Action::DeletePermanently(ids) => {
@@ -436,7 +436,7 @@ impl App {
                 }
                 Action::MergeDuplicates(merges) => lib.merge_duplicates(&merges).map(|report| {
                     self.ws.selected.retain(|id| lib.item(id).is_some_and(|i| !i.is_deleted));
-                    self.flash(format!("Merged {} and moved {} to the Trash", export_ui::plural(report.kept, "group"), report.trashed));
+                    self.flash(format!("Merged {} and moved {} to the Trash", crate::ui::dialogs::export::plural(report.kept, "group"), report.trashed));
                     self.ws.duplicates.merged(report);
                 }),
                 Action::Organize(a) => self.apply_organize(lib, a),

@@ -5,11 +5,13 @@ pub(crate) mod layout_panel;
 use eframe::egui::{self, Align2, Color32, CornerRadius, Pos2, Rect, RichText, Sense, Stroke, StrokeKind, TextEdit, Ui, Vec2, vec2};
 use falcon_library::Library;
 
-use crate::app::{App, GRID_PAD_X, Progress, TILE_MAX, TILE_MIN, smart_name};
+use crate::app::{App, Progress, TILE_MAX, TILE_MIN};
 use crate::icons as ic;
 use crate::logic::{self, Scope};
 use crate::theme::{self as t, font};
 use crate::ui::widgets::{galley, icon, icon_button, window_drag};
+use crate::ui::grid::GRID_PAD_X;
+use crate::ui::sidebar::smart_name;
 impl App {
     pub(crate) fn toolbar(&mut self, ui: &mut Ui, lib: &Library) {
         let bar = ui.max_rect();

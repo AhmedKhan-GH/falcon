@@ -13,10 +13,10 @@ use crate::theme::{self as t, font};
 impl App {
     /// Starts the native drag once grid items leave the window, and draws
     /// the item count beside the pointer.
-    pub(crate) fn drag_out(&mut self, ctx: &egui::Context, frame: &eframe::Frame, lib: &Library) {
+    pub(crate) fn drag_out(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame, lib: &Library) {
         // Items dragged past the window edge become a macOS file drag, so
         // they can be dropped into Finder or other apps, as from Eagle.
-        if let Some(d) = egui::DragAndDrop::payload::<DragItems>(&ctx)
+        if let Some(d) = egui::DragAndDrop::payload::<DragItems>(ctx)
             && ctx.pointer_latest_pos().is_some_and(|p| !ctx.content_rect().contains(p))
             && !self.native_drag.load(std::sync::atomic::Ordering::Relaxed)
         {
@@ -24,7 +24,7 @@ impl App {
             let preview = d.0.first().and_then(|id| lib.item(id)).map(|i| {
                 i.thumbnail_path(lib.root()).unwrap_or_else(|| i.original_path(lib.root()))
             });
-            egui::DragAndDrop::clear_payload(&ctx);
+            egui::DragAndDrop::clear_payload(ctx);
             if let Some(image) = preview.filter(|_| !files.is_empty()).map(|p| drag_image(&p)) {
                 let flag = self.native_drag.clone();
                 flag.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -46,7 +46,7 @@ impl App {
                 }
             }
         }
-        if let Some(d) = egui::DragAndDrop::payload::<DragItems>(&ctx)
+        if let Some(d) = egui::DragAndDrop::payload::<DragItems>(ctx)
             && let Some(pos) = ctx.pointer_latest_pos()
         {
             let text = if d.0.len() == 1 { "1 item".to_string() } else { format!("{} items", d.0.len()) };
