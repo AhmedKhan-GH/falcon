@@ -27,6 +27,7 @@ mod dupes_ui;
 mod export_ui;
 mod duplicates_view;
 mod filters_ui;
+mod find_cmds;
 mod media_view;
 mod font_view;
 mod image_view;
@@ -631,6 +632,8 @@ pub struct App {
     show_sidebar: bool,
     show_inspector: bool,
     focus_search: bool,
+    /// Focus the sidebar's folder filter next frame (Find ▸ Filter Sidebar).
+    focus_folder_filter: bool,
     /// Eagle's in-app tag clipboard (Copy Tags), shared by the open
     /// libraries; the text also goes to the system clipboard.
     copied_tags: Option<Vec<String>>,
@@ -711,6 +714,7 @@ impl App {
             show_sidebar: true,
             show_inspector: true,
             focus_search: false,
+            focus_folder_filter: false,
             copied_tags: None,
             native_drag: Arc::default(),
             imports: Default::default(),
@@ -1702,6 +1706,10 @@ impl App {
             C::Forward => self.go_forward(),
             C::Rename => self.rename_items(self.ws.selected.clone()),
             C::Find => self.focus_search = true,
+            C::SearchAll => self.search_all(),
+            C::FilterSidebar => self.focus_filter_sidebar(),
+            C::ResetFilter => self.reset_filter(),
+            C::OpenFilter(kind) => self.open_filter(kind),
             C::FolderSettings => {
                 if let Scope::Folder(id) = &self.ws.scope {
                     self.ws.org.settings_request = Some(id.clone());
@@ -2708,7 +2716,7 @@ impl App {
         p.rect_stroke(filter_rect, t::RADIUS, Stroke::new(1.0, t::p().field_border), StrokeKind::Inside);
         icon(ui, Pos2::new(filter_rect.left() + 15.0, filter_rect.center().y), ic::FUNNEL, 15.0, t::p().text_muted);
         let inner = Rect::from_min_max(Pos2::new(filter_rect.left() + 30.0, filter_rect.top()), filter_rect.max);
-        ui.put(
+        let filter_resp = ui.put(
             inner,
             TextEdit::singleline(&mut self.ws.folder_filter)
                 .id_salt("folder-filter")
@@ -2719,6 +2727,9 @@ impl App {
                 .align(Align2::LEFT_CENTER)
                 .desired_width(inner.width() - 8.0),
         );
+        if std::mem::take(&mut self.focus_folder_filter) {
+            filter_resp.request_focus();
+        }
     }
 
     /// The count shown beside a sidebar row: none when zero, or when
@@ -3434,11 +3445,7 @@ impl App {
         if self.ws.filter.is_active() {
             let clear = ui.add(egui::Button::new(RichText::new(format!("{}  Clear", ic::X)).color(t::p().text_muted)).frame(false));
             if clear.clicked() {
-                self.ws.filter = Filter::default();
-                self.clear_media_filter_text();
-                self.ws.color_text.clear();
-                self.ws.note_text.clear();
-                self.ws.url_text.clear();
+                self.reset_filter();
             }
         }
         self.saved_filters_menu(ui, lib);

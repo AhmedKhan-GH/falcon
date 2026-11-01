@@ -131,6 +131,11 @@ pub enum Command {
     Import,
     ImportFolders,
     FindDuplicates,
+    SearchAll,
+    FilterSidebar,
+    ResetFilter,
+    /// Opens one filter of the filter bar.
+    OpenFilter(crate::search_state::FilterKind),
     FlipHorizontal,
     RotateLeft,
     WindowZoom,
@@ -294,6 +299,25 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::Forward, id: "go.forward", group: "Navigate", label: "Forward", default: k(CMD, Key::ArrowRight), aliases: &[KeyboardShortcut::new(ALT, Key::ArrowRight)] },
     Spec { cmd: Command::Find, id: "find.search.current", group: "Find", label: "Focus search", default: k(CMD, Key::F), aliases: &[] },
     Spec { cmd: Command::ToggleFilter, id: "find.filter.toggle", group: "Find", label: "Show or hide the filter bar", default: k(CMD_SHIFT, Key::F), aliases: &[] },
+    Spec { cmd: Command::SearchAll, id: "find.search.all", group: "Find", label: "Search the whole library", default: k(CMD_ALT, Key::F), aliases: &[] },
+    Spec { cmd: Command::FilterSidebar, id: "find.sidebar.filter", group: "Find", label: "Filter the sidebar", default: k(ALT_SHIFT, Key::F), aliases: &[] },
+    Spec { cmd: Command::ResetFilter, id: "find.filter.reset", group: "Find", label: "Clear the filter", default: k(CMD_SHIFT_ALT, Key::F), aliases: &[] },
+    Spec { cmd: Command::OpenFilter(crate::search_state::FilterKind::Folders), id: "find.filter.folder", group: "Find", label: "Open the folder filter", default: k(ALT, Key::F), aliases: &[] },
+    Spec { cmd: Command::OpenFilter(crate::search_state::FilterKind::Tags), id: "find.filter.tag", group: "Find", label: "Open the tag filter", default: k(ALT, Key::T), aliases: &[] },
+    Spec { cmd: Command::OpenFilter(crate::search_state::FilterKind::Color), id: "find.filter.color", group: "Find", label: "Open the color filter", default: k(ALT, Key::C), aliases: &[] },
+    Spec { cmd: Command::OpenFilter(crate::search_state::FilterKind::Shape), id: "find.filter.shape", group: "Find", label: "Open the shape filter", default: k(ALT, Key::S), aliases: &[] },
+    Spec { cmd: Command::OpenFilter(crate::search_state::FilterKind::Rating), id: "find.filter.rating", group: "Find", label: "Open the rating filter", default: k(ALT, Key::R), aliases: &[] },
+    Spec { cmd: Command::OpenFilter(crate::search_state::FilterKind::Date), id: "find.filter.date", group: "Find", label: "Open the date filter", default: k(ALT, Key::D), aliases: &[] },
+    Spec { cmd: Command::OpenFilter(crate::search_state::FilterKind::Types), id: "find.filter.type", group: "Find", label: "Open the type filter", default: k(ALT, Key::E), aliases: &[] },
+    Spec { cmd: Command::OpenFilter(crate::search_state::FilterKind::Size), id: "find.filter.size", group: "Find", label: "Open the size filter", default: None, aliases: &[] },
+    Spec { cmd: Command::OpenFilter(crate::search_state::FilterKind::Dimensions), id: "find.filter.resolution", group: "Find", label: "Open the dimensions filter", default: None, aliases: &[] },
+    Spec { cmd: Command::OpenFilter(crate::search_state::FilterKind::Duration), id: "find.filter.duration", group: "Find", label: "Open the duration filter", default: None, aliases: &[] },
+    Spec { cmd: Command::OpenFilter(crate::search_state::FilterKind::Comment), id: "find.filter.annotation", group: "Find", label: "Open the comment filter", default: None, aliases: &[] },
+    Spec { cmd: Command::OpenFilter(crate::search_state::FilterKind::Note), id: "find.filter.note", group: "Find", label: "Open the note filter", default: None, aliases: &[] },
+    Spec { cmd: Command::OpenFilter(crate::search_state::FilterKind::Url), id: "find.filter.url", group: "Find", label: "Open the URL filter", default: None, aliases: &[] },
+    Spec { cmd: Command::OpenFilter(crate::search_state::FilterKind::Bpm), id: "find.filter.bpm", group: "Find", label: "Open the BPM filter", default: None, aliases: &[] },
+    Spec { cmd: Command::OpenFilter(crate::search_state::FilterKind::Camera), id: "find.filter.camera", group: "Find", label: "Open the camera filter", default: None, aliases: &[] },
+    Spec { cmd: Command::OpenFilter(crate::search_state::FilterKind::Font), id: "find.filter.fonts", group: "Find", label: "Open the font filter", default: None, aliases: &[] },
     Spec { cmd: Command::SelectAll, id: "edit.select.all", group: "Edit", label: "Select all", default: k(CMD, Key::A), aliases: &[] },
     Spec { cmd: Command::Rename, id: "edit.rename", group: "Edit", label: "Rename the selected item", default: k(CMD, Key::R), aliases: &[KeyboardShortcut::new(NONE, Key::F2)] },
     Spec { cmd: Command::Copy, id: "edit.copy", group: "Edit", label: "Copy the selected files", default: k(CMD, Key::C), aliases: &[] },
@@ -993,7 +1017,7 @@ mod tests {
         let keys = Shortcuts::default();
         assert_eq!(keys.resolve(Key::T, CMD), Some(Command::AddTags));
         assert_eq!(keys.resolve(Key::T, Modifiers::NONE), Some(Command::TagPanel));
-        assert_eq!(keys.resolve(Key::T, ALT), None);
+        assert_eq!(keys.resolve(Key::T, ALT), Some(Command::OpenFilter(crate::search_state::FilterKind::Tags)));
         assert_eq!(spec(Command::AddTags).id, "organize.tag.add");
         assert_eq!(keys.resolve(Key::C, CMD_SHIFT), Some(Command::CopyTags));
         assert_eq!(keys.resolve(Key::V, CMD_SHIFT), Some(Command::PasteTags));
@@ -1017,9 +1041,9 @@ mod tests {
     #[test]
     fn r_reshuffles() {
         let keys = Shortcuts::default();
-        assert_eq!(keys.resolve(Key::R, Modifiers::NONE), Some(Command::Reshuffle));
         assert_eq!(keys.resolve(Key::R, CMD), Some(Command::Rename));
-        assert_eq!(keys.resolve(Key::R, ALT), None);
+        assert_eq!(keys.resolve(Key::R, ALT), Some(Command::OpenFilter(crate::search_state::FilterKind::Rating)));
+        assert_eq!(keys.resolve(Key::R, Modifiers::NONE), Some(Command::Reshuffle));
     }
 
     #[test]
@@ -1329,5 +1353,19 @@ mod tests {
         assert_eq!(keys.resolve(Key::Num7, CMD_ALT), Some(Command::ToggleSubfolders));
         // ⌥4 alone is still the List layout.
         assert_eq!(keys.resolve(Key::Num4, ALT), Some(Command::LayoutList));
+    }
+
+    #[test]
+    fn find_menu_keys() {
+        use crate::search_state::FilterKind;
+        let keys = Shortcuts::default();
+        assert_eq!(keys.resolve(Key::F, CMD_ALT), Some(Command::SearchAll));
+        assert_eq!(keys.resolve(Key::T, ALT), Some(Command::OpenFilter(FilterKind::Tags)));
+        assert_eq!(keys.resolve(Key::F, ALT), Some(Command::OpenFilter(FilterKind::Folders)));
+        assert_eq!(keys.resolve(Key::F, ALT_SHIFT), Some(Command::FilterSidebar));
+        assert_eq!(keys.resolve(Key::F, CMD_SHIFT_ALT), Some(Command::ResetFilter));
+        assert_eq!(keys.resolve(Key::T, Modifiers::NONE), Some(Command::TagPanel));
+        assert_eq!(keys.resolve(Key::R, Modifiers::NONE), Some(Command::Reshuffle));
+        assert_eq!(keys.resolve(Key::R, ALT), Some(Command::OpenFilter(FilterKind::Rating)));
     }
 }

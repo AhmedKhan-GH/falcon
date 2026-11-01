@@ -13,6 +13,7 @@
 use eframe::egui::{Key, KeyboardShortcut, Modifiers};
 
 use crate::logic::Layout;
+use crate::search_state::FilterKind;
 use crate::shortcuts::{Command, Page, Scroll, Shortcuts};
 
 /// What kind of view is open.
@@ -116,7 +117,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::Rename => grid && s.selected > 0,
         C::Back => s.viewer || (s.library && s.back),
         C::Forward => grid && s.forward,
-        C::Find | C::ToggleFilter | C::NewFolder | C::NewSmartFolder => grid,
+        C::Find | C::ToggleFilter | C::SearchAll | C::FilterSidebar | C::ResetFilter | C::OpenFilter(_) | C::NewFolder | C::NewSmartFolder => grid,
         C::NewSubfolder => grid && s.scope == ScopeKind::Folder,
         C::NewTextFile => s.library,
         // The panels can be toggled anywhere, the viewer included.
@@ -316,7 +317,32 @@ pub static MENUS: &[(&str, &[Entry])] = &[
         "Find",
         &[
             item("Search", Command::Find),
+            item("Search All", Command::SearchAll),
+            item("Filter Sidebar", Command::FilterSidebar),
+            SEP,
             checked("Filter Bar", Command::ToggleFilter, Check::Filter),
+            item("Clear Filter", Command::ResetFilter),
+            Entry::Sub(
+                "Open Filter",
+                &[
+                    item("Color", Command::OpenFilter(FilterKind::Color)),
+                    item("Tags", Command::OpenFilter(FilterKind::Tags)),
+                    item("Folders", Command::OpenFilter(FilterKind::Folders)),
+                    item("Shape", Command::OpenFilter(FilterKind::Shape)),
+                    item("Rating", Command::OpenFilter(FilterKind::Rating)),
+                    item("Type", Command::OpenFilter(FilterKind::Types)),
+                    item("Date", Command::OpenFilter(FilterKind::Date)),
+                    item("Dimensions", Command::OpenFilter(FilterKind::Dimensions)),
+                    item("Size", Command::OpenFilter(FilterKind::Size)),
+                    item("Duration", Command::OpenFilter(FilterKind::Duration)),
+                    item("Comment", Command::OpenFilter(FilterKind::Comment)),
+                    item("Notes", Command::OpenFilter(FilterKind::Note)),
+                    item("URL", Command::OpenFilter(FilterKind::Url)),
+                    item("Font", Command::OpenFilter(FilterKind::Font)),
+                    item("BPM", Command::OpenFilter(FilterKind::Bpm)),
+                    item("Camera", Command::OpenFilter(FilterKind::Camera)),
+                ],
+            ),
             SEP,
             item("Find Duplicates", Command::FindDuplicates),
         ],

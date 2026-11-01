@@ -10,7 +10,6 @@ use falcon_library::search::SearchScope;
 /// One filter of the filter bar, in Eagle's default bar order. falcon's
 /// Date chip stands for Eagle's Date Added and Date Modified filters (it
 /// has a tab for each, and one for Date Created).
-#[allow(dead_code)] // the filter bar's pins and keys use it next
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum FilterKind {
     Color,

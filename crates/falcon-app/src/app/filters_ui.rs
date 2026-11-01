@@ -15,6 +15,9 @@ use crate::theme as t;
 /// Text typed into the new chips, kept between frames.
 #[derive(Default)]
 pub(super) struct MediaFilterUi {
+    /// A filter whose menu should open next frame (Find ▸ Open Filter and its keys).
+    #[allow(dead_code)] // read by the filter bar
+    pub(super) open_chip: Option<crate::search_state::FilterKind>,
     /// The Date chip's tab: Imported, Modified or Created.
     date_tab: usize,
     /// Range fields per tab, as typed.
