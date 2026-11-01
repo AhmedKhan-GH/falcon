@@ -51,6 +51,9 @@ pub enum Command {
     FolderBottom,
     /// Eagle's Set Current Folder: the open folder's name and auto-tags.
     FolderSettings,
+    /// Edit ▸ Move Folder…: the Move Folder dialog for the picked folders,
+    /// or else the open one.
+    MoveFolder,
     /// File ▸ Export (`App::export_keys`).
     ExportComputer,
     ExportPack,
@@ -251,6 +254,8 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::FolderTop, id: "edit.folder.arrange.top", group: "Edit", label: "Move folder to the top", default: k(CMD_SHIFT, Key::CloseBracket), aliases: &[KeyboardShortcut::new(CMD_SHIFT, Key::CloseCurlyBracket)] },
     Spec { cmd: Command::FolderBottom, id: "edit.folder.arrange.bottom", group: "Edit", label: "Move folder to the bottom", default: k(CMD_SHIFT, Key::OpenBracket), aliases: &[KeyboardShortcut::new(CMD_SHIFT, Key::OpenCurlyBracket)] },
     Spec { cmd: Command::FolderSettings, id: "edit.folder.setting", group: "Edit", label: "Folder settings (name and auto-tags)", default: k(CMD_SHIFT, Key::R), aliases: &[] },
+    // Eagle binds no key to it by default.
+    Spec { cmd: Command::MoveFolder, id: "edit.folder.move", group: "Edit", label: "Move folders to another place", default: None, aliases: &[] },
     Spec { cmd: Command::NewFolder, id: "file.create.folder", group: "File", label: "New folder", default: k(CMD_SHIFT, Key::N), aliases: &[] },
     Spec { cmd: Command::NewSubfolder, id: "file.create.subfolder", group: "File", label: "New subfolder", default: k(ALT, Key::N), aliases: &[] },
     Spec { cmd: Command::NewSmartFolder, id: "file.create.smartfolder", group: "File", label: "New smart folder", default: k(CMD_SHIFT_ALT, Key::N), aliases: &[] },

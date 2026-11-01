@@ -45,6 +45,9 @@ pub struct State {
     pub forward: bool,
     /// The open folder or smart folder has a parent.
     pub parent: bool,
+    /// Folders, or smart folders, picked together in the sidebar.
+    pub picked_folders: usize,
+    pub picked_smart: usize,
     pub undo: bool,
     pub redo: bool,
     pub layout: Layout,
@@ -106,7 +109,11 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         // The selection, or else every item shown.
         C::ExportCsv => s.library,
         C::LayoutGrid | C::LayoutJustified | C::LayoutWaterfall | C::LayoutList => grid,
-        C::FolderUp | C::FolderDown | C::FolderTop | C::FolderBottom => grid && matches!(s.scope, ScopeKind::Folder | ScopeKind::Smart),
+        // As in Eagle, not while several folders are picked.
+        C::FolderUp | C::FolderDown | C::FolderTop | C::FolderBottom => {
+            grid && matches!(s.scope, ScopeKind::Folder | ScopeKind::Smart) && s.picked_folders < 2 && s.picked_smart < 2
+        }
+        C::MoveFolder => grid && (s.scope == ScopeKind::Folder || s.picked_folders > 0),
         C::SwitchLibrary | C::CollectWindow | C::Preferences | C::CloseWindow | C::Minimize | C::FullScreen | C::WindowZoom => true,
         C::NextLibrary | C::PreviousLibrary => s.libraries > 1,
         C::Page(_) | C::Import | C::ImportFolders | C::FindDuplicates => s.library,
@@ -245,6 +252,7 @@ pub static MENUS: &[(&str, &[Entry])] = &[
                 &[item("Flip Horizontally", Command::FlipHorizontal), item("Rotate Left", Command::RotateLeft), item("Crop…", Command::Crop)],
             ),
             item("Folder Settings…", Command::FolderSettings),
+            item("Move Folder…", Command::MoveFolder),
             SEP,
             item("Remove from Folder", Command::RemoveFromFolder),
             item("Move to Trash", Command::Trash),
@@ -712,6 +720,13 @@ mod tests {
         assert!(!enabled(Command::FolderUp, &grid(0)));
         assert!(enabled(Command::FolderUp, &State { scope: ScopeKind::Folder, ..grid(0) }));
         assert!(enabled(Command::FolderTop, &State { scope: ScopeKind::Smart, ..grid(0) }));
+        // Several picked folders can't be stepped, but can be moved.
+        let picked = State { scope: ScopeKind::Folder, picked_folders: 3, ..grid(0) };
+        assert!(!enabled(Command::FolderUp, &picked));
+        assert!(!enabled(Command::FolderBottom, &State { scope: ScopeKind::Smart, picked_smart: 2, ..grid(0) }));
+        assert!(enabled(Command::MoveFolder, &picked));
+        assert!(enabled(Command::MoveFolder, &State { scope: ScopeKind::Folder, ..grid(0) }));
+        assert!(!enabled(Command::MoveFolder, &State { scope: ScopeKind::Smart, ..grid(0) }));
     }
 
     #[test]

@@ -1208,6 +1208,8 @@ impl App {
             back: !self.ws.back.is_empty(),
             forward: !self.ws.forward.is_empty(),
             parent: self.ws.up.is_some(),
+            picked_folders: self.ws.folders.sel.ids.len(),
+            picked_smart: self.ws.folders.smart.ids.len(),
             layout: self.ws.layout,
             sidebar: self.show_sidebar,
             inspector: self.show_inspector,
@@ -1309,6 +1311,12 @@ impl App {
                     self.ws.org.settings_request = Some(id.clone());
                 }
             }
+            // The picked folders, else the open one, as Eagle's menu does.
+            C::MoveFolder => match (&self.ws.scope, self.ws.folders.sel.ids.is_empty()) {
+                (_, false) => self.open_mover(self.ws.folders.sel.ids.clone()),
+                (Scope::Folder(id), true) => self.open_mover(vec![id.clone()]),
+                _ => {}
+            },
             C::FolderUp | C::FolderDown | C::FolderTop | C::FolderBottom => {
                 use crate::organize::Arrange;
                 let how = match cmd {
