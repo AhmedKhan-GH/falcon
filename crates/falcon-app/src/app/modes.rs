@@ -1,5 +1,5 @@
 //! Window and viewer modes from Eagle's View menu: presentation
-//! (slideshow) mode and Always on Top (see the desktop app chapter of the
+//! (slideshow) mode, Always on Top and the grayscale preview (see the desktop app chapter of the
 //! docs).
 
 use eframe::egui;
@@ -21,6 +21,9 @@ pub(super) struct Modes {
     /// The main window floats above other windows (Eagle's
     /// `isAlwaysOnTop`, off at every launch).
     pub on_top: bool,
+    /// Grayscale preview (Eagle's `isGrayscaleMode`, off at every launch):
+    /// the viewer's pictures are drawn desaturated.
+    pub grayscale: bool,
 }
 
 impl App {

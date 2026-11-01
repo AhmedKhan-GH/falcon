@@ -68,6 +68,7 @@ impl App {
             logic::smart_fit((natural.x, natural.y), (area.width(), area.height()), 40.0, &item.name)
         };
         self.ws.loader.set_pixelated(self.prefs.pixelated);
+        self.ws.loader.set_grayscale(self.modes.grayscale);
         // A newly opened image starts where it was left, at actual size, or
         // fitted, by the preferences; "fit to window edge" overrides both,
         // as in Eagle.

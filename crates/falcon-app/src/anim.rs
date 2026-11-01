@@ -851,6 +851,8 @@ pub struct Player {
     pub speed: f32,
     pub range: Option<LoopRange>,
     last: Option<f64>,
+    /// Frames are desaturated before upload (grayscale preview).
+    pub gray: bool,
 }
 
 /// Thumbnails kept for the scrub bar.
@@ -886,6 +888,7 @@ impl Player {
             speed: 1.0,
             range: None,
             last: None,
+            gray: false,
         }
     }
 
@@ -932,12 +935,18 @@ impl Player {
                 }
                 Ok(Msg::Still) => self.state = State::Still,
                 Ok(Msg::Failed(e)) => self.state = State::Failed(e),
-                Ok(Msg::Frame(i, img)) => {
+                Ok(Msg::Frame(i, mut img)) => {
+                    if self.gray {
+                        crate::logic::grayscale_rgba(img.as_raw_mut());
+                    }
                     let tex = self.ctx.load_texture(format!("{}-{i}", self.name), img, egui::TextureOptions::LINEAR);
                     self.frames.insert(i, tex);
                     self.evict();
                 }
-                Ok(Msg::Thumb(i, img)) => {
+                Ok(Msg::Thumb(i, mut img)) => {
+                    if self.gray {
+                        crate::logic::grayscale_rgba(img.as_raw_mut());
+                    }
                     let tex = self.ctx.load_texture(format!("{}-t{i}", self.name), img, egui::TextureOptions::LINEAR);
                     if self.thumbs.len() >= THUMB_CAP
                         && let Some(&far) = self.thumbs.keys().max_by_key(|&&k| k.abs_diff(i))

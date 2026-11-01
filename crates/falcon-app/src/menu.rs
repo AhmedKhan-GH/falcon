@@ -78,6 +78,8 @@ pub struct State {
     pub presenting: bool,
     /// The main window floats above other apps' windows.
     pub on_top: bool,
+    /// The grayscale preview is on.
+    pub grayscale: bool,
 }
 
 impl State {
@@ -145,6 +147,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::Documentation => s.docs,
         C::ToggleName | C::ToggleInfo | C::ToggleComments | C::ToggleSubfolders => s.library,
         C::AlwaysOnTop => true,
+        C::Grayscale => s.library,
         C::Presentation => s.library && (s.viewer || s.selected > 0 || s.presenting),
         C::Player(_) => false,
     }
@@ -167,6 +170,7 @@ pub enum Check {
     Subfolders,
     Presentation,
     AlwaysOnTop,
+    Grayscale,
 }
 
 impl Check {
@@ -186,6 +190,7 @@ impl Check {
             Check::Subfolders => s.subfolders,
             Check::Presentation => s.presenting,
             Check::AlwaysOnTop => s.on_top,
+            Check::Grayscale => s.grayscale,
         }
     }
 }
@@ -353,6 +358,7 @@ pub static MENUS: &[(&str, &[Entry])] = &[
             item("Zoom Out", Command::ZoomOut),
             item("Actual Size", Command::ZoomActual),
             item("Zoom to Fit", Command::ZoomFit),
+            checked("Grayscale", Command::Grayscale, Check::Grayscale),
             SEP,
             checked("Viewer", Command::Viewer, Check::Viewer),
             item("Open With Default App", Command::OpenDefault),

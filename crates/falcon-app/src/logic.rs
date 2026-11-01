@@ -1525,6 +1525,43 @@ pub fn tile_spans(w: usize, h: usize, side: usize) -> Vec<TileSpan> {
     out
 }
 
+// ---------------------------------------------------------------------------
+// Viewer modes: grayscale preview
+
+/// One pixel as CSS's `filter: grayscale(1)` draws it (the filter Eagle's
+/// grayscale preview puts on the grid and the viewer): every channel
+/// becomes the luminance 0.2126 R + 0.7152 G + 0.0722 B; alpha stays. Works
+/// on premultiplied pixels too, since the weights sum to one.
+pub fn grayscale_pixel([r, g, b, a]: [u8; 4]) -> [u8; 4] {
+    let y = ((u32::from(r) * 2126 + u32::from(g) * 7152 + u32::from(b) * 722 + 5000) / 10_000) as u8;
+    [y, y, y, a]
+}
+
+/// Desaturates RGBA pixels in place with [`grayscale_pixel`] (a trailing
+/// partial pixel is left alone). The grid can run it on its cards' pixels.
+pub fn grayscale_rgba(rgba: &mut [u8]) {
+    for px in rgba.as_chunks_mut::<4>().0 {
+        *px = grayscale_pixel(*px);
+    }
+}
+
+#[cfg(test)]
+mod viewer_mode_tests {
+    use super::*;
+
+    #[test]
+    fn grayscale_uses_css_luminance() {
+        assert_eq!(grayscale_pixel([255, 255, 255, 255]), [255, 255, 255, 255]);
+        assert_eq!(grayscale_pixel([0, 0, 0, 7]), [0, 0, 0, 7]);
+        assert_eq!(grayscale_pixel([255, 0, 0, 255]), [54, 54, 54, 255]);
+        assert_eq!(grayscale_pixel([0, 255, 0, 255]), [182, 182, 182, 255]);
+        assert_eq!(grayscale_pixel([0, 0, 255, 128]), [18, 18, 18, 128]);
+        let mut px = vec![255, 0, 0, 255, 10, 20, 30, 40, 9];
+        grayscale_rgba(&mut px);
+        assert_eq!(px, vec![54, 54, 54, 255, 19, 19, 19, 40, 9]);
+    }
+}
+
 #[cfg(test)]
 mod image_viewer_tests {
     use super::*;

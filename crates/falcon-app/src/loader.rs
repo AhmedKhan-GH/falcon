@@ -111,6 +111,8 @@ struct Shared {
     cv: Condvar,
     /// Set when the loader is dropped; the workers then stop.
     closed: std::sync::atomic::AtomicBool,
+    /// Grayscale preview: the viewer's tiers decode desaturated.
+    gray: std::sync::atomic::AtomicBool,
 }
 
 /// What a worker hands back: one image, or a full-resolution one in tiles.
@@ -126,6 +128,26 @@ struct Decoded {
     image: Option<Pixels>,
     /// From an SVG region job, which shares its key with the full tier.
     region: bool,
+    /// Decoded desaturated (grayscale preview).
+    gray: bool,
+}
+
+/// Whether a tier follows the grayscale preview: the viewer's sizes, not
+/// the grid's cards.
+fn grays(tier: Tier) -> bool {
+    tier != Tier::Grid
+}
+
+/// Desaturates decoded pixels in place.
+fn desaturate(p: &mut Pixels) {
+    match p {
+        Pixels::Whole(img) | Pixels::Patch(_, img) => crate::logic::grayscale_rgba(img.as_raw_mut()),
+        Pixels::Tiled { tiles, .. } => {
+            for (_, img) in tiles {
+                crate::logic::grayscale_rgba(img.as_raw_mut());
+            }
+        }
+    }
 }
 
 /// One texture of a full-resolution image.
@@ -176,11 +198,16 @@ pub struct Loader {
     svg_patch: Option<SvgPatch>,
     svg_last: Option<(String, [f32; 4], [u32; 2])>,
     svg_seq: u64,
+    /// Grayscale preview, and the cached renders made before it last
+    /// changed: still shown until their replacement arrives, so switching
+    /// doesn't blank the view.
+    gray: bool,
+    stale: HashSet<Key>,
 }
 
 impl Loader {
     pub fn new(ctx: &Context) -> Self {
-        let shared = Arc::new(Shared { queue: Mutex::new(VecDeque::new()), cv: Condvar::new(), closed: Default::default() });
+        let shared = Arc::new(Shared { queue: Mutex::new(VecDeque::new()), cv: Condvar::new(), closed: Default::default(), gray: Default::default() });
         let (tx, rx) = std::sync::mpsc::channel();
         let workers = std::thread::available_parallelism().map_or(4, |n| n.get().clamp(2, 6));
         for _ in 0..workers {
@@ -199,8 +226,12 @@ impl Loader {
                             q = shared.cv.wait(q).unwrap();
                         }
                     };
-                    let image = decode(&job);
-                    if tx.send(Decoded { key: job.key, image, region: job.region.is_some() }).is_err() {
+                    let gray = grays(job.key.1) && shared.gray.load(std::sync::atomic::Ordering::Relaxed);
+                    let mut image = decode(&job);
+                    if gray && let Some(p) = &mut image {
+                        desaturate(p);
+                    }
+                    if tx.send(Decoded { key: job.key, image, region: job.region.is_some(), gray }).is_err() {
                         return;
                     }
                     ctx.request_repaint();
@@ -211,7 +242,21 @@ impl Loader {
             .into_iter()
             .map(|t| (t, LruCache::new(NonZeroUsize::new(t.capacity()).unwrap())))
             .collect();
-        Loader { shared, rx, caches, pending: HashSet::new(), failed: HashSet::new(), original: None, staged: None, pixelated: false, svg_patch: None, svg_last: None, svg_seq: 0 }
+        Loader {
+            shared,
+            rx,
+            caches,
+            pending: HashSet::new(),
+            failed: HashSet::new(),
+            original: None,
+            staged: None,
+            pixelated: false,
+            svg_patch: None,
+            svg_last: None,
+            svg_seq: 0,
+            gray: false,
+            stale: HashSet::new(),
+        }
     }
 
     /// Uploads finished decodes (bounded per call so frames stay short).
@@ -219,6 +264,13 @@ impl Loader {
         self.upload_staged(ctx);
         for _ in 0..24 {
             let Ok(d) = self.rx.try_recv() else { return };
+            // Decoded before the grayscale preview changed: asked again.
+            if grays(d.key.1) && d.gray != self.gray {
+                if !d.region {
+                    self.pending.remove(&d.key);
+                }
+                continue;
+            }
             if d.region {
                 let Some(Pixels::Patch(region, img)) = d.image else { continue };
                 // Only the latest region for the item still on screen.
@@ -238,9 +290,11 @@ impl Loader {
             match d.image {
                 Some(Pixels::Whole(img)) => {
                     let tex = ctx.load_texture(format!("{}-{:?}", d.key.0, d.key.1), img, self.options(d.key.1));
+                    self.stale.remove(&d.key);
                     self.caches.get_mut(&d.key.1).unwrap().put(d.key.0, tex);
                 }
                 Some(Pixels::Tiled { size, tiles }) => {
+                    self.stale.remove(&d.key);
                     self.original = None;
                     self.staged = Some(Staged { original: Original { id: d.key.0, size, tiles: Vec::new() }, rest: tiles });
                     self.upload_staged(ctx);
@@ -305,6 +359,28 @@ impl Loader {
         self.caches.get_mut(&Tier::Full).unwrap().clear();
         self.original = None;
         self.staged = None;
+    }
+
+    /// Turns the grayscale preview on or off for the viewer's renders (the
+    /// grid's cards keep their colours). What is cached is marked stale and
+    /// decoded again, still shown until the new pixels arrive.
+    pub fn set_grayscale(&mut self, on: bool) {
+        if self.gray == on {
+            return;
+        }
+        self.gray = on;
+        self.shared.gray.store(on, std::sync::atomic::Ordering::Relaxed);
+        for (tier, cache) in &self.caches {
+            if grays(*tier) {
+                self.stale.extend(cache.iter().map(|(id, _)| (id.clone(), *tier)));
+            }
+        }
+        if let Some(o) = &self.original {
+            self.stale.insert((o.id.clone(), Tier::Original));
+        }
+        self.staged = None;
+        self.svg_last = None;
+        self.svg_patch = None;
     }
 
     /// The full-resolution original of `id`, once every tile is uploaded.
@@ -382,7 +458,7 @@ impl Loader {
                     self.original.as_ref().is_some_and(|o| o.id == j.key.0) || self.staged.as_ref().is_some_and(|s| s.original.id == j.key.0)
                 }
                 tier => self.caches[&tier].peek(&j.key.0).is_some(),
-            };
+            } && !self.stale.contains(&j.key);
             if self.failed.contains(&j.key) || self.pending.contains(&j.key) || have {
                 continue;
             }
@@ -399,6 +475,7 @@ impl Loader {
     /// Drops one item's textures in every size, after its file or
     /// thumbnail changed, so they are decoded again.
     pub fn forget(&mut self, id: &str) {
+        self.stale.retain(|k| k.0 != id);
         for (tier, c) in &mut self.caches {
             c.pop(id);
             self.failed.remove(&(id.to_string(), *tier));

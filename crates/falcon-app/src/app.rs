@@ -1500,6 +1500,7 @@ impl App {
             libraries: self.others.len(),
             presenting: self.modes.presenting,
             on_top: self.modes.on_top,
+            grayscale: self.modes.grayscale,
         }
     }
 
@@ -1774,6 +1775,7 @@ impl App {
             }
             C::Presentation => self.toggle_presentation(ctx),
             C::AlwaysOnTop => self.toggle_on_top(ctx),
+            C::Grayscale => self.modes.grayscale = !self.modes.grayscale,
             C::Player(_) => {}
             C::ToggleName => self.display.show_name = !self.display.show_name,
             C::ToggleInfo => self.display.show_info = !self.display.show_info,
@@ -3553,6 +3555,12 @@ impl App {
             });
         }
         self.item_export_menu(ui, targets);
+        // Eagle's grayscale preview toggle; the menu stays open, as Eagle's
+        // entry does.
+        let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::Grayscale);
+        if ui.add(egui::Button::new("Grayscale").selected(self.modes.grayscale).shortcut_text(keys)).clicked() {
+            self.modes.grayscale = !self.modes.grayscale;
+        }
         // Eagle's Enter / Leave Presentation Mode.
         let label = if self.modes.presenting { "Leave Presentation Mode" } else { "Enter Presentation Mode" };
         let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::Presentation);
@@ -4708,10 +4716,16 @@ impl App {
         if self.icloud_viewer(parent, lib, item, screen) {
             return;
         }
+        // An animation playing in colour starts again in grayscale, and back.
+        if self.ws.view.anim.as_ref().is_some_and(|a| a.gray != self.modes.grayscale) {
+            self.ws.view.anim = None;
+        }
         if self.ws.view.anim.is_none()
             && let Some(kind) = crate::anim::kind(&item.ext)
         {
-            self.ws.view.anim = Some(crate::anim::Player::open(ctx, item.original_path(lib.root()), kind, crate::anim::Opts::viewer()));
+            let mut player = crate::anim::Player::open(ctx, item.original_path(lib.root()), kind, crate::anim::Opts::viewer());
+            player.gray = self.modes.grayscale;
+            self.ws.view.anim = Some(player);
         }
         if self.text_viewer(parent, lib, item, screen)
             || self.video_viewer(parent, lib, item, screen)
