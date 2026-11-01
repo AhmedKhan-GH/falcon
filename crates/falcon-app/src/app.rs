@@ -51,6 +51,7 @@ mod layout_panel;
 mod library_ui;
 mod text_view;
 mod tag_picker;
+mod library_dialogs;
 #[path = "comments.rs"]
 mod comments;
 #[path = "covers.rs"]
@@ -750,6 +751,8 @@ pub struct App {
     /// What to open once the frame is done (it replaces the library being
     /// drawn).
     switch_to: Option<Switch>,
+    /// The create-library dialog and its follow-up steps.
+    dialogs: library_dialogs::State,
     prefs: crate::prefs::Prefs,
     /// Search scope, pinned filters and Go to Folder history.
     search: crate::search_state::SearchPrefs,
@@ -851,6 +854,7 @@ impl App {
             clear_history_open: false,
             lib_icons: Default::default(),
             switch_to: None,
+            dialogs: Default::default(),
             prefs: Default::default(),
             search: Default::default(),
             prefs_window: Default::default(),
@@ -1278,15 +1282,9 @@ impl App {
         }
     }
 
+    /// Opens the create-library dialog (`library_dialogs.rs`).
     fn new_library(&mut self) {
-        let Some(dest) = rfd::FileDialog::new().set_title("Create Library").set_directory(falcon_library::sandbox::default_root()).set_file_name("Untitled.library").save_file() else {
-            return;
-        };
-        let dest = if dest.extension().is_some_and(|e| e == "library") { dest } else { dest.with_extension("library") };
-        match falcon_library::sandbox::guard(&dest).and_then(|()| Library::create(&dest)) {
-            Ok(_) => self.open(dest),
-            Err(e) => self.flash_error(format!("Could not create the library: {e}")),
-        }
+        self.dialogs.start_create();
     }
 
     fn pick_library(&mut self) {
@@ -5601,6 +5599,7 @@ impl App {
         }
         self.import_dialogs(&ctx);
         self.about_ui(&ctx);
+        self.library_dialogs(&ctx);
         if self.collect.open {
             self.collect_window(&ctx);
         }
