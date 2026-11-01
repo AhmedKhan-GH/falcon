@@ -1172,3 +1172,49 @@ mod manual_drop_tests {
         assert_eq!(manual_drop(Layout::Grid, &[], CAP, GAP, none, 0.0, 0.0), None);
     }
 }
+
+// ---------------------------------------------------------------------------
+// The detail viewer's shell
+
+/// Room the macOS window buttons need at the left of a bar that starts at
+/// the window's left edge.
+pub const TRAFFIC_LIGHTS: f32 = 72.0;
+
+/// The left and right edges of the viewer, given the window's edges and
+/// the widths of the sidebar and inspector when they are shown. As in
+/// Eagle's detail mode, the viewer takes the space between the two panels
+/// (all of it when both are hidden).
+pub fn viewer_span(left: f32, right: f32, sidebar: Option<f32>, inspector: Option<f32>) -> (f32, f32) {
+    let l = left + sidebar.unwrap_or(0.0);
+    let r = (right - inspector.unwrap_or(0.0)).max(l);
+    (l, r)
+}
+
+/// Where the first control of a bar starts, measured from the bar's left
+/// edge: after the window buttons when nothing is to its left.
+pub fn bar_inset(at_window_edge: bool) -> f32 {
+    if at_window_edge { 20.0 + TRAFFIC_LIGHTS + 6.0 } else { 20.0 }
+}
+
+#[cfg(test)]
+mod viewer_shell_tests {
+    use super::*;
+
+    #[test]
+    fn viewer_sits_between_the_panels() {
+        let (sw, iw) = (240.0, 260.0);
+        assert_eq!(viewer_span(0.0, 1440.0, Some(sw), Some(iw)), (240.0, 1180.0));
+        assert_eq!(viewer_span(0.0, 1440.0, None, Some(iw)), (0.0, 1180.0));
+        assert_eq!(viewer_span(0.0, 1440.0, Some(sw), None), (240.0, 1440.0));
+        assert_eq!(viewer_span(0.0, 1440.0, None, None), (0.0, 1440.0));
+        // A window narrower than both panels leaves an empty span, never a
+        // negative one.
+        assert_eq!(viewer_span(0.0, 400.0, Some(sw), Some(iw)), (240.0, 240.0));
+    }
+
+    #[test]
+    fn bars_leave_room_for_the_window_buttons() {
+        assert_eq!(bar_inset(false), 20.0);
+        assert_eq!(bar_inset(true), 98.0);
+    }
+}

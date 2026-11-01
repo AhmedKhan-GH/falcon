@@ -1589,6 +1589,15 @@ fn icon_button(ui: &mut Ui, center: Pos2, glyph: &str, size: f32, enabled: bool,
 }
 
 /// Makes `rect` drag the window, and double-click zoom it, like a title bar.
+/// The layer a viewer draws in: a child of the central panel covering
+/// `screen` and clipped to it, so the viewer never paints over or takes
+/// input from the sidebar and inspector beside it.
+fn viewer_ui(parent: &mut Ui, screen: Rect, salt: &str) -> Ui {
+    let mut ui = parent.new_child(egui::UiBuilder::new().max_rect(screen).id_salt(salt));
+    ui.set_clip_rect(screen.intersect(parent.clip_rect()));
+    ui
+}
+
 fn window_drag(ui: &Ui, rect: Rect, id: &str) {
     let resp = ui.interact(rect, ui.scope_id().with(("drag", id)), Sense::click_and_drag());
     if resp.drag_started() {
@@ -2503,13 +2512,29 @@ impl App {
 // Grid
 
 impl App {
-    fn grid(&mut self, ui: &mut Ui, lib: &Library) {
-        let area = ui.max_rect();
+    /// The scope's items in grid order, as indices into the library.
+    fn scope_order(&mut self, lib: &Library) -> Vec<usize> {
         let only: Option<HashSet<String>> = match &self.ws.scope {
             Scope::Smart(id) => Some(lib.smart_folder_items(id).into_iter().map(|i| i.id.clone()).collect()),
             _ => None,
         };
-        let order = self.grid_order(lib, only.as_ref());
+        self.grid_order(lib, only.as_ref())
+    }
+
+    /// Keeps `ws.order` current while the viewer hides the grid, so the
+    /// viewer's stepping and counter follow edits and deletions.
+    fn refresh_order(&mut self, lib: &Library) {
+        if self.scope_gate(lib).is_some() {
+            self.ws.order.clear();
+            return;
+        }
+        let order = self.scope_order(lib);
+        self.ws.order = order.iter().map(|&i| lib.items()[i].id.clone()).collect();
+    }
+
+    fn grid(&mut self, ui: &mut Ui, lib: &Library) {
+        let area = ui.max_rect();
+        let order = self.scope_order(lib);
         if let Some(gate) = self.scope_gate(lib) {
             self.ws.order.clear();
             self.unlock_screen(ui, gate, lib);
@@ -3502,10 +3527,11 @@ fn wide_button(ui: &mut Ui, glyph: &str, label: &str, enabled: bool) -> Response
 // Viewer and frame
 
 impl App {
-    /// Shows the open item over the whole window, or for a PDF over just the
-    /// middle (`central`), leaving the sidebar and inspector in place as
-    /// Eagle's reader does.
-    fn viewer(&mut self, ctx: &egui::Context, ui: &mut Ui, lib: &Library, central: Rect) {
+    /// The open item's viewer, drawn by `parent` (the central panel) over
+    /// `screen`: as in Eagle's detail mode it takes the place of the grid,
+    /// between the sidebar and the inspector.
+    fn viewer(&mut self, parent: &mut Ui, lib: &Library, screen: Rect) {
+        let ctx = &parent.ctx().clone();
         let Some(id) = self.ws.viewer.clone() else { return };
         let Some(item) = lib.item(&id) else {
             self.ws.viewer = None;
@@ -3514,143 +3540,140 @@ impl App {
         if self.ws.view.id != id {
             self.ws.view = ViewState { id: id.clone(), file: item.original_path(lib.root()), ..Default::default() };
         }
-        let screen = if cfg!(target_os = "macos") && pdf_view::is_pdf(item) { central } else { ui.max_rect() };
         // An original still in iCloud downloads in the background first.
-        if self.icloud_viewer(ctx, lib, item, screen) {
+        if self.icloud_viewer(parent, lib, item, screen) {
             return;
         }
         if item.ext == "gif" && self.ws.view.started.is_none() {
             self.ws.view.frames = gif_frames(ctx, &item.original_path(lib.root()));
             self.ws.view.started = Some(Instant::now());
         }
-        if self.video_viewer(ctx, lib, item, screen) || self.pdf_viewer(ctx, lib, item, screen) || self.media_viewer(ctx, lib, item, screen) {
+        if self.video_viewer(parent, lib, item, screen) || self.pdf_viewer(parent, lib, item, screen) || self.media_viewer(parent, lib, item, screen) {
             return;
         }
-        egui::Area::new(egui::Id::unique("viewer")).fixed_pos(screen.min).order(egui::Order::Foreground).show(ctx, |ui| {
-            // Claim the whole rect, so egui sends scroll and hover here
-            // rather than to the grid underneath.
-            ui.expand_to_include_rect(screen);
-            let p = ui.painter().clone();
-            p.rect_filled(screen, 0.0, t::p().main);
-            let bar = Rect::from_min_size(screen.min, vec2(screen.width(), t::BAR_HEIGHT));
-            let area = Rect::from_min_max(Pos2::new(screen.left(), bar.bottom()), screen.max);
+        let ui = &mut viewer_ui(parent, screen, "viewer");
+        let p = ui.painter().clone();
+        p.rect_filled(screen, 0.0, t::p().main);
+        let bar = Rect::from_min_size(screen.min, vec2(screen.width(), t::BAR_HEIGHT));
+        let area = Rect::from_min_max(Pos2::new(screen.left(), bar.bottom()), screen.max);
 
-            // The image: a GIF frame, the full render, or the preview.
-            let gif = (!self.ws.view.frames.is_empty()).then(|| {
-                let total: f32 = self.ws.view.frames.iter().map(|f| f.1).sum();
-                let mut t = self.ws.view.started.map_or(0.0, |s| s.elapsed().as_secs_f32()) % total.max(0.01);
-                let mut pick = 0;
-                for (n, (_, d)) in self.ws.view.frames.iter().enumerate() {
-                    if t < *d {
-                        pick = n;
-                        break;
-                    }
-                    t -= d;
+        // The image: a GIF frame, the full render, or the preview.
+        let gif = (!self.ws.view.frames.is_empty()).then(|| {
+            let total: f32 = self.ws.view.frames.iter().map(|f| f.1).sum();
+            let mut t = self.ws.view.started.map_or(0.0, |s| s.elapsed().as_secs_f32()) % total.max(0.01);
+            let mut pick = 0;
+            for (n, (_, d)) in self.ws.view.frames.iter().enumerate() {
+                if t < *d {
+                    pick = n;
+                    break;
                 }
-                ctx.request_repaint_after(std::time::Duration::from_millis(15));
-                self.ws.view.frames[pick].0.clone()
-            });
-            let tex = gif
-                .or_else(|| self.ws.loader.get(&id, Tier::Full).cloned())
-                .or_else(|| self.ws.loader.get(&id, Tier::Preview).cloned());
-            let natural = if item.width > 0 && item.height > 0 {
-                vec2(item.width as f32, item.height as f32)
-            } else {
-                tex.as_ref().map_or(Vec2::splat(512.0), |t| t.size_vec2())
-            };
-            let fit = ((area.width() - 80.0) / natural.x).min((area.height() - 80.0) / natural.y).min(1.0);
-            let scale = self.ws.view.zoom.unwrap_or(fit);
-
-            // Scroll or pinch zooms around the pointer; dragging pans.
-            let resp = ui.interact(area, ui.scope_id().with("viewer-canvas"), Sense::click_and_drag());
-            let (scroll, pinch, pointer) = ui.input(|i| (i.smooth_scroll_delta.y, i.zoom_delta(), i.pointer.hover_pos()));
-            let factor = if pinch != 1.0 { pinch } else if resp.hovered() && scroll != 0.0 { (scroll / 300.0).exp() } else { 1.0 };
-            if factor != 1.0 {
-                let new = (scale * factor).clamp(0.02, 32.0);
-                if let Some(pos) = pointer {
-                    let center = area.center() + self.ws.view.pan;
-                    let off = pos - center;
-                    self.ws.view.pan += off - off * (new / scale);
-                }
-                self.ws.view.zoom = Some(new);
+                t -= d;
             }
-            if resp.dragged() {
-                self.ws.view.pan += resp.drag_delta();
-                if self.ws.view.zoom.is_none() {
-                    self.ws.view.zoom = Some(scale);
-                }
-            }
-            if resp.double_clicked() {
-                self.ws.view.zoom = None;
-                self.ws.view.pan = Vec2::ZERO;
-            }
-            let scale = self.ws.view.zoom.unwrap_or(fit);
-            if self.ws.view.zoom.is_none() {
-                self.ws.view.pan = Vec2::ZERO;
-            }
-            let r = Rect::from_center_size(area.center() + self.ws.view.pan, natural * scale);
-            let mut clip = ui.new_child(egui::UiBuilder::new().max_rect(area));
-            clip.set_clip_rect(area);
-            match &tex {
-                Some(tex) => egui::Image::new((tex.id(), r.size())).paint_at(&clip, r),
-                None => ext_placeholder(&clip, Rect::from_center_size(area.center(), Vec2::splat(260.0)), &item.ext),
-            }
-            self.edit_overlay(ui, item, r, area);
-
-            // Bar on top: close, name, zoom controls.
-            p.rect_filled(bar, 0.0, t::p().main);
-            window_drag(ui, bar, "viewer");
-            let cy = bar.center().y;
-            if icon_button(ui, Pos2::new(bar.left() + 98.0, cy), ic::CARET_LEFT, 17.0, true, "Back (Esc)").clicked() {
-                self.ws.viewer = None;
-            }
-            let name = format!("{}.{}", item.name, item.ext);
-            let g = galley(ui, &name, font(14.0), t::p().text, 360.0);
-            p.galley(Pos2::new(bar.left() + 120.0, cy - g.size().y / 2.0), g, t::p().text);
-            let file = self.ws.view.file.clone();
-            let mut x = self.viewer_open_button(ui, bar.right() - 12.0, cy, &file) - 14.0;
-            if icon_button(ui, Pos2::new(x, cy), ic::PLUS, 15.0, true, "Zoom In (+)").clicked() {
-                self.ws.view.zoom = Some((scale * 1.25).min(32.0));
-            }
-            x -= 28.0;
-            p.text(Pos2::new(x, cy), Align2::CENTER_CENTER, format!("{:.0}%", scale * 100.0), mono(12.0), t::p().text_value);
-            x -= 30.0;
-            if icon_button(ui, Pos2::new(x, cy), ic::MINUS, 15.0, true, "Zoom Out (−)").clicked() {
-                self.ws.view.zoom = Some((scale / 1.25).max(0.02));
-            }
-            x -= 40.0;
-            let actual = ui.put(Rect::from_center_size(Pos2::new(x, cy), vec2(46.0, 24.0)), egui::Button::new("1:1"));
-            if actual.on_hover_text("Actual Size (1)").clicked() {
-                self.ws.view.zoom = Some(1.0);
-                self.ws.view.pan = Vec2::ZERO;
-            }
-            x -= 50.0;
-            if ui.put(Rect::from_center_size(Pos2::new(x, cy), vec2(46.0, 24.0)), egui::Button::new("Fit")).on_hover_text("Zoom to Fit (0)").clicked() {
-                self.ws.view.zoom = None;
-            }
-            self.edit_bar(ui, item, x - 50.0, cy);
-
-            // Keys: 0 fits, 1 is actual size, + and - zoom.
-            let (k0, k1, kp, km) = ui.input(|i| {
-                (i.key_pressed(Key::Num0), i.key_pressed(Key::Num1), i.key_pressed(Key::Plus) || i.key_pressed(Key::Equals), i.key_pressed(Key::Minus))
-            });
-            if k0 {
-                self.ws.view.zoom = None;
-            }
-            if k1 {
-                self.ws.view.zoom = Some(1.0);
-                self.ws.view.pan = Vec2::ZERO;
-            }
-            if kp {
-                self.ws.view.zoom = Some((scale * 1.25).min(32.0));
-            }
-            if km {
-                self.ws.view.zoom = Some((scale / 1.25).max(0.02));
-            }
-            if let Some(j) = job_for(item, lib.root(), Tier::Full) {
-                self.ws.frame_jobs.push(j);
-            }
+            ctx.request_repaint_after(std::time::Duration::from_millis(15));
+            self.ws.view.frames[pick].0.clone()
         });
+        let tex = gif
+            .or_else(|| self.ws.loader.get(&id, Tier::Full).cloned())
+            .or_else(|| self.ws.loader.get(&id, Tier::Preview).cloned());
+        let natural = if item.width > 0 && item.height > 0 {
+            vec2(item.width as f32, item.height as f32)
+        } else {
+            tex.as_ref().map_or(Vec2::splat(512.0), |t| t.size_vec2())
+        };
+        let fit = ((area.width() - 80.0) / natural.x).min((area.height() - 80.0) / natural.y).min(1.0);
+        let scale = self.ws.view.zoom.unwrap_or(fit);
+
+        // Scroll or pinch over the picture zooms around the pointer;
+        // dragging pans.
+        let resp = ui.interact(area, ui.scope_id().with("viewer-canvas"), Sense::click_and_drag());
+        let (scroll, pinch, pointer) = ui.input(|i| (i.smooth_scroll_delta.y, i.zoom_delta(), i.pointer.hover_pos()));
+        let factor = if !resp.hovered() {
+            1.0
+        } else if pinch != 1.0 {
+            pinch
+        } else if scroll != 0.0 {
+            (scroll / 300.0).exp()
+        } else {
+            1.0
+        };
+        if factor != 1.0 {
+            let new = (scale * factor).clamp(0.02, 32.0);
+            if let Some(pos) = pointer {
+                let center = area.center() + self.ws.view.pan;
+                let off = pos - center;
+                self.ws.view.pan += off - off * (new / scale);
+            }
+            self.ws.view.zoom = Some(new);
+        }
+        if resp.dragged() {
+            self.ws.view.pan += resp.drag_delta();
+            if self.ws.view.zoom.is_none() {
+                self.ws.view.zoom = Some(scale);
+            }
+        }
+        if resp.double_clicked() {
+            self.ws.view.zoom = None;
+            self.ws.view.pan = Vec2::ZERO;
+        }
+        let scale = self.ws.view.zoom.unwrap_or(fit);
+        if self.ws.view.zoom.is_none() {
+            self.ws.view.pan = Vec2::ZERO;
+        }
+        let r = Rect::from_center_size(area.center() + self.ws.view.pan, natural * scale);
+        let mut clip = ui.new_child(egui::UiBuilder::new().max_rect(area));
+        clip.set_clip_rect(area);
+        match &tex {
+            Some(tex) => egui::Image::new((tex.id(), r.size())).paint_at(&clip, r),
+            None => ext_placeholder(&clip, Rect::from_center_size(area.center(), Vec2::splat(260.0)), &item.ext),
+        }
+        self.edit_overlay(ui, item, r, area);
+
+        // The bar on top: back and name, then zoom and the tools.
+        let (name_x, right) = media_view::bar_shell(self, ui, item, bar);
+        let cy = bar.center().y;
+        let mut x = right - 14.0;
+        if icon_button(ui, Pos2::new(x, cy), ic::PLUS, 15.0, true, "Zoom In (+)").clicked() {
+            self.ws.view.zoom = Some((scale * 1.25).min(32.0));
+        }
+        x -= 28.0;
+        p.text(Pos2::new(x, cy), Align2::CENTER_CENTER, format!("{:.0}%", scale * 100.0), mono(12.0), t::p().text_value);
+        x -= 30.0;
+        if icon_button(ui, Pos2::new(x, cy), ic::MINUS, 15.0, true, "Zoom Out (−)").clicked() {
+            self.ws.view.zoom = Some((scale / 1.25).max(0.02));
+        }
+        x -= 40.0;
+        let actual = ui.put(Rect::from_center_size(Pos2::new(x, cy), vec2(46.0, 24.0)), egui::Button::new("1:1"));
+        if actual.on_hover_text("Actual Size (1)").clicked() {
+            self.ws.view.zoom = Some(1.0);
+            self.ws.view.pan = Vec2::ZERO;
+        }
+        x -= 50.0;
+        if ui.put(Rect::from_center_size(Pos2::new(x, cy), vec2(46.0, 24.0)), egui::Button::new("Fit")).on_hover_text("Zoom to Fit (0)").clicked() {
+            self.ws.view.zoom = None;
+        }
+        let tools_left = self.edit_bar(ui, item, x - 50.0, cy);
+        media_view::bar_name(ui, item, bar, name_x, tools_left);
+
+        // Keys: 0 fits, 1 is actual size, + and - zoom.
+        let (k0, k1, kp, km) = ui.input(|i| {
+            (i.key_pressed(Key::Num0), i.key_pressed(Key::Num1), i.key_pressed(Key::Plus) || i.key_pressed(Key::Equals), i.key_pressed(Key::Minus))
+        });
+        if k0 {
+            self.ws.view.zoom = None;
+        }
+        if k1 {
+            self.ws.view.zoom = Some(1.0);
+            self.ws.view.pan = Vec2::ZERO;
+        }
+        if kp {
+            self.ws.view.zoom = Some((scale * 1.25).min(32.0));
+        }
+        if km {
+            self.ws.view.zoom = Some((scale / 1.25).max(0.02));
+        }
+        if let Some(j) = job_for(item, lib.root(), Tier::Full) {
+            self.ws.frame_jobs.push(j);
+        }
     }
 
     fn empty_state(&mut self, ui: &mut Ui) {
@@ -3752,6 +3775,16 @@ impl eframe::App for App {
         if self.ws.selected.iter().any(|id| lib.item(id).is_none()) {
             self.ws.selected.retain(|id| lib.item(id).is_some());
         }
+        // As in Eagle's detail mode, the inspector shows the item in the
+        // viewer: the selection follows it.
+        if let Some(id) = self.ws.viewer.clone()
+            && self.ws.selected != [id.clone()]
+            && lib.item(&id).is_some()
+        {
+            self.ws.selected = vec![id.clone()];
+            self.ws.anchor = Some(id.clone());
+            self.ws.scroll_to = Some(id);
+        }
 
         if self.show_sidebar {
             egui::Panel::left("sidebar")
@@ -3769,41 +3802,59 @@ impl eframe::App for App {
                 .frame(egui::Frame::NONE)
                 .show(ui, |ui| self.inspector(ui, lib));
         }
-        let mut central = ctx.content_rect();
         egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t::p().main)).show(ui, |ui| {
             let full = ui.max_rect();
-            central = full;
-            let bar = Rect::from_min_size(full.min, vec2(full.width(), t::BAR_HEIGHT));
-            let mut top = ui.new_child(egui::UiBuilder::new().max_rect(bar));
-            self.toolbar(&mut top, lib);
-            if !self.show_inspector {
-                let c = Pos2::new(bar.right() - 24.0, bar.center().y);
-                if icon_button(&mut top, c, ic::SIDEBAR_SIMPLE, 18.0, true, "Show inspector").clicked() {
-                    self.show_inspector = true;
+            if self.ws.viewer.is_some() {
+                // Eagle's detail mode: the viewer, with its own bar, takes
+                // the place of the toolbar, filter bar and grid, between
+                // the sidebar and the inspector.
+                self.refresh_order(lib);
+                let window = ctx.content_rect();
+                let (l, r) = logic::viewer_span(
+                    window.left(),
+                    window.right(),
+                    self.show_sidebar.then_some(t::SIDEBAR_WIDTH),
+                    self.show_inspector.then_some(t::INSPECTOR_WIDTH),
+                );
+                let screen = Rect::from_x_y_ranges(l..=r, full.y_range()).intersect(full);
+                self.viewer(ui, lib, screen);
+            }
+            if self.ws.viewer.is_none() {
+                let bar = Rect::from_min_size(full.min, vec2(full.width(), t::BAR_HEIGHT));
+                let mut top = ui.new_child(egui::UiBuilder::new().max_rect(bar));
+                self.toolbar(&mut top, lib);
+                if !self.show_inspector {
+                    let c = Pos2::new(bar.right() - 24.0, bar.center().y);
+                    if icon_button(&mut top, c, ic::SIDEBAR_SIMPLE, 18.0, true, "Show inspector").clicked() {
+                        self.show_inspector = true;
+                    }
                 }
+                let mut grid_top = bar.bottom();
+                let pb = Rect::from_min_size(Pos2::new(full.left(), grid_top), vec2(full.width(), 26.0));
+                let mut pui = ui.new_child(egui::UiBuilder::new().max_rect(pb));
+                if self.progress_bar(&mut pui, pb) {
+                    grid_top = pb.bottom();
+                }
+                if self.ws.show_filter {
+                    let fb = Rect::from_min_size(Pos2::new(full.left(), bar.bottom()), vec2(full.width(), 40.0));
+                    let mut fui = ui.new_child(egui::UiBuilder::new().max_rect(fb));
+                    self.filter_bar(&mut fui, lib);
+                    grid_top = fb.bottom();
+                }
+                let grid = Rect::from_min_max(Pos2::new(full.left(), grid_top), full.max);
+                let mut g = ui.new_child(egui::UiBuilder::new().max_rect(grid));
+                g.set_clip_rect(grid);
+                self.grid(&mut g, lib);
             }
-            let mut grid_top = bar.bottom();
-            let pb = Rect::from_min_size(Pos2::new(full.left(), grid_top), vec2(full.width(), 26.0));
-            let mut pui = ui.new_child(egui::UiBuilder::new().max_rect(pb));
-            if self.progress_bar(&mut pui, pb) {
-                grid_top = pb.bottom();
-            }
-            if self.ws.show_filter {
-                let fb = Rect::from_min_size(Pos2::new(full.left(), bar.bottom()), vec2(full.width(), 40.0));
-                let mut fui = ui.new_child(egui::UiBuilder::new().max_rect(fb));
-                self.filter_bar(&mut fui, lib);
-                grid_top = fb.bottom();
-            }
-            let grid = Rect::from_min_max(Pos2::new(full.left(), grid_top), full.max);
-            let mut g = ui.new_child(egui::UiBuilder::new().max_rect(grid));
-            g.set_clip_rect(grid);
-            self.grid(&mut g, lib);
 
             if let Some((msg, at)) = &self.ws.status {
                 // Long messages (a restored backup, say) stay up longer.
                 if at.elapsed().as_secs_f32() < (msg.chars().count() as f32 / 20.0).max(3.0) {
                     let gal = galley(ui, msg, font(13.0), t::p().text, 400.0);
-                    let r = Rect::from_center_size(Pos2::new(full.center().x, full.bottom() - 30.0), gal.size() + vec2(24.0, 14.0));
+                    // Over the viewer the note sits in the middle of the
+                    // picture, as Eagle's viewer tips do.
+                    let at = if self.ws.viewer.is_some() { full.center() } else { Pos2::new(full.center().x, full.bottom() - 30.0) };
+                    let r = Rect::from_center_size(at, gal.size() + vec2(24.0, 14.0));
                     ui.painter().rect_filled(r, CornerRadius::same(8), t::p().row_selected);
                     ui.painter().galley(r.min + vec2(12.0, 7.0), gal, t::p().text);
                     ctx.request_repaint_after(std::time::Duration::from_millis(250));
@@ -3812,10 +3863,6 @@ impl eframe::App for App {
                 }
             }
         });
-        if self.ws.viewer.is_some() {
-            let mut v = ui.new_child(egui::UiBuilder::new().max_rect(ctx.content_rect()));
-            self.viewer(&ctx, &mut v, lib, central);
-        }
         // Playback stops when the viewer closes or moves to another item.
         if self.audio.loaded().is_some() && self.audio.loaded() != self.ws.viewer.as_deref() {
             self.audio.stop();

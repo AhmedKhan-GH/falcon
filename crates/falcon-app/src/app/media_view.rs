@@ -58,41 +58,56 @@ fn sample(item: &Item) -> String {
     .to_string()
 }
 
-/// The bar above the audio, font and video viewers: back, the item's
-/// name and the open button.
-pub(super) fn top_bar(app: &mut App, ui: &mut Ui, item: &Item, bar: Rect) {
+/// The bar every viewer shares: back and the item's name at the left, the
+/// open button at the right. Returns where the name starts and the x left
+/// of what was drawn on the right, so a viewer can add its own controls
+/// there before `bar_name` fits the name into what is left.
+pub(super) fn bar_shell(app: &mut App, ui: &mut Ui, item: &Item, bar: Rect) -> (f32, f32) {
     let p = ui.painter().clone();
     p.rect_filled(bar, 0.0, t::p().main);
     window_drag(ui, bar, "viewer");
     let cy = bar.center().y;
     // Leave room for the window buttons only when the bar starts at the
     // window's left edge (no sidebar beside it).
-    let x = if bar.left() > ui.ctx().content_rect().left() + 1.0 { bar.left() + 20.0 } else { bar.left() + 98.0 };
+    let x = bar.left() + logic::bar_inset(bar.left() <= ui.ctx().content_rect().left() + 1.0);
     if icon_button(ui, Pos2::new(x, cy), ic::CARET_LEFT, 17.0, true, "Back (Esc)").clicked() {
         app.ws.viewer = None;
     }
-    let name = format!("{}.{}", item.name, item.ext);
-    let g = galley(ui, &name, font(14.0), t::p().text, 360.0);
-    p.galley(Pos2::new(x + 22.0, cy - g.size().y / 2.0), g, t::p().text);
+    let mut right = bar.right() - 12.0;
     if app.ws.view.id == item.id {
         let file = app.ws.view.file.clone();
-        app.viewer_open_button(ui, bar.right() - 12.0, cy, &file);
+        right = app.viewer_open_button(ui, right, cy, &file);
     }
+    (x + 22.0, right)
+}
+
+/// The item's name in the viewer bar, between `left` and `right`.
+pub(super) fn bar_name(ui: &Ui, item: &Item, bar: Rect, left: f32, right: f32) {
+    let name = format!("{}.{}", item.name, item.ext);
+    let g = galley(ui, &name, font(14.0), t::p().text, (right - left - 12.0).clamp(0.0, 360.0));
+    ui.painter().galley(Pos2::new(left, bar.center().y - g.size().y / 2.0), g, t::p().text);
+}
+
+/// The bar for viewers with no controls of their own in it (audio, font,
+/// video, the iCloud wait). Returns the x left of its right-hand buttons.
+pub(super) fn top_bar(app: &mut App, ui: &mut Ui, item: &Item, bar: Rect) -> f32 {
+    let (left, right) = bar_shell(app, ui, item, bar);
+    bar_name(ui, item, bar, left, right);
+    right
 }
 
 impl App {
     /// Draws the viewer for an audio item, or a font egui can read, and
     /// returns true; returns false for anything else, which the image
     /// viewer shows.
-    pub(super) fn media_viewer(&mut self, ctx: &egui::Context, lib: &Library, item: &Item, screen: Rect) -> bool {
+    pub(super) fn media_viewer(&mut self, parent: &mut Ui, lib: &Library, item: &Item, screen: Rect) -> bool {
+        let ctx = &parent.ctx().clone();
         let audio = media::is_audio(&item.ext);
         if !audio && !self.font_ready(ctx, lib, item) {
             return false;
         }
-        egui::Area::new(egui::Id::unique("media-viewer")).fixed_pos(screen.min).order(egui::Order::Foreground).show(ctx, |ui| {
-            // Claim the whole rect, so egui sends scroll and hover here
-            // rather than to the grid underneath.
-            ui.expand_to_include_rect(screen);
+        {
+            let ui = &mut super::viewer_ui(parent, screen, "media-viewer");
             ui.painter().rect_filled(screen, 0.0, t::p().main);
             let bar = Rect::from_min_size(screen.min, vec2(screen.width(), t::BAR_HEIGHT));
             let area = Rect::from_min_max(Pos2::new(screen.left(), bar.bottom()), screen.max);
@@ -104,7 +119,7 @@ impl App {
                 self.font_view(ui, item, area);
             }
             top_bar(self, ui, item, bar);
-        });
+        }
         true
     }
 

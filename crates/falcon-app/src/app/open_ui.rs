@@ -125,17 +125,16 @@ impl App {
     /// The viewer's screen while `item`'s original is still in iCloud: the
     /// preview (if cached) dimmed, a line of state and a bar. Returns true
     /// while it shows, so nothing reads the original on this thread.
-    pub(super) fn icloud_viewer(&mut self, ctx: &egui::Context, lib: &Library, item: &Item, screen: Rect) -> bool {
+    pub(super) fn icloud_viewer(&mut self, parent: &mut Ui, lib: &Library, item: &Item, screen: Rect) -> bool {
+        let ctx = &parent.ctx().clone();
         let path = item.original_path(lib.root());
         let state = self.fetches.ensure(ctx, &path);
         if state.is_local() {
             return false;
         }
         let preview = self.ws.loader.get(&item.id, Tier::Preview).cloned();
-        egui::Area::new(egui::Id::unique("icloud-viewer")).fixed_pos(screen.min).order(egui::Order::Foreground).show(ctx, |ui| {
-            // Claim the whole rect, so egui sends scroll and hover here
-            // rather than to the grid underneath.
-            ui.expand_to_include_rect(screen);
+        {
+            let ui = &mut super::viewer_ui(parent, screen, "icloud-viewer");
             let p = ui.painter().clone();
             p.rect_filled(screen, 0.0, t::p().main);
             let bar = Rect::from_min_size(screen.min, vec2(screen.width(), t::BAR_HEIGHT));
@@ -174,7 +173,7 @@ impl App {
                 FetchState::Local => {}
             }
             super::media_view::top_bar(self, ui, item, bar);
-        });
+        }
         true
     }
 }

@@ -200,8 +200,9 @@ impl App {
     }
 
     /// The crop tool's controls in the viewer bar, right-aligned at `right`.
-    pub(super) fn crop_bar(&mut self, ui: &mut Ui, item: &Item, right: f32, cy: f32) {
-        let Some(crop) = self.ws.tools.crop.as_mut() else { return };
+    /// Returns the x left of what it drew.
+    pub(super) fn crop_bar(&mut self, ui: &mut Ui, item: &Item, right: f32, cy: f32) -> f32 {
+        let Some(crop) = self.ws.tools.crop.as_mut() else { return right };
         let button = |ui: &mut Ui, x: f32, w: f32, label: &str, primary: bool| {
             let r = Rect::from_center_size(Pos2::new(x - w / 2.0, cy), vec2(w, 26.0));
             let b = egui::Button::new(egui::RichText::new(label).color(t::p().text)).fill(if primary { t::p().primary } else { t::p().button });
@@ -212,13 +213,15 @@ impl App {
                 let rect = pixel_rect(crop.rect);
                 self.ws.actions.push(Action::Edit(Op::Crop(item.id.clone(), rect)));
                 self.ws.tools.crop = None;
-                return;
+                return right - 138.0;
             }
             if button(ui, right - 138.0, 70.0, "Back", false).clicked() {
                 crop.confirming = false;
             }
             let g = ui.painter().layout_no_wrap("Cropping overwrites the original file and can't be undone".into(), font(12.0), t::p().text_muted);
-            ui.painter().galley(Pos2::new(right - 216.0 - g.size().x, cy - g.size().y / 2.0), g, t::p().text_muted);
+            let left = right - 216.0 - g.size().x;
+            ui.painter().galley(Pos2::new(left, cy - g.size().y / 2.0), g, t::p().text_muted);
+            left - 8.0
         } else {
             if button(ui, right, 70.0, "Save", true).on_hover_text("Save (Enter)").clicked() {
                 crop.confirming = true;
@@ -226,6 +229,7 @@ impl App {
             if button(ui, right - 78.0, 70.0, "Cancel", false).on_hover_text("Cancel (Esc)").clicked() {
                 self.ws.tools.crop = None;
             }
+            right - 156.0
         }
     }
 

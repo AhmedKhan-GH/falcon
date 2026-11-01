@@ -955,15 +955,14 @@ impl App {
 
     /// Draws the reader for a PDF item and returns true; false for anything
     /// else (and off macOS, where the image viewer shows the preview).
-    pub(super) fn pdf_viewer(&mut self, ctx: &egui::Context, lib: &Library, item: &Item, screen: Rect) -> bool {
+    pub(super) fn pdf_viewer(&mut self, parent: &mut Ui, lib: &Library, item: &Item, screen: Rect) -> bool {
+        let ctx = &parent.ctx().clone();
         if !cfg!(target_os = "macos") || !is_pdf(item) {
             return false;
         }
         self.pdf.ensure(ctx, lib, item);
-        egui::Area::new(Id::unique("pdf-viewer")).fixed_pos(screen.min).order(egui::Order::Foreground).show(ctx, |ui| {
-            // Claim the whole rect, so egui sends scroll and hover here
-            // rather than to the grid underneath.
-            ui.expand_to_include_rect(screen);
+        {
+            let ui = &mut super::viewer_ui(parent, screen, "pdf-viewer");
             ui.painter().rect_filled(screen, 0.0, t::p().main);
             let bar = Rect::from_min_size(screen.min, vec2(screen.width(), t::BAR_HEIGHT));
             let mut area = Rect::from_min_max(Pos2::new(screen.left(), bar.bottom()), screen.max);
@@ -1000,12 +999,14 @@ impl App {
                     }
                 }
             }
-            super::media_view::top_bar(self, ui, item, bar);
+            let (name_x, mut right) = super::media_view::bar_shell(self, ui, item, bar);
             if let Some(o) = self.pdf.open.as_mut().filter(|o| o.status == Status::Ready) {
-                let tab = toolbar(o, ui, bar, self.pdf.sidebar);
+                let (tab, left) = toolbar(o, ui, bar, right - 8.0, self.pdf.sidebar);
                 self.pdf.sidebar = tab;
+                right = left;
             }
-        });
+            super::media_view::bar_name(ui, item, bar, name_x, right);
+        }
         true
     }
 }
@@ -1191,11 +1192,12 @@ fn side_panel(o: &mut Open, ui: &mut Ui, side: Rect, tab: Tab, jobs: &mut Vec<Jo
     }
 }
 
-/// The reader's controls on the right of the top bar: sidebar and find
-/// toggles, page navigation and zoom. Returns the sidebar choice.
-fn toolbar(o: &mut Open, ui: &mut Ui, bar: Rect, mut sidebar: Option<Tab>) -> Option<Tab> {
+/// The reader's controls in the viewer bar, leftwards from `right`:
+/// sidebar and find toggles, page navigation and zoom. Returns the
+/// sidebar choice and the x left of the controls.
+fn toolbar(o: &mut Open, ui: &mut Ui, bar: Rect, right: f32, mut sidebar: Option<Tab>) -> (Option<Tab>, f32) {
     let cy = bar.center().y;
-    let mut x = bar.right() - 20.0;
+    let mut x = right - 8.0;
     let p = ui.painter().clone();
     if icon_button(ui, Pos2::new(x, cy), ic::PLUS, 15.0, o.zoom_factor() < MAX_ZOOM, "Zoom In (⌘+)").clicked() {
         o.act(PdfKey::ZoomIn);
@@ -1278,7 +1280,7 @@ fn toolbar(o: &mut Open, ui: &mut Ui, bar: Rect, mut sidebar: Option<Tab>) -> Op
             }
         });
     }
-    sidebar
+    (sidebar, x - 16.0)
 }
 
 /// The find bar under the top bar's right end: the query, previous/next,

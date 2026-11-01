@@ -310,14 +310,14 @@ impl App {
         }
     }
 
-    /// The tools' buttons in the viewer bar, leftwards from `x`.
-    pub(super) fn edit_bar(&mut self, ui: &mut Ui, item: &Item, x: f32, cy: f32) {
+    /// The tools' buttons in the viewer bar, leftwards from `x`. Returns
+    /// the x left of them.
+    pub(super) fn edit_bar(&mut self, ui: &mut Ui, item: &Item, x: f32, cy: f32) -> f32 {
         if self.ws.tools.crop.is_some() {
-            self.crop_bar(ui, item, x + 12.0, cy);
-            return;
+            return self.crop_bar(ui, item, x + 12.0, cy);
         }
         let x = self.comment_button(ui, item, x, cy);
-        self.rotate_crop_buttons(ui, item, x, cy);
+        self.rotate_crop_buttons(ui, item, x, cy) + 14.0
     }
 }
 

@@ -250,21 +250,20 @@ impl App {
 
     /// Draws the viewer for a video AVFoundation can play and returns true;
     /// false for anything else (the image viewer shows it).
-    pub(super) fn video_viewer(&mut self, ctx: &egui::Context, lib: &Library, item: &Item, screen: Rect) -> bool {
+    pub(super) fn video_viewer(&mut self, parent: &mut Ui, lib: &Library, item: &Item, screen: Rect) -> bool {
+        let ctx = &parent.ctx().clone();
         if !media::is_video(&item.ext.to_lowercase()) || self.video.failed.contains(&item.id) || !self.video.open(lib, item) {
             return false;
         }
-        egui::Area::new(egui::Id::unique("video-viewer")).fixed_pos(screen.min).order(egui::Order::Foreground).show(ctx, |ui| {
-            // Claim the whole rect, so egui sends scroll and hover here
-            // rather than to the grid underneath.
-            ui.expand_to_include_rect(screen);
+        {
+            let ui = &mut super::viewer_ui(parent, screen, "video-viewer");
             ui.painter().rect_filled(screen, 0.0, t::p().main);
             let bar = Rect::from_min_size(screen.min, vec2(screen.width(), t::BAR_HEIGHT));
             let area = Rect::from_min_max(Pos2::new(screen.left(), bar.bottom()), screen.max);
             ui.interact(area, ui.scope_id().with("video-bg"), Sense::click());
             self.video_view(ctx, ui, item, area);
             super::media_view::top_bar(self, ui, item, bar);
-        });
+        }
         true
     }
 
