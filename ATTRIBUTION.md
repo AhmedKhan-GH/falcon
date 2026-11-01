@@ -61,3 +61,9 @@ Libraries built into falcon beyond ordinary Rust crates from crates.io, with the
 | ufbx (C library, vendored by the `ufbx` crate and compiled with `cc`) | 0.18.0 | MIT (or public domain, at the user's choice) | https://github.com/ufbx/ufbx | Reading FBX models (`crates/falcon-library/src/model3d/fbx.rs`) |
 | `ufbx` Rust bindings | 0.8.0 | MIT OR PDDL-1.0 | https://github.com/ufbx/ufbx-rust | Rust interface to the ufbx C library |
 | roxmltree | 0.21 | MIT OR Apache-2.0 | https://github.com/RazrFalcon/roxmltree | Reading COLLADA (`.dae`) models (`crates/falcon-library/src/model3d/dae.rs`); already linked through resvg |
+| rusqlite | 0.32.1 | MIT | [github.com/rusqlite/rusqlite](https://github.com/rusqlite/rusqlite) | Reading Pixave library databases, read-only (`falcon_library::pixave`) |
+| libsqlite3-sys | 0.30.1 | MIT | [github.com/rusqlite/rusqlite](https://github.com/rusqlite/rusqlite) | The SQLite build behind rusqlite (`bundled` feature) |
+| SQLite | 3.46.0 | Public domain | [sqlite.org](https://www.sqlite.org/copyright.html) | Compiled into falcon through libsqlite3-sys |
+| hashlink | 0.9.1 | MIT OR Apache-2.0 | [github.com/kyren/hashlink](https://github.com/kyren/hashlink) | rusqlite's statement cache |
+| fallible-iterator | 0.3.0 | MIT OR Apache-2.0 | [github.com/sfackler/rust-fallible-iterator](https://github.com/sfackler/rust-fallible-iterator) | rusqlite dependency |
+| fallible-streaming-iterator | 0.1.9 | MIT OR Apache-2.0 | [github.com/sfackler/fallible-streaming-iterator](https://github.com/sfackler/fallible-streaming-iterator) | rusqlite dependency |

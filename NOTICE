@@ -16,6 +16,10 @@ Third-party material:
   copyright (c) Samuli Raivio.
 - roxmltree 0.21 (https://github.com/RazrFalcon/roxmltree), the COLLADA XML
   parser, MIT OR Apache-2.0, copyright (c) Yevhenii Reizner.
+- rusqlite 0.32.1 and libsqlite3-sys 0.30.1, MIT license, copyright (c) 2014-2021
+  The rusqlite developers (https://github.com/rusqlite/rusqlite).
+- SQLite 3.46.0, bundled through libsqlite3-sys, in the public domain
+  (https://www.sqlite.org/copyright.html).
 
 "Eagle" is a trademark of its respective owner. Falcon is not affiliated
 with, endorsed by or sponsored by Eagle or its developers.

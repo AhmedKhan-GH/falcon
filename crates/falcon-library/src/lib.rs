@@ -42,6 +42,7 @@ pub mod imageio;
 pub mod import;
 pub mod item_ops;
 pub mod inboard;
+pub mod pixave;
 pub mod import_check;
 pub mod thumbnail;
 pub mod transform;

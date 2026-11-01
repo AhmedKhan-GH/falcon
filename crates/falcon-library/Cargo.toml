@@ -30,6 +30,7 @@ brotli-decompressor = "5"
 regex = "1"
 ufbx = "0.8.0"
 roxmltree = "0.21"
+rusqlite = { version = "=0.32.1", features = ["bundled"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"

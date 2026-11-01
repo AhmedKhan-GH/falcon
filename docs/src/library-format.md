@@ -274,6 +274,39 @@ Eagle's File ▸ Import ▸ Inboard reads a backup folder made by the Inboard ap
 
 `inboard::is_backup(dir)` says whether a folder has the index, and `inboard::read(dir)` returns the folders and importable items. The import itself goes through the ordinary import path, so duplicate handling and thumbnails are the same as for other files.
 
+## Pixave libraries
+
+Pixave, LittleHJ's discontinued macOS image manager, keeps each library in a package whose name ends in `.pxvlibrary`. Eagle 4.0.0 has no working Pixave importer: its menus have no Pixave entry, Import Folders silently skips a `.pxvlibrary` folder, and only unused strings remain (a confirmation naming the folder and file counts, and an error asking for a path ending in `.pxvlibrary`). Falcon's File ▸ Import ▸ Pixave Library… goes as far as the public record allows.
+
+### What is known
+
+| Fact | Source |
+|---|---|
+| A library is a package with the extension `pxvlibrary` (type `com.littlehj.pxvlibrary`); each item is a package with the extension `pxvitem` (type `com.littlehj.pxvitem`). Bundle id `com.littlehj.Pixave`, last version 2.3.12 (2021) | [Does It ARM: Pixave](https://doesitarm.com/app/pixave) (the app's declared document types) |
+| Pixave renames each imported file to an opaque name with the `.pxvitem` extension | A user review quoted in search results for [apps-store.nl: Pixave](https://www.apps-store.nl/app/924891282/pixave) |
+| Several libraries can exist; one is open at a time; the default one lives in `~/Library/Containers/com.littlehj.Pixave/Data/Library/Application Support/Pixave/` and can be moved anywhere, including iCloud Drive or Dropbox | [ifanr review](https://www.ifanr.com/app/593029), [sspai review](https://sspai.com/post/31780) |
+| Files can be referenced in place instead of copied into the library | [sspai review](https://sspai.com/post/31780) |
+| A library holds collections in a tree (folders, sub-collections, smart collections), tags, colour labels, ratings, notes, a source URL and copyright per image | [sspai review](https://sspai.com/post/31780), [Mac App Store listing](https://apps.apple.com/app/pixave/id924891282) (release notes for 2.2.1, 2.3 and 2.3.5) |
+| Pixave's own folders are exported with "subfolder format as collection name or collection hierarchy", and tags, note, URL and rating can be written into exported files' IPTC fields | [Mac App Store listing](https://apps.apple.com/app/pixave/id924891282) (2.3 release notes) |
+
+### What is not known
+
+No public source describes the inside of the package: whether the catalogue is SQLite, Core Data or something else, its file name, its tables, or how a `.pxvitem` holds its file. So the importer does not map collections, tags, ratings, colour labels, notes, URLs or dates; doing so would mean guessing at a schema. Referenced (not copied) images are outside the package and are not found either.
+
+### What falcon does
+
+`pixave::probe` walks the package without writing to it and without following links:
+
+- every file starting with SQLite's 16-byte header (`SQLite format 3\0`) outside the item packages is opened with rusqlite through a `file:…?mode=ro&immutable=1` URI with `SQLITE_OPEN_READ_ONLY | SQLITE_OPEN_NO_MUTEX`. SQLite then takes no locks and creates no `-shm` or `-journal` file, even while Pixave has the database open. A `-wal` file beside the database means Pixave had unsaved changes the immutable read does not see; the report says so.
+- for each database, the table names, their columns with declared types, and the row counts are read. A damaged database, or one with no tables, gives an error for that database and the probe goes on.
+- every `.pxvitem` folder is listed with the regular files inside it (hidden files left out).
+
+A path not ending in `.pxvlibrary`, a file instead of a folder, and a package with neither a database nor an item are refused with an error.
+
+`Probe::files` gives the files that can be imported without knowing the schema: those of `.pxvitem` folders holding exactly one file. A `.pxvitem` that is a plain file, an empty one and one with several files are counted (`Probe::left_out`), not guessed at.
+
+The app shows the counts, then imports those files into a new top-level folder named after the library, through the ordinary import path (copied, never moved; thumbnails, the duplicate check, progress with Pause and Stop, and the failed-imports list as for any import). "Save Schema Report…" writes `pixave::report`: the package name, item counts, the files per item package grouped by extension, and each database's tables, columns and row counts. Row contents are never included, so the report can be shared to document the layout and finish the mapping.
+
 ## Undo
 
 | Behaviour | Status | Detail |
