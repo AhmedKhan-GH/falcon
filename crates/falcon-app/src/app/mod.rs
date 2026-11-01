@@ -272,6 +272,9 @@ impl App {
         app.layouts = saved.layouts;
         app.display = saved.display;
         app.prefs = saved.prefs.sanitized();
+        let lang = app.prefs.language.resolve();
+        crate::locale::load_fonts(&cc.egui_ctx, lang);
+        crate::locale::set(lang);
         app.search = saved.search;
         // The interface size is a preference, as in Eagle, so egui's own
         // ⌘+ and ⌘− (which falcon uses to zoom the grid) must not change it.

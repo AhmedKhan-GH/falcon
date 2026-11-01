@@ -22,6 +22,7 @@ mod links;
 mod folder_picker;
 mod import_dupes;
 mod loader;
+mod locale;
 mod logic;
 mod menu;
 mod open_files;

@@ -286,6 +286,9 @@ impl App {
         self.prefs.collect_folders = chosen;
         self.prefs.collect_recent = recent;
         self.ctx.set_zoom_factor(crate::prefs::zoom_factor(self.prefs.ui_zoom));
+        let lang = self.prefs.language.resolve();
+        crate::locale::load_fonts(&self.ctx, lang);
+        crate::locale::set(lang);
         self.show_sidebar = d.panels.sidebar;
         self.show_inspector = d.panels.inspector;
         self.shortcuts = d.keys;

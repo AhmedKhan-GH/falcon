@@ -145,6 +145,9 @@ pub struct Prefs {
     /// Eagle's `video.hoverPlay`: hovered video cards play a preview that
     /// the pointer scrubs.
     pub video_hover: bool,
+    /// Eagle's `general.language`: the interface language, the system's
+    /// unless one is chosen (`locale.rs`).
+    pub language: crate::locale::Language,
 }
 
 /// What a middle click on a card in the grid does.
@@ -294,6 +297,7 @@ impl Default for Prefs {
             tag_picker: Default::default(),
             middle_button: MiddleButton::default(),
             video_hover: true,
+            language: crate::locale::Language::Auto,
         }
     }
 }
@@ -613,6 +617,7 @@ pub struct Window {
     /// ones revert to them.
     applied_theme: Theme,
     applied_zoom: u16,
+    applied_language: crate::locale::Language,
     /// The shown library's folder, for the Auto-Import pane.
     pub library: Option<std::path::PathBuf>,
     /// Why the folder last picked for auto-import was refused.
@@ -671,6 +676,7 @@ impl Window {
         self.port_text = draft.prefs.api_port.to_string();
         self.applied_theme = draft.prefs.theme;
         self.applied_zoom = draft.prefs.ui_zoom;
+        self.applied_language = draft.prefs.language;
         self.draft = Some(draft);
         self.open = true;
         self.query.clear();
@@ -776,6 +782,7 @@ impl Window {
                 draft.prefs.api_port = p;
                 self.applied_theme = draft.prefs.theme;
                 self.applied_zoom = draft.prefs.ui_zoom;
+                self.applied_language = draft.prefs.language;
                 result = Some(draft.clone());
                 close |= save || save_key;
             }
@@ -785,6 +792,7 @@ impl Window {
                 t::set_theme(ctx, theme);
             }
             ctx.set_zoom_factor(zoom_factor(self.applied_zoom));
+            crate::locale::set(self.applied_language.resolve());
             self.close();
         } else {
             self.draft = Some(draft);
@@ -893,6 +901,20 @@ fn general(p: &mut Page, d: &mut Draft) {
             }
         });
         ui.checkbox(&mut d.prefs.sidebar_counts, "Show item counts in the sidebar");
+    });
+    p.block(crate::locale::tr("Language"), &["language", "locale", "translation", "english", "chinese", "japanese", "korean", "german", "spanish", "russian"], |ui| {
+        let before = d.prefs.language;
+        egui::ComboBox::from_id_salt("language").selected_text(d.prefs.language.label()).show_ui(ui, |ui| {
+            for l in crate::locale::Language::all() {
+                ui.selectable_value(&mut d.prefs.language, l, l.label());
+            }
+        });
+        if d.prefs.language != before {
+            // Previewed at once, like the theme; Cancel switches back.
+            let lang = d.prefs.language.resolve();
+            crate::locale::load_fonts(ui.ctx(), lang);
+            crate::locale::set(lang);
+        }
     });
     p.block("Window", &["sidebar", "inspector", "panel", "show"], |ui| {
         ui.checkbox(&mut d.panels.sidebar, "Show the sidebar");
