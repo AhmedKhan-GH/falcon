@@ -39,7 +39,9 @@ impl App {
         };
         let g = galley(ui, &title, font(15.0), t::p().text, 220.0);
         let title_end = x + 45.0 + g.size().x;
-        ui.painter().galley(Pos2::new(x + 45.0, cy - g.size().y / 2.0), g, t::p().text);
+        let title_rect = Rect::from_min_size(Pos2::new(x + 45.0, cy - g.size().y / 2.0), g.size());
+        ui.painter().galley(title_rect.min, g, t::p().text);
+        self.title_menu(ui, lib, title_rect);
 
         // Right side: search field, then the icon row.
         let search = Rect::from_min_size(Pos2::new(bar.right() - 18.0 - 178.0, cy - 15.0), vec2(178.0, 30.0));
@@ -70,6 +72,34 @@ impl App {
             self.zoom_slider(ui, Pos2::new(zx, cy));
         }
         ui.painter().hline(bar.x_range(), bar.bottom() - 0.5, Stroke::new(1.0, t::p().main));
+    }
+
+    /// Right-clicking the title of an open subfolder lists it and its
+    /// ancestors; a pick opens that folder. Hovering shows the full path.
+    fn title_menu(&mut self, ui: &mut Ui, lib: &Library, rect: Rect) {
+        let Scope::Folder(id) = &self.ws.scope else { return };
+        if self.ws.folders.combined() || !self.ws.query.trim().is_empty() {
+            return;
+        }
+        let chain = logic::ancestor_chain(&lib.metadata.folders, id);
+        if chain.len() < 2 {
+            return;
+        }
+        let resp = ui.interact(rect, ui.scope_id().with("title"), Sense::click());
+        let path = chain.iter().rev().map(|(_, n)| n.as_str()).collect::<Vec<_>>().join(" / ");
+        resp.clone().on_hover_text(path);
+        let mut open = None;
+        resp.context_menu(|ui| {
+            for (i, (fid, name)) in chain.iter().enumerate() {
+                if ui.add(egui::Button::selectable(i == 0, name)).clicked() {
+                    open = Some(fid.clone());
+                    ui.close();
+                }
+            }
+        });
+        if let Some(fid) = open {
+            self.go(Scope::Folder(fid));
+        }
     }
 
     /// Shows or hides the sidebar and inspector together (Eagle's

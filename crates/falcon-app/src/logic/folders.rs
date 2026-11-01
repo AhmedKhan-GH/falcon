@@ -36,6 +36,28 @@ pub fn folder_path(roots: &[Folder], id: &str) -> Option<String> {
     down(roots, id, &mut path).then(|| path.join(" / "))
 }
 
+/// The folder `id` and its ancestors, nearest first and the top-level
+/// folder last, as `(id, name)` pairs. Empty when the folder is unknown.
+pub fn ancestor_chain(roots: &[Folder], id: &str) -> Vec<(String, String)> {
+    fn down(list: &[Folder], id: &str, chain: &mut Vec<(String, String)>) -> bool {
+        for f in list {
+            chain.push((f.id.clone(), f.name.clone()));
+            if f.id == id || down(&f.children, id, chain) {
+                return true;
+            }
+            chain.pop();
+        }
+        false
+    }
+    let mut chain = Vec::new();
+    if down(roots, id, &mut chain) {
+        chain.reverse();
+        chain
+    } else {
+        Vec::new()
+    }
+}
+
 /// Number of live items placed directly in each folder, as Eagle's sidebar
 /// shows them. Folders with no direct items are absent.
 pub fn folder_counts(items: &[Item]) -> HashMap<String, usize> {
@@ -182,6 +204,16 @@ mod tests {
         assert_eq!(folder_path(&roots, "B").as_deref(), Some("A-name / B-name"));
         assert_eq!(folder_path(&roots, "C").as_deref(), Some("C-name"));
         assert_eq!(folder_path(&roots, "Z"), None);
+    }
+
+    #[test]
+    fn ancestor_chain_runs_from_the_folder_up_to_the_top() {
+        let (roots, _) = fixture();
+        let ids = |id: &str| ancestor_chain(&roots, id).into_iter().map(|(i, _)| i).collect::<Vec<_>>();
+        assert_eq!(ids("B"), ["B", "A"]);
+        assert_eq!(ids("C"), ["C"]);
+        assert_eq!(ancestor_chain(&roots, "B")[1].1, "A-name");
+        assert!(ancestor_chain(&roots, "Z").is_empty());
     }
 
     #[test]

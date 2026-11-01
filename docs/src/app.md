@@ -827,6 +827,8 @@ This covers folder icons, colours, sorts and passwords, drag reordering in the s
 - `ui/organize.rs` holds the egui side.
 - `ui/sidebar/folders.rs` holds several picked folders: the ⌘ and ⇧ clicks (rules in `logic::TreeSel`), their menu, and the batch rename, Move Folder, New Folder with Selection and delete dialogs. The batch edits are in `falcon_library::edit` and the rename templates in `falcon_library::rename`.
 
+In an open folder that has a parent, hovering the toolbar title shows the folder's full path, and right-clicking it lists the folder (ticked) and its ancestors up to the top-level folder; picking one opens it like a sidebar click. The list comes from `logic::ancestor_chain`. A top-level folder, a smart folder, several picked folders and a search get no menu.
+
 Library writes go through `falcon_library` (see Library format and Smart folders).
 
 What Eagle does, from `app.bundle.js`, `index.html`, `js/directives/*.html` and `style/components/*.scss`:
