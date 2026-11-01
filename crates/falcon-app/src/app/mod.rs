@@ -92,6 +92,8 @@ pub struct App {
     pub(crate) clear_history_open: bool,
     /// The library tools' dialogs (`ui/dialogs/tools.rs`).
     pub(crate) tools: crate::ui::dialogs::tools::Tools,
+    /// A library whose close waits for its tasks (`ui/dialogs/force_close.rs`).
+    pub(crate) force_close: Option<crate::ui::dialogs::force_close::Pending>,
     /// The libraries' `icon.png` textures.
     pub(crate) lib_icons: crate::library_icons::LibraryIcons,
     /// What to open once the frame is done (it replaces the library being
@@ -220,6 +222,7 @@ impl App {
             recent_shown: None,
             clear_history_open: false,
             tools: Default::default(),
+            force_close: None,
             lib_icons: Default::default(),
             switch_to: None,
             dialogs: Default::default(),
@@ -473,6 +476,7 @@ impl App {
         self.progress_modal(&ctx);
         self.reload_confirm(&ctx);
         self.clear_history_dialog(&ctx);
+        self.force_close_dialog(&ctx);
         self.alert_modal(&ctx);
         if self.ws.lib.is_some() {
             self.missing_modal(&ctx);
@@ -633,7 +637,7 @@ impl App {
             Some(Switch::Pick) => self.pick_library(),
             Some(Switch::Create) => self.new_library(),
             Some(Switch::Focus(i)) => self.focus(i),
-            Some(Switch::Close(i)) => self.close_workspace(i),
+            Some(Switch::Close(i)) => self.request_close(i),
             Some(Switch::Merge) => self.merge_library(),
             None => {}
         }

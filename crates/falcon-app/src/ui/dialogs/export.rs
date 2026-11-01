@@ -131,6 +131,15 @@ pub(crate) struct ExportState {
     format: FormatDraft,
 }
 
+impl ExportState {
+    /// Whether a copy is still running. The copy can't be stopped part way;
+    /// it ends on its own.
+    pub(crate) fn working(&self) -> bool {
+        let j = self.job.lock().unwrap_or_else(|p| p.into_inner());
+        j.running && j.finished.is_none()
+    }
+}
+
 /// Several folder exports into `dest` as one, revealing `dest` when done.
 fn merge_plans(dest: &std::path::Path, plans: impl Iterator<Item = Plan>, how: Collision) -> Plan {
     let mut all = Plan { dirs: Vec::new(), steps: Vec::new(), top: dest.to_path_buf(), overwrite: how == Collision::Replace };

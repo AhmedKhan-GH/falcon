@@ -114,6 +114,21 @@ impl ProgressModal {
         self.run.is_some()
     }
 
+    /// Whether the worker is still running. Unlike [`ProgressModal::busy`]
+    /// this turns false as soon as the worker has reported its outcome, even
+    /// if the UI hasn't closed the modal yet (a library in the background
+    /// never draws it).
+    pub fn working(&self) -> bool {
+        self.run.as_ref().is_some_and(|r| r.state.lock().unwrap_or_else(|p| p.into_inner()).finished.is_none())
+    }
+
+    /// Asks the worker to stop before its next item, as the Cancel button does.
+    pub fn cancel(&self) {
+        if let Some(r) = &self.run {
+            r.cancel.store(true, Ordering::Relaxed);
+        }
+    }
+
     /// Opens the modal and returns the worker's handle. `total` is 0 when
     /// not yet known; `cancellable` shows the Cancel button.
     pub fn start(&mut self, ctx: &egui::Context, title: impl Into<String>, total: usize, cancellable: bool) -> Handle {

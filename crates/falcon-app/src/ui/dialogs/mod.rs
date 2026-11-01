@@ -6,6 +6,7 @@ pub(crate) mod add_to_library;
 pub(crate) mod debug;
 pub(crate) mod duplicates;
 pub(crate) mod export;
+pub(crate) mod force_close;
 pub(crate) mod ext;
 pub(crate) mod library;
 pub(crate) mod library_notices;

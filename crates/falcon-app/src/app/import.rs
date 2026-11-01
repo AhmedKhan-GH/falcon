@@ -496,9 +496,21 @@ impl App {
         let dupes = self.prefs.asks_duplicates().then(|| self.ws.dupes.clone());
         std::thread::spawn(move || {
             for Job { path: f, opts } in jobs {
-                // Paused from the sidebar: wait before the next file.
-                while progress.lock().unwrap_or_else(|p| p.into_inner()).paused {
+                // Paused from the sidebar: wait before the next file (a
+                // stop request ends the wait).
+                while {
+                    let pr = progress.lock().unwrap_or_else(|p| p.into_inner());
+                    pr.paused && !pr.cancel
+                } {
                     std::thread::sleep(crate::tasks::PAUSE_POLL);
+                }
+                if progress.lock().unwrap_or_else(|p| p.into_inner()).cancel {
+                    // Stopped: skip the file, but still clear a pasted copy.
+                    if scratch.as_ref().is_some_and(|d| f.starts_with(d)) {
+                        let _ = std::fs::remove_file(&f);
+                    }
+                    progress.lock().unwrap_or_else(|p| p.into_inner()).done += 1;
+                    continue;
                 }
                 // A file already in the library is held for the duplicate
                 // dialog (`import_dupes`) instead of being committed.

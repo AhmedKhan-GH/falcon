@@ -179,6 +179,9 @@ pub(crate) struct Progress {
     pub(crate) total: usize,
     pub(crate) done: usize,
     pub(crate) failed: usize,
+    /// Set to stop the import: the jobs not started yet are skipped and
+    /// counted as done, so the batch ends (closing a library with tasks running).
+    pub(crate) cancel: bool,
     pub(crate) current: String,
     /// Every failed import since the list was last cleared, kept across
     /// batches like Eagle's error list (`import.rs` shows it).
