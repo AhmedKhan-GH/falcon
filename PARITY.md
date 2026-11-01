@@ -7,10 +7,10 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
 | Main window: menus, shortcuts, toolbar, sidebar, layouts | 121 | 47 | 103 | 9 |
-| Viewers and file formats | 95 | 30 | 65 | 7 |
+| Viewers and file formats | 107 | 26 | 57 | 7 |
 | Search, filters and organising | 139 | 29 | 54 | 3 |
-| Import, export, library, preferences and integrations | 106 | 19 | 87 | 26 |
-| **Total** | 461 | 125 | 309 | 45 |
+| Import, export, library, preferences and integrations | 111 | 19 | 82 | 26 |
+| **Total** | 478 | 121 | 296 | 45 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -29,7 +29,7 @@ These are bugs, not missing features. The first four can lose data or edits.
 1. ~~Every viewer opens inside the window between the sidebar and inspector in Eagle, with a toolbar button that hides both. Falcon does this only for PDFs.~~ Fixed: every viewer draws in the central panel, with the panels button, ⌥⌘3 and Tab.
 2. ~~No application menu bar.~~ Fixed: native File / Edit / Find / Organize / View / Window / Help menus with live shortcuts; no Actions menu.
 3. Preferences: 8 panes and about 30 settings against Eagle's 13 panes and about 80 settings; the rest are listed in §6.
-4. The full-size image is capped at 3072 px.
+4. ~~The full-size image is capped at 3072 px.~~ Fixed: the original is tiled at full resolution; HEIC/AVIF/JXL still come from a 3072 px QuickLook render (no decoders).
 5. ~~Folder import flattens structure; no duplicate check on import; no import error list.~~ Fixed.
 6. ~~No export of items or folders, and no CSV export.~~ Fixed.
 7. Shortcuts still missing: T, F, ⌘J Go to Folder, ⇧+arrows, ⌘D, ⌘T and the tag clipboard, ⇧D, ⇧T, F5, ⌘O and more (see §3).
@@ -502,12 +502,12 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Pinned plugins and plugin button in the viewer toolbar | Missing | No plugins | online/plugin |
 | Open in default app / Open With from the viewer | Done | `F/app/open_ui.rs:109`, used at `F/app.rs:3486` and `F/app/media_view.rs:79` | local |
 | "Cannot preview" page with an "Open With Other Application" button | Done | Icon, name, a line of text and an Open With Another App button; the page's menu has Open, Open With and Show in Finder; shown only when neither render nor thumbnail exists | local |
-| "Image too large to preview" page (TIFF/HEIC/TGA above the pixel limit) | Partial | No message; falcon decodes at most 3072 px (`F/loader.rs:26`) so large files still show, downscaled | local |
+| "Image too large to preview" page (TIFF/HEIC/TGA above the pixel limit) | Done | `logic::too_large_to_preview` (Eagle's 120,000,000 px limit for tif/tiff/heic/heif/hif/tga without a custom thumbnail); `image_view.rs` `too_large` with the thumbnail and an Open With button | local |
 | Unsupported format suggests a plugin from the plugin center | Missing | No plugins | online/plugin |
 | Presentation (slideshow) mode: full screen, panels hidden | Missing | No full-screen or presentation mode anywhere in falcon | local |
 | Always on top | Missing | Only the collect window is always on top (`F/collect.rs:89`) | local |
 | Thumbnail background per item (none, black, gray, white, grid) used in the viewer and grid | Missing | The viewer always fills with the theme colour (`F/app.rs:3418`) | local |
-| Transparent-area display preference (grid or no grid) | Missing | None | local |
+| Transparent-area display preference (grid or no grid) | Done | `prefs.transparency_grid`, off by default as Eagle | local |
 | Grayscale preview toggle | Missing | None (falcon's "grayscale" is only a search filter, `FL/search.rs:487`) | local |
 | Navigator (minimap) while zoomed | Missing | None | local |
 | Viewer keys follow the shortcut table (zoom, crop, rotate, flip) | Partial | Zoom keys are rebindable (`view.zoom.*`); crop, rotate and flip keys are still fixed | local |
@@ -516,21 +516,21 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| Fit to window on open ("Smart Zoom") | Done | Fit, never enlarged (`F/app.rs:3433-3434`) | local |
-| Preference: open at original size instead | Missing | No setting | local |
-| Long images (very tall or wide) open fitted to width for scrolling | Missing | Always fits the whole image | local |
-| Zoom slider (5–200%) in the toolbar | Missing | Only plus and minus buttons and a % label (`F/app.rs:3487-3494`) | local |
-| Zoom presets menu (5%–800%, Actual Size, Zoom to Fit) from the % label | Missing | The % label is plain text (`F/app.rs:3491`) | local |
+| Fit to window on open ("Smart Zoom") | Done | `logic::smart_fit` | local |
+| Preference: open at original size instead | Done | `prefs.open_actual_size` | local |
+| Long images (very tall or wide) open fitted to width for scrolling | Done | `logic::smart_fit` with Eagle's thresholds (width ≥ 960 and height > 1.8×, or width ≥ 320 and height > 2.7×); tall images only, as Eagle has no rule for wide strips | local |
+| Zoom slider (5–200%) in the toolbar | Done | `image_view.rs`: positions 5–200 showing 5–800% (7% per step above 100), snapping as Eagle | local |
+| Zoom presets menu (5%–800%, Actual Size, Zoom to Fit) from the % label | Done | `image_view.rs` size menu on the % label; right-click toggles actual size and fit | local |
 | Zoom in and out buttons and keys | Done | ⌘= and ⌘− act on the viewer while it is open (`logic::view_zoom`); unmodified + and − still work | local |
 | Actual size (100%) | Done | "1:1" button, the 1 key and ⌘0 (`view.zoom.actual`) | local |
 | Zoom to fit | Done | "Fit" button, the 0 key and ⌘9 (`view.zoom.fit`) | local |
-| Fit to window edge toggle (backtick key) | Missing | No fill-to-edge mode | local |
-| Pinch zoom around the pointer | Done | `F/app.rs:3440-3450` | local |
-| Mouse-wheel behaviour preference (scroll, zoom, or previous/next) | Partial | The wheel always zooms (`F/app.rs:3442`); Eagle's default is scroll, and there is no paging option | local |
-| Pan by dragging | Done | `F/app.rs:3452` | local |
-| Remember the last zoom and position per item | Missing | View state resets for every item (`F/app.rs:3389`) | local |
-| Pixelated or smooth rendering when zoomed in | Missing | Textures are always linear-filtered (`F/loader.rs:135`) | local |
-| Shows the original at full resolution | Partial | The full tier is capped at 3072 px on the long side (`F/loader.rs:26`), so deep zoom on larger photos is soft | local |
+| Fit to window edge toggle (backtick key) | Done | Backtick, saved in `Saved.zoom_edge` | local |
+| Pinch zoom around the pointer | Done | `F/app/image_view.rs`, 5–800% | local |
+| Mouse-wheel behaviour preference (scroll, zoom, or previous/next) | Done | `logic::wheel_action`, `prefs.wheel`: scroll (default), zoom or page; no first-use prompt | local |
+| Pan by dragging | Done | `F/app/image_view.rs` | local |
+| Remember the last zoom and position per item | Done | `prefs.remember_zoom`, per session as Eagle's `lastItemStates` | local |
+| Pixelated or smooth rendering when zoomed in | Partial | `prefs.pixelated`: nearest sampling above 100% of screen pixels (Eagle starts at 200%); grid thumbnails stay smooth | local |
+| Shows the original at full resolution | Done | `Tier::Original` in `loader.rs`: the original decoded on a worker and cut into ≤ 2048 px tiles within the GPU limit, kept only for the viewed item (`keep_original`); jpg, png, webp, bmp, tiff and RAW previews | local |
 | EXIF orientation applied in the viewer | Done | `FL/thumbnail.rs:121-130` | local |
 | Rotate | Done | `F/crop.rs:242-250`, Shift+R `F/image_edit.rs:281` | local |
 | Rotation mode preference (preview only, or write to file) | Partial | Always writes to the file (`FL/transform.rs:65`); no preview-only mode | local |
@@ -567,7 +567,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| RAW viewer shows the thumbnail, then the embedded full preview | Partial | Image viewer with a QuickLook render capped at 3072 px (`F/loader.rs:56-57`); macOS only | local |
+| RAW viewer shows the thumbnail, then the embedded full preview | Done | `thumbnail::raw_preview` extracts the largest embedded baseline or progressive JPEG, turned by EXIF orientation; QuickLook fallback on macOS | local |
 | EXIF orientation for RAW | Partial | Whatever QuickLook applies | local |
 | Camera metadata (camera, ISO, focal length, shutter, aperture, date) | Done | `F/app/media_view.rs:315-333` (when `rawMetas` exists) | local |
 | Zoom, comments on RAW | Done | Same image viewer and `F/comments.rs:169` | local |
@@ -713,8 +713,8 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| SVG drawn as vectors, sharp at any zoom | Partial | Rasterised once at up to 3072 px (`F/loader.rs:212-214`) | local |
-| TIFF viewer (multi-page aware, worker decode) | Partial | QuickLook still up to 3072 px | local |
+| SVG drawn as vectors, sharp at any zoom | Done | `thumbnail::render_svg_region` re-renders the visible part at screen resolution 0.15 s after the view holds still (`logic::svg_region`) | local |
+| TIFF viewer (multi-page aware, worker decode) | Partial | Decoded at full resolution when zoomed (`Tier::Original`), QuickLook fallback; not multi-page | local |
 | TGA viewer | Partial | QuickLook still | local |
 | HEIC/HEIF viewer | Partial | QuickLook still | local |
 
@@ -831,7 +831,7 @@ Ranked by how often a user would notice them.
 14. **No separate preview window (Missing).** No opacity, always on top or reveal in Eagle.
 15. **No viewer background options (Missing).** No per-item background, transparency grid preference or pixelated zoom.
 16. **No navigator minimap or grayscale preview (Missing).**
-17. **Viewer preferences are absent (Missing).** Missing settings: wheel behaviour (scroll, zoom, paging), default ratio, remember last zoom, rotation mode, default mode, video stretch, video wheel to volume, autoplay, loop short clips, always play GIFs and hover play.
+17. ~~Viewer preferences are absent.~~ Fixed: wheel behaviour, default size, pixelated zoom, remembered zoom, transparency grid, GIF player and grid autoplay.
 18. **Remember last zoom and position per item, and persist video position across launches (Missing / Partial).**
 19. **PDF gaps (Missing).** No page rotation, hand tool, scroll and spread modes, presentation, print, document properties, password prompt, links, attachments, layers, current outline item, or whole-word and diacritics search. The reader is also macOS only.
 20. **Crop gaps (Missing).** No width and height fields, no Save As, no size readout and no Shift+C.
@@ -1381,16 +1381,16 @@ Eagle panes (`app/js/preferences.js:659-788`): General, Sidebar, Controls, Previ
 | General (falcon only): show the sidebar and inspector | Done (beyond Eagle) | `prefs.rs:322-325` | local |
 | **Sidebar:** double-clicking a sidebar item renames it or expands and collapses it | Done | `Prefs::sidebar_double_click` (default: expand/collapse) | local |
 | Sidebar: show or hide Uncategorized, Untagged, Recently Used, Random, Community, Quick Access, Smart Folders and Folders | Done | `SidebarSections`, all on by default; no Community entry | local |
-| **Controls:** mouse wheel in the viewer scrolls, pages to previous or next, or zooms | Missing | No setting (viewer behaviour is cross-ref viewers) | local |
+| **Controls:** mouse wheel in the viewer scrolls, pages to previous or next, or zooms | Done | `prefs.wheel` | local |
 | Controls: hover zoom button on cards | Done | `prefs.rs:331-337` | local |
 | Controls: double-clicking an item opens it in Eagle or in the default app | Done | `Prefs::double_click` | local |
 | Controls: middle button does nothing, opens a new window or runs a plugin | Missing | — | local |
 | Controls: spacebar previews, opens Quick Look or scrolls the list | Done | `Prefs::space` | local |
-| **Preview:** zoom rendering smooth or pixelated | Missing | — | local |
-| Preview: remember the last zoom and position | Missing | — | local |
-| Preview: default image size, smart zoom or original | Missing | — | local |
+| **Preview:** zoom rendering smooth or pixelated | Done | `prefs.pixelated` | local |
+| Preview: remember the last zoom and position | Done | `prefs.remember_zoom` | local |
+| Preview: default image size, smart zoom or original | Done | `prefs.open_actual_size` | local |
 | Preview: rotation applies to the file or to the preview only | Missing | Rotation always writes the file (`image_edit.rs:113-118`); no preview-only mode | local |
-| Preview: transparency grid on or off | Missing | — | local |
+| Preview: transparency grid on or off | Done | `prefs.transparency_grid` | local |
 | Preview: video vertical scroll controls progress or volume | Done | `Prefs::video_scroll` | local |
 | Preview: video hover preview | Missing | Falcon has no video hover-play; `hover.rs` is the still-image preview | local |
 | Preview: stretch video to fit the window | Done | `Prefs::video_fill` | local |
@@ -1517,9 +1517,9 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 
 Rows marked "not counted" are features Eagle 4.0.0 does not have.
 
-- **Done:** 106, including 5 where falcon goes beyond Eagle and 1 with a small difference.
+- **Done:** 111, including 5 where falcon goes beyond Eagle and 1 with a small difference.
 - **Partial:** 19.
-- **Missing:** 113, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
+- **Missing:** 108, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
 - **Different on purpose:** 1 (the API listens on localhost only).
 
 ### Ranked Missing and Partial local items
