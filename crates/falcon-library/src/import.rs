@@ -467,6 +467,14 @@ fn generate(item: &mut Item, raw: &Path, thumb: &Path) -> Option<Analysis> {
         return Some(Analysis::Thumbnail);
     }
     if !thumbnail::is_supported(&item.ext) {
+        // Video macOS can't read goes to FFmpeg first; other video only
+        // when QuickLook fails, as Eagle tries its own player before mpv.
+        if media::is_video(&item.ext) && falcon_ffmpeg::handles(&item.ext) {
+            return ffmpeg_thumbnail(item, raw, thumb).or_else(|| quicklook_thumbnail(item, raw, thumb, max));
+        }
+        if media::is_video(&item.ext) {
+            return quicklook_thumbnail(item, raw, thumb, max).or_else(|| ffmpeg_thumbnail(item, raw, thumb));
+        }
         return quicklook_thumbnail(item, raw, thumb, max);
     }
     let img = thumbnail::decode(raw).ok()?;
@@ -524,6 +532,24 @@ fn quicklook_thumbnail(item: &mut Item, raw: &Path, thumb: &Path, max: u32) -> O
     item.width = w.into();
     item.height = h.into();
     thumbnail::write_thumbnail(img, max, thumb).ok()?;
+    Some(Analysis::Thumbnail)
+}
+
+/// A video's thumbnail through the FFmpeg fallback, as Eagle's
+/// thumbnailer makes one through its bundled player: the picture ten
+/// seconds in (a third of the way through a shorter clip), or a later one
+/// when that is black, written per [`thumbnail::video_thumbnail_jpeg`]
+/// (a 480-wide JPEG). `None` without FFmpeg or when it can't decode the file.
+fn ffmpeg_thumbnail(item: &mut Item, raw: &Path, thumb: &Path) -> Option<Analysis> {
+    if !falcon_ffmpeg::available() {
+        return None;
+    }
+    let (info, frame, _) = falcon_ffmpeg::thumbnail(raw).ok()?;
+    let img = image::RgbaImage::from_raw(frame.width as u32, frame.height as u32, frame.rgba)?;
+    let bytes = thumbnail::video_thumbnail_jpeg(&img).ok()?;
+    fs::write(thumb, bytes).ok()?;
+    item.width = info.width.into();
+    item.height = info.height.into();
     Some(Analysis::Thumbnail)
 }
 
@@ -787,6 +813,25 @@ mod tests {
         assert_eq!((item.width, item.height), (280, 140));
         assert_eq!(thumb, Some((280, 140)), "the waveform is the thumbnail");
         assert!(!item.extra.contains_key("bpm"), "a steady tone has no beat");
+    }
+
+    #[test]
+    fn video_macos_cannot_read_is_thumbnailed_through_ffmpeg() {
+        if !falcon_ffmpeg::available() {
+            eprintln!("skipped: FFmpeg is not installed (scripts/build-ffmpeg.sh)");
+            return;
+        }
+        // Two seconds of 64×48 frames, black for the first one: Eagle's
+        // spot (a third of the way in) is black, so a later frame is used.
+        let clip = falcon_ffmpeg::testing::Clip { width: 64, height: 48, frames: 50, fps: 25, audio_rate: Some(8000) };
+        let avi = clip.avi(|i, _| if i < 25 { [0, 0, 0] } else { [200, 40, 40] });
+        let (item, thumb) = import_with_thumb("clip.avi", &avi, &ImportOptions::default());
+        assert_eq!((item.width, item.height), (64, 48));
+        assert_eq!(thumb, Some((480, 360)), "a 480-wide thumbnail as Eagle draws");
+        assert!((item.extra["duration"].as_f64().unwrap() - 2.0).abs() < 0.05, "{}", item.extra["duration"]);
+        assert_eq!((item.extra["resolutionWidth"].clone(), item.extra["resolutionHeight"].clone()), (json!(64), json!(48)));
+        let reddish = item.palettes.first().is_some_and(|p| p.color[0] > 150 && p.color[1] < 90);
+        assert!(reddish, "the thumbnail is the first non-black frame: {:?}", item.palettes.first().map(|p| p.color));
     }
 
     #[test]

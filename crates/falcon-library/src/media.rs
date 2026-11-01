@@ -25,14 +25,20 @@ pub fn is_video(ext: &str) -> bool {
 }
 
 /// The duration in seconds of an audio or video file falcon can read:
-/// the audio formats through [`crate::audio`], and ISO-media video (mp4, mov,
-/// m4v, 3gp, f4v) from its movie header.
+/// the audio formats through [`crate::audio`], ISO-media video (mp4, mov,
+/// m4v, 3gp, f4v) from its movie header, and other video through FFmpeg
+/// when it is installed.
 pub fn duration(path: &Path, ext: &str) -> Option<f64> {
     if is_audio(ext) {
         return audio_duration(path, ext);
     }
-    if matches!(ext, "mp4" | "mov" | "m4v" | "3gp" | "f4v") {
-        return File::open(path).ok().and_then(|mut f| mp4_duration(&mut f));
+    if matches!(ext, "mp4" | "mov" | "m4v" | "3gp" | "f4v")
+        && let Some(d) = File::open(path).ok().and_then(|mut f| mp4_duration(&mut f))
+    {
+        return Some(d);
+    }
+    if is_video(ext) && falcon_ffmpeg::available() {
+        return falcon_ffmpeg::probe(path).ok().map(|i| i.duration).filter(|d| *d > 0.0);
     }
     None
 }
