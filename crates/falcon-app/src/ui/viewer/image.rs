@@ -450,7 +450,7 @@ fn zoom_slider(ui: &mut Ui, track: Rect, pos: f32) -> Option<f32> {
 }
 
 /// Draws texture `tex` over `r` turned and mirrored by `tf`.
-fn paint_transformed(painter: &egui::Painter, tex: egui::TextureId, r: Rect, tf: crate::ui::viewer::crop::ViewTransform) {
+pub(crate) fn paint_transformed(painter: &egui::Painter, tex: egui::TextureId, r: Rect, tf: crate::ui::viewer::crop::ViewTransform) {
     let corners = [r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom()];
     let mut mesh = egui::Mesh::with_texture(tex);
     for (pos, (u, v)) in corners.into_iter().zip(tf.uv_corners()) {

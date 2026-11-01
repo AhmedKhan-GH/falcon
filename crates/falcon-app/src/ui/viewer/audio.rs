@@ -14,13 +14,13 @@ use crate::icons as ic;
 use crate::logic;
 use crate::theme::{self as t, font, mono};
 
-const PLAY: &str = "\u{E3D0}";
-const PAUSE: &str = "\u{E39E}";
+pub(crate) const PLAY: &str = "\u{E3D0}";
+pub(crate) const PAUSE: &str = "\u{E39E}";
 const REPEAT: &str = "\u{E3F6}";
 const SPEAKER: &str = "\u{E44A}";
 /// Eagle's waveform colours: unplayed grey, played in the brand blue.
-const WAVE: Color32 = Color32::from_rgb(0x7c, 0x7c, 0x7c);
-const PLAYED: Color32 = Color32::from_rgb(waveform::COLOR[0], waveform::COLOR[1], waveform::COLOR[2]);
+pub(crate) const WAVE: Color32 = Color32::from_rgb(0x7c, 0x7c, 0x7c);
+pub(crate) const PLAYED: Color32 = Color32::from_rgb(waveform::COLOR[0], waveform::COLOR[1], waveform::COLOR[2]);
 /// The bar every viewer shares: the panels button, back, the counter and
 /// the item's name at the left; open, previous and next at the right.
 /// Returns where the name starts and the x left of what was drawn on the

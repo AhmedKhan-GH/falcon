@@ -459,7 +459,7 @@ pub fn frame_item_name(name: &str, at: f64) -> String {
 }
 
 /// A decoded frame as an image the library and clipboard code take.
-fn rgba_image(f: falcon_video::Frame) -> Option<image::RgbaImage> {
+pub(crate) fn rgba_image(f: falcon_video::Frame) -> Option<image::RgbaImage> {
     image::RgbaImage::from_raw(f.width as u32, f.height as u32, f.rgba)
 }
 
