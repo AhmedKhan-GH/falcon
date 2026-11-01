@@ -177,6 +177,10 @@ pub struct Prefs {
     /// A system notification when an export finishes (falcon's own,
     /// after Eagle's "Export Successful" notice).
     pub notify_export_done: bool,
+    /// falcon's own: the search box also finds near misses (one or two
+    /// typos), listed after the exact matches. On by default; off gives
+    /// Eagle's results (exact substrings only).
+    pub typo_search: bool,
 }
 
 /// What a middle click on a card in the grid does.
@@ -337,6 +341,7 @@ impl Default for Prefs {
             screenshot_retina: true,
             menu_icon: true,
             notify_export_done: true,
+            typo_search: true,
         }
     }
 }
@@ -1045,6 +1050,10 @@ fn general(p: &mut Page, d: &mut Draft) {
         note(ui, tr("When off, such files are imported as new items."));
         ui.checkbox(&mut d.prefs.keywords_as_tags, tr("Add IPTC and XMP keywords as tags when importing images"));
         ui.checkbox(&mut d.prefs.screenshot_retina, tr("Keep full Retina resolution in screenshots (@2x)"));
+    });
+    p.block(tr_key("Search"), &["search", "typo", "fuzzy", "spelling", "near", "exact", "keyword"], |ui| {
+        ui.checkbox(&mut d.prefs.typo_search, tr("Also find near misses when searching"));
+        note(ui, tr("Words with a typo or two are listed after the exact matches. Turn it off to find exact text only, as Eagle does."));
     });
 }
 

@@ -1092,7 +1092,7 @@ impl App {
         };
         let scope = if self.ws.folders.combined() || members.is_some() { Scope::All } else { self.ws.scope.clone() };
         let only = members.as_ref().or(only);
-        let mut order = logic::visible_in(lib.items(), &lib.metadata.folders, &scope, &self.ws.query, &self.search.scope, &self.ws.filter, key, inc, only);
+        let mut order = logic::visible_in(lib.items(), &lib.metadata.folders, &scope, &self.ws.query, &self.search.scope, self.prefs.typo_search, &self.ws.filter, key, inc, only);
         // Random and duration re-sort only a plain listing (no search or
         // colour ranking to keep).
         if self.ws.query.trim().is_empty() && self.ws.filter.color.is_none() {

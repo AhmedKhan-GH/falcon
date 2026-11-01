@@ -42,7 +42,11 @@ If the terms fail, Eagle makes one last attempt: it tests the whole query as a s
 
 ## Typo tolerance (falcon only)
 
-Eagle has no typo tolerance. falcon's app adds it on top of Eagle's matching (`Query::fuzzy_score`). The HTTP API keeps Eagle's exact behaviour.
+Eagle has no typo tolerance: an item matches only when the text is in it. falcon's app can add typo tolerance on top of Eagle's matching (`Query::fuzzy_score`) with Preferences ▸ General ▸ Search ▸ "Also find near misses when searching" (`Prefs::typo_search`). It is on by default, a deliberate falcon extra; turned off, the search box gives Eagle's exact-substring results. The HTTP API always keeps Eagle's exact behaviour.
+
+When nothing matches a search or the active filters, the grid says so in the middle ("No Matches", with a hint to try another keyword or loosen the filters), as Eagle shows its own nothing-found message with a search illustration.
+
+With the preference on:
 
 - An item that matches the way Eagle matches costs 0 edits.
 - Otherwise, each AND term, and one member of each OR group, must match the start of some word in the item's text within a small number of edits. The edits are insertions, deletions, substitutions and swaps of two adjacent letters (optimal string alignment distance).

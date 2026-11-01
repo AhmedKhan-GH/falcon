@@ -207,14 +207,15 @@ pub fn visible(
     increase: bool,
     only: Option<&HashSet<String>>,
 ) -> Vec<usize> {
-    visible_in(items, roots, scope, query, &search::SearchScope::default(), filter, order, increase, only)
+    visible_in(items, roots, scope, query, &search::SearchScope::default(), true, filter, order, increase, only)
 }
 
 #[allow(clippy::too_many_arguments)]
 /// Indices into `items` that pass the scope, the search query and the filter
-/// panel, in Eagle's order. A colour filter sorts by colour distance. The
-/// query is matched with typo tolerance; exact matches come first, then
-/// typo matches by number of edits, each group in that order.
+/// panel, in Eagle's order. A colour filter sorts by colour distance. With
+/// `typos` the query is matched with typo tolerance (falcon's own): exact
+/// matches come first, then typo matches by number of edits, each group in
+/// that order. Without it only exact substrings match, as in Eagle.
 /// Only the parts of each item `parts` turns on are searched (the search
 /// box's Search Scope menu).
 pub fn visible_in(
@@ -223,6 +224,7 @@ pub fn visible_in(
     scope: &Scope,
     query: &str,
     parts: &search::SearchScope,
+    typos: bool,
     filter: &Filter,
     order: OrderBy,
     increase: bool,
@@ -236,7 +238,12 @@ pub fn visible_in(
         .enumerate()
         .filter(|(_, i)| in_scope(i, scope, &index) && only.is_none_or(|o| o.contains(&i.id)))
         .filter_map(|(n, i)| {
-            let cost = if q.is_empty() { 0 } else { q.fuzzy_score(&search::search_text_in(i, &index, qlen, parts))? };
+            let cost = if q.is_empty() {
+                0
+            } else {
+                let text = search::search_text_in(i, &index, qlen, parts);
+                if typos { q.fuzzy_score(&text)? } else { q.matches(&text).then_some(0)? }
+            };
             filter.check(i).map(|d| (n, d, cost))
         })
         .collect();
@@ -361,6 +368,20 @@ mod tests {
         assert_eq!(q("zebar"), ["Zebra"]);
         assert_eq!(q("mangp"), ["Mango"]);
         assert!(q("qqqqq").is_empty());
+    }
+
+    #[test]
+    fn exact_search_has_no_typo_fallback() {
+        let (roots, items) = fixture();
+        let parts = search::SearchScope::default();
+        let q = |s: &str| {
+            names(&items, &visible_in(&items, &roots, &Scope::All, s, &parts, false, &Filter::default(), OrderBy::Name, true, None))
+        };
+        assert!(q("zebar").is_empty());
+        assert!(q("mangp").is_empty());
+        assert_eq!(q("ZEB"), ["Zebra"]);
+        assert_eq!(q("red -big"), ["apple"]);
+        assert_eq!(q("zebra OR mango"), ["Mango", "Zebra"]);
     }
 
     #[test]
