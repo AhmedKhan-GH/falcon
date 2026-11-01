@@ -4634,6 +4634,9 @@ impl App {
         let mut guard = lock(&shared);
         let lib: &mut Library = &mut guard;
         self.begin_frame_edits(lib);
+        // Typing in a text item the viewer has just left (an arrow key,
+        // Esc) is saved before the viewer opens the next one.
+        self.text_saves(lib, ctx.input(|i| i.time));
         self.ws.up = parent_scope(&self.ws.scope, lib);
         self.ws.editable = editable_now(&self.acted_on(), lib);
         // Items can vanish under the selection (deleted here or over the API).

@@ -356,6 +356,10 @@ impl App {
     /// the text. The blank file is made in a temporary folder of its own
     /// and removed once imported.
     pub(super) fn new_text_file(&mut self, lib: &mut Library, folders: Vec<String>) -> falcon_library::Result<()> {
+        // Typing in the text open now is saved before it is replaced.
+        if let Some(open) = &mut self.ws.text {
+            open.save(lib)?;
+        }
         let dir = std::env::temp_dir().join("falcon-new").join(falcon_library::ids::new_id());
         let file = dir.join(textdoc::NEW_FILE_NAME);
         let made = std::fs::create_dir_all(&dir).and_then(|()| std::fs::write(&file, b""));
