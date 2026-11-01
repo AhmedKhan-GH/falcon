@@ -503,4 +503,42 @@ impl App {
             }
         });
     }
+
+    /// Keeps the auto-import watcher on the shown library's folder (or
+    /// stops it when auto-import is off or no library is open) and imports
+    /// what it found, as Eagle's auto-import does: into the library's root,
+    /// with no folders or tags, through the usual import so the duplicate
+    /// check and the failed-imports list apply. A folder that can't be
+    /// watched (gone, or on a network drive) is reported once.
+    pub(super) fn auto_import_tick(&mut self) {
+        let want = match (&self.ws.lib, &self.ws.root) {
+            (Some(_), Some(root)) => self.prefs.auto_import_dir(root),
+            _ => None,
+        };
+        if self.auto_import.as_ref().map(|w| &w.dir) != want.as_ref() && self.auto_import_refused != want {
+            self.auto_import = None;
+            if let Some(dir) = want {
+                let chosen = self.prefs.auto_import_path.clone().unwrap_or_default();
+                match crate::prefs::auto_import_refusal(&chosen) {
+                    Some(why) => {
+                        self.flash(format!("Auto-import is paused. {why}"));
+                        self.auto_import_refused = Some(dir);
+                    }
+                    None => {
+                        let ctx = self.ctx.clone();
+                        self.auto_import = crate::auto_import::Watcher::start(dir, self.auto_imported.clone(), move || ctx.request_repaint());
+                    }
+                }
+            }
+        }
+        let batches = self.auto_import.as_ref().map(|w| w.take()).unwrap_or_default();
+        for files in batches {
+            if self.prefs.tells_auto_import() {
+                let n = files.len();
+                self.flash(format!("Importing {n} file{} from the auto-import folder", if n == 1 { "" } else { "s" }));
+            }
+            let opts = self.prefs.import_options(Vec::new());
+            self.spawn_import(files.into_iter().map(|path| Job { path, opts: opts.clone() }).collect());
+        }
+    }
 }

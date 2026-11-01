@@ -108,6 +108,9 @@ pub struct Prefs {
     /// Eagle's `autoImport.path`: the chosen folder. Each library watches
     /// the folder named after it inside this one.
     pub auto_import_path: Option<std::path::PathBuf>,
+    /// Eagle's `notification.notification.when.autoImport`: a notice when
+    /// files from the watched folder start importing.
+    pub notify_auto_import: bool,
 }
 
 /// What the wheel does over a playing video.
@@ -223,6 +226,7 @@ impl Default for Prefs {
             transparency_grid: false,
             auto_import: false,
             auto_import_path: None,
+            notify_auto_import: true,
         }
     }
 }
@@ -275,6 +279,18 @@ impl Prefs {
     /// Whether a finished import says how many items it added.
     pub fn tells_import_done(&self) -> bool {
         self.notifications && self.notify_import_done
+    }
+
+    /// Whether files found in the watched folder get a notice.
+    pub fn tells_auto_import(&self) -> bool {
+        self.notifications && self.notify_auto_import
+    }
+
+    /// The folder the library at `root` watches, while auto-import is on
+    /// and a folder is chosen.
+    pub fn auto_import_dir(&self, root: &std::path::Path) -> Option<std::path::PathBuf> {
+        let chosen = self.auto_import_path.as_ref().filter(|_| self.auto_import)?;
+        Some(crate::auto_import::watch_dir(chosen, root))
     }
 
     /// The ports to try for the API, or None when it is off.
@@ -821,13 +837,14 @@ fn preview(p: &mut Page, d: &mut Draft) {
 
 /// Notification: which notices falcon shows.
 fn notification(p: &mut Page, d: &mut Draft) {
-    p.block("Pop-ups", &["notice", "notification", "pop-up", "duplicate", "already", "import", "added", "finished"], |ui| {
+    p.block("Pop-ups", &["notice", "notification", "pop-up", "duplicate", "already", "import", "added", "finished", "auto-import", "watched"], |ui| {
         let n = &mut d.prefs;
         ui.checkbox(&mut n.notifications, "Show notices");
         ui.add_enabled_ui(n.notifications, |ui| {
             ui.indent("notices", |ui| {
                 ui.checkbox(&mut n.notify_duplicates, "Ask what to do when an imported file is already in the library");
                 ui.checkbox(&mut n.notify_import_done, "Say how many items an import added");
+                ui.checkbox(&mut n.notify_auto_import, "Say when files from the auto-import folder start importing");
             });
         });
         note(ui, "Import failures are always reported. falcon plays no sound effects.");
@@ -883,11 +900,25 @@ fn auto_import(p: &mut Page, d: &mut Draft, library: Option<&std::path::Path>, r
             ui.label(RichText::new(why).size(11.0).color(t::p().icon_red));
         }
         ui.add_space(4.0);
-        let target = match (library, &d.prefs.auto_import_path) {
-            (Some(root), Some(chosen)) => format!("Files dropped into {} are imported into this library.", crate::auto_import::watch_dir(chosen, root).display()),
-            _ => "Each library watches the folder named after it inside the chosen folder (\"Books\" for Books.library).".to_string(),
-        };
-        note(ui, &target);
+        match (library, &d.prefs.auto_import_path) {
+            (Some(root), Some(chosen)) => {
+                let dir = crate::auto_import::watch_dir(chosen, root);
+                note(ui, &format!("Files dropped into {} are imported into this library.", dir.display()));
+                // Eagle makes this folder itself; falcon only reads the
+                // chosen folder, so it is made here when asked.
+                if chosen.is_dir() && !dir.exists() {
+                    ui.horizontal(|ui| {
+                        note(ui, "That folder doesn't exist yet.");
+                        if ui.small_button("Make It").clicked()
+                            && let Err(e) = std::fs::create_dir(&dir)
+                        {
+                            *refused = Some(format!("Couldn't make {}: {e}", dir.display()));
+                        }
+                    });
+                }
+            }
+            _ => note(ui, "Each library watches the folder named after it inside the chosen folder (\"Books\" for Books.library)."),
+        }
         note(ui, "New files are imported once they stop growing; the originals stay where they are. Files under 1 KB, temporary (.tmp) files and files without an extension are skipped.");
     });
 }
@@ -1034,6 +1065,11 @@ mod tests {
         assert!(p.font_style_tags, "Eagle's font autoTag defaults to on");
         assert_eq!(p.api_ports(), Some(41596..=41600));
         assert!(!p.auto_import && p.auto_import_path.is_none(), "Eagle's autoImport defaults to off with no folder");
+        assert!(p.tells_auto_import(), "Eagle's autoImport notification defaults to on");
+        let chosen = Prefs { auto_import_path: Some("/d".into()), ..Default::default() };
+        assert_eq!(chosen.auto_import_dir(std::path::Path::new("/x/Books.library")), None, "off watches nothing");
+        let on = Prefs { auto_import: true, ..chosen };
+        assert_eq!(on.auto_import_dir(std::path::Path::new("/x/Books.library")), Some("/d/Books".into()));
     }
 
     #[test]

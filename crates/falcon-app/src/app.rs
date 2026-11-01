@@ -99,6 +99,8 @@ struct Saved {
     zoom_edge: Option<bool>,
     /// The text viewer's text size (`textdoc::zoom_scale`).
     text_zoom: Option<u8>,
+    /// Files the auto-import folder has handed over (`auto_import.rs`).
+    auto_imported: crate::auto_import::Imported,
 }
 
 /// A rubber-band selection in progress: where it started, in the grid's
@@ -621,6 +623,13 @@ pub struct App {
     refresh: bool,
     /// The text viewer's zoom level, kept across items and launches.
     text_zoom: u8,
+    /// The thread watching the shown library's auto-import folder.
+    auto_import: Option<crate::auto_import::Watcher>,
+    /// Files it has handed over, shared with the thread and saved.
+    auto_imported: Arc<Mutex<crate::auto_import::Imported>>,
+    /// A folder that couldn't be watched and was reported, so it isn't
+    /// checked again until the preferences change.
+    auto_import_refused: Option<PathBuf>,
 }
 
 impl App {
@@ -659,6 +668,9 @@ impl App {
             display: Default::default(),
             refresh: false,
             text_zoom: 0,
+            auto_import: None,
+            auto_imported: Arc::default(),
+            auto_import_refused: None,
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
         app.tile = saved.tile.unwrap_or(app.tile).clamp(TILE_MIN, TILE_MAX);
@@ -687,6 +699,7 @@ impl App {
         app.pdf.set_marks(saved.pdf_marks);
         app.image.edge = saved.zoom_edge.unwrap_or(false);
         app.text_zoom = saved.text_zoom.unwrap_or(0).min(crate::textdoc::ZOOM_LEVELS - 1);
+        app.auto_imported = Arc::new(Mutex::new(saved.auto_imported));
         // Reopen the libraries that were open, then the one given on the
         // command line (focused if it was already open).
         let (libraries, active) = crate::workspaces::restore(&saved.libraries, saved.active, saved.library.as_deref(), |p| p.is_dir());
@@ -960,6 +973,8 @@ impl App {
         self.show_sidebar = d.panels.sidebar;
         self.show_inspector = d.panels.inspector;
         self.shortcuts = d.keys;
+        // A folder refused before is checked again.
+        self.auto_import_refused = None;
         if restart {
             self.start_server();
             if self.ws.lib.is_some() && !self.prefs.api_enabled {
@@ -4544,6 +4559,7 @@ impl eframe::App for App {
             pdf_marks: self.pdf.marks(),
             zoom_edge: Some(self.image.edge),
             text_zoom: Some(self.text_zoom),
+            auto_imported: self.auto_imported.lock().unwrap_or_else(|p| p.into_inner()).clone(),
         };
         eframe::set_value(storage, eframe::APP_KEY, &saved);
     }
@@ -4847,6 +4863,7 @@ impl App {
             None => {}
         }
         self.run_import_request();
+        self.auto_import_tick();
     }
 }
 
