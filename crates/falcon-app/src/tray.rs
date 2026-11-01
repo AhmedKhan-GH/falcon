@@ -239,4 +239,24 @@ mod tests {
         assert_eq!(shown_key(Choice::Show, &keys, true), None, "no default");
         assert_eq!(shown_key(Choice::Quit, &keys, true), None);
     }
+
+    #[test]
+    fn choices_map_to_commands() {
+        use crate::shortcuts::Command;
+        let cmds: Vec<_> = MENU.iter().filter_map(|e| if let Entry::Item(c) = e { Some(c.command()) } else { None }).collect();
+        assert_eq!(
+            cmds,
+            [Some(Command::ShowFalcon), Some(Command::Capture(Mode::Area)), Some(Command::Capture(Mode::Window)), Some(Command::Capture(Mode::Full)), None]
+        );
+    }
+
+    #[test]
+    fn shown_key_follows_a_rebinding() {
+        let mut keys = Shortcuts::default();
+        keys.set(Command::ShowFalcon, crate::shortcuts::parse("Ctrl + Alt + Space")).unwrap();
+        let shown = shown_key(Choice::Show, &keys, false).map(|c| crate::shortcuts::format(&c));
+        assert_eq!(shown.as_deref(), Some("Ctrl + Alt + Space"));
+        keys.set(Command::ShowFalcon, None).unwrap();
+        assert_eq!(shown_key(Choice::Show, &keys, true), None);
+    }
 }

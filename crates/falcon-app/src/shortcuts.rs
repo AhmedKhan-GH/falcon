@@ -1487,4 +1487,42 @@ mod tests {
         assert_eq!(spec(Command::QuickSwitch).id, "find.quicksearch");
         assert_eq!(spec(Command::QuickSwitchKey).id, "find.quicksearch.key");
     }
+
+    #[test]
+    fn global_rows_follow_eagles_ids() {
+        use crate::capture::Mode;
+        let expected = [
+            (Command::ShowFalcon, "global.show.eagle"),
+            (Command::ShowSearch, "global.show.search"),
+            (Command::Capture(Mode::Area), "global.capture.area"),
+            (Command::Capture(Mode::Window), "global.capture.window"),
+            (Command::Capture(Mode::Full), "global.capture.full"),
+        ];
+        for (cmd, id) in expected {
+            let s = spec(cmd);
+            assert_eq!((s.id, s.group), (id, GLOBAL));
+        }
+        assert_eq!(TABLE.iter().filter(|s| s.group == GLOBAL).count(), expected.len());
+    }
+
+    #[test]
+    fn a_global_key_cannot_take_an_in_app_chord() {
+        use crate::capture::Mode;
+        let mut keys = Shortcuts::default();
+        assert_eq!(keys.set(Command::Capture(Mode::Window), parse("Command + F")), Err(Command::Find));
+        assert_eq!(keys.binding(Command::Capture(Mode::Window)), None);
+        assert!(keys.is_default(Command::Capture(Mode::Window)));
+    }
+
+    #[test]
+    fn resolve_never_returns_a_global_command() {
+        use crate::capture::Mode;
+        let mut keys = Shortcuts::default();
+        let chord = parse("Ctrl + Alt + Shift + J").unwrap();
+        assert_eq!(keys.resolve(chord.logical_key, chord.modifiers), None);
+        keys.set(Command::Capture(Mode::Full), Some(chord)).unwrap();
+        keys.set(Command::ShowFalcon, parse("Ctrl + Alt + Shift + K")).unwrap();
+        assert_eq!(keys.resolve(chord.logical_key, chord.modifiers), None);
+        assert_eq!(keys.resolve(Key::K, Modifiers { ctrl: true, alt: true, shift: true, ..Modifiers::NONE }), None);
+    }
 }

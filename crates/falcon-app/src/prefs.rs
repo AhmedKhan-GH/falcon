@@ -1729,4 +1729,62 @@ mod tests {
         assert_eq!(p.api_port, 41596);
         assert!(p.api_enabled);
     }
+
+    #[test]
+    fn screenshot_defaults_are_eagles() {
+        use crate::capture::{Format, Mode};
+        let p = Prefs::default();
+        assert_eq!((p.screenshot_format, p.screenshot_quality), (Format::Png, 90));
+        assert!(p.screenshot_shortcuts && !p.screenshot_ask && p.notify_capture && p.screenshot_tag);
+        assert!(!p.screenshot_clipboard && p.screenshot_retina && p.menu_icon && p.notify_export_done);
+        assert!(p.tells_capture(Mode::Area));
+    }
+
+    #[test]
+    fn capture_switches_ignore_the_full_screen() {
+        use crate::capture::Mode;
+        let mut p = Prefs { screenshot_ask: true, ..Prefs::default() };
+        assert!(p.tells_capture(Mode::Window) && p.asks_capture(Mode::Area));
+        assert!(!p.tells_capture(Mode::Full) && !p.asks_capture(Mode::Full));
+        p.screenshot_ask = false;
+        assert!(!p.asks_capture(Mode::Window));
+        p.notify_capture = false;
+        assert!(!p.tells_capture(Mode::Area));
+        p.notify_capture = true;
+        p.notifications = false;
+        assert!(!p.tells_capture(Mode::Area), "the master switch wins");
+    }
+
+    #[test]
+    fn export_notice_needs_both_switches() {
+        let mut p = Prefs { notifications: true, notify_export_done: true, ..Prefs::default() };
+        assert!(p.tells_export_done());
+        p.notify_export_done = false;
+        assert!(!p.tells_export_done());
+        p.notify_export_done = true;
+        p.notifications = false;
+        assert!(!p.tells_export_done());
+    }
+
+    #[test]
+    fn sanitizing_keeps_only_eagles_qualities() {
+        assert_eq!(Prefs { screenshot_quality: 55, ..Prefs::default() }.sanitized().screenshot_quality, 90);
+        assert_eq!(Prefs { screenshot_quality: 70, ..Prefs::default() }.sanitized().screenshot_quality, 70);
+    }
+
+    #[test]
+    fn prefs_without_screenshot_fields_take_defaults() {
+        let p: Prefs = serde_json::from_str(r#"{"hover_zoom":false,"api_port":42000}"#).unwrap();
+        let d = Prefs::default();
+        assert_eq!((p.screenshot_format, p.screenshot_quality), (d.screenshot_format, 90));
+        assert!(p.screenshot_shortcuts && !p.screenshot_ask && p.notify_capture && p.screenshot_tag);
+        assert!(!p.screenshot_clipboard && p.screenshot_retina && p.menu_icon && p.notify_export_done);
+    }
+
+    #[test]
+    fn capture_options_copy_the_screenshot_prefs() {
+        use crate::capture::{Format, Options};
+        let p = Prefs { screenshot_format: Format::Webp, screenshot_quality: 80, screenshot_retina: false, screenshot_clipboard: true, ..Prefs::default() };
+        assert_eq!(p.capture_options(), Options { format: Format::Webp, quality: 80, retina: false, clipboard: true });
+    }
 }

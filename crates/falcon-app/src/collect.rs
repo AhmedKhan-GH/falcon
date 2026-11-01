@@ -803,4 +803,37 @@ mod tests {
         m.apply(&mut o, 2);
         assert_eq!(o.name, None, "the name is for one file only");
     }
+
+    fn pending(name: &str, tags: &[&str]) -> Pending {
+        Pending { path: PathBuf::from(format!("/tmp/{name}.png")), name: name.into(), tags: tags.iter().map(|t| t.to_string()).collect() }
+    }
+
+    #[test]
+    fn ask_opens_and_fills_from_the_first_only() {
+        let mut c = Collect::default();
+        assert!(!c.waiting());
+        c.ask(pending("one", &["Screenshot"]));
+        assert!(c.open && c.waiting());
+        assert_eq!(c.meta.name, "one");
+        assert_eq!(c.meta.tags, ["Screenshot"]);
+        c.meta.name = "edited".into();
+        c.ask(pending("two", &[]));
+        assert_eq!(c.meta.name, "edited", "a second ask leaves the fields alone");
+        assert_eq!(c.meta.tags, ["Screenshot"]);
+    }
+
+    #[test]
+    fn next_pending_moves_to_the_next_screenshot() {
+        let mut c = Collect::default();
+        c.ask(pending("one", &["Screenshot"]));
+        c.ask(pending("two", &[]));
+        let first = c.next_pending().unwrap();
+        assert_eq!(first.name, "one");
+        assert!(c.waiting());
+        assert_eq!(c.meta.name, "two");
+        assert!(c.meta.tags.is_empty());
+        assert_eq!(c.next_pending().unwrap().name, "two");
+        assert!(!c.waiting());
+        assert_eq!(c.next_pending(), None);
+    }
 }

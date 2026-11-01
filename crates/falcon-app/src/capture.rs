@@ -387,4 +387,72 @@ mod tests {
         assert!(done[0].as_ref().is_ok_and(|s| s.path.is_file()));
         assert!(!c.busy());
     }
+
+    #[test]
+    fn halves_only_without_retina_on_a_retina_screen() {
+        let on = Options { format: Format::Png, quality: 90, retina: true, clipboard: false };
+        let off = Options { retina: false, ..on };
+        assert!(!halves(&on, 2.0));
+        assert!(!halves(&on, 1.0));
+        assert!(halves(&off, 2.0));
+        assert!(!halves(&off, 1.0));
+    }
+
+    #[test]
+    fn free_path_numbers_taken_names() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(free_path(dir.path(), "S", "png"), dir.path().join("S.png"));
+        std::fs::write(dir.path().join("S.png"), b"x").unwrap();
+        assert_eq!(free_path(dir.path(), "S", "png"), dir.path().join("S 2.png"));
+        std::fs::write(dir.path().join("S 2.png"), b"x").unwrap();
+        assert_eq!(free_path(dir.path(), "S", "png"), dir.path().join("S 3.png"));
+        assert_eq!(free_path(dir.path(), "S", "jpg"), dir.path().join("S.jpg"));
+    }
+
+    #[test]
+    fn format_extensions() {
+        assert_eq!(Format::Png.ext(), "png");
+        assert_eq!(Format::Jpg.ext(), "jpg");
+        assert_eq!(Format::Webp.ext(), "webp");
+    }
+
+    #[test]
+    fn webp_conversion_keeps_the_size() {
+        let dir = tempfile::tempdir().unwrap();
+        let raw = dir.path().join("raw.png");
+        png(&raw, 40, 20);
+        let opts = Options { format: Format::Webp, quality: 80, retina: true, clipboard: false };
+        let out = finish_file(&raw, &opts, 2.0, "Shot").unwrap();
+        assert_eq!(out, dir.path().join("Shot.webp"));
+        assert!(!raw.exists());
+        assert_eq!(image::image_dimensions(&out).unwrap(), (40, 20));
+    }
+
+    #[test]
+    fn jpg_keeps_the_size_with_retina_on() {
+        let dir = tempfile::tempdir().unwrap();
+        let raw = dir.path().join("raw.png");
+        png(&raw, 40, 20);
+        let opts = Options { format: Format::Jpg, quality: 90, retina: true, clipboard: false };
+        let out = finish_file(&raw, &opts, 2.0, "Shot").unwrap();
+        assert_eq!(out, dir.path().join("Shot.jpg"));
+        assert_eq!(image::image_dimensions(&out).unwrap(), (40, 20));
+    }
+
+    #[test]
+    fn a_shooter_error_is_an_error_and_leaves_nothing_behind() {
+        let dir = tempfile::tempdir().unwrap();
+        let opts = Options { format: Format::Png, quality: 90, retina: true, clipboard: false };
+        let fails: Shooter = Arc::new(|_: &[OsString]| Err(std::io::Error::other("no screencapture")));
+        let r = take(Mode::Area, &opts, Screen::default(), dir.path(), at(), &fails);
+        assert!(r.is_err_and(|e| e.contains("no screencapture")));
+        let left: Vec<_> = std::fs::read_dir(dir.path()).unwrap().map(|e| e.unwrap().file_name()).collect();
+        assert!(left.is_empty(), "stray files: {left:?}");
+    }
+
+    #[test]
+    fn qualities_are_eagles_three() {
+        assert_eq!(QUALITIES.map(|q| q.0), [90, 80, 70]);
+        assert_eq!(DEFAULT_QUALITY, QUALITIES[0].0);
+    }
 }

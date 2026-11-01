@@ -346,4 +346,41 @@ mod tests {
         let keys = Shortcuts::default();
         assert_ne!(keys.resolve(Key::E, Modifiers { alt: true, ..Modifiers::COMMAND }), Some(Command::Capture(Mode::Area)));
     }
+
+    #[test]
+    fn letters_and_digits_have_distinct_key_codes() {
+        use std::collections::HashSet;
+        let keys = [
+            Key::A, Key::B, Key::C, Key::D, Key::E, Key::F, Key::G, Key::H, Key::I, Key::J, Key::K, Key::L, Key::M,
+            Key::N, Key::O, Key::P, Key::Q, Key::R, Key::S, Key::T, Key::U, Key::V, Key::W, Key::X, Key::Y, Key::Z,
+            Key::Num0, Key::Num1, Key::Num2, Key::Num3, Key::Num4, Key::Num5, Key::Num6, Key::Num7, Key::Num8, Key::Num9,
+        ];
+        let codes: Vec<_> = keys.iter().map(|k| key_code(*k).unwrap_or_else(|| panic!("{k:?} has no code"))).collect();
+        assert_eq!(codes.iter().collect::<HashSet<_>>().len(), keys.len());
+    }
+
+    #[test]
+    fn each_modifier_has_its_carbon_bit() {
+        let none = Modifiers::NONE;
+        assert_eq!(carbon_modifiers(Modifiers { command: true, ..none }), 256);
+        assert_eq!(carbon_modifiers(Modifiers { shift: true, ..none }), 512);
+        assert_eq!(carbon_modifiers(Modifiers { alt: true, ..none }), 2048);
+        assert_eq!(carbon_modifiers(Modifiers { ctrl: true, ..none }), 4096);
+        assert_eq!(carbon_modifiers(Modifiers { mac_cmd: true, ..none }), 256);
+    }
+
+    #[test]
+    fn wanted_drops_keys_without_a_code_and_keeps_table_order() {
+        let odd = Key::F21;
+        assert_eq!(key_code(odd), None);
+        let mut keys = Shortcuts::default();
+        keys.set(Command::ShowSearch, Some(KeyboardShortcut::new(Modifiers::COMMAND, odd))).unwrap();
+        assert!(keys.binding(Command::ShowSearch).is_some(), "the odd key is bound");
+        assert!(wanted(&keys, true).iter().all(|w| w.0 != Command::ShowSearch));
+        // Bound out of table order, they still come back in the table's.
+        keys.set(Command::Capture(Mode::Window), crate::shortcuts::parse("Ctrl + Alt + W")).unwrap();
+        keys.set(Command::ShowFalcon, crate::shortcuts::parse("Ctrl + Alt + Space")).unwrap();
+        let order: Vec<_> = wanted(&keys, true).iter().map(|w| w.0).collect();
+        assert_eq!(order, [Command::ShowFalcon, Command::Capture(Mode::Area), Command::Capture(Mode::Window)]);
+    }
 }
