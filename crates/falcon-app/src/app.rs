@@ -3068,6 +3068,8 @@ impl App {
                 self.expand_menu(ui, &lib.metadata.folders, &f.id);
                 return;
             }
+            // The caret's Expand menu has no search box, as in Eagle.
+            crate::menu_search::show(ui, |ui| {
             if self.ws.folders.sel.is_multi() && self.ws.folders.sel.contains(&f.id) {
                 self.multi_folder_menu(ui, lib, f, pinned);
                 return;
@@ -3111,6 +3113,7 @@ impl App {
             if ui.add_enabled(!shut, egui::Button::new(RichText::new("Delete Folder").color(t::p().icon_red))).clicked() {
                 self.ask_delete_folders(lib, vec![f.id.clone()]);
             }
+            })
         });
         if resp.clicked() {
             let caret = caret_rect(row_rect, depth);
@@ -3714,7 +3717,12 @@ impl App {
     /// The item context menu, for a grid card or the item in the viewer.
     /// `targets` are the items it acts on. Returns true when Open was
     /// chosen (the grid's menu only; the viewer's has no Open).
+    /// The item context menu, with Eagle's search box on top.
     fn item_menu(&mut self, ui: &mut Ui, lib: &Library, item: &Item, targets: &[String]) -> bool {
+        crate::menu_search::show(ui, |ui| self.item_menu_body(ui, lib, item, targets))
+    }
+
+    fn item_menu_body(&mut self, ui: &mut Ui, lib: &Library, item: &Item, targets: &[String]) -> bool {
         let in_viewer = self.ws.viewer.as_deref() == Some(item.id.as_str());
         let mut opened = false;
         ui.set_min_width(200.0);
@@ -4241,10 +4249,10 @@ impl App {
             self.ws.org.tag_sel = vec![tag.to_string()];
             self.ws.org.tag_anchor = Some(tag.to_string());
         }
-        resp.context_menu(|ui| {
+        resp.context_menu(|ui| crate::menu_search::show(ui, |ui| {
             let tags = if self.ws.org.tag_sel.is_empty() { vec![tag.to_string()] } else { self.ws.org.tag_sel.clone() };
             self.tags_menu(ui, lib, &tags);
-        });
+        }));
         resp.on_hover_text("Click to pick, ⌘ or ⇧ to pick more · double-click to show items · right-click for more. Renaming to an existing tag merges them.");
     }
 

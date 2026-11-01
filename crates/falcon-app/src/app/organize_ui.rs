@@ -483,6 +483,8 @@ impl App {
                 self.expand_menu(ui, roots, &sf.id);
                 return;
             }
+            // The caret's Expand menu has no search box, as in Eagle.
+            crate::menu_search::show(ui, |ui| {
             if self.ws.folders.smart.is_multi() && self.ws.folders.smart.contains(&sf.id) {
                 self.multi_smart_menu(ui, lib, pinned);
                 return;
@@ -543,6 +545,7 @@ impl App {
             if ui.button(RichText::new(delete).color(t::p().icon_red)).clicked() {
                 self.ws.actions.push(Action::DeleteSmart(sf.id.clone()));
             }
+            })
         });
         if resp.clicked() {
             let caret = caret_rect(row, depth);

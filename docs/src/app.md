@@ -277,6 +277,12 @@ On macOS falcon has a native menu bar, built with AppKit in `crates/falcon-app/s
 - Keys stay with egui. Every falcon menu has a delegate that tells AppKit it has no key equivalents, so a key press never fires an item: egui gets it as before, text fields keep ⌘C, ⌘V, ⌘A, ⌘Z, ⌘← and the rest, and bare keys such as R or the digits still type. Should AppKit fire an item from a key anyway (the application menu has no such delegate, so ⌘, comes this way), falcon turns it back into the key egui would have had. Clicking an item runs the same `App::run_command` as its key. Undo, Redo, Cut, Copy, Paste and Select All act on a focused text field when there is one.
 - Left out because falcon can't do them yet: File ▸ New… (only its Text File template is in New ▸), the link and site importers and folder exports from the menu, Duplicate, custom thumbnails from the menu, the rest of Edit Folder (passwords), Add to Folders…, Open Link, the caption toggles, Lock and Color Space, and the online Help items.
 
+## Context menu search
+
+As in Eagle (`app.bundle.js`, `showSearch: true`, seen), the item, folder, smart folder and tag context menus open with a search box on top that already has focus, so you can type straight away. Typing replaces the menu with the entries whose label holds every typed word (any case), earliest match first; ↑ and ↓ move the highlight, Enter or a click runs the entry, Esc closes the menu. Disabled entries and submenu buttons are left out, as in Eagle. Clicking into the box doesn't close the menu.
+
+`crates/falcon-app/src/menu_search.rs` wraps a menu's body without changing it: while you type, the body still runs each frame out of sight, the app collects its enabled buttons and their labels, and running an entry hands that button an accessibility click, so the menu code acts exactly as if it had been clicked. Unlike Eagle, entries inside submenus are not searched, because egui only builds a submenu while it is open.
+
 ## Keys
 
 These are the defaults. All but the arrows, Esc, Tab, Z and the viewer's C, ⇧R, ⇧F, 0, 1, +, − and ` can be changed under Preferences → Shortcuts (see Shortcut settings); the video and audio player keys are its Player group. Bare keys (the digits, R, T and /) don't answer their ⌥ chord. Apart from the Player keys, every rebindable command is also in the menu bar (see Menu bar).
