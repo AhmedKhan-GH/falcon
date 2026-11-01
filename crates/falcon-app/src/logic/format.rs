@@ -26,6 +26,20 @@ pub fn format_ms(ms: u64) -> String {
     }
 }
 
+/// A count with thousands separators, as Eagle prints result counts
+/// (`1,234`).
+pub fn group_digits(n: usize) -> String {
+    let digits = n.to_string();
+    let mut out = String::with_capacity(digits.len() + digits.len() / 3);
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out
+}
+
 /// `#RRGGBB`.
 pub fn hex(rgb: [u8; 3]) -> String {
     format!("#{:02X}{:02X}{:02X}", rgb[0], rgb[1], rgb[2])
@@ -35,6 +49,14 @@ pub fn hex(rgb: [u8; 3]) -> String {
 mod tests {
     use super::*;
     use crate::logic::layout::columns;
+
+    #[test]
+    fn counts_get_thousands_separators() {
+        assert_eq!(group_digits(0), "0");
+        assert_eq!(group_digits(999), "999");
+        assert_eq!(group_digits(1234), "1,234");
+        assert_eq!(group_digits(1_234_567), "1,234,567");
+    }
 
     #[test]
     fn formatting() {

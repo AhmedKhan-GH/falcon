@@ -15,6 +15,13 @@ use crate::theme::{self as t, font};
 use crate::ui::widgets::{galley, icon, icon_button, window_drag};
 use crate::ui::grid::GRID_PAD_X;
 use crate::ui::sidebar::smart_name;
+/// Whether the toolbar title adds "Search results (N)": while a search or
+/// a filter narrows the view, except on the All Tags page (whose search
+/// filters tags, not items), as in Eagle.
+fn shows_results(scope: &Scope, query: &str, filtered: bool) -> bool {
+    *scope != Scope::AllTags && (filtered || !query.trim().is_empty())
+}
+
 impl App {
     pub(crate) fn toolbar(&mut self, ui: &mut Ui, lib: &Library) {
         let bar = ui.max_rect();
@@ -33,21 +40,37 @@ impl App {
         if icon_button(ui, Pos2::new(x + 27.0, cy), ic::CARET_RIGHT, 17.0, !self.ws.forward.is_empty(), "").clicked() {
             self.go_forward();
         }
-        let combined = self.combined_title().filter(|_| self.ws.query.trim().is_empty());
-        let title = if let Some(t) = combined {
+        // Eagle's breadcrumb: the page, folder or smart folder (its full path
+        // on hover, its ancestors on right-click), then "Search results (N)"
+        // while a search or a filter narrows it. A click on the first part
+        // clears both.
+        let title = if let Some(t) = self.combined_title() {
             t
         } else if let Scope::Smart(id) = &self.ws.scope {
             smart_name(lib, id)
-        } else if self.ws.query.trim().is_empty() {
-            self.ws.scope.title(&lib.metadata.folders)
         } else {
-            tr("Search results").into()
+            self.ws.scope.title(&lib.metadata.folders)
         };
-        let g = galley(ui, &title, font(15.0), t::p().text, 220.0);
-        let title_end = x + 45.0 + g.size().x;
+        let narrowed = shows_results(&self.ws.scope, &self.ws.query, self.ws.filter.is_active());
+        let g = galley(ui, &title, font(15.0), t::p().text, if narrowed { 160.0 } else { 220.0 });
         let title_rect = Rect::from_min_size(Pos2::new(x + 45.0, cy - g.size().y / 2.0), g.size());
         ui.painter().galley(title_rect.min, g, t::p().text);
-        self.title_menu(ui, lib, title_rect);
+        let mut title_end = title_rect.right();
+        let title_resp = ui.interact(title_rect, ui.scope_id().with("title"), Sense::click());
+        if narrowed {
+            let sep = Pos2::new(title_end + 12.0, cy);
+            icon(ui, sep, ic::CARET_RIGHT, 12.0, t::p().text_muted);
+            let text = format!("{} ({})", tr("Search results"), logic::group_digits(self.ws.order.len()));
+            let g = galley(ui, &text, font(15.0), t::p().text, 200.0);
+            let at = Pos2::new(sep.x + 12.0, cy - g.size().y / 2.0);
+            title_end = at.x + g.size().x;
+            ui.painter().galley(at, g, t::p().text);
+            if title_resp.clone().on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
+                self.ws.query.clear();
+                self.reset_filter();
+            }
+        }
+        self.title_menu(lib, title_resp);
 
         // Right side: search field, then the icon row.
         let search = Rect::from_min_size(Pos2::new(bar.right() - 18.0 - 178.0, cy - 15.0), vec2(178.0, 30.0));
@@ -92,16 +115,15 @@ impl App {
 
     /// Right-clicking the title of an open subfolder lists it and its
     /// ancestors; a pick opens that folder. Hovering shows the full path.
-    fn title_menu(&mut self, ui: &mut Ui, lib: &Library, rect: Rect) {
+    fn title_menu(&mut self, lib: &Library, resp: egui::Response) {
         let Scope::Folder(id) = &self.ws.scope else { return };
-        if self.ws.folders.combined() || !self.ws.query.trim().is_empty() {
+        if self.ws.folders.combined() {
             return;
         }
         let chain = logic::ancestor_chain(&lib.metadata.folders, id);
         if chain.len() < 2 {
             return;
         }
-        let resp = ui.interact(rect, ui.scope_id().with("title"), Sense::click());
         let path = chain.iter().rev().map(|(_, n)| n.as_str()).collect::<Vec<_>>().join(" / ");
         resp.clone().on_hover_text(path);
         let mut open = None;
@@ -246,5 +268,19 @@ impl App {
         let g = galley(ui, &text, font(12.0), t::p().text_muted, rect.width() - 40.0);
         p.galley(Pos2::new(rect.left() + GRID_PAD_X, rect.top() + 3.0), g, t::p().text_muted);
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn results_show_while_a_search_or_filter_narrows_the_view() {
+        assert!(!shows_results(&Scope::All, "", false));
+        assert!(!shows_results(&Scope::All, "   ", false), "blank text is no search");
+        assert!(shows_results(&Scope::All, "cat", false));
+        assert!(shows_results(&Scope::Folder("F".into()), "", true), "a filter alone counts");
+        assert!(!shows_results(&Scope::AllTags, "cat", true), "the tag page filters tags");
     }
 }
