@@ -10,6 +10,7 @@ use falcon_library::Library;
 
 use super::navigation::fastrand_seed;
 use super::{App, Shared, Workspace, lock};
+use crate::locale::{tr, tr_n, trf};
 use crate::logic::{self, Scope};
 use crate::ui::sidebar::smart_has;
 
@@ -27,7 +28,7 @@ pub(crate) fn same_path(a: &std::path::Path, b: &std::path::Path) -> bool {
 pub(crate) fn restored_note(backup: &std::path::Path) -> String {
     let lib = backup.parent().and_then(std::path::Path::parent).and_then(|p| p.file_stem()).map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
     let name = backup.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-    format!("{lib}'s metadata.json was damaged and was restored from backup/{name}; the damaged file was kept in backup/")
+    trf("{lib}'s metadata.json was damaged and was restored from backup/{name}; the damaged file was kept in backup/", &[("lib", &lib), ("name", &name)])
 }
 
 impl App {
@@ -87,8 +88,7 @@ impl App {
                     notes.push(restored_note(&backup));
                 }
                 if skipped > 0 {
-                    let s = if skipped == 1 { "" } else { "s" };
-                    notes.push(format!("{skipped} item{s} couldn't be read and are hidden; their files are untouched"));
+                    notes.push(tr_n(skipped, "{n} item couldn't be read and is hidden; its file is untouched", "{n} items couldn't be read and are hidden; their files are untouched"));
                 }
                 if !notes.is_empty() {
                     self.flash(notes.join(". "));
@@ -100,7 +100,7 @@ impl App {
                     crate::errlog::error(&format!("Could not open the library: {e}"));
                     self.show_alert(alert);
                 } else if self.ws.lib.is_some() {
-                    self.flash_error(format!("Could not open the library: {e}"));
+                    self.flash_error(trf("Could not open the library: {e}", &[("e", &e)]));
                 } else {
                     crate::errlog::error(&format!("Could not open the library: {e}"));
                 }
@@ -155,7 +155,7 @@ impl App {
             None => return,
         };
         if let Err(e) = closed.flush_and_backup() {
-            self.flash_error(format!("Could not save: {e}"));
+            self.flash_error(trf("Could not save: {e}", &[("e", &e)]));
         }
         drop(closed);
         self.serve_active();
@@ -213,8 +213,8 @@ impl App {
         crate::workspaces::remember(&mut self.recent, &now, RECENT_LIMIT);
         let name = now.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
         match note {
-            Some(note) => self.flash(format!("Switched to {name} over the API. {note}")),
-            None => self.flash(format!("Switched to {name} over the API")),
+            Some(note) => self.flash(trf("Switched to {name} over the API. {note}", &[("name", &name), ("note", &note)])),
+            None => self.flash(trf("Switched to {name} over the API", &[("name", &name)])),
         }
         self.serve_active();
     }
@@ -228,11 +228,11 @@ impl App {
         let ctx = self.ctx.clone();
         match falcon_server::start(shared, ports, move || ctx.request_repaint()) {
             Ok(h) => {
-                self.flash(format!("API on http://localhost:{}", h.port));
+                self.flash(trf("API on http://localhost:{port}", &[("port", &h.port)]));
                 self.server = Some(h);
                 self.share_with_server();
             }
-            Err(e) => self.flash_error(format!("API not started: {e}")),
+            Err(e) => self.flash_error(trf("API not started: {e}", &[("e", &e)])),
         }
     }
 
@@ -298,7 +298,7 @@ impl App {
         if restart {
             self.start_server();
             if self.ws.lib.is_some() && !self.prefs.api_enabled {
-                self.flash("API stopped");
+                self.flash(tr("API stopped"));
             }
         }
     }
@@ -311,7 +311,7 @@ impl App {
     /// Asks for a library and opens it in the background, with a loading
     /// screen.
     pub(crate) fn pick_library(&mut self) {
-        if let Some(p) = rfd::FileDialog::new().set_title("Open Eagle Library").set_directory(falcon_library::sandbox::default_root()).pick_folder() {
+        if let Some(p) = rfd::FileDialog::new().set_title(tr("Open Eagle Library")).set_directory(falcon_library::sandbox::default_root()).pick_folder() {
             self.open_in_background(p);
         }
     }
@@ -322,7 +322,7 @@ impl App {
     pub(crate) fn refresh_library(&mut self) {
         let (Some(shared), Some(root)) = (self.ws.lib.clone(), self.ws.root.clone()) else { return };
         if let Err(e) = self.ws.flush_and_backup() {
-            self.flash_error(format!("Could not save: {e}"));
+            self.flash_error(trf("Could not save: {e}", &[("e", &e)]));
             return;
         }
         match falcon_library::sandbox::guard(&root).and_then(|()| Library::open_or_restore(&root)) {
@@ -340,9 +340,9 @@ impl App {
                 if let Scope::Random(_) = self.ws.scope {
                     self.ws.scope = Scope::Random(fastrand_seed());
                 }
-                self.flash_brief("Refreshed");
+                self.flash_brief(tr("Refreshed"));
             }
-            Err(e) => self.flash_error(format!("Could not refresh: {e}")),
+            Err(e) => self.flash_error(trf("Could not refresh: {e}", &[("e", &e)])),
         }
     }
 }

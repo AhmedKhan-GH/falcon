@@ -22,6 +22,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use crate::locale::{tr, tr_n, trf};
+
 use eframe::egui;
 
 /// `SF_DATALESS` from `<sys/stat.h>`: the file's contents live in the cloud.
@@ -84,9 +86,9 @@ impl FetchState {
     pub fn message(&self) -> String {
         match self {
             FetchState::Local => String::new(),
-            FetchState::Downloading { progress: Some(p) } => format!("Downloading from iCloud… {:.0}%", p.clamp(0.0, 1.0) * 100.0),
-            FetchState::Downloading { progress: None } => "Downloading from iCloud…".into(),
-            FetchState::Failed(e) => format!("Couldn't download from iCloud: {e}"),
+            FetchState::Downloading { progress: Some(p) } => trf("Downloading from iCloud… {percent}%", &[("percent", &format!("{:.0}", p.clamp(0.0, 1.0) * 100.0))]),
+            FetchState::Downloading { progress: None } => tr("Downloading from iCloud…").into(),
+            FetchState::Failed(e) => trf("Couldn't download from iCloud: {e}", &[("e", e)]),
         }
     }
 }
@@ -129,8 +131,8 @@ impl Tracker {
         self.state = match seen {
             Seen::Local => FetchState::Local,
             Seen::Error(e) => FetchState::Failed(e),
-            _ if cancelled => FetchState::Failed("cancelled".into()),
-            _ if elapsed >= self.timeout => FetchState::Failed(format!("no answer after {} minutes", self.timeout.as_secs() / 60)),
+            _ if cancelled => FetchState::Failed(tr("cancelled").into()),
+            _ if elapsed >= self.timeout => FetchState::Failed(tr_n((self.timeout.as_secs() / 60) as usize, "no answer after {n} minute", "no answer after {n} minutes")),
             Seen::Remote { progress } => FetchState::Downloading { progress },
         };
         &self.state
@@ -167,7 +169,7 @@ pub fn ensure_local(path: &Path, timeout: Duration, cancel: &AtomicBool, mut rep
                 Ok(Ok(())) => Seen::Local,
                 Ok(Err(e)) => Seen::Error(e),
                 Err(std::sync::mpsc::TryRecvError::Empty) => Seen::Remote { progress: None },
-                Err(std::sync::mpsc::TryRecvError::Disconnected) => Seen::Error("the read stopped".into()),
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => Seen::Error(tr("the read stopped").into()),
             },
         };
         let before = tracker.state().clone();
@@ -234,7 +236,7 @@ mod platform {
     use super::{Seen, is_dataless};
 
     pub fn start_download(_: &Path) -> Result<(), String> {
-        Err("no iCloud here".into())
+        Err(tr("no iCloud here").into())
     }
 
     pub fn look(path: &Path) -> Seen {
@@ -354,7 +356,7 @@ mod tests {
         assert_eq!(t.observe(Seen::Local, S, false), &FetchState::Failed("offline".into()));
 
         let mut t = Tracker::new(10 * S);
-        assert_eq!(t.observe(Seen::Remote { progress: None }, S, true), &FetchState::Failed("cancelled".into()));
+        assert_eq!(t.observe(Seen::Remote { progress: None }, S, true), &FetchState::Failed(tr("cancelled").into()));
 
         let mut t = Tracker::new(10 * S);
         t.observe(Seen::Remote { progress: None }, 9 * S, false);

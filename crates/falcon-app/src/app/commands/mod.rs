@@ -16,6 +16,7 @@ use super::{
     Action, App, BULK_CONFIRM, Confirm, SmartDraft, Switch, TILE_MAX, TILE_MIN, image_edit, lock,
 };
 use super::navigation::fastrand_seed;
+use crate::locale::{tr, tr_n};
 use crate::logic::{self, Layout, Scope};
 
 /// The input events a key press of `chord` makes, as egui-winit sends
@@ -69,9 +70,8 @@ pub(crate) fn docs_path() -> Option<&'static std::path::Path> {
 /// The toast after a rating key or menu item.
 pub(crate) fn rated_note(stars: u8) -> String {
     match stars {
-        0 => "Removed the rating".into(),
-        1 => "Rated 1 star".into(),
-        n => format!("Rated {n} stars"),
+        0 => tr("Removed the rating").into(),
+        n => tr_n(n as usize, "Rated {n} star", "Rated {n} stars"),
     }
 }
 
@@ -395,7 +395,7 @@ impl App {
                 .collect()
         };
         if targets.is_empty() {
-            self.flash("No link to open");
+            self.flash(tr("No link to open"));
         }
         for t in &targets {
             crate::urls::open_link(t);
@@ -593,7 +593,7 @@ impl App {
                 let Some(id) = self.acted_on().into_iter().next() else { return };
                 let allowed = self.ws.lib.clone().is_some_and(|s| lock(&s).item(&id).is_some_and(|i| thumbnail::custom_thumbnail_allowed(&i.ext)));
                 if !allowed {
-                    self.flash("This file is its own thumbnail");
+                    self.flash(tr("This file is its own thumbnail"));
                 } else if cmd == C::CustomThumbnail {
                     self.ws.actions.push(Action::Edit(image_edit::Op::PickCustomThumbnail(id)));
                 } else {

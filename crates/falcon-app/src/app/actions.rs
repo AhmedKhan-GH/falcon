@@ -10,6 +10,7 @@ use falcon_library::model::Item;
 use falcon_library::undo::{Transaction, WriteMode};
 
 use super::{App, Confirm, image_edit};
+use crate::locale::{tr, tr_n, tr_nf, trf};
 use crate::logic::{self, Scope};
 
 /// An action on this many items or more asks first (Eagle's bulk confirm).
@@ -111,52 +112,52 @@ pub(crate) fn push_capped(stack: &mut Vec<Transaction>, tx: Transaction) {
 /// The undo name of an action, as "Undid: …" shows it.
 pub(crate) fn action_label(action: &Action) -> String {
     match action {
-        Action::CreateFolder { .. } | Action::CreateSibling(_) => "New folder".into(),
-        Action::RemoveFromFolder(ids, _) => format!("Remove {} from folder", ids.len()),
-        Action::RenameFolder(..) => "Rename folder".into(),
-        Action::SetExtension(..) => "Change extension".into(),
-        Action::SetFolderDescription(..) => "Edit folder description".into(),
-        Action::SetSmartDescription(..) => "Edit smart folder description".into(),
-        Action::AddToFolder(ids, _) => format!("Add {} to folder", ids.len()),
-        Action::OpenFiles(files, _) => format!("Open {} files", files.len()),
-        Action::DropOnFolder(ids, _, logic::FolderDrop::Move(_)) => format!("Move {} to folder", ids.len()),
-        Action::DropOnFolder(ids, _, logic::FolderDrop::Add) => format!("Add {} to folder", ids.len()),
-        Action::Trash(ids, true) => format!("Move {} to Trash", ids.len()),
-        Action::Background(ids, _) => format!("Set the thumbnail background of {}", ids.len()),
-        Action::Trash(ids, false) => format!("Restore {}", ids.len()),
-        Action::TrashAsk(ids) | Action::TrashInFolder(ids, _, false) => format!("Move {} to Trash", ids.len()),
-        Action::TrashInFolder(ids, _, true) => format!("Remove {} from folder", ids.len()),
-        Action::DeletePermanently(ids) => format!("Delete {}", ids.len()),
-        Action::EmptyTrash => "Empty Trash".into(),
-        Action::CreateSmart(..) => "New smart folder".into(),
-        Action::UpdateSmart(..) => "Edit smart folder".into(),
-        Action::DeleteSmart(_) => "Delete smart folder".into(),
-        Action::Arrange(_) => "Move folder".into(),
-        Action::RenameTag(..) => "Rename tag".into(),
-        Action::DeleteTags(t) => if t.len() == 1 { "Delete tag".into() } else { format!("Delete {} tags", t.len()) },
-        Action::StarTags(_, true) => "Star tags".into(),
-        Action::StarTags(_, false) => "Unstar tags".into(),
-        Action::MergeTags(t, _) => format!("Merge {} tags", t.len()),
-        Action::ClearTagHistory => "Clear tag history".into(),
-        Action::MoveFolder(..) => "Move folder".into(),
-        Action::AddTags(ids, ..) => format!("Tag {}", ids.len()),
-        Action::RemoveTags(ids, _) => format!("Untag {}", ids.len()),
-        Action::PasteTags(ids, _) => format!("Paste tags to {}", ids.len()),
-        Action::ClearTags(ids) => format!("Clear tags of {}", ids.len()),
-        Action::SetNotes(ids, _) => format!("Edit the notes of {}", ids.len()),
-        Action::SetUrls(ids, _) => format!("Edit the URLs of {}", ids.len()),
-        Action::BatchRating(ids, _) => format!("Rate {}", ids.len()),
-        Action::QuickAdd(..) => "Add to Quick Access".into(),
-        Action::QuickRemove(_) => "Remove from Quick Access".into(),
-        Action::PlaceQuick(..) => "Move in Quick Access".into(),
+        Action::CreateFolder { .. } | Action::CreateSibling(_) => tr("New folder").into(),
+        Action::RemoveFromFolder(ids, _) => trf("Remove {n} from folder", &[("n", &ids.len())]),
+        Action::RenameFolder(..) => tr("Rename folder").into(),
+        Action::SetExtension(..) => tr("Change extension").into(),
+        Action::SetFolderDescription(..) => tr("Edit folder description").into(),
+        Action::SetSmartDescription(..) => tr("Edit smart folder description").into(),
+        Action::AddToFolder(ids, _) => trf("Add {n} to folder", &[("n", &ids.len())]),
+        Action::OpenFiles(files, _) => tr_n(files.len(), "Open {n} file", "Open {n} files"),
+        Action::DropOnFolder(ids, _, logic::FolderDrop::Move(_)) => trf("Move {n} to folder", &[("n", &ids.len())]),
+        Action::DropOnFolder(ids, _, logic::FolderDrop::Add) => trf("Add {n} to folder", &[("n", &ids.len())]),
+        Action::Trash(ids, true) => trf("Move {n} to Trash", &[("n", &ids.len())]),
+        Action::Background(ids, _) => trf("Set the thumbnail background of {n}", &[("n", &ids.len())]),
+        Action::Trash(ids, false) => trf("Restore {n}", &[("n", &ids.len())]),
+        Action::TrashAsk(ids) | Action::TrashInFolder(ids, _, false) => trf("Move {n} to Trash", &[("n", &ids.len())]),
+        Action::TrashInFolder(ids, _, true) => trf("Remove {n} from folder", &[("n", &ids.len())]),
+        Action::DeletePermanently(ids) => trf("Delete {n}", &[("n", &ids.len())]),
+        Action::EmptyTrash => tr("Empty Trash").into(),
+        Action::CreateSmart(..) => tr("New smart folder").into(),
+        Action::UpdateSmart(..) => tr("Edit smart folder").into(),
+        Action::DeleteSmart(_) => tr("Delete smart folder").into(),
+        Action::Arrange(_) => tr("Move folder").into(),
+        Action::RenameTag(..) => tr("Rename tag").into(),
+        Action::DeleteTags(t) => tr_n(t.len(), "Delete {n} tag", "Delete {n} tags"),
+        Action::StarTags(_, true) => tr("Star tags").into(),
+        Action::StarTags(_, false) => tr("Unstar tags").into(),
+        Action::MergeTags(t, _) => tr_n(t.len(), "Merge {n} tag", "Merge {n} tags"),
+        Action::ClearTagHistory => tr("Clear tag history").into(),
+        Action::MoveFolder(..) => tr("Move folder").into(),
+        Action::AddTags(ids, ..) => trf("Tag {n}", &[("n", &ids.len())]),
+        Action::RemoveTags(ids, _) => trf("Untag {n}", &[("n", &ids.len())]),
+        Action::PasteTags(ids, _) => trf("Paste tags to {n}", &[("n", &ids.len())]),
+        Action::ClearTags(ids) => trf("Clear tags of {n}", &[("n", &ids.len())]),
+        Action::SetNotes(ids, _) => trf("Edit the notes of {n}", &[("n", &ids.len())]),
+        Action::SetUrls(ids, _) => trf("Edit the URLs of {n}", &[("n", &ids.len())]),
+        Action::BatchRating(ids, _) => trf("Rate {n}", &[("n", &ids.len())]),
+        Action::QuickAdd(..) => tr("Add to Quick Access").into(),
+        Action::QuickRemove(_) => tr("Remove from Quick Access").into(),
+        Action::PlaceQuick(..) => tr("Move in Quick Access").into(),
         Action::Organize(a) => organize_label(a),
-        Action::MergeDuplicates(m) => format!("Merge {} duplicates", m.len()),
-        Action::ResolveDuplicates(files, crate::import_dupes::Choice::UseExisting) => format!("Use existing for {}", files.len()),
-        Action::ResolveDuplicates(files, _) => format!("Import {}", files.len()),
+        Action::MergeDuplicates(m) => tr_n(m.len(), "Merge {n} duplicate", "Merge {n} duplicates"),
+        Action::ResolveDuplicates(files, crate::import_dupes::Choice::UseExisting) => trf("Use existing for {n}", &[("n", &files.len())]),
+        Action::ResolveDuplicates(files, _) => trf("Import {n}", &[("n", &files.len())]),
         Action::Edit(op) => op.label(),
         Action::Folders(a) => a.label(),
-        Action::RenameItem(..) => "Rename".into(),
-        Action::NewTextFile(_) => "New text file".into(),
+        Action::RenameItem(..) => tr("Rename").into(),
+        Action::NewTextFile(_) => tr("New text file").into(),
     }
 }
 
@@ -164,31 +165,31 @@ pub(crate) fn action_label(action: &Action) -> String {
 pub(crate) fn organize_label(a: &crate::ui::organize::OrgAction) -> String {
     use crate::ui::organize::OrgAction as O;
     match a {
-        O::FolderOrder(..) | O::SmartOrder(..) => "Change sort".into(),
-        O::FolderIcon(..) | O::SmartIcon(..) => "Change icon".into(),
-        O::ReorderFolder(..) => "Move folder".into(),
-        O::MoveSmart(..) => "Move smart folder".into(),
-        O::FolderPassword(_, Some(_)) => "Set password".into(),
-        O::FolderPassword(_, None) => "Remove password".into(),
-        O::CreateSmart { .. } => "New smart folder".into(),
-        O::CreateGroup(_) => "New tag group".into(),
-        O::RenameGroup(..) => "Rename tag group".into(),
-        O::GroupColor(..) => "Recolour tag group".into(),
-        O::DeleteGroup(_) => "Delete tag group".into(),
-        O::AddToGroup(_, tags) => format!("Group {} tags", tags.len()),
-        O::AddToGroupToo(_, tags) => format!("Group {} tags", tags.len()),
-        O::RemoveFromGroup(_, tags) => format!("Ungroup {} tags", tags.len()),
-        O::SaveFilter(..) => "Save filter".into(),
-        O::RenameFilter(..) => "Rename saved filter".into(),
-        O::DeleteFilter(_) => "Remove saved filter".into(),
-        O::MoveFilter(..) => "Move saved filter".into(),
-        O::MoveManual(_, ids, _) => format!("Reorder {}", ids.len()),
-        O::CreateSmartGroup(_) => "New smart folder group".into(),
-        O::RenameSmart(..) => "Rename smart folder".into(),
-        O::SortFolders(..) => "Sort folders by title".into(),
-        O::MoveGroup(..) => "Move tag group".into(),
-        O::GroupDescription(..) => "Describe tag group".into(),
-        O::FolderSettings(..) => "Change folder settings".into(),
+        O::FolderOrder(..) | O::SmartOrder(..) => tr("Change sort").into(),
+        O::FolderIcon(..) | O::SmartIcon(..) => tr("Change icon").into(),
+        O::ReorderFolder(..) => tr("Move folder").into(),
+        O::MoveSmart(..) => tr("Move smart folder").into(),
+        O::FolderPassword(_, Some(_)) => tr("Set password").into(),
+        O::FolderPassword(_, None) => tr("Remove password").into(),
+        O::CreateSmart { .. } => tr("New smart folder").into(),
+        O::CreateGroup(_) => tr("New tag group").into(),
+        O::RenameGroup(..) => tr("Rename tag group").into(),
+        O::GroupColor(..) => tr("Recolour tag group").into(),
+        O::DeleteGroup(_) => tr("Delete tag group").into(),
+        O::AddToGroup(_, tags) => tr_n(tags.len(), "Group {n} tag", "Group {n} tags"),
+        O::AddToGroupToo(_, tags) => tr_n(tags.len(), "Group {n} tag", "Group {n} tags"),
+        O::RemoveFromGroup(_, tags) => tr_n(tags.len(), "Ungroup {n} tag", "Ungroup {n} tags"),
+        O::SaveFilter(..) => tr("Save filter").into(),
+        O::RenameFilter(..) => tr("Rename saved filter").into(),
+        O::DeleteFilter(_) => tr("Remove saved filter").into(),
+        O::MoveFilter(..) => tr("Move saved filter").into(),
+        O::MoveManual(_, ids, _) => trf("Reorder {n}", &[("n", &ids.len())]),
+        O::CreateSmartGroup(_) => tr("New smart folder group").into(),
+        O::RenameSmart(..) => tr("Rename smart folder").into(),
+        O::SortFolders(..) => tr("Sort folders by title").into(),
+        O::MoveGroup(..) => tr("Move tag group").into(),
+        O::GroupDescription(..) => tr("Describe tag group").into(),
+        O::FolderSettings(..) => tr("Change folder settings").into(),
     }
 }
 
@@ -196,9 +197,9 @@ pub(crate) fn organize_label(a: &crate::ui::organize::OrgAction) -> String {
 /// only had inspector edits.
 pub(crate) fn undo_label(labels: &[String]) -> String {
     match labels {
-        [] => "Edit item".into(),
+        [] => tr("Edit item").into(),
         [one] => one.clone(),
-        [first, rest @ ..] => format!("{first} and {} more", rest.len()),
+        [first, rest @ ..] => trf("{first} and {n} more", &[("first", first), ("n", &rest.len())]),
     }
 }
 
@@ -262,7 +263,7 @@ impl App {
                         }
                     }
                     let name = logic::find_folder(&lib.metadata.folders, &fid).map_or_else(String::new, |f| f.name.clone());
-                    self.flash_undo(format!("Removed {n} from {name}"));
+                    self.flash_undo(trf("Removed {n} from {name}", &[("n", &n), ("name", &name)]));
                     r
                 }
                 Action::RenameFolder(id, name) => lib.rename_folder(&id, &name),
@@ -270,7 +271,7 @@ impl App {
                     let r = lib.set_extension(&id, &ext);
                     if r.is_ok() {
                         self.ws.loader.forget(&id);
-                        self.flash(format!("Extension changed to .{ext}"));
+                        self.flash(trf("Extension changed to .{ext}", &[("ext", &ext)]));
                     }
                     r
                 }
@@ -288,7 +289,7 @@ impl App {
                         }
                     }
                     let name = logic::find_folder(&lib.metadata.folders, &fid).map_or_else(String::new, |f| f.name.clone());
-                    self.flash_folder(format!("Added {n} to"), &name, &fid, true);
+                    self.flash_folder(trf("Added {n} to", &[("n", &n)]), &name, &fid, true);
                     r
                 }
                 Action::DropOnFolder(ids, fid, op) => {
@@ -349,10 +350,10 @@ impl App {
                     _ => Ok(()),
                 }),
                 Action::RemoveTags(ids, tags) => lib.remove_tags_from_items(&ids, &tags).map(|_| ()),
-                Action::PasteTags(ids, tags) => lib.paste_tags(&ids, &tags).map(|n| self.flash_undo(format!("Pasted {} to {}", crate::ui::dialogs::export::plural(tags.len(), "tag"), crate::ui::dialogs::export::plural(n, "item")))),
+                Action::PasteTags(ids, tags) => lib.paste_tags(&ids, &tags).map(|n| self.flash_undo(tr_nf(n, "Pasted {tags} to {n} item", "Pasted {tags} to {n} items", &[("tags", &tr_n(tags.len(), "{n} tag", "{n} tags"))]))),
                 Action::SetNotes(ids, note) => lib.set_notes(&ids, &note).map(|_| ()),
                 Action::SetUrls(ids, url) => lib.set_urls(&ids, &url).map(|_| ()),
-                Action::ClearTags(ids) => lib.clear_tags(&ids).map(|n| self.flash_undo(format!("Cleared the tags of {}", crate::ui::dialogs::export::plural(n, "item")))),
+                Action::ClearTags(ids) => lib.clear_tags(&ids).map(|n| self.flash_undo(tr_n(n, "Cleared the tags of {n} item", "Cleared the tags of {n} items"))),
                 Action::BatchRating(ids, star) => {
                     let mut r = Ok(());
                     for id in &ids {
@@ -373,12 +374,12 @@ impl App {
                     if self.ws.scope == Scope::Tag(from.clone()) {
                         self.ws.scope = Scope::Tag(to.clone());
                     }
-                    self.flash_undo(format!("Renamed “{from}” to “{to}” on {n} items"));
+                    self.flash_undo(tr_nf(n, "Renamed “{from}” to “{to}” on {n} item", "Renamed “{from}” to “{to}” on {n} items", &[("from", &from), ("to", &to)]));
                 }),
                 Action::DeleteTags(tags) => lib.delete_tags(&tags).map(|n| {
                     self.ws.org.tag_sel.retain(|t| !tags.contains(t));
-                    let what = if let [one] = tags.as_slice() { format!("“{one}”") } else { crate::ui::dialogs::export::plural(tags.len(), "tag") };
-                    self.flash_undo(format!("Removed {what} from {}", crate::ui::dialogs::export::plural(n, "item")));
+                    let what = if let [one] = tags.as_slice() { format!("“{one}”") } else { tr_n(tags.len(), "{n} tag", "{n} tags") };
+                    self.flash_undo(tr_nf(n, "Removed {what} from {n} item", "Removed {what} from {n} items", &[("what", &what)]));
                 }),
                 Action::StarTags(tags, on) => lib.star_tags(&tags, on),
                 Action::MergeTags(tags, into) => lib.merge_tags(&tags, &into).map(|n| {
@@ -389,7 +390,7 @@ impl App {
                         self.ws.scope = Scope::Tag(into.clone());
                     }
                     self.ws.org.tag_sel = vec![into.clone()];
-                    self.flash_undo(format!("Merged {} into “{into}” on {}", crate::ui::dialogs::export::plural(tags.len(), "tag"), crate::ui::dialogs::export::plural(n, "item")));
+                    self.flash_undo(tr_nf(n, "Merged {tags} into “{into}” on {n} item", "Merged {tags} into “{into}” on {n} items", &[("tags", &tr_n(tags.len(), "{n} tag", "{n} tags")), ("into", &into)]));
                 }),
                 Action::OpenFiles(files, default) => {
                     if default {
@@ -400,11 +401,11 @@ impl App {
                     }
                     Ok(())
                 }
-                Action::ClearTagHistory => lib.clear_tag_history().map(|_| self.flash("Cleared the tag history")),
+                Action::ClearTagHistory => lib.clear_tag_history().map(|_| self.flash(tr("Cleared the tag history"))),
                 Action::DeletePermanently(ids) => {
                     self.select_after_removal(&ids);
                     let r = lib.delete_permanently(&ids);
-                    self.flash(format!("Deleted {}", ids.len()));
+                    self.flash(trf("Deleted {n}", &[("n", &ids.len())]));
                     r
                 }
                 // Runs behind the progress modal; permanent, so the undo
@@ -422,9 +423,9 @@ impl App {
                     }
                     let r = lib.set_trashed(&ids, trash);
                     if trash {
-                        self.flash_undo(format!("Moved {} to Trash", ids.len()));
+                        self.flash_undo(trf("Moved {n} to Trash", &[("n", &ids.len())]));
                     } else {
-                        self.flash(format!("Restored {}", ids.len()));
+                        self.flash(trf("Restored {n}", &[("n", &ids.len())]));
                     }
                     r
                 }
@@ -438,7 +439,7 @@ impl App {
                         None => {
                             self.select_after_removal(&ids);
                             let r = lib.set_trashed(&ids, true);
-                            self.flash(format!("Moved {} to Trash", ids.len()));
+                            self.flash(trf("Moved {n} to Trash", &[("n", &ids.len())]));
                             r
                         }
                     }
@@ -457,15 +458,15 @@ impl App {
                     let removed = ids.len() - trash.len();
                     r = r.and(lib.set_trashed(&trash, true));
                     self.flash(match (removed, trash.len()) {
-                        (0, t) => format!("Moved {t} to Trash"),
-                        (n, 0) => format!("Removed {n} from the folder"),
-                        (n, t) => format!("Removed {n} from the folder and moved {t} to Trash"),
+                        (0, t) => trf("Moved {t} to Trash", &[("t", &t)]),
+                        (n, 0) => trf("Removed {n} from the folder", &[("n", &n)]),
+                        (n, t) => trf("Removed {n} from the folder and moved {t} to Trash", &[("n", &n), ("t", &t)]),
                     });
                     r
                 }
                 Action::MergeDuplicates(merges) => lib.merge_duplicates(&merges).map(|report| {
                     self.ws.selected.retain(|id| lib.item(id).is_some_and(|i| !i.is_deleted));
-                    self.flash(format!("Merged {} and moved {} to the Trash", crate::ui::dialogs::export::plural(report.kept, "group"), report.trashed));
+                    self.flash(tr_nf(report.kept, "Merged {n} group and moved {trashed} to the Trash", "Merged {n} groups and moved {trashed} to the Trash", &[("trashed", &report.trashed)]));
                     self.ws.duplicates.merged(report);
                 }),
                 Action::Organize(a) => self.apply_organize(lib, a),
@@ -502,7 +503,7 @@ impl App {
                 },
             };
             if let Err(e) = result {
-                self.flash_error(format!("Could not save: {e}"));
+                self.flash_error(trf("Could not save: {e}", &[("e", &e)]));
             }
         }
     }
@@ -519,12 +520,12 @@ impl App {
         if lib.write_mode() != WriteMode::Batched
             && let Err(e) = lib.set_write_mode(WriteMode::Batched)
         {
-            self.flash_error(format!("Could not save: {e}"));
+            self.flash_error(trf("Could not save: {e}", &[("e", &e)]));
         }
         if let Some(undo) = self.ws.undo_request.take() {
             let (from, to) = if undo { (&mut self.ws.undo, &mut self.ws.redo) } else { (&mut self.ws.redo, &mut self.ws.undo) };
             match from.pop() {
-                None => self.flash(if undo { "Nothing to undo" } else { "Nothing to redo" }),
+                None => self.flash(if undo { tr("Nothing to undo") } else { tr("Nothing to redo") }),
                 Some(tx) => {
                     let label = tx.label.clone();
                     match lib.revert(tx) {
@@ -534,9 +535,9 @@ impl App {
                             self.ws.edit = None;
                             self.ws.multi_edit = None;
                             self.ws.folder_edit = None;
-                            self.flash(format!("{}: {label}", if undo { "Undid" } else { "Redid" }));
+                            self.flash(if undo { trf("Undid: {label}", &[("label", &label)]) } else { trf("Redid: {label}", &[("label", &label)]) });
                         }
-                        Err(e) => self.flash_error(format!("Could not save: {e}")),
+                        Err(e) => self.flash_error(trf("Could not save: {e}", &[("e", &e)])),
                     }
                 }
             }
@@ -565,7 +566,7 @@ impl App {
                     self.ctx.request_repaint_after(crate::backups::DEBOUNCE);
                 }
                 Ok(_) => {}
-                Err(e) => self.flash_error(format!("Could not save: {e}")),
+                Err(e) => self.flash_error(trf("Could not save: {e}", &[("e", &e)])),
             }
         }
     }

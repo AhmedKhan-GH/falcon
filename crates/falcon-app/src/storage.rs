@@ -12,6 +12,8 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, channel};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use crate::locale::{tr, trf};
+
 /// A round trip slower than this counts as a slow disk.
 pub const SLOW: Duration = Duration::from_millis(1500);
 
@@ -30,10 +32,10 @@ pub enum Warning {
 impl Warning {
     pub fn message(&self) -> String {
         match self {
-            Warning::ReadOnly => "Its metadata.json is read-only, so changes can't be saved. Check the file's permissions, or move the library somewhere you can write.".into(),
-            Warning::NoPermission(why) => format!("Falcon can't create files in the library folder ({why}), so changes may not be saved. Check the folder's permissions."),
-            Warning::SlowDisk(d) => format!("The disk it is on is slow to respond ({:.1} s for a simple write), so thumbnails and saving may lag. Check the drive or its connection.", d.as_secs_f32()),
-            Warning::Ntfs => "It is on an NTFS drive. NTFS drivers on macOS are slow and less reliable; a drive formatted as APFS or exFAT works better.".into(),
+            Warning::ReadOnly => tr("Its metadata.json is read-only, so changes can't be saved. Check the file's permissions, or move the library somewhere you can write.").into(),
+            Warning::NoPermission(why) => trf("Falcon can't create files in the library folder ({why}), so changes may not be saved. Check the folder's permissions.", &[("why", why)]),
+            Warning::SlowDisk(d) => trf("The disk it is on is slow to respond ({seconds} s for a simple write), so thumbnails and saving may lag. Check the drive or its connection.", &[("seconds", &format!("{:.1}", d.as_secs_f32()))]),
+            Warning::Ntfs => tr("It is on an NTFS drive. NTFS drivers on macOS are slow and less reliable; a drive formatted as APFS or exFAT works better.").into(),
         }
     }
 

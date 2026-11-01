@@ -271,13 +271,11 @@ pub fn trf(key: &str, args: &[(&str, &dyn Display)]) -> String {
 
 /// The form of a count for `n`: `one` and `other` are the English forms,
 /// and `other` is the key. `{n}` is filled with `n`.
-#[allow(dead_code)] // Until the first callers land.
 pub fn tr_n(n: usize, one: &str, other: &str) -> String {
     tr_nf(n, one, other, &[])
 }
 
 /// `tr_n` with more placeholders filled from `args`.
-#[allow(dead_code)] // Until the first callers land.
 pub fn tr_nf(n: usize, one: &str, other: &str, args: &[(&str, &dyn Display)]) -> String {
     let lang = current();
     let count = n as u64;

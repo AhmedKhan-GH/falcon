@@ -9,6 +9,7 @@ use falcon_library::transform::{self, Flip, PixelRect};
 use falcon_library::{Library, item_ops, thumbnail};
 
 use super::{Action, App};
+use crate::locale::{tr, tr_n, tr_nf, trf};
 use crate::logic::{self, Scope};
 
 /// One edit, applied at the end of the frame.
@@ -55,28 +56,28 @@ impl Op {
     /// The undo name.
     pub fn label(&self) -> String {
         match self {
-            Op::PickCustomThumbnail(_) => "Set custom thumbnail".into(),
-            Op::ResetCustomThumbnail(_) => "Reset thumbnail".into(),
-            Op::RefreshThumbnail(ids) => format!("Refresh {} thumbnails", ids.len()),
-            Op::RefreshPalette(ids) => format!("Refresh {} palettes", ids.len()),
-            Op::SetFolderCover(..) => "Set folder cover".into(),
-            Op::Rotate(..) => "Rotate".into(),
-            Op::Crop(..) => "Crop".into(),
-            Op::CropAsNew(..) => "Crop as new item".into(),
-            Op::AddComment(..) => "Add comment".into(),
-            Op::UpdateComment(..) => "Edit comment".into(),
-            Op::DeleteComment(..) => "Delete comment".into(),
-            Op::Flip(_, Flip::Horizontal) => "Flip horizontally".into(),
-            Op::Flip(_, Flip::Vertical) => "Flip vertically".into(),
-            Op::FrameThumbnail(..) | Op::VideoThumbnail(..) => "Set frame as thumbnail".into(),
-            Op::Rename(..) => "Rename".into(),
-            Op::FontLanguage(..) => "Change sample language".into(),
-            Op::Duplicate(_) => "Duplicate item".into(),
-            Op::Pin(ids, _, true) => format!("Pin {} to the top", ids.len()),
-            Op::Pin(ids, _, false) => format!("Unpin {}", ids.len()),
-            Op::RenameItems(v) => format!("Rename {} items", v.len()),
-            Op::ClipboardThumbnail(_) => "Set custom thumbnail".into(),
-            Op::ReplaceFile(_) => "Replace with file".into(),
+            Op::PickCustomThumbnail(_) => tr("Set custom thumbnail").into(),
+            Op::ResetCustomThumbnail(_) => tr("Reset thumbnail").into(),
+            Op::RefreshThumbnail(ids) => tr_n(ids.len(), "Refresh {n} thumbnail", "Refresh {n} thumbnails"),
+            Op::RefreshPalette(ids) => tr_n(ids.len(), "Refresh {n} palette", "Refresh {n} palettes"),
+            Op::SetFolderCover(..) => tr("Set folder cover").into(),
+            Op::Rotate(..) => tr("Rotate").into(),
+            Op::Crop(..) => tr("Crop").into(),
+            Op::CropAsNew(..) => tr("Crop as new item").into(),
+            Op::AddComment(..) => tr("Add comment").into(),
+            Op::UpdateComment(..) => tr("Edit comment").into(),
+            Op::DeleteComment(..) => tr("Delete comment").into(),
+            Op::Flip(_, Flip::Horizontal) => tr("Flip horizontally").into(),
+            Op::Flip(_, Flip::Vertical) => tr("Flip vertically").into(),
+            Op::FrameThumbnail(..) | Op::VideoThumbnail(..) => tr("Set frame as thumbnail").into(),
+            Op::Rename(..) => tr("Rename").into(),
+            Op::FontLanguage(..) => tr("Change sample language").into(),
+            Op::Duplicate(_) => tr("Duplicate item").into(),
+            Op::Pin(ids, _, true) => trf("Pin {n} to the top", &[("n", &ids.len())]),
+            Op::Pin(ids, _, false) => trf("Unpin {n}", &[("n", &ids.len())]),
+            Op::RenameItems(v) => tr_n(v.len(), "Rename {n} item", "Rename {n} items"),
+            Op::ClipboardThumbnail(_) => tr("Set custom thumbnail").into(),
+            Op::ReplaceFile(_) => tr("Replace with file").into(),
         }
     }
 }
@@ -123,59 +124,59 @@ impl App {
             let picked = &self.ws.folders.sel.ids;
             let folders: Vec<String> = if picked.is_empty() { vec![fid.clone()] } else { picked.clone() };
             let pinned = item_ops::all_pinned(targets.iter().filter_map(|id| lib.item(id)), fid);
-            if ui.button(if pinned { "Unpin from Top" } else { "Pin to Top" }).clicked() {
+            if ui.button(if pinned { tr("Unpin from Top") } else { tr("Pin to Top") }).clicked() {
                 self.push_bulk(targets.len(), Action::Edit(Op::Pin(targets.to_vec(), folders, !pinned)));
             }
         }
         if single
             && let Scope::Folder(fid) = &self.ws.scope
-            && ui.button("Set as Folder Cover").clicked()
+            && ui.button(tr("Set as Folder Cover")).clicked()
         {
             self.ws.actions.push(Action::Edit(Op::SetFolderCover(fid.clone(), item.id.clone())));
         }
         if single && thumbnail::custom_thumbnail_allowed(&item.ext) {
             let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::CustomThumbnail);
-            if ui.add(egui::Button::new("Set Custom Thumbnail…").shortcut_text(keys)).clicked() {
+            if ui.add(egui::Button::new(tr("Set Custom Thumbnail…")).shortcut_text(keys)).clicked() {
                 self.ws.actions.push(Action::Edit(Op::PickCustomThumbnail(item.id.clone())));
             }
             let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::ClipboardThumbnail);
-            if ui.add(egui::Button::new("Custom Thumbnail from Clipboard").shortcut_text(keys)).clicked() {
+            if ui.add(egui::Button::new(tr("Custom Thumbnail from Clipboard")).shortcut_text(keys)).clicked() {
                 self.ws.actions.push(Action::Edit(Op::ClipboardThumbnail(item.id.clone())));
             }
-            if thumbnail::has_custom_thumbnail(item) && ui.button("Reset Thumbnail").clicked() {
+            if thumbnail::has_custom_thumbnail(item) && ui.button(tr("Reset Thumbnail")).clicked() {
                 self.ws.actions.push(Action::Edit(Op::ResetCustomThumbnail(item.id.clone())));
             }
         }
-        if single && ui.button("Replace with File…").clicked() {
+        if single && ui.button(tr("Replace with File…")).clicked() {
             self.ws.actions.push(Action::Edit(Op::ReplaceFile(item.id.clone())));
         }
         let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::RefreshThumbnail);
-        if ui.add(egui::Button::new("Refresh Thumbnail").shortcut_text(keys)).clicked() {
+        if ui.add(egui::Button::new(tr("Refresh Thumbnail")).shortcut_text(keys)).clicked() {
             self.ws.actions.push(Action::Edit(Op::RefreshThumbnail(targets.to_vec())));
         }
-        if ui.button("Refresh Palette").clicked() {
+        if ui.button(tr("Refresh Palette")).clicked() {
             self.ws.actions.push(Action::Edit(Op::RefreshPalette(targets.to_vec())));
         }
         let ext_of = |id: &str| lib.item(id).map(|i| i.ext.clone());
         let rotatable = editable(targets, ext_of, transform::can_rotate);
         if !rotatable.is_empty() {
-            if ui.button("Rotate Left").clicked() {
+            if ui.button(tr("Rotate Left")).clicked() {
                 self.rotate_request(rotatable.clone(), -1);
             }
-            if ui.button("Rotate Right").clicked() {
+            if ui.button(tr("Rotate Right")).clicked() {
                 self.rotate_request(rotatable, 1);
             }
         }
         let flippable = editable(targets, ext_of, transform::can_flip);
         if !flippable.is_empty() {
-            if ui.button("Flip Horizontal").clicked() {
+            if ui.button(tr("Flip Horizontal")).clicked() {
                 self.flip_request(flippable.clone(), Flip::Horizontal);
             }
-            if ui.button("Flip Vertical").clicked() {
+            if ui.button(tr("Flip Vertical")).clicked() {
                 self.flip_request(flippable, Flip::Vertical);
             }
         }
-        if single && transform::can_crop(&item.ext) && ui.button("Crop…").clicked() {
+        if single && transform::can_crop(&item.ext) && ui.button(tr("Crop…")).clicked() {
             self.ws.viewer = Some(item.id.clone());
             self.ws.tools.crop_next = Some(item.id.clone());
         }
@@ -186,23 +187,23 @@ impl App {
     pub(crate) fn apply_edit(&mut self, lib: &mut Library, op: Op) -> falcon_library::Result<()> {
         match op {
             Op::PickCustomThumbnail(id) => {
-                let picked = rfd::FileDialog::new().set_title("Choose Thumbnail").add_filter("Images", &["jpg", "jpeg", "png", "bmp", "webp"]).pick_file();
+                let picked = rfd::FileDialog::new().set_title(tr("Choose Thumbnail")).add_filter(tr("Images"), &["jpg", "jpeg", "png", "bmp", "webp"]).pick_file();
                 let Some(path) = picked else { return Ok(()) };
                 lib.set_custom_thumbnail(&id, &path)?;
                 self.ws.loader.forget(&id);
-                self.flash("Thumbnail set");
+                self.flash(tr("Thumbnail set"));
                 Ok(())
             }
             Op::FrameThumbnail(id, img) => {
                 lib.set_frame_thumbnail(&id, &img)?;
                 self.ws.loader.forget(&id);
-                self.flash("Thumbnail set");
+                self.flash(tr("Thumbnail set"));
                 Ok(())
             }
             Op::VideoThumbnail(id, img, at) => {
                 lib.set_video_thumbnail(&id, &img, at)?;
                 self.ws.loader.forget(&id);
-                self.flash("Thumbnail set");
+                self.flash(tr("Thumbnail set"));
                 Ok(())
             }
             Op::Rename(id, name) => {
@@ -219,46 +220,45 @@ impl App {
             }
             Op::Duplicate(id) => {
                 lib.duplicate_item(&id)?;
-                self.flash("Duplicated");
+                self.flash(tr("Duplicated"));
                 Ok(())
             }
             Op::Pin(ids, folders, pin) => {
                 let now = chrono::Utc::now().timestamp_millis().max(0) as u64;
                 let n = lib.set_pinned(&ids, &folders, pin, now)?;
-                let s = if n == 1 { "" } else { "s" };
-                self.flash(if pin { format!("Pinned {n} item{s} to the top") } else { format!("Unpinned {n} item{s}") });
+                self.flash(if pin { tr_n(n, "Pinned {n} item to the top", "Pinned {n} items to the top") } else { tr_n(n, "Unpinned {n} item", "Unpinned {n} items") });
                 Ok(())
             }
             Op::ClipboardThumbnail(id) => {
                 let Some(picture) = clipboard_picture() else {
-                    self.flash("No picture on the clipboard");
+                    self.flash(tr("No picture on the clipboard"));
                     return Ok(());
                 };
                 let r = lib.set_custom_thumbnail(&id, picture.path());
                 drop(picture);
                 r?;
                 self.ws.loader.forget(&id);
-                self.flash("Thumbnail set");
+                self.flash(tr("Thumbnail set"));
                 Ok(())
             }
             Op::ReplaceFile(id) => {
                 if self.local_only(lib, std::slice::from_ref(&id)).is_empty() {
                     return Ok(());
                 }
-                let Some(path) = rfd::FileDialog::new().set_title("Replace with File").pick_file() else { return Ok(()) };
+                let Some(path) = rfd::FileDialog::new().set_title(tr("Replace with File")).pick_file() else { return Ok(()) };
                 let file = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
                 let answer = rfd::MessageDialog::new()
                     .set_level(rfd::MessageLevel::Warning)
-                    .set_title("Replace with File")
-                    .set_description(format!("The item's file becomes a copy of “{file}”. Its name, tags, folders and notes stay; the current file is deleted."))
-                    .set_buttons(rfd::MessageButtons::OkCancelCustom("Replace".into(), "Cancel".into()))
+                    .set_title(tr("Replace with File"))
+                    .set_description(trf("The item's file becomes a copy of “{file}”. Its name, tags, folders and notes stay; the current file is deleted.", &[("file", &file)]))
+                    .set_buttons(rfd::MessageButtons::OkCancelCustom(tr("Replace").into(), tr("Cancel").into()))
                     .show();
-                if !matches!(answer, rfd::MessageDialogResult::Custom(ref b) if b == "Replace") && answer != rfd::MessageDialogResult::Ok {
+                if !matches!(answer, rfd::MessageDialogResult::Custom(ref b) if b == tr("Replace")) && answer != rfd::MessageDialogResult::Ok {
                     return Ok(());
                 }
                 lib.replace_original(&id, &path)?;
                 self.ws.loader.forget(&id);
-                self.flash("File replaced");
+                self.flash(tr("File replaced"));
                 Ok(())
             }
             Op::RenameItems(names) => {
@@ -269,7 +269,7 @@ impl App {
                     lib.update_item(item)?;
                     done += 1;
                 }
-                self.flash(format!("Renamed {done} {}", if done == 1 { "item" } else { "items" }));
+                self.flash(tr_n(done, "Renamed {n} item", "Renamed {n} items"));
                 Ok(())
             }
             Op::ResetCustomThumbnail(id) => {
@@ -296,10 +296,11 @@ impl App {
                     }
                     self.ws.loader.forget(id);
                 }
-                let mut msg = format!("Refreshed {done} {}", if done == 1 { "thumbnail" } else { "thumbnails" });
-                if custom > 0 {
-                    msg.push_str(&format!(", kept {custom} custom"));
-                }
+                let msg = if custom > 0 {
+                    tr_nf(done, "Refreshed {n} thumbnail, kept {custom} custom", "Refreshed {n} thumbnails, kept {custom} custom", &[("custom", &custom)])
+                } else {
+                    tr_n(done, "Refreshed {n} thumbnail", "Refreshed {n} thumbnails")
+                };
                 self.flash(msg);
                 r
             }
@@ -317,13 +318,13 @@ impl App {
                         Err(e) => r = Err(e),
                     }
                 }
-                self.flash(format!("Refreshed {done} {}", if done == 1 { "palette" } else { "palettes" }));
+                self.flash(tr_n(done, "Refreshed {n} palette", "Refreshed {n} palettes"));
                 r
             }
             Op::SetFolderCover(fid, id) => {
                 lib.set_folder_cover(&fid, Some(&id))?;
                 let name = logic::find_folder(&lib.metadata.folders, &fid).map_or_else(String::new, |f| f.name.clone());
-                self.flash(format!("Set as the cover of {name}"));
+                self.flash(trf("Set as the cover of {name}", &[("name", &name)]));
                 Ok(())
             }
             Op::Rotate(ids, turns) => {
@@ -363,7 +364,7 @@ impl App {
                 self.ws.selected = vec![new.clone()];
                 self.ws.anchor = Some(new.clone());
                 self.ws.scroll_to = Some(new);
-                self.flash("Saved the crop as a new item");
+                self.flash(tr("Saved the crop as a new item"));
                 Ok(())
             }
             Op::AddComment(id, c) => lib.add_comment(&id, c).map(|_| ()),

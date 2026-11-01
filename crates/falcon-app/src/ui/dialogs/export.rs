@@ -141,6 +141,7 @@ fn merge_plans(dest: &std::path::Path, plans: impl Iterator<Item = Plan>, how: C
     all
 }
 
+/// "1 item", "3 items": English only; localised text uses `tr_n`.
 pub(crate) fn plural(n: usize, one: &str) -> String {
     if n == 1 { format!("1 {one}") } else { format!("{n} {one}s") }
 }

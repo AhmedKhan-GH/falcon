@@ -11,6 +11,7 @@ use falcon_library::search::{ColorQuery, OrderBy};
 
 use crate::icons as ic;
 use crate::logic::{self, Layout, Scope};
+use crate::locale::tr;
 use crate::theme as t;
 use crate::ui::filter_bar::parse_hex;
 use crate::ui::widgets::{galley, icon_button};
@@ -550,7 +551,7 @@ impl App {
                 self.toolbar(&mut top, lib);
                 if !self.show_inspector {
                     let c = Pos2::new(bar.right() - 24.0, bar.center().y);
-                    if icon_button(&mut top, c, ic::SIDEBAR_SIMPLE, 18.0, true, "Show inspector").clicked() {
+                    if icon_button(&mut top, c, ic::SIDEBAR_SIMPLE, 18.0, true, tr("Show inspector")).clicked() {
                         self.show_inspector = true;
                     }
                 }

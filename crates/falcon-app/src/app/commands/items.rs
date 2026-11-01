@@ -10,6 +10,7 @@ use falcon_library::rename::{Method, Rename, Subject, TextCase};
 
 use crate::app::image_edit::Op;
 use crate::app::{Action, App};
+use crate::locale::{tr, tr_key, tr_n};
 use crate::logic::{self, Scope};
 use crate::theme as t;
 
@@ -106,7 +107,7 @@ impl App {
             last_used(&self.recent_folders, |id| crate::logic::find_folder(&lib.metadata.folders, id).is_some())
         };
         let Some(fid) = target else {
-            self.flash("No folder used yet");
+            self.flash(tr("No folder used yet"));
             return;
         };
         if ids.is_empty() {
@@ -151,41 +152,41 @@ impl App {
         let mut apply = false;
         let modal = egui::Modal::new(egui::Id::unique("item-batch-rename")).show(ctx, |ui| {
             ui.set_width(480.0);
-            ui.label(RichText::new(format!("Rename {} Items", previews.len())).size(15.0));
+            ui.label(RichText::new(tr_n(previews.len(), "Rename {n} Item", "Rename {n} Items")).size(15.0));
             ui.add_space(6.0);
             if d.confirming {
-                ui.label(format!("This renames {} items. Go ahead?", previews.len()));
+                ui.label(tr_n(previews.len(), "This renames {n} item. Go ahead?", "This renames {n} items. Go ahead?"));
                 ui.add_space(10.0);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("Rename").clicked() {
+                    if ui.button(tr("Rename")).clicked() {
                         apply = true;
                     }
-                    if ui.button("Back").clicked() {
+                    if ui.button(tr("Back")).clicked() {
                         d.confirming = false;
                     }
                 });
                 return;
             }
             ui.horizontal(|ui| {
-                ui.selectable_value(&mut d.replace, false, "Format");
-                ui.selectable_value(&mut d.replace, true, "Replace Text");
+                ui.selectable_value(&mut d.replace, false, tr("Format"));
+                ui.selectable_value(&mut d.replace, true, tr("Replace Text"));
             });
             ui.add_space(4.0);
             if d.replace {
                 egui::Grid::new("item-rename-replace").num_columns(2).spacing([8.0, 6.0]).show(ui, |ui| {
-                    ui.label("Find");
-                    ui.add(TextEdit::singleline(&mut d.find).hint_text("Text, or /pattern/flags").desired_width(360.0));
+                    ui.label(tr("Find"));
+                    ui.add(TextEdit::singleline(&mut d.find).hint_text(tr("Text, or /pattern/flags")).desired_width(360.0));
                     ui.end_row();
-                    ui.label("Replace with");
+                    ui.label(tr("Replace with"));
                     ui.add(TextEdit::singleline(&mut d.with).desired_width(360.0));
                     ui.end_row();
                 });
             } else {
                 egui::Grid::new("item-rename-format").num_columns(2).spacing([8.0, 6.0]).show(ui, |ui| {
-                    ui.label("Name");
+                    ui.label(tr("Name"));
                     ui.horizontal(|ui| {
                         ui.add(TextEdit::singleline(&mut d.template).desired_width(290.0));
-                        ui.menu_button("Insert", |ui| {
+                        ui.menu_button(tr("Insert"), |ui| {
                             ui.set_min_width(200.0);
                             let mut pick = |ui: &mut Ui, label: &str, token: &str| {
                                 if ui.add(egui::Button::new(label).shortcut_text(token)).clicked() {
@@ -193,38 +194,38 @@ impl App {
                                     ui.close();
                                 }
                             };
-                            ui.menu_button("Number", |ui| {
+                            ui.menu_button(tr("Number"), |ui| {
                                 for (label, token) in [("1", "%N"), ("01", "%NN"), ("001", "%NNN"), ("0001", "%NNNN")] {
                                     pick(ui, label, token);
                                 }
                             });
-                            ui.menu_button("Date", |ui| {
-                                for (head, letter) in [("Today", 'D'), ("Modified", 'M'), ("Created", 'B')] {
-                                    ui.label(RichText::new(head).color(t::p().text_muted).size(12.0));
-                                    for (label, suffix) in [("Date", "1"), ("Month and day", "2"), ("Written out", "3"), ("Date and time", "HM"), ("Date and time with seconds", "HMS")] {
+                            ui.menu_button(tr("Date"), |ui| {
+                                for (head, letter) in [(tr_key("Today"), 'D'), (tr_key("Modified"), 'M'), (tr_key("Created"), 'B')] {
+                                    ui.label(RichText::new(tr(head)).color(t::p().text_muted).size(12.0));
+                                    for (label, suffix) in [(tr_key("Date"), "1"), (tr_key("Month and day"), "2"), (tr_key("Written out"), "3"), (tr_key("Date and time"), "HM"), (tr_key("Date and time with seconds"), "HMS")] {
                                         let token = match suffix {
                                             "1" => format!("%{letter}"),
                                             "2" => format!("%{letter}{letter}"),
                                             "3" => format!("%{letter}{letter}{letter}"),
                                             s => format!("%{letter}{s}"),
                                         };
-                                        pick(ui, label, &token);
+                                        pick(ui, tr(label), &token);
                                     }
                                 }
                             });
-                            pick(ui, "Tags", "%T");
-                            pick(ui, "Folders", "%F");
-                            pick(ui, "Original Name", "*");
+                            pick(ui, tr("Tags"), "%T");
+                            pick(ui, tr("Folders"), "%F");
+                            pick(ui, tr("Original Name"), "*");
                         });
                     });
                     ui.end_row();
-                    ui.label("Start at");
+                    ui.label(tr("Start at"));
                     ui.add(egui::DragValue::new(&mut d.start).range(0..=999_999));
                     ui.end_row();
                 });
             }
             ui.horizontal(|ui| {
-                ui.label("Case");
+                ui.label(tr("Case"));
                 egui::ComboBox::from_id_salt("item-rename-case").selected_text(case_label(d.case)).show_ui(ui, |ui| {
                     for c in [TextCase::Keep, TextCase::Upper, TextCase::Lower, TextCase::Capitalize] {
                         ui.selectable_value(&mut d.case, c, case_label(c));
@@ -246,14 +247,14 @@ impl App {
             ui.separator();
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let ready = d.rename().is_ready();
-                if ui.add_enabled(ready, egui::Button::new("Rename")).clicked() {
+                if ui.add_enabled(ready, egui::Button::new(tr("Rename"))).clicked() {
                     if previews.len() >= RENAME_ASK {
                         d.confirming = true;
                     } else {
                         apply = true;
                     }
                 }
-                if ui.button("Cancel").clicked() {
+                if ui.button(tr("Cancel")).clicked() {
                     keep = false;
                 }
             });
@@ -280,8 +281,8 @@ impl App {
     /// Eagle's Open File Location submenu for one item: All, then each
     /// folder the item is in.
     pub(crate) fn location_menu(&mut self, ui: &mut Ui, lib: &Library, item: &Item) {
-        crate::ui::menus::search::submenu(ui, "Open File Location", |ui| {
-            if ui.button("All").clicked() {
+        crate::ui::menus::search::submenu(ui, tr("Open File Location"), |ui| {
+            if ui.button(tr("All")).clicked() {
                 self.open_item_location(&item.id, None);
             }
             let folders: Vec<(String, String)> =
@@ -316,10 +317,10 @@ impl App {
 
 fn case_label(c: TextCase) -> &'static str {
     match c {
-        TextCase::Keep => "As typed",
-        TextCase::Upper => "UPPER CASE",
-        TextCase::Lower => "lower case",
-        TextCase::Capitalize => "Capitalize Words",
+        TextCase::Keep => tr("As typed"),
+        TextCase::Upper => tr("UPPER CASE"),
+        TextCase::Lower => tr("lower case"),
+        TextCase::Capitalize => tr("Capitalize Words"),
     }
 }
 
