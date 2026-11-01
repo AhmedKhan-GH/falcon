@@ -1671,6 +1671,7 @@ dependencies = [
  "falcon-pdf",
  "falcon-server",
  "falcon-video",
+ "gif",
  "image",
  "lru",
  "objc2 0.6.5",

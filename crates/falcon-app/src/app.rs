@@ -260,33 +260,12 @@ struct ViewState {
     /// Scale relative to the image's pixels; `None` fits the window.
     zoom: Option<f32>,
     pan: Vec2,
-    /// Decoded GIF frames with their delays in seconds.
-    frames: Vec<(egui::TextureHandle, f32)>,
-    started: Option<Instant>,
+    /// The animation playing, for GIFs (see `anim.rs`).
+    anim: Option<crate::anim::Player>,
     /// The item's original, for the bar's open button.
     file: PathBuf,
     /// A zoom key pressed this frame, for the image viewer.
     zoom_key: Option<logic::ViewZoom>,
-}
-
-/// Decodes up to 300 GIF frames into textures.
-fn gif_frames(ctx: &egui::Context, path: &std::path::Path) -> Vec<(egui::TextureHandle, f32)> {
-    use image::AnimationDecoder;
-    let Ok(file) = std::fs::File::open(path) else { return Vec::new() };
-    let Ok(decoder) = image::codecs::gif::GifDecoder::new(std::io::BufReader::new(file)) else { return Vec::new() };
-    decoder
-        .into_frames()
-        .take(300)
-        .filter_map(Result::ok)
-        .enumerate()
-        .map(|(n, f)| {
-            let (num, den) = f.delay().numer_denom_ms();
-            let secs = (num as f32 / den.max(1) as f32 / 1000.0).max(0.02);
-            let buf = f.into_buffer();
-            let img = egui::ColorImage::from_rgba_unmultiplied([buf.width() as usize, buf.height() as usize], buf.as_raw());
-            (ctx.load_texture(format!("gif-{n}"), img, egui::TextureOptions::LINEAR), secs)
-        })
-        .collect()
 }
 
 /// The smart-folder dialog's state.
@@ -4131,9 +4110,10 @@ impl App {
         if self.icloud_viewer(parent, lib, item, screen) {
             return;
         }
-        if item.ext == "gif" && self.ws.view.started.is_none() {
-            self.ws.view.frames = gif_frames(ctx, &item.original_path(lib.root()));
-            self.ws.view.started = Some(Instant::now());
+        if self.ws.view.anim.is_none()
+            && let Some(kind) = crate::anim::kind(&item.ext)
+        {
+            self.ws.view.anim = Some(crate::anim::Player::open(ctx, item.original_path(lib.root()), kind, crate::anim::Opts::viewer()));
         }
         if self.video_viewer(parent, lib, item, screen) || self.pdf_viewer(parent, lib, item, screen) || self.media_viewer(parent, lib, item, screen) {
             return;
@@ -4144,20 +4124,11 @@ impl App {
         let bar = Rect::from_min_size(screen.min, vec2(screen.width(), t::BAR_HEIGHT));
         let area = Rect::from_min_max(Pos2::new(screen.left(), bar.bottom()), screen.max);
 
-        // The image: a GIF frame, the full render, or the preview.
-        let gif = (!self.ws.view.frames.is_empty()).then(|| {
-            let total: f32 = self.ws.view.frames.iter().map(|f| f.1).sum();
-            let mut t = self.ws.view.started.map_or(0.0, |s| s.elapsed().as_secs_f32()) % total.max(0.01);
-            let mut pick = 0;
-            for (n, (_, d)) in self.ws.view.frames.iter().enumerate() {
-                if t < *d {
-                    pick = n;
-                    break;
-                }
-                t -= d;
-            }
-            ctx.request_repaint_after(std::time::Duration::from_millis(15));
-            self.ws.view.frames[pick].0.clone()
+        // The image: a frame of an animation, the full render, or the preview.
+        let now = ctx.input(|i| i.time);
+        let gif = self.ws.view.anim.as_mut().and_then(|a| {
+            a.update(now);
+            a.texture().cloned()
         });
         let tex = gif
             .or_else(|| self.ws.loader.get(&id, Tier::Full).cloned())
