@@ -8,8 +8,8 @@ use falcon_library::Library;
 use falcon_library::model::Item;
 use falcon_library::rename::{Method, Rename, Subject, TextCase};
 
-use super::image_edit::Op;
-use super::{Action, App};
+use crate::app::image_edit::Op;
+use crate::app::{Action, App};
 use crate::logic::{self, Scope};
 use crate::theme as t;
 
@@ -102,7 +102,7 @@ impl App {
     pub(crate) fn add_to_last_used(&mut self, ids: Vec<String>) {
         let Some(shared) = self.ws.lib.clone() else { return };
         let target = {
-            let lib = super::lock(&shared);
+            let lib = crate::app::lock(&shared);
             last_used(&self.recent_folders, |id| crate::logic::find_folder(&lib.metadata.folders, id).is_some())
         };
         let Some(fid) = target else {

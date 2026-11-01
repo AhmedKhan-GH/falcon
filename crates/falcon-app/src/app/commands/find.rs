@@ -1,6 +1,6 @@
 //! The Find menu's commands: Search All, Filter Sidebar, Clear Filter and
 //! opening one filter of the filter bar.
-use super::App;
+use crate::app::App;
 use crate::search_state::FilterKind;
 use falcon_library::search::Filter;
 
