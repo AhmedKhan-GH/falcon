@@ -31,6 +31,7 @@ pub mod undo;
 pub use error::{Error, Result};
 pub use library::Library;
 pub mod import;
+pub mod item_ops;
 pub mod import_check;
 pub mod thumbnail;
 pub mod transform;
