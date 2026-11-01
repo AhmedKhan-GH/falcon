@@ -82,10 +82,24 @@ impl Drop for Running {
     }
 }
 
+/// The app's `eagle-backup` folder, where each library's newest backup is
+/// also copied (`falcon_library::backup::backup_library_with`), as Eagle
+/// keeps one in its app data.
+pub fn app_backup_dir() -> Option<PathBuf> {
+    eframe::storage_dir("Falcon").map(|d| d.join("eagle-backup"))
+}
+
+/// Backs up the library at `root` now, on this thread.
+pub fn backup_now(root: &std::path::Path) {
+    if let Err(e) = falcon_library::backup::backup_library_with(root, app_backup_dir().as_deref()) {
+        eprintln!("falcon: metadata backup of {} failed: {e}", root.display());
+    }
+}
+
 /// Backs up the library at `root` on a background thread.
 pub fn spawn(root: PathBuf, running: Running) {
     std::thread::spawn(move || {
-        if let Err(e) = falcon_library::backup::backup_library(&root) {
+        if let Err(e) = falcon_library::backup::backup_library_with(&root, app_backup_dir().as_deref()) {
             eprintln!("falcon: metadata backup of {} failed: {e}", root.display());
         }
         drop(running);

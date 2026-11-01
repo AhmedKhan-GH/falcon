@@ -683,9 +683,8 @@ impl Workspace {
         }
         if self.backup.take_pending()
             && let Some(root) = &self.root
-            && let Err(e) = falcon_library::backup::backup_library(root)
         {
-            eprintln!("falcon: metadata backup of {} failed: {e}", root.display());
+            crate::backups::backup_now(root);
         }
         Ok(())
     }

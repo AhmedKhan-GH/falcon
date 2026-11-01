@@ -8,6 +8,15 @@
 //! backups. On open, a `metadata.json` that fails to parse is replaced by the
 //! newest backup that parses and has a `modificationTime`; the damaged file
 //! is kept as `backup/metadata.json.damaged-<ms>`.
+//!
+//! Eagle also keeps one more copy outside the library, in its app data:
+//! `eagle-backup/<hash>.json`, where `<hash>` is the 32-bit FNV-1a hash of
+//! the library path (no trailing slash) over its UTF-16 code units, as 8
+//! lowercase hex digits ([`app_data_backup_name`]). It replaces that copy
+//! whenever it writes a new backup into an existing `backup/` list (not
+//! for the very first one); falcon replaces it with every new backup.
+//! Nothing is written for a library whose folder is gone, so a backup
+//! never recreates a moved or deleted library.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -82,6 +91,46 @@ impl Library {
     }
 }
 
+/// The name of the app-data copy of the library at `root`:
+/// `<fnv1a-32 of the path>.json`, as Eagle names it.
+pub fn app_data_backup_name(root: &Path) -> String {
+    let path = root.to_string_lossy();
+    let path = path.trim_end_matches(['/', '\\']);
+    format!("{}.json", fnv1a_hex(path))
+}
+
+/// 32-bit FNV-1a over the UTF-16 code units of `s` (as JavaScript strings
+/// index them), as 8 lowercase hex digits.
+fn fnv1a_hex(s: &str) -> String {
+    let mut h: u32 = 0x811c_9dc5;
+    for unit in s.encode_utf16() {
+        h ^= u32::from(unit);
+        h = h.wrapping_mul(0x0100_0193);
+    }
+    format!("{h:08x}")
+}
+
+/// [`backup_library`], also replacing the library's copy in `app_backups`
+/// (the app's `eagle-backup` folder, created if needed) whenever a new
+/// backup is written. A failure there is ignored, as Eagle ignores it.
+pub fn backup_library_with(root: &Path, app_backups: Option<&Path>) -> Result<Option<PathBuf>> {
+    let made = backup_library(root)?;
+    if let (Some(made), Some(dir)) = (&made, app_backups) {
+        let _ = fs::create_dir_all(dir).and_then(|()| write_atomic(&dir.join(app_data_backup_name(root)), &fs::read(made)?));
+    }
+    Ok(made)
+}
+
+/// Writes `bytes` to `path` through a temporary file beside it and a
+/// rename, so a reader never sees half a file.
+fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let dir = path.parent().unwrap_or(Path::new("."));
+    let mut tmp = tempfile::NamedTempFile::new_in(dir)?;
+    std::io::Write::write_all(&mut tmp, bytes)?;
+    tmp.persist(path).map_err(|e| e.error)?;
+    Ok(())
+}
+
 /// [`Library::backup_metadata`] for the library at `root`, without opening
 /// it. It only reads `metadata.json` and writes into `backup/`, so the app
 /// runs it on a background thread while the library stays in use: a
@@ -94,6 +143,10 @@ pub fn backup_library(root: &Path) -> Result<Option<PathBuf>> {
 pub(crate) fn backup_at(root: &Path, now: NaiveDateTime) -> Result<Option<PathBuf>> {
     let current = root.join(METADATA);
     let dir = root.join(BACKUP_DIR);
+    if !current.is_file() {
+        // The library moved or was deleted: never recreate its folder.
+        return Ok(None);
+    }
     fs::create_dir_all(&dir).map_err(|e| Error::io(&dir, e))?;
 
     let text = fs::read(&current).map_err(|e| Error::io(&current, e))?;
@@ -109,7 +162,7 @@ pub(crate) fn backup_at(root: &Path, now: NaiveDateTime) -> Result<Option<PathBu
         Some(newest) => fs::metadata(newest).map(|m| m.len()).ok() != Some(text.len() as u64),
     };
     if changed {
-        fs::write(&target, &text).map_err(|e| Error::io(&target, e))?;
+        write_atomic(&target, &text).map_err(|e| Error::io(&target, e))?;
     }
     // Eagle trims the list it read before copying, so with the new copy at
     // most MAX_BACKUP_COUNT remain.
@@ -193,6 +246,42 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let lib = Library::create(dir.path().join("Test.library")).unwrap();
         (dir, lib)
+    }
+
+    #[test]
+    fn app_data_name_is_eagles_fnv_hash() {
+        // FNV-1a 32 reference values.
+        assert_eq!(fnv1a_hex(""), "811c9dc5");
+        assert_eq!(fnv1a_hex("a"), "e40c292c");
+        assert_eq!(fnv1a_hex("foobar"), "bf9cf968");
+        // Code units, not bytes: one unit per BMP character, two for others.
+        assert_ne!(fnv1a_hex("é"), fnv1a_hex("\u{c3}\u{a9}"));
+        let p = Path::new("/Users/me/Falcon Sandbox/Books.library");
+        assert_eq!(app_data_backup_name(p), format!("{}.json", fnv1a_hex("/Users/me/Falcon Sandbox/Books.library")));
+        assert_eq!(app_data_backup_name(Path::new("/Users/me/Falcon Sandbox/Books.library/")), app_data_backup_name(p));
+    }
+
+    #[test]
+    fn app_data_copy_follows_each_new_backup() {
+        let (d, mut lib) = temp_library();
+        let app = d.path().join("app/eagle-backup");
+        let copy = app.join(app_data_backup_name(lib.root()));
+        backup_library_with(lib.root(), Some(&app)).unwrap().unwrap();
+        assert_eq!(fs::read(&copy).unwrap(), fs::read(lib.root().join(METADATA)).unwrap());
+        lib.create_folder(None, "Changed").unwrap();
+        backup_library_with(lib.root(), Some(&app)).unwrap().unwrap();
+        assert_eq!(fs::read(&copy).unwrap(), fs::read(lib.root().join(METADATA)).unwrap());
+        assert_eq!(fs::read_dir(&app).unwrap().count(), 1, "one copy per library, no temp files left");
+    }
+
+    #[test]
+    fn never_recreates_a_missing_library() {
+        let (d, lib) = temp_library();
+        let root = lib.root().to_path_buf();
+        drop(lib);
+        fs::remove_dir_all(&root).unwrap();
+        assert_eq!(backup_library_with(&root, Some(&d.path().join("app"))).unwrap(), None);
+        assert!(!root.exists());
     }
 
     #[test]
