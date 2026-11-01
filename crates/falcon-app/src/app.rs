@@ -876,7 +876,10 @@ impl App {
     /// server, starts one if none runs, or stops it when nothing is open.
     fn serve_active(&mut self) {
         match (&self.server, self.ws.lib.clone()) {
-            (Some(h), Some(lib)) => h.set_library(lib),
+            (Some(h), Some(lib)) => {
+                h.set_library(lib);
+                self.share_with_server();
+            }
             (None, Some(_)) => self.start_server(),
             (_, None) => self.server = None,
         }
@@ -938,8 +941,26 @@ impl App {
             Ok(h) => {
                 self.flash(format!("API on http://localhost:{}", h.port));
                 self.server = Some(h);
+                self.share_with_server();
             }
             Err(e) => self.flash(format!("API not started: {e}")),
+        }
+    }
+
+    /// Hands the API what Eagle's reads from the app: the Developer token,
+    /// the preferences `application/info` reports, and the recent
+    /// libraries `library/history` lists.
+    fn share_with_server(&self) {
+        let Some(h) = &self.server else { return };
+        h.set_token(&self.prefs.api_token);
+        h.set_preferences(self.prefs.eagle_preferences());
+        h.set_history(self.recent.iter().map(|p| p.display().to_string()).collect());
+    }
+
+    /// Keeps what the API changed in the preferences (`preferences/collect/*`).
+    fn follow_api_preferences(&mut self) {
+        if let Some(v) = self.server.as_ref().and_then(|h| h.take_preferences()) {
+            self.prefs.take_eagle_preferences(&v);
         }
     }
 
@@ -1023,6 +1044,7 @@ impl App {
         self.shortcuts = d.keys;
         // A folder refused before is checked again.
         self.auto_import_refused = None;
+        self.share_with_server();
         if restart {
             self.start_server();
             if self.ws.lib.is_some() && !self.prefs.api_enabled {
@@ -4887,6 +4909,7 @@ impl App {
             ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
         }
         self.follow_api_switch();
+        self.follow_api_preferences();
         if std::mem::take(&mut self.refresh) {
             self.refresh_library();
         }

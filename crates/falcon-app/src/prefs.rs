@@ -41,6 +41,14 @@ pub struct Prefs {
     pub api_enabled: bool,
     /// The first port the API tries.
     pub api_port: u16,
+    /// Eagle's `developer.apiToken`: requests carrying it as `token` are
+    /// served by the API whatever their `Host`. Empty until first launch
+    /// makes one (`sanitized`); regenerated in the Developer pane.
+    pub api_token: String,
+    /// Eagle's `general.showCollectModal`, which falcon only keeps for the
+    /// API: `preferences/collect/on` and `off` set it, and
+    /// `application/info` reports it.
+    pub show_collect_modal: bool,
     /// The folder the collect window adds items to (None: no folder).
     /// Chosen in the collect window itself.
     pub collect_folder: Option<String>,
@@ -204,6 +212,8 @@ impl Default for Prefs {
             font_style_tags: true,
             api_enabled: true,
             api_port: falcon_server::DEFAULT_PORT,
+            api_token: String::new(),
+            show_collect_modal: false,
             collect_folder: None,
             theme: Theme::Dark,
             ui_zoom: 100,
@@ -249,6 +259,9 @@ impl Prefs {
     pub fn sanitized(mut self) -> Self {
         if port_error(self.api_port).is_some() {
             self.api_port = Prefs::default().api_port;
+        }
+        if self.api_token.trim().is_empty() {
+            self.api_token = new_token();
         }
         self.ui_zoom = self.ui_zoom.clamp(ZOOM_STEPS[0], ZOOM_STEPS[ZOOM_STEPS.len() - 1]);
         // As in Eagle, a chosen folder that is gone is forgotten and
@@ -301,6 +314,80 @@ impl Prefs {
     pub fn api_ports(&self) -> Option<RangeInclusive<u16>> {
         let first = if port_error(self.api_port).is_none() { self.api_port } else { falcon_server::DEFAULT_PORT };
         self.api_enabled.then_some(first..=first + (PORT_SPAN - 1))
+    }
+
+    /// The preferences the API reports in `application/info`, in Eagle's
+    /// shape and spelling (`"true"`/`"false"`, `"on"`/`"off"` and so on):
+    /// the settings falcon has, each under Eagle's key.
+    pub fn eagle_preferences(&self) -> serde_json::Value {
+        let b = |v: bool| if v { "true" } else { "false" };
+        let on = |v: bool| if v { "on" } else { "off" };
+        serde_json::json!({
+            "general": {
+                "zoom": self.ui_zoom.to_string(),
+                "showSidebarBadge": b(self.sidebar_counts),
+                "autoSelect": b(self.auto_select),
+                "showCollectModal": b(self.show_collect_modal),
+                "IPTC": b(self.keywords_as_tags),
+            },
+            "habits": {
+                "dblclickSidebarItem": match self.sidebar_double_click {
+                    SidebarDoubleClick::Rename => "rename",
+                    SidebarDoubleClick::Collapse => "collapse",
+                },
+                "scrollBehavior": match self.viewer_wheel {
+                    crate::logic::WheelMode::Scroll => "scroll",
+                    crate::logic::WheelMode::Zoom => "zoom",
+                    crate::logic::WheelMode::Paging => "paging",
+                },
+                "videoScrollBehavior": match self.video_scroll {
+                    VideoScroll::Progress => "progress",
+                    VideoScroll::Volume => "volume",
+                },
+                "hoverZoom": on(self.hover_zoom),
+                "renderBehavior": if self.pixelated { "pixelated" } else { "non-pixelated" },
+                "rememberLastZoom": on(self.remember_zoom),
+                "defaultRatio": if self.open_actual_size { "100%" } else { "auto" },
+                "transparency": if self.transparency_grid { "show" } else { "hide" },
+                "keyspace": match self.space {
+                    SpaceKey::Preview => "preview",
+                    SpaceKey::QuickLook => "preview-native",
+                    SpaceKey::Scroll => "scroll",
+                },
+                "doubleclick": match self.double_click {
+                    DoubleClick::Viewer => "internal",
+                    DoubleClick::External => "external",
+                },
+                "gifViewer": on(self.gif_player),
+                "alwaysPlayGIF": on(self.always_play_animated),
+            },
+            "notification": {
+                "notification": {
+                    "enable": b(self.notifications),
+                    "when": {"repeatImage": b(self.notify_duplicates), "autoImport": b(self.notify_auto_import)},
+                },
+            },
+            "video": {
+                "zoomFill": b(self.video_fill),
+                "autoPlay": b(self.video_autoplay),
+                "rememberPosition": b(self.video_resume),
+                "loopShortVideo": b(self.video_loop_short),
+            },
+            "font": {"autoTag": b(self.font_style_tags)},
+            "autoImport": {
+                "enable": b(self.auto_import),
+                "path": self.auto_import_path.as_ref().map(|p| p.display().to_string()).unwrap_or_default(),
+            },
+            "developer": {"apiToken": self.api_token},
+        })
+    }
+
+    /// Takes back what the API changed in [`Prefs::eagle_preferences`]:
+    /// only `general.showCollectModal` can change there.
+    pub fn take_eagle_preferences(&mut self, v: &serde_json::Value) {
+        if let Some(s) = v["general"]["showCollectModal"].as_str() {
+            self.show_collect_modal = s == "true";
+        }
     }
 
     /// Whether going from `self` to `new` needs the API restarted.
@@ -1027,8 +1114,44 @@ fn password(p: &mut Page, d: &mut Draft, form: &mut PasswordForm) {
 }
 
 /// Developer: the local HTTP API.
+/// A new API token in Eagle's format (a random UUID, version 4).
+pub fn new_token() -> String {
+    let mut b = [0u8; 16];
+    let read = std::fs::File::open("/dev/urandom").and_then(|mut f| std::io::Read::read_exact(&mut f, &mut b));
+    if read.is_err() {
+        // No /dev/urandom: fall back on the standard library's random hash
+        // keys, mixed with the time.
+        use std::hash::{BuildHasher, Hasher};
+        for (i, chunk) in b.chunks_mut(8).enumerate() {
+            let mut h = std::collections::hash_map::RandomState::new().build_hasher();
+            h.write_u128(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos()));
+            h.write_usize(i);
+            chunk.copy_from_slice(&h.finish().to_le_bytes());
+        }
+    }
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    let hex: String = b.iter().map(|x| format!("{x:02x}")).collect();
+    format!("{}-{}-{}-{}-{}", &hex[0..8], &hex[8..12], &hex[12..16], &hex[16..20], &hex[20..32])
+}
+
 fn developer(p: &mut Page, d: &mut Draft, port_text: &mut String, error: Option<&String>) {
     let pr = &mut d.prefs;
+    let first = parse_port(port_text).unwrap_or(pr.api_port);
+    p.block("API token", &["api", "token", "key", "auth", "developer", "restful"], |ui| {
+        ui.horizontal(|ui| {
+            ui.add(egui::Label::new(RichText::new(&pr.api_token).monospace()).selectable(true));
+            if ui.button("Copy").clicked() {
+                ui.ctx().copy_text(pr.api_token.clone());
+            }
+            if ui.button("Regenerate").clicked() {
+                pr.api_token = new_token();
+            }
+        });
+        let url = format!("http://localhost:{first}/?token={}", pr.api_token);
+        ui.hyperlink_to(RichText::new(&url).size(11.0), &url);
+        note(ui, "Programs that send this token are let in from any address the API listens on.");
+    });
     p.block("HTTP API", &["api", "server", "port", "local", "plugin"], |ui| {
         ui.checkbox(&mut pr.api_enabled, "Run the local API while a library is open");
         ui.add_enabled_ui(pr.api_enabled, |ui| {
@@ -1041,7 +1164,6 @@ fn developer(p: &mut Page, d: &mut Draft, port_text: &mut String, error: Option<
                     ui.label(RichText::new(e).size(11.0).color(t::p().icon_red));
                 }
                 None => {
-                    let first = parse_port(port_text).unwrap_or(pr.api_port);
                     note(ui, &format!("falcon tries ports {first} to {} and never uses Eagle's {EAGLE_PORT}.", first + PORT_SPAN - 1));
                 }
             }
@@ -1074,6 +1196,26 @@ mod tests {
         assert_eq!(chosen.auto_import_dir(std::path::Path::new("/x/Books.library")), None, "off watches nothing");
         let on = Prefs { auto_import: true, ..chosen };
         assert_eq!(on.auto_import_dir(std::path::Path::new("/x/Books.library")), Some("/d/Books".into()));
+    }
+
+    #[test]
+    fn api_token_and_eagle_preferences() {
+        let t = new_token();
+        let parts: Vec<usize> = t.split('-').map(str::len).collect();
+        assert_eq!(parts, [8, 4, 4, 4, 12]);
+        assert_eq!(&t[14..15], "4", "a version 4 UUID");
+        assert_ne!(t, new_token());
+        assert!(Prefs::default().api_token.is_empty(), "Eagle's default is empty");
+        let mut p = Prefs::default().sanitized();
+        assert_eq!(p.api_token.len(), 36, "made on first launch");
+        let kept = Prefs { api_token: "abc".into(), ..Default::default() }.sanitized();
+        assert_eq!(kept.api_token, "abc");
+        let v = p.eagle_preferences();
+        assert_eq!(v["general"]["showCollectModal"], "false");
+        assert_eq!(v["habits"]["hoverZoom"], "on");
+        assert_eq!(v["developer"]["apiToken"], p.api_token.as_str());
+        p.take_eagle_preferences(&serde_json::json!({"general": {"showCollectModal": "true"}}));
+        assert!(p.show_collect_modal);
     }
 
     #[test]
