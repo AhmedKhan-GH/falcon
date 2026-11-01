@@ -526,6 +526,10 @@ impl App {
             if ui.button("Rename").clicked() {
                 self.ws.org.smart_rename = Some((sf.id.clone(), sf.name.clone()));
             }
+            if !group && ui.button("Copy Link").clicked() {
+                ui.ctx().copy_text(crate::links::smart_link(&sf.id));
+                self.flash_brief("Link copied");
+            }
             // A group has no rules to edit.
             if !group && ui.button("Edit Rules…").clicked() {
                 let parent = organize::locate(roots, &sf.id).and_then(|(p, _)| p).map(str::to_string);

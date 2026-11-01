@@ -31,6 +31,16 @@ pub fn parse(url: &str) -> Option<Link> {
     }
 }
 
+/// The link Copy Link puts on the clipboard for a folder.
+pub fn folder_link(id: &str) -> String {
+    format!("eagle://folder/{id}")
+}
+
+/// The link Copy Link puts on the clipboard for a smart folder.
+pub fn smart_link(id: &str) -> String {
+    format!("eagle://smart-folder/{id}")
+}
+
 #[cfg(target_os = "macos")]
 pub use mac::{install, set_repaint, take};
 
@@ -138,6 +148,12 @@ mod mac {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn built_links_parse_back() {
+        assert_eq!(parse(&folder_link("L1")), Some(Link::Folder("L1".into())));
+        assert_eq!(parse(&smart_link("S1")), Some(Link::Smart("S1".into())));
+    }
 
     #[test]
     fn reads_eagle_links() {

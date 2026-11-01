@@ -700,6 +700,10 @@ impl App {
             if ui.button("Rename").clicked() {
                 self.ws.renaming = Some((f.id.clone(), f.name.clone()));
             }
+            if ui.button("Copy Link").clicked() {
+                ui.ctx().copy_text(crate::links::folder_link(&f.id));
+                self.flash_brief("Link copied");
+            }
             self.folder_menu_extras(ui, lib, f);
             ui.separator();
             self.expand_menu(ui, &lib.metadata.folders, &f.id);
