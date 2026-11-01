@@ -159,7 +159,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::CustomThumbnail | C::ClipboardThumbnail => s.library && (s.viewer || s.selected == 1),
         C::ResetThumbnail => s.library && (s.viewer || s.selected == 1) && s.has_custom_thumb,
         C::AddToLastFolder => (any || (s.library && s.viewer)) && s.last_folder,
-        C::AddToFolders => any || (s.library && s.viewer),
+        C::AddToFolders | C::FolderPanel => any || (s.library && s.viewer),
         C::FolderPasswordNew => grid && s.scope == ScopeKind::Folder && !s.folder_password,
         C::FolderPasswordChange | C::FolderPasswordRemove => grid && s.scope == ScopeKind::Folder && s.folder_password,
         C::LockFolder => grid && s.scope == ScopeKind::Folder && s.folder_password && s.folder_unlocked,

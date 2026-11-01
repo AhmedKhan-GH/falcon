@@ -382,7 +382,7 @@ These are the defaults. All but the arrows, Esc, Tab, Z and the viewer's C, 0, 1
 | ⌘⌫ or ⌦ | Move to the Trash, or delete permanently when in the Trash; the next item is then selected. On the All Tags page, with a group open, it deletes the group when the tag sidebar has the arrow keys (asking first if it holds tags), or takes the picked tags out of the group otherwise, as Eagle does |
 | ⌘R (or F2) | Rename the selected item in the inspector, or open the Rename dialog for several |
 | ⌘D | Duplicate the selected item (or the viewer's) |
-| ⇧⌘J | Add to Folders… (the folder picker for the selection) |
+| ⇧⌘J and F | Add to Folders… (the folder picker for the selection, or the viewer's item). The bare F (`organize.folder.panel`) stands in for Eagle's F, which opens its folder panel, and only acts when no text field has focus. Eagle's G (Actions) and P (Plugins) have no counterpart: falcon has neither |
 | ⇧D | Add the selection to the last used folder |
 | ⌥⌘T and ⇧⌥⌘T | Custom thumbnail for the item from a file, or from the clipboard |
 | ⌘F | Focus search |

@@ -160,6 +160,8 @@ The core words, so every file uses one term for one thing.
 
 - "Enter the password of “{name}” to put the items in it", the prompt when
   items are dropped onto a locked folder (machine-written).
+- "Open the folder picker", the Preferences ▸ Shortcuts row of the bare F
+  (machine-written).
 
 ## Reviewed
 
