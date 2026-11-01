@@ -10,6 +10,7 @@ use std::sync::mpsc::Receiver;
 
 use eframe::egui::{self, RichText};
 use falcon_library::library_merge::{self as merge, MergePlan};
+use falcon_library::pack::{self, PackPreview};
 use falcon_library::{Error, Library};
 
 use super::{App, Workspace, lock};
@@ -388,6 +389,95 @@ fn start_copy(ctx: &egui::Context, into: PathBuf, plan: MergePlan) -> Merge {
 
 fn plural(n: usize, what: &str) -> String {
     if n == 1 { format!("1 {what}") } else { format!("{n} {what}s") }
+}
+
+/// Importing an `.eaglepack`: Eagle confirms the disk space it takes,
+/// then asks about items the library already has.
+pub(super) enum PackAsk {
+    Space { path: PathBuf, folder: Option<String>, preview: PackPreview },
+    Duplicates { path: PathBuf, folder: Option<String>, preview: PackPreview },
+}
+
+impl App {
+    /// File ▸ Import ▸ Eagle Package…
+    pub(super) fn import_pack_dialog(&mut self) {
+        if self.ws.lib.is_none() {
+            return;
+        }
+        if let Some(path) = rfd::FileDialog::new().set_title("Import Eagle Package").add_filter("Eagle Package", &["eaglepack"]).pick_file() {
+            let folder = self.scope_folders().into_iter().next();
+            self.start_pack_import(path, folder);
+        }
+    }
+
+    /// Reads the pack and asks; `folder` takes every item of an items pack
+    /// (a dropped pack goes into the folder it was dropped on).
+    pub(super) fn start_pack_import(&mut self, path: PathBuf, folder: Option<String>) {
+        let Some(shared) = self.ws.lib.clone() else { return };
+        let preview = pack::preview_pack(&lock(&shared), &path);
+        match preview {
+            Ok(preview) => self.pack_ask = Some(PackAsk::Space { path, folder, preview }),
+            Err(e) => self.show_alert(Alert::new("Can't import the package", format!("It may be incomplete or damaged; export or download it again. ({e})"))),
+        }
+    }
+
+    pub(super) fn pack_dialogs(&mut self, ctx: &egui::Context) {
+        let Some(ask) = self.pack_ask.take() else { return };
+        let (title, body, yes, no) = match &ask {
+            PackAsk::Space { path, preview, .. } => (
+                format!("Import {}?", name(path)),
+                format!("{} will take up {} of disk space in this library.", plural(preview.items, "item"), crate::logic::format_size(preview.bytes)),
+                "Import",
+                "Cancel",
+            ),
+            PackAsk::Duplicates { preview, .. } => (
+                "Already in the library".to_string(),
+                format!("{} in the package look like items already here. Import them anyway?", plural(preview.duplicates, "item")),
+                "Import",
+                "Don't Import Them",
+            ),
+        };
+        let mut answer = None;
+        let modal = egui::Modal::new(egui::Id::unique("pack-import")).show(ctx, |ui| {
+            ui.set_width(340.0);
+            ui.label(RichText::new(&title).size(15.0));
+            ui.add_space(4.0);
+            ui.label(RichText::new(&body).color(t::p().text_muted));
+            ui.add_space(10.0);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.button(yes).clicked() {
+                    answer = Some(true);
+                }
+                if ui.button(no).clicked() {
+                    answer = Some(false);
+                }
+            });
+        });
+        let closed = modal.should_close();
+        match (ask, answer) {
+            (PackAsk::Space { .. }, Some(false)) | (PackAsk::Space { .. }, None) if closed => {}
+            (PackAsk::Space { path, folder, preview }, Some(true)) if preview.duplicates > 0 => self.pack_ask = Some(PackAsk::Duplicates { path, folder, preview }),
+            (PackAsk::Space { path, folder, .. }, Some(true)) => self.run_pack_import(&path, folder, false),
+            (PackAsk::Space { .. }, Some(false)) => {}
+            (PackAsk::Duplicates { path, folder, .. }, Some(keep)) => self.run_pack_import(&path, folder, !keep),
+            // Closing the duplicates question cancels, as Esc does in Eagle.
+            (PackAsk::Duplicates { .. }, None) if closed => {}
+            (ask, None) => self.pack_ask = Some(ask),
+        }
+    }
+
+    fn run_pack_import(&mut self, path: &std::path::Path, folder: Option<String>, skip_duplicates: bool) {
+        let Some(shared) = self.ws.lib.clone() else { return };
+        let opts = pack::PackImportOptions { folder, skip_duplicates };
+        let result = pack::import_pack(&mut lock(&shared), path, &opts);
+        match result {
+            Ok(ids) => {
+                self.flash(format!("Imported {} from {}", plural(ids.len(), "item"), name(path)));
+                self.ws.backup.changed(std::time::Instant::now());
+            }
+            Err(e) => self.show_alert(Alert::new("Can't import the package", format!("It may be incomplete or damaged; export or download it again. ({e})"))),
+        }
+    }
 }
 
 #[cfg(test)]

@@ -156,6 +156,38 @@ pub fn write_pack(plan: &PackPlan, dest: &Path, on_item: impl FnMut(usize)) -> R
     Ok(plan.ids.len())
 }
 
+/// What importing a pack would do, read before asking (Eagle confirms the
+/// disk space first, then asks about items it already has).
+#[derive(Debug, Clone, PartialEq)]
+pub struct PackPreview {
+    /// Items listed in `pack.json`.
+    pub items: usize,
+    /// Of those, how many look like untrashed items already in `lib`
+    /// (the key [`PackImportOptions::skip_duplicates`] uses).
+    pub duplicates: usize,
+    /// Bytes the import adds: the archive's uncompressed contents.
+    pub bytes: u64,
+}
+
+/// Reads `pack.json` and the archive's sizes without extracting anything.
+pub fn preview_pack(lib: &Library, pack: &Path) -> Result<PackPreview> {
+    let refuse = |reason: String| Error::Pack { path: pack.to_path_buf(), reason };
+    let file = File::open(pack).map_err(|e| Error::io(pack, e))?;
+    let mut zip = ZipArchive::new(file).map_err(|e| refuse(e.to_string()))?;
+    let mut bytes = 0;
+    for i in 0..zip.len() {
+        bytes += zip.by_index(i).map_err(|e| refuse(e.to_string()))?.size();
+    }
+    let mut text = Vec::new();
+    zip.by_name(PACK_JSON).map_err(|_| refuse("pack.json is missing".into()))?.read_to_end(&mut text).map_err(|e| refuse(e.to_string()))?;
+    let manifest: Value = serde_json::from_slice(&text).map_err(|e| refuse(format!("pack.json: {e}")))?;
+    let records = manifest.get("images").and_then(Value::as_array).ok_or_else(|| refuse("pack.json has no images list".into()))?;
+    let existing: HashSet<String> = lib.items().iter().filter(|i| !i.is_deleted).filter_map(duplicate_key).collect();
+    let items: Vec<Item> = records.iter().filter_map(|r| Item::from_json_str(&r.to_string()).ok()).collect();
+    let duplicates = items.iter().filter(|i| duplicate_key(i).is_some_and(|k| existing.contains(&k))).count();
+    Ok(PackPreview { items: records.len(), duplicates, bytes })
+}
+
 /// Imports the pack at `pack` into `lib` and returns the new item ids.
 /// Items and folders get new ids; a folder pack's tree is added at the root.
 pub fn import_pack(lib: &mut Library, pack: &Path, opts: &PackImportOptions) -> Result<Vec<String>> {
@@ -682,6 +714,10 @@ mod tests {
         export_pack(&s.lib, PackSource::Items(&s.ids), &out).unwrap();
 
         // Importing into its own library: everything is a duplicate.
+        let preview = preview_pack(&s.lib, &out).unwrap();
+        assert_eq!((preview.items, preview.duplicates), (3, 3));
+        assert!(preview.bytes >= fs::metadata(&out).unwrap().len() / 2);
+        assert_eq!(preview_pack(&Library::create(s.root.join("Empty.library")).unwrap(), &out).unwrap().duplicates, 0);
         let opts = PackImportOptions { skip_duplicates: true, ..Default::default() };
         assert!(import_pack(&mut s.lib, &out, &opts).unwrap().is_empty());
 

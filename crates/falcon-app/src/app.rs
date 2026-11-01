@@ -838,6 +838,8 @@ pub struct App {
     missing: Option<PathBuf>,
     /// A merge of another library in progress (`library_ui.rs`).
     merge: Option<library_ui::Merge>,
+    /// An `.eaglepack` import waiting for an answer.
+    pack_ask: Option<library_ui::PackAsk>,
 }
 
 impl App {
@@ -913,6 +915,7 @@ impl App {
             conflict_reload: false,
             missing: None,
             merge: None,
+            pack_ask: None,
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
         app.welcomed = library_dialogs::already_welcomed(saved.welcomed, saved.recent.len(), saved.libraries.len(), saved.library.is_some());
@@ -1523,6 +1526,12 @@ impl App {
     /// them is opened instead, never imported (only the first, if several).
     fn import_into(&mut self, paths: Vec<PathBuf>, folders: Vec<String>) {
         let (libraries, paths) = logic::split_libraries(paths);
+        // A dropped or opened .eaglepack is imported as a package, not as
+        // a file (the first one; Eagle takes one at a time).
+        let (packs, paths): (Vec<PathBuf>, Vec<PathBuf>) = paths.into_iter().partition(|p| p.is_file() && p.extension().is_some_and(|e| e.eq_ignore_ascii_case("eaglepack")));
+        if let Some(first) = packs.into_iter().next() {
+            self.start_pack_import(first, folders.first().cloned());
+        }
         self.import_files(paths, folders);
         if let Some(first) = libraries.first() {
             self.open(first.clone());
@@ -3124,6 +3133,9 @@ impl App {
             }
             if ui.button("Import Folders…").clicked() {
                 self.import_folders_dialog();
+            }
+            if ui.button("Import Eagle Package…").clicked() {
+                self.import_pack_dialog();
             }
             ui.separator();
             if ui.button(if self.collect.open { "Hide Collect Window" } else { "Show Collect Window" }).clicked() {
@@ -5678,6 +5690,7 @@ impl App {
             self.collect_window(&ctx);
         }
         self.merge_dialogs(&ctx);
+        self.pack_dialogs(&ctx);
         self.alert_modal(&ctx);
         if self.ws.lib.is_some() {
             self.missing_modal(&ctx);
