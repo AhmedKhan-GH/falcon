@@ -19,6 +19,7 @@ use std::path::Path;
 use image::{DynamicImage, ImageFormat};
 
 use crate::error::{Error, Result};
+use crate::import::ImportOptions;
 use crate::library::Library;
 use crate::thumbnail;
 
@@ -125,6 +126,44 @@ impl Library {
     /// export does, so its orientation is baked into the pixels.
     pub fn crop_item(&mut self, id: &str, rect: PixelRect) -> Result<()> {
         let item = self.item(id).cloned().ok_or_else(|| self.invalid(format!("no item {id}")))?;
+        let raw = item.original_path(self.root());
+        let Some(out) = self.cropped(&item, rect)? else { return Ok(()) };
+        self.rewrite(item, &raw, &out)
+    }
+
+    /// Eagle's crop "Save As": the cropped picture becomes a new item and
+    /// the original is left alone. The new item has the original's name,
+    /// tags, folders, source URL and rating, and its date added is just
+    /// after the original's so the two sit together. Returns its id; a
+    /// crop of the whole picture still makes a copy.
+    pub fn crop_item_as_new(&mut self, id: &str, rect: PixelRect) -> Result<String> {
+        let item = self.item(id).cloned().ok_or_else(|| self.invalid(format!("no item {id}")))?;
+        let out = match self.cropped(&item, rect)? {
+            Some(bytes) => bytes,
+            None => {
+                let raw = item.original_path(self.root());
+                fs::read(&raw).map_err(|e| Error::io(&raw, e))?
+            }
+        };
+        let dir = tempfile::Builder::new().prefix("falcon-crop").tempdir().map_err(|e| Error::io(self.root(), e))?;
+        let file = dir.path().join(format!("{}.{}", item.name, item.ext));
+        fs::write(&file, &out).map_err(|e| Error::io(&file, e))?;
+        let opts = ImportOptions { folders: item.folders.clone(), tags: item.tags.clone(), url: item.url.clone(), ..Default::default() };
+        self.check_folders(&file, &opts)?;
+        let staged = crate::import::stage(&file, &opts)?;
+        let new_id = self.commit_import(staged)?;
+        let mut copy = self.item(&new_id).cloned().ok_or_else(|| self.invalid("the cropped copy went missing"))?;
+        copy.modification_time = item.modification_time + 1;
+        if let Some(star) = item.extra.get("star").filter(|v| v.as_u64().is_some_and(|n| n > 0)) {
+            copy.extra.insert("star".into(), star.clone());
+        }
+        self.update_item(copy)?;
+        Ok(new_id)
+    }
+
+    /// The item's original cropped to `rect` and encoded in its format, or
+    /// `None` when `rect` covers the whole picture.
+    fn cropped(&self, item: &crate::model::Item, rect: PixelRect) -> Result<Option<Vec<u8>>> {
         let ext = item.ext.to_lowercase();
         if !can_crop(&ext) {
             return Err(self.invalid(format!("falcon can't crop .{} files", item.ext)));
@@ -141,25 +180,52 @@ impl Library {
             return Err(self.invalid("the crop area is empty"));
         }
         if (x, y, w, h) == (0, 0, img.width(), img.height()) {
-            return Ok(());
+            return Ok(None);
         }
-        let out = encode_like(&img.crop_imm(x, y, w, h), &ext, &data).map_err(|e| self.invalid(e))?;
-        self.rewrite(item, &raw, &out)
+        encode_like(&img.crop_imm(x, y, w, h), &ext, &data).map(Some).map_err(|e| self.invalid(e))
     }
 
     fn refuse_animated(&self, data: &[u8]) -> Result<()> {
         if is_animated(data) { Err(self.invalid("animated images can't be edited")) } else { Ok(()) }
     }
 
-    /// Writes the new bytes over the original (in place, so the birth time
-    /// stays), then refreshes the item and marks the undo step irreversible.
+    /// Writes the new bytes over the original, then refreshes the item and
+    /// marks the undo step irreversible. As in Eagle the file is written in
+    /// place (so its birth time stays) with a `.bk` copy beside it until
+    /// the write has reached the disk; a failed write puts the copy back.
     fn rewrite(&mut self, item: crate::model::Item, raw: &Path, bytes: &[u8]) -> Result<()> {
-        fs::write(raw, bytes).map_err(|e| Error::io(raw, e))?;
+        write_in_place(raw, bytes)?;
         let r = self.redraw_item(item);
         if let Some(j) = &mut self.journal {
             j.irreversible = true;
         }
         r
+    }
+}
+
+/// Overwrites `path` with `bytes`, keeping `path.bk` until the new bytes
+/// are synced; on failure the old file is copied back.
+fn write_in_place(path: &Path, bytes: &[u8]) -> Result<()> {
+    use std::io::Write;
+    let mut bk = path.as_os_str().to_owned();
+    bk.push(".bk");
+    let bk = std::path::PathBuf::from(bk);
+    fs::copy(path, &bk).map_err(|e| Error::io(&bk, e))?;
+    let written = fs::OpenOptions::new().write(true).truncate(true).open(path).and_then(|mut f| {
+        f.write_all(bytes)?;
+        f.sync_all()
+    });
+    match written {
+        Ok(()) => {
+            let _ = fs::remove_file(&bk);
+            Ok(())
+        }
+        Err(e) => {
+            if fs::copy(&bk, path).is_ok() {
+                let _ = fs::remove_file(&bk);
+            }
+            Err(Error::io(path, e))
+        }
     }
 }
 
@@ -658,6 +724,49 @@ mod tests {
         assert_eq!(keys(&lib, &id), order);
         let img = thumbnail::decode(&item.original_path(lib.root())).unwrap();
         assert!(img.color().has_alpha());
+    }
+
+    #[test]
+    fn crop_save_as_adds_an_item_and_keeps_the_original() {
+        let jpg = encode(&picture(1600, 1000), ImageFormat::Jpeg);
+        let tmp = tempfile::tempdir().unwrap();
+        let mut lib = Library::create(tmp.path().join("T.library")).unwrap();
+        let folder = lib.create_folder(None, "F").unwrap();
+        let src = tmp.path().join("big.jpg");
+        fs::write(&src, &jpg).unwrap();
+        let opts = ImportOptions { folders: vec![folder.clone()], tags: vec!["t".into()], url: "https://example.com/x".into(), annotation: "note".into(), ..Default::default() };
+        let id = lib.import_file(&src, &opts).unwrap();
+        let mut rated = lib.item(&id).unwrap().clone();
+        rated.extra.insert("star".into(), 4.into());
+        lib.update_item(rated).unwrap();
+        let before = lib.item(&id).unwrap().clone();
+        let original_bytes = fs::read(before.original_path(lib.root())).unwrap();
+        let meta_before = fs::read(before.info_dir(lib.root()).join("metadata.json")).unwrap();
+
+        let new_id = lib.crop_item_as_new(&id, PixelRect { x: 100, y: 100, width: 800, height: 400 }).unwrap();
+        assert_ne!(new_id, id);
+        assert_eq!(fs::read(before.original_path(lib.root())).unwrap(), original_bytes, "the original file is untouched");
+        assert_eq!(fs::read(before.info_dir(lib.root()).join("metadata.json")).unwrap(), meta_before, "and so is its record");
+        let copy = lib.item(&new_id).unwrap().clone();
+        assert_eq!((copy.width, copy.height), (800, 400));
+        assert_eq!((&copy.name, &copy.ext, &copy.folders, &copy.tags, &copy.url), (&before.name, &before.ext, &before.folders, &before.tags, &before.url));
+        assert_eq!(copy.annotation, "", "Eagle doesn't carry the note over");
+        assert_eq!(copy.extra.get("star"), Some(&serde_json::Value::from(4)));
+        assert_eq!(copy.modification_time, before.modification_time + 1);
+        assert!(!copy.palettes.is_empty());
+        // Saved like any item, and found again on reopening.
+        let again = Library::open(lib.root()).unwrap();
+        assert_eq!(again.item(&new_id).unwrap().width, 800);
+    }
+
+    #[test]
+    fn rewriting_leaves_no_backup_behind() {
+        let png = encode(&picture(300, 200), ImageFormat::Png);
+        let (_tmp, mut lib, id) = library_with("a.png", &png);
+        lib.crop_item(&id, PixelRect { x: 0, y: 0, width: 100, height: 100 }).unwrap();
+        let dir = lib.item(&id).unwrap().info_dir(lib.root());
+        let names: Vec<String> = fs::read_dir(dir).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+        assert!(names.iter().all(|n| !n.ends_with(".bk")), "{names:?}");
     }
 
     #[test]
