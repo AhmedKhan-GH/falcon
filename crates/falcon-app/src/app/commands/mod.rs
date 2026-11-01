@@ -163,7 +163,7 @@ impl App {
             pressed.push(C::Scroll(crate::shortcuts::Scroll::PageUp));
         }
         // These take the whole key press: the fixed keys wait a frame.
-        let done = audio || pressed.iter().any(|c| matches!(c, C::Paste | C::OpenDefault | C::RevealInFinder | C::Viewer) || (*c == C::Back && viewer));
+        let done = audio || pressed.iter().any(|c| matches!(c, C::Paste | C::OpenDefault | C::RevealInFinder | C::RevealAlt | C::Viewer) || (*c == C::Back && viewer));
         for cmd in pressed {
             self.run_command(ctx, cmd);
         }
@@ -551,7 +551,7 @@ impl App {
             C::LayoutWaterfall => self.set_layout(Layout::Waterfall),
             C::LayoutList => self.set_layout(Layout::List),
             C::OpenDefault => self.open_keys(true),
-            C::RevealInFinder => self.open_keys(false),
+            C::RevealInFinder | C::RevealAlt => self.open_keys(false),
             C::OpenLink => self.open_links(),
             C::SelectAll => self.ws.selected = self.ws.order.clone(),
             C::Viewer if viewer => self.ws.viewer = None,
@@ -652,7 +652,7 @@ impl App {
                     self.ws.actions.push(Action::Edit(image_edit::Op::ResetCustomThumbnail(id)));
                 }
             }
-            C::Duplicate => {
+            C::Duplicate | C::DuplicateAlt => {
                 if let Some(id) = self.acted_on().into_iter().next() {
                     self.ws.actions.push(Action::Edit(image_edit::Op::Duplicate(id)));
                 }

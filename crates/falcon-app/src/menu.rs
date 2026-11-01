@@ -122,7 +122,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::Redo => s.text || (s.library && s.redo),
         C::Trash => any,
         C::RemoveFromFolder | C::SetFolderCover => any && s.scope == ScopeKind::Folder,
-        C::OpenDefault | C::OpenLink | C::RevealInFinder | C::RefreshThumbnail | C::Duplicate => any || (s.library && s.viewer),
+        C::OpenDefault | C::OpenLink | C::RevealInFinder | C::RevealAlt | C::RefreshThumbnail | C::Duplicate | C::DuplicateAlt => any || (s.library && s.viewer),
         C::Rename => grid && s.selected > 0,
         C::Back => s.viewer || (s.library && s.back),
         C::Forward => grid && s.forward,

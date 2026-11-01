@@ -40,6 +40,10 @@ pub enum Command {
     RevealInFinder,
     /// Eagle's View ▸ Open Link: the source link of the items.
     OpenLink,
+    /// Eagle's listed ⌥⌘S: a second chord for Reveal in Finder.
+    RevealAlt,
+    /// Eagle's listed ⌥⌘D: a second chord for Duplicate.
+    DuplicateAlt,
     Preferences,
     /// Lock falcon behind its password (Preferences ▸ Password).
     LockApp,
@@ -341,6 +345,10 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::OpenDefault, id: "view.file.opendefault", group: "View", label: "Open in the default app", default: k(SHIFT, Key::Enter), aliases: &[] },
     Spec { cmd: Command::RevealInFinder, id: "view.file.openfinder", group: "View", label: "Show in Finder", default: k(CMD, Key::Enter), aliases: &[] },
     Spec { cmd: Command::OpenLink, id: "view.file.openlink", group: "View", label: "Open the source link", default: k(CMD_SHIFT, Key::O), aliases: &[] },
+    // Eagle lists these two on macOS with defaults only (nothing in its bundle reads them);
+    // they run the same code as the ⌘↩ and ⌘D rows. macOS reserves ⌥⌘D for hiding the Dock.
+    Spec { cmd: Command::RevealAlt, id: "view.reveal.darwin", group: "View", label: "Show in Finder (second key)", default: k(CMD_ALT, Key::S), aliases: &[] },
+    Spec { cmd: Command::DuplicateAlt, id: "view.duplicate.darwin", group: "View", label: "Duplicate the item (second key)", default: k(CMD_ALT, Key::D), aliases: &[] },
     // Eagle: ⌫ goes back (or leaves the viewer), and ⌘←/⌘→ and ⌥←/⌥→
     // step through the history.
     Spec { cmd: Command::Back, id: "go.back", group: "Navigate", label: "Back", default: k(NONE, Key::Backspace), aliases: &[KeyboardShortcut::new(CMD, Key::ArrowLeft), KeyboardShortcut::new(ALT, Key::ArrowLeft)] },
@@ -1019,6 +1027,17 @@ mod tests {
         assert_eq!(keys.resolve(Key::C, ALT_SHIFT), Some(Command::SetFolderCover));
         assert_eq!(keys.resolve(Key::C, Modifiers::SHIFT), Some(Command::Crop));
         assert_eq!(keys.resolve(Key::C, CMD_ALT_SHIFT), Some(Command::CopyFolderPath));
+    }
+
+    #[test]
+    fn second_reveal_and_duplicate_keys() {
+        let keys = Shortcuts::default();
+        assert_eq!(keys.resolve(Key::S, CMD_ALT), Some(Command::RevealAlt));
+        assert_eq!(keys.resolve(Key::D, CMD_ALT), Some(Command::DuplicateAlt));
+        assert_eq!(keys.resolve(Key::D, CMD), Some(Command::Duplicate));
+        assert_eq!(keys.resolve(Key::Enter, CMD), Some(Command::RevealInFinder));
+        assert_eq!(spec(Command::RevealAlt).id, "view.reveal.darwin");
+        assert_eq!(spec(Command::DuplicateAlt).id, "view.duplicate.darwin");
     }
 
     #[test]

@@ -435,6 +435,7 @@ These are the defaults. All but the arrows, Esc, Tab, Z and the viewer's C, 0, 1
 | ⌘M and ⌃⌘F | Minimise the window, and enter or leave full screen |
 | ⇧↩ | Open the selected items (or the viewer's item) in their default apps (Eagle's `view.file.opendefault`) |
 | ⌘↩ | Show the selected items (or the viewer's item) in Finder (Eagle's `view.file.openfinder`) |
+| ⌥⌘S and ⌥⌘D | Second keys for Show in Finder and Duplicate (Eagle's shortcut editor lists `view.reveal.darwin` and `view.duplicate.darwin` with these defaults; nothing in Eagle's code reads them). They run the same code as ⌘↩ and ⌘D, in the grid and in the viewer, and have their own rows under Preferences → Shortcuts. macOS reserves ⌥⌘D for hiding the Dock by default, so that chord reaches falcon only when the system shortcut is turned off. The menu bar shows the first key of each action only |
 | ⇧⌘O | Open the source links of the selected items (or the viewer's item), up to 50; `file://` links and existing paths open in their app, web addresses in the browser (Eagle's `view.file.openlink`) |
 | C | In the viewer, turn comment mode on or off (Esc also leaves it) |
 | ⇧R | Rotate the viewer's image left (`edit.image.rotate`, rebindable; unbound means no key) |
