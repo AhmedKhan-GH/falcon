@@ -7,13 +7,12 @@ use std::sync::{Arc, Mutex};
 
 use eframe::egui::{self, Pos2, Rect, Ui, vec2};
 use falcon_library::Library;
-use falcon_library::search::{ColorQuery, OrderBy};
+use falcon_library::search::OrderBy;
 
 use crate::icons as ic;
-use crate::logic::{self, Layout, Scope};
+use crate::logic::{self, Layout};
 use crate::locale::tr;
 use crate::theme as t;
-use crate::ui::filter_bar::parse_hex;
 use crate::ui::widgets::{galley, icon_button};
 
 pub(crate) mod actions;
@@ -23,6 +22,7 @@ pub(crate) mod import;
 pub(crate) mod library;
 pub(crate) mod long_ops;
 pub(crate) mod navigation;
+pub(crate) mod open_queue;
 pub(crate) mod state;
 pub(crate) mod system;
 
@@ -187,6 +187,9 @@ pub struct App {
     pub(crate) confirm_reload: bool,
     /// A library being read on a background thread (`ui/dialogs/library_notices.rs`).
     pub(crate) loading: Option<crate::ui::dialogs::library_notices::Loading>,
+    /// Libraries waiting for their turn behind the loading screen, and the
+    /// launch's starting view (`app/open_queue.rs`).
+    pub(crate) opens: open_queue::OpenQueue,
     /// The global keys, the menu bar icon and screen capture (`system.rs`).
     pub(crate) system: system::System,
     /// Smaller main-window state (`shell.rs`): text cards' cache.
@@ -275,6 +278,7 @@ impl App {
             pack_ask: None,
             confirm_reload: false,
             loading: None,
+            opens: Default::default(),
             system: Default::default(),
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
@@ -326,40 +330,10 @@ impl App {
         // command line (focused if it was already open).
         app.missing = crate::workspaces::missing_shown(&saved.libraries, saved.active, saved.library.as_deref(), |p| p.is_dir());
         let (libraries, active) = crate::workspaces::restore(&saved.libraries, saved.active, saved.library.as_deref(), |p| p.is_dir());
-        for p in libraries {
-            app.open(p);
-        }
-        app.focus(active);
-        if let Some(p) = initial {
-            app.open(p);
-        }
-        if !launch.import.is_empty() {
-            app.import(launch.import);
-        }
-        // One item opens in the viewer (unless --select); several are selected.
-        if let [id] = launch.items.as_slice()
-            && !launch.select
-        {
-            app.ws.viewer = Some(id.clone());
-        }
-        if let Some(first) = launch.items.first() {
-            app.ws.scroll_to = Some(first.clone());
-        }
-        app.ws.selected = launch.items;
-        if let Some(q) = launch.search {
-            app.ws.query = q;
-        }
-        if let Some(rgb) = launch.color.as_deref().and_then(parse_hex) {
-            app.ws.filter.color = Some(ColorQuery::new(rgb));
-            app.ws.color_text = logic::hex(rgb);
-            app.ws.show_filter = true;
-        }
-        if launch.tags {
-            app.ws.scope = Scope::AllTags;
-        }
-        for link in launch.links {
-            app.follow_link(link);
-        }
+        // Each is read behind the loading screen; the command line's
+        // starting view waits until they are open (`app/open_queue.rs`).
+        let show = initial.or_else(|| libraries.get(active).cloned());
+        app.queue_launch(libraries, show, launch);
         crate::links::set_repaint(&app.ctx);
         crate::open_files::set_repaint(&app.ctx);
         app
@@ -441,17 +415,22 @@ impl App {
         }
         self.follow_api_switch();
         self.follow_api_preferences();
-        for link in crate::links::take() {
-            self.follow_link(link);
-        }
-        // Files opened with falcon: packages and files are imported,
-        // libraries opened (`App::import_into`), as when dropped.
-        let opened = crate::open_files::take();
-        if !opened.is_empty() {
-            self.import(opened);
-            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
-        }
         self.poll_loading();
+        self.pump_opens();
+        // Links and files opened with falcon wait while the launch's
+        // libraries are still being read.
+        if !self.opens_pending() {
+            for link in crate::links::take() {
+                self.follow_link(link);
+            }
+            // Files opened with falcon: packages and files are imported,
+            // libraries opened (`App::import_into`), as when dropped.
+            let opened = crate::open_files::take();
+            if !opened.is_empty() {
+                self.import(opened);
+                ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+            }
+        }
         if std::mem::take(&mut self.refresh) {
             self.refresh_library();
         }
@@ -660,7 +639,7 @@ impl App {
         self.ws.loader.want(std::mem::take(&mut self.ws.frame_jobs));
         drop(guard);
         match self.switch_to.take() {
-            Some(Switch::Open(p)) => self.open_in_background(p),
+            Some(Switch::Open(p)) => self.queue_open(p),
             Some(Switch::Pick) => self.pick_library(),
             Some(Switch::Create) => self.new_library(),
             Some(Switch::Focus(i)) => self.focus(i),

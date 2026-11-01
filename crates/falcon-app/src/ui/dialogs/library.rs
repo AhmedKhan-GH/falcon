@@ -200,7 +200,7 @@ impl App {
             return true;
         }
         match crate::install_dir::guard(&dest).and_then(|()| Library::create(&dest)) {
-            Ok(_) => self.open(dest),
+            Ok(_) => self.queue_open(dest),
             Err(e) => self.flash(trf("Could not create the library: {error}", &[("error", &e)])),
         }
         false

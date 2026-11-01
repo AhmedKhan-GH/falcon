@@ -248,19 +248,13 @@ impl App {
         ui.add_space(12.0);
         ui.horizontal(|ui| {
             if ui.button(tr("Try Again")).clicked() {
-                self.open(path.clone());
-                if self.missing.is_some() {
-                    self.flash(tr("The library is still missing"));
-                }
+                self.retry_missing(path.clone());
             }
-            if ui.button(tr("Select Another Path…")).clicked() {
-                if let Some(p) = rfd::FileDialog::new().set_title(tr("Open Eagle Library")).set_directory(falcon_library::sandbox::default_root()).pick_folder() {
-                    self.open(p);
-                }
-                if self.missing.is_none() {
-                    // Found elsewhere: the old place leaves the history.
-                    crate::workspaces::remove_from_list(&mut self.recent, &path);
-                }
+            if ui.button(tr("Select Another Path…")).clicked()
+                && let Some(p) = rfd::FileDialog::new().set_title(tr("Open Eagle Library")).set_directory(falcon_library::sandbox::default_root()).pick_folder()
+            {
+                // Found elsewhere: once it opens, the old place leaves the history.
+                self.replace_missing(path.clone(), p);
             }
             if dialog && ui.button(tr("Close")).clicked() {
                 self.missing = None;

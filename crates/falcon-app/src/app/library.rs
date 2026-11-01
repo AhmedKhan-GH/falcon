@@ -342,7 +342,7 @@ impl App {
     /// screen.
     pub(crate) fn pick_library(&mut self) {
         if let Some(p) = rfd::FileDialog::new().set_title(tr("Open Eagle Library")).set_directory(falcon_library::sandbox::default_root()).pick_folder() {
-            self.open_in_background(p);
+            self.queue_open(p);
         }
     }
 
