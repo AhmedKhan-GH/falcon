@@ -1,4 +1,4 @@
-//! The filter bar's Date, Duration, Camera and Font chips (see the Search
+//! The filter bar's Date, Duration, BPM, Camera and Font chips (see the Search
 //! and filters chapter of the docs). Everything goes through
 //! [`Filter`], so `logic::visible` applies it.
 
@@ -23,6 +23,8 @@ pub(super) struct MediaFilterUi {
     dur_min: String,
     dur_max: String,
     dur_unit: DurationUnit,
+    bpm_min: String,
+    bpm_max: String,
     /// Keys of the fonts activated through Eagle, read once.
     font_keys: Option<HashSet<String>>,
 }
@@ -159,6 +161,35 @@ impl App {
             });
         }
 
+        // BPM: min and max, whole numbers as Eagle's parseInt reads them.
+        let tempo = live().filter_map(search::bpm).fold(None, |r: Option<(f64, f64)>, b| Some(r.map_or((b, b), |(lo, hi)| (lo.min(b), hi.max(b)))));
+        if tempo.is_some() || f.bpm != (None, None) {
+            if bpm_fields_stale(&fui.bpm_min, &fui.bpm_max, f.bpm) {
+                // A saved filter set the rule: show its bounds.
+                fui.bpm_min = f.bpm.0.map(|b| b.trunc().to_string()).unwrap_or_default();
+                fui.bpm_max = f.bpm.1.map(|b| b.trunc().to_string()).unwrap_or_default();
+            }
+            let resp = filter_chip(ui, "BPM", bpm_summary(f.bpm));
+            menu(&resp, |ui| {
+                ui.set_min_width(160.0);
+                let mut changed = false;
+                ui.horizontal(|ui| {
+                    let (lo, hi) = tempo.map_or(("Min".to_string(), "Max".to_string()), |(a, b)| (a.trunc().to_string(), b.trunc().to_string()));
+                    changed |= ui.add(TextEdit::singleline(&mut fui.bpm_min).desired_width(56.0).hint_text(lo)).changed();
+                    ui.label("–");
+                    changed |= ui.add(TextEdit::singleline(&mut fui.bpm_max).desired_width(56.0).hint_text(hi)).changed();
+                });
+                if changed {
+                    f.bpm = (parse_bpm(&fui.bpm_min), parse_bpm(&fui.bpm_max));
+                }
+                if f.bpm != (None, None) && ui.button("Clear").clicked() {
+                    f.bpm = (None, None);
+                    fui.bpm_min.clear();
+                    fui.bpm_max.clear();
+                }
+            });
+        }
+
         // Camera: every distinct camera with its count, multi-select.
         let cameras = logic::camera_counts(items);
         if !cameras.is_empty() || !f.cameras.is_empty() {
@@ -223,5 +254,74 @@ fn unit_label(u: DurationUnit) -> &'static str {
         DurationUnit::Seconds => "s",
         DurationUnit::Minutes => "min",
         DurationUnit::Hours => "h",
+    }
+}
+
+/// A BPM bound as typed, read the way Eagle's `parseInt` reads it: leading
+/// spaces, an optional sign, then digits up to the first other character
+/// ("120.5" and "120 bpm" give 120). `None` when there are no digits.
+pub fn parse_bpm(text: &str) -> Option<f64> {
+    let t = text.trim_start();
+    let (sign, rest) = match t.as_bytes().first() {
+        Some(b'-') => (-1.0, &t[1..]),
+        Some(b'+') => (1.0, &t[1..]),
+        _ => (1.0, t),
+    };
+    let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+    digits.parse::<f64>().ok().map(|n| sign * n)
+}
+
+/// The BPM chip's value: `90 – 128`, `≥ 90` or `≤ 128`, with each bound
+/// truncated as the search applies it.
+pub fn bpm_summary(range: (Option<f64>, Option<f64>)) -> Option<String> {
+    let n = |b: f64| b.trunc().to_string();
+    match range {
+        (None, None) => None,
+        (Some(a), None) => Some(format!("≥ {}", n(a))),
+        (None, Some(b)) => Some(format!("≤ {}", n(b))),
+        (Some(a), Some(b)) => Some(format!("{} – {}", n(a), n(b))),
+    }
+}
+
+/// Whether the typed fields no longer describe the rule (a saved filter or
+/// the bar's Clear changed it), so they should be refilled from it.
+fn bpm_fields_stale(min: &str, max: &str, range: (Option<f64>, Option<f64>)) -> bool {
+    let t = |b: Option<f64>| b.map(f64::trunc);
+    (parse_bpm(min), parse_bpm(max)) != (t(range.0), t(range.1))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bpm_fields_parse_like_parse_int() {
+        assert_eq!(parse_bpm("120"), Some(120.0));
+        assert_eq!(parse_bpm("  98.7"), Some(98.0));
+        assert_eq!(parse_bpm("140 bpm"), Some(140.0));
+        assert_eq!(parse_bpm("+90"), Some(90.0));
+        assert_eq!(parse_bpm("-5"), Some(-5.0));
+        assert_eq!(parse_bpm(""), None);
+        assert_eq!(parse_bpm("fast"), None);
+        assert_eq!(parse_bpm("-"), None);
+        assert_eq!(parse_bpm(".5"), None);
+    }
+
+    #[test]
+    fn bpm_chip_labels() {
+        assert_eq!(bpm_summary((None, None)), None);
+        assert_eq!(bpm_summary((Some(90.0), None)).as_deref(), Some("≥ 90"));
+        assert_eq!(bpm_summary((None, Some(128.5))).as_deref(), Some("≤ 128"));
+        assert_eq!(bpm_summary((Some(90.0), Some(128.0))).as_deref(), Some("90 – 128"));
+    }
+
+    #[test]
+    fn bpm_fields_follow_saved_filters() {
+        assert!(!bpm_fields_stale("", "", (None, None)));
+        assert!(!bpm_fields_stale("90", "128 ", (Some(90.0), Some(128.0))));
+        assert!(!bpm_fields_stale("fast", "", (None, None)), "unreadable text is no rule");
+        assert!(!bpm_fields_stale("128", "", (Some(128.5), None)), "a saved fraction is truncated");
+        assert!(bpm_fields_stale("", "", (Some(90.0), None)), "a saved filter set a bound");
+        assert!(bpm_fields_stale("90", "", (None, None)), "the rule was cleared");
     }
 }

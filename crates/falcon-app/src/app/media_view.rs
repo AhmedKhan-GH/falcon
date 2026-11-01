@@ -269,10 +269,14 @@ impl App {
 }
 
 /// The inspector rows for audio, video, camera and font metadata, when the
-/// item has them: `duration`, `rawMetas` and `fontMetas`.
+/// item has them: `duration`, `bpm`, `rawMetas` and `fontMetas`.
 pub(super) fn media_props(ui: &mut Ui, item: &Item) {
     if let Some(d) = search::duration(item) {
         super::prop(ui, "Duration", &logic::format_duration(d));
+    }
+    if let Some(b) = search::bpm(item) {
+        // As stored (`119.985`), as Eagle's inspector shows it.
+        super::prop(ui, "BPM", &b.to_string());
     }
     if let Some(raw) = item.extra.get("rawMetas") {
         let text = |k: &str| raw.get(k).and_then(|v| v.as_str()).filter(|s| !s.is_empty()).map(String::from);
