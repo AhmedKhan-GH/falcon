@@ -12,6 +12,7 @@ pub mod fontpreview;
 pub mod folder_import;
 pub mod library;
 pub mod manual;
+pub mod merge;
 pub mod ids;
 pub mod keywords;
 pub mod media;

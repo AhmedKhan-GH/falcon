@@ -2,7 +2,7 @@
 //! by a perceptual hash of their thumbnails. See the Import chapter of the
 //! docs; Eagle stores no hash in item JSON, so nothing here writes to items.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
 use std::io;
 use std::path::Path;
@@ -83,8 +83,9 @@ fn tidy(mut groups: Vec<Vec<String>>, order: &HashMap<&str, usize>) -> Vec<Vec<S
     groups
 }
 
-fn live(lib: &Library) -> Vec<&Item> {
-    lib.items().iter().filter(|i| !i.is_deleted).collect()
+/// Items not in the trash, and among `only` when given.
+fn live<'a>(lib: &'a Library, only: Option<&HashSet<String>>) -> Vec<&'a Item> {
+    lib.items().iter().filter(|i| !i.is_deleted && only.is_none_or(|o| o.contains(&i.id))).collect()
 }
 
 /// Groups of items (not in the trash) whose originals are byte-identical.
@@ -95,7 +96,13 @@ pub fn find_exact_duplicates(lib: &Library) -> Vec<Vec<String>> {
 /// [`find_exact_duplicates`] with a cache. Only files that share their size
 /// with another file are hashed.
 pub fn find_exact_duplicates_cached(lib: &Library, cache: &mut HashCache) -> Vec<Vec<String>> {
-    let items = live(lib);
+    find_exact_duplicates_in(lib, None, cache)
+}
+
+/// [`find_exact_duplicates_cached`] among the items in `only` (all live
+/// items when `None`), as Eagle scans the selection or the current list.
+pub fn find_exact_duplicates_in(lib: &Library, only: Option<&HashSet<String>>, cache: &mut HashCache) -> Vec<Vec<String>> {
+    let items = live(lib, only);
     let order: HashMap<&str, usize> = items.iter().enumerate().map(|(n, i)| (i.id.as_str(), n)).collect();
     let mut by_size: HashMap<u64, Vec<(&Item, u64)>> = HashMap::new();
     for item in &items {
@@ -178,7 +185,13 @@ pub fn find_near_duplicates(lib: &Library, threshold: u32) -> Vec<Vec<String>> {
 /// original's size and mtime, like the content hash, since a thumbnail
 /// only changes with its original.
 pub fn find_near_duplicates_cached(lib: &Library, threshold: u32, cache: &mut HashCache) -> Vec<Vec<String>> {
-    let items = live(lib);
+    find_near_duplicates_in(lib, None, threshold, cache)
+}
+
+/// [`find_near_duplicates_cached`] among the items in `only`; items
+/// outside it never link two groups together.
+pub fn find_near_duplicates_in(lib: &Library, only: Option<&HashSet<String>>, threshold: u32, cache: &mut HashCache) -> Vec<Vec<String>> {
+    let items = live(lib, only);
     let order: HashMap<&str, usize> = items.iter().enumerate().map(|(n, i)| (i.id.as_str(), n)).collect();
     let mut hashes: Vec<(&str, u64)> = Vec::new();
     for item in &items {

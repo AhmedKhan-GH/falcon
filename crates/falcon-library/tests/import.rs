@@ -396,3 +396,64 @@ fn folder_auto_tags_on_import() {
     let id = lib.import_file(&src, &off).unwrap();
     assert_eq!(lib.item(&id).unwrap().tags, ["mine"]);
 }
+
+#[test]
+fn merging_duplicates_keeps_one_combines_the_rest_and_undoes() {
+    use falcon_library::merge::Choices;
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("Merge.library");
+    let mut lib = Library::create(&root).unwrap();
+    let f1 = lib.create_folder(None, "One").unwrap();
+    let f2 = lib.create_folder(None, "Two").unwrap();
+    let opts = ImportOptions { palette: false, ..Default::default() };
+    let mut ids = Vec::new();
+    for (n, name) in ["keep.png", "copy.png", "third.png"].iter().enumerate() {
+        let p = tmp.path().join(name);
+        make_png(&p, 40, 30);
+        let id = lib.import_file(&p, &opts).unwrap();
+        let mut item = lib.item(&id).unwrap().clone();
+        item.folders = vec![[&f1, &f2, &f1][n].clone()];
+        item.tags = vec![format!("t{n}")];
+        item.annotation = format!("note {n}");
+        item.url = if n == 1 { "https://example.com/copy".into() } else { String::new() };
+        if n == 2 {
+            item.extra.insert("star".into(), 3.into());
+        }
+        lib.update_item(item).unwrap();
+        ids.push(id);
+    }
+    let before: Vec<_> = ids.iter().map(|id| lib.item(id).unwrap().clone()).collect();
+    let items: Vec<_> = before.iter().collect();
+    let choices = Choices::of(&items);
+    let mut merge = choices.defaults(&ids[0], vec![ids[1].clone(), ids[2].clone(), ids[0].clone()]);
+    merge.name = Some("copy".into());
+    merge.note = choices.merged_note.clone().unwrap();
+
+    lib.begin_transaction("Merge");
+    let report = lib.merge_duplicates(&[merge]).unwrap();
+    let tx = lib.end_transaction().unwrap();
+    assert_eq!((report.kept, report.trashed), (1, 2), "the kept item is never trashed");
+    assert_eq!(report.bytes, before[1].size + before[2].size);
+
+    let reopened = Library::open(&root).unwrap();
+    let kept = reopened.item(&ids[0]).unwrap();
+    assert!(!kept.is_deleted);
+    assert_eq!(kept.name, "copy");
+    assert!(kept.original_path(&root).is_file(), "the original was renamed with the item");
+    assert_eq!(kept.folders, [f1.clone(), f2.clone()]);
+    assert_eq!(kept.tags, ["t0", "t1", "t2"]);
+    assert_eq!(kept.url, "https://example.com/copy");
+    assert_eq!(kept.annotation, "note 0\nnote 1\nnote 2");
+    assert_eq!(kept.extra.get("star").and_then(|v| v.as_u64()), Some(3));
+    assert!(reopened.item(&ids[1]).unwrap().is_deleted && reopened.item(&ids[2]).unwrap().is_deleted);
+    assert!(reopened.item(&ids[1]).unwrap().original_path(&root).is_file(), "trashed copies keep their files");
+
+    lib.revert(tx).unwrap();
+    let back = Library::open(&root).unwrap();
+    for b in &before {
+        let now = back.item(&b.id).unwrap();
+        assert_eq!((&now.name, &now.folders, &now.tags, &now.annotation, &now.url, now.is_deleted), (&b.name, &b.folders, &b.tags, &b.annotation, &b.url, false));
+        assert_eq!(now.extra.get("star"), b.extra.get("star"));
+        assert!(now.original_path(&root).is_file());
+    }
+}
