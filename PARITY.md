@@ -2,15 +2,17 @@
 
 This is the checklist of everything Eagle 4.0.0 can do, compared with falcon. It was built on 2026-11-01 from Eagle's shipped app code and its English UI text, and every falcon status was checked in falcon's code, not taken from ROADMAP or the docs. Local parity means every row marked local is Done. Rows marked online or plugin need a network service, an account or Eagle's plugin system, and don't count.
 
-Statuses: **Done** works as in Eagle. **Partial** exists but is missing options or behaves differently. **Missing** isn't there.
+Statuses: **Done** works as in Eagle. **Partial** exists but is missing options or behaves differently. **Missing** isn't there. **Not wanted (user decision)** is an Eagle feature the user chose to leave out; it is not counted as Missing.
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
 | Main window: menus, shortcuts, toolbar, sidebar, layouts | 257 | 6 | 9 | 8 |
 | Viewers and file formats | 187 | 13 | 3 | 5 |
-| Search, filters and organising | 216 | 1 | 4 | 3 |
-| Import, export, library, preferences and integrations | 190 | 3 | 16 | 26 |
-| **Total** | 850 | 23 | 32 | 42 |
+| Search, filters and organising | 216 | 1 | 2 | 3 |
+| Import, export, library, preferences and integrations | 190 | 3 | 15 | 26 |
+| **Total** | 850 | 23 | 29 | 42 |
+
+Rows marked **Not wanted (user decision)** (3) are Eagle features the user chose not to have in falcon; they are counted outside the local Missing total.
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -875,8 +877,8 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Search Scope menu: turn name, folder name, folder description, extension, tags, URL, comment and note on or off (remembered) | Done | Menu on the search caret, 8 toggles remembered (`search_state.rs`) | local |
 | Search All: search the whole library from any view | Done | ⌥⌘F (`find.search.all`) | local |
 | Exact-substring results only | Done | Falcon adds typo-tolerant matching, on by default at the user's request (`Prefs::typo_search`); off gives Eagle's exact substrings. A documented falcon extra, not a gap | local |
-| Traditional and simplified Chinese match each other | Missing | Not built: needs a conversion table; no crate offline | local |
-| Pinyin matching for folder, smart folder and tag names in sidebar and tag lists | Missing | Not built: needs pinyin dictionaries; no crate offline | local |
+| Traditional and simplified Chinese match each other | Not wanted (user decision) | Not built by decision (2026-11-01): the user does not want Chinese variant matching in falcon | local |
+| Pinyin matching for folder, smart folder and tag names in sidebar and tag lists | Not wanted (user decision) | Not built by decision (2026-11-01): the user does not want pinyin search in falcon | local |
 | Toolbar title reads "Search results" while searching | Done | `A:2019` | local |
 | Empty-result message | Done | `ui/grid/empty.rs`: per-view messages (No Matches, Drop Files Here, Trash Is Empty, All Sorted…) | local |
 | Search by image from the search box (AI) | Missing | The camera icon is drawn disabled (`A:2069`) | online/plugin |
@@ -1195,7 +1197,7 @@ Ranked by user impact. Data-loss and silent-mismatch bugs come first, then every
 27. ~~No change-extension in the inspector; URL isn't validated; no Open Link button.~~ Fixed.
 28. ~~Recently Used isn't a list of opened items; Uncategorized ignores stale folder ids.~~ Fixed (R reshuffles Random).
 29. **Folder deletion**: the trash checkbox can now be unticked; there's no move confirmation, and Touch ID unlock is missing.
-30. **Search extras**: no Search All, no Chinese traditional/simplified matching, no pinyin sidebar search. Falcon's own fuzzy matching is a deviation from Eagle.
+30. **Search extras**: Search All is done. Chinese traditional/simplified matching and pinyin sidebar search are not wanted (user decision). Falcon's own fuzzy matching is a documented falcon extra, on by default with a switch.
 31. **Minor UI gaps**: Smart Folders and Folders section headers don't fold; the bulk-action gate doesn't cover every newer command yet.
 
 Online/plugin only (not ranked): Visual Match, Semantic search, the search-by-image button.
@@ -1509,7 +1511,7 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | Eight UI languages: English, Simplified Chinese, Traditional Chinese, Japanese, Korean, Spanish, German and Russian (picked automatically from the system language, or set in Preferences) | `i18n/index.js` `supportLanguage`; `i18n/{en,zh_CN,zh_TW,ja_JP,ko_KR,es_ES,de_DE,ru_RU}.js`; collect window `locales/*.json`; PH `general.language` | Done | `crate::locale` with falcon's own catalogues for all eight (`crates/falcon-app/locales/`), picked from the system language or set in Preferences, applied live to the whole interface incl. the native menu bar; translations are machine-written and listed for review in `locales/REVIEW.md` | local |
-| Chinese pinyin search support (jieba dictionaries) | Missing | Model round-trips `pinyin` only | local |
+| Chinese pinyin search support (jieba dictionaries) | Not wanted (user decision) | Not built by decision (2026-11-01): no jieba dictionaries; the model still round-trips `pinyin` | local |
 
 ---
 
@@ -1519,7 +1521,7 @@ Rows marked "not counted" are features Eagle 4.0.0 does not have.
 
 - **Done:** 190, including 5 where falcon goes beyond Eagle and 1 with a small difference.
 - **Partial:** 3.
-- **Missing:** 42, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
+- **Missing:** 41, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
 - **Different on purpose:** 1 (the API listens on localhost only).
 
 ### Ranked Missing and Partial local items
