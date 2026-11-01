@@ -65,12 +65,15 @@ pub(super) fn top_bar(app: &mut App, ui: &mut Ui, item: &Item, bar: Rect) {
     p.rect_filled(bar, 0.0, t::p().main);
     window_drag(ui, bar, "viewer");
     let cy = bar.center().y;
-    if icon_button(ui, Pos2::new(bar.left() + 98.0, cy), ic::CARET_LEFT, 17.0, true, "Back (Esc)").clicked() {
+    // Leave room for the window buttons only when the bar starts at the
+    // window's left edge (no sidebar beside it).
+    let x = if bar.left() > ui.ctx().content_rect().left() + 1.0 { bar.left() + 20.0 } else { bar.left() + 98.0 };
+    if icon_button(ui, Pos2::new(x, cy), ic::CARET_LEFT, 17.0, true, "Back (Esc)").clicked() {
         app.ws.viewer = None;
     }
     let name = format!("{}.{}", item.name, item.ext);
     let g = galley(ui, &name, font(14.0), t::p().text, 360.0);
-    p.galley(Pos2::new(bar.left() + 120.0, cy - g.size().y / 2.0), g, t::p().text);
+    p.galley(Pos2::new(x + 22.0, cy - g.size().y / 2.0), g, t::p().text);
     if app.ws.view.id == item.id {
         let file = app.ws.view.file.clone();
         app.viewer_open_button(ui, bar.right() - 12.0, cy, &file);
@@ -87,6 +90,9 @@ impl App {
             return false;
         }
         egui::Area::new(egui::Id::unique("media-viewer")).fixed_pos(screen.min).order(egui::Order::Foreground).show(ctx, |ui| {
+            // Claim the whole rect, so egui sends scroll and hover here
+            // rather than to the grid underneath.
+            ui.expand_to_include_rect(screen);
             ui.painter().rect_filled(screen, 0.0, t::p().main);
             let bar = Rect::from_min_size(screen.min, vec2(screen.width(), t::BAR_HEIGHT));
             let area = Rect::from_min_max(Pos2::new(screen.left(), bar.bottom()), screen.max);

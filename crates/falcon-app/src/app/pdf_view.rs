@@ -901,7 +901,7 @@ impl PdfState {
     }
 }
 
-fn is_pdf(item: &Item) -> bool {
+pub(super) fn is_pdf(item: &Item) -> bool {
     item.ext.eq_ignore_ascii_case("pdf")
 }
 
@@ -961,6 +961,9 @@ impl App {
         }
         self.pdf.ensure(ctx, lib, item);
         egui::Area::new(Id::unique("pdf-viewer")).fixed_pos(screen.min).order(egui::Order::Foreground).show(ctx, |ui| {
+            // Claim the whole rect, so egui sends scroll and hover here
+            // rather than to the grid underneath.
+            ui.expand_to_include_rect(screen);
             ui.painter().rect_filled(screen, 0.0, t::p().main);
             let bar = Rect::from_min_size(screen.min, vec2(screen.width(), t::BAR_HEIGHT));
             let mut area = Rect::from_min_max(Pos2::new(screen.left(), bar.bottom()), screen.max);

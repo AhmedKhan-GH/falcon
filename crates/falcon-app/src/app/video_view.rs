@@ -255,6 +255,9 @@ impl App {
             return false;
         }
         egui::Area::new(egui::Id::unique("video-viewer")).fixed_pos(screen.min).order(egui::Order::Foreground).show(ctx, |ui| {
+            // Claim the whole rect, so egui sends scroll and hover here
+            // rather than to the grid underneath.
+            ui.expand_to_include_rect(screen);
             ui.painter().rect_filled(screen, 0.0, t::p().main);
             let bar = Rect::from_min_size(screen.min, vec2(screen.width(), t::BAR_HEIGHT));
             let area = Rect::from_min_max(Pos2::new(screen.left(), bar.bottom()), screen.max);

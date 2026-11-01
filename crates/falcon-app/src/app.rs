@@ -3377,7 +3377,10 @@ fn wide_button(ui: &mut Ui, glyph: &str, label: &str, enabled: bool) -> Response
 // Viewer and frame
 
 impl App {
-    fn viewer(&mut self, ctx: &egui::Context, ui: &mut Ui, lib: &Library) {
+    /// Shows the open item over the whole window, or for a PDF over just the
+    /// middle (`central`), leaving the sidebar and inspector in place as
+    /// Eagle's reader does.
+    fn viewer(&mut self, ctx: &egui::Context, ui: &mut Ui, lib: &Library, central: Rect) {
         let Some(id) = self.ws.viewer.clone() else { return };
         let Some(item) = lib.item(&id) else {
             self.ws.viewer = None;
@@ -3386,7 +3389,7 @@ impl App {
         if self.ws.view.id != id {
             self.ws.view = ViewState { id: id.clone(), file: item.original_path(lib.root()), ..Default::default() };
         }
-        let screen = ui.max_rect();
+        let screen = if cfg!(target_os = "macos") && pdf_view::is_pdf(item) { central } else { ui.max_rect() };
         // An original still in iCloud downloads in the background first.
         if self.icloud_viewer(ctx, lib, item, screen) {
             return;
@@ -3399,6 +3402,9 @@ impl App {
             return;
         }
         egui::Area::new(egui::Id::unique("viewer")).fixed_pos(screen.min).order(egui::Order::Foreground).show(ctx, |ui| {
+            // Claim the whole rect, so egui sends scroll and hover here
+            // rather than to the grid underneath.
+            ui.expand_to_include_rect(screen);
             let p = ui.painter().clone();
             p.rect_filled(screen, 0.0, t::p().main);
             let bar = Rect::from_min_size(screen.min, vec2(screen.width(), t::BAR_HEIGHT));
@@ -3636,8 +3642,10 @@ impl eframe::App for App {
                 .frame(egui::Frame::NONE)
                 .show(ui, |ui| self.inspector(ui, lib));
         }
+        let mut central = ctx.content_rect();
         egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t::p().main)).show(ui, |ui| {
             let full = ui.max_rect();
+            central = full;
             let bar = Rect::from_min_size(full.min, vec2(full.width(), t::BAR_HEIGHT));
             let mut top = ui.new_child(egui::UiBuilder::new().max_rect(bar));
             self.toolbar(&mut top, lib);
@@ -3678,7 +3686,7 @@ impl eframe::App for App {
         });
         if self.ws.viewer.is_some() {
             let mut v = ui.new_child(egui::UiBuilder::new().max_rect(ctx.content_rect()));
-            self.viewer(&ctx, &mut v, lib);
+            self.viewer(&ctx, &mut v, lib, central);
         }
         // Playback stops when the viewer closes or moves to another item.
         if self.audio.loaded().is_some() && self.audio.loaded() != self.ws.viewer.as_deref() {
