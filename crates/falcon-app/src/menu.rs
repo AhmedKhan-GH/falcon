@@ -69,6 +69,8 @@ pub struct State {
     pub flippable: bool,
     pub rotatable: bool,
     pub croppable: bool,
+    /// The item acted on has a custom thumbnail.
+    pub has_custom_thumb: bool,
     /// The book in `docs/` is on this machine.
     pub docs: bool,
     /// An app password is set, so falcon can be locked.
@@ -151,6 +153,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::AddTags | C::TagPanel | C::CopyTags | C::ClearTags => any,
         C::PasteTags => any && s.tag_clipboard,
         C::CustomThumbnail | C::ClipboardThumbnail => s.library && (s.viewer || s.selected == 1),
+        C::ResetThumbnail => s.library && (s.viewer || s.selected == 1) && s.has_custom_thumb,
         C::AddToLastFolder => (any || (s.library && s.viewer)) && s.last_folder,
         C::AddToFolders => any || (s.library && s.viewer),
         C::FolderPasswordNew => grid && s.scope == ScopeKind::Folder && !s.folder_password,
@@ -313,7 +316,7 @@ pub static MENUS: &[(&str, &[Entry])] = &[
             item("Refresh Thumbnail", Command::RefreshThumbnail),
             Entry::Sub(
                 "Custom Thumbnail",
-                &[item("From a File…", Command::CustomThumbnail), item("From the Clipboard", Command::ClipboardThumbnail)],
+                &[item("From a File…", Command::CustomThumbnail), item("From the Clipboard", Command::ClipboardThumbnail), item("Reset", Command::ResetThumbnail)],
             ),
             SEP,
             Entry::Sub(
@@ -933,6 +936,7 @@ mod tests {
             flippable: true,
             rotatable: true,
             croppable: true,
+            has_custom_thumb: true,
             docs: true,
             lockable: true,
             tag_clipboard: true,

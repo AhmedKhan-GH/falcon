@@ -318,6 +318,7 @@ impl App {
             flippable: self.ws.editable[0],
             rotatable: self.ws.editable[1],
             croppable: self.ws.editable[2],
+            has_custom_thumb: self.has_custom_thumb(),
             docs: docs_path().is_some(),
             back: !self.ws.back.is_empty(),
             forward: !self.ws.forward.is_empty(),
@@ -397,6 +398,12 @@ impl App {
         for t in &targets {
             crate::urls::open_link(t);
         }
+    }
+
+    /// The first item acted on has a custom thumbnail.
+    fn has_custom_thumb(&self) -> bool {
+        let Some(id) = self.acted_on().into_iter().next() else { return false };
+        self.ws.lib.clone().is_some_and(|s| lock(&s).item(&id).is_some_and(thumbnail::has_custom_thumbnail))
     }
 
     pub(crate) fn acted_on(&self) -> Vec<String> {
@@ -582,6 +589,12 @@ impl App {
                     self.ws.actions.push(Action::Edit(image_edit::Op::PickCustomThumbnail(id)));
                 } else {
                     self.ws.actions.push(Action::Edit(image_edit::Op::ClipboardThumbnail(id)));
+                }
+            }
+            C::ResetThumbnail => {
+                // As in Eagle, the first item acted on.
+                if let Some(id) = self.acted_on().into_iter().next() {
+                    self.ws.actions.push(Action::Edit(image_edit::Op::ResetCustomThumbnail(id)));
                 }
             }
             C::Duplicate => {
