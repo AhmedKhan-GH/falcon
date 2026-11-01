@@ -7,8 +7,9 @@ use std::path::{Path, PathBuf};
 use eframe::egui::{self, Align2, Key, RichText, Sense, Stroke, StrokeKind, Ui, vec2};
 use falcon_library::Library;
 
-use super::App;
+use crate::app::App;
 use crate::theme::{self as t, Theme, font};
+use crate::ui::widgets::window_drag;
 
 /// Characters a library name may not contain.
 const FORBIDDEN: &[char] = &['@', '#', '$', '%', '^', '&', '*', '<', '>', ':', '\'', '"', '/', '\\', '|', '?'];
@@ -218,7 +219,7 @@ impl App {
 
     fn welcome(&mut self, ui: &mut Ui) {
         let r = ui.max_rect();
-        super::window_drag(ui, egui::Rect::from_min_size(r.min, vec2(r.width(), t::BAR_HEIGHT)), "welcome");
+        window_drag(ui, egui::Rect::from_min_size(r.min, vec2(r.width(), t::BAR_HEIGHT)), "welcome");
         ui.painter().rect_filled(r, 0.0, t::p().main);
         let w = 440.0_f32.min(r.width() - 32.0);
         let body = egui::Rect::from_center_size(r.center(), vec2(w, 340.0));

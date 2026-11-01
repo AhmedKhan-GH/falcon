@@ -2,10 +2,10 @@
 
 use eframe::egui::{self, Align, ColorImage, Layout, RichText, TextureHandle, TextureOptions, vec2};
 
-use super::App;
+use crate::app::App;
 use crate::theme as t;
 
-const ICON: &[u8] = include_bytes!("../../assets/icon-256.png");
+const ICON: &[u8] = include_bytes!("../../../assets/icon-256.png");
 
 /// The app icon as a texture, or `None` if the PNG can't be read.
 fn load_icon(ctx: &egui::Context) -> Option<TextureHandle> {

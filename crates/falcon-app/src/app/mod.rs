@@ -64,14 +64,11 @@ pub(crate) use crate::ui::viewer::comments;
 pub(crate) use crate::ui::viewer::crop;
 
 // Dialogs and menus.
-pub(crate) mod about;
-pub(crate) mod debug_ui;
-pub(crate) mod dupes_ui;
-pub(crate) mod export_ui;
-pub(crate) mod ext_ui;
-pub(crate) mod quick_switch_ui;
-pub(crate) mod library_ui;
-pub(crate) mod library_dialogs;
+pub(crate) use crate::ui::dialogs::export as export_ui;
+pub(crate) use crate::ui::dialogs::ext as ext_ui;
+pub(crate) use crate::ui::dialogs::quick_switch as quick_switch_ui;
+pub(crate) use crate::ui::dialogs::library_notices as library_ui;
+pub(crate) use crate::ui::dialogs::library as library_dialogs;
 
 pub(crate) use actions::{Action, BULK_CONFIRM};
 use commands::editable_now;

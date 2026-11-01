@@ -1,7 +1,13 @@
 //! The dialog for files an import found already in the library (see
 //! `crate::import_dupes`), after Eagle's Duplicate File Alert.
 
-use super::*;
+use eframe::egui::{self, CornerRadius, Key, Rect, RichText, Sense, Ui, Vec2};
+use falcon_library::Library;
+
+use crate::app::{Action, App};
+use crate::loader::{Tier, job_for};
+use crate::logic;
+use crate::theme as t;
 use crate::import_dupes::{Choice, Dialog};
 
 impl App {

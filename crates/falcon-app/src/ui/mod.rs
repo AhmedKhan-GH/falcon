@@ -13,3 +13,4 @@ pub(crate) mod grid;
 pub(crate) mod drop_hint;
 pub(crate) mod toolbar;
 pub(crate) mod filter_bar;
+pub(crate) mod dialogs;

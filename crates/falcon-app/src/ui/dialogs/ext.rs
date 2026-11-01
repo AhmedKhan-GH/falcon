@@ -4,7 +4,7 @@
 use eframe::egui::{self, Key, RichText, TextEdit};
 use falcon_library::item_ops::check_extension;
 
-use super::{Action, App};
+use crate::app::{Action, App};
 use crate::theme as t;
 
 /// The dialog as typed so far.

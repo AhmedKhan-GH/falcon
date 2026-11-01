@@ -13,9 +13,10 @@ use falcon_library::library_merge::{self as merge, MergePlan};
 use falcon_library::pack::{self, PackPreview};
 use falcon_library::{Error, Library};
 
-use super::{App, Workspace, import_ui, lock};
+use crate::app::{App, Workspace, import_ui, lock};
 use crate::watch::Change;
 use crate::theme as t;
+use crate::ui::widgets::window_drag;
 
 /// A message that needs acknowledging, shown in a modal.
 #[derive(Clone, Debug, PartialEq)]
@@ -214,7 +215,7 @@ impl App {
     /// The missing-library screen, when no library is open.
     pub(crate) fn missing_page(&mut self, ui: &mut egui::Ui) {
         let r = ui.max_rect();
-        super::window_drag(ui, egui::Rect::from_min_size(r.min, egui::vec2(r.width(), t::BAR_HEIGHT)), "missing");
+        window_drag(ui, egui::Rect::from_min_size(r.min, egui::vec2(r.width(), t::BAR_HEIGHT)), "missing");
         ui.painter().rect_filled(r, 0.0, t::p().main);
         let card = egui::Rect::from_center_size(r.center(), egui::vec2(420.0, 240.0));
         let mut c = ui.new_child(egui::UiBuilder::new().max_rect(card).layout(egui::Layout::top_down(egui::Align::Center)));
@@ -690,7 +691,7 @@ impl App {
     /// The loading screen, when no library is open.
     pub(crate) fn loading_page(&mut self, ui: &mut egui::Ui) {
         let r = ui.max_rect();
-        super::window_drag(ui, egui::Rect::from_min_size(r.min, egui::vec2(r.width(), t::BAR_HEIGHT)), "loading");
+        window_drag(ui, egui::Rect::from_min_size(r.min, egui::vec2(r.width(), t::BAR_HEIGHT)), "loading");
         ui.painter().rect_filled(r, 0.0, t::p().main);
         let card = egui::Rect::from_center_size(r.center(), egui::vec2(320.0, 120.0));
         let mut c = ui.new_child(egui::UiBuilder::new().max_rect(card).layout(egui::Layout::top_down(egui::Align::Center)));

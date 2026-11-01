@@ -3,7 +3,7 @@
 
 use falcon_library::model::Folder;
 
-use super::{App, lock};
+use crate::app::{App, lock};
 use crate::debug_report::{self as report, Info, LibraryInfo};
 
 fn count_folders(folders: &[Folder]) -> usize {
