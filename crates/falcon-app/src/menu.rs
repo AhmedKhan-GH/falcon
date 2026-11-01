@@ -136,8 +136,9 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
             grid && matches!(s.scope, ScopeKind::Folder | ScopeKind::Smart) && s.picked_folders < 2 && s.picked_smart < 2
         }
         C::MoveFolder => grid && (s.scope == ScopeKind::Folder || s.picked_folders > 0),
+        C::MergeLibrary | C::EmptyCacheReload | C::ImportPack | C::ImportInboard => s.library,
         C::LockApp => s.lockable,
-        C::SwitchLibrary | C::CollectWindow | C::Preferences | C::CloseWindow | C::Minimize | C::FullScreen | C::WindowZoom => true,
+        C::NewLibrary | C::ClearLibraryHistory | C::SwitchLibrary | C::CollectWindow | C::Preferences | C::CloseWindow | C::Minimize | C::FullScreen | C::WindowZoom => true,
         C::NextLibrary | C::PreviousLibrary => s.libraries > 1,
         C::Page(_) | C::Import | C::ImportFolders | C::FindDuplicates => s.library,
         C::Scroll(_) | C::SelectFirst | C::SelectLast | C::ToggleFolders => grid,
@@ -238,7 +239,7 @@ pub static ABOUT: &[Entry] = &[item("About Falcon", Command::About)];
 pub static APP: &[Entry] = &[item("Preferences…", Command::Preferences), item("Lock Falcon", Command::LockApp)];
 
 /// The menus after the application menu, after Eagle's (without its
-/// Library and Actions menus), with only what falcon can do.
+/// Actions menu), with only what falcon can do.
 pub static MENUS: &[(&str, &[Entry])] = &[
     (
         "File",
@@ -251,6 +252,7 @@ pub static MENUS: &[(&str, &[Entry])] = &[
             SEP,
             item("Import Folders…", Command::ImportFolders),
             item("Import Files…", Command::Import),
+            Entry::Sub("Import", &[item("Eagle Package…", Command::ImportPack), item("Inboard Backup…", Command::ImportInboard)]),
             Entry::Sub(
                 "Export",
                 &[
@@ -261,9 +263,18 @@ pub static MENUS: &[(&str, &[Entry])] = &[
                 ],
             ),
             SEP,
-            item("Open Library…", Command::SwitchLibrary),
-            SEP,
             item("Close Window", Command::CloseWindow),
+        ],
+    ),
+    (
+        "Library",
+        &[
+            item("New Library…", Command::NewLibrary),
+            item("Open Library…", Command::SwitchLibrary),
+            item("Merge Library…", Command::MergeLibrary),
+            SEP,
+            item("Clear Library History…", Command::ClearLibraryHistory),
+            item("Empty Cache and Reload…", Command::EmptyCacheReload),
         ],
     ),
     (
@@ -858,7 +869,7 @@ mod tests {
     #[test]
     fn menus_follow_eagles_order() {
         let titles: Vec<&str> = MENUS.iter().map(|m| m.0).collect();
-        assert_eq!(titles, ["File", "Edit", "Find", "Organize", "View", "Window", "Help"]);
+        assert_eq!(titles, ["File", "Library", "Edit", "Find", "Organize", "View", "Window", "Help"]);
         let keys = Shortcuts::default();
         // Always on Top comes first, then the View pages, ⌘1 to ⌘7.
         let view = MENUS.iter().find(|m| m.0 == "View").unwrap().1;
@@ -1010,6 +1021,12 @@ mod tests {
         assert!(enabled(Command::SwitchLibrary, &s));
         assert!(!enabled(Command::NewFolder, &s));
         assert!(!enabled(Command::NextLibrary, &s));
+        assert!(enabled(Command::NewLibrary, &s));
+        assert!(enabled(Command::ClearLibraryHistory, &s));
+        for c in [Command::MergeLibrary, Command::EmptyCacheReload, Command::ImportPack, Command::ImportInboard] {
+            assert!(!enabled(c, &s), "{c:?} needs a library");
+            assert!(enabled(c, &State { library: true, ..Default::default() }), "{c:?}");
+        }
     }
 
     #[test]

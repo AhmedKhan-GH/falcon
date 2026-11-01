@@ -45,6 +45,14 @@ pub enum Command {
     LockApp,
     CollectWindow,
     SwitchLibrary,
+    /// Library menu (`App::library_ui`).
+    NewLibrary,
+    MergeLibrary,
+    ClearLibraryHistory,
+    EmptyCacheReload,
+    /// File ▸ Import submenu.
+    ImportPack,
+    ImportInboard,
     NextLibrary,
     PreviousLibrary,
     /// Edit ▸ Move Folder: the open folder or smart folder among its
@@ -408,6 +416,12 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::Player(PlayerKey::Frame(FrameTool::Copy)), id: "player.thumbnail.copy", group: PLAYER, label: "Copy the current frame", default: k(SHIFT, Key::C), aliases: &[] },
     Spec { cmd: Command::Player(PlayerKey::Frame(FrameTool::Save)), id: "player.thumbnail.save", group: PLAYER, label: "Save the current frame to the library", default: k(SHIFT, Key::S), aliases: &[] },
     // Export and copy-out (`App::export_keys`).
+    Spec { cmd: Command::NewLibrary, id: "library.create", group: "Library", label: "Create a new library", default: None, aliases: &[] },
+    Spec { cmd: Command::MergeLibrary, id: "library.merge", group: "Library", label: "Merge another library into this one", default: None, aliases: &[] },
+    Spec { cmd: Command::ClearLibraryHistory, id: "library.clearHistory", group: "Library", label: "Clear the library history", default: None, aliases: &[] },
+    Spec { cmd: Command::EmptyCacheReload, id: "library.reload", group: "Library", label: "Empty the cache and reload the library", default: None, aliases: &[] },
+    Spec { cmd: Command::ImportPack, id: "file.import.eaglepack", group: "Import", label: "Import an Eagle package", default: None, aliases: &[] },
+    Spec { cmd: Command::ImportInboard, id: "file.import.inboard", group: "Import", label: "Import an Inboard backup", default: None, aliases: &[] },
     Spec { cmd: Command::ExportComputer, id: "file.export.item.computer", group: "Export", label: "Export to Computer", default: k(CMD, Key::E), aliases: &[] },
     Spec { cmd: Command::ExportPack, id: "file.export.item.eaglepack", group: "Export", label: "Export as .eaglepack", default: k(CMD_SHIFT, Key::E), aliases: &[] },
     Spec { cmd: Command::ExportFormat, id: "file.export.item.as", group: "Export", label: "Export in a chosen format and size", default: k(SHIFT, Key::E), aliases: &[] },

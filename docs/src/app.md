@@ -270,7 +270,8 @@ On macOS falcon has a native menu bar, built with AppKit in `crates/falcon-app/s
 | Menu | Items |
 |---|---|
 | Falcon | About Falcon (falcon's own, in place of winit's), Services, Hide, Hide Others, Show All and Quit, plus Preferences… and Lock Falcon after About |
-| File | New ▸ Text File, New Folder, New Subfolder, New Smart Folder…, Import Folders…, Import Files…, Export ▸ (To Computer…, As .eaglepack…, In Another Format…, To CSV…), Open Library…, Close Window |
+| File | New ▸ Text File, New Folder, New Subfolder, New Smart Folder…, Import Folders…, Import Files…, Import ▸ (Eagle Package…, Inboard Backup…), Export ▸ (To Computer…, As .eaglepack…, In Another Format…, To CSV…), Close Window |
+| Library | New Library…, Open Library…, Merge Library…, Clear Library History…, Empty Cache and Reload… |
 | Edit | Undo, Redo, Cut, Copy, Paste, Select All, Rename, Duplicate, Copy Details ▸ (File Paths, Folder Paths, Names, Source URLs, Thumbnail, Base64), Refresh Thumbnail, Custom Thumbnail ▸ (From a File…, From the Clipboard), Move Folder ▸ (Up, Down, To the Top, To the Bottom), Edit Image ▸ (Flip Horizontally, Rotate Left, Crop…), Folder Settings…, Move Folder…, Remove from Folder, Move to Trash |
 | Find | Search, Search All, Filter Sidebar, Go to Folder…, then Filter Bar, Clear Filter and an Open Filter ▸ submenu (Color, Tags, Folders, Shape, Rating, Type, Date, Dimensions, Size, Duration, Comment, Notes, URL, Font, BPM, Camera), then Find Duplicates |
 | Organize | Add Tags…, Add to Last Used Folder, No Rating, 1 Star … 5 Stars, Copy Tags, Paste Tags, Clear Tags |

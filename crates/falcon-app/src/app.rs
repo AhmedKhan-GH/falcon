@@ -1371,6 +1371,33 @@ impl App {
         }
     }
 
+    /// Library ▸ Clear Library History: asks first. Shown with or without
+    /// a library open.
+    fn clear_history_dialog(&mut self, ctx: &egui::Context) {
+        if self.clear_history_open {
+            let modal = egui::Modal::new(egui::Id::unique("clear-library-history")).show(ctx, |ui| {
+                ui.set_width(320.0);
+                ui.label(RichText::new("Clear Library History").size(15.0));
+                ui.add_space(4.0);
+                ui.label(RichText::new("The list of recent libraries is emptied, except for the libraries that are open now. This can't be undone. No library is deleted.").color(t::p().text_muted));
+                ui.add_space(10.0);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.button(RichText::new("Clear All").color(t::p().icon_red)).clicked() {
+                        let open: Vec<PathBuf> = self.others.iter(&self.ws).filter_map(|w| w.root.clone()).collect();
+                        self.recent = crate::workspaces::clear_history(&self.recent, &open);
+                        self.clear_history_open = false;
+                    }
+                    if ui.button("Cancel").clicked() {
+                        self.clear_history_open = false;
+                    }
+                });
+            });
+            if modal.should_close() {
+                self.clear_history_open = false;
+            }
+        }
+    }
+
     /// Opens the create-library dialog (`library_dialogs.rs`).
     fn new_library(&mut self) {
         self.dialogs.start_create();
@@ -2053,6 +2080,12 @@ impl App {
                     self.pick_library();
                 }
             }
+            C::NewLibrary => self.new_library(),
+            C::MergeLibrary => self.merge_library(),
+            C::ClearLibraryHistory => self.clear_history_open = true,
+            C::EmptyCacheReload => self.confirm_reload = true,
+            C::ImportPack => self.import_pack_dialog(),
+            C::ImportInboard => self.import_inboard_dialog(),
             C::NextLibrary => self.switch_to = Some(Switch::Focus(self.others.step(true))),
             C::PreviousLibrary => self.switch_to = Some(Switch::Focus(self.others.step(false))),
             C::ToggleSidebar => self.show_sidebar = !self.show_sidebar,
@@ -5722,6 +5755,7 @@ impl App {
         self.merge_dialogs(&ctx);
         self.pack_dialogs(&ctx);
         self.reload_confirm(&ctx);
+        self.clear_history_dialog(&ctx);
         self.alert_modal(&ctx);
         if self.ws.lib.is_some() {
             self.missing_modal(&ctx);
@@ -5981,28 +6015,6 @@ impl App {
         self.collect_duplicates();
         self.duplicate_dialog(&ctx, lib);
         self.export_dialogs(&ctx, lib);
-        if self.clear_history_open {
-            let modal = egui::Modal::new(egui::Id::unique("clear-library-history")).show(&ctx, |ui| {
-                ui.set_width(320.0);
-                ui.label(RichText::new("Clear Library History").size(15.0));
-                ui.add_space(4.0);
-                ui.label(RichText::new("The list of recent libraries is emptied, except for the libraries that are open now. This can't be undone. No library is deleted.").color(t::p().text_muted));
-                ui.add_space(10.0);
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button(RichText::new("Clear All").color(t::p().icon_red)).clicked() {
-                        let open: Vec<PathBuf> = self.others.iter(&self.ws).filter_map(|w| w.root.clone()).collect();
-                        self.recent = crate::workspaces::clear_history(&self.recent, &open);
-                        self.clear_history_open = false;
-                    }
-                    if ui.button("Cancel").clicked() {
-                        self.clear_history_open = false;
-                    }
-                });
-            });
-            if modal.should_close() {
-                self.clear_history_open = false;
-            }
-        }
         if let Some(c) = self.ws.confirm.clone() {
             let (title, detail, label) = match &c {
                 Confirm::DeleteFolders(ids) => {
