@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 213 | 27 | 31 | 9 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 216 | 24 | 31 | 9 |
 | Viewers and file formats | 156 | 23 | 11 | 7 |
 | Search, filters and organising | 197 | 11 | 14 | 3 |
-| Import, export, library, preferences and integrations | 153 | 13 | 46 | 26 |
-| **Total** | 719 | 74 | 102 | 45 |
+| Import, export, library, preferences and integrations | 157 | 10 | 45 | 26 |
+| **Total** | 726 | 68 | 101 | 45 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -62,7 +62,7 @@ Overall finding: falcon now has a native menu bar (`crates/falcon-app/src/menu.r
 | A menubar with File / Edit / Find / Organize / View / Actions / Window / Help menus, each item showing its live shortcut | Partial | Native AppKit menus in `crates/falcon-app/src/menu.rs` (File, Edit, Find, Organize, View, Window, Help) with live shortcuts, enabled rules and checkmarks; clicks run through `App::run_command`. No Actions menu; only commands falcon has | local |
 | App menu: About | Done | Falcon's own About window (`about.rs`), replacing winit's stock item | local |
 | App menu: Preferences… (⌘,) | Done | shortcuts.rs `app.preferences`; in the app menu after About (`menu.rs`) and in the library switcher | local |
-| App menu: Lock Now (⌘⌥L, locks the whole app behind a password or Touch ID) | Partial | ⌥⌘L locks the app behind the password set in Preferences ▸ Password (`applock.rs`, `app.lock`); in the app menu. No Touch ID | local |
+| App menu: Lock Now (⌘⌥L, locks the whole app behind a password or Touch ID) | Done | ⌥⌘L locks the app (`applock.rs`); unlock by password or Touch ID (`touch_id.rs`, LAContext through `msg_send!`, pref `touch_id` shown only when available) | local |
 | App menu: Color Space (sRGB / Display P3 / Unmanaged) | Missing | No colour-space choice | local |
 | App menu: Hide, Hide Others, Quit | Done | Supplied by winit's default macOS app menu (main.rs uses eframe defaults) | local |
 | App menu: Check for Updates, Register / Unregister, Manage devices | Missing | Not applicable to falcon | online/plugin |
@@ -74,7 +74,7 @@ Overall finding: falcon now has a native menu bar (`crates/falcon-app/src/menu.r
 | Edit: Cut / Copy / Paste / Select All | Partial | Menu entries exist and act on a focused text field; ⌘C copies files, ⌘V imports, ⌘A selects all. Cut works only in text fields | local |
 | Edit: Rename (⌘R on macOS) | Done | ⌘R (F2 alias): one item renames through the inspector title; several open the Rename N Items dialog with Eagle's templates (`rename.rs`) | local |
 | Edit: Copy File Path (⌥⌘C) | Done | Key and item menu copy every selected path, one per line (`export_ui.rs` `copy_variant`) | local |
-| Edit: Copy Folder Path (⌥⇧⌘C), Copy Eagle Link, Copy Thumbnail, Copy Base64, Copy Name | Partial | All but Copy Eagle Link (`export_ui.rs` `item_copy_menu`); Copy Folder Path copies the items' `.info` folders as Eagle does. Falcon doesn't register `eagle://` | local |
+| Edit: Copy Folder Path (⌥⇧⌘C), Copy Eagle Link, Copy Thumbnail, Copy Base64, Copy Name | Done | Edit ▸ Copy Details: Folder Paths, Links (`http://localhost:<port>/item?id=`, as Eagle's Copy Link), Eagle Links (`eagle://item/<id>`), Thumbnail, Base64, Names; all for every selected item | local |
 | Edit: Duplicate item (⌘D) | Done | `item_ops.rs` duplicate: a byte-identical metadata copy with a new id, keeping `modificationTime` as Eagle; ⌘D, Edit menu, card menu | local |
 | Edit: Refresh Thumbnail (⌥⌘R), Custom thumbnail from a file (⌥⌘T), Reset custom thumbnail | Done | ⌥⌘R, ⌥⌘T and Edit ▸ Custom Thumbnail submenu | local |
 | Edit: Custom thumbnail from the clipboard (⇧⌥⌘T) | Done | Clipboard image or copied file | local |
@@ -115,7 +115,7 @@ Cross-references (not counted): File ▸ Import Folders / Links / Eagle Package 
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| Every context menu has a type-to-filter search box with keyword matching | Done | `menu_search.rs` wraps the item, folder, smart folder and tag menus: type to filter, ↑/↓, Enter; submenu entries aren't searched (egui builds them only when open) | local |
+| Every context menu has a type-to-filter search box with keyword matching | Done | `ui/menus/search.rs` on the item, folder, smart folder and tag menus, including submenu entries grouped under their name (`search::submenu`); Change Icon's grid is left out | local |
 | **Item**: Restore (in the Trash) | Done | app.rs:2531-2534, which also offers Delete Permanently | local |
 | Item: Open Item(s) in New Window | Done | Item menu; one item per window | local |
 | Item: Open With Default App / Open With ▸ apps / Reveal in Finder | Done | open_ui.rs:33-46 | local |
@@ -369,7 +369,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Presentation / slideshow mode | Done | `modes.rs`; `ViewportCommand::Fullscreen`, panels and bar hidden | local |
 | Closing the window keeps the app running (Dock icon stays); reopen from the Dock | Done | Closing hides falcon (`NSApp hide:`, so the collect and preview windows hide too); the Dock icon or reopening brings it back; ⌘Q quits | local |
 | Menu bar status icon: Show Eagle, Capture Area / Window / Full Screen, Quit | Missing | Captures cross-ref import | local |
-| Lock screen for the whole app, with Touch ID | Partial | Password lock (`applock.rs`, ⌥⌘L); no Touch ID | local |
+| Lock screen for the whole app, with Touch ID | Done | Password and a Use Touch ID button (`touch_id.rs`) | local |
 | Loading screen while a library opens (progress messages) | Done | `Library::open_with_progress` behind a loading screen for opens started in the app; restoring at launch still blocks | local |
 | Resizable inspector | Done | Drag its inner edge; kept across launches | local |
 | Several libraries open in one window (falcon only) | Done | app.rs:624-676, workspaces.rs (extra) | local |
@@ -400,7 +400,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Import progress bar with count and time remaining | Partial | Count and file name (app.rs:911-940). No time remaining and no cancel | local |
 | Import errors toast ("N files failed, click for details") opens an error list with retry and reveal | Partial | Toast shows the failure count only (app.rs:925) | local |
 | Dock icon progress bar during long tasks | Missing |  | local |
-| Progress modals for export, eaglepack, thumbnail refresh, empty trash, WebP conversion and similar | Partial | Import only. Other tasks run synchronously | local |
+| Progress modals for export, eaglepack, thumbnail refresh, empty trash, WebP conversion and similar | Partial | Shared progress modal with Cancel for pack import and export, thumbnail refresh and Empty Trash; Export to Computer keeps its toolbar bar; no WebP conversion | local |
 | Sound effects (delete item, delete folder, capture) | Missing |  | local |
 | System notifications (import done, capture done) | Missing | Cross-ref import | local |
 | Warnings: slow disk, NTFS on macOS, library path permissions, localhost / API port | Partial | API port errors appear in Preferences (prefs.rs:100). No disk or permission warnings | local |
@@ -741,7 +741,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Window opacity 10%–100% | Missing | None | local |
 | Always on top toggle in the window | Done | Preview window menu | local |
 | Navigator, grayscale, rotate, flip in the window menu | Partial | Grayscale only | local |
-| Copy, copy path, copy link, reveal in Finder, open in default app | Partial | Reveal in Finder and Open in Default App only | local |
+| Copy, copy path, copy link, reveal in Finder, open in default app | Partial | Copy Link, Reveal in Finder and Open in Default App in the preview window; no Copy or Copy Path | local |
 | Copy or save the current video frame | Missing | None | local |
 | Reveal in Eagle (select the item in the main window) | Done | Show in Falcon | local |
 
@@ -888,7 +888,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Show or hide the filter bar | Done | `A:2045`, Command::ToggleFilter | local |
 | Badge or highlight while filters are active | Done | `A:2048` outlines the funnel | local |
 | Clear all filters | Done | `A:2403` Clear | local |
-| Add filter (+) menu: choose and pin which filters appear in the bar | Done | `app/filter_bar.rs`: Eagle's default pins, + menu to pin or open any filter; no drag reordering | local |
+| Add filter (+) menu: choose and pin which filters appear in the bar | Done | `ui/filter_bar/`: Eagle's default pins, + menu, chips reordered by dragging (`SearchPrefs.order`) | local |
 | Lock the filter so it survives switching folders. Unlocked, a view change clears the filter and search | Done | `filter_bar.rs` Lock; not kept across launches, as Eagle | local |
 | Per-option counts in each filter menu | Done | Tags, folders, type, shape and rating counts (`type_counts`, `shape_counts`); counted over the whole library | local |
 | A shortcut for each filter (open the colour, tag, folder... chip) | Done | ⌥F/⌥T/⌥C/⌥S/⌥R/⌥D/⌥E (`find.filter.*`); the others have unbound rows | local |
@@ -1235,7 +1235,7 @@ Two cross-cutting facts explain many rows:
 | Watched auto-import folder: files dropped into it are imported automatically | Partial | `auto_import.rs` polls `<chosen>/<library name>` every 2 s and imports settled files into the root; imported files go to the Trash as Eagle deletes them (preference `auto_import_delete`, on by default, Trash instead of a hard delete). Still Partial: polling instead of file events, only the shown library is watched, any format is accepted | local |
 | Auto-import rejects network drives and missing paths | Done | `auto_import::is_network_volume` (`NSURLVolumeIsLocalKey`), `prefs::auto_import_refusal`; a vanished folder pauses with a notice | local |
 | Auto-import skips `.tmp` files, tiny files and unsupported types, and waits until a copy has finished | Done | `auto_import::skip` and `Settle` (size and mtime unchanged for 3 s); any extension is accepted, as a drop is | local |
-| Import an Eagle Package (`.eaglepack`) from the File menu or by opening the file | Done | File ▸ Import submenu, the switcher and a drop; Finder Open With is still not registered | local |
+| Import an Eagle Package (`.eaglepack`) from the File menu or by opening the file | Done | File ▸ Import submenu, the switcher, a drop, and Finder Open With / Dock drop through `open_files.rs` and the bundle's document types | local |
 | Confirm the disk space an `.eaglepack` will use before importing it | Done | `preview_pack` confirmation | local |
 | When an `.eaglepack` holds items already in the library, ask "N repeated files, import anyway?" | Done | Duplicate prompt; "Don't Import" imports without the duplicates, as Eagle | local |
 | Merge another Eagle library into the current one (folders and items), refusing the library already open | Done | `crates/falcon-library/src/library_merge.rs`: Eagle's id matching for folders, smart folders and tag groups; item folders copied in the background with progress and Stop; the open library is refused | local |
@@ -1245,7 +1245,7 @@ Two cross-cutting facts explain many rows:
 | Import from Pinterest | Missing | — | online |
 | Import from Huaban | Missing | — | online |
 | Import an ArtStation artist's portfolio by URL into a folder, all at once or picked by hand | Missing | — | online |
-| Add files by opening them with the app from Finder (Eagle registers for about 36 image, video and design types, folders and packages) | Partial | CLI arguments that are existing paths are imported (`crates/falcon-app/src/main.rs:38`). The bundle registers no document types (`scripts/bundle.sh`), and Finder "Open With" events are not handled | local |
+| Add files by opening them with the app from Finder (Eagle registers for about 36 image, video and design types, folders and packages) | Partial | `CFBundleDocumentTypes` in `scripts/bundle.sh` (Eagle's 30 types, `.eaglepack`, `.library`, folders) and the open-documents Apple event (`open_files.rs`) importing or opening them; not yet checked in a built bundle | local |
 | Add items from another app through the HTTP API (`addFromPath`, `addFromPaths`, `addFromURL`, `addFromURLs`, v2 `item/add`) | Done | `crates/falcon-server/src/lib.rs:369-372,386`; data URLs and http(s) downloads in `add_url` (`lib.rs:753-779`) | local, or online for URLs |
 | Add an item from base64 data (v2 `item/add` with `base64`) | Done | `crates/falcon-server/src/v2.rs:303-305` | local |
 | Import into a folder chosen in the collect window | Done | `app.rs:768-776` | local |
@@ -1306,8 +1306,8 @@ Two cross-cutting facts explain many rows:
 | Copy Name | Done | `export_ui.rs` `item_copy_menu` | local |
 | Copy Thumbnail (as an image) | Done | One item: image on the clipboard; several: the thumbnail files, as Eagle | local |
 | Copy Base64 | Done | One item: data URL of the original for jpg/png/webp/gif, else of the thumbnail | local |
-| Copy Eagle Link (`eagle://item/<id>`) | Missing | — | local |
-| Copy Link (the item's source URL) | Done | `edit.copy.sourceurl`; Eagle's own Copy Link copies its local API link instead | local |
+| Copy Eagle Link (`eagle://item/<id>`) | Done | Copy ▸ Eagle Link in the item menu, Edit ▸ Copy Details, `edit.copy.eaglelink` (unbound, as Eagle) | local |
+| Copy Link (the item's source URL) | Done | Copy ▸ Link copies Eagle's local API link per item (`edit.copy.link`); the source URL keeps its own entry (`edit.copy.sourceurl`) | local |
 | Copy the image to the clipboard as pixels plus file reference (the AppleScript helper) | Partial | Falcon copies a file list only (`app.rs:948-949`) | local |
 | macOS Share sheet for items | Missing | — | local |
 | Add selected items to another library (from the recent list, or choose a path) | Missing | — | local |
@@ -1353,7 +1353,7 @@ Two cross-cutting facts explain many rows:
 | Library loading progress screen | Done | `Library::open_with_progress` | local |
 | Library stats (item count, size, trash count) | Partial | Sidebar counts (`app.rs:1744-1745`) and folder inspector items and size (`app.rs:2925-2928`); CLI `info` prints items, trash, folders and tags (`src/main.rs:112-121`). No library-wide stats in the app | local |
 | Welcome or onboarding flow (theme, extension install, create library) | Done | First-launch welcome with theme choice and create or open; no extension step | local |
-| Password lock for the whole app: password, hint, Lock Now (⌥⌘L), Touch ID unlock | Partial | `crates/falcon-app/src/applock.rs`: password with hint, salted BLAKE3 digest in app state, lock screen at launch, ⌥⌘L. No Touch ID | local |
+| Password lock for the whole app: password, hint, Lock Now (⌥⌘L), Touch ID unlock | Done | `applock.rs` with Touch ID unlock (`touch_id.rs`) | local |
 
 ### 6. Preferences (every pane and setting)
 
@@ -1414,7 +1414,7 @@ Eagle panes (`app/js/preferences.js:659-788`): General, Sidebar, Controls, Previ
 | **Notification:** sound effects master switch, plus per event (delete item, delete folder, screenshot, extension) | Missing | — | local |
 | Notification: pop-up master switch, plus per event (screenshot, extension, duplicates, auto-import) | Partial | "Show notices" master switch over the duplicate dialog, the import-done note and auto-import notices; screenshot and extension don't exist | local |
 | Notification Center panel (history) | Missing | — | local |
-| **Password:** enable the app password lock, change the password, Lock Now, Touch ID | Partial | Set, change, remove, hint, Lock Now ⌥⌘L (`applock.rs`); no Touch ID | local |
+| **Password:** enable the app password lock, change the password, Lock Now, Touch ID | Done | Set, change, remove, hint, Lock Now ⌥⌘L, Unlock with Touch ID (shown when available, fingerprint checked when turned on, as Eagle) | local |
 | **Auto-Import:** enable, choose folder, open folder | Done | `prefs.rs` `auto_import` pane: enable, Choose Folder…, Open Folder, Make It for the watched subfolder | local |
 | **AI Search** pane (install, enable or disable the local semantic-search plugin) | Missing | — | online/plugin |
 | **AI Models** pane (shared API keys for OpenAI, Anthropic, Gemini and so on) | Missing | — | online/plugin |
@@ -1482,7 +1482,7 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 | --- | --- | --- | --- |
 | `eagle://` URL scheme registered with macOS | Done | `CFBundleURLTypes` in `scripts/bundle.sh`; `links.rs` handles the get-URL Apple event | local |
 | `eagle://item/<id>` opens the item | Done | Opens the item in the viewer inside its first folder (or All); also as a launch argument | local |
-| `eagle://folder/<id>`, `eagle://smart-folder/<id>`, `eagle://openFolder/<id>` | Partial | `folder` and `smart-folder` open; `openFolder` is not handled | local |
+| `eagle://folder/<id>`, `eagle://smart-folder/<id>`, `eagle://openFolder/<id>` | Done | `links.rs`: all three open the folder in the app (Eagle's `openFolder` does the same) | local |
 | Open `.eaglepack` files by double-clicking them | Missing | — | local |
 | Install a plugin by opening a `.eagleplugin` file | Missing | — | local |
 | Open With: list the apps that can open a file | Done | `crates/falcon-app/src/open_with.rs` | local |
@@ -1517,9 +1517,9 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 
 Rows marked "not counted" are features Eagle 4.0.0 does not have.
 
-- **Done:** 153, including 5 where falcon goes beyond Eagle and 1 with a small difference.
-- **Partial:** 13.
-- **Missing:** 72, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
+- **Done:** 157, including 5 where falcon goes beyond Eagle and 1 with a small difference.
+- **Partial:** 10.
+- **Missing:** 71, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
 - **Different on purpose:** 1 (the API listens on localhost only).
 
 ### Ranked Missing and Partial local items
@@ -1544,8 +1544,8 @@ Ranked by how often a user would hit the gap, and the risk if they do.
 16. **Unsupported formats are imported silently** instead of being refused with a message.
 17. **The collect window is thin**: no multi-folder, recent folders, new folder, name, description or tags.
 18. **Library list management is missing**: clear history, remove from list, library icon, and the missing-library retry or relocate screen.
-19. **App password lock** has no Touch ID.
-20. ~~Missing API routes.~~ Fixed; `eagle://openFolder` is still unhandled.
+19. ~~App password lock has no Touch ID.~~ Fixed; Touch ID on locked folders is still missing.
+20. ~~Missing API routes.~~ Fixed.
 21. **Hard-coded behaviours need preference switches**: font style tag, video autoplay, loop short clips, hover video preview, saved playback position, sidebar counts.
 22. **Missing Controls and Preview settings**: middle button, and the image settings not yet wired (see §6).
 23. **Sidebar pane is missing**: show or hide sections, and double-click to rename or collapse.
