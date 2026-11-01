@@ -15,6 +15,7 @@ use crate::app::{Action, App, Fold};
 use crate::ui::widgets::icon_button;
 use crate::ui::viewer::crop::{Handle, hit, to_image, to_screen};
 use crate::icons as ic;
+use crate::locale::{tr, trf};
 use crate::theme::{self as t, font, mono};
 
 /// Smallest region Eagle keeps: both sides over 10 image pixels.
@@ -212,7 +213,7 @@ impl App {
         if on {
             ui.painter().rect_filled(r, t::RADIUS, t::p().primary.gamma_multiply(0.5));
         }
-        if icon_button(ui, Pos2::new(x, cy), ic::CHAT_CIRCLE, 17.0, true, "Comment Mode (C)").clicked() {
+        if icon_button(ui, Pos2::new(x, cy), ic::CHAT_CIRCLE, 17.0, true, tr("Comment Mode (C)")).clicked() {
             self.ws.tools.comment_mode = !on;
             self.ws.tools.crop = None;
         }
@@ -281,7 +282,7 @@ impl App {
             p.text(badge, Align2::CENTER_CENTER, (n + 1).to_string(), mono(11.0), Color32::WHITE);
             let text = plain_text(&c.annotation);
             if !editing {
-                let tip = if text.is_empty() { "(no text)".to_string() } else { text };
+                let tip = if text.is_empty() { tr("(no text)").to_string() } else { text };
                 resp.clone().on_hover_text(tip);
             }
             if mode && resp.clicked() {
@@ -300,7 +301,7 @@ impl App {
                 let xr = ui.interact(x, ui.scope_id().with(("comment-x", &c.id)), Sense::click());
                 p.circle_filled(x.center(), 9.0, if xr.hovered() { t::p().icon_red } else { t::p().button });
                 p.text(x.center(), Align2::CENTER_CENTER, ic::X, font(10.0), Color32::WHITE);
-                if xr.on_hover_text("Delete comment").clicked() {
+                if xr.on_hover_text(tr("Delete comment")).clicked() {
                     self.ws.actions.push(Action::Edit(Op::DeleteComment(item.id.clone(), c.id.clone())));
                     self.ws.tools.draft = None;
                 }
@@ -372,7 +373,7 @@ impl App {
                 let te = ui.add(
                     TextEdit::multiline(&mut draft.text)
                         .id_salt("comment-text")
-                        .hint_text("Write a comment…")
+                        .hint_text(tr("Write a comment…"))
                         .font(font(13.0))
                         .desired_rows(3)
                         .desired_width(width - 20.0),
@@ -388,13 +389,13 @@ impl App {
                     cancel = true;
                 }
                 ui.horizontal(|ui| {
-                    if ui.button("Save").on_hover_text("⌘↩").clicked() {
+                    if ui.button(tr("Save")).on_hover_text("⌘↩").clicked() {
                         save = true;
                     }
-                    if ui.button("Cancel").clicked() {
+                    if ui.button(tr("Cancel")).clicked() {
                         cancel = true;
                     }
-                    if draft.id.is_some() && ui.button("Delete").clicked() {
+                    if draft.id.is_some() && ui.button(tr("Delete")).clicked() {
                         delete = true;
                     }
                 });
@@ -434,7 +435,7 @@ impl App {
         if comments.is_empty() {
             return;
         }
-        if !self.fold_heading(ui, Fold::Comments, &format!("Comments ({})", comments.len())) {
+        if !self.fold_heading(ui, Fold::Comments, &trf("Comments ({count})", &[("count", &comments.len())])) {
             return;
         }
         let w = ui.available_width();
@@ -445,10 +446,10 @@ impl App {
                 let te = ui.add(TextEdit::multiline(text).id_salt(("comment-edit", &c.id)).font(font(13.0)).desired_rows(2).desired_width(w));
                 let mut done = None;
                 ui.horizontal(|ui| {
-                    if ui.button("Save").clicked() || (te.has_focus() && ui.input(|i| i.modifiers.command && i.key_pressed(Key::Enter))) {
+                    if ui.button(tr("Save")).clicked() || (te.has_focus() && ui.input(|i| i.modifiers.command && i.key_pressed(Key::Enter))) {
                         done = Some(true);
                     }
-                    if ui.button("Cancel").clicked() {
+                    if ui.button(tr("Cancel")).clicked() {
                         done = Some(false);
                     }
                 });
@@ -468,7 +469,7 @@ impl App {
                 Some(s) => format!("{}  {}", time_label(s), text),
                 None => text,
             };
-            let g = wrapped(ui, if label.is_empty() { "(no text)" } else { &label }, 12.5, t::p().text, w - 64.0, 3);
+            let g = wrapped(ui, if label.is_empty() { tr("(no text)") } else { &label }, 12.5, t::p().text, w - 64.0, 3);
             let (row, resp) = ui.allocate_exact_size(vec2(w, g.size().y.max(16.0) + 8.0), Sense::click());
             if resp.hovered() {
                 ui.painter().rect_filled(row, CornerRadius::same(4), t::p().row_hover);
@@ -478,8 +479,8 @@ impl App {
             ui.painter().text(badge, Align2::CENTER_CENTER, (n + 1).to_string(), mono(10.0), Color32::WHITE);
             ui.painter().galley(Pos2::new(row.left() + 24.0, row.top() + 4.0), g, t::p().text);
             if resp.hovered() || ui.rect_contains_pointer(row) {
-                let edit = icon_button(ui, Pos2::new(row.right() - 34.0, row.top() + 12.0), ic::PENCIL, 13.0, true, "Edit");
-                let del = icon_button(ui, Pos2::new(row.right() - 10.0, row.top() + 12.0), ic::TRASH, 13.0, true, "Delete");
+                let edit = icon_button(ui, Pos2::new(row.right() - 34.0, row.top() + 12.0), ic::PENCIL, 13.0, true, tr("Edit"));
+                let del = icon_button(ui, Pos2::new(row.right() - 10.0, row.top() + 12.0), ic::TRASH, 13.0, true, tr("Delete"));
                 if edit.clicked() {
                     self.ws.tools.list_edit = Some((item.id.clone(), c.id.clone(), plain_text(&c.annotation)));
                 }

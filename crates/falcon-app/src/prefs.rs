@@ -1220,9 +1220,9 @@ fn notification(p: &mut Page, d: &mut Draft) {
 /// Whether a folder can be watched for auto-import, and why not.
 pub fn auto_import_refusal(path: &std::path::Path) -> Option<String> {
     if crate::auto_import::is_network_volume(path) {
-        Some("Auto-import doesn't work with network drives. Choose a folder on this Mac or a drive attached to it.".into())
+        Some(tr("Auto-import doesn't work with network drives. Choose a folder on this Mac or a drive attached to it.").into())
     } else if !path.is_dir() {
-        Some(format!("{} doesn't exist.", path.display()))
+        Some(trf("{path} doesn't exist.", &[("path", &path.display())]))
     } else {
         None
     }
@@ -1231,25 +1231,25 @@ pub fn auto_import_refusal(path: &std::path::Path) -> Option<String> {
 /// Auto-Import: a folder whose new files are imported by themselves.
 fn auto_import(p: &mut Page, d: &mut Draft, library: Option<&std::path::Path>, refused: &mut Option<String>) {
     let keywords = ["auto", "import", "watch", "monitor", "folder", "drop", "automatic", "inbox", "delete", "trash", "remove"];
-    p.block("Auto-import", &keywords, |ui| {
+    p.block(tr_key("Auto-import"), &keywords, |ui| {
         let was = d.prefs.auto_import;
-        ui.checkbox(&mut d.prefs.auto_import, "Import files added to a folder automatically");
-        ui.checkbox(&mut d.prefs.auto_import_delete, "Delete files after importing them");
+        ui.checkbox(&mut d.prefs.auto_import, tr("Import files added to a folder automatically"));
+        ui.checkbox(&mut d.prefs.auto_import_delete, tr("Delete files after importing them"));
         if d.prefs.auto_import_delete {
-            ui.label(RichText::new("Files in the watched folder are moved to the Trash once they are in the library.").size(11.0).color(t::p().icon_red));
+            ui.label(RichText::new(tr("Files in the watched folder are moved to the Trash once they are in the library.")).size(11.0).color(t::p().icon_red));
         } else {
-            note(ui, "Files stay in the folder; falcon remembers which ones it imported and skips them.");
+            note(ui, tr("Files stay in the folder; falcon remembers which ones it imported and skips them."));
         }
         let mut choose = d.prefs.auto_import && !was && d.prefs.auto_import_path.is_none();
         ui.add_space(4.0);
         ui.horizontal(|ui| {
-            let shown = d.prefs.auto_import_path.as_ref().map_or_else(|| "No folder chosen".to_string(), |p| p.display().to_string());
+            let shown = d.prefs.auto_import_path.as_ref().map_or_else(|| tr("No folder chosen").to_string(), |p| p.display().to_string());
             ui.add(egui::Label::new(RichText::new(shown).color(t::p().text_value)).truncate());
         });
         ui.horizontal(|ui| {
-            choose |= ui.button("Choose Folder…").clicked();
+            choose |= ui.button(tr("Choose Folder…")).clicked();
             let chosen = d.prefs.auto_import_path.clone().filter(|p| p.is_dir());
-            let open = ui.add_enabled(chosen.is_some(), egui::Button::new("Open Folder")).on_hover_text("Shows the chosen folder in Finder");
+            let open = ui.add_enabled(chosen.is_some(), egui::Button::new(tr("Open Folder"))).on_hover_text(tr("Shows the chosen folder in Finder"));
             if open.clicked()
                 && let Some(dir) = chosen
             {
@@ -1257,7 +1257,7 @@ fn auto_import(p: &mut Page, d: &mut Draft, library: Option<&std::path::Path>, r
             }
         });
         if choose {
-            if let Some(dir) = rfd::FileDialog::new().set_title("Choose a Folder to Watch").set_can_create_directories(true).pick_folder() {
+            if let Some(dir) = rfd::FileDialog::new().set_title(tr("Choose a Folder to Watch")).set_can_create_directories(true).pick_folder() {
                 *refused = auto_import_refusal(&dir);
                 if refused.is_none() {
                     d.prefs.auto_import_path = Some(dir);
@@ -1275,23 +1275,23 @@ fn auto_import(p: &mut Page, d: &mut Draft, library: Option<&std::path::Path>, r
         match (library, &d.prefs.auto_import_path) {
             (Some(root), Some(chosen)) => {
                 let dir = crate::auto_import::watch_dir(chosen, root);
-                note(ui, &format!("Files dropped into {} are imported into this library.", dir.display()));
+                note(ui, &trf("Files dropped into {path} are imported into this library.", &[("path", &dir.display())]));
                 // Eagle makes this folder itself; falcon only reads the
                 // chosen folder, so it is made here when asked.
                 if chosen.is_dir() && !dir.exists() {
                     ui.horizontal(|ui| {
-                        note(ui, "That folder doesn't exist yet.");
-                        if ui.small_button("Make It").clicked()
+                        note(ui, tr("That folder doesn't exist yet."));
+                        if ui.small_button(tr("Make It")).clicked()
                             && let Err(e) = std::fs::create_dir(&dir)
                         {
-                            *refused = Some(format!("Couldn't make {}: {e}", dir.display()));
+                            *refused = Some(trf("Couldn't make {path}: {error}", &[("path", &dir.display()), ("error", &e)]));
                         }
                     });
                 }
             }
-            _ => note(ui, "Each library watches the folder named after it inside the chosen folder (\"Books\" for Books.library)."),
+            _ => note(ui, tr("Each library watches the folder named after it inside the chosen folder (\"Books\" for Books.library).")),
         }
-        note(ui, "New files are imported once they stop growing; the originals stay where they are. Files under 1 KB, temporary (.tmp) files and files without an extension are skipped.");
+        note(ui, tr("New files are imported once they stop growing; the originals stay where they are. Files under 1 KB, temporary (.tmp) files and files without an extension are skipped."));
     });
 }
 
@@ -1446,32 +1446,32 @@ pub fn new_token() -> String {
 fn developer(p: &mut Page, d: &mut Draft, port_text: &mut String, error: Option<&String>) {
     let pr = &mut d.prefs;
     let first = parse_port(port_text).unwrap_or(pr.api_port);
-    p.block("API token", &["api", "token", "key", "auth", "developer", "restful"], |ui| {
+    p.block(tr_key("API token"), &["api", "token", "key", "auth", "developer", "restful"], |ui| {
         if pr.api_token.is_empty() {
-            note(ui, "No token. Only requests addressed to localhost are served.");
-            if ui.button("Generate").clicked() {
+            note(ui, tr("No token. Only requests addressed to localhost are served."));
+            if ui.button(tr("Generate")).clicked() {
                 pr.api_token = new_token();
             }
             return;
         }
         ui.horizontal(|ui| {
             ui.add(egui::Label::new(RichText::new(&pr.api_token).monospace()).selectable(true));
-            if ui.button("Copy").clicked() {
+            if ui.button(tr("Copy")).clicked() {
                 ui.ctx().copy_text(pr.api_token.clone());
             }
-            if ui.button("Regenerate").clicked() {
+            if ui.button(tr("Regenerate")).clicked() {
                 pr.api_token = new_token();
             }
         });
         let url = format!("http://localhost:{first}/?token={}", pr.api_token);
         ui.hyperlink_to(RichText::new(&url).size(11.0), &url);
-        note(ui, "Programs that send this token are let in from any address the API listens on.");
+        note(ui, tr("Programs that send this token are let in from any address the API listens on."));
     });
-    p.block("HTTP API", &["api", "server", "port", "local", "plugin"], |ui| {
-        ui.checkbox(&mut pr.api_enabled, "Run the local API while a library is open");
+    p.block(tr_key("HTTP API"), &["api", "server", "port", "local", "plugin"], |ui| {
+        ui.checkbox(&mut pr.api_enabled, tr("Run the local API while a library is open"));
         ui.add_enabled_ui(pr.api_enabled, |ui| {
             ui.horizontal(|ui| {
-                ui.label("First port");
+                ui.label(tr("First port"));
                 ui.add(egui::TextEdit::singleline(port_text).desired_width(70.0));
             });
             match error {
@@ -1479,7 +1479,7 @@ fn developer(p: &mut Page, d: &mut Draft, port_text: &mut String, error: Option<
                     ui.label(RichText::new(e).size(11.0).color(t::p().icon_red));
                 }
                 None => {
-                    note(ui, &format!("falcon tries ports {first} to {} and never uses Eagle's {EAGLE_PORT}.", first + PORT_SPAN - 1));
+                    note(ui, &trf("falcon tries ports {first} to {last} and never uses Eagle's {eagle}.", &[("first", &first), ("last", &(first + PORT_SPAN - 1)), ("eagle", &EAGLE_PORT)]));
                 }
             }
         });

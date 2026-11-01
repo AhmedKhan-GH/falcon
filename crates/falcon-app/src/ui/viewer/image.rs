@@ -14,6 +14,7 @@ use crate::gesture::{Gesture, Outcome};
 use crate::ui::viewer::audio;
 use crate::ui::widgets::ext_placeholder;
 use crate::loader::{Tier, hires_job, job_for, original_job};
+use crate::locale::{tr, trf};
 use crate::logic;
 use crate::theme::{self as t, mono};
 
@@ -294,21 +295,20 @@ impl App {
             Some(c) => format!("{label} ({})", crate::shortcuts::display(ui.ctx(), &c)),
             None => label.to_string(),
         };
-        let t_fit = match self.shortcuts.binding(C::ZoomFit) {
-            Some(c) => crate::locale::trf(", {key} fits", &[("key", &crate::shortcuts::display(ui.ctx(), &c))]),
-            None => String::new(),
+        let t_zoom = match self.shortcuts.binding(C::ZoomFit) {
+            Some(c) => trf("Zoom sizes. Right-click switches between actual size and fit, {key} fits", &[("key", &crate::shortcuts::display(ui.ctx(), &c))]),
+            None => tr("Zoom sizes. Right-click switches between actual size and fit").to_string(),
         };
-        let (t_zoom, t_actual, t_edge) = (
-            format!("Zoom sizes. Right-click switches between actual size and fit{t_fit}"),
-            tip("Actual Size", C::ZoomActual),
-            "Fit to Window Edge (`)".to_string(),
+        let (t_actual, t_edge) = (
+            tip(tr("Actual Size"), C::ZoomActual),
+            tr("Fit to Window Edge (`)").to_string(),
         );
         let mut zoom = self.ws.view.zoom_key.take();
         // Eagle's detail toolbar: the zoom slider and its % label (a menu of
         // sizes; right-click toggles actual size and fit), Actual Size, and
         // the fit-to-edge toggle.
         let mut x = right - 30.0;
-        if ui.put(Rect::from_center_size(Pos2::new(x, cy), vec2(40.0, 24.0)), egui::Button::new("Fit").selected(self.image.edge)).on_hover_text(t_edge).clicked() {
+        if ui.put(Rect::from_center_size(Pos2::new(x, cy), vec2(40.0, 24.0)), egui::Button::new(tr("Fit")).selected(self.image.edge)).on_hover_text(t_edge).clicked() {
             zoom = Some(logic::ViewZoom::Edge);
         }
         x -= 48.0;
@@ -329,10 +329,10 @@ impl App {
                 }
             }
             ui.separator();
-            if ui.button("Actual Size").clicked() {
+            if ui.button(tr("Actual Size")).clicked() {
                 zoom = Some(logic::ViewZoom::Actual);
             }
-            if ui.button("Zoom to Fit").clicked() {
+            if ui.button(tr("Zoom to Fit")).clicked() {
                 zoom = Some(logic::ViewZoom::Fit);
             }
         });
@@ -468,12 +468,12 @@ impl App {
             self.ws.frame_jobs.push(j);
         }
         let megapixels = item.width.saturating_mul(item.height) / 1_000_000;
-        let line = format!(
-            "Falcon previews TIFF, HEIC and TGA images of up to {} megapixels; this one has {megapixels}.",
-            logic::TOO_LARGE_PIXELS / 1_000_000
+        let line = trf(
+            "Falcon previews TIFF, HEIC and TGA images of up to {limit} megapixels; this one has {megapixels}.",
+            &[("limit", &(logic::TOO_LARGE_PIXELS / 1_000_000)), ("megapixels", &megapixels)],
         );
         // As in Eagle, the button opens the item's menu (Open With is in it).
-        let b = crate::ui::viewer::notice_text(ui, area, "Too large to preview", &line);
+        let b = crate::ui::viewer::notice_text(ui, area, tr("Too large to preview"), &line);
         egui::Popup::menu(&b).show(|ui| {
             self.item_menu(ui, lib, item, std::slice::from_ref(&item.id));
         });

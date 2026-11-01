@@ -14,6 +14,7 @@ use crate::loader::Tier;
 use crate::ui::widgets::{icon, icon_button};
 use crate::icloud::FetchState;
 use crate::icons as ic;
+use crate::locale::{tr, tr_n, trf};
 use crate::open_with;
 use crate::shortcuts::{self, Command};
 use crate::theme::{self as t, font};
@@ -34,14 +35,14 @@ impl App {
     /// With (one file, as in Eagle) and Show in Finder.
     pub(crate) fn open_menu(&mut self, ui: &mut Ui, files: &[PathBuf]) {
         let def = self.shortcut_text(ui.ctx(), Command::OpenDefault);
-        if ui.add(egui::Button::new("Open in Default App").shortcut_text(def)).clicked() {
+        if ui.add(egui::Button::new(tr("Open in Default App")).shortcut_text(def)).clicked() {
             self.open_files(files, true);
         }
         if let [file] = files {
-            crate::ui::menus::search::submenu(ui, "Open With", |ui| self.open_with_list(ui, file));
+            crate::ui::menus::search::submenu(ui, tr("Open With"), |ui| self.open_with_list(ui, file));
         }
         let reveal = self.shortcut_text(ui.ctx(), Command::RevealInFinder);
-        if ui.add(egui::Button::new("Show in Finder").shortcut_text(reveal)).clicked() {
+        if ui.add(egui::Button::new(tr("Show in Finder")).shortcut_text(reveal)).clicked() {
             self.open_files(files, false);
         }
     }
@@ -110,7 +111,7 @@ impl App {
         ui.set_min_width(200.0);
         let apps = self.open_apps.get(file).to_vec();
         if apps.is_empty() {
-            ui.label(egui::RichText::new("No apps found").color(t::p().text_muted));
+            ui.label(egui::RichText::new(tr("No apps found")).color(t::p().text_muted));
         }
         for e in &apps {
             if ui.button(e.label()).on_hover_text(e.app.path.display().to_string()).clicked() {
@@ -133,10 +134,10 @@ impl App {
         let caret = ui.interact(Rect::from_center_size(Pos2::new(caret_x, cy), vec2(16.0, 26.0)), ui.scope_id().with("viewer-open-with"), Sense::click());
         let color = if caret.hovered() { t::p().text } else { t::p().text_value };
         icon(ui, Pos2::new(caret_x, cy), CARET, 11.0, color);
-        let caret = caret.on_hover_text("Open With");
+        let caret = caret.on_hover_text(tr("Open With"));
         egui::Popup::menu(&caret).show(|ui| self.open_with_list(ui, file));
         let x = caret_x - 20.0;
-        let tip = if def.is_empty() { "Open in Default App".to_string() } else { format!("Open in Default App ({def})") };
+        let tip = if def.is_empty() { tr("Open in Default App").to_string() } else { trf("Open in Default App ({shortcut})", &[("shortcut", &def)]) };
         if icon_button(ui, Pos2::new(x, cy), ic::ARROW_SQUARE_OUT, 16.0, true, &tip).clicked() {
             open_with::open_default(&[file.to_path_buf()]);
             self.used(&[file.to_path_buf()]);
@@ -188,7 +189,7 @@ impl App {
                 }
                 FetchState::Failed(_) => {
                     let mut b = ui.new_child(egui::UiBuilder::new().max_rect(Rect::from_center_size(c + vec2(0.0, 22.0), vec2(120.0, 26.0))));
-                    if b.button("Try Again").clicked() {
+                    if b.button(tr("Try Again")).clicked() {
                         self.fetches.retry(&path);
                     }
                 }
@@ -202,11 +203,7 @@ impl App {
 
 /// The status line when an action skipped items still in iCloud.
 pub(crate) fn waiting_message(n: usize) -> String {
-    if n == 1 {
-        "Downloading 1 item from iCloud; try again once it is local".into()
-    } else {
-        format!("Downloading {n} items from iCloud; try again once they are local")
-    }
+    tr_n(n, "Downloading {n} item from iCloud; try again once it is local", "Downloading {n} items from iCloud; try again once they are local")
 }
 
 #[cfg(test)]

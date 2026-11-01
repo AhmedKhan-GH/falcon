@@ -10,6 +10,7 @@ use crate::app::image_edit::Op;
 use crate::app::{Action, App};
 use crate::ui::widgets::icon_button;
 use crate::icons as ic;
+use crate::locale::tr;
 use crate::theme::{self as t, font, mono};
 
 /// What a drag on the crop rectangle changes.
@@ -274,30 +275,30 @@ impl App {
             ui.put(r, b)
         };
         if crop.confirming {
-            if button(ui, right, 130.0, "Replace Original", true).clicked() {
+            if button(ui, right, 130.0, tr("Replace Original"), true).clicked() {
                 let rect = pixel_rect(crop.rect);
                 self.ws.actions.push(Action::Edit(Op::Crop(item.id.clone(), rect)));
                 self.ws.tools.crop = None;
                 return right - 138.0;
             }
-            if button(ui, right - 138.0, 70.0, "Back", false).clicked() {
+            if button(ui, right - 138.0, 70.0, tr("Back"), false).clicked() {
                 crop.confirming = false;
             }
-            let g = ui.painter().layout_no_wrap("Cropping overwrites the original file and can't be undone".into(), font(12.0), t::p().text_muted);
+            let g = ui.painter().layout_no_wrap(tr("Cropping overwrites the original file and can't be undone").into(), font(12.0), t::p().text_muted);
             let left = right - 216.0 - g.size().x;
             ui.painter().galley(Pos2::new(left, cy - g.size().y / 2.0), g, t::p().text_muted);
             left - 8.0
         } else {
-            if button(ui, right, 70.0, "Save", true).on_hover_text("Save (Enter, ⇧C)").clicked() {
+            if button(ui, right, 70.0, tr("Save"), true).on_hover_text(tr("Save (Enter, ⇧C)")).clicked() {
                 crop.confirming = true;
             }
-            if button(ui, right - 78.0, 80.0, "Save As", false).on_hover_text("Save the crop as a new item").clicked() {
+            if button(ui, right - 78.0, 80.0, tr("Save As"), false).on_hover_text(tr("Save the crop as a new item")).clicked() {
                 let rect = pixel_rect(crop.rect);
                 self.ws.actions.push(Action::Edit(Op::CropAsNew(item.id.clone(), rect)));
                 self.ws.tools.crop = None;
                 return right - 166.0;
             }
-            if button(ui, right - 166.0, 70.0, "Cancel", false).on_hover_text("Cancel (Esc)").clicked() {
+            if button(ui, right - 166.0, 70.0, tr("Cancel"), false).on_hover_text(tr("Cancel (Esc)")).clicked() {
                 self.ws.tools.crop = None;
                 return right - 244.0;
             }
@@ -341,15 +342,15 @@ impl App {
     pub(crate) fn rotate_crop_buttons(&mut self, ui: &mut Ui, item: &Item, mut x: f32, cy: f32) -> f32 {
         if transform::can_crop(&item.ext) {
             let open = self.ws.tools.crop.is_some();
-            if icon_button(ui, Pos2::new(x, cy), ic::CROP, 17.0, !open, "Crop").clicked() && !open {
+            if icon_button(ui, Pos2::new(x, cy), ic::CROP, 17.0, !open, tr("Crop")).clicked() && !open {
                 self.start_crop(item);
             }
             x -= 30.0;
         }
         let keyed = |label: &str, cmd| self.shortcuts.tooltip(ui.ctx(), label, cmd);
-        let (rotate_tip, flip_tip) = (keyed("Rotate Left", crate::shortcuts::Command::RotateLeft), format!("{}\n⇧-click: Flip Vertical", keyed("Flip Horizontal", crate::shortcuts::Command::FlipHorizontal)));
+        let (rotate_tip, flip_tip) = (keyed(tr("Rotate Left"), crate::shortcuts::Command::RotateLeft), format!("{}\n{}", keyed(tr("Flip Horizontal"), crate::shortcuts::Command::FlipHorizontal), tr("⇧-click: Flip Vertical")));
         if transform::can_rotate(&item.ext) {
-            if icon_button(ui, Pos2::new(x, cy), ic::ARROW_CLOCKWISE, 17.0, true, "Rotate Right").clicked() {
+            if icon_button(ui, Pos2::new(x, cy), ic::ARROW_CLOCKWISE, 17.0, true, tr("Rotate Right")).clicked() {
                 self.rotate_request(vec![item.id.clone()], 1);
             }
             x -= 30.0;

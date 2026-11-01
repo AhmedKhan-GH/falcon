@@ -16,6 +16,7 @@ use crate::app::{Action, App};
 use crate::ui::widgets::icon_button;
 use crate::anim::{self, State};
 use crate::icons as ic;
+use crate::locale::{tr, trf};
 use crate::shortcuts::{Command, PlayerKey};
 use crate::theme::{self as t, font, mono};
 
@@ -76,7 +77,7 @@ impl App {
         if on {
             ui.painter().rect_filled(Rect::from_center_size(c, Vec2::splat(26.0)), t::RADIUS, t::p().primary.gamma_multiply(0.35));
         }
-        if icon_button(ui, c, FILM_STRIP, 16.0, true, "Frame-by-Frame Player").clicked() {
+        if icon_button(ui, c, FILM_STRIP, 16.0, true, tr("Frame-by-Frame Player")).clicked() {
             self.ws.gif_player = !self.ws.gif_player;
         }
         x - 34.0
@@ -128,9 +129,9 @@ impl App {
     /// plays or pauses, as in Eagle.
     pub(crate) fn gif_toolbar(&mut self, ui: &mut Ui, item: &Item, bar: Rect, canvas: &Response) {
         let tips = [
-            ("Previous Frame", self.shortcut_text(ui.ctx(), Command::Player(PlayerKey::Frames(-1)))),
-            ("Next Frame", self.shortcut_text(ui.ctx(), Command::Player(PlayerKey::Frames(1)))),
-            ("Play/Pause", self.shortcut_text(ui.ctx(), Command::Player(PlayerKey::Toggle))),
+            (tr("Previous Frame"), self.shortcut_text(ui.ctx(), Command::Player(PlayerKey::Frames(-1)))),
+            (tr("Next Frame"), self.shortcut_text(ui.ctx(), Command::Player(PlayerKey::Frames(1)))),
+            (tr("Play/Pause"), self.shortcut_text(ui.ctx(), Command::Player(PlayerKey::Toggle))),
         ]
         .map(|(l, k)| if k.is_empty() { l.to_string() } else { format!("{l} ({k})") });
         let editing = self.ws.tools.crop.is_some() || self.ws.tools.comment_mode;
@@ -141,9 +142,9 @@ impl App {
         let Some(player) = self.ws.view.anim.as_mut() else { return };
         if player.state != State::Ready {
             let text = match &player.state {
-                State::Failed(e) => format!("Can't play this GIF: {e}"),
-                State::Still => "This GIF has one frame".to_string(),
-                _ => "Reading frames…".to_string(),
+                State::Failed(e) => trf("Can't play this GIF: {error}", &[("error", e)]),
+                State::Still => tr("This GIF has one frame").to_string(),
+                _ => tr("Reading frames…").to_string(),
             };
             p.text(Pos2::new(bar.left() + 20.0, cy), Align2::LEFT_CENTER, text, font(12.5), t::p().text_muted);
             return;
@@ -189,11 +190,11 @@ impl App {
         let mut set_thumb = false;
         let mut reset = false;
         let menu = |ui: &mut Ui, has_range: bool, set_thumb: &mut bool, reset: &mut bool| {
-            if ui.button("Set Frame as Thumbnail").clicked() {
+            if ui.button(tr("Set Frame as Thumbnail")).clicked() {
                 *set_thumb = true;
                 ui.close();
             }
-            if ui.add_enabled(has_range, egui::Button::new("Reset Loop Range")).clicked() {
+            if ui.add_enabled(has_range, egui::Button::new(tr("Reset Loop Range"))).clicked() {
                 *reset = true;
                 ui.close();
             }

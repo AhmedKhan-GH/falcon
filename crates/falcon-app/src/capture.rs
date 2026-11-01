@@ -17,6 +17,8 @@ use std::sync::{Arc, Mutex};
 
 use falcon_library::export;
 
+use crate::locale::trf;
+
 /// What to capture: Eagle's modes 1 (area), 2 (window) and 3 (full screen).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Mode {
@@ -198,7 +200,7 @@ pub fn take(mode: Mode, opts: &Options, screen: Screen, dir: &Path, now: chrono:
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     let stamp = now.and_utc().timestamp_nanos_opt().unwrap_or_default();
     let raw = dir.join(format!(".capture-{}-{stamp}.png", std::process::id()));
-    shoot(&args(mode, &raw, screen.display)).map_err(|e| format!("Couldn't run screencapture: {e}"))?;
+    shoot(&args(mode, &raw, screen.display)).map_err(|e| trf("Couldn't run screencapture: {error}", &[("error", &e)]))?;
     if !raw.is_file() {
         return Ok(None);
     }

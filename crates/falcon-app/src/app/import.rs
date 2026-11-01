@@ -574,7 +574,7 @@ impl App {
                 let chosen = self.prefs.auto_import_path.clone().unwrap_or_default();
                 match crate::prefs::auto_import_refusal(&chosen) {
                     Some(why) => {
-                        self.flash(format!("Auto-import is paused. {why}"));
+                        self.flash(trf("Auto-import is paused. {reason}", &[("reason", &why)]));
                         self.auto_import.refused = Some(dir);
                     }
                     None => {
@@ -588,7 +588,7 @@ impl App {
         for files in batches {
             if self.prefs.tells_auto_import() {
                 let n = files.len();
-                self.flash(format!("Importing {n} file{} from the auto-import folder", if n == 1 { "" } else { "s" }));
+                self.flash(tr_n(n, "Importing {n} file from the auto-import folder", "Importing {n} files from the auto-import folder"));
             }
             let opts = self.prefs.import_options(Vec::new());
             let removal = self.auto_import.watcher.as_ref().filter(|_| self.prefs.auto_import_delete).map(|w| crate::auto_import::Removal { watched: w.dir.clone(), imported: self.auto_import.imported.clone() });
