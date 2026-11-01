@@ -1243,9 +1243,38 @@ pub fn viewer_step(len: usize, at: Option<usize>, step: isize) -> Result<usize, 
     }
 }
 
+/// A zoom step in the image viewer.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ViewZoom {
+    In,
+    Out,
+    Actual,
+    Fit,
+}
+
+/// The viewer's zoom after `cmd` from `scale` (`None`: fit the window).
+pub fn view_zoom(cmd: ViewZoom, scale: f32) -> Option<f32> {
+    match cmd {
+        ViewZoom::In => Some((scale * 1.25).min(32.0)),
+        ViewZoom::Out => Some((scale / 1.25).max(0.02)),
+        ViewZoom::Actual => Some(1.0),
+        ViewZoom::Fit => None,
+    }
+}
+
 #[cfg(test)]
 mod viewer_shell_tests {
     use super::*;
+
+    #[test]
+    fn viewer_zoom_steps_and_limits() {
+        assert_eq!(view_zoom(ViewZoom::In, 1.0), Some(1.25));
+        assert_eq!(view_zoom(ViewZoom::Out, 1.25), Some(1.0));
+        assert_eq!(view_zoom(ViewZoom::In, 30.0), Some(32.0));
+        assert_eq!(view_zoom(ViewZoom::Out, 0.021), Some(0.02));
+        assert_eq!(view_zoom(ViewZoom::Actual, 0.3), Some(1.0));
+        assert_eq!(view_zoom(ViewZoom::Fit, 4.0), None);
+    }
 
     #[test]
     fn steps_stop_at_the_ends() {

@@ -181,6 +181,8 @@ struct ViewState {
     started: Option<Instant>,
     /// The item's original, for the bar's open button.
     file: PathBuf,
+    /// A zoom key pressed this frame, for the image viewer.
+    zoom_key: Option<logic::ViewZoom>,
 }
 
 /// Decodes up to 300 GIF frames into textures.
@@ -1011,6 +1013,25 @@ impl App {
             self.toggle_panels();
             // Tab must not also hand keyboard focus to the first widget.
             ctx.memory_mut(|m| m.move_focus(egui::FocusDirection::None));
+        }
+        // Zoom keys in the viewer: the table's ⌘ chords and the fixed
+        // plain 0, 1, + and −.
+        if self.ws.viewer.is_some() {
+            use logic::ViewZoom as Z;
+            let plain = ctx.input(|i| {
+                i.events.iter().find_map(|e| match e {
+                    egui::Event::Key { key, pressed: true, modifiers: m, .. } if !m.command && !m.ctrl && !m.alt => match key {
+                        Key::Num0 => Some(Z::Fit),
+                        Key::Num1 => Some(Z::Actual),
+                        Key::Plus | Key::Equals => Some(Z::In),
+                        Key::Minus => Some(Z::Out),
+                        _ => None,
+                    },
+                    _ => None,
+                })
+            });
+            let table = [(C::ZoomIn, Z::In), (C::ZoomOut, Z::Out), (C::ZoomActual, Z::Actual), (C::ZoomFit, Z::Fit)].into_iter().find(|(c, _)| on(*c)).map(|(_, z)| z);
+            self.ws.view.zoom_key = table.or(plain);
         }
         // In the viewer, Back from ⌫ leaves it, as in Eagle; the arrow
         // chords of Back do nothing there.
@@ -3716,45 +3737,41 @@ impl App {
         // The bar on top: back and name, then zoom and the tools.
         let (name_x, right) = media_view::bar_shell(self, ui, item, bar);
         let cy = bar.center().y;
+        use crate::shortcuts::Command as C;
+        let tip = |label: &str, fixed: &str, cmd: C| match self.shortcuts.binding(cmd) {
+            Some(c) => format!("{label} ({fixed}, {})", crate::shortcuts::display(ui.ctx(), &c)),
+            None => format!("{label} ({fixed})"),
+        };
+        let (t_in, t_out, t_actual, t_fit) =
+            (tip("Zoom In", "+", C::ZoomIn), tip("Zoom Out", "−", C::ZoomOut), tip("Actual Size", "1", C::ZoomActual), tip("Zoom to Fit", "0", C::ZoomFit));
+        let mut zoom = self.ws.view.zoom_key.take();
         let mut x = right - 14.0;
-        if icon_button(ui, Pos2::new(x, cy), ic::PLUS, 15.0, true, "Zoom In (+)").clicked() {
-            self.ws.view.zoom = Some((scale * 1.25).min(32.0));
+        if icon_button(ui, Pos2::new(x, cy), ic::PLUS, 15.0, true, &t_in).clicked() {
+            zoom = Some(logic::ViewZoom::In);
         }
         x -= 28.0;
         p.text(Pos2::new(x, cy), Align2::CENTER_CENTER, format!("{:.0}%", scale * 100.0), mono(12.0), t::p().text_value);
         x -= 30.0;
-        if icon_button(ui, Pos2::new(x, cy), ic::MINUS, 15.0, true, "Zoom Out (−)").clicked() {
-            self.ws.view.zoom = Some((scale / 1.25).max(0.02));
+        if icon_button(ui, Pos2::new(x, cy), ic::MINUS, 15.0, true, &t_out).clicked() {
+            zoom = Some(logic::ViewZoom::Out);
         }
         x -= 40.0;
         let actual = ui.put(Rect::from_center_size(Pos2::new(x, cy), vec2(46.0, 24.0)), egui::Button::new("1:1"));
-        if actual.on_hover_text("Actual Size (1)").clicked() {
-            self.ws.view.zoom = Some(1.0);
-            self.ws.view.pan = Vec2::ZERO;
+        if actual.on_hover_text(t_actual).clicked() {
+            zoom = Some(logic::ViewZoom::Actual);
         }
         x -= 50.0;
-        if ui.put(Rect::from_center_size(Pos2::new(x, cy), vec2(46.0, 24.0)), egui::Button::new("Fit")).on_hover_text("Zoom to Fit (0)").clicked() {
-            self.ws.view.zoom = None;
+        if ui.put(Rect::from_center_size(Pos2::new(x, cy), vec2(46.0, 24.0)), egui::Button::new("Fit")).on_hover_text(t_fit).clicked() {
+            zoom = Some(logic::ViewZoom::Fit);
         }
         let tools_left = self.edit_bar(ui, item, x - 50.0, cy);
         media_view::bar_name(ui, item, bar, name_x, tools_left);
 
-        // Keys: 0 fits, 1 is actual size, + and - zoom.
-        let (k0, k1, kp, km) = ui.input(|i| {
-            (i.key_pressed(Key::Num0), i.key_pressed(Key::Num1), i.key_pressed(Key::Plus) || i.key_pressed(Key::Equals), i.key_pressed(Key::Minus))
-        });
-        if k0 {
-            self.ws.view.zoom = None;
-        }
-        if k1 {
-            self.ws.view.zoom = Some(1.0);
-            self.ws.view.pan = Vec2::ZERO;
-        }
-        if kp {
-            self.ws.view.zoom = Some((scale * 1.25).min(32.0));
-        }
-        if km {
-            self.ws.view.zoom = Some((scale / 1.25).max(0.02));
+        if let Some(z) = zoom {
+            self.ws.view.zoom = logic::view_zoom(z, scale);
+            if matches!(z, logic::ViewZoom::Actual | logic::ViewZoom::Fit) {
+                self.ws.view.pan = Vec2::ZERO;
+            }
         }
         if let Some(j) = job_for(item, lib.root(), Tier::Full) {
             self.ws.frame_jobs.push(j);

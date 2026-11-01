@@ -21,6 +21,9 @@ pub enum Command {
     Forward,
     ZoomIn,
     ZoomOut,
+    /// The viewer's actual size and zoom to fit.
+    ZoomActual,
+    ZoomFit,
     NewFolder,
     Copy,
     Paste,
@@ -108,6 +111,8 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::Viewer, id: "view.viewer", group: "View", label: "Open or close the viewer", default: k(NONE, Key::Space), aliases: &[KeyboardShortcut::new(NONE, Key::Enter)] },
     Spec { cmd: Command::ZoomIn, id: "view.zoom.in", group: "View", label: "Zoom in", default: k(CMD, Key::Equals), aliases: &[KeyboardShortcut::new(CMD, Key::Plus)] },
     Spec { cmd: Command::ZoomOut, id: "view.zoom.out", group: "View", label: "Zoom out", default: k(CMD, Key::Minus), aliases: &[] },
+    Spec { cmd: Command::ZoomActual, id: "view.zoom.actual", group: "View", label: "Actual size (viewer)", default: k(CMD, Key::Num0), aliases: &[] },
+    Spec { cmd: Command::ZoomFit, id: "view.zoom.fit", group: "View", label: "Zoom to fit (viewer)", default: k(CMD, Key::Num9), aliases: &[] },
     Spec { cmd: Command::ToggleSidebar, id: "view.toggle.sidebar", group: "View", label: "Show or hide the sidebar", default: k(CMD_ALT, Key::Num1), aliases: &[] },
     Spec { cmd: Command::ToggleInspector, id: "view.toggle.inspector", group: "View", label: "Show or hide the inspector", default: k(CMD_ALT, Key::Num2), aliases: &[] },
     Spec { cmd: Command::ToggleAll, id: "view.toggle.all", group: "View", label: "Show or hide the sidebar and inspector", default: k(CMD_ALT, Key::Num3), aliases: &[] },
@@ -162,6 +167,7 @@ pub const TABLE: &[Spec] = &[
 pub const FIXED: &[(&str, &str)] = &[
     ("← → ↑ ↓", "Move the selection, or step through the viewer"),
     ("Esc", "Close the viewer, or clear the selection"),
+    ("0 / 1 / + / −", "Viewer: zoom to fit, actual size, zoom in, zoom out"),
     ("Tab", "Show or hide the sidebar and inspector (no text field focused)"),
     ("Hold Z", "Hover preview of the card under the pointer"),
 ];
@@ -646,6 +652,16 @@ mod tests {
         assert_eq!(keys.resolve(Key::Num2, CMD_ALT), Some(Command::ToggleInspector));
         assert_eq!(keys.resolve(Key::Num3, CMD_ALT), Some(Command::ToggleAll));
         assert_eq!(spec(Command::ToggleAll).id, "view.toggle.all");
+    }
+
+    #[test]
+    fn viewer_zoom_keys() {
+        let keys = Shortcuts::default();
+        assert_eq!(keys.resolve(Key::Equals, CMD), Some(Command::ZoomIn));
+        assert_eq!(keys.resolve(Key::Minus, CMD), Some(Command::ZoomOut));
+        assert_eq!(keys.resolve(Key::Num0, CMD), Some(Command::ZoomActual));
+        assert_eq!(keys.resolve(Key::Num9, CMD), Some(Command::ZoomFit));
+        assert_eq!(keys.resolve(Key::Num0, Modifiers::NONE), None, "plain 0 stays the viewer's fixed key");
     }
 
     #[test]
