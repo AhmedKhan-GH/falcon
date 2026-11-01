@@ -343,7 +343,7 @@ impl App {
         if (gone || view.save_now || view.autosave.due(now))
             && let Err(e) = view.save(lib)
         {
-            self.flash(format!("Could not save the text: {e}"));
+            self.flash_error(format!("Could not save the text: {e}"));
         }
         if gone {
             self.ws.text = None;

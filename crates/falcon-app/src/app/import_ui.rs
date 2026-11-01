@@ -206,7 +206,7 @@ impl App {
         for tree in trees {
             let plan = folder_import::plan(&tree, parent.as_deref(), falcon_library::ids::new_id);
             if let Err(e) = lock(&shared).create_folders(&plan.folders) {
-                self.flash(format!("Couldn't import {}: {e}", tree.dir.display()));
+                self.flash_error(format!("Couldn't import {}: {e}", tree.dir.display()));
                 continue;
             }
             opened = plan.root().map(String::from);
@@ -322,7 +322,7 @@ impl App {
             if let Ok(mut clip) = arboard::Clipboard::new()
                 && clip.set().file_list(&paths).is_ok()
             {
-                self.flash(format!("Copied {} file{}", paths.len(), if paths.len() == 1 { "" } else { "s" }));
+                self.flash_brief(format!("Copied {} file{}", paths.len(), if paths.len() == 1 { "" } else { "s" }));
             }
         }
         if retry {

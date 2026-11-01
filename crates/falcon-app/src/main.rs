@@ -30,6 +30,7 @@ mod subtitles;
 mod tags;
 mod organize;
 mod textdoc;
+mod toast;
 mod theme;
 mod workspaces;
 

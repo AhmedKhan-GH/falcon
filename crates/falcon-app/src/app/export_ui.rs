@@ -331,7 +331,7 @@ impl App {
                         self.flash(format!("Exported {} to CSV", plural(n, "item")));
                         crate::open_with::reveal(&[dest]);
                     }
-                    Err(e) => self.flash(format!("Export failed: {e}")),
+                    Err(e) => self.flash_error(format!("Export failed: {e}")),
                 }
             }
             Request::Copy(kind, ids) => self.copy_variant(lib, kind, &ids),
@@ -395,7 +395,7 @@ impl App {
         };
         if let Some((text, what)) = text {
             self.ctx.copy_text(text);
-            self.flash(format!("Copied {what}"));
+            self.flash_brief(format!("Copied {what}"));
             return;
         }
         // Copy Thumbnail.
@@ -409,7 +409,7 @@ impl App {
             let files: Vec<PathBuf> = items.iter().map(|i| i.thumbnail_path(lib.root()).unwrap_or_else(|| i.original_path(lib.root()))).collect();
             clip.set().file_list(&files).is_ok()
         };
-        self.flash(if !ok { "No thumbnail to copy".to_string() } else if n == 1 { "Copied thumbnail".to_string() } else { format!("Copied {}", plural(n, "thumbnail")) });
+        self.flash_brief(if !ok { "No thumbnail to copy".to_string() } else if n == 1 { "Copied thumbnail".to_string() } else { format!("Copied {}", plural(n, "thumbnail")) });
     }
 
     /// The Copy File Path entry and Copy submenu of the item menu.
@@ -442,7 +442,7 @@ impl App {
         let plan = match pack::plan_pack(lib, source) {
             Ok(p) => p,
             Err(e) => {
-                self.flash(format!("Export failed: {e}"));
+                self.flash_error(format!("Export failed: {e}"));
                 return;
             }
         };

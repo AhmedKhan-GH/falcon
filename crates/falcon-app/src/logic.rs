@@ -716,14 +716,15 @@ pub fn next_after_removal(order: &[String], removed: &[String]) -> Option<String
     order[first..].iter().find(stays).or_else(|| order[..first].iter().rev().find(stays)).cloned()
 }
 
-/// The notice after a folder drop: "Moved 3 items to Logos".
-pub fn folder_drop_notice(drop: &FolderDrop, n: usize, folder: &str) -> String {
+/// The notice after a folder drop up to the folder name ("Moved 3 items to");
+/// the toast shows the name as a link.
+pub fn folder_drop_lead(drop: &FolderDrop, n: usize) -> String {
     let verb = match drop {
         FolderDrop::Move(_) => "Moved",
         FolderDrop::Add => "Added",
     };
     let noun = if n == 1 { "item" } else { "items" };
-    format!("{verb} {n} {noun} to {folder}")
+    format!("{verb} {n} {noun} to")
 }
 
 #[cfg(test)]
@@ -799,8 +800,8 @@ mod folder_drop_tests {
 
     #[test]
     fn notices() {
-        assert_eq!(folder_drop_notice(&FolderDrop::Move("A".into()), 3, "Logos"), "Moved 3 items to Logos");
-        assert_eq!(folder_drop_notice(&FolderDrop::Add, 1, "Logos"), "Added 1 item to Logos");
+        assert_eq!(folder_drop_lead(&FolderDrop::Move("A".into()), 3), "Moved 3 items to");
+        assert_eq!(folder_drop_lead(&FolderDrop::Add, 1), "Added 1 item to");
     }
 }
 

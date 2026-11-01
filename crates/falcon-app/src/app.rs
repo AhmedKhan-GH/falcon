@@ -17,6 +17,7 @@ use falcon_library::{Library, thumbnail};
 
 use crate::colors;
 use crate::icons as ic;
+use crate::toast::{Kind as ToastKind, Life, Link, Toast};
 use crate::loader::{Loader, Tier, job_for};
 use crate::logic::{self, Layout, NavCounts, Scope};
 use falcon_library::search::{ColorQuery, Filter, Logic, OrderBy, TextFilter};
@@ -510,7 +511,7 @@ struct Workspace {
     edit: Option<EditBuf>,
     multi_edit: Option<MultiEditBuf>,
     folder_edit: Option<FolderEditBuf>,
-    status: Option<(String, Instant)>,
+    status: Option<crate::toast::Toast>,
     /// Ids in grid order, refreshed every frame.
     order: Vec<String>,
     columns: usize,
@@ -972,7 +973,7 @@ impl App {
             }
             Err(e) => {
                 if self.ws.lib.is_some() {
-                    self.flash(format!("Could not open the library: {e}"));
+                    self.flash_error(format!("Could not open the library: {e}"));
                 }
                 self.error = Some(e.to_string());
             }
@@ -1025,7 +1026,7 @@ impl App {
             None => return,
         };
         if let Err(e) = closed.flush_and_backup() {
-            self.flash(format!("Could not save: {e}"));
+            self.flash_error(format!("Could not save: {e}"));
         }
         drop(closed);
         self.serve_active();
@@ -1102,7 +1103,7 @@ impl App {
                 self.server = Some(h);
                 self.share_with_server();
             }
-            Err(e) => self.flash(format!("API not started: {e}")),
+            Err(e) => self.flash_error(format!("API not started: {e}")),
         }
     }
 
@@ -1233,7 +1234,7 @@ impl App {
         let dest = if dest.extension().is_some_and(|e| e == "library") { dest } else { dest.with_extension("library") };
         match falcon_library::sandbox::guard(&dest).and_then(|()| Library::create(&dest)) {
             Ok(_) => self.open(dest),
-            Err(e) => self.flash(format!("Could not create the library: {e}")),
+            Err(e) => self.flash_error(format!("Could not create the library: {e}")),
         }
     }
 
@@ -1290,7 +1291,7 @@ impl App {
     fn refresh_library(&mut self) {
         let (Some(shared), Some(root)) = (self.ws.lib.clone(), self.ws.root.clone()) else { return };
         if let Err(e) = self.ws.flush_and_backup() {
-            self.flash(format!("Could not save: {e}"));
+            self.flash_error(format!("Could not save: {e}"));
             return;
         }
         match falcon_library::sandbox::guard(&root).and_then(|()| Library::open_or_restore(&root)) {
@@ -1308,9 +1309,9 @@ impl App {
                 if let Scope::Random(_) = self.ws.scope {
                     self.ws.scope = Scope::Random(fastrand_seed());
                 }
-                self.flash("Refreshed");
+                self.flash_brief("Refreshed");
             }
-            Err(e) => self.flash(format!("Could not refresh: {e}")),
+            Err(e) => self.flash_error(format!("Could not refresh: {e}")),
         }
     }
 
@@ -1332,8 +1333,39 @@ impl App {
         }
     }
 
+    /// Shows a note for a few seconds; a new one replaces the old.
     fn flash(&mut self, msg: impl Into<String>) {
-        self.ws.status = Some((msg.into(), Instant::now()));
+        self.ws.status = Some(Toast::new(msg, ToastKind::Info, Life::Normal));
+    }
+
+    /// A quick confirmation, such as "Copied 2 tags".
+    fn flash_brief(&mut self, msg: impl Into<String>) {
+        self.ws.status = Some(Toast::new(msg, ToastKind::Info, Life::Brief));
+    }
+
+    /// A failure: a red mark before the text, and it stays longer.
+    fn flash_error(&mut self, msg: impl Into<String>) {
+        let msg = msg.into();
+        // Hook: write `msg` to the error log here once there is one.
+        self.ws.status = Some(Toast::new(msg, ToastKind::Error, Life::Normal));
+    }
+
+    /// A note with an Undo button, for actions the undo history records.
+    fn flash_undo(&mut self, msg: impl Into<String>) {
+        let mut t = Toast::new(msg, ToastKind::Info, Life::Undoable);
+        t.undo = true;
+        self.ws.status = Some(t);
+    }
+
+    /// A note that ends in the folder's name as a link that opens it.
+    /// `msg` is the text before the name ("Added 3 items to").
+    fn flash_folder(&mut self, msg: impl Into<String>, folder_name: &str, folder_id: &str, undo: bool) {
+        let mut t = Toast::new(msg, ToastKind::Info, if undo { Life::Undoable } else { Life::Normal });
+        t.undo = undo;
+        if !folder_name.is_empty() {
+            t.link = Some(Link { label: folder_name.to_string(), folder: folder_id.to_string() });
+        }
+        self.ws.status = Some(t);
     }
 
     /// Applies a click on the card at `id` with the given modifiers.
@@ -1436,7 +1468,7 @@ impl App {
             drop(pr);
             self.imports.select_after = Some(added);
             if failed > 0 {
-                self.flash(format!("Added {}, {failed} failed", done - failed));
+                self.flash_error(format!("Added {}, {failed} failed", done - failed));
             } else if self.prefs.tells_import_done() {
                 self.flash(format!("Added {done}"));
             }
@@ -1466,7 +1498,7 @@ impl App {
             && clip.set().file_list(&paths).is_ok()
         {
             self.used(&paths);
-            self.flash(format!("Copied {} file{}", paths.len(), if paths.len() == 1 { "" } else { "s" }));
+            self.flash_brief(format!("Copied {} file{}", paths.len(), if paths.len() == 1 { "" } else { "s" }));
         }
     }
 
@@ -1942,7 +1974,7 @@ impl App {
                 let asks = ids.len() >= BULK_CONFIRM;
                 self.push_bulk(ids.len(), Action::BatchRating(ids, n.into()));
                 if !asks {
-                    self.flash(rated_note(n));
+                    self.flash_brief(rated_note(n));
                 }
             }
             C::CloseWindow if self.ws.viewer.is_some() => self.ws.viewer = None,
@@ -2124,7 +2156,7 @@ impl App {
                         }
                     }
                     let name = logic::find_folder(&lib.metadata.folders, &fid).map_or_else(String::new, |f| f.name.clone());
-                    self.flash(format!("Removed {n} from {name}"));
+                    self.flash_undo(format!("Removed {n} from {name}"));
                     r
                 }
                 Action::RenameFolder(id, name) => lib.rename_folder(&id, &name),
@@ -2150,7 +2182,7 @@ impl App {
                         }
                     }
                     let name = logic::find_folder(&lib.metadata.folders, &fid).map_or_else(String::new, |f| f.name.clone());
-                    self.flash(format!("Added {n} to {name}"));
+                    self.flash_folder(format!("Added {n} to"), &name, &fid, true);
                     r
                 }
                 Action::DropOnFolder(ids, fid, op) => {
@@ -2175,7 +2207,7 @@ impl App {
                         self.select_after_removal(&moved);
                     }
                     let name = logic::find_folder(&lib.metadata.folders, &fid).map_or_else(String::new, |f| f.name.clone());
-                    self.flash(logic::folder_drop_notice(&op, ids.len(), &name));
+                    self.flash_folder(logic::folder_drop_lead(&op, ids.len()), &name, &fid, true);
                     r
                 }
                 Action::CreateSmart(name, conditions) => lib.create_smart_folder(&name, conditions).map(|id| {
@@ -2211,10 +2243,10 @@ impl App {
                     _ => Ok(()),
                 }),
                 Action::RemoveTags(ids, tags) => lib.remove_tags_from_items(&ids, &tags).map(|_| ()),
-                Action::PasteTags(ids, tags) => lib.paste_tags(&ids, &tags).map(|n| self.flash(format!("Pasted {} to {}", export_ui::plural(tags.len(), "tag"), export_ui::plural(n, "item")))),
+                Action::PasteTags(ids, tags) => lib.paste_tags(&ids, &tags).map(|n| self.flash_undo(format!("Pasted {} to {}", export_ui::plural(tags.len(), "tag"), export_ui::plural(n, "item")))),
                 Action::SetNotes(ids, note) => lib.set_notes(&ids, &note).map(|_| ()),
                 Action::SetUrls(ids, url) => lib.set_urls(&ids, &url).map(|_| ()),
-                Action::ClearTags(ids) => lib.clear_tags(&ids).map(|n| self.flash(format!("Cleared the tags of {}", export_ui::plural(n, "item")))),
+                Action::ClearTags(ids) => lib.clear_tags(&ids).map(|n| self.flash_undo(format!("Cleared the tags of {}", export_ui::plural(n, "item")))),
                 Action::BatchRating(ids, star) => {
                     let mut r = Ok(());
                     for id in &ids {
@@ -2235,12 +2267,12 @@ impl App {
                     if self.ws.scope == Scope::Tag(from.clone()) {
                         self.ws.scope = Scope::Tag(to.clone());
                     }
-                    self.flash(format!("Renamed “{from}” to “{to}” on {n} items"));
+                    self.flash_undo(format!("Renamed “{from}” to “{to}” on {n} items"));
                 }),
                 Action::DeleteTags(tags) => lib.delete_tags(&tags).map(|n| {
                     self.ws.org.tag_sel.retain(|t| !tags.contains(t));
                     let what = if let [one] = tags.as_slice() { format!("“{one}”") } else { export_ui::plural(tags.len(), "tag") };
-                    self.flash(format!("Removed {what} from {}", export_ui::plural(n, "item")));
+                    self.flash_undo(format!("Removed {what} from {}", export_ui::plural(n, "item")));
                 }),
                 Action::StarTags(tags, on) => lib.star_tags(&tags, on),
                 Action::MergeTags(tags, into) => lib.merge_tags(&tags, &into).map(|n| {
@@ -2251,7 +2283,7 @@ impl App {
                         self.ws.scope = Scope::Tag(into.clone());
                     }
                     self.ws.org.tag_sel = vec![into.clone()];
-                    self.flash(format!("Merged {} into “{into}” on {}", export_ui::plural(tags.len(), "tag"), export_ui::plural(n, "item")));
+                    self.flash_undo(format!("Merged {} into “{into}” on {}", export_ui::plural(tags.len(), "tag"), export_ui::plural(n, "item")));
                 }),
                 Action::ClearTagHistory => lib.clear_tag_history().map(|_| self.flash("Cleared the tag history")),
                 Action::DeletePermanently(ids) => {
@@ -2272,7 +2304,11 @@ impl App {
                         self.select_after_removal(&ids);
                     }
                     let r = lib.set_trashed(&ids, trash);
-                    self.flash(if trash { format!("Moved {} to Trash", ids.len()) } else { format!("Restored {}", ids.len()) });
+                    if trash {
+                        self.flash_undo(format!("Moved {} to Trash", ids.len()));
+                    } else {
+                        self.flash(format!("Restored {}", ids.len()));
+                    }
                     r
                 }
                 Action::TrashAsk(ids) => {
@@ -2349,7 +2385,7 @@ impl App {
                 },
             };
             if let Err(e) = result {
-                self.flash(format!("Could not save: {e}"));
+                self.flash_error(format!("Could not save: {e}"));
             }
         }
     }
@@ -2366,7 +2402,7 @@ impl App {
         if lib.write_mode() != WriteMode::Batched
             && let Err(e) = lib.set_write_mode(WriteMode::Batched)
         {
-            self.flash(format!("Could not save: {e}"));
+            self.flash_error(format!("Could not save: {e}"));
         }
         if let Some(undo) = self.ws.undo_request.take() {
             let (from, to) = if undo { (&mut self.ws.undo, &mut self.ws.redo) } else { (&mut self.ws.redo, &mut self.ws.undo) };
@@ -2383,7 +2419,7 @@ impl App {
                             self.ws.folder_edit = None;
                             self.flash(format!("{}: {label}", if undo { "Undid" } else { "Redid" }));
                         }
-                        Err(e) => self.flash(format!("Could not save: {e}")),
+                        Err(e) => self.flash_error(format!("Could not save: {e}")),
                     }
                 }
             }
@@ -2412,7 +2448,7 @@ impl App {
                     self.ctx.request_repaint_after(crate::backups::DEBOUNCE);
                 }
                 Ok(_) => {}
-                Err(e) => self.flash(format!("Could not save: {e}")),
+                Err(e) => self.flash_error(format!("Could not save: {e}")),
             }
         }
     }
@@ -4610,11 +4646,11 @@ impl App {
     /// the old clipboard.
     fn copy_tags(&mut self, ctx: &egui::Context, tags: Vec<String>) {
         if tags.is_empty() {
-            self.flash("No tags to copy");
+            self.flash_brief("No tags to copy");
             return;
         }
         ctx.copy_text(tags.join("\n"));
-        self.flash(format!("Copied {}", export_ui::plural(tags.len(), "tag")));
+        self.flash_brief(format!("Copied {}", export_ui::plural(tags.len(), "tag")));
         self.copied_tags = Some(tags);
     }
 
@@ -4772,7 +4808,7 @@ impl App {
                         }
                         if ui.button(format!("Copy {v}")).clicked() {
                             ui.ctx().copy_text(v.clone());
-                            self.flash(format!("Copied {v}"));
+                            self.flash_brief(format!("Copied {v}"));
                             ui.close();
                         }
                     }
@@ -4792,7 +4828,7 @@ impl App {
             if let Some((n, on)) = toggle_primary
                 && let Err(e) = lib.set_palette_marked(&item.id, n, on)
             {
-                self.flash(format!("Could not save: {e}"));
+                self.flash_error(format!("Could not save: {e}"));
             }
         }
 
@@ -4828,7 +4864,7 @@ impl App {
                 changed = Some(it);
             } else {
                 edit.url = item.url.clone();
-                self.ws.status = Some(("Not a valid link".into(), Instant::now()));
+                self.ws.status = Some(Toast::new("Not a valid link", ToastKind::Info, Life::Normal));
             }
         }
         if open_link && let Some(t) = crate::urls::link_target(&item.url, |p| std::path::Path::new(p).exists()) {
@@ -4938,7 +4974,7 @@ impl App {
                         e.name = lib.item(&item.id).map_or(e.name.clone(), |i| i.name.clone());
                     }
                 }
-                Err(e) => self.flash(format!("Could not save: {e}")),
+                Err(e) => self.flash_error(format!("Could not save: {e}")),
             }
         }
     }
@@ -5427,19 +5463,76 @@ impl App {
                 self.error_toast(ui, Pos2::new(full.center().x, grid_top + 10.0));
             }
 
-            if let Some((msg, at)) = &self.ws.status {
-                // Long messages (a restored backup, say) stay up longer;
-                // short notes over the viewer go quickly, like Eagle's tips.
-                let least = if self.ws.viewer.is_some() { 1.2 } else { 3.0 };
-                if at.elapsed().as_secs_f32() < (msg.chars().count() as f32 / 20.0).max(least) {
-                    let gal = galley(ui, msg, font(13.0), t::p().text, 400.0);
+            if let Some(mut toast) = self.ws.status.clone() {
+                let over_viewer = self.ws.viewer.is_some();
+                if toast.at.elapsed().as_secs_f32() < crate::toast::seconds(&toast, over_viewer) {
+                    let p = t::p();
+                    let f = font(13.0);
+                    let gal = galley(ui, &toast.msg, f.clone(), p.text, 400.0);
+                    let link = toast.link.as_ref().map(|l| galley(ui, &l.label, f.clone(), p.primary, 240.0));
+                    let undo = toast.undo.then(|| galley(ui, "Undo", f.clone(), p.primary, 80.0));
+                    let mark = if toast.kind == ToastKind::Error { 20.0 } else { 0.0 };
+                    let gap = 8.0;
+                    let mut w = 24.0 + mark + gal.size().x;
+                    for g in link.iter().chain(undo.iter()) {
+                        w += gap + g.size().x;
+                    }
+                    let h = gal.size().y.max(link.as_ref().map_or(0.0, |g| g.size().y)) + 14.0;
                     // Over the viewer the note sits in the middle of the
                     // picture, as Eagle's viewer tips do.
-                    let at = if self.ws.viewer.is_some() { full.center() } else { Pos2::new(full.center().x, full.bottom() - 30.0) };
-                    let r = Rect::from_center_size(at, gal.size() + vec2(24.0, 14.0));
-                    ui.painter().rect_filled(r, CornerRadius::same(8), t::p().row_selected);
-                    ui.painter().galley(r.min + vec2(12.0, 7.0), gal, t::p().text);
-                    ctx.request_repaint_after(std::time::Duration::from_millis(250));
+                    let at = if over_viewer { full.center() } else { Pos2::new(full.center().x, full.bottom() - 30.0) };
+                    let r = Rect::from_center_size(at, vec2(w, h));
+                    ui.painter().rect_filled(r, CornerRadius::same(8), p.row_selected);
+                    let mut x = r.left() + 12.0;
+                    if mark > 0.0 {
+                        let c = Pos2::new(x + 7.0, r.center().y);
+                        ui.painter().circle_filled(c, 7.0, p.icon_red);
+                        ui.painter().text(c, Align2::CENTER_CENTER, "!", font(11.0), Color32::WHITE);
+                        x += mark;
+                    }
+                    ui.painter().galley(Pos2::new(x, r.center().y - gal.size().y / 2.0), gal.clone(), p.text);
+                    x += gal.size().x;
+                    let mut go_to = None;
+                    if let (Some(g), Some(l)) = (&link, &toast.link) {
+                        x += gap;
+                        let lr = Rect::from_min_size(Pos2::new(x, r.center().y - g.size().y / 2.0), g.size());
+                        let resp = ui.interact(lr.expand(2.0), ui.scope_id().with("toast_link"), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
+                        ui.painter().galley(lr.min, g.clone(), p.primary);
+                        if resp.hovered() {
+                            let y = lr.bottom() - 1.0;
+                            ui.painter().line_segment([Pos2::new(lr.left(), y), Pos2::new(lr.right(), y)], Stroke::new(1.0, p.primary));
+                        }
+                        if resp.clicked() {
+                            go_to = Some(l.folder.clone());
+                        }
+                        x += g.size().x;
+                    }
+                    let mut undo_clicked = false;
+                    if let Some(g) = &undo {
+                        x += gap;
+                        let ur = Rect::from_min_size(Pos2::new(x, r.center().y - g.size().y / 2.0), g.size());
+                        let resp = ui.interact(ur.expand(2.0), ui.scope_id().with("toast_undo"), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
+                        ui.painter().galley(ur.min, g.clone(), p.primary);
+                        if resp.hovered() {
+                            let y = ur.bottom() - 1.0;
+                            ui.painter().line_segment([Pos2::new(ur.left(), y), Pos2::new(ur.right(), y)], Stroke::new(1.0, p.primary));
+                        }
+                        undo_clicked = resp.clicked();
+                    }
+                    if let Some(folder) = go_to {
+                        self.ws.status = None;
+                        self.go(Scope::Folder(folder));
+                    } else if undo_clicked {
+                        self.ws.status = None;
+                        self.ws.undo_request = Some(true);
+                    } else {
+                        // While the pointer rests on the toast it stays up.
+                        if ctx.pointer_hover_pos().is_some_and(|pos| r.contains(pos)) {
+                            toast.at = Instant::now();
+                            self.ws.status = Some(toast);
+                        }
+                        ctx.request_repaint_after(std::time::Duration::from_millis(250));
+                    }
                 } else {
                     self.ws.status = None;
                 }
@@ -5480,7 +5573,7 @@ impl App {
                 );
                 if let Err(e) = started {
                     flag.store(false, std::sync::atomic::Ordering::Relaxed);
-                    self.flash(format!("Could not drag out: {e}"));
+                    self.flash_error(format!("Could not drag out: {e}"));
                 }
             }
         }
