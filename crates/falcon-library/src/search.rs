@@ -437,11 +437,14 @@ pub struct SetFilter {
     pub excludes: Vec<String>,
     /// Also match items with an empty list (`tag.no` / `NoFolders`).
     pub empty: bool,
+    /// Exclude items with an empty list (the folder filter's excluded
+    /// Uncategorized, `folder.excludes.NoFolders`).
+    pub exclude_empty: bool,
 }
 
 impl SetFilter {
     pub fn is_active(&self) -> bool {
-        !self.includes.is_empty() || !self.excludes.is_empty() || self.empty
+        !self.includes.is_empty() || !self.excludes.is_empty() || self.empty || self.exclude_empty
     }
 
     /// Eagle's semantics, including its OR quirk: under OR an item with any
@@ -451,25 +454,19 @@ impl SetFilter {
             return true;
         }
         let has = |v: &String| values.contains(v);
+        let excluding = !self.excludes.is_empty() || self.exclude_empty;
+        let excluded = self.excludes.iter().any(has) || (self.exclude_empty && values.is_empty());
         let base = match self.logic {
-            Logic::Or => {
-                if self.includes.iter().any(has) {
-                    true
-                } else if !self.excludes.is_empty() {
-                    !self.excludes.iter().any(has)
-                } else {
-                    false
-                }
-            }
+            Logic::Or => self.includes.iter().any(has) || (excluding && !excluded),
             Logic::And | Logic::Equal => {
-                let ok = self.includes.iter().all(has) && !self.excludes.iter().any(has);
+                let ok = self.includes.iter().all(has) && !excluded;
                 let ok = ok && (self.logic != Logic::Equal || values.len() == self.includes.len());
-                ok && (!self.includes.is_empty() || !self.excludes.is_empty())
+                ok && (!self.includes.is_empty() || excluding)
             }
         };
         match (self.empty, self.logic) {
             (true, Logic::Or) => base || values.is_empty(),
-            (true, _) if self.includes.is_empty() && self.excludes.is_empty() => values.is_empty(),
+            (true, _) if self.includes.is_empty() && !excluding => values.is_empty(),
             (true, _) => base && values.is_empty(),
             (false, _) => base,
         }
@@ -1364,6 +1361,19 @@ mod tests {
         let f = SetFilter { empty: true, ..Default::default() };
         assert!(f.matches(&[]));
         assert!(!f.matches(&v(&["a"])));
+    }
+
+    #[test]
+    fn excluding_the_empty_list() {
+        let v = |s: &[&str]| s.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        let f = SetFilter { exclude_empty: true, ..Default::default() };
+        assert!(f.is_active());
+        assert!(f.matches(&v(&["F1"])) && !f.matches(&[]));
+        // Under OR, lacking every excluded value is enough, as in Eagle.
+        let f = SetFilter { includes: v(&["F1"]), exclude_empty: true, ..Default::default() };
+        assert!(f.matches(&v(&["F1"])) && !f.matches(&[]) && f.matches(&v(&["F2"])));
+        let f = SetFilter { logic: Logic::And, excludes: v(&["F2"]), exclude_empty: true, ..Default::default() };
+        assert!(f.matches(&v(&["F1"])) && !f.matches(&[]) && !f.matches(&v(&["F2"])));
     }
 
     #[test]

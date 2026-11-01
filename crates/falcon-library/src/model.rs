@@ -665,11 +665,9 @@ impl SavedFilter {
         f.exclude_types = keys(&["type", "excludes"]);
         f.tags = SetFilter { includes: strings(&["tag", "includes"]), excludes: strings(&["tag", "excludes"]), empty: truthy(&["tag", "no"]), ..Default::default() };
         let (inc, exc) = (keys(&["folder", "includes"]), keys(&["folder", "excludes"]));
-        if exc.iter().any(|k| k == "NoFolders") {
-            skip("folder.excludes.NoFolders");
-        }
         f.folders = SetFilter {
             empty: inc.iter().any(|k| k == "NoFolders"),
+            exclude_empty: exc.iter().any(|k| k == "NoFolders"),
             includes: inc.into_iter().filter(|k| k != "NoFolders").collect(),
             excludes: exc.into_iter().filter(|k| k != "NoFolders").collect(),
             ..Default::default()
@@ -809,7 +807,11 @@ impl SavedFilter {
             inc.insert("NoFolders".into(), serde_json::json!({"id": "NoFolders"}));
         }
         r["folder"]["includes"] = Value::Object(inc);
-        r["folder"]["excludes"] = Value::Object(filter.folders.excludes.iter().map(|id| (id.clone(), folder(id))).collect());
+        let mut exc: Map<String, Value> = filter.folders.excludes.iter().map(|id| (id.clone(), folder(id))).collect();
+        if filter.folders.exclude_empty {
+            exc.insert("NoFolders".into(), serde_json::json!({"id": "NoFolders"}));
+        }
+        r["folder"]["excludes"] = Value::Object(exc);
         for star in &filter.ratings {
             r["rating"][star.to_string()] = true.into();
         }
@@ -1184,6 +1186,7 @@ mod tests {
         let cases: Vec<(&str, Filter)> = vec![
             ("tags", Filter { tags: SetFilter { includes: vec!["a".into()], excludes: vec!["b".into()], empty: true, ..Default::default() }, ..Default::default() }),
             ("folders", Filter { folders: SetFilter { includes: vec!["F1".into()], excludes: vec!["F2".into()], empty: true, ..Default::default() }, ..Default::default() }),
+            ("uncategorized excluded", Filter { folders: SetFilter { excludes: vec!["F2".into()], exclude_empty: true, ..Default::default() }, ..Default::default() }),
             ("types", Filter { types: vec!["png".into(), "video".into()], ..Default::default() }),
             ("exclude_types", Filter { exclude_types: vec!["font".into()], ..Default::default() }),
             ("size", Filter { size: (Some(1024), Some(3 * 1_048_576)), ..Default::default() }),
