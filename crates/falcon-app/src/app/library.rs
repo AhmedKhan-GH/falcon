@@ -12,6 +12,7 @@ use super::navigation::fastrand_seed;
 use super::{App, Shared, Workspace, lock};
 use crate::locale::{tr, tr_n, trf};
 use crate::logic::{self, Scope};
+use crate::ui::dialogs::library_notices::Alert;
 use crate::ui::sidebar::smart_has;
 
 /// Most libraries kept in the recent list.
@@ -224,15 +225,38 @@ impl App {
     /// started) Eagle must keep reaching Eagle.
     pub(crate) fn start_server(&mut self) {
         self.server = None;
+        self.api_check.cancel();
+        self.clear_api_warning();
         let (Some(shared), Some(ports)) = (self.ws.lib.clone(), self.prefs.api_ports()) else { return };
         let ctx = self.ctx.clone();
-        match falcon_server::start(shared, ports, move || ctx.request_repaint()) {
+        match falcon_server::start(shared, ports.clone(), move || ctx.request_repaint()) {
             Ok(h) => {
                 self.flash(trf("API on http://localhost:{port}", &[("port", &h.port)]));
+                let ctx = self.ctx.clone();
+                self.api_check.start(h.port, move || ctx.request_repaint());
                 self.server = Some(h);
                 self.share_with_server();
             }
-            Err(e) => self.flash_error(trf("API not started: {e}", &[("e", &e)])),
+            Err(e) => {
+                crate::errlog::error(&format!("API not started: {e}"));
+                self.show_alert(Alert::new(crate::api_check::TITLE, crate::api_check::start_failed_message(&ports)));
+            }
+        }
+    }
+
+    /// Drops the API warning when it is the alert on screen.
+    fn clear_api_warning(&mut self) {
+        if self.alert.as_ref().is_some_and(|a| a.title == crate::api_check::TITLE) {
+            self.alert = None;
+        }
+    }
+
+    /// Takes the result of the localhost check of the running API and warns
+    /// when extensions couldn't reach it.
+    pub(crate) fn poll_api_check(&mut self) {
+        let Some((port, reached)) = self.api_check.poll() else { return };
+        if !reached && self.server.as_ref().is_some_and(|h| h.port == port) {
+            self.show_alert(Alert::new(crate::api_check::TITLE, crate::api_check::unreachable_message(port)));
         }
     }
 

@@ -10,7 +10,6 @@
   "A library already exists there. Create again and pick another folder, or change the name.": "Ya existe una biblioteca ahí. Vuelve a crearla y elige otra carpeta, o cambia el nombre.",
   "A number in the unit, or a time such as 1:30": "Un número en la unidad, o una hora como 1:30",
   "A side left at 0 is not used": "Un lado en 0 no se usa",
-  "API not started: {e}": "API no iniciada: {e}",
   "API on http://localhost:{port}": "API en http://localhost:{port}",
   "API stopped": "API detenida",
   "About Falcon": "Acerca de Falcon",

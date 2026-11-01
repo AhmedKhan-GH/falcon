@@ -1,4 +1,5 @@
 mod anim;
+mod api_check;
 mod app;
 mod applock;
 mod backups;

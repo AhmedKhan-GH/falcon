@@ -92,6 +92,8 @@ pub struct App {
     pub(crate) clear_history_open: bool,
     /// The library tools' dialogs (`ui/dialogs/tools.rs`).
     pub(crate) tools: crate::ui::dialogs::tools::Tools,
+    /// The localhost check of the running API (`api_check.rs`).
+    pub(crate) api_check: crate::api_check::Check,
     /// A library whose close waits for its tasks (`ui/dialogs/force_close.rs`).
     pub(crate) force_close: Option<crate::ui::dialogs::force_close::Pending>,
     /// The libraries' `icon.png` textures.
@@ -222,6 +224,7 @@ impl App {
             recent_shown: None,
             clear_history_open: false,
             tools: Default::default(),
+            api_check: Default::default(),
             force_close: None,
             lib_icons: Default::default(),
             switch_to: None,
@@ -477,6 +480,7 @@ impl App {
         self.reload_confirm(&ctx);
         self.clear_history_dialog(&ctx);
         self.force_close_dialog(&ctx);
+        self.poll_api_check();
         self.alert_modal(&ctx);
         if self.ws.lib.is_some() {
             self.missing_modal(&ctx);

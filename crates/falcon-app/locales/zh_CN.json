@@ -10,7 +10,6 @@
   "A library already exists there. Create again and pick another folder, or change the name.": "该位置已有资源库。请重新创建并选择其他文件夹，或更改名称。",
   "A number in the unit, or a time such as 1:30": "按所选单位输入数字，或1:30这样的时间",
   "A side left at 0 is not used": "保持为0的边不参与筛选",
-  "API not started: {e}": "API 未启动：{e}",
   "API on http://localhost:{port}": "API：http://localhost:{port}",
   "API stopped": "API 已停止",
   "About Falcon": "关于 Falcon",

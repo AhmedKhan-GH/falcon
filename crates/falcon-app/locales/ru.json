@@ -10,7 +10,6 @@
   "A library already exists there. Create again and pick another folder, or change the name.": "Здесь уже есть библиотека. Создайте заново и выберите другую папку или измените имя.",
   "A number in the unit, or a time such as 1:30": "Число в выбранной единице или время вида 1:30",
   "A side left at 0 is not used": "Сторона со значением 0 не учитывается",
-  "API not started: {e}": "API не запущен: {e}",
   "API on http://localhost:{port}": "API: http://localhost:{port}",
   "API stopped": "API остановлен",
   "About Falcon": "О программе Falcon",

@@ -10,7 +10,6 @@
   "A library already exists there. Create again and pick another folder, or change the name.": "Dort existiert bereits eine Mediathek. Erstellen Sie erneut und wählen Sie einen anderen Ordner oder ändern Sie den Namen.",
   "A number in the unit, or a time such as 1:30": "Zahl in der Einheit oder Zeit wie 1:30",
   "A side left at 0 is not used": "Eine Seite mit 0 wird nicht verwendet",
-  "API not started: {e}": "API nicht gestartet: {e}",
   "API on http://localhost:{port}": "API unter http://localhost:{port}",
   "API stopped": "API angehalten",
   "About Falcon": "Über Falcon",

@@ -10,7 +10,6 @@
   "A library already exists there. Create again and pick another folder, or change the name.": "A library already exists there. Create again and pick another folder, or change the name.",
   "A number in the unit, or a time such as 1:30": "A number in the unit, or a time such as 1:30",
   "A side left at 0 is not used": "A side left at 0 is not used",
-  "API not started: {e}": "API not started: {e}",
   "API on http://localhost:{port}": "API on http://localhost:{port}",
   "API stopped": "API stopped",
   "About Falcon": "About Falcon",

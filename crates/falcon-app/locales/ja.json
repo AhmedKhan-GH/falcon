@@ -10,7 +10,6 @@
   "A library already exists there. Create again and pick another folder, or change the name.": "そこにはすでにライブラリがあります。もう一度作成して別のフォルダを選ぶか、名前を変更してください。",
   "A number in the unit, or a time such as 1:30": "単位に合わせた数値、または1:30のような時間",
   "A side left at 0 is not used": "0のままの辺は使用されません",
-  "API not started: {e}": "APIを開始できませんでした：{e}",
   "API on http://localhost:{port}": "API：http://localhost:{port}",
   "API stopped": "APIを停止しました",
   "About Falcon": "Falconについて",
