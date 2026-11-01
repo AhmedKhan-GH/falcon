@@ -104,6 +104,19 @@ pub fn dragged(picked: &[String], tag: &str) -> Vec<String> {
     if picked.iter().any(|t| t == tag) { picked.to_vec() } else { vec![tag.to_string()] }
 }
 
+/// The tags a rubber band picks: every chip whose rectangle meets the
+/// band, in drawing order, each once (Eagle's tag rectangle select). The
+/// band replaces the pick.
+pub fn banded(chips: &[(String, eframe::egui::Rect)], band: eframe::egui::Rect) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for (t, r) in chips {
+        if r.intersects(band) && !out.contains(t) {
+            out.push(t.clone());
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -135,6 +148,17 @@ mod tests {
         assert_eq!(step(&g("gone"), &gs, true), Some(TagView::Uncategorized));
         assert_eq!(valid(&g("gone"), &gs), TagView::All);
         assert_eq!(valid(&g("g2"), &gs), g("g2"));
+    }
+
+    #[test]
+    fn a_band_picks_the_chips_it_touches() {
+        use eframe::egui::{Rect, pos2};
+        let chip = |t: &str, x: f32, y: f32| (t.to_string(), Rect::from_min_size(pos2(x, y), eframe::egui::vec2(50.0, 20.0)));
+        let chips = [chip("a", 0.0, 0.0), chip("b", 60.0, 0.0), chip("c", 0.0, 30.0), chip("a", 60.0, 30.0)];
+        assert_eq!(banded(&chips, Rect::from_two_pos(pos2(55.0, 10.0), pos2(45.0, 40.0))), s(&["a", "c"]));
+        assert_eq!(banded(&chips, Rect::from_two_pos(pos2(45.0, 10.0), pos2(65.0, 40.0))), s(&["a", "b", "c"]));
+        assert_eq!(banded(&chips, Rect::from_two_pos(pos2(52.0, 22.0), pos2(58.0, 28.0))), Vec::<String>::new());
+        assert_eq!(banded(&chips, Rect::from_two_pos(pos2(70.0, 5.0), pos2(80.0, 10.0))), s(&["b"]));
     }
 
     #[test]

@@ -82,6 +82,15 @@ pub(crate) struct OrgState {
     pub tag_sidebar: Option<Rect>,
     /// Scroll the open list's sidebar row into view (after an arrow key).
     pub tag_reveal: bool,
+    /// The page's chips as drawn this frame, for the rubber band.
+    pub tag_rects: Vec<(String, Rect)>,
+    /// Where a rubber band on the page started, in the list's scrolled
+    /// coordinates (screen position minus the list's top-left, plus the
+    /// scroll offset).
+    pub tag_band: Option<egui::Vec2>,
+    /// A scroll offset for the page's list next frame (the band scrolling
+    /// at an edge).
+    pub tag_scroll: Option<f32>,
     /// The merge dialog: the tags and the name typed so far.
     pub merge: Option<(Vec<String>, String)>,
 }

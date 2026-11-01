@@ -54,7 +54,16 @@ impl App {
         } else {
             Vec::new()
         };
-        egui::ScrollArea::vertical().id_salt("tags-page").auto_shrink([false, false]).show(ui, |ui| {
+        // The rubber band's background sits under the list, so chips and
+        // fields on top take their own presses.
+        let view_rect = ui.max_rect();
+        let bg = ui.interact(view_rect, ui.scope_id().with("tag-band"), Sense::click_and_drag());
+        self.ws.org.tag_rects.clear();
+        let mut area = egui::ScrollArea::vertical();
+        if let Some(y) = self.ws.org.tag_scroll.take() {
+            area = area.vertical_scroll_offset(y);
+        }
+        let out = area.id_salt("tags-page").auto_shrink([false, false]).scroll_source(egui::scroll_area::ScrollSource::SCROLL_BAR | egui::scroll_area::ScrollSource::MOUSE_WHEEL).show(ui, |ui| {
             ui.add_space(12.0);
             ui.horizontal(|ui| {
                 ui.add_space(GRID_PAD_X);
@@ -150,6 +159,46 @@ impl App {
                 ui.add_space(16.0);
             }
         });
+        self.tag_band(ui, &bg, view_rect, out.state.clamped_offset());
+    }
+
+    /// Eagle's rubber band on the tag list: a plain press on empty space
+    /// drops the pick, and dragging picks every chip the band touches
+    /// (live, replacing the pick); near the top or bottom edge the list
+    /// scrolls. A press with ⌘ or ⇧ does nothing there.
+    fn tag_band(&mut self, ui: &Ui, bg: &egui::Response, view_rect: Rect, offset: egui::Vec2) {
+        let plain = ui.input(|i| !i.modifiers.command && !i.modifiers.shift && !i.modifiers.ctrl);
+        let to_list = |p: Pos2| p - view_rect.min + offset;
+        if bg.clicked() && plain {
+            self.ws.org.tag_sel.clear();
+            self.ws.org.tag_anchor = None;
+        }
+        if bg.drag_started() && plain
+            && let Some(p) = bg.interact_pointer_pos()
+        {
+            self.ws.org.tag_sel.clear();
+            self.ws.org.tag_anchor = None;
+            self.ws.org.tag_band = Some(to_list(p));
+        }
+        let Some(start) = self.ws.org.tag_band else { return };
+        if !bg.dragged() {
+            self.ws.org.tag_band = None;
+            return;
+        }
+        let Some(p) = ui.ctx().pointer_latest_pos() else { return };
+        let band = Rect::from_two_pos(view_rect.min + (start - offset), p);
+        let chips: Vec<(String, Rect)> = self.ws.org.tag_rects.clone();
+        self.ws.org.tag_sel = tag_view::banded(&chips, band);
+        let shown = band.intersect(view_rect);
+        ui.painter().rect_filled(shown, 2.0, t::p().primary.gamma_multiply(0.15));
+        ui.painter().rect_stroke(shown, 2.0, Stroke::new(1.0, t::p().primary), StrokeKind::Inside);
+        // Near an edge the list scrolls, as Eagle's does.
+        let edge = 24.0;
+        let dy = if p.y < view_rect.top() + edge { 12.0 } else if p.y > view_rect.bottom() - edge { -12.0 } else { 0.0 };
+        if dy != 0.0 {
+            ui.ctx().request_repaint();
+            self.ws.org.tag_scroll = Some((offset.y - dy).max(0.0));
+        }
     }
 
     pub(crate) fn tag_chip(&mut self, ui: &mut Ui, lib: &Library, tag: &str, n: usize) {
@@ -178,6 +227,7 @@ impl App {
         let (rect, resp) = ui.allocate_exact_size(size, Sense::click_and_drag());
         self.tag_chip_drag(&resp, tag);
         self.ws.org.tag_order.push(tag.to_string());
+        self.ws.org.tag_rects.push((tag.to_string(), rect));
         let picked = self.ws.org.tag_sel.iter().any(|t| t == tag);
         let fill = if picked {
             t::p().primary.gamma_multiply(0.45)
