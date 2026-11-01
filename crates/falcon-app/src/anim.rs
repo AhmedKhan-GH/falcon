@@ -745,37 +745,42 @@ fn worker(path: PathBuf, kind: Kind, opts: Opts, ctx: egui::Context, rx: Receive
     }
     let mut want: std::collections::VecDeque<usize> = Default::default();
     loop {
-        let req = if want.is_empty() {
+        // Everything asked for so far: the latest list and thumbnail win.
+        let mut reqs = Vec::new();
+        if want.is_empty() {
             match rx.recv() {
-                Ok(r) => Some(r),
+                Ok(r) => reqs.push(r),
                 Err(_) => return,
             }
-        } else {
+        }
+        loop {
             match rx.try_recv() {
-                Ok(r) => Some(r),
-                Err(TryRecvError::Empty) => None,
+                Ok(r) => reqs.push(r),
+                Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => return,
             }
-        };
-        let ok = match req {
-            Some(Req::Want(v)) => {
-                want = v.into();
-                true
+        }
+        let mut thumb = None;
+        for r in reqs {
+            match r {
+                Req::Want(v) => want = v.into(),
+                Req::Thumb(i) => thumb = Some(i),
+                Req::Export(i) => {
+                    if let Ok(img) = src.frame(i)
+                        && !send(Msg::Export(i, img))
+                    {
+                        return;
+                    }
+                }
             }
-            Some(Req::Thumb(i)) => match src.frame(i) {
-                Ok(img) => send(Msg::Thumb(i, color_image(&fit(img, Some(THUMB_SIDE))))),
-                Err(_) => true,
-            },
-            Some(Req::Export(i)) => match src.frame(i) {
-                Ok(img) => send(Msg::Export(i, img)),
-                Err(_) => true,
-            },
-            None => match want.pop_front().map(|i| (i, src.frame(i))) {
-                Some((i, Ok(img))) => send(Msg::Frame(i, color_image(&fit(img, opts.max_side)))),
-                _ => true,
-            },
+        }
+        let msg = match thumb {
+            Some(i) => src.frame(i).ok().map(|img| Msg::Thumb(i, color_image(&fit(img, Some(THUMB_SIDE))))),
+            None => want.pop_front().and_then(|i| Some(Msg::Frame(i, color_image(&fit(src.frame(i).ok()?, opts.max_side))))),
         };
-        if !ok {
+        if let Some(m) = msg
+            && !send(m)
+        {
             return;
         }
     }
@@ -822,7 +827,6 @@ pub struct Player {
     rx: Receiver<Msg>,
     name: String,
     pub state: State,
-    size: (u32, u32),
     delays: Vec<u32>,
     cap: usize,
     budget: usize,
@@ -859,7 +863,6 @@ impl Player {
             rx,
             name: format!("anim-{}", SERIAL.fetch_add(1, std::sync::atomic::Ordering::Relaxed)),
             state: State::Opening,
-            size: (0, 0),
             delays: Vec::new(),
             cap: 2,
             budget: opts.frame_budget,
@@ -889,17 +892,14 @@ impl Player {
         self.frame
     }
 
-    /// The image's size in pixels.
-    pub fn size(&self) -> (u32, u32) {
-        self.size
-    }
-
     /// Frames decoded and held now.
+    #[cfg(test)]
     pub fn held(&self) -> usize {
         self.frames.len()
     }
 
     /// The most frames ever held at once.
+    #[cfg(test)]
     pub fn capacity(&self) -> usize {
         self.cap
     }
@@ -920,7 +920,6 @@ impl Player {
                     let side = self.max_side_hint(w, h);
                     let bytes = (side.0 as usize * side.1 as usize * 4).max(1);
                     self.cap = (self.budget / bytes).clamp(3, 2048);
-                    self.size = size;
                     self.delays = delays;
                     self.state = State::Ready;
                 }
@@ -1391,6 +1390,33 @@ pub(crate) mod tests {
             assert_eq!(p.state, State::Ready, "{kind:?}");
             assert_eq!(seen.len(), 4, "{kind:?} played {seen:?}");
         }
+    }
+
+    #[test]
+    fn thumbnails_and_exports() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("big.gif");
+        write_gif(&path, 400, 200, 20, 5);
+        let ctx = egui::Context::default();
+        let mut p = Player::open(&ctx, path, Kind::Gif, Opts::viewer());
+        p.playing = false;
+        let start = std::time::Instant::now();
+        let (mut thumb, mut export, mut asked) = (None, None, false);
+        while (thumb.is_none() || export.is_none()) && start.elapsed().as_secs() < 10 {
+            p.update(0.0);
+            if p.state == State::Ready {
+                if !asked {
+                    p.request_export(3);
+                    asked = true;
+                }
+                thumb = thumb.or_else(|| p.thumb(7).filter(|_| p.thumbs.contains_key(&7)).map(|t| t.size()));
+                export = export.or_else(|| p.take_export());
+            }
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        assert_eq!(thumb, Some([THUMB_SIDE as usize, THUMB_SIDE as usize / 2]));
+        let (i, img) = export.unwrap();
+        assert_eq!((i, img.dimensions()), (3, (400, 200)));
     }
 
     #[test]

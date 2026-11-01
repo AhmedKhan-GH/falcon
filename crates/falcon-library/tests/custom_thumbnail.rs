@@ -69,6 +69,25 @@ fn custom_thumbnail_is_copied_and_flagged() {
 }
 
 #[test]
+fn frame_thumbnail_is_a_png_like_eagles() {
+    let (_tmp, mut lib, id) = setup("anim.gif", &picture(1200, 900, 10), ImageFormat::Gif);
+    let before = lib.item(&id).unwrap().clone();
+    let order = keys(&lib, &id);
+    let frame = image::DynamicImage::ImageRgb8(picture(1200, 900, 250)).to_rgba8();
+    lib.set_frame_thumbnail(&id, &frame).unwrap();
+    let item = lib.item(&id).unwrap().clone();
+    let thumb = item.thumbnail_path(lib.root()).unwrap();
+    let bytes = fs::read(&thumb).unwrap();
+    assert_eq!(&bytes[..8], b"\x89PNG\r\n\x1a\n", "written as PNG, as Eagle's canvas does");
+    let t = thumbnail::decode(&thumb).unwrap();
+    assert_eq!((t.width(), t.height()), (640, 480));
+    assert_eq!((item.width, item.height), (1200, 900), "the item keeps its size");
+    assert!(!thumbnail::has_custom_thumbnail(&item));
+    assert_ne!(item.palettes, before.palettes);
+    assert_eq!(keys(&lib, &id), order, "no keys added or moved");
+}
+
+#[test]
 fn custom_thumbnail_refusals() {
     let (tmp, mut lib, id) = setup("a.png", &picture(50, 50, 0), ImageFormat::Png);
     let custom = tmp.path().join("c.png");

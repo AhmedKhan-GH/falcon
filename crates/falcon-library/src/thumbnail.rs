@@ -319,7 +319,40 @@ pub fn has_custom_thumbnail(item: &crate::model::Item) -> bool {
     item.extra.get(CUSTOM_THUMBNAIL_KEY).and_then(|v| v.as_bool()) == Some(true)
 }
 
+/// Short side a frame chosen in the GIF player is brought down to.
+pub const FRAME_THUMBNAIL_SIDE: u32 = 480;
+
+/// The size Eagle draws a GIF frame thumbnail at: the short side brought
+/// down to [`FRAME_THUMBNAIL_SIDE`], never enlarged.
+pub fn frame_thumbnail_size(w: u32, h: u32) -> (u32, u32) {
+    let short = w.min(h);
+    if short <= FRAME_THUMBNAIL_SIDE {
+        return (w, h);
+    }
+    let scale = |side: u32| ((u64::from(side) * u64::from(FRAME_THUMBNAIL_SIDE) / u64::from(short)) as u32).max(1);
+    (scale(w), scale(h))
+}
+
 impl crate::Library {
+    /// Makes a frame of an animated item its thumbnail, as Eagle's GIF
+    /// player does: the frame is scaled per [`frame_thumbnail_size`],
+    /// written as a PNG to `<name>_thumbnail.png`, and the palette is
+    /// computed from it. Nothing else changes: the item keeps its size and
+    /// is not marked as a custom thumbnail, so Refresh Thumbnail draws the
+    /// first frame again.
+    pub fn set_frame_thumbnail(&mut self, id: &str, frame: &RgbaImage) -> crate::Result<()> {
+        let mut item = self.item(id).cloned().ok_or_else(|| self.invalid(format!("no item {id}")))?;
+        let (w, h) = frame_thumbnail_size(frame.width(), frame.height());
+        let img = DynamicImage::ImageRgba8(frame.clone());
+        let img = if (w, h) == (frame.width(), frame.height()) { img } else { img.resize_exact(w, h, RESIZE_FILTER) };
+        let mut png = Vec::new();
+        img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).map_err(|e| self.invalid(e.to_string()))?;
+        let dest = self.info_dir(&item).join(format!("{}_thumbnail.png", item.name));
+        fs::write(&dest, png).map_err(|e| crate::Error::io(&dest, e))?;
+        item.palettes = crate::palette::extract(&img);
+        self.update_item(item)
+    }
+
     /// Makes the image at `image` the item's thumbnail, as Eagle's
     /// "Custom Thumbnail" does: the file is copied byte for byte to
     /// `<name>_thumbnail.png` (not resized or re-encoded), `width` and
@@ -396,6 +429,14 @@ mod tests {
         assert_eq!(target_size(1000, 200, 320), (1600, 320));
         assert_eq!(target_size(400, 400, 320), (320, 320));
         assert_eq!(target_size(330, 100, 320), (1056, 320));
+    }
+
+    #[test]
+    fn frame_thumbnail_sizes() {
+        assert_eq!(frame_thumbnail_size(1200, 900), (640, 480));
+        assert_eq!(frame_thumbnail_size(900, 1200), (480, 640));
+        assert_eq!(frame_thumbnail_size(2000, 480), (2000, 480), "a short side of 480 is left alone");
+        assert_eq!(frame_thumbnail_size(300, 200), (300, 200));
     }
 
     #[test]

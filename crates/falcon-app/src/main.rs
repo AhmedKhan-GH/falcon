@@ -1,5 +1,3 @@
-// The player controls in `anim` are used once the GIF player UI lands.
-#[allow(dead_code)]
 mod anim;
 mod app;
 mod applock;

@@ -82,6 +82,9 @@ pub struct Prefs {
     pub notify_import_done: bool,
     /// Eagle's `privacy.*`: the app password, if one is set (`applock`).
     pub app_lock: Option<Secret>,
+    /// Eagle's `habits.gifViewer`: always show the frame-by-frame player
+    /// for GIFs in the viewer.
+    pub gif_player: bool,
 }
 
 /// What the wheel does over a playing video.
@@ -188,6 +191,7 @@ impl Default for Prefs {
             notifications: true,
             notify_import_done: true,
             app_lock: None,
+            gif_player: false,
         }
     }
 }
@@ -735,6 +739,9 @@ fn preview(p: &mut Page, d: &mut Draft) {
         ui.checkbox(&mut v.video_autoplay, "Play videos when they open");
         ui.checkbox(&mut v.video_resume, "Resume where each video was left");
         ui.checkbox(&mut v.video_loop_short, "Always loop clips of 30 seconds or less");
+    });
+    p.block("GIF", &["gif", "player", "frame", "animation"], |ui| {
+        ui.checkbox(&mut d.prefs.gif_player, "Always use the frame-by-frame player for GIFs");
     });
     p.block("Fonts", &["font", "style", "regular", "bold", "italic", "tags", "import"], |ui| {
         ui.checkbox(&mut d.prefs.font_style_tags, "Add style tags (Regular, Bold, Italic) when importing fonts");

@@ -28,6 +28,7 @@ mod duplicates_view;
 mod filters_ui;
 mod media_view;
 mod video_view;
+mod gif_view;
 mod open_ui;
 mod pdf_view;
 mod import_ui;
@@ -263,6 +264,8 @@ struct ViewState {
     /// The animation playing, for GIFs, animated WebPs and APNGs (see
     /// `anim.rs`).
     anim: Option<crate::anim::Player>,
+    /// The GIF player bar's drag state.
+    gif: gif_view::GifUi,
     /// The item's original, for the bar's open button.
     file: PathBuf,
     /// A zoom key pressed this frame, for the image viewer.
@@ -389,6 +392,9 @@ struct Workspace {
     confirm: Option<Confirm>,
     smart_dialog: Option<SmartDraft>,
     view: ViewState,
+    /// The GIF player turned on with the viewer's toolbar button, until
+    /// the viewer closes (Eagle's `usingGifPlayer`).
+    gif_player: bool,
     /// Focus the inspector's title field next frame (F2).
     focus_title: bool,
     /// Tag typed into the multi-selection inspector.
@@ -470,6 +476,7 @@ impl Workspace {
             confirm: None,
             smart_dialog: None,
             view: ViewState::default(),
+            gif_player: false,
             focus_title: false,
             batch_tag: String::new(),
             progress: Arc::new(Mutex::new(Progress::default())),
@@ -4124,6 +4131,7 @@ impl App {
         p.rect_filled(screen, 0.0, t::p().main);
         let bar = Rect::from_min_size(screen.min, vec2(screen.width(), t::BAR_HEIGHT));
         let area = Rect::from_min_max(Pos2::new(screen.left(), bar.bottom()), screen.max);
+        let (area, gif_bar) = self.gif_split(item, area);
 
         // The image: a frame of an animation, the full render, or the preview.
         let now = ctx.input(|i| i.time);
@@ -4202,6 +4210,9 @@ impl App {
             self.ws.frame_jobs.push(j);
         }
         self.edit_overlay(ui, item, r, area);
+        if let Some(gif_bar) = gif_bar {
+            self.gif_toolbar(ui, item, gif_bar, &resp);
+        }
 
         // The bar on top: back and name, then zoom and the tools.
         let (name_x, right) = media_view::bar_shell(self, ui, item, bar);
@@ -4233,7 +4244,8 @@ impl App {
         if ui.put(Rect::from_center_size(Pos2::new(x, cy), vec2(46.0, 24.0)), egui::Button::new("Fit")).on_hover_text(t_fit).clicked() {
             zoom = Some(logic::ViewZoom::Fit);
         }
-        let tools_left = self.edit_bar(ui, item, x - 50.0, cy);
+        let tools_x = self.gif_toggle_button(ui, item, x - 50.0, cy);
+        let tools_left = self.edit_bar(ui, item, tools_x, cy);
         media_view::bar_name(ui, item, bar, name_x, tools_left);
 
         if let Some(z) = zoom {
@@ -4363,6 +4375,7 @@ impl App {
         }
         self.pdf_keys(&ctx);
         self.video_keys(&ctx);
+        self.gif_keys(&ctx);
         self.edit_keys(&ctx);
         self.keyboard(&ctx);
         if let Some(d) = self.prefs_window.show(&ctx) {
