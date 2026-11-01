@@ -45,6 +45,7 @@ mod modes;
 mod preview_window;
 mod import_ui;
 mod empty_view;
+mod drop_hint;
 mod folders_ui;
 mod layout_panel;
 mod text_view;
@@ -5676,6 +5677,7 @@ impl App {
         if self.audio.loaded().is_some() && self.audio.loaded() != self.ws.viewer.as_deref() {
             self.audio.stop();
         }
+        self.drop_hint(&ctx);
         self.video.keep_only(self.ws.viewer.as_deref());
         self.fetches.prune((self.ws.view.id.as_str() == self.ws.viewer.as_deref().unwrap_or_default()).then_some(self.ws.view.file.as_path()));
         self.pdf.keep_only(self.ws.viewer.as_deref());
