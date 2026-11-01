@@ -20,11 +20,11 @@ The app opens libraries with `Library::open_or_restore` (see [Backups](library-f
 | Library menu | The open libraries (each with a close button), then recent ones, then Open, New, Show in Finder, the collect window and Preferences. Several libraries can be open at once (see Several libraries). The open libraries, layout and sort reopen on launch |
 | Preferences | ⌘, or the library menu (see below) |
 | Sidebar | Eagle's fixed entries, Quick Access, a nested smart folder tree, and a folder tree with guide lines and direct-item counts. Folders and smart folders show their icon in their colour, and locked folders a lock. You can filter it, create, rename and delete folders, drag folders and smart folders to reorder or nest them, and drop items onto folders or the Trash (dropping on a folder moves the items out of the open folder, and ⌥ adds them instead; see Organising below) |
-| Toolbar | Back and forward, zoom slider, layout and sort menu, filter bar toggle, search with Eagle's syntax, plus typo tolerance (see Search and filters) |
+| Toolbar | The panels button (see Viewer layout), back and forward, zoom slider, layout and sort menu, filter bar toggle, search with Eagle's syntax, plus typo tolerance (see Search and filters) |
 | Filter bar | Colour (presets, hex value, accuracy, grayscale), tags, folders, shape, rating, type, notes, URL, date, duration, BPM, camera and font (see below), and saved filters |
 | Grid | Four layouts. **Waterfall** (the default): equal columns, each card keeping its image's shape. **Justified**: rows of equal height. **Grid**: square cards. **List**: rows showing type, size, dimensions and date. Cards have type badges. Supports multi-select, drag (inside the app, or out to Finder and other apps), a context menu and a hover preview (see below) |
 | Inspector | **One item:** preview, palette (click a colour to search for it), editable title, notes and URL, tags, folders (as in Eagle, clicking a folder chip opens that folder with the item still selected and scrolled into view, and the chip's × removes the item from the folder, one ⌘Z step; the tooltip gives the folder's full path), comments (edit and delete; click a region comment to show it, or a timed comment to play the video from its moment), rating and properties (with duration, BPM as stored (`119.985`, as Eagle's inspector shows it), camera facts from `rawMetas`, and font family, style, PostScript name, version and glyph count when the item has them). **Several items:** a preview stack, shared tags, add a tag to all, add all to a folder, a shared rating, trash all. **Nothing selected, inside a folder:** the folder's name and description, item count, size, date imported and password state. The name saves when the field loses focus or on Return (an emptied name goes back to the saved one), the description (several lines) when it loses focus; each is one ⌘Z step and changes only that key in `metadata.json`. Eagle saves both a second after typing stops; falcon waits for the field to lose focus, and also saves text left in the fields when the folder or the selection changes. Other scopes show their fixed name |
-| Viewer | Zoom around the pointer, pan, fit (0), actual size (1), + and −, animated GIFs, and full-size QuickLook renders. Video plays with a control bar and timed comments, PDFs open in a scrolling reader with find and text selection, audio plays over its waveform and fonts show a live specimen; images take region comments, rotate, flip and crop (see below) |
+| Viewer | Opens between the sidebar and the inspector, with a bar holding the panels button, back, an "n / total" counter, the name, previous and next (see Viewer layout). Zoom around the pointer, pan, fit (0 or ⌘9), actual size (1 or ⌘0), + and − (or ⌘= and ⌘−), animated GIFs, full-size QuickLook renders, and a cannot-preview page with an Open With button. Right-click opens the item menu; double-click leaves. Video plays with a control bar and timed comments, PDFs open in a scrolling reader with find and text selection, audio plays over its waveform and fonts show a live specimen; images take region comments, rotate, flip and crop (see below) |
 | Card menu | Besides Open, Show in Finder and the folder and Trash entries: Set as Folder Cover (inside a folder), Set Custom Thumbnail… and Reset Thumbnail, Refresh Thumbnail, Refresh Palette, Rotate Left and Right, Flip Horizontal and Vertical, and Crop… (opens the viewer with the crop tool) |
 | Folder view | Cards for the folder's subfolders above its items, each with its cover, name and counts. Click one to open it |
 | All Tags | A tag manager with a filter, starred tags, rename, merge and delete, grouped A-Z or by tag group |
@@ -49,6 +49,26 @@ What Eagle does, from `js/directives/filter-item-import.html`, `filter-item-mtim
 | Camera | Every distinct `rawMetas.camera` value with its count; several can be ticked; "no results" when there are none | Seen | Same, counting items not in the Trash |
 | Font | Two exclusive options, Activated and Deactivated, each with its count and shown only when its count is above 0 | Seen | Both options always listed with counts. "Activated" means the font's `<postScriptName>_.<ext>` key is among the files in `~/Library/Fonts/EagleApp/` (`installed_font_keys`), read once per session. On a Mac where Eagle never activated a font that folder is missing or empty, so every font counts as deactivated. falcon can't activate fonts itself |
 | Clearing | A clear button on each item, and right-click | Seen | A Clear button inside each menu, and the bar's Clear for everything |
+
+## Viewer layout
+
+Every viewer (image, GIF, RAW, SVG, video, audio, font, PDF, the cannot-preview page and the iCloud wait screen) opens in the middle of the window, in place of the toolbar, filter bar and grid, with the sidebar and the inspector still beside it, as Eagle's detail mode does. The inspector shows the viewed item: the selection follows it as you step through, so closing the viewer leaves the grid on that item. The viewer draws only inside its own rect, and its scroll, pinch, clicks and menus act only there. The span is `logic::viewer_span`; the bar is `media_view::bar_shell`, shared by every viewer.
+
+What Eagle does, from the detail mode in `index.html` and `app.bundle.js`:
+
+| Part | Eagle | Status | Falcon |
+|---|---|---|---|
+| Placement | `content-panel detail-mode` between the sidebar and inspector widths; the main toolbar and grid are hidden while it shows | Seen | Same |
+| Panels button | `toggle-all-btn` at the left of both the main toolbar and the detail toolbar. `toggleAll` shows both panels when the sidebar is hidden and hides both otherwise; it doesn't remember each panel's state. Right-click lists both panels (Tab), the sidebar and the inspector | Seen | Same button in both bars, same rule (`logic::toggle_all`) and the same three-entry menu |
+| Panel keys | View menu: ⌘⌥1 sidebar, ⌘⌥2 inspector, ⌘⌥3 both (`view.toggle.all`); Tab is a fixed key for both | Seen | Same keys, in the grid and in the viewer. ⌘⌥3 can be rebound; Tab can't and is ignored while a text field has focus |
+| Counter | "n / total" after the exit button | Seen | Same, counted in the grid's order (`logic::viewer_counter`) |
+| Previous and next | Buttons at the right end of the detail toolbar, disabled on the first and last item, and the arrow keys | Seen | Same |
+| At the ends | A short "already the first / last item" tip in the middle of the viewer | Seen | A status note in the middle of the viewer for about a second (`logic::viewer_step`) |
+| Double-click | Leaves the viewer anywhere in the image viewer, the picture included, except while cropping. Video and audio stop the double-click; PDF, font and text viewers are iframes that keep it | Seen | Same for the image viewer (also not in comment mode). Before, falcon reset the zoom on double-click; Fit and 0 still do |
+| Right-click | Opens the item's context menu (`mouse-gesture.js`) | Seen | The grid card's menu, without Open, in the image viewer and over the audio and font viewers' background. Trashing or restoring the viewed item moves the viewer to the next item |
+| Zoom keys | `view.zoom.in` ⌘=, `view.zoom.out` ⌘−, `view.zoom.actual` ⌘0, `view.zoom.fit` ⌘9 | Seen | Same chords and ids, rebindable; falcon also keeps plain 0, 1, + and − (without ⌘, ⌃ or ⌥) |
+| Cannot preview | An illustration, the file name, a line saying the format can't be previewed and an "Open With Other Application…" button that opens the item menu | Seen | The file icon with its extension, the name, a line and an "Open With Another App…" button whose menu has Open in Default App, Open With and Show in Finder. Shown only when neither a full render nor the thumbnail can be shown; a failed full render falls back to the thumbnail |
+| Not built | Presentation mode, always on top, thumbnail backgrounds, grayscale, the navigator, the separate preview window, Space's inline quick preview and mouse gestures | Seen | Not built |
 
 ## Audio and font viewer
 
@@ -149,7 +169,7 @@ The dialog, "Already in the library (N)", shows the existing item's thumbnail, n
 
 ## Keys
 
-These are the defaults. All but the arrows, Esc, Z and the viewer's C, ⇧R and ⇧F can be changed under Preferences → Shortcuts (see Shortcut settings); the video keys are its Player group.
+These are the defaults. All but the arrows, Esc, Tab, Z and the viewer's C, ⇧R, ⇧F, 0, 1, + and − can be changed under Preferences → Shortcuts (see Shortcut settings); the video keys are its Player group.
 
 | Key | Action |
 |---|---|
@@ -163,14 +183,17 @@ These are the defaults. All but the arrows, Esc, Z and the viewer's C, ⇧R and 
 | ⌘→ and ⌥→ | Forward. In the viewer they do nothing; with a video playing, ⌘→ still skips in the video. Not while a text field has focus |
 | ⌘] and ⌘[, ⇧⌘] and ⇧⌘[ | Move the open folder (or open smart folder) up or down one place among its siblings; with ⇧, to the top or the bottom (Eagle's Edit ▸ Move Folder). Each move is one undo step |
 | ⇧⌘R | Folder settings (name and auto-tags) for the open folder, unless it is locked (Eagle's Set Current Folder, `edit.folder.setting`) |
-| ⌘= and ⌘− | Zoom the grid |
+| ⌘= and ⌘− | Zoom the grid's cards, or zoom the image in the viewer |
 | ⌘⇧N | New folder |
 | ⌘C and ⌘V | Copy the selected files, or paste files or images |
 | ⌘Z and ⇧⌘Z | Undo and redo library edits, up to 100 steps. Each frame's edits are one step, named after what was done ("Undid: Move 3 to Trash"). Deleting permanently or emptying the Trash can't be undone and clears the history. Text fields keep their own undo while focused |
 | ⌘⇧F | Show or hide the filter bar |
-| ⌘⌥1 and ⌘⌥2 | Show or hide the sidebar and the inspector |
+| ⌘⌥1 and ⌘⌥2 | Show or hide the sidebar and the inspector, in the grid and in the viewer |
+| ⌘⌥3 and Tab | Show or hide both panels together: both show when the sidebar is hidden, otherwise both hide (Eagle's `view.toggle.all`; Tab is fixed and does nothing while a text field has focus) |
 | ⌥1 to ⌥4 | Waterfall, Justified, Grid and List layouts, as in Eagle |
 | Esc | Close the viewer, or clear the selection |
+| ⌘0 and ⌘9 | In the viewer, actual size and zoom to fit (Eagle's `view.zoom.actual` and `view.zoom.fit`) |
+| 0, 1, + and − | In the viewer, zoom to fit, actual size, zoom in and out (only without ⌘, ⌃ or ⌥) |
 | Hold Z | Show the hover preview of the card under the pointer |
 | ⌘⇧K | Show or hide the collect window |
 | ⌘L | Open the library menu (Eagle's `library.switch`) |
