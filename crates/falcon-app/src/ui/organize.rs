@@ -15,6 +15,7 @@ use crate::app::navigation::fastrand_seed;
 use crate::ui::sidebar::{caret_rect, icon_x, sidebar_row_tinted};
 use falcon_library::search::{OrderBy, TextFilter};
 use crate::icons as ic;
+use crate::locale::{tr, tr_n, trf};
 use crate::logic::{self, Scope};
 use crate::theme::{self as t, font};
 use crate::ui::widgets::{chip, icon, icon_button};
@@ -193,7 +194,7 @@ pub(crate) fn color_row(ui: &mut Ui, current: Option<&str>) -> Option<Option<Str
             if resp.clicked() {
                 pick = Some(name.map(str::to_string));
             }
-            resp.on_hover_text(name.unwrap_or("No colour"));
+            resp.on_hover_text(name.unwrap_or(tr("No colour")));
         }
     });
     pick
@@ -221,7 +222,7 @@ pub(crate) fn icon_grid(ui: &mut Ui, current: Option<&str>, tint: Color32, smart
                 if resp.clicked() {
                     pick = Some(name.map(str::to_string));
                 }
-                resp.on_hover_text(name.unwrap_or("Default"));
+                resp.on_hover_text(name.unwrap_or(tr("Default")));
             }
         });
     });
@@ -233,7 +234,7 @@ pub(crate) fn icon_grid(ui: &mut Ui, current: Option<&str>, tint: Color32, smart
 pub(crate) fn sort_entries(ui: &mut Ui, current: Option<(FolderOrder, bool)>, manual: bool, global: (OrderBy, bool)) -> Option<Option<(FolderOrder, bool)>> {
     let mut pick = None;
     let mark = |on: bool| if on { ic::CHECK } else { " " };
-    if ui.button(format!("{}  Global Settings", mark(current.is_none()))).clicked() {
+    if ui.button(format!("{}  {}", mark(current.is_none()), tr("Global Settings"))).clicked() {
         pick = Some(None);
     }
     let keys = organize::FOLDER_ORDERS.into_iter().chain(manual.then_some(FolderOrder::Manual));
@@ -322,14 +323,14 @@ impl App {
     /// menu of its caret): the row and its children, its level, or all.
     pub(crate) fn expand_menu<T: organize::Node>(&mut self, ui: &mut Ui, roots: &[T], id: &str) {
         ui.set_min_width(180.0);
-        if ui.button("Expand or Collapse This One").on_hover_text("This item and the ones directly inside it (⌥-click the arrow)").clicked() {
+        if ui.button(tr("Expand or Collapse This One")).on_hover_text(tr("This item and the ones directly inside it (⌥-click the arrow)")).clicked() {
             organize::toggle_with_children(roots, id, &mut self.ws.collapsed);
         }
-        if ui.button("Expand or Collapse This Level").on_hover_text("Everything beside it (⌘-click the arrow)").clicked() {
+        if ui.button(tr("Expand or Collapse This Level")).on_hover_text(tr("Everything beside it (⌘-click the arrow)")).clicked() {
             organize::toggle_level(roots, id, &mut self.ws.collapsed);
         }
         let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::ToggleFolders);
-        if ui.add(egui::Button::new("Expand or Collapse All").shortcut_text(keys)).on_hover_text("Every item in the tree (⌥⌘-click the arrow)").clicked() {
+        if ui.add(egui::Button::new(tr("Expand or Collapse All")).shortcut_text(keys)).on_hover_text(tr("Every item in the tree (⌥⌘-click the arrow)")).clicked() {
             organize::toggle_all(roots, Some(id), &mut self.ws.collapsed);
         }
     }
@@ -401,21 +402,21 @@ impl App {
 
     pub(crate) fn folder_password_menu(&mut self, ui: &mut Ui, f: &Folder) {
         let shut = organize::is_shut(f, &self.ws.org.unlocked);
-        crate::ui::menus::search::submenu(ui, "Password", |ui| {
+        crate::ui::menus::search::submenu(ui, tr("Password"), |ui| {
             let mut open = |mode| self.open_password(f, mode);
             if !f.is_locked() {
-                if ui.button("Create Password…").clicked() {
+                if ui.button(tr("Create Password…")).clicked() {
                     open(PasswordMode::New);
                 }
             } else {
-                if ui.button("Change Password…").clicked() {
+                if ui.button(tr("Change Password…")).clicked() {
                     open(PasswordMode::Change);
                 }
-                if ui.button("Remove Password…").clicked() {
+                if ui.button(tr("Remove Password…")).clicked() {
                     open(PasswordMode::Remove);
                 }
                 let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::LockFolder);
-                if ui.add_enabled(!shut, egui::Button::new("Lock Now").shortcut_text(keys)).clicked() {
+                if ui.add_enabled(!shut, egui::Button::new(tr("Lock Now")).shortcut_text(keys)).clicked() {
                     self.ws.org.unlocked.remove(&f.id);
                 }
             }
@@ -433,7 +434,7 @@ impl App {
         self.folder_password_menu(ui, f);
         let parent = organize::locate(&lib.metadata.folders, &f.id).and_then(|(p, _)| p).map(str::to_string);
         self.folder_title_sort_menu(ui, parent.as_deref());
-        crate::ui::menus::search::submenu(ui, "Sort Items By", |ui| {
+        crate::ui::menus::search::submenu(ui, tr("Sort Items By"), |ui| {
             ui.set_min_width(180.0);
             let cur = organize::own_order(f.order_by.as_deref(), f.sort_increase);
             if let Some(v) = sort_entries(ui, cur, true, (self.ws.sort, self.ws.increase)) {
@@ -442,7 +443,7 @@ impl App {
         });
         ui.separator();
         let tint = folder_icons::color(f.icon_color.as_deref()).unwrap_or(t::p().text);
-        ui.menu_button("Change Icon", |ui| {
+        ui.menu_button(tr("Change Icon"), |ui| {
             if let Some(icon) = icon_grid(ui, f.icon.as_deref(), tint, false) {
                 self.ws.actions.push(org(OrgAction::FolderIcon(f.id.clone(), icon, f.icon_color.clone())));
                 ui.close();
@@ -460,10 +461,10 @@ impl App {
     /// parent is `parent` (`None`: on the top level, or the Folders
     /// heading). Asks first, as Eagle does.
     pub(crate) fn folder_title_sort_menu(&mut self, ui: &mut Ui, parent: Option<&str>) {
-        crate::ui::menus::search::submenu(ui, "Sort By", |ui| {
+        crate::ui::menus::search::submenu(ui, tr("Sort By"), |ui| {
             ui.set_min_width(200.0);
             for (label, sort) in organize::FOLDER_TITLE_SORTS {
-                if ui.button(label).clicked() {
+                if ui.button(tr(label)).clicked() {
                     self.ws.org.sort_confirm = Some((organize::title_sort_parent(parent, sort).map(str::to_string), sort));
                 }
             }
@@ -525,12 +526,12 @@ impl App {
                 return;
             }
             ui.set_min_width(180.0);
-            if ui.button("New Subfolder…").clicked() {
+            if ui.button(tr("New Subfolder…")).clicked() {
                 // A group's children start with the folder icon, not the grid.
                 let (icon, color) = if group { (None, None) } else { (sf.icon.clone(), sf.icon_color.clone()) };
                 self.ws.smart_dialog = Some(SmartDraft { parent: Some(sf.id.clone()), orig_parent: Some(sf.id.clone()), icon, color, ..Default::default() });
             }
-            if ui.button("Rename").clicked() {
+            if ui.button(tr("Rename")).clicked() {
                 self.ws.org.smart_rename = Some((sf.id.clone(), sf.name.clone()));
             }
             if !group && ui.button("Copy Link").clicked() {
@@ -538,7 +539,7 @@ impl App {
                 self.flash_brief("Link copied");
             }
             // A group has no rules to edit.
-            if !group && ui.button("Edit Rules…").clicked() {
+            if !group && ui.button(tr("Edit Rules…")).clicked() {
                 let parent = organize::locate(roots, &sf.id).and_then(|(p, _)| p).map(str::to_string);
                 let mut d = SmartDraft::from_folder(sf);
                 d.parent.clone_from(&parent);
@@ -546,30 +547,30 @@ impl App {
                 self.ws.smart_dialog = Some(d);
             }
             if pinned {
-                if ui.button("Remove from Quick Access").clicked() {
+                if ui.button(tr("Remove from Quick Access")).clicked() {
                     self.ws.actions.push(Action::QuickRemove(sf.id.clone()));
                 }
-            } else if ui.button("Add to Quick Access").clicked() {
+            } else if ui.button(tr("Add to Quick Access")).clicked() {
                 self.ws.actions.push(Action::QuickAdd("smartFolder", sf.id.clone()));
             }
-            if depth > 0 && ui.button("Move to Top Level").clicked() {
+            if depth > 0 && ui.button(tr("Move to Top Level")).clicked() {
                 self.ws.actions.push(org(OrgAction::MoveSmart(sf.id.clone(), None, usize::MAX)));
             }
-            crate::ui::menus::search::submenu(ui, "Sort Items By", |ui| {
+            crate::ui::menus::search::submenu(ui, tr("Sort Items By"), |ui| {
                 ui.set_min_width(180.0);
                 let cur = organize::own_order(sf.order_by.as_deref(), sf.sort_increase);
                 if let Some(v) = sort_entries(ui, cur, false, (self.ws.sort, self.ws.increase)) {
                     self.ws.actions.push(org(OrgAction::SmartOrder(sf.id.clone(), v)));
                 }
             });
-            if ui.button("Duplicate").clicked() {
+            if ui.button(tr("Duplicate")).clicked() {
                 self.ws.actions.push(Action::Folders(crate::ui::sidebar::folders::FolderAction::DuplicateSmart(sf.id.clone())));
             }
             self.tree_export_menu(ui, crate::ui::dialogs::export::Target::Smart(sf.id.clone()), true);
             ui.separator();
             self.expand_menu(ui, roots, &sf.id);
             ui.separator();
-            ui.menu_button("Change Icon", |ui| {
+            ui.menu_button(tr("Change Icon"), |ui| {
                 if let Some(icon) = icon_grid(ui, sf.icon.as_deref(), tint, true) {
                     self.ws.actions.push(org(OrgAction::SmartIcon(sf.id.clone(), icon, sf.icon_color.clone())));
                     ui.close();
@@ -580,7 +581,7 @@ impl App {
                 ui.close();
             }
             ui.separator();
-            let delete = if group { "Delete Smart Folder Group" } else { "Delete Smart Folder" };
+            let delete = if group { tr("Delete Smart Folder Group") } else { tr("Delete Smart Folder") };
             if ui.button(RichText::new(delete).color(t::p().icon_red)).clicked() {
                 self.ws.actions.push(Action::DeleteSmart(sf.id.clone()));
             }
@@ -658,15 +659,15 @@ impl App {
         if !(menu_open || resp.hovered() || ui.rect_contains_pointer(rect)) {
             return resp.clicked();
         }
-        let btn = icon_button(ui, Pos2::new(rect.right() - 24.0, rect.center().y), ic::PLUS, 15.0, true, "New Smart Folder");
+        let btn = icon_button(ui, Pos2::new(rect.right() - 24.0, rect.center().y), ic::PLUS, 15.0, true, tr("New Smart Folder"));
         let on_btn = btn.rect.contains(ui.input(|i| i.pointer.interact_pos()).unwrap_or(Pos2::new(f32::MIN, f32::MIN)));
         let toggled = resp.clicked() && !btn.clicked() && !on_btn;
         egui::Popup::menu(&btn).id(menu_id).show(|ui| {
             ui.set_min_width(200.0);
-            if ui.button(format!("{}  New Smart Folder…", ic::FOLDER_STAR)).clicked() {
+            if ui.button(format!("{}  {}", ic::FOLDER_STAR, tr("New Smart Folder…"))).clicked() {
                 self.ws.smart_dialog = Some(SmartDraft::default());
             }
-            if ui.button(format!("{}  New Smart Folder Group", folder_icons::glyph(Some("grid"), false))).clicked() {
+            if ui.button(format!("{}  {}", folder_icons::glyph(Some("grid"), false), tr("New Smart Folder Group"))).clicked() {
                 self.ws.actions.push(org(OrgAction::CreateSmartGroup(None)));
             }
         });
@@ -678,10 +679,10 @@ impl App {
         let roots = lib.smart_folders();
         let choices = organize::flatten(&roots, d.editing.as_deref());
         ui.horizontal(|ui| {
-            ui.label("Inside");
-            let current = d.parent.as_deref().and_then(|p| organize::find(&roots, p)).map_or("Top level".to_string(), |f| f.name.clone());
+            ui.label(tr("Inside"));
+            let current = d.parent.as_deref().and_then(|p| organize::find(&roots, p)).map_or(tr("Top level").to_string(), |f| f.name.clone());
             egui::ComboBox::from_id_salt("smart-parent").selected_text(current).width(220.0).show_ui(ui, |ui| {
-                if ui.selectable_label(d.parent.is_none(), "Top level").clicked() {
+                if ui.selectable_label(d.parent.is_none(), tr("Top level")).clicked() {
                     d.parent = None;
                 }
                 for (f, depth) in &choices {
@@ -693,7 +694,7 @@ impl App {
             });
         });
         ui.horizontal(|ui| {
-            ui.label("Icon");
+            ui.label(tr("Icon"));
             let tint = folder_icons::color(d.color.as_deref()).unwrap_or(t::p().text);
             let glyph = folder_icons::smart_glyph(d.icon.as_deref());
             ui.menu_button(RichText::new(glyph).size(16.0).color(tint), |ui| {
@@ -736,6 +737,108 @@ impl App {
 const MAX_CONDITIONS: usize = 30;
 const MAX_RULES: usize = 30;
 
+/// The smart folder dialog's property names, which the library gives in
+/// English, in the current language.
+fn tr_property(label: &str) -> &str {
+    match label {
+        "Name" => tr("Name"),
+        "Type" => tr("Type"),
+        "Tags" => tr("Tags"),
+        "Folders" => tr("Folders"),
+        "Folder name" => tr("Folder name"),
+        "Colour" => tr("Colour"),
+        "Date added" => tr("Date added"),
+        "Date modified" => tr("Date modified"),
+        "Date created" => tr("Date created"),
+        "Notes" => tr("Notes"),
+        "Width" => tr("Width"),
+        "Height" => tr("Height"),
+        "File size" => tr("File size"),
+        "Shape" => tr("Shape"),
+        "Rating" => tr("Rating"),
+        "Comments" => tr("Comments"),
+        "Duration" => tr("Duration"),
+        "Font" => tr("Font"),
+        "Camera" => tr("Camera"),
+        "Aperture (f/)" => tr("Aperture (f/)"),
+        "Focal length (mm)" => tr("Focal length (mm)"),
+        "Shutter (1/x s)" => tr("Shutter (1/x s)"),
+        "Date taken" => tr("Date taken"),
+        _ => label,
+    }
+}
+
+/// The wording of a rule's method (from `smart_draft::method_label`) in the
+/// current language.
+fn tr_method(label: &str) -> &str {
+    match label {
+        "contains" => tr("contains"),
+        "doesn't contain" => tr("doesn't contain"),
+        "starts with" => tr("starts with"),
+        "ends with" => tr("ends with"),
+        "are exactly" => tr("are exactly"),
+        "is" => tr("is"),
+        "is not" => tr("is not"),
+        "is empty" => tr("is empty"),
+        "isn't empty" => tr("isn't empty"),
+        "matches regex" => tr("matches regex"),
+        "between" => tr("between"),
+        "before" => tr("before"),
+        "after" => tr("after"),
+        "on" => tr("on"),
+        "in the last" => tr("in the last"),
+        "include all of" => tr("include all of"),
+        "include any of" => tr("include any of"),
+        "include none of" => tr("include none of"),
+        "similar to" => tr("similar to"),
+        "very close to" => tr("very close to"),
+        "is greyscale" => tr("is greyscale"),
+        "is installed" => tr("is installed"),
+        "isn't installed" => tr("isn't installed"),
+        "is one of" => tr("is one of"),
+        _ => label,
+    }
+}
+
+/// A shape choice's name (from `smart_draft::SHAPES`) in the current language.
+fn tr_shape(label: &str) -> &str {
+    match label {
+        "Landscape" => tr("Landscape"),
+        "Portrait" => tr("Portrait"),
+        "Square" => tr("Square"),
+        "Wide landscape" => tr("Wide landscape"),
+        "Tall portrait" => tr("Tall portrait"),
+        "Ratio W:H" => tr("Ratio W:H"),
+        _ => label,
+    }
+}
+
+/// A rating choice's name (from `smart_draft::RATINGS`) in the current language.
+fn rating_text(label: &str) -> String {
+    if label == "Unrated" {
+        return tr("Unrated").to_string();
+    }
+    match label.split(' ').next().and_then(|n| n.parse::<usize>().ok()) {
+        Some(n) => tr_n(n, "{n} star", "{n} stars"),
+        None => label.to_string(),
+    }
+}
+
+/// The library's message about a rule value that can't be stored
+/// (`smart_draft::conditions`), in the current language.
+pub(crate) fn smart_error(message: &str) -> String {
+    if let Some(property) = message.strip_suffix(" needs a number") {
+        return trf("{property} needs a number", &[("property", &tr_property(property))]);
+    }
+    if let Some(property) = message.strip_suffix(" needs a date as YYYY-MM-DD") {
+        return trf("{property} needs a date as YYYY-MM-DD", &[("property", &tr_property(property))]);
+    }
+    if message == "Colour needs a value like #FF0000" {
+        return tr("Colour needs a value like #FF0000").to_string();
+    }
+    message.to_string()
+}
+
 /// Every folder as `(id, name)`, in tree order, for the folders rule.
 pub(crate) fn folder_choices(roots: &[Folder]) -> Vec<(String, String)> {
     let mut out = Vec::new();
@@ -754,18 +857,18 @@ pub(crate) fn smart_conditions_ui(ui: &mut Ui, conditions: &mut Vec<ConditionDra
         egui::Frame::group(ui.style()).show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.horizontal(|ui| {
-                ui.label(if ci == 0 { "Items" } else { "And items" });
-                egui::ComboBox::from_id_salt(("smart-negate", ci)).selected_text(if c.negate { "must not match" } else { "must match" }).width(120.0).show_ui(ui, |ui| {
-                    ui.selectable_value(&mut c.negate, false, "must match");
-                    ui.selectable_value(&mut c.negate, true, "must not match");
+                ui.label(if ci == 0 { tr("Items") } else { tr("And items") });
+                egui::ComboBox::from_id_salt(("smart-negate", ci)).selected_text(if c.negate { tr("must not match") } else { tr("must match") }).width(120.0).show_ui(ui, |ui| {
+                    ui.selectable_value(&mut c.negate, false, tr("must match"));
+                    ui.selectable_value(&mut c.negate, true, tr("must not match"));
                 });
-                egui::ComboBox::from_id_salt(("smart-any", ci)).selected_text(if c.any { "any" } else { "all" }).width(60.0).show_ui(ui, |ui| {
-                    ui.selectable_value(&mut c.any, false, "all");
-                    ui.selectable_value(&mut c.any, true, "any");
+                egui::ComboBox::from_id_salt(("smart-any", ci)).selected_text(if c.any { tr("any") } else { tr("all") }).width(60.0).show_ui(ui, |ui| {
+                    ui.selectable_value(&mut c.any, false, tr("all"));
+                    ui.selectable_value(&mut c.any, true, tr("any"));
                 });
-                ui.label("of these rules");
+                ui.label(tr("of these rules"));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if count > 1 && ui.button(ic::X).on_hover_text("Remove this condition").clicked() {
+                    if count > 1 && ui.button(ic::X).on_hover_text(tr("Remove this condition")).clicked() {
                         remove = Some(ci);
                     }
                 });
@@ -780,7 +883,7 @@ pub(crate) fn smart_conditions_ui(ui: &mut Ui, conditions: &mut Vec<ConditionDra
             if let Some(ri) = gone {
                 c.rules.remove(ri);
             }
-            if c.rules.len() < MAX_RULES && ui.button(format!("{}  Add Rule", ic::PLUS)).clicked() {
+            if c.rules.len() < MAX_RULES && ui.button(format!("{}  {}", ic::PLUS, tr("Add Rule"))).clicked() {
                 c.rules.push(RuleDraft::default());
             }
         });
@@ -789,7 +892,7 @@ pub(crate) fn smart_conditions_ui(ui: &mut Ui, conditions: &mut Vec<ConditionDra
     if let Some(ci) = remove {
         conditions.remove(ci);
     }
-    if conditions.len() < MAX_CONDITIONS && ui.button(format!("{}  Add Condition", ic::PLUS)).on_hover_text("Items must also pass every other condition").clicked() {
+    if conditions.len() < MAX_CONDITIONS && ui.button(format!("{}  {}", ic::PLUS, tr("Add Condition"))).on_hover_text(tr("Items must also pass every other condition")).clicked() {
         conditions.push(ConditionDraft::default());
     }
 }
@@ -802,14 +905,14 @@ fn smart_rule_ui(ui: &mut Ui, salt: (usize, usize), rule: &mut RuleDraft, folder
             RuleDraft::Unsupported(v) => {
                 let text = v.to_string();
                 let short: String = if text.chars().count() > 60 { text.chars().take(59).chain(['…']).collect() } else { text.clone() };
-                ui.label(RichText::new("Unsupported rule").italics().color(t::p().text_muted))
-                    .on_hover_text("Falcon can't show or edit this rule. Saving keeps it exactly as it is; remove it to drop it.");
+                ui.label(RichText::new(tr("Unsupported rule")).italics().color(t::p().text_muted))
+                    .on_hover_text(tr("Falcon can't show or edit this rule. Saving keeps it exactly as it is; remove it to drop it."));
                 ui.label(RichText::new(short).monospace().small().color(t::p().text_muted)).on_hover_text(text);
             }
             RuleDraft::Edit { fields, .. } => rule_fields_ui(ui, salt, fields, folders),
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui.add_enabled(removable, egui::Button::new(ic::X)).on_hover_text("Remove this rule").clicked() {
+            if ui.add_enabled(removable, egui::Button::new(ic::X)).on_hover_text(tr("Remove this rule")).clicked() {
                 remove = true;
             }
         });
@@ -819,19 +922,19 @@ fn smart_rule_ui(ui: &mut Ui, salt: (usize, usize), rule: &mut RuleDraft, folder
 
 fn rule_fields_ui(ui: &mut Ui, salt: (usize, usize), f: &mut RuleFields, folders: &[(String, String)]) {
     let kind = f.kind();
-    let label = PROPERTIES.iter().find(|p| p.key == f.property).map_or(f.property, |p| p.label);
+    let label = tr_property(PROPERTIES.iter().find(|p| p.key == f.property).map_or(f.property, |p| p.label));
     egui::ComboBox::from_id_salt(("smart-prop", salt)).selected_text(label).width(130.0).height(400.0).show_ui(ui, |ui| {
         for p in PROPERTIES {
-            if ui.selectable_label(f.property == p.key, p.label).clicked() {
+            if ui.selectable_label(f.property == p.key, tr_property(p.label)).clicked() {
                 f.set_property(p.key);
             }
         }
     });
     let kind_now = f.kind();
     let methods = PROPERTIES.iter().find(|p| p.key == f.property).map_or(&[][..], |p| p.methods);
-    egui::ComboBox::from_id_salt(("smart-method", salt)).selected_text(smart_draft::method_label(kind_now, f.method)).width(110.0).show_ui(ui, |ui| {
+    egui::ComboBox::from_id_salt(("smart-method", salt)).selected_text(tr_method(smart_draft::method_label(kind_now, f.method))).width(110.0).show_ui(ui, |ui| {
         for m in methods {
-            if ui.selectable_label(f.method == *m, smart_draft::method_label(kind_now, m)).clicked() {
+            if ui.selectable_label(f.method == *m, tr_method(smart_draft::method_label(kind_now, m))).clicked() {
                 f.set_method(m);
             }
         }
@@ -844,23 +947,23 @@ fn rule_fields_ui(ui: &mut Ui, salt: (usize, usize), f: &mut RuleFields, folders
     };
     let between = f.method == "between";
     match kind {
-        Kind::Text => field(ui, &mut f.value, if f.method == "regex" { "pattern" } else { "text" }, 220.0),
+        Kind::Text => field(ui, &mut f.value, if f.method == "regex" { tr("pattern") } else { tr("text") }, 220.0),
         Kind::Type => field(ui, &mut f.value, "png, video, font…", 220.0),
-        Kind::Tags => field(ui, &mut f.value, "tag, tag", 220.0),
+        Kind::Tags => field(ui, &mut f.value, tr("tag, tag"), 220.0),
         Kind::Number | Kind::Size | Kind::Duration => {
-            field(ui, &mut f.value, "number", 64.0);
+            field(ui, &mut f.value, tr("number"), 64.0);
             if between {
-                ui.label("and");
-                field(ui, &mut f.value2, "number", 64.0);
+                ui.label(tr("and"));
+                field(ui, &mut f.value2, tr("number"), 64.0);
             }
             let units = smart_draft::units(kind);
             if !units.is_empty() {
                 let name = |u: &str| match u {
                     "mb" => "MB",
                     "kb" => "KB",
-                    "s" => "seconds",
-                    "m" => "minutes",
-                    "h" => "hours",
+                    "s" => tr("seconds"),
+                    "m" => tr("minutes"),
+                    "h" => tr("hours"),
                     _ => "?",
                 };
                 egui::ComboBox::from_id_salt(("smart-unit", salt)).selected_text(name(f.unit)).width(80.0).show_ui(ui, |ui| {
@@ -873,20 +976,20 @@ fn rule_fields_ui(ui: &mut Ui, salt: (usize, usize), f: &mut RuleFields, folders
             }
         }
         Kind::Date if f.method == "within" => {
-            field(ui, &mut f.value, "number", 64.0);
-            ui.label("days");
+            field(ui, &mut f.value, tr("number"), 64.0);
+            ui.label(tr("days"));
         }
         Kind::Date => {
             field(ui, &mut f.value, "YYYY-MM-DD", 96.0);
             if between {
-                ui.label("and");
+                ui.label(tr("and"));
                 field(ui, &mut f.value2, "YYYY-MM-DD", 96.0);
             }
         }
         Kind::Folders => {
             let mut ids: Vec<String> = f.value.split(',').map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect();
             let names: Vec<&str> = ids.iter().map(|id| folders.iter().find(|(i, _)| i == id).map_or(id.as_str(), |(_, n)| n.as_str())).collect();
-            let shown = if names.is_empty() { "Choose folders…".to_string() } else { names.join(", ") };
+            let shown = if names.is_empty() { tr("Choose folders…").to_string() } else { names.join(", ") };
             let mut changed = false;
             ui.menu_button(shown, |ui| {
                 egui::ScrollArea::vertical().max_height(320.0).show(ui, |ui| {
@@ -907,22 +1010,22 @@ fn rule_fields_ui(ui: &mut Ui, salt: (usize, usize), f: &mut RuleFields, folders
                 f.value = ids.join(", ");
             }
         }
-        Kind::Rating if f.method == "contain" => field(ui, &mut f.value, "stars, e.g. 35", 120.0),
+        Kind::Rating if f.method == "contain" => field(ui, &mut f.value, tr("stars, e.g. 35"), 120.0),
         Kind::Rating => {
-            let shown = RATINGS.iter().find(|r| r.0 == f.value).map_or(f.value.as_str(), |r| r.1).to_string();
+            let shown = rating_text(RATINGS.iter().find(|r| r.0 == f.value).map_or(f.value.as_str(), |r| r.1));
             egui::ComboBox::from_id_salt(("smart-rating", salt)).selected_text(shown).width(100.0).show_ui(ui, |ui| {
                 for (v, name) in RATINGS {
-                    if ui.selectable_label(f.value == *v, *name).clicked() {
+                    if ui.selectable_label(f.value == *v, rating_text(name)).clicked() {
                         f.value = v.to_string();
                     }
                 }
             });
         }
         Kind::Shape => {
-            let shown = SHAPES.iter().find(|s| s.0 == f.value).map_or(f.value.as_str(), |s| s.1).to_string();
+            let shown = tr_shape(SHAPES.iter().find(|s| s.0 == f.value).map_or(f.value.as_str(), |s| s.1)).to_string();
             egui::ComboBox::from_id_salt(("smart-shape", salt)).selected_text(shown).width(120.0).show_ui(ui, |ui| {
                 for (v, name) in SHAPES {
-                    if ui.selectable_label(f.value == *v, *name).clicked() {
+                    if ui.selectable_label(f.value == *v, tr_shape(name)).clicked() {
                         f.value = v.to_string();
                     }
                 }
@@ -1072,12 +1175,12 @@ impl App {
     /// folder owns the sort: changes go to it. With "Global Settings" the
     /// direction still changes the global sort.
     pub(crate) fn own_sort_menu(&mut self, ui: &mut Ui, target: OrderTarget, cur: Option<(FolderOrder, bool)>) {
-        ui.label(RichText::new("Sort by (this folder)").color(t::p().text_muted).size(12.0));
+        ui.label(RichText::new(tr("Sort by (this folder)")).color(t::p().text_muted).size(12.0));
         let manual = matches!(target, OrderTarget::Folder(_));
         let pick = sort_entries(ui, cur, manual, (self.ws.sort, self.ws.increase));
         if cur.is_none() {
-            let labels = if self.ws.sort.is_time() { ["Newest First", "Oldest First"] } else { ["Ascending", "Descending"] };
-            ui.label(RichText::new(format!("Global: {}", self.ws.sort.label())).color(t::p().text_muted).size(12.0));
+            let labels = if self.ws.sort.is_time() { [tr("Newest First"), tr("Oldest First")] } else { [tr("Ascending"), tr("Descending")] };
+            ui.label(RichText::new(trf("Global: {sort}", &[("sort", &tr(self.ws.sort.label()))])).color(t::p().text_muted).size(12.0));
             for (inc, label) in [(true, labels[0]), (false, labels[1])] {
                 let mark = if inc == self.ws.increase { ic::CHECK } else { " " };
                 if ui.button(format!("{mark}  {label}")).clicked() {
@@ -1107,10 +1210,10 @@ impl App {
         let area = ui.max_rect();
         let c = area.center() - vec2(0.0, 60.0);
         icon(ui, c, ic::LOCK_SIMPLE, 48.0, t::p().text_muted);
-        ui.painter().text(c + vec2(0.0, 48.0), Align2::CENTER_CENTER, "Unlock to view contents", font(16.0), t::p().text);
+        ui.painter().text(c + vec2(0.0, 48.0), Align2::CENTER_CENTER, tr("Unlock to view contents"), font(16.0), t::p().text);
         let mut y = c.y + 74.0;
         if !gate.password_tips.is_empty() {
-            ui.painter().text(Pos2::new(c.x, y), Align2::CENTER_CENTER, format!("Hint: {}", gate.password_tips), font(13.0), t::p().text_muted);
+            ui.painter().text(Pos2::new(c.x, y), Align2::CENTER_CENTER, trf("Hint: {hint}", &[("hint", &gate.password_tips)]), font(13.0), t::p().text_muted);
             y += 24.0;
         }
         let r = Rect::from_center_size(Pos2::new(c.x, y + 14.0), vec2(220.0, 30.0));
@@ -1124,7 +1227,7 @@ impl App {
                 .password(true)
                 .frame(egui::Frame::NONE)
                 .margin(egui::Margin::ZERO)
-                .hint_text(RichText::new("Enter password").color(t::p().text_muted))
+                .hint_text(RichText::new(tr("Enter password")).color(t::p().text_muted))
                 .font(font(14.0))
                 .align(Align2::LEFT_CENTER),
         );
@@ -1151,19 +1254,19 @@ impl App {
     /// The All Tags page's mode switch and New Group button.
     pub(crate) fn tag_page_controls(&mut self, ui: &mut Ui) {
         ui.add_space(12.0);
-        ui.label(RichText::new("Group by").color(t::p().text_muted));
-        if ui.selectable_label(!self.ws.org.by_group, "Alphabet").clicked() {
+        ui.label(RichText::new(tr("Group by")).color(t::p().text_muted));
+        if ui.selectable_label(!self.ws.org.by_group, tr("Alphabet")).clicked() {
             self.ws.org.by_group = false;
         }
-        if ui.selectable_label(self.ws.org.by_group, "Tag Group").clicked() {
+        if ui.selectable_label(self.ws.org.by_group, tr("Tag Group")).clicked() {
             self.ws.org.by_group = true;
         }
-        if ui.button(format!("{}  New Group", ic::PLUS)).clicked() {
+        if ui.button(format!("{}  {}", ic::PLUS, tr("New Group"))).clicked() {
             self.ws.org.by_group = true;
             self.ws.org.rename_new_group = true;
             self.ws.actions.push(org(OrgAction::CreateGroup(Vec::new())));
         }
-        ui.menu_button(format!("Sort: {}", self.ws.org.tag_sort.label()), |ui| {
+        ui.menu_button(trf("Sort: {sort}", &[("sort", &self.ws.org.tag_sort.label())]), |ui| {
             ui.set_min_width(180.0);
             for s in crate::tags::TagSort::ALL {
                 let mark = if s == self.ws.org.tag_sort { ic::CHECK } else { " " };
@@ -1172,7 +1275,7 @@ impl App {
                 }
             }
         });
-        if ui.button("Clear Tag History…").on_hover_text("Start the tag picker's Recent tags over").clicked() {
+        if ui.button(tr("Clear Tag History…")).on_hover_text(tr("Start the tag picker's Recent tags over")).clicked() {
             self.ws.confirm = Some(Confirm::ClearTagHistory);
         }
     }
@@ -1242,7 +1345,7 @@ impl App {
                 }
             }
         } else {
-            let title = sec.map_or("Ungrouped", |s| s.name.as_str());
+            let title = sec.map_or(tr("Ungrouped"), |s| s.name.as_str());
             ui.painter().text(Pos2::new(tx, cy), Align2::LEFT_CENTER, format!("{title}  ({n})"), font(14.0), t::p().text_muted);
         }
         if resp.dnd_hover_payload::<DragTag>().is_some() {
@@ -1269,21 +1372,21 @@ impl App {
         resp.context_menu(|ui| {
             ui.set_min_width(200.0);
             let tags = groups.get(pos).map(|g| g.tags.clone()).unwrap_or_default();
-            if ui.add_enabled(!tags.is_empty(), egui::Button::new("Find Items with These Tags")).clicked() {
+            if ui.add_enabled(!tags.is_empty(), egui::Button::new(tr("Find Items with These Tags"))).clicked() {
                 self.filter_any_tags(tags);
             }
             ui.separator();
-            if ui.button("Rename").clicked() {
+            if ui.button(tr("Rename")).clicked() {
                 self.ws.org.group_rename = Some((s.id.clone(), s.name.clone()));
             }
-            let label = if s.description.is_empty() { "Add Description…" } else { "Edit Description…" };
+            let label = if s.description.is_empty() { tr("Add Description…") } else { tr("Edit Description…") };
             if ui.button(label).clicked() {
                 self.ws.org.group_describe = Some((s.id.clone(), s.description.clone()));
             }
-            if ui.add_enabled(pos > 0, egui::Button::new("Move Up")).clicked() {
+            if ui.add_enabled(pos > 0, egui::Button::new(tr("Move Up"))).clicked() {
                 self.ws.actions.push(org(OrgAction::MoveGroup(s.id.clone(), pos - 1)));
             }
-            if ui.add_enabled(pos + 1 < groups.len(), egui::Button::new("Move Down")).clicked() {
+            if ui.add_enabled(pos + 1 < groups.len(), egui::Button::new(tr("Move Down"))).clicked() {
                 self.ws.actions.push(org(OrgAction::MoveGroup(s.id.clone(), pos + 1)));
             }
             if let Some(c) = color_row(ui, s.color.as_deref()) {
@@ -1291,7 +1394,7 @@ impl App {
                 ui.close();
             }
             ui.separator();
-            if ui.button(RichText::new("Delete Group").color(t::p().icon_red)).clicked() {
+            if ui.button(RichText::new(tr("Delete Group")).color(t::p().icon_red)).clicked() {
                 if s.tags.is_empty() {
                     self.ws.actions.push(org(OrgAction::DeleteGroup(s.id.clone())));
                 } else {
@@ -1334,7 +1437,7 @@ impl App {
             ui.add_space(GRID_PAD_X + 20.0);
             let width = (ui.available_width() - GRID_PAD_X - 20.0).max(80.0);
             if let (true, Some((_, buf))) = (editing, self.ws.org.group_describe.as_mut()) {
-                let te = ui.add(TextEdit::multiline(buf).id_salt(("group-describe", &s.id)).hint_text("Add a description").desired_rows(2).desired_width(width).font(font(13.0)));
+                let te = ui.add(TextEdit::multiline(buf).id_salt(("group-describe", &s.id)).hint_text(tr("Add a description")).desired_rows(2).desired_width(width).font(font(13.0)));
                 if !te.has_focus() && !te.lost_focus() {
                     te.request_focus();
                 }
@@ -1376,7 +1479,7 @@ impl App {
         let groups = &lib.metadata.tags_groups;
         let in_all = |g: &falcon_library::model::TagGroup| tags.iter().all(|t| g.tags.contains(t));
         ui.add_enabled_ui(!groups.is_empty(), |ui| {
-            ui.menu_button("Add to Group", |ui| {
+            ui.menu_button(tr("Add to Group"), |ui| {
                 ui.set_min_width(180.0);
                 for g in groups {
                     let all = in_all(g);
@@ -1387,7 +1490,7 @@ impl App {
                 }
             });
         });
-        ui.menu_button("Move to Group", |ui| {
+        ui.menu_button(tr("Move to Group"), |ui| {
             ui.set_min_width(180.0);
             for g in groups {
                 let mark = if in_all(g) { ic::CHECK } else { " " };
@@ -1398,14 +1501,14 @@ impl App {
             if !groups.is_empty() {
                 ui.separator();
             }
-            if ui.button("New Group…").clicked() {
+            if ui.button(tr("New Group…")).clicked() {
                 self.ws.org.by_group = true;
                 self.ws.org.rename_new_group = true;
                 self.ws.actions.push(org(OrgAction::CreateGroup(tags.to_vec())));
             }
         });
         let holding: Vec<&falcon_library::model::TagGroup> = groups.iter().filter(|g| tags.iter().any(|t| g.tags.contains(t))).collect();
-        if ui.add_enabled(!holding.is_empty(), egui::Button::new("Remove from Group")).clicked() {
+        if ui.add_enabled(!holding.is_empty(), egui::Button::new(tr("Remove from Group"))).clicked() {
             for g in holding {
                 self.push_bulk(tags.len(), org(OrgAction::RemoveFromGroup(g.id.clone(), tags.to_vec())));
             }
@@ -1419,24 +1522,24 @@ impl App {
         let mut keep = true;
         let modal = egui::Modal::new(egui::Id::unique("merge-tags")).show(ctx, |ui| {
             ui.set_width(340.0);
-            ui.label(RichText::new(format!("Merge {} tags", tags.len())).size(15.0));
+            ui.label(RichText::new(tr_n(tags.len(), "Merge {n} tag", "Merge {n} tags")).size(15.0));
             ui.add_space(4.0);
             ui.label(RichText::new(tags.join(", ")).color(t::p().text_muted));
-            ui.label(RichText::new("Items with any of them get this tag instead:").color(t::p().text_muted));
+            ui.label(RichText::new(tr("Items with any of them get this tag instead:")).color(t::p().text_muted));
             ui.add_space(6.0);
-            let te = ui.add(TextEdit::singleline(&mut name).id_salt("merge-name").hint_text("Tag name").desired_width(f32::INFINITY));
+            let te = ui.add(TextEdit::singleline(&mut name).id_salt("merge-name").hint_text(tr("Tag name")).desired_width(f32::INFINITY));
             if ui.memory(|m| m.focused().is_none()) {
                 te.request_focus();
             }
             let enter = te.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
             ui.add_space(10.0);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let ok = ui.add_enabled(!name.trim().is_empty(), egui::Button::new("Merge"));
+                let ok = ui.add_enabled(!name.trim().is_empty(), egui::Button::new(tr("Merge")));
                 if (ok.clicked() || enter) && !name.trim().is_empty() {
                     self.ws.actions.push(Action::MergeTags(tags.clone(), name.trim().to_string()));
                     keep = false;
                 }
-                if ui.button("Cancel").clicked() {
+                if ui.button(tr("Cancel")).clicked() {
                     keep = false;
                 }
             });
@@ -1458,11 +1561,11 @@ impl App {
     /// the saved ones to apply, rename, move or delete.
     pub(crate) fn saved_filters_menu(&mut self, ui: &mut Ui, lib: &Library) {
         let n = lib.saved_filters.len();
-        let resp = filter_chip(ui, &format!("{}  Saved", ic::FLOPPY_DISK), None);
+        let resp = filter_chip(ui, &format!("{}  {}", ic::FLOPPY_DISK, tr("Saved")), None);
         egui::Popup::menu(&resp).show(|ui| {
             ui.set_min_width(220.0);
             let can_save = self.ws.filter.is_active() || !self.ws.query.trim().is_empty();
-            if ui.add_enabled(can_save, egui::Button::new("Save This Filter…")).clicked() {
+            if ui.add_enabled(can_save, egui::Button::new(tr("Save This Filter…"))).clicked() {
                 let name = organize::fresh_name("Filter", lib.saved_filters.iter().map(|f| f.name.as_str()));
                 self.ws.org.filter_name = Some((None, name));
             }
@@ -1475,16 +1578,16 @@ impl App {
                         self.apply_saved_filter(sf);
                     }
                     ui.menu_button("⋯", |ui| {
-                        if ui.button("Rename…").clicked() {
+                        if ui.button(tr("Rename…")).clicked() {
                             self.ws.org.filter_name = Some((Some(i), sf.name.clone()));
                         }
-                        if ui.add_enabled(i > 0, egui::Button::new("Move Up")).clicked() {
+                        if ui.add_enabled(i > 0, egui::Button::new(tr("Move Up"))).clicked() {
                             self.ws.actions.push(org(OrgAction::MoveFilter(i, i - 1)));
                         }
-                        if ui.add_enabled(i + 1 < n, egui::Button::new("Move Down")).clicked() {
+                        if ui.add_enabled(i + 1 < n, egui::Button::new(tr("Move Down"))).clicked() {
                             self.ws.actions.push(org(OrgAction::MoveFilter(i, i + 1)));
                         }
-                        if ui.button(RichText::new("Remove").color(t::p().icon_red)).clicked() {
+                        if ui.button(RichText::new(tr("Remove")).color(t::p().icon_red)).clicked() {
                             self.ws.actions.push(org(OrgAction::DeleteFilter(i)));
                         }
                     });
@@ -1507,9 +1610,9 @@ impl App {
         self.ws.show_filter = true;
         let skipped = organize::unsupported_names(&q.unsupported);
         if skipped.is_empty() {
-            self.flash(format!("Applied “{}”", sf.name));
+            self.flash(trf("Applied “{name}”", &[("name", &sf.name)]));
         } else {
-            self.flash(format!("Applied “{}” without: {}", sf.name, skipped.join(", ")));
+            self.flash(trf("Applied “{name}” without: {skipped}", &[("name", &sf.name), ("skipped", &skipped.join(", "))]));
         }
     }
 }
@@ -1549,23 +1652,23 @@ impl App {
         self.password_dialog(ctx, lib);
         self.filter_name_dialog(ctx, lib);
         if let Some((parent, sort)) = self.ws.org.sort_confirm.clone() {
-            let what = match (&parent, sort.all_levels) {
-                (_, true) => "every folder".to_string(),
-                (None, false) => "the top-level folders".to_string(),
-                (Some(p), false) => format!("the folders in “{}”", logic::find_folder(&lib.metadata.folders, p).map_or("", |f| f.name.as_str())),
+            let question = match (&parent, sort.all_levels) {
+                (_, true) => tr("Sort every folder by title?").to_string(),
+                (None, false) => tr("Sort the top-level folders by title?").to_string(),
+                (Some(p), false) => trf("Sort the folders in “{name}” by title?", &[("name", &logic::find_folder(&lib.metadata.folders, p).map_or("", |f| f.name.as_str()))]),
             };
             let modal = egui::Modal::new(egui::Id::unique("sort-folders")).show(ctx, |ui| {
                 ui.set_width(320.0);
-                ui.label(RichText::new(format!("Sort {what} by title?")).size(15.0));
+                ui.label(RichText::new(&question).size(15.0));
                 ui.add_space(4.0);
-                ui.label(RichText::new("Their hand-made order is replaced.").color(t::p().text_muted));
+                ui.label(RichText::new(tr("Their hand-made order is replaced.")).color(t::p().text_muted));
                 ui.add_space(10.0);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("Sort by Title").clicked() {
+                    if ui.button(tr("Sort by Title")).clicked() {
                         self.ws.actions.push(org(OrgAction::SortFolders(parent.clone(), sort)));
                         self.ws.org.sort_confirm = None;
                     }
-                    if ui.button("Cancel").clicked() {
+                    if ui.button(tr("Cancel")).clicked() {
                         self.ws.org.sort_confirm = None;
                     }
                 });
@@ -1578,16 +1681,16 @@ impl App {
             let name = lib.metadata.tags_groups.iter().find(|g| g.id == id).map_or_else(String::new, |g| g.name.clone());
             let modal = egui::Modal::new(egui::Id::unique("group-delete")).show(ctx, |ui| {
                 ui.set_width(320.0);
-                ui.label(RichText::new(format!("Delete the group “{name}”?")).size(15.0));
+                ui.label(RichText::new(trf("Delete the group “{name}”?", &[("name", &name)])).size(15.0));
                 ui.add_space(4.0);
-                ui.label(RichText::new("Its tags stay on their items.").color(t::p().text_muted));
+                ui.label(RichText::new(tr("Its tags stay on their items.")).color(t::p().text_muted));
                 ui.add_space(10.0);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button(RichText::new("Delete Group").color(t::p().icon_red)).clicked() {
+                    if ui.button(RichText::new(tr("Delete Group")).color(t::p().icon_red)).clicked() {
                         self.ws.actions.push(org(OrgAction::DeleteGroup(id.clone())));
                         self.ws.org.group_delete = None;
                     }
-                    if ui.button("Cancel").clicked() {
+                    if ui.button(tr("Cancel")).clicked() {
                         self.ws.org.group_delete = None;
                     }
                 });
@@ -1605,29 +1708,29 @@ impl App {
         let modal = egui::Modal::new(egui::Id::unique("folder-password")).show(ctx, |ui| {
             ui.set_width(340.0);
             let title = match d.mode {
-                PasswordMode::New => "Create Password",
-                PasswordMode::Change => "Change Password",
-                PasswordMode::Remove => "Remove Password",
+                PasswordMode::New => trf("Create Password for “{name}”", &[("name", &name)]),
+                PasswordMode::Change => trf("Change Password for “{name}”", &[("name", &name)]),
+                PasswordMode::Remove => trf("Remove Password for “{name}”", &[("name", &name)]),
             };
-            ui.label(RichText::new(format!("{title} for “{name}”")).size(15.0));
+            ui.label(RichText::new(title).size(15.0));
             ui.add_space(6.0);
             let pw = |ui: &mut Ui, v: &mut String, hint: &str| {
                 ui.add(TextEdit::singleline(v).password(true).hint_text(hint).desired_width(f32::INFINITY));
             };
             match d.mode {
                 PasswordMode::New => {
-                    pw(ui, &mut d.new, "Password");
-                    pw(ui, &mut d.again, "Enter the password again");
+                    pw(ui, &mut d.new, tr("Password"));
+                    pw(ui, &mut d.again, tr("Enter the password again"));
                 }
                 PasswordMode::Change => {
-                    pw(ui, &mut d.old, "Old password");
-                    pw(ui, &mut d.new, "New password");
-                    pw(ui, &mut d.again, "Enter the new password again");
+                    pw(ui, &mut d.old, tr("Old password"));
+                    pw(ui, &mut d.new, tr("New password"));
+                    pw(ui, &mut d.again, tr("Enter the new password again"));
                 }
-                PasswordMode::Remove => pw(ui, &mut d.old, "Current password"),
+                PasswordMode::Remove => pw(ui, &mut d.old, tr("Current password")),
             }
             if d.mode != PasswordMode::Remove {
-                ui.add(TextEdit::multiline(&mut d.hint).hint_text("Password hint").desired_rows(2).desired_width(f32::INFINITY));
+                ui.add(TextEdit::multiline(&mut d.hint).hint_text(tr("Password hint")).desired_rows(2).desired_width(f32::INFINITY));
             }
             if let Some(e) = d.error {
                 ui.label(RichText::new(e).color(t::p().icon_red));
@@ -1635,9 +1738,9 @@ impl App {
             ui.add_space(8.0);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let label = match d.mode {
-                    PasswordMode::New => "Save Password",
-                    PasswordMode::Change => "Change Password",
-                    PasswordMode::Remove => "Remove Password",
+                    PasswordMode::New => tr("Save Password"),
+                    PasswordMode::Change => tr("Change Password"),
+                    PasswordMode::Remove => tr("Remove Password"),
                 };
                 if ui.button(label).clicked() {
                     match organize::check_password_form(d.mode == PasswordMode::New, d.mode == PasswordMode::Remove, &d.new, &d.again, || lib.verify_folder_password(&d.id, &d.old)) {
@@ -1655,7 +1758,7 @@ impl App {
                         }
                     }
                 }
-                if ui.button("Cancel").clicked() {
+                if ui.button(tr("Cancel")).clicked() {
                     keep = false;
                 }
             });
@@ -1678,14 +1781,14 @@ impl App {
         let mut keep = true;
         let modal = egui::Modal::new(egui::Id::unique("folder-settings")).show(ctx, |ui| {
             ui.set_width(360.0);
-            ui.label(RichText::new("Folder Settings").size(15.0));
+            ui.label(RichText::new(tr("Folder Settings")).size(15.0));
             ui.add_space(6.0);
-            ui.label(RichText::new("Name").size(12.0).color(t::p().text_muted));
+            ui.label(RichText::new(tr("Name")).size(12.0).color(t::p().text_muted));
             let name = ui.add(TextEdit::singleline(&mut d.name).char_limit(1024).desired_width(f32::INFINITY));
             let save_key = |ui: &Ui| ui.input(|i| i.modifiers.command && i.key_pressed(Key::Enter));
             let mut save = name.has_focus() && save_key(ui);
             ui.add_space(8.0);
-            ui.label(RichText::new("Tags added to items put in this folder").size(12.0).color(t::p().text_muted));
+            ui.label(RichText::new(tr("Tags added to items put in this folder")).size(12.0).color(t::p().text_muted));
             let mut remove = None;
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing = vec2(4.0, 4.0);
@@ -1698,7 +1801,7 @@ impl App {
             if let Some(n) = remove {
                 d.tags.remove(n);
             }
-            let field = ui.add(TextEdit::singleline(&mut d.typed).hint_text("Add a tag (Return or comma)").desired_width(f32::INFINITY));
+            let field = ui.add(TextEdit::singleline(&mut d.typed).hint_text(tr("Add a tag (Return or comma)")).desired_width(f32::INFINITY));
             if field.has_focus() && save_key(ui) {
                 save = true;
             }
@@ -1711,13 +1814,13 @@ impl App {
             }
             if !inherited.is_empty() {
                 ui.add_space(4.0);
-                ui.label(RichText::new(format!("Also added from the folders above: {}", inherited.join(", "))).size(11.0).color(t::p().text_muted));
+                ui.label(RichText::new(trf("Also added from the folders above: {tags}", &[("tags", &inherited.join(", "))])).size(11.0).color(t::p().text_muted));
             }
             ui.add_space(4.0);
-            ui.label(RichText::new("Saving a changed list adds these tags to the items already in the folder and its subfolders. Tags you remove stay on those items.").size(11.0).color(t::p().text_muted));
+            ui.label(RichText::new(tr("Saving a changed list adds these tags to the items already in the folder and its subfolders. Tags you remove stay on those items.")).size(11.0).color(t::p().text_muted));
             ui.add_space(8.0);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button("Save").clicked() || save {
+                if ui.button(tr("Save")).clicked() || save {
                     organize::add_typed_tags(&mut d.tags, &d.typed);
                     let name = if d.name.trim().is_empty() { folder.name.clone() } else { d.name.clone() };
                     if name != folder.name || d.tags != folder.tags {
@@ -1725,7 +1828,7 @@ impl App {
                     }
                     keep = false;
                 }
-                if ui.button("Cancel").clicked() {
+                if ui.button(tr("Cancel")).clicked() {
                     keep = false;
                 }
             });
@@ -1743,14 +1846,14 @@ impl App {
         let mut keep = true;
         let modal = egui::Modal::new(egui::Id::unique("filter-name")).show(ctx, |ui| {
             ui.set_width(300.0);
-            ui.label(RichText::new(if index.is_some() { "Rename Saved Filter" } else { "Save This Filter" }).size(15.0));
+            ui.label(RichText::new(if index.is_some() { tr("Rename Saved Filter") } else { tr("Save This Filter") }).size(15.0));
             ui.add_space(6.0);
-            let te = ui.add(TextEdit::singleline(&mut name).hint_text("Name").desired_width(f32::INFINITY));
+            let te = ui.add(TextEdit::singleline(&mut name).hint_text(tr("Name")).desired_width(f32::INFINITY));
             let enter = te.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
             ui.add_space(8.0);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let ok = !name.trim().is_empty();
-                if (ui.add_enabled(ok, egui::Button::new("Save")).clicked() || (enter && ok)) && keep {
+                if (ui.add_enabled(ok, egui::Button::new(tr("Save"))).clicked() || (enter && ok)) && keep {
                     let n = name.trim().to_string();
                     self.ws.actions.push(org(match index {
                         Some(i) => OrgAction::RenameFilter(i, n),
@@ -1762,7 +1865,7 @@ impl App {
                     }));
                     keep = false;
                 }
-                if ui.button("Cancel").clicked() {
+                if ui.button(tr("Cancel")).clicked() {
                     keep = false;
                 }
             });
@@ -1819,7 +1922,7 @@ impl App {
             OrgAction::AddToGroup(id, tags) => lib.add_tags_to_group(&id, &tags),
             OrgAction::AddToGroupToo(id, tags) => lib.add_tags_to_group_too(&id, &tags),
             OrgAction::RemoveFromGroup(id, tags) => lib.remove_tags_from_group(&id, &tags),
-            OrgAction::SaveFilter(name, rule) => lib.create_saved_filter(&name, rule).map(|_| self.flash(format!("Saved “{name}”"))),
+            OrgAction::SaveFilter(name, rule) => lib.create_saved_filter(&name, rule).map(|_| self.flash(trf("Saved “{name}”", &[("name", &name)]))),
             OrgAction::RenameFilter(i, name) => lib.rename_saved_filter(i, &name),
             OrgAction::DeleteFilter(i) => lib.delete_saved_filter(i),
             OrgAction::MoveFilter(i, to) => lib.reorder_saved_filter(i, to),
@@ -1845,7 +1948,7 @@ impl App {
                 }
                 let n = lib.set_folder_auto_tags(&id, &tags)?;
                 if n > 0 {
-                    self.flash(format!("Added the folder's tags to {n} item{}", if n == 1 { "" } else { "s" }));
+                    self.flash(tr_n(n, "Added the folder's tags to {n} item", "Added the folder's tags to {n} items"));
                 }
                 Ok(())
             }

@@ -2,17 +2,18 @@
 
 use std::collections::{HashMap, HashSet};
 use falcon_library::model::Item;
+use crate::locale::tr;
 use falcon_library::search::{self, DateFilter, DatePreset, DurationUnit};
 
 /// Menu label of a date preset.
 pub fn preset_label(p: DatePreset) -> &'static str {
     match p {
-        DatePreset::Today => "Today",
-        DatePreset::Yesterday => "Yesterday",
-        DatePreset::Last7Days => "Last 7 Days",
-        DatePreset::Last30Days => "Last 30 Days",
-        DatePreset::Last90Days => "Last 90 Days",
-        DatePreset::Last365Days => "Last 365 Days",
+        DatePreset::Today => tr("Today"),
+        DatePreset::Yesterday => tr("Yesterday"),
+        DatePreset::Last7Days => tr("Last 7 Days"),
+        DatePreset::Last30Days => tr("Last 30 Days"),
+        DatePreset::Last90Days => tr("Last 90 Days"),
+        DatePreset::Last365Days => tr("Last 365 Days"),
     }
 }
 
@@ -72,7 +73,7 @@ pub fn date_summary(f: &DateFilter) -> Option<String> {
         } else if let Some(m) = f.months.iter().next() {
             month_label(*m)
         } else {
-            "Range".to_string()
+            tr("Range").to_string()
         }),
         n => Some(n.to_string()),
     }

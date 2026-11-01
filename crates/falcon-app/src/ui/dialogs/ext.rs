@@ -2,7 +2,9 @@
 //! (the file is not converted).
 
 use eframe::egui::{self, Key, RichText, TextEdit};
-use falcon_library::item_ops::check_extension;
+use falcon_library::item_ops::{ExtensionError, check_extension};
+
+use crate::locale::tr;
 
 use crate::app::{Action, App};
 use crate::theme as t;
@@ -24,11 +26,11 @@ impl App {
         let mut keep = true;
         let modal = egui::Modal::new(d.uid).show(ctx, |ui| {
             ui.set_width(320.0);
-            ui.label(RichText::new("Change Extension").size(15.0));
+            ui.label(RichText::new(tr("Change Extension")).size(15.0));
             ui.add_space(2.0);
-            ui.label(RichText::new("This does not convert the file, and it may become unreadable.").color(t::p().text_muted));
+            ui.label(RichText::new(tr("This does not convert the file, and it may become unreadable.")).color(t::p().text_muted));
             ui.add_space(6.0);
-            let te = ui.add(TextEdit::singleline(&mut d.text).id(d.uid.with("field")).hint_text("Extension").desired_width(f32::INFINITY));
+            let te = ui.add(TextEdit::singleline(&mut d.text).id(d.uid.with("field")).hint_text(tr("Extension")).desired_width(f32::INFINITY));
             if !d.focused {
                 d.focused = true;
                 te.request_focus();
@@ -41,12 +43,17 @@ impl App {
             let checked = check_extension(&d.text);
             if let Err(e) = &checked {
                 ui.add_space(4.0);
-                ui.label(RichText::new(e.to_string()).color(t::p().text_muted));
+                ui.label(RichText::new(match e {
+                    ExtensionError::Empty => tr("Type an extension"),
+                    ExtensionError::BadCharacter => tr("Use only letters and digits"),
+                    ExtensionError::TooLong => tr("At most 10 characters"),
+                })
+                .color(t::p().text_muted));
             }
             ui.add_space(8.0);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let ok = checked.is_ok();
-                if (ui.add_enabled(ok, egui::Button::new("Change")).clicked() || (enter && ok)) && keep {
+                if (ui.add_enabled(ok, egui::Button::new(tr("Change"))).clicked() || (enter && ok)) && keep {
                     if let Ok(ext) = &checked
                         && *ext != d.current
                     {
@@ -54,7 +61,7 @@ impl App {
                     }
                     keep = false;
                 }
-                if ui.button("Cancel").clicked() {
+                if ui.button(tr("Cancel")).clicked() {
                     keep = false;
                 }
             });

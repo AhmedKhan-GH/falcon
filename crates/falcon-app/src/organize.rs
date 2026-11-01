@@ -10,6 +10,8 @@ use falcon_library::model::{Folder, FolderOrder, Item, TagGroup};
 use falcon_library::search::{self, OrderBy};
 use falcon_library::smart::SmartFolder;
 
+use crate::locale::{tr, tr_key};
+
 // ---------------------------------------------------------------------------
 // Trees
 
@@ -293,19 +295,19 @@ pub fn without_hidden(order: Vec<usize>, items: &[Item], hidden: &HashSet<String
 /// past U+00FF, so those are refused here too.
 pub fn check_password_form(create: bool, remove: bool, new: &str, again: &str, old_ok: impl FnOnce() -> bool) -> Result<(), &'static str> {
     if !create && !old_ok() {
-        return Err(if remove { "The password is wrong." } else { "The old password is wrong." });
+        return Err(if remove { tr("The password is wrong.") } else { tr("The old password is wrong.") });
     }
     if remove {
         return Ok(());
     }
     if new.is_empty() {
-        return Err("Enter a password.");
+        return Err(tr("Enter a password."));
     }
     if new.chars().any(|c| c as u32 > 0xff) {
-        return Err("Use only Latin letters, digits and symbols.");
+        return Err(tr("Use only Latin letters, digits and symbols."));
     }
     if new != again {
-        return Err("The passwords don't match.");
+        return Err(tr("The passwords don't match."));
     }
     Ok(())
 }
@@ -331,18 +333,18 @@ pub const FOLDER_ORDERS: [FolderOrder; 11] = [
 /// Menu label of a folder sort key.
 pub fn order_label(o: FolderOrder) -> &'static str {
     match o {
-        FolderOrder::By(k) => k.label(),
-        FolderOrder::Duration => "Duration",
-        FolderOrder::Random => "Random",
-        FolderOrder::Manual => "Manual",
+        FolderOrder::By(k) => tr(k.label()),
+        FolderOrder::Duration => tr("Duration"),
+        FolderOrder::Random => tr("Random"),
+        FolderOrder::Manual => tr("Manual"),
     }
 }
 
 /// The two direction labels for a key (time keys read newest/oldest).
 pub fn direction_labels(o: FolderOrder) -> [&'static str; 2] {
     match o {
-        FolderOrder::By(k) if k.is_time() => ["Newest First", "Oldest First"],
-        _ => ["Ascending", "Descending"],
+        FolderOrder::By(k) if k.is_time() => [tr("Newest First"), tr("Oldest First")],
+        _ => [tr("Ascending"), tr("Descending")],
     }
 }
 
@@ -440,10 +442,10 @@ pub fn smart_icon(sf: &SmartFolder) -> Option<&str> {
 /// The folder menu's Sort By entries, in Eagle's order: this level A to Z
 /// and Z to A, then every level A to Z and Z to A.
 pub const FOLDER_TITLE_SORTS: [(&str, SubfolderSort); 4] = [
-    ("Title, This Level (A→Z)", SubfolderSort { descending: false, all_levels: false }),
-    ("Title, This Level (Z→A)", SubfolderSort { descending: true, all_levels: false }),
-    ("Title, All Levels (A→Z)", SubfolderSort { descending: false, all_levels: true }),
-    ("Title, All Levels (Z→A)", SubfolderSort { descending: true, all_levels: true }),
+    (tr_key("Title, This Level (A→Z)"), SubfolderSort { descending: false, all_levels: false }),
+    (tr_key("Title, This Level (Z→A)"), SubfolderSort { descending: true, all_levels: false }),
+    (tr_key("Title, All Levels (A→Z)"), SubfolderSort { descending: false, all_levels: true }),
+    (tr_key("Title, All Levels (Z→A)"), SubfolderSort { descending: true, all_levels: true }),
 ];
 
 /// The list [`falcon_library::Library::sort_subfolders`] should sort for
@@ -533,9 +535,9 @@ pub fn unsupported_names(keys: &[String]) -> Vec<&'static str> {
     let mut out: Vec<&'static str> = Vec::new();
     for k in keys {
         let name = match k.as_str() {
-            "image" => "image search",
-            "semantic" => "semantic search",
-            _ => "other rules",
+            "image" => tr("image search"),
+            "semantic" => tr("semantic search"),
+            _ => tr("other rules"),
         };
         if !out.contains(&name) {
             out.push(name);

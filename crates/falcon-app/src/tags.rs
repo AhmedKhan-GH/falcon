@@ -7,6 +7,8 @@ use std::collections::{HashMap, HashSet};
 
 use falcon_library::model::{Item, TagGroup};
 
+use crate::locale::{tr, tr_key};
+
 /// How many recently used tags the Recent section shows.
 pub const RECENT_SHOWN: usize = 12;
 /// How many tags one paste or one typed entry may add.
@@ -123,7 +125,7 @@ pub struct PickerPrefs {
 }
 
 /// The column widths the picker offers.
-pub const COLUMNS: [(u16, &str); 4] = [(100, "Extra Small"), (120, "Small"), (140, "Medium"), (160, "Large")];
+pub const COLUMNS: [(u16, &str); 4] = [(100, tr_key("Extra Small")), (120, tr_key("Small")), (140, tr_key("Medium")), (160, tr_key("Large"))];
 
 impl Default for PickerPrefs {
     fn default() -> Self {
@@ -534,10 +536,10 @@ impl TagSort {
 
     pub fn label(self) -> &'static str {
         match self {
-            TagSort::NameUp => "A > Z",
-            TagSort::NameDown => "Z > A",
-            TagSort::CountDown => "Count, High to Low",
-            TagSort::CountUp => "Count, Low to High",
+            TagSort::NameUp => tr("A > Z"),
+            TagSort::NameDown => tr("Z > A"),
+            TagSort::CountDown => tr("Count, High to Low"),
+            TagSort::CountUp => tr("Count, Low to High"),
         }
     }
 
