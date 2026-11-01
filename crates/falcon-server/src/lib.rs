@@ -42,13 +42,16 @@ const API_VERSION: &str = "4.0.0";
 pub type Shared = Arc<Mutex<Library>>;
 
 /// Server state beside the library: what `library/history` reports, the
-/// Developer token and the preferences `application/info` reports.
+/// Developer token, the preferences `application/info` reports, and the
+/// folders unlocked over the API this session.
 struct State {
     history: Mutex<Vec<String>>,
     token: Mutex<String>,
     preferences: Mutex<Value>,
     /// Set when a request changed `preferences` (`preferences/collect/*`).
     preferences_changed: AtomicBool,
+    /// `(library root, folder id)` pairs opened with `folder/unlock`.
+    unlocked: Mutex<HashSet<(String, String)>>,
 }
 
 impl State {
@@ -58,6 +61,7 @@ impl State {
             token: Mutex::new(String::new()),
             preferences: Mutex::new(default_preferences()),
             preferences_changed: AtomicBool::new(false),
+            unlocked: Mutex::new(HashSet::new()),
         }
     }
 
@@ -80,6 +84,12 @@ impl State {
 
     fn preferences(&self) -> Value {
         self.preferences.lock().unwrap_or_else(|p| p.into_inner()).clone()
+    }
+
+    /// The folder ids of the library at `root` unlocked this session.
+    fn unlocked_in(&self, root: &str) -> HashSet<String> {
+        let u = self.unlocked.lock().unwrap_or_else(|p| p.into_inner());
+        u.iter().filter(|(r, _)| r == root).map(|(_, id)| id.clone()).collect()
     }
 }
 
@@ -364,14 +374,21 @@ fn item_json(item: &Item) -> Value {
 
 /// A folder in `/api/folder/list`'s shape, with Eagle's extra display keys.
 fn folder_json(f: &Folder) -> Value {
+    folder_json_with(f, &HashSet::new())
+}
+
+/// [`folder_json`], where the folders in `unlocked` (opened with
+/// `folder/unlock`) report `isUnLock: true` and keep their children.
+fn folder_json_with(f: &Folder, unlocked: &HashSet<String>) -> Value {
     let mut v = serde_json::to_value(f).unwrap_or(Value::Null);
     if let Value::Object(m) = &mut v {
-        m.insert("children".into(), Value::Array(f.children.iter().map(folder_json).collect()));
+        m.insert("children".into(), Value::Array(f.children.iter().map(|c| folder_json_with(c, unlocked)).collect()));
         for (k, d) in [("extendTags", json!([])), ("icon", json!("")), ("iconColor", json!("")), ("coverId", json!(""))] {
             m.entry(k).or_insert(d);
         }
-        m.insert("isUnLock".into(), json!(f.password.is_empty()));
-        if !f.password.is_empty() {
+        let open = f.password.is_empty() || unlocked.contains(&f.id);
+        m.insert("isUnLock".into(), json!(open));
+        if !open {
             m.insert("children".into(), json!([]));
         }
     }
@@ -428,6 +445,7 @@ fn route(lib: &Shared, state: &State, method: &Method, path: &str, args: &Map<St
         ("/api/folder/create", &[Post]),
         ("/api/folder/rename", &[Post]),
         ("/api/folder/update", &[Post]),
+        ("/api/folder/unlock", &[Post]),
         ("/api/preferences/collect/on", &[Get]),
         ("/api/preferences/collect/off", &[Get]),
         ("/api/tag/all", &[Get]),
@@ -535,9 +553,33 @@ fn route(lib: &Shared, state: &State, method: &Method, path: &str, args: &Map<St
         "/api/library/icon" => v2::library_icon(s(args, "libraryPath")).map_or_else(Reply::Fail, Reply::Data),
         "/api/v2/library/icon" => v2::library_icon(s(args, "libraryPath")).map_or_else(Reply::Error, Reply::Data),
 
-        "/api/folder/list" => Reply::Data(Value::Array(lib.metadata.folders.iter().map(folder_json).collect())),
+        "/api/folder/list" => {
+            let open = state.unlocked_in(&lib.root().display().to_string());
+            Reply::Data(Value::Array(lib.metadata.folders.iter().map(|f| folder_json_with(f, &open)).collect()))
+        }
         "/api/folder/listRecent" => {
-            Reply::Data(Value::Array(lib.all_folders().into_iter().take(16).map(folder_json).collect()))
+            let open = state.unlocked_in(&lib.root().display().to_string());
+            Reply::Data(Value::Array(lib.all_folders().into_iter().take(16).map(|f| folder_json_with(f, &open)).collect()))
+        }
+        "/api/folder/unlock" => {
+            let id = s(args, "folderId").unwrap_or("");
+            let Some(folder) = lib.all_folders().into_iter().find(|f| f.id == id) else {
+                return Reply::Fail("Folder does not exist.".into());
+            };
+            // Eagle compares the stored value with the encoded password, so
+            // an empty password opens a folder that has none.
+            let given = args.get("password").and_then(Value::as_str);
+            let opens = match given {
+                Some(p) if folder.is_locked() => lib.verify_folder_password(id, p),
+                Some(p) => p.is_empty(),
+                None => false,
+            };
+            if !opens {
+                return Reply::Fail("Password is incorrect.".into());
+            }
+            let root = lib.root().display().to_string();
+            state.unlocked.lock().unwrap_or_else(|p| p.into_inner()).insert((root, id.to_string()));
+            Reply::Empty
         }
         "/api/preferences/collect/on" | "/api/preferences/collect/off" => {
             let on = path.ends_with("/on");

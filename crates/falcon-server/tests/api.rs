@@ -592,3 +592,38 @@ fn library_history_is_set_by_the_app() {
     let d = e.ok_get("/api/v2/library/history?limit=1&offset=1");
     assert_eq!((d["data"].clone(), d["total"].clone(), d["offset"].clone(), d["limit"].clone()), (json!([b]), json!(2), json!(1), json!(1)));
 }
+
+#[test]
+fn folder_unlock() {
+    let e = env();
+    e.lib.lock().unwrap().set_folder_password(&e.folder, Some(("pw", "hint"))).unwrap();
+    let find = |list: &Value| list.as_array().unwrap().iter().find(|f| f["id"] == e.folder.as_str()).cloned().unwrap();
+    let before = find(&e.ok_get("/api/folder/list"));
+    assert_eq!(before["isUnLock"], false);
+    assert_eq!(before["children"], json!([]));
+
+    let fail = |body: Value| {
+        let (code, v) = e.post("/api/folder/unlock", body);
+        assert_eq!(code, 500, "{v}");
+        assert_eq!(v["status"], "error");
+        v["data"].as_str().unwrap().to_string()
+    };
+    assert_eq!(fail(json!({"folderId": "NOPE", "password": "pw"})), "Folder does not exist.");
+    assert_eq!(fail(json!({"folderId": e.folder, "password": "bad"})), "Password is incorrect.");
+    assert_eq!(fail(json!({"folderId": e.folder})), "Password is incorrect.");
+    assert_eq!(find(&e.ok_get("/api/folder/list"))["isUnLock"], false);
+
+    let (code, v) = e.post("/api/folder/unlock", json!({"folderId": e.folder, "password": "pw"}));
+    assert_eq!((code, v), (200, json!({"status": "success"})));
+    let after = find(&e.ok_get("/api/folder/list"));
+    assert_eq!(after["isUnLock"], true);
+    assert_eq!(after["children"].as_array().unwrap().len(), 1);
+    assert_eq!(after["children"][0]["id"], e.sub.as_str());
+
+    // A folder without a password opens with an empty one.
+    let (code, v) = e.post("/api/folder/unlock", json!({"folderId": e.sub, "password": ""}));
+    assert_eq!((code, v), (200, json!({"status": "success"})));
+
+    // Nothing was written: the password is still set on disk.
+    assert!(e.reopen().all_folders().into_iter().find(|f| f.id == e.folder).unwrap().is_locked());
+}
