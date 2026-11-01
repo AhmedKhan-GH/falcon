@@ -1194,6 +1194,11 @@ impl App {
             self.tag_chips(ui, lib, &sec.tags);
         }
         self.tag_group_header(ui, lib, None, rest.len());
+        if rest.is_empty() && filter.is_empty() && !counts.is_empty() {
+            let area = Rect::from_min_max(Pos2::new(ui.max_rect().left(), ui.cursor().top()), ui.max_rect().right_bottom());
+            self.empty_tags_filed(ui, area);
+            return;
+        }
         self.tag_chips(ui, lib, &rest);
     }
 

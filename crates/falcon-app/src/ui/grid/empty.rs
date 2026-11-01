@@ -151,6 +151,12 @@ impl App {
         };
         paint(ui, area, &e);
     }
+
+    /// The tag-group view's message when every tag is already in a group.
+    pub(crate) fn empty_tags_filed(&self, ui: &Ui, area: Rect) {
+        let e = Empty { icon: ic::TAG_SIMPLE, title: "All Tags Are in Groups", body: "No tag is left outside a group.", import: false };
+        paint(ui, area, &e);
+    }
 }
 
 #[cfg(test)]
