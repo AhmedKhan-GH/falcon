@@ -13,7 +13,7 @@ The second part, [The desktop app](app.md), describes falcon's desktop app: its 
 
 ## Status
 
-Falcon is early alpha. [PARITY.md](https://github.com/AhmedKhan-GH/falcon/blob/main/PARITY.md) compares it with Eagle 4.0.0 feature by feature, checked against falcon's code; about a third of Eagle's local features are done, about a sixth are partly done and the rest are missing. [ROADMAP.md](https://github.com/AhmedKhan-GH/falcon/blob/main/ROADMAP.md) lists what comes next.
+Falcon is early alpha. [PARITY.md](https://github.com/AhmedKhan-GH/falcon/blob/main/PARITY.md) compares it with Eagle 4.0.0 feature by feature, checked against falcon's code; a little under half of Eagle's local features are done, about one in seven are partly done and the rest are missing. [ROADMAP.md](https://github.com/AhmedKhan-GH/falcon/blob/main/ROADMAP.md) lists what comes next.
 
 While falcon is in development, the app and the CLI only open libraries inside `~/Falcon Sandbox` (or the folder in `FALCON_SANDBOX`). To work on an existing library, copy it there first. See [Sandbox](app.md#sandbox).
 

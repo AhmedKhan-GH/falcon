@@ -177,6 +177,8 @@
           <ul>
             <li>Images, SVG and animated GIF</li>
             <li>PDF, PSD, AI, HEIC, RAW and video through macOS QuickLook</li>
+            <li>Import folders with their folder tree, and skip or keep files already in the library</li>
+            <li>A panel lists imports that failed, with the reason</li>
             <li>Waveform thumbnails for audio and specimen thumbnails for fonts</li>
             <li>Camera, duration, tempo and font details, and IPTC and XMP keywords as tags</li>
             <li>Imports run in the background with a progress bar</li>
@@ -189,12 +191,13 @@
         <div class="text">
           <div class="num">02 · Organise</div>
           <h3>Folders, tags and smart folders</h3>
-          <p>Nest folders, pin the ones you use to Quick Access, and let smart folders gather items that match your rules. Folders take icons, colours, covers, passwords and a manual item order.</p>
+          <p>Nest folders, pin the ones you use to Quick Access, and let smart folders gather items that match your rules. Folders take icons, colours, covers, passwords, auto-tags for items added to them and a manual item order.</p>
           <ul>
             <li>Rename, merge, star and delete tags, and sort them into tag groups</li>
             <li>Edit tags, folders and ratings on many items at once</li>
             <li>Undo and redo for edits</li>
             <li>A Duplicates page for identical files and similar pictures</li>
+            <li>Export items or folders to a folder, CSV or .eaglepack, or as JPG, PNG or WebP at a chosen size</li>
             <li>Notes, source URLs, ratings and a Trash you can restore from</li>
           </ul>
         </div>
@@ -223,10 +226,10 @@
           <p>Waterfall keeps every image's shape, Justified fills each row, Grid lines up square cards, and List shows the details.</p>
           <ul>
             <li>Hover over a card for a larger preview</li>
-            <li>Drag items out into Finder, Figma or Photoshop</li>
+            <li>Drag items out into Finder, Figma or Photoshop, or copy their paths, names, thumbnails or Base64</li>
             <li>Keep several libraries open and switch between them</li>
             <li>Dark, light, gray, blue and purple themes, or follow macOS</li>
-            <li>Rebind keyboard shortcuts in Preferences</li>
+            <li>A native macOS menu bar, many of Eagle's keyboard shortcuts, and rebinding in Preferences</li>
           </ul>
         </div>
         <div class="media"><img src="images/falcon-justified.jpg" alt="Paintings arranged in the Justified layout, in rows of equal height" loading="lazy"></div>
@@ -236,7 +239,7 @@
         <div class="text">
           <div class="num">05 · View</div>
           <h3>A viewer for images, video, audio, PDFs and fonts</h3>
-          <p>Open an item to zoom around the pointer, pan, fit or see it at actual size, and step through items with the arrow keys.</p>
+          <p>Items open inside the window between the sidebar and the inspector, and one button hides both panels. Zoom around the pointer, pan, fit or see an image at actual size, and step through items with the arrow keys.</p>
           <ul>
             <li>Video plays with a control bar and timed comments</li>
             <li>PDFs open in a scrolling reader with find and text selection</li>
@@ -295,24 +298,27 @@ tags:    2</pre>
     <div class="wrap">
       <div class="eyebrow">Status</div>
       <h2>Early alpha</h2>
-      <p class="intro">Falcon reads and writes Eagle-format libraries and is being rebuilt feature by feature against Eagle 4. <a href="https://github.com/AhmedKhan-GH/falcon/blob/main/PARITY.md" style="color: var(--accent)">PARITY.md</a> checks every local Eagle feature in falcon's code: about a third are done, about a sixth are partly done, and the rest are still missing. <a href="https://github.com/AhmedKhan-GH/falcon/blob/main/ROADMAP.md" style="color: var(--accent)">ROADMAP.md</a> lists what comes next.</p>
+      <p class="intro">Falcon reads and writes Eagle-format libraries and is being rebuilt feature by feature against Eagle 4. <a href="https://github.com/AhmedKhan-GH/falcon/blob/main/PARITY.md" style="color: var(--accent)">PARITY.md</a> checks every local Eagle feature in falcon's code: a little under half are done, about one in seven are partly done, and the rest are still missing. <a href="https://github.com/AhmedKhan-GH/falcon/blob/main/ROADMAP.md" style="color: var(--accent)">ROADMAP.md</a> lists what comes next.</p>
       <div class="status">
         <div class="card"><h4>Working today</h4>
           <ul>
-            <li>Import with thumbnails, colour palettes and file metadata</li>
+            <li>Import with thumbnails, colour palettes, file metadata and folder trees</li>
             <li>Folders, tags, tag groups, smart folders, Quick Access, undo</li>
             <li>Keyword, filter and colour search, saved filters</li>
             <li>Four layouts, hover preview and themes</li>
             <li>Viewers for images, video, audio, PDFs and fonts</li>
             <li>Duplicates, region comments, rotate, flip and crop</li>
+            <li>Export to a folder, CSV or .eaglepack, or in another format and size</li>
+            <li>A native menu bar and many of Eagle's shortcuts</li>
             <li>Command-line tool and local HTTP API</li>
           </ul>
         </div>
         <div class="card"><h4>Not there yet</h4>
           <ul>
-            <li>An application menu bar, and many of Eagle's shortcuts and preferences</li>
-            <li>Exporting items to folders or CSV from the app</li>
-            <li>Importing a folder with its folder tree</li>
+            <li>Most of Eagle's preferences, and some of its shortcuts</li>
+            <li>Images above 3072 px at full size</li>
+            <li>Marquee selection and grid display options</li>
+            <li>A tag picker with suggestions</li>
             <li>3D and text viewers, and screen capture</li>
             <li>Watched import folders and reloading on outside changes</li>
             <li>Languages other than English</li>
