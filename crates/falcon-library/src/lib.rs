@@ -17,6 +17,7 @@ pub mod ids;
 pub mod library_icon;
 pub mod keywords;
 pub mod media;
+pub mod library_merge;
 pub mod model;
 pub mod pack;
 pub mod sandbox;

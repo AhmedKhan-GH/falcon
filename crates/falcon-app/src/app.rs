@@ -292,6 +292,8 @@ enum Switch {
     Focus(usize),
     /// Close the open library at this switcher position.
     Close(usize),
+    /// Merge another library into the shown one.
+    Merge,
 }
 
 /// Background import counters.
@@ -834,6 +836,8 @@ pub struct App {
     conflict_reload: bool,
     /// A library that can't be found, for the missing-library screen.
     missing: Option<PathBuf>,
+    /// A merge of another library in progress (`library_ui.rs`).
+    merge: Option<library_ui::Merge>,
 }
 
 impl App {
@@ -908,6 +912,7 @@ impl App {
             alert: None,
             conflict_reload: false,
             missing: None,
+            merge: None,
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
         app.welcomed = library_dialogs::already_welcomed(saved.welcomed, saved.recent.len(), saved.libraries.len(), saved.library.is_some());
@@ -3106,6 +3111,9 @@ impl App {
             }
             if ui.button("New Library…").clicked() {
                 self.switch_to = Some(Switch::Create);
+            }
+            if ui.button("Merge Another Library…").clicked() {
+                self.switch_to = Some(Switch::Merge);
             }
             if ui.button("Show in Finder").clicked() {
                 let _ = std::process::Command::new("open").arg("-R").arg(&current).spawn();
@@ -5669,6 +5677,7 @@ impl App {
         if self.collect.open {
             self.collect_window(&ctx);
         }
+        self.merge_dialogs(&ctx);
         self.alert_modal(&ctx);
         if self.ws.lib.is_some() {
             self.missing_modal(&ctx);
@@ -6075,6 +6084,7 @@ impl App {
             Some(Switch::Create) => self.new_library(),
             Some(Switch::Focus(i)) => self.focus(i),
             Some(Switch::Close(i)) => self.close_workspace(i),
+            Some(Switch::Merge) => self.merge_library(),
             None => {}
         }
         self.run_import_request();

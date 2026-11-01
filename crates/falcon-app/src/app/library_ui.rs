@@ -3,7 +3,13 @@
 //! reloading a library from disk after a sync conflict, and taking in
 //! changes other apps make to open libraries (`watch.rs`).
 
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::mpsc::Receiver;
+
 use eframe::egui::{self, RichText};
+use falcon_library::library_merge::{self as merge, MergePlan};
 use falcon_library::{Error, Library};
 
 use super::{App, Workspace, lock};
@@ -247,10 +253,153 @@ impl App {
     }
 }
 
+/// Merging another library into the shown one (`falcon_library::library_merge`).
+pub(super) enum Merge {
+    /// Asking, with what would come in.
+    Confirm { into: PathBuf, plan: Box<MergePlan> },
+    /// Copying item folders on a background thread.
+    Copying { into: PathBuf, plan: Arc<MergePlan>, done: Arc<AtomicUsize>, cancel: Arc<AtomicBool>, rx: Receiver<Copied> },
+}
+
+type Copied = (Vec<String>, Vec<(String, String)>);
+
+impl App {
+    /// Library ▸ Merge Another Library…: pick a library and ask.
+    pub(super) fn merge_library(&mut self) {
+        let (Some(shared), Some(into)) = (self.ws.lib.clone(), self.ws.root.clone()) else { return };
+        if self.merge.is_some() {
+            return;
+        }
+        let Some(source) = rfd::FileDialog::new().set_title("Choose a Library to Merge In").set_directory(falcon_library::sandbox::default_root()).pick_folder() else {
+            return;
+        };
+        if let Err(e) = falcon_library::sandbox::guard(&source) {
+            self.show_alert(Alert::new("Can't merge that library", e.to_string()));
+            return;
+        }
+        let planned = merge::plan(&lock(&shared), &source);
+        match planned {
+            Ok(plan) => self.merge = Some(Merge::Confirm { into, plan: Box::new(plan) }),
+            Err(e) => self.show_alert(Alert::new("Can't merge that library", e.to_string())),
+        }
+    }
+
+    /// The merge's confirmation and progress dialogs, and its last step
+    /// once the copy is done.
+    pub(super) fn merge_dialogs(&mut self, ctx: &egui::Context) {
+        let Some(state) = self.merge.take() else { return };
+        self.merge = match state {
+            Merge::Confirm { into, plan } => {
+                let (folders, items) = plan.counts();
+                let mut answer = None;
+                let modal = egui::Modal::new(egui::Id::unique("merge-confirm")).show(ctx, |ui| {
+                    ui.set_width(360.0);
+                    ui.label(RichText::new(format!("Merge {} into {}?", name(&plan.source), name(&into))).size(15.0));
+                    ui.add_space(4.0);
+                    let body = format!(
+                        "{} and {} from {} will be added. Folders, smart folders and tag groups already here are kept as they are, and so are items already here.",
+                        plural(folders, "top-level folder"),
+                        plural(items, "item"),
+                        crate::workspaces::tilde(&plan.source)
+                    );
+                    ui.label(RichText::new(body).color(t::p().text_muted));
+                    ui.add_space(10.0);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.button("Merge").clicked() {
+                            answer = Some(true);
+                        }
+                        if ui.button("Cancel").clicked() {
+                            answer = Some(false);
+                        }
+                    });
+                });
+                if modal.should_close() {
+                    answer = Some(false);
+                }
+                match answer {
+                    None => Some(Merge::Confirm { into, plan }),
+                    Some(false) => None,
+                    Some(true) => Some(start_copy(ctx, into, *plan)),
+                }
+            }
+            Merge::Copying { into, plan, done, cancel, rx } => match rx.try_recv() {
+                Ok((copied, failed)) => {
+                    self.finish_merge(&into, &plan, &copied, failed.len());
+                    None
+                }
+                Err(_) => {
+                    let total = plan.item_dirs.len().max(1);
+                    let n = done.load(Ordering::Relaxed);
+                    egui::Modal::new(egui::Id::unique("merge-progress")).show(ctx, |ui| {
+                        ui.set_width(320.0);
+                        ui.label(RichText::new(format!("Merging {}", name(&plan.source))).size(15.0));
+                        ui.add_space(6.0);
+                        ui.add(egui::ProgressBar::new(n as f32 / total as f32).text(format!("{n} of {}", plan.item_dirs.len())));
+                        ui.add_space(8.0);
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.add_enabled(!cancel.load(Ordering::Relaxed), egui::Button::new("Stop")).clicked() {
+                                cancel.store(true, Ordering::Relaxed);
+                            }
+                        });
+                    });
+                    ctx.request_repaint_after(std::time::Duration::from_millis(100));
+                    Some(Merge::Copying { into, plan, done, cancel, rx })
+                }
+            },
+        };
+    }
+
+    /// Merges the folder tree and registers the copied items in the
+    /// library they were copied into (wherever it sits in the switcher).
+    fn finish_merge(&mut self, into: &std::path::Path, plan: &MergePlan, copied: &[String], failed: usize) {
+        let Some(shared) = self.others.iter(&self.ws).find(|w| w.root.as_deref() == Some(into)).and_then(|w| w.lib.clone()) else { return };
+        let result = lock(&shared).finish_merge(plan, copied);
+        match result {
+            Ok(r) => {
+                let mut body = format!("Added {}, {} and {} from {}.", plural(r.items, "item"), plural(r.folders, "folder"), plural(r.smart_folders + r.tag_groups, "smart folder or tag group"), name(&plan.source));
+                if failed > 0 {
+                    body.push_str(&format!(" {} could not be copied.", plural(failed, "item")));
+                }
+                if copied.len() < plan.item_dirs.len() && failed == 0 {
+                    body.push_str(" Items already in this library were left as they are.");
+                }
+                self.show_alert(Alert::new("Merge finished", body));
+            }
+            Err(e) => self.show_alert(Alert::new("Merge not finished", format!("The items were copied, but the folders couldn't be saved: {e}"))),
+        }
+    }
+}
+
+fn start_copy(ctx: &egui::Context, into: PathBuf, plan: MergePlan) -> Merge {
+    let plan = Arc::new(plan);
+    let (done, cancel) = (Arc::new(AtomicUsize::new(0)), Arc::new(AtomicBool::new(false)));
+    let (tx, rx) = std::sync::mpsc::channel();
+    let (p, d, c, root, ctx2) = (plan.clone(), done.clone(), cancel.clone(), into.clone(), ctx.clone());
+    std::thread::spawn(move || {
+        let out = merge::copy_items(&root, &p, &c, |n, _| {
+            d.store(n, Ordering::Relaxed);
+            ctx2.request_repaint();
+        });
+        let _ = tx.send(out);
+        ctx2.request_repaint();
+    });
+    Merge::Copying { into, plan, done, cancel, rx }
+}
+
+fn plural(n: usize, what: &str) -> String {
+    if n == 1 { format!("1 {what}") } else { format!("{n} {what}s") }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::path::PathBuf;
+
+    #[test]
+    fn plurals() {
+        assert_eq!(plural(1, "item"), "1 item");
+        assert_eq!(plural(0, "folder"), "0 folders");
+    }
 
     #[test]
     fn alerts_name_the_library() {

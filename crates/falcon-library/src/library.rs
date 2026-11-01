@@ -308,7 +308,7 @@ impl Library {
     }
 
     /// Writes `mtime.json`, or marks it dirty in batched mode.
-    fn write_mtime(&mut self) -> Result<()> {
+    pub(crate) fn write_mtime(&mut self) -> Result<()> {
         match self.write_mode {
             WriteMode::Immediate => write_json(&self.root.join(MTIME), &self.mtime),
             WriteMode::Batched => {

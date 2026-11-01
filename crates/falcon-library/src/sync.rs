@@ -173,7 +173,7 @@ impl Library {
 
     /// Puts an item read from disk in memory with its `mtime.json` stamp.
     /// A pending write of the old copy is dropped: the disk copy is newer.
-    fn adopt(&mut self, item: Item, stamp: u64) {
+    pub(crate) fn adopt(&mut self, item: Item, stamp: u64) {
         self.dirty.items.remove(&item.id);
         self.skipped.retain(|(dir, _)| !dir.ends_with(format!("{}.info", item.id)));
         match self.mtime.entries.iter_mut().find(|(id, _)| *id == item.id) {
