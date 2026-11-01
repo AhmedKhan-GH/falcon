@@ -428,13 +428,13 @@ impl App {
         }
         if let Some(path) = rfd::FileDialog::new().set_title("Import Eagle Package").add_filter("Eagle Package", &["eaglepack"]).pick_file() {
             let folder = self.scope_folders().into_iter().next();
-            self.start_pack_import(path, folder);
+            self.preview_pack_import(path, folder);
         }
     }
 
     /// Reads the pack and asks; `folder` takes every item of an items pack
     /// (a dropped pack goes into the folder it was dropped on).
-    pub(crate) fn start_pack_import(&mut self, path: PathBuf, folder: Option<String>) {
+    pub(crate) fn preview_pack_import(&mut self, path: PathBuf, folder: Option<String>) {
         let Some(shared) = self.ws.lib.clone() else { return };
         let preview = pack::preview_pack(&lock(&shared), &path);
         match preview {
@@ -479,25 +479,12 @@ impl App {
         match (ask, answer) {
             (PackAsk::Space { .. }, Some(false)) | (PackAsk::Space { .. }, None) if closed => {}
             (PackAsk::Space { path, folder, preview }, Some(true)) if preview.duplicates > 0 => self.pack_ask = Some(PackAsk::Duplicates { path, folder, preview }),
-            (PackAsk::Space { path, folder, .. }, Some(true)) => self.run_pack_import(&path, folder, false),
+            (PackAsk::Space { path, folder, .. }, Some(true)) => self.start_pack_import(path, folder, false),
             (PackAsk::Space { .. }, Some(false)) => {}
-            (PackAsk::Duplicates { path, folder, .. }, Some(keep)) => self.run_pack_import(&path, folder, !keep),
+            (PackAsk::Duplicates { path, folder, .. }, Some(keep)) => self.start_pack_import(path, folder, !keep),
             // Closing the duplicates question cancels, as Esc does in Eagle.
             (PackAsk::Duplicates { .. }, None) if closed => {}
             (ask, None) => self.pack_ask = Some(ask),
-        }
-    }
-
-    fn run_pack_import(&mut self, path: &std::path::Path, folder: Option<String>, skip_duplicates: bool) {
-        let Some(shared) = self.ws.lib.clone() else { return };
-        let opts = pack::PackImportOptions { folder, skip_duplicates };
-        let result = pack::import_pack(&mut lock(&shared), path, &opts);
-        match result {
-            Ok(ids) => {
-                self.flash(format!("Imported {} from {}", plural(ids.len(), "item"), name(path)));
-                self.ws.backup.changed(std::time::Instant::now());
-            }
-            Err(e) => self.show_alert(Alert::new("Can't import the package", format!("It may be incomplete or damaged; export or download it again. ({e})"))),
         }
     }
 }

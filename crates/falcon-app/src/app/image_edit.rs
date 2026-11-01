@@ -282,6 +282,10 @@ impl App {
                 if ids.is_empty() {
                     return Ok(());
                 }
+                if ids.len() > 1 {
+                    self.start_refresh_thumbnails(ids);
+                    return Ok(());
+                }
                 let (mut done, mut custom) = (0, 0);
                 let mut r = Ok(());
                 for id in &ids {

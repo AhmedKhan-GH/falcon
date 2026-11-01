@@ -18,6 +18,7 @@ use crate::ui::widgets::{galley, wide_button};
 use falcon_library::export::{self, Collision, Convert, Format, Plan};
 use falcon_library::pack::{self, PackSource};
 use crate::ui::grid::GRID_PAD_X;
+use crate::ui::dialogs::progress::Outcome;
 
 /// An export asked for from a menu or a key, handled once the frame has
 /// the library (`App::export_dialogs`).
@@ -483,21 +484,25 @@ impl App {
             self.flash("Nothing to export");
             return;
         }
+        if self.operation_running() {
+            return;
+        }
         let Some(dest) = pick_pack(name) else { return };
-        let job = self.ws.export.job.clone();
-        let current = dest.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        *job.lock().unwrap_or_else(|p| p.into_inner()) = Job { verb: "Packing", total: plan.len().max(1), running: true, current, ..Default::default() };
-        let ctx = self.ctx.clone();
+        let name = dest.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let h = self.ws.op.start(&self.ctx, "Exporting Eagle Package", plan.len().max(1), true);
+        h.step(0, name);
         std::thread::spawn(move || {
-            let result = pack::write_pack(&plan, &dest, |n| {
-                job.lock().unwrap_or_else(|p| p.into_inner()).done = n;
-                ctx.request_repaint();
+            // Stopping leaves nothing behind: the archive is built in a
+            // temporary file beside `dest` and only moved into place when whole.
+            let result = pack::write_pack_until(&plan, &dest, |n| {
+                h.step(n, dest.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default());
+                !h.cancelled()
             });
-            job.lock().unwrap_or_else(|p| p.into_inner()).finished = Some(match result {
-                Ok(n) => (exported(n, 0), vec![dest]),
-                Err(e) => (format!("Export failed: {e}"), Vec::new()),
+            h.finish(match result {
+                Ok(Some(n)) => Outcome { message: exported(n, 0), reveal: vec![dest], ..Default::default() },
+                Ok(None) => Outcome { message: "Export cancelled".into(), ..Default::default() },
+                Err(e) => Outcome { error: Some(format!("Export failed: {e}")), ..Default::default() },
             });
-            ctx.request_repaint();
         });
     }
 

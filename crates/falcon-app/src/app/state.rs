@@ -396,6 +396,8 @@ pub(crate) struct Workspace {
     pub(crate) backup: crate::backups::Schedule,
     /// Export requests, prompts and the background copy (`ui/dialogs/export.rs`).
     pub(crate) export: crate::ui::dialogs::export::ExportState,
+    /// The modal for long operations (`ui/dialogs/progress.rs`).
+    pub(crate) op: crate::ui::dialogs::progress::ProgressModal,
     /// Folders and smart folders picked with ⌘ and ⇧ (`ui/sidebar/folders.rs`).
     pub(crate) folders: crate::ui::sidebar::folders::FolderUi,
     /// Polls the library for changes made by other apps (`watch.rs`).
@@ -484,6 +486,7 @@ impl Workspace {
             tools: Default::default(),
             backup: crate::backups::Schedule::new(Instant::now()),
             export: Default::default(),
+            op: Default::default(),
             folders: Default::default(),
         }
     }

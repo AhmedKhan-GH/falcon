@@ -5,6 +5,7 @@ mod backups;
 mod collect;
 mod colors;
 mod dock;
+mod dock_progress;
 mod drop_pos;
 mod debug_report;
 mod errlog;

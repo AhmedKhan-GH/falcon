@@ -604,7 +604,7 @@ impl App {
         // a file (the first one; Eagle takes one at a time).
         let (packs, paths): (Vec<PathBuf>, Vec<PathBuf>) = paths.into_iter().partition(|p| p.is_file() && p.extension().is_some_and(|e| e.eq_ignore_ascii_case("eaglepack")));
         if let Some(first) = packs.into_iter().next() {
-            self.start_pack_import(first, folders.first().cloned());
+            self.preview_pack_import(first, folders.first().cloned());
         }
         self.import_files(paths, folders);
         if let Some(first) = libraries.first() {

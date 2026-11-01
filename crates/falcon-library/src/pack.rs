@@ -146,14 +146,27 @@ pub fn plan_pack(lib: &Library, source: PackSource<'_>) -> Result<PackPlan> {
 /// Writes a planned pack to `dest`, calling `on_item` with the number of
 /// item folders added so far, and returns the number of items. The archive
 /// is written beside `dest`, checked and only then moved into place.
-pub fn write_pack(plan: &PackPlan, dest: &Path, on_item: impl FnMut(usize)) -> Result<usize> {
+pub fn write_pack(plan: &PackPlan, dest: &Path, mut on_item: impl FnMut(usize)) -> Result<usize> {
+    let written = write_pack_until(plan, dest, |n| {
+        on_item(n);
+        true
+    })?;
+    Ok(written.unwrap_or(0))
+}
+
+/// Like [`write_pack`], but `on_item` returns whether to go on. Returning
+/// false stops after that item: nothing is left at `dest` (the archive is
+/// built in a temporary file that is removed) and the result is `None`.
+pub fn write_pack_until(plan: &PackPlan, dest: &Path, on_item: impl FnMut(usize) -> bool) -> Result<Option<usize>> {
     let refuse = |reason: String| Error::Pack { path: dest.to_path_buf(), reason };
     let parent = dest.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new("."));
     let mut tmp = tempfile::NamedTempFile::new_in(parent).map_err(|e| Error::io(parent, e))?;
-    let entries = write_zip(&plan.root, tmp.as_file_mut(), &plan.pack_json, &plan.ids, on_item).map_err(|e| refuse(e.to_string()))?;
+    let Some(entries) = write_zip(&plan.root, tmp.as_file_mut(), &plan.pack_json, &plan.ids, on_item).map_err(|e| refuse(e.to_string()))? else {
+        return Ok(None);
+    };
     verify(tmp.path(), entries).map_err(refuse)?;
     tmp.persist(dest).map_err(|e| Error::io(dest, e.error))?;
-    Ok(plan.ids.len())
+    Ok(Some(plan.ids.len()))
 }
 
 /// What importing a pack would do, read before asking (Eagle confirms the
@@ -191,88 +204,150 @@ pub fn preview_pack(lib: &Library, pack: &Path) -> Result<PackPreview> {
 /// Imports the pack at `pack` into `lib` and returns the new item ids.
 /// Items and folders get new ids; a folder pack's tree is added at the root.
 pub fn import_pack(lib: &mut Library, pack: &Path, opts: &PackImportOptions) -> Result<Vec<String>> {
-    let refuse = |reason: String| Error::Pack { path: pack.to_path_buf(), reason };
-    if let Some(f) = &opts.folder
-        && !lib.folder_ids().contains(f.as_str())
-    {
-        return Err(refuse(format!("no folder {f}")));
+    check_target(lib, pack, opts)?;
+    let extracted = extract_pack(pack)?;
+    let mut run = PackImport::prepare(lib, pack, extracted, opts)?;
+    run.start(lib)?;
+    let mut out = Vec::new();
+    while let Some(id) = run.step(lib)? {
+        out.push(id);
     }
+    Ok(out)
+}
+
+fn check_target(lib: &Library, pack: &Path, opts: &PackImportOptions) -> Result<()> {
+    match &opts.folder {
+        Some(f) if !lib.folder_ids().contains(f.as_str()) => Err(Error::Pack { path: pack.to_path_buf(), reason: format!("no folder {f}") }),
+        _ => Ok(()),
+    }
+}
+
+/// Unpacks `pack` into a temporary folder, the slow, library-free part of
+/// an import (an app can do it without holding the library).
+pub fn extract_pack(pack: &Path) -> Result<tempfile::TempDir> {
     let extracted = tempfile::Builder::new().prefix("falcon-eaglepack").tempdir().map_err(|e| Error::io(pack, e))?;
-    extract(pack, extracted.path()).map_err(|e| refuse(e.to_string()))?;
-    let manifest = extracted.path().join(PACK_JSON);
-    let text = fs::read(&manifest).map_err(|_| refuse("pack.json is missing".into()))?;
-    let mut manifest: Value = serde_json::from_slice(&text).map_err(|e| Error::json(&manifest, e))?;
-    let records = manifest.get_mut("images").and_then(Value::as_array_mut).map(std::mem::take).ok_or_else(|| refuse("pack.json has no images list".into()))?;
+    extract(pack, extracted.path()).map_err(|e| Error::Pack { path: pack.to_path_buf(), reason: e.to_string() })?;
+    Ok(extracted)
+}
 
-    // Eagle walks the list oldest first.
-    let mut seen = HashSet::new();
-    let mut items = Vec::new();
-    for mut record in records.into_iter().rev() {
-        let Some(id) = record.get("id").and_then(Value::as_str).map(str::to_string) else { continue };
-        if !seen.insert(id.clone()) || !extracted.path().join(format!("{id}.info")).is_dir() {
-            continue;
-        }
-        if let Value::Object(m) = &mut record
-            && !m.contains_key("isDeleted")
-        {
-            m.insert("isDeleted".into(), Value::Bool(false));
-        }
-        let item = Item::from_json_str(&record.to_string()).map_err(|e| refuse(format!("item {id}: {e}")))?;
-        items.push(item);
-    }
-    if opts.skip_duplicates {
-        let existing: HashSet<String> = lib.items().iter().filter(|i| !i.is_deleted).filter_map(duplicate_key).collect();
-        items.retain(|i| duplicate_key(i).is_none_or(|k| !existing.contains(&k)));
-    }
+/// An import in steps, so a caller can lock the library per item, show
+/// progress and stop between items: [`PackImport::prepare`], then
+/// [`PackImport::start`], then [`PackImport::step`] until it returns `None`.
+/// [`import_pack`] runs all of it at once.
+pub struct PackImport {
+    /// Held so the unpacked items stay on disk until they are moved.
+    extracted: tempfile::TempDir,
+    items: std::vec::IntoIter<Item>,
+    count: usize,
+    new_ids: HashMap<String, String>,
+    folder: Option<Folder>,
+    now: u64,
+    index: usize,
+}
 
-    let mut taken: HashSet<String> = lib.items().iter().map(|i| i.id.clone()).collect();
-    let mut fresh_id = || loop {
-        let id = ids::new_id();
-        if taken.insert(id.clone()) && !lib.root().join("images").join(format!("{id}.info")).exists() {
-            return id;
-        }
-    };
-    let new_ids: HashMap<String, String> = items.iter().map(|i| (i.id.clone(), fresh_id())).collect();
+impl PackImport {
+    /// Reads the unpacked pack and works out the new items and ids, without
+    /// changing the library.
+    pub fn prepare(lib: &Library, pack: &Path, extracted: tempfile::TempDir, opts: &PackImportOptions) -> Result<PackImport> {
+        let refuse = |reason: String| Error::Pack { path: pack.to_path_buf(), reason };
+        check_target(lib, pack, opts)?;
+        let manifest = extracted.path().join(PACK_JSON);
+        let text = fs::read(&manifest).map_err(|_| refuse("pack.json is missing".into()))?;
+        let mut manifest: Value = serde_json::from_slice(&text).map_err(|e| Error::json(&manifest, e))?;
+        let records = manifest.get_mut("images").and_then(Value::as_array_mut).map(std::mem::take).ok_or_else(|| refuse("pack.json has no images list".into()))?;
 
-    let mut folder = None;
-    if let Some(record) = manifest.get_mut("folder").filter(|f| f.is_object()) {
-        let old_root = record.get("id").and_then(Value::as_str).unwrap_or_default().to_string();
-        let mut folder_ids = HashMap::new();
-        remap_folder(record, &mut folder_ids, &new_ids, &mut fresh_id);
-        let tree: Folder = serde_json::from_value(record.take()).map_err(|e| refuse(format!("folder: {e}")))?;
-        // Keep the folder's custom order, else oldest first.
-        let rank = |i: &Item| i.extra.get("order").and_then(|o| o.get(&old_root)).and_then(as_number).unwrap_or(i.modification_time as f64);
-        items.sort_by(|a, b| rank(a).total_cmp(&rank(b)));
-        for item in &mut items {
-            item.folders = item.folders.iter().filter_map(|f| folder_ids.get(f).cloned()).collect();
+        // Eagle walks the list oldest first.
+        let mut seen = HashSet::new();
+        let mut items = Vec::new();
+        for mut record in records.into_iter().rev() {
+            let Some(id) = record.get("id").and_then(Value::as_str).map(str::to_string) else { continue };
+            if !seen.insert(id.clone()) || !extracted.path().join(format!("{id}.info")).is_dir() {
+                continue;
+            }
+            if let Value::Object(m) = &mut record
+                && !m.contains_key("isDeleted")
+            {
+                m.insert("isDeleted".into(), Value::Bool(false));
+            }
+            let item = Item::from_json_str(&record.to_string()).map_err(|e| refuse(format!("item {id}: {e}")))?;
+            items.push(item);
         }
-        folder = Some(tree);
-    } else {
-        let known = lib.folder_ids();
-        for item in &mut items {
-            match &opts.folder {
-                Some(f) => item.folders = vec![f.clone()],
-                None => item.folders.retain(|f| known.contains(f.as_str())),
+        if opts.skip_duplicates {
+            let existing: HashSet<String> = lib.items().iter().filter(|i| !i.is_deleted).filter_map(duplicate_key).collect();
+            items.retain(|i| duplicate_key(i).is_none_or(|k| !existing.contains(&k)));
+        }
+
+        let mut taken: HashSet<String> = lib.items().iter().map(|i| i.id.clone()).collect();
+        let mut fresh_id = || loop {
+            let id = ids::new_id();
+            if taken.insert(id.clone()) && !lib.root().join("images").join(format!("{id}.info")).exists() {
+                return id;
+            }
+        };
+        let new_ids: HashMap<String, String> = items.iter().map(|i| (i.id.clone(), fresh_id())).collect();
+
+        let mut folder = None;
+        if let Some(record) = manifest.get_mut("folder").filter(|f| f.is_object()) {
+            let old_root = record.get("id").and_then(Value::as_str).unwrap_or_default().to_string();
+            let mut folder_ids = HashMap::new();
+            remap_folder(record, &mut folder_ids, &new_ids, &mut fresh_id);
+            let tree: Folder = serde_json::from_value(record.take()).map_err(|e| refuse(format!("folder: {e}")))?;
+            // Keep the folder's custom order, else oldest first.
+            let rank = |i: &Item| i.extra.get("order").and_then(|o| o.get(&old_root)).and_then(as_number).unwrap_or(i.modification_time as f64);
+            items.sort_by(|a, b| rank(a).total_cmp(&rank(b)));
+            for item in &mut items {
+                item.folders = item.folders.iter().filter_map(|f| folder_ids.get(f).cloned()).collect();
+            }
+            folder = Some(tree);
+        } else {
+            let known = lib.folder_ids();
+            for item in &mut items {
+                match &opts.folder {
+                    Some(f) => item.folders = vec![f.clone()],
+                    None => item.folders.retain(|f| known.contains(f.as_str())),
+                }
             }
         }
-    }
-    if let Some(tree) = folder {
-        lib.metadata.folders.push(tree);
-        lib.save_metadata()?;
+
+        let count = items.len();
+        Ok(PackImport { extracted, items: items.into_iter(), count, new_ids, folder, now: now_ms(), index: 0 })
     }
 
-    let now = now_ms();
-    let mut out = Vec::new();
-    for (index, mut item) in items.into_iter().enumerate() {
-        let from = extracted.path().join(format!("{}.info", item.id));
-        item.id = new_ids[&item.id].clone();
-        item.modification_time = lib.next_import_time(now + index as u64);
+    /// Items left to import (before the first step: all of them).
+    pub fn len(&self) -> usize {
+        self.items.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.items.len() == 0
+    }
+
+    /// How many items the import holds in all.
+    pub fn total(&self) -> usize {
+        self.count
+    }
+
+    /// Adds a folder pack's folder tree to the library.
+    pub fn start(&mut self, lib: &mut Library) -> Result<()> {
+        if let Some(tree) = self.folder.take() {
+            lib.metadata.folders.push(tree);
+            lib.save_metadata()?;
+        }
+        Ok(())
+    }
+
+    /// Imports the next item and returns its new id, or `None` when all are in.
+    pub fn step(&mut self, lib: &mut Library) -> Result<Option<String>> {
+        let Some(mut item) = self.items.next() else { return Ok(None) };
+        let from = self.extracted.path().join(format!("{}.info", item.id));
+        item.id = self.new_ids[&item.id].clone();
+        item.modification_time = lib.next_import_time(self.now + self.index as u64);
+        self.index += 1;
         let to = item.info_dir(lib.root());
         move_dir(&from, &to)?;
         lib.register_item(item.clone())?;
-        out.push(item.id);
+        Ok(Some(item.id))
     }
-    Ok(out)
 }
 
 /// An item's record as Eagle writes it into `pack.json`.
@@ -401,7 +476,7 @@ fn duplicate_key(item: &Item) -> Option<String> {
     }
 }
 
-fn write_zip(root: &Path, file: &mut File, pack_json: &[u8], ids: &[String], mut on_item: impl FnMut(usize)) -> io::Result<usize> {
+fn write_zip(root: &Path, file: &mut File, pack_json: &[u8], ids: &[String], mut on_item: impl FnMut(usize) -> bool) -> io::Result<Option<usize>> {
     let mut zip = ZipWriter::new(file);
     let base = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
     let mut entries = 1;
@@ -412,10 +487,12 @@ fn write_zip(root: &Path, file: &mut File, pack_json: &[u8], ids: &[String], mut
         if dir.is_dir() {
             entries += add_dir(&mut zip, base, &dir, &format!("{id}.info/"))?;
         }
-        on_item(n + 1);
+        if !on_item(n + 1) {
+            return Ok(None);
+        }
     }
     zip.finish()?;
-    Ok(entries)
+    Ok(Some(entries))
 }
 
 /// Adds `dir` (as `name`, ending in `/`) and everything under it; returns
@@ -606,6 +683,35 @@ mod tests {
         let mut text = String::new();
         zip.by_name(PACK_JSON).unwrap().read_to_string(&mut text).unwrap();
         (serde_json::from_str(&text).unwrap(), names)
+    }
+
+    #[test]
+    fn stopping_a_pack_leaves_no_file() {
+        let s = setup();
+        let plan = plan_pack(&s.lib, PackSource::Items(&s.ids)).unwrap();
+        let out = s.root.join("stopped.eaglepack");
+        assert_eq!(write_pack_until(&plan, &out, |n| n < 2).unwrap(), None);
+        assert!(!out.exists());
+        let leftovers = fs::read_dir(&s.root).unwrap().filter_map(|e| e.ok()).filter(|e| e.file_name().to_string_lossy().starts_with(".tmp")).count();
+        assert_eq!(leftovers, 0);
+        assert_eq!(write_pack_until(&plan, &out, |_| true).unwrap(), Some(3));
+        assert!(out.exists());
+    }
+
+    #[test]
+    fn stepped_import_can_stop_between_items() {
+        let s = setup();
+        let out = s.root.join("all.eaglepack");
+        export_pack(&s.lib, PackSource::Items(&s.ids), &out).unwrap();
+        let mut target = Library::create(s.root.join("B.library")).unwrap();
+        let mut run = PackImport::prepare(&target, &out, extract_pack(&out).unwrap(), &PackImportOptions::default()).unwrap();
+        run.start(&mut target).unwrap();
+        assert_eq!(run.total(), 3);
+        assert!(run.step(&mut target).unwrap().is_some());
+        assert_eq!(target.items().len(), 1);
+        assert_eq!(run.len(), 2);
+        while run.step(&mut target).unwrap().is_some() {}
+        assert_eq!(target.items().len(), 3);
     }
 
     #[test]

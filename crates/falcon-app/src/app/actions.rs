@@ -404,10 +404,12 @@ impl App {
                     self.flash(format!("Deleted {}", ids.len()));
                     r
                 }
-                Action::EmptyTrash => lib.empty_trash().map(|n| {
-                    self.ws.selected.clear();
-                    self.flash(format!("Deleted {n}"));
-                }),
+                // Runs behind the progress modal; permanent, so the undo
+                // history is cleared when it ends.
+                Action::EmptyTrash => {
+                    self.start_empty_trash(lib);
+                    Ok(())
+                }
                 Action::Trash(ids, trash) => {
                     // The Duplicates page keeps its own selection rules.
                     if self.ws.scope == Scope::Duplicates {

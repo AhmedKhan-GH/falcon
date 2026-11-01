@@ -20,6 +20,7 @@ pub(crate) mod commands;
 pub(crate) mod image_edit;
 pub(crate) mod import;
 pub(crate) mod library;
+pub(crate) mod long_ops;
 pub(crate) mod navigation;
 pub(crate) mod state;
 
@@ -430,6 +431,7 @@ impl App {
         }
         self.merge_dialogs(&ctx);
         self.pack_dialogs(&ctx);
+        self.progress_modal(&ctx);
         self.reload_confirm(&ctx);
         self.clear_history_dialog(&ctx);
         self.alert_modal(&ctx);

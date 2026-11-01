@@ -56,7 +56,7 @@ From the context menu's "Custom Thumbnail" entries and the background window's `
 - The palette is computed from the new file.
 - `noThumbnail` and `noPreview` are deleted, and `customThumbnail: true` is set. Being a new key, it lands at the end of the item. `removeThumbnail` is left alone.
 - Grid cards with a custom thumbnail get a `custom-thumbnail` CSS class. The viewer and the plugin API use the thumbnail in place of the original for formats Eagle can't show itself.
-- Refresh Thumbnail skips an item whose `customThumbnail` is set. "Reset Thumbnail" (shown only when it is set) deletes the key and then refreshes the thumbnail.
+- Refresh Thumbnail skips an item whose `customThumbnail` is set. With several items selected falcon refreshes them on a background thread behind a progress modal with a Cancel button that stops before the next item, as Eagle shows a progress dialog for it. "Reset Thumbnail" (shown only when it is set) deletes the key and then refreshes the thumbnail.
 
 ### GIF frame thumbnails (observed)
 
