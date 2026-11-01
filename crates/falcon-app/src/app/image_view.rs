@@ -29,6 +29,8 @@ pub(super) struct ImageState {
     page: Option<(isize, Instant)>,
     /// The transparency checkerboard, made on first use.
     checker: Option<TextureHandle>,
+    /// The visible part of a zoomed-in SVG and since when it has held still.
+    svg_view: Option<([f32; 4], [u32; 2], Instant)>,
 }
 
 /// Side of a checkerboard square, in points.
@@ -149,6 +151,30 @@ impl App {
         {
             self.ws.frame_jobs.push(j);
         }
+        // An SVG enlarged past its render is drawn again, sharp, for the part
+        // on screen once the view holds still.
+        let mut patch = None;
+        if ext == "svg" && tex.as_ref().is_some_and(|t| shown_px > t.size_vec2().max_elem()) {
+            let max = ui.ctx().input(|i| i.max_texture_side).min(8192) as u32;
+            let region = logic::svg_region([r.min.x, r.min.y, r.max.x, r.max.y], [area.min.x, area.min.y, area.max.x, area.max.y], ui.ctx().pixels_per_point(), max);
+            if let Some((rect, size)) = region {
+                let same = self.image.svg_view.is_some_and(|(r0, s0, _)| r0 == rect && s0 == size);
+                if !same {
+                    self.image.svg_view = Some((rect, size, Instant::now()));
+                }
+                let settled = self.image.svg_view.is_some_and(|(_, _, at)| at.elapsed().as_secs_f32() >= logic::SVG_SETTLE);
+                if settled {
+                    if let Some(j) = job_for(item, lib.root(), Tier::Full) {
+                        self.ws.loader.want_svg_region(j, rect, size);
+                    }
+                } else {
+                    ui.ctx().request_repaint_after(std::time::Duration::from_secs_f32(logic::SVG_SETTLE));
+                }
+            }
+            patch = self.ws.loader.svg_patch(&id).map(|p| {
+                (p.texture.id(), Rect::from_min_max(r.min + p.rect.min.to_vec2() * r.size(), r.min + p.rect.max.to_vec2() * r.size()))
+            });
+        }
         let full_px = tex.as_ref().map_or(0.0, |t| t.size_vec2().max_elem());
         let original = self.ws.loader.original(&id).filter(|o| !animated && shown_px > full_px && o.size[0].max(o.size[1]) as f32 > full_px);
 
@@ -157,7 +183,8 @@ impl App {
         let full_failed = self.ws.loader.has_failed(&id, Tier::Full) || job_for(item, lib.root(), Tier::Full).is_none();
         let preview_job = if full_failed { job_for(item, lib.root(), Tier::Preview) } else { None };
         let no_preview = full_failed && (preview_job.is_none() || self.ws.loader.has_failed(&id, Tier::Preview));
-        if self.prefs.transparency_grid && (tex.is_some() || original.is_some()) {
+        let has_original = original.is_some();
+        if self.prefs.transparency_grid && (tex.is_some() || has_original) {
             let checker = self.image.checker.get_or_insert_with(|| {
                 let (a, b) = (Color32::WHITE, Color32::from_gray(0xcc));
                 ui.ctx().load_texture("viewer-checker", ColorImage::new([2, 2], vec![a, b, b, a]), TextureOptions::NEAREST_REPEAT)
@@ -176,7 +203,15 @@ impl App {
                     }
                 }
             }
-            (Some(tex), None) => egui::Image::new((tex.id(), r.size())).paint_at(&clip, r),
+            (Some(tex), None) => match patch {
+                // Under the sharp part of an SVG the render isn't drawn, so
+                // semi-transparent shapes aren't laid on twice.
+                Some((patch_tex, hole)) => {
+                    paint_except(clip.painter(), tex.id(), r, hole);
+                    clip.painter().image(patch_tex, hole, Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)), Color32::WHITE);
+                }
+                None => egui::Image::new((tex.id(), r.size())).paint_at(&clip, r),
+            },
             (None, None) if no_preview => self.cannot_preview(&mut clip, item, area),
             (None, None) => ext_placeholder(&clip, Rect::from_center_size(area.center(), Vec2::splat(260.0)), &item.ext),
         }
@@ -325,4 +360,20 @@ fn zoom_slider(ui: &mut Ui, track: Rect, pos: f32) -> Option<f32> {
     p.line_segment([Pos2::new(track.left(), y), Pos2::new(kx, y)], egui::Stroke::new(2.0, t::p().text_muted));
     p.circle_filled(Pos2::new(kx, y), 6.0, Color32::WHITE);
     picked
+}
+
+/// Draws texture `tex` stretched over `r`, except inside `hole`: the bands
+/// above, below, left and right of it, each with its part of the texture.
+fn paint_except(painter: &egui::Painter, tex: egui::TextureId, r: Rect, hole: Rect) {
+    let hole = hole.intersect(r);
+    let bands = [
+        Rect::from_min_max(r.min, Pos2::new(r.max.x, hole.min.y)),
+        Rect::from_min_max(Pos2::new(r.min.x, hole.max.y), r.max),
+        Rect::from_min_max(Pos2::new(r.min.x, hole.min.y), Pos2::new(hole.min.x, hole.max.y)),
+        Rect::from_min_max(Pos2::new(hole.max.x, hole.min.y), Pos2::new(r.max.x, hole.max.y)),
+    ];
+    let uv = |p: Pos2| ((p - r.min) / r.size()).to_pos2();
+    for band in bands.into_iter().filter(|b| b.width() > 0.0 && b.height() > 0.0) {
+        painter.image(tex, band, Rect::from_min_max(uv(band.min), uv(band.max)), Color32::WHITE);
+    }
 }

@@ -242,6 +242,29 @@ pub fn render_svg(data: &[u8], max: Option<u32>) -> Result<DynamicImage, ThumbEr
     RgbaImage::from_raw(w, h, raw).map(DynamicImage::ImageRgba8).ok_or_else(|| ThumbError("bad pixmap".into()))
 }
 
+/// Renders part of an SVG at `size` pixels: `region` is the part to draw,
+/// as fractions of the drawing (`[x0, y0, x1, y1]`, 0..1). The viewer uses
+/// it to stay sharp when zoomed in, drawing only what is on screen.
+pub fn render_svg_region(data: &[u8], region: [f32; 4], size: (u32, u32)) -> Result<DynamicImage, ThumbError> {
+    use resvg::tiny_skia::{Pixmap, Transform};
+    let tree = parse_svg(data)?;
+    let (w, h) = size;
+    let [x0, y0, x1, y1] = region;
+    if w == 0 || h == 0 || w > MAX_WEBP_SIDE || h > MAX_WEBP_SIDE || x1 <= x0 || y1 <= y0 {
+        return Err(ThumbError("bad SVG region".into()));
+    }
+    let (tw, th) = (tree.size().width(), tree.size().height());
+    let (sx, sy) = (w as f32 / ((x1 - x0) * tw), h as f32 / ((y1 - y0) * th));
+    let mut pixmap = Pixmap::new(w, h).ok_or_else(|| ThumbError("cannot allocate pixmap".into()))?;
+    resvg::render(&tree, Transform::from_row(sx, 0.0, 0.0, sy, -x0 * tw * sx, -y0 * th * sy), &mut pixmap.as_mut());
+    let mut raw = Vec::with_capacity(pixmap.pixels().len() * 4);
+    for p in pixmap.pixels() {
+        let c = p.demultiply();
+        raw.extend_from_slice(&[c.red(), c.green(), c.blue(), c.alpha()]);
+    }
+    RgbaImage::from_raw(w, h, raw).map(DynamicImage::ImageRgba8).ok_or_else(|| ThumbError("bad pixmap".into()))
+}
+
 /// Scales `img` per [`target_size`]; returns it unchanged when it fits.
 pub fn resize(img: DynamicImage, max: u32) -> DynamicImage {
     resize_with(img, max, RESIZE_FILTER)
@@ -420,6 +443,21 @@ impl crate::Library {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn svg_regions_render_only_the_part_asked_for() {
+        // Left half red, right half blue.
+        let svg = br##"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="50"><rect width="50" height="50" fill="#f00"/><rect x="50" width="50" height="50" fill="#00f"/></svg>"##;
+        let right = render_svg_region(svg, [0.5, 0.0, 1.0, 1.0], (400, 400)).unwrap().to_rgba8();
+        assert_eq!(right.dimensions(), (400, 400));
+        assert_eq!(right.get_pixel(0, 0).0, [0, 0, 255, 255]);
+        assert_eq!(right.get_pixel(399, 399).0, [0, 0, 255, 255]);
+        // A strip across the middle shows both halves, magnified 20 times.
+        let middle = render_svg_region(svg, [0.45, 0.0, 0.55, 0.1], (200, 100)).unwrap().to_rgba8();
+        assert_eq!(middle.get_pixel(10, 50).0, [255, 0, 0, 255]);
+        assert_eq!(middle.get_pixel(190, 50).0, [0, 0, 255, 255]);
+        assert!(render_svg_region(svg, [0.5, 0.0, 0.5, 1.0], (10, 10)).is_err());
+    }
 
     #[test]
     fn sizes() {

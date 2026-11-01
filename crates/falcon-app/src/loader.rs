@@ -52,6 +52,26 @@ pub struct Job {
     quicklook: bool,
     /// For [`Tier::Original`]: the side of the tiles to cut it into.
     tile: usize,
+    /// For an SVG zoomed in: the visible part to render sharp.
+    region: Option<Region>,
+}
+
+/// The part of an SVG on screen: fractions of the drawing
+/// (`[x0, y0, x1, y1]`) and the pixel size to render it at.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct Region {
+    pub rect: [f32; 4],
+    pub size: [u32; 2],
+    seq: u64,
+}
+
+/// A sharp render of the visible part of the viewed SVG.
+pub struct SvgPatch {
+    pub id: String,
+    /// Where it sits, as a fraction of the drawing.
+    pub rect: Rect,
+    pub texture: TextureHandle,
+    seq: u64,
 }
 
 /// The job decoding `item`'s original at full resolution, in tiles of at
@@ -59,7 +79,7 @@ pub struct Job {
 pub fn original_job(item: &Item, root: &std::path::Path, tile: usize) -> Option<Job> {
     let ext = item.ext.to_lowercase();
     crate::logic::full_resolution(&ext)
-        .then(|| Job { key: (item.id.clone(), Tier::Original), path: item.original_path(root), svg: false, quicklook: false, tile })
+        .then(|| Job { key: (item.id.clone(), Tier::Original), path: item.original_path(root), svg: false, quicklook: false, tile, region: None })
 }
 
 /// Picks the file to decode for `item`: the thumbnail when it exists (unless
@@ -69,7 +89,7 @@ pub fn job_for(item: &Item, root: &std::path::Path, tier: Tier) -> Option<Job> {
     let supported = thumbnail::is_supported(&ext);
     let original = supported.then(|| item.original_path(root));
     if tier == Tier::Full && !supported && cfg!(target_os = "macos") {
-        return Some(Job { key: (item.id.clone(), tier), path: item.original_path(root), svg: false, quicklook: true, tile: 0 });
+        return Some(Job { key: (item.id.clone(), tier), path: item.original_path(root), svg: false, quicklook: true, tile: 0, region: None });
     }
     let (path, svg) = match (tier, item.thumbnail_path(root), original) {
         (Tier::Full, _, Some(o)) => (o, ext == "svg"),
@@ -77,7 +97,7 @@ pub fn job_for(item: &Item, root: &std::path::Path, tier: Tier) -> Option<Job> {
         (_, None, Some(o)) => (o, ext == "svg"),
         (_, None, None) => return None,
     };
-    Some(Job { key: (item.id.clone(), tier), path, svg, quicklook: false, tile: 0 })
+    Some(Job { key: (item.id.clone(), tier), path, svg, quicklook: false, tile: 0, region: None })
 }
 
 struct Shared {
@@ -91,11 +111,15 @@ struct Shared {
 enum Pixels {
     Whole(ColorImage),
     Tiled { size: [usize; 2], tiles: Vec<(crate::logic::TileSpan, ColorImage)> },
+    /// A render of part of an SVG.
+    Patch(Region, ColorImage),
 }
 
 struct Decoded {
     key: Key,
     image: Option<Pixels>,
+    /// From an SVG region job, which shares its key with the full tier.
+    region: bool,
 }
 
 /// One texture of a full-resolution image.
@@ -141,6 +165,11 @@ pub struct Loader {
     staged: Option<Staged>,
     /// Draw the viewer's renders with sharp pixels when enlarged.
     pixelated: bool,
+    /// The viewed SVG's sharp render of what is on screen, the region last
+    /// asked for (with its item), and the count of regions asked for.
+    svg_patch: Option<SvgPatch>,
+    svg_last: Option<(String, [f32; 4], [u32; 2])>,
+    svg_seq: u64,
 }
 
 impl Loader {
@@ -165,7 +194,7 @@ impl Loader {
                         }
                     };
                     let image = decode(&job);
-                    if tx.send(Decoded { key: job.key, image }).is_err() {
+                    if tx.send(Decoded { key: job.key, image, region: job.region.is_some() }).is_err() {
                         return;
                     }
                     ctx.request_repaint();
@@ -176,7 +205,7 @@ impl Loader {
             .into_iter()
             .map(|t| (t, LruCache::new(NonZeroUsize::new(t.capacity()).unwrap())))
             .collect();
-        Loader { shared, rx, caches, pending: HashSet::new(), failed: HashSet::new(), original: None, staged: None, pixelated: false }
+        Loader { shared, rx, caches, pending: HashSet::new(), failed: HashSet::new(), original: None, staged: None, pixelated: false, svg_patch: None, svg_last: None, svg_seq: 0 }
     }
 
     /// Uploads finished decodes (bounded per call so frames stay short).
@@ -184,6 +213,18 @@ impl Loader {
         self.upload_staged(ctx);
         for _ in 0..24 {
             let Ok(d) = self.rx.try_recv() else { return };
+            if d.region {
+                let Some(Pixels::Patch(region, img)) = d.image else { continue };
+                // Only the latest region for the item still on screen.
+                let current = self.svg_last.as_ref().is_some_and(|l| l.0 == d.key.0);
+                if current && self.svg_patch.as_ref().is_none_or(|p| p.seq < region.seq) {
+                    let [x0, y0, x1, y1] = region.rect;
+                    let texture = ctx.load_texture(format!("{}-svg-region", d.key.0), img, TextureOptions::LINEAR);
+                    let rect = Rect::from_min_max(Pos2::new(x0, y0), Pos2::new(x1, y1));
+                    self.svg_patch = Some(SvgPatch { id: d.key.0, rect, texture, seq: region.seq });
+                }
+                continue;
+            }
             // A decode started before `forget` would bring back the old pixels.
             if !self.pending.remove(&d.key) {
                 continue;
@@ -198,7 +239,8 @@ impl Loader {
                     self.staged = Some(Staged { original: Original { id: d.key.0, size, tiles: Vec::new() }, rest: tiles });
                     self.upload_staged(ctx);
                 }
-                None => {
+                // Region jobs were handled above.
+                Some(Pixels::Patch(..)) | None => {
                     self.failed.insert(d.key);
                 }
             }
@@ -264,6 +306,30 @@ impl Loader {
         self.original.as_ref().filter(|o| o.id == id)
     }
 
+    /// Asks for the part `rect` of the SVG `job` (a full-tier SVG job) to be
+    /// rendered at `size`, unless that is what was last asked for. The job
+    /// goes to the front of the queue; an older region still queued is
+    /// dropped.
+    pub fn want_svg_region(&mut self, mut job: Job, rect: [f32; 4], size: [u32; 2]) {
+        let last = (job.key.0.clone(), rect, size);
+        if self.svg_last.as_ref() == Some(&last) {
+            return;
+        }
+        self.svg_last = Some(last);
+        self.svg_seq += 1;
+        job.region = Some(Region { rect, size, seq: self.svg_seq });
+        let mut q = self.shared.queue.lock().unwrap();
+        q.retain(|j| j.region.is_none());
+        q.push_front(job);
+        drop(q);
+        self.shared.cv.notify_all();
+    }
+
+    /// The sharp render of part of the SVG `id`, if one has arrived.
+    pub fn svg_patch(&self, id: &str) -> Option<&SvgPatch> {
+        self.svg_patch.as_ref().filter(|p| p.id == id)
+    }
+
     /// Drops the full-resolution original unless it belongs to `id` (the
     /// item in the viewer, if any). Called every frame, so leaving an item
     /// frees its textures at once.
@@ -273,6 +339,10 @@ impl Loader {
         }
         if self.staged.as_ref().is_some_and(|s| Some(s.original.id.as_str()) != id) {
             self.staged = None;
+        }
+        if self.svg_last.as_ref().is_some_and(|l| Some(l.0.as_str()) != id) {
+            self.svg_last = None;
+            self.svg_patch = None;
         }
     }
 
@@ -292,7 +362,8 @@ impl Loader {
         let mut q = self.shared.queue.lock().unwrap();
         let pending = &mut self.pending;
         q.retain(|j| {
-            let keep = wanted.contains(&j.key);
+            // SVG regions are managed by `want_svg_region`.
+            let keep = wanted.contains(&j.key) || j.region.is_some();
             if !keep {
                 pending.remove(&j.key);
             }
@@ -336,6 +407,10 @@ impl Loader {
         if self.staged.as_ref().is_some_and(|s| s.original.id == id) {
             self.staged = None;
         }
+        if self.svg_last.as_ref().is_some_and(|l| l.0 == id) {
+            self.svg_last = None;
+            self.svg_patch = None;
+        }
     }
 }
 
@@ -351,6 +426,12 @@ impl Drop for Loader {
 }
 
 fn decode(job: &Job) -> Option<Pixels> {
+    if let Some(region) = job.region {
+        let data = std::fs::read(&job.path).ok()?;
+        let rgba = thumbnail::render_svg_region(&data, region.rect, (region.size[0], region.size[1])).ok()?.into_rgba8();
+        let size = [rgba.width() as usize, rgba.height() as usize];
+        return Some(Pixels::Patch(region, ColorImage::from_rgba_unmultiplied(size, rgba.as_raw())));
+    }
     if job.key.1 == Tier::Original {
         return decode_tiled(job);
     }
@@ -406,7 +487,7 @@ mod tests {
     }
 
     fn original(path: PathBuf, tile: usize) -> Job {
-        Job { key: ("x".into(), Tier::Original), path, svg: false, quicklook: false, tile }
+        Job { key: ("x".into(), Tier::Original), path, svg: false, quicklook: false, tile, region: None }
     }
 
     #[test]

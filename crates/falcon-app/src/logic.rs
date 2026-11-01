@@ -1458,6 +1458,28 @@ pub fn smart_fit(natural: (f32, f32), view: (f32, f32), margin: f32, name: &str)
     (scale, top)
 }
 
+/// How long the view must hold still before a zoomed-in SVG is rendered
+/// again at the new size.
+pub const SVG_SETTLE: f32 = 0.15;
+
+/// The part of an SVG to render sharp: `image` is where the whole drawing
+/// is on screen and `view` the viewer's rect (both `[x0, y0, x1, y1]` in
+/// points). Gives the visible part as fractions of the drawing and its
+/// size in pixels (`ppp` pixels per point), at most `max_side` on its long
+/// side; `None` when none of it is visible.
+pub fn svg_region(image: [f32; 4], view: [f32; 4], ppp: f32, max_side: u32) -> Option<([f32; 4], [u32; 2])> {
+    let (iw, ih) = (image[2] - image[0], image[3] - image[1]);
+    let vis = [image[0].max(view[0]), image[1].max(view[1]), image[2].min(view[2]), image[3].min(view[3])];
+    if iw <= 0.0 || ih <= 0.0 || vis[2] <= vis[0] || vis[3] <= vis[1] {
+        return None;
+    }
+    let frac = |v: f32, o: f32, len: f32| ((v - o) / len).clamp(0.0, 1.0);
+    let rect = [frac(vis[0], image[0], iw), frac(vis[1], image[1], ih), frac(vis[2], image[0], iw), frac(vis[3], image[1], ih)];
+    let (w, h) = ((vis[2] - vis[0]) * ppp, (vis[3] - vis[1]) * ppp);
+    let shrink = (max_side as f32 / w.max(h)).min(1.0);
+    Some((rect, [((w * shrink).round() as u32).max(1), ((h * shrink).round() as u32).max(1)]))
+}
+
 /// Pixel count above which Eagle shows its "too large" page instead of a
 /// TIFF, HEIC or TGA (`MAX_DIMENSION` in `index.html`).
 pub const TOO_LARGE_PIXELS: u64 = 120_000_000;
@@ -1515,6 +1537,18 @@ mod image_viewer_tests {
         assert_eq!(wheel_action(Paging, (0.0, -5.0), 1.0, false), WheelAction::Page(1));
         assert_eq!(wheel_action(Paging, (0.0, 5.0), 1.0, false), WheelAction::Page(-1));
         assert_eq!(wheel_action(Paging, (-5.0, 0.0), 1.0, false), WheelAction::Page(1));
+    }
+
+    #[test]
+    fn svg_regions_cover_what_is_on_screen() {
+        // A drawing four times the view's size, centred: the middle quarter
+        // shows, rendered at the view's pixel size.
+        let (rect, size) = svg_region([-1000.0, -1000.0, 2000.0, 2000.0], [0.0, 0.0, 1000.0, 1000.0], 2.0, 8192).unwrap();
+        assert_eq!(rect, [1.0 / 3.0, 1.0 / 3.0, 2.0 / 3.0, 2.0 / 3.0]);
+        assert_eq!(size, [2000, 2000]);
+        // Capped on the long side.
+        assert_eq!(svg_region([0.0, 0.0, 1000.0, 500.0], [0.0, 0.0, 1000.0, 500.0], 2.0, 1000).unwrap().1, [1000, 500]);
+        assert_eq!(svg_region([2000.0, 0.0, 3000.0, 10.0], [0.0, 0.0, 1000.0, 1000.0], 2.0, 8192), None);
     }
 
     #[test]
