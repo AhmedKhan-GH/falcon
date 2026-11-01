@@ -122,8 +122,9 @@ pub(crate) struct FontView {
     glyphs: Option<Vec<(&'static str, String)>>,
     /// The name field in the header.
     name: String,
-    /// Whether the font is activated, read when it opens.
-    active: Option<bool>,
+    /// Where the font is activated, read when it opens (`None` on systems
+    /// without a fonts folder).
+    active: Option<crate::font_install::Activation>,
     /// When the wheel last zoomed (egui time).
     wheel_at: f64,
 }
@@ -255,7 +256,7 @@ impl App {
                 family
             });
             let old = std::mem::take(&mut self.ws.font_view);
-            let active = search::eagle_font_dir().map(|d| crate::font_install::is_active(&d, item));
+            let active = activation(item);
             self.ws.font_view = FontView {
                 id: item.id.clone(),
                 family,
@@ -356,12 +357,21 @@ impl App {
             } else if !r.has_focus() {
                 fv.name = item.name.clone();
             }
-            if let Some(active) = fv.active {
-                let (label, tip) = if active { ("Activated", "Deactivate the font") } else { ("Activate", "Install the font for every app") };
+            if let Some(state) = fv.active {
+                use crate::font_install::Activation;
+                // A font only in Eagle's folder is Eagle's to deactivate.
+                let (label, tip) = match state {
+                    Activation::Off => ("Activate", "Install the font for every app"),
+                    Activation::Falcon => ("Activated", "Deactivate the font"),
+                    Activation::Eagle => ("Activated by Eagle", "Eagle installed this font; deactivate it in Eagle"),
+                };
+                let active = state != Activation::Off;
                 let b = egui::Button::new(RichText::new(label).color(if active { Color32::WHITE } else { ink }))
                     .fill(if active { t::p().primary } else { Color32::TRANSPARENT })
                     .stroke(Stroke::new(1.0, muted));
-                if ui.add(b).on_hover_text(tip).clicked() {
+                let r = ui.add_enabled(state != Activation::Eagle, b);
+                let r = if state == Activation::Eagle { r.on_disabled_hover_text(tip) } else { r.on_hover_text(tip) };
+                if r.clicked() {
                     toggle = Some(!active);
                 }
             }
@@ -563,14 +573,15 @@ impl App {
 
     /// Activates or deactivates the font after asking, as Eagle's Activate
     /// button does (Eagle doesn't ask; falcon writes outside the library,
-    /// so it confirms first).
+    /// so it confirms first). falcon writes only its own folder,
+    /// `~/Library/Fonts/Falcon/`, never Eagle's `EagleApp/`.
     fn toggle_font(&mut self, lib: &Library, item: &Item, on: bool) {
-        let Some(dir) = search::eagle_font_dir() else { return };
+        let Some(dir) = search::falcon_font_dir() else { return };
         let Some(file) = crate::font_install::file_name(item) else {
             self.flash("This font has no PostScript name to install it under");
             return;
         };
-        let place = format!("~/Library/Fonts/EagleApp/{file}");
+        let place = format!("~/Library/Fonts/Falcon/{file}");
         let (title, text) = if on {
             ("Activate Font", format!("Copy \u{201c}{}\u{201d} to {place}? macOS then offers it in every app, as fonts activated in Eagle are.", item.name))
         } else {
@@ -583,7 +594,7 @@ impl App {
         let result = if on { crate::font_install::activate(&dir, item, &item.original_path(lib.root())).map(|_| ()) } else { crate::font_install::deactivate(&dir, item) };
         match result {
             Ok(()) => {
-                self.ws.font_view.active = Some(crate::font_install::is_active(&dir, item));
+                self.ws.font_view.active = activation(item);
                 self.ws.filter_ui.forget_font_keys();
                 self.flash(if on { format!("Activated {}", item.name) } else { format!("Deactivated {}", item.name) });
             }
@@ -602,6 +613,13 @@ impl App {
 #[cfg(test)]
 fn all_chars(s: Specimen) -> std::collections::HashSet<char> {
     glyph_groups(s).into_iter().flat_map(|(_, g)| g.chars().collect::<Vec<_>>()).collect()
+}
+
+/// Where `item` is activated, from falcon's font folder and Eagle's; `None`
+/// where there are no such folders.
+fn activation(item: &Item) -> Option<crate::font_install::Activation> {
+    let falcon = search::falcon_font_dir()?;
+    Some(crate::font_install::activation(&falcon, search::eagle_font_dir().as_deref(), item))
 }
 
 #[cfg(test)]
@@ -682,3 +700,4 @@ mod tests {
         assert!(rows[0].2 && rows[1].2 && !rows[2].2, "names can become the file name; counts can't");
     }
 }
+

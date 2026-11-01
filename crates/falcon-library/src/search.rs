@@ -1127,6 +1127,27 @@ pub fn eagle_font_dir() -> Option<PathBuf> {
     std::env::var_os("HOME").map(|h| PathBuf::from(h).join("Library/Fonts/EagleApp"))
 }
 
+/// The folder falcon copies the fonts it activates into (macOS:
+/// `~/Library/Fonts/Falcon/`). falcon never writes to Eagle's folder, which
+/// the user's Eagle manages; it only reads it.
+pub fn falcon_font_dir() -> Option<PathBuf> {
+    if !cfg!(target_os = "macos") {
+        return None;
+    }
+    std::env::var_os("HOME").map(|h| PathBuf::from(h).join("Library/Fonts/Falcon"))
+}
+
+/// The folders whose fonts count as activated: Eagle's and falcon's.
+pub fn font_dirs() -> Vec<PathBuf> {
+    eagle_font_dir().into_iter().chain(falcon_font_dir()).collect()
+}
+
+/// Keys of the activated fonts across `dirs` (see [`installed_font_keys`]):
+/// a font in any of them counts as activated.
+pub fn installed_font_keys_in(dirs: &[PathBuf]) -> HashSet<String> {
+    dirs.iter().flat_map(|d| installed_font_keys(d)).collect()
+}
+
 /// Keys of the activated fonts in `dir`, built from file names the way Eagle
 /// does: `<base>_<.ext lower-cased>`. The base only loses the extension when
 /// the file name ends with the lower-cased form, as with Node's `basename`.
@@ -1688,6 +1709,25 @@ mod tests {
         assert!(on.check(&other).is_none() && off.check(&other).is_some());
         assert!(on.check(&photo).is_none() && off.check(&photo).is_none());
         assert_eq!(distinct_font_families([&other, &font, &photo, &font]), ["Arial", "Inter"]);
+    }
+
+    #[test]
+    fn fonts_in_either_folder_count_as_installed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (eagle, falcon) = (tmp.path().join("EagleApp"), tmp.path().join("Falcon"));
+        std::fs::create_dir_all(&eagle).unwrap();
+        std::fs::create_dir_all(&falcon).unwrap();
+        std::fs::write(eagle.join("ArialMT.otf"), b"").unwrap();
+        std::fs::write(falcon.join("Inter-Regular.ttf"), b"").unwrap();
+        let keys = installed_font_keys_in(&[eagle.clone(), falcon, tmp.path().join("missing")]);
+        assert!(keys.contains("ArialMT_.otf") && keys.contains("Inter-Regular_.ttf"));
+        assert_eq!(keys.len(), 2, "a missing folder adds nothing");
+        assert_eq!(installed_font_keys_in(&[eagle]).len(), 1);
+        assert!(installed_font_keys_in(&[]).is_empty());
+        if cfg!(target_os = "macos") {
+            let dirs = font_dirs();
+            assert!(dirs[0].ends_with("Library/Fonts/EagleApp") && dirs[1].ends_with("Library/Fonts/Falcon"));
+        }
     }
 
     #[test]

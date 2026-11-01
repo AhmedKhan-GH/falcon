@@ -326,10 +326,10 @@ impl App {
                 }
             }
             FilterKind::Font => {
-                // Font: activated (installed through Eagle) or not; one at a time.
+                // Font: activated (through Eagle or falcon) or not; one at a time.
                 let has_fonts = live().any(|i| search::font_key(i).is_some());
                 if has_fonts || f.font != FontFilter::Off {
-                    let keys = fui.font_keys.get_or_insert_with(|| search::eagle_font_dir().map(|d| search::installed_font_keys(&d)).unwrap_or_default());
+                    let keys = fui.font_keys.get_or_insert_with(|| search::installed_font_keys_in(&search::font_dirs()));
                     let value = match &f.font {
                         FontFilter::Off => None,
                         FontFilter::Activated(_) => Some("Activated".to_string()),

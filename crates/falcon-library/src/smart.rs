@@ -76,11 +76,11 @@ impl SmartFolder {
 }
 
 /// What evaluating rules needs besides the item: the folder index (for
-/// `folderName`), the fonts activated through Eagle (for `fontActivated`,
-/// read on first use) and a cache of compiled regexes.
+/// `folderName`), the activated fonts (for `fontActivated`, read on first
+/// use from Eagle's font folder and falcon's) and a cache of compiled regexes.
 pub struct Context<'a> {
     pub folders: &'a FolderIndex,
-    font_dir: Option<PathBuf>,
+    font_dirs: Vec<PathBuf>,
     fonts: OnceCell<HashSet<String>>,
     /// Compiled patterns, case-sensitive in `[0]` and case-insensitive in
     /// `[1]`; `None` for a pattern that doesn't compile.
@@ -88,19 +88,25 @@ pub struct Context<'a> {
 }
 
 impl<'a> Context<'a> {
-    /// A context reading activated fonts from Eagle's font folder
-    /// ([`search::eagle_font_dir`]).
+    /// A context reading activated fonts from Eagle's font folder, as
+    /// Eagle does, and from falcon's ([`search::font_dirs`]): a font in
+    /// either counts as installed.
     pub fn new(folders: &'a FolderIndex) -> Context<'a> {
-        Context::with_font_dir(folders, search::eagle_font_dir())
+        Context::with_font_dirs(folders, search::font_dirs())
     }
 
     /// A context reading activated fonts from `dir` (none when `None`).
     pub fn with_font_dir(folders: &'a FolderIndex, dir: Option<PathBuf>) -> Context<'a> {
-        Context { folders, font_dir: dir, fonts: OnceCell::new(), regexes: Default::default() }
+        Context::with_font_dirs(folders, dir.into_iter().collect())
+    }
+
+    /// A context reading activated fonts from every folder in `dirs`.
+    pub fn with_font_dirs(folders: &'a FolderIndex, dirs: Vec<PathBuf>) -> Context<'a> {
+        Context { folders, font_dirs: dirs, fonts: OnceCell::new(), regexes: Default::default() }
     }
 
     fn fonts(&self) -> &HashSet<String> {
-        self.fonts.get_or_init(|| self.font_dir.as_deref().map(search::installed_font_keys).unwrap_or_default())
+        self.fonts.get_or_init(|| search::installed_font_keys_in(&self.font_dirs))
     }
 
     /// Whether `pattern` matches somewhere in `text`. A pattern that doesn't
@@ -862,6 +868,18 @@ mod tests {
         assert!(!r(&font("Other"), "activate", d()) && r(&font("Other"), "deactivate", d()));
         assert!(r(&font("ArialMT"), "deactivate", None), "no font folder: nothing is activated");
         assert!(!r(&item(json!({})), "deactivate", d()), "not a font fails both");
+        // Eagle's folder and falcon's both count.
+        let falcon = tempfile::tempdir().unwrap();
+        std::fs::write(falcon.path().join("Inter-Bold.otf"), b"").unwrap();
+        let otf = |ps: &str| item(json!({"ext": "otf", "fontMetas": {"postScriptName": {"en": ps}}}));
+        let fx = FolderIndex::new();
+        let both = |it: &Item, m: &str| {
+            let cx = Context::with_font_dirs(&fx, vec![dir.path().to_path_buf(), falcon.path().to_path_buf()]);
+            contains(it, &folder(json!([{"match": "AND", "rules": [{"property": "fontActivated", "method": m}]}])), &[], &cx)
+        };
+        assert!(both(&font("ArialMT"), "activate"), "in Eagle's folder");
+        assert!(both(&otf("Inter-Bold"), "activate") && !both(&otf("Inter-Bold"), "deactivate"), "in falcon's folder");
+        assert!(both(&otf("Other"), "deactivate"));
     }
 
     #[test]

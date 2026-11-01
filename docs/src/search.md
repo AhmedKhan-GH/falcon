@@ -184,7 +184,7 @@ The font rule is not a family picker. It has two choices, activated and deactiva
 
 - A `DateFilter` takes an optional `Clock` (`now` and the start of today). With none, it reads the system clock and time zone. `local_day_start` builds range ends from a date picker.
 - `DurationUnit::to_seconds` converts the min and max fields.
-- These helpers build the panel's options: `distinct_cameras`, `month_counts`, `duration_range`, `installed_font_keys` with `eagle_font_dir`, and `distinct_font_families` (`fontMetas.fontFamily`, a falcon extra).
+- These helpers build the panel's options: `distinct_cameras`, `month_counts`, `duration_range`, `installed_font_keys_in` with `font_dirs` (Eagle's `EagleApp/` and falcon's `Falcon/` under `~/Library/Fonts`, the second a deliberate difference), and `distinct_font_families` (`fontMetas.fontFamily`, a falcon extra).
 
 ## Colour search (observed)
 

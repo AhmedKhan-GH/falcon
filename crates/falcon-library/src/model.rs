@@ -636,11 +636,11 @@ impl SavedFilter {
     /// Reads the saved rules into a [`crate::search::Filter`]. Eagle does not
     /// save whether tags and folders combine with OR, AND or EQUAL (that
     /// setting lives in the panel), so they come back as OR, the panel's
-    /// starting value. A font rule reads the fonts activated through Eagle
-    /// from [`crate::search::eagle_font_dir`].
+    /// starting value. A font rule reads the activated fonts from Eagle's
+    /// font folder and falcon's ([`crate::search::font_dirs`]).
     pub fn to_filter(&self) -> SavedFilterQuery {
-        use crate::search::{eagle_font_dir, installed_font_keys};
-        self.to_filter_with_fonts(|| eagle_font_dir().map(|d| installed_font_keys(&d)).unwrap_or_default())
+        use crate::search::{font_dirs, installed_font_keys_in};
+        self.to_filter_with_fonts(|| installed_font_keys_in(&font_dirs()))
     }
 
     /// [`SavedFilter::to_filter`] with the activated font keys supplied;
