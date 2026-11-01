@@ -128,9 +128,10 @@ impl App {
                 self.push_bulk(targets.len(), Action::Edit(Op::Pin(targets.to_vec(), folders, !pinned)));
             }
         }
+        let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::SetFolderCover);
         if single
             && let Scope::Folder(fid) = &self.ws.scope
-            && ui.button(tr("Set as Folder Cover")).clicked()
+            && ui.add(egui::Button::new(tr("Set as Folder Cover")).shortcut_text(keys)).clicked()
         {
             self.ws.actions.push(Action::Edit(Op::SetFolderCover(fid.clone(), item.id.clone())));
         }

@@ -391,6 +391,7 @@ These are the defaults. All but the arrows, Esc, Tab, Z and the viewer's C, 0, 1
 | ⌥⇧N | New text file: an empty "Untitled.txt" item in the open folder (with its auto-tags), opened in the text viewer with the cursor in the text (Eagle's fixed key; rebindable in falcon) |
 | ⇧⌘⌫ | Remove the selection from the open folder, then select the next item; as in Eagle there is no prompt, and an item left in no folder becomes Uncategorized |
 | ⌥↑ | Open the parent of the open folder or smart folder |
+| ⌥⇧C | Make the first selected item the open folder's cover, with a note naming the folder (Eagle's fixed key; rebindable in falcon as `edit.folder.cover`, also Edit ▸ Set as Folder Cover and the card menu). Does nothing outside a folder or with nothing selected, or while a text field has focus |
 | / and * | Expand every folder if the reference folder (the open folder's parent, or the first folder) is collapsed, else collapse them all; in a smart folder, the smart folders |
 | ⌘C and ⌘V | Copy the selected files, or paste files or images |
 | ⌘E | Export the selected items' originals to a folder (see Export and copy-out) |

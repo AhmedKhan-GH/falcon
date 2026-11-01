@@ -504,6 +504,14 @@ impl App {
                     self.ws.org.settings_request = Some(id.clone());
                 }
             }
+            // The first selected item, as in Eagle.
+            C::SetFolderCover => {
+                if let Scope::Folder(fid) = &self.ws.scope
+                    && let Some(id) = self.ws.selected.first()
+                {
+                    self.ws.actions.push(Action::Edit(image_edit::Op::SetFolderCover(fid.clone(), id.clone())));
+                }
+            }
             // The picked folders, else the open one, as Eagle's menu does.
             C::MoveFolder => match (&self.ws.scope, self.ws.folders.sel.ids.is_empty()) {
                 (_, false) => self.open_mover(self.ws.folders.sel.ids.clone()),

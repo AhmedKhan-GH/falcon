@@ -1115,6 +1115,7 @@
   "Set frame as thumbnail": "フレームをサムネールに設定",
   "Set password": "パスワードを設定",
   "Set the current frame as the thumbnail": "現在のフレームをサムネールに設定",
+  "Set the first selected item as the folder cover": "最初に選択したアイテムをフォルダのカバーにする",
   "Set the open folder's password": "開いているフォルダにパスワードを設定",
   "Set the thumbnail background of {n}": "{n}件のサムネール背景を設定",
   "Settings": "設定",

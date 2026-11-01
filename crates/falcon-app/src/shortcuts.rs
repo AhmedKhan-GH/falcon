@@ -63,6 +63,9 @@ pub enum Command {
     FolderBottom,
     /// Eagle's Set Current Folder: the open folder's name and auto-tags.
     FolderSettings,
+    /// Edit ▸ Set as Folder Cover: the first selected item becomes the
+    /// open folder's cover (Eagle's ⌥⇧C).
+    SetFolderCover,
     /// Edit ▸ Move Folder…: the Move Folder dialog for the picked folders,
     /// or else the open one.
     MoveFolder,
@@ -386,6 +389,8 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::FolderDown, id: "edit.folder.arrange.down", group: "Edit", label: "Move folder down", default: k(CMD, Key::OpenBracket), aliases: &[] },
     Spec { cmd: Command::FolderTop, id: "edit.folder.arrange.top", group: "Edit", label: "Move folder to the top", default: k(CMD_SHIFT, Key::CloseBracket), aliases: &[KeyboardShortcut::new(CMD_SHIFT, Key::CloseCurlyBracket)] },
     Spec { cmd: Command::FolderBottom, id: "edit.folder.arrange.bottom", group: "Edit", label: "Move folder to the bottom", default: k(CMD_SHIFT, Key::OpenBracket), aliases: &[KeyboardShortcut::new(CMD_SHIFT, Key::OpenCurlyBracket)] },
+    // Eagle binds ⌥⇧C outside its keybind table (falcon's own id).
+    Spec { cmd: Command::SetFolderCover, id: "edit.folder.cover", group: "Edit", label: "Set the first selected item as the folder cover", default: k(ALT_SHIFT, Key::C), aliases: &[] },
     Spec { cmd: Command::FolderSettings, id: "edit.folder.setting", group: "Edit", label: "Folder settings (name and auto-tags)", default: k(CMD_SHIFT, Key::R), aliases: &[] },
     // Eagle binds no key to it by default.
     Spec { cmd: Command::MoveFolder, id: "edit.folder.move", group: "Edit", label: "Move folders to another place", default: None, aliases: &[] },
@@ -1006,6 +1011,14 @@ mod tests {
         assert!(hits("ZOOM").contains(&Command::ZoomOut));
         assert!(hits("player").iter().all(|c| matches!(c, Command::Player(_))), "a group's name finds its commands");
         assert!(hits("nothing like this").is_empty());
+    }
+
+    #[test]
+    fn folder_cover_key_is_option_shift_c() {
+        let keys = Shortcuts::default();
+        assert_eq!(keys.resolve(Key::C, ALT_SHIFT), Some(Command::SetFolderCover));
+        assert_eq!(keys.resolve(Key::C, Modifiers::SHIFT), Some(Command::Crop));
+        assert_eq!(keys.resolve(Key::C, CMD_ALT_SHIFT), Some(Command::CopyFolderPath));
     }
 
     #[test]

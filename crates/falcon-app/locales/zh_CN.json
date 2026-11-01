@@ -1115,6 +1115,7 @@
   "Set frame as thumbnail": "将帧设为缩略图",
   "Set password": "设置密码",
   "Set the current frame as the thumbnail": "将当前帧设为缩略图",
+  "Set the first selected item as the folder cover": "将第一个选中的项目设为文件夹封面",
   "Set the open folder's password": "为当前文件夹设置密码",
   "Set the thumbnail background of {n}": "设置{n}个项目的缩略图背景",
   "Settings": "设置",

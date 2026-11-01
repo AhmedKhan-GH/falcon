@@ -121,7 +121,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::Undo => s.text || (s.library && s.undo),
         C::Redo => s.text || (s.library && s.redo),
         C::Trash => any,
-        C::RemoveFromFolder => any && s.scope == ScopeKind::Folder,
+        C::RemoveFromFolder | C::SetFolderCover => any && s.scope == ScopeKind::Folder,
         C::OpenDefault | C::OpenLink | C::RevealInFinder | C::RefreshThumbnail | C::Duplicate => any || (s.library && s.viewer),
         C::Rename => grid && s.selected > 0,
         C::Back => s.viewer || (s.library && s.back),
@@ -342,6 +342,7 @@ pub static MENUS: &[(&str, &[Entry])] = &[
                 &[item("Flip Horizontally", Command::FlipHorizontal), item("Rotate Left", Command::RotateLeft), item("Crop…", Command::Crop)],
             ),
             item("Folder Settings…", Command::FolderSettings),
+            item("Set as Folder Cover", Command::SetFolderCover),
             Entry::Sub(
                 "Folder Password",
                 &[
@@ -900,6 +901,16 @@ mod tests {
         assert!(enabled(Command::MoveFolder, &picked));
         assert!(enabled(Command::MoveFolder, &State { scope: ScopeKind::Folder, ..grid(0) }));
         assert!(!enabled(Command::MoveFolder, &State { scope: ScopeKind::Smart, ..grid(0) }));
+    }
+
+    #[test]
+    fn folder_cover_needs_a_folder_and_a_selection() {
+        let folder = |selected| State { scope: ScopeKind::Folder, ..grid(selected) };
+        assert!(enabled(Command::SetFolderCover, &folder(1)));
+        assert!(enabled(Command::SetFolderCover, &folder(3)), "the first selected item is used");
+        assert!(!enabled(Command::SetFolderCover, &folder(0)));
+        assert!(!enabled(Command::SetFolderCover, &grid(1)));
+        assert!(!enabled(Command::SetFolderCover, &State { scope: ScopeKind::Smart, ..grid(1) }));
     }
 
     #[test]
