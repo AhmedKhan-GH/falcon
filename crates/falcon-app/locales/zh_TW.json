@@ -176,6 +176,7 @@
   "Can't draw this page": "無法繪製此頁",
   "Can't find it?": "找不到？",
   "Can't import the Inboard backup": "無法匯入 Inboard 備份",
+  "Can't import the Pixave library": "無法匯入 Pixave 資料庫",
   "Can't import the package": "無法匯入套件",
   "Can't merge that library": "無法合併該資料庫",
   "Can't open this PDF: {error}": "無法開啟此 PDF：{error}",
@@ -183,8 +184,10 @@
   "Can't play this file: {error}": "無法播放此檔案：{error}",
   "Can't print: {error}": "無法列印：{error}",
   "Can't read the Inboard backup": "無法讀取 Inboard 備份",
+  "Can't read the Pixave library": "無法讀取 Pixave 資料庫",
   "Can't read this file: {error}": "無法讀取此檔案：{error}",
   "Can't save the attachment: {error}": "無法儲存附件：{error}",
+  "Can't save the schema report": "無法儲存結構報告",
   "Cancel": "取消",
   "Cancel (Esc)": "取消（Esc）",
   "Capitalize Words": "單字首字母大寫",
@@ -222,6 +225,8 @@
   "Choose a Folder to Watch": "選擇要監視的資料夾",
   "Choose a Library to Add To": "選擇要加入的資料庫",
   "Choose a Library to Merge In": "選擇要合併的資料庫",
+  "Choose a Pixave Library": "選擇 Pixave 資料庫",
+  "Choose a Pixave library: a folder whose name ends in .pxvlibrary. ({path})": "請選擇 Pixave 資料庫：名稱以 .pxvlibrary 結尾的資料夾。（{path}）",
   "Choose a look": "選擇外觀",
   "Choose an Inboard Backup Folder": "選擇 Inboard 備份資料夾",
   "Choose folders…": "選擇資料夾…",
@@ -753,6 +758,8 @@
   "Import Folders": "匯入資料夾",
   "Import Folders…": "匯入資料夾…",
   "Import Inboard Backup…": "匯入 Inboard 備份…",
+  "Import Pixave Library…": "匯入 Pixave 資料庫…",
+  "Import a Pixave library": "匯入 Pixave 資料庫",
   "Import a large folder?": "要匯入大型資料夾嗎？",
   "Import an Eagle package": "匯入 Eagle 套件",
   "Import an Inboard backup": "匯入 Inboard 備份",
@@ -775,6 +782,9 @@
   "Importing {done} of {total}  ·  {current}": "正在匯入{done}/{total}  ·  {current}",
   "Importing {done} of {total}  ·  {left}  ·  {current}": "正在匯入{done}/{total}  ·  {left}  ·  {current}",
   "Importing {images} and {folders} from Inboard": "正在從 Inboard 匯入{images}和{folders}",
+  "Importing {n} files from Pixave": {
+    "other": "正在從 Pixave 匯入 {n} 個檔案"
+  },
   "Importing {n} files from the auto-import folder": {
     "other": "正在從自動匯入資料夾匯入{n}個檔案"
   },
@@ -1222,6 +1232,8 @@
   "Pinned {n} items to the top": {
     "other": "已將{n}個項目釘選到頂端"
   },
+  "Pixave Library…": "Pixave 資料庫…",
+  "Pixave's catalogue format isn't public, so collections, tags, ratings, colour labels, notes, links and dates are not brought over. A schema report lists the catalogue's tables without their contents.": "Pixave 的目錄格式未公開，因此不會匯入收藏集、標籤、評分、顏色標記、備註、連結和日期。結構報告會列出目錄中的資料表，但不包含其內容。",
   "Play a preview on hovered video cards": "游標停留時在影片卡片上播放預覽",
   "Play or pause": "播放或暫停",
   "Play sound effects": "播放音效",
@@ -1430,6 +1442,8 @@
   "Save Current Frame to Library": "將目前影格存入資料庫",
   "Save Frame…": "儲存影格…",
   "Save Password": "儲存密碼",
+  "Save Schema Report": "儲存結構報告",
+  "Save Schema Report…": "儲存結構報告…",
   "Save This Filter": "儲存此篩選",
   "Save This Filter…": "儲存此篩選…",
   "Save filter": "儲存篩選",
@@ -1440,6 +1454,7 @@
   "Save to": "儲存到",
   "Saved": "已儲存",
   "Saved the crop as a new item": "已將裁切結果儲存為新項目",
+  "Saved {file}": "已儲存 {file}",
   "Saved {name}": "已儲存{name}",
   "Saved “{name}”": "已儲存「{name}」",
   "Saving a changed list adds these tags to the items already in the folder and its subfolders. Tags you remove stay on those items.": "儲存修改後的清單時，這些標籤會加入資料夾及其子資料夾中已有的項目。你移除的標籤仍會保留在這些項目上。",
@@ -2011,6 +2026,9 @@
   "{n} files": {
     "other": "{n}個檔案"
   },
+  "{n} files can be imported into a new folder named {name}.": {
+    "other": "可將 {n} 個檔案匯入名為 {name} 的新資料夾。"
+  },
   "{n} files failed to import. Click for details.": {
     "other": "{n}個檔案匯入失敗。按一下以查看詳細資料。"
   },
@@ -2074,6 +2092,9 @@
   },
   "{n} items that are not images will be skipped.": {
     "other": "{n}個非圖片項目將被略過。"
+  },
+  "{n} items were left out because their files couldn't be identified.": {
+    "other": "有 {n} 個項目因無法辨識其檔案而被略過。"
   },
   "{n} items whose folder is gone are dropped.": {
     "other": "資料夾已遺失的{n}個項目會被移除。"

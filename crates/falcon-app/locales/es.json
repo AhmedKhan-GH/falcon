@@ -188,6 +188,7 @@
   "Can't draw this page": "No se puede dibujar esta página",
   "Can't find it?": "¿No la encuentras?",
   "Can't import the Inboard backup": "No se puede importar la copia de Inboard",
+  "Can't import the Pixave library": "No se puede importar la biblioteca de Pixave",
   "Can't import the package": "No se puede importar el paquete",
   "Can't merge that library": "No se puede combinar esa biblioteca",
   "Can't open this PDF: {error}": "No se puede abrir este PDF: {error}",
@@ -195,8 +196,10 @@
   "Can't play this file: {error}": "No se puede reproducir este archivo: {error}",
   "Can't print: {error}": "No se puede imprimir: {error}",
   "Can't read the Inboard backup": "No se puede leer la copia de Inboard",
+  "Can't read the Pixave library": "No se puede leer la biblioteca de Pixave",
   "Can't read this file: {error}": "No se puede leer este archivo: {error}",
   "Can't save the attachment: {error}": "No se puede guardar el adjunto: {error}",
+  "Can't save the schema report": "No se puede guardar el informe del esquema",
   "Cancel": "Cancelar",
   "Cancel (Esc)": "Cancelar (Esc)",
   "Capitalize Words": "Palabras en mayúscula inicial",
@@ -236,6 +239,8 @@
   "Choose a Folder to Watch": "Elegir una carpeta para vigilar",
   "Choose a Library to Add To": "Elegir una biblioteca de destino",
   "Choose a Library to Merge In": "Elige una biblioteca para combinar",
+  "Choose a Pixave Library": "Elegir una biblioteca de Pixave",
+  "Choose a Pixave library: a folder whose name ends in .pxvlibrary. ({path})": "Elige una biblioteca de Pixave: una carpeta cuyo nombre termine en .pxvlibrary. ({path})",
   "Choose a look": "Elige un aspecto",
   "Choose an Inboard Backup Folder": "Elige una carpeta de copia de Inboard",
   "Choose folders…": "Elegir carpetas…",
@@ -793,6 +798,8 @@
   "Import Folders": "Importar carpetas",
   "Import Folders…": "Importar carpetas…",
   "Import Inboard Backup…": "Importar copia de Inboard…",
+  "Import Pixave Library…": "Importar biblioteca de Pixave…",
+  "Import a Pixave library": "Importar una biblioteca de Pixave",
   "Import a large folder?": "¿Importar una carpeta grande?",
   "Import an Eagle package": "Importar un paquete de Eagle",
   "Import an Inboard backup": "Importar una copia de seguridad de Inboard",
@@ -817,6 +824,10 @@
   "Importing {done} of {total}  ·  {current}": "Importando {done} de {total}  ·  {current}",
   "Importing {done} of {total}  ·  {left}  ·  {current}": "Importando {done} de {total}  ·  {left}  ·  {current}",
   "Importing {images} and {folders} from Inboard": "Importando {images} y {folders} de Inboard",
+  "Importing {n} files from Pixave": {
+    "one": "Importando {n} archivo de Pixave",
+    "other": "Importando {n} archivos de Pixave"
+  },
   "Importing {n} files from the auto-import folder": {
     "one": "Importando {n} archivo de la carpeta de importación automática",
     "other": "Importando {n} archivos de la carpeta de importación automática"
@@ -1287,6 +1298,8 @@
     "one": "{n} elemento fijado arriba",
     "other": "{n} elementos fijados arriba"
   },
+  "Pixave Library…": "Biblioteca de Pixave…",
+  "Pixave's catalogue format isn't public, so collections, tags, ratings, colour labels, notes, links and dates are not brought over. A schema report lists the catalogue's tables without their contents.": "El formato del catálogo de Pixave no es público, así que no se traen colecciones, etiquetas, valoraciones, etiquetas de color, notas, enlaces ni fechas. Un informe del esquema enumera las tablas del catálogo sin su contenido.",
   "Play a preview on hovered video cards": "Reproducir una vista previa al pasar sobre tarjetas de vídeo",
   "Play or pause": "Reproducir o pausar",
   "Play sound effects": "Reproducir efectos de sonido",
@@ -1512,6 +1525,8 @@
   "Save Current Frame to Library": "Guardar fotograma actual en la biblioteca",
   "Save Frame…": "Guardar fotograma…",
   "Save Password": "Guardar contraseña",
+  "Save Schema Report": "Guardar informe del esquema",
+  "Save Schema Report…": "Guardar informe del esquema…",
   "Save This Filter": "Guardar este filtro",
   "Save This Filter…": "Guardar este filtro…",
   "Save filter": "Guardar filtro",
@@ -1522,6 +1537,7 @@
   "Save to": "Guardar en",
   "Saved": "Guardados",
   "Saved the crop as a new item": "Recorte guardado como elemento nuevo",
+  "Saved {file}": "{file} guardado",
   "Saved {name}": "{name} guardada",
   "Saved “{name}”": "Se guardó «{name}»",
   "Saving a changed list adds these tags to the items already in the folder and its subfolders. Tags you remove stay on those items.": "Al guardar una lista modificada, estas etiquetas se añaden a los elementos que ya están en la carpeta y sus subcarpetas. Las etiquetas que quites se conservan en esos elementos.",
@@ -2119,6 +2135,10 @@
     "one": "{n} archivo",
     "other": "{n} archivos"
   },
+  "{n} files can be imported into a new folder named {name}.": {
+    "one": "Se puede importar {n} archivo a una carpeta nueva llamada {name}.",
+    "other": "Se pueden importar {n} archivos a una carpeta nueva llamada {name}."
+  },
   "{n} files failed to import. Click for details.": {
     "one": "{n} archivo no se pudo importar. Clic para ver los detalles.",
     "other": "{n} archivos no se pudieron importar. Clic para ver los detalles."
@@ -2206,6 +2226,10 @@
   "{n} items that are not images will be skipped.": {
     "one": "Se omitirá {n} elemento que no es una imagen.",
     "other": "Se omitirán {n} elementos que no son imágenes."
+  },
+  "{n} items were left out because their files couldn't be identified.": {
+    "one": "Se omitió {n} elemento porque no se pudo identificar su archivo.",
+    "other": "Se omitieron {n} elementos porque no se pudieron identificar sus archivos."
   },
   "{n} items whose folder is gone are dropped.": {
     "one": "Se quita {n} elemento cuya carpeta ya no existe.",

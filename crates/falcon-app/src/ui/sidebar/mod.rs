@@ -380,6 +380,9 @@ impl App {
             if ui.button(tr("Import Inboard Backup…")).clicked() {
                 self.import_inboard_dialog();
             }
+            if ui.button(tr("Import Pixave Library…")).clicked() {
+                self.import_pixave_dialog();
+            }
             ui.separator();
             if ui.button(if self.collect.open { tr("Hide Collect Window") } else { tr("Show Collect Window") }).clicked() {
                 self.collect.toggle();

@@ -176,6 +176,7 @@
   "Can't draw this page": "このページを描画できません",
   "Can't find it?": "見つかりませんか？",
   "Can't import the Inboard backup": "Inboardバックアップを読み込めません",
+  "Can't import the Pixave library": "Pixave ライブラリを読み込めません",
   "Can't import the package": "パッケージを読み込めません",
   "Can't merge that library": "そのライブラリは統合できません",
   "Can't open this PDF: {error}": "このPDFを開けません：{error}",
@@ -183,8 +184,10 @@
   "Can't play this file: {error}": "このファイルを再生できません：{error}",
   "Can't print: {error}": "印刷できません：{error}",
   "Can't read the Inboard backup": "Inboardバックアップを読み取れません",
+  "Can't read the Pixave library": "Pixave ライブラリを読み取れません",
   "Can't read this file: {error}": "このファイルを読み込めません：{error}",
   "Can't save the attachment: {error}": "添付ファイルを保存できません：{error}",
+  "Can't save the schema report": "スキーマレポートを保存できません",
   "Cancel": "キャンセル",
   "Cancel (Esc)": "キャンセル（Esc）",
   "Capitalize Words": "単語の先頭を大文字",
@@ -222,6 +225,8 @@
   "Choose a Folder to Watch": "監視するフォルダを選択",
   "Choose a Library to Add To": "追加先のライブラリを選択",
   "Choose a Library to Merge In": "統合するライブラリを選択",
+  "Choose a Pixave Library": "Pixave ライブラリを選択",
+  "Choose a Pixave library: a folder whose name ends in .pxvlibrary. ({path})": "Pixave ライブラリ（名前が .pxvlibrary で終わるフォルダ）を選択してください。（{path}）",
   "Choose a look": "外観を選択",
   "Choose an Inboard Backup Folder": "Inboardバックアップのフォルダを選択",
   "Choose folders…": "フォルダを選択…",
@@ -753,6 +758,8 @@
   "Import Folders": "フォルダを読み込む",
   "Import Folders…": "フォルダを読み込む…",
   "Import Inboard Backup…": "Inboardバックアップを読み込む…",
+  "Import Pixave Library…": "Pixave ライブラリを読み込む…",
+  "Import a Pixave library": "Pixave ライブラリを読み込む",
   "Import a large folder?": "大きなフォルダを読み込みますか？",
   "Import an Eagle package": "Eagleパッケージを読み込む",
   "Import an Inboard backup": "Inboardバックアップを読み込む",
@@ -775,6 +782,9 @@
   "Importing {done} of {total}  ·  {current}": "{total} 件中 {done} 件を読み込み中  ·  {current}",
   "Importing {done} of {total}  ·  {left}  ·  {current}": "{total} 件中 {done} 件を読み込み中  ·  {left}  ·  {current}",
   "Importing {images} and {folders} from Inboard": "Inboardから{images}と{folders}を読み込み中",
+  "Importing {n} files from Pixave": {
+    "other": "Pixave から{n}個のファイルを読み込んでいます"
+  },
   "Importing {n} files from the auto-import folder": {
     "other": "自動読み込みフォルダから{n}個のファイルを読み込み中"
   },
@@ -1222,6 +1232,8 @@
   "Pinned {n} items to the top": {
     "other": "{n}件のアイテムを先頭にピン留めしました"
   },
+  "Pixave Library…": "Pixave ライブラリ…",
+  "Pixave's catalogue format isn't public, so collections, tags, ratings, colour labels, notes, links and dates are not brought over. A schema report lists the catalogue's tables without their contents.": "Pixave のカタログ形式は公開されていないため、コレクション、タグ、評価、カラーラベル、メモ、リンク、日付は引き継がれません。スキーマレポートには、カタログのテーブルが内容を含めずに一覧表示されます。",
   "Play a preview on hovered video cards": "ポインタを置いたビデオカードでプレビューを再生",
   "Play or pause": "再生 / 一時停止",
   "Play sound effects": "効果音を鳴らす",
@@ -1430,6 +1442,8 @@
   "Save Current Frame to Library": "現在のフレームをライブラリに保存",
   "Save Frame…": "フレームを保存…",
   "Save Password": "パスワードを保存",
+  "Save Schema Report": "スキーマレポートを保存",
+  "Save Schema Report…": "スキーマレポートを保存…",
   "Save This Filter": "このフィルタを保存",
   "Save This Filter…": "このフィルタを保存…",
   "Save filter": "フィルタを保存",
@@ -1440,6 +1454,7 @@
   "Save to": "保存先",
   "Saved": "保存済み",
   "Saved the crop as a new item": "切り抜きを新規アイテムとして保存しました",
+  "Saved {file}": "{file} を保存しました",
   "Saved {name}": "{name} を保存しました",
   "Saved “{name}”": "「{name}」を保存しました",
   "Saving a changed list adds these tags to the items already in the folder and its subfolders. Tags you remove stay on those items.": "変更したリストを保存すると、フォルダとそのサブフォルダにあるアイテムにもこれらのタグが追加されます。削除したタグはそれらのアイテムに残ります。",
@@ -2011,6 +2026,9 @@
   "{n} files": {
     "other": "{n} ファイル"
   },
+  "{n} files can be imported into a new folder named {name}.": {
+    "other": "{n}個のファイルを新しいフォルダ「{name}」に読み込めます。"
+  },
   "{n} files failed to import. Click for details.": {
     "other": "{n}個のファイルを読み込めませんでした。クリックで詳細を表示。"
   },
@@ -2074,6 +2092,9 @@
   },
   "{n} items that are not images will be skipped.": {
     "other": "画像ではない{n}個のアイテムはスキップされます。"
+  },
+  "{n} items were left out because their files couldn't be identified.": {
+    "other": "{n}個の項目はファイルを特定できなかったため除外されました。"
   },
   "{n} items whose folder is gone are dropped.": {
     "other": "フォルダがなくなったアイテム{n}個は除外されます。"

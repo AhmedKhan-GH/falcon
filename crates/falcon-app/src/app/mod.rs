@@ -189,6 +189,8 @@ pub struct App {
     pub(crate) merge: Option<crate::ui::dialogs::library_notices::Merge>,
     /// An `.eaglepack` import waiting for an answer.
     pub(crate) pack_ask: Option<crate::ui::dialogs::library_notices::PackAsk>,
+    /// A probed Pixave library waiting for an answer (`ui/dialogs/pixave.rs`).
+    pub(crate) pixave_ask: Option<crate::ui::dialogs::pixave::PixaveAsk>,
     /// Empty Cache and Reload is asking for confirmation.
     pub(crate) confirm_reload: bool,
     /// A library being read on a background thread (`ui/dialogs/library_notices.rs`).
@@ -284,6 +286,7 @@ impl App {
             missing: None,
             merge: None,
             pack_ask: None,
+            pixave_ask: None,
             confirm_reload: false,
             loading: None,
             opens: Default::default(),
@@ -485,6 +488,7 @@ impl App {
         self.merge_dialogs(&ctx);
         self.tools_dialogs(&ctx);
         self.pack_dialogs(&ctx);
+        self.pixave_dialogs(&ctx);
         self.progress_modal(&ctx);
         self.dock_import_progress();
         self.reload_confirm(&ctx);
