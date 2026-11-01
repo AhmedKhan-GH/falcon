@@ -47,6 +47,22 @@ pub fn placeholder(path: &Path) -> Option<PathBuf> {
     Some(path.with_file_name(format!(".{name}.icloud")))
 }
 
+/// The hint for a picture whose original is gone from disk (tooltip on its
+/// card, line under the viewer's placeholder).
+pub const MISSING_HINT: &str = "File not found. If the library is synced, the sync may still be in progress.";
+
+/// Whether to show [`MISSING_HINT`]: the picture failed to load, the
+/// original is not on disk, and it is not waiting on iCloud.
+pub fn missing_hint(failed: bool, exists: bool, dataless: bool) -> bool {
+    failed && !exists && !dataless
+}
+
+/// [`missing_hint`] for the file at `path`. Only `stat`s, so call it only
+/// once a load has failed.
+pub fn is_missing(path: &Path) -> bool {
+    missing_hint(true, path.exists(), is_dataless(path))
+}
+
 /// Whether reading `path` would wait for a download: the file is dataless,
 /// or it is missing and iCloud's placeholder stands in for it. Only `stat`s,
 /// which never triggers a download.
@@ -336,6 +352,25 @@ mod tests {
     use super::*;
 
     const S: Duration = Duration::from_secs(1);
+
+    #[test]
+    fn the_missing_hint_needs_a_failed_load_and_a_plain_missing_file() {
+        assert!(missing_hint(true, false, false));
+        assert!(!missing_hint(false, false, false));
+        assert!(!missing_hint(true, true, false));
+        assert!(!missing_hint(true, false, true));
+    }
+
+    #[test]
+    fn a_missing_file_is_told_from_an_icloud_placeholder() {
+        let dir = tempfile::tempdir().unwrap();
+        let gone = dir.path().join("a.png");
+        assert!(is_missing(&gone));
+        std::fs::write(placeholder(&gone).unwrap(), b"").unwrap();
+        assert!(!is_missing(&gone));
+        std::fs::write(&gone, b"x").unwrap();
+        assert!(!is_missing(&gone));
+    }
 
     #[test]
     fn a_download_ends_local() {

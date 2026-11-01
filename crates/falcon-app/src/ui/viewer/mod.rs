@@ -93,11 +93,12 @@ impl App {
 
     /// Eagle's "cannot preview" page: the file's type, a line saying so
     /// and a button listing the apps that can open it.
-    pub(crate) fn cannot_preview(&mut self, ui: &mut Ui, item: &Item, area: Rect) {
+    pub(crate) fn cannot_preview(&mut self, ui: &mut Ui, item: &Item, root: &std::path::Path, area: Rect) {
         let c = area.center();
         ext_placeholder(ui, Rect::from_center_size(c - vec2(0.0, 70.0), Vec2::splat(150.0)), &item.ext);
         let name = format!("{}.{}", item.name, item.ext);
-        self.notice_lines(ui, area, &name, "Falcon can't show a preview of this file. Try opening it in another app.");
+        let line = if crate::icloud::is_missing(&item.original_path(root)) { crate::icloud::MISSING_HINT } else { "Falcon can't show a preview of this file. Try opening it in another app." };
+        self.notice_lines(ui, area, &name, line);
     }
 
     /// The title, line and Open With button under the picture of a page

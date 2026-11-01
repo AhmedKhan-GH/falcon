@@ -994,6 +994,8 @@ Where originals are read:
 
 How long downloads take depends on the file and the link (inferred: seconds for a thumbnail, minutes for a several-hundred-megabyte book).
 
+A picture that cannot be drawn because its original is gone from disk (and is not an iCloud file waiting to download) says so: the card shows "File not found. If the library is synced, the sync may still be in progress." as its hover text, and the viewer shows the same line centred under the placeholder. Falcon looks at the disk only once the load has failed, and for a card only while the pointer is on it (`icloud::missing_hint`, `icloud::MISSING_HINT`).
+
 ## Folder covers
 
 Eagle shows covers only on the subfolder cards at the top of a folder's content (`sub-folder-list` in `index.html`), not in the sidebar. From `calculateImageBinding` and `setFolderCover` (observed):

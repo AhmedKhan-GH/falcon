@@ -269,7 +269,7 @@ impl App {
                 None if !tf.is_identity() && !animated => paint_transformed(clip.painter(), tex.id(), r, tf),
                 None => egui::Image::new((tex.id(), r.size())).paint_at(&clip, r),
             },
-            (None, None) if no_preview => self.cannot_preview(&mut clip, item, area),
+            (None, None) if no_preview => self.cannot_preview(&mut clip, item, lib.root(), area),
             (None, None) => ext_placeholder(&clip, Rect::from_center_size(area.center(), Vec2::splat(260.0)), &item.ext),
         }
         if tex.is_none()
