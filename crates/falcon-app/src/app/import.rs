@@ -653,10 +653,16 @@ impl App {
 
     /// ⌘C: puts the selected originals on the clipboard as files.
     pub(crate) fn copy_selection(&mut self) {
+        let ids = self.ws.selected.clone();
+        self.copy_items(&ids);
+    }
+
+    /// Puts the originals of `ids` on the clipboard as files.
+    pub(crate) fn copy_items(&mut self, ids: &[String]) {
         let Some(shared) = self.ws.lib.clone() else { return };
         let paths: Vec<PathBuf> = {
             let lib = lock(&shared);
-            self.ws.selected.iter().filter_map(|id| lib.item(id)).map(|i| i.original_path(lib.root())).collect()
+            ids.iter().filter_map(|id| lib.item(id)).map(|i| i.original_path(lib.root())).collect()
         };
         if let Ok(mut clip) = arboard::Clipboard::new()
             && clip.set().file_list(&paths).is_ok()

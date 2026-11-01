@@ -424,7 +424,11 @@ impl App {
             "Falcon previews TIFF, HEIC and TGA images of up to {} megapixels; this one has {megapixels}.",
             logic::TOO_LARGE_PIXELS / 1_000_000
         );
-        self.notice_lines(ui, area, "Too large to preview", &line);
+        // As in Eagle, the button opens the item's menu (Open With is in it).
+        let b = crate::ui::viewer::notice_text(ui, area, "Too large to preview", &line);
+        egui::Popup::menu(&b).show(|ui| {
+            self.item_menu(ui, lib, item, std::slice::from_ref(&item.id));
+        });
         let (name_x, right) = audio::bar_shell(self, ui, item, bar);
         audio::bar_name(ui, item, bar, name_x, right);
     }

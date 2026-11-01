@@ -440,8 +440,13 @@ impl App {
         self.flash_brief(if !ok { "No thumbnail to copy".to_string() } else if n == 1 { "Copied thumbnail".to_string() } else { format!("Copied {}", plural(n, "thumbnail")) });
     }
 
-    /// The Copy File Path entry and Copy submenu of the item menu.
+    /// The Copy (the files), Copy File Path and Copy submenu entries of the
+    /// item menu, which the viewer's right-click menu shares.
     pub(crate) fn item_copy_menu(&mut self, ui: &mut Ui, targets: &[String]) {
+        let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::Copy);
+        if ui.add(egui::Button::new("Copy").shortcut_text(keys)).clicked() {
+            self.copy_items(targets);
+        }
         let mut ask = |kind| self.ws.export.request = Some(Request::Copy(kind, targets.to_vec()));
         if ui.button("Copy File Path").clicked() {
             ask(CopyKind::Path);
