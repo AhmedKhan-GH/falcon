@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 218 | 36 | 18 | 8 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 220 | 35 | 17 | 8 |
 | Viewers and file formats | 182 | 17 | 4 | 5 |
-| Search, filters and organising | 207 | 8 | 7 | 3 |
+| Search, filters and organising | 214 | 2 | 5 | 3 |
 | Import, export, library, preferences and integrations | 175 | 12 | 22 | 26 |
-| **Total** | 782 | 73 | 51 | 42 |
+| **Total** | 791 | 66 | 48 | 42 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -220,7 +220,7 @@ Eagle defaults come from prefs `shortcuts.keybinds` (rebindable) and from the ha
 | Arrow keys move the selection; ←→ step in the viewer | Done | app.rs:1105-1135 | local |
 | WASD as arrow keys | Done | Fixed keys | local |
 | ⇧ + arrows extend the selection | Done | `logic::extend_selection`: ⇧←/→ grow or shrink from the anchor; ⇧↑/↓ only in List layout, as Eagle | local |
-| Arrow keys move through the sidebar tree when it has focus (focus zones: content / sidebar / tags) | Partial | Content and sidebar zones; no tags zone (needs the All Tags tag-group sidebar) | local |
+| Arrow keys move through the sidebar tree when it has focus (focus zones: content / sidebar / tags) | Done | Content, sidebar and tags zones: → from the sidebar enters the tags zone on All Tags, ← leaves, ↑/↓ walk All → Uncategorized → Starred → groups, ⌘⌫ deletes the open group | local |
 | ⌫ goes back (or leaves the viewer); ⌥← / ⌥→ and ⌘← / ⌘→ move through history | Done | shortcuts.rs `go.back` (⌫, ⌘←, ⌥←) and `go.forward` (⌘→, ⌥→); in the viewer ⌫ leaves it (app.rs `keyboard`) | local |
 | ⌥↑ opens the parent folder | Done | Of the open folder or smart folder | local |
 | ⌥⇧N creates a text file from a template; ⌥⇧C sets the folder cover | Partial | ⌥⇧N creates and opens an empty Untitled.txt (`file.create.txt`); ⌥⇧C is still context-menu only | local |
@@ -351,7 +351,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Drag a Finder folder onto the sidebar to import it with its folder tree | Done | `folder_import.rs` plan and `import_ui.rs` `import_folder_trees`: a drop on the sidebar's empty space makes a top-level folder tree and opens it; on the grid it imports flat, as Eagle's `onDropContainer` does | local |
 | Drop an .eaglepack onto the window | Done | Grid, sidebar folder rows (into that folder) and empty sidebar space (into the open folder), as Eagle's `onDropSidebar` | local |
 | Drop an image or URL from a browser | Missing |  | online/plugin |
-| Drag tags onto tag groups or the starred list; ⌥ copies instead of moving | Missing | Cross-ref organising | local |
+| Drag tags onto tag groups or the starred list; ⌥ copies instead of moving | Done | `onDropTag`-style moves, ⌥ copies, Starred stars (and moves to the front) as Eagle; a drag carries all picked tags | local |
 | Drag ghost showing the item count | Done | app.rs:3732-3740 | local |
 
 ---
@@ -874,7 +874,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Also matches camera (`rawMetas.camera`), text-file content (`image.text`) and font metadata | Done | Always searched, as Eagle | local |
 | Search Scope menu: turn name, folder name, folder description, extension, tags, URL, comment and note on or off (remembered) | Done | Menu on the search caret, 8 toggles remembered (`search_state.rs`) | local |
 | Search All: search the whole library from any view | Done | ⌥⌘F (`find.search.all`) | local |
-| Exact-substring results only | Partial | Falcon adds its own typo-tolerant fallback (`S:191` fuzzy_score, `L:165`), which returns results Eagle would not. This is a deviation to keep or put behind an option. | local |
+| Exact-substring results only | Done | Falcon adds typo-tolerant matching, on by default at the user's request (`Prefs::typo_search`); off gives Eagle's exact substrings. A documented falcon extra, not a gap | local |
 | Traditional and simplified Chinese match each other | Missing | none | local |
 | Pinyin matching for folder, smart folder and tag names in sidebar and tag lists | Missing | `A:1904` subtree_matches is a plain substring test | local |
 | Toolbar title reads "Search results" while searching | Done | `A:2019` | local |
@@ -899,7 +899,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | --- | --- | --- | --- |
 | Colour: preset swatches, any colour, accuracy slider, results sorted by colour distance | Done | `A:2237`, `S:870` ColorQuery, `L:173` distance sort | local |
 | Colour: grayscale only | Done | `A:2276`, `S:922` | local |
-| Colour: full picker widget | Partial | Hex text field plus 14 swatches, no picker | local |
+| Colour: full picker widget | Done | HSV square and hue strip with a preview beside the hex field (`ui/filter_bar`); falcon's own swatches; Eagle has no recent-colour list either | local |
 | Tags: include tags, with Any, All or Equals logic | Done | `A:2289`, `S:362` SetFilter (keeps the OR quirk) | local |
 | Tags: Untagged option | Done | `A:2294` | local |
 | Tags: exclude a tag (right-click) | Done | `filter_bar.rs` Tags chip | local |
@@ -981,7 +981,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Reset a folder cover | Missing | `E:465` accepts None, but no UI calls it | local |
 | Folder password: create with hint, change, remove, Lock Now | Done | `OU:270`, `OU:1067`, `O:202` | local |
 | Locked folder hides its items and subfolders until unlocked; unlock screen shows the hint | Done | `O:160` hidden_folders, `OU:676` unlock_screen | local |
-| Unlock a folder with Touch ID | Missing | none | local |
+| Unlock a folder with Touch ID | Done | Touch ID button on the locked-folder screen whenever the Mac supports it, regardless of the preference, as Eagle; only the asked folder unlocks | local |
 | Folder description, edited in the inspector | Done | Saves 1 s after typing stops and on blur, one undo step (`Action::SetFolderDescription`) | local |
 | Rename a folder from the inspector name field | Done | `scope_inspector`: Return or blur saves through `Action::RenameFolder`; an emptied name reverts | local |
 | Folder auto-tagging: tags added to every item put in the folder, including the parent folders' tags | Done | `crates/falcon-library/src/autotag.rs` (own tags then each parent's, deduped, in Eagle's order); applied on import, paste, Add to Folder, the inspector picker and drops. `extendTags` is derived, as Eagle does, not stored | local |
@@ -990,7 +990,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Subfolder strip with covers at the top of a folder | Done | `covers.rs:65` subfolder_strip | local |
 | Folder item counts | Done | `L:67` folder_counts | local |
 | Folder inspector: item count, size, date imported, password state | Done | `A:2926` | local |
-| Folder inspector: set, change or remove password buttons | Partial | Shows only "Set" or "None"; the actions are in the context menu | local |
+| Folder inspector: set, change or remove password buttons | Done | Create, or Change | Remove, for a single folder; count and size hidden while locked | local |
 | Copy Folder Link (eagle:// link) | Done | Folder and smart folder menus | local |
 | Export folder (computer, .eaglepack) | Done | Folder menu Export ▸ … and the inspector's Export button (`export_ui.rs` `tree_export_menu`, `scope_export_button`) | local |
 | Clear Invalid Content (empty or broken folders) | Missing | Cross-ref: library agent | local |
@@ -1011,7 +1011,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Description | Done | Edited in the inspector when a smart folder is open and nothing is selected (Eagle edits it there too, not in the rules dialog) | local |
 | Several conditions, each with its own Any/All and true/false (NOT), AND-ed together | Done | `smart_draft.rs` drafts/conditions and `organize_ui::smart_conditions_ui`: every condition is edited, each with must/must-not and all/any | local |
 | Editing a smart folder keeps its other conditions and rules | Done | Untouched conditions and rules are written back verbatim, edited ones keep their unknown keys, and rules the dialog can't show stay as read-only Unsupported rows until deleted (`smart_draft.rs`, test `eagle_smart_folder_survives_an_edit`) | local |
-| Live "N items found" count while editing rules | Missing | none | local |
+| Live "N items found" count while editing rules | Done | `smart_count.rs` / `smart::count_draft` on a worker, debounced 250 ms, with the parent's conditions | local |
 | Batch rename, recolour or delete several smart folders | Done | Multi-smart-folder menu in `folders_ui`, looping the `smart.rs` calls in one undo step | local |
 | Export a smart folder | Done | Smart folder menu Export ▸ directory or `.eaglepack` (`export::plan_smart`, `PackSource::Smart`) | local |
 | Rule: name, URL, note, with equals, contains, excludes, begins with, ends with, empty, not empty | Done | `smart.rs` text rules; every method is in the dialog for each text property. Begins/ends-with are anchored regexes as in Eagle | local |
@@ -1027,7 +1027,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Rule: height | Done | `smart.rs`; in the dialog | local |
 | Rule: file size with KB or MB unit | Done | `smart.rs`; the dialog offers KB/MB and =, <, >, between | local |
 | Rule: BPM | Done | `smart.rs`; in the dialog | local |
-| Rule: Date Added (on, before, after, between, within last N days) | Done | `smart.rs` compares local calendar days for "on"; the dialog takes dates typed as YYYY-MM-DD and a "within N days" count. No date picker | local |
+| Rule: Date Added (on, before, after, between, within last N days) | Done | `smart.rs` compares local calendar days for "on"; the dialog has a calendar picker (`ui/date_picker.rs`) and "within N days" | local |
 | Rule: Date Created and Date Modified | Done | `smart.rs`; in the dialog | local |
 | Rule: comments | Done | `smart.rs` rule arm over the joined comment texts, with tests | local |
 | Rule: camera | Done | `smart.rs` text methods on the lower-cased camera; a photo without one fails every method, as in Eagle | local |
@@ -1042,16 +1042,16 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | --- | --- | --- | --- |
 | All Tags page: every tag with its count, filter box, A-Z sections | Done | `A:2745` tag_page | local |
 | Click a tag to show its items | Done | `A:2840` Scope::Tag | local |
-| Rename a tag everywhere (items, history, starred, groups) | Done | `A:2853`, `E:131` | local |
-| Merge tags: select several and merge them into one name | Done | `Library::merge_tags` through the merge dialog, 2–5 tags; rename to an existing name still merges two | local |
+| Rename a tag everywhere (items, history, starred, groups) | Done | `E:131` plus folder auto-tags and smart-folder tag rules rewritten in place in one undo step (`tag_renames_reach_folder_auto_tags_and_smart_rules_in_one_undo_step`) | local |
+| Merge tags: select several and merge them into one name | Done | Merge dialog (2–5 tags as Eagle), reaching folder auto-tags and smart-folder rules | local |
 | Delete a tag (with confirmation) | Done | `A:2860`, `E:169` | local |
 | Star and unstar tags; Starred section | Done | `A:2856`, `E:187`, `A:2751` | local |
-| Select several tags (click, Shift, Cmd, rubber band) and act on all | Partial | Click, ⌘ and ⇧ picks with the tag menu acting on all (`tags.rs`); no rubber band | local |
+| Select several tags (click, Shift, Cmd, rubber band) and act on all | Done | Click, ⌘, ⇧ and a rubber band with edge auto-scroll (`tag_view.rs`); the tag menu acts on all | local |
 | Tag groups: create, rename, colour, description, reorder, delete | Done | `OU:722`-`900`, `E:214`-`330` | local |
 | Move a tag to a group, remove from group, drag a tag onto a group | Done | `OU:919` tag_group_menu, DragTag | local |
 | Add a tag to more than one group | Done | Add to Group keeps the tag's other groups (`add_tags_to_group_too`) | local |
 | Find items with any tag in a group | Done | Group heading menu | local |
-| Tag sidebar: All, Starred, Uncategorized (tags in no group), Groups | Partial | Toggle between A-Z and group view (`OU:724`); falcon lists "Ungrouped" tags in group view, but there are no separate Starred or Uncategorized pages | local |
+| Tag sidebar: All, Starred, Uncategorized (tags in no group), Groups | Done | `ui/grid/tag_sidebar.rs`: All / Uncategorized / Starred / Groups with +, rename, reorder and the group menu; fixed 190 px, not resizable as Eagle's | local |
 | Sort tags by name or count, group by alphabet or groups | Done | All Tags page sort menu | local |
 | Tag group colour dot on chips | Done | `A:2827` tag_dot | local |
 | Recent tag history (last 120 used) kept in tags.json | Done | `tagging.rs` `add_tags_to_items` and `push_history`: each added tag moves to the front, 120 kept, a tag removed from its last item leaves the history | local |
@@ -1065,7 +1065,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Colour palette swatches | Done | `A:3053` | local |
 | Click a swatch to find items of similar colour | Done | `A:3066` | local |
 | Copy the colour as HEX, RGB or RGBA | Done | Swatch right-click: HEX, RGB, RGBA, HSL, HSV, HWB, CMYK (`colors.rs`) | local |
-| Set a palette colour as the primary colour (`marked`) | Partial | Stored as Eagle writes it (`marked` true/false); colour search still ignores it | local |
+| Set a palette colour as the primary colour (`marked`) | Done | Stored as Eagle writes it; colour search matches a marked colour under ΔE2000 30 as Eagle; smart-folder colour rules use Eagle's stricter test without it, as Eagle | local |
 | Re-analyse colours | Done | `image_edit.rs:107` Refresh Palette | local |
 | Name (title) editing | Done | `A:3082` | local |
 | Click the extension to change it | Done | Inspector Type row opens a checking dialog; only the original is renamed, as Eagle | local |
@@ -1174,7 +1174,7 @@ Ranked by user impact. Data-loss and silent-mismatch bugs come first, then every
 6. ~~Clicking a folder chip in the inspector removes the item from the folder.~~ Fixed: it opens the folder; the chip's × removes.
 7. **No size or dimensions filter chips.** The engine supports them, but there's no UI.
 8. **No Comment filter, and comments, camera, text content and fonts aren't searched.** There's also no Search Scope menu.
-9. **The smart folder dialog** has no date picker and shows no live hit count.
+9. ~~The smart folder dialog has no date picker and shows no live hit count.~~ Fixed.
 10. ~~No tag picker.~~ Fixed.
 11. **No exclude, search or tag-group options in the Tag, Folder and Type filters.** Also no type groups (video, audio, font...).
 12. ~~Remove from current folder is missing, and the "remove from folder or trash" prompt.~~ Fixed: ⇧⌘⌫, and trashing in a folder asks "only this folder" or "trash all" when items are filed elsewhere too.
