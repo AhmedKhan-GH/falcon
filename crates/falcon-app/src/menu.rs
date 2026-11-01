@@ -131,6 +131,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::ParentFolder => grid && s.parent,
         C::Reshuffle => grid && s.scope == ScopeKind::Random,
         C::Rate(_) => any || (s.library && s.viewer),
+        C::AddTags | C::TagPanel => any,
         C::FlipHorizontal => s.library && s.flippable,
         C::RotateLeft => s.library && s.rotatable,
         C::Crop => s.library && s.croppable,
@@ -291,6 +292,8 @@ pub static MENUS: &[(&str, &[Entry])] = &[
     (
         "Organize",
         &[
+            item("Add Tags…", Command::AddTags),
+            SEP,
             item("No Rating", Command::Rate(0)),
             item("1 Star", Command::Rate(1)),
             item("2 Stars", Command::Rate(2)),

@@ -105,6 +105,10 @@ pub enum Command {
     ToggleComments,
     /// Show Subfolder Content (Eagle's ⌥⌘7).
     ToggleSubfolders,
+    /// Open the tag picker for the selection: Organize ▸ Add Tags… (⌘T)
+    /// and Eagle's bare T.
+    AddTags,
+    TagPanel,
     // Menu bar entries with no row in `TABLE` (no rebindable key).
     Undo,
     Redo,
@@ -341,6 +345,9 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::ToggleInfo, id: "view.toggle.listmetas", group: "View", label: "Show or hide item info", default: k(CMD_ALT, Key::Num5), aliases: &[] },
     Spec { cmd: Command::ToggleComments, id: "view.toggle.listannotation", group: "View", label: "Show or hide comment counts", default: k(CMD_ALT, Key::Num6), aliases: &[] },
     Spec { cmd: Command::ToggleSubfolders, id: "view.toggle.subfolder", group: "View", label: "Show or hide subfolder content", default: k(CMD_ALT, Key::Num7), aliases: &[] },
+    // Tags: Organize ▸ Add Tags… and Eagle's T, bound outside its keybind table (falcon's own id).
+    Spec { cmd: Command::AddTags, id: "organize.tag.add", group: "Tags", label: "Add tags to the selection", default: k(CMD, Key::T), aliases: &[] },
+    Spec { cmd: Command::TagPanel, id: "organize.tag.panel", group: "Tags", label: "Open the tag picker", default: k(NONE, Key::T), aliases: &[] },
 ];
 
 /// Keys that cannot be rebound, listed in the Shortcuts section.
@@ -922,6 +929,15 @@ mod tests {
         assert_eq!(keys.resolve(Key::F, mac(CTRL_CMD)), Some(Command::FullScreen));
         assert_eq!(keys.resolve(Key::F, mac(CMD)), Some(Command::Find));
         assert_eq!(format(&keys.binding(Command::FullScreen).unwrap()), "Ctrl + Command + F");
+    }
+
+    #[test]
+    fn tag_picker_keys() {
+        let keys = Shortcuts::default();
+        assert_eq!(keys.resolve(Key::T, CMD), Some(Command::AddTags));
+        assert_eq!(keys.resolve(Key::T, Modifiers::NONE), Some(Command::TagPanel));
+        assert_eq!(keys.resolve(Key::T, ALT), None);
+        assert_eq!(spec(Command::AddTags).id, "organize.tag.add");
     }
 
     #[test]

@@ -238,6 +238,8 @@ On macOS falcon has a native menu bar, built with AppKit in `crates/falcon-app/s
 | Find | Search, Filter Bar, Find Duplicates |
 | Organize | No Rating, 1 Star … 5 Stars |
 | View | All Items, Uncategorized, Untagged, Recently Used, Random, All Tags, Trash; Waterfall, Justified, Grid, List; Show Name, Show Item Info, Show Comment Count, Show Subfolder Content; Scroll to Top, Scroll to Bottom, Page Up, Page Down, First Item, Last Item; Zoom In, Zoom Out, Actual Size, Zoom to Fit; Viewer, Open With Default App, Reveal in Finder; Sidebar, Inspector, Show or Hide Both Panels; Back, Forward, Parent Folder, Shuffle Again, Expand or Collapse All Folders |
+| Organize | Add Tags…, No Rating, 1 Star … 5 Stars |
+| View | All Items, Uncategorized, Untagged, Recently Used, Random, All Tags, Trash; Waterfall, Justified, Grid, List; Scroll to Top, Scroll to Bottom, Page Up, Page Down, First Item, Last Item; Zoom In, Zoom Out, Actual Size, Zoom to Fit; Viewer, Open With Default App, Reveal in Finder; Sidebar, Inspector, Show or Hide Both Panels; Back, Forward, Parent Folder, Shuffle Again, Expand or Collapse All Folders |
 | Window | Minimize, Zoom, Full Screen, Collect Window, Next Library, Previous Library, Close Window, then macOS's window list |
 | Help | Falcon Documentation (the book in `docs/`, built or not, when falcon runs from its source tree; disabled otherwise) |
 
@@ -245,10 +247,11 @@ On macOS falcon has a native menu bar, built with AppKit in `crates/falcon-app/s
 - An item is enabled when its command can act, by the same rules the keys follow (`menu::enabled`): Rename needs one selected item and no viewer, Remove from Folder a selection inside a folder, the Move Folder ▸ entries an open folder or smart folder and not several picked ones (as in Eagle), Move Folder… picked folders or an open folder (it moves the picked ones if any, as Eagle's does), Parent Folder a folder with a parent, Shuffle Again the Random page, Next and Previous Library a second open library, the Edit Image entries an image of a kind falcon can flip, rotate or crop. Lock Falcon needs an app password. Everything is disabled while Preferences is open or falcon is locked. The open page, the layout, the caption switches, the sidebar, the inspector, the filter bar, the viewer and full screen carry checkmarks. The app hands the menu a fresh state only when it changes; AppKit reads it when a menu opens.
 - Keys stay with egui. Every falcon menu has a delegate that tells AppKit it has no key equivalents, so a key press never fires an item: egui gets it as before, text fields keep ⌘C, ⌘V, ⌘A, ⌘Z, ⌘← and the rest, and bare keys such as R or the digits still type. Should AppKit fire an item from a key anyway (the application menu has no such delegate, so ⌘, comes this way), falcon turns it back into the key egui would have had. Clicking an item runs the same `App::run_command` as its key. Undo, Redo, Cut, Copy, Paste and Select All act on a focused text field when there is one.
 - Left out because falcon can't do them yet: File ▸ New… (only its Text File template is in New ▸), the link and site importers and folder exports from the menu, Duplicate, custom thumbnails from the menu, the rest of Edit Folder (passwords), Go to Folder, Add to Folders…, the tag commands, Always on Top, Grayscale, Open in New Window, Open Link, the caption toggles, Presentation Mode, Lock and Color Space, and the online Help items.
+- Left out because falcon can't do them yet: File ▸ New…, the link and site importers and folder exports from the menu, Duplicate, custom thumbnails from the menu, the rest of Edit Folder (passwords), Go to Folder, Add to Folders…, Always on Top, Grayscale, Open in New Window, Open Link, the caption toggles, Presentation Mode, Lock and Color Space, and the online Help items.
 
 ## Keys
 
-These are the defaults. All but the arrows, Esc, Tab, Z and the viewer's C, ⇧R, ⇧F, 0, 1, +, − and ` can be changed under Preferences → Shortcuts (see Shortcut settings); the video keys are its Player group. Bare keys (the digits, R and /) don't answer their ⌥ chord. Apart from the Player keys, every rebindable command is also in the menu bar (see Menu bar).
+These are the defaults. All but the arrows, Esc, Tab, Z and the viewer's C, ⇧R, ⇧F, 0, 1, +, − and ` can be changed under Preferences → Shortcuts (see Shortcut settings); the video keys are its Player group. Bare keys (the digits, R, T and /) don't answer their ⌥ chord. Apart from the Player keys, every rebindable command is also in the menu bar (see Menu bar).
 
 | Key | Action |
 |---|---|
@@ -299,6 +302,7 @@ These are the defaults. All but the arrows, Esc, Tab, Z and the viewer's C, ⇧R
 | 0 to 5 | Set the rating of the selection (0 removes it), with a toast such as "Rated 3 stars". In the viewer 0 and 1 stay its zoom keys; Organize in the menu bar rates there. In the text viewer they rate the item while neither the text nor the title has focus, as in Eagle's text editor |
 | ⌥⌘R | Refresh the thumbnails of the selection (or the viewer's item) |
 | R | On the Random page, shuffle again (no history step) |
+| ⌘T and T | Open the [tag picker](#tag-picker) for the selection (or the viewer's item) at the pointer: Eagle's Organize ▸ Add Tags (`organize.tag.add`) and its bare T. T only acts when no text field has focus |
 | ⌘W | Close the viewer if it is open, otherwise the window (which quits falcon, as the red button does) |
 | ⌘M and ⌃⌘F | Minimise the window, and enter or leave full screen |
 | ⇧↩ | Open the selected items (or the viewer's item) in their default apps (Eagle's `view.file.opendefault`) |
@@ -606,7 +610,7 @@ What Eagle does, from `app.bundle.js`, `index.html`, `js/directives/*.html` and 
 
 ### Tag picker
 
-The + after the inspector's tags opens the tag picker for the selected items (or the item in the viewer), after Eagle's tag select panel. The code is in `crates/falcon-app/src/app/tag_picker.rs`; what it lists, ranks and recommends is in `crates/falcon-app/src/tags.rs`, with unit tests.
+The + after the inspector's tags, Organize ▸ Add Tags… (⌘T) and T open the tag picker for the selected items (or the item in the viewer), after Eagle's tag select panel. The code is in `crates/falcon-app/src/app/tag_picker.rs`; what it lists, ranks and recommends is in `crates/falcon-app/src/tags.rs`, with unit tests.
 
 | Topic | Eagle 4.0 | Evidence | falcon |
 | --- | --- | --- | --- |

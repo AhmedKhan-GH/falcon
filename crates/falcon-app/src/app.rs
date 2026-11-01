@@ -1610,6 +1610,7 @@ impl App {
                     self.ws.scroll_to = Some(id);
                 }
             }
+            C::AddTags | C::TagPanel => self.open_tag_picker(ctx, None),
             C::Rate(n) => {
                 let ids = self.acted_on();
                 self.ws.actions.push(Action::BatchRating(ids, n.into()));
@@ -4058,9 +4059,10 @@ impl App {
                     remove = Some(tag.clone());
                 }
             }
+            let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::TagPanel);
             let label = if tags.is_empty() { format!("{}  Add Tags", ic::PLUS) } else { ic::PLUS.to_string() };
             let b = ui.add(egui::Button::new(RichText::new(label).size(12.0).color(t::p().text_muted)).frame(false));
-            let b = b.on_hover_text("Add tags");
+            let b = b.on_hover_text(if keys.is_empty() { "Add tags".to_string() } else { format!("Add tags  ({keys})") });
             if b.clicked() {
                 open = Some(b.rect.left_center());
             }
