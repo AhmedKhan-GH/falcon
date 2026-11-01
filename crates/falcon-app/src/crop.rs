@@ -26,7 +26,7 @@ pub enum Handle {
 }
 
 impl Handle {
-    fn cursor(self) -> egui::CursorIcon {
+    pub fn cursor(self) -> egui::CursorIcon {
         use egui::CursorIcon as C;
         match self {
             Handle::Move => C::Move,

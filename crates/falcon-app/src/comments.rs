@@ -1,6 +1,7 @@
-//! Comments on a region of an image: markers and drawing in the viewer, the
-//! inspector's list and the count badge on cards. Region coordinates are in
-//! the image's displayed pixels (`width` × `height`), as Eagle stores them.
+//! Comments on a region of an image: markers, drawing, moving and resizing
+//! in the viewer, the inspector's list and the count badge on cards. Region
+//! coordinates are in the original image's pixels (`width` × `height`), as
+//! Eagle stores them; after a move or resize they can be fractional.
 //!
 //! Eagle keeps a comment's text as the HTML of an editable box (`<br>` for
 //! line breaks). Falcon writes plain text and shows Eagle's HTML with the
@@ -11,7 +12,7 @@ use falcon_library::model::{Comment, Item};
 
 use super::image_edit::{Draft, Op};
 use super::{Action, App, heading, icon_button};
-use super::crop::{to_image, to_screen};
+use super::crop::{Handle, hit, to_image, to_screen};
 use crate::icons as ic;
 use crate::theme::{self as t, font, mono};
 
@@ -68,6 +69,99 @@ pub fn new_region(a: Pos2, b: Pos2, bounds: Vec2) -> Option<Rect> {
     let clamp = |p: Pos2| Pos2::new(p.x.clamp(0.0, bounds.x).round(), p.y.clamp(0.0, bounds.y).round());
     let r = Rect::from_two_pos(clamp(a), clamp(b));
     (r.width() > MIN_REGION && r.height() > MIN_REGION).then_some(r)
+}
+
+/// How far outside or inside a region's edge, in points, a press still
+/// grabs the edge.
+const EDGE_GRAB: f32 = 6.0;
+
+/// A saved region being moved or resized in comment mode.
+#[derive(Debug, Clone)]
+pub struct RegionDrag {
+    pub comment: String,
+    pub handle: Handle,
+    /// The region (image pixels) when the drag started.
+    pub start: Rect,
+    /// Where the press was, on screen.
+    pub origin: Pos2,
+}
+
+/// Which part of a region's on-screen box `s` a press at `pos` takes hold
+/// of. Like Eagle (jQuery UI's default handles), a box resizes only from
+/// its right edge, its bottom edge and its bottom-right corner, which keeps
+/// clear of the number badge (top left) and the × (top right); anywhere
+/// else inside moves it.
+pub fn region_handle(s: Rect, pos: Pos2, tol: f32) -> Option<Handle> {
+    match hit(s, pos, tol)? {
+        h @ (Handle::E | Handle::S | Handle::SE | Handle::Move) => Some(h),
+        _ if s.contains(pos) => Some(Handle::Move),
+        _ => None,
+    }
+}
+
+/// The region (image pixels) after dragging `handle` by `delta` image
+/// pixels from `start`, kept inside an image of size `bounds` and at least
+/// [`MIN_REGION`] on each side; a move keeps the size. A start box that
+/// sticks out of the image (Eagle doesn't clamp its moves) is first pulled
+/// inside. `None` when the image is too small to hold a region, which
+/// includes dimensionless (0×0) items, or for non-finite input.
+pub fn adjust_region(start: Rect, handle: Handle, delta: Vec2, bounds: Vec2) -> Option<Rect> {
+    if !(bounds.x >= MIN_REGION && bounds.y >= MIN_REGION) || !bounds.is_finite() || !start.is_finite() || !delta.is_finite() {
+        return None;
+    }
+    let fit = |lo: f32, len: f32, max: f32| {
+        let len = len.clamp(MIN_REGION, max);
+        let lo = lo.clamp(0.0, max - len);
+        (lo, lo + len)
+    };
+    let (x0, x1) = fit(start.min.x, start.width(), bounds.x);
+    let (y0, y1) = fit(start.min.y, start.height(), bounds.y);
+    let mut r = Rect::from_min_max(Pos2::new(x0, y0), Pos2::new(x1, y1));
+    let (west, east, north, south) = match handle {
+        Handle::Move => {
+            let dx = delta.x.clamp(-r.min.x, bounds.x - r.max.x);
+            let dy = delta.y.clamp(-r.min.y, bounds.y - r.max.y);
+            return Some(r.translate(vec2(dx, dy)));
+        }
+        Handle::N => (false, false, true, false),
+        Handle::S => (false, false, false, true),
+        Handle::E => (false, true, false, false),
+        Handle::W => (true, false, false, false),
+        Handle::NE => (false, true, true, false),
+        Handle::NW => (true, false, true, false),
+        Handle::SE => (false, true, false, true),
+        Handle::SW => (true, false, false, true),
+    };
+    if west {
+        r.min.x = (r.min.x + delta.x).clamp(0.0, r.max.x - MIN_REGION);
+    }
+    if east {
+        r.max.x = (r.max.x + delta.x).clamp(r.min.x + MIN_REGION, bounds.x);
+    }
+    if north {
+        r.min.y = (r.min.y + delta.y).clamp(0.0, r.max.y - MIN_REGION);
+    }
+    if south {
+        r.max.y = (r.max.y + delta.y).clamp(r.min.y + MIN_REGION, bounds.y);
+    }
+    Some(r)
+}
+
+/// The region while the pointer is at `now` (screen) in a drag that
+/// started at `origin`, for an image of size `natural` drawn into `shown`.
+pub fn drag_region(d: &RegionDrag, now: Pos2, shown: Rect, natural: Vec2) -> Option<Rect> {
+    let delta = to_image(now, shown, natural) - to_image(d.origin, shown, natural);
+    adjust_region(d.start, d.handle, delta, natural)
+}
+
+/// `c` with its region set to `r`. Values are kept to two decimals, and
+/// whole ones are written as integers, as JavaScript writes them.
+pub fn with_region(c: &Comment, r: Rect) -> Comment {
+    let num = |v: f32| {
+        let v = (v as f64 * 100.0).round() / 100.0;
+        if v.fract() == 0.0 { Some(serde_json::Number::from(v as i64)) } else { serde_json::Number::from_f64(v) }
+    };
+    Comment { x: num(r.min.x), y: num(r.min.y), width: num(r.width()), height: num(r.height()), ..c.clone() }
 }
 
 /// Whether the viewer offers comment mode for this item. Eagle hides it for
@@ -136,6 +230,10 @@ impl App {
         let natural = vec2(item.width as f32, item.height as f32);
         let mode = self.ws.tools.comment_mode && self.ws.tools.crop.is_none();
         let p = ui.painter().clone().with_clip_rect(area);
+        if !mode {
+            // A drag cut short by leaving comment mode is dropped, not saved.
+            self.ws.tools.region_drag = None;
+        }
 
         if mode {
             let canvas = ui.interact(area, ui.scope_id().with("comment-canvas"), Sense::drag());
@@ -163,11 +261,13 @@ impl App {
 
         let comments = item.comments();
         for (n, c) in comments.iter().enumerate() {
-            let Some(rect) = region(c) else { continue };
-            let s = to_screen(rect, shown, natural);
+            let Some(saved) = region(c) else { continue };
             let editing = self.ws.tools.draft.as_ref().is_some_and(|d| d.id.as_deref() == Some(c.id.as_str()));
-            let resp = ui.interact(s, ui.scope_id().with(("comment", &c.id)), if mode { Sense::click() } else { Sense::hover() });
-            let hot = resp.hovered() || editing;
+            let grab = to_screen(saved, shown, natural).expand(if mode { EDGE_GRAB } else { 0.0 });
+            let resp = ui.interact(grab, ui.scope_id().with(("comment", &c.id)), if mode { Sense::click_and_drag() } else { Sense::hover() });
+            let rect = if mode { self.region_drag(ui, &resp, item, c, shown) } else { saved };
+            let s = to_screen(rect, shown, natural);
+            let hot = resp.hovered() || resp.dragged() || editing;
             p.rect_filled(s, 0.0, Color32::from_black_alpha(if hot { 40 } else { 20 }));
             p.rect_stroke(s, 0.0, Stroke::new(if hot { 2.0 } else { 1.5 }, t::p().primary), StrokeKind::Middle);
             let badge = s.left_top() + vec2(0.0, 0.0);
@@ -183,6 +283,14 @@ impl App {
                 self.ws.tools.draft = Some(Draft { item: item.id.clone(), id: Some(c.id.clone()), rect, text: plain_text(&c.annotation), focus: true });
             }
             if mode && hot {
+                // Eagle's resize handles: right, bottom, bottom right.
+                for h in [Pos2::new(s.right(), s.center().y), Pos2::new(s.center().x, s.bottom()), s.right_bottom()] {
+                    let r = Rect::from_center_size(h, Vec2::splat(7.0));
+                    p.rect_filled(r, 1.0, Color32::WHITE);
+                    p.rect_stroke(r, 1.0, Stroke::new(1.0, t::p().primary), StrokeKind::Middle);
+                }
+            }
+            if mode && hot && !resp.dragged() {
                 let x = Rect::from_center_size(s.right_top(), Vec2::splat(18.0));
                 let xr = ui.interact(x, ui.scope_id().with(("comment-x", &c.id)), Sense::click());
                 p.circle_filled(x.center(), 9.0, if xr.hovered() { t::p().icon_red } else { t::p().button });
@@ -205,6 +313,43 @@ impl App {
             self.comment_editor(ui, item, s, area);
         }
         mode
+    }
+
+    /// Moving and resizing a saved region: sets the cursor for the handle
+    /// under the pointer, tracks a drag on `resp`, and on release saves the
+    /// new box through `update_comment` (one undo step per drag). Returns the
+    /// box to draw this frame.
+    fn region_drag(&mut self, ui: &Ui, resp: &egui::Response, item: &Item, c: &Comment, shown: Rect) -> Rect {
+        let Some(saved) = region(c) else { return Rect::NOTHING };
+        let natural = vec2(item.width as f32, item.height as f32);
+        let s = to_screen(saved, shown, natural);
+        if resp.drag_started()
+            && let Some(origin) = ui.input(|i| i.pointer.press_origin())
+            && let Some(handle) = region_handle(s, origin, EDGE_GRAB)
+        {
+            self.ws.tools.region_drag = Some(RegionDrag { comment: c.id.clone(), handle, start: saved, origin });
+        }
+        let active = self.ws.tools.region_drag.clone().filter(|d| d.comment == c.id);
+        let Some(d) = active else {
+            if let Some(h) = resp.hover_pos().and_then(|pos| region_handle(s, pos, EDGE_GRAB)) {
+                ui.ctx().set_cursor_icon(h.cursor());
+            }
+            return saved;
+        };
+        ui.ctx().set_cursor_icon(d.handle.cursor());
+        let now = resp.interact_pointer_pos().or_else(|| ui.input(|i| i.pointer.latest_pos()));
+        let rect = now.and_then(|now| drag_region(&d, now, shown, natural)).unwrap_or(saved);
+        if resp.drag_stopped() || !resp.dragged() {
+            self.ws.tools.region_drag = None;
+            let new = with_region(c, rect);
+            if rect != saved && region(&new) != Some(saved) {
+                if let Some(draft) = self.ws.tools.draft.as_mut().filter(|dr| dr.id.as_deref() == Some(c.id.as_str())) {
+                    draft.rect = region(&new).unwrap_or(rect);
+                }
+                self.ws.actions.push(Action::Edit(Op::UpdateComment(item.id.clone(), new)));
+            }
+        }
+        rect
     }
 
     /// The small note editor under a region being written.
@@ -376,6 +521,93 @@ mod tests {
         let c = Comment::region(20, 50, 90, 151, "x");
         assert_eq!(region(&c), Some(Rect::from_min_size(Pos2::new(20.0, 50.0), vec2(90.0, 151.0))));
         assert_eq!(region(&Comment::at_time(3.0, "x")), None);
+    }
+
+    fn rect(x: f32, y: f32, w: f32, h: f32) -> Rect {
+        Rect::from_min_size(Pos2::new(x, y), vec2(w, h))
+    }
+
+    #[test]
+    fn moving_a_region_keeps_its_size_inside_the_image() {
+        let b = vec2(1000.0, 800.0);
+        let r = rect(100.0, 100.0, 200.0, 50.0);
+        assert_eq!(adjust_region(r, Handle::Move, vec2(10.5, -20.25), b), Some(rect(110.5, 79.75, 200.0, 50.0)));
+        assert_eq!(adjust_region(r, Handle::Move, vec2(-500.0, -500.0), b), Some(rect(0.0, 0.0, 200.0, 50.0)));
+        assert_eq!(adjust_region(r, Handle::Move, vec2(5000.0, 5000.0), b), Some(rect(800.0, 750.0, 200.0, 50.0)));
+    }
+
+    #[test]
+    fn resizing_a_region_keeps_ten_pixels_and_the_image() {
+        let b = vec2(1000.0, 800.0);
+        let r = rect(100.0, 100.0, 200.0, 50.0);
+        assert_eq!(adjust_region(r, Handle::E, vec2(30.0, 99.0), b), Some(rect(100.0, 100.0, 230.0, 50.0)));
+        assert_eq!(adjust_region(r, Handle::S, vec2(99.0, 30.0), b), Some(rect(100.0, 100.0, 200.0, 80.0)));
+        assert_eq!(adjust_region(r, Handle::SE, vec2(-1000.0, -1000.0), b), Some(rect(100.0, 100.0, MIN_REGION, MIN_REGION)));
+        assert_eq!(adjust_region(r, Handle::SE, vec2(5000.0, 5000.0), b), Some(rect(100.0, 100.0, 900.0, 700.0)));
+        // The other handles work too, though the viewer offers Eagle's three.
+        assert_eq!(adjust_region(r, Handle::NW, vec2(-500.0, 45.0), b), Some(Rect::from_min_max(Pos2::new(0.0, 140.0), Pos2::new(300.0, 150.0))));
+    }
+
+    #[test]
+    fn a_region_outside_the_image_is_pulled_in() {
+        let b = vec2(100.0, 80.0);
+        // Eagle can leave a box past the edge, or bigger than the image.
+        assert_eq!(adjust_region(rect(90.0, -5.0, 30.0, 20.0), Handle::Move, Vec2::ZERO, b), Some(rect(70.0, 0.0, 30.0, 20.0)));
+        assert_eq!(adjust_region(rect(-10.0, -10.0, 500.0, 500.0), Handle::SE, vec2(-5.0, -5.0), b), Some(rect(0.0, 0.0, 95.0, 75.0)));
+        assert_eq!(adjust_region(rect(50.0, 50.0, -3.0, 2.0), Handle::Move, Vec2::ZERO, b), Some(rect(50.0, 50.0, MIN_REGION, MIN_REGION)));
+    }
+
+    #[test]
+    fn no_region_on_tiny_or_dimensionless_images() {
+        let r = rect(0.0, 0.0, 20.0, 20.0);
+        assert_eq!(adjust_region(r, Handle::Move, vec2(1.0, 1.0), Vec2::ZERO), None);
+        assert_eq!(adjust_region(r, Handle::SE, vec2(1.0, 1.0), vec2(9.0, 500.0)), None);
+        assert_eq!(adjust_region(r, Handle::Move, vec2(f32::NAN, 0.0), vec2(500.0, 500.0)), None);
+        let d = RegionDrag { comment: "c".into(), handle: Handle::Move, start: r, origin: Pos2::new(5.0, 5.0) };
+        assert_eq!(drag_region(&d, Pos2::new(50.0, 50.0), Rect::ZERO, Vec2::ZERO), None);
+    }
+
+    #[test]
+    fn screen_drags_become_image_pixels() {
+        // A 2000 × 1000 image drawn at half size from (100, 50).
+        let shown = Rect::from_min_size(Pos2::new(100.0, 50.0), vec2(1000.0, 500.0));
+        let natural = vec2(2000.0, 1000.0);
+        let start = rect(200.0, 100.0, 400.0, 200.0);
+        let mut d = RegionDrag { comment: "c".into(), handle: Handle::Move, start, origin: Pos2::new(300.0, 150.0) };
+        assert_eq!(drag_region(&d, Pos2::new(310.0, 145.0), shown, natural), Some(rect(220.0, 90.0, 400.0, 200.0)));
+        d.handle = Handle::SE;
+        assert_eq!(drag_region(&d, Pos2::new(301.5, 151.0), shown, natural), Some(rect(200.0, 100.0, 403.0, 202.0)));
+        assert_eq!(to_screen(start, shown, natural), Rect::from_min_max(Pos2::new(200.0, 100.0), Pos2::new(400.0, 200.0)));
+    }
+
+    #[test]
+    fn handles_are_eagles_three() {
+        let s = Rect::from_min_max(Pos2::new(100.0, 100.0), Pos2::new(200.0, 160.0));
+        assert_eq!(region_handle(s, Pos2::new(203.0, 130.0), 6.0), Some(Handle::E));
+        assert_eq!(region_handle(s, Pos2::new(150.0, 158.0), 6.0), Some(Handle::S));
+        assert_eq!(region_handle(s, Pos2::new(199.0, 161.0), 6.0), Some(Handle::SE));
+        assert_eq!(region_handle(s, Pos2::new(150.0, 130.0), 6.0), Some(Handle::Move));
+        // Left and top edges, and the badge and × corners, move instead.
+        assert_eq!(region_handle(s, Pos2::new(102.0, 130.0), 6.0), Some(Handle::Move));
+        assert_eq!(region_handle(s, Pos2::new(198.0, 102.0), 6.0), Some(Handle::Move));
+        assert_eq!(region_handle(s, Pos2::new(97.0, 130.0), 6.0), None);
+        assert_eq!(region_handle(s, Pos2::new(300.0, 130.0), 6.0), None);
+    }
+
+    #[test]
+    fn moved_regions_are_written_like_eagle() {
+        let mut c = Comment::region(20, 50, 90, 151, "note");
+        c.id = "K".into();
+        let moved = with_region(&c, rect(25.5, 60.0, 90.0, 151.333));
+        assert_eq!(moved.id, "K");
+        assert_eq!(moved.annotation, "note");
+        let json = serde_json::to_value(&moved).unwrap();
+        assert_eq!(json["x"], serde_json::json!(25.5));
+        assert_eq!(json["y"], serde_json::json!(60));
+        assert_eq!(serde_json::to_string(&json["y"]).unwrap(), "60");
+        assert_eq!(json["width"], serde_json::json!(90));
+        assert_eq!(json["height"], serde_json::json!(151.33));
+        assert_eq!(region(&moved), Some(rect(25.5, 60.0, 90.0, 151.33)));
     }
 
     #[test]

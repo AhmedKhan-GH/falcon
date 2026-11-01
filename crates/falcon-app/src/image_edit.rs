@@ -67,6 +67,8 @@ pub struct Tools {
     pub comment_mode: bool,
     /// Start of a region being dragged, in image pixels.
     pub draw_start: Option<eframe::egui::Pos2>,
+    /// A saved region being moved or resized.
+    pub region_drag: Option<super::comments::RegionDrag>,
     pub draft: Option<Draft>,
     pub crop: Option<super::crop::CropState>,
     /// Open the crop tool once the viewer shows this item.
@@ -199,6 +201,7 @@ impl App {
             self.ws.tools.crop = None;
             self.ws.tools.draft = None;
             self.ws.tools.draw_start = None;
+            self.ws.tools.region_drag = None;
             self.ws.tools.item.clear();
             return;
         }
@@ -255,6 +258,7 @@ impl App {
             self.ws.tools.crop = None;
             self.ws.tools.draft = None;
             self.ws.tools.draw_start = None;
+            self.ws.tools.region_drag = None;
         }
         if self.ws.tools.crop_next.as_deref() == Some(item.id.as_str()) {
             self.ws.tools.crop_next = None;
