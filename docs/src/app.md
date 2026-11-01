@@ -476,7 +476,7 @@ Edits stay in a draft until Save (also ⌘↩) or Apply; Cancel, the close butto
 | Preview | Checkerboard behind transparent areas | `habits.transparency`, `hide` by default | Off by default; when on, a white and light grey checkerboard of 8 pt squares is drawn under the picture |
 | Auto-Import | Import files added to a folder automatically; Choose Folder…; Open Folder | `autoImport.enable` (off) and `autoImport.path` (empty). Turning it on with no folder opens the folder picker, and cancelling it leaves it off; a folder on a network drive is refused with a warning; Open the folder opens it in Finder when it exists. A saved folder that no longer exists is forgotten and auto-import turned off | Same defaults and rules (`prefs::auto_import`, `auto_import::is_network_volume`). The pane also says which folder the shown library watches (see [Auto-import](import.md#auto-import)) |
 | Developer | Run the HTTP API, first port | Eagle always serves on 41595 and only has an API token setting | On by default, from 41596; tries five ports. Ports whose range would include 41595, or below 1024, are refused. Changing either restarts the API |
-| Developer | API token | Eagle 4.0.0's preferences can generate and copy an API token (`developer.apiToken`), but nothing in its readable source checks it | No token; falcon keeps the Host check |
+| Developer | API token | Eagle 4.0.0's preferences show, copy and regenerate an API token (`developer.apiToken`, empty by default; Regenerate makes a random UUID). Its JSON server lets a request carrying it in from any Host (observed in `json-rest-light`) | A random UUID made on first launch, with Copy, Regenerate and a `?token=` link. A request carrying it is served from any Host; see [HTTP API](http-api.md) |
 
 What Eagle does, from `js/default-preferences.js`, `preferences.html`, `js/preferences.js` and `css/preferences.css` (all seen):
 
@@ -484,7 +484,7 @@ What Eagle does, from `js/default-preferences.js`, `preferences.html`, `js/prefe
 - The window's sidebar (200 pt wide, 32 pt rows) has General and Sidebar, then Controls, Preview (the `habits` group), Screenshot and Shortcuts, then Notification, Password and Auto-Import, then the AI panels. A search box filters every panel by keywords.
 - Save applies and closes, Apply applies and stays open, Cancel and Esc revert (including a previewed theme or zoom), ⌘↩ saves.
 - The window's own size is set in Eagle's main process, which is not in the readable bundle; falcon's 720 × 500 pt is a guess (inferred).
-- Not built in falcon: language, vibrancy, menu bar and Dock icon options, launch at login, GPU, the collect modal, screenshots, the middle button, image rotate mode, sound effects, Touch ID, proxy, the AI and MCP panes and the API token.
+- Not built in falcon: language, vibrancy, menu bar and Dock icon options, launch at login, GPU, the collect modal, screenshots, the middle button, image rotate mode, sound effects, Touch ID, proxy, the AI and MCP panes.
 
 ## Themes
 
@@ -767,7 +767,7 @@ The item menu's Copy File Path entry and Copy submenu put text or images on the 
 | Entry | Key | What is copied |
 |---|---|---|
 | Copy File Path | ⌥⌘C | Each original's path, one per line |
-| Copy ▸ Link | unbound | Each item's source URL, one per line; items without one are skipped, and a message says when none has one. Eagle's Copy Link copies its own local item link instead; falcon has no item link (Copy Eagle Link is left out because falcon doesn't register `eagle://`) |
+| Copy ▸ Link | unbound | Each item's source URL, one per line; items without one are skipped, and a message says when none has one. Eagle's Copy Link copies its own local item link instead; falcon has no item link (Copy Eagle Link is left out, although the app does open `eagle://` links; see [HTTP API](http-api.md#eagle-links)) |
 | Copy ▸ Folder Path | ⌥⇧⌘C | Each item's `<id>.info` folder with a trailing slash, one per line, as Eagle copies it |
 | Copy ▸ Thumbnail | unbound | One item: its thumbnail as an image (the original for an image with no thumbnail). Several: their thumbnail files as files, as Eagle copies them |
 | Copy ▸ Base64 | unbound | One item only (disabled for several, as in Eagle): a `data:image/…;base64,` URL of the original for JPEG, PNG, WebP and GIF, otherwise of the thumbnail, whose real format (usually WebP) names the type. Eagle labels every thumbnail `webp` |
