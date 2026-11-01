@@ -9,9 +9,8 @@ use falcon_library::Library;
 
 use crate::app::App;
 use crate::theme::{self as t, Theme, font};
-use crate::icons as ic;
 use crate::locale::{tr, trf};
-use crate::ui::widgets::{wide_button, window_drag};
+use crate::ui::widgets::window_drag;
 
 /// Characters a library name may not contain.
 const FORBIDDEN: &[char] = &['@', '#', '$', '%', '^', '&', '*', '<', '>', ':', '\'', '"', '/', '\\', '|', '?'];
@@ -408,11 +407,19 @@ impl App {
         if let Some(e) = &self.error {
             ui.painter().text(c - vec2(0.0, 14.0), Align2::CENTER_CENTER, e, font(12.0), t::p().text_muted);
         }
-        let b = Rect::from_center_size(c + vec2(0.0, 24.0), vec2(180.0, 32.0));
-        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(b));
-        if wide_button(&mut child, ic::FOLDER_OPEN, tr("Choose Library…"), true).clicked() {
+        let (bw, gap) = (150.0, 12.0);
+        let b = Rect::from_center_size(c + vec2(0.0, 24.0), vec2(bw * 2.0 + gap, 32.0));
+        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(b).layout(egui::Layout::left_to_right(egui::Align::Center)));
+        child.spacing_mut().item_spacing.x = gap;
+        let create = egui::Button::new(RichText::new(tr("Create Library")).size(13.0).color(egui::Color32::WHITE)).fill(t::p().primary).min_size(vec2(bw, 32.0));
+        if child.add(create).clicked() {
+            self.new_library();
+        }
+        let open = egui::Button::new(RichText::new(tr("Open Library")).size(13.0).color(t::p().text)).fill(t::p().button).min_size(vec2(bw, 32.0));
+        if child.add(open).clicked() {
             self.pick_library();
         }
+        ui.painter().text(c + vec2(0.0, 64.0), Align2::CENTER_CENTER, tr("A library is a folder that holds your files and their tags."), font(12.0), t::p().text_muted);
     }
 }
 
