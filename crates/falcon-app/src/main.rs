@@ -17,6 +17,8 @@ mod workspaces;
 use std::path::PathBuf;
 
 fn main() -> eframe::Result {
+    // Only libraries in the sandbox folder open, never real ones.
+    falcon_library::sandbox::enforce(falcon_library::sandbox::default_root());
     // `falcon-app [LIBRARY] [ITEM]`, where ITEM is an id or Eagle's
     // `eagle://item/<id>` link, opened in the viewer.
     let initial = std::env::args_os().nth(1).map(PathBuf::from);

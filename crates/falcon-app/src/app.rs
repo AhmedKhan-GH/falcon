@@ -598,7 +598,7 @@ impl App {
             crate::workspaces::remember(&mut self.recent, &path, RECENT_LIMIT);
             return;
         }
-        match Library::open(&path) {
+        match falcon_library::sandbox::guard(&path).and_then(|()| Library::open(&path)) {
             Ok(lib) => {
                 let skipped = lib.skipped.len();
                 self.add_workspace(Arc::new(Mutex::new(lib)));
@@ -777,18 +777,18 @@ impl App {
     }
 
     fn new_library(&mut self) {
-        let Some(dest) = rfd::FileDialog::new().set_title("Create Library").set_file_name("Untitled.library").save_file() else {
+        let Some(dest) = rfd::FileDialog::new().set_title("Create Library").set_directory(falcon_library::sandbox::default_root()).set_file_name("Untitled.library").save_file() else {
             return;
         };
         let dest = if dest.extension().is_some_and(|e| e == "library") { dest } else { dest.with_extension("library") };
-        match Library::create(&dest) {
+        match falcon_library::sandbox::guard(&dest).and_then(|()| Library::create(&dest)) {
             Ok(_) => self.open(dest),
             Err(e) => self.flash(format!("Could not create the library: {e}")),
         }
     }
 
     fn pick_library(&mut self) {
-        if let Some(p) = rfd::FileDialog::new().set_title("Open Eagle Library").pick_folder() {
+        if let Some(p) = rfd::FileDialog::new().set_title("Open Eagle Library").set_directory(falcon_library::sandbox::default_root()).pick_folder() {
             self.open(p);
         }
     }

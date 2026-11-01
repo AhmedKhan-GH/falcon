@@ -912,6 +912,7 @@ pub(crate) fn open_library(path: &str) -> Result<Library, String> {
     if !is_library {
         return Err("Not an Eagle library.".into());
     }
+    falcon_library::sandbox::check(p)?;
     Library::open(p).map_err(|e| e.to_string())
 }
 

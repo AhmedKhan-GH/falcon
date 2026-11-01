@@ -24,6 +24,10 @@ pub enum Error {
         source: serde_json::Error,
     },
     /// The folder does not look like an Eagle library.
+    /// The path is outside the sandbox folder (see [`crate::sandbox`]).
+    #[error("{0}")]
+    Sandbox(String),
+
     #[error("{0} is not an Eagle library (missing metadata.json or images/)")]
     NotALibrary(PathBuf),
     /// `save_to` was pointed at the library's own folder, which would copy

@@ -6,6 +6,10 @@
 - **Fonts and icons:** SF Pro for text, plus Phosphor Light icons, which are MIT-licensed and close to Eagle's line icons.
 - **Measurements:** taken from Eagle at 1280 × 800: 240 pt panels, a 48 pt toolbar, 27 pt sidebar rows and 139 pt cards.
 
+## Sandbox
+
+While falcon is in development, the app and the `falcon` CLI only open libraries inside `~/Falcon Sandbox`. Set `FALCON_SANDBOX` to use another folder. Opening, creating or switching to a library anywhere else (including over the HTTP API's `library/switch`) fails with a message saying so, and the Open and Create dialogs start in the sandbox. To work on a real library, copy it into the sandbox first.
+
 ## What it does
 
 | Area | Features |

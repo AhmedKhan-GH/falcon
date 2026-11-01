@@ -5,3 +5,4 @@
 - Library writes must stay byte-compatible with existing libraries. `crates/falcon-library/tests/fixture.rs` checks round trips against a library in `fixtures/`, which is gitignored and supplied locally; without it, those tests skip.
 - The app draws everything with egui painters. Colours and sizes live in `crates/falcon-app/src/theme.rs`, and layout logic lives in `crates/falcon-app/src/logic.rs`, which has unit tests.
 - `docs/` is an mdBook describing each part. When you change behaviour, update the matching chapter.
+- The app and CLI only open libraries inside `~/Falcon Sandbox` (or `$FALCON_SANDBOX`); see `crates/falcon-library/src/sandbox.rs`. Never weaken this or point it at real libraries. Copy a library into the sandbox to test with it.

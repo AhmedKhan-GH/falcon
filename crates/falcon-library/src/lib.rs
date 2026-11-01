@@ -14,6 +14,7 @@ pub mod keywords;
 pub mod media;
 pub mod model;
 pub mod pack;
+pub mod sandbox;
 pub mod palette;
 pub mod search;
 pub mod smart;
