@@ -1322,6 +1322,7 @@
   "Quick Access": "Schnellzugriff",
   "Quick Access ({count})": "Schnellzugriff ({count})",
   "Quit Falcon": "Falcon beenden",
+  "Quit While Tasks Run": "Beenden, während Aufgaben laufen",
   "Random": "Zufällig",
   "Range": "Zeitraum",
   "Rate 1 star": "Mit 1 Stern bewerten",
@@ -1718,6 +1719,7 @@
   "Startup": "Start",
   "Stop": "Stopp",
   "Stop Tasks and Close": "Aufgaben stoppen und schließen",
+  "Stop Tasks and Quit": "Aufgaben stoppen und beenden",
   "Stopped after adding {done} of {n} items to {target}": {
     "one": "Beim Hinzufügen zu {target} nach {done} von {n} Objekt angehalten",
     "other": "Beim Hinzufügen zu {target} nach {done} von {n} Objekten angehalten"
@@ -1752,6 +1754,7 @@
   "Takes effect when you Save or Apply.": "Wird beim Sichern oder Anwenden wirksam.",
   "Tall portrait": "Hohes Hochformat",
   "Tasks are still running in {library}. Closing it stops them. Work already done is kept.": "In {library} laufen noch Aufgaben. Beim Schließen werden sie gestoppt. Bereits erledigte Arbeit bleibt erhalten.",
+  "Tasks are still running. Quitting stops them. Work already done is kept.": "Es laufen noch Aufgaben. Beim Beenden werden sie gestoppt. Bereits erledigte Arbeit bleibt erhalten.",
   "Text Document": "Textdokument",
   "Text Selection Tool": "Textauswahl-Werkzeug",
   "Text, or /pattern/flags": "Text oder /Muster/Optionen",

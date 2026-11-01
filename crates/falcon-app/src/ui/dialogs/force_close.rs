@@ -70,7 +70,7 @@ pub(crate) fn tasks_running(ws: &Workspace) -> bool {
     Counts { import_total, import_done, op_working: ws.op.working(), export_working: ws.export.working() }.running()
 }
 
-fn stop_tasks(ws: &Workspace) {
+pub(crate) fn stop_tasks(ws: &Workspace) {
     ws.progress.lock().unwrap_or_else(|p| p.into_inner()).cancel = true;
     ws.op.cancel();
 }

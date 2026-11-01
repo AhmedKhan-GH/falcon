@@ -626,6 +626,12 @@ pub fn take_clicks() -> Vec<Click> {
     mac::take_clicks()
 }
 
+/// Whether the app menu's Quit (⌘Q) was chosen since the last call. It
+/// comes to the app instead of ending the process, so it can ask first.
+pub fn take_quit_request() -> bool {
+    mac::take_quit_request()
+}
+
 #[cfg(not(target_os = "macos"))]
 mod mac {
     use super::{Click, State};
@@ -635,6 +641,9 @@ mod mac {
     pub fn set_state(_state: State) {}
     pub fn take_clicks() -> Vec<Click> {
         Vec::new()
+    }
+    pub fn take_quit_request() -> bool {
+        false
     }
 }
 
@@ -661,8 +670,11 @@ mod mac {
     const TAG_BASE: isize = 1000;
     /// The separator falcon puts before Preferences in the app menu.
     const TAG_SEPARATOR: isize = 999;
+    /// Falcon's Quit item, which replaces winit's (that one ends the process).
+    const TAG_QUIT: isize = 998;
 
     static CLICKS: Mutex<Vec<Click>> = Mutex::new(Vec::new());
+    static QUIT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
     static STATE: Mutex<Option<State>> = Mutex::new(None);
     static REPAINT: OnceLock<eframe::egui::Context> = OnceLock::new();
 
@@ -682,6 +694,14 @@ mod mac {
             #[unsafe(method(falconMenuItem:))]
             fn clicked(&self, item: &NSMenuItem) {
                 clicked(self.mtm(), item);
+            }
+
+            #[unsafe(method(falconQuit:))]
+            fn quit(&self, _item: &NSMenuItem) {
+                QUIT.store(true, std::sync::atomic::Ordering::Relaxed);
+                if let Some(ctx) = REPAINT.get() {
+                    ctx.request_repaint();
+                }
             }
 
             /// NSMenuDelegate: no key equivalents, so key presses reach
@@ -737,6 +757,10 @@ mod mac {
         *STATE.lock().unwrap_or_else(|p| p.into_inner()) = Some(state);
     }
 
+    pub fn take_quit_request() -> bool {
+        QUIT.swap(false, std::sync::atomic::Ordering::Relaxed)
+    }
+
     pub fn take_clicks() -> Vec<Click> {
         std::mem::take(&mut *CLICKS.lock().unwrap_or_else(|p| p.into_inner()))
     }
@@ -771,7 +795,7 @@ mod mac {
             // About there (tagged) and only rebuilds the tagged items.
             let stock_about = app_menu.itemAtIndex(0).is_some_and(|it| it.tag() < TAG_SEPARATOR);
             for i in (0..app_menu.numberOfItems()).rev() {
-                if app_menu.itemAtIndex(i).is_some_and(|it| it.tag() >= TAG_SEPARATOR) {
+                if app_menu.itemAtIndex(i).is_some_and(|it| it.tag() >= TAG_QUIT || it.action() == Some(sel!(terminate:))) {
                     app_menu.removeItemAtIndex(i);
                 }
             }
@@ -794,6 +818,16 @@ mod mac {
                     app_menu.insertItem_atIndex(&menu_item(mtm, &target, keys, all, it), at);
                 }
             }
+            // winit's Quit calls terminate:, which ends the process without
+            // a question; this one asks the app (⌘Q fires it as well).
+            let quit = unsafe {
+                NSMenuItem::initWithTitle_action_keyEquivalent(NSMenuItem::alloc(mtm), &NSString::from_str(crate::locale::tr_key("Quit Falcon")), Some(sel!(falconQuit:)), &NSString::from_str("q"))
+            };
+            quit.setKeyEquivalentModifierMask(NSEventModifierFlags::Command);
+            // SAFETY: `target` lives in TARGET for the rest of the process.
+            unsafe { quit.setTarget(Some(&target)) };
+            quit.setTag(TAG_QUIT);
+            app_menu.addItem(&quit);
         }
         for (title, entries) in super::MENUS {
             let menu = submenu(mtm, &target, keys, all, title, entries);

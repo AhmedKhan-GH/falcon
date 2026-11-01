@@ -96,6 +96,8 @@ pub struct App {
     pub(crate) api_check: crate::api_check::Check,
     /// A library whose close waits for its tasks (`ui/dialogs/force_close.rs`).
     pub(crate) force_close: Option<crate::ui::dialogs::force_close::Pending>,
+    /// Quitting while tasks run (`ui/dialogs/quit_confirm.rs`).
+    pub(crate) quit: crate::ui::dialogs::quit_confirm::QuitConfirm,
     /// The libraries' `icon.png` textures.
     pub(crate) lib_icons: crate::library_icons::LibraryIcons,
     /// What to open once the frame is done (it replaces the library being
@@ -226,6 +228,7 @@ impl App {
             tools: Default::default(),
             api_check: Default::default(),
             force_close: None,
+            quit: Default::default(),
             lib_icons: Default::default(),
             switch_to: None,
             dialogs: Default::default(),
@@ -383,7 +386,7 @@ impl eframe::App for App {
         // Dock icon option off it leaves the Dock too while the menu bar
         // icon is shown, else the close goes through and quits (`dock.rs`).
         let mut left_dock = false;
-        if ctx.input(|i| i.viewport().close_requested()) {
+        if ctx.input(|i| i.viewport().close_requested()) && self.quit_on_close_request(&ctx) {
             let action = crate::dock::close_action(self.prefs.keep_dock_icon, self.prefs.menu_icon, crate::dock::CAN_HIDE);
             if action != crate::dock::CloseAction::Quit && crate::dock::keep_running_hidden() {
                 ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
@@ -416,6 +419,7 @@ impl eframe::App for App {
             self.menu_clicks(&ctx);
             self.draw(ui, frame);
         }
+        self.quit_dialog(&ctx);
         // The web page sits over the viewer only in frames that asked for it.
         self.web.sync(&ctx, frame);
         let state = self.menu_state(&ctx);

@@ -1322,6 +1322,7 @@
   "Quick Access": "Quick Access",
   "Quick Access ({count})": "Quick Access ({count})",
   "Quit Falcon": "Quit Falcon",
+  "Quit While Tasks Run": "Quit While Tasks Run",
   "Random": "Random",
   "Range": "Range",
   "Rate 1 star": "Rate 1 star",
@@ -1718,6 +1719,7 @@
   "Startup": "Startup",
   "Stop": "Stop",
   "Stop Tasks and Close": "Stop Tasks and Close",
+  "Stop Tasks and Quit": "Stop Tasks and Quit",
   "Stopped after adding {done} of {n} items to {target}": {
     "one": "Stopped after adding {done} of {n} item to {target}",
     "other": "Stopped after adding {done} of {n} items to {target}"
@@ -1752,6 +1754,7 @@
   "Takes effect when you Save or Apply.": "Takes effect when you Save or Apply.",
   "Tall portrait": "Tall portrait",
   "Tasks are still running in {library}. Closing it stops them. Work already done is kept.": "Tasks are still running in {library}. Closing it stops them. Work already done is kept.",
+  "Tasks are still running. Quitting stops them. Work already done is kept.": "Tasks are still running. Quitting stops them. Work already done is kept.",
   "Text Document": "Text Document",
   "Text Selection Tool": "Text Selection Tool",
   "Text, or /pattern/flags": "Text, or /pattern/flags",

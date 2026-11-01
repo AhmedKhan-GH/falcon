@@ -1257,6 +1257,7 @@
   "Quick Access": "빠른 접근",
   "Quick Access ({count})": "빠른 접근 ({count})",
   "Quit Falcon": "Falcon 종료",
+  "Quit While Tasks Run": "작업 실행 중 종료",
   "Random": "무작위",
   "Range": "범위",
   "Rate 1 star": "별점 1개",
@@ -1630,6 +1631,7 @@
   "Startup": "시작",
   "Stop": "중지",
   "Stop Tasks and Close": "작업 중지 후 닫기",
+  "Stop Tasks and Quit": "작업 중지 후 종료",
   "Stopped after adding {done} of {n} items to {target}": {
     "other": "{target}에 항목 {n}개 중 {done}개를 추가한 후 중지했습니다"
   },
@@ -1661,6 +1663,7 @@
   "Takes effect when you Save or Apply.": "저장하거나 적용하면 반영됩니다.",
   "Tall portrait": "긴 세로",
   "Tasks are still running in {library}. Closing it stops them. Work already done is kept.": "{library}에서 아직 작업이 실행 중입니다. 닫으면 중지됩니다. 이미 끝난 작업은 유지됩니다.",
+  "Tasks are still running. Quitting stops them. Work already done is kept.": "작업이 아직 실행 중입니다. 종료하면 작업이 중지됩니다. 이미 끝난 작업은 유지됩니다.",
   "Text Document": "텍스트 문서",
   "Text Selection Tool": "텍스트 선택 도구",
   "Text, or /pattern/flags": "텍스트 또는 /패턴/플래그",

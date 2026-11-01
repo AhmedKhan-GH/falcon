@@ -1257,6 +1257,7 @@
   "Quick Access": "クイックアクセス",
   "Quick Access ({count})": "クイックアクセス（{count}）",
   "Quit Falcon": "Falcon を終了",
+  "Quit While Tasks Run": "タスクの実行中に終了",
   "Random": "ランダム",
   "Range": "範囲",
   "Rate 1 star": "星1つを付ける",
@@ -1630,6 +1631,7 @@
   "Startup": "起動",
   "Stop": "停止",
   "Stop Tasks and Close": "タスクを停止して閉じる",
+  "Stop Tasks and Quit": "タスクを停止して終了",
   "Stopped after adding {done} of {n} items to {target}": {
     "other": "{target}への追加を{n}個中{done}個で停止しました"
   },
@@ -1661,6 +1663,7 @@
   "Takes effect when you Save or Apply.": "保存または適用すると有効になります。",
   "Tall portrait": "縦長（トール）",
   "Tasks are still running in {library}. Closing it stops them. Work already done is kept.": "{library}ではまだタスクが実行中です。閉じると停止します。完了済みの作業は保持されます。",
+  "Tasks are still running. Quitting stops them. Work already done is kept.": "タスクがまだ実行中です。終了すると停止します。完了済みの作業は保持されます。",
   "Text Document": "テキスト書類",
   "Text Selection Tool": "テキスト選択ツール",
   "Text, or /pattern/flags": "テキスト、または /パターン/フラグ",

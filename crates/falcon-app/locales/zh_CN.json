@@ -1257,6 +1257,7 @@
   "Quick Access": "快速访问",
   "Quick Access ({count})": "快速访问（{count}）",
   "Quit Falcon": "退出 Falcon",
+  "Quit While Tasks Run": "任务运行时退出",
   "Random": "随机",
   "Range": "范围",
   "Rate 1 star": "评 1 星",
@@ -1630,6 +1631,7 @@
   "Startup": "启动",
   "Stop": "停止",
   "Stop Tasks and Close": "停止任务并关闭",
+  "Stop Tasks and Quit": "停止任务并退出",
   "Stopped after adding {done} of {n} items to {target}": {
     "other": "已在向{target}添加{n}个项目中的{done}个后停止"
   },
@@ -1661,6 +1663,7 @@
   "Takes effect when you Save or Apply.": "保存或应用后生效。",
   "Tall portrait": "高纵向",
   "Tasks are still running in {library}. Closing it stops them. Work already done is kept.": "{library}中仍有任务在运行。关闭会停止这些任务，已完成的工作会保留。",
+  "Tasks are still running. Quitting stops them. Work already done is kept.": "任务仍在运行。退出会停止它们。已完成的工作会保留。",
   "Text Document": "文本文档",
   "Text Selection Tool": "文本选择工具",
   "Text, or /pattern/flags": "文本，或 /模式/标志",

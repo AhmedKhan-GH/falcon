@@ -137,6 +137,10 @@ The core words, so every file uses one term for one thing.
   when another app holds its chord (machine-written).
 - The no-library screen: "Open Library" and "A library is a folder that holds
   your files and their tags." (machine-written).
+- The quit warning ("Quit While Tasks Run", "Tasks are still running.
+  Quitting stops them. Work already done is kept.", "Stop Tasks and
+  Quit"), machine-written with the terms of "Close Library While Tasks
+  Run".
 
 - The viewers, sidebar and context menus (the follow-up pass),
   machine-written: the 3D viewer's terms (Perspective, Orthographic, Fixed

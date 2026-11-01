@@ -61,7 +61,7 @@ impl App {
         }
         for choice in crate::tray::take_choices() {
             match choice {
-                Choice::Quit => crate::dock::quit(),
+                Choice::Quit => self.request_quit(ctx),
                 other => {
                     if let Some(cmd) = other.command() {
                         self.outside_command(ctx, cmd);

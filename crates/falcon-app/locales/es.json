@@ -1322,6 +1322,7 @@
   "Quick Access": "Acceso rápido",
   "Quick Access ({count})": "Acceso rápido ({count})",
   "Quit Falcon": "Salir de Falcon",
+  "Quit While Tasks Run": "Salir mientras hay tareas en curso",
   "Random": "Aleatorio",
   "Range": "Rango",
   "Rate 1 star": "Valorar con 1 estrella",
@@ -1718,6 +1719,7 @@
   "Startup": "Inicio",
   "Stop": "Detener",
   "Stop Tasks and Close": "Detener tareas y cerrar",
+  "Stop Tasks and Quit": "Detener tareas y salir",
   "Stopped after adding {done} of {n} items to {target}": {
     "one": "Detenido tras añadir {done} de {n} elemento a {target}",
     "other": "Detenido tras añadir {done} de {n} elementos a {target}"
@@ -1752,6 +1754,7 @@
   "Takes effect when you Save or Apply.": "Se aplica al guardar o aplicar.",
   "Tall portrait": "Vertical alto",
   "Tasks are still running in {library}. Closing it stops them. Work already done is kept.": "Todavía hay tareas en curso en {library}. Al cerrarla se detienen. El trabajo ya hecho se conserva.",
+  "Tasks are still running. Quitting stops them. Work already done is kept.": "Todavía hay tareas en curso. Al salir se detienen. El trabajo ya hecho se conserva.",
   "Text Document": "Documento de texto",
   "Text Selection Tool": "Herramienta de selección de texto",
   "Text, or /pattern/flags": "Texto, o /patrón/indicadores",

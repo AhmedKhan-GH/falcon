@@ -1387,6 +1387,7 @@
   "Quick Access": "Быстрый доступ",
   "Quick Access ({count})": "Быстрый доступ ({count})",
   "Quit Falcon": "Завершить Falcon",
+  "Quit While Tasks Run": "Выход, пока выполняются задачи",
   "Random": "Случайные",
   "Range": "Диапазон",
   "Rate 1 star": "Поставить 1 звезду",
@@ -1804,6 +1805,7 @@
   "Startup": "Запуск",
   "Stop": "Остановить",
   "Stop Tasks and Close": "Остановить задачи и закрыть",
+  "Stop Tasks and Quit": "Остановить задачи и выйти",
   "Stopped after adding {done} of {n} items to {target}": {
     "few": "Остановлено после добавления {done} из {n} элементов в {target}",
     "many": "Остановлено после добавления {done} из {n} элементов в {target}",
@@ -1841,6 +1843,7 @@
   "Takes effect when you Save or Apply.": "Вступает в силу после нажатия «Сохранить» или «Применить».",
   "Tall portrait": "Высокая портретная",
   "Tasks are still running in {library}. Closing it stops them. Work already done is kept.": "В {library} ещё выполняются задачи. При закрытии они будут остановлены. Уже выполненная работа сохранится.",
+  "Tasks are still running. Quitting stops them. Work already done is kept.": "Задачи ещё выполняются. При выходе они будут остановлены. Уже сделанная работа сохраняется.",
   "Text Document": "Текстовый документ",
   "Text Selection Tool": "Инструмент выделения текста",
   "Text, or /pattern/flags": "Текст или /шаблон/флаги",
