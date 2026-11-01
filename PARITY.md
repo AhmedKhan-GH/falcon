@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 178 | 40 | 53 | 9 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 183 | 39 | 49 | 9 |
 | Viewers and file formats | 157 | 22 | 11 | 7 |
-| Search, filters and organising | 173 | 22 | 27 | 3 |
+| Search, filters and organising | 188 | 15 | 19 | 3 |
 | Import, export, library, preferences and integrations | 129 | 17 | 66 | 26 |
-| **Total** | 637 | 101 | 157 | 45 |
+| **Total** | 657 | 93 | 145 | 45 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -169,8 +169,8 @@ Cross-references (not counted): File ▸ Import Folders / Links / Eagle Package 
 | **Quick Access item**: Remove from Quick Access | Done | app.rs:1692-1696 | local |
 | **Subfolder card** (strip above a folder's items): Rename / Auto-Tag / Password / Export / Remove | Missing | The cards have no menu (covers.rs:65-140) | local |
 | **Trash** sidebar item: Empty Trash | Done | app.rs:1758-1763 | local |
-| Trash sidebar item: Restore All Items | Missing |  | local |
-| **Recently Used** item: Clear history | Missing |  | local |
+| Trash sidebar item: Restore All Items | Done | Trash menu, after asking | local |
+| **Recently Used** item: Clear history | Done | Recently Used menu | local |
 | **Sidebar nav area**: choose which entries are visible (All, Uncategorized, Untagged, Recent, Random, Community, All Tags) | Missing |  | local |
 | **Sidebar / panel edges**: Toggle Sidebar / Inspector / both | Missing | Buttons only (app.rs:1585, 3644) | local |
 | **Folders heading**: Sort folders by title | Done | app.rs:1713-1715 | local |
@@ -266,12 +266,12 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | --- | --- | --- | --- |
 | Library name and switcher at the top | Done | app.rs:1595-1652, which adds several open libraries (falcon extra) | local |
 | Nav entries: All, Uncategorized, Untagged, Recently Used, Random, All Tags, Trash, each with a count | Done | app.rs:1740-1776, which adds Duplicates | local |
-| Recently Used lists items the user recently opened | Partial | Falcon sorts by last modified (logic.rs:170), not by what was opened | local |
+| Recently Used lists items the user recently opened | Done | Opened items newest first (viewer after a second, external open, Open With, new window, copy), kept per library in app storage as Eagle | local |
 | Community entry | Missing |  | online/plugin |
 | Show or hide each nav entry (context menu and preferences) | Partial | Preferences ▸ Sidebar (`SidebarSections`); no context menu | local |
 | Show or hide the count badges | Done | `Prefs::sidebar_counts` | local |
 | Quick Access section | Done | app.rs:1670-1699 | local |
-| Section headers (Quick Access / Smart Folders / Folders) collapse on click and show a count | Partial | Folders shows a count (app.rs:1704). The headers do not collapse (app.rs:1931) | local |
+| Section headers (Quick Access / Smart Folders / Folders) collapse on click and show a count | Partial | Quick Access folds and shows a count; Smart Folders and Folders don't fold | local |
 | Smart Folders tree with groups, nesting, icons, colours, counts | Done | organize_ui.rs:340-450 | local |
 | Folder tree with carets, guide lines, icon and colour tints, counts, lock badge | Done | app.rs:1778-1890 | local |
 | Double-click a folder to expand or collapse (preference: or rename) | Done | `Prefs::sidebar_double_click`, folders and smart folders | local |
@@ -337,13 +337,13 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | --- | --- | --- | --- |
 | Drag items onto a sidebar folder | Done | `logic::folder_drop`: inside a folder the drop moves the items out of it, ⌥ adds; from other views it adds; trashed items come back (`Action::DropOnFolder`, one undo step). A locked target isn't asked for its password | local |
 | Toast after a drop ("N items moved to Folder", with a link to the folder) | Partial | `logic::folder_drop_notice` shows "Moved N items to Folder" / "Added …". No link; falcon's toast has no actions | local |
-| Drag items onto a Quick Access folder | Missing | Quick Access rows take no drops (app.rs:1688-1697) | local |
+| Drag items onto a Quick Access folder | Done | Quick Access rows take item drops (move/add rules as the tree) | local |
 | Drag items onto a subfolder card | Missing |  | local |
 | Drag items onto the Trash | Done | app.rs:1764-1767 | local |
 | Drag folders to reorder or nest, with insertion lines | Done | organize_ui.rs:254-266 | local |
 | Drag a folder onto the Folders heading to move it to the top level | Done | app.rs:1705-1711 | local |
 | Drag smart folders to reorder or nest | Done | organize_ui.rs:362-372 | local |
-| Drag Quick Access entries to reorder them | Missing |  | local |
+| Drag Quick Access entries to reorder them | Done | Reorder by dragging; folders and smart folders can be dragged in | local |
 | Drag items within a manually sorted folder to reorder them | Done | organize_ui.rs:616 | local |
 | Drag items out to Finder or other apps | Done | app.rs:3699-3730 | local |
 | Drag files from Finder onto the grid to import into the open folder | Done | app.rs:3601-3606, 852-862 | local |
@@ -445,7 +445,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 16. Toast system: no UNDO button, no links, no import error list, no dock progress, no time remaining.
 17. Drag and drop gaps: files onto a specific sidebar folder, a Finder folder onto the sidebar (keeping its tree), items onto Quick Access or subfolder cards, Quick Access reorder.
 18. Context menus have no type-to-filter search.
-19. Trash ▸ Restore All, Recently Used ▸ Clear history, and Recently Used tracks modification time rather than items the user opened.
+19. ~~Trash ▸ Restore All, Recently Used ▸ Clear history, Recently Used by modification time.~~ Fixed.
 20. Right-click on the empty grid (layout panel), right-click on the title (ancestor jump), ⌥↑ to the parent folder, R to reshuffle Random and a refresh button.
 21. Video, GIF and audio hover-play in the grid.
 22. Window: closing quits instead of keeping the app in the Dock; no Full Screen menu or key; no app lock screen; no menu bar status icon; no library loading screen.
@@ -944,13 +944,13 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Uncategorized also counts items whose only folder no longer exists | Partial | Falcon checks `folders.is_empty()` only (`L:123`) | local |
 | Random view | Done | `L:19` Scope::Random | local |
 | Random refresh button (key R) | Partial | Clicking Random again reshuffles (`A:797`); no button or key | local |
-| Recently Used: items the user recently opened | Partial | Falcon shows every item by `lastModified` (`L:166`), not a list of opened items | local |
+| Recently Used: items the user recently opened | Done | Opened items, newest first; trashed items listed too, as Eagle | local |
 | Filter sidebar items | Partial | Filters folders only; ⌥⇧F focuses it | local |
 | Go to Folder: quick-search folders, smart folders and tags, with history | Done | `app/goto.rs`-style dialog with history; also an Items tab as Eagle 4 | local |
 | Quick Access: add or remove a folder or smart folder | Done | `A:1842`, `OU:391`, `E:595` | local |
-| Quick Access: reorder by dragging, drag a folder in to add it | Missing | Rows are click and context menu only (`A:1678`) | local |
-| Quick Access: drop items on a row to add them to that folder | Missing | No dnd on Quick Access rows | local |
-| Expand/collapse a folder, all folders, or the same level | Partial | Single folder by caret or double-click (`A:1863`); no all or same-level | local |
+| Quick Access: reorder by dragging, drag a folder in to add it | Done | Entries keep their whole JSON object when moved | local |
+| Quick Access: drop items on a row to add them to that folder | Done | Drop target rows | local |
+| Expand/collapse a folder, all folders, or the same level | Done | Expand/collapse entries in the folder and smart folder menus; ⌘, ⌥ and ⌘⌥ clicks on carets | local |
 | Double-click on a sidebar row renames or collapses, per preference | Partial | Always collapses | local |
 
 ### 6. Folders
@@ -1008,7 +1008,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Smart folder's own sort | Done | `OU:400`, `SM:429` | local |
 | Add to Quick Access | Done | `OU:394` | local |
 | Duplicate a smart folder | Done | `smart::duplicate_smart_folder` | local |
-| Description | Missing | Read (`SM:30`) but not editable | local |
+| Description | Done | Edited in the inspector when a smart folder is open and nothing is selected (Eagle edits it there too, not in the rules dialog) | local |
 | Several conditions, each with its own Any/All and true/false (NOT), AND-ed together | Done | `smart_draft.rs` drafts/conditions and `organize_ui::smart_conditions_ui`: every condition is edited, each with must/must-not and all/any | local |
 | Editing a smart folder keeps its other conditions and rules | Done | Untouched conditions and rules are written back verbatim, edited ones keep their unknown keys, and rules the dialog can't show stay as read-only Unsupported rows until deleted (`smart_draft.rs`, test `eagle_smart_folder_survives_an_edit`) | local |
 | Live "N items found" count while editing rules | Missing | none | local |
@@ -1097,7 +1097,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Rate all | Done | `A:3003`, Action::BatchRating | local |
 | Total size | Done | `A:3007` | local |
 | Batch rename with a template (%NN, $D, original name, tags, folders, index, date) and find/replace with regex | Done | Rename N Items dialog (`rename.rs`): `%NN`, dates, original name, tags, folders, `%F`, index, find/replace | local |
-| Confirm bulk actions on many items | Missing | none | local |
+| Confirm bulk actions on many items | Done | `App::push_bulk`: asks before changing 100 or more items (rate, trash, drops); newer commands still need the gate | local |
 | New Folder with Selection | Missing | none | local |
 | Add To Last Used Folder | Missing | none | local |
 | Remove from the current folder | Missing | Only through the × on the single-item inspector chip | local |
@@ -1112,13 +1112,13 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | --- | --- | --- | --- |
 | Find identical files | Done | `DV:76`, `duplicates.rs:91` content hash | local |
 | Find similar-looking images, with a similarity slider | Done | `duplicates.rs:173` perceptual hash, `DV` slider | local |
-| Choose the method (same or similar) before scanning | Partial | Both run in one scan | local |
-| Scan all, the current list, or the selected items | Partial | Scans all only | local |
+| Choose the method (same or similar) before scanning | Done | Duplicates page: method, range, similarity | local |
+| Scan all, the current list, or the selected items | Done | `merge.rs` scan ranges | local |
 | Progress while scanning | Done | `DV` progress bar | local |
-| Best copy picked automatically for similar groups (highest quality) | Partial | "Select All but First" keeps the first of each group (`DV:172`), not the best | local |
-| Remove an item or a group from the results | Missing | none | local |
-| Merge: keep one file and combine the others' folders, tags, link and notes into it, choosing the file name | Missing | Falcon only trashes the extra copies | local |
-| Summary of files deleted and space saved | Partial | Shows group and item counts, not space saved | local |
+| Best copy picked automatically for similar groups (highest quality) | Done | Most pixels, then bigger file of the same format, else Eagle's format order; the kept copy can be changed | local |
+| Remove an item or a group from the results | Done | Duplicates page | local |
+| Merge: keep one file and combine the others' folders, tags, link and notes into it, choosing the file name | Done | `crates/falcon-library/src/merge.rs`: the kept item takes the folders, tags, notes, link and highest rating; the others are trashed, nothing deleted; one undo step; always asks first | local |
+| Summary of files deleted and space saved | Done | After the merge | local |
 | Move duplicates to Trash | Done | `DV:177` | local |
 
 ### 12. Trash and ratings
@@ -1126,13 +1126,13 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | Move to Trash (menu, key, drag onto Trash) | Done | `A:2537`, `A:1765` | local |
-| When an item is in several folders, ask whether to remove it from this folder or trash it | Missing | Always trashes | local |
+| When an item is in several folders, ask whether to remove it from this folder or trash it | Done | Trashing inside a folder asks "only this folder" or "trash all"; the answer is kept for the session | local |
 | Restore selected items | Done | `A:2531`, `E:94` | local |
-| Restore All Items (with confirmation) | Partial | Restores a selection only (select all, then Restore All in the inspector, `A:3011`); no Trash menu command | local |
+| Restore All Items (with confirmation) | Done | Trash menu | local |
 | Delete permanently (with confirmation) | Done | `A:2534`, `E:108` | local |
 | Empty Trash (with confirmation) | Done | `A:1760`, `E:122` | local |
 | Ratings stored as 1-5, key removed when cleared | Done | `A:3188`, `A:1215` | local |
-| Toast "rated as N star" | Missing | Silent | local |
+| Toast "rated as N star" | Done | "Rated N stars" / "Removed the rating" notice from the rating keys and menu | local |
 
 ### 13. Comments (annotations)
 
@@ -1177,26 +1177,26 @@ Ranked by user impact. Data-loss and silent-mismatch bugs come first, then every
 9. **The smart folder dialog** has no date picker and shows no live hit count.
 10. ~~No tag picker.~~ Fixed.
 11. **No exclude, search or tag-group options in the Tag, Folder and Type filters.** Also no type groups (video, audio, font...).
-12. **Remove from current folder is missing**, and so is the "remove from folder or trash" prompt for items in several folders.
+12. ~~Remove from current folder is missing, and the "remove from folder or trash" prompt.~~ Fixed: ⇧⌘⌫, and trashing in a folder asks "only this folder" or "trash all" when items are filed elsewhere too.
 13. ~~No Show Subfolder Content toggle.~~ Fixed.
 14. **Batch rename of items is missing**, and so is batch name/note/URL editing for several items (folders can be batch-renamed).
 15. **Duplicates can't merge.** Folders, tags, notes and links aren't combined; there's no best-copy pick, no scope (current list or selected), and no remove-from-results.
 16. ~~No Go to Folder quick search.~~ Fixed.
 17. ~~No multi-select of folders.~~ Fixed, for folders and smart folders.
 18. ~~Missing folder commands.~~ Fixed, including Add to Last Used Folder.
-19. **Emoji folder icons don't show.** A new folder doesn't inherit the parent's icon or colour, and there's no reset cover.
+19. Eagle 4 stores no emoji icons (its "emoji" submenu is the named-icon grid) and has no reset-cover command; a new folder inherits the parent's icon and colour.
 20. ~~No Pin to Top for items, and no Open File Location.~~ Fixed.
 21. **Tag manager gaps**: no Uncategorized or Starred tag pages, no rubber-band tag selection, and rename or merge don't reach folder auto-tags or smart-folder rules.
-22. **Quick Access can't be reordered, dragged into, or used as a drop target.**
+22. ~~Quick Access can't be reordered, dragged into, or used as a drop target.~~ Fixed.
 23. **Filter bar gaps**: no Filter Lock toggle (falcon always keeps the filter and search when switching views), no add or pin filters, no ratio shapes (4:3, 16:9, custom), no counts for type, shape and rating.
 24. ~~Global sort lacks Duration and Random.~~ Fixed.
 25. **Rating gaps**: no rating shortcuts (0-5) and no rating toast.
 26. ~~Palette gaps.~~ Fixed; colour search still ignores the primary colour.
 27. ~~No change-extension in the inspector; URL isn't validated; no Open Link button.~~ Fixed.
-28. **Recently Used isn't a list of opened items.** Random has no refresh key. Uncategorized ignores stale folder ids.
+28. ~~Recently Used isn't a list of opened items; Uncategorized ignores stale folder ids.~~ Fixed (R reshuffles Random).
 29. **Folder deletion**: the trash checkbox can now be unticked; there's no move confirmation, and Touch ID unlock is missing.
 30. **Search extras**: no Search All, no Chinese traditional/simplified matching, no pinyin sidebar search. Falcon's own fuzzy matching is a deviation from Eagle.
-31. **Minor UI gaps**: no expand/collapse all folders, no collapsible inspector sections, no bulk-action confirm, no Restore All command, no smart folder description, and the double-click preference is ignored.
+31. **Minor UI gaps**: Smart Folders and Folders section headers don't fold; the bulk-action gate doesn't cover every newer command yet.
 
 Online/plugin only (not ranked): Visual Match, Semantic search, the search-by-image button.
 
