@@ -1353,6 +1353,7 @@ fn organize_label(a: &organize_ui::OrgAction) -> String {
         O::RenameFilter(..) => "Rename saved filter".into(),
         O::DeleteFilter(_) => "Remove saved filter".into(),
         O::MoveFilter(..) => "Move saved filter".into(),
+        O::MoveManual(_, ids, _) => format!("Reorder {}", ids.len()),
     }
 }
 
@@ -2460,6 +2461,7 @@ impl App {
         let mut opened: Option<String> = None;
         let mut bg_clicked = false;
         let mut hovered: Option<(&Item, Rect, bool)> = None;
+        let manual = self.manual_folder(lib);
         let out = scroll.show_viewport(ui, |ui, viewport| {
             let origin = ui.max_rect().min;
             let bg = ui.allocate_rect(Rect::from_min_size(origin, vec2(area.width(), total_h.max(area.height()))), Sense::click());
@@ -2533,6 +2535,9 @@ impl App {
                 if let Some(j) = job_for(item, lib.root(), Tier::Grid) {
                     jobs.push(j);
                 }
+            }
+            if let Some(folder) = &manual {
+                self.manual_drag(ui, folder, &places, caption, origin);
             }
         });
         let offset = out.state.clamped_offset().y;

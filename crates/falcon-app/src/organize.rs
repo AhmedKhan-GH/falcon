@@ -273,9 +273,10 @@ pub fn base_key(own: Option<(FolderOrder, bool)>, global: (OrderBy, bool)) -> (O
 
 /// Applies the keys the main list can't sort by. Random shuffles by
 /// `seed` (fixed for one visit); duration sorts by length, shortest first
-/// when `increase`, items without one last. Manual keeps import order:
-/// falcon doesn't read Eagle's per-folder manual positions yet.
-pub fn finish_order(order: &mut [usize], items: &[Item], own: Option<(FolderOrder, bool)>, seed: u64) {
+/// when `increase`, items without one last. Manual sorts by each item's
+/// hand-arranged position in `folder` ([`search::sort_manual`]); outside a
+/// folder it keeps the incoming order.
+pub fn finish_order(order: &mut [usize], items: &[Item], own: Option<(FolderOrder, bool)>, folder: Option<&str>, seed: u64) {
     match own {
         Some((FolderOrder::Random, _)) => order.sort_by_key(|&i| shuffle_key(seed, &items[i].id)),
         Some((FolderOrder::Duration, inc)) => order.sort_by(|&a, &b| {
@@ -286,8 +287,50 @@ pub fn finish_order(order: &mut [usize], items: &[Item], own: Option<(FolderOrde
                 (None, None) => std::cmp::Ordering::Equal,
             }
         }),
+        Some((FolderOrder::Manual, inc)) => {
+            let Some(folder) = folder else { return };
+            let mut refs: Vec<&Item> = order.iter().map(|&i| &items[i]).collect();
+            search::sort_manual(&mut refs, folder, inc);
+            let pos: std::collections::HashMap<&str, usize> = order.iter().map(|&i| (items[i].id.as_str(), i)).collect();
+            for (slot, it) in order.iter_mut().zip(refs) {
+                *slot = pos[it.id.as_str()];
+            }
+        }
         _ => {}
     }
+}
+
+/// Whether items in the grid can be dragged into a new hand-made order,
+/// as Eagle allows: only inside a folder, while its sort is Manual or
+/// import time (its own, or the global one when it has none), and with no
+/// filter or search narrowing the view. Dropping switches the folder to
+/// Manual.
+pub fn manual_sortable(in_folder: bool, own: Option<(FolderOrder, bool)>, global: OrderBy, filtered: bool, searching: bool) -> bool {
+    let key_ok = match own {
+        Some((FolderOrder::Manual | FolderOrder::By(OrderBy::Import), _)) => true,
+        Some(_) => false,
+        None => global == OrderBy::Import,
+    };
+    in_folder && key_ok && !filtered && !searching
+}
+
+/// The `before` item for [`falcon_library::Library::move_items_manually`]
+/// when `moving` items are dropped before or `after` the shown item at
+/// `target` in `order`: the first item at the drop point that isn't
+/// moving, or `None` for the end.
+pub fn manual_before(order: &[String], moving: &[String], target: usize, after: bool) -> Option<String> {
+    let start = if after { target + 1 } else { target };
+    order.iter().skip(start).find(|id| !moving.contains(id)).cloned()
+}
+
+/// Whether moving `moving` (as one block, in their shown order) to just
+/// before `before` (`None`: the end) would leave `order` as it is.
+pub fn manual_noop(order: &[String], moving: &[String], before: Option<&str>) -> bool {
+    let block: Vec<&String> = order.iter().filter(|id| moving.contains(id)).collect();
+    let mut out: Vec<&String> = order.iter().filter(|id| !moving.contains(id)).collect();
+    let at = before.and_then(|b| out.iter().position(|id| *id == b)).unwrap_or(out.len());
+    out.splice(at..at, block);
+    out.iter().map(|s| s.as_str()).eq(order.iter().map(String::as_str))
 }
 
 fn shuffle_key(seed: u64, id: &str) -> u64 {
@@ -545,18 +588,64 @@ mod tests {
     fn duration_and_random_finish_the_order() {
         let items = vec![item("a", &[], Some(30.0)), item("b", &[], None), item("c", &[], Some(5.5)), item("d", &[], Some(12.0))];
         let mut o = vec![0, 1, 2, 3];
-        finish_order(&mut o, &items, Some((FolderOrder::Duration, true)), 0);
+        finish_order(&mut o, &items, Some((FolderOrder::Duration, true)), None, 0);
         assert_eq!(o, [2, 3, 0, 1]);
-        finish_order(&mut o, &items, Some((FolderOrder::Duration, false)), 0);
+        finish_order(&mut o, &items, Some((FolderOrder::Duration, false)), None, 0);
         assert_eq!(o, [0, 3, 2, 1]);
         let mut r1 = vec![0, 1, 2, 3];
         let mut r2 = vec![3, 2, 1, 0];
-        finish_order(&mut r1, &items, Some((FolderOrder::Random, true)), 42);
-        finish_order(&mut r2, &items, Some((FolderOrder::Random, true)), 42);
+        finish_order(&mut r1, &items, Some((FolderOrder::Random, true)), None, 42);
+        finish_order(&mut r2, &items, Some((FolderOrder::Random, true)), None, 42);
         assert_eq!(r1, r2, "one seed gives one order");
         let mut m = vec![2, 0, 1];
-        finish_order(&mut m, &items, Some((FolderOrder::Manual, true)), 1);
-        assert_eq!(m, [2, 0, 1], "manual keeps the incoming order");
+        finish_order(&mut m, &items, Some((FolderOrder::Manual, true)), None, 1);
+        assert_eq!(m, [2, 0, 1], "manual outside a folder keeps the incoming order");
+    }
+
+    #[test]
+    fn manual_sorts_by_the_folders_order_map() {
+        let mut items = vec![item("a", &["f"], None), item("b", &["f"], None), item("c", &["f"], None), item("d", &["f"], None)];
+        items[0].set_manual_order("f", "2");
+        items[1].set_manual_order("f", "5");
+        items[2].set_manual_order("g", "9");
+        items[3].set_manual_order("f", "3.5");
+        // Larger values first; c has no entry for f and falls back to its
+        // modificationTime (0), which sorts last.
+        let mut m = vec![0, 1, 2, 3];
+        finish_order(&mut m, &items, Some((FolderOrder::Manual, true)), Some("f"), 0);
+        assert_eq!(m, [1, 3, 0, 2]);
+        finish_order(&mut m, &items, Some((FolderOrder::Manual, false)), Some("f"), 0);
+        assert_eq!(m, [2, 0, 3, 1]);
+    }
+
+    #[test]
+    fn manual_drag_is_allowed_like_eagle() {
+        let g = OrderBy::Name;
+        assert!(manual_sortable(true, Some((FolderOrder::Manual, false)), g, false, false));
+        assert!(manual_sortable(true, Some((FolderOrder::By(OrderBy::Import), true)), g, false, false));
+        assert!(manual_sortable(true, None, OrderBy::Import, false, false));
+        assert!(!manual_sortable(true, None, g, false, false));
+        assert!(!manual_sortable(true, Some((FolderOrder::Random, true)), OrderBy::Import, false, false));
+        assert!(!manual_sortable(false, Some((FolderOrder::Manual, true)), g, false, false), "only inside a folder");
+        assert!(!manual_sortable(true, Some((FolderOrder::Manual, true)), g, true, false), "not while filtered");
+        assert!(!manual_sortable(true, Some((FolderOrder::Manual, true)), g, false, true), "not while searching");
+    }
+
+    #[test]
+    fn manual_drop_targets() {
+        let order: Vec<String> = ["a", "b", "c", "d", "e"].map(String::from).to_vec();
+        let mv = |ids: &[&str]| ids.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(manual_before(&order, &mv(&["a"]), 2, false).as_deref(), Some("c"));
+        assert_eq!(manual_before(&order, &mv(&["a"]), 2, true).as_deref(), Some("d"));
+        assert_eq!(manual_before(&order, &mv(&["d"]), 2, true).as_deref(), Some("e"), "skips moving items");
+        assert_eq!(manual_before(&order, &mv(&["a"]), 4, true), None, "after the last is the end");
+        assert_eq!(manual_before(&order, &mv(&["e"]), 3, true), None);
+        assert!(manual_noop(&order, &mv(&["b"]), Some("c")));
+        assert!(manual_noop(&order, &mv(&["e"]), None));
+        assert!(manual_noop(&order, &mv(&["b", "c"]), Some("d")));
+        assert!(!manual_noop(&order, &mv(&["b"]), Some("d")));
+        assert!(!manual_noop(&order, &mv(&["a", "c"]), Some("d")), "a gap closes up");
+        assert!(!manual_noop(&order, &mv(&["a"]), None));
     }
 
     fn group(id: &str, name: &str, tags: &[&str]) -> TagGroup {

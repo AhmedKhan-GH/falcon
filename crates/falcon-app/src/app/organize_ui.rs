@@ -76,6 +76,9 @@ pub(super) enum OrgAction {
     RenameFilter(usize, String),
     DeleteFilter(usize),
     MoveFilter(usize, usize),
+    /// Items dropped at a new place in a folder's hand-made order:
+    /// folder, items, and the item they now sit before (`None`: the end).
+    MoveManual(String, Vec<String>, Option<String>),
 }
 
 /// Which stored sort the toolbar's sort menu edits.
@@ -485,10 +488,49 @@ impl App {
                     seed
                 }
             };
-            organize::finish_order(&mut order, lib.items(), own, seed);
+            let folder = if let Scope::Folder(id) = &self.ws.scope { Some(id.as_str()) } else { None };
+            organize::finish_order(&mut order, lib.items(), own, folder, seed);
         }
         let hidden = organize::hidden_folders(&lib.metadata.folders, &self.ws.org.unlocked);
         organize::without_hidden(order, lib.items(), &hidden)
+    }
+
+    /// The folder whose items can be dragged into a new order right now
+    /// (see [`organize::manual_sortable`]).
+    pub(super) fn manual_folder(&self, lib: &Library) -> Option<String> {
+        let Scope::Folder(id) = &self.ws.scope else { return None };
+        let own = self.own_sort(lib).and_then(|o| o.1);
+        organize::manual_sortable(true, own, self.ws.sort, self.ws.filter.is_active(), !self.ws.query.trim().is_empty()).then(|| id.clone())
+    }
+
+    /// While grid items are dragged over the grid of a hand-sortable
+    /// folder: shows where they would land, as Eagle's drop strip beside a
+    /// card (a bar between list rows), and queues the move on release.
+    /// `places` are the cards in content space; `origin` is the content's
+    /// top-left on screen.
+    pub(super) fn manual_drag(&mut self, ui: &Ui, folder: &str, places: &[logic::Place], caption: f32, origin: Pos2) {
+        let Some(d) = egui::DragAndDrop::payload::<DragItems>(ui.ctx()) else { return };
+        let Some(pos) = ui.ctx().pointer_latest_pos().filter(|p| ui.clip_rect().contains(*p)) else { return };
+        let order = &self.ws.order;
+        let moving: Vec<String> = d.0.iter().filter(|id| order.contains(id)).cloned().collect();
+        if moving.is_empty() {
+            return;
+        }
+        let base = origin + vec2(GRID_PAD_X, GRID_PAD_TOP);
+        let skip = |n: usize| order.get(n).is_none_or(|id| moving.contains(id));
+        let Some(hit) = logic::manual_drop(self.ws.layout, places, caption, GRID_GAP, skip, pos.x - base.x, pos.y - base.y) else { return };
+        let [x, y, w, h] = hit.bar;
+        let bar = Rect::from_min_size(base + vec2(x, y), vec2(w, h));
+        let p = ui.painter();
+        p.rect_filled(bar, CornerRadius::same(3), t::p().primary.gamma_multiply(0.3));
+        p.rect_stroke(bar, CornerRadius::same(3), Stroke::new(2.0, t::p().primary), StrokeKind::Inside);
+        if ui.input(|i| i.pointer.any_released()) {
+            egui::DragAndDrop::clear_payload(ui.ctx());
+            let before = organize::manual_before(order, &moving, hit.target, hit.after);
+            if !organize::manual_noop(order, &moving, before.as_deref()) {
+                self.ws.actions.push(org(OrgAction::MoveManual(folder.to_string(), moving, before)));
+            }
+        }
     }
 
     /// The sort part of the toolbar's layout menu while a folder or smart
@@ -974,6 +1016,7 @@ impl App {
             OrgAction::RenameFilter(i, name) => lib.rename_saved_filter(i, &name),
             OrgAction::DeleteFilter(i) => lib.delete_saved_filter(i),
             OrgAction::MoveFilter(i, to) => lib.reorder_saved_filter(i, to),
+            OrgAction::MoveManual(folder, ids, before) => lib.move_items_manually(&folder, &ids, before.as_deref()),
         }
     }
 }
