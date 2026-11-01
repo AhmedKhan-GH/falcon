@@ -152,6 +152,33 @@ pub fn tree_drop<T: Node>(roots: &[T], dragged: &str, target: &str, zone: DropZo
     Some((parent.map(str::to_string), pos))
 }
 
+/// Eagle's Edit ▸ Move Folder commands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Arrange {
+    Up,
+    Down,
+    Top,
+    Bottom,
+}
+
+/// The move that shifts `id` among its siblings, in the form `tree_drop`
+/// returns (parent, index counted after the node leaves). `None` when it
+/// is already at that end or not in the tree.
+pub fn arrange<T: Node>(roots: &[T], id: &str, how: Arrange) -> Option<(Option<String>, usize)> {
+    let (parent, at) = locate(roots, id)?;
+    let len = match parent {
+        None => roots.len(),
+        Some(p) => find(roots, p)?.kids().len(),
+    };
+    let to = match how {
+        Arrange::Up => at.checked_sub(1)?,
+        Arrange::Down => at + 1,
+        Arrange::Top => 0,
+        Arrange::Bottom => len - 1,
+    };
+    (to != at && to < len).then(|| (parent.map(str::to_string), to))
+}
+
 // ---------------------------------------------------------------------------
 // Locked folders
 
@@ -582,6 +609,29 @@ mod tests {
         assert_eq!(tree_drop(&t, "S3", "S1", DropZone::Into), Some((Some("S1".into()), usize::MAX)));
         assert_eq!(tree_drop(&t, "S2", "S3", DropZone::After), Some((None, 2)));
         assert_eq!(tree_drop(&t, "S1", "S2", DropZone::Into), None);
+    }
+
+    #[test]
+    fn arrange_moves_among_siblings() {
+        let t = vec![folder("A", vec![]), folder("B", vec![folder("B1", vec![]), folder("B2", vec![]), folder("B3", vec![])]), folder("C", vec![])];
+        assert_eq!(arrange(&t, "B", Arrange::Up), Some((None, 0)));
+        assert_eq!(arrange(&t, "B", Arrange::Down), Some((None, 2)));
+        assert_eq!(arrange(&t, "A", Arrange::Up), None);
+        assert_eq!(arrange(&t, "C", Arrange::Down), None);
+        assert_eq!(arrange(&t, "C", Arrange::Top), Some((None, 0)));
+        assert_eq!(arrange(&t, "A", Arrange::Top), None);
+        assert_eq!(arrange(&t, "A", Arrange::Bottom), Some((None, 2)));
+        assert_eq!(arrange(&t, "C", Arrange::Bottom), None);
+        // Subfolders stay inside their parent.
+        assert_eq!(arrange(&t, "B2", Arrange::Up), Some((Some("B".into()), 0)));
+        assert_eq!(arrange(&t, "B2", Arrange::Down), Some((Some("B".into()), 2)));
+        assert_eq!(arrange(&t, "B1", Arrange::Bottom), Some((Some("B".into()), 2)));
+        assert_eq!(arrange(&t, "B3", Arrange::Top), Some((Some("B".into()), 0)));
+        assert_eq!(arrange(&t, "Z", Arrange::Up), None);
+        let lone = vec![folder("A", vec![])];
+        for how in [Arrange::Up, Arrange::Down, Arrange::Top, Arrange::Bottom] {
+            assert_eq!(arrange(&lone, "A", how), None);
+        }
     }
 
     #[test]

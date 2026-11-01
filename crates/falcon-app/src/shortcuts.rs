@@ -38,6 +38,12 @@ pub enum Command {
     SwitchLibrary,
     NextLibrary,
     PreviousLibrary,
+    /// Edit ▸ Move Folder: the open folder or smart folder among its
+    /// siblings.
+    FolderUp,
+    FolderDown,
+    FolderTop,
+    FolderBottom,
     /// A key of the video player (`App::video_keys` reads these).
     Player(PlayerKey),
 }
@@ -73,9 +79,9 @@ pub struct Spec {
     pub group: &'static str,
     pub label: &'static str,
     pub default: Option<KeyboardShortcut>,
-    /// A second chord that also works while the binding is the default
-    /// (Enter for the viewer, ⌘+ for zoom in).
-    pub alias: Option<KeyboardShortcut>,
+    /// More chords that also work while the binding is the default
+    /// (Enter for the viewer, ⌘+ for zoom in, ⌘← and ⌥← for Back).
+    pub aliases: &'static [KeyboardShortcut],
 }
 
 const fn k(modifiers: Modifiers, key: Key) -> Option<KeyboardShortcut> {
@@ -88,51 +94,62 @@ const CMD_SHIFT: Modifiers = Modifiers { shift: true, ..Modifiers::COMMAND };
 const CMD_ALT: Modifiers = Modifiers { alt: true, ..Modifiers::COMMAND };
 const ALT: Modifiers = Modifiers::ALT;
 const SHIFT: Modifiers = Modifiers::SHIFT;
+/// The Mac's ⌃ key (on other systems ⌘ chords already use Ctrl).
+const CTRL: Modifiers = Modifiers::CTRL;
+const CTRL_SHIFT: Modifiers = Modifiers { shift: true, ..Modifiers::CTRL };
 
 /// Every rebindable command with its default. Arrow keys, Escape and the
 /// held Z of the hover preview stay fixed (see `FIXED`).
 pub const TABLE: &[Spec] = &[
-    Spec { cmd: Command::Viewer, id: "view.viewer", group: "View", label: "Open or close the viewer", default: k(NONE, Key::Space), alias: k(NONE, Key::Enter) },
-    Spec { cmd: Command::ZoomIn, id: "view.zoom.in", group: "View", label: "Zoom in", default: k(CMD, Key::Equals), alias: k(CMD, Key::Plus) },
-    Spec { cmd: Command::ZoomOut, id: "view.zoom.out", group: "View", label: "Zoom out", default: k(CMD, Key::Minus), alias: None },
-    Spec { cmd: Command::ToggleSidebar, id: "view.toggle.sidebar", group: "View", label: "Show or hide the sidebar", default: k(CMD_ALT, Key::Num1), alias: None },
-    Spec { cmd: Command::ToggleInspector, id: "view.toggle.inspector", group: "View", label: "Show or hide the inspector", default: k(CMD_ALT, Key::Num2), alias: None },
+    Spec { cmd: Command::Viewer, id: "view.viewer", group: "View", label: "Open or close the viewer", default: k(NONE, Key::Space), aliases: &[KeyboardShortcut::new(NONE, Key::Enter)] },
+    Spec { cmd: Command::ZoomIn, id: "view.zoom.in", group: "View", label: "Zoom in", default: k(CMD, Key::Equals), aliases: &[KeyboardShortcut::new(CMD, Key::Plus)] },
+    Spec { cmd: Command::ZoomOut, id: "view.zoom.out", group: "View", label: "Zoom out", default: k(CMD, Key::Minus), aliases: &[] },
+    Spec { cmd: Command::ToggleSidebar, id: "view.toggle.sidebar", group: "View", label: "Show or hide the sidebar", default: k(CMD_ALT, Key::Num1), aliases: &[] },
+    Spec { cmd: Command::ToggleInspector, id: "view.toggle.inspector", group: "View", label: "Show or hide the inspector", default: k(CMD_ALT, Key::Num2), aliases: &[] },
     // Eagle's ⌥1 is Waterfall and ⌥3 the square Grid (its keybind names say the opposite).
-    Spec { cmd: Command::LayoutWaterfall, id: "view.layout.waterfall", group: "View", label: "Waterfall layout", default: k(ALT, Key::Num1), alias: None },
-    Spec { cmd: Command::LayoutJustified, id: "view.layout.justified", group: "View", label: "Justified layout", default: k(ALT, Key::Num2), alias: None },
-    Spec { cmd: Command::LayoutGrid, id: "view.layout.grid", group: "View", label: "Grid layout", default: k(ALT, Key::Num3), alias: None },
-    Spec { cmd: Command::LayoutList, id: "view.layout.list", group: "View", label: "List layout", default: k(ALT, Key::Num4), alias: None },
-    Spec { cmd: Command::OpenDefault, id: "view.file.opendefault", group: "View", label: "Open in the default app", default: k(SHIFT, Key::Enter), alias: None },
-    Spec { cmd: Command::RevealInFinder, id: "view.file.openfinder", group: "View", label: "Show in Finder", default: k(CMD, Key::Enter), alias: None },
-    Spec { cmd: Command::Back, id: "go.back", group: "Navigate", label: "Back", default: k(CMD, Key::OpenBracket), alias: None },
-    Spec { cmd: Command::Forward, id: "go.forward", group: "Navigate", label: "Forward", default: k(CMD, Key::CloseBracket), alias: None },
-    Spec { cmd: Command::Find, id: "find.search.current", group: "Find", label: "Focus search", default: k(CMD, Key::F), alias: None },
-    Spec { cmd: Command::ToggleFilter, id: "find.filter.toggle", group: "Find", label: "Show or hide the filter bar", default: k(CMD_SHIFT, Key::F), alias: None },
-    Spec { cmd: Command::SelectAll, id: "edit.select.all", group: "Edit", label: "Select all", default: k(CMD, Key::A), alias: None },
-    Spec { cmd: Command::Rename, id: "edit.rename", group: "Edit", label: "Rename the selected item", default: k(NONE, Key::F2), alias: None },
-    Spec { cmd: Command::Copy, id: "edit.copy", group: "Edit", label: "Copy the selected files", default: k(CMD, Key::C), alias: None },
-    Spec { cmd: Command::Paste, id: "edit.paste", group: "Edit", label: "Paste files or an image", default: k(CMD, Key::V), alias: None },
-    Spec { cmd: Command::Trash, id: "edit.remove.trash", group: "Edit", label: "Move to the Trash", default: k(CMD, Key::Backspace), alias: None },
-    Spec { cmd: Command::NewFolder, id: "file.create.folder", group: "File", label: "New folder", default: k(CMD_SHIFT, Key::N), alias: None },
-    Spec { cmd: Command::CollectWindow, id: "file.collect.window", group: "File", label: "Show or hide the collect window", default: k(CMD_SHIFT, Key::K), alias: None },
-    Spec { cmd: Command::SwitchLibrary, id: "library.switch", group: "Library", label: "Open the library switcher", default: k(CMD, Key::L), alias: None },
+    Spec { cmd: Command::LayoutWaterfall, id: "view.layout.waterfall", group: "View", label: "Waterfall layout", default: k(ALT, Key::Num1), aliases: &[] },
+    Spec { cmd: Command::LayoutJustified, id: "view.layout.justified", group: "View", label: "Justified layout", default: k(ALT, Key::Num2), aliases: &[] },
+    Spec { cmd: Command::LayoutGrid, id: "view.layout.grid", group: "View", label: "Grid layout", default: k(ALT, Key::Num3), aliases: &[] },
+    Spec { cmd: Command::LayoutList, id: "view.layout.list", group: "View", label: "List layout", default: k(ALT, Key::Num4), aliases: &[] },
+    Spec { cmd: Command::OpenDefault, id: "view.file.opendefault", group: "View", label: "Open in the default app", default: k(SHIFT, Key::Enter), aliases: &[] },
+    Spec { cmd: Command::RevealInFinder, id: "view.file.openfinder", group: "View", label: "Show in Finder", default: k(CMD, Key::Enter), aliases: &[] },
+    // Eagle: ⌫ goes back (or leaves the viewer), and ⌘←/⌘→ and ⌥←/⌥→
+    // step through the history.
+    Spec { cmd: Command::Back, id: "go.back", group: "Navigate", label: "Back", default: k(NONE, Key::Backspace), aliases: &[KeyboardShortcut::new(CMD, Key::ArrowLeft), KeyboardShortcut::new(ALT, Key::ArrowLeft)] },
+    Spec { cmd: Command::Forward, id: "go.forward", group: "Navigate", label: "Forward", default: k(CMD, Key::ArrowRight), aliases: &[KeyboardShortcut::new(ALT, Key::ArrowRight)] },
+    Spec { cmd: Command::Find, id: "find.search.current", group: "Find", label: "Focus search", default: k(CMD, Key::F), aliases: &[] },
+    Spec { cmd: Command::ToggleFilter, id: "find.filter.toggle", group: "Find", label: "Show or hide the filter bar", default: k(CMD_SHIFT, Key::F), aliases: &[] },
+    Spec { cmd: Command::SelectAll, id: "edit.select.all", group: "Edit", label: "Select all", default: k(CMD, Key::A), aliases: &[] },
+    Spec { cmd: Command::Rename, id: "edit.rename", group: "Edit", label: "Rename the selected item", default: k(CMD, Key::R), aliases: &[KeyboardShortcut::new(NONE, Key::F2)] },
+    Spec { cmd: Command::Copy, id: "edit.copy", group: "Edit", label: "Copy the selected files", default: k(CMD, Key::C), aliases: &[] },
+    Spec { cmd: Command::Paste, id: "edit.paste", group: "Edit", label: "Paste files or an image", default: k(CMD, Key::V), aliases: &[] },
+    Spec { cmd: Command::Trash, id: "edit.remove.trash", group: "Edit", label: "Move to the Trash", default: k(CMD, Key::Backspace), aliases: &[] },
+    // Eagle's Edit ▸ Move Folder accelerators. ⇧ may or may not turn the
+    // bracket into a brace before it reaches us.
+    Spec { cmd: Command::FolderUp, id: "edit.folder.arrange.up", group: "Edit", label: "Move folder up", default: k(CMD, Key::CloseBracket), aliases: &[] },
+    Spec { cmd: Command::FolderDown, id: "edit.folder.arrange.down", group: "Edit", label: "Move folder down", default: k(CMD, Key::OpenBracket), aliases: &[] },
+    Spec { cmd: Command::FolderTop, id: "edit.folder.arrange.top", group: "Edit", label: "Move folder to the top", default: k(CMD_SHIFT, Key::CloseBracket), aliases: &[KeyboardShortcut::new(CMD_SHIFT, Key::CloseCurlyBracket)] },
+    Spec { cmd: Command::FolderBottom, id: "edit.folder.arrange.bottom", group: "Edit", label: "Move folder to the bottom", default: k(CMD_SHIFT, Key::OpenBracket), aliases: &[KeyboardShortcut::new(CMD_SHIFT, Key::OpenCurlyBracket)] },
+    Spec { cmd: Command::NewFolder, id: "file.create.folder", group: "File", label: "New folder", default: k(CMD_SHIFT, Key::N), aliases: &[] },
+    Spec { cmd: Command::CollectWindow, id: "file.collect.window", group: "File", label: "Show or hide the collect window", default: k(CMD_SHIFT, Key::K), aliases: &[] },
+    Spec { cmd: Command::SwitchLibrary, id: "library.switch", group: "Library", label: "Open the library switcher", default: k(CMD, Key::L), aliases: &[] },
     // falcon's own: Eagle shows one library at a time.
-    Spec { cmd: Command::NextLibrary, id: "library.next", group: "Library", label: "Next open library", default: k(CMD_SHIFT, Key::CloseBracket), alias: k(CMD_SHIFT, Key::CloseCurlyBracket) },
-    Spec { cmd: Command::PreviousLibrary, id: "library.previous", group: "Library", label: "Previous open library", default: k(CMD_SHIFT, Key::OpenBracket), alias: k(CMD_SHIFT, Key::OpenCurlyBracket) },
-    Spec { cmd: Command::Preferences, id: "app.preferences", group: "App", label: "Preferences", default: k(CMD, Key::Comma), alias: None },
-    Spec { cmd: Command::Player(PlayerKey::Toggle), id: "player.playAndPause", group: PLAYER, label: "Play or pause", default: k(NONE, Key::Space), alias: None },
-    Spec { cmd: Command::Player(PlayerKey::Frames(-1)), id: "player.prev1frame", group: PLAYER, label: "Previous frame", default: k(NONE, Key::OpenBracket), alias: None },
-    Spec { cmd: Command::Player(PlayerKey::Frames(1)), id: "player.next1frame", group: PLAYER, label: "Next frame", default: k(NONE, Key::CloseBracket), alias: None },
-    Spec { cmd: Command::Player(PlayerKey::Frames(-10)), id: "player.prev10frame", group: PLAYER, label: "Back 10 frames", default: k(SHIFT, Key::OpenBracket), alias: None },
-    Spec { cmd: Command::Player(PlayerKey::Frames(10)), id: "player.next10frame", group: PLAYER, label: "Forward 10 frames", default: k(SHIFT, Key::CloseBracket), alias: None },
-    Spec { cmd: Command::Player(PlayerKey::Volume(true)), id: "player.volume.increase", group: PLAYER, label: "Volume up", default: k(CMD, Key::ArrowUp), alias: None },
-    Spec { cmd: Command::Player(PlayerKey::Volume(false)), id: "player.volume.decrease", group: PLAYER, label: "Volume down", default: k(CMD, Key::ArrowDown), alias: None },
-    Spec { cmd: Command::Player(PlayerKey::Skip(true)), id: "player.step.forward", group: PLAYER, label: "Skip forward", default: k(CMD, Key::ArrowRight), alias: None },
-    Spec { cmd: Command::Player(PlayerKey::Skip(false)), id: "player.step.backward", group: PLAYER, label: "Skip back", default: k(CMD, Key::ArrowLeft), alias: None },
-    Spec { cmd: Command::Player(PlayerKey::Speed(true)), id: "player.speed.up", group: PLAYER, label: "Faster", default: k(SHIFT, Key::Period), alias: None },
-    Spec { cmd: Command::Player(PlayerKey::Speed(false)), id: "player.speed.down", group: PLAYER, label: "Slower", default: k(SHIFT, Key::Comma), alias: None },
+    Spec { cmd: Command::NextLibrary, id: "library.next", group: "Library", label: "Next open library", default: k(CTRL, Key::Tab), aliases: &[] },
+    Spec { cmd: Command::PreviousLibrary, id: "library.previous", group: "Library", label: "Previous open library", default: k(CTRL_SHIFT, Key::Tab), aliases: &[] },
+    Spec { cmd: Command::Preferences, id: "app.preferences", group: "App", label: "Preferences", default: k(CMD, Key::Comma), aliases: &[] },
+    Spec { cmd: Command::Player(PlayerKey::Toggle), id: "player.playAndPause", group: PLAYER, label: "Play or pause", default: k(NONE, Key::Space), aliases: &[] },
+    Spec { cmd: Command::Player(PlayerKey::Frames(-1)), id: "player.prev1frame", group: PLAYER, label: "Previous frame", default: k(NONE, Key::OpenBracket), aliases: &[] },
+    Spec { cmd: Command::Player(PlayerKey::Frames(1)), id: "player.next1frame", group: PLAYER, label: "Next frame", default: k(NONE, Key::CloseBracket), aliases: &[] },
+    Spec { cmd: Command::Player(PlayerKey::Frames(-10)), id: "player.prev10frame", group: PLAYER, label: "Back 10 frames", default: k(SHIFT, Key::OpenBracket), aliases: &[] },
+    Spec { cmd: Command::Player(PlayerKey::Frames(10)), id: "player.next10frame", group: PLAYER, label: "Forward 10 frames", default: k(SHIFT, Key::CloseBracket), aliases: &[] },
+    Spec { cmd: Command::Player(PlayerKey::Volume(true)), id: "player.volume.increase", group: PLAYER, label: "Volume up", default: k(CMD, Key::ArrowUp), aliases: &[] },
+    Spec { cmd: Command::Player(PlayerKey::Volume(false)), id: "player.volume.decrease", group: PLAYER, label: "Volume down", default: k(CMD, Key::ArrowDown), aliases: &[] },
+    Spec { cmd: Command::Player(PlayerKey::Skip(true)), id: "player.step.forward", group: PLAYER, label: "Skip forward", default: k(CMD, Key::ArrowRight), aliases: &[] },
+    Spec { cmd: Command::Player(PlayerKey::Skip(false)), id: "player.step.backward", group: PLAYER, label: "Skip back", default: k(CMD, Key::ArrowLeft), aliases: &[] },
+    Spec { cmd: Command::Player(PlayerKey::Speed(true)), id: "player.speed.up", group: PLAYER, label: "Faster", default: k(SHIFT, Key::Period), aliases: &[] },
+    Spec { cmd: Command::Player(PlayerKey::Speed(false)), id: "player.speed.down", group: PLAYER, label: "Slower", default: k(SHIFT, Key::Comma), aliases: &[] },
     // falcon's own id: Eagle handles N outside its keybind table.
-    Spec { cmd: Command::Player(PlayerKey::AddComment), id: "player.comment.add", group: PLAYER, label: "Add a comment at the current time", default: k(NONE, Key::N), alias: None },
+    Spec { cmd: Command::Player(PlayerKey::AddComment), id: "player.comment.add", group: PLAYER, label: "Add a comment at the current time", default: k(NONE, Key::N), aliases: &[] },
 ];
 
 /// Keys that cannot be rebound, listed in the Shortcuts section.
@@ -158,8 +175,16 @@ impl Shortcuts {
         let s = spec(cmd);
         match self.0.get(s.id) {
             Some(text) => parse(text),
-            None => s.default,
+            None => s.default.filter(|c| !self.taken(s, *c)),
         }
+    }
+
+    /// Whether another command of the same conflict group was explicitly
+    /// bound to `chord`. Recording refuses such clashes, but a default
+    /// that changed in a newer falcon can land on a chord the user chose
+    /// earlier; the user's choice then wins and the default gives way.
+    fn taken(&self, s: &Spec, chord: KeyboardShortcut) -> bool {
+        TABLE.iter().filter(|o| o.cmd != s.cmd && same_scope(o, s)).any(|o| self.0.get(o.id).and_then(|t| parse(t)).is_some_and(|c| same(c, Some(chord))))
     }
 
     pub fn is_default(&self, cmd: Command) -> bool {
@@ -172,7 +197,7 @@ impl Shortcuts {
         let s = spec(cmd);
         let mut v: Vec<_> = self.binding(cmd).into_iter().collect();
         if self.is_default(cmd) {
-            v.extend(s.alias);
+            v.extend(s.aliases.iter().copied().filter(|c| !self.taken(s, *c)));
         }
         v
     }
@@ -492,7 +517,7 @@ impl Recorder {
                     keys.reset(s.cmd);
                     // The default may now clash with a chord given to
                     // another command; that command gives way.
-                    if let Some(c) = keys.binding(s.cmd) {
+                    if let Some(c) = s.default {
                         for other in TABLE.iter().filter(|o| o.cmd != s.cmd && same_scope(o, s)) {
                             if keys.chords(other.cmd).iter().any(|x| same(*x, Some(c))) {
                                 let _ = keys.set(other.cmd, None);
@@ -539,7 +564,7 @@ mod tests {
         // viewer's while a video plays.
         let mut seen = HashSet::new();
         for s in TABLE {
-            for c in s.default.iter().chain(s.alias.iter()) {
+            for c in s.default.iter().chain(s.aliases.iter()) {
                 assert!(seen.insert((s.group == PLAYER, format(c))), "{} reuses {}", s.id, format(c));
             }
         }
@@ -571,7 +596,7 @@ mod tests {
     #[test]
     fn format_parse_round_trips() {
         for s in TABLE {
-            for c in s.default.iter().chain(s.alias.iter()) {
+            for c in s.default.iter().chain(s.aliases.iter()) {
                 let text = format(c);
                 let back = parse(&text).unwrap_or_else(|| panic!("parse {text}"));
                 assert!(same(back, Some(*c)), "{text}");
@@ -600,11 +625,60 @@ mod tests {
     fn library_switch_keys() {
         let keys = Shortcuts::default();
         assert_eq!(keys.resolve(Key::L, Modifiers::COMMAND), Some(Command::SwitchLibrary));
+        assert_eq!(keys.resolve(Key::Tab, CTRL), Some(Command::NextLibrary));
+        assert_eq!(keys.resolve(Key::Tab, CTRL_SHIFT), Some(Command::PreviousLibrary));
+        // Plain Tab and ⇧Tab stay with egui's focus moves.
+        assert_eq!(keys.resolve(Key::Tab, Modifiers::NONE), None);
+        assert_eq!(keys.resolve(Key::Tab, Modifiers::SHIFT), None);
+    }
+
+    #[test]
+    fn eagle_history_keys() {
+        let keys = Shortcuts::default();
+        let cmd = Modifiers { command: true, mac_cmd: true, ..Default::default() };
+        assert_eq!(keys.resolve(Key::Backspace, Modifiers::NONE), Some(Command::Back));
+        assert_eq!(keys.resolve(Key::ArrowLeft, cmd), Some(Command::Back));
+        assert_eq!(keys.resolve(Key::ArrowLeft, Modifiers::ALT), Some(Command::Back));
+        assert_eq!(keys.resolve(Key::ArrowRight, cmd), Some(Command::Forward));
+        assert_eq!(keys.resolve(Key::ArrowRight, Modifiers::ALT), Some(Command::Forward));
+        // ⌘⌫ is still the Trash, and plain arrows are no command.
+        assert_eq!(keys.resolve(Key::Backspace, cmd), Some(Command::Trash));
+        assert_eq!(keys.resolve(Key::ArrowLeft, Modifiers::NONE), None);
+        assert_eq!(keys.chords(Command::Back).len(), 3);
+    }
+
+    #[test]
+    fn eagle_folder_arrange_and_rename_keys() {
+        let keys = Shortcuts::default();
+        assert_eq!(keys.resolve(Key::CloseBracket, CMD), Some(Command::FolderUp));
+        assert_eq!(keys.resolve(Key::OpenBracket, CMD), Some(Command::FolderDown));
         // ⇧ may or may not turn the bracket into a brace before it reaches us.
-        for (key, cmd) in [(Key::CloseBracket, Command::NextLibrary), (Key::CloseCurlyBracket, Command::NextLibrary), (Key::OpenBracket, Command::PreviousLibrary), (Key::OpenCurlyBracket, Command::PreviousLibrary)] {
+        for (key, cmd) in [(Key::CloseBracket, Command::FolderTop), (Key::CloseCurlyBracket, Command::FolderTop), (Key::OpenBracket, Command::FolderBottom), (Key::OpenCurlyBracket, Command::FolderBottom)] {
             assert_eq!(keys.resolve(key, CMD_SHIFT), Some(cmd), "{key:?}");
         }
-        assert_eq!(keys.resolve(Key::OpenBracket, Modifiers::COMMAND), Some(Command::Back));
+        assert_eq!(keys.resolve(Key::R, CMD), Some(Command::Rename));
+        assert_eq!(keys.resolve(Key::F2, Modifiers::NONE), Some(Command::Rename));
+    }
+
+    #[test]
+    fn saved_choices_beat_changed_defaults() {
+        // Saved by an older falcon: ⌘R for Select All (Rename's default is
+        // now ⌘R) and ⌃Tab for the filter (now Next Library).
+        let keys: Shortcuts = serde_json::from_str(r#"{"edit.select.all":"Command + R","find.filter.toggle":"Ctrl + Tab"}"#).unwrap();
+        assert_eq!(keys.resolve(Key::R, CMD), Some(Command::SelectAll));
+        assert_eq!(keys.binding(Command::Rename), None);
+        assert_eq!(keys.resolve(Key::F2, Modifiers::NONE), Some(Command::Rename), "the alias still works");
+        assert_eq!(keys.resolve(Key::Tab, CTRL), Some(Command::ToggleFilter));
+        assert_eq!(keys.binding(Command::NextLibrary), None);
+        // Recording still refuses a clash with the saved chord.
+        assert_eq!(keys.clone().set(Command::Find, parse("Command + R")), Err(Command::SelectAll));
+        // Untouched commands keep their new defaults.
+        assert_eq!(keys.resolve(Key::Backspace, Modifiers::NONE), Some(Command::Back));
+        // A saved id falcon no longer has, or text it can't parse, is ignored.
+        let odd: Shortcuts = serde_json::from_str(r#"{"go.nowhere":"Command + B","go.back":"Hyper + ["}"#).unwrap();
+        assert_eq!(odd.binding(Command::Back), None);
+        assert_eq!(odd.resolve(Key::B, CMD), None);
+        assert_eq!(odd.resolve(Key::ArrowRight, CMD), Some(Command::Forward));
     }
 
     #[test]
@@ -652,11 +726,11 @@ mod tests {
         // The viewer's alias Enter is taken while the viewer is default.
         assert_eq!(keys.set(Command::Rename, Some(parse("Enter").unwrap())), Err(Command::Viewer));
 
-        let r = parse("Command + R").unwrap();
+        let r = parse("Command + K").unwrap();
         assert_eq!(keys.set(Command::Rename, Some(r)), Ok(()));
-        assert_eq!(keys.0.get("edit.rename").map(String::as_str), Some("Command + R"));
-        assert_eq!(keys.resolve(Key::R, Modifiers::COMMAND), Some(Command::Rename));
-        assert_eq!(keys.resolve(Key::F2, Modifiers::NONE), None);
+        assert_eq!(keys.0.get("edit.rename").map(String::as_str), Some("Command + K"));
+        assert_eq!(keys.resolve(Key::K, Modifiers::COMMAND), Some(Command::Rename));
+        assert_eq!(keys.resolve(Key::F2, Modifiers::NONE), None, "a changed binding drops the F2 alias");
 
         keys.set(Command::Rename, None).unwrap();
         assert_eq!(keys.binding(Command::Rename), None);
@@ -702,14 +776,14 @@ mod tests {
         r.feed(&mut keys, Key::F, cmd, 1.0);
         assert_eq!(r.conflict.map(|c| c.1), Some(Command::Find));
         assert!(r.recording.is_some() && keys.is_default(Command::Rename), "a conflict changes nothing");
-        r.feed(&mut keys, Key::R, cmd, 2.0);
+        r.feed(&mut keys, Key::K, cmd, 2.0);
         assert!(!r.recording.is_some() && r.conflict.is_none());
-        assert_eq!(keys.binding(Command::Rename).map(|c| format(&c)).as_deref(), Some("Command + R"));
+        assert_eq!(keys.binding(Command::Rename).map(|c| format(&c)).as_deref(), Some("Command + K"));
 
         r.recording = Some(Command::Rename);
         r.feed(&mut keys, Key::Escape, Modifiers::NONE, 3.0);
         assert!(!r.recording.is_some());
-        assert_eq!(keys.binding(Command::Rename).map(|c| format(&c)).as_deref(), Some("Command + R"), "Escape keeps the chord");
+        assert_eq!(keys.binding(Command::Rename).map(|c| format(&c)).as_deref(), Some("Command + K"), "Escape keeps the chord");
 
         r.recording = Some(Command::Rename);
         r.feed(&mut keys, Key::Backspace, Modifiers::NONE, 4.0);
@@ -719,9 +793,9 @@ mod tests {
     #[test]
     fn saved_form_is_a_plain_map() {
         let mut keys = Shortcuts::default();
-        keys.set(Command::Rename, parse("Command + R")).unwrap();
+        keys.set(Command::Rename, parse("Command + K")).unwrap();
         let json = serde_json::to_string(&keys).unwrap();
-        assert_eq!(json, r#"{"edit.rename":"Command + R"}"#);
+        assert_eq!(json, r#"{"edit.rename":"Command + K"}"#);
         let back: Shortcuts = serde_json::from_str(&json).unwrap();
         assert_eq!(back, keys);
     }
@@ -734,13 +808,17 @@ mod tests {
             let global = keys.resolve(c.logical_key, c.modifiers);
             if s.cmd == Command::Player(PlayerKey::Toggle) {
                 assert_eq!(global, Some(Command::Viewer));
+            } else if let Command::Player(PlayerKey::Skip(fwd)) = s.cmd {
+                // ⌘← and ⌘→ skip in a playing video and are Back and
+                // Forward elsewhere, as in Eagle.
+                assert_eq!(global, Some(if fwd { Command::Forward } else { Command::Back }));
             } else {
                 // A global chord that only matches loosely (⌘[ for [) is no clash.
                 assert!(global.is_none_or(|g| !keys.chords(g).iter().any(|x| same(*x, Some(c)))), "{} clashes with {global:?}", s.id);
             }
         }
-        // ⌘[ and ⌘] stay Back and Forward; the player's [ and ] are bare.
-        assert_eq!(keys.resolve(Key::OpenBracket, Modifiers::COMMAND), Some(Command::Back));
+        // ⌘[ moves the folder; the player's [ and ] are bare.
+        assert_eq!(keys.resolve(Key::OpenBracket, Modifiers::COMMAND), Some(Command::FolderDown));
         assert_eq!(keys.player(&[Key::OpenBracket], Modifiers::COMMAND), None);
     }
 

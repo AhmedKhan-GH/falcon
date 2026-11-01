@@ -109,6 +109,8 @@ enum Action {
     DeleteTag(String),
     StarTag(String, bool),
     DeleteSmart(String),
+    /// Edit ▸ Move Folder on the open folder or smart folder.
+    Arrange(crate::organize::Arrange),
     /// Folder icons, sorts, passwords and reordering, nested smart
     /// folders, tag groups and saved filters (see `organize_ui`).
     Organize(organize_ui::OrgAction),
@@ -1069,6 +1071,12 @@ impl App {
                 self.switch_to = Some(Switch::Focus(self.others.step(false)));
             }
         }
+        // In the viewer, Back from ⌫ leaves it, as in Eagle; the arrow
+        // chords of Back do nothing there.
+        if self.ws.viewer.is_some() && on(C::Back) && !ctx.input(|i| i.key_pressed(Key::ArrowLeft)) {
+            self.ws.viewer = None;
+            return;
+        }
         if self.ws.viewer.is_none() {
             if on(C::Rename) && self.ws.selected.len() == 1 {
                 self.show_inspector = true;
@@ -1082,6 +1090,12 @@ impl App {
             }
             if on(C::Forward) {
                 self.go_forward();
+            }
+            use crate::organize::Arrange;
+            for (c, how) in [(C::FolderUp, Arrange::Up), (C::FolderDown, Arrange::Down), (C::FolderTop, Arrange::Top), (C::FolderBottom, Arrange::Bottom)] {
+                if on(c) && matches!(self.ws.scope, Scope::Folder(_) | Scope::Smart(_)) {
+                    self.ws.actions.push(Action::Arrange(how));
+                }
             }
             if on(C::ZoomIn) {
                 self.tile = (self.tile + 20.0).min(TILE_MAX);
@@ -1122,10 +1136,12 @@ impl App {
             self.open_keys(on(C::OpenDefault));
             return;
         }
+        // ⌘ or ⌥ with ← → is Back or Forward, not a selection move.
         let (left, right, up, down, esc) = ctx.input(|i| {
+            let plain = !i.modifiers.command && !i.modifiers.alt;
             (
-                i.key_pressed(Key::ArrowLeft),
-                i.key_pressed(Key::ArrowRight),
+                plain && i.key_pressed(Key::ArrowLeft),
+                plain && i.key_pressed(Key::ArrowRight),
                 i.key_pressed(Key::ArrowUp),
                 i.key_pressed(Key::ArrowDown),
                 i.key_pressed(Key::Escape),
@@ -1262,6 +1278,17 @@ impl App {
                     }
                     lib.delete_smart_folder(&id)
                 }
+                Action::Arrange(how) => match self.ws.scope.clone() {
+                    Scope::Folder(id) => match crate::organize::arrange(&lib.metadata.folders, &id, how) {
+                        Some((parent, index)) => lib.reorder_folder(&id, parent.as_deref(), index),
+                        None => Ok(()),
+                    },
+                    Scope::Smart(id) => match crate::organize::arrange(&lib.smart_folders(), &id, how) {
+                        Some((parent, index)) => lib.move_smart_folder(&id, parent.as_deref(), index),
+                        None => Ok(()),
+                    },
+                    _ => Ok(()),
+                },
                 Action::MoveFolder(id, parent) => {
                     if let Some(p) = &parent {
                         self.ws.collapsed.remove(p);
@@ -1443,6 +1470,7 @@ fn action_label(action: &Action) -> String {
         Action::CreateSmart(..) => "New smart folder".into(),
         Action::UpdateSmart(..) => "Edit smart folder".into(),
         Action::DeleteSmart(_) => "Delete smart folder".into(),
+        Action::Arrange(_) => "Move folder".into(),
         Action::RenameTag(..) => "Rename tag".into(),
         Action::DeleteTag(_) => "Delete tag".into(),
         Action::StarTag(_, true) => "Star tag".into(),
