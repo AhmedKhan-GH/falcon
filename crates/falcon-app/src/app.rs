@@ -138,6 +138,8 @@ struct Saved {
     recent_items: crate::recent::RecentItems,
     /// Which inspector sections are folded away, for every library.
     folds: Folds,
+    /// The welcome flow was finished.
+    welcomed: bool,
 }
 
 /// An inspector section whose title folds it away.
@@ -753,6 +755,9 @@ pub struct App {
     switch_to: Option<Switch>,
     /// The create-library dialog and its follow-up steps.
     dialogs: library_dialogs::State,
+    /// Whether the welcome flow has been finished (or skipped by having
+    /// used falcon before).
+    welcomed: bool,
     prefs: crate::prefs::Prefs,
     /// Search scope, pinned filters and Go to Folder history.
     search: crate::search_state::SearchPrefs,
@@ -855,6 +860,7 @@ impl App {
             lib_icons: Default::default(),
             switch_to: None,
             dialogs: Default::default(),
+            welcomed: true,
             prefs: Default::default(),
             search: Default::default(),
             prefs_window: Default::default(),
@@ -889,6 +895,7 @@ impl App {
             conflict_reload: false,
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
+        app.welcomed = library_dialogs::already_welcomed(saved.welcomed, saved.recent.len(), saved.libraries.len(), saved.library.is_some());
         app.tile = saved.tile.unwrap_or(app.tile).clamp(TILE_MIN, TILE_MAX);
         app.ws.sort = saved.sort.as_deref().and_then(|l| OrderBy::ALL.into_iter().find(|o| o.label() == l)).unwrap_or(app.ws.sort);
         app.ws.increase = saved.increase.unwrap_or(app.ws.increase);
@@ -1009,6 +1016,7 @@ impl App {
                 self.add_workspace(Arc::new(Mutex::new(lib)));
                 crate::workspaces::remember(&mut self.recent, &path, RECENT_LIMIT);
                 self.error = None;
+                self.welcomed = true;
                 let mut notes = Vec::new();
                 if let Some(backup) = restored {
                     notes.push(restored_note(&backup));
@@ -5519,6 +5527,7 @@ impl eframe::App for App {
             font_look: Some(self.font_look),
             hide_navigator: Some(self.modes.hide_navigator),
             recent_items: self.recent_items.clone(),
+            welcomed: self.welcomed,
         };
         eframe::set_value(storage, eframe::APP_KEY, &saved);
     }
@@ -5606,7 +5615,7 @@ impl App {
         self.alert_modal(&ctx);
 
         let Some(shared) = self.ws.lib.clone() else {
-            egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| self.empty_state(ui));
+            egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| self.empty_or_welcome(ui));
             return;
         };
         let mut guard = lock(&shared);
