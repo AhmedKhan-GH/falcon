@@ -723,6 +723,7 @@ impl SavedFilter {
         };
         f.url = text("url");
         f.note = text("note");
+        f.comments = text("annotation");
 
         // Dates. Eagle's Date Modified range reads `import.range` (its panel
         // has one picker for both); falcon writes `mtime.range` only when
@@ -766,9 +767,6 @@ impl SavedFilter {
         }
 
         // Rules with no counterpart in falcon's filter yet.
-        if truthy(&["annotation", "has"]) || truthy(&["annotation", "no"]) {
-            skip("annotation");
-        }
         if get(&["image", "itemId"]).is_some_and(|v| !v.is_null()) {
             skip("image");
         }
@@ -858,6 +856,7 @@ impl SavedFilter {
                 r["bpm"][k] = js_number(v);
             }
         }
+        text(&mut r, "annotation", &filter.comments);
         text(&mut r, "url", &filter.url);
         text(&mut r, "note", &filter.note);
 
@@ -1182,6 +1181,8 @@ mod tests {
             ("shapes", Filter { shapes: [Shape::Portrait, Shape::PanoramicLandscape].into(), ..Default::default() }),
             ("url", Filter { url: TextFilter::Keywords(vec!["a".into(), "b".into()]), ..Default::default() }),
             ("note", Filter { note: TextFilter::No, ..Default::default() }),
+            ("comments", Filter { comments: TextFilter::Has, ..Default::default() }),
+            ("comment keywords", Filter { comments: TextFilter::Keywords(vec!["red".into(), "car".into()]), ..Default::default() }),
             ("color", Filter { color: Some(ColorQuery { rgb: [9, 8, 7], accuracy: 12.5 }), ..Default::default() }),
             ("grayscale", Filter { grayscale: true, ..Default::default() }),
             ("imported", Filter { imported: dates.clone(), ..Default::default() }),

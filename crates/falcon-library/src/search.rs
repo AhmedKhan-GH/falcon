@@ -488,6 +488,24 @@ pub enum TextFilter {
 }
 
 impl TextFilter {
+    /// The rule over a list of texts, as Eagle's comment filter reads an
+    /// item's comments: `Has` needs one, `No` none, and every keyword must
+    /// occur (case-insensitively) in one of them.
+    pub fn matches_any<'a>(&self, values: impl Iterator<Item = &'a str>) -> bool {
+        match self {
+            TextFilter::Off => true,
+            TextFilter::Has => values.count() > 0,
+            TextFilter::No => values.count() == 0,
+            TextFilter::Keywords(k) => {
+                let v: Vec<String> = values.map(str::to_lowercase).collect();
+                k.iter().all(|w| {
+                    let w = w.to_lowercase();
+                    v.iter().any(|t| t.contains(&w))
+                })
+            }
+        }
+    }
+
     fn matches(&self, value: &str) -> bool {
         match self {
             TextFilter::Off => true,
@@ -555,6 +573,8 @@ pub struct Filter {
     pub shapes: HashSet<Shape>,
     pub url: TextFilter,
     pub note: TextFilter,
+    /// Region and video comments (Eagle's `annotation` rule).
+    pub comments: TextFilter,
     pub color: Option<ColorQuery>,
     pub grayscale: bool,
     /// Date Imported (`modificationTime`).
@@ -605,7 +625,7 @@ impl Filter {
         if !self.shapes.is_empty() && !self.shapes.iter().any(|s| s.matches(item.width, item.height)) {
             return None;
         }
-        if !self.url.matches(&item.url) || !self.note.matches(&item.annotation) {
+        if !self.url.matches(&item.url) || !self.note.matches(&item.annotation) || !self.comments.matches_any(comment_texts(item)) {
             return None;
         }
         if self.grayscale && !is_grayscale(item) {
@@ -1463,6 +1483,21 @@ mod tests {
         let zh = item(serde_json::json!({"ext": "otf", "fontMetas": {"fullName": {"en": "Song", "zh": "宋体"}}}));
         let t = search_text(&zh, &folders, 3);
         assert!(t.contains("宋体") && !t.contains("song"), "the zh name wins; no postScriptName, no JSON");
+    }
+
+    #[test]
+    fn comment_rule() {
+        let noted = item(serde_json::json!({"comments": [{"annotation": "Red Car"}, {"annotation": "blue sky"}]}));
+        let bare = item(serde_json::json!({}));
+        let empty = item(serde_json::json!({"comments": []}));
+        let f = |t: TextFilter| Filter { comments: t, ..Default::default() };
+        assert!(f(TextFilter::Has).check(&noted).is_some() && f(TextFilter::Has).check(&bare).is_none());
+        assert!(f(TextFilter::No).check(&bare).is_some() && f(TextFilter::No).check(&empty).is_some());
+        assert!(f(TextFilter::No).check(&noted).is_none());
+        let kw = |w: &[&str]| f(TextFilter::Keywords(w.iter().map(|s| s.to_string()).collect()));
+        assert!(kw(&["car", "SKY"]).check(&noted).is_some(), "each keyword may sit in a different comment");
+        assert!(kw(&["car", "boat"]).check(&noted).is_none());
+        assert!(kw(&["car"]).check(&bare).is_none());
     }
 
     #[test]
