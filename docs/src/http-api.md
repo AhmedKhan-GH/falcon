@@ -60,6 +60,8 @@ Eagle's quirks are kept:
 
 The app bundle registers the `eagle` scheme (`CFBundleURLTypes` in `scripts/bundle.sh`). The app handles `eagle://item/<id>`, `eagle://folder/<id>` and `eagle://smart-folder/<id>`, both from clicked links and as launch arguments. A clicked link reaches the running app as an Apple "get URL" event, which falcon catches before the event loop starts. An item opens in the viewer inside its first folder, or All when it has none; a folder or smart folder is shown. Ids the shown library doesn't have are ignored, and links wait while the app is locked. `eagle://openFolder/<id>`, the form Eagle's "added to folder" notices link with, opens the folder in the app as a folder link does (Eagle sends it to the same handler). Plugin links are not handled.
 
+The bundle also registers image, video, design, `.eaglepack` and `.library` document types, so Finder's Open With and Dock drops reach falcon. Files are imported into the shown library, a package is imported as a package, and a library is opened (only inside the sandbox folder). Folders can be dropped on the Dock icon, but falcon does not become any folder's default app.
+
 ## v2 routes (observed)
 
 Read from Eagle 4.0's `app/js/api-server-v2.js` (the route table), `api-v2-playground-config.js` (parameters) and the handlers in `app/js/plugin/index.js` and `plugin/handlers/smart-folder-handlers.js`. "Paged" means the reply is wrapped as above. GET takes the query string, POST a JSON body, so array parameters only work through POST.
