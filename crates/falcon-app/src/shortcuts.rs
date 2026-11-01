@@ -74,6 +74,11 @@ pub enum Command {
     SelectLast,
     /// Set the rating of the selection (0 removes it).
     Rate(u8),
+    /// Close the window (the viewer first, if open), minimise it, or
+    /// toggle full screen.
+    CloseWindow,
+    Minimize,
+    FullScreen,
 }
 
 /// How a scroll command moves the grid.
@@ -178,6 +183,7 @@ const SHIFT: Modifiers = Modifiers::SHIFT;
 /// The Mac's ⌃ key (on other systems ⌘ chords already use Ctrl).
 const CTRL: Modifiers = Modifiers::CTRL;
 const CTRL_SHIFT: Modifiers = Modifiers { shift: true, ..Modifiers::CTRL };
+const CTRL_CMD: Modifiers = Modifiers { ctrl: true, ..Modifiers::COMMAND };
 
 /// Every rebindable command with its default. Arrow keys, Escape and the
 /// held Z of the hover preview stay fixed (see `FIXED`).
@@ -244,6 +250,10 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::Rate(3), id: "organize.rating.3", group: "Organize", label: "Rate 3 stars", default: k(NONE, Key::Num3), aliases: &[] },
     Spec { cmd: Command::Rate(4), id: "organize.rating.4", group: "Organize", label: "Rate 4 stars", default: k(NONE, Key::Num4), aliases: &[] },
     Spec { cmd: Command::Rate(5), id: "organize.rating.5", group: "Organize", label: "Rate 5 stars", default: k(NONE, Key::Num5), aliases: &[] },
+    // Eagle's Window menu (macOS roles; falcon's own ids).
+    Spec { cmd: Command::CloseWindow, id: "window.close", group: "Window", label: "Close the window", default: k(CMD, Key::W), aliases: &[] },
+    Spec { cmd: Command::Minimize, id: "window.minimize", group: "Window", label: "Minimize", default: k(CMD, Key::M), aliases: &[] },
+    Spec { cmd: Command::FullScreen, id: "window.fullscreen", group: "Window", label: "Enter or leave full screen", default: k(CTRL_CMD, Key::F), aliases: &[] },
     Spec { cmd: Command::Player(PlayerKey::Toggle), id: "player.playAndPause", group: PLAYER, label: "Play or pause", default: k(NONE, Key::Space), aliases: &[] },
     Spec { cmd: Command::Player(PlayerKey::Frames(-1)), id: "player.prev1frame", group: PLAYER, label: "Previous frame", default: k(NONE, Key::OpenBracket), aliases: &[] },
     Spec { cmd: Command::Player(PlayerKey::Frames(1)), id: "player.next1frame", group: PLAYER, label: "Next frame", default: k(NONE, Key::CloseBracket), aliases: &[] },
@@ -794,6 +804,17 @@ mod tests {
         assert_eq!(keys.resolve(Key::Num1, ALT), Some(Command::LayoutWaterfall));
         assert_eq!(keys.resolve(Key::Num5, ALT), None);
         assert_eq!(keys.resolve(Key::Num6, Modifiers::NONE), None);
+    }
+
+    #[test]
+    fn window_keys() {
+        let keys = Shortcuts::default();
+        let mac = |m: Modifiers| Modifiers { mac_cmd: m.command, ..m };
+        assert_eq!(keys.resolve(Key::W, mac(CMD)), Some(Command::CloseWindow));
+        assert_eq!(keys.resolve(Key::M, mac(CMD)), Some(Command::Minimize));
+        assert_eq!(keys.resolve(Key::F, mac(CTRL_CMD)), Some(Command::FullScreen));
+        assert_eq!(keys.resolve(Key::F, mac(CMD)), Some(Command::Find));
+        assert_eq!(format(&keys.binding(Command::FullScreen).unwrap()), "Ctrl + Command + F");
     }
 
     #[test]

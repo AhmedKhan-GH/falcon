@@ -76,7 +76,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::ExportCsv => s.library,
         C::LayoutGrid | C::LayoutJustified | C::LayoutWaterfall | C::LayoutList => grid,
         C::FolderUp | C::FolderDown | C::FolderTop | C::FolderBottom => grid && matches!(s.scope, ScopeKind::Folder | ScopeKind::Smart),
-        C::SwitchLibrary | C::CollectWindow | C::Preferences => true,
+        C::SwitchLibrary | C::CollectWindow | C::Preferences | C::CloseWindow | C::Minimize | C::FullScreen => true,
         C::NextLibrary | C::PreviousLibrary => s.libraries > 1,
         C::Page(_) => s.library,
         C::Scroll(_) | C::SelectFirst | C::SelectLast => grid,

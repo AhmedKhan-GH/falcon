@@ -1222,6 +1222,13 @@ impl App {
                 self.ws.actions.push(Action::BatchRating(ids, n.into()));
                 self.flash(rated_note(n));
             }
+            C::CloseWindow if self.ws.viewer.is_some() => self.ws.viewer = None,
+            C::CloseWindow => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+            C::Minimize => ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true)),
+            C::FullScreen => {
+                let on = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
+                ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!on));
+            }
             C::Page(p) => {
                 self.ws.viewer = None;
                 self.go(p.scope());
