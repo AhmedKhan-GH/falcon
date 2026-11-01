@@ -7,10 +7,10 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
 | Main window: menus, shortcuts, toolbar, sidebar, layouts | 150 | 42 | 79 | 9 |
-| Viewers and file formats | 115 | 25 | 50 | 7 |
+| Viewers and file formats | 136 | 19 | 35 | 7 |
 | Search, filters and organising | 148 | 28 | 46 | 3 |
 | Import, export, library, preferences and integrations | 115 | 19 | 78 | 26 |
-| **Total** | 528 | 114 | 253 | 45 |
+| **Total** | 549 | 108 | 238 | 45 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -577,31 +577,31 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | Play native formats (mp4, mov, m4v and others) | Done | AVFoundation player (`F/app/video_view.rs:114-145`) | local |
-| Fallback player for formats Chromium can't play (mkv, avi, wmv, flv and others) | Missing | AVFoundation failures fall back to a still image (`F/app/video_view.rs:254`) | local |
-| "Can't play this file" page with an Open With button | Partial | Error text in the stage (`F/app/video_view.rs:300`) | local |
+| Fallback player for formats Chromium can't play (mkv, avi, wmv, flv and others) | Missing | No ffmpeg or mpv; the can't-play page names the format (`F/app/video_view.rs` `cannot_play`) | local |
+| "Can't play this file" page with an Open With button | Done | `video_view.rs` `cannot_play`, `cannot_play_line`: thumbnail, name, a line naming the format, Open With | local |
 | Autoplay on open | Done | `F/app/video_view.rs`; switch `Prefs::video_autoplay` | local |
 | Play/pause button, click picture to toggle, Space | Done | `F/app/video_view.rs:309-312`, `:385-392`, `F/shortcuts.rs:122` | local |
 | Seek bar with drag scrubbing | Done | `F/app/video_view.rs:320-349` | local |
-| Hover thumbnail on the seek bar (preview frame under the pointer) | Missing | None | local |
-| Skip back and forward buttons (2%, capped at 10 s / 20 s), hold to repeat | Partial | Buttons and Cmd+Left/Right (`F/app/video_view.rs:394-400`); no hold-to-repeat | local |
+| Hover thumbnail on the seek bar (preview frame under the pointer) | Done | `SeekPreview` fed by `falcon_video::Grabber` on a worker thread | local |
+| Skip back and forward buttons (2%, capped at 10 s / 20 s), hold to repeat | Done | `Repeat`: acts on press, repeats every 100 ms while held; 2% capped at 10 s back / 20 s forward | local |
 | Frame step back and forward, 1 and 10 frames | Done | Buttons and [ ] Shift+[ Shift+] (`F/app/video_view.rs:402-408`, `F/shortcuts.rs:123-126`) | local |
 | Playback speed menu 0.25x–8x and Shift+. / Shift+, | Done | `F/app/video_view.rs:441-452`, `F/shortcuts.rs:131-132` | local |
 | Loop toggle, remembered | Done | `F/app/video_view.rs:431-439` | local |
 | Always loop clips shorter than 30 s | Done | `F/app/video_view.rs`; switch `Prefs::video_loop_short` | local |
 | Volume slider, mute, volume keys (Cmd+Up/Down), remembered | Done | `F/app/video_view.rs:412-430`, `F/shortcuts.rs:127-128` | local |
-| Volume / seek tip overlay while adjusting | Missing | None | local |
+| Volume / seek tip overlay while adjusting | Done | `volume_tip`, top right for 1 s; Eagle has no seek tip either | local |
 | Wheel over the picture seeks; Shift/Alt+wheel seeks horizontally | Done | `F/app/video_view.rs`; `Prefs::video_scroll` can make the wheel change the volume instead | local |
 | Preference: vertical wheel controls volume instead | Missing | No setting | local |
 | Remember the last playback position | Done | `Prefs::video_resume`; positions saved per item id in app state (`Positions`, latest 500), across launches | local |
 | Stretch video to fill the window | Done | `Prefs::video_fill` | local |
-| Full-screen button | Missing | None | local |
-| Flip and rotate the video (viewer toolbar) | Missing | None | local |
+| Full-screen button | Done | Control-bar button toggling window full screen (Eagle's toggles its presentation mode) | local |
+| Flip and rotate the video (viewer toolbar) | Done | `rotate_step`, `corner_uvs`; view only, also ⇧R / ⇧F (⇧-click rotates clockwise) | local |
 | Timed notes: add a note at the current time | Done | `F/app/video_view.rs:453-458`, N key `F/shortcuts.rs:134` | local |
 | Timed notes shown as markers on the seek bar; click to jump, edit, delete | Done | `F/app/video_view.rs:351-381` | local |
-| Set current frame as the video thumbnail | Missing | None | local |
-| Copy current frame to the clipboard | Missing | None | local |
-| Save current frame as an image | Missing | None | local |
-| Load subtitles (.srt, .vtt) | Missing | None | local |
+| Set current frame as the video thumbnail | Done | `Library::set_video_thumbnail`: `thumbnailAt` kept in metadata, 480 px JPEG under `<name>_thumbnail.png`, palette recomputed, as Eagle | local |
+| Copy current frame to the clipboard | Done | `frame_tool`, ⇧C (full decoded frame; Eagle copies at the recorded size) | local |
+| Save current frame as an image | Done | ⇧S imports a `<name> - <t>` JPEG as a new item with the video's URL and folders, as Eagle | local |
+| Load subtitles (.srt, .vtt) | Done | `F/subtitles.rs` parser (no crate); sidecar `<name>.vtt/.srt` in the `.info` folder, Load Subtitles… copies one in, as Eagle | local |
 | Open in default app from the video toolbar | Done | `F/app/media_view.rs:79` | local |
 
 ### 6. Audio viewer
@@ -615,9 +615,9 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Time readout | Done | `F/app/media_view.rs:161` | local |
 | Loop toggle | Done | `F/app/media_view.rs:172-181` | local |
 | Volume slider | Done | `F/app/media_view.rs:163-170` | local |
-| Volume keys (Cmd+Up/Down) | Missing | Player keys only bind to video (`F/app/video_view.rs:202`) | local |
-| Skip back and forward keys (Cmd+Left/Right) | Missing | Same | local |
-| Playback speed (menu and Shift+. / Shift+,) | Missing | No speed control in `F/audio.rs` | local |
+| Volume keys (Cmd+Up/Down) | Done | `video_view.rs` `audio_action`: the Player key table drives the audio player | local |
+| Skip back and forward keys (Cmd+Left/Right) | Done | `audio_action` | local |
+| Playback speed (menu and Shift+. / Shift+,) | Done | `Audio::set_speed`, `MENU_RATES` 0.5–2× in the menu, 0.25–8× by key; pitch follows speed | local |
 | m4a playback | Done | `F/audio.rs:48` via rodio mp4 | local |
 | BPM and duration in the inspector | Done | `F/app/media_view.rs:306-313` | local |
 
@@ -627,14 +627,14 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | --- | --- | --- | --- |
 | Specimen drawn in the font itself | Done | `F/app/media_view.rs:241-298` | local |
 | Editable sample text | Done | `F/app/media_view.rs:262-275` | local |
-| Size slider with zoom-in and zoom-out buttons | Partial | Slider 12–200 pt (`F/app/media_view.rs:252`); no buttons, no wheel zoom | local |
-| Tabs: Article, Waterfall, Alphabet, Other (info) | Partial | One scrolling page with sample, waterfall and character set (`F/app/media_view.rs:276-296`); no tabs, no info tab | local |
-| Colour themes for the specimen (auto, light, dark, purple, yellow) | Missing | None | local |
-| Font info panel (PostScript, full name, family, version, designer, maker, description, copyright, trademark, glyph count) | Partial | The inspector shows family, style, PostScript, version and glyphs (`F/app/media_view.rs:334-351`); no designer, maker, description, copyright, trademark | local |
-| Rename the file from the PostScript, full or family name | Missing | None | local |
-| Activate or deactivate (install) the font | Missing | Falcon can only filter by Eagle's activation state (`F/app/filters_ui.rs:219`) | local |
-| Change the sample language | Partial | Sample script chosen automatically from the font's coverage (`F/app/media_view.rs:53-63`); no manual choice | local |
-| Number keys rate the font from inside the viewer | Missing | No rating keys in viewers | local |
+| Size slider with zoom-in and zoom-out buttons | Done | `F/app/font_view.rs`: 50–1000% slider with − and +, ⌘=/⌘−/⌘0/⌘9, modifier-wheel and pinch | local |
+| Tabs: Article, Waterfall, Alphabet, Other (info) | Done | `font_view.rs` tabs Article / Waterfall / Alphabet / Info, remembered in app state | local |
+| Colour themes for the specimen (auto, light, dark, purple, yellow) | Done | auto, light, dark, purple, yellow | local |
+| Font info panel (PostScript, full name, family, version, designer, maker, description, copyright, trademark, glyph count) | Done | `fontmeta::FontInfo`, `info_rows` with Use as File Name on the names | local |
+| Rename the file from the PostScript, full or family name | Done | `Op::Rename` from the info panel or the header name; undoable | local |
+| Activate or deactivate (install) the font | Done | `F/font_install.rs` copies to `~/Library/Fonts/EagleApp/<postScriptName>.<ext>` after a confirmation (Eagle asks none); macOS only | local |
+| Change the sample language | Done | Language menu writing `fontMetas.preferLng` (`Library::set_font_language`), redrawing the specimen thumbnail | local |
+| Number keys rate the font from inside the viewer | Done | `digits_rate` in `keyboard`: font, video, audio and text viewers rate; the image viewer keeps 0/1 for zoom | local |
 | Fonts egui can't read (some woff2, CFF) | Partial | Falls back to the image viewer (`F/app/media_view.rs:88-90`, `:189`) | local |
 
 ### 8. Text (.txt) editor
@@ -836,7 +836,7 @@ Ranked by how often a user would notice them.
 19. **PDF gaps (Missing).** No page rotation, hand tool, scroll and spread modes, presentation, print, document properties, password prompt, links, attachments, layers, current outline item, or whole-word and diacritics search. The reader is also macOS only.
 20. **Crop gaps (Missing).** No width and height fields, no Save As, no size readout and no Shift+C.
 21. **Audio gaps (Missing).** No speed control, and no volume or skip keys.
-22. **Font viewer gaps (Missing / Partial).** No tabs, colour themes, full info panel, rename from font name, activate or deactivate, manual language choice or rating keys.
+22. **Font viewer gaps**: fonts egui can't read (some woff2, CFF) still fall back to the image viewer.
 23. **Space opens the full viewer instead of Eagle's inline quick preview (Partial).**
 24. **No position counter, prev/next buttons or first/last-item tips in the viewer bar (Missing).**
 25. **Video gaps (Missing / Partial).** No seek-bar hover thumbnail, flip and rotate, subtitles, volume and seek tip overlay, or hold-to-repeat skip.
