@@ -1,21 +1,25 @@
 //! 3D models: readers for the formats falcon can show itself (OBJ with MTL
-//! colours, STL, PLY, glTF/GLB, 3MF, FBX, COLLADA and 3DS), the triangle
-//! model they produce, the measurements Eagle's model viewer shows, and the
-//! geometry the viewer and the thumbnail renderer share (normals, feature
-//! edges, shading).
+//! colours, STL, PLY, glTF/GLB, 3MF, FBX, COLLADA, 3DS and the tessellated
+//! part of IFC), the triangle model they produce, the measurements Eagle's
+//! model viewer shows, and the geometry the viewer and the thumbnail renderer
+//! share (normals, feature edges, shading).
 //!
-//! IFC files are not read here; they keep their QuickLook still.
+//! IFC files without tessellated geometry are not read; those items keep
+//! their QuickLook still.
 
 pub mod dae;
+pub mod earclip;
 pub mod export;
 pub mod fbx;
 pub mod geom;
 pub mod gltf;
+pub mod ifc;
 pub mod math;
 pub mod obj;
 pub mod off;
 pub mod ply;
 pub mod raster;
+pub mod step;
 pub mod stl;
 pub mod threemf;
 pub mod threeds;
@@ -25,7 +29,7 @@ use std::path::Path;
 use math::V3;
 
 /// Extensions read here, lower case.
-pub const EXTENSIONS: &[&str] = &["obj", "stl", "ply", "glb", "gltf", "3mf", "fbx", "dae", "3ds"];
+pub const EXTENSIONS: &[&str] = &["obj", "stl", "ply", "glb", "gltf", "3mf", "fbx", "dae", "3ds", "ifc"];
 
 /// Whether files with extension `ext` (any case) are read here.
 pub fn is_supported(ext: &str) -> bool {
@@ -184,6 +188,7 @@ pub fn parse(bytes: &[u8], ext: &str, side: &dyn Fn(&str) -> Option<Vec<u8>>) ->
         "fbx" => fbx::parse(bytes),
         "dae" => dae::parse(bytes, side),
         "3ds" => threeds::parse(bytes, side),
+        "ifc" => ifc::parse(bytes),
         other => Err(ParseError(format!("cannot read .{other} models"))),
     }
 }
