@@ -126,6 +126,8 @@ pub struct App {
     pub(crate) model3d: crate::model3d::Model3dState,
     /// The page control of a multi-page TIFF in the viewer (`ui/viewer/tiff.rs`).
     pub(crate) tiff: crate::tiff_pages::TiffPages,
+    /// The grid's video and audio hover previews (`hover_media.rs`).
+    pub(crate) hover_media: crate::hover_media::HoverMedia,
     /// Drop targets and other import state (`import.rs`).
     pub(crate) imports: import::Imports,
     /// The macOS menu bar (`menu.rs`).
@@ -226,6 +228,7 @@ impl App {
             image: Default::default(),
             model3d: crate::model3d::Model3dState::new(cc),
             tiff: Default::default(),
+            hover_media: Default::default(),
             menu_bar: Default::default(),
             layouts: HashMap::new(),
             legacy_layout: None,
@@ -424,6 +427,7 @@ impl App {
         self.pdf_keys(&ctx);
         self.video_keys(&ctx);
         self.gif_keys(&ctx);
+        self.hover_media.begin(ctx.cumulative_frame_nr());
         self.tiff_keys(&ctx);
         self.edit_keys(&ctx);
         self.keyboard(&ctx);

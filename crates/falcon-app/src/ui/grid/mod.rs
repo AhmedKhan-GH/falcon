@@ -18,6 +18,7 @@ pub(crate) mod covers;
 pub(crate) mod duplicates;
 pub(crate) mod drag_out;
 pub(crate) mod empty;
+mod hover_media;
 mod tags_page;
 
 /// Grid geometry, measured from Eagle at 1280 x 800.
@@ -222,6 +223,7 @@ impl App {
                 }
                 if resp.hovered() {
                     hovered = Some((item, card, self.zoom_button(ui, item, card, caption)));
+                    self.card_media(ui, lib, item, card, caption, &resp);
                 }
                 if let Some(j) = job_for(item, lib.root(), Tier::Grid) {
                     jobs.push(j);

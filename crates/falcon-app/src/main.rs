@@ -14,6 +14,7 @@ mod font_install;
 mod audio;
 mod auto_import;
 mod hover;
+mod hover_media;
 mod urls;
 mod icloud;
 mod icons;
