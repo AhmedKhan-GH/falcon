@@ -62,6 +62,8 @@ const GRID_GAP: f32 = 8.0;
 const ROW_GAP: f32 = 10.0;
 const TILE_MIN: f32 = 80.0;
 const TILE_MAX: f32 = 400.0;
+/// An action on this many items or more asks first (Eagle's bulk confirm).
+const BULK_CONFIRM: usize = 100;
 
 /// What falcon remembers between launches, as Eagle does: the open
 /// libraries, zoom, sort and panel layout.
@@ -516,6 +518,9 @@ struct Workspace {
     /// Subfolder card being renamed above the grid, with the text so far.
     strip_rename: Option<(String, String)>,
     confirm: Option<Confirm>,
+    /// Actions held back until the bulk dialog is answered, with the number
+    /// of items they change (`App::push_bulk`).
+    bulk: Option<(usize, Vec<Action>)>,
     smart_dialog: Option<SmartDraft>,
     view: ViewState,
     /// The GIF player turned on with the viewer's toolbar button, until
@@ -609,6 +614,7 @@ impl Workspace {
             renaming: None,
             strip_rename: None,
             confirm: None,
+            bulk: None,
             smart_dialog: None,
             view: ViewState::default(),
             gif_player: false,
@@ -1729,6 +1735,22 @@ impl App {
         true
     }
 
+    /// Queues `action`, which changes `n` items, as Eagle does: at once for
+    /// fewer than `BULK_CONFIRM`, else after the user confirms the dialog.
+    fn push_bulk(&mut self, n: usize, action: Action) {
+        if n < BULK_CONFIRM {
+            self.ws.actions.push(action);
+            return;
+        }
+        match &mut self.ws.bulk {
+            Some((held, actions)) => {
+                *held = (*held).max(n);
+                actions.push(action);
+            }
+            None => self.ws.bulk = Some((n, vec![action])),
+        }
+    }
+
     /// The items a command acts on: the viewer's item, or the selection.
     /// Opens the source links of the acted-on items (Eagle's cap is 50).
     fn open_links(&mut self) {
@@ -1863,7 +1885,7 @@ impl App {
                     self.ws.confirm = Some(Confirm::DeleteItems(ids));
                 } else {
                     self.leave_viewed(&ids);
-                    self.ws.actions.push(Action::Trash(ids, true));
+                    self.push_bulk(ids.len(), Action::Trash(ids, true));
                 }
             }
             C::ExportComputer | C::ExportPack | C::ExportCsv | C::ExportFormat | C::CopyPath | C::CopyFolderPath | C::CopyName | C::CopyLink | C::CopyThumbnail | C::CopyBase64 => {
@@ -1894,8 +1916,11 @@ impl App {
             C::ClearTags => self.ws.actions.push(Action::ClearTags(self.acted_on())),
             C::Rate(n) => {
                 let ids = self.acted_on();
-                self.ws.actions.push(Action::BatchRating(ids, n.into()));
-                self.flash(rated_note(n));
+                let asks = ids.len() >= BULK_CONFIRM;
+                self.push_bulk(ids.len(), Action::BatchRating(ids, n.into()));
+                if !asks {
+                    self.flash(rated_note(n));
+                }
             }
             C::CloseWindow if self.ws.viewer.is_some() => self.ws.viewer = None,
             C::CloseWindow => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
@@ -2786,7 +2811,7 @@ impl App {
                         if let Some(d) = resp.dnd_release_payload::<DragItems>()
                             && let Some(op) = logic::folder_drop(&self.ws.scope, id, ui.input(|i| i.modifiers.alt))
                         {
-                            self.ws.actions.push(Action::DropOnFolder(d.0.clone(), id.to_string(), op));
+                            self.push_bulk(d.0.len(), Action::DropOnFolder(d.0.clone(), id.to_string(), op));
                         }
                     }
                     if resp.clicked() {
@@ -2964,7 +2989,7 @@ impl App {
         if let Some(d) = resp.dnd_release_payload::<DragItems>()
             && let Some(op) = logic::folder_drop(&self.ws.scope, &f.id, ui.input(|i| i.modifiers.alt))
         {
-            self.ws.actions.push(Action::DropOnFolder(d.0.clone(), f.id.clone(), op));
+            self.push_bulk(d.0.len(), Action::DropOnFolder(d.0.clone(), f.id.clone(), op));
         }
         self.folder_drop(ui, lib, &resp, f, depth);
         let pinned = cx.quick.contains(&f.id);
@@ -3637,7 +3662,7 @@ impl App {
             egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
                 for f in lib.all_folders() {
                     if ui.button(&f.name).clicked() {
-                        self.ws.actions.push(Action::AddToFolder(targets.to_vec(), f.id.clone()));
+                        self.push_bulk(targets.len(), Action::AddToFolder(targets.to_vec(), f.id.clone()));
                     }
                 }
             });
@@ -3754,7 +3779,7 @@ impl App {
             }
             if ui.button("Move to Trash").clicked() {
                 self.leave_viewed(targets);
-                self.ws.actions.push(Action::Trash(targets.to_vec(), true));
+                self.push_bulk(targets.len(), Action::Trash(targets.to_vec(), true));
             }
         }
         opened
@@ -4413,18 +4438,24 @@ impl App {
             self.ws.multi_edit = Some(MultiEditBuf { ids: ids.clone(), notes: shown.0.clone(), url: shown.1.clone(), shown: shown.clone() });
         }
         let m = self.ws.multi_edit.as_mut().unwrap();
+        let mut edits = Vec::new();
         let notes_hint = if shown.0.is_empty() && items.iter().any(|i| !i.annotation.is_empty()) { "Multiple notes" } else { "Notes..." };
         let r = field(ui, &mut m.notes, notes_hint, 54.0, true, "multi-notes");
         if r.lost_focus() && m.notes != m.shown.0 {
-            self.ws.actions.push(Action::SetNotes(ids.clone(), m.notes.clone()));
+            let action = Action::SetNotes(ids.clone(), m.notes.clone());
             m.shown.0 = m.notes.clone();
+            edits.push(action);
         }
         let url_hint = if shown.1.is_empty() && items.iter().any(|i| !i.url.is_empty()) { "Multiple URLs" } else { "http://" };
         let r = field(ui, &mut m.url, url_hint, 33.0, false, "multi-url");
         if r.lost_focus() && m.url.trim() != m.shown.1 {
             m.url = m.url.trim().to_string();
-            self.ws.actions.push(Action::SetUrls(ids.clone(), m.url.clone()));
+            let action = Action::SetUrls(ids.clone(), m.url.clone());
             m.shown.1 = m.url.clone();
+            edits.push(action);
+        }
+        for action in edits {
+            self.push_bulk(ids.len(), action);
         }
 
         // Tags every selected item shares; the picker adds to all.
@@ -4455,7 +4486,7 @@ impl App {
                     egui::ScrollArea::vertical().max_height(320.0).show(ui, |ui| {
                         for f in lib.all_folders() {
                             if ui.button(&f.name).clicked() {
-                                self.ws.actions.push(Action::AddToFolder(ids.clone(), f.id.clone()));
+                                self.push_bulk(ids.len(), Action::AddToFolder(ids.clone(), f.id.clone()));
                             }
                         }
                     });
@@ -4474,7 +4505,7 @@ impl App {
             let stars: HashSet<u64> = items.iter().map(|i| i.extra.get("star").and_then(|v| v.as_u64()).unwrap_or(0)).collect();
             let shown = if stars.len() == 1 { stars.into_iter().next().unwrap_or(0) } else { 0 };
             if let Some(star) = rating(ui, shown) {
-                self.ws.actions.push(Action::BatchRating(ids.clone(), star));
+                self.push_bulk(ids.len(), Action::BatchRating(ids.clone(), star));
             }
             prop(ui, "Items", &n.to_string());
             prop(ui, "Size", &logic::format_size(size));
@@ -4483,7 +4514,12 @@ impl App {
         let trash = self.ws.scope == Scope::Trash;
         let label = if trash { "Restore All" } else { "Move All to Trash" };
         if wide_button(ui, ic::TRASH, label, true).clicked() {
-            self.ws.actions.push(Action::Trash(ids, !trash));
+            let n = ids.len();
+            if trash {
+                self.ws.actions.push(Action::Trash(ids, false));
+            } else {
+                self.push_bulk(n, Action::Trash(ids, true));
+            }
         }
     }
 
@@ -5452,6 +5488,37 @@ impl App {
             });
             if modal.should_close() {
                 self.ws.confirm = None;
+            }
+        }
+        if let Some((n, _)) = &self.ws.bulk {
+            let n = *n;
+            let mut answer = None;
+            let modal = egui::Modal::new(egui::Id::unique("bulk")).show(&ctx, |ui| {
+                ui.set_width(320.0);
+                ui.label(RichText::new(format!("Change {n} items?")).size(15.0));
+                ui.add_space(4.0);
+                ui.label(RichText::new("Everything selected is changed at once.").color(t::p().text_muted));
+                ui.add_space(10.0);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.button("OK").clicked() {
+                        answer = Some(true);
+                    }
+                    if ui.button("Cancel").clicked() {
+                        answer = Some(false);
+                    }
+                });
+            });
+            if modal.should_close() {
+                answer = Some(false);
+            }
+            match answer {
+                Some(true) => {
+                    if let Some((_, actions)) = self.ws.bulk.take() {
+                        self.ws.actions.extend(actions);
+                    }
+                }
+                Some(false) => self.ws.bulk = None,
+                None => {}
             }
         }
         self.text_saves(lib, ctx.input(|i| i.time));
