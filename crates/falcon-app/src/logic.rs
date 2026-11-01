@@ -6,6 +6,32 @@ use std::hash::{Hash, Hasher};
 use falcon_library::model::{Folder, Item};
 use falcon_library::search::{self, Filter, OrderBy, Query};
 
+/// Which part of the window the arrow keys act on, after Eagle's focus
+/// zones: the grid (or viewer), or the sidebar once one of its rows was
+/// clicked.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Zone {
+    #[default]
+    Content,
+    Sidebar,
+}
+
+/// The sidebar row ↑ (or ↓ with `down`) opens, as an index into `rows`,
+/// the views of the visible rows top to bottom. The open row is `cursor`
+/// when that row still shows `current` (Quick Access repeats folders),
+/// else the first row showing it. No row above the top or below the
+/// bottom; from a view with no row, ↓ goes to the first.
+pub fn sidebar_step(rows: &[Scope], cursor: Option<usize>, current: &Scope, down: bool) -> Option<usize> {
+    let same = |a: &Scope, b: &Scope| matches!((a, b), (Scope::Random(_), Scope::Random(_))) || a == b;
+    let at = cursor.filter(|&c| rows.get(c).is_some_and(|r| same(r, current))).or_else(|| rows.iter().position(|r| same(r, current)));
+    match (at, down) {
+        (None, true) => (!rows.is_empty()).then_some(0),
+        (None, false) => None,
+        (Some(i), true) => (i + 1 < rows.len()).then_some(i + 1),
+        (Some(i), false) => i.checked_sub(1),
+    }
+}
+
 /// Which sidebar entry is active.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum Scope {
@@ -2748,5 +2774,26 @@ mod selection_tests {
         assert!(!it.extra.contains_key("background"), "none removes the key, as Eagle does");
         it.extra.insert("background".into(), "plaid".into());
         assert_eq!(ThumbBg::of(&it), None);
+    }
+
+    #[test]
+    fn sidebar_step_walks_the_visible_rows() {
+        let f = |id: &str| Scope::Folder(id.to_string());
+        // All, Random, Trash, Quick Access "b", then folders a and b.
+        let rows = [Scope::All, Scope::Random(7), Scope::Trash, f("b"), f("a"), f("b")];
+        assert_eq!(sidebar_step(&rows, None, &Scope::All, true), Some(1));
+        assert_eq!(sidebar_step(&rows, None, &Scope::All, false), None);
+        // Any shuffle seed is the Random row.
+        assert_eq!(sidebar_step(&rows, None, &Scope::Random(99), true), Some(2));
+        // A folder shown twice: the row the keys last opened counts.
+        assert_eq!(sidebar_step(&rows, Some(5), &f("b"), false), Some(4));
+        assert_eq!(sidebar_step(&rows, None, &f("b"), false), Some(2));
+        // A stale cursor falls back to the first matching row.
+        assert_eq!(sidebar_step(&rows, Some(0), &f("a"), true), Some(5));
+        assert_eq!(sidebar_step(&rows, Some(5), &f("b"), true), None);
+        // A view with no row: ↓ starts at the top.
+        assert_eq!(sidebar_step(&rows, None, &Scope::Duplicates, true), Some(0));
+        assert_eq!(sidebar_step(&rows, None, &Scope::Duplicates, false), None);
+        assert_eq!(sidebar_step(&[], None, &Scope::All, true), None);
     }
 }

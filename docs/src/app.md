@@ -307,6 +307,9 @@ These are the defaults. All but the arrows, Esc, Tab, Z and the viewer's C, ⇧R
 |---|---|
 | Space (or ↩) | Open or close the viewer. With audio or video in the viewer, or a GIF with the frame player showing, Space plays or pauses instead (Esc or ↩ closes) |
 | ← → ↑ ↓ | Move the selection (with ⇧, extend it; see Selection), or go to the next item in the viewer (with a PDF, ↑ ↓ scroll the document). With ⌘ or ⌥, ← and → go back and forward instead (see below) |
+| W A S D | The same as ← → ↑ ↓ (Eagle's bare letter arrows), unless a letter is bound to a command under Preferences → Shortcuts |
+| ← → ↑ ↓ in the sidebar | After a click in the sidebar the arrows act there, as in Eagle's focus zones: ↑ and ↓ open the row above or below (the fixed entries, Quick Access, smart folders and folders, in the order shown, scrolling it into view), ← collapses and → expands the open folder or smart folder, or every picked folder. A click anywhere else hands the arrows back to the grid. Eagle's third zone, the tag groups of the All Tags page, is not there |
+| ⇧Space | Scroll up a page (outside the viewer) |
 | ⌘A | Select all |
 | ⌘⌫ | Move to the Trash, or delete permanently when in the Trash; the next item is then selected |
 | ⌘R (or F2) | Rename the selected item in the inspector, or open the Rename dialog for several |

@@ -789,6 +789,14 @@ pub struct App {
     /// The About window is open, and its icon once loaded (`about.rs`).
     about: bool,
     about_icon: Option<egui::TextureHandle>,
+    /// What the arrow keys act on (Eagle's focus zones).
+    zone: logic::Zone,
+    /// The views of the sidebar's visible rows this frame, top to bottom,
+    /// for ↑ and ↓ while the sidebar has the keys.
+    side_rows: Vec<Scope>,
+    /// The row the keys last opened, and whether to scroll it into view.
+    side_cursor: Option<usize>,
+    side_reveal: bool,
 }
 
 impl App {
@@ -849,6 +857,10 @@ impl App {
 
             about: false,
             about_icon: None,
+            zone: logic::Zone::Content,
+            side_rows: Vec::new(),
+            side_cursor: None,
+            side_reveal: false,
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
         app.tile = saved.tile.unwrap_or(app.tile).clamp(TILE_MIN, TILE_MAX);
@@ -1561,6 +1573,12 @@ impl App {
     fn keyboard(&mut self, ctx: &egui::Context) {
         use crate::shortcuts::Command as C;
         let mut pressed = ctx.input(|i| self.shortcuts.pressed(i));
+        // A click in the sidebar hands it the arrow keys; a click anywhere
+        // else gives them back to the grid, as in Eagle.
+        if let Some(pos) = ctx.input(|i| i.pointer.any_pressed().then(|| i.pointer.press_origin()).flatten()) {
+            let side = self.show_sidebar && self.imports.sidebar.is_some_and(|r| r.contains(pos));
+            self.zone = if side { logic::Zone::Sidebar } else { logic::Zone::Content };
+        }
         if pressed.contains(&C::Preferences) && !self.prefs_window.open {
             self.open_preferences();
         }
@@ -1626,6 +1644,12 @@ impl App {
         if viewer && !digits_rate {
             pressed.retain(|c| !matches!(c, C::Rate(_)));
         }
+        // ⇧Space pages up, as in Eagle; the table would read it as Space
+        // (the viewer key), since a chord without ⇧ also matches with it.
+        if !viewer && ctx.input(|i| i.modifiers.shift_only() && i.key_pressed(Key::Space)) {
+            pressed.retain(|c| *c != C::Viewer);
+            pressed.push(C::Scroll(crate::shortcuts::Scroll::PageUp));
+        }
         // These take the whole key press: the fixed keys wait a frame.
         let done = audio || pressed.iter().any(|c| matches!(c, C::Paste | C::OpenDefault | C::RevealInFinder | C::Viewer) || (*c == C::Back && viewer));
         for cmd in pressed {
@@ -1635,14 +1659,16 @@ impl App {
             return;
         }
         // With ⌘ or ⌥ the arrows are commands (Back, Forward, first and
-        // last item, parent folder), not selection moves.
+        // last item, parent folder), not selection moves. Bare W, A, S
+        // and D are arrows too, as in Eagle, unless bound to a command.
+        let wasd = |i: &egui::InputState, k: Key| i.modifiers.is_none() && i.key_pressed(k) && self.shortcuts.resolve(k, Modifiers::NONE).is_none();
         let (left, right, up, down, esc, shift) = ctx.input(|i| {
             let plain = !i.modifiers.command && !i.modifiers.alt;
             (
-                plain && i.key_pressed(Key::ArrowLeft),
-                plain && i.key_pressed(Key::ArrowRight),
-                plain && i.key_pressed(Key::ArrowUp),
-                plain && i.key_pressed(Key::ArrowDown),
+                plain && i.key_pressed(Key::ArrowLeft) || wasd(i, Key::A),
+                plain && i.key_pressed(Key::ArrowRight) || wasd(i, Key::D),
+                plain && i.key_pressed(Key::ArrowUp) || wasd(i, Key::W),
+                plain && i.key_pressed(Key::ArrowDown) || wasd(i, Key::S),
                 i.key_pressed(Key::Escape),
                 i.modifiers.shift,
             )
@@ -1659,6 +1685,39 @@ impl App {
                 self.ws.viewer = None;
             } else {
                 self.ws.selected.clear();
+            }
+        }
+        // The sidebar has the keys: ↑ and ↓ open the row above or below,
+        // ← and → collapse or expand the open folder (or every picked one).
+        if self.zone == logic::Zone::Sidebar && self.show_sidebar && self.ws.viewer.is_none() && !shift {
+            if up || down {
+                if let Some(i) = logic::sidebar_step(&self.side_rows, self.side_cursor, &self.ws.scope, down) {
+                    let scope = self.side_rows[i].clone();
+                    self.side_cursor = Some(i);
+                    self.side_reveal = true;
+                    self.go(scope);
+                }
+                return;
+            }
+            if left || right {
+                let picked = if self.ws.folders.sel.is_multi() {
+                    self.ws.folders.sel.ids.clone()
+                } else if self.ws.folders.smart.is_multi() {
+                    self.ws.folders.smart.ids.clone()
+                } else {
+                    match &self.ws.scope {
+                        Scope::Folder(id) | Scope::Smart(id) => vec![id.clone()],
+                        _ => Vec::new(),
+                    }
+                };
+                for id in picked {
+                    if right {
+                        self.ws.collapsed.remove(&id);
+                    } else {
+                        self.ws.collapsed.insert(id);
+                    }
+                }
+                return;
             }
         }
         if self.ws.viewer.is_some() {
@@ -2793,6 +2852,7 @@ impl App {
         let full = ui.max_rect();
         self.imports.sidebar = Some(full);
         self.imports.folder_rows.clear();
+        self.side_rows.clear();
         self.ws.folders.begin_rows();
         let p = ui.painter().clone();
         p.rect_filled(full, 0.0, t::p().panel);
@@ -2919,6 +2979,7 @@ impl App {
                     };
                     let active = self.ws.scope == scope;
                     let resp = sidebar_row(ui, 0, glyph, &name, self.badge(count), active, None);
+                    self.side_row(scope.clone(), &resp);
                     if kind != "smartFolder" {
                         self.imports.note_row(ui, resp.rect, id);
                     }
@@ -2994,6 +3055,16 @@ impl App {
         }
     }
 
+    /// Notes a visible sidebar row for the arrow keys, and scrolls it into
+    /// view when the keys just opened it.
+    pub(super) fn side_row(&mut self, scope: Scope, resp: &Response) {
+        if self.side_reveal && self.side_cursor == Some(self.side_rows.len()) {
+            resp.scroll_to_me(None);
+            self.side_reveal = false;
+        }
+        self.side_rows.push(scope);
+    }
+
     /// The count shown beside a sidebar row: none when zero, or when
     /// Preferences turns counts off.
     pub(super) fn badge(&self, count: usize) -> Option<usize> {
@@ -3021,6 +3092,7 @@ impl App {
                 (a, b) => a == b,
             };
             let resp = sidebar_row(ui, 0, glyph, label, self.badge(count), active, None);
+            self.side_row(scope.clone(), &resp);
             if scope == Scope::Recent {
                 resp.context_menu(|ui| {
                     let root = self.ws.root.clone().unwrap_or_default();
@@ -3072,6 +3144,7 @@ impl App {
         let renaming = self.ws.renaming.as_ref().is_some_and(|(id, _)| *id == f.id);
         let label = if renaming { "" } else { f.name.as_str() };
         let resp = sidebar_row_tinted(ui, depth, glyph, tint, label, count, active, has_children.then_some(open));
+        self.side_row(Scope::Folder(f.id.clone()), &resp);
         let row_rect = resp.rect;
         self.imports.note_row(ui, row_rect, &f.id);
         if f.is_locked() && !renaming {

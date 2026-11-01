@@ -459,6 +459,7 @@ impl App {
         let renaming = self.ws.org.smart_rename.as_ref().is_some_and(|(id, _)| *id == sf.id);
         let label = if renaming { "" } else { sf.name.as_str() };
         let resp = sidebar_row_tinted(ui, depth, glyph, tint, label, self.badge(count), active, has_children.then_some(open));
+        self.side_row(Scope::Smart(sf.id.clone()), &resp);
         let row = resp.rect;
         if renaming {
             self.smart_rename_field(ui, row, depth, sf);
