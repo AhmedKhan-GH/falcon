@@ -9,8 +9,8 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 | Main window: menus, shortcuts, toolbar, sidebar, layouts | 258 | 6 | 8 | 8 |
 | Viewers and file formats | 187 | 13 | 3 | 5 |
 | Search, filters and organising | 216 | 1 | 2 | 3 |
-| Import, export, library, preferences and integrations | 190 | 4 | 14 | 26 |
-| **Total** | 851 | 24 | 27 | 42 |
+| Import, export, library, preferences and integrations | 190 | 5 | 13 | 26 |
+| **Total** | 851 | 25 | 26 | 42 |
 
 Rows marked **Not wanted (user decision)** (3) are Eagle features the user chose not to have in falcon; they are counted outside the local Missing total.
 ## Fix first
@@ -38,7 +38,7 @@ These are bugs, not missing features. The first four can lose data or edits.
 8. ~~No marquee selection, no multi-select of folders, no grid display options.~~ Fixed.
 9. ~~No tag picker or suggestions.~~ Fixed.
 10. ~~No GIF player controls, no animated WebP or AVIF, no GIF hover previews.~~ Fixed (AVIF on macOS); still no hover playback for video or audio.
-11. ~~No interactive 3D viewer, text editor or full font viewer.~~ Fixed for obj/stl/ply/glb/gltf/3mf/fbx; 3ds, dae and ifc stay stills.
+11. ~~No interactive 3D viewer, text editor or full font viewer.~~ Fixed for obj/stl/ply/glb/gltf/3mf/fbx/dae/3ds; ifc stays a still.
 12. ~~No watched import folder, no reload on outside changes, no sync-conflict detection, no screen capture.~~ Fixed.
 13. ~~English only; Eagle ships 8 languages.~~ Fixed: the whole interface in all eight (machine-written translations, pending a native read).
 
@@ -478,7 +478,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Font | Inside main window (`index.html:1388`) | Central panel between sidebar and inspector (`F/app.rs` `fn viewer`, `viewer_ui`) | Done |
 | Text (.txt) | Inside main window (`index.html:1393`) | Central panel between sidebar and inspector (`F/app.rs` `fn viewer`, `viewer_ui`), as a still render | Partial |
 | PDF | Inside main window (`index.html:1301`) | Central area, sidebar and inspector kept (`F/app.rs:3392`, `F/app/pdf_view.rs:958`) | Done (macOS only) |
-| 3D model | Inside main window (`index.html:1443`) | Central panel, interactive for obj/stl/ply/glb/gltf/3mf/fbx, a still for 3ds/dae/ifc | Partial |
+| 3D model | Inside main window (`index.html:1443`) | Central panel, interactive for obj/stl/ply/glb/gltf/3mf/fbx/dae/3ds, a still for ifc | Partial |
 | Special formats (PSD, AI, Office…) | Inside main window (`index.html:1448`) | Central panel between sidebar and inspector (`F/app.rs` `fn viewer`, `viewer_ui`), as a QuickLook render | Partial |
 | Web page (url/html/mhtml) | Inside main window (`index.html:1491`) | Central panel; live WKWebView for url/html on macOS, MHTML as a still | Partial |
 | Toggle sidebar and inspector from inside the viewer | `toggle-all-btn` in the detail toolbar (`index.html:1015`) | Panels button in every viewer bar and the main toolbar (`App::panels_button`, `logic::toggle_all`), ⌥⌘3 and Tab; both-on/both-off like Eagle | Done |
@@ -691,7 +691,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| Interactive 3D view (orbit, pan, zoom) | Partial | `falcon_library::model3d` readers obj+mtl, stl, ply, glb/gltf, 3mf and fbx (binary and ASCII via ufbx, every mesh node with its world transform, material colours, unit and axis conversion, bind pose only); orbit, pan, zoom, wireframe, grid and axes in `ui/viewer/model.rs`. Gaps: 3ds, dae and ifc stay QuickLook stills; no textures in any format | local |
+| Interactive 3D view (orbit, pan, zoom) | Partial | `falcon_library::model3d` readers obj+mtl, stl, ply, glb/gltf, 3mf, fbx (binary and ASCII via ufbx, world transforms, material colours, unit and axis conversion, bind pose), dae (COLLADA 1.4.1/1.5 via roxmltree: scene transforms and instances, controllers in bind pose, up axis and unit to Y-up metres, diffuse colour or a texture's average colour) and 3ds (material groups, every colour form, smoothing-group normals; keyframer skipped); orbit, pan, zoom, wireframe, grid and axes in `ui/viewer/model.rs`. Gaps: ifc stays a QuickLook still; no format maps textures | local |
 | Fit model to window | Done | Fit button (⌘0), `viewer3d::fit` | local |
 | Up-axis (Y/Z), flip up vector, fixed or free orbit | Done | Settings menu: Y/Z up, Flip, Fixed Up Vector / Free Orbit | local |
 | Perspective or orthographic camera | Done | Settings menu: Perspective / Orthographic | local |
@@ -809,7 +809,7 @@ Eagle columns come from `config.js` (`SUPPORT_FORMATS_DARWIN`), `E/js/thumbs/thu
 | mp4, mov, m4v, 3gp, ts, mts, m2ts | HTML5 video player, mpv fallback | QL | AVFoundation player |
 | webm, mkv, avi, wmv, mpg, flv, f4v | HTML5 player or mpv fallback | QL if available | AVFoundation if it can, else a still |
 | 360, afx, eva, vap | Video player | QL if available | AVFoundation if it can, else a still |
-| glb, obj, fbx, 3ds, 3mf, dae, ifc, ply, stl | Interactive 3D viewer | QL if available (obj/stl/ply/dae usually; fbx/ifc/glb rarely) | Interactive viewer and drawn thumbnail for glb/gltf, obj, fbx, 3mf, ply, stl; QL still for 3ds, dae, ifc |
+| glb, obj, fbx, 3ds, 3mf, dae, ifc, ply, stl | Interactive 3D viewer | QL if available (obj/stl/ply/dae usually; fbx/ifc/glb rarely) | Interactive viewer and drawn thumbnail for glb/gltf, obj, fbx, 3mf, ply, stl, dae, 3ds; QL still for ifc |
 | url | Live web view | QL (generic) | Live WKWebView (macOS); `.url`/`.webloc` addresses read on import |
 | html, mhtml | Live web view | QL | QL still |
 
@@ -825,7 +825,7 @@ Ranked by how often a user would notice them.
 6. **No video hover-scrub preview in the grid (Missing).** Also missing: audio hover playback. GIF and WebP cards do play on hover.
 7. **No video frame tools (Missing).** You can't set a frame as the thumbnail, copy it or save it.
 8. **No fallback player for mkv, avi, wmv, flv or webm (Missing).**
-9. ~~No interactive 3D model viewer.~~ Fixed for obj/stl/ply/glb/gltf/3mf/fbx; 3ds, dae and ifc stay stills, and no format shows textures.
+9. ~~No interactive 3D model viewer.~~ Fixed for obj/stl/ply/glb/gltf/3mf/fbx/dae/3ds; ifc stays a still, and no format maps textures (dae and 3ds use a texture's average colour).
 10. **No text editor for .txt (Missing).** No editing, renaming, zoom or auto-reload, and cards don't show the text.
 11. **No viewer context menu or right-drag gestures (Missing).** Right-click menu, swipe to previous or next, drag to zoom.
 12. **No zoom slider or zoom presets menu, and different zoom keys (Partial).** Cmd+=/Cmd+-/Cmd+0/Cmd+9 and backtick don't work in the viewer.
@@ -1242,7 +1242,7 @@ Two cross-cutting facts explain many rows:
 | When an `.eaglepack` holds items already in the library, ask "N repeated files, import anyway?" | Done | Count in the title, Import / Leave Them Out, Esc imports everything, as Eagle | local |
 | Merge another Eagle library into the current one (folders and items), refusing the library already open | Done | `crates/falcon-library/src/library_merge.rs`: Eagle's id matching for folders, smart folders and tag groups; item folders copied in the background with progress and Stop; the open library is refused | local |
 | Import an Inboard backup folder (`InboardBackup.json`), with its folders recreated | Done | `ImportOptions::trashed` and `added_at`; folders recreated | local |
-| Import a Pixave library | Missing | Not built: Eagle's importer isn't in readable source and the format needs SQLite (no crate offline) | local |
+| Import a Pixave library | Partial | File ▸ Import ▸ Pixave Library… and the library switcher entry (`ui/dialogs/pixave.rs`, `falcon_library::pixave`, rusqlite read-only and immutable, source never written). Eagle 4.0.0 itself has no working Pixave importer, only unused strings. The catalogue layout is not public, so only single-file `.pxvitem` items are imported, into a folder named after the library, through the ordinary import with thumbnails, duplicate check and progress. Gaps: collections and their hierarchy, tags, ratings, colour labels, notes, URLs and dates are not mapped, and referenced images outside the package are not found; Save Schema Report… writes a read-only schema dump to finish the mapping from a real library | local |
 | Import from Billfish | — (not counted) | — | — |
 | Import from Pinterest | Missing | — | online |
 | Import from Huaban | Missing | — | online |
@@ -1520,8 +1520,8 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 Rows marked "not counted" are features Eagle 4.0.0 does not have.
 
 - **Done:** 190, including 5 where falcon goes beyond Eagle and 1 with a small difference.
-- **Partial:** 4.
-- **Missing:** 40, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
+- **Partial:** 5.
+- **Missing:** 39, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
 - **Different on purpose:** 1 (the API listens on localhost only).
 
 ### Ranked Missing and Partial local items
@@ -1556,4 +1556,4 @@ Ranked by how often a user would hit the gap, and the risk if they do.
 26. **Localisation**: English only, against Eagle's eight languages.
 27. **Library safety checks are missing**: newer-version refusal, warnings for Desktop or Documents paths, read-only paths and slow disks, disk-space checks, and confirmation for large folders or deep trees.
 28. ~~"Empty cache and reload" is missing.~~ Fixed; "Clear Invalid Content" is not built (damaged items are skipped and reported).
-29. **Smaller gaps**: library loading progress, welcome flow, Preferences search, remembering the last pane, the Share sheet, WebP conversion, saving the current video frame, the menu bar icon, Inboard and Pixave importers, the API playground, debug report and error logs, the plugin system and plugin development, and colour-space selection.
+29. **Smaller gaps**: library loading progress, welcome flow, Preferences search, remembering the last pane, the Share sheet, WebP conversion, saving the current video frame, the menu bar icon, Pixave importer (catalogue layout unknown; Inboard is done), the API playground, debug report and error logs, the plugin system and plugin development, and colour-space selection.
