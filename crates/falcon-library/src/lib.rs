@@ -18,6 +18,7 @@ pub mod sandbox;
 pub mod palette;
 pub mod search;
 pub mod smart;
+pub mod smart_draft;
 pub mod tempo;
 pub mod undo;
 

@@ -23,8 +23,8 @@ Eagle's save rebuilds each **top-level** entry with these keys, in this order. U
 ```json
 { "id": "…", "icon": "star", "iconColor": "pink", "name": "Red logos", "description": "",
   "modificationTime": 1793000000000,
-  "conditions": [ { "match": "AND", "boolean": "TRUE",
-                    "rules": [ { "property": "type", "method": "equal", "value": "png" } ] } ],
+  "conditions": [ { "rules": [ { "property": "type", "method": "equal", "value": "png" } ],
+                    "match": "AND", "boolean": "TRUE" } ],
   "children": [] }
 ```
 
@@ -33,7 +33,7 @@ Eagle's save rebuilds each **top-level** entry with these keys, in this order. U
 ## Editing (observed)
 
 - **Create:** the dialog appends a new smart folder to the top level or to the chosen parent's children.
-- **Edit:** the dialog replaces `name` and `conditions` and stamps `modificationTime`.
+- **Edit:** the dialog replaces `name` and `conditions` and stamps `modificationTime`. It edits the stored conditions in place, so keys it doesn't touch stay. On opening it adds `boolean: "TRUE"` to any condition without one.
 - **Icon and colour:** these are separate menu commands. Picking the blank icon or no colour deletes the key.
 - **Drag onto a smart folder:** appends the dragged folders to its children and sets their `parent`. Dropping a folder onto one of its own descendants is refused.
 - **Drag between siblings:** inserts the folder before or after the target in the target's list. Eagle tries to delete `parent` when the target is top-level, but the delete hits the array rather than the folder. The stale key only lingers on nested folders: top-level entries are rebuilt without it on save.
@@ -54,6 +54,18 @@ Falcon's API, all on `Library`:
 | `delete_smart_folder(id)` | Removes the folder with its children |
 
 `Library::smart_folders()` returns `SmartFolder` values with `icon`, `icon_color`, `description`, `order_by` and `sort_increase` read out for display.
+
+## The dialog (observed)
+
+Eagle's dialog lists every condition. Each has a row choosing all (`AND`) or any (`OR`) of its rules and whether they must be true or false (`boolean`), then its rules, one per row: property, method, value. The second and later conditions are labelled as AND-ed with the ones above. A new condition is `{"rules": [...], "match": "OR", "boolean": "TRUE"}` with one rule, name contains `""`. A new rule is `{"property", "method", "value"}`; `unit` follows for file size and duration, and `width` and `height` for a custom shape. Changing a rule's property resets its method and value. Eagle caps both lists at 30, won't remove a condition's last rule, and saves an empty text value as it is (such a rule never matches). Picked dates are stored as local midnight.
+
+Falcon's dialog (`smart_dialog_ui`, with the rows in `organize_ui::smart_conditions_ui`) does the same, in its own words: each condition reads "Items must match / must not match all / any of these rules", with buttons to add and remove conditions and rules. It offers every property the evaluator knows (table above). Dates are typed as `YYYY-MM-DD` (there is no date picker), `within` takes a day count, folders come from a checklist of the library's folders, tags are comma-separated, and colours have a swatch picker. A value that can't be stored (a missing number, a bad date or colour) shows a message and disables Save, where Eagle would store whatever the field held. Falcon also needs at least one condition, so the dialog can't turn a smart folder into a group. There is no live count of matching items.
+
+Saving never loses rules. The draft lives in `falcon_library::smart_draft`, which keeps the stored JSON next to what the dialog shows:
+- **Untouched** conditions and rules are written back exactly as they were read.
+- **Edited** ones are the stored object with only the changed keys replaced. Key order and keys falcon doesn't know survive. Unlike Eagle, falcon doesn't add `boolean` to a condition that lacks it unless you invert the condition.
+- **Unsupported rules:** a rule with a property falcon doesn't know, a method that property doesn't have, a unit other than the ones listed, or a value of the wrong JSON type shows as a read-only "Unsupported rule" row with its JSON. It is saved verbatim until you remove it.
+- **Date rules** keep their stored timestamp when only the method changes between `on`, `before` and `after`. Switching to or from `within` restarts the value (30 days), as in Eagle.
 
 ## Smart folder groups (observed in code)
 
@@ -107,4 +119,4 @@ Eagle's quirks are kept:
 
 - **Regex engine:** Eagle runs JavaScript `RegExp`; falcon runs the Rust `regex` crate. It has no look-around or backreferences, so a pattern using them fails to compile and never matches (in Eagle it works). `\w`, `\d`, `\b` and case folding are Unicode-aware, where JavaScript without the `u` flag is ASCII-only. An invalid `regex` pattern fails the rule in both, but Eagle fails its whole test on an invalid `startWith` or `endWith` pattern, where falcon fails only that rule.
 - **Installed fonts:** like Eagle, falcon counts a font as installed when a file named after it is in Eagle's font folder (`~/Library/Fonts/EagleApp`, read once per evaluation). Fonts installed any other way count as not installed in both. Falcon has no font activation of its own and no such folder on other systems, so there every font is "not installed".
-- **The app's dialog:** it creates top-level smart folders with one condition. Nesting, icons and moves are in the library API but not yet in the app.
+- **The dialog:** see above for how falcon's differs from Eagle's.

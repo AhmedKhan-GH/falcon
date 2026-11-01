@@ -9,6 +9,7 @@ use crate::organize::{self, DropZone};
 use falcon_library::edit::SubfolderSort;
 use falcon_library::model::{FolderOrder, SavedFilter};
 use falcon_library::smart::SmartFolder;
+use falcon_library::smart_draft::{Kind, PROPERTIES, RATINGS, RuleDraft, RuleFields, SHAPES};
 
 /// State kept by the organising features.
 #[derive(Default)]
@@ -533,24 +534,237 @@ impl App {
 
     /// Queues the dialog's save: a new smart folder in its parent, or the
     /// edit plus any icon and parent change.
-    pub(super) fn save_smart_draft(&mut self, d: &SmartDraft, name: String, cond: serde_json::Value) {
+    pub(super) fn save_smart_draft(&mut self, d: &SmartDraft, name: String, conditions: Vec<serde_json::Value>) {
         match d.editing.clone() {
             Some(id) => {
-                self.ws.actions.push(Action::UpdateSmart(id.clone(), name, vec![cond]));
+                self.ws.actions.push(Action::UpdateSmart(id.clone(), name, conditions));
                 self.ws.actions.push(org(OrgAction::SmartIcon(id.clone(), d.icon.clone(), d.color.clone())));
                 if d.parent != d.orig_parent {
                     self.ws.actions.push(org(OrgAction::MoveSmart(id, d.parent.clone(), usize::MAX)));
                 }
             }
-            None if d.parent.is_none() && d.icon.is_none() && d.color.is_none() => self.ws.actions.push(Action::CreateSmart(name, vec![cond])),
+            None if d.parent.is_none() && d.icon.is_none() && d.color.is_none() => self.ws.actions.push(Action::CreateSmart(name, conditions)),
             None => self.ws.actions.push(org(OrgAction::CreateSmart {
                 parent: d.parent.clone(),
                 name,
-                conditions: vec![cond],
+                conditions,
                 icon: d.icon.clone(),
                 color: d.color.clone(),
             })),
         }
+    }
+}
+
+/// Eagle's limits on conditions per smart folder and rules per condition.
+const MAX_CONDITIONS: usize = 30;
+const MAX_RULES: usize = 30;
+
+/// Every folder as `(id, name)`, in tree order, for the folders rule.
+pub(super) fn folder_choices(roots: &[Folder]) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for r in roots {
+        r.walk(&mut |f| out.push((f.id.clone(), f.name.clone())));
+    }
+    out
+}
+
+/// The smart folder dialog's conditions: each with its must/must-not and
+/// all/any choice and its rules, AND-ed together.
+pub(super) fn smart_conditions_ui(ui: &mut Ui, conditions: &mut Vec<ConditionDraft>, folders: &[(String, String)]) {
+    let mut remove = None;
+    let count = conditions.len();
+    for (ci, c) in conditions.iter_mut().enumerate() {
+        egui::Frame::group(ui.style()).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal(|ui| {
+                ui.label(if ci == 0 { "Items" } else { "And items" });
+                egui::ComboBox::from_id_salt(("smart-negate", ci)).selected_text(if c.negate { "must not match" } else { "must match" }).width(120.0).show_ui(ui, |ui| {
+                    ui.selectable_value(&mut c.negate, false, "must match");
+                    ui.selectable_value(&mut c.negate, true, "must not match");
+                });
+                egui::ComboBox::from_id_salt(("smart-any", ci)).selected_text(if c.any { "any" } else { "all" }).width(60.0).show_ui(ui, |ui| {
+                    ui.selectable_value(&mut c.any, false, "all");
+                    ui.selectable_value(&mut c.any, true, "any");
+                });
+                ui.label("of these rules");
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if count > 1 && ui.button(ic::X).on_hover_text("Remove this condition").clicked() {
+                        remove = Some(ci);
+                    }
+                });
+            });
+            let mut gone = None;
+            let only = c.rules.len() == 1;
+            for (ri, r) in c.rules.iter_mut().enumerate() {
+                if smart_rule_ui(ui, (ci, ri), r, folders, !only) {
+                    gone = Some(ri);
+                }
+            }
+            if let Some(ri) = gone {
+                c.rules.remove(ri);
+            }
+            if c.rules.len() < MAX_RULES && ui.button(format!("{}  Add Rule", ic::PLUS)).clicked() {
+                c.rules.push(RuleDraft::default());
+            }
+        });
+        ui.add_space(4.0);
+    }
+    if let Some(ci) = remove {
+        conditions.remove(ci);
+    }
+    if conditions.len() < MAX_CONDITIONS && ui.button(format!("{}  Add Condition", ic::PLUS)).on_hover_text("Items must also pass every other condition").clicked() {
+        conditions.push(ConditionDraft::default());
+    }
+}
+
+/// One rule row; returns whether its remove button was clicked.
+fn smart_rule_ui(ui: &mut Ui, salt: (usize, usize), rule: &mut RuleDraft, folders: &[(String, String)], removable: bool) -> bool {
+    let mut remove = false;
+    ui.horizontal(|ui| {
+        match rule {
+            RuleDraft::Unsupported(v) => {
+                let text = v.to_string();
+                let short: String = if text.chars().count() > 60 { text.chars().take(59).chain(['…']).collect() } else { text.clone() };
+                ui.label(RichText::new("Unsupported rule").italics().color(t::p().text_muted))
+                    .on_hover_text("Falcon can't show or edit this rule. Saving keeps it exactly as it is; remove it to drop it.");
+                ui.label(RichText::new(short).monospace().small().color(t::p().text_muted)).on_hover_text(text);
+            }
+            RuleDraft::Edit { fields, .. } => rule_fields_ui(ui, salt, fields, folders),
+        }
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if ui.add_enabled(removable, egui::Button::new(ic::X)).on_hover_text("Remove this rule").clicked() {
+                remove = true;
+            }
+        });
+    });
+    remove
+}
+
+fn rule_fields_ui(ui: &mut Ui, salt: (usize, usize), f: &mut RuleFields, folders: &[(String, String)]) {
+    let kind = f.kind();
+    let label = PROPERTIES.iter().find(|p| p.key == f.property).map_or(f.property, |p| p.label);
+    egui::ComboBox::from_id_salt(("smart-prop", salt)).selected_text(label).width(130.0).height(400.0).show_ui(ui, |ui| {
+        for p in PROPERTIES {
+            if ui.selectable_label(f.property == p.key, p.label).clicked() {
+                f.set_property(p.key);
+            }
+        }
+    });
+    let kind_now = f.kind();
+    let methods = PROPERTIES.iter().find(|p| p.key == f.property).map_or(&[][..], |p| p.methods);
+    egui::ComboBox::from_id_salt(("smart-method", salt)).selected_text(smart_draft::method_label(kind_now, f.method)).width(110.0).show_ui(ui, |ui| {
+        for m in methods {
+            if ui.selectable_label(f.method == *m, smart_draft::method_label(kind_now, m)).clicked() {
+                f.set_method(m);
+            }
+        }
+    });
+    if kind != kind_now || smart_draft::no_value(kind_now, f.method) {
+        return;
+    }
+    let field = |ui: &mut Ui, s: &mut String, hint: &str, w: f32| {
+        ui.add(TextEdit::singleline(s).hint_text(hint).desired_width(w));
+    };
+    let between = f.method == "between";
+    match kind {
+        Kind::Text => field(ui, &mut f.value, if f.method == "regex" { "pattern" } else { "text" }, 220.0),
+        Kind::Type => field(ui, &mut f.value, "png, video, font…", 220.0),
+        Kind::Tags => field(ui, &mut f.value, "tag, tag", 220.0),
+        Kind::Number | Kind::Size | Kind::Duration => {
+            field(ui, &mut f.value, "number", 64.0);
+            if between {
+                ui.label("and");
+                field(ui, &mut f.value2, "number", 64.0);
+            }
+            let units = smart_draft::units(kind);
+            if !units.is_empty() {
+                let name = |u: &str| match u {
+                    "mb" => "MB",
+                    "kb" => "KB",
+                    "s" => "seconds",
+                    "m" => "minutes",
+                    "h" => "hours",
+                    _ => "?",
+                };
+                egui::ComboBox::from_id_salt(("smart-unit", salt)).selected_text(name(f.unit)).width(80.0).show_ui(ui, |ui| {
+                    for u in units {
+                        if ui.selectable_label(f.unit == *u, name(u)).clicked() {
+                            f.unit = u;
+                        }
+                    }
+                });
+            }
+        }
+        Kind::Date if f.method == "within" => {
+            field(ui, &mut f.value, "number", 64.0);
+            ui.label("days");
+        }
+        Kind::Date => {
+            field(ui, &mut f.value, "YYYY-MM-DD", 96.0);
+            if between {
+                ui.label("and");
+                field(ui, &mut f.value2, "YYYY-MM-DD", 96.0);
+            }
+        }
+        Kind::Folders => {
+            let mut ids: Vec<String> = f.value.split(',').map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect();
+            let names: Vec<&str> = ids.iter().map(|id| folders.iter().find(|(i, _)| i == id).map_or(id.as_str(), |(_, n)| n.as_str())).collect();
+            let shown = if names.is_empty() { "Choose folders…".to_string() } else { names.join(", ") };
+            let mut changed = false;
+            ui.menu_button(shown, |ui| {
+                egui::ScrollArea::vertical().max_height(320.0).show(ui, |ui| {
+                    for (id, name) in folders {
+                        let mut on = ids.contains(id);
+                        if ui.checkbox(&mut on, name).changed() {
+                            if on {
+                                ids.push(id.clone());
+                            } else {
+                                ids.retain(|x| x != id);
+                            }
+                            changed = true;
+                        }
+                    }
+                });
+            });
+            if changed {
+                f.value = ids.join(", ");
+            }
+        }
+        Kind::Rating if f.method == "contain" => field(ui, &mut f.value, "stars, e.g. 35", 120.0),
+        Kind::Rating => {
+            let shown = RATINGS.iter().find(|r| r.0 == f.value).map_or(f.value.as_str(), |r| r.1).to_string();
+            egui::ComboBox::from_id_salt(("smart-rating", salt)).selected_text(shown).width(100.0).show_ui(ui, |ui| {
+                for (v, name) in RATINGS {
+                    if ui.selectable_label(f.value == *v, *name).clicked() {
+                        f.value = v.to_string();
+                    }
+                }
+            });
+        }
+        Kind::Shape => {
+            let shown = SHAPES.iter().find(|s| s.0 == f.value).map_or(f.value.as_str(), |s| s.1).to_string();
+            egui::ComboBox::from_id_salt(("smart-shape", salt)).selected_text(shown).width(120.0).show_ui(ui, |ui| {
+                for (v, name) in SHAPES {
+                    if ui.selectable_label(f.value == *v, *name).clicked() {
+                        f.value = v.to_string();
+                    }
+                }
+            });
+            if f.value == "custom" {
+                field(ui, &mut f.width, "W", 40.0);
+                ui.label(":");
+                field(ui, &mut f.height, "H", 40.0);
+            }
+        }
+        Kind::Color => {
+            field(ui, &mut f.value, "#FF0000", 80.0);
+            let hex = f.value.trim().trim_start_matches('#');
+            let mut rgb = u32::from_str_radix(hex, 16).ok().filter(|_| hex.len() == 6).map_or([0, 0, 0], |v| [(v >> 16) as u8, (v >> 8) as u8, v as u8]);
+            if ui.color_edit_button_srgb(&mut rgb).changed() {
+                f.value = format!("#{:02X}{:02X}{:02X}", rgb[0], rgb[1], rgb[2]);
+            }
+        }
+        Kind::Font => {}
     }
 }
 

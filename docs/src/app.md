@@ -30,7 +30,7 @@ The app opens libraries with `Library::open_or_restore` (see [Backups](library-f
 | All Tags | A tag manager with a filter, starred tags, rename, merge and delete, grouped A-Z or by tag group |
 | Duplicates | Finds identical files and similar pictures, grouped, with Select All but First and Move to Trash (see below) |
 | Import | Drag and drop, ⌘V (files or images), files passed to the app, and the collect window (see below). Imports run in the background with a progress bar. PDF, video, PSD, AI, HEIC and RAW go through QuickLook. A dropped or pasted `*.library` folder is opened as a library (through the sandbox check, like the switcher), never imported; if several are dropped at once, only the first opens and a message says how many were left closed. As in Eagle, this applies to the dropped paths themselves, not to `.library` folders found inside a dropped folder |
-| Smart folders | Create and edit them with rule rows, matched by any or all, inside another smart folder, with an icon and colour |
+| Smart folders | Create and edit them with every condition (each matched by any or all of its rules, and inverted or not) and every rule property, inside another smart folder, with an icon and colour. Rules falcon can't edit are kept |
 | Trash | Restore, Delete Permanently and Empty Trash, all with confirmation |
 | HTTP API | Runs while the app is open, from port 41596 up |
 

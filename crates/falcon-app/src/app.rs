@@ -12,6 +12,7 @@ use eframe::egui::{
 };
 use falcon_library::model::{Folder, Item};
 use falcon_library::undo::{Transaction, WriteMode};
+use falcon_library::smart_draft::{self, ConditionDraft};
 use falcon_library::{Library, thumbnail};
 
 use crate::icons as ic;
@@ -199,28 +200,15 @@ fn gif_frames(ctx: &egui::Context, path: &std::path::Path) -> Vec<(egui::Texture
         .collect()
 }
 
-/// A rule row in the smart-folder dialog.
-#[derive(Clone)]
-struct RuleDraft {
-    property: &'static str,
-    method: &'static str,
-    value: String,
-}
-
-impl Default for RuleDraft {
-    fn default() -> Self {
-        RuleDraft { property: "name", method: "contain", value: String::new() }
-    }
-}
-
 /// The smart-folder dialog's state.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 struct SmartDraft {
     /// The smart folder being edited; `None` creates a new one.
     editing: Option<String>,
     name: String,
-    any: bool,
-    rules: Vec<RuleDraft>,
+    /// Every condition, in the editable form that writes back unchanged
+    /// parts verbatim (see `falcon_library::smart_draft`).
+    conditions: Vec<ConditionDraft>,
     /// The parent smart folder (`None` is the top level), and where it was.
     parent: Option<String>,
     orig_parent: Option<String>,
@@ -228,108 +216,31 @@ struct SmartDraft {
     color: Option<String>,
 }
 
-impl SmartDraft {
-    /// Fills the dialog from a stored smart folder's first condition.
-    fn from_folder(sf: &falcon_library::smart::SmartFolder) -> SmartDraft {
-        let cond = sf.conditions.first().cloned().unwrap_or_default();
-        let any = cond.get("match").and_then(|m| m.as_str()) == Some("OR");
-        let rules = cond
-            .get("rules")
-            .and_then(|r| r.as_array())
-            .map(|rules| rules.iter().filter_map(RuleDraft::from_json).collect())
-            .unwrap_or_default();
+impl Default for SmartDraft {
+    fn default() -> Self {
         SmartDraft {
-            editing: Some(sf.id.clone()),
-            name: sf.name.clone(),
-            any,
-            rules,
-            icon: sf.icon.clone(),
-            color: sf.icon_color.clone(),
-            ..Default::default()
+            editing: None,
+            name: String::new(),
+            conditions: vec![ConditionDraft::default()],
+            parent: None,
+            orig_parent: None,
+            icon: None,
+            color: None,
         }
     }
 }
 
-/// Properties offered in the dialog, with their methods (Eagle's names).
-const SMART_PROPS: [(&str, &str, &[&str]); 12] = [
-    ("name", "Name", &["contain", "uncontain", "equal", "startWith", "endWith", "empty", "not-empty"]),
-    ("annotation", "Notes", &["contain", "uncontain", "equal", "empty", "not-empty"]),
-    ("url", "URL", &["contain", "uncontain", "equal", "empty", "not-empty"]),
-    ("folderName", "Folder name", &["contain", "uncontain", "equal"]),
-    ("tags", "Tags", &["union", "intersection", "equal", "identity", "empty", "not-empty"]),
-    ("type", "Type", &["equal", "unequal"]),
-    ("rating", "Rating", &["equal", "unequal"]),
-    ("shape", "Shape", &["equal", "unequal"]),
-    ("color", "Color", &["similar", "accuracy", "grayscale"]),
-    ("width", "Width", &[">=", "<=", "=", ">", "<", "between"]),
-    ("fileSize", "File size (MB)", &[">=", "<=", "between"]),
-    ("createTime", "Date imported", &["within", "after", "before"]),
-];
-
-impl RuleDraft {
-    /// Reads a stored rule back into the dialog's text form.
-    fn from_json(r: &serde_json::Value) -> Option<RuleDraft> {
-        let prop = r.get("property")?.as_str()?;
-        let (property, _, methods) = SMART_PROPS.iter().find(|p| p.0 == prop)?;
-        let m = r.get("method").and_then(|m| m.as_str()).unwrap_or("");
-        let method = methods.iter().find(|x| **x == m).copied().unwrap_or(methods[0]);
-        let v = r.get("value").cloned().unwrap_or_default();
-        let num = |x: &serde_json::Value| x.as_f64().map(|n| if n.fract() == 0.0 { format!("{n:.0}") } else { n.to_string() });
-        let value = match (prop, &v) {
-            ("createTime", serde_json::Value::Array(a)) => {
-                let n = a.first().and_then(|x| x.as_f64()).unwrap_or(0.0);
-                if method == "within" {
-                    format!("{n:.0}")
-                } else {
-                    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0.0, |d| d.as_millis() as f64);
-                    format!("{:.0}", ((now - n) / 86_400_000.0).max(0.0))
-                }
-            }
-            ("width" | "fileSize", serde_json::Value::Array(a)) => {
-                let nums: Vec<String> = a.iter().filter_map(num).collect();
-                if method == "between" { nums.join("-") } else { nums.first().cloned().unwrap_or_default() }
-            }
-            (_, serde_json::Value::Array(a)) => a.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>().join(", "),
-            ("rating", serde_json::Value::String(s)) if s == "none" => "0".into(),
-            (_, serde_json::Value::String(s)) => s.clone(),
-            _ => String::new(),
-        };
-        Some(RuleDraft { property, method, value })
-    }
-
-    /// The rule in Eagle's JSON form, or `None` when the value is unusable.
-    fn to_json(&self) -> Option<serde_json::Value> {
-        use serde_json::json;
-        let v = self.value.trim();
-        let nums = || -> Option<Vec<f64>> {
-            let n: Vec<f64> = v.split(['-', ',', ' ']).filter(|x| !x.is_empty()).filter_map(|x| x.parse().ok()).collect();
-            (!n.is_empty()).then_some(n)
-        };
-        let value = match self.property {
-            "tags" => json!(v.split(',').map(str::trim).filter(|x| !x.is_empty()).collect::<Vec<_>>()),
-            "width" | "fileSize" => {
-                let n = nums()?;
-                json!([n[0], n.get(1).copied().unwrap_or(0.0)])
-            }
-            "createTime" => {
-                let n = nums()?;
-                if self.method == "within" {
-                    json!([n[0]])
-                } else {
-                    let ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).ok()?.as_millis() as f64;
-                    json!([ms - n[0] * 86_400_000.0])
-                }
-            }
-            "rating" => json!(if v.is_empty() || v == "0" { "none".to_string() } else { v.to_string() }),
-            _ if matches!(self.method, "empty" | "not-empty" | "grayscale") => json!(""),
-            _ if v.is_empty() => return None,
-            _ => json!(v),
-        };
-        let mut rule = json!({"property": self.property, "method": self.method, "value": value});
-        if self.property == "fileSize" {
-            rule["unit"] = json!("mb");
+impl SmartDraft {
+    /// Fills the dialog from a stored smart folder, every condition included.
+    fn from_folder(sf: &falcon_library::smart::SmartFolder) -> SmartDraft {
+        SmartDraft {
+            editing: Some(sf.id.clone()),
+            name: sf.name.clone(),
+            conditions: smart_draft::drafts(&sf.conditions),
+            icon: sf.icon.clone(),
+            color: sf.icon_color.clone(),
+            ..Default::default()
         }
-        Some(rule)
     }
 }
 
@@ -3424,78 +3335,33 @@ impl App {
     fn smart_dialog_ui(&mut self, ctx: &egui::Context, lib: &Library) {
         let Some(mut d) = self.ws.smart_dialog.take() else { return };
         let mut keep = true;
+        let folders = organize_ui::folder_choices(&lib.metadata.folders);
+        let max_rules_height = (ctx.content_rect().height() - 320.0).max(160.0);
         let modal = egui::Modal::new(egui::Id::unique("smart-dialog")).show(ctx, |ui| {
-            ui.set_width(520.0);
+            ui.set_width(660.0);
             ui.label(RichText::new(if d.editing.is_some() { "Edit Smart Folder" } else { "New Smart Folder" }).size(16.0));
             ui.add_space(6.0);
             ui.add(TextEdit::singleline(&mut d.name).hint_text("Name").desired_width(f32::INFINITY));
             ui.add_space(6.0);
             App::smart_dialog_extras(ui, &mut d, lib);
-            ui.add_space(4.0);
-            ui.horizontal(|ui| {
-                ui.label("Match");
-                if ui.selectable_label(!d.any, "all rules").clicked() {
-                    d.any = false;
-                }
-                if ui.selectable_label(d.any, "any rule").clicked() {
-                    d.any = true;
-                }
+            ui.add_space(6.0);
+            egui::ScrollArea::vertical().max_height(max_rules_height).auto_shrink([false, true]).show(ui, |ui| {
+                organize_ui::smart_conditions_ui(ui, &mut d.conditions, &folders);
             });
-            ui.add_space(4.0);
-            if d.rules.is_empty() {
-                d.rules.push(RuleDraft::default());
-            }
-            let mut remove = None;
-            for (n, r) in d.rules.iter_mut().enumerate() {
-                ui.horizontal(|ui| {
-                    let label = SMART_PROPS.iter().find(|p| p.0 == r.property).map_or("", |p| p.1);
-                    egui::ComboBox::from_id_salt(("prop", n)).selected_text(label).width(130.0).show_ui(ui, |ui| {
-                        for (key, name, methods) in SMART_PROPS {
-                            if ui.selectable_label(r.property == key, name).clicked() {
-                                r.property = key;
-                                r.method = methods[0];
-                            }
-                        }
-                    });
-                    let methods = SMART_PROPS.iter().find(|p| p.0 == r.property).map_or(&[][..], |p| p.2);
-                    egui::ComboBox::from_id_salt(("method", n)).selected_text(r.method).width(110.0).show_ui(ui, |ui| {
-                        for m in methods {
-                            if ui.selectable_label(r.method == *m, *m).clicked() {
-                                r.method = m;
-                            }
-                        }
-                    });
-                    let hint = match r.property {
-                        "tags" => "tag, tag",
-                        "type" => "png, video, font…",
-                        "rating" => "1–5 or 0",
-                        "shape" => "landscape, square…",
-                        "color" => "#FF0000",
-                        "createTime" => "days",
-                        "width" | "fileSize" => "number or a-b",
-                        _ => "text",
-                    };
-                    ui.add(TextEdit::singleline(&mut r.value).hint_text(hint).desired_width(170.0));
-                    if ui.button(ic::X).clicked() {
-                        remove = Some(n);
-                    }
-                });
-            }
-            if let Some(n) = remove {
-                d.rules.remove(n);
-            }
-            if ui.button(format!("{}  Add Rule", ic::PLUS)).clicked() {
-                d.rules.push(RuleDraft::default());
+            let result = smart_draft::conditions(&d.conditions);
+            if let Err(e) = &result {
+                ui.add_space(4.0);
+                ui.label(RichText::new(e).color(t::p().icon_red));
             }
             ui.add_space(10.0);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let rules: Vec<serde_json::Value> = d.rules.iter().filter_map(RuleDraft::to_json).collect();
-                let ok = !d.name.trim().is_empty() && !rules.is_empty();
+                let ok = !d.name.trim().is_empty() && !d.conditions.is_empty() && result.is_ok();
                 let label = if d.editing.is_some() { "Save" } else { "Create" };
-                if ui.add_enabled(ok, egui::Button::new(label)).clicked() {
-                    let cond = serde_json::json!({"match": if d.any { "OR" } else { "AND" }, "boolean": "TRUE", "rules": rules});
+                if ui.add_enabled(ok, egui::Button::new(label)).clicked()
+                    && let Ok(conditions) = result
+                {
                     let name = d.name.trim().to_string();
-                    self.save_smart_draft(&d, name, cond);
+                    self.save_smart_draft(&d, name, conditions);
                     keep = false;
                 }
                 if ui.button("Cancel").clicked() {
