@@ -29,6 +29,17 @@ Third-party material:
 - opus-decoder 0.1.1, MIT or Apache-2.0,
   https://github.com/TadeuszWolfGang/Rusopus.
 - rodio 0.23.0, MIT or Apache-2.0, https://github.com/RustAudio/rodio.
+- libloading 0.8.9 (https://github.com/nagisa/rust_libloading/), ISC license,
+  used to open the FFmpeg libraries at run time.
+- FFmpeg 7.1.5 (https://ffmpeg.org/releases/ffmpeg-7.1.5.tar.xz), licensed
+  under the GNU Lesser General Public License version 2.1 or later. It is not
+  part of this source tree and is not linked into Falcon. When built with
+  scripts/build-ffmpeg.sh (decode only, no GPL or nonfree parts; the configure
+  line is in that script and in docs/src/video.md), Falcon.app carries its
+  unmodified shared libraries in Contents/Frameworks, and the LGPL text and a note of the
+  version, source and configure line in Contents/Resources/FFmpeg
+  (COPYING.LGPLv2.1.txt, BUILD-INFO.txt). The source is available from the URL above and
+  https://ffmpeg.org/download.html.
 
 "Eagle" is a trademark of its respective owner. Falcon is not affiliated
 with, endorsed by or sponsored by Eagle or its developers.

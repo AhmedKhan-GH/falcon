@@ -8,6 +8,35 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp target/release/falcon-app "$APP/Contents/MacOS/Falcon"
 cp crates/falcon-app/assets/Falcon.icns "$APP/Contents/Resources/Falcon.icns"
+# The FFmpeg fallback player's libraries, when scripts/build-ffmpeg.sh has
+# built them. Falcon opens them at run time, so the app works without them;
+# only formats macOS can't play are then unavailable.
+FFMPEG=${FFMPEG_PREFIX:-target/ffmpeg}
+if [ -f "$FFMPEG/lib/libavformat.61.dylib" ]; then
+  FW="$APP/Contents/Frameworks"
+  mkdir -p "$FW"
+  for lib in libavutil.59 libswresample.5 libavcodec.61 libavformat.61 libswscale.8; do
+    cp -L "$FFMPEG/lib/$lib.dylib" "$FW/$lib.dylib"
+    chmod u+w "$FW/$lib.dylib"
+    install_name_tool -id "@rpath/$lib.dylib" "$FW/$lib.dylib"
+    # Point links to the other FFmpeg libraries at the bundle's copies.
+    for dep in $(otool -L "$FW/$lib.dylib" | awk 'NR > 2 { print $1 }' | grep -E 'lib(avutil|swresample|avcodec|avformat|swscale)\.' || true); do
+      install_name_tool -change "$dep" "@rpath/$(basename "$dep")" "$FW/$lib.dylib"
+    done
+    otool -l "$FW/$lib.dylib" | grep -q 'path @loader_path ' || install_name_tool -add_rpath @loader_path "$FW/$lib.dylib"
+    codesign --force --sign - "$FW/$lib.dylib" 2>/dev/null
+  done
+  install_name_tool -add_rpath @executable_path/../Frameworks "$APP/Contents/MacOS/Falcon"
+  RESIGN=1
+  # The LGPL asks for its text and the source's whereabouts to ship along.
+  # They go in Resources: code signing allows only code in Frameworks.
+  mkdir -p "$APP/Contents/Resources/FFmpeg"
+  cp "$FFMPEG/COPYING.LGPLv2.1" "$APP/Contents/Resources/FFmpeg/COPYING.LGPLv2.1.txt"
+  cp "$FFMPEG/BUILD-INFO.txt" "$APP/Contents/Resources/FFmpeg/BUILD-INFO.txt"
+  echo "Bundled FFmpeg from $FFMPEG"
+else
+  echo "No FFmpeg in $FFMPEG (run scripts/build-ffmpeg.sh): formats macOS can't play won't play"
+fi
 VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
 # The document types let Finder's Open With and Dock drops hand files, packages and libraries to falcon, which imports files and opens packages and libraries.
 cat > "$APP/Contents/Info.plist" <<PLIST
@@ -103,4 +132,9 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </dict>
 </plist>
 PLIST
+# Changing the executable's rpath voided its ad-hoc signature; sign the
+# whole bundle again (ad hoc, as the linker did).
+if [ -n "${RESIGN:-}" ]; then
+  codesign --force --sign - "$APP"
+fi
 echo "Built $APP"

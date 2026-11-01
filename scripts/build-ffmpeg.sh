@@ -81,4 +81,16 @@ make -j"$(sysctl -n hw.ncpu)"
 rm -rf "$PREFIX"
 make install
 cp COPYING.LGPLv2.1 "$PREFIX/COPYING.LGPLv2.1"
+# What was built and how, for the notice that ships next to the libraries
+# (the install prefix is left out of the recorded configure line).
+CONF=$(sed -n 's/^#define FFMPEG_CONFIGURATION "\(.*\)"$/\1/p' config.h | sed 's|--prefix=[^ ]*|--prefix=<repo>/target/ffmpeg|')
+cat > "$PREFIX/BUILD-INFO.txt" <<INFO
+FFmpeg $VERSION, built for Falcon by scripts/build-ffmpeg.sh.
+Licence: GNU Lesser General Public License, version 2.1 or later (COPYING.LGPLv2.1).
+Source: $URL
+SHA-256 of the source: $SHA256
+Falcon loads these libraries at run time and does not modify FFmpeg.
+Configured with:
+$CONF
+INFO
 echo "FFmpeg $VERSION installed in $PREFIX"
