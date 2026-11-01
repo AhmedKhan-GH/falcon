@@ -453,3 +453,77 @@ fn imports_leave_the_library_unlocked_while_staging() {
     assert!(took > Duration::from_millis(50), "staging too fast to tell: {took:?}");
     assert!(longest * 4 < took, "waited {longest:?} for the lock during a {took:?} import");
 }
+
+// ---------------------------------------------------------------------------
+// Token auth, preferences, links and the add/refresh routes
+
+impl Env {
+    /// A raw HTTP/1.1 exchange with an explicit `Host` header. Returns the
+    /// status, the header block (lower-cased) and the body text.
+    fn raw(&self, method: &str, path: &str, host: Option<&str>, body: Option<&str>) -> (u16, String, String) {
+        use std::io::{Read, Write};
+        let mut s = std::net::TcpStream::connect(("127.0.0.1", self.server.port)).unwrap();
+        let mut req = format!("{method} {path} HTTP/1.1\r\n");
+        if let Some(h) = host {
+            req.push_str(&format!("Host: {h}\r\n"));
+        }
+        req.push_str("Connection: close\r\n");
+        if let Some(b) = body {
+            req.push_str(&format!("Content-Type: application/json\r\nContent-Length: {}\r\n\r\n{b}", b.len()));
+        } else {
+            req.push_str("\r\n");
+        }
+        s.write_all(req.as_bytes()).unwrap();
+        let mut out = Vec::new();
+        s.read_to_end(&mut out).unwrap();
+        let text = String::from_utf8_lossy(&out).into_owned();
+        let (head, body) = text.split_once("\r\n\r\n").unwrap_or((&text, ""));
+        let code = head.split_whitespace().nth(1).unwrap().parse().unwrap();
+        (code, head.to_lowercase(), body.to_string())
+    }
+
+    fn foreign(&self, method: &str, path: &str, body: Option<&str>) -> (u16, Value) {
+        let (code, _, text) = self.raw(method, path, Some("example.com"), body);
+        (code, serde_json::from_str(&text).unwrap())
+    }
+}
+
+#[test]
+fn token_auth() {
+    let e = env();
+    let denied = |v: &Value| {
+        assert_eq!(v["status"], "error");
+        assert_eq!(v["code"], 401);
+        assert!(v["message"].is_string());
+    };
+    let (code, v) = e.foreign("GET", "/api/library/info", None);
+    assert_eq!(code, 401);
+    denied(&v);
+
+    e.server.set_token("abc");
+    let (code, v) = e.foreign("GET", "/api/library/info?token=abc", None);
+    assert_eq!((code, v["status"].clone()), (200, json!("success")));
+    let (code, v) = e.foreign("GET", "/api/library/info?token=wrong", None);
+    assert_eq!(code, 401);
+    denied(&v);
+
+    let (code, v) = e.foreign("POST", "/api/folder/create", Some(r#"{"token":"abc","folderName":"ByBody"}"#));
+    assert_eq!((code, v["status"].clone(), v["data"]["name"].clone()), (200, json!("success"), json!("ByBody")));
+    let (code, v) = e.foreign("POST", "/api/folder/create?token=abc", Some(r#"{"folderName":"ByQuery"}"#));
+    assert_eq!((code, v["status"].clone(), v["data"]["name"].clone()), (200, json!("success"), json!("ByQuery")));
+    let (code, v) = e.foreign("POST", "/api/folder/create", Some(r#"{"token":"nope","folderName":"X"}"#));
+    assert_eq!(code, 401);
+    denied(&v);
+
+    // The right Host keeps working with or without a token.
+    assert_eq!(e.get("/api/library/info").0, 200);
+    assert_eq!(e.get("/api/library/info?token=wrong").0, 200);
+
+    // No token set: an empty one matches nothing.
+    e.server.set_token("");
+    let (code, v) = e.foreign("GET", "/api/library/info?token=", None);
+    assert_eq!(code, 401);
+    denied(&v);
+    assert_eq!(e.foreign("GET", "/api/library/info", None).0, 401);
+    assert_eq!(e.get("/api/library/info").0, 200);
+}

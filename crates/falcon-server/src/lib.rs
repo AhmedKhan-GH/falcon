@@ -5,10 +5,12 @@
 //! errors as HTTP 500 `{"status":"error","data":"..."}`, unknown paths as 404
 //! and wrong verbs as 405 (both with Eagle's "method not allowed" text).
 //!
+//! A request is served when its `Host` is the server's own address or when
+//! it carries the Developer token ([`Handle::set_token`]) as `token`.
+//!
 //! Falcon's own choices:
 //! - it listens on 127.0.0.1 only;
-//! - it serves library routes only;
-//! - application info reports version and platform only;
+//! - it serves library routes only (no script injection, plugins or AI);
 //! - imports finish before the reply, so returned ids always exist;
 //! - imports read their source without holding the library lock;
 //! - library history is the libraries this server has served, newest first.
@@ -37,15 +39,19 @@ const API_VERSION: &str = "4.0.0";
 
 pub type Shared = Arc<Mutex<Library>>;
 
-/// Server state beside the library: the libraries served so far, newest
-/// first (what `library/history` reports).
+/// Server state beside the library: what `library/history` reports and
+/// the Developer token.
 struct State {
     history: Mutex<Vec<String>>,
+    token: Mutex<String>,
 }
 
 impl State {
     fn new(lib: &Shared) -> State {
-        State { history: Mutex::new(vec![root_of(lib)]) }
+        State {
+            history: Mutex::new(vec![root_of(lib)]),
+            token: Mutex::new(String::new()),
+        }
     }
 
     fn history(&self) -> Vec<String> {
@@ -57,6 +63,12 @@ impl State {
             h.retain(|p| *p != path);
             h.insert(0, path);
         }
+    }
+
+    /// Whether `given` is the Developer token. No token set never matches.
+    fn token_matches(&self, given: &str) -> bool {
+        let token = self.token.lock().unwrap_or_else(|p| p.into_inner());
+        !token.is_empty() && *token == given
     }
 }
 
@@ -96,6 +108,13 @@ impl Handle {
     /// The library being served now.
     pub fn library(&self) -> Shared {
         self.slot.lock().unwrap_or_else(|p| p.into_inner()).clone()
+    }
+
+    /// Sets the Developer token. A request carrying it as `token` (in the
+    /// query string, or in a POST body) is served whatever its `Host`
+    /// header says. An empty token turns this off.
+    pub fn set_token(&self, token: &str) {
+        *self.state.token.lock().unwrap_or_else(|p| p.into_inner()) = token.to_string();
     }
 }
 
@@ -187,9 +206,16 @@ fn handle(lib: &Shared, state: &State, port: u16, mut req: Request) {
         }
     }
 
+    // Eagle serves a request whose Host is its own address, or one that
+    // carries the Developer token (a POST may also put it in the query).
     let host = req.headers().iter().find(|h| h.field.equiv("Host")).map(|h| h.value.as_str().to_string());
     let allowed_hosts = [format!("localhost:{port}"), format!("127.0.0.1:{port}"), format!("0.0.0.0:{port}")];
-    if !host.as_ref().is_some_and(|h| allowed_hosts.contains(h)) {
+    let host_ok = host.as_ref().is_some_and(|h| allowed_hosts.contains(h));
+    let token = match args.get("token") {
+        Some(Value::String(t)) => Some(t.clone()),
+        _ => parse_query(query).get("token").and_then(Value::as_str).map(String::from),
+    };
+    if !host_ok && !token.is_some_and(|t| state.token_matches(&t)) {
         return send(req, Reply::Unauthorized);
     }
 
