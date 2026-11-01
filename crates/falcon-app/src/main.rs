@@ -21,7 +21,6 @@ mod import_dupes;
 mod loader;
 mod logic;
 mod menu;
-mod menu_search;
 mod open_with;
 mod prefs;
 mod share;

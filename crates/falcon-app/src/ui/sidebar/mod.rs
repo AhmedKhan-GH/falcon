@@ -615,7 +615,7 @@ impl App {
                 return;
             }
             // The caret's Expand menu has no search box, as in Eagle.
-            crate::menu_search::show(ui, |ui| {
+            crate::ui::menus::search::show(ui, |ui| {
             if self.ws.folders.sel.is_multi() && self.ws.folders.sel.contains(&f.id) {
                 self.multi_folder_menu(ui, lib, f, pinned);
                 return;

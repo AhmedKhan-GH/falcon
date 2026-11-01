@@ -158,7 +158,7 @@ impl App {
             self.ws.org.tag_sel = vec![tag.to_string()];
             self.ws.org.tag_anchor = Some(tag.to_string());
         }
-        resp.context_menu(|ui| crate::menu_search::show(ui, |ui| {
+        resp.context_menu(|ui| crate::ui::menus::search::show(ui, |ui| {
             let tags = if self.ws.org.tag_sel.is_empty() { vec![tag.to_string()] } else { self.ws.org.tag_sel.clone() };
             self.tags_menu(ui, lib, &tags);
         }));
