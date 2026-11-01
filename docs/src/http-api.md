@@ -58,7 +58,7 @@ Eagle's quirks are kept:
 
 ## eagle:// links
 
-The app bundle registers the `eagle` scheme (`CFBundleURLTypes` in `scripts/bundle.sh`). The app handles `eagle://item/<id>`, `eagle://folder/<id>` and `eagle://smart-folder/<id>`, both from clicked links and as launch arguments. A clicked link reaches the running app as an Apple "get URL" event, which falcon catches before the event loop starts. An item opens in the viewer inside its first folder, or All when it has none; a folder or smart folder is shown. Ids the shown library doesn't have are ignored, and links wait while the app is locked. `eagle://openFolder/…` and plugin links are not handled.
+The app bundle registers the `eagle` scheme (`CFBundleURLTypes` in `scripts/bundle.sh`). The app handles `eagle://item/<id>`, `eagle://folder/<id>` and `eagle://smart-folder/<id>`, both from clicked links and as launch arguments. A clicked link reaches the running app as an Apple "get URL" event, which falcon catches before the event loop starts. An item opens in the viewer inside its first folder, or All when it has none; a folder or smart folder is shown. Ids the shown library doesn't have are ignored, and links wait while the app is locked. `eagle://openFolder/<id>`, the form Eagle's "added to folder" notices link with, opens the folder in the app as a folder link does (Eagle sends it to the same handler). Plugin links are not handled.
 
 ## v2 routes (observed)
 

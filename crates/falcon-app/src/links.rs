@@ -1,6 +1,8 @@
 //! Eagle's `eagle://` links: `eagle://item/<id>`, `eagle://folder/<id>`
 //! and `eagle://smart-folder/<id>`, as Eagle's Copy Link and the API's
-//! `/item?id=` redirects make them. The bundle registers the scheme
+//! `/item?id=` redirects make them, and `eagle://openFolder/<id>`, the
+//! form Eagle's "added to folder" notices link with, which opens the
+//! folder in the app like a folder link. The bundle registers the scheme
 //! (`scripts/bundle.sh`); macOS hands a clicked link to the running app as
 //! a "get URL" Apple event, which [`install`] catches. The app takes the
 //! links with [`take`] each frame.
@@ -25,7 +27,7 @@ pub fn parse(url: &str) -> Option<Link> {
     let id = id.to_string();
     match kind {
         "item" => Some(Link::Item(id)),
-        "folder" => Some(Link::Folder(id)),
+        "folder" | "openFolder" => Some(Link::Folder(id)),
         "smart-folder" => Some(Link::Smart(id)),
         _ => None,
     }
@@ -171,6 +173,7 @@ mod tests {
         assert_eq!(parse("eagle://item/M3QSGJNQTC2DG"), Some(Link::Item("M3QSGJNQTC2DG".into())));
         assert_eq!(parse("eagle://folder/L1/"), Some(Link::Folder("L1".into())));
         assert_eq!(parse("eagle://smart-folder/S1?x=1"), Some(Link::Smart("S1".into())));
+        assert_eq!(parse("eagle://openFolder/L2"), Some(Link::Folder("L2".into())));
         assert_eq!(parse("eagle://item/"), None);
         assert_eq!(parse("eagle://plugin/X"), None);
         assert_eq!(parse("https://item/X"), None);
