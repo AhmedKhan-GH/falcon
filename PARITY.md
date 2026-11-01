@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 217 | 37 | 18 | 8 |
-| Viewers and file formats | 171 | 23 | 9 | 5 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 218 | 36 | 18 | 8 |
+| Viewers and file formats | 182 | 17 | 4 | 5 |
 | Search, filters and organising | 207 | 8 | 7 | 3 |
 | Import, export, library, preferences and integrations | 175 | 12 | 22 | 26 |
-| **Total** | 770 | 80 | 56 | 42 |
+| **Total** | 782 | 73 | 51 | 42 |
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -208,7 +208,7 @@ Eagle defaults come from prefs `shortcuts.keybinds` (rebindable) and from the ha
 | ⇧↩ default app, ⌘↩ reveal | Done | shortcuts.rs:104-105 | local |
 | ⌥⌘S reveal, ⌥⌘D duplicate (view) | Missing |  | local |
 | Home / End / PageUp / PageDown scroll the grid; ⌘↑ / ⌘↓ jump to top or bottom | Done | `run_command` scroll offsets; ⌘↑ / ⌘↓ also select the first or last item, where Eagle only scrolls | local |
-| 0–5 set the rating of the selection | Partial | Grid and the text, font, video and audio viewers; in the image viewer 0 and 1 are falcon's zoom keys where Eagle rates | local |
+| 0–5 set the rating of the selection | Done | `organize.rating.*` in the grid and every viewer (bare 0/1 no longer zoom the image viewer, as Eagle); the web viewer takes the keys while its page has focus | local |
 | T opens the tag panel, F opens the folder panel, J opens Go to Folder, G opens Actions, P opens Plugins | Partial | T and J done; no F, G or P | local |
 | R reshuffles the Random view | Done | R and View ▸ Shuffle Again; also a folder or smart folder sorted Random | local |
 | `*` or `/` expand or collapse every folder | Done | Eagle's `toggleAllFolders` rule (smart folders when one is open); `*` is the ⇧8 alias chord | local |
@@ -495,8 +495,8 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Previous and next buttons in the toolbar | Done | Bar buttons and arrows share `App::viewer_step`; disabled at the ends | local |
 | Previous and next with the arrow keys | Done | `F/app.rs:1110-1135` | local |
 | "Already the first item" and "Already the last item" tips | Done | Status note over the viewer for about 1.2 s (`logic::Edge`) | local |
-| Mouse gesture: right-drag left or right moves to the previous or next item | Missing | None | local |
-| Mouse gesture: right-drag up or down zooms | Missing | None | local |
+| Mouse gesture: right-drag left or right moves to the previous or next item | Done | `gesture.rs`: Eagle's swipe rule (over 20 px, within 1 s, no zoom change) in the image viewer, the too-large page and the preview window, with the trail | local |
+| Mouse gesture: right-drag up or down zooms | Done | `gesture.rs`: zoom about the press point, Eagle's ×e per 100/150 px, clamped 5–200% | local |
 | Right-click in the viewer opens the item context menu | Done | `App::item_menu` reused by the image viewer and the audio/font background; video and PDF have none (Eagle's PDF is an iframe, a click on video toggles playback) | local |
 | Middle-click in the viewer opens the plugin panel | Missing | No plugins | online/plugin |
 | Pinned plugins and plugin button in the viewer toolbar | Missing | No plugins | online/plugin |
@@ -529,7 +529,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Mouse-wheel behaviour preference (scroll, zoom, or previous/next) | Done | `logic::wheel_action`, `prefs.wheel`: scroll (default), zoom or page; no first-use prompt | local |
 | Pan by dragging | Done | `F/app/image_view.rs` | local |
 | Remember the last zoom and position per item | Done | `prefs.remember_zoom`, per session as Eagle's `lastItemStates` | local |
-| Pixelated or smooth rendering when zoomed in | Partial | `prefs.pixelated`: nearest sampling above 100% of screen pixels (Eagle starts at 200%); grid thumbnails stay smooth | local |
+| Pixelated or smooth rendering when zoomed in | Done | `logic::pixelated_at`: nearest sampling from 200% as Eagle, viewer and preview window; the texture is remade in the background | local |
 | Shows the original at full resolution | Done | `Tier::Original` in `loader.rs`: the original decoded on a worker and cut into ≤ 2048 px tiles within the GPU limit, kept only for the viewed item (`keep_original`); jpg, png, webp, bmp, tiff and RAW previews | local |
 | EXIF orientation applied in the viewer | Done | `FL/thumbnail.rs:121-130` | local |
 | Rotate | Done | `F/crop.rs:242-250`, Shift+R `F/image_edit.rs:281` | local |
@@ -568,7 +568,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | RAW viewer shows the thumbnail, then the embedded full preview | Done | `thumbnail::raw_preview` extracts the largest embedded baseline or progressive JPEG, turned by EXIF orientation; QuickLook fallback on macOS | local |
-| EXIF orientation for RAW | Partial | Whatever QuickLook applies | local |
+| EXIF orientation for RAW | Partial | TIFF-based files, ORF/RW2, RAF (its JPEG preview's EXIF) and CR3 (`CMT1`) through `exif::orientation`; CRW, MRW and X3F containers not parsed | local |
 | Camera metadata (camera, ISO, focal length, shutter, aperture, date) | Done | `F/app/media_view.rs:315-333` (when `rawMetas` exists) | local |
 | Zoom, comments on RAW | Done | Same image viewer and `F/comments.rs:169` | local |
 
@@ -689,14 +689,14 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| Interactive 3D view (orbit, pan, zoom) | Partial | `falcon_library::model3d` readers (obj+mtl, stl, ply, glb/gltf, 3mf) and an `egui_wgpu` callback viewer (`ui/viewer/model.rs`): Eagle's camera, mouse mapping, lighting, edges, details; grid/axes extras; thumbnails rendered at import. fbx, 3ds, dae and ifc stay QuickLook stills; no mesh tree, export, snapshot or textures | local |
+| Interactive 3D view (orbit, pan, zoom) | Partial | `falcon_library::model3d` readers (obj+mtl, stl, ply, glb/gltf, 3mf) and the `egui_wgpu` viewer with Eagle's camera, mouse mapping, lighting, edges, details, tree, measure, export and snapshot; fbx, 3ds, dae and ifc stay QuickLook stills; no textures | local |
 | Fit model to window | Done | Fit button (⌘0), `viewer3d::fit` | local |
 | Up-axis (Y/Z), flip up vector, fixed or free orbit | Done | Settings menu: Y/Z up, Flip, Fixed Up Vector / Free Orbit | local |
 | Perspective or orthographic camera | Done | Settings menu: Perspective / Orthographic | local |
-| Measure tool | Missing | None | local |
-| Model tree navigator (files, meshes, materials) and details sidebar | Partial | Details panel with materials; no tree of files or meshes | local |
-| Settings: background colour, edge display, dark theme | Partial | Background colour, edges with colour and angle, default colour, Reset; no dark-theme setting | local |
-| Export model and create snapshot | Missing | None | local |
+| Measure tool | Done | Distance, angle and distance between parallel faces (`ui/viewer/model.rs`) | local |
+| Model tree navigator (files, meshes, materials) and details sidebar | Done | Files, meshes (hide, isolate, fit one), materials, plus the details panel | local |
+| Settings: background colour, edge display, dark theme | Done | Background colour, edges with colour and angle, default colour, Auto/Light/Dark theme, Reset | local |
+| Export model and create snapshot | Partial | OBJ+MTL and binary STL export, PNG snapshot of the faces (no edges, grid or axes); Eagle's viewer also writes glTF, PLY, OFF and 3DM | local |
 | Esc/←/→ still exit or move between items | Done | The shared viewer shell handles Esc, ← and → | local |
 
 ### 11. Special formats viewed as images (PSD, PSB, AI, EPS, XD, Sketch, Figma, Affinity, C4D, Blender, SketchUp, DWG, CDR, Clip, InDesign, Office, iWork, XMind, MindNode, OmniGraffle, HDR, EXR, ICO, ICNS, DDS)
@@ -704,10 +704,10 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | Shown as a zoomable image of the thumbnail | Done | Image viewer falls back to the preview tier (`F/app.rs:3427-3429`) | local |
-| Higher-resolution render made on demand for PSD, PSB, AI, PPT, PPTX, POTX | Partial | A QuickLook render up to 3072 px for every unsupported format (`F/loader.rs:56-57`, `:209-211`); macOS only | local |
+| Higher-resolution render made on demand for PSD, PSB, AI, PPT, PPTX, POTX | Partial | One larger QuickLook render (up to 8192 px, tiled) when zoomed past the 3072 px tier, macOS only; Eagle re-renders at every zoom | local |
 | Comments on special formats | Done | `F/comments.rs:169` | local |
-| Custom thumbnail shown in the viewer for formats with no preview | Partial | Full tier tries QuickLook on the original first; the custom thumbnail only shows if that fails (`F/loader.rs:56`, `F/app.rs:3427`) | local |
-| HDR/EXR rendered with tone mapping and exposure | Partial | QuickLook render, no exposure | local |
+| Custom thumbnail shown in the viewer for formats with no preview | Done | The custom thumbnail is the viewer's picture for formats with no picture of their own | local |
+| HDR/EXR rendered with tone mapping and exposure | Done | `falcon_library::hdr`: linear decode, Reinhard tone mapping as Eagle (fixed exposure 1.0 there); falcon adds an exposure slider | local |
 
 ### 12. SVG, TIFF, TGA, HEIC
 
@@ -715,7 +715,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | --- | --- | --- | --- |
 | SVG drawn as vectors, sharp at any zoom | Done | `thumbnail::render_svg_region` re-renders the visible part at screen resolution 0.15 s after the view holds still (`logic::svg_region`) | local |
 | TIFF viewer (multi-page aware, worker decode) | Done | `tiff_pages.rs`: pages counted on a worker, `‹ 2 / 5 ›` in the bar, PageUp/PageDown; Eagle's own TIFF viewer decodes only the first page | local |
-| TGA viewer | Partial | QuickLook still | local |
+| TGA viewer | Done | Full resolution and tiles through the `image` TGA decoder; the too-large rule kept | local |
 | HEIC/HEIF viewer | Partial | Full resolution, orientation and tiles through ImageIO (`crates/falcon-library/src/imageio.rs`) on macOS; QuickLook still elsewhere | local |
 
 ### 13. Web pages (url, html, mhtml)
@@ -737,7 +737,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | Open one or more items in their own window (Cmd+O, middle click) | Partial | ⌘O and middle click (preference) open one item per window; no multi-item opening | local |
-| Same viewers in the window (image, GIF, RAW, video, font, text, PDF, 3D, web, plugin) | Partial | Image, GIF, video, audio, text and PDF are real viewers in the window; fonts, 3D and web show the thumbnail | local |
+| Same viewers in the window (image, GIF, RAW, video, font, text, PDF, 3D, web, plugin) | Partial | Image, GIF, video, audio, text, PDF and fonts (incl. the fallback font view) are real viewers in the preview window; 3D and web are stills | local |
 | Window opacity 10%–100% | Done | NSWindow `alphaValue` from the window menu | local |
 | Always on top toggle in the window | Done | Preview window menu | local |
 | Navigator, grayscale, rotate, flip in the window menu | Done | Preview window menu; rotate and flip change the preview only | local |
@@ -755,9 +755,9 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Animated GIF plays inside the hover preview | Done | `gif_view.rs` `hover_anim`, `anim.rs` `Cards::popup` | local |
 | GIF and animated images play when hovered in the grid | Done | GIF, animated WebP and (macOS) animated AVIF (`card_anim`, `Cards::play`) | local |
 | Preference: always autoplay GIF/WebP/AVIF in the grid | Done | `prefs.always_play_animated` (off by default, as Eagle); AVIF on macOS | local |
-| Video hover preview: autoplays, moving the pointer scrubs, progress bar and time | Partial | 48-picture strip from `falcon_video::Grabber` on a worker: 500 ms delay, scrub, resume after 200 ms rest, bar and time; no sound (`Prefs::video_hover`, on by default) | local |
-| Mute toggle on the video hover preview, remembered | Missing | None | local |
-| Audio hover preview: plays, click to seek, progress | Partial | Separate hover player after 200 ms, progress tint, click to seek, remembered play switch; doesn't stop when the window hides | local |
+| Video hover preview: autoplays, moving the pointer scrubs, progress bar and time | Partial | Picture strip with scrub, rest-resume, bar and time; sound through rodio for AAC in MP4/MOV when unmuted, unheard so far; other codecs silent | local |
+| Mute toggle on the video hover preview, remembered | Done | `Display::video_muted`, muted by default as Eagle; sound through the shared hover audio player when unmuted | local |
+| Audio hover preview: plays, click to seek, progress | Done | Plays after 200 ms, click to seek, progress; stops when the window hides or is minimised | local |
 | YouTube, Vimeo and Bilibili hover previews for bookmarked links | Missing | None | online/plugin |
 | Text files show their text on the card | Missing | Extension placeholder (`F/app.rs:2593`) | local |
 
