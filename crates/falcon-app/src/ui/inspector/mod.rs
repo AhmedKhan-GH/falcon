@@ -26,6 +26,7 @@ use crate::ui::widgets::{
 /// Seconds after the last keystroke that a folder description saves.
 const DESC_SAVE_DELAY: f64 = 1.0;
 
+mod ifc;
 pub(crate) mod tag_picker;
 
 /// The saved name and description of a folder, or of a smart folder.
@@ -627,6 +628,7 @@ impl App {
             prop(ui, tr("Date Created"), &logic::format_ms(item.btime));
             prop(ui, tr("Date Modified"), &logic::format_ms(item.mtime));
             crate::ui::viewer::audio::media_props(ui, &item);
+            self.ifc_props(ui, lib, &item);
         }
         ui.add_space(4.0);
         if wide_button(ui, ic::ARROW_SQUARE_OUT, tr("Open in Default App"), true).clicked() {

@@ -163,7 +163,7 @@ pub fn display_name(upper: &str) -> String {
     match upper.strip_prefix("IFC") {
         Some(rest) if !rest.is_empty() => {
             let lower = rest.to_ascii_lowercase();
-            format!("Ifc{}{}", &lower[..1].to_ascii_uppercase(), &lower[1..])
+            format!("Ifc{}{}", lower[..1].to_ascii_uppercase(), &lower[1..])
         }
         _ => upper.to_string(),
     }
@@ -265,6 +265,9 @@ impl Piece {
         Piece { material, ..Default::default() }
     }
 }
+
+/// What meshes are grouped by: entity type, material name and colour.
+type GroupKey = (String, String, [u32; 3]);
 
 struct Reader<'a> {
     f: &'a StepFile,
@@ -539,8 +542,8 @@ impl<'a> Reader<'a> {
         e.arg(0).as_list()?.iter().map(coords).collect()
     }
 
-    /// Adds the triangles of one representation item to `out`; returns the
-    /// unread geometry types met on the way.
+    /// Adds the triangles of one representation item to `out`, and the
+    /// geometry types it can't read to `skipped`.
     fn item(&mut self, v: &Value, xf: &Xf, depth: usize, inherited: Option<&Material>, out: &mut Vec<Piece>, skipped: &mut Vec<String>) {
         let Some(id) = v.as_ref_id() else { return };
         let Some(e) = self.f.get(id) else { return };
@@ -792,9 +795,10 @@ impl<'a> Reader<'a> {
         let unit = self.length_scale();
         let mut ids: Vec<u64> = f.entities.keys().copied().collect();
         ids.sort_unstable();
-        // (type, material name, colour bits) → mesh in progress.
-        let mut groups: Vec<((String, String, [u32; 3]), Mesh, bool)> = Vec::new();
-        let mut where_: HashMap<(String, String, [u32; 3]), usize> = HashMap::new();
+        // Meshes in progress (with whether every piece had normals), by
+        // (type, material name, colour bits).
+        let mut groups: Vec<(GroupKey, Mesh, bool)> = Vec::new();
+        let mut where_: HashMap<GroupKey, usize> = HashMap::new();
         let mut unsupported: HashMap<String, usize> = HashMap::new();
         let mut world: Vec<Vec<[f64; 3]>> = Vec::new();
         for id in ids {

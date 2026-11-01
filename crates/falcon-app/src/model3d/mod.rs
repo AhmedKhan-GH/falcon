@@ -5,6 +5,7 @@
 //! readers and geometry in `falcon_library::model3d`.
 
 pub(crate) mod gpu;
+pub(crate) mod ifc_facts;
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -428,11 +429,13 @@ pub(crate) struct Model3dState {
     /// The scene's response while a preview window draws a model, for the
     /// window's right-click menu.
     pub scene_resp: Option<eframe::egui::Response>,
+    /// The inspector's facts about IFC items.
+    pub ifc: ifc_facts::IfcFacts,
 }
 
 impl Model3dState {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Model3dState {
-        Model3dState { target: cc.wgpu_render_state.as_ref().map(|r| r.target_format), settings: Settings::default(), view: None, scene_resp: None }
+        Model3dState { target: cc.wgpu_render_state.as_ref().map(|r| r.target_format), settings: Settings::default(), view: None, scene_resp: None, ifc: Default::default() }
     }
 }
 

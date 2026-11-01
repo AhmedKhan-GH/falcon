@@ -1,12 +1,12 @@
-//! The viewer for 3D models (obj, stl, ply, glb, gltf, 3mf, fbx, dae, 3ds), after the
+//! The viewer for 3D models (obj, stl, ply, glb, gltf, 3mf, fbx, dae, 3ds, ifc), after the
 //! model viewer Eagle embeds: the model lit from the camera on the
 //! viewer's background, turned with the mouse (left drag orbits, right or
 //! middle drag or ⇧ pans, ⌃ drag and the wheel zoom), fitted when it
 //! opens, with buttons in the bar to fit it again, show edges, a grid and
 //! axes, the details panel and a menu of display settings. The scene is
 //! drawn with wgpu (`model3d/gpu.rs`); the camera maths are in
-//! `logic/viewer3d.rs`. Models falcon can't read, and other 3D formats
-//! (ifc), show their still.
+//! `logic/viewer3d.rs`. Models falcon can't read (an ifc file without
+//! tessellated geometry among them) show their still.
 
 use eframe::egui::{self, Align2, Color32, CornerRadius, PointerButton, Pos2, Rect, Sense, Stroke, Ui, vec2};
 use falcon_library::Library;

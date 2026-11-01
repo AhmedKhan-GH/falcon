@@ -173,6 +173,7 @@ The core words, so every file uses one term for one thing.
   into a new folder named {name}.", the left-out count, the sentence on
   what isn't brought over), Save Schema Report and its errors
   (machine-written).
+- The IFC rows of the inspector ("3D Preview", "IFC: no tessellated geometry", "Not Read", "Products Shown", "Products Skipped", "Reading…", "Schema", "The file could not be read") (machine-written).
 
 ## Reviewed
 
