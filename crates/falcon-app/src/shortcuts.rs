@@ -92,6 +92,17 @@ pub enum Command {
     ParentFolder,
     /// Expand or collapse every folder in the sidebar.
     ToggleFolders,
+    // Menu bar entries with no row in `TABLE` (no rebindable key).
+    Undo,
+    Redo,
+    Cut,
+    Import,
+    FindDuplicates,
+    FlipHorizontal,
+    RotateLeft,
+    Crop,
+    WindowZoom,
+    Documentation,
 }
 
 /// How a scroll command moves the grid.
@@ -132,6 +143,8 @@ pub enum Page {
 }
 
 impl Page {
+    pub const ALL: [Page; 7] = [Page::All, Page::Uncategorized, Page::Untagged, Page::Recent, Page::Random, Page::AllTags, Page::Trash];
+
     pub fn scope(self) -> crate::logic::Scope {
         use crate::logic::Scope;
         match self {
@@ -314,8 +327,13 @@ pub const FIXED: &[(&str, &str)] = &[
     ("Hold Z", "Hover preview of the card under the pointer"),
 ];
 
+/// The row of a command; menu-only commands (Undo, Import, …) have none.
+pub fn find_spec(cmd: Command) -> Option<&'static Spec> {
+    TABLE.iter().find(|s| s.cmd == cmd)
+}
+
 pub fn spec(cmd: Command) -> &'static Spec {
-    TABLE.iter().find(|s| s.cmd == cmd).expect("every command is in TABLE")
+    find_spec(cmd).expect("a command with a row in TABLE")
 }
 
 /// The user's changes to the defaults, by `Spec::id`. An empty string
@@ -327,7 +345,7 @@ pub struct Shortcuts(pub BTreeMap<String, String>);
 impl Shortcuts {
     /// The chord bound to a command now, if any.
     pub fn binding(&self, cmd: Command) -> Option<KeyboardShortcut> {
-        let s = spec(cmd);
+        let s = find_spec(cmd)?;
         match self.0.get(s.id) {
             Some(text) => parse(text),
             None => s.default.filter(|c| !self.taken(s, *c)),
@@ -343,13 +361,13 @@ impl Shortcuts {
     }
 
     pub fn is_default(&self, cmd: Command) -> bool {
-        !self.0.contains_key(spec(cmd).id)
+        find_spec(cmd).is_none_or(|s| !self.0.contains_key(s.id))
     }
 
     /// Every chord that triggers a command (the binding, plus the alias
     /// while the binding is the default).
     pub fn chords(&self, cmd: Command) -> Vec<KeyboardShortcut> {
-        let s = spec(cmd);
+        let Some(s) = find_spec(cmd) else { return Vec::new() };
         let mut v: Vec<_> = self.binding(cmd).into_iter().collect();
         if self.is_default(cmd) {
             v.extend(s.aliases.iter().copied().filter(|c| !self.taken(s, *c)));
@@ -782,8 +800,7 @@ mod tests {
     fn page_keys_follow_eagles_view_menu() {
         let keys = Shortcuts::default();
         let digits = [Key::Num1, Key::Num2, Key::Num3, Key::Num4, Key::Num5, Key::Num6, Key::Num7];
-        let pages = [Page::All, Page::Uncategorized, Page::Untagged, Page::Recent, Page::Random, Page::AllTags, Page::Trash];
-        for (key, page) in digits.into_iter().zip(pages) {
+        for (key, page) in digits.into_iter().zip(Page::ALL) {
             assert_eq!(keys.resolve(key, CMD), Some(Command::Page(page)), "{key:?}");
         }
         // ⌥1 is still a layout and ⌥⌘1 the sidebar.
@@ -850,6 +867,17 @@ mod tests {
         assert_eq!(keys.resolve(Key::R, Modifiers::NONE), Some(Command::Reshuffle));
         assert_eq!(keys.resolve(Key::R, CMD), Some(Command::Rename));
         assert_eq!(keys.resolve(Key::R, ALT), None);
+    }
+
+    #[test]
+    fn menu_only_commands_have_no_keys() {
+        let keys = Shortcuts::default();
+        for cmd in [Command::Undo, Command::Import, Command::Crop, Command::Documentation] {
+            assert!(find_spec(cmd).is_none());
+            assert_eq!(keys.binding(cmd), None);
+            assert!(keys.chords(cmd).is_empty());
+            assert!(keys.is_default(cmd));
+        }
     }
 
     #[test]

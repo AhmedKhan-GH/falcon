@@ -167,6 +167,54 @@ struct Progress {
     added: Vec<String>,
 }
 
+/// The input events a key press of `chord` makes, as egui-winit sends
+/// them: ⌘C, ⌘X and ⌘V become clipboard events, and a bare printable key
+/// also types its character.
+fn key_events(chord: &egui::KeyboardShortcut) -> Vec<egui::Event> {
+    let m = chord.modifiers;
+    let modifiers = Modifiers { mac_cmd: m.command && cfg!(target_os = "macos"), ..m };
+    let command_only = m.command && !m.shift && !m.alt && !m.ctrl;
+    match chord.logical_key {
+        Key::C if command_only => return vec![egui::Event::Copy],
+        Key::X if command_only => return vec![egui::Event::Cut],
+        Key::V if command_only => {
+            let text = arboard::Clipboard::new().and_then(|mut c| c.get_text()).unwrap_or_default();
+            return vec![egui::Event::Paste(text)];
+        }
+        _ => {}
+    }
+    let mut events = vec![egui::Event::Key { key: chord.logical_key, physical_key: None, pressed: true, repeat: false, modifiers }];
+    let name = if chord.logical_key == Key::Space { " " } else { chord.logical_key.symbol_or_name() };
+    if !m.command && !m.ctrl && !m.alt && name.chars().count() == 1 {
+        let text = if m.shift { name.to_uppercase() } else { name.to_lowercase() };
+        events.push(egui::Event::Text(text));
+    }
+    events
+}
+
+/// Whether some of `ids` can be flipped, some rotated, and (one item)
+/// cropped.
+fn editable_now(ids: &[String], lib: &Library) -> [bool; 3] {
+    use falcon_library::transform::{can_crop, can_flip, can_rotate};
+    let ext = |id: &String| lib.item(id).map(|i| i.ext.as_str());
+    [
+        ids.iter().filter_map(ext).any(can_flip),
+        ids.iter().filter_map(ext).any(can_rotate),
+        ids.len() == 1 && ids.iter().filter_map(ext).any(can_crop),
+    ]
+}
+
+/// The book in `docs/` next to the sources: the built one if there is
+/// one, else its source folder. `None` when falcon runs elsewhere.
+fn docs_path() -> Option<&'static std::path::Path> {
+    static DOCS: std::sync::OnceLock<Option<PathBuf>> = std::sync::OnceLock::new();
+    DOCS.get_or_init(|| {
+        let docs = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs");
+        [docs.join("book/index.html"), docs.join("src")].into_iter().find(|p| p.exists())
+    })
+    .as_deref()
+}
+
 /// The parent of the open folder or smart folder, as a scope.
 fn parent_scope(scope: &Scope, lib: &Library) -> Option<Scope> {
     use crate::organize::locate;
@@ -339,6 +387,9 @@ struct Workspace {
     /// Where ⌥↑ goes: the open folder's (or smart folder's) parent.
     /// Refreshed each frame while the library is locked.
     up: Option<Scope>,
+    /// Whether some of the items acted on can be flipped, some rotated, and
+    /// the one item cropped (for the menu bar). Refreshed with `up`.
+    editable: [bool; 3],
     /// A Home, End, Page Up or Page Down for the grid, applied next frame.
     scroll: Option<crate::shortcuts::Scroll>,
     /// Images needed this frame, handed to the loader once at the end.
@@ -421,6 +472,7 @@ impl Workspace {
             scroll_to: None,
             scroll: None,
             up: None,
+            editable: [false; 3],
             frame_jobs: Vec::new(),
             actions: Vec::new(),
             renaming: None,
@@ -511,6 +563,8 @@ pub struct App {
     pdf: pdf_view::PdfState,
     /// Drop targets and other import state (`import_ui.rs`).
     imports: import_ui::Imports,
+    /// The macOS menu bar (`menu.rs`).
+    menu_bar: crate::menu::Bar,
 }
 
 impl App {
@@ -541,6 +595,7 @@ impl App {
             audio: Default::default(),
             video: Default::default(),
             pdf: Default::default(),
+            menu_bar: Default::default(),
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
         app.tile = saved.tile.unwrap_or(app.tile).clamp(TILE_MIN, TILE_MAX);
@@ -1113,6 +1168,7 @@ impl App {
     /// The state commands and the menu bar look at (see `menu.rs`).
     fn menu_state(&self, ctx: &egui::Context) -> crate::menu::State {
         use crate::menu::ScopeKind;
+        use crate::shortcuts::Page;
         crate::menu::State {
             library: self.ws.lib.is_some(),
             modal: self.prefs_window.open || self.ws.dup_dialog.is_some(),
@@ -1126,6 +1182,17 @@ impl App {
                 Scope::Random(_) => ScopeKind::Random,
                 _ => ScopeKind::Other,
             },
+            page: Page::ALL.into_iter().find(|p| match (p.scope(), &self.ws.scope) {
+                (Scope::Random(_), Scope::Random(_)) => true,
+                (a, b) => a == *b,
+            }),
+            undo: !self.ws.undo.is_empty(),
+            redo: !self.ws.redo.is_empty(),
+            fullscreen: ctx.input(|i| i.viewport().fullscreen.unwrap_or(false)),
+            flippable: self.ws.editable[0],
+            rotatable: self.ws.editable[1],
+            croppable: self.ws.editable[2],
+            docs: docs_path().is_some(),
             back: !self.ws.back.is_empty(),
             forward: !self.ws.forward.is_empty(),
             parent: self.ws.up.is_some(),
@@ -1135,6 +1202,43 @@ impl App {
             filter: self.ws.show_filter,
             libraries: self.others.len(),
         }
+    }
+
+    /// Menu bar clicks since the last frame. Runs before `keyboard`, so a
+    /// key handed back to egui is seen this frame.
+    fn menu_clicks(&mut self, ctx: &egui::Context) {
+        for click in crate::menu::take_clicks() {
+            if click.by_key {
+                // AppKit matched a key to an item; egui should have had it.
+                if let Some(chord) = crate::menu::chord(click.cmd, &self.shortcuts) {
+                    let events = key_events(&chord);
+                    ctx.input_mut(|i| i.events.extend(events));
+                }
+            } else if !self.text_command(ctx, click.cmd) {
+                self.run_command(ctx, click.cmd);
+            }
+        }
+    }
+
+    /// Edit ▸ Undo, Redo, Cut, Copy, Paste and Select All act on a focused
+    /// text field: they become the events its keys would make. Returns
+    /// whether the command went there.
+    fn text_command(&self, ctx: &egui::Context, cmd: crate::shortcuts::Command) -> bool {
+        use crate::shortcuts::Command as C;
+        if !ctx.egui_wants_keyboard_input() || self.prefs_window.open {
+            return false;
+        }
+        let chord = match cmd {
+            C::Undo | C::Redo | C::Cut => crate::menu::chord(cmd, &self.shortcuts),
+            C::Copy => Some(egui::KeyboardShortcut::new(Modifiers::COMMAND, Key::C)),
+            C::Paste => Some(egui::KeyboardShortcut::new(Modifiers::COMMAND, Key::V)),
+            C::SelectAll => Some(egui::KeyboardShortcut::new(Modifiers::COMMAND, Key::A)),
+            _ => None,
+        };
+        let Some(chord) = chord else { return false };
+        let events = key_events(&chord);
+        ctx.input_mut(|i| i.events.extend(events));
+        true
     }
 
     /// The items a command acts on: the viewer's item, or the selection.
@@ -1297,6 +1401,46 @@ impl App {
             C::Page(p) => {
                 self.ws.viewer = None;
                 self.go(p.scope());
+            }
+            C::Undo | C::Redo => self.ws.undo_request = Some(cmd == C::Undo),
+            // Only for a focused text field (`text_command`).
+            C::Cut => {}
+            C::Import => self.import_files_dialog(),
+            C::FindDuplicates => {
+                self.ws.viewer = None;
+                self.go(Scope::Duplicates);
+            }
+            C::FlipHorizontal | C::RotateLeft | C::Crop => {
+                let Some(shared) = self.ws.lib.clone() else { return };
+                let ids = self.acted_on();
+                let lib = lock(&shared);
+                let ext_of = |id: &str| lib.item(id).map(|i| i.ext.clone());
+                use falcon_library::transform;
+                match cmd {
+                    C::FlipHorizontal => {
+                        let ids = image_edit::editable(&ids, ext_of, transform::can_flip);
+                        self.ws.actions.push(Action::Edit(image_edit::Op::Flip(ids, transform::Flip::Horizontal)));
+                    }
+                    C::RotateLeft => {
+                        let ids = image_edit::editable(&ids, ext_of, transform::can_rotate);
+                        self.ws.actions.push(Action::Edit(image_edit::Op::Rotate(ids, -1)));
+                    }
+                    _ => {
+                        if let [id] = image_edit::editable(&ids, ext_of, transform::can_crop).as_slice() {
+                            self.ws.viewer = Some(id.clone());
+                            self.ws.tools.crop_next = Some(id.clone());
+                        }
+                    }
+                }
+            }
+            C::WindowZoom => {
+                let on = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
+                ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!on));
+            }
+            C::Documentation => {
+                if let Some(p) = docs_path() {
+                    crate::open_with::open_default(&[p.to_path_buf()]);
+                }
             }
             C::Player(_) => {}
         }
@@ -4047,6 +4191,17 @@ impl eframe::App for App {
 
     fn ui(&mut self, ui: &mut Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        self.menu_clicks(&ctx);
+        self.draw(ui, frame);
+        let state = self.menu_state(&ctx);
+        self.menu_bar.sync(&ctx, &self.shortcuts, &state);
+    }
+}
+
+impl App {
+    /// One frame of the main window.
+    fn draw(&mut self, ui: &mut Ui, frame: &mut eframe::Frame) {
+        let ctx = ui.ctx().clone();
         if ctx.cumulative_frame_nr() == 0 {
             // Come to the front on launch, like any Mac app.
             ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
@@ -4090,6 +4245,7 @@ impl eframe::App for App {
         let lib: &mut Library = &mut guard;
         self.begin_frame_edits(lib);
         self.ws.up = parent_scope(&self.ws.scope, lib);
+        self.ws.editable = editable_now(&self.acted_on(), lib);
         // Items can vanish under the selection (deleted here or over the API).
         if self.ws.selected.iter().any(|id| lib.item(id).is_none()) {
             self.ws.selected.retain(|id| lib.item(id).is_some());
@@ -4309,8 +4465,26 @@ impl eframe::App for App {
 
 #[cfg(test)]
 mod tests {
-    use super::{drag_image, rated_note, restored_note};
+    use super::{drag_image, key_events, rated_note, restored_note};
     use super::Saved;
+    use eframe::egui::{Event, Key, KeyboardShortcut, Modifiers};
+
+    #[test]
+    fn menu_keys_become_the_events_egui_winit_sends() {
+        let cmd = |key| KeyboardShortcut::new(Modifiers::COMMAND, key);
+        assert_eq!(key_events(&cmd(Key::C)), vec![Event::Copy]);
+        assert_eq!(key_events(&cmd(Key::X)), vec![Event::Cut]);
+        assert!(matches!(key_events(&cmd(Key::V)).as_slice(), [Event::Paste(_)]));
+        // ⌥⌘C is an ordinary key press.
+        let alt_cmd_c = key_events(&KeyboardShortcut::new(Modifiers { alt: true, ..Modifiers::COMMAND }, Key::C));
+        assert!(matches!(alt_cmd_c.as_slice(), [Event::Key { key: Key::C, pressed: true, .. }]));
+        // A bare key also types its character.
+        let r = key_events(&KeyboardShortcut::new(Modifiers::NONE, Key::R));
+        assert!(matches!(r.as_slice(), [Event::Key { key: Key::R, .. }, Event::Text(t)] if t == "r"));
+        let space = key_events(&KeyboardShortcut::new(Modifiers::NONE, Key::Space));
+        assert!(matches!(space.as_slice(), [Event::Key { .. }, Event::Text(t)] if t == " "));
+        assert_eq!(key_events(&cmd(Key::W)).len(), 1);
+    }
 
     #[test]
     fn rating_toasts() {
