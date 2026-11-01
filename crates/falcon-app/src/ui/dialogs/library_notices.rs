@@ -453,10 +453,10 @@ impl App {
                 "Cancel",
             ),
             PackAsk::Duplicates { preview, .. } => (
-                "Already in the library".to_string(),
-                format!("{} in the package look like items already here. Import them anyway?", plural(preview.duplicates, "item")),
+                format!("{} already in the library", plural(preview.duplicates, "item")),
+                "They look like items already here. Import them anyway, or leave them out and import the rest.".to_string(),
                 "Import",
-                "Don't Import Them",
+                "Leave Them Out",
             ),
         };
         let mut answer = None;
