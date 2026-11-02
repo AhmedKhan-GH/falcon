@@ -21,16 +21,16 @@ Of the 901 local features in PARITY.md, 854 are done, 29 are partly done and 18 
 
 ## Left
 
-Local features still missing or partly done in [PARITY.md](PARITY.md), by theme.
+Local features still missing or partly done in [PARITY.md](PARITY.md), by theme. Most of the partly done rows name a small gap, or wait for a person to check them on screen.
 
-- **Shortcuts and menus:** the keys T, F, ⌘J, ⇧-arrows, ⌘T, F5 and ⌘O, and gaps in the item and folder context menus.
-- **Viewer:** presentation mode, a separate preview window, a viewer context menu, zoom presets, a navigator, video frame tools and per-item viewer backgrounds.
-- **Search and organising:** size and dimension filter chips, a comment filter and search scope, Filter Lock, ratio shapes, batch rename of items, merging duplicates and rating shortcuts.
-- **Library:** the `eagle://` scheme, merging another library, library list management, and safety checks for risky paths.
-- **Preferences:** the settings and panes not yet built, listed in section 6 of the import, export and library part of [PARITY.md](PARITY.md).
+- **File ▸ New… templates:** Word, Excel, PowerPoint, XMind and text documents work. Keynote, Pages, Numbers, Sketch, XD, MindNode, PSD and AI are listed but disabled.
+- **3D:** normal, bump and emissive maps and alpha blending. Some readers also have gaps, which the row names.
+- **Rendering past QuickLook's limit:** PPT, PPTX, POTX and PostScript-only AI files stay capped at 8192 px, and the preview window at 3072 px.
+- **PDF layers:** they switch, but appear as a flat list without groups, and printing uses the default layers.
+- **Differences by design or by platform:** falcon's own font folder, regex rules without look-around, tasks that continue when you switch libraries, and decoders that only exist on macOS.
+- **Waiting for a check on screen:** colour space, translucent side panels (off by default), hover sound, Finder's Open With and double-clicking an `.eaglepack`.
+- **Not feasible today:** a GPU acceleration switch.
 - **Translation:** the eight languages are machine written and wait for a native read.
-
-PARITY.md is the authority on the exact rows; some of its ranked lists still carry entries marked fixed.
 
 ## Later
 

@@ -30,9 +30,7 @@ While falcon is in development, the app and the CLI only open libraries inside `
 
 ### Not there yet
 
-- Some shortcuts and context-menu entries, presentation mode, a separate preview window and other viewer options (see [ROADMAP.md](https://github.com/AhmedKhan-GH/falcon/blob/main/ROADMAP.md)).
-- Some filters, batch rename of items and merging of duplicates.
-- Some preferences and library safety checks.
+- Some File ▸ New templates, normal and bump maps on 3D models, and a check on screen of some newer features (see [ROADMAP.md](https://github.com/AhmedKhan-GH/falcon/blob/main/ROADMAP.md)).
 - Eagle's plugins.
 - Windows and Linux, and signed releases.
 
