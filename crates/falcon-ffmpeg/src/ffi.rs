@@ -241,6 +241,7 @@ pub struct Api {
     pub avcodec_send_packet: unsafe extern "C" fn(*mut AVCodecContext, *const AVPacket) -> c_int,
     pub avcodec_receive_frame: unsafe extern "C" fn(*mut AVCodecContext, *mut AVFrame) -> c_int,
     pub avcodec_flush_buffers: unsafe extern "C" fn(*mut AVCodecContext),
+    pub avcodec_find_decoder_by_name: unsafe extern "C" fn(*const c_char) -> *const AVCodec,
     pub av_packet_alloc: unsafe extern "C" fn() -> *mut AVPacket,
     pub av_packet_free: unsafe extern "C" fn(*mut *mut AVPacket),
     pub av_packet_unref: unsafe extern "C" fn(*mut AVPacket),
@@ -419,6 +420,7 @@ fn load(dir: &Path) -> Result<Api, LoadError> {
         avcodec_send_packet: sym(&avcodec, "avcodec_send_packet")?,
         avcodec_receive_frame: sym(&avcodec, "avcodec_receive_frame")?,
         avcodec_flush_buffers: sym(&avcodec, "avcodec_flush_buffers")?,
+        avcodec_find_decoder_by_name: sym(&avcodec, "avcodec_find_decoder_by_name")?,
         av_packet_alloc: sym(&avcodec, "av_packet_alloc")?,
         av_packet_free: sym(&avcodec, "av_packet_free")?,
         av_packet_unref: sym(&avcodec, "av_packet_unref")?,
@@ -442,6 +444,14 @@ fn load(dir: &Path) -> Result<Api, LoadError> {
     // SAFETY: plain value; FFmpeg's log goes to stderr otherwise.
     unsafe { (api.av_log_set_level)(AV_LOG_QUIET) };
     Ok(api)
+}
+
+/// Whether the loaded FFmpeg has the decoder called `name` (FFmpeg's
+/// short name, such as `libdav1d` for AV1).
+pub fn has_decoder(api: &Api, name: &str) -> bool {
+    let Ok(name) = std::ffi::CString::new(name) else { return false };
+    // SAFETY: a NUL-terminated name; FFmpeg returns a static codec or null.
+    !unsafe { (api.avcodec_find_decoder_by_name)(name.as_ptr()) }.is_null()
 }
 
 /// Whether a library's licence string is one falcon may load: the LGPL,

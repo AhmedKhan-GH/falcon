@@ -15,12 +15,15 @@ FFMPEG=${FFMPEG_PREFIX:-target/ffmpeg}
 if [ -f "$FFMPEG/lib/libavformat.61.dylib" ]; then
   FW="$APP/Contents/Frameworks"
   mkdir -p "$FW"
-  for lib in libavutil.59 libswresample.5 libavcodec.61 libavformat.61 libswscale.8; do
+  # libdav1d is the AV1 decoder libavcodec links (absent from builds
+  # made before it was added).
+  for lib in libdav1d.7 libavutil.59 libswresample.5 libavcodec.61 libavformat.61 libswscale.8; do
+    [ "$lib" = libdav1d.7 ] && [ ! -f "$FFMPEG/lib/$lib.dylib" ] && continue
     cp -L "$FFMPEG/lib/$lib.dylib" "$FW/$lib.dylib"
     chmod u+w "$FW/$lib.dylib"
     install_name_tool -id "@rpath/$lib.dylib" "$FW/$lib.dylib"
     # Point links to the other FFmpeg libraries at the bundle's copies.
-    for dep in $(otool -L "$FW/$lib.dylib" | awk 'NR > 2 { print $1 }' | grep -E 'lib(avutil|swresample|avcodec|avformat|swscale)\.' || true); do
+    for dep in $(otool -L "$FW/$lib.dylib" | awk 'NR > 2 { print $1 }' | grep -E 'lib(avutil|swresample|avcodec|avformat|swscale|dav1d)\.' || true); do
       install_name_tool -change "$dep" "@rpath/$(basename "$dep")" "$FW/$lib.dylib"
     done
     otool -l "$FW/$lib.dylib" | grep -q 'path @loader_path ' || install_name_tool -add_rpath @loader_path "$FW/$lib.dylib"
@@ -28,10 +31,14 @@ if [ -f "$FFMPEG/lib/libavformat.61.dylib" ]; then
   done
   install_name_tool -add_rpath @executable_path/../Frameworks "$APP/Contents/MacOS/Falcon"
   RESIGN=1
-  # The LGPL asks for its text and the source's whereabouts to ship along.
-  # They go in Resources: code signing allows only code in Frameworks.
+  # The LGPL asks for its text and the source's whereabouts to ship along,
+  # and dav1d's BSD licence for its text. They go in Resources: code
+  # signing allows only code in Frameworks.
   mkdir -p "$APP/Contents/Resources/FFmpeg"
   cp "$FFMPEG/COPYING.LGPLv2.1" "$APP/Contents/Resources/FFmpeg/COPYING.LGPLv2.1.txt"
+  if [ -f "$FFMPEG/COPYING.dav1d" ]; then
+    cp "$FFMPEG/COPYING.dav1d" "$APP/Contents/Resources/FFmpeg/COPYING.dav1d.txt"
+  fi
   cp "$FFMPEG/BUILD-INFO.txt" "$APP/Contents/Resources/FFmpeg/BUILD-INFO.txt"
   echo "Bundled FFmpeg from $FFMPEG"
 else

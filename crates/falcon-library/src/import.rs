@@ -861,6 +861,36 @@ mod tests {
     }
 
     #[test]
+    fn av1_video_is_thumbnailed_through_dav1d() {
+        if !falcon_ffmpeg::ffi::api().is_ok_and(|api| falcon_ffmpeg::ffi::has_decoder(api, "libdav1d")) {
+            eprintln!("skipped: FFmpeg with dav1d is not installed (scripts/build-ffmpeg.sh)");
+            return;
+        }
+        // falcon-ffmpeg's AV1 fixture (a second of flat 64×48 frames, frame
+        // `i` coloured (10 + 7i, 100, 200)) rewrapped in each container.
+        // WebM and Matroska go to FFmpeg first; MP4 to QuickLook first and
+        // FFmpeg when QuickLook can't read AV1.
+        let ivf = include_bytes!("../../falcon-ffmpeg/testdata/av1.ivf");
+        let clip = falcon_ffmpeg::testing::av1::Av1Clip::from_ivf(ivf).unwrap();
+        for (name, bytes) in [("clip.webm", clip.matroska(true)), ("clip.mkv", clip.matroska(false)), ("clip.mp4", clip.mp4())] {
+            let (item, thumb) = import_with_thumb(name, &bytes, &ImportOptions::default());
+            assert_eq!((item.width, item.height), (64, 48), "{name}");
+            assert!((item.extra["duration"].as_f64().unwrap() - 1.0).abs() < 0.05, "{name}: {}", item.extra["duration"]);
+            let c = item.palettes.first().map(|p| p.color).unwrap();
+            assert!(c[1].abs_diff(100) < 16 && c[2].abs_diff(200) < 16, "{name}: a frame of the clip, not black or an icon: {c:?}");
+            if name.ends_with(".mp4") && thumb != Some((480, 360)) {
+                // QuickLook read it (macOS 14+ decodes AV1 on Apple silicon
+                // with an AV1 decoder) and chose its own frame and size.
+                assert!(thumb.is_some(), "{name}");
+                continue;
+            }
+            assert_eq!(thumb, Some((480, 360)), "{name}: a 480-wide thumbnail as Eagle draws");
+            // Eagle's spot, a third of the way in, is frame 8: (66, 100, 200).
+            assert!(c[0].abs_diff(66) < 16, "{name}: {c:?}");
+        }
+    }
+
+    #[test]
     fn audio_with_a_beat_gets_bpm_after_duration() {
         let opts = ImportOptions { palette: false, ..Default::default() };
         let click = |t: f64| { let s = t % 0.5; if s < 0.004 { 0.8 * (s * 9000.0).sin() } else { 0.0 } };

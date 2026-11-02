@@ -61,8 +61,8 @@ Status: **Done** works as well as Eagle or better. **Partial** opens, but someth
 
 | Formats | Eagle | Falcon | Status |
 | --- | --- | --- | --- |
-| mp4, mov, m4v, 3gp | HTML5 player | AVFoundation player | Done |
-| mkv, webm, avi, wmv, flv, f4v, mpg, ts, mts, m2ts, 360, afx, eva, vap | HTML5 player or mpv | FFmpeg player (LGPL, decode only), thumbnail and duration at import | Partial: AV1 isn't decoded yet |
+| mp4, mov, m4v, 3gp | HTML5 player | AVFoundation player; FFmpeg (AV1 through dav1d) when AVFoundation can't decode a file | Done |
+| mkv, webm, avi, wmv, flv, f4v, mpg, ts, mts, m2ts, 360, afx, eva, vap | HTML5 player or mpv | FFmpeg player (LGPL, decode only, AV1 through dav1d), thumbnail and duration at import | Done |
 
 ## 3D models
 

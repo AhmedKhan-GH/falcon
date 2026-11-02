@@ -40,6 +40,14 @@ Third-party material:
   version, source and configure line in Contents/Resources/FFmpeg
   (COPYING.LGPLv2.1.txt, BUILD-INFO.txt). The source is available from the URL above and
   https://ffmpeg.org/download.html.
+- dav1d 1.5.4 (https://downloads.videolan.org/pub/videolan/dav1d/1.5.4/dav1d-1.5.4.tar.xz,
+  SHA-256 686616b7c69eb88d44459391ab25cac13b6647a3b288835c5784e71c1514a5c5),
+  Copyright (c) 2018-2025 VideoLAN and dav1d authors, licensed under the BSD
+  2-Clause License. It is FFmpeg's AV1 decoder (libdav1d): scripts/build-ffmpeg.sh
+  builds it as a shared library that libavcodec links, and Falcon.app carries
+  it unmodified in Contents/Frameworks with its licence text in
+  Contents/Resources/FFmpeg/COPYING.dav1d.txt. It is not part of this source
+  tree and is not linked into Falcon.
 
 "Eagle" is a trademark of its respective owner. Falcon is not affiliated
 with, endorsed by or sponsored by Eagle or its developers.

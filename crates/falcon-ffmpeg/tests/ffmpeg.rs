@@ -344,6 +344,92 @@ fn struct_layouts_match_the_installed_headers() {
     assert_eq!(text.lines().count(), ours.len());
 }
 
+/// The AV1 clip, `testdata/av1.ivf`: falcon's own, encoded with rav1e 0.8.1
+/// (`--speed 10 --quantizer 20 --keyint 13 --min-keyint 13 --low-latency
+/// --no-scene-detection`) from 25 flat 64 × 48 pictures, picture `i`
+/// coloured [`color`]`(i)`, keyframes at 0 and 13 (the frame count in its
+/// header, which rav1e leaves at 0, was set to 25). The build has no AV1
+/// encoder; `testing::av1` rewraps the stream as WebM, Matroska and MP4.
+fn av1_clips(dir: &Path) -> Vec<PathBuf> {
+    let ivf = include_bytes!("../testdata/av1.ivf");
+    let clip = falcon_ffmpeg::testing::av1::Av1Clip::from_ivf(ivf).unwrap();
+    let files: [(&str, Vec<u8>); 3] = [("av1.webm", clip.matroska(true)), ("av1.mkv", clip.matroska(false)), ("av1.mp4", clip.mp4())];
+    files
+        .into_iter()
+        .map(|(name, bytes)| {
+            let path = dir.join(name);
+            std::fs::write(&path, bytes).unwrap();
+            path
+        })
+        .collect()
+}
+
+/// Whether a decoded AV1 picture shows frame `i`'s colour everywhere, to
+/// within the encoder's loss and the YUV round trip.
+fn shows(f: &Frame, i: u32) -> bool {
+    let want = color(i);
+    [(0, 0), (f.width / 2, f.height / 2), (f.width - 1, f.height - 1)]
+        .iter()
+        .all(|&(x, y)| f.pixel(x, y)[..3].iter().zip(want).all(|(&got, want)| got.abs_diff(want) <= 3))
+}
+
+#[test]
+#[cfg_attr(not(ffmpeg_dav1d), ignore = "needs scripts/build-ffmpeg.sh with dav1d")]
+fn av1_decodes_through_dav1d() {
+    let api = ffi::api().unwrap();
+    assert!(ffi::has_decoder(api, "libdav1d"), "libavcodec was built with --enable-libdav1d");
+    assert!(!ffi::has_decoder(api, "no-such-decoder"));
+    // libavcodec found dav1d next to itself.
+    assert!(api.dir.join("libdav1d.7.dylib").is_file() || api.dir.join("libdav1d.so.7").is_file());
+
+    // The raw stream as encoded (IVF states no frame rate, so only the
+    // size, length and first picture are checked here).
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("av1.ivf");
+    std::fs::write(&path, include_bytes!("../testdata/av1.ivf")).unwrap();
+    let info = probe(&path).unwrap();
+    assert_eq!((info.width, info.height), (W, H));
+    assert!((info.duration - 1.0).abs() < 0.05, "{}", info.duration);
+    assert!(shows(&frame_at(&path, 0.0).unwrap(), 0));
+}
+
+#[test]
+#[cfg_attr(not(ffmpeg_dav1d), ignore = "needs scripts/build-ffmpeg.sh with dav1d")]
+fn av1_probes_grabs_thumbnails_and_seeks_in_every_container() {
+    let dir = tempfile::tempdir().unwrap();
+    for path in av1_clips(dir.path()) {
+        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        let info = probe(&path).unwrap_or_else(|e| panic!("{name}: {e}"));
+        assert_eq!((info.width, info.height, info.turns, info.has_audio), (W, H, 0, false), "{name}");
+        assert!((info.duration - 1.0).abs() < 0.05, "{name}: {}", info.duration);
+        assert_eq!(info.fps, 25.0, "{name}");
+
+        let first = frame_at(&path, 0.0).unwrap();
+        assert_eq!((first.width, first.height), (W as usize, H as usize), "{name}");
+        assert!(shows(&first, 0), "{name}: first frame {:?}", first.pixel(0, 0));
+        // Past the second keyframe, then back into the first group.
+        assert!(shows(&frame_at(&path, 0.6).unwrap(), 15), "{name}");
+        assert!(shows(&frame_at(&path, 0.2).unwrap(), 5), "{name}");
+
+        let (_, thumb, at) = thumbnail(&path).unwrap();
+        assert!((at - 1.0 / 3.0).abs() < 0.05, "{name}: Eagle's duration / 3, at {at}");
+        assert_eq!(index_of(&thumb), 8, "{name}");
+
+        let mut g = falcon_ffmpeg::Grabber::open(&path, 32).unwrap();
+        assert_eq!(index_of(&g.grab(0.8).unwrap()), 20, "{name}");
+        assert_eq!(index_of(&g.grab(0.1).unwrap()), 2, "{name}");
+
+        let (mut p, _) = Player::open(&path, false).unwrap();
+        assert!(shows(&next_frame(&mut p, 2.0).unwrap(), 0), "{name}");
+        p.seek(0.6);
+        assert_eq!(index_of(&next_frame(&mut p, 2.0).unwrap()), 15, "{name}");
+        p.step(1);
+        assert_eq!(index_of(&next_frame(&mut p, 2.0).unwrap()), 16, "{name}");
+        p.step(-4);
+        assert_eq!(index_of(&next_frame(&mut p, 2.0).unwrap()), 12, "{name}: back over the keyframe");
+    }
+}
+
 
 /// A manual check on real clips: `FALCON_VIDEO_SAMPLES=<folder> cargo test
 /// -p falcon-ffmpeg --test ffmpeg samples -- --ignored --nocapture`

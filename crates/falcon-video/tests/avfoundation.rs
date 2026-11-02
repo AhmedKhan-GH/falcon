@@ -383,6 +383,44 @@ mod mac {
                 std::thread::sleep(Duration::from_millis(5));
             }
             check("FFmpeg sound.mp4: plays on the wall clock when muted", frames >= 5 && p.current_time() > 0.4, (frames, p.current_time()));
+            drop(p);
+
+            // AV1 (dav1d inside FFmpeg) in WebM, Matroska and MP4, through
+            // the calls the viewer, the preview window and hover previews
+            // make. WebM and Matroska go to FFmpeg; MP4 to AVFoundation
+            // first, which decodes AV1 on Macs with an AV1 decoder (M3 and
+            // later), else to FFmpeg. Frame `i` is flat (10 + 7i, 100, 200).
+            let ivf = include_bytes!("../../falcon-ffmpeg/testdata/av1.ivf");
+            let clip = falcon_ffmpeg::testing::av1::Av1Clip::from_ivf(ivf).unwrap();
+            let shows = |f: &Frame, i: f32| {
+                let [r, g, b] = f.mean();
+                (r - (10.0 + 7.0 * i)).abs() < 12.0 && (g - 100.0).abs() < 12.0 && (b - 200.0).abs() < 12.0
+            };
+            let dav1d = falcon_ffmpeg::ffi::api().is_ok_and(|api| falcon_ffmpeg::ffi::has_decoder(api, "libdav1d"));
+            if !dav1d {
+                println!("skip AV1 checks: this FFmpeg was built without dav1d (run scripts/build-ffmpeg.sh)");
+            }
+            let av1 = if dav1d { vec![("av1.webm", clip.matroska(true)), ("av1.mkv", clip.matroska(false)), ("av1.mp4", clip.mp4())] } else { Vec::new() };
+            for (name, bytes) in av1 {
+                let path = dir.path().join(name);
+                std::fs::write(&path, bytes).unwrap();
+                let info = probe(&path).expect("probe AV1");
+                check(&format!("AV1 {name}: facts"), (info.width, info.height) == (64, 48) && (info.duration - 1.0).abs() < 0.05, &info);
+                let f = frame_at(&path, 0.6).expect("AV1 frame");
+                check(&format!("AV1 {name}: picture at 0.6 s"), shows(&f, 15.0), f.mean());
+                let g = Grabber::open(&path, 32).expect("AV1 grabber");
+                let small = g.grab(0.2).expect("AV1 hover picture");
+                check(&format!("AV1 {name}: hover picture"), small.width == 32 && shows(&small, 5.0), (small.width, small.mean()));
+                // `tick` is where a failed system player hands over to FFmpeg.
+                let mut v = Video::open(&path).expect("open AV1");
+                let mut f = None;
+                wait_for(5.0, || {
+                    v.tick();
+                    f = v.frame();
+                    f.is_some()
+                });
+                check(&format!("AV1 {name}: player shows the first frame ({:?})", v.backend()), f.as_ref().is_some_and(|f| shows(f, 0.0)), f.map(|f| f.mean()));
+            }
         } else {
             println!("skip FFmpeg checks: {:?}", falcon_ffmpeg::status().err());
         }
