@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 257 | 11 | 4 | 8 |
-| Viewers and file formats | 188 | 13 | 2 | 5 |
-| Search, filters and organising | 215 | 2 | 2 | 3 |
-| Import, export, library, preferences and integrations | 188 | 9 | 10 | 26 |
-| **Total** | 848 | 35 | 18 | 42 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 258 | 14 | 1 | 8 |
+| Viewers and file formats | 193 | 15 | 1 | 5 |
+| Search, filters and organising | 216 | 4 | 0 | 3 |
+| Import, export, library, preferences and integrations | 189 | 11 | 7 | 27 |
+| **Total** | 856 | 44 | 9 | 43 |
 
 Rows marked **Not wanted (user decision)** (4) are Eagle features the user chose not to have in falcon; they are counted outside the local Missing total.
 ## Fix first
@@ -1413,7 +1413,7 @@ Eagle panes (`app/js/preferences.js:659-788`): General, Sidebar, Controls, Previ
 | Screenshot: auto-tag "Screenshot" | Done | "Screenshot" tag | local |
 | Screenshot: also copy to the clipboard | Done | The finished picture is copied with arboard (not `-c`) | local |
 | Screenshot: @2x on Retina | Done | Halves at scale ≥ 1.5 (Eagle checks exactly 2) | local |
-| **Shortcuts:** rebind any command, search the list, Restore Defaults | Partial | 165 rebindable rows, 129 of them with Eagle's ids (of its 147; Eagle's `library.load` and `organize.folder.add` have rows), search field, Restore Defaults, recorder. `find.filter.import` (Eagle's `toggleFilterByType('import')` clicks its Date Modified filter, `mtime-filter-item`) opens falcon's Date chip on its Modified tab, and `find.filter.other` (`openFilterAddContextMenu`) opens the filter bar's + menu; both unbound as in Eagle, with Find ▸ Open Filter ▸ Date Modified and More Filters entries, and Find ▸ Date now starts on the Imported tab as Eagle's Date Added. `view.file.openother` opens View ▸ Open With Another App…, unbound; Eagle's Shortcuts pane lists it for `win32` only, while falcon also gives it a row on macOS. 18 Eagle ids have no row: the five Windows variants, the link and site importers, reverse image search and `find.filter.semantic` (online), `edit.image.merge` (Combine Images plugin), and `find.filter.image`: it runs `eagle.aiSearch.searchByItemId` / `searchByBase64` (`lib/api/ai-search.js`) against Eagle's AI Search plugin service at `http://localhost:38766`, a local model with a plugin to install, which falcon doesn't have (see the AI Search rows). The new menu items and the app chooser are not yet seen on screen | local |
+| **Shortcuts:** rebind any command, search the list, Restore Defaults | Partial | 166 rebindable rows, 132 of them with Eagle's ids (of the 150 in its Shortcuts pane; 129 of the 147 in `default-preferences.js`; Eagle's `library.load` and `organize.folder.add` have rows), search field, Restore Defaults, recorder. `find.filter.import` (Eagle's `toggleFilterByType('import')` clicks its Date Modified filter, `mtime-filter-item`) opens falcon's Date chip on its Modified tab, and `find.filter.other` (`openFilterAddContextMenu`) opens the filter bar's + menu; both unbound as in Eagle, with Find ▸ Open Filter ▸ Date Modified and More Filters entries, and Find ▸ Date now starts on the Imported tab as Eagle's Date Added. `view.file.openother` opens View ▸ Open With Another App…, unbound; Eagle's Shortcuts pane lists it for `win32` only, while falcon also gives it a row on macOS. 18 Eagle ids have no row: the five Windows variants, the Pinterest and ArtStation importers, the eight reverse image searches and `find.filter.semantic` (online), `edit.image.merge` (Combine Images plugin), and `find.filter.image`: it runs `eagle.aiSearch.searchByItemId` / `searchByBase64` (`lib/api/ai-search.js`) against Eagle's AI Search plugin service at `http://localhost:38766`, a local model with a plugin to install, which falcon doesn't have (see the AI Search rows). The new menu items and the app chooser are not yet seen on screen | local |
 | Shortcuts: plugin shortcuts | Missing | Not applicable: no plugin system | local |
 | Global shortcuts (show Eagle, quick search from anywhere) | Done | `hotkeys.rs`, Global group in the shortcut table | local |
 | **Notification:** sound effects master switch, plus per event (delete item, delete folder, screenshot, extension) | Partial | Preferences ▸ Notification: Play sound effects master switch plus delete item, delete folder and screenshot switches, Eagle's defaults (all on), persisted as `Prefs::sounds`, reported in `application/info` as `notification.soundEffect`. Gap: the extension switch is kept and reported but not shown, since falcon has no browser extension | local |
@@ -1521,9 +1521,9 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 
 Rows marked "not counted" are features Eagle 4.0.0 does not have.
 
-- **Done:** 188, including 5 where falcon goes beyond Eagle and 1 with a small difference.
-- **Partial:** 9.
-- **Missing:** 36, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
+- **Done:** 189, including 5 where falcon goes beyond Eagle and 1 with a small difference.
+- **Partial:** 11.
+- **Missing:** 34, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
 - **Different on purpose:** 1 (the API listens on localhost only).
 
 ### Ranked Missing and Partial local items
@@ -1557,5 +1557,5 @@ Ranked by how often a user would hit the gap, and the risk if they do.
 25. **Settings**: vibrancy, the screenshot notice, the App menu's Color Space and the sound effects (extension switch hidden) are Partial; GPU acceleration is not built (no switch to offer); plugin shortcuts and plugin developer tools wait on the plugin system. Language, UI zoom, launch at login, Dock icon, menu bar icon and auto-select after import are built.
 26. ~~**Localisation**: English only, against Eagle's eight languages.~~ Fixed.
 27. ~~**Library safety checks are missing**: newer-version refusal, warnings for Desktop or Documents paths, read-only paths and slow disks, disk-space checks, and confirmation for large folders or deep trees.~~ Fixed.
-28. ~~"Empty cache and reload" is missing.~~ Fixed, and "Clear Invalid Content" is built (`clear_invalid.rs`).
+28. ~~"Empty cache and reload" is missing.~~ Fixed, and "Clear Invalid Content" is built (`ui/dialogs/clear_invalid.rs`).
 29. **Smaller gaps still open**: the plugin system and plugin development (out of scope) and the Color Space menu (Partial, not seen on screen). Loading progress, the welcome flow, Preferences search, the last pane, the Share sheet, WebP conversion, saving the video frame (Partial in the preview window), the menu bar icon, Inboard import, the API playground, the debug report and error logs are built.
