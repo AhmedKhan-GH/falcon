@@ -7,8 +7,8 @@ This product is licensed under either of the Apache License, Version 2.0
 Third-party material:
 - Phosphor Icons (crates/falcon-app/assets/Phosphor-*.ttf), MIT license,
   copyright (c) 2023 Phosphor Icons. See crates/falcon-app/assets/PHOSPHOR-LICENSE-MIT.
-- The screenshots in docs/images show a demo library of images generated
-  for the purpose. They contain no third-party artwork.
+- The screenshots in docs/images show public-domain artworks from the
+  Art Institute of Chicago, released under CC0. See ATTRIBUTION.md.
 - ufbx 0.18.0 (https://github.com/ufbx/ufbx), the FBX reader, MIT license
   (or public domain), copyright (c) 2020 Samuli Raivio. Compiled from the
   C source vendored by the ufbx Rust crate.

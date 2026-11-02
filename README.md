@@ -28,9 +28,10 @@
 <br>
 
 <p align="center">
-  <img src="docs/images/falcon-hero.jpg" alt="Falcon showing a library of generated posters and patterns in the Waterfall layout, with a poster selected and its palette, notes, tags and properties in the inspector" width="100%">
+  <img src="docs/images/falcon-hero.jpg" alt="Falcon showing a library of public-domain paintings in the Waterfall layout, with Seurat's A Sunday on La Grande Jatte selected and its palette, notes, tags and properties in the inspector" width="100%">
   <br>
-  <sub>A demo library of generated images in the Waterfall layout, with the inspector open on the selected item.</sub>
+  <sub>A library of public-domain paintings in the Waterfall layout, with the inspector open on the selected work.<br>
+  <i>A Sunday on La Grande Jatte — 1884</i>, Georges Seurat, 1884–86</sub>
 </p>
 
 <p align="center">
@@ -68,30 +69,30 @@
 
 ## Features
 
-Every screenshot here is the real app at work on a demo library of generated images.
+Every screenshot here is the real app at work on public-domain art. The credits are in [ATTRIBUTION.md](ATTRIBUTION.md).
 
 <table>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/images/falcon-color.jpg" alt="The filter bar with the colour picker open over a grid of generated posters" width="100%">
+      <img src="docs/images/falcon-color.jpg" alt="The filter bar with a colour filter showing four sea paintings" width="100%">
       <br>
-      <sub>The colour filter, with its picker open.</sub>
+      <sub>A colour filter finding the sea paintings.</sub>
       <h3>Search by colour</h3>
       Every image gets a dominant-colour palette when it is imported. Pick a colour, or click a swatch in the inspector, to find images with that colour, sorted by how close they are (CIEDE2000). Combine it with tags, folders, shape, rating, type, notes and URL filters.
     </td>
     <td width="50%" valign="top">
-      <img src="docs/images/falcon-viewer.jpg" alt="A poster open in the viewer, between the sidebar and the inspector" width="100%">
+      <img src="docs/images/falcon-viewer.jpg" alt="Monet's The Beach at Sainte-Adresse open in the viewer, between the sidebar and the inspector" width="100%">
       <br>
-      <sub>The viewer, between the sidebar and the inspector.</sub>
+      <sub>The viewer, between the sidebar and the inspector.<br><i>The Beach at Sainte-Adresse</i>, Claude Monet, 1867</sub>
       <h3>A viewer that keeps up</h3>
       Zoom around the pointer, pan, fit or show actual size, and step through the library with the arrow keys. Animated GIFs play, and PDFs, PSD and AI files render at full resolution. Video (with an FFmpeg fallback that includes AV1), audio, fonts, text, 3D models with textures, IFC and web pages have viewers too.
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/images/falcon-batch.jpg" alt="Fourteen posters selected, with the inspector showing their shared tags and actions that apply to all of them" width="100%">
+      <img src="docs/images/falcon-batch.jpg" alt="Three Monet paintings selected, with the inspector showing their shared tags and actions that apply to all of them" width="100%">
       <br>
-      <sub>Editing several selected items at once.</sub>
+      <sub>Editing three selected works at once.</sub>
       <h3>Edit in bulk</h3>
       Select many items to add or remove tags, file them into a folder, rate them or move them to the Trash in one step. Drag items onto any folder, or out of the window into Finder, Figma or Photoshop.
     </td>
@@ -105,7 +106,7 @@ Every screenshot here is the real app at work on a demo library of generated ima
   </tr>
   <tr>
     <td colspan="2" valign="top">
-      <img src="docs/images/falcon-justified.jpg" alt="Generated posters and patterns in the Justified layout, in rows of equal height" width="100%">
+      <img src="docs/images/falcon-justified.jpg" alt="Paintings arranged in the Justified layout, in rows of equal height" width="100%">
       <br>
       <sub>The Justified layout.</sub>
       <h3>Four ways to browse</h3>
