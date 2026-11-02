@@ -227,6 +227,7 @@ pub struct App {
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>, initial: Option<PathBuf>, launch: Launch) -> Self {
         t::install(&cc.egui_ctx);
+        cc.egui_ctx.add_plugin(crate::access_order::AccessOrder);
         let mut app = App {
             ws: Workspace::new(&cc.egui_ctx, None),
             others: Default::default(),
