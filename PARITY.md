@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 260 | 6 | 6 | 8 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 260 | 7 | 5 | 8 |
 | Viewers and file formats | 188 | 13 | 2 | 5 |
 | Search, filters and organising | 216 | 1 | 2 | 3 |
-| Import, export, library, preferences and integrations | 190 | 5 | 12 | 26 |
-| **Total** | 854 | 25 | 22 | 42 |
+| Import, export, library, preferences and integrations | 190 | 6 | 11 | 26 |
+| **Total** | 854 | 27 | 20 | 42 |
 
 Rows marked **Not wanted (user decision)** (4) are Eagle features the user chose not to have in falcon; they are counted outside the local Missing total.
 ## Fix first
@@ -65,7 +65,7 @@ Overall finding: falcon now has a native menu bar (`crates/falcon-app/src/menu.r
 | App menu: About | Done | `ui/dialogs/about.rs`, replacing winit's stock item | local |
 | App menu: Preferences… (⌘,) | Done | shortcuts.rs `app.preferences`; in the app menu after About (`menu.rs`) and in the library switcher | local |
 | App menu: Lock Now (⌘⌥L, locks the whole app behind a password or Touch ID) | Done | ⌥⌘L locks the app (`applock.rs`); unlock by password or Touch ID (`touch_id.rs`, LAContext through `msg_send!`, pref `touch_id` shown only when available) | local |
-| App menu: Color Space (sRGB / Display P3 / Unmanaged) | Missing | Not feasible: egui/wgpu draw in the surface's colour space with no per-document colour management; no sRGB/P3 switch to offer | local |
+| App menu: Color Space (sRGB / Display P3 / Unmanaged) | Partial | App menu ▸ Color Space after Preferences with Eagle's three choices, order and default (Unmanaged), persisted in prefs and applied to the window's `CAMetalLayer.colorspace` at start and on change (`colorspace.rs`; re-applied each frame because wgpu resets it on resize), disabled while locked or Preferences is open. Gap: egui's pixels are sRGB content, so the choice changes how the display interprets the window; there is no per-image colour management, and the visible effect is still to be checked on screen | local |
 | App menu: Hide, Hide Others, Quit | Done | Supplied by winit's default macOS app menu (main.rs uses eframe defaults) | local |
 | App menu: Check for Updates, Register / Unregister, Manage devices | Missing | Not applicable to falcon | online/plugin |
 | File: New… (⌘N), a searchable menu of folder, smart folder, imports, duplicates and new documents from templates (Sketch, PSD, AI, XD, TXT, Word, PPT, Excel, Keynote, Pages, Numbers, MindNode, XMind) | Partial | File ▸ New…, ⌘N (`file.create.new`) and the sidebar +: type-to-filter menu with New Folder, New Subfolder, New Smart Folder…, Import Folders / Files / Eagle Package…, Find Duplicates ▸ All Items / Current List / Selected (disabled when the list is empty or fewer than two items are selected), Auto-Import ▸ Settings… (opens the Auto-Import pane, with the watched folder shown while on) and Text Document; Eagle's 11 other template documents listed disabled (they need Eagle's template files); no Import Links entry (falcon has no link import); Pinterest and ArtStation are online | local |
@@ -451,7 +451,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 20. Right-click on the empty grid (layout panel), right-click on the title (ancestor jump), ⌥↑ to the parent folder, R to reshuffle Random and a refresh button.
 21. Video, GIF and audio hover-play in the grid.
 22. Window: closing now hides falcon (whole app) and the Dock icon brings it back; Full Screen and the app lock exist.
-23. Smaller items: Color Space menu, vibrancy, ~~sound effects~~ (done), palette-analysis status indicator, shortcut-list search is done, Error Logs / Debug Report are done.
+23. Smaller items: ~~Color Space menu~~ (built), vibrancy, ~~sound effects~~ (done), palette-analysis status indicator, shortcut-list search is done, Error Logs / Debug Report are done.
 
 ## Viewers and file formats
 
@@ -1426,7 +1426,7 @@ Eagle panes (`app/js/preferences.js:659-788`): General, Sidebar, Controls, Previ
 | Developer (falcon only): API on or off, and first port | Done (beyond Eagle) | `prefs.rs:339-358` | local |
 | Developer: plugin developer tools | Missing | Not applicable: no plugin system | local |
 | **Proxy** (server address and port, used for downloads and web search) | Missing | — | online |
-| Color space (sRGB, Display P3, unmanaged) | Missing | Not feasible (see the Color Space menu row) | local |
+| Color space (sRGB, Display P3, unmanaged) | Partial | App menu ▸ Color Space after Preferences with Eagle's three choices, order and default (Unmanaged), persisted in prefs and applied to the window's `CAMetalLayer.colorspace` at start and on change (`colorspace.rs`; re-applied each frame because wgpu resets it on resize), disabled while locked or Preferences is open. Gap: egui's pixels are sRGB content, so the choice changes how the display interprets the window; there is no per-image colour management, and the visible effect is still to be checked on screen | local |
 
 ### 7. HTTP API
 
@@ -1521,8 +1521,8 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 Rows marked "not counted" are features Eagle 4.0.0 does not have.
 
 - **Done:** 190, including 5 where falcon goes beyond Eagle and 1 with a small difference.
-- **Partial:** 5.
-- **Missing:** 38, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
+- **Partial:** 6.
+- **Missing:** 37, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
 - **Different on purpose:** 1 (the API listens on localhost only).
 
 ### Ranked Missing and Partial local items
