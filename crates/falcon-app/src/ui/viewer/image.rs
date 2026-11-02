@@ -13,10 +13,14 @@ use crate::app::App;
 use crate::gesture::{Gesture, Outcome};
 use crate::ui::viewer::audio;
 use crate::ui::widgets::ext_placeholder;
-use crate::loader::{Tier, job_for, original_job, quicklook_region_job};
+use crate::loader::{Job, Loader, Original, Tier, job_for, original_job, quicklook_region_job};
 use crate::locale::{tr, trf};
 use crate::logic;
 use crate::theme::{self as t, mono};
+
+/// The visible part of a zoomed-in SVG or QuickLook format, its render size
+/// (see `loader::Region`) and since when it has held still.
+pub(crate) type RegionView = ([f32; 4], [u32; 2], u32, Instant);
 
 /// The image viewer's state that outlives one item.
 #[derive(Default)]
@@ -35,9 +39,8 @@ pub(crate) struct ImageState {
     page: Option<(isize, Instant)>,
     /// The transparency checkerboard, made on first use.
     checker: Option<TextureHandle>,
-    /// The visible part of a zoomed-in SVG or QuickLook format, its render
-    /// size (see `loader::Region`) and since when it has held still.
-    region_view: Option<([f32; 4], [u32; 2], u32, Instant)>,
+    /// The sharp render last asked for.
+    region_view: Option<RegionView>,
     /// Where in the navigator's frame a drag took hold, from its centre.
     nav_grab: Vec2,
     /// The preview-only rotation and flip of the image shown; reset when the
@@ -188,75 +191,11 @@ impl App {
         let mut clip = ui.new_child(egui::UiBuilder::new().max_rect(area));
         clip.set_clip_rect(area);
 
-        // Zoomed in past the full tier's render, the original is decoded at
-        // full resolution (on a worker, in tiles) and drawn instead; never
-        // for an animation, whose player owns the picture.
         let animated = self.ws.view.anim.as_ref().is_some_and(|a| a.texture().is_some());
-        let shown_px = r.width().max(r.height()) * ui.ctx().pixels_per_point();
-        let tile = logic::tile_side(ui.ctx().input(|i| i.max_texture_side));
-        // A PSD's merged image goes in tiles while it fits their budget; past
-        // it, or where it fails, the part on screen is decoded when zoomed.
-        let composite = self.image.psd.composite(&id);
-        let tiled = composite == Some(true) && logic::composite_tiled(natural.x as u32, natural.y as u32) && !self.ws.loader.has_failed(&id, Tier::Original);
-        if !animated
-            && page_size.is_none()
-            && (!is_psd || tiled)
-            && tf.is_identity()
-            && logic::wants_original(&ext, natural.x.max(natural.y) as u32, shown_px)
-            && let Some(j) = original_job(item, lib.root(), tile)
-        {
-            self.ws.frame_jobs.push(j);
-        }
-        // An SVG enlarged past its render is drawn again, sharp, for the part
-        // on screen once the view holds still. So are PSD, AI and PowerPoint
-        // (Eagle's native viewer draws them at the size shown): QuickLook
-        // renders the page at the zoom shown and the part on screen is kept.
-        // A PSD with a merged image too large for tiles decodes that part
-        // from the file instead, and a PDF-compatible AI draws that part at
-        // the size shown with PDFKit (the worker reads which it is; `render`
-        // is for QuickLook, `size` for PDFKit).
-        let mut patch = None;
-        let full_side = tex.as_ref().map_or(0.0, |t| t.size_vec2().max_elem());
-        let quicklook = logic::hires_quicklook(&ext) && !animated && page_size.is_none() && !tiled && (!is_psd || composite.is_some()) && !logic::custom_thumbnail_is_picture(&ext, thumbnail::has_custom_thumbnail(item));
-        if (ext == "svg" || quicklook) && tf.is_identity() && tex.is_some() && shown_px > full_side {
-            let ppp = ui.ctx().pixels_per_point();
-            let (image_rect, view_rect) = ([r.min.x, r.min.y, r.max.x, r.max.y], [area.min.x, area.min.y, area.max.x, area.max.y]);
-            let (region, job, settle) = if quicklook {
-                let raster = logic::quicklook_raster(&ext).then_some(natural.x.max(natural.y) as u32).filter(|n| *n > 0);
-                let region = if composite == Some(true) {
-                    logic::composite_region(image_rect, view_rect, ppp, natural.x.max(natural.y) as u32)
-                } else {
-                    logic::quicklook_region(image_rect, view_rect, ppp, raster)
-                };
-                // Only a render larger than the full tier's adds anything.
-                let region = region.filter(|(_, side)| *side as f32 > full_side);
-                let max = ui.ctx().input(|i| i.max_texture_side).min(8192) as u32;
-                let size = logic::illustrator(&ext).then(|| logic::svg_region(image_rect, view_rect, ppp, max)).flatten().map_or([0, 0], |(_, size)| size);
-                (region.map(|(rect, side)| (rect, size, side)), quicklook_region_job(item, lib.root()), logic::QUICKLOOK_SETTLE)
-            } else {
-                let max = ui.ctx().input(|i| i.max_texture_side).min(8192) as u32;
-                let region = logic::svg_region(image_rect, view_rect, ppp, max);
-                (region.map(|(rect, size)| (rect, size, 0)), job_for(item, lib.root(), Tier::Full), logic::SVG_SETTLE)
-            };
-            if let Some((rect, size, render)) = region {
-                let same = self.image.region_view.is_some_and(|(r0, s0, n0, _)| r0 == rect && s0 == size && n0 == render);
-                if !same {
-                    self.image.region_view = Some((rect, size, render, Instant::now()));
-                }
-                let settled = self.image.region_view.is_some_and(|(.., at)| at.elapsed().as_secs_f32() >= settle);
-                if settled {
-                    if let Some(j) = job {
-                        self.ws.loader.want_region(j, rect, size, render);
-                    }
-                } else {
-                    ui.ctx().request_repaint_after(std::time::Duration::from_secs_f32(settle));
-                }
-            }
-            patch = self.ws.loader.patch(&id).map(|p| {
-                (p.texture.id(), Rect::from_min_max(r.min + p.rect.min.to_vec2() * r.size(), r.min + p.rect.max.to_vec2() * r.size()))
-            });
-        }
-        let original = self.ws.loader.original(&id).filter(|o| !animated && page_size.is_none() && tf.is_identity() && shown_px > full_side && o.size[0].max(o.size[1]) as f32 > full_side);
+        let ask = SharpAsk { item, root: lib.root(), natural, r, area, tex: tex.as_ref(), tf, plain: !animated && page_size.is_none() };
+        let sharp = ask_sharp(ui, &mut self.ws.loader, &mut self.ws.frame_jobs, &self.image.psd, &mut self.image.region_view, &ask);
+        let patch = sharp.patch;
+        let original = self.ws.loader.original(&id).filter(|_| sharp.original);
 
         // Without a full render the thumbnail stands in; with neither, the
         // format can't be previewed.
@@ -281,22 +220,9 @@ impl App {
             clip.painter().image(checker.id(), shown, Rect::from_min_max(uv(shown.min), uv(shown.max)), Color32::WHITE);
         }
         match (&tex, original) {
-            (_, Some(o)) => {
-                let painter = clip.painter();
-                for t in &o.tiles {
-                    let rect = Rect::from_min_max(r.min + t.rect.min.to_vec2() * r.size(), r.min + t.rect.max.to_vec2() * r.size());
-                    if rect.intersects(area) {
-                        painter.image(t.texture.id(), rect, t.uv, Color32::WHITE);
-                    }
-                }
-            }
+            (_, Some(o)) => paint_tiles(clip.painter(), o, r, area),
             (Some(tex), None) => match patch {
-                // Under the sharp part the render isn't drawn, so
-                // semi-transparent shapes aren't laid on twice.
-                Some((patch_tex, hole)) => {
-                    paint_except(clip.painter(), tex.id(), r, hole);
-                    clip.painter().image(patch_tex, hole, Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)), Color32::WHITE);
-                }
+                Some(patch) => paint_patched(clip.painter(), tex.id(), r, patch),
                 None if !tf.is_identity() && !animated => paint_transformed(clip.painter(), tex.id(), r, tf),
                 None => egui::Image::new((tex.id(), r.size())).paint_at(&clip, r),
             },
@@ -583,6 +509,123 @@ pub(crate) fn paint_transformed(painter: &egui::Painter, tex: egui::TextureId, r
     }
     mesh.indices = vec![0, 1, 2, 0, 2, 3];
     painter.add(egui::Shape::mesh(mesh));
+}
+
+/// A picture on screen, for [`ask_sharp`].
+pub(crate) struct SharpAsk<'a> {
+    pub item: &'a Item,
+    pub root: &'a std::path::Path,
+    /// The picture's size in pixels, as drawn (any turn applied).
+    pub natural: Vec2,
+    /// Where the picture is drawn, and the part of the window it shows in.
+    pub r: Rect,
+    pub area: Rect,
+    /// The full tier's render, if it has arrived.
+    pub tex: Option<&'a TextureHandle>,
+    pub tf: crate::ui::viewer::crop::ViewTransform,
+    /// No animation's player or TIFF page owns the picture.
+    pub plain: bool,
+}
+
+/// What [`ask_sharp`] found to draw over or instead of the render.
+pub(crate) struct Sharp {
+    /// The loader's original, in tiles, replaces the render.
+    pub original: bool,
+    /// A sharp part of the picture: its texture and where it goes.
+    pub patch: Option<(egui::TextureId, Rect)>,
+}
+
+/// Asks `loader` for whatever is sharper than the full tier's render at the
+/// size the picture is drawn, used by the viewer and the preview window.
+///
+/// Zoomed in past the render, the original is decoded at full resolution
+/// (on a worker, in tiles) and drawn instead; never for an animation, whose
+/// player owns the picture. A PSD's merged image goes in tiles while it fits
+/// their budget; past it, or where it fails, the part on screen is decoded
+/// when zoomed. An SVG enlarged past its render is drawn again, sharp, for
+/// the part on screen once the view holds still. So are PSD, AI and
+/// PowerPoint (Eagle's native viewer draws them at the size shown): QuickLook
+/// renders the page at the zoom shown and the part on screen is kept. A PSD
+/// with a merged image too large for tiles decodes that part from the file
+/// instead, and a PDF-compatible AI draws that part at the size shown with
+/// PDFKit (the worker reads which it is; `render` is for QuickLook, `size`
+/// for PDFKit).
+pub(crate) fn ask_sharp(ui: &Ui, loader: &mut Loader, jobs: &mut Vec<Job>, psd: &crate::psd_status::PsdStatus, region_view: &mut Option<RegionView>, a: &SharpAsk) -> Sharp {
+    let SharpAsk { item, root, natural, r, area, tex, tf, plain } = *a;
+    let id = &item.id;
+    let ext = item.ext.to_lowercase();
+    let is_psd = falcon_library::psd::handles(&ext);
+    let ppp = ui.ctx().pixels_per_point();
+    let shown_px = r.width().max(r.height()) * ppp;
+    let tile = logic::tile_side(ui.ctx().input(|i| i.max_texture_side));
+    let composite = psd.composite(id);
+    let tiled = composite == Some(true) && logic::composite_tiled(natural.x as u32, natural.y as u32) && !loader.has_failed(id, Tier::Original);
+    if plain
+        && (!is_psd || tiled)
+        && tf.is_identity()
+        && logic::wants_original(&ext, natural.x.max(natural.y) as u32, shown_px)
+        && let Some(j) = original_job(item, root, tile)
+    {
+        jobs.push(j);
+    }
+    let mut patch = None;
+    let full_side = tex.map_or(0.0, |t| t.size_vec2().max_elem());
+    let quicklook = logic::hires_quicklook(&ext) && plain && !tiled && (!is_psd || composite.is_some()) && !logic::custom_thumbnail_is_picture(&ext, thumbnail::has_custom_thumbnail(item));
+    if (ext == "svg" || quicklook) && tf.is_identity() && tex.is_some() && shown_px > full_side {
+        let (image_rect, view_rect) = ([r.min.x, r.min.y, r.max.x, r.max.y], [area.min.x, area.min.y, area.max.x, area.max.y]);
+        let (region, job, settle) = if quicklook {
+            let raster = logic::quicklook_raster(&ext).then_some(natural.x.max(natural.y) as u32).filter(|n| *n > 0);
+            let region = if composite == Some(true) {
+                logic::composite_region(image_rect, view_rect, ppp, natural.x.max(natural.y) as u32)
+            } else {
+                logic::quicklook_region(image_rect, view_rect, ppp, raster)
+            };
+            // Only a render larger than the full tier's adds anything.
+            let region = region.filter(|(_, side)| *side as f32 > full_side);
+            let max = ui.ctx().input(|i| i.max_texture_side).min(8192) as u32;
+            let size = logic::illustrator(&ext).then(|| logic::svg_region(image_rect, view_rect, ppp, max)).flatten().map_or([0, 0], |(_, size)| size);
+            (region.map(|(rect, side)| (rect, size, side)), quicklook_region_job(item, root), logic::QUICKLOOK_SETTLE)
+        } else {
+            let max = ui.ctx().input(|i| i.max_texture_side).min(8192) as u32;
+            let region = logic::svg_region(image_rect, view_rect, ppp, max);
+            (region.map(|(rect, size)| (rect, size, 0)), job_for(item, root, Tier::Full), logic::SVG_SETTLE)
+        };
+        if let Some((rect, size, render)) = region {
+            let same = region_view.is_some_and(|(r0, s0, n0, _)| r0 == rect && s0 == size && n0 == render);
+            if !same {
+                *region_view = Some((rect, size, render, Instant::now()));
+            }
+            let settled = region_view.is_some_and(|(.., at)| at.elapsed().as_secs_f32() >= settle);
+            if settled {
+                if let Some(j) = job {
+                    loader.want_region(j, rect, size, render);
+                }
+            } else {
+                ui.ctx().request_repaint_after(std::time::Duration::from_secs_f32(settle));
+            }
+        }
+        patch = loader.patch(id).map(|p| (p.texture.id(), Rect::from_min_max(r.min + p.rect.min.to_vec2() * r.size(), r.min + p.rect.max.to_vec2() * r.size())));
+    }
+    let original = loader.original(id).is_some_and(|o| plain && tf.is_identity() && shown_px > full_side && o.size[0].max(o.size[1]) as f32 > full_side);
+    Sharp { original, patch }
+}
+
+/// Draws an original's tiles over `r`, those that show in `area`.
+pub(crate) fn paint_tiles(painter: &egui::Painter, o: &Original, r: Rect, area: Rect) {
+    for t in &o.tiles {
+        let rect = Rect::from_min_max(r.min + t.rect.min.to_vec2() * r.size(), r.min + t.rect.max.to_vec2() * r.size());
+        if rect.intersects(area) {
+            painter.image(t.texture.id(), rect, t.uv, Color32::WHITE);
+        }
+    }
+}
+
+/// Draws the render `tex` over `r` with a sharp part on it. Under the sharp
+/// part the render isn't drawn, so semi-transparent shapes aren't laid on
+/// twice.
+pub(crate) fn paint_patched(painter: &egui::Painter, tex: egui::TextureId, r: Rect, (patch, hole): (egui::TextureId, Rect)) {
+    paint_except(painter, tex, r, hole);
+    painter.image(patch, hole, Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)), Color32::WHITE);
 }
 
 /// Draws texture `tex` stretched over `r`, except inside `hole`: the bands
