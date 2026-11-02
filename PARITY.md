@@ -787,17 +787,17 @@ Eagle columns come from `config.js` (`SUPPORT_FORMATS_DARWIN`), `E/js/thumbs/thu
 | exr | Image of thumbnail | QL | Tone-mapped viewer with an exposure slider (`falcon_library::hdr`) |
 | RAW: 3fr arw cr2 cr3 crw dng erf mrw nef nrw orf pef raf raw rw2 sr2 srw x3f | RAW viewer (embedded full preview) | Embedded camera preview at import (crw, mrw, orf, raf, raw, srw, x3f included), else QL | Embedded full-size preview, correctly oriented. Gap: mrw and raw files with no embedded JPEG get no thumbnail (needs a RAW decoder) |
 | psd, psdt, psb | Native high-res viewer | QL (size from the file header) | Merged image decoded by falcon at full resolution with ICC colour, tiled; QuickLook when the file has no composite |
-| ai, ait | Native high-res viewer | PDFKit, QL | PDF-compatible files: PDFKit draws the part on screen at the size shown, at any zoom. PostScript-only files: QuickLook render, redrawn at each zoom level up to 8192 px |
-| eps | Image of thumbnail | QL | QuickLook render (macOS 14+ has no EPS renderer) |
+| ai, ait | Native high-res viewer | PDFKit, QL | PDF-compatible files: PDFKit draws the part on screen at the size shown, at any zoom. PostScript-only files: QuickLook render, redrawn at each zoom level up to 8192 px Falls back to page 1 through PDFKit, then the PostScript preview, when QuickLook has none. |
+| eps | Image of thumbnail | QL | QuickLook render (macOS 14+ has no EPS renderer) Falls back to the DOS header TIFF, `%%BeginPreview` or `%AI7_Thumbnail`; an EPS with no preview gets no thumbnail (no PostScript interpreter). |
 | xd | Image of thumbnail | QL if available | QuickLook render where the app's generator is installed |
 | sketch | Image of thumbnail | In-file preview (QL first) | QuickLook render where the app's generator is installed |
 | fig | Image of thumbnail | QL if available | QuickLook render where the app's generator is installed |
 | af, afdesign, afphoto, afpub | Image of thumbnail | QL if available | QuickLook render where the app's generator is installed |
-| c4d, blend, skp, dwg, cdr, clip, prd, skt | Image of thumbnail | QL if available | QuickLook render where the app's generator is installed |
+| c4d, blend, skp, dwg, cdr, clip, prd, skt | Image of thumbnail | QL if available | QuickLook render where the app's generator is installed blend, skp and dwg read their own preview first (not zstd blend or WMF dwg). |
 | pxd, graffle, mindnode | Image of thumbnail | QL if available | QuickLook render where the app's generator is installed |
 | xmind | Image of thumbnail | In-file preview (QL first) | QuickLook render where the app's generator is installed |
 | eddx, emmx | Image of thumbnail | QL if available | QuickLook render where the app's generator is installed |
-| indd, indt, idml | Image of thumbnail | QL if available | QuickLook render where the app's generator is installed |
+| indd, indt, idml | Image of thumbnail | QL if available | QuickLook render where the app's generator is installed Read the XMP thumbnail first. |
 | doc, docx | Image of thumbnail | QL | QuickLook render |
 | xls, xlsx | Image of thumbnail | QL | QuickLook render |
 | ppt, pptx, potx | Native high-res viewer | QL | QuickLook render, redrawn at each zoom level up to 8192 px; no PDF route past that (see the higher-resolution row) |
