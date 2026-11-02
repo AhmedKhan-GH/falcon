@@ -8,7 +8,7 @@ Falcon is early alpha. This page summarises what is done, what is left and what 
 
 ## Done
 
-Of the 909 local features in PARITY.md, 860 are done, 40 are partly done and 9 are missing. That is about nineteen in twenty. A further 43 need an online service, an account or Eagle's plugin system and are counted separately.
+Of the 909 local features in PARITY.md, 864 are done, 36 are partly done and 9 are missing. That is about nineteen in twenty. A further 43 need an online service, an account or Eagle's plugin system and are counted separately.
 
 - **Library:** reads and writes Eagle-format libraries, byte-identical on round trips, with backups, restore, duplicate detection, `.eaglepack` import and export, a watched import folder, reloading on outside changes and sync conflict detection.
 - **Import:** thumbnails and colour palettes, folders with their structure, links, paste, drag and drop, screen capture and background imports.
@@ -28,7 +28,7 @@ Local features still missing or partly done in [PARITY.md](PARITY.md), by theme.
 - **Rendering past QuickLook's limit:** PPT, PPTX, POTX and PostScript-only AI files stay capped at 8192 px, and the preview window at 3072 px. macOS hands PowerPoint files back only as a bitmap or as HTML from `Office.qlgenerator`, with no PDF for PDFKit; going through that HTML would need a web view and print path, whose layout would not line up with the thumbnail.
 - **PDF layers:** they switch, but appear as a flat list without groups, and printing uses the default layers.
 - **Differences by design or by platform:** falcon's own font folder, regex rules without look-around, tasks that continue when you switch libraries, and decoders that only exist on macOS.
-- **Waiting for a check on screen:** colour space, translucent side panels (off by default), hover sound, Finder's Open With and double-clicking an `.eaglepack`.
+- **Waiting for a check on screen:** translucent side panels (off by default) and hover sound.
 - **Not feasible today:** a GPU acceleration switch.
 - **Translation:** the eight languages are machine written and wait for a native read.
 
