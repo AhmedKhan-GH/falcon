@@ -190,11 +190,10 @@ impl Library {
     }
 
     /// Writes the new bytes over the original, then refreshes the item and
-    /// marks the undo step irreversible. As in Eagle the file is written in
-    /// place (so its birth time stays) with a `.bk` copy beside it until
-    /// the write has reached the disk; a failed write puts the copy back.
+    /// marks the undo step irreversible. The file is replaced atomically,
+    /// so a failed write leaves the original as it was.
     fn rewrite(&mut self, item: crate::model::Item, raw: &Path, bytes: &[u8]) -> Result<()> {
-        write_in_place(raw, bytes)?;
+        replace_atomically(raw, bytes)?;
         let r = self.redraw_item(item);
         if let Some(j) = &mut self.journal {
             j.irreversible = true;
@@ -203,30 +202,31 @@ impl Library {
     }
 }
 
-/// Overwrites `path` with `bytes`, keeping `path.bk` until the new bytes
-/// are synced; on failure the old file is copied back.
-fn write_in_place(path: &Path, bytes: &[u8]) -> Result<()> {
+/// Replaces `path` with `bytes` atomically: the bytes go into `path.staged`
+/// beside it and are renamed over the original once synced, so a crash
+/// leaves either the old file or the new one. A failure removes the staged
+/// file and leaves the original untouched.
+fn replace_atomically(path: &Path, bytes: &[u8]) -> Result<()> {
     use std::io::Write;
-    let mut bk = path.as_os_str().to_owned();
-    bk.push(".bk");
-    let bk = std::path::PathBuf::from(bk);
-    fs::copy(path, &bk).map_err(|e| Error::io(&bk, e))?;
-    let written = fs::OpenOptions::new().write(true).truncate(true).open(path).and_then(|mut f| {
-        f.write_all(bytes)?;
-        f.sync_all()
-    });
-    match written {
-        Ok(()) => {
-            let _ = fs::remove_file(&bk);
-            Ok(())
-        }
-        Err(e) => {
-            if fs::copy(&bk, path).is_ok() {
-                let _ = fs::remove_file(&bk);
-            }
-            Err(Error::io(path, e))
-        }
-    }
+    let mut name = path.as_os_str().to_owned();
+    name.push(".staged");
+    let staged = std::path::PathBuf::from(name);
+    // Copying first gives the staged file the original's permissions and
+    // extended attributes, which the rename then carries over.
+    fs::copy(path, &staged).map_err(|e| Error::io(&staged, e))?;
+    let done = fs::OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open(&staged)
+        .and_then(|mut f| {
+            f.write_all(bytes)?;
+            f.sync_all()
+        })
+        .and_then(|()| fs::rename(&staged, path));
+    done.map_err(|e| {
+        let _ = fs::remove_file(&staged);
+        Error::io(path, e)
+    })
 }
 
 /// Encodes `img` in the item's format. JPEG uses quality 100 and BMP is
@@ -759,6 +759,55 @@ mod tests {
         assert_eq!(again.item(&new_id).unwrap().width, 800);
     }
 
+    fn names_in(dir: &Path) -> Vec<String> {
+        fs::read_dir(dir).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect()
+    }
+
+    #[test]
+    fn atomic_replace_swaps_the_contents() {
+        let tmp = tempfile::tempdir().unwrap();
+        let p = tmp.path().join("x.png");
+        fs::write(&p, b"old").unwrap();
+        replace_atomically(&p, b"brand new").unwrap();
+        assert_eq!(fs::read(&p).unwrap(), b"brand new");
+        assert_eq!(names_in(tmp.path()), vec!["x.png".to_string()]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn atomic_replace_renames_instead_of_truncating() {
+        use std::io::Read;
+        let tmp = tempfile::tempdir().unwrap();
+        let p = tmp.path().join("x.png");
+        fs::write(&p, b"old bytes").unwrap();
+        let mut held = fs::File::open(&p).unwrap();
+        replace_atomically(&p, b"new").unwrap();
+        let mut seen = Vec::new();
+        held.read_to_end(&mut seen).unwrap();
+        assert_eq!(seen, b"old bytes");
+        assert_eq!(fs::read(&p).unwrap(), b"new");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn atomic_replace_keeps_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let p = tmp.path().join("x.png");
+        fs::write(&p, b"old").unwrap();
+        fs::set_permissions(&p, fs::Permissions::from_mode(0o640)).unwrap();
+        replace_atomically(&p, b"new").unwrap();
+        assert_eq!(fs::metadata(&p).unwrap().permissions().mode() & 0o777, 0o640);
+    }
+
+    #[test]
+    fn atomic_replace_of_a_missing_file_fails_cleanly() {
+        let tmp = tempfile::tempdir().unwrap();
+        let p = tmp.path().join("gone.png");
+        assert!(replace_atomically(&p, b"new").is_err());
+        assert!(names_in(tmp.path()).is_empty());
+    }
+
     #[test]
     fn rewriting_leaves_no_backup_behind() {
         let png = encode(&picture(300, 200), ImageFormat::Png);
@@ -766,7 +815,7 @@ mod tests {
         lib.crop_item(&id, PixelRect { x: 0, y: 0, width: 100, height: 100 }).unwrap();
         let dir = lib.item(&id).unwrap().info_dir(lib.root());
         let names: Vec<String> = fs::read_dir(dir).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
-        assert!(names.iter().all(|n| !n.ends_with(".bk")), "{names:?}");
+        assert!(names.iter().all(|n| !n.ends_with(".bk") && !n.ends_with(".staged")), "{names:?}");
     }
 
     #[test]
