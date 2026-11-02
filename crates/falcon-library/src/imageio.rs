@@ -141,6 +141,14 @@ pub fn write(path: &Path, ext: &str, frames: &[WriteFrame]) -> Result<(), String
     imp::write(path, uti, frames)
 }
 
+/// Decodes the picture in `data` no larger than `max_side` pixels on its
+/// longer side, as straight-alpha sRGB RGBA, not turned. ImageIO scales
+/// while it decodes (a JPEG at a fraction of its size directly), so a huge
+/// picture never sits in memory at full size. Any format ImageIO reads.
+pub fn decode_bytes_within(data: &[u8], max_side: u32) -> Result<RgbaImage, String> {
+    imp::decode_bytes_within(data, max_side.max(1))
+}
+
 fn readable_types() -> &'static [String] {
     static TYPES: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
     TYPES.get_or_init(imp::readable_types)
@@ -157,7 +165,7 @@ mod imp {
     use image::DynamicImage;
     use objc2::rc::Retained;
     use objc2::runtime::AnyObject;
-    use objc2_core_foundation::{CFArray, CFDictionary, CFRetained, CFString, CFURL, CGPoint, CGRect, CGSize};
+    use objc2_core_foundation::{CFArray, CFData, CFDictionary, CFRetained, CFString, CFURL, CGPoint, CGRect, CGSize};
     use objc2_core_graphics::{
         CGBitmapContextCreate, CGBitmapContextCreateImage, CGColorSpace, CGContext, CGImage, CGImageAlphaInfo, CGImageByteOrderInfo,
         kCGColorSpaceSRGB,
@@ -252,6 +260,21 @@ mod imp {
         // SAFETY: owned.
         let primary = unsafe { src.primary_image_index() };
         decode_at(&src, primary).map(DynamicImage::ImageRgba8).map_err(ThumbError)
+    }
+
+    pub fn decode_bytes_within(data: &[u8], max_side: u32) -> Result<RgbaImage, String> {
+        let cf = CFData::from_bytes(data);
+        // SAFETY: owned; no options.
+        let src = unsafe { CGImageSource::with_data(&cf, None) }.ok_or("ImageIO can't read the data")?;
+        // SAFETY: the keys are constant CFStrings.
+        let (always, max) = unsafe { (objc2_image_io::kCGImageSourceCreateThumbnailFromImageAlways, objc2_image_io::kCGImageSourceThumbnailMaxPixelSize) };
+        let opts = dict(vec![(&always.to_string(), obj(NSNumber::new_bool(true))), (&max.to_string(), obj(NSNumber::new_u32(max_side)))]);
+        // SAFETY: owned.
+        let primary = unsafe { src.primary_image_index() };
+        // SAFETY: NSDictionary is toll-free bridged to CFDictionary; its
+        // keys are strings and its values numbers, as ImageIO expects.
+        let image = unsafe { src.thumbnail_at_index(primary, Some(&*Retained::as_ptr(&opts).cast::<CFDictionary>())) }.ok_or("ImageIO decoded no picture")?;
+        draw(&image)
     }
 
     pub fn readable_types() -> Vec<String> {
@@ -355,6 +378,10 @@ mod imp {
 
     pub fn readable_types() -> Vec<String> {
         Vec::new()
+    }
+
+    pub fn decode_bytes_within(_: &[u8], _: u32) -> Result<RgbaImage, String> {
+        Err("ImageIO is only available on macOS".into())
     }
 
     pub fn write(_: &Path, _: &str, _: &[super::WriteFrame]) -> Result<(), String> {

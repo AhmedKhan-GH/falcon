@@ -587,6 +587,7 @@ impl<'a, 'i, 's> Reader<'a, 'i, 's> {
                 colors: prim.colors.clone(),
                 indices,
                 material,
+                ..Mesh::default()
             });
         }
         Ok(())

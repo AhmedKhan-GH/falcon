@@ -21,6 +21,7 @@ pub mod ply;
 pub mod raster;
 pub mod step;
 pub mod stl;
+pub mod texture;
 pub mod threemf;
 pub mod threeds;
 
@@ -79,6 +80,12 @@ pub struct Mesh {
     /// Three indices into `positions` per triangle.
     pub indices: Vec<u32>,
     pub material: Option<Material>,
+    /// Texture coordinates, one per position, in picture space (u right,
+    /// v down; see [`texture`]), when the file has them.
+    pub uvs: Option<Vec<[f32; 2]>>,
+    /// The material's texture, drawn where the mesh has `uvs`; otherwise
+    /// (and where the picture couldn't be read) the material colour is.
+    pub texture: Option<texture::Texture>,
 }
 
 impl Mesh {
@@ -101,6 +108,14 @@ impl Mesh {
         if self.colors.as_ref().is_some_and(|v| v.len() != n) {
             self.colors = None;
         }
+        if self.uvs.as_ref().is_some_and(|v| v.len() != n) {
+            self.uvs = None;
+        }
+    }
+
+    /// The texture and coordinates to draw with, when the mesh has both.
+    pub fn textured(&self) -> Option<(&texture::Texture, &[[f32; 2]])> {
+        Some((self.texture.as_ref()?, self.uvs.as_deref()?))
     }
 }
 
