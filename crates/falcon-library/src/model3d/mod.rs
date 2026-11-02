@@ -200,7 +200,7 @@ pub fn parse(bytes: &[u8], ext: &str, side: &dyn Fn(&str) -> Option<Vec<u8>>) ->
         "ply" => ply::parse(bytes),
         "glb" => gltf::parse_glb(bytes, side),
         "3mf" => threemf::parse(bytes),
-        "fbx" => fbx::parse(bytes),
+        "fbx" => fbx::parse(bytes, side),
         "dae" => dae::parse(bytes, side),
         "3ds" => threeds::parse(bytes, side),
         "ifc" => ifc::parse(bytes),
