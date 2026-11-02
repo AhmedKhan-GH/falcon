@@ -60,6 +60,8 @@ fn name(path: &std::path::Path) -> String {
 impl App {
     /// Shows `alert` (replacing any shown).
     pub(crate) fn show_alert(&mut self, alert: Alert) {
+        let text = if alert.body.is_empty() { alert.title.clone() } else { format!("{}\n{}", alert.title, alert.body) };
+        self.notices.record(&text, crate::notice_history::Kind::Notice, crate::notice_history::now());
         self.alert = Some(alert);
     }
 

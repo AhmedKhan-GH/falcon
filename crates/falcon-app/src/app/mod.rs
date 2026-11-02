@@ -92,6 +92,9 @@ pub struct App {
     pub(crate) recent_shown: Option<(PathBuf, Vec<String>)>,
     /// The Clear Library History dialog is showing.
     pub(crate) clear_history_open: bool,
+    /// The Notification Center: what toasts and notices said (`notice_history.rs`).
+    pub(crate) notices: crate::notice_history::History,
+    pub(crate) notice_window_open: bool,
     /// The library tools' dialogs (`ui/dialogs/tools.rs`).
     pub(crate) tools: crate::ui::dialogs::tools::Tools,
     /// The localhost check of the running API (`api_check.rs`).
@@ -245,6 +248,8 @@ impl App {
             view_timer: Default::default(),
             recent_shown: None,
             clear_history_open: false,
+            notices: Default::default(),
+            notice_window_open: false,
             tools: Default::default(),
             api_check: Default::default(),
             force_close: None,
@@ -316,6 +321,8 @@ impl App {
         app.ws.collapsed = saved.collapsed.into_iter().collect();
         app.recent = saved.recent;
         app.recent_folders = saved.recent_folders;
+        app.notices = saved.notices;
+        app.notices.trim();
         app.legacy_layout = saved.layout;
         app.layouts = saved.layouts;
         app.display = saved.display;
@@ -508,6 +515,7 @@ impl App {
         self.import_dialogs(&ctx);
         self.import_links_ui(&ctx);
         self.about_ui(&ctx);
+        self.notice_history_ui(&ctx);
         self.library_dialogs(&ctx);
         if self.collect.open {
             self.collect_window(&ctx);

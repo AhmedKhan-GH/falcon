@@ -472,6 +472,7 @@ impl App {
             C::Preferences => self.open_preferences(),
             C::LockApp => self.lock_now(),
             C::CollectWindow => self.collect.toggle(),
+            C::NotificationCenter => self.notice_window_open = !self.notice_window_open,
             C::SwitchLibrary => {
                 if self.ws.lib.is_some() {
                     self.show_sidebar = true;

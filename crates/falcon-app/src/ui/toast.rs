@@ -93,28 +93,42 @@ impl App {
         }
     }
 
+    /// Shows `toast` and adds its text to the Notification Center. Every
+    /// `flash*` call and any other code that sets a toast goes through here
+    /// (the `toasts_are_set_in_one_place` test checks), so a note that
+    /// stays up while hovered is recorded once.
+    pub(crate) fn set_toast(&mut self, toast: Toast) {
+        let text = match &toast.link {
+            Some(l) => format!("{} {}", toast.msg, l.label),
+            None => toast.msg.clone(),
+        };
+        let kind = if toast.kind == ToastKind::Error { crate::notice_history::Kind::Error } else { crate::notice_history::Kind::Info };
+        self.notices.record(&text, kind, crate::notice_history::now());
+        self.ws.status = Some(toast);
+    }
+
     /// Shows a note for a few seconds; a new one replaces the old.
     pub(crate) fn flash(&mut self, msg: impl Into<String>) {
-        self.ws.status = Some(Toast::new(msg, ToastKind::Info, Life::Normal));
+        self.set_toast(Toast::new(msg, ToastKind::Info, Life::Normal));
     }
 
     /// A quick confirmation, such as "Copied 2 tags".
     pub(crate) fn flash_brief(&mut self, msg: impl Into<String>) {
-        self.ws.status = Some(Toast::new(msg, ToastKind::Info, Life::Brief));
+        self.set_toast(Toast::new(msg, ToastKind::Info, Life::Brief));
     }
 
     /// A failure: a red mark before the text, and it stays longer.
     pub(crate) fn flash_error(&mut self, msg: impl Into<String>) {
         let msg = msg.into();
         crate::errlog::error(&msg);
-        self.ws.status = Some(Toast::new(msg, ToastKind::Error, Life::Normal));
+        self.set_toast(Toast::new(msg, ToastKind::Error, Life::Normal));
     }
 
     /// A note with an Undo button, for actions the undo history records.
     pub(crate) fn flash_undo(&mut self, msg: impl Into<String>) {
         let mut t = Toast::new(msg, ToastKind::Info, Life::Undoable);
         t.undo = true;
-        self.ws.status = Some(t);
+        self.set_toast(t);
     }
 
     /// A note that ends in the folder's name as a link that opens it.
@@ -125,6 +139,39 @@ impl App {
         if !folder_name.is_empty() {
             t.link = Some(Link { label: folder_name.to_string(), folder: folder_id.to_string() });
         }
-        self.ws.status = Some(t);
+        self.set_toast(t);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    fn rust_files(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+        for e in std::fs::read_dir(dir).unwrap().flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                rust_files(&p, out);
+            } else if p.extension().is_some_and(|x| x == "rs") {
+                out.push(p);
+            }
+        }
+    }
+
+    /// A new toast is set only in `set_toast`, which records it. The draw
+    /// code re-sets the same toast to keep it up while hovered, and that must
+    /// not record again.
+    #[test]
+    fn toasts_are_set_in_one_place() {
+        let mut files = Vec::new();
+        rust_files(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src"), &mut files);
+        let mut found = Vec::new();
+        for f in files {
+            let text = std::fs::read_to_string(&f).unwrap();
+            let text = text.split("#[cfg(test)]").next().unwrap();
+            for l in text.lines().filter(|l| l.contains("ws.status = Some(")) {
+                found.push(format!("{}: {}", f.file_name().unwrap().to_string_lossy(), l.trim()));
+            }
+        }
+        found.sort();
+        assert_eq!(found, ["toast.rs: self.ws.status = Some(toast);", "toast.rs: self.ws.status = Some(toast);"], "set toasts with set_toast so they reach the Notification Center");
     }
 }

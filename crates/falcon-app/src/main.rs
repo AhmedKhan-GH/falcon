@@ -37,6 +37,7 @@ mod loader;
 mod locale;
 mod logic;
 mod menu;
+mod notice_history;
 mod notify;
 mod open_files;
 mod model3d;

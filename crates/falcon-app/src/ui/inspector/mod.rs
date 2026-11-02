@@ -548,7 +548,7 @@ impl App {
                 changed = Some(it);
             } else {
                 edit.url = item.url.clone();
-                self.ws.status = Some(Toast::new(tr("Not a valid link"), ToastKind::Info, Life::Normal));
+                self.set_toast(Toast::new(tr("Not a valid link"), ToastKind::Info, Life::Normal));
             }
         }
         if open_link && let Some(t) = crate::urls::link_target(&item.url, |p| std::path::Path::new(p).exists()) {

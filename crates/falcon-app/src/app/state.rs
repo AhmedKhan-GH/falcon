@@ -94,6 +94,8 @@ pub(crate) struct Saved {
     pub(crate) tag_look: crate::tags::TagLook,
     /// The welcome flow was finished.
     pub(crate) welcomed: bool,
+    /// The Notification Center's list, for every library.
+    pub(crate) notices: crate::notice_history::History,
 }
 
 /// An inspector section whose title folds it away.
@@ -576,6 +578,7 @@ impl App {
             recent_items: self.recent_items.clone(),
             tag_look: self.tag_look,
             welcomed: self.welcomed,
+            notices: self.notices.clone(),
         };
         eframe::set_value(storage, eframe::APP_KEY, &saved);
     }
@@ -616,6 +619,21 @@ mod tests {
         assert_eq!(saved.tile, Some(150.0));
         let (libs, active) = crate::workspaces::restore(&saved.libraries, saved.active, saved.library.as_deref(), |_| true);
         assert_eq!((libs, active), (vec![PathBuf::from("/x/A.library")], 0));
+    }
+
+    #[test]
+    fn notification_history_defaults_empty_and_is_kept() {
+        let mut m = Memory::default();
+        m.set_string_raw(r#"(tile: Some(150.0))"#);
+        let saved: Saved = eframe::get_value(&m, eframe::APP_KEY).unwrap();
+        assert!(saved.notices.is_empty());
+        let mut notices = crate::notice_history::History::default();
+        notices.record("Copied", crate::notice_history::Kind::Info, 7);
+        notices.record("Copied", crate::notice_history::Kind::Info, 9);
+        eframe::set_value(&mut m, eframe::APP_KEY, &Saved { notices, ..Default::default() });
+        let back: Saved = eframe::get_value(&m, eframe::APP_KEY).unwrap();
+        let e = back.notices.newest_first().next().unwrap();
+        assert_eq!((e.text.as_str(), e.count, e.at), ("Copied", 2, 9));
     }
 
     #[test]

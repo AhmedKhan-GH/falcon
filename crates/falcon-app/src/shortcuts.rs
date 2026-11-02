@@ -48,6 +48,8 @@ pub enum Command {
     /// Lock falcon behind its password (Preferences ▸ Password).
     LockApp,
     CollectWindow,
+    /// Show or hide the Notification Center (falcon's own).
+    NotificationCenter,
     SwitchLibrary,
     /// Choose a library folder and open it (Eagle's `library.load`).
     LoadLibrary,
@@ -473,6 +475,8 @@ pub const TABLE: &[Spec] = &[
     // Eagle's Window menu (macOS roles; falcon's own ids).
     Spec { cmd: Command::CloseWindow, id: "window.close", group: "Window", label: "Close the window", default: k(CMD, Key::W), aliases: &[] },
     Spec { cmd: Command::Minimize, id: "window.minimize", group: "Window", label: "Minimize", default: k(CMD, Key::M), aliases: &[] },
+    // falcon's own: Eagle has no notification history. No default key.
+    Spec { cmd: Command::NotificationCenter, id: "window.notifications", group: "Window", label: "Show or hide the Notification Center", default: None, aliases: &[] },
     Spec { cmd: Command::FullScreen, id: "window.fullscreen", group: "Window", label: "Enter or leave full screen", default: k(CTRL_CMD, Key::F), aliases: &[] },
     Spec { cmd: Command::Player(PlayerKey::Toggle), id: "player.playAndPause", group: PLAYER, label: "Play or pause", default: k(NONE, Key::Space), aliases: &[] },
     Spec { cmd: Command::Player(PlayerKey::Frames(-1)), id: "player.prev1frame", group: PLAYER, label: "Previous frame", default: k(NONE, Key::OpenBracket), aliases: &[] },

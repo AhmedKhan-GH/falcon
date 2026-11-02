@@ -185,6 +185,7 @@ The core words, so every file uses one term for one thing.
 - "{name} now has {n} items", the toast after Refresh in a smart folder's menu (machine-written).
 - "Reset Cover", "Use the default cover again", "Reset folder cover" and "Reset the cover of {name}", the folder menu entry that clears a custom cover (machine-written).
 - "The viewer opens images in" and "Comment mode", the Preferences ▸ Preview radios for the default viewer mode; "Preview" was already translated (machine-written).
+- "No notifications", "Notification Center" (the Window menu item and window title) and "Show or hide the Notification Center" (its shortcut row), machine-written. German uses Mitteilungszentrale, Spanish and Russian centro / центр de notificaciones / уведомлений, Japanese 通知センター, Korean 알림 센터, as the systems do.
 
 ## Reviewed
 

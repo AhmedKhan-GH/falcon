@@ -437,7 +437,7 @@ On macOS falcon has a native menu bar, built with AppKit in `crates/falcon-app/s
 | Organize | Add Tags…, Add to Last Used Folder, No Rating, 1 Star … 5 Stars, Copy Tags, Paste Tags, Clear Tags |
 | View | Always on Top; All Items, Uncategorized, Untagged, Recently Used, Random, All Tags, Trash; Waterfall, Justified, Grid, List; Show Name, Show Item Info, Show Comment Count, Show Subfolder Content; Scroll to Top, Scroll to Bottom, Page Up, Page Down, First Item, Last Item; Zoom In, Zoom Out, Actual Size, Zoom to Fit, Grayscale, Navigator; Viewer, Open in New Window, Open With Default App, Open With Another App… (asks for an app), Reveal in Finder, Open Link in Browser; Sidebar, Inspector, Show or Hide Both Panels, Presentation Mode; Back, Forward, Parent Folder, Shuffle Again, Expand or Collapse All Folders |
 | Actions | Falcon's actions for the open library, each with its shortcut; shown only while there are any, as in Eagle, where Actions is a plugin (see [Actions](actions.md)) |
-| Window | Minimize, Zoom, Full Screen, Collect Window, Next Library, Previous Library, Close Window, then macOS's window list |
+| Window | Minimize, Zoom, Full Screen, Collect Window, Notification Center, Next Library, Previous Library, Close Window, then macOS's window list |
 | Help | Falcon Documentation (the book in `docs/`, built or not, when falcon runs from its source tree; disabled otherwise), Error Logs, Export Debug Report… |
 
 - Each item shows its chord from the shortcut table (Undo, Redo and Cut show egui's fixed ⌘Z, ⇧⌘Z and ⌘X). The menus are rebuilt when the bindings, the language or the library's actions change, so a chord changed under Preferences → Shortcuts shows at once, an unbound command shows none, and the menu titles and items follow Preferences ▸ General ▸ Language (see [Localisation](localisation.md)).
@@ -598,6 +598,10 @@ Short notes appear in a small rounded box at the bottom centre of the window (in
 - Notes about adding or moving items to a folder end with the folder's name as a link. Clicking it opens that folder.
 
 The import error box and the progress bars are separate and unchanged.
+
+### Notification Center
+
+A falcon addition; Eagle has no such panel. Window ▸ Notification Center (no default key; the shortcut `window.notifications` can be bound in Preferences) shows or hides a window listing the notes above and the dialog notices (a library that is too new, a merge that finished, and the like), newest first. It does not block the app and opens with or without a library. Each row has its time (the clock time for today, else the date and time), a red mark for a failure, a count such as ×3 when the same text was shown several times in a row (they are one row), and the text, wrapped and selectable. The Clear button empties the list. Only the text is kept: the Undo button and folder link of a note are not replayed. A dialog notice is listed as its title and body. The most recent 200 are kept, across restarts and for every library together (they are saved with the rest of the app state). The Collect window's own status line is not listed. The list is `notice_history.rs`; every `flash*` call goes through `set_toast`, which records the text once, however long the note stays up.
 
 ### Background task status
 
