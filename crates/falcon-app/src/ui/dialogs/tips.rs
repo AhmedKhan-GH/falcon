@@ -33,7 +33,7 @@ impl App {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(tr(tip.title)).size(18.0).color(t::p().text));
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if ui.button("✕").on_hover_text(tr("Close")).clicked() {
+                    if ui.button(crate::icons::X).on_hover_text(tr("Close")).clicked() {
                         close = true;
                     }
                 });
