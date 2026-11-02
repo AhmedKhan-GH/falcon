@@ -2413,7 +2413,7 @@
   "{first} and {n} more": "{first} и ещё {n}",
   "{first}–{last} would include Eagle's port {port}": "{first}–{last} включает порт Eagle {port}",
   "{folders} and {items} from {path} will be added. Folders, smart folders and tag groups already here are kept as they are, and so are items already here.": "Из {path} будут добавлены {folders} и {items}. Уже имеющиеся здесь папки, смарт-папки, группы тегов и элементы останутся без изменений.",
-  "{hex}  ·  {ratio}%\nClick to find similar colours, right-click for more": "{hex}  ·  {ratio}%\nЩелчок — найти похожие цвета, правый щелчок — другие действия",
+  "{hex}  ·  {ratio}%\nClick for colour values, right-click to find similar colours": "{hex}  ·  {ratio}%\nЩелчок — значения цвета, правый щелчок — поиск похожих цветов",
   "{lib}'s metadata.json was damaged and was restored from backup/{name}; the damaged file was kept in backup/": "Файл metadata.json библиотеки «{lib}» был повреждён и восстановлен из backup/{name}; повреждённый файл сохранён в backup/.",
   "{message}; skipped {n} items (animated)": {
     "few": "{message}; пропущено {n} элемента (анимированные)",

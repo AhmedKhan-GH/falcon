@@ -463,13 +463,8 @@ impl App {
                 }
                 let hit = ui.interact(Rect::from_center_size(center, Vec2::splat(d)), ui.scope_id().with(("swatch", n)), Sense::click());
                 let hex = logic::hex(c.color);
-                if hit.clicked() {
-                    self.ws.filter.color = Some(ColorQuery::new(c.color));
-                    self.ws.color_text = hex.clone();
-                    self.ws.show_filter = true;
-                }
-                let mut similar = false;
-                hit.context_menu(|ui| {
+                let mut similar = hit.secondary_clicked();
+                swatch_menu(&hit).show(|ui| {
                     crate::ui::menus::search::show(ui, |ui| {
                         if ui.button(tr("Find Similar Colours")).clicked() {
                             similar = true;
@@ -507,7 +502,7 @@ impl App {
                     self.ws.color_text = hex.clone();
                     self.ws.show_filter = true;
                 }
-                hit.on_hover_text(trf("{hex}  ·  {ratio}%\nClick to find similar colours, right-click for more", &[("hex", &hex), ("ratio", &c.ratio)]));
+                hit.on_hover_text(trf("{hex}  ·  {ratio}%\nClick for colour values, right-click to find similar colours", &[("hex", &hex), ("ratio", &c.ratio)]));
             }
             if let Some((n, on)) = toggle_primary
                 && let Err(e) = lib.set_palette_marked(&item.id, n, on)
@@ -654,5 +649,57 @@ impl App {
                 Err(e) => self.flash_error(trf("Could not save: {error}", &[("error", &e)])),
             }
         }
+    }
+}
+
+/// A palette swatch's menu, as in Eagle: a left click opens it where the
+/// pointer is. A right click filters by the colour instead.
+fn swatch_menu(hit: &egui::Response) -> egui::Popup<'_> {
+    let set = if hit.clicked() {
+        Some(egui::SetOpenCommand::Bool(true))
+    } else if hit.secondary_clicked() {
+        Some(egui::SetOpenCommand::Bool(false))
+    } else {
+        None
+    };
+    egui::Popup::menu(hit).open_memory(set).at_pointer_fixed()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use egui::{Event, Modifiers, PointerButton, pos2};
+
+    /// One frame of a swatch. Returns whether it asks to filter and whether
+    /// its menu is open.
+    fn frame(ctx: &egui::Context, events: Vec<Event>) -> (bool, bool) {
+        let (mut filter, mut open) = (false, false);
+        let input = egui::RawInput { events, screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+        let mut out = ctx.run_ui(input, |ui| {
+            let hit = ui.allocate_response(vec2(16.0, 16.0), Sense::click());
+            filter = hit.secondary_clicked();
+            open = swatch_menu(&hit).show(|ui| ui.label("Copy")).is_some();
+        });
+        out.textures_delta.clear();
+        (filter, open)
+    }
+
+    fn click(ctx: &egui::Context, button: PointerButton) -> (bool, bool) {
+        let at = pos2(8.0, 8.0);
+        let press = |pressed| Event::PointerButton { pos: at, button, pressed, modifiers: Modifiers::NONE };
+        frame(ctx, vec![Event::PointerMoved(at)]);
+        frame(ctx, vec![press(true)]);
+        let released = frame(ctx, vec![press(false)]);
+        (released.0, frame(ctx, vec![]).1)
+    }
+
+    #[test]
+    fn a_left_click_opens_the_menu_and_a_right_click_filters() {
+        let ctx = egui::Context::default();
+        frame(&ctx, vec![]);
+        assert_eq!(click(&ctx, PointerButton::Primary), (false, true));
+        let ctx = egui::Context::default();
+        frame(&ctx, vec![]);
+        assert_eq!(click(&ctx, PointerButton::Secondary), (true, false));
     }
 }

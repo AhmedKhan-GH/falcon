@@ -189,6 +189,7 @@ The core words, so every file uses one term for one thing.
 - The tips overlay (Help ▸ Show Tips and the first-run tips, `tips.rs`): six titles and sentences with a `{key}` placeholder for the live key, and "{n} of {total}". They name the File ▸ New Smart Folder menu path, which must match each language's menu wording; ko puts 을(를) after `{key}` (machine-written).
 - Remove from Disk (a falcon addition in the library switcher): "Remove from Disk…", the confirmation title, size line and body, "Calculating…", "Size unknown", the toasts and the three refusal sentences (machine-written).
 - "Emoji" and "Remove Emoji", the folder and smart folder menu entries for an emoji icon, and the 112 `emoji::` names of the curated emoji (plain object, animal and symbol words; the colour hearts and circles follow the colour terms in the glossary; machine-written).
+- "{hex}  ·  {ratio}%\nClick for colour values, right-click to find similar colours", the inspector palette swatch's tooltip after its clicks were swapped to match Eagle (machine-written).
 
 ## Reviewed
 

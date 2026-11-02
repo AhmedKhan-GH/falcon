@@ -2209,7 +2209,7 @@
   "{first} and {n} more": "{first} 외 {n}건",
   "{first}–{last} would include Eagle's port {port}": "{first}–{last}에 Eagle의 포트 {port}이(가) 포함됩니다",
   "{folders} and {items} from {path} will be added. Folders, smart folders and tag groups already here are kept as they are, and so are items already here.": "{path}에서 {folders}와(과) {items}이(가) 추가됩니다. 이미 있는 폴더, 스마트 폴더, 태그 그룹과 항목은 그대로 유지됩니다.",
-  "{hex}  ·  {ratio}%\nClick to find similar colours, right-click for more": "{hex}  ·  {ratio}%\n클릭하면 비슷한 색상 찾기, 오른쪽 클릭으로 더 보기",
+  "{hex}  ·  {ratio}%\nClick for colour values, right-click to find similar colours": "{hex}  ·  {ratio}%\n클릭하면 색상 값 표시, 오른쪽 클릭하면 비슷한 색상 찾기",
   "{lib}'s metadata.json was damaged and was restored from backup/{name}; the damaged file was kept in backup/": "{lib}의 metadata.json이 손상되어 backup/{name}에서 복원했습니다. 손상된 파일은 backup/에 보관되어 있습니다.",
   "{message}; skipped {n} items (animated)": {
     "other": "{message}; 애니메이션 항목 {n}개 건너뜀"

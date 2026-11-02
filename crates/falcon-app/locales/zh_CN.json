@@ -2209,7 +2209,7 @@
   "{first} and {n} more": "{first}及另外{n}项",
   "{first}–{last} would include Eagle's port {port}": "{first}–{last}包含 Eagle 的端口{port}",
   "{folders} and {items} from {path} will be added. Folders, smart folders and tag groups already here are kept as they are, and so are items already here.": "将从{path}添加{folders}和{items}。此处已有的文件夹、智能文件夹、标签组和项目将保持不变。",
-  "{hex}  ·  {ratio}%\nClick to find similar colours, right-click for more": "{hex}  ·  {ratio}%\n点按以查找相似颜色，右键查看更多",
+  "{hex}  ·  {ratio}%\nClick for colour values, right-click to find similar colours": "{hex}  ·  {ratio}%\n单击查看颜色值，右键单击查找相似颜色",
   "{lib}'s metadata.json was damaged and was restored from backup/{name}; the damaged file was kept in backup/": "{lib}的 metadata.json 已损坏，已从 backup/{name}恢复；损坏的文件保留在 backup/ 中。",
   "{message}; skipped {n} items (animated)": {
     "other": "{message}；已跳过{n}个项目（动画）"

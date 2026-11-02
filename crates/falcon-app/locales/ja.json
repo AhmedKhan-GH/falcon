@@ -2209,7 +2209,7 @@
   "{first} and {n} more": "{first}ほか{n}件",
   "{first}–{last} would include Eagle's port {port}": "{first}〜{last}にはEagleのポート{port}が含まれます",
   "{folders} and {items} from {path} will be added. Folders, smart folders and tag groups already here are kept as they are, and so are items already here.": "{path}から{folders}と{items}が追加されます。すでにあるフォルダ、スマートフォルダ、タググループ、アイテムはそのまま残ります。",
-  "{hex}  ·  {ratio}%\nClick to find similar colours, right-click for more": "{hex}  ·  {ratio}%\nクリックで似た色を検索、右クリックでその他",
+  "{hex}  ·  {ratio}%\nClick for colour values, right-click to find similar colours": "{hex}  ·  {ratio}%\nクリックで色の値を表示、右クリックで似た色を検索",
   "{lib}'s metadata.json was damaged and was restored from backup/{name}; the damaged file was kept in backup/": "{lib}のmetadata.jsonが破損していたため、backup/{name}から復元しました。破損したファイルはbackup/に残してあります。",
   "{message}; skipped {n} items (animated)": {
     "other": "{message}；スキップ：{n}個（アニメーション）"

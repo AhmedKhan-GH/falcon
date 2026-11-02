@@ -1067,7 +1067,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Preview; double-click to open | Done | `A:3034` | local |
 | Colour palette swatches | Done | `A:3053` | local |
 | Click a swatch to find items of similar colour | Done | `A:3066` | local |
-| Copy the colour as HEX, RGB or RGBA | Done | Swatch right-click: HEX, RGB, RGBA, HSL, HSV, HWB, CMYK (`colors.rs`) | local |
+| Copy the colour as HEX, RGB or RGBA | Done | Swatch left click opens the menu: HEX, RGB, RGBA, HSL, HSV, HWB, CMYK (`colors.rs`); right click filters by the colour, as Eagle's `openColorContextMenu` and `filterWithColor` | local |
 | Set a palette colour as the primary colour (`marked`) | Done | Stored as Eagle writes it; colour search matches a marked colour under ΔE2000 30 as Eagle; smart-folder colour rules use Eagle's stricter test without it, as Eagle | local |
 | Re-analyse colours | Done | `image_edit.rs:107` Refresh Palette | local |
 | Name (title) editing | Done | `A:3082` | local |

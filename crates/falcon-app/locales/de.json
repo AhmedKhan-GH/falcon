@@ -2312,7 +2312,7 @@
   "{first} and {n} more": "{first} und {n} weitere",
   "{first}–{last} would include Eagle's port {port}": "{first}–{last} würde den Port {port} von Eagle einschließen",
   "{folders} and {items} from {path} will be added. Folders, smart folders and tag groups already here are kept as they are, and so are items already here.": "{folders} und {items} aus {path} werden hinzugefügt. Ordner, intelligente Ordner und Tag-Gruppen, die schon hier sind, bleiben unverändert, ebenso vorhandene Objekte.",
-  "{hex}  ·  {ratio}%\nClick to find similar colours, right-click for more": "{hex}  ·  {ratio}%\nKlicken, um ähnliche Farben zu finden, Rechtsklick für mehr",
+  "{hex}  ·  {ratio}%\nClick for colour values, right-click to find similar colours": "{hex}  ·  {ratio}%\nKlicken für Farbwerte, Rechtsklick, um ähnliche Farben zu finden",
   "{lib}'s metadata.json was damaged and was restored from backup/{name}; the damaged file was kept in backup/": "Die Datei metadata.json von „{lib}“ war beschädigt und wurde aus backup/{name} wiederhergestellt; die beschädigte Datei liegt weiterhin in backup/.",
   "{message}; skipped {n} items (animated)": {
     "one": "{message}; {n} Objekt übersprungen (animiert)",

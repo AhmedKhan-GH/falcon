@@ -2312,7 +2312,7 @@
   "{first} and {n} more": "{first} and {n} more",
   "{first}–{last} would include Eagle's port {port}": "{first}–{last} would include Eagle's port {port}",
   "{folders} and {items} from {path} will be added. Folders, smart folders and tag groups already here are kept as they are, and so are items already here.": "{folders} and {items} from {path} will be added. Folders, smart folders and tag groups already here are kept as they are, and so are items already here.",
-  "{hex}  ·  {ratio}%\nClick to find similar colours, right-click for more": "{hex}  ·  {ratio}%\nClick to find similar colours, right-click for more",
+  "{hex}  ·  {ratio}%\nClick for colour values, right-click to find similar colours": "{hex}  ·  {ratio}%\nClick for colour values, right-click to find similar colours",
   "{lib}'s metadata.json was damaged and was restored from backup/{name}; the damaged file was kept in backup/": "{lib}'s metadata.json was damaged and was restored from backup/{name}; the damaged file was kept in backup/",
   "{message}; skipped {n} items (animated)": {
     "one": "{message}; skipped {n} item (animated)",
