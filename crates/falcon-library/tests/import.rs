@@ -294,6 +294,31 @@ fn quicklook_formats_get_thumbnails() {
     eprintln!("eagle {:?}\nours  {:?}", eagle.palettes, item.palettes);
 }
 
+/// A web archive is thumbnailed from its unpacked page: QuickLook has no
+/// MHTML renderer, so without the unpacking there would be no thumbnail.
+/// The render shows the archive's style sheet (the light blue page) and
+/// its image (the red square), and the item gets Eagle's 1440 × 900.
+#[cfg(target_os = "macos")]
+#[test]
+fn mhtml_archives_get_thumbnails_from_their_page() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut lib = Library::create(tmp.path().join("Web.library")).unwrap();
+    let src = tmp.path().join("cafe.mhtml");
+    fs::copy(Path::new(env!("CARGO_MANIFEST_DIR")).join("testdata/mhtml/chrome.mhtml"), &src).unwrap();
+    let id = lib.import_file(&src, &ImportOptions::default()).unwrap();
+    let item = lib.item(&id).unwrap();
+    assert_eq!((item.width, item.height), (1440, 900));
+    let thumb = item.thumbnail_path(lib.root()).expect("thumbnail");
+    let img = falcon_library::thumbnail::decode(&thumb).unwrap().to_rgb8();
+    let ratio = f64::from(img.width()) / f64::from(img.height());
+    assert!((ratio - 1.6).abs() < 0.02, "cut to 16:10, got {}x{}", img.width(), img.height());
+    let near = |p: &Rgb<u8>, c: [u8; 3]| p.0.iter().zip(c).all(|(a, b)| a.abs_diff(b) < 24);
+    assert!(near(img.get_pixel(img.width() - 2, img.height() - 2), [200, 230, 255]), "the archive's CSS applies");
+    assert!(img.pixels().any(|p| near(p, [255, 0, 0])), "the archive's image shows");
+    // The original stays where it was, untouched.
+    assert_eq!(fs::read(&src).unwrap(), fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("testdata/mhtml/chrome.mhtml")).unwrap());
+}
+
 #[test]
 fn tags_rename_merge_and_delete() {
     let Some(src) = fixture() else { return };

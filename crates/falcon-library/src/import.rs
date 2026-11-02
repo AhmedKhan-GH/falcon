@@ -466,6 +466,9 @@ fn generate(item: &mut Item, raw: &Path, thumb: &Path) -> Option<Analysis> {
         item.height = h.into();
         return Some(Analysis::Thumbnail);
     }
+    if item.ext == "mhtml" {
+        return mhtml_thumbnail(item, raw, thumb, max);
+    }
     if !thumbnail::is_supported(&item.ext) {
         // Video macOS can't read goes to FFmpeg first; other video only
         // when QuickLook fails, as Eagle tries its own player before mpv.
@@ -532,6 +535,29 @@ fn quicklook_thumbnail(item: &mut Item, raw: &Path, thumb: &Path, max: u32) -> O
     item.width = w.into();
     item.height = h.into();
     thumbnail::write_thumbnail(img, max, thumb).ok()?;
+    Some(Analysis::Thumbnail)
+}
+
+/// The size Eagle records for a web archive: the 1440 × 900 window its
+/// thumbnailer captures the page in.
+pub const MHTML_SIZE: (u32, u32) = (1440, 900);
+
+/// An MHTML archive's thumbnail. QuickLook has no renderer for MHTML, so
+/// the archive is unpacked into a temporary folder (removed afterwards)
+/// and QuickLook renders the page there as it renders an HTML file; the
+/// top of the render, cut to Eagle's 16:10, is the thumbnail, and the item
+/// gets Eagle's 1440 × 900.
+fn mhtml_thumbnail(item: &mut Item, raw: &Path, thumb: &Path, max: u32) -> Option<Analysis> {
+    let dir = tempfile::Builder::new().prefix("falcon-mhtml-").tempdir().ok()?;
+    let unpacked = crate::mhtml::unpack_file(raw, dir.path(), crate::mhtml::Limits::default(), crate::mhtml::Policy::None).ok()?;
+    let img = thumbnail::quicklook(&unpacked.root, thumbnail::QUICKLOOK_SIZE).ok()?;
+    let (w, h) = (img.width(), img.height());
+    let (ew, eh) = MHTML_SIZE;
+    let cut = (u64::from(w) * u64::from(eh) / u64::from(ew)) as u32;
+    let img = if cut > 0 && cut < h { img.crop_imm(0, 0, w, cut) } else { img };
+    thumbnail::write_thumbnail(img, max, thumb).ok()?;
+    item.width = ew.into();
+    item.height = eh.into();
     Some(Analysis::Thumbnail)
 }
 
