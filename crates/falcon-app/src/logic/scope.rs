@@ -101,7 +101,20 @@ pub fn uncategorized(item: &Item, known: &impl Fn(&str) -> bool) -> bool {
     }
 }
 
-pub fn nav_counts(items: &[Item], roots: &[Folder]) -> NavCounts {
+/// Whether the sidebar's Uncategorized count includes `item`. The view
+/// ([`uncategorized`]) lists an item whose single folder id names no
+/// folder; Eagle's count adds such an item only when the item's content
+/// was last modified before the library's `modificationTime` (both known).
+pub fn counts_as_uncategorized(item: &Item, known: &impl Fn(&str) -> bool, library_time: u64) -> bool {
+    match item.folders.as_slice() {
+        [only] if !only.is_empty() && !known(only) => item.last_modified != 0 && library_time != 0 && item.last_modified < library_time,
+        _ => uncategorized(item, known),
+    }
+}
+
+/// The sidebar counts. `library_time` is the library's `modificationTime`
+/// (`metadata.json`), which the Uncategorized count compares items against.
+pub fn nav_counts(items: &[Item], roots: &[Folder], library_time: u64) -> NavCounts {
     let index = search::folder_index(roots);
     let known = |id: &str| index.contains_key(id);
     let mut c = NavCounts::default();
@@ -112,7 +125,7 @@ pub fn nav_counts(items: &[Item], roots: &[Folder]) -> NavCounts {
             continue;
         }
         c.all += 1;
-        c.uncategorized += usize::from(uncategorized(i, &known));
+        c.uncategorized += usize::from(counts_as_uncategorized(i, &known, library_time));
         c.untagged += usize::from(i.tags.is_empty());
         tags.extend(i.tags.iter());
     }
@@ -303,7 +316,7 @@ mod tests {
     #[test]
     fn nav_counts_cover_fixed_entries() {
         let (roots, items) = fixture();
-        assert_eq!(nav_counts(&items, &roots), NavCounts { all: 4, uncategorized: 1, untagged: 1, trash: 1, tags: 3 });
+        assert_eq!(nav_counts(&items, &roots, 0), NavCounts { all: 4, uncategorized: 1, untagged: 1, trash: 1, tags: 3 });
     }
 
     #[test]
@@ -329,9 +342,30 @@ mod tests {
         items.push(item("6", "orphan", &["Gone"], &["red"], false, 60, 3, 3));
         items.push(item("7", "two-stale", &["Gone", "Lost"], &["red"], false, 70, 4, 4));
         items.push(item("8", "stale-and-live", &["Gone", "A"], &["red"], false, 80, 5, 5));
-        assert_eq!(nav_counts(&items, &roots).uncategorized, 2);
+        // The view lists the stale-id item; the count adds it only under
+        // Eagle's last-modified guard (see the next test).
+        assert_eq!(nav_counts(&items, &roots, 0).uncategorized, 1);
         let v = visible(&items, &roots, &Scope::Uncategorized, "", &Filter::default(), OrderBy::Name, true, None);
         assert_eq!(names(&items, &v), ["loose", "orphan"]);
+    }
+
+    #[test]
+    fn the_count_applies_eagles_last_modified_guard_to_a_stale_folder_id() {
+        let (roots, mut items) = fixture();
+        items.push(item("6", "older", &["Gone"], &["red"], false, 60, 3, 3));
+        items.push(item("7", "newer", &["Gone"], &["red"], false, 70, 4, 4));
+        items.push(item("8", "unstamped", &["Gone"], &["red"], false, 80, 5, 5));
+        items[5].last_modified = 100;
+        items[6].last_modified = 300;
+        items[7].last_modified = 0;
+        // "loose" has no folders and always counts; "older" predates the
+        // library's modificationTime of 200, "newer" doesn't.
+        assert_eq!(nav_counts(&items, &roots, 200).uncategorized, 2);
+        // No library time, or no item time: the guard fails.
+        assert_eq!(nav_counts(&items, &roots, 0).uncategorized, 1);
+        // The view lists all three regardless.
+        let v = visible(&items, &roots, &Scope::Uncategorized, "", &Filter::default(), OrderBy::Name, true, None);
+        assert_eq!(names(&items, &v), ["loose", "newer", "older", "unstamped"]);
     }
 
     #[test]

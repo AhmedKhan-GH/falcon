@@ -944,7 +944,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | All, Uncategorized, Untagged, All Tags and Trash, with counts | Done | `A:1740` nav_rows, `L:88` nav_counts | local |
-| Uncategorized also counts items whose only folder no longer exists | Done | `logic::scope::uncategorized`: no folders, or exactly one id that names no folder, as Eagle | local |
+| Uncategorized also counts items whose only folder no longer exists | Done | `logic::scope::uncategorized` (the view): no folders, or exactly one id that names no folder. `counts_as_uncategorized` (the sidebar count) adds the one-stale-id case only when the item's last-modified time is before the library's `modificationTime`, as Eagle's count does; Eagle's view has no such guard | local |
 | Random view | Done | `L:19` Scope::Random | local |
 | Random refresh button (key R) | Done | Button, R and the View menu | local |
 | Recently Used: items the user recently opened | Done | Opened items, newest first; trashed items listed too, as Eagle | local |
