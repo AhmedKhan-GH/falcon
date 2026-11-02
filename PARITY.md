@@ -7,10 +7,10 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
 | Main window: menus, shortcuts, toolbar, sidebar, layouts | 260 | 6 | 6 | 8 |
-| Viewers and file formats | 187 | 14 | 2 | 5 |
+| Viewers and file formats | 188 | 13 | 2 | 5 |
 | Search, filters and organising | 216 | 1 | 2 | 3 |
 | Import, export, library, preferences and integrations | 190 | 5 | 12 | 26 |
-| **Total** | 853 | 26 | 22 | 42 |
+| **Total** | 854 | 25 | 22 | 42 |
 
 Rows marked **Not wanted (user decision)** (4) are Eagle features the user chose not to have in falcon; they are counted outside the local Missing total.
 ## Fix first
@@ -480,7 +480,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | PDF | Inside main window (`index.html:1301`) | Central area, sidebar and inspector kept (`F/app.rs:3392`, `F/app/pdf_view.rs:958`) | Done (macOS only) |
 | 3D model | Inside main window (`index.html:1443`) | Central panel, interactive for obj/stl/ply/glb/3mf/fbx/dae/3ds and ifc with tessellated geometry, a still for ifc without it | Partial |
 | Special formats (PSD, AI, Office…) | Inside main window (`index.html:1448`) | Central panel between sidebar and inspector (`F/app.rs` `fn viewer`, `viewer_ui`), as a QuickLook render | Partial |
-| Web page (url/html/mhtml) | Inside main window (`index.html:1491`) | Central panel; live WKWebView for url/html on macOS, MHTML as a still | Partial |
+| Web page (url/html/mhtml) | Inside main window (`index.html:1491`) | Central panel; live WKWebView for url, html and mhtml on macOS (MHTML unpacked by `falcon_library::mhtml` into a temp folder per view with a file-only content security policy, `web_archive.rs`); the preview window too | Done |
 | Toggle sidebar and inspector from inside the viewer | `toggle-all-btn` in the detail toolbar (`index.html:1015`) | Panels button in every viewer bar and the main toolbar (`App::panels_button`, `logic::toggle_all`), ⌥⌘3 and Tab; both-on/both-off like Eagle | Done |
 | Separate preview window | `preview-window.html`, `Context.Open.New.Window` | No second viewer window (only the collect window uses a viewport, `F/collect.rs:84`) | Missing |
 | Space quick preview (inline mode) | Inline overlay with prev/next arrows, counter and exit button (`index.html:1242-1254`, `app.bundle.js:33612`) | Space opens the same full viewer (`F/app.rs:1092`) | Partial |
@@ -579,7 +579,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | Play native formats (mp4, mov, m4v and others) | Done | AVFoundation player (`F/app/video_view.rs:114-145`) | local |
-| Fallback player for formats Chromium can't play (mkv, avi, wmv, flv and others) | Partial | `falcon-ffmpeg` player behind `falcon_video::Video` in the viewer and the preview window, over an LGPL decode-only FFmpeg 7.1.5 built by `scripts/build-ffmpeg.sh` into `target/ffmpeg` (CONFIG_GPL 0, no encoders, muxers, network or filters; checked again at run time from each library's licence string) and loaded with `dlopen`, never linked; `scripts/bundle.sh` ships the five dylibs in Contents/Frameworks with the LGPL text in Resources/FFmpeg. Same viewer UI, seek-bar thumbnail, hover strip and hover sound, import thumbnail at Eagle's min(10 s, duration/3) and duration. Gaps: AV1 is not decoded (dav1d needs meson); pitch moves with speed (atempo lives in avfilter); Eagle's 1.5 s no-frame switch is not copied; without a built FFmpeg the can't-play page says the libraries weren't found | local |
+| Fallback player for formats Chromium can't play (mkv, avi, wmv, flv and others) | Partial | `falcon-ffmpeg` player behind `falcon_video::Video` in the viewer and the preview window, over an LGPL decode-only FFmpeg 7.1.5 built by `scripts/build-ffmpeg.sh` into `target/ffmpeg` (CONFIG_GPL 0, no encoders, muxers, network or filters; checked again at run time from each library's licence string) and loaded with `dlopen`, never linked; `scripts/bundle.sh` ships the five dylibs in Contents/Frameworks with the LGPL text in Resources/FFmpeg. Same viewer UI, seek-bar thumbnail, hover strip and hover sound, import thumbnail at Eagle's min(10 s, duration/3) and duration. AV1 decodes through dav1d 1.5.4 (BSD-2, built by the same script with meson/ninja/pkgconf pinned into a venv under target/, shipped as libdav1d.7.dylib). Gaps: pitch moves with speed (atempo lives in avfilter); Eagle's 1.5 s no-frame switch is not copied; without a built FFmpeg the can't-play page says the libraries weren't found | local |
 | "Can't play this file" page with an Open With button | Done | `video_view.rs` `cannot_play`, `cannot_play_line(ext, ffmpeg)`: thumbnail, name, a line saying neither macOS nor FFmpeg could play the file (or that the FFmpeg libraries weren't found), Open With | local |
 | Autoplay on open | Done | `F/app/video_view.rs`; switch `Prefs::video_autoplay` | local |
 | Play/pause button, click picture to toggle, Space | Done | `F/app/video_view.rs:309-312`, `:385-392`, `F/shortcuts.rs:122` | local |
@@ -757,7 +757,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Animated GIF plays inside the hover preview | Done | `gif_view.rs` `hover_anim`, `anim.rs` `Cards::popup` | local |
 | GIF and animated images play when hovered in the grid | Done | GIF, animated WebP and (macOS) animated AVIF (`card_anim`, `Cards::play`) | local |
 | Preference: always autoplay GIF/WebP/AVIF in the grid | Done | `prefs.always_play_animated` (off by default, as Eagle); AVIF on macOS | local |
-| Video hover preview: autoplays, moving the pointer scrubs, progress bar and time | Partial | Picture strip with scrub, rest-resume, bar and time, through the FFmpeg grabber for FFmpeg-only formats; sound through `falcon_library::audio` (symphonia, then the FFmpeg backend), so mkv/webm/avi soundtracks play when unmuted and FFmpeg is installed; not yet heard by hand | local |
+| Video hover preview: autoplays, moving the pointer scrubs, progress bar and time | Partial | Picture strip with scrub, rest-resume, bar and time, through the FFmpeg grabber for FFmpeg-only formats; sound through `falcon_library::audio` (symphonia, then the FFmpeg backend), so mkv/webm/avi soundtracks play when unmuted and FFmpeg is installed; the grabber falls back to FFmpeg when AVFoundation opens a file it can't decode (AV1 MP4); not yet heard by hand | local |
 | Mute toggle on the video hover preview, remembered | Done | `Display::video_muted`, muted by default as Eagle; sound through the shared hover audio player when unmuted | local |
 | Audio hover preview: plays, click to seek, progress | Done | Plays after 200 ms, click to seek, progress; stops when the window hides or is minimised; every audio format falcon decodes, with the decoded length when the record has none | local |
 | YouTube, Vimeo and Bilibili hover previews for bookmarked links | Missing | None | online/plugin |
@@ -806,13 +806,13 @@ Eagle columns come from `config.js` (`SUPPORT_FORMATS_DARWIN`), `E/js/thumbs/thu
 | txt | Editable text editor | None | Editable text with autosave (`textdoc.rs`) |
 | ttf, otf, ttc, woff, woff2 | Font viewer | Drawn specimen 600×600 | Font viewer (falls back if egui can't read the font) |
 | mp3, wav, ogg, flac, aac, m4a | Audio player with waveform | Drawn waveform 280×140 | Audio player with waveform; all decode through `falcon_library::audio` (ADTS with MPEG-2 headers and Opus in Ogg included); other sound files are plain items, as in Eagle |
-| mp4, mov, m4v, 3gp, ts, mts, m2ts | HTML5 video player, mpv fallback | QL | AVFoundation player; FFmpeg player for what it refuses (ts, mts, m2ts) |
-| webm, mkv, avi, wmv, mpg, flv, f4v | HTML5 player or mpv fallback | QL if available | AVFoundation if it can, else the FFmpeg player when installed; FFmpeg thumbnail and duration at import |
+| mp4, mov, m4v, 3gp, ts, mts, m2ts | HTML5 video player, mpv fallback | QL | AVFoundation player; FFmpeg player for what it refuses (ts, mts, m2ts) or can't decode (AV1 through dav1d) |
+| webm, mkv, avi, wmv, mpg, flv, f4v | HTML5 player or mpv fallback | QL if available | AVFoundation if it can, else the FFmpeg player when installed (AV1 included, through dav1d); FFmpeg thumbnail and duration at import |
 | 360, afx, eva, vap | Video player | QL if available | AVFoundation, else FFmpeg if it reads the container |
 | glb, obj, fbx, 3ds, 3mf, dae, ifc, ply, stl | Interactive 3D viewer | QL if available (obj/stl/ply/dae usually; fbx/ifc/glb rarely) | Interactive viewer with textures (glb, obj, fbx, dae, 3ds) and drawn, textured thumbnail for glb, obj, fbx, 3mf, ply, stl, dae, 3ds and ifc with tessellated geometry; QL still for ifc without it; `.gltf` is a plain item with QuickLook, as in Eagle |
 | url | Live web view | QL (generic) | Live WKWebView (macOS); `.url` addresses read on import; `.webloc`, `.htm` and `.mht` are plain items, as in Eagle |
 | html | Live web view | QL | Live page in the viewer (WKWebView) |
-| mhtml | Live web view | QL | QL still |
+| mhtml | Live web view | QL | Live page in the viewer and preview window (unpacked by falcon's own MIME reader, no network); 16:10 thumbnail from the page at import |
 
 ### 18. Ranked list of local Missing and Partial items
 
@@ -825,7 +825,7 @@ Ranked by how often a user would notice them.
 5. ~~Animated AVIF doesn't animate.~~ Fixed on macOS through ImageIO; WebP and APNG everywhere.
 6. **No video hover-scrub preview in the grid (Missing).** Also missing: audio hover playback. GIF and WebP cards do play on hover.
 7. **No video frame tools (Missing).** You can't set a frame as the thumbnail, copy it or save it.
-8. ~~No fallback player for mkv, avi, wmv, flv or webm.~~ Fixed when FFmpeg is built (`scripts/build-ffmpeg.sh`); no AV1.
+8. ~~No fallback player for mkv, avi, wmv, flv or webm.~~ Fixed when FFmpeg is built (`scripts/build-ffmpeg.sh`); AV1 through dav1d.
 9. ~~No interactive 3D model viewer.~~ Fixed for obj/stl/ply/glb/3mf/fbx/dae/3ds and tessellated ifc; ifc with only swept, CSG or b-spline geometry stays a still. Textures are drawn for glb, obj, fbx, dae and 3ds.
 10. **No text editor for .txt (Missing).** No editing, renaming, zoom or auto-reload, and cards don't show the text.
 11. **No viewer context menu or right-drag gestures (Missing).** Right-click menu, swipe to previous or next, drag to zoom.
