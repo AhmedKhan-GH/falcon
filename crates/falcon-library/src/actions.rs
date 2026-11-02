@@ -1,19 +1,20 @@
 //! Actions: named, ordered lists of organising steps with an optional
 //! shortcut, run on the selected items.
 //!
-//! Eagle 4.0.0 keeps a library's actions in `actions.config.json` at the
-//! library root, a JSON array read when the library opens and re-read
-//! when the file changes. Eagle's own window reads only each entry's
-//! `id`, `name` and `shortcut` (an accelerator such as
-//! `"Command + Shift + 1"`); the steps belong to whoever wrote the entry.
-//! Falcon keeps each entry as the JSON it read, so entries written by
-//! something else (fields falcon doesn't know, steps it can't run, key
-//! order) survive a save byte for byte, and writes its own steps under
-//! `steps`, one object per step tagged by `type`.
+//! In Eagle 4.0.0 actions are a plugin (`ai-action`) that keeps its list
+//! in `actions.config.json` at the library root. That file belongs to the
+//! plugin: falcon never reads, creates, changes or deletes it. Falcon's
+//! own actions are its implementation of the feature and live in falcon's
+//! app data, one file per library (see [`store_path`]); the app picks the
+//! folder (`<app data>/actions/`).
 //!
-//! The file is written only after an edit, atomically (temp file and
-//! rename), compact like Eagle's other library files, or indented with
-//! two spaces when the file it replaces was.
+//! The file is a JSON array of objects, each with `id`, `name`,
+//! `shortcut` (an accelerator such as `"Command + Shift + 1"`, empty for
+//! none) and `steps`, one object per step tagged by `type`. Falcon keeps
+//! each entry as the JSON it read, so fields it doesn't know and key
+//! order survive a save byte for byte. It is written only after an edit,
+//! atomically (temp file and rename), compact, or indented with two
+//! spaces when the file it replaces was.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -24,8 +25,29 @@ use serde_json::{Map, Value};
 use crate::error::{Error, Result};
 use crate::library::Library;
 
-/// The file's name inside the library.
-pub const FILE: &str = "actions.config.json";
+/// The key naming a library's actions file: Eagle's `metadata.json`
+/// carries no library id, so it is the 64-bit FNV-1a hash of the
+/// library's canonical path (symlinks resolved, no trailing slash) as 16
+/// lowercase hex digits. A path that can't be resolved (the library is
+/// gone) is hashed as given. Moving or renaming a library therefore
+/// starts it with no actions.
+pub fn library_key(root: &Path) -> String {
+    let canonical = fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+    let text = canonical.to_string_lossy();
+    let text = text.trim_end_matches(['/', '\\']);
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in text.bytes() {
+        h ^= u64::from(b);
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    format!("{h:016x}")
+}
+
+/// The file holding the actions of the library at `root`, inside `dir`
+/// (falcon's `<app data>/actions/`): `<dir>/<library_key>.json`.
+pub fn store_path(dir: &Path, root: &Path) -> PathBuf {
+    dir.join(format!("{}.json", library_key(root)))
+}
 
 /// One organising step. The `type` strings follow the rule names Eagle's
 /// translations still carry from its earlier built-in Actions.
@@ -75,13 +97,13 @@ pub struct ActionDef {
     /// The accelerator text, as Eagle stores it; `None` when unset.
     pub shortcut: Option<String>,
     pub steps: Vec<Step>,
-    /// Falcon understood every step. An entry written by something else
-    /// (Eagle's AI Action plugin) lists and keeps its shortcut but cannot
-    /// run or be edited here.
+    /// Falcon understood every step. An entry with fields or steps falcon
+    /// doesn't know (written by a newer falcon, or by hand) lists and keeps
+    /// its shortcut but cannot run or be edited here.
     pub runnable: bool,
 }
 
-/// `actions.config.json` as read: each entry's JSON, untouched.
+/// A store file as read: each entry's JSON, untouched.
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct ActionsFile {
     entries: Vec<Map<String, Value>>,
@@ -107,29 +129,25 @@ impl ActionsFile {
         }
     }
 
-    /// The path of the file in `root`.
-    pub fn path(root: &Path) -> PathBuf {
-        root.join(FILE)
-    }
-
-    /// Reads the library's file; a missing file is an empty list, as in
-    /// Eagle.
-    pub fn load(root: &Path) -> Result<ActionsFile> {
-        let path = Self::path(root);
-        match fs::read_to_string(&path) {
-            Ok(text) => Self::parse(&text).map_err(|e| Error::json(&path, e)),
+    /// Reads a store file; a missing file is an empty list.
+    pub fn load(path: &Path) -> Result<ActionsFile> {
+        match fs::read_to_string(path) {
+            Ok(text) => Self::parse(&text).map_err(|e| Error::json(path, e)),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(ActionsFile::default()),
-            Err(e) => Err(Error::io(&path, e)),
+            Err(e) => Err(Error::io(path, e)),
         }
     }
 
-    /// Writes the file atomically: a temp file beside it, then a rename.
-    pub fn save(&self, root: &Path) -> Result<()> {
-        let path = Self::path(root);
-        let io = |e: std::io::Error| Error::io(&path, e);
-        let mut tmp = tempfile::NamedTempFile::new_in(root).map_err(io)?;
+    /// Writes a store file atomically: a temp file beside it, then a
+    /// rename, creating its folder if needed. On a failure the temp file
+    /// is removed and the old file, if any, stays as it was.
+    pub fn save(&self, path: &Path) -> Result<()> {
+        let io = |e: std::io::Error| Error::io(path, e);
+        let dir = path.parent().unwrap_or(Path::new("."));
+        fs::create_dir_all(dir).map_err(io)?;
+        let mut tmp = tempfile::NamedTempFile::new_in(dir).map_err(io)?;
         std::io::Write::write_all(&mut tmp, self.to_text().as_bytes()).map_err(io)?;
-        tmp.persist(&path).map_err(|e| io(e.error))?;
+        tmp.persist(path).map_err(|e| io(e.error))?;
         Ok(())
     }
 
@@ -406,14 +424,57 @@ mod tests {
     #[test]
     fn missing_file_is_empty_and_save_is_atomic() {
         let d = tempfile::tempdir().unwrap();
-        assert!(ActionsFile::load(d.path()).unwrap().is_empty());
+        let path = d.path().join("actions/k.json");
+        assert!(ActionsFile::load(&path).unwrap().is_empty());
         let f = ActionsFile::parse(SAMPLE).unwrap();
-        f.save(d.path()).unwrap();
-        assert_eq!(fs::read_to_string(d.path().join(FILE)).unwrap(), SAMPLE);
-        assert_eq!(fs::read_dir(d.path()).unwrap().count(), 1, "no temp file left");
-        assert_eq!(ActionsFile::load(d.path()).unwrap(), f);
-        fs::write(d.path().join(FILE), "{oops").unwrap();
-        assert!(ActionsFile::load(d.path()).is_err());
+        f.save(&path).unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), SAMPLE);
+        assert_eq!(fs::read_dir(d.path().join("actions")).unwrap().count(), 1, "no temp file left");
+        assert_eq!(ActionsFile::load(&path).unwrap(), f);
+        fs::write(&path, "{oops").unwrap();
+        assert!(ActionsFile::load(&path).is_err());
+    }
+
+    #[test]
+    fn a_failed_save_leaves_no_partial_file() {
+        let d = tempfile::tempdir().unwrap();
+        // The rename fails: a folder sits where the file goes.
+        let blocked = d.path().join("k.json");
+        fs::create_dir(&blocked).unwrap();
+        assert!(ActionsFile::parse(SAMPLE).unwrap().save(&blocked).is_err());
+        let names: Vec<_> = fs::read_dir(d.path()).unwrap().map(|e| e.unwrap().file_name()).collect();
+        assert_eq!(names, ["k.json"], "the temp file is gone");
+        assert!(blocked.is_dir());
+        // The temp file can't be made: the old file stays whole.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let ro = d.path().join("ro");
+            fs::create_dir(&ro).unwrap();
+            let path = ro.join("k.json");
+            fs::write(&path, "[]").unwrap();
+            fs::set_permissions(&ro, fs::Permissions::from_mode(0o555)).unwrap();
+            let res = ActionsFile::parse(SAMPLE).unwrap().save(&path);
+            fs::set_permissions(&ro, fs::Permissions::from_mode(0o755)).unwrap();
+            assert!(res.is_err());
+            assert_eq!(fs::read_to_string(&path).unwrap(), "[]");
+            assert_eq!(fs::read_dir(&ro).unwrap().count(), 1);
+        }
+    }
+
+    #[test]
+    fn keys_follow_the_canonical_library_path() {
+        let d = tempfile::tempdir().unwrap();
+        let (a, b) = (d.path().join("A.library"), d.path().join("B.library"));
+        fs::create_dir_all(&a).unwrap();
+        fs::create_dir_all(&b).unwrap();
+        assert_ne!(library_key(&a), library_key(&b));
+        assert_eq!(library_key(&a).len(), 16);
+        assert_eq!(library_key(&a), library_key(&d.path().join("A.library/")), "a trailing slash is the same library");
+        assert_eq!(library_key(&a), library_key(&d.path().join("B.library/../A.library")), "resolved before hashing");
+        let dir = Path::new("/app/actions");
+        assert_eq!(store_path(dir, &a), dir.join(format!("{}.json", library_key(&a))));
+        assert!(!store_path(dir, &a).starts_with(&a), "never inside the library");
     }
 
     fn folder(lib: &mut Library, name: &str) -> String {

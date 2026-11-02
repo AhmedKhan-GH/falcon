@@ -10,14 +10,10 @@ use crate::logic::Scope;
 
 impl App {
     /// Once a frame, before the keyboard: follows the open library's
-    /// actions file, hands the actions to Preferences, and runs the
+    /// actions, hands the actions to Preferences, and runs the
     /// actions chosen in the menu bar or by their keys.
     pub(crate) fn actions_tick(&mut self, ctx: &egui::Context) {
-        let now = ctx.input(|i| i.time);
-        self.user_actions.follow(self.ws.root.as_deref(), now);
-        if self.ws.root.is_some() {
-            ctx.request_repaint_after(std::time::Duration::from_secs_f64(super::POLL_SECS));
-        }
+        self.user_actions.follow(self.ws.root.as_deref());
         self.prefs_window.set_actions(self.user_actions.shortcut_list());
         for click in crate::menu::take_action_clicks() {
             if click.by_key {
@@ -64,7 +60,7 @@ impl App {
     pub(crate) fn run_user_action(&mut self, id: &str) {
         let Some(def) = self.user_actions.find(id) else { return };
         if !def.runnable {
-            self.flash_error(tr("Made by Eagle's AI Action plugin; it runs only in Eagle"));
+            self.flash_error(tr("This action has steps Falcon can't run"));
             return;
         }
         if self.ws.scope == Scope::Trash {

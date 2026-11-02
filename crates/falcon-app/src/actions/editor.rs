@@ -505,10 +505,7 @@ mod tests {
 
     #[test]
     fn recording_refuses_taken_keys() {
-        let d = tempfile::tempdir().unwrap();
-        std::fs::write(d.path().join("actions.config.json"), r#"[{"id":"A","name":"Other","shortcut":"Command + Shift + 1","steps":[]}]"#).unwrap();
-        let mut state = ActionsState::default();
-        state.follow(Some(d.path()), 0.0);
+        let (_d, state) = crate::actions::state_with(r#"[{"id":"A","name":"Other","shortcut":"Command + Shift + 1","steps":[]}]"#);
         let keys = Shortcuts::default();
         let mut ed = Editor::new_action();
         ed.recording = true;

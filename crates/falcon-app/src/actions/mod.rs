@@ -2,26 +2,31 @@
 //! with an optional shortcut, run on the selection from the Actions menu,
 //! the Actions panel (toolbar button, G) or the shortcut.
 //!
-//! The list lives in the library's `actions.config.json`
-//! (`falcon_library::actions`), as in Eagle 4.0.0, and is read again
-//! when the file changes on disk (checked every four seconds, as Eagle
-//! polls it). This module holds the state and the rules; `app.rs` runs
-//! actions and routes the menu and keys, `panel.rs` and `editor.rs` draw.
+//! Eagle 4.0.0 has this as a plugin; falcon builds it in. The list lives
+//! in falcon's own app data, `<app data>/actions/<library key>.json`
+//! (`falcon_library::actions::store_path`), never in the library: the
+//! library's `actions.config.json` belongs to Eagle's plugin and falcon
+//! doesn't open it. Falcon is the only writer of its file, so the list is
+//! read when the library changes and kept in memory between edits. This
+//! module holds the state and the rules; `app.rs` runs actions and routes
+//! the menu and keys, `panel.rs` and `editor.rs` draw.
 
 pub(crate) mod app;
 pub(crate) mod editor;
 pub(crate) mod panel;
 
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
 
 use eframe::egui::{Key, KeyboardShortcut, Modifiers};
 use falcon_library::actions::{ActionDef, ActionsFile, Step};
 
 use crate::shortcuts::{self, Shortcuts};
 
-/// How often the file is checked for changes made elsewhere, in seconds.
-pub const POLL_SECS: f64 = 4.0;
+/// The folder in falcon's app data holding one actions file per library
+/// (`~/Library/Application Support/Falcon/actions/` on macOS).
+pub fn store_dir() -> Option<PathBuf> {
+    eframe::storage_dir("Falcon").map(|d| d.join("actions"))
+}
 
 /// Running an action on this many items or more asks first, as Eagle's
 /// Actions menu does.
@@ -52,66 +57,63 @@ pub struct Panel {
 }
 
 /// The open library's actions.
-#[derive(Default)]
 pub struct ActionsState {
+    /// Where actions files go (`store_dir`); none means nothing is kept.
+    dir: Option<PathBuf>,
     root: Option<PathBuf>,
+    /// The open library's file in `dir`.
+    store: Option<PathBuf>,
     file: ActionsFile,
     defs: Vec<ActionDef>,
     /// Why the file couldn't be read; nothing is written over it then.
     pub broken: Option<String>,
-    stamp: Option<SystemTime>,
-    checked_at: Option<f64>,
     pub panel: Panel,
     pub editor: Option<editor::Editor>,
 }
 
-fn modified(path: &Path) -> Option<SystemTime> {
-    std::fs::metadata(path).and_then(|m| m.modified()).ok()
+impl Default for ActionsState {
+    fn default() -> Self {
+        Self::new(store_dir())
+    }
 }
 
 impl ActionsState {
-    /// Follows the open library: reads its file when the library changes
-    /// and, every `POLL_SECS`, when the file's modification time moved.
-    /// Returns whether the list was read again.
-    pub fn follow(&mut self, root: Option<&Path>, now: f64) -> bool {
-        if self.root.as_deref() != root {
-            self.root = root.map(Path::to_path_buf);
-            self.panel = Panel::default();
-            self.editor = None;
-            self.reload();
-            self.checked_at = Some(now);
-            return true;
-        }
-        if self.checked_at.is_some_and(|t| now - t < POLL_SECS) {
+    /// Keeps actions files in `dir`.
+    pub fn new(dir: Option<PathBuf>) -> Self {
+        ActionsState { dir, root: None, store: None, file: ActionsFile::default(), defs: Vec::new(), broken: None, panel: Panel::default(), editor: None }
+    }
+
+    /// Follows the open library: reads its actions when the library
+    /// changes. Returns whether the list was read again.
+    pub fn follow(&mut self, root: Option<&Path>) -> bool {
+        if self.root.as_deref() == root {
             return false;
         }
-        self.checked_at = Some(now);
-        let Some(root) = &self.root else { return false };
-        if modified(&ActionsFile::path(root)) == self.stamp {
-            return false;
-        }
+        self.root = root.map(Path::to_path_buf);
+        self.store = self.dir.as_deref().zip(root).map(|(dir, root)| falcon_library::actions::store_path(dir, root));
+        self.panel = Panel::default();
+        self.editor = None;
         self.reload();
         true
     }
 
     fn reload(&mut self) {
         self.broken = None;
-        let Some(root) = &self.root else {
-            self.file = ActionsFile::default();
-            self.defs.clear();
-            self.stamp = None;
-            return;
-        };
-        self.stamp = modified(&ActionsFile::path(root));
-        match ActionsFile::load(root) {
-            Ok(f) => self.file = f,
-            Err(e) => {
-                // Eagle lists nothing then; falcon also keeps its hands off.
-                self.file = ActionsFile::default();
+        self.file = match &self.store {
+            None => ActionsFile::default(),
+            Some(path) => ActionsFile::load(path).unwrap_or_else(|e| {
+                // Listed as empty and never written over.
                 self.broken = Some(e.to_string());
-            }
-        }
+                ActionsFile::default()
+            }),
+        };
         self.defs = self.file.actions();
+    }
+
+    /// The open library's actions file, if one can be kept.
+    #[cfg(test)]
+    pub fn store(&self) -> Option<&Path> {
+        self.store.as_deref()
     }
 
     /// The actions, in the file's order.
@@ -150,25 +152,17 @@ impl ActionsState {
     }
 
     /// Applies an edit to the file and writes it. Refused while no library
-    /// is open or the file on disk couldn't be read.
+    /// is open or the file couldn't be read.
     pub fn commit(&mut self, edit: impl FnOnce(&mut ActionsFile)) -> Result<(), String> {
-        let Some(root) = self.root.clone() else { return Err(crate::locale::tr("No library is open").into()) };
+        let Some(path) = self.store.clone() else { return Err(crate::locale::tr("No library is open").into()) };
         if let Some(e) = &self.broken {
             return Err(e.clone());
         }
-        // Someone else may have changed it since the last check.
-        if modified(&ActionsFile::path(&root)) != self.stamp {
-            self.reload();
-            if let Some(e) = &self.broken {
-                return Err(e.clone());
-            }
-        }
         let mut file = self.file.clone();
         edit(&mut file);
-        file.save(&root).map_err(|e| e.to_string())?;
+        file.save(&path).map_err(|e| e.to_string())?;
         self.file = file;
         self.defs = self.file.actions();
-        self.stamp = modified(&ActionsFile::path(&root));
         Ok(())
     }
 
@@ -199,41 +193,48 @@ pub fn filter<'a>(defs: &'a [ActionDef], query: &str) -> Vec<&'a ActionDef> {
     defs.iter().filter(|d| words.iter().all(|w| d.name.to_lowercase().contains(w))).collect()
 }
 
+/// A state keeping its files in `<tmp>/app/actions`, following the
+/// library folder `<tmp>/T.library`, whose actions file holds `text`.
+#[cfg(test)]
+pub(crate) fn state_with(text: &str) -> (tempfile::TempDir, ActionsState) {
+    let d = tempfile::tempdir().unwrap();
+    let root = d.path().join("T.library");
+    std::fs::create_dir_all(&root).unwrap();
+    let dir = d.path().join("app/actions");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(falcon_library::actions::store_path(&dir, &root), text).unwrap();
+    let mut s = ActionsState::new(Some(dir));
+    assert!(s.follow(Some(&root)));
+    (d, s)
+}
+
+#[cfg(test)]
+mod storage_tests;
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn state_with(text: &str) -> (tempfile::TempDir, ActionsState) {
-        let d = tempfile::tempdir().unwrap();
-        std::fs::write(d.path().join("actions.config.json"), text).unwrap();
-        let mut s = ActionsState::default();
-        assert!(s.follow(Some(d.path()), 0.0));
-        (d, s)
-    }
-
     const TWO: &str = r#"[{"id":"A","name":"Tag as reference","shortcut":"Command + Shift + 1","steps":[{"type":"addTags","tags":["ref"]}]},{"id":"B","name":"Rate five","shortcut":"","steps":[{"type":"rating","rating":5}]}]"#;
 
     #[test]
-    fn follows_the_library_and_polls_the_file() {
+    fn follows_the_library() {
         let (d, mut s) = state_with(TWO);
         assert_eq!(s.defs().len(), 2);
-        assert!(!s.follow(Some(d.path()), 1.0), "not before the poll interval");
-        // Written by Eagle meanwhile (a later modification time).
-        std::fs::write(d.path().join("actions.config.json"), "[]").unwrap();
-        let later = SystemTime::now() + std::time::Duration::from_secs(5);
-        std::fs::File::options().write(true).open(d.path().join("actions.config.json")).unwrap().set_modified(later).unwrap();
-        assert!(s.follow(Some(d.path()), 5.0));
-        assert!(s.defs().is_empty());
-        assert!(s.follow(None, 6.0));
+        assert!(!s.follow(Some(&d.path().join("T.library"))), "the same library isn't read again");
+        assert!(s.follow(None));
         assert!(s.menu_entries().is_empty());
+        assert!(s.store().is_none());
+        assert!(s.follow(Some(&d.path().join("T.library"))));
+        assert_eq!(s.defs().len(), 2);
     }
 
     #[test]
     fn a_broken_file_lists_nothing_and_is_never_overwritten() {
-        let (d, mut s) = state_with("{not json");
+        let (_d, mut s) = state_with("{not json");
         assert!(s.defs().is_empty() && s.broken.is_some());
         assert!(s.commit(|f| f.remove("A")).is_err());
-        assert_eq!(std::fs::read_to_string(d.path().join("actions.config.json")).unwrap(), "{not json");
+        assert_eq!(std::fs::read_to_string(s.store().unwrap()).unwrap(), "{not json");
     }
 
     #[test]
@@ -243,11 +244,15 @@ mod tests {
         b.shortcut = Some("Alt + 5".into());
         s.commit(|f| f.put(&b)).unwrap();
         assert_eq!(s.find("B").unwrap().shortcut.as_deref(), Some("Alt + 5"));
-        let disk = std::fs::read_to_string(d.path().join("actions.config.json")).unwrap();
+        let disk = std::fs::read_to_string(s.store().unwrap()).unwrap();
         assert!(disk.ends_with(r#"{"id":"B","name":"Rate five","shortcut":"Alt + 5","steps":[{"type":"rating","rating":5}]}]"#), "{disk}");
         // No library open: nothing to write to.
-        let mut none = ActionsState::default();
+        let mut none = ActionsState::new(None);
         assert!(none.commit(|f| f.remove("A")).is_err());
+        // No app data folder: nowhere to keep them.
+        let mut nowhere = ActionsState::new(None);
+        nowhere.follow(Some(&d.path().join("T.library")));
+        assert!(nowhere.defs().is_empty() && nowhere.commit(|f| f.remove("A")).is_err());
     }
 
     #[test]

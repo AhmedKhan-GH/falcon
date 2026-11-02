@@ -107,7 +107,7 @@ impl App {
                             let more_resp = ui.interact(more, ui.scope_id().with(("action-more", &d.id)), Sense::click());
                             ui.painter().text(more.center(), Align2::CENTER_CENTER, ic::DOTS_THREE, font(14.0), t::p().text_muted);
                             let resp = if !d.runnable {
-                                resp.on_hover_text(tr("Made by Eagle's AI Action plugin; it runs only in Eagle"))
+                                resp.on_hover_text(tr("This action has steps Falcon can't run"))
                             } else if selected == 0 {
                                 resp.on_hover_text(tr("Select items to run the action on"))
                             } else {
