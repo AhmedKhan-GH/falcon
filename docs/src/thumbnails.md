@@ -82,6 +82,7 @@ From the viewer's `rotateImage`, `cropImage` and `saveCrop`, `js/utils/rotateIma
 - **Other formats are re-encoded.** PNG, WebP and BMP are drawn rotated on a canvas and exported in the same format, at quality 1 for WebP. Animated PNG is refused, and AVIF can't be written.
 - **Cropping is always re-encoded.** The crop box is cut out on a canvas and exported as PNG, JPEG or WebP, with a quality setting of 100 passed to Eagle's canvas helper (inferred to mean the best quality). The canvas drops the EXIF block, so a JPEG's orientation ends up in its pixels. Eagle shows the result and asks before saving.
 - **Writing.** Crop and rotate both overwrite the original in place and keep its name. Crop first copies it to `<file>.bk` and restores that if the write fails. Rotate writes `<file>.tmp` and then the file.
+- **Falcon's writing.** Falcon does not write in place. Rotate, flip and crop put the new bytes in `<file>.staged`, a copy of the original so that permissions and extended attributes stay, sync it and rename it over the original, keeping the birth time on macOS. There is no `.bk`.
 - **Afterwards.** Eagle refreshes the thumbnail (see above), which updates `size`, `btime`, `mtime`, `width`, `height`, the thumbnail and the palette. The item edit also bumps `lastModified`; `modificationTime` stays. Folder covers that show the item are redrawn.
 - **Undo.** There is none. The overwritten pixels are gone.
 
@@ -94,7 +95,7 @@ From the viewer's `flipImage` and `js/utils/flipImage.js`:
 - **PNG, WebP and BMP are re-encoded.** The image is loaded, drawn mirrored on a canvas and exported in the same format (quality 1 for WebP, a canvas-to-BMP helper for BMP). AVIF is accepted, then fails because it can't be written. Other formats are refused. Eagle doesn't check for animation here (inferred: an APNG would lose its frames).
 - **Afterwards.** Eagle queues `regenerate-thumbnail` for the item, as rotation does.
 
-Falcon's `Library::flip_item(id, Flip::Horizontal | Flip::Vertical)` follows this, with rotation's in-place semantics. A JPEG gets `transform::flip_orientation`, which composes the mirror with the current orientation and reproduces Eagle's tables. PNG, WebP and BMP are mirrored and re-encoded with the same encoders falcon uses for rotation. Animated PNG and WebP are refused rather than flattened. The item is then refreshed (size, times, dimensions, thumbnail, palette), `lastModified` is bumped, and the open undo transaction is marked irreversible. `transform::can_flip(ext)` lists jpg, jpeg, png, webp and bmp.
+Falcon's `Library::flip_item(id, Flip::Horizontal | Flip::Vertical)` follows this, with rotation's semantics (the file is replaced atomically, see Writing above). A JPEG gets `transform::flip_orientation`, which composes the mirror with the current orientation and reproduces Eagle's tables. PNG, WebP and BMP are mirrored and re-encoded with the same encoders falcon uses for rotation. Animated PNG and WebP are refused rather than flattened. The item is then refreshed (size, times, dimensions, thumbnail, palette), `lastModified` is bumped, and the open undo transaction is marked irreversible. `transform::can_flip(ext)` lists jpg, jpeg, png, webp and bmp.
 
 ## How falcon does it
 
@@ -138,6 +139,6 @@ The `thumbnail` module holds the rules as plain functions: `plan_raster`, `plan_
   - Formats: rotate takes jpg, png, webp and bmp, crop takes jpg, png and webp. GIF, SVG, PDF and the rest are refused, and so are animated PNG and WebP.
   - A JPEG rotation rewrites only the EXIF orientation. An existing tag is changed in place. EXIF without the tag gets a copy of IFD0 with the tag added, appended to the block. A JPEG without EXIF gets a minimal block after its JFIF header. The compressed image data is copied unchanged.
   - Everything else is decoded with the `image` crate, turned or cut, and encoded again in the same format: PNG, JPEG at quality 100 with no EXIF (as Chromium's canvas does), BMP, and WebP through libwebp. Eagle's canvas exports WebP at quality 1, which falcon takes to be lossy quality 100 (inferred); falcon keeps a lossless WebP lossless.
-  - The file is overwritten in place, so its birth time stays. Then the item is refreshed as by Refresh Thumbnail and saved through `update_item`.
+  - The file is replaced atomically through `<file>.staged` rather than overwritten in place, and its birth time is kept on macOS. Then the item is refreshed as by Refresh Thumbnail and saved through `update_item`.
   - Undo: falcon's undo can't restore pixels, so these edits mark the open undo transaction irreversible, like a permanent delete. In the app that clears the undo history rather than restoring dimensions that no longer match the file.
 

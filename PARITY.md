@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 260 | 8 | 4 | 8 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 259 | 9 | 4 | 8 |
 | Viewers and file formats | 188 | 13 | 2 | 5 |
 | Search, filters and organising | 215 | 2 | 2 | 3 |
 | Import, export, library, preferences and integrations | 188 | 9 | 10 | 26 |
-| **Total** | 851 | 32 | 18 | 42 |
+| **Total** | 850 | 33 | 18 | 42 |
 
 Rows marked **Not wanted (user decision)** (4) are Eagle features the user chose not to have in falcon; they are counted outside the local Missing total.
 ## Fix first
@@ -96,7 +96,7 @@ Overall finding: falcon now has a native menu bar (`crates/falcon-app/src/menu.r
 | View: Scroll to Top / Bottom / Page Up / Page Down (Home, End, PgUp, PgDn) | Done | Home, End, Page Up and Page Down scroll the grid (a page is the view less 72 px, as Eagle); ⌘↑ / ⌘↓ select the first or last item | local |
 | View: Zoom In / Out (⌘= / ⌘-) | Done | Thumbnail size (shortcuts.rs:96-97, app.rs:1024-1029) | local |
 | View: Actual Size (⌘0) / Zoom to Fit (⌘9) | Done | View ▸ Actual Size ⌘0 and Zoom to Fit ⌘9 (`view.zoom.actual`, `view.zoom.fit`), enabled in the viewer | local |
-| View: Grayscale preview (⌥⌘G) | Done | Every loader tier incl. grid cards, animations, video frames, PDF pages, font specimen and the preview window (`logic::grayscale_rgba`); custom thumbnails gray too, unlike Eagle | local |
+| View: Grayscale preview (⌥⌘G) | Done | Every loader tier incl. grid cards, animations, video frames, PDF pages and font specimen (`logic::grayscale_rgba`), for the main window's grid and viewer only, as in Eagle; a preview window has its own flag (see the Navigator row in the viewers section); custom thumbnails gray too, unlike Eagle | local |
 | View: Open in New Window (⌘O) | Done | Every acted-on item except audio in a new window per open, stepped with ←/→ (`ui/viewer/preview_window/mod.rs` `open_preview_items`), as Eagle's one window that steps | local |
 | View: Open With Default App (⇧↩), Open with Other App, Reveal in Finder (⌘↩) | Done | open_ui.rs:33-46, shortcuts.rs:104-105 | local |
 | View: Open Link in Browser (⇧⌘O) | Done | `view.file.openlink`, `urls.rs` (web URL or file path) | local |
@@ -366,7 +366,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Remember window size and position | Done | eframe persistence (Cargo.toml `persistence` feature) | local |
 | Full screen | Done | ⌃⌘F and Window ▸ Full Screen, plus the green button | local |
 | Always on top for the main window | Done | `modes.rs` | local |
-| Open items in a separate preview window: own titlebar always-on-top toggle, opacity 10–100%, navigator, zoom presets 5–800%, grayscale, rotate / flip, copy, copy path / link, Reveal in Eagle | Done | `ui/viewer/preview_window/`: always-on-top, opacity 10–100%, navigator, zoom presets, grayscale, rotate/flip, Copy, Copy File Path, Copy ▸ Eagle Link, Reveal in Finder, Show in Falcon; every viewer type incl. 3D and web; ⌘O, middle click and the item menu | local |
+| Open items in a separate preview window: own titlebar always-on-top toggle, opacity 10–100%, navigator, zoom presets 5–800%, grayscale, rotate / flip, copy, copy path / link, Reveal in Eagle | Partial | `ui/viewer/preview_window/`: always-on-top, opacity 10–100%, navigator, zoom presets, grayscale (the window's own flag), rotate/flip, Copy, Copy File Path, Copy ▸ Eagle Link, Reveal in Finder, Show in Falcon; every viewer type incl. 3D and web; ⌘O, middle click and the item menu. Partial because the window's rotate, flip, grayscale and sharp zoom are covered by tests but not yet seen on screen (see the Navigator row in the viewers section) | local |
 | Middle-click opens an item in a new window (preference) | Done | `Prefs::middle_button` (new window, default, or nothing); never for audio, as Eagle | local |
 | Presentation / slideshow mode | Done | `modes.rs`; `ViewportCommand::Fullscreen`, panels and bar hidden | local |
 | Closing the window keeps the app running (Dock icon stays); reopen from the Dock | Done | Closing hides falcon (`NSApp hide:`, so the collect and preview windows hide too); the Dock icon or reopening brings it back; ⌘Q quits | local |
@@ -510,7 +510,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Always on top | Done | ⇧T (`modes.rs`) | local |
 | Thumbnail background per item (none, black, gray, white, grid) used in the viewer and grid | Done | `paint_thumb_bg` from the item's `background` key; wins over the transparency-grid preference | local |
 | Transparent-area display preference (grid or no grid) | Done | `prefs.transparency_grid`, off by default as Eagle | local |
-| Grayscale preview toggle | Done | Image, GIF, video, PDF, font, grid and the preview window; ⌥⌘G, View menu and item menu | local |
+| Grayscale preview toggle | Done | Image, GIF, video, PDF, font and grid in the main window; ⌥⌘G, View menu and item menu. Each preview window keeps its own flag (see the Navigator row in the viewers section) | local |
 | Navigator (minimap) while zoomed | Done | Eagle's 120 px box, 16 px inset, shown by its overflow rule; click centres, drag pans (`logic::navigator_*`); ⌥⌘8 and View ▸ Navigator | local |
 | Viewer keys follow the shortcut table (zoom, crop, rotate, flip) | Done | `view.zoom.*`, `edit.image.crop`, `edit.image.rotate` ⇧R, `edit.image.flip` ⇧F (Eagle's ids); the keys act only while a viewer is open | local |
 
@@ -538,7 +538,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Rotation mode preference (preview only, or write to file) | Done | `imageRotateMode` preference, default Write; preview mode only changes how the viewer draws | local |
 | Horizontal flip (Shift+F), vertical flip | Done | `F/crop.rs:251-258`, Shift-click flips vertically (`F/image_edit.rs:332`) | local |
 | Rotate and flip limited to jpg/png/webp/bmp (flip also avif) | Done | `FL/transform.rs:36-53` | local |
-| Crop tool (jpg/png/webp) with handles | Done | Crop with handles, ⇧C, W/H fields, Save / Save As / Cancel (`crop.rs`); in-place writes keep a `.bk` until synced, as Eagle | local |
+| Crop tool (jpg/png/webp) with handles | Done | Crop with handles, ⇧C, W/H fields, Save / Save As / Cancel (`crop.rs`); the edited file replaces the original atomically through `<file>.staged` (Eagle writes in place) and keeps its birth time | local |
 | Crop width and height number fields | Done | `crop.rs` bar fields | local |
 | Crop "Save As" (keeps the original, adds a new item) | Done | `crop_item_as_new`: same name, tags, folders, URL and rating, dated `modificationTime + 1` (Eagle +0.1); note not carried | local |
 | Live crop size readout | Done | `x: y: W: H:` shown while dragging | local |
@@ -706,7 +706,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | Shown as a zoomable image of the thumbnail | Done | Image viewer falls back to the preview tier (`F/app.rs:3427-3429`) | local |
-| Higher-resolution render made on demand for PSD, PSB, AI, PPT, PPTX, POTX | Partial | PSD, PSDT and PSB: the merged image is decoded by falcon's own reader of Adobe's spec (`falcon_library::psd`: raw and RLE, 8/16/32 bit, bitmap/gray/indexed/RGB/CMYK/duotone/Lab, ICC colour through moxcms, alpha only when the layer section flags it) into the tiled original path up to 16384² and the on-screen rows beyond, with no 8192 px cap; QuickLook stays the fallback when the file has no composite, with the reason in the inspector. AI and AIT saved PDF-compatible (by their `%PDF` header): PDFKit draws the part on screen at the size shown after the view rests 0.4 s, with no cap and one patch held, lined up with QuickLook's picture (crop box, rotation, white). PostScript-only AI, PPT, PPTX and POTX: re-rendered through QuickLook at the shown size after the same rest, visible part only. What remains: PPT, PPTX, POTX and PostScript-only AI keep the 8192² cap (QuickLook renders whole pages only), and the separate preview window keeps the 3072 px render for every format. Gaps: PPT, PPTX and POTX and PostScript-only `.ai` files keep the QuickLook 8192² cap, and the separate preview window keeps the 3072 px render for every format | local |
+| Higher-resolution render made on demand for PSD, PSB, AI, PPT, PPTX, POTX | Partial | PSD, PSDT and PSB: the merged image is decoded by falcon's own reader of Adobe's spec (`falcon_library::psd`: raw and RLE, 8/16/32 bit, bitmap/gray/indexed/RGB/CMYK/duotone/Lab, ICC colour through moxcms, alpha only when the layer section flags it) into the tiled original path up to 16384² and the on-screen rows beyond, with no 8192 px cap; QuickLook stays the fallback when the file has no composite, with the reason in the inspector. AI and AIT saved PDF-compatible (by their `%PDF` header): PDFKit draws the part on screen at the size shown after the view rests 0.4 s, with no cap and one patch held, lined up with QuickLook's picture (crop box, rotation, white). PostScript-only AI, PPT, PPTX and POTX: re-rendered through QuickLook at the shown size after the same rest, visible part only. The separate preview window now asks for the same renders as the main viewer (`ask_sharp` in `ui/viewer/image.rs`, on the window's own loader), not while the window's view is turned and not for animations; tests cover the jobs and region asked, but this has not yet been seen on screen. Gaps: PPT, PPTX and POTX and PostScript-only `.ai` files keep the QuickLook 8192² cap (QuickLook renders whole pages only) | local |
 | Comments on special formats | Done | `F/comments.rs:169` | local |
 | Custom thumbnail shown in the viewer for formats with no preview | Done | The custom thumbnail is the viewer's picture for formats with no picture of their own | local |
 | HDR/EXR rendered with tone mapping and exposure | Done | `falcon_library::hdr`: linear decode, Reinhard tone mapping as Eagle (fixed exposure 1.0 there); falcon adds an exposure slider | local |
@@ -742,7 +742,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Same viewers in the window (image, GIF, RAW, video, font, text, PDF, 3D, web, plugin) | Done | Image, GIF, video, audio, text, PDF, fonts, 3D (shared wgpu callback) and web (WKWebView on the preview's NSWindow) in the preview window; plugins not applicable | local |
 | Window opacity 10%–100% | Done | NSWindow `alphaValue` from the window menu | local |
 | Always on top toggle in the window | Done | Preview window menu | local |
-| Navigator, grayscale, rotate, flip in the window menu | Partial | Preview window menu (`ui/viewer/preview_window/mod.rs`). Gaps: rotate and flip change the preview only, where Eagle writes the file by default (`imageRotateMode` Write); they are not offered for video panes (Eagle also rotates and flips video); grayscale toggles the app-wide mode shared with the main window, where Eagle's is per window | local |
+| Navigator, grayscale, rotate, flip in the window menu | Partial | Preview window menu (`ui/viewer/preview_window/mod.rs`). In write mode (`RotateMode::Write`, the default, Eagle's `imageRotateMode`) rotate and flip rewrite the file through the main viewer's `Op::Rotate` and `Op::Flip` for formats `transform::can_rotate` and `can_flip` accept; in preview mode, or for a format falcon can't write, only the window's view turns. A video's picture turns and mirrors in the view only, never the file. The keys `edit.image.rotate`, `edit.image.flip` and `view.grayscale` are bound in the window. Audio never opens in a preview window, in Eagle or falcon. Grayscale is the window's own flag (`PreviewWin::gray`), off at start and kept while stepping items, on a loader of the window's own (`PreviewWin::loader`), as the main window's `modes.grayscale` stays its own and grays only its grid and viewer, as in Eagle. Tests cover the write-or-view rule, a turned view asking for no sharp render, grayscale surviving a step and the loader following forgets, but none of this has been seen on screen. Gaps: View ▸ Grayscale in the app menu bar always acts on the main window (only the key and the window's right-click menu act on a preview window); the web and 3D panes are not grayed in either window, where Eagle's preview CSS grays iframes | local |
 | Copy, copy path, copy link, reveal in Finder, open in default app | Done | Copy, Copy File Path, Copy ▸ Eagle Link, Reveal in Finder, Open in Default App | local |
 | Copy or save the current video frame | Done | Preview window video player: Copy Frame, Save Frame… | local |
 | Reveal in Eagle (select the item in the main window) | Done | Show in Falcon | local |
@@ -831,9 +831,9 @@ Ranked by how often a user would notice them.
 11. ~~**No viewer context menu or right-drag gestures (Missing).** Right-click menu, swipe to previous or next, drag to zoom.~~ Fixed.
 12. ~~**No zoom slider or zoom presets menu, and different zoom keys (Partial).** Cmd+=/Cmd+-/Cmd+0/Cmd+9 and backtick don't work in the viewer.~~ Fixed.
 13. ~~**No presentation mode or full screen (Missing).** Also affects the video full-screen button and PDF presentation mode.~~ Fixed.
-14. The separate preview window is built (opacity, always on top, reveal in Finder). Partial: rotate and flip change the preview only where Eagle writes the file by default, they are not offered for video, and grayscale is app-wide rather than per window.
+14. The separate preview window is built (opacity, always on top, reveal in Finder). Partial: rotate and flip write the file by default as Eagle does, a video's picture turns in the view only, grayscale is per window, and zoom uses the main viewer's sharp renders. None of this has been seen on screen yet, the app menu's View ▸ Grayscale acts on the main window only, and the web and 3D panes are not grayed.
 15. ~~**No viewer background options (Missing).** No per-item background, transparency grid preference or pixelated zoom.~~ Fixed.
-16. ~~**No navigator minimap or grayscale preview (Missing).**~~ Fixed; the preview window's grayscale is app-wide (see the Navigator row).
+16. ~~**No navigator minimap or grayscale preview (Missing).**~~ Fixed; each preview window has its own grayscale flag (see the Navigator row).
 17. ~~Viewer preferences are absent.~~ Fixed: wheel behaviour, default size, pixelated zoom, remembered zoom, transparency grid, GIF player and grid autoplay.
 18. ~~**Remember last zoom and position per item, and persist video position across launches (Missing / Partial).**~~ Fixed.
 19. ~~PDF gaps.~~ Fixed: page rotation, hand tool, scroll and spread modes, presentation, print, document properties, password prompt, links, attachments, layers (switched through an in-memory optional-content update PDFKit draws), current outline item, and whole-word and diacritics search are in. The reader is still macOS only (PDFKit).
