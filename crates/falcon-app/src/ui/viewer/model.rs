@@ -83,6 +83,7 @@ impl App {
             let path = item.original_path(lib.root());
             self.model3d.view = Some(ModelView::open(&ctx, &item.id, path, &item.ext, self.model3d.settings.up));
         }
+        self.model3d.mark_shown(&ctx);
         let view = self.model3d.view.as_mut().expect("opened above");
         let loading = view.poll();
         if view.error.is_some() {

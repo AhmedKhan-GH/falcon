@@ -104,8 +104,9 @@ impl Settings {
     }
 }
 
-/// Floats per vertex: position, normal, colour.
-pub(crate) const VERTEX_FLOATS: usize = 9;
+/// Floats per vertex: position, normal, colour, texture coordinates and
+/// the texture's alpha cutoff (0 for none).
+pub(crate) const VERTEX_FLOATS: usize = 12;
 
 static GENERATION: AtomicU64 = AtomicU64::new(1);
 
@@ -136,15 +137,71 @@ fn unit(c: [u8; 3]) -> V3 {
     c.map(|v| f32::from(v) / 255.0)
 }
 
+/// A run of the triangle list drawn the same way: plain, or with texture
+/// `texture` (an index into the model's [`Textures`]).
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Draw {
+    pub range: std::ops::Range<u32>,
+    pub texture: Option<usize>,
+}
+
+/// The distinct textures of a model (by picture and wrap), tagged with a
+/// generation so the GPU side uploads them once per model.
+#[derive(Clone)]
+pub(crate) struct Textures {
+    pub generation: u64,
+    pub list: Arc<Vec<m3d::texture::Texture>>,
+}
+
+impl Textures {
+    /// The textures `model`'s meshes draw with; the position of each in
+    /// the list is what [`Draw::texture`] refers to.
+    pub fn of(model: &Model) -> Textures {
+        let mut list: Vec<m3d::texture::Texture> = Vec::new();
+        for m in &model.meshes {
+            if let Some((t, _)) = m.textured()
+                && Self::find(&list, t).is_none()
+            {
+                list.push(t.clone());
+            }
+        }
+        Textures { generation: generation(), list: Arc::new(list) }
+    }
+
+    fn find(list: &[m3d::texture::Texture], t: &m3d::texture::Texture) -> Option<usize> {
+        list.iter().position(|x| Arc::ptr_eq(&x.image, &t.image) && x.wrap == t.wrap)
+    }
+}
+
+/// The triangle data the GPU draws: vertices, their runs and the textures.
+#[derive(Clone)]
+pub(crate) struct MeshData {
+    pub vertices: Vertices,
+    pub draws: Arc<Vec<Draw>>,
+    pub textures: Textures,
+}
+
 /// The triangles of `model` as a plain triangle list (no index buffer),
 /// with a normal and colour per corner: vertex colours first, then the
 /// material's, then `default_color`. Meshes marked in `hidden` are left out.
+#[cfg(test)]
 pub(crate) fn mesh_vertices(model: &Model, shading: Shading, default_color: V3, hidden: &[bool]) -> Vec<f32> {
+    mesh_data(model, shading, default_color, hidden, &[]).0
+}
+
+/// [`mesh_vertices`] with the runs to draw: a textured mesh (one with
+/// coordinates and a texture found in `textures`) carries its coordinates
+/// and, as its colour, the texture's tint times any vertex colours, which
+/// the shader multiplies with the picture.
+pub(crate) fn mesh_data(model: &Model, shading: Shading, default_color: V3, hidden: &[bool], textures: &[m3d::texture::Texture]) -> (Vec<f32>, Vec<Draw>) {
     let mut out = Vec::with_capacity(model.triangle_count() * 3 * VERTEX_FLOATS);
+    let mut draws: Vec<Draw> = Vec::new();
     for (k, mesh) in model.meshes.iter().enumerate() {
         if hidden.get(k) == Some(&true) {
             continue;
         }
+        let textured = mesh.textured().and_then(|(t, uvs)| Some((Textures::find(textures, t)?, t, uvs)));
+        let start = (out.len() / VERTEX_FLOATS) as u32;
         let smooth = match shading {
             Shading::Flat => None,
             Shading::Smooth => Some(geom::smooth_normals(mesh)),
@@ -156,14 +213,30 @@ pub(crate) fn mesh_vertices(model: &Model, shading: Shading, default_color: V3, 
             let face = geom::face_normal(p[0], p[1], p[2]);
             for (k, &i) in t.iter().enumerate() {
                 let n = smooth.as_ref().map_or(face, |s| s[i as usize]);
-                let c = mesh.colors.as_ref().map_or(base, |c| c[i as usize]);
+                let (c, uv, cutoff) = match textured {
+                    Some((_, tex, uvs)) => {
+                        let tint = [tex.tint[0], tex.tint[1], tex.tint[2], 1.0];
+                        let c = mesh.colors.as_ref().map_or(tex.tint, |c| m3d::texture::modulate(c[i as usize], tint));
+                        (c, uvs[i as usize], tex.alpha_cutoff.unwrap_or(0.0))
+                    }
+                    None => (mesh.colors.as_ref().map_or(base, |c| c[i as usize]), [0.0; 2], 0.0),
+                };
                 out.extend_from_slice(&p[k]);
                 out.extend_from_slice(&n);
                 out.extend_from_slice(&c);
+                out.extend_from_slice(&uv);
+                out.push(cutoff);
             }
         }
+        let end = (out.len() / VERTEX_FLOATS) as u32;
+        let texture = textured.map(|(i, _, _)| i);
+        match draws.last_mut() {
+            Some(d) if d.texture == texture && d.range.end == start => d.range.end = end,
+            _ if end > start => draws.push(Draw { range: start..end, texture }),
+            _ => {}
+        }
     }
-    out
+    (out, draws)
 }
 
 /// Line segments in the same vertex layout, all in `color`.
@@ -173,6 +246,7 @@ pub(crate) fn line_vertices(out: &mut Vec<f32>, segments: &[[V3; 2]], color: V3)
             out.extend_from_slice(p);
             out.extend_from_slice(&[0.0; 3]);
             out.extend_from_slice(&color);
+            out.extend_from_slice(&[0.0; 3]);
         }
     }
 }
@@ -233,6 +307,8 @@ type Loaded = Result<(Arc<Model>, Stats), String>;
 /// What the triangle data was built from: shading, default colour and the
 /// hidden meshes.
 type MeshKey = (Shading, [u8; 3], Vec<bool>);
+/// The triangle data and the runs drawn from it.
+type MeshBuilt = (Vertices, Arc<Vec<Draw>>);
 /// A feature edge and the mesh it belongs to.
 type MeshEdge = (usize, [V3; 2]);
 
@@ -246,7 +322,9 @@ pub(crate) struct ModelView {
     pub camera: Camera,
     /// The camera still has to be fitted (once the view's size is known).
     pub needs_fit: bool,
-    mesh: Option<(MeshKey, Vertices)>,
+    mesh: Option<(MeshKey, MeshBuilt)>,
+    /// The model's textures, gathered once it is read.
+    textures: Option<Textures>,
     /// Feature edges by threshold (in hundredths of a degree), with the
     /// mesh each belongs to.
     edges: Option<(u32, Arc<Vec<MeshEdge>>)>,
@@ -280,6 +358,7 @@ impl ModelView {
             camera: Camera::home(up),
             needs_fit: true,
             mesh: None,
+            textures: None,
             edges: None,
             lines: None,
             hidden: Vec::new(),
@@ -368,14 +447,15 @@ impl ModelView {
 
     /// The triangle data for `settings`, rebuilt when shading or the
     /// default colour changes.
-    pub fn mesh(&mut self, settings: &Settings) -> Option<Vertices> {
+    pub fn mesh(&mut self, settings: &Settings) -> Option<MeshData> {
         let model = self.model.as_ref()?;
+        let textures = self.textures.get_or_insert_with(|| Textures::of(model)).clone();
         let key = (settings.shading, settings.default_color, self.hidden.clone());
         if self.mesh.as_ref().is_none_or(|(k, _)| *k != key) {
-            let v = Vertices::new(&mesh_vertices(model, settings.shading, unit(settings.default_color), &self.hidden));
-            self.mesh = Some((key, v));
+            let (floats, draws) = mesh_data(model, settings.shading, unit(settings.default_color), &self.hidden, &textures.list);
+            self.mesh = Some((key, (Vertices::new(&floats), Arc::new(draws))));
         }
-        self.mesh.as_ref().map(|(_, v)| v.clone())
+        self.mesh.as_ref().map(|(_, (vertices, draws))| MeshData { vertices: vertices.clone(), draws: draws.clone(), textures })
     }
 
     /// The line data (edges, grid, axes) for `settings`.
@@ -424,6 +504,12 @@ impl ModelView {
 /// and the open model.
 pub(crate) struct Model3dState {
     pub target: Option<wgpu::TextureFormat>,
+    /// egui's wgpu objects, to free the scene's GPU objects (textures
+    /// among them) once the viewer has left the model.
+    render: Option<eframe::egui_wgpu::RenderState>,
+    /// The main window's pass in which a model was last drawn (by the
+    /// viewer or a preview window, which draw within that pass).
+    pub shown_pass: u64,
     pub settings: Settings,
     pub view: Option<ModelView>,
     /// The scene's response while a preview window draws a model, for the
@@ -435,8 +521,46 @@ pub(crate) struct Model3dState {
 
 impl Model3dState {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Model3dState {
-        Model3dState { target: cc.wgpu_render_state.as_ref().map(|r| r.target_format), settings: Settings::default(), view: None, scene_resp: None, ifc: Default::default() }
+        Model3dState {
+            target: cc.wgpu_render_state.as_ref().map(|r| r.target_format),
+            render: cc.wgpu_render_state.clone(),
+            shown_pass: 0,
+            settings: Settings::default(),
+            view: None,
+            scene_resp: None,
+            ifc: Default::default(),
+        }
     }
+
+    /// Notes that a model is drawn in this pass, and asks for another pass
+    /// within [`RECHECK_AFTER`] seconds so one is sure to run once the
+    /// viewer has left it.
+    pub fn mark_shown(&mut self, ctx: &eframe::egui::Context) {
+        self.shown_pass = ctx.cumulative_pass_nr_for(eframe::egui::ViewportId::ROOT);
+        ctx.request_repaint_after(std::time::Duration::from_secs_f64(RECHECK_AFTER));
+    }
+
+    /// Lets go of the model (its geometry and textures, here and on the
+    /// GPU) when the previous pass drew it nowhere. Called at the start of
+    /// every pass.
+    pub fn release_unseen(&mut self, ctx: &eframe::egui::Context) {
+        if self.view.is_some() && should_release(self.shown_pass, ctx.cumulative_pass_nr_for(eframe::egui::ViewportId::ROOT)) {
+            self.view = None;
+            if let Some(r) = &self.render {
+                gpu::release(r);
+            }
+        }
+    }
+}
+
+/// Longest wait, in seconds, for the pass that lets go of a model the
+/// viewer has left.
+pub(crate) const RECHECK_AFTER: f64 = 1.0;
+
+/// Whether a model last drawn in pass `shown` is let go of at the start
+/// of pass `now`: when the pass before did not draw it.
+pub(crate) fn should_release(shown: u64, now: u64) -> bool {
+    now > shown + 1
 }
 
 #[cfg(test)]
@@ -528,6 +652,40 @@ mod tests {
         assert!(!s.edges && !s.grid && !s.axes && s.fixed_up);
         assert_eq!((s.edge_color, s.edge_threshold, s.default_color), ([0, 0, 0], 1.0, [200, 200, 200]));
         assert_eq!(s.up, UpAxis::Y);
+    }
+
+    #[test]
+    fn textured_meshes_carry_coordinates_and_runs() {
+        use falcon_library::model3d::texture::{Image, Texture};
+        let image = Arc::new(Image { name: "t".into(), width: 1, height: 1, rgba: vec![255; 4] });
+        let mut m = tri(Some(vec![[1.0, 0.0, 0.0]; 3]), None);
+        m.meshes.push(m.meshes[0].clone());
+        m.meshes.push(m.meshes[0].clone());
+        for k in [0, 2] {
+            m.meshes[k].uvs = Some(vec![[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]]);
+            m.meshes[k].texture = Some(Texture { tint: [0.5, 1.0, 1.0], alpha_cutoff: Some(0.3), ..Texture::new(image.clone()) });
+        }
+        // A texture without coordinates is not used.
+        m.meshes[1].texture = m.meshes[0].texture.clone();
+        let tex = Textures::of(&m);
+        assert_eq!(tex.list.len(), 1, "one picture, one entry");
+        let (v, draws) = mesh_data(&m, Shading::Flat, [1.0; 3], &[], &tex.list);
+        assert_eq!(draws, [Draw { range: 0..3, texture: Some(0) }, Draw { range: 3..6, texture: None }, Draw { range: 6..9, texture: Some(0) }]);
+        let corner = |i: usize| &v[i * VERTEX_FLOATS..(i + 1) * VERTEX_FLOATS];
+        assert_eq!(&corner(1)[9..12], &[1.0, 0.0, 0.3]);
+        // The red vertex colour times the tint, in linear light.
+        assert!((corner(0)[6] - 0.5).abs() < 1e-3 && corner(0)[7] == 0.0, "{:?}", corner(0));
+        assert_eq!(&corner(3)[6..12], &[1.0, 0.0, 0.0, 0.0, 0.0, 0.0]);
+        // Hiding the middle mesh joins nothing: the runs stay apart by texture.
+        let (_, draws) = mesh_data(&m, Shading::Flat, [1.0; 3], &[false, true, false], &tex.list);
+        assert_eq!(draws, [Draw { range: 0..6, texture: Some(0) }]);
+    }
+
+    #[test]
+    fn models_are_let_go_after_the_viewer_leaves() {
+        assert!(!should_release(10, 10));
+        assert!(!should_release(10, 11), "drawn in the pass before");
+        assert!(should_release(10, 12));
     }
 
     #[test]

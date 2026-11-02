@@ -29,6 +29,8 @@ impl App {
     /// menu bar icon in step with the preferences, acts on what they
     /// queued, and brings in finished screenshots.
     pub(crate) fn system_tick(&mut self, ctx: &egui::Context) {
+        // A 3D model the viewer has left is let go of (`model3d`).
+        self.model3d.release_unseen(ctx);
         let captures_on = self.prefs.screenshot_shortcuts;
         // While Preferences is open the keys follow what is being edited,
         // so a chord another app holds shows on its row at once and is
