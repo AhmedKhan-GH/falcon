@@ -139,7 +139,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::ZoomActual | C::ZoomFit => s.library && s.viewer,
         C::FolderSettings => grid && s.scope == ScopeKind::Folder,
         C::ExportComputer | C::ExportPack | C::ExportFormat => any,
-        C::CopyPath | C::CopyFolderPath | C::CopyName | C::CopyLink | C::CopyEagleLink | C::CopySourceUrl | C::CopyThumbnail | C::CopyBase64 => any,
+        C::CopyPath | C::CopyFolderPath | C::CopyName | C::CopyEagleLink | C::CopySourceUrl | C::CopyThumbnail | C::CopyBase64 => any,
         // The selection, or else every item shown.
         C::ExportCsv => s.library,
         C::LayoutGrid | C::LayoutJustified | C::LayoutWaterfall | C::LayoutList => grid,
@@ -351,7 +351,6 @@ pub static MENUS: &[(&str, &[Entry])] = &[
                     item("File Paths", Command::CopyPath),
                     item("Folder Paths", Command::CopyFolderPath),
                     item("Names", Command::CopyName),
-                    item("Links", Command::CopyLink),
                     item("Eagle Links", Command::CopyEagleLink),
                     item("Source URLs", Command::CopySourceUrl),
                     item("Thumbnail", Command::CopyThumbnail),

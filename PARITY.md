@@ -76,7 +76,7 @@ Overall finding: falcon now has a native menu bar (`crates/falcon-app/src/menu.r
 | Edit: Cut / Copy / Paste / Select All | Done | Menu entries; Cut is the text role only, as in Eagle; ⌘C copies files, ⌘V imports, ⌘A selects all | local |
 | Edit: Rename (⌘R on macOS) | Done | ⌘R (F2 alias): one item renames through the inspector title; several open the Rename N Items dialog with Eagle's templates (`rename.rs`) | local |
 | Edit: Copy File Path (⌥⌘C) | Done | Key and item menu copy every selected path, one per line (`export_ui.rs` `copy_variant`) | local |
-| Edit: Copy Folder Path (⌥⇧⌘C), Copy Eagle Link, Copy Thumbnail, Copy Base64, Copy Name | Done | Edit ▸ Copy Details: Folder Paths, Links (`http://localhost:<port>/item?id=`, as Eagle's Copy Link), Eagle Links (`eagle://item/<id>`), Thumbnail, Base64, Names; all for every selected item | local |
+| Edit: Copy Folder Path (⌥⇧⌘C), Copy Eagle Link, Copy Thumbnail, Copy Base64, Copy Name | Done | Edit ▸ Copy Details: Folder Paths, Eagle Links (`http://localhost:<port>/item?id=`, as Eagle's Copy Eagle Link), Thumbnail, Base64, Names; all for every selected item | local |
 | Edit: Duplicate item (⌘D) | Done | The first selected item, as Eagle's `duplicateItem`; the card entry is single-item only, as Eagle | local |
 | Edit: Refresh Thumbnail (⌥⌘R), Custom thumbnail from a file (⌥⌘T), Reset custom thumbnail | Done | ⌥⌘R, ⌥⌘T, Edit ▸ Custom Thumbnail ▸ From File / From Clipboard / Reset (`edit.thumbnail.custom.reset`), card menu; Reset on the first item, as Eagle | local |
 | Edit: Custom thumbnail from the clipboard (⇧⌥⌘T) | Done | Clipboard image or copied file | local |
@@ -366,7 +366,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Remember window size and position | Done | eframe persistence (Cargo.toml `persistence` feature) | local |
 | Full screen | Done | ⌃⌘F and Window ▸ Full Screen, plus the green button | local |
 | Always on top for the main window | Done | `modes.rs` | local |
-| Open items in a separate preview window: own titlebar always-on-top toggle, opacity 10–100%, navigator, zoom presets 5–800%, grayscale, rotate / flip, copy, copy path / link, Reveal in Eagle | Done | `ui/viewer/preview_window/`: always-on-top, opacity 10–100%, navigator, zoom presets, grayscale, rotate/flip, Copy, Copy File Path, Copy ▸ Link / Eagle Link, Reveal in Finder, Show in Falcon; every viewer type incl. 3D and web; ⌘O, middle click and the item menu | local |
+| Open items in a separate preview window: own titlebar always-on-top toggle, opacity 10–100%, navigator, zoom presets 5–800%, grayscale, rotate / flip, copy, copy path / link, Reveal in Eagle | Done | `ui/viewer/preview_window/`: always-on-top, opacity 10–100%, navigator, zoom presets, grayscale, rotate/flip, Copy, Copy File Path, Copy ▸ Eagle Link, Reveal in Finder, Show in Falcon; every viewer type incl. 3D and web; ⌘O, middle click and the item menu | local |
 | Middle-click opens an item in a new window (preference) | Done | `Prefs::middle_button` (new window, default, or nothing); never for audio, as Eagle | local |
 | Presentation / slideshow mode | Done | `modes.rs`; `ViewportCommand::Fullscreen`, panels and bar hidden | local |
 | Closing the window keeps the app running (Dock icon stays); reopen from the Dock | Done | Closing hides falcon (`NSApp hide:`, so the collect and preview windows hide too); the Dock icon or reopening brings it back; ⌘Q quits | local |
@@ -547,7 +547,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Hovering a region shows its note | Done | Tooltip on hover (`F/comments.rs:290`) | local |
 | Comment count badge on grid cards | Done | `F/comments.rs:180` (always on; no toggle) | local |
 | Default viewer mode preference (preview or comment) | Missing | Not applicable: Eagle declares `habits.defaultMode` and never reads it | local |
-| Copy, copy path and copy link from the viewer menu | Done | The viewer's right-click menu is the item menu: Copy (files), Copy File Path, Copy ▸ Link (Eagle's local API link) / Eagle Link / Source URL | local |
+| Copy, copy path and copy link from the viewer menu | Done | The viewer's right-click menu is the item menu: Copy (files), Copy File Path, Copy ▸ Eagle Link (Eagle's local API link) / Source URL | local |
 
 ### 3. GIF and animated images
 
@@ -743,7 +743,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Window opacity 10%–100% | Done | NSWindow `alphaValue` from the window menu | local |
 | Always on top toggle in the window | Done | Preview window menu | local |
 | Navigator, grayscale, rotate, flip in the window menu | Done | Preview window menu; rotate and flip change the preview only | local |
-| Copy, copy path, copy link, reveal in Finder, open in default app | Done | Copy, Copy File Path, Copy ▸ Link / Eagle Link, Reveal in Finder, Open in Default App | local |
+| Copy, copy path, copy link, reveal in Finder, open in default app | Done | Copy, Copy File Path, Copy ▸ Eagle Link, Reveal in Finder, Open in Default App | local |
 | Copy or save the current video frame | Done | Preview window video player: Copy Frame, Save Frame… | local |
 | Reveal in Eagle (select the item in the main window) | Done | Show in Falcon | local |
 
@@ -1309,8 +1309,8 @@ Two cross-cutting facts explain many rows:
 | Copy Name | Done | `export_ui.rs` `item_copy_menu` | local |
 | Copy Thumbnail (as an image) | Done | One item: image on the clipboard; several: the thumbnail files, as Eagle | local |
 | Copy Base64 | Done | One item: data URL of the original for jpg/png/webp/gif, else of the thumbnail | local |
-| Copy Eagle Link (`eagle://item/<id>`) | Done | Copy ▸ Eagle Link in the item menu, Edit ▸ Copy Details, `edit.copy.eaglelink` (unbound, as Eagle) | local |
-| Copy Link (the item's source URL) | Done | Copy ▸ Link copies Eagle's local API link per item (`edit.copy.link`); the source URL keeps its own entry (`edit.copy.sourceurl`) | local |
+| Copy Eagle Link (`http://localhost:<port>/item?id=<id>`) | Done | Copy ▸ Eagle Link in the item menu, Edit ▸ Copy Details, `edit.copy.eaglelink` (unbound, as Eagle) | local |
+| Copy Link (the item's source URL) | Done | The source URL has its own entry, Copy ▸ Source URL (`edit.copy.sourceurl`) | local |
 | Copy the image to the clipboard as pixels plus file reference (the AppleScript helper) | Done | One jpg/png/bmp: raw bytes, TIFF, `public.file-url` and `NSFilenamesPboardType` together; several items: a file list, as Eagle | local |
 | macOS Share sheet for items | Done | Share… in the item menu over the selected files (`share.rs`, `NSSharingServicePicker`) | local |
 | Add selected items to another library (from the recent list, or choose a path) | Done | `add_to_library.rs` (both crates): item, single-folder, folder-card, smart-folder and tag-group menus; recent libraries plus Choose Library…; whole `.info` folders copied under a temporary name, existing ids skipped, folder ids kept as Eagle; target must pass the sandbox and install-folder guards; asks above one item; progress with Stop | local |

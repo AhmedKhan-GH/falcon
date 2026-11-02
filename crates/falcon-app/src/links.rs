@@ -43,13 +43,8 @@ pub fn smart_link(id: &str) -> String {
     format!("eagle://smart-folder/{id}")
 }
 
-/// An item's `eagle://` link, as Copy Eagle Link writes it.
-pub fn item_link(id: &str) -> String {
-    format!("eagle://item/{id}")
-}
-
-/// An item's link through the local API on `port`, as Copy Link writes
-/// it: the API answers it with a redirect to [`item_link`].
+/// An item's link through the local API on `port`, as Eagle's Copy Eagle
+/// Link writes it: the API answers it with a redirect to the item's `eagle://item/<id>` link.
 pub fn api_item_link(port: u16, id: &str) -> String {
     format!("http://localhost:{port}/item?id={id}")
 }
@@ -193,8 +188,7 @@ mod tests {
 
     #[test]
     fn writes_item_links() {
-        assert_eq!(item_link("M3QSGJNQTC2DG"), "eagle://item/M3QSGJNQTC2DG");
-        assert_eq!(parse(&item_link("A1")), Some(Link::Item("A1".into())));
+        assert_eq!(parse("eagle://item/A1"), Some(Link::Item("A1".into())));
         assert_eq!(api_item_link(41600, "A1"), "http://localhost:41600/item?id=A1");
         assert_eq!(api_folder_link(41600, "L1"), "http://localhost:41600/folder?id=L1");
         assert_eq!(api_smart_link(41600, "S1"), "http://localhost:41600/smart-folder?id=S1");

@@ -415,14 +415,11 @@ impl App {
             self.ws.export.request = Some(Request::Copy(CopyKind::Path, vec![item.id.clone()]));
             ui.close();
         }
-        // The links as the item menu copies them: Link is the local API
-        // link, Eagle Link the `eagle://item/<id>` one.
+        // Eagle Link, as the item menu copies it: the local API link.
         ui.menu_button(tr("Copy"), |ui| {
-            for (label, kind) in [(tr_key("Link"), CopyKind::Link), (tr_key("Eagle Link"), CopyKind::EagleLink)] {
-                if ui.button(tr(label)).clicked() {
-                    self.ws.export.request = Some(Request::Copy(kind, vec![item.id.clone()]));
-                    ui.close();
-                }
+            if ui.button(tr("Eagle Link")).clicked() {
+                self.ws.export.request = Some(Request::Copy(CopyKind::EagleLink, vec![item.id.clone()]));
+                ui.close();
             }
         });
         if matches!(pw.pane, Pane::Video(_)) {

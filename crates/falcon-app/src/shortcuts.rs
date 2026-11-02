@@ -87,8 +87,7 @@ pub enum Command {
     CopyFolderPath,
     CopyName,
     /// Copy ▸ Link: each item's local API link (`/item?id=`).
-    CopyLink,
-    /// Copy Eagle Link: each item's `eagle://item/<id>` link.
+    /// Copy Eagle Link: each item's `http://localhost:<port>/item?id=<id>` link.
     CopyEagleLink,
     /// Each item's source URL (falcon's own entry).
     CopySourceUrl,
@@ -493,9 +492,8 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::CopyPath, id: "edit.copy.path", group: "Copy", label: "Copy file paths", default: k(CMD_ALT, Key::C), aliases: &[] },
     Spec { cmd: Command::CopyFolderPath, id: "edit.copy.folderpath", group: "Copy", label: "Copy item folder paths", default: k(CMD_ALT_SHIFT, Key::C), aliases: &[] },
     Spec { cmd: Command::CopyName, id: "edit.copy.name", group: "Copy", label: "Copy names", default: None, aliases: &[] },
-    // Eagle's Copy Eagle Link id; Copy Link and the source URLs have falcon's own ids.
+    // Eagle's Copy Eagle Link id; the source URLs have falcon's own id.
     Spec { cmd: Command::CopyEagleLink, id: "edit.copy.eaglelink", group: "Copy", label: "Copy Eagle links", default: None, aliases: &[] },
-    Spec { cmd: Command::CopyLink, id: "edit.copy.link", group: "Copy", label: "Copy item links", default: None, aliases: &[] },
     Spec { cmd: Command::CopySourceUrl, id: "edit.copy.sourceurl", group: "Copy", label: "Copy source URLs", default: None, aliases: &[] },
     Spec { cmd: Command::CopyThumbnail, id: "edit.copy.thumbnail", group: "Copy", label: "Copy thumbnail", default: None, aliases: &[] },
     Spec { cmd: Command::CopyBase64, id: "edit.copy.base64", group: "Copy", label: "Copy as Base64", default: None, aliases: &[] },
@@ -1300,6 +1298,14 @@ mod tests {
         assert_eq!(keys.resolve(Key::R, CMD), Some(Command::Rename));
         assert_eq!(keys.resolve(Key::R, ALT), Some(Command::OpenFilter(crate::search_state::FilterKind::Rating)));
         assert_eq!(keys.resolve(Key::R, Modifiers::NONE), Some(Command::Reshuffle));
+    }
+
+    #[test]
+    fn copy_eagle_link_is_the_only_item_link_command() {
+        let row = TABLE.iter().find(|s| s.id == "edit.copy.eaglelink").unwrap();
+        assert_eq!(row.cmd, Command::CopyEagleLink);
+        assert!(TABLE.iter().all(|s| s.id != "edit.copy.link"));
+        assert_eq!(TABLE.iter().filter(|s| s.cmd == Command::CopyEagleLink).count(), 1);
     }
 
     #[test]

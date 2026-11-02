@@ -50,9 +50,8 @@ pub(crate) enum CopyKind {
     /// Each item's `<id>.info` folder, one per line.
     FolderPath,
     Name,
-    /// Each item's local API link (Eagle's Copy Link).
-    Link,
-    /// Each item's `eagle://item/<id>` link (Eagle's Copy Eagle Link).
+    /// Each item's local API link, `http://localhost:<port>/item?id=<id>`
+    /// (Eagle's Copy Eagle Link).
     EagleLink,
     /// The items' source URLs (falcon's own).
     SourceUrl,
@@ -386,11 +385,10 @@ impl App {
             CopyKind::Path => Some((export::paths_text(lib, &items), tr_n(n, "Copied {n} path", "Copied {n} paths"))),
             CopyKind::FolderPath => Some((export::folder_paths_text(lib, &items), tr_n(n, "Copied {n} folder path", "Copied {n} folder paths"))),
             CopyKind::Name => Some((items.iter().map(|i| i.name.as_str()).collect::<Vec<_>>().join("\n"), tr_n(n, "Copied {n} name", "Copied {n} names"))),
-            CopyKind::Link => {
+            CopyKind::EagleLink => {
                 let port = self.api_link_port();
-                Some((items.iter().map(|i| crate::links::api_item_link(port, &i.id)).collect::<Vec<_>>().join("\n"), tr_n(n, "Copied {n} link", "Copied {n} links")))
+                Some((items.iter().map(|i| crate::links::api_item_link(port, &i.id)).collect::<Vec<_>>().join("\n"), tr_n(n, "Copied {n} Eagle link", "Copied {n} Eagle links")))
             }
-            CopyKind::EagleLink => Some((items.iter().map(|i| crate::links::item_link(&i.id)).collect::<Vec<_>>().join("\n"), tr_n(n, "Copied {n} Eagle link", "Copied {n} Eagle links"))),
             CopyKind::SourceUrl => {
                 let links: Vec<&str> = items.iter().map(|i| i.url.trim()).filter(|u| !u.is_empty()).collect();
                 if links.is_empty() {
@@ -447,7 +445,6 @@ impl App {
         crate::ui::menus::search::submenu(ui, tr("Copy"), |ui| {
             ui.set_min_width(160.0);
             for (label, kind) in [
-                (tr_key("Link"), CopyKind::Link),
                 (tr_key("Eagle Link"), CopyKind::EagleLink),
                 (tr_key("Source URL"), CopyKind::SourceUrl),
                 (tr_key("Folder Path"), CopyKind::FolderPath),
@@ -601,7 +598,6 @@ impl App {
             (C::CopyPath, CopyKind::Path),
             (C::CopyFolderPath, CopyKind::FolderPath),
             (C::CopyName, CopyKind::Name),
-            (C::CopyLink, CopyKind::Link),
             (C::CopyEagleLink, CopyKind::EagleLink),
             (C::CopySourceUrl, CopyKind::SourceUrl),
             (C::CopyThumbnail, CopyKind::Thumbnail),
