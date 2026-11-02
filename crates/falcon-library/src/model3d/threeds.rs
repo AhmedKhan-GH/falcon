@@ -3,17 +3,20 @@
 //! Read: the editor chunk with its named triangle-mesh objects (vertex list,
 //! face list, per-material face groups, smoothing groups) and its materials
 //! (name, diffuse colour in the 8-bit or float, linear or gamma-corrected
-//! forms, transparency, and the diffuse texture map's file name: when that
-//! image sits next to the model its average colour stands in for the
-//! diffuse colour). One mesh is made per (object, material) pair; faces
+//! forms, transparency, and the diffuse texture map: its file name, tiling
+//! flags, scale, offset and rotation; when that image sits next to the model
+//! its average colour stands in for the diffuse colour and the mesh keeps
+//! the picture as its texture). The mapping coordinates (0x4140) are kept,
+//! with the material's map scale, offset and rotation baked in and v
+//! flipped into picture space. One mesh is made per (object, material) pair; faces
 //! in no material group go to a mesh without a material. With smoothing
 //! groups, each triangle gets its own three vertices and normals averaged
 //! over the faces that meet at the same place and share a smoothing bit;
 //! without them the vertices stay shared and the viewer shades flat.
 //!
 //! Skipped: the keyframer (animation), lights, cameras, the master scale,
-//! and everything else unknown. Texture coordinates are bound-checked but
-//! not kept (`Mesh` has no UVs, so textures are not mapped). The vertices of a 3DS mesh are already stored in world space, so
+//! and everything else unknown (bump, opacity and other maps among it). The
+//! vertices of a 3DS mesh are already stored in world space, so
 //! the local axis matrix (0x4160) is parsed and ignored, not applied.
 //! Coordinates are kept as stored (Z up).
 
@@ -21,6 +24,7 @@ use std::collections::HashMap;
 
 use super::geom::{self, face_normal};
 use super::math::{self, V3};
+use super::texture::{Loader, Texture, Wrap};
 use super::{DEFAULT_COLOR, Material, Mesh, Model, ParseError, Result};
 
 const MAIN: u16 = 0x4D4D;
@@ -39,6 +43,12 @@ const MAT_DIFFUSE: u16 = 0xA020;
 const MAT_TRANSPARENCY: u16 = 0xA050;
 const MAT_TEXTURE: u16 = 0xA200;
 const MAT_TEXTURE_FILE: u16 = 0xA300;
+const MAP_TILING: u16 = 0xA351;
+const MAP_U_SCALE: u16 = 0xA354;
+const MAP_V_SCALE: u16 = 0xA356;
+const MAP_U_OFFSET: u16 = 0xA358;
+const MAP_V_OFFSET: u16 = 0xA35A;
+const MAP_ROTATION: u16 = 0xA35C;
 const COLOR_FLOAT: u16 = 0x0010;
 const COLOR_BYTE: u16 = 0x0011;
 const COLOR_BYTE_GAMMA: u16 = 0x0012;
@@ -141,6 +151,54 @@ struct Mat {
     opacity: f32,
     /// Diffuse texture file name.
     texture: Option<String>,
+    /// How the texture map is laid on.
+    map: MapTransform,
+    /// The decoded texture, once the picture was found.
+    loaded: Option<Texture>,
+}
+
+/// A texture map's tiling and transform, as the file stores them (v up).
+#[derive(Debug, Clone, Copy)]
+struct MapTransform {
+    wrap: Wrap,
+    scale: [f32; 2],
+    offset: [f32; 2],
+    /// Degrees.
+    rotation: f32,
+}
+
+impl Default for MapTransform {
+    fn default() -> Self {
+        MapTransform { wrap: Wrap::Repeat, scale: [1.0; 2], offset: [0.0; 2], rotation: 0.0 }
+    }
+}
+
+impl MapTransform {
+    /// Reads the tiling flags (0xA351): bit 0x0010 (no tiling) clamps and
+    /// bit 0x0002 (mirror) mirrors, as in lib3ds's texture flags; the rest
+    /// (decal, negate, tint, ...) is ignored and the picture tiles.
+    fn set_tiling(&mut self, flags: u16) {
+        self.wrap = if flags & 0x0010 != 0 {
+            Wrap::Clamp
+        } else if flags & 0x0002 != 0 {
+            Wrap::Mirror
+        } else {
+            Wrap::Repeat
+        };
+    }
+
+    /// A coordinate in the file's v-up space through the map, then v
+    /// flipped to picture space. The map is three.js's `texture.repeat`,
+    /// `rotation` and `offset` around the centre (0, 0), which Eagle's
+    /// viewer sets from these chunks: rotate by the angle, then scale, then
+    /// move (three.js composes its UV matrix as translate * scale * rotate).
+    /// A scale of 0 (a degenerate map) counts as 1.
+    fn apply(&self, uv: [f32; 2]) -> [f32; 2] {
+        let (s, c) = self.rotation.to_radians().sin_cos();
+        let (u, v) = (c * uv[0] + s * uv[1], -s * uv[0] + c * uv[1]);
+        let k = |x: f32| if x == 0.0 { 1.0 } else { x };
+        [u * k(self.scale[0]) + self.offset[0], 1.0 - (v * k(self.scale[1]) + self.offset[1])]
+    }
 }
 
 #[derive(Default)]
@@ -152,6 +210,8 @@ struct Object {
     groups: Vec<(String, Vec<u16>)>,
     /// One smoothing mask per face, when the file has them.
     smoothing: Option<Vec<u32>>,
+    /// Mapping coordinates as stored (v up), one per vertex.
+    uvs: Option<Vec<[f32; 2]>>,
 }
 
 #[derive(Default)]
@@ -174,9 +234,13 @@ pub fn parse(bytes: &[u8], side: &dyn Fn(&str) -> Option<Vec<u8>>) -> Result<Mod
             read_editor(body, &mut scene)?;
         }
     }
+    let mut loader = Loader::new(side);
     for m in &mut scene.materials {
-        if let Some(c) = m.texture.as_deref().and_then(|t| super::dae::texture_color(side, t)) {
-            m.color = Some(c);
+        if let Some(image) = m.texture.as_deref().and_then(|t| loader.file(t)) {
+            if let Some(c) = image.average() {
+                m.color = Some(c);
+            }
+            m.loaded = Some(Texture { image, tint: [1.0; 3], wrap: [m.map.wrap; 2], alpha_cutoff: None });
         }
     }
     Model { meshes: build(&scene) }.finish()
@@ -213,11 +277,7 @@ fn read_mesh(name: String, body: &[u8]) -> Result<Object> {
         match id {
             VERTICES => o.positions = read_vertices(body)?,
             FACES => read_faces(body, &mut o)?,
-            TEX_COORDS => {
-                let mut r = Reader { b: body };
-                let n = r.u16()? as usize;
-                r.records(n, 8)?;
-            }
+            TEX_COORDS => o.uvs = Some(read_tex_coords(body)?),
             LOCAL_AXES => {
                 Reader { b: body }.take(48)?;
             }
@@ -232,6 +292,13 @@ fn read_vertices(body: &[u8]) -> Result<Vec<V3>> {
     let n = r.u16()? as usize;
     let data = r.records(n, 12)?;
     Ok(data.as_chunks::<12>().0.iter().map(|v| [f32_at(v, 0), f32_at(v, 4), f32_at(v, 8)]).collect())
+}
+
+fn read_tex_coords(body: &[u8]) -> Result<Vec<[f32; 2]>> {
+    let mut r = Reader { b: body };
+    let n = r.u16()? as usize;
+    let data = r.records(n, 8)?;
+    Ok(data.as_chunks::<8>().0.iter().map(|v| [f32_at(v, 0), f32_at(v, 4)].map(|x| if x.is_finite() { x } else { 0.0 })).collect())
 }
 
 fn read_faces(body: &[u8], o: &mut Object) -> Result<()> {
@@ -273,8 +340,16 @@ fn read_material(body: &[u8]) -> Result<Mat> {
             MAT_TEXTURE => {
                 for c in chunks(body) {
                     let (id, body) = c?;
-                    if id == MAT_TEXTURE_FILE {
-                        m.texture = Some(Reader { b: body }.cstr()?);
+                    let mut r = Reader { b: body };
+                    match id {
+                        MAT_TEXTURE_FILE => m.texture = Some(r.cstr()?),
+                        MAP_TILING => m.map.set_tiling(r.u16()?),
+                        MAP_U_SCALE => m.map.scale[0] = finite(r.f32()?, 1.0),
+                        MAP_V_SCALE => m.map.scale[1] = finite(r.f32()?, 1.0),
+                        MAP_U_OFFSET => m.map.offset[0] = finite(r.f32()?, 0.0),
+                        MAP_V_OFFSET => m.map.offset[1] = finite(r.f32()?, 0.0),
+                        MAP_ROTATION => m.map.rotation = finite(r.f32()?, 0.0),
+                        _ => {}
                     }
                 }
             }
@@ -282,6 +357,10 @@ fn read_material(body: &[u8]) -> Result<Mat> {
         }
     }
     Ok(m)
+}
+
+fn finite(x: f32, default: f32) -> f32 {
+    if x.is_finite() { x } else { default }
 }
 
 fn read_diffuse(body: &[u8], m: &mut Mat) -> Result<()> {
@@ -356,6 +435,8 @@ fn build_object(o: &Object, materials: &[Mat]) -> Vec<Mesh> {
             }
         }
     }
+    // One coordinate per vertex, or none.
+    let uvs = o.uvs.as_deref().filter(|u| u.len() == n);
     let normals = o.smoothing.is_some().then(|| corner_normals(&o.positions, &faces));
     let mut meshes = Vec::new();
     // One mesh per group name, then the faces in none.
@@ -364,43 +445,57 @@ fn build_object(o: &Object, materials: &[Mat]) -> Vec<Mesh> {
         if members.is_empty() {
             continue;
         }
-        let material = g.and_then(|g| materials.iter().find(|m| m.name == names[g])).map(|m| Material {
+        let mat = g.and_then(|g| materials.iter().find(|m| m.name == names[g]));
+        let material = mat.map(|m| Material {
             name: m.name.clone(),
             color: m.color.unwrap_or(DEFAULT_COLOR),
             opacity: m.opacity,
         });
         let mut mesh = match &normals {
-            Some(nrm) => split_mesh(&o.positions, &faces, nrm, &members),
-            None => shared_mesh(&o.positions, &faces, &members),
+            Some(nrm) => split_mesh(&o.positions, &faces, nrm, uvs, &members),
+            None => shared_mesh(&o.positions, &faces, uvs, &members),
         };
         mesh.name = o.name.clone();
         mesh.material = material;
+        // The map moves the coordinates; a mesh whose picture couldn't be
+        // read gets them with just the flip.
+        let map = mat.map(|m| m.map).unwrap_or_default();
+        if let Some(uvs) = &mut mesh.uvs {
+            for uv in uvs {
+                *uv = map.apply(*uv);
+            }
+        }
+        mesh.texture = mat.and_then(|m| m.loaded.clone());
         meshes.push(mesh);
     }
     meshes
 }
 
 /// The listed faces over the vertices they use, as in the file.
-fn shared_mesh(positions: &[V3], faces: &[Option<Face>], members: &[usize]) -> Mesh {
+fn shared_mesh(positions: &[V3], faces: &[Option<Face>], uvs: Option<&[[f32; 2]]>, members: &[usize]) -> Mesh {
     let mut remap: Vec<Option<u32>> = vec![None; positions.len()];
     let mut mesh = Mesh::default();
+    let mut out_uvs = Vec::new();
     for f in members.iter().filter_map(|&i| faces[i].as_ref()) {
         for &c in &f.corners {
             let slot = &mut remap[c];
             let i = *slot.get_or_insert_with(|| {
                 mesh.positions.push(positions[c]);
+                out_uvs.extend(uvs.map(|u| u[c]));
                 (mesh.positions.len() - 1) as u32
             });
             mesh.indices.push(i);
         }
     }
+    mesh.uvs = uvs.map(|_| out_uvs);
     mesh
 }
 
 /// The listed faces with three own vertices each, carrying `normals`
 /// (three per face, in face order).
-fn split_mesh(positions: &[V3], faces: &[Option<Face>], normals: &[[V3; 3]], members: &[usize]) -> Mesh {
+fn split_mesh(positions: &[V3], faces: &[Option<Face>], normals: &[[V3; 3]], uvs: Option<&[[f32; 2]]>, members: &[usize]) -> Mesh {
     let mut mesh = Mesh::default();
+    let mut out_uvs = Vec::with_capacity(if uvs.is_some() { members.len() * 3 } else { 0 });
     let mut out_normals = Vec::with_capacity(members.len() * 3);
     for &i in members {
         let Some(f) = &faces[i] else { continue };
@@ -408,9 +503,11 @@ fn split_mesh(positions: &[V3], faces: &[Option<Face>], normals: &[[V3; 3]], mem
             mesh.indices.push(mesh.positions.len() as u32);
             mesh.positions.push(positions[f.corners[k]]);
             out_normals.push(normals[i][k]);
+            out_uvs.extend(uvs.map(|u| u[f.corners[k]]));
         }
     }
     mesh.normals = Some(out_normals);
+    mesh.uvs = uvs.map(|_| out_uvs);
     mesh
 }
 
@@ -482,6 +579,109 @@ mod tests {
         assert_eq!(super::parse(&f, &side).unwrap().meshes[0].material.as_ref().unwrap().color, [0.0, 0.0, 1.0]);
         // Missing image: the diffuse colour.
         assert_eq!(parse(&f).unwrap().meshes[0].material.as_ref().unwrap().color, [1.0, 0.0, 0.0]);
+    }
+
+    /// Cube corner `i` maps to this, in the file's v-up space.
+    fn corner_uv(i: usize) -> [f32; 2] {
+        [i as f32 * 0.1, i as f32 * 0.05]
+    }
+
+    fn cube_uvs() -> Vec<[f32; 2]> {
+        (0..8).map(corner_uv).collect()
+    }
+
+    fn near(a: [f32; 2], b: [f32; 2]) -> bool {
+        (a[0] - b[0]).abs() < 1e-5 && (a[1] - b[1]).abs() < 1e-5
+    }
+
+    /// Every vertex of the model has the coordinate `want` gives for its
+    /// corner of the cube.
+    fn uvs_match(m: &Model, want: impl Fn(usize) -> [f32; 2]) -> bool {
+        m.meshes.iter().all(|mesh| {
+            let uvs = mesh.uvs.as_ref().unwrap();
+            uvs.len() == mesh.positions.len() && mesh.positions.iter().zip(uvs).all(|(p, uv)| near(*uv, want((0..8).find(|&i| corner(i) == *p).unwrap())))
+        })
+    }
+
+    /// A texture map chunk: file name, then the sub-chunks given.
+    fn map_chunk(name: &str, subs: &[Vec<u8>]) -> Vec<u8> {
+        chunk(MAT_TEXTURE, &cat(&[chunk(MAT_TEXTURE_FILE, &cstr(name)), subs.concat()]))
+    }
+
+    fn float_chunk(id: u16, v: f32) -> Vec<u8> {
+        chunk(id, &v.to_le_bytes())
+    }
+
+    #[test]
+    fn mapping_coordinates_are_read_and_flipped() {
+        // Shared vertices (no smoothing groups) and split ones (with).
+        for smooth in [None, Some(&[1u32; 12][..])] {
+            let m = parse(&file_uv(&[], &[], smooth, &cube_uvs())).unwrap();
+            assert_eq!(m.meshes[0].positions.len(), if smooth.is_some() { 36 } else { 8 });
+            assert!(uvs_match(&m, |i| [corner_uv(i)[0], 1.0 - corner_uv(i)[1]]));
+            // No texture without a material that has one.
+            assert!(m.meshes[0].texture.is_none());
+        }
+        // A list that is not one per vertex is dropped.
+        let m = parse(&file_uv(&[], &[], None, &cube_uvs()[..5])).unwrap();
+        assert!(m.meshes[0].uvs.is_none());
+        // Groups split a mesh; each part keeps its own vertices' coordinates.
+        let mats = [material("a", red_byte())];
+        let m = parse(&file_uv(&mats, &[("a", all(5))], None, &cube_uvs())).unwrap();
+        assert_eq!(m.meshes.len(), 2);
+        assert!(uvs_match(&m, |i| [corner_uv(i)[0], 1.0 - corner_uv(i)[1]]));
+    }
+
+    #[test]
+    fn texture_map_gives_texture_tiling_and_transform() {
+        let png = crate::model3d::texture::tests::png_2x2();
+        let side = |n: &str| (n == "tex.png").then(|| png.clone());
+        let flags = |f: u16| chunk(MAP_TILING, &f.to_le_bytes());
+        let with = |subs: &[Vec<u8>]| {
+            let mat = cat(&[chunk(MAT_NAME, &cstr("t")), red_byte(), map_chunk("tex.png", subs)]);
+            super::parse(&file_uv(&[mat], &[("t", all(12))], None, &cube_uvs()), &side).unwrap()
+        };
+        let m = with(&[flags(0x0010)]);
+        let mesh = &m.meshes[0];
+        let t = mesh.texture.as_ref().unwrap();
+        assert_eq!((t.image.width, t.image.height, t.tint, t.alpha_cutoff), (2, 2, [1.0; 3], None));
+        assert_eq!(t.wrap, [Wrap::Clamp; 2]);
+        // The material colour is the picture's average, not the diffuse red.
+        let avg = mesh.material.as_ref().unwrap().color;
+        assert!((avg[1] - 0.5).abs() < 1e-3 && (avg[0] - 0.5).abs() < 1e-3);
+        assert!(mesh.textured().is_some());
+        assert_eq!(with(&[flags(0x0002)]).meshes[0].texture.as_ref().unwrap().wrap, [Wrap::Mirror; 2]);
+        assert_eq!(with(&[flags(0)]).meshes[0].texture.as_ref().unwrap().wrap, [Wrap::Repeat; 2]);
+        assert_eq!(with(&[]).meshes[0].texture.as_ref().unwrap().wrap, [Wrap::Repeat; 2]);
+        // Scale then offset (no rotation), then v flipped.
+        let m = with(&[float_chunk(MAP_U_SCALE, 2.0), float_chunk(MAP_V_SCALE, 3.0), float_chunk(MAP_U_OFFSET, 0.25), float_chunk(MAP_V_OFFSET, 0.5)]);
+        assert!(uvs_match(&m, |i| [corner_uv(i)[0] * 2.0 + 0.25, 1.0 - (corner_uv(i)[1] * 3.0 + 0.5)]));
+        // Rotation of 90 degrees: (u, v) -> (v, -u), as three.js does about (0, 0).
+        let m = with(&[float_chunk(MAP_ROTATION, 90.0)]);
+        assert!(uvs_match(&m, |i| [corner_uv(i)[1], 1.0 + corner_uv(i)[0]]));
+    }
+
+    #[test]
+    fn missing_texture_keeps_the_diffuse_colour_and_the_coordinates() {
+        let mat = cat(&[chunk(MAT_NAME, &cstr("t")), red_byte(), map_chunk("gone.png", &[chunk(MAP_TILING, &0x10u16.to_le_bytes())])]);
+        let m = parse(&file_uv(&[mat], &[("t", all(12))], None, &cube_uvs())).unwrap();
+        let mesh = &m.meshes[0];
+        assert!(mesh.texture.is_none());
+        assert_eq!(mesh.material.as_ref().unwrap().color, [1.0, 0.0, 0.0]);
+        assert!(uvs_match(&m, |i| [corner_uv(i)[0], 1.0 - corner_uv(i)[1]]));
+    }
+
+    #[test]
+    fn texture_outside_the_model_folder_is_not_read() {
+        let png = crate::model3d::texture::tests::png_2x2();
+        let asked = std::cell::RefCell::new(Vec::new());
+        let side = |n: &str| {
+            asked.borrow_mut().push(n.to_string());
+            (!n.contains("..")).then(|| png.clone())
+        };
+        let mat = cat(&[chunk(MAT_NAME, &cstr("t")), red_byte(), map_chunk("../up/tex.png", &[])]);
+        super::parse(&file(&[mat], &[("t", all(12))], None), &side).unwrap();
+        assert!(asked.borrow().iter().all(|n| !n.contains("..")));
     }
 
     #[test]
@@ -559,6 +759,10 @@ mod tests {
     }
 
     fn mesh_chunk(faces: &[[u16; 3]], groups: &[(&str, Vec<u16>)], smooth: Option<&[u32]>) -> Vec<u8> {
+        mesh_chunk_uv(faces, groups, smooth, &[[0.0; 2]; 8])
+    }
+
+    fn mesh_chunk_uv(faces: &[[u16; 3]], groups: &[(&str, Vec<u16>)], smooth: Option<&[u32]>, uvs: &[[f32; 2]]) -> Vec<u8> {
         let mut verts = 8u16.to_le_bytes().to_vec();
         for i in 0..8 {
             verts.extend(corner(i).iter().flat_map(|c| c.to_le_bytes()));
@@ -577,14 +781,18 @@ mod tests {
         if let Some(s) = smooth {
             fl.extend(chunk(SMOOTHING, &s.iter().flat_map(|m| m.to_le_bytes()).collect::<Vec<_>>()));
         }
-        let mut uv = 8u16.to_le_bytes().to_vec();
-        uv.extend([0u8; 64]);
+        let mut uv = (uvs.len() as u16).to_le_bytes().to_vec();
+        uv.extend(uvs.iter().flatten().flat_map(|c| c.to_le_bytes()));
         cat(&[chunk(VERTICES, &verts), chunk(FACES, &fl), chunk(TEX_COORDS, &uv), chunk(LOCAL_AXES, &[0u8; 48])])
     }
 
     fn file(materials: &[Vec<u8>], groups: &[(&str, Vec<u16>)], smooth: Option<&[u32]>) -> Vec<u8> {
+        file_uv(materials, groups, smooth, &[[0.0; 2]; 8])
+    }
+
+    fn file_uv(materials: &[Vec<u8>], groups: &[(&str, Vec<u16>)], smooth: Option<&[u32]>, uvs: &[[f32; 2]]) -> Vec<u8> {
         let mut obj = cstr("cube");
-        obj.extend(chunk(TRI_MESH, &mesh_chunk(&cube_faces(), groups, smooth)));
+        obj.extend(chunk(TRI_MESH, &mesh_chunk_uv(&cube_faces(), groups, smooth, uvs)));
         let mut editor = chunk(OBJECT, &obj);
         for m in materials {
             editor.extend(chunk(MATERIAL, m));

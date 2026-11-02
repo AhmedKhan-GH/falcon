@@ -461,25 +461,6 @@ fn percent_decode(s: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-/// The average colour of the image a model refers to by `uri`, looked up
-/// next to the model: by its relative path, else by its file name alone.
-pub(super) fn texture_color(side: Side, uri: &str) -> Option<V3> {
-    let path = percent_decode(uri.trim());
-    let path = path.strip_prefix("file://").unwrap_or(&path).replace('\\', "/");
-    let name = path.rsplit('/').next().unwrap_or(&path).to_string();
-    let bytes = side(&path).or_else(|| side(&name))?;
-    let img = image::load_from_memory(&bytes).ok()?.thumbnail(64, 64).to_rgba8();
-    let (mut sum, mut weight) = ([0.0f64; 3], 0.0f64);
-    for px in img.pixels() {
-        let a = f64::from(px[3]) / 255.0;
-        for k in 0..3 {
-            sum[k] += f64::from(px[k]) / 255.0 * a;
-        }
-        weight += a;
-    }
-    (weight > 0.0).then(|| sum.map(|s| (s / weight) as f32))
-}
-
 // ---- the scene ---------------------------------------------------------------
 
 /// A material as bound: its colour and, when its diffuse is a picture
