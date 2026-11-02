@@ -17,10 +17,10 @@ const MAX_FIELD: usize = 200;
 /// removed.
 pub fn read(path: &Path, ext: &str) -> Vec<String> {
     let Ok(data) = std::fs::read(path) else { return Vec::new() };
-    let (iptc, xmp) = match ext {
+    let (iptc, xmp) = match crate::alias::canonical(ext).as_str() {
         "jpg" | "jpeg" => jpeg_blocks(&data),
         "png" => (None, png_xmp(&data)),
-        "tif" | "tiff" => tiff_blocks(&data),
+        "tiff" => tiff_blocks(&data),
         _ => (None, None),
     };
     let mut fields = iptc.map(|b| iim_keywords(&b)).unwrap_or_default();

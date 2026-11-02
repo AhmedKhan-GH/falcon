@@ -300,7 +300,7 @@ pub struct Convert {
 /// Whether an item's original can be converted: raster images falcon
 /// decodes, and SVG.
 pub fn convertible(item: &Item) -> bool {
-    matches!(item.ext.to_lowercase().as_str(), "png" | "jpg" | "jpeg" | "jfif" | "webp" | "gif" | "bmp" | "tif" | "tiff" | "ico" | "svg")
+    matches!(item.ext.to_lowercase().as_str(), "png" | "jpg" | "jpeg" | "jfif" | "jpe" | "insp" | "webp" | "gif" | "bmp" | "tif" | "tiff" | "ico" | "svg")
 }
 
 /// Plans exporting `ids` converted to `format` into `dest`: each file is

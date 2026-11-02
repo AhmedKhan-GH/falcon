@@ -23,7 +23,7 @@ const FRAME: f32 = 3.0;
 
 /// Types Eagle loads the original of for the preview; the rest keep their
 /// thumbnail.
-const RASTER: [&str; 9] = ["avif", "gif", "webp", "png", "jpg", "jpeg", "bmp", "ico", "jfif"];
+const RASTER: [&str; 11] = ["avif", "gif", "webp", "png", "jpg", "jpeg", "bmp", "ico", "jfif", "jpe", "insp"];
 /// Types whose cards have no zoom button (they have their own hover
 /// behaviour in Eagle, or nothing to enlarge).
 const NO_BUTTON: [&str; 21] = [

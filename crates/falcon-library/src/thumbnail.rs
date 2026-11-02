@@ -40,7 +40,7 @@ impl ThumbError {
 
 /// Whether falcon can decode and thumbnail this extension (lowercase, no dot).
 pub fn is_supported(ext: &str) -> bool {
-    matches!(ext, "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" | "svg")
+    matches!(ext, "png" | "jpg" | "jpeg" | "jfif" | "jpe" | "insp" | "webp" | "gif" | "bmp" | "svg")
 }
 
 /// The short-side limit for `ext`: 320 for ordinary images, 512 for icon
@@ -51,7 +51,7 @@ pub fn max_side(ext: &str) -> u32 {
     match ext {
         e if crate::model3d::EXTENSIONS.contains(&e) => crate::model3d::raster::CANVAS + 2 * crate::model3d::raster::PADDING,
         "ico" | "icns" => 512,
-        "pdf" | "doc" | "docx" | "xls" | "xlsx" | "ppt" | "pptx" | "psd" | "ai" | "eps" | "hdr" | "exr" | "dds"
+        "pdf" | "doc" | "docx" | "xls" | "xlsx" | "ppt" | "pptx" | "psd" | "psdt" | "ai" | "ait" | "eps" | "hdr" | "exr" | "dds"
         | "cr3" => 480,
         _ => DEFAULT_MAX_SIDE,
     }
@@ -203,6 +203,10 @@ pub fn quicklook(path: &Path, size: u32) -> Result<DynamicImage, ThumbError> {
     if !cfg!(target_os = "macos") {
         return Err(ThumbError("QuickLook is only available on macOS".into()));
     }
+    // macOS has no type for some alias names (.jfif, .psdt); QuickLook gets
+    // the file under the extension the alias stands for.
+    let renamed = crate::alias::renamed(path);
+    let path = renamed.as_ref().map_or(path, |r| r.path());
     let out = tempfile::tempdir().map_err(ThumbError::new)?;
     let mut child = std::process::Command::new("qlmanage")
         .arg("-t")
@@ -395,7 +399,7 @@ pub const CUSTOM_THUMBNAIL_KEY: &str = "customThumbnail";
 /// the command for the image formats it shows as themselves (tif, jpg, png,
 /// bmp, webp); jpeg and tiff are falcon's addition, as the same formats.
 pub fn custom_thumbnail_allowed(ext: &str) -> bool {
-    !matches!(ext.to_lowercase().as_str(), "tif" | "tiff" | "jpg" | "jpeg" | "png" | "bmp" | "webp")
+    !matches!(crate::alias::canonical(ext).as_str(), "tiff" | "jpg" | "jpeg" | "png" | "bmp" | "webp")
 }
 
 /// Whether the item's thumbnail was set by hand (`customThumbnail: true`).

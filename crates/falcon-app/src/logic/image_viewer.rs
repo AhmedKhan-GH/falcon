@@ -87,7 +87,7 @@ pub const FULL_TIER_SIDE: u32 = 3072;
 /// mapped at the viewer's exposure. PSD and PSB show their merged image, in
 /// tiles up to [`COMPOSITE_TILED_PIXELS`] ([`composite_tiled`]).
 pub fn full_resolution(ext: &str) -> bool {
-    matches!(ext, "jpg" | "jpeg" | "jfif" | "jpe" | "png" | "webp" | "bmp" | "tif" | "tiff" | "tga" | "hdr" | "exr")
+    matches!(ext, "jpg" | "jpeg" | "jfif" | "jpe" | "insp" | "png" | "webp" | "bmp" | "tif" | "tiff" | "tga" | "hdr" | "exr")
         || falcon_library::exif::is_raw(ext)
         || falcon_library::psd::handles(ext)
         || (cfg!(target_os = "macos") && falcon_library::imageio::handles(ext))
@@ -106,7 +106,7 @@ pub fn wants_original(ext: &str, natural_long: u32, shown_px: f32) -> bool {
 /// page again at the zoom shown once the view holds still and keeps the
 /// part on screen ([`quicklook_region`]).
 pub fn hires_quicklook(ext: &str) -> bool {
-    matches!(ext, "psd" | "psdt" | "psb" | "ai" | "ppt" | "pptx" | "potx")
+    matches!(ext, "psd" | "psdt" | "psb" | "ai" | "ait" | "ppt" | "pptx" | "potx")
 }
 
 /// Most pixels of a PSD's merged image held in tiles: 1 GiB in memory while

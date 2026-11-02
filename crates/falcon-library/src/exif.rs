@@ -15,7 +15,7 @@ pub const RAW_EXTENSIONS: [&str; 18] =
     ["3fr", "arw", "orf", "mrw", "nef", "nrw", "raw", "cr2", "crw", "dng", "erf", "pef", "raf", "rw2", "sr2", "srw", "x3f", "cr3"];
 
 /// Other photo formats whose EXIF falcon can read.
-pub const EXIF_EXTENSIONS: [&str; 8] = ["jpg", "jpeg", "tif", "tiff", "heic", "heif", "png", "webp"];
+pub const EXIF_EXTENSIONS: [&str; 12] = ["jpg", "jpeg", "jfif", "jpe", "insp", "tif", "tiff", "heic", "heif", "hif", "png", "webp"];
 
 pub fn is_raw(ext: &str) -> bool {
     RAW_EXTENSIONS.contains(&ext)
