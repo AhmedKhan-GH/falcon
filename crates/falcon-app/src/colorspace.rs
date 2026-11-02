@@ -4,7 +4,9 @@
 //! the window.
 //!
 //! Falcon draws through wgpu's Metal surface, whose `CAMetalLayer` carries
-//! the colour space. The choice sets the layer's `colorspace` to
+//! the colour space. That layer is a sublayer of the content view's own
+//! layer (`raw-window-metal` adds it, since winit's view has a plain
+//! backing layer), so it is looked for there. The choice sets the layer's `colorspace` to
 //! `kCGColorSpaceSRGB`, `kCGColorSpaceDisplayP3`, or nil for Unmanaged
 //! (the colours go to the display as they are). wgpu sets the layer's
 //! colour space to nil each time it configures the surface (at start and
@@ -53,7 +55,7 @@ pub fn sync(_: &eframe::Frame, _: ColorSpace) -> bool {
 }
 
 #[cfg(target_os = "macos")]
-mod imp {
+pub(crate) mod imp {
     use super::ColorSpace;
     use objc2::encode::{Encoding, RefEncode};
     use objc2::msg_send;
@@ -91,13 +93,59 @@ mod imp {
     /// # Safety
     /// `view` must be a live NSView (or null), used on the main thread.
     pub unsafe fn apply_to_view(view: *mut AnyObject, cs: ColorSpace) -> bool {
+        // SAFETY: as the caller ensures; `apply_to_layer` takes the result,
+        // a live layer or null.
+        unsafe { apply_to_layer(metal_layer_of_view(view), cs) }
+    }
+
+    /// The `CAMetalLayer` wgpu draws `view` through, or null.
+    ///
+    /// # Safety
+    /// `view` must be a live NSView (or null), used on the main thread.
+    pub unsafe fn metal_layer_of_view(view: *mut AnyObject) -> *mut AnyObject {
         if view.is_null() {
-            return false;
+            return std::ptr::null_mut();
         }
-        // SAFETY: NSView getter.
-        let layer: *mut AnyObject = unsafe { msg_send![view, layer] };
-        // SAFETY: `layer` is a live CALayer or null.
-        unsafe { apply_to_layer(layer, cs) }
+        // SAFETY: NSView getter, then a live CALayer or null.
+        unsafe {
+            let layer: *mut AnyObject = msg_send![view, layer];
+            metal_layer_in(layer)
+        }
+    }
+
+    /// `layer` itself when it is a `CAMetalLayer`, else its first sublayer
+    /// that is one, else null.
+    ///
+    /// # Safety
+    /// `layer` must be a live CALayer or null.
+    pub unsafe fn metal_layer_in(layer: *mut AnyObject) -> *mut AnyObject {
+        let none = std::ptr::null_mut();
+        let Some(metal) = AnyClass::get(c"CAMetalLayer") else { return none };
+        if layer.is_null() {
+            return none;
+        }
+        // SAFETY: isKindOfClass: is an NSObject method; `sublayers` is a
+        // CALayer getter returning an NSArray or nil, whose elements stay
+        // alive with the layer.
+        unsafe {
+            let is_metal: Bool = msg_send![layer, isKindOfClass: metal];
+            if is_metal.as_bool() {
+                return layer;
+            }
+            let subs: *mut AnyObject = msg_send![layer, sublayers];
+            if subs.is_null() {
+                return none;
+            }
+            let count: usize = msg_send![subs, count];
+            for i in 0..count {
+                let sub: *mut AnyObject = msg_send![subs, objectAtIndex: i];
+                let is_metal: Bool = msg_send![sub, isKindOfClass: metal];
+                if is_metal.as_bool() {
+                    return sub;
+                }
+            }
+        }
+        none
     }
 
     /// Sets a `CAMetalLayer` to `cs` unless it already has it; false when
@@ -188,6 +236,32 @@ mod imp {
                 assert!(apply_to_layer(layer, ColorSpace::Unmanaged));
                 assert_eq!(name(layer), None);
                 let _: () = msg_send![layer, release];
+            }
+        }
+
+        /// How the window is really built: wgpu's layer sits inside the
+        /// view's plain backing layer.
+        #[test]
+        fn the_metal_layer_is_found_among_the_sublayers() {
+            let metal = AnyClass::get(c"CAMetalLayer").expect("QuartzCore has CAMetalLayer");
+            let plain = AnyClass::get(c"CALayer").expect("QuartzCore has CALayer");
+            // SAFETY: owned instances, released at the end.
+            unsafe {
+                let root: *mut AnyObject = msg_send![plain, new];
+                let other: *mut AnyObject = msg_send![plain, new];
+                let inner: *mut AnyObject = msg_send![metal, new];
+                assert!(metal_layer_in(root).is_null());
+                let _: () = msg_send![root, addSublayer: other];
+                assert!(metal_layer_in(root).is_null());
+                let _: () = msg_send![root, addSublayer: inner];
+                assert_eq!(metal_layer_in(root), inner);
+                assert_eq!(metal_layer_in(inner), inner);
+                assert!(metal_layer_in(std::ptr::null_mut()).is_null());
+                assert!(apply_to_layer(metal_layer_in(root), ColorSpace::DisplayP3));
+                assert_eq!(name(inner).as_deref(), Some("kCGColorSpaceDisplayP3"));
+                let _: () = msg_send![root, release];
+                let _: () = msg_send![other, release];
+                let _: () = msg_send![inner, release];
             }
         }
 
