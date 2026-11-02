@@ -104,9 +104,21 @@ pub fn wants_original(ext: &str, natural_long: u32, shown_px: f32) -> bool {
 /// Formats Eagle draws again natively at the size shown when zoomed in
 /// (its native viewer over the thumbnail); falcon asks QuickLook for the
 /// page again at the zoom shown once the view holds still and keeps the
-/// part on screen ([`quicklook_region`]).
+/// part on screen ([`quicklook_region`]). A PDF-compatible AI file has no
+/// such cap: only that part is drawn ([`illustrator`], [`pdf_compatible`]).
 pub fn hires_quicklook(ext: &str) -> bool {
     matches!(ext, "psd" | "psdt" | "psb" | "ai" | "ait" | "ppt" | "pptx" | "potx")
+}
+
+/// Adobe Illustrator documents and templates, which are PDF files when saved
+/// with "Create PDF Compatible File" (the default) and PostScript otherwise.
+pub fn illustrator(ext: &str) -> bool {
+    matches!(ext, "ai" | "ait")
+}
+
+/// Whether a file starting with `head` is a PDF.
+pub fn pdf_compatible(head: &[u8]) -> bool {
+    head.starts_with(b"%PDF")
 }
 
 /// Most pixels of a PSD's merged image held in tiles: 1 GiB in memory while
@@ -645,6 +657,9 @@ mod zoom_tests {
     fn larger_renders_and_custom_thumbnails() {
         assert!(hires_quicklook("pptx") && !hires_quicklook("sketch"));
         assert!(quicklook_raster("psb") && !quicklook_raster("ai"));
+        assert!(hires_quicklook("ai") && hires_quicklook("ait"));
+        assert!(illustrator("ai") && illustrator("ait") && !illustrator("pdf") && !illustrator("pptx"));
+        assert!(pdf_compatible(b"%PDF-1.6\n") && !pdf_compatible(b"%!PS-Adobe-3.0") && !pdf_compatible(b"%PD") && !pdf_compatible(b""));
         assert!(custom_thumbnail_is_picture("zip", true));
         assert!(!custom_thumbnail_is_picture("zip", false));
         assert!(!custom_thumbnail_is_picture("psd", true));

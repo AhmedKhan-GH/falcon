@@ -72,8 +72,9 @@ pub struct Job {
 }
 
 /// The part of a zoomed picture on screen: fractions of the drawing
-/// (`[x0, y0, x1, y1]`); for an SVG the pixel size to render it at, for a
-/// QuickLook format the long side to render the whole page at (`render`).
+/// (`[x0, y0, x1, y1]`); for an SVG or a PDF-compatible AI the pixel size to
+/// render it at, for a QuickLook format the long side to render the whole
+/// page at (`render`). An AI file has both until its worker reads which it is.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Region {
     pub rect: [f32; 4],
@@ -100,9 +101,9 @@ pub fn original_job(item: &Item, root: &std::path::Path, tile: usize) -> Option<
         .then(|| Job { key: (item.id.clone(), Tier::Original), path: item.original_path(root), svg: false, quicklook: false, tile, region: None, raw: falcon_library::exif::is_raw(&ext), page: 0, hdr: falcon_library::hdr::is_hdr(&ext) })
 }
 
-/// The job asking QuickLook for the visible part of `item` at the zoom
-/// shown (see [`Loader::want_region`]), for the formats Eagle draws again
-/// natively when zoomed (`logic::hires_quicklook`). It shares its key with
+/// The job asking QuickLook (PDFKit for a PDF-compatible AI) for the visible
+/// part of `item` at the zoom shown (see [`Loader::want_region`]), for the
+/// formats Eagle draws again natively when zoomed (`logic::hires_quicklook`). It shares its key with
 /// the full tier, as an SVG region does.
 pub fn quicklook_region_job(item: &Item, root: &std::path::Path) -> Option<Job> {
     let ext = item.ext.to_lowercase();
@@ -510,9 +511,9 @@ impl Loader {
     }
 
     /// Asks for the part `rect` of `job` (a full-tier SVG job, or a
-    /// [`quicklook_region_job`]) to be rendered at `size` (SVG) or with the
-    /// whole page `render` pixels on its long side (QuickLook), unless that
-    /// is what was last asked for. The job goes to the front of the queue;
+    /// [`quicklook_region_job`]) to be rendered at `size` (SVG, PDF-compatible
+    /// AI) or with the whole page `render` pixels on its long side
+    /// (QuickLook), unless that is what was last asked for. The job goes to the front of the queue;
     /// an older region still queued is dropped.
     pub fn want_region(&mut self, mut job: Job, rect: [f32; 4], size: [u32; 2], render: u32) {
         let last = (job.key.0.clone(), rect, size, render);
@@ -652,7 +653,8 @@ fn decode(job: &Job, exposure: f32, linear: &Mutex<Option<(PathBuf, u32, Arc<ima
         && job.quicklook
     {
         if !is_psd(&job.path) {
-            return quicklook_patch(&job.path, region, rendered);
+            // PDFKit's way out (a locked or damaged file) is QuickLook's.
+            return pdf_patch(&job.path, region).or_else(|| quicklook_patch(&job.path, region, rendered));
         }
         // QuickLook's limits apply again if the merged image fails.
         let fallback = Region { render: region.render.min(crate::logic::QUICKLOOK_RENDER_PIXELS.sqrt() as u32), ..region };
@@ -783,6 +785,32 @@ fn quicklook_patch(path: &std::path::Path, region: Region, rendered: &Rendered) 
     Some(Pixels::Patch(region, ColorImage::from_rgba_unmultiplied(size, part.as_raw())))
 }
 
+/// Whether `path` is an Illustrator file saved PDF-compatible, by its first
+/// bytes: the extension says nothing about that.
+fn pdf_compatible_ai(path: &std::path::Path) -> bool {
+    use std::io::Read;
+    let ai = path.extension().and_then(|e| e.to_str()).is_some_and(|e| crate::logic::illustrator(&e.to_lowercase()));
+    let mut head = [0u8; 4];
+    ai && std::fs::File::open(path).and_then(|mut f| f.read_exact(&mut head)).is_ok() && crate::logic::pdf_compatible(&head)
+}
+
+/// The part `region.rect` of a PDF-compatible AI file's first page (what
+/// QuickLook shows, which also draws the crop box, turned and on white) at
+/// `region.size` pixels. `None` for any other file. Nothing is kept: the
+/// document opens and closes here, on this worker's thread, and the only
+/// memory left is the patch, whatever the zoom.
+fn pdf_patch(path: &std::path::Path, region: Region) -> Option<Pixels> {
+    if region.size[0] == 0 || region.size[1] == 0 || !pdf_compatible_ai(path) {
+        return None;
+    }
+    let doc = falcon_pdf::Document::open(path).ok()?;
+    let (w, h) = doc.page_size(0)?;
+    let [x0, y0, x1, y1] = region.rect.map(f64::from);
+    let part = falcon_pdf::Rect { x: x0 * w, y: y0 * h, w: (x1 - x0) * w, h: (y1 - y0) * h };
+    let b = doc.render_part(0, part, region.size[0] as usize, region.size[1] as usize).ok()?;
+    Some(Pixels::Patch(region, ColorImage::from_rgba_unmultiplied([b.width, b.height], &b.rgba)))
+}
+
 /// Whether ImageIO decodes `path` here (AVIF, HEIC/HEIF, JPEG XL on a
 /// system that reads it).
 fn imageio(path: &std::path::Path) -> bool {
@@ -890,6 +918,101 @@ mod tests {
 
     fn original(path: PathBuf, tile: usize) -> Job {
         Job { key: ("x".into(), Tier::Original), path, svg: false, quicklook: false, tile, region: None, raw: false, page: 0, hdr: false }
+    }
+
+    /// A one-page PDF with an Illustrator extension: `page` holds its
+    /// page entries, and the page is drawn with `content`.
+    #[cfg(target_os = "macos")]
+    fn write_ai(path: &std::path::Path, page: &str, content: &str) {
+        let objs = [
+            "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
+            format!("<< /Type /Page /Parent 2 0 R {page} /Contents 4 0 R >>"),
+            format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len()),
+        ];
+        let mut out = b"%PDF-1.4\n".to_vec();
+        let mut offsets = Vec::new();
+        for (k, body) in objs.iter().enumerate() {
+            offsets.push(out.len());
+            out.extend_from_slice(format!("{} 0 obj\n{body}\nendobj\n", k + 1).as_bytes());
+        }
+        let xref = out.len();
+        out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
+        for o in offsets {
+            out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+        }
+        out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objs.len() + 1).as_bytes());
+        std::fs::write(path, out).unwrap();
+    }
+
+    #[cfg(target_os = "macos")]
+    fn ai_job(path: PathBuf, rect: [f32; 4], size: [u32; 2], render: u32) -> Job {
+        Job { key: ("x".into(), Tier::Full), path, svg: false, quicklook: true, tile: 0, region: Some(Region { rect, size, render, seq: 1 }), raw: false, page: 0, hdr: false }
+    }
+
+    /// Far past QuickLook's cap: a PDF-compatible AI or AIT is drawn by
+    /// PDFKit for the part asked, and its edge stays sharp. No page render
+    /// is kept.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn pdf_compatible_ai_regions_are_sharp_past_the_cap() {
+        let dir = tempfile::tempdir().unwrap();
+        for name in ["x.ai", "x.AIT"] {
+            let path = dir.path().join(name);
+            write_ai(&path, "/MediaBox [0 0 4000 4000]", "0 0 0 rg 2000 0 2000 4000 re f");
+            // 2 points on either side of the middle at 200 px: 400,000 px across
+            // the whole page, in place of QuickLook's 8192.
+            let (a, b) = (1999.0 / 4000.0, 2001.0 / 4000.0);
+            let rendered: Rendered = Mutex::new(None);
+            let job = ai_job(path, [a, a, b, b], [200, 200], 16384);
+            let Some(Pixels::Patch(got, img)) = decode(&job, 1.0, &Mutex::new(None), &rendered) else { panic!("no patch") };
+            assert_eq!(got.rect, [a, a, b, b]);
+            assert_eq!(img.size, [200, 200]);
+            let (white, black) = (img.pixels[20 * 200 + 96], img.pixels[20 * 200 + 104]);
+            assert_eq!((white, black), (Color32::WHITE, Color32::BLACK));
+            assert!(rendered.lock().unwrap().is_none(), "nothing is kept");
+        }
+    }
+
+    /// The patch lands on what QuickLook drew in the same place, with a crop
+    /// box and a turn. Skipped where QuickLook can't render.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn pdf_compatible_ai_regions_line_up_with_quicklook() {
+        let dir = tempfile::tempdir().unwrap();
+        // Blue media, green crop box, a red middle, a yellow corner; the art
+        // and trim boxes don't count, as neither engine reads them.
+        let content = "0 0 1 rg 0 0 400 300 re f 0 1 0 rg 100 50 200 150 re f 1 0 0 rg 150 100 100 50 re f 1 1 0 rg 100 50 30 30 re f";
+        for page in ["/MediaBox [0 0 400 300]", "/MediaBox [0 0 400 300] /CropBox [100 50 300 200] /ArtBox [150 100 250 150] /TrimBox [150 100 250 150]", "/MediaBox [0 0 400 300] /CropBox [100 50 300 200] /Rotate 90"] {
+            let path = dir.path().join("x.ai");
+            write_ai(&path, page, content);
+            let Ok(ql) = thumbnail::quicklook(&path, 800) else { return };
+            let ql = ql.into_rgba8();
+            for (fx, fy) in [(0.02, 0.02), (0.98, 0.02), (0.02, 0.98), (0.98, 0.98), (0.5, 0.5), (0.1, 0.9), (0.25, 0.6)] {
+                let rect = [fx - 0.005, fy - 0.005, fx + 0.005, fy + 0.005];
+                let job = ai_job(path.clone(), rect, [10, 10], 800);
+                let Some(Pixels::Patch(_, img)) = decode(&job, 1.0, &Mutex::new(None), &Mutex::new(None)) else { panic!("no patch") };
+                let [r, g, b, a] = ql.get_pixel((fx * ql.width() as f32) as u32, (fy * ql.height() as f32) as u32).0;
+                assert_eq!(img.pixels[5 * 10 + 5], Color32::from_rgba_unmultiplied(r, g, b, a), "{page} at {fx},{fy}");
+            }
+        }
+    }
+
+    /// An AI file that isn't a PDF, and one PDFKit can't read, stay on the
+    /// QuickLook path (here its kept render).
+    #[test]
+    fn other_ai_files_keep_quicklook() {
+        let dir = tempfile::tempdir().unwrap();
+        for (name, data) in [("eps.ai", &b"%!PS-Adobe-3.0\n"[..]), ("broken.ai", b"%PDF-1.4\nnot really"), ("empty.ai", b"")] {
+            let path = dir.path().join(name);
+            std::fs::write(&path, data).unwrap();
+            let page = image::RgbaImage::from_pixel(1000, 500, image::Rgba([9, 8, 7, 255]));
+            let rendered: Rendered = Mutex::new(Some((path.clone(), 1000, Arc::new(page))));
+            let job = Job { key: ("x".into(), Tier::Full), path, svg: false, quicklook: true, tile: 0, region: Some(Region { rect: [0.5, 0.0, 1.0, 0.5], size: [80, 40], render: 1000, seq: 1 }), raw: false, page: 0, hdr: false };
+            let Some(Pixels::Patch(_, img)) = decode(&job, 1.0, &Mutex::new(None), &rendered) else { panic!("{name}: no patch") };
+            assert_eq!(img.size, [500, 250], "{name}");
+            assert_eq!(img.pixels[0], Color32::from_rgb(9, 8, 7), "{name}");
+        }
     }
 
     /// One region at a time; other work passes a region left waiting.

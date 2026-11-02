@@ -212,10 +212,12 @@ impl App {
         // (Eagle's native viewer draws them at the size shown): QuickLook
         // renders the page at the zoom shown and the part on screen is kept.
         // A PSD with a merged image too large for tiles decodes that part
-        // from the file instead.
+        // from the file instead, and a PDF-compatible AI draws that part at
+        // the size shown with PDFKit (the worker reads which it is; `render`
+        // is for QuickLook, `size` for PDFKit).
         let mut patch = None;
         let full_side = tex.as_ref().map_or(0.0, |t| t.size_vec2().max_elem());
-        let quicklook = logic::hires_quicklook(&ext) && !animated && page_size.is_none() && !tiled && (!is_psd || composite.is_some());
+        let quicklook = logic::hires_quicklook(&ext) && !animated && page_size.is_none() && !tiled && (!is_psd || composite.is_some()) && !logic::custom_thumbnail_is_picture(&ext, thumbnail::has_custom_thumbnail(item));
         if (ext == "svg" || quicklook) && tf.is_identity() && tex.is_some() && shown_px > full_side {
             let ppp = ui.ctx().pixels_per_point();
             let (image_rect, view_rect) = ([r.min.x, r.min.y, r.max.x, r.max.y], [area.min.x, area.min.y, area.max.x, area.max.y]);
@@ -228,7 +230,9 @@ impl App {
                 };
                 // Only a render larger than the full tier's adds anything.
                 let region = region.filter(|(_, side)| *side as f32 > full_side);
-                (region.map(|(rect, side)| (rect, [0, 0], side)), quicklook_region_job(item, lib.root()), logic::QUICKLOOK_SETTLE)
+                let max = ui.ctx().input(|i| i.max_texture_side).min(8192) as u32;
+                let size = logic::illustrator(&ext).then(|| logic::svg_region(image_rect, view_rect, ppp, max)).flatten().map_or([0, 0], |(_, size)| size);
+                (region.map(|(rect, side)| (rect, size, side)), quicklook_region_job(item, lib.root()), logic::QUICKLOOK_SETTLE)
             } else {
                 let max = ui.ctx().input(|i| i.max_texture_side).min(8192) as u32;
                 let region = logic::svg_region(image_rect, view_rect, ppp, max);

@@ -35,7 +35,7 @@ Eagle's alias extensions import as the format they stand for, whatever macOS cal
 | Formats | Eagle | Falcon | Status |
 | --- | --- | --- | --- |
 | psd, psdt, psb | High-resolution render | The file's merged image decoded by falcon at full resolution, in colour through its ICC profile; QuickLook when it has none (Maximize Compatibility off) | Done |
-| ai, ait | High-resolution render | QuickLook, redrawn at each zoom level up to 8192 px | Done |
+| ai, ait | High-resolution render | PDF-compatible files: PDFKit draws the part on screen at the size shown, sharp at any zoom in the viewer. PostScript-only files: QuickLook, redrawn at each zoom level up to 8192 px | Done |
 | eps | Image of the thumbnail (dropped on macOS 13+) | QuickLook render (macOS 14+ has no EPS renderer) | Done |
 | xd, sketch, fig, af, afdesign, afphoto, afpub, c4d, blend, clip, skp, dwg, prd, cdr, skt, pxd, graffle, mindnode, xmind, eddx, emmx, indd, indt, idml | Image of the thumbnail | QuickLook render where the app's generator is installed | Done |
 
