@@ -535,7 +535,10 @@ fn quicklook_thumbnail(item: &mut Item, raw: &Path, thumb: &Path, max: u32) -> O
     let meta = thumbnail::spotlight(raw);
     // A PSD's header is the file's own word on its size.
     let psd = crate::psd::handles(&item.ext).then(|| crate::psd::dimensions(raw)).flatten();
-    let (w, h) = psd.or(meta.size).unwrap_or((img.width(), img.height()));
+    // A RAW photo's size is the camera's stated size, as Eagle records it
+    // (its `rawMetas`), not the size of QuickLook's render.
+    let camera = crate::exif::is_raw(&item.ext).then(|| fs::read(raw).ok()).flatten().map(|data| raw_dimensions(&data, raw, (img.width(), img.height())));
+    let (w, h) = psd.or(camera).or(meta.size).unwrap_or((img.width(), img.height()));
     item.width = w.into();
     item.height = h.into();
     thumbnail::write_thumbnail(img, max, thumb).ok()?;
@@ -579,6 +582,34 @@ fn raw_dimensions(data: &[u8], raw: &Path, fallback: (u32, u32)) -> (u32, u32) {
         return if turned { (h, w) } else { (w, h) };
     }
     thumbnail::spotlight(raw).size.filter(|&s| s.0.max(s.1) >= long).unwrap_or(fallback)
+}
+
+#[cfg(test)]
+mod raw_size_tests {
+    use super::raw_dimensions;
+    use std::path::Path;
+
+    /// A little-endian TIFF whose first IFD states ImageWidth and ImageLength.
+    fn tiff_stating(w: u16, h: u16) -> Vec<u8> {
+        let mut t = vec![b'I', b'I', 42, 0, 8, 0, 0, 0, 2, 0];
+        for (tag, v) in [(0x0100u16, w), (0x0101, h)] {
+            t.extend_from_slice(&tag.to_le_bytes());
+            t.extend_from_slice(&3u16.to_le_bytes());
+            t.extend_from_slice(&1u32.to_le_bytes());
+            t.extend_from_slice(&v.to_le_bytes());
+            t.extend_from_slice(&[0, 0]);
+        }
+        t.extend_from_slice(&0u32.to_le_bytes());
+        t
+    }
+
+    #[test]
+    fn a_quicklook_render_does_not_decide_a_raw_photos_size() {
+        let data = tiff_stating(6000, 4000);
+        assert_eq!(raw_dimensions(&data, Path::new("/nonexistent/x.nef"), (1024, 683)), (6000, 4000));
+        // Nothing stated: the render stays the fallback.
+        assert_eq!(raw_dimensions(&[0u8; 16], Path::new("/nonexistent/x.nef"), (1024, 683)), (1024, 683));
+    }
 }
 
 /// The size Eagle records for a web archive: the 1440 × 900 window its
