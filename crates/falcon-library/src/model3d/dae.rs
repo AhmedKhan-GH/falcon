@@ -12,11 +12,16 @@
 //! metres the way three.js's loader (used by Eagle's viewer) does;
 //! material base colours from the `library_effects` diffuse (emission for
 //! `constant`), or, when the diffuse is a texture whose image sits next to
-//! the file, that image's average colour.
+//! the file (or is embedded as `hex`), that image's average colour. The
+//! texture is also kept for drawing: the image through the profile's
+//! sampler and surface (1.4.1) or `instance_image` (1.5), its wrap modes
+//! from the sampler's `wrap_s` and `wrap_t`, and the `TEXCOORD` set the
+//! texture's `texcoord` is bound to by the instance's `bind_vertex_input`
+//! (else the first set), with v flipped to falcon's picture space.
 //!
 //! Not read: animation, skinning weights and joints, morph targets,
-//! cameras, lights, `skew`, lines, texture coordinates (falcon's mesh has
-//! no UVs, so textures are not mapped) and transparency. A missing normal
+//! cameras, lights, `skew`, lines, texture transforms (`extra` techniques)
+//! and transparency. A missing normal
 //! input leaves `normals` empty; the viewer then shades flat or generates
 //! smooth normals as for any other format.
 
@@ -26,6 +31,7 @@ use std::rc::Rc;
 use roxmltree::{Document, Node};
 
 use super::math::{self, M4, V3};
+use super::texture::{Loader, Texture, Wrap};
 use super::{DEFAULT_COLOR, Material, Mesh, Model, ParseError, Result};
 
 /// Deepest node nesting followed (also stops `instance_node` cycles).
@@ -47,7 +53,7 @@ pub fn parse(bytes: &[u8], side: Side) -> Result<Model> {
     if root.tag_name().name() != "COLLADA" {
         return Err(ParseError::new("not a COLLADA file"));
     }
-    let mut r = Reader::new(root, side);
+    let mut r = Reader::new(root, Loader::new(side));
     r.read()?;
     Model { meshes: r.meshes }.finish()
 }
@@ -205,6 +211,8 @@ struct Prim {
     positions: Vec<V3>,
     normals: Option<Vec<V3>>,
     colors: Option<Vec<V3>>,
+    /// Texture coordinates (v down) of each `TEXCOORD` set, by its `set`.
+    uvs: Vec<(Option<u32>, Vec<[f32; 2]>)>,
     indices: Vec<u32>,
     /// The `material` symbol, bound per instance.
     material: Option<String>,
@@ -240,16 +248,26 @@ fn read_source(src: Node, k: usize) -> Vec<V3> {
         .collect()
 }
 
+/// Most `TEXCOORD` sets kept per primitive.
+const MAX_UV_SETS: usize = 4;
+
+/// An input's `set` attribute.
+fn set_of(input: Node) -> Option<u32> {
+    input.attribute("set").and_then(|s| s.trim().parse().ok())
+}
+
 struct Inputs {
     position: Option<(Vec<V3>, usize)>,
     normal: Option<(Vec<V3>, usize)>,
     color: Option<(Vec<V3>, usize)>,
+    /// The `TEXCOORD` inputs (at most [`MAX_UV_SETS`]): set, values, offset.
+    texcoords: Vec<(Option<u32>, Vec<V3>, usize)>,
     /// Indices per corner in `p`.
     stride: usize,
 }
 
 fn read_inputs(prim: Node, mesh: Node, ids: &HashMap<&str, Node>) -> Inputs {
-    let mut out = Inputs { position: None, normal: None, color: None, stride: 1 };
+    let mut out = Inputs { position: None, normal: None, color: None, texcoords: Vec::new(), stride: 1 };
     let source = |id: &str, k: usize| ids.get(url_id(id)).map(|n| read_source(*n, k)).unwrap_or_default();
     for input in children(prim, "input") {
         let offset = input.attribute("offset").and_then(|s| s.trim().parse::<usize>().ok()).unwrap_or(0);
@@ -268,6 +286,7 @@ fn read_inputs(prim: Node, mesh: Node, ids: &HashMap<&str, Node>) -> Inputs {
                 for vi in children(v, "input") {
                     let s = vi.attribute("source").unwrap_or("");
                     match vi.attribute("semantic").unwrap_or("") {
+                        "TEXCOORD" if out.texcoords.len() < MAX_UV_SETS => out.texcoords.push((set_of(vi), source(s, 2), offset)),
                         "POSITION" => out.position = Some((source(s, 3), offset)),
                         "NORMAL" if out.normal.is_none() => out.normal = Some((source(s, 3), offset)),
                         "COLOR" if out.color.is_none() => out.color = Some((source(s, 3), offset)),
@@ -276,6 +295,7 @@ fn read_inputs(prim: Node, mesh: Node, ids: &HashMap<&str, Node>) -> Inputs {
                 }
             }
             "NORMAL" => out.normal = Some((source(src, 3), offset)),
+            "TEXCOORD" if out.texcoords.len() < MAX_UV_SETS => out.texcoords.push((set_of(input), source(src, 2), offset)),
             "COLOR" if out.color.is_none() => out.color = Some((source(src, 3), offset)),
             _ => {}
         }
@@ -289,12 +309,12 @@ struct Builder<'a> {
     inputs: &'a Inputs,
     p: &'a [u32],
     prim: Prim,
-    seen: HashMap<(u32, u32, u32), u32>,
+    seen: HashMap<(u32, u32, u32, [u32; MAX_UV_SETS]), u32>,
 }
 
 impl<'a> Builder<'a> {
     fn new(inputs: &'a Inputs, p: &'a [u32], material: Option<String>) -> Self {
-        let prim = Prim { positions: Vec::new(), normals: inputs.normal.as_ref().map(|_| Vec::new()), colors: inputs.color.as_ref().map(|_| Vec::new()), indices: Vec::new(), material };
+        let prim = Prim { positions: Vec::new(), normals: inputs.normal.as_ref().map(|_| Vec::new()), colors: inputs.color.as_ref().map(|_| Vec::new()), uvs: inputs.texcoords.iter().map(|t| (t.0, Vec::new())).collect(), indices: Vec::new(), material };
         Builder { inputs, p, prim, seen: HashMap::new() }
     }
 
@@ -312,7 +332,15 @@ impl<'a> Builder<'a> {
             }
         };
         let (pos, nrm, col) = (at(&self.inputs.position)??, at(&self.inputs.normal)?, at(&self.inputs.color)?);
-        let key = (pos, nrm.unwrap_or(0), col.unwrap_or(0));
+        let mut tcs = [0u32; MAX_UV_SETS];
+        for (slot, (_, vals, off)) in tcs.iter_mut().zip(&self.inputs.texcoords) {
+            let i = *self.p.get(base + off)?;
+            if i as usize >= vals.len() {
+                return None;
+            }
+            *slot = i;
+        }
+        let key = (pos, nrm.unwrap_or(0), col.unwrap_or(0), tcs);
         if let Some(&v) = self.seen.get(&key) {
             return Some(v);
         }
@@ -323,6 +351,10 @@ impl<'a> Builder<'a> {
         }
         if let (Some(out), Some((vals, _)), Some(i)) = (self.prim.colors.as_mut(), &self.inputs.color, col) {
             out.push(vals[i as usize]);
+        }
+        for (k, (_, vals, _)) in self.inputs.texcoords.iter().enumerate() {
+            let uv = vals[tcs[k] as usize];
+            self.prim.uvs[k].1.push([uv[0], 1.0 - uv[1]]);
         }
         self.seen.insert(key, v);
         Some(v)
@@ -450,27 +482,31 @@ pub(super) fn texture_color(side: Side, uri: &str) -> Option<V3> {
 
 // ---- the scene ---------------------------------------------------------------
 
+/// A material as bound: its colour and, when its diffuse is a picture
+/// that could be read, the texture and the `texcoord` name it uses.
+type Resolved = (Material, Option<(Texture, String)>);
+
 struct Reader<'a, 'i, 's> {
     root: Node<'a, 'i>,
     ids: HashMap<&'a str, Node<'a, 'i>>,
-    side: Side<'s>,
+    loader: Loader<'s>,
     up: M4,
     prims: HashMap<String, Rc<Vec<Prim>>>,
-    materials: HashMap<String, Option<Material>>,
+    materials: HashMap<String, Option<Resolved>>,
     visits: usize,
     triangles: usize,
     meshes: Vec<Mesh>,
 }
 
 impl<'a, 'i, 's> Reader<'a, 'i, 's> {
-    fn new(root: Node<'a, 'i>, side: Side<'s>) -> Self {
+    fn new(root: Node<'a, 'i>, loader: Loader<'s>) -> Self {
         let mut ids = HashMap::new();
         for n in root.descendants().filter(|n| n.is_element()) {
             if let Some(id) = n.attribute("id") {
                 ids.entry(id).or_insert(n);
             }
         }
-        Reader { root, ids, side, up: asset_matrix(root), prims: HashMap::new(), materials: HashMap::new(), visits: 0, triangles: 0, meshes: Vec::new() }
+        Reader { root, ids, loader, up: asset_matrix(root), prims: HashMap::new(), materials: HashMap::new(), visits: 0, triangles: 0, meshes: Vec::new() }
     }
 
     fn read(&mut self) -> Result<()> {
@@ -573,7 +609,14 @@ impl<'a, 'i, 's> Reader<'a, 'i, 's> {
             if self.triangles > MAX_TRIANGLES {
                 return Err(ParseError::new("the COLLADA file has too many triangles"));
             }
-            let material = prim.material.as_deref().and_then(|sym| self.bound_material(bind, sym));
+            let resolved = prim.material.as_deref().and_then(|sym| self.bound_material(bind, sym));
+            let (material, texture) = match resolved {
+                Some((m, t)) => (Some(m), t),
+                None => (None, None),
+            };
+            // The UV set the texture's `texcoord` is bound to, else the first.
+            let want = texture.as_ref().and_then(|(_, tc)| bound_set(bind, prim.material.as_deref().unwrap_or(""), tc));
+            let uvs = prim.uvs.iter().find(|(set, _)| want.is_some() && *set == want).or(prim.uvs.first()).map(|(_, v)| v.clone());
             let mut indices = prim.indices.clone();
             if flip {
                 for t in indices.as_chunks_mut::<3>().0 {
@@ -587,7 +630,8 @@ impl<'a, 'i, 's> Reader<'a, 'i, 's> {
                 colors: prim.colors.clone(),
                 indices,
                 material,
-                ..Mesh::default()
+                texture: texture.filter(|_| uvs.is_some()).map(|(t, _)| t),
+                uvs,
             });
         }
         Ok(())
@@ -595,7 +639,7 @@ impl<'a, 'i, 's> Reader<'a, 'i, 's> {
 
     /// The material an instance binds to the primitive symbol `sym`; files
     /// without a binding often name the material itself.
-    fn bound_material(&mut self, bind: Option<Node<'a, 'i>>, sym: &str) -> Option<Material> {
+    fn bound_material(&mut self, bind: Option<Node<'a, 'i>>, sym: &str) -> Option<Resolved> {
         let target = bind
             .and_then(|b| child(b, "technique_common"))
             .and_then(|t| children(t, "instance_material").find(|im| im.attribute("symbol") == Some(sym)))
@@ -611,36 +655,49 @@ impl<'a, 'i, 's> Reader<'a, 'i, 's> {
         m
     }
 
-    fn material(&self, id: &str) -> Option<Material> {
+    fn material(&mut self, id: &str) -> Option<Resolved> {
         let mat = self.ids.get(id).copied().filter(|n| n.tag_name().name() == "material")?;
         let name = mat.attribute("name").unwrap_or(id).to_string();
         let effect = child(mat, "instance_effect").and_then(|i| i.attribute("url")).and_then(|u| self.ids.get(url_id(u)).copied());
-        let color = effect.and_then(|e| self.effect_color(e)).unwrap_or(DEFAULT_COLOR);
-        Some(Material { name, color, opacity: 1.0 })
+        let (color, texture) = effect.map(|e| self.effect_color(e)).unwrap_or((None, None));
+        Some((Material { name, color: color.unwrap_or(DEFAULT_COLOR), opacity: 1.0 }, texture))
     }
 
-    fn effect_color(&self, effect: Node<'a, 'i>) -> Option<V3> {
-        let profile = child(effect, "profile_COMMON")?;
-        let technique = child(profile, "technique")?;
-        let shader = technique.children().find(|c| c.is_element() && matches!(c.tag_name().name(), "phong" | "lambert" | "blinn" | "constant"))?;
+    /// The effect's colour (the diffuse's, the emission's for `constant`,
+    /// the picture's average for a texture) and the texture to draw.
+    fn effect_color(&mut self, effect: Node<'a, 'i>) -> (Option<V3>, Option<(Texture, String)>) {
+        let Some(profile) = child(effect, "profile_COMMON") else { return (None, None) };
+        let Some(technique) = child(profile, "technique") else { return (None, None) };
+        let Some(shader) = technique.children().find(|c| c.is_element() && matches!(c.tag_name().name(), "phong" | "lambert" | "blinn" | "constant")) else { return (None, None) };
         let slot = if shader.tag_name().name() == "constant" { "emission" } else { "diffuse" };
-        let value = child(shader, slot)?;
+        let Some(value) = child(shader, slot) else { return (None, None) };
         if let Some(c) = child(value, "color") {
             let v = floats(c);
-            return (v.len() >= 3).then(|| [v[0], v[1], v[2]].map(|x| x.clamp(0.0, 1.0)));
+            return ((v.len() >= 3).then(|| [v[0], v[1], v[2]].map(|x| x.clamp(0.0, 1.0))), None);
         }
-        let tex = child(value, "texture")?.attribute("texture")?;
-        let uri = self.texture_uri(profile, tex)?;
-        texture_color(self.side, &uri)
+        let Some(tex) = child(value, "texture") else { return (None, None) };
+        let Some(name) = tex.attribute("texture") else { return (None, None) };
+        let Some((source, wrap)) = self.texture_source(profile, name) else { return (None, None) };
+        let image = match source {
+            Source::Uri(uri) => self.loader.file(&percent_decode(uri.trim())),
+            Source::Hex(bytes) => self.loader.embedded("embedded", &bytes),
+        };
+        let Some(image) = image else { return (None, None) };
+        let color = image.average();
+        let texture = Texture { image, tint: [1.0; 3], wrap, alpha_cutoff: None };
+        (color, Some((texture, tex.attribute("texcoord").unwrap_or("").to_string())))
     }
 
-    /// The image file a `texture` attribute names: through the profile's
-    /// sampler and surface params (1.4.1), the sampler's `instance_image`
-    /// (1.5), or an image id used directly.
-    fn texture_uri(&self, profile: Node<'a, 'i>, tex: &str) -> Option<String> {
+    /// The image a `texture` attribute names, and the wrap modes of the
+    /// sampler it goes through: through the profile's sampler and surface
+    /// params (1.4.1), the sampler's `instance_image` (1.5), or an image
+    /// id used directly (wrapping around).
+    fn texture_source(&self, profile: Node<'a, 'i>, tex: &str) -> Option<(Source, [Wrap; 2])> {
         let param = |sid: &str| children(profile, "newparam").find(|p| p.attribute("sid") == Some(sid));
         let mut image = None;
+        let mut wrap = [Wrap::Repeat; 2];
         if let Some(sampler) = param(tex).and_then(|p| child(p, "sampler2D")) {
+            wrap = [wrap_of(sampler, "wrap_s"), wrap_of(sampler, "wrap_t")];
             if let Some(url) = child(sampler, "instance_image").and_then(|i| i.attribute("url")) {
                 image = self.ids.get(url_id(url)).copied();
             } else if let Some(surface_sid) = child(sampler, "source").and_then(|s| s.text()) {
@@ -650,15 +707,51 @@ impl<'a, 'i, 's> Reader<'a, 'i, 's> {
         }
         let image = image.or_else(|| self.ids.get(tex).copied()).filter(|n| n.tag_name().name() == "image")?;
         let init = child(image, "init_from")?;
+        if let Some(hex) = child(init, "hex") {
+            return Some((Source::Hex(hex_bytes(hex.text().unwrap_or(""))?), wrap));
+        }
         // 1.5 wraps the path in `ref`.
         let text = child(init, "ref").and_then(|r| r.text()).or(init.text())?;
-        Some(text.trim().to_string()).filter(|s| !s.is_empty())
+        Some((Source::Uri(text.trim().to_string()), wrap)).filter(|(s, _)| matches!(s, Source::Uri(u) if !u.is_empty()))
     }
+}
+
+/// Where a texture's picture is.
+enum Source {
+    Uri(String),
+    Hex(Vec<u8>),
+}
+
+/// A sampler's `wrap_s` or `wrap_t`.
+fn wrap_of(sampler: Node, tag: &str) -> Wrap {
+    match child(sampler, tag).and_then(|n| n.text()).map(|t| t.trim().to_ascii_uppercase()).as_deref() {
+        Some("MIRROR" | "MIRROR_ONCE") => Wrap::Mirror,
+        Some("CLAMP" | "BORDER" | "NONE") => Wrap::Clamp,
+        _ => Wrap::Repeat,
+    }
+}
+
+/// The bytes of a `hex` element (whitespace between digits allowed).
+fn hex_bytes(s: &str) -> Option<Vec<u8>> {
+    let digits: Vec<u8> = s.bytes().filter(|b| !b.is_ascii_whitespace()).collect();
+    if !digits.len().is_multiple_of(2) {
+        return None;
+    }
+    digits.chunks(2).map(|p| u8::from_str_radix(std::str::from_utf8(p).ok()?, 16).ok()).collect()
+}
+
+/// The `input_set` the instance's `bind_vertex_input` gives the `texcoord`
+/// name for the material symbol `sym`.
+fn bound_set(bind: Option<Node>, sym: &str, texcoord: &str) -> Option<u32> {
+    let im = children(child(bind?, "technique_common")?, "instance_material").find(|im| im.attribute("symbol") == Some(sym))?;
+    let b = children(im, "bind_vertex_input").find(|b| b.attribute("semantic") == Some(texcoord) && b.attribute("input_semantic") == Some("TEXCOORD"))?;
+    b.attribute("input_set").and_then(|s| s.trim().parse().ok())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model3d::texture;
 
     fn none(_: &str) -> Option<Vec<u8>> {
         None
@@ -879,6 +972,120 @@ mod tests {
         let node = r##"<instance_geometry url="#cube"><bind_material><technique_common><instance_material symbol="m" target="#m15"/></technique_common></bind_material></instance_geometry>"##;
         let m = parse(doc("", &triangles(), node, extra).as_bytes(), &side).unwrap();
         assert!(close(m.meshes[0].material.as_ref().unwrap().color, [0.0, 1.0, 0.0]));
+    }
+
+    /// A document with a UV source (three corners) and a triangle using it
+    /// at offset 1, and `effects` and `images` added to the libraries.
+    fn textured(effect: &str, images: &str, bind: &str) -> String {
+        let uv = r##"<source id="cube-uv"><float_array id="cube-uv-arr" count="6">0 0 1 0 1 0.25</float_array>
+            <technique_common><accessor source="#cube-uv-arr" count="3" stride="2"><param name="S" type="float"/><param name="T" type="float"/></accessor></technique_common></source>
+            <vertices id="cube-vtx">"##;
+        let prim = r##"<triangles material="m" count="1"><input semantic="VERTEX" source="#cube-vtx" offset="0"/><input semantic="TEXCOORD" source="#cube-uv" offset="1" set="0"/><p>0 0 1 1 2 2</p></triangles>"##;
+        let extra = format!(r##"{images}<library_effects>{effect}</library_effects><library_materials><material id="m141"><instance_effect url="#fx"/></material></library_materials>"##);
+        let node = format!(r##"<instance_geometry url="#cube"><bind_material><technique_common><instance_material symbol="m" target="#m141">{bind}</instance_material></technique_common></bind_material></instance_geometry>"##);
+        doc("", prim, &node, &extra).replace(r#"<vertices id="cube-vtx">"#, uv)
+    }
+
+    const SAMPLER_141: &str = r##"<effect id="fx"><profile_COMMON>
+        <newparam sid="surf"><surface type="2D"><init_from>img</init_from></surface></newparam>
+        <newparam sid="samp"><sampler2D><source>surf</source><wrap_s>CLAMP</wrap_s><wrap_t>MIRROR</wrap_t></sampler2D></newparam>
+        <technique sid="common"><lambert><diffuse><texture texture="samp" texcoord="UVSET0"/></diffuse></lambert></technique></profile_COMMON></effect>"##;
+
+    #[test]
+    fn texture_coordinates_and_wrap_are_read() {
+        let png = texture::tests::png_2x2();
+        let side = |name: &str| (name == "pics/a.png").then(|| png.clone());
+        let images = r#"<library_images><image id="img"><init_from>pics/a.png</init_from></image></library_images>"#;
+        let m = parse(textured(SAMPLER_141, images, "").as_bytes(), &side).unwrap();
+        let mesh = &m.meshes[0];
+        // v is flipped into picture space.
+        assert_eq!(mesh.uvs.as_deref(), Some(&[[0.0, 1.0], [1.0, 1.0], [1.0, 0.75]][..]));
+        let t = mesh.texture.as_ref().unwrap();
+        assert_eq!((t.image.width, t.image.height), (2, 2));
+        assert_eq!(t.wrap, [Wrap::Clamp, Wrap::Mirror]);
+        assert_eq!((t.tint, t.alpha_cutoff), ([1.0; 3], None));
+        assert!(mesh.textured().is_some());
+        // The colour is the picture's average, as before: red, green, blue, white.
+        assert!(close(mesh.material.as_ref().unwrap().color, [0.5, 0.5, 0.5]));
+        // No sampler wrap elements: both repeat.
+        let plain = SAMPLER_141.replace("<wrap_s>CLAMP</wrap_s><wrap_t>MIRROR</wrap_t>", "");
+        let m = parse(textured(&plain, images, "").as_bytes(), &side).unwrap();
+        assert_eq!(m.meshes[0].texture.as_ref().unwrap().wrap, [Wrap::Repeat; 2]);
+    }
+
+    #[test]
+    fn bound_texcoord_set_is_chosen() {
+        let png = texture::tests::png_2x2();
+        let side = |name: &str| (name == "a.png").then(|| png.clone());
+        let images = r#"<library_images><image id="img"><init_from>a.png</init_from></image></library_images>"#;
+        let s = textured(SAMPLER_141, images, r#"<bind_vertex_input semantic="UVSET0" input_semantic="TEXCOORD" input_set="1"/>"#);
+        // A second set, 1, with other values, in front of set 0.
+        let s = s.replace(
+            r##"<input semantic="TEXCOORD" source="#cube-uv" offset="1" set="0"/>"##,
+            r##"<input semantic="TEXCOORD" source="#cube-uv" offset="1" set="0"/><input semantic="TEXCOORD" source="#cube-uv2" offset="2" set="1"/>"##,
+        )
+        .replace("<p>0 0 1 1 2 2</p>", "<p>0 0 2 1 1 1 2 2 0</p>")
+        .replace(
+            r#"<vertices id="cube-vtx">"#,
+            r##"<source id="cube-uv2"><float_array id="cube-uv2-arr" count="6">0.5 0.5 0 1 1 1</float_array>
+            <technique_common><accessor source="#cube-uv2-arr" count="3" stride="2"><param name="S" type="float"/><param name="T" type="float"/></accessor></technique_common></source>
+            <vertices id="cube-vtx">"##,
+        );
+        let m = parse(s.as_bytes(), &side).unwrap();
+        // Set 1 through offset 2: indices 2, 1, 0 of its source.
+        assert_eq!(m.meshes[0].uvs.as_deref(), Some(&[[1.0, 0.0], [0.0, 0.0], [0.5, 0.5]][..]));
+    }
+
+    #[test]
+    fn collada_15_instance_image_and_embedded_hex() {
+        let png = texture::tests::png_2x2();
+        let side = |name: &str| (name == "g.png").then(|| png.clone());
+        let fx = r##"<effect id="fx"><profile_COMMON><newparam sid="s"><sampler2D><instance_image url="#img"/><wrap_s>WRAP</wrap_s><wrap_t>MIRROR_ONCE</wrap_t></sampler2D></newparam>
+            <technique sid="t"><blinn><diffuse><texture texture="s" texcoord="UV"/></diffuse></blinn></technique></profile_COMMON></effect>"##;
+        let images = r#"<library_images><image id="img"><init_from><ref>file:///C:/work/g.png</ref></init_from></image></library_images>"#;
+        let m = parse(textured(fx, images, "").as_bytes(), &side).unwrap();
+        let t = m.meshes[0].texture.as_ref().unwrap();
+        assert_eq!((t.image.width, t.wrap), (2, [Wrap::Repeat, Wrap::Mirror]));
+        // The same picture inline.
+        let hex: String = png.iter().map(|b| format!("{b:02x}")).collect();
+        let images = format!(r#"<library_images><image id="img"><init_from><hex format="PNG">{hex}</hex></init_from></image></library_images>"#);
+        let m = parse(textured(fx, &images, "").as_bytes(), &none).unwrap();
+        assert_eq!(m.meshes[0].texture.as_ref().unwrap().image.height, 2);
+        assert_ne!(m.meshes[0].material.as_ref().unwrap().color, DEFAULT_COLOR);
+    }
+
+    #[test]
+    fn missing_image_keeps_the_fallback_colour() {
+        let images = r#"<library_images><image id="img"><init_from>nope.png</init_from></image></library_images>"#;
+        let m = read(&textured(SAMPLER_141, images, ""));
+        let mesh = &m.meshes[0];
+        assert!(mesh.texture.is_none());
+        assert_eq!(mesh.material.as_ref().unwrap().color, DEFAULT_COLOR);
+        // The coordinates are still read.
+        assert!(mesh.uvs.is_some());
+    }
+
+    #[test]
+    fn images_above_the_model_folder_are_not_read() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("sub")).unwrap();
+        std::fs::write(dir.path().join("x.png"), texture::tests::png_2x2()).unwrap();
+        let images = r#"<library_images><image id="img"><init_from>../x.png</init_from></image></library_images>"#;
+        let path = dir.path().join("sub").join("m.dae");
+        std::fs::write(&path, textured(SAMPLER_141, images, "")).unwrap();
+        let m = super::super::load(&path, "dae").unwrap();
+        assert!(m.meshes[0].texture.is_none());
+        // Only the file name next to the model is asked for.
+        let asked = std::cell::RefCell::new(Vec::new());
+        let side = |name: &str| {
+            asked.borrow_mut().push(name.to_string());
+            None
+        };
+        parse(textured(SAMPLER_141, images, "").as_bytes(), &side).unwrap();
+        assert_eq!(*asked.borrow(), ["x.png"]);
+        // The same picture inside the folder is found.
+        std::fs::write(dir.path().join("sub").join("x.png"), texture::tests::png_2x2()).unwrap();
+        assert!(super::super::load(&path, "dae").unwrap().meshes[0].texture.is_some());
     }
 
     #[test]
