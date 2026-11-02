@@ -3,10 +3,15 @@
 
 use std::path::Path;
 
-use crate::{Attachment, Bitmap, Error, Hit, Info, Layer, Link, OutlineEntry, Rect, Result, SearchOptions, Selection};
+use crate::{Attachment, Bitmap, Error, Hit, Info, Layer, LayerNode, Link, OutlineEntry, Rect, Result, SearchOptions, Selection};
 
 /// Printing needs macOS's PDFKit.
-pub fn print(_path: &Path, _password: Option<&str>, _title: &str) -> Result<bool> {
+pub fn print(_path: &Path, _password: Option<&str>, _title: &str, _layers: Option<&[bool]>) -> Result<bool> {
+    Err(Error("printing needs macOS".into()))
+}
+
+/// Printing needs macOS's PDFKit.
+pub fn open_for_print(_path: &Path, _password: Option<&str>, _layers: Option<&[bool]>) -> Result<Document> {
     Err(Error("printing needs macOS".into()))
 }
 
@@ -69,6 +74,9 @@ impl Document {
     }
     pub fn layers(&self) -> Vec<Layer> {
         Vec::new()
+    }
+    pub fn layer_tree(&self) -> Option<Vec<LayerNode>> {
+        None
     }
     pub fn set_layers(&mut self, _visible: &[bool]) -> Result<()> {
         Err(Error("PDF needs macOS".into()))

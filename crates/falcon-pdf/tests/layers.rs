@@ -6,7 +6,7 @@
 
 use std::path::{Path, PathBuf};
 
-use falcon_pdf::Document;
+use falcon_pdf::{Document, LayerNode, open_for_print};
 use lopdf::{EncryptionState, EncryptionVersion, Permissions};
 
 const RED: [u8; 4] = [255, 0, 0, 255];
@@ -17,8 +17,13 @@ const WHITE: [u8; 4] = [255, 255, 255, 255];
 /// catalog's /OCProperties value; `extra` more catalog entries. Object 4 is
 /// the red group, 5 the blue one and 6 is free for `properties` to refer to.
 fn pdf(properties: &str, config: &str, extra: &str) -> Vec<u8> {
+    pdf_with(properties, config, extra, &[])
+}
+
+/// As `pdf`, with more objects after the content stream, numbered from 8.
+fn pdf_with(properties: &str, config: &str, extra: &str, more: &[&str]) -> Vec<u8> {
     let content = "/OC /A BDC 1 0 0 rg 50 50 100 100 re f EMC /OC /B BDC 0 0 1 rg 250 50 100 100 re f EMC";
-    let objs = [
+    let mut objs = vec![
         format!("<< /Type /Catalog /Pages 2 0 R /OCProperties {properties} {extra} >>"),
         "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
         "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 400 200] /Resources << /Properties << /A 4 0 R /B 5 0 R >> >> /Contents 7 0 R >>".to_string(),
@@ -27,6 +32,7 @@ fn pdf(properties: &str, config: &str, extra: &str) -> Vec<u8> {
         config.to_string(),
         format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len()),
     ];
+    objs.extend(more.iter().map(|m| m.to_string()));
     let mut out = b"%PDF-1.5\n".to_vec();
     let mut offsets = Vec::new();
     for (k, body) in objs.iter().enumerate() {
@@ -182,4 +188,123 @@ fn a_wrong_list_or_no_layers_changes_nothing() {
     let mut doc = Document::open(&path).unwrap();
     assert!(doc.layers().is_empty());
     doc.set_layers(&[]).unwrap();
+}
+
+/// The configuration object for a default state with the given `/Order`.
+fn ordered(order: &str) -> Vec<u8> {
+    ordered_with(order, &[])
+}
+
+fn ordered_with(order: &str, more: &[&str]) -> Vec<u8> {
+    pdf_with("6 0 R", &format!("<< /OCGs [4 0 R 5 0 R] /D << /Order {order} >> >>"), "", more)
+}
+
+fn layer(index: usize, children: Vec<LayerNode>) -> LayerNode {
+    LayerNode::Layer { index, children }
+}
+
+fn label(text: &str, children: Vec<LayerNode>) -> LayerNode {
+    LayerNode::Label { text: text.into(), children }
+}
+
+fn tree_of(bytes: &[u8], password: Option<&str>) -> Option<Vec<LayerNode>> {
+    let dir = tempfile::tempdir().unwrap();
+    Document::open_with_password(&write(dir.path(), bytes), password).unwrap().layer_tree()
+}
+
+#[test]
+fn the_order_becomes_a_tree() {
+    // A group with a child array, a labelled array, and labels in
+    // UTF-16BE (with an accent) and PDFDocEncoding (0x80 is a bullet).
+    let bytes = ordered("[4 0 R [5 0 R] [<FEFF00E9004C> 4 0 R] [(A\\200B) 5 0 R]]");
+    let tree = tree_of(&bytes, None).unwrap();
+    assert_eq!(
+        tree,
+        vec![layer(0, vec![layer(1, vec![])]), label("\u{e9}L", vec![layer(0, vec![])]), label("A\u{2022}B", vec![layer(1, vec![])])],
+    );
+}
+
+#[test]
+fn a_missing_order_means_a_flat_list() {
+    assert_eq!(tree_of(&plain(), None), None);
+    assert_eq!(tree_of(&pdf("null", "null", ""), None), None);
+}
+
+#[test]
+fn unknown_groups_are_skipped_and_the_rest_listed_last() {
+    // 3 0 R is a page, not a group; the red layer is never named.
+    let tree = tree_of(&ordered("[3 0 R 5 0 R 99 0 R [(Empty)]]"), None).unwrap();
+    assert_eq!(tree, vec![layer(1, vec![]), LayerNode::Additional(vec![layer(0, vec![])])]);
+    let tree = tree_of(&ordered("[]"), None).unwrap();
+    assert_eq!(tree, vec![LayerNode::Additional(vec![layer(0, vec![]), layer(1, vec![])])]);
+}
+
+#[test]
+fn a_cycle_in_the_order_ends() {
+    // Object 8 is a labelled array holding the blue group and itself.
+    let tree = tree_of(&ordered_with("[4 0 R 8 0 R]", &["[(Loop) 5 0 R 8 0 R]"]), None).unwrap();
+    assert_eq!(tree[0], layer(0, vec![]));
+    let mut at = &tree[1];
+    let mut depth = 0;
+    while let LayerNode::Label { text, children } = at {
+        assert_eq!(text, "Loop");
+        assert_eq!(children[0], layer(1, vec![]));
+        depth += 1;
+        match children.get(1) {
+            Some(next) => at = next,
+            None => break,
+        }
+    }
+    assert!((1..=11).contains(&depth), "stopped at pdf.js's depth, not {depth}");
+}
+
+#[test]
+fn compressed_objects_give_the_same_tree() {
+    let bytes = ordered("[4 0 R [5 0 R] [(Notes) 4 0 R]]");
+    let expected = tree_of(&bytes, None);
+    let mut modern = Vec::new();
+    lopdf::Document::load_mem(&bytes).unwrap().save_modern(&mut modern).unwrap();
+    assert!(modern.windows(6).any(|w| w == b"ObjStm"));
+    assert_eq!(tree_of(&modern, None), expected);
+    assert_eq!(expected.unwrap(), vec![layer(0, vec![layer(1, vec![])]), label("Notes", vec![layer(0, vec![])])]);
+}
+
+#[test]
+fn an_encrypted_files_labels_are_read() {
+    let mut doc = lopdf::Document::load_mem(&ordered("[[(Secret label) 4 0 R 5 0 R]]")).unwrap();
+    doc.trailer.set("ID", lopdf::Object::Array(vec![lopdf::Object::string_literal("0123456789abcdef"), lopdf::Object::string_literal("0123456789abcdef")]));
+    let version = EncryptionVersion::V2 { document: &doc, owner_password: "owner", user_password: "secret", key_length: 128, permissions: Permissions::all() };
+    let state = EncryptionState::try_from(version).unwrap();
+    doc.encrypt(&state).unwrap();
+    let mut bytes = Vec::new();
+    doc.save_to(&mut bytes).unwrap();
+    assert_eq!(tree_of(&bytes, Some("secret")).unwrap(), vec![label("Secret label", vec![layer(0, vec![]), layer(1, vec![])])]);
+}
+
+/// What the print call is handed draws with the chosen layers, without
+/// touching the file; the print panel itself isn't opened.
+#[test]
+fn the_document_for_printing_shows_the_switched_layers() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = write(dir.path(), &plain());
+    let before = std::fs::read(&path).unwrap();
+    assert_eq!(squares(&open_for_print(&path, None, None).unwrap()), (RED, BLUE));
+    assert_eq!(squares(&open_for_print(&path, None, Some(&[false, true])).unwrap()), (WHITE, BLUE));
+    assert_eq!(squares(&open_for_print(&path, None, Some(&[true, false])).unwrap()), (RED, WHITE));
+    assert_eq!(squares(&open_for_print(&path, None, Some(&[true, true])).unwrap()), (RED, BLUE));
+    assert!(open_for_print(&path, None, Some(&[true])).is_err(), "a list the file doesn't match is refused, not printed wrongly");
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+}
+
+#[test]
+fn an_encrypted_file_prints_with_its_layers() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut doc = lopdf::Document::load_mem(&plain()).unwrap();
+    doc.trailer.set("ID", lopdf::Object::Array(vec![lopdf::Object::string_literal("0123456789abcdef"), lopdf::Object::string_literal("0123456789abcdef")]));
+    let version = EncryptionVersion::V2 { document: &doc, owner_password: "owner", user_password: "secret", key_length: 128, permissions: Permissions::all() };
+    doc.encrypt(&EncryptionState::try_from(version).unwrap()).unwrap();
+    let mut bytes = Vec::new();
+    doc.save_to(&mut bytes).unwrap();
+    let path = write(dir.path(), &bytes);
+    assert_eq!(squares(&open_for_print(&path, Some("secret"), Some(&[false, true])).unwrap()), (WHITE, BLUE));
 }

@@ -35,7 +35,7 @@ use objc2_pdf_kit::{
 
 use crate::geom::{self, PageGeom};
 use crate::ocg::Patcher;
-use crate::{Attachment, Bitmap, Error, Hit, Info, Layer, Link, LinkTarget, NEEDS_PASSWORD, OutlineEntry, Rect, Result, SearchOptions, Selection, WRONG_PASSWORD, render_size};
+use crate::{Attachment, Bitmap, Error, Hit, Info, Layer, LayerNode, Link, LinkTarget, NEEDS_PASSWORD, OutlineEntry, Rect, Result, SearchOptions, Selection, WRONG_PASSWORD, render_size};
 
 /// Search stops collecting after this many matches.
 const MAX_HITS: usize = 10_000;
@@ -343,6 +343,13 @@ impl Document {
         autoreleasepool(|_| self.with_catalog(|cat, _| catalog::layers(cat)).unwrap_or_default())
     }
 
+    /// The layers list as a tree, from the default configuration's
+    /// `/Order` (see [`crate::layer_tree`]); `None` when it has none, and
+    /// the list is then flat. Indices are those of [`Document::layers`].
+    pub fn layer_tree(&self) -> Option<Vec<LayerNode>> {
+        autoreleasepool(|_| self.with_catalog(|cat, _| catalog::layer_tree(cat)).flatten())
+    }
+
     /// Chooses which layers [`Document::render`] and [`Document::thumbnail`]
     /// show, one flag per entry of [`Document::layers`]. The default choice
     /// draws the document itself; any other draws an in-memory copy with
@@ -459,15 +466,29 @@ impl Document {
     }
 }
 
+/// Opens the PDF at `path` as [`print`] prints it: showing `layers` (one
+/// flag per entry of [`Document::layers`]) when given. The file on disk is
+/// not changed.
+pub fn open_for_print(path: &Path, password: Option<&str>, layers: Option<&[bool]>) -> Result<Document> {
+    let mut doc = Document::open_with_password(path, password)?;
+    if let Some(visible) = layers {
+        doc.set_layers(visible)?;
+    }
+    Ok(doc)
+}
+
 /// Prints the PDF at `path` (unlocked with `password` if it has one)
 /// through PDFKit's print operation: the system print panel, then the job
-/// named `title`. Must run on the main thread, which it blocks while the
-/// panel is up; returns whether it printed (false if cancelled). Fails off
-/// the main thread, for an unreadable file, or when the PDF forbids
-/// printing.
-pub fn print(path: &Path, password: Option<&str>, title: &str) -> Result<bool> {
+/// named `title`. `layers` is the reader's choice of layers, if it differs
+/// from the document's default; the job prints what that shows. Must run
+/// on the main thread, which it blocks while the panel is up, and opens the
+/// file again there, since a [`Document`] stays on the thread that opened
+/// it. Returns whether it printed (false if cancelled). Fails off the main
+/// thread, for an unreadable file, when the layers can't be switched, or
+/// when the PDF forbids printing.
+pub fn print(path: &Path, password: Option<&str>, title: &str, layers: Option<&[bool]>) -> Result<bool> {
     let mtm = objc2::MainThreadMarker::new().ok_or_else(|| err("printing needs the main thread"))?;
-    let doc = Document::open_with_password(path, password)?;
+    let doc = open_for_print(path, password, layers)?;
     autoreleasepool(|_| {
         // SAFETY: owned; this (main) thread opened the document just now.
         if !unsafe { doc.doc.allowsPrinting() } {
@@ -475,7 +496,7 @@ pub fn print(path: &Path, password: Option<&str>, title: &str) -> Result<bool> {
         }
         let info = objc2_app_kit::NSPrintInfo::sharedPrintInfo();
         // SAFETY: owned, plain; main thread (`mtm`).
-        let op = unsafe { doc.doc.printOperationForPrintInfo_scalingMode_autoRotate(Some(&info), objc2_pdf_kit::PDFPrintScalingMode::PageScaleDownToFit, true, mtm) }
+        let op = unsafe { doc.switched.as_ref().unwrap_or(&doc.doc).printOperationForPrintInfo_scalingMode_autoRotate(Some(&info), objc2_pdf_kit::PDFPrintScalingMode::PageScaleDownToFit, true, mtm) }
             .ok_or_else(|| err("PDFKit made no print job"))?;
         op.setJobTitle(Some(&NSString::from_str(title)));
         op.setShowsPrintPanel(true);
@@ -585,7 +606,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("plain.pdf");
         plain_pdf(&path);
-        let e = print(&path, None, "x").err().unwrap();
+        let e = print(&path, None, "x", None).err().unwrap();
         assert!(e.0.contains("main thread"), "{e}");
     }
 }
@@ -607,7 +628,7 @@ mod catalog {
         CGPDFStreamRef, CGPDFString, CGPDFStringRef,
     };
 
-    use crate::{Attachment, Layer};
+    use crate::{Attachment, Layer, LayerNode, OrderItem, layer_tree as build_tree};
 
     pub type Dict = CGPDFDictionaryRef;
 
@@ -748,6 +769,50 @@ mod catalog {
         let mut format = CGPDFDataFormat::Raw;
         // SAFETY: `s` is a live stream of the document; `format` is a local.
         unsafe { CGPDFStream::data(s, &mut format) }.map(|d| d.to_vec())
+    }
+
+    fn array_array(a: CGPDFArrayRef, i: usize) -> Option<CGPDFArrayRef> {
+        let mut out: CGPDFArrayRef = ptr::null_mut();
+        // SAFETY: as `array_dict`.
+        (unsafe { CGPDFArray::array(a, i, &mut out) } && !out.is_null()).then_some(out)
+    }
+
+    /// `/Order` as items. The walk is capped in depth and in count, since
+    /// an array may reach itself through an indirect object.
+    fn order_items(a: CGPDFArrayRef, groups: &[Dict], depth: usize, budget: &mut usize) -> Vec<OrderItem> {
+        let mut out = Vec::new();
+        if depth > MAX_DEPTH {
+            return out;
+        }
+        for i in 0..len(a) {
+            if *budget == 0 {
+                break;
+            }
+            *budget -= 1;
+            out.push(if let Some(g) = array_dict(a, i) {
+                groups.iter().position(|&x| x == g).map_or(OrderItem::Other, OrderItem::Group)
+            } else if let Some(inner) = array_array(a, i) {
+                OrderItem::Array(order_items(inner, groups, depth + 1, budget))
+            } else if let Some(t) = array_string(a, i) {
+                OrderItem::Text(t)
+            } else {
+                OrderItem::Other
+            });
+        }
+        out
+    }
+
+    /// The layers tree from the default configuration's `/Order`, if it
+    /// has one. Labels are read as text strings, so PDFDocEncoding,
+    /// UTF-16 and an encrypted document's strings come out as they do for
+    /// the groups' names.
+    pub fn layer_tree(cat: Dict) -> Option<Vec<LayerNode>> {
+        let props = dict(cat, c"OCProperties")?;
+        let groups_array = array(props, c"OCGs")?;
+        let groups: Vec<Dict> = (0..len(groups_array)).filter_map(|i| array_dict(groups_array, i)).collect();
+        let order = array(dict(props, c"D")?, c"Order")?;
+        let mut budget = MAX_ITEMS;
+        Some(build_tree(&order_items(order, &groups, 0, &mut budget), groups.len()))
     }
 
     /// The optional content groups, in the document's order, each visible

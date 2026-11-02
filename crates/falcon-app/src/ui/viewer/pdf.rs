@@ -851,6 +851,7 @@ fn work(path: &Path, rx: &Receiver<Req>, tx: &Sender<Reply>, ctx: &egui::Context
         password,
         attachments: doc.attachments(),
         layers: doc.layers(),
+        layer_tree: doc.layer_tree(),
     };
     if !send(Reply::Opened { sizes: doc.page_sizes(), outline: doc.outline(), info: Box::new(info) }) {
         return;
@@ -944,6 +945,8 @@ struct DocInfo {
     /// sidebar's Attachments and Layers lists.
     attachments: Vec<falcon_pdf::Attachment>,
     layers: Vec<falcon_pdf::Layer>,
+    /// The layers as `/Order` nests them; none when the list is flat.
+    layer_tree: Option<Vec<falcon_pdf::LayerNode>>,
 }
 
 /// Whether a PDF file is linearized ("fast web view"): its first object,
@@ -1562,7 +1565,7 @@ impl App {
             if let Some(o) = self.pdf.open.as_mut().filter(|o| o.print) {
                 o.print = false;
                 let title = o.info.pdf.title.clone().unwrap_or_else(|| item.name.clone());
-                if let Err(e) = falcon_pdf::print(&item.original_path(lib.root()), o.info.password.as_deref(), &title) {
+                if let Err(e) = falcon_pdf::print(&item.original_path(lib.root()), o.info.password.as_deref(), &title, o.layers.chosen()) {
                     self.flash(trf("Can't print: {error}", &[("error", &e)]));
                 }
             }

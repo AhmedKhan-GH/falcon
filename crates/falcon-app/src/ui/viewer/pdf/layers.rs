@@ -34,6 +34,11 @@ impl LayerSwitches {
         self.on != self.defaults
     }
 
+    /// The layers to print or draw, when they differ from the default.
+    pub fn chosen(&self) -> Option<&[bool]> {
+        self.changed().then_some(self.on.as_slice())
+    }
+
     /// Sets layer `i`; returns the state to apply if that changed anything.
     fn set(&mut self, i: usize, on: bool) -> Option<Vec<bool>> {
         if self.stuck || self.on.get(i).is_none_or(|&was| was == on) {
@@ -64,6 +69,48 @@ impl LayerSwitches {
     }
 }
 
+/// One line of the layers list.
+#[derive(Clone, Debug, PartialEq)]
+struct Row {
+    depth: usize,
+    kind: RowKind,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum RowKind {
+    /// A checkbox for the layer at this index of `info.layers`.
+    Switch(usize),
+    /// A heading with no checkbox.
+    Label(String),
+    /// The heading for layers the document's order leaves out.
+    Additional,
+}
+
+/// The tree as lines, each indented by its depth.
+fn rows(tree: &[falcon_pdf::LayerNode]) -> Vec<Row> {
+    fn walk(nodes: &[falcon_pdf::LayerNode], depth: usize, out: &mut Vec<Row>) {
+        for node in nodes {
+            match node {
+                falcon_pdf::LayerNode::Layer { index, children } => {
+                    out.push(Row { depth, kind: RowKind::Switch(*index) });
+                    walk(children, depth + 1, out);
+                }
+                falcon_pdf::LayerNode::Label { text, children } => {
+                    out.push(Row { depth, kind: RowKind::Label(text.clone()) });
+                    walk(children, depth + 1, out);
+                }
+                falcon_pdf::LayerNode::Additional(children) => {
+                    out.push(Row { depth, kind: RowKind::Additional });
+                    walk(children, depth + 1, out);
+                }
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(tree, 0, &mut out);
+    out
+}
+
 impl Open {
     /// Has the worker draw `on`, dropping every picture of the old state.
     /// The page stays where it is, since layers don't change page sizes.
@@ -89,13 +136,27 @@ impl Open {
             return;
         }
         let mut switched = None;
-        for (i, l) in self.info.layers.iter().enumerate() {
-            let mut on = self.layers.is_on(i);
+        let rows = match &self.info.layer_tree {
+            Some(tree) => rows(tree),
+            None => (0..self.info.layers.len()).map(|index| Row { depth: 0, kind: RowKind::Switch(index) }).collect(),
+        };
+        for (n, row) in rows.iter().enumerate() {
             ui.horizontal(|ui| {
-                ui.add_space(8.0);
-                let text = egui::RichText::new(&l.name).font(font(12.0)).color(if on { t::p().text } else { t::p().text_muted });
-                if ui.add_enabled(!self.layers.stuck, egui::Checkbox::new(&mut on, text)).changed() {
-                    switched = Some((i, on));
+                ui.add_space(8.0 + 12.0 * row.depth.min(6) as f32);
+                match &row.kind {
+                    RowKind::Switch(i) => {
+                        let mut on = self.layers.is_on(*i);
+                        let text = egui::RichText::new(&self.info.layers[*i].name).font(font(12.0)).color(if on { t::p().text } else { t::p().text_muted });
+                        if ui.push_id(n, |ui| ui.add_enabled(!self.layers.stuck, egui::Checkbox::new(&mut on, text))).inner.changed() {
+                            switched = Some((*i, on));
+                        }
+                    }
+                    RowKind::Label(text) => {
+                        ui.add(egui::Label::new(egui::RichText::new(text).font(font(12.0)).color(t::p().text_muted)).truncate());
+                    }
+                    RowKind::Additional => {
+                        ui.add(egui::Label::new(egui::RichText::new(tr("Additional layers")).font(font(12.0)).italics().color(t::p().text_muted)).truncate());
+                    }
                 }
             });
         }
@@ -147,6 +208,38 @@ mod tests {
         assert_eq!(s.give_up(), vec![true]);
         assert!(s.stuck && !s.changed());
         assert_eq!(s.set(0, false), None);
+    }
+
+    #[test]
+    fn the_tree_becomes_indented_lines() {
+        use falcon_pdf::LayerNode::*;
+        let tree = vec![
+            Layer { index: 1, children: vec![Layer { index: 0, children: vec![] }] },
+            Label { text: "Notes".into(), children: vec![Layer { index: 2, children: vec![] }] },
+            Additional(vec![Layer { index: 3, children: vec![] }]),
+        ];
+        let row = |depth, kind| Row { depth, kind };
+        assert_eq!(
+            rows(&tree),
+            vec![
+                row(0, RowKind::Switch(1)),
+                row(1, RowKind::Switch(0)),
+                row(0, RowKind::Label("Notes".into())),
+                row(1, RowKind::Switch(2)),
+                row(0, RowKind::Additional),
+                row(1, RowKind::Switch(3)),
+            ]
+        );
+    }
+
+    #[test]
+    fn the_chosen_layers_are_only_given_when_they_differ() {
+        let mut s = LayerSwitches::new(&[layer(true), layer(false)]);
+        assert_eq!(s.chosen(), None);
+        s.set(1, true);
+        assert_eq!(s.chosen(), Some(&[true, true][..]));
+        s.reset();
+        assert_eq!(s.chosen(), None);
     }
 
     /// One page, a red square in the first of two layers and a blue one in

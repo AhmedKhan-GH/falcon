@@ -19,18 +19,20 @@
 //! All Objective-C interop sits in the private `mac` module.
 
 mod geom;
+mod tree;
+pub use tree::{LayerNode, OrderItem, layer_tree};
 
 #[cfg(target_os = "macos")]
 mod mac;
 #[cfg(target_os = "macos")]
 mod ocg;
 #[cfg(target_os = "macos")]
-pub use mac::{Document, print};
+pub use mac::{Document, open_for_print, print};
 
 #[cfg(not(target_os = "macos"))]
 mod other;
 #[cfg(not(target_os = "macos"))]
-pub use other::{Document, print};
+pub use other::{Document, open_for_print, print};
 
 /// An RGBA picture, 8 bits per channel, rows top to bottom, opaque.
 #[derive(Clone, Debug, PartialEq)]

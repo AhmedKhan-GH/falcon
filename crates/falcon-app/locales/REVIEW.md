@@ -180,6 +180,7 @@ The core words, so every file uses one term for one thing.
 - Import Links: "Batch Import Links", "Import Links…", "Import links", "Invalid link format", the paste instruction, "Fetching {n} links" and "{n} links could not be saved" (machine-written).
 - "Blur the desktop behind the sidebar and inspector", the General pane's transparency checkbox (machine-written).
 - "Reset Layers" and "This document's layers can't be switched.", the PDF reader's layers sidebar (machine-written).
+- "Additional layers", the layers sidebar's heading for layers the document's order leaves out (machine-written).
 
 ## Reviewed
 
