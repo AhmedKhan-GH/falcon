@@ -6,6 +6,7 @@
 pub(crate) mod widgets;
 pub(crate) mod date_picker;
 pub(crate) mod color_picker;
+pub(crate) mod capture_notice;
 pub(crate) mod toast;
 pub(crate) mod organize;
 pub(crate) mod sidebar;

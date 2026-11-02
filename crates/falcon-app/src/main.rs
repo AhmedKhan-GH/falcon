@@ -5,6 +5,7 @@ mod app;
 mod applock;
 mod backups;
 mod capture;
+mod capture_notice;
 mod clip_image;
 mod collect;
 mod colorspace;

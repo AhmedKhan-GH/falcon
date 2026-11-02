@@ -8,6 +8,7 @@ use eframe::egui;
 use super::App;
 use super::import::{Job, tempfile_dir};
 use crate::capture::{self, Mode};
+use crate::capture_notice::Route;
 use crate::locale::{tr, trf};
 use crate::shortcuts::Command;
 use crate::tray::Choice;
@@ -22,6 +23,8 @@ pub(crate) struct System {
     /// only holds them doesn't also say "Import finished" (the screenshot
     /// had its own notice).
     pub(crate) capture_imports: usize,
+    /// The in-app pop-up for a screenshot (`capture_notice.rs`).
+    pub(crate) notice: crate::capture_notice::CaptureNotice,
 }
 
 impl App {
@@ -72,6 +75,9 @@ impl App {
             }
         }
         self.capture_tick();
+        if let Some(name) = self.system.notice.take_click() {
+            self.reveal_capture(&name);
+        }
         for shot in self.collect.take_abandoned() {
             let _ = std::fs::remove_file(&shot.path);
         }
@@ -139,8 +145,17 @@ impl App {
                 self.collect.ask(crate::collect::Pending { path: shot.path, name: shot.name, tags });
                 continue;
             }
-            if self.prefs.tells_capture(shot.mode) {
-                crate::notify::post(&crate::notify::Notice::captured(&shot.name));
+            // Falcon's own pop-up while it is the active app, else the
+            // system notification (which macOS shows only in that case).
+            match crate::capture_notice::route(self.prefs.tells_capture(shot.mode), crate::dock::is_active()) {
+                Route::InApp => {
+                    // Before the import, which deletes the file.
+                    let thumb = crate::capture_notice::load_thumb(&self.ctx, &shot.path);
+                    self.system.notice.show(shot.name.clone(), thumb);
+                    self.ctx.request_repaint();
+                }
+                Route::System => crate::notify::post(&crate::notify::Notice::captured(&shot.name)),
+                Route::Nothing => {}
             }
             if self.prefs.sounds_capture(shot.mode) {
                 self.play_sound(crate::sounds::Sound::Capture);
@@ -155,6 +170,21 @@ impl App {
             // in falcon's temp folder).
             self.spawn_import(vec![Job { path: shot.path, opts }]);
         }
+    }
+
+    /// Clicking the pop-up shows the screenshot in the library, as
+    /// Eagle's does: All, with the newest item of that name selected and
+    /// scrolled to.
+    fn reveal_capture(&mut self, name: &str) {
+        let Some(shared) = self.ws.lib.clone() else { return };
+        let id = super::lock(&shared).items().iter().filter(|i| !i.is_deleted && i.name == name).max_by_key(|i| i.btime).map(|i| i.id.clone());
+        let Some(id) = id else { return };
+        crate::dock::bring_to_front();
+        self.ws.viewer = None;
+        self.go(crate::logic::Scope::All);
+        self.ws.anchor = Some(id.clone());
+        self.ws.scroll_to = Some(id.clone());
+        self.ws.selected = vec![id];
     }
 
     /// When an import batch finishes: posts "Import finished" unless the

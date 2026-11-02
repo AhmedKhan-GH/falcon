@@ -978,7 +978,9 @@ Eagle has five global keys (`global.show.eagle`, `global.show.search`, `global.c
 
 ## System notifications
 
-Eagle's pop-ups ("Import Successful", "Export Successful", the screenshot pop-up) are its own windows, not system notifications. falcon posts macOS notifications instead (`crates/falcon-app/src/notify.rs`).
+Eagle's pop-ups ("Import Successful", "Export Successful", the screenshot pop-up) are its own windows, not system notifications. falcon posts macOS notifications instead (`crates/falcon-app/src/notify.rs`), which macOS shows only while falcon is in the background.
+
+A screenshot taken while falcon is the active app (`dock::is_active`, AppKit's `isActive`, true whichever falcon window has focus) gets falcon's own pop-up instead (`capture_notice.rs`, `ui/capture_notice.rs`), so exactly one of the two shows, and neither when the screenshot switch is off. As in Eagle's pop-up (`progress.html`), it is a 300 pt card at the window's top right with the screenshot's 44 pt thumbnail, "Screenshot added" and the name; it slides in, stays 1.5 seconds (while the pointer is on it, it stays), has a close button while hovered, and a new screenshot replaces it. Clicking it opens All with the item selected. The thumbnail is decoded off the UI thread from a hard link to the shot file, and the card shows without a picture if that fails. Eagle's drag-to-dismiss is not built.
 
 | Title | Text | When |
 |---|---|---|
