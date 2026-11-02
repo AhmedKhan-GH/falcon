@@ -160,6 +160,8 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::ResetThumbnail => s.library && (s.viewer || s.selected == 1) && s.has_custom_thumb,
         C::AddToLastFolder => (any || (s.library && s.viewer)) && s.last_folder,
         C::AddToFolders | C::FolderPanel => any || (s.library && s.viewer),
+        // Eagle hides the Actions button on the All Tags page.
+        C::ActionsPanel => s.library && s.page != Some(Page::AllTags),
         C::FolderPasswordNew => grid && s.scope == ScopeKind::Folder && !s.folder_password,
         C::FolderPasswordChange | C::FolderPasswordRemove => grid && s.scope == ScopeKind::Folder && s.folder_password,
         C::LockFolder => grid && s.scope == ScopeKind::Folder && s.folder_password && s.folder_unlocked,
@@ -179,6 +181,22 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::ShowFalcon | C::ShowSearch => true,
         C::Capture(_) => s.library,
     }
+}
+
+/// An action of the open library, as the Actions menu lists it.
+#[derive(Clone, PartialEq, Debug)]
+pub struct ActionEntry {
+    pub id: String,
+    pub name: String,
+    pub chord: Option<KeyboardShortcut>,
+    /// Falcon can run it (it was not written by another program).
+    pub runnable: bool,
+}
+
+/// Whether an action can run now: on the selection (or the item in the
+/// viewer), outside the Trash.
+pub fn action_enabled(a: &ActionEntry, s: &State) -> bool {
+    a.runnable && !s.modal && s.library && s.selected > 0 && s.scope != ScopeKind::Trash
 }
 
 /// What puts a checkmark on an item.
@@ -257,8 +275,8 @@ pub static ABOUT: &[Entry] = &[item("About Falcon", Command::About)];
 pub static APP: &[Entry] = &[item("Preferences…", Command::Preferences), item("Lock Falcon", Command::LockApp)];
 
 /// The menus after the application menu, after Eagle's, with only what
-/// falcon can do. Eagle's Actions menu belongs to its `ai-action`
-/// plugin, and falcon has no plugins.
+/// falcon can do. Eagle's Actions menu, which lists the library's
+/// actions, goes before Window while there are any (`ActionEntry`).
 pub static MENUS: &[(&str, &[Entry])] = &[
     (
         "File",
@@ -589,6 +607,13 @@ pub fn key_equivalent(c: &KeyboardShortcut) -> Option<KeyEquivalent> {
     Some(KeyEquivalent { key, command: m.command || m.mac_cmd, shift: m.shift, alt: m.alt, ctrl: m.ctrl })
 }
 
+/// An action chosen in the Actions menu, by id; `by_key` as for [`Click`].
+#[derive(Clone, PartialEq, Debug)]
+pub struct ActionClick {
+    pub id: String,
+    pub by_key: bool,
+}
+
 /// A menu item chosen. `by_key` means AppKit matched a key press to the
 /// item despite the delegate; the key then goes back to egui.
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -600,8 +625,8 @@ pub struct Click {
 /// The menu bar as last built and refreshed.
 #[derive(Default)]
 pub struct Bar {
-    /// The bindings and language the menus were last built with.
-    built: Option<(Shortcuts, crate::locale::Lang)>,
+    /// The bindings, language and actions the menus were last built with.
+    built: Option<(Shortcuts, crate::locale::Lang, Vec<ActionEntry>)>,
     state: Option<State>,
 }
 
@@ -609,11 +634,11 @@ impl Bar {
     /// Builds the menus on the first call and again when the bindings
     /// or the language change, and hands the state to the items' validation when it
     /// changes. Call on the main thread.
-    pub fn sync(&mut self, ctx: &eframe::egui::Context, keys: &Shortcuts, state: &State) {
+    pub fn sync(&mut self, ctx: &eframe::egui::Context, keys: &Shortcuts, state: &State, actions: &[ActionEntry]) {
         let lang = crate::locale::current();
-        if self.built.as_ref().is_none_or(|(k, l)| k != keys || *l != lang) {
-            mac::build(ctx, keys);
-            self.built = Some((keys.clone(), lang));
+        if self.built.as_ref().is_none_or(|(k, l, a)| k != keys || *l != lang || a != actions) {
+            mac::build(ctx, keys, actions);
+            self.built = Some((keys.clone(), lang, actions.to_vec()));
         }
         if self.state.as_ref() != Some(state) {
             mac::set_state(state.clone());
@@ -627,6 +652,11 @@ pub fn take_clicks() -> Vec<Click> {
     mac::take_clicks()
 }
 
+/// The actions chosen in the Actions menu since the last call.
+pub fn take_action_clicks() -> Vec<ActionClick> {
+    mac::take_action_clicks()
+}
+
 /// Whether the app menu's Quit (⌘Q) was chosen since the last call. It
 /// comes to the app instead of ending the process, so it can ask first.
 pub fn take_quit_request() -> bool {
@@ -635,12 +665,15 @@ pub fn take_quit_request() -> bool {
 
 #[cfg(not(target_os = "macos"))]
 mod mac {
-    use super::{Click, State};
+    use super::{ActionClick, ActionEntry, Click, State};
     use crate::shortcuts::Shortcuts;
 
-    pub fn build(_ctx: &eframe::egui::Context, _keys: &Shortcuts) {}
+    pub fn build(_ctx: &eframe::egui::Context, _keys: &Shortcuts, _actions: &[ActionEntry]) {}
     pub fn set_state(_state: State) {}
     pub fn take_clicks() -> Vec<Click> {
+        Vec::new()
+    }
+    pub fn take_action_clicks() -> Vec<ActionClick> {
         Vec::new()
     }
     pub fn take_quit_request() -> bool {
@@ -663,7 +696,7 @@ mod mac {
     };
     use objc2_foundation::{NSString, NSUserDefaults};
 
-    use super::{Click, Entry, State, items, key_equivalent};
+    use super::{ActionClick, ActionEntry, Click, Entry, State, items, key_equivalent};
     use crate::locale::tr;
     use crate::shortcuts::Shortcuts;
 
@@ -673,8 +706,13 @@ mod mac {
     const TAG_SEPARATOR: isize = 999;
     /// Falcon's Quit item, which replaces winit's (that one ends the process).
     const TAG_QUIT: isize = 998;
+    /// Actions menu items are this plus the action's index.
+    const TAG_ACTION: isize = 100_000;
 
     static CLICKS: Mutex<Vec<Click>> = Mutex::new(Vec::new());
+    static ACTION_CLICKS: Mutex<Vec<ActionClick>> = Mutex::new(Vec::new());
+    /// The actions the Actions menu was last built from.
+    static ACTIONS: Mutex<Vec<ActionEntry>> = Mutex::new(Vec::new());
     static QUIT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
     static STATE: Mutex<Option<State>> = Mutex::new(None);
     static REPAINT: OnceLock<eframe::egui::Context> = OnceLock::new();
@@ -695,6 +733,11 @@ mod mac {
             #[unsafe(method(falconMenuItem:))]
             fn clicked(&self, item: &NSMenuItem) {
                 clicked(self.mtm(), item);
+            }
+
+            #[unsafe(method(falconAction:))]
+            fn action(&self, item: &NSMenuItem) {
+                action_clicked(self.mtm(), item);
             }
 
             #[unsafe(method(falconQuit:))]
@@ -739,9 +782,26 @@ mod mac {
         }
     }
 
+    fn action_of(item: &NSMenuItem) -> Option<ActionEntry> {
+        let i = usize::try_from(item.tag() - TAG_ACTION).ok()?;
+        ACTIONS.lock().unwrap_or_else(|p| p.into_inner()).get(i).cloned()
+    }
+
+    fn action_clicked(mtm: MainThreadMarker, item: &NSMenuItem) {
+        let Some(a) = action_of(item) else { return };
+        let by_key = NSApplication::sharedApplication(mtm).currentEvent().is_some_and(|e| e.r#type() == NSEventType::KeyDown);
+        ACTION_CLICKS.lock().unwrap_or_else(|p| p.into_inner()).push(ActionClick { id: a.id, by_key });
+        if let Some(ctx) = REPAINT.get() {
+            ctx.request_repaint();
+        }
+    }
+
     /// Enables the item and sets its checkmark from the last state.
     fn validate(item: &NSMenuItem) -> bool {
         let state = STATE.lock().unwrap_or_else(|p| p.into_inner()).clone().unwrap_or_default();
+        if item.tag() >= TAG_ACTION {
+            return action_of(item).is_some_and(|a| super::action_enabled(&a, &state));
+        }
         let Some(it) = model(item) else { return true };
         item.setState(if it.check.on(&state) { NSControlStateValueOn } else { NSControlStateValueOff });
         super::enabled(it.cmd, &state)
@@ -762,13 +822,17 @@ mod mac {
         QUIT.swap(false, std::sync::atomic::Ordering::Relaxed)
     }
 
+    pub fn take_action_clicks() -> Vec<ActionClick> {
+        std::mem::take(&mut *ACTION_CLICKS.lock().unwrap_or_else(|p| p.into_inner()))
+    }
+
     pub fn take_clicks() -> Vec<Click> {
         std::mem::take(&mut *CLICKS.lock().unwrap_or_else(|p| p.into_inner()))
     }
 
     /// Replaces every menu after the application menu (which winit made)
     /// and puts Preferences into it.
-    pub fn build(ctx: &eframe::egui::Context, keys: &Shortcuts) {
+    pub fn build(ctx: &eframe::egui::Context, keys: &Shortcuts, actions: &[ActionEntry]) {
         let Some(mtm) = MainThreadMarker::new() else { return };
         let _ = REPAINT.set(ctx.clone());
         let target = TARGET.with(|t| t.borrow_mut().get_or_insert_with(|| Target::new(mtm)).clone());
@@ -830,7 +894,16 @@ mod mac {
             quit.setTag(TAG_QUIT);
             app_menu.addItem(&quit);
         }
+        *ACTIONS.lock().unwrap_or_else(|p| p.into_inner()) = actions.to_vec();
         for (title, entries) in super::MENUS {
+            // Eagle shows its Actions menu only while the library has actions.
+            if *title == "Window" && !actions.is_empty() {
+                let menu = actions_menu(mtm, &target, actions);
+                let top = NSMenuItem::new(mtm);
+                top.setTitle(&NSString::from_str(tr("Actions")));
+                top.setSubmenu(Some(&menu));
+                main.addItem(&top);
+            }
             let menu = submenu(mtm, &target, keys, all, title, entries);
             let top = NSMenuItem::new(mtm);
             top.setTitle(&NSString::from_str(tr(title)));
@@ -858,6 +931,19 @@ mod mac {
                     menu.addItem(&item);
                 }
             }
+        }
+        menu
+    }
+
+    fn actions_menu(mtm: MainThreadMarker, target: &Target, actions: &[ActionEntry]) -> Retained<NSMenu> {
+        let menu = NSMenu::initWithTitle(NSMenu::alloc(mtm), &NSString::from_str(tr("Actions")));
+        menu.setDelegate(Some(ProtocolObject::from_ref(target)));
+        for (i, a) in actions.iter().enumerate() {
+            let item = titled_item(mtm, &a.name, sel!(falconAction:), a.chord.as_ref());
+            // SAFETY: `target` lives in TARGET for the rest of the process.
+            unsafe { item.setTarget(Some(target)) };
+            item.setTag(TAG_ACTION + i as isize);
+            menu.addItem(&item);
         }
         menu
     }
@@ -896,6 +982,18 @@ mod tests {
 
     fn grid(selected: usize) -> State {
         State { library: true, selected, libraries: 1, ..Default::default() }
+    }
+
+    #[test]
+    fn actions_run_on_a_selection_outside_the_trash() {
+        let a = ActionEntry { id: "A".into(), name: "Tidy".into(), chord: None, runnable: true };
+        assert!(action_enabled(&a, &grid(1)));
+        assert!(!action_enabled(&a, &grid(0)));
+        assert!(!action_enabled(&a, &State { scope: ScopeKind::Trash, ..grid(2) }));
+        assert!(!action_enabled(&a, &State { modal: true, ..grid(2) }));
+        assert!(!action_enabled(&ActionEntry { runnable: false, ..a.clone() }, &grid(2)), "another program's action");
+        assert!(enabled(Command::ActionsPanel, &grid(0)));
+        assert!(!enabled(Command::ActionsPanel, &State { page: Some(Page::AllTags), ..grid(0) }));
     }
 
     #[test]

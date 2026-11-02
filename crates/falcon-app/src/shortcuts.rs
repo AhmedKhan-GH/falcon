@@ -155,6 +155,9 @@ pub enum Command {
     /// Open the Add to Folders picker for the selection (Eagle's bare F,
     /// which opens its folder panel).
     FolderPanel,
+    /// Open the Actions panel (the toolbar's Actions button and Eagle's
+    /// bare G).
+    ActionsPanel,
     /// Organize ▸ Copy Tags, Paste Tags and Clear Tags (Eagle's tag clipboard).
     CopyTags,
     PasteTags,
@@ -508,6 +511,7 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::LockFolder, id: "edit.folder.password.lock", group: "Edit", label: "Lock the open folder now", default: k(CMD_SHIFT, Key::L), aliases: &[] },
     Spec { cmd: Command::AddToFolders, id: "find.add.to", group: "Find", label: "Add the selection to folders", default: k(CMD_SHIFT, Key::J), aliases: &[] },
     Spec { cmd: Command::FolderPanel, id: "organize.folder.panel", group: "Organize", label: "Open the folder picker", default: k(NONE, Key::F), aliases: &[] },
+    Spec { cmd: Command::ActionsPanel, id: "organize.actions.panel", group: "Organize", label: "Open the Actions panel", default: k(NONE, Key::G), aliases: &[] },
     Spec { cmd: Command::AddToLastFolder, id: "organize.folder.addLast", group: "Organize", label: "Add to the last used folder", default: k(SHIFT, Key::D), aliases: &[] },
     Spec { cmd: Command::ClearTags, id: "organize.tag.clear", group: "Tags", label: "Clear the selection's tags", default: None, aliases: &[] },
     Spec { cmd: Command::Presentation, id: "view.toggle.slideshow", group: "View", label: "Enter or leave presentation mode", default: k(NONE, Key::F5), aliases: &[] },
@@ -622,6 +626,12 @@ impl Shortcuts {
         TABLE.iter().filter(|s| s.cmd != cmd && same_scope(s, me)).map(|s| s.cmd).find(|&c| self.chords(c).iter().any(|x| same(*x, Some(chord))))
     }
 
+    /// The command outside the Player group whose chords include `chord`:
+    /// an action's shortcut may not take a key a command already uses.
+    pub fn used_by(&self, chord: KeyboardShortcut) -> Option<Command> {
+        TABLE.iter().filter(|s| s.group != PLAYER).map(|s| s.cmd).find(|&c| self.chords(c).iter().any(|x| same(*x, Some(chord))))
+    }
+
     /// The command a key press triggers, outside the Player group and the
     /// Global group (the system hands those over, `hotkeys.rs`). When
     /// several match (⌘F and ⌘⇧F for ⌘⇧F), the chord with the most
@@ -677,6 +687,11 @@ impl Shortcuts {
 
 fn weight(m: Modifiers) -> u8 {
     m.command as u8 + m.ctrl as u8 + m.shift as u8 + m.alt as u8
+}
+
+/// Whether two chords are the same keys.
+pub fn same_chord(a: KeyboardShortcut, b: KeyboardShortcut) -> bool {
+    same(a, Some(b))
 }
 
 fn same(a: KeyboardShortcut, b: Option<KeyboardShortcut>) -> bool {
@@ -830,13 +845,33 @@ const CONFLICT_SECS: f64 = 1.5;
 pub struct Recorder {
     recording: Option<Command>,
     /// A rejected chord: the command being set, what uses it, and when.
-    conflict: Option<(Command, Command, f64)>,
+    conflict: Option<(Command, User, f64)>,
     confirm_reset: bool,
     /// Filters the list by command name, group or chord.
     query: String,
     /// Global keys the system refused (another app holds the chord), set
     /// by the app each frame; their rows say so (`hotkeys.rs`).
     pub refused: Vec<(Command, KeyboardShortcut)>,
+    /// The open library's actions with their shortcuts, set by the app:
+    /// listed in their own group, and no command may take their keys.
+    pub actions: Vec<(String, Option<KeyboardShortcut>)>,
+}
+
+/// What already uses a chord the recorder refused.
+#[derive(Clone, PartialEq, Debug)]
+enum User {
+    Command(Command),
+    /// An action, by name.
+    Action(String),
+}
+
+impl User {
+    fn label(&self) -> String {
+        match self {
+            User::Command(c) => crate::locale::tr(spec(*c).label).to_string(),
+            User::Action(name) => name.clone(),
+        }
+    }
 }
 
 /// The note a refused global key's row shows.
@@ -865,12 +900,17 @@ impl Recorder {
             }
             Recorded::Ignore => {}
             Recorded::Chord(c) => {
+                let action = self.actions.iter().find(|(_, a)| a.is_some_and(|a| same(a, Some(c)))).filter(|_| spec(cmd).group != PLAYER);
+                if let Some((name, _)) = action {
+                    self.conflict = Some((cmd, User::Action(name.clone()), now));
+                    return;
+                }
                 match keys.set(cmd, Some(c)) {
                     Ok(()) => {
                         self.recording = None;
                         self.conflict = None;
                     }
-                    Err(other) => self.conflict = Some((cmd, other, now)),
+                    Err(other) => self.conflict = Some((cmd, User::Command(other), now)),
                 }
             }
         }
@@ -916,7 +956,7 @@ impl Recorder {
             self.conflict = None;
         }
         if let Some((_, other, _)) = self.conflict.as_ref().filter(|c| c.0 == s.cmd) {
-            let note = trf("Used by {command}", &[("command", &tr(spec(*other).label))]);
+            let note = trf("Used by {command}", &[("command", &other.label())]);
             p.text(button.left_center() - vec2(10.0, 0.0), Align2::RIGHT_CENTER, note, font(11.5), egui::Color32::from_rgb(0xff, 0xb0, 0x40));
         } else {
             let mut left = button.left();
@@ -995,6 +1035,25 @@ impl Recorder {
                 ui.label(RichText::new(tr(group)).strong().size(13.0));
             }
             self.row(ui, keys, s);
+        }
+        // The open library's actions, whose keys are set in the Actions panel.
+        let actions: Vec<_> = self
+            .actions
+            .iter()
+            .map(|(name, c)| (name, c.map(|c| display(ui.ctx(), &c)).unwrap_or_default()))
+            .filter(|(name, chord)| crate::prefs::matches(&self.query, &[tr("Actions"), "Actions", name, chord]))
+            .collect();
+        if !actions.is_empty() {
+            shown += actions.len();
+            ui.add_space(10.0);
+            ui.label(RichText::new(tr("Actions")).strong().size(13.0));
+            for (name, chord) in actions {
+                let (row, _) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::hover());
+                ui.painter().text(row.left_center() + vec2(12.0, 0.0), Align2::LEFT_CENTER, name, font(13.0), t::p().text);
+                let (text, color) = if chord.is_empty() { (tr("None").to_string(), t::p().text_disabled) } else { (chord, t::p().text_muted) };
+                ui.painter().text(row.right_center() - vec2(75.0, 0.0), Align2::CENTER_CENTER, text, font(12.5), color);
+            }
+            ui.label(RichText::new(tr("Set an action's shortcut in the Actions panel.")).color(t::p().text_muted).size(11.5));
         }
         let fixed: Vec<_> = FIXED.iter().filter(|(k, what)| crate::prefs::matches(&self.query, &[tr("Fixed"), tr(k), tr(what), what])).collect();
         if shown == 0 && fixed.is_empty() {
@@ -1623,6 +1682,18 @@ mod tests {
     }
 
     #[test]
+    fn recorder_refuses_an_actions_key() {
+        let mut keys = Shortcuts::default();
+        let chord = parse("Command + Shift + 1").unwrap();
+        let mut r = Recorder { recording: Some(Command::Rename), actions: vec![("Tidy".into(), Some(chord)), ("Bare".into(), None)], ..Default::default() };
+        r.feed(&mut keys, Key::Num1, Modifiers { shift: true, ..Modifiers::COMMAND }, 0.0);
+        assert_eq!(r.conflict.as_ref().map(|c| c.1.clone()), Some(User::Action("Tidy".into())));
+        assert!(keys.is_default(Command::Rename), "nothing changes");
+        assert_eq!(keys.used_by(parse("G").unwrap()), Some(Command::ActionsPanel));
+        assert_eq!(keys.used_by(chord), None);
+    }
+
+    #[test]
     fn recorder_feeds_the_draft() {
         let mut keys = Shortcuts::default();
         let mut r = Recorder { recording: Some(Command::Rename), ..Default::default() };
@@ -1630,7 +1701,7 @@ mod tests {
         r.feed(&mut keys, Key::R, Modifiers::NONE, 0.0);
         assert!(r.recording.is_some(), "a bare letter is ignored");
         r.feed(&mut keys, Key::F, cmd, 1.0);
-        assert_eq!(r.conflict.as_ref().map(|c| c.1), Some(Command::Find));
+        assert_eq!(r.conflict.as_ref().map(|c| c.1.clone()), Some(User::Command(Command::Find)));
         assert!(r.recording.is_some() && keys.is_default(Command::Rename), "a conflict changes nothing");
         r.feed(&mut keys, Key::K, cmd, 2.0);
         assert!(!r.recording.is_some() && r.conflict.is_none());

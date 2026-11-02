@@ -97,6 +97,8 @@ pub(crate) enum Action {
     MergeDuplicates(Vec<falcon_library::merge::Merge>),
     /// The duplicate dialog's answer for these held files.
     ResolveDuplicates(Vec<crate::import_dupes::Pending>, crate::import_dupes::Choice),
+    /// An action's steps run on items (`actions/`).
+    RunSteps(crate::actions::Run),
 }
 
 /// Most undo steps kept.
@@ -158,6 +160,7 @@ pub(crate) fn action_label(action: &Action) -> String {
         Action::Folders(a) => a.label(),
         Action::RenameItem(..) => tr("Rename").into(),
         Action::NewTextFile(_) => tr("New text file").into(),
+        Action::RunSteps(run) => crate::actions::app::run_label(run),
     }
 }
 
@@ -496,6 +499,7 @@ impl App {
                     r
                 }
                 Action::NewTextFile(folders) => self.new_text_file(lib, folders),
+                Action::RunSteps(run) => self.apply_run(lib, run),
                 Action::RenameItem(id, name) => match lib.item(&id).cloned() {
                     Some(mut item) => {
                         item.name = name;
