@@ -191,7 +191,8 @@ impl Library {
 
     /// Writes the new bytes over the original, then refreshes the item and
     /// marks the undo step irreversible. The file is replaced atomically,
-    /// so a failed write leaves the original as it was.
+    /// so a failed write leaves the original as it was; its birth time stays,
+    /// as Eagle's in-place write keeps it.
     fn rewrite(&mut self, item: crate::model::Item, raw: &Path, bytes: &[u8]) -> Result<()> {
         replace_atomically(raw, bytes)?;
         let r = self.redraw_item(item);
@@ -200,6 +201,21 @@ impl Library {
         }
         r
     }
+}
+
+/// Gives the file the birth time `born`, where the system keeps one to set.
+#[cfg(target_os = "macos")]
+fn keep_birth_time(f: &fs::File, born: Option<std::time::SystemTime>) -> std::io::Result<()> {
+    use std::os::macos::fs::FileTimesExt;
+    match born {
+        Some(t) => f.set_times(fs::FileTimes::new().set_created(t)),
+        None => Ok(()),
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn keep_birth_time(_: &fs::File, _: Option<std::time::SystemTime>) -> std::io::Result<()> {
+    Ok(())
 }
 
 /// Replaces `path` with `bytes` atomically: the bytes go into `path.staged`
@@ -213,6 +229,7 @@ fn replace_atomically(path: &Path, bytes: &[u8]) -> Result<()> {
     let staged = std::path::PathBuf::from(name);
     // Copying first gives the staged file the original's permissions and
     // extended attributes, which the rename then carries over.
+    let born = fs::metadata(path).and_then(|m| m.created()).ok();
     fs::copy(path, &staged).map_err(|e| Error::io(&staged, e))?;
     let done = fs::OpenOptions::new()
         .write(true)
@@ -220,6 +237,7 @@ fn replace_atomically(path: &Path, bytes: &[u8]) -> Result<()> {
         .open(&staged)
         .and_then(|mut f| {
             f.write_all(bytes)?;
+            keep_birth_time(&f, born)?;
             f.sync_all()
         })
         .and_then(|()| fs::rename(&staged, path));
@@ -761,6 +779,18 @@ mod tests {
 
     fn names_in(dir: &Path) -> Vec<String> {
         fs::read_dir(dir).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect()
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn replacing_keeps_the_birth_time() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("a.png");
+        fs::write(&p, b"old").unwrap();
+        let born = fs::metadata(&p).unwrap().created().unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        replace_atomically(&p, b"new").unwrap();
+        assert_eq!(fs::metadata(&p).unwrap().created().unwrap(), born);
     }
 
     #[test]
