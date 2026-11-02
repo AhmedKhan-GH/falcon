@@ -1,8 +1,10 @@
 //! The preview picture inside the zip containers of Sketch, XMind, Keynote
-//! and IDML files (and SketchUp files saved as a zip). Used at import when QuickLook has no render (no generator
-//! for the app is installed). The archive is untrusted: only one named entry
-//! is read, at most [`MAX_ENTRY`] bytes of it, and anything malformed means
-//! "no preview".
+//! and IDML files (and SketchUp files saved as a zip). Used at import when
+//! QuickLook has no render (no generator for the app is installed).
+//!
+//! The archive is untrusted. Entries are only matched by name, never used as
+//! paths. At most a few entries are read, each at most [`MAX_ENTRY`] bytes,
+//! and anything malformed means "no preview".
 
 use std::io::Read;
 use std::path::Path;
@@ -30,49 +32,94 @@ pub fn handles(ext: &str) -> bool {
     !entries(ext).is_empty() || ext == "idml"
 }
 
+/// The most extra entries [`found`] returns.
+const MAX_FOUND: usize = 8;
+/// The IDML entry that carries an XMP thumbnail.
+const IDML_METADATA: &str = "META-INF/metadata.xml";
+
+fn is_picture(name: &str) -> bool {
+    name.ends_with(".png") || name.ends_with(".jpg") || name.ends_with(".jpeg")
+}
+
 /// More entries to try after [`entries`], found by their names in the
-/// archive: a Keynote package's own folder prefix, its `Data/st-*` slide
-/// pictures, and for IDML and zipped SketchUp files any `thumbnail*` or
-/// `preview*` picture. At most a few are returned.
+/// archive. For Keynote: a preview or QuickLook thumbnail under the
+/// package's own `<name>.key/` folder, then `Data/st-*` slide pictures
+/// (also under that folder), in name order. For IDML and zipped SketchUp
+/// files: any `thumbnail*` or `preview*` picture. At most [`MAX_FOUND`]
+/// are returned, none of them already in [`entries`].
 fn found(names: &[String], ext: &str) -> Vec<String> {
-    let lower = |n: &String| n.to_ascii_lowercase();
-    let picture = |n: &str| n.ends_with(".png") || n.ends_with(".jpg") || n.ends_with(".jpeg");
     let mut out: Vec<String> = match ext {
         "key" => {
-            let tails = ["preview.jpg", "preview.png", "quicklook/thumbnail.jpg", "quicklook/thumbnail.png"];
-            let mut v: Vec<&String> = names
-                .iter()
-                .filter(|n| {
-                    let l = lower(n);
-                    let tail = l.split_once('/').map(|(first, rest)| (first.ends_with(".key"), rest));
-                    tails.contains(&l.as_str()) || tail.is_some_and(|(pkg, rest)| pkg && tails.contains(&rest))
-                })
-                .collect();
-            let mut slides: Vec<&String> = names
-                .iter()
-                .filter(|n| {
-                    let l = lower(n);
-                    let name = l.rsplit('/').next().unwrap_or("");
-                    l.contains("data/") && name.starts_with("st-") && picture(name)
-                })
-                .collect();
+            const TAILS: [&str; 4] = ["preview.jpg", "preview.png", "quicklook/thumbnail.jpg", "quicklook/thumbnail.png"];
+            // The part of a name below an optional `<name>.key/` folder.
+            let below = |l: &str| -> String {
+                match l.split_once('/') {
+                    Some((first, rest)) if first.ends_with(".key") => rest.to_owned(),
+                    _ => l.to_owned(),
+                }
+            };
+            let mut previews: Vec<&String> = Vec::new();
+            let mut slides: Vec<&String> = Vec::new();
+            for n in names {
+                let l = n.to_ascii_lowercase();
+                let rest = below(&l);
+                if TAILS.contains(&rest.as_str()) {
+                    previews.push(n);
+                } else if let Some(file) = rest.strip_prefix("data/")
+                    && file.starts_with("st-")
+                    && !file.contains('/')
+                    && is_picture(file)
+                {
+                    slides.push(n);
+                }
+            }
             slides.sort();
-            v.extend(slides);
-            v.into_iter().cloned().collect()
+            previews.into_iter().chain(slides).cloned().collect()
         }
         "idml" | "skp" => names
             .iter()
             .filter(|n| {
-                let l = lower(n);
+                let l = n.to_ascii_lowercase();
                 let name = l.rsplit('/').next().unwrap_or("");
-                !l.ends_with('/') && (name.starts_with("thumbnail") || name.starts_with("preview")) && picture(name)
+                (name.starts_with("thumbnail") || name.starts_with("preview")) && is_picture(name)
             })
             .cloned()
             .collect(),
         _ => Vec::new(),
     };
-    out.truncate(8);
+    out.retain(|n| !entries(ext).contains(&n.as_str()));
+    out.dedup();
+    out.truncate(MAX_FOUND);
     out
+}
+
+/// The bytes of the file entry `name`; `None` when it is absent, a
+/// directory, or over [`MAX_ENTRY`].
+fn read_entry<R: std::io::Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>, name: &str) -> Option<Vec<u8>> {
+    let entry = zip.by_name(name).ok()?;
+    if entry.is_dir() || entry.size() > MAX_ENTRY {
+        return None;
+    }
+    let mut bytes = Vec::new();
+    // `take` bounds the read even when the header lies about the size.
+    entry.take(MAX_ENTRY + 1).read_to_end(&mut bytes).ok()?;
+    (bytes.len() as u64 <= MAX_ENTRY).then_some(bytes)
+}
+
+/// The picture in the `xmpGImg:image` element of an IDML `metadata.xml`: a
+/// base64 body that may be split by `&#xA;` entities. `None` when the element
+/// is missing or the body is not a picture.
+fn xmp_thumbnail(xml: &[u8]) -> Option<DynamicImage> {
+    use base64::Engine;
+    const OPEN: &str = "<xmpGImg:image>";
+    const CLOSE: &str = "</xmpGImg:image>";
+    let text = std::str::from_utf8(xml).ok()?;
+    let start = text.find(OPEN)?.checked_add(OPEN.len())?;
+    let body = text.get(start..)?;
+    let body = body.get(..body.find(CLOSE)?)?;
+    let cleaned: String = body.replace("&#xA;", "").replace("&#xD;", "").chars().filter(|c| !c.is_whitespace()).collect();
+    let bytes = base64::engine::general_purpose::STANDARD.decode(cleaned.as_bytes()).ok()?;
+    decode(&bytes)
 }
 
 /// The preview picture of the file at `path`; `None` when it isn't a zip,
@@ -83,18 +130,12 @@ pub fn preview(path: &Path, ext: &str) -> Option<DynamicImage> {
     let names: Vec<String> = zip.file_names().filter_map(Result::ok).map(std::borrow::Cow::into_owned).collect();
     let tried: Vec<String> = entries(ext).iter().map(|n| (*n).to_owned()).chain(found(&names, ext)).collect();
     for name in &tried {
-        let Ok(entry) = zip.by_name(name) else { continue };
-        if entry.is_dir() || entry.size() > MAX_ENTRY {
-            continue;
-        }
-        let mut bytes = Vec::new();
-        // `take` bounds the read even when the header lies about the size.
-        if entry.take(MAX_ENTRY + 1).read_to_end(&mut bytes).is_err() || bytes.len() as u64 > MAX_ENTRY {
-            continue;
-        }
-        if let Some(img) = decode(&bytes) {
+        if let Some(img) = read_entry(&mut zip, name).and_then(|bytes| decode(&bytes)) {
             return Some(img);
         }
+    }
+    if ext == "idml" {
+        return read_entry(&mut zip, IDML_METADATA).and_then(|xml| xmp_thumbnail(&xml));
     }
     None
 }
@@ -178,6 +219,69 @@ mod tests {
         let p = make_zip(dir.path(), "bad.idml", &[("preview.png", b"junk")]);
         assert!(preview(&p, "idml").is_none());
         assert!(handles("idml"));
+    }
+
+    fn xmp(body: &str) -> Vec<u8> {
+        format!("<?xml version=\"1.0\"?><x:xmpmeta><xmpGImg:format>JPEG</xmpGImg:format><xmpGImg:image>{body}</xmpGImg:image></x:xmpmeta>").into_bytes()
+    }
+
+    fn b64_split(bytes: &[u8]) -> String {
+        use base64::Engine;
+        let s = base64::engine::general_purpose::STANDARD.encode(bytes);
+        s.as_bytes().chunks(76).map(|c| std::str::from_utf8(c).unwrap()).collect::<Vec<_>>().join("&#xA;")
+    }
+
+    #[test]
+    fn idml_xmp_thumbnail_is_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let body = b64_split(&jpeg(40, 30));
+        assert!(body.contains("&#xA;"));
+        let m = xmp(&body);
+        let p = make_zip(dir.path(), "x.idml", &[("designmap.xml", b"<x/>"), ("META-INF/metadata.xml", &m)]);
+        assert_eq!(preview(&p, "idml").unwrap().dimensions(), (40, 30));
+        // Only IDML looks there.
+        assert!(preview(&p, "skp").is_none());
+        // A named picture wins over the metadata.
+        let p = make_zip(dir.path(), "y.idml", &[("META-INF/metadata.xml", &m), ("META-INF/Thumbnail.png", &png(7, 7))]);
+        assert_eq!(preview(&p, "idml").unwrap().dimensions(), (7, 7));
+    }
+
+    #[test]
+    fn idml_malformed_metadata_gives_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let good = b64_split(&jpeg(40, 30));
+        let cases: Vec<Vec<u8>> = vec![
+            xmp("!!!! not base64 ????"),
+            xmp("QUJD"),
+            xmp(""),
+            // A cut entity, and a lone ampersand.
+            xmp(&good.replacen("&#xA;", "&#x", 1)),
+            xmp(&good.replacen("&#xA;", "&", 1)),
+            // No closing tag, no element, not UTF-8.
+            format!("<xmpGImg:image>{good}").into_bytes(),
+            b"<x:xmpmeta/>".to_vec(),
+            vec![0xFF, 0xFE, 0x00, 0x3C],
+            // Closing tag before the opening one.
+            format!("</xmpGImg:image><xmpGImg:image>{good}").into_bytes(),
+            b"<xmpGImg:image>".to_vec(),
+        ];
+        for (i, m) in cases.iter().enumerate() {
+            let p = make_zip(dir.path(), &format!("m{i}.idml"), &[("META-INF/metadata.xml", m)]);
+            assert!(preview(&p, "idml").is_none(), "case {i}");
+        }
+    }
+
+    #[test]
+    fn found_matches_whole_path_components() {
+        let names: Vec<String> = ["mydata/st-1.jpg", "Data/st-2.jpg", "Data/sub/st-3.jpg", "Data/st-4.txt", "x/preview.jpg", "Pkg.key/Data/st-5.png"]
+            .iter()
+            .map(|s| (*s).to_owned())
+            .collect();
+        assert_eq!(found(&names, "key"), ["Data/st-2.jpg", "Pkg.key/Data/st-5.png"]);
+        let names: Vec<String> = ["Pkg.key/preview.jpg", "preview.jpg", "other.key/x/preview.jpg"].iter().map(|s| (*s).to_owned()).collect();
+        assert_eq!(found(&names, "key"), ["Pkg.key/preview.jpg"], "the top-level one is in entries()");
+        let many: Vec<String> = (0..50).map(|i| format!("Data/st-{i:02}.jpg")).collect();
+        assert_eq!(found(&many, "key").len(), MAX_FOUND);
     }
 
     #[test]
