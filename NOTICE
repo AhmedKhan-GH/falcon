@@ -49,5 +49,27 @@ Third-party material:
   Contents/Resources/FFmpeg/COPYING.dav1d.txt. It is not part of this source
   tree and is not linked into Falcon.
 
+- web-ifc 0.0.78 (https://github.com/ThatOpen/engine_web-ifc, tag 0.78), the
+  IFC geometry engine, Mozilla Public License 2.0, copyright (c) web-ifc
+  contributors. Not part of this source tree: scripts/fetch-web-ifc.sh fetches
+  it at that tag with a pinned SHA-256, and crates/falcon-ifc compiles it
+  unmodified into Falcon when present. The source of the MPL-covered files is
+  available at the URL above. See https://mozilla.org/MPL/2.0/.
+- Header-only libraries web-ifc builds against, fetched the same way:
+  glm (https://github.com/g-truc/glm), MIT license, copyright (c) G-Truc
+  Creation; tinynurbs (https://github.com/QuimMoya/tinynurbs), BSD 3-Clause,
+  copyright (c) 2017 Pradeep Kumar Jayaraman; fast_float
+  (https://github.com/fastfloat/fast_float), MIT or Apache-2.0 or BSL-1.0,
+  copyright (c) the fast_float authors; earcut.hpp
+  (https://github.com/mapbox/earcut.hpp), ISC license, copyright (c) 2015
+  Mapbox; CDT (https://github.com/artem-ogre/CDT), Mozilla Public License 2.0,
+  copyright (c) Artem Amirkhanov; spdlog (https://github.com/gabime/spdlog),
+  MIT license, copyright (c) 2016 Gabi Melman and spdlog contributors (with
+  {fmt}, MIT, copyright (c) Victor Zverovich); stduuid
+  (https://github.com/mariusbancila/stduuid), MIT license, copyright (c) 2017
+  Marius Bancila; unordered_dense (https://github.com/martinus/unordered_dense),
+  MIT license, copyright (c) 2022 Martin Leitner-Ankerl. Falcon.app carries
+  each licence text in Contents/Resources/web-ifc.
+
 "Eagle" is a trademark of its respective owner. Falcon is not affiliated
 with, endorsed by or sponsored by Eagle or its developers.

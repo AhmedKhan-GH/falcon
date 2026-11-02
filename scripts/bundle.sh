@@ -44,6 +44,26 @@ if [ -f "$FFMPEG/lib/libavformat.61.dylib" ]; then
 else
   echo "No FFmpeg in $FFMPEG (run scripts/build-ffmpeg.sh): formats macOS can't play won't play"
 fi
+# web-ifc is compiled into the binary when scripts/fetch-web-ifc.sh has fetched it;
+# its licence and those of the libraries it builds against ship along.
+WEB_IFC=${FALCON_WEB_IFC_DIR:-target/web-ifc}
+if [ -f "$WEB_IFC/SOURCES.txt" ]; then
+  LIC="$APP/Contents/Resources/web-ifc"
+  mkdir -p "$LIC"
+  cp "$WEB_IFC/SOURCES.txt" "$LIC/SOURCES.txt"
+  cp "$WEB_IFC/web-ifc/LICENSE.md" "$LIC/web-ifc-LICENSE.txt"
+  cp "$WEB_IFC/glm/copying.txt" "$LIC/glm-LICENSE.txt"
+  cp "$WEB_IFC/tinynurbs/LICENSE" "$LIC/tinynurbs-LICENSE.txt"
+  cp "$WEB_IFC/fast_float/LICENSE-MIT" "$LIC/fast_float-LICENSE-MIT.txt"
+  cp "$WEB_IFC/earcut/LICENSE" "$LIC/earcut-LICENSE.txt"
+  cp "$WEB_IFC/cdt/LICENSE" "$LIC/CDT-LICENSE.txt"
+  cp "$WEB_IFC/spdlog/LICENSE" "$LIC/spdlog-LICENSE.txt"
+  cp "$WEB_IFC/stduuid/LICENSE" "$LIC/stduuid-LICENSE.txt"
+  cp "$WEB_IFC/unordered_dense/LICENSE" "$LIC/unordered_dense-LICENSE.txt"
+  echo "web-ifc is built in; licences in $LIC"
+else
+  echo "No web-ifc in $WEB_IFC (run scripts/fetch-web-ifc.sh): IFC shows only tessellated geometry"
+fi
 VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
 # The document types let Finder's Open With and Dock drops hand files, packages and libraries to falcon, which imports files and opens packages and libraries.
 cat > "$APP/Contents/Info.plist" <<PLIST

@@ -1,0 +1,10 @@
+[package]
+name = "falcon-ifc"
+description = "Full IFC geometry for falcon through the web-ifc engine, compiled from source when scripts/fetch-web-ifc.sh has fetched it"
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+edition.workspace = true
+
+[build-dependencies]
+cc = { version = "1.10.0", features = ["parallel"] }

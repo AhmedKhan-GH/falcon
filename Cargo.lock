@@ -1700,6 +1700,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "falcon-ifc"
+version = "0.1.0"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "falcon-library"
 version = "0.1.0"
 dependencies = [
@@ -1709,6 +1716,7 @@ dependencies = [
  "chrono",
  "encoding_rs",
  "falcon-ffmpeg",
+ "falcon-ifc",
  "fastrand",
  "filetime",
  "image",
