@@ -1,6 +1,7 @@
 //! Importing a local file into a library, following Eagle's `processImage`.
 
 use std::fs;
+use std::io::Read;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -545,14 +546,22 @@ fn quicklook_thumbnail(item: &mut Item, raw: &Path, thumb: &Path, max: u32) -> O
     Some(Analysis::Thumbnail)
 }
 
-/// The thumbnail of a file QuickLook can't render, from the picture the file
-/// carries: a RAW photo's embedded preview (turned upright), or the preview
-/// in a Sketch, XMind or Keynote file's zip. `None` for other formats.
+/// The thumbnail of a file QuickLook can't render, from what the file
+/// carries: a RAW photo's embedded preview (turned upright), the preview in
+/// a Sketch, XMind, Keynote or IDML zip, the first page of an Illustrator
+/// file's PDF, or the preview in an EPS, InDesign, Blender, SketchUp or
+/// AutoCAD file. `None` for other formats, and for files with no preview.
 fn embedded_thumbnail(item: &mut Item, raw: &Path, thumb: &Path, max: u32) -> Option<Analysis> {
     let (img, size) = if crate::exif::is_raw(&item.ext) {
         let data = fs::read(raw).ok()?;
         let img = thumbnail::raw_preview(&data).ok()?;
         let size = raw_dimensions(&data, raw, (img.width(), img.height()));
+        (img, size)
+    } else if matches!(item.ext.as_str(), "ai" | "ait") && let Some(page) = pdf_page(raw) {
+        page
+    } else if crate::binary_preview::handles(&item.ext) {
+        let img = crate::binary_preview::preview(raw, &item.ext)?;
+        let size = (img.width(), img.height());
         (img, size)
     } else if crate::zip_preview::handles(&item.ext) {
         let img = crate::zip_preview::preview(raw, &item.ext)?;
@@ -565,6 +574,22 @@ fn embedded_thumbnail(item: &mut Item, raw: &Path, thumb: &Path, max: u32) -> Op
     item.width = size.0.into();
     item.height = size.1.into();
     Some(Analysis::Thumbnail)
+}
+
+/// Page 1 of an Illustrator file saved PDF-compatible, drawn by PDFKit, with
+/// the page's size in points. `None` when the file is not a PDF inside (older
+/// files are PostScript) or PDFKit can't draw it.
+fn pdf_page(raw: &Path) -> Option<(DynamicImage, (u32, u32))> {
+    let mut head = Vec::new();
+    fs::File::open(raw).ok()?.take(1024).read_to_end(&mut head).ok()?;
+    if !head.windows(5).any(|w| w == b"%PDF-") {
+        return None;
+    }
+    let doc = falcon_pdf::Document::open(raw).ok()?;
+    let bitmap = doc.thumbnail(0, thumbnail::QUICKLOOK_SIZE as usize).ok()?;
+    let (pw, ph) = doc.page_size(0).unwrap_or((bitmap.width as f64, bitmap.height as f64));
+    let img = image::RgbaImage::from_raw(u32::try_from(bitmap.width).ok()?, u32::try_from(bitmap.height).ok()?, bitmap.rgba)?;
+    Some((DynamicImage::ImageRgba8(img), (pw.round().clamp(1.0, 1e6) as u32, ph.round().clamp(1.0, 1e6) as u32)))
 }
 
 /// The displayed size of a RAW photo: the camera's own pixel size, turned by

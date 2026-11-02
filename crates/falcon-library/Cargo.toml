@@ -9,6 +9,7 @@ edition.workspace = true
 [dependencies]
 falcon-ffmpeg = { path = "../falcon-ffmpeg" }
 falcon-ifc = { path = "../falcon-ifc" }
+falcon-pdf = { path = "../falcon-pdf" }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 thiserror = "2"

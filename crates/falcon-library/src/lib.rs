@@ -6,6 +6,7 @@ pub mod add_to_library;
 pub mod audio;
 pub mod autotag;
 pub mod backup;
+pub mod binary_preview;
 pub mod duplicates;
 pub mod edit;
 pub mod error;
