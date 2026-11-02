@@ -20,20 +20,15 @@ use std::path::Path;
 
 use image::DynamicImage;
 
-#[allow(unused_imports)]
 pub(crate) use crate::zip_preview::decode;
 
 /// The most bytes of one embedded picture or text block read.
-#[allow(dead_code)]
 pub(crate) const MAX_ITEM: usize = 16 << 20;
 /// The most bytes a scan for an embedded picture reads from one file.
-#[allow(dead_code)]
 pub(crate) const MAX_SCAN: u64 = 1 << 30;
 /// The most embedded pictures a scan offers before it stops.
-#[allow(dead_code)]
 pub(crate) const MAX_HITS: usize = 16;
 /// The most bytes of the head of a PostScript or Blender file read.
-#[allow(dead_code)]
 pub(crate) const HEAD: u64 = 16 << 20;
 
 /// The extensions this module reads a preview from.
@@ -56,7 +51,6 @@ pub fn preview(path: &Path, ext: &str) -> Option<DynamicImage> {
 }
 
 /// Up to `max` bytes from the current position of `r`.
-#[allow(dead_code)]
 pub(crate) fn read_head<R: Read>(r: &mut R, max: u64) -> Option<Vec<u8>> {
     let mut out = Vec::new();
     r.take(max).read_to_end(&mut out).ok()?;
@@ -65,7 +59,6 @@ pub(crate) fn read_head<R: Read>(r: &mut R, max: u64) -> Option<Vec<u8>> {
 
 /// `len` bytes at `offset`, when that range is inside a file of `file_len`
 /// bytes and no bigger than `cap`. Nothing is allocated before those checks.
-#[allow(dead_code)]
 pub(crate) fn read_at(file: &mut File, file_len: u64, offset: u64, len: u64, cap: usize) -> Option<Vec<u8>> {
     if len == 0 || len > cap as u64 || offset.checked_add(len)? > file_len {
         return None;
@@ -77,13 +70,11 @@ pub(crate) fn read_at(file: &mut File, file_len: u64, offset: u64, len: u64, cap
 }
 
 /// The little-endian `u32` at `at`, when it is inside `d`.
-#[allow(dead_code)]
 pub(crate) fn le32(d: &[u8], at: usize) -> Option<u32> {
     Some(u32::from_le_bytes(d.get(at..at.checked_add(4)?)?.try_into().ok()?))
 }
 
 /// Where `needle` first starts in `hay`.
-#[allow(dead_code)]
 pub(crate) fn find(hay: &[u8], needle: &[u8]) -> Option<usize> {
     if needle.is_empty() || hay.len() < needle.len() {
         return None;
@@ -98,7 +89,6 @@ pub(crate) fn find(hay: &[u8], needle: &[u8]) -> Option<usize> {
 /// Linear in the bytes read: at most [`MAX_SCAN`] are read, at most
 /// [`MAX_ITEM`] held, a stretch that outgrows that is dropped, and the scan
 /// ends after [`MAX_HITS`] offers or when `visit` breaks.
-#[allow(dead_code)]
 pub(crate) fn scan<R: Read>(mut r: R, open: &[u8], close: &[u8], mut visit: impl FnMut(&[u8]) -> ControlFlow<()>) {
     if open.is_empty() || close.is_empty() {
         return;

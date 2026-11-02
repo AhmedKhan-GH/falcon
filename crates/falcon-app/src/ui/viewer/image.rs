@@ -13,7 +13,7 @@ use crate::app::App;
 use crate::gesture::{Gesture, Outcome};
 use crate::ui::viewer::audio;
 use crate::ui::widgets::ext_placeholder;
-use crate::loader::{Job, Loader, Original, Tier, job_for, original_job, quicklook_region_job};
+use crate::loader::{Job, Loader, Original, Tier, job_for, original_job, quicklook_region_job, stand_in_job};
 use crate::locale::{tr, trf};
 use crate::logic;
 use crate::theme::{self as t, mono};
@@ -197,10 +197,10 @@ impl App {
         let patch = sharp.patch;
         let original = self.ws.loader.original(&id).filter(|_| sharp.original);
 
-        // Without a full render the thumbnail stands in; with neither, the
-        // format can't be previewed.
+        // Without a full render, or while QuickLook is still making one, the
+        // thumbnail stands in; with neither, the format can't be previewed.
         let full_failed = self.ws.loader.has_failed(&id, Tier::Full) || job_for(item, lib.root(), Tier::Full).is_none();
-        let preview_job = if full_failed { job_for(item, lib.root(), Tier::Preview) } else { None };
+        let preview_job = stand_in_job(item, lib.root(), full_failed);
         let no_preview = full_failed && (preview_job.is_none() || self.ws.loader.has_failed(&id, Tier::Preview));
         let has_original = original.is_some();
         // The item's own thumbnail background wins over the preference.

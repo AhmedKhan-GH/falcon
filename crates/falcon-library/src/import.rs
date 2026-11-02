@@ -1117,6 +1117,69 @@ mod tests {
         Some(((item.width, item.height), (img.width(), img.height())))
     }
 
+    /// A one-page PDF of `w` x `h` points with a correct cross-reference table.
+    fn pdf_bytes(w: u32, h: u32) -> Vec<u8> {
+        let content = "1 0 0 rg 0 0 50 50 re f";
+        let objs = [
+            "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
+            format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {w} {h}] /Contents 4 0 R >>"),
+            format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len()),
+        ];
+        let mut out = b"%PDF-1.4\n".to_vec();
+        let mut offsets = Vec::new();
+        for (k, body) in objs.iter().enumerate() {
+            offsets.push(out.len());
+            out.extend_from_slice(format!("{} 0 obj\n{body}\nendobj\n", k + 1).as_bytes());
+        }
+        let xref = out.len();
+        out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
+        for o in offsets {
+            out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+        }
+        out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objs.len() + 1).as_bytes());
+        out
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn pdf_compatible_illustrator_files_draw_page_one() {
+        for name in ["a.ai", "a.ait"] {
+            let (dims, thumb) = embedded_only(name, &pdf_bytes(200, 100)).expect(name);
+            assert_eq!(dims, (200, 100), "{name}: the page's size");
+            assert!(thumb.0 > thumb.1, "{name}: landscape, {thumb:?}");
+        }
+    }
+
+    #[test]
+    fn illustrator_files_with_no_page_fall_back_to_their_postscript_preview() {
+        let ps = b"%!PS-Adobe-3.0\n%%BeginPreview: 2 2 8 2\n%00ff\n%8040\n%%EndPreview\n";
+        assert_eq!(embedded_only("old.ai", ps).unwrap().0, (2, 2));
+        // PostScript with no preview, and a broken PDF: nothing, no panic.
+        assert!(embedded_only("stub.ai", b"%!PS-Adobe-3.0\n%%Creator: x\n").is_none());
+        assert!(embedded_only("bad.ai", b"%PDF-1.4\nnot really").is_none());
+        assert!(embedded_only("empty.ait", b"").is_none());
+    }
+
+    #[test]
+    fn binary_and_zip_previews_reach_the_thumbnail() {
+        // A Blender file with one 3 x 2 thumbnail block.
+        let mut blend = b"BLENDER-v305".to_vec();
+        let mut body = Vec::new();
+        body.extend(3u32.to_le_bytes());
+        body.extend(2u32.to_le_bytes());
+        body.extend([9u8; 3 * 2 * 4]);
+        blend.extend(b"TEST");
+        blend.extend((body.len() as u32).to_le_bytes());
+        blend.extend([0u8; 16]);
+        blend.extend(&body);
+        assert_eq!(embedded_only("a.blend", &blend).unwrap().0, (3, 2));
+        // Files of the other formats with nothing in them give no thumbnail.
+        for name in ["a.eps", "a.indd", "a.indt", "a.skp", "a.dwg", "a.idml", "a.key"] {
+            assert!(embedded_only(name, b"nothing here").is_none(), "{name}");
+        }
+    }
+
     #[test]
     fn raw_without_a_quicklook_render_uses_its_embedded_preview() {
         let preview = jpeg_bytes(96, 64);

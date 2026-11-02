@@ -163,6 +163,16 @@ pub fn job_for(item: &Item, root: &std::path::Path, tier: Tier) -> Option<Job> {
     Some(Job { key: (item.id.clone(), tier), path, svg, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: false })
 }
 
+/// The job for the thumbnail the viewer draws in place of the full render:
+/// when that failed, or while QuickLook is still making it, which can take
+/// up to `thumbnail::QUICKLOOK_TIMEOUT` and often ends with no render at all
+/// for a format with no generator installed. So a thumbnail is on screen
+/// from the start, never the bare file icon.
+pub fn stand_in_job(item: &Item, root: &std::path::Path, full_failed: bool) -> Option<Job> {
+    let waiting_for_quicklook = job_for(item, root, Tier::Full).is_some_and(|j| j.quicklook);
+    (full_failed || waiting_for_quicklook).then(|| job_for(item, root, Tier::Preview)).flatten()
+}
+
 struct Shared {
     queue: Mutex<VecDeque<Job>>,
     cv: Condvar,
@@ -940,6 +950,46 @@ mod tests {
     /// A one-page PDF with an Illustrator extension: `page` holds its
     /// page entries, and the page is drawn with `content`.
     #[cfg(target_os = "macos")]
+    /// An item in a library at `root` with the given extension, and its thumbnail file if asked.
+    fn special_item(root: &std::path::Path, ext: &str, thumb: bool) -> Item {
+        let item: Item = serde_json::from_value(serde_json::json!({
+            "id": "SPECIAL", "name": "x", "size": 1, "btime": 0, "mtime": 0, "ext": ext,
+            "tags": [], "folders": [], "isDeleted": false, "url": "", "annotation": "", "modificationTime": 0,
+            "height": 10, "width": 10, "lastModified": 0, "palettes": []
+        }))
+        .unwrap();
+        std::fs::create_dir_all(item.info_dir(root)).unwrap();
+        if thumb {
+            std::fs::write(item.info_dir(root).join("x_thumbnail.png"), b"x").unwrap();
+        }
+        item
+    }
+
+    #[test]
+    fn a_thumbnail_stands_in_for_formats_with_no_render() {
+        let dir = tempfile::tempdir().unwrap();
+        for ext in ["ai", "ait", "blend", "dwg", "eps", "idml", "indd", "indt", "key", "skp"] {
+            let item = special_item(dir.path(), ext, true);
+            let thumb = item.thumbnail_path(dir.path()).unwrap();
+            let job = stand_in_job(&item, dir.path(), true).unwrap_or_else(|| panic!("{ext}: after the render failed"));
+            assert_eq!((job.path, job.quicklook, job.key.1), (thumb.clone(), false, Tier::Preview), "{ext}");
+            if cfg!(target_os = "macos") {
+                // While QuickLook runs, too.
+                let job = stand_in_job(&item, dir.path(), false).unwrap_or_else(|| panic!("{ext}: while QuickLook runs"));
+                assert_eq!(job.path, thumb, "{ext}");
+            }
+            std::fs::remove_file(thumb).unwrap();
+            assert!(stand_in_job(&item, dir.path(), true).is_none(), "{ext}: no thumbnail, no stand-in");
+        }
+    }
+
+    #[test]
+    fn a_decodable_image_loads_its_render_with_no_stand_in() {
+        let dir = tempfile::tempdir().unwrap();
+        let item = special_item(dir.path(), "png", true);
+        assert!(stand_in_job(&item, dir.path(), false).is_none());
+    }
+
     fn write_ai(path: &std::path::Path, page: &str, content: &str) {
         let objs = [
             "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
