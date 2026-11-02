@@ -541,7 +541,8 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Crop tool (jpg/png/webp) with handles | Done | Crop with handles, ⇧C, W/H fields, Save / Save As / Cancel (`crop.rs`); the edited file replaces the original atomically through `<file>.staged` (Eagle writes in place) and keeps its birth time | local |
 | Crop width and height number fields | Done | `crop.rs` bar fields | local |
 | Crop "Save As" (keeps the original, adds a new item) | Done | `crop_item_as_new`: same name, tags, folders, URL and rating, dated `modificationTime + 1` (Eagle +0.1); note not carried | local |
-| Live crop size readout | Done | `x: y: W: H:` shown while dragging | local |
+| Live crop size readout | Done | `x: y: W: H:` shown while dragging and for a second after a crop key, as Eagle's `showSize` | local |
+| Crop keys: arrows move 1 px, ⇧ arrows 10 px, ⌘ arrows resize 1 px, ⌘⇧ arrows 10 px, ⌘S saves | Done | `ui/viewer/crop.rs` `crop_key`, `CropState::take_keys`, read in `app/image_edit.rs` `edit_keys`; W, A, S, D move too, as in Eagle; Page Up and Page Down moving 10 px are a falcon extra; shrinking stops at Eagle's 24 px | local |
 | Comment mode: draw rectangle regions with notes (C key) | Done | `F/comments.rs:201-320`, C key `F/image_edit.rs:277` | local |
 | Comment badges, delete X, resize handles, count badge on the toolbar button | Done | `F/comments.rs:213-318` | local |
 | Hovering a region shows its note | Done | Tooltip on hover (`F/comments.rs:290`) | local |

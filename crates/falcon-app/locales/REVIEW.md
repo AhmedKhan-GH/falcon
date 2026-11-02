@@ -190,6 +190,7 @@ The core words, so every file uses one term for one thing.
 - Remove from Disk (a falcon addition in the library switcher): "Remove from Disk…", the confirmation title, size line and body, "Calculating…", "Size unknown", the toasts and the three refusal sentences (machine-written).
 - "Emoji" and "Remove Emoji", the folder and smart folder menu entries for an emoji icon, and the 112 `emoji::` names of the curated emoji (plain object, animal and symbol words; the colour hearts and circles follow the colour terms in the glossary; machine-written).
 - "{hex}  ·  {ratio}%\nClick for colour values, right-click to find similar colours", the inspector palette swatch's tooltip after its clicks were swapped to match Eagle (machine-written).
+- "Save (Enter, ⇧C, ⌘S)", the crop tool's Save tooltip with Eagle's ⌘S added; only the key list changed (machine-written).
 
 ## Reviewed
 

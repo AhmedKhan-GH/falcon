@@ -135,6 +135,73 @@ pub fn set_size(rect: Rect, width: Option<u32>, height: Option<u32>, bounds: Vec
     Rect::from_min_size(rect.min, vec2(w, h))
 }
 
+/// Eagle's smallest crop side, which its keys stop at.
+pub const KEY_MIN_SIDE: f32 = 24.0;
+
+/// What a key does to the open crop tool.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum CropKey {
+    Move(f32, f32),
+    Resize(f32, f32),
+    Save,
+}
+
+/// The crop tool's fixed keys, as Eagle hard-codes them: the arrows (and
+/// bare W, A, S and D) move the box 1 px and with ⇧ 10 px; with ⌘ they resize
+/// it 1 px and with ⌘⇧ 10 px; ⌘S saves. Page Up and Page Down also move it
+/// 10 px, which Eagle doesn't do. `letters_free` says whether a bare letter
+/// isn't bound to a command.
+pub fn crop_key(key: egui::Key, m: egui::Modifiers, letters_free: bool) -> Option<CropKey> {
+    use egui::Key as K;
+    let m = crate::shortcuts::normalize(m);
+    if m.alt || m.ctrl {
+        return None;
+    }
+    let arrow = match key {
+        K::ArrowLeft => Some((-1.0, 0.0)),
+        K::ArrowRight => Some((1.0, 0.0)),
+        K::ArrowUp => Some((0.0, -1.0)),
+        K::ArrowDown => Some((0.0, 1.0)),
+        _ => None,
+    };
+    if let Some((x, y)) = arrow {
+        let n = if m.shift { 10.0 } else { 1.0 };
+        return Some(if m.command { CropKey::Resize(x * n, y * n) } else { CropKey::Move(x * n, y * n) });
+    }
+    match (key, m.command, m.shift) {
+        (K::S, true, false) => Some(CropKey::Save),
+        (K::PageUp, false, false) => Some(CropKey::Move(0.0, -10.0)),
+        (K::PageDown, false, false) => Some(CropKey::Move(0.0, 10.0)),
+        (K::A, false, false) if letters_free => Some(CropKey::Move(-1.0, 0.0)),
+        (K::D, false, false) if letters_free => Some(CropKey::Move(1.0, 0.0)),
+        (K::W, false, false) if letters_free => Some(CropKey::Move(0.0, -1.0)),
+        (K::S, false, false) if letters_free => Some(CropKey::Move(0.0, 1.0)),
+        _ => None,
+    }
+}
+
+/// `r` with its edges on whole pixels, which a key then moves.
+fn whole(r: Rect) -> Rect {
+    Rect::from_min_max(r.min.round(), r.max.round())
+}
+
+/// The rectangle after a resize key: the top-left corner stays and the right
+/// and bottom edges move, stopping at the image and at [`KEY_MIN_SIDE`]. A
+/// smaller rectangle, drawn with the mouse, isn't grown by a key that shrinks.
+pub fn key_resize(rect: Rect, dx: f32, dy: f32, bounds: Vec2) -> Rect {
+    let r = whole(rect);
+    let side = |size: f32, by: f32, room: f32| {
+        if by > 0.0 {
+            (size + by).min(room)
+        } else if by < 0.0 {
+            (size + by).max(KEY_MIN_SIDE.min(size))
+        } else {
+            size
+        }
+    };
+    Rect::from_min_size(r.min, vec2(side(r.width(), dx, bounds.x - r.min.x), side(r.height(), dy, bounds.y - r.min.y)))
+}
+
 /// A rotation and mirror of the picture the viewer draws, without touching
 /// the file (the "preview only" rotate mode). The picture is mirrored
 /// horizontally first when `mirror` is set, then turned clockwise by `turns`
@@ -192,11 +259,41 @@ pub struct CropState {
     pub confirming: bool,
     /// Text being typed in the width and height fields, while they have focus.
     pub fields: [Option<String>; 2],
+    /// The image size, which the rectangle stays inside.
+    pub bounds: Vec2,
+    /// Until when the size readout stays up after a key, in `InputState::time`.
+    pub readout_until: f64,
 }
 
 impl CropState {
     pub fn new(w: f32, h: f32) -> CropState {
-        CropState { rect: Rect::from_min_size(Pos2::ZERO, vec2(w, h)), drag: None, confirming: false, fields: [None, None] }
+        CropState { rect: Rect::from_min_size(Pos2::ZERO, vec2(w, h)), drag: None, confirming: false, fields: [None, None], bounds: vec2(w, h), readout_until: 0.0 }
+    }
+
+    /// Acts on the crop keys among `events` and takes them out, so nothing
+    /// else reads them. While the tool asks to confirm or a handle is being
+    /// dragged they change nothing. Returns whether the rectangle moved.
+    pub fn take_keys(&mut self, events: &mut Vec<egui::Event>, letters_free: bool) -> bool {
+        let mut moved = false;
+        events.retain(|e| {
+            let egui::Event::Key { key, pressed, modifiers, .. } = e else { return true };
+            let Some(act) = crop_key(*key, *modifiers, letters_free) else { return true };
+            if *pressed && self.drag.is_none() && !self.confirming {
+                match act {
+                    CropKey::Move(x, y) => {
+                        self.rect = drag(whole(self.rect), Handle::Move, vec2(x, y), self.bounds);
+                        moved = true;
+                    }
+                    CropKey::Resize(x, y) => {
+                        self.rect = key_resize(self.rect, x, y, self.bounds);
+                        moved = true;
+                    }
+                    CropKey::Save => self.confirming = true,
+                }
+            }
+            false
+        });
+        moved
     }
 }
 
@@ -250,8 +347,13 @@ impl App {
             crop.drag = None;
         }
 
-        // Position and size readout under the rectangle, during a drag only.
-        if crop.drag.is_some() {
+        // Position and size readout under the rectangle, during a drag and
+        // for a second after a key, as in Eagle.
+        let left = crop.readout_until - ui.input(|i| i.time);
+        if left > 0.0 {
+            ui.ctx().request_repaint_after_secs(left as f32);
+        }
+        if crop.drag.is_some() || left > 0.0 {
             let px = pixel_rect(crop.rect);
             let label = format!("x:{} y:{}, W:{} H:{}", px.x, px.y, px.width, px.height);
             let g = ui.painter().layout_no_wrap(label, mono(12.0), t::p().text);
@@ -289,7 +391,7 @@ impl App {
             ui.painter().galley(Pos2::new(left, cy - g.size().y / 2.0), g, t::p().text_muted);
             left - 8.0
         } else {
-            if button(ui, right, 70.0, tr("Save"), true).on_hover_text(tr("Save (Enter, ⇧C)")).clicked() {
+            if button(ui, right, 70.0, tr("Save"), true).on_hover_text(tr("Save (Enter, ⇧C, ⌘S)")).clicked() {
                 crop.confirming = true;
             }
             if button(ui, right - 78.0, 80.0, tr("Save As"), false).on_hover_text(tr("Save the crop as a new item")).clicked() {
@@ -458,6 +560,84 @@ mod tests {
         // Zero becomes one pixel.
         assert_eq!(set_size(start, Some(0), Some(0), bounds), r(100.0, 50.0, 1.0, 1.0));
         assert_eq!(set_size(start, None, None, bounds), start);
+    }
+
+    fn key(key: egui::Key, modifiers: egui::Modifiers) -> egui::Event {
+        egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers }
+    }
+
+    #[test]
+    fn crop_keys_are_eagles() {
+        use egui::{Key as K, Modifiers as M};
+        let cmd = M { command: true, mac_cmd: true, ..M::NONE };
+        let cmd_shift = M { shift: true, ..cmd };
+        let bare = |k| crop_key(k, M::NONE, true);
+        assert_eq!(bare(K::ArrowLeft), Some(CropKey::Move(-1.0, 0.0)));
+        assert_eq!(bare(K::ArrowDown), Some(CropKey::Move(0.0, 1.0)));
+        assert_eq!(crop_key(K::ArrowRight, M::SHIFT, true), Some(CropKey::Move(10.0, 0.0)));
+        assert_eq!(crop_key(K::ArrowUp, M::SHIFT, true), Some(CropKey::Move(0.0, -10.0)));
+        assert_eq!(bare(K::PageUp), Some(CropKey::Move(0.0, -10.0)));
+        assert_eq!(bare(K::PageDown), Some(CropKey::Move(0.0, 10.0)));
+        assert_eq!(crop_key(K::ArrowRight, cmd, true), Some(CropKey::Resize(1.0, 0.0)));
+        assert_eq!(crop_key(K::ArrowUp, cmd, true), Some(CropKey::Resize(0.0, -1.0)));
+        assert_eq!(crop_key(K::ArrowLeft, cmd_shift, true), Some(CropKey::Resize(-10.0, 0.0)));
+        assert_eq!(crop_key(K::ArrowDown, cmd_shift, true), Some(CropKey::Resize(0.0, 10.0)));
+        assert_eq!(crop_key(K::S, cmd, true), Some(CropKey::Save));
+        // The letters are arrows too, unless a command has them.
+        assert_eq!(bare(K::W), Some(CropKey::Move(0.0, -1.0)));
+        assert_eq!(bare(K::S), Some(CropKey::Move(0.0, 1.0)));
+        assert_eq!(crop_key(K::S, M::NONE, false), None);
+        assert_eq!(crop_key(K::S, cmd, false), Some(CropKey::Save));
+        // ⌥ and other keys are left alone.
+        assert_eq!(crop_key(K::ArrowLeft, M::ALT, true), None);
+        assert_eq!(bare(K::C), None);
+    }
+
+    #[test]
+    fn crop_resize_keys_move_the_far_edges() {
+        let bounds = vec2(100.0, 100.0);
+        let start = r(10.0, 20.0, 50.0, 40.0);
+        assert_eq!(key_resize(start, 1.0, 0.0, bounds), r(10.0, 20.0, 51.0, 40.0));
+        assert_eq!(key_resize(start, 0.0, -10.0, bounds), r(10.0, 20.0, 50.0, 30.0));
+        // They stop at the image and at Eagle's smallest side.
+        assert_eq!(key_resize(start, 500.0, 500.0, bounds), r(10.0, 20.0, 90.0, 80.0));
+        assert_eq!(key_resize(r(0.0, 0.0, 30.0, 30.0), -10.0, -10.0, bounds), r(0.0, 0.0, 24.0, 24.0));
+        // A box smaller than that isn't grown by shrinking it.
+        assert_eq!(key_resize(r(0.0, 0.0, 10.0, 10.0), -1.0, -1.0, bounds), r(0.0, 0.0, 10.0, 10.0));
+        // Off whole pixels (after a mouse drag), they land on whole pixels.
+        assert_eq!(key_resize(r(1.4, 1.4, 50.0, 50.0), 1.0, 0.0, bounds), r(1.0, 1.0, 51.0, 50.0));
+    }
+
+    #[test]
+    fn crop_state_takes_its_keys_from_the_events() {
+        use egui::{Key as K, Modifiers as M};
+        let mut crop = CropState::new(100.0, 80.0);
+        crop.rect = r(10.0, 10.0, 50.0, 50.0);
+        let other = key(K::C, M::NONE);
+        let mut events = vec![
+            key(K::ArrowRight, M::NONE),
+            key(K::ArrowDown, M::SHIFT),
+            other.clone(),
+            egui::Event::Text("x".into()),
+        ];
+        assert!(crop.take_keys(&mut events, true));
+        assert_eq!(crop.rect, r(11.0, 20.0, 50.0, 50.0));
+        assert_eq!(events, [other, egui::Event::Text("x".into())], "only the crop keys are taken");
+
+        // A move stops at the image and keeps the size.
+        let mut events = vec![key(K::ArrowDown, M::SHIFT), key(K::ArrowDown, M::SHIFT)];
+        crop.take_keys(&mut events, true);
+        assert_eq!(crop.rect, r(11.0, 30.0, 50.0, 50.0));
+
+        // ⌘S asks to confirm, as the Save button does; then the box stays put
+        // and the keys are still taken.
+        let cmd = M { command: true, mac_cmd: true, ..M::NONE };
+        assert!(!crop.take_keys(&mut vec![key(K::S, cmd)], true));
+        assert!(crop.confirming);
+        let mut events = vec![key(K::ArrowLeft, M::NONE)];
+        assert!(!crop.take_keys(&mut events, true));
+        assert!(events.is_empty());
+        assert_eq!(crop.rect, r(11.0, 30.0, 50.0, 50.0));
     }
 
     #[test]

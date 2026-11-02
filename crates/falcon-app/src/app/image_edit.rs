@@ -393,7 +393,8 @@ impl App {
     }
 
     /// Keys for the viewer's tools, read before the app's own shortcuts so
-    /// Esc and Enter act on the crop tool rather than close the viewer: C
+    /// Esc, Enter and the crop tool's own keys act on it rather than on the
+    /// viewer or the grid: C
     /// toggles comment mode. Rotate left and flip are table commands
     /// (`edit.image.rotate`, `edit.image.flip`) that `keyboard` runs on the
     /// viewer's item, as it does Crop.
@@ -414,7 +415,11 @@ impl App {
         let none = Modifiers::NONE;
         if let Some(crop) = self.ws.tools.crop.as_mut() {
             let (esc, enter) = ctx.input_mut(|i| (i.consume_key(none, Key::Escape), i.consume_key(none, Key::Enter)));
+            let letters_free = [Key::W, Key::A, Key::S, Key::D].into_iter().all(|k| self.shortcuts.resolve(k, none).is_none());
             ctx.input_mut(|i| {
+                if crop.take_keys(&mut i.events, letters_free) {
+                    crop.readout_until = i.time + 1.0;
+                }
                 for k in [Key::Space, Key::ArrowLeft, Key::ArrowRight, Key::ArrowUp, Key::ArrowDown] {
                     i.consume_key(none, k);
                 }

@@ -569,6 +569,9 @@ These are the defaults. All but the arrows, Esc, Tab, Z and the viewer's C, 0, 1
 | ⇧F | Flip the viewer's image horizontally (`edit.image.flip`, rebindable; unbound means no key) |
 | ⇧C | Opens the crop tool on the viewer's image, or on the one selected item (opening the viewer); while cropping, it saves (then confirm), as Enter does. Rebindable as `edit.image.crop` |
 | Enter and Esc | While cropping, save (then confirm) or cancel |
+| Arrows, W, A, S, D | While cropping, move the box 1 px in the image, stopping at its edges; with ⇧, 10 px, as Eagle's Mousetrap keys do (the letters only with no modifier and when no command has them). Page Up and Page Down also move it 10 px, which is falcon's: in Eagle they pan the view |
+| ⌘ arrows, ⌘⇧ arrows | While cropping, resize the box 1 px or 10 px by its right and bottom edges, stopping at the image and at Eagle's 24 px (Eagle lets one press take it below 24 and the next snap back; falcon stops there) |
+| ⌘S | While cropping, save (then confirm), as Enter does. The size readout stays up a second after any of these keys, as in Eagle |
 | ⌘← and ⌘→ | With video or audio in the viewer, skip back or forward 2% of its length, at most 10 s |
 | ⌘↑ and ⌘↓ | With video or audio in the viewer, volume up or down 5% |
 | `[` and `]` (with ⇧, ten) | With video in the viewer, previous or next frame; with audio, back or forward 1/24 s |
