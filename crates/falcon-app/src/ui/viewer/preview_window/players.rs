@@ -14,6 +14,8 @@ use crate::audio::{Audio, Waveforms};
 use crate::locale::{tr, trf};
 use crate::logic;
 use crate::theme::{self as t, font, mono};
+use crate::ui::viewer::crop::ViewTransform;
+use crate::ui::viewer::image::paint_transformed;
 use crate::ui::viewer::audio::{PAUSE, PLAY, PLAYED, WAVE};
 
 /// Height of the video's seek bar.
@@ -68,8 +70,9 @@ impl VideoPane {
     }
 
     /// Draws the clip in `full`. A click on `canvas` (the window) or Space
-    /// plays and pauses; the bar along the bottom seeks.
-    pub fn show(&mut self, ui: &mut Ui, full: Rect, canvas: &egui::Response, gray: bool) {
+    /// plays and pauses; the bar along the bottom seeks. `tf` turns the
+    /// picture only, not the bar.
+    pub fn show(&mut self, ui: &mut Ui, full: Rect, canvas: &egui::Response, gray: bool, tf: ViewTransform) {
         let ctx = ui.ctx().clone();
         self.video.tick();
         let fresh = self.video.frame();
@@ -85,8 +88,8 @@ impl VideoPane {
 
         let stage = Rect::from_min_max(full.min, Pos2::new(full.right(), full.bottom() - BAR));
         let natural = match (&self.tex, info.width, info.height) {
-            (_, w, h) if w > 0 && h > 0 => vec2(w as f32, h as f32),
-            (Some(tex), ..) => tex.size_vec2(),
+            (_, w, h) if w > 0 && h > 0 => tf.size(w as f32, h as f32),
+            (Some(tex), ..) => tf.size(tex.size_vec2().x, tex.size_vec2().y),
             _ => Vec2::splat(1.0),
         };
         // Fitted, never enlarged.
@@ -94,7 +97,11 @@ impl VideoPane {
         match &self.tex {
             Some(tex) => {
                 let r = Rect::from_center_size(stage.center(), natural * fit);
-                ui.painter().image(tex.id(), r, Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)), Color32::WHITE);
+                if tf.is_identity() {
+                    ui.painter().image(tex.id(), r, Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)), Color32::WHITE);
+                } else {
+                    paint_transformed(ui.painter(), tex.id(), r, tf);
+                }
             }
             None => {
                 ui.painter().text(stage.center(), Align2::CENTER_CENTER, tr("Loading…"), font(13.0), t::p().text_muted);

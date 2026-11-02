@@ -42,6 +42,21 @@ pub fn kind_of(ext: &str) -> Kind {
     }
 }
 
+/// Where a rotate or flip in the window lands.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Turn {
+    /// The file is rewritten.
+    File,
+    /// Only the window's view turns.
+    View,
+}
+
+/// A rotate or flip rewrites the file only in write mode, never for a video,
+/// and only for a format falcon can write; otherwise the view turns.
+pub fn turn_target(mode: crate::prefs::RotateMode, video: bool, writable: bool) -> Turn {
+    if mode == crate::prefs::RotateMode::Write && !video && writable { Turn::File } else { Turn::View }
+}
+
 /// The window opacities of the Opacity menu, in percent.
 pub const OPACITIES: [u8; 10] = [100, 90, 80, 70, 60, 50, 40, 30, 20, 10];
 
@@ -77,6 +92,17 @@ pub fn key_scale(key: i32, size: (f64, f64)) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::prefs::RotateMode::{Preview, Write};
+
+    #[test]
+    fn turns_write_only_a_writable_picture_in_write_mode() {
+        assert_eq!(turn_target(Write, false, true), Turn::File);
+        assert_eq!(turn_target(Write, false, false), Turn::View);
+        assert_eq!(turn_target(Write, true, true), Turn::View);
+        assert_eq!(turn_target(Write, true, false), Turn::View);
+        assert_eq!(turn_target(Preview, false, true), Turn::View);
+        assert_eq!(turn_target(Preview, true, true), Turn::View);
+    }
 
     #[test]
     fn viewers_follow_the_extension() {

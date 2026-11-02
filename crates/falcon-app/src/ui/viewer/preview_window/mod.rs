@@ -1,7 +1,8 @@
 //! Eagle's "Open in New Window" (⌘O): the selected items in a window of
 //! their own, stepped with ← and →, a further eframe viewport like the
 //! collect window; each open makes another window. Pictures zoom and pan
-//! (with the navigator and preview-only rotate and flip); video, audio,
+//! (with the navigator); rotate and flip write to the file or only turn the
+//! view, by the rotate preference, and only turn the view of a video; video, audio,
 //! text and PDF files get a viewer of the window's own; fonts, 3D models
 //! and web pages get the main viewer's, drawn on the window's own state
 //! (the 3D scene through the same wgpu callback, which every window
@@ -18,17 +19,19 @@ use eframe::egui::{self, Color32, Pos2, Rect, Sense, TextureHandle, Ui, Vec2, ve
 use falcon_library::Library;
 use falcon_library::model::Item;
 
-use crate::app::App;
+use crate::app::image_edit::Op;
+use crate::app::{Action, App};
+use falcon_library::transform::{self, Flip};
 use crate::gesture::Outcome;
 use crate::loader::{Tier, job_for};
-use crate::locale::{tr, tr_key, trf};
+use crate::locale::{tr, trf};
 use crate::logic;
 use crate::theme as t;
 use crate::ui::dialogs::export::{CopyKind, Request};
 use crate::ui::viewer::crop::ViewTransform;
 use crate::ui::viewer::image::paint_transformed;
 use crate::ui::widgets::ext_placeholder;
-use kind::{Kind, OPACITIES, kind_of};
+use kind::{Kind, OPACITIES, Turn, kind_of, turn_target};
 
 /// The viewer an item got in the window.
 enum Pane {
@@ -84,7 +87,8 @@ pub(crate) struct PreviewWin {
     on_top: bool,
     /// The window is being closed this frame.
     close: bool,
-    /// Preview-only rotation and flip of the picture.
+    /// The view-only rotation and flip: the preview-only preference, a format
+    /// that can't be written, a video.
     tf: ViewTransform,
     /// Window opacity in percent.
     opacity: u8,
@@ -119,6 +123,11 @@ impl PreviewWin {
             custom: false,
             gesture: None,
         }
+    }
+
+    /// Rotate and flip apply: a video or the picture pane, not the other viewers.
+    fn turnable(&self) -> bool {
+        matches!(self.pane, Pane::Video(_)) || !self.custom
     }
 
     /// Moves `by` items along, stopping at either end as Eagle does. The
@@ -220,6 +229,20 @@ impl App {
             let mixer = (kind_of(&item.ext) == Kind::Video && falcon_video::ffmpeg_available()).then(|| self.audio.mixer()).flatten();
             pw.pane = Pane::open(&ctx, lib, item, self.prefs.video_autoplay, self.model3d.target.is_some(), mixer.as_ref());
         }
+        if !ctx.egui_wants_keyboard_input() {
+            use crate::shortcuts::Command as C;
+            let take = |cmd: C| self.shortcuts.chords(cmd).iter().any(|c| ctx.input_mut(|i| i.consume_shortcut(c)));
+            let (rotate, flip, gray_key) = (take(C::RotateLeft), take(C::FlipHorizontal), take(C::Grayscale));
+            if rotate && pw.turnable() {
+                self.window_rotate(pw, item, -1);
+            }
+            if flip && pw.turnable() {
+                self.window_flip(pw, item, Flip::Horizontal);
+            }
+            if gray_key {
+                self.modes.grayscale = !self.modes.grayscale;
+            }
+        }
         // The opacity belongs to the NSWindow, found by its title.
         let want = (pw.title(item), pw.opacity);
         if pw.applied.as_ref() != Some(&want) {
@@ -239,11 +262,12 @@ impl App {
         let tex = self.ws.loader.get(&item.id, Tier::Full).cloned().or_else(|| self.ws.loader.get(&item.id, Tier::Preview).cloned());
         let gray = self.modes.grayscale;
         let file = item.original_path(lib.root());
+        let tf = pw.tf;
 
         let resp = ui.interact(full, ui.scope_id().with("preview-canvas"), Sense::click_and_drag());
         pw.custom = match &mut pw.pane {
             Pane::Video(v) => {
-                v.show(ui, full, &resp, gray);
+                v.show(ui, full, &resp, gray, tf);
                 true
             }
             Pane::Audio(a) => {
@@ -357,6 +381,29 @@ impl App {
     }
 
     /// The window's right-click menu; returns what to do after it closes.
+    /// A rotate in the window: the file in write mode, else the view.
+    fn window_rotate(&mut self, pw: &mut PreviewWin, item: &Item, turns: i32) {
+        let video = matches!(pw.pane, Pane::Video(_));
+        match turn_target(self.prefs.rotate_mode, video, transform::can_rotate(&item.ext)) {
+            Turn::File => self.ws.actions.push(Action::Edit(Op::Rotate(vec![item.id.clone()], turns))),
+            Turn::View => pw.tf = pw.tf.rotated(turns),
+        }
+    }
+
+    /// A flip in the window: the file in write mode, else the view.
+    fn window_flip(&mut self, pw: &mut PreviewWin, item: &Item, flip: Flip) {
+        let video = matches!(pw.pane, Pane::Video(_));
+        match turn_target(self.prefs.rotate_mode, video, transform::can_flip(&item.ext)) {
+            Turn::File => self.ws.actions.push(Action::Edit(Op::Flip(vec![item.id.clone()], flip))),
+            Turn::View => {
+                pw.tf = match flip {
+                    Flip::Horizontal => pw.tf.flipped_h(),
+                    Flip::Vertical => pw.tf.flipped_v(),
+                }
+            }
+        }
+    }
+
     fn window_menu(&mut self, ui: &mut Ui, pw: &mut PreviewWin, item: &Item, file: &std::path::Path) -> Option<Act> {
         let mut act = None;
         ui.set_min_width(200.0);
@@ -374,7 +421,8 @@ impl App {
                 }
             }
         });
-        if ui.add(egui::Button::new(tr("Grayscale")).selected(self.modes.grayscale)).clicked() {
+        let gray_keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::Grayscale);
+        if ui.add(egui::Button::new(tr("Grayscale")).selected(self.modes.grayscale).shortcut_text(gray_keys)).clicked() {
             self.modes.grayscale = !self.modes.grayscale;
             ui.close();
         }
@@ -393,17 +441,26 @@ impl App {
                 self.modes.hide_navigator = !self.modes.hide_navigator;
                 ui.close();
             }
+        }
+        if pw.turnable() {
+            use crate::shortcuts::Command as C;
             ui.separator();
-            for (label, to) in [
-                (tr_key("Rotate Left"), pw.tf.rotated(-1)),
-                (tr_key("Rotate Right"), pw.tf.rotated(1)),
-                (tr_key("Flip Horizontal"), pw.tf.flipped_h()),
-                (tr_key("Flip Vertical"), pw.tf.flipped_v()),
-            ] {
-                if ui.button(tr(label)).clicked() {
-                    pw.tf = to;
-                    ui.close();
-                }
+            let (rot_keys, flip_keys) = (self.shortcut_text(ui.ctx(), C::RotateLeft), self.shortcut_text(ui.ctx(), C::FlipHorizontal));
+            if ui.add(egui::Button::new(tr("Rotate Left")).shortcut_text(rot_keys)).clicked() {
+                self.window_rotate(pw, item, -1);
+                ui.close();
+            }
+            if ui.button(tr("Rotate Right")).clicked() {
+                self.window_rotate(pw, item, 1);
+                ui.close();
+            }
+            if ui.add(egui::Button::new(tr("Flip Horizontal")).shortcut_text(flip_keys)).clicked() {
+                self.window_flip(pw, item, Flip::Horizontal);
+                ui.close();
+            }
+            if ui.button(tr("Flip Vertical")).clicked() {
+                self.window_flip(pw, item, Flip::Vertical);
+                ui.close();
             }
         }
         ui.separator();
@@ -629,6 +686,14 @@ mod tests {
         assert_eq!(window_size((4000.0, 2000.0)), vec2(1000.0, 500.0));
         assert_eq!(window_size((100.0, 50.0)), vec2(320.0, 240.0));
         assert_eq!(window_size((0.0, 0.0)), vec2(320.0, 240.0));
+    }
+
+    #[test]
+    fn turning_applies_to_the_picture_and_video_only() {
+        let mut w = PreviewWin::new(vec!["a".into()], 1);
+        assert!(w.turnable());
+        w.custom = true;
+        assert!(!w.turnable());
     }
 
     #[test]
