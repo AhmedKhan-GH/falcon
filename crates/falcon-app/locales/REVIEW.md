@@ -186,6 +186,7 @@ The core words, so every file uses one term for one thing.
 - "Reset Cover", "Use the default cover again", "Reset folder cover" and "Reset the cover of {name}", the folder menu entry that clears a custom cover (machine-written).
 - "The viewer opens images in" and "Comment mode", the Preferences ▸ Preview radios for the default viewer mode; "Preview" was already translated (machine-written).
 - "No notifications", "Notification Center" (the Window menu item and window title) and "Show or hide the Notification Center" (its shortcut row), machine-written. German uses Mitteilungszentrale, Spanish and Russian centro / центр de notificaciones / уведомлений, Japanese 通知センター, Korean 알림 센터, as the systems do.
+- The tips overlay (Help ▸ Show Tips and the first-run tips, `tips.rs`): six titles and sentences with a `{key}` placeholder for the live key, and "{n} of {total}". They name the File ▸ New Smart Folder menu path, which must match each language's menu wording; ko puts 을(를) after `{key}` (machine-written).
 
 ## Reviewed
 

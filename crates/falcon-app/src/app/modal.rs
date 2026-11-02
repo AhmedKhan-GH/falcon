@@ -12,6 +12,7 @@ impl App {
         let lib = ws.lib.is_some();
         self.prefs_window.open
             || self.about.open
+            || self.tips.open
             || self.quick.is_open()
             || self.item_rename.is_some()
             || self.pack_ask.is_some()

@@ -198,6 +198,8 @@ pub enum Command {
     RotateLeft,
     WindowZoom,
     Documentation,
+    /// Help ▸ Show Tips (falcon addition, no key).
+    ShowTips,
     /// Eagle's Enter / Leave Presentation Mode: the viewer full screen.
     Presentation,
     /// Eagle's View ▸ Always on Top for the main window.
@@ -1549,7 +1551,7 @@ mod tests {
     #[test]
     fn menu_only_commands_have_no_keys() {
         let keys = Shortcuts::default();
-        for cmd in [Command::Undo, Command::Redo, Command::Cut, Command::Import, Command::FindDuplicates, Command::WindowZoom, Command::Documentation, Command::ErrorLogs, Command::About, Command::DebugReport, Command::ColorSpace(crate::colorspace::ColorSpace::Srgb)] {
+        for cmd in [Command::Undo, Command::Redo, Command::Cut, Command::Import, Command::FindDuplicates, Command::WindowZoom, Command::Documentation, Command::ShowTips, Command::ErrorLogs, Command::About, Command::DebugReport, Command::ColorSpace(crate::colorspace::ColorSpace::Srgb)] {
             assert!(find_spec(cmd).is_none());
             assert_eq!(keys.binding(cmd), None);
             assert!(keys.chords(cmd).is_empty());

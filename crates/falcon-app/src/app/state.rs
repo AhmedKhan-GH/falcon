@@ -96,6 +96,8 @@ pub(crate) struct Saved {
     pub(crate) welcomed: bool,
     /// The Notification Center's list, for every library.
     pub(crate) notices: crate::notice_history::History,
+    /// The first-run tips were shown and dismissed.
+    pub(crate) tips_seen: bool,
 }
 
 /// An inspector section whose title folds it away.
@@ -579,6 +581,7 @@ impl App {
             tag_look: self.tag_look,
             welcomed: self.welcomed,
             notices: self.notices.clone(),
+            tips_seen: self.tips_seen,
         };
         eframe::set_value(storage, eframe::APP_KEY, &saved);
     }

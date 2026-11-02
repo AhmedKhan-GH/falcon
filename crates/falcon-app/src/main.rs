@@ -62,6 +62,7 @@ mod text_cards;
 mod textdoc;
 mod psd_status;
 mod tiff_pages;
+mod tips;
 mod toast;
 mod touch_id;
 mod tray;

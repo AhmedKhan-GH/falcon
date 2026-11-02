@@ -781,6 +781,7 @@ impl App {
             C::OpenNewWindow => self.open_preview_window(),
 
             C::About => self.about.open = true,
+            C::ShowTips => self.tips.show(),
             C::ColorSpace(c) => self.prefs.color_space = c,
             C::DebugReport => self.export_debug_report(ctx),
             C::ErrorLogs => {

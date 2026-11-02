@@ -113,6 +113,10 @@ pub struct App {
     /// Whether the welcome flow has been finished (or skipped by having
     /// used falcon before).
     pub(crate) welcomed: bool,
+    /// The first-run tips were dismissed once (`tips.rs`).
+    pub(crate) tips_seen: bool,
+    /// The tips overlay (`ui/dialogs/tips.rs`).
+    pub(crate) tips: crate::tips::TipsState,
     pub(crate) prefs: crate::prefs::Prefs,
     pub(crate) vibrancy: crate::vibrancy::Vibrancy,
     /// Search scope, pinned filters and Go to Folder history.
@@ -258,6 +262,8 @@ impl App {
             switch_to: None,
             dialogs: Default::default(),
             welcomed: true,
+            tips_seen: true,
+            tips: Default::default(),
             prefs: Default::default(),
             vibrancy: Default::default(),
             search: Default::default(),
@@ -308,6 +314,7 @@ impl App {
         };
         let saved: Saved = cc.storage.and_then(|s| eframe::get_value(s, eframe::APP_KEY)).unwrap_or_default();
         app.welcomed = crate::ui::dialogs::library::already_welcomed(saved.welcomed, saved.recent.len(), saved.libraries.len(), saved.library.is_some());
+        app.tips_seen = saved.tips_seen;
         app.tile = saved.tile.unwrap_or(app.tile).clamp(TILE_MIN, TILE_MAX);
         app.ws.sort = saved.sort.as_deref().and_then(|l| OrderBy::ALL.into_iter().find(|o| o.label() == l)).unwrap_or(app.ws.sort);
         app.ws.increase = saved.increase.unwrap_or(app.ws.increase);
@@ -516,6 +523,7 @@ impl App {
         self.import_links_ui(&ctx);
         self.about_ui(&ctx);
         self.notice_history_ui(&ctx);
+        self.tips_ui(&ctx);
         self.library_dialogs(&ctx);
         if self.collect.open {
             self.collect_window(&ctx);
