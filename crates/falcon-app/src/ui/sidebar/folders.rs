@@ -342,6 +342,9 @@ impl App {
         crate::ui::menus::search::submenu(ui, tr("Change Icon"), |ui| {
             if let Some(pick) = icon_grid(ui, icon.flatten(), tint, false) {
                 self.ws.actions.push(act(FolderAction::Restyle(ids.clone(), Some(pick), None)));
+                for id in &ids {
+                    self.folder_emoji.store.clear(id);
+                }
                 ui.close();
             }
         });
@@ -391,6 +394,9 @@ impl App {
         crate::ui::menus::search::submenu(ui, tr("Change Icon"), |ui| {
             if let Some(pick) = icon_grid(ui, icon.flatten(), tint, true) {
                 self.ws.actions.push(act(FolderAction::RestyleSmart(ids.clone(), Some(pick), None)));
+                for id in &ids {
+                    self.folder_emoji.store.clear(id);
+                }
                 ui.close();
             }
         });

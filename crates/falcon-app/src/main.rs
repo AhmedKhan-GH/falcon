@@ -15,6 +15,8 @@ mod dock_progress;
 mod drop_pos;
 mod debug_report;
 mod errlog;
+mod folder_emoji;
+mod folder_emoji_tex;
 mod folder_icons;
 mod font_install;
 mod gesture;

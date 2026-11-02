@@ -132,6 +132,23 @@ pub(crate) fn sidebar_row_tinted(
     active: bool,
     caret: Option<bool>,
 ) -> Response {
+    sidebar_row_emoji(ui, depth, glyph, tint, None, label, count, active, caret)
+}
+
+/// A sidebar row whose icon is `emoji`, a folder's emoji texture, when
+/// there is one, and otherwise `glyph` in `tint`.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn sidebar_row_emoji(
+    ui: &mut Ui,
+    depth: usize,
+    glyph: &str,
+    tint: Color32,
+    emoji: Option<&egui::TextureHandle>,
+    label: &str,
+    count: Option<usize>,
+    active: bool,
+    caret: Option<bool>,
+) -> Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), t::ROW_HEIGHT), Sense::click_and_drag());
     let ix = rect.left() + icon_x(depth);
     let bg = Rect::from_min_max(Pos2::new(ix - 14.0, rect.top() + 0.5), Pos2::new(rect.right() - 11.0, rect.bottom() - 0.5));
@@ -151,8 +168,12 @@ pub(crate) fn sidebar_row_tinted(
         };
         p.add(egui::Shape::convex_polygon(pts, t::p().text_muted, Stroke::NONE));
     }
-    let size = if crate::folder_icons::is_text(glyph) { 11.0 } else { 18.0 };
-    p.text(Pos2::new(ix, rect.center().y), Align2::CENTER_CENTER, glyph, font(size), tint);
+    if let Some(tex) = emoji {
+        egui::Image::new(tex).paint_at(ui, Rect::from_center_size(Pos2::new(ix, rect.center().y), Vec2::splat(16.0)));
+    } else {
+        let size = if crate::folder_icons::is_text(glyph) { 11.0 } else { 18.0 };
+        p.text(Pos2::new(ix, rect.center().y), Align2::CENTER_CENTER, glyph, font(size), tint);
+    }
     let count_w = if count.is_some() { 30.0 } else { 0.0 };
     let g = galley(ui, label, font(13.5), t::p().text, rect.right() - 20.0 - count_w - (ix + 15.0));
     p.galley(Pos2::new(ix + 15.0, rect.center().y - g.size().y / 2.0), g, t::p().text);
@@ -439,7 +460,8 @@ impl App {
                         (ic::FOLDER, f.name.clone(), Scope::Folder(id.to_string()), cx.folder_counts.get(id).copied().unwrap_or(0))
                     };
                     let active = self.ws.scope == scope;
-                    let resp = sidebar_row(ui, 0, glyph, &name, self.badge(count), active, None);
+                    let emoji = self.folder_emoji.for_folder(ui.ctx(), id);
+                    let resp = sidebar_row_emoji(ui, 0, glyph, t::p().text, emoji.as_ref(), &name, self.badge(count), active, None);
                     self.side_row(scope.clone(), &resp);
                     if kind != "smartFolder" {
                         self.imports.note_row(ui, resp.rect, id);
@@ -633,7 +655,8 @@ impl App {
         let (glyph, tint) = App::folder_look(f, open);
         let renaming = self.ws.renaming.as_ref().is_some_and(|(id, _)| *id == f.id);
         let label = if renaming { "" } else { f.name.as_str() };
-        let resp = sidebar_row_tinted(ui, depth, glyph, tint, label, count, active, has_children.then_some(open));
+        let emoji = self.folder_emoji.for_folder(ui.ctx(), &f.id);
+        let resp = sidebar_row_emoji(ui, depth, glyph, tint, emoji.as_ref(), label, count, active, has_children.then_some(open));
         self.side_row(Scope::Folder(f.id.clone()), &resp);
         let row_rect = resp.rect;
         self.imports.note_row(ui, row_rect, &f.id);

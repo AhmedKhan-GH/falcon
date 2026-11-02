@@ -9,6 +9,7 @@ pub(crate) mod color_picker;
 pub(crate) mod capture_notice;
 pub(crate) mod toast;
 pub(crate) mod organize;
+pub(crate) mod emoji_menu;
 pub(crate) mod sidebar;
 pub(crate) mod inspector;
 pub(crate) mod viewer;

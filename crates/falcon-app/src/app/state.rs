@@ -98,6 +98,8 @@ pub(crate) struct Saved {
     pub(crate) notices: crate::notice_history::History,
     /// The first-run tips were shown and dismissed.
     pub(crate) tips_seen: bool,
+    /// Emoji chosen as folder icons, kept here and not in the library.
+    pub(crate) folder_emoji: crate::folder_emoji::FolderEmoji,
 }
 
 /// An inspector section whose title folds it away.
@@ -234,6 +236,8 @@ pub(crate) struct SmartDraft {
     pub(crate) orig_parent: Option<String>,
     pub(crate) icon: Option<String>,
     pub(crate) color: Option<String>,
+    /// An icon was picked in the dialog, so a folder's emoji gives way to it.
+    pub(crate) icon_picked: bool,
     /// The live "N items found" count (`smart_count.rs`).
     pub(crate) live: crate::smart_count::LiveCount,
 }
@@ -248,6 +252,7 @@ impl Default for SmartDraft {
             orig_parent: None,
             icon: None,
             color: None,
+            icon_picked: false,
             live: Default::default(),
         }
     }
@@ -582,6 +587,7 @@ impl App {
             welcomed: self.welcomed,
             notices: self.notices.clone(),
             tips_seen: self.tips_seen,
+            folder_emoji: self.folder_emoji.store.clone(),
         };
         eframe::set_value(storage, eframe::APP_KEY, &saved);
     }

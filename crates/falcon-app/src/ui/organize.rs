@@ -12,7 +12,7 @@ use falcon_library::Library;
 
 use crate::app::{Action, App, Confirm, DragFolder, DragItems, DragQuick, SmartDraft};
 use crate::app::navigation::fastrand_seed;
-use crate::ui::sidebar::{caret_rect, icon_x, sidebar_row_tinted};
+use crate::ui::sidebar::{caret_rect, icon_x, sidebar_row_emoji};
 use falcon_library::search::{OrderBy, TextFilter};
 use crate::icons as ic;
 use crate::locale::{tr, tr_n, trf};
@@ -504,9 +504,11 @@ impl App {
         crate::ui::menus::search::submenu(ui, tr("Change Icon"), |ui| {
             if let Some(icon) = icon_grid(ui, f.icon.as_deref(), tint, false) {
                 self.ws.actions.push(org(OrgAction::FolderIcon(f.id.clone(), icon, f.icon_color.clone())));
+                self.folder_emoji.store.clear(&f.id);
                 ui.close();
             }
         });
+        self.emoji_submenu(ui, &f.id);
         if let Some(color) = color_row(ui, f.icon_color.as_deref()) {
             self.ws.actions.push(org(OrgAction::FolderIcon(f.id.clone(), f.icon.clone(), color)));
             ui.close();
@@ -551,7 +553,8 @@ impl App {
         let tint = folder_icons::color(sf.icon_color.as_deref()).unwrap_or(t::p().text);
         let renaming = self.ws.org.smart_rename.as_ref().is_some_and(|(id, _)| *id == sf.id);
         let label = if renaming { "" } else { sf.name.as_str() };
-        let resp = sidebar_row_tinted(ui, depth, glyph, tint, label, self.badge(count), active, has_children.then_some(open));
+        let emoji = self.folder_emoji.for_folder(ui.ctx(), &sf.id);
+        let resp = sidebar_row_emoji(ui, depth, glyph, tint, emoji.as_ref(), label, self.badge(count), active, has_children.then_some(open));
         self.side_row(Scope::Smart(sf.id.clone()), &resp);
         let row = resp.rect;
         if renaming {
@@ -647,9 +650,11 @@ impl App {
             crate::ui::menus::search::submenu(ui, tr("Change Icon"), |ui| {
                 if let Some(icon) = icon_grid(ui, sf.icon.as_deref(), tint, true) {
                     self.ws.actions.push(org(OrgAction::SmartIcon(sf.id.clone(), icon, sf.icon_color.clone())));
+                    self.folder_emoji.store.clear(&sf.id);
                     ui.close();
                 }
             });
+            self.emoji_submenu(ui, &sf.id);
             if let Some(color) = color_row(ui, sf.icon_color.as_deref()) {
                 self.ws.actions.push(org(OrgAction::SmartIcon(sf.id.clone(), sf.icon.clone(), color)));
                 ui.close();
@@ -774,6 +779,7 @@ impl App {
             ui.menu_button(RichText::new(glyph).size(16.0).color(tint), |ui| {
                 if let Some(icon) = icon_grid(ui, d.icon.as_deref(), tint, true) {
                     d.icon = icon;
+                    d.icon_picked = true;
                     ui.close();
                 }
             });
@@ -791,6 +797,9 @@ impl App {
             Some(id) => {
                 self.ws.actions.push(Action::UpdateSmart(id.clone(), name, conditions));
                 self.ws.actions.push(org(OrgAction::SmartIcon(id.clone(), d.icon.clone(), d.color.clone())));
+                if d.icon_picked {
+                    self.folder_emoji.store.clear(&id);
+                }
                 if d.parent != d.orig_parent {
                     self.ws.actions.push(org(OrgAction::MoveSmart(id, d.parent.clone(), usize::MAX)));
                 }
