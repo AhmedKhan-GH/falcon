@@ -1040,6 +1040,7 @@
   "New Subfolder": "새 하위 폴더",
   "New Subfolder…": "새 하위 폴더…",
   "New Text File": "새 텍스트 파일",
+  "New document": "새 문서",
   "New files are imported once they stop growing; the originals stay where they are. Files under 1 KB, temporary (.tmp) files and files without an extension are skipped.": "새 파일은 크기가 더 이상 늘어나지 않으면 가져오며, 원본은 그대로 둡니다. 1 KB 미만 파일, 임시(.tmp) 파일, 확장자가 없는 파일은 건너뜁니다.",
   "New folder": "새 폴더",
   "New folder with {n} items": {

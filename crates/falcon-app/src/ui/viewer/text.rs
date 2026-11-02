@@ -21,6 +21,7 @@ use crate::icons as ic;
 use crate::locale::{tr, trf};
 use crate::logic::ViewZoom;
 use crate::textdoc::{self, Autosave};
+use falcon_library::templates::Template;
 use crate::theme::{self as t, font};
 
 /// Eagle's page: at most 920 points wide, 30 points of padding.
@@ -351,26 +352,29 @@ impl App {
         }
     }
 
-    /// File ▸ New ▸ Text File, as Eagle's `newFileFromTemplate("txt")`:
-    /// an empty file named "Untitled.txt" is imported into the open folder
-    /// (taking its auto-tags), then opened in the viewer with the cursor in
-    /// the text. The blank file is made in a temporary folder of its own
-    /// and removed once imported.
-    pub(crate) fn new_text_file(&mut self, lib: &mut Library, folders: Vec<String>) -> falcon_library::Result<()> {
+    /// File ▸ New…: a blank document of `template` named "Untitled" plus its
+    /// extension is imported into the open folder (taking its auto-tags), as
+    /// Eagle's New menu does. A text file then opens in the viewer with the
+    /// cursor in the text; the other documents are selected in the grid. The
+    /// blank file is made in a temporary folder of its own and removed once
+    /// imported.
+    pub(crate) fn new_document(&mut self, lib: &mut Library, template: Template, folders: Vec<String>) -> falcon_library::Result<()> {
         // Typing in the text open now is saved before it is replaced.
         if let Some(open) = &mut self.ws.text {
             open.save(lib)?;
         }
         let dir = std::env::temp_dir().join("falcon-new").join(falcon_library::ids::new_id());
-        let file = dir.join(textdoc::NEW_FILE_NAME);
-        let made = std::fs::create_dir_all(&dir).and_then(|()| std::fs::write(&file, b""));
+        let file = dir.join(template.file_name());
+        let made = std::fs::create_dir_all(&dir).and_then(|()| std::fs::write(&file, template.bytes()));
         let id = made.map_err(|source| falcon_library::Error::Io { path: file.clone(), source }).and_then(|()| lib.import_file(&file, &self.prefs.import_options(folders)));
         let _ = std::fs::remove_dir_all(&dir);
         let id = id?;
-        let mut view = TextView::open(&id, &lib.item(&id).map(|i| i.original_path(lib.root())).unwrap_or_default());
-        view.focus = true;
-        self.ws.text = Some(view);
-        self.ws.viewer = Some(id.clone());
+        if template == Template::Text {
+            let mut view = TextView::open(&id, &lib.item(&id).map(|i| i.original_path(lib.root())).unwrap_or_default());
+            view.focus = true;
+            self.ws.text = Some(view);
+            self.ws.viewer = Some(id.clone());
+        }
         self.ws.selected = vec![id.clone()];
         self.ws.anchor = Some(id.clone());
         self.ws.scroll_to = Some(id);

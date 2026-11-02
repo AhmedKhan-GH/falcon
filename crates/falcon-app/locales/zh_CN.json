@@ -1040,6 +1040,7 @@
   "New Subfolder": "新建子文件夹",
   "New Subfolder…": "新建子文件夹…",
   "New Text File": "新建文本文件",
+  "New document": "新建文档",
   "New files are imported once they stop growing; the originals stay where they are. Files under 1 KB, temporary (.tmp) files and files without an extension are skipped.": "新文件在停止增长后导入，原文件保持原位。小于 1 KB 的文件、临时（.tmp）文件和没有扩展名的文件会被跳过。",
   "New folder": "新建文件夹",
   "New folder with {n} items": {

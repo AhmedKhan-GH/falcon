@@ -482,3 +482,19 @@ fn merging_duplicates_keeps_one_combines_the_rest_and_undoes() {
         assert!(now.original_path(&root).is_file());
     }
 }
+
+#[test]
+fn blank_documents_from_templates_import_as_their_formats() {
+    use falcon_library::templates::Template;
+    let dir = tempfile::tempdir().unwrap();
+    let mut lib = Library::create(dir.path().join("T.library")).unwrap();
+    for t in Template::ALL {
+        let src = dir.path().join("src").join(format!("{:?}", t));
+        std::fs::create_dir_all(&src).unwrap();
+        let file = src.join(t.file_name());
+        std::fs::write(&file, t.bytes()).unwrap();
+        let id = lib.import_file(&file, &Default::default()).unwrap();
+        let item = lib.item(&id).unwrap();
+        assert_eq!((item.name.as_str(), item.ext.as_str()), ("Untitled", t.ext()));
+    }
+}

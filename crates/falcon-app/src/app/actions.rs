@@ -90,8 +90,8 @@ pub(crate) enum Action {
     Background(Vec<String>, Option<logic::ThumbBg>),
     /// An item renamed from the text viewer's title.
     RenameItem(String, String),
-    /// File ▸ New ▸ Text File, into these folders.
-    NewTextFile(Vec<String>),
+    /// File ▸ New…: a blank document from a template, into these folders.
+    NewDocument(falcon_library::templates::Template, Vec<String>),
     /// The Duplicates page's merge: each kept item takes its group's
     /// values and the rest go to the Trash (`falcon_library::merge`).
     MergeDuplicates(Vec<falcon_library::merge::Merge>),
@@ -159,7 +159,7 @@ pub(crate) fn action_label(action: &Action) -> String {
         Action::Edit(op) => op.label(),
         Action::Folders(a) => a.label(),
         Action::RenameItem(..) => tr("Rename").into(),
-        Action::NewTextFile(_) => tr("New text file").into(),
+        Action::NewDocument(..) => tr("New document").into(),
         Action::RunSteps(run) => crate::actions::app::run_label(run),
     }
 }
@@ -498,7 +498,7 @@ impl App {
                     }
                     r
                 }
-                Action::NewTextFile(folders) => self.new_text_file(lib, folders),
+                Action::NewDocument(template, folders) => self.new_document(lib, template, folders),
                 Action::RunSteps(run) => self.apply_run(lib, run),
                 Action::RenameItem(id, name) => match lib.item(&id).cloned() {
                     Some(mut item) => {

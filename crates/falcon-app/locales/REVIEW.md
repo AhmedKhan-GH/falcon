@@ -176,6 +176,7 @@ The core words, so every file uses one term for one thing.
 - "IFC: web-ifc could not read this file", the inspector's 3D Preview row when web-ifc failed on a file and falcon's own reader took over (machine-written).
 - "Render" and its four "QuickLook, ..." reasons, the inspector's row when a PSD falls back to QuickLook; "merged image" is Photoshop's flattened composite (machine-written).
 - "Color Space" and "Unmanaged", the App menu's colour space submenu (sRGB and Display P3 are names and stay as they are; machine-written).
+- "New document", the undo label for a blank document made from File ▸ New… (machine-written).
 
 ## Reviewed
 

@@ -1040,6 +1040,7 @@
   "New Subfolder": "新規サブフォルダ",
   "New Subfolder…": "新規サブフォルダ…",
   "New Text File": "新規テキストファイル",
+  "New document": "新規書類",
   "New files are imported once they stop growing; the originals stay where they are. Files under 1 KB, temporary (.tmp) files and files without an extension are skipped.": "新しいファイルは、サイズが増えなくなってから読み込まれ、元のファイルはそのまま残ります。1 KB未満のファイル、一時ファイル（.tmp）、拡張子のないファイルはスキップされます。",
   "New folder": "新規フォルダ",
   "New folder with {n} items": {

@@ -1100,6 +1100,7 @@
   "New Subfolder": "Neuer Unterordner",
   "New Subfolder…": "Neuer Unterordner …",
   "New Text File": "Neue Textdatei",
+  "New document": "Neues Dokument",
   "New files are imported once they stop growing; the originals stay where they are. Files under 1 KB, temporary (.tmp) files and files without an extension are skipped.": "Neue Dateien werden importiert, sobald sie nicht mehr wachsen; die Originale bleiben an ihrem Ort. Dateien unter 1 KB, temporäre Dateien (.tmp) und Dateien ohne Endung werden übersprungen.",
   "New folder": "Neuer Ordner",
   "New folder with {n} items": {

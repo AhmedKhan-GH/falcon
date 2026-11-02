@@ -1100,6 +1100,7 @@
   "New Subfolder": "Nueva subcarpeta",
   "New Subfolder…": "Nueva subcarpeta…",
   "New Text File": "Nuevo archivo de texto",
+  "New document": "Nuevo documento",
   "New files are imported once they stop growing; the originals stay where they are. Files under 1 KB, temporary (.tmp) files and files without an extension are skipped.": "Los archivos nuevos se importan cuando dejan de crecer; los originales se quedan donde están. Se omiten los archivos de menos de 1 KB, los temporales (.tmp) y los que no tienen extensión.",
   "New folder": "Carpeta nueva",
   "New folder with {n} items": {

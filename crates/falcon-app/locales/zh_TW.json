@@ -1040,6 +1040,7 @@
   "New Subfolder": "新增子資料夾",
   "New Subfolder…": "新增子資料夾…",
   "New Text File": "新增文字檔",
+  "New document": "新增文件",
   "New files are imported once they stop growing; the originals stay where they are. Files under 1 KB, temporary (.tmp) files and files without an extension are skipped.": "新檔案在停止增長後匯入，原始檔案保持原位。小於 1 KB 的檔案、暫存（.tmp）檔案和沒有副檔名的檔案會被略過。",
   "New folder": "新增資料夾",
   "New folder with {n} items": {

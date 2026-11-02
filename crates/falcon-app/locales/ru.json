@@ -1160,6 +1160,7 @@
   "New Subfolder": "Новая вложенная папка",
   "New Subfolder…": "Новая вложенная папка…",
   "New Text File": "Новый текстовый файл",
+  "New document": "Новый документ",
   "New files are imported once they stop growing; the originals stay where they are. Files under 1 KB, temporary (.tmp) files and files without an extension are skipped.": "Новые файлы импортируются, когда перестают расти; оригиналы остаются на месте. Файлы меньше 1 КБ, временные (.tmp) и без расширения пропускаются.",
   "New folder": "Новая папка",
   "New folder with {n} items": {

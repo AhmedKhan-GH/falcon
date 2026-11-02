@@ -6,10 +6,6 @@ use std::ops::Range;
 
 use crate::locale::tr_key;
 
-/// The file File ▸ New ▸ Text File imports: Eagle's blank template is an
-/// empty `Untitled.txt`.
-pub const NEW_FILE_NAME: &str = "Untitled.txt";
-
 /// Eagle saves half a second after the last key press.
 pub const AUTOSAVE_DELAY: f64 = 0.5;
 

@@ -543,7 +543,7 @@ impl App {
             C::NewMenu => self.request_new_menu(),
             C::NewTextFile => {
                 let folders = self.scope_folders();
-                self.ws.actions.push(Action::NewTextFile(folders));
+                self.ws.actions.push(Action::NewDocument(falcon_library::templates::Template::Text, folders));
             }
             C::Copy => self.copy_selection(),
             C::Paste => self.paste(),
