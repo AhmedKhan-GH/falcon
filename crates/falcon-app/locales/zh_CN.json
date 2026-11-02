@@ -2081,6 +2081,9 @@
     "other": "{name}更改了{n}个项目"
   },
   "{name} may not save changes": "“{name}”可能无法存储更改",
+  "{name} now has {n} items": {
+    "other": "{name}现有{n}个项目"
+  },
   "{name} was last saved by Eagle {version}. Falcon reads libraries up to Eagle {supported}, so it won't open or change this one. Open it in Eagle, or use a newer falcon.": "“{name}”上次由 Eagle {version}存储。Falcon 只能读取 Eagle {supported}及更早版本的资源库，因此不会打开或修改它。请在 Eagle 中打开，或使用更新的 falcon。",
   "{name}: {n} folders no longer exist and were skipped": {
     "other": "{name}：有{n}个文件夹已不存在，已跳过"

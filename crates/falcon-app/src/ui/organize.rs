@@ -604,6 +604,12 @@ impl App {
                     }
                 });
             }
+            // Reloads the library from disk and shows the fresh count; a
+            // group has no count.
+            if !group && ui.button(tr("Refresh")).clicked() {
+                self.refresh_smart = Some(sf.id.clone());
+                ui.close();
+            }
             // A group has no rules to edit.
             if !group && ui.button(tr("Edit Rules…")).clicked() {
                 let parent = organize::locate(roots, &sf.id).and_then(|(p, _)| p).map(str::to_string);

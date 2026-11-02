@@ -159,6 +159,8 @@ pub struct App {
     /// Reload the shown library from disk next frame (the layout panel's
     /// Refresh).
     pub(crate) refresh: bool,
+    /// Reload the library next frame for this smart folder's Refresh.
+    pub(crate) refresh_smart: Option<String>,
     /// The text viewer's zoom level, kept across items and launches.
     pub(crate) text_zoom: u8,
     /// Inspector sections folded away (`Folds`).
@@ -276,6 +278,7 @@ impl App {
             legacy_layout: None,
             display: Default::default(),
             refresh: false,
+            refresh_smart: None,
             text_zoom: 0,
             folds: Folds::default(),
             tag_look: Default::default(),
@@ -463,6 +466,9 @@ impl App {
         }
         if std::mem::take(&mut self.refresh) {
             self.refresh_library();
+        }
+        if let Some(id) = self.refresh_smart.take() {
+            self.refresh_smart_folder(&id);
         }
         if std::mem::take(&mut self.conflict_reload) {
             self.reload_after_conflict();

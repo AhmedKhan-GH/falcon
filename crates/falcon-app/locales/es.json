@@ -2189,6 +2189,10 @@
     "other": "{name} cambió {n} elementos"
   },
   "{name} may not save changes": "{name} podría no guardar los cambios",
+  "{name} now has {n} items": {
+    "one": "{name} tiene ahora {n} elemento",
+    "other": "{name} tiene ahora {n} elementos"
+  },
   "{name} was last saved by Eagle {version}. Falcon reads libraries up to Eagle {supported}, so it won't open or change this one. Open it in Eagle, or use a newer falcon.": "{name} se guardó por última vez con Eagle {version}. Falcon lee bibliotecas hasta Eagle {supported}, así que no abrirá ni modificará esta. Ábrela en Eagle o usa un falcon más reciente.",
   "{name}: {n} folders no longer exist and were skipped": {
     "one": "{name}: {n} carpeta ya no existe y se omitió",

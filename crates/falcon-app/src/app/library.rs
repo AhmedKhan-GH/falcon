@@ -10,7 +10,7 @@ use falcon_library::Library;
 
 use super::navigation::fastrand_seed;
 use super::{App, Shared, Workspace, lock};
-use crate::locale::{tr, tr_n, trf};
+use crate::locale::{tr, tr_n, tr_nf, trf};
 use crate::logic::{self, Scope};
 use crate::ui::dialogs::library_notices::Alert;
 use crate::ui::sidebar::smart_has;
@@ -350,10 +350,43 @@ impl App {
     /// library again from disk, decodes its thumbnails again and reshuffles
     /// random orders, keeping the view and selection.
     pub(crate) fn refresh_library(&mut self) {
-        let (Some(shared), Some(root)) = (self.ws.lib.clone(), self.ws.root.clone()) else { return };
+        if self.reload_library() {
+            self.flash_brief(tr("Refreshed"));
+        }
+    }
+
+    /// A smart folder's Refresh (a falcon addition): the same reload, then a
+    /// toast with the folder's name and its fresh item count. The view and
+    /// selection stay as they were.
+    pub(crate) fn refresh_smart_folder(&mut self, id: &str) {
+        if !self.reload_library() {
+            return;
+        }
+        let found = self.ws.lib.as_ref().and_then(|shared| {
+            let lib = lock(shared);
+            let mut name = None;
+            for root in lib.smart_folders() {
+                root.walk(&mut Vec::new(), &mut |f, _| {
+                    if f.id == id {
+                        name = Some(f.name.clone());
+                    }
+                });
+            }
+            Some((name?, lib.smart_folder_items(id).len()))
+        });
+        match found {
+            Some((name, n)) => self.flash(smart_refreshed_text(&name, n)),
+            None => self.flash_brief(tr("Refreshed")),
+        }
+    }
+
+    /// Writes anything pending and reads the library again. False (after an
+    /// error toast) when it could not.
+    fn reload_library(&mut self) -> bool {
+        let (Some(shared), Some(root)) = (self.ws.lib.clone(), self.ws.root.clone()) else { return false };
         if let Err(e) = self.ws.flush_and_backup() {
             self.flash_error(trf("Could not save: {e}", &[("e", &e)]));
-            return;
+            return false;
         }
         match crate::install_dir::guard(&root).and_then(|()| Library::open_or_restore(&root)) {
             Ok((fresh, _)) => {
@@ -370,17 +403,32 @@ impl App {
                 if let Scope::Random(_) = self.ws.scope {
                     self.ws.scope = Scope::Random(fastrand_seed());
                 }
-                self.flash_brief(tr("Refreshed"));
+                true
             }
-            Err(e) => self.flash_error(trf("Could not refresh: {e}", &[("e", &e)])),
+            Err(e) => {
+                self.flash_error(trf("Could not refresh: {e}", &[("e", &e)]));
+                false
+            }
         }
     }
 }
 
+/// The toast after a smart folder's Refresh.
+fn smart_refreshed_text(name: &str, n: usize) -> String {
+    tr_nf(n, "{name} now has {n} item", "{name} now has {n} items", &[("name", &name)])
+}
+
 #[cfg(test)]
 mod tests {
-    use super::restored_note;
+    use super::{restored_note, smart_refreshed_text};
     use std::path::Path;
+
+    #[test]
+    fn smart_refresh_toast_names_the_folder_and_counts() {
+        assert_eq!(smart_refreshed_text("Pictures", 1), "Pictures now has 1 item");
+        assert_eq!(smart_refreshed_text("Pictures", 0), "Pictures now has 0 items");
+        assert_eq!(smart_refreshed_text("Pictures", 12), "Pictures now has 12 items");
+    }
 
     #[test]
     fn restore_note_names_the_library_and_backup() {

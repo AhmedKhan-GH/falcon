@@ -182,6 +182,7 @@ The core words, so every file uses one term for one thing.
 - "Reset Layers" and "This document's layers can't be switched.", the PDF reader's layers sidebar (machine-written).
 - "Additional layers", the layers sidebar's heading for layers the document's order leaves out (machine-written).
 - "More Filters" (Find ▸ Open Filter), "Open the add-filter menu", "Open the modified date filter" and "Open with another app" (the new shortcut rows), "Choose an App to Open With" and "Applications" (the app chooser behind View ▸ Open With Another App…) (machine-written).
+- "{name} now has {n} items", the toast after Refresh in a smart folder's menu (machine-written).
 
 ## Reviewed
 

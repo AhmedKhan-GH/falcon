@@ -2295,6 +2295,11 @@
     "one": "«{name}»: изменён {n} элемент"
   },
   "{name} may not save changes": "«{name}» может не сохранять изменения",
+  "{name} now has {n} items": {
+    "few": "В «{name}» теперь {n} элемента",
+    "many": "В «{name}» теперь {n} элементов",
+    "one": "В «{name}» теперь {n} элемент"
+  },
   "{name} was last saved by Eagle {version}. Falcon reads libraries up to Eagle {supported}, so it won't open or change this one. Open it in Eagle, or use a newer falcon.": "«{name}» в последний раз сохранена в Eagle {version}. Falcon читает библиотеки не новее Eagle {supported}, поэтому не будет открывать или изменять эту. Откройте её в Eagle или используйте более новый falcon.",
   "{name}: {n} folders no longer exist and were skipped": {
     "few": "«{name}»: {n} папки больше не существуют, пропущены",

@@ -2081,6 +2081,9 @@
     "other": "{name}이(가) 항목 {n}개를 변경했습니다"
   },
   "{name} may not save changes": "\"{name}\"의 변경 사항이 저장되지 않을 수 있음",
+  "{name} now has {n} items": {
+    "other": "{name}에 이제 항목 {n}개가 있습니다"
+  },
   "{name} was last saved by Eagle {version}. Falcon reads libraries up to Eagle {supported}, so it won't open or change this one. Open it in Eagle, or use a newer falcon.": "\"{name}\"은(는) 마지막으로 Eagle {version}에서 저장되었습니다. Falcon은 Eagle {supported}까지의 라이브러리를 읽으므로 이 라이브러리를 열거나 변경하지 않습니다. Eagle에서 열거나 더 새로운 falcon을 사용하세요.",
   "{name}: {n} folders no longer exist and were skipped": {
     "other": "{name}: 폴더 {n}개가 더 이상 없어 건너뛰었습니다"

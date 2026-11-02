@@ -2189,6 +2189,10 @@
     "other": "{name} hat {n} Objekte geändert"
   },
   "{name} may not save changes": "{name} speichert Änderungen möglicherweise nicht",
+  "{name} now has {n} items": {
+    "one": "{name} hat jetzt {n} Objekt",
+    "other": "{name} hat jetzt {n} Objekte"
+  },
   "{name} was last saved by Eagle {version}. Falcon reads libraries up to Eagle {supported}, so it won't open or change this one. Open it in Eagle, or use a newer falcon.": "{name} wurde zuletzt mit Eagle {version} gesichert. Falcon liest Mediatheken bis Eagle {supported} und öffnet oder ändert diese daher nicht. Öffnen Sie sie in Eagle oder verwenden Sie ein neueres Falcon.",
   "{name}: {n} folders no longer exist and were skipped": {
     "one": "{name}: {n} Ordner existiert nicht mehr und wurde übersprungen",

@@ -2081,6 +2081,9 @@
     "other": "{name}が{n}個のアイテムを変更しました"
   },
   "{name} may not save changes": "「{name}」は変更を保存できない可能性があります",
+  "{name} now has {n} items": {
+    "other": "{name}は現在{n}件のアイテムを含みます"
+  },
   "{name} was last saved by Eagle {version}. Falcon reads libraries up to Eagle {supported}, so it won't open or change this one. Open it in Eagle, or use a newer falcon.": "「{name}」は最後にEagle {version}で保存されました。FalconはEagle {supported}までのライブラリを読み込めるため、このライブラリは開けず、変更もできません。Eagleで開くか、新しいfalconを使ってください。",
   "{name}: {n} folders no longer exist and were skipped": {
     "other": "{name}：{n}個のフォルダが存在しないためスキップしました"

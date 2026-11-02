@@ -2189,6 +2189,10 @@
     "other": "{name} changed {n} items"
   },
   "{name} may not save changes": "{name} may not save changes",
+  "{name} now has {n} items": {
+    "one": "{name} now has {n} item",
+    "other": "{name} now has {n} items"
+  },
   "{name} was last saved by Eagle {version}. Falcon reads libraries up to Eagle {supported}, so it won't open or change this one. Open it in Eagle, or use a newer falcon.": "{name} was last saved by Eagle {version}. Falcon reads libraries up to Eagle {supported}, so it won't open or change this one. Open it in Eagle, or use a newer falcon.",
   "{name}: {n} folders no longer exist and were skipped": {
     "one": "{name}: {n} folder no longer exists and was skipped",

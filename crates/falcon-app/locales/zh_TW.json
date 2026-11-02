@@ -2081,6 +2081,9 @@
     "other": "{name}變更了{n}個項目"
   },
   "{name} may not save changes": "「{name}」可能無法儲存更動",
+  "{name} now has {n} items": {
+    "other": "{name}現有{n}個項目"
+  },
   "{name} was last saved by Eagle {version}. Falcon reads libraries up to Eagle {supported}, so it won't open or change this one. Open it in Eagle, or use a newer falcon.": "「{name}」上次由 Eagle {version}儲存。Falcon 只能讀取 Eagle {supported}及更早版本的資料庫，因此不會打開或修改它。請在 Eagle 中打開，或使用更新的 falcon。",
   "{name}: {n} folders no longer exist and were skipped": {
     "other": "{name}：有{n}個資料夾已不存在，已略過"

@@ -353,3 +353,34 @@ fn tag_renames_reach_folder_auto_tags_and_smart_rules_in_one_undo_step() {
     assert_eq!(lib.metadata.folders[0].children[0].tags, ["new"]);
     assert!(metadata(&lib).contains(r#""value":["old","x"]"#));
 }
+
+/// What the app's smart folder Refresh relies on: a smart folder's items are
+/// worked out from the items in memory, so a library opened again after
+/// another handle changed the files on disk shows the new count.
+#[test]
+fn smart_folder_count_follows_changes_made_through_another_handle() {
+    use falcon_library::import::ImportOptions;
+    use serde_json::json;
+    let tmp = tempfile::tempdir().unwrap();
+    let mut lib = new_library(tmp.path());
+    let rule = vec![json!({"match": "AND", "rules": [{"property": "type", "method": "equal", "value": "png"}]})];
+    let sf = lib.create_smart_folder("Pictures", rule).unwrap();
+    let png = |name: &str| {
+        let path = tmp.path().join(name);
+        image::RgbImage::from_fn(8, 8, |x, y| image::Rgb([x as u8 * 30, y as u8 * 30, 90])).save_with_format(&path, image::ImageFormat::Png).unwrap();
+        path
+    };
+    lib.import_file(png("one.png"), &ImportOptions::default()).unwrap();
+    assert_eq!(lib.smart_folder_items(&sf).len(), 1);
+
+    // A second handle (another program) adds an item and saves.
+    let mut other = Library::open(lib.root()).unwrap();
+    other.import_file(png("two.png"), &ImportOptions::default()).unwrap();
+    assert_eq!(other.smart_folder_items(&sf).len(), 2);
+
+    // The first handle still holds what it read.
+    assert_eq!(lib.smart_folder_items(&sf).len(), 1);
+    // Reading the library again picks the change up.
+    let fresh = Library::open(lib.root()).unwrap();
+    assert_eq!(fresh.smart_folder_items(&sf).len(), 2);
+}
