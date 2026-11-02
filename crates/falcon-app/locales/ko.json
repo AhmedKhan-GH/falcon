@@ -57,7 +57,6 @@
   "Add tags  ({keys})": "태그 추가  ({keys})",
   "Add tags to the selection": "선택한 항목에 태그 추가",
   "Add the selection to folders": "선택 항목을 폴더에 추가",
-  "Add to Folders": "폴더에 추가",
   "Add to Folders…": "폴더에 추가…",
   "Add to Group": "그룹에 추가",
   "Add to Last Used Folder": "마지막으로 사용한 폴더에 추가",
@@ -67,9 +66,6 @@
   "Add to the last used folder": "마지막으로 사용한 폴더에 추가",
   "Add {n} folders to Quick Access": {
     "other": "폴더 {n}개를 빠른 접근에 추가"
-  },
-  "Add {n} items": {
-    "other": "항목 {n}개 추가"
   },
   "Add {n} items to {library}": {
     "other": "항목 {n}개를 {library}에 추가"
@@ -691,7 +687,6 @@
   "Folder:": "폴더:",
   "Folders": "폴더",
   "Folders ({count})": "폴더 ({count})",
-  "Folders ({n})": "폴더({n})",
   "Font": "글꼴",
   "Fonts": "글꼴",
   "Format": "형식",

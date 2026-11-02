@@ -86,7 +86,7 @@ Overall finding: falcon now has a native menu bar (`crates/falcon-app/src/menu.r
 | Edit: Remove from current folder (⇧⌘⌫) | Done | shortcuts.rs `edit.remove.folder`, menu and card menu; one undo step, no prompt (Eagle's `removeFromFolder` asks nothing) | local |
 | Edit: Move to Trash (⌘⌫) | Done | shortcuts.rs:114, app.rs:1095-1102 | local |
 | Find: Go to Folder (⌘J or J), a quick-switch dialog with Folders / Smart Folders / Tags tabs | Done | `find.quicksearch` ⌘J and bare J: Folders / Tags / Smart Folders / Items tabs, ranked by `string_score`, recents (200 kept) | local |
-| Find: Add to Folders… (⇧⌘J, a searchable folder picker that can create folders) | Done | `ui/dialogs/add_to_folders.rs`, `folder_picker.rs`: Find menu, ⇧⌘J, item menu and the inspector's + (one or several items); search, 8 recent folders, Create “…”, tree with keys; one undo step. Falcon's is a modal applied on Save where Eagle's popover applies on close | local |
+| Find: Add to Folders… (⇧⌘J, a searchable folder picker that can create folders) | Partial | `ui/dialogs/add_to_folders.rs`, `folder_picker.rs`: Find menu, ⇧⌘J, item menu and the inspector's + (one or several items); All / Recent / Selected tabs, search, Create “…”, tree with keys; no Save: closing (click outside, Esc) applies the ticks as one undo step, nothing if unchanged; the “Take them out of the open folder” box stays below the list when a folder is open (Eagle's Add to Folder dialog has it, its panel doesn't). Rules tested; not yet seen on screen. Gaps: Eagle's ⇧⌘J and Find menu open its older Save / Cancel dialog, and only F, Organize ▸ Folder ▸ Add and the inspector's + open the tabbed panel, while falcon uses the panel for all of them; the panel is placed at the pointer but not moved clear of the inspector; search is substring, not Eagle's fuzzy / pinyin match | local |
 | Organize: Add To Last Used Folder (⇧D) | Done | `organize.folder.addLast`: 50 recent folders kept app-wide, as Eagle's localStorage list | local |
 | Organize: Rate 0–5 stars from the menu and keys | Done | Organize menu and the 0–5 keys (`organize.rating.*`) with a toast; in the viewer the bare digits keep their zoom meaning | local |
 | Organize: Add Tags… (⌘T), Copy Tags (⇧⌘C), Paste Tags (⇧⌘V), Clear Tags | Done | Organize menu; shortcuts.rs `organize.tag.*` (Clear Tags unbound by default, as Eagle) | local |
@@ -436,7 +436,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 5. ~~No rubber-band (marquee) selection.~~ Fixed.
 6. ~~Item context menu gaps: Rename / batch rename, Copy ▸ (link, folder path, thumbnail, base64, name), Copy / Paste Tags, Duplicate, Remove from this Folder, Open File Location, Pin to Top, New Folder with Selection, Add to Last Used Folder, Share, thumbnail background, custom thumbnail from clipboard, Replace with File, Combine Images.~~ Fixed; Combine Images is a plugin in Eagle 4 and is not built.
 7. ~~Grid display options: only Thumbnail Speed / Quality is missing.~~ Fixed.
-8. ~~Add to Folders as a searchable picker instead of a flat list (Go to Folder is done).~~ Fixed; the picker is still Partial (no Selected tab, applied on Save).
+8. ~~Add to Folders as a searchable picker instead of a flat list (Go to Folder is done).~~ Fixed; the picker is still Partial (see its row).
 9. ~~No multi-folder selection in the sidebar.~~ Fixed.
 10. ~~Open in New Window (preview window with always-on-top, opacity and navigator), plus main-window Always on Top.~~ Fixed.
 11. ~~Presentation / slideshow mode (F5) and grayscale preview.~~ Fixed.
@@ -1080,7 +1080,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Copy, paste and clear an item's tags | Done | `Library::paste_tags`, `clear_tags`; one undo step and a notice | local |
 | Folders: chips, remove, Add Category | Done | `folder_chip` in app.rs; removal is the × on the chip | local |
 | Click a folder chip to open that folder | Done | `folder_chip` in app.rs: the click opens the folder with the item still selected and scrolled to; the tooltip shows the folder path | local |
-| Folder picker with search, Recent, Selected and create-new | Partial | `add_to_folders.rs`, `folder_picker.rs`; search, Recent (a block above the tree) and Create work. Gaps: no Selected tab or list (ticks in the tree only; Eagle has All / Recent / Selected tabs); a modal applied on Save, where Eagle's is a popover applied on close | local |
+| Folder picker with search, Recent, Selected and create-new | Partial | `add_to_folders.rs`, `folder_picker.rs`; All / Recent / Selected tabs in Eagle's order (Tab cycles; All default), search, Create “…” and applied on close are built and the list rules tested. Gaps: not yet seen on screen; search is substring, not fuzzy / pinyin; the Recent row's remove is a hover × (Eagle: right-click ▸ Remove); no key-hint footer | local |
 | Comments list: jump to, edit, delete | Done | `comments.rs:427` | local |
 | Rating stars; click the same star again to clear | Done | `A:3332` | local |
 | Dimensions, size, type, date imported, created, modified | Done | `A:3196`-`3203` | local |

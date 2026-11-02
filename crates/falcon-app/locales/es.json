@@ -57,7 +57,6 @@
   "Add tags  ({keys})": "Añadir etiquetas  ({keys})",
   "Add tags to the selection": "Añadir etiquetas a la selección",
   "Add the selection to folders": "Añadir la selección a carpetas",
-  "Add to Folders": "Añadir a carpetas",
   "Add to Folders…": "Añadir a carpetas…",
   "Add to Group": "Añadir al grupo",
   "Add to Last Used Folder": "Añadir a la última carpeta usada",
@@ -68,10 +67,6 @@
   "Add {n} folders to Quick Access": {
     "one": "Añadir carpeta a Acceso rápido",
     "other": "Añadir {n} carpetas a Acceso rápido"
-  },
-  "Add {n} items": {
-    "one": "Añadir {n} elemento",
-    "other": "Añadir {n} elementos"
   },
   "Add {n} items to {library}": {
     "one": "Añadir {n} elemento a {library}",
@@ -730,7 +725,6 @@
   "Folder:": "Carpeta:",
   "Folders": "Carpetas",
   "Folders ({count})": "Carpetas ({count})",
-  "Folders ({n})": "Carpetas ({n})",
   "Font": "Fuente",
   "Fonts": "Fuentes",
   "Format": "Formato",

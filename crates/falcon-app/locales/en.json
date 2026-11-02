@@ -57,7 +57,6 @@
   "Add tags  ({keys})": "Add tags  ({keys})",
   "Add tags to the selection": "Add tags to the selection",
   "Add the selection to folders": "Add the selection to folders",
-  "Add to Folders": "Add to Folders",
   "Add to Folders…": "Add to Folders…",
   "Add to Group": "Add to Group",
   "Add to Last Used Folder": "Add to Last Used Folder",
@@ -68,10 +67,6 @@
   "Add {n} folders to Quick Access": {
     "one": "Add folder to Quick Access",
     "other": "Add {n} folders to Quick Access"
-  },
-  "Add {n} items": {
-    "one": "Add {n} item",
-    "other": "Add {n} items"
   },
   "Add {n} items to {library}": {
     "one": "Add {n} item to {library}",
@@ -730,7 +725,6 @@
   "Folder:": "Folder:",
   "Folders": "Folders",
   "Folders ({count})": "Folders ({count})",
-  "Folders ({n})": "Folders ({n})",
   "Font": "Font",
   "Fonts": "Fonts",
   "Format": "Format",

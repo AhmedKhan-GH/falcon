@@ -918,6 +918,7 @@ impl App {
                     if let Some(parent) = parent {
                         p.expanded.insert(parent);
                     }
+                    p.dirty = true;
                 }
                 Ok(())
             }
