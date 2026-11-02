@@ -348,7 +348,17 @@ impl App {
         // scene, which takes the clicks).
         let mut act = None;
         let menu_on = self.model3d.scene_resp.take().filter(|_| matches!(pw.pane, Pane::Model(_))).unwrap_or(resp);
-        menu_on.context_menu(|ui| act = self.window_menu(ui, pw, item, &file));
+        // A popup can't leave its window, and this one can be as small as a
+        // short clip, so the menu scrolls when it doesn't fit.
+        let menu_height = ctx.content_rect().height() - 16.0;
+        let reopened = menu_on.secondary_clicked();
+        menu_on.context_menu(|ui| {
+            let mut scroll = egui::ScrollArea::vertical().max_height(menu_height);
+            if reopened {
+                scroll = scroll.vertical_scroll_offset(0.0);
+            }
+            scroll.show(ui, |ui| act = self.window_menu(ui, pw, item, &file));
+        });
         match act {
             Some(Act::CopyFile) => self.copy_preview_file(item, &file),
             Some(Act::CopyFrame) => {
