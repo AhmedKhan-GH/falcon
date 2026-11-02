@@ -29,6 +29,9 @@ pub struct Prefs {
     /// takes falcon out of the Dock while the menu bar icon is shown, and
     /// quits otherwise, since nothing would bring it back (`dock.rs`).
     pub keep_dock_icon: bool,
+    /// Eagle's App menu ▸ Color Space (its `colorSpace` setting): how the
+    /// window's colours are matched to the display (`colorspace.rs`).
+    pub color_space: crate::colorspace::ColorSpace,
     /// Eagle's `habits.hoverZoom`: the zoom button on hovered cards.
     pub hover_zoom: bool,
     /// Eagle's `general.IPTC`: add IPTC/XMP keywords as tags on import.
@@ -297,6 +300,7 @@ impl Default for Prefs {
     fn default() -> Self {
         Prefs {
             keep_dock_icon: true,
+            color_space: crate::colorspace::ColorSpace::default(),
             hover_zoom: true,
             keywords_as_tags: false,
             notify_duplicates: true,

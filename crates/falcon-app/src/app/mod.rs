@@ -416,6 +416,7 @@ impl eframe::App for App {
         self.quit_dialog(&ctx);
         // The web page sits over the viewer only in frames that asked for it.
         self.web.sync(&ctx, frame);
+        crate::colorspace::sync(frame, self.prefs.color_space);
         let state = self.menu_state(&ctx);
         self.menu_bar.sync(&ctx, &self.shortcuts, &state, &self.user_actions.menu_entries());
     }

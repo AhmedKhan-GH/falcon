@@ -12,6 +12,7 @@
 
 use eframe::egui::{Key, KeyboardShortcut, Modifiers};
 
+use crate::colorspace::ColorSpace;
 use crate::logic::Layout;
 use crate::search_state::FilterKind;
 use crate::shortcuts::{Command, Page, Scroll, Shortcuts};
@@ -89,6 +90,8 @@ pub struct State {
     pub grayscale: bool,
     /// The image viewer's navigator shows when zoomed in.
     pub navigator: bool,
+    /// The chosen Color Space.
+    pub color_space: crate::colorspace::ColorSpace,
     /// A folder has been used for Add to Last Used Folder.
     pub last_folder: bool,
     /// The open folder has a password, and it is unlocked for now.
@@ -169,7 +172,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::RotateLeft => s.library && s.rotatable,
         C::Crop => s.library && s.croppable,
         C::Documentation => s.docs,
-        C::ErrorLogs | C::About | C::DebugReport => true,
+        C::ErrorLogs | C::About | C::DebugReport | C::ColorSpace(_) => true,
         C::ToggleName | C::ToggleInfo | C::ToggleComments | C::ToggleSubfolders => s.library,
         C::AlwaysOnTop => true,
         C::Grayscale | C::Navigator => s.library,
@@ -218,6 +221,7 @@ pub enum Check {
     AlwaysOnTop,
     Grayscale,
     Navigator,
+    ColorSpace(crate::colorspace::ColorSpace),
 }
 
 impl Check {
@@ -239,6 +243,7 @@ impl Check {
             Check::AlwaysOnTop => s.on_top,
             Check::Grayscale => s.grayscale,
             Check::Navigator => s.navigator,
+            Check::ColorSpace(c) => s.color_space == c,
         }
     }
 }
@@ -272,7 +277,18 @@ const SEP: Entry = Entry::Separator;
 pub static ABOUT: &[Entry] = &[item("About Falcon", Command::About)];
 
 /// Added to the application menu, after About.
-pub static APP: &[Entry] = &[item("Preferences…", Command::Preferences), item("Lock Falcon", Command::LockApp)];
+pub static APP: &[Entry] = &[
+    item("Preferences…", Command::Preferences),
+    Entry::Sub(
+        "Color Space",
+        &[
+            checked("sRGB", Command::ColorSpace(ColorSpace::Srgb), Check::ColorSpace(ColorSpace::Srgb)),
+            checked("Display P3", Command::ColorSpace(ColorSpace::DisplayP3), Check::ColorSpace(ColorSpace::DisplayP3)),
+            checked("Unmanaged", Command::ColorSpace(ColorSpace::Unmanaged), Check::ColorSpace(ColorSpace::Unmanaged)),
+        ],
+    ),
+    item("Lock Falcon", Command::LockApp),
+];
 
 /// The menus after the application menu, after Eagle's, with only what
 /// falcon can do. Eagle's Actions menu, which lists the library's
@@ -878,9 +894,16 @@ mod mac {
             sep.setTag(TAG_SEPARATOR);
             app_menu.insertItem_atIndex(&sep, at);
             for e in super::APP {
-                if let Entry::Item(it) = e {
-                    at += 1;
-                    app_menu.insertItem_atIndex(&menu_item(mtm, &target, keys, all, it), at);
+                at += 1;
+                match e {
+                    Entry::Item(it) => app_menu.insertItem_atIndex(&menu_item(mtm, &target, keys, all, it), at),
+                    Entry::Sub(t, sub) => {
+                        let item = NSMenuItem::new(mtm);
+                        item.setTitle(&NSString::from_str(tr(t)));
+                        item.setSubmenu(Some(&submenu(mtm, &target, keys, all, t, sub)));
+                        app_menu.insertItem_atIndex(&item, at);
+                    }
+                    Entry::Separator => app_menu.insertItem_atIndex(&NSMenuItem::separatorItem(mtm), at),
                 }
             }
             // winit's Quit calls terminate:, which ends the process without
@@ -1174,7 +1197,10 @@ mod tests {
     fn checkmarks() {
         let s = State { library: true, layout: Layout::Grid, page: Some(Page::Trash), sidebar: true, ..Default::default() };
         let on: Vec<&str> = items().iter().filter(|i| i.check.on(&s)).map(|i| i.label).collect();
-        assert_eq!(on, ["Trash", "Grid", "Sidebar"]);
+        assert_eq!(on, ["Unmanaged", "Trash", "Grid", "Sidebar"]);
+        let p3 = State { color_space: ColorSpace::DisplayP3, ..s };
+        let on: Vec<&str> = items().iter().filter(|i| i.check.on(&p3)).map(|i| i.label).collect();
+        assert_eq!(on[0], "Display P3");
     }
 
     /// Registers the AppKit target class, which checks its method

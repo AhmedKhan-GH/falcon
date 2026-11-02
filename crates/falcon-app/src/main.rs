@@ -7,6 +7,7 @@ mod backups;
 mod capture;
 mod clip_image;
 mod collect;
+mod colorspace;
 mod colors;
 mod dock;
 mod dock_progress;

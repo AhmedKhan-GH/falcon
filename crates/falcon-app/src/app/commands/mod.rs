@@ -360,6 +360,7 @@ impl App {
             libraries: self.others.len(),
             presenting: self.modes.presenting,
             on_top: self.modes.on_top,
+            color_space: self.prefs.color_space,
             grayscale: self.modes.grayscale,
             navigator: !self.modes.hide_navigator,
         }
@@ -758,6 +759,7 @@ impl App {
             C::OpenNewWindow => self.open_preview_window(),
 
             C::About => self.about.open = true,
+            C::ColorSpace(c) => self.prefs.color_space = c,
             C::DebugReport => self.export_debug_report(ctx),
             C::ErrorLogs => {
                 if let Some(p) = crate::errlog::ensure() {

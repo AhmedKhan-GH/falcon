@@ -195,6 +195,8 @@ pub enum Command {
     ErrorLogs,
     About,
     DebugReport,
+    /// Eagle's App menu ▸ Color Space: use this colour space.
+    ColorSpace(crate::colorspace::ColorSpace),
     /// Eagle's global shortcuts (`global.*`), which act from any app
     /// (`hotkeys.rs`), and the menu bar icon's items (`tray.rs`): bring
     /// falcon to the front, the same with the search focused, and the
@@ -1495,7 +1497,7 @@ mod tests {
     #[test]
     fn menu_only_commands_have_no_keys() {
         let keys = Shortcuts::default();
-        for cmd in [Command::Undo, Command::Redo, Command::Cut, Command::Import, Command::FindDuplicates, Command::WindowZoom, Command::Documentation, Command::ErrorLogs, Command::About, Command::DebugReport] {
+        for cmd in [Command::Undo, Command::Redo, Command::Cut, Command::Import, Command::FindDuplicates, Command::WindowZoom, Command::Documentation, Command::ErrorLogs, Command::About, Command::DebugReport, Command::ColorSpace(crate::colorspace::ColorSpace::Srgb)] {
             assert!(find_spec(cmd).is_none());
             assert_eq!(keys.binding(cmd), None);
             assert!(keys.chords(cmd).is_empty());
