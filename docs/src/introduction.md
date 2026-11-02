@@ -13,9 +13,28 @@ The second part, [The desktop app](app.md), describes falcon's desktop app: its 
 
 ## Status
 
-Falcon is early alpha. [PARITY.md](https://github.com/AhmedKhan-GH/falcon/blob/main/PARITY.md) compares it with Eagle 4.0.0 feature by feature, checked against falcon's code; a little under half of Eagle's local features are done, about one in seven are partly done and the rest are missing. [ROADMAP.md](https://github.com/AhmedKhan-GH/falcon/blob/main/ROADMAP.md) lists what comes next.
+Falcon is early alpha and unsigned. [PARITY.md](https://github.com/AhmedKhan-GH/falcon/blob/main/PARITY.md) compares it with Eagle 4.0.0 feature by feature, checked against falcon's code. Of Eagle's 901 local features, 854 are done, 29 are partly done and 18 are missing: about nineteen in twenty. Another 42 need an online service, an account or Eagle's plugin system and are counted separately. [ROADMAP.md](https://github.com/AhmedKhan-GH/falcon/blob/main/ROADMAP.md) lists what is left and what comes later.
+
+Falcon handles exactly Eagle's set of file formats. [FORMATS.md](https://github.com/AhmedKhan-GH/falcon/blob/main/FORMATS.md) lists each one and its status. Falcon has no plugin system: Actions and Export in Format are built into the app, and [PLUGINS.md](https://github.com/AhmedKhan-GH/falcon/blob/main/PLUGINS.md) lists the plugins Eagle provides that falcon could build later.
 
 While falcon is in development, the app and the CLI only open libraries inside `~/Falcon Sandbox` (or the folder in `FALCON_SANDBOX`). To work on an existing library, copy it there first. See [Sandbox](app.md#sandbox).
+
+### Working today
+
+- Import with thumbnails and colour palettes, folders with their structure, paste, drag and drop, and screen capture.
+- Folders, tags with a tag picker, smart folders, Quick Access, ratings, notes, undo and batch editing.
+- Keyword, filter and colour search, with marquee selection in four layouts.
+- Viewers for images at full resolution, video (with an FFmpeg fallback that includes AV1), audio, fonts, a text editor, PDFs with their reader tools, interactive 3D models with textures, full IFC through web-ifc, PSD and AI at full resolution, and live web pages and MHTML.
+- Preferences panes, the interface in eight languages (machine-written, waiting for a native read), sound effects, Actions, and Export in Format.
+- The local HTTP API and the command-line tool.
+
+### Not there yet
+
+- Some shortcuts and context-menu entries, presentation mode, a separate preview window and other viewer options (see [ROADMAP.md](https://github.com/AhmedKhan-GH/falcon/blob/main/ROADMAP.md)).
+- Some filters, batch rename of items and merging of duplicates.
+- Some preferences and library safety checks.
+- Eagle's plugins.
+- Windows and Linux, and signed releases.
 
 ## Running the docs
 
