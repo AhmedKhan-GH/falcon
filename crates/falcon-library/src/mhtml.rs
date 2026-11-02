@@ -1187,4 +1187,565 @@ mod tests {
         assert!(png.starts_with(b"\x89PNG\r\n\x1a\n"));
         assert!(image::load_from_memory(&png).is_ok(), "base64 decoded intact");
     }
+
+    // ---- helpers ----
+
+    const CHROME: &[u8] = include_bytes!("../testdata/mhtml/chrome.mhtml");
+
+    /// One entity: header lines (no trailing break), a blank line, the body.
+    fn part(headers: &str, body: &[u8]) -> Vec<u8> {
+        let mut v = headers.replace('\n', "\r\n").into_bytes();
+        v.extend_from_slice(b"\r\n\r\n");
+        v.extend_from_slice(body);
+        v
+    }
+
+    fn multipart_body(boundary: &str, parts: &[Vec<u8>]) -> Vec<u8> {
+        let mut v = Vec::new();
+        for p in parts {
+            v.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+            v.extend_from_slice(p);
+            v.extend_from_slice(b"\r\n");
+        }
+        v.extend_from_slice(format!("--{boundary}--\r\n").as_bytes());
+        v
+    }
+
+    /// A whole file: `top` headers, then the parts between `boundary` lines.
+    fn wrap(top: &str, boundary: &str, parts: &[Vec<u8>]) -> Vec<u8> {
+        part(top, &multipart_body(boundary, parts))
+    }
+
+    fn archive(parts: &[Vec<u8>]) -> Vec<u8> {
+        wrap("MIME-Version: 1.0\nContent-Type: multipart/related; boundary=\"BND\"", "BND", parts)
+    }
+
+    fn html_part(location: &str, body: &str) -> Vec<u8> {
+        part(&format!("Content-Type: text/html; charset=utf-8\nContent-Location: {location}"), body.as_bytes())
+    }
+
+    fn png_part(location: &str) -> Vec<u8> {
+        part(&format!("Content-Type: image/png\nContent-Location: {location}"), b"PNGDATA")
+    }
+
+    fn unpack_to(data: &[u8], policy: Policy) -> (tempfile::TempDir, Unpacked) {
+        let dir = tempfile::tempdir().unwrap();
+        let u = unpack(data, dir.path(), Limits::default(), policy).unwrap();
+        (dir, u)
+    }
+
+    /// A file's text without its byte order mark.
+    fn read_text(dir: &Path, name: &str) -> String {
+        let bytes = fs::read(dir.join(name)).unwrap();
+        assert!(bytes.starts_with(b"\xEF\xBB\xBF"), "{name} leads with a byte order mark");
+        String::from_utf8(bytes[3..].to_vec()).unwrap()
+    }
+
+    fn lcg(state: &mut u64) -> u8 {
+        *state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        (*state >> 33) as u8
+    }
+
+    // ---- transfer encodings ----
+
+    #[test]
+    fn base64_with_breaks_missing_padding_and_stray_characters() {
+        let original: Vec<u8> = (0..=255u8).collect();
+        let encoded = base64::engine::general_purpose::STANDARD.encode(&original);
+        let unpadded = encoded.trim_end_matches('=');
+        let mut messy = String::new();
+        for (i, c) in unpadded.chars().enumerate() {
+            if i % 76 == 0 && i > 0 {
+                messy.push_str("\r\n");
+            }
+            if i == 10 {
+                messy.push_str(" *!\t");
+            }
+            messy.push(c);
+        }
+        messy.push_str("\r\n");
+        let data = archive(&[part("Content-Type: application/octet-stream\nContent-Transfer-Encoding: base64", messy.as_bytes())]);
+        let a = parse(&data, Limits::default()).unwrap();
+        assert_eq!(a.parts[0].body, original);
+    }
+
+    #[test]
+    fn quoted_printable_escapes_and_soft_breaks() {
+        assert_eq!(decode_qp(b"a=3Db=3db=C3=a9"), "a=b=bé".as_bytes());
+        // Soft breaks: CRLF, LF, and trailing blanks before the break.
+        assert_eq!(decode_qp(b"ab=\r\ncd=\nef=  \r\ngh=\t\nij"), b"abcdefghij");
+        // A lone `=` that starts neither an escape nor a break stays.
+        assert_eq!(decode_qp(b"a=zz b= c =g"), b"a=zz b= c =g");
+        // An `=` at the very end is a soft break with nothing after it.
+        assert_eq!(decode_qp(b"x=="), b"x=");
+    }
+
+    #[test]
+    fn quoted_printable_cr_before_crlf_gives_one_crlf() {
+        let data = archive(&[part("Content-Type: text/plain\nContent-Transfer-Encoding: quoted-printable", b"line1=0D\r\nline2=0D\r\n")]);
+        let a = parse(&data, Limits::default()).unwrap();
+        assert_eq!(a.parts[0].body, b"line1\r\nline2\r\n");
+    }
+
+    // ---- structure ----
+
+    #[test]
+    fn nested_multipart_flattens_and_root_is_the_html() {
+        let inner = multipart_body("inner", &[part("Content-Type: text/plain", b"plain"), part("Content-Type: text/html", b"<p>html</p>")]);
+        let nested = part("Content-Type: multipart/alternative; boundary=\"inner\"", &inner);
+        let data = archive(&[nested, part("Content-Type: image/png", b"png")]);
+        let a = parse(&data, Limits::default()).unwrap();
+        let types: Vec<&str> = a.parts.iter().map(|p| p.content_type.as_str()).collect();
+        assert_eq!(types, ["text/plain", "text/html", "image/png"]);
+        assert_eq!(a.root, 1);
+    }
+
+    #[test]
+    fn start_parameter_picks_the_root_by_content_id() {
+        let parts = [
+            part("Content-Type: text/html\nContent-ID: <first@x>", b"first"),
+            part("Content-Type: text/html\nContent-ID: <second@x>", b"second"),
+        ];
+        let plain = parse(&archive(&parts), Limits::default()).unwrap();
+        assert_eq!(plain.root, 0, "without start the first html part");
+        let data = wrap("Content-Type: multipart/related; start=\"<second@x>\"; boundary=\"BND\"", "BND", &parts);
+        let a = parse(&data, Limits::default()).unwrap();
+        assert_eq!(a.root, 1);
+        assert_eq!(a.parts[a.root].body, b"second");
+    }
+
+    // ---- text ----
+
+    /// Unpacks one html part with `ctype` header text and returns index.html.
+    fn unpack_page(ctype: &str, body: &[u8]) -> String {
+        let data = archive(&[part(&format!("Content-Type: {ctype}"), body)]);
+        let (dir, _) = unpack_to(&data, Policy::None);
+        read_text(dir.path(), "index.html")
+    }
+
+    #[test]
+    fn charset_utf8_page() {
+        let html = unpack_page("text/html; charset=utf-8", "<p>é€</p>".as_bytes());
+        assert!(html.contains("<p>é€</p>"));
+    }
+
+    #[test]
+    fn charset_windows_1252_page() {
+        let html = unpack_page("text/html; charset=windows-1252", b"<p>\x80 \xE9 \x93q\x94</p>");
+        assert!(html.contains("<p>€ é “q”</p>"), "{html}");
+    }
+
+    #[test]
+    fn charset_iso_8859_1_label_reads_as_windows_1252() {
+        let html = unpack_page("text/html; charset=iso-8859-1", b"<p>\x80 \xE9 \x93q\x94</p>");
+        assert!(html.contains("<p>€ é “q”</p>"), "{html}");
+    }
+
+    #[test]
+    fn charset_undeclared_invalid_utf8_falls_back_to_windows_1252() {
+        let html = unpack_page("text/html", b"<p>caf\xE9 \x80</p>");
+        assert!(html.contains("<p>café €</p>"), "{html}");
+    }
+
+    #[test]
+    fn charset_from_meta_when_mime_gives_none() {
+        let html = unpack_page("text/html", b"<html><head><meta charset=\"windows-1252\"></head><body>\x93q\x94 \xE9</body></html>");
+        assert!(html.contains("“q” é"), "{html}");
+    }
+
+    #[test]
+    fn encoded_words_in_headers() {
+        assert_eq!(decode_words("=?utf-8?Q?Caf=C3=A9_au_lait?="), "Café au lait");
+        assert_eq!(decode_words("=?utf-8?B?Q2Fmw6k=?="), "Café");
+        assert_eq!(decode_words("=?iso-8859-1?Q?Caf=E9?="), "Café");
+        // Blanks between two adjacent encoded words are dropped.
+        assert_eq!(decode_words("=?utf-8?Q?Caf?= =?utf-8?Q?=C3=A9?="), "Café");
+        // Text around a word is kept.
+        assert_eq!(decode_words("pre =?utf-8?Q?x?= post"), "pre x post");
+        // An unknown charset is left as written.
+        assert_eq!(decode_words("=?x-nonsense?Q?abc?="), "=?x-nonsense?Q?abc?=");
+    }
+
+    #[test]
+    fn encoded_words_in_location_and_subject() {
+        let data = wrap(
+            "Subject: =?iso-8859-1?Q?Caf=E9_page?=\nContent-Type: multipart/related; boundary=\"BND\"",
+            "BND",
+            &[part("Content-Type: text/html\nContent-Location: =?utf-8?B?aHR0cHM6Ly9leGFtcGxlLmNvbS9hLmh0bWw=?=", b"x")],
+        );
+        let a = parse(&data, Limits::default()).unwrap();
+        assert_eq!(a.subject.as_deref(), Some("Café page"));
+        assert_eq!(a.parts[0].location.as_deref(), Some("https://example.com/a.html"));
+        assert_eq!(a.address.as_deref(), Some("https://example.com/a.html"));
+    }
+
+    // ---- reference rewriting ----
+
+    const SITE: &str = "https://example.com/dir/sub/page.html";
+
+    /// A page at `SITE` with the references the tests below look at, and
+    /// the parts they point to (indexes in the comments).
+    fn site() -> (tempfile::TempDir, Unpacked) {
+        let root = r##"<!DOCTYPE html><html><head>
+<link rel="stylesheet" href="../css/main.css">
+<style>@import "c.css"; p { background: url(a.png) } i { background: url( 'a.png' ) }</style>
+<script>var u = "a.png"; document.write('<img src="a.png">'); var c = "url(a.png)";</script>
+</head><body>
+<img id=rel src="a.png">
+<img id=up src="../up.png">
+<img id=abs src="/abs.png">
+<img id=proto src="//cdn.example.com/x.png">
+<img id=query src="q.png?v=2">
+<a id=frag href="frag.html#sec">f</a>
+<a id=amp href="a&amp;b.png">amp</a>
+<img id=srcset srcset="s1.png 1x, s2.png 2x" src="s1.png">
+<div id=inline style="background:url(&quot;a.png&quot;)"></div>
+<img id=cid src="cid:logo@x">
+<img id=missing src="missing.png">
+<img id=remote src="https://example.com/nope.png">
+<img id=data src="data:image/png;base64,AAAA">
+<base href="https://example.com/other/">
+<img id=based src="b.png">
+</body></html>"##;
+        let data = archive(&[
+            html_part(SITE, root),                                                          // 0
+            png_part("https://example.com/dir/sub/a.png"),                                  // 1
+            png_part("https://example.com/dir/up.png"),                                     // 2
+            png_part("https://example.com/abs.png"),                                        // 3
+            png_part("https://cdn.example.com/x.png"),                                      // 4
+            png_part("https://example.com/dir/sub/q.png?v=2"),                              // 5
+            html_part("https://example.com/dir/sub/frag.html", "<p>f</p>"),                 // 6
+            png_part("https://example.com/dir/sub/a&b.png"),                                // 7
+            png_part("https://example.com/dir/sub/s1.png"),                                 // 8
+            png_part("https://example.com/dir/sub/s2.png"),                                 // 9
+            part("Content-Type: text/css\nContent-Location: https://example.com/dir/sub/c.css", b"p{}"), // 10
+            part("Content-Type: text/css\nContent-Location: https://example.com/dir/css/main.css", b"div { background: url(../img/in.png) }"), // 11
+            png_part("https://example.com/dir/img/in.png"),                                 // 12
+            png_part("https://example.com/other/b.png"),                                    // 13
+            part("Content-Type: image/png\nContent-ID: <logo@x>", b"PNGDATA"),              // 14
+        ]);
+        unpack_to(&data, Policy::None)
+    }
+
+    #[test]
+    fn rewrites_relative_absolute_and_protocol_relative_references() {
+        let (dir, _) = site();
+        let html = read_text(dir.path(), "index.html");
+        assert!(html.contains("id=rel src=\"1-a.png\""), "{html}");
+        assert!(html.contains("id=up src=\"2-up.png\""), "dot-dot path");
+        assert!(html.contains("id=abs src=\"3-abs.png\""), "absolute path");
+        assert!(html.contains("id=proto src=\"4-x.png\""), "protocol-relative");
+        assert!(html.contains("<link rel=\"stylesheet\" href=\"11-main.css\">"));
+        assert!(html.contains("id=cid src=\"14-logo.png\""), "cid: reference");
+    }
+
+    #[test]
+    fn rewrites_query_fragment_and_entities() {
+        let (dir, _) = site();
+        let html = read_text(dir.path(), "index.html");
+        assert!(html.contains("id=query src=\"5-q.png\""), "query matched the part with the same query");
+        assert!(html.contains("id=frag href=\"6-frag.html#sec\""), "fragment kept");
+        assert!(html.contains("id=amp href=\"7-a_b.png\""), "&amp; in the href matched a & location");
+    }
+
+    #[test]
+    fn rewrites_srcset_with_descriptors_and_inline_style() {
+        let (dir, _) = site();
+        let html = read_text(dir.path(), "index.html");
+        assert!(html.contains("srcset=\"8-s1.png 1x, 9-s2.png 2x\""), "{html}");
+        assert!(html.contains("style=\"background:url(&quot;1-a.png&quot;)\""), "{html}");
+    }
+
+    #[test]
+    fn rewrites_style_blocks_with_url_and_import() {
+        let (dir, _) = site();
+        let html = read_text(dir.path(), "index.html");
+        assert!(html.contains("@import \"10-c.css\";"), "{html}");
+        assert!(html.contains("url(1-a.png)"), "unquoted url()");
+        assert!(html.contains("url( '1-a.png' )"), "quoted url() with blanks");
+    }
+
+    #[test]
+    fn css_part_resolves_against_its_own_location() {
+        let (dir, _) = site();
+        let css = read_text(dir.path(), "11-main.css");
+        assert!(css.contains("url(12-in.png)"), "{css}");
+    }
+
+    #[test]
+    fn base_href_changes_the_base_and_points_at_the_folder() {
+        let (dir, _) = site();
+        let html = read_text(dir.path(), "index.html");
+        assert!(html.contains("<base href=\"./\">"), "{html}");
+        assert!(html.contains("id=based src=\"13-b.png\""), "resolved against the new base");
+    }
+
+    #[test]
+    fn leaves_unknown_and_data_references_alone() {
+        let (dir, _) = site();
+        let html = read_text(dir.path(), "index.html");
+        assert!(html.contains("id=missing src=\"missing.png\""));
+        assert!(html.contains("id=remote src=\"https://example.com/nope.png\""));
+        assert!(html.contains("id=data src=\"data:image/png;base64,AAAA\""));
+    }
+
+    #[test]
+    fn script_content_is_not_rewritten() {
+        let (dir, _) = site();
+        let html = read_text(dir.path(), "index.html");
+        assert!(html.contains(r#"<script>var u = "a.png"; document.write('<img src="a.png">'); var c = "url(a.png)";</script>"#), "{html}");
+    }
+
+    #[test]
+    fn word_archive_rewrites_image_and_file_list() {
+        let root = part(
+            "Content-Type: text/html; charset=\"windows-1252\"\nContent-Transfer-Encoding: quoted-printable\nContent-Location: file:///C:/Users/x/doc.htm",
+            b"<html><head><link rel=3DFile-List href=3D\"doc_files/filelist.xml\"></head><body><img src=3D\"doc_files/image001.png\"></body></html>",
+        );
+        let data = wrap(
+            "MIME-Version: 1.0\nContent-Type: multipart/related; type=\"text/html\"; boundary=\"----=_NextPart_01\"",
+            "----=_NextPart_01",
+            &[
+                root,
+                png_part("file:///C:/Users/x/doc_files/image001.png"),
+                part("Content-Type: text/xml\nContent-Location: file:///C:/Users/x/doc_files/filelist.xml", b"<xml/>"),
+            ],
+        );
+        let (dir, u) = unpack_to(&data, Policy::None);
+        assert_eq!(u.files.len(), 3);
+        let html = read_text(dir.path(), "index.html");
+        assert!(html.contains("href=\"2-filelist.xml\""), "{html}");
+        assert!(html.contains("src=\"1-image001.png\""), "{html}");
+    }
+
+    // ---- file names ----
+
+    #[test]
+    fn hostile_locations_land_as_plain_files_in_the_folder() {
+        let outer = tempfile::tempdir().unwrap();
+        let out = outer.path().join("out");
+        fs::create_dir(&out).unwrap();
+        let locations: [&[u8]; 6] = [
+            b"../../../etc/passwd",
+            b"/etc/passwd",
+            b"file:///etc/passwd",
+            b"..\\..\\x.png",
+            b"a\0b/c.png",
+            b"x/y/z/../../w.png",
+        ];
+        let mut parts = vec![html_part("https://example.com/", "<p>hi</p>")];
+        for loc in locations {
+            let mut headers = b"Content-Type: image/png\r\nContent-Location: ".to_vec();
+            headers.extend_from_slice(loc);
+            headers.extend_from_slice(b"\r\n\r\nPNGDATA");
+            parts.push(headers);
+        }
+        let data = archive(&parts);
+        let u = unpack(&data, &out, Limits::default(), Policy::None).unwrap();
+        assert_eq!(u.files.len(), parts.len());
+        let mut count = 0;
+        for entry in fs::read_dir(&out).unwrap() {
+            let entry = entry.unwrap();
+            assert!(entry.file_type().unwrap().is_file(), "{:?} is a plain file", entry.path());
+            assert_eq!(entry.path().parent().unwrap(), out);
+            count += 1;
+        }
+        assert_eq!(count, parts.len());
+        for f in &u.files {
+            assert_eq!(f.parent().unwrap(), out);
+        }
+        let siblings: Vec<_> = fs::read_dir(outer.path()).unwrap().map(|e| e.unwrap().file_name()).collect();
+        assert_eq!(siblings, ["out"], "nothing written beside the folder");
+    }
+
+    #[test]
+    fn safe_join_accepts_only_plain_names() {
+        let dir = Path::new("/some/dir");
+        assert_eq!(safe_join(dir, "index.html").unwrap(), dir.join("index.html"));
+        for bad in ["..", ".", "a/b", "/abs", "", "a\\b", "a\0b"] {
+            assert!(matches!(safe_join(dir, bad), Err(MhtmlError::UnsafeName(_))), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn percent_encoding_round_trips() {
+        assert_eq!(percent_encode("a b&é.png"), "a%20b%26%C3%A9.png");
+        assert_eq!(percent_decode("a%20b%26%C3%A9.png"), "a b&é.png");
+        assert_eq!(percent_decode("100%zz%2"), "100%zz%2", "invalid escapes kept");
+    }
+
+    #[test]
+    fn resolve_follows_rfc_3986_for_common_shapes() {
+        let base = "https://example.com/a/b/c.html?x=1";
+        assert_eq!(resolve(base, "d.png").as_deref(), Some("https://example.com/a/b/d.png"));
+        assert_eq!(resolve(base, "../d.png").as_deref(), Some("https://example.com/a/d.png"));
+        assert_eq!(resolve(base, "/d.png").as_deref(), Some("https://example.com/d.png"));
+        assert_eq!(resolve(base, "//other.org/d.png").as_deref(), Some("https://other.org/d.png"));
+        assert_eq!(resolve(base, "?y=2").as_deref(), Some("https://example.com/a/b/c.html?y=2"));
+        assert_eq!(resolve(base, "http://z/").as_deref(), Some("http://z/"));
+        assert_eq!(resolve("not a url", "d.png"), None);
+    }
+
+    // ---- limits ----
+
+    fn text_parts(n: usize, size: usize) -> Vec<u8> {
+        let parts: Vec<Vec<u8>> = (0..n).map(|_| part("Content-Type: text/plain", &vec![b'x'; size])).collect();
+        archive(&parts)
+    }
+
+    #[test]
+    fn total_size_cap() {
+        let data = text_parts(2, 20);
+        let limits = Limits { max_total: 30, ..Limits::default() };
+        assert!(matches!(parse(&data, limits), Err(MhtmlError::TooLarge(30))));
+        let dir = tempfile::tempdir().unwrap();
+        assert!(matches!(unpack(&data, dir.path(), limits, Policy::None), Err(MhtmlError::TooLarge(_))));
+        assert!(parse(&data, Limits { max_total: 40, ..Limits::default() }).is_ok());
+    }
+
+    #[test]
+    fn part_count_cap() {
+        let data = text_parts(3, 1);
+        let limits = Limits { max_parts: 2, ..Limits::default() };
+        assert!(matches!(parse(&data, limits), Err(MhtmlError::TooManyParts(2))));
+        assert_eq!(parse(&data, Limits { max_parts: 3, ..Limits::default() }).unwrap().parts.len(), 3);
+    }
+
+    /// A file of `levels` multiparts inside each other around one text part.
+    fn nested(levels: usize) -> Vec<u8> {
+        let mut inner = part("Content-Type: text/plain", b"x");
+        for k in (0..levels).rev() {
+            let boundary = format!("lvl{k}x");
+            inner = part(&format!("Content-Type: multipart/mixed; boundary=\"{boundary}\""), &multipart_body(&boundary, &[inner]));
+        }
+        inner
+    }
+
+    #[test]
+    fn nesting_depth_cap() {
+        assert_eq!(parse(&nested(8), Limits::default()).unwrap().parts.len(), 1);
+        assert!(matches!(parse(&nested(9), Limits::default()), Err(MhtmlError::TooDeep)));
+        assert!(matches!(parse(&nested(12), Limits::default()), Err(MhtmlError::TooDeep)));
+    }
+
+    // ---- malformed input ----
+
+    #[test]
+    fn empty_and_headerless_input_is_an_error() {
+        assert!(parse(b"", Limits::default()).is_err());
+        assert!(parse(b"\r\n\r\n", Limits::default()).is_err());
+        assert!(parse(b"just some text", Limits::default()).is_err());
+    }
+
+    #[test]
+    fn headers_only_is_an_error() {
+        assert!(parse(b"Content-Type: multipart/related; boundary=\"B\"\r\n", Limits::default()).is_err());
+        assert!(parse(b"Content-Type: multipart/related; boundary=\"B\"\r\n\r\n", Limits::default()).is_err());
+    }
+
+    #[test]
+    fn missing_boundary_parameter_is_an_error() {
+        let data = b"Content-Type: multipart/related\r\n\r\n--B\r\nContent-Type: text/html\r\n\r\nx\r\n--B--\r\n";
+        assert!(matches!(parse(data, Limits::default()), Err(MhtmlError::NotArchive)));
+    }
+
+    #[test]
+    fn boundary_that_never_appears_is_an_error() {
+        let data = b"Content-Type: multipart/related; boundary=\"B\"\r\n\r\n--OTHER\r\nContent-Type: text/html\r\n\r\nx\r\n--OTHER--\r\n";
+        assert!(parse(data, Limits::default()).is_err());
+    }
+
+    #[test]
+    fn missing_final_boundary_still_reads_the_last_part() {
+        let data = b"Content-Type: multipart/related; boundary=\"B\"\r\n\r\n--B\r\nContent-Type: text/html\r\n\r\nfirst\r\n--B\r\nContent-Type: image/png\r\n\r\nlast part";
+        let a = parse(data, Limits::default()).unwrap();
+        assert_eq!(a.parts.len(), 2);
+        assert_eq!(a.parts[0].body, b"first");
+        assert_eq!(a.parts[1].body, b"last part");
+    }
+
+    #[test]
+    fn file_cut_inside_a_base64_part_gives_a_prefix() {
+        let original: Vec<u8> = (0..100u8).collect();
+        let encoded = base64::engine::general_purpose::STANDARD.encode(&original);
+        for cut in 1..encoded.len() {
+            let head = "Content-Type: application/octet-stream\r\nContent-Transfer-Encoding: base64\r\n\r\n";
+            let data = format!("Content-Type: multipart/related; boundary=\"B\"\r\n\r\n--B\r\n{head}{}", &encoded[..cut]);
+            let a = parse(data.as_bytes(), Limits::default()).unwrap();
+            let body = &a.parts[0].body;
+            assert!(original.starts_with(body), "cut at {cut}");
+        }
+    }
+
+    #[test]
+    fn random_bytes_never_panic() {
+        let mut state = 0x1234_5678_9abc_def0u64;
+        let dir = tempfile::tempdir().unwrap();
+        for n in 0..400 {
+            let len = (lcg(&mut state) as usize) * 2 % 300 + (n % 7);
+            let mut buf: Vec<u8> = (0..len).map(|_| lcg(&mut state)).collect();
+            if n % 2 == 1 {
+                // Behind a valid multipart header, so the parts get read.
+                let mut v = b"Content-Type: multipart/related; boundary=\"B\"\r\n\r\n--B\r\n".to_vec();
+                v.append(&mut buf);
+                buf = v;
+            }
+            let _ = parse(&buf, Limits::default());
+            let _ = unpack(&buf, dir.path(), Limits::default(), Policy::Offline);
+        }
+    }
+
+    #[test]
+    fn every_prefix_of_the_chrome_sample_never_panics() {
+        let dir = tempfile::tempdir().unwrap();
+        for n in 0..=CHROME.len() {
+            let _ = parse(&CHROME[..n], Limits::default());
+            if n % 7 == 0 {
+                let _ = unpack(&CHROME[..n], dir.path(), Limits::default(), Policy::Offline);
+            }
+        }
+    }
+
+    // ---- line ends and single parts ----
+
+    #[test]
+    fn lf_line_ends_parse_like_crlf() {
+        let mut lf = Vec::new();
+        let mut i = 0;
+        while i < CHROME.len() {
+            if CHROME[i..].starts_with(b"\r\n") {
+                lf.push(b'\n');
+                i += 2;
+            } else {
+                lf.push(CHROME[i]);
+                i += 1;
+            }
+        }
+        assert!(!lf.contains(&b'\r'));
+        let a = parse(CHROME, Limits::default()).unwrap();
+        let b = parse(&lf, Limits::default()).unwrap();
+        assert_eq!(a.parts.len(), b.parts.len());
+        assert_eq!(a.root, b.root);
+        assert_eq!((&a.subject, &a.address), (&b.subject, &b.address));
+        for (x, y) in a.parts.iter().zip(&b.parts) {
+            assert_eq!((&x.content_type, &x.location, &x.content_id), (&y.content_type, &y.location, &y.content_id));
+            if x.content_type.starts_with("text/") {
+                // Hard line breaks in a text part keep the file's line ends.
+                let tx = decode_text(&x.body, x.charset.as_deref(), x.content_type == "text/html");
+                let ty = decode_text(&y.body, y.charset.as_deref(), y.content_type == "text/html");
+                assert_eq!(tx.replace("\r\n", "\n"), ty);
+            } else {
+                assert_eq!(x.body, y.body);
+            }
+        }
+    }
+
+    #[test]
+    fn single_part_html_unpacks_to_index() {
+        let data = b"Content-Type: text/html; charset=utf-8\r\nContent-Location: https://example.com/\r\n\r\n<html><body>hi</body></html>";
+        let (dir, u) = unpack_to(data, Policy::Offline);
+        assert_eq!(u.files, [dir.path().join("index.html")]);
+        assert!(read_text(dir.path(), "index.html").contains("<body>hi</body>"));
+        assert_eq!(u.address.as_deref(), Some("https://example.com/"));
+    }
 }
