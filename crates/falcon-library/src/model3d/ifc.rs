@@ -25,7 +25,7 @@ use std::collections::{HashMap, HashSet};
 use super::earclip::{self, P3};
 use super::math::V3;
 use super::step::{self, Entity, StepFile, Value};
-use super::{DEFAULT_COLOR, Material, Mesh, Model, ParseError, Result};
+use super::{DEFAULT_COLOR, Material, Mesh, Model, ParseError, Result, Surface};
 
 /// The reason given for a file with nothing falcon can draw.
 pub const NO_GEOMETRY: &str = "IFC: no tessellated geometry";
@@ -445,7 +445,7 @@ impl<'a> Reader<'a> {
                         }
                         let Some(c) = self.f.deref_named(se.arg(0), "IFCCOLOURRGB") else { continue };
                         let ch = |k: usize| c.arg(k).as_f64().unwrap_or(0.8).clamp(0.0, 1.0) as f32;
-                        let transparency = se.arg(1).as_f64().unwrap_or(0.0).clamp(0.0, 1.0) as f32;
+                        let transparency = se.arg(1).as_f64().filter(|t| t.is_finite()).unwrap_or(0.0).clamp(0.0, 1.0) as f32;
                         return Some(Material { name, color: [ch(1), ch(2), ch(3)], opacity: 1.0 - transparency });
                     }
                 }
@@ -857,7 +857,8 @@ impl<'a> Reader<'a> {
                 let mat = piece.material.unwrap_or_else(|| Material { name: type_name.clone(), color: default_color(&e.name), opacity: 1.0 });
                 let key = (type_name.clone(), mat.name.clone(), mat.color.map(f32::to_bits));
                 let g = *where_.entry(key.clone()).or_insert_with(|| {
-                    groups.push((key, Mesh { name: type_name.clone(), material: Some(mat.clone()), normals: Some(Vec::new()), ..Default::default() }, true));
+                    let surface = Surface { blend: mat.opacity.is_finite() && (mat.opacity - 1.0).abs() > 1e-6, ..Surface::default() };
+                    groups.push((key, Mesh { name: type_name.clone(), material: Some(mat.clone()), surface, normals: Some(Vec::new()), ..Default::default() }, true));
                     world.push(Vec::new());
                     groups.len() - 1
                 });

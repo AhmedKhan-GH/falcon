@@ -11,7 +11,7 @@ use std::collections::{HashMap, HashSet};
 
 use super::ifc::{HIDDEN, Report, display_name, rep_rank};
 use super::step::{StepFile, Value};
-use super::{Material, Mesh, Model, ParseError, Result};
+use super::{Material, Mesh, Model, ParseError, Result, Surface};
 
 /// A placed model this far from the origin (in metres) is moved to it.
 const RECENTRE_BEYOND: f64 = 10_000.0;
@@ -196,8 +196,10 @@ fn build(scene: &falcon_ifc::Scene, types: &HashMap<u32, String>) -> Option<Mode
         let key = (name.clone(), g.color.map(f64::to_bits));
         let k = *by_key.entry(key).or_insert_with(|| {
             let c = g.color;
-            let material = Material { name: name.clone(), color: [c[0] as f32, c[1] as f32, c[2] as f32], opacity: c[3] as f32 };
-            meshes.push(Mesh { name, material: Some(material), ..Default::default() });
+            let opacity = if c[3].is_finite() { c[3] as f32 } else { 1.0 };
+            let material = Material { name: name.clone(), color: [c[0] as f32, c[1] as f32, c[2] as f32], opacity };
+            let surface = Surface { blend: (opacity - 1.0).abs() > 1e-6, ..Surface::default() };
+            meshes.push(Mesh { name, material: Some(material), surface, ..Default::default() });
             meshes.len() - 1
         });
         let mesh = &mut meshes[k];

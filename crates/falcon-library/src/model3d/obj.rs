@@ -5,13 +5,20 @@
 //! options are baked into the texture coordinates and `-clamp on` clamps
 //! it. The picture replaces the `Kd` colour where it is drawn, as in
 //! Eagle's viewer.
+//!
+//! `map_bump` (or `bump`) is read the same way into the surface's bump map;
+//! its `-bm` strength is ignored, as Eagle's viewer ignores it. The
+//! coordinates take their `-o` and `-s` from `map_Kd`, else from the bump
+//! map. A material whose `d` or `Tr` is not 1 draws see-through. `map_Ke`,
+//! `Ke`, `norm` and `map_d` are not read, as in Eagle's viewer. Statement
+//! names are compared without regard to case.
 
 use std::borrow::Cow;
 use std::collections::HashMap;
 
 use super::math::V3;
 use super::texture::{Loader, Texture, Wrap};
-use super::{DEFAULT_COLOR, Material, Mesh, Model, Result};
+use super::{DEFAULT_COLOR, Material, Mesh, Model, Result, Surface};
 
 const NO_NORMAL: u32 = u32::MAX;
 const NO_UV: u32 = u32::MAX;
@@ -71,6 +78,14 @@ struct MtlEntry {
     opacity: Option<f32>,
     tr: Option<f32>,
     map: Option<String>,
+    bump: Option<String>,
+}
+
+/// A material's `map_Kd` and bump statements.
+#[derive(Default)]
+struct MapSet {
+    kd: Option<MapOpts>,
+    bump: Option<MapOpts>,
 }
 
 /// A `map_Kd` statement: the picture's path (relative to the MTL file's
@@ -122,17 +137,21 @@ fn map_opts(rest: &str, dir: &str) -> Option<MapOpts> {
     (!m.path.is_empty()).then_some(m)
 }
 
-fn parse_mtl(bytes: &[u8], dir: &str, out: &mut HashMap<String, Material>, maps: &mut HashMap<String, MapOpts>) {
+fn parse_mtl(bytes: &[u8], dir: &str, out: &mut HashMap<String, Material>, maps: &mut HashMap<String, MapSet>) {
     let text = String::from_utf8_lossy(bytes);
     let mut cur: Option<(String, MtlEntry)> = None;
-    let flush = |cur: &mut Option<(String, MtlEntry)>, out: &mut HashMap<String, Material>, maps: &mut HashMap<String, MapOpts>| {
+    let flush = |cur: &mut Option<(String, MtlEntry)>, out: &mut HashMap<String, Material>, maps: &mut HashMap<String, MapSet>| {
         if let Some((name, e)) = cur.take() {
             let opacity = e.opacity.or(e.tr.map(|t| 1.0 - t)).unwrap_or(1.0).clamp(0.0, 1.0);
             let color = e.color.unwrap_or(DEFAULT_COLOR);
-            if !out.contains_key(&name)
-                && let Some(m) = e.map.as_deref().and_then(|r| map_opts(r, dir))
-            {
-                maps.insert(name.clone(), m);
+            if !out.contains_key(&name) {
+                let set = MapSet {
+                    kd: e.map.as_deref().and_then(|r| map_opts(r, dir)),
+                    bump: e.bump.as_deref().and_then(|r| map_opts(r, dir)),
+                };
+                if set.kd.is_some() || set.bump.is_some() {
+                    maps.insert(name.clone(), set);
+                }
             }
             out.entry(name.clone()).or_insert(Material { name, color, opacity });
         }
@@ -142,11 +161,11 @@ fn parse_mtl(bytes: &[u8], dir: &str, out: &mut HashMap<String, Material>, maps:
         let (key, rest) = line.split_once(char::is_whitespace).unwrap_or((line, ""));
         let rest = rest.trim();
         match key {
-            "newmtl" => {
+            _ if key.eq_ignore_ascii_case("newmtl") => {
                 flush(&mut cur, out, maps);
                 cur = Some((rest.to_string(), MtlEntry::default()));
             }
-            "Kd" => {
+            _ if key.eq_ignore_ascii_case("Kd") => {
                 if let Some((_, e)) = cur.as_mut() {
                     let mut it = rest.split_ascii_whitespace();
                     if let Some([r, g, b]) = floats::<3>(&mut it) {
@@ -154,19 +173,28 @@ fn parse_mtl(bytes: &[u8], dir: &str, out: &mut HashMap<String, Material>, maps:
                     }
                 }
             }
-            "d" => {
-                if let (Some((_, e)), Ok(v)) = (cur.as_mut(), rest.split_ascii_whitespace().next().unwrap_or("").parse::<f32>()) {
+            _ if key.eq_ignore_ascii_case("d") => {
+                if let (Some((_, e)), Ok(v)) = (cur.as_mut(), rest.split_ascii_whitespace().next().unwrap_or("").parse::<f32>())
+                    && v.is_finite()
+                {
                     e.opacity = Some(v);
                 }
             }
-            "Tr" => {
-                if let (Some((_, e)), Ok(v)) = (cur.as_mut(), rest.split_ascii_whitespace().next().unwrap_or("").parse::<f32>()) {
+            _ if key.eq_ignore_ascii_case("Tr") => {
+                if let (Some((_, e)), Ok(v)) = (cur.as_mut(), rest.split_ascii_whitespace().next().unwrap_or("").parse::<f32>())
+                    && v.is_finite()
+                {
                     e.tr = Some(v);
                 }
             }
             k if k.eq_ignore_ascii_case("map_Kd") => {
                 if let Some((_, e)) = cur.as_mut() {
                     e.map = Some(rest.to_string());
+                }
+            }
+            k if k.eq_ignore_ascii_case("map_bump") || k.eq_ignore_ascii_case("bump") => {
+                if let Some((_, e)) = cur.as_mut() {
+                    e.bump = Some(rest.to_string());
                 }
             }
             _ => {}
@@ -195,9 +223,10 @@ pub fn parse(bytes: &[u8], side: &dyn Fn(&str) -> Option<Vec<u8>>) -> Result<Mod
     let mut normals: Vec<V3> = Vec::new();
     let mut texcoords: Vec<[f32; 2]> = Vec::new();
     let mut materials: HashMap<String, Material> = HashMap::new();
-    let mut maps: HashMap<String, MapOpts> = HashMap::new();
+    let mut maps: HashMap<String, MapSet> = HashMap::new();
     let mut loader = Loader::new(side);
     let mut textures: HashMap<String, Option<Texture>> = HashMap::new();
+    let mut bumps: HashMap<String, Option<Texture>> = HashMap::new();
 
     let mut obj_name = String::new();
     let mut mat_name: Option<String> = None;
@@ -291,8 +320,12 @@ pub fn parse(bytes: &[u8], side: &dyn Fn(&str) -> Option<Vec<u8>>) -> Result<Mod
                             let material = mat_name.as_ref().map(|n| {
                                 materials.get(n).cloned().unwrap_or_else(|| Material { name: n.clone(), color: DEFAULT_COLOR, opacity: 1.0 })
                             });
-                            let map = mat_name.as_ref().and_then(|n| maps.get(n)).cloned();
-                            let texture = match (&mat_name, &map) {
+                            let set = mat_name.as_ref().and_then(|n| maps.get(n));
+                            let kd = set.and_then(|s| s.kd.clone());
+                            let bump = set.and_then(|s| s.bump.clone());
+                            let map = kd.clone().or_else(|| bump.clone());
+                            let blend = material.as_ref().is_some_and(|m| (m.opacity - 1.0).abs() > 1e-6);
+                            let texture = match (&mat_name, &kd) {
                                 (Some(n), Some(m)) => textures
                                     .entry(n.clone())
                                     .or_insert_with(|| {
@@ -303,8 +336,25 @@ pub fn parse(bytes: &[u8], side: &dyn Fn(&str) -> Option<Vec<u8>>) -> Result<Mod
                                     .clone(),
                                 _ => None,
                             };
+                            let bump_map = match (&mat_name, &bump) {
+                                (Some(n), Some(m)) => bumps
+                                    .entry(n.clone())
+                                    .or_insert_with(|| {
+                                        let image = loader.for_map(|l| l.file_in(&m.dir, &m.path))?;
+                                        let wrap = if m.clamp { Wrap::Clamp } else { Wrap::Repeat };
+                                        Some(Texture { wrap: [wrap; 2], ..Texture::new(image) })
+                                    })
+                                    .clone(),
+                                _ => None,
+                            };
                             builders.push(Builder {
-                                mesh: Mesh { name: obj_name.clone(), material, texture, ..Mesh::default() },
+                                mesh: Mesh {
+                                    name: obj_name.clone(),
+                                    material,
+                                    texture,
+                                    surface: Surface { bump_map, blend, ..Surface::default() },
+                                    ..Mesh::default()
+                                },
                                 colors: Vec::new(),
                                 uvs: Vec::new(),
                                 all_normals: true,
@@ -517,6 +567,59 @@ mod tests {
         // Faces without vt have no coordinates.
         let m = parse(b"v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n", &none).unwrap();
         assert!(m.meshes[0].uvs.is_none());
+    }
+
+    fn bump_model(mtl: &str, with_vt: bool) -> Model {
+        let png = crate::model3d::texture::tests::png_2x2();
+        let mtl = mtl.to_string();
+        let side = move |n: &str| match n {
+            "m.mtl" => Some(mtl.clone().into_bytes()),
+            "b.png" => Some(png.clone()),
+            _ => None,
+        };
+        let src: &[u8] = if with_vt { TEXTURED } else { b"mtllib m.mtl\nv 0 0 0\nv 1 0 0\nv 0 1 0\nusemtl wood\nf 1 2 3\n" };
+        parse(src, &side).unwrap()
+    }
+
+    #[test]
+    fn map_bump_with_options_and_aliases() {
+        for stmt in ["map_bump -bm 0.5 -s 2 2 b.png", "bump b.png", "MAP_BUMP b.png", "Bump -bm 3 b.png"] {
+            let m = bump_model(&format!("newmtl wood\n{stmt}\n"), true);
+            let mesh = &m.meshes[0];
+            assert!(mesh.surface.bump_map.is_some(), "{stmt}");
+            assert!(mesh.texture.is_none());
+            assert!(mesh.uvs.is_some());
+            assert!(!mesh.surface.blend);
+        }
+        let m = bump_model("newmtl wood\nmap_bump -clamp on b.png\n", true);
+        assert_eq!(m.meshes[0].surface.bump_map.as_ref().unwrap().wrap, [Wrap::Clamp; 2]);
+    }
+
+    #[test]
+    fn missing_bump_keeps_the_mesh() {
+        let m = bump_model("newmtl wood\nKd 1 0 0\nmap_bump gone.png\n", true);
+        assert_eq!(m.meshes.len(), 1);
+        assert!(m.meshes[0].surface.bump_map.is_none());
+        assert_eq!(m.meshes[0].material.as_ref().unwrap().color, [1.0, 0.0, 0.0]);
+        // Without vt coordinates no map survives.
+        let m = bump_model("newmtl wood\nmap_bump b.png\n", false);
+        assert!(m.meshes[0].surface.bump_map.is_none());
+    }
+
+    #[test]
+    fn bump_placement_is_used_without_map_kd() {
+        let m = bump_model("newmtl wood\nmap_bump -s 2 2 b.png\n", true);
+        assert_eq!(m.meshes[0].uvs.as_deref(), Some(&[[0.0, 1.0], [2.0, 1.0], [0.0, -1.0]][..]));
+        let m = bump_model("newmtl wood\nmap_bump -s 2 2 b.png\nmap_Kd -s 3 3 b.png\n", true);
+        assert_eq!(m.meshes[0].uvs.as_deref(), Some(&[[0.0, 1.0], [3.0, 1.0], [0.0, -2.0]][..]));
+    }
+
+    #[test]
+    fn opacity_sets_blend() {
+        for (stmt, blend) in [("d 0.5", true), ("Tr 0.25", true), ("d 1", false), ("d garbage", false), ("d nan", false), ("Tr inf", false), ("Tr 0", false)] {
+            let m = bump_model(&format!("newmtl wood\n{stmt}\n"), true);
+            assert_eq!(m.meshes[0].surface.blend, blend, "{stmt}");
+        }
     }
 
     #[test]

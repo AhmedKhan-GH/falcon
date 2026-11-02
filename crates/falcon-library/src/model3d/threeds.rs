@@ -14,6 +14,10 @@
 //! over the faces that meet at the same place and share a smoothing bit;
 //! without them the vertices stay shared and the viewer shades flat.
 //!
+//! A material with transparency draws see-through. Only the diffuse map and
+//! the transparency are read, as in Eagle's viewer: the bump, opacity and
+//! other map chunks are skipped, so no mesh gets a bump or normal map.
+//!
 //! Skipped: the keyframer (animation), lights, cameras, the master scale,
 //! and everything else unknown (bump, opacity and other maps among it). The
 //! vertices of a 3DS mesh are already stored in world space, so
@@ -466,6 +470,7 @@ fn build_object(o: &Object, materials: &[Mat]) -> Vec<Mesh> {
             }
         }
         mesh.texture = mat.and_then(|m| m.loaded.clone());
+        mesh.surface.blend = mat.is_some_and(|m| (m.opacity - 1.0).abs() > 1e-6);
         meshes.push(mesh);
     }
     meshes
@@ -848,12 +853,33 @@ mod tests {
         mat.extend(chunk(MAT_TRANSPARENCY, &chunk(PERCENT_INT, &25u16.to_le_bytes())));
         let m = parse(&file(&[mat], &[("glass", all(12))], None)).unwrap();
         assert_eq!(m.meshes[0].material.as_ref().unwrap().opacity, 0.75);
+        assert!(m.meshes[0].surface.blend);
         let mut mat = material("glass", red_byte());
         mat.extend(chunk(MAT_TRANSPARENCY, &chunk(PERCENT_FLOAT, &0.5f32.to_le_bytes())));
         let m = parse(&file(&[mat], &[("glass", all(12))], None)).unwrap();
         assert_eq!(m.meshes[0].material.as_ref().unwrap().opacity, 0.5);
         let mat = read_material(&cat(&[chunk(MAT_NAME, &cstr("t")), chunk(MAT_TEXTURE, &chunk(MAT_TEXTURE_FILE, &cstr("wood.jpg")))])).unwrap();
         assert_eq!(mat.texture.as_deref(), Some("wood.jpg"));
+    }
+
+    #[test]
+    fn blend_follows_transparency() {
+        let transparent = |bytes: Vec<u8>| {
+            let mut mat = material("glass", red_byte());
+            mat.extend(chunk(MAT_TRANSPARENCY, &bytes));
+            mat
+        };
+        // Shared vertices, and split ones with smoothing groups.
+        for smooth in [None, Some(&[1u32; 12][..])] {
+            let m = parse(&file(&[transparent(chunk(PERCENT_INT, &50u16.to_le_bytes()))], &[("glass", all(12))], smooth)).unwrap();
+            assert!(m.meshes[0].surface.blend);
+            assert!(m.meshes[0].surface.bump_map.is_none() && m.meshes[0].surface.normal_map.is_none());
+            let m = parse(&file(&[transparent(chunk(PERCENT_INT, &0u16.to_le_bytes()))], &[("glass", all(12))], smooth)).unwrap();
+            assert!(!m.meshes[0].surface.blend);
+            let m = parse(&file(&[transparent(chunk(PERCENT_FLOAT, &f32::NAN.to_le_bytes()))], &[("glass", all(12))], smooth)).unwrap();
+            assert!(!m.meshes[0].surface.blend);
+        }
+        assert!(!parse(&red_cube()).unwrap().meshes[0].surface.blend);
     }
 
     #[test]

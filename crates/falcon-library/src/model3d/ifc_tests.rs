@@ -61,6 +61,7 @@ fn triangulated_face_set_cube_with_a_style() {
     assert_eq!(m.meshes[0].name, "IfcBuildingElementProxy");
     let mat = m.meshes[0].material.as_ref().unwrap();
     assert_eq!((mat.name.as_str(), mat.color, mat.opacity), ("Red", [1.0, 0.0, 0.0], 0.75));
+    assert!(m.meshes[0].surface.blend, "a transparent style draws see-through");
     // Z-up turned to Y-up: IFC's +Y runs along the viewer's −Z.
     let (lo, hi) = m.bounds().unwrap();
     assert!(close(lo, [0.0, 0.0, -1.0]) && close(hi, [1.0, 1.0, 0.0]), "{lo:?} {hi:?}");
@@ -68,6 +69,19 @@ fn triangulated_face_set_cube_with_a_style() {
     assert!((s.volume.unwrap() - 1.0).abs() < 1e-6, "closed and wound consistently");
     // Through the registry too (web-ifc, when built in, reads it the same).
     assert_eq!(crate::model3d::parse(src.as_bytes(), "IFC", &|_| None).unwrap().triangle_count(), 12);
+}
+
+#[test]
+fn opaque_and_odd_styles_do_not_blend() {
+    for (t, blend) in [("0.", false), ("1.", true), ("$", false)] {
+        let style = format!("#16=IFCCOLOURRGB($,1.,0.,0.);\n#17=IFCSURFACESTYLESHADING(#16,{t});\n#18=IFCSURFACESTYLE('Red',.BOTH.,(#17));\n#19=IFCSTYLEDITEM(#11,(#18),$);\n");
+        let src = file("IFC4", "$", &format!("{}{}{style}", cube_tfs(1.0), product("IFCBUILDINGELEMENTPROXY", "#11")));
+        let m = parse(src.as_bytes()).unwrap();
+        assert_eq!(m.meshes[0].surface.blend, blend, "transparency {t}");
+    }
+    // A product with no style is opaque.
+    let src = file("IFC4", "$", &format!("{}{}", cube_tfs(1.0), product("IFCBUILDINGELEMENTPROXY", "#11")));
+    assert!(!parse(src.as_bytes()).unwrap().meshes[0].surface.blend);
 }
 
 #[test]
