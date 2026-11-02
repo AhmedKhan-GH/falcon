@@ -8,12 +8,16 @@
 //! (the 3D scene through the same wgpu callback, which every window
 //! shares; the page in a `WKWebView` put on this window); the window can stay
 //! on top, be made translucent, show in grayscale and copy the item (see
-//! the desktop app chapter).
+//! the desktop app chapter). Each window decodes with a loader of its own,
+//! so its grayscale, its sampling and the sharp renders of its zoom don't
+//! touch the main window's.
 
 mod kind;
 mod opacity;
 mod pdf;
 mod players;
+
+use std::collections::HashMap;
 
 use eframe::egui::{self, Color32, Pos2, Rect, Sense, TextureHandle, Ui, Vec2, vec2};
 use falcon_library::Library;
@@ -23,15 +27,18 @@ use crate::app::image_edit::Op;
 use crate::app::{Action, App};
 use falcon_library::transform::{self, Flip};
 use crate::gesture::Outcome;
-use crate::loader::{Tier, job_for};
+use crate::loader::{Job, Loader, Tier, job_for};
 use crate::locale::{tr, trf};
 use crate::logic;
 use crate::theme as t;
 use crate::ui::dialogs::export::{CopyKind, Request};
 use crate::ui::viewer::crop::ViewTransform;
-use crate::ui::viewer::image::paint_transformed;
+use crate::ui::viewer::image::{RegionView, SharpAsk, ask_sharp, paint_patched, paint_tiles, paint_transformed};
 use crate::ui::widgets::ext_placeholder;
 use kind::{Kind, OPACITIES, Turn, kind_of, turn_target};
+
+/// Decoding threads of one window's loader: it shows one item at a time.
+const WINDOW_WORKERS: usize = 2;
 
 /// The viewer an item got in the window.
 enum Pane {
@@ -101,6 +108,17 @@ pub(crate) struct PreviewWin {
     custom: bool,
     /// A right- or middle-button drag on the picture (`crate::gesture`).
     gesture: Option<crate::gesture::Gesture>,
+    /// The window's own decoding, made once it first draws.
+    loader: Option<Loader>,
+    /// The main loader's `forget_mark` of each item last seen here.
+    seen: HashMap<String, u64>,
+    /// Whether the window is in grayscale; starts off, as Eagle's does.
+    gray: bool,
+    /// Whether the PSD shown has a merged image to draw.
+    psd: crate::psd_status::PsdStatus,
+    psd_opened: bool,
+    /// The sharp render last asked for.
+    region_view: Option<RegionView>,
 }
 
 impl PreviewWin {
@@ -122,6 +140,12 @@ impl PreviewWin {
             pane: Pane::Pending,
             custom: false,
             gesture: None,
+            loader: None,
+            seen: HashMap::new(),
+            gray: false,
+            psd: Default::default(),
+            psd_opened: false,
+            region_view: None,
         }
     }
 
@@ -131,14 +155,22 @@ impl PreviewWin {
     }
 
     /// Moves `by` items along, stopping at either end as Eagle does. The
-    /// new item starts with a fresh view and viewer; Always on Top and the
-    /// opacity stay.
+    /// new item starts with a fresh view and viewer; Always on Top, the
+    /// opacity, the grayscale and the loader stay.
     fn step(&mut self, by: isize) {
         let next = self.index as isize + by;
         if next < 0 || next as usize >= self.ids.len() || next as usize == self.index {
             return;
         }
-        let keep = PreviewWin { on_top: self.on_top, opacity: self.opacity, applied: self.applied.take(), ..PreviewWin::new(self.ids.clone(), self.serial) };
+        let keep = PreviewWin {
+            on_top: self.on_top,
+            opacity: self.opacity,
+            applied: self.applied.take(),
+            loader: self.loader.take(),
+            seen: std::mem::take(&mut self.seen),
+            gray: self.gray,
+            ..PreviewWin::new(self.ids.clone(), self.serial)
+        };
         *self = PreviewWin { id: keep.ids[next as usize].clone(), index: next as usize, ..keep };
     }
 }
@@ -199,12 +231,35 @@ impl App {
                 .with_inner_size(window_size(natural))
                 .with_min_inner_size([200.0, 150.0]);
             let vid = egui::ViewportId::from_hash_of(("falcon-preview", pw.serial));
-            ctx.show_viewport_immediate(vid, builder, |ui, _class| self.preview_contents(ui, lib, &item, pw));
+            let forgot = self.ws.loader.forget_mark(&item.id);
+            ctx.show_viewport_immediate(vid, builder, |ui, _class| {
+                let mut own = pw.own_loader(ui.ctx(), &item.id, forgot);
+                self.in_window_state(&mut own, pw, |app, pw| app.preview_contents(ui, lib, &item, pw));
+                pw.loader = Some(own);
+            });
             !pw.close
         });
         // Windows opened while these were drawn come after them.
         wins.append(&mut self.preview);
         self.preview = wins;
+    }
+
+    /// Runs `draw` with the window's loader, jobs and grayscale in the
+    /// main window's places, so the code it shares with the main viewer
+    /// (fonts, 3D, web) reads the window's, and the main window keeps its
+    /// own. Eagle's grayscale belongs to each window in the same way: the
+    /// main window's grays its grid and viewer, a preview window's only
+    /// itself, and neither changes the other. The window's menu and key
+    /// toggle `modes.grayscale` here, which is the window's during `draw`.
+    fn in_window_state(&mut self, own: &mut Loader, pw: &mut PreviewWin, draw: impl FnOnce(&mut App, &mut PreviewWin)) {
+        std::mem::swap(&mut self.ws.loader, own);
+        std::mem::swap(&mut self.modes.grayscale, &mut pw.gray);
+        let main_jobs = std::mem::take(&mut self.ws.frame_jobs);
+        draw(self, pw);
+        self.ws.loader.keep_original(Some(&pw.id));
+        self.ws.loader.want(std::mem::replace(&mut self.ws.frame_jobs, main_jobs));
+        std::mem::swap(&mut self.modes.grayscale, &mut pw.gray);
+        std::mem::swap(&mut self.ws.loader, own);
     }
 
     fn preview_contents(&mut self, ui: &mut Ui, lib: &Library, item: &Item, pw: &mut PreviewWin) {
@@ -285,12 +340,8 @@ impl App {
             Pane::Pending | Pane::Picture => false,
         };
         if !pw.custom {
-            let scale = pw.picture(ui, &resp, tex, item, full, self.modes.hide_navigator);
-            // The loader's sampling is shared: the main viewer's zoom rules
-            // while it is open.
-            if self.ws.viewer.is_none() {
-                self.ws.loader.set_pixelated(logic::pixelated_at(self.prefs.pixelated, scale));
-            }
+            let scale = pw.picture(ui, &resp, tex, item, lib.root(), full, self.modes.hide_navigator, &mut self.ws.loader, &mut self.ws.frame_jobs);
+            self.ws.loader.set_pixelated(logic::pixelated_at(self.prefs.pixelated, scale));
         }
 
         // Eagle's window menu, from a right-click (over a model, on the
@@ -541,13 +592,35 @@ impl PreviewWin {
 }
 
 impl PreviewWin {
+    /// The window's loader, taken out for the frame (made on the first),
+    /// having caught up with what arrived and with an item changed on disk
+    /// (`forgot`, the main loader's `forget_mark`).
+    fn own_loader(&mut self, ctx: &egui::Context, id: &str, forgot: u64) -> Loader {
+        let mut own = self.loader.take().unwrap_or_else(|| Loader::with_workers(ctx, WINDOW_WORKERS));
+        if self.seen.get(id).copied().unwrap_or(0) != forgot {
+            own.forget(id);
+            self.seen.insert(id.to_string(), forgot);
+        }
+        own.poll(ctx);
+        own
+    }
+
     /// The zoomable picture (or the thumbnail of a type with no viewer of
-    /// its own) with its navigator.
+    /// its own) with its navigator, sharp at each zoom as in the main viewer
+    /// (`ask_sharp`).
     /// Returns the zoom it was drawn at.
-    fn picture(&mut self, ui: &mut Ui, resp: &egui::Response, tex: Option<TextureHandle>, item: &Item, full: Rect, hide_navigator: bool) -> f32 {
+    #[allow(clippy::too_many_arguments)]
+    fn picture(&mut self, ui: &mut Ui, resp: &egui::Response, tex: Option<TextureHandle>, item: &Item, root: &std::path::Path, full: Rect, hide_navigator: bool, loader: &mut Loader, jobs: &mut Vec<Job>) -> f32 {
         let ctx = ui.ctx().clone();
         let tf = self.tf;
-        let natural = if item.width > 0 && item.height > 0 {
+        if falcon_library::psd::handles(&item.ext.to_lowercase()) && !self.psd_opened {
+            self.psd_opened = true;
+            self.psd.open(&item.id, item.original_path(root), &ctx);
+        }
+        self.psd.poll();
+        let natural = if let Some((w, h)) = self.psd.size(&item.id) {
+            tf.size(w as f32, h as f32)
+        } else if item.width > 0 && item.height > 0 {
             tf.size(item.width as f32, item.height as f32)
         } else {
             tex.as_ref().map_or(Vec2::splat(512.0), |t| tf.size(t.size_vec2().x, t.size_vec2().y))
@@ -587,12 +660,19 @@ impl PreviewWin {
             self.pan = Vec2::ZERO;
         }
         let r = Rect::from_center_size(full.center() + self.pan, natural * scale);
-        match &tex {
-            Some(tex) if tf.is_identity() => {
-                ui.painter().image(tex.id(), r, Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)), Color32::WHITE);
-            }
-            Some(tex) => paint_transformed(ui.painter(), tex.id(), r, tf),
-            None => ext_placeholder(ui, Rect::from_center_size(full.center(), Vec2::splat(180.0)), &item.ext),
+        let plain = crate::anim::kind(&item.ext).is_none();
+        let ask = SharpAsk { item, root, natural, r, area: full, tex: tex.as_ref(), tf, plain };
+        let sharp = ask_sharp(ui, loader, jobs, &self.psd, &mut self.region_view, &ask);
+        match (&tex, loader.original(&item.id).filter(|_| sharp.original)) {
+            (_, Some(o)) => paint_tiles(ui.painter(), o, r, full),
+            (Some(tex), None) => match sharp.patch {
+                Some(patch) => paint_patched(ui.painter(), tex.id(), r, patch),
+                None if tf.is_identity() => {
+                    ui.painter().image(tex.id(), r, Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)), Color32::WHITE);
+                }
+                None => paint_transformed(ui.painter(), tex.id(), r, tf),
+            },
+            (None, None) => ext_placeholder(ui, Rect::from_center_size(full.center(), Vec2::splat(180.0)), &item.ext),
         }
         if !hide_navigator {
             self.navigator(ui, tex.as_ref(), natural, r, full);
@@ -704,10 +784,76 @@ mod tests {
         let mut w = PreviewWin::new(ids, 1);
         w.step(-1);
         assert_eq!(w.id, "a");
-        (w.zoom, w.on_top, w.opacity) = (Some(2.0), true, 50);
+        (w.zoom, w.on_top, w.opacity, w.gray) = (Some(2.0), true, 50, true);
         w.step(1);
-        assert_eq!((w.id.as_str(), w.index, w.zoom, w.on_top, w.opacity), ("c", 1, None, true, 50));
+        assert_eq!((w.id.as_str(), w.index, w.zoom, w.on_top, w.opacity, w.gray), ("c", 1, None, true, 50, true));
         w.step(1);
         assert_eq!(w.id, "c");
+    }
+
+    #[test]
+    fn a_window_starts_in_colour() {
+        assert!(!PreviewWin::new(vec!["a".into()], 1).gray);
+    }
+
+    #[test]
+    fn the_window_loader_forgets_what_the_main_one_did() {
+        let ctx = egui::Context::default();
+        let mut main = Loader::with_workers(&ctx, 1);
+        let mut w = PreviewWin::new(vec!["a".into()], 1);
+        let own = w.own_loader(&ctx, "a", main.forget_mark("a"));
+        assert_eq!(own.forget_mark("a"), 0, "nothing changed yet");
+        main.forget("a");
+        let own = w.own_loader(&ctx, "a", main.forget_mark("a"));
+        let first = own.forget_mark("a");
+        assert!(first > 0, "the item changed");
+        w.loader = Some(own);
+        let own = w.own_loader(&ctx, "a", main.forget_mark("a"));
+        assert_eq!(own.forget_mark("a"), first, "only once for one change");
+    }
+
+    fn item(ext: &str, side: u32) -> Item {
+        let json = format!(r#"{{"id":"a","name":"n","ext":"{ext}","width":{side},"height":{side},"size":1,"btime":0,"mtime":0,"modificationTime":0,"lastModified":0,"tags":[],"folders":[],"url":"","annotation":"","palettes":[],"isDeleted":false}}"#);
+        serde_json::from_str(&json).unwrap()
+    }
+
+    /// One frame of the picture at actual size; the jobs asked for.
+    fn draw_at_actual_size(w: &mut PreviewWin, item: &Item) -> Vec<Job> {
+        let ctx = egui::Context::default();
+        let mut loader = Loader::with_workers(&ctx, 1);
+        let mut jobs = Vec::new();
+        w.zoom = Some(1.0);
+        let tex = ctx.load_texture("t", egui::ColorImage::new([16, 16], vec![Color32::WHITE; 256]), egui::TextureOptions::LINEAR);
+        let mut out = ctx.run_ui(Default::default(), |ui| {
+            let full = Rect::from_min_size(Pos2::ZERO, vec2(1000.0, 800.0));
+            let resp = ui.interact(full, ui.scope_id().with("canvas"), Sense::click_and_drag());
+            w.picture(ui, &resp, Some(tex.clone()), item, std::path::Path::new("/nowhere"), full, true, &mut loader, &mut jobs);
+        });
+        out.textures_delta.clear();
+        jobs
+    }
+
+    #[test]
+    fn a_zoomed_picture_asks_for_its_original() {
+        let mut w = PreviewWin::new(vec!["a".into()], 1);
+        let jobs = draw_at_actual_size(&mut w, &item("jpg", 8000));
+        assert!(jobs.iter().any(|j| j.key.1 == Tier::Original), "past the full tier, the tiles");
+    }
+
+    #[test]
+    fn a_zoomed_special_format_asks_for_its_part_on_screen() {
+        let mut w = PreviewWin::new(vec!["a".into()], 1);
+        draw_at_actual_size(&mut w, &item("ai", 8000));
+        assert!(w.region_view.is_some(), "the redraw at the zoom shown");
+    }
+
+    #[test]
+    fn a_view_turned_picture_stays_on_its_render() {
+        let mut w = PreviewWin::new(vec!["a".into()], 1);
+        w.tf = w.tf.rotated(1);
+        draw_at_actual_size(&mut w, &item("ai", 8000));
+        assert!(w.region_view.is_none());
+        let jobs = draw_at_actual_size(&mut w, &item("jpg", 8000));
+        assert!(!jobs.iter().any(|j| j.key.1 == Tier::Original));
     }
 }

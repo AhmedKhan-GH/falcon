@@ -281,13 +281,21 @@ pub struct Loader {
     /// The HDR exposure (a multiplier) and the keys queued for HDR images.
     exposure: f32,
     hdr_keys: HashSet<Key>,
+    /// How many times anything was forgotten, and that count at each item's
+    /// last time: how a preview window's loader learns an item changed.
+    forgets: u64,
+    forgotten: HashMap<String, u64>,
 }
 
 impl Loader {
     pub fn new(ctx: &Context) -> Self {
+        Self::with_workers(ctx, std::thread::available_parallelism().map_or(4, |n| n.get().clamp(2, 6)))
+    }
+
+    /// A loader decoding on `workers` threads.
+    pub fn with_workers(ctx: &Context, workers: usize) -> Self {
         let shared = Arc::new(Shared { queue: Mutex::new(VecDeque::new()), cv: Condvar::new(), closed: Default::default(), region_busy: Default::default(), gray: Default::default(), exposure: std::sync::atomic::AtomicU32::new(1.0f32.to_bits()), linear: Mutex::new(None), rendered: Mutex::new(None) });
         let (tx, rx) = std::sync::mpsc::channel();
-        let workers = std::thread::available_parallelism().map_or(4, |n| n.get().clamp(2, 6));
         for _ in 0..workers {
             let (shared, tx, ctx) = (shared.clone(), tx.clone(), ctx.clone());
             std::thread::spawn(move || {
@@ -345,6 +353,8 @@ impl Loader {
             stale: HashSet::new(),
             exposure: 1.0,
             hdr_keys: HashSet::new(),
+            forgets: 0,
+            forgotten: HashMap::new(),
         }
     }
 
@@ -599,9 +609,16 @@ impl Loader {
         }
     }
 
+    /// Changes when `id` is forgotten; 0 if it never was.
+    pub fn forget_mark(&self, id: &str) -> u64 {
+        self.forgotten.get(id).copied().unwrap_or(0)
+    }
+
     /// Drops one item's textures in every size, after its file or
     /// thumbnail changed, so they are decoded again.
     pub fn forget(&mut self, id: &str) {
+        self.forgets += 1;
+        self.forgotten.insert(id.to_string(), self.forgets);
         self.stale.retain(|k| k.0 != id);
         for (tier, c) in &mut self.caches {
             c.pop(id);
