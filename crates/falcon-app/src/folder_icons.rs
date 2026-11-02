@@ -7,6 +7,7 @@ use eframe::egui::Color32;
 use falcon_library::model::{FOLDER_ICONS, ICON_COLORS};
 
 use crate::icons as ic;
+use crate::locale::tr;
 use crate::theme as t;
 
 /// Eagle icon name → Phosphor Light glyph. Numbers past nine have no glyph
@@ -218,6 +219,21 @@ pub fn all() -> impl Iterator<Item = (&'static str, &'static str)> {
 /// The colour keys in menu order with their tints.
 pub fn colors() -> impl Iterator<Item = (&'static str, Color32)> {
     ICON_COLORS.iter().map(|c| (*c, color(Some(c)).unwrap_or(t::p().icon_none)))
+}
+
+/// The name of an icon colour, for assistive technology.
+pub fn color_label(name: &str) -> &'static str {
+    match name {
+        "red" => tr("Red"),
+        "orange" => tr("Orange"),
+        "yellow" => tr("Yellow"),
+        "green" => tr("Green"),
+        "aqua" => tr("Aqua"),
+        "blue" => tr("Blue"),
+        "purple" => tr("Purple"),
+        "pink" => tr("Pink"),
+        _ => tr("Color"),
+    }
 }
 
 #[cfg(test)]

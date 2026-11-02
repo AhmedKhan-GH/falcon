@@ -192,6 +192,10 @@ The font rule is not a family picker. It has two choices, activated and deactiva
 
 The Color filter's menu opens with a picker: a square where the horizontal position sets saturation and the vertical position sets brightness for the current hue, and a vertical strip beside it that sets the hue. Dragging either one changes the filter colour as it moves, and the hue is kept when the brightness reaches black. Below it are the swatches, then the hex field with a small square showing the current colour, the accuracy slider, the Grayscale only box and Clear.
 
+The swatches are exposed to assistive technology as radio buttons named after their colours (Red, Orange, …, Moss), with their selected state, and a press on one picks the colour as a click does. The picker's square and strip are named too. The folder colour rows, the inspector's palette swatches (named by hex) and the welcome flow's themes are exposed the same way.
+
+A popup takes every pointer click inside it: egui hit-tests by layer, so a click on a swatch or in the gaps between swatches never reaches the grid underneath. AccessKit's own hit test walks its tree instead, last child first, and egui builds that tree in creation order, so on its own it finds a card drawn later in the frame before the popup above it. `crates/falcon-app/src/access_order.rs` sorts each tree update by layer order before it leaves the app, and gives a menu or dialog its bounds so a press between its controls stops there. Two windows in the same layer order keep their creation order, as egui does not publish their stacking.
+
 ## Colour search (observed)
 
 Eagle compares the query colour with the item's two dominant palette colours, then with any colour marked as the item's primary colour.

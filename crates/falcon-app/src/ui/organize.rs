@@ -216,6 +216,7 @@ pub(crate) fn color_row(ui: &mut Ui, current: Option<&str>) -> Option<Option<Str
         let swatches = std::iter::once((None, t::p().icon_none)).chain(folder_icons::colors().map(|(n, c)| (Some(n), c)));
         for (name, c) in swatches {
             let (rect, resp) = ui.allocate_exact_size(Vec2::splat(20.0), Sense::click());
+            resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::RadioButton, true, name == current, name.map_or(tr("No colour"), folder_icons::color_label)));
             let p = ui.painter();
             if name.is_some() {
                 p.circle_filled(rect.center(), 7.0, c);

@@ -3,6 +3,7 @@
 
 use eframe::egui::{self, Color32, Mesh, Pos2, Rect, Sense, Shape, Stroke, Vec2, pos2, vec2};
 
+use crate::locale::tr;
 use crate::logic::{hsv_to_rgb, rgb_to_hsv};
 use crate::theme as t;
 
@@ -29,6 +30,8 @@ pub(crate) fn sv_hue_picker(ui: &mut egui::Ui, id: egui::Id, rgb: &mut [u8; 3]) 
     let strip = Rect::from_min_size(pos2(sq.right() + GAP, rect.top()), vec2(STRIP_W, HEIGHT));
     let sq_resp = ui.interact(sq, id.with("sv"), Sense::click_and_drag());
     let strip_resp = ui.interact(strip, id.with("hue"), Sense::click_and_drag());
+    sq_resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Slider, true, tr("Saturation and Brightness")));
+    strip_resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Slider, true, tr("Hue")));
 
     let mut changed = false;
     if let Some(p) = sq_resp.interact_pointer_pos().filter(|_| sq_resp.is_pointer_button_down_on() || sq_resp.clicked()) {

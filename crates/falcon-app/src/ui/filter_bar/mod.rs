@@ -310,70 +310,7 @@ impl App {
     }
 
     fn color_chip(&mut self, ui: &mut Ui) {
-        let f = &mut self.ws.filter;
-        let value = match (f.color, f.grayscale) {
-            (Some(c), _) => Some(logic::hex(c.rgb)),
-            (None, true) => Some(tr("Grayscale").to_string()),
-            (None, false) => None,
-        };
-        let resp = filter_chip(ui, tr("Color"), value);
-        let color_text = &mut self.ws.color_text;
-        egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
-            ui.set_min_width(230.0);
-            let mut rgb = f.color.map_or(DEFAULT_PICKER_RGB, |q| q.rgb);
-            if super::color_picker::sv_hue_picker(ui, ui.make_persistent_id("filter_color_picker"), &mut rgb) {
-                let acc = f.color.map_or(20.0, |q| q.accuracy);
-                f.color = Some(ColorQuery { rgb, accuracy: acc });
-                *color_text = logic::hex(rgb);
-            }
-            ui.add_space(8.0);
-            ui.horizontal_wrapped(|ui| {
-                ui.spacing_mut().item_spacing = vec2(6.0, 6.0);
-                for c in PRESET_COLORS {
-                    let (rect, hit) = ui.allocate_exact_size(Vec2::splat(22.0), Sense::click());
-                    ui.painter().circle_filled(rect.center(), 10.0, Color32::from_rgb(c[0], c[1], c[2]));
-                    ui.painter().circle_stroke(rect.center(), 10.0, Stroke::new(1.0, t::p().divider));
-                    if f.color.is_some_and(|q| q.rgb == c) {
-                        ui.painter().circle_stroke(rect.center(), 12.5, Stroke::new(1.5, t::p().primary));
-                    }
-                    if hit.clicked() {
-                        let acc = f.color.map_or(20.0, |q| q.accuracy);
-                        f.color = Some(ColorQuery { rgb: c, accuracy: acc });
-                        *color_text = logic::hex(c);
-                    }
-                }
-            });
-            ui.add_space(6.0);
-            ui.horizontal(|ui| {
-                ui.label(tr("Hex"));
-                if ui.add(TextEdit::singleline(color_text).desired_width(90.0).hint_text("#FF0000")).changed()
-                    && let Some(rgb) = parse_hex(color_text)
-                {
-                    let acc = f.color.map_or(20.0, |q| q.accuracy);
-                    f.color = Some(ColorQuery { rgb, accuracy: acc });
-                }
-                let (sw, _) = ui.allocate_exact_size(Vec2::splat(20.0), Sense::hover());
-                match f.color {
-                    Some(q) => ui.painter().rect_filled(sw, 4.0, Color32::from_rgb(q.rgb[0], q.rgb[1], q.rgb[2])),
-                    None => ui.painter().rect_stroke(sw, 4.0, Stroke::new(1.0, t::p().text_disabled), egui::StrokeKind::Inside),
-                }
-            });
-            if let Some(q) = f.color.as_mut() {
-                ui.horizontal(|ui| {
-                    ui.label(tr("Accuracy"));
-                    // Eagle draws the slider reversed: right is stricter.
-                    let mut strict = 45.0 - q.accuracy;
-                    ui.add(egui::Slider::new(&mut strict, 5.0..=40.0).show_value(false));
-                    q.accuracy = 45.0 - strict;
-                });
-            }
-            ui.checkbox(&mut f.grayscale, tr("Grayscale only"));
-            if ui.button(tr("Clear")).clicked() {
-                f.color = None;
-                f.grayscale = false;
-                color_text.clear();
-            }
-        });
+        color_filter_chip(ui, &mut self.ws.filter, &mut self.ws.color_text);
     }
 
     /// Tags: a search box, a sidebar (all tags, the selected ones, each
@@ -674,6 +611,97 @@ pub(crate) const PRESET_COLORS: [[u8; 3]; 14] = [
     [0x67, 0x95, 0x3f],
 ];
 
+/// The Color chip and its popup: the picker, the preset swatches, a hex
+/// field, the accuracy, Grayscale and Clear.
+fn color_filter_chip(ui: &mut Ui, f: &mut Filter, color_text: &mut String) {
+    let value = match (f.color, f.grayscale) {
+        (Some(c), _) => Some(logic::hex(c.rgb)),
+        (None, true) => Some(tr("Grayscale").to_string()),
+        (None, false) => None,
+    };
+    let resp = filter_chip(ui, tr("Color"), value);
+    egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
+        ui.set_min_width(230.0);
+        let mut rgb = f.color.map_or(DEFAULT_PICKER_RGB, |q| q.rgb);
+        if super::color_picker::sv_hue_picker(ui, ui.make_persistent_id("filter_color_picker"), &mut rgb) {
+            let acc = f.color.map_or(20.0, |q| q.accuracy);
+            f.color = Some(ColorQuery { rgb, accuracy: acc });
+            *color_text = logic::hex(rgb);
+        }
+        ui.add_space(8.0);
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = vec2(6.0, 6.0);
+            for c in PRESET_COLORS {
+                let (rect, hit) = ui.allocate_exact_size(Vec2::splat(22.0), Sense::click());
+                let selected = f.color.is_some_and(|q| q.rgb == c);
+                hit.widget_info(|| egui::WidgetInfo::selected(egui::Role::RadioButton, true, selected, preset_color_name(c)));
+                ui.painter().circle_filled(rect.center(), 10.0, Color32::from_rgb(c[0], c[1], c[2]));
+                ui.painter().circle_stroke(rect.center(), 10.0, Stroke::new(1.0, t::p().divider));
+                if selected {
+                    ui.painter().circle_stroke(rect.center(), 12.5, Stroke::new(1.5, t::p().primary));
+                }
+                if hit.clicked() {
+                    let acc = f.color.map_or(20.0, |q| q.accuracy);
+                    f.color = Some(ColorQuery { rgb: c, accuracy: acc });
+                    *color_text = logic::hex(c);
+                }
+            }
+        });
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            ui.label(tr("Hex"));
+            if ui.add(TextEdit::singleline(color_text).desired_width(90.0).hint_text("#FF0000")).changed()
+                && let Some(rgb) = parse_hex(color_text)
+            {
+                let acc = f.color.map_or(20.0, |q| q.accuracy);
+                f.color = Some(ColorQuery { rgb, accuracy: acc });
+            }
+            let (sw, _) = ui.allocate_exact_size(Vec2::splat(20.0), Sense::hover());
+            match f.color {
+                Some(q) => ui.painter().rect_filled(sw, 4.0, Color32::from_rgb(q.rgb[0], q.rgb[1], q.rgb[2])),
+                None => ui.painter().rect_stroke(sw, 4.0, Stroke::new(1.0, t::p().text_disabled), egui::StrokeKind::Inside),
+            }
+        });
+        if let Some(q) = f.color.as_mut() {
+            ui.horizontal(|ui| {
+                ui.label(tr("Accuracy"));
+                // Eagle draws the slider reversed: right is stricter.
+                let mut strict = 45.0 - q.accuracy;
+                ui.add(egui::Slider::new(&mut strict, 5.0..=40.0).show_value(false));
+                q.accuracy = 45.0 - strict;
+            });
+        }
+        ui.checkbox(&mut f.grayscale, tr("Grayscale only"));
+        if ui.button(tr("Clear")).clicked() {
+            f.color = None;
+            f.grayscale = false;
+            color_text.clear();
+        }
+    });
+}
+
+/// The name assistive technology reads for a preset, as painted swatches
+/// have no text of their own.
+fn preset_color_name(c: [u8; 3]) -> String {
+    match c {
+        [0xff, 0x3b, 0x30] => tr("Red").to_string(),
+        [0xff, 0x95, 0x00] => tr("Orange").to_string(),
+        [0xff, 0xd6, 0x0a] => tr("Yellow").to_string(),
+        [0x34, 0xc7, 0x59] => tr("Green").to_string(),
+        [0x30, 0xb0, 0xc7] => tr("Teal").to_string(),
+        [0x00, 0x7a, 0xff] => tr("Blue").to_string(),
+        [0x58, 0x56, 0xd6] => tr("Indigo").to_string(),
+        [0xaf, 0x52, 0xde] => tr("Purple").to_string(),
+        [0xff, 0x2d, 0x55] => tr("Pink").to_string(),
+        [0xa2, 0x84, 0x5e] => tr("Brown").to_string(),
+        [0x00, 0x00, 0x00] => tr("Black").to_string(),
+        [0x8e, 0x8e, 0x93] => tr("Gray").to_string(),
+        [0xff, 0xff, 0xff] => tr("White").to_string(),
+        [0x67, 0x95, 0x3f] => tr("Moss").to_string(),
+        other => logic::hex(other),
+    }
+}
+
 pub(crate) fn parse_hex(s: &str) -> Option<[u8; 3]> {
     let s = s.trim().trim_start_matches('#');
     if s.len() != 6 {
@@ -734,6 +762,9 @@ pub(crate) fn text_filter_menu(ui: &mut Ui, f: &mut TextFilter, keywords: &mut S
         *f = if words.is_empty() { TextFilter::Off } else { TextFilter::Keywords(words) };
     }
 }
+
+#[cfg(test)]
+mod popup_tests;
 
 #[cfg(test)]
 mod tests {

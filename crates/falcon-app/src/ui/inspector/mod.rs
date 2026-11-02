@@ -463,6 +463,7 @@ impl App {
                 }
                 let hit = ui.interact(Rect::from_center_size(center, Vec2::splat(d)), ui.scope_id().with(("swatch", n)), Sense::click());
                 let hex = logic::hex(c.color);
+                hit.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &hex));
                 let mut similar = hit.secondary_clicked();
                 swatch_menu(&hit).show(|ui| {
                     crate::ui::menus::search::show(ui, |ui| {

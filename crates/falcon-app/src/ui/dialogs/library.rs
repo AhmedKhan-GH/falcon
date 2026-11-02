@@ -312,6 +312,7 @@ fn swatch(ui: &mut Ui, theme: Theme) -> egui::Response {
     let pal = theme.resolve(ui.ctx().system_theme()).palette();
     let (rect, resp) = ui.allocate_exact_size(vec2(96.0, 74.0), Sense::click());
     let selected = t::current() == theme;
+    resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::RadioButton, true, selected, theme));
     let preview = egui::Rect::from_min_size(rect.min, vec2(96.0, 52.0));
     let p = ui.painter();
     p.rect_filled(preview, t::RADIUS, pal.main);
