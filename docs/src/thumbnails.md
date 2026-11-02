@@ -123,7 +123,7 @@ The `thumbnail` module holds the rules as plain functions: `plan_raster`, `plan_
   - The result is opaque RGB, as Eagle's JPEG capture is.
   - woff2 is unpacked first. A TrueType woff2 whose glyphs are stored packed (the usual case) has no outlines after unpacking, so it falls back to QuickLook instead of drawing a blank card.
 - **3D models.**
-  - obj, stl, ply, glb, gltf, 3mf, fbx, dae, 3ds and ifc are drawn by `model3d::raster` instead of QuickLook, as Eagle renders models in its own viewer at import.
+  - obj, stl, ply, glb, 3mf, fbx, dae, 3ds and ifc are drawn by `model3d::raster` instead of QuickLook, as Eagle renders models in its own viewer at import.
   - The model is drawn in the viewer's opening view (Y up, fitted, Eagle's lighting and default colour) on a transparent 1080×1080 canvas at 2× supersampling. The empty border is cropped and 40 transparent pixels are added on each side.
   - That image is the thumbnail, not scaled down (`max_side` is 1160 for these formats), and `width` and `height` are its size, as in Eagle.
   - A model that can't be read falls back to QuickLook, and so does an ifc file without tessellated geometry (only swept solids, CSG or b-splines).

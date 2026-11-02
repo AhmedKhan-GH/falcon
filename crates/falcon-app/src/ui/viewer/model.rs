@@ -1,4 +1,4 @@
-//! The viewer for 3D models (obj, stl, ply, glb, gltf, 3mf, fbx, dae, 3ds, ifc), after the
+//! The viewer for 3D models (obj, stl, ply, glb, 3mf, fbx, dae, 3ds, ifc), after the
 //! model viewer Eagle embeds: the model lit from the camera on the
 //! viewer's background, turned with the mouse (left drag orbits, right or
 //! middle drag or ⇧ pans, ⌃ drag and the wheel zoom), fitted when it

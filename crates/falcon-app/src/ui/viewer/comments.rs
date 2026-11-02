@@ -175,7 +175,7 @@ pub fn supports_regions(item: &Item) -> bool {
         && !falcon_library::media::is_video(&ext)
         && !falcon_library::media::is_audio(&ext)
         && !falcon_library::import::FONT_EXTENSIONS.contains(&ext.as_str())
-        && !matches!(ext.as_str(), "pdf" | "txt" | "woff2" | "glb" | "gltf" | "obj" | "fbx" | "stl" | "url")
+        && !matches!(ext.as_str(), "pdf" | "txt" | "woff2" | "glb" | "obj" | "fbx" | "stl" | "url")
 }
 
 /// Eagle's comment count: a blue disc with the number at a card's top right.

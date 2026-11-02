@@ -475,7 +475,7 @@ mod tests {
         let (a, b) = painted();
         let text = gltf([&a, &b]);
         assert!(text.contains("data:application/octet-stream;base64,"));
-        let back = super::super::parse(text.as_bytes(), "gltf", &|_| None).unwrap();
+        let back = super::super::gltf::parse_gltf(text.as_bytes(), &|_| None).unwrap();
         assert_eq!(back.triangle_count(), 24);
         assert!(close(back.meshes[0].material.as_ref().unwrap().color, [0.8, 0.2, 0.1]));
     }

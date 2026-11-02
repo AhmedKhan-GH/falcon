@@ -1,5 +1,5 @@
 //! 3D models: readers for the formats falcon can show itself (OBJ with MTL
-//! colours, STL, PLY, glTF/GLB, 3MF, FBX, COLLADA, 3DS and the tessellated
+//! colours, STL, PLY, GLB, 3MF, FBX, COLLADA, 3DS and the tessellated
 //! part of IFC), the triangle model they produce, the measurements Eagle's
 //! model viewer shows, and the geometry the viewer and the thumbnail renderer
 //! share (normals, feature edges, shading).
@@ -28,8 +28,9 @@ use std::path::Path;
 
 use math::V3;
 
-/// Extensions read here, lower case.
-pub const EXTENSIONS: &[&str] = &["obj", "stl", "ply", "glb", "gltf", "3mf", "fbx", "dae", "3ds", "ifc"];
+/// Extensions read here, lower case: Eagle's model formats. A `.gltf` is a
+/// plain item with a QuickLook thumbnail, as in Eagle.
+pub const EXTENSIONS: &[&str] = &["obj", "stl", "ply", "glb", "3mf", "fbx", "dae", "3ds", "ifc"];
 
 /// Whether files with extension `ext` (any case) are read here.
 pub fn is_supported(ext: &str) -> bool {
@@ -160,7 +161,7 @@ impl Model {
 }
 
 /// Reads the model at `path`, picking the reader by `ext`. Files a model
-/// refers to (an OBJ's MTL, a glTF's buffers) are looked up next to it.
+/// refers to (an OBJ's MTL, a GLB's external buffers) are looked up next to it.
 pub fn load(path: &Path, ext: &str) -> Result<Model> {
     let bytes = std::fs::read(path).map_err(ParseError::new)?;
     let dir = path.parent().map(Path::to_path_buf).unwrap_or_default();
@@ -183,7 +184,6 @@ pub fn parse(bytes: &[u8], ext: &str, side: &dyn Fn(&str) -> Option<Vec<u8>>) ->
         "stl" => stl::parse(bytes),
         "ply" => ply::parse(bytes),
         "glb" => gltf::parse_glb(bytes, side),
-        "gltf" => gltf::parse_gltf(bytes, side),
         "3mf" => threemf::parse(bytes),
         "fbx" => fbx::parse(bytes),
         "dae" => dae::parse(bytes, side),

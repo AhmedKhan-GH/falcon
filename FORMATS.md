@@ -87,7 +87,6 @@ Status: **Done** works as well as Eagle or better. **Partial** opens, but someth
 
 ## Already in falcon beyond Eagle's set
 
-- **3D:** gltf opens in the 3D viewer. Models export to GLB, glTF, OBJ, PLY, STL and OFF.
 - **Other files:** `.webloc` links, Inboard libraries and single Pixave items import.
 
 ## Possible later additions (not planned)
