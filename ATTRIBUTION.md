@@ -76,7 +76,7 @@ Libraries built into falcon beyond ordinary Rust crates from crates.io, with the
 | tinynurbs (header-only, web-ifc dependency) | commit 47115cd9 | BSD-3-Clause | [github.com/QuimMoya/tinynurbs](https://github.com/QuimMoya/tinynurbs) | B-spline curves and surfaces inside web-ifc |
 | fast_float (header-only, web-ifc dependency) | commit b0ab987b | MIT OR Apache-2.0 OR BSL-1.0 | [github.com/fastfloat/fast_float](https://github.com/fastfloat/fast_float) | Number parsing inside web-ifc |
 | earcut.hpp (header-only, web-ifc dependency) | commit c68c8835 | ISC | [github.com/mapbox/earcut.hpp](https://github.com/mapbox/earcut.hpp) | Polygon triangulation inside web-ifc |
-| CDT (header-only, web-ifc dependency) | commit 2068d015 | MPL-2.0 | [github.com/artem-ogre/CDT](https://github.com/artem-ogre/CDT) | Constrained Delaunay triangulation inside web-ifc |
+| CDT (header-only, web-ifc dependency) | commit 2068d015 | MPL-2.0 (bundles `predicates.h`, BSD-3-Clause, by William C. Lenthe, and `portable_nth_element.hpp`, Apache-2.0 WITH LLVM-exception) | [github.com/artem-ogre/CDT](https://github.com/artem-ogre/CDT) | Constrained Delaunay triangulation inside web-ifc |
 | spdlog (header-only, web-ifc dependency) | commit 79524ddd | MIT (bundles {fmt}, MIT) | [github.com/gabime/spdlog](https://github.com/gabime/spdlog) | web-ifc's logging, switched off |
 | stduuid (header-only, web-ifc dependency) | commit 3afe7193 | MIT | [github.com/mariusbancila/stduuid](https://github.com/mariusbancila/stduuid) | GUIDs inside web-ifc |
 | unordered_dense (header-only, web-ifc dependency) | commit 1c8636e8 | MIT | [github.com/martinus/unordered_dense](https://github.com/martinus/unordered_dense) | Hash maps inside web-ifc |

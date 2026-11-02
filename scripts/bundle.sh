@@ -61,6 +61,7 @@ if [ -f "$WEB_IFC/SOURCES.txt" ] && [ -n "$WORKER" ]; then
   cp "$WEB_IFC/fast_float/LICENSE-MIT" "$LIC/fast_float-LICENSE-MIT.txt"
   cp "$WEB_IFC/earcut/LICENSE" "$LIC/earcut-LICENSE.txt"
   cp "$WEB_IFC/cdt/LICENSE" "$LIC/CDT-LICENSE.txt"
+  sed '/\*\//q' "$WEB_IFC/cdt/CDT/include/predicates.h" >"$LIC/CDT-predicates-LICENSE.txt"
   cp "$WEB_IFC/spdlog/LICENSE" "$LIC/spdlog-LICENSE.txt"
   cp "$WEB_IFC/stduuid/LICENSE" "$LIC/stduuid-LICENSE.txt"
   cp "$WEB_IFC/unordered_dense/LICENSE" "$LIC/unordered_dense-LICENSE.txt"

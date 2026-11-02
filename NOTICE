@@ -64,7 +64,9 @@ Third-party material:
   copyright (c) the fast_float authors; earcut.hpp
   (https://github.com/mapbox/earcut.hpp), ISC license, copyright (c) 2015
   Mapbox; CDT (https://github.com/artem-ogre/CDT), Mozilla Public License 2.0,
-  copyright (c) Artem Amirkhanov; spdlog (https://github.com/gabime/spdlog),
+  copyright (c) Artem Amirkhanov (with predicates.h, BSD 3-Clause, copyright (c)
+  2019 William C. Lenthe, and portable_nth_element.hpp, Apache-2.0 WITH
+  LLVM-exception); spdlog (https://github.com/gabime/spdlog),
   MIT license, copyright (c) 2016 Gabi Melman and spdlog contributors (with
   {fmt}, MIT, copyright (c) Victor Zverovich); stduuid
   (https://github.com/mariusbancila/stduuid), MIT license, copyright (c) 2017

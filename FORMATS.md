@@ -69,7 +69,7 @@ Status: **Done** works as well as Eagle or better. **Partial** opens, but someth
 | Formats | Eagle | Falcon | Status |
 | --- | --- | --- | --- |
 | glb, obj, fbx, 3ds, 3mf, dae, ply, stl | Interactive viewer with textures | Interactive viewer and thumbnails with diffuse textures for glb, obj, fbx, dae and 3ds (3mf, ply and stl have no textures in Eagle's viewer either); export of geometry and colours | Done |
-| ifc | Interactive viewer with full geometry (web-ifc) | Interactive viewer for triangle and facet geometry; a still image for the rest | Partial: extruded and solid geometry isn't computed yet |
+| ifc | Interactive viewer with full geometry (web-ifc) | Interactive viewer and thumbnails with full geometry through web-ifc 0.0.78 (swept, CSG, boolean and b-spline solids, openings cut), built from source by `scripts/fetch-web-ifc.sh` and run in a worker process | Done |
 
 ## Web
 
