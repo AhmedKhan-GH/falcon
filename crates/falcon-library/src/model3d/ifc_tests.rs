@@ -1,8 +1,17 @@
-//! Hand-written IFC files covering each geometry kind the reader takes,
-//! placements, units, styles and the fallbacks.
+//! Hand-written IFC files covering each geometry kind falcon's own
+//! reader takes, placements, units, styles and the fallbacks.
 
 use super::*;
 use crate::model3d::geom;
+
+// These cover falcon's own reader; `ifc_native_tests.rs` covers web-ifc.
+fn read(bytes: &[u8]) -> Result<(Option<Model>, Report)> {
+    read_tessellated(bytes)
+}
+
+fn parse(bytes: &[u8]) -> Result<Model> {
+    read(bytes)?.0.ok_or_else(|| ParseError::new(NO_GEOMETRY))
+}
 
 /// A whole file around `body` (instances from #10 on): a project whose
 /// length unit is the metre with `prefix` (`$` or `.MILLI.`), and a 3D
@@ -57,7 +66,7 @@ fn triangulated_face_set_cube_with_a_style() {
     assert!(close(lo, [0.0, 0.0, -1.0]) && close(hi, [1.0, 1.0, 0.0]), "{lo:?} {hi:?}");
     let s = geom::stats(&m);
     assert!((s.volume.unwrap() - 1.0).abs() < 1e-6, "closed and wound consistently");
-    // Through the registry too.
+    // Through the registry too (web-ifc, when built in, reads it the same).
     assert_eq!(crate::model3d::parse(src.as_bytes(), "IFC", &|_| None).unwrap().triangle_count(), 12);
 }
 
@@ -159,12 +168,14 @@ fn extruded_solid_only_falls_back() {
     assert!(m.is_none());
     assert_eq!((r.shown, r.skipped, r.triangles), (0, 1, 0));
     assert_eq!(r.unsupported, vec![("IfcExtrudedAreaSolid".to_string(), 1)]);
-    // The thumbnail renderer gives up too, so QuickLook gets its turn.
+    // Without web-ifc the thumbnail renderer gives up too, so QuickLook gets
+    // its turn; with it the wall is drawn.
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("wall.ifc");
     std::fs::write(&path, &src).unwrap();
-    assert!(crate::model3d::raster::thumbnail(&path, "ifc").is_none());
-    assert_eq!(summary(&path).unwrap().skipped, 1);
+    assert_eq!(crate::model3d::raster::thumbnail(&path, "ifc").is_some(), full_geometry());
+    let r = summary(&path).unwrap();
+    assert_eq!((r.shown, r.skipped), if full_geometry() { (1, 0) } else { (0, 1) });
 }
 
 #[test]

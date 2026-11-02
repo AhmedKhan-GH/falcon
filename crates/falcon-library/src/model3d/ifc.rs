@@ -1,22 +1,24 @@
-//! IFC (`.ifc`, the STEP text form) limited to tessellated geometry:
-//! `IfcTriangulatedFaceSet`, `IfcPolygonalFaceSet` (faces with holes) and
-//! faceted breps (`IfcFacetedBrep`, shells, `IfcFace` with `IfcPolyLoop`
-//! bounds), also inside shell- and face-based surface models. Products
-//! are placed through `IfcProductDefinitionShape`, their shape
-//! representations (Body first), `IfcMappedItem` (representation map
-//! origin and transformation operator) and the `IfcLocalPlacement` chain.
-//! Lengths are converted to metres from the project's length unit and the
-//! model is turned from IFC's Z-up to the viewer's Y-up.
+//! IFC (`.ifc`, the STEP text form). Geometry comes from web-ifc, the
+//! engine Eagle's viewer uses, when falcon is built with it
+//! (`scripts/fetch-web-ifc.sh`; see [`super::ifc_native`]): extruded,
+//! revolved and swept solids, booleans and openings, CSG primitives,
+//! advanced breps and everything tessellated.
 //!
-//! Colours come from `IfcStyledItem` surface styles on the geometry, else
-//! from the product's (or its type's) material style, else from a default
-//! per entity type so walls, slabs and windows can be told apart.
-//!
-//! Swept solids (`IfcExtrudedAreaSolid` and friends), CSG and boolean
-//! results, b-spline surfaces and advanced breps are not read: products
-//! with only such geometry are counted as skipped, and a file with no
-//! tessellated geometry at all is an error ([`NO_GEOMETRY`]), so the item
-//! keeps its QuickLook still.
+//! Without web-ifc, or when it cannot read a file, falcon's own reader
+//! below draws the tessellated part: `IfcTriangulatedFaceSet`,
+//! `IfcPolygonalFaceSet` (faces with holes) and faceted breps
+//! (`IfcFacetedBrep`, shells, `IfcFace` with `IfcPolyLoop` bounds), also
+//! inside shell- and face-based surface models. Products are placed
+//! through `IfcProductDefinitionShape`, their shape representations (Body
+//! first), `IfcMappedItem` (representation map origin and transformation
+//! operator) and the `IfcLocalPlacement` chain. Lengths are converted to
+//! metres from the project's length unit and the model is turned from
+//! IFC's Z-up to the viewer's Y-up. Colours come from `IfcStyledItem`
+//! surface styles on the geometry, else from the product's (or its
+//! type's) material style, else from a default per entity type. Swept
+//! solids, CSG, booleans and advanced breps are not read by it: such
+//! products are counted as skipped, and a file with nothing drawable is
+//! an error ([`NO_GEOMETRY`]), so the item keeps its QuickLook still.
 
 use std::collections::{HashMap, HashSet};
 
@@ -27,6 +29,12 @@ use super::{DEFAULT_COLOR, Material, Mesh, Model, ParseError, Result};
 
 /// The reason given for a file with nothing falcon can draw.
 pub const NO_GEOMETRY: &str = "IFC: no tessellated geometry";
+
+/// Whether falcon reads IFC geometry through web-ifc (every solid kind)
+/// rather than only the tessellated part.
+pub fn full_geometry() -> bool {
+    super::ifc_native::available()
+}
 
 /// Files larger than this are not read (the whole instance graph is held
 /// in memory).
@@ -67,6 +75,19 @@ pub fn read(bytes: &[u8]) -> Result<(Option<Model>, Report)> {
         return Err(ParseError::new("IFC: the file is too large"));
     }
     let file = step::parse(bytes)?;
+    if let Some(r) = super::ifc_native::read(&file, bytes)? {
+        return Ok(r);
+    }
+    Ok(Reader::new(&file).run())
+}
+
+/// Reads the file with falcon's own (tessellated-only) reader, never
+/// through web-ifc.
+pub fn read_tessellated(bytes: &[u8]) -> Result<(Option<Model>, Report)> {
+    if bytes.len() > MAX_BYTES {
+        return Err(ParseError::new("IFC: the file is too large"));
+    }
+    let file = step::parse(bytes)?;
     Ok(Reader::new(&file).run())
 }
 
@@ -78,7 +99,7 @@ pub fn summary(path: &std::path::Path) -> Result<Report> {
 
 /// Entity types never drawn: voids, spaces and helpers that would hide
 /// the building.
-const HIDDEN: &[&str] = &[
+pub(super) const HIDDEN: &[&str] = &[
     "IFCOPENINGELEMENT",
     "IFCOPENINGSTANDARDCASE",
     "IFCVOIDINGFEATURE",
@@ -166,6 +187,18 @@ pub fn display_name(upper: &str) -> String {
             format!("Ifc{}{}", lower[..1].to_ascii_uppercase(), &lower[1..])
         }
         _ => upper.to_string(),
+    }
+}
+
+/// How a shape representation ranks by its identifier: Body first, then
+/// Facetation, then anything else; `None` for the ones that are never
+/// drawn (axis, footprint, bounding box, annotation and the like).
+pub(super) fn rep_rank(identifier: &str) -> Option<u8> {
+    match identifier.to_ascii_lowercase().as_str() {
+        "body" => Some(0),
+        "facetation" => Some(1),
+        "axis" | "footprint" | "box" | "annotation" | "profile" | "clearance" | "cog" | "lighting" | "reference" | "plan" => None,
+        _ => Some(2),
     }
 }
 
@@ -761,13 +794,7 @@ impl<'a> Reader<'a> {
         let mut ranked: Vec<(u8, &Entity)> = Vec::new();
         for r in pds.arg(2).as_list().unwrap_or_default() {
             let Some(re) = self.f.deref(r) else { continue };
-            let ident = re.arg(1).as_str().unwrap_or("").to_ascii_lowercase();
-            let rank = match ident.as_str() {
-                "body" => 0,
-                "facetation" => 1,
-                "axis" | "footprint" | "box" | "annotation" | "profile" | "clearance" | "cog" | "lighting" | "reference" | "plan" => continue,
-                _ => 2,
-            };
+            let Some(rank) = rep_rank(re.arg(1).as_str().unwrap_or("")) else { continue };
             ranked.push((rank, re));
         }
         ranked.sort_by_key(|r| r.0);

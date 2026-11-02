@@ -1,10 +1,11 @@
 //! 3D models: readers for the formats falcon can show itself (OBJ with MTL
-//! colours, STL, PLY, GLB, 3MF, FBX, COLLADA, 3DS and the tessellated
-//! part of IFC), the triangle model they produce, the measurements Eagle's
-//! model viewer shows, and the geometry the viewer and the thumbnail renderer
-//! share (normals, feature edges, shading).
+//! colours, STL, PLY, GLB, 3MF, FBX, COLLADA, 3DS and IFC), the triangle
+//! model they produce, the measurements Eagle's model viewer shows, and the
+//! geometry the viewer and the thumbnail renderer share (normals, feature
+//! edges, shading).
 //!
-//! IFC files without tessellated geometry are not read; those items keep
+//! IFC geometry comes from web-ifc when falcon is built with it; without
+//! it only tessellated IFC geometry is read, and IFC files without any keep
 //! their QuickLook still.
 
 pub mod dae;
@@ -14,6 +15,7 @@ pub mod fbx;
 pub mod geom;
 pub mod gltf;
 pub mod ifc;
+mod ifc_native;
 pub mod math;
 pub mod obj;
 pub mod off;
