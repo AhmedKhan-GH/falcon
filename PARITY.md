@@ -414,7 +414,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| Welcome flow: welcome, choose a theme, install browser extension, create or open a library with example names | Missing |  | local (extension step online) |
+| Welcome flow: welcome, choose a theme, create or open a library with example names | Done | First-launch welcome (see the Welcome or onboarding row); its browser extension step is online and left out | local |
 | No-library screen offers both Create and Open | Done | Create Library and Open Library with a hint (`ui/dialogs/library.rs`), through the sandbox guard | local |
 | Tutorial / tips overlay | Missing | Not applicable: Eagle's tutorial is an online video link | local |
 | Empty All or folder view: "Drag and Drop" with a hint | Done | Tailored empty states per view | local |
