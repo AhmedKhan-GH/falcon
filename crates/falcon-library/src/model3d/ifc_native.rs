@@ -207,3 +207,7 @@ fn build(scene: &falcon_ifc::Scene, types: &HashMap<u32, String>) -> Option<Mode
     }
     Model { meshes }.finish().ok()
 }
+
+#[cfg(test)]
+#[path = "ifc_native_tests.rs"]
+mod native_tests;
