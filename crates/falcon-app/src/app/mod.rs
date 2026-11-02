@@ -95,6 +95,8 @@ pub struct App {
     /// The Notification Center: what toasts and notices said (`notice_history.rs`).
     pub(crate) notices: crate::notice_history::History,
     pub(crate) notice_window_open: bool,
+    /// Remove from Disk is asking for confirmation (`ui/dialogs/remove_library.rs`).
+    pub(crate) remove_library: Option<crate::ui::dialogs::remove_library::RemoveLibrary>,
     /// The library tools' dialogs (`ui/dialogs/tools.rs`).
     pub(crate) tools: crate::ui::dialogs::tools::Tools,
     /// The localhost check of the running API (`api_check.rs`).
@@ -254,6 +256,7 @@ impl App {
             clear_history_open: false,
             notices: Default::default(),
             notice_window_open: false,
+            remove_library: None,
             tools: Default::default(),
             api_check: Default::default(),
             force_close: None,
@@ -535,6 +538,7 @@ impl App {
         self.dock_import_progress();
         self.reload_confirm(&ctx);
         self.clear_history_dialog(&ctx);
+        self.remove_library_dialog(&ctx);
         self.force_close_dialog(&ctx);
         self.poll_api_check();
         self.alert_modal(&ctx);

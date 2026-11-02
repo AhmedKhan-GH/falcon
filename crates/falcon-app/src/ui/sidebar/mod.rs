@@ -232,6 +232,17 @@ impl App {
             ui.close();
             crate::workspaces::remove_from_list(&mut self.recent, root);
         }
+        // A falcon addition: Eagle can't move a library to the Trash.
+        if !missing && self.can_offer_removal(root) {
+            let open = self.is_library_open(root);
+            let button = ui.add_enabled(!open, egui::Button::new(RichText::new(tr("Remove from Disk…")).color(t::p().icon_red)));
+            if open {
+                button.on_disabled_hover_text(tr("Close the library first."));
+            } else if button.clicked() {
+                ui.close();
+                self.ask_remove_library(root);
+            }
+        }
     }
 
     /// Asks for an image and makes it the library's icon.

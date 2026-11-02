@@ -21,6 +21,7 @@ impl App {
             || (lib && (self.missing.is_some() || self.loading.is_some()))
             || self.confirm_reload
             || self.clear_history_open
+            || self.remove_library.is_some()
             || self.force_close.is_some()
             || self.quit.asking.is_some()
             || self.link_import.open

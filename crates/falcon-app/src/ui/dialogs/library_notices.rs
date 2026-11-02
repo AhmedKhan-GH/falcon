@@ -631,7 +631,7 @@ impl App {
 
 /// A library being read on a background thread, for the loading screen.
 pub(crate) struct Loading {
-    path: PathBuf,
+    pub(crate) path: PathBuf,
     /// Item folders read so far, and how many there are (0 until the
     /// folder list is known).
     done: Arc<AtomicUsize>,
