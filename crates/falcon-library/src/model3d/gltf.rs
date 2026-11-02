@@ -1,9 +1,15 @@
 //! glTF 2.0: binary `.glb` and JSON `.gltf` with its buffers.
 //!
-//! Only geometry and the base colour are read (no textures, animation,
-//! skins or sparse accessors). The default scene is walked, node transforms
-//! are baked into positions and normals, and every primitive of every mesh
-//! instance becomes one [`Mesh`].
+//! Geometry, the base colour and the base colour texture are read (no
+//! other textures, animation, skins or sparse accessors). The default
+//! scene is walked, node transforms are baked into positions and normals,
+//! and every primitive of every mesh instance becomes one [`Mesh`].
+//!
+//! The base colour texture comes from the GLB's binary chunk, a data URI
+//! or a file next to the model, with its sampler's wrap modes, its
+//! `KHR_texture_transform` baked into the texture coordinates, the base
+//! colour factor as its tint (glTF multiplies the two) and, for the `MASK`
+//! alpha mode, its alpha cutoff.
 
 use std::collections::HashMap;
 
@@ -11,6 +17,7 @@ use base64::Engine;
 use serde::Deserialize;
 
 use super::math::{self, M4, V3};
+use super::texture::{Loader, Texture, Wrap};
 use super::{Material, Mesh, Model, ParseError, Result};
 
 const GLB_MAGIC: u32 = 0x4654_6C67;
@@ -38,6 +45,67 @@ struct Doc {
     nodes: Vec<NodeDef>,
     scenes: Vec<SceneDef>,
     scene: Option<usize>,
+    textures: Vec<TextureDef>,
+    images: Vec<ImageDef>,
+    samplers: Vec<SamplerDef>,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct TextureDef {
+    source: Option<usize>,
+    sampler: Option<usize>,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct ImageDef {
+    name: String,
+    uri: Option<String>,
+    #[serde(rename = "bufferView")]
+    buffer_view: Option<usize>,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct SamplerDef {
+    #[serde(rename = "wrapS")]
+    wrap_s: Option<u32>,
+    #[serde(rename = "wrapT")]
+    wrap_t: Option<u32>,
+}
+
+/// A material's reference to a texture.
+#[derive(Deserialize, Default, Clone)]
+#[serde(default)]
+struct TexInfo {
+    index: usize,
+    #[serde(rename = "texCoord")]
+    tex_coord: usize,
+    extensions: TexExtensions,
+}
+
+#[derive(Deserialize, Default, Clone)]
+#[serde(default)]
+struct TexExtensions {
+    #[serde(rename = "KHR_texture_transform")]
+    transform: Option<TexTransform>,
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(default)]
+struct TexTransform {
+    offset: [f32; 2],
+    rotation: f32,
+    scale: [f32; 2],
+    #[serde(rename = "texCoord")]
+    tex_coord: Option<usize>,
+}
+
+impl Default for TexTransform {
+    fn default() -> Self {
+        TexTransform { offset: [0.0; 2], rotation: 0.0, scale: [1.0; 2], tex_coord: None }
+    }
 }
 
 #[derive(Deserialize, Default)]
@@ -95,6 +163,10 @@ struct MaterialDef {
     name: String,
     #[serde(rename = "pbrMetallicRoughness")]
     pbr: PbrDef,
+    #[serde(rename = "alphaMode")]
+    alpha_mode: String,
+    #[serde(rename = "alphaCutoff")]
+    alpha_cutoff: Option<f32>,
 }
 
 #[derive(Deserialize, Default)]
@@ -102,6 +174,8 @@ struct MaterialDef {
 struct PbrDef {
     #[serde(rename = "baseColorFactor")]
     base_color_factor: Option<[f32; 4]>,
+    #[serde(rename = "baseColorTexture")]
+    base_color_texture: Option<TexInfo>,
 }
 
 #[derive(Deserialize, Default)]
@@ -182,7 +256,16 @@ fn build(json: &[u8], bin: Option<&[u8]>, side: Side) -> Result<Model> {
 
     let mut out = Vec::new();
     let mut cache: HashMap<(usize, usize), Option<Prim>> = HashMap::new();
-    let mut walker = Walker { doc: &doc, buffers: &buffers, cache: &mut cache, out: &mut out, instances: 0, vertices: 0 };
+    let mut walker = Walker {
+        doc: &doc,
+        buffers: &buffers,
+        cache: &mut cache,
+        out: &mut out,
+        instances: 0,
+        vertices: 0,
+        loader: Loader::new(side),
+        textures: HashMap::new(),
+    };
     let identity = identity();
     for root in roots(&doc) {
         walker.visit(root, &identity, 0);
@@ -336,6 +419,7 @@ struct Prim {
     colors: Option<Vec<V3>>,
     indices: Vec<u32>,
     material: Option<Material>,
+    uvs: Option<Vec<[f32; 2]>>,
 }
 
 fn read_prim(doc: &Doc, buffers: &[Vec<u8>], p: &PrimDef) -> Result<Option<Prim>> {
@@ -377,7 +461,61 @@ fn read_prim(doc: &Doc, buffers: &[Vec<u8>], p: &PrimDef) -> Result<Option<Prim>
         let f = m.pbr.base_color_factor.unwrap_or([1.0; 4]);
         Material { name: m.name.clone(), color: [srgb(f[0]), srgb(f[1]), srgb(f[2])], opacity: f[3] }
     });
-    Ok(Some(Prim { positions, normals, colors, indices, material }))
+    // The coordinates the base colour texture uses, through its transform.
+    let info = p.material.and_then(|m| doc.materials.get(m)).and_then(|m| m.pbr.base_color_texture.as_ref());
+    let uvs = info.and_then(|t| {
+        let set = t.extensions.transform.as_ref().and_then(|x| x.tex_coord).unwrap_or(t.tex_coord);
+        let (v, nc) = read_accessor(doc, buffers, *p.attributes.get(&format!("TEXCOORD_{set}"))?).ok()?;
+        (nc == 2 && v.len() == n * 2).then(|| v.as_chunks::<2>().0.iter().map(|c| transform_uv(t.extensions.transform.as_ref(), [c[0] as f32, c[1] as f32])).collect())
+    });
+    Ok(Some(Prim { positions, normals, colors, indices, material, uvs }))
+}
+
+/// `uv` through a `KHR_texture_transform`: scaled, rotated, then offset,
+/// rotating as three.js does for these files.
+fn transform_uv(t: Option<&TexTransform>, uv: [f32; 2]) -> [f32; 2] {
+    let Some(t) = t else { return uv };
+    let (s, c) = t.rotation.sin_cos();
+    let (u, v) = (uv[0] * t.scale[0], uv[1] * t.scale[1]);
+    [c * u + s * v + t.offset[0], -s * u + c * v + t.offset[1]]
+}
+
+/// A glTF sampler wrap mode.
+fn wrap(mode: Option<u32>) -> Wrap {
+    match mode {
+        Some(33071) => Wrap::Clamp,
+        Some(33648) => Wrap::Mirror,
+        _ => Wrap::Repeat,
+    }
+}
+
+/// Material `m`'s base colour texture, decoded through `loader`.
+fn material_texture(doc: &Doc, buffers: &[Vec<u8>], loader: &mut Loader, m: usize) -> Option<Texture> {
+    let mat = doc.materials.get(m)?;
+    let info = mat.pbr.base_color_texture.as_ref()?;
+    let tex = doc.textures.get(info.index)?;
+    let img = doc.images.get(tex.source?)?;
+    let image = if let Some(view) = img.buffer_view.and_then(|v| doc.buffer_views.get(v)) {
+        let data = buffers.get(view.buffer)?;
+        let end = view.byte_offset.checked_add(view.byte_length)?;
+        let name = if img.name.is_empty() { format!("image {}", tex.source?) } else { img.name.clone() };
+        loader.embedded(&name, data.get(view.byte_offset..end)?)?
+    } else {
+        let uri = img.uri.as_deref()?;
+        if uri.starts_with("data:") {
+            loader.embedded(&img.name, &load_uri(uri, &|_| None)?)?
+        } else {
+            loader.file(&String::from_utf8_lossy(&percent_decode(uri)))?
+        }
+    };
+    let sampler = tex.sampler.and_then(|s| doc.samplers.get(s));
+    let f = mat.pbr.base_color_factor.unwrap_or([1.0; 4]);
+    Some(Texture {
+        image,
+        tint: [srgb(f[0]), srgb(f[1]), srgb(f[2])],
+        wrap: [wrap(sampler.and_then(|s| s.wrap_s)), wrap(sampler.and_then(|s| s.wrap_t))],
+        alpha_cutoff: (mat.alpha_mode == "MASK").then(|| mat.alpha_cutoff.unwrap_or(0.5)),
+    })
 }
 
 struct Walker<'a> {
@@ -387,6 +525,9 @@ struct Walker<'a> {
     out: &'a mut Vec<Mesh>,
     instances: usize,
     vertices: usize,
+    loader: Loader<'a>,
+    /// Each material's texture, decoded when a primitive first uses it.
+    textures: HashMap<usize, Option<Texture>>,
 }
 
 impl Walker<'_> {
@@ -415,7 +556,14 @@ impl Walker<'_> {
             let Some(prim) = prim else { continue };
             self.instances += 1;
             self.vertices += prim.positions.len();
-            self.out.push(instance(&def.name, prim, world));
+            let mut mesh = instance(&def.name, prim, world);
+            if mesh.uvs.is_some()
+                && let Some(m) = pdef.material
+            {
+                let loader = &mut self.loader;
+                mesh.texture = self.textures.entry(m).or_insert_with(|| material_texture(doc, buffers, loader, m)).clone();
+            }
+            self.out.push(mesh);
         }
     }
 }
@@ -440,7 +588,7 @@ fn instance(name: &str, prim: &Prim, world: &M4) -> Mesh {
             t.swap(1, 2);
         }
     }
-    Mesh { name: name.to_string(), positions, normals, colors: prim.colors.clone(), indices, material: prim.material.clone(), ..Mesh::default() }
+    Mesh { name: name.to_string(), positions, normals, colors: prim.colors.clone(), indices, material: prim.material.clone(), uvs: prim.uvs.clone(), texture: None }
 }
 
 /// The cofactor matrix of the upper 3x3 of `m` (`[row][col]`, which is the
@@ -701,6 +849,88 @@ mod tests {
         let extra = r#","nodes":[{"mesh":0,"children":[1]},{"children":[0]}],"scenes":[{"nodes":[0]}]"#;
         let m = parse_glb(&make_glb(&tri_json("", "", extra), &tri_bin()), &no_side).unwrap();
         assert!(!m.meshes.is_empty());
+    }
+
+    /// A triangle with UVs (0,0) (1,0) (0,1) and a textured material:
+    /// `image` is the image entry's body, `bin_png` bytes go after the
+    /// geometry (as buffer view 3), `material` extra material members.
+    fn textured(image: &str, bin_png: &[u8], material: &str, texinfo: &str) -> Vec<u8> {
+        let mut bin = tri_bin();
+        for v in [0.0f32, 0.0, 1.0, 0.0, 0.0, 1.0] {
+            bin.extend_from_slice(&v.to_le_bytes());
+        }
+        let png_at = bin.len();
+        bin.extend_from_slice(bin_png);
+        let json = format!(
+            r#"{{"buffers":[{{"byteLength":{total}}}],
+            "bufferViews":[{{"buffer":0,"byteOffset":0,"byteLength":36}},{{"buffer":0,"byteOffset":36,"byteLength":6}},{{"buffer":0,"byteOffset":44,"byteLength":24}},{{"buffer":0,"byteOffset":{png_at},"byteLength":{png_len}}}],
+            "accessors":[{{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3"}},{{"bufferView":1,"componentType":5123,"count":3,"type":"SCALAR"}},{{"bufferView":2,"componentType":5126,"count":3,"type":"VEC2"}}],
+            "meshes":[{{"primitives":[{{"attributes":{{"POSITION":0,"TEXCOORD_0":2}},"indices":1,"material":0}}]}}],
+            "materials":[{{"pbrMetallicRoughness":{{"baseColorFactor":[1,0.2140,1,1],"baseColorTexture":{{"index":0{texinfo}}}}}{material}}}],
+            "samplers":[{{"wrapS":33071,"wrapT":33648}}],
+            "textures":[{{"source":0,"sampler":0}}],
+            "images":[{{{image}}}]}}"#,
+            total = bin.len(),
+            png_len = bin_png.len(),
+        );
+        make_glb(&json, &bin)
+    }
+
+    #[test]
+    fn embedded_texture_is_read() {
+        let png = crate::model3d::texture::tests::png_2x2();
+        let glb = textured(r#""bufferView":3,"mimeType":"image/png""#, &png, r#","alphaMode":"MASK","alphaCutoff":0.25"#, "");
+        let m = parse_glb(&glb, &no_side).unwrap();
+        let mesh = &m.meshes[0];
+        assert_eq!(mesh.uvs.as_deref(), Some(&[[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]][..]));
+        let t = mesh.texture.as_ref().expect("texture decoded");
+        assert_eq!((t.image.width, t.image.height), (2, 2));
+        assert_eq!(&t.image.rgba[..4], &[255, 0, 0, 255]);
+        assert_eq!(t.wrap, [Wrap::Clamp, Wrap::Mirror]);
+        assert_eq!(t.alpha_cutoff, Some(0.25));
+        // The factor tints, in display values (linear 0.214 is about 0.5).
+        assert!(close(t.tint, [1.0, 0.5, 1.0]), "{:?}", t.tint);
+        // The material colour is kept for when the texture can't be drawn.
+        assert!(close(mesh.material.as_ref().unwrap().color, [1.0, 0.5, 1.0]));
+        assert!(mesh.textured().is_some());
+    }
+
+    #[test]
+    fn data_uri_and_sidecar_textures() {
+        use base64::Engine;
+        let png = crate::model3d::texture::tests::png_2x2();
+        let uri = format!(r#""uri":"data:image/png;base64,{}""#, base64::engine::general_purpose::STANDARD.encode(&png));
+        let m = parse_glb(&textured(&uri, &[], "", ""), &no_side).unwrap();
+        assert_eq!(m.meshes[0].texture.as_ref().unwrap().image.width, 2);
+        assert_eq!(m.meshes[0].texture.as_ref().unwrap().alpha_cutoff, None, "opaque unless MASK");
+        // A file next to the model, its name percent-encoded.
+        let side = |n: &str| (n == "tex/my tex.png").then(|| png.clone());
+        let m = parse_glb(&textured(r#""uri":"tex/my%20tex.png""#, &[], "", ""), &side).unwrap();
+        assert!(m.meshes[0].texture.is_some());
+        // Missing: no texture, the material colour stays.
+        let m = parse_glb(&textured(r#""uri":"gone.png""#, &[], "", ""), &no_side).unwrap();
+        assert!(m.meshes[0].texture.is_none());
+        assert!(close(m.meshes[0].material.as_ref().unwrap().color, [1.0, 0.5, 1.0]));
+        // Outside the model's folder: only the bare name is asked for.
+        let asked = std::cell::RefCell::new(Vec::new());
+        let side = |n: &str| {
+            asked.borrow_mut().push(n.to_string());
+            None
+        };
+        parse_glb(&textured(r#""uri":"../up/x.png""#, &[], "", ""), &side).unwrap();
+        parse_glb(&textured(r#""uri":"/abs/x.png""#, &[], "", ""), &side).unwrap();
+        assert_eq!(*asked.borrow(), ["x.png", "x.png"]);
+    }
+
+    #[test]
+    fn texture_transform_is_baked_into_the_coordinates() {
+        let png = crate::model3d::texture::tests::png_2x2();
+        let ext = r#","extensions":{"KHR_texture_transform":{"offset":[0.5,0],"scale":[2,3]}}"#;
+        let m = parse_glb(&textured(r#""bufferView":3"#, &png, "", ext), &no_side).unwrap();
+        assert_eq!(m.meshes[0].uvs.as_deref(), Some(&[[0.5, 0.0], [2.5, 0.0], [0.5, 3.0]][..]));
+        let rot = r#","extensions":{"KHR_texture_transform":{"rotation":1.5707964}}"#;
+        let uv = parse_glb(&textured(r#""bufferView":3"#, &png, "", rot), &no_side).unwrap().meshes[0].uvs.clone().unwrap();
+        assert!((uv[1][0]).abs() < 1e-6 && (uv[1][1] + 1.0).abs() < 1e-6, "{uv:?}");
     }
 
     #[test]
