@@ -1,6 +1,9 @@
 //! Test clips for falcon's own tests: AVI files written byte by byte, with
 //! uncompressed BGR pictures and 16-bit PCM sound, so no encoder is needed
 //! (falcon's FFmpeg build has none) and every pixel's value is known.
+//! [`av1`] rewraps an AV1 stream encoded elsewhere in WebM, Matroska and MP4.
+
+pub mod av1;
 
 /// An AVI clip to write: `frames` pictures of `width` × `height` at `fps`,
 /// with a 440 Hz stereo tone at `audio_rate` samples per second if given.
