@@ -28,7 +28,7 @@
 <br>
 
 <p align="center">
-  <img src="docs/images/falcon-hero.jpg" alt="Falcon showing a library of public-domain paintings in the Waterfall layout, with Seurat's A Sunday on La Grande Jatte selected and its palette, notes, tags and rating in the inspector" width="100%">
+  <img src="docs/images/falcon-hero.jpg" alt="Falcon showing a library of generated posters and patterns in the Waterfall layout, with a poster selected and its palette, notes, tags and properties in the inspector" width="100%">
   <br>
   <sub>A library of public-domain paintings in the Waterfall layout, with the inspector open on the selected work.<br>
   <i>A Sunday on La Grande Jatte — 1884</i>, Georges Seurat, 1884–86</sub>
@@ -74,14 +74,14 @@ Every screenshot here is the real app at work on public-domain art. The credits 
 <table>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/images/falcon-color.jpg" alt="The filter bar with a blue colour filter active, showing five sea paintings" width="100%">
+      <img src="docs/images/falcon-color.jpg" alt="The filter bar with the colour picker open over a grid of generated posters" width="100%">
       <br>
       <sub>A colour filter for blue, finding the sea paintings.</sub>
       <h3>Search by colour</h3>
       Every image gets a dominant-colour palette when it is imported. Pick a colour, or click a swatch in the inspector, to find images with that colour, sorted by how close they are (CIEDE2000). Combine it with tags, folders, shape, rating, type, notes and URL filters.
     </td>
     <td width="50%" valign="top">
-      <img src="docs/images/falcon-viewer.jpg" alt="Monet's The Beach at Sainte-Adresse open in the full-window viewer" width="100%">
+      <img src="docs/images/falcon-viewer.jpg" alt="A poster open in the viewer, between the sidebar and the inspector" width="100%">
       <br>
       <sub>The full-window viewer.<br><i>The Beach at Sainte-Adresse</i>, Claude Monet, 1867</sub>
       <h3>A viewer that keeps up</h3>
@@ -90,14 +90,14 @@ Every screenshot here is the real app at work on public-domain art. The credits 
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/images/falcon-batch.jpg" alt="Four Monet paintings selected, with the inspector showing their shared tags, a field to add a tag to all, and Add All to Folder" width="100%">
+      <img src="docs/images/falcon-batch.jpg" alt="Fourteen posters selected, with the inspector showing their shared tags and actions that apply to all of them" width="100%">
       <br>
       <sub>Editing four selected works at once.</sub>
       <h3>Edit in bulk</h3>
       Select many items to add or remove tags, file them into a folder, rate them or move them to the Trash in one step. Drag items onto any folder, or out of the window into Finder, Figma or Photoshop.
     </td>
     <td width="50%" valign="top">
-      <img src="docs/images/falcon-tags.jpg" alt="The tag manager listing every tag with its item count, grouped by letter" width="100%">
+      <img src="docs/images/falcon-tags.jpg" alt="The tags page listing every tag with its item count, grouped by letter" width="100%">
       <br>
       <sub>The tag manager.</sub>
       <h3>Tags you can manage</h3>
@@ -106,7 +106,7 @@ Every screenshot here is the real app at work on public-domain art. The credits 
   </tr>
   <tr>
     <td colspan="2" valign="top">
-      <img src="docs/images/falcon-justified.jpg" alt="The Justified layout: rows of paintings of equal height filling the window" width="100%">
+      <img src="docs/images/falcon-justified.jpg" alt="Generated posters and patterns in the Justified layout, in rows of equal height" width="100%">
       <br>
       <sub>The Justified layout.</sub>
       <h3>Four ways to browse</h3>
