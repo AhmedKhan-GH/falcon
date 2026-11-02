@@ -19,9 +19,19 @@
 //! texture's `texcoord` is bound to by the instance's `bind_vertex_input`
 //! (else the first set), with v flipped to falcon's picture space.
 //!
+//! A `bump` texture (the shader's own child, or in an `extra` technique of
+//! the shader's technique, the profile or the effect, the latter winning) is
+//! drawn as a normal map, as Eagle's viewer does: its picture goes through
+//! the same sampler route and takes the mesh's one set of coordinates.
+//! Transparency follows `transparent` (its `opaque` mode, colour) and
+//! `transparency`: the opacity of the material, and, with a texture in
+//! `transparent`, blending by the diffuse picture's alpha alone.
+//!
 //! Not read: animation, skinning weights and joints, morph targets,
 //! cameras, lights, `skew`, lines, texture transforms (`extra` techniques)
-//! and transparency. A missing normal
+//! and emission (colour or texture, apart from `constant` shaders using it
+//! as the base colour): Eagle's viewer shows none, so `emissive` stays
+//! black. A missing normal
 //! input leaves `normals` empty; the viewer then shades flat or generates
 //! smooth normals as for any other format.
 
@@ -32,7 +42,7 @@ use roxmltree::{Document, Node};
 
 use super::math::{self, M4, V3};
 use super::texture::{Loader, Texture, Wrap};
-use super::{DEFAULT_COLOR, Material, Mesh, Model, ParseError, Result};
+use super::{DEFAULT_COLOR, Material, Mesh, Model, ParseError, Result, Surface};
 
 /// Deepest node nesting followed (also stops `instance_node` cycles).
 const MAX_DEPTH: usize = 32;
@@ -463,9 +473,18 @@ fn percent_decode(s: &str) -> String {
 
 // ---- the scene ---------------------------------------------------------------
 
-/// A material as bound: its colour and, when its diffuse is a picture
-/// that could be read, the texture and the `texcoord` name it uses.
-type Resolved = (Material, Option<(Texture, String)>);
+/// What a material adds to its colour and picture: the normal map (from
+/// `bump`) with the `texcoord` name it names, and whether it blends.
+#[derive(Clone)]
+struct Extra {
+    normal: Option<(Texture, String)>,
+    blend: bool,
+}
+
+/// A material as bound: its colour (with the opacity) and, when its diffuse
+/// is a picture that could be read, the texture and the `texcoord` name it
+/// uses, then the rest.
+type Resolved = (Material, Option<(Texture, String)>, Extra);
 
 struct Reader<'a, 'i, 's> {
     root: Node<'a, 'i>,
@@ -591,12 +610,14 @@ impl<'a, 'i, 's> Reader<'a, 'i, 's> {
                 return Err(ParseError::new("the COLLADA file has too many triangles"));
             }
             let resolved = prim.material.as_deref().and_then(|sym| self.bound_material(bind, sym));
-            let (material, texture) = match resolved {
-                Some((m, t)) => (Some(m), t),
-                None => (None, None),
+            let (material, texture, extra) = match resolved {
+                Some((m, t, e)) => (Some(m), t, Some(e)),
+                None => (None, None, None),
             };
-            // The UV set the texture's `texcoord` is bound to, else the first.
-            let want = texture.as_ref().and_then(|(_, tc)| bound_set(bind, prim.material.as_deref().unwrap_or(""), tc));
+            // The UV set the texture's `texcoord` is bound to, else the first;
+            // the normal map's own name chooses when there is no texture.
+            let tc = texture.as_ref().map(|(_, tc)| tc.as_str()).or(extra.as_ref().and_then(|e| e.normal.as_ref()).map(|(_, tc)| tc.as_str()));
+            let want = tc.and_then(|tc| bound_set(bind, prim.material.as_deref().unwrap_or(""), tc));
             let uvs = prim.uvs.iter().find(|(set, _)| want.is_some() && *set == want).or(prim.uvs.first()).map(|(_, v)| v.clone());
             let mut indices = prim.indices.clone();
             if flip {
@@ -612,7 +633,10 @@ impl<'a, 'i, 's> Reader<'a, 'i, 's> {
                 indices,
                 material,
                 texture: texture.filter(|_| uvs.is_some()).map(|(t, _)| t),
-                surface: Default::default(),
+                surface: match extra {
+                    Some(e) => Surface { normal_map: e.normal.map(|(t, _)| t).filter(|_| uvs.is_some()), blend: e.blend, ..Default::default() },
+                    None => Surface::default(),
+                },
                 uvs,
             });
         }
@@ -642,7 +666,67 @@ impl<'a, 'i, 's> Reader<'a, 'i, 's> {
         let name = mat.attribute("name").unwrap_or(id).to_string();
         let effect = child(mat, "instance_effect").and_then(|i| i.attribute("url")).and_then(|u| self.ids.get(url_id(u)).copied());
         let (color, texture) = effect.map(|e| self.effect_color(e)).unwrap_or((None, None));
-        Some((Material { name, color: color.unwrap_or(DEFAULT_COLOR), opacity: 1.0 }, texture))
+        let (extra, opacity) = effect.map(|e| self.effect_extra(e)).unwrap_or((Extra { normal: None, blend: false }, 1.0));
+        Some((Material { name, color: color.unwrap_or(DEFAULT_COLOR), opacity }, texture, extra))
+    }
+
+    /// The effect's normal map (a `bump` texture), its opacity and whether
+    /// it blends.
+    fn effect_extra(&mut self, effect: Node<'a, 'i>) -> (Extra, f32) {
+        let mut extra = Extra { normal: None, blend: false };
+        let Some(profile) = child(effect, "profile_COMMON") else { return (extra, 1.0) };
+        let technique = child(profile, "technique");
+        let shader = technique.and_then(shader_of);
+        // `extra` techniques first, then the shader's own child.
+        let bump = [technique, Some(profile), Some(effect)]
+            .into_iter()
+            .flatten()
+            .flat_map(|h| children(h, "extra"))
+            .flat_map(|e| children(e, "technique"))
+            .chain(shader)
+            .flat_map(|t| children(t, "bump"))
+            .find_map(|b| child(b, "texture"));
+        if let Some(tex) = bump {
+            let name = tex.attribute("texture").unwrap_or("");
+            if let Some((source, wrap)) = self.texture_source(profile, name) {
+                let image = self.loader.for_map(|l| match source {
+                    Source::Uri(uri) => l.file(&percent_decode(uri.trim())),
+                    Source::Hex(bytes) => l.embedded("embedded", &bytes),
+                });
+                if let Some(image) = image {
+                    let texture = Texture { image, tint: [1.0; 3], wrap, alpha_cutoff: None };
+                    extra.normal = Some((texture, tex.attribute("texcoord").unwrap_or("").to_string()));
+                }
+            }
+        }
+        let Some(shader) = shader else { return (extra, 1.0) };
+        let transparent = child(shader, "transparent");
+        let transparency = child(shader, "transparency");
+        if transparent.is_none() && transparency.is_none() {
+            return (extra, 1.0);
+        }
+        if transparent.is_some_and(|t| child(t, "texture").is_some()) {
+            extra.blend = true;
+            return (extra, 1.0);
+        }
+        let factor = transparency.and_then(|t| child(t, "float")).and_then(|f| f.text()).and_then(|t| t.trim().parse::<f32>().ok()).unwrap_or(1.0);
+        let mut c = [1.0f32; 4];
+        if let Some(v) = transparent.and_then(|t| child(t, "color")).map(floats) {
+            for (slot, x) in c.iter_mut().zip(v) {
+                *slot = x;
+            }
+        }
+        let mode = transparent.and_then(|t| t.attribute("opaque")).map(str::trim).unwrap_or("A_ONE");
+        let opacity = match mode {
+            "A_ONE" => c[3] * factor,
+            "RGB_ZERO" => 1.0 - c[0] * factor,
+            "A_ZERO" => 1.0 - c[3] * factor,
+            "RGB_ONE" => c[0] * factor,
+            _ => 1.0,
+        };
+        let opacity = if opacity.is_finite() { opacity.clamp(0.0, 1.0) } else { 1.0 };
+        extra.blend = opacity < 1.0;
+        (extra, opacity)
     }
 
     /// The effect's colour (the diffuse's, the emission's for `constant`,
@@ -650,7 +734,7 @@ impl<'a, 'i, 's> Reader<'a, 'i, 's> {
     fn effect_color(&mut self, effect: Node<'a, 'i>) -> (Option<V3>, Option<(Texture, String)>) {
         let Some(profile) = child(effect, "profile_COMMON") else { return (None, None) };
         let Some(technique) = child(profile, "technique") else { return (None, None) };
-        let Some(shader) = technique.children().find(|c| c.is_element() && matches!(c.tag_name().name(), "phong" | "lambert" | "blinn" | "constant")) else { return (None, None) };
+        let Some(shader) = shader_of(technique) else { return (None, None) };
         let slot = if shader.tag_name().name() == "constant" { "emission" } else { "diffuse" };
         let Some(value) = child(shader, slot) else { return (None, None) };
         if let Some(c) = child(value, "color") {
@@ -696,6 +780,11 @@ impl<'a, 'i, 's> Reader<'a, 'i, 's> {
         let text = child(init, "ref").and_then(|r| r.text()).or(init.text())?;
         Some((Source::Uri(text.trim().to_string()), wrap)).filter(|(s, _)| matches!(s, Source::Uri(u) if !u.is_empty()))
     }
+}
+
+/// The shading model element of a profile's technique.
+fn shader_of<'a, 'i>(technique: Node<'a, 'i>) -> Option<Node<'a, 'i>> {
+    technique.children().find(|c| c.is_element() && matches!(c.tag_name().name(), "phong" | "lambert" | "blinn" | "constant"))
 }
 
 /// Where a texture's picture is.
@@ -1034,6 +1123,125 @@ mod tests {
         let m = parse(textured(fx, &images, "").as_bytes(), &none).unwrap();
         assert_eq!(m.meshes[0].texture.as_ref().unwrap().image.height, 2);
         assert_ne!(m.meshes[0].material.as_ref().unwrap().color, DEFAULT_COLOR);
+    }
+
+    const IMG: &str = r#"<library_images><image id="img"><init_from>a.png</init_from></image></library_images>"#;
+
+    /// An effect with a sampler `samp` for `a.png` and `shader` as its shader.
+    fn fx_with(shader: &str, extra: &str) -> String {
+        format!(
+            r##"<effect id="fx"><profile_COMMON><newparam sid="surf"><surface type="2D"><init_from>img</init_from></surface></newparam>
+            <newparam sid="samp"><sampler2D><source>surf</source></sampler2D></newparam>
+            <technique sid="common">{shader}{extra}</technique></profile_COMMON></effect>"##
+        )
+    }
+
+    fn opacity_of(shader: &str) -> (f32, bool) {
+        let m = read(&textured(&fx_with(shader, ""), "", ""));
+        (m.meshes[0].material.as_ref().unwrap().opacity, m.meshes[0].surface.blend)
+    }
+
+    #[test]
+    fn transparency_modes() {
+        let near = |a: f32, b: f32| (a - b).abs() < 1e-5;
+        let sh = |opaque: &str, c: &str, f: &str| {
+            let op = if opaque.is_empty() { String::new() } else { format!(r#" opaque="{opaque}""#) };
+            format!("<phong><transparent{op}><color>{c}</color></transparent><transparency><float>{f}</float></transparency></phong>")
+        };
+        let (o, b) = opacity_of(&sh("A_ONE", "1 1 1 0.8", "0.5"));
+        assert!(near(o, 0.4) && b);
+        let (o, b) = opacity_of(&sh("RGB_ZERO", "0.5 0 0 1", "0.5"));
+        assert!(near(o, 0.75) && b);
+        let (o, b) = opacity_of(&sh("A_ZERO", "0 0 0 0.5", "1"));
+        assert!(near(o, 0.5) && b);
+        let (o, b) = opacity_of(&sh("RGB_ONE", "0.25 0 0 1", "2"));
+        assert!(near(o, 0.5) && b);
+        // No attribute: A_ONE. Unknown mode: opaque. Opaque result: no blend.
+        let (o, b) = opacity_of(&sh("", "1 1 1 0.25", "1"));
+        assert!(near(o, 0.25) && b);
+        assert_eq!(opacity_of(&sh("SOMETHING", "1 1 1 0.25", "1")), (1.0, false));
+        assert_eq!(opacity_of(&sh("A_ONE", "1 1 1 1", "1")), (1.0, false));
+        // Clamped; fewer than four numbers count as ones.
+        assert_eq!(opacity_of(&sh("RGB_ONE", "1 1 1 1", "5")), (1.0, false));
+        assert_eq!(opacity_of(&sh("RGB_ZERO", "1 1 1 1", "5")), (0.0, true));
+        let (o, b) = opacity_of(&sh("A_ONE", "1 1", "0.5"));
+        assert!(near(o, 0.5) && b);
+    }
+
+    #[test]
+    fn transparency_defaults_and_garbage() {
+        // Neither element.
+        assert_eq!(opacity_of("<phong><diffuse><color>1 0 0 1</color></diffuse></phong>"), (1.0, false));
+        // `transparent` alone: factor 1.
+        let (o, b) = opacity_of(r#"<phong><transparent opaque="A_ZERO"><color>0 0 0 0.25</color></transparent></phong>"#);
+        assert!((o - 0.75).abs() < 1e-5 && b);
+        // `transparency` alone: A_ONE with white, so the factor is the opacity.
+        let (o, b) = opacity_of("<phong><transparency><float>0.3</float></transparency></phong>");
+        assert!((o - 0.3).abs() < 1e-5 && b);
+        // Garbage and non-finite factors.
+        assert_eq!(opacity_of("<phong><transparency><float>abc</float></transparency></phong>"), (1.0, false));
+        assert_eq!(opacity_of("<phong><transparency><float>NaN</float></transparency></phong>"), (1.0, false));
+        assert_eq!(opacity_of("<phong><transparency><float>inf</float></transparency></phong>"), (1.0, false));
+        assert_eq!(opacity_of(r#"<phong><transparent opaque="A_ONE"><color>x y z w</color></transparent></phong>"#), (0.0, true));
+    }
+
+    #[test]
+    fn transparent_texture_blends_at_full_opacity() {
+        let sh = r#"<phong><transparent opaque="A_ONE"><texture texture="samp" texcoord="UV"/></transparent><transparency><float>0.5</float></transparency></phong>"#;
+        assert_eq!(opacity_of(sh), (1.0, true));
+    }
+
+    #[test]
+    fn bump_is_a_normal_map() {
+        let png = texture::tests::png_2x2();
+        let side = |name: &str| (name == "a.png").then(|| png.clone());
+        let direct = r#"<phong><bump><texture texture="samp" texcoord="UV"/></bump></phong>"#;
+        let m = parse(textured(&fx_with(direct, ""), IMG, "").as_bytes(), &side).unwrap();
+        let s = &m.meshes[0].surface;
+        assert_eq!(s.normal_map.as_ref().map(|t| t.image.width), Some(2));
+        assert!(s.bump_map.is_none() && s.emissive_map.is_none() && s.emissive == [0.0; 3]);
+        // In an extra technique of the shader's technique, the profile or the effect.
+        let ex = r#"<extra><technique profile="X"><bump><texture texture="samp" texcoord="UV"/></bump></technique></extra>"#;
+        let plain = r#"<phong><diffuse><color>1 0 0 1</color></diffuse></phong>"#;
+        for fx in [fx_with(plain, ex), fx_with(plain, "").replace("</technique></profile_COMMON>", &format!("</technique>{ex}</profile_COMMON>")), fx_with(plain, "").replace("</profile_COMMON>", &format!("</profile_COMMON>{ex}"))] {
+            let m = parse(textured(&fx, IMG, "").as_bytes(), &side).unwrap();
+            assert!(m.meshes[0].surface.normal_map.is_some(), "{fx}");
+            assert!(m.meshes[0].texture.is_none());
+        }
+        // The extra one wins when both exist (here only it has a picture).
+        let both = r#"<phong><bump><texture texture="none" texcoord="UV"/></bump></phong>"#;
+        let m = parse(textured(&fx_with(both, ex), IMG, "").as_bytes(), &side).unwrap();
+        assert!(m.meshes[0].surface.normal_map.is_some());
+        // Its wrap comes from its sampler.
+        let fx = fx_with(direct, "").replace("<source>surf</source>", "<source>surf</source><wrap_s>CLAMP</wrap_s>");
+        let m = parse(textured(&fx, IMG, "").as_bytes(), &side).unwrap();
+        assert_eq!(m.meshes[0].surface.normal_map.as_ref().unwrap().wrap, [Wrap::Clamp, Wrap::Repeat]);
+    }
+
+    #[test]
+    fn broken_bump_leaves_the_mesh() {
+        let direct = r#"<phong><bump><texture texture="samp" texcoord="UV"/></bump></phong>"#;
+        // Picture missing.
+        let m = read(&textured(&fx_with(direct, ""), IMG, ""));
+        assert_eq!(m.meshes.len(), 1);
+        assert!(m.meshes[0].surface.normal_map.is_none());
+        // Unknown sampler, and undecodable hex.
+        let m = read(&textured(&fx_with(&direct.replace("samp", "nope"), ""), IMG, ""));
+        assert!(m.meshes[0].surface.normal_map.is_none());
+        let images = r#"<library_images><image id="img"><init_from><hex>zz</hex></init_from></image></library_images>"#;
+        let m = read(&textured(&fx_with(direct, ""), images, ""));
+        assert!(m.meshes[0].surface.normal_map.is_none() && !m.meshes[0].positions.is_empty());
+    }
+
+    #[test]
+    fn normal_map_needs_uvs() {
+        let png = texture::tests::png_2x2();
+        let side = |name: &str| (name == "a.png").then(|| png.clone());
+        let direct = r#"<phong><bump><texture texture="samp" texcoord="UV"/></bump></phong>"#;
+        let s = textured(&fx_with(direct, ""), IMG, "").replace(r##"<input semantic="TEXCOORD" source="#cube-uv" offset="1" set="0"/>"##, "").replace("<p>0 0 1 1 2 2</p>", "<p>0 1 2</p>");
+        let m = parse(s.as_bytes(), &side).unwrap();
+        assert!(m.meshes[0].uvs.is_none());
+        assert!(m.meshes[0].surface.normal_map.is_none());
     }
 
     #[test]
