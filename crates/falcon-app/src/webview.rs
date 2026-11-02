@@ -8,6 +8,9 @@
 //! the page (so a video stops playing), and a frame where an egui window,
 //! menu, popup or modal overlaps its area hides it until that closes. When
 //! hidden it hands the keyboard back to egui. Tests never create one.
+//!
+//! MHTML archives are unpacked first (`crate::web_archive`); the web view
+//! owns the unpacked folder, which goes when no frame asks for it.
 
 use std::path::{Path, PathBuf};
 
@@ -20,8 +23,11 @@ pub enum Page {
     Remote(String),
     /// A local HTML file, read from its own folder.
     Local(PathBuf),
-    /// Shown as a still: MHTML archives (WebKit on macOS doesn't read
-    /// them), or a bookmark whose address isn't a web address.
+    /// An MHTML archive, the file itself: unpacked with
+    /// [`WebView::archive`], then shown as the `Local` page it unpacks to.
+    Archive(PathBuf),
+    /// Shown as a still: a bookmark whose address isn't a web address, or
+    /// an archive that can't be unpacked (or with no WebKit).
     Still { url: Option<String> },
 }
 
@@ -53,7 +59,7 @@ pub fn page_for(ext: &str, url: &str, file: &Path) -> Option<Page> {
             })
         }
         "html" => Some(Page::Local(file.to_path_buf())),
-        "mhtml" => Some(Page::Still { url: Some(url.trim().to_string()).filter(|u| !u.is_empty()) }),
+        "mhtml" => Some(Page::Archive(file.to_path_buf())),
         _ => None,
     }
 }
@@ -116,6 +122,8 @@ pub struct WebView {
     want: Option<Want>,
     /// The item whose page is loaded.
     loaded: Option<String>,
+    /// The MHTML archive unpacked for the page.
+    archive: crate::web_archive::Archives,
     #[cfg(target_os = "macos")]
     native: Option<mac::Native>,
 }
@@ -133,6 +141,12 @@ impl WebView {
         }
     }
 
+    /// The archive of item `key` (file `file`), unpacked for this view;
+    /// asking keeps it for this frame.
+    pub fn archive(&mut self, key: &str, file: &Path, ctx: &egui::Context) -> crate::web_archive::State {
+        self.archive.get(key, file, ctx)
+    }
+
     /// Asks for the page to be shown this frame.
     pub fn want(&mut self, want: Want) {
         self.want = Some(want);
@@ -140,6 +154,7 @@ impl WebView {
 
     /// Places, shows or hides the web view after the frame is drawn.
     pub fn sync(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
+        self.archive.end_frame();
         #[cfg(target_os = "macos")]
         self.sync_with(ctx, |n| n.attach(frame));
         #[cfg(not(target_os = "macos"))]
@@ -154,6 +169,7 @@ impl WebView {
     /// NSWindow is looked up the way the window's opacity is set. Until
     /// the window exists the page waits.
     pub fn sync_window(&mut self, ctx: &egui::Context, title: &str) {
+        self.archive.end_frame();
         #[cfg(target_os = "macos")]
         self.sync_with(ctx, |n| n.attach_titled(title));
         #[cfg(not(target_os = "macos"))]
@@ -416,7 +432,7 @@ mod mac {
                             let _: Option<Retained<AnyObject>> = msg_send![&*self.view, loadFileURL: &*file, allowingReadAccessToURL: &*dir];
                         }
                     }
-                    Page::Still { .. } => self.unload(),
+                    Page::Archive(_) | Page::Still { .. } => self.unload(),
                 }
             }
         }
@@ -523,7 +539,9 @@ mod tests {
         assert_eq!(page_for("url", "", &missing), Some(Page::Still { url: None }));
         let html = dir.path().join("p.html");
         assert_eq!(page_for("HTML", "", &html), Some(Page::Local(html.clone())));
-        assert_eq!(page_for("mhtml", "https://source.example/", &html), Some(Page::Still { url: Some("https://source.example/".into()) }));
+        let archive = dir.path().join("a.mhtml");
+        assert_eq!(page_for("MHTML", "https://source.example/", &archive), Some(Page::Archive(archive.clone())));
+        assert_eq!(page_for("mht", "https://source.example/", &archive), None, "not in Eagle's formats");
         assert_eq!(page_for("png", "", &html), None);
     }
 

@@ -1795,6 +1795,7 @@
   "This renames {n} smart folders. Go ahead?": {
     "other": "스마트 폴더 {n}개의 이름을 변경합니다. 계속할까요?"
   },
+  "This web archive couldn't be read. Open it in its own app to browse it.": "이 웹 보관 파일을 읽을 수 없습니다. 탐색하려면 전용 앱에서 여세요.",
   "Thumbnail": "썸네일",
   "Thumbnail Background": "썸네일 배경",
   "Thumbnail set": "썸네일을 설정했습니다",

@@ -1795,6 +1795,7 @@
   "This renames {n} smart folders. Go ahead?": {
     "other": "將重新命名{n}個智慧型資料夾。要繼續嗎？"
   },
+  "This web archive couldn't be read. Open it in its own app to browse it.": "無法讀取此網頁封存。請在對應的 App 中開啟以瀏覽。",
   "Thumbnail": "縮圖",
   "Thumbnail Background": "縮圖背景",
   "Thumbnail set": "已設定縮圖",

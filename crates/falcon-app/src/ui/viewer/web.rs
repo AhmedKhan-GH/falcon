@@ -1,9 +1,11 @@
 //! The viewer for web pages (`.url` bookmarks, `.html`,
 //! `.mhtml`), after Eagle's web view: on macOS the page itself, live in a
 //! `WKWebView` (see `crate::webview`), with back, forward, reload, Copy URL
-//! and Open in Browser in the bar. MHTML archives, bookmarks that don't
-//! point at a web address, and systems without WebKit get a still: the
-//! QuickLook render of the file with the same Copy URL and open buttons.
+//! and Open in Browser in the bar. MHTML archives are unpacked first
+//! (`crate::web_archive`) and load from the unpacked folder. Bookmarks that
+//! don't point at a web address, archives that can't be read and systems
+//! without WebKit get a still: the thumbnail of the file with the same
+//! Copy URL and open buttons.
 
 use eframe::egui::{self, Align2, Pos2, Rect, Ui, Vec2, vec2};
 use falcon_library::Library;
@@ -16,6 +18,7 @@ use crate::locale::tr;
 use crate::theme::{self as t, font, mono};
 use crate::ui::viewer::audio::bar_shell;
 use crate::ui::widgets::{ext_placeholder, galley, icon_button, viewer_ui};
+use crate::web_archive::State;
 use crate::webview::{Nav, Page, Want, WebView, is_web, is_web_address, page_for};
 
 impl App {
@@ -26,7 +29,33 @@ impl App {
             return false;
         }
         let file = item.original_path(lib.root());
-        let Some(page) = page_for(&item.ext, &item.url, &file) else { return false };
+        let Some(mut page) = page_for(&item.ext, &item.url, &file) else { return false };
+        // An archive loads from its unpacked folder once that is ready; the
+        // address it was saved from stands in for the folder's.
+        let archive = matches!(page, Page::Archive(_));
+        let mut saved_from = None;
+        let mut unreadable = false;
+        if let Page::Archive(path) = &page {
+            let stored = Some(item.url.trim().to_string()).filter(|u| !u.is_empty());
+            page = if WebView::available() {
+                match self.web.archive(&item.id, path, parent.ctx()) {
+                    State::Ready(r) => {
+                        saved_from = stored.or(r.address);
+                        Page::Local(r.root)
+                    }
+                    State::Pending => {
+                        saved_from = stored;
+                        Page::Archive(path.clone())
+                    }
+                    State::Failed(_) => {
+                        unreadable = true;
+                        Page::Still { url: stored }
+                    }
+                }
+            } else {
+                Page::Still { url: stored }
+            };
+        }
         let live = !matches!(page, Page::Still { .. }) && WebView::available();
         let ui = &mut viewer_ui(parent, screen, "web-viewer");
         ui.painter().rect_filled(screen, 0.0, t::p().main);
@@ -35,9 +64,9 @@ impl App {
 
         let nav = if live { self.web.nav() } else { Nav::default() };
         // The address shown: where the page is now, else where it started.
-        let url = nav.url.clone().or_else(|| match &page {
+        let url = nav.url.clone().filter(|u| !(archive && u.starts_with("file:"))).or_else(|| match &page {
             Page::Remote(u) => Some(u.clone()),
-            Page::Local(_) => None,
+            Page::Local(_) | Page::Archive(_) => saved_from.clone(),
             Page::Still { url } => url.clone(),
         });
         let (left, mut right) = bar_shell(self, ui, item, bar);
@@ -45,13 +74,14 @@ impl App {
         // Open in Browser: the address, or the HTML file in its default
         // app (a browser); an MHTML archive opens in its own app.
         let (open_tip, can_open) = match &page {
+            _ if archive => (tr("Open in Default App"), true),
             Page::Local(_) => (tr("Open in Browser"), true),
             Page::Still { .. } if !item.ext.eq_ignore_ascii_case("url") => (tr("Open in Default App"), true),
             _ => (tr("Open in Browser"), url.as_deref().is_some_and(is_web_address)),
         };
         if icon_button(ui, Pos2::new(right - 13.0, cy), ic::GLOBE, 16.0, can_open, open_tip).clicked() {
             match (&page, &url) {
-                (Page::Remote(_), Some(u)) | (Page::Still { .. }, Some(u)) if is_web_address(u) => crate::open_with::open_url(u),
+                (Page::Remote(_), Some(u)) | (Page::Still { .. }, Some(u)) if !archive && is_web_address(u) => crate::open_with::open_url(u),
                 _ => crate::open_with::open_default(std::slice::from_ref(&file)),
             }
         }
@@ -86,20 +116,24 @@ impl App {
 
         if live {
             ui.painter().text(area.center(), Align2::CENTER_CENTER, tr("Loading…"), font(13.0), t::p().text_muted);
-            self.web.want(Want { key: item.id.clone(), page, rect: area });
+            // An archive still unpacking has nothing to load yet.
+            if !matches!(page, Page::Archive(_)) {
+                self.web.want(Want { key: item.id.clone(), page, rect: area });
+            }
         } else {
-            self.web_still(ui, lib, item, &page, area);
+            self.web_still(ui, lib, item, &page, area, unreadable);
         }
         true
     }
 
     /// The still page: the QuickLook render of the file, fitted, with a
     /// line saying why the page isn't live.
-    fn web_still(&mut self, ui: &mut Ui, lib: &Library, item: &Item, page: &Page, area: Rect) {
+    fn web_still(&mut self, ui: &mut Ui, lib: &Library, item: &Item, page: &Page, area: Rect, unreadable: bool) {
         if let Some(j) = job_for(item, lib.root(), Tier::Full) {
             self.ws.frame_jobs.insert(0, j);
         }
         let note = match page {
+            _ if unreadable => tr("This web archive couldn't be read. Open it in its own app to browse it."),
             Page::Still { url: Some(u) } if item.ext.eq_ignore_ascii_case("url") && !is_web_address(u) => {
                 tr("This link isn't a web address, so it isn't opened here.")
             }

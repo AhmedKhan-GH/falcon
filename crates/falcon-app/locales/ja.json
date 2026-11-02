@@ -1795,6 +1795,7 @@
   "This renames {n} smart folders. Go ahead?": {
     "other": "{n}個のスマートフォルダの名前を変更します。続けますか？"
   },
+  "This web archive couldn't be read. Open it in its own app to browse it.": "このWebアーカイブを読み込めませんでした。専用のアプリで開いて閲覧してください。",
   "Thumbnail": "サムネール",
   "Thumbnail Background": "サムネールの背景",
   "Thumbnail set": "サムネールを設定しました",

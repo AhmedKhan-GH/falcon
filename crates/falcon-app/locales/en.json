@@ -1892,6 +1892,7 @@
     "one": "This renames {n} smart folder. Go ahead?",
     "other": "This renames {n} smart folders. Go ahead?"
   },
+  "This web archive couldn't be read. Open it in its own app to browse it.": "This web archive couldn't be read. Open it in its own app to browse it.",
   "Thumbnail": "Thumbnail",
   "Thumbnail Background": "Thumbnail Background",
   "Thumbnail set": "Thumbnail set",

@@ -64,6 +64,7 @@ mod theme;
 mod ui;
 mod library_icons;
 mod watch;
+mod web_archive;
 mod webview;
 mod workspaces;
 

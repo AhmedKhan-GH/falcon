@@ -171,6 +171,7 @@ The core words, so every file uses one term for one thing.
 - The IFC rows of the inspector ("3D Preview", "IFC: no tessellated geometry", "Not Read", "Products Shown", "Products Skipped", "Reading…", "Schema", "The file could not be read") (machine-written).
 - The Actions panel, editor and menu strings (step names, the empty and error states, "Run on {n} items", "{name} changed {n} items", the shortcut hints, "This action has steps Falcon can't run"), machine-written in one pass; "action" is the existing term for "Actions" in each file.
 - "Neither macOS nor FFmpeg could play this video…" and "macOS can't play .{ext} videos, and the FFmpeg libraries Falcon plays them with weren't found…", the video viewer's can't-play lines; FFmpeg is a product name and is not translated (machine-written).
+- "This web archive couldn't be read. Open it in its own app to browse it.", the web viewer's note when an MHTML archive can't be unpacked (machine-written).
 
 ## Reviewed
 

@@ -364,6 +364,11 @@ impl eframe::App for App {
         self.save_state(storage);
     }
 
+    fn on_exit(&mut self) {
+        // Unpacked web archives don't outlive falcon.
+        crate::web_archive::remove_own();
+    }
+
     fn persist_egui_memory(&self) -> bool {
         false
     }

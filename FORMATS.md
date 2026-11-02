@@ -76,7 +76,7 @@ Status: **Done** works as well as Eagle or better. **Partial** opens, but someth
 | Formats | Eagle | Falcon | Status |
 | --- | --- | --- | --- |
 | url, html | Live page | Live page in the viewer (WKWebView) | Done |
-| mhtml | Live page | QuickLook still | Partial: not rendered live yet |
+| mhtml | Live page | Live page in the viewer and preview window (WKWebView), unpacked by falcon's own MIME reader with its styles and images and kept off the network; thumbnail from the unpacked page | Done |
 
 ## Libraries and packages
 
