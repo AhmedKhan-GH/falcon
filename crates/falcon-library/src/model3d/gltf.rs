@@ -588,7 +588,7 @@ fn instance(name: &str, prim: &Prim, world: &M4) -> Mesh {
             t.swap(1, 2);
         }
     }
-    Mesh { name: name.to_string(), positions, normals, colors: prim.colors.clone(), indices, material: prim.material.clone(), uvs: prim.uvs.clone(), texture: None }
+    Mesh { name: name.to_string(), positions, normals, colors: prim.colors.clone(), indices, material: prim.material.clone(), uvs: prim.uvs.clone(), ..Mesh::default() }
 }
 
 /// The cofactor matrix of the upper 3x3 of `m` (`[row][col]`, which is the

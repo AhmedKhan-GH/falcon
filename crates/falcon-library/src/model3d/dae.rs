@@ -612,6 +612,7 @@ impl<'a, 'i, 's> Reader<'a, 'i, 's> {
                 indices,
                 material,
                 texture: texture.filter(|_| uvs.is_some()).map(|(t, _)| t),
+                surface: Default::default(),
                 uvs,
             });
         }

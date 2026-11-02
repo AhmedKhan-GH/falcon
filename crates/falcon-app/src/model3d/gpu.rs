@@ -9,21 +9,31 @@
 //! view's rectangle with premultiplied-alpha blending, so a transparent
 //! background shows the viewer behind it.
 //!
-//! Textured meshes draw with a second pipeline: each texture is uploaded
+//! Meshes with a look draw with a second pipeline: each picture is uploaded
 //! once per model as sRGB with its mipmaps (made on the CPU in linear
 //! light, `texture::mip_chain`), sampled trilinearly with anisotropic
 //! filtering and the file's wrap modes, multiplied with the vertex colour
-//! (the tint) in linear light, and discarded under its alpha cutoff. The
-//! textures are dropped with the model ([`release`]) or when the next
-//! model's arrive. Everything here is thin glue;
+//! (the tint) in linear light, and discarded under its alpha cutoff. Normal,
+//! bump and emissive maps are uploaded as they are stored, with plain mipmaps
+//! (`texture::mip_chain_data`); no tangents are stored, the frame comes from
+//! screen derivatives. A look's missing maps are a white pixel the shader
+//! ignores or multiplies with. The textures are dropped with the model
+//! ([`release`]) or when the next model's arrive.
+//!
+//! See-through meshes draw last, farthest first, back faces and then front
+//! faces, writing depth as they go, as three.js does in Eagle's viewer. The
+//! target holds premultiplied colour, and the blend keeps it that way.
+//! Everything here is thin glue;
 //! the maths it draws with is tested in `logic/viewer3d.rs`,
 //! `model3d/mod.rs` and `falcon_library::model3d`.
 
 use std::ops::Range;
+use std::sync::Arc;
 
 use eframe::egui_wgpu::{self, CallbackResources, CallbackTrait, ScreenDescriptor, wgpu};
 use falcon_library::model3d::geom;
 use falcon_library::model3d::math::M4;
+use falcon_library::model3d::texture::{self, Image, Texture, Wrap};
 
 use super::{Lines, MeshData, VERTEX_FLOATS, Vertices};
 
@@ -54,6 +64,7 @@ struct VOut {
     @location(1) color: vec3<f32>,
     @location(2) uv: vec2<f32>,
     @location(3) cutoff: f32,
+    @location(4) world: vec3<f32>,
 };
 
 @vertex fn vs(v: VIn) -> VOut {
@@ -63,6 +74,7 @@ struct VOut {
     o.color = v.color;
     o.uv = v.uv;
     o.cutoff = v.cutoff;
+    o.world = v.pos;
     return o;
 }
 
@@ -80,8 +92,21 @@ fn lit(normal: vec3<f32>, color: vec3<f32>) -> vec4<f32> {
     return lit(i.normal, i.color);
 }
 
-@group(1) @binding(0) var tex: texture_2d<f32>;
-@group(1) @binding(1) var samp: sampler;
+struct Look {
+    // rgb: the surface's own light; a: its opacity.
+    emissive: vec4<f32>,
+    // x: has a normal map; y: has a bump map; z: see-through.
+    flags: vec4<f32>,
+};
+@group(1) @binding(0) var<uniform> look: Look;
+@group(1) @binding(1) var base_tex: texture_2d<f32>;
+@group(1) @binding(2) var base_samp: sampler;
+@group(1) @binding(3) var normal_tex: texture_2d<f32>;
+@group(1) @binding(4) var normal_samp: sampler;
+@group(1) @binding(5) var bump_tex: texture_2d<f32>;
+@group(1) @binding(6) var bump_samp: sampler;
+@group(1) @binding(7) var emissive_tex: texture_2d<f32>;
+@group(1) @binding(8) var emissive_samp: sampler;
 
 fn to_linear(c: vec3<f32>) -> vec3<f32> {
     return select(pow((c + 0.055) / 1.055, vec3<f32>(2.4)), c / 12.92, c <= vec3<f32>(0.04045));
@@ -91,15 +116,68 @@ fn to_srgb(c: vec3<f32>) -> vec3<f32> {
     return select(1.055 * pow(k, vec3<f32>(1.0 / 2.4)) - 0.055, k * 12.92, k <= vec3<f32>(0.0031308));
 }
 
+// The surface's normal through its maps, as
+// falcon_library::model3d::geom::normal_mapped and bumped, from screen
+// derivatives. A normal map wins over a bump map.
+fn surface_normal(n: vec3<f32>, q0: vec3<f32>, q1: vec3<f32>, st0: vec2<f32>, st1: vec2<f32>, front: bool, map: vec3<f32>, dh: vec2<f32>) -> vec3<f32> {
+    if (length(n) <= 1e-8) {
+        return n;
+    }
+    var m = normalize(n);
+    let has_normal = look.flags.x > 0.5;
+    if (has_normal) {
+        if (!front) {
+            m = -m;
+        }
+        let p1 = cross(q1, m);
+        let p0 = cross(m, q0);
+        let t = p1 * st0.x + p0 * st1.x;
+        let b = p1 * st0.y + p0 * st1.y;
+        let det = max(dot(t, t), dot(b, b));
+        if (det <= 0.0) {
+            return m;
+        }
+        let k = 1.0 / sqrt(det);
+        let v = map * 2.0 - vec3<f32>(1.0);
+        // v runs down the picture, the map's green up it.
+        return normalize(t * (v.x * k) - b * (v.y * k) + m * v.z);
+    }
+    if (look.flags.y > 0.5) {
+        let p1 = cross(q1, m);
+        let p0 = cross(m, q0);
+        let det = dot(q0, p1);
+        if (abs(det) <= 0.0) {
+            return m;
+        }
+        // dh is per screen pixel, and so are q0 and q1.
+        return normalize(m - (p1 * dh.x + p0 * dh.y) / det);
+    }
+    return m;
+}
+
 // The picture (an sRGB texture, so sampled in linear light) times the
 // tint, back in display values, then lit like the plain faces; as
-// falcon_library::model3d::texture::modulate.
-@fragment fn fs_tex(i: VOut) -> @location(0) vec4<f32> {
-    let t = textureSample(tex, samp, i.uv);
-    if (t.a < i.cutoff) {
+// falcon_library::model3d::texture::modulate. Every map is read up front:
+// derivatives aren't to be taken after a discard.
+@fragment fn fs_tex(i: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4<f32> {
+    let t = textureSample(base_tex, base_samp, i.uv);
+    let map = textureSample(normal_tex, normal_samp, i.uv).xyz;
+    let st0 = dpdx(i.uv);
+    let st1 = dpdy(i.uv);
+    let h = textureSample(bump_tex, bump_samp, i.uv).r;
+    let hx = textureSample(bump_tex, bump_samp, i.uv + st0).r;
+    let hy = textureSample(bump_tex, bump_samp, i.uv + st1).r;
+    let own = textureSample(emissive_tex, emissive_samp, i.uv).rgb * look.emissive.rgb;
+    let q0 = dpdx(i.world);
+    let q1 = dpdy(i.world);
+    let alpha = t.a * look.emissive.a;
+    if (alpha < i.cutoff) {
         discard;
     }
-    return lit(i.normal, to_srgb(to_linear(i.color) * t.rgb));
+    let n = surface_normal(i.normal, q0, q1, st0, st1, front, map, vec2<f32>(hx - h, hy - h));
+    let lit_color = lit(n, to_srgb(to_linear(i.color) * t.rgb)).rgb;
+    let a = select(1.0, alpha, look.flags.z > 0.5);
+    return vec4<f32>(min(lit_color + own, vec3<f32>(1.0)), a);
 }
 
 @fragment fn fs_line(i: VOut) -> @location(0) vec4<f32> {
@@ -173,10 +251,12 @@ struct Buffer {
     count: u32,
 }
 
-/// One model texture on the GPU.
-struct GpuTexture {
-    _texture: wgpu::Texture,
-    group: wgpu::BindGroup,
+/// The white pixels that stand in for a look's missing maps, and the samplers
+/// by wrap mode, shared by all its bind groups.
+struct LookParts {
+    white: wgpu::TextureView,
+    white_srgb: wgpu::TextureView,
+    samplers: std::collections::HashMap<[Wrap; 2], wgpu::Sampler>,
 }
 
 /// Textures the size of the view.
@@ -201,7 +281,9 @@ struct Gpu {
     uniform_group: wgpu::BindGroup,
     mesh_pipeline: wgpu::RenderPipeline,
     tex_pipeline: wgpu::RenderPipeline,
-    tex_layout: wgpu::BindGroupLayout,
+    blend_back_pipeline: wgpu::RenderPipeline,
+    blend_front_pipeline: wgpu::RenderPipeline,
+    look_layout: wgpu::BindGroupLayout,
     line_pipeline: wgpu::RenderPipeline,
     blit_pipeline: wgpu::RenderPipeline,
     blit_layout: wgpu::BindGroupLayout,
@@ -209,8 +291,9 @@ struct Gpu {
     targets: Option<Targets>,
     mesh: Option<Buffer>,
     lines: Option<Buffer>,
-    /// The model's textures, by the generation of their list.
-    textures: Option<(u64, Vec<Option<GpuTexture>>)>,
+    /// The bind group of each of the model's looks, which hold on to its
+    /// textures, by the generation of their list.
+    looks: Option<(u64, Vec<wgpu::BindGroup>)>,
 }
 
 fn vertex_layout() -> wgpu::VertexBufferLayout<'static> {
@@ -254,33 +337,47 @@ impl Gpu {
             bind_group_layouts: &[Some(&uniform_layout)],
             immediate_size: 0,
         });
-        let tex_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("falcon-model3d-texture"),
+        let tex_entry = |binding| wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Texture {
+                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                view_dimension: wgpu::TextureViewDimension::D2,
+                multisampled: false,
+            },
+            count: None,
+        };
+        let samp_entry = |binding| wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+            count: None,
+        };
+        let look_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("falcon-model3d-look"),
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
+                    ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
                     count: None,
                 },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
+                tex_entry(1),
+                samp_entry(2),
+                tex_entry(3),
+                samp_entry(4),
+                tex_entry(5),
+                samp_entry(6),
+                tex_entry(7),
+                samp_entry(8),
             ],
         });
         let tex_scene_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("falcon-model3d-textured"),
-            bind_group_layouts: &[Some(&uniform_layout), Some(&tex_layout)],
+            bind_group_layouts: &[Some(&uniform_layout), Some(&look_layout)],
             immediate_size: 0,
         });
-        let scene_pipeline = |layout: &wgpu::PipelineLayout, topology: wgpu::PrimitiveTopology, fs: &str, bias: wgpu::DepthBiasState| {
+        let scene_pipeline = |layout: &wgpu::PipelineLayout, topology: wgpu::PrimitiveTopology, fs: &str, bias: wgpu::DepthBiasState, cull_mode: Option<wgpu::Face>, blend: Option<wgpu::BlendState>| {
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("falcon-model3d"),
                 layout: Some(layout),
@@ -290,7 +387,7 @@ impl Gpu {
                     compilation_options: Default::default(),
                     buffers: &[Some(vertex_layout())],
                 },
-                primitive: wgpu::PrimitiveState { topology, cull_mode: None, ..Default::default() },
+                primitive: wgpu::PrimitiveState { topology, cull_mode, ..Default::default() },
                 depth_stencil: Some(wgpu::DepthStencilState {
                     format: DEPTH_FORMAT,
                     depth_write_enabled: Some(true),
@@ -303,7 +400,7 @@ impl Gpu {
                     module: &scene,
                     entry_point: Some(fs),
                     compilation_options: Default::default(),
-                    targets: &[Some(wgpu::ColorTargetState { format: COLOR_FORMAT, blend: None, write_mask: wgpu::ColorWrites::ALL })],
+                    targets: &[Some(wgpu::ColorTargetState { format: COLOR_FORMAT, blend, write_mask: wgpu::ColorWrites::ALL })],
                 }),
                 multiview_mask: None,
                 cache: None,
@@ -311,9 +408,18 @@ impl Gpu {
         };
         // Faces sit slightly behind lines at the same depth.
         let face_bias = wgpu::DepthBiasState { constant: 2, slope_scale: 1.0, clamp: 0.0 };
-        let mesh_pipeline = scene_pipeline(&scene_layout, wgpu::PrimitiveTopology::TriangleList, "fs_mesh", face_bias);
-        let tex_pipeline = scene_pipeline(&tex_scene_layout, wgpu::PrimitiveTopology::TriangleList, "fs_tex", face_bias);
-        let line_pipeline = scene_pipeline(&scene_layout, wgpu::PrimitiveTopology::LineList, "fs_line", Default::default());
+        let triangles = wgpu::PrimitiveTopology::TriangleList;
+        let mesh_pipeline = scene_pipeline(&scene_layout, triangles, "fs_mesh", face_bias, None, None);
+        let tex_pipeline = scene_pipeline(&tex_scene_layout, triangles, "fs_tex", face_bias, None, None);
+        // The shader's colour is straight; what lands in the target is
+        // premultiplied, which is what the copy into egui's pass expects.
+        let over = wgpu::BlendState {
+            color: wgpu::BlendComponent { src_factor: wgpu::BlendFactor::SrcAlpha, dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha, operation: wgpu::BlendOperation::Add },
+            alpha: wgpu::BlendComponent { src_factor: wgpu::BlendFactor::One, dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha, operation: wgpu::BlendOperation::Add },
+        };
+        let blend_back_pipeline = scene_pipeline(&tex_scene_layout, triangles, "fs_tex", face_bias, Some(wgpu::Face::Front), Some(over));
+        let blend_front_pipeline = scene_pipeline(&tex_scene_layout, triangles, "fs_tex", face_bias, Some(wgpu::Face::Back), Some(over));
+        let line_pipeline = scene_pipeline(&scene_layout, wgpu::PrimitiveTopology::LineList, "fs_line", Default::default(), None, None);
         let blit_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("falcon-model3d-blit"),
             entries: &[
@@ -373,7 +479,9 @@ impl Gpu {
             uniform_group,
             mesh_pipeline,
             tex_pipeline,
-            tex_layout,
+            blend_back_pipeline,
+            blend_front_pipeline,
+            look_layout,
             line_pipeline,
             blit_pipeline,
             blit_layout,
@@ -381,19 +489,74 @@ impl Gpu {
             targets: None,
             mesh: None,
             lines: None,
-            textures: None,
+            looks: None,
         }
     }
 
-    /// Uploads the model's textures unless they are already there.
-    fn ensure_textures(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, t: &super::Textures) {
-        if self.textures.as_ref().is_some_and(|(g, _)| *g == t.generation) {
+    /// Uploads the model's pictures and makes its looks' bind groups unless
+    /// they are already there. A picture used by several looks, or several
+    /// times by one, goes up once.
+    fn ensure_looks(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, looks: &super::Looks) {
+        if self.looks.as_ref().is_some_and(|(g, _)| *g == looks.generation) {
             return;
         }
         // The previous model's go first.
-        self.textures = None;
-        let list = t.list.iter().map(|tex| upload_texture(device, queue, &self.tex_layout, tex)).collect();
-        self.textures = Some((t.generation, list));
+        self.looks = None;
+        let white = |format| {
+            let image = falcon_library::model3d::texture::Image { name: String::new(), width: 1, height: 1, rgba: vec![255; 4] };
+            upload_image(device, queue, &image, format).expect("a pixel fits")
+        };
+        let mut parts = LookParts { white: white(wgpu::TextureFormat::Rgba8Unorm), white_srgb: white(wgpu::TextureFormat::Rgba8UnormSrgb), samplers: Default::default() };
+        let mut uploaded = std::collections::HashMap::new();
+        let groups = looks.list.iter().map(|look| self.look_group(device, queue, look, &mut parts, &mut uploaded)).collect();
+        self.looks = Some((looks.generation, groups));
+    }
+
+    fn look_group(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        look: &super::Look,
+        parts: &mut LookParts,
+        uploaded: &mut std::collections::HashMap<(*const Image, bool), Option<wgpu::TextureView>>,
+    ) -> wgpu::BindGroup {
+        let mut view = |t: &Option<Texture>, srgb: bool| -> Option<wgpu::TextureView> {
+            let t = t.as_ref()?;
+            let format = if srgb { wgpu::TextureFormat::Rgba8UnormSrgb } else { wgpu::TextureFormat::Rgba8Unorm };
+            uploaded.entry((Arc::as_ptr(&t.image), srgb)).or_insert_with(|| upload_image(device, queue, &t.image, format)).clone()
+        };
+        let (base, normal, bump, emissive) = (view(&look.base, true), view(&look.normal, false), view(&look.bump, false), view(&look.emissive_map, false));
+        // A map that didn't make it to the GPU counts as missing.
+        let uniform = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("falcon-model3d-look"),
+            size: LOOK_BYTES as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        queue.write_buffer(&uniform, 0, &look_bytes(look.emissive, look.opacity, normal.is_some(), bump.is_some(), look.blend));
+        for t in [&look.base, &look.normal, &look.bump, &look.emissive_map].into_iter().flatten() {
+            parts.samplers.entry(t.wrap).or_insert_with(|| make_sampler(device, t.wrap));
+        }
+        parts.samplers.entry([Wrap::Repeat; 2]).or_insert_with(|| make_sampler(device, [Wrap::Repeat; 2]));
+        let samplers = &parts.samplers;
+        let sampler = |t: &Option<Texture>| &samplers[&t.as_ref().map_or([Wrap::Repeat; 2], |t| t.wrap)];
+        let or_white = |v: &'_ Option<wgpu::TextureView>, srgb: bool| -> wgpu::TextureView { v.clone().unwrap_or_else(|| if srgb { parts.white_srgb.clone() } else { parts.white.clone() }) };
+        let views = [or_white(&base, true), or_white(&normal, false), or_white(&bump, false), or_white(&emissive, false)];
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("falcon-model3d-look"),
+            layout: &self.look_layout,
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: uniform.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&views[0]) },
+                wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(sampler(&look.base)) },
+                wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::TextureView(&views[1]) },
+                wgpu::BindGroupEntry { binding: 4, resource: wgpu::BindingResource::Sampler(sampler(&look.normal)) },
+                wgpu::BindGroupEntry { binding: 5, resource: wgpu::BindingResource::TextureView(&views[2]) },
+                wgpu::BindGroupEntry { binding: 6, resource: wgpu::BindingResource::Sampler(sampler(&look.bump)) },
+                wgpu::BindGroupEntry { binding: 7, resource: wgpu::BindingResource::TextureView(&views[3]) },
+                wgpu::BindGroupEntry { binding: 8, resource: wgpu::BindingResource::Sampler(sampler(&look.emissive_map)) },
+            ],
+        })
     }
 
     fn ensure_targets(&mut self, device: &wgpu::Device, size: [u32; 2]) {
@@ -449,8 +612,7 @@ fn upload(device: &wgpu::Device, queue: &wgpu::Queue, slot: &mut Option<Buffer>,
     *slot = Some(Buffer { generation: v.generation, buffer, count: v.count });
 }
 
-fn address(w: falcon_library::model3d::texture::Wrap) -> wgpu::AddressMode {
-    use falcon_library::model3d::texture::Wrap;
+fn address(w: Wrap) -> wgpu::AddressMode {
     match w {
         Wrap::Repeat => wgpu::AddressMode::Repeat,
         Wrap::Clamp => wgpu::AddressMode::ClampToEdge,
@@ -458,54 +620,48 @@ fn address(w: falcon_library::model3d::texture::Wrap) -> wgpu::AddressMode {
     }
 }
 
-/// One texture as an sRGB GPU texture with its mipmaps, and its bind
-/// group (texture and sampler). `None` for a picture the device can't hold.
-fn upload_texture(device: &wgpu::Device, queue: &wgpu::Queue, layout: &wgpu::BindGroupLayout, tex: &falcon_library::model3d::texture::Texture) -> Option<GpuTexture> {
-    let img = &*tex.image;
+/// A picture as a GPU texture with its mipmaps: in `format`, sRGB for a
+/// picture and plain for a map holding data. `None` for one the device
+/// can't hold.
+fn upload_image(device: &wgpu::Device, queue: &wgpu::Queue, img: &Image, format: wgpu::TextureFormat) -> Option<wgpu::TextureView> {
     let max = device.limits().max_texture_dimension_2d;
     if img.width == 0 || img.height == 0 || img.width > max || img.height > max {
         return None;
     }
-    let chain = falcon_library::model3d::texture::mip_chain(img);
-    let texture = device.create_texture(&wgpu::TextureDescriptor {
+    let chain = if format.is_srgb() { texture::mip_chain(img) } else { texture::mip_chain_data(img) };
+    let gpu = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("falcon-model3d-texture"),
         size: wgpu::Extent3d { width: img.width, height: img.height, depth_or_array_layers: 1 },
         mip_level_count: chain.len() as u32 + 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+        format,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
     });
     let levels = std::iter::once((img.width, img.height, &img.rgba)).chain(chain.iter().map(|(w, h, px)| (*w, *h, px)));
     for (level, (w, h, px)) in levels.enumerate() {
         queue.write_texture(
-            wgpu::TexelCopyTextureInfo { texture: &texture, mip_level: level as u32, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+            wgpu::TexelCopyTextureInfo { texture: &gpu, mip_level: level as u32, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
             px,
             wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(w * 4), rows_per_image: Some(h) },
             wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
         );
     }
-    let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+    Some(gpu.create_view(&wgpu::TextureViewDescriptor::default()))
+}
+
+fn make_sampler(device: &wgpu::Device, wrap: [Wrap; 2]) -> wgpu::Sampler {
+    device.create_sampler(&wgpu::SamplerDescriptor {
         label: Some("falcon-model3d-texture"),
-        address_mode_u: address(tex.wrap[0]),
-        address_mode_v: address(tex.wrap[1]),
+        address_mode_u: address(wrap[0]),
+        address_mode_v: address(wrap[1]),
         mag_filter: wgpu::FilterMode::Linear,
         min_filter: wgpu::FilterMode::Linear,
         mipmap_filter: wgpu::MipmapFilterMode::Linear,
         anisotropy_clamp: 16,
         ..Default::default()
-    });
-    let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-    let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("falcon-model3d-texture"),
-        layout,
-        entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&view) },
-            wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&sampler) },
-        ],
-    });
-    Some(GpuTexture { _texture: texture, group })
+    })
 }
 
 /// Drops every view's GPU objects (vertex buffers, textures); the next
@@ -517,6 +673,12 @@ pub(crate) fn release(render: &egui_wgpu::RenderState) {
 }
 
 const UNIFORM_BYTES: usize = 96;
+const LOOK_BYTES: usize = 32;
+
+fn look_bytes(emissive: [f32; 3], opacity: f32, normal: bool, bump: bool, blend: bool) -> Vec<u8> {
+    let flag = |on: bool| if on { 1.0f32 } else { 0.0 };
+    [emissive[0], emissive[1], emissive[2], opacity, flag(normal), flag(bump), flag(blend), 0.0].iter().flat_map(|f| f.to_ne_bytes()).collect()
+}
 
 fn uniform_bytes(view_proj: &M4, light: [f32; 3]) -> Vec<u8> {
     let mut floats: Vec<f32> = view_proj.iter().flatten().copied().collect();
@@ -549,11 +711,11 @@ impl CallbackTrait for SceneCallback {
         match &self.mesh {
             Some(m) => {
                 upload(device, queue, &mut gpu.mesh, &m.vertices);
-                gpu.ensure_textures(device, queue, &m.textures);
+                gpu.ensure_looks(device, queue, &m.looks);
             }
             None => {
                 gpu.mesh = None;
-                gpu.textures = None;
+                gpu.looks = None;
             }
         }
         match &self.lines {
@@ -579,17 +741,17 @@ impl CallbackTrait for SceneCallback {
             ..Default::default()
         });
         pass.set_bind_group(0, &gpu.uniform_group, &[]);
-        if let (Some(m), Some(data)) = (&gpu.mesh, &self.mesh) {
+        let mesh = gpu.mesh.as_ref().zip(self.mesh.as_ref());
+        let drawn = mesh.map_or(Vec::new(), |(m, data)| data.draws.iter().filter(|d| d.range.end <= m.count && !d.range.is_empty()).collect::<Vec<_>>());
+        let group = |d: &super::Draw| d.look.and_then(|i| gpu.looks.as_ref()?.1.get(i));
+        if let Some((m, _)) = mesh {
             pass.set_vertex_buffer(0, m.buffer.slice(..));
-            for d in data.draws.iter().filter(|d| d.range.end <= m.count && !d.range.is_empty()) {
-                let group = d.texture.and_then(|i| gpu.textures.as_ref()?.1.get(i)?.as_ref());
-                match group {
-                    Some(t) => {
+            for d in drawn.iter().filter(|d| !d.blend) {
+                match group(d) {
+                    Some(g) => {
                         pass.set_pipeline(&gpu.tex_pipeline);
-                        pass.set_bind_group(1, &t.group, &[]);
+                        pass.set_bind_group(1, g, &[]);
                     }
-                    // Untextured, or a texture the device couldn't take:
-                    // the vertex colour (the tint) stands in.
                     None => pass.set_pipeline(&gpu.mesh_pipeline),
                 }
                 pass.draw(d.range.clone(), 0..1);
@@ -602,6 +764,21 @@ impl CallbackTrait for SceneCallback {
             for (on, r) in ranges {
                 if on && !r.is_empty() && r.end <= buf.count {
                     pass.draw(r.clone(), 0..1);
+                }
+            }
+        }
+        if let Some((m, _)) = mesh {
+            let blended: Vec<_> = drawn.iter().filter(|d| d.blend).collect();
+            if !blended.is_empty() {
+                pass.set_vertex_buffer(0, m.buffer.slice(..));
+                let centers: Vec<_> = blended.iter().map(|d| d.center).collect();
+                for i in geom::back_to_front(&centers, &self.view_proj) {
+                    let Some(g) = group(blended[i]) else { continue };
+                    pass.set_bind_group(1, g, &[]);
+                    for pipeline in [&gpu.blend_back_pipeline, &gpu.blend_front_pipeline] {
+                        pass.set_pipeline(pipeline);
+                        pass.draw(blended[i].range.clone(), 0..1);
+                    }
                 }
             }
         }
@@ -623,6 +800,7 @@ impl CallbackTrait for SceneCallback {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use falcon_library::model3d::Material;
 
     #[test]
     fn uniforms_fill_the_buffer() {
@@ -675,7 +853,12 @@ mod tests {
     /// `paint` from the home direction on a 64 x 48 target, each face
     /// mapped over the whole of `texture` when one is given. Its pixels and
     /// size; `None` on machines without a GPU adapter.
-    fn draw_cube(texture: Option<falcon_library::model3d::texture::Texture>) -> Option<(Vec<u8>, [u32; 2])> {
+    fn draw_cube(texture: Option<Texture>) -> Option<(Vec<u8>, [u32; 2])> {
+        draw_cube_with(texture, |_| {})
+    }
+
+    /// [`draw_cube`] with the cube changed by `change` before it is drawn.
+    fn draw_cube_with(texture: Option<Texture>, change: impl FnOnce(&mut falcon_library::model3d::Mesh)) -> Option<(Vec<u8>, [u32; 2])> {
         let instance = wgpu::Instance::default();
         let Ok(adapter) = block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default())) else {
             eprintln!("no GPU adapter; skipping");
@@ -693,14 +876,13 @@ mod tests {
         for q in [[0u32, 3, 2, 1], [4, 5, 6, 7], [0, 1, 5, 4], [2, 3, 7, 6], [1, 2, 6, 5], [0, 4, 7, 3]] {
             cube.indices.extend([q[0], q[1], q[2], q[0], q[2], q[3]]);
         }
-        if texture.is_some() {
-            // Corners repeated per triangle, so each face has its own UVs.
-            let quad = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
-            cube.positions = cube.indices.iter().map(|&i| c[i as usize]).collect();
-            cube.indices = (0..36).collect();
-            cube.uvs = Some((0..36).map(|i| quad[i % 6]).collect());
-            cube.texture = texture;
-        }
+        // Corners repeated per triangle, so each face has its own UVs.
+        let quad = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
+        cube.positions = cube.indices.iter().map(|&i| c[i as usize]).collect();
+        cube.indices = (0..36).collect();
+        cube.uvs = Some((0..36).map(|i| quad[i % 6]).collect());
+        cube.texture = texture;
+        change(&mut cube);
         let model = falcon_library::model3d::Model { meshes: vec![cube] };
         let mut camera = crate::logic::Camera::home(crate::logic::UpAxis::Y);
         let aspect = size[0] as f32 / size[1] as f32;
@@ -716,9 +898,9 @@ mod tests {
             view_proj: falcon_library::model3d::math::mul(&proj, &camera.view()),
             light: camera.light_direction(),
             mesh: Some({
-                let textures = super::super::Textures::of(&model);
-                let (floats, draws) = super::super::mesh_data(&model, super::super::Shading::Flat, [0.8; 3], &[], &textures.list);
-                MeshData { vertices: Vertices::new(&floats), draws: std::sync::Arc::new(draws), textures }
+                let looks = super::super::Looks::of(&model);
+                let (floats, draws) = super::super::mesh_data(&model, super::super::Shading::Flat, [0.8; 3], &[], &looks.list);
+                MeshData { vertices: Vertices::new(&floats), draws: Arc::new(draws), looks }
             }),
             lines: Some(Lines { vertices: Vertices::new(&lines), edges: 0..2, grid: 2..2, axes: 2..2 }),
             edges: true,
@@ -783,14 +965,112 @@ mod tests {
     /// picture under its cutoff is not drawn.
     #[test]
     fn draws_a_textured_cube_when_a_gpu_is_present() {
-        use falcon_library::model3d::texture::{Image, Texture};
-        let image = std::sync::Arc::new(Image { name: "t".into(), width: 8, height: 8, rgba: [0u8, 0, 255, 255].repeat(64) });
+        let image = Arc::new(Image { name: "t".into(), width: 8, height: 8, rgba: [0u8, 0, 255, 255].repeat(64) });
         let Some((px, size)) = draw_cube(Some(Texture::new(image.clone()))) else { return };
         let i = ((size[1] / 2 * size[0] + size[0] / 2) * 4) as usize;
         let mid = &px[i..i + 4];
         assert!(mid[3] == 255 && mid[2] > 100 && mid[0] < 5 && mid[1] < 5, "blue from the picture: {mid:?}");
-        let faint = std::sync::Arc::new(Image { rgba: [0u8, 0, 255, 10].repeat(64), ..(*image).clone() });
+        let faint = Arc::new(Image { rgba: [0u8, 0, 255, 10].repeat(64), ..(*image).clone() });
         let (px, _) = draw_cube(Some(Texture { alpha_cutoff: Some(0.5), ..Texture::new(faint) })).unwrap();
         assert_eq!(px[i + 3], 0, "cut out");
+    }
+
+    /// The middle pixel of the cube with `change` applied.
+    fn middle(change: impl FnOnce(&mut falcon_library::model3d::Mesh)) -> Option<[u8; 4]> {
+        let (px, size) = draw_cube_with(None, change)?;
+        let i = ((size[1] / 2 * size[0] + size[0] / 2) * 4) as usize;
+        Some([px[i], px[i + 1], px[i + 2], px[i + 3]])
+    }
+
+    fn solid(rgba: [u8; 4]) -> Texture {
+        Texture::new(Arc::new(Image { name: "m".into(), width: 4, height: 4, rgba: rgba.repeat(16) }))
+    }
+
+    /// Normal maps turn the lit face, a flat one changes nothing, and the
+    /// bump map is ignored beside a normal map.
+    #[test]
+    fn normal_and_bump_maps_when_a_gpu_is_present() {
+        let Some(plain) = middle(|_| {}) else { return };
+        let flat = middle(|m| m.surface.normal_map = Some(solid([128, 128, 255, 255]))).unwrap();
+        assert!(flat[0].abs_diff(plain[0]) <= 2, "{flat:?} against {plain:?}");
+        let tilted = middle(|m| m.surface.normal_map = Some(solid([255, 128, 128, 255]))).unwrap();
+        assert!(tilted[0].abs_diff(plain[0]) > 10, "{tilted:?} against {plain:?}");
+        // A level height field leans nothing.
+        let level = middle(|m| m.surface.bump_map = Some(solid([200, 0, 0, 255]))).unwrap();
+        assert!(level[0].abs_diff(plain[0]) <= 2, "{level:?} against {plain:?}");
+    }
+
+    /// A height ramp across the picture leans the surface; a steeper one
+    /// more so.
+    #[test]
+    fn bump_slopes_when_a_gpu_is_present() {
+        let ramp = |steps: u32| {
+            let px: Vec<u8> = (0..64u32).flat_map(|x| [(x * steps) as u8, 0, 0, 255]).collect();
+            Texture { wrap: [Wrap::Clamp; 2], ..Texture::new(Arc::new(Image { name: "h".into(), width: 64, height: 1, rgba: px })) }
+        };
+        let Some(plain) = middle(|_| {}) else { return };
+        let bumped = middle(|m| m.surface.bump_map = Some(ramp(4))).unwrap();
+        assert!(bumped[0].abs_diff(plain[0]) > 3, "{bumped:?} against {plain:?}");
+    }
+
+    /// The surface's own light adds to the lit colour, through its map.
+    #[test]
+    fn own_light_when_a_gpu_is_present() {
+        let dark = Material { name: "k".into(), color: [0.0; 3], opacity: 1.0 };
+        let Some(off) = middle(|m| m.material = Some(dark.clone())) else { return };
+        let on = middle(|m| {
+            m.material = Some(dark.clone());
+            m.surface.emissive = [1.0, 0.0, 0.0];
+        })
+        .unwrap();
+        assert_eq!((on[0], on[1]), (255, off[1]), "{on:?}");
+        let mapped = middle(|m| {
+            m.material = Some(dark.clone());
+            m.surface.emissive = [1.0, 0.0, 0.0];
+            m.surface.emissive_map = Some(solid([51, 255, 255, 255]));
+        })
+        .unwrap();
+        assert!(mapped[0].abs_diff(off[0] + 51) <= 2, "{mapped:?} over {off:?}");
+    }
+
+    /// A see-through box shows both walls over the clear background: the
+    /// back faces go first and the front faces don't hide them. Its result
+    /// stays premultiplied, as the copy into egui's pass takes it.
+    #[test]
+    fn see_through_box_when_a_gpu_is_present() {
+        let green = Material { name: "g".into(), color: [0.0, 1.0, 0.0], opacity: 0.5 };
+        let Some(p) = middle(|m| {
+            m.material = Some(green);
+            m.surface.blend = true;
+        }) else {
+            return;
+        };
+        assert!(p[3] > 180 && p[3] < 200, "two layers of a half: {p:?}");
+        assert!(p[1] <= p[3] && p[1] > 90, "premultiplied green: {p:?}");
+        // Opacity without the flag is ignored, as in Eagle.
+        let solid_box = middle(|m| m.material = Some(Material { name: "g".into(), color: [0.0, 1.0, 0.0], opacity: 0.5 })).unwrap();
+        assert_eq!(solid_box[3], 255);
+        // Picture alpha counts when see-through and the cutoff still applies.
+        let faint = middle(|m| {
+            m.texture = Some(solid([0, 0, 255, 64]));
+            m.surface.blend = true;
+        })
+        .unwrap();
+        assert!(faint[3] > 90 && faint[3] < 125, "two layers of a quarter: {faint:?}");
+        let cut = middle(|m| {
+            m.texture = Some(Texture { alpha_cutoff: Some(0.5), ..solid([0, 0, 255, 64]) });
+            m.surface.blend = true;
+        })
+        .unwrap();
+        assert_eq!(cut[3], 0);
+    }
+
+    #[test]
+    fn looks_fill_their_buffer() {
+        let b = look_bytes([1.0, 0.5, 0.0], 0.25, true, false, true);
+        assert_eq!(b.len(), LOOK_BYTES);
+        assert_eq!(&b[12..16], &0.25f32.to_ne_bytes());
+        assert_eq!(&b[16..20], &1.0f32.to_ne_bytes());
+        assert_eq!(&b[24..28], &1.0f32.to_ne_bytes());
     }
 }

@@ -137,39 +137,82 @@ fn unit(c: [u8; 3]) -> V3 {
     c.map(|v| f32::from(v) / 255.0)
 }
 
-/// A run of the triangle list drawn the same way: plain, or with texture
-/// `texture` (an index into the model's [`Textures`]).
+/// A run of the triangle list drawn the same way: plain, or with look
+/// `look` (an index into the model's [`Looks`]). See-through runs are one
+/// mesh each, drawn after the rest, the farthest `center` first.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct Draw {
     pub range: std::ops::Range<u32>,
-    pub texture: Option<usize>,
+    pub look: Option<usize>,
+    pub blend: bool,
+    pub center: V3,
 }
 
-/// The distinct textures of a model (by picture and wrap), tagged with a
-/// generation so the GPU side uploads them once per model.
-#[derive(Clone)]
-pub(crate) struct Textures {
-    pub generation: u64,
-    pub list: Arc<Vec<m3d::texture::Texture>>,
+/// How a mesh that isn't one plain colour is drawn: its picture, the
+/// surface's maps and light, and its alpha.
+#[derive(Clone, Debug)]
+pub(crate) struct Look {
+    pub base: Option<m3d::texture::Texture>,
+    pub normal: Option<m3d::texture::Texture>,
+    pub bump: Option<m3d::texture::Texture>,
+    pub emissive_map: Option<m3d::texture::Texture>,
+    pub emissive: V3,
+    pub opacity: f32,
+    pub blend: bool,
 }
 
-impl Textures {
-    /// The textures `model`'s meshes draw with; the position of each in
-    /// the list is what [`Draw::texture`] refers to.
-    pub fn of(model: &Model) -> Textures {
-        let mut list: Vec<m3d::texture::Texture> = Vec::new();
-        for m in &model.meshes {
-            if let Some((t, _)) = m.textured()
-                && Self::find(&list, t).is_none()
-            {
-                list.push(t.clone());
-            }
+impl Look {
+    /// `None` for a mesh the plain pipeline draws.
+    fn of(mesh: &m3d::Mesh) -> Option<Look> {
+        if !mesh.has_look() {
+            return None;
         }
-        Textures { generation: generation(), list: Arc::new(list) }
+        let s = &mesh.surface;
+        // Without coordinates there is nothing to read a map at.
+        let map = |t: &Option<m3d::texture::Texture>| t.clone().filter(|_| mesh.uvs.is_some());
+        Some(Look {
+            base: mesh.textured().map(|(t, _)| t.clone()),
+            normal: map(&s.normal_map),
+            bump: map(&s.bump_map),
+            emissive_map: map(&s.emissive_map),
+            emissive: s.emissive,
+            opacity: mesh.opacity(),
+            blend: s.blend,
+        })
     }
 
-    fn find(list: &[m3d::texture::Texture], t: &m3d::texture::Texture) -> Option<usize> {
-        list.iter().position(|x| Arc::ptr_eq(&x.image, &t.image) && x.wrap == t.wrap)
+    /// The same picture, maps and numbers: one bind group serves both.
+    fn same(&self, o: &Look) -> bool {
+        fn tex(a: &Option<m3d::texture::Texture>, b: &Option<m3d::texture::Texture>) -> bool {
+            match (a, b) {
+                (None, None) => true,
+                (Some(a), Some(b)) => Arc::ptr_eq(&a.image, &b.image) && a.wrap == b.wrap,
+                _ => false,
+            }
+        }
+        tex(&self.base, &o.base) && tex(&self.normal, &o.normal) && tex(&self.bump, &o.bump) && tex(&self.emissive_map, &o.emissive_map) && self.emissive == o.emissive && self.opacity == o.opacity && self.blend == o.blend
+    }
+}
+
+/// The distinct looks of a model, tagged with a generation so the GPU side
+/// uploads their pictures once per model.
+#[derive(Clone)]
+pub(crate) struct Looks {
+    pub generation: u64,
+    pub list: Arc<Vec<Look>>,
+}
+
+impl Looks {
+    /// The looks of `model`'s meshes; the position of each in the list is
+    /// what [`Draw::look`] refers to.
+    pub fn of(model: &Model) -> Looks {
+        let mut list: Vec<Look> = Vec::new();
+        for look in model.meshes.iter().filter_map(Look::of) {
+            if !list.iter().any(|x| x.same(&look)) {
+                list.push(look);
+            }
+        }
+        Looks { generation: generation(), list: Arc::new(list) }
     }
 }
 
@@ -178,7 +221,7 @@ impl Textures {
 pub(crate) struct MeshData {
     pub vertices: Vertices,
     pub draws: Arc<Vec<Draw>>,
-    pub textures: Textures,
+    pub looks: Looks,
 }
 
 /// The triangles of `model` as a plain triangle list (no index buffer),
@@ -189,18 +232,20 @@ pub(crate) fn mesh_vertices(model: &Model, shading: Shading, default_color: V3, 
     mesh_data(model, shading, default_color, hidden, &[]).0
 }
 
-/// [`mesh_vertices`] with the runs to draw: a textured mesh (one with
-/// coordinates and a texture found in `textures`) carries its coordinates
-/// and, as its colour, the texture's tint times any vertex colours, which
-/// the shader multiplies with the picture.
-pub(crate) fn mesh_data(model: &Model, shading: Shading, default_color: V3, hidden: &[bool], textures: &[m3d::texture::Texture]) -> (Vec<f32>, Vec<Draw>) {
+/// [`mesh_vertices`] with the runs to draw: a mesh with a look found in
+/// `looks` carries its coordinates and, when it has a picture, as its
+/// colour the texture's tint times any vertex colours, which the shader
+/// multiplies with the picture.
+pub(crate) fn mesh_data(model: &Model, shading: Shading, default_color: V3, hidden: &[bool], looks: &[Look]) -> (Vec<f32>, Vec<Draw>) {
     let mut out = Vec::with_capacity(model.triangle_count() * 3 * VERTEX_FLOATS);
     let mut draws: Vec<Draw> = Vec::new();
     for (k, mesh) in model.meshes.iter().enumerate() {
         if hidden.get(k) == Some(&true) {
             continue;
         }
-        let textured = mesh.textured().and_then(|(t, uvs)| Some((Textures::find(textures, t)?, t, uvs)));
+        let look = Look::of(mesh).and_then(|l| looks.iter().position(|x| x.same(&l)));
+        let textured = look.and_then(|_| mesh.textured());
+        let uvs = look.and(mesh.uvs.as_deref());
         let start = (out.len() / VERTEX_FLOATS) as u32;
         let smooth = match shading {
             Shading::Flat => None,
@@ -213,14 +258,14 @@ pub(crate) fn mesh_data(model: &Model, shading: Shading, default_color: V3, hidd
             let face = geom::face_normal(p[0], p[1], p[2]);
             for (k, &i) in t.iter().enumerate() {
                 let n = smooth.as_ref().map_or(face, |s| s[i as usize]);
-                let (c, uv, cutoff) = match textured {
-                    Some((_, tex, uvs)) => {
+                let (c, cutoff) = match textured {
+                    Some((tex, _)) => {
                         let tint = [tex.tint[0], tex.tint[1], tex.tint[2], 1.0];
-                        let c = mesh.colors.as_ref().map_or(tex.tint, |c| m3d::texture::modulate(c[i as usize], tint));
-                        (c, uvs[i as usize], tex.alpha_cutoff.unwrap_or(0.0))
+                        (mesh.colors.as_ref().map_or(tex.tint, |c| m3d::texture::modulate(c[i as usize], tint)), tex.alpha_cutoff.unwrap_or(0.0))
                     }
-                    None => (mesh.colors.as_ref().map_or(base, |c| c[i as usize]), [0.0; 2], 0.0),
+                    None => (mesh.colors.as_ref().map_or(base, |c| c[i as usize]), 0.0),
                 };
+                let uv = uvs.map_or([0.0; 2], |u| u[i as usize]);
                 out.extend_from_slice(&p[k]);
                 out.extend_from_slice(&n);
                 out.extend_from_slice(&c);
@@ -229,10 +274,10 @@ pub(crate) fn mesh_data(model: &Model, shading: Shading, default_color: V3, hidd
             }
         }
         let end = (out.len() / VERTEX_FLOATS) as u32;
-        let texture = textured.map(|(i, _, _)| i);
+        let blend = look.is_some() && mesh.surface.blend;
         match draws.last_mut() {
-            Some(d) if d.texture == texture && d.range.end == start => d.range.end = end,
-            _ if end > start => draws.push(Draw { range: start..end, texture }),
+            Some(d) if d.look == look && !blend && !d.blend && d.range.end == start => d.range.end = end,
+            _ if end > start => draws.push(Draw { range: start..end, look, blend, center: geom::center(mesh).unwrap_or_default() }),
             _ => {}
         }
     }
@@ -323,8 +368,8 @@ pub(crate) struct ModelView {
     /// The camera still has to be fitted (once the view's size is known).
     pub needs_fit: bool,
     mesh: Option<(MeshKey, MeshBuilt)>,
-    /// The model's textures, gathered once it is read.
-    textures: Option<Textures>,
+    /// The model's looks, gathered once it is read.
+    looks: Option<Looks>,
     /// Feature edges by threshold (in hundredths of a degree), with the
     /// mesh each belongs to.
     edges: Option<(u32, Arc<Vec<MeshEdge>>)>,
@@ -358,7 +403,7 @@ impl ModelView {
             camera: Camera::home(up),
             needs_fit: true,
             mesh: None,
-            textures: None,
+            looks: None,
             edges: None,
             lines: None,
             hidden: Vec::new(),
@@ -449,13 +494,13 @@ impl ModelView {
     /// default colour changes.
     pub fn mesh(&mut self, settings: &Settings) -> Option<MeshData> {
         let model = self.model.as_ref()?;
-        let textures = self.textures.get_or_insert_with(|| Textures::of(model)).clone();
+        let looks = self.looks.get_or_insert_with(|| Looks::of(model)).clone();
         let key = (settings.shading, settings.default_color, self.hidden.clone());
         if self.mesh.as_ref().is_none_or(|(k, _)| *k != key) {
-            let (floats, draws) = mesh_data(model, settings.shading, unit(settings.default_color), &self.hidden, &textures.list);
+            let (floats, draws) = mesh_data(model, settings.shading, unit(settings.default_color), &self.hidden, &looks.list);
             self.mesh = Some((key, (Vertices::new(&floats), Arc::new(draws))));
         }
-        self.mesh.as_ref().map(|(_, (vertices, draws))| MeshData { vertices: vertices.clone(), draws: draws.clone(), textures })
+        self.mesh.as_ref().map(|(_, (vertices, draws))| MeshData { vertices: vertices.clone(), draws: draws.clone(), looks })
     }
 
     /// The line data (edges, grid, axes) for `settings`.
@@ -667,18 +712,49 @@ mod tests {
         }
         // A texture without coordinates is not used.
         m.meshes[1].texture = m.meshes[0].texture.clone();
-        let tex = Textures::of(&m);
-        assert_eq!(tex.list.len(), 1, "one picture, one entry");
-        let (v, draws) = mesh_data(&m, Shading::Flat, [1.0; 3], &[], &tex.list);
-        assert_eq!(draws, [Draw { range: 0..3, texture: Some(0) }, Draw { range: 3..6, texture: None }, Draw { range: 6..9, texture: Some(0) }]);
+        let looks = Looks::of(&m);
+        assert_eq!(looks.list.len(), 1, "one picture, one entry");
+        let (v, draws) = mesh_data(&m, Shading::Flat, [1.0; 3], &[], &looks.list);
+        let run = |range, look| Draw { range, look, blend: false, center: [1.0 / 2.0, 1.0 / 2.0, 0.0] };
+        assert_eq!(draws, [run(0..3, Some(0)), run(3..6, None), run(6..9, Some(0))]);
         let corner = |i: usize| &v[i * VERTEX_FLOATS..(i + 1) * VERTEX_FLOATS];
         assert_eq!(&corner(1)[9..12], &[1.0, 0.0, 0.3]);
         // The red vertex colour times the tint, in linear light.
         assert!((corner(0)[6] - 0.5).abs() < 1e-3 && corner(0)[7] == 0.0, "{:?}", corner(0));
         assert_eq!(&corner(3)[6..12], &[1.0, 0.0, 0.0, 0.0, 0.0, 0.0]);
         // Hiding the middle mesh joins nothing: the runs stay apart by texture.
-        let (_, draws) = mesh_data(&m, Shading::Flat, [1.0; 3], &[false, true, false], &tex.list);
-        assert_eq!(draws, [Draw { range: 0..6, texture: Some(0) }]);
+        let (_, draws) = mesh_data(&m, Shading::Flat, [1.0; 3], &[false, true, false], &looks.list);
+        assert_eq!(draws, [run(0..6, Some(0))]);
+    }
+
+    #[test]
+    fn looks_tell_surfaces_apart_and_blended_runs_stay_single() {
+        use falcon_library::model3d::texture::{Image, Texture};
+        let image = Arc::new(Image { name: "t".into(), width: 1, height: 1, rgba: vec![128, 128, 255, 255] });
+        let red = Material { name: "r".into(), color: [1.0, 0.0, 0.0], opacity: 0.5 };
+        let mut m = tri(None, Some(red));
+        m.meshes[0].surface.blend = true;
+        m.meshes.push(m.meshes[0].clone());
+        m.meshes.push(m.meshes[0].clone());
+        // The third gains a normal map, which needs coordinates.
+        m.meshes[2].surface.normal_map = Some(Texture::new(image));
+        let looks = Looks::of(&m);
+        assert_eq!(looks.list.len(), 1, "without coordinates the map is ignored");
+        assert_eq!(looks.list[0].opacity, 0.5);
+        assert!(looks.list[0].blend && looks.list[0].normal.is_none());
+        m.meshes[2].uvs = Some(vec![[0.0; 2], [1.0, 0.0], [0.0, 1.0]]);
+        let looks = Looks::of(&m);
+        assert_eq!(looks.list.len(), 2);
+        let (v, draws) = mesh_data(&m, Shading::Flat, [1.0; 3], &[], &looks.list);
+        assert_eq!(draws.iter().map(|d| (d.range.clone(), d.look, d.blend)).collect::<Vec<_>>(), [(0..3, Some(0), true), (3..6, Some(0), true), (6..9, Some(1), true)], "one run per see-through mesh");
+        // The plain colour stands in for a missing picture.
+        assert_eq!(&v[6 * VERTEX_FLOATS + 6..6 * VERTEX_FLOATS + 9], &[1.0, 0.0, 0.0]);
+        // A plain mesh has no look.
+        assert!(Looks::of(&tri(None, None)).list.is_empty());
+        // Its own light gives one, and a picture without coordinates doesn't.
+        let mut lit = tri(None, None);
+        lit.meshes[0].surface.emissive = [1.0, 0.0, 0.0];
+        assert_eq!(Looks::of(&lit).list.len(), 1);
     }
 
     #[test]

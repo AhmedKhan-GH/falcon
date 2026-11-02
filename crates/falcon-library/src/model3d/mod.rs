@@ -88,6 +88,27 @@ pub struct Mesh {
     /// The material's texture, drawn where the mesh has `uvs`; otherwise
     /// (and where the picture couldn't be read) the material colour is.
     pub texture: Option<texture::Texture>,
+    /// What the material adds to its colour and picture.
+    pub surface: Surface,
+}
+
+/// What a material adds to its colour and picture, as far as Eagle's viewer
+/// draws it. The maps are read with the mesh's one set of coordinates
+/// (`uvs`) and are not drawn without them. A map that is missing or can't
+/// be decoded is `None` and the surface draws as if the file had none.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Surface {
+    /// Tangent-space normals, green up in the picture. Wins over `bump_map`.
+    pub normal_map: Option<texture::Texture>,
+    /// Heights in its red channel, 1 being one unit of the model's space.
+    pub bump_map: Option<texture::Texture>,
+    /// Multiplies `emissive`, so it shows nothing when that is black.
+    pub emissive_map: Option<texture::Texture>,
+    /// Light the surface gives off whatever the lighting, in display values.
+    pub emissive: V3,
+    /// Drawn see-through: its alpha is the material's opacity times the
+    /// picture's. Otherwise both are ignored and it is opaque.
+    pub blend: bool,
 }
 
 impl Mesh {
@@ -113,11 +134,31 @@ impl Mesh {
         if self.uvs.as_ref().is_some_and(|v| v.len() != n) {
             self.uvs = None;
         }
+        if self.uvs.is_none() {
+            let s = &mut self.surface;
+            (s.normal_map, s.bump_map, s.emissive_map) = (None, None, None);
+        }
+        if !self.surface.emissive.iter().all(|c| c.is_finite()) {
+            self.surface.emissive = [0.0; 3];
+        }
     }
 
     /// The texture and coordinates to draw with, when the mesh has both.
     pub fn textured(&self) -> Option<(&texture::Texture, &[[f32; 2]])> {
         Some((self.texture.as_ref()?, self.uvs.as_deref()?))
+    }
+
+    /// The alpha the material gives every pixel: its opacity when it is
+    /// drawn see-through, otherwise 1.
+    pub fn opacity(&self) -> f32 {
+        if self.surface.blend { self.material.as_ref().map_or(1.0, |m| m.opacity.clamp(0.0, 1.0)) } else { 1.0 }
+    }
+
+    /// Whether the plain colour pipeline can't draw it: it has a picture,
+    /// a map, its own light or transparency.
+    pub fn has_look(&self) -> bool {
+        let s = &self.surface;
+        self.textured().is_some() || s.blend || s.emissive != [0.0; 3] || (self.uvs.is_some() && (s.normal_map.is_some() || s.bump_map.is_some()))
     }
 }
 

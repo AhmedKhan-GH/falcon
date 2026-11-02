@@ -15,7 +15,13 @@
 //!
 //! Textured meshes sample their picture per pixel ([`texture::Texture::sample`],
 //! bilinear in linear light) at perspective-correct coordinates; pixels
-//! below a texture's alpha cutoff are left out.
+//! below a texture's alpha cutoff are left out. Normal, bump and emissive
+//! maps are read at the same coordinates ([`geom::normal_mapped`],
+//! [`geom::bumped`]).
+//!
+//! See-through meshes are drawn after the rest, farthest first, each one's
+//! back faces and then its front faces, and write depth as they go: what
+//! Eagle's viewer (three.js) and the app's shader do.
 //!
 //! Triangles with any vertex nearer than the near plane are skipped rather
 //! than clipped: the fitted camera keeps the whole bounding sphere in front
@@ -62,9 +68,7 @@ pub fn render(model: &Model, size: u32) -> RgbaImage {
     let vp = math::mul(&proj, &view);
 
     let mut target = Target { size: s, depth: vec![f32::INFINITY; (s * s) as usize], color: vec![[0; 4]; (s * s) as usize] };
-    for mesh in &model.meshes {
-        draw_mesh(&mut target, mesh, &vp, near, dir, DEFAULT_COLOR);
-    }
+    draw_scene(&mut target, model.meshes.iter(), &[], &vp, near, dir, DEFAULT_COLOR);
     downsample(&target, &mut out);
     out
 }
@@ -95,16 +99,46 @@ pub fn render_view_lines<'a>(meshes: impl IntoIterator<Item = &'a Mesh>, lines: 
     }
     let s = side * SS;
     let mut target = Target { size: s, depth: vec![f32::INFINITY; (s * s) as usize], color: vec![[0; 4]; (s * s) as usize] };
-    for mesh in meshes {
-        // Clip w is the distance in front of the eye (1 for orthographic).
-        draw_mesh(&mut target, mesh, &m, 1e-6, to_eye, default_color);
-    }
-    for (seg, color) in lines {
-        draw_line(&mut target, *seg, &m, 1e-6, *color);
-    }
+    // Clip w is the distance in front of the eye (1 for orthographic).
+    draw_scene(&mut target, meshes, lines, &m, 1e-6, to_eye, default_color);
     let mut square = RgbaImage::new(side, side);
     downsample(&target, &mut square);
     image::imageops::crop_imm(&square, (side - w) / 2, (side - h) / 2, w, h).to_image()
+}
+
+/// Which of a mesh's faces to draw.
+#[derive(Clone, Copy, PartialEq)]
+enum Faces {
+    All,
+    Back,
+    Front,
+}
+
+/// Opaque meshes, then lines, then the see-through meshes.
+fn draw_scene<'a>(t: &mut Target, meshes: impl IntoIterator<Item = &'a Mesh>, lines: &[([V3; 2], V3)], vp: &math::M4, near: f32, to_eye: V3, default_color: V3) {
+    let (blended, opaque): (Vec<&Mesh>, Vec<&Mesh>) = meshes.into_iter().partition(|m| m.surface.blend);
+    for mesh in opaque {
+        draw_mesh(t, mesh, vp, near, to_eye, default_color, Faces::All);
+    }
+    for (seg, color) in lines {
+        draw_line(t, *seg, vp, near, *color);
+    }
+    let centers: Vec<V3> = blended.iter().map(|m| geom::center(m).unwrap_or_default()).collect();
+    for i in geom::back_to_front(&centers, vp) {
+        draw_mesh(t, blended[i], vp, near, to_eye, default_color, Faces::Back);
+        draw_mesh(t, blended[i], vp, near, to_eye, default_color, Faces::Front);
+    }
+}
+
+/// A straight-alpha colour `src` over `dst`.
+fn over(src: [u8; 4], dst: [u8; 4]) -> [u8; 4] {
+    let (sa, da) = (f32::from(src[3]) / 255.0, f32::from(dst[3]) / 255.0);
+    let a = sa + da * (1.0 - sa);
+    if a <= 0.0 {
+        return [0; 4];
+    }
+    let mix = |k: usize| ((f32::from(src[k]) * sa + f32::from(dst[k]) * da * (1.0 - sa)) / a).round() as u8;
+    [mix(0), mix(1), mix(2), (a * 255.0).round() as u8]
 }
 
 /// How far in front of a face (in clip depth) a line on it still shows,
@@ -178,12 +212,44 @@ fn pack(c: V3) -> [u8; 4] {
     [b(c[0]), b(c[1]), b(c[2]), 255]
 }
 
-fn draw_mesh(t: &mut Target, mesh: &Mesh, vp: &math::M4, near: f32, to_eye: V3, default_color: V3) {
+/// The normal, bump and emissive maps to read, with the coordinates they
+/// are read at; `None` for a mesh without coordinates.
+struct Maps<'a> {
+    uvs: &'a [[f32; 2]],
+    normal: Option<&'a texture::Texture>,
+    bump: Option<&'a texture::Texture>,
+    emissive: Option<&'a texture::Texture>,
+}
+
+/// The surface's normal at `uv` through its normal or bump map, on the
+/// triangle `i` of `mesh`, whose interpolated normal is `n`.
+fn mapped_normal(maps: &Maps, mesh: &Mesh, i: [usize; 3], n: V3, uv: [f32; 2]) -> V3 {
+    let edge = |a: usize, b: usize| math::sub(mesh.positions[b], mesh.positions[a]);
+    let st = |a: usize, b: usize| [maps.uvs[b][0] - maps.uvs[a][0], maps.uvs[b][1] - maps.uvs[a][1]];
+    let (q0, q1, st0, st1) = (edge(i[0], i[1]), edge(i[0], i[2]), st(i[0], i[1]), st(i[0], i[2]));
+    if let Some(map) = maps.normal {
+        geom::normal_mapped(n, q0, q1, st0, st1, map.sample_data(uv))
+    } else if let Some(map) = maps.bump {
+        // One pixel of the map either way along each axis.
+        let (du, dv) = (1.0 / map.image.width.max(1) as f32, 1.0 / map.image.height.max(1) as f32);
+        let h = |u: f32, v: f32| map.sample_data([u, v])[0];
+        let dh = [(h(uv[0] + du, uv[1]) - h(uv[0] - du, uv[1])) / (2.0 * du), (h(uv[0], uv[1] + dv) - h(uv[0], uv[1] - dv)) / (2.0 * dv)];
+        geom::bumped(n, q0, q1, st0, st1, dh)
+    } else {
+        n
+    }
+}
+
+fn draw_mesh(t: &mut Target, mesh: &Mesh, vp: &math::M4, near: f32, to_eye: V3, default_color: V3, faces: Faces) {
     let verts = project(mesh, vp, near, t.size as f32);
     let base = mesh.material.as_ref().map_or(default_color, |m| m.color);
     let colors = mesh.colors.as_deref();
     let normals = mesh.normals.as_deref();
     let textured = mesh.textured();
+    let maps = mesh.uvs.as_deref().map(|uvs| Maps { uvs, normal: mesh.surface.normal_map.as_ref(), bump: mesh.surface.bump_map.as_ref(), emissive: mesh.surface.emissive_map.as_ref() });
+    let maps = maps.filter(|m| m.normal.is_some() || m.bump.is_some() || m.emissive.is_some());
+    let emissive = mesh.surface.emissive;
+    let (blend, opacity) = (mesh.surface.blend, mesh.opacity());
     let size = t.size as i64;
     for tri in mesh.indices.as_chunks::<3>().0 {
         let idx = tri.map(|i| i as usize);
@@ -195,6 +261,12 @@ fn draw_mesh(t: &mut Target, mesh: &Mesh, vp: &math::M4, near: f32, to_eye: V3, 
         let (i0, mut i1, mut i2) = (idx[0], idx[1], idx[2]);
         let mut area = (p1[0] - p0[0]) * (p2[1] - p0[1]) - (p1[1] - p0[1]) * (p2[0] - p0[0]);
         if area == 0 {
+            continue;
+        }
+        // With y down, a triangle counter-clockwise to the eye has a
+        // negative area here.
+        let front = area < 0;
+        if (faces == Faces::Back && front) || (faces == Faces::Front && !front) {
             continue;
         }
         if area < 0 {
@@ -230,7 +302,7 @@ fn draw_mesh(t: &mut Target, mesh: &Mesh, vp: &math::M4, near: f32, to_eye: V3, 
             (b[0] - a[0]) * (py0 - a[1]) - (b[1] - a[1]) * (px0 - a[0])
         });
         // Per-pixel attributes, or one colour for the whole face.
-        let per_pixel = colors.is_some() || normals.is_some() || textured.is_some();
+        let per_pixel = colors.is_some() || normals.is_some() || textured.is_some() || maps.is_some() || blend || emissive != [0.0; 3];
         let flat = if per_pixel {
             [0; 4]
         } else {
@@ -259,28 +331,43 @@ fn draw_mesh(t: &mut Target, mesh: &Mesh, vp: &math::M4, near: f32, to_eye: V3, 
                                 Some((tex, uvs)) => {
                                     let uv = perspective_uv(w, [q0, q1, q2], [uvs[i0], uvs[i1], uvs[i2]]);
                                     let texel = tex.sample(uv);
-                                    if tex.alpha_cutoff.is_some_and(|cut| texel[3] < cut) {
+                                    let alpha = texel[3] * opacity;
+                                    if tex.alpha_cutoff.is_some_and(|cut| alpha < cut) {
                                         None
                                     } else {
                                         let tint = colors.map_or(tex.tint, |cs| texture::modulate(mix(&|i| cs[i]), [tex.tint[0], tex.tint[1], tex.tint[2], 1.0]));
-                                        Some(texture::modulate(tint, texel))
+                                        Some((texture::modulate(tint, texel), if blend { alpha } else { 1.0 }))
                                     }
                                 }
-                                None => Some(colors.map_or(base, |cs| mix(&|i| cs[i]))),
+                                None => Some((colors.map_or(base, |cs| mix(&|i| cs[i])), opacity)),
                             };
-                            col.map(|col| {
-                                let n = match normals {
+                            col.map(|(col, alpha)| {
+                                let mut n = match normals {
                                     Some(ns) => math::normalize(mix(&|i| ns[i])),
                                     None => geom::face_normal(mesh.positions[i0], mesh.positions[i1], mesh.positions[i2]),
                                 };
-                                pack(geom::shade(col, n, to_eye))
+                                let mut light = emissive;
+                                if let Some(m) = &maps {
+                                    let uv = perspective_uv(w, [q0, q1, q2], [m.uvs[i0], m.uvs[i1], m.uvs[i2]]);
+                                    if m.normal.is_some() && !front {
+                                        n = math::scale(n, -1.0);
+                                    }
+                                    n = mapped_normal(m, mesh, [i0, i1, i2], n, uv);
+                                    if let Some(e) = m.emissive {
+                                        let px = e.sample_data(uv);
+                                        light = std::array::from_fn(|k| light[k] * px[k]);
+                                    }
+                                }
+                                let mut px = pack(geom::add_light(geom::shade(col, n, to_eye), light));
+                                px[3] = (alpha * 255.0).round() as u8;
+                                px
                             })
                         } else {
                             Some(flat)
                         };
                         if let Some(px) = px {
                             t.depth[k] = z;
-                            t.color[k] = px;
+                            t.color[k] = if blend { over(px, t.color[k]) } else { px };
                         }
                     }
                 }
@@ -469,6 +556,127 @@ mod tests {
         // Without a cutoff the picture is opaque.
         m.meshes[0].texture.as_mut().unwrap().alpha_cutoff = None;
         assert_eq!(render(&m, 32).get_pixel(16, 16)[3], 255);
+    }
+
+    /// A square facing +z, the whole of a picture on it, seen head on, with
+    /// the light at the eye.
+    fn facing_square() -> Mesh {
+        Mesh {
+            positions: vec![[-1.0, -1.0, 0.0], [1.0, -1.0, 0.0], [1.0, 1.0, 0.0], [-1.0, 1.0, 0.0]],
+            indices: vec![0, 1, 2, 0, 2, 3],
+            uvs: Some(vec![[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]]),
+            material: Some(Material { name: "m".into(), color: [0.5; 3], opacity: 1.0 }),
+            ..Default::default()
+        }
+    }
+
+    fn head_on(meshes: &[Mesh]) -> RgbaImage {
+        let view = math::look_at([0.0, 0.0, 4.0], [0.0; 3], [0.0, 1.0, 0.0]);
+        let vp = math::mul(&math::perspective(FOV_DEG.to_radians(), 1.0, 0.1, 100.0), &view);
+        render_view(meshes, 32, 32, &vp, [0.0, 0.0, 1.0], [1.0; 3])
+    }
+
+    #[test]
+    fn normal_maps_change_the_shading_and_flat_ones_do_not() {
+        let plain = *head_on(&[facing_square()]).get_pixel(16, 16);
+        let with = |rgb: [u8; 4]| {
+            let mut m = facing_square();
+            m.surface.normal_map = Some(texture::Texture::new(std::sync::Arc::new(solid(2, 2, rgb))));
+            *head_on(&[m]).get_pixel(16, 16)
+        };
+        assert!(with([128, 128, 255, 255])[0].abs_diff(plain[0]) <= 1, "flat");
+        let tilted = with([255, 128, 128, 255]);
+        assert!(tilted[0] < plain[0] - 20, "turned away from the light: {tilted:?} against {plain:?}");
+        // A back face takes the map too, without going black.
+        let mut back = facing_square();
+        back.indices = vec![0, 2, 1, 0, 3, 2];
+        back.surface.normal_map = Some(texture::Texture::new(std::sync::Arc::new(solid(2, 2, [128, 128, 255, 255]))));
+        assert!(head_on(&[back]).get_pixel(16, 16)[0].abs_diff(plain[0]) <= 1);
+    }
+
+    #[test]
+    fn bump_maps_show_their_slopes_and_normal_maps_win() {
+        // A ramp of height across the picture, steep enough to see.
+        let px: Vec<u8> = (0..64).flat_map(|x| [(x * 4) as u8, 0, 0, 255]).collect();
+        let ramp = std::sync::Arc::new(texture::Image { name: "h".into(), width: 64, height: 1, rgba: px });
+        let plain = *head_on(&[facing_square()]).get_pixel(16, 16);
+        let mut m = facing_square();
+        m.surface.bump_map = Some(texture::Texture { wrap: [texture::Wrap::Clamp; 2], ..texture::Texture::new(ramp.clone()) });
+        let bumped = *head_on(std::slice::from_ref(&m)).get_pixel(16, 16);
+        assert!(bumped[0] < plain[0] - 3, "{bumped:?} against {plain:?}");
+        m.surface.normal_map = Some(texture::Texture::new(std::sync::Arc::new(solid(2, 2, [128, 128, 255, 255]))));
+        assert!(head_on(&[m]).get_pixel(16, 16)[0].abs_diff(plain[0]) <= 1, "the normal map is used instead");
+    }
+
+    #[test]
+    fn own_light_shows_through_its_map() {
+        let mut m = facing_square();
+        m.material.as_mut().unwrap().color = [0.0; 3];
+        let dark = *head_on(std::slice::from_ref(&m)).get_pixel(16, 16);
+        m.surface.emissive = [1.0, 0.0, 0.0];
+        let lit = *head_on(std::slice::from_ref(&m)).get_pixel(16, 16);
+        assert!(lit[0] == 255 && lit[1] == dark[1], "{lit:?}");
+        // The map multiplies it, and a black factor shows none of the map.
+        m.surface.emissive_map = Some(texture::Texture::new(std::sync::Arc::new(solid(2, 2, [51, 255, 255, 255]))));
+        let lit = *head_on(std::slice::from_ref(&m)).get_pixel(16, 16);
+        assert!(lit[0].abs_diff(dark[0] + 51) <= 1, "{lit:?} over {dark:?}");
+        m.surface.emissive = [0.0; 3];
+        assert_eq!(*head_on(&[m]).get_pixel(16, 16), dark);
+    }
+
+    #[test]
+    fn see_through_meshes_blend_over_what_is_behind() {
+        let mut far = facing_square();
+        far.material.as_mut().unwrap().color = [1.0, 0.0, 0.0];
+        let behind = |m: &Mesh| {
+            let mut m = m.clone();
+            m.positions.iter_mut().for_each(|p| p[2] = -1.0);
+            m
+        };
+        let far = behind(&far);
+        let mut near = facing_square();
+        near.material = Some(Material { name: "g".into(), color: [0.0, 1.0, 0.0], opacity: 0.5 });
+        // Without the flag the opacity is ignored, as in Eagle.
+        let p = *head_on(&[near.clone(), far.clone()]).get_pixel(16, 16);
+        assert!(p[1] > 100 && p[0] < 20 && p[3] == 255, "{p:?}");
+        near.surface.blend = true;
+        // Whatever order the file has them in, the far one is drawn first.
+        for scene in [[near.clone(), far.clone()], [far.clone(), near.clone()]] {
+            let p = *head_on(&scene).get_pixel(16, 16);
+            assert!(p[0] > 50 && p[1] > 50 && p[3] == 255, "both show: {p:?}");
+        }
+        // Alone it leaves the background partly clear.
+        let p = *head_on(std::slice::from_ref(&near)).get_pixel(16, 16);
+        assert!(p[3].abs_diff(128) <= 1 && p[1] > 100, "{p:?}");
+        // The picture's alpha counts too, and a cutoff still removes pixels.
+        near.material.as_mut().unwrap().opacity = 1.0;
+        near.texture = Some(texture::Texture::new(std::sync::Arc::new(solid(2, 2, [0, 255, 0, 64]))));
+        assert!(head_on(std::slice::from_ref(&near)).get_pixel(16, 16)[3].abs_diff(64) <= 1);
+        near.texture.as_mut().unwrap().alpha_cutoff = Some(0.5);
+        assert_eq!(head_on(&[near]).get_pixel(16, 16)[3], 0);
+    }
+
+    /// The back wall of a closed see-through box shows through its front:
+    /// back faces are drawn first even though they come later in the file.
+    #[test]
+    fn a_closed_see_through_box_shows_both_walls() {
+        let mut m = cube(false);
+        m.material = Some(Material { name: "g".into(), color: [0.0, 1.0, 0.0], opacity: 0.5 });
+        m.surface.blend = true;
+        let p = *render(&Model { meshes: vec![m] }, 64).get_pixel(32, 32);
+        assert!(p[3] > 180 && p[3] < 200, "two layers of a half: {p:?}");
+    }
+
+    #[test]
+    fn maps_without_coordinates_are_ignored() {
+        let mut m = facing_square();
+        let plain = *head_on(std::slice::from_ref(&m)).get_pixel(16, 16);
+        m.uvs = None;
+        m.surface.normal_map = Some(texture::Texture::new(std::sync::Arc::new(solid(2, 2, [255, 128, 128, 255]))));
+        assert_eq!(*head_on(std::slice::from_ref(&m)).get_pixel(16, 16), plain);
+        let mut sane = m.clone();
+        sane.sanitize();
+        assert!(sane.surface.normal_map.is_none());
     }
 
     #[test]

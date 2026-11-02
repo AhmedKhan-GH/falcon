@@ -158,6 +158,87 @@ pub fn shade(base: V3, n: V3, to_eye: V3) -> V3 {
     base.map(|c| (c * (AMBIENT + DIFFUSE * d) + spec).min(1.0))
 }
 
+/// The normal `n` turned by a tangent-space normal map's stored values
+/// `texel` (0..1, green up in the picture), on a surface where going along
+/// `q0` moves the picture coordinates (u right, v down) by `st0` and going
+/// along `q1` by `st1`. No tangents are stored: the frame comes from those
+/// differences, as in Schüler's "Normal Mapping Without Precomputed
+/// Tangents". `n` comes back alone where the coordinates don't change. The
+/// shader in the app computes the same from screen derivatives.
+pub fn normal_mapped(n: V3, q0: V3, q1: V3, st0: [f32; 2], st1: [f32; 2], texel: V3) -> V3 {
+    let (p1, p0) = (math::cross(q1, n), math::cross(n, q0));
+    let t = math::add(math::scale(p1, st0[0]), math::scale(p0, st1[0]));
+    let b = math::add(math::scale(p1, st0[1]), math::scale(p0, st1[1]));
+    let det = math::dot(t, t).max(math::dot(b, b));
+    if !(det.is_finite() && det > 0.0) {
+        return n;
+    }
+    let k = det.sqrt().recip();
+    let (x, y, z) = (texel[0] * 2.0 - 1.0, texel[1] * 2.0 - 1.0, texel[2] * 2.0 - 1.0);
+    // v runs down the picture, the map's green up it.
+    let tilted = math::add(math::add(math::scale(t, x * k), math::scale(b, -y * k)), math::scale(n, z));
+    let out = math::normalize(tilted);
+    if out == [0.0; 3] { n } else { out }
+}
+
+/// The normal `n` tilted by a height field that changes by `dh` (per unit
+/// of u, per unit of v) in picture coordinates, on a surface as in
+/// [`normal_mapped`]: Mikkelsen's surface gradient, heights in the model's
+/// units.
+pub fn bumped(n: V3, q0: V3, q1: V3, st0: [f32; 2], st1: [f32; 2], dh: [f32; 2]) -> V3 {
+    let (p1, p0) = (math::cross(q1, n), math::cross(n, q0));
+    let det = math::dot(q0, p1);
+    if !(det.is_finite() && det != 0.0) {
+        return n;
+    }
+    // Per unit along the surface: how u and v change, then the height.
+    let du = math::add(math::scale(p1, st0[0] / det), math::scale(p0, st1[0] / det));
+    let dv = math::add(math::scale(p1, st0[1] / det), math::scale(p0, st1[1] / det));
+    let slope = math::add(math::scale(du, dh[0]), math::scale(dv, dh[1]));
+    let out = math::normalize(math::sub(n, slope));
+    if out == [0.0; 3] || !out.iter().all(|c| c.is_finite()) { n } else { out }
+}
+
+/// `shade`'s result with the surface's own light added, in display values
+/// as in Eagle's viewer.
+pub fn add_light(lit: V3, emissive: V3) -> V3 {
+    std::array::from_fn(|k| (lit[k] + emissive[k]).min(1.0))
+}
+
+/// The middle of the box around the vertices of `mesh` that triangles use.
+pub fn center(mesh: &Mesh) -> Option<V3> {
+    let mut b: Option<(V3, V3)> = None;
+    for &i in &mesh.indices {
+        let p = *mesh.positions.get(i as usize)?;
+        if !p.iter().all(|c| c.is_finite()) {
+            continue;
+        }
+        let (lo, hi) = b.get_or_insert((p, p));
+        for k in 0..3 {
+            lo[k] = lo[k].min(p[k]);
+            hi[k] = hi[k].max(p[k]);
+        }
+    }
+    b.map(|(lo, hi)| math::scale(math::add(lo, hi), 0.5))
+}
+
+/// The order to draw see-through parts in: the indices of `centers`,
+/// farthest from the camera `vp` (projection times view) first.
+pub fn back_to_front(centers: &[V3], vp: &math::M4) -> Vec<usize> {
+    let depth = |p: V3| {
+        let v = [p[0], p[1], p[2], 1.0];
+        let z: f32 = (0..4).map(|k| vp[k][2] * v[k]).sum();
+        let w: f32 = (0..4).map(|k| vp[k][3] * v[k]).sum();
+        // Clip w is the distance in front of the eye under perspective;
+        // behind the eye counts as nearest.
+        if w > 0.0 { z / w } else { f32::NEG_INFINITY }
+    };
+    let keyed: Vec<f32> = centers.iter().map(|&c| depth(c)).collect();
+    let mut order: Vec<usize> = (0..centers.len()).collect();
+    order.sort_by(|&a, &b| keyed[b].total_cmp(&keyed[a]));
+    order
+}
+
 /// Ambient and directional light strengths (0x88 / 255).
 pub const AMBIENT: f32 = 136.0 / 255.0;
 pub const DIFFUSE: f32 = 136.0 / 255.0;
@@ -168,6 +249,62 @@ pub const SHININESS: i32 = 30;
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+
+    /// A flat map value leaves the normal alone; tilting towards red (+u)
+    /// tips it along +x, towards green (up the picture, -v) along +y.
+    #[test]
+    fn normal_maps_tilt_along_the_picture() {
+        let n = [0.0, 0.0, 1.0];
+        // +x is +u, and +y goes up the picture, so v falls.
+        let (q0, q1, st0, st1) = ([2.0, 0.0, 0.0], [0.0, 2.0, 0.0], [1.0, 0.0], [0.0, -1.0]);
+        let flat = normal_mapped(n, q0, q1, st0, st1, [0.5, 0.5, 1.0]);
+        assert!(math::length(math::sub(flat, n)) < 1e-6, "{flat:?}");
+        let right = normal_mapped(n, q0, q1, st0, st1, [1.0, 0.5, 0.5]);
+        assert!(right[0] > 0.99 && right[1].abs() < 1e-5, "{right:?}");
+        let up = normal_mapped(n, q0, q1, st0, st1, [0.5, 1.0, 0.5]);
+        assert!(up[1] > 0.99 && up[0].abs() < 1e-5, "{up:?}");
+        // The same result whatever two directions the frame is built from.
+        let other = normal_mapped(n, [1.0, 1.0, 0.0], [0.0, 3.0, 0.0], [0.5, -0.5], [0.0, -1.5], [1.0, 0.5, 0.5]);
+        assert!(math::length(math::sub(other, right)) < 1e-5, "{other:?}");
+        // Coordinates that don't change give no frame.
+        assert_eq!(normal_mapped(n, q0, q1, [0.0; 2], [0.0; 2], [1.0, 0.5, 0.5]), n);
+    }
+
+    /// Height rising to the right leans the surface to the left.
+    #[test]
+    fn bumps_lean_away_from_rising_height() {
+        let n = [0.0, 0.0, 1.0];
+        let (q0, q1, st0, st1) = ([2.0, 0.0, 0.0], [0.0, 2.0, 0.0], [1.0, 0.0], [0.0, -1.0]);
+        assert_eq!(bumped(n, q0, q1, st0, st1, [0.0, 0.0]), n);
+        // u goes 0..1 over 2 units, so dh/du = 2 is a slope of 1: 45 degrees.
+        let b = bumped(n, q0, q1, st0, st1, [2.0, 0.0]);
+        assert!((b[0] + 0.5f32.sqrt()).abs() < 1e-5 && (b[2] - 0.5f32.sqrt()).abs() < 1e-5, "{b:?}");
+        // Height rising down the picture, so falling along +y: leans up.
+        let b = bumped(n, q0, q1, st0, st1, [0.0, 2.0]);
+        assert!(b[1] > 0.7, "{b:?}");
+        // A degenerate frame leaves it alone.
+        assert_eq!(bumped(n, [0.0; 3], q1, st0, st1, [1.0, 1.0]), n);
+    }
+
+    #[test]
+    fn see_through_parts_sort_far_to_near() {
+        let view = math::look_at([0.0, 0.0, 5.0], [0.0; 3], [0.0, 1.0, 0.0]);
+        let proj = math::perspective(1.0, 1.0, 0.1, 100.0);
+        let vp = math::mul(&proj, &view);
+        assert_eq!(back_to_front(&[[0.0, 0.0, 1.0], [0.0, 0.0, -3.0], [0.0, 0.0, 9.0], [0.0, 0.0, 0.0]], &vp), [1, 3, 0, 2]);
+    }
+
+    #[test]
+    fn centers_use_the_vertices_of_triangles() {
+        let m = Mesh { positions: vec![[0.0; 3], [2.0, 0.0, 0.0], [0.0, 4.0, 0.0], [100.0; 3]], indices: vec![0, 1, 2], ..Default::default() };
+        assert_eq!(center(&m), Some([1.0, 2.0, 0.0]));
+        assert_eq!(center(&Mesh::default()), None);
+    }
+
+    #[test]
+    fn own_light_adds_and_clamps() {
+        assert_eq!(add_light([0.25, 0.5, 0.75], [0.25, 0.75, 0.0]), [0.5, 1.0, 0.75]);
+    }
 
     /// A unit cube from (0,0,0) to (1,1,1), wound outward, with its corners
     /// repeated per triangle the way STL stores them when `split` is true.

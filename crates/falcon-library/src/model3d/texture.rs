@@ -16,6 +16,9 @@
 //! macOS), and one model's pictures together take at most [`BUDGET`]
 //! bytes of RGBA; a picture that doesn't fit what is left is halved until
 //! it does. The same file or the same embedded bytes are decoded once.
+//! Normal, bump and emissive maps count too, but each may take only half of
+//! what is left ([`Loader::for_map`]), so they can't starve the pictures of
+//! the materials read after them.
 //!
 //! Texture coordinates are kept in picture space: u to the right and v
 //! downwards, (0, 0) the top left corner. Readers of formats that count v
@@ -114,10 +117,8 @@ impl Texture {
         Texture { image, tint: [1.0; 3], wrap: [Wrap::Repeat; 2], alpha_cutoff: None }
     }
 
-    /// The picture at `uv` (picture space, 0..1 across it), filtered
-    /// bilinearly in linear light, as display values and straight alpha.
-    /// The tint is not applied.
-    pub fn sample(&self, uv: [f32; 2]) -> [f32; 4] {
+    /// The four pixels around `uv` and the weight of each.
+    fn around(&self, uv: [f32; 2]) -> [(u32, u32, f32); 4] {
         let img = &*self.image;
         let (w, h) = (img.width.max(1), img.height.max(1));
         // Texel centres sit at half-integers.
@@ -139,27 +140,43 @@ impl Texture {
         let (x0, y0) = (x0 as i64, y0 as i64);
         let xs = [pick(x0, w, self.wrap[0]), pick(x0 + 1, w, self.wrap[0])];
         let ys = [pick(y0, h, self.wrap[1]), pick(y0 + 1, h, self.wrap[1])];
+        [(xs[0], ys[0], (1.0 - tx) * (1.0 - ty)), (xs[1], ys[0], tx * (1.0 - ty)), (xs[0], ys[1], (1.0 - tx) * ty), (xs[1], ys[1], tx * ty)]
+    }
+
+    /// The picture at `uv` (picture space, 0..1 across it), filtered
+    /// bilinearly in linear light, as display values and straight alpha.
+    /// The tint is not applied.
+    pub fn sample(&self, uv: [f32; 2]) -> [f32; 4] {
         let lut = linear_lut();
         let mut acc = [0.0f32; 4];
-        for (j, &y) in ys.iter().enumerate() {
-            let wy = if j == 0 { 1.0 - ty } else { ty };
-            for (i, &x) in xs.iter().enumerate() {
-                let wx = if i == 0 { 1.0 - tx } else { tx };
-                let p = img.texel(x, y);
-                let a = f32::from(p[3]) / 255.0;
-                let wt = wx * wy;
-                // Weighted by alpha, so transparent pixels don't bleed
-                // their colour into the edge.
-                for k in 0..3 {
-                    acc[k] += lut[p[k] as usize] * a * wt;
-                }
-                acc[3] += a * wt;
+        for (x, y, wt) in self.around(uv) {
+            let p = self.image.texel(x, y);
+            let a = f32::from(p[3]) / 255.0;
+            // Weighted by alpha, so transparent pixels don't bleed their
+            // colour into the edge.
+            for k in 0..3 {
+                acc[k] += lut[p[k] as usize] * a * wt;
             }
+            acc[3] += a * wt;
         }
         if acc[3] <= 0.0 {
             return [0.0; 4];
         }
         [linear_to_srgb(acc[0] / acc[3]), linear_to_srgb(acc[1] / acc[3]), linear_to_srgb(acc[2] / acc[3]), acc[3]]
+    }
+
+    /// The map's stored values at `uv`, 0..1, filtered bilinearly as they
+    /// are: normals and heights are data, and Eagle's viewer takes emissive
+    /// maps the same way. Alpha plays no part.
+    pub fn sample_data(&self, uv: [f32; 2]) -> V3 {
+        let mut acc = [0.0f32; 3];
+        for (x, y, wt) in self.around(uv) {
+            let p = self.image.texel(x, y);
+            for k in 0..3 {
+                acc[k] += f32::from(p[k]) / 255.0 * wt;
+            }
+        }
+        acc
     }
 }
 
@@ -283,6 +300,8 @@ pub type Side<'a> = &'a dyn Fn(&str) -> Option<Vec<u8>>;
 pub struct Loader<'a> {
     side: Side<'a>,
     left: usize,
+    /// What a picture may take: `left` divided by this.
+    share: usize,
     /// By the path read and by the bytes' hash.
     by_path: HashMap<String, Option<Arc<Image>>>,
     by_hash: HashMap<[u8; 32], Option<Arc<Image>>>,
@@ -295,7 +314,16 @@ impl<'a> Loader<'a> {
 
     /// A loader with its own byte budget.
     pub fn with_budget(side: Side<'a>, budget: usize) -> Loader<'a> {
-        Loader { side, left: budget, by_path: HashMap::new(), by_hash: HashMap::new() }
+        Loader { side, left: budget, share: 1, by_path: HashMap::new(), by_hash: HashMap::new() }
+    }
+
+    /// Runs `read`, a read of a normal, bump or emissive map: it may take
+    /// only half of the bytes still free.
+    pub fn for_map<T>(&mut self, read: impl FnOnce(&mut Self) -> T) -> T {
+        self.share = 2;
+        let out = read(self);
+        self.share = 1;
+        out
     }
 
     /// Bytes of RGBA still free.
@@ -348,7 +376,7 @@ impl<'a> Loader<'a> {
         if let Some(hit) = self.by_hash.get(&hash) {
             return hit.clone();
         }
-        let img = decode(data, MAX_SIDE, self.left).map(|img| {
+        let img = decode(data, MAX_SIDE, self.left / self.share).map(|img| {
             let (width, height) = img.dimensions();
             Arc::new(Image { name: name.to_string(), width, height, rgba: img.into_raw() })
         });
@@ -393,6 +421,37 @@ pub fn mip_chain(img: &Image) -> Vec<(u32, u32, Vec<u8>)> {
                     level[o + k] = (v * 255.0).round() as u8;
                 }
                 level[o + 3] = (acc[3] / n * 255.0).round() as u8;
+            }
+        }
+        out.push((nw, nh, level));
+        (w, h) = (nw, nh);
+    }
+    out
+}
+
+/// [`mip_chain`] for a map holding data: plain 2 x 2 averages of the stored
+/// values, alpha included and with no weight.
+pub fn mip_chain_data(img: &Image) -> Vec<(u32, u32, Vec<u8>)> {
+    let mut out: Vec<(u32, u32, Vec<u8>)> = Vec::new();
+    let (mut w, mut h) = (img.width, img.height);
+    while w > 1 || h > 1 {
+        let src: &[u8] = out.last().map_or(&img.rgba, |l| &l.2);
+        let (nw, nh) = ((w / 2).max(1), (h / 2).max(1));
+        let mut level = vec![0u8; nw as usize * nh as usize * 4];
+        for y in 0..nh {
+            for x in 0..nw {
+                let mut acc = [0u32; 4];
+                for (dx, dy) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+                    let (sx, sy) = ((x * 2 + dx).min(w - 1), (y * 2 + dy).min(h - 1));
+                    let i = (sy as usize * w as usize + sx as usize) * 4;
+                    for k in 0..4 {
+                        acc[k] += u32::from(src[i + k]);
+                    }
+                }
+                let o = (y as usize * nw as usize + x as usize) * 4;
+                for k in 0..4 {
+                    level[o + k] = ((acc[k] + 2) / 4) as u8;
+                }
             }
         }
         out.push((nw, nh, level));
@@ -669,6 +728,36 @@ pub(crate) mod tests {
         let p = &chain[1].2;
         assert!(p[0] > 180 && p[0] == p[2] && p[1] == 0 && p[3] == 255, "{p:?}");
         assert!(mip_chain(&Image { name: String::new(), width: 1, height: 1, rgba: vec![0; 4] }).is_empty());
+    }
+
+    #[test]
+    fn data_mipmaps_average_the_stored_values() {
+        let img = Image { name: String::new(), width: 2, height: 1, rgba: vec![0, 100, 200, 0, 100, 100, 100, 255] };
+        let chain = mip_chain_data(&img);
+        assert_eq!(chain.len(), 1);
+        // Plain averages with the row repeated: no linear light, no alpha weight.
+        assert_eq!(chain[0].2, [50, 100, 150, 128]);
+        assert!(mip_chain_data(&Image { name: String::new(), width: 1, height: 1, rgba: vec![0; 4] }).is_empty());
+    }
+
+    #[test]
+    fn data_sampling_keeps_the_stored_values() {
+        let t = Texture::new(image(2, 1, &[[0, 0, 0, 0], [255, 51, 255, 255]]));
+        let mid = t.sample_data([0.5, 0.5]);
+        assert!((mid[0] - 0.5).abs() < 1e-5 && (mid[1] - 0.1).abs() < 1e-5, "{mid:?}");
+    }
+
+    #[test]
+    fn maps_take_at_most_half_of_what_is_left() {
+        let side = |_: &str| None;
+        let mut l = Loader::with_budget(&side, 64 * 64 * 4);
+        let big = png(64, 64, [1, 2, 3, 255]);
+        let map = l.for_map(|l| l.embedded("n", &big)).unwrap();
+        assert_eq!((map.width, map.height), (32, 32), "halved to fit half the budget");
+        // Pictures read afterwards have the rest.
+        let rest = l.embedded("b", &png(64, 32, [4, 5, 6, 255])).unwrap();
+        assert_eq!((rest.width, rest.height), (64, 32));
+        assert_eq!(l.left(), 64 * 64 * 4 - 32 * 32 * 4 - 64 * 32 * 4);
     }
 
     #[test]
