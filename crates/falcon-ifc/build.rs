@@ -1,10 +1,12 @@
-//! Compiles web-ifc and falcon's C interface to it (`cpp/shim.cpp`) when
-//! `scripts/fetch-web-ifc.sh` has put the sources in the workspace's
-//! `target/web-ifc` (or `$FALCON_WEB_IFC_DIR`), and sets `web_ifc` so the
-//! crate uses them. Without the sources the crate builds empty and
-//! `falcon_ifc::available()` is false.
+//! Builds `falcon-ifc-worker`, web-ifc and falcon's `cpp/worker.cpp` linked
+//! into one executable, when `scripts/fetch-web-ifc.sh` has put the sources in
+//! the workspace's `target/web-ifc` (or `$FALCON_WEB_IFC_DIR`), and tells the
+//! crate where it is. It stays an executable of its own, nothing of it linked
+//! into falcon, so a crash in it can't reach the app. Without the sources
+//! nothing is built and `falcon_ifc::available()` is false.
 
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 fn sources(dir: &Path, out: &mut Vec<PathBuf>) {
     let Ok(rd) = std::fs::read_dir(dir) else { return };
@@ -20,9 +22,8 @@ fn sources(dir: &Path, out: &mut Vec<PathBuf>) {
 }
 
 fn main() {
-    println!("cargo::rustc-check-cfg=cfg(web_ifc)");
     println!("cargo::rerun-if-env-changed=FALCON_WEB_IFC_DIR");
-    println!("cargo::rerun-if-changed=cpp/shim.cpp");
+    println!("cargo::rerun-if-changed=cpp/worker.cpp");
     let root = std::env::var_os("FALCON_WEB_IFC_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/web-ifc"));
@@ -36,6 +37,7 @@ fn main() {
     sources(&cpp.join("web-ifc"), &mut files);
     let mut b = cc::Build::new();
     b.cpp(true)
+        .cargo_metadata(false)
         .std("c++20")
         .opt_level(2)
         .debug(false)
@@ -52,7 +54,15 @@ fn main() {
         .include(root.join("stduuid/include"))
         .include(root.join("unordered_dense/include"))
         .files(&files)
-        .file("cpp/shim.cpp");
-    b.compile("falcon_web_ifc");
-    println!("cargo::rustc-cfg=web_ifc");
+        .file("cpp/worker.cpp");
+    let objects = b.compile_intermediates();
+    let exe = PathBuf::from(std::env::var_os("OUT_DIR").unwrap()).join("falcon-ifc-worker");
+    let mut link: Command = b.get_compiler().to_command();
+    link.args(&objects).arg("-pthread").arg("-o").arg(&exe);
+    if std::env::var("CARGO_CFG_TARGET_OS").is_ok_and(|os| os == "macos") {
+        link.arg("-Wl,-dead_strip");
+    }
+    let status = link.status().expect("the C++ compiler runs");
+    assert!(status.success(), "linking falcon-ifc-worker failed");
+    println!("cargo::rustc-env=FALCON_IFC_WORKER={}", exe.display());
 }

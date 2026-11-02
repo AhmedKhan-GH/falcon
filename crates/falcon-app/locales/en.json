@@ -795,6 +795,7 @@
   "How alike similar pictures must be": "How alike similar pictures must be",
   "IFC: no 3D geometry": "IFC: no 3D geometry",
   "IFC: no tessellated geometry": "IFC: no tessellated geometry",
+  "IFC: web-ifc could not read this file": "IFC: web-ifc could not read this file",
   "Icon": "Icon",
   "Identical Files": "Identical Files",
   "If the library is synced by a cloud service, let the sync finish first: files still downloading look missing.": "If the library is synced by a cloud service, let the sync finish first: files still downloading look missing.",

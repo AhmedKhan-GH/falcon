@@ -56,7 +56,7 @@ fn triangulated_face_set_cube_with_a_style() {
     let src = file("IFC4", "$", &format!("{}{}{style}", cube_tfs(1.0), product("IFCBUILDINGELEMENTPROXY", "#11")));
     let (m, r) = read(src.as_bytes()).unwrap();
     let m = m.unwrap();
-    assert_eq!(r, Report { schema: "IFC4".into(), shown: 1, skipped: 0, triangles: 12, unsupported: vec![] });
+    assert_eq!(r, Report { schema: "IFC4".into(), shown: 1, skipped: 0, triangles: 12, unsupported: vec![], fallback: false });
     assert_eq!(m.meshes.len(), 1);
     assert_eq!(m.meshes[0].name, "IfcBuildingElementProxy");
     let mat = m.meshes[0].material.as_ref().unwrap();

@@ -79,12 +79,15 @@ pub(crate) fn fact_rows(facts: Option<&Facts>) -> Vec<(&'static str, String)> {
         Err(_) => return vec![(preview, tr("The file could not be read").to_string())],
     };
     let mut rows = Vec::new();
-    if r.shown == 0 {
+    if r.fallback {
+        rows.push((preview, tr("IFC: web-ifc could not read this file").to_string()));
+    } else if r.shown == 0 {
         // With web-ifc every solid kind is read, so an empty file has no
         // 3D geometry at all; without it only the tessellated part is.
         let why = if ifc::full_geometry() { tr("IFC: no 3D geometry") } else { tr("IFC: no tessellated geometry") };
         rows.push((preview, why.to_string()));
-    } else {
+    }
+    if r.shown > 0 {
         rows.push((tr_key("Products Shown"), r.shown.to_string()));
     }
     if r.skipped > 0 {
@@ -115,15 +118,20 @@ mod tests {
     fn rows_for_each_outcome() {
         assert_eq!(labels(&fact_rows(None)), ["3D Preview"]);
         assert_eq!(labels(&fact_rows(Some(&Err("bad".into())))), ["3D Preview"]);
-        let mixed = Report { schema: "IFC4".into(), shown: 3, skipped: 2, triangles: 120, unsupported: vec![("IfcExtrudedAreaSolid".into(), 2)] };
+        let mixed = Report { schema: "IFC4".into(), shown: 3, skipped: 2, triangles: 120, unsupported: vec![("IfcExtrudedAreaSolid".into(), 2)], fallback: false };
         let rows = fact_rows(Some(&Ok(mixed)));
         assert_eq!(labels(&rows), ["Products Shown", "Products Skipped", "Not Read", "Triangles", "Schema"]);
         assert_eq!(rows[2].1, "IfcExtrudedAreaSolid (2)");
         assert_eq!(rows[3].1, "120");
-        let none = Report { schema: String::new(), shown: 0, skipped: 1, triangles: 0, unsupported: vec![] };
+        let none = Report { schema: String::new(), shown: 0, skipped: 1, triangles: 0, unsupported: vec![], fallback: false };
         let rows = fact_rows(Some(&Ok(none)));
         assert_eq!(labels(&rows), ["3D Preview", "Products Skipped"]);
         let why = if ifc::full_geometry() { "IFC: no 3D geometry" } else { "IFC: no tessellated geometry" };
         assert_eq!(rows[0].1, why);
+        // web-ifc failed: the reason shows along with what the own reader found.
+        let fell_back = Report { schema: "IFC4".into(), shown: 2, skipped: 1, triangles: 24, unsupported: vec![("IfcBooleanResult".into(), 1)], fallback: true };
+        let rows = fact_rows(Some(&Ok(fell_back)));
+        assert_eq!(labels(&rows), ["3D Preview", "Products Shown", "Products Skipped", "Not Read", "Triangles", "Schema"]);
+        assert_eq!(rows[0].1, "IFC: web-ifc could not read this file");
     }
 }

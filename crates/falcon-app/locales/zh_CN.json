@@ -755,6 +755,7 @@
   "How alike similar pictures must be": "图片需要多相似",
   "IFC: no 3D geometry": "IFC：无 3D 几何体",
   "IFC: no tessellated geometry": "IFC：无网格化几何体",
+  "IFC: web-ifc could not read this file": "IFC：web-ifc 无法读取此文件",
   "Icon": "图标",
   "Identical Files": "完全相同的文件",
   "If the library is synced by a cloud service, let the sync finish first: files still downloading look missing.": "如果资源库通过云服务同步，请先等待同步完成：仍在下载的文件会显示为缺失。",

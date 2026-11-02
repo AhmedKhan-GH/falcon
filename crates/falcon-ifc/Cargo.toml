@@ -1,6 +1,6 @@
 [package]
 name = "falcon-ifc"
-description = "Full IFC geometry for falcon through the web-ifc engine, compiled from source when scripts/fetch-web-ifc.sh has fetched it"
+description = "Full IFC geometry for falcon through the web-ifc engine, compiled from source into a worker process when scripts/fetch-web-ifc.sh has fetched it"
 license.workspace = true
 repository.workspace = true
 version.workspace = true

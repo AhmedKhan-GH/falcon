@@ -755,6 +755,7 @@
   "How alike similar pictures must be": "이미지가 얼마나 비슷해야 하는지",
   "IFC: no 3D geometry": "IFC: 3D 지오메트리 없음",
   "IFC: no tessellated geometry": "IFC: 테셀레이션된 지오메트리 없음",
+  "IFC: web-ifc could not read this file": "IFC: web-ifc에서 이 파일을 읽을 수 없습니다",
   "Icon": "아이콘",
   "Identical Files": "동일한 파일",
   "If the library is synced by a cloud service, let the sync finish first: files still downloading look missing.": "라이브러리를 클라우드 서비스로 동기화하는 경우 먼저 동기화를 끝내세요. 아직 다운로드 중인 파일은 없는 것처럼 보입니다.",

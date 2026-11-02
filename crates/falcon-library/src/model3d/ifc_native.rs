@@ -24,11 +24,19 @@ pub fn available() -> bool {
     falcon_ifc::available()
 }
 
-/// Reads the file through web-ifc. `Ok(None)` when web-ifc is not built
-/// in or could not read the file, so the caller falls back to falcon's own
-/// reader.
+/// Reads the file through web-ifc, in its worker process. `Ok(None)` when
+/// web-ifc is not built in or could not read the file (it refused it,
+/// crashed, ran out of time or memory), so the caller falls back to
+/// falcon's own reader.
 pub(super) fn read(file: &StepFile, bytes: &[u8]) -> Result<Option<(Option<Model>, Report)>> {
-    let scene = match falcon_ifc::read(bytes, falcon_ifc::Limits::default()) {
+    if !available() {
+        return Ok(None);
+    }
+    let mut limits = falcon_ifc::Limits::default();
+    if !sound_graph(file) {
+        limits.timeout = SUSPECT_TIMEOUT;
+    }
+    let scene = match falcon_ifc::read(bytes, limits) {
         Ok(s) => s,
         Err(falcon_ifc::Error::TooLarge) => return Err(ParseError::new("IFC: the model is too large")),
         Err(_) => return Ok(None),
@@ -65,6 +73,66 @@ pub(super) fn read(file: &StepFile, bytes: &[u8]) -> Result<Option<(Option<Model
     let model = build(&scene, &types);
     report.triangles = model.as_ref().map_or(0, Model::triangle_count);
     Ok(Some((model, report)))
+}
+
+/// How long a chain of references counts as sound.
+const MAX_GRAPH_DEPTH: usize = 10_000;
+
+/// How long web-ifc gets on a file whose graph isn't sound. It can spin
+/// forever on one, so a bad file shouldn't hold up a read for the full
+/// timeout, but real files with a stray reference read fine.
+const SUSPECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(if cfg!(test) { 2 } else { 30 });
+
+/// Whether every reference resolves, none leads back to itself and no
+/// chain is deeper than [`MAX_GRAPH_DEPTH`].
+pub(super) fn sound_graph(file: &StepFile) -> bool {
+    fn refs(v: &Value, out: &mut Vec<u64>) {
+        match v {
+            Value::Ref(id) => out.push(*id),
+            Value::List(l) | Value::Typed(_, l) => l.iter().for_each(|x| refs(x, out)),
+            _ => {}
+        }
+    }
+    // 1 while on the current path, 2 once finished.
+    let mut state: HashMap<u64, u8> = HashMap::with_capacity(file.entities.len());
+    let mut ids: Vec<u64> = file.entities.keys().copied().collect();
+    ids.sort_unstable();
+    let mut buf = Vec::new();
+    for root in ids {
+        if state.contains_key(&root) {
+            continue;
+        }
+        // Each frame: an entity and the references still to visit.
+        let mut stack: Vec<(u64, Vec<u64>)> = Vec::new();
+        let children = |id: u64, buf: &mut Vec<u64>| -> Option<Vec<u64>> {
+            buf.clear();
+            for a in &file.get(id)?.args {
+                refs(a, buf);
+            }
+            Some(buf.clone())
+        };
+        state.insert(root, 1);
+        stack.push((root, children(root, &mut buf).unwrap_or_default()));
+        while let Some((id, todo)) = stack.last_mut() {
+            let Some(next) = todo.pop() else {
+                state.insert(*id, 2);
+                stack.pop();
+                continue;
+            };
+            match state.get(&next) {
+                Some(1) => return false,
+                Some(_) => continue,
+                None => {}
+            }
+            let Some(kids) = children(next, &mut buf) else { return false };
+            if stack.len() >= MAX_GRAPH_DEPTH {
+                return false;
+            }
+            state.insert(next, 1);
+            stack.push((next, kids));
+        }
+    }
+    true
 }
 
 /// The geometry types of a product's drawable shape representations, one

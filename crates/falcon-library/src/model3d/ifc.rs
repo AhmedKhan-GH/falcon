@@ -60,6 +60,9 @@ pub struct Report {
     /// The geometry types that were not read, by display name, most
     /// common first.
     pub unsupported: Vec<(String, usize)>,
+    /// web-ifc is built in but could not read this file, so falcon's own
+    /// tessellated reader made this report.
+    pub fallback: bool,
 }
 
 /// Reads an IFC file as a model.
@@ -78,7 +81,9 @@ pub fn read(bytes: &[u8]) -> Result<(Option<Model>, Report)> {
     if let Some(r) = super::ifc_native::read(&file, bytes)? {
         return Ok(r);
     }
-    Ok(Reader::new(&file).run())
+    let (model, mut report) = Reader::new(&file).run();
+    report.fallback = full_geometry();
+    Ok((model, report))
 }
 
 /// Reads the file with falcon's own (tessellated-only) reader, never

@@ -835,6 +835,7 @@
   "How alike similar pictures must be": "Насколько похожими должны быть изображения",
   "IFC: no 3D geometry": "IFC: нет 3D-геометрии",
   "IFC: no tessellated geometry": "IFC: нет тесселированной геометрии",
+  "IFC: web-ifc could not read this file": "IFC: web-ifc не удалось прочитать этот файл",
   "Icon": "Значок",
   "Identical Files": "Идентичные файлы",
   "If the library is synced by a cloud service, let the sync finish first: files still downloading look missing.": "Если библиотека синхронизируется через облачный сервис, сначала дождитесь окончания синхронизации: файлы, которые ещё загружаются, выглядят отсутствующими.",

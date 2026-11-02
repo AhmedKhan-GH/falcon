@@ -44,10 +44,14 @@ if [ -f "$FFMPEG/lib/libavformat.61.dylib" ]; then
 else
   echo "No FFmpeg in $FFMPEG (run scripts/build-ffmpeg.sh): formats macOS can't play won't play"
 fi
-# web-ifc is compiled into the binary when scripts/fetch-web-ifc.sh has fetched it;
-# its licence and those of the libraries it builds against ship along.
+# web-ifc is built into falcon-ifc-worker when scripts/fetch-web-ifc.sh has fetched it;
+# the worker goes beside the app's binary, and its licence and those of the libraries it
+# builds against ship along.
 WEB_IFC=${FALCON_WEB_IFC_DIR:-target/web-ifc}
-if [ -f "$WEB_IFC/SOURCES.txt" ]; then
+WORKER=$(ls -t target/release/build/falcon-ifc-*/out/falcon-ifc-worker 2>/dev/null | head -n 1)
+if [ -f "$WEB_IFC/SOURCES.txt" ] && [ -n "$WORKER" ]; then
+  cp "$WORKER" "$APP/Contents/MacOS/falcon-ifc-worker"
+  codesign --force --sign - "$APP/Contents/MacOS/falcon-ifc-worker" 2>/dev/null
   LIC="$APP/Contents/Resources/web-ifc"
   mkdir -p "$LIC"
   cp "$WEB_IFC/SOURCES.txt" "$LIC/SOURCES.txt"
@@ -60,7 +64,7 @@ if [ -f "$WEB_IFC/SOURCES.txt" ]; then
   cp "$WEB_IFC/spdlog/LICENSE" "$LIC/spdlog-LICENSE.txt"
   cp "$WEB_IFC/stduuid/LICENSE" "$LIC/stduuid-LICENSE.txt"
   cp "$WEB_IFC/unordered_dense/LICENSE" "$LIC/unordered_dense-LICENSE.txt"
-  echo "web-ifc is built in; licences in $LIC"
+  echo "web-ifc worker bundled; licences in $LIC"
 else
   echo "No web-ifc in $WEB_IFC (run scripts/fetch-web-ifc.sh): IFC shows only tessellated geometry"
 fi

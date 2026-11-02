@@ -53,8 +53,9 @@ Third-party material:
   IFC geometry engine, Mozilla Public License 2.0, copyright (c) web-ifc
   contributors. Not part of this source tree: scripts/fetch-web-ifc.sh fetches
   it at that tag with a pinned SHA-256, and crates/falcon-ifc compiles it
-  unmodified into Falcon when present. The source of the MPL-covered files is
-  available at the URL above. See https://mozilla.org/MPL/2.0/.
+  unmodified into falcon-ifc-worker, a separate executable that Falcon starts,
+  when present. The source of the MPL-covered files is available at the URL
+  above. See https://mozilla.org/MPL/2.0/.
 - Header-only libraries web-ifc builds against, fetched the same way:
   glm (https://github.com/g-truc/glm), MIT license, copyright (c) G-Truc
   Creation; tinynurbs (https://github.com/QuimMoya/tinynurbs), BSD 3-Clause,

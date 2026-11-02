@@ -173,6 +173,7 @@ The core words, so every file uses one term for one thing.
 - "Neither macOS nor FFmpeg could play this video…" and "macOS can't play .{ext} videos, and the FFmpeg libraries Falcon plays them with weren't found…", the video viewer's can't-play lines; FFmpeg is a product name and is not translated (machine-written).
 - "This web archive couldn't be read. Open it in its own app to browse it.", the web viewer's note when an MHTML archive can't be unpacked (machine-written).
 - "IFC: no 3D geometry", the inspector's 3D Preview row for an IFC file in which web-ifc found nothing to draw (machine-written).
+- "IFC: web-ifc could not read this file", the inspector's 3D Preview row when web-ifc failed on a file and falcon's own reader took over (machine-written).
 
 ## Reviewed
 
