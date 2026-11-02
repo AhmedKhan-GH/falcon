@@ -62,7 +62,7 @@ impl App {
     /// The hover preview of the hovered card, if it is a video or audio
     /// card: called once a frame for that card, after it is drawn.
     pub(crate) fn card_media(&mut self, ui: &Ui, lib: &Library, item: &Item, card: Rect, caption: f32, resp: &egui::Response) {
-        if self.ws.marquee.is_some() || ui.input(|i| i.pointer.primary_down()) && !resp.is_pointer_button_down_on() {
+        if self.ws.marquee.is_some() || resp.dragged() || ui.input(|i| i.pointer.primary_down()) && !resp.is_pointer_button_down_on() {
             return;
         }
         // Only the thumbnail starts a preview, not the name under it; the
