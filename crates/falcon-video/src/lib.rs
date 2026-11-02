@@ -122,27 +122,45 @@ pub fn frame_at(path: &Path, secs: f64) -> Result<Frame> {
 /// their long side.
 ///
 /// Usable from any thread, but not `Send`: open it on the thread that uses it.
-pub struct Grabber(Grab);
+pub struct Grabber {
+    grab: RefCell<Grab>,
+    path: std::path::PathBuf,
+    max_side: u32,
+}
 
 enum Grab {
     System(sys::Grabber),
-    Ffmpeg(RefCell<falcon_ffmpeg::Grabber>),
+    Ffmpeg(falcon_ffmpeg::Grabber),
 }
 
 impl Grabber {
     /// Opens `path` for grabbing; fails for anything [`probe`] refuses.
     pub fn open(path: &Path, max_side: u32) -> Result<Grabber> {
-        either(
-            || sys::Grabber::open(path, max_side).map(|g| Grabber(Grab::System(g))),
-            || falcon_ffmpeg::Grabber::open(path, max_side).map(|g| Grabber(Grab::Ffmpeg(RefCell::new(g)))),
-        )
+        let grab = either(
+            || sys::Grabber::open(path, max_side).map(Grab::System),
+            || falcon_ffmpeg::Grabber::open(path, max_side).map(Grab::Ffmpeg),
+        )?;
+        Ok(Grabber { grab: RefCell::new(grab), path: path.to_path_buf(), max_side })
     }
 
     /// The picture at `secs`, scaled down to fit the size given to `open`.
+    /// When the system opened the file but can't decode its pictures (AV1
+    /// in an MP4 on a Mac without an AV1 decoder, say), FFmpeg takes over
+    /// for this and every later picture.
     pub fn grab(&self, secs: f64) -> Result<Frame> {
-        match &self.0 {
-            Grab::System(g) => g.grab(secs),
-            Grab::Ffmpeg(g) => g.borrow_mut().grab(secs).map_err(Error::from),
+        let mut grab = self.grab.borrow_mut();
+        match &mut *grab {
+            Grab::Ffmpeg(g) => g.grab(secs).map_err(Error::from),
+            Grab::System(g) => match g.grab(secs) {
+                Ok(f) => Ok(f),
+                Err(e) if !ffmpeg_available() => Err(e),
+                Err(e) => {
+                    let Ok(mut g) = falcon_ffmpeg::Grabber::open(&self.path, self.max_side) else { return Err(e) };
+                    let f = g.grab(secs).map_err(Error::from);
+                    *grab = Grab::Ffmpeg(g);
+                    f
+                }
+            },
         }
     }
 }
