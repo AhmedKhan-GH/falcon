@@ -188,7 +188,6 @@
   "Can't draw this page": "Diese Seite kann nicht dargestellt werden",
   "Can't find it?": "Nicht zu finden?",
   "Can't import the Inboard backup": "Inboard-Backup kann nicht importiert werden",
-  "Can't import the Pixave library": "Pixave-Bibliothek kann nicht importiert werden",
   "Can't import the package": "Paket kann nicht importiert werden",
   "Can't merge that library": "Diese Mediathek kann nicht zusammengeführt werden",
   "Can't open this PDF: {error}": "Dieses PDF kann nicht geöffnet werden: {error}",
@@ -196,10 +195,8 @@
   "Can't play this file: {error}": "Diese Datei kann nicht wiedergegeben werden: {error}",
   "Can't print: {error}": "Drucken nicht möglich: {error}",
   "Can't read the Inboard backup": "Inboard-Backup kann nicht gelesen werden",
-  "Can't read the Pixave library": "Pixave-Bibliothek kann nicht gelesen werden",
   "Can't read this file: {error}": "Diese Datei kann nicht gelesen werden: {error}",
   "Can't save the attachment: {error}": "Der Anhang kann nicht gesichert werden: {error}",
-  "Can't save the schema report": "Schemabericht kann nicht gesichert werden",
   "Cancel": "Abbrechen",
   "Cancel (Esc)": "Abbrechen (Esc)",
   "Capitalize Words": "Wörter großschreiben",
@@ -239,8 +236,6 @@
   "Choose a Folder to Watch": "Zu überwachenden Ordner wählen",
   "Choose a Library to Add To": "Mediathek zum Hinzufügen wählen",
   "Choose a Library to Merge In": "Mediathek zum Zusammenführen wählen",
-  "Choose a Pixave Library": "Pixave-Bibliothek wählen",
-  "Choose a Pixave library: a folder whose name ends in .pxvlibrary. ({path})": "Wähle eine Pixave-Bibliothek: einen Ordner, dessen Name auf .pxvlibrary endet. ({path})",
   "Choose a look": "Erscheinungsbild wählen",
   "Choose an Inboard Backup Folder": "Inboard-Backup-Ordner wählen",
   "Choose folders…": "Ordner auswählen …",
@@ -799,8 +794,6 @@
   "Import Folders": "Ordner importieren",
   "Import Folders…": "Ordner importieren …",
   "Import Inboard Backup…": "Inboard-Backup importieren…",
-  "Import Pixave Library…": "Pixave-Bibliothek importieren…",
-  "Import a Pixave library": "Pixave-Bibliothek importieren",
   "Import a large folder?": "Großen Ordner importieren?",
   "Import an Eagle package": "Eagle-Paket importieren",
   "Import an Inboard backup": "Inboard-Backup importieren",
@@ -825,10 +818,6 @@
   "Importing {done} of {total}  ·  {current}": "Importiere {done} von {total}  ·  {current}",
   "Importing {done} of {total}  ·  {left}  ·  {current}": "Importiere {done} von {total}  ·  {left}  ·  {current}",
   "Importing {images} and {folders} from Inboard": "{images} und {folders} aus Inboard werden importiert",
-  "Importing {n} files from Pixave": {
-    "one": "{n} Datei aus Pixave wird importiert",
-    "other": "{n} Dateien aus Pixave werden importiert"
-  },
   "Importing {n} files from the auto-import folder": {
     "one": "{n} Datei aus dem Auto-Import-Ordner wird importiert",
     "other": "{n} Dateien aus dem Auto-Import-Ordner werden importiert"
@@ -1301,8 +1290,6 @@
     "one": "{n} Objekt oben angeheftet",
     "other": "{n} Objekte oben angeheftet"
   },
-  "Pixave Library…": "Pixave-Bibliothek…",
-  "Pixave's catalogue format isn't public, so collections, tags, ratings, colour labels, notes, links and dates are not brought over. A schema report lists the catalogue's tables without their contents.": "Das Katalogformat von Pixave ist nicht öffentlich, daher werden Sammlungen, Tags, Bewertungen, Farbmarkierungen, Notizen, Links und Daten nicht übernommen. Ein Schemabericht listet die Tabellen des Katalogs ohne ihren Inhalt.",
   "Play a preview on hovered video cards": "Vorschau auf Videokarten unter dem Zeiger abspielen",
   "Play or pause": "Wiedergabe oder Pause",
   "Play sound effects": "Toneffekte abspielen",
@@ -1531,8 +1518,6 @@
   "Save Current Frame to Library": "Aktuelles Bild in der Mediathek sichern",
   "Save Frame…": "Bild sichern …",
   "Save Password": "Passwort sichern",
-  "Save Schema Report": "Schemabericht sichern",
-  "Save Schema Report…": "Schemabericht sichern…",
   "Save This Filter": "Diesen Filter sichern",
   "Save This Filter…": "Diesen Filter sichern …",
   "Save filter": "Filter sichern",
@@ -1543,7 +1528,6 @@
   "Save to": "Sichern in",
   "Saved": "Gesichert",
   "Saved the crop as a new item": "Zuschnitt als neues Objekt gesichert",
-  "Saved {file}": "{file} gesichert",
   "Saved {name}": "{name} gesichert",
   "Saved “{name}”": "„{name}“ gesichert",
   "Saving a changed list adds these tags to the items already in the folder and its subfolders. Tags you remove stay on those items.": "Wenn Sie eine geänderte Liste sichern, werden diese Tags zu den Objekten hinzugefügt, die bereits im Ordner und seinen Unterordnern liegen. Entfernte Tags bleiben an diesen Objekten.",
@@ -2143,10 +2127,6 @@
     "one": "{n} Datei",
     "other": "{n} Dateien"
   },
-  "{n} files can be imported into a new folder named {name}.": {
-    "one": "{n} Datei kann in einen neuen Ordner namens {name} importiert werden.",
-    "other": "{n} Dateien können in einen neuen Ordner namens {name} importiert werden."
-  },
   "{n} files failed to import. Click for details.": {
     "one": "{n} Datei konnte nicht importiert werden. Für Details klicken.",
     "other": "{n} Dateien konnten nicht importiert werden. Für Details klicken."
@@ -2234,10 +2214,6 @@
   "{n} items that are not images will be skipped.": {
     "one": "{n} Objekt, das kein Bild ist, wird übersprungen.",
     "other": "{n} Objekte, die keine Bilder sind, werden übersprungen."
-  },
-  "{n} items were left out because their files couldn't be identified.": {
-    "one": "{n} Objekt wurde ausgelassen, weil seine Datei nicht erkannt wurde.",
-    "other": "{n} Objekte wurden ausgelassen, weil ihre Dateien nicht erkannt wurden."
   },
   "{n} items whose folder is gone are dropped.": {
     "one": "{n} Objekt, dessen Ordner fehlt, wird entfernt.",

@@ -65,14 +65,6 @@ pub enum Error {
         /// What went wrong.
         reason: String,
     },
-    /// A Pixave library could not be read.
-    #[error("Pixave library {path}: {reason}")]
-    Pixave {
-        /// The `.pxvlibrary` package or the database in it.
-        path: PathBuf,
-        /// What went wrong.
-        reason: String,
-    },
 }
 
 /// Convenience alias.

@@ -200,7 +200,6 @@
   "Can't draw this page": "Не удаётся отобразить страницу",
   "Can't find it?": "Не удаётся найти?",
   "Can't import the Inboard backup": "Не удаётся импортировать копию Inboard",
-  "Can't import the Pixave library": "Не удаётся импортировать библиотеку Pixave",
   "Can't import the package": "Не удаётся импортировать пакет",
   "Can't merge that library": "Не удаётся объединить эту библиотеку",
   "Can't open this PDF: {error}": "Не удаётся открыть PDF: {error}",
@@ -208,10 +207,8 @@
   "Can't play this file: {error}": "Не удаётся воспроизвести файл: {error}",
   "Can't print: {error}": "Не удаётся напечатать: {error}",
   "Can't read the Inboard backup": "Не удаётся прочитать копию Inboard",
-  "Can't read the Pixave library": "Не удаётся прочитать библиотеку Pixave",
   "Can't read this file: {error}": "Не удаётся прочитать файл: {error}",
   "Can't save the attachment: {error}": "Не удаётся сохранить вложение: {error}",
-  "Can't save the schema report": "Не удаётся сохранить отчёт о схеме",
   "Cancel": "Отмена",
   "Cancel (Esc)": "Отмена (Esc)",
   "Capitalize Words": "Каждое слово с заглавной",
@@ -253,8 +250,6 @@
   "Choose a Folder to Watch": "Выберите папку для наблюдения",
   "Choose a Library to Add To": "Выберите библиотеку для добавления",
   "Choose a Library to Merge In": "Выберите библиотеку для объединения",
-  "Choose a Pixave Library": "Выберите библиотеку Pixave",
-  "Choose a Pixave library: a folder whose name ends in .pxvlibrary. ({path})": "Выберите библиотеку Pixave: папку, имя которой оканчивается на .pxvlibrary. ({path})",
   "Choose a look": "Выберите оформление",
   "Choose an Inboard Backup Folder": "Выберите папку копии Inboard",
   "Choose folders…": "Выбрать папки…",
@@ -839,8 +834,6 @@
   "Import Folders": "Импорт папок",
   "Import Folders…": "Импорт папок…",
   "Import Inboard Backup…": "Импортировать резервную копию Inboard…",
-  "Import Pixave Library…": "Импортировать библиотеку Pixave…",
-  "Import a Pixave library": "Импортировать библиотеку Pixave",
   "Import a large folder?": "Импортировать большую папку?",
   "Import an Eagle package": "Импортировать пакет Eagle",
   "Import an Inboard backup": "Импортировать резервную копию Inboard",
@@ -867,11 +860,6 @@
   "Importing {done} of {total}  ·  {current}": "Импорт: {done} из {total}  ·  {current}",
   "Importing {done} of {total}  ·  {left}  ·  {current}": "Импорт: {done} из {total}  ·  {left}  ·  {current}",
   "Importing {images} and {folders} from Inboard": "Импорт из Inboard: {images} и {folders}",
-  "Importing {n} files from Pixave": {
-    "few": "Импорт {n} файлов из Pixave",
-    "many": "Импорт {n} файлов из Pixave",
-    "one": "Импорт {n} файла из Pixave"
-  },
   "Importing {n} files from the auto-import folder": {
     "few": "Импорт {n} файлов из папки автоимпорта",
     "many": "Импорт {n} файлов из папки автоимпорта",
@@ -1367,8 +1355,6 @@
     "many": "Закреплено {n} элементов вверху",
     "one": "Закреплён {n} элемент вверху"
   },
-  "Pixave Library…": "Библиотека Pixave…",
-  "Pixave's catalogue format isn't public, so collections, tags, ratings, colour labels, notes, links and dates are not brought over. A schema report lists the catalogue's tables without their contents.": "Формат каталога Pixave не опубликован, поэтому коллекции, теги, оценки, цветовые метки, заметки, ссылки и даты не переносятся. Отчёт о схеме перечисляет таблицы каталога без их содержимого.",
   "Play a preview on hovered video cards": "Воспроизводить превью на карточках видео под указателем",
   "Play or pause": "Воспроизвести или поставить на паузу",
   "Play sound effects": "Воспроизводить звуковые эффекты",
@@ -1614,8 +1600,6 @@
   "Save Current Frame to Library": "Сохранить текущий кадр в библиотеку",
   "Save Frame…": "Сохранить кадр…",
   "Save Password": "Сохранить пароль",
-  "Save Schema Report": "Сохранить отчёт о схеме",
-  "Save Schema Report…": "Сохранить отчёт о схеме…",
   "Save This Filter": "Сохранить этот фильтр",
   "Save This Filter…": "Сохранить этот фильтр…",
   "Save filter": "Сохранить фильтр",
@@ -1626,7 +1610,6 @@
   "Save to": "Сохранить в",
   "Saved": "Сохранённые",
   "Saved the crop as a new item": "Обрезка сохранена как новый элемент",
-  "Saved {file}": "Сохранено: {file}",
   "Saved {name}": "Сохранено: {name}",
   "Saved “{name}”": "Сохранено: «{name}»",
   "Saving a changed list adds these tags to the items already in the folder and its subfolders. Tags you remove stay on those items.": "При сохранении изменённого списка эти теги добавляются к элементам, которые уже лежат в папке и её вложенных папках. Удалённые теги у этих элементов остаются.",
@@ -2250,11 +2233,6 @@
     "many": "{n} файлов",
     "one": "{n} файл"
   },
-  "{n} files can be imported into a new folder named {name}.": {
-    "few": "Можно импортировать {n} файла в новую папку «{name}».",
-    "many": "Можно импортировать {n} файлов в новую папку «{name}».",
-    "one": "Можно импортировать {n} файл в новую папку «{name}»."
-  },
   "{n} files failed to import. Click for details.": {
     "few": "Не удалось импортировать {n} файла. Нажмите для подробностей.",
     "many": "Не удалось импортировать {n} файлов. Нажмите для подробностей.",
@@ -2364,11 +2342,6 @@
     "few": "{n} элемента, не являющихся изображениями, будут пропущены.",
     "many": "{n} элементов, не являющихся изображениями, будут пропущены.",
     "one": "{n} элемент, не являющийся изображением, будет пропущен."
-  },
-  "{n} items were left out because their files couldn't be identified.": {
-    "few": "{n} элемента пропущено: не удалось определить их файлы.",
-    "many": "{n} элементов пропущено: не удалось определить их файлы.",
-    "one": "{n} элемент пропущен: не удалось определить его файл."
   },
   "{n} items whose folder is gone are dropped.": {
     "few": "{n} элемента, папки которых пропали, исключаются.",

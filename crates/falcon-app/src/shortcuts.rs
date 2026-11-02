@@ -59,7 +59,6 @@ pub enum Command {
     /// File ▸ Import submenu.
     ImportPack,
     ImportInboard,
-    ImportPixave,
     NextLibrary,
     PreviousLibrary,
     /// Edit ▸ Move Folder: the open folder or smart folder among its
@@ -478,7 +477,6 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::ImportFolders, id: "file.import.folders", group: "Import", label: "Import folders", default: None, aliases: &[] },
     Spec { cmd: Command::ImportPack, id: "file.import.eaglepack", group: "Import", label: "Import an Eagle package", default: None, aliases: &[] },
     Spec { cmd: Command::ImportInboard, id: "file.import.inboard", group: "Import", label: "Import an Inboard backup", default: None, aliases: &[] },
-    Spec { cmd: Command::ImportPixave, id: "file.import.pixave", group: "Import", label: "Import a Pixave library", default: None, aliases: &[] },
     Spec { cmd: Command::ExportComputer, id: "file.export.item.computer", group: "Export", label: "Export to Computer", default: k(CMD, Key::E), aliases: &[] },
     Spec { cmd: Command::ExportPack, id: "file.export.item.eaglepack", group: "Export", label: "Export as .eaglepack", default: k(CMD_SHIFT, Key::E), aliases: &[] },
     Spec { cmd: Command::ExportFormat, id: "file.export.item.as", group: "Export", label: "Export in a chosen format and size", default: k(SHIFT, Key::E), aliases: &[] },

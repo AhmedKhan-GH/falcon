@@ -145,7 +145,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
             grid && matches!(s.scope, ScopeKind::Folder | ScopeKind::Smart) && s.picked_folders < 2 && s.picked_smart < 2
         }
         C::MoveFolder => grid && (s.scope == ScopeKind::Folder || s.picked_folders > 0),
-        C::MergeLibrary | C::EmptyCacheReload | C::ImportPack | C::ImportInboard | C::ImportPixave => s.library,
+        C::MergeLibrary | C::EmptyCacheReload | C::ImportPack | C::ImportInboard => s.library,
         C::LockApp => s.lockable,
         C::NewLibrary | C::ClearLibraryHistory | C::SwitchLibrary | C::CollectWindow | C::Preferences | C::CloseWindow | C::Minimize | C::FullScreen | C::WindowZoom => true,
         C::NextLibrary | C::PreviousLibrary => s.libraries > 1,
@@ -272,7 +272,7 @@ pub static MENUS: &[(&str, &[Entry])] = &[
             SEP,
             item("Import Folders…", Command::ImportFolders),
             item("Import Files…", Command::Import),
-            Entry::Sub("Import", &[item("Eagle Package…", Command::ImportPack), item("Inboard Backup…", Command::ImportInboard), item("Pixave Library…", Command::ImportPixave)]),
+            Entry::Sub("Import", &[item("Eagle Package…", Command::ImportPack), item("Inboard Backup…", Command::ImportInboard)]),
             Entry::Sub(
                 "Export",
                 &[
@@ -1123,7 +1123,7 @@ mod tests {
         assert!(!enabled(Command::NextLibrary, &s));
         assert!(enabled(Command::NewLibrary, &s));
         assert!(enabled(Command::ClearLibraryHistory, &s));
-        for c in [Command::MergeLibrary, Command::EmptyCacheReload, Command::ImportPack, Command::ImportInboard, Command::ImportPixave] {
+        for c in [Command::MergeLibrary, Command::EmptyCacheReload, Command::ImportPack, Command::ImportInboard] {
             assert!(!enabled(c, &s), "{c:?} needs a library");
             assert!(enabled(c, &State { library: true, ..Default::default() }), "{c:?}");
         }

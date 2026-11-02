@@ -188,7 +188,6 @@
   "Can't draw this page": "Can't draw this page",
   "Can't find it?": "Can't find it?",
   "Can't import the Inboard backup": "Can't import the Inboard backup",
-  "Can't import the Pixave library": "Can't import the Pixave library",
   "Can't import the package": "Can't import the package",
   "Can't merge that library": "Can't merge that library",
   "Can't open this PDF: {error}": "Can't open this PDF: {error}",
@@ -196,10 +195,8 @@
   "Can't play this file: {error}": "Can't play this file: {error}",
   "Can't print: {error}": "Can't print: {error}",
   "Can't read the Inboard backup": "Can't read the Inboard backup",
-  "Can't read the Pixave library": "Can't read the Pixave library",
   "Can't read this file: {error}": "Can't read this file: {error}",
   "Can't save the attachment: {error}": "Can't save the attachment: {error}",
-  "Can't save the schema report": "Can't save the schema report",
   "Cancel": "Cancel",
   "Cancel (Esc)": "Cancel (Esc)",
   "Capitalize Words": "Capitalize Words",
@@ -239,8 +236,6 @@
   "Choose a Folder to Watch": "Choose a Folder to Watch",
   "Choose a Library to Add To": "Choose a Library to Add To",
   "Choose a Library to Merge In": "Choose a Library to Merge In",
-  "Choose a Pixave Library": "Choose a Pixave Library",
-  "Choose a Pixave library: a folder whose name ends in .pxvlibrary. ({path})": "Choose a Pixave library: a folder whose name ends in .pxvlibrary. ({path})",
   "Choose a look": "Choose a look",
   "Choose an Inboard Backup Folder": "Choose an Inboard Backup Folder",
   "Choose folders…": "Choose folders…",
@@ -799,8 +794,6 @@
   "Import Folders": "Import Folders",
   "Import Folders…": "Import Folders…",
   "Import Inboard Backup…": "Import Inboard Backup…",
-  "Import Pixave Library…": "Import Pixave Library…",
-  "Import a Pixave library": "Import a Pixave library",
   "Import a large folder?": "Import a large folder?",
   "Import an Eagle package": "Import an Eagle package",
   "Import an Inboard backup": "Import an Inboard backup",
@@ -825,10 +818,6 @@
   "Importing {done} of {total}  ·  {current}": "Importing {done} of {total}  ·  {current}",
   "Importing {done} of {total}  ·  {left}  ·  {current}": "Importing {done} of {total}  ·  {left}  ·  {current}",
   "Importing {images} and {folders} from Inboard": "Importing {images} and {folders} from Inboard",
-  "Importing {n} files from Pixave": {
-    "one": "Importing {n} file from Pixave",
-    "other": "Importing {n} files from Pixave"
-  },
   "Importing {n} files from the auto-import folder": {
     "one": "Importing {n} file from the auto-import folder",
     "other": "Importing {n} files from the auto-import folder"
@@ -1301,8 +1290,6 @@
     "one": "Pinned {n} item to the top",
     "other": "Pinned {n} items to the top"
   },
-  "Pixave Library…": "Pixave Library…",
-  "Pixave's catalogue format isn't public, so collections, tags, ratings, colour labels, notes, links and dates are not brought over. A schema report lists the catalogue's tables without their contents.": "Pixave's catalogue format isn't public, so collections, tags, ratings, colour labels, notes, links and dates are not brought over. A schema report lists the catalogue's tables without their contents.",
   "Play a preview on hovered video cards": "Play a preview on hovered video cards",
   "Play or pause": "Play or pause",
   "Play sound effects": "Play sound effects",
@@ -1531,8 +1518,6 @@
   "Save Current Frame to Library": "Save Current Frame to Library",
   "Save Frame…": "Save Frame…",
   "Save Password": "Save Password",
-  "Save Schema Report": "Save Schema Report",
-  "Save Schema Report…": "Save Schema Report…",
   "Save This Filter": "Save This Filter",
   "Save This Filter…": "Save This Filter…",
   "Save filter": "Save filter",
@@ -1543,7 +1528,6 @@
   "Save to": "Save to",
   "Saved": "Saved",
   "Saved the crop as a new item": "Saved the crop as a new item",
-  "Saved {file}": "Saved {file}",
   "Saved {name}": "Saved {name}",
   "Saved “{name}”": "Saved “{name}”",
   "Saving a changed list adds these tags to the items already in the folder and its subfolders. Tags you remove stay on those items.": "Saving a changed list adds these tags to the items already in the folder and its subfolders. Tags you remove stay on those items.",
@@ -2143,10 +2127,6 @@
     "one": "{n} file",
     "other": "{n} files"
   },
-  "{n} files can be imported into a new folder named {name}.": {
-    "one": "{n} file can be imported into a new folder named {name}.",
-    "other": "{n} files can be imported into a new folder named {name}."
-  },
   "{n} files failed to import. Click for details.": {
     "one": "{n} file failed to import. Click for details.",
     "other": "{n} files failed to import. Click for details."
@@ -2234,10 +2214,6 @@
   "{n} items that are not images will be skipped.": {
     "one": "{n} item that is not an image will be skipped.",
     "other": "{n} items that are not images will be skipped."
-  },
-  "{n} items were left out because their files couldn't be identified.": {
-    "one": "{n} item was left out because its file couldn't be identified.",
-    "other": "{n} items were left out because their files couldn't be identified."
   },
   "{n} items whose folder is gone are dropped.": {
     "one": "{n} item whose folder is gone is dropped.",

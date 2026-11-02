@@ -168,11 +168,6 @@ The core words, so every file uses one term for one thing.
 - "Current List", "Selected" and "Settings…", the New… menu's Find Duplicates scopes and Auto-Import entry (machine-written).
 - "Untitled" and "tag_group::Untitled", the default names of a new folder, smart folder group and tag group (machine-written).
 - Preferences ▸ Notification ▸ Sound effects: the block title, "Play sound effects", the three "When …" switches and the note under them, plus the shortened pop-ups note (its last sentence dropped), machine-written. "Sound effects" follows each system's own term (Toneffekte, 効果音, 효과음, 音效).
-- File ▸ Import ▸ Pixave Library…: the menu and switcher entries, the
-  file-picker title, the probe's confirmation ("{n} files can be imported
-  into a new folder named {name}.", the left-out count, the sentence on
-  what isn't brought over), Save Schema Report and its errors
-  (machine-written).
 - The IFC rows of the inspector ("3D Preview", "IFC: no tessellated geometry", "Not Read", "Products Shown", "Products Skipped", "Reading…", "Schema", "The file could not be read") (machine-written).
 - "Neither macOS nor FFmpeg could play this video…" and "macOS can't play .{ext} videos, and the FFmpeg libraries Falcon plays them with weren't found…", the video viewer's can't-play lines; FFmpeg is a product name and is not translated (machine-written).
 

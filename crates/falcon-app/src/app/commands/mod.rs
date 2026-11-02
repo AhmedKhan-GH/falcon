@@ -469,7 +469,6 @@ impl App {
             C::EmptyCacheReload => self.confirm_reload = true,
             C::ImportPack => self.import_pack_dialog(),
             C::ImportInboard => self.import_inboard_dialog(),
-            C::ImportPixave => self.import_pixave_dialog(),
             C::NextLibrary => self.switch_to = Some(Switch::Focus(self.others.step(true))),
             C::PreviousLibrary => self.switch_to = Some(Switch::Focus(self.others.step(false))),
             C::ToggleSidebar => self.show_sidebar = !self.show_sidebar,
