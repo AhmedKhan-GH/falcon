@@ -233,7 +233,7 @@ Eagle defaults come from prefs `shortcuts.keybinds` (rebindable) and from the ha
 | ⌘T add tags, ⇧⌘C / ⇧⌘V copy and paste tags, ⇧D add to last folder, ⌘D duplicate | Done | `organize.tag.*`, `organize.folder.addLast` ⇧D, `edit.duplicate` ⌘D | local |
 | ⇧⌘L lock the folder now, ⌥⌘L lock the app | Done | `edit.folder.lock` ⇧⌘L and `app.lock` ⌥⌘L | local |
 | Hold Z for the hover preview | Done | app.rs:2703, hover.rs | local |
-| Global shortcuts: Show Eagle, Bring up Eagle and search, screen captures (⌥⌘E) | Done | `hotkeys.rs` (Carbon `RegisterEventHotKey`): Show falcon, Show falcon and search, the captures with Eagle's ⌥⌘E chord; **off by default** (a deliberate change: Eagle usually owns ⌥⌘E on the user's Mac); a refused chord is shown in orange on its row and re-registered when the switch or chord changes | local |
+| Global shortcuts: Show Eagle, Bring up Eagle and search, screen captures (⌥⌘E) | Done | `hotkeys.rs` (Carbon `RegisterEventHotKey`): Show falcon, Show falcon and search, the captures with Eagle's ⌥⌘E chord; **off by default** (a deliberate user decision, stays off: Eagle usually owns ⌥⌘E on the user's Mac); a refused chord is shown in orange on its row and re-registered when the switch or chord changes | local |
 | Falcon extras: ⇧⌘K collect window, ⌃Tab / ⌃⇧Tab next or previous open library | Done | shortcuts.rs `file.collect.window`, `library.next`, `library.previous` (falcon only) | local |
 
 Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute, C comment mode) belong to the viewer audit. Falcon has the player table at shortcuts.rs:122-134.
@@ -1316,7 +1316,7 @@ Two cross-cutting facts explain many rows:
 | macOS Share sheet for items | Done | Share… in the item menu over the selected files (`share.rs`, `NSSharingServicePicker`) | local |
 | Add selected items to another library (from the recent list, or choose a path) | Done | `add_to_library.rs` (both crates): item, single-folder, folder-card, smart-folder and tag-group menus; recent libraries plus Choose Library…; whole `.info` folders copied under a temporary name, existing ids skipped, folder ids kept as Eagle; target must pass the sandbox and install-folder guards; asks above one item; progress with Stop | local |
 | Convert WebP items to PNG or JPG (Eagle's "Convert WebP…") | Done | Eagle's tool converts **WebP items to PNG or JPG** (not to WebP): item menu ▸ Convert WebP ▸ PNG/JPG for every WebP in the selection, warning first, animated skipped, old file to the macOS Trash (irreversible for ⌘Z), `ext`/`size` updated | local |
-| Save the current video frame as an item or copy it | Done | Video right-click menu and ⇧S / ⇧C; also in the preview window | local |
+| Save the current video frame as an item or copy it | Partial | Main viewer as Eagle: right-click menu and ⇧S / ⇧C, a JPEG item named after the time, in the video's folders (`ui/viewer/video.rs`). Preview window: copy as Eagle; Save writes a PNG through a file dialog (`ui/viewer/preview_window/mod.rs`), where Eagle's `videoScreenShot` (`js/preview-window.js`) adds a JPEG item to the library | local |
 
 ### 5. Library management
 
