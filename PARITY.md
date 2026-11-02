@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 259 | 9 | 4 | 8 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 257 | 11 | 4 | 8 |
 | Viewers and file formats | 188 | 13 | 2 | 5 |
 | Search, filters and organising | 215 | 2 | 2 | 3 |
 | Import, export, library, preferences and integrations | 188 | 9 | 10 | 26 |
-| **Total** | 850 | 33 | 18 | 42 |
+| **Total** | 848 | 35 | 18 | 42 |
 
 Rows marked **Not wanted (user decision)** (4) are Eagle features the user chose not to have in falcon; they are counted outside the local Missing total.
 ## Fix first
