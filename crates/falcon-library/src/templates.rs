@@ -1,8 +1,10 @@
 //! Blank documents falcon writes itself, for File ▸ New….
 //!
 //! Each [`Template`] builds the bytes of a minimal, valid empty file in
-//! code: a text file, the Office Open XML formats (Word, Excel, PowerPoint)
-//! and an XMind mind map. Nothing is copied from another application's
+//! code: a text file, the Office Open XML formats (Word, Excel, PowerPoint),
+//! an XMind mind map, a Photoshop document (from Adobe's public PSD file
+//! format specification) and a PDF-compatible Illustrator document (a plain
+//! PDF with one blank page). Nothing is copied from another application's
 //! template files. The caller writes the bytes to a temporary file named
 //! [`Template::file_name`] and imports it like any other file.
 
@@ -18,11 +20,13 @@ pub enum Template {
     Excel,
     PowerPoint,
     XMind,
+    Psd,
+    Ai,
 }
 
 impl Template {
-    /// Every template, in the order the New… menu lists them.
-    pub const ALL: [Template; 5] = [Template::Text, Template::Word, Template::Excel, Template::PowerPoint, Template::XMind];
+    /// Every template.
+    pub const ALL: [Template; 7] = [Template::Text, Template::Word, Template::Excel, Template::PowerPoint, Template::XMind, Template::Psd, Template::Ai];
 
     /// The file extension.
     pub fn ext(self) -> &'static str {
@@ -32,6 +36,8 @@ impl Template {
             Template::Excel => "xlsx",
             Template::PowerPoint => "pptx",
             Template::XMind => "xmind",
+            Template::Psd => "psd",
+            Template::Ai => "ai",
         }
     }
 
@@ -48,6 +54,8 @@ impl Template {
             Template::Excel => zip_of(&xlsx_parts()),
             Template::PowerPoint => zip_of(&pptx_parts()),
             Template::XMind => zip_of(&xmind_parts()),
+            Template::Psd => psd_bytes(),
+            Template::Ai => ai_bytes(),
         }
     }
 }
@@ -206,6 +214,101 @@ fn xmind_parts() -> Vec<(&'static str, String)> {
     vec![("content.json", content.to_string()), ("metadata.json", metadata.to_string()), ("manifest.json", manifest.to_string())]
 }
 
+/// Size of the blank Photoshop canvas, in pixels.
+const PSD_SIZE: (u32, u32) = (1920, 1080);
+/// Page size of the blank Illustrator document, in points.
+const AI_PAGE: (u32, u32) = (1366, 768);
+
+/// PackBits (the PSD "RLE" scheme) of a row of `n` white bytes: runs of at
+/// most 128 copies, each a count byte `257 - run` and the value.
+fn white_row_rle(n: usize) -> Vec<u8> {
+    let mut out = Vec::new();
+    let mut left = n;
+    while left > 0 {
+        let run = left.min(128);
+        if run == 1 {
+            out.extend([0, 0xFF]);
+        } else {
+            out.extend([(257 - run) as u8, 0xFF]);
+        }
+        left -= run;
+    }
+    out
+}
+
+/// A white, opaque, 8-bit RGB Photoshop document with no layers, laid out
+/// as the spec's five sections: header, colour mode data (empty), image
+/// resources (the resolution, 72 dpi), layer and mask information (no
+/// layers, no global mask) and the merged image, RLE compressed.
+fn psd_bytes() -> Vec<u8> {
+    let (w, h) = PSD_SIZE;
+    let mut out = Vec::new();
+    out.extend(b"8BPS");
+    out.extend(1u16.to_be_bytes()); // version
+    out.extend([0u8; 6]); // reserved
+    out.extend(3u16.to_be_bytes()); // channels
+    out.extend(h.to_be_bytes());
+    out.extend(w.to_be_bytes());
+    out.extend(8u16.to_be_bytes()); // depth
+    out.extend(3u16.to_be_bytes()); // colour mode: RGB
+    out.extend(0u32.to_be_bytes()); // colour mode data
+    // Resolution info (resource 0x03ED), 16 bytes: 72.00 dpi as 16.16 fixed
+    // point, in inches, both ways.
+    let mut res = Vec::new();
+    res.extend(b"8BIM");
+    res.extend(0x03EDu16.to_be_bytes());
+    res.extend([0u8, 0]); // empty pascal name, padded to even
+    res.extend(16u32.to_be_bytes());
+    for _ in 0..2 {
+        res.extend(0x0048_0000u32.to_be_bytes());
+        res.extend(1u16.to_be_bytes()); // inches
+        res.extend(1u16.to_be_bytes()); // inches
+    }
+    out.extend((res.len() as u32).to_be_bytes());
+    out.extend(res);
+    // Layer and mask information: layer info length 0, global mask length 0.
+    out.extend(8u32.to_be_bytes());
+    out.extend(0u32.to_be_bytes());
+    out.extend(0u32.to_be_bytes());
+    // Image data: RLE, a table of byte counts for every row of every
+    // channel, then the rows channel by channel.
+    out.extend(1u16.to_be_bytes());
+    let row = white_row_rle(w as usize);
+    for _ in 0..3 * h {
+        out.extend((row.len() as u16).to_be_bytes());
+    }
+    for _ in 0..3 * h {
+        out.extend(&row);
+    }
+    out
+}
+
+/// A one-page PDF 1.5 file: Illustrator opens a PDF saved with an `.ai`
+/// extension, and falcon reads PDF-compatible Illustrator files by their
+/// `%PDF` header.
+fn ai_bytes() -> Vec<u8> {
+    let (w, h) = AI_PAGE;
+    let objects = [
+        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
+        format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {w} {h}] /Resources << >> /Contents 4 0 R >>"),
+        "<< /Length 0 >>\nstream\n\nendstream".to_string(),
+    ];
+    let mut out = b"%PDF-1.5\n%\xE2\xE3\xCF\xD3\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, body) in objects.iter().enumerate() {
+        offsets.push(out.len());
+        out.extend(format!("{} 0 obj\n{body}\nendobj\n", i + 1).bytes());
+    }
+    let xref = out.len();
+    out.extend(format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).bytes());
+    for o in offsets {
+        out.extend(format!("{o:010} 00000 n \n").bytes());
+    }
+    out.extend(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objects.len() + 1).bytes());
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -261,7 +364,7 @@ mod tests {
     #[test]
     fn names_are_untitled_with_the_extension() {
         let names: Vec<String> = Template::ALL.iter().map(|t| t.file_name()).collect();
-        assert_eq!(names, ["Untitled.txt", "Untitled.docx", "Untitled.xlsx", "Untitled.pptx", "Untitled.xmind"]);
+        assert_eq!(names, ["Untitled.txt", "Untitled.docx", "Untitled.xlsx", "Untitled.pptx", "Untitled.xmind", "Untitled.psd", "Untitled.ai"]);
     }
 
     #[test]
@@ -296,6 +399,95 @@ mod tests {
         assert_eq!(meta["creator"]["name"], "falcon");
         let manifest: serde_json::Value = serde_json::from_str(&entry(&mut z, "manifest.json")).unwrap();
         assert!(manifest["file-entries"]["content.json"].is_object());
+    }
+
+    fn be32(b: &[u8], at: usize) -> usize {
+        u32::from_be_bytes(b[at..at + 4].try_into().unwrap()) as usize
+    }
+
+    #[test]
+    fn psd_sections_are_consistent() {
+        let b = Template::Psd.bytes();
+        assert_eq!(&b[..4], b"8BPS");
+        assert_eq!(&b[4..6], [0, 1]);
+        assert_eq!((be32(&b, 14), be32(&b, 18)), (1080, 1920));
+        assert_eq!(&b[22..26], [0, 8, 0, 3]);
+        // Each section's length leads to the next one, and the last ends the file.
+        let mut at = 26;
+        let colour = be32(&b, at);
+        at += 4 + colour;
+        let resources = be32(&b, at);
+        assert!(b[at + 4..at + 4 + resources].starts_with(b"8BIM"));
+        at += 4 + resources;
+        let layers = be32(&b, at);
+        at += 4 + layers;
+        assert_eq!(&b[at..at + 2], [0, 1], "RLE");
+        at += 2;
+        let table = 3 * 1080 * 2;
+        let data: usize = (0..3 * 1080).map(|i| u16::from_be_bytes([b[at + 2 * i], b[at + 2 * i + 1]]) as usize).sum();
+        assert_eq!(at + table + data, b.len());
+        assert!(b.len() < 120_000);
+    }
+
+    #[test]
+    fn psd_decodes_as_white() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("Untitled.psd");
+        std::fs::write(&file, Template::Psd.bytes()).unwrap();
+        assert_eq!(crate::psd::dimensions(&file), Some((1920, 1080)));
+        let mut c = crate::psd::Composite::open(&file).unwrap();
+        assert_eq!(c.size(), (1920, 1080));
+        let img = c.read_rects(&[[0, 0, 1920, 1080]]).unwrap().remove(0);
+        assert!(img.pixels().all(|p| p.0 == [255, 255, 255, 255]));
+    }
+
+    /// macOS's image reader accepts the blank Photoshop file.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn sips_reads_the_psd() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("Untitled.psd");
+        std::fs::write(&file, Template::Psd.bytes()).unwrap();
+        let Ok(out) = std::process::Command::new("/usr/bin/sips").args(["-g", "pixelWidth", "-g", "pixelHeight"]).arg(&file).output() else { return };
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+        let text = String::from_utf8_lossy(&out.stdout);
+        assert!(text.contains("pixelWidth: 1920") && text.contains("pixelHeight: 1080"), "{text}");
+    }
+
+    #[test]
+    fn ai_is_a_pdf_with_correct_offsets() {
+        let b = Template::Ai.bytes();
+        assert!(b.starts_with(b"%PDF-"));
+        assert!(crate::import::is_recognized("ai"));
+        let find = |needle: &[u8]| b.windows(needle.len()).rposition(|w| w == needle).unwrap();
+        let tail = String::from_utf8(b[find(b"startxref\n")..].to_vec()).unwrap();
+        let start: usize = tail.lines().nth(1).unwrap().parse().unwrap();
+        assert!(b[start..].starts_with(b"xref\n0 5\n"));
+        let table = String::from_utf8(b[start..find(b"trailer")].to_vec()).unwrap();
+        let entries: Vec<&str> = table.lines().skip(2).collect();
+        assert_eq!(entries.len(), 5);
+        assert!(entries[0].ends_with(" f "));
+        for (i, e) in entries.iter().enumerate().skip(1) {
+            let off: usize = e[..10].parse().unwrap();
+            assert!(e.ends_with(" n "));
+            assert!(b[off..].starts_with(format!("{i} 0 obj\n").as_bytes()), "object {i}");
+        }
+        let text = String::from_utf8_lossy(&b);
+        assert!(text.contains("/MediaBox [0 0 1366 768]") && text.contains("/Count 1"));
+        assert!(text.trim_end().ends_with("%%EOF"));
+    }
+
+    /// macOS's image reader opens the blank document as a PDF page.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn sips_reads_the_ai_as_a_pdf() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("Untitled.pdf");
+        std::fs::write(&file, Template::Ai.bytes()).unwrap();
+        let Ok(out) = std::process::Command::new("/usr/bin/sips").args(["-g", "pixelWidth", "-g", "pixelHeight"]).arg(&file).output() else { return };
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+        let text = String::from_utf8_lossy(&out.stdout);
+        assert!(text.contains("pixelWidth: 1366") && text.contains("pixelHeight: 768"), "{text}");
     }
 
     /// macOS's own converter reads the blank Word file.
