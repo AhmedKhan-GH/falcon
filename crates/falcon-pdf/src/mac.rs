@@ -156,11 +156,20 @@ impl Document {
     /// Draws page `i` at `scale` pixels per point on white, turned as the
     /// page asks, shrunk so neither side exceeds `max_px`.
     pub fn render(&self, i: usize, scale: f64, max_px: usize) -> Result<Bitmap> {
+        let size = self.page_size(i).ok_or_else(|| err(format!("no page {}", i + 1)))?;
+        let (w, h) = render_size(size, scale, max_px.max(1));
+        self.render_part(i, Rect { x: 0.0, y: 0.0, w: size.0, h: size.1 }, w, h)
+    }
+
+    /// Draws the part `part` of page `i` (display points, so the crop box
+    /// and the page's turn are already applied) on white, filling a picture
+    /// of `w` x `h` pixels. Memory follows the picture, not the page, so
+    /// any zoom can be drawn for the part on screen.
+    pub fn render_part(&self, i: usize, part: Rect, w: usize, h: usize) -> Result<Bitmap> {
         autoreleasepool(|_| {
             let page = self.page(i)?;
-            let g = Self::geom(&page);
-            let size = g.size();
-            let (w, h) = render_size(size, scale, max_px.max(1));
+            let size = Self::geom(&page).size();
+            let (w, h) = (w.max(1), h.max(1));
             let mut rgba = vec![0u8; w * h * 4];
             let space = CGColorSpace::new_device_rgb().ok_or_else(|| err("no RGB colour space"))?;
             let info = CGImageAlphaInfo::PremultipliedLast.0 | CGImageByteOrderInfo::Order32Big.0;
@@ -172,14 +181,18 @@ impl Document {
             CGContext::set_rgb_fill_color(c, 1.0, 1.0, 1.0, 1.0);
             CGContext::fill_rect(c, CGRect::new(CGPoint::new(0.0, 0.0), CGSize::new(w as f64, h as f64)));
             CGContext::set_interpolation_quality(c, CGInterpolationQuality::High);
-            if size.0 > 0.0 && size.1 > 0.0 {
-                CGContext::scale_ctm(c, w as f64 / size.0, h as f64 / size.1);
+            if part.w > 0.0 && part.h > 0.0 {
+                CGContext::scale_ctm(c, w as f64 / part.w, h as f64 / part.h);
+                // The context's origin is at the bottom, display points' at
+                // the top: the part's bottom-left corner goes to the origin.
+                CGContext::translate_ctm(c, -part.x, part.y + part.h - size.1);
+                // drawWithBox:toContext: applies the box's origin and the
+                // page's rotation itself, drawing the page as shown into a
+                // context of its displayed size (checked by the rotated-page
+                // test).
+                // SAFETY: owned; one thread; `ctx` is a live bitmap context.
+                unsafe { page.drawWithBox_toContext(PDFDisplayBox::CropBox, &ctx) };
             }
-            // drawWithBox:toContext: applies the box's origin and the page's
-            // rotation itself, drawing the page as shown into a context of
-            // its displayed size (checked by the rotated-page test).
-            // SAFETY: owned; one thread; `ctx` is a live bitmap context.
-            unsafe { page.drawWithBox_toContext(PDFDisplayBox::CropBox, &ctx) };
             drop(ctx);
             // The background is opaque white, so premultiplied is straight.
             for px in rgba.as_chunks_mut::<4>().0 {

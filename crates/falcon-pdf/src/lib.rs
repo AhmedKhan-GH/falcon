@@ -3,7 +3,7 @@
 //! falcon keeps its MIT/Apache-2.0 licence.
 //!
 //! [`Document`] opens a file and hands out what a reader needs: page
-//! sizes, pages rendered to RGBA pixels at any scale, each page's text,
+//! sizes, pages or parts of them rendered to RGBA pixels at any scale, each page's text,
 //! search hits, the text and rectangles of a drag selection, and the table
 //! of contents.
 //!
