@@ -1,15 +1,22 @@
 //! glTF 2.0: binary `.glb` and JSON `.gltf` with its buffers.
 //!
-//! Geometry, the base colour and the base colour texture are read (no
-//! other textures, animation, skins or sparse accessors). The default
+//! Geometry, the base colour, the base colour, normal and emissive textures,
+//! the emissive factor and the alpha mode are read (no other textures,
+//! animation, skins or sparse accessors). The default
 //! scene is walked, node transforms are baked into positions and normals,
 //! and every primitive of every mesh instance becomes one [`Mesh`].
 //!
-//! The base colour texture comes from the GLB's binary chunk, a data URI
-//! or a file next to the model, with its sampler's wrap modes, its
-//! `KHR_texture_transform` baked into the texture coordinates, the base
-//! colour factor as its tint (glTF multiplies the two) and, for the `MASK`
-//! alpha mode, its alpha cutoff.
+//! A texture comes from the GLB's binary chunk, a data URI or a file next
+//! to the model, with its sampler's wrap modes. The base colour texture has
+//! the base colour factor as its tint (glTF multiplies the two) and, for the
+//! `MASK` alpha mode, its alpha cutoff. A mesh has one set of texture
+//! coordinates, those of the base colour texture, else of the normal
+//! texture, else of the emissive one, with that texture's
+//! `KHR_texture_transform` baked in. The `BLEND` and `MASK` alpha modes draw
+//! see-through. A material with `KHR_materials_pbrSpecularGlossiness` has no
+//! normal, emissive or see-through part, as in Eagle's viewer. A texture or
+//! factor that is out of range, undecodable or malformed is left out; it
+//! never fails the file.
 
 use std::collections::HashMap;
 
@@ -18,7 +25,7 @@ use serde::Deserialize;
 
 use super::math::{self, M4, V3};
 use super::texture::{Loader, Texture, Wrap};
-use super::{Material, Mesh, Model, ParseError, Result};
+use super::{Material, Mesh, Model, ParseError, Result, Surface};
 
 const GLB_MAGIC: u32 = 0x4654_6C67;
 const CHUNK_JSON: u32 = 0x4E4F_534A;
@@ -167,6 +174,61 @@ struct MaterialDef {
     alpha_mode: String,
     #[serde(rename = "alphaCutoff")]
     alpha_cutoff: Option<f32>,
+    // Kept as raw JSON so that a wrongly shaped value only loses itself.
+    #[serde(rename = "normalTexture")]
+    normal_texture: Option<serde_json::Value>,
+    #[serde(rename = "emissiveTexture")]
+    emissive_texture: Option<serde_json::Value>,
+    #[serde(rename = "emissiveFactor")]
+    emissive_factor: Option<serde_json::Value>,
+    extensions: serde_json::Value,
+}
+
+/// A texture reference from raw JSON; anything but an object is none (a
+/// sequence would otherwise be read as a struct's fields).
+fn tex_info(v: &serde_json::Value) -> Option<TexInfo> {
+    if !v.is_object() {
+        return None;
+    }
+    serde_json::from_value(v.clone()).ok()
+}
+
+impl MaterialDef {
+    fn normal(&self) -> Option<TexInfo> {
+        tex_info(self.normal_texture.as_ref()?)
+    }
+
+    fn emissive_texture(&self) -> Option<TexInfo> {
+        tex_info(self.emissive_texture.as_ref()?)
+    }
+
+    /// The emissive factor in display values; black unless it is exactly
+    /// three finite numbers.
+    fn emissive(&self) -> V3 {
+        let Some(a) = self.emissive_factor.as_ref().and_then(|v| v.as_array()).filter(|a| a.len() == 3) else { return [0.0; 3] };
+        let mut out = [0.0; 3];
+        for (o, v) in out.iter_mut().zip(a) {
+            match v.as_f64().map(|x| x as f32).filter(|x| x.is_finite()) {
+                Some(x) => *o = srgb(x),
+                None => return [0.0; 3],
+            }
+        }
+        out
+    }
+
+    /// Eagle's viewer replaces a specular-glossiness material, dropping
+    /// everything of the surface.
+    fn spec_gloss(&self) -> bool {
+        self.extensions.get("KHR_materials_pbrSpecularGlossiness").is_some()
+    }
+
+    /// The surface without its maps.
+    fn flat_surface(&self) -> Surface {
+        if self.spec_gloss() {
+            return Surface::default();
+        }
+        Surface { emissive: self.emissive(), blend: matches!(self.alpha_mode.as_str(), "BLEND" | "MASK"), ..Surface::default() }
+    }
 }
 
 #[derive(Deserialize, Default)]
@@ -461,8 +523,10 @@ fn read_prim(doc: &Doc, buffers: &[Vec<u8>], p: &PrimDef) -> Result<Option<Prim>
         let f = m.pbr.base_color_factor.unwrap_or([1.0; 4]);
         Material { name: m.name.clone(), color: [srgb(f[0]), srgb(f[1]), srgb(f[2])], opacity: f[3] }
     });
-    // The coordinates the base colour texture uses, through its transform.
-    let info = p.material.and_then(|m| doc.materials.get(m)).and_then(|m| m.pbr.base_color_texture.as_ref());
+    // The coordinates of the first texture the material has, in the order
+    // base colour, normal, emissive, through its transform.
+    let info = p.material.and_then(|m| doc.materials.get(m)).and_then(|m| m.pbr.base_color_texture.clone().or_else(|| m.normal()).or_else(|| m.emissive_texture()));
+    let info = info.as_ref();
     let uvs = info.and_then(|t| {
         let set = t.extensions.transform.as_ref().and_then(|x| x.tex_coord).unwrap_or(t.tex_coord);
         let (v, nc) = read_accessor(doc, buffers, *p.attributes.get(&format!("TEXCOORD_{set}"))?).ok()?;
@@ -489,10 +553,9 @@ fn wrap(mode: Option<u32>) -> Wrap {
     }
 }
 
-/// Material `m`'s base colour texture, decoded through `loader`.
-fn material_texture(doc: &Doc, buffers: &[Vec<u8>], loader: &mut Loader, m: usize) -> Option<Texture> {
-    let mat = doc.materials.get(m)?;
-    let info = mat.pbr.base_color_texture.as_ref()?;
+/// The picture a texture reference names, laid on with its sampler's wrap
+/// modes, decoded through `loader`.
+fn texture_for(doc: &Doc, buffers: &[Vec<u8>], loader: &mut Loader, info: &TexInfo) -> Option<Texture> {
     let tex = doc.textures.get(info.index)?;
     let img = doc.images.get(tex.source?)?;
     let image = if let Some(view) = img.buffer_view.and_then(|v| doc.buffer_views.get(v)) {
@@ -509,13 +572,32 @@ fn material_texture(doc: &Doc, buffers: &[Vec<u8>], loader: &mut Loader, m: usiz
         }
     };
     let sampler = tex.sampler.and_then(|s| doc.samplers.get(s));
-    let f = mat.pbr.base_color_factor.unwrap_or([1.0; 4]);
-    Some(Texture {
-        image,
-        tint: [srgb(f[0]), srgb(f[1]), srgb(f[2])],
-        wrap: [wrap(sampler.and_then(|s| s.wrap_s)), wrap(sampler.and_then(|s| s.wrap_t))],
-        alpha_cutoff: (mat.alpha_mode == "MASK").then(|| mat.alpha_cutoff.unwrap_or(0.5)),
-    })
+    Some(Texture { wrap: [wrap(sampler.and_then(|s| s.wrap_s)), wrap(sampler.and_then(|s| s.wrap_t))], ..Texture::new(image) })
+}
+
+/// What a material draws with: its base colour texture and its surface.
+#[derive(Clone)]
+struct Look {
+    texture: Option<Texture>,
+    surface: Surface,
+}
+
+/// Material `m`'s textures, decoded through `loader`: the base colour
+/// texture first, then the maps, which may take only half of what is left.
+fn material_look(doc: &Doc, buffers: &[Vec<u8>], loader: &mut Loader, m: usize) -> Look {
+    let Some(mat) = doc.materials.get(m) else { return Look { texture: None, surface: Surface::default() } };
+    let texture = mat.pbr.base_color_texture.as_ref().and_then(|info| texture_for(doc, buffers, loader, info)).map(|t| {
+        let f = mat.pbr.base_color_factor.unwrap_or([1.0; 4]);
+        Texture { tint: [srgb(f[0]), srgb(f[1]), srgb(f[2])], alpha_cutoff: (mat.alpha_mode == "MASK").then(|| mat.alpha_cutoff.unwrap_or(0.5)), ..t }
+    });
+    let mut surface = mat.flat_surface();
+    if !mat.spec_gloss() {
+        loader.for_map(|l| {
+            surface.normal_map = mat.normal().and_then(|i| texture_for(doc, buffers, l, &i));
+            surface.emissive_map = mat.emissive_texture().and_then(|i| texture_for(doc, buffers, l, &i));
+        });
+    }
+    Look { texture, surface }
 }
 
 struct Walker<'a> {
@@ -526,8 +608,8 @@ struct Walker<'a> {
     instances: usize,
     vertices: usize,
     loader: Loader<'a>,
-    /// Each material's texture, decoded when a primitive first uses it.
-    textures: HashMap<usize, Option<Texture>>,
+    /// Each material's textures, decoded when a primitive first uses it.
+    textures: HashMap<usize, Look>,
 }
 
 impl Walker<'_> {
@@ -557,11 +639,15 @@ impl Walker<'_> {
             self.instances += 1;
             self.vertices += prim.positions.len();
             let mut mesh = instance(&def.name, prim, world);
-            if mesh.uvs.is_some()
-                && let Some(m) = pdef.material
-            {
-                let loader = &mut self.loader;
-                mesh.texture = self.textures.entry(m).or_insert_with(|| material_texture(doc, buffers, loader, m)).clone();
+            if let Some(m) = pdef.material {
+                if mesh.uvs.is_some() {
+                    let loader = &mut self.loader;
+                    let look = self.textures.entry(m).or_insert_with(|| material_look(doc, buffers, loader, m));
+                    mesh.texture = look.texture.clone();
+                    mesh.surface = look.surface.clone();
+                } else if let Some(mat) = doc.materials.get(m) {
+                    mesh.surface = mat.flat_surface();
+                }
             }
             self.out.push(mesh);
         }
@@ -931,6 +1017,124 @@ mod tests {
         let rot = r#","extensions":{"KHR_texture_transform":{"rotation":1.5707964}}"#;
         let uv = parse_glb(&textured(r#""bufferView":3"#, &png, "", rot), &no_side).unwrap().meshes[0].uvs.clone().unwrap();
         assert!((uv[1][0]).abs() < 1e-6 && (uv[1][1] + 1.0).abs() < 1e-6, "{uv:?}");
+    }
+
+    /// A triangle with UVs and `material` (the whole material object) over
+    /// one texture, index 0, that is `png` in buffer view 3.
+    fn with_material(material: &str, png: &[u8]) -> Vec<u8> {
+        let mut bin = tri_bin();
+        for v in [0.0f32, 0.0, 1.0, 0.0, 0.0, 1.0] {
+            bin.extend_from_slice(&v.to_le_bytes());
+        }
+        let png_at = bin.len();
+        bin.extend_from_slice(png);
+        let json = format!(
+            r#"{{"buffers":[{{"byteLength":{total}}}],
+            "bufferViews":[{{"buffer":0,"byteOffset":0,"byteLength":36}},{{"buffer":0,"byteOffset":36,"byteLength":6}},{{"buffer":0,"byteOffset":44,"byteLength":24}},{{"buffer":0,"byteOffset":{png_at},"byteLength":{png_len}}}],
+            "accessors":[{{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3"}},{{"bufferView":1,"componentType":5123,"count":3,"type":"SCALAR"}},{{"bufferView":2,"componentType":5126,"count":3,"type":"VEC2"}}],
+            "meshes":[{{"primitives":[{{"attributes":{{"POSITION":0,"TEXCOORD_0":2}},"indices":1,"material":0}}]}}],
+            "materials":[{material}],
+            "samplers":[{{"wrapS":33071,"wrapT":33648}}],
+            "textures":[{{"source":0,"sampler":0}}],
+            "images":[{{"bufferView":3}}]}}"#,
+            total = bin.len(),
+            png_len = png.len(),
+        );
+        make_glb(&json, &bin)
+    }
+
+    fn read_material(material: &str) -> Mesh {
+        let png = crate::model3d::texture::tests::png_2x2();
+        let m = parse_glb(&with_material(material, &png), &no_side).unwrap();
+        assert_eq!(m.meshes.len(), 1);
+        m.meshes.into_iter().next().unwrap()
+    }
+
+    #[test]
+    fn normal_and_emissive_maps_are_read() {
+        let mesh = read_material(r#"{"normalTexture":{"index":0,"scale":3},"emissiveTexture":{"index":0},"emissiveFactor":[1,0.2140,0]}"#);
+        let s = &mesh.surface;
+        let n = s.normal_map.as_ref().expect("normal map");
+        assert_eq!((n.image.width, n.image.height), (2, 2));
+        assert_eq!(n.wrap, [Wrap::Clamp, Wrap::Mirror]);
+        assert!(s.emissive_map.is_some());
+        assert!(close(s.emissive, [1.0, 0.5, 0.0]), "{:?}", s.emissive);
+        assert!(!s.blend);
+        assert!(mesh.texture.is_none());
+        assert_eq!(mesh.uvs.as_deref(), Some(&[[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]][..]));
+    }
+
+    #[test]
+    fn emissive_map_without_factor_still_loads() {
+        let mesh = read_material(r#"{"emissiveTexture":{"index":0}}"#);
+        assert!(mesh.surface.emissive_map.is_some());
+        assert_eq!(mesh.surface.emissive, [0.0; 3]);
+    }
+
+    #[test]
+    fn alpha_modes_set_blend() {
+        let png = crate::model3d::texture::tests::png_2x2();
+        let base = r#""pbrMetallicRoughness":{"baseColorFactor":[1,1,1,0.5],"baseColorTexture":{"index":0}}"#;
+        let get = |mode: &str| {
+            let mat = if mode.is_empty() { format!("{{{base}}}") } else { format!(r#"{{{base},"alphaMode":"{mode}","alphaCutoff":0.3}}"#) };
+            parse_glb(&with_material(&mat, &png), &no_side).unwrap().meshes.remove(0)
+        };
+        assert!(get("BLEND").surface.blend);
+        assert_eq!(get("BLEND").texture.unwrap().alpha_cutoff, None);
+        let mask = get("MASK");
+        assert!(mask.surface.blend);
+        assert_eq!(mask.texture.unwrap().alpha_cutoff, Some(0.3));
+        for m in ["OPAQUE", ""] {
+            let mesh = get(m);
+            assert!(!mesh.surface.blend);
+            assert!((mesh.material.unwrap().opacity - 0.5).abs() < 1e-6, "kept, though ignored");
+        }
+        // MASK with no base colour texture has no cutoff to keep.
+        assert!(read_material(r#"{"alphaMode":"MASK"}"#).surface.blend);
+    }
+
+    #[test]
+    fn specular_glossiness_drops_the_surface() {
+        let mesh = read_material(r#"{"normalTexture":{"index":0},"emissiveTexture":{"index":0},"emissiveFactor":[1,1,1],"alphaMode":"BLEND","extensions":{"KHR_materials_pbrSpecularGlossiness":{}}}"#);
+        assert_eq!(mesh.surface, Surface::default());
+    }
+
+    #[test]
+    fn coordinates_follow_base_then_normal_then_emissive() {
+        let ext = r#","extensions":{"KHR_texture_transform":{"offset":[0.5,0],"scale":[2,3]}}"#;
+        let mesh = read_material(&format!(r#"{{"normalTexture":{{"index":0{ext}}},"emissiveTexture":{{"index":0}}}}"#));
+        assert_eq!(mesh.uvs.as_deref(), Some(&[[0.5, 0.0], [2.5, 0.0], [0.5, 3.0]][..]));
+        // Emissive alone, and a base colour texture ahead of both.
+        let mesh = read_material(&format!(r#"{{"emissiveTexture":{{"index":0{ext}}}}}"#));
+        assert_eq!(mesh.uvs.as_ref().unwrap()[1], [2.5, 0.0]);
+        let mesh = read_material(&format!(r#"{{"pbrMetallicRoughness":{{"baseColorTexture":{{"index":0}}}},"normalTexture":{{"index":0{ext}}}}}"#));
+        assert_eq!(mesh.uvs.as_ref().unwrap()[1], [1.0, 0.0]);
+        // A set the mesh doesn't have: no coordinates, so no maps.
+        let mesh = read_material(r#"{"normalTexture":{"index":0,"texCoord":1}}"#);
+        assert!(mesh.uvs.is_none());
+        assert!(mesh.surface.normal_map.is_none());
+    }
+
+    #[test]
+    fn bad_maps_and_factors_keep_the_mesh() {
+        // Index out of range, texture without a usable image.
+        let mesh = read_material(r#"{"normalTexture":{"index":9},"emissiveTexture":{"index":0},"emissiveFactor":[0.5,0.5,0.5]}"#);
+        assert!(mesh.surface.normal_map.is_none());
+        assert!(mesh.surface.emissive_map.is_some());
+        assert!(mesh.surface.emissive[0] > 0.7);
+        // Undecodable bytes.
+        let m = parse_glb(&with_material(r#"{"normalTexture":{"index":0},"emissiveTexture":{"index":0}}"#, b"not a picture"), &no_side).unwrap();
+        assert_eq!(m.meshes.len(), 1);
+        assert!(m.meshes[0].surface.normal_map.is_none() && m.meshes[0].surface.emissive_map.is_none());
+        // Wrongly shaped values lose only themselves.
+        for f in ["[1,2]", "[1,2,3,4]", "[1,null,0]", r#"["a",0,0]"#, "5", "null"] {
+            let mesh = read_material(&format!(r#"{{"emissiveFactor":{f},"alphaMode":"BLEND"}}"#));
+            assert_eq!(mesh.surface.emissive, [0.0; 3], "{f}");
+            assert!(mesh.surface.blend);
+        }
+        let mesh = read_material(r#"{"normalTexture":"x","emissiveTexture":[],"emissiveFactor":[2,-1,0]}"#);
+        assert!(mesh.surface.normal_map.is_none() && mesh.surface.emissive_map.is_none());
+        assert!(close(mesh.surface.emissive, [1.0, 0.0, 0.0]), "clamped");
     }
 
     #[test]
