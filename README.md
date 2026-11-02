@@ -20,7 +20,9 @@
 <p align="center">
   <a href="https://ahmedkhan-gh.github.io/falcon/"><b>Website</b></a> ·
   <a href="https://ahmedkhan-gh.github.io/falcon/book/">Documentation</a> ·
-  <a href="ROADMAP.md">Roadmap</a>
+  <a href="ROADMAP.md">Roadmap</a> ·
+  <a href="FORMATS.md">Formats</a> ·
+  <a href="PLUGINS.md">Plugins</a>
 </p>
 
 <br>
@@ -46,7 +48,7 @@
   <tr>
     <td width="25%" valign="top">
       <h3>📥 Collect anything</h3>
-      Drag files in, paste with ⌘V, or open files with the app. Thumbnails and colour palettes are made for you. PDF, video, PSD, AI, HEIC and RAW come in through macOS QuickLook.
+      Drag files in, paste with ⌘V, or open files with the app. Thumbnails and colour palettes are made for you. Falcon handles exactly Eagle's set of file formats, listed in [FORMATS.md](FORMATS.md). PDF, PSD, AI, HEIC, RAW and video come in with thumbnails from macOS QuickLook where it helps, and screen capture is built in.
     </td>
     <td width="25%" valign="top">
       <h3>🗂️ Organise your way</h3>
@@ -58,7 +60,7 @@
     </td>
     <td width="25%" valign="top">
       <h3>⚡ Native and fast</h3>
-      Written in Rust with egui. No Electron and no web view. Thumbnails decode on worker threads, and 40 large images import in under three seconds.
+      Written in Rust with egui. No Electron; only live web pages use the system web view. Thumbnails decode on worker threads, and 40 large images import in under three seconds.
     </td>
   </tr>
 </table>
@@ -83,7 +85,7 @@ Every screenshot here is the real app at work on public-domain art. The credits 
       <br>
       <sub>The full-window viewer.<br><i>The Beach at Sainte-Adresse</i>, Claude Monet, 1867</sub>
       <h3>A viewer that keeps up</h3>
-      Zoom around the pointer, pan, fit or show actual size, and step through the library with the arrow keys. Animated GIFs play, and PDFs and other documents render at full resolution.
+      Zoom around the pointer, pan, fit or show actual size, and step through the library with the arrow keys. Animated GIFs play, and PDFs, PSD and AI files render at full resolution. Video (with an FFmpeg fallback that includes AV1), audio, fonts, text, 3D models with textures, IFC and web pages have viewers too.
     </td>
   </tr>
   <tr>
@@ -139,7 +141,8 @@ cargo run -p falcon -- serve ~/"Falcon Sandbox"/Inspiration.library     # local 
 |---|---|
 | `falcon-library` | The library format: loading and byte-identical saving, import, thumbnails (WebP), colour palettes (median cut), editing, search, smart folders |
 | `falcon-server` | A local JSON HTTP API for scripts and tools, also built into the app |
-| `falcon-video` | Video playback and frame decoding through macOS's AVFoundation, used by the app's viewer |
+| `falcon-video` | Video playback and frame decoding through macOS's AVFoundation, falling back to `falcon-ffmpeg`, used by the app's viewer |
+| `falcon-ffmpeg` | The fallback video decoder and player over an LGPL FFmpeg opened at run time |
 | `falcon-pdf` | PDF pages, text, search and selection through macOS's PDFKit, used by the app's PDF reader |
 | `falcon-app` | The desktop app, drawn with egui |
 | `falcon` | The command-line tool |
@@ -150,7 +153,7 @@ cargo run -p falcon -- serve ~/"Falcon Sandbox"/Inspiration.library     # local 
 
 ## Status
 
-Falcon is early alpha: the everyday workflow works, and the [roadmap](ROADMAP.md) lists what comes next. Back up a library before trying it, and don't edit the same library in two apps at once.
+Falcon is early alpha and unsigned: the everyday workflow works, about nineteen in twenty of Eagle's local features are done, and the [roadmap](ROADMAP.md) lists what is left. [PARITY.md](PARITY.md) checks every feature against Eagle 4.0.0, [FORMATS.md](FORMATS.md) lists the file formats and [PLUGINS.md](PLUGINS.md) lists Eagle's plugins, which falcon does not have; Actions and Export in Format are built in. Back up a library before trying it, and don't edit the same library in two apps at once.
 
 Falcon is an independent project. It is not affiliated with, endorsed by or sponsored by Eagle or its developers. "Eagle" is a trademark of its respective owner and appears here only to describe file-format compatibility.
 
