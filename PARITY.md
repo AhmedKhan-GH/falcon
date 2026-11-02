@@ -30,11 +30,11 @@ These are bugs, not missing features. The first four can lose data or edits.
 
 1. ~~Every viewer opens inside the window between the sidebar and inspector in Eagle, with a toolbar button that hides both. Falcon does this only for PDFs.~~ Fixed: every viewer draws in the central panel, with the panels button, ⌥⌘3 and Tab.
 2. ~~No application menu bar.~~ Fixed: native File / Edit / Find / Organize / View / Window / Help menus with live shortcuts and falcon's own Actions menu while falcon has actions (Eagle's is the `ai-action` plugin).
-3. ~~Preferences: 8 panes and about 30 settings against Eagle's 13 panes and about 80 settings; the rest are listed in §6.~~ Fixed: Preferences has every pane and setting Eagle's does, except vibrancy (Partial) and GPU acceleration (not built).
+3. ~~Preferences: 8 panes and about 30 settings against Eagle's 13 panes and about 80 settings; the rest are listed in §6.~~ Fixed: Preferences has every local pane and setting of Eagle's except GPU acceleration (not built); vibrancy, the screenshot notice, the App menu's Color Space and the sound effects are Partial, and plugin shortcuts and plugin developer tools are open with the plugin system. The extension, Proxy, AI Search, AI Models and MCP settings are online or plugin and absent.
 4. ~~The full-size image is capped at 3072 px.~~ Fixed: the original is tiled at full resolution; HEIC/AVIF/JXL still come from a 3072 px QuickLook render (no decoders).
 5. ~~Folder import flattens structure; no duplicate check on import; no import error list.~~ Fixed.
 6. ~~No export of items or folders, and no CSV export.~~ Fixed.
-7. ~~Shortcuts still missing: T, F, ⌘J Go to Folder, ⇧+arrows, ⌘D, ⌘T and the tag clipboard, ⇧D, ⇧T, F5, ⌘O and more (see §3).~~ Fixed: the shortcut table has every local Eagle id but four (see the Shortcuts row).
+7. ~~Shortcuts still missing: T, F, ⌘J Go to Folder, ⇧+arrows, ⌘D, ⌘T and the tag clipboard, ⇧D, ⇧T, F5, ⌘O and more (see §3).~~ Fixed: the shortcut table has every local macOS Eagle id; the 18 without a row are Windows variants, online importers, reverse image search and plugin services (see the Shortcuts row).
 8. ~~No marquee selection, no multi-select of folders, no grid display options.~~ Fixed.
 9. ~~No tag picker or suggestions.~~ Fixed.
 10. ~~No GIF player controls, no animated WebP or AVIF, no GIF hover previews.~~ Fixed (AVIF on macOS); hover playback for video and audio is in.
@@ -109,7 +109,7 @@ Overall finding: falcon now has a native menu bar (`crates/falcon-app/src/menu.r
 | Help: Help Center, Show Tutorial, Install Extensions, Feedback, Recover license, Change Logs | Missing | Not applicable; Help ▸ Show Tips is falcon's local overlay (see Tutorial / tips overlay) | online/plugin |
 | Help: Error Logs, Export Debug Report… | Done | Errors and panics logged to `~/Library/Logs/Falcon`; Help ▸ Error Logs and Export Debug Report (a zip of system, library and log details; no network or disk tests) | local |
 
-Cross-references (not counted): File ▸ Import Folders / Links / Eagle Package / Pinterest / ArtStation / Auto Import, File ▸ Export to Computer / .eaglepack / Specified Format / CSV, Library menu (Create / Switch / Merge / Clear History / Empty cache and reload) and Find ▸ Search / Search All / Filter submenu / Search by Image / Find Duplicates belong to the import, export, library and search audits. Falcon's library switcher popup (app.rs:1595-1652) covers Open, Recent, New, Show in Finder, Collect Window and Preferences.
+Cross-references (not counted): File ▸ Import Folders / Links / Eagle Package / Pinterest / ArtStation / Auto Import, File ▸ Export to Computer / .eaglepack / Specified Format / CSV, Library menu (Create / Switch / Merge / Clear History / Empty cache and reload) and Find ▸ Search / Search All / Filter submenu / Search by Image / Find Duplicates belong to the import, export, library and search audits. Falcon's library switcher popup (`ui/sidebar/mod.rs`) covers Open, Recent, New, Show in Finder, Collect Window and Preferences.
 
 ---
 
@@ -431,9 +431,9 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 ### Missing and Partial local items, ranked by how noticeable they are
 
 1. ~~No application menubar.~~ Fixed, with falcon's own Actions menu (Eagle's is the `ai-action` plugin).
-2. ~~Shortcuts missing: T (tags), F (folders), ⌘J Go to Folder, ⇧-arrows, ⌘T and copy/paste tags, ⇧D last folder, ⌘D duplicate, ⇧T always on top, F5, ⌘O new window.~~ Fixed; the Shortcuts row stays Partial only for four Eagle ids falcon has no command for.
-3. ~~Layout, history and rename keys differ from Eagle.~~ Fixed; what remains is Home/End/PgUp/PgDn, ⌘1–7 and the other missing keys in §3.
-4. ~~Dragging items between folders adds them instead of moving them.~~ Fixed; the drop toast still has no link to the folder.
+2. ~~Shortcuts missing: T (tags), F (folders), ⌘J Go to Folder, ⇧-arrows, ⌘T and copy/paste tags, ⇧D last folder, ⌘D duplicate, ⇧T always on top, F5, ⌘O new window.~~ Fixed; the Shortcuts row stays Partial only for the 18 Eagle ids with no row, none of them a local macOS feature.
+3. ~~Layout, history and rename keys differ from Eagle.~~ Fixed.
+4. ~~Dragging items between folders adds them instead of moving them.~~ Fixed, and the drop toast links to the folder.
 5. ~~No rubber-band (marquee) selection.~~ Fixed.
 6. ~~Item context menu gaps: Rename / batch rename, Copy ▸ (link, folder path, thumbnail, base64, name), Copy / Paste Tags, Duplicate, Remove from this Folder, Open File Location, Pin to Top, New Folder with Selection, Add to Last Used Folder, Share, thumbnail background, custom thumbnail from clipboard, Replace with File, Combine Images.~~ Fixed; Combine Images is a plugin in Eagle 4 and is not built.
 7. ~~Grid display options: only Thumbnail Speed / Quality is missing.~~ Fixed.
@@ -442,12 +442,12 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 10. ~~Open in New Window (preview window with always-on-top, opacity and navigator), plus main-window Always on Top.~~ Fixed.
 11. ~~Presentation / slideshow mode (F5) and grayscale preview.~~ Fixed.
 12. ~~Folder context menu gaps: New Folder (sibling), Move Folder dialog, Expand/Collapse submenu, Duplicate, Copy Link, Show Subfolder Content. Also no menu at all on subfolder cards, and no menu for several folders.~~ Fixed.
-13. ~~Fixed-width sidebar and inspector; nav entries fixed.~~ Fixed; Smart Folders and Folders section headers still don't fold.
+13. ~~Fixed-width sidebar and inspector; nav entries fixed.~~ Fixed, and every section header folds.
 14. ~~List layout: no column header, no column chooser, no sort-by-column.~~ Fixed.
-15. ~~Empty states are a single "No items".~~ Fixed; the welcome flow and the no-library screen are the library builder's.
-16. Toast system: ~~no UNDO button, no links, no import error list~~ fixed; no dock progress, no time remaining.
+15. ~~Empty states are a single "No items".~~ Fixed, with the welcome flow and the no-library screen.
+16. ~~Toast system: no UNDO button, no links, no import error list, no dock progress, no time remaining.~~ Fixed.
 17. ~~Drag and drop gaps: files onto a specific sidebar folder, a Finder folder onto the sidebar (keeping its tree), items onto Quick Access or subfolder cards, Quick Access reorder.~~ Fixed.
-18. ~~Context menus have no type-to-filter search.~~ Fixed (not inside submenus).
+18. ~~Context menus have no type-to-filter search.~~ Fixed, inside submenus too (see its row for what stays Partial).
 19. ~~Trash ▸ Restore All, Recently Used ▸ Clear history, Recently Used by modification time.~~ Fixed.
 20. ~~Right-click on the empty grid (layout panel), right-click on the title (ancestor jump), ⌥↑ to the parent folder, R to reshuffle Random and a refresh button.~~ Fixed.
 21. Video, GIF and audio hover-play in the grid is built; the rows stay Partial because the sound has never been heard by a person and the video strip is a set of pictures, not the file playing.
@@ -746,7 +746,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Always on top toggle in the window | Done | Preview window menu | local |
 | Navigator, grayscale, rotate, flip in the window menu | Partial | Preview window menu (`ui/viewer/preview_window/mod.rs`). In write mode (`RotateMode::Write`, the default, Eagle's `imageRotateMode`) rotate and flip rewrite the file through the main viewer's `Op::Rotate` and `Op::Flip` for formats `transform::can_rotate` and `can_flip` accept; in preview mode, or for a format falcon can't write, only the window's view turns. A video's picture turns and mirrors in the view only, never the file. The keys `edit.image.rotate`, `edit.image.flip` and `view.grayscale` are bound in the window. Audio never opens in a preview window, in Eagle or falcon. Grayscale is the window's own flag (`PreviewWin::gray`), off at start and kept while stepping items, on a loader of the window's own (`PreviewWin::loader`), as the main window's `modes.grayscale` stays its own and grays only its grid and viewer, as in Eagle. Tests cover the write-or-view rule, a turned view asking for no sharp render, grayscale surviving a step and the loader following forgets, but none of this has been seen on screen. Gaps: View ▸ Grayscale in the app menu bar always acts on the main window (only the key and the window's right-click menu act on a preview window); the web and 3D panes are not grayed in either window, where Eagle's preview CSS grays iframes | local |
 | Copy, copy path, copy link, reveal in Finder, open in default app | Done | Copy, Copy File Path, Copy ▸ Eagle Link, Reveal in Finder, Open in Default App | local |
-| Copy or save the current video frame | Done | Preview window video player: Copy Frame, Save Frame… | local |
+| Copy or save the current video frame | Partial | Preview window video player: Copy Frame as Eagle; Save Frame… writes a PNG through a file dialog, where Eagle's `videoScreenShot` (`E/js/preview-window.js`) adds a JPEG item to the library | local |
 | Reveal in Eagle (select the item in the main window) | Done | Show in Falcon | local |
 
 ### 16. Grid hover behaviours
@@ -820,7 +820,7 @@ Eagle columns come from `config.js` (`SUPPORT_FORMATS_DARWIN`), `E/js/thumbs/thu
 
 Ranked by how often a user would notice them.
 
-1. ~~**Viewers cover the whole window (Missing).** In Eagle, every viewer opens between the sidebar and inspector (`index.html:1007`). Falcon does this only for PDFs (`F/app.rs:3392`). This affects image, GIF, video, audio, font, text, 3D and special-format viewing.~~ Fixed.
+1. ~~**Viewers cover the whole window (Missing).** In Eagle, every viewer opens between the sidebar and inspector (`index.html:1007`). Falcon does this only for PDFs. This affects image, GIF, video, audio, font, text, 3D and special-format viewing.~~ Fixed.
 2. ~~**No toggle for sidebar and inspector inside the viewer (Missing)** (`toggle-all-btn`).~~ Fixed.
 3. ~~**Image resolution capped at 3072 px (Partial).** Zooming into large photos and SVGs is soft (`F/loader.rs:26`).~~ Fixed.
 4. ~~No GIF frame player.~~ Fixed.
@@ -845,7 +845,7 @@ Ranked by how often a user would notice them.
 23. ~~**Space opens the full viewer instead of Eagle's inline quick preview (Partial).**~~ Fixed.
 24. ~~**No position counter, prev/next buttons or first/last-item tips in the viewer bar (Missing).**~~ Fixed.
 25. ~~**Video gaps (Missing / Partial).** No seek-bar hover thumbnail, flip and rotate, subtitles, volume and seek tip overlay, or hold-to-repeat skip.~~ Fixed.
-26. **RAW, TIFF, TGA, HEIC, AVIF, JXL and design formats rely on QuickLook (Partial).** This works only on macOS and depends on the machine. PSD, PSB and HEIC have their own readers; there is no RAW embedded-preview extraction and no HDR exposure.
+26. **Design formats rely on QuickLook (Partial).** This works only on macOS and depends on the machine. PSD, PSB, HEIC, TIFF and TGA have their own readers, RAW shows its embedded preview (mrw and raw files with none get no thumbnail), and HDR and EXR are tone mapped with an exposure slider.
 27. ~~**No "cannot preview" page with an Open With button, and no "too large" message (Partial).**~~ Fixed.
 28. ~~**Long images open fitted to the window instead of to the width (Missing).**~~ Fixed.
 29. ~~**No "double-click opens in the default app" preference (Missing).**~~ Fixed.
@@ -860,7 +860,7 @@ Every falcon status below comes from reading falcon's code, not from its ROADMAP
 
 Path shorthand:
 - Eagle: `B` = `app/app/app.bundle.js`, `R` = `app/app/js/rule-match.js`, `D/` = `app/app/js/directives/`, `en` = `i18n/en.js`, `idx` = `app/app/index.html`.
-- Falcon: `S` = `crates/falcon-library/src/search.rs`, `SM` = `.../smart.rs`, `M` = `.../model.rs`, `E` = `.../edit.rs`, `A` = `crates/falcon-app/src/app.rs`, `L` = `.../logic.rs`, `O` = `.../organize.rs`, `OU` = `.../app/organize_ui.rs`, `FU` = `.../app/filters_ui.rs`, `DV` = `.../app/duplicates_view.rs`.
+- Falcon: `S` = `crates/falcon-library/src/search.rs`, `SM` = `.../smart.rs`, `M` = `.../model.rs`, `E` = `.../edit.rs`, `O` = `crates/falcon-app/src/organize.rs`. Other falcon paths are relative to `crates/falcon-app/src/`.
 
 Status values: Done = works as in Eagle. Partial = exists but is missing options or behaves differently. Missing = not there.
 
@@ -868,7 +868,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| Type to search the current view, with a short debounce | Done | `ui/toolbar/mod.rs` search_field; `logic/scope.rs` visible_in | local |
+| Type to search the current view, with a short debounce | Done | `ui/toolbar/mod.rs` search_field; `logic/scope.rs` visible_in; no debounce, the query applies each frame | local |
 | Space between words means AND | Done | `S:115` Query::parse | local |
 | `OR` and `\ | \ | ` mean OR | same | Done | `S:115` | local |
 | A leading `-word` excludes matches | Done | `S:161` | local |
@@ -1014,7 +1014,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Add to Quick Access | Done | `ui/organize.rs` smart_row | local |
 | Duplicate a smart folder | Done | `smart::duplicate_smart_folder` | local |
 | Description | Done | Edited in the inspector when a smart folder is open and nothing is selected (Eagle edits it there too, not in the rules dialog) | local |
-| Several conditions, each with its own Any/All and true/false (NOT), AND-ed together | Done | `smart_draft.rs` drafts/conditions and `organize_ui::smart_conditions_ui`: every condition is edited, each with must/must-not and all/any | local |
+| Several conditions, each with its own Any/All and true/false (NOT), AND-ed together | Done | `smart_draft.rs` drafts/conditions and `ui/organize.rs` `smart_conditions_ui`: every condition is edited, each with must/must-not and all/any | local |
 | Editing a smart folder keeps its other conditions and rules | Done | Untouched conditions and rules are written back verbatim, edited ones keep their unknown keys, and rules the dialog can't show stay as read-only Unsupported rows until deleted (`smart_draft.rs`, test `eagle_smart_folder_survives_an_edit`) | local |
 | Live "N items found" count while editing rules | Done | `smart_count.rs` / `smart::count_draft` on a worker, debounced 250 ms, with the parent's conditions | local |
 | Batch rename, recolour or delete several smart folders | Done | Multi-smart-folder menu in `folders_ui`, looping the `smart.rs` calls in one undo step | local |
@@ -1022,7 +1022,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Rule: name, URL, note, with equals, contains, excludes, begins with, ends with, empty, not empty | Done | `smart.rs` text rules; every method is in the dialog for each text property. Begins/ends-with are anchored regexes as in Eagle | local |
 | Rule: regex method | Partial | `smart.rs` uses the `regex` crate, lower-casing as Eagle; no look-around or backreferences (documented difference) | local |
 | Rule: folder name | Done | `SM:111`, `crates/falcon-library/src/smart_draft.rs` PROPERTIES, `ui/organize.rs` rule_fields_ui | local |
-| Rule: folders (in any, all, equal, excludes, empty, not empty) | Done | `smart.rs`; the dialog has a folder checklist (`organize_ui::rule_fields_ui`) | local |
+| Rule: folders (in any, all, equal, excludes, empty, not empty) | Done | `smart.rs`; the dialog has a folder checklist (`ui/organize.rs` `rule_fields_ui`) | local |
 | Rule: tags (any, all, equal, excludes, empty, not empty) | Done | `SM:124`, `crates/falcon-library/src/smart_draft.rs` PROPERTIES, `ui/organize.rs` rule_fields_ui (typed list, no tag picker) | local |
 | Rule: type (is, is not; extensions and groups) | Done | `SM:126` | local |
 | Rule: rating (is, is not, contains) | Done | `smart.rs` rating, including "contains" over the stars as text; all three in the dialog | local |
@@ -1068,7 +1068,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | --- | --- | --- | --- |
 | Preview; double-click to open | Done | `ui/inspector/mod.rs` item_inspector | local |
 | Colour palette swatches | Done | `ui/inspector/mod.rs` item_inspector, palette | local |
-| Click a swatch to find items of similar colour | Done | `ui/inspector/mod.rs` item_inspector, swatch_menu | local |
+| Right-click a swatch to find items of similar colour | Done | `ui/inspector/mod.rs` item_inspector, swatch_menu | local |
 | Copy the colour as HEX, RGB or RGBA | Done | Swatch left click opens the menu: HEX, RGB, RGBA, HSL, HSV, HWB, CMYK (`colors.rs`); right click filters by the colour, as Eagle's `openColorContextMenu` and `filterWithColor` | local |
 | Set a palette colour as the primary colour (`marked`) | Done | Stored as Eagle writes it; colour search matches a marked colour under ΔE2000 30 as Eagle; smart-folder colour rules use Eagle's stricter test without it, as Eagle | local |
 | Re-analyse colours | Done | `image_edit.rs:107` Refresh Palette | local |
@@ -1196,7 +1196,7 @@ Ranked by user impact. Data-loss and silent-mismatch bugs come first, then every
 23. ~~**Filter bar gaps**: no Filter Lock toggle (falcon always keeps the filter and search when switching views), no add or pin filters, no ratio shapes (4:3, 16:9, custom), no counts for type, shape and rating.~~ Fixed.
 24. ~~Global sort lacks Duration and Random.~~ Fixed.
 25. ~~**Rating gaps**: no rating shortcuts (0-5) and no rating toast.~~ Fixed.
-26. ~~Palette gaps.~~ Fixed; colour search still ignores the primary colour.
+26. ~~Palette gaps.~~ Fixed: colour search matches a marked primary colour under ΔE2000 30, as Eagle.
 27. ~~No change-extension in the inspector; URL isn't validated; no Open Link button.~~ Fixed.
 28. ~~Recently Used isn't a list of opened items; Uncategorized ignores stale folder ids.~~ Fixed (R reshuffles Random).
 29. ~~**Folder deletion**: the trash checkbox can now be unticked; there's no move confirmation, and Touch ID unlock is missing.~~ Fixed.
@@ -1214,7 +1214,7 @@ Status meanings: **Done** means it works in the falcon app, or the API for API r
 
 Two cross-cutting facts explain many rows:
 - Falcon's native menu bar (`menu.rs`) carries File, Edit, Find, Organize, View, Window and Help; Eagle's online and plugin entries are left out.
-- Falcon's `Prefs` struct (`crates/falcon-app/src/prefs.rs:21-35`) holds six fields: hover zoom, IPTC keywords, API on/off, API port, collect folder and theme. The Preferences window has four sections: General, Preview, Shortcuts and Developer (`prefs.rs:138-147`). Every other Eagle setting has no switch in falcon. Where falcon hard-codes the behaviour, the row says so.
+- Falcon's `Prefs` struct (`crates/falcon-app/src/prefs.rs`) holds the app's settings, and the Preferences window has ten panes: General, Sidebar, Controls, Preview, Screenshot, Shortcuts, Notification, Password, Auto-Import and Developer. §6 lists every Eagle setting and the few falcon has no switch for.
 
 ---
 
@@ -1530,7 +1530,7 @@ Rows marked "not counted" are features Eagle 4.0.0 does not have.
 
 Ranked by how often a user would hit the gap, and the risk if they do.
 
-1. ~~**Dropping a `.library` folder imports its insides as items.** It should open the library or be refused. This is a data hazard (`app.rs:864-878`).~~ Fixed.
+1. ~~**Dropping a `.library` folder imports its insides as items.** It should open the library or be refused. This is a data hazard.~~ Fixed.
 2. ~~**Folder import keeps no structure.** Dropped folders are flattened into the current folder, and there is no "Import Folders" dialog.~~ Fixed.
 3. ~~No duplicate check on import.~~ Fixed.
 4. ~~**Auto-backup and restore are not wired into the app.** Backups happen only through the CLI, and the app opens with `Library::open` rather than `open_or_restore`, so a damaged `metadata.json` makes the library unusable.~~ Fixed.
@@ -1548,14 +1548,14 @@ Ranked by how often a user would hit the gap, and the risk if they do.
 16. ~~**Unsupported formats are imported silently** instead of being refused with a message.~~ Fixed.
 17. ~~**The collect window is thin**: no multi-folder, recent folders, new folder, name, description or tags.~~ Fixed.
 18. ~~**Library list management is missing**: clear history, remove from list, library icon, and the missing-library retry or relocate screen.~~ Fixed.
-19. ~~App password lock has no Touch ID.~~ Fixed; Touch ID on locked folders is still missing.
+19. ~~App password lock has no Touch ID.~~ Fixed, and for locked folders too.
 20. ~~Missing API routes.~~ Fixed.
 21. ~~**Hard-coded behaviours need preference switches**: font style tag, video autoplay, loop short clips, hover video preview, saved playback position, sidebar counts.~~ Fixed.
 22. ~~**Missing Controls and Preview settings**: middle button, and the image settings not yet wired (see §6).~~ Fixed.
 23. ~~**Sidebar pane is missing**: show or hide sections, and double-click to rename or collapse.~~ Fixed.
-24. ~~**Notifications**: system pop-ups and sound effects per event are done; the Notification Center is still open.~~ Fixed; the Notification Center is not an Eagle 4 feature.
-25. **General settings**: vibrancy is Partial and GPU acceleration is not built (no switch to offer); language, UI zoom, launch at login, Dock icon, menu bar icon and auto-select after import are built.
+24. ~~**Notifications**: system pop-ups and sound effects per event are done; the Notification Center is still open.~~ Fixed; the Notification Center is not an Eagle 4 feature, and falcon has one as an addition (main window §11).
+25. **Settings**: vibrancy, the screenshot notice, the App menu's Color Space and the sound effects (extension switch hidden) are Partial; GPU acceleration is not built (no switch to offer); plugin shortcuts and plugin developer tools wait on the plugin system. Language, UI zoom, launch at login, Dock icon, menu bar icon and auto-select after import are built.
 26. ~~**Localisation**: English only, against Eagle's eight languages.~~ Fixed.
 27. ~~**Library safety checks are missing**: newer-version refusal, warnings for Desktop or Documents paths, read-only paths and slow disks, disk-space checks, and confirmation for large folders or deep trees.~~ Fixed.
-28. ~~"Empty cache and reload" is missing.~~ Fixed; "Clear Invalid Content" is not built (damaged items are skipped and reported).
-29. **Smaller gaps still open**: the plugin system and plugin development (out of scope) and the Color Space menu (Partial, not seen on screen). Loading progress, the welcome flow, Preferences search, the last pane, the Share sheet, WebP conversion, saving the video frame, the menu bar icon, Inboard import, the API playground, the debug report and error logs are built.
+28. ~~"Empty cache and reload" is missing.~~ Fixed, and "Clear Invalid Content" is built (`clear_invalid.rs`).
+29. **Smaller gaps still open**: the plugin system and plugin development (out of scope) and the Color Space menu (Partial, not seen on screen). Loading progress, the welcome flow, Preferences search, the last pane, the Share sheet, WebP conversion, saving the video frame (Partial in the preview window), the menu bar icon, Inboard import, the API playground, the debug report and error logs are built.
