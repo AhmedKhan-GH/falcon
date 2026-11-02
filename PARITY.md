@@ -785,23 +785,23 @@ Eagle columns come from `config.js` (`SUPPORT_FORMATS_DARWIN`), `E/js/thumbs/thu
 | dds | Image of thumbnail | QL | QuickLook render shown in the viewer |
 | hdr | Image of thumbnail | QL | Tone-mapped viewer with an exposure slider (`falcon_library::hdr`) |
 | exr | Image of thumbnail | QL | Tone-mapped viewer with an exposure slider (`falcon_library::hdr`) |
-| RAW: 3fr arw cr2 cr3 crw dng erf mrw nef nrw orf pef raf raw rw2 sr2 srw x3f | RAW viewer (embedded full preview) | QL | Embedded full-size preview, correctly oriented |
+| RAW: 3fr arw cr2 cr3 crw dng erf mrw nef nrw orf pef raf raw rw2 sr2 srw x3f | RAW viewer (embedded full preview) | Embedded camera preview at import (crw, mrw, orf, raf, raw, srw, x3f included), else QL | Embedded full-size preview, correctly oriented. Gap: mrw and raw files with no embedded JPEG get no thumbnail (needs a RAW decoder) |
 | psd, psdt, psb | Native high-res viewer | QL (size from the file header) | Merged image decoded by falcon at full resolution with ICC colour, tiled; QuickLook when the file has no composite |
 | ai, ait | Native high-res viewer | PDFKit, QL | PDF-compatible files: PDFKit draws the part on screen at the size shown, at any zoom. PostScript-only files: QuickLook render, redrawn at each zoom level up to 8192 px |
 | eps | Image of thumbnail | QL | QuickLook render (macOS 14+ has no EPS renderer) |
 | xd | Image of thumbnail | QL if available | QuickLook render where the app's generator is installed |
-| sketch | Image of thumbnail | QL if available | QuickLook render where the app's generator is installed |
+| sketch | Image of thumbnail | In-file preview (QL first) | QuickLook render where the app's generator is installed |
 | fig | Image of thumbnail | QL if available | QuickLook render where the app's generator is installed |
 | af, afdesign, afphoto, afpub | Image of thumbnail | QL if available | QuickLook render where the app's generator is installed |
 | c4d, blend, skp, dwg, cdr, clip, prd, skt | Image of thumbnail | QL if available | QuickLook render where the app's generator is installed |
 | pxd, graffle, mindnode | Image of thumbnail | QL if available | QuickLook render where the app's generator is installed |
-| xmind | Image of thumbnail | QL if available | QuickLook render where the app's generator is installed |
+| xmind | Image of thumbnail | In-file preview (QL first) | QuickLook render where the app's generator is installed |
 | eddx, emmx | Image of thumbnail | QL if available | QuickLook render where the app's generator is installed |
 | indd, indt, idml | Image of thumbnail | QL if available | QuickLook render where the app's generator is installed |
 | doc, docx | Image of thumbnail | QL | QuickLook render |
 | xls, xlsx | Image of thumbnail | QL | QuickLook render |
 | ppt, pptx, potx | Native high-res viewer | QL | QuickLook render, redrawn at each zoom level up to 8192 px |
-| key, numbers, pages | Image of thumbnail | QL | QuickLook render |
+| key, numbers, pages | Image of thumbnail | QL, else the preview picture inside the package | QuickLook render. Gap: package-style key files with no preview picture get no thumbnail |
 | pdf | pdf.js reader in main window | QL | PDFKit reader in main window (macOS) |
 | txt | Editable text editor | None | Editable text with autosave (`textdoc.rs`) |
 | ttf, otf, ttc, woff, woff2 | Font viewer | Drawn specimen 600×600 | Font viewer (falls back if egui can't read the font) |
