@@ -49,7 +49,7 @@ impl App {
     pub(crate) fn inspector(&mut self, ui: &mut Ui, lib: &mut Library) {
         let full = ui.max_rect();
         let p = ui.painter().clone();
-        p.rect_filled(full, 0.0, t::p().panel);
+        p.rect_filled(full, 0.0, crate::vibrancy::side_fill(t::p().panel, self.vibrancy.live));
         p.vline(full.left() + 0.5, full.y_range(), Stroke::new(1.0, t::p().divider));
         let header = Rect::from_min_size(full.min, vec2(full.width(), t::BAR_HEIGHT));
         window_drag(ui, header, "inspector");

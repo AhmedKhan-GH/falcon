@@ -385,7 +385,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | --- | --- | --- | --- |
 | Themes: Auto, Light, Light Grey, Gray, Dark, Blue, Purple | Done | theme.rs:73-130, prefs.rs:312 | local |
 | Auto theme follows the system | Done | theme.rs:365 `follow_system` | local |
-| Transparency (vibrancy) effects | Missing | Not feasible: egui draws opaque surfaces; no NSVisualEffectView behind the window | local |
+| Transparency (vibrancy) effects | Partial | Preferences ▸ General checkbox, on by default as Eagle's `general.enableVibrancy`, persisted as `Prefs::vibrancy`, applied at once (`vibrancy.rs`): NSVisualEffectView behind the `CAMetalLayer`, sidebar and inspector at 75% alpha, everything else opaque. Unit tests cover the rules only. Gap: not yet seen on screen | local |
 | UI zoom level | Done | `Prefs::ui_zoom`, applied live | local |
 | Interface language | Done | `crate::locale`: Automatic or one of Eagle's eight languages, applied live to every pane, menu (incl. the native menu bar), toast, dialog and viewer; 1,837 keys incl. context keys (`tags::Uncategorized`…); falcon's own translations, machine-written and unreviewed (`locales/REVIEW.md`) | local |
 | File-type colours on extension badges | Done | theme.rs:447-468 | local |
@@ -451,7 +451,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 20. Right-click on the empty grid (layout panel), right-click on the title (ancestor jump), ⌥↑ to the parent folder, R to reshuffle Random and a refresh button.
 21. Video, GIF and audio hover-play in the grid.
 22. Window: closing now hides falcon (whole app) and the Dock icon brings it back; Full Screen and the app lock exist.
-23. Smaller items: ~~Color Space menu~~ (built), vibrancy, ~~sound effects~~ (done), palette-analysis status indicator, shortcut-list search is done, Error Logs / Debug Report are done.
+23. Smaller items: ~~Color Space menu~~ (built), vibrancy (Partial, not yet seen on screen), ~~sound effects~~ (done), palette-analysis status indicator, shortcut-list search is done, Error Logs / Debug Report are done.
 
 ## Viewers and file formats
 
@@ -1370,7 +1370,7 @@ Eagle panes (`app/js/preferences.js:659-788`): General, Sidebar, Controls, Previ
 | **General:** theme (Auto, Light, Light Grey, Gray, Dark, Blue, Purple) | Done | `crates/falcon-app/src/theme.rs:73-83`, `prefs.rs:312-321` (live preview, reverted on Cancel) | local |
 | General: language | Done | Preferences ▸ General ▸ Language (`Prefs::language`), Cancel reverts, `FALCON_LANG` override; whole interface converted | local |
 | General: UI zoom level (50 to 150%) | Done | `Prefs::ui_zoom` in Eagle's steps, previewed live; egui's own keyboard zoom is disabled so ⌘+/⌘− only zoom the grid | local |
-| General: transparency (vibrancy) effects | Missing | Not feasible (vibrancy) | local |
+| General: transparency (vibrancy) effects | Partial | Preferences ▸ General checkbox, on by default as Eagle's `general.enableVibrancy`, persisted as `Prefs::vibrancy`, applied at once (`vibrancy.rs`): NSVisualEffectView behind the `CAMetalLayer`, sidebar and inspector at 75% alpha, everything else opaque. Unit tests cover the rules only. Gap: not yet seen on screen | local |
 | General: show counts in the sidebar | Done | `Prefs::sidebar_counts` | local |
 | General: menu bar icon | Done | `tray.rs` status item with its General switch | local |
 | General: keep the Dock icon after the window closes | Done | Pref on by default (Eagle's `keepDockIcon`); off leaves the Dock on close while the menu bar icon is shown, or quits without one | local |

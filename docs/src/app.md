@@ -697,6 +697,7 @@ Edits stay in a draft until Save (also ⌘↩) or Apply; Cancel, the close butto
 | General | Language: Automatic, English, 简体中文, 繁體中文, 日本語, 한국어, Deutsch, Español, Русский | `general.language`, empty by default (the system's language); its `i18n/` folder has the same eight | The same eight with falcon's own translations, stored as `language` (`auto` or a code such as `zh_CN`). Automatic takes the first of macOS's preferred languages that falcon has, else English. Previewed at once, menu bar included, and switched back on Cancel. Every pane, menu, dialog, toast and viewer follows it (see [Localisation](localisation.md)) |
 | General | Show item counts in the sidebar | `general.showSidebarBadge`, on | Same; off hides every count beside sidebar rows (nav rows, Quick Access, smart folders, folders) |
 | General | Show the sidebar, show the inspector | View menu toggles, not preferences | Same flags as the panel buttons |
+| General | Blur the desktop behind the sidebar and inspector | `general.enableVibrancy` (its transparency checkbox), on by default | `Prefs::vibrancy`, on by default and on for older saved state; macOS only. See [Transparency effects](#transparency-effects) |
 | General | Open Falcon when you log in | Eagle's login item option | A Startup block. Registers the app with `SMAppService` (`login_item.rs`, macOS 13 or later). The state is not saved in the preferences: the system keeps it, and it is read each time Preferences opens, so a change made in System Settings ▸ General ▸ Login Items shows. Save or Apply registers or unregisters it, and a failure shows as an error toast with the system's message. When the system wants the user to allow it, a note points to Login Items. It only works from the app bundle (`scripts/bundle.sh`); under `cargo run`, on older macOS and on other systems the checkbox is disabled with the reason. The older `LSSharedFileList` API is not used |
 | General | Keep Falcon in the Dock after closing its window | Eagle's Dock icon option, on by default | `Prefs::keep_dock_icon`, on by default and on for older saved state. On, closing the window hides the app and the Dock icon brings it back. Off, closing the window also takes falcon out of the Dock while the menu bar icon is shown (its Show falcon, a global key or opening the app again puts it back); with the menu bar icon off nothing could bring it back, so closing the window quits instead (pending saves are written first) |
 | General | Select the new items after importing | `general.autoSelect`, on by default. When a batch finishes, the new items shown in the open view are selected (not in the viewer or a Random view, and only up to 1,000); a single new item is scrolled to, also with the setting off | Same rule, applied when falcon's batch finishes rather than per Eagle refresh |
@@ -754,7 +755,20 @@ What Eagle does, from `js/default-preferences.js`, `preferences.html`, `js/prefe
 - The window's own size is set in Eagle's main process, which is not in the readable bundle; falcon's 720 × 500 pt is a guess (inferred).
 - Built in falcon since: the menu bar icon option, the collect modal for screenshots, and screenshots with their keys, format, quality, tag, clipboard and @2x settings.
 - Built in falcon since: sound effects (see below).
-- Not built in falcon: vibrancy, GPU, proxy, the AI and MCP panes.
+- Not built in falcon: GPU, proxy, the AI and MCP panes.
+
+### Transparency effects
+
+Eagle stores `general.enableVibrancy`, `'true'` by default, and sets a `vibrancy` attribute on each window's root element (`js/default-preferences.js`, `js/preferences.js`, `preferences.html`, `index.html`, seen). In its main window on macOS the attribute only changes `--box-background` and `--box-background-blur`, the blurred background of menus, boxes and the sidebar when it slides in on hover (`style/base/_color.scss`, `style/components/_sidebar.scss`, seen); the translucent `--color-theme-75` page background is commented out in `style/app.scss` and live only in Preferences and two smaller windows (`style/preferences.scss`, seen). How its main process configures the Electron window is in compiled bytecode and not read.
+
+Falcon's checkbox, in the General pane's Window block, makes the sidebar and inspector translucent over the macOS blur, which is a wider use than Eagle's main window makes of it (inferred from the above). `vibrancy.rs` holds the rules:
+
+- The window is always created transparent, since eframe fixes the surface's alpha mode at creation. An `NSVisualEffectView` (Sidebar material, blending behind the window, following the window's active state, light or dark after falcon's theme) is a subview of the content view and sits under wgpu's `CAMetalLayer` and any web page view. It lets clicks through.
+- The sidebar and inspector are filled at 75%, the opacity of Eagle's `--color-theme-75`. Everything between them stays opaque: one rectangle in the main colour is laid under the frame, and egui's blending never lowers alpha already in the frame, so text, thumbnails and viewers can't show the desktop through. Text in the side panels is drawn over the fill and is more opaque than it. Popups and dialogs keep their opaque fills. The Collect and Preview windows are not translucent.
+- Save or Apply takes effect at once, without a relaunch. Off, the view is hidden and the layer and window are opaque again. Falcon also falls back to opaque side panels if it can't find wgpu's layer.
+- Color Space still applies: it and the blur both find the `CAMetalLayer` the same way, and the blur leaves the layer's colour space alone.
+
+The effect has not been checked on screen yet.
 
 ### Sound effects
 

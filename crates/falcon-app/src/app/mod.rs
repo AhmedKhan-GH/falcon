@@ -110,6 +110,7 @@ pub struct App {
     /// used falcon before).
     pub(crate) welcomed: bool,
     pub(crate) prefs: crate::prefs::Prefs,
+    pub(crate) vibrancy: crate::vibrancy::Vibrancy,
     /// Search scope, pinned filters and Go to Folder history.
     pub(crate) search: crate::search_state::SearchPrefs,
     pub(crate) prefs_window: crate::prefs::Window,
@@ -250,6 +251,7 @@ impl App {
             dialogs: Default::default(),
             welcomed: true,
             prefs: Default::default(),
+            vibrancy: Default::default(),
             search: Default::default(),
             prefs_window: Default::default(),
             lock: Default::default(),
@@ -376,6 +378,10 @@ impl eframe::App for App {
         false
     }
 
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        crate::vibrancy::clear_color(self.vibrancy.live, t::p().main)
+    }
+
     fn ui(&mut self, ui: &mut Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         // The red button or ⌘W on the window: like Eagle, falcon stays
@@ -408,6 +414,7 @@ impl eframe::App for App {
         if ctx.input(|i| i.viewport().minimized) == Some(true) {
             self.hover_media.stop_all();
         }
+        self.vibrancy.begin_frame(ui);
         if self.lock.is_locked() {
             // Nothing but the lock screen acts while locked.
             let _ = crate::menu::take_clicks();
@@ -420,6 +427,8 @@ impl eframe::App for App {
         // The web page sits over the viewer only in frames that asked for it.
         self.web.sync(&ctx, frame);
         crate::colorspace::sync(frame, self.prefs.color_space);
+        self.vibrancy.end_frame(ui, t::p().main);
+        self.vibrancy.sync(&ctx, frame, self.prefs.vibrancy);
         let state = self.menu_state(&ctx);
         self.menu_bar.sync(&ctx, &self.shortcuts, &state, &self.user_actions.menu_entries());
     }
@@ -565,6 +574,7 @@ impl App {
                 .frame(egui::Frame::NONE)
                 .show(ui, |ui| self.sidebar(ui, lib));
             self.sidebar_width = shown.response.rect.width();
+            self.vibrancy.sidebar_right = Some(shown.response.rect.right());
         }
         if show_inspector {
             let shown = egui::Panel::right("inspector")
@@ -575,6 +585,7 @@ impl App {
                 .frame(egui::Frame::NONE)
                 .show(ui, |ui| self.inspector(ui, lib));
             self.inspector_width = shown.response.rect.width();
+            self.vibrancy.inspector_left = Some(shown.response.rect.left());
         }
         egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t::p().main)).show(ui, |ui| {
             let full = ui.max_rect();

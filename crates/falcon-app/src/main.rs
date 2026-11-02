@@ -66,6 +66,7 @@ mod tray;
 mod theme;
 mod ui;
 mod library_icons;
+mod vibrancy;
 mod watch;
 mod web_archive;
 mod webview;
@@ -113,6 +114,7 @@ fn main() -> eframe::Result {
             .with_fullsize_content_view(true)
             .with_titlebar_shown(false)
             .with_title_shown(false)
+            .with_transparent(vibrancy::SUPPORTED)
             .with_inner_size([1280.0, 800.0])
             .with_min_inner_size([800.0, 500.0])
             .with_icon(eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon-256.png")).unwrap_or_default()),

@@ -32,6 +32,9 @@ pub struct Prefs {
     /// Eagle's App menu ▸ Color Space (its `colorSpace` setting): how the
     /// window's colours are matched to the display (`colorspace.rs`).
     pub color_space: crate::colorspace::ColorSpace,
+    /// Eagle's `general.enableVibrancy`: the sidebar and inspector are
+    /// translucent over the macOS blur (`vibrancy.rs`).
+    pub vibrancy: bool,
     /// Eagle's `habits.hoverZoom`: the zoom button on hovered cards.
     pub hover_zoom: bool,
     /// Eagle's `general.IPTC`: add IPTC/XMP keywords as tags on import.
@@ -301,6 +304,7 @@ impl Default for Prefs {
         Prefs {
             keep_dock_icon: true,
             color_space: crate::colorspace::ColorSpace::default(),
+            vibrancy: true,
             hover_zoom: true,
             keywords_as_tags: false,
             notify_duplicates: true,
@@ -1108,9 +1112,12 @@ fn general(p: &mut Page, d: &mut Draft, login: &crate::login_item::Status) {
             crate::locale::set(lang);
         }
     });
-    p.block(tr_key("Window"), &["sidebar", "inspector", "panel", "show", "menu bar", "icon", "tray", "status"], |ui| {
+    p.block(tr_key("Window"), &["sidebar", "inspector", "panel", "show", "menu bar", "icon", "tray", "status", "transparency", "transparent", "vibrancy", "blur", "translucent"], |ui| {
         ui.checkbox(&mut d.panels.sidebar, tr("Show the sidebar"));
         ui.checkbox(&mut d.panels.inspector, tr("Show the inspector"));
+        if crate::vibrancy::SUPPORTED {
+            ui.checkbox(&mut d.prefs.vibrancy, tr("Blur the desktop behind the sidebar and inspector"));
+        }
         if cfg!(target_os = "macos") {
             ui.checkbox(&mut d.prefs.menu_icon, tr("Show the falcon icon in the menu bar"));
         }

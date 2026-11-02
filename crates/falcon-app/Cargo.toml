@@ -37,7 +37,7 @@ objc2 = "0.6"
 objc2-foundation = "0.3"
 raw-window-handle = "0.6"
 block2 = "0.6"
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSDockTile", "NSProgressIndicator", "NSImageView", "NSImage", "NSView", "NSControl", "NSWorkspace", "NSApplication", "NSResponder", "NSMenu", "NSMenuItem", "NSEvent", "NSCell", "NSScreen", "NSWindow", "NSGraphics", "NSButton", "NSStatusBar", "NSStatusBarButton", "NSStatusItem"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSDockTile", "NSProgressIndicator", "NSImageView", "NSImage", "NSView", "NSControl", "NSWorkspace", "NSApplication", "NSResponder", "NSMenu", "NSMenuItem", "NSEvent", "NSCell", "NSScreen", "NSWindow", "NSGraphics", "NSButton", "NSStatusBar", "NSStatusBarButton", "NSStatusItem", "NSVisualEffectView"] }
 
 [dev-dependencies]
 serde_json = "1"
