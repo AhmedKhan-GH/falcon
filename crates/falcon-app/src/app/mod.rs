@@ -522,6 +522,7 @@ impl App {
             self.drop_files(dropped, crate::drop_pos::at_drop(&ctx));
         }
         self.pdf_keys(&ctx);
+        self.notice_history_keys(&ctx);
         self.folder_emoji.store.set_library(self.ws.root.as_deref());
         self.video_keys(&ctx);
         self.gif_keys(&ctx);
@@ -541,6 +542,9 @@ impl App {
         self.library_dialogs(&ctx);
         if self.collect.open {
             self.collect_window(&ctx);
+            for status in self.collect.take_statuses() {
+                self.notices.record(&status, crate::notice_history::Kind::Info, crate::notice_history::now());
+            }
         }
         self.merge_dialogs(&ctx);
         self.tools_dialogs(&ctx);

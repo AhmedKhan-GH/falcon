@@ -350,7 +350,8 @@ impl App {
         if std::mem::take(&mut self.open_switcher) {
             egui::Popup::open_id(ui.ctx(), egui::Popup::default_response_id(&resp));
         }
-        egui::Popup::menu(&resp).show(|ui| {
+        // Lined up with the sidebar rows rather than the window's edge.
+        egui::Popup::menu(&resp).at_position(Pos2::new(full.left() + 8.0, lib_row.bottom())).show(|ui| {
             ui.set_min_width(260.0);
             ui.label(RichText::new(tr("switcher::Open")).color(t::p().text_muted).size(12.0));
             let open: Vec<PathBuf> = self.others.iter(&self.ws).map(|w| w.root.clone().unwrap_or_default()).collect();
@@ -358,7 +359,7 @@ impl App {
             for (i, p) in open.iter().enumerate() {
                 ui.horizontal(|ui| {
                     self.switcher_icon(ui, p, false);
-                    let row = ui.add(egui::Button::selectable(i == slot, library_label(p, false)).min_size(vec2(200.0, 0.0)));
+                    let row = ui.add(egui::Button::selectable(i == slot, library_label(p, false)).right_text("").min_size(vec2(200.0, 0.0)));
                     row.context_menu(|ui| self.library_menu(ui, p, false));
                     if row.on_hover_text(p.display().to_string()).clicked() && i != slot {
                         self.switch_to = Some(Switch::Focus(i));
@@ -377,7 +378,7 @@ impl App {
                     let missing = !p.is_dir();
                     ui.horizontal(|ui| {
                         self.switcher_icon(ui, &p, missing);
-                        let row = ui.add(egui::Button::new(library_label(&p, missing)).min_size(vec2(200.0, 0.0)));
+                        let row = ui.add(egui::Button::new(library_label(&p, missing)).right_text("").min_size(vec2(200.0, 0.0)));
                         row.context_menu(|ui| self.library_menu(ui, &p, missing));
                         let tip = if missing { trf("The folder can't be found: {path}", &[("path", &p.display())]) } else { p.display().to_string() };
                         if row.on_hover_text(tip).clicked() {

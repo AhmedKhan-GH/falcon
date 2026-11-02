@@ -261,6 +261,8 @@ pub struct Collect {
     open_at: Option<Pos2>,
     filter: String,
     status: Option<(String, f64)>,
+    /// Status lines not yet copied to the Notification Center.
+    new_statuses: Vec<String>,
     /// Name, description and tags for the next collect.
     pub meta: Meta,
     tag_input: String,
@@ -529,7 +531,7 @@ impl Collect {
                 // screenshot's replace them in the fields.
                 let meta = self.meta.clone();
                 if let Some(p) = self.next_pending() {
-                    self.status = Some((trf("Saved {name}", &[("name", &meta.name.trim())]), now));
+                    self.set_status(trf("Saved {name}", &[("name", &meta.name.trim())]), now);
                     self.saved_meta = Some(meta);
                     return Some(Event::Save(p));
                 }
@@ -541,7 +543,7 @@ impl Collect {
             return event;
         }
         if self.waiting() && (!dropped.is_empty() || (pasted && !typing)) {
-            self.status = Some((tr("Save or discard the screenshot first").into(), now));
+            self.set_status(tr("Save or discard the screenshot first").into(), now);
             return None;
         }
         let chosen = target(rows, state.selected);
@@ -562,7 +564,7 @@ impl Collect {
                 Target::Folder(f) => tr_nf(n, "Adding {n} item to {folder}", "Adding {n} items to {folder}", &[("folder", f)]),
                 Target::Folders(c) => tr_nf(n, "Adding {n} item to {count} folders", "Adding {n} items to {count} folders", &[("count", c)]),
             };
-            self.status = Some((msg, now));
+            self.set_status(msg, now);
             return Some(Event::Files(dropped));
         }
         if pasted && !typing {
@@ -571,10 +573,22 @@ impl Collect {
                 Target::Folder(f) => trf("Pasting into {folder}", &[("folder", f)]),
                 Target::Folders(c) => trf("Pasting into {count} folders", &[("count", c)]),
             };
-            self.status = Some((msg, now));
+            self.set_status(msg, now);
             return Some(Event::Paste);
         }
         None
+    }
+
+    /// Shows a line in the status bar, and queues it for the Notification
+    /// Center.
+    fn set_status(&mut self, msg: String, now: f64) {
+        self.new_statuses.push(msg.clone());
+        self.status = Some((msg, now));
+    }
+
+    /// The status lines shown since the last call.
+    pub(crate) fn take_statuses(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.new_statuses)
     }
 
     /// The tag field: chips with ×, an input that takes Enter or a comma,

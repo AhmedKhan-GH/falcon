@@ -10,6 +10,19 @@ use crate::notice_history::{Kind, format_time, now};
 use crate::theme as t;
 
 impl App {
+    /// Esc closes the window before anything behind it reacts, unless a
+    /// dialog, a menu or a text field has the key.
+    pub(crate) fn notice_history_keys(&mut self, ctx: &egui::Context) {
+        if self.notice_window_open
+            && !self.any_modal_open()
+            && !egui::Popup::is_any_open(ctx)
+            && ctx.memory(|m| m.focused().is_none())
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
+        {
+            self.notice_window_open = false;
+        }
+    }
+
     /// Draws the window while `notice_window_open` is set. It does not block
     /// the app, and opens with or without a library.
     pub(crate) fn notice_history_ui(&mut self, ctx: &egui::Context) {
