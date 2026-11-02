@@ -14,13 +14,36 @@ use crate::theme::{self as t, mono};
 
 /// Height of the progress bar along the picture's bottom edge.
 const BAR: f32 = 3.0;
+/// Pictures narrower than this (a List row's) get the progress bar only:
+/// the sound button and the time label would cover them.
+const SMALL: f32 = 80.0;
+
+/// The thumbnail square at the left of a List row.
+pub(crate) fn list_thumb(row: Rect) -> Rect {
+    Rect::from_min_size(Pos2::new(row.left() + 6.0, row.top() + 5.0), Vec2::splat(row.height() - 10.0))
+}
 
 impl App {
+    /// Eagle's `.thumbnail`, the only part of a card that starts a hover
+    /// preview (or a GIF): the tile above the name, or a List row's square.
+    pub(crate) fn thumb_area(&self, card: Rect, caption: f32) -> Rect {
+        if self.ws.layout == Layout::List { list_thumb(card) } else { Rect::from_min_max(card.min, Pos2::new(card.right(), card.bottom() - caption)) }
+    }
+
+    /// Whether the pointer is on the card's thumbnail.
+    pub(crate) fn on_thumb(&self, ui: &Ui, card: Rect, caption: f32) -> bool {
+        ui.input(|i| i.pointer.hover_pos()).is_some_and(|p| self.thumb_area(card, caption).contains(p))
+    }
+
     /// Where a card's picture is drawn: the whole tile in waterfall and
     /// justified, the tile's inner square when the grid fills, else the
     /// picture fitted into it without enlarging (as `draw_image` does).
+    /// In the List layout it is the row's thumbnail square.
     fn card_picture(&self, item: &Item, card: Rect, caption: f32) -> Rect {
         let tile = Rect::from_min_max(card.min, Pos2::new(card.right(), card.bottom() - caption));
+        if self.ws.layout == Layout::List {
+            return list_thumb(card).shrink(2.0);
+        }
         if self.ws.layout != Layout::Grid {
             return tile;
         }
@@ -39,7 +62,12 @@ impl App {
     /// The hover preview of the hovered card, if it is a video or audio
     /// card: called once a frame for that card, after it is drawn.
     pub(crate) fn card_media(&mut self, ui: &Ui, lib: &Library, item: &Item, card: Rect, caption: f32, resp: &egui::Response) {
-        if self.ws.layout == Layout::List || self.ws.marquee.is_some() || ui.input(|i| i.pointer.primary_down()) && !resp.is_pointer_button_down_on() {
+        if self.ws.marquee.is_some() || ui.input(|i| i.pointer.primary_down()) && !resp.is_pointer_button_down_on() {
+            return;
+        }
+        // Only the thumbnail starts a preview, not the name under it; the
+        // sound button sits on it, so a pointer on that keeps it going.
+        if !self.on_thumb(ui, card, caption) && !self.hover_media.over_toggle(&item.id, ui.ctx().cumulative_frame_nr()) {
             return;
         }
         let ext = item.ext.to_lowercase();
@@ -61,7 +89,7 @@ impl App {
         let gray = self.modes.grayscale;
         let pointer = ctx.input(|i| i.pointer.hover_pos()).filter(|p| pic.contains(*p));
         let v = self.hover_media.video_for(&item.id, now, frame);
-        if now - v.since < hm::VIDEO_DELAY {
+        if !v.warm(now) {
             ctx.request_repaint_after(std::time::Duration::from_secs_f64(hm::VIDEO_DELAY - (now - v.since)));
             return;
         }
@@ -85,18 +113,8 @@ impl App {
         }
         ctx.request_repaint();
         let Some(duration) = strip.duration else { return };
-        // The first position seen only arms scrubbing; play starts at 0.
-        match (pointer, v.last_x) {
-            (Some(p), Some(x)) if p.x != x => {
-                v.t = logic::seek_time(p.x, pic.left(), pic.width(), duration);
-                v.moved_at = now;
-                v.label_until = now + hm::LABEL_SECS;
-            }
-            _ if now - v.moved_at >= hm::SCRUB_REST => v.t = hm::advance(v.t, dt, duration),
-            _ => {}
-        }
-        v.last_x = pointer.map(|p| p.x).or(v.last_x);
-        let (t_now, playing, label_until) = (v.t, now - v.moved_at >= hm::SCRUB_REST, v.label_until);
+        let playing = v.step(now, dt, pointer.map(|p| p.x), pic.left(), pic.width(), duration);
+        let (t_now, label_until) = (v.t, v.label_until);
         let (muted, volume) = (self.display.video_muted, self.video.volume);
         let path = item.original_path(lib.root());
         self.hover_media.video_sound(&item.id, &path, &item.ext.to_lowercase(), muted, playing, t_now, duration, volume);
@@ -107,6 +125,9 @@ impl App {
         p.rect_filled(pic, CornerRadius::same(4), Color32::BLACK);
         p.image(tex.id(), pic, uv, Color32::WHITE);
         progress(&p, pic, t_now / duration);
+        if pic.width() < SMALL {
+            return;
+        }
         if now < label_until {
             time_pill(&p, pic, &logic::time_label(t_now, duration));
         }
@@ -162,6 +183,16 @@ impl App {
             if let Some(hp) = ctx.input(|i| i.pointer.hover_pos()).filter(|q| pic.contains(*q)) {
                 p.line_segment([Pos2::new(hp.x, pic.top()), Pos2::new(hp.x, pic.bottom())], Stroke::new(1.0, Color32::from_white_alpha(140)));
             }
+        }
+        if pic.width() < SMALL {
+            if resp.clicked()
+                && duration > 0.0
+                && let Some(at) = resp.interact_pointer_pos().filter(|q| pic.contains(*q))
+            {
+                self.hover_media.player.seek(logic::seek_time(at.x, pic.left(), pic.width(), duration));
+            }
+            ctx.request_repaint_after(std::time::Duration::from_millis(50));
+            return;
         }
         let button = Rect::from_center_size(Pos2::new(pic.right() - 16.0, pic.top() + 16.0), Vec2::splat(24.0));
         let b = ui.interact(button, ui.scope_id().with(("hover-audio-play", &item.id)), Sense::click());

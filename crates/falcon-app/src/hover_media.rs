@@ -19,9 +19,10 @@ use std::sync::{Arc, mpsc};
 
 use eframe::egui::{self, TextureHandle};
 
-/// How long a video card is hovered before its preview starts (Eagle's
-/// 500 ms), and an audio card before it plays (Eagle's 200 ms).
-pub const VIDEO_DELAY: f64 = 0.5;
+/// How long a video card is hovered before its preview starts, and an
+/// audio card before it plays (Eagle's 200 ms). Eagle's video comment says
+/// 500 ms but the timer it sets is 250 ms, which is what runs.
+pub const VIDEO_DELAY: f64 = 0.25;
 pub const AUDIO_DELAY: f64 = 0.2;
 /// After the pointer stops moving, the preview plays on from where it was
 /// scrubbed to (Eagle's 200 ms).
@@ -86,6 +87,25 @@ pub fn audio_drift(audio: f64, t: f64, duration: f64) -> f64 {
 /// Whether the sound has to be moved to the picture's time.
 pub fn needs_reseek(audio: f64, t: f64, duration: f64) -> bool {
     audio_drift(audio, t, duration) > AUDIO_DRIFT
+}
+
+/// What the hover sound does this frame, given where the sound and the
+/// picture are.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SoundPlan {
+    /// Whether the sound plays (else it is held paused).
+    pub run: bool,
+    /// Whether it is first moved to the picture's time.
+    pub reseek: bool,
+}
+
+/// The sound follows the picture while the picture plays, and is held
+/// while the pointer scrubs. A soundtrack shorter than the picture is
+/// silent past its end instead of restarting over and over.
+pub fn sound_plan(playing: bool, audio_pos: f64, audio_len: Option<f64>, t: f64, duration: f64) -> SoundPlan {
+    let covered = audio_len.is_none_or(|l| t < l);
+    let run = playing && covered;
+    SoundPlan { run, reseek: run && needs_reseek(audio_pos, t, duration) }
 }
 
 /// The hover player's sound, reachable from the notification that the
@@ -208,6 +228,34 @@ pub struct VideoHover {
     pub sound_tried: bool,
 }
 
+impl VideoHover {
+    /// Whether the hover has lasted long enough for the preview to start.
+    pub fn warm(&self, now: f64) -> bool {
+        now - self.since >= VIDEO_DELAY
+    }
+
+    /// One frame of the preview's clock: the pointer's x (`None` off the
+    /// picture) across a picture `width` wide from `left`, `dt` seconds
+    /// since the last frame, over a clip of `duration`. The first position
+    /// seen only arms scrubbing; a move after it sets the time from the
+    /// pointer (and shows the label); once the pointer has rested for
+    /// [`SCRUB_REST`] the time runs on and loops. Returns whether the
+    /// preview is playing (false while scrubbing).
+    pub fn step(&mut self, now: f64, dt: f64, x: Option<f32>, left: f32, width: f32, duration: f64) -> bool {
+        match (x, self.last_x) {
+            (Some(p), Some(last)) if p != last => {
+                self.t = crate::logic::seek_time(p, left, width, duration);
+                self.moved_at = now;
+                self.label_until = now + LABEL_SECS;
+            }
+            _ if now - self.moved_at >= SCRUB_REST => self.t = advance(self.t, dt, duration),
+            _ => {}
+        }
+        self.last_x = x.or(self.last_x);
+        now - self.moved_at >= SCRUB_REST
+    }
+}
+
 /// The hovered audio card's playback.
 pub struct AudioHover {
     pub id: String,
@@ -276,6 +324,20 @@ impl HoverMedia {
 }
 
 impl HoverMedia {
+    /// After the grid is drawn in `frame`: ends the previews of cards not
+    /// hovered in it, at once (the pointer left, the card scrolled away or
+    /// a drag began), so a sound never plays on into the next frame.
+    pub fn end_frame(&mut self, frame: u64) {
+        if self.video.as_ref().is_some_and(|v| v.seen != frame) {
+            self.stop_video_sound();
+            self.video = None;
+        }
+        if self.audio.as_ref().is_some_and(|a| a.seen != frame) {
+            self.audio = None;
+            self.player.stop();
+        }
+    }
+
     /// Stops the sound of the video preview, if it is what the player holds.
     fn stop_video_sound(&mut self) {
         if let Some(v) = &self.video
@@ -317,6 +379,10 @@ impl HoverMedia {
             if self.player.loaded() == Some(id) {
                 self.player.stop();
             }
+            // Unmuting later loads the sound afresh.
+            if let Some(v) = self.video.as_mut().filter(|v| v.id == id) {
+                v.sound_tried = false;
+            }
             return;
         }
         if self.player.loaded() != Some(id) {
@@ -332,14 +398,11 @@ impl HoverMedia {
         }
         self.player.set_volume(volume);
         self.player.tick();
-        if playing {
-            if needs_reseek(self.player.position(), t, duration) {
-                self.player.seek(t);
-            }
-            if !self.player.is_playing() {
-                self.player.toggle();
-            }
-        } else if self.player.is_playing() {
+        let plan = sound_plan(playing, self.player.position(), self.player.track_duration(), t, duration);
+        if plan.reseek {
+            self.player.seek(t);
+        }
+        if plan.run != self.player.is_playing() {
             self.player.toggle();
         }
     }
@@ -395,6 +458,68 @@ mod tests {
         assert!(!needs_reseek(9.9, 0.1, 10.0), "across the loop point they are close");
         assert!(needs_reseek(9.0, 0.1, 10.0));
         assert!((audio_drift(9.9, 0.1, 10.0) - 0.2).abs() < 1e-9);
+    }
+
+    fn hover(now: f64) -> VideoHover {
+        VideoHover { id: "a".into(), since: now, strip: None, t: 0.0, last_x: None, moved_at: now, label_until: 0.0, seen: 0, sound_tried: false }
+    }
+
+    #[test]
+    fn a_video_card_starts_after_the_delay() {
+        let v = hover(10.0);
+        assert!(!v.warm(10.0) && !v.warm(10.24) && v.warm(10.25) && v.warm(12.0));
+        assert_eq!(AUDIO_DELAY, 0.2);
+    }
+
+    #[test]
+    fn the_pointer_scrubs_and_the_preview_plays_on_when_it_rests() {
+        let mut v = hover(0.0);
+        // Resting from the start: plays from 0, the first position only arms.
+        assert!(v.step(0.3, 0.1, Some(50.0), 0.0, 200.0, 20.0));
+        assert_eq!((v.last_x, v.label_until), (Some(50.0), 0.0));
+        assert!((v.t - 0.1).abs() < 1e-9);
+        // A move maps the pointer across the picture onto the clip.
+        assert!(!v.step(0.4, 0.016, Some(100.0), 0.0, 200.0, 20.0), "scrubbing is paused");
+        assert_eq!(v.t, 10.0);
+        assert!((v.label_until - 1.0).abs() < 1e-9);
+        assert!(!v.step(0.5, 0.016, Some(100.0), 0.0, 200.0, 20.0), "still inside the rest time");
+        assert_eq!(v.t, 10.0);
+        // Rested for 0.2 s: playing on from the scrubbed time.
+        assert!(v.step(0.61, 0.5, Some(100.0), 0.0, 200.0, 20.0));
+        assert!((v.t - 10.5).abs() < 1e-9);
+        // Off the picture the last position is kept; the left edge is time 0, the right the end.
+        assert!(!v.step(0.7, 0.016, Some(0.0), 0.0, 200.0, 20.0));
+        assert_eq!(v.t, 0.0);
+        v.step(0.8, 0.016, Some(500.0), 0.0, 200.0, 20.0);
+        assert_eq!(v.t, 20.0);
+        assert!(v.step(1.5, 0.5, None, 0.0, 200.0, 20.0));
+        assert!((v.t - 0.5).abs() < 1e-9, "past the end it loops");
+        assert_eq!(v.last_x, Some(500.0));
+    }
+
+    #[test]
+    fn the_sound_is_held_while_scrubbing_and_silent_past_a_short_track() {
+        let plan = |playing, pos, len, t| sound_plan(playing, pos, len, t, 10.0);
+        assert_eq!(plan(true, 5.1, None, 5.0), SoundPlan { run: true, reseek: false });
+        assert_eq!(plan(true, 1.0, None, 5.0), SoundPlan { run: true, reseek: true });
+        assert_eq!(plan(false, 1.0, None, 5.0), SoundPlan { run: false, reseek: false }, "paused while scrubbing");
+        assert_eq!(plan(true, 4.0, Some(4.0), 5.0), SoundPlan { run: false, reseek: false }, "the track is shorter");
+        assert_eq!(plan(true, 1.0, Some(4.0), 3.0), SoundPlan { run: true, reseek: true });
+    }
+
+    #[test]
+    fn a_card_left_in_a_frame_ends_in_that_frame() {
+        let mut h = HoverMedia::default();
+        h.video_for("a", 0.0, 5);
+        h.audio_for("x", 0.0, 5);
+        h.end_frame(5);
+        assert!(h.video.is_some() && h.audio.is_some(), "both were drawn in frame 5");
+        h.video_for("a", 0.0, 6);
+        h.end_frame(6);
+        assert!(h.video.is_some() && h.audio.is_none(), "the audio card was not drawn in frame 6");
+        h.end_frame(7);
+        assert!(h.video.is_none(), "the pointer left: no waiting for another frame");
+        assert!(h.player.loaded().is_none());
     }
 
     #[test]

@@ -228,7 +228,8 @@ impl App {
                 if let Some(hint) = self.broken_hint(ui, lib, item) {
                     resp.clone().on_hover_text(hint);
                 }
-                self.card_anim(ui, lib, item, card, resp.hovered());
+                let on_thumb = resp.hovered() && self.on_thumb(ui, card, caption);
+                self.card_anim(ui, lib, item, card, on_thumb);
                 match layout {
                     Layout::List => self.list_row(ui, lib, item, card, selected, resp.hovered(), n),
                     _ => self.card(ui, lib, item, card, caption, selected, resp.hovered()),
@@ -252,6 +253,7 @@ impl App {
         let offset = out.state.clamped_offset().y;
         let scrolled = ui.ctx().data(|d| d.get_temp::<f32>(ui.scope_id().with("grid-offset"))).is_some_and(|o| (o - offset).abs() > 0.5);
         ui.ctx().data_mut(|d| d.insert_temp(ui.scope_id().with("grid-offset"), offset));
+        self.hover_media.end_frame(ui.ctx().cumulative_frame_nr());
         self.hover_preview(ui, lib, hovered, scrolled, order_changed || clicked.is_some() || opened.is_some());
         self.ws.frame_jobs.extend(jobs);
         // Thumbnails first; large cards' originals after them.
@@ -474,7 +476,7 @@ impl App {
         } else if n % 2 == 1 {
             p.rect_filled(bg, t::RADIUS, t::p().row_hover.gamma_multiply(0.3));
         }
-        let thumb = Rect::from_min_size(Pos2::new(row.left() + 6.0, row.top() + 5.0), Vec2::splat(row.height() - 10.0));
+        let thumb = hover_media::list_thumb(row);
         p.rect_filled(thumb, CornerRadius::same(4), t::p().field);
         if let Some(bg) = logic::ThumbBg::of(item) {
             paint_thumb_bg(&p, thumb, bg);
