@@ -23,6 +23,7 @@ mod hints;
 mod hover_media;
 mod tag_sidebar;
 mod tags_page;
+pub(crate) use tags_page::{tag_flow, tag_margin, tag_toolbar};
 mod text_card;
 
 /// Grid geometry, measured from Eagle at 1280 x 800.

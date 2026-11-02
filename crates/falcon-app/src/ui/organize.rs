@@ -18,7 +18,7 @@ use crate::icons as ic;
 use crate::locale::{tr, tr_n, trf};
 use crate::logic::{self, Scope};
 use crate::theme::{self as t, font};
-use crate::ui::widgets::{chip, icon, icon_button};
+use crate::ui::widgets::{chip, galley, icon, icon_button};
 use crate::folder_icons;
 use crate::organize::{self, DropZone};
 use falcon_library::edit::SubfolderSort;
@@ -26,7 +26,7 @@ use falcon_library::model::{FolderOrder, SavedFilter};
 use falcon_library::smart::SmartFolder;
 use falcon_library::smart_draft::{Kind, PROPERTIES, RATINGS, RuleDraft, RuleFields, SHAPES};
 use crate::ui::filter_bar::filter_chip;
-use crate::ui::grid::{GRID_GAP, GRID_PAD_TOP, GRID_PAD_X};
+use crate::ui::grid::{GRID_GAP, GRID_PAD_TOP, GRID_PAD_X, tag_flow, tag_margin, tag_toolbar};
 
 /// State kept by the organising features.
 #[derive(Default)]
@@ -1371,33 +1371,14 @@ impl App {
 // Tag groups
 
 impl App {
-    /// The All Tags page's mode switch and New Group button.
-    pub(crate) fn tag_page_controls(&mut self, ui: &mut Ui, all: bool) {
-        ui.add_space(12.0);
-        // Grouping applies to the All list; the others are one list each.
-        if all {
-            ui.label(RichText::new(tr("Group by")).color(t::p().text_muted));
-            if ui.selectable_label(!self.tag_look.by_group, tr("Alphabet")).clicked() {
-                self.tag_look.by_group = false;
-            }
-            if ui.selectable_label(self.tag_look.by_group, tr("Tag Group")).clicked() {
-                self.tag_look.by_group = true;
-            }
-        }
-        if ui.button(format!("{}  {}", ic::PLUS, tr("New Group"))).clicked() {
+    /// The All Tags page's toolbar (`tag_toolbar`) and what its buttons do.
+    pub(crate) fn tag_page_toolbar(&mut self, ui: &mut Ui, count: usize, all: bool) {
+        let pressed = tag_toolbar(ui, &mut self.ws.tag_filter, count, all, &mut self.tag_look);
+        if pressed.new_group {
             self.ws.org.rename_new_group = true;
             self.ws.actions.push(org(OrgAction::CreateGroup(Vec::new())));
         }
-        ui.menu_button(trf("Sort: {sort}", &[("sort", &self.tag_look.sort.label())]), |ui| {
-            ui.set_min_width(180.0);
-            for s in crate::tags::TagSort::ALL {
-                let mark = if s == self.tag_look.sort { ic::CHECK } else { " " };
-                if ui.button(format!("{mark}  {}", s.label())).clicked() {
-                    self.tag_look.sort = s;
-                }
-            }
-        });
-        if ui.button(tr("Clear Tag History…")).on_hover_text(tr("Start the tag picker's Recent tags over")).clicked() {
+        if pressed.clear_history {
             self.ws.confirm = Some(Confirm::ClearTagHistory);
         }
     }
@@ -1429,9 +1410,7 @@ impl App {
 
     pub(crate) fn tag_chips(&mut self, ui: &mut Ui, lib: &Library, tags: &[(String, usize)]) {
         ui.add_space(2.0);
-        ui.horizontal_wrapped(|ui| {
-            ui.add_space(GRID_PAD_X);
-            ui.spacing_mut().item_spacing = vec2(8.0, 8.0);
+        tag_flow(ui, |ui| {
             for (tag, n) in tags {
                 self.tag_chip(ui, lib, tag, *n);
             }
@@ -1454,7 +1433,8 @@ impl App {
         let tx = if sec.is_some() { x + 18.0 } else { x };
         // Renaming happens in the page's sidebar row (`tag_sidebar.rs`).
         let title = sec.map_or(tr("Ungrouped"), |s| s.name.as_str());
-        ui.painter().text(Pos2::new(tx, cy), Align2::LEFT_CENTER, format!("{title}  ({n})"), font(14.0), t::p().text_muted);
+        let heading = galley(ui, &format!("{title}  ({n})"), font(14.0), t::p().text_muted, rect.right() - GRID_PAD_X - tx);
+        ui.painter().galley(Pos2::new(tx, cy - heading.size().y / 2.0), heading, t::p().text_muted);
         if resp.dnd_hover_payload::<DragTag>().is_some() {
             ui.painter().rect_stroke(rect.shrink2(vec2(GRID_PAD_X - 6.0, 0.0)), t::RADIUS, Stroke::new(1.5, t::p().primary), StrokeKind::Inside);
         }
@@ -1557,9 +1537,8 @@ impl App {
         if !editing && s.description.is_empty() {
             return;
         }
-        ui.horizontal(|ui| {
-            ui.add_space(GRID_PAD_X + 20.0);
-            let width = (ui.available_width() - GRID_PAD_X - 20.0).max(80.0);
+        tag_margin(ui, 20.0, |ui| {
+            let width = ui.available_width();
             if let (true, Some((_, buf))) = (editing, self.ws.org.group_describe.as_mut()) {
                 let te = ui.add(TextEdit::multiline(buf).id_salt(("group-describe", &s.id)).hint_text(tr("Add a description")).desired_rows(2).desired_width(width).font(font(13.0)));
                 if !te.has_focus() && !te.lost_focus() {
