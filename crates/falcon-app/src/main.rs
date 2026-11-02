@@ -44,6 +44,7 @@ mod notify;
 mod open_files;
 mod model3d;
 mod open_with;
+mod page_shot;
 mod prefs;
 mod progress_eta;
 mod share;

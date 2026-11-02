@@ -10,6 +10,10 @@ edition.workspace = true
 name = "falcon-app"
 path = "src/main.rs"
 
+[[test]]
+name = "page_shot"
+harness = false
+
 [dependencies]
 falcon-library = { path = "../falcon-library" }
 falcon-server = { path = "../falcon-server" }

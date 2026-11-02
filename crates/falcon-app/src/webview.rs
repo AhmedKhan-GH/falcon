@@ -36,15 +36,7 @@ pub fn is_web(ext: &str) -> bool {
     matches!(ext.to_lowercase().as_str(), "url" | "html" | "mhtml")
 }
 
-/// Whether `url` is an http or https address, the only kind a bookmark
-/// loads (a link file pointing at `file:`, `javascript:` or an app's own
-/// scheme is shown as a still instead).
-pub fn is_web_address(url: &str) -> bool {
-    let url = url.trim();
-    let lower = url.to_ascii_lowercase();
-    let rest = lower.strip_prefix("https://").or_else(|| lower.strip_prefix("http://"));
-    rest.is_some_and(|r| !r.is_empty()) && !url.chars().any(char::is_whitespace)
-}
+pub use crate::page_shot::is_web_address;
 
 /// The page for an item of `ext` with the stored `url`, whose file is
 /// `file`: bookmarks open their stored address, else the one in the file
