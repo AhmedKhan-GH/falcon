@@ -4,9 +4,10 @@
 //! Eagle walks `images/` and counts as invalid:
 //! - an `<id>.info` folder that isn't a loaded item and has no
 //!   `metadata.json`: the folder is removed;
-//! - a loaded item whose original file is gone, or whose folder holds
-//!   nothing but its `metadata.json`: the item is moved to the Trash (if it
-//!   isn't there already);
+//! - a loaded item whose original file is gone (whether or not its folder
+//!   holds anything else): the item is moved to the Trash (if it isn't
+//!   there already). An item whose original exists is never invalid, however
+//!   few files its folder holds;
 //! - a loaded item whose folder has gone altogether: it drops out when the
 //!   library is reloaded.
 //!
@@ -35,7 +36,7 @@ pub struct InvalidScan {
     pub scanned: usize,
     /// Folders that are no item and have no `metadata.json`.
     pub orphans: Vec<PathBuf>,
-    /// Items whose original is gone or whose folder is empty, not yet in
+    /// Items whose original is gone, not yet in
     /// the Trash.
     pub broken: Vec<String>,
     /// Items whose folder has gone.
@@ -47,11 +48,6 @@ impl InvalidScan {
     pub fn total(&self) -> usize {
         self.orphans.len() + self.broken.len() + self.gone.len()
     }
-}
-
-/// Files in `dir` other than `.DS_Store`.
-fn contents(dir: &Path) -> usize {
-    fs::read_dir(dir).map(|r| r.filter_map(|e| e.ok()).filter(|e| e.file_name() != ".DS_Store").count()).unwrap_or(0)
 }
 
 /// Scans the library at `root`, whose loaded items are `items`.
@@ -79,7 +75,7 @@ pub fn scan(root: &Path, items: &[Item]) -> InvalidScan {
         let dir = item.info_dir(root);
         if !dir.is_dir() {
             out.gone.push(item.id.clone());
-        } else if !item.is_deleted && (contents(&dir) <= 1 || !item.original_path(root).exists()) {
+        } else if !item.is_deleted && !item.original_path(root).exists() {
             out.broken.push(item.id.clone());
         }
     }
@@ -213,6 +209,25 @@ mod tests {
         }
         fs::write(item.info_dir(lib.root()).join(".DS_Store"), b"").unwrap();
         assert_eq!(scan(lib.root(), lib.items()).broken, [ids[3].clone()]);
+    }
+
+    #[test]
+    fn an_item_whose_original_exists_is_never_invalid() {
+        let (_d, lib, ids) = setup();
+        let item = lib.item(&ids[3]).unwrap().clone();
+        let dir = item.info_dir(lib.root());
+        let original = item.original_path(lib.root());
+        for e in fs::read_dir(&dir).unwrap() {
+            let p = e.unwrap().path();
+            if p != original {
+                fs::remove_file(p).unwrap();
+            }
+        }
+        // Only the original is left: one file, but the original exists.
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 1);
+        let s = scan(lib.root(), lib.items());
+        assert!(s.broken.is_empty());
+        assert_eq!(s.total(), 0);
     }
 
     #[test]
