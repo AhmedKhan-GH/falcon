@@ -668,7 +668,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Sidebar outline (bookmarks) | Done | `F/app/pdf_view.rs:1164-1192` | local |
 | Highlight the outline entry for the current page | Done | `pdf_view.rs` outline follows the page and scrolls to it | local |
 | Sidebar attachments list | Done | `falcon_pdf::Document::attachments` through CGPDF (EmbeddedFiles tree and file annotations); click saves the file | local |
-| Sidebar layers (optional content) | Partial | Listed with their default visibility (`Document::layers`); not switchable, PDFKit draws only the default configuration | local |
+| Sidebar layers (optional content) | Partial | A checkbox per layer redraws pages and thumbnails, Reset Layers returns to the default and each document starts at its own default (`Document::set_layers`, an in-memory incremental update PDFKit draws; pixel tests on generated two-layer PDFs: table, stream and encrypted files, and through the reader's worker). The sidebar itself hasn't been seen on screen. The list is flat rather than pdf.js's `/Order` tree with group labels, and printing ignores switched layers | local |
 | Find bar with previous/next, match count | Done | `F/app/pdf_view.rs:1286-1332` | local |
 | Find option: match case | Done | `F/app/pdf_view.rs:1310-1312` | local |
 | Find option: highlight all | Done | All hits always drawn (`F/app/pdf_view.rs:1059-1064`); no toggle | local |

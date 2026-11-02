@@ -43,7 +43,7 @@ Eagle's alias extensions import as the format they stand for, whatever macOS cal
 
 | Formats | Eagle | Falcon | Status |
 | --- | --- | --- | --- |
-| pdf | pdf.js reader inside the window | PDFKit reader inside the window: find, rotate, spreads, links, password, attachments, print | Partial: optional-content layers are listed but can't be switched |
+| pdf | pdf.js reader inside the window | PDFKit reader inside the window: find, rotate, spreads, links, password, attachments, switchable layers, print | Partial: the layers list is flat rather than the document's tree, and printing ignores switched layers |
 | txt | Editable text | Editable text with autosave | Done |
 | doc, docx, xls, xlsx, key, pages, numbers | Image of the thumbnail | QuickLook render | Done |
 | ppt, pptx, potx | High-resolution render | QuickLook, redrawn at each zoom level up to 8192 px | Done |

@@ -19,6 +19,8 @@ use falcon_library::Library;
 use falcon_library::model::Item;
 use falcon_pdf::{Document, Hit, Link, LinkTarget, OutlineEntry, SearchOptions};
 
+mod layers;
+
 use crate::app::App;
 use crate::ui::widgets::icon_button;
 use crate::icons as ic;
@@ -742,6 +744,8 @@ struct Job {
     turns: u8,
     /// Desaturated for the grayscale preview.
     gray: bool,
+    /// The generation of `LayerSwitches` it is drawn for.
+    layers: u32,
 }
 
 enum Req {
@@ -753,6 +757,8 @@ enum Req {
     Password(String),
     /// Write attachment `usize` to the file chosen.
     Save(usize, PathBuf),
+    /// Show these layers.
+    Layers(Vec<bool>),
 }
 
 enum Reply {
@@ -767,6 +773,8 @@ enum Reply {
     Links(usize, Vec<Link>),
     /// An attachment was written (to the path) or couldn't be.
     Saved(Result<PathBuf, String>),
+    /// The document's layers couldn't be switched.
+    LayersFailed,
 }
 
 /// A selection request: serial, page, drag start and end.
@@ -779,6 +787,8 @@ struct Pending {
     search: Option<(u64, String, SearchOptions)>,
     select: Option<SelectReq>,
     saves: Vec<(usize, PathBuf)>,
+    /// Only the latest choice matters, ahead of any drawing.
+    layers: Option<Vec<bool>>,
 }
 
 impl Pending {
@@ -789,11 +799,12 @@ impl Pending {
             Req::Select(g, p, a, b) => self.select = Some((g, p, a, b)),
             Req::Password(_) => {}
             Req::Save(i, path) => self.saves.push((i, path)),
+            Req::Layers(on) => self.layers = Some(on),
         }
     }
 
     fn idle(&self) -> bool {
-        self.queue.is_empty() && self.search.is_none() && self.select.is_none() && self.saves.is_empty()
+        self.queue.is_empty() && self.search.is_none() && self.select.is_none() && self.saves.is_empty() && self.layers.is_none()
     }
 }
 
@@ -813,7 +824,7 @@ fn work(path: &Path, rx: &Receiver<Req>, tx: &Sender<Reply>, ctx: &egui::Context
     };
     // A locked document waits for passwords until one opens it.
     let mut password: Option<String> = None;
-    let doc = loop {
+    let mut doc = loop {
         match Document::open_with_password(path, password.as_deref()) {
             Ok(d) => break d,
             Err(e) if e.needs_password() => {
@@ -862,6 +873,12 @@ fn work(path: &Path, rx: &Receiver<Req>, tx: &Sender<Reply>, ctx: &egui::Context
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => return,
             }
+        }
+        if let Some(on) = p.layers.take()
+            && doc.set_layers(&on).is_err()
+            && !send(Reply::LayersFailed)
+        {
+            return;
         }
         let reply = if let Some((i, dest)) = p.saves.pop() {
             Reply::Saved(doc.attachment_data(i).map_err(|e| e.0).and_then(|bytes| std::fs::write(&dest, bytes).map(|()| dest).map_err(|e| e.to_string())))
@@ -1025,6 +1042,8 @@ struct Open {
     properties: bool,
     /// The outline entry last highlighted, to scroll to a new one.
     outline_shown: Option<usize>,
+    /// Which layers are on.
+    layers: layers::LayerSwitches,
     /// Print was asked for this frame.
     print: bool,
     /// The pages are drawn for the grayscale preview.
@@ -1077,6 +1096,7 @@ impl Open {
             outline_shown: None,
             print: false,
             gray: false,
+            layers: layers::LayerSwitches::default(),
             notice: None,
         }
     }
@@ -1140,6 +1160,7 @@ impl Open {
                     self.password.clear();
                 }
                 Ok(Reply::Opened { sizes, outline, info }) => {
+                    self.layers = layers::LayerSwitches::new(&info.layers);
                     self.info = *info;
                     self.sizes = sizes.into_iter().map(|(w, h)| (w as f32, h as f32)).collect();
                     self.outline = outline;
@@ -1150,7 +1171,8 @@ impl Open {
                     }
                 }
                 Ok(Reply::Failed(e)) => self.status = Status::Failed(e),
-                Ok(Reply::Page(job, _)) if job.turns != self.turns || job.gray != self.gray => {}
+                Ok(Reply::Page(job, _)) if job.turns != self.turns || job.gray != self.gray || job.layers != self.layers.generation => {}
+                Ok(Reply::LayersFailed) => self.layers_failed(),
                 Ok(Reply::Page(job, Some(b))) => {
                     let img = egui::ColorImage::from_rgba_unmultiplied([b.width, b.height], &b.rgba);
                     let tex = ctx.load_texture(format!("pdf-{}-{}", job.page, job.key), img, egui::TextureOptions::LINEAR);
@@ -1621,7 +1643,7 @@ fn pages(o: &mut Open, ui: &mut Ui, area: Rect, jobs: &mut Vec<Job>) {
         let order = (a..=b).chain(a.checked_sub(1)).chain((b + 1 < n).then_some(b + 1));
         for i in order {
             if !o.broken.contains(&i) && !o.pages.contains((i, key)) && (settled || !o.pages.has_page(i)) {
-                jobs.push(Job { page: i, key, turns, gray: o.gray });
+                jobs.push(Job { page: i, key, turns, gray: o.gray, layers: o.layers.generation });
             }
         }
 
@@ -1784,7 +1806,7 @@ fn side_panel(o: &mut Open, ui: &mut Ui, side: Rect, tab: Tab, jobs: &mut Vec<Jo
             let sizes = o.shown_sizes();
             let widest = sizes.iter().map(|s| s.0).fold(1.0f32, f32::max);
             let tl = layout(&sizes, THUMB_W / (widest * UNIT), 26.0);
-            let (turns, gray) = (o.turns, o.gray);
+            let (turns, gray, layers) = (o.turns, o.gray, o.layers.generation);
             let current = o.current;
             let mut go = None;
             egui::ScrollArea::vertical().id_salt("pdf-thumbs").auto_shrink([false, false]).show_viewport(&mut child, |ui, viewport| {
@@ -1800,7 +1822,7 @@ fn side_panel(o: &mut Open, ui: &mut Ui, side: Rect, tab: Tab, jobs: &mut Vec<Jo
                         Some(tex) => {
                             p.image(tex.id(), r, Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)), Color32::WHITE);
                         }
-                        None => jobs.push(Job { page: i, key: THUMB_KEY, turns, gray }),
+                        None => jobs.push(Job { page: i, key: THUMB_KEY, turns, gray, layers }),
                     }
                     let stroke = if i == current { Stroke::new(2.0, t::p().primary) } else { Stroke::new(1.0, t::p().divider) };
                     p.rect_stroke(r.expand(2.0), 2.0, stroke, egui::StrokeKind::Outside);
@@ -1881,29 +1903,7 @@ fn side_panel(o: &mut Open, ui: &mut Ui, side: Rect, tab: Tab, jobs: &mut Vec<Jo
             }
         }
         Tab::Layers => {
-            // pdf.js's layers list. PDFKit draws the document's default
-            // configuration only, so the list shows which layers that has
-            // on without switching them.
-            egui::ScrollArea::vertical().id_salt("pdf-layers").auto_shrink([false, false]).show(&mut child, |ui| {
-                if o.info.layers.is_empty() {
-                    ui.add_space(8.0);
-                    ui.label(egui::RichText::new(tr("No layers")).font(font(12.0)).color(t::p().text_muted));
-                    return;
-                }
-                for l in &o.info.layers {
-                    ui.horizontal(|ui| {
-                        ui.add_space(8.0);
-                        let (mark, color) = if l.visible { ("●", t::p().text) } else { ("○", t::p().text_muted) };
-                        ui.label(egui::RichText::new(mark).font(font(11.0)).color(color));
-                        ui.add(egui::Label::new(egui::RichText::new(&l.name).font(font(12.0)).color(color)).truncate());
-                    });
-                }
-                ui.add_space(8.0);
-                ui.horizontal(|ui| {
-                    ui.add_space(8.0);
-                    ui.add(egui::Label::new(egui::RichText::new(tr("Shown as the document sets them; macOS's PDF engine can't switch layers.")).font(font(11.0)).color(t::p().text_muted)).wrap());
-                });
-            });
+            egui::ScrollArea::vertical().id_salt("pdf-layers").auto_shrink([false, false]).show(&mut child, |ui| o.draw_layers(ui));
         }
     }
 }
