@@ -72,7 +72,14 @@ fn resetting_a_cover_drops_only_cover_id() {
     let text = metadata(&lib);
     assert!(!text.contains("coverId"));
     // The remaining keys keep their order and values.
-    assert_eq!(text.replace(r#""modificationTime""#, ""), with.replace(r#","coverId":"ITEMID0000001""#, "").replace(r#""modificationTime""#, ""));
+    let no_times = |t: &str| {
+        let mut out = String::new();
+        for (i, part) in t.split(r#""modificationTime":"#).enumerate() {
+            out.push_str(if i == 0 { part } else { part.trim_start_matches(|c: char| c.is_ascii_digit()) });
+        }
+        out
+    };
+    assert_eq!(no_times(&text), no_times(&with.replace(r#","coverId":"ITEMID0000001""#, "")));
     let key = |t: &str, k: &str| t.find(k).unwrap();
     assert!(key(&text, "\"iconColor\"") < key(&text, "\"password\"") && key(&text, "\"password\"") < key(&text, "\"orderBy\""));
 }
