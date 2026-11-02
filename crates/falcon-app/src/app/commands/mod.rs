@@ -95,12 +95,23 @@ impl App {
                 logic::Zone::Content
             };
         }
+        // Behind a dialog no bare key or chord acts (Eagle's modals swallow
+        // them). The dialogs read their own Return, Esc and arrows, and
+        // text fields their typing; only Esc is left for the tag picker,
+        // which closes with it. ⌘Q is the menu's, not a command here.
+        if self.any_modal_open() {
+            let only_picker = self.ws.picker.open && !self.blocking_dialog_open();
+            if only_picker && ctx.memory(|m| m.focused().is_none()) && ctx.input(|i| i.key_pressed(Key::Escape)) {
+                self.ws.picker.open = false;
+            }
+            return;
+        }
         if pressed.contains(&C::Preferences) && !self.prefs_window.open {
             self.open_preferences();
         }
         // The duplicate dialog and Go to Folder take Return, Esc and the
         // arrows for themselves.
-        if self.prefs_window.open || self.about.open || self.ws.dup_dialog.is_some() || self.quick.is_open() || ctx.memory(|m| m.focused().is_some()) {
+        if ctx.memory(|m| m.focused().is_some()) {
             return;
         }
         pressed.retain(|c| *c != C::Preferences);
@@ -314,7 +325,7 @@ impl App {
         use crate::shortcuts::Page;
         crate::menu::State {
             library: self.ws.lib.is_some(),
-            modal: self.prefs_window.open || self.ws.dup_dialog.is_some() || self.lock.is_locked() || self.item_rename.is_some() || self.ws.ext_dialog.is_some() || self.quick.is_open() || self.ws.folders.picker.is_some(),
+            modal: self.any_modal_open() || self.lock.is_locked(),
             lockable: self.prefs.app_lock.is_some(),
             tag_clipboard: self.copied_tags.is_some(),
             last_folder: !self.recent_folders.is_empty(),

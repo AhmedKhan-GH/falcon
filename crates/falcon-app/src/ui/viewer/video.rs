@@ -493,7 +493,7 @@ impl App {
     pub(crate) fn video_keys(&mut self, ctx: &egui::Context) {
         let viewer = self.ws.viewer.as_deref();
         let (video, audio) = (viewer.is_some() && self.video.loaded() == viewer, viewer.is_some() && self.audio.loaded() == viewer);
-        if !(video || audio) || self.prefs_window.open || ctx.memory(|m| m.focused().is_some()) {
+        if !(video || audio) || self.any_modal_open() || ctx.memory(|m| m.focused().is_some()) {
             return;
         }
         if audio {

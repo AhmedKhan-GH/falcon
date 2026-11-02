@@ -390,7 +390,7 @@ impl App {
             self.image.tf = Default::default();
             return;
         }
-        if ctx.memory(|m| m.focused().is_some()) {
+        if self.any_modal_open() || ctx.memory(|m| m.focused().is_some()) {
             return;
         }
         let none = Modifiers::NONE;

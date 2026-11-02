@@ -95,7 +95,7 @@ impl App {
         self.ws.cards.clear();
         let ext = self.ws.view.file.extension().map(|e| e.to_string_lossy().into_owned()).unwrap_or_default();
         let ready = self.ws.view.anim.as_ref().is_some_and(|a| a.state == State::Ready);
-        if !ready || !self.gif_player_on(&ext) || self.prefs_window.open || ctx.memory(|m| m.focused().is_some()) {
+        if !ready || !self.gif_player_on(&ext) || self.any_modal_open() || ctx.memory(|m| m.focused().is_some()) {
             return;
         }
         let mut pressed = Vec::new();

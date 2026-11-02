@@ -21,6 +21,7 @@ pub(crate) mod image_edit;
 pub(crate) mod import;
 pub(crate) mod library;
 pub(crate) mod long_ops;
+pub(crate) mod modal;
 pub(crate) mod navigation;
 pub(crate) mod open_queue;
 pub(crate) mod state;

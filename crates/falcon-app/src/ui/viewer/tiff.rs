@@ -23,7 +23,7 @@ impl App {
     /// (taken out of the key events, so they don't scroll the grid behind).
     pub(crate) fn tiff_keys(&mut self, ctx: &egui::Context) {
         let Some(id) = self.ws.viewer.as_deref() else { return };
-        if self.tiff.id != id || self.tiff.pages().is_none() || self.prefs_window.open || ctx.memory(|m| m.focused().is_some()) {
+        if self.tiff.id != id || self.tiff.pages().is_none() || self.any_modal_open() || ctx.memory(|m| m.focused().is_some()) {
             return;
         }
         let mut step = 0;

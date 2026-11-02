@@ -1456,10 +1456,10 @@ impl App {
     /// the scrolling keys act on the document.
     pub(crate) fn pdf_keys(&mut self, ctx: &egui::Context) {
         let Some(viewer) = self.ws.viewer.as_deref() else { return };
-        let Some(o) = self.pdf.open.as_mut().filter(|o| o.id == viewer && o.status == Status::Ready) else { return };
-        if self.prefs_window.open {
+        if self.any_modal_open() {
             return;
         }
+        let Some(o) = self.pdf.open.as_mut().filter(|o| o.id == viewer && o.status == Status::Ready) else { return };
         let focused = ctx.memory(|m| m.focused());
         let find_focused = focused == Some(Id::unique(FIND_ID));
         if focused.is_some() && !find_focused {

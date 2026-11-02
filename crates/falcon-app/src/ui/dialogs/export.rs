@@ -113,6 +113,13 @@ pub(crate) struct ExportState {
     format: FormatDraft,
 }
 
+impl ExportState {
+    /// Whether the name clash or Export in Format dialog is up.
+    pub(crate) fn dialog_open(&self) -> bool {
+        self.clash.is_some() || self.format_for.is_some()
+    }
+}
+
 /// Several folder exports into `dest` as one, revealing `dest` when done.
 fn merge_plans(dest: &std::path::Path, plans: impl Iterator<Item = Plan>, how: Collision) -> Plan {
     let mut all = Plan { dirs: Vec::new(), steps: Vec::new(), top: dest.to_path_buf(), overwrite: how == Collision::Replace };

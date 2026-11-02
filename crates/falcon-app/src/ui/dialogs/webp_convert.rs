@@ -15,7 +15,7 @@ use crate::ui::dialogs::progress::Outcome;
 /// The confirmation waiting for an answer: the WebP items and the format.
 #[derive(Default)]
 pub(crate) struct State {
-    confirm: Option<(Vec<String>, Format)>,
+    pub(super) confirm: Option<(Vec<String>, Format)>,
 }
 
 /// The WebP items among `targets`, in order.

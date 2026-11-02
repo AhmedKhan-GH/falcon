@@ -32,7 +32,7 @@ pub(crate) enum AddWhat {
 /// The confirmation waiting for an answer.
 #[derive(Default)]
 pub(crate) struct State {
-    confirm: Option<(AddWhat, PathBuf)>,
+    pub(super) confirm: Option<(AddWhat, PathBuf)>,
 }
 
 /// A library's name for messages.

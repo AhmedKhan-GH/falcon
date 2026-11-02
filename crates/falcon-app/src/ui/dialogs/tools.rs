@@ -14,6 +14,13 @@ pub(crate) struct Tools {
     pub clear: super::clear_invalid::State,
 }
 
+impl Tools {
+    /// Whether a tool's confirmation, scan or report is up.
+    pub(crate) fn dialog_open(&self) -> bool {
+        self.add.confirm.is_some() || self.webp.confirm.is_some() || !matches!(self.clear, super::clear_invalid::State::Idle)
+    }
+}
+
 impl App {
     /// Draws whichever tool dialog is up.
     pub(crate) fn tools_dialogs(&mut self, ctx: &egui::Context) {

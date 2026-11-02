@@ -153,6 +153,11 @@ pub(crate) enum Tree {
 }
 
 impl FolderUi {
+    /// Whether one of the folder dialogs or the Add to Folders picker is up.
+    pub(crate) fn dialog_open(&self) -> bool {
+        self.rename.is_some() || self.mover.is_some() || self.new_with.is_some() || self.picker.is_some()
+    }
+
     /// Start of a sidebar frame: the rows drawn last frame become the
     /// rows ranges are taken from.
     pub fn begin_rows(&mut self) {

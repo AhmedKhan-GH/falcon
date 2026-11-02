@@ -95,6 +95,17 @@ pub(crate) struct OrgState {
 }
 
 impl OrgState {
+    /// Whether one of the folder, tag and saved filter dialogs is up.
+    pub(crate) fn dialog_open(&self) -> bool {
+        self.password.is_some()
+            || self.group_delete.is_some()
+            || self.filter_name.is_some()
+            || self.sort_confirm.is_some()
+            || self.auto_tag.is_some()
+            || self.merge.is_some()
+            || self.drop_unlock.is_some()
+    }
+
     /// Forgets the random folder sort's seed, so it shuffles again.
     pub(crate) fn reshuffle(&mut self) {
         self.seed = None;

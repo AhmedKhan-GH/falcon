@@ -107,9 +107,21 @@ impl State {
 }
 
 /// Whether `cmd` can act in state `s`.
+/// Commands that still run behind a modal dialog: the window's own
+/// (minimise, full screen, zoom, always on top), and the clipboard and undo
+/// commands, which serve a focused text field in the dialog.
+fn allowed_behind_modal(cmd: Command, s: &State) -> bool {
+    use Command as C;
+    match cmd {
+        C::Minimize | C::FullScreen | C::WindowZoom | C::AlwaysOnTop => true,
+        C::SelectAll | C::Copy | C::Paste | C::Cut | C::Undo | C::Redo => s.text,
+        _ => false,
+    }
+}
+
 pub fn enabled(cmd: Command, s: &State) -> bool {
     use Command as C;
-    if s.modal {
+    if s.modal && !allowed_behind_modal(cmd, s) {
         return false;
     }
     let grid = s.grid();
@@ -1028,6 +1040,20 @@ mod tests {
         let s = State { modal: true, ..grid(3) };
         assert!(!enabled(Command::Trash, &s));
         assert!(!enabled(Command::Preferences, &s));
+    }
+
+    #[test]
+    fn a_modal_blocks_commands_but_not_the_window_or_its_text_field() {
+        let s = State { modal: true, ..grid(3) };
+        for cmd in [Command::ActionsPanel, Command::TagPanel, Command::AddToFolders, Command::Find, Command::QuickSwitchKey, Command::ImportPack, Command::NewFolder, Command::Rename] {
+            assert!(enabled(cmd, &grid(3)) || cmd == Command::ImportPack, "{cmd:?} runs without a modal");
+            assert!(!enabled(cmd, &s), "{cmd:?} must not run behind a modal");
+        }
+        assert!(enabled(Command::Minimize, &s));
+        assert!(enabled(Command::FullScreen, &s));
+        assert!(!enabled(Command::Paste, &s), "no text field, no paste");
+        assert!(enabled(Command::Paste, &State { text: true, ..s.clone() }));
+        assert!(!enabled(Command::Trash, &State { text: true, ..s }));
     }
 
     #[test]
