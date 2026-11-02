@@ -152,7 +152,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::LockApp => s.lockable,
         C::NewLibrary | C::ClearLibraryHistory | C::SwitchLibrary | C::CollectWindow | C::Preferences | C::CloseWindow | C::Minimize | C::FullScreen | C::WindowZoom => true,
         C::NextLibrary | C::PreviousLibrary => s.libraries > 1,
-        C::Page(_) | C::Import | C::ImportFolders | C::FindDuplicates => s.library,
+        C::Page(_) | C::Import | C::ImportFolders | C::ImportLinks | C::FindDuplicates => s.library,
         C::Scroll(_) | C::SelectFirst | C::SelectLast | C::ToggleFolders => grid,
         C::ParentFolder => grid && s.parent,
         C::Reshuffle => grid && (s.scope == ScopeKind::Random || s.random_sorted),
@@ -305,6 +305,7 @@ pub static MENUS: &[(&str, &[Entry])] = &[
             item("New Text File", Command::NewTextFile),
             SEP,
             item("Import Folders…", Command::ImportFolders),
+            item("Import Links…", Command::ImportLinks),
             item("Import Files…", Command::Import),
             Entry::Sub("Import", &[item("Eagle Package…", Command::ImportPack), item("Inboard Backup…", Command::ImportInboard)]),
             Entry::Sub(

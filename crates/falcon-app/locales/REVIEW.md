@@ -177,6 +177,7 @@ The core words, so every file uses one term for one thing.
 - "Render" and its four "QuickLook, ..." reasons, the inspector's row when a PSD falls back to QuickLook; "merged image" is Photoshop's flattened composite (machine-written).
 - "Color Space" and "Unmanaged", the App menu's colour space submenu (sRGB and Display P3 are names and stay as they are; machine-written).
 - "New document", the undo label for a blank document made from File ▸ New… (machine-written).
+- Import Links: "Batch Import Links", "Import Links…", "Import links", "Invalid link format", the paste instruction, "Fetching {n} links" and "{n} links could not be saved" (machine-written).
 
 ## Reviewed
 

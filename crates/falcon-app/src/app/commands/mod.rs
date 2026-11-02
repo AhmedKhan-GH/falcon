@@ -711,6 +711,7 @@ impl App {
             C::Cut => {}
             C::Import => self.import_files_dialog(),
             C::ImportFolders => self.import_folders_dialog(),
+            C::ImportLinks => self.import_links_dialog(),
             C::FindDuplicates => {
                 self.ws.viewer = None;
                 self.go(Scope::Duplicates);

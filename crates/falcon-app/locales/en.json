@@ -185,6 +185,7 @@
   "Back 10 frames": "Back 10 frames",
   "Background Colour": "Background Colour",
   "Base64": "Base64",
+  "Batch Import Links": "Batch Import Links",
   "Below": "Below",
   "Black": "Black",
   "Blue": "Blue",
@@ -662,6 +663,10 @@
   "Fast web view": "Fast web view",
   "Faster": "Faster",
   "February": "February",
+  "Fetching {n} links": {
+    "one": "Fetching {n} link",
+    "other": "Fetching {n} links"
+  },
   "File": "File",
   "File Name": "File Name",
   "File Paths": "File Paths",
@@ -812,6 +817,7 @@
   "Import Folders": "Import Folders",
   "Import Folders…": "Import Folders…",
   "Import Inboard Backup…": "Import Inboard Backup…",
+  "Import Links…": "Import Links…",
   "Import a large folder?": "Import a large folder?",
   "Import an Eagle package": "Import an Eagle package",
   "Import an Inboard backup": "Import an Inboard backup",
@@ -819,6 +825,7 @@
   "Import files added to a folder automatically": "Import files added to a folder automatically",
   "Import finished": "Import finished",
   "Import folders": "Import folders",
+  "Import links": "Import links",
   "Import {name}?": "Import {name}?",
   "Import {n}": "Import {n}",
   "Imported": "Imported",
@@ -851,6 +858,7 @@
   "Install the font for every app": "Install the font for every app",
   "Interface zoom": "Interface zoom",
   "Into": "Into",
+  "Invalid link format": "Invalid link format",
   "Isolate (again to show all)": "Isolate (again to show all)",
   "It is on an NTFS drive. NTFS drivers on macOS are slow and less reliable; a drive formatted as APFS or exFAT works better.": "It is on an NTFS drive. NTFS drivers on macOS are slow and less reliable; a drive formatted as APFS or exFAT works better.",
   "It may be incomplete or damaged; export or download it again. ({error})": "It may be incomplete or damaged; export or download it again. ({error})",
@@ -1298,6 +1306,7 @@
   "Paste": "Paste",
   "Paste Tags": "Paste Tags",
   "Paste files or an image": "Paste files or an image",
+  "Paste links, one per line. Images are imported as files and web pages are saved as bookmarks.": "Paste links, one per line. Images are imported as files and web pages are saved as bookmarks.",
   "Paste tags onto the selection": "Paste tags onto the selection",
   "Paste tags to {n}": "Paste tags to {n}",
   "Pasted {tags} to {n} items": {
@@ -2296,6 +2305,10 @@
   "{n} items with a missing or empty file go to the Trash.": {
     "one": "{n} item with a missing or empty file goes to the Trash.",
     "other": "{n} items with a missing or empty file go to the Trash."
+  },
+  "{n} links could not be saved": {
+    "one": "{n} link could not be saved",
+    "other": "{n} links could not be saved"
   },
   "{n} similar pictures, the best copy picked (within {bits} of 64 bits)": {
     "one": "{n} similar picture, the best copy picked (within {bits} of 64 bits)",

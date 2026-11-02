@@ -173,6 +173,7 @@
   "Back 10 frames": "10フレーム戻る",
   "Background Colour": "背景色",
   "Base64": "Base64",
+  "Batch Import Links": "リンクを一括で読み込む",
   "Below": "下",
   "Black": "黒",
   "Blue": "ブルー",
@@ -624,6 +625,9 @@
   "Fast web view": "Webアクセス最適化",
   "Faster": "速く",
   "February": "2月",
+  "Fetching {n} links": {
+    "other": "{n} 件のリンクを取得中"
+  },
   "File": "ファイル",
   "File Name": "ファイル名",
   "File Paths": "ファイルパス",
@@ -772,6 +776,7 @@
   "Import Folders": "フォルダを読み込む",
   "Import Folders…": "フォルダを読み込む…",
   "Import Inboard Backup…": "Inboardバックアップを読み込む…",
+  "Import Links…": "リンクを読み込む…",
   "Import a large folder?": "大きなフォルダを読み込みますか？",
   "Import an Eagle package": "Eagleパッケージを読み込む",
   "Import an Inboard backup": "Inboardバックアップを読み込む",
@@ -779,6 +784,7 @@
   "Import files added to a folder automatically": "フォルダに追加されたファイルを自動で読み込む",
   "Import finished": "読み込み完了",
   "Import folders": "フォルダを読み込む",
+  "Import links": "リンクを読み込む",
   "Import {name}?": "「{name}」を読み込みますか？",
   "Import {n}": "{n}件を読み込む",
   "Imported": "読み込み",
@@ -808,6 +814,7 @@
   "Install the font for every app": "すべてのアプリ用にフォントをインストール",
   "Interface zoom": "インターフェイスのズーム",
   "Into": "中",
+  "Invalid link format": "リンクの形式が正しくありません",
   "Isolate (again to show all)": "分離（もう一度ですべて表示）",
   "It is on an NTFS drive. NTFS drivers on macOS are slow and less reliable; a drive formatted as APFS or exFAT works better.": "NTFSドライブ上にあります。macOSのNTFSドライバは低速で信頼性も低いため、APFSまたはexFATでフォーマットしたドライブをおすすめします。",
   "It may be incomplete or damaged; export or download it again. ({error})": "不完全または破損している可能性があります。もう一度書き出すかダウンロードしてください。（{error}）",
@@ -1235,6 +1242,7 @@
   "Paste": "ペースト",
   "Paste Tags": "タグをペースト",
   "Paste files or an image": "ファイルまたは画像をペースト",
+  "Paste links, one per line. Images are imported as files and web pages are saved as bookmarks.": "リンクを1行に1つずつ貼り付けてください。画像はファイルとして読み込まれ、Web ページはブックマークとして保存されます。",
   "Paste tags onto the selection": "選択したアイテムにタグをペースト",
   "Paste tags to {n}": "{n}件にタグをペースト",
   "Pasted {tags} to {n} items": {
@@ -2157,6 +2165,9 @@
   },
   "{n} items with a missing or empty file go to the Trash.": {
     "other": "ファイルがない、または空のアイテム{n}個はゴミ箱に入ります。"
+  },
+  "{n} links could not be saved": {
+    "other": "{n} 件のリンクを保存できませんでした"
   },
   "{n} similar pictures, the best copy picked (within {bits} of 64 bits)": {
     "other": "似ている画像 {n} 件、最良のコピーを選択済み（64ビット中 {bits} 以内の差）"

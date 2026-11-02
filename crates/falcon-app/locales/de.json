@@ -185,6 +185,7 @@
   "Back 10 frames": "10 Bilder zurück",
   "Background Colour": "Hintergrundfarbe",
   "Base64": "Base64",
+  "Batch Import Links": "Links stapelweise importieren",
   "Below": "Unter",
   "Black": "Schwarz",
   "Blue": "Blau",
@@ -662,6 +663,10 @@
   "Fast web view": "Schnelle Web-Anzeige",
   "Faster": "Schneller",
   "February": "Februar",
+  "Fetching {n} links": {
+    "one": "{n} Link wird abgerufen",
+    "other": "{n} Links werden abgerufen"
+  },
   "File": "Ablage",
   "File Name": "Dateiname",
   "File Paths": "Dateipfade",
@@ -812,6 +817,7 @@
   "Import Folders": "Ordner importieren",
   "Import Folders…": "Ordner importieren …",
   "Import Inboard Backup…": "Inboard-Backup importieren…",
+  "Import Links…": "Links importieren …",
   "Import a large folder?": "Großen Ordner importieren?",
   "Import an Eagle package": "Eagle-Paket importieren",
   "Import an Inboard backup": "Inboard-Backup importieren",
@@ -819,6 +825,7 @@
   "Import files added to a folder automatically": "In einen Ordner gelegte Dateien automatisch importieren",
   "Import finished": "Import fertig",
   "Import folders": "Ordner importieren",
+  "Import links": "Links importieren",
   "Import {name}?": "{name} importieren?",
   "Import {n}": "{n} importieren",
   "Imported": "Importiert",
@@ -851,6 +858,7 @@
   "Install the font for every app": "Schrift für alle Apps installieren",
   "Interface zoom": "Oberflächengröße",
   "Into": "In",
+  "Invalid link format": "Ungültiges Linkformat",
   "Isolate (again to show all)": "Isolieren (erneut, um alle zu zeigen)",
   "It is on an NTFS drive. NTFS drivers on macOS are slow and less reliable; a drive formatted as APFS or exFAT works better.": "Sie liegt auf einem NTFS-Laufwerk. NTFS-Treiber unter macOS sind langsam und weniger zuverlässig; ein mit APFS oder exFAT formatiertes Laufwerk funktioniert besser.",
   "It may be incomplete or damaged; export or download it again. ({error})": "Es ist möglicherweise unvollständig oder beschädigt; exportieren oder laden Sie es erneut herunter. ({error})",
@@ -1298,6 +1306,7 @@
   "Paste": "Einsetzen",
   "Paste Tags": "Tags einsetzen",
   "Paste files or an image": "Dateien oder ein Bild einsetzen",
+  "Paste links, one per line. Images are imported as files and web pages are saved as bookmarks.": "Fügen Sie Links ein, einen pro Zeile. Bilder werden als Dateien importiert, Webseiten als Lesezeichen gesichert.",
   "Paste tags onto the selection": "Tags in die Auswahl einsetzen",
   "Paste tags to {n}": "Tags in {n} einsetzen",
   "Pasted {tags} to {n} items": {
@@ -2296,6 +2305,10 @@
   "{n} items with a missing or empty file go to the Trash.": {
     "one": "{n} Objekt mit fehlender oder leerer Datei kommt in den Papierkorb.",
     "other": "{n} Objekte mit fehlender oder leerer Datei kommen in den Papierkorb."
+  },
+  "{n} links could not be saved": {
+    "one": "{n} Link konnte nicht gesichert werden",
+    "other": "{n} Links konnten nicht gesichert werden"
   },
   "{n} similar pictures, the best copy picked (within {bits} of 64 bits)": {
     "one": "{n} ähnliches Bild, beste Kopie gewählt (höchstens {bits} von 64 Bit verschieden)",

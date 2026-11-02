@@ -173,6 +173,7 @@
   "Back 10 frames": "10프레임 뒤로",
   "Background Colour": "배경색",
   "Base64": "Base64",
+  "Batch Import Links": "링크 일괄 가져오기",
   "Below": "아래",
   "Black": "검정",
   "Blue": "블루",
@@ -624,6 +625,9 @@
   "Fast web view": "빠른 웹 보기",
   "Faster": "더 빠르게",
   "February": "2월",
+  "Fetching {n} links": {
+    "other": "링크 {n}개를 가져오는 중"
+  },
   "File": "파일",
   "File Name": "파일 이름",
   "File Paths": "파일 경로",
@@ -772,6 +776,7 @@
   "Import Folders": "폴더 가져오기",
   "Import Folders…": "폴더 가져오기…",
   "Import Inboard Backup…": "Inboard 백업 가져오기…",
+  "Import Links…": "링크 가져오기…",
   "Import a large folder?": "큰 폴더를 가져올까요?",
   "Import an Eagle package": "Eagle 패키지 가져오기",
   "Import an Inboard backup": "Inboard 백업 가져오기",
@@ -779,6 +784,7 @@
   "Import files added to a folder automatically": "폴더에 추가된 파일을 자동으로 가져오기",
   "Import finished": "가져오기 완료",
   "Import folders": "폴더 가져오기",
+  "Import links": "링크 가져오기",
   "Import {name}?": "\"{name}\"을(를) 가져올까요?",
   "Import {n}": "{n}개 가져오기",
   "Imported": "가져옴",
@@ -808,6 +814,7 @@
   "Install the font for every app": "모든 앱에서 쓸 수 있도록 서체 설치",
   "Interface zoom": "인터페이스 확대/축소",
   "Into": "안",
+  "Invalid link format": "링크 형식이 올바르지 않습니다",
   "Isolate (again to show all)": "분리(다시 누르면 모두 표시)",
   "It is on an NTFS drive. NTFS drivers on macOS are slow and less reliable; a drive formatted as APFS or exFAT works better.": "NTFS 드라이브에 있습니다. macOS의 NTFS 드라이버는 느리고 안정성이 떨어지므로 APFS 또는 exFAT로 포맷한 드라이브를 권장합니다.",
   "It may be incomplete or damaged; export or download it again. ({error})": "불완전하거나 손상되었을 수 있습니다. 다시 내보내거나 내려받으세요. ({error})",
@@ -1235,6 +1242,7 @@
   "Paste": "붙여넣기",
   "Paste Tags": "태그 붙여넣기",
   "Paste files or an image": "파일 또는 이미지 붙여넣기",
+  "Paste links, one per line. Images are imported as files and web pages are saved as bookmarks.": "링크를 한 줄에 하나씩 붙여넣으세요. 이미지는 파일로 가져오고 웹 페이지는 북마크로 저장합니다.",
   "Paste tags onto the selection": "선택한 항목에 태그 붙여넣기",
   "Paste tags to {n}": "{n}개에 태그 붙여넣기",
   "Pasted {tags} to {n} items": {
@@ -2157,6 +2165,9 @@
   },
   "{n} items with a missing or empty file go to the Trash.": {
     "other": "파일이 없거나 비어 있는 항목 {n}개는 휴지통으로 이동합니다."
+  },
+  "{n} links could not be saved": {
+    "other": "링크 {n}개를 저장하지 못했습니다"
   },
   "{n} similar pictures, the best copy picked (within {bits} of 64 bits)": {
     "other": "비슷한 이미지 {n}개, 최상의 사본 선택됨 (64비트 중 {bits}비트 이내 차이)"

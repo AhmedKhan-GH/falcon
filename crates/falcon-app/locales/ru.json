@@ -197,6 +197,7 @@
   "Back 10 frames": "Назад на 10 кадров",
   "Background Colour": "Цвет фона",
   "Base64": "Base64",
+  "Batch Import Links": "Пакетный импорт ссылок",
   "Below": "Ниже",
   "Black": "Чёрный",
   "Blue": "Синий",
@@ -700,6 +701,11 @@
   "Fast web view": "Быстрый просмотр в Интернете",
   "Faster": "Быстрее",
   "February": "Февраль",
+  "Fetching {n} links": {
+    "few": "Загружаются {n} ссылки",
+    "many": "Загружаются {n} ссылок",
+    "one": "Загружается {n} ссылка"
+  },
   "File": "Файл",
   "File Name": "Имя файла",
   "File Paths": "Пути к файлам",
@@ -852,6 +858,7 @@
   "Import Folders": "Импорт папок",
   "Import Folders…": "Импорт папок…",
   "Import Inboard Backup…": "Импортировать резервную копию Inboard…",
+  "Import Links…": "Импорт ссылок…",
   "Import a large folder?": "Импортировать большую папку?",
   "Import an Eagle package": "Импортировать пакет Eagle",
   "Import an Inboard backup": "Импортировать резервную копию Inboard",
@@ -859,6 +866,7 @@
   "Import files added to a folder automatically": "Автоматически импортировать файлы, добавленные в папку",
   "Import finished": "Импорт завершён",
   "Import folders": "Импортировать папки",
+  "Import links": "Импорт ссылок",
   "Import {name}?": "Импортировать «{name}»?",
   "Import {n}": "Импортировать: {n}",
   "Imported": "Импортировано",
@@ -894,6 +902,7 @@
   "Install the font for every app": "Установить шрифт для всех приложений",
   "Interface zoom": "Масштаб интерфейса",
   "Into": "Внутрь",
+  "Invalid link format": "Недопустимый формат ссылки",
   "Isolate (again to show all)": "Изолировать (ещё раз — показать все)",
   "It is on an NTFS drive. NTFS drivers on macOS are slow and less reliable; a drive formatted as APFS or exFAT works better.": "Она находится на диске NTFS. Драйверы NTFS в macOS медленные и менее надёжные; диск в формате APFS или exFAT работает лучше.",
   "It may be incomplete or damaged; export or download it again. ({error})": "Возможно, он неполный или повреждён; экспортируйте или скачайте его заново. ({error})",
@@ -1361,6 +1370,7 @@
   "Paste": "Вставить",
   "Paste Tags": "Вставить теги",
   "Paste files or an image": "Вставить файлы или изображение",
+  "Paste links, one per line. Images are imported as files and web pages are saved as bookmarks.": "Вставьте ссылки, по одной в строке. Изображения импортируются как файлы, веб-страницы сохраняются как закладки.",
   "Paste tags onto the selection": "Вставить теги в выбранное",
   "Paste tags to {n}": "Вставить теги: {n}",
   "Pasted {tags} to {n} items": {
@@ -2431,6 +2441,11 @@
     "few": "{n} элемента с отсутствующим или пустым файлом перемещаются в корзину.",
     "many": "{n} элементов с отсутствующим или пустым файлом перемещаются в корзину.",
     "one": "{n} элемент с отсутствующим или пустым файлом перемещается в корзину."
+  },
+  "{n} links could not be saved": {
+    "few": "Не удалось сохранить {n} ссылки",
+    "many": "Не удалось сохранить {n} ссылок",
+    "one": "Не удалось сохранить {n} ссылку"
   },
   "{n} similar pictures, the best copy picked (within {bits} of 64 bits)": {
     "few": "{n} похожих изображения, выбрана лучшая копия (отличие не более {bits} из 64 бит)",

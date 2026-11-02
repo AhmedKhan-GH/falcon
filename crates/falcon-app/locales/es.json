@@ -185,6 +185,7 @@
   "Back 10 frames": "Retroceder 10 fotogramas",
   "Background Colour": "Color de fondo",
   "Base64": "Base64",
+  "Batch Import Links": "Importar enlaces por lotes",
   "Below": "Debajo",
   "Black": "Negro",
   "Blue": "Azul",
@@ -662,6 +663,10 @@
   "Fast web view": "Vista web rápida",
   "Faster": "Más rápido",
   "February": "febrero",
+  "Fetching {n} links": {
+    "one": "Obteniendo {n} enlace",
+    "other": "Obteniendo {n} enlaces"
+  },
   "File": "Archivo",
   "File Name": "Nombre de archivo",
   "File Paths": "Rutas de archivo",
@@ -812,6 +817,7 @@
   "Import Folders": "Importar carpetas",
   "Import Folders…": "Importar carpetas…",
   "Import Inboard Backup…": "Importar copia de Inboard…",
+  "Import Links…": "Importar enlaces…",
   "Import a large folder?": "¿Importar una carpeta grande?",
   "Import an Eagle package": "Importar un paquete de Eagle",
   "Import an Inboard backup": "Importar una copia de seguridad de Inboard",
@@ -819,6 +825,7 @@
   "Import files added to a folder automatically": "Importar automáticamente los archivos añadidos a una carpeta",
   "Import finished": "Importación terminada",
   "Import folders": "Importar carpetas",
+  "Import links": "Importar enlaces",
   "Import {name}?": "¿Importar {name}?",
   "Import {n}": "Importar {n}",
   "Imported": "Importado",
@@ -851,6 +858,7 @@
   "Install the font for every app": "Instalar la tipografía para todas las apps",
   "Interface zoom": "Zoom de la interfaz",
   "Into": "Dentro",
+  "Invalid link format": "Formato de enlace no válido",
   "Isolate (again to show all)": "Aislar (otra vez para mostrar todo)",
   "It is on an NTFS drive. NTFS drivers on macOS are slow and less reliable; a drive formatted as APFS or exFAT works better.": "Está en una unidad NTFS. Los controladores NTFS en macOS son lentos y menos fiables; una unidad con formato APFS o exFAT funciona mejor.",
   "It may be incomplete or damaged; export or download it again. ({error})": "Puede estar incompleto o dañado; expórtalo o descárgalo de nuevo. ({error})",
@@ -1298,6 +1306,7 @@
   "Paste": "Pegar",
   "Paste Tags": "Pegar etiquetas",
   "Paste files or an image": "Pegar archivos o una imagen",
+  "Paste links, one per line. Images are imported as files and web pages are saved as bookmarks.": "Pegar enlaces, uno por línea. Las imágenes se importan como archivos y las páginas web se guardan como marcadores.",
   "Paste tags onto the selection": "Pegar etiquetas en la selección",
   "Paste tags to {n}": "Pegar etiquetas en {n}",
   "Pasted {tags} to {n} items": {
@@ -2296,6 +2305,10 @@
   "{n} items with a missing or empty file go to the Trash.": {
     "one": "{n} elemento con un archivo ausente o vacío va a la papelera.",
     "other": "{n} elementos con un archivo ausente o vacío van a la papelera."
+  },
+  "{n} links could not be saved": {
+    "one": "No se pudo guardar {n} enlace",
+    "other": "No se pudieron guardar {n} enlaces"
   },
   "{n} similar pictures, the best copy picked (within {bits} of 64 bits)": {
     "one": "{n} imagen similar, mejor copia elegida (diferencia de hasta {bits} de 64 bits)",

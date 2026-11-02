@@ -24,6 +24,7 @@ mod hotkeys;
 mod hover;
 mod hover_media;
 mod urls;
+mod link_import;
 mod icloud;
 mod icons;
 mod install_dir;

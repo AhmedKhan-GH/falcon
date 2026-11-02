@@ -173,6 +173,7 @@
   "Back 10 frames": "倒退 10 格",
   "Background Colour": "背景顏色",
   "Base64": "Base64",
+  "Batch Import Links": "批次匯入連結",
   "Below": "下方",
   "Black": "黑色",
   "Blue": "藍色",
@@ -624,6 +625,9 @@
   "Fast web view": "快速網頁瀏覽",
   "Faster": "加快",
   "February": "2月",
+  "Fetching {n} links": {
+    "other": "正在取得{n}個連結"
+  },
   "File": "檔案",
   "File Name": "檔案名稱",
   "File Paths": "檔案路徑",
@@ -772,6 +776,7 @@
   "Import Folders": "匯入資料夾",
   "Import Folders…": "匯入資料夾…",
   "Import Inboard Backup…": "匯入 Inboard 備份…",
+  "Import Links…": "匯入連結…",
   "Import a large folder?": "要匯入大型資料夾嗎？",
   "Import an Eagle package": "匯入 Eagle 套件",
   "Import an Inboard backup": "匯入 Inboard 備份",
@@ -779,6 +784,7 @@
   "Import files added to a folder automatically": "自動匯入加入資料夾的檔案",
   "Import finished": "匯入完成",
   "Import folders": "匯入資料夾",
+  "Import links": "匯入連結",
   "Import {name}?": "匯入「{name}」？",
   "Import {n}": "匯入{n}個項目",
   "Imported": "匯入",
@@ -808,6 +814,7 @@
   "Install the font for every app": "為所有 App 安裝此字體",
   "Interface zoom": "介面縮放",
   "Into": "內部",
+  "Invalid link format": "連結格式無效",
   "Isolate (again to show all)": "隔離（再次點擊顯示全部）",
   "It is on an NTFS drive. NTFS drivers on macOS are slow and less reliable; a drive formatted as APFS or exFAT works better.": "它位於 NTFS 磁碟上。macOS 上的 NTFS 驅動程式速度慢且不夠可靠，使用 APFS 或 exFAT 格式的磁碟效果更好。",
   "It may be incomplete or damaged; export or download it again. ({error})": "它可能不完整或已損毀，請重新匯出或下載。（{error}）",
@@ -1235,6 +1242,7 @@
   "Paste": "貼上",
   "Paste Tags": "貼上標籤",
   "Paste files or an image": "貼上檔案或影像",
+  "Paste links, one per line. Images are imported as files and web pages are saved as bookmarks.": "每行貼上一個連結。圖片會作為檔案匯入，網頁會存成書籤。",
   "Paste tags onto the selection": "將標籤貼到所選項目",
   "Paste tags to {n}": "將標籤貼上到{n}個項目",
   "Pasted {tags} to {n} items": {
@@ -2157,6 +2165,9 @@
   },
   "{n} items with a missing or empty file go to the Trash.": {
     "other": "{n}個檔案遺失或為空的項目會丟到垃圾桶。"
+  },
+  "{n} links could not be saved": {
+    "other": "{n}個連結無法儲存"
   },
   "{n} similar pictures, the best copy picked (within {bits} of 64 bits)": {
     "other": "{n}張相似圖片，已選出最佳複本（64 位元中相差不超過{bits}位元）"

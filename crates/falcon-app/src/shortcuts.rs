@@ -56,6 +56,8 @@ pub enum Command {
     EmptyCacheReload,
     /// File ▸ Import Folders…
     ImportFolders,
+    /// File ▸ Import Links…
+    ImportLinks,
     /// File ▸ Import submenu.
     ImportPack,
     ImportInboard,
@@ -480,6 +482,7 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::ClearLibraryHistory, id: "library.clearHistory", group: "Library", label: "Clear the library history", default: None, aliases: &[] },
     Spec { cmd: Command::EmptyCacheReload, id: "library.reload", group: "Library", label: "Empty the cache and reload the library", default: None, aliases: &[] },
     Spec { cmd: Command::ImportFolders, id: "file.import.folders", group: "Import", label: "Import folders", default: None, aliases: &[] },
+    Spec { cmd: Command::ImportLinks, id: "file.import.links", group: "Import", label: "Import links", default: None, aliases: &[] },
     Spec { cmd: Command::ImportPack, id: "file.import.eaglepack", group: "Import", label: "Import an Eagle package", default: None, aliases: &[] },
     Spec { cmd: Command::ImportInboard, id: "file.import.inboard", group: "Import", label: "Import an Inboard backup", default: None, aliases: &[] },
     Spec { cmd: Command::ExportComputer, id: "file.export.item.computer", group: "Export", label: "Export to Computer", default: k(CMD, Key::E), aliases: &[] },
@@ -1320,6 +1323,7 @@ mod tests {
         ("file.create.subfolder", "Alt + N"),
         ("file.create.smartfolder", "Command + Shift + Alt + N"),
         ("file.import.folders", ""),
+        ("file.import.links", ""),
         ("file.import.eaglepack", ""),
         ("file.export.item.eaglepack", "Command + Shift + E"),
         ("file.export.item.computer", "Command + E"),

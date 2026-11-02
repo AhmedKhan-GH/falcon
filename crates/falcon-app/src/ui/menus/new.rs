@@ -113,6 +113,7 @@ impl App {
         entry(self, ui, &mut chosen, tr_key("New Smart Folder…"), Command::NewSmartFolder, true);
         ui.separator();
         entry(self, ui, &mut chosen, tr_key("Import Folders…"), Command::ImportFolders, true);
+        entry(self, ui, &mut chosen, tr_key("Import Links…"), Command::ImportLinks, true);
         entry(self, ui, &mut chosen, tr_key("Import Files…"), Command::Import, true);
         entry(self, ui, &mut chosen, tr_key("Import Eagle Package…"), Command::ImportPack, true);
         crate::ui::menus::search::submenu(ui, tr("Auto-Import"), |ui| {

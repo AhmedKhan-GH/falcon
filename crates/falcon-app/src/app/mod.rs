@@ -143,6 +143,8 @@ pub struct App {
     pub(crate) hover_media: crate::hover_media::HoverMedia,
     /// Drop targets and other import state (`import.rs`).
     pub(crate) imports: import::Imports,
+    /// File ▸ Import Links… (`ui/dialogs/import_links.rs`).
+    pub(crate) link_import: crate::ui::dialogs::import_links::LinkImport,
     /// The macOS menu bar (`menu.rs`).
     pub(crate) menu_bar: crate::menu::Bar,
     /// The open library's actions, their panel and editor (`actions/`).
@@ -228,6 +230,7 @@ impl App {
             copied_tags: None,
             native_drag: Arc::default(),
             imports: Default::default(),
+            link_import: Default::default(),
             fetches: Default::default(),
             open_apps: Default::default(),
             recent: Vec::new(),
@@ -487,6 +490,7 @@ impl App {
             self.apply_preferences(d);
         }
         self.import_dialogs(&ctx);
+        self.import_links_ui(&ctx);
         self.about_ui(&ctx);
         self.library_dialogs(&ctx);
         if self.collect.open {
