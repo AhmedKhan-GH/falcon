@@ -529,7 +529,9 @@ fn quicklook_thumbnail(item: &mut Item, raw: &Path, thumb: &Path, max: u32) -> O
     if item.ext == "txt" {
         return None;
     }
-    let img = thumbnail::quicklook(raw, thumbnail::QUICKLOOK_SIZE).ok()?;
+    let Ok(img) = thumbnail::quicklook(raw, thumbnail::QUICKLOOK_SIZE) else {
+        return embedded_thumbnail(item, raw, thumb, max);
+    };
     let meta = thumbnail::spotlight(raw);
     // A PSD's header is the file's own word on its size.
     let psd = crate::psd::handles(&item.ext).then(|| crate::psd::dimensions(raw)).flatten();
@@ -538,6 +540,45 @@ fn quicklook_thumbnail(item: &mut Item, raw: &Path, thumb: &Path, max: u32) -> O
     item.height = h.into();
     thumbnail::write_thumbnail(img, max, thumb).ok()?;
     Some(Analysis::Thumbnail)
+}
+
+/// The thumbnail of a file QuickLook can't render, from the picture the file
+/// carries: a RAW photo's embedded preview (turned upright), or the preview
+/// in a Sketch, XMind or Keynote file's zip. `None` for other formats.
+fn embedded_thumbnail(item: &mut Item, raw: &Path, thumb: &Path, max: u32) -> Option<Analysis> {
+    let (img, size) = if crate::exif::is_raw(&item.ext) {
+        let data = fs::read(raw).ok()?;
+        let img = thumbnail::raw_preview(&data).ok()?;
+        let size = raw_dimensions(&data, raw, (img.width(), img.height()));
+        (img, size)
+    } else if crate::zip_preview::handles(&item.ext) {
+        let img = crate::zip_preview::preview(raw, &item.ext)?;
+        let size = (img.width(), img.height());
+        (img, size)
+    } else {
+        return None;
+    };
+    thumbnail::write_thumbnail(img, max, thumb).ok()?;
+    item.width = size.0.into();
+    item.height = size.1.into();
+    Some(Analysis::Thumbnail)
+}
+
+/// The displayed size of a RAW photo: the camera's own pixel size, turned by
+/// the orientation. It is the largest size the file states (EXIF or TIFF
+/// tags), when that is at least the preview's; else Spotlight's; else the
+/// preview's `fallback`.
+fn raw_dimensions(data: &[u8], raw: &Path, fallback: (u32, u32)) -> (u32, u32) {
+    let area = |s: (u32, u32)| u64::from(s.0) * u64::from(s.1);
+    let preview = area(fallback);
+    // The preview is turned already, so compare its long side only.
+    let long = fallback.0.max(fallback.1);
+    let stated = crate::exif::stated_sizes(data).into_iter().filter(|&(w, h)| w.max(h) >= long && area((w, h)) >= preview).max_by_key(|&s| area(s));
+    if let Some((w, h)) = stated {
+        let turned = crate::exif::orientation(data).is_some_and(|o| (5..=8).contains(&o));
+        return if turned { (h, w) } else { (w, h) };
+    }
+    thumbnail::spotlight(raw).size.filter(|&s| s.0.max(s.1) >= long).unwrap_or(fallback)
 }
 
 /// The size Eagle records for a web archive: the 1440 × 900 window its
@@ -978,5 +1019,115 @@ mod tests {
         assert!(keys(&item).contains(&"fontMetas"));
         let item = import("Arial.ttf", &data, &ImportOptions { font_weight_tag: false, ..opts });
         assert_eq!(item.tags, ["mine"]);
+    }
+
+    fn jpeg_bytes(w: u32, h: u32) -> Vec<u8> {
+        let mut out = Vec::new();
+        DynamicImage::ImageRgb8(image::RgbImage::from_pixel(w, h, image::Rgb([180, 40, 20])))
+            .write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Jpeg)
+            .unwrap();
+        out
+    }
+
+    /// A little-endian TIFF-based RAW stand-in: IFD0 states `size` and an
+    /// orientation, and a JPEG preview follows the IFD.
+    fn tiff_raw(size: (u32, u32), orientation: u16, preview: &[u8]) -> Vec<u8> {
+        let entry = |tag: u16, v: u32| [&tag.to_le_bytes()[..], &4u16.to_le_bytes(), &1u32.to_le_bytes(), &v.to_le_bytes()].concat();
+        let mut out = b"II*\0\x08\0\0\0".to_vec();
+        out.extend(3u16.to_le_bytes());
+        out.extend(entry(0x100, size.0));
+        out.extend(entry(0x101, size.1));
+        out.extend(entry(0x112, orientation.into()));
+        out.extend(0u32.to_le_bytes());
+        out.extend(preview);
+        out
+    }
+
+    /// Runs only the embedded-picture step, as for a file QuickLook can't
+    /// render, and returns the item's size and the thumbnail's.
+    fn embedded_only(file: &str, bytes: &[u8]) -> Option<((u64, u64), (u32, u32))> {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join(file);
+        fs::write(&src, bytes).unwrap();
+        let mut item: Item = serde_json::from_value(json!({
+            "id": "", "name": "x", "size": bytes.len(), "btime": 0, "mtime": 0, "ext": src.extension().unwrap().to_str(),
+            "tags": [], "folders": [], "isDeleted": false, "url": "", "annotation": "", "modificationTime": 0,
+            "height": 0, "width": 0, "lastModified": 0, "palettes": []
+        }))
+        .unwrap();
+        let thumb = tmp.path().join("t.png");
+        embedded_thumbnail(&mut item, &src, &thumb, 320)?;
+        let img = thumbnail::decode(&thumb).unwrap();
+        Some(((item.width, item.height), (img.width(), img.height())))
+    }
+
+    #[test]
+    fn raw_without_a_quicklook_render_uses_its_embedded_preview() {
+        let preview = jpeg_bytes(96, 64);
+        // The camera's size is the one the file states, turned by the orientation.
+        let raw = tiff_raw((6000, 4000), 1, &preview);
+        let (dims, thumb) = embedded_only("a.nef", &raw).unwrap();
+        assert_eq!(dims, (6000, 4000));
+        assert_eq!(thumb, (96, 64));
+        let (dims, thumb) = embedded_only("a.orf", &tiff_raw((6000, 4000), 6, &preview)).unwrap();
+        assert_eq!(dims, (4000, 6000));
+        assert_eq!(thumb, (64, 96), "the thumbnail is upright too");
+        // A stated size smaller than the preview is a thumbnail's, not the camera's.
+        let (dims, _) = embedded_only("a.nef", &tiff_raw((32, 21), 1, &preview)).unwrap();
+        assert_eq!(dims, (96, 64));
+        // Formats with no stated size use the preview's.
+        let mut raf = b"FUJIFILMCCD-RAW 0201FF383501".to_vec();
+        raf.resize(100, 0);
+        raf[84..88].copy_from_slice(&100u32.to_be_bytes());
+        raf[88..92].copy_from_slice(&(preview.len() as u32).to_be_bytes());
+        raf.extend_from_slice(&preview);
+        assert_eq!(embedded_only("a.raf", &raf).unwrap().0, (96, 64));
+    }
+
+    #[test]
+    fn raw_without_a_preview_or_malformed_gets_no_thumbnail() {
+        for ext in ["crw", "mrw", "orf", "raf", "raw", "srw", "x3f"] {
+            let file = format!("bad.{ext}");
+            assert!(embedded_only(&file, b"").is_none(), "{ext} empty");
+            assert!(embedded_only(&file, &[0xFF; 300]).is_none(), "{ext} noise");
+            assert!(embedded_only(&file, &tiff_raw((100, 100), 1, b"no picture here")).is_none(), "{ext} no jpeg");
+            let jpeg = jpeg_bytes(64, 64);
+            // A preview cut short, with a header that points past the end.
+            assert!(embedded_only(&file, &tiff_raw((100, 100), 1, &jpeg[..jpeg.len() / 3])).is_none(), "{ext} cut");
+        }
+        let mut raf = b"FUJIFILMCCD-RAW 0201FF383501".to_vec();
+        raf.resize(100, 0);
+        raf[84..88].copy_from_slice(&u32::MAX.to_be_bytes());
+        raf[88..92].copy_from_slice(&u32::MAX.to_be_bytes());
+        assert!(embedded_only("a.raf", &raf).is_none());
+        assert!(embedded_only("a.x3f", b"FOVb\0\0\0\0\xFF\xFF\xFF\xFF").is_none());
+        assert!(embedded_only("a.mrw", b"\0MRM\xFF\xFF\xFF\xFF\0TTW\xFF\xFF\xFF\xFF").is_none());
+    }
+
+    #[test]
+    fn document_previews_become_thumbnails() {
+        use std::io::Write;
+        let zipped = |entries: &[(&str, &[u8])]| {
+            let mut z = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+            for (name, data) in entries {
+                z.start_file(*name, zip::write::SimpleFileOptions::default()).unwrap();
+                z.write_all(data).unwrap();
+            }
+            z.finish().unwrap().into_inner()
+        };
+        let mut png = Vec::new();
+        DynamicImage::ImageRgb8(image::RgbImage::new(40, 30)).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        let sketch = zipped(&[("previews/preview.png", &png)]);
+        assert_eq!(embedded_only("a.sketch", &sketch), Some(((40, 30), (40, 30))));
+        assert_eq!(embedded_only("a.xmind", &zipped(&[("Thumbnails/thumbnail.png", &png)])), Some(((40, 30), (40, 30))));
+        assert_eq!(embedded_only("a.key", &zipped(&[("preview.jpg", &jpeg_bytes(20, 10))])), Some(((20, 10), (20, 10))));
+        assert_eq!(embedded_only("a.key", &zipped(&[("QuickLook/Thumbnail.jpg", &jpeg_bytes(10, 20))])), Some(((10, 20), (10, 20))));
+        // Missing, malformed or not a zip: no thumbnail.
+        assert!(embedded_only("a.sketch", &zipped(&[("document.json", b"{}")])).is_none());
+        assert!(embedded_only("a.sketch", &zipped(&[("previews/preview.png", b"junk")])).is_none());
+        assert!(embedded_only("a.xmind", b"not a zip").is_none());
+        assert!(embedded_only("a.key", &sketch[..sketch.len() - 5]).is_none());
+        // Other formats are left alone.
+        assert!(embedded_only("a.pages", &sketch).is_none());
     }
 }

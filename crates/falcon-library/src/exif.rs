@@ -250,7 +250,8 @@ fn crw_orientation(data: &[u8]) -> Option<u32> {
         return None;
     }
     let start = le32(data, 2)?;
-    let angle = ciff_rotation(data.get(start..)?, 0, &mut 0)?;
+    let info = ciff_image_info(data.get(start..)?, 0, &mut 0)?;
+    let angle = i32::from_le_bytes(info.get(12..16)?.try_into().ok()?);
     match angle.rem_euclid(360) {
         0 => Some(1),
         90 => Some(6),
@@ -260,7 +261,19 @@ fn crw_orientation(data: &[u8]) -> Option<u32> {
     }
 }
 
-fn ciff_rotation(heap: &[u8], depth: u32, seen: &mut u32) -> Option<i32> {
+/// The size a Canon CRW states in its CIFF `ImageInfo` record, unturned.
+fn crw_size(data: &[u8]) -> Option<(u32, u32)> {
+    if data.get(..2)? != b"II" || data.get(6..14)? != b"HEAPCCDR" {
+        return None;
+    }
+    let info = ciff_image_info(data.get(le32(data, 2)?..)?, 0, &mut 0)?;
+    let (w, h) = (le32(info, 0)? as u32, le32(info, 4)? as u32);
+    (w > 0 && h > 0).then_some((w, h))
+}
+
+/// The `ImageInfo` record (0x1810) of a CIFF heap: width and height as u32,
+/// then the aspect ratio and the rotation.
+fn ciff_image_info<'a>(heap: &'a [u8], depth: u32, seen: &mut u32) -> Option<&'a [u8]> {
     if depth > 6 {
         return None;
     }
@@ -280,11 +293,11 @@ fn ciff_rotation(heap: &[u8], depth: u32, seen: &mut u32) -> Option<i32> {
         let body = heap.get(offset..offset.checked_add(size)?)?;
         match tag & 0x3800 {
             0x2800 | 0x3000 => {
-                if let Some(a) = ciff_rotation(body, depth + 1, seen) {
+                if let Some(a) = ciff_image_info(body, depth + 1, seen) {
                     return Some(a);
                 }
             }
-            _ if tag == 0x1810 => return body.get(12..16).map(|b| i32::from_le_bytes([b[0], b[1], b[2], b[3]])),
+            _ if tag == 0x1810 && body.len() >= 16 => return Some(body),
             _ => {}
         }
     }
@@ -314,6 +327,31 @@ pub fn read(path: &Path) -> Option<CameraMeta> {
 pub fn orientation(data: &[u8]) -> Option<u32> {
     let from_exif = field(&exif_blocks(data), Tag::Orientation.number()).and_then(|f| f.value.get_uint(0)).filter(|v| (1..=8).contains(v));
     from_exif.or_else(|| crw_orientation(data))
+}
+
+/// The pixel sizes a photo file states for itself: every width and height
+/// pair (`PixelXDimension`/`PixelYDimension` in the EXIF IFD, `ImageWidth`/
+/// `ImageLength` in any IFD the reader walks), as stored, unturned. Thumbnail
+/// IFDs are in the list too, so callers pick by size.
+pub fn stated_sizes(data: &[u8]) -> Vec<(u32, u32)> {
+    let mut out = Vec::new();
+    if let Some((w, h)) = crw_size(data) {
+        out.push((w, h));
+    }
+    for block in exif_blocks(data) {
+        for (w, h) in [(Tag::PixelXDimension, Tag::PixelYDimension), (Tag::ImageWidth, Tag::ImageLength)] {
+            for ifd in [In::PRIMARY, In(1)] {
+                let get = |t: Tag| block.get_field(t, ifd).and_then(|f| f.value.get_uint(0));
+                if let (Some(w), Some(h)) = (get(w), get(h))
+                    && w > 0
+                    && h > 0
+                {
+                    out.push((w, h));
+                }
+            }
+        }
+    }
+    out
 }
 
 fn from_blocks(exif: &[::exif::Exif]) -> Option<CameraMeta> {
@@ -662,6 +700,16 @@ pub(crate) mod tests {
         heap.extend_from_slice(&entry(0x300A, inner.len(), inner_at));
         heap.extend_from_slice(&table_at.to_le_bytes());
         [&b"II"[..], &26u32.to_le_bytes(), b"HEAPCCDR", &[0; 12], &heap].concat()
+    }
+
+    #[test]
+    fn size_of_crw_image_info() {
+        let mut raw = crw(0);
+        assert!(stated_sizes(&raw).is_empty(), "no size stated");
+        raw[34..38].copy_from_slice(&2048u32.to_le_bytes());
+        raw[38..42].copy_from_slice(&1536u32.to_le_bytes());
+        assert_eq!(stated_sizes(&raw), vec![(2048, 1536)]);
+        assert!(stated_sizes(&raw[..30]).is_empty());
     }
 
     #[test]
