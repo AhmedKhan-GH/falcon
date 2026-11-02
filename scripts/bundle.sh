@@ -62,6 +62,8 @@ if [ -f "$WEB_IFC/SOURCES.txt" ] && [ -n "$WORKER" ]; then
   cp "$WEB_IFC/earcut/LICENSE" "$LIC/earcut-LICENSE.txt"
   cp "$WEB_IFC/cdt/LICENSE" "$LIC/CDT-LICENSE.txt"
   sed '/\*\//q' "$WEB_IFC/cdt/CDT/include/predicates.h" >"$LIC/CDT-predicates-LICENSE.txt"
+  # CDT's portable_nth_element.hpp is Apache-2.0; the licence text is the one of this repository.
+  cp LICENSE-APACHE "$LIC/LICENSE-CDT-portable_nth_element-Apache-2.0.txt"
   cp "$WEB_IFC/spdlog/LICENSE" "$LIC/spdlog-LICENSE.txt"
   cp "$WEB_IFC/stduuid/LICENSE" "$LIC/stduuid-LICENSE.txt"
   cp "$WEB_IFC/unordered_dense/LICENSE" "$LIC/unordered_dense-LICENSE.txt"
