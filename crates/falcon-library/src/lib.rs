@@ -38,6 +38,7 @@ pub mod smart_draft;
 pub mod sync;
 pub mod tagging;
 pub mod tempo;
+pub mod templates;
 pub mod text;
 pub mod undo;
 
