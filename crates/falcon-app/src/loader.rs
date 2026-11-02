@@ -167,6 +167,9 @@ struct Shared {
     cv: Condvar,
     /// Set when the loader is dropped; the workers then stop.
     closed: std::sync::atomic::AtomicBool,
+    /// A worker is drawing a region (see [`next_job`]). Changed under the
+    /// queue's lock.
+    region_busy: std::sync::atomic::AtomicBool,
     /// Grayscale preview: the viewer's tiers decode desaturated.
     gray: std::sync::atomic::AtomicBool,
     /// The HDR exposure (an `f32`'s bits): a multiplier, 1.0 by default.
@@ -281,7 +284,7 @@ pub struct Loader {
 
 impl Loader {
     pub fn new(ctx: &Context) -> Self {
-        let shared = Arc::new(Shared { queue: Mutex::new(VecDeque::new()), cv: Condvar::new(), closed: Default::default(), gray: Default::default(), exposure: std::sync::atomic::AtomicU32::new(1.0f32.to_bits()), linear: Mutex::new(None), rendered: Mutex::new(None) });
+        let shared = Arc::new(Shared { queue: Mutex::new(VecDeque::new()), cv: Condvar::new(), closed: Default::default(), region_busy: Default::default(), gray: Default::default(), exposure: std::sync::atomic::AtomicU32::new(1.0f32.to_bits()), linear: Mutex::new(None), rendered: Mutex::new(None) });
         let (tx, rx) = std::sync::mpsc::channel();
         let workers = std::thread::available_parallelism().map_or(4, |n| n.get().clamp(2, 6));
         for _ in 0..workers {
@@ -294,7 +297,10 @@ impl Loader {
                             if shared.closed.load(std::sync::atomic::Ordering::Relaxed) {
                                 return;
                             }
-                            if let Some(j) = q.pop_front() {
+                            if let Some(j) = next_job(&mut q, shared.region_busy.load(Ordering::Relaxed)) {
+                                if j.region.is_some() {
+                                    shared.region_busy.store(true, Ordering::Relaxed);
+                                }
                                 break j;
                             }
                             q = shared.cv.wait(q).unwrap();
@@ -303,6 +309,11 @@ impl Loader {
                     let gray = grays(job.key.1) && shared.gray.load(std::sync::atomic::Ordering::Relaxed);
                     let exposure = shared.exposure.load(Ordering::Relaxed);
                     let mut image = decode(&job, f32::from_bits(exposure), &shared.linear, &shared.rendered);
+                    if job.region.is_some() {
+                        let _q = shared.queue.lock().unwrap();
+                        shared.region_busy.store(false, Ordering::Relaxed);
+                        shared.cv.notify_all();
+                    }
                     if gray && let Some(p) = &mut image {
                         desaturate(p);
                     }
@@ -625,6 +636,15 @@ impl Drop for Loader {
     }
 }
 
+/// The next job for a worker: the first in the queue, passing over a region
+/// while another is being drawn (`region_busy`). So one region is drawn at a
+/// time, and one that waits is replaced by the next (`Loader::want_region`)
+/// instead of being drawn for a view already gone.
+fn next_job(queue: &mut VecDeque<Job>, region_busy: bool) -> Option<Job> {
+    let i = queue.iter().position(|j| !region_busy || j.region.is_none())?;
+    queue.remove(i)
+}
+
 /// Decodes `job`; HDR images are tone mapped at `exposure`, reading the file
 /// only when `linear` doesn't already hold it.
 fn decode(job: &Job, exposure: f32, linear: &Mutex<Option<(PathBuf, u32, Arc<image::Rgba32FImage>)>>, rendered: &Rendered) -> Option<Pixels> {
@@ -870,6 +890,30 @@ mod tests {
 
     fn original(path: PathBuf, tile: usize) -> Job {
         Job { key: ("x".into(), Tier::Original), path, svg: false, quicklook: false, tile, region: None, raw: false, page: 0, hdr: false }
+    }
+
+    /// One region at a time; other work passes a region left waiting.
+    #[test]
+    fn only_one_region_is_drawn_at_a_time() {
+        let job = |id: &str, region: bool| Job {
+            key: (id.into(), Tier::Full),
+            path: PathBuf::new(),
+            svg: false,
+            quicklook: true,
+            tile: 0,
+            region: region.then_some(Region { rect: [0.0, 0.0, 1.0, 1.0], size: [1, 1], render: 1, seq: 1 }),
+            raw: false,
+            page: 0,
+            hdr: false,
+        };
+        let mut q = VecDeque::from([job("region", true), job("a", false), job("b", false)]);
+        assert_eq!(next_job(&mut q, true).unwrap().key.0, "a");
+        assert_eq!(next_job(&mut q, false).unwrap().key.0, "region");
+        assert_eq!(next_job(&mut q, true).unwrap().key.0, "b");
+        let mut q = VecDeque::from([job("region", true)]);
+        assert!(next_job(&mut q, true).is_none());
+        assert_eq!(q.len(), 1);
+        assert!(next_job(&mut q, false).is_some());
     }
 
     /// A zoomed QuickLook region is cut from the kept page render when it
