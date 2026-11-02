@@ -9,10 +9,10 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 | Main window: menus, shortcuts, toolbar, sidebar, layouts | 258 | 6 | 6 | 10 |
 | Viewers and file formats | 187 | 14 | 2 | 5 |
 | Search, filters and organising | 216 | 1 | 2 | 3 |
-| Import, export, library, preferences and integrations | 190 | 5 | 12 | 27 |
-| **Total** | 851 | 26 | 22 | 45 |
+| Import, export, library, preferences and integrations | 190 | 4 | 12 | 27 |
+| **Total** | 851 | 25 | 22 | 45 |
 
-Rows marked **Not wanted (user decision)** (3) are Eagle features the user chose not to have in falcon; they are counted outside the local Missing total.
+Rows marked **Not wanted (user decision)** (4) are Eagle features the user chose not to have in falcon; they are counted outside the local Missing total.
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -38,7 +38,7 @@ These are bugs, not missing features. The first four can lose data or edits.
 8. ~~No marquee selection, no multi-select of folders, no grid display options.~~ Fixed.
 9. ~~No tag picker or suggestions.~~ Fixed.
 10. ~~No GIF player controls, no animated WebP or AVIF, no GIF hover previews.~~ Fixed (AVIF on macOS); hover playback for video and audio is in.
-11. ~~No interactive 3D viewer, text editor or full font viewer.~~ Fixed for obj/stl/ply/glb/gltf/3mf/fbx/dae/3ds and tessellated ifc (triangulated and polygonal face sets, faceted breps); ifc with only swept, CSG or b-spline geometry stays a still.
+11. ~~No interactive 3D viewer, text editor or full font viewer.~~ Fixed for obj/stl/ply/glb/3mf/fbx/dae/3ds and tessellated ifc (triangulated and polygonal face sets, faceted breps); ifc with only swept, CSG or b-spline geometry stays a still.
 12. ~~No watched import folder, no reload on outside changes, no sync-conflict detection, no screen capture.~~ Fixed.
 13. ~~English only; Eagle ships 8 languages.~~ Fixed: the whole interface in all eight (machine-written translations, pending a native read).
 
@@ -478,7 +478,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Font | Inside main window (`index.html:1388`) | Central panel between sidebar and inspector (`F/app.rs` `fn viewer`, `viewer_ui`) | Done |
 | Text (.txt) | Inside main window (`index.html:1393`) | Central panel between sidebar and inspector (`F/app.rs` `fn viewer`, `viewer_ui`), as a still render | Partial |
 | PDF | Inside main window (`index.html:1301`) | Central area, sidebar and inspector kept (`F/app.rs:3392`, `F/app/pdf_view.rs:958`) | Done (macOS only) |
-| 3D model | Inside main window (`index.html:1443`) | Central panel, interactive for obj/stl/ply/glb/gltf/3mf/fbx/dae/3ds and ifc with tessellated geometry, a still for ifc without it | Partial |
+| 3D model | Inside main window (`index.html:1443`) | Central panel, interactive for obj/stl/ply/glb/3mf/fbx/dae/3ds and ifc with tessellated geometry, a still for ifc without it | Partial |
 | Special formats (PSD, AI, Office…) | Inside main window (`index.html:1448`) | Central panel between sidebar and inspector (`F/app.rs` `fn viewer`, `viewer_ui`), as a QuickLook render | Partial |
 | Web page (url/html/mhtml) | Inside main window (`index.html:1491`) | Central panel; live WKWebView for url/html on macOS, MHTML as a still | Partial |
 | Toggle sidebar and inspector from inside the viewer | `toggle-all-btn` in the detail toolbar (`index.html:1015`) | Panels button in every viewer bar and the main toolbar (`App::panels_button`, `logic::toggle_all`), ⌥⌘3 and Tab; both-on/both-off like Eagle | Done |
@@ -610,7 +610,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| Waveform display | Done | `waveform::peaks` on `falcon_library::audio`, the same decoder as playback, for all six Eagle formats plus opus, aiff and caf (`ui/viewer/audio.rs`) | local |
+| Waveform display | Done | `waveform::peaks` on `falcon_library::audio`, the same decoder as playback, for Eagle's six formats only (`ui/viewer/audio.rs`) | local |
 | Click or drag the waveform to seek | Done | `F/app/media_view.rs:137-148` | local |
 | Autoplay on open | Done | `F/app/media_view.rs:107` | local |
 | Play/pause button and Space | Done | `F/app/media_view.rs:151-160`, `F/app.rs:1084` | local |
@@ -691,14 +691,14 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| Interactive 3D view (orbit, pan, zoom) | Partial | `falcon_library::model3d` readers obj+mtl, stl, ply, glb/gltf, 3mf, fbx (binary and ASCII via ufbx, world transforms, material colours, unit and axis conversion, bind pose), dae (COLLADA 1.4.1/1.5 via roxmltree: scene transforms and instances, controllers in bind pose, up axis and unit to Y-up metres, diffuse colour or a texture's average colour), 3ds (material groups, every colour form, smoothing-group normals; keyframer skipped) and ifc (own STEP parser: `IfcTriangulatedFaceSet`, `IfcPolygonalFaceSet` with voids, faceted breps, mapped items, local placements, units to metres, Z-up, styled-item / material / per-type colours; products shown, skipped and triangles in the inspector); orbit, pan, zoom, wireframe, grid and axes in `ui/viewer/model.rs`. Gaps: ifc swept solids, CSG, b-splines and advanced breps are not read (such products are skipped, an all-swept file falls back to the QuickLook still with the reason in the inspector), while Eagle's viewer renders them; no format maps textures | local |
+| Interactive 3D view (orbit, pan, zoom) | Partial | `falcon_library::model3d` readers obj+mtl, stl, ply, glb, 3mf, fbx (binary and ASCII via ufbx, world transforms, material colours, unit and axis conversion, bind pose), dae (COLLADA 1.4.1/1.5 via roxmltree: scene transforms and instances, controllers in bind pose, up axis and unit to Y-up metres, diffuse colour or a texture's average colour), 3ds (material groups, every colour form, smoothing-group normals; keyframer skipped) and ifc (own STEP parser: `IfcTriangulatedFaceSet`, `IfcPolygonalFaceSet` with voids, faceted breps, mapped items, local placements, units to metres, Z-up, styled-item / material / per-type colours; products shown, skipped and triangles in the inspector); orbit, pan, zoom, wireframe, grid and axes in `ui/viewer/model.rs`. Gaps: ifc swept solids, CSG, b-splines and advanced breps are not read (such products are skipped, an all-swept file falls back to the QuickLook still with the reason in the inspector), while Eagle's viewer renders them; no format maps textures | local |
 | Fit model to window | Done | Fit button (⌘0), `viewer3d::fit` | local |
 | Up-axis (Y/Z), flip up vector, fixed or free orbit | Done | Settings menu: Y/Z up, Flip, Fixed Up Vector / Free Orbit | local |
 | Perspective or orthographic camera | Done | Settings menu: Perspective / Orthographic | local |
 | Measure tool | Done | Distance, angle and distance between parallel faces (`ui/viewer/model.rs`) | local |
 | Model tree navigator (files, meshes, materials) and details sidebar | Done | Files, meshes (hide, isolate, fit one), materials, plus the details panel | local |
 | Settings: background colour, edge display, dark theme | Done | Background colour, edges with colour and angle, default colour, Auto/Light/Dark theme, Reset | local |
-| Export model and create snapshot | Done | Viewer menu exports GLB, glTF, OFF, OBJ+MTL, PLY and STL (`export::Format::ALL`, round-trip tests incl. OFF); the snapshot draws edges, grid and axes. 3DM is not built: proprietary Rhino format | local |
+| Export model and create snapshot | Done | Viewer menu exports GLB, glTF, OFF, OBJ+MTL, PLY and STL (`export::Format::ALL`, round-trip tests incl. OFF); the snapshot draws edges, grid and axes; every format is in Online 3D Viewer's export list (its Dotbim .bim is not built either). 3DM is not built: proprietary Rhino format | local |
 | Esc/←/→ still exit or move between items | Done | The shared viewer shell handles Esc, ← and → | local |
 
 ### 11. Special formats viewed as images (PSD, PSB, AI, EPS, XD, Sketch, Figma, Affinity, C4D, Blender, SketchUp, DWG, CDR, Clip, InDesign, Office, iWork, XMind, MindNode, OmniGraffle, HDR, EXR, ICO, ICNS, DDS)
@@ -804,13 +804,13 @@ Eagle columns come from `config.js` (`SUPPORT_FORMATS_DARWIN`), `E/js/thumbs/thu
 | key, numbers, pages | Image of thumbnail | QL | QuickLook render |
 | pdf | pdf.js reader in main window | QL | PDFKit reader in main window (macOS) |
 | txt | Editable text editor | None | Editable text with autosave (`textdoc.rs`) |
-| ttf, otf, ttc, woff, woff2, otc | Font viewer | Drawn specimen 600×600 | Font viewer (falls back if egui can't read the font) |
-| mp3, wav, ogg, flac, aac, m4a | Audio player with waveform | Drawn waveform 280×140 | Audio player with waveform; all decode through `falcon_library::audio` (ADTS with MPEG-2 headers and Ogg Opus included); falcon also plays opus, aiff, aif, aifc and caf, which Eagle treats as plain files |
+| ttf, otf, ttc, woff, woff2 | Font viewer | Drawn specimen 600×600 | Font viewer (falls back if egui can't read the font) |
+| mp3, wav, ogg, flac, aac, m4a | Audio player with waveform | Drawn waveform 280×140 | Audio player with waveform; all decode through `falcon_library::audio` (ADTS with MPEG-2 headers and Opus in Ogg included); other sound files are plain items, as in Eagle |
 | mp4, mov, m4v, 3gp, ts, mts, m2ts | HTML5 video player, mpv fallback | QL | AVFoundation player; FFmpeg player for what it refuses (ts, mts, m2ts) |
 | webm, mkv, avi, wmv, mpg, flv, f4v | HTML5 player or mpv fallback | QL if available | AVFoundation if it can, else the FFmpeg player when installed; FFmpeg thumbnail and duration at import |
 | 360, afx, eva, vap | Video player | QL if available | AVFoundation, else FFmpeg if it reads the container |
-| glb, obj, fbx, 3ds, 3mf, dae, ifc, ply, stl | Interactive 3D viewer | QL if available (obj/stl/ply/dae usually; fbx/ifc/glb rarely) | Interactive viewer and drawn thumbnail for glb/gltf, obj, fbx, 3mf, ply, stl, dae, 3ds and ifc with tessellated geometry; QL still for ifc without it |
-| url | Live web view | QL (generic) | Live WKWebView (macOS); `.url`/`.webloc` addresses read on import |
+| glb, obj, fbx, 3ds, 3mf, dae, ifc, ply, stl | Interactive 3D viewer | QL if available (obj/stl/ply/dae usually; fbx/ifc/glb rarely) | Interactive viewer and drawn thumbnail for glb, obj, fbx, 3mf, ply, stl, dae, 3ds and ifc with tessellated geometry; QL still for ifc without it; `.gltf` is a plain item with QuickLook, as in Eagle |
+| url | Live web view | QL (generic) | Live WKWebView (macOS); `.url` addresses read on import; `.webloc`, `.htm` and `.mht` are plain items, as in Eagle |
 | html | Live web view | QL | Live page in the viewer (WKWebView) |
 | mhtml | Live web view | QL | QL still |
 
@@ -826,7 +826,7 @@ Ranked by how often a user would notice them.
 6. **No video hover-scrub preview in the grid (Missing).** Also missing: audio hover playback. GIF and WebP cards do play on hover.
 7. **No video frame tools (Missing).** You can't set a frame as the thumbnail, copy it or save it.
 8. ~~No fallback player for mkv, avi, wmv, flv or webm.~~ Fixed when FFmpeg is built (`scripts/build-ffmpeg.sh`); no AV1.
-9. ~~No interactive 3D model viewer.~~ Fixed for obj/stl/ply/glb/gltf/3mf/fbx/dae/3ds and tessellated ifc; ifc with only swept, CSG or b-spline geometry stays a still, and no format maps textures (dae and 3ds use a texture's average colour).
+9. ~~No interactive 3D model viewer.~~ Fixed for obj/stl/ply/glb/3mf/fbx/dae/3ds and tessellated ifc; ifc with only swept, CSG or b-spline geometry stays a still, and no format maps textures (dae and 3ds use a texture's average colour).
 10. **No text editor for .txt (Missing).** No editing, renaming, zoom or auto-reload, and cards don't show the text.
 11. **No viewer context menu or right-drag gestures (Missing).** Right-click menu, swipe to previous or next, drag to zoom.
 12. **No zoom slider or zoom presets menu, and different zoom keys (Partial).** Cmd+=/Cmd+-/Cmd+0/Cmd+9 and backtick don't work in the viewer.
@@ -1243,7 +1243,7 @@ Two cross-cutting facts explain many rows:
 | When an `.eaglepack` holds items already in the library, ask "N repeated files, import anyway?" | Done | Count in the title, Import / Leave Them Out, Esc imports everything, as Eagle | local |
 | Merge another Eagle library into the current one (folders and items), refusing the library already open | Done | `crates/falcon-library/src/library_merge.rs`: Eagle's id matching for folders, smart folders and tag groups; item folders copied in the background with progress and Stop; the open library is refused | local |
 | Import an Inboard backup folder (`InboardBackup.json`), with its folders recreated | Done | `ImportOptions::trashed` and `added_at`; folders recreated | local |
-| Import a Pixave library | Partial | File ▸ Import ▸ Pixave Library… and the library switcher entry (`ui/dialogs/pixave.rs`, `falcon_library::pixave`, rusqlite read-only and immutable, source never written). Eagle 4.0.0 itself has no working Pixave importer, only unused strings. The catalogue layout is not public, so only single-file `.pxvitem` items are imported, into a folder named after the library, through the ordinary import with thumbnails, duplicate check and progress. Gaps: collections and their hierarchy, tags, ratings, colour labels, notes, URLs and dates are not mapped, and referenced images outside the package are not found; Save Schema Report… writes a read-only schema dump to finish the mapping from a real library | local |
+| Import a Pixave library | Not wanted (user decision) | Eagle 4.0.0 has no Pixave importer (no menu entry, only unused strings); falcon's probe importer was removed in b586862f to match. The `.pxvlibrary` skip in folder import stays | local |
 | Import from Billfish | — (not counted) | — | — |
 | Import from Pinterest | Missing | — | online |
 | Import from Huaban | Missing | — | online |
@@ -1521,7 +1521,7 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 Rows marked "not counted" are features Eagle 4.0.0 does not have.
 
 - **Done:** 190, including 5 where falcon goes beyond Eagle and 1 with a small difference.
-- **Partial:** 5.
+- **Partial:** 4.
 - **Missing:** 39, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
 - **Different on purpose:** 1 (the API listens on localhost only).
 
@@ -1557,4 +1557,4 @@ Ranked by how often a user would hit the gap, and the risk if they do.
 26. **Localisation**: English only, against Eagle's eight languages.
 27. **Library safety checks are missing**: newer-version refusal, warnings for Desktop or Documents paths, read-only paths and slow disks, disk-space checks, and confirmation for large folders or deep trees.
 28. ~~"Empty cache and reload" is missing.~~ Fixed; "Clear Invalid Content" is not built (damaged items are skipped and reported).
-29. **Smaller gaps**: library loading progress, welcome flow, Preferences search, remembering the last pane, the Share sheet, WebP conversion, saving the current video frame, the menu bar icon, Pixave importer (catalogue layout unknown; Inboard is done), the API playground, debug report and error logs, the plugin system and plugin development, and colour-space selection.
+29. **Smaller gaps**: library loading progress, welcome flow, Preferences search, remembering the last pane, the Share sheet, WebP conversion, saving the current video frame, the menu bar icon, Inboard import is done, the API playground, debug report and error logs, the plugin system and plugin development, and colour-space selection.
