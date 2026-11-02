@@ -304,7 +304,7 @@ impl Default for Prefs {
         Prefs {
             keep_dock_icon: true,
             color_space: crate::colorspace::ColorSpace::default(),
-            vibrancy: true,
+            vibrancy: false,
             hover_zoom: true,
             keywords_as_tags: false,
             notify_duplicates: true,

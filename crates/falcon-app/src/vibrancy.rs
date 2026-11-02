@@ -315,15 +315,15 @@ mod tests {
     }
 
     #[test]
-    fn on_is_the_default_and_the_choice_is_kept() {
+    fn off_is_the_default_and_the_choice_is_kept() {
         let mut p = crate::prefs::Prefs::default();
-        assert!(p.vibrancy);
-        p.vibrancy = false;
+        assert!(!p.vibrancy, "Eagle's main window is opaque, so the blur is off by default");
+        p.vibrancy = true;
         let text = serde_json::to_string(&p).unwrap();
         let back: crate::prefs::Prefs = serde_json::from_str(&text).unwrap();
-        assert!(!back.vibrancy);
+        assert!(back.vibrancy);
         // Saved state from before the setting has none and gets the default.
         let old: crate::prefs::Prefs = serde_json::from_str(r#"{"hover_zoom":false}"#).unwrap();
-        assert!(old.vibrancy);
+        assert!(!old.vibrancy);
     }
 }
