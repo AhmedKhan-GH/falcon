@@ -106,7 +106,7 @@ Falcon is tested against a local library holding one sample of each format where
 
 | Formats | Sample |
 | --- | --- |
-| ai | A header-only stub in the test library; real files are still to be tried |
+| ai | A header-only stub in the test library. A real PDF-compatible file was checked by hand: it opens and stays sharp at 250% |
 | doc, docx | Generated with macOS `textutil` |
 | xlsx, pptx | Generated with a script |
 | xls, ppt | Apache POI's test files |
