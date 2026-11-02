@@ -84,7 +84,7 @@ fn escape(s: &str) -> String {
     s.replace('&', "&amp;").replace('<', "&lt;").replace('"', "&quot;")
 }
 
-/// Renders the specimen of a font file (ttf, otf, ttc/otc face 0, woff):
+/// Renders the specimen of a font file (ttf, otf, ttc face 0, woff):
 /// dark grey lines on white, left-aligned in a block centred on the canvas.
 pub fn render(data: &[u8], metas: &Map<String, Value>) -> Option<DynamicImage> {
     let sfnt = fontmeta::sfnt(data)?.into_owned();

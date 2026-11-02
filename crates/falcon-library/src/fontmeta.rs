@@ -303,7 +303,7 @@ fn build_sfnt(flavor: u32, tables: &[Table]) -> Vec<u8> {
     out
 }
 
-/// Parses a font file (ttf, otf, or the first face of a ttc/otc); unpack
+/// Parses a font file (ttf, otf, or the first face of a ttc); unpack
 /// WOFF and WOFF 2 with [`sfnt`] first.
 pub fn parse(data: &[u8]) -> Option<Face<'_>> {
     Face::parse(data, 0).ok()
