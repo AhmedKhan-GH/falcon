@@ -468,7 +468,7 @@ fn remap_folder(v: &mut Value, folder_ids: &mut HashMap<String, String>, item_id
 /// duration, other files by size, dimensions and extension. SVG, TIFF and
 /// BMP are never treated as duplicates.
 fn duplicate_key(item: &Item) -> Option<String> {
-    const VIDEO: &[&str] = &["mp4", "mov", "m4v", "webm", "avi", "mkv", "wmv", "flv", "3gp", "ogv"];
+    const VIDEO: &[&str] = &["mp4", "mov", "m4v", "webm", "avi", "mkv", "wmv", "flv", "3gp"];
     match item.ext.as_str() {
         "svg" | "tif" | "tiff" | "bmp" | "url" => None,
         ext if VIDEO.contains(&ext) => Some(format!("v-{}{}", item.size, item.extra.get("duration").map(Value::to_string).unwrap_or_default())),

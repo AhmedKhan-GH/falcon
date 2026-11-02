@@ -71,12 +71,10 @@ pub fn available() -> bool {
     ffi::api().is_ok()
 }
 
-/// File extensions macOS can't play that falcon hands to FFmpeg: Eagle's
-/// video formats outside mp4/mov/m4v, and other common containers.
-pub const EXTENSIONS: [&str; 22] = [
-    "mkv", "webm", "avi", "wmv", "asf", "flv", "f4v", "ogv", "ogg", "ts", "mts", "m2ts", "mpg", "mpeg", "vob", "3gp", "3g2", "rm",
-    "rmvb", "divx", "mxf", "nut",
-];
+/// File extensions macOS can't play that falcon hands to FFmpeg first:
+/// Eagle's video formats outside mp4, mov and m4v (and the 360, afx, vap
+/// and eva camera formats, which go to macOS first).
+pub const EXTENSIONS: [&str; 11] = ["mkv", "webm", "avi", "wmv", "flv", "f4v", "ts", "mts", "m2ts", "mpg", "3gp"];
 
 /// Whether files with extension `ext` (any case) go to FFmpeg first.
 pub fn handles(ext: &str) -> bool {
@@ -90,10 +88,10 @@ mod tests {
 
     #[test]
     fn fallback_formats() {
-        for ext in ["mkv", "WEBM", "avi", "wmv", "flv", "ts", "m2ts", "3gp", "rm", "ogv"] {
+        for ext in ["mkv", "WEBM", "avi", "wmv", "flv", "ts", "m2ts", "3gp"] {
             assert!(handles(ext), "{ext}");
         }
-        for ext in ["mp4", "mov", "m4v", "png", ""] {
+        for ext in ["mp4", "mov", "m4v", "png", "", "ogv", "rm", "ogg"] {
             assert!(!handles(ext), "{ext}");
         }
     }
