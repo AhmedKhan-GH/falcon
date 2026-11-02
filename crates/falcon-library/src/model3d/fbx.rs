@@ -10,11 +10,20 @@
 //! UVs (v flipped to picture space), wrap modes and UV transform. A
 //! picture that is missing or can't be decoded leaves the colour.
 //!
+//! The surface follows what Eagle's viewer shows for FBX: the `Bump` and
+//! `NormalMap` pictures (also Maya's `TEX_normal_map`) are read the same
+//! way and share the mesh's UVs; the one UV transform baked in is the base
+//! map's, else the normal map's, else the bump map's. A material is drawn
+//! see-through when its opacity is below 1 or a texture is connected to
+//! `TransparentColor` or `TransparencyFactor` (that picture is not drawn).
+//! Emissive colour and maps are deliberately not read: the viewer drops
+//! them for FBX, so the emissive stays black.
+//!
 //! The scene is converted to the viewer's convention: right-handed, Y up,
 //! and centimetres, the FBX default unit (the file's `UnitScaleFactor` is
 //! applied, so a file saved in metres shows sizes in centimetres too).
 //!
-//! Not read: other maps (normal, specular, ...), vertex colours, skinning
+//! Not read: other maps (emissive, specular, ...), vertex colours, skinning
 //! and blend shapes (meshes stay in their bind pose), animation, cameras,
 //! lights, NURBS and external files other than texture pictures.
 
@@ -105,6 +114,17 @@ fn node_meshes(node: &ufbx::Node, mesh: &ufbx::Mesh, loader: &mut texture::Loade
         let mut m = Mesh { name: node.element.name.to_string(), ..Default::default() };
         let mat = materials.get(part.index as usize);
         let tex = mat.and_then(|mat| map_texture(mat, loader));
+        // The normal and bump maps need the mesh's UVs, so are not decoded
+        // without them.
+        let (normal, bump) = match mat {
+            Some(mat) if uvs.exists => (
+                loader.for_map(|l| normal_texture(mat).and_then(|t| file_texture(t, l))),
+                loader.for_map(|l| mat.fbx.bump.texture.as_ref().and_then(|t| file_texture(t, l))),
+            ),
+            _ => (None, None),
+        };
+        // One transform for all the maps: the first map's that exists.
+        let transform = tex.as_ref().or(normal.as_ref()).or(bump.as_ref()).and_then(|t| t.1);
         let mut ns: Vec<V3> = Vec::new();
         let mut uv_out: Vec<[f32; 2]> = Vec::new();
         // (position index, normal index, uv index) → output vertex.
@@ -131,7 +151,7 @@ fn node_meshes(node: &ufbx::Node, mesh: &ufbx::Mesh, loader: &mut texture::Loade
                         ns.push(math::normalize(v3(ufbx::transform_direction(&normal_matrix, nv))));
                         if uvs.exists {
                             let uv = uvs.values.get(ui as usize).copied().unwrap_or_default();
-                            uv_out.push(picture_uv(uv, tex.as_ref().and_then(|t| t.1.as_ref())));
+                            uv_out.push(picture_uv(uv, transform.as_ref()));
                         }
                         next
                     });
@@ -148,6 +168,9 @@ fn node_meshes(node: &ufbx::Node, mesh: &ufbx::Mesh, loader: &mut texture::Loade
         // A picture without UVs can't be laid on.
         m.texture = tex.filter(|_| uvs.exists).map(|t| t.0);
         m.material = mat.map(|m| material(m));
+        m.surface.normal_map = normal.map(|t| t.0);
+        m.surface.bump_map = bump.map(|t| t.0);
+        m.surface.blend = mat.is_some_and(|mat| see_through(mat, m.material.as_ref().map_or(1.0, |m| m.opacity)));
         out.push(m);
     }
     out
@@ -173,8 +196,19 @@ fn wrap(w: ufbx::WrapMode) -> Wrap {
 /// The material's diffuse texture, decoded, with its UV transform if any.
 fn map_texture(mat: &ufbx::Material, loader: &mut texture::Loader) -> Option<(Texture, Option<ufbx::Matrix>)> {
     let tex = mat.pbr.base_color.texture.as_ref().or(mat.fbx.diffuse_color.texture.as_ref())?;
+    file_texture(tex, loader)
+}
+
+/// The texture connected as the normal map (FBX `NormalMap`, Maya's
+/// `TEX_normal_map`).
+fn normal_texture(mat: &ufbx::Material) -> Option<&ufbx::Texture> {
+    mat.fbx.normal_map.texture.as_ref().or(mat.pbr.normal_map.texture.as_ref()).map(|t| &**t)
+}
+
+/// The picture of a texture, decoded, with its UV transform if any.
+fn file_texture(tex: &ufbx::Texture, loader: &mut texture::Loader) -> Option<(Texture, Option<ufbx::Matrix>)> {
     // A layered or procedural texture: its first picture.
-    let file = if tex.type_ == ufbx::TextureType::File { Some(&**tex) } else { tex.file_textures.first().map(|t| &**t) }?;
+    let file = if tex.type_ == ufbx::TextureType::File { Some(tex) } else { tex.file_textures.first().map(|t| &**t) }?;
     let name = |p: &str| p.rsplit(['/', '\\']).next().unwrap_or(p).to_string();
     // An empty blob has a null pointer: test its size, not the slice.
     let image = if file.content.size > 0 {
@@ -189,13 +223,23 @@ fn map_texture(mat: &ufbx::Material, loader: &mut texture::Loader) -> Option<(Te
     Some((t, file.has_uv_transform.then_some(file.uv_to_texture)))
 }
 
+/// Whether the material is drawn see-through: opacity below 1, or a
+/// texture on its transparency colour or factor.
+fn see_through(mat: &ufbx::Material, opacity: f32) -> bool {
+    opacity < 1.0 - 1e-6 || mat.fbx.transparency_color.texture.is_some() || mat.fbx.transparency_factor.texture.is_some()
+}
+
 fn material(mat: &ufbx::Material) -> Material {
     let pbr = &mat.pbr;
     let c = pbr.base_color.value_vec4;
     let factor = if pbr.base_factor.has_value { pbr.base_factor.value_vec4.x } else { 1.0 };
     let color = [c.x, c.y, c.z].map(|v| ((v * factor) as f32).clamp(0.0, 1.0));
     let color = if pbr.base_color.has_value { color } else { super::DEFAULT_COLOR };
-    let opacity = if pbr.opacity.has_value { (pbr.opacity.value_vec4.x as f32).clamp(0.0, 1.0) } else { 1.0 };
+    // Only the `Opacity` property, as in Eagle's viewer. `TransparencyFactor`
+    // is no guide: exporters commonly write 1 on fully opaque materials.
+    let opacity = ufbx::find_prop(&mat.element.props, "Opacity").map_or(1.0f32, |p| p.value_vec4.x as f32);
+    // NaN counts as opaque.
+    let opacity = if opacity.is_nan() { 1.0 } else { opacity.clamp(0.0, 1.0) };
     Material { name: mat.element.name.to_string(), color, opacity }
 }
 
@@ -475,6 +519,13 @@ mod tests {
     /// texture `tex.png` (wrapped along u by `wrap_u`, 0 repeat, 1 clamp),
     /// with an embedded picture when `content` is given.
     fn textured_file(wrap_u: i32, content: Option<Vec<u8>>) -> Vec<N> {
+        textured_on("DiffuseColor", wrap_u, content, true, vec![])
+    }
+
+    /// As [`textured_file`] with the texture connected to the material
+    /// property `on`, the UVs left out unless `uvs`, and `extra` material
+    /// properties added.
+    fn textured_on(on: &'static str, wrap_u: i32, content: Option<Vec<u8>>, uvs: bool, extra: Vec<N>) -> Vec<N> {
         let verts = vec![0., 0., 0., 1., 0., 0., 1., 1., 0., 0., 1., 0.];
         let uv = vec![0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.25, 0.0, 0.0, 1.0];
         let mut texture = vec![
@@ -491,7 +542,7 @@ mod tests {
                     n("Vertices", vec![P::Doubles(verts)], vec![]),
                     n("PolygonVertexIndex", vec![P::Ints(vec![0, 1, -3, 0, 2, -4])], vec![]),
                     n(
-                        "LayerElementUV",
+                        if uvs { "LayerElementUV" } else { "Unused" },
                         vec![P::Int(0)],
                         vec![
                             n("Version", vec![P::Int(101)], vec![]),
@@ -510,7 +561,7 @@ mod tests {
                 vec![P::Id(3000), P::Name("Material", "Red"), P::S("")],
                 vec![
                     n("ShadingModel", vec![P::S("phong")], vec![]),
-                    n("Properties70", vec![], vec![prop("DiffuseColor", "Color", vec![P::D(1.0), P::D(0.0), P::D(0.0)])]),
+                    n("Properties70", vec![], std::iter::once(prop("DiffuseColor", "Color", vec![P::D(1.0), P::D(0.0), P::D(0.0)])).chain(extra).collect()),
                 ],
             ),
         ];
@@ -518,7 +569,7 @@ mod tests {
             n("C", vec![P::S("OO"), P::Id(1000), P::Id(2000)], vec![]),
             n("C", vec![P::S("OO"), P::Id(2000), P::Id(0)], vec![]),
             n("C", vec![P::S("OO"), P::Id(3000), P::Id(2000)], vec![]),
-            n("C", vec![P::S("OP"), P::Id(4000), P::Id(3000), P::S("DiffuseColor")], vec![]),
+            n("C", vec![P::S("OP"), P::Id(4000), P::Id(3000), P::S(on)], vec![]),
         ];
         if let Some(bytes) = content {
             // The embedded picture is not the sidecar file, so a test can
@@ -582,6 +633,71 @@ mod tests {
         // A mesh without UVs has no texture to lay on.
         let m = parse(&ascii(&box_file(1, 1.0, 0.0, 1.0)), &|_| Some(super::texture::tests::png_2x2())).unwrap();
         assert!(m.meshes[0].uvs.is_none() && m.meshes[0].texture.is_none());
+    }
+
+    #[test]
+    fn bump_and_normal_sidecar_maps_are_read() {
+        let png = super::texture::tests::png_2x2();
+        let side = |name: &str| (name == "tex.png").then(|| png.clone());
+        for (on, want_normal) in [("Bump", false), ("NormalMap", true)] {
+            let m = parse(&ascii(&textured_on(on, 0, None, true, vec![])), &side).unwrap();
+            let mesh = &m.meshes[0];
+            let s = &mesh.surface;
+            assert!(mesh.texture.is_none(), "{on}: not the base map");
+            let got = if want_normal { &s.normal_map } else { &s.bump_map };
+            assert_eq!(got.as_ref().map(|t| t.image.width), Some(2), "{on}");
+            assert!(if want_normal { s.bump_map.is_none() } else { s.normal_map.is_none() }, "{on}");
+            assert!(s.emissive_map.is_none() && s.emissive == [0.0; 3] && !s.blend, "{on}");
+            assert!(mesh.uvs.is_some());
+        }
+    }
+
+    #[test]
+    fn an_embedded_normal_map_is_read_from_binary() {
+        let embedded = super::texture::tests::png(3, 1, [9, 8, 7, 255]);
+        let m = parse(&binary(&textured_on("NormalMap", 0, Some(embedded), true, vec![])), &|_| None).unwrap();
+        let tex = m.meshes[0].surface.normal_map.as_ref().expect("normal map");
+        assert_eq!((tex.image.width, tex.image.height), (3, 1));
+    }
+
+    #[test]
+    fn opacity_and_transparency_textures_set_blend() {
+        let opacity = |v: f64| vec![prop("Opacity", "double", vec![P::D(v)])];
+        let blend = |file: Vec<N>| parse(&ascii(&file), &|_| None).unwrap().meshes[0].surface.blend;
+        assert!(blend(textured_on("DiffuseColor", 0, None, true, opacity(0.5))));
+        assert!(!blend(textured_on("DiffuseColor", 0, None, true, opacity(1.0))));
+        assert!(!blend(textured_on("DiffuseColor", 0, None, true, vec![])));
+        // A TransparencyFactor value alone is not opacity: exporters write 1
+        // on opaque materials.
+        let factor = vec![prop("TransparencyFactor", "double", vec![P::D(1.0)])];
+        assert!(!blend(textured_on("DiffuseColor", 0, None, true, factor)));
+        // A transparency texture alone, with no picture to read.
+        assert!(blend(textured_on("TransparencyFactor", 0, None, true, vec![])));
+        assert!(blend(textured_on("TransparentColor", 0, None, true, vec![])));
+        let png = super::texture::tests::png_2x2();
+        let m = parse(&ascii(&textured_on("TransparencyFactor", 0, None, true, vec![])), &|_| Some(png.clone())).unwrap();
+        assert!(m.meshes[0].surface.blend && m.meshes[0].texture.is_none(), "the transparency picture is not drawn");
+        assert_eq!(m.meshes[0].material.as_ref().unwrap().opacity, 1.0);
+    }
+
+    #[test]
+    fn a_missing_or_bad_map_stays_none() {
+        for side in [&(|_: &str| None) as &dyn Fn(&str) -> Option<Vec<u8>>, &|_: &str| Some(b"nope".to_vec())] {
+            let m = parse(&ascii(&textured_on("Bump", 0, None, true, vec![])), side).unwrap();
+            assert_eq!(m.meshes.len(), 1);
+            assert!(m.meshes[0].surface.bump_map.is_none() && m.meshes[0].uvs.is_some());
+            assert_eq!(m.meshes[0].material.as_ref().unwrap().color, [1.0, 0.0, 0.0]);
+        }
+    }
+
+    #[test]
+    fn maps_without_uvs_are_dropped() {
+        let png = super::texture::tests::png_2x2();
+        for on in ["Bump", "NormalMap"] {
+            let m = parse(&ascii(&textured_on(on, 0, None, false, vec![])), &|_| Some(png.clone())).unwrap();
+            let mesh = &m.meshes[0];
+            assert!(mesh.uvs.is_none() && mesh.surface.bump_map.is_none() && mesh.surface.normal_map.is_none(), "{on}");
+        }
     }
 
     #[test]
