@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 258 | 6 | 6 | 10 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 260 | 6 | 6 | 8 |
 | Viewers and file formats | 187 | 14 | 2 | 5 |
 | Search, filters and organising | 216 | 1 | 2 | 3 |
-| Import, export, library, preferences and integrations | 190 | 4 | 12 | 27 |
-| **Total** | 851 | 25 | 22 | 45 |
+| Import, export, library, preferences and integrations | 190 | 5 | 12 | 26 |
+| **Total** | 853 | 26 | 22 | 42 |
 
 Rows marked **Not wanted (user decision)** (4) are Eagle features the user chose not to have in falcon; they are counted outside the local Missing total.
 ## Fix first
@@ -29,7 +29,7 @@ These are bugs, not missing features. The first four can lose data or edits.
 ## Biggest gaps
 
 1. ~~Every viewer opens inside the window between the sidebar and inspector in Eagle, with a toolbar button that hides both. Falcon does this only for PDFs.~~ Fixed: every viewer draws in the central panel, with the panels button, ⌥⌘3 and Tab.
-2. ~~No application menu bar.~~ Fixed: native File / Edit / Find / Organize / View / Window / Help menus with live shortcuts (Eagle's Actions menu is the `ai-action` plugin; no plugin functionality for now).
+2. ~~No application menu bar.~~ Fixed: native File / Edit / Find / Organize / View / Window / Help menus with live shortcuts and falcon's own Actions menu while falcon has actions (Eagle's is the `ai-action` plugin).
 3. Preferences: 8 panes and about 30 settings against Eagle's 13 panes and about 80 settings; the rest are listed in §6.
 4. ~~The full-size image is capped at 3072 px.~~ Fixed: the original is tiled at full resolution; HEIC/AVIF/JXL still come from a 3072 px QuickLook render (no decoders).
 5. ~~Folder import flattens structure; no duplicate check on import; no import error list.~~ Fixed.
@@ -53,7 +53,7 @@ Paths: Eagle paths are relative to `eagle-src/app/` (`bundle` = `app/app.bundle.
 
 Every falcon status here was checked in the code. ROADMAP and docs were not used. Rows that belong to other audits (viewers, search and filters, import, export, library, preferences, API) appear only as cross-references at the end of each section and are **not counted**.
 
-Overall finding: falcon now has a native menu bar (`crates/falcon-app/src/menu.rs`, AppKit through `objc2-app-kit`) with File, Edit, Find, Organize, View, Window and Help menus whose items show their live shortcuts, enable and disable with the app's state and carry checkmarks. It holds only commands falcon has; Eagle's Actions menu (`ai-action` plugin) and its online items are absent.
+Overall finding: falcon now has a native menu bar (`crates/falcon-app/src/menu.rs`, AppKit through `objc2-app-kit`) with File, Edit, Find, Organize, View, Window and Help menus whose items show their live shortcuts, enable and disable with the app's state and carry checkmarks. It holds only commands falcon has, plus falcon's own Actions menu while falcon has actions (Eagle's is the `ai-action` plugin, and falcon keeps its actions in its app data, never in `actions.config.json`); Eagle's online items are absent.
 
 ---
 
@@ -61,7 +61,7 @@ Overall finding: falcon now has a native menu bar (`crates/falcon-app/src/menu.r
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| A menubar with File / Edit / Find / Organize / View / Actions / Window / Help menus, each item showing its live shortcut | Partial | Native AppKit menus in `crates/falcon-app/src/menu.rs` (File, Edit, Find, Organize, View, Window, Help) with live shortcuts, enabled rules and checkmarks; clicks run through `App::run_command`. no Actions menu (Eagle plugin `ai-action`; no plugin functionality for now); only commands falcon has | local |
+| A menubar with File / Edit / Find / Organize / View / Actions / Window / Help menus, each item showing its live shortcut | Partial | Native AppKit menus in `crates/falcon-app/src/menu.rs` (File, Edit, Find, Organize, View, Window, Help) with live shortcuts, enabled rules and checkmarks; clicks run through `App::run_command`. Actions is falcon's own (Eagle's is the `ai-action` plugin), shown while falcon has actions; only commands falcon has | local |
 | App menu: About | Done | `ui/dialogs/about.rs`, replacing winit's stock item | local |
 | App menu: Preferences… (⌘,) | Done | shortcuts.rs `app.preferences`; in the app menu after About (`menu.rs`) and in the library switcher | local |
 | App menu: Lock Now (⌘⌥L, locks the whole app behind a password or Touch ID) | Done | ⌥⌘L locks the app (`applock.rs`); unlock by password or Touch ID (`touch_id.rs`, LAContext through `msg_send!`, pref `touch_id` shown only when available) | local |
@@ -104,7 +104,7 @@ Overall finding: falcon now has a native menu bar (`crates/falcon-app/src/menu.r
 | View: Show Name (⌥⌘4), Show Item Info (⌥⌘5), Show Comment count (⌥⌘6) | Done | shortcuts.rs `view.toggle.listname/listmetas/listannotation`, View menu checkmarks, `logic::Display` | local |
 | View: Show Subfolder Content (⌥⌘7) | Done | `view.toggle.subfolder`, `logic::folder_members`, `grid_order` in organize_ui.rs; the layout panel and the strip heading have the switch too | local |
 | View: Enter / Leave Presentation Mode (F5) | Done | `view.toggle.slideshow`: full screen with panels and the viewer bar hidden; arrows step, Esc leaves. Eagle has no timer or shuffle either | local |
-| Actions menu: user-defined Actions, each with its own shortcut | Missing | Eagle plugin (ai-action); no plugin functionality for now. In Eagle 4.0.0 the Actions menu, runner and editor are the separately installed `ai-action` plugin (see PLUGINS.md); falcon's own Actions were removed and falcon never reads, creates, changes or deletes `actions.config.json` | online/plugin |
+| Actions menu: user-defined Actions, each with its own shortcut | Done | Falcon's own implementation of a feature that is a plugin in Eagle (`ai-action`): a native Actions menu between View and Window, shown only while falcon has actions for the open library, each entry with its accelerator and enabled state (`action_enabled`: selection, not Trash, runnable); panel with search, run, Edit/Duplicate/Remove and New Action; editor with steps, tag and folder pickers and a shortcut recorder that refuses conflicts (`crates/falcon-app/src/actions/`). Actions are stored in `<app data>/actions/<path-hash>.json` (atomic writes); falcon never reads, creates, changes or deletes `<library>/actions.config.json` (`actions/storage_tests.rs`) | local |
 | Window: Toggle Full Screen, Minimize, Close Window (⌘W) | Done | ⌃⌘F, ⌘M and ⌘W through eframe viewport commands; ⌘W closes the viewer first, then the window (which quits falcon, like the red button) | local |
 | Help: Help Center, Show Tutorial, Install Extensions, Feedback, Recover license, Change Logs | Missing | Not applicable | online/plugin |
 | Help: Error Logs, Export Debug Report… | Done | Errors and panics logged to `~/Library/Logs/Falcon`; Help ▸ Error Logs and Export Debug Report (a zip of system, library and log details; no network or disk tests) | local |
@@ -211,7 +211,7 @@ Eagle defaults come from prefs `shortcuts.keybinds` (rebindable) and from the ha
 | ⌥⌘S reveal, ⌥⌘D duplicate (view) | Done | `view.reveal.darwin` ⌥⌘S and `view.duplicate.darwin` ⌥⌘D (inert in Eagle itself; macOS reserves ⌥⌘D for the Dock) | local |
 | Home / End / PageUp / PageDown scroll the grid; ⌘↑ / ⌘↓ jump to top or bottom | Done | `run_command` scroll offsets; ⌘↑ / ⌘↓ also select the first or last item, where Eagle only scrolls | local |
 | 0–5 set the rating of the selection | Done | `organize.rating.*` in the grid and every viewer (bare 0/1 no longer zoom the image viewer, as Eagle); the web viewer takes the keys while its page has focus | local |
-| T opens the tag panel, F opens the folder panel, J opens Go to Folder, G opens Actions, P opens Plugins | Done | T opens the tag picker, F the Add to Folders picker (`organize.folder.panel`), J Go to Folder; G (Actions) and P (Plugins) are Eagle plugin features (`ai-action`), not applicable while falcon has no plugin functionality | local |
+| T opens the tag panel, F opens the folder panel, J opens Go to Folder, G opens Actions, P opens Plugins | Done | T opens the tag picker, F the Add to Folders picker (`organize.folder.panel`), J Go to Folder; G opens falcon's Actions panel (`organize.actions.panel`; Eagle's is the `ai-action` plugin); P (Plugins) is not applicable | local |
 | R reshuffles the Random view | Done | R and View ▸ Shuffle Again; also a folder or smart folder sorted Random | local |
 | `*` or `/` expand or collapse every folder | Done | Eagle's `toggleAllFolders` rule (smart folders when one is open); `*` is the ⇧8 alias chord | local |
 | Tab toggles all panels | Done | Fixed key in shortcuts.rs FIXED, when no text field has focus (`logic::toggle_all`) | local |
@@ -253,7 +253,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Layout and sort panel button | Done | `app/layout_panel.rs` in Eagle's order (layout, Fit/Fill, sort, Show Name/Info/Extension/Label/Comments/Subfolders, sidebar and inspector, Refresh); no Speed/Quality | local |
 | Filter button with an active state | Done | app.rs:2034, 2043-2049 | local |
 | Search field with a scope menu (Tags / URL / Comment / Note) and a search-by-image camera | Partial | Search scope menu on the caret (`search_scope_menu`); the camera is disabled (search by image is online) | local |
-| Actions button | Missing | Eagle plugin (ai-action); no plugin functionality for now: Eagle's toolbar Actions button belongs to the plugin | online/plugin |
+| Actions button | Done | Falcon's own implementation of a feature that is a plugin in Eagle (`ai-action`): the lightning button left of the layout button opens the panel under it and is hidden on All Tags, as in Eagle (`ui/toolbar/mod.rs`) | local |
 | Plugins button | Missing | Drawn disabled (app.rs:2040) | online/plugin |
 | AI Search button | Missing |  | online/plugin |
 | Show-inspector button when the inspector is hidden | Done | app.rs:3642-3646 | local |
@@ -429,7 +429,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 
 ### Missing and Partial local items, ranked by how noticeable they are
 
-1. ~~No application menubar.~~ Fixed; Eagle's Actions menu is the `ai-action` plugin, no plugin functionality for now.
+1. ~~No application menubar.~~ Fixed, with falcon's own Actions menu (Eagle's is the `ai-action` plugin).
 2. Shortcuts missing: T (tags), F (folders), ⌘J Go to Folder, ⇧-arrows, ⌘T and copy/paste tags, ⇧D last folder, ⌘D duplicate, ⇧T always on top, F5, ⌘O new window.
 3. ~~Layout, history and rename keys differ from Eagle.~~ Fixed; what remains is Home/End/PgUp/PgDn, ⌘1–7 and the other missing keys in §3.
 4. ~~Dragging items between folders adds them instead of moving them.~~ Fixed; the drop toast still has no link to the folder.
@@ -1100,7 +1100,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Rate all | Done | `A:3003`, Action::BatchRating | local |
 | Total size | Done | `A:3007` | local |
 | Batch rename with a template (%NN, $D, original name, tags, folders, index, date) and find/replace with regex | Done | Rename N Items dialog (`rename.rs`): `%NN`, dates, original name, tags, folders, `%F`, index, find/replace | local |
-| Confirm bulk actions on many items | Done | `push_bulk` / `push_bulk_at`: rating, trash, drops, batch notes/URL, the folder panel, Add to Last Used, Pin/Unpin, Show in Finder and Open in default app on several, Remove from Group; folder delete at 50 items; Eagle's Actions menu gate (30 items) belongs to the `ai-action` plugin, not applicable. Eagle also gates fonts and plugins (out of scope) | local |
+| Confirm bulk actions on many items | Done | `push_bulk` / `push_bulk_at`: rating, trash, drops, batch notes/URL, the folder panel, Add to Last Used, Pin/Unpin, Show in Finder and Open in default app on several, Remove from Group; folder delete at 50 items; action runs ask from 30 items (`RUN_CONFIRM`, `push_bulk_at`), as Eagle's Actions menu does. Eagle also gates fonts and plugins (out of scope) | local |
 | New Folder with Selection | Done | Item menu, `folders_ui` `new_with_dialog` | local |
 | Add To Last Used Folder | Done | ⇧D, Organize menu, card menu | local |
 | Remove from the current folder | Done | ⇧⌘⌫, Edit menu and card menu | local |
@@ -1494,7 +1494,7 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 | Plugin system: window, inspector, format (thumbnail and preview) and background-service plugins | Missing | Out of scope: Eagle's plugin platform | local |
 | Plugin Center (browse, install, update, disable or uninstall; sort and search) | Missing | — | online/plugin |
 | Plugin development (create from template, import a local project, pack, publish, reload, DevTools) | Missing | Out of scope: Eagle's plugin platform | local |
-| Actions (recorded multi-step automations with shortcuts) | Missing | Eagle plugin (ai-action); no plugin functionality for now (same feature as the Actions menu row) | online/plugin |
+| Actions (recorded multi-step automations with shortcuts) | Partial | Falcon's own implementation of a feature that is a plugin in Eagle (`ai-action`): seven rule steps (add/remove/clear tags, add/remove/clear folders, rating) run in order on the multi-selection as one undo step, with per-action app-wide shortcuts and the 30-item confirm. Gap: the plugin's AI steps (auto-tag, describe) need AI Models (see PLUGINS.md) | local |
 | AI Search: semantic and similar-image search on the device | Missing | — | online/plugin (model download) |
 | AI Models: shared model configuration | Missing | — | online/plugin |
 | Eagle MCP server plugin | Missing | — | online/plugin |
@@ -1521,8 +1521,8 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 Rows marked "not counted" are features Eagle 4.0.0 does not have.
 
 - **Done:** 190, including 5 where falcon goes beyond Eagle and 1 with a small difference.
-- **Partial:** 4.
-- **Missing:** 39, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
+- **Partial:** 5.
+- **Missing:** 38, including 3 left out on purpose (`script/inject`, `/api/check`, licensing).
 - **Different on purpose:** 1 (the API listens on localhost only).
 
 ### Ranked Missing and Partial local items
