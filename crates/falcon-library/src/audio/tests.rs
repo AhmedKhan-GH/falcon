@@ -185,3 +185,67 @@ fn video_soundtracks_decode_through_ffmpeg_when_installed() {
     assert!((frames as i64 - 24_000).abs() < 500, "half a second at 48 kHz: {frames}");
     assert!((s.position() - 1.0).abs() < 0.02);
 }
+
+/// A copy of fixture `name` under the name `to`, as a video file of that
+/// container would be found in a library.
+fn copy_as(dir: &Path, name: &str, to: &str) -> PathBuf {
+    let p = dir.join(to);
+    std::fs::copy(fixture(name), &p).unwrap();
+    p
+}
+
+#[test]
+fn iso_media_soundtracks_decode_natively_whatever_the_extension() {
+    // The hover preview of an mp4, mov, m4v or 3gp card plays the sound of
+    // the file by its contents: the extension is only a hint. The fixtures
+    // are MP4 files whose one track is AAC or ALAC.
+    let dir = tempfile::tempdir().unwrap();
+    for (src, ext, onset) in [("tone.m4a", "mp4", 0.5), ("tone.m4a", "mov", 0.5), ("tone.m4a", "m4v", 0.5), ("alac.m4a", "mp4", 0.5), ("alac.m4a", "3gp", 0.5)] {
+        let name = format!("clip-{src}.{ext}");
+        let p = copy_as(dir.path(), src, &name);
+        let mut s = open(&p, ext).unwrap_or_else(|e| panic!("{name}: {e}"));
+        assert_eq!(s.backend(), "symphonia", "{name}");
+        assert!((s.duration().unwrap() - 1.0).abs() < 0.005, "{name}");
+        // Following a scrub: seek, then the position and the tone agree.
+        for at in [0.3, 0.05, 0.38] {
+            let wait = onset_after_seek(s.as_mut(), at);
+            assert!((wait - (onset - at)).abs() < 0.005, "{name}: {at} then {wait}");
+        }
+        assert!((s.seek(0.7).unwrap() - 0.7).abs() < 0.01 && (s.position() - 0.7).abs() < 0.01, "{name}");
+        assert!(loudest(s.next_block().unwrap()) > 0.2, "{name}: inside the tone");
+        // Seeking past the end stays inside the stream.
+        assert!(s.seek(99.0).unwrap() <= 1.0 + 0.005, "{name}");
+    }
+}
+
+#[test]
+fn a_container_without_a_native_reader_needs_ffmpeg() {
+    // Matroska and WebM have no symphonia reader here: with no FFmpeg the
+    // hover preview stays silent (the open fails with the reason), with
+    // one the same file decodes through it.
+    let dir = tempfile::tempdir().unwrap();
+    let samples: Vec<i16> = (0..16_000).map(|n| if n < 8000 { 0 } else { ((n as f64 * 440.0 * std::f64::consts::TAU / 8000.0).sin() * 12000.0) as i16 }).collect();
+    for (webm, ext) in [(false, "mkv"), (true, "webm")] {
+        let p = dir.path().join(format!("clip.{ext}"));
+        std::fs::write(&p, falcon_ffmpeg::testing::mkv::pcm_matroska(webm, 8000, &samples)).unwrap();
+        if !falcon_ffmpeg::available() {
+            assert_eq!(open(&p, ext).err(), Some(AudioError::UnknownFormat), "{ext} without FFmpeg");
+            continue;
+        }
+        let mut s = open(&p, ext).unwrap_or_else(|e| panic!("{ext}: {e}"));
+        assert_eq!((s.backend(), s.channels(), s.sample_rate()), ("ffmpeg", 2, 48_000), "{ext}");
+        assert!((s.duration().unwrap() - 2.0).abs() < 0.05, "{ext}");
+        // Silent for the first second, then the tone: after a seek to 0.9
+        // the tone starts 0.1 s on; after one to 1.5 it is already going.
+        let wait = onset_after_seek(s.as_mut(), 0.9);
+        assert!((wait - 0.1).abs() < 0.03, "{ext}: tone came {wait}s after the seek");
+        assert!(onset_after_seek(s.as_mut(), 1.5) < 0.03, "{ext}: tone already playing");
+        assert!((s.seek(0.0).unwrap()).abs() < 1e-9);
+        let mut frames = 0;
+        while let Some(b) = s.next_block() {
+            frames += b.frames().count();
+        }
+        assert!((frames as i64 - 96_000).abs() < 1500, "{ext}: two seconds at 48 kHz: {frames}");
+        assert!((s.position() - 2.0).abs() < 0.03, "{ext}: {}", s.position());
+    }
+}

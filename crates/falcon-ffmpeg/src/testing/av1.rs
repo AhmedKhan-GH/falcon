@@ -245,7 +245,7 @@ impl Av1Clip {
 }
 
 /// A Matroska element: ID, size (as an eight-byte vint) and data.
-fn el(id: u32, data: &[u8]) -> Vec<u8> {
+pub(super) fn el(id: u32, data: &[u8]) -> Vec<u8> {
     let id = id.to_be_bytes();
     let skip = id.iter().take_while(|b| **b == 0).count();
     let mut v = id[skip..].to_vec();
@@ -256,7 +256,7 @@ fn el(id: u32, data: &[u8]) -> Vec<u8> {
 }
 
 /// A Matroska unsigned integer element, in eight bytes.
-fn uint(id: u32, value: u64) -> Vec<u8> {
+pub(super) fn uint(id: u32, value: u64) -> Vec<u8> {
     el(id, &value.to_be_bytes())
 }
 

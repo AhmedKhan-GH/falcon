@@ -4,6 +4,7 @@
 //! [`av1`] rewraps an AV1 stream encoded elsewhere in WebM, Matroska and MP4.
 
 pub mod av1;
+pub mod mkv;
 
 /// An AVI clip to write: `frames` pictures of `width` × `height` at `fps`,
 /// with a 440 Hz stereo tone at `audio_rate` samples per second if given.
