@@ -4,9 +4,10 @@
 //! parse of the same file supplies the schema and, for products that come
 //! out empty, whether they had a shape at all and which geometry types it
 //! used, so the inspector's counts mean the same as with falcon's own
-//! reader.
+//! reader. A product whose openings cut it away completely is neither
+//! shown nor skipped.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use super::ifc::{HIDDEN, Report, display_name, rep_rank};
 use super::step::{StepFile, Value};
@@ -34,13 +35,21 @@ pub(super) fn read(file: &StepFile, bytes: &[u8]) -> Result<Option<(Option<Model
     };
     let mut report = Report { schema: file.schemas.first().cloned().unwrap_or_default(), ..Default::default() };
     let mut unsupported: HashMap<String, usize> = HashMap::new();
+    // Products with openings: one that comes out empty was cut away whole
+    // (a frame placeholder filled by its opening, say), not left unread.
+    let voided: HashSet<u64> = file
+        .entities
+        .values()
+        .filter(|e| e.name == "IFCRELVOIDSELEMENT")
+        .filter_map(|e| e.arg(4).as_ref_id())
+        .collect();
     for p in &scene.products {
         if p.geometries > 0 {
             report.shown += 1;
             continue;
         }
         let upper = p.type_name.to_ascii_uppercase();
-        if HIDDEN.contains(&upper.as_str()) {
+        if HIDDEN.contains(&upper.as_str()) || voided.contains(&u64::from(p.id)) {
             continue;
         }
         let Some(kinds) = shape_kinds(file, u64::from(p.id)) else { continue };

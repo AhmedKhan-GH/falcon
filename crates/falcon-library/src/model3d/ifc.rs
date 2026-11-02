@@ -172,6 +172,8 @@ const TYPES: &[(&str, &str, Option<V3>)] = &[
     ("IFCPOLYGONALBOUNDEDHALFSPACE", "IfcPolygonalBoundedHalfSpace", None),
     ("IFCBOUNDINGBOX", "IfcBoundingBox", None),
     ("IFCPOLYLINE", "IfcPolyline", None),
+    ("IFCGEOMETRICCURVESET", "IfcGeometricCurveSet", None),
+    ("IFCGEOMETRICSET", "IfcGeometricSet", None),
     ("IFCINDEXEDPOLYCURVE", "IfcIndexedPolyCurve", None),
 ];
 
