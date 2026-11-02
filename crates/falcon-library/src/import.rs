@@ -555,7 +555,7 @@ fn quicklook_thumbnail(item: &mut Item, raw: &Path, thumb: &Path, max: u32) -> O
 
 /// Formats whose own preview is tried before QuickLook, which rarely has a
 /// generator for them and can then wait out its whole timeout.
-fn embedded_first(ext: &str) -> bool {
+pub fn embedded_first(ext: &str) -> bool {
     matches!(ext, "blend" | "dwg" | "skp" | "indd" | "indt" | "idml" | "sketch" | "xmind")
 }
 

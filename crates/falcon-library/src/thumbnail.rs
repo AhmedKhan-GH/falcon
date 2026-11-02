@@ -197,17 +197,40 @@ pub const QUICKLOOK_SIZE: u32 = 1024;
 /// How long a QuickLook render may take.
 pub const QUICKLOOK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
+/// Why [`quicklook_until`] gave no picture.
+#[derive(Debug)]
+pub enum QuickLookStop {
+    /// `cancel` was set; `qlmanage` has been killed.
+    Cancelled,
+    /// The time ran out; `qlmanage` has been killed. Without a generator for
+    /// the format `qlmanage` hangs here rather than failing.
+    TimedOut,
+    Failed(ThumbError),
+}
+
 /// Renders a preview of any file macOS QuickLook understands, with its long
 /// side at most `size`.
 pub fn quicklook(path: &Path, size: u32) -> Result<DynamicImage, ThumbError> {
+    let never = std::sync::atomic::AtomicBool::new(false);
+    quicklook_until(path, size, QUICKLOOK_TIMEOUT, &never).map_err(|stop| match stop {
+        QuickLookStop::Failed(e) => e,
+        QuickLookStop::TimedOut => ThumbError("QuickLook timed out".into()),
+        QuickLookStop::Cancelled => ThumbError("QuickLook was cancelled".into()),
+    })
+}
+
+/// [`quicklook`], giving up after `timeout` or once `cancel` is set, either
+/// of which kills `qlmanage`.
+pub fn quicklook_until(path: &Path, size: u32, timeout: std::time::Duration, cancel: &std::sync::atomic::AtomicBool) -> Result<DynamicImage, QuickLookStop> {
+    let failed = |e: ThumbError| QuickLookStop::Failed(e);
     if !cfg!(target_os = "macos") {
-        return Err(ThumbError("QuickLook is only available on macOS".into()));
+        return Err(failed(ThumbError("QuickLook is only available on macOS".into())));
     }
     // macOS has no type for some alias names (.jfif, .psdt); QuickLook gets
     // the file under the extension the alias stands for.
     let renamed = crate::alias::renamed(path);
     let path = renamed.as_ref().map_or(path, |r| r.path());
-    let out = tempfile::tempdir().map_err(ThumbError::new)?;
+    let out = tempfile::tempdir().map_err(ThumbError::new).map_err(failed)?;
     let mut child = std::process::Command::new("qlmanage")
         .arg("-t")
         .arg("-s")
@@ -218,26 +241,33 @@ pub fn quicklook(path: &Path, size: u32) -> Result<DynamicImage, ThumbError> {
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn()
-        .map_err(ThumbError::new)?;
-    // qlmanage can hang on a malformed file; give up after a while.
-    let deadline = std::time::Instant::now() + QUICKLOOK_TIMEOUT;
+        .map_err(ThumbError::new)
+        .map_err(failed)?;
+    let deadline = std::time::Instant::now() + timeout;
     let status = loop {
-        if let Some(s) = child.try_wait().map_err(ThumbError::new)? {
+        if let Some(s) = child.try_wait().map_err(ThumbError::new).map_err(failed)? {
             break s;
         }
-        if std::time::Instant::now() > deadline {
+        let stop = if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+            Some(QuickLookStop::Cancelled)
+        } else if std::time::Instant::now() > deadline {
+            Some(QuickLookStop::TimedOut)
+        } else {
+            None
+        };
+        if let Some(stop) = stop {
             let _ = child.kill();
             let _ = child.wait();
-            return Err(ThumbError("QuickLook timed out".into()));
+            return Err(stop);
         }
         std::thread::sleep(std::time::Duration::from_millis(20));
     };
     let name = format!("{}.png", path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default());
     let png = out.path().join(name);
     if !status.success() || !png.is_file() {
-        return Err(ThumbError("QuickLook made no preview".into()));
+        return Err(failed(ThumbError("QuickLook made no preview".into())));
     }
-    decode(&png)
+    decode(&png).map_err(failed)
 }
 
 /// What Spotlight knows about a file's pixel size and duration.
@@ -578,6 +608,46 @@ pub fn redrawn(root: &Path, mut item: crate::model::Item) -> crate::Result<crate
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `qlmanage` hangs on a format with no generator; elsewhere it answers,
+    /// which these accept too. Neither takes long or leaves a process.
+    #[cfg(target_os = "macos")]
+    fn quicklook_stops(name: &str, timeout: std::time::Duration, cancel_after: Option<std::time::Duration>, stop: fn(&QuickLookStop) -> bool) {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(name);
+        std::fs::write(&path, b"not really one").unwrap();
+        let cancel = AtomicBool::new(false);
+        let begun = std::time::Instant::now();
+        let out = std::thread::scope(|s| {
+            s.spawn(|| {
+                if let Some(after) = cancel_after {
+                    std::thread::sleep(after);
+                    cancel.store(true, Ordering::Relaxed);
+                }
+            });
+            quicklook_until(&path, 64, timeout, &cancel)
+        });
+        assert!(begun.elapsed() < std::time::Duration::from_secs(5));
+        if let Err(e) = &out {
+            assert!(stop(e) || matches!(e, QuickLookStop::Failed(_)), "{e:?}");
+        }
+        let left = std::process::Command::new("pgrep").arg("-f").arg(&path).output().unwrap();
+        assert!(left.stdout.is_empty(), "qlmanage left running");
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn cancelling_quicklook_kills_it() {
+        let long = std::time::Duration::from_secs(30);
+        quicklook_stops("x.blend", long, Some(std::time::Duration::from_millis(150)), |e| matches!(e, QuickLookStop::Cancelled));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn quicklook_out_of_time_is_killed() {
+        quicklook_stops("x.dwg", std::time::Duration::from_millis(200), None, |e| matches!(e, QuickLookStop::TimedOut));
+    }
 
     #[test]
     fn tga_decodes_by_extension() {
