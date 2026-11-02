@@ -8,9 +8,9 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 |---|---|---|---|---|
 | Main window: menus, shortcuts, toolbar, sidebar, layouts | 258 | 14 | 1 | 8 |
 | Viewers and file formats | 193 | 15 | 1 | 5 |
-| Search, filters and organising | 216 | 4 | 0 | 3 |
+| Search, filters and organising | 215 | 5 | 0 | 3 |
 | Import, export, library, preferences and integrations | 189 | 11 | 7 | 27 |
-| **Total** | 856 | 44 | 9 | 43 |
+| **Total** | 855 | 45 | 9 | 43 |
 
 Rows marked **Not wanted (user decision)** (4) are Eagle features the user chose not to have in falcon; they are counted outside the local Missing total.
 ## Fix first
@@ -543,7 +543,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Crop width and height number fields | Done | `crop.rs` bar fields | local |
 | Crop "Save As" (keeps the original, adds a new item) | Done | `crop_item_as_new`: same name, tags, folders, URL and rating, dated `modificationTime + 1` (Eagle +0.1); note not carried | local |
 | Live crop size readout | Done | `x: y: W: H:` shown while dragging and for a second after a crop key, as Eagle's `showSize` | local |
-| Crop keys: arrows move 1 px, ⇧ arrows 10 px, ⌘ arrows resize 1 px, ⌘⇧ arrows 10 px, ⌘S saves | Done | `ui/viewer/crop.rs` `crop_key`, `CropState::take_keys`, read in `app/image_edit.rs` `edit_keys`; W, A, S, D move too, as in Eagle; Page Up and Page Down moving 10 px are a falcon extra; shrinking stops at Eagle's 24 px | local |
+| Crop keys: arrows move 1 px, ⇧ arrows 10 px, ⌘ arrows resize 1 px, ⌘⇧ arrows 10 px, ⌘S saves | Done | `ui/viewer/crop.rs` `crop_key`, `CropState::take_keys`, read in `app/image_edit.rs` `edit_keys`; W, A, S, D move too, as in Eagle; shrinking stops at Eagle's 24 px | local |
 | Comment mode: draw rectangle regions with notes (C key) | Done | `F/comments.rs:201-320`, C key `F/image_edit.rs:277` | local |
 | Comment badges, delete X, resize handles, count badge on the toolbar button | Done | `F/comments.rs:213-318` | local |
 | Hovering a region shows its note | Done | Tooltip on hover (`F/comments.rs:290`) | local |
@@ -868,7 +868,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
-| Type to search the current view, with a short debounce | Done | `ui/toolbar/mod.rs` search_field; `logic/scope.rs` visible_in; no debounce, the query applies each frame | local |
+| Type to search the current view, with a short debounce | Partial | `ui/toolbar/mod.rs` search_field; `logic/scope.rs` visible_in; no debounce, the query applies each frame | local |
 | Space between words means AND | Done | `S:115` Query::parse | local |
 | `OR` and `\ | \ | ` mean OR | same | Done | `S:115` | local |
 | A leading `-word` excludes matches | Done | `S:161` | local |

@@ -170,8 +170,6 @@ pub fn crop_key(key: egui::Key, m: egui::Modifiers, letters_free: bool) -> Optio
     }
     match (key, m.command, m.shift) {
         (K::S, true, false) => Some(CropKey::Save),
-        (K::PageUp, false, false) => Some(CropKey::Move(0.0, -10.0)),
-        (K::PageDown, false, false) => Some(CropKey::Move(0.0, 10.0)),
         (K::A, false, false) if letters_free => Some(CropKey::Move(-1.0, 0.0)),
         (K::D, false, false) if letters_free => Some(CropKey::Move(1.0, 0.0)),
         (K::W, false, false) if letters_free => Some(CropKey::Move(0.0, -1.0)),
@@ -576,8 +574,6 @@ mod tests {
         assert_eq!(bare(K::ArrowDown), Some(CropKey::Move(0.0, 1.0)));
         assert_eq!(crop_key(K::ArrowRight, M::SHIFT, true), Some(CropKey::Move(10.0, 0.0)));
         assert_eq!(crop_key(K::ArrowUp, M::SHIFT, true), Some(CropKey::Move(0.0, -10.0)));
-        assert_eq!(bare(K::PageUp), Some(CropKey::Move(0.0, -10.0)));
-        assert_eq!(bare(K::PageDown), Some(CropKey::Move(0.0, 10.0)));
         assert_eq!(crop_key(K::ArrowRight, cmd, true), Some(CropKey::Resize(1.0, 0.0)));
         assert_eq!(crop_key(K::ArrowUp, cmd, true), Some(CropKey::Resize(0.0, -1.0)));
         assert_eq!(crop_key(K::ArrowLeft, cmd_shift, true), Some(CropKey::Resize(-10.0, 0.0)));
