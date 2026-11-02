@@ -92,6 +92,33 @@ Eagle's alias extensions import as the format they stand for, whatever macOS cal
 
 None.
 
+## How well each format has been tested
+
+Falcon is tested against a local library holding one sample of each format where a sample is available. It covers 101 of Eagle's 124 extensions. The library isn't published, because some samples are for local testing only.
+
+**No sample (23 extensions).** These come from closed or paid apps, and a limited search of public test-file collections found no free sample. The code paths exist but haven't been run on a real file:
+
+- **Images:** insp
+- **Design:** ait, xd, fig, af, afdesign, afphoto, afpub, c4d, clip, prd, cdr, skt, pxd, graffle, mindnode, eddx, emmx, indt
+- **Video:** 360, afx, eva, vap
+
+**Samples that only show a format opens.** These are small or generated, so complex real-world files could behave differently:
+
+| Formats | Sample |
+| --- | --- |
+| ai | A header-only stub in the test library; real files are still to be tried |
+| doc, docx | Generated with macOS `textutil` |
+| xlsx, pptx | Generated with a script |
+| xls, ppt | Apache POI's test files |
+| 3D models | Mostly small cubes, plus one textured sample and one larger FBX |
+| Most video | Short generated clips in hand-written containers |
+| jpeg, jfif, jpe, heif, hif, tif, psdt | Copies of another sample under an alternate extension |
+
+**Not yet confirmed:**
+
+- Blank documents from File ▸ New… haven't been opened in Word, Excel, PowerPoint or XMind.
+- A sample passing means it opened in falcon, not that it looks identical to Eagle.
+
 ## Possible later additions (not planned)
 
 These are open formats in common use that neither app handles well:
