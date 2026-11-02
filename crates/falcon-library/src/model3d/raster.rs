@@ -13,6 +13,10 @@
 //! into a 2x supersampled z-buffer, which is then box-filtered down with
 //! premultiplied alpha so the silhouette is antialiased.
 //!
+//! Textured meshes sample their picture per pixel ([`texture::Texture::sample`],
+//! bilinear in linear light) at perspective-correct coordinates; pixels
+//! below a texture's alpha cutoff are left out.
+//!
 //! Triangles with any vertex nearer than the near plane are skipped rather
 //! than clipped: the fitted camera keeps the whole bounding sphere in front
 //! of the eye (the near plane is at most `d - 2r`), so nothing is lost.
@@ -21,6 +25,7 @@ use image::{Rgba, RgbaImage};
 
 use super::geom;
 use super::math::{self, V3};
+use super::texture;
 use super::{DEFAULT_COLOR, Mesh, Model};
 
 /// Side of the square Eagle renders models on.
@@ -149,9 +154,9 @@ struct Target {
     color: Vec<[u8; 4]>,
 }
 
-/// Screen position (pixels, y down) and depth (0..1) of every vertex, or
-/// `None` where it is behind the near plane or not finite.
-fn project(mesh: &Mesh, vp: &math::M4, near: f32, size: f32) -> Vec<Option<[f32; 3]>> {
+/// Screen position (pixels, y down), depth (0..1) and 1 / clip w of every
+/// vertex, or `None` where it is behind the near plane or not finite.
+fn project(mesh: &Mesh, vp: &math::M4, near: f32, size: f32) -> Vec<Option<[f32; 4]>> {
     mesh.positions
         .iter()
         .map(|p| {
@@ -163,7 +168,7 @@ fn project(mesh: &Mesh, vp: &math::M4, near: f32, size: f32) -> Vec<Option<[f32;
             }
             let (x, y, z) = (c[0] / c[3], c[1] / c[3], c[2] / c[3]);
             let (sx, sy) = ((x * 0.5 + 0.5) * size, (0.5 - y * 0.5) * size);
-            (sx.abs() < LIMIT && sy.abs() < LIMIT).then_some([sx, sy, z])
+            (sx.abs() < LIMIT && sy.abs() < LIMIT).then_some([sx, sy, z, 1.0 / c[3]])
         })
         .collect()
 }
@@ -178,13 +183,15 @@ fn draw_mesh(t: &mut Target, mesh: &Mesh, vp: &math::M4, near: f32, to_eye: V3, 
     let base = mesh.material.as_ref().map_or(default_color, |m| m.color);
     let colors = mesh.colors.as_deref();
     let normals = mesh.normals.as_deref();
+    let textured = mesh.textured();
     let size = t.size as i64;
     for tri in mesh.indices.as_chunks::<3>().0 {
         let idx = tri.map(|i| i as usize);
         let (Some(a), Some(b), Some(c)) = (verts[idx[0]], verts[idx[1]], verts[idx[2]]) else { continue };
-        let fx = |p: [f32; 3]| [(p[0] * FRAC as f32).round() as i64, (p[1] * FRAC as f32).round() as i64];
+        let fx = |p: [f32; 4]| [(p[0] * FRAC as f32).round() as i64, (p[1] * FRAC as f32).round() as i64];
         let (p0, mut p1, mut p2) = (fx(a), fx(b), fx(c));
         let (z0, mut z1, mut z2) = (a[2], b[2], c[2]);
+        let (q0, mut q1, mut q2) = (a[3], b[3], c[3]);
         let (i0, mut i1, mut i2) = (idx[0], idx[1], idx[2]);
         let mut area = (p1[0] - p0[0]) * (p2[1] - p0[1]) - (p1[1] - p0[1]) * (p2[0] - p0[0]);
         if area == 0 {
@@ -193,6 +200,7 @@ fn draw_mesh(t: &mut Target, mesh: &Mesh, vp: &math::M4, near: f32, to_eye: V3, 
         if area < 0 {
             std::mem::swap(&mut p1, &mut p2);
             std::mem::swap(&mut z1, &mut z2);
+            std::mem::swap(&mut q1, &mut q2);
             std::mem::swap(&mut i1, &mut i2);
             area = -area;
         }
@@ -222,7 +230,7 @@ fn draw_mesh(t: &mut Target, mesh: &Mesh, vp: &math::M4, near: f32, to_eye: V3, 
             (b[0] - a[0]) * (py0 - a[1]) - (b[1] - a[1]) * (px0 - a[0])
         });
         // Per-pixel attributes, or one colour for the whole face.
-        let per_pixel = colors.is_some() || normals.is_some();
+        let per_pixel = colors.is_some() || normals.is_some() || textured.is_some();
         let flat = if per_pixel {
             [0; 4]
         } else {
@@ -240,21 +248,40 @@ fn draw_mesh(t: &mut Target, mesh: &Mesh, vp: &math::M4, near: f32, to_eye: V3, 
                     let z = w[0] * z0 + w[1] * z1 + w[2] * z2;
                     let k = line + x as usize;
                     if (0.0..=1.0).contains(&z) && z < t.depth[k] {
-                        t.depth[k] = z;
-                        t.color[k] = if per_pixel {
+                        let px = if per_pixel {
                             let mix = |f: &dyn Fn(usize) -> V3| {
                                 let (u, v, q) = (f(i0), f(i1), f(i2));
                                 std::array::from_fn(|c| w[0] * u[c] + w[1] * v[c] + w[2] * q[c])
                             };
-                            let col = colors.map_or(base, |cs| mix(&|i| cs[i]));
-                            let n = match normals {
-                                Some(ns) => math::normalize(mix(&|i| ns[i])),
-                                None => geom::face_normal(mesh.positions[i0], mesh.positions[i1], mesh.positions[i2]),
+                            let col = match textured {
+                                // The picture, times the vertex colours
+                                // and the tint, in linear light.
+                                Some((tex, uvs)) => {
+                                    let uv = perspective_uv(w, [q0, q1, q2], [uvs[i0], uvs[i1], uvs[i2]]);
+                                    let texel = tex.sample(uv);
+                                    if tex.alpha_cutoff.is_some_and(|cut| texel[3] < cut) {
+                                        None
+                                    } else {
+                                        let tint = colors.map_or(tex.tint, |cs| texture::modulate(mix(&|i| cs[i]), [tex.tint[0], tex.tint[1], tex.tint[2], 1.0]));
+                                        Some(texture::modulate(tint, texel))
+                                    }
+                                }
+                                None => Some(colors.map_or(base, |cs| mix(&|i| cs[i]))),
                             };
-                            pack(geom::shade(col, n, to_eye))
+                            col.map(|col| {
+                                let n = match normals {
+                                    Some(ns) => math::normalize(mix(&|i| ns[i])),
+                                    None => geom::face_normal(mesh.positions[i0], mesh.positions[i1], mesh.positions[i2]),
+                                };
+                                pack(geom::shade(col, n, to_eye))
+                            })
                         } else {
-                            flat
+                            Some(flat)
                         };
+                        if let Some(px) = px {
+                            t.depth[k] = z;
+                            t.color[k] = px;
+                        }
                     }
                 }
                 for i in 0..3 {
@@ -266,6 +293,17 @@ fn draw_mesh(t: &mut Target, mesh: &Mesh, vp: &math::M4, near: f32, to_eye: V3, 
             }
         }
     }
+}
+
+/// Texture coordinates at screen weights `w` of a triangle whose corners
+/// have 1 / clip w `q` and coordinates `uv`: interpolated as uv / w and
+/// 1 / w, so they stay straight on the surface under perspective.
+fn perspective_uv(w: [f32; 3], q: [f32; 3], uv: [[f32; 2]; 3]) -> [f32; 2] {
+    let d = w[0] * q[0] + w[1] * q[1] + w[2] * q[2];
+    if !(d.is_finite() && d != 0.0) {
+        return uv[0];
+    }
+    std::array::from_fn(|k| (w[0] * q[0] * uv[0][k] + w[1] * q[1] * uv[1][k] + w[2] * q[2] * uv[2][k]) / d)
 }
 
 /// Averages each `SS` x `SS` block with premultiplied alpha.
@@ -379,6 +417,87 @@ mod tests {
         let img = render(&Model { meshes: vec![m] }, 64);
         let p = img.get_pixel(32, 32);
         assert!(p[1] > 100 && p[0] == 0 && p[2] == 0, "{p:?}");
+    }
+
+    /// The split cube with each face's quad mapped over the whole of
+    /// `image`.
+    fn textured_cube(image: texture::Image) -> Model {
+        let mut m = cube(true);
+        let quad = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
+        m.uvs = Some((0..36).map(|i| quad[i % 6]).collect());
+        m.texture = Some(texture::Texture::new(std::sync::Arc::new(image)));
+        m.material = Some(Material { name: "grey".into(), color: [0.5; 3], opacity: 1.0 });
+        Model { meshes: vec![m] }
+    }
+
+    fn solid(w: u32, h: u32, rgba: [u8; 4]) -> texture::Image {
+        texture::Image { name: "t".into(), width: w, height: h, rgba: rgba.repeat((w * h) as usize) }
+    }
+
+    #[test]
+    fn textured_cube_shows_the_texture_colour() {
+        let img = render(&textured_cube(solid(4, 4, [0, 0, 255, 255])), 64);
+        let p = img.get_pixel(32, 32);
+        assert!(p[2] > 100 && p[0] == 0 && p[1] == 0, "the picture replaces the grey material: {p:?}");
+        // Without coordinates the material colour is drawn.
+        let mut m = textured_cube(solid(4, 4, [0, 0, 255, 255]));
+        m.meshes[0].uvs = None;
+        let p = *render(&m, 64).get_pixel(32, 32);
+        assert!(p[0] == p[1] && p[1] == p[2] && p[0] > 50, "{p:?}");
+    }
+
+    #[test]
+    fn both_halves_of_a_picture_show() {
+        // Left half red, right half green on every face.
+        let mut px = Vec::new();
+        for _y in 0..8 {
+            for x in 0..8 {
+                px.extend_from_slice(&if x < 4 { [255, 0, 0, 255] } else { [0, 255, 0, 255] });
+            }
+        }
+        let img = render(&textured_cube(texture::Image { name: "h".into(), width: 8, height: 8, rgba: px }), 128);
+        let red = img.pixels().filter(|p| p[3] == 255 && p[0] > 80 && p[1] < 20).count();
+        let green = img.pixels().filter(|p| p[3] == 255 && p[1] > 80 && p[0] < 20).count();
+        assert!(red > 500 && green > 500, "{red} red, {green} green");
+    }
+
+    #[test]
+    fn cutout_pixels_are_left_out() {
+        let mut m = textured_cube(solid(2, 2, [255, 255, 255, 10]));
+        m.meshes[0].texture.as_mut().unwrap().alpha_cutoff = Some(0.5);
+        assert!(render(&m, 32).pixels().all(|p| p[3] == 0), "everything below the cutoff");
+        // Without a cutoff the picture is opaque.
+        m.meshes[0].texture.as_mut().unwrap().alpha_cutoff = None;
+        assert_eq!(render(&m, 32).get_pixel(16, 16)[3], 255);
+    }
+
+    #[test]
+    fn coordinates_are_perspective_correct() {
+        // Halfway across the screen between a near corner (w = 1) and a
+        // far one (w = 3), the surface point is a quarter of the way.
+        let uv = perspective_uv([0.5, 0.5, 0.0], [1.0, 1.0 / 3.0, 1.0], [[0.0, 0.0], [1.0, 0.0], [9.0, 9.0]]);
+        assert!((uv[0] - 0.25).abs() < 1e-6 && uv[1] == 0.0, "{uv:?}");
+        // Equal depths interpolate linearly.
+        assert_eq!(perspective_uv([0.25, 0.75, 0.0], [0.5; 3], [[0.0, 0.0], [1.0, 1.0], [0.0, 0.0]]), [0.75, 0.75]);
+    }
+
+    #[test]
+    fn import_thumbnail_of_a_textured_obj() {
+        let dir = tempfile::tempdir().unwrap();
+        let obj = "mtllib c.mtl\nusemtl t\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\nvt 1 0\nvt 1 1\nvt 0 1\nf 1/1 2/2 3/3 4/4\n";
+        std::fs::write(dir.path().join("c.obj"), obj).unwrap();
+        std::fs::write(dir.path().join("c.mtl"), "newmtl t\nKd 1 1 1\nmap_Kd tex/c.png\n").unwrap();
+        std::fs::create_dir(dir.path().join("tex")).unwrap();
+        std::fs::write(dir.path().join("tex/c.png"), texture::tests::png(4, 4, [255, 128, 0, 255])).unwrap();
+        let img = thumbnail(&dir.path().join("c.obj"), "obj").unwrap();
+        let (w, h) = img.dimensions();
+        let p = img.get_pixel(w / 2, h / 2);
+        assert!(p[3] == 255 && p[0] > p[1] && p[1] > p[2] && p[2] < 20, "orange from the picture: {p:?}");
+        // Without the picture, the white Kd.
+        std::fs::remove_file(dir.path().join("tex/c.png")).unwrap();
+        let img = thumbnail(&dir.path().join("c.obj"), "obj").unwrap();
+        let p = img.get_pixel(img.width() / 2, img.height() / 2);
+        assert!(p[0] == p[1] && p[1] == p[2], "{p:?}");
     }
 
     #[test]
