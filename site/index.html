@@ -176,12 +176,14 @@
           <p>Drop files and folders onto the window, paste with ⌘V, open files with Falcon, or keep the always-on-top collect window open beside your browser. Each item gets a thumbnail and a colour palette automatically.</p>
           <ul>
             <li>Images, SVG and animated GIF</li>
-            <li>PDF, PSD, AI, HEIC, RAW and video through macOS QuickLook</li>
+            <li>PDF, PSD, AI, HEIC, RAW and video, with macOS QuickLook where it helps</li>
+            <li>Screen capture of an area, a window or the whole screen</li>
             <li>Import folders with their folder tree, and skip or keep files already in the library</li>
             <li>A panel lists imports that failed, with the reason</li>
             <li>Waveform thumbnails for audio and specimen thumbnails for fonts</li>
             <li>Camera, duration, tempo and font details, and IPTC and XMP keywords as tags</li>
             <li>Imports run in the background with a progress bar</li>
+            <li>Exactly Eagle's set of file formats, listed in <a href="https://github.com/AhmedKhan-GH/falcon/blob/main/FORMATS.md" style="color: var(--accent)">FORMATS.md</a></li>
           </ul>
         </div>
         <div class="media"><img src="images/falcon-batch.jpg" alt="Four paintings selected, with the inspector showing their shared tags and actions that apply to all of them" loading="lazy"></div>
@@ -196,6 +198,8 @@
             <li>Rename, merge, star and delete tags, and sort them into tag groups</li>
             <li>Edit tags, folders and ratings on many items at once</li>
             <li>Undo and redo for edits</li>
+            <li>A tag picker with suggestions, and marquee selection in the grid</li>
+            <li>Actions you define with steps, a shortcut and a menu entry</li>
             <li>A Duplicates page for identical files and similar pictures</li>
             <li>Export items or folders to a folder, CSV or .eaglepack, or as JPG, PNG or WebP at a chosen size</li>
             <li>Notes, source URLs, ratings and a Trash you can restore from</li>
@@ -229,6 +233,7 @@
             <li>Drag items out into Finder, Figma or Photoshop, or copy their paths, names, thumbnails or Base64</li>
             <li>Keep several libraries open and switch between them</li>
             <li>Dark, light, gray, blue and purple themes, or follow macOS</li>
+            <li>The interface in eight languages, with sound effects and preferences panes</li>
             <li>A native macOS menu bar, many of Eagle's keyboard shortcuts, and rebinding in Preferences</li>
           </ul>
         </div>
@@ -238,11 +243,14 @@
       <div class="feature">
         <div class="text">
           <div class="num">05 · View</div>
-          <h3>A viewer for images, video, audio, PDFs and fonts</h3>
+          <h3>A viewer for images, video, audio, PDFs, fonts, 3D and web pages</h3>
           <p>Items open inside the window between the sidebar and the inspector, and one button hides both panels. Zoom around the pointer, pan, fit or see an image at actual size, and step through items with the arrow keys.</p>
           <ul>
-            <li>Video plays with a control bar and timed comments</li>
-            <li>PDFs open in a scrolling reader with find and text selection</li>
+            <li>Images, PSD and AI files open at full resolution</li>
+            <li>Video plays with a control bar and timed comments, with an FFmpeg fallback that includes AV1</li>
+            <li>PDFs open in a reader with find, text selection, spreads, rotation and print</li>
+            <li>3D models turn and zoom with their textures, and IFC models load through web-ifc</li>
+            <li>Text files open in an editor, and web pages and MHTML files show live</li>
             <li>Audio plays over its waveform, and fonts show a live specimen</li>
             <li>Comment on a region of an image</li>
             <li>Rotate, flip and crop originals</li>
@@ -272,7 +280,7 @@
     <div class="wrap">
       <div class="eyebrow">Developers</div>
       <h2>Command-line tool and HTTP API</h2>
-      <p class="intro">The same engine runs the app, a command-line tool and a local HTTP API, so scripts, plugins and AI agents can work with your library too.</p>
+      <p class="intro">The same engine runs the app, a command-line tool and a local HTTP API, so scripts and other tools can work with your library too.</p>
       <div class="code">
 <pre><span class="c"># Create a library in the sandbox and add files</span>
 <span class="p">$</span> lib=~/"Falcon Sandbox"/Moodboard.library
@@ -298,35 +306,34 @@ tags:    2</pre>
     <div class="wrap">
       <div class="eyebrow">Status</div>
       <h2>Early alpha</h2>
-      <p class="intro">Falcon reads and writes Eagle-format libraries and is being rebuilt feature by feature against Eagle 4. <a href="https://github.com/AhmedKhan-GH/falcon/blob/main/PARITY.md" style="color: var(--accent)">PARITY.md</a> checks every local Eagle feature in falcon's code: a little under half are done, about one in seven are partly done, and the rest are still missing. <a href="https://github.com/AhmedKhan-GH/falcon/blob/main/ROADMAP.md" style="color: var(--accent)">ROADMAP.md</a> lists what comes next.</p>
+      <p class="intro">Falcon reads and writes Eagle-format libraries and is being rebuilt feature by feature against Eagle 4. <a href="https://github.com/AhmedKhan-GH/falcon/blob/main/PARITY.md" style="color: var(--accent)">PARITY.md</a> checks every local Eagle feature in falcon's code: about nineteen in twenty are done, and the rest are partly done or missing. Falcon handles exactly Eagle's set of file formats, listed in <a href="https://github.com/AhmedKhan-GH/falcon/blob/main/FORMATS.md" style="color: var(--accent)">FORMATS.md</a>. <a href="https://github.com/AhmedKhan-GH/falcon/blob/main/ROADMAP.md" style="color: var(--accent)">ROADMAP.md</a> lists what is left and what comes later.</p>
       <div class="status">
         <div class="card"><h4>Working today</h4>
           <ul>
-            <li>Import with thumbnails, colour palettes, file metadata and folder trees</li>
-            <li>Folders, tags, tag groups, smart folders, Quick Access, undo</li>
+            <li>Import with thumbnails, colour palettes, folder trees and screen capture</li>
+            <li>Folders, tags with a tag picker, tag groups, smart folders, Quick Access, undo</li>
             <li>Keyword, filter and colour search, saved filters</li>
-            <li>Four layouts, hover preview and themes</li>
-            <li>Viewers for images, video, audio, PDFs and fonts</li>
+            <li>Four layouts, marquee selection, hover preview and themes</li>
+            <li>Viewers for images, video, audio, fonts, text, PDFs, 3D models, PSD, AI and web pages</li>
             <li>Duplicates, region comments, rotate, flip and crop</li>
-            <li>Export to a folder, CSV or .eaglepack, or in another format and size</li>
-            <li>A native menu bar and many of Eagle's shortcuts</li>
+            <li>Actions and Export in Format, built into the app</li>
+            <li>Preferences panes, sound effects and eight interface languages</li>
             <li>Command-line tool and local HTTP API</li>
           </ul>
         </div>
         <div class="card"><h4>Not there yet</h4>
           <ul>
-            <li>Most of Eagle's preferences, and some of its shortcuts</li>
-            <li>Images above 3072 px at full size</li>
-            <li>Marquee selection and grid display options</li>
-            <li>A tag picker with suggestions</li>
-            <li>3D and text viewers, and screen capture</li>
-            <li>Watched import folders and reloading on outside changes</li>
-            <li>Languages other than English</li>
+            <li>Some shortcuts and context-menu entries</li>
+            <li>Presentation mode and a separate preview window</li>
+            <li>Some filters, batch rename of items and merging duplicates</li>
+            <li>Some preferences and library safety checks</li>
+            <li>Eagle's plugins</li>
+            <li>Native review of the translations</li>
             <li>Windows and Linux builds, and signed releases</li>
           </ul>
         </div>
       </div>
-      <p class="fine">While falcon is in development, the app and the command-line tool only open libraries inside <code>~/Falcon Sandbox</code> (or the folder set in <code>FALCON_SANDBOX</code>). To try falcon on an existing library, copy it there first. See <a href="book/app.html#sandbox" style="color: var(--accent)">Sandbox</a> in the docs.</p>
+      <p class="fine">Falcon is early alpha and unsigned. While falcon is in development, the app and the command-line tool only open libraries inside <code>~/Falcon Sandbox</code> (or the folder set in <code>FALCON_SANDBOX</code>). To try falcon on an existing library, copy it there first. See <a href="book/app.html#sandbox" style="color: var(--accent)">Sandbox</a> in the docs.</p>
     </div>
   </section>
 
