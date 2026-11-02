@@ -1,12 +1,20 @@
-//! Wavefront OBJ, with colours from its MTL library.
+//! Wavefront OBJ, with colours and diffuse textures from its MTL library.
+//!
+//! A material's `map_Kd` picture is looked up next to its MTL file, then
+//! next to the model (never outside the model's folder); its `-o` and `-s`
+//! options are baked into the texture coordinates and `-clamp on` clamps
+//! it. The picture replaces the `Kd` colour where it is drawn, as in
+//! Eagle's viewer.
 
 use std::borrow::Cow;
 use std::collections::HashMap;
 
 use super::math::V3;
+use super::texture::{Loader, Texture, Wrap};
 use super::{DEFAULT_COLOR, Material, Mesh, Model, Result};
 
 const NO_NORMAL: u32 = u32::MAX;
+const NO_UV: u32 = u32::MAX;
 
 /// The lines of `text` with `\` continuations joined; a line is only
 /// copied when it is continued.
@@ -49,8 +57,12 @@ fn floats<'a, const N: usize>(it: &mut impl Iterator<Item = &'a str>) -> Option<
 struct Builder {
     mesh: Mesh,
     colors: Vec<V3>,
+    uvs: Vec<[f32; 2]>,
     all_normals: bool,
-    lookup: HashMap<u64, u32>,
+    any_uv: bool,
+    /// The material's texture map: placement and wrap.
+    map: Option<MapOpts>,
+    lookup: HashMap<(u32, u32, u32), u32>,
 }
 
 #[derive(Default)]
@@ -58,15 +70,70 @@ struct MtlEntry {
     color: Option<V3>,
     opacity: Option<f32>,
     tr: Option<f32>,
+    map: Option<String>,
 }
 
-fn parse_mtl(bytes: &[u8], out: &mut HashMap<String, Material>) {
+/// A `map_Kd` statement: the picture's path (relative to the MTL file's
+/// folder `dir`) and its options.
+#[derive(Clone, Debug, PartialEq)]
+struct MapOpts {
+    dir: String,
+    path: String,
+    offset: [f32; 2],
+    scale: [f32; 2],
+    clamp: bool,
+}
+
+/// Reads a `map_Kd` line's options and file name. Options take a fixed
+/// number of words, `-o`, `-s` and `-t` one to three numbers; the rest is
+/// the file name (which may hold spaces).
+fn map_opts(rest: &str, dir: &str) -> Option<MapOpts> {
+    let mut m = MapOpts { dir: dir.to_string(), path: String::new(), offset: [0.0; 2], scale: [1.0; 2], clamp: false };
+    let words: Vec<&str> = rest.split_ascii_whitespace().collect();
+    let mut i = 0;
+    while i < words.len() && words[i].starts_with('-') {
+        let opt = words[i].to_ascii_lowercase();
+        i += 1;
+        match opt.as_str() {
+            "-o" | "-s" | "-t" => {
+                let mut v = Vec::new();
+                while v.len() < 3 && i < words.len() && let Ok(f) = words[i].parse::<f32>() {
+                    v.push(f);
+                    i += 1;
+                }
+                let at = |k: usize, d: f32| v.get(k).copied().filter(|f| f.is_finite()).unwrap_or(d);
+                match opt.as_str() {
+                    "-o" => m.offset = [at(0, 0.0), at(1, 0.0)],
+                    "-s" => m.scale = [at(0, 1.0), at(1, 1.0)],
+                    _ => {}
+                }
+            }
+            "-clamp" => {
+                m.clamp = words.get(i).is_some_and(|w| w.eq_ignore_ascii_case("on"));
+                i += 1;
+            }
+            "-mm" => i += 2,
+            _ => i += 1,
+        }
+    }
+    // The file name keeps its own spacing.
+    let name_start = words.get(i).and_then(|w| rest.find(w))?;
+    m.path = rest[name_start..].trim().to_string();
+    (!m.path.is_empty()).then_some(m)
+}
+
+fn parse_mtl(bytes: &[u8], dir: &str, out: &mut HashMap<String, Material>, maps: &mut HashMap<String, MapOpts>) {
     let text = String::from_utf8_lossy(bytes);
     let mut cur: Option<(String, MtlEntry)> = None;
-    let flush = |cur: &mut Option<(String, MtlEntry)>, out: &mut HashMap<String, Material>| {
+    let flush = |cur: &mut Option<(String, MtlEntry)>, out: &mut HashMap<String, Material>, maps: &mut HashMap<String, MapOpts>| {
         if let Some((name, e)) = cur.take() {
             let opacity = e.opacity.or(e.tr.map(|t| 1.0 - t)).unwrap_or(1.0).clamp(0.0, 1.0);
             let color = e.color.unwrap_or(DEFAULT_COLOR);
+            if !out.contains_key(&name)
+                && let Some(m) = e.map.as_deref().and_then(|r| map_opts(r, dir))
+            {
+                maps.insert(name.clone(), m);
+            }
             out.entry(name.clone()).or_insert(Material { name, color, opacity });
         }
     };
@@ -76,7 +143,7 @@ fn parse_mtl(bytes: &[u8], out: &mut HashMap<String, Material>) {
         let rest = rest.trim();
         match key {
             "newmtl" => {
-                flush(&mut cur, out);
+                flush(&mut cur, out, maps);
                 cur = Some((rest.to_string(), MtlEntry::default()));
             }
             "Kd" => {
@@ -97,10 +164,20 @@ fn parse_mtl(bytes: &[u8], out: &mut HashMap<String, Material>) {
                     e.tr = Some(v);
                 }
             }
+            k if k.eq_ignore_ascii_case("map_Kd") => {
+                if let Some((_, e)) = cur.as_mut() {
+                    e.map = Some(rest.to_string());
+                }
+            }
             _ => {}
         }
     }
-    flush(&mut cur, out);
+    flush(&mut cur, out, maps);
+}
+
+/// The folder part of a relative path (`""` for a bare name).
+fn dir_of(path: &str) -> &str {
+    path.rfind(['/', '\\']).map_or("", |i| &path[..i])
 }
 
 /// Resolves an OBJ index (1-based, or negative from the end) to 0-based.
@@ -116,7 +193,11 @@ pub fn parse(bytes: &[u8], side: &dyn Fn(&str) -> Option<Vec<u8>>) -> Result<Mod
     let mut vcolors: Vec<V3> = Vec::new();
     let mut has_color = false;
     let mut normals: Vec<V3> = Vec::new();
+    let mut texcoords: Vec<[f32; 2]> = Vec::new();
     let mut materials: HashMap<String, Material> = HashMap::new();
+    let mut maps: HashMap<String, MapOpts> = HashMap::new();
+    let mut loader = Loader::new(side);
+    let mut textures: HashMap<String, Option<Texture>> = HashMap::new();
 
     let mut obj_name = String::new();
     let mut mat_name: Option<String> = None;
@@ -124,7 +205,7 @@ pub fn parse(bytes: &[u8], side: &dyn Fn(&str) -> Option<Vec<u8>>) -> Result<Mod
     let mut by_key: HashMap<(String, Option<String>), usize> = HashMap::new();
     // Index into `builders` of the current run; None until a face needs one.
     let mut current: Option<usize> = None;
-    let mut corners: Vec<(u32, u32)> = Vec::new();
+    let mut corners: Vec<(u32, u32, u32)> = Vec::new();
 
     for line in logical_lines(&text) {
         let line = strip_comment(&line);
@@ -144,6 +225,10 @@ pub fn parse(bytes: &[u8], side: &dyn Fn(&str) -> Option<Vec<u8>>) -> Result<Mod
             "vn" => {
                 let Some(n) = floats::<3>(&mut it) else { continue };
                 normals.push(n);
+            }
+            "vt" => {
+                let Some(uv) = floats::<2>(&mut it).or_else(|| floats::<1>(&mut line.split_ascii_whitespace().skip(1)).map(|[u]| [u, 0.0])) else { continue };
+                texcoords.push(uv);
             }
             "o" | "g" => {
                 let name = line.trim().get(key.len()..).unwrap_or("").trim();
@@ -165,11 +250,11 @@ pub fn parse(bytes: &[u8], side: &dyn Fn(&str) -> Option<Vec<u8>>) -> Result<Mod
                     continue;
                 }
                 if let Some(b) = side(rest) {
-                    parse_mtl(&b, &mut materials);
+                    parse_mtl(&b, dir_of(rest), &mut materials, &mut maps);
                 } else {
                     for name in rest.split_ascii_whitespace() {
                         if let Some(b) = side(name) {
-                            parse_mtl(&b, &mut materials);
+                            parse_mtl(&b, dir_of(name), &mut materials, &mut maps);
                         }
                     }
                 }
@@ -182,7 +267,7 @@ pub fn parse(bytes: &[u8], side: &dyn Fn(&str) -> Option<Vec<u8>>) -> Result<Mod
                         corners.clear();
                         break;
                     };
-                    let _vt = parts.next();
+                    let t = parts.next().filter(|t| !t.is_empty()).and_then(|t| resolve(t, texcoords.len())).unwrap_or(NO_UV);
                     let n = match parts.next() {
                         Some(t) if !t.is_empty() => match resolve(t, normals.len()) {
                             Some(n) => n,
@@ -193,7 +278,7 @@ pub fn parse(bytes: &[u8], side: &dyn Fn(&str) -> Option<Vec<u8>>) -> Result<Mod
                         },
                         _ => NO_NORMAL,
                     };
-                    corners.push((p, n));
+                    corners.push((p, t, n));
                 }
                 if corners.len() < 3 {
                     continue;
@@ -206,10 +291,25 @@ pub fn parse(bytes: &[u8], side: &dyn Fn(&str) -> Option<Vec<u8>>) -> Result<Mod
                             let material = mat_name.as_ref().map(|n| {
                                 materials.get(n).cloned().unwrap_or_else(|| Material { name: n.clone(), color: DEFAULT_COLOR, opacity: 1.0 })
                             });
+                            let map = mat_name.as_ref().and_then(|n| maps.get(n)).cloned();
+                            let texture = match (&mat_name, &map) {
+                                (Some(n), Some(m)) => textures
+                                    .entry(n.clone())
+                                    .or_insert_with(|| {
+                                        let image = loader.file_in(&m.dir, &m.path)?;
+                                        let wrap = if m.clamp { Wrap::Clamp } else { Wrap::Repeat };
+                                        Some(Texture { wrap: [wrap; 2], ..Texture::new(image) })
+                                    })
+                                    .clone(),
+                                _ => None,
+                            };
                             builders.push(Builder {
-                                mesh: Mesh { name: obj_name.clone(), material, ..Mesh::default() },
+                                mesh: Mesh { name: obj_name.clone(), material, texture, ..Mesh::default() },
                                 colors: Vec::new(),
+                                uvs: Vec::new(),
                                 all_normals: true,
+                                any_uv: false,
+                                map,
                                 lookup: HashMap::new(),
                             });
                             builders.len() - 1
@@ -219,12 +319,17 @@ pub fn parse(bytes: &[u8], side: &dyn Fn(&str) -> Option<Vec<u8>>) -> Result<Mod
                     }
                 };
                 let b = &mut builders[bi];
-                let mut idx = |(p, n): (u32, u32)| -> u32 {
-                    let k = (u64::from(p) << 32) | u64::from(n);
-                    *b.lookup.entry(k).or_insert_with(|| {
+                let mut idx = |(p, t, n): (u32, u32, u32)| -> u32 {
+                    *b.lookup.entry((p, t, n)).or_insert_with(|| {
                         let i = b.mesh.positions.len() as u32;
                         b.mesh.positions.push(positions[p as usize]);
                         b.colors.push(vcolors[p as usize]);
+                        if t == NO_UV {
+                            b.uvs.push([0.0; 2]);
+                        } else {
+                            b.any_uv = true;
+                            b.uvs.push(texcoords[t as usize]);
+                        }
                         let nv = if n == NO_NORMAL {
                             b.all_normals = false;
                             [0.0, 0.0, 1.0]
@@ -255,6 +360,12 @@ pub fn parse(bytes: &[u8], side: &dyn Fn(&str) -> Option<Vec<u8>>) -> Result<Mod
             }
             if has_color {
                 b.mesh.colors = Some(b.colors);
+            }
+            if b.any_uv {
+                // Through the map's placement, then v flipped to run down
+                // the picture.
+                let (o, s) = b.map.as_ref().map_or(([0.0; 2], [1.0; 2]), |m| (m.offset, m.scale));
+                b.mesh.uvs = Some(b.uvs.iter().map(|uv| [uv[0] * s[0] + o[0], 1.0 - (uv[1] * s[1] + o[1])]).collect());
             }
             b.mesh
         })
@@ -341,6 +452,71 @@ mod tests {
         let m = parse(b"v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 9\nf 1 2 3\n# c\n", &none).unwrap();
         assert_eq!(m.meshes[0].indices, vec![0, 1, 2]);
         assert!(parse(b"v 0 0 0\nv 1 0 0\nf 1 2 3\n", &none).is_err());
+    }
+
+    const TEXTURED: &[u8] = b"mtllib m.mtl\nv 0 0 0\nv 1 0 0\nv 0 1 0\nvt 0 0\nvt 1 0\nvt 0 1\nusemtl wood\nf 1/1 2/2 3/3\n";
+
+    #[test]
+    fn map_kd_textures_the_mesh() {
+        let png = crate::model3d::texture::tests::png_2x2();
+        let side = |n: &str| match n {
+            "m.mtl" => Some(b"newmtl wood\nKd 0.5 0.25 0\nmap_Kd -clamp on -s 2 2 1 -o 0.5 0 tex/wood grain.png\n".to_vec()),
+            "tex/wood grain.png" => Some(png.clone()),
+            _ => None,
+        };
+        let m = parse(TEXTURED, &side).unwrap();
+        let mesh = &m.meshes[0];
+        let t = mesh.texture.as_ref().expect("texture decoded");
+        assert_eq!((t.image.width, t.image.height), (2, 2));
+        assert_eq!(t.wrap, [Wrap::Clamp; 2]);
+        assert_eq!(t.tint, [1.0; 3], "the picture replaces Kd");
+        // Scaled by 2, offset by 0.5 in u, then v flipped.
+        assert_eq!(mesh.uvs.as_deref(), Some(&[[0.5, 1.0], [2.5, 1.0], [0.5, -1.0]][..]));
+        assert_eq!(mesh.material.as_ref().unwrap().color, [0.5, 0.25, 0.0]);
+    }
+
+    #[test]
+    fn map_kd_options_and_names() {
+        let m = map_opts("-blendu on -bm 0.5 -mm 0 1 -o 0.1 0.2 -imfchan l my file.png", "").unwrap();
+        assert_eq!((m.path.as_str(), m.offset, m.scale, m.clamp), ("my file.png", [0.1, 0.2], [1.0, 1.0], false));
+        assert_eq!(map_opts("wood.png", "sub").unwrap().dir, "sub");
+        assert!(map_opts("-clamp on", "").is_none());
+    }
+
+    #[test]
+    fn missing_or_outside_textures_keep_the_colour() {
+        let asked = std::cell::RefCell::new(Vec::new());
+        let png = crate::model3d::texture::tests::png_2x2();
+        for map in ["gone.png", "../up/x.png", "/abs/x.png"] {
+            let side = |n: &str| {
+                asked.borrow_mut().push(n.to_string());
+                match n {
+                    "m.mtl" => Some(format!("newmtl wood\nKd 0.5 0.25 0\nmap_Kd {map}\n").into_bytes()),
+                    "up/x.png" => Some(png.clone()),
+                    _ => None,
+                }
+            };
+            let m = parse(TEXTURED, &side).unwrap();
+            assert!(m.meshes[0].texture.is_none(), "{map}");
+            assert_eq!(m.meshes[0].material.as_ref().unwrap().color, [0.5, 0.25, 0.0]);
+            assert!(m.meshes[0].uvs.is_some());
+        }
+        assert!(asked.borrow().iter().all(|n| !n.contains("..") && !n.starts_with('/')), "{:?}", asked.borrow());
+    }
+
+    #[test]
+    fn maps_resolve_next_to_their_mtl_first() {
+        let png = crate::model3d::texture::tests::png_2x2();
+        let src = String::from_utf8_lossy(TEXTURED).replace("mtllib m.mtl", "mtllib mats/m.mtl");
+        let side = |n: &str| match n {
+            "mats/m.mtl" => Some(b"newmtl wood\nmap_Kd w.png\n".to_vec()),
+            "mats/w.png" => Some(png.clone()),
+            _ => None,
+        };
+        assert!(parse(src.as_bytes(), &side).unwrap().meshes[0].texture.is_some());
+        // Faces without vt have no coordinates.
+        let m = parse(b"v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n", &none).unwrap();
+        assert!(m.meshes[0].uvs.is_none());
     }
 
     #[test]
