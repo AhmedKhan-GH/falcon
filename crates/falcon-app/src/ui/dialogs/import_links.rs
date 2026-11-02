@@ -3,7 +3,7 @@
 //! link is downloaded, anything else is saved as a `.url` bookmark, all
 //! going into the open folder through the usual import queue.
 
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::sync::mpsc::{Receiver, TryRecvError, channel};
 use std::sync::{Arc, Mutex};
 
@@ -34,6 +34,9 @@ pub(crate) struct LinkImport {
     folders: Vec<String>,
     rx: Option<Receiver<Option<Resolved>>>,
     expected: usize,
+    /// Addresses saved as bookmarks, until their items arrive and their
+    /// pages are queued (`app/page_shots.rs`).
+    pub bookmarks: HashSet<String>,
 }
 
 impl App {
@@ -44,7 +47,7 @@ impl App {
         }
         let clip = arboard::Clipboard::new().and_then(|mut c| c.get_text()).unwrap_or_default();
         let l = &mut self.link_import;
-        *l = LinkImport { open: true, text: link_import::prefill(&clip), focus: true, rx: l.rx.take(), expected: l.expected, folders: std::mem::take(&mut l.folders), ..Default::default() };
+        *l = LinkImport { open: true, text: link_import::prefill(&clip), focus: true, rx: l.rx.take(), expected: l.expected, folders: std::mem::take(&mut l.folders), bookmarks: std::mem::take(&mut l.bookmarks), ..Default::default() };
     }
 
     /// Draws the box and takes in the files the fetch has finished.
@@ -154,6 +157,9 @@ impl App {
             if self.ws.lib.is_none() {
                 let _ = std::fs::remove_file(&r.path);
                 continue;
+            }
+            if r.path.extension().is_some_and(|e| e.eq_ignore_ascii_case("url")) {
+                self.link_import.bookmarks.insert(r.address.clone());
             }
             let mut opts = self.prefs.import_options(self.link_import.folders.clone());
             opts.url = r.address;

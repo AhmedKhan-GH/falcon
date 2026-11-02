@@ -448,6 +448,7 @@ impl App {
     pub(crate) fn import_dialogs(&mut self, ctx: &eframe::egui::Context) {
         use eframe::egui::{self, RichText};
         if let Some(added) = self.imports.select_after.take() {
+            self.page_shots_for_links(&added);
             self.select_imported(added);
         }
         if self.imports.errors_open {

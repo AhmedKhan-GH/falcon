@@ -573,6 +573,11 @@
   "Drag files onto this window to add them to this folder.": "Перетащите файлы в это окно, чтобы добавить их в эту папку.",
   "Drag files or folders from Finder onto the window to import them. Pasting copied files or images imports them too.": "Перетащите файлы или папки из Finder в окно, чтобы импортировать их. Вставка скопированных файлов или изображений тоже импортирует их.",
   "Drag files or folders onto this window to add them to the library.": "Перетащите файлы или папки в это окно, чтобы добавить их в библиотеку.",
+  "Drawing {n} bookmark pages": {
+    "few": "Отрисовываются {n} страницы закладок",
+    "many": "Отрисовывается {n} страниц закладок",
+    "one": "Отрисовывается {n} страница закладки"
+  },
   "Drawn by QuickLook: falcon can't read this font itself": "Отрисовано Quick Look: Falcon не может прочитать этот шрифт сам",
   "Drop Files Here": "Перетащите файлы сюда",
   "Drop files here": "Перетащите файлы сюда",
@@ -2461,6 +2466,11 @@
     "few": "{n} бита",
     "many": "{n} бит",
     "one": "{n} бит"
+  },
+  "{n} bookmark pages could not be drawn": {
+    "few": "Не удалось отрисовать {n} страницы закладок",
+    "many": "Не удалось отрисовать {n} страниц закладок",
+    "one": "Не удалось отрисовать {n} страницу закладки"
   },
   "{n} files": {
     "few": "{n} файла",

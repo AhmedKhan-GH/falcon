@@ -480,9 +480,11 @@ impl App {
                 Action::ResolveDuplicates(files, choice) => {
                     let n = files.len();
                     let mut r = Ok(());
+                    let mut resolved = Vec::new();
                     for p in files {
-                        r = r.and(crate::import_dupes::resolve(lib, p, choice).map(|_| ()));
+                        r = r.and(crate::import_dupes::resolve(lib, p, choice).map(|id| resolved.extend(id)));
                     }
+                    self.page_shots_for_links_in(lib, &resolved);
                     self.flash(crate::import_dupes::notice(choice, n));
                     r
                 }

@@ -286,6 +286,8 @@ impl App {
             }
             Op::RefreshThumbnail(ids) => {
                 let ids = self.local_only(lib, &ids);
+                // Bookmarks are drawn from their page, later and one at a time.
+                let ids = self.page_shots_refresh(lib, ids);
                 if ids.is_empty() {
                     return Ok(());
                 }

@@ -540,6 +540,10 @@
   "Drag files onto this window to add them to this folder.": "Arrastrar archivos a esta ventana para añadirlos a esta carpeta.",
   "Drag files or folders from Finder onto the window to import them. Pasting copied files or images imports them too.": "Arrastra archivos o carpetas desde el Finder a la ventana para importarlos. Pegar archivos o imágenes copiados también los importa.",
   "Drag files or folders onto this window to add them to the library.": "Arrastrar archivos o carpetas a esta ventana para añadirlos a la biblioteca.",
+  "Drawing {n} bookmark pages": {
+    "one": "Dibujando {n} página de marcador",
+    "other": "Dibujando {n} páginas de marcador"
+  },
   "Drawn by QuickLook: falcon can't read this font itself": "Dibujado por Quick Look: Falcon no puede leer esta tipografía",
   "Drop Files Here": "Soltar archivos aquí",
   "Drop files here": "Suelta los archivos aquí",
@@ -2352,6 +2356,10 @@
   "{n} bits": {
     "one": "{n} bit",
     "other": "{n} bits"
+  },
+  "{n} bookmark pages could not be drawn": {
+    "one": "No se pudo dibujar {n} página de marcador",
+    "other": "No se pudieron dibujar {n} páginas de marcador"
   },
   "{n} files": {
     "one": "{n} archivo",

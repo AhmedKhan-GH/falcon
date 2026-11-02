@@ -507,6 +507,9 @@
   "Drag files onto this window to add them to this folder.": "將檔案拖到此視窗，即可加入此資料夾。",
   "Drag files or folders from Finder onto the window to import them. Pasting copied files or images imports them too.": "將檔案或資料夾從 Finder 拖到視窗中即可匯入。貼上複製的檔案或圖片也會匯入。",
   "Drag files or folders onto this window to add them to the library.": "將檔案或資料夾拖到此視窗，即可加入資料庫。",
+  "Drawing {n} bookmark pages": {
+    "other": "正在繪製 {n} 個書籤頁面"
+  },
   "Drawn by QuickLook: falcon can't read this font itself": "由 Quick Look 繪製：Falcon 無法自行讀取此字體",
   "Drop Files Here": "將檔案拖放到這裡",
   "Drop files here": "將檔案拖到此處",
@@ -2241,6 +2244,9 @@
   "{note}; {files} missing from the backup": "{note}；備份中缺少{files}",
   "{n} bits": {
     "other": "{n}位元"
+  },
+  "{n} bookmark pages could not be drawn": {
+    "other": "無法繪製 {n} 個書籤頁面"
   },
   "{n} files": {
     "other": "{n}個檔案"

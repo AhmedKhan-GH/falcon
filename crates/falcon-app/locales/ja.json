@@ -507,6 +507,9 @@
   "Drag files onto this window to add them to this folder.": "ファイルをこのウインドウにドラッグすると、このフォルダに追加されます。",
   "Drag files or folders from Finder onto the window to import them. Pasting copied files or images imports them too.": "Finderからファイルやフォルダをウインドウにドラッグすると読み込まれます。コピーしたファイルや画像をペーストしても読み込まれます。",
   "Drag files or folders onto this window to add them to the library.": "ファイルまたはフォルダをこのウインドウにドラッグすると、ライブラリに追加されます。",
+  "Drawing {n} bookmark pages": {
+    "other": "{n} 件のブックマークページを描画中"
+  },
   "Drawn by QuickLook: falcon can't read this font itself": "Quick Lookで描画：Falconはこのフォントを直接読み込めません",
   "Drop Files Here": "ここにファイルをドロップ",
   "Drop files here": "ここにファイルをドロップ",
@@ -2241,6 +2244,9 @@
   "{note}; {files} missing from the backup": "{note}。バックアップに{files}が見つかりません",
   "{n} bits": {
     "other": "{n} ビット"
+  },
+  "{n} bookmark pages could not be drawn": {
+    "other": "{n} 件のブックマークページを描画できませんでした"
   },
   "{n} files": {
     "other": "{n} ファイル"

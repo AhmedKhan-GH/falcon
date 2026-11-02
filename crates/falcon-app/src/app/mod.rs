@@ -24,6 +24,7 @@ pub(crate) mod long_ops;
 pub(crate) mod modal;
 pub(crate) mod navigation;
 pub(crate) mod open_queue;
+pub(crate) mod page_shots;
 pub(crate) mod state;
 pub(crate) mod sounds;
 pub(crate) mod system;
@@ -156,6 +157,8 @@ pub struct App {
     pub(crate) imports: import::Imports,
     /// File ▸ Import Links… (`ui/dialogs/import_links.rs`).
     pub(crate) link_import: crate::ui::dialogs::import_links::LinkImport,
+    /// Screenshots of bookmarked pages (`page_shots.rs`).
+    pub(crate) page_shots: page_shots::PageShots,
     /// The macOS menu bar (`menu.rs`).
     pub(crate) menu_bar: crate::menu::Bar,
     /// The open library's actions, their panel and editor (`actions/`).
@@ -246,6 +249,7 @@ impl App {
             native_drag: Arc::default(),
             imports: Default::default(),
             link_import: Default::default(),
+            page_shots: Default::default(),
             fetches: Default::default(),
             open_apps: Default::default(),
             recent: Vec::new(),
@@ -451,6 +455,7 @@ impl eframe::App for App {
         self.quit_dialog(&ctx);
         // The web page sits over the viewer only in frames that asked for it.
         self.web.sync(&ctx, frame);
+        self.page_shots_tick(&ctx);
         crate::colorspace::sync(frame, self.prefs.color_space);
         self.vibrancy.end_frame(ui, t::p().main);
         self.vibrancy.sync(&ctx, frame, self.prefs.vibrancy);

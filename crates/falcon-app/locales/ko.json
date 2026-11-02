@@ -507,6 +507,9 @@
   "Drag files onto this window to add them to this folder.": "파일을 이 창으로 끌어다 놓으면 이 폴더에 추가됩니다.",
   "Drag files or folders from Finder onto the window to import them. Pasting copied files or images imports them too.": "Finder에서 파일이나 폴더를 창으로 드래그하면 가져옵니다. 복사한 파일이나 이미지를 붙여넣어도 가져옵니다.",
   "Drag files or folders onto this window to add them to the library.": "파일이나 폴더를 이 창으로 끌어다 놓으면 라이브러리에 추가됩니다.",
+  "Drawing {n} bookmark pages": {
+    "other": "북마크 페이지 {n}개를 그리는 중"
+  },
   "Drawn by QuickLook: falcon can't read this font itself": "Quick Look으로 표시됨: Falcon이 이 서체를 직접 읽을 수 없습니다",
   "Drop Files Here": "여기에 파일 놓기",
   "Drop files here": "여기에 파일을 놓으세요",
@@ -2241,6 +2244,9 @@
   "{note}; {files} missing from the backup": "{note}. 백업에서 {files}이(가) 없습니다",
   "{n} bits": {
     "other": "{n}비트"
+  },
+  "{n} bookmark pages could not be drawn": {
+    "other": "북마크 페이지 {n}개를 그릴 수 없습니다"
   },
   "{n} files": {
     "other": "파일 {n}개"

@@ -540,6 +540,10 @@
   "Drag files onto this window to add them to this folder.": "Drag files onto this window to add them to this folder.",
   "Drag files or folders from Finder onto the window to import them. Pasting copied files or images imports them too.": "Drag files or folders from Finder onto the window to import them. Pasting copied files or images imports them too.",
   "Drag files or folders onto this window to add them to the library.": "Drag files or folders onto this window to add them to the library.",
+  "Drawing {n} bookmark pages": {
+    "one": "Drawing {n} bookmark page",
+    "other": "Drawing {n} bookmark pages"
+  },
   "Drawn by QuickLook: falcon can't read this font itself": "Drawn by QuickLook: falcon can't read this font itself",
   "Drop Files Here": "Drop Files Here",
   "Drop files here": "Drop files here",
@@ -2352,6 +2356,10 @@
   "{n} bits": {
     "one": "{n} bit",
     "other": "{n} bits"
+  },
+  "{n} bookmark pages could not be drawn": {
+    "one": "{n} bookmark page could not be drawn",
+    "other": "{n} bookmark pages could not be drawn"
   },
   "{n} files": {
     "one": "{n} file",
