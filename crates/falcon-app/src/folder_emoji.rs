@@ -3,10 +3,12 @@
 //!
 //! Eagle builds a CSS class from a folder's `icon` value, so an emoji
 //! there would have no artwork. The emoji is therefore never written to
-//! `metadata.json`: falcon keeps a map from folder or smart folder id to
-//! emoji in its own app data (`Saved`). Ids are unique per folder, so the
-//! map survives moving or renaming a library, and entries of deleted
-//! folders stay so that undoing a delete brings the emoji back. The
+//! `metadata.json`: falcon keeps a map from library path and folder or
+//! smart folder id to emoji in its own app data (`Saved`), as Actions are
+//! kept per library path. A copied library has the same folder ids, so the
+//! path keeps its emoji apart; a moved or renamed library starts without
+//! them. Entries of deleted folders stay so that undoing a delete brings
+//! the emoji back. The
 //! folder's own `icon` and `iconColor` are left alone, so Eagle still
 //! shows the named icon.
 //!
@@ -143,17 +145,35 @@ pub fn name(c: char) -> Option<&'static str> {
     CURATED.iter().find(|(e, _)| *e == c).map(|(_, n)| *n)
 }
 
-/// Folder and smart folder ids mapped to their emoji. Saved as is in
-/// falcon's app data.
+/// Folder and smart folder ids, within their library, mapped to their
+/// emoji. Saved as is in falcon's app data.
 #[derive(serde::Serialize, serde::Deserialize, Default, Clone, PartialEq, Debug)]
 #[serde(transparent)]
-pub struct FolderEmoji(BTreeMap<String, String>);
+pub struct FolderEmoji {
+    map: BTreeMap<String, String>,
+    /// The focused library's path, which every call below is about.
+    #[serde(skip)]
+    scope: String,
+}
 
 impl FolderEmoji {
+    /// Makes `root` the library the other calls are about.
+    pub fn set_library(&mut self, root: Option<&std::path::Path>) {
+        match root {
+            Some(root) if self.scope.as_str() != root.to_string_lossy() => self.scope = root.to_string_lossy().into_owned(),
+            None => self.scope.clear(),
+            _ => {}
+        }
+    }
+
+    fn key(&self, id: &str) -> String {
+        format!("{}\n{id}", self.scope)
+    }
+
     /// The folder's emoji. A stored value that is not a curated emoji
     /// (from a newer falcon, or hand-edited) is ignored.
     pub fn get(&self, id: &str) -> Option<char> {
-        let mut chars = self.0.get(id)?.chars();
+        let mut chars = self.map.get(&self.key(id))?.chars();
         let c = chars.next()?;
         (chars.next().is_none() && name(c).is_some()).then_some(c)
     }
@@ -164,19 +184,28 @@ impl FolderEmoji {
         if name(emoji).is_none() {
             return false;
         }
-        self.0.insert(id.to_string(), emoji.to_string());
+        self.map.insert(self.key(id), emoji.to_string());
         true
     }
 
     /// Removes the folder's emoji, so its named icon shows again.
     pub fn clear(&mut self, id: &str) {
-        self.0.remove(id);
+        self.map.remove(&self.key(id));
+    }
+
+    /// Gives `to` the emoji of `from`, if it has one: a new subfolder takes
+    /// its parent's, as it does the named icon, and a duplicate its
+    /// original's.
+    pub fn copy(&mut self, from: &str, to: &str) {
+        if let Some(c) = self.get(from) {
+            self.set(to, c);
+        }
     }
 
     /// Whether any folder has an emoji.
     #[cfg(test)]
     pub fn any(&self) -> bool {
-        !self.0.is_empty()
+        !self.map.is_empty()
     }
 }
 
@@ -211,6 +240,28 @@ mod tests {
     }
 
     #[test]
+    fn libraries_keep_their_own_emoji() {
+        let mut m = FolderEmoji::default();
+        m.set_library(Some(std::path::Path::new("/a.library")));
+        m.set("F1", '🔥');
+        m.set_library(Some(std::path::Path::new("/copy.library")));
+        assert_eq!(m.get("F1"), None);
+        m.set("F1", '🌱');
+        m.set_library(Some(std::path::Path::new("/a.library")));
+        assert_eq!(m.get("F1"), Some('🔥'));
+    }
+
+    #[test]
+    fn copy_takes_the_emoji_only_when_there_is_one() {
+        let mut m = FolderEmoji::default();
+        m.set("F1", '🔥');
+        m.copy("F1", "F2");
+        assert_eq!(m.get("F2"), Some('🔥'));
+        m.copy("none", "F3");
+        assert_eq!(m.get("F3"), None);
+    }
+
+    #[test]
     fn round_trips_through_serde() {
         let mut m = FolderEmoji::default();
         m.set("F1", '🔥');
@@ -225,13 +276,13 @@ mod tests {
     fn saved_state_without_the_field_loads_and_keeps_it_when_present() {
         let saved: crate::app::Saved = serde_json::from_str("{}").unwrap();
         assert!(!saved.folder_emoji.any());
-        let saved: crate::app::Saved = serde_json::from_str(r#"{"folder_emoji":{"F1":"🔥"}}"#).unwrap();
+        let saved: crate::app::Saved = serde_json::from_str(r#"{"folder_emoji":{"\nF1":"🔥"}}"#).unwrap();
         assert_eq!(saved.folder_emoji.get("F1"), Some('🔥'));
     }
 
     #[test]
     fn unknown_values_are_ignored() {
-        let m: FolderEmoji = serde_json::from_str(r#"{"a":"x","b":"","c":"🔥🔥","d":"🫠","e":"🔥"}"#).unwrap();
+        let m: FolderEmoji = serde_json::from_str(r#"{"\na":"x","\nb":"","\nc":"🔥🔥","\nd":"🫠","\ne":"🔥"}"#).unwrap();
         assert_eq!(m.get("a"), None);
         assert_eq!(m.get("b"), None);
         assert_eq!(m.get("c"), None);

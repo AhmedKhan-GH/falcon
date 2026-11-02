@@ -522,6 +522,7 @@ impl App {
             self.drop_files(dropped, crate::drop_pos::at_drop(&ctx));
         }
         self.pdf_keys(&ctx);
+        self.folder_emoji.store.set_library(self.ws.root.as_deref());
         self.video_keys(&ctx);
         self.gif_keys(&ctx);
         self.hover_media.begin(ctx.cumulative_frame_nr());

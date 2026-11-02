@@ -239,6 +239,7 @@ impl App {
                         // Eagle puts a new subfolder first among its siblings.
                         lib.reorder_folder(&id, Some(&p), 0)?;
                         self.ws.collapsed.remove(&p);
+                        self.folder_emoji.store.copy(&p, &id);
                     }
                     self.ws.renaming = Some((id, tr("Untitled").into()));
                     Ok(())
@@ -248,6 +249,7 @@ impl App {
                         lib.reorder_folder(&id, parent.as_deref(), at + 1)?;
                         if let Some(p) = &parent {
                             self.ws.collapsed.remove(p);
+                            self.folder_emoji.store.copy(p, &id);
                         }
                         self.ws.renaming = Some((id, tr("Untitled").into()));
                         Ok(())

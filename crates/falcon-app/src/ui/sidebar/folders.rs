@@ -350,6 +350,7 @@ impl App {
                 ui.close();
             }
         });
+        self.emoji_submenu(ui, &ids);
         if let Some(pick) = color_row(ui, color.flatten()) {
             self.ws.actions.push(act(FolderAction::Restyle(ids.clone(), None, Some(pick))));
             ui.close();
@@ -402,6 +403,7 @@ impl App {
                 ui.close();
             }
         });
+        self.emoji_submenu(ui, &ids);
         if let Some(pick) = color_row(ui, color.flatten()) {
             self.ws.actions.push(act(FolderAction::RestyleSmart(ids.clone(), None, Some(pick))));
             ui.close();
@@ -893,8 +895,20 @@ impl App {
                 }
                 r
             }
-            FolderAction::Duplicate(id) => lib.duplicate_folder(&id).map(drop),
-            FolderAction::DuplicateSmart(id) => lib.duplicate_smart_folder(&id).map(drop),
+            FolderAction::Duplicate(id) => {
+                let new = lib.duplicate_folder(&id)?;
+                if let (Some(a), Some(b)) = (logic::find_folder(&lib.metadata.folders, &id), logic::find_folder(&lib.metadata.folders, &new)) {
+                    self.copy_folder_emoji(a, b);
+                }
+                Ok(())
+            }
+            FolderAction::DuplicateSmart(id) => {
+                let new = lib.duplicate_smart_folder(&id)?;
+                if let (Some(a), Some(b)) = (crate::ui::emoji_menu::find_smart(&lib.metadata.smart_folders, &id), crate::ui::emoji_menu::find_smart(&lib.metadata.smart_folders, &new)) {
+                    self.copy_smart_emoji(a, b);
+                }
+                Ok(())
+            }
             FolderAction::CreateWith(name, items) => {
                 let id = lib.create_folder(None, &name)?;
                 let mut r = Ok(());
@@ -922,6 +936,9 @@ impl App {
                     },
                 };
                 let id = lib.create_folder(parent.as_deref(), &name)?;
+                if let Some(p) = &parent {
+                    self.folder_emoji.store.copy(p, &id);
+                }
                 if let Some(at) = index {
                     lib.reorder_folder(&id, parent.as_deref(), at)?;
                 }

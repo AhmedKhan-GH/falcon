@@ -520,7 +520,7 @@ impl App {
                 ui.close();
             }
         });
-        self.emoji_submenu(ui, &f.id);
+        self.emoji_submenu(ui, std::slice::from_ref(&f.id));
         if let Some(color) = color_row(ui, f.icon_color.as_deref()) {
             self.ws.actions.push(org(OrgAction::FolderIcon(f.id.clone(), f.icon.clone(), color)));
             ui.close();
@@ -666,7 +666,7 @@ impl App {
                     ui.close();
                 }
             });
-            self.emoji_submenu(ui, &sf.id);
+            self.emoji_submenu(ui, std::slice::from_ref(&sf.id));
             if let Some(color) = color_row(ui, sf.icon_color.as_deref()) {
                 self.ws.actions.push(org(OrgAction::SmartIcon(sf.id.clone(), sf.icon.clone(), color)));
                 ui.close();
