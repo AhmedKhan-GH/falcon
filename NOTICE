@@ -14,6 +14,8 @@ Third-party material:
   C source vendored by the ufbx Rust crate.
 - ufbx Rust crate 0.8.0 (https://github.com/ufbx/ufbx-rust), MIT OR PDDL-1.0,
   copyright (c) Samuli Raivio.
+- lopdf 0.46.0 (https://github.com/J-F-Liu/lopdf), reads a PDF's structure to
+  switch its layers, MIT license, copyright (c) 2016 Junfeng Liu.
 - moxcms 0.8.1 (https://github.com/awxkee/moxcms), the ICC colour conversion
   of PSD merged images, BSD-3-Clause OR Apache-2.0, copyright (c) Radzivon
   Bartoshyk.

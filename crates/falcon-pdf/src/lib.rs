@@ -1,6 +1,6 @@
 //! PDF documents for falcon's viewer, through the operating system's own
-//! PDF engine: PDFKit on macOS. No third-party PDF library is linked, so
-//! falcon keeps its MIT/Apache-2.0 licence.
+//! PDF engine: PDFKit on macOS. The one third-party PDF library, lopdf (MIT),
+//! only reads a file's structure so that layers can be switched (`ocg`).
 //!
 //! [`Document`] opens a file and hands out what a reader needs: page
 //! sizes, pages or parts of them rendered to RGBA pixels at any scale, each page's text,
@@ -22,6 +22,8 @@ mod geom;
 
 #[cfg(target_os = "macos")]
 mod mac;
+#[cfg(target_os = "macos")]
+mod ocg;
 #[cfg(target_os = "macos")]
 pub use mac::{Document, print};
 
@@ -134,7 +136,8 @@ pub struct Attachment {
 }
 
 /// An optional content group ("layer"), as pdf.js's layers list shows
-/// them, with whether the document's default configuration shows it.
+/// them, with whether the document's default configuration shows it. Use
+/// [`Document::set_layers`] to show others.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Layer {
     pub name: String,

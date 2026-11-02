@@ -70,4 +70,7 @@ impl Document {
     pub fn layers(&self) -> Vec<Layer> {
         Vec::new()
     }
+    pub fn set_layers(&mut self, _visible: &[bool]) -> Result<()> {
+        Err(Error("PDF needs macOS".into()))
+    }
 }

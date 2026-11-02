@@ -19,14 +19,14 @@
 //! Every public method runs inside an autorelease pool, since the viewer
 //! calls them on a worker thread that has none of its own.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use objc2::AnyThread;
 use objc2::runtime::AnyObject;
 use objc2::rc::{Retained, autoreleasepool};
 use objc2_core_foundation::{CGPoint, CGRect, CGSize};
 use objc2_core_graphics::{CGBitmapContextCreate, CGColorSpace, CGContext, CGImageAlphaInfo, CGImageByteOrderInfo, CGInterpolationQuality, CGPDFDocument};
-use objc2_foundation::{NSArray, NSDate, NSPoint, NSString, NSStringCompareOptions, NSURL};
+use objc2_foundation::{NSArray, NSData, NSDate, NSPoint, NSString, NSStringCompareOptions, NSURL};
 use objc2_pdf_kit::{
     PDFActionGoTo, PDFActionURL, PDFDestination, PDFDisplayBox, PDFDocument, PDFDocumentAttribute, PDFDocumentAuthorAttribute,
     PDFDocumentCreationDateAttribute, PDFDocumentCreatorAttribute, PDFDocumentKeywordsAttribute, PDFDocumentModificationDateAttribute,
@@ -34,6 +34,7 @@ use objc2_pdf_kit::{
 };
 
 use crate::geom::{self, PageGeom};
+use crate::ocg::Patcher;
 use crate::{Attachment, Bitmap, Error, Hit, Info, Layer, Link, LinkTarget, NEEDS_PASSWORD, OutlineEntry, Rect, Result, SearchOptions, Selection, WRONG_PASSWORD, render_size};
 
 /// Search stops collecting after this many matches.
@@ -43,10 +44,27 @@ fn err(msg: impl Into<String>) -> Error {
     Error(msg.into())
 }
 
+/// Runs `f` on a document's catalog dictionary and its Core Graphics
+/// document, if it has them.
+fn catalog_of<T>(doc: &PDFDocument, f: impl FnOnce(catalog::Dict, &CGPDFDocument) -> T) -> Option<T> {
+    // SAFETY: owned; one thread. The CGPDFDocument is retained for the
+    // whole call, so the catalog and every object reached from it live
+    // at least as long.
+    let doc = unsafe { doc.documentRef() }?;
+    let cat = CGPDFDocument::catalog(Some(&doc));
+    (!cat.is_null()).then(|| f(cat, &doc))
+}
+
 /// An open PDF file. Usable only on the thread that opened it.
 pub struct Document {
     doc: Retained<PDFDocument>,
     count: usize,
+    path: PathBuf,
+    password: Option<String>,
+    /// The copy drawn while the layers differ from the default configuration.
+    switched: Option<Retained<PDFDocument>>,
+    /// Read on the first switch.
+    patcher: Option<Patcher>,
 }
 
 impl Document {
@@ -65,9 +83,9 @@ impl Document {
         if !path.is_file() {
             return Err(err(format!("no file at {}", path.display())));
         }
-        let path = path.to_str().ok_or_else(|| err("the path is not valid UTF-8"))?;
+        let path_text = path.to_str().ok_or_else(|| err("the path is not valid UTF-8"))?;
         autoreleasepool(|_| {
-            let url = NSURL::fileURLWithPath(&NSString::from_str(path));
+            let url = NSURL::fileURLWithPath(&NSString::from_str(path_text));
             // SAFETY: owned; one thread (the result stays in this `Document`).
             let doc = unsafe { PDFDocument::initWithURL(PDFDocument::alloc(), &url) }.ok_or_else(|| err("not a PDF this system can read"))?;
             // SAFETY: owned; one thread.
@@ -80,7 +98,7 @@ impl Document {
             }
             // SAFETY: owned; one thread.
             let count = unsafe { doc.pageCount() };
-            Ok(Document { doc, count })
+            Ok(Document { doc, count, path: path.to_path_buf(), password: password.map(str::to_string), switched: None, patcher: None })
         })
     }
 
@@ -137,6 +155,17 @@ impl Document {
         unsafe { self.doc.pageAtIndex(i) }.ok_or_else(|| err(format!("page {} can't be read", i + 1)))
     }
 
+    /// Page `i` of the copy showing the chosen layers, else of the document.
+    fn drawn_page(&self, i: usize) -> Result<Retained<PDFPage>> {
+        let Some(doc) = &self.switched else { return self.page(i) };
+        if i >= self.count {
+            return Err(err(format!("no page {}", i + 1)));
+        }
+        // SAFETY: owned, plain (index checked above; the copy was checked to
+        // have the same pages); one thread.
+        unsafe { doc.pageAtIndex(i) }.ok_or_else(|| err(format!("page {} can't be read", i + 1)))
+    }
+
     fn geom(page: &PDFPage) -> PageGeom {
         // SAFETY: owned, plain; one thread.
         let (b, rot) = unsafe { (page.boundsForBox(PDFDisplayBox::CropBox), page.rotation()) };
@@ -167,7 +196,7 @@ impl Document {
     /// any zoom can be drawn for the part on screen.
     pub fn render_part(&self, i: usize, part: Rect, w: usize, h: usize) -> Result<Bitmap> {
         autoreleasepool(|_| {
-            let page = self.page(i)?;
+            let page = self.drawn_page(i)?;
             let size = Self::geom(&page).size();
             let (w, h) = (w.max(1), h.max(1));
             let mut rgba = vec![0u8; w * h * 4];
@@ -309,21 +338,59 @@ impl Document {
     }
 
     /// The optional content groups ("layers") and whether the default
-    /// configuration shows each. PDFKit always draws that configuration,
-    /// so they can be listed but not switched.
+    /// configuration shows each.
     pub fn layers(&self) -> Vec<Layer> {
         autoreleasepool(|_| self.with_catalog(|cat, _| catalog::layers(cat)).unwrap_or_default())
+    }
+
+    /// Chooses which layers [`Document::render`] and [`Document::thumbnail`]
+    /// show, one flag per entry of [`Document::layers`]. The default choice
+    /// draws the document itself; any other draws an in-memory copy with
+    /// that configuration (see the `ocg` module). Text, search and links
+    /// stay the document's. On failure what's drawn doesn't change.
+    pub fn set_layers(&mut self, visible: &[bool]) -> Result<()> {
+        let layers = self.layers();
+        if visible.len() != layers.len() {
+            return Err(err("the list of layers doesn't match the document"));
+        }
+        if layers.iter().map(|l| l.visible).eq(visible.iter().copied()) {
+            self.switched = None;
+            return Ok(());
+        }
+        let mut bytes = std::fs::read(&self.path).map_err(|e| err(e.to_string()))?;
+        if self.patcher.is_none() {
+            let patcher = Patcher::new(&bytes, self.password.as_deref())?;
+            if patcher.groups() != layers.len() {
+                return Err(err("the PDF's layers can't be switched"));
+            }
+            self.patcher = Some(patcher);
+        }
+        let tail = self.patcher.as_ref().map(|p| p.update(visible, bytes.len())).unwrap_or_default();
+        bytes.extend_from_slice(&tail);
+        autoreleasepool(|_| {
+            let data = NSData::with_bytes(&bytes);
+            // SAFETY: owned; one thread (the copy stays in this `Document`).
+            let copy = unsafe { PDFDocument::initWithData(PDFDocument::alloc(), &data) }.ok_or_else(|| err("the PDF's layers can't be switched"))?;
+            // SAFETY: owned; one thread.
+            if unsafe { copy.isLocked() } && !self.password.as_deref().is_some_and(|pw| unsafe { copy.unlockWithPassword(&NSString::from_str(pw)) }) {
+                return Err(err("the PDF's layers can't be switched"));
+            }
+            // SAFETY: owned; one thread.
+            let same_pages = unsafe { copy.pageCount() } == self.count;
+            // The engine must read back the configuration just written.
+            let took = catalog_of(&copy, |cat, _| catalog::layers(cat)).is_some_and(|l| l.iter().map(|l| l.visible).eq(visible.iter().copied()));
+            if !same_pages || !took {
+                return Err(err("the PDF's layers can't be switched"));
+            }
+            self.switched = Some(copy);
+            Ok(())
+        })
     }
 
     /// Runs `f` on the document's catalog dictionary and its Core Graphics
     /// document, if it has them.
     fn with_catalog<T>(&self, f: impl FnOnce(catalog::Dict, &CGPDFDocument) -> T) -> Option<T> {
-        // SAFETY: owned; one thread. The CGPDFDocument is retained for the
-        // whole call, so the catalog and every object reached from it live
-        // at least as long.
-        let doc = unsafe { self.doc.documentRef() }?;
-        let cat = CGPDFDocument::catalog(Some(&doc));
-        (!cat.is_null()).then(|| f(cat, &doc))
+        catalog_of(&self.doc, f)
     }
 
     /// Page `i`'s link annotations: their areas and where they go (a page
