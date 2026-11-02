@@ -720,16 +720,7 @@ impl Library {
         if ids.iter().any(|id| path.contains(&id.as_str())) {
             return Err(self.invalid("cannot move a folder into itself"));
         }
-        let picked: HashSet<&str> = ids.iter().map(String::as_str).collect();
-        let parents = parent_map(&self.metadata.folders);
-        // Tree order, leaving out folders whose parent moves with them.
-        let movers: Vec<String> = self
-            .all_folders()
-            .into_iter()
-            .filter(|f| picked.contains(f.id.as_str()) && !parents[f.id.as_str()].is_some_and(|p| picked.contains(p)))
-            .map(|f| f.id.clone())
-            .collect();
-        let moved: Vec<Folder> = movers.iter().map(|id| remove(&mut self.metadata.folders, id).expect("checked above")).collect();
+        let moved = self.take_folders(ids);
         let (siblings, at) = match place {
             FolderPlace::Into => {
                 let kids = &mut find_mut(&mut self.metadata.folders, target).expect("checked above").children;
@@ -748,6 +739,29 @@ impl Library {
         };
         siblings.splice(at..at, moved);
         self.save_metadata()
+    }
+
+    /// Moves several folders to the end of the top level in one save, keeping
+    /// their tree order. A folder whose parent is among them stays inside it.
+    pub fn move_folders_to_top(&mut self, ids: &[String]) -> Result<()> {
+        self.expect_folders(ids)?;
+        let moved = self.take_folders(ids);
+        self.metadata.folders.extend(moved);
+        self.save_metadata()
+    }
+
+    /// Takes `ids`, known to exist, out of the tree in tree order, leaving out
+    /// folders whose parent moves with them.
+    fn take_folders(&mut self, ids: &[String]) -> Vec<Folder> {
+        let picked: HashSet<&str> = ids.iter().map(String::as_str).collect();
+        let parents = parent_map(&self.metadata.folders);
+        let movers: Vec<String> = self
+            .all_folders()
+            .into_iter()
+            .filter(|f| picked.contains(f.id.as_str()) && !parents[f.id.as_str()].is_some_and(|p| picked.contains(p)))
+            .map(|f| f.id.clone())
+            .collect();
+        movers.iter().map(|id| remove(&mut self.metadata.folders, id).expect("checked by the caller")).collect()
     }
 
     /// Moves a folder under `parent` (or to the root), at the end of its new
@@ -1174,6 +1188,13 @@ mod tests {
         assert!(lib.move_folders(std::slice::from_ref(&b), &a2, FolderPlace::Into).is_err(), "into its own descendant");
         assert!(lib.move_folders(&[b.clone(), c.clone()], &c, FolderPlace::Above).is_err(), "onto a moved folder");
         assert!(lib.move_folders(std::slice::from_ref(&c), "NOPE", FolderPlace::Above).is_err());
+        assert_eq!(tree(&lib), before);
+
+        // To the top level: nested picks stay with their parent, after the rest.
+        lib.move_folders_to_top(&[a1.clone(), a.clone(), c.clone()]).unwrap();
+        assert_eq!(tree(&Library::open(lib.root()).unwrap()), ["B", "C", "A", " A1", " A2", " D"]);
+        let before = tree(&lib);
+        assert!(lib.move_folders_to_top(&["nope".to_string()]).is_err());
         assert_eq!(tree(&lib), before);
     }
 

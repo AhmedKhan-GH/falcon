@@ -145,9 +145,13 @@ pub(crate) struct Marquee {
 #[derive(Clone)]
 pub(crate) struct DragItems(pub(crate) Vec<String>);
 
-/// A folder being dragged in the sidebar.
+/// Folders being dragged in the sidebar: the row the drag began on, and what
+/// moves with it (see [`crate::logic::TreeSel::dragged`]).
 #[derive(Clone)]
-pub(crate) struct DragFolder(pub(crate) String);
+pub(crate) struct DragFolder {
+    pub(crate) grabbed: String,
+    pub(crate) ids: Vec<String>,
+}
 
 /// A Quick Access row being dragged, by the id it pins.
 #[derive(Clone)]

@@ -5,7 +5,7 @@
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 
-use falcon_library::edit::SubfolderSort;
+use falcon_library::edit::{FolderPlace, SubfolderSort};
 use falcon_library::model::{Folder, FolderOrder, Item, TagGroup};
 use falcon_library::search::{self, OrderBy};
 use falcon_library::smart::SmartFolder;
@@ -217,6 +217,39 @@ pub fn tree_drop<T: Node>(roots: &[T], dragged: &str, target: &str, zone: DropZo
         return None;
     }
     Some((parent.map(str::to_string), pos))
+}
+
+/// Whether a drop of `dragged` on `target` is refused: the target is one of
+/// them or lies inside one, as Eagle's `moveFoldersToFolder` refuses.
+pub fn drop_refused<T: Node>(roots: &[T], dragged: &[String], target: &str) -> bool {
+    dragged.iter().any(|d| find(roots, d).is_some_and(|n| within(n, target)))
+}
+
+/// What dropping dragged folders on a row does.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FolderDrop {
+    /// One folder: its new parent and index, as [`tree_drop`] gives them.
+    One(String, Option<String>, usize),
+    /// Several: all of them next to or into the target in one step.
+    Many(Vec<String>, String, FolderPlace),
+}
+
+/// The move a drop of folders `dragged` on `target` asks for. `None` when it
+/// is refused or, for one folder, changes nothing.
+pub fn folder_drop<T: Node>(roots: &[T], dragged: &[String], target: &str, zone: DropZone) -> Option<FolderDrop> {
+    if let [one] = dragged {
+        let (parent, index) = tree_drop(roots, one, target, zone)?;
+        return Some(FolderDrop::One(one.clone(), parent, index));
+    }
+    if dragged.is_empty() || drop_refused(roots, dragged, target) {
+        return None;
+    }
+    let place = match zone {
+        DropZone::Before => FolderPlace::Above,
+        DropZone::Into => FolderPlace::Into,
+        DropZone::After => FolderPlace::Below,
+    };
+    Some(FolderDrop::Many(dragged.to_vec(), target.to_string(), place))
 }
 
 /// Eagle's Edit ▸ Move Folder commands.
@@ -567,6 +600,28 @@ pub fn add_typed_tags(tags: &mut Vec<String>, typed: &str) -> bool {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn dropping_picked_folders_moves_them_together() {
+        let roots = vec![folder("a", vec![folder("a1", vec![folder("a1x", vec![])])]), folder("b", vec![]), folder("c", vec![])];
+        let ids = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let picked = ids(&["a", "b"]);
+        assert_eq!(folder_drop(&roots, &picked, "c", DropZone::Into), Some(FolderDrop::Many(picked.clone(), "c".into(), FolderPlace::Into)));
+        assert_eq!(folder_drop(&roots, &picked, "c", DropZone::Before), Some(FolderDrop::Many(picked.clone(), "c".into(), FolderPlace::Above)));
+        assert_eq!(folder_drop(&roots, &picked, "c", DropZone::After), Some(FolderDrop::Many(picked.clone(), "c".into(), FolderPlace::Below)));
+        // Refused on a picked folder and anywhere inside one, in every zone.
+        for zone in [DropZone::Before, DropZone::Into, DropZone::After] {
+            for target in ["a", "b", "a1", "a1x"] {
+                assert_eq!(folder_drop(&roots, &picked, target, zone), None, "{target}");
+            }
+        }
+        assert!(drop_refused(&roots, &picked, "a1x"));
+        assert!(!drop_refused(&roots, &picked, "c"));
+        // One folder keeps the exact index a single reorder gets.
+        assert_eq!(folder_drop(&roots, &ids(&["c"]), "a", DropZone::Before), Some(FolderDrop::One("c".into(), None, 0)));
+        assert_eq!(folder_drop(&roots, &ids(&["a"]), "a1x", DropZone::Into), None);
+        assert_eq!(folder_drop::<Folder>(&roots, &[], "c", DropZone::Into), None);
+    }
 
     #[test]
     fn touch_id_unlocks_only_the_asked_folder() {

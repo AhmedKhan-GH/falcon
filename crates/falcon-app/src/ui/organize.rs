@@ -365,14 +365,24 @@ impl App {
     /// top or bottom quarter, a highlight in the middle. Queues the move on
     /// release.
     pub(crate) fn folder_drop(&mut self, ui: &Ui, lib: &Library, resp: &Response, f: &Folder, depth: usize) {
-        let zone = tree_drop_feedback::<DragFolder>(ui, resp, depth, true, |d| d.0 == f.id);
-        if let (Some(zone), Some(d)) = (zone, resp.dnd_release_payload::<DragFolder>())
-            && let Some((parent, index)) = organize::tree_drop(&lib.metadata.folders, &d.0, &f.id, zone)
-        {
-            if let Some(p) = &parent {
-                self.ws.collapsed.remove(p);
+        let roots = &lib.metadata.folders;
+        let zone = tree_drop_feedback::<DragFolder>(ui, resp, depth, true, |d| organize::drop_refused(roots, &d.ids, &f.id));
+        if let (Some(zone), Some(d)) = (zone, resp.dnd_release_payload::<DragFolder>()) {
+            match organize::folder_drop(roots, &d.ids, &f.id, zone) {
+                Some(organize::FolderDrop::One(id, parent, index)) => {
+                    if let Some(p) = &parent {
+                        self.ws.collapsed.remove(p);
+                    }
+                    self.ws.actions.push(org(OrgAction::ReorderFolder(id, parent, index)));
+                }
+                Some(organize::FolderDrop::Many(ids, target, place)) => {
+                    if place == falcon_library::edit::FolderPlace::Into {
+                        self.ws.collapsed.remove(&target);
+                    }
+                    self.ws.actions.push(Action::Folders(crate::ui::sidebar::folders::FolderAction::Move(ids, target, place)));
+                }
+                None => {}
             }
-            self.ws.actions.push(org(OrgAction::ReorderFolder(d.0.clone(), parent, index)));
         }
     }
 
@@ -426,9 +436,10 @@ impl App {
             .zip(resp.dnd_release_payload::<DragQuick>())
             .map(|(z, d)| (z, d.0.clone(), None))
             .or_else(|| {
-                tree_drop_feedback::<DragFolder>(ui, resp, 0, false, |d| d.0 == target)
+                // The row the drag began on, as Eagle's `draggedQuickAccess`.
+                tree_drop_feedback::<DragFolder>(ui, resp, 0, false, |d| d.grabbed == target)
                     .zip(resp.dnd_release_payload::<DragFolder>())
-                    .map(|(z, d)| (z, d.0.clone(), Some("folder")))
+                    .map(|(z, d)| (z, d.grabbed.clone(), Some("folder")))
             })
             .or_else(|| {
                 tree_drop_feedback::<DragSmart>(ui, resp, 0, false, |d| d.0 == target)

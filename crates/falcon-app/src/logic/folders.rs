@@ -158,6 +158,12 @@ impl TreeSel {
         self.anchor = None;
     }
 
+    /// What a drag that begins on row `id` carries: every picked row if `id`
+    /// is one of them, as Eagle's `draggedFolders`, else just `id`.
+    pub fn dragged(&self, id: &str) -> Vec<String> {
+        if self.contains(id) { self.ids.clone() } else { vec![id.to_string()] }
+    }
+
     /// A ⌘-click on `id` while `open` is the folder shown. A first ⌘-click
     /// picks the open folder too; after that the click toggles `id`, but
     /// the last picked row stays picked. Adding a row makes it the anchor.
@@ -306,6 +312,14 @@ mod folder_drop_tests {
         assert!(apply_folder_drop(&mut it, "B", &FolderDrop::Add, &tags));
         assert_eq!((it.folders.as_slice(), it.tags.as_slice()), (["B".to_string()].as_slice(), tags.as_slice()));
         assert!(!apply_folder_drop(&mut it, "B", &FolderDrop::Add, &tags));
+    }
+
+    #[test]
+    fn a_drag_carries_the_picked_rows_if_it_begins_on_one() {
+        let sel = TreeSel { ids: vec!["a".into(), "b".into()], anchor: None };
+        assert_eq!(sel.dragged("b"), ["a", "b"]);
+        assert_eq!(sel.dragged("c"), ["c"]);
+        assert_eq!(TreeSel::default().dragged("c"), ["c"]);
     }
 
     #[test]

@@ -519,7 +519,10 @@ impl App {
                 ui.painter().rect_stroke(header.rect.shrink2(vec2(11.0, 1.0)), t::RADIUS, Stroke::new(1.5, t::p().primary), StrokeKind::Inside);
             }
             if let Some(d) = header.dnd_release_payload::<DragFolder>() {
-                self.ws.actions.push(Action::MoveFolder(d.0.clone(), None));
+                match d.ids.as_slice() {
+                    [one] => self.ws.actions.push(Action::MoveFolder(one.clone(), None)),
+                    many => self.ws.actions.push(Action::Folders(crate::ui::sidebar::folders::FolderAction::MoveToTop(many.to_vec()))),
+                }
             }
             header.context_menu(|ui| {
                 self.folder_title_sort_menu(ui, None);
@@ -693,7 +696,7 @@ impl App {
             }
         }
         if resp.drag_started() {
-            resp.dnd_set_drag_payload(DragFolder(f.id.clone()));
+            resp.dnd_set_drag_payload(DragFolder { grabbed: f.id.clone(), ids: self.ws.folders.sel.dragged(&f.id) });
         }
         drop_highlight(ui, &resp, depth);
         if let Some(d) = resp.dnd_release_payload::<DragItems>() {

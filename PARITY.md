@@ -342,7 +342,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Drag items onto a Quick Access folder | Done | Same flow as sidebar rows, incl. the password prompt | local |
 | Drag items onto a subfolder card | Done | Same `DropOnFolder` path as sidebar rows, with the bulk gate | local |
 | Drag items onto the Trash | Done | app.rs:1764-1767 | local |
-| Drag folders to reorder or nest, with insertion lines | Done | organize_ui.rs:254-266 | local |
+| Drag folders to reorder or nest, with insertion lines | Done | `ui/organize.rs` `folder_drop`, `organize::folder_drop`: a drag that begins on a picked folder carries every picked one, as Eagle's `draggedFolders`, in one undo step; a drop on a picked folder or inside one is refused. Eagle's drag helper (icon, name, count by the pointer) isn't drawn | local |
 | Drag a folder onto the Folders heading to move it to the top level | Done | app.rs:1705-1711 | local |
 | Drag smart folders to reorder or nest | Done | organize_ui.rs:362-372 | local |
 | Drag Quick Access entries to reorder them | Done | Reorder by dragging; folders and smart folders can be dragged in | local |

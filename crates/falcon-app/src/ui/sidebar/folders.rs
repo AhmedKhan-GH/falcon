@@ -93,6 +93,8 @@ pub(crate) enum FolderAction {
     Rename(Vec<(String, String)>),
     RenameSmart(Vec<(String, String)>),
     Move(Vec<String>, String, FolderPlace),
+    /// To the end of the top level (a drop on the Folders header).
+    MoveToTop(Vec<String>),
     /// New icon and/or colour for every folder (`None` keeps each one's).
     Restyle(Vec<String>, Option<Option<String>>, Option<Option<String>>),
     RestyleSmart(Vec<String>, Option<Option<String>>, Option<Option<String>>),
@@ -123,7 +125,7 @@ impl FolderAction {
     pub fn label(&self) -> String {
         match self {
             FolderAction::Rename(v) | FolderAction::RenameSmart(v) => tr_n(v.len(), "Rename {n} folder", "Rename {n} folders"),
-            FolderAction::Move(v, ..) => tr_n(v.len(), "Move folder", "Move {n} folders"),
+            FolderAction::Move(v, ..) | FolderAction::MoveToTop(v) => tr_n(v.len(), "Move folder", "Move {n} folders"),
             FolderAction::Restyle(v, ..) | FolderAction::RestyleSmart(v, ..) => tr_n(v.len(), "Change icon of folder", "Change icon of {n} folders"),
             FolderAction::Order(v, _) | FolderAction::Increase(v, _) | FolderAction::SmartOrder(v, _) | FolderAction::SmartIncrease(v, _) => {
                 tr_n(v.len(), "Change sort of folder", "Change sort of {n} folders")
@@ -817,6 +819,7 @@ impl App {
                 r
             }
             FolderAction::Move(ids, target, place) => lib.move_folders(&ids, &target, place),
+            FolderAction::MoveToTop(ids) => lib.move_folders_to_top(&ids),
             FolderAction::Restyle(ids, icon, color) => lib.restyle_folders(&ids, icon.as_ref().map(Option::as_deref), color.as_ref().map(Option::as_deref)),
             FolderAction::RestyleSmart(ids, icon, color) => {
                 let roots = lib.smart_folders();
