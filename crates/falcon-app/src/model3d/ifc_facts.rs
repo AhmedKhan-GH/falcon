@@ -1,6 +1,7 @@
 //! What the inspector lists for an IFC item: how many products falcon
-//! draws and skips, the triangle count, the schema, and why there is no
-//! 3D preview when nothing could be drawn. Files are read on one
+//! draws and skips (through web-ifc when it is built in), the triangle
+//! count, the schema, and why there is no 3D preview when nothing could
+//! be drawn. Files are read on one
 //! background thread at a time and the results kept by item.
 
 use std::collections::HashMap;
@@ -79,7 +80,10 @@ pub(crate) fn fact_rows(facts: Option<&Facts>) -> Vec<(&'static str, String)> {
     };
     let mut rows = Vec::new();
     if r.shown == 0 {
-        rows.push((preview, tr("IFC: no tessellated geometry").to_string()));
+        // With web-ifc every solid kind is read, so an empty file has no
+        // 3D geometry at all; without it only the tessellated part is.
+        let why = if ifc::full_geometry() { tr("IFC: no 3D geometry") } else { tr("IFC: no tessellated geometry") };
+        rows.push((preview, why.to_string()));
     } else {
         rows.push((tr_key("Products Shown"), r.shown.to_string()));
     }
@@ -119,6 +123,7 @@ mod tests {
         let none = Report { schema: String::new(), shown: 0, skipped: 1, triangles: 0, unsupported: vec![] };
         let rows = fact_rows(Some(&Ok(none)));
         assert_eq!(labels(&rows), ["3D Preview", "Products Skipped"]);
-        assert_eq!(rows[0].1, "IFC: no tessellated geometry");
+        let why = if ifc::full_geometry() { "IFC: no 3D geometry" } else { "IFC: no tessellated geometry" };
+        assert_eq!(rows[0].1, why);
     }
 }
