@@ -820,14 +820,6 @@ impl Window {
         }
     }
 
-    /// The open library's actions and their keys, for the Shortcuts
-    /// pane's Actions group and its conflict checks.
-    pub fn set_actions(&mut self, actions: Vec<(String, Option<egui::KeyboardShortcut>)>) {
-        if self.recorder.actions != actions {
-            self.recorder.actions = actions;
-        }
-    }
-
     pub fn close(&mut self) {
         self.open = false;
         self.draft = None;

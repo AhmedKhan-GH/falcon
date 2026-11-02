@@ -631,7 +631,6 @@ impl App {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!on));
             }
             C::AddToLastFolder => self.add_to_last_used(self.acted_on()),
-            C::ActionsPanel => self.open_actions_panel(None),
             C::AddToFolders | C::FolderPanel => {
                 if let Some(l) = self.ws.lib.clone() {
                     let ids = self.acted_on();

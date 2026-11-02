@@ -33,7 +33,6 @@ pub const GEAR: &str = "\u{E270}";
 pub const IMAGES: &str = "\u{E836}";
 pub const KEYBOARD: &str = "\u{E2D8}";
 pub const LAYOUT: &str = "\u{E6D6}";
-pub const LIGHTNING: &str = "\u{E2DE}";
 pub const MAGNIFYING_GLASS: &str = "\u{E30C}";
 pub const MINUS: &str = "\u{E32A}";
 pub const PENCIL: &str = "\u{E3AE}";
