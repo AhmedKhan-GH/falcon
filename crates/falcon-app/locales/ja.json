@@ -291,6 +291,7 @@
   "Comment": "コメント",
   "Comment Mode (C)": "コメントモード（C）",
   "Comment at {time}": "{time}のコメント",
+  "Comment mode": "コメントモード",
   "Comments": "コメント",
   "Comments ({count})": "コメント（{count}）",
   "Comparing files": "ファイルを比較中",
@@ -1779,6 +1780,7 @@
   "The system can't find the app to open at login": "ログイン時に開くアプリがシステムで見つかりません",
   "The system has no login item for this app": "このアプリのログイン項目がシステムにありません",
   "The tag picker's Recent tags start over. Tags stay on their items.": "タグピッカーの最近使ったタグが空になります。アイテムのタグは残ります。",
+  "The viewer opens images in": "ビューアで画像を開くモード",
   "The wheel button on an item": "アイテム上でのホイールボタン",
   "The wheel over an image in the viewer": "ビューアで画像上のホイールを回すと",
   "The {n} selected items go into it.": {

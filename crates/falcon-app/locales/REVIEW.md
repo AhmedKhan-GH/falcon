@@ -184,6 +184,7 @@ The core words, so every file uses one term for one thing.
 - "More Filters" (Find ▸ Open Filter), "Open the add-filter menu", "Open the modified date filter" and "Open with another app" (the new shortcut rows), "Choose an App to Open With" and "Applications" (the app chooser behind View ▸ Open With Another App…) (machine-written).
 - "{name} now has {n} items", the toast after Refresh in a smart folder's menu (machine-written).
 - "Reset Cover", "Use the default cover again", "Reset folder cover" and "Reset the cover of {name}", the folder menu entry that clears a custom cover (machine-written).
+- "The viewer opens images in" and "Comment mode", the Preferences ▸ Preview radios for the default viewer mode; "Preview" was already translated (machine-written).
 
 ## Reviewed
 

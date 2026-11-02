@@ -305,6 +305,7 @@
   "Comment": "Comentario",
   "Comment Mode (C)": "Modo de comentarios (C)",
   "Comment at {time}": "Comentario en {time}",
+  "Comment mode": "Modo de comentarios",
   "Comments": "Comentarios",
   "Comments ({count})": "Comentarios ({count})",
   "Comparing files": "Comparando archivos",
@@ -1872,6 +1873,7 @@
   "The system can't find the app to open at login": "El sistema no encuentra la app que abrir al iniciar sesión",
   "The system has no login item for this app": "El sistema no tiene ningún ítem de inicio de sesión para esta app",
   "The tag picker's Recent tags start over. Tags stay on their items.": "Las etiquetas recientes del selector empiezan de cero. Las etiquetas se conservan en sus elementos.",
+  "The viewer opens images in": "El visor abre las imágenes en",
   "The wheel button on an item": "El botón de la rueda sobre un elemento",
   "The wheel over an image in the viewer": "La rueda sobre una imagen en el visor",
   "The {n} selected items go into it.": {

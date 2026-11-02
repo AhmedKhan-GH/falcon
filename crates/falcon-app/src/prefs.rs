@@ -123,6 +123,10 @@ pub struct Prefs {
     /// Eagle's `habits.defaultRatio` "100%": images open at actual size
     /// instead of Smart Zoom.
     pub open_actual_size: bool,
+    /// Eagle's `habits.defaultMode` key and values ("preview", "annotation"),
+    /// which Eagle declares but never reads. A falcon addition: with
+    /// Comment, the viewer opens images with comment mode on.
+    pub viewer_mode: crate::logic::DefaultViewerMode,
     /// Eagle's `habits.renderBehavior` "pixelated": sharp pixels when an
     /// image is enlarged.
     pub pixelated: bool,
@@ -337,6 +341,7 @@ impl Default for Prefs {
             always_play_animated: false,
             viewer_wheel: crate::logic::WheelMode::Scroll,
             open_actual_size: false,
+            viewer_mode: Default::default(),
             pixelated: false,
             remember_zoom: true,
             rotate_mode: RotateMode::default(),
@@ -503,6 +508,7 @@ impl Prefs {
                 "hoverZoom": on(self.hover_zoom),
                 "renderBehavior": if self.pixelated { "pixelated" } else { "non-pixelated" },
                 "rememberLastZoom": on(self.remember_zoom),
+                "defaultMode": self.viewer_mode.eagle_name(),
                 "defaultRatio": if self.open_actual_size { "100%" } else { "auto" },
                 "transparency": if self.transparency_grid { "show" } else { "hide" },
                 "keyspace": match self.space {
@@ -1210,6 +1216,10 @@ fn preview(p: &mut Page, d: &mut Draft) {
         ui.checkbox(&mut d.prefs.remember_zoom, tr("Reopen an image at the zoom and position it was left at"));
         ui.checkbox(&mut d.prefs.transparency_grid, tr("Show a checkerboard behind transparent areas"));
         ui.add_space(4.0);
+        ui.label(tr("The viewer opens images in"));
+        ui.radio_value(&mut d.prefs.viewer_mode, crate::logic::DefaultViewerMode::Preview, tr("Preview"));
+        ui.radio_value(&mut d.prefs.viewer_mode, crate::logic::DefaultViewerMode::Comment, tr("Comment mode"));
+        ui.add_space(4.0);
         ui.label(tr("Rotating and flipping the image in the viewer"));
         ui.radio_value(&mut d.prefs.rotate_mode, RotateMode::Write, tr("Writes to the file"));
         ui.radio_value(&mut d.prefs.rotate_mode, RotateMode::Preview, tr("Changes the preview only"));
@@ -1551,12 +1561,24 @@ mod tests {
     }
 
     #[test]
+    fn viewer_mode_round_trips_and_old_prefs_load_as_preview() {
+        let p = Prefs { viewer_mode: crate::logic::DefaultViewerMode::Comment, ..Prefs::default() };
+        assert_eq!(p.eagle_preferences()["habits"]["defaultMode"], "annotation");
+        let back: Prefs = serde_json::from_str(&serde_json::to_string(&p).unwrap()).unwrap();
+        assert_eq!(back.viewer_mode, crate::logic::DefaultViewerMode::Comment);
+        let old: Prefs = serde_json::from_str(r#"{"pixelated": true}"#).unwrap();
+        assert_eq!(old.viewer_mode, crate::logic::DefaultViewerMode::Preview);
+    }
+
+    #[test]
     fn defaults() {
         let p = Prefs::default();
         assert!(p.hover_zoom, "Eagle's hoverZoom defaults to on");
         assert!(!p.gif_player && !p.always_play_animated, "Eagle's gifViewer and alwaysPlayGIF default to off");
         assert_eq!(p.viewer_wheel, crate::logic::WheelMode::Scroll, "Eagle's scrollBehavior defaults to scroll");
         assert!(!p.open_actual_size, "Eagle's defaultRatio defaults to auto");
+        assert_eq!(p.viewer_mode, crate::logic::DefaultViewerMode::Preview);
+        assert_eq!(p.eagle_preferences()["habits"]["defaultMode"], "preview");
         assert!(!p.pixelated, "Eagle's renderBehavior defaults to non-pixelated");
         assert!(p.remember_zoom, "Eagle's rememberLastZoom defaults to on");
         assert_eq!(p.rotate_mode, RotateMode::Write, "Eagle's imageRotateMode defaults to write");

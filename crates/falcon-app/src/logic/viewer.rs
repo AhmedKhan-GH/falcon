@@ -70,6 +70,57 @@ pub fn viewer_step(len: usize, at: Option<usize>, step: isize) -> Result<usize, 
     }
 }
 
+/// What the viewer does when it first shows an image that takes comments
+/// (a falcon addition: Eagle declares `habits.defaultMode` but never reads it).
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum DefaultViewerMode {
+    /// Plain preview (Eagle's "preview").
+    #[default]
+    Preview,
+    /// Comment mode on (Eagle's "annotation").
+    Comment,
+}
+
+impl DefaultViewerMode {
+    /// Eagle's spelling in `habits.defaultMode`.
+    pub fn eagle_name(self) -> &'static str {
+        match self {
+            DefaultViewerMode::Preview => "preview",
+            DefaultViewerMode::Comment => "annotation",
+        }
+    }
+}
+
+/// Whether to turn comment mode on as the viewer first shows an item.
+/// Only with the Comment preference, for items that take region comments,
+/// and not while presenting or cropping. The caller asks once per viewer
+/// session, so turning it off stays off.
+pub fn comment_mode_on_open(mode: DefaultViewerMode, supports_regions: bool, presenting: bool, cropping: bool) -> bool {
+    mode == DefaultViewerMode::Comment && supports_regions && !presenting && !cropping
+}
+
+#[cfg(test)]
+mod default_mode_tests {
+    use super::*;
+    use DefaultViewerMode::*;
+
+    #[test]
+    fn rule_table() {
+        assert!(comment_mode_on_open(Comment, true, false, false));
+        assert!(!comment_mode_on_open(Preview, true, false, false), "Preview changes nothing");
+        assert!(!comment_mode_on_open(Comment, false, false, false), "no regions on video, audio, PDF");
+        assert!(!comment_mode_on_open(Comment, true, true, false), "not while presenting");
+        assert!(!comment_mode_on_open(Comment, true, false, true), "not while cropping");
+    }
+
+    #[test]
+    fn eagle_names() {
+        assert_eq!(Preview.eagle_name(), "preview");
+        assert_eq!(Comment.eagle_name(), "annotation");
+        assert_eq!(DefaultViewerMode::default(), Preview);
+    }
+}
+
 #[cfg(test)]
 mod viewer_shell_tests {
     use super::*;

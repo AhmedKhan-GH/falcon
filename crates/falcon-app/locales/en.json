@@ -305,6 +305,7 @@
   "Comment": "Comment",
   "Comment Mode (C)": "Comment Mode (C)",
   "Comment at {time}": "Comment at {time}",
+  "Comment mode": "Comment mode",
   "Comments": "Comments",
   "Comments ({count})": "Comments ({count})",
   "Comparing files": "Comparing files",
@@ -1872,6 +1873,7 @@
   "The system can't find the app to open at login": "The system can't find the app to open at login",
   "The system has no login item for this app": "The system has no login item for this app",
   "The tag picker's Recent tags start over. Tags stay on their items.": "The tag picker's Recent tags start over. Tags stay on their items.",
+  "The viewer opens images in": "The viewer opens images in",
   "The wheel button on an item": "The wheel button on an item",
   "The wheel over an image in the viewer": "The wheel over an image in the viewer",
   "The {n} selected items go into it.": {

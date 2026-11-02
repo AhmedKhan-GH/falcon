@@ -319,6 +319,7 @@
   "Comment": "Комментарий",
   "Comment Mode (C)": "Режим комментариев (C)",
   "Comment at {time}": "Комментарий на {time}",
+  "Comment mode": "Режим комментариев",
   "Comments": "Комментарии",
   "Comments ({count})": "Комментарии ({count})",
   "Comparing files": "Сравнение файлов",
@@ -1963,6 +1964,7 @@
   "The system can't find the app to open at login": "Система не находит приложение для открытия при входе",
   "The system has no login item for this app": "В системе нет объекта входа для этого приложения",
   "The tag picker's Recent tags start over. Tags stay on their items.": "Список недавних тегов в выборе тегов начнётся заново. Теги на элементах останутся.",
+  "The viewer opens images in": "Просмотр открывает изображения в режиме",
   "The wheel button on an item": "Нажатие колеса мыши на элементе",
   "The wheel over an image in the viewer": "Колесо над изображением в просмотрщике",
   "The {n} selected items go into it.": {

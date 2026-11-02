@@ -291,6 +291,7 @@
   "Comment": "코멘트",
   "Comment Mode (C)": "코멘트 모드 (C)",
   "Comment at {time}": "{time}의 코멘트",
+  "Comment mode": "코멘트 모드",
   "Comments": "코멘트",
   "Comments ({count})": "코멘트 ({count})",
   "Comparing files": "파일 비교 중",
@@ -1779,6 +1780,7 @@
   "The system can't find the app to open at login": "시스템에서 로그인 시 열 앱을 찾을 수 없습니다",
   "The system has no login item for this app": "시스템에 이 앱의 로그인 항목이 없습니다",
   "The tag picker's Recent tags start over. Tags stay on their items.": "태그 선택기의 최근 태그가 초기화됩니다. 항목의 태그는 그대로 유지됩니다.",
+  "The viewer opens images in": "뷰어에서 이미지를 여는 방식",
   "The wheel button on an item": "항목 위에서 휠 버튼",
   "The wheel over an image in the viewer": "뷰어에서 이미지 위의 휠",
   "The {n} selected items go into it.": {

@@ -291,6 +291,7 @@
   "Comment": "註解",
   "Comment Mode (C)": "註解模式（C）",
   "Comment at {time}": "{time}處的註解",
+  "Comment mode": "註解模式",
   "Comments": "註解",
   "Comments ({count})": "註解（{count}）",
   "Comparing files": "正在比較檔案",
@@ -1779,6 +1780,7 @@
   "The system can't find the app to open at login": "系統找不到要在登入時開啟的 App",
   "The system has no login item for this app": "系統中沒有此 App 的登入項目",
   "The tag picker's Recent tags start over. Tags stay on their items.": "標籤選擇器中的「最近使用」將重新開始。項目上的標籤會保留。",
+  "The viewer opens images in": "檢視器開啟圖片時使用",
   "The wheel button on an item": "在項目上按下滾輪鍵",
   "The wheel over an image in the viewer": "在檢視器中，滾輪作用於圖片時",
   "The {n} selected items go into it.": {

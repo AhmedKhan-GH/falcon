@@ -305,6 +305,7 @@
   "Comment": "Kommentar",
   "Comment Mode (C)": "Kommentarmodus (C)",
   "Comment at {time}": "Kommentar bei {time}",
+  "Comment mode": "Kommentarmodus",
   "Comments": "Kommentare",
   "Comments ({count})": "Kommentare ({count})",
   "Comparing files": "Dateien werden verglichen",
@@ -1872,6 +1873,7 @@
   "The system can't find the app to open at login": "Das System findet die App nicht, die bei der Anmeldung geöffnet werden soll",
   "The system has no login item for this app": "Das System hat kein Anmeldeobjekt für diese App",
   "The tag picker's Recent tags start over. Tags stay on their items.": "Die zuletzt verwendeten Tags in der Tag-Auswahl beginnen von vorn. Die Tags bleiben an ihren Objekten.",
+  "The viewer opens images in": "Der Betrachter öffnet Bilder im",
   "The wheel button on an item": "Die Mausradtaste auf einem Objekt",
   "The wheel over an image in the viewer": "Das Mausrad über einem Bild im Betrachter",
   "The {n} selected items go into it.": {

@@ -102,6 +102,8 @@ pub struct Draft {
 pub struct Tools {
     /// The viewer item the state belongs to.
     item: String,
+    /// The default viewer mode has been considered in this viewer session.
+    mode_applied: bool,
     pub comment_mode: bool,
     /// Start of a region being dragged, in image pixels.
     pub draw_start: Option<eframe::egui::Pos2>,
@@ -400,6 +402,7 @@ impl App {
             self.ws.tools.draw_start = None;
             self.ws.tools.region_drag = None;
             self.ws.tools.item.clear();
+            self.ws.tools.mode_applied = false;
             self.image.tf = Default::default();
             return;
         }
@@ -456,6 +459,15 @@ impl App {
             self.ws.tools.draft = None;
             self.ws.tools.draw_start = None;
             self.ws.tools.region_drag = None;
+        }
+        // Once per viewer session, on the first item that takes comments:
+        // comment mode otherwise carries over between items as it always has.
+        if !self.ws.tools.mode_applied && crate::ui::viewer::comments::supports_regions(item) {
+            self.ws.tools.mode_applied = true;
+            let cropping = self.ws.tools.crop.is_some() || self.ws.tools.crop_next.is_some();
+            if crate::logic::comment_mode_on_open(self.prefs.viewer_mode, true, self.modes.presenting, cropping) {
+                self.ws.tools.comment_mode = true;
+            }
         }
         let turned = !self.image.tf.is_identity();
         if self.ws.tools.crop_next.as_deref() == Some(item.id.as_str()) {
