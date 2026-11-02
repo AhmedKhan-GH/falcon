@@ -706,7 +706,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | Shown as a zoomable image of the thumbnail | Done | Image viewer falls back to the preview tier (`F/app.rs:3427-3429`) | local |
-| Higher-resolution render made on demand for PSD, PSB, AI, PPT, PPTX, POTX | Partial | Zoomed past the 3072 px tier the page is re-rendered through QuickLook at the shown size after the view rests 0.4 s, visible part only, one page render kept per item (`logic::quicklook_region`); macOS only. Gaps: past the 8192² pixel cap the last render is magnified (QuickLook renders whole pages only) and the separate preview window keeps the 3072 px render | local |
+| Higher-resolution render made on demand for PSD, PSB, AI, PPT, PPTX, POTX | Partial | PSD, PSDT and PSB: the merged image is decoded by falcon's own reader of Adobe's spec (`falcon_library::psd`: raw and RLE, 8/16/32 bit, bitmap/gray/indexed/RGB/CMYK/duotone/Lab, ICC colour through moxcms, alpha only when the layer section flags it) into the tiled original path up to 16384² and the on-screen rows beyond, with no 8192 px cap; QuickLook stays the fallback when the file has no composite, with the reason in the inspector. AI, PPT, PPTX and POTX: re-rendered through QuickLook at the shown size after the view rests 0.4 s, visible part only. Gaps: those four keep the 8192² cap (QuickLook renders whole pages only), and the separate preview window keeps the 3072 px render for every format | local |
 | Comments on special formats | Done | `F/comments.rs:169` | local |
 | Custom thumbnail shown in the viewer for formats with no preview | Done | The custom thumbnail is the viewer's picture for formats with no picture of their own | local |
 | HDR/EXR rendered with tone mapping and exposure | Done | `falcon_library::hdr`: linear decode, Reinhard tone mapping as Eagle (fixed exposure 1.0 there); falcon adds an exposure slider | local |
@@ -786,7 +786,7 @@ Eagle columns come from `config.js` (`SUPPORT_FORMATS_DARWIN`), `E/js/thumbs/thu
 | hdr | Image of thumbnail | QL | Tone-mapped viewer with an exposure slider (`falcon_library::hdr`) |
 | exr | Image of thumbnail | QL | Tone-mapped viewer with an exposure slider (`falcon_library::hdr`) |
 | RAW: 3fr arw cr2 cr3 crw dng erf mrw nef nrw orf pef raf raw rw2 sr2 srw x3f | RAW viewer (embedded full preview) | QL | Embedded full-size preview, correctly oriented |
-| psd, psdt, psb | Native high-res viewer | QL | QuickLook render, redrawn at each zoom level up to 8192 px |
+| psd, psdt, psb | Native high-res viewer | QL (size from the file header) | Merged image decoded by falcon at full resolution with ICC colour, tiled; QuickLook when the file has no composite |
 | ai, ait | Native high-res viewer | QL | QuickLook render, redrawn at each zoom level up to 8192 px |
 | eps | Image of thumbnail | QL | QuickLook render (macOS 14+ has no EPS renderer) |
 | xd | Image of thumbnail | QL if available | QuickLook render where the app's generator is installed |
