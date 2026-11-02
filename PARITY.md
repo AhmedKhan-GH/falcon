@@ -836,7 +836,7 @@ Ranked by how often a user would notice them.
 16. **No navigator minimap or grayscale preview (Missing).**
 17. ~~Viewer preferences are absent.~~ Fixed: wheel behaviour, default size, pixelated zoom, remembered zoom, transparency grid, GIF player and grid autoplay.
 18. **Remember last zoom and position per item, and persist video position across launches (Missing / Partial).**
-19. **PDF gaps (Missing).** No page rotation, hand tool, scroll and spread modes, presentation, print, document properties, password prompt, links, attachments, layers, current outline item, or whole-word and diacritics search. The reader is also macOS only.
+19. ~~PDF gaps.~~ Fixed: page rotation, hand tool, scroll and spread modes, presentation, print, document properties, password prompt, links, attachments, layers (switched through an in-memory optional-content update PDFKit draws), current outline item, and whole-word and diacritics search are in. The reader is still macOS only (PDFKit).
 20. **Crop gaps (Missing).** No width and height fields, no Save As, no size readout and no Shift+C.
 21. ~~Audio gaps.~~ Fixed: speed control, volume and skip keys are in (see the audio viewer rows).
 22. **Font viewer gaps**: fonts egui can't read (some woff2, CFF) still fall back to the image viewer.
