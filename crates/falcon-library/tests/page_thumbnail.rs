@@ -144,3 +144,11 @@ fn only_the_items_own_folder_changes() {
     assert_eq!(listing(lib.root(), &info), before);
     assert_eq!(names(&other_info), other_before);
 }
+
+#[test]
+fn a_bookmark_imports_without_waiting_for_quicklook() {
+    let start = std::time::Instant::now();
+    let (_tmp, lib, id) = setup();
+    assert!(start.elapsed() < std::time::Duration::from_secs(10), "took {:?}", start.elapsed());
+    assert!(lib.item(&id).unwrap().thumbnail_path(lib.root()).is_none(), "the plain icon until its page is drawn");
+}

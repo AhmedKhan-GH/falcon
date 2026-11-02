@@ -526,8 +526,10 @@ fn drawn_thumbnail(ext: &str, raw: &Path) -> Option<(DynamicImage, u32, u32)> {
 /// render (Eagle likewise reports a PDF's render size); videos also get a
 /// `duration` in seconds.
 fn quicklook_thumbnail(item: &mut Item, raw: &Path, thumb: &Path, max: u32) -> Option<Analysis> {
-    // Eagle shows text files as text and never thumbnails them.
-    if item.ext == "txt" {
+    // Eagle shows text files as text and never thumbnails them. A bookmark
+    // has no QuickLook generator, which would wait out its whole timeout on
+    // the import thread; its picture comes from its page (falcon-app).
+    if matches!(item.ext.as_str(), "txt" | "url") {
         return None;
     }
     // QuickLook can hang for its whole timeout on a format with no generator,
