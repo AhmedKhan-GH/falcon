@@ -27,6 +27,10 @@ Third-party material:
 - rodio 0.23.0, MIT or Apache-2.0, https://github.com/RustAudio/rodio.
 - libloading 0.8.9 (https://github.com/nagisa/rust_libloading/), ISC license,
   used to open the FFmpeg libraries at run time.
+- encoding_rs 0.8.44 (https://github.com/hsivonen/encoding_rs), (Apache-2.0
+  OR MIT) AND BSD-3-Clause, copyright (c) Mozilla Foundation and the
+  encoding_rs contributors; its index data is from the WHATWG Encoding
+  Standard (BSD-3-Clause). Used to read the charsets of MHTML web archives.
 - FFmpeg 7.1.5 (https://ffmpeg.org/releases/ffmpeg-7.1.5.tar.xz), licensed
   under the GNU Lesser General Public License version 2.1 or later. It is not
   part of this source tree and is not linked into Falcon. When built with

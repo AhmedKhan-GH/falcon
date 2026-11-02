@@ -69,6 +69,7 @@ Libraries built into falcon beyond ordinary Rust crates from crates.io, with the
 | rodio | 0.23.0 | MIT OR Apache-2.0 | [github.com/RustAudio/rodio](https://github.com/RustAudio/rodio) | Audio output on the default device |
 | FFmpeg (libavutil, libavcodec, libavformat, libswscale, libswresample) | 7.1.5 | LGPL-2.1-or-later | [ffmpeg.org/releases/ffmpeg-7.1.5.tar.xz](https://ffmpeg.org/releases/ffmpeg-7.1.5.tar.xz) | The fallback video player (`crates/falcon-ffmpeg`) |
 | libloading | 0.8.9 | ISC | [github.com/nagisa/rust_libloading](https://github.com/nagisa/rust_libloading/) | Opening the FFmpeg libraries at run time |
+| encoding_rs | 0.8.44 | (Apache-2.0 OR MIT) AND BSD-3-Clause | [github.com/hsivonen/encoding_rs](https://github.com/hsivonen/encoding_rs) | Reading the charsets of MHTML web archive parts and headers (`falcon_library::mhtml`); already linked through Symphonia |
 
 Symphonia is covered by the Mozilla Public License 2.0 (<https://mozilla.org/MPL/2.0/>). Falcon uses it unmodified, as published on crates.io; the source code of every MPL-covered file is available from the repository above and from each crate's page on crates.io (for example <https://crates.io/crates/symphonia/0.5.5>). Falcon's own files are not covered by the MPL.
 

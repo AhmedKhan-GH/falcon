@@ -21,6 +21,7 @@ tempfile = "3"
 zip = { version = "9.2.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
 base64 = "0.22"
+encoding_rs = "0.8"
 kamadak-exif = "0.6"
 symphonia = { version = "0.5.5", default-features = false, features = ["mp3", "aac", "isomp4", "flac", "wav", "pcm", "ogg", "vorbis", "adpcm", "alac"] }
 opus-decoder = "0.1.1"

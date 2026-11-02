@@ -17,6 +17,7 @@ pub mod folder_import;
 pub mod library;
 pub mod manual;
 pub mod merge;
+pub mod mhtml;
 pub mod ids;
 pub mod library_icon;
 pub mod keywords;

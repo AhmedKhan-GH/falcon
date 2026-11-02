@@ -1,0 +1,33 @@
+From: <Saved by Blink>
+Snapshot-Content-Location: https://example.com/page
+Subject: =?utf-8?Q?Caf=C3=A9_page?=
+Date: Mon, 2 Nov 2026 10:00:00 -0000
+MIME-Version: 1.0
+Content-Type: multipart/related;
+	type="text/html";
+	boundary="----MultipartBoundary--abc----"
+
+
+------MultipartBoundary--abc----
+Content-Type: text/html
+Content-ID: <frame-1@mhtml.blink>
+Content-Transfer-Encoding: quoted-printable
+Content-Location: https://example.com/page
+
+<!DOCTYPE html><html><head><meta http-equiv=3D"Content-Type" content=3D"text/=
+html; charset=3DUTF-8"><link rel=3D"stylesheet" href=3D"cid:css-1@mhtml.blink" /><title>Caf=C3=A9</title></head><body><h1>Caf=C3=A9 archive</h1><img src=3D"https://example.com/img/red.png?v=3D2"></body></html>
+------MultipartBoundary--abc----
+Content-Type: text/css
+Content-Transfer-Encoding: quoted-printable
+Content-Location: cid:css-1@mhtml.blink
+
+@charset "utf-8";
+body { background: rgb(200, 230, 255); font: 30px sans-serif; }
+------MultipartBoundary--abc----
+Content-Type: image/png
+Content-Transfer-Encoding: base64
+Content-Location: https://example.com/img/red.png?v=2
+
+iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAIAAAADnC86AAAALUlEQVR4nO3NMQkAAAwDsPo3vcko
+lED+5JKKzioWi8VisVgsFovFYrFYLB6NH6r1OhvW1o1iAAAAAElFTkSuQmCC
+------MultipartBoundary--abc------

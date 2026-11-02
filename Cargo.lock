@@ -1707,6 +1707,7 @@ dependencies = [
  "blake3",
  "brotli-decompressor",
  "chrono",
+ "encoding_rs",
  "falcon-ffmpeg",
  "fastrand",
  "filetime",
