@@ -144,7 +144,9 @@ impl App {
         // ⌘−), through `run_command`.
         if viewer && !text {
             use logic::ViewZoom as Z;
-            self.ws.view.zoom_key = ctx.input(|i| {
+            // A zoom asked for by the menu bar waits in `zoom_key` too, so a
+            // frame with no zoom key leaves it alone.
+            let typed = ctx.input(|i| {
                 i.events.iter().find_map(|e| match e {
                     egui::Event::Key { key, pressed: true, modifiers: m, .. } if !m.command && !m.ctrl && !m.alt => match key {
                         Key::Plus | Key::Equals => Some(Z::In),
@@ -155,6 +157,9 @@ impl App {
                     _ => None,
                 })
             });
+            if typed.is_some() {
+                self.ws.view.zoom_key = typed;
+            }
         }
         // In the viewer, ⌫ (Back) leaves it, as in Eagle; the arrow chords
         // of Back do nothing there.
