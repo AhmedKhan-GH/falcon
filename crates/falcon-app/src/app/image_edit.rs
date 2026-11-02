@@ -21,6 +21,8 @@ pub enum Op {
     RefreshPalette(Vec<String>),
     /// Folder id, item id.
     SetFolderCover(String, String),
+    /// Folder id: drop its custom cover so the default shows again.
+    ResetFolderCover(String),
     /// Items and clockwise quarter turns (negative: anticlockwise).
     Rotate(Vec<String>, i32),
     Crop(String, PixelRect),
@@ -61,6 +63,7 @@ impl Op {
             Op::RefreshThumbnail(ids) => tr_n(ids.len(), "Refresh {n} thumbnail", "Refresh {n} thumbnails"),
             Op::RefreshPalette(ids) => tr_n(ids.len(), "Refresh {n} palette", "Refresh {n} palettes"),
             Op::SetFolderCover(..) => tr("Set folder cover").into(),
+            Op::ResetFolderCover(_) => tr("Reset folder cover").into(),
             Op::Rotate(..) => tr("Rotate").into(),
             Op::Crop(..) => tr("Crop").into(),
             Op::CropAsNew(..) => tr("Crop as new item").into(),
@@ -327,6 +330,16 @@ impl App {
                 lib.set_folder_cover(&fid, Some(&id))?;
                 let name = logic::find_folder(&lib.metadata.folders, &fid).map_or_else(String::new, |f| f.name.clone());
                 self.flash(trf("Set as the cover of {name}", &[("name", &name)]));
+                Ok(())
+            }
+            Op::ResetFolderCover(fid) => {
+                let Some(folder) = logic::find_folder(&lib.metadata.folders, &fid) else { return Ok(()) };
+                if folder.cover_id.is_none() {
+                    return Ok(());
+                }
+                let name = folder.name.clone();
+                lib.set_folder_cover(&fid, None)?;
+                self.flash(trf("Reset the cover of {name}", &[("name", &name)]));
                 Ok(())
             }
             Op::Rotate(ids, turns) => {

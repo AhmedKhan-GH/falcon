@@ -489,6 +489,7 @@ impl App {
             self.open_folder_settings(f);
         }
         self.folder_password_menu(ui, f);
+        self.reset_cover_entry(ui, f, shut);
         let parent = organize::locate(&lib.metadata.folders, &f.id).and_then(|(p, _)| p).map(str::to_string);
         self.folder_title_sort_menu(ui, parent.as_deref());
         crate::ui::menus::search::submenu(ui, tr("Sort Items By"), |ui| {

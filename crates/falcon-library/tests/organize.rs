@@ -53,6 +53,31 @@ fn folder_order_icon_and_cover_are_written_in_eagle_order() {
 }
 
 #[test]
+fn resetting_a_cover_drops_only_cover_id() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut lib = new_library(tmp.path());
+    let a = lib.create_folder(None, "A").unwrap();
+    lib.set_folder_icon(&a, Some("palette"), Some("blue")).unwrap();
+    lib.set_folder_order(&a, Some(OrderBy::Name.into()), false).unwrap();
+    let before = metadata(&lib);
+    assert!(!before.contains("coverId"));
+
+    lib.set_folder_cover(&a, Some("ITEMID0000001")).unwrap();
+    let with = metadata(&lib);
+    assert!(with.contains(r#""coverId":"ITEMID0000001""#));
+
+    lib.set_folder_cover(&a, None).unwrap();
+    let after = Library::open(lib.root()).unwrap();
+    assert!(after.metadata.folders[0].cover_id.is_none());
+    let text = metadata(&lib);
+    assert!(!text.contains("coverId"));
+    // The remaining keys keep their order and values.
+    assert_eq!(text.replace(r#""modificationTime""#, ""), with.replace(r#","coverId":"ITEMID0000001""#, "").replace(r#""modificationTime""#, ""));
+    let key = |t: &str, k: &str| t.find(k).unwrap();
+    assert!(key(&text, "\"iconColor\"") < key(&text, "\"password\"") && key(&text, "\"password\"") < key(&text, "\"orderBy\""));
+}
+
+#[test]
 fn reorder_places_folders_among_siblings() {
     let tmp = tempfile::tempdir().unwrap();
     let mut lib = new_library(tmp.path());

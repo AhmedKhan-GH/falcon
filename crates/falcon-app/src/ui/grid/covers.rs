@@ -89,6 +89,14 @@ fn folder_meta(lib: &Library, child: &Folder) -> String {
 }
 
 impl App {
+    /// "Reset Cover" in a folder's context menu, only while the folder has a
+    /// custom cover. A falcon addition; Eagle has no such entry.
+    pub(crate) fn reset_cover_entry(&mut self, ui: &mut Ui, f: &Folder, shut: bool) {
+        if f.cover_id.is_some() && ui.add_enabled(!shut, egui::Button::new(tr("Reset Cover"))).on_hover_text(tr("Use the default cover again")).clicked() {
+            self.ws.actions.push(Action::Edit(crate::app::image_edit::Op::ResetFolderCover(f.id.clone())));
+        }
+    }
+
     /// Cards for the open folder's subfolders, above its items, as in
     /// Eagle's folder view, under a heading with the Show Subfolder Content
     /// switch. With that on, every folder under it gets a card. Clicking
@@ -263,6 +271,7 @@ impl App {
                 self.open_folder_settings(child);
             }
             self.folder_password_menu(ui, child);
+            self.reset_cover_entry(ui, child, shut);
             if !shut {
                 ui.separator();
                 self.tree_export_menu(ui, crate::ui::dialogs::export::Target::Folder(child.id.clone()), true);
@@ -312,6 +321,17 @@ mod tests {
         assert_eq!(cover(&items, &child, OrderBy::Import, true, &none).map(|i| i.id.as_str()), Some("old"));
         let locked: HashSet<&str> = ["C"].into_iter().collect();
         assert_eq!(cover(&items, &child, OrderBy::Import, true, &locked), None);
+    }
+
+    #[test]
+    fn cover_returns_to_the_default_after_a_reset() {
+        let items = vec![item("old", "C", 1), item("new", "C", 5)];
+        let mut folder = Folder::new("C", "Child", 0);
+        folder.cover_id = Some("old".into());
+        let none = HashSet::new();
+        assert_eq!(cover(&items, &folder, OrderBy::Import, true, &none).map(|i| i.id.as_str()), Some("old"));
+        folder.cover_id = None;
+        assert_eq!(cover(&items, &folder, OrderBy::Import, true, &none).map(|i| i.id.as_str()), Some("new"));
     }
 
     #[test]
