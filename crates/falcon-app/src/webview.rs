@@ -27,7 +27,7 @@ pub enum Page {
 
 /// Whether the web viewer shows items of this extension.
 pub fn is_web(ext: &str) -> bool {
-    matches!(ext.to_lowercase().as_str(), "url" | "html" | "htm" | "mhtml" | "mht")
+    matches!(ext.to_lowercase().as_str(), "url" | "html" | "mhtml")
 }
 
 /// Whether `url` is an http or https address, the only kind a bookmark
@@ -52,8 +52,8 @@ pub fn page_for(ext: &str, url: &str, file: &Path) -> Option<Page> {
                 url => Page::Still { url },
             })
         }
-        "html" | "htm" => Some(Page::Local(file.to_path_buf())),
-        "mhtml" | "mht" => Some(Page::Still { url: Some(url.trim().to_string()).filter(|u| !u.is_empty()) }),
+        "html" => Some(Page::Local(file.to_path_buf())),
+        "mhtml" => Some(Page::Still { url: Some(url.trim().to_string()).filter(|u| !u.is_empty()) }),
         _ => None,
     }
 }
@@ -488,10 +488,13 @@ mod tests {
 
     #[test]
     fn web_extensions() {
-        for e in ["url", "URL", "html", "htm", "mhtml", "mht"] {
+        for e in ["url", "URL", "html", "mhtml"] {
             assert!(is_web(e), "{e}");
         }
         assert!(!is_web("txt") && !is_web("pdf") && !is_web("webloc"));
+        for e in ["htm", "mht"] {
+            assert!(!is_web(e), "{e} is a plain item, as in Eagle");
+        }
     }
 
     #[test]
