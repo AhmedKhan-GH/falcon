@@ -24,7 +24,7 @@ While falcon is in development, the app and the CLI only open libraries inside `
 - Import with thumbnails and colour palettes, folders with their structure, paste, drag and drop, and screen capture.
 - Folders, tags with a tag picker, smart folders, Quick Access, ratings, notes, undo and batch editing.
 - Keyword, filter and colour search, with marquee selection in four layouts.
-- Viewers for images at full resolution, video (with an FFmpeg fallback that includes AV1), audio, fonts, a text editor, PDFs with their reader tools, interactive 3D models with textures, full IFC through web-ifc, PSD and AI at full resolution, and live web pages and MHTML.
+- Viewers for images at full resolution, video (with an FFmpeg fallback that includes AV1), audio, fonts, a text editor, PDFs with their reader tools, interactive 3D models with textures, normal, bump and emissive maps and transparency, full IFC through web-ifc, PSD and AI at full resolution, and live web pages and MHTML.
 - Preferences panes, the interface in eight languages (machine-written, waiting for a native read), sound effects, Actions, and Export in Format.
 - The local HTTP API and the command-line tool.
 

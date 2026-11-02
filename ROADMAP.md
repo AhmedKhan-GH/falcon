@@ -25,7 +25,7 @@ Local features still missing or partly done in [PARITY.md](PARITY.md), by theme.
 
 - **File ▸ New… templates:** Word, Excel, PowerPoint, XMind and text documents work. Keynote, Pages, Numbers, Sketch, XD, MindNode, PSD and AI are listed but disabled.
 - **3D:** normal, bump and emissive maps and alpha blending. Some readers also have gaps, which the row names.
-- **Rendering past QuickLook's limit:** PPT, PPTX, POTX and PostScript-only AI files stay capped at 8192 px, and the preview window at 3072 px.
+- **Rendering past QuickLook's limit:** PPT, PPTX, POTX and PostScript-only AI files stay capped at 8192 px, and the preview window at 3072 px. macOS hands PowerPoint files back only as a bitmap or as HTML from `Office.qlgenerator`, with no PDF for PDFKit; going through that HTML would need a web view and print path, whose layout would not line up with the thumbnail.
 - **PDF layers:** they switch, but appear as a flat list without groups, and printing uses the default layers.
 - **Differences by design or by platform:** falcon's own font folder, regex rules without look-around, tasks that continue when you switch libraries, and decoders that only exist on macOS.
 - **Waiting for a check on screen:** colour space, translucent side panels (off by default), hover sound, Finder's Open With and double-clicking an `.eaglepack`.

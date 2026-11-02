@@ -46,7 +46,7 @@ Eagle's alias extensions import as the format they stand for, whatever macOS cal
 | pdf | pdf.js reader inside the window | PDFKit reader inside the window: find, rotate, spreads, links, password, attachments, switchable layers, print | Partial: the layers list is flat rather than the document's tree, and printing ignores switched layers |
 | txt | Editable text | Editable text with autosave | Done |
 | doc, docx, xls, xlsx, key, pages, numbers | Image of the thumbnail | QuickLook render; key falls back to the preview picture in the file | Done |
-| ppt, pptx, potx | High-resolution render | QuickLook, redrawn at each zoom level up to 8192 px | Done |
+| ppt, pptx, potx | High-resolution render | QuickLook, redrawn at each zoom level up to 8192 px | Partial: past 8192 px the picture stops getting sharper. macOS hands these files back only as a bitmap or as HTML, with no PDF to draw by region |
 
 ## Fonts
 
@@ -71,7 +71,7 @@ Eagle's alias extensions import as the format they stand for, whatever macOS cal
 
 | Formats | Eagle | Falcon | Status |
 | --- | --- | --- | --- |
-| glb, obj, fbx, 3ds, 3mf, dae, ply, stl | Interactive viewer with textures | Interactive viewer and thumbnails with diffuse textures for glb, obj, fbx, dae and 3ds (3mf, ply and stl have no textures in Eagle's viewer either); export of geometry and colours | Done |
+| glb, obj, fbx, 3ds, 3mf, dae, ply, stl | Interactive viewer with textures, normal, bump and emissive maps and transparency | Interactive viewer and thumbnails with diffuse textures for glb, obj, fbx, dae and 3ds (3mf, ply and stl have no textures in Eagle's viewer either); the maps and transparency Eagle draws: normal maps for glb, fbx and dae, bump maps for obj and fbx, emissive for glb, transparency for glb, obj, fbx, dae and 3ds; export of geometry and colours | Partial: the maps and transparency pass tests on a real GPU but haven't yet been checked by eye against Eagle |
 | ifc | Interactive viewer with full geometry (web-ifc) | Interactive viewer and thumbnails with full geometry through web-ifc 0.0.78 (swept, CSG, boolean and b-spline solids, openings cut), built from source by `scripts/fetch-web-ifc.sh` and run in a worker process | Done |
 
 ## Web
