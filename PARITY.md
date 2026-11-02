@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 259 | 13 | 1 | 8 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 260 | 12 | 1 | 8 |
 | Viewers and file formats | 194 | 14 | 1 | 5 |
-| Search, filters and organising | 215 | 5 | 0 | 3 |
-| Import, export, library, preferences and integrations | 189 | 11 | 7 | 27 |
-| **Total** | 857 | 43 | 9 | 43 |
+| Search, filters and organising | 216 | 4 | 0 | 3 |
+| Import, export, library, preferences and integrations | 190 | 10 | 7 | 27 |
+| **Total** | 860 | 40 | 9 | 43 |
 
 Rows marked **Not wanted (user decision)** (4) are Eagle features the user chose not to have in falcon; they are counted outside the local Missing total.
 ## Fix first
@@ -166,7 +166,7 @@ Cross-references (not counted): File ▸ Import Folders / Links / Eagle Package 
 | **Several folders selected**: menu with batch rename, shared order, move, quick access, export, icon, colour, remove | Done | `multi_folder_menu` in `folders_ui`: batch rename (Eagle's templates, `rename.rs`), shared sort, Move Folder…, Quick Access, Export to Computer, icon and colour for all, remove. Falcon's icon grid instead of emoji | local |
 | **Smart folder**: New Smart Folder (sibling) / New Subfolder / Rename / Edit Rules / Quick Access / Change Icon / Remove | Done | ui/organize.rs `smart_row` | local |
 | Smart folder: Duplicate | Done | `smart::duplicate_smart_folder`: deep copy placed before the original, `parent` keys fixed | local |
-| Smart folder: Refresh | Partial | Falcon addition (Eagle 4's smart-folder menu has no Refresh entry): non-group smart folder menu; flushes, re-reads the library and shows a toast with the fresh count (`refresh_smart_folder`). Not yet seen on screen | local |
+| Smart folder: Refresh | Done | Falcon addition (Eagle 4's smart-folder menu has no Refresh entry): non-group smart folder menu; flushes, re-reads the library and shows a toast with the fresh count (`refresh_smart_folder`). Seen on screen | local |
 | **Smart Folders heading +**: New Smart Folder / New Group | Done | ui/organize.rs `smart_section` | local |
 | **Quick Access item**: Remove from Quick Access | Done | ui/sidebar/mod.rs `sidebar` | local |
 | **Subfolder card** (strip above a folder's items): Rename / Auto-Tag / Password / Export / Remove | Done | Card menu: Rename, Auto-Tags…, Password ▸, Export ▸, Delete Folder (⌘⌫); Rename/Auto-Tags/Delete disabled and Export hidden while locked, as Eagle | local |
@@ -978,12 +978,12 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Sort folders by title for this level or all levels, A-Z or Z-A, with confirmation | Done | `ui/organize.rs` folder_title_sort_menu, `O:352`, `ui/organize.rs` organize_dialogs confirm | local |
 | Duplicate a folder | Done | `Library::duplicate_folder` | local |
 | Folder icon from the named icon set | Done | `ui/organize.rs` icon_grid, `folder_icons.rs:171` | local |
-| Folder icon as an emoji | Partial | Falcon addition (Eagle 4 stores no emoji icons; its "emoji" submenu is the named-icon grid): 112 curated emoji in an Emoji submenu for folders and smart folders, drawn in sidebar and Quick Access rows from the system font's bitmaps; kept in falcon's app data, not metadata.json, so Eagle keeps the named icon. No subfolder inheritance, Duplicate or multi-select Emoji menu. Not yet seen on screen | local |
+| Folder icon as an emoji | Partial | Falcon addition (Eagle 4 stores no emoji icons; its "emoji" submenu is the named-icon grid): 112 curated emoji in an Emoji submenu for folders and smart folders, drawn in sidebar and Quick Access rows from the system font's bitmaps; kept in falcon's app data, not metadata.json, so Eagle keeps the named icon. No subfolder inheritance, Duplicate or multi-select Emoji menu. A copied library keeps the same folder ids, so a copy shows the same emoji. Seen on screen | local |
 | Folder colour (8 colours or none), also tinting the guide line | Done | `ui/organize.rs` color_row, `ui/sidebar/mod.rs` folder_row guide line | local |
 | Change icon or colour of several selected folders | Done | `Library::set_folders_icon` from the multi-folder menu | local |
 | Folder cover: set an item as cover | Done | `image_edit.rs:92`, `E:465` | local |
 | Folder cover: falls back to the first item, then to subfolders | Done | `covers.rs:44` | local |
-| Reset a folder cover | Partial | Falcon addition (Eagle has no reset-cover command): Reset Cover in the sidebar folder menu and subfolder card menu, shown only with a custom cover. Not yet seen on screen | local |
+| Reset a folder cover | Done | Falcon addition (Eagle has no reset-cover command): Reset Cover in the sidebar folder menu and subfolder card menu, shown only with a custom cover. Seen on screen | local |
 | Folder password: create with hint, change, remove, Lock Now | Done | `ui/organize.rs` folder_password_menu, password_dialog, `O:202` | local |
 | Locked folder hides its items and subfolders until unlocked; unlock screen shows the hint | Done | `O:160` hidden_folders, `ui/organize.rs` unlock_screen | local |
 | Unlock a folder with Touch ID | Done | Touch ID button on the locked-folder screen whenever the Mac supports it, regardless of the preference, as Eagle; only the asked folder unlocks | local |
@@ -1189,7 +1189,7 @@ Ranked by user impact. Data-loss and silent-mismatch bugs come first, then every
 16. ~~No Go to Folder quick search.~~ Fixed.
 17. ~~No multi-select of folders.~~ Fixed, for folders and smart folders.
 18. ~~Missing folder commands.~~ Fixed, including Add to Last Used Folder.
-19. Eagle 4 stores no emoji icons (its "emoji" submenu is the named-icon grid) and has no reset-cover command, so Eagle has neither; falcon now has both as additions (Partial until seen on screen). A new folder inherits the parent's icon and colour.
+19. Eagle 4 stores no emoji icons (its "emoji" submenu is the named-icon grid) and has no reset-cover command, so Eagle has neither; falcon now has both as additions. A new folder inherits the parent's icon and colour.
 20. ~~No Pin to Top for items, and no Open File Location.~~ Fixed.
 21. ~~**Tag manager gaps**: no Uncategorized or Starred tag pages, no rubber-band tag selection, and rename or merge don't reach folder auto-tags or smart-folder rules.~~ Fixed.
 22. ~~Quick Access can't be reordered, dragged into, or used as a drop target.~~ Fixed.
@@ -1334,7 +1334,7 @@ Two cross-cutting facts explain many rows:
 | Recent libraries history | Done | `crates/falcon-app/src/workspaces.rs:119-129`, `ui/sidebar/mod.rs` (the switcher popup; 10 entries, `RECENT_LIMIT` in `app/library.rs`) | local |
 | Clear library history | Done | Switcher menu | local |
 | Remove one library from the list | Done | Switcher menu; missing libraries are kept and shown dimmed | local |
-| Library list menu: Remove from Disk | Partial | Falcon addition, not an Eagle feature (Eagle's string is the Remove Icon confirmation): moves a closed library inside the sandbox to the macOS Trash after a confirmation naming it, its path and size (`library_removal.rs`, `ui/dialogs/remove_library.rs`). Not yet seen on screen | local |
+| Library list menu: Remove from Disk | Done | Falcon addition, not an Eagle feature (Eagle's string is the Remove Icon confirmation): moves a closed library inside the sandbox to the macOS Trash after a confirmation naming it, its path and size (`library_removal.rs`, `ui/dialogs/remove_library.rs`). Seen on screen | local |
 | Set or remove a library icon (`icon.png`) | Done | `library_icon.rs`: shorter side scaled to 64 px, written atomically; Change Icon / Remove Icon in the switcher | local |
 | Warn before switching while tasks run (Force Switch), or block while an AI action runs | Partial | "Stop Tasks and Close" on Close Library and on Quit (exports stop too); falcon's switching keeps tasks running by design, so no switch warning; no AI actions exist | local |
 | Several libraries open at once | Done (beyond Eagle) | `workspaces.rs` (several workspaces), `app/library.rs` `add_workspace` and `focus` | local |
