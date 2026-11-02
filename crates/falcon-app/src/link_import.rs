@@ -188,24 +188,94 @@ fn agent() -> ureq::Agent {
         .into()
 }
 
+/// The image format `head` starts with, as the extension to save it
+/// under, judged from magic bytes alone. `None` for anything else,
+/// including HTML. SVG counts (Eagle makes thumbnails for it) but only
+/// when the text opens, after an optional byte order mark, XML
+/// declaration, comments and `<!DOCTYPE svg`, with an `<svg` element.
+pub fn sniff(head: &[u8]) -> Option<&'static str> {
+    let at = |i: usize, s: &[u8]| head.get(i..i + s.len()) == Some(s);
+    if at(0, b"\x89PNG\r\n\x1a\n") {
+        return Some("png");
+    }
+    if at(0, b"\xff\xd8\xff") {
+        return Some("jpg");
+    }
+    if at(0, b"GIF87a") || at(0, b"GIF89a") {
+        return Some("gif");
+    }
+    if at(0, b"RIFF") && at(8, b"WEBP") {
+        return Some("webp");
+    }
+    if at(0, b"II*\0") || at(0, b"MM\0*") {
+        return Some("tiff");
+    }
+    // "BM" alone is too weak: the DIB header size that follows must be one of the known ones.
+    if at(0, b"BM") && head.get(14..18).is_some_and(|b| matches!(u32::from_le_bytes([b[0], b[1], b[2], b[3]]), 12 | 40 | 52 | 56 | 64 | 108 | 124)) {
+        return Some("bmp");
+    }
+    if at(0, &[0, 0, 1, 0]) && head.get(4..6).is_some_and(|c| u16::from_le_bytes([c[0], c[1]]) > 0) && head.len() >= 22 {
+        return Some("ico");
+    }
+    if at(4, b"ftyp") {
+        let brand = head.get(8..12)?;
+        return match brand {
+            b"avif" | b"avis" => Some("avif"),
+            b"heic" | b"heix" | b"heim" | b"heis" | b"hevc" | b"hevx" | b"hevm" | b"hevs" => Some("heic"),
+            b"mif1" | b"msf1" => Some("heif"),
+            _ => None,
+        };
+    }
+    sniff_svg(head).then_some("svg")
+}
+
+/// Whether `head` is the start of an SVG document (see `sniff`).
+fn sniff_svg(head: &[u8]) -> bool {
+    let mut rest = head.strip_prefix(b"\xef\xbb\xbf").unwrap_or(head);
+    loop {
+        rest = rest.trim_ascii_start();
+        let skip = |rest: &[u8], close: &[u8]| rest.windows(close.len()).position(|w| w == close).map(|i| i + close.len());
+        let n = if rest.starts_with(b"<?") {
+            skip(rest, b"?>")
+        } else if rest.starts_with(b"<!--") {
+            skip(rest, b"-->")
+        } else if rest.len() >= 13 && rest[..13].eq_ignore_ascii_case(b"<!doctype svg") {
+            skip(rest, b">")
+        } else {
+            break;
+        };
+        match n {
+            Some(n) => rest = &rest[n..],
+            None => return false,
+        }
+    }
+    rest.starts_with(b"<svg") && rest.get(4).is_some_and(|c| c.is_ascii_whitespace() || matches!(c, b'>' | b'/'))
+}
+
 /// Fetches `address` (once, with a 10 s limit) and writes the file to
-/// import into `dir`: the image itself when the server says it is one,
-/// otherwise a `.url` bookmark named after the page title (or the host
-/// when the page is unreachable or has none), as Eagle falls back to a
-/// bookmark whatever goes wrong. Only the address given is contacted.
+/// import into `dir`: the image itself when the server says it is one or
+/// the bytes are one, otherwise a `.url` bookmark named after the page
+/// title (or the host when the page is unreachable or has none), as Eagle
+/// falls back to a bookmark whatever goes wrong. A missing, wrong or
+/// generic content type (including `text/html`) is not believed over
+/// the bytes: the start of the body is checked with `sniff` and the file
+/// gets the extension of what it is. Only the address given is contacted.
 pub fn resolve(address: &str, dir: &Path) -> std::io::Result<Resolved> {
     let mut title = None;
     if let Ok(mut resp) = agent().get(address).call() {
         let ctype = resp.headers().get("content-type").and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
-        if let Some(ext) = image_ext(&ctype) {
-            let mut bytes = Vec::new();
-            if resp.body_mut().as_reader().take(IMAGE_BYTES + 1).read_to_end(&mut bytes).is_ok() && !bytes.is_empty() && bytes.len() as u64 <= IMAGE_BYTES {
+        let typed = image_ext(&ctype);
+        let mut reader = resp.body_mut().as_reader();
+        // The head decides what the body is; a read error leaves what arrived.
+        let mut bytes = Vec::new();
+        let head_ok = reader.by_ref().take(PAGE_BYTES).read_to_end(&mut bytes).is_ok();
+        let ext = sniff(&bytes).or(typed);
+        if let Some(ext) = ext {
+            if head_ok && reader.take(IMAGE_BYTES + 1 - bytes.len() as u64).read_to_end(&mut bytes).is_ok() && !bytes.is_empty() && bytes.len() as u64 <= IMAGE_BYTES {
                 let path = write_free(dir, &image_stem(address), ext, &bytes)?;
                 return Ok(Resolved { address: address.into(), path });
             }
-        } else if ctype.is_empty() || ctype.to_ascii_lowercase().contains("html") {
-            let mut bytes = Vec::new();
-            let _ = resp.body_mut().as_reader().take(PAGE_BYTES).read_to_end(&mut bytes);
+        } else if typed.is_none() && (ctype.is_empty() || ctype.to_ascii_lowercase().contains("html")) {
             title = title_of(&String::from_utf8_lossy(&bytes));
         }
     }
@@ -282,6 +352,11 @@ mod tests {
 
     /// A one-shot local server answering with `head` and `body`.
     fn serve(head: &'static str, body: &'static [u8]) -> String {
+        serve_declaring(head, body, body.len())
+    }
+
+    /// Like `serve`, but announces `declared` bytes, so a shorter body is cut off.
+    fn serve_declaring(head: &'static str, body: &'static [u8], declared: usize) -> String {
         use std::io::Write;
         let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = l.local_addr().unwrap();
@@ -292,7 +367,7 @@ mod tests {
                 let req = String::from_utf8_lossy(&seen[..n]).to_ascii_lowercase();
                 // Nothing that names the user or the program is sent.
                 assert!(!req.contains("user-agent") && !req.contains("cookie") && !req.contains("referer"), "{req}");
-                let _ = write!(s, "HTTP/1.1 200 OK\r\n{head}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
+                let _ = write!(s, "HTTP/1.1 200 OK\r\n{head}\r\nContent-Length: {declared}\r\nConnection: close\r\n\r\n");
                 let _ = s.write_all(body);
             }
         });
@@ -339,5 +414,105 @@ mod tests {
         drop(l);
         let r = resolve(&url, dir.path()).unwrap();
         assert_eq!(r.path.extension().unwrap(), "url");
+    }
+
+    const PNG: &[u8] = b"\x89PNG\r\n\x1a\nrest-of-image";
+
+    #[test]
+    fn sniff_knows_the_image_formats() {
+        let cases: [(&[u8], &str); 14] = [
+            (PNG, "png"),
+            (b"\xff\xd8\xff\xdb\0\x43", "jpg"),
+            (b"GIF89a\x01\0", "gif"),
+            (b"GIF87a\x01\0", "gif"),
+            (b"RIFF\x10\0\0\0WEBPVP8 ", "webp"),
+            (b"II*\0\x08\0\0\0", "tiff"),
+            (b"MM\0*\0\0\0\x08", "tiff"),
+            (b"BM\x46\0\0\0\0\0\0\0\x36\0\0\0\x28\0\0\0", "bmp"),
+            (b"\0\0\x01\0\x01\0\x10\x10\0\0\x01\0\x20\0\x68\x04\0\0\x16\0\0\0", "ico"),
+            (b"\0\0\0\x1cftypavif\0\0\0\0", "avif"),
+            (b"\0\0\0\x18ftypheic\0\0\0\0", "heic"),
+            (b"\0\0\0\x18ftypmif1\0\0\0\0", "heif"),
+            (b"<svg xmlns='http://www.w3.org/2000/svg'/>", "svg"),
+            (b"\xef\xbb\xbf <?xml version=\"1.0\"?>\n<!-- c -->\n<!DOCTYPE svg PUBLIC \"x\" \"y\">\n<svg\nwidth='1'>", "svg"),
+        ];
+        for (bytes, ext) in cases {
+            assert_eq!(sniff(bytes), Some(ext), "{}", String::from_utf8_lossy(bytes));
+        }
+    }
+
+    #[test]
+    fn sniff_refuses_everything_else() {
+        let none: [&[u8]; 12] = [
+            b"",
+            b"<!doctype html><html><body><svg></svg>",
+            b"<html><svg>",
+            b"<svgfoo>",
+            b"<?xml version='1.0'?><feed/>",
+            b"<?xml unterminated <svg>",
+            b"BM but not a bitmap at all",
+            b"\0\0\x01\0\0\0",
+            b"\0\0\0\x18ftypmp42\0\0\0\0",
+            b"RIFF\x10\0\0\0WAVEfmt ",
+            b"%PDF-1.7",
+            b"\x89PN",
+        ];
+        for bytes in none {
+            assert_eq!(sniff(bytes), None, "{}", String::from_utf8_lossy(bytes));
+        }
+    }
+
+    fn resolved(url: &str) -> (tempfile::TempDir, Resolved) {
+        let dir = tempfile::tempdir().unwrap();
+        let r = resolve(url, dir.path()).unwrap();
+        (dir, r)
+    }
+
+    #[test]
+    fn an_image_with_no_content_type_is_downloaded() {
+        let (_d, r) = resolved(&serve("X-Other: 1", PNG));
+        assert_eq!(r.path.file_name().unwrap(), "pic.png");
+        assert_eq!(std::fs::read(&r.path).unwrap(), PNG);
+    }
+
+    #[test]
+    fn an_octet_stream_image_gets_its_extension_from_the_bytes() {
+        let url = serve("Content-Type: application/octet-stream", b"GIF89a\x01\0\x01\0rest").replace("pic.png", "download.bin");
+        let (_d, r) = resolved(&url);
+        assert_eq!(r.path.file_name().unwrap(), "download.gif");
+    }
+
+    #[test]
+    fn an_image_labelled_html_is_still_an_image() {
+        let (_d, r) = resolved(&serve("Content-Type: text/html", b"\xff\xd8\xff\xe0JFIFdata"));
+        assert_eq!(r.path.file_name().unwrap(), "pic.jpg");
+    }
+
+    #[test]
+    fn a_wrong_image_type_does_not_set_the_extension() {
+        let (_d, r) = resolved(&serve("Content-Type: image/jpeg", PNG));
+        assert_eq!(r.path.file_name().unwrap(), "pic.png");
+    }
+
+    #[test]
+    fn real_html_without_a_type_is_a_bookmark_with_its_title() {
+        let (_d, r) = resolved(&serve("X-Other: 1", b"<!doctype html><title>Plain page</title><svg></svg>"));
+        assert_eq!(r.path.file_name().unwrap(), "Plain page.url");
+    }
+
+    #[test]
+    fn an_empty_body_is_a_bookmark_named_after_the_host() {
+        for head in ["Content-Type: image/png", "Content-Type: text/html", "X-Other: 1"] {
+            let (_d, r) = resolved(&serve(head, b""));
+            assert_eq!(r.path.file_name().unwrap(), "127.0.0.1.url", "{head}");
+        }
+    }
+
+    #[test]
+    fn a_truncated_image_is_a_bookmark_and_a_truncated_page_keeps_its_title() {
+        let (_d, r) = resolved(&serve_declaring("X-Other: 1", PNG, PNG.len() + 100));
+        assert_eq!(r.path.extension().unwrap(), "url");
+        let (_d, r) = resolved(&serve_declaring("Content-Type: text/html", b"<title>Cut</title><p>", 5000));
+        assert_eq!(r.path.file_name().unwrap(), "Cut.url");
     }
 }
