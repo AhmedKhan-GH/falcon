@@ -21,6 +21,8 @@ use crate::theme::{self as t, mono};
 /// The image viewer's state that outlives one item.
 #[derive(Default)]
 pub(crate) struct ImageState {
+    /// Whether the PSD in the viewer has a merged image to draw.
+    pub psd: crate::psd_status::PsdStatus,
     /// "Fit to window edge" (backtick): every image opens filling the view,
     /// enlarged if small, until switched off or Zoom to Fit is chosen.
     pub edge: bool,
@@ -79,8 +81,15 @@ impl App {
             self.image.exposure = 0.0;
         }
         let tf = self.image.tf;
+        let is_psd = falcon_library::psd::handles(&ext);
+        if is_psd && self.image.opened != id {
+            self.image.psd.open(&id, item.original_path(lib.root()), ui.ctx());
+        }
+        self.image.psd.poll();
         let natural = if let Some(size) = page_size {
             tf.size(size.x, size.y)
+        } else if let Some((w, h)) = self.image.psd.size(&id) {
+            tf.size(w as f32, h as f32)
         } else if item.width > 0 && item.height > 0 {
             tf.size(item.width as f32, item.height as f32)
         } else {
@@ -185,8 +194,13 @@ impl App {
         let animated = self.ws.view.anim.as_ref().is_some_and(|a| a.texture().is_some());
         let shown_px = r.width().max(r.height()) * ui.ctx().pixels_per_point();
         let tile = logic::tile_side(ui.ctx().input(|i| i.max_texture_side));
+        // A PSD's merged image goes in tiles while it fits their budget; past
+        // it, or where it fails, the part on screen is decoded when zoomed.
+        let composite = self.image.psd.composite(&id);
+        let tiled = composite == Some(true) && logic::composite_tiled(natural.x as u32, natural.y as u32) && !self.ws.loader.has_failed(&id, Tier::Original);
         if !animated
             && page_size.is_none()
+            && (!is_psd || tiled)
             && tf.is_identity()
             && logic::wants_original(&ext, natural.x.max(natural.y) as u32, shown_px)
             && let Some(j) = original_job(item, lib.root(), tile)
@@ -197,16 +211,23 @@ impl App {
         // on screen once the view holds still. So are PSD, AI and PowerPoint
         // (Eagle's native viewer draws them at the size shown): QuickLook
         // renders the page at the zoom shown and the part on screen is kept.
+        // A PSD with a merged image too large for tiles decodes that part
+        // from the file instead.
         let mut patch = None;
         let full_side = tex.as_ref().map_or(0.0, |t| t.size_vec2().max_elem());
-        let quicklook = logic::hires_quicklook(&ext) && !animated && page_size.is_none();
+        let quicklook = logic::hires_quicklook(&ext) && !animated && page_size.is_none() && !tiled && (!is_psd || composite.is_some());
         if (ext == "svg" || quicklook) && tf.is_identity() && tex.is_some() && shown_px > full_side {
             let ppp = ui.ctx().pixels_per_point();
             let (image_rect, view_rect) = ([r.min.x, r.min.y, r.max.x, r.max.y], [area.min.x, area.min.y, area.max.x, area.max.y]);
             let (region, job, settle) = if quicklook {
                 let raster = logic::quicklook_raster(&ext).then_some(natural.x.max(natural.y) as u32).filter(|n| *n > 0);
+                let region = if composite == Some(true) {
+                    logic::composite_region(image_rect, view_rect, ppp, natural.x.max(natural.y) as u32)
+                } else {
+                    logic::quicklook_region(image_rect, view_rect, ppp, raster)
+                };
                 // Only a render larger than the full tier's adds anything.
-                let region = logic::quicklook_region(image_rect, view_rect, ppp, raster).filter(|(_, side)| *side as f32 > full_side);
+                let region = region.filter(|(_, side)| *side as f32 > full_side);
                 (region.map(|(rect, side)| (rect, [0, 0], side)), quicklook_region_job(item, lib.root()), logic::QUICKLOOK_SETTLE)
             } else {
                 let max = ui.ctx().input(|i| i.max_texture_side).min(8192) as u32;

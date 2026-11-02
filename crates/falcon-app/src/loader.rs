@@ -8,6 +8,7 @@ use std::sync::atomic::Ordering;
 
 use eframe::egui::{Color32, ColorImage, Context, Pos2, Rect, TextureHandle, TextureOptions};
 use falcon_library::model::Item;
+use falcon_library::psd::Composite;
 use falcon_library::thumbnail;
 use lru::LruCache;
 
@@ -105,7 +106,7 @@ pub fn original_job(item: &Item, root: &std::path::Path, tile: usize) -> Option<
 /// the full tier, as an SVG region does.
 pub fn quicklook_region_job(item: &Item, root: &std::path::Path) -> Option<Job> {
     let ext = item.ext.to_lowercase();
-    (crate::logic::hires_quicklook(&ext) && cfg!(target_os = "macos"))
+    (crate::logic::hires_quicklook(&ext) && (cfg!(target_os = "macos") || falcon_library::psd::handles(&ext)))
         .then(|| Job { key: (item.id.clone(), Tier::Full), path: item.original_path(root), svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false })
 }
 
@@ -144,6 +145,10 @@ pub fn job_for(item: &Item, root: &std::path::Path, tier: Tier) -> Option<Job> {
         && let Some(t) = item.thumbnail_path(root)
     {
         return Some(Job { key: (item.id.clone(), tier), path: t, svg: false, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: false });
+    }
+    if tier == Tier::Full && falcon_library::psd::handles(&ext) {
+        // The merged image, QuickLook where it can't be read and exists.
+        return Some(Job { key: (item.id.clone(), tier), path: item.original_path(root), svg: false, quicklook: cfg!(target_os = "macos"), tile: 0, region: None, raw: false, page: 0, hdr: false });
     }
     if tier == Tier::Full && !supported && cfg!(target_os = "macos") {
         return Some(Job { key: (item.id.clone(), tier), path: item.original_path(root), svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false });
@@ -626,7 +631,12 @@ fn decode(job: &Job, exposure: f32, linear: &Mutex<Option<(PathBuf, u32, Arc<ima
     if let Some(region) = job.region
         && job.quicklook
     {
-        return quicklook_patch(&job.path, region, rendered);
+        if !is_psd(&job.path) {
+            return quicklook_patch(&job.path, region, rendered);
+        }
+        // QuickLook's limits apply again if the merged image fails.
+        let fallback = Region { render: region.render.min(crate::logic::QUICKLOOK_RENDER_PIXELS.sqrt() as u32), ..region };
+        return psd_patch(&job.path, region).or_else(|| quicklook_patch(&job.path, fallback, rendered));
     }
     if let Some(region) = job.region {
         let data = std::fs::read(&job.path).ok()?;
@@ -640,6 +650,11 @@ fn decode(job: &Job, exposure: f32, linear: &Mutex<Option<(PathBuf, u32, Arc<ima
     let max = job.key.1.max_side();
     if job.page > 0 {
         let rgba = crate::tiff_pages::decode_page(&job.path, job.page, max)?;
+        return Some(Pixels::Whole(ColorImage::from_rgba_unmultiplied([rgba.width() as usize, rgba.height() as usize], rgba.as_raw())));
+    }
+    if is_psd(&job.path)
+        && let Some(rgba) = psd_whole(&job.path, max)
+    {
         return Some(Pixels::Whole(ColorImage::from_rgba_unmultiplied([rgba.width() as usize, rgba.height() as usize], rgba.as_raw())));
     }
     let img = if job.hdr {
@@ -661,6 +676,56 @@ fn decode(job: &Job, exposure: f32, linear: &Mutex<Option<(PathBuf, u32, Arc<ima
     let img = if img.width() > max || img.height() > max { img.thumbnail(max, max) } else { img };
     let rgba = img.to_rgba8();
     Some(Pixels::Whole(ColorImage::from_rgba_unmultiplied([rgba.width() as usize, rgba.height() as usize], rgba.as_raw())))
+}
+
+/// Whether `path` is a Photoshop document, read for its merged image.
+fn is_psd(path: &std::path::Path) -> bool {
+    path.extension().and_then(|e| e.to_str()).is_some_and(|e| falcon_library::psd::handles(&e.to_lowercase()))
+}
+
+/// A PSD's merged image, at most `max` pixels on its long side.
+fn psd_whole(path: &std::path::Path, max: u32) -> Option<image::RgbaImage> {
+    let mut c = Composite::open(path).ok()?;
+    let (w, h) = c.size();
+    c.read_scaled([0, 0, w, h], max).ok()
+}
+
+/// The part of a PSD's merged image on screen, at the scale of a whole
+/// picture `region.render` pixels on its long side. Only those rows are
+/// decoded and only the result is kept, so it costs what the screen shows.
+/// The rectangle given back is the whole pixels cut, so the part lines up
+/// with the render under it however few pixels are on screen.
+fn psd_patch(path: &std::path::Path, region: Region) -> Option<Pixels> {
+    let mut c = Composite::open(path).ok()?;
+    let (w, h) = c.size();
+    let [x0, y0, x1, y1] = region.rect;
+    let (fw, fh) = (f64::from(w), f64::from(h));
+    let below = |f: f32, n: f64| (f64::from(f.clamp(0.0, 1.0)) * n).floor() as u32;
+    let above = |f: f32, n: f64| (f64::from(f.clamp(0.0, 1.0)) * n).ceil() as u32;
+    let (px0, py0) = (below(x0, fw).min(w - 1), below(y0, fh).min(h - 1));
+    let (px1, py1) = (above(x1, fw).clamp(px0 + 1, w), above(y1, fh).clamp(py0 + 1, h));
+    let scale = (f64::from(region.render) / fw.max(fh)).min(1.0);
+    let long = (f64::from((px1 - px0).max(py1 - py0)) * scale).ceil() as u32;
+    let part = c.read_scaled([px0, py0, px1, py1], long).ok()?;
+    let exact = Region { rect: [(f64::from(px0) / fw) as f32, (f64::from(py0) / fh) as f32, (f64::from(px1) / fw) as f32, (f64::from(py1) / fh) as f32], ..region };
+    Some(Pixels::Patch(exact, ColorImage::from_rgba_unmultiplied([part.width() as usize, part.height() as usize], part.as_raw())))
+}
+
+/// A PSD's merged image in tiles, read straight from the file row by row;
+/// `None` past `logic::COMPOSITE_TILED_PIXELS` or when it can't be read.
+/// Peak memory is the picture at 4 bytes a pixel (with each tile's overlap)
+/// plus one tile while it is converted, and `falcon_library::psd`'s buffers.
+fn psd_tiled(job: &Job) -> Option<Pixels> {
+    let mut c = Composite::open(&job.path).ok()?;
+    let (w, h) = c.size();
+    if !crate::logic::composite_tiled(w, h) {
+        return None;
+    }
+    let spans = crate::logic::tile_spans(w as usize, h as usize, job.tile);
+    let rects: Vec<[u32; 4]> = spans.iter().map(|s| s.padded.map(|v| v as u32)).collect();
+    let images = c.read_rects(&rects).ok()?;
+    let tiles = spans.into_iter().zip(images).map(|(span, img)| (span, ColorImage::from_rgba_unmultiplied([img.width() as usize, img.height() as usize], img.as_raw()))).collect();
+    Some(Pixels::Tiled { size: [w as usize, h as usize], tiles })
 }
 
 /// The kept whole-page QuickLook render (see `Shared::rendered`).
@@ -757,6 +822,9 @@ fn tone_mapped(job: &Job, max: u32, exposure: f32, linear: &Mutex<Option<(PathBu
 /// Decodes the original at full size and cuts it into tiles, all on the
 /// worker; the UI thread only uploads them.
 fn decode_tiled(job: &Job, exposure: f32, linear: &Mutex<Option<(PathBuf, u32, Arc<image::Rgba32FImage>)>>) -> Option<Pixels> {
+    if is_psd(&job.path) {
+        return psd_tiled(job);
+    }
     let img = if job.hdr {
         tone_mapped(job, u32::MAX, exposure, linear)?
     } else if job.raw {
@@ -835,6 +903,128 @@ mod tests {
             // The tile's first pixel is the image's pixel at its padded origin.
             assert_eq!(img.pixels[0], Color32::from_rgb((x0 % 251) as u8, (y0 % 241) as u8, ((x0 / 64 + y0 / 64) % 256) as u8));
         }
+    }
+
+    /// A raw RGB PSD holding a ramp: red is `x`, green is `y`, blue is 7.
+    fn write_psd(dir: &std::path::Path, name: &str, w: u32, h: u32) -> PathBuf {
+        let mut f = b"8BPS\0\x01\0\0\0\0\0\0\0\x03".to_vec();
+        f.extend(h.to_be_bytes());
+        f.extend(w.to_be_bytes());
+        f.extend([0, 8, 0, 3]);
+        f.extend([0; 12]);
+        f.extend([0, 0]);
+        let (wu, hu) = (w as usize, h as usize);
+        f.extend((0..wu * hu).map(|i| (i % wu % 256) as u8));
+        f.extend((0..wu * hu).map(|i| (i / wu % 256) as u8));
+        f.extend(std::iter::repeat_n(7u8, wu * hu));
+        let path = dir.join(name);
+        std::fs::write(&path, f).unwrap();
+        path
+    }
+
+    /// A merged image past QuickLook's cap: tiles carry the file's pixels.
+    #[test]
+    fn psd_originals_decode_into_tiles() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = write_psd(dir.path(), "x.psd", 300, 130);
+        let Some(Pixels::Tiled { size, tiles }) = decode(&original(path, 128), 1.0, &Mutex::new(None), &Mutex::new(None)) else { panic!("not tiled") };
+        assert_eq!(size, [300, 130]);
+        assert_eq!(tiles.len(), 3 * 2);
+        for (span, img) in &tiles {
+            let [x0, y0, x1, y1] = span.padded;
+            assert_eq!(img.size, [x1 - x0, y1 - y0]);
+            let (x, y) = (x1 - 1, y1 - 1);
+            assert_eq!(img.pixels[img.pixels.len() - 1], Color32::from_rgb((x % 256) as u8, y as u8, 7));
+        }
+    }
+
+    /// The full tier scales the merged image; the part on screen comes from
+    /// it at the zoom shown, aligned to whole pixels.
+    #[test]
+    fn psd_full_tier_and_regions_come_from_the_merged_image() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = write_psd(dir.path(), "x.psd", 400, 200);
+        let job = Job { key: ("x".into(), Tier::Full), path: path.clone(), svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false };
+        // Small enough to decode whole, with no QuickLook needed.
+        let Some(Pixels::Whole(img)) = decode(&job, 1.0, &Mutex::new(None), &Mutex::new(None)) else { panic!("no full tier") };
+        assert_eq!(img.size, [400, 200]);
+        assert_eq!(img.pixels[399], Color32::from_rgb(143, 0, 7));
+        let region = Region { rect: [0.5, 0.5, 0.6251, 0.625], size: [0, 0], render: 400, seq: 1 };
+        let job = Job { region: Some(region), ..job };
+        let Some(Pixels::Patch(got, img)) = decode(&job, 1.0, &Mutex::new(None), &Mutex::new(None)) else { panic!("no patch") };
+        assert_eq!(img.size, [51, 25], "cut outward to whole pixels");
+        assert_eq!(got.rect[2], 251.0 / 400.0);
+        assert_eq!(img.pixels[0], Color32::from_rgb(200, 100, 7));
+        // At half scale the same part is half the size.
+        let job = Job { region: Some(Region { render: 200, ..region }), ..job };
+        let Some(Pixels::Patch(_, img)) = decode(&job, 1.0, &Mutex::new(None), &Mutex::new(None)) else { panic!("no patch") };
+        assert_eq!(img.size, [26, 13]);
+    }
+
+    /// An RLE RGB PSB with a row pattern that doesn't compress to nothing,
+    /// written a row at a time.
+    fn write_large_psb(path: &std::path::Path, w: u32, h: u32) {
+        use std::io::Write;
+        let mut out = std::io::BufWriter::new(std::fs::File::create(path).unwrap());
+        out.write_all(b"8BPS\0\x02\0\0\0\0\0\0\0\x03").unwrap();
+        out.write_all(&h.to_be_bytes()).unwrap();
+        out.write_all(&w.to_be_bytes()).unwrap();
+        out.write_all(&[0, 8, 0, 3]).unwrap();
+        out.write_all(&[0; 16]).unwrap();
+        out.write_all(&[0, 1]).unwrap();
+        // Runs of 16 pixels: 2 bytes each, for 8 times compression.
+        let row_of = |seed: u32| -> Vec<u8> { (0..w.div_ceil(16)).flat_map(|i| { let run = 16.min(w - i * 16) as u8; if run == 1 { [0, (i ^ seed) as u8] } else { [(257 - u32::from(run)) as u8, (i ^ seed) as u8] } }).collect() };
+        for _ in 0..3 * h {
+            out.write_all(&(row_of(0).len() as u32).to_be_bytes()).unwrap();
+        }
+        for y in 0..3 * h {
+            out.write_all(&row_of(y / 64)).unwrap();
+        }
+    }
+
+    /// A 20000 x 12000 merged image in tiles and a 40000 x 30000 one read in
+    /// part. Slow in a debug build and writes about 1.3 GB of files, so run
+    /// it with `cargo test --release -p falcon-app -- --ignored large_psd`.
+    /// See the peak memory with `/usr/bin/time -l` on the test binary.
+    #[test]
+    #[ignore]
+    fn large_psd_decodes_within_its_memory_bound() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("big.psb");
+        let which = std::env::var("FALCON_LARGE_PSD").unwrap_or_default();
+        if which != "part" {
+            write_large_psb(&path, 20000, 12000);
+            let t = std::time::Instant::now();
+            let Some(Pixels::Tiled { size, tiles }) = decode(&original(path.clone(), 2048), 1.0, &Mutex::new(None), &Mutex::new(None)) else { panic!("not tiled") };
+            eprintln!("240 MP in tiles: {:?}, {} tiles", t.elapsed(), tiles.len());
+            assert_eq!(size, [20000, 12000]);
+            drop(tiles);
+        }
+        if which != "tiles" {
+            write_large_psb(&path, 40000, 30000);
+            let t = std::time::Instant::now();
+            assert!(decode(&original(path.clone(), 2048), 1.0, &Mutex::new(None), &Mutex::new(None)).is_none(), "past the budget for tiles");
+            eprintln!("refused in {:?}", t.elapsed());
+            let full = Job { key: ("x".into(), Tier::Full), path: path.clone(), svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false };
+            let t = std::time::Instant::now();
+            let Some(Pixels::Whole(img)) = decode(&full, 1.0, &Mutex::new(None), &Mutex::new(None)) else { panic!("no full tier") };
+            eprintln!("full tier {:?} in {:?}", img.size, t.elapsed());
+            let region = Region { rect: [0.5, 0.5, 0.55, 0.55], size: [0, 0], render: 40000, seq: 1 };
+            let t = std::time::Instant::now();
+            let Some(Pixels::Patch(_, img)) = decode(&Job { region: Some(region), ..full }, 1.0, &Mutex::new(None), &Mutex::new(None)) else { panic!("no patch") };
+            eprintln!("part {:?} in {:?}", img.size, t.elapsed());
+            assert!(img.size[0].abs_diff(2000) <= 1 && img.size[1].abs_diff(1500) <= 1, "{:?}", img.size);
+        }
+    }
+
+    /// Bad data ends in no pixels (QuickLook's turn), with no panic.
+    #[test]
+    fn a_damaged_psd_gives_no_tiles() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = write_psd(dir.path(), "x.psd", 300, 130);
+        let bytes = std::fs::read(&path).unwrap();
+        std::fs::write(&path, &bytes[..bytes.len() / 2]).unwrap();
+        assert!(decode(&original(path, 128), 1.0, &Mutex::new(None), &Mutex::new(None)).is_none());
     }
 
     /// An EXR is tone mapped at the exposure asked for, from the linear

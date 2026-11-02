@@ -32,7 +32,8 @@ Status: **Done** works as well as Eagle or better. **Partial** opens, but someth
 
 | Formats | Eagle | Falcon | Status |
 | --- | --- | --- | --- |
-| psd, psdt, psb, ai, ait | High-resolution render | QuickLook, redrawn at each zoom level up to 8192 px | Done |
+| psd, psdt, psb | High-resolution render | The file's merged image decoded by falcon at full resolution, in colour through its ICC profile; QuickLook when it has none (Maximize Compatibility off) | Done |
+| ai, ait | High-resolution render | QuickLook, redrawn at each zoom level up to 8192 px | Done |
 | eps | Image of the thumbnail (dropped on macOS 13+) | QuickLook render (macOS 14+ has no EPS renderer) | Done |
 | xd, sketch, fig, af, afdesign, afphoto, afpub, c4d, blend, clip, skp, dwg, prd, cdr, skt, pxd, graffle, mindnode, xmind, eddx, emmx, indd, indt, idml | Image of the thumbnail | QuickLook render where the app's generator is installed | Done |
 

@@ -618,6 +618,9 @@ impl App {
             if item.width > 0 {
                 prop(ui, tr("Dimensions"), &format!("{} × {}", item.width, item.height));
             }
+            if let Some(reason) = self.image.psd.fallback_reason(&item.id) {
+                prop(ui, tr("Render"), &reason);
+            }
             prop(ui, tr("Size"), &logic::format_size(item.size));
             let type_row = prop(ui, tr("Type"), &item.ext.to_uppercase());
             let type_hit = ui.interact(type_row.rect, ui.scope_id().with("type-row"), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text(tr("Click to change the extension"));

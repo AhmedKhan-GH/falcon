@@ -445,11 +445,6 @@ impl Composite {
         if self.swaps_sides() { (h, w) } else { (w, h) }
     }
 
-    /// Whether the picture has transparency.
-    pub fn has_alpha(&self) -> bool {
-        self.alpha || (self.mode == Mode::Indexed && self.transparent_index.is_some())
-    }
-
     fn swaps_sides(&self) -> bool {
         matches!(self.orientation, Orientation::Rotate90 | Orientation::Rotate270 | Orientation::Rotate90FlipH | Orientation::Rotate270FlipH)
     }
@@ -513,9 +508,9 @@ impl Composite {
     /// The rectangle `[x0, y0, x1, y1]` of the upright picture, box-filtered
     /// down so its long side is at most `long` pixels; never enlarged. The
     /// memory beyond the module notes' is 40 bytes per pixel of one row of
-    /// the result, and 4 per pixel of the result. Reduced to under a third,
-    /// rows are skipped so a huge file stays quick: at most a factor of 3
-    /// rows are averaged, across every column.
+    /// the result, and 4 per pixel of the result. Reduced six times or more,
+    /// rows are skipped so a huge file stays quick, leaving at least three
+    /// rows averaged into each row of the result.
     pub fn read_scaled(&mut self, rect: [u32; 4], long: u32) -> Result<RgbaImage, PsdError> {
         let [x0, y0, x1, y1] = self.to_file_rect(rect);
         let (sw, sh) = (x1 - x0, y1 - y0);

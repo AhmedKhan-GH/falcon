@@ -84,10 +84,12 @@ pub const FULL_TIER_SIDE: u32 = 3072;
 /// GIFs belong to the animation player; SVGs are re-rendered instead.
 /// RAW photos show their embedded JPEG preview at its full size, as
 /// Eagle's RAW viewer does. TGA is decoded by falcon; HDR and EXR are tone
-/// mapped at the viewer's exposure.
+/// mapped at the viewer's exposure. PSD and PSB show their merged image, in
+/// tiles up to [`COMPOSITE_TILED_PIXELS`] ([`composite_tiled`]).
 pub fn full_resolution(ext: &str) -> bool {
     matches!(ext, "jpg" | "jpeg" | "jfif" | "jpe" | "png" | "webp" | "bmp" | "tif" | "tiff" | "tga" | "hdr" | "exr")
         || falcon_library::exif::is_raw(ext)
+        || falcon_library::psd::handles(ext)
         || (cfg!(target_os = "macos") && falcon_library::imageio::handles(ext))
 }
 
@@ -104,7 +106,29 @@ pub fn wants_original(ext: &str, natural_long: u32, shown_px: f32) -> bool {
 /// page again at the zoom shown once the view holds still and keeps the
 /// part on screen ([`quicklook_region`]).
 pub fn hires_quicklook(ext: &str) -> bool {
-    matches!(ext, "psd" | "psb" | "ai" | "ppt" | "pptx" | "potx")
+    matches!(ext, "psd" | "psdt" | "psb" | "ai" | "ppt" | "pptx" | "potx")
+}
+
+/// Most pixels of a PSD's merged image held in tiles: 1 GiB in memory while
+/// they are cut and again as textures. A larger one is decoded only for the
+/// part on screen ([`composite_region`]).
+pub const COMPOSITE_TILED_PIXELS: u64 = 16384 * 16384;
+
+/// Whether a `w` x `h` merged image is drawn in tiles.
+pub fn composite_tiled(w: u32, h: u32) -> bool {
+    u64::from(w) * u64::from(h) <= COMPOSITE_TILED_PIXELS
+}
+
+/// The part on screen of a merged image too large for tiles, as
+/// [`quicklook_region`] gives it: the visible part as fractions and the long
+/// side to scale the whole picture to, rounded up to a step. Only the part
+/// is decoded, so the size shown and the picture's own `long` side are the
+/// only limits.
+pub fn composite_region(image: [f32; 4], view: [f32; 4], ppp: f32, long: u32) -> Option<([f32; 4], u32)> {
+    let (rect, _) = svg_region(image, view, ppp, u32::MAX)?;
+    let shown = (image[2] - image[0]).max(image[3] - image[1]) * ppp;
+    let side = ((shown / QUICKLOOK_STEP).ceil() * QUICKLOOK_STEP).min(long as f32);
+    Some((rect, side.max(1.0) as u32))
 }
 
 /// Most pixels a zoomed QuickLook render of the whole page may have (a
@@ -149,7 +173,7 @@ pub fn crop_span(rect: [f32; 4], w: u32, h: u32) -> (u32, u32, u32, u32) {
 /// Raster formats among [`hires_quicklook`]: a render past their own size
 /// only magnifies.
 pub fn quicklook_raster(ext: &str) -> bool {
-    matches!(ext, "psd" | "psb")
+    falcon_library::psd::handles(ext)
 }
 
 /// The formats Eagle shows as a picture of their own (its special-format
@@ -454,7 +478,9 @@ mod image_viewer_tests {
         assert!(!wants_original("jpg", 12000, 1500.0), "fitted, the full tier is enough");
         assert!(!wants_original("jpg", 3000, 6000.0), "the full tier already is the original");
         assert!(!wants_original("gif", 12000, 6000.0), "animations are the player's");
-        assert!(!wants_original("psd", 12000, 6000.0), "no decoder");
+        assert!(wants_original("psd", 12000, 6000.0), "the merged image");
+        assert!(wants_original("psb", 12000, 6000.0));
+        assert!(!wants_original("ai", 12000, 6000.0), "no decoder");
         assert!(wants_original("tiff", 9000, 4000.0));
         assert!(wants_original("nef", 8256, 4000.0), "a RAW's embedded preview");
         if cfg!(target_os = "macos") {
@@ -502,6 +528,12 @@ mod image_viewer_tests {
         // A square page is held to 8192² pixels; a wide one may be longer.
         assert_eq!(quicklook_region([0.0, 0.0, 20000.0, 20000.0], [0.0, 0.0, 1000.0, 1000.0], 1.0, None).unwrap().1, 8192);
         assert_eq!(quicklook_region([0.0, 0.0, 40000.0, 10000.0], [0.0, 0.0, 1000.0, 1000.0], 1.0, None).unwrap().1, 16384);
+        // A merged image has no pixel cap, only its own size.
+        assert_eq!(composite_region([0.0, 0.0, 40000.0, 40000.0], [0.0, 0.0, 1000.0, 1000.0], 1.0, 90000).unwrap().1, 40448);
+        assert_eq!(composite_region([0.0, 0.0, 40000.0, 40000.0], [0.0, 0.0, 1000.0, 1000.0], 1.0, 30000).unwrap().1, 30000);
+        assert_eq!(composite_region([2000.0, 0.0, 3000.0, 10.0], [0.0, 0.0, 1000.0, 1000.0], 1.0, 30000), None);
+        assert!(composite_tiled(16384, 16384) && composite_tiled(30000, 8000));
+        assert!(!composite_tiled(30000, 30000));
         // A PSD never past its own pixels.
         assert_eq!(quicklook_region([0.0, 0.0, 9000.0, 6000.0], [0.0, 0.0, 1000.0, 1000.0], 1.0, Some(5000)).unwrap().1, 5000);
         assert_eq!(quicklook_region([2000.0, 0.0, 3000.0, 10.0], [0.0, 0.0, 1000.0, 1000.0], 2.0, None), None);

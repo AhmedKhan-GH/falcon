@@ -531,7 +531,9 @@ fn quicklook_thumbnail(item: &mut Item, raw: &Path, thumb: &Path, max: u32) -> O
     }
     let img = thumbnail::quicklook(raw, thumbnail::QUICKLOOK_SIZE).ok()?;
     let meta = thumbnail::spotlight(raw);
-    let (w, h) = meta.size.unwrap_or((img.width(), img.height()));
+    // A PSD's header is the file's own word on its size.
+    let psd = crate::psd::handles(&item.ext).then(|| crate::psd::dimensions(raw)).flatten();
+    let (w, h) = psd.or(meta.size).unwrap_or((img.width(), img.height()));
     item.width = w.into();
     item.height = h.into();
     thumbnail::write_thumbnail(img, max, thumb).ok()?;
