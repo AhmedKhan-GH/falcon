@@ -60,6 +60,7 @@ Libraries built into falcon beyond ordinary Rust crates from crates.io, with the
 |---|---|---|---|---|
 | ufbx (C library, vendored by the `ufbx` crate and compiled with `cc`) | 0.18.0 | MIT (or public domain, at the user's choice) | https://github.com/ufbx/ufbx | Reading FBX models (`crates/falcon-library/src/model3d/fbx.rs`) |
 | `ufbx` Rust bindings | 0.8.0 | MIT OR PDDL-1.0 | https://github.com/ufbx/ufbx-rust | Rust interface to the ufbx C library |
+| moxcms | 0.8.1 | BSD-3-Clause OR Apache-2.0 | https://github.com/awxkee/moxcms | ICC colour conversion of the PSD merged image (`crates/falcon-library/src/psd.rs`); already linked through `image` |
 | roxmltree | 0.21 | MIT OR Apache-2.0 | https://github.com/RazrFalcon/roxmltree | Reading COLLADA (`.dae`) models (`crates/falcon-library/src/model3d/dae.rs`); already linked through resvg |
 | symphonia, symphonia-core, symphonia-metadata, symphonia-utils-xiph | 0.5.5 | MPL-2.0 | [github.com/pdeljanov/Symphonia](https://github.com/pdeljanov/Symphonia) | Audio decoding (`falcon_library::audio`): playback, seeking, waveforms, durations, tempo |
 | symphonia-bundle-mp3, symphonia-bundle-flac | 0.5.5 | MPL-2.0 | [github.com/pdeljanov/Symphonia](https://github.com/pdeljanov/Symphonia) | MP3 and FLAC |

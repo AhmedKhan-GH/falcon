@@ -1722,6 +1722,7 @@ dependencies = [
  "image",
  "kamadak-exif",
  "miniz_oxide 0.8.9",
+ "moxcms",
  "num-bigint",
  "objc2 0.6.5",
  "objc2-core-foundation",

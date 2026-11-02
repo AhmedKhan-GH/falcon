@@ -14,6 +14,9 @@ Third-party material:
   C source vendored by the ufbx Rust crate.
 - ufbx Rust crate 0.8.0 (https://github.com/ufbx/ufbx-rust), MIT OR PDDL-1.0,
   copyright (c) Samuli Raivio.
+- moxcms 0.8.1 (https://github.com/awxkee/moxcms), the ICC colour conversion
+  of PSD merged images, BSD-3-Clause OR Apache-2.0, copyright (c) Radzivon
+  Bartoshyk.
 - roxmltree 0.21 (https://github.com/RazrFalcon/roxmltree), the COLLADA XML
   parser, MIT OR Apache-2.0, copyright (c) Yevhenii Reizner.
 - Symphonia 0.5.5 (symphonia and its core, metadata, xiph, mp3, flac, aac,

@@ -28,6 +28,7 @@ pub mod model3d;
 pub mod pack;
 pub mod sandbox;
 pub mod palette;
+pub mod psd;
 pub mod rename;
 pub mod repair;
 pub mod search;
