@@ -632,17 +632,21 @@ impl App {
                     self.flash(tr("Frame copied"));
                 }
             }
-            FrameTool::Save => {
-                let jpeg = falcon_library::thumbnail::jpeg(&image::DynamicImage::ImageRgba8(img), 95);
-                let Ok(dir) = crate::app::import::tempfile_dir() else { return };
-                let path = dir.join(format!("{}.jpg", frame_item_name(&item.name, at)));
-                // The import thread deletes the staged file once it has it.
-                if jpeg.is_ok_and(|b| std::fs::write(&path, b).is_ok()) {
-                    let mut opts = self.prefs.import_options(item.folders.clone());
-                    opts.url = item.url.clone();
-                    self.spawn_import(vec![crate::app::import::Job { path, opts }]);
-                }
-            }
+            FrameTool::Save => self.save_frame_to_library(item, img, at),
+        }
+    }
+
+    /// Adds a video's frame to the library as a new JPEG item named after
+    /// the video and the time, in the video's folders and with its URL.
+    pub(crate) fn save_frame_to_library(&mut self, item: &Item, img: image::RgbaImage, at: f64) {
+        let jpeg = falcon_library::thumbnail::jpeg(&image::DynamicImage::ImageRgba8(img), 95);
+        let Ok(dir) = crate::app::import::tempfile_dir() else { return };
+        let path = dir.join(format!("{}.jpg", frame_item_name(&item.name, at)));
+        // The import thread deletes the staged file once it has it.
+        if jpeg.is_ok_and(|b| std::fs::write(&path, b).is_ok()) {
+            let mut opts = self.prefs.import_options(item.folders.clone());
+            opts.url = item.url.clone();
+            self.spawn_import(vec![crate::app::import::Job { path, opts }]);
         }
     }
 

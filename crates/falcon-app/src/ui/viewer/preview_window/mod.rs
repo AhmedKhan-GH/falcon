@@ -366,13 +366,7 @@ impl App {
                 if let Pane::Video(v) = &pw.pane
                     && let Some((img, at)) = v.current_frame()
                 {
-                    let name = format!("{}.png", crate::ui::viewer::video::frame_item_name(&item.name, at));
-                    if let Some(dest) = rfd::FileDialog::new().set_file_name(name).add_filter("PNG", &["png"]).save_file() {
-                        match img.save(&dest) {
-                            Ok(()) => self.flash_brief(tr("Frame saved")),
-                            Err(e) => self.flash_error(trf("Couldn't save the frame: {error}", &[("error", &e)])),
-                        }
-                    }
+                    self.save_frame_to_library(item, img, at);
                 }
             }
             None => {}
@@ -536,7 +530,7 @@ impl App {
                 act = Some(Act::CopyFrame);
                 ui.close();
             }
-            if ui.button(tr("Save Frame…")).clicked() {
+            if ui.button(tr("Save Current Frame to Library")).clicked() {
                 act = Some(Act::SaveFrame);
                 ui.close();
             }
