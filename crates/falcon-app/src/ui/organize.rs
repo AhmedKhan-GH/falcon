@@ -686,13 +686,11 @@ impl App {
             }
         }
         if resp.double_clicked() {
-            match self.prefs.sidebar_double_click {
-                crate::prefs::SidebarDoubleClick::Rename => self.ws.org.smart_rename = Some((sf.id.clone(), sf.name.clone())),
-                crate::prefs::SidebarDoubleClick::Collapse => {
-                    if has_children && !self.ws.collapsed.remove(&sf.id) {
-                        self.ws.collapsed.insert(sf.id.clone());
-                    }
-                }
+            let toggles = resp.interact_pointer_pos().is_some_and(|p| crate::ui::sidebar::double_click_toggles(row, depth, p, self.badge(count).is_some()));
+            if !toggles && self.prefs.sidebar_double_click == crate::prefs::SidebarDoubleClick::Rename {
+                self.ws.org.smart_rename = Some((sf.id.clone(), sf.name.clone()));
+            } else if has_children && !self.ws.collapsed.remove(&sf.id) {
+                self.ws.collapsed.insert(sf.id.clone());
             }
         }
         if open {

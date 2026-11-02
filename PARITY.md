@@ -955,7 +955,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Quick Access: reorder by dragging, drag a folder in to add it | Done | Entries keep their whole JSON object when moved | local |
 | Quick Access: drop items on a row to add them to that folder | Done | Drop target rows | local |
 | Expand/collapse a folder, all folders, or the same level | Done | Expand/collapse entries in the folder and smart folder menus; ⌘, ⌥ and ⌘⌥ clicks on carets | local |
-| Double-click on a sidebar row renames or collapses, per preference | Done | `Prefs::sidebar_double_click` for folder and smart folder rows | local |
+| Double-click on a sidebar row renames or collapses, per preference | Done | `Prefs::sidebar_double_click` for folder and smart folder rows; a double-click on the icon or count badge always toggles expand, as Eagle's `index.html` (`ui/sidebar/mod.rs` `double_click_toggles`) | local |
 
 ### 6. Folders
 

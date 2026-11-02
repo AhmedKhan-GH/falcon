@@ -60,6 +60,17 @@ pub(crate) fn caret_rect(row: Rect, depth: usize) -> Rect {
     Rect::from_center_size(Pos2::new(row.left() + icon_x(depth) - 19.0, row.center().y), vec2(16.0, row.height()))
 }
 
+/// Whether a double-click at `pos` on a tree row landed on its icon or count
+/// badge, which always expand or collapse it, as in Eagle; the preference
+/// applies to the rest of the row. The areas are where `sidebar_row_tinted`
+/// draws them.
+pub(crate) fn double_click_toggles(row: Rect, depth: usize, pos: Pos2, has_count: bool) -> bool {
+    let ix = row.left() + icon_x(depth);
+    let on_icon = (ix - 10.0..=ix + 12.0).contains(&pos.x);
+    let on_count = has_count && (row.right() - 49.0..=row.right() - 11.0).contains(&pos.x);
+    on_icon || on_count
+}
+
 pub(crate) fn smart_name(lib: &Library, id: &str) -> String {
     let mut name = tr("Smart Folder").to_string();
     for sf in lib.smart_folders() {
@@ -786,13 +797,11 @@ impl App {
             }
         }
         if resp.double_clicked() {
-            match self.prefs.sidebar_double_click {
-                crate::prefs::SidebarDoubleClick::Rename => self.ws.renaming = Some((f.id.clone(), f.name.clone())),
-                crate::prefs::SidebarDoubleClick::Collapse => {
-                    if has_children && !self.ws.collapsed.remove(&f.id) {
-                        self.ws.collapsed.insert(f.id.clone());
-                    }
-                }
+            let toggles = resp.interact_pointer_pos().is_some_and(|p| double_click_toggles(row_rect, depth, p, count.is_some()));
+            if !toggles && self.prefs.sidebar_double_click == crate::prefs::SidebarDoubleClick::Rename {
+                self.ws.renaming = Some((f.id.clone(), f.name.clone()));
+            } else if has_children && !self.ws.collapsed.remove(&f.id) {
+                self.ws.collapsed.insert(f.id.clone());
             }
         }
         if open {
@@ -820,6 +829,21 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_icon_and_count_of_a_row_always_toggle_on_a_double_click() {
+        let row = Rect::from_min_size(Pos2::new(0.0, 0.0), vec2(240.0, 28.0));
+        let at = |x: f32| Pos2::new(x, 14.0);
+        // The icon sits at icon_x, further in for a deeper row.
+        assert!(double_click_toggles(row, 0, at(icon_x(0)), true));
+        assert!(double_click_toggles(row, 2, at(icon_x(2)), false));
+        assert!(!double_click_toggles(row, 2, at(icon_x(0)), false), "left of a deeper row's icon");
+        // The name follows the preference.
+        assert!(!double_click_toggles(row, 0, at(icon_x(0) + 40.0), true));
+        // The count, only if the row shows one.
+        assert!(double_click_toggles(row, 0, at(220.0), true));
+        assert!(!double_click_toggles(row, 0, at(220.0), false));
+    }
 
     fn sf(name: &str, children: Vec<SmartFolder>) -> SmartFolder {
         SmartFolder {
