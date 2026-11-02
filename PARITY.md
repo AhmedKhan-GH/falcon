@@ -765,45 +765,45 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 
 ### 17. File formats
 
-Eagle columns come from `config.js` (`SUPPORT_FORMATS_DARWIN`), `E/js/thumbs/thumb.js:94-309` and the viewer switch in `E/index.html`. Falcon columns come from `FL/thumbnail.rs:42-44` (formats falcon decodes itself: png, jpg, jpeg, webp, gif, bmp, svg), `FL/import.rs:296-351` (drawn audio and font thumbnails, QuickLook for the rest), and `F/loader.rs:52-66` (viewer source). "QL" means macOS QuickLook: it works only on macOS and only where macOS has a QuickLook generator for that type, so results vary by machine.
+Eagle columns come from `config.js` (`SUPPORT_FORMATS_DARWIN`), `E/js/thumbs/thumb.js:94-309` and the viewer switch in `E/index.html`. Falcon columns match `FORMATS.md`, which is the maintained list; this table is kept in sync with it as rows land.
 
 | Format | Eagle viewer | Falcon thumbnail | Falcon viewer |
 | --- | --- | --- | --- |
-| jpg, jpeg, jfif, jpe, insp | Image viewer, full res | Decoded | Image viewer (cap 3072 px) |
+| jpg, jpeg, jfif, jpe, insp | Image viewer, full res | Decoded | Image viewer, full resolution, tiled for large images |
 | png | Image viewer | Decoded | Image viewer (APNG animates) |
 | webp | Image viewer, animates | Decoded (first frame) | Image viewer, animates |
 | gif | GIF viewer with frame player | Decoded (first frame) | Animated, all frames, frame player |
 | bmp | Image viewer | Decoded | Image viewer |
-| svg | Vector image viewer | Rendered (resvg) | Rasterised at up to 3072 px |
+| svg | Vector image viewer | Rendered (resvg) | Vector viewer, redrawn sharp at every zoom |
 | avif | Image viewer, animates | QL | Image viewer, full res, animates (macOS ImageIO) |
 | jxl | Image viewer | QL (macOS 14+) | Image viewer, full res (ImageIO, macOS 14+) |
 | heic, heif, hif | Image viewer | QL | Image viewer, full res (ImageIO, macOS) |
-| tif, tiff | TIFF viewer | QL | QL still |
-| tga | TGA viewer | QL | QL still |
-| ico | Image of thumbnail | QL | QL still |
-| icns | Image of thumbnail | QL | QL still |
-| dds | Image of thumbnail | QL | QL still |
-| hdr | Image of thumbnail | QL | QL still |
-| exr | Image of thumbnail | QL | QL still |
-| RAW: 3fr arw cr2 cr3 crw dng erf mrw nef nrw orf pef raf raw rw2 sr2 srw x3f | RAW viewer (embedded full preview) | QL | QL still |
-| psd, psdt, psb | Native high-res viewer | QL | QL still |
-| ai, ait | Native high-res viewer | QL | QL still |
-| eps | Image of thumbnail | QL | QL still |
-| xd | Image of thumbnail | QL if available | QL still |
-| sketch | Image of thumbnail | QL if available | QL still |
-| fig | Image of thumbnail | QL if available | QL still |
-| af, afdesign, afphoto, afpub | Image of thumbnail | QL if available | QL still |
-| c4d, blend, skp, dwg, cdr, clip, prd, skt | Image of thumbnail | QL if available | QL still |
-| pxd, graffle, mindnode | Image of thumbnail | QL if available | QL still |
-| xmind | Image of thumbnail | QL if available | QL still |
-| eddx, emmx | Image of thumbnail | QL if available | QL still |
-| indd, indt, idml | Image of thumbnail | QL if available | QL still |
-| doc, docx | Image of thumbnail | QL | QL still |
-| xls, xlsx | Image of thumbnail | QL | QL still |
-| ppt, pptx, potx | Native high-res viewer | QL | QL still |
-| key, numbers, pages | Image of thumbnail | QL | QL still |
+| tif, tiff | TIFF viewer | QL | Image viewer, full resolution, multi-page paging |
+| tga | TGA viewer | QL | Image viewer, full resolution |
+| ico | Image of thumbnail | QL | QuickLook render shown in the viewer |
+| icns | Image of thumbnail | QL | QuickLook render shown in the viewer |
+| dds | Image of thumbnail | QL | QuickLook render shown in the viewer |
+| hdr | Image of thumbnail | QL | Tone-mapped viewer with an exposure slider (`falcon_library::hdr`) |
+| exr | Image of thumbnail | QL | Tone-mapped viewer with an exposure slider (`falcon_library::hdr`) |
+| RAW: 3fr arw cr2 cr3 crw dng erf mrw nef nrw orf pef raf raw rw2 sr2 srw x3f | RAW viewer (embedded full preview) | QL | Embedded full-size preview, correctly oriented |
+| psd, psdt, psb | Native high-res viewer | QL | QuickLook render, redrawn at each zoom level up to 8192 px |
+| ai, ait | Native high-res viewer | QL | QuickLook render, redrawn at each zoom level up to 8192 px |
+| eps | Image of thumbnail | QL | QuickLook render (macOS 14+ has no EPS renderer) |
+| xd | Image of thumbnail | QL if available | QuickLook render where the app's generator is installed |
+| sketch | Image of thumbnail | QL if available | QuickLook render where the app's generator is installed |
+| fig | Image of thumbnail | QL if available | QuickLook render where the app's generator is installed |
+| af, afdesign, afphoto, afpub | Image of thumbnail | QL if available | QuickLook render where the app's generator is installed |
+| c4d, blend, skp, dwg, cdr, clip, prd, skt | Image of thumbnail | QL if available | QuickLook render where the app's generator is installed |
+| pxd, graffle, mindnode | Image of thumbnail | QL if available | QuickLook render where the app's generator is installed |
+| xmind | Image of thumbnail | QL if available | QuickLook render where the app's generator is installed |
+| eddx, emmx | Image of thumbnail | QL if available | QuickLook render where the app's generator is installed |
+| indd, indt, idml | Image of thumbnail | QL if available | QuickLook render where the app's generator is installed |
+| doc, docx | Image of thumbnail | QL | QuickLook render |
+| xls, xlsx | Image of thumbnail | QL | QuickLook render |
+| ppt, pptx, potx | Native high-res viewer | QL | QuickLook render, redrawn at each zoom level up to 8192 px |
+| key, numbers, pages | Image of thumbnail | QL | QuickLook render |
 | pdf | pdf.js reader in main window | QL | PDFKit reader in main window (macOS) |
-| txt | Editable text editor | None | QL still |
+| txt | Editable text editor | None | Editable text with autosave (`textdoc.rs`) |
 | ttf, otf, ttc, woff, woff2, otc | Font viewer | Drawn specimen 600×600 | Font viewer (falls back if egui can't read the font) |
 | mp3, wav, ogg, flac, aac, m4a | Audio player with waveform | Drawn waveform 280×140 | Audio player with waveform; all decode through `falcon_library::audio` (ADTS with MPEG-2 headers and Ogg Opus included); falcon also plays opus, aiff, aif, aifc and caf, which Eagle treats as plain files |
 | mp4, mov, m4v, 3gp, ts, mts, m2ts | HTML5 video player, mpv fallback | QL | AVFoundation player; FFmpeg player for what it refuses (ts, mts, m2ts) |
@@ -811,7 +811,8 @@ Eagle columns come from `config.js` (`SUPPORT_FORMATS_DARWIN`), `E/js/thumbs/thu
 | 360, afx, eva, vap | Video player | QL if available | AVFoundation, else FFmpeg if it reads the container |
 | glb, obj, fbx, 3ds, 3mf, dae, ifc, ply, stl | Interactive 3D viewer | QL if available (obj/stl/ply/dae usually; fbx/ifc/glb rarely) | Interactive viewer and drawn thumbnail for glb/gltf, obj, fbx, 3mf, ply, stl, dae, 3ds and ifc with tessellated geometry; QL still for ifc without it |
 | url | Live web view | QL (generic) | Live WKWebView (macOS); `.url`/`.webloc` addresses read on import |
-| html, mhtml | Live web view | QL | QL still |
+| html | Live web view | QL | Live page in the viewer (WKWebView) |
+| mhtml | Live web view | QL | QL still |
 
 ### 18. Ranked list of local Missing and Partial items
 
