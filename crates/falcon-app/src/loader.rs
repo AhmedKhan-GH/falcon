@@ -1,15 +1,16 @@
 //! Background image decoding and an LRU texture cache.
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::{Arc, Condvar, Mutex};
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 
 use eframe::egui::{Color32, ColorImage, Context, Pos2, Rect, TextureHandle, TextureOptions};
 use falcon_library::model::Item;
 use falcon_library::psd::Composite;
-use falcon_library::thumbnail;
+use falcon_library::thumbnail::{self, QuickLookStop};
 use lru::LruCache;
 
 /// How large a version of an image is wanted.
@@ -69,6 +70,9 @@ pub struct Job {
     page: usize,
     /// A Radiance HDR or OpenEXR image: tone mapped at the loader's exposure.
     hdr: bool,
+    /// Falcon's own decoders had their turn and QuickLook is what is left,
+    /// so only the QuickLook worker takes it (see [`next_job`]).
+    deferred: bool,
 }
 
 /// The part of a zoomed picture on screen: fractions of the drawing
@@ -98,7 +102,7 @@ pub struct Patch {
 pub fn original_job(item: &Item, root: &std::path::Path, tile: usize) -> Option<Job> {
     let ext = item.ext.to_lowercase();
     crate::logic::full_resolution(&ext)
-        .then(|| Job { key: (item.id.clone(), Tier::Original), path: item.original_path(root), svg: false, quicklook: false, tile, region: None, raw: falcon_library::exif::is_raw(&ext), page: 0, hdr: falcon_library::hdr::is_hdr(&ext) })
+        .then(|| Job { key: (item.id.clone(), Tier::Original), path: item.original_path(root), svg: false, quicklook: false, tile, region: None, raw: falcon_library::exif::is_raw(&ext), page: 0, hdr: falcon_library::hdr::is_hdr(&ext), deferred: false })
 }
 
 /// The job asking QuickLook (PDFKit for a PDF-compatible AI) for the visible
@@ -108,14 +112,14 @@ pub fn original_job(item: &Item, root: &std::path::Path, tile: usize) -> Option<
 pub fn quicklook_region_job(item: &Item, root: &std::path::Path) -> Option<Job> {
     let ext = item.ext.to_lowercase();
     (crate::logic::hires_quicklook(&ext) && (cfg!(target_os = "macos") || falcon_library::psd::handles(&ext)))
-        .then(|| Job { key: (item.id.clone(), Tier::Full), path: item.original_path(root), svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false })
+        .then(|| Job { key: (item.id.clone(), Tier::Full), path: item.original_path(root), svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false })
 }
 
 /// The job decoding page `page` (0-based, above 0) of a multi-page TIFF at
 /// the full tier, kept under the key `<id>#page<n>`.
 pub fn tiff_page_job(item: &Item, root: &std::path::Path, page: usize) -> Job {
     let key = (format!("{}#page{page}", item.id), Tier::Full);
-    Job { key, path: item.original_path(root), svg: false, quicklook: false, tile: 0, region: None, raw: false, page, hdr: false }
+    Job { key, path: item.original_path(root), svg: false, quicklook: false, tile: 0, region: None, raw: false, page, hdr: false, deferred: false }
 }
 
 /// The job decoding `item`'s original for a large grid card, for the
@@ -123,7 +127,7 @@ pub fn tiff_page_job(item: &Item, root: &std::path::Path, page: usize) -> Job {
 pub fn card_job(item: &Item, root: &std::path::Path) -> Option<Job> {
     let ext = item.ext.to_lowercase();
     crate::logic::quality_card_format(&ext)
-        .then(|| Job { key: (item.id.clone(), Tier::Card), path: item.original_path(root), svg: false, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: false })
+        .then(|| Job { key: (item.id.clone(), Tier::Card), path: item.original_path(root), svg: false, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false })
 }
 
 /// Picks the file to decode for `item`: the thumbnail when it exists (unless
@@ -133,26 +137,27 @@ pub fn job_for(item: &Item, root: &std::path::Path, tier: Tier) -> Option<Job> {
     let supported = thumbnail::is_supported(&ext);
     let original = supported.then(|| item.original_path(root));
     if tier == Tier::Full && falcon_library::exif::is_raw(&ext) {
-        let quicklook = cfg!(target_os = "macos");
-        return Some(Job { key: (item.id.clone(), tier), path: item.original_path(root), svg: false, quicklook, tile: 0, region: None, raw: true, page: 0, hdr: false });
+        let quicklook = cfg!(target_os = "macos") && !quicklook_hung(&ext);
+        return Some(Job { key: (item.id.clone(), tier), path: item.original_path(root), svg: false, quicklook, tile: 0, region: None, raw: true, page: 0, hdr: false, deferred: false });
     }
     if tier == Tier::Full && (ext == "tga" || falcon_library::hdr::is_hdr(&ext)) {
         // Decoded by falcon itself (HDR and EXR tone mapped), not QuickLook.
-        return Some(Job { key: (item.id.clone(), tier), path: item.original_path(root), svg: false, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: falcon_library::hdr::is_hdr(&ext) });
+        return Some(Job { key: (item.id.clone(), tier), path: item.original_path(root), svg: false, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: falcon_library::hdr::is_hdr(&ext), deferred: false });
     }
     // A custom thumbnail stands for a format with no picture of its own.
     if tier == Tier::Full
         && crate::logic::custom_thumbnail_is_picture(&ext, thumbnail::has_custom_thumbnail(item))
         && let Some(t) = item.thumbnail_path(root)
     {
-        return Some(Job { key: (item.id.clone(), tier), path: t, svg: false, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: false });
+        return Some(Job { key: (item.id.clone(), tier), path: t, svg: false, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false });
     }
     if tier == Tier::Full && falcon_library::psd::handles(&ext) {
         // The merged image, QuickLook where it can't be read and exists.
-        return Some(Job { key: (item.id.clone(), tier), path: item.original_path(root), svg: false, quicklook: cfg!(target_os = "macos"), tile: 0, region: None, raw: false, page: 0, hdr: false });
+        return Some(Job { key: (item.id.clone(), tier), path: item.original_path(root), svg: false, quicklook: cfg!(target_os = "macos") && !quicklook_hung(&ext), tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false });
     }
-    if tier == Tier::Full && !supported && cfg!(target_os = "macos") {
-        return Some(Job { key: (item.id.clone(), tier), path: item.original_path(root), svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false });
+    // Once QuickLook has hung on the format, the full tier is the thumbnail.
+    if tier == Tier::Full && !supported && cfg!(target_os = "macos") && !quicklook_hung(&ext) {
+        return Some(Job { key: (item.id.clone(), tier), path: item.original_path(root), svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false });
     }
     let (path, svg) = match (tier, item.thumbnail_path(root), original) {
         (Tier::Full, _, Some(o)) => (o, ext == "svg"),
@@ -160,17 +165,77 @@ pub fn job_for(item: &Item, root: &std::path::Path, tier: Tier) -> Option<Job> {
         (_, None, Some(o)) => (o, ext == "svg"),
         (_, None, None) => return None,
     };
-    Some(Job { key: (item.id.clone(), tier), path, svg, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: false })
+    Some(Job { key: (item.id.clone(), tier), path, svg, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false })
 }
 
 /// The job for the thumbnail the viewer draws in place of the full render:
 /// when that failed, or while QuickLook is still making it, which can take
-/// up to `thumbnail::QUICKLOOK_TIMEOUT` and often ends with no render at all
-/// for a format with no generator installed. So a thumbnail is on screen
-/// from the start, never the bare file icon.
+/// up to its timeout and often ends with no render at all for a format with
+/// no generator installed. So a thumbnail is on screen from the start, never
+/// the bare file icon: it goes ahead of everything else in the queue and no
+/// QuickLook run can hold it up (see [`next_job`]).
 pub fn stand_in_job(item: &Item, root: &std::path::Path, full_failed: bool) -> Option<Job> {
     let waiting_for_quicklook = job_for(item, root, Tier::Full).is_some_and(|j| j.quicklook);
     (full_failed || waiting_for_quicklook).then(|| job_for(item, root, Tier::Preview)).flatten()
+}
+
+/// How long the formats that rarely have a QuickLook generator
+/// (`import::embedded_first`) get. A generator answers small files in about
+/// 0.3 s here, and without one `qlmanage` only hangs. Other formats keep
+/// `thumbnail::QUICKLOOK_TIMEOUT`: a large document or video really can take
+/// that long, and running out marks the whole format for the run.
+const RARE_QUICKLOOK_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Formats QuickLook timed out on in this run, under their canonical names.
+/// Shared by every loader; not retried until falcon is started again.
+static QUICKLOOK_HUNG: Mutex<BTreeSet<String>> = Mutex::new(BTreeSet::new());
+
+/// Whether QuickLook has timed out on `ext` (lowercase) in this run.
+fn quicklook_hung(ext: &str) -> bool {
+    QUICKLOOK_HUNG.lock().unwrap_or_else(|p| p.into_inner()).contains(&falcon_library::alias::canonical(ext))
+}
+
+fn path_ext(path: &std::path::Path) -> String {
+    path.extension().and_then(|e| e.to_str()).unwrap_or_default().to_lowercase()
+}
+
+/// Runs QuickLook: `thumbnail::quicklook_until`, or a stand-in in tests.
+type Runner = Arc<dyn Fn(&std::path::Path, u32, Duration, &AtomicBool) -> Result<image::DynamicImage, QuickLookStop> + Send + Sync>;
+
+/// A decode's way to QuickLook. On a fast worker the decode only notes that
+/// it needs it, and the job moves to the QuickLook worker.
+struct Lane<'a> {
+    turn: Option<(&'a Runner, &'a AtomicBool)>,
+    deferred: std::cell::Cell<bool>,
+}
+
+impl Lane<'_> {
+    fn quicklook(&self, path: &std::path::Path, size: u32) -> Option<image::DynamicImage> {
+        let ext = path_ext(path);
+        if quicklook_hung(&ext) {
+            return None;
+        }
+        let Some((run, cancel)) = self.turn else {
+            self.deferred.set(true);
+            return None;
+        };
+        let timeout = if falcon_library::import::embedded_first(&ext) { RARE_QUICKLOOK_TIMEOUT } else { thumbnail::QUICKLOOK_TIMEOUT };
+        match run(path, size, timeout, cancel) {
+            Ok(img) => Some(img),
+            Err(QuickLookStop::TimedOut) => {
+                QUICKLOOK_HUNG.lock().unwrap_or_else(|p| p.into_inner()).insert(falcon_library::alias::canonical(&ext));
+                None
+            }
+            Err(_) => None,
+        }
+    }
+}
+
+/// The job on the QuickLook worker, so it can be stopped from the UI thread.
+struct Running {
+    key: Key,
+    region: bool,
+    cancel: Arc<AtomicBool>,
 }
 
 struct Shared {
@@ -195,6 +260,81 @@ struct Shared {
     /// (`logic::QUICKLOOK_RENDER_PIXELS`), dropped when the viewer leaves
     /// the item.
     rendered: Mutex<Option<(PathBuf, u32, Arc<image::RgbaImage>)>>,
+    /// What the QuickLook worker is on. Locked after `queue`, never before.
+    running: Mutex<Option<Running>>,
+    quicklook: Runner,
+}
+
+impl Shared {
+    /// Stops the QuickLook run on a job for which `keep` is false, killing
+    /// its `qlmanage`, and returns the job's key.
+    fn stop_running(&self, keep: impl Fn(&Running) -> bool) -> Option<Key> {
+        let running = self.running.lock().unwrap_or_else(|p| p.into_inner());
+        let r = running.as_ref().filter(|r| !keep(r))?;
+        r.cancel.store(true, Ordering::Relaxed);
+        Some(r.key.clone())
+    }
+}
+
+/// One worker's life. `quicklook` makes it the one that runs QuickLook, so
+/// there is at most one `qlmanage` per loader and the others stay free for
+/// what falcon decodes itself.
+fn work(shared: &Shared, tx: &std::sync::mpsc::Sender<Decoded>, ctx: &Context, quicklook: bool) {
+    loop {
+        let cancel = Arc::new(AtomicBool::new(false));
+        let mut job = {
+            let mut q = shared.queue.lock().unwrap();
+            loop {
+                if shared.closed.load(Ordering::Relaxed) {
+                    return;
+                }
+                if let Some(j) = next_job(&mut q, shared.region_busy.load(Ordering::Relaxed), quicklook) {
+                    if quicklook {
+                        *shared.running.lock().unwrap() = Some(Running { key: j.key.clone(), region: j.region.is_some(), cancel: cancel.clone() });
+                    } else if j.region.is_some() {
+                        shared.region_busy.store(true, Ordering::Relaxed);
+                    }
+                    break j;
+                }
+                q = shared.cv.wait(q).unwrap();
+            }
+        };
+        let gray = grays(job.key.1) && shared.gray.load(Ordering::Relaxed);
+        let exposure = shared.exposure.load(Ordering::Relaxed);
+        let lane = Lane { turn: quicklook.then_some((&shared.quicklook, &*cancel)), deferred: Default::default() };
+        let mut image = decode(&job, f32::from_bits(exposure), &shared.linear, &shared.rendered, &lane);
+        if quicklook {
+            *shared.running.lock().unwrap() = None;
+        } else if job.region.is_some() {
+            let _q = shared.queue.lock().unwrap();
+            shared.region_busy.store(false, Ordering::Relaxed);
+            shared.cv.notify_all();
+        }
+        if lane.deferred.get() {
+            let mut q = shared.queue.lock().unwrap();
+            // A newer region may have come in meanwhile.
+            if job.region.is_none() || q.iter().all(|j| j.region.is_none()) {
+                job.deferred = true;
+                q.push_back(job);
+                shared.cv.notify_all();
+            }
+            drop(q);
+            // The next frame drops it if the view has moved on.
+            ctx.request_repaint();
+            continue;
+        }
+        // Whoever stopped it no longer waits for it, and it didn't fail.
+        if cancel.load(Ordering::Relaxed) && image.is_none() {
+            continue;
+        }
+        if gray && let Some(p) = &mut image {
+            desaturate(p);
+        }
+        if tx.send(Decoded { key: job.key, image, region: job.region.is_some(), gray, exposure: job.hdr.then_some(exposure) }).is_err() {
+            return;
+        }
+        ctx.request_repaint();
+    }
 }
 
 /// What a worker hands back: one image, or a full-resolution one in tiles.
@@ -302,46 +442,17 @@ impl Loader {
         Self::with_workers(ctx, std::thread::available_parallelism().map_or(4, |n| n.get().clamp(2, 6)))
     }
 
-    /// A loader decoding on `workers` threads.
+    /// A loader decoding on `workers` threads, plus one for QuickLook.
     pub fn with_workers(ctx: &Context, workers: usize) -> Self {
-        let shared = Arc::new(Shared { queue: Mutex::new(VecDeque::new()), cv: Condvar::new(), closed: Default::default(), region_busy: Default::default(), gray: Default::default(), exposure: std::sync::atomic::AtomicU32::new(1.0f32.to_bits()), linear: Mutex::new(None), rendered: Mutex::new(None) });
+        Self::with_runner(ctx, workers, Arc::new(thumbnail::quicklook_until))
+    }
+
+    fn with_runner(ctx: &Context, workers: usize, quicklook: Runner) -> Self {
+        let shared = Arc::new(Shared { queue: Mutex::new(VecDeque::new()), cv: Condvar::new(), closed: Default::default(), region_busy: Default::default(), gray: Default::default(), exposure: std::sync::atomic::AtomicU32::new(1.0f32.to_bits()), linear: Mutex::new(None), rendered: Mutex::new(None), running: Mutex::new(None), quicklook });
         let (tx, rx) = std::sync::mpsc::channel();
-        for _ in 0..workers {
+        for i in 0..=workers {
             let (shared, tx, ctx) = (shared.clone(), tx.clone(), ctx.clone());
-            std::thread::spawn(move || {
-                loop {
-                    let job = {
-                        let mut q = shared.queue.lock().unwrap();
-                        loop {
-                            if shared.closed.load(std::sync::atomic::Ordering::Relaxed) {
-                                return;
-                            }
-                            if let Some(j) = next_job(&mut q, shared.region_busy.load(Ordering::Relaxed)) {
-                                if j.region.is_some() {
-                                    shared.region_busy.store(true, Ordering::Relaxed);
-                                }
-                                break j;
-                            }
-                            q = shared.cv.wait(q).unwrap();
-                        }
-                    };
-                    let gray = grays(job.key.1) && shared.gray.load(std::sync::atomic::Ordering::Relaxed);
-                    let exposure = shared.exposure.load(Ordering::Relaxed);
-                    let mut image = decode(&job, f32::from_bits(exposure), &shared.linear, &shared.rendered);
-                    if job.region.is_some() {
-                        let _q = shared.queue.lock().unwrap();
-                        shared.region_busy.store(false, Ordering::Relaxed);
-                        shared.cv.notify_all();
-                    }
-                    if gray && let Some(p) = &mut image {
-                        desaturate(p);
-                    }
-                    if tx.send(Decoded { key: job.key, image, region: job.region.is_some(), gray, exposure: job.hdr.then_some(exposure) }).is_err() {
-                        return;
-                    }
-                    ctx.request_repaint();
-                }
-            });
+            std::thread::spawn(move || work(&shared, &tx, &ctx, i == workers));
         }
         let caches = [Tier::Grid, Tier::Preview, Tier::Full, Tier::Card]
             .into_iter()
@@ -582,19 +693,32 @@ impl Loader {
     }
 
     /// Declares what the current frame needs. Queued jobs that are no longer
-    /// wanted are dropped; new ones go to the front, nearest-first.
+    /// wanted are dropped, and a QuickLook run for one is killed; new ones go
+    /// to the front, nearest-first.
     pub fn want(&mut self, jobs: Vec<Job>) {
         let wanted: HashSet<&Key> = jobs.iter().map(|j| &j.key).collect();
+        // Regions are managed by `want_region`, while the viewer is on their
+        // item (`keep_original`).
+        let region_item = self.region_last.as_ref().map(|l| l.0.as_str());
         let mut q = self.shared.queue.lock().unwrap();
         let pending = &mut self.pending;
         q.retain(|j| {
-            // Regions are managed by `want_region`.
-            let keep = wanted.contains(&j.key) || j.region.is_some();
+            if j.region.is_some() {
+                return region_item == Some(j.key.0.as_str());
+            }
+            let keep = wanted.contains(&j.key);
             if !keep {
                 pending.remove(&j.key);
             }
             keep
         });
+        let stopped = self.shared.stop_running(|r| if r.region { region_item == Some(r.key.0.as_str()) } else { wanted.contains(&r.key) });
+        if let Some(key) = stopped {
+            // A region shares its key with a full render it says nothing about.
+            if !wanted.contains(&key) {
+                pending.remove(&key);
+            }
+        }
         let mut added = false;
         for j in jobs {
             let have = match j.key.1 {
@@ -648,6 +772,8 @@ impl Loader {
             self.region_last = None;
             self.patch = None;
         }
+        self.shared.queue.lock().unwrap_or_else(|p| p.into_inner()).retain(|j| j.key.0 != id);
+        self.shared.stop_running(|r| r.key.0 != id);
         // The file may have changed under the kept QuickLook render.
         *self.shared.rendered.lock().unwrap_or_else(|p| p.into_inner()) = None;
     }
@@ -661,31 +787,44 @@ impl Drop for Loader {
         self.shared.closed.store(true, std::sync::atomic::Ordering::Relaxed);
         drop(q);
         self.shared.cv.notify_all();
+        self.shared.stop_running(|_| false);
+        // Quitting ends the worker before it notices (it looks every 20 ms),
+        // which would leave a hung `qlmanage` behind for good.
+        for _ in 0..10 {
+            if self.shared.running.lock().unwrap_or_else(|p| p.into_inner()).is_none() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
     }
 }
 
-/// The next job for a worker: the first in the queue, passing over a region
-/// while another is being drawn (`region_busy`). So one region is drawn at a
-/// time, and one that waits is replaced by the next (`Loader::want_region`)
-/// instead of being drawn for a view already gone.
-fn next_job(queue: &mut VecDeque<Job>, region_busy: bool) -> Option<Job> {
-    let i = queue.iter().position(|j| !region_busy || j.region.is_none())?;
+/// The next job for a worker. A fast worker takes a thumbnail stand-in (the
+/// preview tier) before anything else, then the first in the queue, passing
+/// over a region while another is being drawn (`region_busy`). So one region
+/// is drawn at a time, and one that waits is replaced by the next
+/// (`Loader::want_region`) instead of being drawn for a view already gone.
+/// Jobs left with QuickLook are the QuickLook worker's alone, in their order.
+fn next_job(queue: &mut VecDeque<Job>, region_busy: bool, quicklook: bool) -> Option<Job> {
+    let takes = |j: &Job| j.deferred == quicklook && (quicklook || !region_busy || j.region.is_none());
+    let stand_in = queue.iter().position(|j| takes(j) && j.key.1 == Tier::Preview && j.region.is_none());
+    let i = stand_in.or_else(|| queue.iter().position(takes))?;
     queue.remove(i)
 }
 
 /// Decodes `job`; HDR images are tone mapped at `exposure`, reading the file
 /// only when `linear` doesn't already hold it.
-fn decode(job: &Job, exposure: f32, linear: &Mutex<Option<(PathBuf, u32, Arc<image::Rgba32FImage>)>>, rendered: &Rendered) -> Option<Pixels> {
+fn decode(job: &Job, exposure: f32, linear: &Mutex<Option<(PathBuf, u32, Arc<image::Rgba32FImage>)>>, rendered: &Rendered, lane: &Lane) -> Option<Pixels> {
     if let Some(region) = job.region
         && job.quicklook
     {
         if !is_psd(&job.path) {
             // PDFKit's way out (a locked or damaged file) is QuickLook's.
-            return pdf_patch(&job.path, region).or_else(|| quicklook_patch(&job.path, region, rendered));
+            return pdf_patch(&job.path, region).or_else(|| quicklook_patch(&job.path, region, rendered, lane));
         }
         // QuickLook's limits apply again if the merged image fails.
         let fallback = Region { render: region.render.min(crate::logic::QUICKLOOK_RENDER_PIXELS.sqrt() as u32), ..region };
-        return psd_patch(&job.path, region).or_else(|| quicklook_patch(&job.path, fallback, rendered));
+        return psd_patch(&job.path, region).or_else(|| quicklook_patch(&job.path, fallback, rendered, lane));
     }
     if let Some(region) = job.region {
         let data = std::fs::read(&job.path).ok()?;
@@ -711,11 +850,11 @@ fn decode(job: &Job, exposure: f32, linear: &Mutex<Option<(PathBuf, u32, Arc<ima
     } else if job.raw {
         match raw_preview(&job.path) {
             Some(img) => img,
-            None if job.quicklook => thumbnail::quicklook(&job.path, max).ok()?,
+            None if job.quicklook => lane.quicklook(&job.path, max)?,
             None => return None,
         }
     } else if job.quicklook {
-        native_or_quicklook(&job.path, max)?
+        native_or_quicklook(&job.path, max, lane)?
     } else if job.svg {
         let data = std::fs::read(&job.path).ok()?;
         thumbnail::render_svg(&data, Some(max)).ok()?
@@ -784,7 +923,7 @@ type Rendered = Mutex<Option<(PathBuf, u32, Arc<image::RgbaImage>)>>;
 /// with `region.render` pixels on its long side: the kept render when it is
 /// of this file and at least that large (scaled down to the size asked),
 /// else a new one, which is kept in its place.
-fn quicklook_patch(path: &std::path::Path, region: Region, rendered: &Rendered) -> Option<Pixels> {
+fn quicklook_patch(path: &std::path::Path, region: Region, rendered: &Rendered, lane: &Lane) -> Option<Pixels> {
     let want = region.render;
     let kept = rendered.lock().ok()?.as_ref().filter(|(p, side, _)| p == path && *side >= want).map(|(_, _, img)| img.clone());
     let page = match kept {
@@ -792,7 +931,7 @@ fn quicklook_patch(path: &std::path::Path, region: Region, rendered: &Rendered) 
         None => {
             // The old render goes first, so two never sit in memory.
             *rendered.lock().ok()? = None;
-            let img = Arc::new(thumbnail::quicklook(path, want).ok()?.into_rgba8());
+            let img = Arc::new(lane.quicklook(path, want)?.into_rgba8());
             *rendered.lock().ok()? = Some((path.to_path_buf(), want, img.clone()));
             img
         }
@@ -846,13 +985,13 @@ fn imageio(path: &std::path::Path) -> bool {
 
 /// A format falcon's own decoder can't read: ImageIO's full decode when it
 /// reads the format, else (or when that fails) a QuickLook render.
-fn native_or_quicklook(path: &std::path::Path, max: u32) -> Option<image::DynamicImage> {
+fn native_or_quicklook(path: &std::path::Path, max: u32, lane: &Lane) -> Option<image::DynamicImage> {
     if imageio(path)
         && let Ok(img) = falcon_library::imageio::decode(path)
     {
         return Some(img);
     }
-    thumbnail::quicklook(path, max).ok()
+    lane.quicklook(path, max)
 }
 
 /// A RAW photo's embedded JPEG preview.
@@ -931,6 +1070,12 @@ fn decode_tiled(job: &Job, exposure: f32, linear: &Mutex<Option<(PathBuf, u32, A
 mod tests {
     use super::*;
 
+    /// `decode` on the QuickLook worker, with the real QuickLook.
+    fn decode(job: &Job, exposure: f32, linear: &Mutex<Option<(PathBuf, u32, Arc<image::Rgba32FImage>)>>, rendered: &Rendered) -> Option<Pixels> {
+        let (run, cancel): (Runner, _) = (Arc::new(thumbnail::quicklook_until), AtomicBool::new(false));
+        super::decode(job, exposure, linear, rendered, &Lane { turn: Some((&run, &cancel)), deferred: Default::default() })
+    }
+
     fn write_png(dir: &std::path::Path, w: u32, h: u32) -> PathBuf {
         use image::ImageEncoder;
         use image::codecs::png::{CompressionType, FilterType, PngEncoder};
@@ -944,7 +1089,7 @@ mod tests {
     }
 
     fn original(path: PathBuf, tile: usize) -> Job {
-        Job { key: ("x".into(), Tier::Original), path, svg: false, quicklook: false, tile, region: None, raw: false, page: 0, hdr: false }
+        Job { key: ("x".into(), Tier::Original), path, svg: false, quicklook: false, tile, region: None, raw: false, page: 0, hdr: false, deferred: false }
     }
 
     /// A one-page PDF with an Illustrator extension: `page` holds its
@@ -1014,7 +1159,7 @@ mod tests {
 
     #[cfg(target_os = "macos")]
     fn ai_job(path: PathBuf, rect: [f32; 4], size: [u32; 2], render: u32) -> Job {
-        Job { key: ("x".into(), Tier::Full), path, svg: false, quicklook: true, tile: 0, region: Some(Region { rect, size, render, seq: 1 }), raw: false, page: 0, hdr: false }
+        Job { key: ("x".into(), Tier::Full), path, svg: false, quicklook: true, tile: 0, region: Some(Region { rect, size, render, seq: 1 }), raw: false, page: 0, hdr: false, deferred: false }
     }
 
     /// Far past QuickLook's cap: a PDF-compatible AI or AIT is drawn by
@@ -1075,11 +1220,282 @@ mod tests {
             std::fs::write(&path, data).unwrap();
             let page = image::RgbaImage::from_pixel(1000, 500, image::Rgba([9, 8, 7, 255]));
             let rendered: Rendered = Mutex::new(Some((path.clone(), 1000, Arc::new(page))));
-            let job = Job { key: ("x".into(), Tier::Full), path, svg: false, quicklook: true, tile: 0, region: Some(Region { rect: [0.5, 0.0, 1.0, 0.5], size: [80, 40], render: 1000, seq: 1 }), raw: false, page: 0, hdr: false };
+            let job = Job { key: ("x".into(), Tier::Full), path, svg: false, quicklook: true, tile: 0, region: Some(Region { rect: [0.5, 0.0, 1.0, 0.5], size: [80, 40], render: 1000, seq: 1 }), raw: false, page: 0, hdr: false, deferred: false };
             let Some(Pixels::Patch(_, img)) = decode(&job, 1.0, &Mutex::new(None), &rendered) else { panic!("{name}: no patch") };
             assert_eq!(img.size, [500, 250], "{name}");
             assert_eq!(img.pixels[0], Color32::from_rgb(9, 8, 7), "{name}");
         }
+    }
+
+
+    /// QuickLook without the process: hangs until cancelled, unless told how
+    /// long it takes, and records what it was asked.
+    #[derive(Default)]
+    struct Fake {
+        started: Mutex<Vec<String>>,
+        timeouts: Mutex<Vec<Duration>>,
+        now: std::sync::atomic::AtomicUsize,
+        peak: std::sync::atomic::AtomicUsize,
+        stopped: std::sync::atomic::AtomicUsize,
+        takes: Mutex<Option<Duration>>,
+        times_out: AtomicBool,
+    }
+
+    impl Fake {
+        fn runner(self: &Arc<Self>) -> Runner {
+            let fake = self.clone();
+            Arc::new(move |path, _, timeout, cancel| {
+                fake.started.lock().unwrap().push(path.file_stem().unwrap().to_string_lossy().into_owned());
+                fake.timeouts.lock().unwrap().push(timeout);
+                if fake.times_out.load(Ordering::Relaxed) {
+                    return Err(QuickLookStop::TimedOut);
+                }
+                let n = fake.now.fetch_add(1, Ordering::SeqCst) + 1;
+                fake.peak.fetch_max(n, Ordering::SeqCst);
+                let takes = *fake.takes.lock().unwrap();
+                let begun = std::time::Instant::now();
+                let out = loop {
+                    if cancel.load(Ordering::Relaxed) {
+                        fake.stopped.fetch_add(1, Ordering::SeqCst);
+                        break Err(QuickLookStop::Cancelled);
+                    }
+                    if takes.is_some_and(|t| begun.elapsed() >= t) {
+                        break Ok(image::DynamicImage::new_rgba8(2, 2));
+                    }
+                    std::thread::sleep(Duration::from_millis(2));
+                };
+                fake.now.fetch_sub(1, Ordering::SeqCst);
+                out
+            })
+        }
+
+        fn started(&self) -> Vec<String> {
+            self.started.lock().unwrap().clone()
+        }
+
+        fn stopped(&self) -> usize {
+            self.stopped.load(Ordering::SeqCst)
+        }
+    }
+
+    fn until(what: &str, mut done: impl FnMut() -> bool) {
+        let begun = std::time::Instant::now();
+        while !done() {
+            assert!(begun.elapsed() < Duration::from_secs(10), "never: {what}");
+            std::thread::sleep(Duration::from_millis(2));
+        }
+    }
+
+    /// A full-tier job that only QuickLook can do.
+    fn quicklook_job(id: &str) -> Job {
+        Job { key: (id.into(), Tier::Full), path: PathBuf::from(format!("/nowhere/{id}.zzformat")), svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false }
+    }
+
+    fn preview_job(id: &str, path: PathBuf) -> Job {
+        Job { key: (id.into(), Tier::Preview), path, svg: false, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false }
+    }
+
+    #[test]
+    fn stand_ins_go_first_and_quicklook_only_on_its_worker() {
+        let deferred = |id: &str| Job { deferred: true, ..quicklook_job(id) };
+        let thumb = preview_job("thumb", PathBuf::new());
+        let mut q = VecDeque::from([quicklook_job("full"), deferred("hung"), thumb]);
+        assert_eq!(next_job(&mut q, false, false).unwrap().key.0, "thumb", "ahead of what came earlier");
+        assert_eq!(next_job(&mut q, false, false).unwrap().key.0, "full", "not yet known to need QuickLook");
+        assert!(next_job(&mut q, false, false).is_none(), "a fast worker leaves QuickLook alone");
+        assert_eq!(next_job(&mut q, false, true).unwrap().key.0, "hung");
+
+        let mut q = VecDeque::from([quicklook_job("full")]);
+        assert!(next_job(&mut q, false, true).is_none(), "the QuickLook worker waits to be handed it");
+    }
+
+    #[test]
+    fn a_stand_in_never_waits_behind_quicklook() {
+        let dir = tempfile::tempdir().unwrap();
+        let png = write_png(dir.path(), 8, 8);
+        let ctx = Context::default();
+        let fake = Arc::new(Fake::default());
+        // One fast worker, the smallest loader there is.
+        let mut l = Loader::with_runner(&ctx, 1, fake.runner());
+        l.want(vec![quicklook_job("a")]);
+        until("QuickLook runs", || fake.started().len() == 1);
+        // A preview window asks for the full tier first.
+        l.want(vec![quicklook_job("a"), quicklook_job("b"), preview_job("a", png)]);
+        until("the thumbnail arrives", || {
+            l.poll(&ctx);
+            l.get("a", Tier::Preview).is_some()
+        });
+        assert_eq!(fake.started(), ["a"], "while QuickLook still hangs");
+    }
+
+    #[test]
+    fn one_quicklook_runs_at_a_time() {
+        let ctx = Context::default();
+        let fake = Arc::new(Fake::default());
+        *fake.takes.lock().unwrap() = Some(Duration::from_millis(20));
+        let mut l = Loader::with_runner(&ctx, 4, fake.runner());
+        l.want(vec![quicklook_job("a"), quicklook_job("b"), quicklook_job("c")]);
+        until("all three are done", || {
+            l.poll(&ctx);
+            ["a", "b", "c"].iter().all(|id| l.get(id, Tier::Full).is_some())
+        });
+        assert_eq!(fake.peak.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn leaving_an_item_stops_its_quicklook_and_drops_what_waits() {
+        let ctx = Context::default();
+        let fake = Arc::new(Fake::default());
+        // One fast worker, so the two reach QuickLook's queue in order.
+        let mut l = Loader::with_runner(&ctx, 1, fake.runner());
+        l.want(vec![quicklook_job("a"), quicklook_job("b")]);
+        until("a runs and b waits", || fake.started() == ["a"] && l.shared.queue.lock().unwrap().iter().any(|j| j.deferred));
+        l.want(vec![quicklook_job("a")]);
+        l.want(vec![quicklook_job("c")]);
+        until("a is stopped and c runs", || fake.stopped() == 1 && fake.started().len() == 2);
+        assert_eq!(fake.started(), ["a", "c"], "b was left while it waited");
+        // Back on an item it was stopped on, which didn't fail: asked again.
+        l.want(vec![quicklook_job("a")]);
+        until("a runs again", || fake.started().len() == 3);
+        l.poll(&ctx);
+        assert!(!l.has_failed("a", Tier::Full) && !l.has_failed("c", Tier::Full));
+        assert_eq!(fake.peak.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn staying_on_an_item_lets_its_quicklook_run() {
+        let ctx = Context::default();
+        let fake = Arc::new(Fake::default());
+        let mut l = Loader::with_runner(&ctx, 2, fake.runner());
+        for _ in 0..50 {
+            l.want(vec![quicklook_job("a")]);
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        until("a runs", || fake.started() == ["a"]);
+        l.want(vec![quicklook_job("a")]);
+        assert_eq!((fake.started().len(), fake.stopped()), (1, 0), "asked once, every frame");
+    }
+
+    #[test]
+    fn a_region_left_behind_is_stopped() {
+        let ctx = Context::default();
+        let fake = Arc::new(Fake::default());
+        let mut l = Loader::with_runner(&ctx, 2, fake.runner());
+        l.want_region(quicklook_job("a"), [0.0, 0.0, 1.0, 1.0], [1, 1], 4000);
+        until("the region runs", || fake.started() == ["a"]);
+        l.want(vec![quicklook_job("a")]);
+        assert_eq!(fake.stopped(), 0, "still on the item");
+        l.keep_original(Some("b"));
+        l.want(vec![]);
+        until("the region is stopped", || fake.stopped() == 1);
+        // One still waiting goes as well, whichever worker holds it just then.
+        l.want_region(quicklook_job("c"), [0.0, 0.0, 1.0, 1.0], [1, 1], 4000);
+        l.keep_original(Some("b"));
+        until("nothing is left of the region", || {
+            l.want(vec![]);
+            l.shared.queue.lock().unwrap().is_empty() && l.shared.running.lock().unwrap().is_none() && !l.shared.region_busy.load(Ordering::Relaxed)
+        });
+    }
+
+    #[test]
+    fn closing_a_loader_stops_its_quicklook() {
+        let ctx = Context::default();
+        let fake = Arc::new(Fake::default());
+        let mut l = Loader::with_runner(&ctx, 1, fake.runner());
+        l.want(vec![quicklook_job("a")]);
+        until("a runs", || fake.started().len() == 1);
+        drop(l);
+        assert_eq!(fake.stopped(), 1, "before the drop returns");
+    }
+
+    #[test]
+    fn a_format_quicklook_timed_out_on_goes_straight_to_its_thumbnail() {
+        let dir = tempfile::tempdir().unwrap();
+        // A name of its own: what is remembered lasts as long as the process.
+        let item = special_item(dir.path(), "zzhung", true);
+        let thumb = item.thumbnail_path(dir.path()).unwrap();
+        image::RgbaImage::new(4, 4).save_with_format(&thumb, image::ImageFormat::Png).unwrap();
+        assert!(job_for(&item, dir.path(), Tier::Full).unwrap().quicklook, "tried at first");
+
+        let ctx = Context::default();
+        let fake = Arc::new(Fake::default());
+        fake.times_out.store(true, Ordering::Relaxed);
+        let mut l = Loader::with_runner(&ctx, 1, fake.runner());
+        l.want(vec![job_for(&item, dir.path(), Tier::Full).unwrap()]);
+        until("it times out", || {
+            l.poll(&ctx);
+            l.has_failed(&item.id, Tier::Full)
+        });
+        assert_eq!(*fake.timeouts.lock().unwrap(), [thumbnail::QUICKLOOK_TIMEOUT]);
+
+        // Any item of the format: no QuickLook, the thumbnail at once.
+        let job = job_for(&item, dir.path(), Tier::Full).unwrap();
+        assert_eq!((job.quicklook, job.path), (false, thumb.clone()));
+        assert!(stand_in_job(&item, dir.path(), false).is_none(), "nothing to stand in for");
+        l.forget(&item.id);
+        l.want(vec![job_for(&item, dir.path(), Tier::Full).unwrap()]);
+        until("the thumbnail arrives", || {
+            l.poll(&ctx);
+            l.get(&item.id, Tier::Full).is_some()
+        });
+        assert_eq!(fake.started().len(), 1, "not retried");
+        // With no thumbnail there is nothing to wait for.
+        std::fs::remove_file(thumb).unwrap();
+        assert!(job_for(&item, dir.path(), Tier::Full).is_none());
+    }
+
+    #[test]
+    fn a_job_already_queued_for_quicklook_is_not_run_once_the_format_hung() {
+        QUICKLOOK_HUNG.lock().unwrap().insert("zzqueued".into());
+        let fake = Arc::new(Fake::default());
+        let (run, cancel) = (fake.runner(), AtomicBool::new(false));
+        let lane = Lane { turn: Some((&run, &cancel)), deferred: Default::default() };
+        assert!(lane.quicklook(std::path::Path::new("/nowhere/x.ZZQUEUED"), 64).is_none());
+        assert!(fake.started().is_empty());
+    }
+
+    #[test]
+    fn formats_that_rarely_have_a_generator_get_less_time() {
+        let fake = Arc::new(Fake::default());
+        *fake.takes.lock().unwrap() = Some(Duration::ZERO);
+        let (run, cancel) = (fake.runner(), AtomicBool::new(false));
+        let lane = Lane { turn: Some((&run, &cancel)), deferred: Default::default() };
+        lane.quicklook(std::path::Path::new("/nowhere/x.blend"), 64);
+        lane.quicklook(std::path::Path::new("/nowhere/x.pptx"), 64);
+        assert_eq!(*fake.timeouts.lock().unwrap(), [RARE_QUICKLOOK_TIMEOUT, thumbnail::QUICKLOOK_TIMEOUT]);
+    }
+
+    #[test]
+    fn a_readable_psd_never_reaches_quicklook() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = write_psd(dir.path(), "x.psd", 8, 8);
+        let ctx = Context::default();
+        let fake = Arc::new(Fake::default());
+        let mut l = Loader::with_runner(&ctx, 1, fake.runner());
+        l.want(vec![Job { path, ..quicklook_job("p") }]);
+        until("the merged image arrives", || {
+            l.poll(&ctx);
+            l.get("p", Tier::Full).is_some()
+        });
+        assert!(fake.started().is_empty());
+    }
+
+    /// The picture appears without the mouse moving: the worker wakes the UI.
+    #[test]
+    fn a_finished_job_asks_for_a_repaint() {
+        let dir = tempfile::tempdir().unwrap();
+        let png = write_png(dir.path(), 8, 8);
+        let ctx = Context::default();
+        let asked = Arc::new(AtomicBool::new(false));
+        let seen = asked.clone();
+        ctx.set_request_repaint_callback(move |_| seen.store(true, Ordering::SeqCst));
+        let mut l = Loader::with_workers(&ctx, 1);
+        l.want(vec![preview_job("a", png)]);
+        until("a repaint is asked for", || asked.load(Ordering::SeqCst));
+        until("the picture is there on the next poll", || {
+            l.poll(&ctx);
+            l.get("a", Tier::Preview).is_some()
+        });
     }
 
     /// One region at a time; other work passes a region left waiting.
@@ -1095,15 +1511,16 @@ mod tests {
             raw: false,
             page: 0,
             hdr: false,
+            deferred: false,
         };
         let mut q = VecDeque::from([job("region", true), job("a", false), job("b", false)]);
-        assert_eq!(next_job(&mut q, true).unwrap().key.0, "a");
-        assert_eq!(next_job(&mut q, false).unwrap().key.0, "region");
-        assert_eq!(next_job(&mut q, true).unwrap().key.0, "b");
+        assert_eq!(next_job(&mut q, true, false).unwrap().key.0, "a");
+        assert_eq!(next_job(&mut q, false, false).unwrap().key.0, "region");
+        assert_eq!(next_job(&mut q, true, false).unwrap().key.0, "b");
         let mut q = VecDeque::from([job("region", true)]);
-        assert!(next_job(&mut q, true).is_none());
+        assert!(next_job(&mut q, true, false).is_none());
         assert_eq!(q.len(), 1);
-        assert!(next_job(&mut q, false).is_some());
+        assert!(next_job(&mut q, false, false).is_some());
     }
 
     /// A zoomed QuickLook region is cut from the kept page render when it
@@ -1113,7 +1530,7 @@ mod tests {
         let path = PathBuf::from("/nonexistent/deck.pptx");
         let page = image::RgbaImage::from_fn(1000, 500, |x, y| image::Rgba([(x / 4) as u8, (y / 2) as u8, 0, 255]));
         let rendered: Rendered = Mutex::new(Some((path.clone(), 1000, Arc::new(page))));
-        let job = Job { key: ("x".into(), Tier::Full), path, svg: false, quicklook: true, tile: 0, region: Some(Region { rect: [0.5, 0.0, 1.0, 0.5], size: [0, 0], render: 1000, seq: 1 }), raw: false, page: 0, hdr: false };
+        let job = Job { key: ("x".into(), Tier::Full), path, svg: false, quicklook: true, tile: 0, region: Some(Region { rect: [0.5, 0.0, 1.0, 0.5], size: [0, 0], render: 1000, seq: 1 }), raw: false, page: 0, hdr: false, deferred: false };
         let Some(Pixels::Patch(_, img)) = decode(&job, 1.0, &Mutex::new(None), &rendered) else { panic!("no patch") };
         assert_eq!(img.size, [500, 250]);
         assert_eq!(img.pixels[0], Color32::from_rgb(125, 0, 0));
@@ -1178,7 +1595,7 @@ mod tests {
     fn psd_full_tier_and_regions_come_from_the_merged_image() {
         let dir = tempfile::tempdir().unwrap();
         let path = write_psd(dir.path(), "x.psd", 400, 200);
-        let job = Job { key: ("x".into(), Tier::Full), path: path.clone(), svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false };
+        let job = Job { key: ("x".into(), Tier::Full), path: path.clone(), svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false };
         // Small enough to decode whole, with no QuickLook needed.
         let Some(Pixels::Whole(img)) = decode(&job, 1.0, &Mutex::new(None), &Mutex::new(None)) else { panic!("no full tier") };
         assert_eq!(img.size, [400, 200]);
@@ -1239,7 +1656,7 @@ mod tests {
             let t = std::time::Instant::now();
             assert!(decode(&original(path.clone(), 2048), 1.0, &Mutex::new(None), &Mutex::new(None)).is_none(), "past the budget for tiles");
             eprintln!("refused in {:?}", t.elapsed());
-            let full = Job { key: ("x".into(), Tier::Full), path: path.clone(), svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false };
+            let full = Job { key: ("x".into(), Tier::Full), path: path.clone(), svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false };
             let t = std::time::Instant::now();
             let Some(Pixels::Whole(img)) = decode(&full, 1.0, &Mutex::new(None), &Mutex::new(None)) else { panic!("no full tier") };
             eprintln!("full tier {:?} in {:?}", img.size, t.elapsed());
@@ -1269,7 +1686,7 @@ mod tests {
         let path = dir.path().join("x.exr");
         let lin = image::Rgba32FImage::from_pixel(8, 4, image::Rgba([1.0, 1.0, 1.0, 1.0]));
         image::DynamicImage::ImageRgba32F(lin).save(&path).unwrap();
-        let full = Job { key: ("x".into(), Tier::Full), path: path.clone(), svg: false, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: true };
+        let full = Job { key: ("x".into(), Tier::Full), path: path.clone(), svg: false, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: true, deferred: false };
         let kept = Mutex::new(None);
         let Some(Pixels::Whole(a)) = decode(&full, 1.0, &kept, &Mutex::new(None)) else { panic!("no full tier") };
         assert_eq!(a.size, [8, 4]);
@@ -1305,7 +1722,7 @@ mod tests {
         let Some(Pixels::Tiled { size, tiles }) = decode(&original(path.clone(), 128), 1.0, &Mutex::new(None), &Mutex::new(None)) else { panic!("not tiled") };
         assert_eq!(size, [130, 300], "turned by its orientation");
         assert_eq!(tiles.len(), 2 * 3);
-        let full = Job { key: ("x".into(), Tier::Full), path, svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false };
+        let full = Job { key: ("x".into(), Tier::Full), path, svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false };
         let Some(Pixels::Whole(img)) = decode(&full, 1.0, &Mutex::new(None), &Mutex::new(None)) else { panic!("no full tier") };
         assert_eq!(img.size, [130, 300]);
     }
