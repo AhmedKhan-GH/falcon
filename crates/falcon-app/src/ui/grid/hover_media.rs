@@ -85,7 +85,8 @@ impl App {
     /// along the bottom and the time shows for a moment after each move.
     fn video_hover(&mut self, ui: &Ui, lib: &Library, item: &Item, pic: Rect) {
         let ctx = ui.ctx().clone();
-        let (now, frame, dt) = ctx.input(|i| (i.time, ctx.cumulative_frame_nr(), f64::from(i.stable_dt.min(0.1))));
+        let frame = ctx.cumulative_frame_nr();
+        let (now, dt) = ctx.input(|i| (i.time, f64::from(i.stable_dt.min(0.1))));
         let gray = self.modes.grayscale;
         let pointer = ctx.input(|i| i.pointer.hover_pos()).filter(|p| pic.contains(*p));
         let v = self.hover_media.video_for(&item.id, now, frame);
@@ -150,7 +151,8 @@ impl App {
     /// there, and the button at the top right plays or pauses.
     fn audio_hover(&mut self, ui: &Ui, lib: &Library, item: &Item, pic: Rect, resp: &egui::Response) {
         let ctx = ui.ctx().clone();
-        let (now, frame) = ctx.input(|i| (i.time, ctx.cumulative_frame_nr()));
+        let frame = ctx.cumulative_frame_nr();
+        let now = ctx.input(|i| i.time);
         let (volume, autoplay) = (self.audio.volume, self.display.audio_autoplay);
         let a = self.hover_media.audio_for(&item.id, now, frame);
         let (since, started) = (a.since, std::mem::replace(&mut a.started, true));
@@ -257,5 +259,26 @@ mod tests {
         let uv = cover_uv(vec2(100.0, 200.0), vec2(200.0, 100.0));
         assert!((uv.height() - 0.25).abs() < 1e-6 && (uv.width() - 1.0).abs() < 1e-6);
         assert_eq!(cover_uv(vec2(160.0, 90.0), vec2(320.0, 180.0)), Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)));
+    }
+}
+
+#[cfg(test)]
+mod lock_tests {
+    /// egui's `Context` lock isn't re-entrant: calling a `Context` method from
+    /// inside `ctx.input(|i| ...)` freezes the app for good. Hovering a video
+    /// card did exactly that.
+    #[test]
+    fn no_context_call_inside_an_input_closure() {
+        let source = include_str!("hover_media.rs");
+        let needle = ["input(|i| (i.time, ", "ctx."].concat();
+        assert!(!source.contains(&needle));
+    }
+
+    #[test]
+    fn the_frame_number_can_be_read_beside_input() {
+        let ctx = eframe::egui::Context::default();
+        let frame = ctx.cumulative_frame_nr();
+        let time = ctx.input(|i| i.time);
+        assert_eq!((frame, time >= 0.0), (0, true));
     }
 }
