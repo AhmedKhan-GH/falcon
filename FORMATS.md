@@ -35,9 +35,9 @@ Eagle's alias extensions import as the format they stand for, whatever macOS cal
 | Formats | Eagle | Falcon | Status |
 | --- | --- | --- | --- |
 | psd, psdt, psb | High-resolution render | The file's merged image decoded by falcon at full resolution, in colour through its ICC profile; QuickLook when it has none (Maximize Compatibility off) | Done |
-| ai, ait | High-resolution render | PDF-compatible files: PDFKit draws the part on screen at the size shown, sharp at any zoom in the viewer. PostScript-only files: QuickLook, redrawn at each zoom level up to 8192 px | Done |
-| eps | Image of the thumbnail (dropped on macOS 13+) | QuickLook render (macOS 14+ has no EPS renderer) | Done |
-| xd, sketch, fig, af, afdesign, afphoto, afpub, c4d, blend, clip, skp, dwg, prd, cdr, skt, pxd, graffle, mindnode, xmind, eddx, emmx, indd, indt, idml | Image of the thumbnail | QuickLook render where the app's generator is installed; sketch and xmind fall back to the preview picture in the file | Done |
+| ai, ait | High-resolution render | PDF-compatible files: PDFKit draws the part on screen at the size shown, sharp at any zoom in the viewer. PostScript-only files: QuickLook, redrawn at each zoom level up to 8192 px. With no QuickLook render: the thumbnail is page 1 through PDFKit, or the preview in a PostScript file (see eps), which stands in for the viewer | Done |
+| eps | Image of the thumbnail (dropped on macOS 13+) | QuickLook render (macOS 14+ has no EPS renderer), else the preview in the file: a DOS header's TIFF, a `%%BeginPreview` bitmap or an `%AI7_Thumbnail` block. An EPS with none gets no thumbnail (falcon has no PostScript interpreter) | Partial |
+| xd, sketch, fig, af, afdesign, afphoto, afpub, c4d, blend, clip, skp, dwg, prd, cdr, skt, pxd, graffle, mindnode, xmind, eddx, emmx, indd, indt, idml | Image of the thumbnail | QuickLook render where the app's generator is installed; sketch, xmind, indd, indt, idml, blend, skp and dwg fall back to the preview picture in the file, where it has one (not a zstd-compressed blend) | Done |
 
 ## Documents
 
@@ -45,7 +45,7 @@ Eagle's alias extensions import as the format they stand for, whatever macOS cal
 | --- | --- | --- | --- |
 | pdf | pdf.js reader inside the window | PDFKit reader inside the window: find, rotate, spreads, links, password, attachments, switchable layers, print | Partial: the layers list is flat rather than the document's tree, and printing ignores switched layers |
 | txt | Editable text | Editable text with autosave | Done |
-| doc, docx, xls, xlsx, key, pages, numbers | Image of the thumbnail | QuickLook render; key falls back to the preview picture in the file | Done |
+| doc, docx, xls, xlsx, key, pages, numbers | Image of the thumbnail | QuickLook render; key falls back to the preview picture in the file, where it has one (many have none) | Done |
 | ppt, pptx, potx | High-resolution render | QuickLook, redrawn at each zoom level up to 8192 px | Partial: past 8192 px the picture stops getting sharper. macOS hands these files back only as a bitmap or as HTML, with no PDF to draw by region |
 
 ## Fonts
