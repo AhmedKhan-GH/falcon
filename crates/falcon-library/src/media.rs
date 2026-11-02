@@ -8,16 +8,12 @@ use std::path::Path;
 
 /// Eagle's audio formats.
 pub const AUDIO_EXTENSIONS: [&str; 6] = ["mp3", "wav", "flac", "ogg", "aac", "m4a"];
-/// Audio formats falcon also treats as audio (viewer, hover playback,
-/// waveform thumbnail, duration, the Audio type filter) because it decodes
-/// them, though Eagle 4 handles them as plain files.
-pub const EXTRA_AUDIO_EXTENSIONS: [&str; 5] = ["opus", "aiff", "aif", "aifc", "caf"];
 /// Eagle's video formats.
 pub const VIDEO_EXTENSIONS: [&str; 18] =
     ["ts", "3gp", "360", "afx", "vap", "eva", "mp4", "mov", "m4v", "webm", "mkv", "avi", "wmv", "mpg", "mts", "flv", "m2ts", "f4v"];
 
 pub fn is_audio(ext: &str) -> bool {
-    AUDIO_EXTENSIONS.contains(&ext) || EXTRA_AUDIO_EXTENSIONS.contains(&ext)
+    AUDIO_EXTENSIONS.contains(&ext)
 }
 
 pub fn is_video(ext: &str) -> bool {

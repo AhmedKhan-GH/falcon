@@ -55,7 +55,7 @@ Status: **Done** works as well as Eagle or better. **Partial** opens, but someth
 
 | Formats | Eagle | Falcon | Status |
 | --- | --- | --- | --- |
-| mp3, wav, ogg, flac, aac, m4a | Player with waveform | Player with waveform, falcon's own decoder (AAC and ALAC in m4a) | Done |
+| mp3, wav, ogg, flac, aac, m4a | Player with waveform | Player with waveform, falcon's own decoder (Opus in ogg; AAC and ALAC in m4a) | Done |
 
 ## Video
 
@@ -87,7 +87,6 @@ Status: **Done** works as well as Eagle or better. **Partial** opens, but someth
 
 ## Already in falcon beyond Eagle's set
 
-- **Audio:** opus, aiff, aif, aifc and caf play in the audio player. With FFmpeg, wma, ape and amr play too.
 - **Video:** ogv and rm play through FFmpeg.
 - **3D:** gltf opens in the 3D viewer. Models export to GLB, glTF, OBJ, PLY, STL and OFF.
 - **Other files:** `.webloc` links, Inboard libraries and single Pixave items import.

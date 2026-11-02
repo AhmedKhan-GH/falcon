@@ -1,7 +1,7 @@
 //! Where a file's audio starts and how long it runs, when the container
 //! says so but symphonia 0.5 doesn't act on it: the edit list or iTunes
 //! gapless tag (`iTunSMPB`) of an MP4 or M4A (encoder priming, 2112 frames
-//! for Apple's AAC) and the packet table of a CAF.
+//! for Apple's AAC).
 
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
@@ -18,46 +18,11 @@ pub(super) fn read(path: &Path) -> Option<Edit> {
     let mut f = File::open(path).ok()?;
     let mut head = [0u8; 8];
     f.read_exact(&mut head).ok()?;
-    if &head[..4] == b"caff" {
-        caf(&mut f)
-    } else if &head[4..] == b"ftyp" {
+    if &head[4..] == b"ftyp" {
         mp4(&mut f)
     } else {
         None
     }
-}
-
-fn caf<R: Read + Seek>(r: &mut R) -> Option<Edit> {
-    let end = r.seek(SeekFrom::End(0)).ok()?;
-    let (mut at, mut rate, mut table) = (8u64, None, None);
-    while at + 12 <= end {
-        r.seek(SeekFrom::Start(at)).ok()?;
-        let mut h = [0u8; 12];
-        r.read_exact(&mut h).ok()?;
-        let size = i64::from_be_bytes(h[4..12].try_into().ok()?);
-        match &h[..4] {
-            b"desc" => {
-                let mut b = [0u8; 8];
-                r.read_exact(&mut b).ok()?;
-                rate = Some(f64::from_be_bytes(b));
-            }
-            b"pakt" => {
-                let mut b = [0u8; 24];
-                r.read_exact(&mut b).ok()?;
-                let valid = i64::from_be_bytes(b[8..16].try_into().ok()?);
-                let priming = i32::from_be_bytes(b[16..20].try_into().ok()?);
-                table = Some((valid, priming));
-            }
-            _ => {}
-        }
-        // A data chunk of unknown size (-1) runs to the end.
-        if size < 0 {
-            break;
-        }
-        at += 12 + size as u64;
-    }
-    let (rate, (valid, priming)) = (rate.filter(|r| *r > 0.0)?, table?);
-    (priming > 0).then(|| Edit { lead: f64::from(priming) / rate, length: (valid > 0).then(|| valid as f64 / rate) })
 }
 
 /// The boxes in `[from, to)`: type, payload offset and payload size.
@@ -225,19 +190,5 @@ mod tests {
         let moov = [bx(b"name", b"\0\0\0\0iTunSMPB"), data].concat();
         assert_eq!(smpb(&moov, 16000), Some(Edit { lead: 0.132, length: Some(1.0) }));
         assert_eq!(smpb(b"nothing", 16000), None);
-    }
-
-    #[test]
-    fn reads_a_caf_packet_table() {
-        let chunk = |kind: &[u8; 4], body: &[u8]| [kind.as_slice(), &(body.len() as i64).to_be_bytes(), body].concat();
-        let mut desc = 48000f64.to_be_bytes().to_vec();
-        desc.extend_from_slice(&[0; 24]);
-        let mut pakt = 3i64.to_be_bytes().to_vec();
-        pakt.extend_from_slice(&48000i64.to_be_bytes());
-        pakt.extend_from_slice(&312i32.to_be_bytes());
-        pakt.extend_from_slice(&648i32.to_be_bytes());
-        let file = [b"caff\0\x01\0\0".as_slice(), &chunk(b"desc", &desc), &chunk(b"pakt", &pakt), b"data", &(-1i64).to_be_bytes()].concat();
-        let e = caf(&mut Cursor::new(file)).unwrap();
-        assert_eq!(e, Edit { lead: 312.0 / 48000.0, length: Some(1.0) });
     }
 }

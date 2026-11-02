@@ -1,8 +1,8 @@
 //! Each fixture in `testdata/audio` is one second of mono audio made for
 //! these tests: half a second of silence, then a 440 Hz tone. Raw AAC
 //! can't say how much encoder priming it starts with, so there the tone
-//! comes 2112 frames late; the Vorbis encoder shifts it a little early. WAV and AIFF
-//! are written here; the rest were encoded from such a WAV (FLAC, AAC,
+//! comes 2112 frames late; the Vorbis encoder shifts it a little early. The WAV is
+//! written here; the rest were encoded from such a WAV (FLAC, AAC,
 //! ALAC and Opus with macOS `afconvert`, the Opus packets put in Ogg by
 //! hand, MP3 and Vorbis with the pure-Rust `rusty_mp3` and `rusty_vorbis`
 //! encoders).
@@ -16,41 +16,9 @@ fn fixture(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("testdata/audio").join(name)
 }
 
-/// The tone's samples at `rate`: silent for the first half second.
-fn tone(rate: u32) -> Vec<i16> {
-    (0..rate).map(|i| if i < rate / 2 { 0 } else { ((i as f32 * 440.0 * std::f32::consts::TAU / rate as f32).sin() * 12000.0) as i16 }).collect()
-}
-
 fn wav(dir: &Path) -> PathBuf {
     let p = dir.join("tone.wav");
     std::fs::write(&p, media::tests::wav(8000, 1.0, |t| if t < 0.5 { 0.0 } else { 12000.0 / 32767.0 * (t * 440.0 * std::f64::consts::TAU).sin() })).unwrap();
-    p
-}
-
-/// An AIFF (big-endian 16-bit PCM) of the tone.
-fn aiff(dir: &Path) -> PathBuf {
-    let p = dir.join("tone.aiff");
-    let samples = tone(8000);
-    let mut comm = Vec::new();
-    comm.extend_from_slice(&1u16.to_be_bytes());
-    comm.extend_from_slice(&(samples.len() as u32).to_be_bytes());
-    comm.extend_from_slice(&16u16.to_be_bytes());
-    // 8000 as an 80-bit extended float.
-    comm.extend_from_slice(&[0x40, 0x0B, 0xFA, 0, 0, 0, 0, 0, 0, 0]);
-    let mut ssnd = vec![0u8; 8];
-    for s in &samples {
-        ssnd.extend_from_slice(&s.to_be_bytes());
-    }
-    let mut body = b"AIFF".to_vec();
-    for (id, chunk) in [(b"COMM", &comm), (b"SSND", &ssnd)] {
-        body.extend_from_slice(id);
-        body.extend_from_slice(&(chunk.len() as u32).to_be_bytes());
-        body.extend_from_slice(chunk);
-    }
-    let mut file = b"FORM".to_vec();
-    file.extend_from_slice(&(body.len() as u32).to_be_bytes());
-    file.extend_from_slice(&body);
-    std::fs::write(&p, file).unwrap();
     p
 }
 
@@ -71,17 +39,14 @@ fn tagged_mp3(dir: &Path) -> PathBuf {
 fn all(dir: &Path) -> Vec<(PathBuf, &'static str, f64, f64)> {
     vec![
         (wav(dir), "wav", 1.0, 0.5),
-        (aiff(dir), "aiff", 1.0, 0.5),
         (fixture("tone.mp3"), "mp3", 1.0, 0.5),
         (tagged_mp3(dir), "mp3", 1.0, 0.5),
         (fixture("tone.flac"), "flac", 1.0, 0.5),
         (fixture("tone.ogg"), "ogg", 0.896, 0.434),
-        (fixture("tone.opus"), "opus", 1.0, 0.5),
-        (fixture("opus.caf"), "caf", 1.0, 0.5),
+        (fixture("opus.ogg"), "ogg", 1.0, 0.5),
         (fixture("tone.m4a"), "m4a", 1.0, 0.5),
         (fixture("tone.aac"), "aac", 1.152, 0.632),
         (fixture("alac.m4a"), "m4a", 1.0, 0.5),
-        (fixture("alac.caf"), "caf", 1.0, 0.5),
     ]
 }
 
@@ -178,32 +143,23 @@ fn waveforms_come_from_the_same_decoder() {
 #[test]
 fn unsupported_files_fall_back_without_panicking() {
     let dir = tempfile::tempdir().unwrap();
-    // WMA (an ASF header) and APE ("MAC ") have no decoder; nor does noise.
-    let cases: [(&str, &[u8]); 4] = [
-        ("x.wma", &[0x30, 0x26, 0xB2, 0x75, 0x8E, 0x66, 0xCF, 0x11, 0xA6, 0xD9, 0, 0xAA, 0, 0x62, 0xCE, 0x6C, 0, 0, 0, 0]),
-        ("x.ape", b"MAC \x96\x0f\0\0\0\0\0\0\0\0\0\0"),
-        ("x.amr", b"#!AMR\n\x3c\x00\x00\x00"),
-        ("x.ogg", b"not audio at all"),
-    ];
+    // Noise has no decoder.
+    let cases: [(&str, &[u8]); 2] = [("x.ogg", b"not audio at all"), ("x.mp3", &[0x30, 0x26, 0xB2, 0x75, 0x8E, 0x66, 0xCF, 0x11, 0, 0, 0, 0])];
     for (name, bytes) in cases {
         let p = dir.path().join(name);
         std::fs::write(&p, bytes).unwrap();
         let ext = name.rsplit('.').next().unwrap();
-        if ext == "amr" && falcon_ffmpeg::available() {
-            // A valid AMR header with one frame: FFmpeg's backend reads it.
-            continue;
-        }
         assert_eq!(open(&p, ext).err(), Some(AudioError::UnknownFormat), "{name}");
         assert!(waveform::peaks(&p, ext, 10).is_none());
         assert!(media::audio_duration(&p, ext).is_none());
     }
     let missing = open(&dir.path().join("gone.mp3"), "mp3").err().unwrap();
     assert!(matches!(missing, AudioError::Io(_)), "{missing:?}");
-    for ext in GAPS {
-        assert!(!media::is_audio(ext), "{ext} decodes only through FFmpeg");
-    }
     for (ext, _) in DECODED {
         assert!(media::is_audio(ext), "{ext}");
+    }
+    for ext in ["opus", "aiff", "aif", "aifc", "caf", "wma", "ape", "amr"] {
+        assert!(!media::is_audio(ext), "{ext} is a plain file, as in Eagle");
     }
 }
 

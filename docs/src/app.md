@@ -116,7 +116,7 @@ What Eagle does, from `index.html`, the `BitmapViewer` and zoomer in `app.bundle
 
 ## Audio and font viewer
 
-Opening an audio item (Eagle's mp3, wav, flac, ogg, aac and m4a, and falcon's extra opus, aiff, aif, aifc and caf; see Audio formats) shows its waveform with playback controls instead of an image; opening a font shows a specimen drawn with the font itself. The code is in `crates/falcon-app/src/audio.rs` (playback and the waveform cache), `crates/falcon-app/src/ui/viewer/audio.rs` (the audio view), `crates/falcon-app/src/ui/viewer/font.rs` (the font viewer) and `crates/falcon-app/src/font_install.rs` (activation), with the seek and time arithmetic in `logic/`, the font information in `fontmeta::FontInfo` and the language change in `Library::set_font_language`.
+Opening an audio item (Eagle's mp3, wav, flac, ogg, aac and m4a; see Audio formats) shows its waveform with playback controls instead of an image; opening a font shows a specimen drawn with the font itself. The code is in `crates/falcon-app/src/audio.rs` (playback and the waveform cache), `crates/falcon-app/src/ui/viewer/audio.rs` (the audio view), `crates/falcon-app/src/ui/viewer/font.rs` (the font viewer) and `crates/falcon-app/src/font_install.rs` (activation), with the seek and time arithmetic in `logic/`, the font information in `fontmeta::FontInfo` and the language change in `Library::set_font_language`.
 
 What Eagle does, from `js/directives/audio-media-element.js`, its video.js setup in `app.bundle.js`, `js/default-preferences.js` and `font-viewer/`:
 
@@ -147,7 +147,7 @@ What Eagle does, from `js/directives/audio-media-element.js`, its video.js setup
 
 ### Audio formats
 
-Eagle 4.0.0 treats six extensions as audio (`mp3`, `wav`, `ogg`, `flac`, `aac`, `m4a`: the audio viewer's `ng-switch-when` in `index.html`, the hover selectors in `js/hover-preview/audio-hover-preview.js` and the thumbnail list in `app.bundle.js`) and plays them with Chromium. Every other sound file (opus, aiff, wma, ape, amr, caf…) is a plain file there, with no player, waveform or duration. Falcon decodes Eagle's six and also treats `opus`, `aiff`, `aif`, `aifc` and `caf` as audio (`media::EXTRA_AUDIO_EXTENSIONS`): they get the viewer, hover playback, a waveform thumbnail and `duration` at import, and the Audio type filter. Items Eagle imported in those formats have no `duration` in their record; the viewer and the hover player take the decoded length instead.
+Eagle 4.0.0 treats six extensions as audio (`mp3`, `wav`, `ogg`, `flac`, `aac`, `m4a`: the audio viewer's `ng-switch-when` in `index.html`, the hover selectors in `js/hover-preview/audio-hover-preview.js` and the thumbnail list in `app.bundle.js`) and plays them with Chromium. Every other sound file (opus, aiff, wma, ape, amr, caf…) is a plain file there, with no player, waveform or duration. Falcon does the same: only those six are audio items (`media::AUDIO_EXTENSIONS`), and other sound files import as plain items with a QuickLook thumbnail. Opus is decoded inside `.ogg` and `.m4a` files, which Chromium plays too.
 
 Decoding is `falcon_library::audio`. `audio::open` returns an `AudioSource`: interleaved `f32` blocks, the rate and channels, the length and an accurate seek. The first backend is symphonia 0.5.5 (pure Rust, MPL-2.0) with the pure-Rust `opus-decoder` crate for Opus; when it can't read a file and an LGPL FFmpeg is installed, `audio::open` tries FFmpeg (`audio/ffmpeg.rs`, see [Video playback](video.md)), which also reads the soundtracks of video files. The app wraps the source as a rodio source; `waveform::peaks`, `media::audio_duration` and `tempo::bpm` read the same source.
 
@@ -156,24 +156,20 @@ Decoding is `falcon_library::audio`. `audio::open` returns an `AudioSource`: int
 | mp3 | MPEG-1, 2 and 2.5 Layer III, with LAME/Xing gapless trimming and ID3v2 tags skipped |
 | wav | PCM (8 to 32 bit), IEEE float, A-law, µ-law, IMA and Microsoft ADPCM |
 | flac | FLAC |
-| ogg | Vorbis, Opus, FLAC |
-| opus | Opus (mono, stereo and multichannel mapping family 1), with the pre-skip trimmed |
+| ogg | Vorbis, Opus (mono, stereo and multichannel mapping family 1, with the pre-skip trimmed), FLAC |
 | aac | AAC-LC in ADTS, MPEG-2 (`FF F9`, as Apple writes) and MPEG-4 (`FF F1`) headers, with or without CRC |
 | m4a | AAC-LC, ALAC, FLAC and Opus in MP4, with the edit list or iTunes gapless tag (`iTunSMPB`) trimming the encoder priming |
-| aiff, aif, aifc | PCM, IEEE float, A-law, µ-law |
-| caf | PCM, ALAC, AAC-LC, FLAC, Opus, A-law, µ-law, with the packet table's priming trimmed |
 
 Fixes falcon makes around symphonia 0.5.5, each in `crates/falcon-library/src/audio/`:
 
 - `adts.rs` replaces symphonia's ADTS reader, which only syncs on `FF F1` and guesses the length from the bitrate: it indexes every frame at open, so the length is exact and seeks land on the frame.
-- `edit.rs` reads the MP4 edit list, the `iTunSMPB` tag and the CAF packet table, which symphonia parses but doesn't apply, so an Apple AAC file is 1.000 s long rather than 1.152 s and its audio starts at 0.
+- `edit.rs` reads the MP4 edit list and the `iTunSMPB` tag, which symphonia parses but doesn't apply, so an Apple AAC file is 1.000 s long rather than 1.152 s and its audio starts at 0.
 - `opus.rs` adds the Opus decoder symphonia 0.5 lacks, and the source trims the Ogg pre-skip and decodes 80 ms before a seek's time so the decoder settles.
 - An MP4 whose sample entry gives a different rate from the ALAC header plays at the codec's rate.
-- symphonia's CAF reader can't seek once it reaches the end; the source reopens the file and seeks again, and if a reader can't seek at all it decodes from the top and drops up to the time.
+- When a reader can't seek from where it is, the source reopens the file and seeks again, and if a reader can't seek at all it decodes from the top and drops up to the time.
 
 Gaps:
 
-- **WMA, APE, AMR (and AWB)** have no FOSS pure-Rust decoder. They decode through the FFmpeg backend when it is installed, but none of them are audio items in falcon (nor in Eagle), so they still open as plain files.
 - **HE-AAC** (SBR, PS) plays its AAC-LC core only, at the core's bandwidth. AAC Main, LTP and more than two AAC channels don't decode.
 - **Raw AAC** carries no priming information, so an `.aac` file starts with the encoder's silence (about 2112 frames) and reads that much longer than its source.
 - Speed changes move the pitch (rodio resamples), as described under Speed.

@@ -72,7 +72,7 @@ In order: `$FALCON_FFMPEG_DIR`, the bundle's `Contents/Frameworks` next to the e
 ## Other uses
 
 - `falcon_video::probe`, `frame_at` and `Grabber` fall back to FFmpeg, so the seek bar's hover thumbnail and the grid's hover strip work for these formats.
-- `falcon_ffmpeg::AudioFile` decodes a file's sound alone. `falcon_library::audio::open`, the decoder behind audio playback, the hover sound, waveforms, durations and the tempo, falls back to it (`audio/ffmpeg.rs`) when symphonia can't read a file: the soundtrack of an mkv, webm or avi in the hover preview, and WMA, APE or AMR files.
+- `falcon_ffmpeg::AudioFile` decodes a file's sound alone. `falcon_library::audio::open`, the decoder behind audio playback, the hover sound, waveforms, durations and the tempo, falls back to it (`audio/ffmpeg.rs`) when symphonia can't read a file: the soundtrack of an mkv, webm, avi or wmv in the hover preview.
 - At import, `media::duration` asks FFmpeg for the length of video it can't otherwise read, and FFmpeg draws the thumbnail as described above. Refresh Thumbnail goes the same way.
 
 ## Tests

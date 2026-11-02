@@ -21,7 +21,7 @@ Third-party material:
 - SQLite 3.46.0, bundled through libsqlite3-sys, in the public domain
   (https://www.sqlite.org/copyright.html).
 - Symphonia 0.5.5 (symphonia and its core, metadata, xiph, mp3, flac, aac,
-  adpcm, alac, pcm, vorbis, caf, isomp4, ogg and riff crates), Mozilla
+  adpcm, alac, pcm, vorbis, isomp4, ogg and riff crates), Mozilla
   Public License 2.0, copyright (c) the Project Symphonia Developers. Used
   unmodified; the source of the MPL-covered files is available at
   https://github.com/pdeljanov/Symphonia and on crates.io. See

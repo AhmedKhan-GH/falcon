@@ -28,11 +28,9 @@ static CODECS: LazyLock<CodecRegistry> = LazyLock::new(|| {
 static PROBE: LazyLock<Probe> = LazyLock::new(|| {
     let mut p = Probe::default();
     p.register_all::<adts::AdtsReader>();
-    p.register_all::<formats::CafReader>();
     p.register_all::<formats::FlacReader>();
     p.register_all::<formats::IsoMp4Reader>();
     p.register_all::<formats::MpaReader>();
-    p.register_all::<formats::AiffReader>();
     p.register_all::<formats::WavReader>();
     p.register_all::<formats::OggReader>();
     p.register_all::<symphonia_metadata::id3v2::Id3v2Reader>();
@@ -220,7 +218,7 @@ impl SymphoniaSource {
     }
 
     /// Starts over on a fresh reader, for containers that can't seek from
-    /// where they are (symphonia's CAF reader at the end of the stream).
+    /// where they are.
     fn reopen(&mut self) -> Result<(), AudioError> {
         let format = open_format(&self.path, &self.ext)?;
         let track = format.tracks().iter().find(|t| t.id == self.track).ok_or(AudioError::NoAudioTrack)?;

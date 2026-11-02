@@ -70,8 +70,8 @@ Libraries built into falcon beyond ordinary Rust crates from crates.io, with the
 | symphonia, symphonia-core, symphonia-metadata, symphonia-utils-xiph | 0.5.5 | MPL-2.0 | [github.com/pdeljanov/Symphonia](https://github.com/pdeljanov/Symphonia) | Audio decoding (`falcon_library::audio`): playback, seeking, waveforms, durations, tempo |
 | symphonia-bundle-mp3, symphonia-bundle-flac | 0.5.5 | MPL-2.0 | [github.com/pdeljanov/Symphonia](https://github.com/pdeljanov/Symphonia) | MP3 and FLAC |
 | symphonia-codec-aac, symphonia-codec-adpcm, symphonia-codec-alac, symphonia-codec-pcm, symphonia-codec-vorbis | 0.5.5 | MPL-2.0 | [github.com/pdeljanov/Symphonia](https://github.com/pdeljanov/Symphonia) | AAC-LC, ADPCM, ALAC, PCM and Vorbis |
-| symphonia-format-caf, symphonia-format-isomp4, symphonia-format-ogg, symphonia-format-riff | 0.5.5 | MPL-2.0 | [github.com/pdeljanov/Symphonia](https://github.com/pdeljanov/Symphonia) | CAF, MP4/M4A, Ogg, WAV and AIFF containers |
-| opus-decoder | 0.1.1 | MIT OR Apache-2.0 | [github.com/TadeuszWolfGang/Rusopus](https://github.com/TadeuszWolfGang/Rusopus) | Opus, pure Rust (`crates/falcon-library/src/audio/opus.rs`) |
+| symphonia-format-isomp4, symphonia-format-ogg, symphonia-format-riff | 0.5.5 | MPL-2.0 | [github.com/pdeljanov/Symphonia](https://github.com/pdeljanov/Symphonia) | MP4/M4A, Ogg and WAV containers |
+| opus-decoder | 0.1.1 | MIT OR Apache-2.0 | [github.com/TadeuszWolfGang/Rusopus](https://github.com/TadeuszWolfGang/Rusopus) | Opus in `.ogg` and `.m4a`, pure Rust (`crates/falcon-library/src/audio/opus.rs`) |
 | rodio | 0.23.0 | MIT OR Apache-2.0 | [github.com/RustAudio/rodio](https://github.com/RustAudio/rodio) | Audio output on the default device |
 | FFmpeg (libavutil, libavcodec, libavformat, libswscale, libswresample) | 7.1.5 | LGPL-2.1-or-later | [ffmpeg.org/releases/ffmpeg-7.1.5.tar.xz](https://ffmpeg.org/releases/ffmpeg-7.1.5.tar.xz) | The fallback video player (`crates/falcon-ffmpeg`) |
 | libloading | 0.8.9 | ISC | [github.com/nagisa/rust_libloading](https://github.com/nagisa/rust_libloading/) | Opening the FFmpeg libraries at run time |

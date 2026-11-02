@@ -1,5 +1,5 @@
 //! Opus for symphonia: a [`Decoder`] over the pure-Rust `opus-decoder`
-//! crate, registered next to symphonia's own codecs. symphonia's Ogg, CAF
+//! crate, registered next to symphonia's own codecs. symphonia's Ogg
 //! and MP4 readers already find Opus tracks; 0.5 just has no decoder.
 
 use opus_decoder::{OpusDecoder, OpusMultistreamDecoder};

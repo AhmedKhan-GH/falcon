@@ -436,9 +436,9 @@ mod tests {
         assert!((rest[0] - want).abs() < 1e-3, "{} vs {want}", rest[0]);
         assert!(Stream::open(&dir.path().join("missing.wav"), "wav").is_err());
         // A format with no decoder is refused with a reason, not a panic.
-        let wma = dir.path().join("x.wma");
-        std::fs::write(&wma, [0x30, 0x26, 0xB2, 0x75, 0x8E, 0x66, 0xCF, 0x11, 0, 0, 0, 0]).unwrap();
-        assert_eq!(Stream::open(&wma, "wma").err().as_deref(), Some("unsupported audio format"));
+        let junk = dir.path().join("x.ogg");
+        std::fs::write(&junk, [0x30, 0x26, 0xB2, 0x75, 0x8E, 0x66, 0xCF, 0x11, 0, 0, 0, 0]).unwrap();
+        assert_eq!(Stream::open(&junk, "ogg").err().as_deref(), Some("unsupported audio format"));
         // Nothing is loaded until the viewer asks, so no device is opened here.
         let mut a = Audio::default();
         assert_eq!(a.loaded(), None);

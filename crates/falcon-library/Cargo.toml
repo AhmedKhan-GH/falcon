@@ -22,7 +22,7 @@ zip = { version = "9.2.0", default-features = false, features = ["deflate-flate2
 chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
 base64 = "0.22"
 kamadak-exif = "0.6"
-symphonia = { version = "0.5.5", default-features = false, features = ["mp3", "aac", "isomp4", "flac", "wav", "pcm", "ogg", "vorbis", "adpcm", "aiff", "alac", "caf"] }
+symphonia = { version = "0.5.5", default-features = false, features = ["mp3", "aac", "isomp4", "flac", "wav", "pcm", "ogg", "vorbis", "adpcm", "alac"] }
 opus-decoder = "0.1.1"
 symphonia-metadata = "0.5.5"
 ttf-parser = "0.25"

@@ -1,5 +1,5 @@
 //! The FFmpeg backend: files symphonia and the Opus decoder can't read
-//! (WMA, APE, AMR, the soundtrack of a Matroska, WebM or AVI file) decode
+//! (the soundtrack of a Matroska, WebM, AVI or WMV file) decode
 //! through `falcon-ffmpeg` when an LGPL FFmpeg is installed.
 
 use std::path::Path;

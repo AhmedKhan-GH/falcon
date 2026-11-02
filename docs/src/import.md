@@ -137,7 +137,7 @@ A folder's `tags` key holds its auto-tags. Eagle's code calls the list it applie
     - Eagle's dcraw build is inferred to read orf, rw2 and raf, which classic dcraw supports. Classic dcraw predates CR3, so Eagle is inferred to store no `rawMetas` for cr3 files, where falcon does.
   - `ImportOptions::camera_metadata_all_photos` (off by default) also stores `rawMetas` for jpg, jpeg, tif, tiff, heic, heif, png and webp. Eagle never does this. It lets the camera filter work on ordinary photos.
 - **`duration`.**
-  - Audio is read with `falcon_library::audio`: the length the container gives, after trimming encoder priming (MP3 gapless headers, the MP4 edit list or `iTunSMPB`, the CAF packet table, the Opus pre-skip), or by adding up packet durations when the header has no count. Raw AAC is counted frame by frame. A file that doesn't decode gets no `duration`. Falcon also stores it for opus, aiff, aif, aifc and caf, which Eagle imports as plain files.
+  - Audio is read with `falcon_library::audio`: the length the container gives, after trimming encoder priming (MP3 gapless headers, the MP4 edit list or `iTunSMPB`, the Opus pre-skip), or by adding up packet durations when the header has no count. Raw AAC is counted frame by frame. A file that doesn't decode gets no `duration`. Only Eagle's six audio formats get one.
   - mp4, mov, m4v, 3gp and f4v are read from the `mvhd` box (duration ÷ timescale).
   - Other video formats are read through FFmpeg when it is installed (see [Video playback](video.md)), then fall back to Spotlight (`mdls`), which knows nothing about files in temporary folders.
   - Values can differ slightly from a browser's, for example around MP3 encoder padding.

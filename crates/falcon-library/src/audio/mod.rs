@@ -2,16 +2,15 @@
 //! and the tempo all read audio through.
 //!
 //! [`open`] returns an [`AudioSource`], a stream of interleaved `f32`
-//! blocks that can seek. Today the only backend is symphonia (pure Rust,
+//! blocks that can seek. The main backend is symphonia (pure Rust,
 //! MPL-2.0) with its MP3, AAC, ALAC, FLAC, Vorbis, PCM and ADPCM decoders
-//! in MP4/M4A, CAF, Ogg, WAV, AIFF, FLAC, MP3 and ADTS files, plus the
-//! pure-Rust `opus-decoder` crate for Opus (in Ogg or CAF). Formats with no
-//! FOSS pure-Rust decoder (WMA, APE, AMR) don't open: [`open`] returns an
+//! in MP4/M4A, Ogg, WAV, FLAC, MP3 and ADTS files, plus the pure-Rust
+//! `opus-decoder` crate for Opus (in Ogg or M4A, which Eagle's Chromium
+//! player also plays). A file that doesn't decode returns an
 //! [`AudioError`] and callers fall back (the viewer shows the reason, the
 //! waveform is flat, no duration is stored). When an LGPL FFmpeg is
 //! installed (`falcon-ffmpeg`, loaded at run time), [`open`] tries it after
-//! symphonia, which covers those formats and the soundtracks of video
-//! files.
+//! symphonia, which covers the soundtracks of video files.
 
 mod adts;
 mod edit;
@@ -69,7 +68,7 @@ pub enum AudioError {
     UnknownFormat,
     /// The container holds no audio track.
     NoAudioTrack,
-    /// The track's codec has no decoder here (WMA, APE, AMR, …).
+    /// The track's codec has no decoder here.
     UnsupportedCodec,
     /// The stream couldn't be moved to the asked time.
     Seek(String),
@@ -100,23 +99,14 @@ pub fn open(path: &Path, ext: &str) -> Result<Box<dyn AudioSource>, AudioError> 
 }
 
 /// Audio formats that decode, by extension, with the codecs each may hold.
-pub const DECODED: [(&str, &str); 11] = [
+pub const DECODED: [(&str, &str); 6] = [
     ("mp3", "MP3"),
     ("wav", "PCM, IEEE float, A-law, µ-law, IMA and MS ADPCM"),
     ("flac", "FLAC"),
     ("ogg", "Vorbis, Opus, FLAC"),
-    ("opus", "Opus"),
     ("aac", "AAC-LC (ADTS)"),
     ("m4a", "AAC-LC, ALAC, FLAC, Opus"),
-    ("aiff", "PCM"),
-    ("aif", "PCM"),
-    ("aifc", "PCM, IEEE float, A-law, µ-law"),
-    ("caf", "PCM, ALAC, AAC-LC, FLAC, Opus, A-law, µ-law"),
 ];
-
-/// Audio formats with no FOSS pure-Rust decoder: they decode only through
-/// the FFmpeg backend, when FFmpeg is installed.
-pub const GAPS: [&str; 4] = ["wma", "ape", "amr", "awb"];
 
 #[cfg(test)]
 mod tests;
