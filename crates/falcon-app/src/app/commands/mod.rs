@@ -464,6 +464,7 @@ impl App {
                     self.pick_library();
                 }
             }
+            C::LoadLibrary => self.pick_library(),
             C::NewLibrary => self.new_library(),
             C::MergeLibrary => self.merge_library(),
             C::ClearLibraryHistory => self.clear_history_open = true,
@@ -632,7 +633,7 @@ impl App {
             }
             C::AddToLastFolder => self.add_to_last_used(self.acted_on()),
             C::ActionsPanel => self.open_actions_panel(None),
-            C::AddToFolders | C::FolderPanel => {
+            C::AddToFolders | C::AddToFolder | C::FolderPanel => {
                 if let Some(l) = self.ws.lib.clone() {
                     let ids = self.acted_on();
                     self.open_add_to_folders(&lock(&l), ids);

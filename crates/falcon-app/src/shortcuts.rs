@@ -49,6 +49,8 @@ pub enum Command {
     LockApp,
     CollectWindow,
     SwitchLibrary,
+    /// Choose a library folder and open it (Eagle's `library.load`).
+    LoadLibrary,
     /// Library menu (`App::library_ui`).
     NewLibrary,
     MergeLibrary,
@@ -156,6 +158,9 @@ pub enum Command {
     /// Open the Add to Folders picker for the selection (Eagle's bare F,
     /// which opens its folder panel).
     FolderPanel,
+    /// The same picker under Eagle's own `organize.folder.add` id, which
+    /// has no default key (the bare F is [`Command::FolderPanel`]).
+    AddToFolder,
     /// Open the Actions panel (the toolbar's Actions button and Eagle's
     /// bare G).
     ActionsPanel,
@@ -476,6 +481,7 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::Player(PlayerKey::Frame(FrameTool::Copy)), id: "player.thumbnail.copy", group: PLAYER, label: "Copy the current frame", default: k(SHIFT, Key::C), aliases: &[] },
     Spec { cmd: Command::Player(PlayerKey::Frame(FrameTool::Save)), id: "player.thumbnail.save", group: PLAYER, label: "Save the current frame to the library", default: k(SHIFT, Key::S), aliases: &[] },
     // Export and copy-out (`App::export_keys`).
+    Spec { cmd: Command::LoadLibrary, id: "library.load", group: "Library", label: "Choose a library folder to open", default: None, aliases: &[] },
     Spec { cmd: Command::NewLibrary, id: "library.create", group: "Library", label: "Create a new library", default: None, aliases: &[] },
     Spec { cmd: Command::MergeLibrary, id: "library.merge", group: "Library", label: "Merge another library into this one", default: None, aliases: &[] },
     Spec { cmd: Command::ClearLibraryHistory, id: "library.clearHistory", group: "Library", label: "Clear the library history", default: None, aliases: &[] },
@@ -513,6 +519,7 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::FolderPasswordRemove, id: "edit.folder.password.reset", group: "Edit", label: "Remove the open folder's password", default: None, aliases: &[] },
     Spec { cmd: Command::LockFolder, id: "edit.folder.password.lock", group: "Edit", label: "Lock the open folder now", default: k(CMD_SHIFT, Key::L), aliases: &[] },
     Spec { cmd: Command::AddToFolders, id: "find.add.to", group: "Find", label: "Add the selection to folders", default: k(CMD_SHIFT, Key::J), aliases: &[] },
+    Spec { cmd: Command::AddToFolder, id: "organize.folder.add", group: "Organize", label: "Add the selection to folders", default: None, aliases: &[] },
     Spec { cmd: Command::FolderPanel, id: "organize.folder.panel", group: "Organize", label: "Open the folder picker", default: k(NONE, Key::F), aliases: &[] },
     Spec { cmd: Command::ActionsPanel, id: "organize.actions.panel", group: "Organize", label: "Open the Actions panel", default: k(NONE, Key::G), aliases: &[] },
     Spec { cmd: Command::AddToLastFolder, id: "organize.folder.addLast", group: "Organize", label: "Add to the last used folder", default: k(SHIFT, Key::D), aliases: &[] },
@@ -1316,8 +1323,9 @@ mod tests {
 
     /// Eagle's macOS keybind ids that falcon has an action for, with
     /// Eagle's default (empty is unbound). Ids falcon lacks an action for
-    /// (link and site importers, reverse image search, image merge, the
-    /// import-date filter) are not listed.
+    /// (link and site importers, reverse image search, image merge (the
+    /// Combine Images plugin), the import-date and image-search filters,
+    /// the add-filter menu, Open With Other App) are not listed.
     const EAGLE_IDS: &[(&str, &str)] = &[
         ("global.show.eagle", ""),
         ("global.show.search", ""),
@@ -1336,6 +1344,8 @@ mod tests {
         ("file.export.item.as", "Shift + E"),
         ("file.export.csv", ""),
         ("library.create", ""),
+        ("library.load", ""),
+        ("organize.folder.add", ""),
         ("library.switch", "Command + L"),
         ("edit.rename.darwin", "Command + R"),
         ("edit.copy.path", "Command + Alt + C"),

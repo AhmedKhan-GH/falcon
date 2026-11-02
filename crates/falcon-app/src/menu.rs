@@ -150,7 +150,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::MoveFolder => grid && (s.scope == ScopeKind::Folder || s.picked_folders > 0),
         C::MergeLibrary | C::EmptyCacheReload | C::ImportPack | C::ImportInboard => s.library,
         C::LockApp => s.lockable,
-        C::NewLibrary | C::ClearLibraryHistory | C::SwitchLibrary | C::CollectWindow | C::Preferences | C::CloseWindow | C::Minimize | C::FullScreen | C::WindowZoom => true,
+        C::NewLibrary | C::LoadLibrary | C::ClearLibraryHistory | C::SwitchLibrary | C::CollectWindow | C::Preferences | C::CloseWindow | C::Minimize | C::FullScreen | C::WindowZoom => true,
         C::NextLibrary | C::PreviousLibrary => s.libraries > 1,
         C::Page(_) | C::Import | C::ImportFolders | C::ImportLinks | C::FindDuplicates => s.library,
         C::Scroll(_) | C::SelectFirst | C::SelectLast | C::ToggleFolders => grid,
@@ -162,7 +162,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::CustomThumbnail | C::ClipboardThumbnail => s.library && (s.viewer || s.selected == 1),
         C::ResetThumbnail => s.library && (s.viewer || s.selected == 1) && s.has_custom_thumb,
         C::AddToLastFolder => (any || (s.library && s.viewer)) && s.last_folder,
-        C::AddToFolders | C::FolderPanel => any || (s.library && s.viewer),
+        C::AddToFolders | C::AddToFolder | C::FolderPanel => any || (s.library && s.viewer),
         // Eagle hides the Actions button on the All Tags page.
         C::ActionsPanel => s.library && s.page != Some(Page::AllTags),
         C::FolderPasswordNew => grid && s.scope == ScopeKind::Folder && !s.folder_password,
