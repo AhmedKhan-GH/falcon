@@ -530,8 +530,15 @@ fn quicklook_thumbnail(item: &mut Item, raw: &Path, thumb: &Path, max: u32) -> O
     if item.ext == "txt" {
         return None;
     }
+    // QuickLook can hang for its whole timeout on a format with no generator,
+    // so a preview the file itself carries is tried first for these.
+    if embedded_first(&item.ext)
+        && let Some(done) = embedded_thumbnail(item, raw, thumb, max)
+    {
+        return Some(done);
+    }
     let Ok(img) = thumbnail::quicklook(raw, thumbnail::QUICKLOOK_SIZE) else {
-        return embedded_thumbnail(item, raw, thumb, max);
+        return (!embedded_first(&item.ext)).then(|| embedded_thumbnail(item, raw, thumb, max)).flatten();
     };
     let meta = thumbnail::spotlight(raw);
     // A PSD's header is the file's own word on its size.
@@ -544,6 +551,12 @@ fn quicklook_thumbnail(item: &mut Item, raw: &Path, thumb: &Path, max: u32) -> O
     item.height = h.into();
     thumbnail::write_thumbnail(img, max, thumb).ok()?;
     Some(Analysis::Thumbnail)
+}
+
+/// Formats whose own preview is tried before QuickLook, which rarely has a
+/// generator for them and can then wait out its whole timeout.
+fn embedded_first(ext: &str) -> bool {
+    matches!(ext, "blend" | "dwg" | "skp" | "indd" | "indt" | "idml" | "sketch" | "xmind")
 }
 
 /// The thumbnail of a file QuickLook can't render, from what the file
