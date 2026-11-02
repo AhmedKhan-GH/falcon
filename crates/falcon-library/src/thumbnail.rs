@@ -480,6 +480,25 @@ pub fn jpeg(img: &DynamicImage, quality: u8) -> Result<Vec<u8>, ThumbError> {
     Ok(out)
 }
 
+/// A page screenshot made ready to save: encoded and its palette taken.
+/// Slow, and needs no library.
+pub struct PageThumbnail {
+    bytes: Vec<u8>,
+    palettes: Vec<crate::model::Palette>,
+}
+
+impl PageThumbnail {
+    /// `img` scaled by [`resize`] to the `url` limit and encoded by
+    /// [`encode`], the encoder [`write_thumbnail`] uses; the palette is taken
+    /// from the scaled image.
+    pub fn draw(img: DynamicImage) -> Result<PageThumbnail, ThumbError> {
+        let img = resize(img, max_side("url"));
+        let bytes = encode(&img)?;
+        let palettes = crate::palette::extract(&img);
+        Ok(PageThumbnail { bytes, palettes })
+    }
+}
+
 impl crate::Library {
     /// Makes the video frame shown at `at` seconds the item's thumbnail, as
     /// Eagle's "Set Current Frame as Thumbnail" does: Eagle regenerates the
@@ -517,6 +536,35 @@ impl crate::Library {
         fs::write(&dest, png).map_err(|e| crate::Error::io(&dest, e))?;
         item.palettes = crate::palette::extract(&img);
         self.update_item(item)
+    }
+
+    /// Saves a page screenshot as a bookmark's thumbnail, through the normal
+    /// thumbnail path: `<name>_thumbnail.png` is written to a temporary
+    /// sibling and renamed into place, `width` and `height` become the page's
+    /// size, the palette is set and `noThumbnail` and `removeThumbnail` are
+    /// cleared. Size, URL, times and tags are untouched, and the item is not
+    /// marked as a custom thumbnail. Returns false, writing nothing, when the
+    /// item is gone or has a custom thumbnail.
+    pub fn set_page_thumbnail(&mut self, id: &str, page: &PageThumbnail, width: u32, height: u32) -> crate::Result<bool> {
+        let Some(mut item) = self.item(id).cloned() else {
+            return Ok(false);
+        };
+        if has_custom_thumbnail(&item) {
+            return Ok(false);
+        }
+        let dest = self.info_dir(&item).join(format!("{}_thumbnail.png", item.name));
+        let tmp = dest.with_file_name(".falcon-page_thumbnail.png");
+        fs::write(&tmp, &page.bytes).map_err(|e| crate::Error::io(&tmp, e))?;
+        if let Err(e) = fs::rename(&tmp, &dest) {
+            let _ = fs::remove_file(&tmp);
+            return Err(crate::Error::io(&dest, e));
+        }
+        item.width = u64::from(width);
+        item.height = u64::from(height);
+        item.palettes = page.palettes.clone();
+        item.no_thumbnail = None;
+        item.remove_thumbnail = None;
+        self.update_item(item).map(|()| true)
     }
 
     /// Makes the image at `image` the item's thumbnail, as Eagle's
