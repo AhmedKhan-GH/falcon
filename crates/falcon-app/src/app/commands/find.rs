@@ -30,8 +30,27 @@ impl App {
     }
 
     /// Shows the filter bar with one filter's menu open.
+    /// Eagle's Date key opens its Date Added filter, so the Date chip
+    /// starts on its Imported tab.
     pub(crate) fn open_filter(&mut self, kind: FilterKind) {
         self.ws.show_filter = true;
+        if kind == FilterKind::Date {
+            self.ws.filter_ui.set_date_tab(0);
+        }
         self.ws.filter_ui.open_chip = Some(kind);
+    }
+
+    /// Eagle's Import Filter key opens its Date Modified filter: the Date
+    /// chip on its Modified tab.
+    pub(crate) fn open_modified_filter(&mut self) {
+        self.ws.show_filter = true;
+        self.ws.filter_ui.show_date_modified();
+        self.ws.filter_ui.open_chip = Some(FilterKind::Date);
+    }
+
+    /// Shows the filter bar with its + menu open.
+    pub(crate) fn open_add_filter_menu(&mut self) {
+        self.ws.show_filter = true;
+        self.ws.filter_ui.open_add_menu = true;
     }
 }

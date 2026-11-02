@@ -495,6 +495,9 @@ impl App {
             C::FilterSidebar => self.focus_filter_sidebar(),
             C::ResetFilter => self.reset_filter(),
             C::OpenFilter(kind) => self.open_filter(kind),
+            C::OpenModifiedFilter => self.open_modified_filter(),
+            C::AddFilterMenu => self.open_add_filter_menu(),
+            C::OpenWithOther => self.open_with_other(),
             C::QuickSwitch | C::QuickSwitchKey => self.quick.toggle(),
             C::FolderPasswordNew | C::FolderPasswordChange | C::FolderPasswordRemove | C::LockFolder => {
                 if let Scope::Folder(id) = &self.ws.scope {

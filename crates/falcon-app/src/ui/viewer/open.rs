@@ -71,6 +71,26 @@ impl App {
         open_with::quick_look(&files);
     }
 
+    /// View ▸ Open With Another App: asks for an app, then opens the
+    /// viewer's item (or the first selected one, as Eagle does) with it.
+    pub(crate) fn open_with_other(&mut self) {
+        let Some(shared) = self.ws.lib.clone() else { return };
+        let file = {
+            let lib = crate::app::lock(&shared);
+            let ids = match &self.ws.viewer {
+                Some(id) => std::slice::from_ref(id),
+                None => self.ws.selected.get(..1).unwrap_or_default(),
+            };
+            originals(&lib, ids).into_iter().next()
+        };
+        let Some(file) = file else { return };
+        let picked = rfd::FileDialog::new().set_title(tr("Choose an App to Open With")).set_directory("/Applications").add_filter(tr("Applications"), &["app"]).pick_file();
+        if let Some(app) = picked {
+            open_with::open_in(&app, std::slice::from_ref(&file));
+            self.used(&[file]);
+        }
+    }
+
     pub(crate) fn open_keys(&mut self, default: bool) {
         let Some(shared) = self.ws.lib.clone() else { return };
         let files = {

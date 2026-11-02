@@ -239,7 +239,8 @@ impl App {
             }
         }
         self.reorder_chips(ui, &drawn);
-        self.add_filter_button(ui, lib);
+        let open_add = std::mem::take(&mut self.ws.filter_ui.open_add_menu);
+        self.add_filter_button(ui, lib, open_add);
 
         if self.ws.filter.is_active() {
             let clear = ui.add(egui::Button::new(RichText::new(format!("{}  {}", ic::X, tr("Clear"))).color(t::p().text_muted)).frame(false));
@@ -260,8 +261,11 @@ impl App {
 
     /// The + button: every filter the library can use, each with a pin
     /// that keeps it in the bar; clicking a name opens that filter.
-    fn add_filter_button(&mut self, ui: &mut Ui, lib: &Library) {
+    fn add_filter_button(&mut self, ui: &mut Ui, lib: &Library, open: bool) {
         let resp = ui.add(egui::Button::new(RichText::new(ic::PLUS).color(t::p().text_muted)).frame(false)).on_hover_text(tr("Add a filter to the bar"));
+        if open {
+            egui::Popup::open_id(ui.ctx(), egui::Popup::default_response_id(&resp));
+        }
         egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
             crate::ui::menus::search::show(ui, |ui| {
                 ui.set_min_width(200.0);

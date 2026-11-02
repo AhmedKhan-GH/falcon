@@ -23,6 +23,8 @@ pub(crate) struct MediaFilterUi {
     /// A chip shown because its menu was opened from the + menu or a key,
     /// though it is not pinned; it goes when the menu closes.
     pub(crate) showing: Option<crate::search_state::FilterKind>,
+    /// The + menu should open next frame (Find ▸ More Filters and its key).
+    pub(crate) open_add_menu: bool,
     /// A chip the primary button went down on, and where; becomes a drag
     /// after the pointer moves (see `reorder.rs`).
     pub(crate) press: Option<(crate::search_state::FilterKind, eframe::egui::Pos2)>,
@@ -68,6 +70,21 @@ impl MediaFilterUi {
     /// or deactivated a font).
     pub(crate) fn forget_font_keys(&mut self) {
         self.font_keys = None;
+    }
+}
+
+/// Where the Modified tab is in `DATE_TABS`.
+const DATE_TAB_MODIFIED: usize = 1;
+
+impl MediaFilterUi {
+    /// Selects one of the Date chip's tabs by index in `DATE_TABS`.
+    pub(crate) fn set_date_tab(&mut self, tab: usize) {
+        self.date_tab = tab.min(2);
+    }
+
+    /// Selects the Date chip's Modified tab.
+    pub(crate) fn show_date_modified(&mut self) {
+        self.date_tab = DATE_TAB_MODIFIED;
     }
 }
 
@@ -365,7 +382,7 @@ impl App {
     /// Lock and any menu being opened.
     pub(crate) fn clear_media_filter_text(&mut self) {
         let old = std::mem::take(&mut self.ws.filter_ui);
-        self.ws.filter_ui = MediaFilterUi { font_keys: old.font_keys, locked: old.locked, open_chip: old.open_chip, showing: old.showing, ..Default::default() };
+        self.ws.filter_ui = MediaFilterUi { font_keys: old.font_keys, locked: old.locked, open_chip: old.open_chip, open_add_menu: old.open_add_menu, showing: old.showing, ..Default::default() };
     }
 
     /// Refills the typed fields from the filter after a saved filter
@@ -677,5 +694,16 @@ mod tests {
         assert_eq!(shape_summary(&none, Some((2.35, 1.0))).as_deref(), Some("2.35:1"));
         assert_eq!(shape_summary(&two, Some((4.0, 3.0))).as_deref(), Some("Horizontal, 16:9, 4:3"));
         assert_eq!(shape_label(Shape::PanoramicPortrait), "Panoramic Vertical");
+    }
+
+    #[test]
+    fn date_tab_shortcuts_pick_the_right_field() {
+        let mut ui = MediaFilterUi::default();
+        ui.show_date_modified();
+        assert_eq!(DATE_TABS[ui.date_tab].0, DateField::Modified);
+        ui.set_date_tab(0);
+        assert_eq!(DATE_TABS[ui.date_tab].0, DateField::Imported);
+        ui.set_date_tab(9);
+        assert_eq!(DATE_TABS[ui.date_tab].0, DateField::Created);
     }
 }

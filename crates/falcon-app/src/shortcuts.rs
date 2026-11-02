@@ -181,6 +181,14 @@ pub enum Command {
     ResetFilter,
     /// Opens one filter of the filter bar.
     OpenFilter(crate::search_state::FilterKind),
+    /// Opens the Date chip on its Modified tab (Eagle's `find.filter.import`,
+    /// which opens its Date Modified filter).
+    OpenModifiedFilter,
+    /// Shows the filter bar with the + menu open (Eagle's `find.filter.other`).
+    AddFilterMenu,
+    /// View ▸ Open With Another App: choose an app for the item
+    /// (`view.file.openother`, unbound; Eagle's pane lists it on Windows only).
+    OpenWithOther,
     /// Go to Folder (Eagle's ⌘J) and its bare J.
     QuickSwitch,
     QuickSwitchKey,
@@ -360,6 +368,7 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::LayoutGrid, id: "view.layout.grid", group: "View", label: "Grid layout", default: k(ALT, Key::Num3), aliases: &[] },
     Spec { cmd: Command::LayoutList, id: "view.layout.list", group: "View", label: "List layout", default: k(ALT, Key::Num4), aliases: &[] },
     Spec { cmd: Command::OpenDefault, id: "view.file.opendefault", group: "View", label: "Open in the default app", default: k(SHIFT, Key::Enter), aliases: &[] },
+    Spec { cmd: Command::OpenWithOther, id: "view.file.openother", group: "View", label: "Open with another app", default: None, aliases: &[] },
     Spec { cmd: Command::RevealInFinder, id: "view.file.openfinder", group: "View", label: "Show in Finder", default: k(CMD, Key::Enter), aliases: &[] },
     Spec { cmd: Command::OpenLink, id: "view.file.openlink", group: "View", label: "Open the source link", default: k(CMD_SHIFT, Key::O), aliases: &[] },
     // Eagle lists these two on macOS with defaults only (nothing in its bundle reads them);
@@ -394,6 +403,8 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::OpenFilter(crate::search_state::FilterKind::Bpm), id: "find.filter.bpm", group: "Find", label: "Open the BPM filter", default: None, aliases: &[] },
     Spec { cmd: Command::OpenFilter(crate::search_state::FilterKind::Camera), id: "find.filter.camera", group: "Find", label: "Open the camera filter", default: None, aliases: &[] },
     Spec { cmd: Command::OpenFilter(crate::search_state::FilterKind::Font), id: "find.filter.fonts", group: "Find", label: "Open the font filter", default: None, aliases: &[] },
+    Spec { cmd: Command::OpenModifiedFilter, id: "find.filter.import", group: "Find", label: "Open the modified date filter", default: None, aliases: &[] },
+    Spec { cmd: Command::AddFilterMenu, id: "find.filter.other", group: "Find", label: "Open the add-filter menu", default: None, aliases: &[] },
     Spec { cmd: Command::SelectAll, id: "edit.select.all", group: "Edit", label: "Select all", default: k(CMD, Key::A), aliases: &[] },
     Spec { cmd: Command::Rename, id: "edit.rename.darwin", group: "Edit", label: "Rename the selected item", default: k(CMD, Key::R), aliases: &[KeyboardShortcut::new(NONE, Key::F2)] },
     Spec { cmd: Command::Copy, id: "edit.copy", group: "Edit", label: "Copy the selected files", default: k(CMD, Key::C), aliases: &[] },
@@ -1133,6 +1144,20 @@ mod tests {
     }
 
     #[test]
+    fn filter_commands_have_unbound_rows() {
+        for (id, cmd) in [("find.filter.import", Command::OpenModifiedFilter), ("find.filter.other", Command::AddFilterMenu), ("view.file.openother", Command::OpenWithOther)] {
+            let s = TABLE.iter().find(|s| s.id == id).unwrap_or_else(|| panic!("{id} has no row"));
+            assert_eq!(s.cmd, cmd);
+            assert!(s.default.is_none(), "{id} is unbound in Eagle");
+            // Bound to a free key, the command resolves.
+            let keys: Shortcuts = serde_json::from_str(&format!(r#"{{"{id}":"Alt + 9"}}"#)).unwrap();
+            assert_eq!(keys.resolve(Key::Num9, Modifiers::ALT), Some(cmd));
+        }
+        // Eagle's image filter needs its AI Search plugin: no row.
+        assert!(TABLE.iter().all(|s| s.id != "find.filter.image"));
+    }
+
+    #[test]
     fn shortcut_search() {
         let hits = |q: &str| TABLE.iter().filter(|s| listed(q, s, &s.default.map(|c| format(&c)).unwrap_or_default())).map(|s| s.cmd).collect::<Vec<_>>();
         assert_eq!(hits(""), TABLE.iter().map(|s| s.cmd).collect::<Vec<_>>());
@@ -1324,8 +1349,8 @@ mod tests {
     /// Eagle's macOS keybind ids that falcon has an action for, with
     /// Eagle's default (empty is unbound). Ids falcon lacks an action for
     /// (link and site importers, reverse image search, image merge (the
-    /// Combine Images plugin), the import-date and image-search filters,
-    /// the add-filter menu, Open With Other App) are not listed.
+    /// Combine Images plugin) and the image-search filter, which needs
+    /// Eagle's AI Search plugin, are not listed.
     const EAGLE_IDS: &[(&str, &str)] = &[
         ("global.show.eagle", ""),
         ("global.show.search", ""),
@@ -1392,6 +1417,8 @@ mod tests {
         ("find.filter.bpm", ""),
         ("find.filter.camera", ""),
         ("find.filter.fonts", ""),
+        ("find.filter.import", ""),
+        ("find.filter.other", ""),
         ("find.quicksearch", "Command + J"),
         ("find.add.to", "Command + Shift + J"),
         ("organize.folder.addLast", "Shift + D"),
@@ -1412,6 +1439,7 @@ mod tests {
         ("view.zoom.fit", "Command + 9"),
         ("view.file.openlink", "Command + Shift + O"),
         ("view.file.opendefault", "Shift + Enter"),
+        ("view.file.openother", ""),
         ("view.file.openfinder", "Command + Enter"),
         ("view.file.opennewwindow", "Command + O"),
         ("view.reveal.darwin", "Command + Alt + S"),
