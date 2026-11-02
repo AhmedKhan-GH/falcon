@@ -16,7 +16,7 @@ use eframe::egui::{self, Rect};
 /// What an item opens in the web viewer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Page {
-    /// A web address (`.url` and `.webloc` bookmarks).
+    /// A web address (`.url` bookmarks).
     Remote(String),
     /// A local HTML file, read from its own folder.
     Local(PathBuf),
@@ -27,7 +27,7 @@ pub enum Page {
 
 /// Whether the web viewer shows items of this extension.
 pub fn is_web(ext: &str) -> bool {
-    matches!(ext.to_lowercase().as_str(), "url" | "webloc" | "html" | "htm" | "mhtml" | "mht")
+    matches!(ext.to_lowercase().as_str(), "url" | "html" | "htm" | "mhtml" | "mht")
 }
 
 /// Whether `url` is an http or https address, the only kind a bookmark
@@ -45,7 +45,7 @@ pub fn is_web_address(url: &str) -> bool {
 /// (older imports didn't store it); HTML opens the file itself.
 pub fn page_for(ext: &str, url: &str, file: &Path) -> Option<Page> {
     match ext.to_lowercase().as_str() {
-        "url" | "webloc" => {
+        "url" => {
             let url = Some(url.trim().to_string()).filter(|u| !u.is_empty()).or_else(|| falcon_library::weblink::read(file));
             Some(match url {
                 Some(u) if is_web_address(&u) => Page::Remote(u.trim().to_string()),
@@ -488,10 +488,10 @@ mod tests {
 
     #[test]
     fn web_extensions() {
-        for e in ["url", "WEBLOC", "html", "htm", "mhtml", "mht"] {
+        for e in ["url", "URL", "html", "htm", "mhtml", "mht"] {
             assert!(is_web(e), "{e}");
         }
-        assert!(!is_web("txt") && !is_web("pdf"));
+        assert!(!is_web("txt") && !is_web("pdf") && !is_web("webloc"));
     }
 
     #[test]
@@ -514,7 +514,8 @@ mod tests {
         assert_eq!(page_for("url", "https://stored.example/", &file), Some(Page::Remote("https://stored.example/".into())));
         assert_eq!(page_for("url", " ", &file), Some(Page::Remote("https://example.com/from-file".into())));
         // Not a web address: a still, keeping the address for Copy.
-        assert_eq!(page_for("webloc", "file:///tmp/x", &file), Some(Page::Still { url: Some("file:///tmp/x".into()) }));
+        assert_eq!(page_for("url", "file:///tmp/x", &file), Some(Page::Still { url: Some("file:///tmp/x".into()) }));
+        assert_eq!(page_for("webloc", "https://example.com/", &file), None);
         let missing = dir.path().join("none.url");
         assert_eq!(page_for("url", "", &missing), Some(Page::Still { url: None }));
         let html = dir.path().join("p.html");

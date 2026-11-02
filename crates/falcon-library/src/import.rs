@@ -557,7 +557,7 @@ fn ffmpeg_thumbnail(item: &mut Item, raw: &Path, thumb: &Path) -> Option<Analysi
 /// in the order Eagle assigns them: `rawMetas` for RAW photos,
 /// `resolutionWidth`, `resolutionHeight` and `duration` for video,
 /// `duration` then `bpm` (when a beat is found) for audio, and `fontMetas`
-/// for fonts. A `.url` or `.webloc` file's address becomes the item's URL so
+/// for fonts. A `.url` file's address becomes the item's URL so
 /// the viewer can open it; a URL given in the options wins.
 fn file_metadata(item: &mut Item, raw: &Path, opts: &ImportOptions) {
     let ext = item.ext.clone();
@@ -710,8 +710,8 @@ mod tests {
         let none = ImportOptions::default();
         let url = metadata_only("go.url", b"[InternetShortcut]\r\nURL=https://example.com/a\r\n", &none);
         assert_eq!(url.url, "https://example.com/a");
-        let xml = b"<plist><dict><key>URL</key><string>https://example.com/w?a=1&amp;b=2</string></dict></plist>";
-        assert_eq!(metadata_only("go.webloc", xml, &none).url, "https://example.com/w?a=1&b=2");
+        let xml = b"<plist><dict><key>URL</key><string>https://example.com/w</string></dict></plist>";
+        assert_eq!(metadata_only("go.webloc", xml, &none).url, "", "a .webloc is a plain item, as in Eagle");
         assert_eq!(metadata_only("empty.url", b"[InternetShortcut]\n", &none).url, "");
         assert_eq!(metadata_only("note.txt", b"[InternetShortcut]\nURL=https://example.com/\n", &none).url, "");
 

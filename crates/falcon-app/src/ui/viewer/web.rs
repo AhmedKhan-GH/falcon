@@ -1,4 +1,4 @@
-//! The viewer for web pages (`.url` and `.webloc` bookmarks, `.html`,
+//! The viewer for web pages (`.url` bookmarks, `.html`,
 //! `.mhtml`), after Eagle's web view: on macOS the page itself, live in a
 //! `WKWebView` (see `crate::webview`), with back, forward, reload, Copy URL
 //! and Open in Browser in the bar. MHTML archives, bookmarks that don't
@@ -46,7 +46,7 @@ impl App {
         // app (a browser); an MHTML archive opens in its own app.
         let (open_tip, can_open) = match &page {
             Page::Local(_) => (tr("Open in Browser"), true),
-            Page::Still { .. } if !matches!(item.ext.to_lowercase().as_str(), "url" | "webloc") => (tr("Open in Default App"), true),
+            Page::Still { .. } if !item.ext.eq_ignore_ascii_case("url") => (tr("Open in Default App"), true),
             _ => (tr("Open in Browser"), url.as_deref().is_some_and(is_web_address)),
         };
         if icon_button(ui, Pos2::new(right - 13.0, cy), ic::GLOBE, 16.0, can_open, open_tip).clicked() {
@@ -100,10 +100,10 @@ impl App {
             self.ws.frame_jobs.insert(0, j);
         }
         let note = match page {
-            Page::Still { url: Some(u) } if matches!(item.ext.to_lowercase().as_str(), "url" | "webloc") && !is_web_address(u) => {
+            Page::Still { url: Some(u) } if item.ext.eq_ignore_ascii_case("url") && !is_web_address(u) => {
                 tr("This link isn't a web address, so it isn't opened here.")
             }
-            Page::Still { url: None } if matches!(item.ext.to_lowercase().as_str(), "url" | "webloc") => tr("This bookmark has no address."),
+            Page::Still { url: None } if item.ext.eq_ignore_ascii_case("url") => tr("This bookmark has no address."),
             Page::Still { .. } => tr("Web archives are shown as a picture. Open it in its own app to browse it."),
             _ => tr("Pages are shown as a picture on this system. Open it in the browser to browse it."),
         };

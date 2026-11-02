@@ -87,7 +87,7 @@ Status: **Done** works as well as Eagle or better. **Partial** opens, but someth
 
 ## Already in falcon beyond Eagle's set
 
-- **Other files:** `.webloc` links, Inboard libraries and single Pixave items import.
+- **Other files:** Inboard libraries and single Pixave items import.
 
 ## Possible later additions (not planned)
 
