@@ -1,6 +1,6 @@
 # Actions
 
-An action is a named list of organising steps (add or remove tags, add to or remove from folders, set a rating) with an optional shortcut. Running it applies every step to the selected items. Each library has its own actions.
+An action is a named list of organising steps (add or remove tags, add to or remove from folders, set a rating) with an optional shortcut. Running it applies every step to the selected items. Each library has its own actions. In Eagle 4.0.0 this is a plugin (`ai-action`); falcon builds it in and keeps the actions in its own app data.
 
 ## What Eagle does
 
@@ -17,11 +17,11 @@ These findings come from Eagle 4.0.0's application bundle. The file and the byte
 
 ## What falcon does
 
-Falcon runs actions itself. It keeps them where Eagle 4.0.0 looks for them, `actions.config.json` in the library, and uses Eagle's earlier rule types as its steps.
+Falcon runs actions itself, with Eagle's earlier rule types as its steps. It keeps them in falcon's own app data, not in the library, and never reads, creates, changes or deletes the library's `actions.config.json`, which belongs to Eagle's AI Action plugin. Actions made in Eagle's plugin don't appear in falcon, and falcon's don't appear in Eagle.
 
 | Entry point | Behaviour |
 |---|---|
-| Actions menu | Between View and Window, only while the library has actions. Each item shows the action's shortcut. It is enabled when items are selected (or one is in the viewer), outside the Trash, and when falcon can run the action |
+| Actions menu | Between View and Window, only while falcon has actions for the open library. Each item shows the action's shortcut. It is enabled when items are selected (or one is in the viewer), outside the Trash, and when falcon can run the action |
 | Toolbar button | The lightning button left of the layout button opens the Actions panel under it. Hidden on the All Tags page, as in Eagle |
 | G | Opens the Actions panel (`organize.actions.panel`, rebindable under Preferences → Shortcuts) |
 | An action's shortcut | Runs it on the selection when no text field or dialog has the keys. The modifiers must match exactly, as with Eagle's menu accelerators |
@@ -44,15 +44,25 @@ Preferences → Shortcuts lists the open library's actions and their keys in an 
 - The whole run is one undo step, named "Run *name*". The notice after it says how many items changed and has an Undo button.
 - Adding tags puts them at the front of the tag history, as the tag picker does. Adding to a folder also adds that folder's auto-tags. A folder that no longer exists is skipped, and the notice names how many were skipped. A failed write stops the run at that point. The steps already done stay in the same undo step.
 
-### Entries written by Eagle
+### Entries falcon can't run
 
-Falcon keeps every entry exactly as it read it. An entry that has fields other than `id`, `name`, `shortcut` and `steps`, or steps falcon doesn't know, is taken to be the AI Action plugin's. It is listed greyed in the panel and the menu, its shortcut is still reserved, and it can be removed. It can't be run, edited or duplicated in falcon. Saving another action leaves these entries byte for byte as they were.
+Falcon keeps every entry exactly as it read it. An entry that has fields other than `id`, `name`, `shortcut` and `steps`, or steps falcon doesn't know (written by a newer falcon, or edited by hand), is listed greyed in the panel and the menu with the note "This action has steps Falcon can't run". Its shortcut is still reserved, and it can be removed. It can't be run, edited or duplicated. Saving another action leaves these entries byte for byte as they were.
 
-## Storage format
+## Storage
 
-`actions.config.json` is a JSON array at the library root. Falcon writes it only after an edit, atomically (a temp file in the library, then a rename), compact like Eagle's other library files. If the file it replaces was indented, falcon keeps the indentation (two spaces). If the file can't be read, falcon lists nothing and refuses to write over it. Before an edit, falcon reads the file again if its modification time has changed. While a library is open, falcon also checks the file every 4 seconds, so actions saved by Eagle show up.
+Falcon keeps each library's actions in one file in its app data folder:
 
-Each falcon entry:
+```
+~/Library/Application Support/Falcon/actions/<key>.json
+```
+
+The folder is `eframe::storage_dir("Falcon")`, the same app data folder that holds falcon's saved state and its `eagle-backup/` copies. `<key>` names the library. Eagle's `metadata.json` carries no library id, so the key is the 64-bit FNV-1a hash of the library's canonical path (symlinks resolved, no trailing slash) as 16 lowercase hex digits (`falcon_library::actions::library_key`). Reopening the same library finds its actions again; two libraries never share a file. A library that is moved or renamed has a new path, so it starts with no actions; its old file stays in the folder.
+
+Falcon writes the file only after an edit, atomically: a temp file in the same `actions/` folder, then a rename, so a failed write leaves the old file whole and no partial file behind. It is compact, or indented with two spaces when the file it replaces was. If the file can't be read, falcon lists nothing and refuses to write over it. Falcon is the only program that writes the file, so it reads it when a library opens or becomes the active one and keeps it in memory between edits; there is no polling.
+
+Nothing in the Actions code touches the library folder. The tests in `crates/falcon-app/src/actions/storage_tests.rs` open libraries that hold an `actions.config.json` with known bytes and modification time, then create, edit, run and delete actions, switch libraries and run the quit flush. They check that the file's bytes and modification time are unchanged, that no file appeared beside it, that the actions landed in the app data folder, and that two libraries don't see each other's actions.
+
+The file is a JSON array. Each falcon entry:
 
 | Key | Type | Meaning |
 |---|---|---|
@@ -83,6 +93,6 @@ A sample, which the tests in `crates/falcon-library/src/actions.rs` read and wri
 
 ## Code
 
-- `crates/falcon-library/src/actions.rs`: the file (`ActionsFile`, which keeps each entry's JSON), the steps (`Step`), and `Library::run_steps`.
-- `crates/falcon-app/src/actions/`: `mod.rs` holds `ActionsState` (follows the open library, polls the file, finds shortcut conflicts), `app.rs` runs actions and routes the menu and the keys, `panel.rs` draws the panel and `editor.rs` the editor. A run goes through the reducer as `Action::RunSteps`, so it lands in the frame's undo step.
+- `crates/falcon-library/src/actions.rs`: the file (`ActionsFile`, which keeps each entry's JSON), its place (`library_key`, `store_path`), the steps (`Step`), and `Library::run_steps`.
+- `crates/falcon-app/src/actions/`: `mod.rs` holds `ActionsState` (follows the open library, reads and writes its file in `store_dir()`, finds shortcut conflicts), `app.rs` runs actions and routes the menu and the keys, `panel.rs` draws the panel and `editor.rs` the editor. A run goes through the reducer as `Action::RunSteps`, so it lands in the frame's undo step.
 - `crates/falcon-app/src/menu.rs`: `ActionEntry`, `action_enabled` and the AppKit Actions menu.

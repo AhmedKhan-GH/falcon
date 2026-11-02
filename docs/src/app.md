@@ -403,7 +403,7 @@ On macOS falcon has a native menu bar, built with AppKit in `crates/falcon-app/s
 | Find | Search, Search All, Filter Sidebar, Go to Folder…, Add to Folders… (⇧⌘J), then Filter Bar, Clear Filter and an Open Filter ▸ submenu (Color, Tags, Folders, Shape, Rating, Type, Date, Dimensions, Size, Duration, Comment, Notes, URL, Font, BPM, Camera), then Find Duplicates |
 | Organize | Add Tags…, Add to Last Used Folder, No Rating, 1 Star … 5 Stars, Copy Tags, Paste Tags, Clear Tags |
 | View | Always on Top; All Items, Uncategorized, Untagged, Recently Used, Random, All Tags, Trash; Waterfall, Justified, Grid, List; Show Name, Show Item Info, Show Comment Count, Show Subfolder Content; Scroll to Top, Scroll to Bottom, Page Up, Page Down, First Item, Last Item; Zoom In, Zoom Out, Actual Size, Zoom to Fit, Grayscale, Navigator; Viewer, Open in New Window, Open With Default App, Reveal in Finder, Open Link in Browser; Sidebar, Inspector, Show or Hide Both Panels, Presentation Mode; Back, Forward, Parent Folder, Shuffle Again, Expand or Collapse All Folders |
-| Actions | The library's actions, each with its shortcut; shown only while the library has actions, as in Eagle (see [Actions](actions.md)) |
+| Actions | Falcon's actions for the open library, each with its shortcut; shown only while there are any, as in Eagle, where Actions is a plugin (see [Actions](actions.md)) |
 | Window | Minimize, Zoom, Full Screen, Collect Window, Next Library, Previous Library, Close Window, then macOS's window list |
 | Help | Falcon Documentation (the book in `docs/`, built or not, when falcon runs from its source tree; disabled otherwise), Error Logs, Export Debug Report… |
 
