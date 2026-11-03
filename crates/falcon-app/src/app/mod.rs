@@ -21,6 +21,7 @@ pub(crate) mod image_edit;
 pub(crate) mod import;
 pub(crate) mod library;
 pub(crate) mod long_ops;
+pub(crate) mod mcp;
 pub(crate) mod modal;
 pub(crate) mod navigation;
 pub(crate) mod open_queue;
@@ -49,6 +50,7 @@ pub struct App {
     pub(crate) open_switcher: bool,
     /// The local HTTP API for the shown library, as Eagle runs it.
     pub(crate) server: Option<falcon_server::Handle>,
+    pub(crate) mcp: mcp::McpState,
     pub(crate) ctx: egui::Context,
     pub(crate) error: Option<String>,
     pub(crate) tile: f32,
@@ -235,6 +237,7 @@ impl App {
             title: String::new(),
             open_switcher: false,
             server: None,
+            mcp: Default::default(),
             ctx: cc.egui_ctx.clone(),
             error: None,
             tile: 139.0,
@@ -475,6 +478,7 @@ impl App {
         }
         self.follow_api_switch();
         self.follow_api_preferences();
+        self.take_mcp_undo();
         self.poll_loading();
         self.pump_opens();
         // Links and files opened with falcon wait while the launch's

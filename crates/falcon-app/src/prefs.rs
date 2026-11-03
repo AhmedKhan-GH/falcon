@@ -14,6 +14,8 @@ use crate::logic::Scope;
 use crate::shortcuts::{Recorder, Shortcuts};
 use crate::theme::{self as t, Theme, font};
 
+pub mod mcp;
+
 /// Eagle's own API port, which falcon must never take.
 pub const EAGLE_PORT: u16 = 41595;
 /// How many ports falcon tries, from the first one up.
@@ -59,6 +61,14 @@ pub struct Prefs {
     /// Empty means token auth is off and the API serves only requests whose
     /// Host is its own address.
     pub api_token: String,
+    /// Run the MCP server while a library is open. Off by default.
+    pub mcp_enabled: bool,
+    /// The first port the MCP server tries.
+    pub mcp_port: u16,
+    /// Let the MCP server's clients change the library. Off by default.
+    pub mcp_writes: bool,
+    /// Ask MCP clients for `api_token`.
+    pub mcp_require_token: bool,
     /// Eagle's `general.showCollectModal`, which falcon only keeps for the
     /// API: `preferences/collect/on` and `off` set it, and
     /// `application/info` reports it.
@@ -317,6 +327,10 @@ impl Default for Prefs {
             api_enabled: true,
             api_port: falcon_server::DEFAULT_PORT,
             api_token: String::new(),
+            mcp_enabled: false,
+            mcp_port: falcon_server::mcp::DEFAULT_PORT,
+            mcp_writes: false,
+            mcp_require_token: false,
             show_collect_modal: false,
             collect_folder: None,
             collect_folders: Vec::new(),
@@ -384,6 +398,9 @@ impl Prefs {
     pub fn sanitized(mut self) -> Self {
         if port_error(self.api_port).is_some() {
             self.api_port = Prefs::default().api_port;
+        }
+        if mcp::mcp_port_error(self.mcp_port).is_some() {
+            self.mcp_port = Prefs::default().mcp_port;
         }
         // A token is never made here. One that is only whitespace is empty;
         // any other is kept, so tokens made by earlier versions survive.
@@ -651,11 +668,12 @@ pub enum Section {
     Notification,
     Password,
     AutoImport,
+    Mcp,
     Developer,
 }
 
 impl Section {
-    pub const ALL: [Section; 10] = [
+    pub const ALL: [Section; 11] = [
         Section::General,
         Section::Sidebar,
         Section::Controls,
@@ -665,6 +683,7 @@ impl Section {
         Section::Notification,
         Section::Password,
         Section::AutoImport,
+        Section::Mcp,
         Section::Developer,
     ];
 
@@ -680,6 +699,7 @@ impl Section {
             Section::Notification => tr_key("Notification"),
             Section::Password => tr_key("Password"),
             Section::AutoImport => tr_key("Auto-Import"),
+            Section::Mcp => tr_key("Eagle MCP"),
             Section::Developer => tr_key("Developer"),
         }
     }
@@ -695,6 +715,7 @@ impl Section {
             Section::Notification => crate::icons::BELL,
             Section::Password => crate::icons::LOCK_SIMPLE,
             Section::AutoImport => crate::icons::TRAY_ARROW_DOWN,
+            Section::Mcp => crate::icons::CHAT_CIRCLE,
             Section::Developer => crate::icons::CODE,
         }
     }
@@ -706,7 +727,8 @@ impl Section {
             Section::General | Section::Sidebar => 0,
             Section::Controls | Section::Preview | Section::Screenshot | Section::Shortcuts => 1,
             Section::Notification | Section::Password | Section::AutoImport => 2,
-            Section::Developer => 3,
+            Section::Mcp => 3,
+            Section::Developer => 4,
         }
     }
 }
@@ -731,6 +753,9 @@ pub struct Window {
     query: String,
     draft: Option<Draft>,
     port_text: String,
+    mcp_port_text: String,
+    /// What the MCP server is doing now, for its pane.
+    pub mcp_status: mcp::Status,
     recorder: Recorder,
     password: PasswordForm,
     /// The theme and interface size last saved or applied; previewed
@@ -805,6 +830,7 @@ impl Window {
     pub fn show_with(&mut self, draft: Draft) {
         self.login = crate::login_item::status();
         self.port_text = draft.prefs.api_port.to_string();
+        self.mcp_port_text = draft.prefs.mcp_port.to_string();
         self.applied_theme = draft.prefs.theme;
         self.applied_zoom = draft.prefs.ui_zoom;
         self.applied_language = draft.prefs.language;
@@ -900,6 +926,7 @@ impl Window {
             builder = builder.with_position(at);
         }
         let port = parse_port(&self.port_text);
+        let mcp_port = mcp::parse_mcp_port(&self.mcp_port_text);
         let mut result = None;
         let mut close = false;
         ctx.show_viewport_immediate(id, builder, |ui, _class| {
@@ -964,14 +991,16 @@ impl Window {
 
             ui.painter().hline(footer.x_range(), footer.top(), Stroke::new(1.0, t::p().divider));
             let mut f = ui.new_child(egui::UiBuilder::new().max_rect(footer.shrink2(vec2(16.0, 10.0))).layout(egui::Layout::right_to_left(egui::Align::Center)));
-            let valid = port.is_ok();
+            let valid = port.is_ok() && mcp_port.is_ok();
             let save = f.add_enabled(valid, egui::Button::new(RichText::new(tr("Save")).color(Color32::WHITE)).fill(t::p().primary)).clicked();
             let apply = f.add_enabled(valid, egui::Button::new(tr("Apply"))).clicked();
             close |= f.button(tr("Cancel")).clicked();
             if (save || apply || (save_key && valid))
                 && let Ok(p) = port
+                && let Ok(m) = mcp_port
             {
                 draft.prefs.api_port = p;
+                draft.prefs.mcp_port = m;
                 self.applied_theme = draft.prefs.theme;
                 self.applied_zoom = draft.prefs.ui_zoom;
                 self.applied_language = draft.prefs.language;
@@ -1004,6 +1033,7 @@ impl Window {
             Section::Notification => notification(p, d),
             Section::Password => password(p, d, &mut self.password),
             Section::AutoImport => auto_import(p, d, self.library.as_deref(), &mut self.auto_import_note),
+            Section::Mcp => mcp::pane(p, d, &mut self.mcp_port_text, self.mcp_status),
             Section::Developer => developer(p, d, &mut self.port_text, port_error),
         }
     }
@@ -1866,7 +1896,7 @@ mod tests {
     #[test]
     fn panes_follow_eagles_order() {
         let labels: Vec<_> = Section::ALL.iter().map(|s| s.label()).collect();
-        assert_eq!(labels, ["General", "Sidebar", "Controls", "Preview", "Screenshot", "Shortcuts", "Notification", "Password", "Auto-Import", "Developer"]);
+        assert_eq!(labels, ["General", "Sidebar", "Controls", "Preview", "Screenshot", "Shortcuts", "Notification", "Password", "Auto-Import", "Eagle MCP", "Developer"]);
         let groups: Vec<_> = Section::ALL.iter().map(|s| s.group()).collect();
         assert!(groups.windows(2).all(|w| w[0] <= w[1]), "groups are contiguous");
         let s: Section = serde_json::from_str(r#""preview""#).unwrap();

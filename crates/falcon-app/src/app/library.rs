@@ -174,6 +174,7 @@ impl App {
             (None, Some(_)) => self.start_server(),
             (_, None) => self.server = None,
         }
+        self.follow_mcp();
     }
 
     /// `library/switch` over the API replaces the library inside the shown
@@ -282,6 +283,7 @@ impl App {
         let panels = crate::prefs::Panels { sidebar: self.show_sidebar, inspector: self.show_inspector };
         self.prefs_window.show_with(crate::prefs::Draft { prefs: self.prefs.clone(), panels, keys: self.shortcuts.clone(), launch_at_login: crate::login_item::status().is_on() });
         self.prefs_window.library = self.ws.root.clone();
+        self.show_mcp_status();
     }
 
     /// Whether menus and boxes are translucent: as being edited in
@@ -332,6 +334,7 @@ impl App {
         // A folder refused before is checked again.
         self.auto_import.refused = None;
         self.share_with_server();
+        self.follow_mcp();
         if restart {
             self.start_server();
             if self.ws.lib.is_some() && !self.prefs.api_enabled {
