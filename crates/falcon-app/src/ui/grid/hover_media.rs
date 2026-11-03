@@ -8,7 +8,7 @@ use falcon_library::model::Item;
 
 use crate::app::App;
 use crate::locale::tr;
-use crate::hover_media::{self as hm, Strip};
+use crate::hover_media::{self as hm, Preview};
 use crate::logic::{self, Layout};
 use crate::theme::{self as t, mono};
 
@@ -79,48 +79,52 @@ impl App {
         }
     }
 
-    /// Eagle's video hover preview: after half a second the card plays,
-    /// silently and looping; moving the pointer across it scrubs, and it
-    /// plays on from there once the pointer rests. A progress bar runs
-    /// along the bottom and the time shows for a moment after each move.
+    /// Eagle's video hover preview: after a quarter of a second the card
+    /// plays the file, looping, with the remembered mute; moving the pointer
+    /// across it scrubs, and it plays on from there once the pointer rests.
+    /// A progress bar runs along the bottom and the time shows for a moment
+    /// after each move.
     fn video_hover(&mut self, ui: &Ui, lib: &Library, item: &Item, pic: Rect) {
         let ctx = ui.ctx().clone();
         let frame = ctx.cumulative_frame_nr();
-        let (now, dt) = ctx.input(|i| (i.time, f64::from(i.stable_dt.min(0.1))));
+        let now = ctx.input(|i| i.time);
         let gray = self.modes.grayscale;
         let pointer = ctx.input(|i| i.pointer.hover_pos()).filter(|p| pic.contains(*p));
+        let (muted, volume) = (self.display.video_muted, self.video.volume);
         let v = self.hover_media.video_for(&item.id, now, frame);
         if !v.warm(now) {
             ctx.request_repaint_after(std::time::Duration::from_secs_f64(hm::VIDEO_DELAY - (now - v.since)));
             return;
         }
-        if v.strip.as_ref().is_some_and(|s| s.gray() != gray) {
-            v.strip = None;
-        }
-        if v.strip.is_none() {
+        if v.preview.is_none() {
             let path = item.original_path(lib.root());
             // An original still in iCloud isn't downloaded for a preview.
             if crate::icloud::is_dataless(&path) {
                 return;
             }
-            let side = ((pic.size().max_elem() * ctx.pixels_per_point()).ceil() as u32).clamp(64, hm::STRIP_MAX_SIDE);
-            v.strip = Some(Strip::start(&ctx, path, side, gray));
-            v.moved_at = now;
+            let side = hm::frame_side(pic.size().max_elem() * ctx.pixels_per_point());
+            v.preview = Some(Preview::start(&ctx, path, side));
         }
-        let Some(strip) = v.strip.as_mut() else { return };
-        strip.poll(&ctx);
-        if strip.failed {
+        let Some(preview) = v.preview.as_mut() else { return };
+        preview.poll(&ctx, gray);
+        if preview.failed {
             return;
         }
-        ctx.request_repaint();
-        let Some(duration) = strip.duration else { return };
-        let playing = v.step(now, dt, pointer.map(|p| p.x), pic.left(), pic.width(), duration);
+        // The worker wakes the frame that makes the player.
+        let Some((duration, fps, clock)) = preview.clock() else { return };
+        ctx.request_repaint_after(std::time::Duration::from_secs_f64(hm::repaint_after(fps)));
+        let (playing, seek) = v.step(now, pointer.map(|p| p.x), pic.left(), pic.width(), duration, clock);
         let (t_now, label_until) = (v.t, v.label_until);
-        let (muted, volume) = (self.display.video_muted, self.video.volume);
-        let path = item.original_path(lib.root());
-        self.hover_media.video_sound(&item.id, &path, &item.ext.to_lowercase(), muted, playing, t_now, duration, volume);
-        let Some(strip) = self.hover_media.video.as_ref().and_then(|v| v.strip.as_ref()) else { return };
-        let Some(tex) = strip.frame_at(t_now) else { return };
+        let media = &mut self.hover_media;
+        let Some(preview) = media.video.as_mut().and_then(|v| v.preview.as_mut()) else { return };
+        if !muted
+            && preview.take_mixer_wish()
+            && let Some(mixer) = media.player.mixer()
+        {
+            preview.set_mixer(mixer);
+        }
+        preview.drive(now, seek, playing, muted, volume);
+        let Some(tex) = preview.frame() else { return };
         let p = ui.painter().with_clip_rect(pic.intersect(ui.clip_rect()));
         let uv = cover_uv(tex.size_vec2(), pic.size());
         p.rect_filled(pic, CornerRadius::same(4), Color32::BLACK);
@@ -219,7 +223,7 @@ impl App {
 }
 
 /// The part of a picture of `tex` size that covers `rect` size, cropping
-/// what overflows (the strip has the clip's shape, the card may not).
+/// what overflows (the picture has the clip's shape, the card may not).
 fn cover_uv(tex: Vec2, rect: Vec2) -> Rect {
     let (ta, ra) = (tex.x / tex.y.max(1.0), rect.x / rect.y.max(1.0));
     if ta > ra {

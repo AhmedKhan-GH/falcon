@@ -13,7 +13,7 @@ From `index.html`, `preview-window.html`, the `mediaElement` and `mpvMediaElemen
 | Video formats | `ts 3gp 360 afx vap eva mp4 mov m4v webm mkv avi wmv mpg mts flv m2ts f4v` open in the video viewer | Seen | Same list (`media::VIDEO_EXTENSIONS`). Other video files (ogv, rm, vob…) are plain items with a QuickLook thumbnail, as in Eagle |
 | When to fall back | The native element errors, reports no size or no duration, or renders no frame within 1.5 s of playing; then `useMpvPlayer` swaps in `<mpv-video>` with the same controls | Seen | AVFoundation is tried first. A file it refuses on opening, that fails while loading, or of which it has drawn no picture 1.5 s after opening plays through FFmpeg in the same viewer, keeping volume, mute, speed, loop, place and play state. The time counts from opening, not from playing, since AVFoundation draws a poster picture while paused, and that picture counts. The switch happens once |
 | Thumbnail at import | Native `<video>` first; on failure an `<mpv-video>` seeks to `min(10, duration / 3)` seconds and takes a 480-wide JPEG | Seen | QuickLook first for formats macOS reads; FFmpeg first for the others. The FFmpeg picture is taken at the same time and written as Eagle's 480-wide JPEG. When that picture is black, up to five later ones are tried (falcon's addition) |
-| Hover preview | `<mpv-video>` for files the native element can't play, muted, looping, scrubbed by the pointer | Seen | The strip of pictures comes from `falcon_video::Grabber`, which falls back to FFmpeg; unmuted sound comes from the hover player through falcon's shared audio decoder, which falls back to FFmpeg when symphonia can't read the file |
+| Hover preview | `<mpv-video>` for files the native element can't play, muted, looping, scrubbed by the pointer | Seen | The card plays the file through `falcon_video::Video` with small pictures, read off the main thread (`falcon_video::Prepared`), so FFmpeg plays these files there, muted or with their sound, as in the viewer |
 
 ## Building FFmpeg
 
@@ -90,8 +90,8 @@ In order: `$FALCON_FFMPEG_DIR`, the bundle's `Contents/Frameworks` next to the e
 
 ## Other uses
 
-- `falcon_video::probe`, `frame_at` and `Grabber` fall back to FFmpeg, so the seek bar's hover thumbnail and the grid's hover strip work for these formats.
-- `falcon_ffmpeg::AudioFile` decodes a file's sound alone. `falcon_library::audio::open`, the decoder behind audio playback, the hover sound, waveforms, durations and the tempo, falls back to it (`audio/ffmpeg.rs`) when symphonia can't read a file: the soundtrack of an mkv, webm, avi or wmv in the hover preview.
+- `falcon_video::probe`, `frame_at` and `Grabber` fall back to FFmpeg, so the seek bar's hover thumbnail works for these formats, and `falcon_video::Prepared` does, so the grid's hover preview does too.
+- `falcon_ffmpeg::AudioFile` decodes a file's sound alone. `falcon_library::audio::open`, the decoder behind audio playback, waveforms, durations and the tempo, falls back to it (`audio/ffmpeg.rs`) when symphonia can't read a file: the soundtrack of an mkv, webm, avi or wmv in the hover preview.
 - At import, `media::duration` asks FFmpeg for the length of video it can't otherwise read, and FFmpeg draws the thumbnail as described above. Refresh Thumbnail goes the same way.
 
 ## Tests
