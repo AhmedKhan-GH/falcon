@@ -11,6 +11,10 @@ use eframe::egui::{TextureHandle, Vec2};
 use image::{RgbaImage, imageops};
 use tiff::ColorType;
 use tiff::decoder::{Decoder, DecodingResult};
+use tiff::tags::Tag;
+
+/// TIFF's tag for an embedded colour profile.
+const ICC_PROFILE_TAG: u16 = 34675;
 
 /// Pages counted at most, so a damaged chain of directories ends.
 const MAX_PAGES: usize = 10_000;
@@ -35,6 +39,7 @@ pub fn decode_page(path: &Path, page: usize, max_side: u32) -> Option<RgbaImage>
     d.seek_to_image(page).ok()?;
     let (w, h) = d.dimensions().ok()?;
     let color = d.colortype().ok()?;
+    let icc = d.get_tag_u8_vec(Tag::Unknown(ICC_PROFILE_TAG)).ok();
     let data = match d.read_image().ok()? {
         DecodingResult::U8(v) => v,
         DecodingResult::U16(v) => v.into_iter().map(|x| (x >> 8) as u8).collect(),
@@ -42,6 +47,10 @@ pub fn decode_page(path: &Path, page: usize, max_side: u32) -> Option<RgbaImage>
     };
     let rgba = to_rgba(color, &data, (w * h) as usize)?;
     let img = RgbaImage::from_raw(w, h, rgba)?;
+    let img = match icc {
+        Some(icc) => falcon_library::color::to_srgb(image::DynamicImage::ImageRgba8(img), &icc).into_rgba8(),
+        None => img,
+    };
     if w > max_side || h > max_side {
         let (nw, nh) = if w >= h {
             (max_side, ((h as u64 * max_side as u64) / w as u64).max(1) as u32)

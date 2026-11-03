@@ -859,7 +859,7 @@ fn decode(job: &Job, exposure: f32, linear: &Mutex<Option<(PathBuf, u32, Arc<ima
         let data = std::fs::read(&job.path).ok()?;
         thumbnail::render_svg(&data, Some(max)).ok()?
     } else {
-        thumbnail::decode(&job.path).ok()?
+        thumbnail::decode_for_display(&job.path).ok()?
     };
     let img = if img.width() > max || img.height() > max { img.thumbnail(max, max) } else { img };
     let rgba = img.to_rgba8();
@@ -1046,7 +1046,7 @@ fn decode_tiled(job: &Job, exposure: f32, linear: &Mutex<Option<(PathBuf, u32, A
     } else if imageio(&job.path) {
         falcon_library::imageio::decode(&job.path).ok()?
     } else {
-        thumbnail::decode(&job.path).ok()?
+        thumbnail::decode_for_display(&job.path).ok()?
     };
     let rgba = img.into_rgba8();
     let (w, h) = (rgba.width() as usize, rgba.height() as usize);

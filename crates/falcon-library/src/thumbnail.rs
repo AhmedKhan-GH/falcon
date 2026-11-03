@@ -122,15 +122,32 @@ pub fn target_size(w: u32, h: u32, max: u32) -> (u32, u32) {
 /// Decodes a raster image, applying its EXIF orientation. Sniffs the format
 /// from content, so it also reads Eagle's WebP-in-`.png` thumbnails.
 pub fn decode(path: &Path) -> Result<DynamicImage, ThumbError> {
+    decode_with_profile(path).map(|(img, _)| img)
+}
+
+/// [`decode`] for showing: the pixels are turned into sRGB through the file's
+/// colour profile (see [`crate::color`]). Whatever rewrites the file uses
+/// [`decode`] instead.
+pub fn decode_for_display(path: &Path) -> Result<DynamicImage, ThumbError> {
+    let (img, icc) = decode_with_profile(path)?;
+    Ok(match icc {
+        Some(icc) => crate::color::to_srgb(img, &icc),
+        None => img,
+    })
+}
+
+fn decode_with_profile(path: &Path) -> Result<(DynamicImage, Option<Vec<u8>>), ThumbError> {
     let reader = ImageReader::open(path)
         .map_err(ThumbError::new)?
         .with_guessed_format()
         .map_err(ThumbError::new)?;
     let mut decoder = reader.into_decoder().map_err(ThumbError::new)?;
     let orientation = decoder.orientation().map_err(ThumbError::new)?;
+    // A format with no way to carry a profile is the same as a file without one.
+    let icc = decoder.icc_profile().ok().flatten();
     let mut img = DynamicImage::from_decoder(decoder).map_err(ThumbError::new)?;
     img.apply_orientation(orientation);
-    Ok(img)
+    Ok((img, icc))
 }
 
 /// The largest JPEG preview embedded in a RAW photo, turned by the file's
@@ -138,10 +155,18 @@ pub fn decode(path: &Path) -> Result<DynamicImage, ThumbError> {
 /// EXIF, CR3's `CMT1`, MRW's TTW block, X3F's preview or CRW's rotation record; see [`crate::exif::orientation`]). Eagle's RAW
 /// viewer shows the preview dcraw extracts; falcon finds the same kind of picture by scanning for
 /// baseline or progressive 8-bit JPEG streams and keeping the one with the
-/// most pixels (the camera's full-size preview rather than its thumbnail).
+/// most pixels (the camera's full-size preview rather than its thumbnail),
+/// in sRGB when the preview has a colour profile.
 pub fn raw_preview(data: &[u8]) -> Result<DynamicImage, ThumbError> {
     let (start, _) = embedded_jpegs(data).into_iter().max_by_key(|&(_, px)| px).ok_or_else(|| ThumbError("no embedded preview".into()))?;
-    let mut img = image::load_from_memory_with_format(&data[start..], image::ImageFormat::Jpeg).map_err(ThumbError::new)?;
+    let mut decoder = ImageReader::with_format(std::io::Cursor::new(&data[start..]), image::ImageFormat::Jpeg)
+        .into_decoder()
+        .map_err(ThumbError::new)?;
+    let icc = decoder.icc_profile().ok().flatten();
+    let mut img = DynamicImage::from_decoder(decoder).map_err(ThumbError::new)?;
+    if let Some(icc) = icc {
+        img = crate::color::to_srgb(img, &icc);
+    }
     let orientation = crate::exif::orientation(data).and_then(|v| image::metadata::Orientation::from_exif(v as u8));
     if let Some(o) = orientation {
         img.apply_orientation(o);
@@ -695,6 +720,19 @@ mod tests {
     #[test]
     fn quicklook_out_of_time_is_killed() {
         quicklook_stops("x.dwg", std::time::Duration::from_millis(200), None, |e| matches!(e, QuickLookStop::TimedOut));
+    }
+
+    #[test]
+    fn only_display_decoding_applies_a_colour_profile() {
+        use image::ImageEncoder;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("p3.png");
+        let mut encoder = image::codecs::png::PngEncoder::new(fs::File::create(&path).unwrap());
+        encoder.set_icc_profile(moxcms::ColorProfile::new_display_p3().encode().unwrap()).unwrap();
+        encoder.write_image(&[200, 100, 50], 1, 1, image::ExtendedColorType::Rgb8).unwrap();
+        assert_eq!(decode(&path).unwrap().to_rgb8().get_pixel(0, 0).0, [200, 100, 50]);
+        let [r, g, _] = decode_for_display(&path).unwrap().to_rgb8().get_pixel(0, 0).0;
+        assert!(r > 200 && g < 100, "{r} {g}");
     }
 
     #[test]

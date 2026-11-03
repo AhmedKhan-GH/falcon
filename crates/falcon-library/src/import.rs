@@ -481,7 +481,7 @@ fn generate(item: &mut Item, raw: &Path, thumb: &Path) -> Option<Analysis> {
         }
         return quicklook_thumbnail(item, raw, thumb, max);
     }
-    let img = thumbnail::decode(raw).ok()?;
+    let img = thumbnail::decode_for_display(raw).ok()?;
     item.width = img.width().into();
     item.height = img.height().into();
     let plan = thumbnail::plan_raster(&item.ext, img.width(), img.height(), item.size);
