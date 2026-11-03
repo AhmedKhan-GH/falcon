@@ -50,6 +50,11 @@ impl Transaction {
     pub fn item_ids(&self) -> impl Iterator<Item = &str> {
         self.items.iter().map(|i| i.id.as_str()).chain(self.created.iter().map(String::as_str))
     }
+
+    /// The item `id` as it was before the transaction changed it.
+    pub fn old_item(&self, id: &str) -> Option<&Item> {
+        self.items.iter().find(|i| i.id == id)
+    }
 }
 
 /// When library writes reach the disk.
