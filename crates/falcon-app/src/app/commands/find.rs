@@ -27,6 +27,7 @@ impl App {
         self.ws.color_text.clear();
         self.ws.note_text.clear();
         self.ws.url_text.clear();
+        self.ws.ai.clear_results();
     }
 
     /// Shows the filter bar with one filter's menu open.

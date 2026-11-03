@@ -26,6 +26,8 @@ pub const PORT_SPAN: u16 = 5;
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Debug)]
 #[serde(default)]
 pub struct Prefs {
+    /// Preferences ▸ AI Search: use the model once it's installed.
+    pub ai_search: bool,
     /// Eagle's Dock icon option: closing the main window hides falcon and
     /// keeps its Dock icon (the default). Off, closing the window also
     /// takes falcon out of the Dock while the menu bar icon is shown, and
@@ -319,6 +321,7 @@ impl SidebarSections {
 impl Default for Prefs {
     fn default() -> Self {
         Prefs {
+            ai_search: true,
             keep_dock_icon: true,
             color_space: crate::colorspace::ColorSpace::default(),
             vibrancy: false,
@@ -656,8 +659,8 @@ pub struct Draft {
     pub launch_at_login: bool,
 }
 
-/// The panes, in Eagle's order. Eagle's MCP and Proxy panes have no
-/// counterpart, and a pane appears only once it has a setting that works.
+/// The panes, in Eagle's order. Eagle's Proxy pane has no counterpart, and
+/// a pane appears only once it has a setting that works.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum Section {
@@ -671,6 +674,7 @@ pub enum Section {
     Notification,
     Password,
     AutoImport,
+    AiSearch,
     #[serde(rename = "aimodels")]
     AiModels,
     Mcp,
@@ -678,7 +682,7 @@ pub enum Section {
 }
 
 impl Section {
-    pub const ALL: [Section; 11] = [
+    pub const ALL: [Section; 13] = [
         Section::General,
         Section::Sidebar,
         Section::Controls,
@@ -688,6 +692,7 @@ impl Section {
         Section::Notification,
         Section::Password,
         Section::AutoImport,
+        Section::AiSearch,
         Section::AiModels,
         Section::Mcp,
         Section::Developer,
@@ -705,6 +710,7 @@ impl Section {
             Section::Notification => tr_key("Notification"),
             Section::Password => tr_key("Password"),
             Section::AutoImport => tr_key("Auto-Import"),
+            Section::AiSearch => tr_key("AI Search"),
             Section::AiModels => tr_key("AI Models"),
             Section::Mcp => tr_key("Eagle MCP"),
             Section::Developer => tr_key("Developer"),
@@ -722,6 +728,7 @@ impl Section {
             Section::Notification => crate::icons::BELL,
             Section::Password => crate::icons::LOCK_SIMPLE,
             Section::AutoImport => crate::icons::TRAY_ARROW_DOWN,
+            Section::AiSearch => crate::icons::SPARKLE,
             Section::AiModels => crate::icons::CHAT_CIRCLE,
             Section::Mcp => crate::icons::CHAT_CIRCLE,
             Section::Developer => crate::icons::CODE,
@@ -735,7 +742,7 @@ impl Section {
             Section::General | Section::Sidebar => 0,
             Section::Controls | Section::Preview | Section::Screenshot | Section::Shortcuts => 1,
             Section::Notification | Section::Password | Section::AutoImport => 2,
-            Section::AiModels | Section::Mcp => 3,
+            Section::AiSearch | Section::AiModels | Section::Mcp => 3,
             Section::Developer => 4,
         }
     }
@@ -773,6 +780,8 @@ pub struct Window {
     applied_language: crate::locale::Language,
     /// The shown library's folder, for the Auto-Import pane.
     pub library: Option<std::path::PathBuf>,
+    /// AI Search's worker and download, for its pane.
+    pub ai_search: Option<std::sync::Arc<crate::ai_search::Engine>>,
     /// Why the folder last picked for auto-import was refused.
     auto_import_note: Option<String>,
     /// The login item as read when the window opened or last applied.
@@ -1051,6 +1060,7 @@ impl Window {
             Section::Notification => notification(p, d),
             Section::Password => password(p, d, &mut self.password),
             Section::AutoImport => auto_import(p, d, self.library.as_deref(), &mut self.auto_import_note),
+            Section::AiSearch => crate::ai_search::pane(p, d, self.ai_search.as_deref()),
             Section::AiModels => self.ai.ui(p, &mut d.prefs.ai_models),
             Section::Mcp => mcp::pane(p, d, &mut self.mcp_port_text, self.mcp_status),
             Section::Developer => developer(p, d, &mut self.port_text, port_error),
@@ -1915,7 +1925,7 @@ mod tests {
     #[test]
     fn panes_follow_eagles_order() {
         let labels: Vec<_> = Section::ALL.iter().map(|s| s.label()).collect();
-        assert_eq!(labels, ["General", "Sidebar", "Controls", "Preview", "Screenshot", "Shortcuts", "Notification", "Password", "Auto-Import", "AI Models", "Eagle MCP", "Developer"]);
+        assert_eq!(labels, ["General", "Sidebar", "Controls", "Preview", "Screenshot", "Shortcuts", "Notification", "Password", "Auto-Import", "AI Search", "AI Models", "Eagle MCP", "Developer"]);
         let groups: Vec<_> = Section::ALL.iter().map(|s| s.group()).collect();
         assert!(groups.windows(2).all(|w| w[0] <= w[1]), "groups are contiguous");
         let s: Section = serde_json::from_str(r#""preview""#).unwrap();

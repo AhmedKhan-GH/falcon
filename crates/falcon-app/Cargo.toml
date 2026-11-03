@@ -22,6 +22,7 @@ harness = false
 falcon-ai = { path = "../falcon-ai" }
 falcon-library = { path = "../falcon-library" }
 falcon-server = { path = "../falcon-server" }
+falcon-clip = { path = "../falcon-clip" }
 falcon-video = { path = "../falcon-video" }
 falcon-pdf = { path = "../falcon-pdf" }
 eframe = { version = "0.37.0", features = ["persistence"] }

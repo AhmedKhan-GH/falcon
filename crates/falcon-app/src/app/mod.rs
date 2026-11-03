@@ -16,6 +16,7 @@ use crate::theme as t;
 use crate::ui::widgets::{galley, icon_button};
 
 pub(crate) mod actions;
+pub(crate) mod ai_search;
 pub(crate) mod commands;
 pub(crate) mod image_edit;
 pub(crate) mod import;
@@ -51,6 +52,8 @@ pub struct App {
     /// The local HTTP API for the shown library, as Eagle runs it.
     pub(crate) server: Option<falcon_server::Handle>,
     pub(crate) mcp: mcp::McpState,
+    /// AI Search's worker (`app/ai_search.rs`).
+    pub(crate) ai: ai_search::AiSearch,
     pub(crate) ctx: egui::Context,
     pub(crate) error: Option<String>,
     pub(crate) tile: f32,
@@ -238,6 +241,7 @@ impl App {
             open_switcher: false,
             server: None,
             mcp: Default::default(),
+            ai: ai_search::AiSearch::start(&cc.egui_ctx),
             ctx: cc.egui_ctx.clone(),
             error: None,
             tile: 139.0,
@@ -358,6 +362,7 @@ impl App {
         cc.egui_ctx.options_mut(|o| o.zoom_with_keyboard = false);
         cc.egui_ctx.set_zoom_factor(crate::prefs::zoom_factor(app.prefs.ui_zoom));
         app.prefs_window.set_pane(saved.prefs_pane);
+        app.prefs_window.ai_search = app.ai.engine.clone();
         app.lock = crate::applock::Lock::at_launch(app.prefs.app_lock.as_ref());
         app.shortcuts = saved.shortcuts;
         app.shortcuts.migrate();
@@ -479,6 +484,7 @@ impl App {
         self.follow_api_switch();
         self.follow_api_preferences();
         self.take_mcp_undo();
+        self.ai_tick();
         self.poll_loading();
         self.pump_opens();
         // Links and files opened with falcon wait while the launch's
@@ -523,7 +529,11 @@ impl App {
         // Our own items dragged out and back in must not import twice.
         let dragging_out = self.native_drag.load(std::sync::atomic::Ordering::Relaxed);
         if !dropped.is_empty() && !dragging_out {
-            self.drop_files(dropped, crate::drop_pos::at_drop(&ctx));
+            let at = crate::drop_pos::at_drop(&ctx);
+            let dropped = self.ai_take_drop(dropped, at);
+            if !dropped.is_empty() {
+                self.drop_files(dropped, at);
+            }
         }
         self.pdf_keys(&ctx);
         self.notice_history_keys(&ctx);

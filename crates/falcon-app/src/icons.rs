@@ -42,6 +42,7 @@ pub const PUSH_PIN: &str = "\u{E3E2}";
 pub const PUZZLE_PIECE: &str = "\u{E596}";
 pub const SHUFFLE: &str = "\u{E422}";
 pub const SIDEBAR_SIMPLE: &str = "\u{EC24}";
+pub const SPARKLE: &str = "\u{E6A2}";
 pub const STAR: &str = "\u{E46A}";
 pub const TAG_SIMPLE: &str = "\u{E47A}";
 pub const TRASH: &str = "\u{E4A6}";

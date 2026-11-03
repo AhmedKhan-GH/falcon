@@ -56,7 +56,10 @@ impl App {
             }
             _ => None,
         };
-        self.grid_order(lib, only.as_ref())
+        let only = if self.ai_view_allowed() { self.ws.ai.narrow(only) } else { only };
+        let mut order = self.grid_order(lib, only.as_ref());
+        self.ws.ai.sort(&mut order, |i| lib.items()[i].id.clone());
+        order
     }
 
     /// Keeps `ws.order` current while the viewer hides the grid, so the

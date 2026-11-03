@@ -52,7 +52,7 @@ impl App {
         } else {
             self.ws.scope.title(&lib.metadata.folders)
         };
-        let narrowed = shows_results(&self.ws.scope, &self.ws.query, self.ws.filter.is_active());
+        let narrowed = shows_results(&self.ws.scope, &self.ws.query, self.ws.filter.is_active() || self.ws.ai.active());
         let g = galley(ui, &title, font(15.0), t::p().text, if narrowed { 160.0 } else { 220.0 });
         let title_rect = Rect::from_min_size(Pos2::new(x + 45.0, cy - g.size().y / 2.0), g.size());
         ui.painter().galley(title_rect.min, g, t::p().text);
@@ -80,6 +80,10 @@ impl App {
         let own = self.own_sort(lib);
         let filter = icon_button(ui, Pos2::new(ix, cy), ic::FUNNEL, 18.0, true, tr("Filter"));
         ix -= 26.0;
+        if self.ai_view_allowed() {
+            self.ai_button(ui, Pos2::new(ix, cy));
+            ix -= 26.0;
+        }
         // Random, and a folder sorted at random, offer a new shuffle.
         let refresh = matches!(self.ws.scope, Scope::Random(_)) || matches!(own, Some((_, Some((FolderOrder::Random, _)))));
         if refresh {
@@ -187,7 +191,60 @@ impl App {
         });
     }
 
+    /// The AI Search button: a highlight while the search box reads
+    /// descriptions, and a thin bar while the library is being indexed.
+    fn ai_button(&mut self, ui: &mut Ui, center: Pos2) {
+        let status = self.ai.engine.as_ref().map(|e| e.status()).unwrap_or_default();
+        let b = icon_button(ui, center, ic::SPARKLE, 18.0, true, &crate::ai_search::button_tip(&status));
+        if b.clicked() {
+            self.ai_button_clicked();
+        }
+        if self.ws.ai.mode {
+            let r = Rect::from_center_size(center, Vec2::splat(26.0));
+            ui.painter().rect_stroke(r, t::RADIUS, Stroke::new(1.0, t::p().primary), StrokeKind::Inside);
+        }
+        if let Some(part) = crate::ai_search::progress(&status) {
+            let track = Rect::from_center_size(center + vec2(0.0, 12.0), vec2(20.0, 2.0));
+            ui.painter().rect_filled(track, 1.0, t::p().button);
+            ui.painter().rect_filled(Rect::from_min_size(track.min, vec2(track.width() * part, 2.0)), 1.0, t::p().primary);
+        }
+    }
+
+    /// The camera at the right of the search box: searches by a picture
+    /// once the model is ready, and ends an image search while one is shown.
+    fn search_camera(&mut self, ui: &mut Ui, rect: Rect) {
+        let center = Pos2::new(rect.right() - 17.0, rect.center().y);
+        let spot = Rect::from_center_size(center, Vec2::splat(26.0));
+        if self.ws.ai.image.is_some() {
+            icon(ui, center, ic::X, 14.0, t::p().text_muted);
+            if ui.interact(spot, ui.scope_id().with("search-image-end"), Sense::click()).on_hover_text(tr("End the image search")).clicked() {
+                self.ws.ai.clear_results();
+            }
+            return;
+        }
+        let ready = self.ai_ready();
+        icon(ui, center, ic::CAMERA, 17.0, if ready { t::p().text_value } else { t::p().text_disabled });
+        let tip = if ready { tr("Search by image") } else { tr("Install the model in Preferences ▸ AI Search") };
+        let resp = ui.interact(spot, ui.scope_id().with("search-camera"), Sense::click()).on_hover_text(tip);
+        if !ready {
+            if resp.clicked() {
+                self.open_ai_preferences();
+            }
+            return;
+        }
+        egui::Popup::menu(&resp).show(|ui| {
+            if ui.button(tr("Choose Image…")).clicked() {
+                self.ai_choose_image();
+            }
+            if ui.button(tr("Paste Image")).clicked() {
+                self.ai_paste_image();
+            }
+            ui.label(RichText::new(tr("Or drop a picture on the search box")).size(11.0).color(t::p().text_muted));
+        });
+    }
+
     pub(crate) fn search_field(&mut self, ui: &mut Ui, rect: Rect) {
+        self.ws.ai.search_rect = Some(rect);
         let p = ui.painter();
         p.rect_filled(rect, t::FIELD_RADIUS, t::p().search);
         p.rect_stroke(rect, t::FIELD_RADIUS, Stroke::new(1.0, t::p().field_border), StrokeKind::Inside);
@@ -196,7 +253,14 @@ impl App {
         let caret = Rect::from_min_max(Pos2::new(rect.left() + 2.0, rect.top()), Pos2::new(rect.left() + 38.0, rect.bottom()));
         let scope_resp = ui.interact(caret, ui.scope_id().with("search-scope"), Sense::click()).on_hover_text(tr("Search Scope"));
         egui::Popup::menu(&scope_resp).show(|ui| self.search_scope_menu(ui));
-        icon(ui, Pos2::new(rect.right() - 17.0, rect.center().y), ic::CAMERA, 17.0, t::p().text_disabled);
+        self.search_camera(ui, rect);
+        let hint = if let Some(label) = &self.ws.ai.image {
+            trf("Like {name}", &[("name", label)])
+        } else if self.ws.ai.mode && self.ai_view_allowed() {
+            tr("Describe a picture").to_string()
+        } else {
+            tr("Search").to_string()
+        };
         let inner = Rect::from_min_max(Pos2::new(rect.left() + 40.0, rect.top()), Pos2::new(rect.right() - 32.0, rect.bottom()));
         let resp = ui.put(
             inner,
@@ -204,7 +268,7 @@ impl App {
                 .id_salt("search")
                 .frame(egui::Frame::NONE)
                 .margin(egui::Margin::ZERO)
-                .hint_text(RichText::new(tr("Search")).color(t::p().text_muted))
+                .hint_text(RichText::new(hint).color(t::p().text_muted))
                 .font(font(14.0))
                 .align(Align2::LEFT_CENTER)
                 .desired_width(inner.width()),
@@ -215,7 +279,15 @@ impl App {
         // Eagle applies the search after a short debounce, or at once on Return.
         let submitted = resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
         match self.ws.search_debounce.poll(resp.changed(), submitted, ui.input(|i| i.time)) {
-            SearchPoll::Apply => self.ws.query.clone_from(&self.ws.search_typed),
+            SearchPoll::Apply if self.ws.ai.mode && self.ai_view_allowed() => {
+                let text = self.ws.search_typed.clone();
+                self.ai_text_search(&text);
+            }
+            SearchPoll::Apply => {
+                // Typing ends an image search.
+                self.ws.ai.clear_results();
+                self.ws.query.clone_from(&self.ws.search_typed);
+            }
             SearchPoll::Wait(left) => ui.ctx().request_repaint_after(std::time::Duration::from_secs_f64(left)),
             SearchPoll::Idle => {}
         }

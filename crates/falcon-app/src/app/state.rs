@@ -424,6 +424,8 @@ pub(crate) struct Workspace {
     pub(crate) text: Option<crate::ui::viewer::text::TextView>,
     /// The Duplicates page's hash cache and results.
     pub(crate) duplicates: crate::ui::grid::duplicates::Duplicates,
+    /// The AI search this library is showing (`ai_search.rs`).
+    pub(crate) ai: crate::ai_search::AiView,
     /// Comment mode, crop tool and comment editing (`app/image_edit.rs`).
     pub(crate) tools: image_edit::Tools,
     /// When `metadata.json` is next backed up (see `backups.rs`).
@@ -449,6 +451,7 @@ impl Workspace {
         self.query = q.into();
         self.search_typed.clone_from(&self.query);
         self.search_debounce.reset();
+        self.ai.clear_results();
     }
 
     /// A fresh workspace for `lib` (or the empty window when `None`).
@@ -529,6 +532,7 @@ impl Workspace {
             font_view: Default::default(),
             text: None,
             duplicates: Default::default(),
+            ai: Default::default(),
             tools: Default::default(),
             backup: crate::backups::Schedule::new(Instant::now()),
             export: Default::default(),

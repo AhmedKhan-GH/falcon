@@ -1,6 +1,7 @@
 mod access_order;
 mod actions;
 mod ai_models;
+mod ai_search;
 mod anim;
 mod api_check;
 mod app;

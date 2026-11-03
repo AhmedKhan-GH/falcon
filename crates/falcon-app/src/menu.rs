@@ -143,7 +143,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::Rename => grid && s.selected > 0,
         C::Back => s.viewer || (s.library && s.back),
         C::Forward => grid && s.forward,
-        C::Find | C::ToggleFilter | C::SearchAll | C::FilterSidebar | C::ResetFilter | C::OpenFilter(_) | C::OpenModifiedFilter | C::AddFilterMenu | C::QuickSwitch | C::QuickSwitchKey | C::NewFolder | C::NewSmartFolder => grid,
+        C::Find | C::ToggleFilter | C::SearchAll | C::FilterSidebar | C::ResetFilter | C::OpenFilter(_) | C::OpenModifiedFilter | C::VisualMatch | C::AddFilterMenu | C::QuickSwitch | C::QuickSwitchKey | C::NewFolder | C::NewSmartFolder => grid,
         C::NewSubfolder => grid && s.scope == ScopeKind::Folder,
         C::NewTextFile | C::NewMenu => s.library,
         // The panels can be toggled anywhere, the viewer included.

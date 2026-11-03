@@ -270,6 +270,9 @@ impl App {
         h.set_token(&self.prefs.api_token);
         h.set_preferences(self.prefs.eagle_preferences());
         h.set_history(self.recent.iter().map(|p| p.display().to_string()).collect());
+        if let Some(engine) = &self.ai.engine {
+            h.set_ai_search(engine.clone());
+        }
     }
 
     /// Keeps what the API changed in the preferences (`preferences/collect/*`).

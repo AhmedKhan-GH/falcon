@@ -29,6 +29,12 @@ impl App {
         if targets.len() == 1 && self.ws.scope != Scope::Trash {
             self.location_menu(ui, lib, item);
         }
+        if targets.len() == 1 && !in_viewer && self.ws.scope != Scope::Trash {
+            let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::VisualMatch);
+            if ui.add_enabled(self.ai_ready(), egui::Button::new(tr("Visual Match")).shortcut_text(keys)).on_disabled_hover_text(tr("Install the model in Preferences ▸ AI Search")).clicked() {
+                self.ai_similar_to_item(&item.id, &item.name);
+            }
+        }
         self.item_copy_menu(ui, targets);
         if self.ws.scope != Scope::Trash {
             // This entry opens the panel, so it shows the panel's key (⇧⌘J opens

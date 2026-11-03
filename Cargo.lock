@@ -2030,6 +2030,7 @@ dependencies = [
  "drag",
  "eframe",
  "falcon-ai",
+ "falcon-clip",
  "falcon-library",
  "falcon-pdf",
  "falcon-server",

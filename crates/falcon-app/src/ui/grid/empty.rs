@@ -131,7 +131,7 @@ impl App {
             Scope::Trash => View::Trash,
             _ => View::Other,
         };
-        let searching = !self.ws.query.trim().is_empty() || self.ws.filter.is_active();
+        let searching = !self.ws.query.trim().is_empty() || self.ws.filter.is_active() || self.ws.ai.active();
         let live = lib.items().iter().filter(|i| !i.is_deleted).count();
         let Some(e) = message(view, searching, live) else { return };
         let at = paint(ui, area, &e);

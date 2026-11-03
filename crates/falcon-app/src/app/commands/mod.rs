@@ -518,6 +518,16 @@ impl App {
             C::ResetFilter => self.reset_filter(),
             C::OpenFilter(kind) => self.open_filter(kind),
             C::OpenModifiedFilter => self.open_modified_filter(),
+            C::VisualMatch => {
+                let names: Vec<(String, String)> = match &self.ws.lib {
+                    Some(shared) => {
+                        let lib = crate::app::lock(shared);
+                        self.ws.selected.iter().filter_map(|id| lib.item(id).map(|i| (id.clone(), i.name.clone()))).collect()
+                    }
+                    None => Vec::new(),
+                };
+                self.ai_visual_match_command(|id| names.iter().find(|(i, _)| i == id).map(|(_, n)| n.clone()));
+            }
             C::AddFilterMenu => self.open_add_filter_menu(),
             C::OpenWithOther => self.open_with_other(),
             C::QuickSwitch | C::QuickSwitchKey => self.quick.toggle(),

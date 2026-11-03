@@ -188,6 +188,9 @@ pub enum Command {
     /// Opens the Date chip on its Modified tab (Eagle's `find.filter.import`,
     /// which opens its Date Modified filter).
     OpenModifiedFilter,
+    /// Visual Match: items like the selected one, or like a chosen picture
+    /// (Eagle's `find.filter.image`).
+    VisualMatch,
     /// Shows the filter bar with the + menu open (Eagle's `find.filter.other`).
     AddFilterMenu,
     /// View ▸ Open With Another App: choose an app for the item
@@ -409,6 +412,7 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::OpenFilter(crate::search_state::FilterKind::Bpm), id: "find.filter.bpm", group: "Find", label: "Open the BPM filter", default: None, aliases: &[] },
     Spec { cmd: Command::OpenFilter(crate::search_state::FilterKind::Camera), id: "find.filter.camera", group: "Find", label: "Open the camera filter", default: None, aliases: &[] },
     Spec { cmd: Command::OpenFilter(crate::search_state::FilterKind::Font), id: "find.filter.fonts", group: "Find", label: "Open the font filter", default: None, aliases: &[] },
+    Spec { cmd: Command::VisualMatch, id: "find.filter.image", group: "Find", label: "Visual Match", default: None, aliases: &[] },
     Spec { cmd: Command::OpenModifiedFilter, id: "find.filter.import", group: "Find", label: "Open the modified date filter", default: None, aliases: &[] },
     Spec { cmd: Command::AddFilterMenu, id: "find.filter.other", group: "Find", label: "Open the add-filter menu", default: None, aliases: &[] },
     Spec { cmd: Command::SelectAll, id: "edit.select.all", group: "Edit", label: "Select all", default: k(CMD, Key::A), aliases: &[] },
@@ -1156,7 +1160,7 @@ mod tests {
 
     #[test]
     fn filter_commands_have_unbound_rows() {
-        for (id, cmd) in [("find.filter.import", Command::OpenModifiedFilter), ("find.filter.other", Command::AddFilterMenu), ("view.file.openother", Command::OpenWithOther)] {
+        for (id, cmd) in [("find.filter.import", Command::OpenModifiedFilter), ("find.filter.other", Command::AddFilterMenu), ("find.filter.image", Command::VisualMatch), ("view.file.openother", Command::OpenWithOther)] {
             let s = TABLE.iter().find(|s| s.id == id).unwrap_or_else(|| panic!("{id} has no row"));
             assert_eq!(s.cmd, cmd);
             assert!(s.default.is_none(), "{id} is unbound in Eagle");
@@ -1164,8 +1168,6 @@ mod tests {
             let keys: Shortcuts = serde_json::from_str(&format!(r#"{{"{id}":"Alt + 9"}}"#)).unwrap();
             assert_eq!(keys.resolve(Key::Num9, Modifiers::ALT), Some(cmd));
         }
-        // Eagle's image filter needs its AI Search plugin: no row.
-        assert!(TABLE.iter().all(|s| s.id != "find.filter.image"));
     }
 
     #[test]
