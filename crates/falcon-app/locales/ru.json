@@ -305,6 +305,7 @@
   "Click to pick, ⌘ or ⇧ to pick more · double-click to show items · right-click for more. Renaming to an existing tag merges them.": "Щелчок — выбрать, ⌘ или ⇧ — выбрать несколько · двойной щелчок — показать элементы · правый щелчок — другие действия. При переименовании в существующий тег они объединяются.",
   "Click to remove": "Нажмите, чтобы удалить",
   "Click to resume": "Нажмите, чтобы продолжить",
+  "Click to show, drag to dismiss": "Нажать — показать, тянуть — закрыть",
   "Close": "Закрыть",
   "Close (Esc)": "Закрыть (Esc)",
   "Close Library": "Закрыть библиотеку",

@@ -966,7 +966,7 @@ How falcon does it (`crates/falcon-app/src/capture.rs`, `app/system.rs`):
 - With "Copy screenshots to the clipboard too" on, the worker thread puts the picture on the clipboard as image data; a failure goes to the error log.
 - The screenshot then goes into the library root with the tag "Screenshot" (unless tagging is off) as an ordinary background import, with no folders; see Screenshots in the import chapter. With "Choose where each screenshot is saved" on it waits in the collect window instead, for an area or window shot only.
 - A failure shows "The screenshot failed: …" as an error note and is written to the error log.
-- The "Screenshot added" notification is posted for an area or window screenshot that goes straight in, when its switches are on. A batch that held only screenshots, imported straight in or saved from the collect window, does not also post "Import finished".
+- The "Screenshot added" pop-up, or the notification while falcon is hidden, shows for an area or window screenshot that goes straight in, when its switches are on. A batch that held only screenshots, imported straight in or saved from the collect window, does not also post "Import finished".
 
 - The capture sound plays as the screenshot goes into the library, under the rules in Sound effects.
 
@@ -996,13 +996,15 @@ Eagle has five global keys (`global.show.eagle`, `global.show.search`, `global.c
 
 ## System notifications
 
-Eagle's pop-ups ("Import Successful", "Export Successful", the screenshot pop-up) are its own windows, not system notifications. falcon posts macOS notifications instead (`crates/falcon-app/src/notify.rs`), which macOS shows only while falcon is in the background.
+Eagle's pop-ups ("Import Successful", "Export Successful") are its own windows, not system notifications. falcon posts macOS notifications instead (`crates/falcon-app/src/notify.rs`), which macOS shows only while falcon is in the background.
 
-A screenshot taken while falcon is the active app (`dock::is_active`, AppKit's `isActive`, true whichever falcon window has focus) gets falcon's own pop-up instead (`capture_notice.rs`, `ui/capture_notice.rs`), so exactly one of the two shows, and neither when the screenshot switch is off. As in Eagle's pop-up (`progress.html`), it is a 300 pt card at the window's top right with the screenshot's 44 pt thumbnail, "Screenshot added" and the name; it slides in, stays 1.5 seconds (while the pointer is on it, it stays), has a close button while hovered, and a new screenshot replaces it. Clicking it opens All with the item selected. The thumbnail is decoded off the UI thread from a hard link to the shot file, and the card shows without a picture if that fails. Eagle's drag-to-dismiss is not built.
+A screenshot gets falcon's own pop-up instead (`capture_notice.rs`, `ui/capture_notice.rs`), whichever app is in front; only while falcon is hidden, when it can't put up a window, does it get the macOS notification, so exactly one of the two shows, and neither when the screenshot switch is off. As in Eagle's pop-up, it is a window of its own (an egui viewport: borderless, transparent, always on top) at the top right of the usable part of the screen under the pointer, on every Space and over full-screen apps. It holds a 300 pt card with the screenshot's 44 pt thumbnail, "Screenshot added" and the hint "Click to show, drag to dismiss". The card slides in from the screen edge, stays 1.5 seconds (while the pointer is on it, it stays), has a close button while hovered, and a new screenshot replaces it. Clicking it opens All with the item selected. Dragged to the right it follows the pointer; let go past 40% of its width (or what is left to the screen edge, if less), or flicked at 600 pt/s, it slides out and is gone, and otherwise it springs back. A drag that sets off vertically does nothing, and a press that moves less than 4 pt is a click. The thumbnail is decoded off the UI thread from a hard link to the shot file, and the card shows without a picture if that fails.
+
+The window is shown without activating falcon. It can't become the key or main window (winit's window class has its answers replaced for this window) and asks not to activate falcon when clicked through AppKit's private `_setPreventsActivation:`, where the system has it. It is not an `NSPanel`, which is AppKit's public way: winit can't make one, and changing a live window's class breaks the key-value observers on it, which raises an exception when it closes. The window's transparent margins (for the shadow) still catch clicks while it is up.
 
 | Title | Text | When |
 |---|---|---|
-| Screenshot added | The item's name | An area or window screenshot went straight into the library; "Show a notification for each screenshot" |
+| Screenshot added | The item's name | An area or window screenshot went straight into the library while falcon was hidden; "Show a notification for each screenshot" |
 | Import finished | "N items added to the library" | A background import added items; "Say how many items an import added". Not posted for a batch that held only screenshots (also those saved from the collect window) |
 | Export finished | The in-window note, for example "Exported 3 items" | An export finished; "Show a notification when an export finishes" |
 

@@ -9,8 +9,9 @@
 //! dropped, since the framework refuses to start without one. macOS
 //! shows them only while falcon is not the active app (it has no
 //! delegate asking otherwise), so they never double the in-window notes.
-//! A screenshot taken while falcon is the active app gets its own
-//! pop-up instead (`capture_notice.rs`), so exactly one of the two shows.
+//! A screenshot gets falcon's own pop-up window instead
+//! (`capture_notice.rs`), and this notification only while falcon is
+//! hidden, so exactly one of the two shows.
 //! The first one asks the user for permission.
 //!
 //! The UserNotifications crate in the local cache binds an older objc2

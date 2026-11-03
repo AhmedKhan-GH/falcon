@@ -277,6 +277,7 @@
   "Click to pick, ⌘ or ⇧ to pick more · double-click to show items · right-click for more. Renaming to an existing tag merges them.": "クリックで選択、⌘ または ⇧ で複数選択 · ダブルクリックでアイテムを表示 · 右クリックでその他。既存のタグ名に変更すると統合されます。",
   "Click to remove": "クリックして削除",
   "Click to resume": "クリックで再開",
+  "Click to show, drag to dismiss": "クリックで表示、ドラッグで閉じる",
   "Close": "閉じる",
   "Close (Esc)": "閉じる（Esc）",
   "Close Library": "ライブラリを閉じる",

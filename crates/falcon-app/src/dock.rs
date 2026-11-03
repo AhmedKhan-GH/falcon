@@ -68,10 +68,9 @@ pub fn bring_to_front() {
     platform::bring_to_front();
 }
 
-/// Whether falcon is the active app (the one in front and receiving keys),
-/// whichever of its windows has focus. False while hidden.
-pub fn is_active() -> bool {
-    platform::is_active()
+/// Whether the app is hidden (⌘H, or the red button keeping it running).
+pub fn is_hidden() -> bool {
+    platform::is_hidden()
 }
 
 /// Quits falcon as ⌘Q does (the menu bar icon's Quit).
@@ -121,9 +120,9 @@ mod platform {
         app.activateIgnoringOtherApps(true);
     }
 
-    pub fn is_active() -> bool {
+    pub fn is_hidden() -> bool {
         let Some(mtm) = MainThreadMarker::new() else { return false };
-        NSApplication::sharedApplication(mtm).isActive()
+        NSApplication::sharedApplication(mtm).isHidden()
     }
 
     pub fn quit() {
@@ -153,7 +152,7 @@ mod platform {
 
     pub fn bring_to_front() {}
 
-    pub fn is_active() -> bool {
+    pub fn is_hidden() -> bool {
         false
     }
 

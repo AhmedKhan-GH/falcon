@@ -277,6 +277,7 @@
   "Click to pick, ⌘ or ⇧ to pick more · double-click to show items · right-click for more. Renaming to an existing tag merges them.": "클릭하여 선택, ⌘ 또는 ⇧로 여러 개 선택 · 더블 클릭하면 항목 표시 · 오른쪽 클릭으로 더 보기. 이미 있는 태그 이름으로 바꾸면 하나로 합쳐집니다.",
   "Click to remove": "클릭하여 제거",
   "Click to resume": "클릭하여 다시 시작",
+  "Click to show, drag to dismiss": "클릭하면 표시, 끌면 닫힘",
   "Close": "닫기",
   "Close (Esc)": "닫기 (Esc)",
   "Close Library": "라이브러리 닫기",

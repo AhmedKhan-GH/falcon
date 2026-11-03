@@ -23,7 +23,7 @@ pub(crate) struct System {
     /// only holds them doesn't also say "Import finished" (the screenshot
     /// had its own notice).
     pub(crate) capture_imports: usize,
-    /// The in-app pop-up for a screenshot (`capture_notice.rs`).
+    /// The pop-up for a screenshot (`capture_notice.rs`).
     pub(crate) notice: crate::capture_notice::CaptureNotice,
 }
 
@@ -145,10 +145,10 @@ impl App {
                 self.collect.ask(crate::collect::Pending { path: shot.path, name: shot.name, tags });
                 continue;
             }
-            // Falcon's own pop-up while it is the active app, else the
-            // system notification (which macOS shows only in that case).
-            match crate::capture_notice::route(self.prefs.tells_capture(shot.mode), crate::dock::is_active()) {
-                Route::InApp => {
+            // Falcon's own pop-up, which needs no focus, else the system
+            // notification: a hidden app can't put up a window.
+            match crate::capture_notice::route(self.prefs.tells_capture(shot.mode), crate::dock::is_hidden()) {
+                Route::Window => {
                     // Before the import, which deletes the file.
                     let thumb = crate::capture_notice::load_thumb(&self.ctx, &shot.path);
                     self.system.notice.show(shot.name.clone(), thumb);
