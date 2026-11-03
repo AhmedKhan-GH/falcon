@@ -582,5 +582,10 @@ fn stops_when_dropped() {
     let port = e.server.port;
     let Env { server, .. } = e;
     drop(server);
-    assert!(std::net::TcpStream::connect(("127.0.0.1", port)).is_err());
+    // tiny_http closes its listener on its accept thread, just after the drop.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while std::net::TcpStream::connect(("127.0.0.1", port)).is_ok() {
+        assert!(std::time::Instant::now() < deadline, "port {port} is still open");
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
 }
