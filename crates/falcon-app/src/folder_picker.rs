@@ -9,8 +9,9 @@
 //! closes, and then only if a tick changed. The All tab lists the recent
 //! and ticked folders above the tree (top level expanded), the Recent tab
 //! only those, and the Selected tab the ticked folders. A search lists
-//! the folders whose name contains it, flat, and offers to create a folder
-//! with that name when none is called exactly that.
+//! the folders whose name has its letters in order ([`fuzzy_rank`]), flat
+//! and best match first, and offers to create a folder with that name when
+//! none is called exactly that. Pinyin is not matched.
 //!
 //! The list is built when the picker opens and again when the tab, the
 //! search or the expanded folders change, not when a tick changes, so
@@ -19,6 +20,7 @@
 use std::collections::HashSet;
 
 use falcon_library::model::Folder;
+use falcon_library::search;
 
 /// Recently used folders the picker lists (as Eagle, the first eight).
 pub const RECENT_SHOWN: usize = 8;
@@ -218,9 +220,110 @@ impl Picker {
     }
 }
 
-/// Whether `f` or a folder below it has `needle` (lowercased) in its name.
+/// How a search's letters sit in a name, best first.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum MatchKind {
+    /// The name starts with the search.
+    Prefix,
+    /// The search runs unbroken from the start of a word, or its letters
+    /// are all first letters of words ("ab" in "Art Books").
+    WordStart,
+    /// The search runs unbroken inside a word.
+    Contiguous,
+    /// The letters are there in order, with others between them.
+    Scattered,
+}
+
+/// How well a name matches a search; a smaller value is a better match.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct FuzzyRank {
+    pub kind: MatchKind,
+    /// Other letters between the first and the last one matched.
+    gaps: usize,
+    /// Letters before the first one matched.
+    start: usize,
+    /// The name's length, so an exact name leads the names it begins.
+    len: usize,
+}
+
+/// A text as [`fuzzy_rank`] compares it: each letter folded (by
+/// `search::rank_key`: decomposed, no accents, lower case), without
+/// spaces, and whether it begins a word. A word begins after a space or
+/// punctuation, at a capital after a small letter, and where letters and
+/// digits meet.
+fn fuzzy_key(text: &str) -> Vec<(char, bool)> {
+    let mut out = Vec::new();
+    let mut prev: Option<char> = None;
+    for c in text.chars() {
+        if c.is_whitespace() {
+            prev = Some(' ');
+            continue;
+        }
+        let folded = search::rank_key(c.encode_utf8(&mut [0; 4]));
+        if folded.is_empty() {
+            continue; // a combining accent belongs to the letter before it
+        }
+        let begins = c.is_alphanumeric() && prev.is_none_or(|p| !p.is_alphanumeric() || (p.is_lowercase() && c.is_uppercase()) || p.is_alphabetic() != c.is_alphabetic());
+        out.extend(folded.chars().enumerate().map(|(n, l)| (l, begins && n == 0)));
+        prev = Some(c);
+    }
+    out
+}
+
+/// Where the letters of `word` first follow each other in order in `text`
+/// from `from` on: the index of the last one. `from` holds the first.
+fn subsequence_end(text: &[char], word: &[char], from: usize) -> Option<usize> {
+    let mut at = from;
+    for c in &word[1..] {
+        at += 1 + text[at + 1..].iter().position(|t| t == c)?;
+    }
+    Some(at)
+}
+
+/// How `name` matches the search `query`, or `None` when its letters are
+/// not all in the name in order. Comparison ignores case, accents and
+/// spaces and goes by whole characters, so any script works. Pinyin is not
+/// matched, on purpose.
+pub fn fuzzy_rank(name: &str, query: &str) -> Option<FuzzyRank> {
+    let key = fuzzy_key(name);
+    let word: Vec<char> = fuzzy_key(query).into_iter().map(|(c, _)| c).collect();
+    let letters: Vec<char> = key.iter().map(|(c, _)| *c).collect();
+    let len = key.len();
+    let rank = |kind, gaps, start| Some(FuzzyRank { kind, gaps, start, len });
+    if word.is_empty() {
+        return rank(MatchKind::Prefix, 0, 0);
+    }
+    // Unbroken: the start of a word beats the middle of one.
+    let runs: Vec<usize> = letters.windows(word.len()).enumerate().filter(|(_, w)| *w == word.as_slice()).map(|(at, _)| at).collect();
+    if runs.first() == Some(&0) {
+        return rank(MatchKind::Prefix, 0, 0);
+    }
+    if let Some(at) = runs.iter().find(|at| key[**at].1) {
+        return rank(MatchKind::WordStart, 0, *at);
+    }
+    // Every letter the first of a word.
+    let firsts: Vec<(usize, char)> = key.iter().enumerate().filter(|(_, (_, begins))| *begins).map(|(at, (c, _))| (at, *c)).collect();
+    let initials: Vec<char> = firsts.iter().map(|(_, c)| *c).collect();
+    if let Some(from) = initials.iter().position(|c| *c == word[0])
+        && let Some(end) = subsequence_end(&initials, &word, from)
+    {
+        let (start, last) = (firsts[from].0, firsts[end].0);
+        return rank(MatchKind::WordStart, last + 1 - start - word.len(), start);
+    }
+    if let Some(at) = runs.first() {
+        return rank(MatchKind::Contiguous, 0, *at);
+    }
+    // Scattered: the tightest run of the letters, the earliest if tied.
+    let (gaps, start) = (0..len)
+        .filter(|from| letters[*from] == word[0])
+        .filter_map(|from| subsequence_end(&letters, &word, from).map(|end| (end + 1 - from - word.len(), from)))
+        .min()?;
+    rank(MatchKind::Scattered, gaps, start)
+}
+
+/// Whether `f` or a folder below it matches the search.
 fn matches(f: &Folder, needle: &str) -> bool {
-    f.name.to_lowercase().contains(needle) || f.children.iter().any(|c| matches(c, needle))
+    fuzzy_rank(&f.name, needle).is_some() || f.children.iter().any(|c| matches(c, needle))
 }
 
 /// The rows for the picker's state. `recent` is the recently used folder
@@ -300,58 +403,66 @@ fn entries<'a>(roots: &'a [Folder], expanded: &HashSet<String>, shut: &dyn Fn(&F
     out
 }
 
+/// The entries that match the search, best first; ties keep their order
+/// and no search keeps every entry where it is.
+fn ranked<'a, 'b>(list: impl Iterator<Item = &'a Entry<'b>>, typed: &str) -> Vec<(FuzzyRank, &'a Entry<'b>)> {
+    let mut list: Vec<_> = list.filter_map(|e| fuzzy_rank(&e.folder.name, typed).map(|r| (r, e))).collect();
+    if !typed.is_empty() {
+        list.sort_by_key(|(r, _)| *r);
+    }
+    list
+}
+
 /// The rows of the picker's current tab. `recent` is the recently used
 /// folder list, newest first.
 ///
 /// All: the recent and ticked folders (ticked first, then those the items
 /// were already in, then newest first; five plus one per ticked folder),
 /// a line, then the tree; with a search, the recent ones that match, a
-/// line and the other matching folders, flat. Recent: the same recent and
-/// ticked folders, up to twenty, that match the search. Selected: the
-/// ticked folders in tree order, flat, which a search does not narrow
-/// (only a folder inside a closed one is hidden while there is no search).
+/// line and the other matching folders, flat, each block best match first.
+/// A recent folder whose letters are merely scattered waits in the second
+/// block, so it doesn't take the highlight from a real match. Recent: the
+/// same recent and ticked folders, up to twenty, that match the search,
+/// best match first. Selected: the ticked folders in tree order, flat,
+/// which a search does not narrow (only a folder inside a closed one is hidden while there is no search).
 /// A search with no folder of exactly that name ends any tab with Create.
 pub fn tab_rows(p: &Picker, roots: &[Folder], recent: &[String], shut: impl Fn(&Folder) -> bool) -> Vec<Row> {
     let all = entries(roots, &p.expanded, &shut);
     let typed = p.search.trim();
-    let needle = typed.to_lowercase();
-    let named = |e: &Entry| needle.is_empty() || e.folder.name.to_lowercase().contains(&needle);
+    let searching = !typed.is_empty();
     let kids = |e: &Entry| !e.folder.children.is_empty() && !shut(e.folder);
-
     // Recent and ticked folders, in the order they are listed.
     let mut keyed: Vec<(usize, &Entry)> = all.iter().enumerate().filter(|(_, e)| p.checked.contains(&e.folder.id) || recent.contains(&e.folder.id)).collect();
     keyed.sort_by_key(|(at, e)| {
         let id = &e.folder.id;
         (!p.checked.contains(id), !p.existing.contains(id), recent.iter().position(|r| r == id).unwrap_or(usize::MAX), *at)
     });
-    let recents: Vec<&Entry> = keyed.into_iter().map(|(_, e)| e).filter(|e| named(e)).collect();
+    let recents = ranked(keyed.into_iter().map(|(_, e)| e), typed);
     let recent_row = |e: &&Entry| Row::Recent(e.folder.id.clone());
 
     let mut out: Vec<Row> = Vec::new();
     match p.tab {
         Tab::All => {
             let limit = RECENT_ABOVE_TREE + all.iter().filter(|e| p.checked.contains(&e.folder.id)).count();
-            let top: Vec<&Entry> = recents.iter().copied().take(limit).collect();
+            let top: Vec<&Entry> = recents.iter().filter(|(r, _)| r.kind != MatchKind::Scattered).map(|(_, e)| *e).take(limit).collect();
             out.extend(top.iter().map(recent_row));
-            let rest: Vec<Row> = if needle.is_empty() {
+            let rest: Vec<Row> = if !searching {
                 all.iter().filter(|e| e.shown).map(|e| Row::Folder { id: e.folder.id.clone(), depth: e.depth, kids: kids(e) }).collect()
             } else {
-                all.iter()
-                    .filter(|e| named(e) && !top.iter().any(|t| t.folder.id == e.folder.id))
-                    .map(|e| Row::Folder { id: e.folder.id.clone(), depth: 0, kids: false })
-                    .collect()
+                let others = all.iter().filter(|e| !top.iter().any(|t| t.folder.id == e.folder.id));
+                ranked(others, typed).into_iter().map(|(_, e)| Row::Folder { id: e.folder.id.clone(), depth: 0, kids: false }).collect()
             };
             if !out.is_empty() && !rest.is_empty() {
                 out.push(Row::Separator);
             }
             out.extend(rest);
         }
-        Tab::Recent => out.extend(recents.iter().take(RECENT_TAB_SHOWN).map(recent_row)),
+        Tab::Recent => out.extend(recents.iter().take(RECENT_TAB_SHOWN).map(|(_, e)| recent_row(e))),
         Tab::Selected => {
             out.extend(
                 all.iter()
-                    .filter(|e| p.checked.contains(&e.folder.id) && (e.shown || !needle.is_empty()))
-                    .map(|e| Row::Folder { id: e.folder.id.clone(), depth: 0, kids: needle.is_empty() && kids(e) }),
+                    .filter(|e| p.checked.contains(&e.folder.id) && (e.shown || searching))
+                    .map(|e| Row::Folder { id: e.folder.id.clone(), depth: 0, kids: !searching && kids(e) }),
             );
         }
     }
@@ -479,13 +590,13 @@ mod tests {
     fn a_search_lists_matching_folders_flat_below_matching_recent_ones() {
         let roots = tree();
         let mut p = picker(&[], &roots);
-        p.search = "ts".into(); // Cats only; Kittens has no "ts"
-        assert_eq!(list(&p, &roots, &["B"]), ["A1@0", "-", "create"]);
+        p.search = "ts".into(); // Unbroken in Cats, scattered in Kittens.
+        assert_eq!(list(&p, &roots, &["B"]), ["A1@0", "A11@0", "-", "create"]);
         p.search = "kit".into();
         assert_eq!(list(&p, &roots, &[]), ["A11@0", "-", "create"]);
         // A recent match leads and is not listed twice.
         p.search = "s".into();
-        assert_eq!(list(&p, &roots, &["B", "A2"]), ["r:B", "r:A2", "-", "A@0", "A1@0", "A11@0", "-", "create"]);
+        assert_eq!(list(&p, &roots, &["B", "A2"]), ["r:A2", "r:B", "-", "A1@0", "A@0", "A11@0", "-", "create"]);
         // An exact name hides Create.
         p.search = "Dogs".into();
         assert_eq!(list(&p, &roots, &[]), ["A2@0"]);
@@ -495,6 +606,92 @@ mod tests {
         p.tab = Tab::Recent;
         p.search = "dog".into();
         assert_eq!(list(&p, &roots, &["B", "A2"]), ["r:A2", "-", "create"]);
+    }
+
+    fn kind(name: &str, query: &str) -> Option<MatchKind> {
+        fuzzy_rank(name, query).map(|r| r.kind)
+    }
+
+    #[test]
+    fn a_match_is_a_prefix_a_word_start_contiguous_or_scattered() {
+        assert_eq!(kind("Animals", "ani"), Some(MatchKind::Prefix));
+        assert_eq!(kind("Old Animals", "ani"), Some(MatchKind::WordStart));
+        assert_eq!(kind("oldAnimals", "ani"), Some(MatchKind::WordStart), "a capital starts a word");
+        assert_eq!(kind("photo2024", "2024"), Some(MatchKind::WordStart), "digits start a word");
+        assert_eq!(kind("Art Books", "ab"), Some(MatchKind::WordStart), "first letters of words");
+        assert_eq!(kind("Humanities", "ani"), Some(MatchKind::Contiguous));
+        assert_eq!(kind("Kittens", "ts"), Some(MatchKind::Scattered));
+        assert_eq!(kind("Animals", "lam"), None, "letters out of order");
+        assert_eq!(kind("Cat", "cats"), None, "more letters than the name");
+    }
+
+    #[test]
+    fn matching_ignores_case_accents_and_spaces_in_any_script() {
+        assert_eq!(kind("ANIMALS", "ani"), Some(MatchKind::Prefix));
+        assert_eq!(kind("animals", "ANI"), Some(MatchKind::Prefix));
+        assert_eq!(kind("Café Photos", "cafe"), Some(MatchKind::Prefix));
+        assert_eq!(kind("Cafe\u{301} Photos", "CAFÉ"), Some(MatchKind::Prefix), "a decomposed accent");
+        assert_eq!(kind("Art Books", "art books"), Some(MatchKind::Prefix));
+        assert_eq!(kind("Art Books", "artb"), Some(MatchKind::Prefix));
+        assert_eq!(kind("Фотографии", "ФОТО"), Some(MatchKind::Prefix));
+        assert_eq!(kind("Моя Фотография", "фот"), Some(MatchKind::WordStart));
+        assert_eq!(kind("Größe", "GRÖ"), Some(MatchKind::Prefix));
+        assert_eq!(kind("写真フォルダ", "フォルダ"), Some(MatchKind::Contiguous));
+        assert_eq!(kind("写真フォルダ", "写フ"), Some(MatchKind::Scattered));
+        assert_eq!(kind("사진 폴더", "폴더"), Some(MatchKind::WordStart));
+    }
+
+    #[test]
+    fn pinyin_is_not_matched() {
+        assert_eq!(fuzzy_rank("照片", "zhaopian"), None);
+        assert_eq!(fuzzy_rank("照片", "zp"), None);
+    }
+
+    #[test]
+    fn ranks_sort_prefix_then_word_start_then_contiguous_then_scattered() {
+        let mut names = vec!["Coat Hangers", "Tomcat", "Old Cat Pictures", "Cat", "Catalogue", "C a t", "Crates", "Crate Art", "Dog"];
+        names.retain(|n| fuzzy_rank(n, "cat").is_some());
+        names.sort_by_key(|n| fuzzy_rank(n, "cat"));
+        // An exact name leads what it begins, and among scattered matches
+        // the same gaps go to the earlier start, then the shorter name.
+        assert_eq!(names, ["Cat", "C a t", "Catalogue", "Old Cat Pictures", "Tomcat", "Crates", "Crate Art", "Coat Hangers"]);
+    }
+
+    #[test]
+    fn a_tighter_scatter_beats_a_looser_one_at_any_start() {
+        // The tightest run counts, not the first c.
+        let rank = fuzzy_rank("cxxaxxtxxcxat", "cat").unwrap();
+        assert_eq!(rank.kind, MatchKind::Scattered);
+        assert_eq!((rank.gaps, rank.start), (1, 9));
+        assert!(fuzzy_rank("cxat", "cat") < fuzzy_rank("cxxat", "cat"));
+    }
+
+    #[test]
+    fn results_are_ranked_and_scattered_recents_do_not_lead() {
+        let roots: Vec<Folder> = ["Coat", "Tomcat", "Cat", "Old Cat"].iter().enumerate().map(|(n, name)| Folder::new(format!("f{n}"), *name, 0)).collect();
+        let mut p = picker(&[], &roots);
+        p.search = "Cat".into();
+        // Best first, whatever the tree's order.
+        assert_eq!(list(&p, &roots, &[]), ["f2@0", "f3@0", "f1@0", "f0@0"]);
+        // A recent real match stays above the line; a scattered one doesn't.
+        assert_eq!(list(&p, &roots, &["f1", "f0"]), ["r:f1", "-", "f2@0", "f3@0", "f0@0"]);
+        // The Recent tab has no second block, so it lists both, ranked.
+        p.tab = Tab::Recent;
+        assert_eq!(list(&p, &roots, &["f0", "f1"]), ["r:f1", "r:f0"]);
+        // And the first row is what the keyboard starts on.
+        p.tab = Tab::All;
+        p.dirty = true;
+        p.refresh(&roots, &[], |_| false);
+        assert_eq!(p.listed[0], Row::Folder { id: "f2".into(), depth: 0, kids: false });
+        assert_eq!(p.highlight, Some(0));
+    }
+
+    #[test]
+    fn the_action_editors_search_keeps_the_tree_and_matches_fuzzily() {
+        let roots = tree();
+        let mut p = picker(&[], &roots);
+        p.search = "ktn".into();
+        assert_eq!(ids(&rows(&p, &roots, &[], |_| false)), ["A@0", "A1@1", "A11@2", "create"]);
     }
 
     #[test]
