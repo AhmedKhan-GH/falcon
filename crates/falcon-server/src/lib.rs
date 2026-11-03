@@ -10,16 +10,20 @@
 //!
 //! Falcon's own choices:
 //! - it listens on 127.0.0.1 only;
-//! - it serves library routes only (no script injection, plugins or AI);
+//! - it serves library routes and AI Search only (no script injection or
+//!   plugins);
 //! - imports and thumbnail work finish before the reply, so returned ids
 //!   exist and new thumbnails are in place;
 //! - routes that read or write files do so without holding the library lock;
 //! - library history is what the app hands over ([`Handle::set_history`]),
 //!   or else the libraries this server has served, newest first.
 
+mod ai;
 pub mod mcp;
 mod rules;
 mod v2;
+
+pub use ai::{AiQuery, AiSearch, AiStatus};
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -54,6 +58,8 @@ struct State {
     preferences_changed: AtomicBool,
     /// `(library root, folder id)` pairs opened with `folder/unlock`.
     unlocked: Mutex<HashSet<(String, String)>>,
+    /// What answers `aiSearch/*`; see [`Handle::set_ai_search`].
+    ai: Mutex<Option<Arc<dyn AiSearch>>>,
 }
 
 impl State {
@@ -64,6 +70,7 @@ impl State {
             preferences: Mutex::new(default_preferences()),
             preferences_changed: AtomicBool::new(false),
             unlocked: Mutex::new(HashSet::new()),
+            ai: Mutex::new(None),
         }
     }
 
@@ -160,6 +167,12 @@ impl Handle {
     pub fn set_preferences(&self, preferences: Value) {
         *self.state.preferences.lock().unwrap_or_else(|p| p.into_inner()) = preferences;
         self.state.preferences_changed.store(false, Ordering::SeqCst);
+    }
+
+    /// Hands over what answers the `aiSearch/*` routes. Without one they
+    /// answer that AI Search isn't installed.
+    pub fn set_ai_search(&self, ai: Arc<dyn AiSearch>) {
+        *self.state.ai.lock().unwrap_or_else(|p| p.into_inner()) = Some(ai);
     }
 
     /// The preferences, if a request changed them since the last call or
@@ -551,12 +564,24 @@ fn route(lib: &Shared, state: &State, method: &Method, path: &str, args: &Map<St
         ("/api/v2/tagGroup/remove", &[Post]),
         ("/api/v2/tagGroup/addTags", &[Post]),
         ("/api/v2/tagGroup/removeTags", &[Post]),
+        ("/api/v2/aiSearch/isInstalled", &[Get]),
+        ("/api/v2/aiSearch/isReady", &[Get]),
+        ("/api/v2/aiSearch/isStarting", &[Get]),
+        ("/api/v2/aiSearch/isSyncing", &[Get]),
+        ("/api/v2/aiSearch/getSyncStatus", &[Get]),
+        ("/api/v2/aiSearch/checkServiceHealth", &[Get]),
+        ("/api/v2/aiSearch/searchByText", &[Get, Post]),
+        ("/api/v2/aiSearch/searchByBase64", &[Post]),
+        ("/api/v2/aiSearch/searchByItemId", &[Get, Post]),
     ];
     let Some((_, methods)) = routes.iter().find(|(p, _)| *p == path) else {
         return Reply::NotFound;
     };
     if !methods.contains(method) {
         return Reply::WrongMethod;
+    }
+    if path.starts_with("/api/v2/aiSearch/") {
+        return ai::route(lib, state, path, args);
     }
     if let Some(reply) = import_route(lib, path, args) {
         return reply;

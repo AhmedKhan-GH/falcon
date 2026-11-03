@@ -392,7 +392,7 @@ fn wrong_method_and_unknown_route() {
     let e = env();
     let (code, v) = e.get("/api/v2/tagGroup/create");
     assert_eq!((code, v["message"].as_str()), (405, Some("method not allowed")));
-    let (code, _) = e.get("/api/v2/aiSearch/isReady");
+    let (code, _) = e.get("/api/v2/plugin/list");
     assert_eq!(code, 404);
     // limit 0 falls back to the default page size.
     assert_eq!(e.ok_get("/api/v2/tag/get?limit=0")["limit"], 50);

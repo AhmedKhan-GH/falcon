@@ -103,7 +103,16 @@ sec('v2', [
  R('POST','tagGroup/update','Change a tag group.', [P('id','s',1,'Group ID.'), P('name','s',0,'Name.'), P('tags','j',0,'Array of tags (replaces).'), P('color','s',0,'Color name.'), P('description','s',0,'Description.')]),
  R('POST','tagGroup/remove','Delete a tag group; tags stay on items.', [P('id','s',1,'Group ID.')]),
  R('POST','tagGroup/addTags','Add tags to a group.', [P('groupId','s',1,'Group ID.'), P('tags','j',1,'Array of tags.'), P('removeFromSource','b',0,'Move out of other groups.')]),
- R('POST','tagGroup/removeTags','Remove tags from a group.', [P('groupId','s',1,'Group ID.'), P('tags','j',1,'Array of tags.')])]]
+ R('POST','tagGroup/removeTags','Remove tags from a group.', [P('groupId','s',1,'Group ID.'), P('tags','j',1,'Array of tags.')])]],
+  ['AI Search',[R('GET','aiSearch/isInstalled','Whether the model is installed and turned on.', []),
+    R('GET','aiSearch/isReady','Whether searches can be answered.', []),
+    R('GET','aiSearch/isStarting','Whether the model is loading.', []),
+    R('GET','aiSearch/isSyncing','Whether items are being indexed.', []),
+    R('GET','aiSearch/getSyncStatus','How far indexing has got.', []),
+    R('GET','aiSearch/checkServiceHealth','How AI Search stands.', []),
+    R('POST','aiSearch/searchByText','Items matching a description, in English.', [P('query','s',1,'The description.'), P('limit','n',0,'At most this many.')]),
+    R('POST','aiSearch/searchByBase64','Items like a picture.', [P('base64','s',1,'The picture file, in Base64.'), P('limit','n',0,'At most this many.')]),
+    R('POST','aiSearch/searchByItemId','Items like an item.', [P('itemId','s',1,'Item ID.'), P('limit','n',0,'At most this many.')])]]
 ].map(([g, rs]) => [g, rs.map(r => ({...r, path: V2 + r.path}))])),
 sec('v1', [
 ['application', [R('GET','application/info','Version and platform of the app.')]],
