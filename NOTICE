@@ -57,6 +57,9 @@ Third-party material:
   Contents/Resources/FFmpeg/COPYING.dav1d.txt. It is not part of this source
   tree and is not linked into Falcon.
 
+- security-framework 3.7.0 and security-framework-sys 2.17.0
+  (https://github.com/kornelski/rust-security-framework), API keys in the macOS
+  Keychain, MIT OR Apache-2.0, copyright (c) Steven Fackler and Kornel.
 - web-ifc 0.0.78 (https://github.com/ThatOpen/engine_web-ifc, tag 0.78), the
   IFC geometry engine, Mozilla Public License 2.0, copyright (c) web-ifc
   contributors. Not part of this source tree: scripts/fetch-web-ifc.sh fetches
