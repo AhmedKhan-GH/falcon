@@ -8,9 +8,9 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 |---|---|---|---|---|
 | Main window: menus, shortcuts, toolbar, sidebar, layouts | 270 | 0 | 0 | 8 |
 | Viewers and file formats | 206 | 0 | 0 | 5 |
-| Search, filters and organising | 219 | 1 | 0 | 3 |
+| Search, filters and organising | 220 | 0 | 0 | 3 |
 | Import, export, library, preferences and integrations | 198 | 0 | 0 | 27 |
-| **Total** | 893 | 1 | 0 | 43 |
+| **Total** | 894 | 0 | 0 | 43 |
 
 Rows marked **Not wanted (user decision)** (12) are Eagle features the user chose not to have in falcon; they are counted outside the local Missing total. Rows marked **Accepted difference (user decision)** (7) are counted outside the Partial total.
 ## Fix first
@@ -978,7 +978,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Sort folders by title for this level or all levels, A-Z or Z-A, with confirmation | Done | `ui/organize.rs` folder_title_sort_menu, `O:352`, `ui/organize.rs` organize_dialogs confirm | local |
 | Duplicate a folder | Done | `Library::duplicate_folder` | local |
 | Folder icon from the named icon set | Done | `ui/organize.rs` icon_grid, `folder_icons.rs:171` | local |
-| Folder icon as an emoji | Partial | Falcon addition (Eagle 4 stores no emoji icons; its "emoji" submenu is the named-icon grid): 112 curated emoji in an Emoji submenu for folders and smart folders, drawn in sidebar and Quick Access rows from the system font's bitmaps; kept in falcon's app data, not metadata.json, so Eagle keeps the named icon. Kept per library path; a new subfolder takes its parent's and Duplicate copies it, both seen on screen. The Emoji menu for several selected folders isn't seen yet: the desktop tool's ⌘-click doesn't reach egui | local |
+| Folder icon as an emoji | Done | Falcon addition (Eagle 4 stores no emoji icons; its "emoji" submenu is the named-icon grid): 112 curated emoji in an Emoji submenu for folders and smart folders, drawn in sidebar and Quick Access rows from the system font's bitmaps; kept in falcon's app data, not metadata.json, so Eagle keeps the named icon. Kept per library path; a new subfolder takes its parent's and Duplicate copies it, both seen on screen. The Emoji menu for several selected folders is seen on screen too: both folders took the emoji | local |
 | Folder colour (8 colours or none), also tinting the guide line | Done | `ui/organize.rs` color_row, `ui/sidebar/mod.rs` folder_row guide line | local |
 | Change icon or colour of several selected folders | Done | `Library::set_folders_icon` from the multi-folder menu | local |
 | Folder cover: set an item as cover | Done | `image_edit.rs:92`, `E:465` | local |
