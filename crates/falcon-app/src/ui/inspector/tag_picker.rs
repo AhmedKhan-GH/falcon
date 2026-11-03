@@ -196,7 +196,7 @@ impl App {
         let mut pin = p.pinned;
         let area = egui::Area::new(egui::Id::unique("tag-picker")).order(egui::Order::Foreground).fixed_pos(Pos2::new(x, y)).show(ctx, |ui| {
             let frame = egui::Frame::NONE
-                .fill(t::p().panel)
+                .fill(ui.visuals().window_fill)
                 .stroke(Stroke::new(1.0, t::p().field_border))
                 .corner_radius(CornerRadius::same(8))
                 .shadow(egui::epaint::Shadow { offset: [0, 6], blur: 18, spread: 0, color: Color32::from_black_alpha(90) })

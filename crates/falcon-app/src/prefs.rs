@@ -32,8 +32,8 @@ pub struct Prefs {
     /// Eagle's App menu ▸ Color Space (its `colorSpace` setting): how the
     /// window's colours are matched to the display (`colorspace.rs`).
     pub color_space: crate::colorspace::ColorSpace,
-    /// Eagle's `general.enableVibrancy`: the sidebar and inspector are
-    /// translucent over the macOS blur (`vibrancy.rs`).
+    /// Eagle's `general.enableVibrancy`: menus and boxes are translucent,
+    /// the windows among them over the macOS blur (`vibrancy.rs`).
     pub vibrancy: bool,
     /// Eagle's `habits.hoverZoom`: the zoom button on hovered cards.
     pub hover_zoom: bool,
@@ -821,6 +821,12 @@ impl Window {
         self.draft.as_ref().filter(|_| self.open).map(|d| (&d.keys, d.prefs.screenshot_shortcuts))
     }
 
+    /// The transparency switch being edited, while the window is open, so
+    /// that it shows at once and Cancel takes it back, as the theme does.
+    pub fn live_vibrancy(&self) -> Option<bool> {
+        self.draft.as_ref().filter(|_| self.open).map(|d| d.prefs.vibrancy)
+    }
+
     /// Whether a shortcut row is waiting for a key press (the global keys
     /// are let go so it gets them).
     pub fn recording(&self) -> bool {
@@ -875,7 +881,7 @@ impl Window {
         });
         let mut result = None;
         let mut close = esc;
-        let frame = egui::Frame::NONE.fill(t::p().panel).stroke(Stroke::new(1.0, t::p().divider)).corner_radius(CornerRadius::same(10));
+        let frame = egui::Frame::NONE.fill(ctx.global_style().visuals.window_fill).stroke(Stroke::new(1.0, t::p().divider)).corner_radius(CornerRadius::same(10));
         egui::Modal::new(egui::Id::unique("preferences")).frame(frame).show(ctx, |ui| {
             ui.set_width(SIZE.x);
             ui.set_height(SIZE.y);
@@ -1122,7 +1128,7 @@ fn general(p: &mut Page, d: &mut Draft, login: &crate::login_item::Status) {
         ui.checkbox(&mut d.panels.sidebar, tr("Show the sidebar"));
         ui.checkbox(&mut d.panels.inspector, tr("Show the inspector"));
         if crate::vibrancy::SUPPORTED {
-            ui.checkbox(&mut d.prefs.vibrancy, tr("Blur the desktop behind the sidebar and inspector"));
+            ui.checkbox(&mut d.prefs.vibrancy, tr("Make menus, dialogs and the Preferences window translucent"));
         }
         if cfg!(target_os = "macos") {
             ui.checkbox(&mut d.prefs.menu_icon, tr("Show the falcon icon in the menu bar"));

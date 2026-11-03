@@ -304,7 +304,7 @@ impl App {
         self.side.rows.clear();
         self.ws.folders.begin_rows();
         let p = ui.painter().clone();
-        p.rect_filled(full, 0.0, crate::vibrancy::side_fill(t::p().panel, self.vibrancy.live));
+        p.rect_filled(full, 0.0, t::p().panel);
         p.vline(full.right() - 0.5, full.y_range(), Stroke::new(1.0, t::p().divider));
 
         // Header: traffic lights on the left, actions on the right.

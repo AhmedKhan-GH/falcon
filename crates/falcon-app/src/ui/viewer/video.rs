@@ -1051,7 +1051,7 @@ impl App {
         let Some(draft) = self.video.draft.as_mut() else { return };
         let at = Pos2::new(bottom.x - width / 2.0, bottom.y - 150.0);
         egui::Area::new(ui.scope_id().with("timed-comment")).order(egui::Order::Tooltip).fixed_pos(at).show(ui.ctx(), |ui| {
-            egui::Frame::new().fill(t::p().panel).stroke(Stroke::new(1.0, t::p().divider)).corner_radius(CornerRadius::same(8)).inner_margin(10).show(ui, |ui| {
+            egui::Frame::new().fill(ui.visuals().window_fill).stroke(Stroke::new(1.0, t::p().divider)).corner_radius(CornerRadius::same(8)).inner_margin(10).show(ui, |ui| {
                 ui.set_width(width - 20.0);
                 ui.label(egui::RichText::new(trf("Comment at {time}", &[("time", &comment_time(draft.at))])).font(font(12.0)).color(t::p().text_muted));
                 let te = ui.add(TextEdit::multiline(&mut draft.text).id_salt("timed-comment-text").hint_text(tr("Write a comment…")).font(font(13.0)).desired_rows(3).desired_width(width - 20.0));

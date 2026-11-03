@@ -284,6 +284,12 @@ impl App {
         self.prefs_window.library = self.ws.root.clone();
     }
 
+    /// Whether menus and boxes are translucent: as being edited in
+    /// Preferences, else as saved.
+    pub(crate) fn vibrancy_on(&self) -> bool {
+        self.prefs_window.live_vibrancy().unwrap_or(self.prefs.vibrancy)
+    }
+
     /// Lock Now: hides everything behind the lock screen, stopping playback
     /// and closing Preferences and the collect window.
     pub(crate) fn lock_now(&mut self) {

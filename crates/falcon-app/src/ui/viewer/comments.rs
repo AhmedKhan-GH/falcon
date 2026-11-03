@@ -368,7 +368,7 @@ impl App {
         let mut delete = false;
         let draft = self.ws.tools.draft.as_mut().unwrap();
         egui::Area::new(ui.scope_id().with("comment-editor")).order(egui::Order::Tooltip).fixed_pos(Pos2::new(x, y)).show(ui.ctx(), |ui| {
-            egui::Frame::new().fill(t::p().panel).stroke(Stroke::new(1.0, t::p().divider)).corner_radius(CornerRadius::same(8)).inner_margin(10).show(ui, |ui| {
+            egui::Frame::new().fill(ui.visuals().window_fill).stroke(Stroke::new(1.0, t::p().divider)).corner_radius(CornerRadius::same(8)).inner_margin(10).show(ui, |ui| {
                 ui.set_width(width - 20.0);
                 let te = ui.add(
                     TextEdit::multiline(&mut draft.text)

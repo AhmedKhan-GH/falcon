@@ -24,8 +24,9 @@ impl App {
             }
             None => (None, collect::TagPool::default()),
         };
+        let vibrancy = self.vibrancy_on();
         let mut state = collect::State { selected: &mut self.prefs.collect_folders, recent: &mut self.prefs.collect_recent };
-        let event = self.collect.show(ctx, folders.as_deref(), &mut state, &pool, &self.shortcuts);
+        let event = self.collect.show(ctx, folders.as_deref(), &mut state, &pool, &self.shortcuts, vibrancy);
         let target = folders.as_deref().map(|f| collect::target(f, &self.prefs.collect_folders)).unwrap_or_default();
         match event {
             Some(collect::Event::CreateFolder(name)) => {

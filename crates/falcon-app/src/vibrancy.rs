@@ -1,116 +1,142 @@
-//! Preferences ▸ General ▸ transparency effects: a translucent sidebar and
-//! inspector over the macOS blur, on by default as Eagle's
-//! `general.enableVibrancy` is.
+//! Preferences ▸ General ▸ transparency effects, Eagle's
+//! `general.enableVibrancy`: menus and boxes go translucent while the main
+//! window stays opaque. Off by default here, since falcon can only do part
+//! of it (below).
 //!
-//! The window is always created transparent (`main.rs`), since eframe picks
-//! the surface's alpha mode once, at creation. An `NSVisualEffectView` sits
-//! behind wgpu's `CAMetalLayer`, and the theme draws the two side panels with
-//! alpha. Everything else stays opaque: egui's blending never lowers the
-//! alpha already in the frame, so [`Vibrancy::end_frame`] lays one opaque
-//! rectangle under the frame, everywhere but the side panels, and text and
-//! pictures can't show the desktop through.
+//! What each surface can do differs, which is what [`Surface`] writes down:
 //!
-//! With the preference off the view is hidden and the layer and window are
-//! opaque again, so the change applies at once, without a relaunch.
+//! - A window of its own that is a box (Preferences, Collect) gets a real
+//!   blur of the desktop. An `NSVisualEffectView` sits behind wgpu's
+//!   `CAMetalLayer` and the window is filled at 75%, the alpha of Eagle's
+//!   `--color-theme-75`.
+//! - Menus, popups, tooltips and dialogs inside a window are filled at 90%,
+//!   with no blur. egui can't leave its window, so they can only show that
+//!   window's content, and blurring it would take a second render of the
+//!   frame (Eagle's CSS `backdrop-filter` gets that from the browser). A
+//!   native view can't help either: it would have to sit above the Metal
+//!   layer, and would cover the text the same layer draws.
+//! - The main window and preview windows stay opaque. egui's blending never
+//!   lowers the alpha already in the frame and the frame starts from an
+//!   opaque clear ([`clear_color`]), so screenshots of the window are as they
+//!   are with the preference off.
+//! - The menu bar is AppKit's (`menu.rs`) and the system makes it vibrant
+//!   whatever this preference says.
+//!
+//! eframe picks the surfaces' alpha mode once, from the main window, so that
+//! window is always created transparent (`main.rs`) and
+//! [`sync_main_window`] makes it opaque. Separate windows are created transparent too and follow the
+//! preference through [`sync_window`], so a change applies at once, without a
+//! relaunch.
 
-use eframe::egui::{self, Color32, Rect, Shape, layers::ShapeIdx};
+use eframe::egui::{self, Color32};
 
-/// The side panels' opacity with transparency on, 75%: Eagle's
-/// `--color-theme-75`, the translucent background of its own Preferences
-/// window on macOS.
-pub const SIDE_ALPHA: u8 = 191;
+/// The opacity of a window of its own over the blur, 75%: Eagle's
+/// `--color-theme-75`, the translucent background of its Preferences window
+/// on macOS.
+pub const WINDOW_ALPHA: u8 = 191;
 
-/// Whether the window is created transparent. Only macOS has the blur.
+/// The opacity of a box inside a window, 90%. With no blur to soften what
+/// is behind it, more would show through than text can stand.
+pub const BOX_ALPHA: u8 = 230;
+
+/// Whether separate windows can be blurred. Only macOS has the blur.
 pub const SUPPORTED: bool = cfg!(target_os = "macos");
 
-/// A side panel's fill: `panel`, translucent while the blur is live.
-pub fn side_fill(panel: Color32, live: bool) -> Color32 {
-    if live {
-        let [r, g, b, _] = panel.to_srgba_unmultiplied();
-        Color32::from_rgba_unmultiplied(r, g, b, SIDE_ALPHA)
-    } else {
-        panel
-    }
+/// What the preference treats differently.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Surface {
+    /// The main window with its panels and grid. Preview windows, whose
+    /// surface it also describes, are simply never touched.
+    MainWindow,
+    /// A context menu, popup, tooltip or dialog, in any window.
+    Box,
+    /// A box that is a window of its own: Preferences, Collect.
+    BoxWindow,
 }
 
-/// What the frame is cleared to: nothing while the blur is live, so that the
-/// side panels' alpha reaches the window, else the opaque main colour.
-pub fn clear_color(live: bool, main: Color32) -> [f32; 4] {
-    if live { [0.0; 4] } else { main.to_normalized_gamma_f32() }
-}
-
-/// The part of the window that must stay opaque: all of it between the side
-/// panels shown this frame.
-pub fn opaque_rect(window: Rect, sidebar_right: Option<f32>, inspector_left: Option<f32>) -> Rect {
-    let mut r = window;
-    if let Some(x) = sidebar_right {
-        r.min.x = x.clamp(window.left(), window.right());
-    }
-    if let Some(x) = inspector_left {
-        r.max.x = x.clamp(r.left(), window.right());
-    }
-    r
-}
-
-/// What the app keeps from frame to frame.
-#[derive(Default)]
-pub struct Vibrancy {
-    /// The blur is in place, so the side panels may be translucent.
-    pub live: bool,
-    /// The side panels' inner edges this frame, where they are shown.
-    pub sidebar_right: Option<f32>,
-    pub inspector_left: Option<f32>,
-    base: Option<ShapeIdx>,
-    #[cfg(target_os = "macos")]
-    appearance: Option<bool>,
-}
-
-impl Vibrancy {
-    /// Keeps a place at the bottom of the frame for the opaque rectangle.
-    pub fn begin_frame(&mut self, ui: &egui::Ui) {
-        self.sidebar_right = None;
-        self.inspector_left = None;
-        self.base = Some(ui.painter().add(Shape::Noop));
-    }
-
-    /// Fills the place kept by [`Self::begin_frame`].
-    pub fn end_frame(&mut self, ui: &egui::Ui, main: Color32) {
-        if let Some(idx) = self.base.take()
-            && self.live
-        {
-            let rect = opaque_rect(ui.ctx().content_rect(), self.sidebar_right, self.inspector_left);
-            ui.painter().set(idx, Shape::rect_filled(rect, 0.0, main));
+impl Surface {
+    /// The surface's opacity under the preference.
+    pub fn alpha(self, enabled: bool) -> u8 {
+        match self {
+            Surface::Box if enabled => BOX_ALPHA,
+            Surface::BoxWindow if enabled => WINDOW_ALPHA,
+            _ => u8::MAX,
         }
     }
 
-    /// Brings the window in line with the preference. Call it every frame:
-    /// wgpu makes the layer non-opaque again whenever it configures the
-    /// surface. A change of `live` asks for another frame to draw it.
-    pub fn sync(&mut self, ctx: &egui::Context, frame: &eframe::Frame, enabled: bool) {
-        let live = self.apply(ctx, frame, enabled);
-        if live != self.live {
-            self.live = live;
-            ctx.request_repaint();
+    /// Whether the desktop shows blurred behind the surface.
+    pub fn blurred(self, enabled: bool) -> bool {
+        enabled && SUPPORTED && self == Surface::BoxWindow
+    }
+
+    /// `base` at the surface's opacity.
+    pub fn fill(self, base: Color32, enabled: bool) -> Color32 {
+        let alpha = self.alpha(enabled);
+        if alpha == u8::MAX {
+            return base;
         }
-    }
-
-    #[cfg(target_os = "macos")]
-    fn apply(&mut self, ctx: &egui::Context, frame: &eframe::Frame, enabled: bool) -> bool {
-        use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-        let Ok(handle) = frame.window_handle() else { return false };
-        let RawWindowHandle::AppKit(h) = handle.as_raw() else { return false };
-        let Some(mtm) = objc2::MainThreadMarker::new() else { return false };
-        let dark = ctx.theme() == egui::Theme::Dark;
-        // SAFETY: `ns_view` is winit's live content view, used on the main
-        // thread inside `ui`.
-        unsafe { imp::apply(h.ns_view.as_ptr().cast(), enabled, dark, &mut self.appearance, mtm) }
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    fn apply(&mut self, _: &egui::Context, _: &eframe::Frame, _: bool) -> bool {
-        false
+        let [r, g, b, _] = base.to_srgba_unmultiplied();
+        Color32::from_rgba_unmultiplied(r, g, b, alpha)
     }
 }
+
+/// What the main window is cleared to: its opaque main colour, whatever the
+/// preference says. Separate windows are cleared to nothing by eframe and
+/// fill themselves.
+pub fn clear_color(main: Color32, enabled: bool) -> [f32; 4] {
+    Surface::MainWindow.fill(main, enabled).to_normalized_gamma_f32()
+}
+
+/// Brings the frame's style in line with the preference: egui draws menus,
+/// popups, tooltips and dialogs with `window_fill`. Call it every frame, as a
+/// theme change sets the fill back.
+pub fn sync_boxes(ctx: &egui::Context, panel: Color32, enabled: bool) {
+    let fill = Surface::Box.fill(panel, enabled);
+    if ctx.global_style().visuals.window_fill != fill {
+        ctx.global_style_mut(|s| s.visuals.window_fill = fill);
+    }
+}
+
+/// Brings the main window in line with the rules, which keep it opaque. Call
+/// it every frame: wgpu makes the layer non-opaque again whenever it configures
+/// the surface.
+#[cfg(target_os = "macos")]
+pub fn sync_main_window(frame: &eframe::Frame, enabled: bool) {
+    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    let Ok(handle) = frame.window_handle() else { return };
+    let RawWindowHandle::AppKit(h) = handle.as_raw() else { return };
+    let Some(mtm) = objc2::MainThreadMarker::new() else { return };
+    // SAFETY: `ns_view` is winit's live content view, used on the main
+    // thread inside `ui`.
+    unsafe { imp::apply(h.ns_view.as_ptr().cast(), Surface::MainWindow.blurred(enabled), false, mtm) };
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn sync_main_window(_: &eframe::Frame, _: bool) {}
+
+/// Brings the separate window titled `title` in line with the preference:
+/// blurred or opaque, in falcon's light or dark look. Call it every frame
+/// from inside the window's viewport. eframe has no handle for a window
+/// besides the main one, so the NSWindow is found by its title, as for a
+/// preview window's opacity.
+#[cfg(target_os = "macos")]
+pub fn sync_window(ctx: &egui::Context, title: &str, enabled: bool) {
+    let Some(mtm) = objc2::MainThreadMarker::new() else { return };
+    let dark = ctx.theme() == egui::Theme::Dark;
+    let app = objc2_app_kit::NSApplication::sharedApplication(mtm);
+    for window in app.windows().iter() {
+        if window.title().to_string() == title {
+            if let Some(view) = window.contentView() {
+                // SAFETY: the window's live content view, on the main thread.
+                unsafe { imp::apply(objc2::rc::Retained::as_ptr(&view).cast_mut(), Surface::BoxWindow.blurred(enabled), dark, mtm) };
+            }
+            return;
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn sync_window(_: &egui::Context, _: &str, _: bool) {}
 
 #[cfg(target_os = "macos")]
 mod imp {
@@ -152,7 +178,8 @@ mod imp {
         let backdrop: Retained<Backdrop> = unsafe { msg_send![Backdrop::alloc(mtm), initWithFrame: frame] };
         backdrop.setMaterial(NSVisualEffectMaterial::Sidebar);
         backdrop.setBlendingMode(NSVisualEffectBlendingMode::BehindWindow);
-        backdrop.setState(NSVisualEffectState::FollowsWindowActiveState);
+        // Collect floats over other apps' windows, so it is seldom the active one.
+        backdrop.setState(NSVisualEffectState::Active);
         backdrop.setAutoresizingMask(NSAutoresizingMaskOptions::ViewWidthSizable | NSAutoresizingMaskOptions::ViewHeightSizable);
         backdrop.setWantsLayer(true);
         view.addSubview_positioned_relativeTo(&backdrop, NSWindowOrderingMode::Below, None);
@@ -191,23 +218,28 @@ mod imp {
         window.invalidateShadow();
     }
 
-    /// Gives the blur falcon's light or dark look rather than the system's.
+    /// Gives the blur falcon's light or dark look rather than the system's,
+    /// when it differs.
     fn set_appearance(view: &NSView, dark: bool) {
         let Some(class) = AnyClass::get(c"NSAppearance") else { return };
         let name = NSString::from_str(if dark { "NSAppearanceNameDarkAqua" } else { "NSAppearanceNameAqua" });
         // SAFETY: NSAppearance's class method returns a live appearance or
-        // nil, and NSView's setter takes either.
+        // nil, NSView's accessors take and give either, and the same
+        // appearance object is handed out for a name.
         unsafe {
             let appearance: *mut AnyObject = msg_send![class, appearanceNamed: &*name];
-            let _: () = msg_send![view, setAppearance: appearance];
+            let now: *mut AnyObject = msg_send![view, appearance];
+            if now != appearance {
+                let _: () = msg_send![view, setAppearance: appearance];
+            }
         }
     }
 
-    /// True once the blur is showing behind a transparent layer.
+    /// Shows the blur behind a transparent layer, or makes the window opaque.
     ///
     /// # Safety
     /// `view` must be a live NSView, used on the main thread.
-    pub unsafe fn apply(view: *mut NSView, enabled: bool, dark: bool, appearance: &mut Option<bool>, mtm: MainThreadMarker) -> bool {
+    pub unsafe fn apply(view: *mut NSView, enabled: bool, dark: bool, mtm: MainThreadMarker) {
         // SAFETY: as the caller ensures.
         let metal = unsafe { crate::colorspace::imp::metal_layer_of_view(view.cast()) };
         // SAFETY: as the caller ensures.
@@ -224,17 +256,11 @@ mod imp {
                 unsafe { set_layer_opaque(metal, true) };
             }
             set_window_opaque(view, true);
-            return false;
+            return;
         }
-        let backdrop = existing.unwrap_or_else(|| {
-            *appearance = None;
-            install(view, mtm)
-        });
+        let backdrop = existing.unwrap_or_else(|| install(view, mtm));
         backdrop.setHidden(false);
-        if *appearance != Some(dark) {
-            set_appearance(&backdrop, dark);
-            *appearance = Some(dark);
-        }
+        set_appearance(&backdrop, dark);
         // SAFETY: `metal` is a live CALayer, and the backdrop is layer-backed
         // (`install`), so `layer` returns a live one.
         unsafe {
@@ -248,22 +274,44 @@ mod imp {
             set_layer_opaque(metal, false);
         }
         set_window_opaque(view, false);
-        true
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use eframe::egui::pos2;
 
     const PANEL: Color32 = Color32::from_rgb(0x1f, 0x20, 0x23);
 
     #[test]
-    fn side_panels_are_translucent_only_while_the_blur_is_live() {
-        assert_eq!(side_fill(PANEL, false), PANEL);
-        let fill = side_fill(PANEL, true);
-        assert_eq!(fill.a(), SIDE_ALPHA);
+    fn with_the_preference_off_every_surface_is_opaque_and_unblurred() {
+        for s in [Surface::MainWindow, Surface::Box, Surface::BoxWindow] {
+            assert_eq!(s.alpha(false), u8::MAX, "{s:?}");
+            assert_eq!(s.fill(PANEL, false), PANEL, "{s:?}");
+            assert!(!s.blurred(false), "{s:?}");
+        }
+    }
+
+    #[test]
+    fn with_the_preference_on_only_boxes_are_translucent() {
+        assert_eq!(Surface::MainWindow.fill(PANEL, true), PANEL);
+        assert_eq!(Surface::Box.alpha(true), BOX_ALPHA);
+        assert_eq!(Surface::BoxWindow.alpha(true), WINDOW_ALPHA);
+    }
+
+    #[test]
+    fn only_a_window_of_its_own_can_blur_the_desktop() {
+        assert_eq!(Surface::BoxWindow.blurred(true), SUPPORTED);
+        // A box inside a window can't leave it.
+        assert!(!Surface::Box.blurred(true));
+        // So the main window never needs the effect view.
+        assert!(!Surface::MainWindow.blurred(true));
+    }
+
+    #[test]
+    fn a_translucent_fill_keeps_the_colour() {
+        let fill = Surface::BoxWindow.fill(PANEL, true);
+        assert_eq!(fill.a(), WINDOW_ALPHA);
         // Same colour, within rounding of the premultiplied store.
         let [r, g, b, _] = fill.to_srgba_unmultiplied();
         for (got, want) in [(r, 0x1f), (g, 0x20), (b, 0x23)] {
@@ -272,21 +320,23 @@ mod tests {
     }
 
     #[test]
-    fn the_frame_is_cleared_to_nothing_only_while_the_blur_is_live() {
-        assert_eq!(clear_color(true, PANEL), [0.0; 4]);
-        assert_eq!(clear_color(false, PANEL)[3], 1.0);
+    fn the_main_window_is_cleared_opaque() {
+        assert_eq!(clear_color(PANEL, false)[3], 1.0);
+        assert_eq!(clear_color(PANEL, true)[3], 1.0);
     }
 
     #[test]
-    fn everything_between_the_side_panels_stays_opaque() {
-        let w = Rect::from_min_max(pos2(0.0, 0.0), pos2(1000.0, 700.0));
-        assert_eq!(opaque_rect(w, None, None), w);
-        assert_eq!(opaque_rect(w, Some(200.0), None), Rect::from_min_max(pos2(200.0, 0.0), pos2(1000.0, 700.0)));
-        assert_eq!(opaque_rect(w, None, Some(740.0)), Rect::from_min_max(pos2(0.0, 0.0), pos2(740.0, 700.0)));
-        assert_eq!(opaque_rect(w, Some(200.0), Some(740.0)), Rect::from_min_max(pos2(200.0, 0.0), pos2(740.0, 700.0)));
-        // Panels wider than the window can't turn the rectangle inside out.
-        let r = opaque_rect(w, Some(1200.0), Some(100.0));
-        assert!(r.width() == 0.0 && r.left() == 1000.0);
+    fn boxes_follow_the_preference_and_a_theme_change() {
+        let ctx = egui::Context::default();
+        sync_boxes(&ctx, PANEL, true);
+        assert_eq!(ctx.global_style().visuals.window_fill, Surface::Box.fill(PANEL, true));
+        // A theme change puts the opaque fill back.
+        ctx.global_style_mut(|s| s.visuals.window_fill = Color32::WHITE);
+        sync_boxes(&ctx, PANEL, true);
+        assert_eq!(ctx.global_style().visuals.window_fill.a(), BOX_ALPHA);
+        // Off restores the panel colour exactly.
+        sync_boxes(&ctx, PANEL, false);
+        assert_eq!(ctx.global_style().visuals.window_fill, PANEL);
     }
 
     /// egui's blending, from `egui_wgpu::renderer`: colour is premultiplied
@@ -296,17 +346,18 @@ mod tests {
     }
 
     #[test]
-    fn nothing_drawn_on_the_opaque_part_lowers_its_alpha() {
+    fn a_translucent_box_never_lowers_the_alpha_of_the_opaque_main_window() {
+        let a = f32::from(BOX_ALPHA) / 255.0;
         let mut px = [0.1, 1.0];
-        for src in [[0.0, 0.0], [0.2, 0.2], [0.5, 0.5], [1.0, 1.0]] {
+        for src in [[0.0, 0.0], [0.1 * a, a], [0.5, 0.5], [1.0, 1.0]] {
             px = over(px, src);
             assert_eq!(px[1], 1.0);
         }
     }
 
     #[test]
-    fn text_on_a_side_panel_is_more_opaque_than_the_panel() {
-        let a = f32::from(SIDE_ALPHA) / 255.0;
+    fn text_on_a_blurred_window_is_more_opaque_than_the_window() {
+        let a = f32::from(WINDOW_ALPHA) / 255.0;
         // Over a cleared pixel, then a whole glyph pixel and a faint edge.
         let panel = over([0.0, 0.0], [0.1 * a, a]);
         assert!((panel[1] - a).abs() < 1e-6);
@@ -317,7 +368,7 @@ mod tests {
     #[test]
     fn off_is_the_default_and_the_choice_is_kept() {
         let mut p = crate::prefs::Prefs::default();
-        assert!(!p.vibrancy, "Eagle's main window is opaque, so the blur is off by default");
+        assert!(!p.vibrancy, "falcon's boxes can't blur as Eagle's do, so it is off by default");
         p.vibrancy = true;
         let text = serde_json::to_string(&p).unwrap();
         let back: crate::prefs::Prefs = serde_json::from_str(&text).unwrap();

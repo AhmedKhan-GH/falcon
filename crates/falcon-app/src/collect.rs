@@ -330,12 +330,13 @@ impl Collect {
 
     /// Shows the window as its own always-on-top, borderless OS window.
     /// Returns what was dropped or pasted on it.
-    pub fn show(&mut self, ctx: &egui::Context, folders: Option<&[FolderRow]>, state: &mut State, pool: &TagPool, keys: &Shortcuts) -> Option<Event> {
+    pub fn show(&mut self, ctx: &egui::Context, folders: Option<&[FolderRow]>, state: &mut State, pool: &TagPool, keys: &Shortcuts, vibrancy: bool) -> Option<Event> {
         let mut builder = egui::ViewportBuilder::default()
             .with_title(tr("Collect"))
             .with_inner_size(SIZE)
             .with_resizable(false)
             .with_decorations(false)
+            .with_transparent(crate::vibrancy::SUPPORTED)
             .with_always_on_top();
         if let Some(p) = self.open_at {
             builder = builder.with_position(p);
@@ -344,7 +345,10 @@ impl Collect {
         if std::mem::take(&mut self.raise) {
             ctx.send_viewport_cmd_to(id, egui::ViewportCommand::Focus);
         }
-        ctx.show_viewport_immediate(id, builder, |ui, _class| self.contents(ui, folders, state, pool, keys))
+        ctx.show_viewport_immediate(id, builder, |ui, _class| {
+            crate::vibrancy::sync_window(ui.ctx(), tr("Collect"), vibrancy);
+            self.contents(ui, folders, state, pool, keys, vibrancy)
+        })
     }
 
     /// The screenshots left waiting in a closed window (closed by ×, Esc,
@@ -358,7 +362,7 @@ impl Collect {
         std::mem::take(&mut self.pending)
     }
 
-    fn contents(&mut self, ui: &mut Ui, folders: Option<&[FolderRow]>, state: &mut State, pool: &TagPool, keys: &Shortcuts) -> Option<Event> {
+    fn contents(&mut self, ui: &mut Ui, folders: Option<&[FolderRow]>, state: &mut State, pool: &TagPool, keys: &Shortcuts, vibrancy: bool) -> Option<Event> {
         let ctx = ui.ctx().clone();
         let (outer, close_requested, hovering, dropped, pasted, esc, toggle, now) = ctx.input(|i| {
             let dropped: Vec<PathBuf> = i.raw.dropped_files.iter().map(|f| f.path().to_path_buf()).collect();
@@ -384,7 +388,7 @@ impl Collect {
 
         let full = ui.max_rect();
         let p = ui.painter().clone();
-        p.rect_filled(full, 0.0, t::p().panel);
+        p.rect_filled(full, 0.0, crate::vibrancy::Surface::BoxWindow.fill(t::p().panel, vibrancy));
         p.rect_stroke(full, 0.0, Stroke::new(1.0, t::p().divider), egui::StrokeKind::Inside);
 
         // Header: drag to move, × to close.
