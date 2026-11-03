@@ -4,6 +4,7 @@
 //! conversion behind the progress modal. Old WebPs go to the Trash.
 
 use eframe::egui::{self, RichText, Ui};
+use falcon_library::Library;
 use falcon_library::model::Item;
 use falcon_library::webp_convert::{Converted, Format};
 
@@ -39,19 +40,15 @@ pub(crate) fn summary(done: usize, skipped: usize, format: Format, stopped: bool
 
 impl App {
     /// The Convert WebP submenu, for a WebP item.
-    pub(crate) fn webp_menu(&mut self, ui: &mut Ui, item: &Item, targets: &[String]) {
+    pub(crate) fn webp_menu(&mut self, ui: &mut Ui, lib: &Library, item: &Item, targets: &[String]) {
         if !item.ext.eq_ignore_ascii_case("webp") {
             return;
         }
         crate::ui::menus::search::submenu(ui, tr("Convert WebP"), |ui| {
             for format in [Format::Png, Format::Jpg] {
-                if ui.button(format.ext().to_uppercase()).clicked()
-                    && let Some(shared) = self.ws.lib.clone()
-                {
-                    let ids = {
-                        let lib = lock(&shared);
-                        webps(targets, |id| lib.item(id))
-                    };
+                if ui.button(format.ext().to_uppercase()).clicked() {
+                    // The frame already holds the library's lock.
+                    let ids = webps(targets, |id| lib.item(id));
                     if !ids.is_empty() {
                         self.tools.webp.confirm = Some((ids, format));
                     }

@@ -96,7 +96,7 @@ impl App {
             });
         }
         if self.ws.scope != Scope::Trash {
-            self.webp_menu(ui, item, targets);
+            self.webp_menu(ui, lib, item, targets);
             self.combine_menu(ui, lib, targets);
         }
         self.item_export_menu(ui, targets);
