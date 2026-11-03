@@ -166,6 +166,57 @@ fn snapshot(root: &Path) -> Vec<(PathBuf, Vec<u8>)> {
     out
 }
 
+/// A saved filter's rules run through the worker, read from the JSON the
+/// library holds.
+#[test]
+fn a_saved_filters_rules_search_like_the_box_does() {
+    use falcon_library::model::SavedFilter;
+    let f = Fixture::new();
+    let red = f.add("red", [250, 10, 10]);
+    let green = f.add("green", [10, 250, 10]);
+    let service = f.service();
+    service.set_library(Some(f.library.clone()));
+    service.set_enabled(true);
+    ready(&service, 2);
+
+    let saved = |rule: serde_json::Value| SavedFilter { name: "n".into(), rule, extra: Default::default() }.to_filter().ai;
+    let text = saved(serde_json::json!({"semantic": {"value": "green"}}));
+    let hits = service.search_blocking(Query::Text(text.semantic_text().unwrap().to_string()), 10, WAIT).unwrap();
+    assert_eq!(hits.iter().map(|h| h.id.as_str()).collect::<Vec<_>>(), [green.as_str()]);
+
+    let image = saved(serde_json::json!({"image": {"itemId": red}}));
+    let hits = service.search_blocking(Query::Item(image.image_item().unwrap().to_string()), 10, WAIT).unwrap();
+    assert_eq!(hits[0].id, red);
+
+    let gone = saved(serde_json::json!({"image": {"itemId": "NOPE"}}));
+    assert_eq!(service.search_blocking(Query::Item(gone.image_item().unwrap().to_string()), 10, WAIT).unwrap_err(), SearchError::NoItem);
+}
+
+/// The status doesn't call a library ready before it has been looked at, and
+/// says which library it means.
+#[test]
+fn ready_means_this_library_has_been_read() {
+    let f = Fixture::new();
+    let root = f.root();
+    assert!(!Status { phase: Phase::Ready, ..Default::default() }.index_ready(&root), "no library");
+    f.add("red", [250, 10, 10]);
+    let service = f.service();
+    service.set_enabled(true);
+    service.set_library(Some(f.library.clone()));
+    // A ready status is only ever one that has read the picture.
+    let status = wait_for(&service, "ready", |s| s.index_ready(&root));
+    assert_eq!((status.done, status.total), (1, 1));
+    assert!(!status.index_ready(&root.with_extension("other")), "another library");
+
+    // Paused with pictures left isn't ready.
+    service.set_paused(true);
+    f.add("green", [10, 250, 10]);
+    let status = wait_for(&service, "the new picture", |s| s.phase == Phase::Paused);
+    assert!(!status.index_ready(&root));
+    service.set_paused(false);
+    ready(&service, 2);
+}
+
 #[test]
 fn nothing_runs_or_answers_until_it_is_turned_on_and_installed() {
     let f = Fixture::new();

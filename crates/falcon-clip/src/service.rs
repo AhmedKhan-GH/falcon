@@ -115,12 +115,21 @@ pub struct Status {
     pub error: Option<String>,
     /// Pictures per second over the last batch, before the throttle's wait.
     pub rate: f32,
+    /// The library this is about: the worker's, which can be a moment behind
+    /// the one it was last given.
+    pub root: Option<PathBuf>,
 }
 
 impl Status {
     /// The model is installed and turned on, so searches can be answered.
     pub fn searchable(&self) -> bool {
         matches!(self.phase, Phase::Loading | Phase::Indexing | Phase::Paused | Phase::Ready)
+    }
+
+    /// Every picture of this library has been looked at, so a search sees
+    /// all of it.
+    pub fn index_ready(&self, root: &Path) -> bool {
+        self.phase == Phase::Ready && self.root.as_deref() == Some(root)
     }
 }
 
@@ -244,6 +253,7 @@ struct Worker {
     options: Options,
     status: Arc<Mutex<Status>>,
     library: Option<Shared>,
+    root: Option<PathBuf>,
     index: Option<Index>,
     embedder: Option<Box<dyn Embedder>>,
     queue: VecDeque<Job>,
@@ -274,6 +284,7 @@ impl Worker {
             options,
             status,
             library: None,
+            root: None,
             index: None,
             embedder: None,
             queue: VecDeque::new(),
@@ -348,6 +359,7 @@ impl Worker {
                     let _ = index.flush();
                 }
                 self.index = None;
+                self.root = library.as_ref().map(|library| lock(library).root().to_path_buf());
                 self.library = library;
                 self.queue.clear();
                 self.total = 0;
@@ -638,6 +650,9 @@ impl Worker {
             Phase::Failed
         } else if self.loading {
             Phase::Loading
+        } else if self.library.is_some() && self.signature.is_none() {
+            // Not compared with the library yet, so what's left isn't known.
+            Phase::Indexing
         } else if queued == 0 {
             Phase::Ready
         } else if self.paused {
@@ -653,6 +668,7 @@ impl Worker {
             device: self.device.clone(),
             error: self.failure.clone(),
             rate: self.rate,
+            root: self.root.clone(),
         };
         *self.status.lock().unwrap_or_else(|p| p.into_inner()) = status;
     }

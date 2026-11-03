@@ -2066,6 +2066,7 @@ dependencies = [
  "candle-transformers",
  "falcon-library",
  "image",
+ "serde_json",
  "sha2",
  "tempfile",
  "tokenizers",
