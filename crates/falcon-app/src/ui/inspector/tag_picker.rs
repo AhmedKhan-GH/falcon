@@ -34,6 +34,8 @@ const WIDTH_SIDEBAR: f32 = 400.0;
 const HEIGHT: f32 = 480.0;
 const MIN_WIDTH: f32 = 200.0;
 const MIN_WIDTH_SIDEBAR: f32 = 400.0;
+/// The grip at the header's left, over the search icon, that moves the panel.
+const MOVE_GRIP: Vec2 = vec2(26.0, HEADER_H);
 /// How far in from the panel's edge a drag resizes it.
 const GRIP: f32 = 7.0;
 const SIDEBAR_W: f32 = 180.0;
@@ -57,8 +59,8 @@ pub(crate) struct TagPicker {
     collapsed: HashSet<Kind>,
     /// Where the pointer was when it opened.
     anchor: Option<Pos2>,
-    /// Where it was placed when it opened, so resizing moves only the edge
-    /// being dragged.
+    /// Where it was placed when it opened, or dragged since, so resizing
+    /// moves only the edge being dragged.
     placed: Option<Pos2>,
     /// Put the cursor in the search field next frame.
     focus: bool,
@@ -147,8 +149,9 @@ impl App {
         let y = (anchor.y - 20.0).clamp(screen.top() + 40.0, (screen.bottom() - size.y - 10.0).max(screen.top() + 40.0));
         let placed = *p.placed.get_or_insert(Pos2::new(x, y));
         // Still on screen if the window has shrunk since.
-        let x = placed.x.min((screen.right() - size.x - 10.0).max(screen.left() + 10.0));
-        let y = placed.y.min((screen.bottom() - size.y - 10.0).max(screen.top() + 40.0));
+        let x = placed.x.min((screen.right() - size.x - 10.0).max(screen.left() + 10.0)).max(screen.left() + 10.0);
+        let y = placed.y.min((screen.bottom() - size.y - 10.0).max(screen.top() + 40.0)).max(screen.top() + 40.0);
+        let mut carried = Vec2::ZERO;
         let list_w = size.x - 24.0 - if sidebar { SIDEBAR_W } else { 0.0 };
         let cols = tags::columns(list_w, prefs.column, prefs.list);
         let lens: Vec<usize> = sections.iter().map(|s| if p.collapsed.contains(&s.kind) && s.kind != Kind::Results { 0 } else { s.picks.len() }).collect();
@@ -226,6 +229,8 @@ impl App {
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 4.0;
                     let buttons = if groups.is_empty() { 3.0 } else { 4.0 };
+                    let (mark, _) = ui.allocate_exact_size(vec2(18.0, 22.0), Sense::hover());
+                    icon(ui, mark.center(), ic::MAGNIFYING_GLASS, 13.0, t::p().text_muted);
                     let te = ui.add(
                         TextEdit::singleline(&mut p.keyword)
                             .id(search_id)
@@ -388,8 +393,12 @@ impl App {
                     shortcut_tip(ui, tr("Select"), &["⏎"]);
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| shortcut_tip(ui, tr("Close"), &["ESC"]));
                 });
-                // The right edge, the bottom edge and their corner resize it.
                 let panel = Rect::from_min_size(Pos2::new(x, y), size);
+                let carry = ui.interact(Rect::from_min_size(panel.min, MOVE_GRIP), ui.scope_id().with("tag-picker-move"), Sense::drag()).on_hover_cursor(egui::CursorIcon::Move);
+                if carry.dragged() {
+                    carried = carry.drag_delta();
+                }
+                // The right edge, the bottom edge and their corner resize it.
                 let right = Rect::from_min_max(Pos2::new(panel.right() - GRIP, panel.top()), panel.max);
                 let bottom = Rect::from_min_max(Pos2::new(panel.left(), panel.bottom() - GRIP), panel.max);
                 let corner = Rect::from_min_max(panel.max - Vec2::splat(GRIP * 2.0), panel.max);
@@ -414,6 +423,9 @@ impl App {
 
         let p = &mut self.ws.picker;
         p.pinned = pin;
+        if carried != Vec2::ZERO {
+            p.placed = Some(Pos2::new(x, y) + carried);
+        }
         if let Some(h) = hover {
             p.highlight = Some(h);
         }
