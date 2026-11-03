@@ -627,9 +627,84 @@ pub struct SavedFilterQuery {
     pub filter: crate::search::Filter,
     /// The search text saved with the filter.
     pub keyword: Option<String>,
-    /// Active rules falcon cannot express, by their rule key (`image` and
-    /// `semantic`, Eagle's AI searches).
-    pub unsupported: Vec<String>,
+    /// The AI rules, which AI Search applies rather than the filter.
+    pub ai: SavedAiRules,
+}
+
+/// A saved filter's `image` and `semantic` rules, each kept as the whole
+/// value it was read as, so that fields falcon doesn't know come back
+/// unchanged when the filter is saved again.
+///
+/// What is known of them is the field that turns each on: `image.itemId`
+/// (read as the id of the item to look like) and `semantic.value` (read as
+/// the description). Both readings are falcon's, from the names; no file
+/// written by Eagle with these rules has been seen. A value that isn't a
+/// usable string is still kept, and counts as a rule that can't be read.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct SavedAiRules {
+    pub image: Option<Value>,
+    pub semantic: Option<Value>,
+}
+
+impl SavedAiRules {
+    /// Reads the rules from a rule object. An empty object is no rule.
+    pub fn from_rule(rule: &Value) -> SavedAiRules {
+        let read = |key: &str| rule.get(key).filter(|v| v.as_object().is_none_or(|o| !o.is_empty())).cloned();
+        SavedAiRules { image: read("image"), semantic: read("semantic") }
+    }
+
+    /// The rules for a search by description.
+    pub fn for_text(text: &str) -> SavedAiRules {
+        SavedAiRules { semantic: Some(serde_json::json!({"value": text})), ..Default::default() }
+    }
+
+    /// The rules for a search by an item in the library.
+    pub fn for_item(id: &str) -> SavedAiRules {
+        SavedAiRules { image: Some(serde_json::json!({"itemId": id})), ..Default::default() }
+    }
+
+    /// A rule's turning-on field: not null, and not a blank string.
+    fn on<'a>(rule: &'a Option<Value>, field: &str) -> Option<&'a Value> {
+        rule.as_ref()?.get(field).filter(|v| !v.is_null() && v.as_str().is_none_or(|s| !s.trim().is_empty()))
+    }
+
+    pub fn image_on(&self) -> bool {
+        Self::on(&self.image, "itemId").is_some()
+    }
+
+    pub fn semantic_on(&self) -> bool {
+        Self::on(&self.semantic, "value").is_some()
+    }
+
+    pub fn is_active(&self) -> bool {
+        self.image_on() || self.semantic_on()
+    }
+
+    /// The item to look like, when the rule is on and can be read.
+    pub fn image_item(&self) -> Option<&str> {
+        Self::on(&self.image, "itemId")?.as_str()
+    }
+
+    /// The description to search by, when the rule is on and can be read.
+    pub fn semantic_text(&self) -> Option<&str> {
+        Self::on(&self.semantic, "value")?.as_str()
+    }
+
+    /// A rule is on but its value can't be searched by.
+    pub fn has_unreadable(&self) -> bool {
+        (self.image_on() && self.image_item().is_none()) || (self.semantic_on() && self.semantic_text().is_none())
+    }
+
+    /// Puts the rules in a rule object, in the places their keys hold. Keys
+    /// with no rule are left as they are.
+    pub fn write_to(&self, rule: &mut Value) {
+        if let Some(image) = &self.image {
+            rule["image"] = image.clone();
+        }
+        if let Some(semantic) = &self.semantic {
+            rule["semantic"] = semantic.clone();
+        }
+    }
 }
 
 impl SavedFilter {
@@ -662,7 +737,6 @@ impl SavedFilter {
         };
         let mut out = SavedFilterQuery::default();
         let mut f = Filter::default();
-        let mut skip = |k: &str| out.unsupported.push(k.to_string());
 
         f.types = keys(&["type", "includes"]);
         f.exclude_types = keys(&["type", "excludes"]);
@@ -769,14 +843,7 @@ impl SavedFilter {
             f.font = FontFilter::Deactivated(font_keys());
         }
 
-        // Rules with no counterpart in falcon's filter yet.
-        if get(&["image", "itemId"]).is_some_and(|v| !v.is_null()) {
-            skip("image");
-        }
-        if get(&["semantic", "value"]).is_some_and(|v| !v.is_null()) {
-            skip("semantic");
-        }
-
+        out.ai = SavedAiRules::from_rule(r);
         out.filter = f;
         out.keyword = r.get("keyword").and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string);
         out
@@ -787,7 +854,8 @@ impl SavedFilter {
     /// keys first) with falcon's rules filled in. `folder_name` looks up a
     /// folder's name; Eagle stores whole folder objects under
     /// `folder.includes`, of which it only reads `id` back, so falcon writes
-    /// `{id, name}`. The tag and folder logic is not part of the rule.
+    /// `{id, name}`. The tag and folder logic is not part of the rule, and
+    /// the AI rules are added with [`SavedAiRules::write_to`].
     pub fn rule_from_filter(filter: &crate::search::Filter, keyword: Option<&str>, folder_name: impl Fn(&str) -> Option<String>) -> Value {
         use crate::search::{DateFilter, FontFilter, Shape, TextFilter};
         let mut r = default_filter_rule();
@@ -1172,12 +1240,67 @@ mod tests {
         assert_eq!(f.url, crate::search::TextFilter::Keywords(vec!["dribbble".into(), "shot".into()]));
         assert_eq!(f.note, crate::search::TextFilter::No);
         assert!(f.shapes.contains(&crate::search::Shape::Ratio16x9));
-        assert!(q.unsupported.is_empty(), "{:?}", q.unsupported);
+        assert_eq!(q.ai, SavedAiRules::default());
         assert_eq!(f.imported.presets, [crate::search::DatePreset::Today].into());
     }
 
     fn saved(rule: Value) -> SavedFilter {
         SavedFilter { name: "n".into(), rule, extra: Extra::new() }
+    }
+
+    /// The default rule with these objects as its AI rules.
+    fn ai_rule(image: &str, semantic: &str) -> String {
+        DEFAULT_RULE.replace(r#""image":{},"semantic":{}"#, &format!(r#""image":{image},"semantic":{semantic}"#))
+    }
+
+    #[test]
+    fn ai_rules_are_read_from_the_fields_that_turn_them_on() {
+        let read = |image: &str, semantic: &str| saved(serde_json::from_str(&ai_rule(image, semantic)).unwrap()).to_filter().ai;
+        let both = read(r#"{"itemId":"ABC"}"#, r#"{"value":"black cat"}"#);
+        assert_eq!((both.image_item(), both.semantic_text()), (Some("ABC"), Some("black cat")));
+        assert!(both.is_active() && !both.has_unreadable());
+
+        for off in [read("{}", "{}"), read(r#"{"itemId":null}"#, r#"{"value":null}"#), read(r#"{"itemId":""}"#, r#"{"value":"  "}"#), read(r#"{"other":1}"#, r#"{"other":1}"#)] {
+            assert!(!off.is_active(), "{off:?}");
+            assert!(!off.has_unreadable(), "{off:?}");
+        }
+
+        // On, but not something that can be searched by.
+        let odd = read(r#"{"itemId":7}"#, r#"{"value":{"text":"cat"}}"#);
+        assert!(odd.is_active() && odd.has_unreadable());
+        assert_eq!((odd.image_item(), odd.semantic_text()), (None, None));
+    }
+
+    /// Reading the rules and writing them into a fresh rule gives back the
+    /// same bytes, whatever else the objects hold and whether or not they
+    /// are on, and an empty filter's rule stays Eagle's default.
+    #[test]
+    fn ai_rules_come_back_byte_for_byte() {
+        for (image, semantic) in [
+            ("{}", "{}"),
+            (r#"{"itemId":"ABC"}"#, "{}"),
+            ("{}", r#"{"value":"black cat"}"#),
+            (r#"{"itemId":"ABC","zeta":[1,2],"alpha":{"b":1,"a":0.5}}"#, r#"{"z":true,"value":"black cat","a":null}"#),
+            (r#"{"itemId":7}"#, r#"{"value":{"text":"cat"}}"#),
+            (r#"{"itemId":null,"base64":"AAAA"}"#, r#"{"value":""}"#),
+        ] {
+            let text = ai_rule(image, semantic);
+            let q = saved(serde_json::from_str(&text).unwrap()).to_filter();
+            let mut rule = SavedFilter::rule_from_filter(&q.filter, None, |_| None);
+            q.ai.write_to(&mut rule);
+            assert_eq!(rule.to_string(), text);
+        }
+    }
+
+    #[test]
+    fn a_new_search_saves_in_the_same_shape() {
+        let mut rule = SavedFilter::rule_from_filter(&crate::search::Filter::default(), Some("logo"), |_| None);
+        SavedAiRules::for_text("black cat").write_to(&mut rule);
+        SavedAiRules::for_item("ABC").write_to(&mut rule);
+        let text = ai_rule(r#"{"itemId":"ABC"}"#, r#"{"value":"black cat"}"#);
+        assert_eq!(rule.to_string(), format!(r#"{},"keyword":"logo"}}"#, &text[..text.len() - 1]));
+        let back = saved(rule).to_filter();
+        assert_eq!((back.ai.image_item(), back.ai.semantic_text(), back.keyword.as_deref()), (Some("ABC"), Some("black cat"), Some("logo")));
     }
 
     /// Filter -> rule -> Filter for every rule `Filter` has, one at a time.
@@ -1222,7 +1345,7 @@ mod tests {
             let rule = SavedFilter::rule_from_filter(&f, None, |_| None);
             let back = saved(rule.clone()).to_filter_with_fonts(|| fonts.clone());
             assert_eq!(back.filter, f, "{name}: {rule}");
-            assert!(back.unsupported.is_empty(), "{name}: {:?}", back.unsupported);
+            assert_eq!(back.ai, SavedAiRules::default(), "{name}");
         }
     }
 
@@ -1270,7 +1393,7 @@ mod tests {
         assert_eq!(rule.matches("ILCE").count() + rule.matches("last7day\":true").count() + rule.matches("\"today\":true").count() + rule.matches("\"usingRange\":true").count() + rule.matches("\"min\":\"1.5\"").count() + rule.matches("\"activated\":true").count(), 6, "{rule}");
         let q = saved(serde_json::from_str(&rule).unwrap()).to_filter_with_fonts(|| ["A_.otf".to_string()].into());
         let f = &q.filter;
-        assert!(q.unsupported.is_empty(), "{:?}", q.unsupported);
+        assert_eq!(q.ai, SavedAiRules::default());
         assert_eq!(f.imported, DateFilter { presets: [DatePreset::Last7Days].into(), months: [(2023, 12)].into(), ..Default::default() });
         assert_eq!(f.modified, DateFilter { presets: [DatePreset::Today].into(), range: Some((1_704_067_200_000, 1_706_659_200_000)), ..Default::default() });
         assert_eq!(f.created, DateFilter::default());
@@ -1312,7 +1435,7 @@ mod tests {
         let back = SavedFilter { name: "n".into(), rule, extra: Extra::new() }.to_filter();
         assert_eq!(back.filter, f);
         assert_eq!(back.keyword.as_deref(), Some("cat"));
-        assert!(back.unsupported.is_empty());
+        assert_eq!(back.ai, SavedAiRules::default());
     }
 
     #[test]

@@ -1722,7 +1722,8 @@ impl App {
         self.sync_media_filter_text();
         self.ws.set_query(q.keyword.unwrap_or_default());
         self.ws.show_filter = true;
-        let skipped = organize::unsupported_names(&q.unsupported);
+        let keys: Vec<String> = [(q.ai.image_on(), "image"), (q.ai.semantic_on(), "semantic")].iter().filter(|(on, _)| *on).map(|(_, k)| k.to_string()).collect();
+        let skipped = organize::unsupported_names(&keys);
         if skipped.is_empty() {
             self.flash(trf("Applied “{name}”", &[("name", &sf.name)]));
         } else {

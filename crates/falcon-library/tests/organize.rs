@@ -192,6 +192,39 @@ fn deleting_a_group_can_take_its_tags_off_items() {
     assert!(reopened.items().iter().all(|i| !i.tags.contains(&tag)));
 }
 
+/// A library's own file comes back byte for byte through opening, renaming
+/// and moving, AI rules included.
+#[test]
+fn saved_filters_keep_ai_rules_on_disk() {
+    use falcon_library::model::SavedFilter;
+    use falcon_library::search::Filter;
+    let tmp = tempfile::tempdir().unwrap();
+    let root = new_library(tmp.path()).root().to_path_buf();
+    let path = root.join("saved-filters.json");
+    let mut rule = SavedFilter::rule_from_filter(&Filter::default(), None, |_| None).to_string();
+    rule = rule.replace(r#""image":{},"semantic":{}"#, r#""image":{"itemId":"ABC","extra":[1]},"semantic":{"z":1,"value":"black cat","a":false}"#);
+    let file = format!(r#"[{{"name":"One","rule":{rule}}},{{"name":"Two","rule":{{"semantic":{{"value":5}}}}}}]"#);
+    fs::write(&path, &file).unwrap();
+
+    let mut lib = Library::open(&root).unwrap();
+    lib.rename_saved_filter(1, "Three").unwrap();
+    lib.rename_saved_filter(1, "Two").unwrap();
+    lib.reorder_saved_filter(0, 1).unwrap();
+    lib.reorder_saved_filter(1, 0).unwrap();
+    assert_eq!(fs::read_to_string(&path).unwrap(), file);
+
+    // Saved again from what applying it read, as a third filter.
+    let q = lib.saved_filters[0].to_filter();
+    assert_eq!((q.ai.image_item(), q.ai.semantic_text()), (Some("ABC"), Some("black cat")));
+    let mut again = SavedFilter::rule_from_filter(&q.filter, None, |_| None);
+    q.ai.write_to(&mut again);
+    lib.create_saved_filter("Again", again).unwrap();
+    let reopened = Library::open(&root).unwrap();
+    assert_eq!(reopened.saved_filters[2].rule, reopened.saved_filters[0].rule);
+    assert!(fs::read_to_string(&path).unwrap().ends_with(&format!(r#"{{"name":"Again","rule":{rule}}}]"#)));
+    assert!(reopened.saved_filters[1].to_filter().ai.has_unreadable());
+}
+
 #[test]
 fn saved_filters() {
     use falcon_library::model::SavedFilter;
