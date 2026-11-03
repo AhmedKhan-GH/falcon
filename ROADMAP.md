@@ -8,7 +8,7 @@ Falcon is early alpha. This page summarises what is done, what is left and what 
 
 ## Done
 
-Of the 909 local features in PARITY.md, 883 are done, 17 are partly done and 9 are missing. That is about nineteen in twenty. A further 43 need an online service, an account or Eagle's plugin system and are counted separately.
+Of the 909 local features in PARITY.md, 883 are done, 12 are partly done, 5 are accepted differences and 9 are missing. That is about nineteen in twenty. A further 43 need an online service, an account or Eagle's plugin system and are counted separately.
 
 - **Library:** reads and writes Eagle-format libraries, byte-identical on round trips, with backups, restore, duplicate detection, `.eaglepack` import and export, a watched import folder, reloading on outside changes and sync conflict detection.
 - **Import:** thumbnails and colour palettes, folders with their structure, links, paste, drag and drop, screen capture and background imports.
@@ -25,7 +25,7 @@ Local features still missing or partly done in [PARITY.md](PARITY.md), by theme.
 
 - **File ▸ New… templates:** Sketch, Photoshop, Illustrator, text, Word, Excel, PowerPoint and XMind documents are written by falcon. Keynote, Pages, Numbers, XD and MindNode are listed but disabled: closed formats, deferred by the user's decision ([FORMATS.md](FORMATS.md) says why for each).
 - **3D:** the normal, bump and emissive maps and alpha blending are drawn but not yet compared by eye with Eagle. Some IFC readers also have gaps, which the row names.
-- **Accepted limits:** PPT, PPTX, POTX and PostScript-only AI files stay capped at 8192 px, and the preview window at 3072 px (macOS hands PowerPoint files back only as a bitmap or as HTML, with no PDF for PDFKit); an EPS with no preview picture gets no thumbnail (no PostScript interpreter); no per-image colour management behind the Color Space menu.
+- **Accepted limits:** PPT, PPTX, POTX and PostScript-only AI files stay capped at 8192 px, and the preview window at 3072 px (macOS hands PowerPoint files back only as a bitmap or as HTML, with no PDF for PDFKit); an EPS with no preview picture gets no thumbnail (no PostScript interpreter); colours outside sRGB are clipped, since pictures with a colour profile are converted to sRGB for showing; no blur behind menus and boxes inside a window.
 - **Vibrancy:** with the preference on (off by default), menus and boxes are translucent and only the Preferences and Collect windows get a real blur of the desktop; Eagle blurs behind its in-window menus too.
 - **Differences by design or by platform:** falcon's own font folder, tasks that keep running when you switch libraries (with a warning first), and decoders that only exist on macOS, which is the only platform.
 - **Waiting for a check by a person:** hover video and its sound, the switch warning, the screenshot notice with a real pointer, the grayed web and 3D panes, the PDF layer tree on screen and the blank documents in their own apps.

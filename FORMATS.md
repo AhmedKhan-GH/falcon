@@ -6,6 +6,8 @@ The goal for now is Eagle's set. Formats beyond it are listed at the end, but th
 
 Status: **Done** works as well as Eagle or better. **Partial** opens, but something Eagle does is missing; the reason is given.
 
+Pictures with a colour profile are shown in sRGB through it, with colours outside sRGB clipped. Animated WebP and APNG frames aren't converted.
+
 Eagle's alias extensions import as the format they stand for, whatever macOS calls them: jfif, jpe and insp are JPEG, psdt is psd, hif is heic, tif is tiff, ait is ai, indt is indd and m2ts is mts. falcon reads JPEGs by their contents, and hands QuickLook a file under the main extension where macOS has no type for the alias (jfif, psdt).
 
 ## Images
