@@ -495,12 +495,14 @@ impl Worker {
         let mut good = Vec::with_capacity(count);
         let mut bad = Vec::new();
         for job in jobs {
-            match thumbnail::decode(&job.picture) {
-                Ok(picture) => {
+            // A damaged file that panics a decoder is one unreadable item,
+            // not the end of the worker.
+            match std::panic::catch_unwind(|| thumbnail::decode(&job.picture)) {
+                Ok(Ok(picture)) => {
                     pictures.push(picture);
                     good.push(job);
                 }
-                Err(_) => bad.push(job),
+                _ => bad.push(job),
             }
         }
         let vectors = match self.embedder.as_mut() {

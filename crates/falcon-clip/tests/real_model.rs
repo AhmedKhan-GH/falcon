@@ -189,6 +189,7 @@ fn the_worker_indexes_a_library_and_finds_the_cat() {
 fn index_speed() {
     let pictures = images();
     let batch: Vec<DynamicImage> = pictures.iter().cycle().take(32).map(|p| p.2.clone()).collect();
+    let mut first: Vec<(Vec<f32>, Vec<f32>)> = Vec::new();
     for cpu in [false, true] {
         let started = Instant::now();
         let mut clip = if cpu { ClipEmbedder::load_cpu(&model_dir()).unwrap() } else { ClipEmbedder::load(&model_dir()).unwrap() };
@@ -211,5 +212,11 @@ fn index_speed() {
             falcon_clip::service::BATCH,
             text.as_secs_f64() * 1000.0 / 8.0,
         );
+        let picture = clip.embed_images(&batch[..1]).unwrap().pop().unwrap();
+        first.push((picture, clip.embed_text("a cat").unwrap()));
     }
+    // The fallback must land in the same space as Metal.
+    let (picture, text) = (dot(&first[0].0, &first[1].0), dot(&first[0].1, &first[1].1));
+    println!("Metal against the CPU: picture {picture:.5}, text {text:.5}");
+    assert!(picture > 0.999 && text > 0.999);
 }
