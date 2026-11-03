@@ -54,6 +54,18 @@ fn toggle_gray_flag(main: &mut bool, windows: &mut [PreviewWin]) {
     *flag = !*flag;
 }
 
+/// Sends View ▸ Zoom In or Out to the focused preview window, if there is
+/// one, by `factor`. False leaves the command to the main window.
+fn zoom_focused(windows: &mut [PreviewWin], factor: f32) -> bool {
+    match windows.iter_mut().find(|w| w.focused) {
+        Some(w) => {
+            w.menu_zoom = Some(factor);
+            true
+        }
+        None => false,
+    }
+}
+
 /// The viewer an item got in the window.
 enum Pane {
     /// Not chosen yet (the window just opened).
@@ -104,6 +116,8 @@ pub(crate) struct PreviewWin {
     serial: u64,
     /// Scale relative to the image's pixels; `None` fits the window.
     zoom: Option<f32>,
+    /// A step of View ▸ Zoom In or Out still to apply.
+    menu_zoom: Option<f32>,
     pan: Vec2,
     on_top: bool,
     /// The window is being closed this frame.
@@ -146,6 +160,7 @@ impl PreviewWin {
             index: 0,
             serial,
             zoom: None,
+            menu_zoom: None,
             pan: Vec2::ZERO,
             on_top: false,
             close: false,
@@ -271,6 +286,14 @@ impl App {
     /// View ▸ Grayscale: toggles the focused window's flag. While a preview
     /// window draws, `preview` is empty and `modes.grayscale` is the
     /// window's, so a command run from inside one acts on it as well.
+    pub(crate) fn zoom_preview(&mut self, factor: f32) -> bool {
+        let sent = zoom_focused(&mut self.preview, factor);
+        if sent {
+            self.ctx.request_repaint();
+        }
+        sent
+    }
+
     pub(crate) fn toggle_grayscale(&mut self) {
         toggle_gray_flag(&mut self.modes.grayscale, &mut self.preview);
     }
@@ -662,6 +685,9 @@ impl PreviewWin {
             tex.as_ref().map_or(Vec2::splat(512.0), |t| tf.size(t.size_vec2().x, t.size_vec2().y))
         };
         let fit = (full.width() / natural.x).min(full.height() / natural.y).min(1.0);
+        if let Some(factor) = self.menu_zoom.take() {
+            self.zoom = Some((self.zoom.unwrap_or(fit) * factor).clamp(logic::ZOOM_MIN, logic::ZOOM_MAX));
+        }
         let scale = self.zoom.unwrap_or(fit);
 
         let (scroll, pinch, pointer) = ctx.input(|i| (i.smooth_scroll_delta.y, i.zoom_delta(), i.pointer.hover_pos()));
@@ -817,6 +843,16 @@ mod tests {
         let mut main = false;
         toggle_gray_flag(&mut main, &mut []);
         assert!(main);
+    }
+
+    #[test]
+    fn menu_zoom_goes_to_the_focused_window_only() {
+        let mut wins = vec![PreviewWin::new(vec!["a".into()], 1), PreviewWin { focused: true, ..PreviewWin::new(vec!["b".into()], 2) }];
+        assert!(zoom_focused(&mut wins, 1.25));
+        assert_eq!((wins[0].menu_zoom, wins[1].menu_zoom), (None, Some(1.25)));
+        wins[1].focused = false;
+        assert!(!zoom_focused(&mut wins, 0.8), "left to the main window");
+        assert!(!zoom_focused(&mut [], 0.8));
     }
 
     #[test]

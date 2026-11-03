@@ -500,6 +500,8 @@ impl App {
                 // Tab must not also hand keyboard focus to the first widget.
                 ctx.memory_mut(|m| m.move_focus(egui::FocusDirection::None));
             }
+            C::ZoomIn if self.zoom_preview(1.25) => {}
+            C::ZoomOut if self.zoom_preview(0.8) => {}
             C::ZoomIn if viewer => self.ws.view.zoom_key = Some(logic::ViewZoom::In),
             C::ZoomOut if viewer => self.ws.view.zoom_key = Some(logic::ViewZoom::Out),
             C::ZoomIn => self.tile = (self.tile + 20.0).min(TILE_MAX),
