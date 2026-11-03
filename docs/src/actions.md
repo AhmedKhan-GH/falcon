@@ -1,6 +1,6 @@
 # Actions
 
-An action is a named list of organising steps (add or remove tags, add to or remove from folders, set a rating) with an optional shortcut. Running it applies every step to the selected items. Each library has its own actions. In Eagle 4.0.0 this is a plugin (`ai-action`); falcon builds it in and keeps the actions in its own app data.
+An action is a named list of organising steps (add or remove tags, add to or remove from folders, set a rating, auto-tag or write a description with AI) with an optional shortcut. Running it applies every step to the selected items. Each library has its own actions. In Eagle 4.0.0 this is a plugin (`ai-action`); falcon builds it in and keeps the actions in its own app data.
 
 ## What Eagle does
 
@@ -17,7 +17,7 @@ These findings come from Eagle 4.0.0's application bundle. The file and the byte
 
 ## What falcon does
 
-Falcon runs actions itself, with Eagle's earlier rule types as its steps. It keeps them in falcon's own app data, not in the library, and never reads, creates, changes or deletes the library's `actions.config.json`, which belongs to Eagle's AI Action plugin. Actions made in Eagle's plugin don't appear in falcon, and falcon's don't appear in Eagle.
+Falcon runs actions itself, with Eagle's earlier rule types as its steps and two AI steps of its own (see [AI steps](#ai-steps)). It keeps them in falcon's own app data, not in the library, and never reads, creates, changes or deletes the library's `actions.config.json`, which belongs to Eagle's AI Action plugin. Actions made in Eagle's plugin don't appear in falcon, and falcon's don't appear in Eagle.
 
 | Entry point | Behaviour |
 |---|---|
@@ -31,7 +31,7 @@ The **Actions panel** lists the library's actions with a search box (every typed
 The **editor** has a name, a shortcut button and the ordered steps.
 
 - The shortcut button records the next key press under Eagle's recorder rules (see Shortcut settings in [The desktop app](app.md)). Letters and digits need a modifier, Esc stops recording and Backspace clears. A chord that another action or a falcon command already uses is refused, and "Used by …" names that action or command.
-- Each step has a kind and its parameters. Add tags and Remove tags take tags typed into a field (separated by commas, Return adds them), with the library's matching tags offered below the field. Add to folders and Remove from folders take folders picked from the folder tree, with a search. Set rating uses the inspector's five stars. Clear all tags and Remove from all folders have no parameters. The arrows move a step up or down, and × removes it.
+- Each step has a kind and its parameters. Add tags and Remove tags take tags typed into a field (separated by commas, Return adds them), with the library's matching tags offered below the field. Add to folders and Remove from folders take folders picked from the folder tree, with a search. Set rating uses the inspector's five stars. Clear all tags, Remove from all folders and Auto-tag with AI have no parameters. Write a description with AI has Replace existing notes. The arrows move a step up or down, and × removes it.
 - Save stays disabled until the action has a name, at least one step, and tags or folders for every step that needs them.
 
 Preferences → Shortcuts lists the open library's actions and their keys in an Actions group. The keys are set in the editor. A command can't be given a key an action uses.
@@ -43,6 +43,20 @@ Preferences → Shortcuts lists the open library's actions and their keys in an 
 - From 30 selected items the run asks first, as Eagle's Actions menu does.
 - The whole run is one undo step, named "Run *name*". The notice after it says how many items changed and has an Undo button.
 - Adding tags puts them at the front of the tag history, as the tag picker does. Adding to a folder also adds that folder's auto-tags. A folder that no longer exists is skipped, and the notice names how many were skipped. A failed write stops the run at that point. The steps already done stay in the same undo step.
+
+### AI steps
+
+**Auto-tag with AI** adds the tags the default model suggests. **Write a description with AI** puts the model's description in the item's notes; an item that already has notes keeps them and isn't sent, unless Replace existing notes is on. Both use the shared interface and the default models from [Preferences ▸ AI Models](app.md#ai-models): the vision model for an item with a picture, otherwise the chat model, or the vision model when no chat model is set.
+
+- **Before the run.** With no provider added or no default vision model, the run doesn't start and a message says which to set. From 30 selected items the confirmation also names the provider and host that receive the items.
+- **What is sent.** One request per step per item: the item's name, file type and notes as JSON, the instructions, and its picture. The picture is its thumbnail, or its original when it has no thumbnail and is an image, as a JPEG at most 1024 pixels on a side. Tags, the source URL, folder names, file paths and other items are not sent. An item with no picture goes as text only.
+- **Off the UI thread.** The run shows the progress modal with the item being asked and Cancel. Items are asked one at a time, and the library lock is not held during a request. Cancel returns at once.
+- **Results are checked, then applied together.** Nothing is written while the model is asked. A reply must be JSON fitting the step's schema, with no other fields. Tags must be text, at most 32 of them and 64 characters each; a description at most 4000 characters, neither with control characters. When the run ends, or Cancel stops it, every step of the action is applied to the items that came through, in order, as one undo step named "Run *name*".
+- **Failures.** An item fails on invalid JSON, a wrong shape, an empty reply, a timeout, a refused request, an unreachable provider or a picture that can't be read. A failed item gets none of the action's steps, including its rule steps, and the run goes on to the next item. A reply cut off at the provider's length limit counts as a failure too.
+- **The report.** A run where everything went well ends in the usual notice with Undo. Otherwise an alert says how many items changed, which model ran, each failed item with its reason, which items kept their notes, and how many Cancel stopped before. Finished items stay applied after Cancel, and ⌘Z reverses them all.
+- **Model output is data.** A reply can only become tags or notes (`StepOutput`). The model is offered no tools (on Anthropic, one output tool whose input is the reply), nothing in a reply is run, and the instructions tell the model that the item's text is data, not instructions.
+
+Switching away from the library keeps a run going, as with other long operations. Closing the library asks first, stops it, applies the finished items and then closes.
 
 ### Entries falcon can't run
 
@@ -82,8 +96,10 @@ The step objects:
 | `removeFolders` | `folders`: array of folder ids | Takes the item out of these folders |
 | `clearFolder` | none | Takes the item out of every folder |
 | `rating` | `rating`: 0 to 5 | Sets the `star` key, or removes it for 0 |
+| `autoTag` | none | Adds the tags the default model suggests. Falcon's own |
+| `describe` | `replace`: boolean, false when absent | Writes the default model's description to the notes. Falcon's own |
 
-The `type` names follow the rule names in Eagle's translations. `clearTag` and `clearFolder` are singular, as there.
+The rule `type` names follow the rule names in Eagle's translations. `clearTag` and `clearFolder` are singular, as there.
 
 A sample, which the tests in `crates/falcon-library/src/actions.rs` read and write back byte for byte:
 
@@ -94,5 +110,5 @@ A sample, which the tests in `crates/falcon-library/src/actions.rs` read and wri
 ## Code
 
 - `crates/falcon-library/src/actions.rs`: the file (`ActionsFile`, which keeps each entry's JSON), its place (`library_key`, `store_path`), the steps (`Step`), and `Library::run_steps`.
-- `crates/falcon-app/src/actions/`: `mod.rs` holds `ActionsState` (follows the open library, reads and writes its file in `store_dir()`, finds shortcut conflicts), `app.rs` runs actions and routes the menu and the keys, `panel.rs` draws the panel and `editor.rs` the editor. A run goes through the reducer as `Action::RunSteps`, so it lands in the frame's undo step.
+- `crates/falcon-app/src/actions/`: `mod.rs` holds `ActionsState` (follows the open library, reads and writes its file in `store_dir()`, finds shortcut conflicts), `app.rs` runs actions and routes the menu and the keys, `panel.rs` draws the panel and `editor.rs` the editor. A run goes through the reducer as `Action::RunSteps`, so it lands in the frame's undo step. A run with AI steps goes on from there to `ai.rs`, which asks the model on a worker thread and applies the results with `Library::run_steps_with` in a transaction of its own.
 - `crates/falcon-app/src/menu.rs`: `ActionEntry`, `action_enabled` and the AppKit Actions menu.

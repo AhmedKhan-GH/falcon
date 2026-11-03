@@ -829,6 +829,8 @@ Calls block their caller, so features make them off the UI thread and never hold
 
 Only the Ollama path has run against a real service. The other providers are tested against a local mock server.
 
+The first feature on this interface is the AI steps in [Actions](actions.md#ai-steps): auto-tag and write a description.
+
 ### Transparency effects
 
 Eagle stores `general.enableVibrancy`, `'true'` by default, and sets a `vibrancy` attribute on each window's root element (`js/default-preferences.js`, `js/preferences.js`, `preferences.html`, `index.html`, seen). In its main window on macOS the attribute only changes `--box-background` and `--box-background-blur`, the blurred background of menus, boxes and the sidebar when it slides in on hover (`style/base/_color.scss`, `style/components/_sidebar.scss`, seen); the translucent `--color-theme-75` page background is commented out in `style/app.scss` and live only in Preferences and two smaller windows (`style/preferences.scss`, seen). How its main process configures the Electron window is in compiled bytecode and not read.
