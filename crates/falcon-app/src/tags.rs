@@ -122,6 +122,8 @@ pub struct PickerPrefs {
     pub column: u16,
     pub list: bool,
     pub sidebar: bool,
+    /// The panel's size once resized, in points.
+    pub size: Option<[u16; 2]>,
 }
 
 /// The column widths the picker offers.
@@ -129,8 +131,17 @@ pub const COLUMNS: [(u16, &str); 4] = [(100, tr_key("Extra Small")), (120, tr_ke
 
 impl Default for PickerPrefs {
     fn default() -> Self {
-        PickerPrefs { show: Show::default(), counts: true, column: 140, list: false, sidebar: false }
+        PickerPrefs { show: Show::default(), counts: true, column: 140, list: false, sidebar: false, size: None }
     }
+}
+
+/// The panel's size: the saved one or `default`, kept to Eagle's limits and
+/// the window. `min_width` is wider with the sidebar.
+pub fn picker_size(saved: Option<[u16; 2]>, default: [f32; 2], min_width: f32, screen: [f32; 2]) -> [f32; 2] {
+    let [w, h] = saved.map_or(default, |[w, h]| [f32::from(w), f32::from(h)]);
+    let room_w = (screen[0] - 20.0).max(1.0);
+    let room_h = (screen[1] - 60.0).max(1.0);
+    [w.max(min_width).min(room_w), h.clamp(160.0, 920.0).min(room_h)]
 }
 
 /// How many columns of `column` px fit in `width` (2 px gaps), at least one.
@@ -570,6 +581,16 @@ impl TagSort {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_panel_keeps_to_its_limits_and_the_window() {
+        let big = [2000.0, 1200.0];
+        assert_eq!(picker_size(None, [360.0, 480.0], 200.0, big), [360.0, 480.0]);
+        assert_eq!(picker_size(Some([700, 600]), [360.0, 480.0], 200.0, big), [700.0, 600.0]);
+        assert_eq!(picker_size(Some([50, 50]), [360.0, 480.0], 400.0, big), [400.0, 160.0]);
+        assert_eq!(picker_size(Some([900, 2000]), [360.0, 480.0], 200.0, big), [900.0, 920.0]);
+        assert_eq!(picker_size(Some([3000, 900]), [360.0, 480.0], 200.0, [800.0, 500.0]), [780.0, 440.0]);
+    }
 
     fn s(v: &[&str]) -> Vec<String> {
         v.iter().map(|x| x.to_string()).collect()

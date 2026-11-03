@@ -32,6 +32,10 @@ fn column_label(label: &str) -> &str {
 const WIDTH: f32 = 360.0;
 const WIDTH_SIDEBAR: f32 = 540.0;
 const HEIGHT: f32 = 480.0;
+const MIN_WIDTH: f32 = 200.0;
+const MIN_WIDTH_SIDEBAR: f32 = 400.0;
+/// How far in from the panel's edge a drag resizes it.
+const GRIP: f32 = 7.0;
 const SIDEBAR_W: f32 = 180.0;
 const HEADER_H: f32 = 40.0;
 const FOOTER_H: f32 = 40.0;
@@ -125,8 +129,10 @@ impl App {
         }
 
         let screen = ctx.content_rect();
-        let width = if sidebar { WIDTH_SIDEBAR } else { WIDTH };
-        let size = vec2(width.min(screen.width() - 20.0), HEIGHT.min(screen.height() - 60.0));
+        let default = [if sidebar { WIDTH_SIDEBAR } else { WIDTH }, HEIGHT];
+        let min_width = if sidebar { MIN_WIDTH_SIDEBAR } else { MIN_WIDTH };
+        let [w, h] = tags::picker_size(prefs.size, default, min_width, [screen.width(), screen.height()]);
+        let size = vec2(w, h);
         // At the pointer, then moved left of the inspector, as Eagle does.
         let anchor = p.anchor.unwrap_or(Pos2::new(screen.right() - t::INSPECTOR_WIDTH, screen.top() + 80.0));
         let mut x = anchor.x - size.x / 2.0;
@@ -374,6 +380,27 @@ impl App {
                     shortcut_tip(ui, tr("Select"), &["⏎"]);
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| shortcut_tip(ui, tr("Close"), &["ESC"]));
                 });
+                // The right edge, the bottom edge and their corner resize it.
+                let panel = Rect::from_min_size(Pos2::new(x, y), size);
+                let right = Rect::from_min_max(Pos2::new(panel.right() - GRIP, panel.top()), panel.max);
+                let bottom = Rect::from_min_max(Pos2::new(panel.left(), panel.bottom() - GRIP), panel.max);
+                let corner = Rect::from_min_max(panel.max - Vec2::splat(GRIP * 2.0), panel.max);
+                let mut moved = Vec2::ZERO;
+                let grips = [
+                    (right, "right", egui::CursorIcon::ResizeHorizontal, vec2(1.0, 0.0)),
+                    (bottom, "bottom", egui::CursorIcon::ResizeVertical, vec2(0.0, 1.0)),
+                    (corner, "corner", egui::CursorIcon::ResizeNwSe, vec2(1.0, 1.0)),
+                ];
+                for (r, name, cursor, axes) in grips {
+                    let resp = ui.interact(r, ui.scope_id().with(("tag-picker-grip", name)), Sense::drag()).on_hover_cursor(cursor);
+                    if resp.dragged() {
+                        moved += resp.drag_delta() * axes;
+                    }
+                }
+                if moved != Vec2::ZERO {
+                    let new = size + moved;
+                    new_prefs.size = Some([new.x.clamp(1.0, 4000.0) as u16, new.y.clamp(1.0, 4000.0) as u16]);
+                }
             });
         });
 
