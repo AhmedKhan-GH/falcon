@@ -243,8 +243,7 @@ A saved filter stores the filter's rules and the search text in `saved-filters.j
 - the ratio shapes `43`, `34`, `169` and `916`, and the custom ratio as `custom` with `width` and `height`
 - excluded Uncategorized, as `folder.excludes.NoFolders`, next to the excluded folder ids
 - tags, folders, type, size, dimensions, rating, notes, URL, colour, dates, duration, BPM, camera and font
-
-Only Eagle's AI searches, `image` and `semantic`, are skipped, and applying a filter that has them shows a notice that names them.
+- Eagle's AI searches, `image` and `semantic`, which AI Search applies; until it can, they are kept and the filter bar says why (see the App chapter)
 
 ## Go to Folder
 
