@@ -36,17 +36,17 @@ Eagle's alias extensions import as the format they stand for, whatever macOS cal
 | --- | --- | --- | --- |
 | psd, psdt, psb | High-resolution render | The file's merged image decoded by falcon at full resolution, in colour through its ICC profile; QuickLook when it has none (Maximize Compatibility off) | Done |
 | ai, ait | High-resolution render | PDF-compatible files: PDFKit draws the part on screen at the size shown, sharp at any zoom in the viewer. PostScript-only files: QuickLook, redrawn at each zoom level up to 8192 px. With no QuickLook render: the thumbnail is page 1 through PDFKit, or the preview in a PostScript file (see eps), which stands in for the viewer | Done |
-| eps | Image of the thumbnail (dropped on macOS 13+) | QuickLook render (macOS 14+ has no EPS renderer), else the preview in the file: a DOS header's TIFF, a `%%BeginPreview` bitmap or an `%AI7_Thumbnail` block. An EPS with none gets no thumbnail (falcon has no PostScript interpreter) | Partial |
+| eps | Image of the thumbnail (dropped on macOS 13+) | QuickLook render (macOS 14+ has no EPS renderer), else the preview in the file: a DOS header's TIFF, a `%%BeginPreview` bitmap or an `%AI7_Thumbnail` block. An EPS with none gets no thumbnail (falcon has no PostScript interpreter, see the end of this file) | Partial |
 | xd, sketch, fig, af, afdesign, afphoto, afpub, c4d, blend, clip, skp, dwg, prd, cdr, skt, pxd, graffle, mindnode, xmind, eddx, emmx, indd, indt, idml | Image of the thumbnail | QuickLook render where the app's generator is installed; sketch, xmind, indd, indt, idml, blend, skp and dwg fall back to the preview picture in the file, where it has one (not a zstd-compressed blend) | Done |
 
 ## Documents
 
 | Formats | Eagle | Falcon | Status |
 | --- | --- | --- | --- |
-| pdf | pdf.js reader inside the window | PDFKit reader inside the window: find, rotate, spreads, links, password, attachments, switchable layers, print | Partial: the layers list is flat rather than the document's tree, and printing ignores switched layers |
+| pdf | pdf.js reader inside the window | PDFKit reader inside the window: find, rotate, spreads, links, password, attachments, switchable layers shown as the document's `/Order` tree, printing with the switched layers | Done |
 | txt | Editable text | Editable text with autosave | Done |
 | doc, docx, xls, xlsx, key, pages, numbers | Image of the thumbnail | QuickLook render; key falls back to the preview picture in the file, where it has one (many have none) | Done |
-| ppt, pptx, potx | High-resolution render | QuickLook, redrawn at each zoom level up to 8192 px | Partial: past 8192 px the picture stops getting sharper. macOS hands these files back only as a bitmap or as HTML, with no PDF to draw by region |
+| ppt, pptx, potx | High-resolution render | QuickLook, redrawn at each zoom level up to 8192 px | Partial: past 8192 px the picture stops getting sharper. macOS hands these files back only as a bitmap or as HTML, with no PDF to draw by region; the cap is accepted as a limit |
 
 ## Fonts
 
@@ -92,6 +92,16 @@ Eagle's alias extensions import as the format they stand for, whatever macOS cal
 
 None.
 
+## File ▸ New… templates deferred because the format is closed
+
+File ▸ New… makes blank Sketch, Photoshop, Illustrator, text, Word, PowerPoint, Excel and XMind documents, each written by falcon from the format's public specification. Eagle also lists these five, which stay disabled in falcon's menu by the user's decision, until a public specification exists that falcon could write reliably:
+
+- **Keynote (.key):** Apple's IWA format, Snappy-compressed Protocol Buffers whose message definitions Apple has not published.
+- **Pages (.pages):** the same IWA format.
+- **Numbers (.numbers):** the same IWA format.
+- **Adobe XD (.xd):** a zip of JSON whose schema Adobe has not published.
+- **MindNode (.mindnode):** a package format with no published specification.
+
 ## How well each format has been tested
 
 Falcon is tested against a local library holding one sample of each format where a sample is available. It covers 101 of Eagle's 124 extensions. The library isn't published, because some samples are for local testing only.
@@ -120,9 +130,9 @@ Falcon is tested against a local library holding one sample of each format where
 - The blank Sketch document from File ▸ New… hasn't been opened in Sketch.
 - A sample passing means it opened in falcon, not that it looks identical to Eagle.
 
-## Possible later additions (not planned)
+## Beyond Eagle's set, not planned
 
-These are open formats in common use that neither app handles well:
+Open formats in common use that neither app handles well:
 
 - epub
 - md
@@ -130,3 +140,7 @@ These are open formats in common use that neither app handles well:
 - odt, ods, odp
 - usdz
 - jp2
+
+Ruled out as going beyond Eagle:
+
+- A PostScript interpreter, which would draw EPS files that carry no preview picture. Eagle shows such a file without a thumbnail too, so falcon leaves it at that.

@@ -60,6 +60,7 @@ Libraries built into falcon beyond ordinary Rust crates from crates.io, with the
 |---|---|---|---|---|
 | ufbx (C library, vendored by the `ufbx` crate and compiled with `cc`) | 0.18.0 | MIT (or public domain, at the user's choice) | https://github.com/ufbx/ufbx | Reading FBX models (`crates/falcon-library/src/model3d/fbx.rs`) |
 | `ufbx` Rust bindings | 0.8.0 | MIT OR PDDL-1.0 | https://github.com/ufbx/ufbx-rust | Rust interface to the ufbx C library |
+| `fancy-regex` | 0.20.0 | MIT | https://github.com/fancy-regex/fancy-regex | The regex engine of smart folder rules, for look-around and backreferences as JavaScript's `RegExp` has (`crates/falcon-library/src/smart.rs`). It brings in `bit-set` and `bit-vec` (MIT OR Apache-2.0) |
 | `lopdf` | 0.46.0 | MIT | https://github.com/J-F-Liu/lopdf | Finding a PDF's optional content objects, in plain, compressed and encrypted files, to switch layers (`crates/falcon-pdf/src/ocg.rs`). The crates it brings in are MIT, Apache-2.0, BSD-3-Clause or Zlib, some with a choice of those |
 | moxcms | 0.8.1 | BSD-3-Clause OR Apache-2.0 | https://github.com/awxkee/moxcms | ICC colour conversion of the PSD merged image (`crates/falcon-library/src/psd.rs`); already linked through `image` |
 | roxmltree | 0.21 | MIT OR Apache-2.0 | https://github.com/RazrFalcon/roxmltree | Reading COLLADA (`.dae`) models (`crates/falcon-library/src/model3d/dae.rs`); already linked through resvg |
