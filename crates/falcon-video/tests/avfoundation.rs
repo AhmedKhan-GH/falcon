@@ -22,7 +22,7 @@ mod mac {
     use std::ptr::{self, NonNull};
     use std::time::{Duration, Instant};
 
-    use falcon_video::{Backend, Frame, Grabber, Video, frame_at, probe};
+    use falcon_video::{Backend, Frame, Grabber, Prepared, Video, frame_at, probe};
     use objc2::rc::Retained;
     use objc2::runtime::AnyObject;
     use objc2_av_foundation::{
@@ -234,11 +234,63 @@ mod mac {
         got
     }
 
+    /// A preview read on another thread, as the grid's hover does.
+    fn prepared(path: &Path, side: u32) -> Prepared {
+        let path = path.to_path_buf();
+        std::thread::spawn(move || Prepared::new(&path, side)).join().unwrap().expect("prepare")
+    }
+
+    /// The next picture of a playing preview, running it as the app does.
+    fn small_frame(v: &mut Video) -> Option<Frame> {
+        let mut got = None;
+        wait_for(5.0, || {
+            v.tick();
+            got = v.frame();
+            got.is_some()
+        });
+        got
+    }
+
+    /// The hover preview's player: small pictures, a scrub, then playing on
+    /// and looping.
+    fn preview(path: &Path) {
+        let mut v = prepared(path, 32).start().expect("start preview");
+        check("preview: the system plays it", v.backend() == Backend::System, v.backend());
+        v.set_muted(true);
+        v.set_looping(true);
+        v.play();
+        let f = small_frame(&mut v);
+        let long = W.max(H);
+        let want = (W * 32 / long, H * 32 / long);
+        check("preview: the picture is small and red", f.as_ref().is_some_and(|f| (f.width, f.height) == want && is_red(f)), f.map(|f| (f.width, f.height, f.mean())));
+        v.pause();
+        v.seek(1.5);
+        let mut f = None;
+        wait_for(5.0, || {
+            v.tick();
+            if let Some(g) = v.frame() {
+                f = Some(g);
+            }
+            f.as_ref().is_some_and(is_blue)
+        });
+        check("preview: a scrub shows that time while paused", f.as_ref().is_some_and(|f| is_blue(f) && (f.width, f.height) == want), f.map(|f| f.mean()));
+        v.play();
+        let mut looped = false;
+        wait_for(5.0, || {
+            v.tick();
+            let _ = v.frame();
+            looped = v.current_time() < 1.0;
+            looped
+        });
+        check("preview: playing on loops at the end", looped, v.current_time());
+    }
+
     pub fn run() {
         let dir = tempfile::tempdir().unwrap();
         let (silent, sound) = (dir.path().join("silent.mov"), dir.path().join("sound.mp4"));
         write_clip(&silent, false, false);
         write_clip(&sound, true, false);
+        preview(&sound);
 
         for (path, audio) in [(&silent, false), (&sound, true)] {
             let name = path.file_name().unwrap().to_string_lossy();
@@ -348,6 +400,15 @@ mod mac {
             let (l, r) = (f.pixel(f.width / 4, f.height / 2), f.pixel(f.width * 3 / 4, f.height / 2));
             (f.width, f.height) == (H, W) && l[2] > 180 && l[0] < 70 && r[0] > 180 && r[2] < 70
         };
+        let mut v = prepared(&portrait, 32).start().expect("start portrait preview");
+        v.play();
+        let f = small_frame(&mut v);
+        let small_upright = |f: &Frame| {
+            let (l, r) = (f.pixel(f.width / 4, f.height / 2), f.pixel(f.width * 3 / 4, f.height / 2));
+            (f.width, f.height) == (24, 32) && l[2] > 180 && l[0] < 70 && r[0] > 180 && r[2] < 70
+        };
+        check("portrait preview: small and upright", f.as_ref().is_some_and(small_upright), f.map(|f| (f.width, f.height)));
+        drop(v);
         let still = frame_at(&portrait, 0.5).expect("portrait frame");
         check("portrait: decoded frame is upright", upright(&still), (still.width, still.height));
         let mut v = Video::open(&portrait).expect("open portrait");
@@ -432,6 +493,16 @@ mod mac {
                 println!("skip AV1 checks: this FFmpeg was built without dav1d (run scripts/build-ffmpeg.sh)");
             }
             let av1 = if dav1d { vec![("av1.webm", clip.matroska(true)), ("av1.mkv", clip.matroska(false)), ("av1.mp4", clip.mp4())] } else { Vec::new() };
+            for (name, bytes) in av1.clone() {
+                // A preview of a file the system can't draw: FFmpeg takes over
+                // in `tick`, at the same small size, on a worker.
+                let path = dir.path().join(format!("preview-{name}"));
+                std::fs::write(&path, bytes).unwrap();
+                let mut v = prepared(&path, 32).start().expect("start AV1 preview");
+                v.play();
+                let f = small_frame(&mut v);
+                check(&format!("AV1 preview {name}: small picture ({:?})", v.backend()), f.as_ref().is_some_and(|f| f.width == 32 && f.height == 24), f.map(|f| (f.width, f.height)));
+            }
             for (name, bytes) in av1 {
                 let path = dir.path().join(name);
                 std::fs::write(&path, bytes).unwrap();
@@ -452,6 +523,20 @@ mod mac {
                 });
                 check(&format!("AV1 {name}: player shows the first frame ({:?})", v.backend()), f.as_ref().is_some_and(|f| shows(f, 0.0)), f.map(|f| f.mean()));
             }
+            // What macOS refuses is opened by the worker, with small pictures.
+            let clip = falcon_ffmpeg::testing::Clip { width: 64, height: 48, frames: 25, fps: 25, audio_rate: Some(16_000) };
+            let avi = dir.path().join("preview.avi");
+            std::fs::write(&avi, clip.avi(|_, _| [10, 100, 200])).unwrap();
+            let mut v = prepared(&avi, 32).start().expect("start AVI preview");
+            check("AVI preview: FFmpeg plays it", v.backend() == Backend::Ffmpeg, v.backend());
+            check("AVI preview: wants an output", v.needs_mixer(), ());
+            v.set_looping(true);
+            v.play();
+            let f = small_frame(&mut v);
+            check("AVI preview: small picture", f.as_ref().is_some_and(|f| (f.width, f.height) == (32, 24)), f.map(|f| (f.width, f.height)));
+            let began = Instant::now();
+            drop(v);
+            check("AVI preview: dropping doesn't wait", began.elapsed() < Duration::from_millis(50), began.elapsed());
         } else {
             println!("skip FFmpeg checks: {:?}", falcon_ffmpeg::status().err());
         }

@@ -167,6 +167,9 @@ pub struct Player {
     info: Info,
     /// Whether the file has a sound track with a decoder and an output.
     audio_out: bool,
+    /// Whether dropping it leaves the workers to end by themselves, instead
+    /// of waiting for the picture they are on.
+    detach: bool,
     wall: WallClock,
     /// Whether the audio clock was the master last time it was read.
     on_audio: bool,
@@ -190,6 +193,19 @@ impl Player {
     /// decoded and the returned [`AudioOut`] must be played for the clock
     /// to run; without, it plays silent on the wall clock.
     pub fn open(path: &Path, audio: bool) -> Result<(Player, Option<AudioOut>)> {
+        Player::open_sized(path, audio, u32::MAX, false)
+    }
+
+    /// As [`Player::open`], for a small preview: pictures fit `max_side` on
+    /// their long side, and dropping it never waits for the workers, which
+    /// stop after the packet they are on. Opening reads and probes the
+    /// file, so it may take a moment; call it off the UI thread (a `Player`
+    /// and its [`AudioOut`] can be sent to the thread that draws).
+    pub fn open_preview(path: &Path, audio: bool, max_side: u32) -> Result<(Player, Option<AudioOut>)> {
+        Player::open_sized(path, audio, max_side, true)
+    }
+
+    fn open_sized(path: &Path, audio: bool, max_side: u32, detach: bool) -> Result<(Player, Option<AudioOut>)> {
         let input = Input::open(path)?;
         let api = input.api();
         let (vi, vcodec) = input.best(ffi::AVMEDIA_TYPE_VIDEO).ok_or_else(|| Error("no video stream FFmpeg can decode".into()))?;
@@ -235,7 +251,7 @@ impl Player {
             let scaler = Scaler::new(api);
             std::thread::Builder::new()
                 .name("falcon-ffmpeg-video".into())
-                .spawn(move || video_loop(&shared, video, scaler, fps))
+                .spawn(move || video_loop(&shared, video, scaler, fps, max_side))
                 .map_err(|e| Error(e.to_string()))?
         };
         let out = audio_out.then(|| AudioOut { shared: shared.clone(), buf: Vec::new(), pos: 0 });
@@ -245,6 +261,7 @@ impl Player {
             path: path.to_path_buf(),
             info,
             audio_out,
+            detach,
             wall: WallClock::new(0.0),
             on_audio: false,
             generation: 0,
@@ -521,6 +538,9 @@ impl Drop for Player {
     fn drop(&mut self) {
         self.shared.lock().stop = true;
         self.shared.cv.notify_all();
+        if self.detach {
+            return;
+        }
         for t in self.threads.drain(..) {
             let _ = t.join();
         }
@@ -654,7 +674,7 @@ fn end(shared: &Shared, generation: u64) {
 }
 
 /// Decodes queued video packets into RGBA frames.
-fn video_loop(shared: &Shared, mut video: Decoder, mut scaler: Scaler, fps: f64) {
+fn video_loop(shared: &Shared, mut video: Decoder, mut scaler: Scaler, fps: f64, max_side: u32) {
     let mut generation = 0;
     let mut target = f64::NEG_INFINITY;
     let mut delivered = false;
@@ -706,7 +726,7 @@ fn video_loop(shared: &Shared, mut video: Decoder, mut scaler: Scaler, fps: f64)
                 video.hold();
                 continue;
             }
-            let Some(frame) = scaler.convert(f, &video.info, u32::MAX) else { continue };
+            let Some(frame) = scaler.convert(f, &video.info, max_side) else { continue };
             delivered = true;
             push(shared, generation, pts, frame);
         }
@@ -714,7 +734,7 @@ fn video_loop(shared: &Shared, mut video: Decoder, mut scaler: Scaler, fps: f64)
             // A seek past the last frame shows the last frame.
             if !delivered
                 && let Some(f) = video.held()
-                && let Some(frame) = scaler.convert(f, &video.info, u32::MAX)
+                && let Some(frame) = scaler.convert(f, &video.info, max_side)
             {
                 let pts = video.pts(f).unwrap_or(target);
                 push(shared, generation, pts, frame);

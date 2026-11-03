@@ -41,6 +41,36 @@ fn clip(dir: &Path, audio: bool) -> PathBuf {
     path
 }
 
+/// A preview opened on one thread and played on another: pictures fit the
+/// side asked for, the time follows a seek, and dropping it doesn't wait.
+#[test]
+#[cfg_attr(not(ffmpeg_built), ignore = "needs scripts/build-ffmpeg.sh")]
+fn a_preview_plays_small_pictures() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = clip(dir.path(), false);
+    let (mut p, out) = std::thread::spawn(move || Player::open_preview(&path, false, 32)).join().unwrap().unwrap();
+    assert!(out.is_none());
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let wait = |p: &mut Player| {
+        while Instant::now() < deadline {
+            if let Some(f) = p.frame() {
+                return f;
+            }
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        panic!("no picture");
+    };
+    let f = wait(&mut p);
+    assert_eq!((f.width, f.height), (32, 24));
+    p.seek(0.6);
+    let f = wait(&mut p);
+    assert_eq!((f.width, f.height), (32, 24));
+    assert_eq!(index_of(&f), 15, "a paused seek shows that time");
+    let began = Instant::now();
+    drop(p);
+    assert!(began.elapsed() < Duration::from_millis(50));
+}
+
 #[test]
 #[cfg_attr(not(ffmpeg_built), ignore = "needs scripts/build-ffmpeg.sh")]
 fn loads_an_lgpl_build() {

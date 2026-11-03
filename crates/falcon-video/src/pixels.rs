@@ -13,6 +13,19 @@ pub fn quarter_turns(a: f64, b: f64) -> u8 {
     turns.rem_euclid(4) as u8
 }
 
+/// The size a system player's output asks for so that a picture shown at
+/// `width` by `height`, once turned `turns` quarter turns, fits `max_side`
+/// on its long side: the size before the turn, never enlarged.
+pub fn output_size(width: u32, height: u32, turns: u8, max_side: u32) -> (u32, u32) {
+    let (w, h) = if turns % 2 == 1 { (height, width) } else { (width, height) };
+    let long = w.max(h).max(1);
+    if long <= max_side {
+        return (w.max(1), h.max(1));
+    }
+    let scale = |v: u32| ((f64::from(v) * f64::from(max_side) / f64::from(long)).round() as u32).max(1);
+    (scale(w), scale(h))
+}
+
 /// Packs `height` rows of `width` BGRA pixels, `stride` bytes apart, into
 /// RGBA, turned clockwise `turns` quarter turns. Rows missing from `src`
 /// come out black rather than panicking.
@@ -106,6 +119,17 @@ mod tests {
         assert_eq!(f.pixel(0, 1), [0, 0, 0, 255]);
         assert_eq!(from_bgra(&[], 0, 0, 0, 1).rgba.len(), 0);
         assert_eq!(from_bgra(&[], 0, 5, 0, 0).rgba.len(), 0);
+    }
+
+    #[test]
+    fn output_sizes_fit_the_long_side() {
+        assert_eq!(output_size(1920, 1080, 0, 640), (640, 360));
+        assert_eq!(output_size(1080, 1920, 0, 640), (360, 640));
+        assert_eq!(output_size(320, 180, 0, 640), (320, 180), "never enlarged");
+        // A portrait clip: shown 1080x1920, stored 1920x1080 and turned once.
+        assert_eq!(output_size(1080, 1920, 1, 640), (640, 360));
+        assert_eq!(output_size(4000, 2, 0, 64), (64, 1), "never empty");
+        assert_eq!(output_size(0, 0, 0, 64), (1, 1));
     }
 
     #[test]

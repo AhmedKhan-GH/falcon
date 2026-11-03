@@ -20,6 +20,9 @@
 //! - [`Video`] plays a file with sound and hands out each new frame as RGBA
 //!   pixels for the caller to upload as a texture. It lives on the main
 //!   thread, as AVFoundation's player requires.
+//! - [`Prepared`] readies a small [`Video`] off the main thread, for the
+//!   grid's hover previews: its frames fit a given side, and nothing about
+//!   opening or dropping it waits on the file.
 //!
 //! All Objective-C interop sits in the private `mac` module; this file and
 //! `pixels` are plain Rust.
@@ -27,6 +30,7 @@
 use std::cell::RefCell;
 use std::num::NonZero;
 use std::path::{Path, PathBuf};
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 mod pixels;
@@ -213,6 +217,68 @@ impl rodio::Source for Sound {
     }
 }
 
+/// What opening FFmpeg's player gives: the player and its sound.
+type Opened = falcon_ffmpeg::Result<(falcon_ffmpeg::Player, Option<falcon_ffmpeg::AudioOut>)>;
+
+enum Readied {
+    System(sys::Prepared),
+    Ffmpeg(falcon_ffmpeg::Player, Option<falcon_ffmpeg::AudioOut>),
+}
+
+/// A preview read and ready to play, as [`Video::start`] of what any thread
+/// prepared: everything that waits on the file (AVFoundation reading its
+/// header, FFmpeg probing its streams) has been done by then.
+pub struct Prepared {
+    readied: Readied,
+    path: PathBuf,
+    max_side: u32,
+}
+
+impl Prepared {
+    /// Reads `path` for a preview whose pictures fit `max_side` on their
+    /// long side, on any thread. Fails for anything [`probe`] refuses.
+    pub fn new(path: &Path, max_side: u32) -> Result<Prepared> {
+        let readied = match sys::Prepared::new(path) {
+            Ok(p) => Readied::System(p),
+            Err(e) if !ffmpeg_available() => return Err(e),
+            Err(_) => {
+                let (player, sound) = falcon_ffmpeg::Player::open_preview(path, true, max_side)?;
+                Readied::Ffmpeg(player, sound)
+            }
+        };
+        Ok(Prepared { readied, path: path.to_path_buf(), max_side })
+    }
+
+    /// The player, paused at the start. Main thread only. FFmpeg's sound
+    /// stays silent until [`Video::set_mixer`] gives it an output, so a
+    /// muted preview needs none.
+    pub fn start(self) -> Result<Video> {
+        if !sys::on_main_thread() {
+            return Err(Error("video playback runs on the main thread".into()));
+        }
+        let (inner, held_sound) = match self.readied {
+            Readied::System(p) => (Inner::System(sys::Video::start(p, Some(self.max_side))?), None),
+            Readied::Ffmpeg(p, sound) => (Inner::Ffmpeg(p), sound),
+        };
+        let mut video = Video {
+            inner,
+            path: self.path,
+            mixer: None,
+            volume: 1.0,
+            muted: false,
+            fallback_error: None,
+            opened: Instant::now(),
+            had_frame: false,
+            held_frame: None,
+            preview_side: Some(self.max_side),
+            held_sound,
+            opening: None,
+        };
+        video.apply_mute();
+        Ok(video)
+    }
+}
+
 enum Inner {
     System(sys::Video),
     Ffmpeg(falcon_ffmpeg::Player),
@@ -239,6 +305,13 @@ pub struct Video {
     had_frame: bool,
     /// A picture taken while checking for one, for the next [`Video::frame`].
     held_frame: Option<Frame>,
+    /// The side a preview's pictures fit: such a player's move to FFmpeg
+    /// keeps that size and opens off the main thread.
+    preview_side: Option<u32>,
+    /// A preview's FFmpeg sound while it has no output (its player is muted).
+    held_sound: Option<falcon_ffmpeg::AudioOut>,
+    /// FFmpeg's player being opened for a preview.
+    opening: Option<mpsc::Receiver<Opened>>,
 }
 
 impl Video {
@@ -261,7 +334,7 @@ impl Video {
             Err(e) if !ffmpeg_available() => return Err(e),
             Err(_) => Inner::Ffmpeg(open_ffmpeg(path, mixer.as_ref())?),
         };
-        Ok(Video { inner, path: path.to_path_buf(), mixer, volume: 1.0, muted: false, fallback_error: None, opened: Instant::now(), had_frame: false, held_frame: None })
+        Ok(Video { inner, path: path.to_path_buf(), mixer, volume: 1.0, muted: false, fallback_error: None, opened: Instant::now(), had_frame: false, held_frame: None, preview_side: None, held_sound: None, opening: None })
     }
 
     /// Which back end is playing.
@@ -369,10 +442,31 @@ impl Video {
 
     pub fn set_muted(&mut self, muted: bool) {
         self.muted = muted;
+        self.apply_mute();
+    }
+
+    /// Mutes the player as asked, and FFmpeg's while its sound has no output
+    /// to go to (its clock would wait for one).
+    fn apply_mute(&mut self) {
         match &mut self.inner {
-            Inner::System(v) => v.set_muted(muted),
-            Inner::Ffmpeg(p) => p.set_muted(muted),
+            Inner::System(v) => v.set_muted(self.muted),
+            Inner::Ffmpeg(p) => p.set_muted(self.muted || self.held_sound.is_some()),
         }
+    }
+
+    /// Whether this preview has yet to be given an output by [`Video::set_mixer`].
+    pub fn needs_mixer(&self) -> bool {
+        self.preview_side.is_some() && self.mixer.is_none()
+    }
+
+    /// Gives a preview the output its FFmpeg sound goes to, whichever
+    /// player has it now or takes over later.
+    pub fn set_mixer(&mut self, mixer: rodio::mixer::Mixer) {
+        if let Some(s) = self.held_sound.take() {
+            mixer.add(Sound(s));
+        }
+        self.mixer = Some(mixer);
+        self.apply_mute();
     }
 
     pub fn set_looping(&mut self, looping: bool) {
@@ -401,9 +495,11 @@ impl Video {
     /// when looping, or stops. When the system player has failed or has
     /// drawn nothing in time, FFmpeg takes over here.
     pub fn tick(&mut self) {
+        self.adopt_opened();
         if let Inner::System(v) = &self.inner
             && v.error().is_some()
             && self.fallback_error.is_none()
+            && self.opening.is_none()
             && ffmpeg_available()
         {
             self.fall_back();
@@ -420,7 +516,7 @@ impl Video {
     /// taken for a player that drew nothing.
     fn check_first_frame(&mut self) {
         let Inner::System(v) = &mut self.inner else { return };
-        if self.fallback_error.is_some() || !switch_for_no_frame(self.opened.elapsed(), self.had_frame, ffmpeg_available()) {
+        if self.fallback_error.is_some() || self.opening.is_some() || !switch_for_no_frame(self.opened.elapsed(), self.had_frame, ffmpeg_available()) {
             return;
         }
         if let Some(f) = v.frame() {
@@ -439,26 +535,62 @@ impl Video {
     }
 
     /// Replaces the failed system player with FFmpeg's, carrying over the
-    /// speed, volume, mute, looping, place and whether it was playing.
+    /// speed, volume, mute, looping, place and whether it was playing. A
+    /// preview opens it on a worker and goes on until [`Video::tick`] finds
+    /// it ready.
     fn fall_back(&mut self) {
-        let Inner::System(old) = &self.inner else { return };
-        let (rate, looping, playing, at) = (old.rate(), old.looping(), old.is_playing(), old.current_time());
+        if let Some(side) = self.preview_side {
+            let (tx, rx) = mpsc::channel();
+            let path = self.path.clone();
+            std::thread::spawn(move || {
+                let _ = tx.send(falcon_ffmpeg::Player::open_preview(&path, true, side));
+            });
+            self.opening = Some(rx);
+            return;
+        }
         match open_ffmpeg(&self.path, self.mixer.as_ref()) {
-            Ok(mut p) => {
-                p.set_volume(self.volume);
-                p.set_muted(self.muted);
-                p.set_rate(rate);
-                p.set_looping(looping);
-                if at > 0.0 {
-                    p.seek(at);
+            Ok(p) => self.take_over(p),
+            Err(e) => self.fallback_error = Some(e.0),
+        }
+    }
+
+    /// Takes the player a worker opened for a preview, if it is ready.
+    fn adopt_opened(&mut self) {
+        let Some(rx) = &self.opening else { return };
+        let opened = match rx.try_recv() {
+            Ok(r) => r,
+            Err(mpsc::TryRecvError::Empty) => return,
+            Err(mpsc::TryRecvError::Disconnected) => Err(falcon_ffmpeg::Error("the FFmpeg worker stopped".into())),
+        };
+        self.opening = None;
+        match opened {
+            Ok((p, sound)) => {
+                match (&self.mixer, sound) {
+                    (Some(m), Some(s)) => m.add(Sound(s)),
+                    (None, s) => self.held_sound = s,
+                    (Some(_), None) => {}
                 }
-                if playing {
-                    p.play();
-                }
-                self.inner = Inner::Ffmpeg(p);
+                self.take_over(p);
             }
             Err(e) => self.fallback_error = Some(e.0),
         }
+    }
+
+    /// Puts FFmpeg's player in the system player's place, as it was.
+    fn take_over(&mut self, mut p: falcon_ffmpeg::Player) {
+        let Inner::System(old) = &self.inner else { return };
+        let (rate, looping, playing, at) = (old.rate(), old.looping(), old.is_playing(), old.current_time());
+        p.set_volume(self.volume);
+        p.set_muted(self.muted || self.held_sound.is_some());
+        p.set_rate(rate);
+        p.set_looping(looping);
+        if at > 0.0 {
+            p.seek(at);
+        }
+        if playing {
+            p.play();
+        }
+        self.inner = Inner::Ffmpeg(p);
     }
 
     /// The picture at the playhead at the clip's full size, turned upright:

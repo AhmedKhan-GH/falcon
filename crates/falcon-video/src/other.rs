@@ -33,12 +33,24 @@ impl Grabber {
 }
 
 /// Never constructed off macOS.
+pub struct Prepared;
+
+impl Prepared {
+    pub fn new(_path: &Path) -> Result<Prepared> {
+        unsupported()
+    }
+}
+
+/// Never constructed off macOS.
 pub struct Video {
     info: Info,
 }
 
 impl Video {
     pub fn open(_path: &Path) -> Result<Video> {
+        unsupported()
+    }
+    pub fn start(_prepared: Prepared, _max_side: Option<u32>) -> Result<Video> {
         unsupported()
     }
     pub fn info(&self) -> &Info {

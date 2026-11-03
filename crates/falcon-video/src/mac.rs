@@ -28,8 +28,8 @@ use objc2_core_graphics::{CGBitmapContextCreate, CGColorSpace, CGContext, CGImag
 use objc2_core_media::{CMClock, CMTime};
 use objc2_core_video::{
     CVPixelBuffer, CVPixelBufferGetBaseAddress, CVPixelBufferGetBytesPerRow, CVPixelBufferGetHeight, CVPixelBufferGetPixelFormatType,
-    CVPixelBufferGetWidth, CVPixelBufferLockBaseAddress, CVPixelBufferLockFlags, CVPixelBufferUnlockBaseAddress, kCVPixelBufferPixelFormatTypeKey,
-    kCVPixelFormatType_32BGRA, kCVReturnSuccess,
+    CVPixelBufferGetWidth, CVPixelBufferLockBaseAddress, CVPixelBufferLockFlags, CVPixelBufferUnlockBaseAddress, kCVPixelBufferHeightKey, kCVPixelBufferPixelFormatTypeKey,
+    kCVPixelBufferWidthKey, kCVPixelFormatType_32BGRA, kCVReturnSuccess,
 };
 use objc2_foundation::{NSDictionary, NSNumber, NSString, NSURL};
 
@@ -212,6 +212,27 @@ fn buffer_to_frame(buffer: &CVPixelBuffer, turns: u8) -> Option<Frame> {
     }
 }
 
+/// A file read and checked for [`Video::start`], so the header can be read
+/// off the main thread and the player made on it without waiting.
+pub struct Prepared {
+    asset: Retained<AVURLAsset>,
+    info: Info,
+}
+
+// SAFETY: an AVAsset is immutable and safe to use from any thread once made
+// (this crate already reads its tracks and decodes from it off the main
+// thread); `Info` is plain data.
+unsafe impl Send for Prepared {}
+
+impl Prepared {
+    /// Reads `path`'s header; fails for anything [`probe`] refuses.
+    pub fn new(path: &Path) -> Result<Prepared> {
+        let asset = asset(path)?;
+        let info = info(&asset)?;
+        Ok(Prepared { asset, info })
+    }
+}
+
 /// A playing video: AVPlayer handles decoding, timing and sound; each new
 /// frame is copied out through an `AVPlayerItemVideoOutput`.
 ///
@@ -233,16 +254,31 @@ impl Video {
     /// Opens a file for playback, paused at the start. Fails off the main
     /// thread, and for anything [`probe`] refuses.
     pub fn open(path: &Path) -> Result<Video> {
+        Video::start(Prepared::new(path)?, None)
+    }
+
+    /// Plays what [`Prepared::new`] read, paused at the start. With
+    /// `max_side`, the output hands out pictures fitting it on their long
+    /// side: AVFoundation scales them off the main thread, before the copy
+    /// that [`Video::frame`] makes.
+    pub fn start(prepared: Prepared, max_side: Option<u32>) -> Result<Video> {
         let mtm = MainThreadMarker::new().ok_or_else(|| err("video playback runs on the main thread"))?;
-        let asset = asset(path)?;
-        let info = info(&asset)?;
-        // kCVPixelBufferPixelFormatTypeKey is a CFString, toll-free bridged
-        // to NSString.
+        let Prepared { asset, info } = prepared;
+        // The pixel buffer keys are CFStrings, toll-free bridged to NSString.
         // SAFETY: CFString and NSString share one object layout (toll-free
-        // bridging), and the key is a constant that lives for the program.
-        let key: &NSString = unsafe { &*(kCVPixelBufferPixelFormatTypeKey as *const CFString as *const NSString) };
+        // bridging), and the keys are constants that live for the program.
+        let key = |k: &'static CFString| -> &'static NSString { unsafe { &*(k as *const CFString as *const NSString) } };
         let format = NSNumber::new_u32(kCVPixelFormatType_32BGRA);
-        let settings = NSDictionary::<NSString, AnyObject>::from_slices(&[key], &[format.as_ref()]);
+        let settings = match max_side {
+            None => NSDictionary::<NSString, AnyObject>::from_slices(&[key(unsafe { kCVPixelBufferPixelFormatTypeKey })], &[format.as_ref()]),
+            Some(side) => {
+                let (w, h) = pixels::output_size(info.width, info.height, info.turns, side);
+                let (w, h) = (NSNumber::new_u32(w), NSNumber::new_u32(h));
+                // SAFETY: reading framework constants that are set at load time.
+                let keys = unsafe { [key(kCVPixelBufferPixelFormatTypeKey), key(kCVPixelBufferWidthKey), key(kCVPixelBufferHeightKey)] };
+                NSDictionary::<NSString, AnyObject>::from_slices(&keys, &[format.as_ref(), w.as_ref(), h.as_ref()])
+            }
+        };
         // SAFETY: owned, main (`mtm`); the dictionary holds the
         // NSString -> NSNumber pair the attributes initialiser documents.
         let (player, item, output) = unsafe {
