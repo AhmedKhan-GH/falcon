@@ -117,6 +117,7 @@ Falcon is tested against a local library holding one sample of each format where
 **Not yet confirmed:**
 
 - Blank documents from File ▸ New… haven't been opened in Word, Excel, PowerPoint or XMind.
+- The blank Sketch document from File ▸ New… hasn't been opened in Sketch.
 - A sample passing means it opened in falcon, not that it looks identical to Eagle.
 
 ## Possible later additions (not planned)
