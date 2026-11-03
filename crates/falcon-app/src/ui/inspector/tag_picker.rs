@@ -28,9 +28,9 @@ fn column_label(label: &str) -> &str {
     }
 }
 
-/// The panel's size, as Eagle's styles open it (wider with its sidebar).
-const WIDTH: f32 = 360.0;
-const WIDTH_SIDEBAR: f32 = 540.0;
+/// The panel's size, as Eagle opens it (at least 400 wide with its sidebar).
+const WIDTH: f32 = 320.0;
+const WIDTH_SIDEBAR: f32 = 400.0;
 const HEIGHT: f32 = 480.0;
 const MIN_WIDTH: f32 = 200.0;
 const MIN_WIDTH_SIDEBAR: f32 = 400.0;
@@ -523,10 +523,13 @@ fn draw_cell(ui: &Ui, r: Rect, pick: &Pick, entries: &[tags::Entry], groups: &[f
         Pick::Tag(i) => {
             let e = &entries[*i];
             let on = selected.contains(&e.name);
-            // Eagle's cell: 6 px in, a 10 px colour slot, 6 px, then the name.
+            // Eagle's cell: 6 px in, a 10 px icon slot, 6 px, then the name.
+            // The slot holds a check on a tag the items have, in the group's colour.
             let x = r.left() + 22.0;
-            if let Some(g) = e.group().and_then(|g| groups.get(g)) {
-                let c = crate::folder_icons::color(g.color.as_deref()).unwrap_or(t::p().icon_none);
+            let tint = e.group().and_then(|g| groups.get(g)).map(|g| crate::folder_icons::color(g.color.as_deref()).unwrap_or(t::p().icon_none));
+            if on {
+                icon(ui, Pos2::new(r.left() + 11.0, cy), ic::CHECK, 11.0, tint.unwrap_or(t::p().primary));
+            } else if let Some(c) = tint {
                 p.circle_filled(Pos2::new(r.left() + 11.0, cy), 3.5, c);
             }
             let ng = (counts && e.count > 0).then(|| galley(ui, &e.count.to_string(), font(11.0), t::p().text_muted, 50.0));
