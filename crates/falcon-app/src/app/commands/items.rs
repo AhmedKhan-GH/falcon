@@ -276,7 +276,7 @@ impl App {
         self.ws.color_text.clear();
         self.ws.note_text.clear();
         self.ws.url_text.clear();
-        self.ws.query.clear();
+        self.ws.set_query("");
         self.ws.viewer = None;
         self.go(folder.map_or(Scope::All, Scope::Folder));
         self.ws.selected = vec![id.to_string()];

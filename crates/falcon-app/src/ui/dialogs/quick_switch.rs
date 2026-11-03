@@ -247,7 +247,7 @@ impl App {
         if let Some(n) = pick {
             let entry = self.quick.cache.as_ref().and_then(|c| c.2.get(n)).cloned();
             if let Some(e) = entry {
-                self.ws.query.clear();
+                self.ws.set_query("");
                 let tab = self.quick.tab;
                 self.quick_switch_open(lib, tab, &e);
             }

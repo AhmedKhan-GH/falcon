@@ -10,6 +10,7 @@ use crate::app::{App, Progress, TILE_MAX, TILE_MIN};
 use crate::icons as ic;
 use crate::locale::{tr, trf};
 use crate::logic::{self, Scope};
+use crate::search_state::SearchPoll;
 use crate::shortcuts::Command;
 use crate::theme::{self as t, font};
 use crate::ui::widgets::{galley, icon, icon_button, window_drag};
@@ -66,7 +67,7 @@ impl App {
             title_end = at.x + g.size().x;
             ui.painter().galley(at, g, t::p().text);
             if title_resp.clone().on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
-                self.ws.query.clear();
+                self.ws.set_query("");
                 self.reset_filter();
             }
         }
@@ -199,7 +200,7 @@ impl App {
         let inner = Rect::from_min_max(Pos2::new(rect.left() + 40.0, rect.top()), Pos2::new(rect.right() - 32.0, rect.bottom()));
         let resp = ui.put(
             inner,
-            TextEdit::singleline(&mut self.ws.query)
+            TextEdit::singleline(&mut self.ws.search_typed)
                 .id_salt("search")
                 .frame(egui::Frame::NONE)
                 .margin(egui::Margin::ZERO)
@@ -210,6 +211,13 @@ impl App {
         );
         if std::mem::take(&mut self.focus_search) {
             resp.request_focus();
+        }
+        // Eagle applies the search after a short debounce, or at once on Return.
+        let submitted = resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+        match self.ws.search_debounce.poll(resp.changed(), submitted, ui.input(|i| i.time)) {
+            SearchPoll::Apply => self.ws.query.clone_from(&self.ws.search_typed),
+            SearchPoll::Wait(left) => ui.ctx().request_repaint_after(std::time::Duration::from_secs_f64(left)),
+            SearchPoll::Idle => {}
         }
     }
 

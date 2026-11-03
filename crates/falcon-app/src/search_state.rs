@@ -177,6 +177,55 @@ pub fn push_history(list: &mut Vec<String>, id: &str) {
     list.truncate(HISTORY_LEN);
 }
 
+/// How long the search box waits after the last keystroke before the
+/// typed text becomes the applied query. Eagle applies the search after a
+/// short debounce; the exact value is not documented, so falcon uses 200 ms.
+pub const SEARCH_DEBOUNCE: f64 = 0.2;
+
+/// What the search box does with the text typed so far.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum SearchPoll {
+    /// Nothing typed is waiting.
+    Idle,
+    /// Typed text is waiting for this many more seconds.
+    Wait(f64),
+    /// Apply the typed text as the query now.
+    Apply,
+}
+
+/// The debounce rule of the search box: the typed text becomes the applied
+/// query once it has been unchanged for [`SEARCH_DEBOUNCE`], or at once on
+/// Return. A new keystroke restarts the delay; a programmatic change of the
+/// query applies at once and drops any pending wait ([`SearchDebounce::reset`]).
+/// Times are seconds on any monotonic clock.
+#[derive(Clone, Copy, Default, Debug)]
+pub struct SearchDebounce {
+    changed_at: Option<f64>,
+}
+
+impl SearchDebounce {
+    /// Decides what to do this frame. `edited` is whether the typed text
+    /// changed this frame, `submitted` whether Return was pressed in the field.
+    pub fn poll(&mut self, edited: bool, submitted: bool, now: f64) -> SearchPoll {
+        if edited {
+            self.changed_at = Some(now);
+        }
+        let Some(at) = self.changed_at else { return SearchPoll::Idle };
+        let left = at + SEARCH_DEBOUNCE - now;
+        if submitted || left <= 0.0 {
+            self.changed_at = None;
+            SearchPoll::Apply
+        } else {
+            SearchPoll::Wait(left)
+        }
+    }
+
+    /// Drops the pending wait, after the query was set from code.
+    pub fn reset(&mut self) {
+        self.changed_at = None;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -257,5 +306,41 @@ mod tests {
         assert_eq!(serde_json::from_str::<SearchPrefs>(&json).unwrap(), p);
         let old: SearchPrefs = serde_json::from_str(r#"{"pinned":{"size":true}}"#).unwrap();
         assert!(old.order.is_empty());
+    }
+
+    #[test]
+    fn typed_text_applies_after_the_delay_not_before() {
+        let mut d = SearchDebounce::default();
+        assert_eq!(d.poll(false, false, 0.0), SearchPoll::Idle);
+        assert!(matches!(d.poll(true, false, 1.0), SearchPoll::Wait(w) if (w - SEARCH_DEBOUNCE).abs() < 1e-9));
+        assert!(matches!(d.poll(false, false, 1.0 + SEARCH_DEBOUNCE / 2.0), SearchPoll::Wait(_)));
+        assert_eq!(d.poll(false, false, 1.0 + SEARCH_DEBOUNCE), SearchPoll::Apply);
+        assert_eq!(d.poll(false, false, 5.0), SearchPoll::Idle);
+    }
+
+    #[test]
+    fn return_applies_at_once() {
+        let mut d = SearchDebounce::default();
+        assert_eq!(d.poll(true, true, 1.0), SearchPoll::Apply);
+        assert_eq!(d.poll(false, false, 1.0), SearchPoll::Idle);
+        // Return with nothing pending does nothing.
+        assert_eq!(d.poll(false, true, 2.0), SearchPoll::Idle);
+    }
+
+    #[test]
+    fn a_new_keystroke_restarts_the_delay() {
+        let mut d = SearchDebounce::default();
+        d.poll(true, false, 0.0);
+        assert!(matches!(d.poll(true, false, 0.15), SearchPoll::Wait(_)));
+        assert!(matches!(d.poll(false, false, 0.25), SearchPoll::Wait(_)));
+        assert_eq!(d.poll(false, false, 0.15 + SEARCH_DEBOUNCE), SearchPoll::Apply);
+    }
+
+    #[test]
+    fn a_programmatic_set_drops_the_pending_wait() {
+        let mut d = SearchDebounce::default();
+        d.poll(true, false, 0.0);
+        d.reset();
+        assert_eq!(d.poll(false, false, 10.0), SearchPoll::Idle);
     }
 }

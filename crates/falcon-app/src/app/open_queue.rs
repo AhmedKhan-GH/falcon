@@ -140,7 +140,7 @@ impl App {
             self.ws.selected = launch.items;
         }
         if let Some(q) = launch.search {
-            self.ws.query = q;
+            self.ws.set_query(q);
         }
         if let Some(rgb) = launch.color.as_deref().and_then(crate::ui::filter_bar::parse_hex) {
             self.ws.filter.color = Some(falcon_library::search::ColorQuery::new(rgb));

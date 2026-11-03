@@ -327,7 +327,13 @@ pub(crate) struct Workspace {
     pub(crate) scope: Scope,
     pub(crate) back: Vec<Scope>,
     pub(crate) forward: Vec<Scope>,
+    /// The applied search query: what the grid, the filter bar and the
+    /// saved filters read. It follows `search_typed` after a debounce; set
+    /// it from code only through [`Workspace::set_query`].
     pub(crate) query: String,
+    /// What the search box shows; `query` catches up after `SEARCH_DEBOUNCE`.
+    pub(crate) search_typed: String,
+    pub(crate) search_debounce: crate::search_state::SearchDebounce,
     pub(crate) sort: OrderBy,
     pub(crate) layout: Layout,
     /// Eagle's `sortIncrease`: time keys newest first, others ascending.
@@ -436,6 +442,15 @@ pub(crate) struct Workspace {
 }
 
 impl Workspace {
+    /// Sets the applied search query from code (a cleared search, a saved
+    /// filter, a launch request): the box shows it and the grid uses it at
+    /// once, and a keystroke still waiting on the debounce is dropped.
+    pub(crate) fn set_query(&mut self, q: impl Into<String>) {
+        self.query = q.into();
+        self.search_typed.clone_from(&self.query);
+        self.search_debounce.reset();
+    }
+
     /// A fresh workspace for `lib` (or the empty window when `None`).
     pub(crate) fn new(ctx: &egui::Context, lib: Option<Shared>) -> Self {
         let root = lib.as_ref().map(|l| lock(l).root().to_path_buf());
@@ -457,6 +472,8 @@ impl Workspace {
             back: Vec::new(),
             forward: Vec::new(),
             query: String::new(),
+            search_typed: String::new(),
+            search_debounce: Default::default(),
             sort: OrderBy::Import,
             layout: Layout::default(),
             increase: true,

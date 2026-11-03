@@ -585,7 +585,7 @@ impl App {
     pub(crate) fn view_changed(&mut self) {
         if !self.ws.filter_ui.locked {
             self.reset_filter();
-            self.ws.query.clear();
+            self.ws.set_query("");
         }
     }
 }

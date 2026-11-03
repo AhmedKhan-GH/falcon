@@ -1720,7 +1720,7 @@ impl App {
         self.ws.color_text = q.filter.color.map(|c| logic::hex(c.rgb)).unwrap_or_default();
         self.ws.filter = q.filter;
         self.sync_media_filter_text();
-        self.ws.query = q.keyword.unwrap_or_default();
+        self.ws.set_query(q.keyword.unwrap_or_default());
         self.ws.show_filter = true;
         let skipped = organize::unsupported_names(&q.unsupported);
         if skipped.is_empty() {
