@@ -115,6 +115,74 @@ fn a_cat_ranks_above_unrelated_pictures() {
     println!("  same class mean {:.3}; other classes mean {:.3}, max {:.3}", mean(&same), mean(&others), max(&others));
 }
 
+/// The whole path on a temporary library: the worker indexes through
+/// thumbnails with its throttle on, then answers a text and an image search.
+#[test]
+#[ignore = "needs the model's files and test pictures"]
+fn the_worker_indexes_a_library_and_finds_the_cat() {
+    use falcon_clip::service::Options;
+    use falcon_clip::{Phase, Query, Service, model};
+    use falcon_library::Library;
+    use falcon_library::import::ImportOptions;
+    use std::sync::{Arc, Mutex};
+    use std::time::Duration;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let mut library = Library::create(tmp.path().join("T.library")).unwrap();
+    let root = PathBuf::from(std::env::var("FALCON_CLIP_IMAGES").unwrap());
+    let mut class_of = std::collections::HashMap::new();
+    for class in std::fs::read_dir(&root).unwrap().flatten().filter(|e| e.path().is_dir()) {
+        for file in std::fs::read_dir(class.path()).unwrap().flatten() {
+            let name = format!("{}-{}", class.file_name().to_string_lossy(), file.file_name().to_string_lossy());
+            let copy = tmp.path().join(name);
+            std::fs::copy(file.path(), &copy).unwrap();
+            let id = library.import_file(&copy, &ImportOptions::default()).unwrap();
+            class_of.insert(id, class.file_name().to_string_lossy().into_owned());
+        }
+    }
+    let count = class_of.len();
+    let dir = model_dir();
+    let (for_load, for_check) = (dir.clone(), dir.clone());
+    let service = Service::start(Options {
+        index_dir: tmp.path().join("indexes"),
+        model_id: model::ID.to_string(),
+        dim: 512,
+        throttle: true,
+        is_installed: Box::new(move || model::is_installed(&for_check)),
+        loader: Box::new(move || ClipEmbedder::load(&for_load).map(|e| Box::new(e) as Box<dyn Embedder>)),
+        notify: Box::new(|| {}),
+    });
+    service.set_library(Some(Arc::new(Mutex::new(library))));
+    service.set_enabled(true);
+    let started = Instant::now();
+    let status = loop {
+        let status = service.status();
+        if status.phase == Phase::Ready && status.total == count && status.done == count {
+            break status;
+        }
+        assert!(started.elapsed() < Duration::from_secs(300), "{status:?}");
+        std::thread::sleep(Duration::from_millis(20));
+    };
+    println!(
+        "{count} pictures indexed in {:.2}s with the throttle ({:.0} ms each, model load included), on {:?}, {:.0}/s before the throttle",
+        started.elapsed().as_secs_f32(),
+        started.elapsed().as_secs_f64() * 1000.0 / count as f64,
+        status.device,
+        status.rate,
+    );
+    let wait = Duration::from_secs(60);
+    let started = Instant::now();
+    let hits = service.search_blocking(Query::Text("a cat".to_string()), 20, wait).unwrap();
+    println!("\"a cat\" answered in {:.0} ms: {:?}", started.elapsed().as_secs_f64() * 1000.0, hits.iter().map(|h| (&class_of[&h.id], h.score)).collect::<Vec<_>>());
+    assert_eq!(class_of[&hits[0].id], "cat");
+    let cat = hits[0].id.clone();
+    let started = Instant::now();
+    let similar = service.search_blocking(Query::Item(cat.clone()), 20, wait).unwrap();
+    println!("visual match answered in {:.0} ms: {:?}", started.elapsed().as_secs_f64() * 1000.0, similar.iter().map(|h| (&class_of[&h.id], h.score)).collect::<Vec<_>>());
+    assert_eq!(similar[0].id, cat);
+    assert_eq!(class_of[&similar[1].id], "cat", "the next closest is another cat");
+}
+
 /// Index speed per picture, on Metal (or the fallback) and on the CPU.
 #[test]
 #[ignore = "needs the model's files and test pictures"]

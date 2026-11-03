@@ -49,6 +49,8 @@ pub enum Query {
     Image(Box<DynamicImage>),
     /// A picture on disk (a dropped file).
     ImageFile(PathBuf),
+    /// The bytes of a picture file.
+    ImageBytes(Vec<u8>),
     /// Items like this one.
     Item(String),
 }
@@ -430,6 +432,10 @@ impl Worker {
         // Only the list is read under the lock.
         let (signature, entries) = {
             let lib = lock(&library);
+            if self.index.as_ref().is_some_and(|index| !index.is_for(lib.root())) {
+                self.index = None;
+                self.signature = None;
+            }
             let signature = signature(&lib);
             if !full && self.signature == Some(signature) {
                 return;
@@ -574,6 +580,10 @@ impl Worker {
             Query::Image(image) => self.embed_one(&image)?,
             Query::ImageFile(path) => {
                 let image = thumbnail::decode(&path).map_err(|e| SearchError::BadImage(e.to_string()))?;
+                self.embed_one(&image)?
+            }
+            Query::ImageBytes(bytes) => {
+                let image = image::load_from_memory(&bytes).map_err(|e| SearchError::BadImage(e.to_string()))?;
                 self.embed_one(&image)?
             }
             Query::Item(id) => {

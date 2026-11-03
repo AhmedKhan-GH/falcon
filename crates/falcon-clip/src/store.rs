@@ -233,6 +233,11 @@ impl Index {
         self.by_id.get(id).map(|&at| &self.vectors[at * self.dim..(at + 1) * self.dim])
     }
 
+    /// Whether this is the index of the library at `root`.
+    pub fn is_for(&self, root: &Path) -> bool {
+        self.root == root.display().to_string()
+    }
+
     /// How many items have a vector.
     pub fn len(&self) -> usize {
         self.ids.len()
