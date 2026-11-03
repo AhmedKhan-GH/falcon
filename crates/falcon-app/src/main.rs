@@ -77,6 +77,7 @@ mod library_removal;
 mod vibrancy;
 mod watch;
 mod web_archive;
+mod web_gray;
 mod webview;
 mod workspaces;
 

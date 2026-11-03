@@ -9,12 +9,7 @@
 //! menu, popup or modal overlaps its area hides it until that closes. When
 //! hidden it hands the keyboard back to egui. Tests never create one.
 //!
-//! The grayscale preview grays the page with CSS, as Eagle's grays its
-//! iframes: `filter` on the page's root element, which covers its frames.
-//! Core Image filters on the native view render in this process, and WebKit
-//! composites its content in another. A user script sets the filter on each
-//! new document and a call sets it on the one shown ([`PageGray`]). Neither
-//! loads anything; off removes both.
+//! The grayscale preview grays the page with CSS (`crate::web_gray`).
 //!
 //! MHTML archives are unpacked first (`crate::web_archive`); the web view
 //! owns the unpacked folder, which goes when no frame asks for it.
@@ -106,52 +101,6 @@ pub struct Want {
     pub gray: bool,
 }
 
-/// The script that grays (or restores) the document it runs in. It goes
-/// through the style object, which a page's content security policy allows.
-fn gray_script(on: bool) -> &'static str {
-    if on {
-        "var e=document.documentElement;if(e&&e.style)e.style.setProperty('filter','grayscale(1)','important');"
-    } else {
-        "var e=document.documentElement;if(e&&e.style)e.style.removeProperty('filter');"
-    }
-}
-
-/// What the web view must do to follow the grayscale preview.
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-struct GrayWork {
-    /// Add or remove the user script, for documents to come.
-    script: bool,
-    /// Run [`gray_script`] on the document shown.
-    apply: bool,
-}
-
-/// The grayscale last given to a web view. The user script handles new
-/// documents, but a page coming back from the back-forward cache keeps the
-/// filter it left with, so a change of address applies the flag again. A view
-/// that was never gray runs nothing.
-#[derive(Default)]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-struct PageGray {
-    on: bool,
-    ever: bool,
-    url: Option<String>,
-}
-
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-impl PageGray {
-    fn step(&mut self, gray: bool, url: Option<&str>) -> GrayWork {
-        let script = gray != self.on;
-        let moved = self.url.as_deref() != url;
-        self.on = gray;
-        self.ever |= gray;
-        if moved {
-            self.url = url.map(str::to_owned);
-        }
-        GrayWork { script, apply: script || (moved && self.ever) }
-    }
-}
-
 /// Where the page is, for the viewer's bar.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Nav {
@@ -171,7 +120,7 @@ pub struct WebView {
     loaded: Option<String>,
     /// The MHTML archive unpacked for the page.
     archive: crate::web_archive::Archives,
-    gray: PageGray,
+    gray: crate::web_gray::PageGray,
     #[cfg(target_os = "macos")]
     native: Option<mac::Native>,
 }
@@ -325,7 +274,7 @@ mod mac {
     //! we retain, the window's content view from winit's window handle, and
     //! the objects AppKit returns, checked for nil.
 
-    use super::{Cmd, Nav, Page, Rect, appkit_frame, gray_script};
+    use super::{Cmd, Nav, Page, Rect, appkit_frame};
     use objc2::rc::{Allocated, Retained};
     use objc2::runtime::{AnyClass, AnyObject, Bool};
     use objc2::{MainThreadMarker, msg_send};
@@ -495,38 +444,14 @@ mod mac {
 
         /// Adds the graying script for documents to come, or removes it.
         pub fn set_gray_script(&self, on: bool) {
-            // WKUserScriptInjectionTimeAtDocumentStart: the
-            // document element exists, nothing has painted.
-            const AT_DOCUMENT_START: isize = 0;
-            // SAFETY: WKWebView's configuration and its content controller,
-            // checked for nil, and alloc/init of a WebKit class on the main
-            // thread. The view holds its only user scripts here, so removing
-            // all of them removes this one.
-            unsafe {
-                let conf: Option<Retained<AnyObject>> = msg_send![&*self.view, configuration];
-                let Some(conf) = conf else { return };
-                let scripts: Option<Retained<AnyObject>> = msg_send![&*conf, userContentController];
-                let Some(scripts) = scripts else { return };
-                if !on {
-                    let _: () = msg_send![&*scripts, removeAllUserScripts];
-                    return;
-                }
-                let Some(cls) = class(c"WKUserScript") else { return };
-                let alloc: Allocated<AnyObject> = msg_send![cls, alloc];
-                let script: Option<Retained<AnyObject>> = msg_send![alloc, initWithSource: &*ns_string(gray_script(true)), injectionTime: AT_DOCUMENT_START, forMainFrameOnly: true];
-                if let Some(script) = script {
-                    let _: () = msg_send![&*scripts, addUserScript: &*script];
-                }
-            }
+            // SAFETY: the view is a live WKWebView, on the main thread.
+            unsafe { crate::web_gray::set_script(&self.view, on) }
         }
 
         /// Grays or restores the document shown.
         pub fn apply_gray(&self, on: bool) {
-            let done: Option<&block2::DynBlock<dyn Fn(*mut AnyObject, *mut AnyObject)>> = None;
-            // SAFETY: WKWebView method on the live view; its handler may be nil.
-            unsafe {
-                let _: () = msg_send![&*self.view, evaluateJavaScript: &*ns_string(gray_script(on)), completionHandler: done];
-            }
+            // SAFETY: the view is a live WKWebView, on the main thread.
+            unsafe { crate::web_gray::apply(&self.view, on) }
         }
 
         /// Stops the page and leaves a blank one (so sound stops).
@@ -635,37 +560,6 @@ mod tests {
         assert_eq!(page_for("MHTML", "https://source.example/", &archive), Some(Page::Archive(archive.clone())));
         assert_eq!(page_for("mht", "https://source.example/", &archive), None, "not in Eagle's formats");
         assert_eq!(page_for("png", "", &html), None);
-    }
-
-    #[test]
-    fn the_page_follows_the_grayscale_flag() {
-        let mut g = PageGray::default();
-        let (none, script, apply) = (
-            GrayWork { script: false, apply: false },
-            GrayWork { script: true, apply: true },
-            GrayWork { script: false, apply: true },
-        );
-        // Never gray: no script runs, wherever the page goes.
-        assert_eq!(g.step(false, None), none);
-        assert_eq!(g.step(false, Some("https://a.example/")), none);
-        // On, and off again: the script and the document shown.
-        assert_eq!(g.step(true, Some("https://a.example/")), script);
-        assert_eq!(g.step(true, Some("https://a.example/")), none);
-        // A new address gets the flag again, gray or not, once it was gray:
-        // the page may come from the back-forward cache.
-        assert_eq!(g.step(true, Some("https://b.example/")), apply);
-        assert_eq!(g.step(false, Some("https://b.example/")), script);
-        assert_eq!(g.step(false, Some("https://a.example/")), apply);
-        assert_eq!(g.step(false, Some("https://a.example/")), none);
-    }
-
-    #[test]
-    fn the_gray_script_is_reversible_and_loads_nothing() {
-        assert!(gray_script(true).contains("setProperty('filter','grayscale(1)'"));
-        assert!(gray_script(false).contains("removeProperty('filter')"));
-        for s in [gray_script(true), gray_script(false)] {
-            assert!(!s.contains("url(") && !s.contains("http") && !s.contains("@import"), "{s}");
-        }
     }
 
     #[test]

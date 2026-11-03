@@ -14,6 +14,10 @@ path = "src/main.rs"
 name = "page_shot"
 harness = false
 
+[[test]]
+name = "web_gray"
+harness = false
+
 [dependencies]
 falcon-library = { path = "../falcon-library" }
 falcon-server = { path = "../falcon-server" }
