@@ -22,7 +22,7 @@ mod mac {
     use std::ptr::{self, NonNull};
     use std::time::{Duration, Instant};
 
-    use falcon_video::{Frame, Grabber, Video, frame_at, probe};
+    use falcon_video::{Backend, Frame, Grabber, Video, frame_at, probe};
     use objc2::rc::Retained;
     use objc2::runtime::AnyObject;
     use objc2_av_foundation::{
@@ -384,6 +384,37 @@ mod mac {
             }
             check("FFmpeg sound.mp4: plays on the wall clock when muted", frames >= 5 && p.current_time() > 0.4, (frames, p.current_time()));
             drop(p);
+
+            // Eagle's no-frame switch: a clip paused on its poster stays with the
+            // system player, even when nothing asked for a frame in time.
+            let mut v = Video::open(&sound).expect("open for the no-frame check");
+            wait_for(1.7, || false);
+            v.tick();
+            check("no-frame switch: a paused clip with a picture stays", v.backend() == Backend::System, v.backend());
+            check("no-frame switch: the picture found is handed out", v.frame().is_some_and(|f| is_red(&f)), ());
+            v.expire_first_frame_time();
+            v.tick();
+            check("no-frame switch: never after a picture", v.backend() == Backend::System, v.backend());
+            // No picture in time: FFmpeg takes over once, with the settings.
+            let mut v = Video::open(&sound).expect("open for the no-frame check");
+            v.set_rate(2.0);
+            v.set_looping(true);
+            v.set_muted(true);
+            v.set_volume(0.5);
+            v.seek(0.5);
+            v.tick();
+            check("no-frame switch: not before the limit", v.backend() == Backend::System, v.backend());
+            v.expire_first_frame_time();
+            v.tick();
+            check("no-frame switch: FFmpeg takes over", v.backend() == Backend::Ffmpeg, v.backend());
+            check("no-frame switch: speed and loop carry over", v.rate() == 2.0 && v.looping(), (v.rate(), v.looping()));
+            let mut f = None;
+            wait_for(5.0, || {
+                v.tick();
+                f = v.frame();
+                f.is_some()
+            });
+            check("no-frame switch: FFmpeg shows the picture", f.is_some() && v.backend() == Backend::Ffmpeg, v.backend());
 
             // AV1 (dav1d inside FFmpeg) in WebM, Matroska and MP4, through
             // the calls the viewer, the preview window and hover previews

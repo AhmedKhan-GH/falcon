@@ -6,6 +6,13 @@
 //! back from Chromium's player to its bundled one. One [`Video`] drives
 //! the same viewer either way.
 //!
+//! A [`Video`] on the system player also moves to FFmpeg, once, when the
+//! system player fails after opening, or when it has drawn no picture within
+//! 1.5 s of opening: Eagle gives its `<video>` element the same time. The
+//! system player draws a poster picture while paused, so a paused clip
+//! counts as drawn. A slow disk gets one switch: FFmpeg is not left again,
+//! and if it can't open the file the system player stays and keeps its time.
+//!
 //! - [`probe`] reads a file's duration, display size and audio track.
 //! - [`frame_at`] decodes the frame at a time, on any thread.
 //! - [`Grabber`] decodes small pictures of one file again and again, for
@@ -20,6 +27,7 @@
 use std::cell::RefCell;
 use std::num::NonZero;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 mod pixels;
 
@@ -93,6 +101,16 @@ pub fn ffmpeg_status() -> std::result::Result<(String, PathBuf), String> {
 /// macOS can't play, such as Matroska, WebM, AVI, WMV and FLV.
 pub fn needs_ffmpeg(ext: &str) -> bool {
     falcon_ffmpeg::handles(ext)
+}
+
+/// How long the system player has to draw its first picture.
+const NO_FRAME_LIMIT: Duration = Duration::from_millis(1500);
+
+/// Whether a system player opened `elapsed` ago should give way to FFmpeg
+/// for having drawn nothing. Once it has drawn a picture (a paused player's
+/// poster counts) it never does, however long it then takes.
+fn switch_for_no_frame(elapsed: Duration, had_frame: bool, ffmpeg: bool) -> bool {
+    ffmpeg && !had_frame && elapsed >= NO_FRAME_LIMIT
 }
 
 /// Runs `system`, and when it fails and FFmpeg is present, `ffmpeg`. The
@@ -201,8 +219,9 @@ enum Inner {
 }
 
 /// A playing video, through whichever back end can play it. AVFoundation
-/// is tried first; a file it refuses on opening, or fails on later, is
-/// played by FFmpeg when present, keeping the player's settings and place.
+/// is tried first; a file it refuses on opening, fails on later, or draws no
+/// picture of within 1.5 s is played by FFmpeg when present, keeping the
+/// player's settings and place.
 ///
 /// Main thread only (it is not `Send`). Dropping it stops playback.
 pub struct Video {
@@ -214,6 +233,12 @@ pub struct Video {
     muted: bool,
     /// Why FFmpeg could not take over from the system player, once tried.
     fallback_error: Option<String>,
+    /// When the system player was opened, for [`NO_FRAME_LIMIT`].
+    opened: Instant,
+    /// The system player has handed out a picture.
+    had_frame: bool,
+    /// A picture taken while checking for one, for the next [`Video::frame`].
+    held_frame: Option<Frame>,
 }
 
 impl Video {
@@ -236,7 +261,7 @@ impl Video {
             Err(e) if !ffmpeg_available() => return Err(e),
             Err(_) => Inner::Ffmpeg(open_ffmpeg(path, mixer.as_ref())?),
         };
-        Ok(Video { inner, path: path.to_path_buf(), mixer, volume: 1.0, muted: false, fallback_error: None })
+        Ok(Video { inner, path: path.to_path_buf(), mixer, volume: 1.0, muted: false, fallback_error: None, opened: Instant::now(), had_frame: false, held_frame: None })
     }
 
     /// Which back end is playing.
@@ -373,8 +398,8 @@ impl Video {
     }
 
     /// Call every frame: at the end of the clip, starts again from the top
-    /// when looping, or stops. When the system player has failed, FFmpeg
-    /// takes over here.
+    /// when looping, or stops. When the system player has failed or has
+    /// drawn nothing in time, FFmpeg takes over here.
     pub fn tick(&mut self) {
         if let Inner::System(v) = &self.inner
             && v.error().is_some()
@@ -383,10 +408,34 @@ impl Video {
         {
             self.fall_back();
         }
+        self.check_first_frame();
         match &mut self.inner {
             Inner::System(v) => v.tick(),
             Inner::Ffmpeg(p) => p.tick(),
         }
+    }
+
+    /// Applies [`switch_for_no_frame`]. A picture that arrived since the last
+    /// [`Video::frame`] (a busy main thread can be that late) is kept, not
+    /// taken for a player that drew nothing.
+    fn check_first_frame(&mut self) {
+        let Inner::System(v) = &mut self.inner else { return };
+        if self.fallback_error.is_some() || !switch_for_no_frame(self.opened.elapsed(), self.had_frame, ffmpeg_available()) {
+            return;
+        }
+        if let Some(f) = v.frame() {
+            self.had_frame = true;
+            self.held_frame = Some(f);
+            return;
+        }
+        self.fall_back();
+    }
+
+    /// Makes the system player's time for its first picture run out now,
+    /// so tests needn't find a file it never draws.
+    #[doc(hidden)]
+    pub fn expire_first_frame_time(&mut self) {
+        self.opened = Instant::now().checked_sub(NO_FRAME_LIMIT).unwrap_or(self.opened);
     }
 
     /// Replaces the failed system player with FFmpeg's, carrying over the
@@ -425,8 +474,15 @@ impl Video {
 
     /// The frame due now, if it differs from the last one handed out.
     pub fn frame(&mut self) -> Option<Frame> {
+        if let Some(f) = self.held_frame.take() {
+            return Some(f);
+        }
         match &mut self.inner {
-            Inner::System(v) => v.frame(),
+            Inner::System(v) => {
+                let f = v.frame();
+                self.had_frame |= f.is_some();
+                f
+            }
             Inner::Ffmpeg(p) => p.frame(),
         }
     }
@@ -454,6 +510,28 @@ mod tests {
         assert_eq!(step_rate(2.0, true), 3.0);
         assert_eq!(step_rate(1.1, true), 1.25);
         assert_eq!(step_rate(1.1, false), 1.0);
+    }
+
+    #[test]
+    fn a_player_with_no_picture_after_the_limit_switches() {
+        let (before, at, after) = (Duration::from_millis(1499), NO_FRAME_LIMIT, Duration::from_secs(60));
+        assert!(!switch_for_no_frame(Duration::ZERO, false, true));
+        assert!(!switch_for_no_frame(before, false, true), "still within its time");
+        assert!(switch_for_no_frame(at, false, true));
+        assert!(switch_for_no_frame(after, false, true));
+    }
+
+    #[test]
+    fn a_player_that_drew_a_picture_stays() {
+        // A paused player's poster picture counts, however long it then sits.
+        assert!(!switch_for_no_frame(NO_FRAME_LIMIT, true, true));
+        assert!(!switch_for_no_frame(Duration::from_secs(3600), true, true));
+    }
+
+    #[test]
+    fn without_ffmpeg_there_is_nothing_to_switch_to() {
+        assert!(!switch_for_no_frame(NO_FRAME_LIMIT, false, false));
+        assert!(!switch_for_no_frame(Duration::from_secs(60), false, false));
     }
 
     #[test]
