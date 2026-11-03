@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 269 | 1 | 0 | 8 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 270 | 0 | 0 | 8 |
 | Viewers and file formats | 206 | 0 | 0 | 5 |
 | Search, filters and organising | 219 | 1 | 0 | 3 |
 | Import, export, library, preferences and integrations | 198 | 0 | 0 | 27 |
-| **Total** | 892 | 2 | 0 | 43 |
+| **Total** | 893 | 1 | 0 | 43 |
 
 Rows marked **Not wanted (user decision)** (12) are Eagle features the user chose not to have in falcon; they are counted outside the local Missing total. Rows marked **Accepted difference (user decision)** (7) are counted outside the Partial total.
 ## Fix first
@@ -366,7 +366,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Remember window size and position | Done | eframe persistence (Cargo.toml `persistence` feature) | local |
 | Full screen | Done | ⌃⌘F and Window ▸ Full Screen, plus the green button | local |
 | Always on top for the main window | Done | `modes.rs` | local |
-| Open items in a separate preview window: own titlebar always-on-top toggle, opacity 10–100%, navigator, zoom presets 5–800%, grayscale, rotate / flip, copy, copy path / link, Reveal in Eagle | Partial | `ui/viewer/preview_window/`: always-on-top, opacity 10–100%, navigator, zoom presets, grayscale (the window's own flag), rotate/flip, Copy, Copy File Path, Copy ▸ Eagle Link, Reveal in Finder, Show in Falcon; every viewer type incl. 3D and web; ⌘O, middle click and the item menu. Rotate, flip and grayscale are seen on screen. Partial because sharp zoom is covered by tests but not yet seen on screen (see the Navigator row in the viewers section) | local |
+| Open items in a separate preview window: own titlebar always-on-top toggle, opacity 10–100%, navigator, zoom presets 5–800%, grayscale, rotate / flip, copy, copy path / link, Reveal in Eagle | Done | `ui/viewer/preview_window/`: always-on-top, opacity 10–100%, navigator, zoom presets, grayscale (the window's own flag), rotate/flip, Copy, Copy File Path, Copy ▸ Eagle Link, Reveal in Finder, Show in Falcon; every viewer type incl. 3D and web; ⌘O, middle click and the item menu. Rotate, flip and grayscale are seen on screen. Sharp zoom and the navigator are seen on screen, and View ▸ Zoom In and Out act on the focused window | local |
 | Middle-click opens an item in a new window (preference) | Done | `Prefs::middle_button` (new window, default, or nothing); never for audio, as Eagle | local |
 | Presentation / slideshow mode | Done | `modes.rs`; `ViewportCommand::Fullscreen`, panels and bar hidden | local |
 | Closing the window keeps the app running (Dock icon stays); reopen from the Dock | Done | Closing hides falcon (`NSApp hide:`, so the collect and preview windows hide too); the Dock icon or reopening brings it back; ⌘Q quits | local |
