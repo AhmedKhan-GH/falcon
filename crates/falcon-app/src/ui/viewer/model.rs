@@ -168,6 +168,7 @@ impl App {
             edges: settings.edges,
             grid: settings.grid,
             axes: settings.axes,
+            gray: self.modes.grayscale,
         };
         ui.painter().add(callback.shape(area));
 

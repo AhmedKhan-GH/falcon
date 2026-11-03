@@ -118,7 +118,7 @@ impl App {
             ui.painter().text(area.center(), Align2::CENTER_CENTER, tr("Loading…"), font(13.0), t::p().text_muted);
             // An archive still unpacking has nothing to load yet.
             if !matches!(page, Page::Archive(_)) {
-                self.web.want(Want { key: item.id.clone(), page, rect: area });
+                self.web.want(Want { key: item.id.clone(), page, rect: area, gray: self.modes.grayscale });
             }
         } else {
             self.web_still(ui, lib, item, &page, area, unreadable);

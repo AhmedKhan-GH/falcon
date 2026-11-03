@@ -8,7 +8,8 @@
 //! (the 3D scene through the same wgpu callback, which every window
 //! shares; the page in a `WKWebView` put on this window); the window can stay
 //! on top, be made translucent, show in grayscale and copy the item (see
-//! the desktop app chapter). Each window decodes with a loader of its own,
+//! the desktop app chapter; the menu bar's View ▸ Grayscale acts on the
+//! focused window). Each window decodes with a loader of its own,
 //! so its grayscale, its sampling and the sharp renders of its zoom don't
 //! touch the main window's.
 
@@ -39,6 +40,19 @@ use kind::{Kind, OPACITIES, Turn, kind_of, turn_target};
 
 /// Decoding threads of one window's loader: it shows one item at a time.
 const WINDOW_WORKERS: usize = 2;
+
+/// The grayscale flag the app menu bar's View ▸ Grayscale reads: the focused
+/// preview window's, else the main window's.
+fn gray_flag(main: bool, windows: &[PreviewWin]) -> bool {
+    windows.iter().find(|w| w.focused).map_or(main, |w| w.gray)
+}
+
+/// Toggles the flag [`gray_flag`] reads and no other. With no window focused
+/// (the app in the background) it is the main window's.
+fn toggle_gray_flag(main: &mut bool, windows: &mut [PreviewWin]) {
+    let flag = windows.iter_mut().find(|w| w.focused).map_or(main, |w| &mut w.gray);
+    *flag = !*flag;
+}
 
 /// The viewer an item got in the window.
 enum Pane {
@@ -114,6 +128,8 @@ pub(crate) struct PreviewWin {
     seen: HashMap<String, u64>,
     /// Whether the window is in grayscale; starts off, as Eagle's does.
     gray: bool,
+    /// Whether the window had the keyboard focus when it last drew.
+    focused: bool,
     /// Whether the PSD shown has a merged image to draw.
     psd: crate::psd_status::PsdStatus,
     psd_opened: bool,
@@ -143,6 +159,7 @@ impl PreviewWin {
             loader: None,
             seen: HashMap::new(),
             gray: false,
+            focused: false,
             psd: Default::default(),
             psd_opened: false,
             region_view: None,
@@ -169,6 +186,7 @@ impl PreviewWin {
             loader: self.loader.take(),
             seen: std::mem::take(&mut self.seen),
             gray: self.gray,
+            focused: self.focused,
             ..PreviewWin::new(self.ids.clone(), self.serial)
         };
         *self = PreviewWin { id: keep.ids[next as usize].clone(), index: next as usize, ..keep };
@@ -244,6 +262,19 @@ impl App {
         self.preview = wins;
     }
 
+    /// Whether the window View ▸ Grayscale acts on is in grayscale, for the
+    /// menu's checkmark.
+    pub(crate) fn grayscale_shown(&self) -> bool {
+        gray_flag(self.modes.grayscale, &self.preview)
+    }
+
+    /// View ▸ Grayscale: toggles the focused window's flag. While a preview
+    /// window draws, `preview` is empty and `modes.grayscale` is the
+    /// window's, so a command run from inside one acts on it as well.
+    pub(crate) fn toggle_grayscale(&mut self) {
+        toggle_gray_flag(&mut self.modes.grayscale, &mut self.preview);
+    }
+
     /// Runs `draw` with the window's loader, jobs and grayscale in the
     /// main window's places, so the code it shares with the main viewer
     /// (fonts, 3D, web) reads the window's, and the main window keeps its
@@ -266,6 +297,7 @@ impl App {
         let ctx = ui.ctx().clone();
         let full = ui.max_rect();
         ui.painter().rect_filled(full, 0.0, t::p().main);
+        pw.focused = ctx.input(|i| i.viewport().focused) == Some(true);
         let (close, esc, cmd_w) = ctx.input(|i| (i.viewport().close_requested(), i.key_pressed(egui::Key::Escape), i.modifiers.command && i.key_pressed(egui::Key::W)));
         if close || esc || cmd_w {
             pw.close = true;
@@ -763,6 +795,36 @@ impl PreviewWin {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_menu_acts_on_the_focused_window() {
+        let window = |focused, gray| PreviewWin { focused, gray, ..PreviewWin::new(vec!["a".into()], 1) };
+        let flags = |main: bool, w: &[PreviewWin]| (main, w[0].gray, w[1].gray);
+        // A preview window has the focus: its flag, and the other's stays.
+        let (mut main, mut wins) = (false, vec![window(false, false), window(true, true)]);
+        assert!(gray_flag(main, &wins), "the checkmark shows the focused window's flag");
+        toggle_gray_flag(&mut main, &mut wins);
+        assert_eq!(flags(main, &wins), (false, false, false));
+        toggle_gray_flag(&mut main, &mut wins);
+        assert_eq!(flags(main, &wins), (false, false, true));
+        // The main window has it, or none has: the main window's flag.
+        let (mut main, mut wins) = (true, vec![window(false, true), window(false, false)]);
+        assert!(gray_flag(main, &wins));
+        toggle_gray_flag(&mut main, &mut wins);
+        assert_eq!(flags(main, &wins), (false, true, false));
+        assert!(!gray_flag(main, &wins));
+        // No preview windows at all.
+        let mut main = false;
+        toggle_gray_flag(&mut main, &mut []);
+        assert!(main);
+    }
+
+    #[test]
+    fn stepping_keeps_the_focus() {
+        let mut w = PreviewWin { focused: true, ..PreviewWin::new(vec!["a".into(), "b".into()], 1) };
+        w.step(1);
+        assert!(w.focused);
+    }
 
     #[test]
     fn window_fits_the_picture() {

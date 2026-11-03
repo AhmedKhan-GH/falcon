@@ -7,7 +7,10 @@
 //! depth so edges drawn on them stay visible, then the edge, grid and axis
 //! lines. `paint` then copies that texture into egui's pass over the
 //! view's rectangle with premultiplied-alpha blending, so a transparent
-//! background shows the viewer behind it.
+//! background shows the viewer behind it. The grayscale preview desaturates
+//! in that copy, so it covers the whole pane as Eagle's CSS filter does on its
+//! iframe, and leaves snapshots and thumbnails, which never pass through it,
+//! in colour.
 //!
 //! Meshes with a look draw with a second pipeline: each picture is uploaded
 //! once per model as sRGB with its mipmaps (made on the CPU in linear
@@ -207,13 +210,23 @@ fn to_linear(c: f32) -> f32 {
     return pow((c + 0.055) / 1.055, 2.4);
 }
 
-@fragment fn fs_blit(i: BOut) -> @location(0) vec4<f32> {
-    let c = textureSample(tex, samp, i.uv);
+fn output(c: vec4<f32>) -> vec4<f32> {
     if (SRGB_TARGET && c.a > 0.0) {
         let rgb = c.rgb / c.a;
         return vec4<f32>(to_linear(rgb.r) * c.a, to_linear(rgb.g) * c.a, to_linear(rgb.b) * c.a, c.a);
     }
     return c;
+}
+
+@fragment fn fs_blit(i: BOut) -> @location(0) vec4<f32> {
+    return output(textureSample(tex, samp, i.uv));
+}
+
+// CSS's luminance weights on display values, as logic::grayscale_pixel.
+@fragment fn fs_blit_gray(i: BOut) -> @location(0) vec4<f32> {
+    let c = textureSample(tex, samp, i.uv);
+    let y = dot(c.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
+    return output(vec4<f32>(y, y, y, c.a));
 }
 "#;
 
@@ -237,6 +250,8 @@ pub(crate) struct SceneCallback {
     pub edges: bool,
     pub grid: bool,
     pub axes: bool,
+    /// The owning window's grayscale preview is on.
+    pub gray: bool,
 }
 
 impl SceneCallback {
@@ -286,6 +301,7 @@ struct Gpu {
     look_layout: wgpu::BindGroupLayout,
     line_pipeline: wgpu::RenderPipeline,
     blit_pipeline: wgpu::RenderPipeline,
+    blit_gray_pipeline: wgpu::RenderPipeline,
     blit_layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
     targets: Option<Targets>,
@@ -447,7 +463,7 @@ impl Gpu {
             immediate_size: 0,
         });
         // egui's own pass: its format, one sample, no depth.
-        let blit_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let blit_for = |entry: &str| device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("falcon-model3d-blit"),
             layout: Some(&blit_pipeline_layout),
             vertex: wgpu::VertexState { module: &blit, entry_point: Some("vs_blit"), compilation_options: Default::default(), buffers: &[] },
@@ -456,7 +472,7 @@ impl Gpu {
             multisample: wgpu::MultisampleState::default(),
             fragment: Some(wgpu::FragmentState {
                 module: &blit,
-                entry_point: Some("fs_blit"),
+                entry_point: Some(entry),
                 compilation_options: Default::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: target,
@@ -467,6 +483,7 @@ impl Gpu {
             multiview_mask: None,
             cache: None,
         });
+        let (blit_pipeline, blit_gray_pipeline) = (blit_for("fs_blit"), blit_for("fs_blit_gray"));
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("falcon-model3d-blit"),
             mag_filter: wgpu::FilterMode::Linear,
@@ -484,6 +501,7 @@ impl Gpu {
             look_layout,
             line_pipeline,
             blit_pipeline,
+            blit_gray_pipeline,
             blit_layout,
             sampler,
             targets: None,
@@ -791,7 +809,7 @@ impl CallbackTrait for SceneCallback {
         if t.size != self.size {
             return;
         }
-        pass.set_pipeline(&gpu.blit_pipeline);
+        pass.set_pipeline(if self.gray { &gpu.blit_gray_pipeline } else { &gpu.blit_pipeline });
         pass.set_bind_group(0, &t.blit_group, &[]);
         pass.draw(0..3, 0..1);
     }
@@ -859,6 +877,11 @@ mod tests {
 
     /// [`draw_cube`] with the cube changed by `change` before it is drawn.
     fn draw_cube_with(texture: Option<Texture>, change: impl FnOnce(&mut falcon_library::model3d::Mesh)) -> Option<(Vec<u8>, [u32; 2])> {
+        draw_cube_gray(texture, change, false)
+    }
+
+    /// [`draw_cube_with`], copied to the target in grayscale when `gray`.
+    fn draw_cube_gray(texture: Option<Texture>, change: impl FnOnce(&mut falcon_library::model3d::Mesh), gray: bool) -> Option<(Vec<u8>, [u32; 2])> {
         let instance = wgpu::Instance::default();
         let Ok(adapter) = block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default())) else {
             eprintln!("no GPU adapter; skipping");
@@ -906,6 +929,7 @@ mod tests {
             edges: true,
             grid: false,
             axes: false,
+            gray,
         };
         let mut resources = CallbackResources::default();
         let screen = ScreenDescriptor { size_in_pixels: size, pixels_per_point: 1.0 };
@@ -984,6 +1008,25 @@ mod tests {
 
     fn solid(rgba: [u8; 4]) -> Texture {
         Texture::new(Arc::new(Image { name: "m".into(), width: 4, height: 4, rgba: rgba.repeat(16) }))
+    }
+
+    /// The grayscale pane: the colour the scene drew, through the weights
+    /// the image viewers use, and the background still clear.
+    #[test]
+    fn grayscale_pane_when_a_gpu_is_present() {
+        let at = |px: &[u8], x: u32, y: u32, w: u32| {
+            let i = ((y * w + x) * 4) as usize;
+            [px[i], px[i + 1], px[i + 2], px[i + 3]]
+        };
+        let texture = || Some(solid([255, 40, 0, 255]));
+        let Some((color, size)) = draw_cube_gray(texture(), |_| {}, false) else { return };
+        let Some((gray, _)) = draw_cube_gray(texture(), |_| {}, true) else { return };
+        let (c, g) = (at(&color, size[0] / 2, size[1] / 2, size[0]), at(&gray, size[0] / 2, size[1] / 2, size[0]));
+        assert!(c[0] > c[1] + 50, "the cube is in colour: {c:?}");
+        assert_eq!((g[0], g[1], g[3]), (g[1], g[2], 255), "gray: {g:?}");
+        let want = crate::logic::grayscale_pixel(c)[0];
+        assert!(g[0].abs_diff(want) <= 1, "{g:?} against {want}");
+        assert_eq!(at(&gray, 0, 0, size[0])[3], 0, "the background stays transparent");
     }
 
     /// Normal maps turn the lit face, a flat one changes nothing, and the

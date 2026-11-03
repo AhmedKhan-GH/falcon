@@ -377,7 +377,7 @@ impl App {
             presenting: self.modes.presenting,
             on_top: self.modes.on_top,
             color_space: self.prefs.color_space,
-            grayscale: self.modes.grayscale,
+            grayscale: self.grayscale_shown(),
             navigator: !self.modes.hide_navigator,
         }
     }
@@ -776,7 +776,7 @@ impl App {
             }
             C::Presentation => self.toggle_presentation(ctx),
             C::AlwaysOnTop => self.toggle_on_top(ctx),
-            C::Grayscale => self.modes.grayscale = !self.modes.grayscale,
+            C::Grayscale => self.toggle_grayscale(),
             C::Navigator => self.modes.hide_navigator = !self.modes.hide_navigator,
             C::OpenNewWindow => self.open_preview_window(),
 
