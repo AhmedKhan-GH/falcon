@@ -552,6 +552,10 @@ impl App {
                             self.ws.edit = None;
                             self.ws.multi_edit = None;
                             self.ws.folder_edit = None;
+                            // An undone import is in the Trash now, not on the page.
+                            if self.ws.scope != Scope::Trash {
+                                self.ws.selected.retain(|id| lib.item(id).is_some_and(|i| !i.is_deleted));
+                            }
                             self.flash(if undo { trf("Undid: {label}", &[("label", &label)]) } else { trf("Redid: {label}", &[("label", &label)]) });
                         }
                         Err(e) => self.flash_error(trf("Could not save: {e}", &[("e", &e)])),
