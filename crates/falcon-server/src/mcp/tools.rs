@@ -529,7 +529,12 @@ fn get_thumbnail(context: &Context, args: &Args) -> Result<Value, String> {
 /// The picture at `path` scaled to fit `size`: a PNG if any of it is
 /// transparent, else a JPEG, which is far smaller for a model to read.
 fn encode_thumbnail(path: &Path, size: u32) -> Option<(Vec<u8>, &'static str)> {
-    let img = thumbnail::decode_for_display(path).ok()?;
+    // A small SVG keeps no thumbnail file, so `path` can be the drawing itself.
+    let img = if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("svg")) {
+        thumbnail::render_svg(&std::fs::read(path).ok()?, Some(size)).ok()?
+    } else {
+        thumbnail::decode_for_display(path).ok()?
+    };
     let img = if img.width() > size || img.height() > size { img.thumbnail(size, size) } else { img };
     let rgba = img.to_rgba8();
     let mut out = std::io::Cursor::new(Vec::new());

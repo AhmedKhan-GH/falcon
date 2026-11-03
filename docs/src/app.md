@@ -1302,7 +1302,7 @@ It listens on `http://127.0.0.1:41610/mcp`. The first port can be changed, and i
 | `list_tags` | Tags in use with item counts, filtered and paged | No |
 | `search_items` | Search or list items by text (the search box's syntax), tags, folder, extension and rating, sorted and paged | No |
 | `get_item` | One item in full, with its note, comments, palette and file path | No |
-| `get_item_thumbnail` | The thumbnail as an image, at most 1024 px; a JPEG, or a PNG if any of it is transparent | No |
+| `get_item_thumbnail` | The thumbnail as an image, at most 1024 px; a JPEG, or a PNG if any of it is transparent. A small SVG, which keeps no thumbnail file, is drawn from the original | No |
 | `add_item_from_path` | Copies a file into the library, with a name, tags, folders, note, URL and rating | Yes |
 | `update_item` | Changes an item's name, tags, note, URL or rating | Yes |
 | `create_folder` | Creates a folder at the top level or inside another | Yes |

@@ -351,6 +351,30 @@ fn thumbnails_are_images_scaled_to_fit() {
     assert_eq!(e.tool_error("get_item_thumbnail", json!({"id": e.a, "maxSize": 4000})), "Invalid argument: maxSize.");
 }
 
+/// A small SVG keeps no thumbnail file (Eagle's rule), so it is drawn from the
+/// original. Claude Code got "This item has no thumbnail" here.
+#[test]
+fn small_svgs_without_a_thumbnail_file_are_drawn() {
+    let e = env();
+    let svg = e.tmp.path().join("square.svg");
+    std::fs::write(&svg, r##"<svg xmlns="http://www.w3.org/2000/svg" width="400" height="200"><rect width="400" height="200" fill="#ff0000"/></svg>"##).unwrap();
+    let id = e.lib.lock().unwrap().import_file(&svg, &ImportOptions { palette: false, ..Default::default() }).unwrap();
+    {
+        let lib = e.lib.lock().unwrap();
+        assert!(lib.item(&id).unwrap().thumbnail_path(lib.root()).is_none());
+    }
+    let got = e.legacy("tools/call", json!({"name": "get_item_thumbnail", "arguments": {"id": id, "maxSize": 64}}));
+    let content = &got.body["result"]["content"][0];
+    assert_eq!(content["type"], "image", "{}", got.body);
+    assert_eq!(content["mimeType"], "image/jpeg");
+    use base64::Engine;
+    let bytes = base64::engine::general_purpose::STANDARD.decode(content["data"].as_str().unwrap()).unwrap();
+    let img = image::load_from_memory(&bytes).unwrap().to_rgb8();
+    assert_eq!(img.dimensions(), (64, 32));
+    let middle = img.get_pixel(32, 16).0;
+    assert!(middle[0] > 200 && middle[1] < 60 && middle[2] < 60, "{middle:?}");
+}
+
 #[test]
 fn library_text_stays_data() {
     let e = env();
