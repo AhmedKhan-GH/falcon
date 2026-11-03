@@ -161,7 +161,7 @@ pub struct Prefs {
     /// files from the watched folder start importing.
     pub notify_auto_import: bool,
     /// Delete each file from the watched folder once it is in the library,
-    /// as Eagle always does (it has no setting for it). On by default. Off
+    /// as Eagle always does (it has no setting for it). Off by default, which
     /// keeps the files and remembers what was imported instead
     /// (`auto_import::Imported`).
     pub auto_import_delete: bool,
@@ -369,7 +369,7 @@ impl Default for Prefs {
             auto_import: false,
             auto_import_path: None,
             notify_auto_import: true,
-            auto_import_delete: true,
+            auto_import_delete: false,
             tag_picker: Default::default(),
             middle_button: MiddleButton::default(),
             video_hover: true,
@@ -1689,7 +1689,7 @@ mod tests {
         assert_eq!(v["video"]["hoverPlay"], "true");
         assert_eq!(p.api_ports(), Some(41596..=41600));
         assert!(!p.auto_import && p.auto_import_path.is_none(), "Eagle's autoImport defaults to off with no folder");
-        assert!(p.auto_import_delete, "Eagle deletes imported files from the watched folder");
+        assert!(!p.auto_import_delete, "files stay in the watched folder unless asked, unlike Eagle");
         assert!(p.tells_auto_import(), "Eagle's autoImport notification defaults to on");
         let chosen = Prefs { auto_import_path: Some("/d".into()), ..Default::default() };
         assert_eq!(chosen.auto_import_dir(std::path::Path::new("/x/Books.library")), None, "off watches nothing");
@@ -1698,11 +1698,11 @@ mod tests {
     }
 
     #[test]
-    fn auto_import_delete_is_on_for_saved_states_without_it() {
+    fn auto_import_delete_is_off_for_saved_states_without_it() {
         let p: Prefs = serde_json::from_str("{}").unwrap();
-        assert!(p.auto_import_delete);
-        let off: Prefs = serde_json::from_str(r#"{"auto_import_delete":false}"#).unwrap();
-        assert!(!off.auto_import_delete);
+        assert!(!p.auto_import_delete);
+        let on: Prefs = serde_json::from_str(r#"{"auto_import_delete":true}"#).unwrap();
+        assert!(on.auto_import_delete);
     }
 
     #[test]
