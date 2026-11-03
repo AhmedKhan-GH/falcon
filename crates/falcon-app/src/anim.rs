@@ -618,6 +618,8 @@ struct SeqSource {
     delays: Vec<u32>,
     frames: Option<image::Frames<'static>>,
     next: usize,
+    /// The file's colour profile, when showing through it changes anything.
+    icc: Option<Vec<u8>>,
 }
 
 impl SeqSource {
@@ -628,7 +630,18 @@ impl SeqSource {
             Kind::WebP => webp_info(r),
             _ => apng_info(r),
         };
-        Ok(info.map(|(size, delays)| SeqSource { path: path.to_path_buf(), kind, size, delays, frames: None, next: 0 }))
+        let icc = if info.is_some() { Self::profile(path, kind) } else { None };
+        Ok(info.map(|(size, delays)| SeqSource { path: path.to_path_buf(), kind, size, delays, frames: None, next: 0, icc }))
+    }
+
+    fn profile(path: &Path, kind: Kind) -> Option<Vec<u8>> {
+        use image::ImageDecoder;
+        let r = std::io::BufReader::new(std::fs::File::open(path).ok()?);
+        let icc = match kind {
+            Kind::WebP => image::codecs::webp::WebPDecoder::new(r).ok()?.icc_profile(),
+            _ => image::codecs::png::PngDecoder::new(r).ok()?.icc_profile(),
+        };
+        icc.ok().flatten().filter(|icc| falcon_library::color::changes_rgb(icc))
     }
 
     fn start(&self) -> Result<image::Frames<'static>, String> {
@@ -661,7 +674,11 @@ impl Source for SeqSource {
             let f = frames.next().ok_or_else(|| trf("no frame {i}", &[("i", &i)]))?.map_err(|e| e.to_string());
             self.next += 1;
             if self.next > i {
-                return f.map(image::Frame::into_buffer);
+                let frame = f.map(image::Frame::into_buffer)?;
+                return Ok(match &self.icc {
+                    Some(icc) => falcon_library::color::to_srgb(image::DynamicImage::ImageRgba8(frame), icc).into_rgba8(),
+                    None => frame,
+                });
             }
         }
         Err(trf("no frame {i}", &[("i", &i)]))
@@ -1468,6 +1485,29 @@ pub(crate) mod tests {
             writer.write_image_data(pic).unwrap();
         }
         writer.finish().unwrap();
+    }
+
+    #[test]
+    fn apng_frames_go_through_the_colour_profile() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("p3.png");
+        let mut info = png::Info::with_size(1, 1);
+        info.color_type = png::ColorType::Rgba;
+        info.bit_depth = png::BitDepth::Eight;
+        info.icc_profile = Some(moxcms::ColorProfile::new_display_p3().encode().unwrap().into());
+        let mut enc = png::Encoder::with_info(std::fs::File::create(&path).unwrap(), info).unwrap();
+        enc.set_animated(2, 0).unwrap();
+        let mut writer = enc.write_header().unwrap();
+        for _ in 0..2 {
+            writer.set_frame_delay(1, 10).unwrap();
+            writer.write_image_data(&[200, 100, 50, 255]).unwrap();
+        }
+        writer.finish().unwrap();
+        let mut source = open_seq(&path, Kind::Png);
+        for i in 0..2 {
+            let [r, g, _, a] = source.frame(i).unwrap().get_pixel(0, 0).0;
+            assert!(r > 200 && g < 100 && a == 255, "frame {i}: {r} {g}");
+        }
     }
 
     fn open_seq(path: &Path, kind: Kind) -> SeqSource {

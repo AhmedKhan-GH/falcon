@@ -49,6 +49,20 @@ pub fn to_srgb(img: DynamicImage, icc: &[u8]) -> DynamicImage {
     }
 }
 
+/// Whether showing a colour picture through `icc` changes it, so a caller
+/// with many frames can skip profiles that do nothing.
+pub fn changes_rgb(icc: &[u8]) -> bool {
+    let Ok(profile) = ColorProfile::new_from_slice(icc) else { return false };
+    if profile.color_space != DataColorSpace::Rgb {
+        return false;
+    }
+    let Ok(transform) = profile.create_transform_8bit(Layout::Rgba, &ColorProfile::new_srgb(), Layout::Rgba, TransformOptions::default()) else {
+        return false;
+    };
+    let mut probe = [0u8; PROBE.len() * 4];
+    transform.transform(PROBE.as_flattened(), &mut probe).is_ok() && !unchanged(PROBE.as_flattened(), &probe)
+}
+
 fn is_float(img: &DynamicImage) -> bool {
     matches!(img, DynamicImage::ImageRgb32F(_) | DynamicImage::ImageRgba32F(_))
 }
@@ -131,6 +145,14 @@ mod tests {
         let out = to_srgb(img, &icc);
         assert!(matches!(out, DynamicImage::ImageRgb8(_)), "untouched, not rebuilt");
         assert_eq!(pixel(&out), [200, 100, 50, 255]);
+    }
+
+    #[test]
+    fn only_a_wider_colour_profile_counts_as_a_change() {
+        assert!(changes_rgb(&ColorProfile::new_display_p3().encode().unwrap()));
+        assert!(!changes_rgb(&ColorProfile::new_srgb().encode().unwrap()));
+        assert!(!changes_rgb(&ColorProfile::new_gray_with_gamma(1.0).encode().unwrap()));
+        assert!(!changes_rgb(b"not a profile"));
     }
 
     #[test]
