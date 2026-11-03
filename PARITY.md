@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 264 | 6 | 1 | 8 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 266 | 5 | 0 | 8 |
 | Viewers and file formats | 204 | 3 | 0 | 5 |
 | Search, filters and organising | 219 | 1 | 0 | 3 |
 | Import, export, library, preferences and integrations | 196 | 2 | 0 | 27 |
-| **Total** | 883 | 12 | 1 | 43 |
+| **Total** | 885 | 11 | 0 | 43 |
 
 Rows marked **Not wanted (user decision)** (12) are Eagle features the user chose not to have in falcon; they are counted outside the local Missing total. Rows marked **Accepted difference (user decision)** (5) are counted outside the Partial total.
 ## Fix first
@@ -34,7 +34,7 @@ These are bugs, not missing features. The first four can lose data or edits.
 4. ~~The full-size image is capped at 3072 px.~~ Fixed: the original is tiled at full resolution; HEIC/AVIF/JXL still come from a 3072 px QuickLook render (no decoders).
 5. ~~Folder import flattens structure; no duplicate check on import; no import error list.~~ Fixed.
 6. ~~No export of items or folders, and no CSV export.~~ Fixed.
-7. ~~Shortcuts still missing: T, F, ⌘J Go to Folder, ⇧+arrows, ⌘D, ⌘T and the tag clipboard, ⇧D, ⇧T, F5, ⌘O and more (see §3).~~ Fixed: the shortcut table has every local macOS Eagle id; the 18 without a row are Windows variants, online importers, reverse image search and plugin services (see the Shortcuts row).
+7. ~~Shortcuts still missing: T, F, ⌘J Go to Folder, ⇧+arrows, ⌘D, ⌘T and the tag clipboard, ⇧D, ⇧T, F5, ⌘O and more (see §3).~~ Fixed: the shortcut table has every local macOS Eagle id; the 17 without a row are Windows variants, online importers, reverse image search and plugin services (see the Shortcuts row).
 8. ~~No marquee selection, no multi-select of folders, no grid display options.~~ Fixed.
 9. ~~No tag picker or suggestions.~~ Fixed.
 10. ~~No GIF player controls, no animated WebP or AVIF, no GIF hover previews.~~ Fixed (AVIF on macOS); hover playback for video and audio is in.
@@ -81,7 +81,7 @@ Overall finding: falcon now has a native menu bar (`crates/falcon-app/src/menu.r
 | Edit: Refresh Thumbnail (⌥⌘R), Custom thumbnail from a file (⌥⌘T), Reset custom thumbnail | Done | ⌥⌘R, ⌥⌘T, Edit ▸ Custom Thumbnail ▸ From File / From Clipboard / Reset (`edit.thumbnail.custom.reset`), card menu; Reset on the first item, as Eagle | local |
 | Edit: Custom thumbnail from the clipboard (⇧⌥⌘T) | Done | Clipboard image or copied file | local |
 | Edit ▸ Move Folder: Up, Down, To Top, To Bottom (⌘] ⌘[ ⇧⌘] ⇧⌘[) | Done | Keys and Edit menu entries move the open folder or smart folder among its siblings, undoably (`organize::arrange`) | local |
-| Edit ▸ Edit Image: Horizontal Flip (⇧F), Rotate (⇧R), Crop (⇧C), Combine Images (⇧⌘M) | Partial | Flip, Rotate and Crop (⇧C, `edit.image.crop`) in the menu and keys; Combine Images is a plugin in Eagle 4, not built | local |
+| Edit ▸ Edit Image: Horizontal Flip (⇧F), Rotate (⇧R), Crop (⇧C), Combine Images (⇧⌘M) | Done | Flip, Rotate and Crop (⇧C, `edit.image.crop`) in the menu and keys; Combine Images (⇧⌘M, `edit.image.merge`) is falcon's own version of an Eagle 4 plugin, enabled with two or more images it can decode: `ui/dialogs/combine.rs`, `falcon_library::combine` | local |
 | Edit ▸ Edit Folder: Set Current Folder (⇧⌘R), Move Folder, Password create / edit / remove / lock (⇧⌘L) | Done | ⇧⌘R Folder Settings, Edit ▸ Move Folder…, Edit ▸ Folder Password ▸ Create / Change / Remove / Lock Now (⇧⌘L), with Eagle's ids and enabled states | local |
 | Edit: Remove from current folder (⇧⌘⌫) | Done | shortcuts.rs `edit.remove.folder`, menu and card menu; one undo step, no prompt (Eagle's `removeFromFolder` asks nothing) | local |
 | Edit: Move to Trash (⌘⌫) | Done | shortcuts.rs:114, app/commands/mod.rs `run_command` | local |
@@ -134,7 +134,7 @@ Cross-references (not counted): File ▸ Import Folders / Links / Eagle Package 
 | Item: Copy File Path | Done | `ui/dialogs/export.rs` `copy_variant`, every selected item | local |
 | Item: Copy… ▸ Link, Folder path, Thumbnail, Base64, Name | Done | `ui/dialogs/export.rs` `item_copy_menu`; Link copies the item's source URL | local |
 | Item: Copy Tags / Paste Tags | Done | `item_menu` in ui/menus/item.rs | local |
-| Item: Combine Images (several selected) | Missing | An Eagle plugin (`combine-images`), not app functionality | local |
+| Item: Combine Images (several selected) | Done | `combine_menu` in `ui/dialogs/combine.rs`: falcon's own version of Eagle's `combine-images` plugin, whose UI isn't known here. Horizontal, vertical or grid, a gap, a colour or transparent background and a preview; a new PNG item, selected, one undo step | local |
 | Item: Duplicate | Done | Card menu for one item, ⌘D, Edit menu; copies the first selected item exactly as Eagle's `duplicateItem` does | local |
 | Item: Search by Image ▸ Google / Bing / Yandex / TinEye / SauceNAO | Missing |  | online/plugin |
 | Item: Enter / Leave Presentation Mode | Done | Item menu and middle click in the image viewer | local |
@@ -431,11 +431,11 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 ### Missing and Partial local items, ranked by how noticeable they are
 
 1. ~~No application menubar.~~ Fixed, with falcon's own Actions menu (Eagle's is the `ai-action` plugin).
-2. ~~Shortcuts missing: T (tags), F (folders), ⌘J Go to Folder, ⇧-arrows, ⌘T and copy/paste tags, ⇧D last folder, ⌘D duplicate, ⇧T always on top, F5, ⌘O new window.~~ Fixed; the Shortcuts row stays Partial only for the 18 Eagle ids with no row, none of them a local macOS feature.
+2. ~~Shortcuts missing: T (tags), F (folders), ⌘J Go to Folder, ⇧-arrows, ⌘T and copy/paste tags, ⇧D last folder, ⌘D duplicate, ⇧T always on top, F5, ⌘O new window.~~ Fixed; the Shortcuts row stays Partial only for the 17 Eagle ids with no row, none of them a local macOS feature.
 3. ~~Layout, history and rename keys differ from Eagle.~~ Fixed.
 4. ~~Dragging items between folders adds them instead of moving them.~~ Fixed, and the drop toast links to the folder.
 5. ~~No rubber-band (marquee) selection.~~ Fixed.
-6. ~~Item context menu gaps: Rename / batch rename, Copy ▸ (link, folder path, thumbnail, base64, name), Copy / Paste Tags, Duplicate, Remove from this Folder, Open File Location, Pin to Top, New Folder with Selection, Add to Last Used Folder, Share, thumbnail background, custom thumbnail from clipboard, Replace with File, Combine Images.~~ Fixed; Combine Images is a plugin in Eagle 4 and is not built.
+6. ~~Item context menu gaps: Rename / batch rename, Copy ▸ (link, folder path, thumbnail, base64, name), Copy / Paste Tags, Duplicate, Remove from this Folder, Open File Location, Pin to Top, New Folder with Selection, Add to Last Used Folder, Share, thumbnail background, custom thumbnail from clipboard, Replace with File, Combine Images.~~ Fixed; Combine Images is falcon's own version of an Eagle 4 plugin.
 7. ~~Grid display options: only Thumbnail Speed / Quality is missing.~~ Fixed.
 8. ~~Add to Folders as a searchable picker instead of a flat list (Go to Folder is done).~~ Fixed; the picker is still Partial (see its row).
 9. ~~No multi-folder selection in the sidebar.~~ Fixed.
@@ -1413,7 +1413,7 @@ Eagle panes (`app/js/preferences.js:659-788`): General, Sidebar, Controls, Previ
 | Screenshot: auto-tag "Screenshot" | Done | "Screenshot" tag | local |
 | Screenshot: also copy to the clipboard | Done | The finished picture is copied with arboard (not `-c`) | local |
 | Screenshot: @2x on Retina | Done | Halves at scale ≥ 1.5 (Eagle checks exactly 2) | local |
-| **Shortcuts:** rebind any command, search the list, Restore Defaults | Done | 166 rebindable rows, 132 of them with Eagle's ids (of the 150 in its Shortcuts pane; 129 of the 147 in `default-preferences.js`; Eagle's `library.load` and `organize.folder.add` have rows), search field, Restore Defaults, recorder. `find.filter.import` (Eagle's `toggleFilterByType('import')` clicks its Date Modified filter, `mtime-filter-item`) opens falcon's Date chip on its Modified tab, and `find.filter.other` (`openFilterAddContextMenu`) opens the filter bar's + menu; both unbound as in Eagle, with Find ▸ Open Filter ▸ Date Modified and More Filters entries, and Find ▸ Date now starts on the Imported tab as Eagle's Date Added. `view.file.openother` opens View ▸ Open With Another App…, unbound; Eagle's Shortcuts pane lists it for `win32` only, while falcon also gives it a row on macOS. 18 Eagle ids have no row: the five Windows variants, the Pinterest and ArtStation importers, the eight reverse image searches and `find.filter.semantic` (online), `edit.image.merge` (Combine Images plugin), and `find.filter.image`: it runs `eagle.aiSearch.searchByItemId` / `searchByBase64` (`lib/api/ai-search.js`) against Eagle's AI Search plugin service at `http://localhost:38766`, a local model with a plugin to install, which falcon doesn't have (see the AI Search rows). The new menu items and the app chooser are seen on screen | local |
+| **Shortcuts:** rebind any command, search the list, Restore Defaults | Done | 167 rebindable rows, 133 of them with Eagle's ids (of the 150 in its Shortcuts pane; 130 of the 147 in `default-preferences.js`; Eagle's `library.load` and `organize.folder.add` have rows), search field, Restore Defaults, recorder. `find.filter.import` (Eagle's `toggleFilterByType('import')` clicks its Date Modified filter, `mtime-filter-item`) opens falcon's Date chip on its Modified tab, and `find.filter.other` (`openFilterAddContextMenu`) opens the filter bar's + menu; both unbound as in Eagle, with Find ▸ Open Filter ▸ Date Modified and More Filters entries, and Find ▸ Date now starts on the Imported tab as Eagle's Date Added. `view.file.openother` opens View ▸ Open With Another App…, unbound; Eagle's Shortcuts pane lists it for `win32` only, while falcon also gives it a row on macOS. 17 Eagle ids have no row: the five Windows variants, the Pinterest and ArtStation importers, the eight reverse image searches and `find.filter.semantic` (online), and `find.filter.image`: it runs `eagle.aiSearch.searchByItemId` / `searchByBase64` (`lib/api/ai-search.js`) against Eagle's AI Search plugin service at `http://localhost:38766`, a local model with a plugin to install, which falcon doesn't have (see the AI Search rows). The new menu items and the app chooser are seen on screen | local |
 | Shortcuts: plugin shortcuts | Not wanted (user decision) | Not applicable: no plugin system | local |
 | Global shortcuts (show Eagle, quick search from anywhere) | Done | `hotkeys.rs`, Global group in the shortcut table | local |
 | **Notification:** sound effects master switch, plus per event (delete item, delete folder, screenshot, extension) | Partial | Preferences ▸ Notification: Play sound effects master switch plus delete item, delete folder and screenshot switches, Eagle's defaults (all on), persisted as `Prefs::sounds`, reported in `application/info` as `notification.soundEffect`. Gap: the extension switch is kept and reported but not shown, since falcon has no browser extension | local |

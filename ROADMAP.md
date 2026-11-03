@@ -8,7 +8,7 @@ Falcon is early alpha. This page summarises what is done, what is left and what 
 
 ## Done
 
-Of the 909 local features in PARITY.md, 883 are done, 12 are partly done, 5 are accepted differences and 1 is missing. That is about nineteen in twenty. A further 43 need an online service, an account or Eagle's plugin system and are counted separately.
+Of the 901 local features in PARITY.md, 885 are done, 11 are partly done and 5 are accepted differences; none is missing. That is about nineteen in twenty. A further 43 need an online service, an account or Eagle's plugin system and are counted separately.
 
 - **Library:** reads and writes Eagle-format libraries, byte-identical on round trips, with backups, restore, duplicate detection, `.eaglepack` import and export, a watched import folder, reloading on outside changes and sync conflict detection.
 - **Import:** thumbnails and colour palettes, folders with their structure, links, paste, drag and drop, screen capture and background imports.
@@ -34,7 +34,7 @@ Local features still missing or partly done in [PARITY.md](PARITY.md), by theme.
 
 ## Later
 
-- **Plugins:** Combine Images, Search by Image, the Eagle MCP server, AI Models and AI Search, in the order given in [PLUGINS.md](PLUGINS.md). Falcon has no plugin system and none is planned; each would be a built-in feature.
+- **Plugins:** Search by Image, the Eagle MCP server, AI Models and AI Search, in the order given in [PLUGINS.md](PLUGINS.md). Falcon has no plugin system and none is planned; each would be a built-in feature.
 - **Out of scope:** Windows and Linux builds (falcon runs on macOS only, and several viewers use macOS frameworks), a GPU acceleration switch, Eagle's script and inject features, and every online feature.
 - **Formats beyond Eagle's set:** listed at the end of [FORMATS.md](FORMATS.md) and not planned.
 - **Releases:** signed and notarised macOS builds. Falcon is unsigned today.

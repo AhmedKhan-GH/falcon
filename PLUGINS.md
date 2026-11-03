@@ -4,15 +4,14 @@ Eagle 4.0.0 provides some features through plugins rather than the app itself. F
 
 ## Remaining plugins
 
-Falcon already has its own versions of two of Eagle's plugins, built into the app: Actions (`ai-action`) and Export in Format (`custom-export`). Five remain. Each would be a normal falcon feature, not a plugin; the plugin platform below isn't needed for them.
+Falcon already has its own versions of three of Eagle's plugins, built into the app: Actions (`ai-action`), Export in Format (`custom-export`) and Combine Images (`combine-images`). Four remain. Each would be a normal falcon feature, not a plugin; the plugin platform below isn't needed for them.
 
 | Order | Plugin | Feature | Effort | Depends on | Network |
 | --- | --- | --- | --- | --- | --- |
-| 1 | `combine-images` | Combine Images: merge several selected images into one | Small | Nothing | None |
-| 2 | `eagle-plugin-search-by-image` | Search by Image on Google, Bing, Yandex, TinEye, Baidu, Sogou and SauceNAO: upload the image and open the results in the browser | Small (engines change their endpoints now and then) | Nothing | Sends the chosen image to the chosen engine, only when you pick it |
-| 3 | `mcp-server` | Eagle MCP: a Model Context Protocol server on localhost so AI assistants on the same Mac can use the library | Medium | Falcon's HTTP API (exists) | None (localhost only) |
-| 4 | `ai-sdk` | AI Models: API keys and model settings for Eagle's eight providers, shared by every AI feature (design below) | Medium | Nothing | Only to providers you add |
-| 5 | `ai-search` | AI Search: semantic text search and similar-image search on the device, with the toolbar button, the search box's camera, Visual Match and Eagle's `aiSearch/*` API routes | Large | Nothing | One-off model download |
+| 1 | `eagle-plugin-search-by-image` | Search by Image on Google, Bing, Yandex, TinEye, Baidu, Sogou and SauceNAO: upload the image and open the results in the browser | Small (engines change their endpoints now and then) | Nothing | Sends the chosen image to the chosen engine, only when you pick it |
+| 2 | `mcp-server` | Eagle MCP: a Model Context Protocol server on localhost so AI assistants on the same Mac can use the library | Medium | Falcon's HTTP API (exists) | None (localhost only) |
+| 3 | `ai-sdk` | AI Models: API keys and model settings for Eagle's eight providers, shared by every AI feature (design below) | Medium | Nothing | Only to providers you add |
+| 4 | `ai-search` | AI Search: semantic text search and similar-image search on the device, with the toolbar button, the search box's camera, Visual Match and Eagle's `aiSearch/*` API routes | Large | Nothing | One-off model download |
 
 After these, there's one follow-up: AI steps in Actions (auto-tag, write a description), which need AI Models.
 
@@ -61,7 +60,7 @@ All but one can be plain local code with no outside service:
 
 | Plugin | Falcon plan |
 | --- | --- |
-| `combine-images` | Local image processing |
+| `combine-images` | Local image processing (falcon's Combine Images already does this) |
 | `custom-export` | Local conversion and resizing (falcon's Export in Format already does this) |
 | `ai-action` | Local rule steps (tags, folders, rating). AI steps such as auto-tagging go through AI Models below |
 | `mcp-server` | A local server on localhost built on falcon's HTTP API, for assistants on the same Mac |
@@ -101,5 +100,6 @@ The Plugin Center also offers community plugins that aren't in Eagle's code. The
 
 - Falcon has its own Actions (panel, editor, per-action shortcuts, Actions menu, toolbar button, G), built into the app. They are stored in falcon's app data for each library. Falcon never reads or writes Eagle's `actions.config.json`.
 - Falcon has its own Export in Format (⇧E): JPG, PNG or WebP, with quality and size. In Eagle this is the `custom-export` plugin.
+- Falcon has its own Combine Images (⇧⌘M): several selected images laid out in a row, a column or a grid and saved as a new PNG item. In Eagle this is the `combine-images` plugin, which isn't installed here, so falcon's dialog is its own design.
 - Falcon's typo-tolerant search is its own feature, not Eagle's AI Search.
 - The HTTP API answers Eagle's routes but not `aiSearch/*`.
