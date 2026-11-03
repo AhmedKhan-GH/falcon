@@ -167,11 +167,11 @@ pub enum KeyHint {
     Move,
     /// ←→ fold and unfold the highlighted folder.
     Fold,
-    /// ↩ ticks or unticks the highlighted folder.
+    /// ↵ ticks or unticks the highlighted folder.
     Tick,
-    /// ⌘↩ does that and leaves the search typed.
+    /// ⌘↵ does that and leaves the search typed.
     TickKeepSearch,
-    /// ↩ on the Create row makes the folder.
+    /// ↵ on the Create row makes the folder.
     Create,
     /// Tab shows the next tab.
     ChangeTab,
@@ -183,7 +183,7 @@ impl Picker {
     /// The keys the panel's footer names just now, only those that do
     /// something: the tree folds without a search and not on the Recent
     /// tab, whose rows have no children, and ⌘ only matters with a search
-    /// to keep. On the Create row ↩ creates.
+    /// to keep. On the Create row ↵ creates.
     pub fn key_hints(&self) -> Vec<KeyHint> {
         let on_create = matches!(self.highlight.and_then(|h| self.listed.get(h)), Some(Row::Create));
         let searching = !self.search.is_empty();
@@ -834,13 +834,13 @@ mod tests {
         assert_eq!(p.key_hints(), [Move, Tick, ChangeTab, Close]);
         p.set_tab(Tab::Selected);
         assert_eq!(p.key_hints(), [Move, Fold, Tick, ChangeTab, Close]);
-        // With a search ←→ move in the text and ⌘↩ keeps it.
+        // With a search ←→ move in the text and ⌘↵ keeps it.
         p.set_tab(Tab::All);
         p.search = "dog".into();
         p.dirty = true;
         p.refresh(&roots, &[], |_| false);
         assert_eq!(p.key_hints(), [Move, Tick, TickKeepSearch, ChangeTab, Close]);
-        // On the Create row ↩ creates, with or without ⌘.
+        // On the Create row ↵ creates, with or without ⌘.
         p.search = "zebra".into();
         p.dirty = true;
         p.refresh(&roots, &[], |_| false);

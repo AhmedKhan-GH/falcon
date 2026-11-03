@@ -196,6 +196,8 @@ impl App {
             self.ws.folders.picker_remove = p.remove_from_current;
         }
         if let Some(how) = closing {
+            // One more frame, so the menu bar sees that no modal is up.
+            ctx.request_repaint();
             // Applied as one undo step; nothing changed, nothing to apply.
             let (add, remove) = p.closed_changes(how, roots);
             if !add.is_empty() || !remove.is_empty() {
@@ -214,9 +216,9 @@ impl App {
                 let (keys, label) = match hint {
                     KeyHint::Move => ("↑↓", crate::locale::tr("hints::Move")),
                     KeyHint::Fold => ("←→", crate::locale::tr("Fold")),
-                    KeyHint::Tick => ("↩", crate::locale::tr("Tick")),
-                    KeyHint::TickKeepSearch => ("⌘↩", crate::locale::tr("Tick and keep the search")),
-                    KeyHint::Create => ("↩", crate::locale::tr("Create")),
+                    KeyHint::Tick => ("↵", crate::locale::tr("Tick")),
+                    KeyHint::TickKeepSearch => ("⌘↵", crate::locale::tr("Tick and keep the search")),
+                    KeyHint::Create => ("↵", crate::locale::tr("Create")),
                     KeyHint::ChangeTab => ("Tab", crate::locale::tr("Change tab")),
                     KeyHint::Close => ("Esc", crate::locale::tr("Close")),
                 };
