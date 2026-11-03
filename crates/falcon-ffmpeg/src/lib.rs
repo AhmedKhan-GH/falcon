@@ -5,8 +5,9 @@
 //! falls back to its bundled player. falcon never links FFmpeg: the shared
 //! libraries are opened with `dlopen` when first needed (see [`ffi`]), so
 //! falcon builds and runs without them and only the fallback is missing.
-//! The libraries must be an LGPL, decode-only build such as the one
-//! `scripts/build-ffmpeg.sh` makes; any GPL or nonfree build is refused.
+//! The libraries must be an LGPL build, decode and the atempo filter only,
+//! such as the one `scripts/build-ffmpeg.sh` makes; any GPL or nonfree build
+//! is refused.
 //!
 //! - [`probe`] reads a file's duration, size and tracks.
 //! - [`Grabber`] decodes single pictures, scaled, for previews; [`frame_at`]
@@ -14,6 +15,8 @@
 //! - [`Player`] plays a file: worker threads decode ahead, the owner takes
 //!   each frame when it is due, and [`AudioOut`] carries the sound to the
 //!   caller's audio output, which drives the clock.
+//! - [`Tempo`] changes the sound's speed and keeps its pitch, as `<video>`
+//!   does by default in Eagle's main player.
 //! - [`AudioFile`] decodes a file's sound alone, for audio players.
 
 mod audio_file;
@@ -23,12 +26,14 @@ mod frame;
 mod media;
 mod player;
 pub mod sync;
+mod tempo;
 pub mod testing;
 
 pub use audio_file::AudioFile;
 pub use frame::Frame;
 pub use media::{Grabber, frame_at, probe, thumbnail};
 pub use player::{AudioOut, Player};
+pub use tempo::Tempo;
 
 /// What [`probe`] learns about a file.
 #[derive(Clone, Debug, PartialEq)]

@@ -24,7 +24,7 @@ From `index.html`, `preview-window.html`, the `mediaElement` and `mpvMediaElemen
 3. downloads `https://ffmpeg.org/releases/ffmpeg-7.1.5.tar.xz` into an empty build folder (`target/ffmpeg-build`, or `$FFMPEG_BUILD_DIR`);
 4. checks its SHA-256, `de668509caf9e35e3cd162473441fdb29538c6d96ed080292b3cf9e6fc5d558f`. ffmpeg.org publishes only a GPG signature; this hash is the one MacPorts and Gentoo record for the signed tarball;
 5. configures, builds and installs into `target/ffmpeg` (or `$FFMPEG_PREFIX`), never system-wide, and copies `libdav1d.7.dylib` and dav1d's licence (`COPYING.dav1d`) next to the FFmpeg libraries;
-6. refuses to build if `config.h` shows `CONFIG_GPL 1` or `CONFIG_NONFREE 1`, or if the `libdav1d` decoder didn't make it into `config_components.h`, and writes `BUILD-INFO.txt` with the versions, sources, hashes and configure lines of FFmpeg and dav1d.
+6. refuses to build if `config.h` shows `CONFIG_GPL 1` or `CONFIG_NONFREE 1`, if `CONFIG_GPL` isn't 0, if `libavfilter` or `atempo` isn't in or any other selectable filter is, if any encoder or muxer is on, or if the `libdav1d` decoder didn't make it into `config_components.h`, and writes `BUILD-INFO.txt` with the versions, sources, hashes and configure lines of FFmpeg and dav1d.
 
 Running it again is cheap. The venv is remade only when a pinned tool version changes, dav1d is rebuilt only when it is missing or its pinned version changes, and FFmpeg only when it is missing, when dav1d was rebuilt, or when the script changes (a stamp in `target/ffmpeg/.stamp`). `FFMPEG_FORCE=1` rebuilds both.
 
@@ -34,7 +34,7 @@ The configure line, also recorded by FFmpeg itself as `FFMPEG_CONFIGURATION`:
 ./configure --prefix=<repo>/target/ffmpeg --install-name-dir=@rpath \
   --extra-ldflags=-Wl,-rpath,@loader_path --cc=clang --arch=arm64 \
   --enable-shared --disable-static --disable-programs --disable-doc --disable-debug \
-  --disable-avdevice --disable-postproc --disable-avfilter \
+  --disable-avdevice --disable-postproc --disable-filters --enable-filter=atempo \
   --disable-encoders --disable-muxers --disable-network --disable-autodetect \
   --enable-zlib --enable-libdav1d --pkg-config=pkgconf \
   --disable-x86asm --disable-protocols --enable-protocol=file \
@@ -42,7 +42,7 @@ The configure line, also recorded by FFmpeg itself as `FFMPEG_CONFIGURATION`:
   --disable-demuxers --enable-demuxer=matroska,av1,obu,avi,asf,flv,live_flv,ogg,mpegts,mpegps,mpegvideo,mov,rm,h264,hevc,m4v,vc1,ivf,nut,dv,mxf,yuv4mpegpipe,aac,mp3,flac,wav,w64,aiff,ac3,eac3,dts,truehd,amr,ape
 ```
 
-Parsers and bitstream filters keep FFmpeg's defaults, since the demuxers and decoders above need them (the AV1 parser and the `av1_frame_merge` and `av1_frame_split` filters among them). libswscale and libswresample are built; libavdevice, libavfilter and libpostproc are not. Besides dav1d, the build links only macOS's own libz, CoreFoundation, CoreVideo and CoreMedia.
+Parsers and bitstream filters keep FFmpeg's defaults, since the demuxers and decoders above need them (the AV1 parser and the `av1_frame_merge` and `av1_frame_split` filters among them). libswscale and libswresample are built, and libavfilter with one filter, `atempo` (its `abuffer` and `abuffersink` graph ends are always built, and no conversion filter is needed since the graph runs on one fixed format); libavdevice and libpostproc are not. libavfilter links only libavutil. Besides dav1d, the build links only macOS's own libz, CoreFoundation, CoreVideo and CoreMedia.
 
 The libraries carry `@rpath` install names and an `@loader_path` rpath, so each finds its siblings whether it is opened from `target/ffmpeg/lib` or from the app bundle.
 
@@ -64,9 +64,9 @@ Which files reach dav1d: WebM and Matroska go to FFmpeg first. MP4 goes to AVFou
 
 ## Licence
 
-FFmpeg built this way is LGPL-2.1-or-later; dav1d is BSD 2-Clause, which the LGPL build may link (configure's licence summary still reads `LGPL version 2.1 or later`, and `CONFIG_GPL` and `CONFIG_NONFREE` stay 0). Falcon stays MIT/Apache-2.0: it contains no FFmpeg code, links nothing at build time, and loads unmodified shared libraries that a user can replace. The loader in `falcon-ffmpeg/src/ffi.rs` reads each library's `*_license()` string at run time and refuses any library that is not LGPL (a `--enable-gpl` or nonfree build), and any major version other than FFmpeg 7.1's (libavutil 59, libavcodec 61, libavformat 61, libswscale 8, libswresample 5).
+FFmpeg built this way is LGPL-2.1-or-later; dav1d is BSD 2-Clause, which the LGPL build may link (configure's licence summary still reads `LGPL version 2.1 or later`, and `CONFIG_GPL` and `CONFIG_NONFREE` stay 0). Falcon stays MIT/Apache-2.0: it contains no FFmpeg code, links nothing at build time, and loads unmodified shared libraries that a user can replace. The loader in `falcon-ffmpeg/src/ffi.rs` reads each library's `*_license()` string at run time and refuses any library that is not LGPL (a `--enable-gpl` or nonfree build), and any major version other than FFmpeg 7.1's (libavutil 59, libavcodec 61, libavformat 61, libswscale 8, libswresample 5, libavfilter 10). A build made before `atempo` was added has no libavfilter and is refused too; run the script again.
 
-`scripts/bundle.sh` copies the five FFmpeg libraries and `libdav1d.7.dylib` into `Falcon.app/Contents/Frameworks`, sets their install names to `@rpath/…`, adds `@executable_path/../Frameworks` to the executable's rpaths and signs the bundle ad hoc again (`codesign -v --strict --deep` passes). The LGPL text, dav1d's licence (`COPYING.dav1d.txt`) and `BUILD-INFO.txt` go in `Contents/Resources/FFmpeg`, since code signing allows only code in `Frameworks`. Without `target/ffmpeg` the bundle builds as before. `NOTICE` and `ATTRIBUTION.md` record the versions, licences and sources of FFmpeg and dav1d.
+`scripts/bundle.sh` copies the six FFmpeg libraries and `libdav1d.7.dylib` into `Falcon.app/Contents/Frameworks`, sets their install names to `@rpath/…`, adds `@executable_path/../Frameworks` to the executable's rpaths and signs the bundle ad hoc again (`codesign -v --strict --deep` passes). The LGPL text, dav1d's licence (`COPYING.dav1d.txt`) and `BUILD-INFO.txt` go in `Contents/Resources/FFmpeg`, since code signing allows only code in `Frameworks`. Without `target/ffmpeg` the bundle builds as before. `NOTICE` and `ATTRIBUTION.md` record the versions, licences and sources of FFmpeg and dav1d.
 
 ## Where the libraries are looked for
 
@@ -74,16 +74,16 @@ In order: `$FALCON_FFMPEG_DIR`, the bundle's `Contents/Frameworks` next to the e
 
 ## The bindings
 
-`falcon-ffmpeg` has its own small FFI rather than `ffmpeg-sys`, so nothing about FFmpeg is needed at build time. dav1d is never opened directly; libavcodec loads it. `ffi::has_decoder` asks libavcodec for a decoder by name (`libdav1d`). It resolves about forty functions (opening and reading files, decoding, seeking, `sws_scale`, `swr_convert` and their helpers). Structs are declared only as far as the last field read, laid out as FFmpeg 7.1 declares them. The test `struct_layouts_match_the_installed_headers` compiles a C program against the installed headers and checks every offset and constant the bindings use.
+`falcon-ffmpeg` has its own small FFI rather than `ffmpeg-sys`, so nothing about FFmpeg is needed at build time. dav1d is never opened directly; libavcodec loads it. `ffi::has_decoder` asks libavcodec for a decoder by name (`libdav1d`). It resolves about fifty functions (opening and reading files, decoding, seeking, `sws_scale`, `swr_convert`, the `atempo` graph and their helpers). Structs are declared only as far as the last field read, laid out as FFmpeg 7.1 declares them. The test `struct_layouts_match_the_installed_headers` compiles a C program against the installed headers and checks every offset and constant the bindings use.
 
 ## The player
 
 `falcon_ffmpeg::Player` sits behind the same `falcon_video::Video` the viewer uses for AVFoundation, so play and pause, seeking, speed, looping, volume and mute, frame stepping, the current time and the duration drive one viewer.
 
-- **Threads.** A demux thread reads packets, decodes and resamples the sound, and queues video packets. A video thread decodes pictures and converts them to RGBA with libswscale (after the pixel aspect ratio and any display-matrix rotation) into a queue of at most eight frames, fewer for large pictures (96 MB at most). The viewer takes the frame due each time it draws and uploads it as a texture.
+- **Threads.** A demux thread reads packets, decodes and resamples the sound, stretches it at any speed but normal, and queues video packets. A video thread decodes pictures and converts them to RGBA with libswscale (after the pixel aspect ratio and any display-matrix rotation) into a queue of at most eight frames, fewer for large pictures (96 MB at most). The viewer takes the frame due each time it draws and uploads it as a texture.
 - **Clock.** The sound goes to the app's rodio output as stereo 32-bit float at 48 kHz. The samples the output takes move the audio clock, which is the master clock while sound plays. With no sound track, no output, the sound muted, or the sound ended first, a wall clock runs the picture and takes over from where the audio clock stopped. Frames due are shown; late ones are skipped.
 - **Mute.** Muting stops decoding the sound and switches to the wall clock; unmuting decodes it again from the playhead.
-- **Speed.** The sound is resampled to the new speed, so its pitch moves with the speed (FFmpeg's pitch-keeping filter is in libavfilter, which is not built).
+- **Speed.** The sound goes through FFmpeg's `atempo` filter (`falcon_ffmpeg::Tempo`), so it keeps its pitch at any speed, as `preservesPitch` does in Eagle's `<video>`. At normal speed the filter is skipped. `atempo` takes 0.5 and up, so slower speeds chain it (0.25 is 0.5 × 0.5). Each sample out covers `rate` samples of the clip, so the audio clock's arithmetic is the same as for resampled sound, and the time of what comes out is counted from the first sample in (`sync::TempoTimeline`), as the filter holds some back. The filter's last window at the very end of the clip may be cut short, about 20 ms of output. Should a replacement FFmpeg lack `atempo`, the sound is resampled to speed and its pitch moves with it.
 - **Seeking.** A seek finds the keyframe before the time (aiming a quarter second early, since FFmpeg rounds to the nearest frame) and decodes forward to the frame on screen at that time. Every seek starts a new generation, and work for an older one is dropped. Seeking past the last frame shows the last frame.
 - **Frame steps.** Forward steps take the next decoded frames; backward steps seek to the earlier frame.
 - **Frame tools.** Set as thumbnail, copy and save frame decode the picture at the playhead again at full size, as with AVFoundation.
@@ -97,7 +97,7 @@ In order: `$FALCON_FFMPEG_DIR`, the bundle's `Contents/Frameworks` next to the e
 ## Tests
 
 - Unit tests cover the clocks, the frame queue, timestamp and seek arithmetic, rotation, black-frame detection and the licence check.
-- `crates/falcon-ffmpeg/tests/ffmpeg.rs` runs only when `target/ffmpeg` exists (`build.rs` sets `ffmpeg_built`; otherwise the tests are ignored), and its AV1 tests only when that build includes `libdav1d.7.dylib` (`ffmpeg_dav1d`). It writes its own AVI clips byte by byte (uncompressed BGR pictures and PCM sound, since the build has no encoders) and checks probing, picture grabbing, thumbnails, playback, seeking, stepping, looping, the audio clock, muting and the struct layouts.
+- `crates/falcon-ffmpeg/tests/ffmpeg.rs` runs only when `target/ffmpeg` exists (`build.rs` sets `ffmpeg_built`; otherwise the tests are ignored), and its AV1 tests only when that build includes `libdav1d.7.dylib` (`ffmpeg_dav1d`). It writes its own AVI clips byte by byte (uncompressed BGR pictures and PCM sound, since the build has no encoders) and checks probing, picture grabbing, thumbnails, playback, seeking, stepping, looping, the audio clock, muting, the struct layouts, and `atempo`: output lengths and the pitch of a tone from 0.1x to 16x, where its sound lands in time, and a 2x run through the player (half the samples, the clock at twice the wall clock, the pitch unchanged, a seek).
 - AV1: `crates/falcon-ffmpeg/testdata/av1.ivf` (1.2 KB) is falcon's own clip, encoded with rav1e 0.8.1 from 25 flat 64 × 48 pictures whose colours count the frame, keyframes at 0 and 13. `falcon_ffmpeg::testing::av1` rewraps it as WebM, Matroska and MP4 (every element and box written by hand, `av1C` included), and the tests check that `libdav1d` is there, then probing, the first frame's colour, frame-accurate seeks across the keyframe, the import-time thumbnail, the grabber, and the player's seeks and steps in each container. falcon-library's import test and the AVFoundation test run the same clips through the import thumbnail and through `falcon_video` (player, grabber, `frame_at`).
 - `crates/falcon-video/tests/avfoundation.rs` also decodes its AVFoundation-written H.264/AAC clips, and a rotated one, through FFmpeg and checks they match.
 - `FALCON_VIDEO_SAMPLES=<folder> cargo test -p falcon-ffmpeg --test ffmpeg samples -- --ignored --nocapture` probes, thumbnails, plays and seeks every clip in a folder, for checks on real files.

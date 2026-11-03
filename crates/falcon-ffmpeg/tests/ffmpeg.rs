@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use falcon_ffmpeg::testing::Clip;
-use falcon_ffmpeg::{Frame, Player, ffi, frame_at, probe, thumbnail};
+use falcon_ffmpeg::{AudioOut, Frame, Player, Tempo, ffi, frame_at, probe, thumbnail};
 
 const W: u32 = 64;
 const H: u32 = 48;
@@ -230,6 +230,167 @@ fn sound_drives_the_clock() {
     assert!(ended, "the sound ends with the player");
 }
 
+/// `secs` of a stereo tone at `hz` as the player's samples.
+fn tone(hz: f64, secs: f64) -> Vec<f32> {
+    let frames = (secs * f64::from(AudioOut::RATE)) as usize;
+    (0..frames).flat_map(|n| [((n as f64 / f64::from(AudioOut::RATE) * hz * std::f64::consts::TAU).sin() * 0.25) as f32; 2]).collect()
+}
+
+/// The pitch of stereo samples in Hz, from one channel's upward zero crossings.
+fn pitch(samples: &[f32]) -> f64 {
+    let left: Vec<f32> = samples.iter().step_by(2).copied().collect();
+    let ups = left.windows(2).filter(|w| w[0] < 0.0 && w[1] >= 0.0).count();
+    ups as f64 / (left.len() as f64 / f64::from(AudioOut::RATE))
+}
+
+/// A real clip's sound played through at double speed, as fast as it
+/// comes: sample frames heard against what its length predicts, and how
+/// often the sound crosses zero against the same part at normal speed
+/// (both ratios about 1 when the pitch holds; resampling would double the
+/// second).
+fn sound_at_double_speed(path: &Path, duration: f64) -> (f64, f64) {
+    let secs = duration.min(20.0);
+    let take = |rate: f32| {
+        let (mut p, out) = Player::open(path, true).unwrap();
+        let mut out = out.unwrap();
+        p.set_rate(rate);
+        p.play();
+        let wanted = (secs / f64::from(rate) * 96_000.0) as usize;
+        let (mut heard, mut quiet) = (Vec::with_capacity(wanted), 0);
+        while heard.len() < wanted && quiet < 400 {
+            let block: Vec<f32> = (0..2048).map(|_| out.next_sample().unwrap()).collect();
+            if block.iter().all(|&s| s == 0.0) {
+                quiet += 1;
+                std::thread::sleep(Duration::from_millis(1));
+            } else {
+                quiet = 0;
+                heard.extend(block);
+            }
+            let _ = p.frame();
+        }
+        heard
+    };
+    let (normal, fast) = (take(1.0), take(2.0));
+    let frames = fast.len() as f64 / (secs * 48_000.0);
+    (frames, pitch(&fast) / pitch(&normal).max(1.0))
+}
+
+/// What a [`Tempo`] at `rate` makes of `input`, all of it.
+fn stretched(rate: f64, input: &[f32]) -> Vec<f32> {
+    let mut t = Tempo::new(rate).unwrap();
+    let mut out = Vec::new();
+    for block in input.chunks(2048) {
+        t.push(block, Some(0.0)).unwrap();
+        t.pull(&mut out);
+    }
+    t.finish().unwrap();
+    t.pull(&mut out);
+    out
+}
+
+#[test]
+#[cfg_attr(not(ffmpeg_built), ignore = "needs scripts/build-ffmpeg.sh")]
+fn tempo_changes_the_length_and_keeps_the_pitch() {
+    let input = tone(440.0, 2.0);
+    for rate in [0.1, 0.25, 0.5, 0.75, 1.25, 2.0, 4.0, 8.0, 16.0] {
+        let out = stretched(rate, &input);
+        // The filter's last window, about 1024 sample frames out, may be cut short.
+        let covered = out.len() as f64 * rate;
+        let slack = 2.0 * 1024.0 * (rate + 1.0);
+        assert!((covered - input.len() as f64).abs() <= slack, "{rate}x: {} samples from {}, covering {covered}", out.len(), input.len());
+        assert_eq!(out.len() % 2, 0, "whole stereo frames");
+        let heard = pitch(&out);
+        assert!((400.0..480.0).contains(&heard), "{rate}x sounds at {heard} Hz");
+    }
+}
+
+#[test]
+#[cfg_attr(not(ffmpeg_built), ignore = "needs scripts/build-ffmpeg.sh")]
+fn tempo_output_lines_up_with_the_clip() {
+    // Half a second of silence, then the tone: at 2x it starts a quarter
+    // second in, and its media time, by the timeline, is the half second.
+    let mut input = vec![0f32; 48_000];
+    input.extend(tone(440.0, 1.0));
+    let mut t = Tempo::new(2.0).unwrap();
+    let mut out = Vec::new();
+    let mut first = None;
+    for block in input.chunks(2048) {
+        t.push(block, Some(3.0)).unwrap();
+        first = first.or(t.pull(&mut out));
+    }
+    t.finish().unwrap();
+    first = first.or(t.pull(&mut out));
+    assert_eq!(first, Some(3.0), "the first sample out is the first sample in");
+    let onset = out.iter().position(|s| s.abs() > 0.1).unwrap() / 2;
+    let at = onset as f64 / f64::from(AudioOut::RATE);
+    assert!((at - 0.25).abs() < 0.03, "the tone starts at {at} s");
+}
+
+#[test]
+#[cfg_attr(not(ffmpeg_built), ignore = "needs scripts/build-ffmpeg.sh")]
+fn double_speed_halves_the_sound_and_keeps_clock_and_pitch() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("long.avi");
+    // Four seconds of 48 kHz sound, so the player's samples are the clip's.
+    let clip = Clip { width: W, height: H, frames: 100, fps: FPS, audio_rate: Some(48_000) };
+    std::fs::write(&path, clip.avi(|i, _| color(i % 25))).unwrap();
+    let (mut p, out) = Player::open(&path, true).unwrap();
+    let mut out = out.expect("a sound track");
+    p.set_rate(2.0);
+    assert_eq!(p.rate(), 2.0);
+    p.play();
+    // Half a second of output in real time, as an audio device takes it.
+    let start = Instant::now();
+    let mut heard = Vec::new();
+    let mut taken = 0usize;
+    while start.elapsed() < Duration::from_millis(500) {
+        while (taken as f64) < start.elapsed().as_secs_f64() * 96_000.0 {
+            heard.push(out.next_sample().unwrap());
+            taken += 1;
+        }
+        let _ = p.frame();
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let t = p.current_time();
+    assert!((0.7..1.15).contains(&t), "half a second at 2x moves the clock a second: {t}");
+    // The rest as fast as it comes, leaving out the silence of a starved output.
+    let mut quiet = 0;
+    while quiet < 400 {
+        let block: Vec<f32> = (0..2048).map(|_| out.next_sample().unwrap()).collect();
+        if block.iter().all(|&s| s == 0.0) {
+            quiet += 1;
+            std::thread::sleep(Duration::from_millis(1));
+        } else {
+            quiet = 0;
+        }
+        heard.extend(block);
+        let _ = p.frame();
+    }
+    heard.retain(|&s| s != 0.0);
+    let frames = heard.len() / 2;
+    assert!((91_000..101_000).contains(&frames), "4 s at 2x is about 96000 sample frames at 48 kHz: {frames}");
+    let tone = pitch(&heard);
+    assert!((400.0..480.0).contains(&tone), "the 440 Hz tone sounds at {tone} Hz");
+    let clock = p.current_time();
+    assert!((3.7..=4.0).contains(&clock), "the clock reaches the end with the sound: {clock}");
+
+    // After a seek the sound starts at the target, still on the clip's time.
+    p.seek(1.0);
+    let mut waited = 0;
+    while waited < 2000 && out.next_sample().unwrap() == 0.0 {
+        waited += 1;
+        if waited % 1024 == 0 {
+            std::thread::sleep(Duration::from_millis(1));
+        }
+    }
+    for _ in 0..12_000 {
+        out.next_sample().unwrap();
+    }
+    let _ = next_frame(&mut p, 1.0);
+    let t = p.current_time();
+    assert!((1.0..1.6).contains(&t), "6000 sample frames past 1 s at 2x is about 1.25 s: {t}");
+}
+
 #[test]
 #[cfg_attr(not(ffmpeg_built), ignore = "needs scripts/build-ffmpeg.sh")]
 fn sound_alone_decodes_and_seeks() {
@@ -313,10 +474,11 @@ fn struct_layouts_match_the_installed_headers() {
         ("AVERROR_INVALIDDATA", i64::from(AVERROR_INVALIDDATA)),
         ("AV_TIME_BASE", AV_TIME_BASE),
         ("AV_NOPTS_VALUE", AV_NOPTS_VALUE),
+        ("LIBAVFILTER_VERSION_MAJOR", i64::from(AVFILTER_MAJOR)),
     ];
     let mut c = String::from(
         "#include <stdio.h>\n#include <stddef.h>\n#include <errno.h>\n#include <libavformat/avformat.h>\n#include <libavcodec/avcodec.h>\n\
-         #include <libavutil/frame.h>\n#include <libswscale/swscale.h>\n#include <libavutil/log.h>\nint main(void) {\n",
+         #include <libavutil/frame.h>\n#include <libswscale/swscale.h>\n#include <libavutil/log.h>\n#include <libavfilter/avfilter.h>\nint main(void) {\n",
     );
     for (name, _) in &ours {
         let expr = if let Some(t) = name.strip_prefix("sizeof(").and_then(|n| n.strip_suffix(')')) {
@@ -479,6 +641,7 @@ fn samples() {
             }
         }
         let t = p.current_time();
+        let tempo = info.has_audio.then(|| sound_at_double_speed(&path, info.duration));
         p.seek(info.duration / 2.0);
         let s0 = Instant::now();
         let mid = next_frame(&mut p, 5.0).map(|f| (f.width, f.height));
@@ -486,7 +649,7 @@ fn samples() {
         drop(p);
         let peak = puller.map(|h| h.join().unwrap());
         println!(
-            "{name}: {}x{} {:.2}s {:.2}fps audio={} turns={} | thumb {}x{} at {at:.2}s in {t_thumb:?} | played {frames} frames, clock {t:.2}s | seek {seek_ms} ms -> {mid:?} | peak {peak:?}",
+            "{name}: {}x{} {:.2}s {:.2}fps audio={} turns={} | thumb {}x{} at {at:.2}s in {t_thumb:?} | played {frames} frames, clock {t:.2}s | seek {seek_ms} ms -> {mid:?} | peak {peak:?} | 2x sound {tempo:?}",
             info.width, info.height, info.duration, info.fps, info.has_audio, info.turns, thumb.width, thumb.height
         );
     }

@@ -17,13 +17,13 @@ if [ -f "$FFMPEG/lib/libavformat.61.dylib" ]; then
   mkdir -p "$FW"
   # libdav1d is the AV1 decoder libavcodec links (absent from builds
   # made before it was added).
-  for lib in libdav1d.7 libavutil.59 libswresample.5 libavcodec.61 libavformat.61 libswscale.8; do
+  for lib in libdav1d.7 libavutil.59 libswresample.5 libavfilter.10 libavcodec.61 libavformat.61 libswscale.8; do
     [ "$lib" = libdav1d.7 ] && [ ! -f "$FFMPEG/lib/$lib.dylib" ] && continue
     cp -L "$FFMPEG/lib/$lib.dylib" "$FW/$lib.dylib"
     chmod u+w "$FW/$lib.dylib"
     install_name_tool -id "@rpath/$lib.dylib" "$FW/$lib.dylib"
     # Point links to the other FFmpeg libraries at the bundle's copies.
-    for dep in $(otool -L "$FW/$lib.dylib" | awk 'NR > 2 { print $1 }' | grep -E 'lib(avutil|swresample|avcodec|avformat|swscale|dav1d)\.' || true); do
+    for dep in $(otool -L "$FW/$lib.dylib" | awk 'NR > 2 { print $1 }' | grep -E 'lib(avutil|swresample|avfilter|avcodec|avformat|swscale|dav1d)\.' || true); do
       install_name_tool -change "$dep" "@rpath/$(basename "$dep")" "$FW/$lib.dylib"
     done
     otool -l "$FW/$lib.dylib" | grep -q 'path @loader_path ' || install_name_tool -add_rpath @loader_path "$FW/$lib.dylib"

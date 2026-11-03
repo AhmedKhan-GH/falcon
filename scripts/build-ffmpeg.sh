@@ -1,10 +1,12 @@
 #!/bin/sh
-# Builds the LGPL, decode-only FFmpeg that falcon's fallback video player loads at run time,
-# with the dav1d AV1 decoder (BSD-2-Clause) as a shared library libavcodec links.
+# Builds the LGPL FFmpeg that falcon's fallback video player loads at run time, decoding plus
+# the atempo filter only, with the dav1d AV1 decoder (BSD-2-Clause) as a shared library
+# libavcodec links.
 #
 # Downloads the release tarballs, checks them against pinned SHA-256s, configures FFmpeg
-# without GPL or nonfree parts, without encoders, muxers, programs, avdevice, avfilter or
-# postproc, and installs shared libraries and headers into target/ffmpeg (never
+# without GPL or nonfree parts, without encoders, muxers, programs, avdevice or postproc,
+# with atempo as libavfilter's only filter (its abuffer and abuffersink graph ends are always
+# built), and installs shared libraries and headers into target/ffmpeg (never
 # system-wide). dav1d is built with meson and ninja, which go into a Python venv under
 # target/ffmpeg-tools with pkgconf (FFmpeg's configure finds dav1d through pkg-config).
 # Nothing it produces is committed. scripts/bundle.sh copies the libraries into Falcon.app.
@@ -110,7 +112,7 @@ fi
 # FFmpeg, rebuilt only when missing or when its version, dav1d or this script changes.
 FFMPEG_STAMP="ffmpeg $VERSION $SHA256 $DAV1D_STAMP script $(shasum -a 256 "$ROOT/scripts/build-ffmpeg.sh" | cut -c1-16)"
 if [ -z "$FORCE" ] && [ "$(cat "$PREFIX/.stamp" 2>/dev/null)" = "$FFMPEG_STAMP" ] \
-  && [ -f "$PREFIX/lib/libavcodec.61.dylib" ] && [ -f "$PREFIX/lib/$DAV1D_LIB" ]; then
+  && [ -f "$PREFIX/lib/libavcodec.61.dylib" ] && [ -f "$PREFIX/lib/libavfilter.10.dylib" ] && [ -f "$PREFIX/lib/$DAV1D_LIB" ]; then
   echo "FFmpeg $VERSION with dav1d $DAV1D_VERSION is already installed in $PREFIX"
   exit 0
 fi
@@ -139,7 +141,8 @@ PKG_CONFIG_PATH="$DAV1D_PREFIX/lib/pkgconfig" ./configure \
   --disable-debug \
   --disable-avdevice \
   --disable-postproc \
-  --disable-avfilter \
+  --disable-filters \
+  --enable-filter=atempo \
   --disable-encoders \
   --disable-muxers \
   --disable-network \
@@ -159,7 +162,16 @@ if grep -q '^#define CONFIG_GPL 1' config.h || grep -q '^#define CONFIG_NONFREE 
   echo "FFmpeg was configured with GPL or nonfree parts; refusing to build" >&2
   exit 1
 fi
-grep -E '^#define CONFIG_(GPL|NONFREE|VERSION3) ' config.h
+grep -E '^#define CONFIG_(GPL|NONFREE|VERSION3|AVFILTER) ' config.h
+grep -q '^#define CONFIG_GPL 0' config.h || { echo "FFmpeg's GPL switch isn't off" >&2; exit 1; }
+grep -q '^#define CONFIG_AVFILTER 1' config.h || { echo "FFmpeg was configured without libavfilter" >&2; exit 1; }
+grep -q '^#define CONFIG_ATEMPO_FILTER 1' config_components.h || { echo "FFmpeg was configured without atempo" >&2; exit 1; }
+[ "$(sed -n 's/^#define CONFIG_\(.*\)_FILTER 1$/\1/p' config_components.h)" = ATEMPO ] \
+  || { echo "FFmpeg was configured with filters other than atempo" >&2; exit 1; }
+if grep -Eq '^#define CONFIG_[A-Z0-9_]+_(ENCODER|MUXER) 1$' config_components.h; then
+  echo "FFmpeg was configured with encoders or muxers; refusing to build" >&2
+  exit 1
+fi
 grep -q '^#define CONFIG_LIBDAV1D_DECODER 1' config_components.h || { echo "FFmpeg was configured without libdav1d" >&2; exit 1; }
 
 make -j"$(sysctl -n hw.ncpu)"
@@ -180,7 +192,8 @@ FFmpeg $VERSION, built for Falcon by scripts/build-ffmpeg.sh.
 Licence: GNU Lesser General Public License, version 2.1 or later (COPYING.LGPLv2.1).
 Source: $URL
 SHA-256 of the source: $SHA256
-Falcon loads these libraries at run time and does not modify FFmpeg.
+Falcon loads these libraries at run time and does not modify FFmpeg. They decode, and
+libavfilter has one filter, atempo, for keeping the pitch at other playback speeds.
 Configured with:
 $CONF
 

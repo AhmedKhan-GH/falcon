@@ -4,7 +4,7 @@
 //! Only the functions in [`Api`] are called. Structs are declared as far as
 //! the last field falcon reads, laid out as FFmpeg 7.1 declares them
 //! (libavutil 59, libavcodec 61, libavformat 61, libswscale 8,
-//! libswresample 5). The loader refuses libraries of any other major
+//! libswresample 5, libavfilter 10). The loader refuses libraries of any other major
 //! version, since a struct prefix is only right for the version it was
 //! copied from, and refuses any build whose licence is not the LGPL. The
 //! `layout` test checks every offset against the installed headers.
@@ -19,6 +19,7 @@ pub const AVCODEC_MAJOR: u32 = 61;
 pub const AVFORMAT_MAJOR: u32 = 61;
 pub const SWSCALE_MAJOR: u32 = 8;
 pub const SWRESAMPLE_MAJOR: u32 = 5;
+pub const AVFILTER_MAJOR: u32 = 10;
 
 pub const AVMEDIA_TYPE_VIDEO: c_int = 0;
 pub const AVMEDIA_TYPE_AUDIO: c_int = 1;
@@ -216,6 +217,18 @@ pub struct SwsContext {
 pub struct SwrContext {
     _private: [u8; 0],
 }
+#[repr(C)]
+pub struct AVFilter {
+    _private: [u8; 0],
+}
+#[repr(C)]
+pub struct AVFilterContext {
+    _private: [u8; 0],
+}
+#[repr(C)]
+pub struct AVFilterGraph {
+    _private: [u8; 0],
+}
 
 /// Every FFmpeg function falcon calls, resolved from the loaded libraries.
 /// The libraries stay loaded for the life of the process.
@@ -227,6 +240,7 @@ pub struct Api {
     pub av_frame_free: unsafe extern "C" fn(*mut *mut AVFrame),
     pub av_frame_unref: unsafe extern "C" fn(*mut AVFrame),
     pub av_frame_ref: unsafe extern "C" fn(*mut AVFrame, *const AVFrame) -> c_int,
+    pub av_frame_get_buffer: unsafe extern "C" fn(*mut AVFrame, c_int) -> c_int,
     pub av_log_set_level: unsafe extern "C" fn(c_int),
     pub av_channel_layout_default: unsafe extern "C" fn(*mut AVChannelLayout, c_int),
     pub av_channel_layout_uninit: unsafe extern "C" fn(*mut AVChannelLayout),
@@ -285,6 +299,16 @@ pub struct Api {
     pub swr_convert: unsafe extern "C" fn(*mut SwrContext, *const *mut u8, c_int, *const *const u8, c_int) -> c_int,
     pub swr_get_out_samples: unsafe extern "C" fn(*mut SwrContext, c_int) -> c_int,
     pub swr_free: unsafe extern "C" fn(*mut *mut SwrContext),
+    // libavfilter
+    pub avfilter_graph_alloc: unsafe extern "C" fn() -> *mut AVFilterGraph,
+    pub avfilter_graph_free: unsafe extern "C" fn(*mut *mut AVFilterGraph),
+    pub avfilter_get_by_name: unsafe extern "C" fn(*const c_char) -> *const AVFilter,
+    pub avfilter_graph_create_filter:
+        unsafe extern "C" fn(*mut *mut AVFilterContext, *const AVFilter, *const c_char, *const c_char, *mut c_void, *mut AVFilterGraph) -> c_int,
+    pub avfilter_link: unsafe extern "C" fn(*mut AVFilterContext, c_uint, *mut AVFilterContext, c_uint) -> c_int,
+    pub avfilter_graph_config: unsafe extern "C" fn(*mut AVFilterGraph, *mut c_void) -> c_int,
+    pub av_buffersrc_add_frame: unsafe extern "C" fn(*mut AVFilterContext, *mut AVFrame) -> c_int,
+    pub av_buffersink_get_frame: unsafe extern "C" fn(*mut AVFilterContext, *mut AVFrame) -> c_int,
     /// Keeps the libraries loaded while the pointers above are in use.
     _libs: Vec<libloading::Library>,
 }
@@ -350,7 +374,7 @@ fn unusable(msg: impl Into<String>) -> LoadError {
     LoadError::Unusable(msg.into())
 }
 
-/// Opens the five libraries in `dir` and resolves every function.
+/// Opens the six libraries in `dir` and resolves every function.
 fn load(dir: &Path) -> Result<Api, LoadError> {
     let open = |name: &str, major: u32| -> Result<libloading::Library, LoadError> {
         let path = dir.join(file_name(name, major));
@@ -361,6 +385,7 @@ fn load(dir: &Path) -> Result<Api, LoadError> {
     // Dependencies first, so each library finds the ones it links.
     let avutil = open("avutil", AVUTIL_MAJOR)?;
     let swresample = open("swresample", SWRESAMPLE_MAJOR)?;
+    let avfilter = open("avfilter", AVFILTER_MAJOR)?;
     let avcodec = open("avcodec", AVCODEC_MAJOR)?;
     let avformat = open("avformat", AVFORMAT_MAJOR)?;
     let swscale = open("swscale", SWSCALE_MAJOR)?;
@@ -381,6 +406,7 @@ fn load(dir: &Path) -> Result<Api, LoadError> {
         (&avformat, "avformat", AVFORMAT_MAJOR),
         (&swscale, "swscale", SWSCALE_MAJOR),
         (&swresample, "swresample", SWRESAMPLE_MAJOR),
+        (&avfilter, "avfilter", AVFILTER_MAJOR),
     ];
     for (lib, name, major) in checks {
         let version: Version = sym(lib, &format!("{name}_version"))?;
@@ -407,6 +433,7 @@ fn load(dir: &Path) -> Result<Api, LoadError> {
         av_frame_free: sym(&avutil, "av_frame_free")?,
         av_frame_unref: sym(&avutil, "av_frame_unref")?,
         av_frame_ref: sym(&avutil, "av_frame_ref")?,
+        av_frame_get_buffer: sym(&avutil, "av_frame_get_buffer")?,
         av_log_set_level: sym(&avutil, "av_log_set_level")?,
         av_channel_layout_default: sym(&avutil, "av_channel_layout_default")?,
         av_channel_layout_uninit: sym(&avutil, "av_channel_layout_uninit")?,
@@ -439,7 +466,15 @@ fn load(dir: &Path) -> Result<Api, LoadError> {
         swr_convert: sym(&swresample, "swr_convert")?,
         swr_get_out_samples: sym(&swresample, "swr_get_out_samples")?,
         swr_free: sym(&swresample, "swr_free")?,
-        _libs: vec![swscale, avformat, avcodec, swresample, avutil],
+        avfilter_graph_alloc: sym(&avfilter, "avfilter_graph_alloc")?,
+        avfilter_graph_free: sym(&avfilter, "avfilter_graph_free")?,
+        avfilter_get_by_name: sym(&avfilter, "avfilter_get_by_name")?,
+        avfilter_graph_create_filter: sym(&avfilter, "avfilter_graph_create_filter")?,
+        avfilter_link: sym(&avfilter, "avfilter_link")?,
+        avfilter_graph_config: sym(&avfilter, "avfilter_graph_config")?,
+        av_buffersrc_add_frame: sym(&avfilter, "av_buffersrc_add_frame")?,
+        av_buffersink_get_frame: sym(&avfilter, "av_buffersink_get_frame")?,
+        _libs: vec![swscale, avformat, avcodec, avfilter, swresample, avutil],
     };
     // SAFETY: plain value; FFmpeg's log goes to stderr otherwise.
     unsafe { (api.av_log_set_level)(AV_LOG_QUIET) };

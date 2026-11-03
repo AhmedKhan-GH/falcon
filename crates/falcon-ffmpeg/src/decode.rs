@@ -19,7 +19,7 @@ use crate::ffi::{self, AVCodec, AVCodecContext, AVFormatContext, AVFrame, AVPack
 use crate::sync;
 use crate::{Error, Frame, Result};
 
-fn check(api: &Api, code: c_int, what: &str) -> Result<c_int> {
+pub(crate) fn check(api: &Api, code: c_int, what: &str) -> Result<c_int> {
     if code < 0 { Err(Error(format!("{what}: {}", ffi::error_text(api, code)))) } else { Ok(code) }
 }
 
@@ -380,7 +380,10 @@ pub const OUT_CHANNELS: usize = 2;
 pub const OUT_RATE: u32 = 48_000;
 
 /// Converts decoded sound to [`OUT_CHANNELS`] float samples, resampled so
-/// that it plays at `rate` times speed when output at [`OUT_RATE`].
+/// that it plays at `rate` times speed when output at [`OUT_RATE`]. The
+/// player asks for normal speed and changes the speed with [`crate::Tempo`],
+/// which keeps the pitch; only a build whose `atempo` can't be used gets
+/// sound resampled to speed, with the pitch moving along.
 pub struct Resampler {
     api: &'static Api,
     ctx: *mut SwrContext,

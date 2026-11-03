@@ -2,7 +2,8 @@
 //! UI thread takes frames when they are due.
 //!
 //! - The **demux** thread reads packets, decodes and resamples the sound
-//!   itself (it is cheap), and queues video packets for the video thread.
+//!   itself (it is cheap), stretches it through `atempo` at any speed but
+//!   normal, and queues video packets for the video thread.
 //!   It stops reading when both queues are full enough and performs seeks.
 //! - The **video** thread decodes and converts pictures to RGBA into a
 //!   short queue of frames.
@@ -25,6 +26,7 @@ use crate::decode::{Decoder, Input, OUT_CHANNELS, OUT_RATE, Packet, Resampler, S
 use crate::ffi;
 use crate::media;
 use crate::sync::{self, AudioClock, FrameQueue, WallClock};
+use crate::tempo::Stretch;
 use crate::{Error, Frame, Info, Result};
 
 /// Sound decoded ahead of the output, in media seconds.
@@ -64,7 +66,8 @@ struct State {
     /// first one.
     samples: VecDeque<f32>,
     samples_pts: f64,
-    /// The speed the queued samples were resampled for.
+    /// The speed the queued samples were made for: each second of them
+    /// covers this many seconds of the clip.
     samples_rate: f64,
     clock: Option<AudioClock>,
 }
@@ -340,8 +343,9 @@ impl Player {
         self.rate
     }
 
-    /// Changes the speed. The sound is resampled to match (its pitch moves
-    /// with the speed), so the queued sound is decoded again from here.
+    /// Changes the speed. The sound is stretched to match and keeps its
+    /// pitch, as `preservesPitch` does in Eagle's `<video>`, so the queued
+    /// sound is decoded again from here.
     pub fn set_rate(&mut self, rate: f32) {
         let rate = rate.clamp(0.1, 16.0);
         if (rate - self.rate).abs() < 1e-4 {
@@ -526,6 +530,7 @@ impl Drop for Player {
 /// Reads packets, decodes sound, queues video packets and carries out seeks.
 fn demux_loop(shared: &Shared, mut input: Input, vi: i32, mut sound: Option<Decoder>, mut resampler: Resampler, mut packet: Packet) {
     let api = input.api();
+    let mut stretch = Stretch::new(api);
     let mut target = f64::NEG_INFINITY;
     loop {
         let mut st = shared.lock();
@@ -541,6 +546,7 @@ fn demux_loop(shared: &Shared, mut input: Input, vi: i32, mut sound: Option<Deco
                     s.flush();
                 }
                 resampler.reset();
+                stretch.reset();
                 target = t;
                 st = shared.lock();
                 if st.generation == generation {
@@ -587,23 +593,39 @@ fn demux_loop(shared: &Shared, mut input: Input, vi: i32, mut sound: Option<Deco
         let _ = s.send(more.then_some(&packet));
         let mut out = Vec::new();
         let mut first_pts = None;
+        let mut tempo = stretch.at(rate);
+        // With the filter changing the speed, the resampler leaves it alone.
+        let resampled_for = if tempo.is_some() { 1.0 } else { rate };
         while s.receive() {
             let f = s.frame();
             let pts = s.pts(f);
-            let Ok(mut samples) = resampler.convert(f, rate) else { continue };
+            let Ok(mut samples) = resampler.convert(f, resampled_for) else { continue };
             let t = pts.unwrap_or(f64::NAN);
+            let mut start = t.is_finite().then_some(t);
             if t.is_finite() && t < target {
                 // Drop the part before a seek's target.
-                let skip = (((target - t) * f64::from(OUT_RATE) / rate) as usize * OUT_CHANNELS).min(samples.len());
+                let skip = (((target - t) * f64::from(OUT_RATE) / resampled_for) as usize * OUT_CHANNELS).min(samples.len());
                 samples.drain(..skip);
                 if samples.is_empty() {
                     continue;
                 }
-                first_pts.get_or_insert(target);
-            } else if t.is_finite() {
-                first_pts.get_or_insert(t);
+                start = Some(target);
             }
-            out.extend_from_slice(&samples);
+            if let Some(tempo) = tempo.as_deref_mut() {
+                let _ = tempo.push(&samples, start);
+                start = tempo.pull(&mut out);
+            } else {
+                out.extend_from_slice(&samples);
+            }
+            if let Some(start) = start {
+                first_pts.get_or_insert(start);
+            }
+        }
+        if !more && let Some(tempo) = tempo {
+            let _ = tempo.finish();
+            if let Some(start) = tempo.pull(&mut out) {
+                first_pts.get_or_insert(start);
+            }
         }
         let mut st = shared.lock();
         if st.generation == generation && st.audio_on && !out.is_empty() {

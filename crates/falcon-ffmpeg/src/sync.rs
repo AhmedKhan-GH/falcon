@@ -1,6 +1,7 @@
 //! The player's timing rules, free of FFmpeg so they can be tested: the
 //! wall clock, the audio clock, the queue of decoded frames waiting to be
-//! shown, and the arithmetic of timestamps and seeks.
+//! shown, the arithmetic of timestamps and seeks, and the bookkeeping of
+//! sound stretched to another speed.
 
 use std::collections::VecDeque;
 
@@ -62,7 +63,8 @@ impl WallClock {
 
 /// Where the sound is: the media time of the first sample of the chunk
 /// the output last took, when it took it, and how much media time that
-/// chunk covers. Between takes the clock runs on from the chunk's start,
+/// chunk covers (at speed `rate`, each second of samples covers `rate`
+/// seconds of the clip, whose pitch stays put). Between takes the clock runs on from the chunk's start,
 /// but never past its end, so a starved output stops the clock.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AudioClock {
@@ -75,6 +77,65 @@ pub struct AudioClock {
 impl AudioClock {
     pub fn now(&self, wall: f64) -> f64 {
         self.pts + ((wall - self.taken_at).max(0.0) * self.rate).min(self.span)
+    }
+}
+
+/// Whether sound at `rate` needs stretching. At normal speed (to within
+/// the player's own tolerance) it skips the filter altogether.
+pub fn needs_tempo(rate: f64) -> bool {
+    (rate - 1.0).abs() >= 1e-4
+}
+
+/// The slowest speed one `atempo` filter takes; it goes up to 100, past the
+/// player's fastest.
+const ATEMPO_MIN: f64 = 0.5;
+
+/// The `atempo` speeds to chain for `rate` (clamped to the player's 0.1 to
+/// 16): one filter, with halving filters ahead of it below 0.5, as FFmpeg's
+/// documentation describes. Their product is `rate`.
+pub fn tempo_chain(rate: f64) -> Vec<f64> {
+    let mut left = rate.clamp(0.1, 16.0);
+    let mut chain = Vec::new();
+    while left < ATEMPO_MIN {
+        chain.push(ATEMPO_MIN);
+        left /= ATEMPO_MIN;
+    }
+    chain.push(left);
+    chain
+}
+
+/// The media time of sound coming out of a tempo filter, which holds some
+/// back: every sample out covers `rate` samples in, counted from the time
+/// of the first sample in, so the timestamps on what goes in don't apply to
+/// what comes out of the same call.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TempoTimeline {
+    rate: f64,
+    sample_rate: f64,
+    start: Option<f64>,
+    frames_out: u64,
+}
+
+impl TempoTimeline {
+    pub fn new(rate: f64, sample_rate: u32) -> TempoTimeline {
+        TempoTimeline { rate, sample_rate: f64::from(sample_rate), start: None, frames_out: 0 }
+    }
+
+    /// Notes the time of sound going in; only the first known one counts.
+    pub fn input(&mut self, pts: Option<f64>) {
+        if self.start.is_none() {
+            self.start = pts;
+        }
+    }
+
+    /// The media time of the next sample frame out, once one is known.
+    pub fn next(&self) -> Option<f64> {
+        self.start.map(|s| s + self.frames_out as f64 * self.rate / self.sample_rate)
+    }
+
+    /// Notes `frames` sample frames coming out.
+    pub fn output(&mut self, frames: usize) {
+        self.frames_out += frames as u64;
     }
 }
 
@@ -233,6 +294,53 @@ mod tests {
         assert_eq!(a.now(51.0), 10.01, "a starved output holds the clock");
         let fast = AudioClock { rate: 2.0, span: 1.0, ..a };
         assert_eq!(fast.now(50.25), 10.5);
+    }
+
+    #[test]
+    fn stretched_sound_keeps_the_clock_on_media_time() {
+        // A second of output at double speed covers two seconds of the clip.
+        let a = AudioClock { pts: 3.0, taken_at: 10.0, span: 1024.0 * 2.0 / 48_000.0, rate: 2.0 };
+        assert!((a.now(10.01) - 3.02).abs() < 1e-9);
+        assert_eq!(a.now(11.0), 3.0 + a.span, "a starved output holds the clock");
+    }
+
+    #[test]
+    fn tempo_is_skipped_at_normal_speed() {
+        assert!(!needs_tempo(1.0));
+        assert!(!needs_tempo(1.00001));
+        assert!(needs_tempo(0.75));
+        assert!(needs_tempo(1.25));
+    }
+
+    #[test]
+    fn tempo_chains_stay_in_the_filters_range() {
+        assert_eq!(tempo_chain(2.0), [2.0]);
+        assert_eq!(tempo_chain(0.5), [0.5]);
+        assert_eq!(tempo_chain(16.0), [16.0]);
+        assert_eq!(tempo_chain(0.25), [0.5, 0.5]);
+        assert_eq!(tempo_chain(100.0), [16.0], "clamped to the player's fastest");
+        for rate in [0.1, 0.13, 0.25, 0.3, 0.49, 0.5, 0.75, 1.25, 3.0, 8.0, 16.0] {
+            let chain = tempo_chain(rate);
+            assert!(chain.iter().all(|t| (0.5..=100.0).contains(t)), "{rate}: {chain:?}");
+            assert!((chain.iter().product::<f64>() - rate).abs() < 1e-9, "{rate}: {chain:?}");
+        }
+    }
+
+    #[test]
+    fn tempo_timeline_counts_from_the_first_sample_in() {
+        let mut t = TempoTimeline::new(2.0, 48_000);
+        assert_eq!(t.next(), None, "nothing known yet");
+        t.input(None);
+        assert_eq!(t.next(), None);
+        t.input(Some(5.0));
+        t.input(Some(5.5));
+        assert_eq!(t.next(), Some(5.0), "later times in say nothing of what comes out");
+        t.output(24_000);
+        assert_eq!(t.next(), Some(6.0), "half a second out at 2x is a second of the clip");
+        let mut slow = TempoTimeline::new(0.25, 48_000);
+        slow.input(Some(0.0));
+        slow.output(48_000);
+        assert_eq!(slow.next(), Some(0.25));
     }
 
     #[test]

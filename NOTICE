@@ -39,7 +39,7 @@ Third-party material:
 - FFmpeg 7.1.5 (https://ffmpeg.org/releases/ffmpeg-7.1.5.tar.xz), licensed
   under the GNU Lesser General Public License version 2.1 or later. It is not
   part of this source tree and is not linked into Falcon. When built with
-  scripts/build-ffmpeg.sh (decode only, no GPL or nonfree parts; the configure
+  scripts/build-ffmpeg.sh (decode and the atempo filter only, no GPL or nonfree parts; the configure
   line is in that script and in docs/src/video.md), Falcon.app carries its
   unmodified shared libraries in Contents/Frameworks, and the LGPL text and a note of the
   version, source and configure line in Contents/Resources/FFmpeg
