@@ -84,6 +84,17 @@ Third-party material:
   Marius Bancila; unordered_dense (https://github.com/martinus/unordered_dense),
   MIT license, copyright (c) 2022 Martin Leitner-Ankerl. Falcon.app carries
   each licence text in Contents/Resources/web-ifc.
+- candle 0.11.1 (https://github.com/huggingface/candle), which runs AI Search's
+  model, MIT or Apache-2.0, copyright (c) The Candle Authors; tokenizers 0.23.2
+  (https://github.com/huggingface/tokenizers) and safetensors 0.8.0
+  (https://github.com/huggingface/safetensors), Apache-2.0, copyright (c)
+  Hugging Face; gemm 0.19.0 (https://github.com/sarah-quinones/gemm), MIT
+  license, copyright (c) sarah quinones.
+- The CLIP ViT-B/32 LAION-2B model
+  (https://huggingface.co/laion/CLIP-ViT-B-32-laion2B-s34B-b79K), MIT license as
+  declared on its model card, by LAION. Not part of this source tree or of
+  Falcon's download: Falcon fetches it at a pinned commit with pinned SHA-256
+  hashes only when the user chooses to in Preferences.
 
 "Eagle" is a trademark of its respective owner. Falcon is not affiliated
 with, endorsed by or sponsored by Eagle or its developers.
