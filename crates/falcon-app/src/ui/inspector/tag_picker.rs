@@ -28,11 +28,14 @@ fn column_label(label: &str) -> &str {
     }
 }
 
-/// The panel's size, as Eagle opens it.
-const WIDTH: f32 = 320.0;
+/// The panel's size, as Eagle's styles open it (wider with its sidebar).
+const WIDTH: f32 = 360.0;
+const WIDTH_SIDEBAR: f32 = 540.0;
 const HEIGHT: f32 = 480.0;
-const SIDEBAR_W: f32 = 112.0;
-const CELL_H: f32 = 26.0;
+const SIDEBAR_W: f32 = 180.0;
+const HEADER_H: f32 = 40.0;
+const FOOTER_H: f32 = 40.0;
+const CELL_H: f32 = 25.0;
 const GAP: f32 = 2.0;
 
 /// The picker's state while it is open.
@@ -122,7 +125,8 @@ impl App {
         }
 
         let screen = ctx.content_rect();
-        let size = vec2(WIDTH.min(screen.width() - 20.0), HEIGHT.min(screen.height() - 60.0));
+        let width = if sidebar { WIDTH_SIDEBAR } else { WIDTH };
+        let size = vec2(width.min(screen.width() - 20.0), HEIGHT.min(screen.height() - 60.0));
         // At the pointer, then moved left of the inspector, as Eagle does.
         let anchor = p.anchor.unwrap_or(Pos2::new(screen.right() - t::INSPECTOR_WIDTH, screen.top() + 80.0));
         let mut x = anchor.x - size.x / 2.0;
@@ -256,7 +260,9 @@ impl App {
                         close = true;
                     }
                 });
-                ui.add_space(6.0);
+                ui.separator();
+                // The list's height, leaving room for the shortcut footer.
+                let list_h = (size.y - 16.0 - HEADER_H - FOOTER_H).max(60.0);
                 ui.horizontal_top(|ui| {
                     if sidebar {
                         ui.vertical(|ui| {
@@ -288,7 +294,8 @@ impl App {
                             row(ui, Side::Ungrouped, None, tr("Ungrouped"));
                         });
                     }
-                    egui::ScrollArea::vertical().id_salt("tag-picker-list").auto_shrink([false, false]).show(ui, |ui| {
+                    // Stacked: a scroll area lays its contents out as its parent does.
+                    ui.vertical(|ui| egui::ScrollArea::vertical().id_salt("tag-picker-list").max_height(list_h).auto_shrink([false, false]).show(ui, |ui| {
                         ui.set_width(list_w);
                         if targets.is_empty() {
                             ui.add_space(40.0);
@@ -310,11 +317,12 @@ impl App {
                                     Kind::Group(g) => groups.get(g).map_or_else(String::new, |g| g.name.clone()),
                                     Kind::Others | Kind::Results => tr("Others").to_string(),
                                 };
-                                let (r, resp) = ui.allocate_exact_size(vec2(list_w, 26.0), Sense::click());
+                                ui.add_space(6.0);
+                                let (r, resp) = ui.allocate_exact_size(vec2(list_w, 36.0), Sense::click());
                                 let caret = if collapsed { ic::CARET_RIGHT } else { ic::CARET_DOWN };
-                                icon(ui, Pos2::new(r.left() + 6.0, r.center().y), caret, 10.0, t::p().text_muted);
+                                icon(ui, Pos2::new(r.right() - 10.0, r.center().y), caret, 10.0, t::p().text_muted);
                                 let g = galley(ui, &format!("{title}  ({})", sec.picks.len()), font(12.0), t::p().text_muted, list_w - 20.0);
-                                ui.painter().galley(Pos2::new(r.left() + 16.0, r.center().y - g.size().y / 2.0), g, t::p().text_muted);
+                                ui.painter().galley(Pos2::new(r.left() + 6.0, r.center().y - g.size().y / 2.0), g, t::p().text_muted);
                                 if resp.on_hover_text(tr("Click to fold or unfold")).clicked() {
                                     toggle = Some(sec.kind);
                                 }
@@ -329,8 +337,13 @@ impl App {
                                         let k = row * cols + c;
                                         let (r, resp) = ui.allocate_exact_size(vec2(cell_w, CELL_H), Sense::click());
                                         let lit = p.highlight == Some((si, k));
+                                        if let Pick::Tag(i) = pick
+                                            && selected.contains(&entries[*i].name)
+                                        {
+                                            ui.painter().rect_filled(r, CornerRadius::same(6), t::p().row_selected);
+                                        }
                                         if lit {
-                                            ui.painter().rect_filled(r, t::RADIUS, t::p().row_selected);
+                                            ui.painter().rect(r, CornerRadius::same(6), t::p().row_hover, Stroke::new(1.0, t::p().field_border), egui::StrokeKind::Inside);
                                             if std::mem::take(&mut p.reveal) {
                                                 ui.scroll_to_rect(r, None);
                                             }
@@ -349,7 +362,17 @@ impl App {
                             }
                             ui.add_space(4.0);
                         }
-                    });
+                    }));
+                });
+                ui.separator();
+                ui.horizontal_centered(|ui| {
+                    ui.spacing_mut().item_spacing.x = 12.0;
+                    if sidebar {
+                        shortcut_tip(ui, tr("Switch"), &["Tab"]);
+                    }
+                    shortcut_tip(ui, tr("Move"), &["↑", "↓", "←", "→"]);
+                    shortcut_tip(ui, tr("Select"), &["⏎"]);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| shortcut_tip(ui, tr("Close"), &["ESC"]));
                 });
             });
         });
@@ -431,6 +454,22 @@ impl App {
 
 /// One cell: a check for tags all the items have, the group's colour dot,
 /// the name, and the count.
+/// One hint in the footer: a label and its keys.
+fn shortcut_tip(ui: &mut Ui, label: &str, keys: &[&str]) {
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.x = 2.0;
+        let g = galley(ui, label, font(11.0), t::p().text_muted, 120.0);
+        let (r, _) = ui.allocate_exact_size(vec2(g.size().x + 2.0, 16.0), Sense::hover());
+        ui.painter().galley(Pos2::new(r.left(), r.center().y - g.size().y / 2.0), g, t::p().text_muted);
+        for key in keys {
+            let k = galley(ui, key, font(10.0), t::p().text, 40.0);
+            let (r, _) = ui.allocate_exact_size(vec2(k.size().x + 8.0, 16.0), Sense::hover());
+            ui.painter().rect_filled(r, CornerRadius::same(3), t::p().button);
+            ui.painter().galley(r.center() - k.size() / 2.0, k, t::p().text);
+        }
+    });
+}
+
 #[allow(clippy::too_many_arguments)]
 fn draw_cell(ui: &Ui, r: Rect, pick: &Pick, entries: &[tags::Entry], groups: &[falcon_library::model::TagGroup], selected: &[String], counts: bool, side: Side) {
     let p = ui.painter();
@@ -449,20 +488,16 @@ fn draw_cell(ui: &Ui, r: Rect, pick: &Pick, entries: &[tags::Entry], groups: &[f
         Pick::Tag(i) => {
             let e = &entries[*i];
             let on = selected.contains(&e.name);
-            let mut x = r.left() + 6.0;
-            if on {
-                icon(ui, Pos2::new(x + 5.0, cy), ic::CHECK, 11.0, t::p().primary);
-            }
-            x += 14.0;
+            // Eagle's cell: 6 px in, a 10 px colour slot, 6 px, then the name.
+            let x = r.left() + 22.0;
             if let Some(g) = e.group().and_then(|g| groups.get(g)) {
                 let c = crate::folder_icons::color(g.color.as_deref()).unwrap_or(t::p().icon_none);
-                p.circle_filled(Pos2::new(x + 3.0, cy), 3.5, c);
-                x += 11.0;
+                p.circle_filled(Pos2::new(r.left() + 11.0, cy), 3.5, c);
             }
             let ng = (counts && e.count > 0).then(|| galley(ui, &e.count.to_string(), font(11.0), t::p().text_muted, 50.0));
             let room = r.right() - x - 6.0 - ng.as_ref().map_or(0.0, |g| g.size().x + 6.0);
             let color = if on { t::p().text } else { t::p().text_value };
-            let g = galley(ui, &e.name, font(12.0), color, room);
+            let g = galley(ui, &e.name, font(13.0), color, room);
             p.galley(Pos2::new(x, cy - g.size().y / 2.0), g, color);
             if let Some(ng) = ng {
                 p.galley(Pos2::new(r.right() - 6.0 - ng.size().x, cy - ng.size().y / 2.0), ng, t::p().text_muted);
