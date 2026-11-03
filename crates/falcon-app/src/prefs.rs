@@ -744,6 +744,8 @@ pub struct Window {
     auto_import_note: Option<String>,
     /// The login item as read when the window opened or last applied.
     login: crate::login_item::Status,
+    /// Where the window opens: over the middle of the main window.
+    open_at: Option<egui::Pos2>,
 }
 
 /// Size of the window, close to Eagle's.
@@ -812,6 +814,7 @@ impl Window {
         self.recorder.stop();
         self.password = PasswordForm::default();
         self.auto_import_note = None;
+        self.open_at = None;
     }
 
     /// The keys and the capture-key switch being edited, while the window
@@ -872,22 +875,47 @@ impl Window {
             self.open = false;
             return None;
         };
-        // A shortcut being recorded takes the key presses first, so Esc
-        // and ⌘↩ can be recorded instead of closing the window.
-        self.recorder.capture(ctx, &mut draft.keys);
+        let id = egui::ViewportId::from_hash_of("falcon-preferences");
+        // The main window waits behind it, dimmed; a click there brings
+        // Preferences back to the front.
+        let behind = egui::Modal::new(egui::Id::unique("preferences-behind")).frame(egui::Frame::NONE).show(ctx, |_| {});
+        if behind.backdrop_response.clicked() {
+            ctx.send_viewport_cmd_to(id, egui::ViewportCommand::Focus);
+        }
+        if self.open_at.is_none() {
+            self.open_at = ctx.input(|i| i.viewport().outer_rect).map(|r| r.center() - SIZE / 2.0);
+        }
+        let title = tr("Preferences");
+        let mut builder = egui::ViewportBuilder::default()
+            .with_title(title)
+            .with_inner_size(SIZE)
+            .with_resizable(false)
+            .with_minimize_button(false)
+            .with_maximize_button(false)
+            .with_fullsize_content_view(true)
+            .with_titlebar_shown(false)
+            .with_title_shown(false)
+            .with_transparent(crate::vibrancy::SUPPORTED);
+        if let Some(at) = self.open_at {
+            builder = builder.with_position(at);
+        }
         let port = parse_port(&self.port_text);
-        let (save_key, esc) = ctx.input_mut(|i| {
-            (i.consume_key(Modifiers::COMMAND, Key::Enter), i.consume_key(Modifiers::NONE, Key::Escape))
-        });
         let mut result = None;
-        let mut close = esc;
-        let frame = egui::Frame::NONE.fill(ctx.global_style().visuals.window_fill).stroke(Stroke::new(1.0, t::p().divider)).corner_radius(CornerRadius::same(10));
-        egui::Modal::new(egui::Id::unique("preferences")).frame(frame).show(ctx, |ui| {
-            ui.set_width(SIZE.x);
-            ui.set_height(SIZE.y);
+        let mut close = false;
+        ctx.show_viewport_immediate(id, builder, |ui, _class| {
+            let ctx = ui.ctx().clone();
+            crate::vibrancy::sync_window(&ctx, title, draft.prefs.vibrancy);
+            // A shortcut being recorded takes the key presses first, so Esc
+            // and ⌘↩ can be recorded instead of closing the window.
+            self.recorder.capture(&ctx, &mut draft.keys);
+            let (save_key, esc, cmd_w, close_requested) = ctx.input_mut(|i| {
+                (i.consume_key(Modifiers::COMMAND, Key::Enter), i.consume_key(Modifiers::NONE, Key::Escape), i.consume_key(Modifiers::COMMAND, Key::W), i.viewport().close_requested())
+            });
+            close |= esc || cmd_w || close_requested;
             let full = ui.max_rect();
-            let nav = egui::Rect::from_min_size(full.min, vec2(NAV_WIDTH, SIZE.y));
-            let body = egui::Rect::from_min_max(egui::pos2(nav.right(), full.top()), egui::pos2(full.left() + SIZE.x, full.top() + SIZE.y));
+            ui.painter().rect_filled(full, 0.0, crate::vibrancy::Surface::BoxWindow.fill(t::p().panel, draft.prefs.vibrancy));
+            let nav = egui::Rect::from_min_size(full.min, vec2(NAV_WIDTH, full.height()));
+            let body = egui::Rect::from_min_max(egui::pos2(nav.right(), full.top()), full.max);
             let mut nav_ui = ui.new_child(egui::UiBuilder::new().max_rect(nav.shrink2(vec2(12.0, 0.0))));
             self.nav(&mut nav_ui);
 
@@ -898,6 +926,7 @@ impl Window {
             let heading = if searching { tr("Search") } else { tr(self.section.label()) };
             ui.painter().text(header.left_center() + vec2(16.0, 0.0), Align2::LEFT_CENTER, heading, font(14.0), t::p().text);
             let x = egui::Rect::from_center_size(header.right_center() - vec2(24.0, 0.0), vec2(24.0, 24.0));
+            crate::ui::widgets::window_drag(ui, header.with_max_x(x.left()), "prefs-header");
             let xr = ui.interact(x, ui.scope_id().with("close"), Sense::click());
             if xr.hovered() {
                 ui.painter().rect_filled(x, CornerRadius::same(6), t::p().button_hover);
@@ -1039,8 +1068,9 @@ impl Window {
     }
 
     fn nav(&mut self, ui: &mut Ui) {
+        // The window's buttons sit in this row, and it moves the window.
         let (title, _) = ui.allocate_exact_size(vec2(ui.available_width(), t::BAR_HEIGHT), Sense::hover());
-        ui.painter().text(title.left_center(), Align2::LEFT_CENTER, tr("Preferences"), font(14.0), t::p().text);
+        crate::ui::widgets::window_drag(ui, title, "prefs-nav");
         let search = ui.add(
             egui::TextEdit::singleline(&mut self.query)
                 .hint_text(RichText::new(format!("{}  {}", crate::icons::MAGNIFYING_GLASS, tr("Search"))).color(t::p().text_muted))

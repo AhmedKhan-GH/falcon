@@ -9,7 +9,7 @@
 //!   blur of the desktop. An `NSVisualEffectView` sits behind wgpu's
 //!   `CAMetalLayer` and the window is filled at 75%, the alpha of Eagle's
 //!   `--color-theme-75`.
-//! - Menus, popups, tooltips and dialogs inside a window are filled at 90%,
+//! - Menus, popups, tooltips and dialogs inside a window are filled at 94%,
 //!   with no blur. egui can't leave its window, so they can only show that
 //!   window's content, and blurring it would take a second render of the
 //!   frame (Eagle's CSS `backdrop-filter` gets that from the browser). A
@@ -35,9 +35,9 @@ use eframe::egui::{self, Color32};
 /// on macOS.
 pub const WINDOW_ALPHA: u8 = 191;
 
-/// The opacity of a box inside a window, 90%. With no blur to soften what
-/// is behind it, more would show through than text can stand.
-pub const BOX_ALPHA: u8 = 230;
+/// The opacity of a box inside a window, 94%. With no blur to soften what is
+/// behind it, the captions of the grid read through a menu's text at 90%.
+pub const BOX_ALPHA: u8 = 240;
 
 /// Whether separate windows can be blurred. Only macOS has the blur.
 pub const SUPPORTED: bool = cfg!(target_os = "macos");
@@ -363,6 +363,19 @@ mod tests {
         assert!((panel[1] - a).abs() < 1e-6);
         assert_eq!(over(panel, [1.0, 1.0])[1], 1.0);
         assert!(over(panel, [0.3, 0.3])[1] > a);
+    }
+
+    #[test]
+    fn the_switch_shows_while_preferences_is_open_and_cancel_takes_it_back() {
+        use crate::prefs::{Draft, Panels, Prefs, Window};
+        let saved = Prefs::default();
+        let mut w = Window::default();
+        assert_eq!(w.live_vibrancy(), None, "closed, the saved value counts");
+        let prefs = Prefs { vibrancy: true, ..Prefs::default() };
+        w.show_with(Draft { prefs, panels: Panels { sidebar: true, inspector: true }, keys: Default::default(), launch_at_login: false });
+        assert_eq!(w.live_vibrancy(), Some(true));
+        w.close();
+        assert!(!w.live_vibrancy().unwrap_or(saved.vibrancy));
     }
 
     #[test]
