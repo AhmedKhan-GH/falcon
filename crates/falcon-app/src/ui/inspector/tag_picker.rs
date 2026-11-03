@@ -57,6 +57,9 @@ pub(crate) struct TagPicker {
     collapsed: HashSet<Kind>,
     /// Where the pointer was when it opened.
     anchor: Option<Pos2>,
+    /// Where it was placed when it opened, so resizing moves only the edge
+    /// being dragged.
+    placed: Option<Pos2>,
     /// Put the cursor in the search field next frame.
     focus: bool,
     /// The frame it opened in: the click that opened it is not a click
@@ -85,6 +88,7 @@ impl App {
         p.focus = true;
         p.opened = ctx.cumulative_frame_nr();
         p.anchor = at.or_else(|| ctx.pointer_latest_pos());
+        p.placed = None;
     }
 
     fn close_tag_picker(&mut self) {
@@ -141,6 +145,10 @@ impl App {
         }
         let x = x.clamp(screen.left() + 10.0, (screen.right() - size.x - 10.0).max(screen.left() + 10.0));
         let y = (anchor.y - 20.0).clamp(screen.top() + 40.0, (screen.bottom() - size.y - 10.0).max(screen.top() + 40.0));
+        let placed = *p.placed.get_or_insert(Pos2::new(x, y));
+        // Still on screen if the window has shrunk since.
+        let x = placed.x.min((screen.right() - size.x - 10.0).max(screen.left() + 10.0));
+        let y = placed.y.min((screen.bottom() - size.y - 10.0).max(screen.top() + 40.0));
         let list_w = size.x - 24.0 - if sidebar { SIDEBAR_W } else { 0.0 };
         let cols = tags::columns(list_w, prefs.column, prefs.list);
         let lens: Vec<usize> = sections.iter().map(|s| if p.collapsed.contains(&s.kind) && s.kind != Kind::Results { 0 } else { s.picks.len() }).collect();
