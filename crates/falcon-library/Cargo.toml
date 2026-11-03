@@ -37,6 +37,7 @@ regex = "1"
 ufbx = "0.8.0"
 roxmltree = "0.21"
 moxcms = "0.8"
+fancy-regex = "0.20.0"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"

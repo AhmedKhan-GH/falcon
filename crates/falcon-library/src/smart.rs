@@ -9,7 +9,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use chrono::{Local, NaiveDate, TimeZone};
-use regex::{Regex, RegexBuilder};
+use fancy_regex::{Regex, RegexBuilder};
 use serde_json::{Map, Value, json};
 
 use crate::edit::{display_name, now_ms};
@@ -110,14 +110,15 @@ impl<'a> Context<'a> {
     }
 
     /// Whether `pattern` matches somewhere in `text`. A pattern that doesn't
-    /// compile never matches.
+    /// compile never matches, nor does one whose backtracking runs past the
+    /// limit on this text.
     fn test(&self, pattern: &str, ignore_case: bool, text: &str) -> bool {
         let mut cache = self.regexes[usize::from(ignore_case)].borrow_mut();
         if !cache.contains_key(pattern) {
-            let re = RegexBuilder::new(pattern).case_insensitive(ignore_case).size_limit(1 << 20).build().ok();
+            let re = RegexBuilder::new(pattern).case_insensitive(ignore_case).delegate_size_limit(1 << 20).backtrack_limit(100_000).build().ok();
             cache.insert(pattern.to_string(), re);
         }
-        cache[pattern].as_ref().is_some_and(|re| re.is_match(text))
+        cache[pattern].as_ref().is_some_and(|re| re.is_match(text).unwrap_or(false))
     }
 }
 
@@ -325,9 +326,9 @@ fn text_rule(text: &str, method: &str, value: &Value, cx: &Context) -> bool {
 /// Eagle's string methods. `startWith` and `endWith` build a
 /// case-insensitive regex from `^` + value and value + `$`, so the value is
 /// a pattern there too. Eagle runs JavaScript `RegExp`; falcon runs the
-/// `regex` crate, which has no look-around or backreferences (such a
-/// pattern never matches) and is Unicode-aware for `\w`, `\d`, `\b` and
-/// case folding where JavaScript without the `u` flag is ASCII-only. Note
+/// `fancy-regex` crate, which has look-around and backreferences as
+/// JavaScript does and is Unicode-aware for `\w`, `\d`, `\b` and case
+/// folding where JavaScript without the `u` flag is ASCII-only. Note
 /// that Eagle lower-cases the pattern along with the value for the
 /// lower-cased rules, so `\D` becomes `\d`; falcon does the same.
 fn string_method(text: &str, method: &str, v: &str, cx: &Context) -> bool {
@@ -945,7 +946,10 @@ mod tests {
         let r = |m: &str, v: &str| one(&it, json!({"property": "name", "method": m, "value": v}), None);
         assert!(r("regex", "^report \\d{4}") && !r("regex", "^\\d"), "a real regex, on lower-cased text");
         assert!(r("regex", "REPORT"), "the pattern is lower-cased too");
-        assert!(!r("regex", "(") && !r("regex", "(?<=x)y"), "a pattern that doesn't compile never matches");
+        assert!(!r("regex", "(") && !r("regex", "(?<=x"), "a pattern that doesn't compile never matches");
+        assert!(r("regex", "(?<=report )\\d{4}") && !r("regex", "(?<!report )\\d{4}"), "look-behind, as JavaScript's");
+        assert!(r("regex", "\\d(?=\\.v)") && !r("regex", "4(?=\\d)"), "look-ahead");
+        assert!(r("regex", "(\\d)\\d\\1") && !r("regex", "(\\d)\\1"), "backreferences: 202 repeats its 2");
         assert!(r("startWith", "rep") && r("endWith", "v\\d") && r("startWith", "r.p"), "begins/ends take patterns");
         assert!(!r("regex", ""), "an empty value is refused");
     }
