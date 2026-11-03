@@ -538,6 +538,9 @@ impl App {
         if let Some(d) = self.prefs_window.show(&ctx) {
             self.apply_preferences(d);
         }
+        if let Some(e) = self.prefs_window.take_key_error() {
+            self.flash_error(crate::locale::trf("Could not save the key: {e}", &[("e", &e)]));
+        }
         self.import_dialogs(&ctx);
         self.import_links_ui(&ctx);
         self.about_ui(&ctx);

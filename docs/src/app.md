@@ -725,7 +725,7 @@ Tests: the state machine (delay, scrub mapping, rest and resume, loop, leave end
 
 ## Preferences
 
-⌘, (or Preferences… in the app menu) opens a window over the main one, laid out like Eagle's: a search box above the list of panes on the left, the pane on the right, and Save, Apply and Cancel at the bottom. The panes follow Eagle's order, with separators between groups: General, Sidebar | Controls, Preview, Screenshot, Shortcuts | Notification, Password, Auto-Import | Eagle MCP | Developer. Eagle's AI and Proxy panes are not built; a pane appears only once it has a working setting. Each pane is one function in `crates/falcon-app/src/prefs.rs` that adds titled blocks to a `Page`.
+⌘, (or Preferences… in the app menu) opens a window over the main one, laid out like Eagle's: a search box above the list of panes on the left, the pane on the right, and Save, Apply and Cancel at the bottom. The panes follow Eagle's order, with separators between groups: General, Sidebar | Controls, Preview, Screenshot, Shortcuts | Notification, Password, Auto-Import | AI Models, Eagle MCP | Developer. Eagle's AI Search and Proxy panes are not built; a pane appears only once it has a working setting. Each pane is one function in `crates/falcon-app/src/prefs.rs` that adds titled blocks to a `Page`.
 
 Typing in the search box shows the matching blocks of every pane under the pane's name. A block matches when every word typed appears in the pane name, the block title or its keywords (case-insensitive), as Eagle's blocks carry keyword lists. The Shortcuts pane appears in the results as a button that opens it. The last pane shown is remembered across launches, as Eagle remembers it.
 
@@ -798,6 +798,36 @@ What Eagle does, from `js/default-preferences.js`, `preferences.html`, `js/prefe
 - Built in falcon since: the menu bar icon option, the collect modal for screenshots, and screenshots with their keys, format, quality, tag, clipboard and @2x settings.
 - Built in falcon since: sound effects (see below).
 - Not built in falcon: GPU, proxy, the AI panes.
+
+### AI Models
+
+Preferences ▸ AI Models is one place to add AI providers. Every AI feature in falcon uses them through the `falcon-ai` crate, as Eagle's AI plugins share its `ai-sdk`. Falcon's copy is its own: it uses the same provider ids and `provider::model` names and never reads Eagle's plugin data.
+
+| Provider | Id | Kind | Key | Base URL when left empty |
+|---|---|---|---|---|
+| OpenAI | `openai` | Cloud | Required | `https://api.openai.com/v1` |
+| Anthropic | `anthropic` | Cloud | Required | `https://api.anthropic.com/v1` |
+| Google Gemini | `google` | Cloud | Required | `https://generativelanguage.googleapis.com/v1beta` |
+| DeepSeek | `deepseek` | Cloud | Required | `https://api.deepseek.com/v1` |
+| Tongyi Qwen | `tongyi` | Cloud | Required | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
+| Ollama | `ollama` | Local | None | `http://localhost:11434/v1` |
+| LM Studio | `lmstudio` | Local | None | `http://localhost:1234/v1` |
+| OpenAI-compatible | `openai-compatible` | Custom | Optional | None; it must be typed |
+
+No provider is added at first, and falcon sends nothing until one is. Even then a request goes out only when you press Verify or run an AI step; nothing is fetched at launch or in the background.
+
+- **Add Provider** adds a box with the key field, the base URL and Verify. **Remove** takes the provider out, clears any default model that names it, and removes its stored key.
+- **Verify** asks the provider for its model list, off the UI thread, with the key as typed or else as stored. It says how many models there are or why it failed, and fills the list that Default Models offers. Cancel stops it.
+- **Default Models** holds the chat and vision model as `provider::model`, typed or chosen from the fetched lists. The name splits at the first `::`, so `ollama::qwen3.8:27b` is a valid name.
+- As with the other panes, the settings stay in the draft until Save or Apply, and a typed key waits with them. Save or Apply writes it to the Keychain; Cancel forgets it.
+
+**Keys** are kept in the macOS Keychain as generic passwords: service `Falcon AI Models`, account the provider id. They are never in the library, the saved preferences, a log or an error text. An error from a provider has the key taken out and is cut to 300 characters. A key goes in a request header, never in a URL, and only over https or over http to this Mac. A base URL with a user name, query or fragment is refused.
+
+**The interface** (`crates/falcon-ai`) offers `generate_text`, `stream_text`, `generate_object` (a reply checked against a JSON schema) and images as parts of a message. Six providers speak the OpenAI chat format; Anthropic and Gemini have their own. DeepSeek and Tongyi get `json_object` with the schema in the instructions; Anthropic gets one forced output tool; every reply is checked against the schema in falcon either way. Requests to Ollama turn off a thinking model's reasoning (`reasoning_effort: "none"`).
+
+Calls block their caller, so features make them off the UI thread and never hold the library lock meanwhile. Each takes a cancel flag and has timeouts for connecting, the first piece of the reply, the gap between pieces and the whole call: 2 minutes, 1 minute and 5 minutes for cloud providers, and 10, 3 and 20 minutes for local and custom servers, which may have to load a large model first. Replies are always streamed, so a slow model isn't mistaken for a dead one. Redirects are refused, so neither the key nor the items can be passed on to another host.
+
+Only the Ollama path has run against a real service. The other providers are tested against a local mock server.
 
 ### Transparency effects
 

@@ -210,6 +210,9 @@ pub struct Prefs {
     /// Eagle's `notification.soundEffect`: the master switch and the
     /// per-event switches (`sounds.rs`).
     pub sounds: crate::sounds::SoundPrefs,
+    /// Preferences ▸ AI Models: the providers added and the default models
+    /// (`ai_models.rs`). Keys are in the Keychain, never here.
+    pub ai_models: falcon_ai::Settings,
 }
 
 /// What a middle click on a card in the grid does.
@@ -380,6 +383,7 @@ impl Default for Prefs {
             notify_export_done: true,
             typo_search: true,
             sounds: Default::default(),
+            ai_models: Default::default(),
         }
     }
 }
@@ -652,9 +656,8 @@ pub struct Draft {
     pub launch_at_login: bool,
 }
 
-/// The panes, in Eagle's order. Eagle's AI, MCP and Proxy panes have no
-/// counterpart (falcon has no plugins or network features), and a pane
-/// appears only once it has a setting that works.
+/// The panes, in Eagle's order. Eagle's MCP and Proxy panes have no
+/// counterpart, and a pane appears only once it has a setting that works.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum Section {
@@ -668,6 +671,8 @@ pub enum Section {
     Notification,
     Password,
     AutoImport,
+    #[serde(rename = "aimodels")]
+    AiModels,
     Mcp,
     Developer,
 }
@@ -683,6 +688,7 @@ impl Section {
         Section::Notification,
         Section::Password,
         Section::AutoImport,
+        Section::AiModels,
         Section::Mcp,
         Section::Developer,
     ];
@@ -699,6 +705,7 @@ impl Section {
             Section::Notification => tr_key("Notification"),
             Section::Password => tr_key("Password"),
             Section::AutoImport => tr_key("Auto-Import"),
+            Section::AiModels => tr_key("AI Models"),
             Section::Mcp => tr_key("Eagle MCP"),
             Section::Developer => tr_key("Developer"),
         }
@@ -715,6 +722,7 @@ impl Section {
             Section::Notification => crate::icons::BELL,
             Section::Password => crate::icons::LOCK_SIMPLE,
             Section::AutoImport => crate::icons::TRAY_ARROW_DOWN,
+            Section::AiModels => crate::icons::CHAT_CIRCLE,
             Section::Mcp => crate::icons::CHAT_CIRCLE,
             Section::Developer => crate::icons::CODE,
         }
@@ -727,7 +735,7 @@ impl Section {
             Section::General | Section::Sidebar => 0,
             Section::Controls | Section::Preview | Section::Screenshot | Section::Shortcuts => 1,
             Section::Notification | Section::Password | Section::AutoImport => 2,
-            Section::Mcp => 3,
+            Section::AiModels | Section::Mcp => 3,
             Section::Developer => 4,
         }
     }
@@ -771,6 +779,8 @@ pub struct Window {
     login: crate::login_item::Status,
     /// Where the window opens: over the middle of the main window.
     open_at: Option<egui::Pos2>,
+    /// The AI Models pane's keys and Verify.
+    ai: crate::ai_models::Pane,
 }
 
 /// Size of the window, close to Eagle's.
@@ -841,6 +851,7 @@ impl Window {
         self.password = PasswordForm::default();
         self.auto_import_note = None;
         self.open_at = None;
+        self.ai.reset();
     }
 
     /// The keys and the capture-key switch being edited, while the window
@@ -881,6 +892,12 @@ impl Window {
         self.open = false;
         self.draft = None;
         self.recorder.stop();
+        self.ai.reset();
+    }
+
+    /// Why the last Save or Apply couldn't change an API key, once.
+    pub fn take_key_error(&mut self) -> Option<String> {
+        self.ai.take_key_error()
     }
 
     /// The pane shown last, remembered across launches as Eagle does.
@@ -1004,6 +1021,7 @@ impl Window {
                 self.applied_theme = draft.prefs.theme;
                 self.applied_zoom = draft.prefs.ui_zoom;
                 self.applied_language = draft.prefs.language;
+                self.ai.commit();
                 result = Some(draft.clone());
                 close |= save || save_key;
             }
@@ -1033,6 +1051,7 @@ impl Window {
             Section::Notification => notification(p, d),
             Section::Password => password(p, d, &mut self.password),
             Section::AutoImport => auto_import(p, d, self.library.as_deref(), &mut self.auto_import_note),
+            Section::AiModels => self.ai.ui(p, &mut d.prefs.ai_models),
             Section::Mcp => mcp::pane(p, d, &mut self.mcp_port_text, self.mcp_status),
             Section::Developer => developer(p, d, &mut self.port_text, port_error),
         }
@@ -1138,7 +1157,7 @@ impl Window {
     }
 }
 
-fn note(ui: &mut Ui, text: &str) {
+pub(crate) fn note(ui: &mut Ui, text: &str) {
     ui.label(RichText::new(text).size(11.0).color(t::p().text_muted));
 }
 
@@ -1896,7 +1915,7 @@ mod tests {
     #[test]
     fn panes_follow_eagles_order() {
         let labels: Vec<_> = Section::ALL.iter().map(|s| s.label()).collect();
-        assert_eq!(labels, ["General", "Sidebar", "Controls", "Preview", "Screenshot", "Shortcuts", "Notification", "Password", "Auto-Import", "Eagle MCP", "Developer"]);
+        assert_eq!(labels, ["General", "Sidebar", "Controls", "Preview", "Screenshot", "Shortcuts", "Notification", "Password", "Auto-Import", "AI Models", "Eagle MCP", "Developer"]);
         let groups: Vec<_> = Section::ALL.iter().map(|s| s.group()).collect();
         assert!(groups.windows(2).all(|w| w[0] <= w[1]), "groups are contiguous");
         let s: Section = serde_json::from_str(r#""preview""#).unwrap();

@@ -1795,6 +1795,7 @@ dependencies = [
  "chrono",
  "drag",
  "eframe",
+ "falcon-ai",
  "falcon-library",
  "falcon-pdf",
  "falcon-server",
