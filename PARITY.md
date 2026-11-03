@@ -6,11 +6,11 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
-| Main window: menus, shortcuts, toolbar, sidebar, layouts | 270 | 0 | 0 | 8 |
+| Main window: menus, shortcuts, toolbar, sidebar, layouts | 271 | 0 | 0 | 7 |
 | Viewers and file formats | 206 | 0 | 0 | 5 |
-| Search, filters and organising | 220 | 0 | 0 | 3 |
-| Import, export, library, preferences and integrations | 198 | 0 | 0 | 27 |
-| **Total** | 894 | 0 | 0 | 43 |
+| Search, filters and organising | 223 | 0 | 0 | 0 |
+| Import, export, library, preferences and integrations | 205 | 0 | 0 | 20 |
+| **Total** | 905 | 0 | 0 | 32 |
 
 Rows marked **Not wanted (user decision)** (12) are Eagle features the user chose not to have in falcon; they are counted outside the local Missing total. Rows marked **Accepted difference (user decision)** (7) are counted outside the Partial total.
 ## Fix first
@@ -30,7 +30,7 @@ These are bugs, not missing features. The first four can lose data or edits.
 
 1. ~~Every viewer opens inside the window between the sidebar and inspector in Eagle, with a toolbar button that hides both. Falcon does this only for PDFs.~~ Fixed: every viewer draws in the central panel, with the panels button, ⌥⌘3 and Tab.
 2. ~~No application menu bar.~~ Fixed: native File / Edit / Find / Organize / View / Window / Help menus with live shortcuts and falcon's own Actions menu while falcon has actions (Eagle's is the `ai-action` plugin).
-3. ~~Preferences: 8 panes and about 30 settings against Eagle's 13 panes and about 80 settings; the rest are listed in §6.~~ Fixed: Preferences has every local pane and setting of Eagle's except GPU acceleration (not built); vibrancy, the App menu's Color Space and the sound effects are Partial, and plugin shortcuts and plugin developer tools are open with the plugin system. The extension, Proxy, AI Search, AI Models and MCP settings are online or plugin and absent.
+3. ~~Preferences: 8 panes and about 30 settings against Eagle's 13 panes and about 80 settings; the rest are listed in §6.~~ Fixed: Preferences has every local pane and setting of Eagle's except GPU acceleration (not built); vibrancy, the App menu's Color Space and the sound effects are Partial, and plugin shortcuts and plugin developer tools are open with the plugin system. The extension and Proxy settings are online and absent; AI Search, AI Models and Eagle MCP are built in.
 4. ~~The full-size image is capped at 3072 px.~~ Fixed: the original is tiled at full resolution; HEIC/AVIF/JXL still come from a 3072 px QuickLook render (no decoders).
 5. ~~Folder import flattens structure; no duplicate check on import; no import error list.~~ Fixed.
 6. ~~No export of items or folders, and no CSV export.~~ Fixed.
@@ -252,10 +252,10 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Refresh button in the Random view | Done | Button on the Random page and in folders or smart folders sorted at random, plus R and View ▸ Shuffle Again | local |
 | Layout and sort panel button | Done | `app/layout_panel.rs` in Eagle's order (layout, Fit/Fill, sort, Show Name/Info/Extension/Label/Comments/Subfolders, sidebar and inspector, Refresh); no Speed/Quality | local |
 | Filter button with an active state | Done | ui/toolbar/mod.rs `toolbar` | local |
-| Search field with a scope menu (Tags / URL / Comment / Note) and a search-by-image camera | Done | Search scope menu on the caret (`search_scope_menu`); the camera is drawn disabled; search by image is counted with the online and plugin rows | local |
+| Search field with a scope menu (Tags / URL / Comment / Note) and a search-by-image camera | Done | Search scope menu on the caret (`search_scope_menu`); the camera searches by image on the device (see the Visual Match row) | local |
 | Actions button | Done | Falcon's own implementation of a feature that is a plugin in Eagle (`ai-action`): the lightning button left of the layout button opens the panel under it and is hidden on All Tags, as in Eagle (`ui/toolbar/mod.rs`) | local |
 | Plugins button | Missing | Drawn disabled (ui/toolbar/mod.rs `toolbar`) | online/plugin |
-| AI Search button | Missing |  | online/plugin |
+| AI Search button | Done | Built in, not a plugin; not seen on screen, by the user's decision. The toolbar sparkle button switches the search box to descriptions (`app/ai_search.rs`); its place left of the funnel is falcon's guess | local |
 | Show-inspector button when the inspector is hidden | Done | app/mod.rs `draw` | local |
 | "Move duplicates to trash" button on the duplicates page | Done | ui/grid/duplicates.rs `merge_review` (cross-ref) | local |
 | Sidebar header "Add" button that opens the New… menu | Done | The + opens the New… menu, next to the Go to Folder button | local |
@@ -884,7 +884,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Pinyin matching for folder, smart folder and tag names in sidebar and tag lists | Not wanted (user decision) | Not built by decision (2026-11-01): the user does not want pinyin search in falcon | local |
 | Toolbar title reads "Search results" while searching | Done | `ui/toolbar/mod.rs` | local |
 | Empty-result message | Done | `ui/grid/empty.rs`: per-view messages (No Matches, Drop Files Here, Trash Is Empty, All Sorted…) | local |
-| Search by image from the search box (AI) | Missing | The camera icon is drawn disabled (`ui/toolbar/mod.rs` search_field) | online/plugin |
+| Search by image from the search box (AI) | Done | Built in, not a plugin; not seen on screen, by the user's decision. The camera offers Choose Image… and Paste Image, and a picture can be dropped on the search box; all on the device through `falcon-clip` | local |
 
 ### 2. Filter bar (general)
 
@@ -927,8 +927,8 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Comment (region and video comments): has, none, or keywords | Done | `Filter::comments`; saved under the `annotation` key | local |
 | Camera: pick from the cameras present | Done | `ui/filter_bar/media.rs` media_chip (Camera) | local |
 | Font: activated or deactivated | Done | `ui/filter_bar/media.rs` media_chip (Font) | local |
-| Visual Match (find by image, drop or paste an image) | Missing | AI search service | online/plugin |
-| Semantic search ("black cat") | Missing | AI search service | online/plugin |
+| Visual Match (find by image, drop or paste an image) | Done | Built in, not a plugin; not seen on screen, by the user's decision. Item menu ▸ Visual Match, the `find.filter.image` row and the camera, on the device through `falcon-clip`; score cut-offs tuned on 33 test pictures, unproven on real libraries | local |
+| Semantic search ("black cat") | Done | Built in, not a plugin; not seen on screen, by the user's decision. On-device CLIP through candle, with `laion/CLIP-ViT-B-32-laion2B-s34B-b79K` (MIT card licence). The top result was right for 12 of 12 test classes on 33 pictures; English queries | local |
 
 ### 4. Sorting
 
@@ -1156,7 +1156,7 @@ Status values: Done = works as in Eagle. Partial = exists but is missing options
 | Save the current filter (and search) under a name | Done | `ui/organize.rs` filter_name_dialog, `E:334` | local |
 | Apply, rename, remove, reorder saved filters | Done | `ui/organize.rs` saved_filters_menu, apply_saved_filter | local |
 | Saving keeps every active rule | Done | `SavedFilter::rule_from_filter` in model.rs writes dates (Eagle's shared `import.range`), duration (`min`/`max`/`unit`), camera and font in Eagle's key names; Date Created goes under falcon's own `btime` key | local |
-| Applying restores every saved rule | Done | `SavedFilter::to_filter` restores every rule; only Eagle's AI rules (`image`, `semantic`) are skipped with a warning | local |
+| Applying restores every saved rule | Done | `SavedFilter::to_filter` restores every rule; only Eagle's AI rules (`image`, `semantic`) are skipped with a warning, though AI Search exists now | local |
 | Saved filters button appears in the filter bar | Done | `ui/organize.rs` saved_filters_menu, drawn by `ui/filter_bar/mod.rs` filter_bar | local |
 
 ### 15. Cross-references (other agents' areas)
@@ -1178,7 +1178,7 @@ Ranked by user impact. Data-loss and silent-mismatch bugs come first, then every
 5. ~~Folder description and inspector rename don't save.~~ Fixed.
 6. ~~Clicking a folder chip in the inspector removes the item from the folder.~~ Fixed: it opens the folder; the chip's × removes.
 7. ~~**No size or dimensions filter chips.** The engine supports them, but there's no UI.~~ Fixed.
-8. ~~**No Comment filter, and comments, camera, text content and fonts aren't searched.** There's also no Search Scope menu.~~ Fixed; the search-by-image camera stays disabled (online).
+8. ~~**No Comment filter, and comments, camera, text content and fonts aren't searched.** There's also no Search Scope menu.~~ Fixed; the search-by-image camera works on the device through AI Search.
 9. ~~The smart folder dialog has no date picker and shows no live hit count.~~ Fixed.
 10. ~~No tag picker.~~ Fixed.
 11. ~~**No exclude, search or tag-group options in the Tag, Folder and Type filters.** Also no type groups (video, audio, font...).~~ Fixed.
@@ -1203,7 +1203,7 @@ Ranked by user impact. Data-loss and silent-mismatch bugs come first, then every
 30. **Search extras**: Search All is done. Chinese traditional/simplified matching and pinyin sidebar search are not wanted (user decision). Falcon's own fuzzy matching is a documented falcon extra, on by default with a switch.
 31. ~~**Minor UI gaps**: Smart Folders and Folders section headers don't fold; the bulk-action gate doesn't cover every newer command yet.~~ Fixed.
 
-Online/plugin only (not ranked): Visual Match, Semantic search, the search-by-image button.
+Visual Match, Semantic search and the search-by-image button are built in through AI Search.
 
 ## Import, export, library, preferences and integrations
 
@@ -1420,9 +1420,9 @@ Eagle panes (`app/js/preferences.js:659-788`): General, Sidebar, Controls, Previ
 | Notification: pop-up master switch, plus per event (screenshot, extension, duplicates, auto-import) | Done | Master switch plus duplicates, import done, auto-import, screenshot and export switches; the extension event has no local counterpart | local |
 | **Password:** enable the app password lock, change the password, Lock Now, Touch ID | Done | Set, change, remove, hint, Lock Now ⌥⌘L, Unlock with Touch ID (shown when available, fingerprint checked when turned on, as Eagle) | local |
 | **Auto-Import:** enable, choose folder, open folder | Done | `prefs.rs` `auto_import` pane: enable, Choose Folder…, Open Folder, Make It for the watched subfolder | local |
-| **AI Search** pane (install, enable or disable the local semantic-search plugin) | Missing | — | online/plugin |
-| **AI Models** pane (shared API keys for OpenAI, Anthropic, Gemini and so on) | Missing | — | online/plugin |
-| **Eagle MCP** pane (install or open the MCP server plugin) | Missing | — | online/plugin |
+| **AI Search** pane (install, enable or disable the local semantic-search plugin) | Done | Built in, not a plugin; not seen on screen, by the user's decision. Preferences ▸ AI Search: model name, size, licence and source, download with a pinned revision and SHA-256, use switch, progress, Pause, Rebuild, Remove Model | local |
+| **AI Models** pane (shared API keys for OpenAI, Anthropic, Gemini and so on) | Done | Built in, not a plugin; not seen on screen, by the user's decision. Preferences ▸ AI Models with Eagle's eight providers, keys in the Keychain, Verify, model lists and default models (`falcon-ai`). Tested for real on Ollama with `qwen3.8:27b`; the other seven only against a mock | local |
+| **Eagle MCP** pane (install or open the MCP server plugin) | Done | Built in, not a plugin; not seen on screen, by the user's decision. Preferences ▸ Eagle MCP: off by default, status, port, client config, separate off-by-default write tools and optional token (`falcon_server::mcp`) | local |
 | **Developer:** show, copy and regenerate the API token | Done | Developer pane: empty by default like Eagle, Generate when empty, Copy / Regenerate / link when set; an empty token means Host-check-only auth (`authorized` in `falcon-server`) | local |
 | Developer (falcon only): API on or off, and first port | Done (beyond Eagle) | `prefs.rs:339-358` | local |
 | Developer: plugin developer tools | Not wanted (user decision) | Not applicable: no plugin system | local |
@@ -1477,7 +1477,7 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 | `smartFolder/get`, `create`, `update`, `remove`, `getItems`, `getRules` | Done | `lib.rs:395-400,534-539` | local |
 | `tag/get`, `getRecentTags`, `getStarredTags`, `update`, `merge` | Done | `lib.rs:401-405,523-527` | local |
 | `tagGroup/get`, `create`, `update`, `remove`, `addTags`, `removeTags` | Done | `lib.rs:406-411,528-533` | local |
-| `aiSearch/*` (isInstalled, isReady, isStarting, isSyncing, getSyncStatus, checkServiceHealth, searchByText, searchByBase64, searchByItemId) | Missing | — | online/plugin |
+| `aiSearch/*` (isInstalled, isReady, isStarting, isSyncing, getSyncStatus, checkServiceHealth, searchByText, searchByBase64, searchByItemId) | Done | All nine routes on the existing port (`falcon-server`). PARITY only names them, so the reply shapes are falcon's reading, stated in `docs/src/http-api.md`; the `falcon` CLI server always answers not installed | local |
 | Interactive API playground page | Done | `/api/v2/playground` (`crates/falcon-server/src/playground.html`) | local |
 
 ### 8. Integrations
@@ -1495,10 +1495,10 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 | Plugin system: window, inspector, format (thumbnail and preview) and background-service plugins | Not wanted (user decision) | Out of scope: Eagle's plugin platform | local |
 | Plugin Center (browse, install, update, disable or uninstall; sort and search) | Missing | — | online/plugin |
 | Plugin development (create from template, import a local project, pack, publish, reload, DevTools) | Not wanted (user decision) | Out of scope: Eagle's plugin platform | local |
-| Actions (recorded multi-step automations with shortcuts) | Done | Falcon's own implementation of a feature that is a plugin in Eagle (`ai-action`): seven rule steps (add/remove/clear tags, add/remove/clear folders, rating) run in order on the multi-selection as one undo step, with per-action app-wide shortcuts and the 30-item confirm. The plugin's AI steps (auto-tag, describe) need AI Models, counted with the plugin rows (see PLUGINS.md) | local |
-| AI Search: semantic and similar-image search on the device | Missing | — | online/plugin (model download) |
-| AI Models: shared model configuration | Missing | — | online/plugin |
-| Eagle MCP server plugin | Missing | — | online/plugin |
+| Actions (recorded multi-step automations with shortcuts) | Done | Falcon's own implementation of a feature that is a plugin in Eagle (`ai-action`): seven rule steps (add/remove/clear tags, add/remove/clear folders, rating) run in order on the multi-selection as one undo step, with per-action app-wide shortcuts and the 30-item confirm. AI steps (auto-tag, write a description) run through AI Models, one undo step, failures stated per item; tested for real on Ollama, and a description can invent detail | local |
+| AI Search: semantic and similar-image search on the device | Done | Built in, not a plugin; not seen on screen, by the user's decision. See the Semantic search and Visual Match rows. Only the model download uses the network | local |
+| AI Models: shared model configuration | Done | Built in, not a plugin; not seen on screen, by the user's decision. `crates/falcon-ai`: one interface for text, streaming, structured output and images. See the AI Models pane row | local |
+| Eagle MCP server plugin | Done | Built in, not a plugin; not seen on screen, by the user's decision. 127.0.0.1 only, read tools by default, write tools opt-in, foreign Host and Origin refused, 15 end-to-end tests over real HTTP; no real MCP client has connected yet | local |
 | Reverse image search on web engines | Missing | — | online |
 | Licence activation, trial, unregister, device management, licence recovery | Missing (not needed) | Falcon is free software | online |
 | Check for updates, update dialog, minor update, Rosetta warning | Missing | — | online |

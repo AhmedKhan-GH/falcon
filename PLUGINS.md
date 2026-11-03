@@ -1,26 +1,12 @@
 # Plugins
 
-Eagle 4.0.0 provides some features through plugins rather than the app itself. Falcon has no plugin functionality for now. This file lists everything plugin-related in Eagle, so it can be built later. Everything here comes from Eagle 4.0.0's shipped code. The rows are counted as online/plugin in [PARITY.md](PARITY.md), not as local gaps.
+Eagle 4.0.0 provides some features through plugins rather than the app itself. Falcon has no plugin system. This file lists everything plugin-related in Eagle and what falcon built in its place. Everything here comes from Eagle 4.0.0's shipped code. The rows are counted as online/plugin in [PARITY.md](PARITY.md), not as local gaps.
 
 ## Remaining plugins
 
-Falcon already has its own versions of three of Eagle's plugins, built into the app: Actions (`ai-action`), Export in Format (`custom-export`) and Combine Images (`combine-images`). Three remain, plus Search by Image, which isn't planned. Each would be a normal falcon feature, not a plugin; the plugin platform below isn't needed for them.
+Falcon has its own built-in versions of six of Eagle's plugins: Actions (`ai-action`, including its AI steps), Export in Format (`custom-export`), Combine Images (`combine-images`), Eagle MCP (`mcp-server`), AI Models (`ai-sdk`) and AI Search (`ai-search`). None of them needs the plugin platform below.
 
-| Order | Plugin | Feature | Effort | Depends on | Network |
-| --- | --- | --- | --- | --- | --- |
-| 1 | `mcp-server` | Eagle MCP: a Model Context Protocol server on localhost so AI assistants on the same Mac can use the library | Medium | Falcon's HTTP API (exists) | None (localhost only) |
-| 2 | `ai-sdk` | AI Models: API keys and model settings for Eagle's eight providers, shared by every AI feature (design below) | Medium | Nothing | Only to providers you add |
-| 3 | `ai-search` | AI Search: semantic text search and similar-image search on the device, with the toolbar button, the search box's camera, Visual Match and Eagle's `aiSearch/*` API routes | Large | Nothing | One-off model download |
-
-Search by Image isn't planned, because it only works by sending your images to outside search engines. AI Search covers similar images within your own library.
-
-After these, there's one follow-up: AI steps in Actions (auto-tag, write a description), which need AI Models.
-
-Steps to finish:
-
-1. One orchestrator round with a builder per plugin. AI Search may take two.
-2. A follow-up for the AI steps in Actions.
-3. Verification: tests, a spot-check of the new rows, and hand checks. The AI parts need an API key, or Ollama or LM Studio running.
+Search by Image (`eagle-plugin-search-by-image`) is the one left, and it isn't planned, because it only works by sending your images to outside search engines. AI Search covers similar images within your own library.
 
 ## The plugin platform
 
@@ -55,9 +41,9 @@ Eagle's app has built-in hooks for these specific plugins, found by their plugin
 
 Eagle's video player also has an internal component called `eagle-notes` that shows timed comments. It isn't an Eagle plugin, and falcon already has timed video comments.
 
-## How falcon would build them
+## How falcon built them
 
-All but one can be plain local code with no outside service:
+All but Search by Image are plain local code with no outside service:
 
 | Plugin | Falcon plan |
 | --- | --- |
@@ -102,5 +88,6 @@ The Plugin Center also offers community plugins that aren't in Eagle's code. The
 - Falcon has its own Actions (panel, editor, per-action shortcuts, Actions menu, toolbar button, G), built into the app. They are stored in falcon's app data for each library. Falcon never reads or writes Eagle's `actions.config.json`.
 - Falcon has its own Export in Format (⇧E): JPG, PNG or WebP, with quality and size. In Eagle this is the `custom-export` plugin.
 - Falcon has its own Combine Images (⇧⌘M): several selected images laid out in a row, a column or a grid and saved as a new PNG item. In Eagle this is the `combine-images` plugin, which isn't installed here, so falcon's dialog is its own design.
-- Falcon's typo-tolerant search is its own feature, not Eagle's AI Search.
-- The HTTP API answers Eagle's routes but not `aiSearch/*`.
+- Falcon has its own Eagle MCP, AI Models and AI Search, described in the app chapter of the docs. AI Search uses `laion/CLIP-ViT-B-32-laion2B-s34B-b79K`, because `openai/clip-vit-base-patch32` states no licence on its model page and has no safetensors on its main branch.
+- Falcon's typo-tolerant search is its own feature, separate from AI Search.
+- The HTTP API answers Eagle's routes, including `aiSearch/*`, whose reply shapes are falcon's reading of their names.

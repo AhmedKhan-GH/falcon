@@ -13,7 +13,7 @@ The second part, [The desktop app](app.md), describes falcon's desktop app: its 
 
 ## Status
 
-Falcon is early alpha and unsigned. [PARITY.md](https://github.com/AhmedKhan-GH/falcon/blob/main/PARITY.md) compares it with Eagle 4.0.0 feature by feature, checked against falcon's code. Of Eagle's 901 local features, 894 are done and 7 are accepted differences; none is partly done or missing. That is about 99% done. Another 43 need an online service, an account or Eagle's plugin system and are counted separately. [ROADMAP.md](https://github.com/AhmedKhan-GH/falcon/blob/main/ROADMAP.md) lists what is left and what comes later.
+Falcon is early alpha and unsigned. [PARITY.md](https://github.com/AhmedKhan-GH/falcon/blob/main/PARITY.md) compares it with Eagle 4.0.0 feature by feature, checked against falcon's code. Of Eagle's 912 features outside the online set, 905 are done and 7 are accepted differences; none is partly done or missing. That is about 99% done. Another 32 need an online service, an account or Eagle's plugin system and are counted separately. [ROADMAP.md](https://github.com/AhmedKhan-GH/falcon/blob/main/ROADMAP.md) lists what is left and what comes later.
 
 Falcon handles exactly Eagle's set of file formats. [FORMATS.md](https://github.com/AhmedKhan-GH/falcon/blob/main/FORMATS.md) lists each one and its status. Falcon has no plugin system: Actions and Export in Format are built into the app, and [PLUGINS.md](https://github.com/AhmedKhan-GH/falcon/blob/main/PLUGINS.md) lists the plugins Eagle provides that falcon could build later.
 

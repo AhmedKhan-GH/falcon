@@ -8,7 +8,7 @@ Falcon is early alpha. This page summarises what is done, what is left and what 
 
 ## Done
 
-Of the 901 local features in PARITY.md, 894 are done and 7 are accepted differences; none is partly done or missing. That is about 99% done. A further 43 need an online service, an account or Eagle's plugin system and are counted separately.
+Of the 912 features in PARITY.md outside the online set, 905 are done and 7 are accepted differences; none is partly done or missing. That is about 99% done. A further 32 need an online service, an account or Eagle's plugin system and are counted separately.
 
 - **Library:** reads and writes Eagle-format libraries, byte-identical on round trips, with backups, restore, duplicate detection, `.eaglepack` import and export, a watched import folder, reloading on outside changes and sync conflict detection.
 - **Import:** thumbnails and colour palettes, folders with their structure, links, paste, drag and drop, screen capture and background imports.
@@ -17,6 +17,7 @@ Of the 901 local features in PARITY.md, 894 are done and 7 are accepted differen
 - **Browse:** four layouts, marquee selection, hover previews that play the file itself, themes and a native menu bar.
 - **Viewers:** images at full resolution, GIF and animated WebP and AVIF, video with an FFmpeg fallback that includes AV1 and keeps the pitch at other speeds, audio, fonts, a text editor, the PDF reader with its tools and its layer tree, interactive 3D with textures, full IFC through web-ifc, PSD and AI at full resolution, and live web pages and MHTML.
 - **File formats:** exactly Eagle's set, listed in [FORMATS.md](FORMATS.md).
+- **AI:** on-device AI Search, AI Models with Eagle's eight providers (tested for real on Ollama only), AI steps in Actions and a local MCP server, none of them yet seen on screen.
 - **App:** preferences panes, localisation into eight languages, sound effects, Actions and Export in Format built into the app, the local HTTP API and the command-line tool.
 
 ## Left
@@ -34,7 +35,7 @@ No local feature in [PARITY.md](PARITY.md) is missing or partly done. What follo
 
 ## Later
 
-- **Plugins:** the Eagle MCP server, AI Models and AI Search, in the order given in [PLUGINS.md](PLUGINS.md). Search by Image isn't planned. Falcon has no plugin system and none is planned; each would be a built-in feature.
+- **Plugins:** Search by Image isn't planned, and there's no plugin system. The Eagle MCP server, AI Models and AI Search are built in ([PLUGINS.md](PLUGINS.md)). Falcon has no plugin system and none is planned; each would be a built-in feature.
 - **Out of scope:** Windows and Linux builds (falcon runs on macOS only, and several viewers use macOS frameworks), a GPU acceleration switch, Eagle's script and inject features, and every online feature.
 - **Formats beyond Eagle's set:** listed at the end of [FORMATS.md](FORMATS.md) and not planned.
 - **Releases:** signed and notarised macOS builds. Falcon is unsigned today.
