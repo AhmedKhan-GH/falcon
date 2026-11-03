@@ -434,6 +434,9 @@ pub(crate) struct Workspace {
     pub(crate) export: crate::ui::dialogs::export::ExportState,
     /// The modal for long operations (`ui/dialogs/progress.rs`).
     pub(crate) op: crate::ui::dialogs::progress::ProgressModal,
+    /// A run with AI steps going in the background, or ended and not yet
+    /// reported (`actions/ai/background.rs`).
+    pub(crate) ai_run: Option<crate::actions::ai::background::BackgroundRun>,
     /// Folders and smart folders picked with ⌘ and ⇧ (`ui/sidebar/folders.rs`).
     pub(crate) folders: crate::ui::sidebar::folders::FolderUi,
     /// Polls the library for changes made by other apps (`watch.rs`).
@@ -537,6 +540,7 @@ impl Workspace {
             backup: crate::backups::Schedule::new(Instant::now()),
             export: Default::default(),
             op: Default::default(),
+            ai_run: None,
             folders: Default::default(),
         }
     }

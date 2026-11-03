@@ -10,8 +10,9 @@
 //! dialog, so Cancel leaves no new library behind) and the HTTP API's
 //! `library/switch`. The API's library goes back out of the shown slot before
 //! the question, so the running tasks never write to the other one; Cancel
-//! leaves the API on the shown library. Eagle's block during an AI action has
-//! no counterpart, as falcon has no AI actions.
+//! leaves the API on the shown library. Eagle blocks a switch during an AI
+//! action; falcon's AI runs are one more task that keeps running in its own
+//! library, so this warning covers them.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};

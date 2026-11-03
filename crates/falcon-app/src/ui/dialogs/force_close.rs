@@ -28,11 +28,13 @@ pub(crate) struct Counts {
     pub import_done: usize,
     /// A progress-modal operation, exports included.
     pub op_working: bool,
+    /// A run with AI steps, which has no modal.
+    pub ai_working: bool,
 }
 
 impl Counts {
     pub fn running(&self) -> bool {
-        (self.import_total > 0 && self.import_done < self.import_total) || self.op_working
+        (self.import_total > 0 && self.import_done < self.import_total) || self.op_working || self.ai_working
     }
 }
 
@@ -61,19 +63,22 @@ pub(crate) fn body(library: &str) -> String {
     trf("Tasks are still running in {library}. Closing it stops them. Work already done is kept.", &[("library", &library)])
 }
 
-/// Whether imports, a long operation or an export are running in `ws`,
+/// Whether imports, a long operation, an export or an AI run are running in `ws`,
 /// shown or in the background.
 pub(crate) fn tasks_running(ws: &Workspace) -> bool {
     let (import_total, import_done) = {
         let p = ws.progress.lock().unwrap_or_else(|p| p.into_inner());
         (p.total, p.done)
     };
-    Counts { import_total, import_done, op_working: ws.op.working() }.running()
+    Counts { import_total, import_done, op_working: ws.op.working(), ai_working: ws.ai_run.as_ref().is_some_and(|r| r.working()) }.running()
 }
 
 pub(crate) fn stop_tasks(ws: &Workspace) {
     ws.progress.lock().unwrap_or_else(|p| p.into_inner()).cancel = true;
     ws.op.cancel();
+    if let Some(run) = &ws.ai_run {
+        run.cancel();
+    }
 }
 
 impl App {
@@ -159,6 +164,7 @@ mod tests {
         assert!(Counts { import_total: 5, import_done: 2, ..Default::default() }.running());
         assert!(!Counts { import_total: 5, import_done: 5, ..Default::default() }.running());
         assert!(Counts { op_working: true, ..Default::default() }.running());
+        assert!(Counts { ai_working: true, ..Default::default() }.running());
     }
 
     #[test]

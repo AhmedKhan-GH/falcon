@@ -1,5 +1,5 @@
-//! Quitting while tasks run. Imports, a progress-modal operation or an
-//! export in any open library would be cut off by a quit, so the first
+//! Quitting while tasks run. Imports, a progress-modal operation, an export
+//! or an AI run in any open library would be cut off by a quit, so the first
 //! request asks, as closing one library does (`force_close.rs`). Stopping
 //! waits for the workers, then the window closes for real, so the usual
 //! save and backup on quit still run.

@@ -36,6 +36,7 @@
   "Accented": "악센트 문자",
   "Access": "접근",
   "Accuracy": "정확도",
+  "Action finished": "동작 완료",
   "Actions": "동작",
   "Actions don't run in the Trash": "휴지통에서는 동작이 실행되지 않습니다",
   "Activate": "활성화",
@@ -902,6 +903,8 @@
   "Isolate (again to show all)": "분리(다시 누르면 모두 표시)",
   "It is on an NTFS drive. NTFS drivers on macOS are slow and less reliable; a drive formatted as APFS or exFAT works better.": "NTFS 드라이브에 있습니다. macOS의 NTFS 드라이버는 느리고 안정성이 떨어지므로 APFS 또는 exFAT로 포맷한 드라이브를 권장합니다.",
   "It may be incomplete or damaged; export or download it again. ({error})": "불완전하거나 손상되었을 수 있습니다. 다시 내보내거나 내려받으세요. ({error})",
+  "It was deleted during the run": "실행 중에 삭제되었습니다",
+  "It was moved to the Trash during the run": "실행 중에 휴지통으로 이동되었습니다",
   "Items": "항목",
   "Items already in this library were left as they are.": "이 라이브러리에 이미 있던 항목은 그대로 두었습니다.",
   "Items in no other folder still go to the Trash": "다른 폴더에 없는 항목은 휴지통으로 이동합니다",
@@ -962,6 +965,7 @@
   "Library not found": "라이브러리를 찾을 수 없음",
   "Library reloaded": "라이브러리를 다시 불러왔습니다",
   "Library switch over the API canceled": "API를 통한 라이브러리 전환이 취소되었습니다",
+  "Library: {library}": "라이브러리: {library}",
   "Licence: {licence}": "라이선스: {licence}",
   "Licensed under MIT or Apache-2.0": "MIT 또는 Apache-2.0 라이선스",
   "Light": "라이트",
@@ -1617,6 +1621,7 @@
   "Running at {address}": "{address}에서 실행 중",
   "Running on {device}": "{device}에서 실행 중",
   "Running {name}": "{name} 실행 중",
+  "Running {name} in {library}": "{library}에서 {name} 실행 중",
   "Sa": "토",
   "Sample language": "샘플 언어",
   "Saturation and Brightness": "채도 및 밝기",
@@ -1922,6 +1927,7 @@
   "The language of the sample text and the thumbnail": "샘플 텍스트와 썸네일의 언어",
   "The library is a folder stored on this Mac. Back it up as you would any other files.": "라이브러리는 이 Mac에 저장되는 폴더입니다. 다른 파일처럼 백업해 두세요.",
   "The library is still missing": "라이브러리를 아직 찾을 수 없습니다",
+  "The library isn't open any more": "라이브러리가 더 이상 열려 있지 않습니다",
   "The library was reloaded.": "라이브러리를 다시 불러왔습니다.",
   "The library's actions file could not be read: {e}": "라이브러리의 동작 파일을 읽을 수 없습니다: {e}",
   "The list can't be brought back. The files themselves are not touched.": "목록은 되돌릴 수 없습니다. 파일 자체는 변경되지 않습니다.",
@@ -2049,6 +2055,7 @@
   "Uncategorized Items": "미분류 항목",
   "Undid: {label}": "실행 취소: {label}",
   "Undo": "실행 취소",
+  "Undo in {library} reverses all of this run's changes.": "{library}에서 실행 취소하면 이번 실행의 모든 변경 사항이 되돌아갑니다.",
   "Undo reverses all of this run's changes.": "실행 취소하면 이번 실행의 변경 사항이 모두 되돌려집니다.",
   "Ungroup {n} tags": {
     "other": "태그 {n}개 그룹 해제"
@@ -2374,6 +2381,7 @@
   "{first}–{last} would include port {port}, used by other MCP servers": "{first}–{last}에는 다른 MCP 서버가 사용하는 포트 {port}이(가) 포함됩니다",
   "{folders} and {items} from {path} will be added. Folders, smart folders and tag groups already here are kept as they are, and so are items already here.": "{path}에서 {folders}와(과) {items}이(가) 추가됩니다. 이미 있는 폴더, 스마트 폴더, 태그 그룹과 항목은 그대로 유지됩니다.",
   "{hex}  ·  {ratio}%\nClick for colour values, right-click to find similar colours": "{hex}  ·  {ratio}%\n클릭하면 색상 값 표시, 오른쪽 클릭하면 비슷한 색상 찾기",
+  "{library}: {message}": "{library}: {message}",
   "{lib}'s metadata.json was damaged and was restored from backup/{name}; the damaged file was kept in backup/": "{lib}의 metadata.json이 손상되어 backup/{name}에서 복원했습니다. 손상된 파일은 backup/에 보관되어 있습니다.",
   "{message}; scaled down to {width} × {height} px to fit the size limit": "{message}. 크기 제한에 맞게 {width} × {height} px로 축소했습니다",
   "{message}; skipped {n} items (animated)": {
@@ -2400,6 +2408,7 @@
   "{name} changed {n} items": {
     "other": "{name}이(가) 항목 {n}개를 변경했습니다"
   },
+  "{name} is still running in {library}. Wait for it to finish or cancel it before starting another AI run.": "{name}이(가) {library}에서 아직 실행 중입니다. 다른 AI 실행을 시작하기 전에 끝날 때까지 기다리거나 취소하세요.",
   "{name} may not save changes": "\"{name}\"의 변경 사항이 저장되지 않을 수 있음",
   "{name} now has {n} items": {
     "other": "{name}에 이제 항목 {n}개가 있습니다"
@@ -2492,6 +2501,9 @@
   },
   "{n} items that are not images will be skipped.": {
     "other": "이미지가 아닌 항목 {n}개는 건너뜁니다."
+  },
+  "{n} items were skipped:": {
+    "other": "{n}개 항목을 건너뛰었습니다:"
   },
   "{n} items whose folder is gone are dropped.": {
     "other": "폴더가 없어진 항목 {n}개는 제외됩니다."

@@ -156,10 +156,14 @@ impl App {
             }
             None => return,
         };
+        let ai_run = crate::actions::ai::background::settle_closing(&mut closed);
         if let Err(e) = closed.flush_and_backup() {
             self.flash_error(trf("Could not save: {e}", &[("e", &e)]));
         }
         drop(closed);
+        if let Some(ended) = ai_run {
+            self.present_ai_run(ended);
+        }
         self.serve_active();
     }
 

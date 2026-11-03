@@ -36,6 +36,7 @@
   "Accented": "С диакритикой",
   "Access": "Доступ",
   "Accuracy": "Точность",
+  "Action finished": "Действие завершено",
   "Actions": "Действия",
   "Actions don't run in the Trash": "В корзине действия не выполняются",
   "Activate": "Включить",
@@ -996,6 +997,8 @@
   "Isolate (again to show all)": "Изолировать (ещё раз — показать все)",
   "It is on an NTFS drive. NTFS drivers on macOS are slow and less reliable; a drive formatted as APFS or exFAT works better.": "Она находится на диске NTFS. Драйверы NTFS в macOS медленные и менее надёжные; диск в формате APFS или exFAT работает лучше.",
   "It may be incomplete or damaged; export or download it again. ({error})": "Возможно, он неполный или повреждён; экспортируйте или скачайте его заново. ({error})",
+  "It was deleted during the run": "Удалён во время запуска",
+  "It was moved to the Trash during the run": "Перемещён в корзину во время запуска",
   "Items": "Элементы",
   "Items already in this library were left as they are.": "Элементы, уже имеющиеся в этой библиотеке, остались без изменений.",
   "Items in no other folder still go to the Trash": "Элементы, которых нет в других папках, всё равно попадут в корзину",
@@ -1056,6 +1059,7 @@
   "Library not found": "Библиотека не найдена",
   "Library reloaded": "Библиотека перезагружена",
   "Library switch over the API canceled": "Переключение библиотеки через API отменено",
+  "Library: {library}": "Библиотека: {library}",
   "Licence: {licence}": "Лицензия: {licence}",
   "Licensed under MIT or Apache-2.0": "Лицензия MIT или Apache-2.0",
   "Light": "Светлый",
@@ -1791,6 +1795,7 @@
   "Running at {address}": "Запущен по адресу {address}",
   "Running on {device}": "Работает на: {device}",
   "Running {name}": "Выполняется «{name}»",
+  "Running {name} in {library}": "Выполняется {name} в {library}",
   "Sa": "Сб",
   "Sample language": "Язык образца",
   "Saturation and Brightness": "Насыщенность и яркость",
@@ -2114,6 +2119,7 @@
   "The language of the sample text and the thumbnail": "Язык образца текста и миниатюры",
   "The library is a folder stored on this Mac. Back it up as you would any other files.": "Библиотека — это папка на этом Mac. Делайте её резервные копии, как и других файлов.",
   "The library is still missing": "Библиотека по-прежнему не найдена",
+  "The library isn't open any more": "Библиотека больше не открыта",
   "The library was reloaded.": "Библиотека перезагружена.",
   "The library's actions file could not be read: {e}": "Не удалось прочитать файл действий библиотеки: {e}",
   "The list can't be brought back. The files themselves are not touched.": "Список нельзя вернуть. Сами файлы не затрагиваются.",
@@ -2253,6 +2259,7 @@
   "Uncategorized Items": "Элементы без папки",
   "Undid: {label}": "Отменено: {label}",
   "Undo": "Отменить",
+  "Undo in {library} reverses all of this run's changes.": "Отмена в {library} вернёт все изменения этого запуска.",
   "Undo reverses all of this run's changes.": "Отмена вернёт все изменения этого запуска.",
   "Ungroup {n} tags": {
     "few": "Разгруппировать {n} тега",
@@ -2588,6 +2595,7 @@
   "{first}–{last} would include port {port}, used by other MCP servers": "{first}–{last} включает порт {port}, который используют другие серверы MCP",
   "{folders} and {items} from {path} will be added. Folders, smart folders and tag groups already here are kept as they are, and so are items already here.": "Из {path} будут добавлены {folders} и {items}. Уже имеющиеся здесь папки, смарт-папки, группы тегов и элементы останутся без изменений.",
   "{hex}  ·  {ratio}%\nClick for colour values, right-click to find similar colours": "{hex}  ·  {ratio}%\nЩелчок — значения цвета, правый щелчок — поиск похожих цветов",
+  "{library}: {message}": "{library}: {message}",
   "{lib}'s metadata.json was damaged and was restored from backup/{name}; the damaged file was kept in backup/": "Файл metadata.json библиотеки «{lib}» был повреждён и восстановлен из backup/{name}; повреждённый файл сохранён в backup/.",
   "{message}; scaled down to {width} × {height} px to fit the size limit": "{message}; уменьшено до {width} × {height} пкс из-за предела размера",
   "{message}; skipped {n} items (animated)": {
@@ -2628,6 +2636,7 @@
     "many": "«{name}»: изменено {n} элементов",
     "one": "«{name}»: изменён {n} элемент"
   },
+  "{name} is still running in {library}. Wait for it to finish or cancel it before starting another AI run.": "{name} всё ещё выполняется в {library}. Дождитесь завершения или отмените его, прежде чем запускать ещё один запуск ИИ.",
   "{name} may not save changes": "«{name}» может не сохранять изменения",
   "{name} now has {n} items": {
     "few": "В «{name}» теперь {n} элемента",
@@ -2782,6 +2791,11 @@
     "few": "{n} элемента, не являющихся изображениями, будут пропущены.",
     "many": "{n} элементов, не являющихся изображениями, будут пропущены.",
     "one": "{n} элемент, не являющийся изображением, будет пропущен."
+  },
+  "{n} items were skipped:": {
+    "few": "Пропущено {n} элемента:",
+    "many": "Пропущено {n} элементов:",
+    "one": "Пропущен {n} элемент:"
   },
   "{n} items whose folder is gone are dropped.": {
     "few": "{n} элемента, папки которых пропали, исключаются.",

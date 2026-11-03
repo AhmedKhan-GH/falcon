@@ -9,7 +9,7 @@
 //! doesn't open it. Falcon is the only writer of its file, so the list is
 //! read when the library changes and kept in memory between edits. This
 //! module holds the state and the rules; `app.rs` runs actions and routes
-//! the menu and keys, `panel.rs` and `editor.rs` draw.
+//! the menu and keys, `ai.rs` asks the models, `panel.rs` and `editor.rs` draw.
 
 pub(crate) mod ai;
 pub(crate) mod app;
@@ -77,6 +77,8 @@ pub struct ActionsState {
     pub broken: Option<String>,
     pub panel: Panel,
     pub editor: Option<editor::Editor>,
+    /// Finished AI runs' reports, waiting for the alert before them to close.
+    pub(crate) ai_reports: std::collections::VecDeque<crate::ui::dialogs::library_notices::Alert>,
 }
 
 impl Default for ActionsState {
@@ -88,7 +90,7 @@ impl Default for ActionsState {
 impl ActionsState {
     /// Keeps actions files in `dir`.
     pub fn new(dir: Option<PathBuf>) -> Self {
-        ActionsState { dir, root: None, store: None, file: ActionsFile::default(), defs: Vec::new(), broken: None, panel: Panel::default(), editor: None }
+        ActionsState { dir, root: None, store: None, file: ActionsFile::default(), defs: Vec::new(), broken: None, panel: Panel::default(), editor: None, ai_reports: Default::default() }
     }
 
     /// Follows the open library: reads its actions when the library

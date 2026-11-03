@@ -36,6 +36,7 @@
   "Accented": "Acentuadas",
   "Access": "Acceso",
   "Accuracy": "Precisión",
+  "Action finished": "Acción terminada",
   "Actions": "Acciones",
   "Actions don't run in the Trash": "Las acciones no se ejecutan en la papelera",
   "Activate": "Activar",
@@ -949,6 +950,8 @@
   "Isolate (again to show all)": "Aislar (otra vez para mostrar todo)",
   "It is on an NTFS drive. NTFS drivers on macOS are slow and less reliable; a drive formatted as APFS or exFAT works better.": "Está en una unidad NTFS. Los controladores NTFS en macOS son lentos y menos fiables; una unidad con formato APFS o exFAT funciona mejor.",
   "It may be incomplete or damaged; export or download it again. ({error})": "Puede estar incompleto o dañado; expórtalo o descárgalo de nuevo. ({error})",
+  "It was deleted during the run": "Se eliminó durante la ejecución",
+  "It was moved to the Trash during the run": "Se movió a la Papelera durante la ejecución",
   "Items": "Elementos",
   "Items already in this library were left as they are.": "Los elementos que ya estaban en esta biblioteca se dejaron como estaban.",
   "Items in no other folder still go to the Trash": "Los elementos que no están en otra carpeta van igualmente a la papelera",
@@ -1009,6 +1012,7 @@
   "Library not found": "Biblioteca no encontrada",
   "Library reloaded": "Biblioteca recargada",
   "Library switch over the API canceled": "Cambio de biblioteca por la API cancelado",
+  "Library: {library}": "Biblioteca: {library}",
   "Licence: {licence}": "Licencia: {licence}",
   "Licensed under MIT or Apache-2.0": "Con licencia MIT o Apache-2.0",
   "Light": "Claro",
@@ -1704,6 +1708,7 @@
   "Running at {address}": "En ejecución en {address}",
   "Running on {device}": "Se ejecuta en: {device}",
   "Running {name}": "Ejecutando {name}",
+  "Running {name} in {library}": "Ejecutando {name} en {library}",
   "Sa": "sá",
   "Sample language": "Idioma de muestra",
   "Saturation and Brightness": "Saturación y brillo",
@@ -2019,6 +2024,7 @@
   "The language of the sample text and the thumbnail": "El idioma del texto de muestra y de la miniatura",
   "The library is a folder stored on this Mac. Back it up as you would any other files.": "La biblioteca es una carpeta guardada en este Mac. Haz copias de seguridad como con cualquier otro archivo.",
   "The library is still missing": "La biblioteca sigue sin encontrarse",
+  "The library isn't open any more": "La biblioteca ya no está abierta",
   "The library was reloaded.": "Se recargó la biblioteca.",
   "The library's actions file could not be read: {e}": "No se pudo leer el archivo de acciones de la biblioteca: {e}",
   "The list can't be brought back. The files themselves are not touched.": "La lista no se puede recuperar. Los archivos no se tocan.",
@@ -2152,6 +2158,7 @@
   "Uncategorized Items": "Elementos sin carpeta",
   "Undid: {label}": "Deshecho: {label}",
   "Undo": "Deshacer",
+  "Undo in {library} reverses all of this run's changes.": "Deshacer en {library} revierte todos los cambios de esta ejecución.",
   "Undo reverses all of this run's changes.": "Deshacer revierte todos los cambios de esta ejecución.",
   "Ungroup {n} tags": {
     "one": "Desagrupar {n} etiqueta",
@@ -2482,6 +2489,7 @@
   "{first}–{last} would include port {port}, used by other MCP servers": "{first}–{last} incluiría el puerto {port}, que usan otros servidores MCP",
   "{folders} and {items} from {path} will be added. Folders, smart folders and tag groups already here are kept as they are, and so are items already here.": "Se añadirán {folders} y {items} de {path}. Las carpetas, carpetas inteligentes y grupos de etiquetas que ya están aquí se mantienen tal cual, igual que los elementos existentes.",
   "{hex}  ·  {ratio}%\nClick for colour values, right-click to find similar colours": "{hex}  ·  {ratio}%\nClic para ver los valores del color, clic derecho para buscar colores similares",
+  "{library}: {message}": "{library}: {message}",
   "{lib}'s metadata.json was damaged and was restored from backup/{name}; the damaged file was kept in backup/": "El metadata.json de «{lib}» estaba dañado y se restauró desde backup/{name}; el archivo dañado se conservó en backup/.",
   "{message}; scaled down to {width} × {height} px to fit the size limit": "{message}; reducida a {width} × {height} px para no superar el límite de tamaño",
   "{message}; skipped {n} items (animated)": {
@@ -2515,6 +2523,7 @@
     "one": "{name} cambió {n} elemento",
     "other": "{name} cambió {n} elementos"
   },
+  "{name} is still running in {library}. Wait for it to finish or cancel it before starting another AI run.": "{name} sigue ejecutándose en {library}. Espera a que termine o cancélalo antes de iniciar otra ejecución de IA.",
   "{name} may not save changes": "{name} podría no guardar los cambios",
   "{name} now has {n} items": {
     "one": "{name} tiene ahora {n} elemento",
@@ -2639,6 +2648,10 @@
   "{n} items that are not images will be skipped.": {
     "one": "Se omitirá {n} elemento que no es una imagen.",
     "other": "Se omitirán {n} elementos que no son imágenes."
+  },
+  "{n} items were skipped:": {
+    "one": "Se omitió {n} elemento:",
+    "other": "Se omitieron {n} elementos:"
   },
   "{n} items whose folder is gone are dropped.": {
     "one": "Se quita {n} elemento cuya carpeta ya no existe.",

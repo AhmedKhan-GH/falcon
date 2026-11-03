@@ -1,7 +1,8 @@
 //! System notifications, where Eagle shows its own pop-ups: a screenshot
 //! taken, an import or an export finished. Each follows its switch in
 //! Preferences ▸ Notification (and the master switch), checked by the
-//! caller (`Prefs::tells_*`).
+//! caller (`Prefs::tells_*`). A finished AI run, which Eagle's window doesn't
+//! have, follows the master switch alone.
 //!
 //! On macOS they go through the UserNotifications framework, which needs
 //! the app to have a bundle identifier: in `Falcon.app` (made by
@@ -44,6 +45,11 @@ impl Notice {
     /// An export finished; `message` is the in-window note ("Exported 3 items").
     pub fn exported(message: &str) -> Self {
         Notice::new(tr("Export finished"), message)
+    }
+
+    /// A run with AI steps finished; `message` says what it did.
+    pub fn action_finished(message: &str) -> Self {
+        Notice::new(tr("Action finished"), message)
     }
 }
 

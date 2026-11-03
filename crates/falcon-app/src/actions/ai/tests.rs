@@ -16,19 +16,21 @@ use super::*;
 
 /// How the mock answers one request.
 #[derive(Clone)]
-enum Reply {
+pub(super) enum Reply {
     /// The text of the model's reply, as one streamed piece.
     Says(String),
+    /// The same after a wait, within the first-byte limit.
+    After(Duration, String),
     /// Sends nothing until the client has gone.
     Stalls,
 }
 
-fn says(text: &str) -> Reply {
+pub(super) fn says(text: &str) -> Reply {
     Reply::Says(text.to_string())
 }
 
 /// A server giving out `replies` in order, keeping the request bodies.
-fn serve(replies: Vec<Reply>) -> (String, Arc<Mutex<Vec<Value>>>) {
+pub(super) fn serve(replies: Vec<Reply>) -> (String, Arc<Mutex<Vec<Value>>>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let base = format!("http://127.0.0.1:{}/v1", listener.local_addr().unwrap().port());
     let bodies = Arc::new(Mutex::new(Vec::new()));
@@ -39,8 +41,12 @@ fn serve(replies: Vec<Reply>) -> (String, Arc<Mutex<Vec<Value>>>) {
             let Ok(mut stream) = stream else { return };
             let Some(body) = read_body(&mut stream) else { continue };
             log.lock().unwrap().push(body);
-            match left.next() {
-                Some(Reply::Says(text)) => {
+            let next = left.next();
+            if let Some(Reply::After(wait, _)) = &next {
+                std::thread::sleep(*wait);
+            }
+            match next {
+                Some(Reply::Says(text) | Reply::After(_, text)) => {
                     let event = json!({"choices":[{"delta":{"content":text}}]});
                     let reply = format!("data: {event}\n\ndata: [DONE]\n\n");
                     let _ = write!(stream, "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{reply}", reply.len());
@@ -78,15 +84,19 @@ fn read_body(stream: &mut TcpStream) -> Option<Value> {
 
 /// A plan on the mock, with vision model `v` and chat model `c`.
 fn plan(base: &str) -> Plan {
+    plan_with(base, Limits { connect: Duration::from_secs(2), first_byte: Duration::from_millis(300), idle: Duration::from_millis(300), total: Duration::from_secs(5) })
+}
+
+/// The same with the client's time limits given.
+pub(super) fn plan_with(base: &str, limits: Limits) -> Plan {
     let mut s = Settings { default_vision: "ollama::v".into(), default_chat: "ollama::c".into(), ..Default::default() };
     s.add(ProviderId::Ollama);
     s.providers[0].base_url = base.to_string();
-    let limits = Limits { connect: Duration::from_secs(2), first_byte: Duration::from_millis(300), idle: Duration::from_millis(300), total: Duration::from_secs(5) };
     Plan::new(Client::new(s, Arc::new(MemoryKeys::default())).with_limits(limits)).unwrap()
 }
 
 /// A temp library with PNG items named by `names`.
-fn library(names: &[&str]) -> (tempfile::TempDir, Shared, Vec<String>) {
+pub(super) fn library(names: &[&str]) -> (tempfile::TempDir, Shared, Vec<String>) {
     let d = tempfile::tempdir().unwrap();
     let mut lib = Library::create(d.path().join("T.library")).unwrap();
     let mut ids = Vec::new();
@@ -98,7 +108,7 @@ fn library(names: &[&str]) -> (tempfile::TempDir, Shared, Vec<String>) {
     (d, Arc::new(Mutex::new(lib)), ids)
 }
 
-fn run(ids: &[String], steps: Vec<Step>) -> Run {
+pub(super) fn run(ids: &[String], steps: Vec<Step>) -> Run {
     Run { name: "Label".into(), ids: ids.to_vec(), steps }
 }
 
@@ -106,11 +116,11 @@ fn go(shared: &Shared, r: &Run, plan: &Plan) -> Report {
     execute(shared, r, plan, "Run Label", &AtomicBool::new(false), &mut |_, _| {})
 }
 
-fn tags(shared: &Shared, id: &str) -> Vec<String> {
+pub(super) fn tags(shared: &Shared, id: &str) -> Vec<String> {
     lock(shared).item(id).unwrap().tags.clone()
 }
 
-fn notes(shared: &Shared, id: &str) -> String {
+pub(super) fn notes(shared: &Shared, id: &str) -> String {
     lock(shared).item(id).unwrap().annotation.clone()
 }
 
@@ -373,7 +383,7 @@ fn no_plan_without_a_vision_model() {
 
 #[test]
 fn a_clean_run_is_a_toast_with_undo() {
-    let o = outcome("Label", Report { total: 2, changed: 2, models: vec!["ollama::v".into()], ..Default::default() });
+    let o = outcome("Label", Report { total: 2, changed: 2, models: vec!["ollama::v".into()], ..Default::default() }, &Place::Shown);
     assert_eq!(o.message, "Label changed 2 items");
     assert!(o.alert.is_none());
 }
@@ -391,12 +401,250 @@ fn a_run_with_problems_says_what_ran_and_what_failed() {
             models: vec!["ollama::v".into()],
             ..Default::default()
         },
+        &Place::Shown,
     );
     let a = o.alert.unwrap();
     assert_eq!(a.title, "Label changed 2 of 5 items");
     for part in ["ollama::v", "bad.png: The model's reply wasn't valid JSON", "kept.png", "Cancel stopped the run before 2 items."] {
         assert!(a.body.contains(part), "{part} in {}", a.body);
     }
+}
+
+/// Runs `r`, calling `meanwhile` at the point the worker reports `at`: an item's
+/// position just before it is asked, or `None` after the last answer and before
+/// anything is applied.
+fn go_with(shared: &Shared, r: &Run, plan: &Plan, at: Option<usize>, meanwhile: impl FnOnce(&mut Library)) -> Report {
+    let mut hook = Some(meanwhile);
+    execute(shared, r, plan, "Run Label", &AtomicBool::new(false), &mut |n, item| {
+        let here = match at {
+            Some(i) => n == i && !item.is_empty(),
+            None => item.is_empty(),
+        };
+        if here && let Some(f) = hook.take() {
+            f(&mut lock(shared));
+        }
+    })
+}
+
+fn edit(lib: &mut Library, id: &str, change: impl FnOnce(&mut falcon_library::model::Item)) {
+    let mut item = lib.item(id).unwrap().clone();
+    change(&mut item);
+    lib.update_item(item).unwrap();
+}
+
+#[test]
+fn edits_made_during_a_run_stay_except_the_fields_its_steps_set() {
+    let (_d, shared, ids) = library(&["x"]);
+    let folder = lock(&shared).create_folder(None, "F").unwrap();
+    let (base, _) = serve(vec![says(r#"{"tags":["cat"]}"#), says(r#"{"description":"A cat."}"#)]);
+    let r = run(&ids, vec![Step::AutoTag, Step::Describe { replace: true }]);
+    let report = go_with(&shared, &r, &plan(&base), None, |lib| {
+        edit(lib, &ids[0], |i| {
+            i.name = "newer name".into();
+            i.url = "https://example.invalid/newer".into();
+            i.tags.push("mine".into());
+            i.folders.push(folder.clone());
+            i.annotation = "newer notes".into();
+            i.extra.insert("star".into(), json!(5));
+        });
+    });
+    assert_eq!((report.changed, report.failed.len(), report.skipped.len()), (1, 0, 0));
+    {
+        let lib = lock(&shared);
+        let item = lib.item(&ids[0]).unwrap();
+        assert_eq!(item.name, "newer name");
+        assert_eq!(item.url, "https://example.invalid/newer");
+        assert_eq!(item.folders, [folder.as_str()]);
+        assert_eq!(item.extra.get("star"), Some(&json!(5)));
+        assert_eq!(item.tags, ["mine", "cat"], "the step adds to the tags as they are");
+        assert_eq!(item.annotation, "A cat.", "the step sets the notes and is told to replace them");
+    }
+    // Undo goes back to the item as it was when the run applied, not to before the run.
+    lock(&shared).revert(report.undo.unwrap()).unwrap();
+    let lib = lock(&shared);
+    let item = lib.item(&ids[0]).unwrap();
+    assert_eq!((item.name.as_str(), item.annotation.as_str()), ("newer name", "newer notes"));
+    assert_eq!(item.tags, ["mine"]);
+}
+
+#[test]
+fn notes_written_during_a_run_stay_unless_the_step_replaces_them() {
+    let (_d, shared, ids) = library(&["x"]);
+    let (base, bodies) = serve(vec![says(r#"{"description":"A cat."}"#), says(r#"{"tags":["cat"]}"#)]);
+    let r = run(&ids, vec![Step::Describe { replace: false }, Step::AutoTag]);
+    let report = go_with(&shared, &r, &plan(&base), None, |lib| edit(lib, &ids[0], |i| i.annotation = "typed meanwhile".into()));
+    assert_eq!(bodies.lock().unwrap().len(), 2, "its notes were empty when it was asked");
+    assert_eq!(notes(&shared, &ids[0]), "typed meanwhile");
+    assert_eq!(tags(&shared, &ids[0]), ["cat"], "its other steps still apply");
+    assert_eq!(report.kept_notes, ["x.png"]);
+    assert_eq!(report.changed, 1);
+}
+
+#[test]
+fn an_item_is_asked_about_as_it_is_when_its_turn_comes() {
+    let (_d, shared, ids) = library(&["first", "second"]);
+    let (base, bodies) = serve(vec![says(TWO_TAGS), says(TWO_TAGS)]);
+    let r = run(&ids, vec![Step::AutoTag]);
+    go_with(&shared, &r, &plan(&base), Some(1), |lib| {
+        edit(lib, &ids[1], |i| {
+            i.name = "renamed".into();
+            i.annotation = "new note".into();
+        });
+    });
+    let body = bodies.lock().unwrap()[1].clone();
+    let data: Value = serde_json::from_str(body["messages"][1]["content"][0]["text"].as_str().unwrap()).unwrap();
+    assert_eq!((data["name"].as_str(), data["notes"].as_str()), (Some("renamed"), Some("new note")));
+}
+
+#[test]
+fn an_item_trashed_before_its_turn_is_skipped_and_never_sent() {
+    let (_d, shared, ids) = library(&["kept", "binned"]);
+    let (base, bodies) = serve(vec![says(r#"{"tags":["t"]}"#)]);
+    let r = run(&ids, vec![Step::AutoTag, Step::Rating { rating: 4 }]);
+    let report = go_with(&shared, &r, &plan(&base), Some(1), |lib| lib.set_trashed(&ids[1..], true).unwrap());
+    assert_eq!(bodies.lock().unwrap().len(), 1);
+    assert_eq!(report.skipped, [("binned.png".to_string(), "It was moved to the Trash during the run".to_string())]);
+    assert_eq!((report.total, report.changed, report.failed.len()), (2, 1, 0));
+    let lib = lock(&shared);
+    let item = lib.item(&ids[1]).unwrap();
+    assert!(item.tags.is_empty() && item.is_deleted);
+    assert_eq!(item.extra.get("star"), None, "no step of the action reaches it");
+}
+
+#[test]
+fn an_item_trashed_after_its_answer_is_skipped_at_the_end() {
+    let (_d, shared, ids) = library(&["kept", "binned"]);
+    let (base, _) = serve(vec![says(r#"{"tags":["t"]}"#), says(r#"{"tags":["t"]}"#)]);
+    let r = run(&ids, vec![Step::AutoTag, Step::Rating { rating: 4 }]);
+    let report = go_with(&shared, &r, &plan(&base), None, |lib| lib.set_trashed(&ids[1..], true).unwrap());
+    assert_eq!(report.skipped, [("binned.png".to_string(), "It was moved to the Trash during the run".to_string())]);
+    assert_eq!(report.changed, 1);
+    assert_eq!(tags(&shared, &ids[0]), ["t"]);
+    let lib = lock(&shared);
+    let item = lib.item(&ids[1]).unwrap();
+    assert!(item.tags.is_empty() && item.is_deleted);
+    assert_eq!(item.extra.get("star"), None);
+}
+
+#[test]
+fn a_deleted_item_is_skipped_at_either_stage() {
+    let (_d, shared, ids) = library(&["kept", "gone"]);
+    let (base, _) = serve(vec![says(r#"{"tags":["t"]}"#), says(r#"{"tags":["t"]}"#)]);
+    let r = run(&ids, vec![Step::AutoTag]);
+    let report = go_with(&shared, &r, &plan(&base), None, |lib| lib.delete_permanently(&ids[1..]).unwrap());
+    assert_eq!(report.skipped, [("gone.png".to_string(), "It was deleted during the run".to_string())]);
+    assert_eq!(tags(&shared, &ids[0]), ["t"]);
+
+    let (_d, shared, ids) = library(&["kept", "gone"]);
+    let (base, bodies) = serve(vec![says(r#"{"tags":["t"]}"#)]);
+    let r = run(&ids, vec![Step::AutoTag]);
+    let report = go_with(&shared, &r, &plan(&base), Some(1), |lib| lib.delete_permanently(&ids[1..]).unwrap());
+    assert_eq!(report.skipped, [("gone.png".to_string(), "It was deleted during the run".to_string())]);
+    assert_eq!(bodies.lock().unwrap().len(), 1);
+}
+
+#[test]
+fn a_skipped_item_is_not_also_listed_as_keeping_its_notes() {
+    let (_d, shared, ids) = library(&["x"]);
+    edit(&mut lock(&shared), &ids[0], |i| i.annotation = "Mine".into());
+    let (base, _) = serve(vec![]);
+    let r = run(&ids, vec![Step::Describe { replace: false }]);
+    let report = go_with(&shared, &r, &plan(&base), None, |lib| lib.set_trashed(&ids, true).unwrap());
+    assert_eq!(report.skipped.len(), 1);
+    assert!(report.kept_notes.is_empty());
+}
+
+#[test]
+fn a_run_whose_items_all_went_has_no_undo_step() {
+    let (_d, shared, ids) = library(&["x"]);
+    let (base, _) = serve(vec![says(r#"{"tags":["t"]}"#)]);
+    let r = run(&ids, vec![Step::AutoTag]);
+    let report = go_with(&shared, &r, &plan(&base), None, |lib| lib.set_trashed(&ids, true).unwrap());
+    assert!(report.undo.is_none());
+    assert_eq!((report.changed, report.skipped.len()), (0, 1));
+}
+
+/// A copy of the library at `from`, with the same item ids, in `dir`.
+fn copy_of(from: &Path, dir: &Path) -> Library {
+    fn copy(from: &Path, to: &Path) {
+        std::fs::create_dir_all(to).unwrap();
+        for e in std::fs::read_dir(from).unwrap().flatten() {
+            let target = to.join(e.file_name());
+            if e.path().is_dir() {
+                copy(&e.path(), &target);
+            } else {
+                std::fs::copy(e.path(), target).unwrap();
+            }
+        }
+    }
+    let to = dir.join("Copy.library");
+    copy(from, &to);
+    Library::open(&to).unwrap()
+}
+
+#[test]
+fn a_run_waits_out_another_library_in_its_slot() {
+    let (d, shared, ids) = library(&["x"]);
+    let root = lock(&shared).root().to_path_buf();
+    lock(&shared).flush().unwrap();
+    let copy = copy_of(&root, d.path());
+    let (base, _) = serve(vec![says(r#"{"tags":["t"]}"#)]);
+    let r = run(&ids, vec![Step::AutoTag]);
+    let slot = shared.clone();
+    let (back, was_in_slot) = std::sync::mpsc::channel();
+    // The API's library/switch: another library in the slot until the next frame.
+    let report = go_with(&shared, &r, &plan(&base), None, move |lib| {
+        let own = std::mem::replace(lib, copy);
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(60));
+            back.send(std::mem::replace(&mut *lock(&slot), own)).unwrap();
+        });
+    });
+    let other = was_in_slot.recv().unwrap();
+    assert_ne!(other.root(), root);
+    assert!(other.items().iter().all(|i| i.tags.is_empty()), "the copy wasn't written to");
+    assert_eq!((report.changed, report.failed.len()), (1, 0));
+    assert_eq!(lock(&shared).root(), root);
+    assert_eq!(tags(&shared, &ids[0]), ["t"]);
+}
+
+#[test]
+fn a_run_never_writes_to_another_library_left_in_its_slot() {
+    let (d, shared, ids) = library(&["x"]);
+    let root = lock(&shared).root().to_path_buf();
+    lock(&shared).flush().unwrap();
+    let copy = copy_of(&root, d.path());
+    let (base, _) = serve(vec![says(r#"{"tags":["t"]}"#)]);
+    let r = run(&ids, vec![Step::AutoTag]);
+    let report = go_with(&shared, &r, &plan(&base), None, move |lib| {
+        let _own = std::mem::replace(lib, copy);
+    });
+    assert_eq!(report.failed, [("x.png".to_string(), "The library isn't open any more".to_string())]);
+    assert!(report.undo.is_none());
+    assert!(tags(&shared, &ids[0]).is_empty(), "the copy has the same ids and stays as it was");
+}
+
+#[test]
+fn the_report_lists_skipped_items_and_where_the_library_is() {
+    let tx = || {
+        let d = tempfile::tempdir().unwrap();
+        let mut lib = Library::create(d.path().join("U.library")).unwrap();
+        lib.begin_transaction("Run Label");
+        lib.create_folder(None, "F").unwrap();
+        lib.end_transaction()
+    };
+    let report = |undo| Report { total: 3, changed: 1, skipped: vec![("binned.png".into(), "It was moved to the Trash during the run".into())], models: vec!["ollama::v".into()], undo, ..Default::default() };
+    let shown = outcome("Label", report(tx()), &Place::Shown).alert.unwrap();
+    assert!(shown.body.contains("1 item was skipped:\nbinned.png: It was moved to the Trash during the run"), "{}", shown.body);
+    assert!(shown.body.contains("Undo reverses all") && !shown.body.contains("Library:"), "{}", shown.body);
+    let parked = outcome("Label", report(tx()), &Place::Parked("Photos".into()));
+    assert!(parked.undo.is_some());
+    let a = parked.alert.unwrap();
+    assert!(a.body.starts_with("Library: Photos") && a.body.contains("Undo in Photos reverses all"), "{}", a.body);
+    let closed = outcome("Label", report(tx()), &Place::Closed("Photos".into()));
+    assert!(closed.undo.is_none(), "the undo step goes with the library");
+    let a = closed.alert.unwrap();
+    assert!(a.body.starts_with("Library: Photos") && !a.body.contains("Undo"), "{}", a.body);
 }
 
 /// The whole path against the real Ollama with the model the user chose.

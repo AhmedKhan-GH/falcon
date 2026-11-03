@@ -36,6 +36,7 @@
   "Accented": "アクセント付き",
   "Access": "アクセス",
   "Accuracy": "精度",
+  "Action finished": "アクションが完了しました",
   "Actions": "アクション",
   "Actions don't run in the Trash": "ゴミ箱ではアクションは実行されません",
   "Activate": "有効にする",
@@ -902,6 +903,8 @@
   "Isolate (again to show all)": "分離（もう一度ですべて表示）",
   "It is on an NTFS drive. NTFS drivers on macOS are slow and less reliable; a drive formatted as APFS or exFAT works better.": "NTFSドライブ上にあります。macOSのNTFSドライバは低速で信頼性も低いため、APFSまたはexFATでフォーマットしたドライブをおすすめします。",
   "It may be incomplete or damaged; export or download it again. ({error})": "不完全または破損している可能性があります。もう一度書き出すかダウンロードしてください。（{error}）",
+  "It was deleted during the run": "実行中に削除されました",
+  "It was moved to the Trash during the run": "実行中にゴミ箱に移動されました",
   "Items": "アイテム",
   "Items already in this library were left as they are.": "このライブラリにすでにあるアイテムはそのままです。",
   "Items in no other folder still go to the Trash": "他のフォルダにないアイテムはゴミ箱に入ります",
@@ -962,6 +965,7 @@
   "Library not found": "ライブラリが見つかりません",
   "Library reloaded": "ライブラリを再読み込みしました",
   "Library switch over the API canceled": "APIによるライブラリの切り替えをキャンセルしました",
+  "Library: {library}": "ライブラリ: {library}",
   "Licence: {licence}": "ライセンス：{licence}",
   "Licensed under MIT or Apache-2.0": "MITまたはApache-2.0ライセンス",
   "Light": "ライト",
@@ -1617,6 +1621,7 @@
   "Running at {address}": "{address}で実行中",
   "Running on {device}": "{device} で実行中",
   "Running {name}": "{name}を実行中",
+  "Running {name} in {library}": "{library} で {name} を実行中",
   "Sa": "土",
   "Sample language": "サンプルの言語",
   "Saturation and Brightness": "彩度と明るさ",
@@ -1922,6 +1927,7 @@
   "The language of the sample text and the thumbnail": "サンプルテキストとサムネールの言語",
   "The library is a folder stored on this Mac. Back it up as you would any other files.": "ライブラリはこのMacに保存されるフォルダです。ほかのファイルと同じようにバックアップしてください。",
   "The library is still missing": "ライブラリはまだ見つかりません",
+  "The library isn't open any more": "ライブラリはもう開かれていません",
   "The library was reloaded.": "ライブラリを再読み込みしました。",
   "The library's actions file could not be read: {e}": "ライブラリのアクションファイルを読み込めませんでした：{e}",
   "The list can't be brought back. The files themselves are not touched.": "リストは元に戻せません。ファイル自体は変更されません。",
@@ -2049,6 +2055,7 @@
   "Uncategorized Items": "未分類のアイテム",
   "Undid: {label}": "取り消しました：{label}",
   "Undo": "取り消す",
+  "Undo in {library} reverses all of this run's changes.": "{library} で取り消すと、この実行の変更がすべて元に戻ります。",
   "Undo reverses all of this run's changes.": "取り消すと、この実行の変更がすべて元に戻ります。",
   "Ungroup {n} tags": {
     "other": "{n}個のタグのグループ化を解除"
@@ -2374,6 +2381,7 @@
   "{first}–{last} would include port {port}, used by other MCP servers": "{first}–{last}には、他のMCPサーバーが使うポート{port}が含まれます",
   "{folders} and {items} from {path} will be added. Folders, smart folders and tag groups already here are kept as they are, and so are items already here.": "{path}から{folders}と{items}が追加されます。すでにあるフォルダ、スマートフォルダ、タググループ、アイテムはそのまま残ります。",
   "{hex}  ·  {ratio}%\nClick for colour values, right-click to find similar colours": "{hex}  ·  {ratio}%\nクリックで色の値を表示、右クリックで似た色を検索",
+  "{library}: {message}": "{library}: {message}",
   "{lib}'s metadata.json was damaged and was restored from backup/{name}; the damaged file was kept in backup/": "{lib}のmetadata.jsonが破損していたため、backup/{name}から復元しました。破損したファイルはbackup/に残してあります。",
   "{message}; scaled down to {width} × {height} px to fit the size limit": "{message}。サイズの上限に収まるように {width} × {height} px に縮小しました",
   "{message}; skipped {n} items (animated)": {
@@ -2400,6 +2408,7 @@
   "{name} changed {n} items": {
     "other": "{name}が{n}個のアイテムを変更しました"
   },
+  "{name} is still running in {library}. Wait for it to finish or cancel it before starting another AI run.": "{name} は {library} でまだ実行中です。別の AI 実行を始める前に、完了を待つかキャンセルしてください。",
   "{name} may not save changes": "「{name}」は変更を保存できない可能性があります",
   "{name} now has {n} items": {
     "other": "{name}は現在{n}件のアイテムを含みます"
@@ -2492,6 +2501,9 @@
   },
   "{n} items that are not images will be skipped.": {
     "other": "画像ではない{n}個のアイテムはスキップされます。"
+  },
+  "{n} items were skipped:": {
+    "other": "{n} 個の項目をスキップしました:"
   },
   "{n} items whose folder is gone are dropped.": {
     "other": "フォルダがなくなったアイテム{n}個は除外されます。"

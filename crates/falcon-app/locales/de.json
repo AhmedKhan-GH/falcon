@@ -36,6 +36,7 @@
   "Accented": "Mit Akzenten",
   "Access": "Zugriff",
   "Accuracy": "Genauigkeit",
+  "Action finished": "Aktion abgeschlossen",
   "Actions": "Aktionen",
   "Actions don't run in the Trash": "Aktionen laufen nicht im Papierkorb",
   "Activate": "Aktivieren",
@@ -949,6 +950,8 @@
   "Isolate (again to show all)": "Isolieren (erneut, um alle zu zeigen)",
   "It is on an NTFS drive. NTFS drivers on macOS are slow and less reliable; a drive formatted as APFS or exFAT works better.": "Sie liegt auf einem NTFS-Laufwerk. NTFS-Treiber unter macOS sind langsam und weniger zuverlässig; ein mit APFS oder exFAT formatiertes Laufwerk funktioniert besser.",
   "It may be incomplete or damaged; export or download it again. ({error})": "Es ist möglicherweise unvollständig oder beschädigt; exportieren oder laden Sie es erneut herunter. ({error})",
+  "It was deleted during the run": "Es wurde während des Laufs gelöscht",
+  "It was moved to the Trash during the run": "Es wurde während des Laufs in den Papierkorb verschoben",
   "Items": "Objekte",
   "Items already in this library were left as they are.": "Objekte, die bereits in dieser Mediathek sind, blieben unverändert.",
   "Items in no other folder still go to the Trash": "Objekte, die in keinem anderen Ordner liegen, kommen trotzdem in den Papierkorb",
@@ -1009,6 +1012,7 @@
   "Library not found": "Mediathek nicht gefunden",
   "Library reloaded": "Mediathek neu geladen",
   "Library switch over the API canceled": "Mediathekswechsel über die API abgebrochen",
+  "Library: {library}": "Bibliothek: {library}",
   "Licence: {licence}": "Lizenz: {licence}",
   "Licensed under MIT or Apache-2.0": "Lizenziert unter MIT oder Apache-2.0",
   "Light": "Hell",
@@ -1704,6 +1708,7 @@
   "Running at {address}": "Läuft unter {address}",
   "Running on {device}": "Läuft auf: {device}",
   "Running {name}": "{name} wird ausgeführt",
+  "Running {name} in {library}": "{name} läuft in {library}",
   "Sa": "Sa",
   "Sample language": "Beispielsprache",
   "Saturation and Brightness": "Sättigung und Helligkeit",
@@ -2019,6 +2024,7 @@
   "The language of the sample text and the thumbnail": "Die Sprache von Beispieltext und Miniatur",
   "The library is a folder stored on this Mac. Back it up as you would any other files.": "Die Mediathek ist ein Ordner auf diesem Mac. Sichern Sie sie wie alle anderen Dateien.",
   "The library is still missing": "Die Mediathek fehlt weiterhin",
+  "The library isn't open any more": "Die Bibliothek ist nicht mehr geöffnet",
   "The library was reloaded.": "Die Mediathek wurde neu geladen.",
   "The library's actions file could not be read: {e}": "Die Aktionsdatei der Mediathek konnte nicht gelesen werden: {e}",
   "The list can't be brought back. The files themselves are not touched.": "Die Liste lässt sich nicht wiederherstellen. Die Dateien selbst bleiben unberührt.",
@@ -2152,6 +2158,7 @@
   "Uncategorized Items": "Objekte ohne Ordner",
   "Undid: {label}": "Widerrufen: {label}",
   "Undo": "Widerrufen",
+  "Undo in {library} reverses all of this run's changes.": "Rückgängig in {library} nimmt alle Änderungen dieses Laufs zurück.",
   "Undo reverses all of this run's changes.": "Rückgängig macht alle Änderungen dieses Laufs rückgängig.",
   "Ungroup {n} tags": {
     "one": "Gruppierung von {n} Tag aufheben",
@@ -2482,6 +2489,7 @@
   "{first}–{last} would include port {port}, used by other MCP servers": "{first}–{last} würde Port {port} einschließen, den andere MCP-Server verwenden",
   "{folders} and {items} from {path} will be added. Folders, smart folders and tag groups already here are kept as they are, and so are items already here.": "{folders} und {items} aus {path} werden hinzugefügt. Ordner, intelligente Ordner und Tag-Gruppen, die schon hier sind, bleiben unverändert, ebenso vorhandene Objekte.",
   "{hex}  ·  {ratio}%\nClick for colour values, right-click to find similar colours": "{hex}  ·  {ratio}%\nKlicken für Farbwerte, Rechtsklick, um ähnliche Farben zu finden",
+  "{library}: {message}": "{library}: {message}",
   "{lib}'s metadata.json was damaged and was restored from backup/{name}; the damaged file was kept in backup/": "Die Datei metadata.json von „{lib}“ war beschädigt und wurde aus backup/{name} wiederhergestellt; die beschädigte Datei liegt weiterhin in backup/.",
   "{message}; scaled down to {width} × {height} px to fit the size limit": "{message}; auf {width} × {height} px verkleinert, um die Größengrenze einzuhalten",
   "{message}; skipped {n} items (animated)": {
@@ -2515,6 +2523,7 @@
     "one": "{name} hat {n} Objekt geändert",
     "other": "{name} hat {n} Objekte geändert"
   },
+  "{name} is still running in {library}. Wait for it to finish or cancel it before starting another AI run.": "{name} läuft noch in {library}. Warte, bis es fertig ist, oder brich es ab, bevor du einen weiteren KI-Lauf startest.",
   "{name} may not save changes": "{name} speichert Änderungen möglicherweise nicht",
   "{name} now has {n} items": {
     "one": "{name} hat jetzt {n} Objekt",
@@ -2639,6 +2648,10 @@
   "{n} items that are not images will be skipped.": {
     "one": "{n} Objekt, das kein Bild ist, wird übersprungen.",
     "other": "{n} Objekte, die keine Bilder sind, werden übersprungen."
+  },
+  "{n} items were skipped:": {
+    "one": "{n} Element wurde übersprungen:",
+    "other": "{n} Elemente wurden übersprungen:"
   },
   "{n} items whose folder is gone are dropped.": {
     "one": "{n} Objekt, dessen Ordner fehlt, wird entfernt.",

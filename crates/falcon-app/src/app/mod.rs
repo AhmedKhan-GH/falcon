@@ -567,6 +567,8 @@ impl App {
         self.tools_dialogs(&ctx);
         self.pack_dialogs(&ctx);
         self.progress_modal(&ctx);
+        self.ai_runs_tick();
+        self.ai_run_panel(&ctx);
         self.dock_import_progress();
         self.reload_confirm(&ctx);
         self.clear_history_dialog(&ctx);

@@ -36,6 +36,7 @@
   "Accented": "Accented",
   "Access": "Access",
   "Accuracy": "Accuracy",
+  "Action finished": "Action finished",
   "Actions": "Actions",
   "Actions don't run in the Trash": "Actions don't run in the Trash",
   "Activate": "Activate",
@@ -949,6 +950,8 @@
   "Isolate (again to show all)": "Isolate (again to show all)",
   "It is on an NTFS drive. NTFS drivers on macOS are slow and less reliable; a drive formatted as APFS or exFAT works better.": "It is on an NTFS drive. NTFS drivers on macOS are slow and less reliable; a drive formatted as APFS or exFAT works better.",
   "It may be incomplete or damaged; export or download it again. ({error})": "It may be incomplete or damaged; export or download it again. ({error})",
+  "It was deleted during the run": "It was deleted during the run",
+  "It was moved to the Trash during the run": "It was moved to the Trash during the run",
   "Items": "Items",
   "Items already in this library were left as they are.": "Items already in this library were left as they are.",
   "Items in no other folder still go to the Trash": "Items in no other folder still go to the Trash",
@@ -1009,6 +1012,7 @@
   "Library not found": "Library not found",
   "Library reloaded": "Library reloaded",
   "Library switch over the API canceled": "Library switch over the API canceled",
+  "Library: {library}": "Library: {library}",
   "Licence: {licence}": "Licence: {licence}",
   "Licensed under MIT or Apache-2.0": "Licensed under MIT or Apache-2.0",
   "Light": "Light",
@@ -1704,6 +1708,7 @@
   "Running at {address}": "Running at {address}",
   "Running on {device}": "Running on {device}",
   "Running {name}": "Running {name}",
+  "Running {name} in {library}": "Running {name} in {library}",
   "Sa": "Sa",
   "Sample language": "Sample language",
   "Saturation and Brightness": "Saturation and Brightness",
@@ -2019,6 +2024,7 @@
   "The language of the sample text and the thumbnail": "The language of the sample text and the thumbnail",
   "The library is a folder stored on this Mac. Back it up as you would any other files.": "The library is a folder stored on this Mac. Back it up as you would any other files.",
   "The library is still missing": "The library is still missing",
+  "The library isn't open any more": "The library isn't open any more",
   "The library was reloaded.": "The library was reloaded.",
   "The library's actions file could not be read: {e}": "The library's actions file could not be read: {e}",
   "The list can't be brought back. The files themselves are not touched.": "The list can't be brought back. The files themselves are not touched.",
@@ -2152,6 +2158,7 @@
   "Uncategorized Items": "Uncategorized Items",
   "Undid: {label}": "Undid: {label}",
   "Undo": "Undo",
+  "Undo in {library} reverses all of this run's changes.": "Undo in {library} reverses all of this run's changes.",
   "Undo reverses all of this run's changes.": "Undo reverses all of this run's changes.",
   "Ungroup {n} tags": {
     "one": "Ungroup {n} tag",
@@ -2482,6 +2489,7 @@
   "{first}–{last} would include port {port}, used by other MCP servers": "{first}–{last} would include port {port}, used by other MCP servers",
   "{folders} and {items} from {path} will be added. Folders, smart folders and tag groups already here are kept as they are, and so are items already here.": "{folders} and {items} from {path} will be added. Folders, smart folders and tag groups already here are kept as they are, and so are items already here.",
   "{hex}  ·  {ratio}%\nClick for colour values, right-click to find similar colours": "{hex}  ·  {ratio}%\nClick for colour values, right-click to find similar colours",
+  "{library}: {message}": "{library}: {message}",
   "{lib}'s metadata.json was damaged and was restored from backup/{name}; the damaged file was kept in backup/": "{lib}'s metadata.json was damaged and was restored from backup/{name}; the damaged file was kept in backup/",
   "{message}; scaled down to {width} × {height} px to fit the size limit": "{message}; scaled down to {width} × {height} px to fit the size limit",
   "{message}; skipped {n} items (animated)": {
@@ -2515,6 +2523,7 @@
     "one": "{name} changed {n} item",
     "other": "{name} changed {n} items"
   },
+  "{name} is still running in {library}. Wait for it to finish or cancel it before starting another AI run.": "{name} is still running in {library}. Wait for it to finish or cancel it before starting another AI run.",
   "{name} may not save changes": "{name} may not save changes",
   "{name} now has {n} items": {
     "one": "{name} now has {n} item",
@@ -2639,6 +2648,10 @@
   "{n} items that are not images will be skipped.": {
     "one": "{n} item that is not an image will be skipped.",
     "other": "{n} items that are not images will be skipped."
+  },
+  "{n} items were skipped:": {
+    "one": "{n} item was skipped:",
+    "other": "{n} items were skipped:"
   },
   "{n} items whose folder is gone are dropped.": {
     "one": "{n} item whose folder is gone is dropped.",

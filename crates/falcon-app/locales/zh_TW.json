@@ -36,6 +36,7 @@
   "Accented": "帶重音符號",
   "Access": "存取權限",
   "Accuracy": "精確度",
+  "Action finished": "動作已完成",
   "Actions": "動作",
   "Actions don't run in the Trash": "垃圾桶中不會執行動作",
   "Activate": "啟用",
@@ -902,6 +903,8 @@
   "Isolate (again to show all)": "隔離（再次點擊顯示全部）",
   "It is on an NTFS drive. NTFS drivers on macOS are slow and less reliable; a drive formatted as APFS or exFAT works better.": "它位於 NTFS 磁碟上。macOS 上的 NTFS 驅動程式速度慢且不夠可靠，使用 APFS 或 exFAT 格式的磁碟效果更好。",
   "It may be incomplete or damaged; export or download it again. ({error})": "它可能不完整或已損毀，請重新匯出或下載。（{error}）",
+  "It was deleted during the run": "執行期間已被刪除",
+  "It was moved to the Trash during the run": "執行期間已移到垃圾桶",
   "Items": "項目",
   "Items already in this library were left as they are.": "此資料庫中已有的項目保持不變。",
   "Items in no other folder still go to the Trash": "不在其他資料夾中的項目仍會丟到垃圾桶",
@@ -962,6 +965,7 @@
   "Library not found": "找不到資料庫",
   "Library reloaded": "資料庫已重新載入",
   "Library switch over the API canceled": "已取消透過 API 切換資料庫",
+  "Library: {library}": "資源庫:{library}",
   "Licence: {licence}": "授權條款：{licence}",
   "Licensed under MIT or Apache-2.0": "採用 MIT 或 Apache-2.0 授權",
   "Light": "淺色",
@@ -1617,6 +1621,7 @@
   "Running at {address}": "執行於{address}",
   "Running on {device}": "執行於{device}",
   "Running {name}": "正在執行{name}",
+  "Running {name} in {library}": "正在 {library} 中執行 {name}",
   "Sa": "六",
   "Sample language": "範例語言",
   "Saturation and Brightness": "飽和度和亮度",
@@ -1922,6 +1927,7 @@
   "The language of the sample text and the thumbnail": "範例文字和縮圖的語言",
   "The library is a folder stored on this Mac. Back it up as you would any other files.": "資料庫是儲存在這台 Mac 上的資料夾。請像備份其他檔案一樣備份它。",
   "The library is still missing": "仍然找不到資料庫",
+  "The library isn't open any more": "資源庫已不再開啟",
   "The library was reloaded.": "資料庫已重新載入。",
   "The library's actions file could not be read: {e}": "無法讀取資料庫的動作檔案：{e}",
   "The list can't be brought back. The files themselves are not touched.": "列表無法回復。檔案本身不受影響。",
@@ -2049,6 +2055,7 @@
   "Uncategorized Items": "未分類項目",
   "Undid: {label}": "已還原：{label}",
   "Undo": "還原",
+  "Undo in {library} reverses all of this run's changes.": "在 {library} 中還原會復原此次執行的所有變更。",
   "Undo reverses all of this run's changes.": "還原可復原此次執行的所有變更。",
   "Ungroup {n} tags": {
     "other": "取消{n}個標籤的分組"
@@ -2374,6 +2381,7 @@
   "{first}–{last} would include port {port}, used by other MCP servers": "{first}–{last}會包含其他 MCP 伺服器使用的連接埠{port}",
   "{folders} and {items} from {path} will be added. Folders, smart folders and tag groups already here are kept as they are, and so are items already here.": "將從{path}加入{folders}和{items}。此處已有的資料夾、智慧型資料夾、標籤群組和項目將保持不變。",
   "{hex}  ·  {ratio}%\nClick for colour values, right-click to find similar colours": "{hex}  ·  {ratio}%\n按一下檢視顏色值，按右鍵尋找相似顏色",
+  "{library}: {message}": "{library}:{message}",
   "{lib}'s metadata.json was damaged and was restored from backup/{name}; the damaged file was kept in backup/": "{lib}的 metadata.json 已損毀，已從 backup/{name}回復；損毀的檔案保留在 backup/ 中。",
   "{message}; scaled down to {width} × {height} px to fit the size limit": "{message}；已縮小到{width} × {height}像素以符合大小上限",
   "{message}; skipped {n} items (animated)": {
@@ -2400,6 +2408,7 @@
   "{name} changed {n} items": {
     "other": "{name}變更了{n}個項目"
   },
+  "{name} is still running in {library}. Wait for it to finish or cancel it before starting another AI run.": "{name} 仍在 {library} 中執行。請等待其完成或將其取消,然後再開始另一次 AI 執行。",
   "{name} may not save changes": "「{name}」可能無法儲存更動",
   "{name} now has {n} items": {
     "other": "{name}現有{n}個項目"
@@ -2492,6 +2501,9 @@
   },
   "{n} items that are not images will be skipped.": {
     "other": "{n}個非圖片項目將被略過。"
+  },
+  "{n} items were skipped:": {
+    "other": "已略過 {n} 個項目:"
   },
   "{n} items whose folder is gone are dropped.": {
     "other": "資料夾已遺失的{n}個項目會被移除。"

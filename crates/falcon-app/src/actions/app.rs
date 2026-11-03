@@ -79,6 +79,9 @@ impl App {
             self.flash_error(tr(problem));
             return;
         }
+        if def.steps.iter().any(|s| s.is_ai()) && self.refuse_second_ai_run() {
+            return;
+        }
         if let Some(run) = self.user_actions.run_of(id, ids) {
             self.push_bulk_at(n, RUN_CONFIRM, Action::RunSteps(run));
         }
