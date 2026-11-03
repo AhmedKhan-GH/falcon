@@ -153,7 +153,7 @@ cargo run -p falcon -- serve ~/"Falcon Sandbox"/Inspiration.library     # local 
 
 ## Status
 
-Falcon is early alpha and unsigned: the everyday workflow works, about nineteen in twenty of Eagle's local features are done, and the [roadmap](ROADMAP.md) lists what is left. [PARITY.md](PARITY.md) checks every feature against Eagle 4.0.0, [FORMATS.md](FORMATS.md) lists the file formats and [PLUGINS.md](PLUGINS.md) lists Eagle's plugins, which falcon does not have; Actions and Export in Format are built in. Back up a library before trying it, and don't edit the same library in two apps at once.
+Falcon is early alpha and unsigned: the everyday workflow works, about 99% of Eagle's local features are done, and the [roadmap](ROADMAP.md) lists what is left. [PARITY.md](PARITY.md) checks every feature against Eagle 4.0.0, [FORMATS.md](FORMATS.md) lists the file formats and [PLUGINS.md](PLUGINS.md) lists Eagle's plugins, which falcon does not have; Actions and Export in Format are built in. Back up a library before trying it, and don't edit the same library in two apps at once.
 
 Falcon is an independent project. It is not affiliated with, endorsed by or sponsored by Eagle or its developers. "Eagle" is a trademark of its respective owner and appears here only to describe file-format compatibility.
 

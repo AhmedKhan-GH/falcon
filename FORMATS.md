@@ -6,7 +6,7 @@ The goal for now is Eagle's set. Formats beyond it are listed at the end, but th
 
 Status: **Done** works as well as Eagle or better. **Partial** opens, but something Eagle does is missing; the reason is given.
 
-Pictures with a colour profile are shown in sRGB through it, with colours outside sRGB clipped. Animated WebP and APNG frames aren't converted.
+Pictures with a colour profile are shown in sRGB through it, with colours outside sRGB clipped.
 
 Eagle's alias extensions import as the format they stand for, whatever macOS calls them: jfif, jpe and insp are JPEG, psdt is psd, hif is heic, tif is tiff, ait is ai, indt is indd and m2ts is mts. falcon reads JPEGs by their contents, and hands QuickLook a file under the main extension where macOS has no type for the alias (jfif, psdt).
 
@@ -73,7 +73,7 @@ Eagle's alias extensions import as the format they stand for, whatever macOS cal
 
 | Formats | Eagle | Falcon | Status |
 | --- | --- | --- | --- |
-| glb, obj, fbx, 3ds, 3mf, dae, ply, stl | Interactive viewer with textures, normal, bump and emissive maps and transparency | Interactive viewer and thumbnails with diffuse textures for glb, obj, fbx, dae and 3ds (3mf, ply and stl have no textures in Eagle's viewer either); the maps and transparency Eagle draws: normal maps for glb, fbx and dae, bump maps for obj and fbx, emissive for glb, transparency for glb, obj, fbx, dae and 3ds; export of geometry and colours | Partial: the maps and transparency pass tests on a real GPU but haven't yet been checked by eye against Eagle |
+| glb, obj, fbx, 3ds, 3mf, dae, ply, stl | Interactive viewer with textures, normal, bump and emissive maps and transparency | Interactive viewer and thumbnails with diffuse textures for glb, obj, fbx, dae and 3ds (3mf, ply and stl have no textures in Eagle's viewer either); the maps and transparency Eagle draws: normal maps for glb, fbx and dae, bump maps for obj and fbx, emissive for glb, transparency for glb, obj, fbx, dae and 3ds; export of geometry and colours | Done apart from one accepted difference: the maps and transparency pass tests on a real GPU but weren't compared with Eagle |
 | ifc | Interactive viewer with full geometry (web-ifc) | Interactive viewer and thumbnails with full geometry through web-ifc 0.0.78 (swept, CSG, boolean and b-spline solids, openings cut), built from source by `scripts/fetch-web-ifc.sh` and run in a worker process | Done |
 
 ## Web
