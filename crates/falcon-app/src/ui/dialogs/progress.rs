@@ -49,6 +49,10 @@ pub(crate) struct Outcome {
     pub reveal: Vec<PathBuf>,
     /// An export finished: `message` also goes out as a notification.
     pub exported: bool,
+    /// The undo step for what the worker did.
+    pub undo: Option<falcon_library::undo::Transaction>,
+    /// A new item to select and scroll to.
+    pub select: Option<String>,
 }
 
 /// The worker's side: a cheap clone that goes into the thread.
@@ -230,6 +234,15 @@ impl App {
             self.ws.selected.clear();
             self.ws.undo.clear();
             self.ws.redo.clear();
+        }
+        if let Some(tx) = o.undo {
+            crate::app::actions::push_capped(&mut self.ws.undo, tx);
+            self.ws.redo.clear();
+        }
+        if let Some(id) = o.select {
+            self.ws.selected = vec![id.clone()];
+            self.ws.anchor = Some(id.clone());
+            self.ws.scroll_to = Some(id);
         }
         if o.changed {
             self.ws.backup.changed(std::time::Instant::now());

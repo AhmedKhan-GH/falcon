@@ -171,6 +171,7 @@
   "Back (Esc)": "返回 (Esc)",
   "Back (⌘←)": "后退 (⌘←)",
   "Back 10 frames": "后退 10 帧",
+  "Background": "背景",
   "Background Colour": "背景颜色",
   "Base64": "Base64",
   "Batch Import Links": "批量导入链接",
@@ -294,6 +295,19 @@
   "Colour": "颜色",
   "Colour needs a value like #FF0000": "颜色需要形如 #FF0000 的值",
   "Column size": "列宽",
+  "Columns": "列数",
+  "Combine": "合并",
+  "Combine Images…": "合并图像…",
+  "Combine images": "合并图像",
+  "Combine the selected images": "合并所选图像",
+  "Combine {n} images": {
+    "other": "合并{n}张图像"
+  },
+  "Combined Image": "合并的图像",
+  "Combined {n} images": {
+    "other": "已合并{n}张图像"
+  },
+  "Combining Images": "正在合并图像",
   "Comment": "批注",
   "Comment Mode (C)": "批注模式（C）",
   "Comment at {time}": "{time}处的批注",
@@ -379,6 +393,7 @@
   "Could not save: {e}": "无法存储：{e}",
   "Couldn't change the font: {error}": "无法更改字体：{error}",
   "Couldn't change the icon: {error}": "无法更改图标：{error}",
+  "Couldn't combine the images: {reason}": "无法合并图像：{reason}",
   "Couldn't copy the subtitles: {error}": "无法拷贝字幕：{error}",
   "Couldn't download from iCloud: {e}": "无法从 iCloud 下载：{e}",
   "Couldn't export the model: {error}": "无法导出模型：{error}",
@@ -720,6 +735,7 @@
   "Full Name": "全名",
   "Full Screen": "全屏幕",
   "GIF": "GIF",
+  "Gap": "间距",
   "General": "通用",
   "Generate": "生成",
   "Global": "全局",
@@ -1500,6 +1516,7 @@
   "Restore every shortcut to its default?": "将所有快捷键恢复为默认设置？",
   "Restore {n}": "恢复{n}个项目",
   "Restored {n}": "已恢复{n}个项目",
+  "Result: {width} × {height} px": "结果：{width} × {height}像素",
   "Resume where each video was left": "从上次停止的位置继续播放视频",
   "Retry All": "全部重试",
   "Retry this file": "重试此文件",
@@ -1543,6 +1560,7 @@
   "Saving a changed list adds these tags to the items already in the folder and its subfolders. Tags you remove stay on those items.": "存储修改后的列表时，这些标签会添加到文件夹及其子文件夹中已有的项目上。你移除的标签仍会保留在这些项目上。",
   "Say how many items an import added": "提示导入添加了多少个项目",
   "Say when files from the auto-import folder start importing": "自动导入文件夹中的文件开始导入时提示",
+  "Scaled down to fit the limits of {side} px a side and {megapixels} megapixels.": "已缩小以符合每边{side}像素和{megapixels}百万像素的上限。",
   "Scan": "扫描",
   "Scan Again": "重新扫描",
   "Schema": "模式",
@@ -1759,6 +1777,7 @@
   "Stopped after {added} of {n} items from {name}": {
     "other": "已在{name}的{n}个项目中完成{added}个后停止"
   },
+  "Stopped combining images": "已停止合并图像",
   "Stopping tasks…": "正在停止任务…",
   "Stretch videos to fill the viewer": "拉伸视频以填满查看器",
   "Style": "样式",
@@ -1893,6 +1912,7 @@
   "Touch ID didn't unlock Falcon": "触控 ID 未能解锁 Falcon",
   "Touch ID didn't unlock the folder": "Touch ID 未能解锁文件夹",
   "Trademark": "商标",
+  "Transparent": "透明",
   "Trash": "废纸篓",
   "Trash Is Empty": "废纸篓为空",
   "Tree": "树",
@@ -2024,6 +2044,8 @@
   "before": "早于",
   "between": "介于",
   "cancelled": "已取消",
+  "combine::Horizontal": "水平",
+  "combine::Vertical": "垂直",
   "contains": "包含",
   "days": "天",
   "doesn't contain": "不包含",
@@ -2226,6 +2248,7 @@
   "{folders} and {items} from {path} will be added. Folders, smart folders and tag groups already here are kept as they are, and so are items already here.": "将从{path}添加{folders}和{items}。此处已有的文件夹、智能文件夹、标签组和项目将保持不变。",
   "{hex}  ·  {ratio}%\nClick for colour values, right-click to find similar colours": "{hex}  ·  {ratio}%\n单击查看颜色值，右键单击查找相似颜色",
   "{lib}'s metadata.json was damaged and was restored from backup/{name}; the damaged file was kept in backup/": "{lib}的 metadata.json 已损坏，已从 backup/{name}恢复；损坏的文件保留在 backup/ 中。",
+  "{message}; scaled down to {width} × {height} px to fit the size limit": "{message}；已缩小到{width} × {height}像素以符合大小上限",
   "{message}; skipped {n} items (animated)": {
     "other": "{message}；已跳过{n}个项目（动画）"
   },

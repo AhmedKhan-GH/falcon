@@ -171,6 +171,7 @@
   "Back (Esc)": "戻る (Esc)",
   "Back (⌘←)": "巻き戻す (⌘←)",
   "Back 10 frames": "10フレーム戻る",
+  "Background": "背景",
   "Background Colour": "背景色",
   "Base64": "Base64",
   "Batch Import Links": "リンクを一括で読み込む",
@@ -294,6 +295,19 @@
   "Colour": "カラー",
   "Colour needs a value like #FF0000": "カラーには #FF0000 のような値が必要です",
   "Column size": "列のサイズ",
+  "Columns": "列数",
+  "Combine": "結合",
+  "Combine Images…": "画像を結合…",
+  "Combine images": "画像を結合",
+  "Combine the selected images": "選択した画像を結合",
+  "Combine {n} images": {
+    "other": "{n}枚の画像を結合"
+  },
+  "Combined Image": "結合した画像",
+  "Combined {n} images": {
+    "other": "{n}枚の画像を結合しました"
+  },
+  "Combining Images": "画像を結合しています",
   "Comment": "コメント",
   "Comment Mode (C)": "コメントモード（C）",
   "Comment at {time}": "{time}のコメント",
@@ -379,6 +393,7 @@
   "Could not save: {e}": "保存できませんでした：{e}",
   "Couldn't change the font: {error}": "フォントを変更できませんでした：{error}",
   "Couldn't change the icon: {error}": "アイコンを変更できませんでした：{error}",
+  "Couldn't combine the images: {reason}": "画像を結合できませんでした：{reason}",
   "Couldn't copy the subtitles: {error}": "字幕をコピーできませんでした：{error}",
   "Couldn't download from iCloud: {e}": "iCloudからダウンロードできませんでした：{e}",
   "Couldn't export the model: {error}": "モデルを書き出せませんでした: {error}",
@@ -720,6 +735,7 @@
   "Full Name": "フルネーム",
   "Full Screen": "フルスクリーン",
   "GIF": "GIF",
+  "Gap": "間隔",
   "General": "一般",
   "Generate": "生成",
   "Global": "グローバル",
@@ -1500,6 +1516,7 @@
   "Restore every shortcut to its default?": "すべてのショートカットをデフォルトに戻しますか？",
   "Restore {n}": "{n}件を元に戻す",
   "Restored {n}": "{n}件を元に戻しました",
+  "Result: {width} × {height} px": "結果：{width} × {height} px",
   "Resume where each video was left": "各ビデオを前回の位置から再開",
   "Retry All": "すべて再試行",
   "Retry this file": "このファイルを再試行",
@@ -1543,6 +1560,7 @@
   "Saving a changed list adds these tags to the items already in the folder and its subfolders. Tags you remove stay on those items.": "変更したリストを保存すると、フォルダとそのサブフォルダにあるアイテムにもこれらのタグが追加されます。削除したタグはそれらのアイテムに残ります。",
   "Say how many items an import added": "読み込みで追加されたアイテム数を通知",
   "Say when files from the auto-import folder start importing": "自動読み込みフォルダのファイルの読み込みが始まったら通知",
+  "Scaled down to fit the limits of {side} px a side and {megapixels} megapixels.": "1辺{side} pxと{megapixels}メガピクセルの上限に収まるように縮小されます。",
   "Scan": "スキャン",
   "Scan Again": "再スキャン",
   "Schema": "スキーマ",
@@ -1759,6 +1777,7 @@
   "Stopped after {added} of {n} items from {name}": {
     "other": "{name}の{n}個中{added}個で停止しました"
   },
+  "Stopped combining images": "画像の結合を中止しました",
   "Stopping tasks…": "タスクを停止しています…",
   "Stretch videos to fill the viewer": "ビデオをビューアいっぱいに拡大",
   "Style": "スタイル",
@@ -1893,6 +1912,7 @@
   "Touch ID didn't unlock Falcon": "Touch IDでFalconのロックを解除できませんでした",
   "Touch ID didn't unlock the folder": "Touch ID でフォルダのロックを解除できませんでした",
   "Trademark": "商標",
+  "Transparent": "透明",
   "Trash": "ゴミ箱",
   "Trash Is Empty": "ゴミ箱は空です",
   "Tree": "ツリー",
@@ -2024,6 +2044,8 @@
   "before": "より前",
   "between": "の範囲",
   "cancelled": "キャンセルされました",
+  "combine::Horizontal": "横",
+  "combine::Vertical": "縦",
   "contains": "を含む",
   "days": "日",
   "doesn't contain": "を含まない",
@@ -2226,6 +2248,7 @@
   "{folders} and {items} from {path} will be added. Folders, smart folders and tag groups already here are kept as they are, and so are items already here.": "{path}から{folders}と{items}が追加されます。すでにあるフォルダ、スマートフォルダ、タググループ、アイテムはそのまま残ります。",
   "{hex}  ·  {ratio}%\nClick for colour values, right-click to find similar colours": "{hex}  ·  {ratio}%\nクリックで色の値を表示、右クリックで似た色を検索",
   "{lib}'s metadata.json was damaged and was restored from backup/{name}; the damaged file was kept in backup/": "{lib}のmetadata.jsonが破損していたため、backup/{name}から復元しました。破損したファイルはbackup/に残してあります。",
+  "{message}; scaled down to {width} × {height} px to fit the size limit": "{message}。サイズの上限に収まるように {width} × {height} px に縮小しました",
   "{message}; skipped {n} items (animated)": {
     "other": "{message}；スキップ：{n}個（アニメーション）"
   },

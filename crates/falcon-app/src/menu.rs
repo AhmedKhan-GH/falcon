@@ -74,6 +74,8 @@ pub struct State {
     pub space_scrolls: bool,
     pub rotatable: bool,
     pub croppable: bool,
+    /// Two or more of the items acted on are images falcon can combine.
+    pub combinable: bool,
     /// The item acted on has a custom thumbnail.
     pub has_custom_thumb: bool,
     /// The book in `docs/` is on this machine.
@@ -183,6 +185,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::FlipHorizontal => s.library && s.flippable,
         C::RotateLeft => s.library && s.rotatable,
         C::Crop => s.library && s.croppable,
+        C::CombineImages => s.library && s.combinable,
         C::Documentation => s.docs,
         C::ShowTips | C::ErrorLogs | C::About | C::DebugReport | C::ColorSpace(_) => true,
         C::ToggleName | C::ToggleInfo | C::ToggleComments | C::ToggleSubfolders => s.library,
@@ -387,7 +390,7 @@ pub static MENUS: &[(&str, &[Entry])] = &[
             ),
             Entry::Sub(
                 "Edit Image",
-                &[item("Flip Horizontally", Command::FlipHorizontal), item("Rotate Left", Command::RotateLeft), item("Crop…", Command::Crop)],
+                &[item("Flip Horizontally", Command::FlipHorizontal), item("Rotate Left", Command::RotateLeft), item("Crop…", Command::Crop), item("Combine Images…", Command::CombineImages)],
             ),
             item("Folder Settings…", Command::FolderSettings),
             item("Set as Folder Cover", Command::SetFolderCover),
@@ -1155,6 +1158,7 @@ mod tests {
             flippable: true,
             rotatable: true,
             croppable: true,
+            combinable: true,
             has_custom_thumb: true,
             docs: true,
             lockable: true,

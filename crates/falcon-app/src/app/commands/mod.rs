@@ -44,15 +44,17 @@ pub(crate) fn key_events(chord: &egui::KeyboardShortcut) -> Vec<egui::Event> {
     events
 }
 
-/// Whether some of `ids` can be flipped, some rotated, and (one item)
-/// cropped.
-pub(crate) fn editable_now(ids: &[String], lib: &Library) -> [bool; 3] {
+/// Whether some of `ids` can be flipped, some rotated, (one item) cropped,
+/// and (two or more) combined.
+pub(crate) fn editable_now(ids: &[String], lib: &Library) -> [bool; 4] {
+    use falcon_library::combine::can_combine;
     use falcon_library::transform::{can_crop, can_flip, can_rotate};
     let ext = |id: &String| lib.item(id).map(|i| i.ext.as_str());
     [
         ids.iter().filter_map(ext).any(can_flip),
         ids.iter().filter_map(ext).any(can_rotate),
         ids.len() == 1 && ids.iter().filter_map(ext).any(can_crop),
+        ids.iter().filter_map(ext).filter(|e| can_combine(e)).count() >= 2,
     ]
 }
 
@@ -358,6 +360,7 @@ impl App {
             flippable: self.ws.editable[0],
             rotatable: self.ws.editable[1],
             croppable: self.ws.editable[2],
+            combinable: self.ws.editable[3] && self.ws.scope != Scope::Trash,
             has_custom_thumb: self.has_custom_thumb(),
             docs: docs_path().is_some(),
             back: !self.ws.back.is_empty(),
@@ -764,6 +767,12 @@ impl App {
                         }
                     }
                 }
+            }
+            C::CombineImages => {
+                let Some(shared) = self.ws.lib.clone() else { return };
+                let ids = self.acted_on();
+                let lib = lock(&shared);
+                self.open_combine(&lib, &ids);
             }
             C::WindowZoom => {
                 let on = ctx.input(|i| i.viewport().maximized.unwrap_or(false));

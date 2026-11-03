@@ -172,6 +172,8 @@ pub enum Command {
     ClearTags,
     /// Edit ▸ Edit Image ▸ Crop… (Eagle's ⇧C; again to save).
     Crop,
+    /// Edit ▸ Edit Image ▸ Combine Images… (Eagle's ⇧⌘M, from its plugin).
+    CombineImages,
     // Menu bar entries with no row in `TABLE` (no rebindable key).
     Undo,
     Redo,
@@ -420,6 +422,7 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::Crop, id: "edit.image.crop", group: "Edit", label: "Crop the image (again to save)", default: k(SHIFT, Key::C), aliases: &[] },
     Spec { cmd: Command::RotateLeft, id: "edit.image.rotate", group: "Edit", label: "Rotate the image left (viewer: also a video's picture)", default: k(SHIFT, Key::R), aliases: &[] },
     Spec { cmd: Command::FlipHorizontal, id: "edit.image.flip", group: "Edit", label: "Flip the image horizontally (viewer: also a video's picture)", default: k(SHIFT, Key::F), aliases: &[] },
+    Spec { cmd: Command::CombineImages, id: "edit.image.merge", group: "Edit", label: "Combine the selected images", default: k(CMD_SHIFT, Key::M), aliases: &[] },
     Spec { cmd: Command::Paste, id: "edit.paste", group: "Edit", label: "Paste files or an image", default: k(CMD, Key::V), aliases: &[] },
     Spec { cmd: Command::Trash, id: "edit.remove.trash.darwin", group: "Edit", label: "Move to the Trash", default: k(CMD, Key::Backspace), aliases: &[KeyboardShortcut::new(NONE, Key::Delete)] },
     Spec { cmd: Command::RemoveFromFolder, id: "edit.remove.folder.darwin", group: "Edit", label: "Remove from the open folder", default: k(CMD_SHIFT, Key::Backspace), aliases: &[] },
@@ -1354,9 +1357,8 @@ mod tests {
 
     /// Eagle's macOS keybind ids that falcon has an action for, with
     /// Eagle's default (empty is unbound). Ids falcon lacks an action for
-    /// (link and site importers, reverse image search, image merge (the
-    /// Combine Images plugin) and the image-search filter, which needs
-    /// Eagle's AI Search plugin, are not listed.
+    /// (link and site importers, reverse image search and the image-search
+    /// filter, which needs Eagle's AI Search plugin) are not listed.
     const EAGLE_IDS: &[(&str, &str)] = &[
         ("global.show.eagle", ""),
         ("global.show.search", ""),
@@ -1393,6 +1395,7 @@ mod tests {
         ("edit.image.flip", "Shift + F"),
         ("edit.image.rotate", "Shift + R"),
         ("edit.image.crop", "Shift + C"),
+        ("edit.image.merge", "Command + Shift + M"),
         ("edit.folder.setting", "Command + Shift + R"),
         ("edit.folder.password.create", ""),
         ("edit.folder.password.change", ""),

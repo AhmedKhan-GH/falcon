@@ -97,6 +97,7 @@ impl App {
         }
         if self.ws.scope != Scope::Trash {
             self.webp_menu(ui, item, targets);
+            self.combine_menu(ui, lib, targets);
         }
         self.item_export_menu(ui, targets);
         self.add_to_library_menu(ui, crate::ui::dialogs::add_to_library::AddWhat::Items(targets.to_vec()));

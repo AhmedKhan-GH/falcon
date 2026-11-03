@@ -365,7 +365,7 @@ pub(crate) struct Workspace {
     pub(crate) up: Option<Scope>,
     /// Whether some of the items acted on can be flipped, some rotated, and
     /// the one item cropped (for the menu bar). Refreshed with `up`.
-    pub(crate) editable: [bool; 3],
+    pub(crate) editable: [bool; 4],
     /// A Home, End, Page Up or Page Down for the grid, applied next frame.
     pub(crate) scroll: Option<crate::shortcuts::Scroll>,
     /// Images needed this frame, handed to the loader once at the end.
@@ -497,7 +497,7 @@ impl Workspace {
             marquee: None,
             scroll: None,
             up: None,
-            editable: [false; 3],
+            editable: [false; 4],
             frame_jobs: Vec::new(),
             actions: Vec::new(),
             renaming: None,

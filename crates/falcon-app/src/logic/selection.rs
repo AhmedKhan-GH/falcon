@@ -12,6 +12,14 @@ pub fn next_after_removal(order: &[String], removed: &[String]) -> Option<String
     order[first..].iter().find(stays).or_else(|| order[..first].iter().rev().find(stays)).cloned()
 }
 
+/// `ids` in the order they have on screen (`order`); any not shown keep
+/// their relative order after those.
+pub fn on_screen_order(order: &[String], ids: &[String]) -> Vec<String> {
+    let picked: HashSet<&String> = ids.iter().collect();
+    let shown: HashSet<&String> = order.iter().collect();
+    order.iter().filter(|id| picked.contains(id)).chain(ids.iter().filter(|id| !shown.contains(id))).cloned().collect()
+}
+
 /// How a rubber-band drag combines with the selection it started from,
 /// after Eagle's `rect-select`: plain replaces it, ⌘ flips every item the
 /// band touches, ⇧ adds to it.
@@ -109,6 +117,14 @@ pub fn extend_selection(order: &[String], selected: &[String], anchor: Option<&s
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn on_screen_order_follows_the_grid_not_the_clicks() {
+        let order: Vec<String> = ["a", "b", "c", "d"].map(String::from).to_vec();
+        let ids = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(on_screen_order(&order, &ids(&["d", "x", "a", "y"])), ids(&["a", "d", "x", "y"]));
+        assert!(on_screen_order(&order, &[]).is_empty());
+    }
 
     #[test]
     fn selection_after_removal() {

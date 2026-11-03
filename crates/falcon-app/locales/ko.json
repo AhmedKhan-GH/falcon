@@ -171,6 +171,7 @@
   "Back (Esc)": "뒤로 (Esc)",
   "Back (⌘←)": "뒤로 감기 (⌘←)",
   "Back 10 frames": "10프레임 뒤로",
+  "Background": "배경",
   "Background Colour": "배경색",
   "Base64": "Base64",
   "Batch Import Links": "링크 일괄 가져오기",
@@ -294,6 +295,19 @@
   "Colour": "색상",
   "Colour needs a value like #FF0000": "색상에는 #FF0000 같은 값이 필요합니다",
   "Column size": "열 크기",
+  "Columns": "열 수",
+  "Combine": "합치기",
+  "Combine Images…": "이미지 합치기…",
+  "Combine images": "이미지 합치기",
+  "Combine the selected images": "선택한 이미지 합치기",
+  "Combine {n} images": {
+    "other": "이미지 {n}개 합치기"
+  },
+  "Combined Image": "합친 이미지",
+  "Combined {n} images": {
+    "other": "이미지 {n}개를 합쳤습니다"
+  },
+  "Combining Images": "이미지를 합치는 중",
   "Comment": "코멘트",
   "Comment Mode (C)": "코멘트 모드 (C)",
   "Comment at {time}": "{time}의 코멘트",
@@ -379,6 +393,7 @@
   "Could not save: {e}": "저장할 수 없습니다: {e}",
   "Couldn't change the font: {error}": "서체를 변경할 수 없습니다: {error}",
   "Couldn't change the icon: {error}": "아이콘을 변경할 수 없습니다: {error}",
+  "Couldn't combine the images: {reason}": "이미지를 합칠 수 없습니다: {reason}",
   "Couldn't copy the subtitles: {error}": "자막을 복사할 수 없습니다: {error}",
   "Couldn't download from iCloud: {e}": "iCloud에서 다운로드할 수 없습니다: {e}",
   "Couldn't export the model: {error}": "모델을 내보낼 수 없습니다: {error}",
@@ -720,6 +735,7 @@
   "Full Name": "전체 이름",
   "Full Screen": "전체 화면",
   "GIF": "GIF",
+  "Gap": "간격",
   "General": "일반",
   "Generate": "생성",
   "Global": "전역",
@@ -1500,6 +1516,7 @@
   "Restore every shortcut to its default?": "모든 단축키를 기본값으로 복원하시겠습니까?",
   "Restore {n}": "{n}개 복원",
   "Restored {n}": "{n}개를 복원했습니다",
+  "Result: {width} × {height} px": "결과: {width} × {height} px",
   "Resume where each video was left": "각 비디오를 마지막 위치부터 이어서 재생",
   "Retry All": "모두 다시 시도",
   "Retry this file": "이 파일 다시 시도",
@@ -1543,6 +1560,7 @@
   "Saving a changed list adds these tags to the items already in the folder and its subfolders. Tags you remove stay on those items.": "변경한 목록을 저장하면 폴더와 하위 폴더에 이미 있는 항목에도 이 태그가 추가됩니다. 제거한 태그는 해당 항목에 그대로 남습니다.",
   "Say how many items an import added": "가져오기로 추가된 항목 수 알리기",
   "Say when files from the auto-import folder start importing": "자동 가져오기 폴더의 파일을 가져오기 시작하면 알리기",
+  "Scaled down to fit the limits of {side} px a side and {megapixels} megapixels.": "한 변 {side} px, {megapixels}메가픽셀 제한에 맞게 축소됩니다.",
   "Scan": "검사",
   "Scan Again": "다시 검사",
   "Schema": "스키마",
@@ -1759,6 +1777,7 @@
   "Stopped after {added} of {n} items from {name}": {
     "other": "{name}의 항목 {n}개 중 {added}개 후 중지했습니다"
   },
+  "Stopped combining images": "이미지 합치기를 중단했습니다",
   "Stopping tasks…": "작업을 중지하는 중…",
   "Stretch videos to fill the viewer": "비디오를 뷰어에 가득 차게 확대",
   "Style": "스타일",
@@ -1893,6 +1912,7 @@
   "Touch ID didn't unlock Falcon": "Touch ID로 Falcon을 잠금 해제하지 못했습니다",
   "Touch ID didn't unlock the folder": "Touch ID로 폴더 잠금을 해제하지 못했습니다",
   "Trademark": "상표",
+  "Transparent": "투명",
   "Trash": "휴지통",
   "Trash Is Empty": "휴지통이 비어 있습니다",
   "Tree": "트리",
@@ -2024,6 +2044,8 @@
   "before": "이전",
   "between": "사이",
   "cancelled": "취소됨",
+  "combine::Horizontal": "가로",
+  "combine::Vertical": "세로",
   "contains": "포함",
   "days": "일",
   "doesn't contain": "포함하지 않음",
@@ -2226,6 +2248,7 @@
   "{folders} and {items} from {path} will be added. Folders, smart folders and tag groups already here are kept as they are, and so are items already here.": "{path}에서 {folders}와(과) {items}이(가) 추가됩니다. 이미 있는 폴더, 스마트 폴더, 태그 그룹과 항목은 그대로 유지됩니다.",
   "{hex}  ·  {ratio}%\nClick for colour values, right-click to find similar colours": "{hex}  ·  {ratio}%\n클릭하면 색상 값 표시, 오른쪽 클릭하면 비슷한 색상 찾기",
   "{lib}'s metadata.json was damaged and was restored from backup/{name}; the damaged file was kept in backup/": "{lib}의 metadata.json이 손상되어 backup/{name}에서 복원했습니다. 손상된 파일은 backup/에 보관되어 있습니다.",
+  "{message}; scaled down to {width} × {height} px to fit the size limit": "{message}. 크기 제한에 맞게 {width} × {height} px로 축소했습니다",
   "{message}; skipped {n} items (animated)": {
     "other": "{message}; 애니메이션 항목 {n}개 건너뜀"
   },

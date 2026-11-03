@@ -3,6 +3,7 @@
 pub(crate) mod about;
 pub(crate) mod tips;
 pub(crate) mod clear_invalid;
+pub(crate) mod combine;
 pub(crate) mod add_to_library;
 pub(crate) mod debug;
 pub(crate) mod duplicates;
