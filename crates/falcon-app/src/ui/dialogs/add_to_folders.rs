@@ -1,17 +1,20 @@
-//! The Add to Folders picker (Find ▸ Add to Folders…, ⇧⌘J, the item
-//! menu and the inspector's +): a panel beside the pointer and clear of
-//! the inspector, with a search field and the All, Recent and Selected
-//! tabs, ticks for the folders the items go in, folder creation and a
-//! footer naming the keys. It has no Save: closing it (a click outside or
-//! Esc) applies the ticks as one undo step, or nothing if none changed.
-//! The rules live in `crate::folder_picker`.
+//! The Add to Folders picker, in Eagle's two forms. F, the item menu and
+//! the inspector's + open a panel beside the pointer and clear of the
+//! inspector, with a search field and the All, Recent and Selected tabs,
+//! ticks for the folders the items go in, folder creation and a footer
+//! naming the keys. It has no Save: closing it (a click outside or Esc)
+//! applies the ticks as one undo step, or nothing if none changed. ⇧⌘J and
+//! Find ▸ Add to Folders… open the older centred dialog with the same list
+//! and no tabs, where only Save applies; Cancel and Esc discard the ticks,
+//! and a click outside does nothing. The rules live in
+//! `crate::folder_picker`.
 
 use eframe::egui::{self, Align2, Color32, Key, Modifiers, Pos2, Rect, RichText, Sense, TextEdit, Ui, vec2};
 use falcon_library::Library;
 
 use crate::app::{Action, App};
 use crate::folder_icons;
-use crate::folder_picker::{self, KeyHint, NewPlace, Picker, Row, Tab};
+use crate::folder_picker::{self, Closing, KeyHint, NewPlace, Picker, Row, Tab, Variant};
 use crate::icons as ic;
 use crate::logic::{self, Scope};
 use crate::theme::{self as t, font};
@@ -24,11 +27,13 @@ const LIST_H: f32 = 330.0;
 /// The panel's whole size at its tallest, frame included, for keeping it
 /// inside the central area: search row, list, the box and two footer lines.
 const PANEL_SIZE: egui::Vec2 = vec2(PANEL_W + 14.0, LIST_H + 124.0);
+/// The dialog's width.
+const DIALOG_W: f32 = 380.0;
 
 impl App {
-    /// Opens the picker for `items`, with the folders they all share
-    /// ticked.
-    pub(crate) fn open_add_to_folders(&mut self, lib: &Library, items: Vec<String>) {
+    /// Opens the picker in the form asked for, for `items`, with the
+    /// folders they all share ticked.
+    pub(crate) fn open_add_to_folders(&mut self, lib: &Library, items: Vec<String>, variant: Variant) {
         // Asked again while open, it stays open with its ticks.
         if items.is_empty() || self.ws.scope == Scope::Trash || self.ws.folders.picker.is_some() {
             return;
@@ -40,6 +45,7 @@ impl App {
             _ => None,
         };
         let mut p = Picker::new(items, current, existing, &lib.metadata.folders);
+        p.variant = variant;
         p.remove_from_current = self.ws.folders.picker_remove;
         self.ws.folders.picker = Some(p);
     }
@@ -59,23 +65,33 @@ impl App {
         let corner = folder_picker::place_panel(screen, inspector_left, Pos2::new(at.0, at.1), PANEL_SIZE);
         p.refresh(roots, &self.recent_folders, shut);
         let naming_open = p.naming.is_some();
-        let area = egui::Modal::default_area(egui::Id::unique("add-to-folders")).anchor(Align2::LEFT_TOP, corner.to_vec2());
-        let modal = egui::Modal::new(egui::Id::unique("add-to-folders")).area(area).backdrop_color(Color32::TRANSPARENT).show(ctx, |ui| {
-            ui.set_width(PANEL_W);
+        let dialog = p.variant == Variant::Dialog;
+        let id = egui::Id::unique("add-to-folders");
+        // The panel shows no dimming and sits at its corner; the dialog is
+        // an ordinary centred modal.
+        let modal = if dialog { egui::Modal::new(id) } else { egui::Modal::new(id).area(egui::Modal::default_area(id).anchor(Align2::LEFT_TOP, corner.to_vec2())).backdrop_color(Color32::TRANSPARENT) };
+        let mut button = None;
+        let modal = modal.show(ctx, |ui| {
+            ui.set_width(if dialog { DIALOG_W } else { PANEL_W });
             if p.naming.is_some() {
                 self.picker_name_prompt(ui, &mut p);
                 return;
             }
+            if dialog {
+                ui.label(RichText::new(crate::locale::tr("Add to Folders")).size(15.0));
+                ui.add_space(6.0);
+            }
             // Keys while the search field has focus, as in Eagle.
             let mut toggle = None;
             ui.input_mut(|i| {
-                if i.consume_key(Modifiers::NONE, Key::Tab) {
+                // The dialog has no tabs; Tab still must not leave the field.
+                if i.consume_key(Modifiers::NONE, Key::Tab) && !dialog {
                     let next = p.tab.next();
                     p.set_tab(next);
                 }
             });
             ui.horizontal(|ui| {
-                let tabs_w = 3.0 * 28.0;
+                let tabs_w = if dialog { 0.0 } else { 3.0 * 28.0 };
                 let te = ui.add(TextEdit::singleline(&mut p.search).hint_text(crate::locale::tr("Search")).desired_width(ui.available_width() - tabs_w));
                 if te.changed() {
                     p.dirty = true;
@@ -111,10 +127,12 @@ impl App {
                 if te.lost_focus() {
                     te.request_focus();
                 }
-                for (tab, glyph, name) in [(Tab::All, ic::FOLDER, crate::locale::tr("All")), (Tab::Recent, ic::CLOCK, crate::locale::tr("Recent")), (Tab::Selected, ic::CHECK, crate::locale::tr("Selected"))] {
-                    let b = egui::Button::new(RichText::new(glyph).size(14.0)).selected(p.tab == tab).min_size(vec2(24.0, 0.0));
-                    if ui.add(b).on_hover_text(name).clicked() {
-                        p.set_tab(tab);
+                if !dialog {
+                    for (tab, glyph, name) in [(Tab::All, ic::FOLDER, crate::locale::tr("All")), (Tab::Recent, ic::CLOCK, crate::locale::tr("Recent")), (Tab::Selected, ic::CHECK, crate::locale::tr("Selected"))] {
+                        let b = egui::Button::new(RichText::new(glyph).size(14.0)).selected(p.tab == tab).min_size(vec2(24.0, 0.0));
+                        if ui.add(b).on_hover_text(name).clicked() {
+                            p.set_tab(tab);
+                        }
                     }
                 }
             });
@@ -147,14 +165,39 @@ impl App {
                 ui.add_space(6.0);
                 ui.checkbox(&mut p.remove_from_current, crate::locale::tr("Take them out of the open folder"));
             }
-            ui.add_space(6.0);
-            Self::picker_key_hints(ui, &p);
+            if dialog {
+                ui.add_space(10.0);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.add(egui::Button::new(RichText::new(crate::locale::tr("Save")).color(Color32::WHITE)).fill(t::p().primary)).clicked() {
+                        button = Some(Closing::Save);
+                    }
+                    if ui.button(crate::locale::tr("Cancel")).clicked() {
+                        button = Some(Closing::Cancel);
+                    }
+                });
+            } else {
+                ui.add_space(6.0);
+                Self::picker_key_hints(ui, &p);
+            }
         });
-        self.ws.folders.picker_remove = p.remove_from_current;
-        if modal.should_close() && !naming_open {
-            // Closing applies what was ticked, as one undo step; nothing
-            // changed, nothing to apply.
-            let (add, remove) = p.changes(roots);
+        // Esc or a click outside: the panel applies; the dialog takes Esc as
+        // Cancel and ignores the click, which egui reports the same way.
+        let esc = ctx.input(|i| i.key_pressed(Key::Escape));
+        let dismissed = modal.should_close() && !naming_open;
+        let closing = match button {
+            Some(how) => Some(how),
+            None if dismissed && !dialog => Some(Closing::Dismiss),
+            None if dismissed && esc => Some(Closing::Cancel),
+            None => None,
+        };
+        // The box is remembered from the panel at once, and from the dialog
+        // only when saved.
+        if !dialog || closing == Some(Closing::Save) {
+            self.ws.folders.picker_remove = p.remove_from_current;
+        }
+        if let Some(how) = closing {
+            // Applied as one undo step; nothing changed, nothing to apply.
+            let (add, remove) = p.closed_changes(how, roots);
             if !add.is_empty() || !remove.is_empty() {
                 self.ws.actions.push(Action::Folders(FolderAction::Categorize(p.items.clone(), add, remove)));
             }
@@ -261,8 +304,19 @@ impl App {
                     let g = galley(ui, parent, font(11.5), t::p().text_muted, 84.0);
                     ui.painter().galley(Pos2::new(rect.right() - 30.0 - g.size().x, cy - g.size().y / 2.0), g, t::p().text_muted);
                 }
-                if p.checked.contains(id) {
-                    icon(ui, Pos2::new(rect.right() - 14.0, cy), ic::CHECK, 14.0, t::p().primary);
+                let tick = Pos2::new(rect.right() - 14.0, cy);
+                let ticked = p.checked.contains(id);
+                if p.variant == Variant::Dialog {
+                    // The dialog's rows are checkboxes.
+                    let frame = Rect::from_center_size(tick, vec2(14.0, 14.0));
+                    if ticked {
+                        ui.painter().rect_filled(frame, 3.0, t::p().primary);
+                        icon(ui, tick, ic::CHECK, 11.0, Color32::WHITE);
+                    } else {
+                        ui.painter().rect_stroke(frame, 3.0, egui::Stroke::new(1.0, t::p().text_muted), egui::StrokeKind::Inside);
+                    }
+                } else if ticked {
+                    icon(ui, tick, ic::CHECK, 14.0, t::p().primary);
                 }
                 if resp.clicked() && !on_control {
                     self.picker_pick(p, row, command);

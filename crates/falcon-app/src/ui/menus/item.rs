@@ -31,9 +31,11 @@ impl App {
         }
         self.item_copy_menu(ui, targets);
         if self.ws.scope != Scope::Trash {
-            let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::AddToFolders);
+            // This entry opens the panel, so it shows the panel's key (⇧⌘J opens
+            // the dialog).
+            let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::FolderPanel);
             if ui.add(egui::Button::new(tr("Add to Folders…")).shortcut_text(keys)).clicked() {
-                self.open_add_to_folders(lib, targets.to_vec());
+                self.open_add_to_folders(lib, targets.to_vec(), crate::folder_picker::Variant::Panel);
             }
         }
         let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::AddToLastFolder);

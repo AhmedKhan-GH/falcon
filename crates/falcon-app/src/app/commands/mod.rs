@@ -656,7 +656,7 @@ impl App {
             C::AddToFolders | C::AddToFolder | C::FolderPanel => {
                 if let Some(l) = self.ws.lib.clone() {
                     let ids = self.acted_on();
-                    self.open_add_to_folders(&lock(&l), ids);
+                    self.open_add_to_folders(&lock(&l), ids, crate::folder_picker::Variant::for_command(cmd));
                 }
             }
             C::CustomThumbnail | C::ClipboardThumbnail => {

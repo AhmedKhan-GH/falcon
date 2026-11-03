@@ -1,12 +1,17 @@
-//! The rules of the Add to Folders picker (Find ▸ Add to Folders…, ⇧⌘J):
-//! which rows each tab lists for the search typed, which row the keyboard
-//! highlights, and what closing the picker changes. The dialog is drawn by
-//! `ui/dialogs/add_to_folders.rs`.
+//! The rules of the Add to Folders picker: which rows each tab lists for
+//! the search typed, which row the keyboard highlights, and what closing
+//! the picker changes. It is drawn by `ui/dialogs/add_to_folders.rs`.
+//!
+//! Eagle has two forms of it ([`Variant`]): F, the item menu and the
+//! inspector's + open the tabbed panel, which applies on closing, and
+//! ⇧⌘J and Find ▸ Add to Folders… open an older dialog with Save and
+//! Cancel and no tabs. Both share these rules.
 //!
 //! Like Eagle's, the picker starts with every folder the items all share
 //! ticked; ticking adds the items to a folder and unticking a shared
 //! folder takes them out of it. Nothing is applied until the picker
-//! closes, and then only if a tick changed. The All tab lists the recent
+//! closes, and then only if a tick changed (and, in the dialog, only by
+//! Save). The All tab lists the recent
 //! and ticked folders above the tree (top level expanded), the Recent tab
 //! only those, and the Selected tab the ticked folders. A search lists
 //! the folders whose name has its letters in order ([`fuzzy_rank`]), flat
@@ -22,6 +27,8 @@ use std::collections::HashSet;
 use eframe::egui::{Pos2, Rect, Vec2};
 use falcon_library::model::Folder;
 use falcon_library::search;
+
+use crate::shortcuts::Command;
 
 /// Recently used folders the picker lists (as Eagle, the first eight).
 pub const RECENT_SHOWN: usize = 8;
@@ -89,6 +96,8 @@ pub const RECENT_ABOVE_TREE: usize = 5;
 /// The picker as filled in so far.
 #[derive(Clone, Debug, Default)]
 pub struct Picker {
+    /// Which form it opened in.
+    pub variant: Variant,
     /// The items being filed.
     pub items: Vec<String>,
     /// The folder being viewed, if any.
@@ -120,6 +129,35 @@ pub struct Picker {
     pub scroll: bool,
     /// The next `refresh` keeps the highlight.
     pub keep_highlight: bool,
+}
+
+/// The two forms the picker opens in.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Variant {
+    /// The tabbed panel beside the pointer; closing it applies the ticks.
+    #[default]
+    Panel,
+    /// The older centred dialog: no tabs, and only Save applies the ticks.
+    Dialog,
+}
+
+impl Variant {
+    /// The form a command opens: ⇧⌘J and the Find menu's entry the dialog,
+    /// F and Eagle's `organize.folder.add` the panel.
+    pub fn for_command(cmd: Command) -> Variant {
+        if cmd == Command::AddToFolders { Variant::Dialog } else { Variant::Panel }
+    }
+}
+
+/// How the picker is being closed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Closing {
+    /// The panel, by Esc or a click outside.
+    Dismiss,
+    /// The dialog's Save.
+    Save,
+    /// The dialog's Cancel or Esc.
+    Cancel,
 }
 
 /// A key the panel's footer names.
@@ -243,6 +281,12 @@ impl Picker {
             remove.push(cur.clone());
         }
         (add, remove)
+    }
+
+    /// What closing the picker this way applies: [`Self::changes`], unless
+    /// it is a Cancel, which discards the ticks.
+    pub fn closed_changes(&self, how: Closing, roots: &[Folder]) -> (Vec<String>, Vec<String>) {
+        if how == Closing::Cancel { (vec![], vec![]) } else { self.changes(roots) }
     }
 
     /// Moves the highlight to the next (`down`) or previous pickable row,
@@ -840,6 +884,31 @@ mod tests {
         // A window too small for it keeps the top left in view.
         let tiny = Rect::from_min_size(Pos2::ZERO, Vec2::new(200.0, 200.0));
         assert_eq!(place_panel(tiny, Some(100.0), Pos2::new(150.0, 150.0), Vec2::new(320.0, 460.0)), Pos2::new(8.0, 8.0));
+    }
+
+    #[test]
+    fn the_find_entry_opens_the_dialog_and_the_rest_the_panel() {
+        assert_eq!(Variant::for_command(Command::AddToFolders), Variant::Dialog);
+        assert_eq!(Variant::for_command(Command::AddToFolder), Variant::Panel);
+        assert_eq!(Variant::for_command(Command::FolderPanel), Variant::Panel);
+        assert_eq!(Variant::default(), Variant::Panel);
+    }
+
+    #[test]
+    fn cancel_discards_the_ticks_and_save_and_dismiss_apply_them() {
+        let roots = tree();
+        let mut p = picker(&["A1"], &roots);
+        p.toggle("B");
+        p.toggle("A1");
+        let both = (vec!["B".to_string()], vec!["A1".to_string()]);
+        assert_eq!(p.closed_changes(Closing::Save, &roots), both);
+        assert_eq!(p.closed_changes(Closing::Dismiss, &roots), both);
+        assert_eq!(p.closed_changes(Closing::Cancel, &roots), (vec![], vec![]));
+        // Cancel also drops the box.
+        let mut p = Picker::new(vec!["i".into()], Some("A1".into()), vec![], &roots);
+        p.remove_from_current = true;
+        assert_eq!(p.closed_changes(Closing::Save, &roots).1, ["A1"]);
+        assert_eq!(p.closed_changes(Closing::Cancel, &roots).1, Vec::<String>::new());
     }
 
     #[test]

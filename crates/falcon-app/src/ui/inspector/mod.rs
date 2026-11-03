@@ -289,7 +289,7 @@ impl App {
                 }
                 let add = ui.add(egui::Button::new(RichText::new(format!("{}  {}", ic::PLUS, tr("Add All to Folder"))).size(12.0).color(t::p().text_muted)).frame(false));
                 if add.clicked() {
-                    self.open_add_to_folders(lib, ids.clone());
+                    self.open_add_to_folders(lib, ids.clone(), crate::folder_picker::Variant::Panel);
                 }
             });
             if let Some(fid) = remove_folder {
@@ -595,7 +595,7 @@ impl App {
             self.ws.scroll_to = Some(item.id.clone());
         }
         if pick_folders {
-            self.open_add_to_folders(lib, vec![item.id.clone()]);
+            self.open_add_to_folders(lib, vec![item.id.clone()], crate::folder_picker::Variant::Panel);
         }
 
         self.comment_list(ui, &item);
