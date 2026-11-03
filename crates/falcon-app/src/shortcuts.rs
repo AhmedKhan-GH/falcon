@@ -772,6 +772,8 @@ pub fn record(key: Key, m: Modifiers) -> Recorded {
     let m = normalize(m);
     let any = m.command || m.ctrl || m.alt || m.shift;
     match key {
+        // Pressed on the way to a chord; egui reports these as keys of their own.
+        Key::ShiftLeft | Key::ShiftRight | Key::ControlLeft | Key::ControlRight | Key::AltLeft | Key::AltRight | Key::SuperLeft | Key::SuperRight => Recorded::Ignore,
         Key::Escape if !any => Recorded::Cancel,
         Key::Backspace if !any => Recorded::Clear,
         _ if !any && !can_stand_alone(key) => Recorded::Ignore,
@@ -1212,6 +1214,15 @@ mod tests {
                 assert_eq!(keys.conflict(s.cmd, c), None, "{}", s.id);
             }
         }
+    }
+
+    #[test]
+    fn a_modifier_held_on_the_way_to_a_chord_is_not_recorded() {
+        let held = Modifiers::SHIFT | Modifiers::COMMAND;
+        for key in [Key::SuperLeft, Key::SuperRight, Key::ShiftLeft, Key::ShiftRight, Key::AltLeft, Key::AltRight, Key::ControlLeft, Key::ControlRight] {
+            assert_eq!(record(key, held), Recorded::Ignore, "{key:?}");
+        }
+        assert!(matches!(record(Key::Y, held), Recorded::Chord(_)));
     }
 
     #[test]
