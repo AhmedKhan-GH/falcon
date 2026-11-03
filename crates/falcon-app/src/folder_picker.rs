@@ -19,6 +19,7 @@
 
 use std::collections::HashSet;
 
+use eframe::egui::{Pos2, Rect, Vec2};
 use falcon_library::model::Folder;
 use falcon_library::search;
 
@@ -121,7 +122,45 @@ pub struct Picker {
     pub keep_highlight: bool,
 }
 
+/// A key the panel's footer names.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum KeyHint {
+    /// ↑↓ move the highlight.
+    Move,
+    /// ←→ fold and unfold the highlighted folder.
+    Fold,
+    /// ↩ ticks or unticks the highlighted folder.
+    Tick,
+    /// ⌘↩ does that and leaves the search typed.
+    TickKeepSearch,
+    /// ↩ on the Create row makes the folder.
+    Create,
+    /// Tab shows the next tab.
+    ChangeTab,
+    /// Esc closes the panel.
+    Close,
+}
+
 impl Picker {
+    /// The keys the panel's footer names just now, only those that do
+    /// something: the tree folds without a search and not on the Recent
+    /// tab, whose rows have no children, and ⌘ only matters with a search
+    /// to keep. On the Create row ↩ creates.
+    pub fn key_hints(&self) -> Vec<KeyHint> {
+        let on_create = matches!(self.highlight.and_then(|h| self.listed.get(h)), Some(Row::Create));
+        let searching = !self.search.is_empty();
+        let mut out = vec![KeyHint::Move];
+        if !searching && self.tab != Tab::Recent {
+            out.push(KeyHint::Fold);
+        }
+        out.push(if on_create { KeyHint::Create } else { KeyHint::Tick });
+        if searching && !on_create {
+            out.push(KeyHint::TickKeepSearch);
+        }
+        out.extend([KeyHint::ChangeTab, KeyHint::Close]);
+        out
+    }
+
     /// A picker for `items`, which all share `existing`; top-level
     /// folders start expanded.
     pub fn new(items: Vec<String>, current: Option<String>, existing: Vec<String>, roots: &[Folder]) -> Self {
@@ -218,6 +257,24 @@ impl Picker {
             (Some(i), false) => (0..i.min(rows.len())).rev().find(|j| rows[*j].pickable()).or(Some(i)),
         };
     }
+}
+
+/// Where the panel's top left goes (window points): beside the pointer,
+/// 10 points right and 10 up as Eagle's, inside the window and clear of
+/// the inspector. Too far right it flips to the pointer's left and then
+/// slides until it clears the inspector (the pointer may be on it); too
+/// low it lifts. In a window too small for it, the top left stays in view.
+pub fn place_panel(window: Rect, inspector_left: Option<f32>, pointer: Pos2, size: Vec2) -> Pos2 {
+    /// The gap kept to the window's edges and the inspector.
+    const MARGIN: f32 = 8.0;
+    let right = inspector_left.unwrap_or(window.right()).min(window.right()) - MARGIN;
+    let bottom = window.bottom() - MARGIN;
+    let mut x = pointer.x + 10.0;
+    if x + size.x > right {
+        x = (pointer.x - size.x - 20.0).min(right - size.x);
+    }
+    let y = (pointer.y - 10.0).min(bottom - size.y);
+    Pos2::new(x.max(window.left() + MARGIN), y.max(window.top() + MARGIN))
 }
 
 /// How a search's letters sit in a name, best first.
@@ -719,6 +776,70 @@ mod tests {
         assert_eq!(list(&p, &roots, &names), ["r:A1", "r:B"]);
         forget_recent(&mut recent, "B");
         assert_eq!(list(&p, &roots, &[]), ["r:A1"]);
+    }
+
+    #[test]
+    fn the_footer_names_only_the_keys_that_work() {
+        use KeyHint::*;
+        let roots = tree();
+        let mut p = picker(&[], &roots);
+        p.refresh(&roots, &[], |_| false);
+        assert_eq!(p.key_hints(), [Move, Fold, Tick, ChangeTab, Close]);
+        // The Recent tab's rows have no children to fold.
+        p.set_tab(Tab::Recent);
+        assert_eq!(p.key_hints(), [Move, Tick, ChangeTab, Close]);
+        p.set_tab(Tab::Selected);
+        assert_eq!(p.key_hints(), [Move, Fold, Tick, ChangeTab, Close]);
+        // With a search ←→ move in the text and ⌘↩ keeps it.
+        p.set_tab(Tab::All);
+        p.search = "dog".into();
+        p.dirty = true;
+        p.refresh(&roots, &[], |_| false);
+        assert_eq!(p.key_hints(), [Move, Tick, TickKeepSearch, ChangeTab, Close]);
+        // On the Create row ↩ creates, with or without ⌘.
+        p.search = "zebra".into();
+        p.dirty = true;
+        p.refresh(&roots, &[], |_| false);
+        assert_eq!(p.listed, [Row::Create]);
+        assert_eq!(p.key_hints(), [Move, Create, ChangeTab, Close]);
+    }
+
+    fn place(inspector: Option<f32>, pointer: (f32, f32)) -> (f32, f32) {
+        let window = Rect::from_min_size(Pos2::ZERO, Vec2::new(1000.0, 800.0));
+        let at = place_panel(window, inspector, Pos2::new(pointer.0, pointer.1), Vec2::new(320.0, 460.0));
+        (at.x, at.y)
+    }
+
+    #[test]
+    fn the_panel_opens_beside_the_pointer() {
+        assert_eq!(place(None, (100.0, 100.0)), (110.0, 90.0));
+        assert_eq!(place(Some(700.0), (100.0, 100.0)), (110.0, 90.0));
+        // Exactly fitting against the inspector, it stays.
+        assert_eq!(place(Some(700.0), (362.0, 100.0)), (372.0, 90.0));
+    }
+
+    #[test]
+    fn the_panel_flips_left_of_the_pointer_rather_than_cover_the_inspector() {
+        assert_eq!(place(Some(700.0), (500.0, 100.0)), (160.0, 90.0));
+        // No inspector: it fits, right up to the window's edge.
+        assert_eq!(place(None, (500.0, 100.0)), (510.0, 90.0));
+        assert_eq!(place(None, (900.0, 100.0)), (560.0, 90.0));
+    }
+
+    #[test]
+    fn the_panel_slides_clear_when_the_pointer_is_on_the_inspector() {
+        // The inspector's + at 720: flipping alone would end at 700, on it.
+        assert_eq!(place(Some(700.0), (720.0, 100.0)), (372.0, 90.0));
+        assert_eq!(place(Some(700.0), (990.0, 100.0)), (372.0, 90.0));
+    }
+
+    #[test]
+    fn the_panel_lifts_and_stays_in_the_window() {
+        assert_eq!(place(None, (100.0, 700.0)), (110.0, 332.0));
+        assert_eq!(place(None, (100.0, 2.0)), (110.0, 8.0));
+        // A window too small for it keeps the top left in view.
+        let tiny = Rect::from_min_size(Pos2::ZERO, Vec2::new(200.0, 200.0));
+        assert_eq!(place_panel(tiny, Some(100.0), Pos2::new(150.0, 150.0), Vec2::new(320.0, 460.0)), Pos2::new(8.0, 8.0));
     }
 
     #[test]

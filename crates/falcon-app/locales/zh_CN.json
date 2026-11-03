@@ -218,6 +218,7 @@
   "Change sort of {n} folders": {
     "other": "更改{n}个文件夹的排序"
   },
+  "Change tab": "切换标签页",
   "Change the open folder's password": "更改当前文件夹的密码",
   "Changes the preview only": "仅更改预览",
   "Changes the volume": "调节音量",
@@ -686,6 +687,7 @@
   "Focal Length": "焦距",
   "Focal length (mm)": "焦距 (mm)",
   "Focus search": "聚焦搜索栏",
+  "Fold": "折叠",
   "Folder": "文件夹",
   "Folder %N": "文件夹 %N",
   "Folder Description": "文件夹描述",
@@ -1872,6 +1874,8 @@
   "Thumbnail set": "已设置缩略图",
   "Thumbnails": "缩略图",
   "Thumbnails and Outline": "缩略图和大纲",
+  "Tick": "勾选",
+  "Tick and keep the search": "勾选并保留搜索",
   "Title": "标题",
   "Title, All Levels (A→Z)": "标题，所有层级 (A→Z)",
   "Title, All Levels (Z→A)": "标题，所有层级 (Z→A)",
@@ -2140,6 +2144,7 @@
   "ends with": "结尾是",
   "falcon asks for its password when it opens, and after Lock Now (⌥⌘L).": "falcon 会在打开时以及“立即锁定”（⌥⌘L）后要求输入密码。",
   "falcon tries ports {first} to {last} and never uses Eagle's {eagle}.": "falcon 会尝试端口{first}至{last}，从不使用 Eagle 的{eagle}。",
+  "hints::Move": "移动",
   "hours": "小时",
   "image search": "图片搜索",
   "in the last": "最近",

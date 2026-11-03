@@ -218,6 +218,7 @@
   "Change sort of {n} folders": {
     "other": "{n}個のフォルダの並べ替えを変更"
   },
+  "Change tab": "タブを切り替え",
   "Change the open folder's password": "開いているフォルダのパスワードを変更",
   "Changes the preview only": "プレビューのみ変更",
   "Changes the volume": "音量を変更",
@@ -686,6 +687,7 @@
   "Focal Length": "焦点距離",
   "Focal length (mm)": "焦点距離（mm）",
   "Focus search": "検索欄に移動",
+  "Fold": "折りたたみ",
   "Folder": "フォルダ",
   "Folder %N": "フォルダ %N",
   "Folder Description": "フォルダの説明",
@@ -1872,6 +1874,8 @@
   "Thumbnail set": "サムネールを設定しました",
   "Thumbnails": "サムネール",
   "Thumbnails and Outline": "サムネールとアウトライン",
+  "Tick": "チェック",
+  "Tick and keep the search": "チェックして検索を維持",
   "Title": "タイトル",
   "Title, All Levels (A→Z)": "タイトル、全階層（A→Z）",
   "Title, All Levels (Z→A)": "タイトル、全階層（Z→A）",
@@ -2140,6 +2144,7 @@
   "ends with": "で終わる",
   "falcon asks for its password when it opens, and after Lock Now (⌥⌘L).": "falconは起動時と、今すぐロック（⌥⌘L）の後にパスワードを要求します。",
   "falcon tries ports {first} to {last} and never uses Eagle's {eagle}.": "falconはポート{first}～{last}を試し、Eagleの{eagle}は使いません。",
+  "hints::Move": "移動",
   "hours": "時間",
   "image search": "画像検索",
   "in the last": "過去",

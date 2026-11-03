@@ -1,16 +1,17 @@
 //! The Add to Folders picker (Find ▸ Add to Folders…, ⇧⌘J, the item
-//! menu and the inspector's +): a panel beside the pointer with a search
-//! field and the All, Recent and Selected tabs, ticks for the folders the
-//! items go in, and folder creation. It has no Save: closing it (a click
-//! outside or Esc) applies the ticks as one undo step, or nothing if none
-//! changed. The rules live in `crate::folder_picker`.
+//! menu and the inspector's +): a panel beside the pointer and clear of
+//! the inspector, with a search field and the All, Recent and Selected
+//! tabs, ticks for the folders the items go in, folder creation and a
+//! footer naming the keys. It has no Save: closing it (a click outside or
+//! Esc) applies the ticks as one undo step, or nothing if none changed.
+//! The rules live in `crate::folder_picker`.
 
 use eframe::egui::{self, Align2, Color32, Key, Modifiers, Pos2, Rect, RichText, Sense, TextEdit, Ui, vec2};
 use falcon_library::Library;
 
 use crate::app::{Action, App};
 use crate::folder_icons;
-use crate::folder_picker::{self, NewPlace, Picker, Row, Tab};
+use crate::folder_picker::{self, KeyHint, NewPlace, Picker, Row, Tab};
 use crate::icons as ic;
 use crate::logic::{self, Scope};
 use crate::theme::{self as t, font};
@@ -20,8 +21,9 @@ use crate::ui::widgets::{galley, icon};
 /// The panel's width, and the height of its list (window points).
 const PANEL_W: f32 = 300.0;
 const LIST_H: f32 = 330.0;
-/// The panel's height with its search row, for keeping it on screen.
-const PANEL_H: f32 = LIST_H + 96.0;
+/// The panel's whole size at its tallest, frame included, for keeping it
+/// inside the central area: search row, list, the box and two footer lines.
+const PANEL_SIZE: egui::Vec2 = vec2(PANEL_W + 14.0, LIST_H + 124.0);
 
 impl App {
     /// Opens the picker for `items`, with the folders they all share
@@ -42,20 +44,6 @@ impl App {
         self.ws.folders.picker = Some(p);
     }
 
-    /// Where the panel's top left goes: beside the pointer (10 points
-    /// right and 10 up, as Eagle's), flipped to its left or lifted when it
-    /// would run off the window.
-    fn picker_corner(at: (f32, f32), screen: Rect) -> Pos2 {
-        let (mut x, mut y) = (at.0 + 10.0, at.1 - 10.0);
-        if at.0 + PANEL_W > screen.right() {
-            x = at.0 - PANEL_W - 20.0;
-        }
-        if at.1 + PANEL_H > screen.bottom() - 20.0 {
-            y = (screen.bottom() - PANEL_H - 20.0).max(20.0);
-        }
-        Pos2::new(x.max(screen.left()), y.max(screen.top()))
-    }
-
     /// The picker, when open.
     pub(crate) fn add_to_folders_dialog(&mut self, ctx: &egui::Context, lib: &Library) {
         let Some(mut p) = self.ws.folders.picker.take() else { return };
@@ -67,7 +55,8 @@ impl App {
             let pos = ctx.pointer_latest_pos().unwrap_or_else(|| screen.center());
             (pos.x, pos.y)
         });
-        let corner = Self::picker_corner(at, screen);
+        let inspector_left = self.panels_shown().1.then(|| screen.right() - self.inspector_width);
+        let corner = folder_picker::place_panel(screen, inspector_left, Pos2::new(at.0, at.1), PANEL_SIZE);
         p.refresh(roots, &self.recent_folders, shut);
         let naming_open = p.naming.is_some();
         let area = egui::Modal::default_area(egui::Id::unique("add-to-folders")).anchor(Align2::LEFT_TOP, corner.to_vec2());
@@ -158,6 +147,8 @@ impl App {
                 ui.add_space(6.0);
                 ui.checkbox(&mut p.remove_from_current, crate::locale::tr("Take them out of the open folder"));
             }
+            ui.add_space(6.0);
+            Self::picker_key_hints(ui, &p);
         });
         self.ws.folders.picker_remove = p.remove_from_current;
         if modal.should_close() && !naming_open {
@@ -170,6 +161,27 @@ impl App {
             return;
         }
         self.ws.folders.picker = Some(p);
+    }
+
+    /// The panel's footer: the keys that work just now.
+    fn picker_key_hints(ui: &mut Ui, p: &Picker) {
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = vec2(4.0, 2.0);
+            for hint in p.key_hints() {
+                let (keys, label) = match hint {
+                    KeyHint::Move => ("↑↓", crate::locale::tr("hints::Move")),
+                    KeyHint::Fold => ("←→", crate::locale::tr("Fold")),
+                    KeyHint::Tick => ("↩", crate::locale::tr("Tick")),
+                    KeyHint::TickKeepSearch => ("⌘↩", crate::locale::tr("Tick and keep the search")),
+                    KeyHint::Create => ("↩", crate::locale::tr("Create")),
+                    KeyHint::ChangeTab => ("Tab", crate::locale::tr("Change tab")),
+                    KeyHint::Close => ("Esc", crate::locale::tr("Close")),
+                };
+                ui.label(RichText::new(keys).size(11.0).color(t::p().text));
+                ui.label(RichText::new(label).size(11.0).color(t::p().text_muted));
+                ui.add_space(4.0);
+            }
+        });
     }
 
     /// A row clicked or chosen with Enter; `keep_search` (⌘ held) leaves

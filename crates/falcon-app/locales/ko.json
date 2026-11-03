@@ -218,6 +218,7 @@
   "Change sort of {n} folders": {
     "other": "폴더 {n}개의 정렬 변경"
   },
+  "Change tab": "탭 전환",
   "Change the open folder's password": "열린 폴더의 암호 변경",
   "Changes the preview only": "미리보기만 변경",
   "Changes the volume": "음량 변경",
@@ -686,6 +687,7 @@
   "Focal Length": "초점 거리",
   "Focal length (mm)": "초점 거리 (mm)",
   "Focus search": "검색창으로 이동",
+  "Fold": "접기/펼치기",
   "Folder": "폴더",
   "Folder %N": "폴더 %N",
   "Folder Description": "폴더 설명",
@@ -1872,6 +1874,8 @@
   "Thumbnail set": "썸네일을 설정했습니다",
   "Thumbnails": "썸네일",
   "Thumbnails and Outline": "썸네일 및 개요",
+  "Tick": "체크",
+  "Tick and keep the search": "체크하고 검색 유지",
   "Title": "제목",
   "Title, All Levels (A→Z)": "제목, 모든 단계 (A→Z)",
   "Title, All Levels (Z→A)": "제목, 모든 단계 (Z→A)",
@@ -2140,6 +2144,7 @@
   "ends with": "(으)로 끝남",
   "falcon asks for its password when it opens, and after Lock Now (⌥⌘L).": "falcon은 열 때와 ‘지금 잠금’(⌥⌘L) 후에 암호를 요청합니다.",
   "falcon tries ports {first} to {last} and never uses Eagle's {eagle}.": "falcon은 포트 {first}~{last}을(를) 시도하며 Eagle의 {eagle}은(는) 사용하지 않습니다.",
+  "hints::Move": "이동",
   "hours": "시간",
   "image search": "이미지 검색",
   "in the last": "최근",
