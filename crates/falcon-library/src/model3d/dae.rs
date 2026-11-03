@@ -14,8 +14,8 @@
 //! `constant`), or, when the diffuse is a texture whose image sits next to
 //! the file (or is embedded as `hex`), that image's average colour. The
 //! texture is also kept for drawing: the image through the profile's
-//! sampler and surface (1.4.1) or `instance_image` (1.5), its wrap modes
-//! from the sampler's `wrap_s` and `wrap_t`, and the `TEXCOORD` set the
+//! sampler and surface (1.4.1) or `instance_image` (1.5) (the sampler's
+//! `wrap_s` and `wrap_t` are ignored, textures always repeat), and the `TEXCOORD` set the
 //! texture's `texcoord` is bound to by the instance's `bind_vertex_input`
 //! (else the first set), with v flipped to falcon's picture space.
 //!
@@ -41,7 +41,7 @@ use std::rc::Rc;
 use roxmltree::{Document, Node};
 
 use super::math::{self, M4, V3};
-use super::texture::{Loader, Texture, Wrap};
+use super::texture::{Loader, Texture};
 use super::{DEFAULT_COLOR, Material, Mesh, Model, ParseError, Result, Surface};
 
 /// Deepest node nesting followed (also stops `instance_node` cycles).
@@ -688,13 +688,13 @@ impl<'a, 'i, 's> Reader<'a, 'i, 's> {
             .find_map(|b| child(b, "texture"));
         if let Some(tex) = bump {
             let name = tex.attribute("texture").unwrap_or("");
-            if let Some((source, wrap)) = self.texture_source(profile, name) {
+            if let Some(source) = self.texture_source(profile, name) {
                 let image = self.loader.for_map(|l| match source {
                     Source::Uri(uri) => l.file(&percent_decode(uri.trim())),
                     Source::Hex(bytes) => l.embedded("embedded", &bytes),
                 });
                 if let Some(image) = image {
-                    let texture = Texture { image, tint: [1.0; 3], wrap, alpha_cutoff: None };
+                    let texture = Texture { image, tint: [1.0; 3], alpha_cutoff: None };
                     extra.normal = Some((texture, tex.attribute("texcoord").unwrap_or("").to_string()));
                 }
             }
@@ -743,27 +743,24 @@ impl<'a, 'i, 's> Reader<'a, 'i, 's> {
         }
         let Some(tex) = child(value, "texture") else { return (None, None) };
         let Some(name) = tex.attribute("texture") else { return (None, None) };
-        let Some((source, wrap)) = self.texture_source(profile, name) else { return (None, None) };
+        let Some(source) = self.texture_source(profile, name) else { return (None, None) };
         let image = match source {
             Source::Uri(uri) => self.loader.file(&percent_decode(uri.trim())),
             Source::Hex(bytes) => self.loader.embedded("embedded", &bytes),
         };
         let Some(image) = image else { return (None, None) };
         let color = image.average();
-        let texture = Texture { image, tint: [1.0; 3], wrap, alpha_cutoff: None };
+        let texture = Texture { image, tint: [1.0; 3], alpha_cutoff: None };
         (color, Some((texture, tex.attribute("texcoord").unwrap_or("").to_string())))
     }
 
-    /// The image a `texture` attribute names, and the wrap modes of the
-    /// sampler it goes through: through the profile's sampler and surface
+    /// The image a `texture` attribute names: through the profile's sampler and surface
     /// params (1.4.1), the sampler's `instance_image` (1.5), or an image
     /// id used directly (wrapping around).
-    fn texture_source(&self, profile: Node<'a, 'i>, tex: &str) -> Option<(Source, [Wrap; 2])> {
+    fn texture_source(&self, profile: Node<'a, 'i>, tex: &str) -> Option<Source> {
         let param = |sid: &str| children(profile, "newparam").find(|p| p.attribute("sid") == Some(sid));
         let mut image = None;
-        let mut wrap = [Wrap::Repeat; 2];
         if let Some(sampler) = param(tex).and_then(|p| child(p, "sampler2D")) {
-            wrap = [wrap_of(sampler, "wrap_s"), wrap_of(sampler, "wrap_t")];
             if let Some(url) = child(sampler, "instance_image").and_then(|i| i.attribute("url")) {
                 image = self.ids.get(url_id(url)).copied();
             } else if let Some(surface_sid) = child(sampler, "source").and_then(|s| s.text()) {
@@ -774,11 +771,11 @@ impl<'a, 'i, 's> Reader<'a, 'i, 's> {
         let image = image.or_else(|| self.ids.get(tex).copied()).filter(|n| n.tag_name().name() == "image")?;
         let init = child(image, "init_from")?;
         if let Some(hex) = child(init, "hex") {
-            return Some((Source::Hex(hex_bytes(hex.text().unwrap_or(""))?), wrap));
+            return Some(Source::Hex(hex_bytes(hex.text().unwrap_or(""))?));
         }
         // 1.5 wraps the path in `ref`.
         let text = child(init, "ref").and_then(|r| r.text()).or(init.text())?;
-        Some((Source::Uri(text.trim().to_string()), wrap)).filter(|(s, _)| matches!(s, Source::Uri(u) if !u.is_empty()))
+        Some(Source::Uri(text.trim().to_string())).filter(|s| matches!(s, Source::Uri(u) if !u.is_empty()))
     }
 }
 
@@ -791,15 +788,6 @@ fn shader_of<'a, 'i>(technique: Node<'a, 'i>) -> Option<Node<'a, 'i>> {
 enum Source {
     Uri(String),
     Hex(Vec<u8>),
-}
-
-/// A sampler's `wrap_s` or `wrap_t`.
-fn wrap_of(sampler: Node, tag: &str) -> Wrap {
-    match child(sampler, tag).and_then(|n| n.text()).map(|t| t.trim().to_ascii_uppercase()).as_deref() {
-        Some("MIRROR" | "MIRROR_ONCE") => Wrap::Mirror,
-        Some("CLAMP" | "BORDER" | "NONE") => Wrap::Clamp,
-        _ => Wrap::Repeat,
-    }
 }
 
 /// The bytes of a `hex` element (whitespace between digits allowed).
@@ -1063,7 +1051,7 @@ mod tests {
         <technique sid="common"><lambert><diffuse><texture texture="samp" texcoord="UVSET0"/></diffuse></lambert></technique></profile_COMMON></effect>"##;
 
     #[test]
-    fn texture_coordinates_and_wrap_are_read() {
+    fn texture_coordinates_are_read() {
         let png = texture::tests::png_2x2();
         let side = |name: &str| (name == "pics/a.png").then(|| png.clone());
         let images = r#"<library_images><image id="img"><init_from>pics/a.png</init_from></image></library_images>"#;
@@ -1073,15 +1061,10 @@ mod tests {
         assert_eq!(mesh.uvs.as_deref(), Some(&[[0.0, 1.0], [1.0, 1.0], [1.0, 0.75]][..]));
         let t = mesh.texture.as_ref().unwrap();
         assert_eq!((t.image.width, t.image.height), (2, 2));
-        assert_eq!(t.wrap, [Wrap::Clamp, Wrap::Mirror]);
         assert_eq!((t.tint, t.alpha_cutoff), ([1.0; 3], None));
         assert!(mesh.textured().is_some());
         // The colour is the picture's average, as before: red, green, blue, white.
         assert!(close(mesh.material.as_ref().unwrap().color, [0.5, 0.5, 0.5]));
-        // No sampler wrap elements: both repeat.
-        let plain = SAMPLER_141.replace("<wrap_s>CLAMP</wrap_s><wrap_t>MIRROR</wrap_t>", "");
-        let m = parse(textured(&plain, images, "").as_bytes(), &side).unwrap();
-        assert_eq!(m.meshes[0].texture.as_ref().unwrap().wrap, [Wrap::Repeat; 2]);
     }
 
     #[test]
@@ -1116,7 +1099,7 @@ mod tests {
         let images = r#"<library_images><image id="img"><init_from><ref>file:///C:/work/g.png</ref></init_from></image></library_images>"#;
         let m = parse(textured(fx, images, "").as_bytes(), &side).unwrap();
         let t = m.meshes[0].texture.as_ref().unwrap();
-        assert_eq!((t.image.width, t.wrap), (2, [Wrap::Repeat, Wrap::Mirror]));
+        assert_eq!(t.image.width, 2);
         // The same picture inline.
         let hex: String = png.iter().map(|b| format!("{b:02x}")).collect();
         let images = format!(r#"<library_images><image id="img"><init_from><hex format="PNG">{hex}</hex></init_from></image></library_images>"#);
@@ -1212,10 +1195,6 @@ mod tests {
         let both = r#"<phong><bump><texture texture="none" texcoord="UV"/></bump></phong>"#;
         let m = parse(textured(&fx_with(both, ex), IMG, "").as_bytes(), &side).unwrap();
         assert!(m.meshes[0].surface.normal_map.is_some());
-        // Its wrap comes from its sampler.
-        let fx = fx_with(direct, "").replace("<source>surf</source>", "<source>surf</source><wrap_s>CLAMP</wrap_s>");
-        let m = parse(textured(&fx, IMG, "").as_bytes(), &side).unwrap();
-        assert_eq!(m.meshes[0].surface.normal_map.as_ref().unwrap().wrap, [Wrap::Clamp, Wrap::Repeat]);
     }
 
     #[test]

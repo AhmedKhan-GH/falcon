@@ -7,7 +7,8 @@
 //! and every primitive of every mesh instance becomes one [`Mesh`].
 //!
 //! A texture comes from the GLB's binary chunk, a data URI or a file next
-//! to the model, with its sampler's wrap modes. The base colour texture has
+//! to the model (sampler wrap modes are ignored, textures always repeat; see
+//! [`super::texture`]). The base colour texture has
 //! the base colour factor as its tint (glTF multiplies the two) and, for the
 //! `MASK` alpha mode, its alpha cutoff. A mesh has one set of texture
 //! coordinates, those of the base colour texture, else of the normal
@@ -24,7 +25,7 @@ use base64::Engine;
 use serde::Deserialize;
 
 use super::math::{self, M4, V3};
-use super::texture::{Loader, Texture, Wrap};
+use super::texture::{Loader, Texture};
 use super::{Material, Mesh, Model, ParseError, Result, Surface};
 
 const GLB_MAGIC: u32 = 0x4654_6C67;
@@ -54,14 +55,12 @@ struct Doc {
     scene: Option<usize>,
     textures: Vec<TextureDef>,
     images: Vec<ImageDef>,
-    samplers: Vec<SamplerDef>,
 }
 
 #[derive(Deserialize, Default)]
 #[serde(default)]
 struct TextureDef {
     source: Option<usize>,
-    sampler: Option<usize>,
 }
 
 #[derive(Deserialize, Default)]
@@ -71,15 +70,6 @@ struct ImageDef {
     uri: Option<String>,
     #[serde(rename = "bufferView")]
     buffer_view: Option<usize>,
-}
-
-#[derive(Deserialize, Default)]
-#[serde(default)]
-struct SamplerDef {
-    #[serde(rename = "wrapS")]
-    wrap_s: Option<u32>,
-    #[serde(rename = "wrapT")]
-    wrap_t: Option<u32>,
 }
 
 /// A material's reference to a texture.
@@ -544,17 +534,7 @@ fn transform_uv(t: Option<&TexTransform>, uv: [f32; 2]) -> [f32; 2] {
     [c * u + s * v + t.offset[0], -s * u + c * v + t.offset[1]]
 }
 
-/// A glTF sampler wrap mode.
-fn wrap(mode: Option<u32>) -> Wrap {
-    match mode {
-        Some(33071) => Wrap::Clamp,
-        Some(33648) => Wrap::Mirror,
-        _ => Wrap::Repeat,
-    }
-}
-
-/// The picture a texture reference names, laid on with its sampler's wrap
-/// modes, decoded through `loader`.
+/// The picture a texture reference names, decoded through `loader`.
 fn texture_for(doc: &Doc, buffers: &[Vec<u8>], loader: &mut Loader, info: &TexInfo) -> Option<Texture> {
     let tex = doc.textures.get(info.index)?;
     let img = doc.images.get(tex.source?)?;
@@ -571,8 +551,7 @@ fn texture_for(doc: &Doc, buffers: &[Vec<u8>], loader: &mut Loader, info: &TexIn
             loader.file(&String::from_utf8_lossy(&percent_decode(uri)))?
         }
     };
-    let sampler = tex.sampler.and_then(|s| doc.samplers.get(s));
-    Some(Texture { wrap: [wrap(sampler.and_then(|s| s.wrap_s)), wrap(sampler.and_then(|s| s.wrap_t))], ..Texture::new(image) })
+    Some(Texture::new(image))
 }
 
 /// What a material draws with: its base colour texture and its surface.
@@ -972,7 +951,6 @@ mod tests {
         let t = mesh.texture.as_ref().expect("texture decoded");
         assert_eq!((t.image.width, t.image.height), (2, 2));
         assert_eq!(&t.image.rgba[..4], &[255, 0, 0, 255]);
-        assert_eq!(t.wrap, [Wrap::Clamp, Wrap::Mirror]);
         assert_eq!(t.alpha_cutoff, Some(0.25));
         // The factor tints, in display values (linear 0.214 is about 0.5).
         assert!(close(t.tint, [1.0, 0.5, 1.0]), "{:?}", t.tint);
@@ -1056,7 +1034,6 @@ mod tests {
         let s = &mesh.surface;
         let n = s.normal_map.as_ref().expect("normal map");
         assert_eq!((n.image.width, n.image.height), (2, 2));
-        assert_eq!(n.wrap, [Wrap::Clamp, Wrap::Mirror]);
         assert!(s.emissive_map.is_some());
         assert!(close(s.emissive, [1.0, 0.5, 0.0]), "{:?}", s.emissive);
         assert!(!s.blend);

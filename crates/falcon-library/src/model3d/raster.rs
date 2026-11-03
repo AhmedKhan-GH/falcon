@@ -601,7 +601,7 @@ mod tests {
         let ramp = std::sync::Arc::new(texture::Image { name: "h".into(), width: 64, height: 1, rgba: px });
         let plain = *head_on(&[facing_square()]).get_pixel(16, 16);
         let mut m = facing_square();
-        m.surface.bump_map = Some(texture::Texture { wrap: [texture::Wrap::Clamp; 2], ..texture::Texture::new(ramp.clone()) });
+        m.surface.bump_map = Some(texture::Texture::new(ramp.clone()));
         let bumped = *head_on(std::slice::from_ref(&m)).get_pixel(16, 16);
         assert!(bumped[0] < plain[0] - 3, "{bumped:?} against {plain:?}");
         m.surface.normal_map = Some(texture::Texture::new(std::sync::Arc::new(solid(2, 2, [128, 128, 255, 255]))));

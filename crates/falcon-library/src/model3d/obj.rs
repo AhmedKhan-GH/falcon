@@ -2,8 +2,8 @@
 //!
 //! A material's `map_Kd` picture is looked up next to its MTL file, then
 //! next to the model (never outside the model's folder); its `-o` and `-s`
-//! options are baked into the texture coordinates and `-clamp on` clamps
-//! it. The picture replaces the `Kd` colour where it is drawn, as in
+//! options are baked into the texture coordinates (`-clamp` is ignored,
+//! textures always repeat). The picture replaces the `Kd` colour where it is drawn, as in
 //! Eagle's viewer.
 //!
 //! `map_bump` (or `bump`) is read the same way into the surface's bump map;
@@ -17,7 +17,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 
 use super::math::V3;
-use super::texture::{Loader, Texture, Wrap};
+use super::texture::{Loader, Texture};
 use super::{DEFAULT_COLOR, Material, Mesh, Model, Result, Surface};
 
 const NO_NORMAL: u32 = u32::MAX;
@@ -96,14 +96,13 @@ struct MapOpts {
     path: String,
     offset: [f32; 2],
     scale: [f32; 2],
-    clamp: bool,
 }
 
 /// Reads a `map_Kd` line's options and file name. Options take a fixed
 /// number of words, `-o`, `-s` and `-t` one to three numbers; the rest is
 /// the file name (which may hold spaces).
 fn map_opts(rest: &str, dir: &str) -> Option<MapOpts> {
-    let mut m = MapOpts { dir: dir.to_string(), path: String::new(), offset: [0.0; 2], scale: [1.0; 2], clamp: false };
+    let mut m = MapOpts { dir: dir.to_string(), path: String::new(), offset: [0.0; 2], scale: [1.0; 2] };
     let words: Vec<&str> = rest.split_ascii_whitespace().collect();
     let mut i = 0;
     while i < words.len() && words[i].starts_with('-') {
@@ -123,10 +122,7 @@ fn map_opts(rest: &str, dir: &str) -> Option<MapOpts> {
                     _ => {}
                 }
             }
-            "-clamp" => {
-                m.clamp = words.get(i).is_some_and(|w| w.eq_ignore_ascii_case("on"));
-                i += 1;
-            }
+            "-clamp" => i += 1,
             "-mm" => i += 2,
             _ => i += 1,
         }
@@ -330,8 +326,7 @@ pub fn parse(bytes: &[u8], side: &dyn Fn(&str) -> Option<Vec<u8>>) -> Result<Mod
                                     .entry(n.clone())
                                     .or_insert_with(|| {
                                         let image = loader.file_in(&m.dir, &m.path)?;
-                                        let wrap = if m.clamp { Wrap::Clamp } else { Wrap::Repeat };
-                                        Some(Texture { wrap: [wrap; 2], ..Texture::new(image) })
+                                        Some(Texture::new(image))
                                     })
                                     .clone(),
                                 _ => None,
@@ -341,8 +336,7 @@ pub fn parse(bytes: &[u8], side: &dyn Fn(&str) -> Option<Vec<u8>>) -> Result<Mod
                                     .entry(n.clone())
                                     .or_insert_with(|| {
                                         let image = loader.for_map(|l| l.file_in(&m.dir, &m.path))?;
-                                        let wrap = if m.clamp { Wrap::Clamp } else { Wrap::Repeat };
-                                        Some(Texture { wrap: [wrap; 2], ..Texture::new(image) })
+                                        Some(Texture::new(image))
                                     })
                                     .clone(),
                                 _ => None,
@@ -518,7 +512,6 @@ mod tests {
         let mesh = &m.meshes[0];
         let t = mesh.texture.as_ref().expect("texture decoded");
         assert_eq!((t.image.width, t.image.height), (2, 2));
-        assert_eq!(t.wrap, [Wrap::Clamp; 2]);
         assert_eq!(t.tint, [1.0; 3], "the picture replaces Kd");
         // Scaled by 2, offset by 0.5 in u, then v flipped.
         assert_eq!(mesh.uvs.as_deref(), Some(&[[0.5, 1.0], [2.5, 1.0], [0.5, -1.0]][..]));
@@ -528,7 +521,7 @@ mod tests {
     #[test]
     fn map_kd_options_and_names() {
         let m = map_opts("-blendu on -bm 0.5 -mm 0 1 -o 0.1 0.2 -imfchan l my file.png", "").unwrap();
-        assert_eq!((m.path.as_str(), m.offset, m.scale, m.clamp), ("my file.png", [0.1, 0.2], [1.0, 1.0], false));
+        assert_eq!((m.path.as_str(), m.offset, m.scale), ("my file.png", [0.1, 0.2], [1.0, 1.0]));
         assert_eq!(map_opts("wood.png", "sub").unwrap().dir, "sub");
         assert!(map_opts("-clamp on", "").is_none());
     }
@@ -592,7 +585,7 @@ mod tests {
             assert!(!mesh.surface.blend);
         }
         let m = bump_model("newmtl wood\nmap_bump -clamp on b.png\n", true);
-        assert_eq!(m.meshes[0].surface.bump_map.as_ref().unwrap().wrap, [Wrap::Clamp; 2]);
+        assert!(m.meshes[0].surface.bump_map.is_some());
     }
 
     #[test]

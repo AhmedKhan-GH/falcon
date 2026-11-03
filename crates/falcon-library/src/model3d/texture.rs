@@ -20,6 +20,11 @@
 //! what is left ([`Loader::for_map`]), so they can't starve the pictures of
 //! the materials read after them.
 //!
+//! Textures always repeat, whatever wrap mode the file names: Eagle's
+//! viewer tiles every texture, so falcon's readers ignore the wrap modes
+//! of glTF samplers, COLLADA samplers, FBX textures, OBJ `-clamp` and 3DS
+//! map flags, and the viewer's GPU sampler repeats too.
+//!
 //! Texture coordinates are kept in picture space: u to the right and v
 //! downwards, (0, 0) the top left corner. Readers of formats that count v
 //! upwards (OBJ, FBX, COLLADA, 3DS) flip it.
@@ -40,18 +45,6 @@ pub const BUDGET: usize = 64 * 1024 * 1024;
 /// Most bytes the `image` crate may allocate decoding one picture at full
 /// size before it is scaled down (where ImageIO can't decode it smaller).
 const DECODE_LIMIT: u64 = 512 * 1024 * 1024;
-
-/// What happens to texture coordinates outside 0..1, per axis.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Hash)]
-pub enum Wrap {
-    /// The picture tiles.
-    #[default]
-    Repeat,
-    /// The edge pixels stretch out.
-    Clamp,
-    /// The picture tiles, every other copy mirrored.
-    Mirror,
-}
 
 /// A decoded picture: straight-alpha RGBA8 in its file's own (sRGB)
 /// values, rows top to bottom.
@@ -104,8 +97,6 @@ pub struct Texture {
     /// base colour factor; white for the other formats, whose viewers in
     /// Eagle replace the material colour with the picture.
     pub tint: V3,
-    /// Wrap along u and along v.
-    pub wrap: [Wrap; 2],
     /// Pixels with alpha below this are not drawn (glTF's `MASK` mode);
     /// `None` draws every pixel opaque.
     pub alpha_cutoff: Option<f32>,
@@ -114,7 +105,7 @@ pub struct Texture {
 impl Texture {
     /// `image` tiled, untinted, opaque.
     pub fn new(image: Arc<Image>) -> Texture {
-        Texture { image, tint: [1.0; 3], wrap: [Wrap::Repeat; 2], alpha_cutoff: None }
+        Texture { image, tint: [1.0; 3], alpha_cutoff: None }
     }
 
     /// The four pixels around `uv` and the weight of each.
@@ -122,24 +113,14 @@ impl Texture {
         let img = &*self.image;
         let (w, h) = (img.width.max(1), img.height.max(1));
         // Texel centres sit at half-integers.
-        let fx = wrap_coord(uv[0], self.wrap[0]) * w as f32 - 0.5;
-        let fy = wrap_coord(uv[1], self.wrap[1]) * h as f32 - 0.5;
+        let fx = wrap_coord(uv[0]) * w as f32 - 0.5;
+        let fy = wrap_coord(uv[1]) * h as f32 - 0.5;
         let (x0, y0) = (fx.floor(), fy.floor());
         let (tx, ty) = (fx - x0, fy - y0);
-        let pick = |i: i64, n: u32, wrap: Wrap| -> u32 {
-            let n = i64::from(n);
-            match wrap {
-                Wrap::Clamp => i.clamp(0, n - 1) as u32,
-                Wrap::Repeat => i.rem_euclid(n) as u32,
-                Wrap::Mirror => {
-                    let m = i.rem_euclid(2 * n);
-                    (if m < n { m } else { 2 * n - 1 - m }) as u32
-                }
-            }
-        };
+        let pick = |i: i64, n: u32| i.rem_euclid(i64::from(n)) as u32;
         let (x0, y0) = (x0 as i64, y0 as i64);
-        let xs = [pick(x0, w, self.wrap[0]), pick(x0 + 1, w, self.wrap[0])];
-        let ys = [pick(y0, h, self.wrap[1]), pick(y0 + 1, h, self.wrap[1])];
+        let xs = [pick(x0, w), pick(x0 + 1, w)];
+        let ys = [pick(y0, h), pick(y0 + 1, h)];
         [(xs[0], ys[0], (1.0 - tx) * (1.0 - ty)), (xs[1], ys[0], tx * (1.0 - ty)), (xs[0], ys[1], (1.0 - tx) * ty), (xs[1], ys[1], tx * ty)]
     }
 
@@ -187,19 +168,12 @@ pub fn modulate(color: V3, rgb: [f32; 4]) -> V3 {
     std::array::from_fn(|k| linear_to_srgb(srgb_to_linear(color[k]) * srgb_to_linear(rgb[k])))
 }
 
-/// A texture coordinate brought into 0..1 by `wrap`.
-pub fn wrap_coord(t: f32, wrap: Wrap) -> f32 {
+/// A texture coordinate brought into 0..1 by repeating the picture.
+pub fn wrap_coord(t: f32) -> f32 {
     if !t.is_finite() {
         return 0.0;
     }
-    match wrap {
-        Wrap::Clamp => t.clamp(0.0, 1.0),
-        Wrap::Repeat => t - t.floor(),
-        Wrap::Mirror => {
-            let m = t.rem_euclid(2.0);
-            if m <= 1.0 { m } else { 2.0 - m }
-        }
-    }
+    t - t.floor()
 }
 
 pub fn srgb_to_linear(c: f32) -> f32 {
@@ -675,13 +649,10 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn wrapping() {
-        assert_eq!(wrap_coord(1.25, Wrap::Repeat), 0.25);
-        assert_eq!(wrap_coord(-0.25, Wrap::Repeat), 0.75);
-        assert_eq!(wrap_coord(1.25, Wrap::Clamp), 1.0);
-        assert_eq!(wrap_coord(1.25, Wrap::Mirror), 0.75);
-        assert_eq!(wrap_coord(-0.25, Wrap::Mirror), 0.25);
-        assert_eq!(wrap_coord(f32::NAN, Wrap::Repeat), 0.0);
+    fn coordinates_repeat() {
+        assert_eq!(wrap_coord(1.25), 0.25);
+        assert_eq!(wrap_coord(-0.25), 0.75);
+        assert_eq!(wrap_coord(f32::NAN), 0.0);
     }
 
     fn close(a: [f32; 4], b: [f32; 4]) -> bool {
@@ -701,11 +672,7 @@ pub(crate) mod tests {
         assert!((mid[0] - mid[1]).abs() < 1e-5 && mid[0] > 0.7 && mid[2] == 0.0, "{mid:?}");
         // Repeat: one past the right edge is the left column again.
         assert!(close(t.sample([1.25, 0.25]), t.sample([0.25, 0.25])));
-        // Clamp at the corner keeps the corner texel; repeat blends with
-        // the opposite side.
-        let mut c = t.clone();
-        c.wrap = [Wrap::Clamp; 2];
-        assert!(close(c.sample([0.0, 0.0]), [1.0, 0.0, 0.0, 1.0]));
+        // At the corner the sample blends with the opposite side.
         assert!(!close(t.sample([0.0, 0.0]), [1.0, 0.0, 0.0, 1.0]));
         // Transparent texels don't darken their neighbours.
         let a = Texture::new(image(2, 1, &[[255, 0, 0, 255], [0, 0, 0, 0]]));

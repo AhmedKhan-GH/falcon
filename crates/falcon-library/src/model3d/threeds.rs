@@ -3,8 +3,7 @@
 //! Read: the editor chunk with its named triangle-mesh objects (vertex list,
 //! face list, per-material face groups, smoothing groups) and its materials
 //! (name, diffuse colour in the 8-bit or float, linear or gamma-corrected
-//! forms, transparency, and the diffuse texture map: its file name, tiling
-//! flags, scale, offset and rotation; when that image sits next to the model
+//! forms, transparency, and the diffuse texture map: its file name, scale, offset and rotation; when that image sits next to the model
 //! its average colour stands in for the diffuse colour and the mesh keeps
 //! the picture as its texture). The mapping coordinates (0x4140) are kept,
 //! with the material's map scale, offset and rotation baked in and v
@@ -28,7 +27,7 @@ use std::collections::HashMap;
 
 use super::geom::{self, face_normal};
 use super::math::{self, V3};
-use super::texture::{Loader, Texture, Wrap};
+use super::texture::{Loader, Texture};
 use super::{DEFAULT_COLOR, Material, Mesh, Model, ParseError, Result};
 
 const MAIN: u16 = 0x4D4D;
@@ -47,6 +46,8 @@ const MAT_DIFFUSE: u16 = 0xA020;
 const MAT_TRANSPARENCY: u16 = 0xA050;
 const MAT_TEXTURE: u16 = 0xA200;
 const MAT_TEXTURE_FILE: u16 = 0xA300;
+/// The map's tiling flags, which falcon ignores: textures always repeat.
+#[cfg(test)]
 const MAP_TILING: u16 = 0xA351;
 const MAP_U_SCALE: u16 = 0xA354;
 const MAP_V_SCALE: u16 = 0xA356;
@@ -161,10 +162,9 @@ struct Mat {
     loaded: Option<Texture>,
 }
 
-/// A texture map's tiling and transform, as the file stores them (v up).
+/// A texture map's transform, as the file stores them (v up).
 #[derive(Debug, Clone, Copy)]
 struct MapTransform {
-    wrap: Wrap,
     scale: [f32; 2],
     offset: [f32; 2],
     /// Degrees.
@@ -173,24 +173,11 @@ struct MapTransform {
 
 impl Default for MapTransform {
     fn default() -> Self {
-        MapTransform { wrap: Wrap::Repeat, scale: [1.0; 2], offset: [0.0; 2], rotation: 0.0 }
+        MapTransform { scale: [1.0; 2], offset: [0.0; 2], rotation: 0.0 }
     }
 }
 
 impl MapTransform {
-    /// Reads the tiling flags (0xA351): bit 0x0010 (no tiling) clamps and
-    /// bit 0x0002 (mirror) mirrors, as in lib3ds's texture flags; the rest
-    /// (decal, negate, tint, ...) is ignored and the picture tiles.
-    fn set_tiling(&mut self, flags: u16) {
-        self.wrap = if flags & 0x0010 != 0 {
-            Wrap::Clamp
-        } else if flags & 0x0002 != 0 {
-            Wrap::Mirror
-        } else {
-            Wrap::Repeat
-        };
-    }
-
     /// A coordinate in the file's v-up space through the map, then v
     /// flipped to picture space. The map is three.js's `texture.repeat`,
     /// `rotation` and `offset` around the centre (0, 0), which Eagle's
@@ -244,7 +231,7 @@ pub fn parse(bytes: &[u8], side: &dyn Fn(&str) -> Option<Vec<u8>>) -> Result<Mod
             if let Some(c) = image.average() {
                 m.color = Some(c);
             }
-            m.loaded = Some(Texture { image, tint: [1.0; 3], wrap: [m.map.wrap; 2], alpha_cutoff: None });
+            m.loaded = Some(Texture { image, tint: [1.0; 3], alpha_cutoff: None });
         }
     }
     Model { meshes: build(&scene) }.finish()
@@ -347,7 +334,6 @@ fn read_material(body: &[u8]) -> Result<Mat> {
                     let mut r = Reader { b: body };
                     match id {
                         MAT_TEXTURE_FILE => m.texture = Some(r.cstr()?),
-                        MAP_TILING => m.map.set_tiling(r.u16()?),
                         MAP_U_SCALE => m.map.scale[0] = finite(r.f32()?, 1.0),
                         MAP_V_SCALE => m.map.scale[1] = finite(r.f32()?, 1.0),
                         MAP_U_OFFSET => m.map.offset[0] = finite(r.f32()?, 0.0),
@@ -638,7 +624,7 @@ mod tests {
     }
 
     #[test]
-    fn texture_map_gives_texture_tiling_and_transform() {
+    fn texture_map_gives_texture_and_transform() {
         let png = crate::model3d::texture::tests::png_2x2();
         let side = |n: &str| (n == "tex.png").then(|| png.clone());
         let flags = |f: u16| chunk(MAP_TILING, &f.to_le_bytes());
@@ -650,14 +636,10 @@ mod tests {
         let mesh = &m.meshes[0];
         let t = mesh.texture.as_ref().unwrap();
         assert_eq!((t.image.width, t.image.height, t.tint, t.alpha_cutoff), (2, 2, [1.0; 3], None));
-        assert_eq!(t.wrap, [Wrap::Clamp; 2]);
         // The material colour is the picture's average, not the diffuse red.
         let avg = mesh.material.as_ref().unwrap().color;
         assert!((avg[1] - 0.5).abs() < 1e-3 && (avg[0] - 0.5).abs() < 1e-3);
         assert!(mesh.textured().is_some());
-        assert_eq!(with(&[flags(0x0002)]).meshes[0].texture.as_ref().unwrap().wrap, [Wrap::Mirror; 2]);
-        assert_eq!(with(&[flags(0)]).meshes[0].texture.as_ref().unwrap().wrap, [Wrap::Repeat; 2]);
-        assert_eq!(with(&[]).meshes[0].texture.as_ref().unwrap().wrap, [Wrap::Repeat; 2]);
         // Scale then offset (no rotation), then v flipped.
         let m = with(&[float_chunk(MAP_U_SCALE, 2.0), float_chunk(MAP_V_SCALE, 3.0), float_chunk(MAP_U_OFFSET, 0.25), float_chunk(MAP_V_OFFSET, 0.5)]);
         assert!(uvs_match(&m, |i| [corner_uv(i)[0] * 2.0 + 0.25, 1.0 - (corner_uv(i)[1] * 3.0 + 0.5)]));

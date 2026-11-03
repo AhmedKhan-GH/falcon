@@ -15,7 +15,8 @@
 //! Meshes with a look draw with a second pipeline: each picture is uploaded
 //! once per model as sRGB with its mipmaps (made on the CPU in linear
 //! light, `texture::mip_chain`), sampled trilinearly with anisotropic
-//! filtering and the file's wrap modes, multiplied with the vertex colour
+//! filtering and repeat addressing (Eagle always repeats textures, whatever
+//! the file says), multiplied with the vertex colour
 //! (the tint) in linear light, and discarded under its alpha cutoff. Normal,
 //! bump and emissive maps are uploaded as they are stored, with plain mipmaps
 //! (`texture::mip_chain_data`); no tangents are stored, the frame comes from
@@ -36,7 +37,7 @@ use std::sync::Arc;
 use eframe::egui_wgpu::{self, CallbackResources, CallbackTrait, ScreenDescriptor, wgpu};
 use falcon_library::model3d::geom;
 use falcon_library::model3d::math::M4;
-use falcon_library::model3d::texture::{self, Image, Texture, Wrap};
+use falcon_library::model3d::texture::{self, Image, Texture};
 
 use super::{Lines, MeshData, VERTEX_FLOATS, Vertices};
 
@@ -266,12 +267,12 @@ struct Buffer {
     count: u32,
 }
 
-/// The white pixels that stand in for a look's missing maps, and the samplers
-/// by wrap mode, shared by all its bind groups.
+/// The white pixels that stand in for a look's missing maps, and the repeating
+/// sampler, shared by all its bind groups.
 struct LookParts {
     white: wgpu::TextureView,
     white_srgb: wgpu::TextureView,
-    samplers: std::collections::HashMap<[Wrap; 2], wgpu::Sampler>,
+    sampler: wgpu::Sampler,
 }
 
 /// Textures the size of the view.
@@ -524,7 +525,7 @@ impl Gpu {
             let image = falcon_library::model3d::texture::Image { name: String::new(), width: 1, height: 1, rgba: vec![255; 4] };
             upload_image(device, queue, &image, format).expect("a pixel fits")
         };
-        let mut parts = LookParts { white: white(wgpu::TextureFormat::Rgba8Unorm), white_srgb: white(wgpu::TextureFormat::Rgba8UnormSrgb), samplers: Default::default() };
+        let mut parts = LookParts { white: white(wgpu::TextureFormat::Rgba8Unorm), white_srgb: white(wgpu::TextureFormat::Rgba8UnormSrgb), sampler: make_sampler(device) };
         let mut uploaded = std::collections::HashMap::new();
         let groups = looks.list.iter().map(|look| self.look_group(device, queue, look, &mut parts, &mut uploaded)).collect();
         self.looks = Some((looks.generation, groups));
@@ -552,12 +553,6 @@ impl Gpu {
             mapped_at_creation: false,
         });
         queue.write_buffer(&uniform, 0, &look_bytes(look.emissive, look.opacity, normal.is_some(), bump.is_some(), look.blend));
-        for t in [&look.base, &look.normal, &look.bump, &look.emissive_map].into_iter().flatten() {
-            parts.samplers.entry(t.wrap).or_insert_with(|| make_sampler(device, t.wrap));
-        }
-        parts.samplers.entry([Wrap::Repeat; 2]).or_insert_with(|| make_sampler(device, [Wrap::Repeat; 2]));
-        let samplers = &parts.samplers;
-        let sampler = |t: &Option<Texture>| &samplers[&t.as_ref().map_or([Wrap::Repeat; 2], |t| t.wrap)];
         let or_white = |v: &'_ Option<wgpu::TextureView>, srgb: bool| -> wgpu::TextureView { v.clone().unwrap_or_else(|| if srgb { parts.white_srgb.clone() } else { parts.white.clone() }) };
         let views = [or_white(&base, true), or_white(&normal, false), or_white(&bump, false), or_white(&emissive, false)];
         device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -566,13 +561,13 @@ impl Gpu {
             entries: &[
                 wgpu::BindGroupEntry { binding: 0, resource: uniform.as_entire_binding() },
                 wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&views[0]) },
-                wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(sampler(&look.base)) },
+                wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(&parts.sampler) },
                 wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::TextureView(&views[1]) },
-                wgpu::BindGroupEntry { binding: 4, resource: wgpu::BindingResource::Sampler(sampler(&look.normal)) },
+                wgpu::BindGroupEntry { binding: 4, resource: wgpu::BindingResource::Sampler(&parts.sampler) },
                 wgpu::BindGroupEntry { binding: 5, resource: wgpu::BindingResource::TextureView(&views[2]) },
-                wgpu::BindGroupEntry { binding: 6, resource: wgpu::BindingResource::Sampler(sampler(&look.bump)) },
+                wgpu::BindGroupEntry { binding: 6, resource: wgpu::BindingResource::Sampler(&parts.sampler) },
                 wgpu::BindGroupEntry { binding: 7, resource: wgpu::BindingResource::TextureView(&views[3]) },
-                wgpu::BindGroupEntry { binding: 8, resource: wgpu::BindingResource::Sampler(sampler(&look.emissive_map)) },
+                wgpu::BindGroupEntry { binding: 8, resource: wgpu::BindingResource::Sampler(&parts.sampler) },
             ],
         })
     }
@@ -630,14 +625,6 @@ fn upload(device: &wgpu::Device, queue: &wgpu::Queue, slot: &mut Option<Buffer>,
     *slot = Some(Buffer { generation: v.generation, buffer, count: v.count });
 }
 
-fn address(w: Wrap) -> wgpu::AddressMode {
-    match w {
-        Wrap::Repeat => wgpu::AddressMode::Repeat,
-        Wrap::Clamp => wgpu::AddressMode::ClampToEdge,
-        Wrap::Mirror => wgpu::AddressMode::MirrorRepeat,
-    }
-}
-
 /// A picture as a GPU texture with its mipmaps: in `format`, sRGB for a
 /// picture and plain for a map holding data. `None` for one the device
 /// can't hold.
@@ -669,11 +656,12 @@ fn upload_image(device: &wgpu::Device, queue: &wgpu::Queue, img: &Image, format:
     Some(gpu.create_view(&wgpu::TextureViewDescriptor::default()))
 }
 
-fn make_sampler(device: &wgpu::Device, wrap: [Wrap; 2]) -> wgpu::Sampler {
+/// The sampler of every texture: repeating along both axes, as Eagle's viewer.
+fn make_sampler(device: &wgpu::Device) -> wgpu::Sampler {
     device.create_sampler(&wgpu::SamplerDescriptor {
         label: Some("falcon-model3d-texture"),
-        address_mode_u: address(wrap[0]),
-        address_mode_v: address(wrap[1]),
+        address_mode_u: wgpu::AddressMode::Repeat,
+        address_mode_v: wgpu::AddressMode::Repeat,
         mag_filter: wgpu::FilterMode::Linear,
         min_filter: wgpu::FilterMode::Linear,
         mipmap_filter: wgpu::MipmapFilterMode::Linear,
@@ -1049,7 +1037,7 @@ mod tests {
     fn bump_slopes_when_a_gpu_is_present() {
         let ramp = |steps: u32| {
             let px: Vec<u8> = (0..64u32).flat_map(|x| [(x * steps) as u8, 0, 0, 255]).collect();
-            Texture { wrap: [Wrap::Clamp; 2], ..Texture::new(Arc::new(Image { name: "h".into(), width: 64, height: 1, rgba: px })) }
+            Texture::new(Arc::new(Image { name: "h".into(), width: 64, height: 1, rgba: px }))
         };
         let Some(plain) = middle(|_| {}) else { return };
         let bumped = middle(|m| m.surface.bump_map = Some(ramp(4))).unwrap();

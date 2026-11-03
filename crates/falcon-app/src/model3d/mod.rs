@@ -186,7 +186,7 @@ impl Look {
         fn tex(a: &Option<m3d::texture::Texture>, b: &Option<m3d::texture::Texture>) -> bool {
             match (a, b) {
                 (None, None) => true,
-                (Some(a), Some(b)) => Arc::ptr_eq(&a.image, &b.image) && a.wrap == b.wrap,
+                (Some(a), Some(b)) => Arc::ptr_eq(&a.image, &b.image),
                 _ => false,
             }
         }
