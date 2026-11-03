@@ -72,7 +72,7 @@ impl App {
             ui.set_width(340.0);
             ui.label(RichText::new(&a.title).size(15.0));
             ui.add_space(4.0);
-            ui.label(RichText::new(&a.body).color(t::p().text_muted));
+            egui::ScrollArea::vertical().max_height(320.0).show(ui, |ui| ui.label(RichText::new(&a.body).color(t::p().text_muted)));
             ui.add_space(10.0);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| ui.button(tr("OK")).clicked()).inner
         });

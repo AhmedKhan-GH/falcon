@@ -53,6 +53,10 @@ pub(crate) struct Outcome {
     pub undo: Option<falcon_library::undo::Transaction>,
     /// A new item to select and scroll to.
     pub select: Option<String>,
+    /// The toast offers Undo.
+    pub undo_toast: bool,
+    /// Items' notes changed: the inspector's edit buffers start over.
+    pub notes_changed: bool,
 }
 
 /// The worker's side: a cheap clone that goes into the thread.
@@ -247,6 +251,10 @@ impl App {
         if o.changed {
             self.ws.backup.changed(std::time::Instant::now());
         }
+        if o.notes_changed {
+            self.ws.edit = None;
+            self.ws.multi_edit = None;
+        }
         if let Some(alert) = o.alert {
             self.show_alert(alert);
         } else if let Some(e) = o.error {
@@ -255,7 +263,11 @@ impl App {
             if o.exported {
                 self.export_done_notice(&o.message);
             }
-            self.flash(o.message);
+            if o.undo_toast {
+                self.flash_undo(o.message);
+            } else {
+                self.flash(o.message);
+            }
         }
         if !o.reveal.is_empty() {
             crate::open_with::reveal(&o.reveal);

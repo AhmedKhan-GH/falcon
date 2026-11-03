@@ -116,6 +116,7 @@
     "other": "항목 {n}개를 {folder}에 추가하는 중"
   },
   "Additional layers": "추가 레이어",
+  "Adds the tags the default model suggests. Each item's name, notes and picture go to the model's provider.": "기본 모델이 제안하는 태그를 추가합니다. 각 항목의 이름, 메모, 그림이 모델 제공업체로 전송됩니다.",
   "Again": "다시 입력",
   "All": "전체",
   "All Filed": "모두 분류됨",
@@ -177,6 +178,7 @@
   "Auto-import": "자동 가져오기",
   "Auto-import doesn't work with network drives. Choose a folder on this Mac or a drive attached to it.": "자동 가져오기는 네트워크 드라이브에서 작동하지 않습니다. 이 Mac이나 연결된 드라이브의 폴더를 선택하세요.",
   "Auto-import is paused. {reason}": "자동 가져오기가 일시 중지되었습니다. {reason}",
+  "Auto-tag with AI": "AI로 자동 태그",
   "Automatic ({language})": "자동({language})",
   "Automatic Zoom": "자동 확대/축소",
   "BPM": "BPM",
@@ -211,6 +213,9 @@
   "Can't save the attachment: {error}": "첨부 파일을 저장할 수 없습니다: {error}",
   "Cancel": "취소",
   "Cancel (Esc)": "취소 (Esc)",
+  "Cancel stopped the run before {n} items.": {
+    "other": "취소로 항목 {n}개는 실행되지 않았습니다."
+  },
   "Cancelled": "취소됨",
   "Capitalize Words": "단어 첫 글자 대문자",
   "Cards play while hovered either way; hold ⌥ to keep one still.": "어느 쪽이든 카드는 마우스를 올리면 재생됩니다. ⌥를 누르면 멈춰 있습니다.",
@@ -407,6 +412,7 @@
   "Could not export the debug report: {error}": "디버그 보고서를 내보낼 수 없습니다: {error}",
   "Could not open the library: {e}": "라이브러리를 열 수 없습니다: {e}",
   "Could not reach the provider: {e}": "제공업체에 연결할 수 없습니다: {e}",
+  "Could not read the picture: {e}": "그림을 읽을 수 없습니다: {e}",
   "Could not refresh: {e}": "새로 고칠 수 없습니다: {e}",
   "Could not reload: {error}": "다시 불러올 수 없습니다: {error}",
   "Could not save the key: {e}": "키를 저장할 수 없습니다: {e}",
@@ -1021,6 +1027,7 @@
   "Missing folder": "폴더 없음",
   "Mo": "월",
   "Model exported": "모델을 내보냈습니다",
+  "Model: {model}": "모델: {model}",
   "Modified": "수정",
   "Month and day": "월과 일",
   "Months": "월",
@@ -1524,6 +1531,7 @@
   "Replace": "교체",
   "Replace Original": "원본 대체",
   "Replace Text": "텍스트 바꾸기",
+  "Replace existing notes": "기존 메모 바꾸기",
   "Replace with": "바꿀 내용",
   "Replace with File": "파일로 교체",
   "Replace with File…": "파일로 교체…",
@@ -1572,6 +1580,7 @@
   "Run the local API while a library is open": "라이브러리가 열려 있는 동안 로컬 API 실행",
   "Run {name}": "{name} 실행",
   "Running at {address}": "{address}에서 실행 중",
+  "Running {name}": "{name} 실행 중",
   "Sa": "토",
   "Sample language": "샘플 언어",
   "Saturation and Brightness": "채도 및 밝기",
@@ -1876,7 +1885,15 @@
   "The list of recent libraries is emptied, except for the libraries that are open now. This can't be undone. No library is deleted.": "최근 라이브러리 목록이 비워집니다. 현재 열려 있는 라이브러리는 제외됩니다. 이 작업은 되돌릴 수 없습니다. 라이브러리는 삭제되지 않습니다.",
   "The local API couldn't start: ports {first}–{last} are all in use. Apps and browser extensions that talk to Falcon won't reach it. Choose another first port in Preferences ▸ Developer.": "로컬 API를 시작하지 못했습니다: 포트 {first}–{last}이(가) 모두 사용 중입니다. Falcon과 통신하는 앱과 브라우저 확장 프로그램이 API에 연결할 수 없습니다. 환경설정 ▸ 개발자에서 다른 첫 번째 포트를 선택하세요.",
   "The local API is running on port {port} but can't be reached through localhost, so browser extensions can't reach Falcon. A proxy or VPN may be redirecting localhost.": "로컬 API가 포트 {port}에서 실행 중이지만 localhost로 연결할 수 없어 브라우저 확장 프로그램이 Falcon에 연결할 수 없습니다. 프록시나 VPN이 localhost를 다른 곳으로 보내고 있을 수 있습니다.",
+  "The model gave a tag that is too long or has control characters": "모델이 너무 길거나 제어 문자가 있는 태그를 주었습니다",
+  "The model gave a tag that isn't text": "모델이 텍스트가 아닌 태그를 주었습니다",
+  "The model gave more than {n} tags": {
+    "other": "모델이 태그를 {n}개보다 많이 주었습니다"
+  },
   "The model took too long to answer": "모델 응답이 너무 오래 걸렸습니다",
+  "The model's description is too long or has control characters": "모델의 설명이 너무 길거나 제어 문자가 있습니다",
+  "The model's reply had no description": "모델 응답에 설명이 없습니다",
+  "The model's reply had no tags": "모델 응답에 태그가 없습니다",
   "The model's reply had the wrong shape: {e}": "모델 응답의 형식이 잘못되었습니다: {e}",
   "The model's reply was cut off": "모델 응답이 잘렸습니다",
   "The model's reply was empty": "모델 응답이 비어 있습니다",
@@ -1902,6 +1919,7 @@
   },
   "Their files and details are copied into the other library. This library keeps them as they are.": "파일과 세부 정보가 다른 라이브러리로 복사됩니다. 이 라이브러리의 항목은 그대로 유지됩니다.",
   "Their hand-made order is replaced.": "직접 정한 순서는 바뀝니다.",
+  "Their names, notes and pictures go to {provider}.": "이름, 메모, 그림이 {provider}(으)로 전송됩니다.",
   "Theme": "테마",
   "There is no library folder at {path}. It may have been moved, renamed or deleted, or its drive isn't connected.": "{path}에 라이브러리 폴더가 없습니다. 이동, 이름 변경 또는 삭제되었거나 드라이브가 연결되지 않았을 수 있습니다.",
   "These items have no source URL": "이 항목들에는 출처 URL이 없습니다",
@@ -1985,6 +2003,7 @@
   "Uncategorized Items": "미분류 항목",
   "Undid: {label}": "실행 취소: {label}",
   "Undo": "실행 취소",
+  "Undo reverses all of this run's changes.": "실행 취소하면 이번 실행의 변경 사항이 모두 되돌려집니다.",
   "Ungroup {n} tags": {
     "other": "태그 {n}개 그룹 해제"
   },
@@ -2070,7 +2089,9 @@
   "Words with a typo or two are listed after the exact matches. Turn it off to find exact text only, as Eagle does.": "오타가 한두 개 있는 단어는 정확히 일치하는 결과 뒤에 표시됩니다. 끄면 Eagle처럼 정확한 텍스트만 찾습니다.",
   "Wrapped Scrolling": "줄바꿈 스크롤",
   "Write a comment…": "코멘트 입력…",
+  "Write a description with AI": "AI로 설명 작성",
   "Write it as provider::model": "provider::model 형식으로 입력하세요",
+  "Writes the default model's description into the item's notes. Each item's name, notes and picture go to the model's provider.": "기본 모델의 설명을 항목의 메모에 씁니다. 각 항목의 이름, 메모, 그림이 모델 제공업체로 전송됩니다.",
   "Writes to the file": "파일에 기록",
   "Written out": "문자로 표기",
   "Wrong password": "암호가 틀렸습니다",
@@ -2326,6 +2347,9 @@
   "{month} {year}": "{year}년 {month}",
   "{name} (Default)": "{name} (기본)",
   "{name} Copy": "{name} 사본",
+  "{name} changed {changed} of {n} items": {
+    "other": "{name}이(가) 항목 {n}개 중 {changed}개를 변경했습니다"
+  },
   "{name} changed {n} items": {
     "other": "{name}이(가) 항목 {n}개를 변경했습니다"
   },
@@ -2333,6 +2357,7 @@
   "{name} now has {n} items": {
     "other": "{name}에 이제 항목 {n}개가 있습니다"
   },
+  "{name} stopped on an internal error.": "{name}이(가) 내부 오류로 중지되었습니다.",
   "{name} was last saved by Eagle {version}. Falcon reads libraries up to Eagle {supported}, so it won't open or change this one. Open it in Eagle, or use a newer falcon.": "\"{name}\"은(는) 마지막으로 Eagle {version}에서 저장되었습니다. Falcon은 Eagle {supported}까지의 라이브러리를 읽으므로 이 라이브러리를 열거나 변경하지 않습니다. Eagle에서 열거나 더 새로운 falcon을 사용하세요.",
   "{name}: {n} folders no longer exist and were skipped": {
     "other": "{name}: 폴더 {n}개가 더 이상 없어 건너뛰었습니다"
@@ -2403,8 +2428,14 @@
   "{n} items couldn't be read and are hidden; their files are untouched": {
     "other": "항목 {n}개를 읽을 수 없어 숨겨졌습니다. 파일은 그대로입니다"
   },
+  "{n} items failed and were left as they were:": {
+    "other": "항목 {n}개가 실패하여 그대로 두었습니다:"
+  },
   "{n} items found": {
     "other": "{n}개 항목 찾음"
+  },
+  "{n} items kept their notes:": {
+    "other": "항목 {n}개는 메모를 그대로 두었습니다:"
   },
   "{n} items selected": {
     "other": "항목 {n}개 선택됨"

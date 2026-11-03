@@ -1,5 +1,6 @@
 //! Actions: named, ordered lists of organising steps with an optional
-//! shortcut, run on the selected items.
+//! shortcut, run on the selected items. AI steps get their results from
+//! the app, which asks the model; here they only become tags or notes.
 //!
 //! In Eagle 4.0.0 actions are a plugin (`ai-action`) that keeps its list
 //! in `actions.config.json` at the library root. That file belongs to the
@@ -16,6 +17,7 @@
 //! atomically (temp file and rename), compact, or indented with two
 //! spaces when the file it replaces was.
 
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -67,11 +69,20 @@ pub enum Step {
     ClearFolders,
     /// 0 (none) to 5 stars.
     Rating { rating: u8 },
+    /// Tags suggested by the default model. Falcon's own: the app asks the
+    /// model and hands the result to [`Library::run_steps_with`].
+    AutoTag,
+    /// A description from the default model, written to the item's notes.
+    /// An item that has notes keeps them unless `replace` is set.
+    Describe {
+        #[serde(default)]
+        replace: bool,
+    },
 }
 
 impl Step {
     /// Every kind, with empty parameters, in the order the editor offers them.
-    pub fn kinds() -> [Step; 7] {
+    pub fn kinds() -> [Step; 9] {
         [
             Step::AddTags { tags: Vec::new() },
             Step::RemoveTags { tags: Vec::new() },
@@ -80,7 +91,14 @@ impl Step {
             Step::RemoveFolders { folders: Vec::new() },
             Step::ClearFolders,
             Step::Rating { rating: 0 },
+            Step::AutoTag,
+            Step::Describe { replace: false },
         ]
+    }
+
+    /// Whether the step asks a model, so the run needs AI Models.
+    pub fn is_ai(&self) -> bool {
+        matches!(self, Step::AutoTag | Step::Describe { .. })
     }
 
     /// Whether two steps are of the same kind, parameters aside.
@@ -236,6 +254,14 @@ fn read_entry(e: &Map<String, Value>) -> ActionDef {
     ActionDef { id: text("id"), name: text("name"), shortcut, runnable: steps.is_some() && !foreign, steps: steps.unwrap_or_default() }
 }
 
+/// What a model produced for one item in one AI step. It can only become
+/// the item's tags or notes.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum StepOutput {
+    Tags(Vec<String>),
+    Description(String),
+}
+
 /// What running an action did.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RunReport {
@@ -249,7 +275,8 @@ impl Library {
     /// Runs `steps` in order on the items `ids`: each step on every item
     /// before the next step. Items in the Trash are left alone. A step
     /// that changes nothing is no error; a folder that no longer exists
-    /// is skipped and reported; a write error stops the run there.
+    /// is skipped and reported; a write error stops the run there. AI steps
+    /// do nothing here; [`Library::run_steps_with`] applies their results.
     pub fn run_steps(&mut self, ids: &[String], steps: &[Step]) -> Result<RunReport> {
         let ids: Vec<String> = ids.iter().filter(|id| self.item(id).is_some_and(|i| !i.is_deleted)).cloned().collect();
         let mut report = RunReport::default();
@@ -336,9 +363,52 @@ impl Library {
                         touched.insert(id.clone());
                     }
                 }
+                Step::AutoTag | Step::Describe { .. } => {}
             }
         }
         report.changed = touched.len();
+        Ok(report)
+    }
+
+    /// Runs `steps` in order on `ids` as [`Library::run_steps`] does, with
+    /// each AI step taking its results from `outputs`, keyed by the step's
+    /// index and the item's id. An item with no result for an AI step is
+    /// left as it is by that step.
+    pub fn run_steps_with(&mut self, ids: &[String], steps: &[Step], outputs: &HashMap<(usize, String), StepOutput>) -> Result<RunReport> {
+        let state = |lib: &Library, id: &String| lib.item(id).filter(|i| !i.is_deleted).map(|i| (i.tags.clone(), i.folders.clone(), i.annotation.clone(), i.extra.get("star").cloned()));
+        let before: Vec<_> = ids.iter().map(|id| state(self, id)).collect();
+        let mut report = RunReport::default();
+        for (n, step) in steps.iter().enumerate() {
+            if !step.is_ai() {
+                let done = self.run_steps(ids, std::slice::from_ref(step))?;
+                for f in done.missing_folders {
+                    if !report.missing_folders.contains(&f) {
+                        report.missing_folders.push(f);
+                    }
+                }
+                continue;
+            }
+            for id in ids {
+                if !self.item(id).is_some_and(|i| !i.is_deleted) {
+                    continue;
+                }
+                match outputs.get(&(n, id.clone())) {
+                    Some(StepOutput::Tags(tags)) => {
+                        self.add_tags_to_items(std::slice::from_ref(id), tags)?;
+                    }
+                    Some(StepOutput::Description(text)) => {
+                        if let Some(mut item) = self.item(id).cloned()
+                            && item.annotation != *text
+                        {
+                            item.annotation.clone_from(text);
+                            self.update_item(item)?;
+                        }
+                    }
+                    None => {}
+                }
+            }
+        }
+        report.changed = ids.iter().zip(&before).filter(|(id, was)| state(self, id) != **was).count();
         Ok(report)
     }
 }
@@ -537,6 +607,67 @@ mod tests {
         assert_eq!(star(&lib, "A1"), 5, "ratings cap at five");
         let a2 = lib.item("A2").unwrap();
         assert!(a2.is_deleted && a2.folders.is_empty(), "a trashed item is not restored");
+    }
+
+    #[test]
+    fn ai_steps_round_trip_and_old_entries_stay_readable() {
+        let text = r#"[{"id":"A","name":"Label","shortcut":"","steps":[{"type":"autoTag"},{"type":"describe","replace":true},{"type":"describe"}]}]"#;
+        let f = ActionsFile::parse(text).unwrap();
+        let a = f.actions().remove(0);
+        assert!(a.runnable);
+        assert_eq!(a.steps, [Step::AutoTag, Step::Describe { replace: true }, Step::Describe { replace: false }]);
+        assert!(a.steps.iter().all(Step::is_ai));
+        assert!(!Step::Rating { rating: 1 }.is_ai());
+        let mut g = ActionsFile::default();
+        g.put(&a);
+        assert!(g.to_text().contains(r#"{"type":"autoTag"}"#));
+    }
+
+    #[test]
+    fn outputs_apply_in_step_order_with_the_rule_steps() {
+        let d = tempfile::tempdir().unwrap();
+        let mut lib = library(d.path(), &[&["old"], &["kept"], &[]]);
+        let steps = [Step::ClearTags, Step::AutoTag, Step::Describe { replace: true }, Step::Rating { rating: 2 }];
+        let outputs = HashMap::from([
+            ((1, "A1".to_string()), StepOutput::Tags(s(&["new", " new ", ""]))),
+            ((2, "A1".to_string()), StepOutput::Description("A cat.".into())),
+            ((1, "A3".to_string()), StepOutput::Tags(s(&["other"]))),
+        ]);
+        let r = lib.run_steps_with(&s(&["A1", "A3"]), &steps, &outputs).unwrap();
+        assert_eq!(r.changed, 2);
+        let a1 = lib.item("A1").unwrap();
+        assert_eq!(a1.tags, s(&["new"]), "added after the clear, once");
+        assert_eq!(a1.annotation, "A cat.");
+        assert_eq!(star(&lib, "A1"), 2);
+        let a3 = lib.item("A3").unwrap();
+        assert_eq!(a3.tags, s(&["other"]));
+        assert_eq!(a3.annotation, "");
+        assert_eq!(lib.item("A2").unwrap().tags, s(&["kept"]), "not in the run");
+        // run_steps alone ignores the AI steps.
+        let r = lib.run_steps(&s(&["A2"]), &[Step::AutoTag, Step::Describe { replace: true }]).unwrap();
+        assert_eq!(r.changed, 0);
+    }
+
+    #[test]
+    fn outputs_undo_as_one_step_and_skip_the_trash() {
+        let d = tempfile::tempdir().unwrap();
+        let mut lib = library(d.path(), &[&["a"], &[]]);
+        let mut gone = lib.item("A2").unwrap().clone();
+        gone.is_deleted = true;
+        lib.update_item(gone).unwrap();
+        let outputs = HashMap::from([
+            ((0, "A1".to_string()), StepOutput::Tags(s(&["n"]))),
+            ((1, "A1".to_string()), StepOutput::Description("d".into())),
+            ((0, "A2".to_string()), StepOutput::Tags(s(&["n"]))),
+        ]);
+        lib.begin_transaction("Run");
+        let r = lib.run_steps_with(&s(&["A1", "A2"]), &[Step::AutoTag, Step::Describe { replace: true }], &outputs).unwrap();
+        let tx = lib.end_transaction().unwrap();
+        assert_eq!(r.changed, 1);
+        assert!(lib.item("A2").unwrap().tags.is_empty(), "a trashed item is left alone");
+        assert_eq!((lib.item("A1").unwrap().tags.len(), lib.item("A1").unwrap().annotation.as_str()), (2, "d"));
+        lib.revert(tx).unwrap();
+        assert_eq!((lib.item("A1").unwrap().tags.clone(), lib.item("A1").unwrap().annotation.as_str()), (s(&["a"]), ""));
     }
 
     #[test]

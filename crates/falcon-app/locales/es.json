@@ -127,6 +127,7 @@
     "other": "Añadiendo {n} elementos a {folder}"
   },
   "Additional layers": "Capas adicionales",
+  "Adds the tags the default model suggests. Each item's name, notes and picture go to the model's provider.": "Añade las etiquetas que sugiere el modelo predeterminado. El nombre, las notas y la imagen de cada elemento se envían al proveedor del modelo.",
   "Again": "Repetir",
   "All": "Todos",
   "All Filed": "Todo archivado",
@@ -188,6 +189,7 @@
   "Auto-import": "Importación automática",
   "Auto-import doesn't work with network drives. Choose a folder on this Mac or a drive attached to it.": "La importación automática no funciona con unidades de red. Elige una carpeta de este Mac o de una unidad conectada a él.",
   "Auto-import is paused. {reason}": "La importación automática está en pausa. {reason}",
+  "Auto-tag with AI": "Etiquetar con IA",
   "Automatic ({language})": "Automático ({language})",
   "Automatic Zoom": "Zoom automático",
   "BPM": "BPM",
@@ -222,6 +224,10 @@
   "Can't save the attachment: {error}": "No se puede guardar el adjunto: {error}",
   "Cancel": "Cancelar",
   "Cancel (Esc)": "Cancelar (Esc)",
+  "Cancel stopped the run before {n} items.": {
+    "one": "Cancelar detuvo la ejecución antes de {n} elemento.",
+    "other": "Cancelar detuvo la ejecución antes de {n} elementos."
+  },
   "Cancelled": "Cancelado",
   "Capitalize Words": "Palabras en mayúscula inicial",
   "Cards play while hovered either way; hold ⌥ to keep one still.": "Las tarjetas se reproducen al pasar el cursor en cualquier caso; mantén ⌥ para dejar una quieta.",
@@ -433,6 +439,7 @@
   "Could not export the debug report: {error}": "No se pudo exportar el informe de depuración: {error}",
   "Could not open the library: {e}": "No se pudo abrir la biblioteca: {e}",
   "Could not reach the provider: {e}": "No se pudo conectar con el proveedor: {e}",
+  "Could not read the picture: {e}": "No se pudo leer la imagen: {e}",
   "Could not refresh: {e}": "No se pudo actualizar: {e}",
   "Could not reload: {error}": "No se pudo recargar: {error}",
   "Could not save the key: {e}": "No se pudo guardar la clave: {e}",
@@ -1075,6 +1082,7 @@
   "Missing folder": "Falta la carpeta",
   "Mo": "lu",
   "Model exported": "Modelo exportado",
+  "Model: {model}": "Modelo: {model}",
   "Modified": "Modificado",
   "Month and day": "Mes y día",
   "Months": "Meses",
@@ -1608,6 +1616,7 @@
   "Replace": "Reemplazar",
   "Replace Original": "Reemplazar original",
   "Replace Text": "Reemplazar texto",
+  "Replace existing notes": "Reemplazar las notas existentes",
   "Replace with": "Reemplazar con",
   "Replace with File": "Reemplazar con archivo",
   "Replace with File…": "Reemplazar con archivo…",
@@ -1658,6 +1667,7 @@
   "Run the local API while a library is open": "Ejecutar la API local mientras haya una biblioteca abierta",
   "Run {name}": "Ejecutar {name}",
   "Running at {address}": "En ejecución en {address}",
+  "Running {name}": "Ejecutando {name}",
   "Sa": "sá",
   "Sample language": "Idioma de muestra",
   "Saturation and Brightness": "Saturación y brillo",
@@ -1972,7 +1982,16 @@
   "The list of recent libraries is emptied, except for the libraries that are open now. This can't be undone. No library is deleted.": "Se vacía la lista de bibliotecas recientes, salvo las que están abiertas ahora. No se puede deshacer. No se elimina ninguna biblioteca.",
   "The local API couldn't start: ports {first}–{last} are all in use. Apps and browser extensions that talk to Falcon won't reach it. Choose another first port in Preferences ▸ Developer.": "La API local no pudo iniciarse: los puertos {first}–{last} están todos en uso. Las apps y extensiones del navegador que se comunican con Falcon no podrán acceder a ella. Elegir otro primer puerto en Preferencias ▸ Desarrollador.",
   "The local API is running on port {port} but can't be reached through localhost, so browser extensions can't reach Falcon. A proxy or VPN may be redirecting localhost.": "La API local se ejecuta en el puerto {port}, pero no se puede acceder a ella a través de localhost, por lo que las extensiones del navegador no llegan a Falcon. Puede que un proxy o una VPN esté redirigiendo localhost.",
+  "The model gave a tag that is too long or has control characters": "El modelo dio una etiqueta demasiado larga o con caracteres de control",
+  "The model gave a tag that isn't text": "El modelo dio una etiqueta que no es texto",
+  "The model gave more than {n} tags": {
+    "one": "El modelo dio más de {n} etiqueta",
+    "other": "El modelo dio más de {n} etiquetas"
+  },
   "The model took too long to answer": "El modelo tardó demasiado en responder",
+  "The model's description is too long or has control characters": "La descripción del modelo es demasiado larga o tiene caracteres de control",
+  "The model's reply had no description": "La respuesta del modelo no tenía descripción",
+  "The model's reply had no tags": "La respuesta del modelo no tenía etiquetas",
   "The model's reply had the wrong shape: {e}": "La respuesta del modelo tenía una forma incorrecta: {e}",
   "The model's reply was cut off": "La respuesta del modelo se cortó",
   "The model's reply was empty": "La respuesta del modelo estaba vacía",
@@ -1999,6 +2018,7 @@
   },
   "Their files and details are copied into the other library. This library keeps them as they are.": "Sus archivos y detalles se copian a la otra biblioteca. Esta biblioteca los conserva tal cual.",
   "Their hand-made order is replaced.": "Se reemplaza su orden manual.",
+  "Their names, notes and pictures go to {provider}.": "Sus nombres, notas e imágenes se envían a {provider}.",
   "Theme": "Tema",
   "There is no library folder at {path}. It may have been moved, renamed or deleted, or its drive isn't connected.": "No hay ninguna carpeta de biblioteca en {path}. Puede que se haya movido, renombrado o eliminado, o que su disco no esté conectado.",
   "These items have no source URL": "Estos elementos no tienen URL de origen",
@@ -2086,6 +2106,7 @@
   "Uncategorized Items": "Elementos sin carpeta",
   "Undid: {label}": "Deshecho: {label}",
   "Undo": "Deshacer",
+  "Undo reverses all of this run's changes.": "Deshacer revierte todos los cambios de esta ejecución.",
   "Ungroup {n} tags": {
     "one": "Desagrupar {n} etiqueta",
     "other": "Desagrupar {n} etiquetas"
@@ -2175,7 +2196,9 @@
   "Words with a typo or two are listed after the exact matches. Turn it off to find exact text only, as Eagle does.": "Las palabras con una o dos erratas aparecen después de las coincidencias exactas. Desactívalo para encontrar solo el texto exacto, como hace Eagle.",
   "Wrapped Scrolling": "Desplazamiento en bloque",
   "Write a comment…": "Escribe un comentario…",
+  "Write a description with AI": "Escribir una descripción con IA",
   "Write it as provider::model": "Escríbalo como provider::model",
+  "Writes the default model's description into the item's notes. Each item's name, notes and picture go to the model's provider.": "Escribe la descripción del modelo predeterminado en las notas del elemento. El nombre, las notas y la imagen de cada elemento se envían al proveedor del modelo.",
   "Writes to the file": "Escribe en el archivo",
   "Written out": "Escrita en letras",
   "Wrong password": "Contraseña incorrecta",
@@ -2437,6 +2460,10 @@
   "{month} {year}": "{month} de {year}",
   "{name} (Default)": "{name} (predeterminada)",
   "{name} Copy": "Copia de {name}",
+  "{name} changed {changed} of {n} items": {
+    "one": "{name} cambió {changed} de {n} elemento",
+    "other": "{name} cambió {changed} de {n} elementos"
+  },
   "{name} changed {n} items": {
     "one": "{name} cambió {n} elemento",
     "other": "{name} cambió {n} elementos"
@@ -2446,6 +2473,7 @@
     "one": "{name} tiene ahora {n} elemento",
     "other": "{name} tiene ahora {n} elementos"
   },
+  "{name} stopped on an internal error.": "{name} se detuvo por un error interno.",
   "{name} was last saved by Eagle {version}. Falcon reads libraries up to Eagle {supported}, so it won't open or change this one. Open it in Eagle, or use a newer falcon.": "{name} se guardó por última vez con Eagle {version}. Falcon lee bibliotecas hasta Eagle {supported}, así que no abrirá ni modificará esta. Ábrela en Eagle o usa un falcon más reciente.",
   "{name}: {n} folders no longer exist and were skipped": {
     "one": "{name}: {n} carpeta ya no existe y se omitió",
@@ -2541,9 +2569,17 @@
     "one": "No se pudo leer {n} elemento y está oculto; su archivo no se ha tocado",
     "other": "No se pudieron leer {n} elementos y están ocultos; sus archivos no se han tocado"
   },
+  "{n} items failed and were left as they were:": {
+    "one": "{n} elemento falló y quedó como estaba:",
+    "other": "{n} elementos fallaron y quedaron como estaban:"
+  },
   "{n} items found": {
     "one": "{n} elemento encontrado",
     "other": "{n} elementos encontrados"
+  },
+  "{n} items kept their notes:": {
+    "one": "{n} elemento conservó sus notas:",
+    "other": "{n} elementos conservaron sus notas:"
   },
   "{n} items selected": {
     "one": "{n} elemento seleccionado",

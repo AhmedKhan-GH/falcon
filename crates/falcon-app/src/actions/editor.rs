@@ -58,6 +58,8 @@ pub fn kind_label(step: &Step) -> &'static str {
         Step::RemoveFolders { .. } => tr_key("Remove from folders"),
         Step::ClearFolders => tr_key("Remove from all folders"),
         Step::Rating { .. } => tr_key("Set rating"),
+        Step::AutoTag => tr_key("Auto-tag with AI"),
+        Step::Describe { .. } => tr_key("Write a description with AI"),
     }
 }
 
@@ -451,6 +453,13 @@ impl App {
                     *rating = n as u8;
                 }
             }
+            Step::AutoTag => {
+                crate::prefs::note(ui, tr("Adds the tags the default model suggests. Each item's name, notes and picture go to the model's provider."));
+            }
+            Step::Describe { replace } => {
+                ui.checkbox(replace, tr("Replace existing notes"));
+                crate::prefs::note(ui, tr("Writes the default model's description into the item's notes. Each item's name, notes and picture go to the model's provider."));
+            }
             Step::ClearTags | Step::ClearFolders => {}
         }
     }
@@ -489,6 +498,18 @@ mod tests {
         ed.steps[0].step = Step::AddFolders { folders: s(&["F"]) };
         ed.steps.push(EditStep::new(Step::ClearTags));
         assert_eq!(ed.problem(), None);
+    }
+
+    #[test]
+    fn ai_steps_save_without_parameters() {
+        let mut ed = Editor::new_action();
+        ed.name = "Label".into();
+        ed.steps = vec![EditStep::new(Step::AutoTag), EditStep::new(Step::Describe { replace: true })];
+        assert_eq!(ed.problem(), None);
+        assert_eq!(ed.to_def().steps, [Step::AutoTag, Step::Describe { replace: true }]);
+        ed.set_kind(0, &Step::Describe { replace: false });
+        assert_eq!(ed.steps[0].step, Step::Describe { replace: false });
+        assert!(Step::kinds().iter().all(|k| !kind_label(k).is_empty()));
     }
 
     #[test]

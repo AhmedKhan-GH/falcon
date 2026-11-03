@@ -138,6 +138,7 @@
     "one": "Добавление {n} элемента в «{folder}»"
   },
   "Additional layers": "Дополнительные слои",
+  "Adds the tags the default model suggests. Each item's name, notes and picture go to the model's provider.": "Добавляет теги, предложенные моделью по умолчанию. Имя, заметки и изображение каждого элемента отправляются поставщику модели.",
   "Again": "Ещё раз",
   "All": "Все",
   "All Filed": "Всё распределено",
@@ -199,6 +200,7 @@
   "Auto-import": "Автоимпорт",
   "Auto-import doesn't work with network drives. Choose a folder on this Mac or a drive attached to it.": "Автоимпорт не работает с сетевыми дисками. Выберите папку на этом Mac или на подключённом к нему диске.",
   "Auto-import is paused. {reason}": "Автоимпорт приостановлен. {reason}",
+  "Auto-tag with AI": "Автотеги с помощью ИИ",
   "Automatic ({language})": "Автоматически ({language})",
   "Automatic Zoom": "Автомасштаб",
   "BPM": "BPM",
@@ -233,6 +235,11 @@
   "Can't save the attachment: {error}": "Не удаётся сохранить вложение: {error}",
   "Cancel": "Отмена",
   "Cancel (Esc)": "Отмена (Esc)",
+  "Cancel stopped the run before {n} items.": {
+    "few": "Отмена остановила запуск до {n} элементов.",
+    "many": "Отмена остановила запуск до {n} элементов.",
+    "one": "Отмена остановила запуск до {n} элемента."
+  },
   "Cancelled": "Отменено",
   "Capitalize Words": "Каждое слово с заглавной",
   "Cards play while hovered either way; hold ⌥ to keep one still.": "Карточки в любом случае воспроизводятся при наведении; удерживайте ⌥, чтобы одна осталась неподвижной.",
@@ -459,6 +466,7 @@
   "Could not export the debug report: {error}": "Не удалось экспортировать отчёт отладки: {error}",
   "Could not open the library: {e}": "Не удалось открыть библиотеку: {e}",
   "Could not reach the provider: {e}": "Не удалось связаться с поставщиком: {e}",
+  "Could not read the picture: {e}": "Не удалось прочитать изображение: {e}",
   "Could not refresh: {e}": "Не удалось обновить: {e}",
   "Could not reload: {error}": "Не удалось перезагрузить: {error}",
   "Could not save the key: {e}": "Не удалось сохранить ключ: {e}",
@@ -1129,6 +1137,7 @@
   "Missing folder": "Папка отсутствует",
   "Mo": "Пн",
   "Model exported": "Модель экспортирована",
+  "Model: {model}": "Модель: {model}",
   "Modified": "Изменено",
   "Month and day": "Месяц и день",
   "Months": "Месяцы",
@@ -1692,6 +1701,7 @@
   "Replace": "Заменить",
   "Replace Original": "Заменить оригинал",
   "Replace Text": "Замена текста",
+  "Replace existing notes": "Заменять существующие заметки",
   "Replace with": "Заменить на",
   "Replace with File": "Заменить файлом",
   "Replace with File…": "Заменить файлом…",
@@ -1744,6 +1754,7 @@
   "Run the local API while a library is open": "Запускать локальный API, пока открыта библиотека",
   "Run {name}": "Выполнить «{name}»",
   "Running at {address}": "Запущен по адресу {address}",
+  "Running {name}": "Выполняется «{name}»",
   "Sa": "Сб",
   "Sample language": "Язык образца",
   "Saturation and Brightness": "Насыщенность и яркость",
@@ -2066,7 +2077,17 @@
   "The list of recent libraries is emptied, except for the libraries that are open now. This can't be undone. No library is deleted.": "Список недавних библиотек будет очищен, кроме библиотек, открытых сейчас. Это действие нельзя отменить. Ни одна библиотека не удаляется.",
   "The local API couldn't start: ports {first}–{last} are all in use. Apps and browser extensions that talk to Falcon won't reach it. Choose another first port in Preferences ▸ Developer.": "Не удалось запустить локальный API: все порты {first}–{last} заняты. Приложения и расширения браузера, работающие с Falcon, не смогут к нему подключиться. Выберите другой первый порт в разделе «Настройки ▸ Разработчик».",
   "The local API is running on port {port} but can't be reached through localhost, so browser extensions can't reach Falcon. A proxy or VPN may be redirecting localhost.": "Локальный API работает на порту {port}, но недоступен через localhost, поэтому расширения браузера не могут подключиться к Falcon. Возможно, прокси или VPN перенаправляет localhost.",
+  "The model gave a tag that is too long or has control characters": "Модель дала слишком длинный тег или тег с управляющими символами",
+  "The model gave a tag that isn't text": "Модель дала тег, который не является текстом",
+  "The model gave more than {n} tags": {
+    "few": "Модель дала больше {n} тегов",
+    "many": "Модель дала больше {n} тегов",
+    "one": "Модель дала больше {n} тега"
+  },
   "The model took too long to answer": "Модель слишком долго не отвечала",
+  "The model's description is too long or has control characters": "Описание модели слишком длинное или содержит управляющие символы",
+  "The model's reply had no description": "В ответе модели нет описания",
+  "The model's reply had no tags": "В ответе модели нет тегов",
   "The model's reply had the wrong shape: {e}": "Ответ модели имеет неверную форму: {e}",
   "The model's reply was cut off": "Ответ модели оборвался",
   "The model's reply was empty": "Ответ модели пуст",
@@ -2094,6 +2115,7 @@
   },
   "Their files and details are copied into the other library. This library keeps them as they are.": "Их файлы и сведения копируются в другую библиотеку. В этой библиотеке они остаются без изменений.",
   "Their hand-made order is replaced.": "Заданный вручную порядок будет заменён.",
+  "Their names, notes and pictures go to {provider}.": "Их имена, заметки и изображения будут отправлены в {provider}.",
   "Theme": "Тема",
   "There is no library folder at {path}. It may have been moved, renamed or deleted, or its drive isn't connected.": "По адресу {path} нет папки библиотеки. Возможно, её переместили, переименовали или удалили, либо диск не подключён.",
   "These items have no source URL": "У этих элементов нет URL источника",
@@ -2185,6 +2207,7 @@
   "Uncategorized Items": "Элементы без папки",
   "Undid: {label}": "Отменено: {label}",
   "Undo": "Отменить",
+  "Undo reverses all of this run's changes.": "Отмена вернёт все изменения этого запуска.",
   "Ungroup {n} tags": {
     "few": "Разгруппировать {n} тега",
     "many": "Разгруппировать {n} тегов",
@@ -2278,7 +2301,9 @@
   "Words with a typo or two are listed after the exact matches. Turn it off to find exact text only, as Eagle does.": "Слова с одной-двумя опечатками идут после точных совпадений. Если выключить, ищется только точный текст, как в Eagle.",
   "Wrapped Scrolling": "Прокрутка с переносом",
   "Write a comment…": "Напишите комментарий…",
+  "Write a description with AI": "Написать описание с помощью ИИ",
   "Write it as provider::model": "Укажите в виде provider::model",
+  "Writes the default model's description into the item's notes. Each item's name, notes and picture go to the model's provider.": "Записывает описание от модели по умолчанию в заметки элемента. Имя, заметки и изображение каждого элемента отправляются поставщику модели.",
   "Writes to the file": "Записывает в файл",
   "Written out": "Словами",
   "Wrong password": "Неверный пароль",
@@ -2546,6 +2571,11 @@
   "{month} {year}": "{month} {year}",
   "{name} (Default)": "{name} (по умолчанию)",
   "{name} Copy": "{name} — копия",
+  "{name} changed {changed} of {n} items": {
+    "few": "«{name}»: изменено {changed} из {n} элементов",
+    "many": "«{name}»: изменено {changed} из {n} элементов",
+    "one": "«{name}»: изменено {changed} из {n} элемента"
+  },
   "{name} changed {n} items": {
     "few": "«{name}»: изменено {n} элемента",
     "many": "«{name}»: изменено {n} элементов",
@@ -2557,6 +2587,7 @@
     "many": "В «{name}» теперь {n} элементов",
     "one": "В «{name}» теперь {n} элемент"
   },
+  "{name} stopped on an internal error.": "«{name}» остановлено из-за внутренней ошибки.",
   "{name} was last saved by Eagle {version}. Falcon reads libraries up to Eagle {supported}, so it won't open or change this one. Open it in Eagle, or use a newer falcon.": "«{name}» в последний раз сохранена в Eagle {version}. Falcon читает библиотеки не новее Eagle {supported}, поэтому не будет открывать или изменять эту. Откройте её в Eagle или используйте более новый falcon.",
   "{name}: {n} folders no longer exist and were skipped": {
     "few": "«{name}»: {n} папки больше не существуют, пропущены",
@@ -2675,10 +2706,20 @@
     "many": "Не удалось прочитать {n} элементов, они скрыты; их файлы не тронуты",
     "one": "Не удалось прочитать {n} элемент, он скрыт; его файл не тронут"
   },
+  "{n} items failed and were left as they were:": {
+    "few": "Сбой для {n} элементов, они не изменены:",
+    "many": "Сбой для {n} элементов, они не изменены:",
+    "one": "Сбой для {n} элемента, он не изменён:"
+  },
   "{n} items found": {
     "few": "Найдено {n} объекта",
     "many": "Найдено {n} объектов",
     "one": "Найден {n} объект"
+  },
+  "{n} items kept their notes:": {
+    "few": "{n} элемента сохранили свои заметки:",
+    "many": "{n} элементов сохранили свои заметки:",
+    "one": "{n} элемент сохранил свои заметки:"
   },
   "{n} items selected": {
     "few": "Выбрано {n} элемента",

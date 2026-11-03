@@ -116,6 +116,7 @@
     "other": "正在将{n}个项目添加到{folder}"
   },
   "Additional layers": "其他图层",
+  "Adds the tags the default model suggests. Each item's name, notes and picture go to the model's provider.": "添加默认模型建议的标签。每个项目的名称、注释和图片都会发送给模型的提供商。",
   "Again": "再次输入",
   "All": "全部",
   "All Filed": "已全部归类",
@@ -177,6 +178,7 @@
   "Auto-import": "自动导入",
   "Auto-import doesn't work with network drives. Choose a folder on this Mac or a drive attached to it.": "自动导入不支持网络驱动器。请选择这台 Mac 或其所连接磁盘上的文件夹。",
   "Auto-import is paused. {reason}": "自动导入已暂停。{reason}",
+  "Auto-tag with AI": "用 AI 自动添加标签",
   "Automatic ({language})": "自动（{language}）",
   "Automatic Zoom": "自动缩放",
   "BPM": "BPM",
@@ -211,6 +213,9 @@
   "Can't save the attachment: {error}": "无法存储附件：{error}",
   "Cancel": "取消",
   "Cancel (Esc)": "取消（Esc）",
+  "Cancel stopped the run before {n} items.": {
+    "other": "取消后，还有{n}个项目未运行。"
+  },
   "Cancelled": "已取消",
   "Capitalize Words": "单词首字母大写",
   "Cards play while hovered either way; hold ⌥ to keep one still.": "无论哪种设置，悬停时卡片都会播放；按住 ⌥ 可让其保持静止。",
@@ -407,6 +412,7 @@
   "Could not export the debug report: {error}": "无法导出调试报告：{error}",
   "Could not open the library: {e}": "无法打开资源库：{e}",
   "Could not reach the provider: {e}": "无法连接提供商：{e}",
+  "Could not read the picture: {e}": "无法读取图片：{e}",
   "Could not refresh: {e}": "无法刷新：{e}",
   "Could not reload: {error}": "无法重新载入：{error}",
   "Could not save the key: {e}": "无法保存密钥：{e}",
@@ -1021,6 +1027,7 @@
   "Missing folder": "缺少文件夹",
   "Mo": "一",
   "Model exported": "模型已导出",
+  "Model: {model}": "模型：{model}",
   "Modified": "修改",
   "Month and day": "月和日",
   "Months": "月份",
@@ -1524,6 +1531,7 @@
   "Replace": "替换",
   "Replace Original": "替换原文件",
   "Replace Text": "替换文本",
+  "Replace existing notes": "替换现有注释",
   "Replace with": "替换为",
   "Replace with File": "用文件替换",
   "Replace with File…": "用文件替换…",
@@ -1572,6 +1580,7 @@
   "Run the local API while a library is open": "打开资源库时运行本地 API",
   "Run {name}": "运行{name}",
   "Running at {address}": "运行于{address}",
+  "Running {name}": "正在运行{name}",
   "Sa": "六",
   "Sample language": "示例语言",
   "Saturation and Brightness": "饱和度和亮度",
@@ -1876,7 +1885,15 @@
   "The list of recent libraries is emptied, except for the libraries that are open now. This can't be undone. No library is deleted.": "最近使用的资源库列表将被清空，当前已打开的资源库除外。此操作无法撤销。不会删除任何资源库。",
   "The local API couldn't start: ports {first}–{last} are all in use. Apps and browser extensions that talk to Falcon won't reach it. Choose another first port in Preferences ▸ Developer.": "本地 API 无法启动：端口{first}–{last}均已被占用。与 Falcon 通信的 App 和浏览器扩展将无法连接。请在“偏好设置 ▸ 开发者”中选择其他起始端口。",
   "The local API is running on port {port} but can't be reached through localhost, so browser extensions can't reach Falcon. A proxy or VPN may be redirecting localhost.": "本地 API 正在端口{port}上运行，但无法通过 localhost 访问，因此浏览器扩展无法连接 Falcon。可能是代理或 VPN 重定向了 localhost。",
+  "The model gave a tag that is too long or has control characters": "模型给出的标签过长或含有控制字符",
+  "The model gave a tag that isn't text": "模型给出的标签不是文本",
+  "The model gave more than {n} tags": {
+    "other": "模型给出的标签超过{n}个"
+  },
   "The model took too long to answer": "模型响应时间过长",
+  "The model's description is too long or has control characters": "模型的描述过长或含有控制字符",
+  "The model's reply had no description": "模型回复中没有描述",
+  "The model's reply had no tags": "模型回复中没有标签",
   "The model's reply had the wrong shape: {e}": "模型回复的结构不对：{e}",
   "The model's reply was cut off": "模型回复被截断",
   "The model's reply was empty": "模型回复为空",
@@ -1902,6 +1919,7 @@
   },
   "Their files and details are copied into the other library. This library keeps them as they are.": "它们的文件和详细信息会拷贝到另一个资源库，当前资源库中的项目保持不变。",
   "Their hand-made order is replaced.": "手动排列的顺序将被替换。",
+  "Their names, notes and pictures go to {provider}.": "它们的名称、注释和图片将发送给 {provider}。",
   "Theme": "主题",
   "There is no library folder at {path}. It may have been moved, renamed or deleted, or its drive isn't connected.": "{path}处没有资源库文件夹。它可能已被移动、重命名或删除，或者所在磁盘未连接。",
   "These items have no source URL": "这些项目没有来源网址",
@@ -1985,6 +2003,7 @@
   "Uncategorized Items": "未分类项目",
   "Undid: {label}": "已撤销：{label}",
   "Undo": "撤销",
+  "Undo reverses all of this run's changes.": "撤销可还原此次运行的所有更改。",
   "Ungroup {n} tags": {
     "other": "取消{n}个标签的分组"
   },
@@ -2070,7 +2089,9 @@
   "Words with a typo or two are listed after the exact matches. Turn it off to find exact text only, as Eagle does.": "有一两个拼写错误的词会列在完全匹配之后。关闭后只查找完全相同的文字，与 Eagle 一致。",
   "Wrapped Scrolling": "平铺滚动",
   "Write a comment…": "写批注…",
+  "Write a description with AI": "用 AI 撰写描述",
   "Write it as provider::model": "请写成 provider::model",
+  "Writes the default model's description into the item's notes. Each item's name, notes and picture go to the model's provider.": "将默认模型的描述写入项目的注释。每个项目的名称、注释和图片都会发送给模型的提供商。",
   "Writes to the file": "写入文件",
   "Written out": "文字形式",
   "Wrong password": "密码错误",
@@ -2326,6 +2347,9 @@
   "{month} {year}": "{year}年{month}",
   "{name} (Default)": "{name}（默认）",
   "{name} Copy": "{name}副本",
+  "{name} changed {changed} of {n} items": {
+    "other": "{name}更改了{n}个项目中的{changed}个"
+  },
   "{name} changed {n} items": {
     "other": "{name}更改了{n}个项目"
   },
@@ -2333,6 +2357,7 @@
   "{name} now has {n} items": {
     "other": "{name}现有{n}个项目"
   },
+  "{name} stopped on an internal error.": "{name}因内部错误而停止。",
   "{name} was last saved by Eagle {version}. Falcon reads libraries up to Eagle {supported}, so it won't open or change this one. Open it in Eagle, or use a newer falcon.": "“{name}”上次由 Eagle {version}存储。Falcon 只能读取 Eagle {supported}及更早版本的资源库，因此不会打开或修改它。请在 Eagle 中打开，或使用更新的 falcon。",
   "{name}: {n} folders no longer exist and were skipped": {
     "other": "{name}：有{n}个文件夹已不存在，已跳过"
@@ -2403,8 +2428,14 @@
   "{n} items couldn't be read and are hidden; their files are untouched": {
     "other": "有{n}个项目无法读取，已被隐藏；其文件未被改动"
   },
+  "{n} items failed and were left as they were:": {
+    "other": "{n}个项目失败，保持原样："
+  },
   "{n} items found": {
     "other": "找到{n}个项目"
+  },
+  "{n} items kept their notes:": {
+    "other": "{n}个项目保留了注释："
   },
   "{n} items selected": {
     "other": "已选择{n}个项目"

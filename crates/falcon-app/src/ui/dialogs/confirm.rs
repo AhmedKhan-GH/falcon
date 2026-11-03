@@ -123,12 +123,17 @@ impl App {
     pub(crate) fn bulk_dialog(&mut self, ctx: &egui::Context) {
         if let Some((n, _)) = &self.ws.bulk {
             let n = *n;
+            let sends_to = self.ws.bulk.as_ref().is_some_and(|(_, actions)| actions.iter().any(|a| matches!(a, Action::RunSteps(r) if r.has_ai()))).then(|| crate::ai_models::receivers(&self.prefs.ai_models).join(", "));
             let mut answer = None;
             let modal = egui::Modal::new(egui::Id::unique("bulk")).show(ctx, |ui| {
                 ui.set_width(320.0);
                 ui.label(RichText::new(tr("Many items at once")).size(15.0));
                 ui.add_space(4.0);
                 ui.label(RichText::new(tr_n(n, "{n} item will be affected. Go ahead?", "{n} items will be affected. Go ahead?")).color(t::p().text_muted));
+                if let Some(who) = &sends_to {
+                    ui.add_space(4.0);
+                    ui.label(RichText::new(trf("Their names, notes and pictures go to {provider}.", &[("provider", who)])).color(t::p().text_muted));
+                }
                 ui.add_space(10.0);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui.button(tr("OK")).clicked() {

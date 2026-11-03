@@ -11,6 +11,7 @@
 //! module holds the state and the rules; `app.rs` runs actions and routes
 //! the menu and keys, `panel.rs` and `editor.rs` draw.
 
+pub(crate) mod ai;
 pub(crate) mod app;
 pub(crate) mod editor;
 pub(crate) mod panel;
@@ -39,6 +40,13 @@ pub struct Run {
     pub name: String,
     pub ids: Vec<String>,
     pub steps: Vec<Step>,
+}
+
+impl Run {
+    /// Whether a model is asked, so the run goes through `ai.rs`.
+    pub fn has_ai(&self) -> bool {
+        self.steps.iter().any(Step::is_ai)
+    }
 }
 
 /// The Actions panel's own state.
@@ -286,6 +294,13 @@ mod tests {
         assert_eq!(filter(&f, "").len(), 2);
         assert_eq!(filter(&f, "REF tag").iter().map(|d| d.id.as_str()).collect::<Vec<_>>(), ["A"]);
         assert!(filter(&f, "nothing").is_empty());
+    }
+
+    #[test]
+    fn runs_with_ai_steps_are_marked() {
+        let (_d, s) = state_with(r#"[{"id":"A","name":"AI","shortcut":"","steps":[{"type":"rating","rating":1},{"type":"describe"}]},{"id":"B","name":"Rule","shortcut":"","steps":[{"type":"clearTag"}]}]"#);
+        assert!(s.run_of("A", vec!["I".into()]).unwrap().has_ai());
+        assert!(!s.run_of("B", vec!["I".into()]).unwrap().has_ai());
     }
 
     #[test]

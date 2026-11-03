@@ -127,6 +127,7 @@
     "other": "Adding {n} items to {folder}"
   },
   "Additional layers": "Additional layers",
+  "Adds the tags the default model suggests. Each item's name, notes and picture go to the model's provider.": "Adds the tags the default model suggests. Each item's name, notes and picture go to the model's provider.",
   "Again": "Again",
   "All": "All",
   "All Filed": "All Filed",
@@ -188,6 +189,7 @@
   "Auto-import": "Auto-import",
   "Auto-import doesn't work with network drives. Choose a folder on this Mac or a drive attached to it.": "Auto-import doesn't work with network drives. Choose a folder on this Mac or a drive attached to it.",
   "Auto-import is paused. {reason}": "Auto-import is paused. {reason}",
+  "Auto-tag with AI": "Auto-tag with AI",
   "Automatic ({language})": "Automatic ({language})",
   "Automatic Zoom": "Automatic Zoom",
   "BPM": "BPM",
@@ -222,6 +224,10 @@
   "Can't save the attachment: {error}": "Can't save the attachment: {error}",
   "Cancel": "Cancel",
   "Cancel (Esc)": "Cancel (Esc)",
+  "Cancel stopped the run before {n} items.": {
+    "one": "Cancel stopped the run before {n} item.",
+    "other": "Cancel stopped the run before {n} items."
+  },
   "Cancelled": "Cancelled",
   "Capitalize Words": "Capitalize Words",
   "Cards play while hovered either way; hold ⌥ to keep one still.": "Cards play while hovered either way; hold ⌥ to keep one still.",
@@ -433,6 +439,7 @@
   "Could not export the debug report: {error}": "Could not export the debug report: {error}",
   "Could not open the library: {e}": "Could not open the library: {e}",
   "Could not reach the provider: {e}": "Could not reach the provider: {e}",
+  "Could not read the picture: {e}": "Could not read the picture: {e}",
   "Could not refresh: {e}": "Could not refresh: {e}",
   "Could not reload: {error}": "Could not reload: {error}",
   "Could not save the key: {e}": "Could not save the key: {e}",
@@ -1075,6 +1082,7 @@
   "Missing folder": "Missing folder",
   "Mo": "Mo",
   "Model exported": "Model exported",
+  "Model: {model}": "Model: {model}",
   "Modified": "Modified",
   "Month and day": "Month and day",
   "Months": "Months",
@@ -1608,6 +1616,7 @@
   "Replace": "Replace",
   "Replace Original": "Replace Original",
   "Replace Text": "Replace Text",
+  "Replace existing notes": "Replace existing notes",
   "Replace with": "Replace with",
   "Replace with File": "Replace with File",
   "Replace with File…": "Replace with File…",
@@ -1658,6 +1667,7 @@
   "Run the local API while a library is open": "Run the local API while a library is open",
   "Run {name}": "Run {name}",
   "Running at {address}": "Running at {address}",
+  "Running {name}": "Running {name}",
   "Sa": "Sa",
   "Sample language": "Sample language",
   "Saturation and Brightness": "Saturation and Brightness",
@@ -1972,7 +1982,16 @@
   "The list of recent libraries is emptied, except for the libraries that are open now. This can't be undone. No library is deleted.": "The list of recent libraries is emptied, except for the libraries that are open now. This can't be undone. No library is deleted.",
   "The local API couldn't start: ports {first}–{last} are all in use. Apps and browser extensions that talk to Falcon won't reach it. Choose another first port in Preferences ▸ Developer.": "The local API couldn't start: ports {first}–{last} are all in use. Apps and browser extensions that talk to Falcon won't reach it. Choose another first port in Preferences ▸ Developer.",
   "The local API is running on port {port} but can't be reached through localhost, so browser extensions can't reach Falcon. A proxy or VPN may be redirecting localhost.": "The local API is running on port {port} but can't be reached through localhost, so browser extensions can't reach Falcon. A proxy or VPN may be redirecting localhost.",
+  "The model gave a tag that is too long or has control characters": "The model gave a tag that is too long or has control characters",
+  "The model gave a tag that isn't text": "The model gave a tag that isn't text",
+  "The model gave more than {n} tags": {
+    "one": "The model gave more than {n} tag",
+    "other": "The model gave more than {n} tags"
+  },
   "The model took too long to answer": "The model took too long to answer",
+  "The model's description is too long or has control characters": "The model's description is too long or has control characters",
+  "The model's reply had no description": "The model's reply had no description",
+  "The model's reply had no tags": "The model's reply had no tags",
   "The model's reply had the wrong shape: {e}": "The model's reply had the wrong shape: {e}",
   "The model's reply was cut off": "The model's reply was cut off",
   "The model's reply was empty": "The model's reply was empty",
@@ -1999,6 +2018,7 @@
   },
   "Their files and details are copied into the other library. This library keeps them as they are.": "Their files and details are copied into the other library. This library keeps them as they are.",
   "Their hand-made order is replaced.": "Their hand-made order is replaced.",
+  "Their names, notes and pictures go to {provider}.": "Their names, notes and pictures go to {provider}.",
   "Theme": "Theme",
   "There is no library folder at {path}. It may have been moved, renamed or deleted, or its drive isn't connected.": "There is no library folder at {path}. It may have been moved, renamed or deleted, or its drive isn't connected.",
   "These items have no source URL": "These items have no source URL",
@@ -2086,6 +2106,7 @@
   "Uncategorized Items": "Uncategorized Items",
   "Undid: {label}": "Undid: {label}",
   "Undo": "Undo",
+  "Undo reverses all of this run's changes.": "Undo reverses all of this run's changes.",
   "Ungroup {n} tags": {
     "one": "Ungroup {n} tag",
     "other": "Ungroup {n} tags"
@@ -2175,7 +2196,9 @@
   "Words with a typo or two are listed after the exact matches. Turn it off to find exact text only, as Eagle does.": "Words with a typo or two are listed after the exact matches. Turn it off to find exact text only, as Eagle does.",
   "Wrapped Scrolling": "Wrapped Scrolling",
   "Write a comment…": "Write a comment…",
+  "Write a description with AI": "Write a description with AI",
   "Write it as provider::model": "Write it as provider::model",
+  "Writes the default model's description into the item's notes. Each item's name, notes and picture go to the model's provider.": "Writes the default model's description into the item's notes. Each item's name, notes and picture go to the model's provider.",
   "Writes to the file": "Writes to the file",
   "Written out": "Written out",
   "Wrong password": "Wrong password",
@@ -2437,6 +2460,10 @@
   "{month} {year}": "{month} {year}",
   "{name} (Default)": "{name} (Default)",
   "{name} Copy": "{name} Copy",
+  "{name} changed {changed} of {n} items": {
+    "one": "{name} changed {changed} of {n} item",
+    "other": "{name} changed {changed} of {n} items"
+  },
   "{name} changed {n} items": {
     "one": "{name} changed {n} item",
     "other": "{name} changed {n} items"
@@ -2446,6 +2473,7 @@
     "one": "{name} now has {n} item",
     "other": "{name} now has {n} items"
   },
+  "{name} stopped on an internal error.": "{name} stopped on an internal error.",
   "{name} was last saved by Eagle {version}. Falcon reads libraries up to Eagle {supported}, so it won't open or change this one. Open it in Eagle, or use a newer falcon.": "{name} was last saved by Eagle {version}. Falcon reads libraries up to Eagle {supported}, so it won't open or change this one. Open it in Eagle, or use a newer falcon.",
   "{name}: {n} folders no longer exist and were skipped": {
     "one": "{name}: {n} folder no longer exists and was skipped",
@@ -2541,9 +2569,17 @@
     "one": "{n} item couldn't be read and is hidden; its file is untouched",
     "other": "{n} items couldn't be read and are hidden; their files are untouched"
   },
+  "{n} items failed and were left as they were:": {
+    "one": "{n} item failed and was left as it was:",
+    "other": "{n} items failed and were left as they were:"
+  },
   "{n} items found": {
     "one": "{n} item found",
     "other": "{n} items found"
+  },
+  "{n} items kept their notes:": {
+    "one": "{n} item kept its notes:",
+    "other": "{n} items kept their notes:"
   },
   "{n} items selected": {
     "one": "{n} item selected",

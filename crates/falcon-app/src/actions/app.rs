@@ -73,6 +73,12 @@ impl App {
             return;
         }
         let n = ids.len();
+        if def.steps.iter().any(|s| s.is_ai())
+            && let Some(problem) = crate::ai_models::setup_problem(&self.prefs.ai_models)
+        {
+            self.flash_error(tr(problem));
+            return;
+        }
         if let Some(run) = self.user_actions.run_of(id, ids) {
             self.push_bulk_at(n, RUN_CONFIRM, Action::RunSteps(run));
         }
@@ -80,6 +86,10 @@ impl App {
 
     /// The reducer's half: runs the steps inside the frame's undo step.
     pub(crate) fn apply_run(&mut self, lib: &mut Library, run: Run) -> falcon_library::Result<()> {
+        if run.has_ai() {
+            self.start_ai_run(run);
+            return Ok(());
+        }
         let report = lib.run_steps(&run.ids, &run.steps)?;
         if !report.missing_folders.is_empty() {
             self.flash_error(tr_nf(

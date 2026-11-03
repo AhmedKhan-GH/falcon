@@ -116,6 +116,7 @@
     "other": "{n}個のアイテムを{folder}に追加中"
   },
   "Additional layers": "追加のレイヤー",
+  "Adds the tags the default model suggests. Each item's name, notes and picture go to the model's provider.": "デフォルトのモデルが提案するタグを追加します。各アイテムの名前、メモ、画像はモデルのプロバイダに送信されます。",
   "Again": "もう一度",
   "All": "すべて",
   "All Filed": "すべて分類済み",
@@ -177,6 +178,7 @@
   "Auto-import": "自動読み込み",
   "Auto-import doesn't work with network drives. Choose a folder on this Mac or a drive attached to it.": "自動読み込みはネットワークドライブでは使えません。このMac上、またはMacに接続したドライブ上のフォルダを選んでください。",
   "Auto-import is paused. {reason}": "自動読み込みを一時停止しました。{reason}",
+  "Auto-tag with AI": "AIで自動タグ付け",
   "Automatic ({language})": "自動（{language}）",
   "Automatic Zoom": "自動ズーム",
   "BPM": "BPM",
@@ -211,6 +213,9 @@
   "Can't save the attachment: {error}": "添付ファイルを保存できません：{error}",
   "Cancel": "キャンセル",
   "Cancel (Esc)": "キャンセル（Esc）",
+  "Cancel stopped the run before {n} items.": {
+    "other": "キャンセルにより、{n}個のアイテムは実行されませんでした。"
+  },
   "Cancelled": "キャンセルしました",
   "Capitalize Words": "単語の先頭を大文字",
   "Cards play while hovered either way; hold ⌥ to keep one still.": "どちらの設定でも、カードはポインタを重ねている間は再生されます。⌥を押すと止まったままになります。",
@@ -407,6 +412,7 @@
   "Could not export the debug report: {error}": "デバッグレポートを書き出せませんでした：{error}",
   "Could not open the library: {e}": "ライブラリを開けませんでした：{e}",
   "Could not reach the provider: {e}": "プロバイダに接続できませんでした：{e}",
+  "Could not read the picture: {e}": "画像を読み取れませんでした：{e}",
   "Could not refresh: {e}": "更新できませんでした：{e}",
   "Could not reload: {error}": "再読み込みできませんでした：{error}",
   "Could not save the key: {e}": "キーを保存できませんでした：{e}",
@@ -1021,6 +1027,7 @@
   "Missing folder": "フォルダが見つかりません",
   "Mo": "月",
   "Model exported": "モデルを書き出しました",
+  "Model: {model}": "モデル：{model}",
   "Modified": "更新",
   "Month and day": "月と日",
   "Months": "月",
@@ -1524,6 +1531,7 @@
   "Replace": "置き換える",
   "Replace Original": "元のファイルを置き換える",
   "Replace Text": "テキストを置換",
+  "Replace existing notes": "既存のメモを置き換える",
   "Replace with": "置換後",
   "Replace with File": "ファイルで置き換え",
   "Replace with File…": "ファイルで置き換え…",
@@ -1572,6 +1580,7 @@
   "Run the local API while a library is open": "ライブラリを開いている間、ローカルAPIを実行する",
   "Run {name}": "{name}を実行",
   "Running at {address}": "{address}で実行中",
+  "Running {name}": "{name}を実行中",
   "Sa": "土",
   "Sample language": "サンプルの言語",
   "Saturation and Brightness": "彩度と明るさ",
@@ -1876,7 +1885,15 @@
   "The list of recent libraries is emptied, except for the libraries that are open now. This can't be undone. No library is deleted.": "最近使ったライブラリの一覧が空になります（現在開いているライブラリを除く）。この操作は取り消せません。ライブラリは削除されません。",
   "The local API couldn't start: ports {first}–{last} are all in use. Apps and browser extensions that talk to Falcon won't reach it. Choose another first port in Preferences ▸ Developer.": "ローカルAPIを起動できませんでした：ポート{first}～{last}はすべて使用中です。Falconと通信するアプリやブラウザ拡張機能はAPIに接続できません。環境設定 ▸ 開発者で別の先頭ポートを選んでください。",
   "The local API is running on port {port} but can't be reached through localhost, so browser extensions can't reach Falcon. A proxy or VPN may be redirecting localhost.": "ローカルAPIはポート{port}で動作していますが、localhost経由で接続できないため、ブラウザ拡張機能はFalconに接続できません。プロキシまたはVPNがlocalhostをリダイレクトしている可能性があります。",
+  "The model gave a tag that is too long or has control characters": "モデルのタグが長すぎるか、制御文字を含んでいます",
+  "The model gave a tag that isn't text": "モデルのタグがテキストではありません",
+  "The model gave more than {n} tags": {
+    "other": "モデルのタグが{n}個を超えています"
+  },
   "The model took too long to answer": "モデルの応答に時間がかかりすぎました",
+  "The model's description is too long or has control characters": "モデルの説明が長すぎるか、制御文字を含んでいます",
+  "The model's reply had no description": "モデルの応答に説明がありません",
+  "The model's reply had no tags": "モデルの応答にタグがありません",
   "The model's reply had the wrong shape: {e}": "モデルの応答の形式が正しくありません：{e}",
   "The model's reply was cut off": "モデルの応答が途中で切れました",
   "The model's reply was empty": "モデルの応答が空でした",
@@ -1902,6 +1919,7 @@
   },
   "Their files and details are copied into the other library. This library keeps them as they are.": "ファイルと詳細情報が別のライブラリにコピーされます。このライブラリのアイテムは変更されません。",
   "Their hand-made order is replaced.": "手動で並べた順序は置き換えられます。",
+  "Their names, notes and pictures go to {provider}.": "名前、メモ、画像は{provider}に送信されます。",
   "Theme": "テーマ",
   "There is no library folder at {path}. It may have been moved, renamed or deleted, or its drive isn't connected.": "{path}にライブラリのフォルダがありません。移動、名前の変更、削除されたか、ドライブが接続されていない可能性があります。",
   "These items have no source URL": "これらのアイテムにはソースURLがありません",
@@ -1985,6 +2003,7 @@
   "Uncategorized Items": "未分類のアイテム",
   "Undid: {label}": "取り消しました：{label}",
   "Undo": "取り消す",
+  "Undo reverses all of this run's changes.": "取り消すと、この実行の変更がすべて元に戻ります。",
   "Ungroup {n} tags": {
     "other": "{n}個のタグのグループ化を解除"
   },
@@ -2070,7 +2089,9 @@
   "Words with a typo or two are listed after the exact matches. Turn it off to find exact text only, as Eagle does.": "1～2文字の入力ミスがある語は完全一致の後に表示されます。オフにすると Eagle と同じく完全一致のみ検索します。",
   "Wrapped Scrolling": "折り返しスクロール",
   "Write a comment…": "コメントを入力…",
+  "Write a description with AI": "AIで説明を書く",
   "Write it as provider::model": "provider::model の形式で入力してください",
+  "Writes the default model's description into the item's notes. Each item's name, notes and picture go to the model's provider.": "デフォルトのモデルの説明をアイテムのメモに書き込みます。各アイテムの名前、メモ、画像はモデルのプロバイダに送信されます。",
   "Writes to the file": "ファイルに書き込む",
   "Written out": "文字表記",
   "Wrong password": "パスワードが違います",
@@ -2326,6 +2347,9 @@
   "{month} {year}": "{year}年{month}",
   "{name} (Default)": "{name}（デフォルト）",
   "{name} Copy": "{name}のコピー",
+  "{name} changed {changed} of {n} items": {
+    "other": "{name}が{n}個中{changed}個のアイテムを変更しました"
+  },
   "{name} changed {n} items": {
     "other": "{name}が{n}個のアイテムを変更しました"
   },
@@ -2333,6 +2357,7 @@
   "{name} now has {n} items": {
     "other": "{name}は現在{n}件のアイテムを含みます"
   },
+  "{name} stopped on an internal error.": "{name}は内部エラーで停止しました。",
   "{name} was last saved by Eagle {version}. Falcon reads libraries up to Eagle {supported}, so it won't open or change this one. Open it in Eagle, or use a newer falcon.": "「{name}」は最後にEagle {version}で保存されました。FalconはEagle {supported}までのライブラリを読み込めるため、このライブラリは開けず、変更もできません。Eagleで開くか、新しいfalconを使ってください。",
   "{name}: {n} folders no longer exist and were skipped": {
     "other": "{name}：{n}個のフォルダが存在しないためスキップしました"
@@ -2403,8 +2428,14 @@
   "{n} items couldn't be read and are hidden; their files are untouched": {
     "other": "{n}件のアイテムを読み込めなかったため非表示にしました。ファイルには変更を加えていません"
   },
+  "{n} items failed and were left as they were:": {
+    "other": "{n}個のアイテムは失敗し、変更されませんでした："
+  },
   "{n} items found": {
     "other": "{n} 件見つかりました"
+  },
+  "{n} items kept their notes:": {
+    "other": "{n}個のアイテムはメモをそのまま残しました："
   },
   "{n} items selected": {
     "other": "{n} 個のアイテムを選択中"

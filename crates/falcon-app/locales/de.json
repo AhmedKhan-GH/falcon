@@ -127,6 +127,7 @@
     "other": "{n} Objekte werden zu {folder} hinzugefügt"
   },
   "Additional layers": "Weitere Ebenen",
+  "Adds the tags the default model suggests. Each item's name, notes and picture go to the model's provider.": "Fügt die vom Standardmodell vorgeschlagenen Tags hinzu. Name, Notizen und Bild jedes Objekts gehen an den Anbieter des Modells.",
   "Again": "Wiederholen",
   "All": "Alle",
   "All Filed": "Alles einsortiert",
@@ -188,6 +189,7 @@
   "Auto-import": "Automatischer Import",
   "Auto-import doesn't work with network drives. Choose a folder on this Mac or a drive attached to it.": "Der automatische Import funktioniert nicht mit Netzwerklaufwerken. Wählen Sie einen Ordner auf diesem Mac oder auf einem daran angeschlossenen Laufwerk.",
   "Auto-import is paused. {reason}": "Der automatische Import ist pausiert. {reason}",
+  "Auto-tag with AI": "Mit KI automatisch taggen",
   "Automatic ({language})": "Automatisch ({language})",
   "Automatic Zoom": "Automatischer Zoom",
   "BPM": "BPM",
@@ -222,6 +224,10 @@
   "Can't save the attachment: {error}": "Der Anhang kann nicht gesichert werden: {error}",
   "Cancel": "Abbrechen",
   "Cancel (Esc)": "Abbrechen (Esc)",
+  "Cancel stopped the run before {n} items.": {
+    "one": "Der Abbruch stoppte den Lauf vor {n} Objekt.",
+    "other": "Der Abbruch stoppte den Lauf vor {n} Objekten."
+  },
   "Cancelled": "Abgebrochen",
   "Capitalize Words": "Wörter großschreiben",
   "Cards play while hovered either way; hold ⌥ to keep one still.": "Karten spielen bei Mauszeiger darüber in jedem Fall ab; mit ⌥ bleibt eine stehen.",
@@ -433,6 +439,7 @@
   "Could not export the debug report: {error}": "Der Debug-Bericht konnte nicht exportiert werden: {error}",
   "Could not open the library: {e}": "Mediathek konnte nicht geöffnet werden: {e}",
   "Could not reach the provider: {e}": "Der Anbieter ist nicht erreichbar: {e}",
+  "Could not read the picture: {e}": "Das Bild konnte nicht gelesen werden: {e}",
   "Could not refresh: {e}": "Aktualisieren nicht möglich: {e}",
   "Could not reload: {error}": "Neu laden nicht möglich: {error}",
   "Could not save the key: {e}": "Der Schlüssel konnte nicht gespeichert werden: {e}",
@@ -1075,6 +1082,7 @@
   "Missing folder": "Ordner fehlt",
   "Mo": "Mo",
   "Model exported": "Modell exportiert",
+  "Model: {model}": "Modell: {model}",
   "Modified": "Geändert",
   "Month and day": "Monat und Tag",
   "Months": "Monate",
@@ -1608,6 +1616,7 @@
   "Replace": "Ersetzen",
   "Replace Original": "Original ersetzen",
   "Replace Text": "Text ersetzen",
+  "Replace existing notes": "Vorhandene Notizen ersetzen",
   "Replace with": "Ersetzen durch",
   "Replace with File": "Durch Datei ersetzen",
   "Replace with File…": "Durch Datei ersetzen …",
@@ -1658,6 +1667,7 @@
   "Run the local API while a library is open": "Lokale API ausführen, solange eine Mediathek geöffnet ist",
   "Run {name}": "{name} ausführen",
   "Running at {address}": "Läuft unter {address}",
+  "Running {name}": "{name} wird ausgeführt",
   "Sa": "Sa",
   "Sample language": "Beispielsprache",
   "Saturation and Brightness": "Sättigung und Helligkeit",
@@ -1972,7 +1982,16 @@
   "The list of recent libraries is emptied, except for the libraries that are open now. This can't be undone. No library is deleted.": "Die Liste der zuletzt verwendeten Mediatheken wird geleert, außer den jetzt geöffneten Mediatheken. Das kann nicht widerrufen werden. Es wird keine Mediathek gelöscht.",
   "The local API couldn't start: ports {first}–{last} are all in use. Apps and browser extensions that talk to Falcon won't reach it. Choose another first port in Preferences ▸ Developer.": "Die lokale API konnte nicht gestartet werden: Die Ports {first}–{last} sind alle belegt. Apps und Browser-Erweiterungen, die mit Falcon sprechen, erreichen sie nicht. Einen anderen ersten Port in Einstellungen ▸ Entwickler wählen.",
   "The local API is running on port {port} but can't be reached through localhost, so browser extensions can't reach Falcon. A proxy or VPN may be redirecting localhost.": "Die lokale API läuft auf Port {port}, ist aber über localhost nicht erreichbar, daher erreichen Browser-Erweiterungen Falcon nicht. Möglicherweise leitet ein Proxy oder VPN localhost um.",
+  "The model gave a tag that is too long or has control characters": "Das Modell lieferte einen zu langen Tag oder einen mit Steuerzeichen",
+  "The model gave a tag that isn't text": "Das Modell lieferte einen Tag, der kein Text ist",
+  "The model gave more than {n} tags": {
+    "one": "Das Modell lieferte mehr als {n} Tag",
+    "other": "Das Modell lieferte mehr als {n} Tags"
+  },
   "The model took too long to answer": "Das Modell hat zu lange für die Antwort gebraucht",
+  "The model's description is too long or has control characters": "Die Beschreibung des Modells ist zu lang oder enthält Steuerzeichen",
+  "The model's reply had no description": "Die Antwort des Modells enthielt keine Beschreibung",
+  "The model's reply had no tags": "Die Antwort des Modells enthielt keine Tags",
   "The model's reply had the wrong shape: {e}": "Die Antwort des Modells hatte die falsche Form: {e}",
   "The model's reply was cut off": "Die Antwort des Modells wurde abgeschnitten",
   "The model's reply was empty": "Die Antwort des Modells war leer",
@@ -1999,6 +2018,7 @@
   },
   "Their files and details are copied into the other library. This library keeps them as they are.": "Die Dateien und Details werden in die andere Mediathek kopiert. Diese Mediathek behält sie unverändert.",
   "Their hand-made order is replaced.": "Die manuelle Reihenfolge wird ersetzt.",
+  "Their names, notes and pictures go to {provider}.": "Ihre Namen, Notizen und Bilder gehen an {provider}.",
   "Theme": "Design",
   "There is no library folder at {path}. It may have been moved, renamed or deleted, or its drive isn't connected.": "Unter {path} gibt es keinen Mediathek-Ordner. Er wurde möglicherweise verschoben, umbenannt oder gelöscht, oder das Laufwerk ist nicht angeschlossen.",
   "These items have no source URL": "Diese Objekte haben keine Quell-URL",
@@ -2086,6 +2106,7 @@
   "Uncategorized Items": "Objekte ohne Ordner",
   "Undid: {label}": "Widerrufen: {label}",
   "Undo": "Widerrufen",
+  "Undo reverses all of this run's changes.": "Rückgängig macht alle Änderungen dieses Laufs rückgängig.",
   "Ungroup {n} tags": {
     "one": "Gruppierung von {n} Tag aufheben",
     "other": "Gruppierung von {n} Tags aufheben"
@@ -2175,7 +2196,9 @@
   "Words with a typo or two are listed after the exact matches. Turn it off to find exact text only, as Eagle does.": "Wörter mit ein oder zwei Tippfehlern folgen nach den genauen Treffern. Ausgeschaltet wird nur genauer Text gefunden, wie in Eagle.",
   "Wrapped Scrolling": "Umbrochenes Scrollen",
   "Write a comment…": "Kommentar schreiben …",
+  "Write a description with AI": "Beschreibung mit KI schreiben",
   "Write it as provider::model": "Schreiben Sie es als provider::model",
+  "Writes the default model's description into the item's notes. Each item's name, notes and picture go to the model's provider.": "Schreibt die Beschreibung des Standardmodells in die Notizen des Objekts. Name, Notizen und Bild jedes Objekts gehen an den Anbieter des Modells.",
   "Writes to the file": "Schreibt in die Datei",
   "Written out": "Ausgeschrieben",
   "Wrong password": "Falsches Kennwort",
@@ -2437,6 +2460,10 @@
   "{month} {year}": "{month} {year}",
   "{name} (Default)": "{name} (Standard)",
   "{name} Copy": "{name} Kopie",
+  "{name} changed {changed} of {n} items": {
+    "one": "{name} hat {changed} von {n} Objekt geändert",
+    "other": "{name} hat {changed} von {n} Objekten geändert"
+  },
   "{name} changed {n} items": {
     "one": "{name} hat {n} Objekt geändert",
     "other": "{name} hat {n} Objekte geändert"
@@ -2446,6 +2473,7 @@
     "one": "{name} hat jetzt {n} Objekt",
     "other": "{name} hat jetzt {n} Objekte"
   },
+  "{name} stopped on an internal error.": "{name} wurde wegen eines internen Fehlers beendet.",
   "{name} was last saved by Eagle {version}. Falcon reads libraries up to Eagle {supported}, so it won't open or change this one. Open it in Eagle, or use a newer falcon.": "{name} wurde zuletzt mit Eagle {version} gesichert. Falcon liest Mediatheken bis Eagle {supported} und öffnet oder ändert diese daher nicht. Öffnen Sie sie in Eagle oder verwenden Sie ein neueres Falcon.",
   "{name}: {n} folders no longer exist and were skipped": {
     "one": "{name}: {n} Ordner existiert nicht mehr und wurde übersprungen",
@@ -2541,9 +2569,17 @@
     "one": "{n} Objekt konnte nicht gelesen werden und ist ausgeblendet; die Datei bleibt unverändert",
     "other": "{n} Objekte konnten nicht gelesen werden und sind ausgeblendet; die Dateien bleiben unverändert"
   },
+  "{n} items failed and were left as they were:": {
+    "one": "{n} Objekt schlug fehl und blieb unverändert:",
+    "other": "{n} Objekte schlugen fehl und blieben unverändert:"
+  },
   "{n} items found": {
     "one": "{n} Objekt gefunden",
     "other": "{n} Objekte gefunden"
+  },
+  "{n} items kept their notes:": {
+    "one": "{n} Objekt behielt seine Notizen:",
+    "other": "{n} Objekte behielten ihre Notizen:"
   },
   "{n} items selected": {
     "one": "{n} Objekt ausgewählt",

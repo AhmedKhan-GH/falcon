@@ -29,14 +29,12 @@ pub fn keys() -> Arc<dyn KeyStore> {
 }
 
 /// The shared interface with these settings and falcon's keys.
-#[allow(dead_code)]
 pub fn client(settings: &Settings) -> Client {
     Client::new(settings.clone(), keys())
 }
 
 /// Who gets items under these settings: each default model's provider and
 /// host, for the confirmation before a large AI run.
-#[allow(dead_code)]
 pub fn receivers(settings: &Settings) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for m in [settings.vision_model(), settings.chat_model()].into_iter().flatten() {
@@ -50,7 +48,6 @@ pub fn receivers(settings: &Settings) -> Vec<String> {
 }
 
 /// What keeps AI steps from running, as a message; none when they can.
-#[allow(dead_code)]
 pub fn setup_problem(settings: &Settings) -> Option<&'static str> {
     if settings.providers.is_empty() {
         return Some(tr_key("Add a provider in Preferences ▸ AI Models to run AI steps"));
