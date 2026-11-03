@@ -423,6 +423,28 @@ Every import from the app (drops, ⌘V, files passed to the app, the collect win
 
 The dialog, "Already in the library (N)", shows the existing item's thumbnail, name and first folder, the new file's size and target folder, two choices, Use the existing item (the default) and Keep both, a "Do the same for all N files" box when more than one file is held, and Import and Don't Import buttons. Return imports with the chosen option and Esc skips; with ⌘ held either answers for every file. A click outside doesn't answer. Use the existing item puts the existing item in the import's folders with their auto-tags and moves its date added to now (`Library::use_existing_for_import`); if that item has been deleted or trashed meanwhile, the file is imported instead. Keep both commits the held copy as a new item. Don't Import drops it, removing the staged copy. Each answer is one undo step and shows a notice ("Used the existing items for 2 files"). Held files count as done in the progress bar's "Added N". Held files still waiting when their library is closed are dropped.
 
+## AI Search
+
+AI Search finds pictures by describing them ("black cat") or by showing a similar one, on the Mac. Eagle does this with a plugin and an outside service; falcon has it built in, and it stays off until the model is installed. Descriptions should be in English: the model was trained on English captions, and other languages work poorly or not at all.
+
+The code is `crates/falcon-clip` (the model, its download, the index and the worker, so the rest of the workspace doesn't rebuild the ML dependencies), `crates/falcon-app/src/ai_search.rs` (the engine handle, one library's search, the Preferences pane) and `crates/falcon-app/src/app/ai_search.rs` (the `impl App` part).
+
+| Part | Behaviour |
+| --- | --- |
+| Model | CLIP ViT-B/32 trained on LAION-2B (`laion/CLIP-ViT-B-32-laion2B-s34B-b79K`), declared MIT on its model card, run through `candle` on Metal, or on the CPU if Metal isn't there or fails its first text. Only safetensors weights are read, never pickle |
+| Download | Nothing is fetched until Preferences ▸ AI Search's Download Model is clicked, next to the model's name, size, licence and source. The download is pinned to one commit, sends no identifiers, can be cancelled, continues where it stopped and is checked against pinned SHA-256 hashes; the files are checked again each time they are loaded. Remove Model deletes the model and every library's index. It is the only network use: images and queries never leave the Mac |
+| Where things live | `ai-search/` in falcon's app data (`~/Library/Application Support/Falcon/`): `model/<commit>/` and `indexes/<hash of the library's path>.index`. Nothing is written inside the `.library` folder, so libraries stay byte-identical |
+| Index | One vector per item, read from its thumbnail, or from its original when it has no thumbnail. A worker thread reads eight pictures at a time and then waits as long as that took, so it uses at most half of the machine's time; the library lock is only held to list the items, never while reading pictures or running the model. Records are appended as they are made, so indexing resumes after a restart. It follows the library: every two seconds it compares a fingerprint of the items, and every five minutes the thumbnail files too. A new item or a changed picture is read; an edit that leaves the picture alone isn't. An item in the Trash keeps its vector and isn't a result; deleting it for good forgets it. An item with nothing readable is counted as skipped and tried again only when it changes. Only the shown library is indexed |
+| Progress | A thin bar under the toolbar button and its tooltip; Preferences ▸ AI Search also has the count, the device, Pause Indexing and Rebuild Index |
+| Text search | The toolbar's AI Search button (the sparkle, left of the funnel) makes the search box read descriptions, with a highlight on the button; another click goes back to keyword search. While the model isn't ready the button opens Preferences ▸ AI Search |
+| Similar images | Visual Match in an item's menu (and `find.filter.image`, unbound by default, which uses the selected item or asks for a picture); the search box's camera with Choose Image… and Paste Image; or a picture dropped on the search box. While one is shown the box says what it's like and an X replaces the camera |
+| Results | Shown through the normal grid, best first whatever the view's sort, and limited by the open view and the filter bar. The title says "Search results (N)". A click on the title, Clear Filter or opening another view (unless the filter is locked) ends the search. At most 500 results; a description's results score at least 0.20 and within 0.08 of the best, and an image's at least 0.55. These cut-offs were chosen from a small set of test pictures |
+| API | `/api/v2/aiSearch/*`: see the HTTP API chapter |
+
+The worker owns the model and drops it after two minutes with nothing to do, since it holds about 600 MB. Searches go ahead of indexing, and run off the UI thread; the answer is picked up in `ai_tick`. The index is searched by comparing with every vector, so a library of 100,000 items holds about 200 MB of vectors in memory.
+
+Tests use a stand-in embedder (`crates/falcon-clip/tests/service.rs`), so `cargo test` needs neither the network nor the weights. `crates/falcon-clip/tests/real_model.rs` holds the tests against the real model, `#[ignore]`d, and says how to run them.
+
 ## Menu bar
 
 On macOS falcon has a native menu bar, built with AppKit in `crates/falcon-app/src/menu.rs`. It follows the order of Eagle's menus (`app.bundle.js`, seen) and holds only what falcon can do:

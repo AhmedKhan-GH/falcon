@@ -144,6 +144,7 @@ cargo run -p falcon -- serve ~/"Falcon Sandbox"/Inspiration.library     # local 
 | `falcon-video` | Video playback and frame decoding through macOS's AVFoundation, falling back to `falcon-ffmpeg`, used by the app's viewer |
 | `falcon-ffmpeg` | The fallback video decoder and player over an LGPL FFmpeg opened at run time |
 | `falcon-pdf` | PDF pages, text, search and selection through macOS's PDFKit, used by the app's PDF reader |
+| `falcon-clip` | AI Search: on-device CLIP embeddings through candle, the model's download, the index and its worker |
 | `falcon-app` | The desktop app, drawn with egui |
 | `falcon` | The command-line tool |
 
