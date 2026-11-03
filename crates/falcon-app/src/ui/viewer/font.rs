@@ -676,24 +676,13 @@ impl App {
         }
     }
 
-    /// Activates or deactivates the font after asking, as Eagle's Activate
-    /// button does (Eagle doesn't ask; falcon writes outside the library,
-    /// so it confirms first). falcon writes only its own folder,
+    /// Activates or deactivates the font at once, as Eagle's Activate
+    /// button does, without asking. falcon writes only its own folder,
     /// `~/Library/Fonts/Falcon/`, never Eagle's `EagleApp/`.
     fn toggle_font(&mut self, lib: &Library, item: &Item, on: bool) {
         let Some(dir) = search::falcon_font_dir() else { return };
-        let Some(file) = crate::font_install::file_name(item) else {
+        if crate::font_install::file_name(item).is_none() {
             self.flash(tr("This font has no PostScript name to install it under"));
-            return;
-        };
-        let place = format!("~/Library/Fonts/Falcon/{file}");
-        let (title, text) = if on {
-            (tr("Activate Font"), trf("Copy “{name}” to {place}? macOS then offers it in every app, as fonts activated in Eagle are.", &[("name", &item.name), ("place", &place)]))
-        } else {
-            (tr("Deactivate Font"), trf("Remove {place}? The font stays in the library.", &[("place", &place)]))
-        };
-        let answer = rfd::MessageDialog::new().set_title(title).set_description(text).set_buttons(rfd::MessageButtons::OkCancel).show();
-        if answer != rfd::MessageDialogResult::Ok {
             return;
         }
         let result = if on { crate::font_install::activate(&dir, item, &item.original_path(lib.root())).map(|_| ()) } else { crate::font_install::deactivate(&dir, item) };

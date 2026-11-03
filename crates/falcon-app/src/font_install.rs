@@ -12,7 +12,7 @@
 //!
 //! Every function takes the folders, so tests use temp dirs; the app passes
 //! `search::falcon_font_dir()` and `search::eagle_font_dir()`, and writes
-//! only on the user's confirmed request.
+//! only when the user presses Activate or Activated, at once, as Eagle does.
 
 use std::io;
 use std::path::{Path, PathBuf};
