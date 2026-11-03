@@ -8,7 +8,7 @@ Falcon is early alpha. This page summarises what is done, what is left and what 
 
 ## Done
 
-Of the 909 local features in PARITY.md, 883 are done, 12 are partly done, 5 are accepted differences and 9 are missing. That is about nineteen in twenty. A further 43 need an online service, an account or Eagle's plugin system and are counted separately.
+Of the 909 local features in PARITY.md, 883 are done, 12 are partly done, 5 are accepted differences and 1 is missing. That is about nineteen in twenty. A further 43 need an online service, an account or Eagle's plugin system and are counted separately.
 
 - **Library:** reads and writes Eagle-format libraries, byte-identical on round trips, with backups, restore, duplicate detection, `.eaglepack` import and export, a watched import folder, reloading on outside changes and sync conflict detection.
 - **Import:** thumbnails and colour palettes, folders with their structure, links, paste, drag and drop, screen capture and background imports.

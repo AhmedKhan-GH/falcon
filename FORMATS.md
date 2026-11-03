@@ -104,6 +104,17 @@ File ▸ New… makes blank Sketch, Photoshop, Illustrator, text, Word, PowerPoi
 - **Adobe XD (.xd):** a zip of JSON whose schema Adobe has not published.
 - **MindNode (.mindnode):** a package format with no published specification.
 
+## What's needed for full thumbnail parity
+
+The code paths exist for every format below, but they haven't been run on real files. These steps are for the owner and aren't urgent.
+
+1. **Supply a real file for each untested extension**, and add it to `Formats Test.library` in the sandbox: insp, ait, xd, fig, af, afdesign, afphoto, afpub, c4d, clip, prd, cdr, skt, pxd, graffle, mindnode, eddx, emmx, indt, 360, afx, eva and vap.
+2. **Install the app that makes each design format, where you can.** Most of these get their thumbnail from QuickLook, which needs the app's generator on the Mac: xd, fig, af, afdesign, afphoto, afpub, c4d, clip, prd, cdr, skt, pxd, graffle, mindnode, eddx and emmx. Without it, they import with no thumbnail.
+3. **Replace the stand-in samples with real files**, from the list of samples that only show a format opens: a real ai, doc, docx, xlsx, pptx, xls and ppt, larger 3D models and longer videos.
+4. **Open the library and look at each thumbnail.** A wrong or missing one is a bug to report.
+
+Comparing the results against Eagle's own thumbnails is left for later.
+
 ## How well each format has been tested
 
 Falcon is tested against a local library holding one sample of each format where a sample is available. It covers 101 of Eagle's 124 extensions. The library isn't published, because some samples are for local testing only.

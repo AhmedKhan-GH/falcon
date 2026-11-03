@@ -7,12 +7,12 @@ Statuses: **Done** works as in Eagle. **Partial** exists but is missing options 
 | Area | Done | Partial | Missing (local) | Missing (online/plugin) |
 |---|---|---|---|---|
 | Main window: menus, shortcuts, toolbar, sidebar, layouts | 264 | 6 | 1 | 8 |
-| Viewers and file formats | 204 | 3 | 1 | 5 |
+| Viewers and file formats | 204 | 3 | 0 | 5 |
 | Search, filters and organising | 219 | 1 | 0 | 3 |
-| Import, export, library, preferences and integrations | 196 | 2 | 7 | 27 |
-| **Total** | 883 | 12 | 9 | 43 |
+| Import, export, library, preferences and integrations | 196 | 2 | 0 | 27 |
+| **Total** | 883 | 12 | 1 | 43 |
 
-Rows marked **Not wanted (user decision)** (4) are Eagle features the user chose not to have in falcon; they are counted outside the local Missing total. Rows marked **Accepted difference (user decision)** (5) are counted outside the Partial total.
+Rows marked **Not wanted (user decision)** (12) are Eagle features the user chose not to have in falcon; they are counted outside the local Missing total. Rows marked **Accepted difference (user decision)** (5) are counted outside the Partial total.
 ## Fix first
 
 These are bugs, not missing features. The first four can lose data or edits.
@@ -658,7 +658,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | Opens inside the main window with sidebar and inspector visible | Done | `F/ui/viewer/mod.rs` `fn viewer`, `F/ui/viewer/pdf.rs` `pdf_viewer` | local |
-| Works on Windows and Linux too | Missing | Out of scope: falcon targets macOS (PDFKit, AVFoundation, QuickLook, ImageIO) | local |
+| Works on Windows and Linux too | Not wanted (user decision) | Out of scope: falcon targets macOS (PDFKit, AVFoundation, QuickLook, ImageIO) | local |
 | Continuous vertical page scrolling | Done | `F/ui/viewer/pdf.rs` `pages` | local |
 | Previous and next page buttons, n/j/p/k keys | Done | `F/ui/viewer/pdf.rs` `toolbar`, `key_action` | local |
 | Page number field and page count | Done | `F/ui/viewer/pdf.rs` `toolbar` | local |
@@ -1377,7 +1377,7 @@ Eagle panes (`app/js/preferences.js:659-788`): General, Sidebar, Controls, Previ
 | General: menu bar icon | Done | `tray.rs` status item with its General switch | local |
 | General: keep the Dock icon after the window closes | Done | Pref on by default (Eagle's `keepDockIcon`); off leaves the Dock on close while the menu bar icon is shown, or quits without one | local |
 | General: launch at login | Done | `SMAppService` on macOS 13+, read from the system, **off by default**, never registered until the user turns it on; shown unavailable before 13 or unbundled | local |
-| General: GPU acceleration | Missing | Not built: eframe's `glow` backend isn't compiled in and the 3D viewer needs wgpu; no switch to offer | local |
+| General: GPU acceleration | Not wanted (user decision) | Not built: eframe's `glow` backend isn't compiled in and the 3D viewer needs wgpu; no switch to offer | local |
 | General: auto-select items after import | Done | `Prefs::auto_select` | local |
 | General: notify on duplicate import | Done | `Prefs::notify_duplicates` | local |
 | General: ask where to save items from the extension | Missing | Not applicable: the browser extension is an online feature, and falcon has no extension | online/plugin |
@@ -1414,7 +1414,7 @@ Eagle panes (`app/js/preferences.js:659-788`): General, Sidebar, Controls, Previ
 | Screenshot: also copy to the clipboard | Done | The finished picture is copied with arboard (not `-c`) | local |
 | Screenshot: @2x on Retina | Done | Halves at scale ≥ 1.5 (Eagle checks exactly 2) | local |
 | **Shortcuts:** rebind any command, search the list, Restore Defaults | Done | 166 rebindable rows, 132 of them with Eagle's ids (of the 150 in its Shortcuts pane; 129 of the 147 in `default-preferences.js`; Eagle's `library.load` and `organize.folder.add` have rows), search field, Restore Defaults, recorder. `find.filter.import` (Eagle's `toggleFilterByType('import')` clicks its Date Modified filter, `mtime-filter-item`) opens falcon's Date chip on its Modified tab, and `find.filter.other` (`openFilterAddContextMenu`) opens the filter bar's + menu; both unbound as in Eagle, with Find ▸ Open Filter ▸ Date Modified and More Filters entries, and Find ▸ Date now starts on the Imported tab as Eagle's Date Added. `view.file.openother` opens View ▸ Open With Another App…, unbound; Eagle's Shortcuts pane lists it for `win32` only, while falcon also gives it a row on macOS. 18 Eagle ids have no row: the five Windows variants, the Pinterest and ArtStation importers, the eight reverse image searches and `find.filter.semantic` (online), `edit.image.merge` (Combine Images plugin), and `find.filter.image`: it runs `eagle.aiSearch.searchByItemId` / `searchByBase64` (`lib/api/ai-search.js`) against Eagle's AI Search plugin service at `http://localhost:38766`, a local model with a plugin to install, which falcon doesn't have (see the AI Search rows). The new menu items and the app chooser are seen on screen | local |
-| Shortcuts: plugin shortcuts | Missing | Not applicable: no plugin system | local |
+| Shortcuts: plugin shortcuts | Not wanted (user decision) | Not applicable: no plugin system | local |
 | Global shortcuts (show Eagle, quick search from anywhere) | Done | `hotkeys.rs`, Global group in the shortcut table | local |
 | **Notification:** sound effects master switch, plus per event (delete item, delete folder, screenshot, extension) | Partial | Preferences ▸ Notification: Play sound effects master switch plus delete item, delete folder and screenshot switches, Eagle's defaults (all on), persisted as `Prefs::sounds`, reported in `application/info` as `notification.soundEffect`. Gap: the extension switch is kept and reported but not shown, since falcon has no browser extension | local |
 | Notification: pop-up master switch, plus per event (screenshot, extension, duplicates, auto-import) | Done | Master switch plus duplicates, import done, auto-import, screenshot and export switches; the extension event has no local counterpart | local |
@@ -1425,7 +1425,7 @@ Eagle panes (`app/js/preferences.js:659-788`): General, Sidebar, Controls, Previ
 | **Eagle MCP** pane (install or open the MCP server plugin) | Missing | — | online/plugin |
 | **Developer:** show, copy and regenerate the API token | Done | Developer pane: empty by default like Eagle, Generate when empty, Copy / Regenerate / link when set; an empty token means Host-check-only auth (`authorized` in `falcon-server`) | local |
 | Developer (falcon only): API on or off, and first port | Done (beyond Eagle) | `prefs.rs:339-358` | local |
-| Developer: plugin developer tools | Missing | Not applicable: no plugin system | local |
+| Developer: plugin developer tools | Not wanted (user decision) | Not applicable: no plugin system | local |
 | **Proxy** (server address and port, used for downloads and web search) | Missing | — | online |
 | Color space (sRGB, Display P3, unmanaged) | Accepted difference (user decision) | App menu ▸ Color Space after Preferences with Eagle's three choices, order and default (Unmanaged), persisted in prefs and applied to the window's `CAMetalLayer.colorspace` (found among the view's sublayers since 700506ff; before that the menu did nothing) at start and on change (`colorspace.rs`; re-applied each frame because wgpu resets it on resize), disabled while locked or Preferences is open. Pictures with a colour profile are turned into sRGB when shown and when falcon draws their thumbnail (`falcon_library::color`, through moxcms for JPEG, PNG, WebP, TIFF and RAW previews, through ImageIO for HEIC, AVIF and JXL): a Display P3 test image read the same as ColorSync's result on screen. Accepted difference: egui's pixels are sRGB content, so colours outside sRGB are clipped, the menu changes how the display interprets the whole window (Display P3 visibly saturates it against sRGB, and sRGB is the accurate choice on a wide-gamut screen), animated WebP and APNG frames aren't converted, and thumbnails made before this keep their old colours until refreshed | local |
 
@@ -1458,7 +1458,7 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 | `POST /api/item/refreshPalette`, `refreshThumbnail` | Done | `thumbnail::redrawn` off the lock; v1 replies with no data as Eagle | local |
 | `GET /api/preferences/collect/on`, `/off` | Done | Served; `application/info` reflects it | local |
 | `/item?id=`, `/folder?id=` and `/smart-folder?id=` redirects to `eagle://` links | Done | 302 to the `eagle://` link, or 404 with Eagle's `{"error":…}`; auth still applies (Eagle skips it there) | local |
-| `POST /api/script/inject` (runs arbitrary JavaScript) | Missing (on purpose) | Deliberately left out; a security hole | local |
+| `POST /api/script/inject` (runs arbitrary JavaScript) | Not wanted (user decision) | Deliberately left out; a security hole | local |
 | `GET /api/check` (obfuscated remote-script loader) | Missing (on purpose) | Not library functionality | online |
 | Token auth (`?token=` matching the Developer token) | Done | Served if the Host is right or `token` matches (query, or body on POST); the Host check is kept | local |
 | Listen on all interfaces | Different (on purpose) | 127.0.0.1 only (`lib.rs:9,69`) | local |
@@ -1488,13 +1488,13 @@ Falcon serves the API on 127.0.0.1 from port 41596 upward (never 41595), while a
 | `eagle://item/<id>` opens the item | Done | Opens the item in the viewer inside its first folder (or All); also as a launch argument | local |
 | `eagle://folder/<id>`, `eagle://smart-folder/<id>`, `eagle://openFolder/<id>` | Done | `links.rs`: all three open the folder in the app (Eagle's `openFolder` does the same) | local |
 | Open `.eaglepack` files by double-clicking them | Done | `CFBundleDocumentTypes` plus the open-documents event send packs to the package import (`open_files.rs`); checked in a built bundle with `open -a`; it asks before importing | local |
-| Install a plugin by opening a `.eagleplugin` file | Missing | Not applicable: no plugin system | local |
+| Install a plugin by opening a `.eagleplugin` file | Not wanted (user decision) | Not applicable: no plugin system | local |
 | Open With: list the apps that can open a file | Done | `crates/falcon-app/src/open_with.rs` | local |
 | AppleScript dictionary or macOS Services | — (not counted) | — | — |
 | Browser extension (Chrome, Safari and others) sending images, video, bookmarks and batch saves to the app on port 41595 | Missing | Falcon never uses 41595, so the stock extension cannot reach it; bookmarks and batch save are also missing | online |
-| Plugin system: window, inspector, format (thumbnail and preview) and background-service plugins | Missing | Out of scope: Eagle's plugin platform | local |
+| Plugin system: window, inspector, format (thumbnail and preview) and background-service plugins | Not wanted (user decision) | Out of scope: Eagle's plugin platform | local |
 | Plugin Center (browse, install, update, disable or uninstall; sort and search) | Missing | — | online/plugin |
-| Plugin development (create from template, import a local project, pack, publish, reload, DevTools) | Missing | Out of scope: Eagle's plugin platform | local |
+| Plugin development (create from template, import a local project, pack, publish, reload, DevTools) | Not wanted (user decision) | Out of scope: Eagle's plugin platform | local |
 | Actions (recorded multi-step automations with shortcuts) | Partial | Falcon's own implementation of a feature that is a plugin in Eagle (`ai-action`): seven rule steps (add/remove/clear tags, add/remove/clear folders, rating) run in order on the multi-selection as one undo step, with per-action app-wide shortcuts and the 30-item confirm. Gap: the plugin's AI steps (auto-tag, describe) need AI Models (see PLUGINS.md) | local |
 | AI Search: semantic and similar-image search on the device | Missing | — | online/plugin (model download) |
 | AI Models: shared model configuration | Missing | — | online/plugin |
