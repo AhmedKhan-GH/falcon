@@ -1675,7 +1675,7 @@ impl App {
         egui::Popup::menu(&resp).show(|ui| {
             crate::ui::menus::search::show(ui, |ui| {
                 ui.set_min_width(220.0);
-                let can_save = self.ws.filter.is_active() || !self.ws.query.trim().is_empty();
+                let can_save = self.ws.filter.is_active() || !self.ws.query.trim().is_empty() || self.ws.ai.rules.is_active();
                 if ui.add_enabled(can_save, egui::Button::new(tr("Save This Filter…"))).clicked() {
                     let name = organize::fresh_name("Filter", lib.saved_filters.iter().map(|f| f.name.as_str()));
                     self.ws.org.filter_name = Some((None, name));
@@ -1686,7 +1686,7 @@ impl App {
                 for (i, sf) in lib.saved_filters.iter().enumerate() {
                     ui.horizontal(|ui| {
                         if ui.add(egui::Button::new(&sf.name).frame(false).min_size(vec2(160.0, 0.0))).clicked() {
-                            self.apply_saved_filter(sf);
+                            self.apply_saved_filter(sf, lib);
                         }
                         if !crate::ui::menus::search::filtering(ui) {
                             crate::ui::menus::search::submenu(ui, "⋯", |ui| {
@@ -1710,9 +1710,9 @@ impl App {
         });
     }
 
-    /// Replaces the filter and search with a saved filter, as Eagle does,
-    /// and says which saved rules falcon can't apply yet.
-    fn apply_saved_filter(&mut self, sf: &SavedFilter) {
+    /// Replaces the filter and search with a saved filter, as Eagle does.
+    /// Its AI rules go to AI Search, which says if they can't apply yet.
+    fn apply_saved_filter(&mut self, sf: &SavedFilter, lib: &Library) {
         let q = sf.to_filter();
         let words = |t: &TextFilter| if let TextFilter::Keywords(k) = t { k.join(", ") } else { String::new() };
         self.ws.note_text = words(&q.filter.note);
@@ -1722,13 +1722,8 @@ impl App {
         self.sync_media_filter_text();
         self.ws.set_query(q.keyword.unwrap_or_default());
         self.ws.show_filter = true;
-        let keys: Vec<String> = [(q.ai.image_on(), "image"), (q.ai.semantic_on(), "semantic")].iter().filter(|(on, _)| *on).map(|(_, k)| k.to_string()).collect();
-        let skipped = organize::unsupported_names(&keys);
-        if skipped.is_empty() {
-            self.flash(trf("Applied “{name}”", &[("name", &sf.name)]));
-        } else {
-            self.flash(trf("Applied “{name}” without: {skipped}", &[("name", &sf.name), ("skipped", &skipped.join(", "))]));
-        }
+        self.ai_restore(q.ai, lib);
+        self.flash(trf("Applied “{name}”", &[("name", &sf.name)]));
     }
 }
 
@@ -1976,7 +1971,8 @@ impl App {
                         Some(i) => OrgAction::RenameFilter(i, n),
                         None => {
                             let keyword = Some(self.ws.query.trim()).filter(|q| !q.is_empty());
-                            let rule = SavedFilter::rule_from_filter(&self.ws.filter, keyword, |id| logic::find_folder(&lib.metadata.folders, id).map(|f| f.name.clone()));
+                            let mut rule = SavedFilter::rule_from_filter(&self.ws.filter, keyword, |id| logic::find_folder(&lib.metadata.folders, id).map(|f| f.name.clone()));
+                            self.ws.ai.rules.write_to(&mut rule);
                             OrgAction::SaveFilter(n, rule)
                         }
                     }));
@@ -2043,7 +2039,13 @@ impl App {
             OrgAction::AddToGroup(id, tags) => lib.add_tags_to_group(&id, &tags),
             OrgAction::AddToGroupToo(id, tags) => lib.add_tags_to_group_too(&id, &tags),
             OrgAction::RemoveFromGroup(id, tags) => lib.remove_tags_from_group(&id, &tags),
-            OrgAction::SaveFilter(name, rule) => lib.create_saved_filter(&name, rule).map(|_| self.flash(trf("Saved “{name}”", &[("name", &name)]))),
+            OrgAction::SaveFilter(name, rule) => lib.create_saved_filter(&name, rule).map(|_| {
+                if self.ws.ai.picture_not_saved() {
+                    self.flash(trf("Saved “{name}”, without the picture: only a search by an item in this library can be saved", &[("name", &name)]));
+                } else {
+                    self.flash(trf("Saved “{name}”", &[("name", &name)]));
+                }
+            }),
             OrgAction::RenameFilter(i, name) => lib.rename_saved_filter(i, &name),
             OrgAction::DeleteFilter(i) => lib.delete_saved_filter(i),
             OrgAction::MoveFilter(i, to) => lib.reorder_saved_filter(i, to),

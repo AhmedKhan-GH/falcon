@@ -239,16 +239,17 @@ impl App {
             }
         }
         self.reorder_chips(ui, &drawn);
+        let ai_note = self.ai_rules_chip(ui);
         let open_add = std::mem::take(&mut self.ws.filter_ui.open_add_menu);
         self.add_filter_button(ui, lib, open_add);
 
-        if self.ws.filter.is_active() {
+        if self.ws.filter.is_active() || self.ws.ai.shows_chip() {
             let clear = ui.add(egui::Button::new(RichText::new(format!("{}  {}", ic::X, tr("Clear"))).color(t::p().text_muted)).frame(false));
             if clear.clicked() {
                 self.reset_filter();
             }
         }
-        if self.ws.filter.is_active() || !self.ws.query.trim().is_empty() {
+        if self.ws.filter.is_active() || !self.ws.query.trim().is_empty() || self.ws.ai.shows_chip() {
             let locked = self.ws.filter_ui.locked;
             let (glyph, color) = if locked { (ic::LOCK_SIMPLE, t::p().primary) } else { (ic::LOCK_SIMPLE_OPEN, t::p().text_muted) };
             let tip = if locked { tr("Locked: the filter and search stay when you open another view") } else { tr("Lock the filter and search so they stay when you open another view") };
@@ -257,6 +258,29 @@ impl App {
             }
         }
         self.saved_filters_menu(ui, lib);
+        if let Some(note) = ai_note {
+            ui.add(egui::Label::new(RichText::new(&note).size(12.0).color(t::p().text_muted)).truncate()).on_hover_text(note);
+        }
+    }
+
+    /// A saved filter's AI rules, and a way to remove them. Returns why they
+    /// aren't applied, for the end of the bar.
+    fn ai_rules_chip(&mut self, ui: &mut Ui) -> Option<String> {
+        if !self.ws.ai.shows_chip() {
+            return None;
+        }
+        let status = self.ai.engine.as_ref().map(|e| e.status()).unwrap_or_default();
+        let note = self.ws.ai.note(&status);
+        let resp = filter_chip(ui, tr("AI Search"), Some(self.ws.ai.chip_value()));
+        egui::Popup::menu(&resp).show(|ui| {
+            if ui.button(tr("AI Search Preferences…")).clicked() {
+                self.open_ai_preferences();
+            }
+            if ui.button(tr("Remove This Search")).clicked() {
+                self.ai_remove_rules();
+            }
+        });
+        note
     }
 
     /// The + button: every filter the library can use, each with a pin

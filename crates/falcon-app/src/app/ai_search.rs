@@ -7,11 +7,13 @@ use std::sync::Arc;
 use std::sync::mpsc::TryRecvError;
 
 use eframe::egui::Pos2;
-use falcon_clip::{Query, SearchError};
+use falcon_clip::{Phase, Query, SearchError};
+use falcon_library::Library;
+use falcon_library::model::SavedAiRules;
 
-use crate::ai_search::Engine;
-use crate::app::{App, Shared};
-use crate::locale::{tr, trf};
+use crate::ai_search::{Answer, Engine};
+use crate::app::{App, Shared, lock};
+use crate::locale::tr;
 use crate::logic::Scope;
 use crate::prefs::Section;
 
@@ -49,6 +51,15 @@ impl App {
             self.ai.enabled = Some(self.prefs.ai_search);
             engine.set_enabled(self.prefs.ai_search);
         }
+        // Held rules run once the index has all of the shown library. Only
+        // the root is read under the lock, and the search is the worker's.
+        if self.ws.ai.waiting && self.ai_view_allowed() && self.ws.ai.pending.is_none() {
+            let status = engine.status();
+            let ready = status.phase == Phase::Ready && self.ws.lib.as_ref().is_some_and(|lib| status.index_ready(lock(lib).root()));
+            if ready && let Some(query) = self.ws.ai.release() {
+                self.ai_start(query);
+            }
+        }
         let answer = match &self.ws.ai.pending {
             Some(rx) => match rx.try_recv() {
                 Ok(answer) => Some(answer),
@@ -58,14 +69,36 @@ impl App {
             None => None,
         };
         let Some(answer) = answer else { return };
-        self.ws.ai.pending = None;
-        match answer {
-            Ok(hits) => self.ws.ai.show(&hits),
-            Err(error) => {
-                self.ws.ai.clear_results();
-                self.flash_error(search_failed(&error));
-            }
+        match self.ws.ai.answer(answer) {
+            Answer::Shown | Answer::Failed(None) => {}
+            Answer::Next(query) => self.ai_start(query),
+            Answer::Failed(Some(message)) => self.flash_error(message),
         }
+    }
+
+    /// Puts a saved filter's AI rules in place, after its filter and search.
+    /// The box reads the description unless the filter's own search text is
+    /// in it; the rules wait in `ai_tick` until they can run.
+    pub(crate) fn ai_restore(&mut self, rules: SavedAiRules, lib: &Library) {
+        let keyword = !self.ws.query.trim().is_empty();
+        if rules.is_active() || keyword {
+            self.ws.ai.mode = rules.semantic_text().is_some() && !keyword;
+        }
+        if self.ws.ai.mode
+            && let Some(text) = rules.semantic_text()
+        {
+            self.ws.search_typed = text.to_string();
+        }
+        self.ws.ai.image = rules.image_item().map(|id| lib.item(id).map_or_else(|| id.to_string(), |item| item.name.clone()));
+        self.ws.ai.restore(rules);
+    }
+
+    /// The chip's Remove: ends the search and what the box says of it.
+    pub(crate) fn ai_remove_rules(&mut self) {
+        if std::mem::take(&mut self.ws.ai.mode) {
+            self.ws.set_query("");
+        }
+        self.ws.ai.clear_results();
     }
 
     /// Whether searches can be started: the model is in and turned on.
@@ -92,7 +125,7 @@ impl App {
     /// The toolbar button: turns the search box's AI mode on or off, or opens
     /// Preferences if the model isn't ready.
     pub(crate) fn ai_button_clicked(&mut self) {
-        if !self.ai_ready() {
+        if !self.ws.ai.mode && !self.ai_ready() {
             self.open_ai_preferences();
             return;
         }
@@ -116,7 +149,13 @@ impl App {
             self.ws.ai.clear_results();
         } else {
             self.ws.ai.image = None;
-            self.ai_start(Query::Text(text.to_string()));
+            self.ws.ai.begin(SavedAiRules::for_text(text.trim()));
+            if self.ai_ready() {
+                self.ai_start(Query::Text(text.to_string()));
+            } else {
+                self.ws.ai.pending = None;
+                self.ws.ai.waiting = true;
+            }
         }
     }
 
@@ -130,6 +169,8 @@ impl App {
         self.ws.search_typed.clear();
         self.ws.search_debounce.reset();
         self.ws.ai.image = Some(label);
+        // Only an item can be saved: the format holds no other picture.
+        self.ws.ai.begin(if let Query::Item(id) = &query { SavedAiRules::for_item(id) } else { SavedAiRules::default() });
         self.ai_start(query);
     }
 
@@ -196,25 +237,5 @@ impl App {
             self.ai_similar_to_file(first);
         }
         Vec::new()
-    }
-}
-
-/// What to tell the user when a search fails.
-fn search_failed(error: &SearchError) -> String {
-    match error {
-        SearchError::BadImage(_) => tr("That picture can't be read").to_string(),
-        SearchError::NotReady => tr("AI Search isn't ready").to_string(),
-        other => trf("AI Search failed: {error}", &[("error", other)]),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn failures_are_said_plainly() {
-        assert_eq!(search_failed(&SearchError::BadImage("x".into())), "That picture can't be read");
-        assert_eq!(search_failed(&SearchError::Failed("out of memory".into())), "AI Search failed: out of memory");
     }
 }

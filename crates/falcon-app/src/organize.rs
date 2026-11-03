@@ -568,26 +568,6 @@ pub fn fresh_name<'a>(base: &str, taken: impl IntoIterator<Item = &'a str>) -> S
     (2..).map(|n| format!("{base} {n}")).find(|s| !taken.contains(s.as_str())).unwrap_or_default()
 }
 
-// ---------------------------------------------------------------------------
-// Saved filters
-
-/// Plain names for the rule keys falcon's filter can't apply yet (from
-/// `SavedFilterQuery::unsupported`), for the warning shown on apply.
-pub fn unsupported_names(keys: &[String]) -> Vec<&'static str> {
-    let mut out: Vec<&'static str> = Vec::new();
-    for k in keys {
-        let name = match k.as_str() {
-            "image" => tr("image search"),
-            "semantic" => tr("semantic search"),
-            _ => tr("other rules"),
-        };
-        if !out.contains(&name) {
-            out.push(name);
-        }
-    }
-    out
-}
-
 /// Adds the tags typed into the auto-tag field to `tags`: the text is split
 /// at commas and line breaks, each part trimmed, and empty parts and tags
 /// already listed are skipped. Returns whether anything was added.
@@ -1021,12 +1001,6 @@ mod tests {
     fn fresh_names_skip_taken_ones() {
         assert_eq!(fresh_name("New Group", []), "New Group");
         assert_eq!(fresh_name("New Group", ["New Group", "New Group 2"]), "New Group 3");
-    }
-
-    #[test]
-    fn unsupported_rules_have_plain_names() {
-        let keys: Vec<String> = ["semantic", "image", "semantic", "bogus"].iter().map(|s| s.to_string()).collect();
-        assert_eq!(unsupported_names(&keys), ["semantic search", "image search", "other rules"]);
     }
 
     #[test]

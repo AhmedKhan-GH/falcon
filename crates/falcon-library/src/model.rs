@@ -737,6 +737,7 @@ impl SavedFilter {
         };
         let mut out = SavedFilterQuery::default();
         let mut f = Filter::default();
+        out.ai = SavedAiRules::from_rule(r);
 
         f.types = keys(&["type", "includes"]);
         f.exclude_types = keys(&["type", "excludes"]);
@@ -843,7 +844,6 @@ impl SavedFilter {
             f.font = FontFilter::Deactivated(font_keys());
         }
 
-        out.ai = SavedAiRules::from_rule(r);
         out.filter = f;
         out.keyword = r.get("keyword").and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string);
         out

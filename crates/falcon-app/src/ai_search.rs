@@ -8,7 +8,7 @@
 //! folder), never inside the `.library` folder. Only the model download uses
 //! the network.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -20,6 +20,7 @@ use falcon_clip::clip::ClipEmbedder;
 use falcon_clip::model::{self, Download, DownloadState};
 use falcon_clip::service::Options;
 use falcon_clip::{Embedder, Hit, Phase, Query, SearchError, Service, Status};
+use falcon_library::model::SavedAiRules;
 use falcon_server::{AiQuery, AiStatus};
 
 use crate::locale::{tr, tr_key, trf};
@@ -162,6 +163,53 @@ pub struct AiView {
     pub pending: Option<Receiver<Result<Vec<Hit>, SearchError>>>,
     /// Where the search box is, for images dropped on it.
     pub search_rect: Option<Rect>,
+    /// The search as a saved filter holds it: what's shown, or what a saved
+    /// filter asked for and can't be shown yet. A save writes these.
+    pub rules: SavedAiRules,
+    /// `rules` came from a saved filter.
+    restored: bool,
+    /// `rules` are held until the index is ready.
+    pub waiting: bool,
+    /// Why `rules` aren't applied, when waiting won't help.
+    problem: Option<String>,
+    /// A filter with both rules: the searches left, and what the first found.
+    queue: VecDeque<Query>,
+    so_far: Option<Vec<Hit>>,
+}
+
+/// What to do with a search's answer.
+pub enum Answer {
+    /// The grid has the results.
+    Shown,
+    /// One more search to run.
+    Next(Query),
+    /// No results, and this to tell the user, if anything.
+    Failed(Option<String>),
+}
+
+/// The searches a filter's rules ask for: the description first, whose order
+/// the results keep.
+fn rule_queries(rules: &SavedAiRules) -> VecDeque<Query> {
+    let text = rules.semantic_text().map(|text| Query::Text(text.to_string()));
+    let item = rules.image_item().map(|id| Query::Item(id.to_string()));
+    text.into_iter().chain(item).collect()
+}
+
+/// `first`, cut down to what `second` also found: rules narrow each other, as
+/// every other filter rule does.
+fn in_both(first: Vec<Hit>, second: &[Hit]) -> Vec<Hit> {
+    let keep: HashSet<&str> = second.iter().map(|hit| hit.id.as_str()).collect();
+    first.into_iter().filter(|hit| keep.contains(hit.id.as_str())).collect()
+}
+
+/// What to tell the user when a search fails.
+pub fn search_failed(error: &SearchError) -> String {
+    match error {
+        SearchError::BadImage(_) => tr("That picture can't be read").to_string(),
+        SearchError::NotReady => tr("AI Search isn't ready").to_string(),
+        SearchError::NoItem => tr("That item is no longer in this library").to_string(),
+        other => trf("AI Search failed: {error}", &[("error", other)]),
+    }
 }
 
 impl AiView {
@@ -174,6 +222,106 @@ impl AiView {
         self.image = None;
         self.ranks = None;
         self.pending = None;
+        self.begin(SavedAiRules::default());
+    }
+
+    /// A new search takes over: `rules` is how a save would write it.
+    pub fn begin(&mut self, rules: SavedAiRules) {
+        self.rules = rules;
+        self.restored = false;
+        self.waiting = false;
+        self.problem = None;
+        self.queue.clear();
+        self.so_far = None;
+    }
+
+    /// Takes a saved filter's rules. They stay here, and go back in a save,
+    /// whether or not they ever run.
+    pub fn restore(&mut self, rules: SavedAiRules) {
+        self.begin(rules);
+        self.restored = true;
+        self.waiting = !rule_queries(&self.rules).is_empty();
+        if self.rules.has_unreadable() {
+            self.problem = Some(tr("This saved search can't be read, so it isn't applied. Saving the filter again keeps it.").to_string());
+        }
+    }
+
+    /// The held rules are going to run: the first search to start.
+    pub fn release(&mut self) -> Option<Query> {
+        self.waiting = false;
+        self.so_far = None;
+        self.queue = rule_queries(&self.rules);
+        self.queue.pop_front()
+    }
+
+    /// Takes a search's answer. A failure keeps the rules.
+    pub fn answer(&mut self, answer: Result<Vec<Hit>, SearchError>) -> Answer {
+        self.pending = None;
+        match answer {
+            Ok(hits) => {
+                let hits = match self.so_far.take() {
+                    Some(first) => in_both(first, &hits),
+                    None => hits,
+                };
+                if let Some(next) = self.queue.pop_front() {
+                    self.so_far = Some(hits);
+                    return Answer::Next(next);
+                }
+                self.show(&hits);
+                Answer::Shown
+            }
+            Err(error) => {
+                let message = search_failed(&error);
+                if !self.rules.is_active() {
+                    self.clear_results();
+                    return Answer::Failed(Some(message));
+                }
+                self.ranks = None;
+                self.queue.clear();
+                self.so_far = None;
+                if error == SearchError::NotReady {
+                    self.waiting = true;
+                    return Answer::Failed(None);
+                }
+                self.problem = Some(message.clone());
+                Answer::Failed(Some(message))
+            }
+        }
+    }
+
+    /// The filter bar shows the rules: the box can't say all of a saved
+    /// filter's, and anything not applied has to be said.
+    pub fn shows_chip(&self) -> bool {
+        self.rules.is_active() && (self.restored || self.waiting || self.problem.is_some())
+    }
+
+    /// What the chip says the search is.
+    pub fn chip_value(&self) -> String {
+        let mut parts = Vec::new();
+        if self.rules.semantic_on() {
+            parts.push(self.rules.semantic_text().map_or_else(|| tr("Unreadable").to_string(), str::to_string));
+        }
+        if self.rules.image_on() {
+            parts.push(match (&self.image, self.rules.image_item()) {
+                (Some(label), Some(_)) => trf("Like {name}", &[("name", label)]),
+                _ => tr("Unreadable").to_string(),
+            });
+        }
+        parts.join(", ")
+    }
+
+    /// Why the rules aren't applied, in a line. `None` once they are.
+    pub fn note(&self, status: &Status) -> Option<String> {
+        if let Some(problem) = &self.problem {
+            return Some(problem.clone());
+        }
+        self.waiting.then(|| trf("Can't apply yet. {reason}", &[("reason", &status_line(status))]))
+    }
+
+    /// An image search shown by a picture that isn't an item: the saved
+    /// format holds only an item's id, so a save leaves it out.
+    pub fn picture_not_saved(&self) -> bool {
+        self.image.is_some() && self.rules.image.is_none()
     }
 
     pub fn show(&mut self, hits: &[Hit]) {
@@ -337,6 +485,12 @@ fn log_removal_failure(error: &str) {
 mod tests {
     use super::*;
 
+    #[test]
+    fn failures_are_said_plainly() {
+        assert_eq!(search_failed(&SearchError::BadImage("x".into())), "That picture can't be read");
+        assert_eq!(search_failed(&SearchError::Failed("out of memory".into())), "AI Search failed: out of memory");
+    }
+
     fn hit(id: &str, score: f32) -> Hit {
         Hit { id: id.to_string(), score }
     }
@@ -366,6 +520,222 @@ mod tests {
         assert!(view.mode);
         assert!(!view.active());
         assert_eq!(view.image, None);
+    }
+
+    fn write(view: &AiView) -> String {
+        let mut rule = falcon_library::model::SavedFilter::rule_from_filter(&Default::default(), None, |_| None);
+        view.rules.write_to(&mut rule);
+        rule.to_string()
+    }
+
+    fn rules(rule: serde_json::Value) -> SavedAiRules {
+        SavedAiRules::from_rule(&rule)
+    }
+
+    #[test]
+    fn rules_that_cant_run_yet_are_held_said_and_saved() {
+        let saved = rules(serde_json::json!({"semantic": {"keep": 1, "value": "black cat"}}));
+        let mut view = AiView::default();
+        view.restore(saved.clone());
+        assert!(view.waiting && view.shows_chip() && !view.active());
+        assert_eq!(view.chip_value(), "black cat");
+        let no_model = Status { phase: Phase::NoModel, ..Default::default() };
+        assert_eq!(view.note(&no_model).as_deref(), Some("Can't apply yet. The model isn't installed"));
+        let indexing = Status { phase: Phase::Indexing, done: 1, total: 4, ..Default::default() };
+        assert_eq!(view.note(&indexing).as_deref(), Some("Can't apply yet. Indexed 1 of 4 items"));
+        assert_eq!(view.rules, saved);
+        assert!(write(&view).contains(r#""semantic":{"keep":1,"value":"black cat"}"#));
+
+        // Told not ready after all: held again, not dropped and not an error.
+        assert!(matches!(view.release(), Some(Query::Text(text)) if text == "black cat"));
+        assert!(!view.waiting);
+        assert!(matches!(view.answer(Err(SearchError::NotReady)), Answer::Failed(None)));
+        assert!(view.waiting);
+        assert_eq!(view.rules, saved);
+
+        // Ending the search is what drops them.
+        view.clear_results();
+        assert!(!view.waiting && !view.rules.is_active() && !view.shows_chip());
+    }
+
+    #[test]
+    fn a_failed_search_keeps_its_rule_and_says_why() {
+        let mut view = AiView::default();
+        let saved = SavedAiRules::for_item("GONE");
+        view.image = Some("GONE".into());
+        view.restore(saved.clone());
+        assert!(matches!(view.release(), Some(Query::Item(id)) if id == "GONE"));
+        assert!(matches!(view.answer(Err(SearchError::NoItem)), Answer::Failed(Some(_))));
+        assert_eq!(view.rules, saved);
+        assert!(!view.waiting && view.shows_chip());
+        assert_eq!(view.note(&Status::default()).as_deref(), Some("That item is no longer in this library"));
+    }
+
+    #[test]
+    fn a_failed_search_with_no_rule_ends_as_before() {
+        let mut view = AiView { image: Some("x.png".into()), ..Default::default() };
+        assert!(view.picture_not_saved());
+        assert!(matches!(view.answer(Err(SearchError::BadImage("x".into()))), Answer::Failed(Some(_))));
+        assert_eq!(view.image, None);
+        assert!(!view.shows_chip());
+    }
+
+    #[test]
+    fn a_rule_that_cant_be_read_is_kept_and_not_run() {
+        let saved = rules(serde_json::json!({"image": {"itemId": 7}}));
+        let mut view = AiView::default();
+        view.restore(saved.clone());
+        assert!(!view.waiting && view.release().is_none());
+        assert!(view.shows_chip());
+        assert_eq!(view.chip_value(), "Unreadable");
+        assert!(view.note(&Status::default()).unwrap().contains("can't be read"));
+        assert_eq!(view.rules, saved);
+        assert!(!view.picture_not_saved());
+    }
+
+    #[test]
+    fn rules_that_are_off_show_nothing_and_still_save() {
+        let saved = rules(serde_json::json!({"semantic": {"value": "", "keep": 1}}));
+        let mut view = AiView::default();
+        view.restore(saved);
+        assert!(!view.waiting && !view.shows_chip());
+        assert!(write(&view).contains(r#""semantic":{"value":"","keep":1}"#));
+    }
+
+    #[test]
+    fn a_search_shown_from_the_box_saves_without_a_chip() {
+        let mut view = AiView::default();
+        view.begin(SavedAiRules::for_text("black cat"));
+        assert!(!view.shows_chip());
+        assert!(write(&view).contains(r#""semantic":{"value":"black cat"}"#));
+        view.begin(SavedAiRules::for_item("ABC"));
+        view.image = Some("a.png".into());
+        assert!(!view.picture_not_saved());
+        assert!(write(&view).contains(r#""image":{"itemId":"ABC"}"#));
+    }
+
+    /// The stand-in embedder falcon-clip's tests use: a picture's vector is
+    /// its average colour and "red" and "green" point along theirs.
+    struct Colours;
+
+    impl Embedder for Colours {
+        fn embed_images(&mut self, images: &[image::DynamicImage]) -> Result<Vec<Vec<f32>>, String> {
+            Ok(images
+                .iter()
+                .map(|image| {
+                    let rgb = image.to_rgb8();
+                    let p = rgb.get_pixel(0, 0);
+                    let v: Vec<f32> = p.0.iter().map(|c| f32::from(*c)).collect();
+                    let n = v.iter().map(|x| x * x).sum::<f32>().sqrt().max(1e-6);
+                    v.iter().map(|x| x / n).collect()
+                })
+                .collect())
+        }
+
+        fn embed_text(&mut self, text: &str) -> Result<Vec<f32>, String> {
+            Ok(match text {
+                "red" => vec![1.0, 0.0, 0.0],
+                "green" => vec![0.0, 1.0, 0.0],
+                _ => return Err("unknown word".to_string()),
+            })
+        }
+
+        fn dim(&self) -> usize {
+            3
+        }
+
+        fn device(&self) -> String {
+            "Test".to_string()
+        }
+    }
+
+    /// Runs what `ai_tick` runs, until the view has no search left.
+    fn settle(view: &mut AiView, service: &Service) -> Answer {
+        let mut query = view.release();
+        loop {
+            let answer = service.search_blocking(query.take().expect("a search"), SEARCH_LIMIT, Duration::from_secs(20));
+            match view.answer(answer) {
+                Answer::Next(next) => query = Some(next),
+                done => return done,
+            }
+        }
+    }
+
+    /// From the JSON a library holds to the grid's results, through the real
+    /// worker, with nothing held under the library lock meanwhile.
+    #[test]
+    fn saved_rules_apply_through_the_worker_once_it_is_ready() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut library = falcon_library::Library::create(dir.path().join("T.library")).unwrap();
+        let mut add = |name: &str, colour: [u8; 3]| {
+            let path = dir.path().join(format!("{name}.png"));
+            image::RgbImage::from_pixel(32, 32, image::Rgb(colour)).save(&path).unwrap();
+            library.import_file(&path, &falcon_library::import::ImportOptions::default()).unwrap()
+        };
+        let red = add("red", [250, 10, 10]);
+        let reddish = add("reddish", [220, 40, 30]);
+        let green = add("green", [10, 250, 10]);
+        let root = library.root().to_path_buf();
+        let installed = Arc::new(AtomicBool::new(false));
+        let check = installed.clone();
+        let service = Service::start(Options {
+            index_dir: dir.path().join("indexes"),
+            model_id: "test-model".to_string(),
+            dim: 3,
+            throttle: false,
+            is_installed: Box::new(move || check.load(Ordering::Relaxed)),
+            loader: Box::new(|| Ok(Box::new(Colours))),
+            notify: Box::new(|| {}),
+        });
+        service.set_library(Some(Arc::new(std::sync::Mutex::new(library))));
+        service.set_enabled(true);
+
+        // No model: the rule waits, and a search would say so.
+        let wait = |ok: &dyn Fn(&Status) -> bool| {
+            let start = std::time::Instant::now();
+            while !ok(&service.status()) {
+                assert!(start.elapsed() < Duration::from_secs(20), "{:?}", service.status());
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        };
+        wait(&|s| s.phase == Phase::NoModel);
+        let mut view = AiView::default();
+        view.restore(SavedAiRules::for_text("red"));
+        assert!(!service.status().index_ready(&root));
+        let answer = service.search_blocking(Query::Text("red".into()), SEARCH_LIMIT, Duration::from_secs(20));
+        assert_eq!(answer.unwrap_err(), SearchError::NotReady);
+        assert!(view.waiting && !view.active());
+
+        // The model arrives: the rule runs once the library has been read.
+        installed.store(true, Ordering::Relaxed);
+        service.model_changed();
+        wait(&|s| s.index_ready(&root) && s.done == 3);
+        assert!(matches!(settle(&mut view, &service), Answer::Shown));
+        let shown = view.narrow(None).unwrap();
+        assert!(shown.contains(&red) && !shown.contains(&green));
+        assert_eq!(view.rules.semantic_text(), Some("red"), "still what a save writes");
+
+        // Visual Match from a saved rule.
+        view.restore(SavedAiRules::for_item(&green));
+        assert!(matches!(settle(&mut view, &service), Answer::Shown));
+        assert_eq!(view.narrow(None).unwrap().into_iter().collect::<Vec<_>>(), std::slice::from_ref(&green));
+
+        // Both rules narrow each other, in the description's order.
+        let both = SavedAiRules { image: SavedAiRules::for_item(&reddish).image, semantic: SavedAiRules::for_text("red").semantic };
+        view.restore(both);
+        assert!(matches!(settle(&mut view, &service), Answer::Shown));
+        let shown = view.narrow(None).unwrap();
+        assert!(shown.contains(&reddish) && !shown.contains(&green));
+        let none = SavedAiRules { image: SavedAiRules::for_item(&green).image, semantic: SavedAiRules::for_text("red").semantic };
+        view.restore(none);
+        assert!(matches!(settle(&mut view, &service), Answer::Shown));
+        assert_eq!(view.narrow(None).unwrap().len(), 0);
+
+        // An item that's gone says so and keeps its rule.
+        view.restore(SavedAiRules::for_item("GONE"));
+        assert!(matches!(settle(&mut view, &service), Answer::Failed(Some(_))));
+        assert_eq!(view.rules.image_item(), Some("GONE"));
+        assert!(!view.active());
     }
 
     #[test]
