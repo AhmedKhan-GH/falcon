@@ -3,10 +3,22 @@
 //! Each [`Template`] builds the bytes of a minimal, valid empty file in
 //! code: a text file, the Office Open XML formats (Word, Excel, PowerPoint),
 //! an XMind mind map, a Photoshop document (from Adobe's public PSD file
-//! format specification) and a PDF-compatible Illustrator document (a plain
-//! PDF with one blank page). Nothing is copied from another application's
-//! template files. The caller writes the bytes to a temporary file named
-//! [`Template::file_name`] and imports it like any other file.
+//! format specification), a PDF-compatible Illustrator document (a plain
+//! PDF with one blank page) and a Sketch document. Nothing is copied from
+//! another application's template files. The caller writes the bytes to a
+//! temporary file named [`Template::file_name`] and imports it like any
+//! other file.
+//!
+//! The Sketch document follows Sketch's public file format reference
+//! (developer.sketch.com/file-format) and targets document version 146, the
+//! latest in the MIT-licensed JSON schemas of
+//! `@sketch-hq/sketch-file-format` 6.5.0. It has one empty page and no
+//! artboards. Those schemas have no `fonts` key in `meta.json`, so it is left
+//! out. `meta.json` names the Sketch that saved a file; no Sketch saved this
+//! one and the public docs give no app version for document version 146, so
+//! `SKETCH_COMMIT`, `SKETCH_APP_VERSION` and `SKETCH_BUILD` say so
+//! rather than claim one, and the save history is empty. The schema allows
+//! only Sketch's own bundle ids for `app`, so the public release's is used.
 
 use std::io::{Cursor, Write};
 
@@ -22,11 +34,12 @@ pub enum Template {
     XMind,
     Psd,
     Ai,
+    Sketch,
 }
 
 impl Template {
     /// Every template.
-    pub const ALL: [Template; 7] = [Template::Text, Template::Word, Template::Excel, Template::PowerPoint, Template::XMind, Template::Psd, Template::Ai];
+    pub const ALL: [Template; 8] = [Template::Text, Template::Word, Template::Excel, Template::PowerPoint, Template::XMind, Template::Psd, Template::Ai, Template::Sketch];
 
     /// The file extension.
     pub fn ext(self) -> &'static str {
@@ -38,6 +51,7 @@ impl Template {
             Template::XMind => "xmind",
             Template::Psd => "psd",
             Template::Ai => "ai",
+            Template::Sketch => "sketch",
         }
     }
 
@@ -56,17 +70,18 @@ impl Template {
             Template::XMind => zip_of(&xmind_parts()),
             Template::Psd => psd_bytes(),
             Template::Ai => ai_bytes(),
+            Template::Sketch => zip_of(&sketch_parts()),
         }
     }
 }
 
-fn zip_of(parts: &[(&str, String)]) -> Vec<u8> {
+fn zip_of<N: AsRef<str>, B: AsRef<[u8]>>(parts: &[(N, B)]) -> Vec<u8> {
     let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
     let opts = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
     for (name, body) in parts {
         // Writing into memory cannot fail.
-        zip.start_file(*name, opts).expect("zip entry");
-        zip.write_all(body.as_bytes()).expect("zip data");
+        zip.start_file(name.as_ref(), opts).expect("zip entry");
+        zip.write_all(body.as_ref()).expect("zip data");
     }
     zip.finish().expect("zip end").into_inner()
 }
@@ -309,6 +324,153 @@ fn ai_bytes() -> Vec<u8> {
     out
 }
 
+/// The Sketch document version the blank is written in.
+const SKETCH_DOCUMENT_VERSION: u32 = 146;
+/// `compatibilityVersion`: the schema allows only this value.
+const SKETCH_COMPATIBILITY_VERSION: u32 = 99;
+/// `commit` in `meta.json`, a free string: names the writer, as no Sketch
+/// build wrote the file.
+const SKETCH_COMMIT: &str = "falcon";
+/// `appVersion` in `meta.json`: no version of Sketch saved the file.
+const SKETCH_APP_VERSION: &str = "0";
+/// `build` in `meta.json`: no build of Sketch saved the file.
+const SKETCH_BUILD: u32 = 0;
+/// Side of the blank's preview picture, in pixels.
+const SKETCH_PREVIEW_SIDE: u32 = 512;
+
+/// A random UUID v4 in the form the Sketch schemas require: uppercase and
+/// hyphenated.
+fn sketch_uuid() -> String {
+    let mut b = [0u8; 16];
+    fastrand::fill(&mut b);
+    b[6] = (b[6] & 0x0F) | 0x40;
+    b[8] = (b[8] & 0x3F) | 0x80;
+    let hex = |r: std::ops::Range<usize>| b[r].iter().map(|x| format!("{x:02X}")).collect::<String>();
+    format!("{}-{}-{}-{}-{}", hex(0..4), hex(4..6), hex(6..8), hex(8..10), hex(10..16))
+}
+
+/// The one empty page: a layer at the origin with no size, untransformed,
+/// with no fill, border or effect.
+fn sketch_page(id: &str) -> serde_json::Value {
+    let ruler = serde_json::json!({"_class": "rulerData", "base": 0, "guides": []});
+    serde_json::json!({
+        "_class": "page",
+        "do_objectID": id,
+        "booleanOperation": -1,
+        "exportOptions": {"_class": "exportOptions", "exportFormats": [], "includedLayerIds": [], "layerOptions": 0, "shouldTrim": false},
+        "frame": {"_class": "rect", "constrainProportions": false, "height": 0, "width": 0, "x": 0, "y": 0},
+        "hasClickThrough": true,
+        "horizontalRulerData": ruler,
+        "isFixedToViewport": false,
+        "isFlippedHorizontal": false,
+        "isFlippedVertical": false,
+        "isLocked": false,
+        "isTemplate": false,
+        "isVisible": true,
+        "layerListExpandedType": 0,
+        "layers": [],
+        "name": "Page 1",
+        "nameIsFixed": false,
+        "resizingConstraint": 63,
+        "resizingType": 0,
+        "rotation": 0,
+        "shouldBreakMaskChain": false,
+        "style": {
+            "_class": "style",
+            "do_objectID": sketch_uuid(),
+            "borderOptions": {"_class": "borderOptions", "isEnabled": true, "dashPattern": [], "lineCapStyle": 0, "lineJoinStyle": 0},
+            "startMarkerType": 0,
+            "endMarkerType": 0,
+            "miterLimit": 10,
+            "windingRule": 1,
+            "innerShadows": [],
+            "colorControls": {"_class": "colorControls", "isEnabled": false, "brightness": 0, "contrast": 0, "hue": 0, "saturation": 0}
+        },
+        "verticalRulerData": ruler
+    })
+}
+
+/// The document: no shared styles, symbols, swatches or assets, sRGB, and a
+/// reference to the page. A reference names the page's file without `.json`.
+fn sketch_document(page_id: &str) -> serde_json::Value {
+    serde_json::json!({
+        "_class": "document",
+        "do_objectID": sketch_uuid(),
+        "assets": {"_class": "assetCollection", "do_objectID": sketch_uuid(), "colorAssets": [], "gradientAssets": [], "images": [], "colors": [], "gradients": [], "exportPresets": []},
+        "colorSpace": 1,
+        "currentPageIndex": 0,
+        "foreignLayerStyles": [],
+        "foreignSymbols": [],
+        "foreignTextStyles": [],
+        "foreignSwatches": [],
+        "layerStyles": {"_class": "sharedStyleContainer", "objects": []},
+        "layerTextStyles": {"_class": "sharedTextStyleContainer", "objects": []},
+        "layerSymbols": {"_class": "symbolContainer", "objects": []},
+        "sharedSwatches": {"_class": "swatchContainer", "objects": []},
+        "fontReferences": [],
+        "perDocumentLibraries": [],
+        "pages": [{"_class": "MSJSONFileReference", "_ref_class": "MSImmutablePage", "_ref": format!("pages/{page_id}")}]
+    })
+}
+
+fn sketch_meta(page_id: &str, page_name: &str) -> serde_json::Value {
+    const APP: &str = "com.bohemiancoding.sketch3";
+    const VARIANT: &str = "NONAPPSTORE";
+    serde_json::json!({
+        "commit": SKETCH_COMMIT,
+        "pagesAndArtboards": {page_id: {"name": page_name, "artboards": {}}},
+        "version": SKETCH_DOCUMENT_VERSION,
+        "compatibilityVersion": SKETCH_COMPATIBILITY_VERSION,
+        "app": APP,
+        "autosaved": 0,
+        "variant": VARIANT,
+        "created": {
+            "commit": SKETCH_COMMIT,
+            "appVersion": SKETCH_APP_VERSION,
+            "build": SKETCH_BUILD,
+            "app": APP,
+            "compatibilityVersion": SKETCH_COMPATIBILITY_VERSION,
+            "version": SKETCH_DOCUMENT_VERSION,
+            "variant": VARIANT
+        },
+        "saveHistory": [],
+        "appVersion": SKETCH_APP_VERSION,
+        "build": SKETCH_BUILD
+    })
+}
+
+/// The per-user state: the page at the origin at 100%, the page list open.
+fn sketch_user(page_id: &str) -> serde_json::Value {
+    serde_json::json!({
+        "document": {"pageListHeight": 200, "pageListCollapsed": 0},
+        page_id: {"scrollOrigin": "{0, 0}", "zoomValue": 1}
+    })
+}
+
+/// A white square PNG, the picture of the empty page.
+fn sketch_preview() -> Vec<u8> {
+    let side = SKETCH_PREVIEW_SIDE;
+    let mut out = Cursor::new(Vec::new());
+    // Encoding into memory cannot fail.
+    image::RgbImage::from_pixel(side, side, image::Rgb([255, 255, 255])).write_to(&mut out, image::ImageFormat::Png).expect("png");
+    out.into_inner()
+}
+
+/// The entries of a Sketch document, each with fresh ids.
+fn sketch_parts() -> Vec<(String, Vec<u8>)> {
+    let page_id = sketch_uuid();
+    let page = sketch_page(&page_id);
+    let name = page["name"].as_str().unwrap_or_default();
+    let json = |v: &serde_json::Value| v.to_string().into_bytes();
+    vec![
+        ("meta.json".to_string(), json(&sketch_meta(&page_id, name))),
+        ("document.json".to_string(), json(&sketch_document(&page_id))),
+        ("user.json".to_string(), json(&sketch_user(&page_id))),
+        (format!("pages/{page_id}.json"), json(&page)),
+        ("previews/preview.png".to_string(), sketch_preview()),
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -364,7 +526,7 @@ mod tests {
     #[test]
     fn names_are_untitled_with_the_extension() {
         let names: Vec<String> = Template::ALL.iter().map(|t| t.file_name()).collect();
-        assert_eq!(names, ["Untitled.txt", "Untitled.docx", "Untitled.xlsx", "Untitled.pptx", "Untitled.xmind", "Untitled.psd", "Untitled.ai"]);
+        assert_eq!(names, ["Untitled.txt", "Untitled.docx", "Untitled.xlsx", "Untitled.pptx", "Untitled.xmind", "Untitled.psd", "Untitled.ai", "Untitled.sketch"]);
     }
 
     #[test]
@@ -499,6 +661,155 @@ mod tests {
         std::fs::write(&file, Template::Word.bytes()).unwrap();
         let Ok(out) = std::process::Command::new("/usr/bin/textutil").args(["-convert", "txt", "-stdout"]).arg(&file).output() else { return };
         assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    }
+
+    /// Whether `s` has the form the Sketch schemas give for a UUID, version 4.
+    fn is_uuid(s: &str) -> bool {
+        let groups: Vec<&str> = s.split('-').collect();
+        groups.iter().map(|g| g.len()).eq([8, 4, 4, 4, 12]) && s.chars().all(|c| c == '-' || c.is_ascii_digit() || ('A'..='F').contains(&c)) && groups[2].starts_with('4') && groups[3].starts_with(['8', '9', 'A', 'B'])
+    }
+
+    fn sketch_json(z: &mut zip::ZipArchive<Cursor<Vec<u8>>>, name: &str) -> serde_json::Value {
+        serde_json::from_str(&entry(z, name)).unwrap_or_else(|e| panic!("{name}: {e}"))
+    }
+
+    /// Fails unless `v` has every key of `keys`, the `required` lists of the
+    /// public schema.
+    fn has_keys(v: &serde_json::Value, keys: &[&str]) {
+        for k in keys {
+            assert!(v.get(k).is_some(), "lacks {k}: {v}");
+        }
+    }
+
+    fn entry_names(z: &zip::ZipArchive<Cursor<Vec<u8>>>) -> Vec<String> {
+        (0..z.len()).map(|i| z.name_for_index(i).unwrap().unwrap().to_string()).collect()
+    }
+
+    fn sketch_page_entry(z: &zip::ZipArchive<Cursor<Vec<u8>>>) -> String {
+        entry_names(z).into_iter().find(|n| n.starts_with("pages/")).unwrap()
+    }
+
+    #[test]
+    fn sketch_uuids_are_uppercase_v4_and_differ() {
+        for _ in 0..200 {
+            assert!(is_uuid(&sketch_uuid()));
+        }
+        assert_ne!(sketch_uuid(), sketch_uuid());
+        assert!(!is_uuid("abcdef00-0000-4000-8000-000000000000"), "lower case is refused by the schema");
+    }
+
+    #[test]
+    fn sketch_has_exactly_the_documented_entries() {
+        let z = open(Template::Sketch);
+        let page = sketch_page_entry(&z);
+        let mut names = entry_names(&z);
+        names.sort_unstable();
+        let mut want = ["document.json", "meta.json", "previews/preview.png", "user.json", page.as_str()];
+        want.sort_unstable();
+        assert_eq!(names, want);
+        assert!(is_uuid(page.trim_start_matches("pages/").trim_end_matches(".json")), "{page}");
+    }
+
+    #[test]
+    fn sketch_document_refers_to_its_page() {
+        let mut z = open(Template::Sketch);
+        let file = sketch_page_entry(&z);
+        let doc = sketch_json(&mut z, "document.json");
+        let pages = doc["pages"].as_array().unwrap();
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0]["_class"], "MSJSONFileReference");
+        assert_eq!(pages[0]["_ref_class"], "MSImmutablePage");
+        // A reference is the file's path without `.json`.
+        assert_eq!(format!("{}.json", pages[0]["_ref"].as_str().unwrap()), file);
+        let page = sketch_json(&mut z, &file);
+        assert_eq!(format!("pages/{}.json", page["do_objectID"].as_str().unwrap()), file);
+    }
+
+    #[test]
+    fn sketch_document_has_the_schemas_required_fields() {
+        let mut z = open(Template::Sketch);
+        let doc = sketch_json(&mut z, "document.json");
+        has_keys(&doc, &["_class", "assets", "colorSpace", "currentPageIndex", "do_objectID", "foreignLayerStyles", "foreignSymbols", "foreignTextStyles", "layerStyles", "layerTextStyles", "pages", "perDocumentLibraries"]);
+        has_keys(&doc["assets"], &["_class", "do_objectID", "colorAssets", "gradientAssets", "images", "colors", "gradients", "exportPresets"]);
+        assert_eq!(doc["_class"], "document");
+        assert_eq!(doc["assets"]["_class"], "assetCollection");
+        assert_eq!(doc["currentPageIndex"], 0);
+        assert!(is_uuid(doc["do_objectID"].as_str().unwrap()));
+        assert!(is_uuid(doc["assets"]["do_objectID"].as_str().unwrap()));
+    }
+
+    #[test]
+    fn sketch_page_is_empty_with_the_schemas_required_fields() {
+        let mut z = open(Template::Sketch);
+        let file = sketch_page_entry(&z);
+        let page = sketch_json(&mut z, &file);
+        has_keys(
+            &page,
+            &[
+                "_class",
+                "booleanOperation",
+                "do_objectID",
+                "exportOptions",
+                "frame",
+                "hasClickThrough",
+                "horizontalRulerData",
+                "isFixedToViewport",
+                "isFlippedHorizontal",
+                "isFlippedVertical",
+                "isLocked",
+                "isTemplate",
+                "isVisible",
+                "layerListExpandedType",
+                "layers",
+                "name",
+                "nameIsFixed",
+                "resizingConstraint",
+                "resizingType",
+                "rotation",
+                "shouldBreakMaskChain",
+                "verticalRulerData",
+            ],
+        );
+        has_keys(&page["frame"], &["_class", "constrainProportions", "height", "width", "x", "y"]);
+        has_keys(&page["style"], &["_class", "do_objectID", "borderOptions", "startMarkerType", "endMarkerType", "miterLimit", "windingRule", "innerShadows", "colorControls"]);
+        assert_eq!(page["_class"], "page");
+        assert_eq!(page["name"], "Page 1");
+        assert_eq!(page["layers"], serde_json::json!([]));
+    }
+
+    #[test]
+    fn sketch_meta_and_user_name_the_page() {
+        let mut z = open(Template::Sketch);
+        let file = sketch_page_entry(&z);
+        let id = file.trim_start_matches("pages/").trim_end_matches(".json").to_string();
+        let meta = sketch_json(&mut z, "meta.json");
+        has_keys(&meta, &["commit", "pagesAndArtboards", "version", "compatibilityVersion", "app", "autosaved", "variant", "created", "saveHistory", "appVersion", "build"]);
+        has_keys(&meta["created"], &["commit", "appVersion", "build", "app", "compatibilityVersion", "version", "variant"]);
+        assert_eq!(meta["version"], 146);
+        assert_eq!(meta["compatibilityVersion"], 99);
+        assert_eq!(meta["pagesAndArtboards"][id.as_str()], serde_json::json!({"name": "Page 1", "artboards": {}}));
+        assert_eq!(meta["pagesAndArtboards"].as_object().unwrap().len(), 1);
+        let user = sketch_json(&mut z, "user.json");
+        has_keys(&user["document"], &["pageListHeight", "pageListCollapsed"]);
+        has_keys(&user[id.as_str()], &["scrollOrigin", "zoomValue"]);
+    }
+
+    #[test]
+    fn each_sketch_document_gets_its_own_ids() {
+        let (mut a, mut b) = (open(Template::Sketch), open(Template::Sketch));
+        assert_ne!(sketch_page_entry(&a), sketch_page_entry(&b));
+        assert_ne!(sketch_json(&mut a, "document.json")["do_objectID"], sketch_json(&mut b, "document.json")["do_objectID"]);
+    }
+
+    /// falcon's reader for files QuickLook can't render finds the preview.
+    #[test]
+    fn sketch_preview_is_read_by_the_zip_preview_reader() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join(Template::Sketch.file_name());
+        std::fs::write(&file, Template::Sketch.bytes()).unwrap();
+        let img = crate::zip_preview::preview(&file, "sketch").expect("a preview").to_rgb8();
+        assert_eq!(img.dimensions(), (SKETCH_PREVIEW_SIDE, SKETCH_PREVIEW_SIDE));
+        assert!(img.pixels().all(|p| p.0 == [255, 255, 255]));
     }
 
     /// They import as the item types the extensions give.
