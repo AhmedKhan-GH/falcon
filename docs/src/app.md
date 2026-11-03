@@ -1130,7 +1130,7 @@ What Eagle does, from `app.bundle.js`, `index.html`, `js/directives/*.html` and 
 
 ### Tag picker
 
-The + after the inspector's tags, Organize ▸ Add Tags… (⌘T) and T open the tag picker for the selected items (or the item in the viewer), after Eagle's tag select panel. The code is in `crates/falcon-app/src/ui/inspector/tag_picker.rs`; what it lists, ranks and recommends is in `crates/falcon-app/src/tags.rs`, with unit tests.
+The + after the inspector's tags, Organize ▸ Add Tags… (⌘T) and T open the tag picker for the selected items (or the item in the viewer), after Eagle's tag select panel. It opens 360 points wide (540 with its sidebar) and its right edge, bottom edge and corner resize it, within Eagle's limits; the size is remembered. The code is in `crates/falcon-app/src/ui/inspector/tag_picker.rs`; what it lists, ranks and recommends is in `crates/falcon-app/src/tags.rs`, with unit tests.
 
 | Topic | Eagle 4.0 | Evidence | falcon |
 | --- | --- | --- | --- |

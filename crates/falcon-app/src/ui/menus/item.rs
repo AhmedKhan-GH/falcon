@@ -102,6 +102,12 @@ impl App {
             });
         }
         if self.ws.scope != Scope::Trash {
+            if ui.button(tr("Auto-tag with AI")).clicked() {
+                self.run_ai_step(targets, tr("Auto-tag with AI"), falcon_library::actions::Step::AutoTag);
+            }
+            if ui.button(tr("Write a description with AI")).clicked() {
+                self.run_ai_step(targets, tr("Write a description with AI"), falcon_library::actions::Step::Describe { replace: false });
+            }
             self.webp_menu(ui, lib, item, targets);
             self.combine_menu(ui, lib, targets);
         }

@@ -87,6 +87,20 @@ impl App {
         }
     }
 
+    /// Runs one AI step on `ids` straight from the item menu, with no saved
+    /// action, under the same checks and confirm as a saved one.
+    pub(crate) fn run_ai_step(&mut self, ids: &[String], name: &str, step: falcon_library::actions::Step) {
+        if let Some(problem) = crate::ai_models::setup_problem(&self.prefs.ai_models) {
+            self.flash_error(tr(problem));
+            return;
+        }
+        if self.refuse_second_ai_run() {
+            return;
+        }
+        let run = Run { name: name.to_string(), ids: ids.to_vec(), steps: vec![step] };
+        self.push_bulk_at(ids.len(), RUN_CONFIRM, Action::RunSteps(run));
+    }
+
     /// The reducer's half: runs the steps inside the frame's undo step.
     pub(crate) fn apply_run(&mut self, lib: &mut Library, run: Run) -> falcon_library::Result<()> {
         if run.has_ai() {
