@@ -17,6 +17,7 @@
 //! - library history is what the app hands over ([`Handle::set_history`]),
 //!   or else the libraries this server has served, newest first.
 
+pub mod mcp;
 mod rules;
 mod v2;
 
