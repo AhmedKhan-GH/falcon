@@ -725,7 +725,7 @@ Tests: the state machine (delay, scrub mapping, rest and resume, loop, leave end
 
 ## Preferences
 
-⌘, (or Preferences… in the app menu) opens a window over the main one, laid out like Eagle's: a search box above the list of panes on the left, the pane on the right, and Save, Apply and Cancel at the bottom. The panes follow Eagle's order, with separators between groups: General, Sidebar | Controls, Preview, Screenshot, Shortcuts | Notification, Password, Auto-Import | Developer. Eagle's AI, MCP and Proxy panes are not built; a pane appears only once it has a working setting. Each pane is one function in `crates/falcon-app/src/prefs.rs` that adds titled blocks to a `Page`.
+⌘, (or Preferences… in the app menu) opens a window over the main one, laid out like Eagle's: a search box above the list of panes on the left, the pane on the right, and Save, Apply and Cancel at the bottom. The panes follow Eagle's order, with separators between groups: General, Sidebar | Controls, Preview, Screenshot, Shortcuts | Notification, Password, Auto-Import | Eagle MCP | Developer. Eagle's AI and Proxy panes are not built; a pane appears only once it has a working setting. Each pane is one function in `crates/falcon-app/src/prefs.rs` that adds titled blocks to a `Page`.
 
 Typing in the search box shows the matching blocks of every pane under the pane's name. A block matches when every word typed appears in the pane name, the block title or its keywords (case-insensitive), as Eagle's blocks carry keyword lists. The Shortcuts pane appears in the results as a button that opens it. The last pane shown is remembered across launches, as Eagle remembers it.
 
@@ -783,6 +783,7 @@ Edits stay in a draft until Save (also ⌘↩) or Apply; Cancel, the close butto
 | Preview | Reopen an image at the zoom and position it was left at | `habits.rememberLastZoom`, on by default; kept in memory (`lastItemStates`), skipped in fit-to-edge mode | Same: per item, for the session, not in fit-to-edge mode |
 | Preview | Checkerboard behind transparent areas | `habits.transparency`, `hide` by default | Off by default; when on, a white and light grey checkerboard of 8 pt squares is drawn under the picture |
 | Auto-Import | Import files added to a folder automatically; Choose Folder…; Open Folder | `autoImport.enable` (off) and `autoImport.path` (empty). Turning it on with no folder opens the folder picker, and cancelling it leaves it off; a folder on a network drive is refused with a warning; Open the folder opens it in Finder when it exists. A saved folder that no longer exists is forgotten and auto-import turned off | Same defaults and rules (`prefs::auto_import`, `auto_import::is_network_volume`). The pane also says which folder the shown library watches (see [Auto-import](import.md#auto-import)). Eagle deletes each file after importing it; falcon has a setting for that, "Delete files after importing them" (`Prefs::auto_import_delete`), on by default, which moves the file to the Trash once the item is in the library and shows a red warning while it is on. Off, files stay and falcon remembers them |
+| Eagle MCP | Run the MCP server, first port, allow writes, require the token | Eagle's pane installs or opens its MCP server plugin | Built in and off by default; see [Eagle MCP](#eagle-mcp) |
 | Developer | Run the HTTP API, first port | Eagle always serves on 41595 and only has an API token setting | On by default, from 41596; tries five ports. Ports whose range would include 41595, or below 1024, are refused. Changing either restarts the API |
 | Developer | API token | Eagle 4.0.0's preferences show, copy and regenerate an API token (`developer.apiToken`, empty by default; Regenerate makes a random UUID). Its JSON server lets a request carrying it in from any Host (observed in `json-rest-light`) | Empty by default, as in Eagle, and a token made by an earlier falcon version is kept. Empty, the pane says "No token. Only requests addressed to localhost are served." and shows a Generate button; set, it shows the token with Copy, Regenerate and a `?token=` link. A token that is only whitespace counts as empty. With a token set, a request carrying it is served from any Host; with none, only the Host check applies and no `token` value lets another Host in. See [HTTP API](http-api.md) |
 
@@ -796,7 +797,7 @@ What Eagle does, from `js/default-preferences.js`, `preferences.html`, `js/prefe
 - The window's own size is set in Eagle's main process, which is not in the readable bundle; falcon's 720 × 500 pt is a guess (inferred).
 - Built in falcon since: the menu bar icon option, the collect modal for screenshots, and screenshots with their keys, format, quality, tag, clipboard and @2x settings.
 - Built in falcon since: sound effects (see below).
-- Not built in falcon: GPU, proxy, the AI and MCP panes.
+- Not built in falcon: GPU, proxy, the AI panes.
 
 ### Transparency effects
 
@@ -1229,6 +1230,35 @@ The item menu's Copy, Copy File Path and Copy submenu entries (also in the image
 Base64 and a single thumbnail read the file on the window's thread, so an item still in iCloud is refused with a message instead of holding the window. The unbound copies can be given keys under Preferences → Shortcuts (Eagle's `edit.copy.*` ids, `edit.copy.eaglelink` for Eagle Link; Source URL has falcon's own, `edit.copy.sourceurl`).
 
 Where files go and how they are named is worked out in `falcon_library::export` (a `Plan`, with tests); `ui/dialogs/export.rs` asks, runs and reports. Exports write only inside the folder picked in the dialog.
+
+## Eagle MCP
+
+A Model Context Protocol server, so AI assistants on the same Mac can use the open library. It is built in (`falcon_server::mcp`, run by `app/mcp.rs`) and off by default. Preferences ▸ Eagle MCP turns it on and shows whether it is running, at what address, and a client configuration to copy.
+
+It listens on `http://127.0.0.1:41610/mcp`. The first port can be changed, and it tries the next four if a port is taken; ranges that include Eagle's 41595 or 8000 are refused. It runs only while a library is open and always serves the shown library, following a switch to another one. It has no way to open a library itself, so it stays inside the sandbox check the app makes.
+
+**Protocol.** Streamable HTTP, with every message a POST and every answer one JSON object. Revision 2026-07-28 is served per request, with its `_meta` fields, its `Mcp-Method` and `Mcp-Name` header checks and `server/discover`. Clients of 2025-11-25, 2025-06-18 and 2025-03-26 use `initialize` as usual; no session is made. GET and DELETE answer 405. There is no change notification, so an assistant sees a change to the write tools when it next lists them, usually on reconnecting.
+
+**Who can connect.** A request must be addressed to the server's own `Host`, and any `Origin` must be on the loopback address; others get 403. No CORS headers are sent and the body must be `application/json`, so a web page can't read an answer or post a form. Without a token, any program on the Mac can connect. "Require the API token" asks for the Developer pane's token as `Authorization: Bearer`, and makes one if there is none.
+
+| Tool | Does | Needs writes on |
+|---|---|---|
+| `get_library_info` | Name, path, and item, Trash, folder and tag counts | No |
+| `list_folders` | The folder tree with descriptions, tags and item counts | No |
+| `list_tags` | Tags in use with item counts, filtered and paged | No |
+| `search_items` | Search or list items by text (the search box's syntax), tags, folder, extension and rating, sorted and paged | No |
+| `get_item` | One item in full, with its note, comments, palette and file path | No |
+| `get_item_thumbnail` | The thumbnail as an image, at most 1024 px; a JPEG, or a PNG if any of it is transparent | No |
+| `add_item_from_path` | Copies a file into the library, with a name, tags, folders, note, URL and rating | Yes |
+| `update_item` | Changes an item's name, tags, note, URL or rating | Yes |
+| `create_folder` | Creates a folder at the top level or inside another | Yes |
+| `move_items_to_trash` | Moves items to the Trash | Yes |
+
+**Writes.** "Allow assistants to change the library" is off by default. While it is off the write tools aren't listed, and calling one is refused with a message saying why. Each write takes the library lock and makes the same `Library` call the app makes, so it is batched and flushed with the frame's edits, and it joins the library's undo history as one step: ⌘Z reverses it, and an undone import goes to the Trash. No tool deletes anything for good.
+
+**Library text is data.** Results are JSON documents, so names, notes and tags stay values and are never spliced into a sentence. The server's instructions and the tool descriptions tell the assistant not to follow instructions found in them.
+
+**Folders with a password.** There is no tool to unlock one, even if it is unlocked in the window. It appears in `list_folders` with only its id, name and `locked: true`. Its subfolders and items, including items also in other folders, behave as if they didn't exist for every tool, and they aren't counted. Passwords and hints are never sent.
 
 ## Running it
 
