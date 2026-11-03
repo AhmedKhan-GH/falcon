@@ -363,6 +363,12 @@ pub fn rows(p: &Picker, roots: &[Folder], recent: &[String], shut: impl Fn(&Fold
     out
 }
 
+/// Takes a folder off the recently used list (Remove on a Recent row's
+/// right-click menu). The folder itself stays.
+pub fn forget_recent(recent: &mut Vec<String>, id: &str) {
+    recent.retain(|r| r != id);
+}
+
 /// The name of the folder that holds `id`, if it is not at the top level.
 pub fn parent_name<'a>(roots: &'a [Folder], id: &str) -> Option<&'a str> {
     fn find<'a>(list: &'a [Folder], id: &str, parent: Option<&'a Folder>) -> Option<Option<&'a Folder>> {
@@ -692,6 +698,27 @@ mod tests {
         let mut p = picker(&[], &roots);
         p.search = "ktn".into();
         assert_eq!(ids(&rows(&p, &roots, &[], |_| false)), ["A@0", "A1@1", "A11@2", "create"]);
+    }
+
+    #[test]
+    fn removing_a_recent_folder_forgets_it_but_not_a_tick() {
+        let roots = tree();
+        let mut recent: Vec<String> = vec!["B".into(), "A2".into(), "A1".into()];
+        forget_recent(&mut recent, "A2");
+        assert_eq!(recent, ["B", "A1"]);
+        forget_recent(&mut recent, "gone");
+        assert_eq!(recent, ["B", "A1"]);
+        // The rebuilt Recent tab no longer lists it; the folder is still in
+        // the tree, and a ticked one stays in the block for its tick.
+        let mut p = picker(&["A1"], &roots);
+        p.tab = Tab::Recent;
+        let names: Vec<&str> = recent.iter().map(String::as_str).collect();
+        assert_eq!(list(&p, &roots, &names), ["r:A1", "r:B"]);
+        forget_recent(&mut recent, "A1");
+        let names: Vec<&str> = recent.iter().map(String::as_str).collect();
+        assert_eq!(list(&p, &roots, &names), ["r:A1", "r:B"]);
+        forget_recent(&mut recent, "B");
+        assert_eq!(list(&p, &roots, &[]), ["r:A1"]);
     }
 
     #[test]

@@ -242,29 +242,31 @@ impl App {
                 // Flat lists (a search, the Selected tab) say where each folder is.
                 let flat = !recent && (p.tab == Tab::Selected || !p.search.trim().is_empty());
                 let hint = if flat { folder_picker::parent_name(roots, id) } else { None };
-                let label_w = rect.right() - x - 60.0 - if hint.is_some() { 90.0 } else { 0.0 };
+                let label_w = rect.right() - x - 44.0 - if hint.is_some() { 90.0 } else { 0.0 };
                 let g = galley(ui, &label, font(13.0), t::p().text, label_w);
                 ui.painter().galley(Pos2::new(x + 16.0, cy - g.size().y / 2.0), g, t::p().text);
                 if let Some(parent) = hint {
                     let g = galley(ui, parent, font(11.5), t::p().text_muted, 84.0);
-                    ui.painter().galley(Pos2::new(rect.right() - 48.0 - g.size().x, cy - g.size().y / 2.0), g, t::p().text_muted);
+                    ui.painter().galley(Pos2::new(rect.right() - 30.0 - g.size().x, cy - g.size().y / 2.0), g, t::p().text_muted);
                 }
                 if p.checked.contains(id) {
-                    icon(ui, Pos2::new(rect.right() - 36.0, cy), ic::CHECK, 14.0, t::p().primary);
-                }
-                if recent && (resp.hovered() || p.highlight == Some(i)) {
-                    let x_rect = Rect::from_center_size(Pos2::new(rect.right() - 12.0, cy), vec2(18.0, 18.0));
-                    icon(ui, x_rect.center(), ic::X, 12.0, t::p().text_muted);
-                    if resp.clicked() && resp.interact_pointer_pos().is_some_and(|q| x_rect.contains(q)) {
-                        on_control = true;
-                        self.recent_folders.retain(|r| r != id);
-                        p.dirty = true;
-                    }
+                    icon(ui, Pos2::new(rect.right() - 14.0, cy), ic::CHECK, 14.0, t::p().primary);
                 }
                 if resp.clicked() && !on_control {
                     self.picker_pick(p, row, command);
                 }
-                if !recent {
+                if recent {
+                    // A ticked folder can sit in this block without being
+                    // recent; there is nothing to forget then.
+                    if self.recent_folders.contains(id) {
+                        resp.context_menu(|ui| {
+                            if ui.button(crate::locale::tr("Remove")).clicked() {
+                                folder_picker::forget_recent(&mut self.recent_folders, id);
+                                p.dirty = true;
+                            }
+                        });
+                    }
+                } else {
                     resp.context_menu(|ui| {
                         if ui.button(crate::locale::tr("New Subfolder")).clicked() {
                             p.naming = Some((NewPlace::Inside(id.clone()), String::new()));
