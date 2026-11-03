@@ -4,14 +4,15 @@ Eagle 4.0.0 provides some features through plugins rather than the app itself. F
 
 ## Remaining plugins
 
-Falcon already has its own versions of three of Eagle's plugins, built into the app: Actions (`ai-action`), Export in Format (`custom-export`) and Combine Images (`combine-images`). Four remain. Each would be a normal falcon feature, not a plugin; the plugin platform below isn't needed for them.
+Falcon already has its own versions of three of Eagle's plugins, built into the app: Actions (`ai-action`), Export in Format (`custom-export`) and Combine Images (`combine-images`). Three remain, plus Search by Image, which isn't planned. Each would be a normal falcon feature, not a plugin; the plugin platform below isn't needed for them.
 
 | Order | Plugin | Feature | Effort | Depends on | Network |
 | --- | --- | --- | --- | --- | --- |
-| 1 | `eagle-plugin-search-by-image` | Search by Image on Google, Bing, Yandex, TinEye, Baidu, Sogou and SauceNAO: upload the image and open the results in the browser | Small (engines change their endpoints now and then) | Nothing | Sends the chosen image to the chosen engine, only when you pick it |
-| 2 | `mcp-server` | Eagle MCP: a Model Context Protocol server on localhost so AI assistants on the same Mac can use the library | Medium | Falcon's HTTP API (exists) | None (localhost only) |
-| 3 | `ai-sdk` | AI Models: API keys and model settings for Eagle's eight providers, shared by every AI feature (design below) | Medium | Nothing | Only to providers you add |
-| 4 | `ai-search` | AI Search: semantic text search and similar-image search on the device, with the toolbar button, the search box's camera, Visual Match and Eagle's `aiSearch/*` API routes | Large | Nothing | One-off model download |
+| 1 | `mcp-server` | Eagle MCP: a Model Context Protocol server on localhost so AI assistants on the same Mac can use the library | Medium | Falcon's HTTP API (exists) | None (localhost only) |
+| 2 | `ai-sdk` | AI Models: API keys and model settings for Eagle's eight providers, shared by every AI feature (design below) | Medium | Nothing | Only to providers you add |
+| 3 | `ai-search` | AI Search: semantic text search and similar-image search on the device, with the toolbar button, the search box's camera, Visual Match and Eagle's `aiSearch/*` API routes | Large | Nothing | One-off model download |
+
+Search by Image isn't planned, because it only works by sending your images to outside search engines. AI Search covers similar images within your own library.
 
 After these, there's one follow-up: AI steps in Actions (auto-tag, write a description), which need AI Models.
 

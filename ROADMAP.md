@@ -34,7 +34,7 @@ No local feature in [PARITY.md](PARITY.md) is missing or partly done. What follo
 
 ## Later
 
-- **Plugins:** Search by Image, the Eagle MCP server, AI Models and AI Search, in the order given in [PLUGINS.md](PLUGINS.md). Falcon has no plugin system and none is planned; each would be a built-in feature.
+- **Plugins:** the Eagle MCP server, AI Models and AI Search, in the order given in [PLUGINS.md](PLUGINS.md). Search by Image isn't planned. Falcon has no plugin system and none is planned; each would be a built-in feature.
 - **Out of scope:** Windows and Linux builds (falcon runs on macOS only, and several viewers use macOS frameworks), a GPU acceleration switch, Eagle's script and inject features, and every online feature.
 - **Formats beyond Eagle's set:** listed at the end of [FORMATS.md](FORMATS.md) and not planned.
 - **Releases:** signed and notarised macOS builds. Falcon is unsigned today.
