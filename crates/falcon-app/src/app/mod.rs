@@ -104,6 +104,8 @@ pub struct App {
     pub(crate) api_check: crate::api_check::Check,
     /// A library whose close waits for its tasks (`ui/dialogs/force_close.rs`).
     pub(crate) force_close: Option<crate::ui::dialogs::force_close::Pending>,
+    /// A switch waiting for an answer (`ui/dialogs/switch_warning.rs`).
+    pub(crate) switch_warning: Option<crate::ui::dialogs::switch_warning::Target>,
     /// Quitting while tasks run (`ui/dialogs/quit_confirm.rs`).
     pub(crate) quit: crate::ui::dialogs::quit_confirm::QuitConfirm,
     /// The libraries' `icon.png` textures.
@@ -267,6 +269,7 @@ impl App {
             tools: Default::default(),
             api_check: Default::default(),
             force_close: None,
+            switch_warning: None,
             quit: Default::default(),
             lib_icons: Default::default(),
             switch_to: None,
@@ -555,6 +558,7 @@ impl App {
         self.clear_history_dialog(&ctx);
         self.remove_library_dialog(&ctx);
         self.force_close_dialog(&ctx);
+        self.switch_warning_dialog(&ctx);
         self.poll_api_check();
         self.alert_modal(&ctx);
         if self.ws.lib.is_some() {
@@ -717,10 +721,10 @@ impl App {
         self.ws.loader.want(std::mem::take(&mut self.ws.frame_jobs));
         drop(guard);
         match self.switch_to.take() {
-            Some(Switch::Open(p)) => self.queue_open(p),
+            Some(Switch::Open(p)) => self.request_switch(crate::ui::dialogs::switch_warning::Target::Open(p)),
             Some(Switch::Pick) => self.pick_library(),
             Some(Switch::Create) => self.new_library(),
-            Some(Switch::Focus(i)) => self.focus(i),
+            Some(Switch::Focus(i)) => self.request_focus(i),
             Some(Switch::Close(i)) => self.request_close(i),
             Some(Switch::Merge) => self.merge_library(),
             None => {}

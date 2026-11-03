@@ -711,7 +711,7 @@ impl App {
         self.import_files(paths, folders);
         if let Some(first) = libraries.first() {
             // Behind the loading screen, as the switcher's opens are.
-            self.open_in_background(first.clone());
+            self.request_switch(crate::ui::dialogs::switch_warning::Target::Open(first.clone()));
             let others = libraries.len() - 1;
             if others > 0 {
                 let name = first.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();

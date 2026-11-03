@@ -141,6 +141,10 @@ The core words, so every file uses one term for one thing.
   Quitting stops them. Work already done is kept.", "Stop Tasks and
   Quit"), machine-written with the terms of "Close Library While Tasks
   Run".
+- The switch warning ("Switch Library While Tasks Run", "Tasks are running
+  in {library}. They keep running in the background after you switch.",
+  "Force Switch") and "Library switch over the API canceled",
+  machine-written with the same terms.
 - "Stopped after exporting {done} of {n} items", the toast of an
   Export to Computer stopped from its progress modal (machine-written).
 

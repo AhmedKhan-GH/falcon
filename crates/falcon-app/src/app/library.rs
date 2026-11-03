@@ -13,6 +13,7 @@ use super::{App, Shared, Workspace, lock};
 use crate::locale::{tr, tr_n, tr_nf, trf};
 use crate::logic::{self, Scope};
 use crate::ui::dialogs::library_notices::Alert;
+use crate::ui::dialogs::switch_warning::Target;
 use crate::ui::sidebar::smart_has;
 
 /// Most libraries kept in the recent list.
@@ -178,7 +179,8 @@ impl App {
     /// `library/switch` over the API replaces the library inside the shown
     /// workspace's slot. Give that slot its own library back and show the
     /// new one in a workspace of its own (an existing one if it is open),
-    /// with fresh state and no undo history.
+    /// with fresh state and no undo history. The slot gets its library back
+    /// at once; showing the new one asks first while tasks run in this one.
     pub(crate) fn follow_api_switch(&mut self) {
         let (Some(shared), Some(was)) = (self.ws.lib.clone(), self.ws.root.clone()) else { return };
         let now = lock(&shared).root().to_path_buf();
@@ -186,19 +188,13 @@ impl App {
             return;
         }
         let existing = self.position_of(&now);
-        let mut note = None;
         match Library::open_or_restore(&was) {
             Ok((back, restored)) => {
-                note = restored.as_deref().map(restored_note);
+                let note = restored.as_deref().map(restored_note);
                 let new = std::mem::replace(&mut *lock(&shared), back);
-                match existing {
-                    // The open workspace's copy is the one with its edits.
-                    Some(i) => {
-                        drop(new);
-                        self.focus(i);
-                    }
-                    None => self.add_workspace(Arc::new(Mutex::new(new))),
-                }
+                // The open workspace's copy is the one with its edits.
+                let library = existing.is_none().then(|| Box::new(new));
+                self.request_switch(Target::Api { root: now, library, note });
             }
             Err(_) => {
                 // The old library can't be reopened: this workspace becomes
@@ -209,9 +205,14 @@ impl App {
                 if let Some(i) = existing {
                     self.close_workspace(i);
                 }
+                self.api_switched(&now, None);
             }
         }
-        crate::workspaces::remember(&mut self.recent, &now, RECENT_LIMIT);
+    }
+
+    /// The end of an API switch to the library at `now`, which is shown.
+    pub(crate) fn api_switched(&mut self, now: &std::path::Path, note: Option<String>) {
+        crate::workspaces::remember(&mut self.recent, now, RECENT_LIMIT);
         let name = now.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
         match note {
             Some(note) => self.flash(trf("Switched to {name} over the API. {note}", &[("name", &name), ("note", &note)])),
@@ -333,16 +334,17 @@ impl App {
         }
     }
 
-    /// Opens the create-library dialog (`library_dialogs.rs`).
+    /// Opens the create-library dialog (`library_dialogs.rs`), after the
+    /// warning when tasks run in the shown library.
     pub(crate) fn new_library(&mut self) {
-        self.dialogs.start_create();
+        self.request_switch(Target::Create);
     }
 
     /// Asks for a library and opens it in the background, with a loading
-    /// screen.
+    /// screen (after the warning when tasks run in the shown library).
     pub(crate) fn pick_library(&mut self) {
         if let Some(p) = rfd::FileDialog::new().set_title(tr("Open Eagle Library")).set_directory(falcon_library::sandbox::default_root()).pick_folder() {
-            self.queue_open(p);
+            self.request_switch(Target::Open(p));
         }
     }
 

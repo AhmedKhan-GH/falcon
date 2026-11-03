@@ -23,6 +23,7 @@ impl App {
             || self.clear_history_open
             || self.remove_library.is_some()
             || self.force_close.is_some()
+            || self.switch_warning.is_some()
             || self.quit.asking.is_some()
             || self.link_import.open
             || self.dialogs.create.as_ref().is_some_and(|c| !c.from_welcome)

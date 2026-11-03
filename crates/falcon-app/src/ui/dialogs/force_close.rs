@@ -1,6 +1,7 @@
 //! Closing a library while tasks run in it. Several libraries stay open at
 //! once and a library in the background keeps its imports and operations
-//! going, so only closing needs a warning: it stops them. The close itself
+//! going, so a switch only says so (`switch_warning.rs`) and closing is what
+//! stops them, which needs this warning. The close itself
 //! waits until the workers have stopped, so none writes to the library
 //! after it was saved.
 
