@@ -40,7 +40,18 @@ impl App {
                 }
                 let name = lock(&shared).item(id).map(|i| i.name.clone()).unwrap_or_default();
                 h.step(n, name);
-                let result = lock(&shared).refresh_thumbnail(id);
+                // QuickLook can take seconds per file, so the file work runs
+                // without the lock; holding it would freeze the window.
+                let (root, item) = {
+                    let lib = lock(&shared);
+                    (lib.root().to_path_buf(), lib.item(id).cloned())
+                };
+                let result = match item {
+                    Some(item) if !falcon_library::thumbnail::has_custom_thumbnail(&item) => {
+                        falcon_library::thumbnail::redrawn(&root, item).and_then(|item| lock(&shared).update_item(item)).map(|()| true)
+                    }
+                    _ => lock(&shared).refresh_thumbnail(id),
+                };
                 match result {
                     Ok(true) => done += 1,
                     Ok(false) => custom += 1,
