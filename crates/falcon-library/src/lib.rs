@@ -8,6 +8,7 @@ pub mod autotag;
 pub mod backup;
 pub mod binary_preview;
 pub mod color;
+pub mod combine;
 pub mod duplicates;
 pub mod edit;
 pub mod error;
