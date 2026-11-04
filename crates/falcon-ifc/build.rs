@@ -23,6 +23,8 @@ fn sources(dir: &Path, out: &mut Vec<PathBuf>) {
 
 fn main() {
     println!("cargo::rerun-if-env-changed=FALCON_WEB_IFC_DIR");
+    // The cc crate builds for the macOS this names (13.3 at least, below).
+    println!("cargo::rerun-if-env-changed=MACOSX_DEPLOYMENT_TARGET");
     println!("cargo::rerun-if-changed=cpp/worker.cpp");
     let root = std::env::var_os("FALCON_WEB_IFC_DIR")
         .map(PathBuf::from)
@@ -55,6 +57,19 @@ fn main() {
         .include(root.join("unordered_dense/include"))
         .files(&files)
         .file("cpp/worker.cpp");
+    // web-ifc formats numbers with std::format, which macOS's C++ library has from 13.3, so the
+    // worker is built for 13.3 at least. Older systems can't start it, and IFC files fall back to
+    // falcon's own reader there.
+    if std::env::var("CARGO_CFG_TARGET_OS").is_ok_and(|os| os == "macos") {
+        let asked = std::env::var("MACOSX_DEPLOYMENT_TARGET").ok();
+        let version = |v: &str| -> (u32, u32) {
+            let mut parts = v.split('.').map(|p| p.parse().unwrap_or(0));
+            (parts.next().unwrap_or(0), parts.next().unwrap_or(0))
+        };
+        if asked.as_deref().is_none_or(|v| version(v) < (13, 3)) {
+            b.flag("-mmacosx-version-min=13.3");
+        }
+    }
     let objects = b.compile_intermediates();
     let exe = PathBuf::from(std::env::var_os("OUT_DIR").unwrap()).join("falcon-ifc-worker");
     let mut link: Command = b.get_compiler().to_command();

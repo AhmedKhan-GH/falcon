@@ -17,7 +17,7 @@ From `index.html`, `preview-window.html`, the `mediaElement` and `mpvMediaElemen
 
 ## Building FFmpeg
 
-`scripts/build-ffmpeg.sh` makes the libraries. On Linux it needs a C compiler, make, `nasm`, zlib's headers and `python3-venv`, and keeps x86 assembly on, since decoding is too slow without it. On macOS it needs clang, make, the Xcode command-line tools and a `python3` (3.15 here) to make a venv; no nasm, yasm, cmake or system pkg-config (arm64 needs no assembler beyond clang's). Nothing goes outside `target/`. It:
+`scripts/build-ffmpeg.sh` makes the libraries. On Linux it needs a C compiler, make, `nasm`, zlib's headers and `python3-venv`, and keeps x86 assembly on, since decoding is too slow without it. On macOS it needs clang, make, the Xcode command-line tools and a `python3` (3.15 here) to make a venv; no nasm, yasm, cmake or system pkg-config (arm64 needs no assembler beyond clang's). There it builds dav1d and FFmpeg for macOS 12, the oldest Falcon supports (`MACOSX_DEPLOYMENT_TARGET` sets another), and builds them again when that changes. Nothing goes outside `target/`. It:
 
 1. makes a venv in `target/ffmpeg-tools/venv` and installs pinned wheels into it, each checked against its PyPI SHA-256 (`pip --require-hashes --only-binary :all:`): meson 1.12.1 and ninja 1.13.2 to build dav1d, and pkgconf 3.0.7.post0, through which FFmpeg's configure finds dav1d;
 2. downloads `https://downloads.videolan.org/pub/videolan/dav1d/1.5.4/dav1d-1.5.4.tar.xz`, checks its SHA-256 (`686616b7c69eb88d44459391ab25cac13b6647a3b288835c5784e71c1514a5c5`, the hash VideoLAN publishes next to the tarball and the one MacPorts' dav1d Portfile records), and builds it with meson into `target/ffmpeg-tools/dav1d` (see below);

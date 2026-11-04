@@ -12,8 +12,8 @@
 # Nothing it produces is committed. scripts/bundle.sh copies the libraries into Falcon.app.
 #
 # Re-running is cheap: the tools, dav1d and FFmpeg are each rebuilt only when missing or
-# when their pinned version (or FFmpeg's configure line) changes. FFMPEG_FORCE=1 rebuilds
-# FFmpeg and dav1d regardless.
+# when their pinned version (or FFmpeg's configure line, or the macOS they are built for)
+# changes. FFMPEG_FORCE=1 rebuilds FFmpeg and dav1d regardless.
 #
 # Environment:
 #   FFMPEG_PREFIX     install prefix (default: <repo>/target/ffmpeg)
@@ -21,6 +21,7 @@
 #                     (default: <repo>/target/ffmpeg-build, wiped before each build)
 #   FFMPEG_FORCE      1 to rebuild even when the pinned versions are already installed
 #   PYTHON            the Python that makes the tools venv (default: python3)
+#   MACOSX_DEPLOYMENT_TARGET  on macOS, the oldest macOS the libraries load on (default: 12.0)
 set -eu
 
 VERSION=7.1.5
@@ -41,6 +42,10 @@ if [ "$(uname -s)" = Darwin ]; then
   DAV1D_CC=clang
   # On arm64 dav1d's assembly is plain .S that clang assembles (no nasm needed).
   JOBS=$(sysctl -n hw.ncpu)
+  # Built for the oldest macOS Falcon supports, not the one building it, or they won't load there.
+  MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET:-12.0}
+  export MACOSX_DEPLOYMENT_TARGET
+  TARGET_STAMP=" macos $MACOSX_DEPLOYMENT_TARGET"
 else
   DAV1D_LIB=libdav1d.so.7
   AVCODEC_LIB=libavcodec.so.61
@@ -50,6 +55,7 @@ else
   # x86 assembly is what makes decoding fast there, and it needs nasm.
   command -v nasm >/dev/null || { echo "Install nasm first: without it video decodes far too slowly" >&2; exit 1; }
   JOBS=$(nproc)
+  TARGET_STAMP=
 fi
 
 # Build tools for dav1d, as pinned wheels with their PyPI SHA-256s.
@@ -103,8 +109,8 @@ fi
 PATH="$VENV/bin:$PATH"
 export PATH
 
-# dav1d, rebuilt only when missing or when its pinned version changes.
-DAV1D_STAMP="dav1d $DAV1D_VERSION $DAV1D_SHA256"
+# dav1d, rebuilt only when missing or when its pinned version (or the macOS it is for) changes.
+DAV1D_STAMP="dav1d $DAV1D_VERSION $DAV1D_SHA256$TARGET_STAMP"
 if [ -n "$FORCE" ] || [ "$(cat "$DAV1D_PREFIX/stamp" 2>/dev/null)" != "$DAV1D_STAMP" ] \
   || [ ! -f "$DAV1D_PREFIX/lib/$DAV1D_LIB" ]; then
   rm -rf "$BUILD" "$DAV1D_PREFIX"
