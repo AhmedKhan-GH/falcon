@@ -32,15 +32,35 @@ URL="https://ffmpeg.org/releases/ffmpeg-$VERSION.tar.xz"
 DAV1D_VERSION=1.5.4
 DAV1D_SHA256=686616b7c69eb88d44459391ab25cac13b6647a3b288835c5784e71c1514a5c5
 DAV1D_URL="https://downloads.videolan.org/pub/videolan/dav1d/$DAV1D_VERSION/dav1d-$DAV1D_VERSION.tar.xz"
-DAV1D_LIB=libdav1d.7.dylib
+# The file names, tools and link settings each system needs.
+if [ "$(uname -s)" = Darwin ]; then
+  DAV1D_LIB=libdav1d.7.dylib
+  AVCODEC_LIB=libavcodec.61.dylib
+  AVFILTER_LIB=libavfilter.10.dylib
+  SHA256SUM="shasum -a 256"
+  DAV1D_CC=clang
+  # On arm64 dav1d's assembly is plain .S that clang assembles (no nasm needed).
+  JOBS=$(sysctl -n hw.ncpu)
+else
+  DAV1D_LIB=libdav1d.so.7
+  AVCODEC_LIB=libavcodec.so.61
+  AVFILTER_LIB=libavfilter.so.10
+  SHA256SUM=sha256sum
+  DAV1D_CC=${CC:-cc}
+  # x86 assembly is what makes decoding fast there, and it needs nasm.
+  command -v nasm >/dev/null || { echo "Install nasm first: without it video decodes far too slowly" >&2; exit 1; }
+  JOBS=$(nproc)
+fi
 
 # Build tools for dav1d, as pinned wheels with their PyPI SHA-256s.
 MESON_VERSION=1.12.1
 MESON_SHA256=930bc7542cbd9f57009e182fd014eba48cf1a0180a7b9006d2d32d8f168d8b02
 NINJA_VERSION=1.13.2
 NINJA_SHA256=fd82e26c0706ad4ab88e5fdd26f3fab0a987a90f810160f6c322e752c6af298b
+NINJA_SHA256_LINUX=65a24341b5ac09fcadcc37082660be40a94174e51a937fabf6e2cae26225fa2c
 PKGCONF_VERSION=3.0.7.post0
 PKGCONF_SHA256=47cbf6889d84297b9a4e1741ae016daa4e198f3ec8bab7ce74554cc50b77cce4
+PKGCONF_SHA256_LINUX=bd3ee4b5294a888d58462324cb83b7c0bc7150cc15b64b36aaf983e4b0ab90d5
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 PREFIX=${FFMPEG_PREFIX:-$ROOT/target/ffmpeg}
@@ -73,8 +93,8 @@ if [ "$(cat "$VENV/stamp" 2>/dev/null)" != "$TOOLS_STAMP" ]; then
   "${PYTHON:-python3}" -m venv "$VENV"
   cat > "$TOOLS/requirements.txt" <<REQ
 meson==$MESON_VERSION --hash=sha256:$MESON_SHA256
-ninja==$NINJA_VERSION --hash=sha256:$NINJA_SHA256
-pkgconf==$PKGCONF_VERSION --hash=sha256:$PKGCONF_SHA256
+ninja==$NINJA_VERSION --hash=sha256:$NINJA_SHA256 --hash=sha256:$NINJA_SHA256_LINUX
+pkgconf==$PKGCONF_VERSION --hash=sha256:$PKGCONF_SHA256 --hash=sha256:$PKGCONF_SHA256_LINUX
 REQ
   "$VENV/bin/python" -m pip install --quiet --disable-pip-version-check --no-cache-dir \
     --only-binary :all: --require-hashes -r "$TOOLS/requirements.txt"
@@ -91,28 +111,29 @@ if [ -n "$FORCE" ] || [ "$(cat "$DAV1D_PREFIX/stamp" 2>/dev/null)" != "$DAV1D_ST
   mkdir -p "$BUILD"
   cd "$BUILD"
   curl -fsSL -o "dav1d-$DAV1D_VERSION.tar.xz" "$DAV1D_URL"
-  echo "$DAV1D_SHA256  dav1d-$DAV1D_VERSION.tar.xz" | shasum -a 256 -c -
+  echo "$DAV1D_SHA256  dav1d-$DAV1D_VERSION.tar.xz" | $SHA256SUM -c -
   tar -xJf "dav1d-$DAV1D_VERSION.tar.xz"
-  # On arm64 dav1d's assembly is plain .S that clang assembles (no nasm needed).
   # Meson gives the library an @rpath/libdav1d.7.dylib install name, like FFmpeg's.
-  CC=clang meson setup "dav1d-$DAV1D_VERSION/build" "dav1d-$DAV1D_VERSION" \
+  CC=$DAV1D_CC meson setup "dav1d-$DAV1D_VERSION/build" "dav1d-$DAV1D_VERSION" \
     --prefix="$DAV1D_PREFIX" --libdir=lib --buildtype=release \
     -Ddefault_library=shared -Denable_asm=true -Denable_tools=false -Denable_tests=false \
     -Denable_examples=false -Denable_docs=false
   ninja -C "dav1d-$DAV1D_VERSION/build"
   ninja -C "dav1d-$DAV1D_VERSION/build" install
   cp "dav1d-$DAV1D_VERSION/COPYING" "$DAV1D_PREFIX/COPYING"
-  otool -D "$DAV1D_PREFIX/lib/$DAV1D_LIB" | grep -q "^@rpath/$DAV1D_LIB\$" \
-    || install_name_tool -id "@rpath/$DAV1D_LIB" "$DAV1D_PREFIX/lib/$DAV1D_LIB"
+  if [ "$(uname -s)" = Darwin ]; then
+    otool -D "$DAV1D_PREFIX/lib/$DAV1D_LIB" | grep -q "^@rpath/$DAV1D_LIB\$" \
+      || install_name_tool -id "@rpath/$DAV1D_LIB" "$DAV1D_PREFIX/lib/$DAV1D_LIB"
+  fi
   echo "$DAV1D_STAMP" > "$DAV1D_PREFIX/stamp"
   # dav1d changed, so FFmpeg links it again.
   FORCE=1
 fi
 
 # FFmpeg, rebuilt only when missing or when its version, dav1d or this script changes.
-FFMPEG_STAMP="ffmpeg $VERSION $SHA256 $DAV1D_STAMP script $(shasum -a 256 "$ROOT/scripts/build-ffmpeg.sh" | cut -c1-16)"
+FFMPEG_STAMP="ffmpeg $VERSION $SHA256 $DAV1D_STAMP script $($SHA256SUM "$ROOT/scripts/build-ffmpeg.sh" | cut -c1-16)"
 if [ -z "$FORCE" ] && [ "$(cat "$PREFIX/.stamp" 2>/dev/null)" = "$FFMPEG_STAMP" ] \
-  && [ -f "$PREFIX/lib/libavcodec.61.dylib" ] && [ -f "$PREFIX/lib/libavfilter.10.dylib" ] && [ -f "$PREFIX/lib/$DAV1D_LIB" ]; then
+  && [ -f "$PREFIX/lib/$AVCODEC_LIB" ] && [ -f "$PREFIX/lib/$AVFILTER_LIB" ] && [ -f "$PREFIX/lib/$DAV1D_LIB" ]; then
   echo "FFmpeg $VERSION with dav1d $DAV1D_VERSION is already installed in $PREFIX"
   exit 0
 fi
@@ -121,19 +142,22 @@ rm -rf "$BUILD"
 mkdir -p "$BUILD"
 cd "$BUILD"
 curl -fsSL -o "ffmpeg-$VERSION.tar.xz" "$URL"
-echo "$SHA256  ffmpeg-$VERSION.tar.xz" | shasum -a 256 -c -
+echo "$SHA256  ffmpeg-$VERSION.tar.xz" | $SHA256SUM -c -
 tar -xJf "ffmpeg-$VERSION.tar.xz"
 cd "ffmpeg-$VERSION"
 
-# Libraries carry an @rpath install name and an @loader_path rpath, so one can be
-# loaded by absolute path from target/ffmpeg/lib or from Falcon.app/Contents/Frameworks
-# and still find its siblings.
+# Libraries carry an @rpath install name and an @loader_path rpath ($ORIGIN off
+# macOS), so one can be loaded by absolute path from target/ffmpeg/lib or from the
+# app's own folder and still find its siblings.
+if [ "$(uname -s)" = Darwin ]; then
+  set -- --install-name-dir=@rpath --extra-ldflags=-Wl,-rpath,@loader_path --cc=clang --arch=arm64 --disable-x86asm
+else
+  # Escaped for configure's eval, make's two expansions, then the shell.
+  set -- '--extra-ldsoflags=-Wl,-rpath,\\\$\$\$\$ORIGIN'
+fi
 PKG_CONFIG_PATH="$DAV1D_PREFIX/lib/pkgconfig" ./configure \
+  "$@" \
   --prefix="$PREFIX" \
-  --install-name-dir=@rpath \
-  --extra-ldflags=-Wl,-rpath,@loader_path \
-  --cc=clang \
-  --arch=arm64 \
   --enable-shared \
   --disable-static \
   --disable-programs \
@@ -150,7 +174,6 @@ PKG_CONFIG_PATH="$DAV1D_PREFIX/lib/pkgconfig" ./configure \
   --enable-zlib \
   --enable-libdav1d \
   --pkg-config=pkgconf \
-  --disable-x86asm \
   --disable-protocols \
   --enable-protocol=file \
   --disable-decoders \
@@ -174,7 +197,7 @@ if grep -Eq '^#define CONFIG_[A-Z0-9_]+_(ENCODER|MUXER) 1$' config_components.h;
 fi
 grep -q '^#define CONFIG_LIBDAV1D_DECODER 1' config_components.h || { echo "FFmpeg was configured without libdav1d" >&2; exit 1; }
 
-make -j"$(sysctl -n hw.ncpu)"
+make -j"$JOBS"
 rm -rf "$PREFIX"
 make install
 cp COPYING.LGPLv2.1 "$PREFIX/COPYING.LGPLv2.1"
@@ -182,8 +205,13 @@ cp COPYING.LGPLv2.1 "$PREFIX/COPYING.LGPLv2.1"
 # @loader_path rpath, here and in Falcon.app/Contents/Frameworks.
 cp "$DAV1D_PREFIX/lib/$DAV1D_LIB" "$PREFIX/lib/$DAV1D_LIB"
 cp "$DAV1D_PREFIX/COPYING" "$PREFIX/COPYING.dav1d"
-otool -L "$PREFIX/lib/libavcodec.61.dylib" | grep -q "@rpath/$DAV1D_LIB" \
-  || { echo "libavcodec doesn't link @rpath/$DAV1D_LIB" >&2; exit 1; }
+if [ "$(uname -s)" = Darwin ]; then
+  otool -L "$PREFIX/lib/$AVCODEC_LIB" | grep -q "@rpath/$DAV1D_LIB" \
+    || { echo "libavcodec doesn't link @rpath/$DAV1D_LIB" >&2; exit 1; }
+else
+  readelf -d "$PREFIX/lib/$AVCODEC_LIB" | grep -q "$DAV1D_LIB" \
+    || { echo "libavcodec doesn't link $DAV1D_LIB" >&2; exit 1; }
+fi
 # What was built and how, for the notice that ships next to the libraries
 # (the install prefix is left out of the recorded configure line).
 CONF=$(sed -n 's/^#define FFMPEG_CONFIGURATION "\(.*\)"$/\1/p' config.h | sed 's|--prefix=[^ ]*|--prefix=<repo>/target/ffmpeg|')
