@@ -150,6 +150,7 @@
     <p class="lede">Collect, tag, search and browse your images, PDFs, fonts, audio and video in one library. Native apps for macOS and Linux, built in Rust for speed.</p>
     <div class="actions">
       <a class="btn btn-primary" href="#linux">Download for Linux</a>
+      <a class="btn btn-ghost" href="#build-linux">Build for Linux</a>
       <a class="btn btn-ghost" href="https://github.com/AhmedKhan-GH/falcon#get-started">Build for macOS</a>
       <a class="btn btn-ghost" href="https://github.com/AhmedKhan-GH/falcon">View the source</a>
     </div>
@@ -195,6 +196,16 @@
         </div>
       </div>
       <p class="fine">Falcon is early alpha and unsigned. While it is in development, it only opens libraries inside <code>~/Falcon Sandbox</code>, so copy a library there to try it. <a href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/SHA256SUMS">SHA-256 checksums</a> · <a href="https://github.com/AhmedKhan-GH/falcon/releases">All releases</a></p>
+    </div>
+  </section>
+
+  <section id="build-linux">
+    <div class="wrap">
+      <div class="eyebrow">Build from source</div>
+      <h2>Build Falcon for Linux</h2>
+      <p class="intro">You need <a href="https://rustup.rs">Rust</a> 1.89 or newer. These steps are for Debian and Ubuntu; other distributions need the same packages under their own names. FFmpeg is what plays video on Linux.</p>
+      <p><code>sudo apt install pkg-config libasound2-dev nasm zlib1g-dev python3-venv</code><br><code>git clone https://github.com/AhmedKhan-GH/falcon</code><br><code>cd falcon</code><br><code>scripts/build-ffmpeg.sh</code><br><code>cargo run --release -p falcon-app</code></p>
+      <p class="fine">To make the AppImage and .deb yourself, run <code>scripts/package-linux.sh</code> after building FFmpeg.</p>
     </div>
   </section>
 
