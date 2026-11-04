@@ -48,6 +48,7 @@
   .btn-primary { background: var(--accent); color: #fff; }
   .btn-primary:hover { background: #4aa3ff; }
   .btn-ghost { border: 1px solid var(--rule); color: var(--text); background: var(--plate); }
+  .btn-soon { border: 1px solid var(--rule); color: var(--faint); background: var(--plate); opacity: .6; cursor: not-allowed; }
   .btn-ghost:hover { border-color: #45464b; }
   nav .btn { padding: 8px 14px; }
 
@@ -162,6 +163,7 @@
     <div class="actions">
       <a class="btn btn-primary" href="#mac">Download for Mac</a>
       <a class="btn btn-ghost" href="#linux">Download for Linux</a>
+      <span class="btn btn-soon" role="button" aria-disabled="true" title="A Windows build is coming soon">Windows .exe · coming soon</span>
       <a class="btn btn-ghost" href="#build">Build from source</a>
     </div>
     <p class="fine">Early alpha · macOS 12 or later on Apple Silicon, or 64-bit Linux · MIT or Apache-2.0</p>
