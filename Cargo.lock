@@ -2000,7 +2000,7 @@ checksum = "af9673d8203fcb076b19dfd17e38b3d4ae9f44959416ea532ce72415a6020365"
 
 [[package]]
 name = "falcon"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "clap",
  "falcon-library",
@@ -2009,7 +2009,7 @@ dependencies = [
 
 [[package]]
 name = "falcon-ai"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "base64 0.22.1",
  "security-framework",
@@ -2020,7 +2020,7 @@ dependencies = [
 
 [[package]]
 name = "falcon-app"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "accesskit_consumer",
  "arboard",
@@ -2060,7 +2060,7 @@ dependencies = [
 
 [[package]]
 name = "falcon-clip"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "blake3",
  "candle-core",
@@ -2077,7 +2077,7 @@ dependencies = [
 
 [[package]]
 name = "falcon-ffmpeg"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "libloading",
  "tempfile",
@@ -2085,14 +2085,14 @@ dependencies = [
 
 [[package]]
 name = "falcon-ifc"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "cc",
 ]
 
 [[package]]
 name = "falcon-library"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "base64 0.22.1",
  "blake3",
@@ -2134,7 +2134,7 @@ dependencies = [
 
 [[package]]
 name = "falcon-pdf"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "lopdf",
  "objc2 0.6.5",
@@ -2148,7 +2148,7 @@ dependencies = [
 
 [[package]]
 name = "falcon-server"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "base64 0.22.1",
  "falcon-library",
@@ -2161,7 +2161,7 @@ dependencies = [
 
 [[package]]
 name = "falcon-video"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "block2 0.6.2",
  "falcon-ffmpeg",

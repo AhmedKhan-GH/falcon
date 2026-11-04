@@ -1,5 +1,7 @@
 Falcon for Apple Silicon Macs and 64-bit Linux. Falcon is early alpha. The Mac app isn't notarised by Apple, and the Linux packages aren't signed.
 
+**New in 0.1.1:** a download for Macs with Apple Silicon, and the Linux .deb is now named `Falcon-x86_64.deb`, like the other downloads.
+
 **Downloads**
 
 | Download | For | Install |
