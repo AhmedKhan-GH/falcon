@@ -11,7 +11,8 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  # Per branch, so a manual test run can't cancel a deploy from main.
+  group: pages-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
