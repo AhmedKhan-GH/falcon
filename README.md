@@ -118,6 +118,8 @@ Every screenshot here is the real app at work on public-domain art. The credits 
 
 ## Get started
 
+**On a Mac with Apple Silicon,** [download the .dmg](https://ahmedkhan-gh.github.io/falcon/#mac), open it and drag Falcon to Applications. Falcon isn't notarised, so the first time you open it, click Open Anyway in System Settings ▸ Privacy & Security; the download page lists the other ways.
+
 **On Linux,** [download the AppImage or .deb](https://ahmedkhan-gh.github.io/falcon/#linux). Some features aren't on Linux yet; the download page lists them.
 
 **To build it,** you need Rust 1.89 or newer. On Debian or Ubuntu, also run `sudo apt install pkg-config libasound2-dev`. Video on Linux needs FFmpeg from `scripts/build-ffmpeg.sh`, which also takes `nasm`, `zlib1g-dev` and `python3-venv`.
@@ -127,6 +129,7 @@ git clone https://github.com/AhmedKhan-GH/falcon
 cd falcon
 cargo run --release -p falcon-app          # choose or create a library on first launch
 scripts/bundle.sh                          # macOS: build target/release/Falcon.app
+scripts/package-macos.sh                   # macOS: build the .dmg in target/macos
 scripts/package-linux.sh                   # Linux: build the AppImage and .deb in target/linux
 ```
 

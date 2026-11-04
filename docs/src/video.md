@@ -1,6 +1,6 @@
 # Video playback and the FFmpeg fallback
 
-Off macOS there is no system player, so FFmpeg plays everything, and the Linux packages bundle it. On macOS, Falcon plays video through AVFoundation (`crates/falcon-video`). That covers mp4, mov and m4v with H.264, HEVC, ProRes and similar codecs. Everything AVFoundation refuses, such as Matroska, WebM, AVI, WMV, FLV, Ogg, MPEG-TS and RealMedia, falls back to FFmpeg (`crates/falcon-ffmpeg`). This mirrors Eagle, which falls back from Chromium's `<video>` element to a bundled mpv player.
+Off macOS there is no system player, so FFmpeg plays everything. The Linux packages and the macOS download bundle it. On macOS, Falcon plays video through AVFoundation (`crates/falcon-video`). That covers mp4, mov and m4v with H.264, HEVC, ProRes and similar codecs. Everything AVFoundation refuses, such as Matroska, WebM, AVI, WMV, FLV, Ogg, MPEG-TS and RealMedia, falls back to FFmpeg (`crates/falcon-ffmpeg`). This mirrors Eagle, which falls back from Chromium's `<video>` element to a bundled mpv player.
 
 FFmpeg is optional. Falcon never links it. The shared libraries are opened at run time with `dlopen` (through the `libloading` crate). Without them Falcon builds and runs, and only the fallback is missing: the viewer's can't-play page then says the FFmpeg libraries weren't found.
 

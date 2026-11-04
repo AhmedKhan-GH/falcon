@@ -39,4 +39,4 @@ No local feature in [PARITY.md](PARITY.md) is missing or partly done. What follo
 - **Out of scope:** Windows builds, a GPU acceleration switch, Eagle's script and inject features, and every online feature.
 - **Formats beyond Eagle's set:** listed at the end of [FORMATS.md](FORMATS.md) and not planned.
 - **Linux:** the macOS-only parts still to bring over: a PDF engine and reader, web views, screen capture, HEIC, AVIF animation and JPEG XL decoding, QuickLook's thumbnails, Open With's app list, dragging out of the window, the tray icon and notifications. macOS stays the primary platform; Linux must always build and pass its tests.
-- **Releases:** signed and notarised macOS builds, and downloadable macOS builds at all: only Linux has them. Falcon is unsigned today.
+- **Releases:** a macOS build signed with a Developer ID and notarised, which macOS opens without asking; today's is signed ad hoc only. A download for Intel Macs: the .dmg is for Apple Silicon only.
