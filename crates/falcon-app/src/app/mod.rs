@@ -460,6 +460,8 @@ impl eframe::App for App {
             self.lock_screen(ui);
         } else {
             self.menu_clicks(&ctx);
+            #[cfg(not(target_os = "macos"))]
+            self.menu_bar.show(ui);
             self.draw(ui, frame);
         }
         self.quit_dialog(&ctx);

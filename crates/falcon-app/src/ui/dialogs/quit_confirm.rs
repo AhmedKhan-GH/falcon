@@ -80,9 +80,14 @@ impl App {
     }
 
     /// A quit from the menu bar or its icon.
-    pub(crate) fn request_quit(&mut self, _ctx: &egui::Context) {
+    pub(crate) fn request_quit(&mut self, ctx: &egui::Context) {
         match menu_quit(self.any_tasks_running()) {
-            MenuQuit::Now => crate::dock::quit(),
+            MenuQuit::Now if cfg!(target_os = "macos") => crate::dock::quit(),
+            // No application object to ask elsewhere: closing the window ends the app.
+            MenuQuit::Now => {
+                self.quit.allowed = true;
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
             MenuQuit::Ask => {
                 // The question must be seen, also when the app is hidden.
                 crate::dock::bring_to_front();
