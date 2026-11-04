@@ -341,15 +341,15 @@ fn file_name(name: &str, major: u32) -> String {
 }
 
 /// Where the libraries are looked for, in order: `$FALCON_FFMPEG_DIR`,
-/// the app bundle's `Contents/Frameworks` next to the executable, and the
-/// workspace's `target/ffmpeg/lib` that `scripts/build-ffmpeg.sh` fills.
+/// the app bundle's `Contents/Frameworks` next to the executable (Linux
+/// packages: `lib/falcon` beside `bin`), and the workspace's `target/ffmpeg/lib` that `scripts/build-ffmpeg.sh` fills.
 pub fn search_dirs() -> Vec<PathBuf> {
     let mut dirs = Vec::new();
     if let Some(d) = std::env::var_os("FALCON_FFMPEG_DIR") {
         dirs.push(PathBuf::from(d));
     }
     if let Some(exe_dir) = std::env::current_exe().ok().and_then(|e| e.parent().map(Path::to_path_buf)) {
-        dirs.push(exe_dir.join("../Frameworks"));
+        dirs.push(exe_dir.join(if cfg!(target_os = "macos") { "../Frameworks" } else { "../lib/falcon" }));
     }
     dirs.push(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/ffmpeg/lib"));
     dirs
