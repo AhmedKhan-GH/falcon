@@ -132,6 +132,7 @@
   <div class="wrap">
     <a class="brand" href="#top"><img src="brand/falcon-icon-256.png?v=3" alt="">Falcon</a>
     <div class="links">
+      <a href="#linux">Linux</a>
       <a href="#collect">Features</a>
       <a href="#open">Open source</a>
       <a href="#developers">Developers</a>
@@ -146,12 +147,13 @@
   <div class="wrap">
     <img class="hero-icon" src="brand/falcon-icon-256.png?v=3" alt="Falcon app icon">
     <h1>Falcon is a free, open-source asset manager for everyone.</h1>
-    <p class="lede">Collect, tag, search and browse your images, PDFs, fonts, audio and video in one library. A native macOS app, built in Rust for speed.</p>
+    <p class="lede">Collect, tag, search and browse your images, PDFs, fonts, audio and video in one library. Native apps for macOS and Linux, built in Rust for speed.</p>
     <div class="actions">
-      <a class="btn btn-primary" href="https://github.com/AhmedKhan-GH/falcon#get-started">Build Falcon for macOS</a>
+      <a class="btn btn-primary" href="#linux">Download for Linux</a>
+      <a class="btn btn-ghost" href="https://github.com/AhmedKhan-GH/falcon#get-started">Build for macOS</a>
       <a class="btn btn-ghost" href="https://github.com/AhmedKhan-GH/falcon">View the source</a>
     </div>
-    <p class="fine">Early alpha · macOS 12 or later · MIT or Apache-2.0</p>
+    <p class="fine">Early alpha · macOS 12 or later, or 64-bit Linux · MIT or Apache-2.0</p>
     <div class="chips">
       <span class="chip">JPG &amp; PNG</span><span class="chip">WebP</span><span class="chip">GIF</span><span class="chip">SVG</span>
       <span class="chip">PDF</span><span class="chip">PSD</span><span class="chip">AI</span><span class="chip">HEIC</span>
@@ -163,6 +165,39 @@
 </header>
 
 <main>
+  <section id="linux">
+    <div class="wrap">
+      <div class="eyebrow">Download</div>
+      <h2>Falcon for Linux</h2>
+      <p class="intro">Free, for 64-bit Intel and AMD computers running a distribution from 2022 or newer. Both downloads hold the same app. To update, download the new version and install it the same way; Falcon doesn't update itself yet.</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/Falcon-x86_64.AppImage">Download AppImage</a>
+        <a class="btn btn-ghost" href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/falcon_amd64.deb">Download .deb (Ubuntu, Debian)</a>
+      </div>
+      <div class="feature">
+        <div class="card"><h4>AppImage, for most distributions</h4>
+          <p>One file with nothing to install. Make it executable, then run it:</p>
+          <p><code>chmod +x Falcon-x86_64.AppImage</code><br><code>./Falcon-x86_64.AppImage</code></p>
+        </div>
+        <div class="card"><h4>.deb, for Ubuntu and Debian</h4>
+          <p>Installs Falcon with an entry in your app menu:</p>
+          <p><code>sudo apt install ./falcon_amd64.deb</code></p>
+        </div>
+        <div class="card"><h4>Not on Linux yet</h4>
+          <ul>
+            <li>The built-in PDF reader: PDFs open in your default app, with no thumbnail</li>
+            <li>Live web pages and bookmark screenshots</li>
+            <li>Screen capture</li>
+            <li>HEIC, AVIF animation and JPEG XL viewing</li>
+            <li>Thumbnails for formats that rely on macOS QuickLook, such as PowerPoint</li>
+            <li>Dragging items out of the window, the tray icon and notifications</li>
+          </ul>
+        </div>
+      </div>
+      <p class="fine">Falcon is early alpha and unsigned. While it is in development, it only opens libraries inside <code>~/Falcon Sandbox</code>, so copy a library there to try it. <a href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/SHA256SUMS">SHA-256 checksums</a> · <a href="https://github.com/AhmedKhan-GH/falcon/releases">All releases</a></p>
+    </div>
+  </section>
+
   <section id="collect">
     <div class="wrap">
       <div class="eyebrow">Features</div>
@@ -328,7 +363,7 @@ tags:    2</pre>
             <li>A check on screen of some newer features</li>
             <li>Eagle's plugins</li>
             <li>Native review of the translations</li>
-            <li>Windows and Linux builds, and signed releases</li>
+            <li>Windows builds, signed releases, and some features on Linux</li>
           </ul>
         </div>
       </div>
@@ -339,9 +374,10 @@ tags:    2</pre>
   <div class="closing">
     <div class="wrap">
       <h2>Get started</h2>
-      <p>Clone the repository and build the app with one command. The README has the steps.</p>
+      <p>Download Falcon for Linux, or clone the repository and build the app with one command. The README has the steps.</p>
       <div class="actions">
-        <a class="btn btn-primary" href="https://github.com/AhmedKhan-GH/falcon#get-started">Get started</a>
+        <a class="btn btn-primary" href="#linux">Download for Linux</a>
+        <a class="btn btn-ghost" href="https://github.com/AhmedKhan-GH/falcon#get-started">Build from source</a>
         <a class="btn btn-ghost" href="book/">Read the docs</a>
       </div>
     </div>

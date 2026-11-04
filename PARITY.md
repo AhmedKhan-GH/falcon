@@ -658,7 +658,7 @@ Falcon now does the same: `fn viewer` draws every viewer in the central panel, r
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | Opens inside the main window with sidebar and inspector visible | Done | `F/ui/viewer/mod.rs` `fn viewer`, `F/ui/viewer/pdf.rs` `pdf_viewer` | local |
-| Works on Windows and Linux too | Not wanted (user decision) | Out of scope: falcon targets macOS (PDFKit, AVFoundation, QuickLook, ImageIO) | local |
+| Works on Windows and Linux too | Partial | Linux x86-64 builds and runs, without the macOS-only parts listed in ROADMAP.md; Windows is out of scope | local |
 | Continuous vertical page scrolling | Done | `F/ui/viewer/pdf.rs` `pages` | local |
 | Previous and next page buttons, n/j/p/k keys | Done | `F/ui/viewer/pdf.rs` `toolbar`, `key_action` | local |
 | Page number field and page count | Done | `F/ui/viewer/pdf.rs` `toolbar` | local |
