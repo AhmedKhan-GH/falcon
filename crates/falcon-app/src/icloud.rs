@@ -247,6 +247,7 @@ mod platform {
     use std::path::Path;
 
     use super::{Seen, is_dataless};
+    use crate::locale::tr;
 
     pub fn start_download(_: &Path) -> Result<(), String> {
         Err(tr("no iCloud here").into())

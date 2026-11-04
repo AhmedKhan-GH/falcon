@@ -1,4 +1,6 @@
 //! Reading and writing Eagle `.library` folders.
+// Code only macOS calls so far; macOS builds keep the full check.
+#![cfg_attr(not(target_os = "macos"), allow(dead_code))]
 
 pub mod actions;
 pub mod alias;

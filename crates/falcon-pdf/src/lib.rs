@@ -17,6 +17,8 @@
 //! PDFKit's page space (origin bottom-left, unrotated).
 //!
 //! All Objective-C interop sits in the private `mac` module.
+// Code only macOS calls so far; macOS builds keep the full check.
+#![cfg_attr(not(target_os = "macos"), allow(dead_code))]
 
 mod geom;
 mod tree;

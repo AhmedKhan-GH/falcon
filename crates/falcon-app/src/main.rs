@@ -1,3 +1,5 @@
+// Code only macOS calls so far; macOS builds keep the full check.
+#![cfg_attr(not(target_os = "macos"), allow(dead_code, unused_imports))]
 mod access_order;
 mod actions;
 mod ai_models;
