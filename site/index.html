@@ -103,13 +103,14 @@
   .status .card ul { margin: 10px 0 0; padding-left: 18px; color: var(--muted); font-size: 15px; }
   .status .card[id], .downloads .card[id] { scroll-margin-top: 88px; }
   .downloads { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 16px; }
+  .downloads.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .downloads .card { display: flex; flex-direction: column; min-width: 0; }
   .downloads .card p + p, .downloads .card pre + p { margin-top: 10px; }
   .downloads .card p code { white-space: nowrap; }
   .downloads .card strong { color: var(--text); font-weight: 600; }
   .downloads .card pre { margin-top: 8px; padding: 10px 12px; border-radius: 8px; font-size: 13px; }
   .downloads .card .btn { margin-top: auto; align-self: flex-start; }
-  .downloads .card > :nth-last-child(2) { margin-bottom: 20px; }
+  .downloads .card > :has(+ .btn) { margin-bottom: 20px; }
 
   /* Closing */
   .closing { text-align: center; padding: 120px 0 110px; }
@@ -125,7 +126,7 @@
     .feature, .feature.flip { grid-template-columns: 1fr; gap: 28px; }
     .feature.flip .text { order: 0; }
     .cards { grid-template-columns: 1fr 1fr; }
-    .code, .status, .downloads { grid-template-columns: 1fr; }
+    .code, .status, .downloads, .downloads.two { grid-template-columns: 1fr; }
     nav .links { display: none; }
     nav .btn { margin-left: auto; }
   }
@@ -161,7 +162,7 @@
     <div class="actions">
       <a class="btn btn-primary" href="#mac">Download for Mac</a>
       <a class="btn btn-ghost" href="#linux">Download for Linux</a>
-      <a class="btn btn-ghost" href="https://github.com/AhmedKhan-GH/falcon">View the source</a>
+      <a class="btn btn-ghost" href="#build">Build from source</a>
     </div>
     <p class="fine">Early alpha · macOS 12 or later on Apple Silicon, or 64-bit Linux · MIT or Apache-2.0</p>
     <div class="chips">
@@ -218,6 +219,39 @@
         </div>
       </div>
       <p class="fine">Falcon is early alpha. The Mac app isn't notarised by Apple, and the Linux packages aren't signed. While it is in development, it only opens libraries inside <code>~/Falcon Sandbox</code>, so copy a library there to try it. <a href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/SHA256SUMS">SHA-256 checksums</a> · <a href="https://github.com/AhmedKhan-GH/falcon/releases">All releases</a></p>
+    </div>
+  </section>
+
+  <section id="build">
+    <div class="wrap">
+      <div class="eyebrow">Build from source</div>
+      <h2>Build Falcon yourself</h2>
+      <p class="intro">Falcon is open source. You need <a href="https://rustup.rs">Rust</a> 1.89 or newer on either system; each card has the rest.</p>
+      <div class="downloads two">
+        <div class="card" id="build-mac"><h4>Mac</h4>
+          <p><strong>Needs</strong> Apple's command line tools (<code>xcode-select --install</code>). Video plays through macOS; FFmpeg, for the formats macOS can't play, is optional.</p>
+          <p><strong>Build and run</strong></p>
+          <pre>git clone https://github.com/AhmedKhan-GH/falcon
+cd falcon
+cargo run --release -p falcon-app</pre>
+          <p><strong>Package it</strong> Build FFmpeg, then make <code>Falcon-arm64.dmg</code> in <code>target/macos</code>:</p>
+          <pre>scripts/build-ffmpeg.sh
+scripts/package-macos.sh</pre>
+        </div>
+        <div class="card" id="build-linux"><h4>Linux</h4>
+          <p><strong>Needs</strong> these packages (Debian and Ubuntu names; other distributions use their own). FFmpeg plays video on Linux, so it is built first.</p>
+          <pre>sudo apt install pkg-config libasound2-dev \
+  nasm zlib1g-dev python3-venv</pre>
+          <p><strong>Build and run</strong></p>
+          <pre>git clone https://github.com/AhmedKhan-GH/falcon
+cd falcon
+scripts/build-ffmpeg.sh
+cargo run --release -p falcon-app</pre>
+          <p><strong>Package it</strong> Make <code>Falcon-x86_64.AppImage</code> and <code>Falcon-x86_64.deb</code> in <code>target/linux</code>:</p>
+          <pre>scripts/package-linux.sh</pre>
+        </div>
+      </div>
+      <p class="fine">While it is in development, Falcon only opens libraries inside <code>~/Falcon Sandbox</code>. The <a href="https://github.com/AhmedKhan-GH/falcon#get-started">README</a> has the command-line tool and more.</p>
     </div>
   </section>
 
@@ -397,10 +431,10 @@ tags:    2</pre>
   <div class="closing">
     <div class="wrap">
       <h2>Get started</h2>
-      <p>Download Falcon for a Mac or for Linux, or clone the repository and build the app with one command. The README has the steps.</p>
+      <p>Download Falcon for a Mac or for Linux, or build it from source on either.</p>
       <div class="actions">
         <a class="btn btn-primary" href="#download">Download Falcon</a>
-        <a class="btn btn-ghost" href="https://github.com/AhmedKhan-GH/falcon#get-started">Build from source</a>
+        <a class="btn btn-ghost" href="#build">Build from source</a>
         <a class="btn btn-ghost" href="book/">Read the docs</a>
       </div>
     </div>
