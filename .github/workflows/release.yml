@@ -56,7 +56,7 @@ jobs:
           name: linux
           path: |
             target/linux/Falcon-x86_64.AppImage
-            target/linux/falcon_amd64.deb
+            target/linux/Falcon-x86_64.deb
           if-no-files-found: error
 
   publish:
@@ -75,10 +75,10 @@ jobs:
         with:
           path: dist
           merge-multiple: true
-      - run: cd dist && sha256sum Falcon-arm64.dmg Falcon-x86_64.AppImage falcon_amd64.deb > SHA256SUMS
+      - run: cd dist && sha256sum Falcon-arm64.dmg Falcon-x86_64.AppImage Falcon-x86_64.deb > SHA256SUMS
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/Falcon-arm64.dmg dist/Falcon-x86_64.AppImage dist/falcon_amd64.deb dist/SHA256SUMS \
+          gh release create "$GITHUB_REF_NAME" dist/Falcon-arm64.dmg dist/Falcon-x86_64.AppImage dist/Falcon-x86_64.deb dist/SHA256SUMS \
             --title "Falcon $GITHUB_REF_NAME" --notes-file docs/release-notes.md

@@ -99,8 +99,17 @@
 
   /* Status */
   .status { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .status .card:only-child { grid-column: 1 / -1; }
   .status .card ul { margin: 10px 0 0; padding-left: 18px; color: var(--muted); font-size: 15px; }
-  .status .card[id] { scroll-margin-top: 88px; }
+  .status .card[id], .downloads .card[id] { scroll-margin-top: 88px; }
+  .downloads { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 16px; }
+  .downloads .card { display: flex; flex-direction: column; min-width: 0; }
+  .downloads .card p + p, .downloads .card pre + p { margin-top: 10px; }
+  .downloads .card p code { white-space: nowrap; }
+  .downloads .card strong { color: var(--text); font-weight: 600; }
+  .downloads .card pre { margin-top: 8px; padding: 10px 12px; border-radius: 8px; font-size: 13px; }
+  .downloads .card .btn { margin-top: auto; align-self: flex-start; }
+  .downloads .card > :nth-last-child(2) { margin-bottom: 20px; }
 
   /* Closing */
   .closing { text-align: center; padding: 120px 0 110px; }
@@ -116,7 +125,7 @@
     .feature, .feature.flip { grid-template-columns: 1fr; gap: 28px; }
     .feature.flip .text { order: 0; }
     .cards { grid-template-columns: 1fr 1fr; }
-    .code, .status { grid-template-columns: 1fr; }
+    .code, .status, .downloads { grid-template-columns: 1fr; }
     nav .links { display: none; }
     nav .btn { margin-left: auto; }
   }
@@ -170,28 +179,33 @@
     <div class="wrap">
       <div class="eyebrow">Download</div>
       <h2>Download Falcon</h2>
-      <p class="intro">Free, for Macs with Apple Silicon and macOS 12 or later, and for 64-bit Intel and AMD computers running a Linux distribution from 2022 or newer. The two Linux downloads hold the same app. To update, download the new version and install it the same way; Falcon doesn't update itself yet.</p>
-      <div class="actions">
-        <a class="btn btn-primary" href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/Falcon-arm64.dmg">Download for Mac (Apple Silicon)</a>
-        <a class="btn btn-ghost" href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/Falcon-x86_64.AppImage">Download AppImage</a>
-        <a class="btn btn-ghost" href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/falcon_amd64.deb">Download .deb (Ubuntu, Debian)</a>
+      <p class="intro">Free. One download for Macs and two for Linux, all holding the same app. To update, download the new version and install it the same way; Falcon doesn't update itself yet.</p>
+      <div class="downloads">
+        <div class="card" id="mac"><h4>Mac · .dmg</h4>
+          <p><strong>For</strong> Macs with Apple Silicon (M1 or newer) and macOS 12 or later. There is no download for Intel Macs yet.</p>
+          <p><strong>Install</strong> Open <code>Falcon-arm64.dmg</code> and drag Falcon to Applications.</p>
+          <p><strong>First launch</strong> Falcon isn't notarised by Apple, so macOS refuses it at first. Click Open Anyway in System Settings ▸ Privacy &amp; Security; on macOS 14 and earlier you can instead right-click Falcon and choose Open. Or run this in Terminal:</p>
+          <pre>xattr -dr com.apple.quarantine \
+  /Applications/Falcon.app</pre>
+          <a class="btn btn-primary" href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/Falcon-arm64.dmg">Download .dmg</a>
+        </div>
+        <div class="card" id="linux"><h4>Linux · AppImage</h4>
+          <p><strong>For</strong> most distributions from 2022 or newer, on 64-bit Intel and AMD.</p>
+          <p><strong>Install</strong> Nothing to install: make the file executable and run it.</p>
+          <pre>chmod +x Falcon-x86_64.AppImage
+./Falcon-x86_64.AppImage</pre>
+          <p><strong>First launch</strong> Opens straight away. It isn't added to your app menu.</p>
+          <a class="btn btn-primary" href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/Falcon-x86_64.AppImage">Download AppImage</a>
+        </div>
+        <div class="card" id="deb"><h4>Linux · .deb</h4>
+          <p><strong>For</strong> Ubuntu, Debian and distributions based on them, from 2022 or newer, on 64-bit Intel and AMD.</p>
+          <p><strong>Install</strong> Installs Falcon with an entry in your app menu.</p>
+          <pre>sudo apt install ./Falcon-x86_64.deb</pre>
+          <p><strong>First launch</strong> Open Falcon from the app menu. To remove it later, run <code>sudo apt remove falcon</code>.</p>
+          <a class="btn btn-primary" href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/Falcon-x86_64.deb">Download .deb</a>
+        </div>
       </div>
       <div class="status">
-        <div class="card" id="mac"><h4>Mac, with Apple Silicon</h4>
-          <p>Open <code>Falcon-arm64.dmg</code> and drag Falcon to Applications. It runs on M1 and newer Macs with macOS 12 or later. There is no download for Intel Macs yet.</p>
-        </div>
-        <div class="card"><h4>Opening it the first time on a Mac</h4>
-          <p>Falcon isn't notarised by Apple, so macOS refuses to open it at first. Open System Settings ▸ Privacy &amp; Security and click Open Anyway. On macOS 14 and earlier, you can instead right-click Falcon and choose Open. Or run this in Terminal:</p>
-          <p><code>xattr -dr com.apple.quarantine /Applications/Falcon.app</code></p>
-        </div>
-        <div class="card" id="linux"><h4>AppImage, for most distributions</h4>
-          <p>One file with nothing to install. Make it executable, then run it:</p>
-          <p><code>chmod +x Falcon-x86_64.AppImage</code><br><code>./Falcon-x86_64.AppImage</code></p>
-        </div>
-        <div class="card"><h4>.deb, for Ubuntu and Debian</h4>
-          <p>Installs Falcon with an entry in your app menu:</p>
-          <p><code>sudo apt install ./falcon_amd64.deb</code></p>
-        </div>
         <div class="card"><h4>Not on Linux yet</h4>
           <ul>
             <li>The built-in PDF reader: PDFs open in your default app, with no thumbnail</li>
@@ -203,7 +217,7 @@
           </ul>
         </div>
       </div>
-      <p class="fine">Falcon is early alpha, and the Linux packages aren't signed. While it is in development, it only opens libraries inside <code>~/Falcon Sandbox</code>, so copy a library there to try it. <a href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/SHA256SUMS">SHA-256 checksums</a> · <a href="https://github.com/AhmedKhan-GH/falcon/releases">All releases</a></p>
+      <p class="fine">Falcon is early alpha. The Mac app isn't notarised by Apple, and the Linux packages aren't signed. While it is in development, it only opens libraries inside <code>~/Falcon Sandbox</code>, so copy a library there to try it. <a href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/SHA256SUMS">SHA-256 checksums</a> · <a href="https://github.com/AhmedKhan-GH/falcon/releases">All releases</a></p>
     </div>
   </section>
 

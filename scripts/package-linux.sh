@@ -1,6 +1,6 @@
 #!/bin/sh
 # Builds falcon-app in release mode and packages it for x86-64 Linux into target/linux:
-# Falcon-x86_64.AppImage (one file that runs on most distributions), falcon_amd64.deb
+# Falcon-x86_64.AppImage (one file that runs on most distributions), Falcon-x86_64.deb
 # (installs on Debian and Ubuntu, with a menu entry) and SHA256SUMS. Both hold the same tree.
 #
 # Run scripts/build-ffmpeg.sh first: without FFmpeg, video can't play on Linux,
@@ -65,7 +65,7 @@ Homepage: https://ahmedkhan-gh.github.io/falcon/
 Description: Open-source asset manager for Eagle-format libraries
  Collect, tag, search and browse images, fonts, audio and video in one library.
 CONTROL
-dpkg-deb --root-owner-group --build "$DEB" "$OUT/falcon_amd64.deb"
+dpkg-deb --root-owner-group --build "$DEB" "$OUT/Falcon-x86_64.deb"
 
 # The AppImage. appimagetool is itself an AppImage: extracting it to run means the build needs no FUSE.
 TOOLS=target/appimage-tools
@@ -91,5 +91,5 @@ chmod +x "$APPDIR/AppRun"
 APPIMAGE_EXTRACT_AND_RUN=1 ARCH=x86_64 "$TOOL" --no-appstream "$APPDIR" "$OUT/Falcon-x86_64.AppImage"
 
 rm -rf "$TREE" "$DEB" "$APPDIR"
-(cd "$OUT" && sha256sum Falcon-x86_64.AppImage falcon_amd64.deb > SHA256SUMS)
+(cd "$OUT" && sha256sum Falcon-x86_64.AppImage Falcon-x86_64.deb > SHA256SUMS)
 ls -l "$OUT"
