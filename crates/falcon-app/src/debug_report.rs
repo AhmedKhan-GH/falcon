@@ -175,15 +175,40 @@ pub fn export(info: &Info, library: Option<&Path>, dest: &Path) -> Result<(), St
     let result = (|| {
         stage(&dir, &render(info), library, crate::errlog::path().as_deref()).map_err(|e| e.to_string())?;
         let _ = std::fs::remove_file(dest);
-        let out = Command::new("/usr/bin/ditto").arg("-c").arg("-k").arg(&dir).arg(dest).output().map_err(|e| e.to_string())?;
-        if out.status.success() {
-            Ok(())
-        } else {
-            Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
-        }
+        zip_folder(&dir, dest)
     })();
     let _ = std::fs::remove_dir_all(&dir);
     result
+}
+
+#[cfg(target_os = "macos")]
+fn zip_folder(dir: &Path, dest: &Path) -> Result<(), String> {
+    let out = Command::new("/usr/bin/ditto").arg("-c").arg("-k").arg(dir).arg(dest).output().map_err(|e| e.to_string())?;
+    if out.status.success() {
+        Ok(())
+    } else {
+        Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn zip_folder(dir: &Path, dest: &Path) -> Result<(), String> {
+    fn add(zip: &mut zip::ZipWriter<std::fs::File>, root: &Path, dir: &Path) -> std::io::Result<()> {
+        for entry in std::fs::read_dir(dir)? {
+            let path = entry?.path();
+            if path.is_dir() {
+                add(zip, root, &path)?;
+            } else {
+                let name = path.strip_prefix(root).map_err(std::io::Error::other)?.to_string_lossy().into_owned();
+                zip.start_file(name, zip::write::SimpleFileOptions::default())?;
+                std::io::copy(&mut std::fs::File::open(&path)?, zip)?;
+            }
+        }
+        Ok(())
+    }
+    let mut zip = zip::ZipWriter::new(std::fs::File::create(dest).map_err(|e| e.to_string())?);
+    add(&mut zip, dir, dir).map_err(|e| e.to_string())?;
+    zip.finish().map(drop).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]

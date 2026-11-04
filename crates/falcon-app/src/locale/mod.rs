@@ -251,11 +251,30 @@ fn lookup(lang: Lang, key: &str) -> Option<&'static Entry> {
 
 /// `key` (falcon's English text) in the current language.
 pub fn tr(key: &str) -> &str {
-    match lookup(current(), key) {
+    native_names(match lookup(current(), key) {
         Some(Entry::Text(t)) => t,
         Some(Entry::Plural(forms)) => forms.get("other").map_or(english(key), |s| s.as_str()),
         None => english(key),
+    })
+}
+
+#[cfg(target_os = "macos")]
+fn native_names(text: &str) -> &str {
+    text
+}
+
+/// The catalogue names Finder, the same word in every language; elsewhere the
+/// text says what the system calls it. Few strings do, so each is kept once.
+#[cfg(not(target_os = "macos"))]
+fn native_names(text: &str) -> &str {
+    use std::collections::HashMap;
+    use std::sync::{LazyLock, Mutex};
+    static RENAMED: LazyLock<Mutex<HashMap<String, &'static str>>> = LazyLock::new(Default::default);
+    if !text.contains("Finder") {
+        return text;
     }
+    let mut renamed = RENAMED.lock().unwrap_or_else(|e| e.into_inner());
+    renamed.entry(text.to_string()).or_insert_with(|| Box::leak(text.replace("Finder", "File Manager").into_boxed_str()))
 }
 
 /// The English text of a key: the key itself, without a `context::`

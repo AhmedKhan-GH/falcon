@@ -637,7 +637,7 @@ impl App {
         }
         ui.add_space(4.0);
         if wide_button(ui, ic::EXPORT, tr("Show in Finder"), true).clicked() {
-            let _ = std::process::Command::new("open").arg("-R").arg(item.original_path(lib.root())).spawn();
+            crate::open_with::reveal(&[item.original_path(lib.root())]);
         }
 
         if let Some(it) = changed {

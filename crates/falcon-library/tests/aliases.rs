@@ -1,5 +1,7 @@
 //! Files under Eagle's alias extensions (`.jfif`, `.psdt`, ...) import with
 //! a thumbnail and their dimensions, as the same bytes do under the main name.
+// Code only macOS calls so far; macOS builds keep the full check.
+#![cfg_attr(not(target_os = "macos"), allow(dead_code))]
 
 use falcon_library::import::ImportOptions;
 use falcon_library::library::Library;

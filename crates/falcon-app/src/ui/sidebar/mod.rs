@@ -257,7 +257,7 @@ impl App {
         }
         if ui.add_enabled(!missing, egui::Button::new(tr("Show in Finder"))).clicked() {
             ui.close();
-            let _ = std::process::Command::new("open").arg("-R").arg(root).spawn();
+            crate::open_with::reveal(&[root.to_path_buf()]);
         }
         ui.separator();
         if ui.button(tr("Remove from List")).clicked() {
@@ -409,7 +409,7 @@ impl App {
                 self.clear_invalid_content();
             }
             if ui.button(tr("Show in Finder")).clicked() {
-                let _ = std::process::Command::new("open").arg("-R").arg(&current).spawn();
+                crate::open_with::reveal(std::slice::from_ref(&current));
             }
             ui.separator();
             if ui.button(tr("Import Files…")).clicked() {

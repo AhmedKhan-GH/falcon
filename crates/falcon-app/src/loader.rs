@@ -1092,9 +1092,6 @@ mod tests {
         Job { key: ("x".into(), Tier::Original), path, svg: false, quicklook: false, tile, region: None, raw: false, page: 0, hdr: false, deferred: false }
     }
 
-    /// A one-page PDF with an Illustrator extension: `page` holds its
-    /// page entries, and the page is drawn with `content`.
-    #[cfg(target_os = "macos")]
     /// An item in a library at `root` with the given extension, and its thumbnail file if asked.
     fn special_item(root: &std::path::Path, ext: &str, thumb: bool) -> Item {
         let item: Item = serde_json::from_value(serde_json::json!({
@@ -1408,6 +1405,7 @@ mod tests {
         assert_eq!(fake.stopped(), 1, "before the drop returns");
     }
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn a_format_quicklook_timed_out_on_goes_straight_to_its_thumbnail() {
         let dir = tempfile::tempdir().unwrap();

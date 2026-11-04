@@ -13,6 +13,7 @@
 <p align="center">
   <img alt="100% Rust" src="https://img.shields.io/badge/100%25-Rust-b7410e?style=flat-square&logo=rust">
   <img alt="macOS" src="https://img.shields.io/badge/macOS-native-2f7bf5?style=flat-square&logo=apple">
+  <img alt="Linux" src="https://img.shields.io/badge/Linux-x86--64-2f7bf5?style=flat-square&logo=linux">
   <img alt="License: MIT OR Apache-2.0" src="https://img.shields.io/badge/license-MIT%20%2F%20Apache--2.0-3a3a3a?style=flat-square">
   <img alt="Status: early alpha" src="https://img.shields.io/badge/status-early%20alpha-d69e2e?style=flat-square">
 </p>
@@ -117,13 +118,16 @@ Every screenshot here is the real app at work on public-domain art. The credits 
 
 ## Get started
 
-You need Rust 1.89 or newer. The desktop app currently targets macOS.
+**On Linux,** [download the AppImage or .deb](https://ahmedkhan-gh.github.io/falcon/#linux). Some features aren't on Linux yet; the download page lists them.
+
+**To build it,** you need Rust 1.89 or newer. On Debian or Ubuntu, also run `sudo apt install pkg-config libasound2-dev`. Video on Linux needs FFmpeg from `scripts/build-ffmpeg.sh`, which also takes `nasm`, `zlib1g-dev` and `python3-venv`.
 
 ```sh
 git clone https://github.com/AhmedKhan-GH/falcon
 cd falcon
 cargo run --release -p falcon-app          # choose or create a library on first launch
-scripts/bundle.sh                          # build target/release/Falcon.app
+scripts/bundle.sh                          # macOS: build target/release/Falcon.app
+scripts/package-linux.sh                   # Linux: build the AppImage and .deb in target/linux
 ```
 
 While falcon is in development, the app and the command-line tool only open libraries inside `~/Falcon Sandbox` (set `FALCON_SANDBOX` to use another folder). Copy a library there to try falcon on it.

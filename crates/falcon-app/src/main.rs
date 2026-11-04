@@ -1,3 +1,5 @@
+// Code only macOS calls so far; macOS builds keep the full check.
+#![cfg_attr(not(target_os = "macos"), allow(dead_code, unused_imports))]
 mod access_order;
 mod actions;
 mod ai_models;
@@ -122,6 +124,8 @@ fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_title("Falcon")
+            // Matches falcon.desktop on Linux, so the desktop shows the icon; macOS ignores it.
+            .with_app_id("falcon")
             .with_fullsize_content_view(true)
             .with_titlebar_shown(false)
             .with_title_shown(false)

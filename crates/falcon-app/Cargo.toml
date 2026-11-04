@@ -35,14 +35,18 @@ image = { version = "0.25", default-features = false, features = ["gif", "jpeg",
 gif = "0.14"
 tiff = "0.11"
 arboard = "3"
-drag = "2.1"
 rodio = { version = "0.23", default-features = false, features = ["playback"] }
 skrifa = "0.44"
 blake3 = "1"
 sys-locale = "0.3"
 ureq = "3"
 
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+trash = "5"
+zip = { version = "9.2.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+
 [target.'cfg(target_os = "macos")'.dependencies]
+drag = "2.1"
 objc2 = "0.6"
 objc2-foundation = "0.3"
 raw-window-handle = "0.6"

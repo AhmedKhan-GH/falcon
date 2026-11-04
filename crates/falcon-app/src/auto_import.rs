@@ -469,8 +469,8 @@ mod platform {
         false
     }
 
-    pub fn trash(_: &std::path::Path) -> std::io::Result<()> {
-        Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "no Trash on this system"))
+    pub fn trash(path: &std::path::Path) -> std::io::Result<()> {
+        ::trash::delete(path).map_err(std::io::Error::other)
     }
 }
 

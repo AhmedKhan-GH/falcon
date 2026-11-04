@@ -96,16 +96,10 @@ pub fn reveal_args(files: &[PathBuf]) -> Vec<std::ffi::OsString> {
     args
 }
 
-fn run_open(args: Vec<std::ffi::OsString>) {
-    std::thread::spawn(move || {
-        let _ = std::process::Command::new("/usr/bin/open").args(args).status();
-    });
-}
-
 /// Opens each file in its default app. Never reads the files.
 pub fn open_default(files: &[PathBuf]) {
     if !files.is_empty() {
-        run_open(open_args(files, None));
+        platform::open_default(files);
     }
 }
 
@@ -120,14 +114,14 @@ pub fn url_args(url: &str) -> Option<Vec<std::ffi::OsString>> {
 /// Opens a web link in the default browser.
 pub fn open_url(url: &str) {
     if let Some(args) = url_args(url) {
-        run_open(args);
+        platform::open_url(args);
     }
 }
 
 /// Opens the files in `app`.
 pub fn open_in(app: &Path, files: &[PathBuf]) {
     if !files.is_empty() {
-        run_open(open_args(files, Some(app)));
+        platform::open_in(app, files);
     }
 }
 
@@ -148,7 +142,7 @@ pub fn quick_look(files: &[PathBuf]) {
 /// Shows the files in Finder.
 pub fn reveal(files: &[PathBuf]) {
     if !files.is_empty() {
-        run_open(reveal_args(files));
+        platform::reveal(files);
     }
 }
 
@@ -194,6 +188,22 @@ impl AppCache {
     }
 }
 
+/// `path` as a `file://` address, with everything but unreserved characters
+/// and `/` percent-encoded, so it is also safe inside a quoted D-Bus string.
+#[cfg_attr(target_os = "macos", allow(dead_code))]
+fn file_uri(path: &Path) -> String {
+    use std::os::unix::ffi::OsStrExt;
+    let mut out = String::from("file://");
+    for &b in path.as_os_str().as_bytes() {
+        if b.is_ascii_alphanumeric() || matches!(b, b'/' | b'-' | b'_' | b'.' | b'~') {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
+}
+
 #[cfg(target_os = "macos")]
 mod platform {
     use std::path::{Path, PathBuf};
@@ -203,7 +213,29 @@ mod platform {
     use objc2_app_kit::NSWorkspace;
     use objc2_foundation::{NSString, NSURL};
 
-    use super::{AppInfo, app_name};
+    use super::{AppInfo, app_name, open_args, reveal_args};
+
+    fn run_open(args: Vec<std::ffi::OsString>) {
+        std::thread::spawn(move || {
+            let _ = std::process::Command::new("/usr/bin/open").args(args).status();
+        });
+    }
+
+    pub fn open_default(files: &[PathBuf]) {
+        run_open(open_args(files, None));
+    }
+
+    pub fn open_url(args: Vec<std::ffi::OsString>) {
+        run_open(args);
+    }
+
+    pub fn open_in(app: &Path, files: &[PathBuf]) {
+        run_open(open_args(files, Some(app)));
+    }
+
+    pub fn reveal(files: &[PathBuf]) {
+        run_open(reveal_args(files));
+    }
 
     fn info(url: &NSURL) -> Option<AppInfo> {
         let path = PathBuf::from(url.path()?.to_string());
@@ -229,9 +261,56 @@ mod platform {
 
 #[cfg(not(target_os = "macos"))]
 mod platform {
-    use std::path::Path;
+    use std::ffi::OsString;
+    use std::path::{Path, PathBuf};
+    use std::process::{Command, Stdio};
 
-    use super::AppInfo;
+    use super::{AppInfo, MAX_OPEN, MAX_REVEAL, file_uri};
+
+    /// `xdg-open` takes one target at a time, unlike macOS's `open`.
+    fn xdg_open(target: OsString) {
+        std::thread::spawn(move || {
+            let _ = Command::new("xdg-open").arg(target).stdout(Stdio::null()).stderr(Stdio::null()).status();
+        });
+    }
+
+    pub fn open_default(files: &[PathBuf]) {
+        for f in files.iter().take(MAX_OPEN) {
+            xdg_open(f.into());
+        }
+    }
+
+    pub fn open_url(args: Vec<OsString>) {
+        if let Some(url) = args.into_iter().last() {
+            xdg_open(url);
+        }
+    }
+
+    pub fn open_in(app: &Path, files: &[PathBuf]) {
+        let (app, files) = (app.to_path_buf(), files.iter().take(MAX_OPEN).cloned().collect::<Vec<_>>());
+        std::thread::spawn(move || {
+            let _ = Command::new(app).args(files).stdout(Stdio::null()).stderr(Stdio::null()).status();
+        });
+    }
+
+    /// Selects the files in the file manager through the freedesktop
+    /// FileManager1 interface, or opens their folder where nothing answers it.
+    pub fn reveal(files: &[PathBuf]) {
+        let files: Vec<PathBuf> = files.iter().take(MAX_REVEAL).cloned().collect();
+        std::thread::spawn(move || {
+            let uris = files.iter().map(|f| format!("'{}'", file_uri(f))).collect::<Vec<_>>().join(",");
+            let shown = Command::new("gdbus")
+                .args(["call", "--session", "--dest", "org.freedesktop.FileManager1", "--object-path", "/org/freedesktop/FileManager1"])
+                .args(["--method", "org.freedesktop.FileManager1.ShowItems", &format!("[{uris}]"), ""])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .is_ok_and(|s| s.success());
+            if !shown && let Some(parent) = files.first().and_then(|f| f.parent()) {
+                xdg_open(parent.into());
+            }
+        });
+    }
 
     pub fn apps(_: &Path) -> (Option<AppInfo>, Vec<AppInfo>) {
         (None, Vec::new())
@@ -241,6 +320,12 @@ mod platform {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn file_addresses_encode_what_could_break_out() {
+        assert_eq!(file_uri(Path::new("/l/a.png")), "file:///l/a.png");
+        assert_eq!(file_uri(Path::new("/l/it's a é.png")), "file:///l/it%27s%20a%20%C3%A9.png");
+    }
 
     #[test]
     fn only_web_links_open() {

@@ -1,5 +1,6 @@
 //! The menu bar: what each command needs to act, the menus themselves
-//! (a tree of [`Entry`]), and on macOS the AppKit menu built from them.
+//! (a tree of [`Entry`]), and the menu built from them: AppKit's on macOS,
+//! drawn in the window elsewhere.
 //!
 //! A key press and a menu click both go through `App::run_command`, which
 //! asks [`enabled`] first, so a command does the same thing (or nothing)
@@ -702,19 +703,101 @@ pub fn take_quit_request() -> bool {
 
 #[cfg(not(target_os = "macos"))]
 mod mac {
-    use super::{ActionClick, ActionEntry, Click, State};
+    use std::cell::{Cell, RefCell};
+
+    use eframe::egui::{self, containers::menu::MenuBar};
+
+    use super::{ABOUT, APP, ActionClick, ActionEntry, Bar, Click, Entry, MENUS, State, action_enabled, chord, enabled};
+    use crate::locale::tr;
     use crate::shortcuts::Shortcuts;
 
-    pub fn build(_ctx: &eframe::egui::Context, _keys: &Shortcuts, _actions: &[ActionEntry]) {}
+    thread_local! {
+        static CLICKS: RefCell<Vec<Click>> = const { RefCell::new(Vec::new()) };
+        static ACTION_CLICKS: RefCell<Vec<ActionClick>> = const { RefCell::new(Vec::new()) };
+        static QUIT: Cell<bool> = const { Cell::new(false) };
+    }
+
+    pub fn build(_ctx: &egui::Context, _keys: &Shortcuts, _actions: &[ActionEntry]) {}
     pub fn set_state(_state: State) {}
     pub fn take_clicks() -> Vec<Click> {
-        Vec::new()
+        CLICKS.take()
     }
     pub fn take_action_clicks() -> Vec<ActionClick> {
-        Vec::new()
+        ACTION_CLICKS.take()
     }
     pub fn take_quit_request() -> bool {
-        false
+        QUIT.take()
+    }
+
+    fn button(ui: &mut egui::Ui, label: &str, on: bool, active: bool, chord: Option<egui::KeyboardShortcut>) -> bool {
+        let text = chord.map(|c| crate::shortcuts::display(ui.ctx(), &c)).unwrap_or_default();
+        let clicked = ui.add_enabled(active, egui::Button::new(label).selected(on).shortcut_text(text)).clicked();
+        if clicked {
+            ui.close();
+        }
+        clicked
+    }
+
+    /// A menu's items, scrolling when the window is too short for them.
+    fn entries(ui: &mut egui::Ui, list: &'static [Entry], keys: &Shortcuts, state: &State) {
+        let height = ui.ctx().content_rect().height() - 48.0;
+        egui::ScrollArea::vertical().max_height(height).show(ui, |ui| rows(ui, list, keys, state));
+    }
+
+    fn rows(ui: &mut egui::Ui, list: &'static [Entry], keys: &Shortcuts, state: &State) {
+        for e in list {
+            match e {
+                Entry::Item(i) => {
+                    if button(ui, tr(i.label), i.check.on(state), enabled(i.cmd, state), chord(i.cmd, keys)) {
+                        CLICKS.with_borrow_mut(|c| c.push(Click { cmd: i.cmd, by_key: false }));
+                    }
+                }
+                Entry::Sub(title, sub) => {
+                    ui.menu_button(tr(title), |ui| entries(ui, sub, keys, state));
+                }
+                Entry::Separator => {
+                    ui.separator();
+                }
+            }
+        }
+    }
+
+    impl Bar {
+        /// The menus inside the window, where macOS has them on the screen's
+        /// menu bar: the same tree, enabling and checkmarks, and the clicks
+        /// reach the app the same way.
+        pub fn show(&self, ui: &mut egui::Ui) {
+            let (Some((keys, _, actions)), Some(state)) = (&self.built, &self.state) else { return };
+            let quit = egui::KeyboardShortcut::new(egui::Modifiers::COMMAND, egui::Key::Q);
+            if ui.ctx().input_mut(|i| i.consume_shortcut(&quit)) {
+                QUIT.set(true);
+            }
+            egui::Panel::top("menu_bar").show(ui, |ui| {
+                MenuBar::new().ui(ui, |ui| {
+                    ui.menu_button("Falcon", |ui| {
+                        entries(ui, ABOUT, keys, state);
+                        entries(ui, APP, keys, state);
+                        ui.separator();
+                        if button(ui, tr("Quit Falcon"), false, true, Some(quit)) {
+                            QUIT.set(true);
+                        }
+                    });
+                    for (title, list) in MENUS {
+                        // As on macOS, Actions comes before Window while there are any.
+                        if *title == "Window" && !actions.is_empty() {
+                            ui.menu_button(tr("Actions"), |ui| {
+                                for a in actions {
+                                    if button(ui, &a.name, false, action_enabled(a, state), a.chord) {
+                                        ACTION_CLICKS.with_borrow_mut(|c| c.push(ActionClick { id: a.id.clone(), by_key: false }));
+                                    }
+                                }
+                            });
+                        }
+                        ui.menu_button(tr(title), |ui| entries(ui, list, keys, state));
+                    }
+                });
+            });
+        }
     }
 }
 
