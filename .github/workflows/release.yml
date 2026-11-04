@@ -1,11 +1,19 @@
 name: Release
 
-# Pushing a tag like v0.1.0 builds the Linux packages and publishes them as a GitHub release.
-# The website links to the latest release's assets by their fixed names.
+# Pushing a tag like v0.1.0 builds the Linux and macOS packages and publishes them as a GitHub
+# release. The website links to the latest release's assets by their fixed names. A pull request
+# that changes the packaging builds them too, without publishing, and keeps them as artifacts.
 
 on:
   push:
     tags: ['v*']
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - scripts/build-ffmpeg.sh
+      - scripts/bundle.sh
+      - scripts/package-linux.sh
+      - scripts/package-macos.sh
 
 permissions:
   contents: write
@@ -16,19 +24,50 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-      - name: Check the tag against the version
-        run: |
-          version=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)
-          [ "$GITHUB_REF_NAME" = "v$version" ] || { echo "Tag $GITHUB_REF_NAME doesn't match version $version" >&2; exit 1; }
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: sudo apt-get update && sudo apt-get install -y pkg-config libasound2-dev nasm zlib1g-dev python3-venv
       - run: scripts/build-ffmpeg.sh
       - run: cargo test -p falcon-ffmpeg
       - run: scripts/package-linux.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: |
+            target/linux/Falcon-x86_64.AppImage
+            target/linux/falcon_amd64.deb
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: scripts/package-macos.sh
+      - run: cargo test -p falcon-ffmpeg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: target/macos/Falcon-arm64.dmg
+
+  publish:
+    needs: [linux, macos]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the tag against the version
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)
+          [ "$GITHUB_REF_NAME" = "v$version" ] || { echo "Tag $GITHUB_REF_NAME doesn't match version $version" >&2; exit 1; }
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - run: cd dist && sha256sum Falcon-x86_64.AppImage falcon_amd64.deb Falcon-arm64.dmg > SHA256SUMS
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" target/linux/Falcon-x86_64.AppImage target/linux/falcon_amd64.deb target/linux/SHA256SUMS \
+          gh release create "$GITHUB_REF_NAME" dist/Falcon-x86_64.AppImage dist/falcon_amd64.deb dist/Falcon-arm64.dmg dist/SHA256SUMS \
             --title "Falcon $GITHUB_REF_NAME" --notes-file docs/release-notes.md
