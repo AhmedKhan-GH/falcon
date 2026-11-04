@@ -2,19 +2,40 @@
 //! file drag (for Finder and other apps), and while dragging a count
 //! follows the pointer.
 
+#[cfg(target_os = "macos")]
 use std::path::PathBuf;
 
 use eframe::egui::{self, Color32, CornerRadius, Rect, vec2};
-use falcon_library::{Library, thumbnail};
+use falcon_library::Library;
 
 use crate::app::{App, DragItems};
-use crate::locale::{tr_n, trf};
+use crate::locale::tr_n;
+#[cfg(target_os = "macos")]
+use crate::locale::trf;
 use crate::theme::{self as t, font};
 
 impl App {
-    /// Starts the native drag once grid items leave the window, and draws
-    /// the item count beside the pointer.
+    /// Starts the native drag once grid items leave the window (macOS only:
+    /// elsewhere items stay inside the window), and draws the item count
+    /// beside the pointer.
+    #[cfg_attr(not(target_os = "macos"), allow(unused_variables))]
     pub(crate) fn drag_out(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame, lib: &Library) {
+        #[cfg(target_os = "macos")]
+        self.start_native_drag(ctx, frame, lib);
+        if let Some(d) = egui::DragAndDrop::payload::<DragItems>(ctx)
+            && let Some(pos) = ctx.pointer_latest_pos()
+        {
+            let text = tr_n(d.0.len(), "{n} item", "{n} items");
+            let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("drag-ghost")));
+            let g = painter.layout_no_wrap(text, font(12.0), Color32::WHITE);
+            let r = Rect::from_min_size(pos + vec2(12.0, 12.0), g.size() + vec2(16.0, 8.0));
+            painter.rect_filled(r, CornerRadius::same(10), t::p().primary);
+            painter.galley(r.min + vec2(8.0, 4.0), g, Color32::WHITE);
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    fn start_native_drag(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame, lib: &Library) {
         // Items dragged past the window edge become a macOS file drag, so
         // they can be dropped into Finder or other apps, as from Eagle.
         if let Some(d) = egui::DragAndDrop::payload::<DragItems>(ctx)
@@ -47,25 +68,16 @@ impl App {
                 }
             }
         }
-        if let Some(d) = egui::DragAndDrop::payload::<DragItems>(ctx)
-            && let Some(pos) = ctx.pointer_latest_pos()
-        {
-            let text = tr_n(d.0.len(), "{n} item", "{n} items");
-            let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("drag-ghost")));
-            let g = painter.layout_no_wrap(text, font(12.0), Color32::WHITE);
-            let r = Rect::from_min_size(pos + vec2(12.0, 12.0), g.size() + vec2(16.0, 8.0));
-            painter.rect_filled(r, CornerRadius::same(10), t::p().primary);
-            painter.galley(r.min + vec2(8.0, 4.0), g, Color32::WHITE);
-        }
     }
 }
 
 /// The picture shown under the pointer while dragging out: a 128 px PNG of
 /// `path`, or a plain tile when it can't be decoded. Always valid PNG, since
 /// the drag crate panics on an image AppKit can't load.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub(crate) fn drag_image(path: &std::path::Path) -> Vec<u8> {
     // A picture still in iCloud would hold the drag until it downloads.
-    let decoded = if crate::icloud::is_dataless(path) { None } else { thumbnail::decode(path).ok() };
+    let decoded = if crate::icloud::is_dataless(path) { None } else { falcon_library::thumbnail::decode(path).ok() };
     let img = decoded
         .map(|i| i.thumbnail(128, 128))
         .unwrap_or_else(|| image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(96, 96, image::Rgba([60, 61, 64, 255]))));
