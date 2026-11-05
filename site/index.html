@@ -48,7 +48,6 @@
   .btn-primary { background: var(--accent); color: #fff; }
   .btn-primary:hover { background: #4aa3ff; }
   .btn-ghost { border: 1px solid var(--rule); color: var(--text); background: var(--plate); }
-  .btn-soon { border: 1px solid var(--rule); color: var(--faint); background: var(--plate); opacity: .6; cursor: not-allowed; }
   .btn-ghost:hover { border-color: #45464b; }
   nav .btn { padding: 8px 14px; }
 
@@ -159,14 +158,14 @@
   <div class="wrap">
     <img class="hero-icon" src="brand/falcon-icon-256.png?v=3" alt="Falcon app icon">
     <h1>Falcon is a free, open-source asset manager for everyone.</h1>
-    <p class="lede">Collect, tag, search and browse your images, PDFs, fonts, audio and video in one library. Native apps for macOS and Linux, built in Rust for speed.</p>
+    <p class="lede">Collect, tag, search and browse your images, PDFs, fonts, audio and video in one library. Native apps for macOS, Windows and Linux, built in Rust for speed.</p>
     <div class="actions">
       <a class="btn btn-primary" href="#mac">Download for Mac</a>
+      <a class="btn btn-ghost" href="#windows">Download for Windows</a>
       <a class="btn btn-ghost" href="#linux">Download for Linux</a>
-      <span class="btn btn-soon" role="button" aria-disabled="true" title="A Windows build is coming soon">Windows .exe · coming soon</span>
       <a class="btn btn-ghost" href="#build">Build from source</a>
     </div>
-    <p class="fine">Early alpha · macOS 12 or later on Apple Silicon, or 64-bit Linux · MIT or Apache-2.0</p>
+    <p class="fine">Early alpha · macOS 12 or later on Apple Silicon, 64-bit Windows or 64-bit Linux · MIT or Apache-2.0</p>
     <div class="chips">
       <span class="chip">JPG &amp; PNG</span><span class="chip">WebP</span><span class="chip">GIF</span><span class="chip">SVG</span>
       <span class="chip">PDF</span><span class="chip">PSD</span><span class="chip">AI</span><span class="chip">HEIC</span>
@@ -182,8 +181,8 @@
     <div class="wrap">
       <div class="eyebrow">Download</div>
       <h2>Download Falcon</h2>
-      <p class="intro">Free. One download for Macs and two for Linux, all holding the same app. To update, download the new version and install it the same way; Falcon doesn't update itself yet.</p>
-      <div class="downloads">
+      <p class="intro">Free. One download for Macs, one for Windows and two for Linux, all holding the same app. To update, download the new version and install it the same way; Falcon doesn't update itself yet.</p>
+      <div class="downloads two">
         <div class="card" id="mac"><h4>Mac · .dmg</h4>
           <p><strong>For</strong> Macs with Apple Silicon (M1 or newer) and macOS 12 or later. There is no download for Intel Macs yet.</p>
           <p><strong>Install</strong> Open <code>Falcon-arm64.dmg</code> and drag Falcon to Applications.</p>
@@ -191,6 +190,12 @@
           <pre>xattr -dr com.apple.quarantine \
   /Applications/Falcon.app</pre>
           <a class="btn btn-primary" href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/Falcon-arm64.dmg">Download .dmg</a>
+        </div>
+        <div class="card" id="windows"><h4>Windows · installer</h4>
+          <p><strong>For</strong> 64-bit Windows on Intel and AMD. Only Windows 11 has been tried so far.</p>
+          <p><strong>Install</strong> Run <code>Falcon-x86_64-setup.exe</code>. It installs for you alone, without admin rights, in <code>%LOCALAPPDATA%\Programs\Falcon</code>, and adds Falcon to the Start menu. To remove it, use Add or remove programs; your libraries and settings stay.</p>
+          <p><strong>First launch</strong> Falcon isn't code-signed, so Windows SmartScreen warns you the first time. Click More info, then Run anyway.</p>
+          <a class="btn btn-primary" href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/Falcon-x86_64-setup.exe">Download installer</a>
         </div>
         <div class="card" id="linux"><h4>Linux · AppImage</h4>
           <p><strong>For</strong> most distributions from 2022 or newer, on 64-bit Intel and AMD.</p>
@@ -209,6 +214,18 @@
         </div>
       </div>
       <div class="status">
+        <div class="card"><h4>Not on Windows yet</h4>
+          <ul>
+            <li>The built-in PDF reader: PDFs open in your default app, with no thumbnail</li>
+            <li>Screen capture, the tray icon, global hotkeys, system notifications and the share sheet</li>
+            <li>Live web pages and bookmark screenshots</li>
+            <li>HEIC, AVIF animation and JPEG XL viewing</li>
+            <li>Thumbnails for formats that rely on macOS QuickLook, such as PowerPoint</li>
+            <li>Dragging items out of the window, and opening files from File Explorer, and links that open Falcon</li>
+            <li>Cloud AI providers: with no place to keep an API key, they can't be set up. Local models such as Ollama don't need one</li>
+            <li>Smaller things: transparency effects, Touch ID, starting at login and iCloud handling. Open With shows Windows' own window, and Show in File Explorer shows only the first file of each folder when you pick several</li>
+          </ul>
+        </div>
         <div class="card"><h4>Not on Linux yet</h4>
           <ul>
             <li>The built-in PDF reader: PDFs open in your default app, with no thumbnail</li>
@@ -217,10 +234,11 @@
             <li>HEIC, AVIF animation and JPEG XL viewing</li>
             <li>Thumbnails for formats that rely on macOS QuickLook, such as PowerPoint</li>
             <li>Dragging items out of the window, the tray icon and notifications</li>
+            <li>Cloud AI providers: with no place to keep an API key, they can't be set up. Local models such as Ollama don't need one</li>
           </ul>
         </div>
       </div>
-      <p class="fine">Falcon is early alpha. The Mac app isn't notarised by Apple, and the Linux packages aren't signed. While it is in development, it only opens libraries inside <code>~/Falcon Sandbox</code>, so copy a library there to try it. <a href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/SHA256SUMS">SHA-256 checksums</a> · <a href="https://github.com/AhmedKhan-GH/falcon/releases">All releases</a></p>
+      <p class="fine">Falcon is early alpha. The Mac app isn't notarised by Apple, the Windows installer isn't code-signed, and the Linux packages aren't signed. While it is in development, it only opens libraries inside <code>~/Falcon Sandbox</code> (<code>%USERPROFILE%\Falcon Sandbox</code> on Windows), so copy a library there to try it. <a href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/SHA256SUMS">SHA-256 checksums</a> · <a href="https://github.com/AhmedKhan-GH/falcon/releases">All releases</a></p>
     </div>
   </section>
 
