@@ -178,6 +178,29 @@ mod tests {
         item
     }
 
+    /// Loads a real font into the session and adds it to the user's list, so
+    /// `cargo test` never does. Run by hand with `--ignored`.
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "changes the user's font list for a moment"]
+    fn a_registered_font_is_listed_and_can_be_removed_after() {
+        let windows = std::env::var_os("SystemRoot").unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let font = tmp.path().join("FalconTestFont.ttf");
+        std::fs::copy(std::path::Path::new(&windows).join("Fonts").join("arial.ttf"), &font).unwrap();
+        let listed = || {
+            let out = std::process::Command::new("reg").args(["query", r"HKCU\Software\Microsoft\Windows NT\CurrentVersion\Fonts", "/v", "FalconTestFont (Falcon)"]).output().unwrap();
+            out.status.success()
+        };
+        announce(&font);
+        assert!(listed());
+        // While it is loaded, Windows holds the file.
+        assert!(std::fs::remove_file(&font).is_err());
+        withdraw(&font);
+        assert!(!listed());
+        std::fs::remove_file(&font).unwrap();
+    }
+
     #[test]
     fn names_follow_eagle() {
         assert_eq!(file_name(&font("Inter-Bold", "otf")).as_deref(), Some("Inter-Bold.otf"));

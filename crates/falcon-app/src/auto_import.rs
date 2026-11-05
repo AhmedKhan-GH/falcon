@@ -653,6 +653,24 @@ mod tests {
         assert!(log.lock().unwrap().is_empty() && s.file.exists());
     }
 
+    /// The real Recycle Bin, so `cargo test` never touches it. Run by hand
+    /// with `--ignored`; leaves a small file and folder in the bin.
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "puts a file and a folder in the real Recycle Bin"]
+    fn the_recycle_bin_takes_files_and_folders_however_they_are_written() {
+        let tmp = tempfile::tempdir().unwrap();
+        let file = tmp.path().join("falcon test file.txt");
+        std::fs::write(&file, "x").unwrap();
+        trash(&file).unwrap();
+        assert!(!file.exists());
+        let folder = tmp.path().canonicalize().unwrap().join("Falcon Test.library");
+        std::fs::create_dir_all(folder.join("images")).unwrap();
+        std::fs::write(folder.join("metadata.json"), "{}").unwrap();
+        trash(&folder).unwrap();
+        assert!(!folder.exists());
+    }
+
     #[test]
     fn a_trash_failure_keeps_the_file() {
         let s = setup();
