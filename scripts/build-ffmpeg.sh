@@ -25,6 +25,8 @@
 #   FFMPEG_BUILD_DIR  empty scratch directory for the downloads and the builds
 #                     (default: <repo>/target/ffmpeg-build, wiped before each build)
 #   FFMPEG_FORCE      1 to rebuild even when the pinned versions are already installed
+#   FFMPEG_TARBALL    absolute path of ffmpeg-<version>.tar.xz, for when ffmpeg.org can't be reached:
+#                     a copy from anywhere, used only if it matches the pinned SHA-256
 #   PYTHON            the Python that makes the tools venv (default: python3, on Windows python)
 #   MACOSX_DEPLOYMENT_TARGET  on macOS, the oldest macOS the libraries load on (default: 12.0)
 set -eu
@@ -193,7 +195,11 @@ fi
 rm -rf "$BUILD"
 mkdir -p "$BUILD"
 cd "$BUILD"
-curl -fsSL -o "ffmpeg-$VERSION.tar.xz" "$URL"
+if [ -n "${FFMPEG_TARBALL:-}" ]; then
+  cp "$FFMPEG_TARBALL" "ffmpeg-$VERSION.tar.xz"
+else
+  curl -fsSL -o "ffmpeg-$VERSION.tar.xz" "$URL"
+fi
 echo "$SHA256  ffmpeg-$VERSION.tar.xz" | $SHA256SUM -c -
 tar -xJf "ffmpeg-$VERSION.tar.xz"
 cd "ffmpeg-$VERSION"
