@@ -267,6 +267,7 @@ pub fn stage(path: impl AsRef<Path>, opts: &ImportOptions) -> Result<Staged> {
     let file = if item.ext.is_empty() { item.name.clone() } else { format!("{}.{}", item.name, item.ext) };
     let raw = dir.path().join(file);
     fs::copy(src, &raw).map_err(|e| Error::io(&raw, e))?;
+    crate::disk_name::make_writable(&raw).map_err(|e| Error::io(&raw, e))?;
     filetime::set_file_times(&raw, FileTime::from_last_access_time(&meta), FileTime::from_last_modification_time(&meta))
         .map_err(|e| Error::io(&raw, e))?;
 
@@ -919,6 +920,17 @@ mod tests {
             if fs::read(&locked).is_err() {
                 assert_eq!(fail(&locked).kind, FailKind::Unreadable);
             }
+        }
+        // Windows' way of a file that can't be read: another program has it
+        // open and shares it with nobody.
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+            let locked = tmp.path().join("locked.png");
+            fs::write(&locked, b"x").unwrap();
+            let held = fs::OpenOptions::new().read(true).share_mode(0).open(&locked).unwrap();
+            assert_eq!(fail(&locked).kind, FailKind::Unreadable);
+            drop(held);
         }
     }
 

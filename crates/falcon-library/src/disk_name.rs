@@ -56,6 +56,25 @@ pub(crate) fn is_device(base: &str) -> bool {
     }
 }
 
+/// Clears the read-only attribute a copy brings from a read-only original on
+/// Windows, where it stops the library setting the file's times or replacing
+/// it. Elsewhere a copy's permissions stay as they are.
+#[cfg(windows)]
+pub(crate) fn make_writable(path: &std::path::Path) -> std::io::Result<()> {
+    let mut permissions = std::fs::metadata(path)?.permissions();
+    if permissions.readonly() {
+        #[allow(clippy::permissions_set_readonly_false)]
+        permissions.set_readonly(false);
+        std::fs::set_permissions(path, permissions)?;
+    }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+pub(crate) fn make_writable(_path: &std::path::Path) -> std::io::Result<()> {
+    Ok(())
+}
+
 #[cfg(all(test, not(windows)))]
 mod tests {
     use super::on_disk;

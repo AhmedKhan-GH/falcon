@@ -101,6 +101,7 @@ fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
 /// Copies `src` to `dest` and flushes it to disk.
 fn copy_synced(src: &Path, dest: &Path) -> Result<()> {
     fs::copy(src, dest).map_err(|e| Error::io(dest, e))?;
+    crate::disk_name::make_writable(dest).map_err(|e| Error::io(dest, e))?;
     // Windows only flushes a file opened for writing.
     fs::OpenOptions::new().read(true).write(cfg!(windows)).open(dest).and_then(|f| f.sync_all()).map_err(|e| Error::io(dest, e))
 }
