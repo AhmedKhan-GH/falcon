@@ -11,6 +11,11 @@
 # target/ffmpeg-tools with pkgconf (FFmpeg's configure finds dav1d through pkg-config).
 # Nothing it produces is committed. scripts/bundle.sh copies the libraries into Falcon.app.
 #
+# On Windows, run it in an MSYS2 UCRT64 shell with mingw-w64 gcc, binutils, nasm and zlib, plus
+# make and diffutils, and a Windows Python (not MSYS2's, whose venv can't take these wheels). The
+# DLLs go in target/ffmpeg/lib like the other systems' libraries, with libgcc, winpthread and
+# zlib linked in, and the script refuses DLLs that need anything a clean Windows lacks.
+#
 # Re-running is cheap: the tools, dav1d and FFmpeg are each rebuilt only when missing or
 # when their pinned version (or FFmpeg's configure line, or the macOS they are built for)
 # changes. FFMPEG_FORCE=1 rebuilds FFmpeg and dav1d regardless.
@@ -20,7 +25,7 @@
 #   FFMPEG_BUILD_DIR  empty scratch directory for the downloads and the builds
 #                     (default: <repo>/target/ffmpeg-build, wiped before each build)
 #   FFMPEG_FORCE      1 to rebuild even when the pinned versions are already installed
-#   PYTHON            the Python that makes the tools venv (default: python3)
+#   PYTHON            the Python that makes the tools venv (default: python3, on Windows python)
 #   MACOSX_DEPLOYMENT_TARGET  on macOS, the oldest macOS the libraries load on (default: 12.0)
 set -eu
 
@@ -34,6 +39,10 @@ DAV1D_VERSION=1.5.4
 DAV1D_SHA256=686616b7c69eb88d44459391ab25cac13b6647a3b288835c5784e71c1514a5c5
 DAV1D_URL="https://downloads.videolan.org/pub/videolan/dav1d/$DAV1D_VERSION/dav1d-$DAV1D_VERSION.tar.xz"
 # The file names, tools and link settings each system needs.
+case "$(uname -s)" in
+  MINGW* | UCRT*) WINDOWS=1 ;;
+  *) WINDOWS= ;;
+esac
 if [ "$(uname -s)" = Darwin ]; then
   DAV1D_LIB=libdav1d.7.dylib
   AVCODEC_LIB=libavcodec.61.dylib
@@ -46,6 +55,16 @@ if [ "$(uname -s)" = Darwin ]; then
   MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET:-12.0}
   export MACOSX_DEPLOYMENT_TARGET
   TARGET_STAMP=" macos $MACOSX_DEPLOYMENT_TARGET"
+elif [ -n "$WINDOWS" ]; then
+  [ "${MSYSTEM:-}" = UCRT64 ] || { echo "Run this in an MSYS2 UCRT64 shell" >&2; exit 1; }
+  DAV1D_LIB=libdav1d.dll
+  AVCODEC_LIB=avcodec-61.dll
+  AVFILTER_LIB=avfilter-10.dll
+  SHA256SUM=sha256sum
+  DAV1D_CC=gcc
+  command -v nasm >/dev/null || { echo "Install nasm first: without it video decodes far too slowly" >&2; exit 1; }
+  JOBS=$(nproc)
+  TARGET_STAMP=" windows"
 else
   DAV1D_LIB=libdav1d.so.7
   AVCODEC_LIB=libavcodec.so.61
@@ -64,15 +83,22 @@ MESON_SHA256=930bc7542cbd9f57009e182fd014eba48cf1a0180a7b9006d2d32d8f168d8b02
 NINJA_VERSION=1.13.2
 NINJA_SHA256=fd82e26c0706ad4ab88e5fdd26f3fab0a987a90f810160f6c322e752c6af298b
 NINJA_SHA256_LINUX=65a24341b5ac09fcadcc37082660be40a94174e51a937fabf6e2cae26225fa2c
+NINJA_SHA256_WINDOWS=1293f4078278b70d0ee4b6cc8f3a9e030656c9b2f59909970343c4fe76070118
 PKGCONF_VERSION=3.0.7.post0
 PKGCONF_SHA256=47cbf6889d84297b9a4e1741ae016daa4e198f3ec8bab7ce74554cc50b77cce4
 PKGCONF_SHA256_LINUX=bd3ee4b5294a888d58462324cb83b7c0bc7150cc15b64b36aaf983e4b0ab90d5
+PKGCONF_SHA256_WINDOWS=e7906bb5ec1d0d074e397466075a8545f1c50cb11710768644f222ba8acebc7f
+# What pkgconf's Windows wheel depends on.
+COLORAMA_VERSION=0.4.6
+COLORAMA_SHA256=4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 PREFIX=${FFMPEG_PREFIX:-$ROOT/target/ffmpeg}
 BUILD=${FFMPEG_BUILD_DIR:-$ROOT/target/ffmpeg-build}
 TOOLS=$ROOT/target/ffmpeg-tools
 VENV=$TOOLS/venv
+# A Windows Python's venv keeps its programs in Scripts.
+if [ -n "$WINDOWS" ]; then VENV_BIN=$VENV/Scripts; else VENV_BIN=$VENV/bin; fi
 # dav1d is installed here first, then its library is copied into $PREFIX/lib, so
 # rebuilding FFmpeg (which empties $PREFIX) doesn't mean rebuilding dav1d.
 DAV1D_PREFIX=$TOOLS/dav1d
@@ -96,18 +122,32 @@ TOOLS_STAMP="meson $MESON_VERSION ninja $NINJA_VERSION pkgconf $PKGCONF_VERSION"
 if [ "$(cat "$VENV/stamp" 2>/dev/null)" != "$TOOLS_STAMP" ]; then
   rm -rf "$VENV"
   mkdir -p "$TOOLS"
-  "${PYTHON:-python3}" -m venv "$VENV"
+  if [ -n "$WINDOWS" ]; then "${PYTHON:-python}" -m venv "$VENV"; else "${PYTHON:-python3}" -m venv "$VENV"; fi
   cat > "$TOOLS/requirements.txt" <<REQ
 meson==$MESON_VERSION --hash=sha256:$MESON_SHA256
-ninja==$NINJA_VERSION --hash=sha256:$NINJA_SHA256 --hash=sha256:$NINJA_SHA256_LINUX
-pkgconf==$PKGCONF_VERSION --hash=sha256:$PKGCONF_SHA256 --hash=sha256:$PKGCONF_SHA256_LINUX
+ninja==$NINJA_VERSION --hash=sha256:$NINJA_SHA256 --hash=sha256:$NINJA_SHA256_LINUX --hash=sha256:$NINJA_SHA256_WINDOWS
+pkgconf==$PKGCONF_VERSION --hash=sha256:$PKGCONF_SHA256 --hash=sha256:$PKGCONF_SHA256_LINUX --hash=sha256:$PKGCONF_SHA256_WINDOWS
+colorama==$COLORAMA_VERSION; sys_platform == "win32" --hash=sha256:$COLORAMA_SHA256
 REQ
-  "$VENV/bin/python" -m pip install --quiet --disable-pip-version-check --no-cache-dir \
+  "$VENV_BIN/python" -m pip install --quiet --disable-pip-version-check --no-cache-dir \
     --only-binary :all: --require-hashes -r "$TOOLS/requirements.txt"
   echo "$TOOLS_STAMP" > "$VENV/stamp"
 fi
-PATH="$VENV/bin:$PATH"
+PATH="$VENV_BIN:$PATH"
 export PATH
+
+# On Windows the DLLs must not need libgcc_s, libwinpthread or zlib1. -static would also refuse the
+# import libraries the DLLs link each other with, so ld finds static copies here first instead.
+if [ -n "$WINDOWS" ]; then
+  STATIC_LIBS=$TOOLS/static-libs
+  rm -rf "$STATIC_LIBS"
+  mkdir -p "$STATIC_LIBS"
+  for lib in libz.a libwinpthread.a libpthread.a; do
+    cp "$(gcc -print-file-name="$lib")" "$STATIC_LIBS/$lib"
+  done
+  STATIC_LDFLAGS="-L$(cygpath -m "$STATIC_LIBS") -static-libgcc"
+  STATIC_LDFLAGS_NOTE="--bindir=lib -Dc_link_args=-L<repo>/target/ffmpeg-tools/static-libs -static-libgcc"
+fi
 
 # dav1d, rebuilt only when missing or when its pinned version (or the macOS it is for) changes.
 DAV1D_STAMP="dav1d $DAV1D_VERSION $DAV1D_SHA256$TARGET_STAMP"
@@ -119,8 +159,14 @@ if [ -n "$FORCE" ] || [ "$(cat "$DAV1D_PREFIX/stamp" 2>/dev/null)" != "$DAV1D_ST
   curl -fsSL -o "dav1d-$DAV1D_VERSION.tar.xz" "$DAV1D_URL"
   echo "$DAV1D_SHA256  dav1d-$DAV1D_VERSION.tar.xz" | $SHA256SUM -c -
   tar -xJf "dav1d-$DAV1D_VERSION.tar.xz"
+  # On Windows the DLL goes in lib, as the other systems' library does, not in bin.
+  if [ -n "$WINDOWS" ]; then
+    set -- --bindir=lib "-Dc_link_args=$STATIC_LDFLAGS"
+  else
+    set --
+  fi
   # Meson gives the library an @rpath/libdav1d.7.dylib install name, like FFmpeg's.
-  CC=$DAV1D_CC meson setup "dav1d-$DAV1D_VERSION/build" "dav1d-$DAV1D_VERSION" \
+  CC=$DAV1D_CC meson setup "$@" "dav1d-$DAV1D_VERSION/build" "dav1d-$DAV1D_VERSION" \
     --prefix="$DAV1D_PREFIX" --libdir=lib --buildtype=release \
     -Ddefault_library=shared -Denable_asm=true -Denable_tools=false -Denable_tests=false \
     -Denable_examples=false -Denable_docs=false
@@ -154,9 +200,13 @@ cd "ffmpeg-$VERSION"
 
 # Libraries carry an @rpath install name and an @loader_path rpath ($ORIGIN off
 # macOS), so one can be loaded by absolute path from target/ffmpeg/lib or from the
-# app's own folder and still find its siblings.
+# app's own folder and still find its siblings. Windows has neither: falcon asks the loader
+# to look in the folder the DLL is in (crates/falcon-ffmpeg/src/ffi.rs).
 if [ "$(uname -s)" = Darwin ]; then
   set -- --install-name-dir=@rpath --extra-ldflags=-Wl,-rpath,@loader_path --cc=clang --arch=arm64 --disable-x86asm
+elif [ -n "$WINDOWS" ]; then
+  # DLLs would go in bin. Threads use Win32's own, not winpthread.
+  set -- --shlibdir="$PREFIX/lib" --extra-ldflags="$STATIC_LDFLAGS" --enable-w32threads
 else
   # Escaped for configure's eval, make's two expansions, then the shell.
   set -- '--extra-ldsoflags=-Wl,-rpath,\\\$\$\$\$ORIGIN'
@@ -202,6 +252,9 @@ if grep -Eq '^#define CONFIG_[A-Z0-9_]+_(ENCODER|MUXER) 1$' config_components.h;
   exit 1
 fi
 grep -q '^#define CONFIG_LIBDAV1D_DECODER 1' config_components.h || { echo "FFmpeg was configured without libdav1d" >&2; exit 1; }
+if [ -n "$WINDOWS" ]; then
+  grep -q '^#define HAVE_W32THREADS 1' config.h || { echo "FFmpeg was configured without Win32 threads" >&2; exit 1; }
+fi
 
 make -j"$JOBS"
 rm -rf "$PREFIX"
@@ -214,13 +267,28 @@ cp "$DAV1D_PREFIX/COPYING" "$PREFIX/COPYING.dav1d"
 if [ "$(uname -s)" = Darwin ]; then
   otool -L "$PREFIX/lib/$AVCODEC_LIB" | grep -q "@rpath/$DAV1D_LIB" \
     || { echo "libavcodec doesn't link @rpath/$DAV1D_LIB" >&2; exit 1; }
+elif [ -n "$WINDOWS" ]; then
+  objdump -p "$PREFIX/lib/$AVCODEC_LIB" | grep -q "DLL Name: $DAV1D_LIB" \
+    || { echo "avcodec doesn't link $DAV1D_LIB" >&2; exit 1; }
+  # Each DLL may need its siblings and what every Windows has: nothing from the build machine.
+  for dll in "$PREFIX"/lib/*.dll; do
+    for dep in $(objdump -p "$dll" | sed -n 's/^[[:space:]]*DLL Name: //p'); do
+      case "$(echo "$dep" | tr '[:upper:]' '[:lower:]')" in
+        avutil-59.dll | avcodec-61.dll | avformat-61.dll | avfilter-10.dll | swscale-8.dll | swresample-5.dll | "$DAV1D_LIB") ;;
+        kernel32.dll | advapi32.dll | bcrypt.dll | ole32.dll | user32.dll | shell32.dll | ws2_32.dll | secur32.dll) ;;
+        api-ms-win-crt-*.dll) ;;
+        *) echo "${dll##*/} needs $dep, which a clean Windows lacks" >&2; exit 1 ;;
+      esac
+    done
+  done
 else
   readelf -d "$PREFIX/lib/$AVCODEC_LIB" | grep -q "$DAV1D_LIB" \
     || { echo "libavcodec doesn't link $DAV1D_LIB" >&2; exit 1; }
 fi
 # What was built and how, for the notice that ships next to the libraries
 # (the install prefix is left out of the recorded configure line).
-CONF=$(sed -n 's/^#define FFMPEG_CONFIGURATION "\(.*\)"$/\1/p' config.h | sed 's|--prefix=[^ ]*|--prefix=<repo>/target/ffmpeg|')
+CONF=$(sed -n 's/^#define FFMPEG_CONFIGURATION "\(.*\)"$/\1/p' config.h | sed -e 's|--prefix=[^ ]*|--prefix=<repo>/target/ffmpeg|' \
+  -e 's|--shlibdir=[^ ]*|--shlibdir=<repo>/target/ffmpeg/lib|' -e "s|--extra-ldflags='-L[^ ]*|--extra-ldflags='-L<repo>/target/ffmpeg-tools/static-libs|")
 cat > "$PREFIX/BUILD-INFO.txt" <<INFO
 FFmpeg $VERSION, built for Falcon by scripts/build-ffmpeg.sh.
 Licence: GNU Lesser General Public License, version 2.1 or later (COPYING.LGPLv2.1).
@@ -238,5 +306,16 @@ SHA-256 of the source: $DAV1D_SHA256
 Built with meson $MESON_VERSION and ninja $NINJA_VERSION:
 -Ddefault_library=shared -Denable_asm=true -Denable_tools=false -Denable_tests=false -Denable_examples=false -Denable_docs=false --buildtype=release
 INFO
+if [ -n "$WINDOWS" ]; then
+  # A little of winpthreads ends up inside avutil, through the C runtime's clock functions, and its
+  # licence asks for its text to ship along.
+  cp "$(dirname "$(dirname "$(command -v gcc)")")/share/licenses/winpthreads/COPYING" "$PREFIX/COPYING.winpthreads"
+  cat >> "$PREFIX/BUILD-INFO.txt" <<INFO
+
+Both were built on Windows with $(gcc --version | head -n 1), with libgcc (GCC Runtime Library
+Exception), zlib (zlib licence, https://zlib.net) and winpthreads (COPYING.winpthreads) linked
+into the DLLs. dav1d also: $STATIC_LDFLAGS_NOTE
+INFO
+fi
 echo "$FFMPEG_STAMP" > "$PREFIX/.stamp"
 echo "FFmpeg $VERSION with dav1d $DAV1D_VERSION installed in $PREFIX"
