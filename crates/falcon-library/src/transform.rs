@@ -803,7 +803,6 @@ mod tests {
         assert_eq!(names_in(tmp.path()), vec!["x.png".to_string()]);
     }
 
-    #[cfg(unix)]
     #[test]
     fn atomic_replace_renames_instead_of_truncating() {
         use std::io::Read;

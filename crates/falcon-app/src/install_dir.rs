@@ -107,10 +107,10 @@ mod tests {
         assert!(!inside(&f, &d.path().join("bin/sub/A.library")));
         assert!(!inside(&f, &d.path().join("A.library")));
         #[cfg(unix)]
-        {
-            std::os::unix::fs::symlink(bundle.join("Contents"), d.path().join("Link")).unwrap();
-            assert!(inside(&b, &d.path().join("Link/A.library")));
-        }
+        std::os::unix::fs::symlink(bundle.join("Contents"), d.path().join("Link")).unwrap();
+        #[cfg(windows)]
+        assert!(std::process::Command::new("cmd").arg("/C").arg("mklink").arg("/J").arg(d.path().join("Link")).arg(bundle.join("Contents")).output().unwrap().status.success());
+        assert!(inside(&b, &d.path().join("Link/A.library")));
     }
 
     #[test]

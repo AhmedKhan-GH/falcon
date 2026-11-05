@@ -637,6 +637,14 @@ mod tests {
             std::os::unix::fs::symlink(&outside, &link).unwrap();
             assert!(!may_remove(&link, &s.watched, sig, Some(&s.original)));
         }
+        // A file link takes Developer Mode or elevation on Windows.
+        #[cfg(windows)]
+        {
+            let link = s.watched.join("link.png");
+            if std::os::windows::fs::symlink_file(&outside, &link).is_ok() {
+                assert!(!may_remove(&link, &s.watched, sig, Some(&s.original)));
+            }
+        }
         assert_eq!(after_import(&outside, &s.watched, true, sig, Some(&s.original), bin(&log)), After::Kept);
         assert!(log.lock().unwrap().is_empty() && outside.exists() && nested.exists());
     }
