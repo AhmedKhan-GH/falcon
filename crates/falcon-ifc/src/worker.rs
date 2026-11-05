@@ -27,7 +27,7 @@ const EXIT_MEMORY: i32 = 72;
 pub(super) fn path() -> Option<&'static PathBuf> {
     static PATH: OnceLock<Option<PathBuf>> = OnceLock::new();
     PATH.get_or_init(|| {
-        let beside = std::env::current_exe().ok().and_then(|e| Some(e.parent()?.join("falcon-ifc-worker")));
+        let beside = std::env::current_exe().ok().and_then(|e| Some(e.parent()?.join(format!("falcon-ifc-worker{}", std::env::consts::EXE_SUFFIX))));
         let built = option_env!("FALCON_IFC_WORKER").map(PathBuf::from);
         [beside, built].into_iter().flatten().find(|p| p.is_file())
     })
@@ -45,7 +45,12 @@ fn request(limits: Limits) -> Vec<u8> {
 /// Reads `bytes` in a worker process.
 pub(super) fn read(bytes: &[u8], limits: Limits) -> Result<Scene, Error> {
     let exe = path().ok_or(Error::Unavailable)?;
-    let mut child = Command::new(exe)
+    let mut command = Command::new(exe);
+    // The worker is a console program; a release app has no console for it
+    // to share, so Windows would open one for every file.
+    #[cfg(windows)]
+    std::os::windows::process::CommandExt::creation_flags(&mut command, 0x0800_0000);
+    let mut child = command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
