@@ -10,9 +10,13 @@ use std::process::Command;
 /// section.
 pub const LIBRARY_FILES: [&str; 4] = ["metadata.json", "mtime.json", "tags.json", "saved-filters.json"];
 
+/// What the report calls the system's version line.
+const OS_NAME: &str = if cfg!(windows) { "Windows" } else { "macOS" };
+
 /// What the report says about the machine.
 #[derive(Debug, Clone, PartialEq)]
 pub struct System {
+    /// The system's version.
     pub macos: String,
     pub build: String,
     pub model: String,
@@ -72,7 +76,7 @@ pub fn render(info: &Info) -> String {
     section(
         "System",
         vec![
-            format!("macOS: {}", s.macos),
+            format!("{OS_NAME}: {}", s.macos),
             format!("build: {}", s.build),
             format!("model: {}", s.model),
             format!("cpu: {}", s.cpu),
@@ -114,8 +118,12 @@ pub fn render(info: &Info) -> String {
 
 /// A command's trimmed output, or "unknown" if it fails.
 fn run(program: &str, args: &[&str]) -> String {
-    Command::new(program)
-        .args(args)
+    let mut command = Command::new(program);
+    command.args(args);
+    // Without this a console flashes up for the command in a release build.
+    #[cfg(windows)]
+    std::os::windows::process::CommandExt::creation_flags(&mut command, 0x0800_0000);
+    command
         .output()
         .ok()
         .filter(|o| o.status.success())
@@ -124,7 +132,56 @@ fn run(program: &str, args: &[&str]) -> String {
         .unwrap_or_else(|| "unknown".to_string())
 }
 
+/// The folder a report is offered to, the Desktop.
+#[cfg(not(windows))]
+pub fn desktop() -> Option<PathBuf> {
+    Some(falcon_library::sandbox::home_dir()?.join("Desktop"))
+}
+
+/// The folder a report is offered to, the Desktop. Windows can keep it away
+/// from the home folder, as OneDrive does, so the system is asked.
+#[cfg(windows)]
+pub fn desktop() -> Option<PathBuf> {
+    use std::os::windows::ffi::OsStringExt;
+    use windows_sys::Win32::System::Com::CoTaskMemFree;
+    use windows_sys::Win32::UI::Shell::{FOLDERID_Desktop, KF_FLAG_DEFAULT, SHGetKnownFolderPath};
+    let mut path = std::ptr::null_mut();
+    // SAFETY: the out-pointer is filled with a NUL-terminated string on
+    // success, freed here with the allocator the call documents.
+    let found = unsafe {
+        let result = SHGetKnownFolderPath(&FOLDERID_Desktop, KF_FLAG_DEFAULT as u32, std::ptr::null_mut(), &mut path);
+        let found = (result >= 0).then(|| {
+            let len = (0..).take_while(|&i| *path.add(i) != 0).count();
+            PathBuf::from(std::ffi::OsString::from_wide(std::slice::from_raw_parts(path, len)))
+        });
+        CoTaskMemFree(path.cast());
+        found
+    };
+    found.or_else(|| Some(falcon_library::sandbox::home_dir()?.join("Desktop")))
+}
+
 /// Asks the system about the machine.
+#[cfg(windows)]
+pub fn system() -> System {
+    use windows_sys::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
+    // `ver` prints "Microsoft Windows [Version 10.0.26200.1234]".
+    let line = run("cmd", &["/C", "ver"]);
+    let version = line.rsplit_once(' ').map_or(line.as_str(), |(_, v)| v).trim_end_matches(']').to_string();
+    let mut memory = MEMORYSTATUSEX { dwLength: size_of::<MEMORYSTATUSEX>() as u32, ..Default::default() };
+    // SAFETY: the struct's size is set as the call requires.
+    let bytes = (unsafe { GlobalMemoryStatusEx(&mut memory) } != 0).then_some(memory.ullTotalPhys);
+    System {
+        build: version.split('.').nth(2).unwrap_or("unknown").to_string(),
+        macos: version,
+        model: "unknown".to_string(),
+        cpu: std::env::var("PROCESSOR_IDENTIFIER").unwrap_or_else(|_| "unknown".to_string()),
+        cpus: std::thread::available_parallelism().map_or(0, |n| n.get()),
+        memory_gb: bytes.map_or_else(|| "unknown".to_string(), |b| format!("{:.1}", b as f64 / (1u64 << 30) as f64)),
+    }
+}
+
+/// Asks the system about the machine.
+#[cfg(not(windows))]
 pub fn system() -> System {
     let bytes: Option<u64> = run("sysctl", &["-n", "hw.memsize"]).parse().ok();
     System {
@@ -199,7 +256,8 @@ fn zip_folder(dir: &Path, dest: &Path) -> Result<(), String> {
             if path.is_dir() {
                 add(zip, root, &path)?;
             } else {
-                let name = path.strip_prefix(root).map_err(std::io::Error::other)?.to_string_lossy().into_owned();
+                // Names in a zip use forward slashes on every system.
+                let name = path.strip_prefix(root).map_err(std::io::Error::other)?.components().map(|c| c.as_os_str().to_string_lossy()).collect::<Vec<_>>().join("/");
                 zip.start_file(name, zip::write::SimpleFileOptions::default())?;
                 std::io::copy(&mut std::fs::File::open(&path)?, zip)?;
             }
@@ -271,7 +329,30 @@ tags.json: missing
 also open: /Users/me/Falcon Sandbox/Two.library
 recent: /Users/me/Falcon Sandbox/Old.library
 ";
-        assert_eq!(text, expected);
+        assert_eq!(text, expected.replace("macOS:", &format!("{OS_NAME}:")));
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn the_zip_names_its_files_with_forward_slashes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("in");
+        std::fs::create_dir_all(dir.join("sub")).unwrap();
+        std::fs::write(dir.join("sub").join("a.txt"), "a").unwrap();
+        let dest = tmp.path().join("out.zip");
+        zip_folder(&dir, &dest).unwrap();
+        let mut zip = zip::ZipArchive::new(std::fs::File::open(&dest).unwrap()).unwrap();
+        assert_eq!(zip.by_index(0).unwrap().name().unwrap(), "sub/a.txt");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn the_system_reports_a_version_and_memory() {
+        let s = system();
+        assert!(s.macos.starts_with(|c: char| c.is_ascii_digit()), "{s:?}");
+        assert!(s.build.parse::<u32>().is_ok(), "{s:?}");
+        assert!(s.memory_gb.parse::<f64>().is_ok(), "{s:?}");
+        assert!(desktop().is_some());
     }
 
     #[test]
