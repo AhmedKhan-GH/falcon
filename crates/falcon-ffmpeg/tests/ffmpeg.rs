@@ -536,6 +536,49 @@ fn struct_layouts_match_the_installed_headers() {
     assert_eq!(text.lines().count(), ours.len());
 }
 
+/// A name FFmpeg must be handed intact: on Windows it reads the path as UTF-8
+/// whatever the system's code page is.
+#[test]
+#[cfg_attr(not(ffmpeg_built), ignore = "needs scripts/build-ffmpeg.sh")]
+fn decodes_a_file_with_a_non_ascii_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let folder = dir.path().join("Ünï çödé 映像");
+    std::fs::create_dir(&folder).unwrap();
+    let path = folder.join("クリップ – été.avi");
+    write_avi(&path, false, |i, _| color(i));
+    let info = probe(&path).unwrap();
+    assert_eq!((info.width, info.height), (W, H));
+    let frame = frame_at(&path, 0.0).unwrap();
+    assert_eq!((frame.width as u32, frame.height as u32), (W, H));
+}
+
+/// Every FFmpeg DLL in the process, avcodec's dav1d too, came from the folder
+/// the loader was pointed at, not from `PATH` or the current directory.
+#[cfg(windows)]
+#[test]
+#[cfg_attr(not(ffmpeg_dav1d), ignore = "needs scripts/build-ffmpeg.sh with dav1d")]
+fn dlls_all_come_from_the_ffmpeg_folder() {
+    use std::os::windows::ffi::{OsStrExt, OsStringExt};
+    unsafe extern "system" {
+        fn GetModuleHandleW(name: *const u16) -> *mut std::ffi::c_void;
+        fn GetModuleFileNameW(module: *mut std::ffi::c_void, path: *mut u16, size: u32) -> u32;
+    }
+    let api = ffi::api().unwrap();
+    let want = std::path::absolute(&api.dir).unwrap();
+    for name in ["avutil-59.dll", "swresample-5.dll", "avfilter-10.dll", "avcodec-61.dll", "avformat-61.dll", "swscale-8.dll", "libdav1d.dll"] {
+        let wide: Vec<u16> = std::ffi::OsStr::new(name).encode_wide().chain([0]).collect();
+        // SAFETY: a NUL-terminated name, and a buffer as long as the size passed.
+        let path = unsafe {
+            let module = GetModuleHandleW(wide.as_ptr());
+            assert!(!module.is_null(), "{name} isn't loaded");
+            let mut buf = [0u16; 1024];
+            let len = GetModuleFileNameW(module, buf.as_mut_ptr(), buf.len() as u32);
+            PathBuf::from(std::ffi::OsString::from_wide(&buf[..len as usize]))
+        };
+        assert_eq!(path.parent().map(Path::to_path_buf).as_ref(), Some(&want), "{name}");
+    }
+}
+
 /// The AV1 clip, `testdata/av1.ivf`: falcon's own, encoded with rav1e 0.8.1
 /// (`--speed 10 --quantizer 20 --keyint 13 --min-keyint 13 --low-latency
 /// --no-scene-detection`) from 25 flat 64 × 48 pictures, picture `i`
@@ -572,7 +615,7 @@ fn av1_decodes_through_dav1d() {
     assert!(ffi::has_decoder(api, "libdav1d"), "libavcodec was built with --enable-libdav1d");
     assert!(!ffi::has_decoder(api, "no-such-decoder"));
     // libavcodec found dav1d next to itself.
-    assert!(api.dir.join("libdav1d.7.dylib").is_file() || api.dir.join("libdav1d.so.7").is_file());
+    assert!(api.dir.join("libdav1d.7.dylib").is_file() || api.dir.join("libdav1d.so.7").is_file() || api.dir.join("libdav1d.dll").is_file());
 
     // The raw stream as encoded (IVF states no frame rate, so only the
     // size, length and first picture are checked here).

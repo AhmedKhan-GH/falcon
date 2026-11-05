@@ -56,6 +56,10 @@ Third-party material:
   it unmodified in Contents/Frameworks with its licence text in
   Contents/Resources/FFmpeg/COPYING.dav1d.txt. It is not part of this source
   tree and is not linked into Falcon.
+- On Windows the installer carries FFmpeg and dav1d as DLLs beside falcon-app.exe, with
+  COPYING.LGPLv2.1, COPYING.dav1d and BUILD-INFO.txt. Those DLLs have linked into them libgcc (GCC
+  Runtime Library Exception), zlib (zlib licence, https://zlib.net) and part of mingw-w64's
+  winpthreads, whose licence ships as COPYING.winpthreads.
 
 - security-framework 3.7.0 and security-framework-sys 2.17.0
   (https://github.com/kornelski/rust-security-framework), API keys in the macOS

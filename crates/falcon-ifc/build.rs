@@ -70,10 +70,20 @@ fn main() {
             b.flag("-mmacosx-version-min=13.3");
         }
     }
+    // MSVC needs telling about C++ exceptions, large objects and UTF-8 sources. The worker has its C
+    // runtime linked in, since a clean Windows may lack Visual C++'s DLLs.
+    let msvc = b.get_compiler().is_like_msvc();
+    if msvc {
+        b.flag("/EHsc").flag("/bigobj").flag("/utf-8").define("NOMINMAX", None).static_crt(true);
+    }
     let objects = b.compile_intermediates();
-    let exe = PathBuf::from(std::env::var_os("OUT_DIR").unwrap()).join("falcon-ifc-worker");
+    let exe = PathBuf::from(std::env::var_os("OUT_DIR").unwrap()).join(if msvc { "falcon-ifc-worker.exe" } else { "falcon-ifc-worker" });
     let mut link: Command = b.get_compiler().to_command();
-    link.args(&objects).arg("-pthread").arg("-o").arg(&exe);
+    if msvc {
+        link.args(&objects).arg(format!("/Fe:{}", exe.display())).arg("/link").arg("/OPT:REF");
+    } else {
+        link.args(&objects).arg("-pthread").arg("-o").arg(&exe);
+    }
     if std::env::var("CARGO_CFG_TARGET_OS").is_ok_and(|os| os == "macos") {
         link.arg("-Wl,-dead_strip");
     }
