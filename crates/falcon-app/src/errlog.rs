@@ -1,4 +1,4 @@
-//! The error log, `~/Library/Logs/Falcon/falcon.log`: one line per error,
+//! The error log, `~/Library/Logs/Falcon/falcon.log` on macOS: one line per error,
 //! kept small by moving the file aside to `falcon.1.log` once it passes
 //! 1 MiB. Writing never fails loudly; a log that can't be written is
 //! simply not written.
@@ -14,10 +14,13 @@ const LIMIT: u64 = 1024 * 1024;
 /// The folder holding the log.
 fn dir() -> Option<PathBuf> {
     if cfg!(target_os = "macos") {
-        let home = std::env::var_os("HOME")?;
-        return Some(PathBuf::from(home).join("Library/Logs/Falcon"));
+        return Some(falcon_library::sandbox::home_dir()?.join("Library/Logs/Falcon"));
     }
+    #[cfg(windows)]
+    return Some(falcon_library::sandbox::local_data_dir()?.join("Falcon").join("Logs"));
+    #[cfg(not(windows))]
     let state = std::env::var_os("XDG_STATE_HOME").map(PathBuf::from).or_else(|| Some(PathBuf::from(std::env::var_os("HOME")?).join(".local/state")))?;
+    #[cfg(not(windows))]
     Some(state.join("falcon"))
 }
 
