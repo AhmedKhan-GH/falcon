@@ -507,6 +507,34 @@ mod tests {
         assert_eq!(reveal_args(&many).len(), MAX_REVEAL + 2);
     }
 
+    /// Opens real Explorer windows and asks the shell what they show, then
+    /// closes them. Run by hand with `--ignored`.
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "opens File Explorer windows on the desktop"]
+    fn explorer_selects_a_file_and_the_shell_opens_a_folder() {
+        let tmp = tempfile::tempdir().unwrap();
+        // Everything a command line could misread, and a `\\?\` path.
+        let folder = tmp.path().canonicalize().unwrap().join("odd, folder & name");
+        std::fs::create_dir_all(&folder).unwrap();
+        let file = folder.join("a, b & c's (1).txt");
+        std::fs::write(&file, "x").unwrap();
+        // Only the windows on this folder are looked at or closed.
+        let script = format!(
+            "$s = New-Object -ComObject Shell.Application; $s.Windows() | Where-Object {{ $_.Document.Folder.Self.Path -eq '{}' }} | ForEach-Object {{ 'window:' + (($_.Document.SelectedItems() | ForEach-Object {{ Split-Path $_.Path -Leaf }}) -join ','); $_.Quit() }}",
+            falcon_library::sandbox::shown(&folder).display()
+        );
+        let look = || {
+            std::thread::sleep(std::time::Duration::from_secs(4));
+            let out = std::process::Command::new("powershell").args(["-NoProfile", "-Command", &script]).output().unwrap();
+            String::from_utf8_lossy(&out.stdout).trim().to_string()
+        };
+        reveal(std::slice::from_ref(&file));
+        assert_eq!(look(), "window:a, b & c's (1).txt");
+        open_default(std::slice::from_ref(&folder));
+        assert_eq!(look(), "window:");
+    }
+
     #[cfg(target_os = "macos")]
     #[test]
     fn launch_services_lists_apps_by_type_without_the_file() {
