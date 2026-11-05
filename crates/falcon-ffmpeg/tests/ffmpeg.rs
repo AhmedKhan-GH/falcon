@@ -524,7 +524,15 @@ fn struct_layouts_match_the_installed_headers() {
     let dir = tempfile::tempdir().unwrap();
     let (src, bin) = (dir.path().join("layout.c"), dir.path().join("layout"));
     std::fs::write(&src, c).unwrap();
-    let cc = std::process::Command::new("cc").arg("-I").arg(&include).arg(&src).arg("-o").arg(&bin).output().expect("a C compiler");
+    let cc = match std::process::Command::new("cc").arg("-I").arg(&include).arg(&src).arg("-o").arg(&bin).output() {
+        Ok(cc) => cc,
+        // Windows only has `cc` in the MSYS2 shell FFmpeg is built in; the release job runs this there.
+        Err(e) if cfg!(windows) && e.kind() == std::io::ErrorKind::NotFound => {
+            eprintln!("skipped: no cc on PATH, run this in the MSYS2 UCRT64 shell");
+            return;
+        }
+        Err(e) => panic!("a C compiler: {e}"),
+    };
     assert!(cc.status.success(), "{}", String::from_utf8_lossy(&cc.stderr));
     let out = std::process::Command::new(&bin).output().unwrap();
     let text = String::from_utf8(out.stdout).unwrap();
