@@ -167,6 +167,8 @@ impl Failure {
             Error::Io { path: at, source } if is_staging(at) => match source.kind() {
                 K::NotFound if !path.exists() => FailKind::Missing,
                 K::PermissionDenied => FailKind::Unreadable,
+                // Windows: another program holds the file (sharing and lock violations).
+                _ if cfg!(windows) && matches!(source.raw_os_error(), Some(32 | 33)) => FailKind::Unreadable,
                 _ => FailKind::CopyFailed,
             },
             Error::Io { .. } | Error::Json { .. } => FailKind::LibraryWrite,
