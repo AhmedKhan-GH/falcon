@@ -119,7 +119,7 @@ fn ambiguous_name(name: &std::ffi::OsStr) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::inside;
 
     #[test]
@@ -160,6 +160,13 @@ mod tests {
     #[test]
     fn the_windows_home_folder_is_the_user_profile() {
         assert_eq!(super::home_dir().map(std::path::PathBuf::into_os_string), std::env::var_os("USERPROFILE"));
+    }
+
+    /// A junction, the link to a folder Windows lets anyone make.
+    #[cfg(windows)]
+    pub(crate) fn junction(target: &std::path::Path, link: &std::path::Path) {
+        let made = std::process::Command::new("cmd").arg("/C").arg("mklink").arg("/J").arg(super::shown(link)).arg(super::shown(target)).output().unwrap();
+        assert!(made.status.success(), "{made:?}");
     }
 
     /// Windows spellings of one path all resolve to one answer, however the
@@ -234,16 +241,14 @@ mod tests {
 
         // A junction needs no privilege, so it is the link anyone can make.
         let link = root.join("Link.library");
-        let made = std::process::Command::new("cmd").arg("/C").arg("mklink").arg("/J").arg(&*super::shown(&link)).arg(&*real).output().unwrap();
-        assert!(made.status.success(), "{made:?}");
+        junction(&real, &link);
         assert!(!inside(&root, &link));
         assert!(!inside(&root, &plain.join("Link.library")));
         assert!(!inside(&root, &plain.join("Link.library").join("metadata.json")));
         assert!(!inside(&root, &plain.join("LINK.LIBRARY").join("New")));
         // And a root reached through a junction is the same root.
         let alias = tmp.path().join("Alias");
-        let made = std::process::Command::new("cmd").arg("/C").arg("mklink").arg("/J").arg(&alias).arg(&*plain).output().unwrap();
-        assert!(made.status.success(), "{made:?}");
+        junction(&plain, &alias);
         assert!(inside(&root, &alias.join("A.library")));
         assert!(!inside(&root, &alias));
     }

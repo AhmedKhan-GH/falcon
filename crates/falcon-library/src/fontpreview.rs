@@ -143,7 +143,7 @@ impl crate::Library {
         let raw = item.original_path(self.root());
         let data = std::fs::read(&raw).map_err(|e| crate::Error::io(&raw, e))?;
         if let Some(img) = render(&data, &metas) {
-            let thumb = self.info_dir(&item).join(format!("{}_thumbnail.png", item.name));
+            let thumb = self.info_dir(&item).join(item.thumbnail_name());
             item.palettes = crate::palette::extract(&img);
             crate::thumbnail::write_thumbnail(img, crate::thumbnail::max_side(&item.ext), &thumb).map_err(|e| self.invalid(e.0))?;
         }

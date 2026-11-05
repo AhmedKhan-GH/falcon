@@ -87,7 +87,8 @@ pub fn check_extension(text: &str) -> std::result::Result<String, ExtensionError
 
 /// The original's file name with another extension.
 fn file_name(name: &str, ext: &str) -> String {
-    if ext.is_empty() { name.to_string() } else { format!("{name}.{ext}") }
+    let file = if ext.is_empty() { name.to_string() } else { format!("{name}.{ext}") };
+    crate::disk_name::on_disk(&file).into_owned()
 }
 
 /// `path` with `suffix` added to its file name.
@@ -100,7 +101,9 @@ fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
 /// Copies `src` to `dest` and flushes it to disk.
 fn copy_synced(src: &Path, dest: &Path) -> Result<()> {
     fs::copy(src, dest).map_err(|e| Error::io(dest, e))?;
-    fs::File::open(dest).and_then(|f| f.sync_all()).map_err(|e| Error::io(dest, e))
+    crate::disk_name::make_writable(dest).map_err(|e| Error::io(dest, e))?;
+    // Windows only flushes a file opened for writing.
+    fs::OpenOptions::new().read(true).write(cfg!(windows)).open(dest).and_then(|f| f.sync_all()).map_err(|e| Error::io(dest, e))
 }
 
 /// Puts `staged` (a finished file in the same folder) where `old` was,

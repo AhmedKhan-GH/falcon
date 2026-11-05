@@ -276,13 +276,15 @@ mod tests {
         assert_eq!(names(&tree.folders[1].folders[0].files), ["z.jpg"]);
     }
 
-    #[cfg(unix)]
     #[test]
     fn walk_does_not_follow_folder_links() {
         let tmp = tempfile::tempdir().unwrap();
         let top = tmp.path().join("Loop");
         touch(&top.join("a.png"));
+        #[cfg(unix)]
         std::os::unix::fs::symlink(&top, top.join("again")).unwrap();
+        #[cfg(windows)]
+        crate::sandbox::tests::junction(&top, &top.join("again"));
         let tree = walk(&top);
         assert_eq!(names(&tree.files), ["a.png"]);
         assert!(tree.folders.is_empty());

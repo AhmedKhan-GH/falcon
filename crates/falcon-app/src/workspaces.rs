@@ -303,7 +303,7 @@ mod tests {
         let p = |s: &str| PathBuf::from(s);
         assert_eq!(not_open(&[p("/a"), p("/b"), p("/c")], &[p("/b")]), [p("/a"), p("/c")]);
         let home = Some(Path::new("/Users/me"));
-        assert_eq!(tilde_in(Path::new("/Users/me/Pictures"), home), "~/Pictures");
+        assert_eq!(tilde_in(Path::new("/Users/me/Pictures"), home), format!("~{}Pictures", std::path::MAIN_SEPARATOR));
         assert_eq!(tilde_in(Path::new("/Users/me"), home), "~");
         assert_eq!(tilde_in(Path::new("/Volumes/X"), home), "/Volumes/X");
         assert_eq!(tilde_in(Path::new("/Users/meme"), home), "/Users/meme");

@@ -33,7 +33,7 @@ impl Library {
             let (from, to) = (old.original_path(&root), item.original_path(&root));
             fs::rename(&from, &to).map_err(|e| Error::io(&from, e))?;
             if let Some(thumb) = old.thumbnail_path(&root) {
-                let dest = thumb.with_file_name(format!("{}_thumbnail.png", item.name));
+                let dest = thumb.with_file_name(item.thumbnail_name());
                 fs::rename(&thumb, &dest).map_err(|e| Error::io(&thumb, e))?;
             }
         }

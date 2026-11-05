@@ -105,12 +105,13 @@ impl Library {
         let img = image::load_from_memory_with_format(&bytes, image::ImageFormat::WebP).map_err(|e| self.invalid(format!("can't read the WebP: {e}")))?;
         let encoded = encode(&img, format).map_err(|e| self.invalid(format!("can't write the {}: {e}", format.ext())))?;
         let dir = item.info_dir(self.root());
-        let new = dir.join(format!("{}.{}", item.name, format.ext()));
+        let name = crate::disk_name::on_disk(&item.name);
+        let new = dir.join(&*crate::disk_name::on_disk(&format!("{name}.{}", format.ext())));
         if new.exists() {
             return Err(self.invalid(format!("{} already exists", new.display())));
         }
-        let staged = dir.join(format!(".{}.{}.falcon-convert", item.name, format.ext()));
-        let kept = dir.join(format!(".{}.webp.falcon-old", item.name));
+        let staged = dir.join(format!(".{name}.{}.falcon-convert", format.ext()));
+        let kept = dir.join(format!(".{name}.webp.falcon-old"));
         let written = fs::File::create(&staged).and_then(|mut f| f.write_all(&encoded).and_then(|()| f.sync_all()));
         if let Err(e) = written {
             let _ = fs::remove_file(&staged);

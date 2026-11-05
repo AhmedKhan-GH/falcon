@@ -637,6 +637,14 @@ mod tests {
             std::os::unix::fs::symlink(&outside, &link).unwrap();
             assert!(!may_remove(&link, &s.watched, sig, Some(&s.original)));
         }
+        // A file link takes Developer Mode or elevation on Windows.
+        #[cfg(windows)]
+        {
+            let link = s.watched.join("link.png");
+            if std::os::windows::fs::symlink_file(&outside, &link).is_ok() {
+                assert!(!may_remove(&link, &s.watched, sig, Some(&s.original)));
+            }
+        }
         assert_eq!(after_import(&outside, &s.watched, true, sig, Some(&s.original), bin(&log)), After::Kept);
         assert!(log.lock().unwrap().is_empty() && outside.exists() && nested.exists());
     }
@@ -651,6 +659,24 @@ mod tests {
         std::fs::write(&other, vec![1u8; 4000]).unwrap();
         assert_eq!(s.removal.finish(&other, Some(&s.original), bin(&log)), After::Kept, "not in the list");
         assert!(log.lock().unwrap().is_empty() && s.file.exists());
+    }
+
+    /// The real Recycle Bin, so `cargo test` never touches it. Run by hand
+    /// with `--ignored`; leaves a small file and folder in the bin.
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "puts a file and a folder in the real Recycle Bin"]
+    fn the_recycle_bin_takes_files_and_folders_however_they_are_written() {
+        let tmp = tempfile::tempdir().unwrap();
+        let file = tmp.path().join("falcon test file.txt");
+        std::fs::write(&file, "x").unwrap();
+        trash(&file).unwrap();
+        assert!(!file.exists());
+        let folder = tmp.path().canonicalize().unwrap().join("Falcon Test.library");
+        std::fs::create_dir_all(folder.join("images")).unwrap();
+        std::fs::write(folder.join("metadata.json"), "{}").unwrap();
+        trash(&folder).unwrap();
+        assert!(!folder.exists());
     }
 
     #[test]

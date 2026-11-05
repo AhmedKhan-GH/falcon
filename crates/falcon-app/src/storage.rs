@@ -143,6 +143,23 @@ mod tests {
         assert!(got.iter().all(Warning::is_serious));
     }
 
+    /// Windows ignores the attribute on a folder, so only the file is checked.
+    #[cfg(windows)]
+    #[test]
+    fn a_read_only_metadata_file_is_reported() {
+        let tmp = tempfile::tempdir().unwrap();
+        let lib = falcon_library::Library::create(tmp.path().join("R.library")).unwrap();
+        let meta = lib.root().join("metadata.json");
+        let mut permissions = std::fs::metadata(&meta).unwrap().permissions();
+        permissions.set_readonly(true);
+        std::fs::set_permissions(&meta, permissions.clone()).unwrap();
+        let got = check(lib.root());
+        #[allow(clippy::permissions_set_readonly_false)]
+        permissions.set_readonly(false);
+        std::fs::set_permissions(&meta, permissions).unwrap();
+        assert!(got.contains(&Warning::ReadOnly), "{got:?}");
+    }
+
     #[test]
     fn ntfs_names() {
         assert!(is_ntfs("ntfs"));

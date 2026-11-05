@@ -71,7 +71,7 @@ impl Library {
         }
         let raw = item.original_path(self.root());
         let stamp = crate::edit::now_ms();
-        let tmp = raw.with_file_name(format!("{}.{}.{stamp}", item.name, item.ext));
+        let tmp = raw.with_file_name(crate::disk_name::on_disk(&format!("{}.{}.{stamp}", item.name, item.ext)).as_ref());
         let written = (|| -> std::io::Result<()> {
             let mut f = fs::File::create(&tmp)?;
             f.write_all(text.as_bytes())?;

@@ -125,7 +125,7 @@ pub fn file_name(title: Option<&str>, address: &str) -> String {
         s.trim().trim_start_matches('.').trim().to_string()
     };
     let name = title.map(clean).filter(|n| !n.is_empty()).unwrap_or_else(|| clean(&host_of(address)));
-    if name.is_empty() { "link".into() } else { name }
+    if name.is_empty() { "link".into() } else { falcon_library::disk_name::on_disk(&name).into_owned() }
 }
 
 /// The extension for an image content type (parameters ignored); `None`

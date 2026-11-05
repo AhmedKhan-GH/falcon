@@ -99,8 +99,8 @@ pub fn withdraw(_font: &Path) {}
 pub use self::windows::{announce, withdraw};
 
 /// A folder of its own means nothing to Windows: a font is loaded for this
-/// session with `AddFontResource`, which also holds the file open until
-/// `RemoveFontResource`, and at each logon from the user's list in the registry.
+/// session with `AddFontResource` until `RemoveFontResource`, and at each
+/// logon from the user's list in the registry.
 #[cfg(windows)]
 mod windows {
     use std::ffi::OsStr;
@@ -176,6 +176,27 @@ mod tests {
         .unwrap();
         item.extra.insert("fontMetas".into(), serde_json::json!({ "postScriptName": { "en": ps } }));
         item
+    }
+
+    /// Loads a real font into the session and adds it to the user's list, so
+    /// `cargo test` never does. Run by hand with `--ignored`.
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "changes the user's font list for a moment"]
+    fn a_registered_font_is_listed_and_can_be_removed_after() {
+        let windows = std::env::var_os("SystemRoot").unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let font = tmp.path().join("FalconTestFont.ttf");
+        std::fs::copy(std::path::Path::new(&windows).join("Fonts").join("arial.ttf"), &font).unwrap();
+        let listed = || {
+            let out = std::process::Command::new("reg").args(["query", r"HKCU\Software\Microsoft\Windows NT\CurrentVersion\Fonts", "/v", "FalconTestFont (Falcon)"]).output().unwrap();
+            out.status.success()
+        };
+        announce(&font);
+        assert!(listed());
+        withdraw(&font);
+        assert!(!listed());
+        std::fs::remove_file(&font).unwrap();
     }
 
     #[test]

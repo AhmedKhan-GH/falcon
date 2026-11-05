@@ -335,7 +335,7 @@ mod tests {
         std::fs::create_dir_all(e.root.join("Sub")).unwrap();
         assert_eq!(run(&e, &e.lib, &[dotted]), Err(Refusal::Open));
         let mut trailing = e.lib.clone().into_os_string();
-        trailing.push("/");
+        trailing.push(std::path::MAIN_SEPARATOR_STR);
         assert_eq!(run(&e, &e.lib, &[PathBuf::from(trailing)]), Err(Refusal::Open));
     }
 
