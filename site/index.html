@@ -271,8 +271,8 @@ cargo run --release -p falcon-app</pre>
           <pre>scripts/package-linux.sh</pre>
         </div>
         <div class="card" id="build-windows"><h4>Windows</h4>
-          <p><strong>Needs</strong> Rust for the MSVC toolchain, with Visual Studio's C++ build tools. FFmpeg plays video on Windows, so it is built first, in an <a href="https://www.msys2.org">MSYS2</a> UCRT64 shell with these packages and a Windows Python:</p>
-          <pre>pacman -S --needed make diffutils \
+          <p><strong>Needs</strong> Rust for the MSVC toolchain, with Visual Studio's C++ build tools. FFmpeg plays video on Windows, so it is built first, in an <a href="https://www.msys2.org">MSYS2</a> UCRT64 shell that can also see <code>cargo</code> and a Windows Python (set <code>MSYS2_PATH_TYPE=inherit</code> before opening it), with these packages:</p>
+          <pre>pacman -S --needed make diffutils tar xz curl \
   mingw-w64-ucrt-x86_64-gcc \
   mingw-w64-ucrt-x86_64-binutils \
   mingw-w64-ucrt-x86_64-nasm \
@@ -282,7 +282,7 @@ cargo run --release -p falcon-app</pre>
 cd falcon
 scripts/build-ffmpeg.sh
 cargo run --release -p falcon-app</pre>
-          <p><strong>Package it</strong> In the same shell, with <code>cargo</code> on its path, make <code>Falcon-x86_64-setup.exe</code> in <code>target/windows</code>. The script fetches NSIS itself:</p>
+          <p><strong>Package it</strong> In the same shell, make <code>Falcon-x86_64-setup.exe</code> in <code>target/windows</code>. The script fetches NSIS itself:</p>
           <pre>scripts/package-windows.sh</pre>
         </div>
       </div>
