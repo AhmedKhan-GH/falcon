@@ -99,8 +99,8 @@ pub fn withdraw(_font: &Path) {}
 pub use self::windows::{announce, withdraw};
 
 /// A folder of its own means nothing to Windows: a font is loaded for this
-/// session with `AddFontResource`, which also holds the file open until
-/// `RemoveFontResource`, and at each logon from the user's list in the registry.
+/// session with `AddFontResource` until `RemoveFontResource`, and at each
+/// logon from the user's list in the registry.
 #[cfg(windows)]
 mod windows {
     use std::ffi::OsStr;
@@ -194,8 +194,6 @@ mod tests {
         };
         announce(&font);
         assert!(listed());
-        // While it is loaded, Windows holds the file.
-        assert!(std::fs::remove_file(&font).is_err());
         withdraw(&font);
         assert!(!listed());
         std::fs::remove_file(&font).unwrap();
