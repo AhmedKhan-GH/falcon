@@ -37,6 +37,20 @@ pub struct Input {
 // `Sync`, so it is only ever used from one thread at a time.
 unsafe impl Send for Input {}
 
+/// A path as FFmpeg's file protocol reads it: the raw bytes on Unix, UTF-8 on
+/// Windows, where FFmpeg converts it back to the wide form the system takes.
+#[cfg(unix)]
+fn path_bytes(path: &Path) -> Result<Vec<u8>> {
+    use std::os::unix::ffi::OsStrExt;
+    Ok(path.as_os_str().as_bytes().to_vec())
+}
+
+#[cfg(windows)]
+fn path_bytes(path: &Path) -> Result<Vec<u8>> {
+    let path = path.to_str().ok_or_else(|| Error("the path is not valid Unicode".into()))?;
+    Ok(path.as_bytes().to_vec())
+}
+
 impl Input {
     pub fn open(path: &Path) -> Result<Input> {
         let api = ffi::api().map_err(|e| Error(e.to_string()))?;
@@ -46,9 +60,8 @@ impl Input {
         // The `file:` prefix keeps a colon in the name from reading as a
         // protocol.
         let url = {
-            use std::os::unix::ffi::OsStrExt;
             let mut bytes = b"file:".to_vec();
-            bytes.extend_from_slice(path.as_os_str().as_bytes());
+            bytes.extend_from_slice(&path_bytes(path)?);
             CString::new(bytes).map_err(|_| Error("the path contains a NUL byte".into()))?
         };
         let mut ctx = ptr::null_mut();
