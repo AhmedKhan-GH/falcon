@@ -192,7 +192,9 @@ fn a_timeout_fails_that_item() {
 #[test]
 fn an_unreachable_provider_is_a_stated_failure() {
     let (_d, shared, ids) = library(&["x"]);
-    let report = go(&shared, &run(&ids, vec![Step::AutoTag]), &plan("http://127.0.0.1:1/v1"));
+    // Windows tries a refused connection again for about two seconds.
+    let limits = Limits { connect: Duration::from_secs(10), first_byte: Duration::from_secs(10), idle: Duration::from_millis(300), total: Duration::from_secs(15) };
+    let report = go(&shared, &run(&ids, vec![Step::AutoTag]), &plan_with("http://127.0.0.1:1/v1", limits));
     assert!(report.failed[0].1.starts_with("Could not reach the provider"), "{}", report.failed[0].1);
     assert!(tags(&shared, &ids[0]).is_empty());
 }
