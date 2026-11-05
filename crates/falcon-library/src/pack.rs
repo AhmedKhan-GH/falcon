@@ -544,7 +544,11 @@ fn extract(pack: &Path, dest: &Path) -> std::result::Result<(), String> {
     let mut zip = ZipArchive::new(File::open(pack).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
     for i in 0..zip.len() {
         let mut entry = zip.by_index(i).map_err(|e| e.to_string())?;
-        let Some(rel) = entry.enclosed_name() else { continue };
+        #[cfg(not(windows))]
+        let rel = entry.enclosed_name();
+        #[cfg(windows)]
+        let rel = entry.name().ok().map(|name| windows_entry_path(&name));
+        let Some(rel) = rel else { continue };
         let out = dest.join(rel);
         if entry.is_dir() {
             fs::create_dir_all(&out).map_err(|e| e.to_string())?;
@@ -561,6 +565,15 @@ fn extract(pack: &Path, dest: &Path) -> std::result::Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// Where a zip entry unpacks to on Windows. `enclosed_name` drops any name
+/// Windows can't keep, but a pack from a Mac holds such names, so each part
+/// becomes the one the item's name maps to. A part can't lead anywhere else:
+/// `..` becomes `_`, and separators and colons in it become `_`.
+#[cfg(windows)]
+fn windows_entry_path(name: &str) -> PathBuf {
+    name.split('/').filter(|part| !part.is_empty() && *part != ".").map(|part| crate::disk_name::on_disk(part).into_owned()).collect()
 }
 
 fn move_dir(from: &Path, to: &Path) -> Result<()> {

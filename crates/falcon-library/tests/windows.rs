@@ -144,6 +144,77 @@ fn nothing_written_to_a_library_holds_a_windows_path() {
     }
 }
 
+/// A pack made on a Mac names its files as the Mac does.
+#[test]
+fn a_pack_from_a_mac_unpacks_to_files_windows_can_keep() {
+    use std::io::Write;
+    use zip::write::SimpleFileOptions;
+    let tmp = tempfile::tempdir().unwrap();
+    let id = "M3KVWXDQ2B7CA";
+    let source = tmp.path().join("Mac.library");
+    mac_library(&source);
+    let item = fs::read(source.join(format!("images/{id}.info/metadata.json"))).unwrap();
+    let pack = tmp.path().join("mac.eaglepack");
+    let mut zip = zip::ZipWriter::new(fs::File::create(&pack).unwrap());
+    let plain = SimpleFileOptions::default();
+    zip.start_file("pack.json", plain).unwrap();
+    let record: serde_json::Value = serde_json::from_slice(&item).unwrap();
+    zip.write_all(serde_json::json!({"images": [record], "folder": {"name": "Pack", "children": []}}).to_string().as_bytes()).unwrap();
+    zip.start_file(format!("{id}.info/metadata.json"), plain).unwrap();
+    zip.write_all(&item).unwrap();
+    zip.start_file(format!("{id}.info/a:b.png"), plain).unwrap();
+    zip.write_all(&fs::read(source.join(format!("images/{id}.info/a_b.png"))).unwrap()).unwrap();
+    zip.finish().unwrap();
+
+    let mut lib = Library::create(tmp.path().join("New.library")).unwrap();
+    let ids = falcon_library::pack::import_pack(&mut lib, &pack, &Default::default()).unwrap();
+    assert_eq!(ids.len(), 1);
+    let item = lib.item(&ids[0]).unwrap();
+    assert_eq!(item.name, "a:b");
+    assert!(item.original_path(lib.root()).is_file(), "{:?}", item.original_path(lib.root()));
+}
+
+/// Unlike the names from a Mac, these are out to get somewhere else.
+#[test]
+fn a_hostile_pack_stays_in_its_folder() {
+    use std::io::Write;
+    use zip::write::SimpleFileOptions;
+    let tmp = tempfile::tempdir().unwrap();
+    let pack = tmp.path().join("hostile.eaglepack");
+    let target = tmp.path().join("escaped.txt");
+    let mut zip = zip::ZipWriter::new(fs::File::create(&pack).unwrap());
+    zip.start_file("pack.json", SimpleFileOptions::default()).unwrap();
+    zip.write_all(br#"{"images":[]}"#).unwrap();
+    for name in ["../escaped.txt".to_string(), r"..\escaped.txt".to_string(), format!("{}", target.display()), format!("//?/{}", target.display())] {
+        zip.start_file(name, SimpleFileOptions::default()).unwrap();
+        zip.write_all(b"x").unwrap();
+    }
+    zip.finish().unwrap();
+    let mut lib = Library::create(tmp.path().join("New.library")).unwrap();
+    let _ = falcon_library::pack::import_pack(&mut lib, &pack, &Default::default());
+    assert!(!target.exists());
+    assert!(!tmp.path().parent().unwrap().join("escaped.txt").exists());
+}
+
+/// `fs::copy` keeps the read-only attribute, which the rest then meets.
+#[test]
+fn a_read_only_original_can_be_imported_renamed_and_removed() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut lib = Library::create(tmp.path().join("New.library")).unwrap();
+    let src = tmp.path().join("picture.png");
+    make_png(&src);
+    let mut read_only = fs::metadata(&src).unwrap().permissions();
+    read_only.set_readonly(true);
+    fs::set_permissions(&src, read_only).unwrap();
+    let id = lib.import_file(&src, &opts()).unwrap();
+    let mut item = lib.item(&id).cloned().unwrap();
+    item.name = "renamed".into();
+    lib.update_item(item).unwrap();
+    let item = lib.item(&id).unwrap();
+    assert!(item.original_path(lib.root()).is_file());
+    fs::remove_dir_all(item.info_dir(lib.root())).unwrap();
+}
+
 #[test]
 fn a_device_name_imports_under_a_name_windows_can_keep() {
     let tmp = tempfile::tempdir().unwrap();
