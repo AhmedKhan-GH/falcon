@@ -501,7 +501,7 @@ pub fn paths_text(lib: &Library, items: &[&Item]) -> String {
 /// Lines for Copy Folder Path: each item's `<id>.info` folder with a
 /// trailing slash, as Eagle copies them.
 pub fn folder_paths_text(lib: &Library, items: &[&Item]) -> String {
-    items.iter().map(|i| format!("{}/", i.info_dir(lib.root()).display())).collect::<Vec<_>>().join("\n")
+    items.iter().map(|i| format!("{}{}", i.info_dir(lib.root()).display(), std::path::MAIN_SEPARATOR)).collect::<Vec<_>>().join("\n")
 }
 
 /// The MIME subtype Eagle uses for an original it copies as Base64 itself;
@@ -776,9 +776,9 @@ mod tests {
         let items: Vec<&Item> = ids.iter().filter_map(|id| lib.item(id)).collect();
         let paths = paths_text(&lib, &items);
         assert_eq!(paths.lines().count(), 3);
-        assert!(paths.lines().next().unwrap().ends_with("/pic.png"));
+        assert!(paths.lines().next().unwrap().ends_with(&format!("{}pic.png", std::path::MAIN_SEPARATOR)));
         let folders = folder_paths_text(&lib, &items[..1]);
-        assert_eq!(folders, format!("{}/", items[0].info_dir(lib.root()).display()));
+        assert_eq!(folders, format!("{}{}", items[0].info_dir(lib.root()).display(), std::path::MAIN_SEPARATOR));
 
         // A PNG is copied as itself.
         let url = data_url(&lib, items[0]).unwrap();
