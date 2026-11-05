@@ -134,7 +134,8 @@ fn file_url_path(rest: &str) -> PathBuf {
     let rest = rest.strip_prefix("localhost/").map_or_else(|| rest.to_string(), |r| format!("/{r}"));
     let slashes = rest.replace('/', "\\");
     match slashes.strip_prefix('\\') {
-        Some(path) => PathBuf::from(path),
+        Some(path) if path.as_bytes().get(1) == Some(&b':') => PathBuf::from(path),
+        Some(_) => PathBuf::from(slashes),
         None => PathBuf::from(format!(r"\\{slashes}")),
     }
 }
@@ -168,6 +169,7 @@ mod tests {
         assert_eq!(file_url_path("/C:/a b/c.png"), PathBuf::from(r"C:\a b\c.png"));
         assert_eq!(file_url_path("localhost/C:/a"), PathBuf::from(r"C:\a"));
         assert_eq!(file_url_path("host/share/a"), PathBuf::from(r"\\host\share\a"));
+        assert_eq!(file_url_path("/Users/a"), PathBuf::from(r"\Users\a"));
     }
 
     fn none(_: &str) -> bool {
