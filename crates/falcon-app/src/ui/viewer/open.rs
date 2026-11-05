@@ -84,6 +84,10 @@ impl App {
             originals(&lib, ids).into_iter().next()
         };
         let Some(file) = file else { return };
+        if open_with::choose_app(&file) {
+            self.used(&[file]);
+            return;
+        }
         let picked = rfd::FileDialog::new().set_title(tr("Choose an App to Open With")).set_directory("/Applications").add_filter(tr("Applications"), &["app"]).pick_file();
         if let Some(app) = picked {
             open_with::open_in(&app, std::slice::from_ref(&file));
@@ -131,7 +135,13 @@ impl App {
         ui.set_min_width(200.0);
         let apps = self.open_apps.get(file).to_vec();
         if apps.is_empty() {
-            ui.label(egui::RichText::new(tr("No apps found")).color(t::p().text_muted));
+            if open_with::SYSTEM_CHOOSER {
+                if ui.button(tr("Open With Another App…")).clicked() && open_with::choose_app(file) {
+                    self.used(&[file.to_path_buf()]);
+                }
+            } else {
+                ui.label(egui::RichText::new(tr("No apps found")).color(t::p().text_muted));
+            }
         }
         for e in &apps {
             if ui.button(e.label()).on_hover_text(e.app.path.display().to_string()).clicked() {

@@ -110,7 +110,7 @@ pub fn percent_decode(s: &str) -> String {
 /// What a stored link opens, if anything.
 pub fn link_target(url: &str, exists: impl Fn(&str) -> bool) -> Option<LinkTarget> {
     if starts_with_ci(url, "file://") {
-        return Some(LinkTarget::File(PathBuf::from(percent_decode(&url["file://".len()..]))));
+        return Some(LinkTarget::File(file_url_path(&percent_decode(&url["file://".len()..]))));
     }
     if is_web_url(url) {
         return Some(LinkTarget::Web(if has_scheme(url) { url.to_string() } else { format!("http://{url}") }));
@@ -121,20 +121,54 @@ pub fn link_target(url: &str, exists: impl Fn(&str) -> bool) -> Option<LinkTarge
     url.contains("://").then(|| LinkTarget::Web(url.to_string()))
 }
 
+/// The path a `file://` address names, after what its `//` is followed by.
+#[cfg(not(windows))]
+fn file_url_path(rest: &str) -> PathBuf {
+    PathBuf::from(rest)
+}
+
+/// The path a `file://` address names: `/C:/a` is `C:\a`, and `host/share/a`
+/// (with no leading slash) is `\\host\share\a`.
+#[cfg(windows)]
+fn file_url_path(rest: &str) -> PathBuf {
+    let rest = rest.strip_prefix("localhost/").map_or_else(|| rest.to_string(), |r| format!("/{r}"));
+    let slashes = rest.replace('/', "\\");
+    match slashes.strip_prefix('\\') {
+        Some(path) => PathBuf::from(path),
+        None => PathBuf::from(format!(r"\\{slashes}")),
+    }
+}
+
 /// Opens a link with the system. Never call this from tests.
 pub fn open_link(t: &LinkTarget) {
     match t {
         LinkTarget::File(p) => crate::open_with::open_default(std::slice::from_ref(p)),
-        LinkTarget::Web(url) => {
-            let opener = if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
-            let _ = std::process::Command::new(opener).arg(url).spawn();
-        }
+        LinkTarget::Web(url) => open_web(url),
     }
+}
+
+#[cfg(not(windows))]
+fn open_web(url: &str) {
+    let opener = if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
+    let _ = std::process::Command::new(opener).arg(url).spawn();
+}
+
+#[cfg(windows)]
+fn open_web(url: &str) {
+    crate::open_with::shell_open(url.into());
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn file_addresses_name_windows_paths() {
+        assert_eq!(file_url_path("/C:/a b/c.png"), PathBuf::from(r"C:\a b\c.png"));
+        assert_eq!(file_url_path("localhost/C:/a"), PathBuf::from(r"C:\a"));
+        assert_eq!(file_url_path("host/share/a"), PathBuf::from(r"\\host\share\a"));
+    }
 
     fn none(_: &str) -> bool {
         false
