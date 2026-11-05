@@ -34,6 +34,9 @@ set -eu
 VERSION=7.1.5
 SHA256=de668509caf9e35e3cd162473441fdb29538c6d96ed080292b3cf9e6fc5d558f
 URL="https://ffmpeg.org/releases/ffmpeg-$VERSION.tar.xz"
+# ffmpeg.org is sometimes unreachable for a while. MacPorts keeps the same file, and the SHA-256
+# below is checked wherever it came from.
+MIRROR_URL="https://distfiles.macports.org/ffmpeg/ffmpeg-$VERSION.tar.xz"
 
 # dav1d's release tarball. The hash is the one VideoLAN publishes next to it
 # (dav1d-1.5.4.tar.xz.sha256) and the one MacPorts' dav1d Portfile records for the same file.
@@ -198,7 +201,8 @@ cd "$BUILD"
 if [ -n "${FFMPEG_TARBALL:-}" ]; then
   cp "$FFMPEG_TARBALL" "ffmpeg-$VERSION.tar.xz"
 else
-  curl -fsSL -o "ffmpeg-$VERSION.tar.xz" "$URL"
+  curl -fsSL --connect-timeout 20 --retry 2 -o "ffmpeg-$VERSION.tar.xz" "$URL" \
+    || curl -fsSL --connect-timeout 20 --retry 2 -o "ffmpeg-$VERSION.tar.xz" "$MIRROR_URL"
 fi
 echo "$SHA256  ffmpeg-$VERSION.tar.xz" | $SHA256SUM -c -
 tar -xJf "ffmpeg-$VERSION.tar.xz"
