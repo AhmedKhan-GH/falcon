@@ -13,6 +13,7 @@
 <p align="center">
   <img alt="100% Rust" src="https://img.shields.io/badge/100%25-Rust-b7410e?style=flat-square&logo=rust">
   <img alt="macOS" src="https://img.shields.io/badge/macOS-native-2f7bf5?style=flat-square&logo=apple">
+  <img alt="Windows" src="https://img.shields.io/badge/Windows-x86--64-2f7bf5?style=flat-square&logo=windows">
   <img alt="Linux" src="https://img.shields.io/badge/Linux-x86--64-2f7bf5?style=flat-square&logo=linux">
   <img alt="License: MIT OR Apache-2.0" src="https://img.shields.io/badge/license-MIT%20%2F%20Apache--2.0-3a3a3a?style=flat-square">
   <img alt="Status: early alpha" src="https://img.shields.io/badge/status-early%20alpha-d69e2e?style=flat-square">
@@ -120,9 +121,11 @@ Every screenshot here is the real app at work on public-domain art. The credits 
 
 **On a Mac with Apple Silicon,** [download the .dmg](https://ahmedkhan-gh.github.io/falcon/#mac), open it and drag Falcon to Applications. Falcon isn't notarised, so the first time you open it, click Open Anyway in System Settings ▸ Privacy & Security; the download page lists the other ways.
 
+**On 64-bit Windows,** [download the installer](https://ahmedkhan-gh.github.io/falcon/#windows) and run it. It installs for you alone, without admin rights. Falcon isn't code-signed, so on first run Windows SmartScreen warns you: click More info, then Run anyway. Some features aren't on Windows yet; the download page lists them.
+
 **On Linux,** download the [AppImage](https://ahmedkhan-gh.github.io/falcon/#linux) (any distribution) or the [.deb](https://ahmedkhan-gh.github.io/falcon/#deb) (Ubuntu, Debian). Some features aren't on Linux yet; the download page lists them.
 
-**To build it,** you need Rust 1.89 or newer. On Debian or Ubuntu, also run `sudo apt install pkg-config libasound2-dev`. Video on Linux needs FFmpeg from `scripts/build-ffmpeg.sh`, which also takes `nasm`, `zlib1g-dev` and `python3-venv`.
+**To build it,** you need Rust 1.89 or newer. On Debian or Ubuntu, also run `sudo apt install pkg-config libasound2-dev`. Video on Linux needs FFmpeg from `scripts/build-ffmpeg.sh`, which also takes `nasm`, `zlib1g-dev` and `python3-venv`. On Windows, use Rust for MSVC with Visual Studio's C++ build tools, and run the two scripts in an MSYS2 UCRT64 shell; the download page lists the packages.
 
 ```sh
 git clone https://github.com/AhmedKhan-GH/falcon
@@ -131,9 +134,10 @@ cargo run --release -p falcon-app          # choose or create a library on first
 scripts/bundle.sh                          # macOS: build target/release/Falcon.app
 scripts/package-macos.sh                   # macOS: build the .dmg in target/macos
 scripts/package-linux.sh                   # Linux: build the AppImage and .deb in target/linux
+scripts/package-windows.sh                 # Windows: build the installer in target/windows
 ```
 
-While falcon is in development, the app and the command-line tool only open libraries inside `~/Falcon Sandbox` (set `FALCON_SANDBOX` to use another folder). Copy a library there to try falcon on it.
+While falcon is in development, the app and the command-line tool only open libraries inside `~/Falcon Sandbox`, which is `%USERPROFILE%\Falcon Sandbox` on Windows (set `FALCON_SANDBOX` to use another folder). Copy a library there to try falcon on it.
 
 ```sh
 cargo run -p falcon -- new ~/"Falcon Sandbox"/Inspiration.library
