@@ -14,12 +14,15 @@ fn main() {
     println!("cargo::rerun-if-changed={}", lib.display());
     println!("cargo::rerun-if-changed={}", lib.join("libavformat.61.dylib").display());
     println!("cargo::rerun-if-changed={}", lib.join("libavfilter.10.dylib").display());
-    let has = |mac: &str, other: &str| lib.join(mac).exists() || lib.join(other).exists();
-    if has("libavformat.61.dylib", "libavformat.so.61") && has("libavfilter.10.dylib", "libavfilter.so.10") {
+    println!("cargo::rerun-if-changed={}", lib.join("avformat-61.dll").display());
+    println!("cargo::rerun-if-changed={}", lib.join("avfilter-10.dll").display());
+    let has = |names: [&str; 3]| names.iter().any(|name| lib.join(name).exists());
+    if has(["libavformat.61.dylib", "libavformat.so.61", "avformat-61.dll"]) && has(["libavfilter.10.dylib", "libavfilter.so.10", "avfilter-10.dll"]) {
         println!("cargo::rustc-cfg=ffmpeg_built");
     }
     println!("cargo::rerun-if-changed={}", lib.join("libdav1d.7.dylib").display());
-    if has("libdav1d.7.dylib", "libdav1d.so.7") {
+    println!("cargo::rerun-if-changed={}", lib.join("libdav1d.dll").display());
+    if has(["libdav1d.7.dylib", "libdav1d.so.7", "libdav1d.dll"]) {
         println!("cargo::rustc-cfg=ffmpeg_dav1d");
     }
 }

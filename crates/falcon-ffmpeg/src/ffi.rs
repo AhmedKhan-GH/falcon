@@ -32,7 +32,7 @@ pub const AVSEEK_FLAG_BACKWARD: c_int = 1;
 pub const SWS_BILINEAR: c_int = 2;
 pub const SWS_AREA: c_int = 0x20;
 pub const AV_LOG_QUIET: c_int = -8;
-/// `AVERROR(EAGAIN)`: EAGAIN is 35 on macOS and 11 on Linux.
+/// `AVERROR(EAGAIN)`: EAGAIN is 35 on macOS and 11 on Linux and in Windows's C runtimes.
 #[cfg(target_os = "macos")]
 pub const AVERROR_EAGAIN: c_int = -35;
 #[cfg(not(target_os = "macos"))]
@@ -337,19 +337,31 @@ impl std::fmt::Display for LoadError {
 
 /// The file name of library `name` with major version `major`.
 fn file_name(name: &str, major: u32) -> String {
-    if cfg!(target_os = "macos") { format!("lib{name}.{major}.dylib") } else { format!("lib{name}.so.{major}") }
+    if cfg!(target_os = "macos") {
+        format!("lib{name}.{major}.dylib")
+    } else if cfg!(windows) {
+        format!("{name}-{major}.dll")
+    } else {
+        format!("lib{name}.so.{major}")
+    }
 }
 
 /// Where the libraries are looked for, in order: `$FALCON_FFMPEG_DIR`,
 /// the app bundle's `Contents/Frameworks` next to the executable (Linux
-/// packages: `lib/falcon` beside `bin`), and the workspace's `target/ffmpeg/lib` that `scripts/build-ffmpeg.sh` fills.
+/// packages: `lib/falcon` beside `bin`; Windows: the executable's own folder), and the workspace's `target/ffmpeg/lib` that `scripts/build-ffmpeg.sh` fills.
 pub fn search_dirs() -> Vec<PathBuf> {
     let mut dirs = Vec::new();
     if let Some(d) = std::env::var_os("FALCON_FFMPEG_DIR") {
         dirs.push(PathBuf::from(d));
     }
     if let Some(exe_dir) = std::env::current_exe().ok().and_then(|e| e.parent().map(Path::to_path_buf)) {
-        dirs.push(exe_dir.join(if cfg!(target_os = "macos") { "../Frameworks" } else { "../lib/falcon" }));
+        dirs.push(if cfg!(target_os = "macos") {
+            exe_dir.join("../Frameworks")
+        } else if cfg!(windows) {
+            exe_dir
+        } else {
+            exe_dir.join("../lib/falcon")
+        });
     }
     dirs.push(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/ffmpeg/lib"));
     dirs
@@ -374,13 +386,32 @@ fn unusable(msg: impl Into<String>) -> LoadError {
     LoadError::Unusable(msg.into())
 }
 
+/// Opens the library at `path`, its links to the others resolved beside it.
+#[cfg(not(windows))]
+fn open_library(path: &Path) -> Result<libloading::Library, libloading::Error> {
+    // SAFETY: loading runs the library's initialisers; FFmpeg's do
+    // nothing beyond setting up its own tables.
+    unsafe { libloading::Library::new(path) }
+}
+
+/// Opens the DLL at `path`. Its own imports (avcodec's libdav1d, say) are
+/// looked for only in its folder and in System32: Windows would otherwise
+/// also try the executable's folder, the current directory and `PATH`, where
+/// a same-named DLL could be picked up.
+#[cfg(windows)]
+fn open_library(path: &Path) -> Result<libloading::Library, libloading::Error> {
+    use libloading::os::windows::{LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR, LOAD_LIBRARY_SEARCH_SYSTEM32, Library};
+    // The flag that searches the DLL's folder needs an absolute path.
+    let path = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
+    // SAFETY: as off Windows.
+    unsafe { Library::load_with_flags(path, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32) }.map(Into::into)
+}
+
 /// Opens the six libraries in `dir` and resolves every function.
 fn load(dir: &Path) -> Result<Api, LoadError> {
     let open = |name: &str, major: u32| -> Result<libloading::Library, LoadError> {
         let path = dir.join(file_name(name, major));
-        // SAFETY: loading runs the library's initialisers; FFmpeg's do
-        // nothing beyond setting up its own tables.
-        unsafe { libloading::Library::new(&path) }.map_err(|e| unusable(format!("{}: {e}", path.display())))
+        open_library(&path).map_err(|e| unusable(format!("{}: {e}", path.display())))
     };
     // Dependencies first, so each library finds the ones it links.
     let avutil = open("avutil", AVUTIL_MAJOR)?;
@@ -524,7 +555,7 @@ mod tests {
     #[test]
     fn library_names_carry_the_major_version() {
         let n = file_name("avformat", 61);
-        assert!(n == "libavformat.61.dylib" || n == "libavformat.so.61");
+        assert!(n == "libavformat.61.dylib" || n == "libavformat.so.61" || n == "avformat-61.dll");
     }
 
     #[test]
