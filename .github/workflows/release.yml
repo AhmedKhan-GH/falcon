@@ -1,7 +1,7 @@
 name: Release
 
-# Pushing a tag like v0.1.0 builds the macOS and Linux packages and publishes them together as a
-# GitHub release, once both have built. The website links to the latest release's assets by their
+# Pushing a tag like v0.1.0 builds the macOS, Linux and Windows packages and publishes them together
+# as a GitHub release, once all have built. The website links to the latest release's assets by their
 # fixed names. A pull request that changes the packaging builds them too, without publishing; the
 # packages are kept as the run's artifacts.
 
@@ -11,12 +11,15 @@ on:
   pull_request:
     paths:
       - .github/workflows/release.yml
+      - crates/falcon-app/build.rs
       - crates/falcon-ifc/build.rs
       - scripts/build-ffmpeg.sh
+      - scripts/falcon.nsi
       - scripts/bundle.sh
       - scripts/fetch-web-ifc.sh
       - scripts/package-linux.sh
       - scripts/package-macos.sh
+      - scripts/package-windows.sh
 
 permissions:
   contents: read
@@ -59,8 +62,49 @@ jobs:
             target/linux/Falcon-x86_64.deb
           if-no-files-found: error
 
+  windows:
+    # FFmpeg builds with MSYS2's mingw-w64 and Falcon with Visual Studio's C++ tools. The shell sees
+    # both, and the Python and cargo set up below. MSYS2 has no old versions to pin, so its packages
+    # are named here and BUILD-INFO.txt records the compiler they came to.
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          path-type: inherit
+          install: >-
+            make
+            diffutils
+            tar
+            xz
+            curl
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-binutils
+            mingw-w64-ucrt-x86_64-nasm
+            mingw-w64-ucrt-x86_64-zlib
+      - run: scripts/build-ffmpeg.sh
+      - run: cargo test -p falcon-ffmpeg
+      - run: scripts/fetch-web-ifc.sh
+      - run: scripts/package-windows.sh
+      - name: Test the FFmpeg inside the app folder
+        run: FALCON_FFMPEG_DIR="$PWD/target/windows/Falcon" cargo test -p falcon-ffmpeg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: target/windows/Falcon-x86_64-setup.exe
+          if-no-files-found: error
+
   publish:
-    needs: [macos, linux]
+    needs: [macos, linux, windows]
     if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     permissions:
@@ -75,10 +119,10 @@ jobs:
         with:
           path: dist
           merge-multiple: true
-      - run: cd dist && sha256sum Falcon-arm64.dmg Falcon-x86_64.AppImage Falcon-x86_64.deb > SHA256SUMS
+      - run: cd dist && sha256sum Falcon-arm64.dmg Falcon-x86_64.AppImage Falcon-x86_64.deb Falcon-x86_64-setup.exe > SHA256SUMS
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/Falcon-arm64.dmg dist/Falcon-x86_64.AppImage dist/Falcon-x86_64.deb dist/SHA256SUMS \
+          gh release create "$GITHUB_REF_NAME" dist/Falcon-arm64.dmg dist/Falcon-x86_64.AppImage dist/Falcon-x86_64.deb dist/Falcon-x86_64-setup.exe dist/SHA256SUMS \
             --title "Falcon $GITHUB_REF_NAME" --notes-file docs/release-notes.md
