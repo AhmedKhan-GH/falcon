@@ -17,7 +17,8 @@
 //   'F' web-ifc failed: length of the message (u32), the message
 //
 // The exit status is 0 after one of the last three, otherwise one of the EXIT
-// values below (or death by signal).
+// values below (or death by signal). Windows has no signals, so an unhandled
+// exception ends the process with EXIT_CRASH there, without a crash dialog.
 //
 // This file is falcon's own (MIT OR Apache-2.0); it only calls web-ifc's
 // public classes.
@@ -25,6 +26,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <exception>
 #include <functional>
@@ -32,17 +34,32 @@
 #include <vector>
 
 #include <fcntl.h>
-#include <pthread.h>
 #include <signal.h>
+#ifndef _WIN32
+#include <pthread.h>
 #include <sys/resource.h>
 #include <time.h>
 #include <unistd.h>
+#endif
 
 #include <spdlog/spdlog.h>
 
 #include "web-ifc/modelmanager/ModelManager.h"
 #include "web-ifc/schema/IfcSchemaManager.h"
 #include "web-ifc/schema/ifc-schema.h"
+
+// After web-ifc's headers, whose names windows.h's macros would otherwise clash with.
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <crtdbg.h>
+#include <io.h>
+#include <process.h>
+#include <psapi.h>
+#define THREAD unsigned __stdcall
+#else
+#define THREAD void *
+#endif
 
 namespace {
 
@@ -54,6 +71,7 @@ constexpr int EXIT_MEMORY = 72;
 // web-ifc's recursion over deep instance graphs needs far more than a default
 // thread's stack.
 constexpr size_t READER_STACK = size_t(256) << 20;
+// What's left to handle a stack overflow on: the signal stack, or on Windows the guarantee.
 constexpr size_t SIGNAL_STACK = size_t(64) << 10;
 
 struct Request {
@@ -76,6 +94,57 @@ void put_u32(uint32_t value) { put(&value, sizeof value); }
 
 void put_tag(char tag) { put(&tag, 1); }
 
+#ifdef _WIN32
+// TerminateProcess needs almost no stack and no locks, whatever state the crash left.
+[[noreturn]] void crash() {
+    TerminateProcess(GetCurrentProcess(), EXIT_CRASH);
+    _exit(EXIT_CRASH);
+}
+
+LONG WINAPI on_fatal_exception(EXCEPTION_POINTERS *) { crash(); }
+
+void on_abort(int) { crash(); }
+
+void on_invalid_parameter(const wchar_t *, const wchar_t *, const wchar_t *, unsigned, uintptr_t) { crash(); }
+
+void on_pure_call() { crash(); }
+
+// Ends quietly on anything fatal, so a bad file brings up no dialog or crash report.
+void catch_crashes() {
+    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
+    SetUnhandledExceptionFilter(on_fatal_exception);
+    _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+    signal(SIGABRT, on_abort);
+    _set_invalid_parameter_handler(on_invalid_parameter);
+    _set_purecall_handler(on_pure_call);
+}
+
+// Leaves room for the exception filter to run after a stack overflow.
+void prepare_stack() {
+    ULONG guarantee = SIGNAL_STACK;
+    SetThreadStackGuarantee(&guarantee);
+}
+
+uint64_t now_ms() { return GetTickCount64(); }
+
+uint64_t peak_memory() {
+    PROCESS_MEMORY_COUNTERS counters;
+    std::memset(&counters, 0, sizeof counters);
+    GetProcessMemoryInfo(GetCurrentProcess(), &counters, sizeof counters);
+    return uint64_t(counters.PeakWorkingSetSize);
+}
+
+void sleep_50ms() { Sleep(50); }
+
+// Starts a thread that reserves `stack` bytes of address space, or the default for 0. Never fails silently.
+bool start_thread(THREAD fn(void *), size_t stack, HANDLE *out = nullptr) {
+    uintptr_t handle = _beginthreadex(nullptr, unsigned(stack), fn, nullptr, stack ? STACK_SIZE_PARAM_IS_A_RESERVATION : 0, nullptr);
+    if (out) {
+        *out = reinterpret_cast<HANDLE>(handle);
+    }
+    return handle != 0;
+}
+#else
 void on_fatal_signal(int) { _exit(EXIT_CRASH); }
 
 // Ends quietly on a fatal signal, so a bad file leaves no crash report.
@@ -88,6 +157,15 @@ void catch_crashes() {
     for (int signal : {SIGSEGV, SIGBUS, SIGABRT, SIGILL, SIGFPE, SIGTRAP}) {
         sigaction(signal, &action, nullptr);
     }
+}
+
+// The signal stack is what lets the handler run after a stack overflow.
+void prepare_stack() {
+    stack_t alt;
+    alt.ss_sp = std::malloc(SIGNAL_STACK);
+    alt.ss_size = SIGNAL_STACK;
+    alt.ss_flags = 0;
+    sigaltstack(&alt, nullptr);
 }
 
 uint64_t now_ms() {
@@ -107,11 +185,14 @@ uint64_t peak_memory() {
 #endif
 }
 
+void sleep_50ms() { usleep(50000); }
+#endif
+
 // Ends the process past its limits, also when the parent has gone.
-void *watch(void *) {
+THREAD watch(void *) {
     uint64_t start = now_ms();
     for (;;) {
-        usleep(50000);
+        sleep_50ms();
         if (now_ms() - start > request.timeout_ms) {
             _exit(EXIT_TIMEOUT);
         }
@@ -202,13 +283,8 @@ void put_failure(const char *message) {
     put(message, std::strlen(message));
 }
 
-void *read_and_reply(void *) {
-    // The signal stack is what lets the handler run after a stack overflow.
-    stack_t alt;
-    alt.ss_sp = std::malloc(SIGNAL_STACK);
-    alt.ss_size = SIGNAL_STACK;
-    alt.ss_flags = 0;
-    sigaltstack(&alt, nullptr);
+THREAD read_and_reply(void *) {
+    prepare_stack();
     try {
         put_tag(read_model() ? 'E' : 'O');
     } catch (const std::exception &e) {
@@ -220,13 +296,13 @@ void *read_and_reply(void *) {
         _exit(EXIT_CRASH);
     }
     _exit(0);
-    return nullptr;
+    return 0;
 }
 
 bool read_all(int fd, std::vector<uint8_t> &out) {
     std::vector<uint8_t> chunk(1 << 20);
     for (;;) {
-        ssize_t n = read(fd, chunk.data(), chunk.size());
+        auto n = read(fd, chunk.data(), static_cast<unsigned>(chunk.size()));
         if (n < 0) {
             return false;
         }
@@ -242,7 +318,14 @@ bool read_all(int fd, std::vector<uint8_t> &out) {
 int main() {
     // The reply gets its own descriptor; anything web-ifc prints goes nowhere.
     int out = dup(1);
+#ifdef _WIN32
+    int null = open("NUL", O_WRONLY);
+    // The request and the reply are binary, and Windows's C runtime would translate line ends.
+    _setmode(0, _O_BINARY);
+    _setmode(out, _O_BINARY);
+#else
     int null = open("/dev/null", O_WRONLY);
+#endif
     if (out < 0 || null < 0 || dup2(null, 1) < 0 || !(reply = fdopen(out, "wb"))) {
         return EXIT_BAD_REQUEST;
     }
@@ -259,6 +342,14 @@ int main() {
     request.file = std::move(input);
     put("FIFC", 4);
     catch_crashes();
+#ifdef _WIN32
+    HANDLE reader;
+    if (!start_thread(watch, 0) || !start_thread(read_and_reply, READER_STACK, &reader)) {
+        return EXIT_CRASH;
+    }
+    WaitForSingleObject(reader, INFINITE);
+    return EXIT_CRASH;
+#else
     pthread_attr_t attr;
     pthread_attr_init(&attr);
     pthread_t watcher, reader;
@@ -271,4 +362,5 @@ int main() {
     }
     pthread_join(reader, nullptr);
     return EXIT_CRASH;
+#endif
 }

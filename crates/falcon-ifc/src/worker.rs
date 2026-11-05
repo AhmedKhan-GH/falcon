@@ -27,7 +27,8 @@ const EXIT_MEMORY: i32 = 72;
 pub(super) fn path() -> Option<&'static PathBuf> {
     static PATH: OnceLock<Option<PathBuf>> = OnceLock::new();
     PATH.get_or_init(|| {
-        let beside = std::env::current_exe().ok().and_then(|e| Some(e.parent()?.join("falcon-ifc-worker")));
+        let name = format!("falcon-ifc-worker{}", std::env::consts::EXE_SUFFIX);
+        let beside = std::env::current_exe().ok().and_then(|e| Some(e.parent()?.join(name)));
         let built = option_env!("FALCON_IFC_WORKER").map(PathBuf::from);
         [beside, built].into_iter().flatten().find(|p| p.is_file())
     })

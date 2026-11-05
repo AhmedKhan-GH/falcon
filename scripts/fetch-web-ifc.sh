@@ -16,6 +16,8 @@ set -eu
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 DEST=${WEB_IFC_DIR:-$ROOT/target/web-ifc}
+# macOS has shasum, and Git Bash and MSYS2 on Windows sha256sum.
+if command -v sha256sum >/dev/null; then SHA256SUM=sha256sum; else SHA256SUM="shasum -a 256"; fi
 
 # name  repository  tag-or-commit  sha256
 SOURCES='web-ifc ThatOpen/engine_web-ifc 0.78 cccd3bbe4058c2c2c118ae40df31f8cfde1b1850f88a031fdbbf23fd6494ae8d
@@ -38,7 +40,7 @@ echo "$SOURCES" | while read -r name repo rev sha; do
     *) url="https://github.com/$repo/archive/$rev.tar.gz" ;;
   esac
   curl -fsSL -o "$file" "$url"
-  echo "$sha  $file" | shasum -a 256 -c - >/dev/null
+  echo "$sha  $file" | $SHA256SUM -c - >/dev/null
   mkdir -p "$DEST/$name"
   tar -xzf "$file" -C "$DEST/$name" --strip-components=1
   echo "$name $repo $rev $url" >>"$DEST/SOURCES.txt"
