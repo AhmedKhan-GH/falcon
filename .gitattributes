@@ -1,0 +1,5 @@
+# Files whose exact bytes matter, whatever core.autocrlf says.
+# The locale tests compare the catalogues with what they would write.
+crates/falcon-app/locales/*.json text eol=lf
+# A carriage return after the #! line stops a script running at all.
+*.sh text eol=lf
