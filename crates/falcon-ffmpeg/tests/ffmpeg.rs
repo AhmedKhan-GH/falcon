@@ -536,6 +536,22 @@ fn struct_layouts_match_the_installed_headers() {
     assert_eq!(text.lines().count(), ours.len());
 }
 
+/// A name FFmpeg must be handed intact: on Windows it reads the path as UTF-8
+/// whatever the system's code page is.
+#[test]
+#[cfg_attr(not(ffmpeg_built), ignore = "needs scripts/build-ffmpeg.sh")]
+fn decodes_a_file_with_a_non_ascii_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let folder = dir.path().join("Ünï çödé 映像");
+    std::fs::create_dir(&folder).unwrap();
+    let path = folder.join("クリップ – été.avi");
+    write_avi(&path, false, |i, _| color(i));
+    let info = probe(&path).unwrap();
+    assert_eq!((info.width, info.height), (W, H));
+    let frame = frame_at(&path, 0.0).unwrap();
+    assert_eq!((frame.width as u32, frame.height as u32), (W, H));
+}
+
 /// Every FFmpeg DLL in the process, avcodec's dav1d too, came from the folder
 /// the loader was pointed at, not from `PATH` or the current directory.
 #[cfg(windows)]
