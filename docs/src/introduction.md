@@ -32,7 +32,7 @@ While falcon is in development, the app and the CLI only open libraries inside `
 
 - Some File ▸ New templates, normal and bump maps on 3D models, and a check on screen of some newer features (see [ROADMAP.md](https://github.com/AhmedKhan-GH/falcon/blob/main/ROADMAP.md)).
 - Eagle's plugins.
-- Windows and Linux, and signed releases.
+- Signed releases, and the parts of the app that need macOS on Windows and Linux (see [Windows](app.md#windows)).
 
 ## Running the docs
 

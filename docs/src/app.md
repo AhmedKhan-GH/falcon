@@ -8,7 +8,7 @@
 
 ## Sandbox
 
-While falcon is in development, the app and the `falcon` CLI only open libraries inside `~/Falcon Sandbox`. Set `FALCON_SANDBOX` to use another folder. Opening, creating or switching to a library anywhere else (including over the HTTP API's `library/switch`) fails with a message saying so, and the Open and Create dialogs start in the sandbox. To work on a real library, copy it into the sandbox first.
+While falcon is in development, the app and the `falcon` CLI only open libraries inside `~/Falcon Sandbox`, which is `%USERPROFILE%\Falcon Sandbox` on Windows. Set `FALCON_SANDBOX` to use another folder. Opening, creating or switching to a library anywhere else (including over the HTTP API's `library/switch`) fails with a message saying so, and the Open and Create dialogs start in the sandbox. To work on a real library, copy it into the sandbox first.
 
 The app opens libraries with `Library::open_or_restore` (see [Backups](library-format.md#backups)): when a library's `metadata.json` can't be read or parsed, the newest usable backup in its `backup/` folder replaces it before the library loads, and a message names the backup used and says the damaged file was kept in `backup/`. This covers the switcher, Open Library, libraries reopened on launch, dropped libraries and the library the app reopens after an API `library/switch`. The HTTP API's own `library/switch` still uses `Library::open`, so a damaged library fails there. Both refuse a library made by a newer Eagle than 4.0.0 (see [Newer libraries and outside changes](library-format.md#newer-libraries-and-outside-changes)); the app shows an alert saying which Eagle version saved it.
 
@@ -25,6 +25,20 @@ The library switcher (the library name at the top of the sidebar, or ⌘L) lists
 Falcon refuses to create, open or add to a library inside the folder it is installed in (its `.app` bundle, or the folder holding a bare executable), as Eagle refuses ones in its install folder: removing or updating the app would delete them.
 
 Below the library rows the switcher lists Open Library…, New Library…, Merge Another Library…, Empty Cache and Reload…, Show in Finder, Import Files…, Import Folders…, Import Eagle Package… and Import Inboard Backup…, then the collect window and Preferences. The new entries are described under Several libraries.
+
+## Windows
+
+Falcon builds and runs on 64-bit Windows, on Intel and AMD, from the same branch as the other systems. Only Windows 11 has been tried; ARM isn't built. The installer, `Falcon-x86_64-setup.exe`, installs for the current user without admin rights in `%LOCALAPPDATA%\Programs\Falcon`, adds a Start menu entry and an uninstaller to Add or remove programs, and leaves libraries and settings alone when you uninstall. To upgrade, run a newer installer; Falcon doesn't update itself. It isn't code-signed, so Windows SmartScreen warns on first run (More info, then Run anyway).
+
+Video plays through the bundled FFmpeg (see [Video playback](video.md)).
+
+Windows has the same gaps as Linux: screen capture, the tray icon, global hotkeys, the share sheet, system notifications, Touch ID, the login item, transparency effects, iCloud handling, QuickLook's thumbnails, live web views and page screenshots, dragging items out of the window, opening files from the file manager and registering `eagle://` links. Open With shows the system's Open With window, and revealing several files shows only the first file in each folder.
+
+Cloud AI providers can't be used: falcon-ai keeps API keys only in the macOS Keychain and has no key store elsewhere, so a key can't be saved. Local providers such as Ollama and LM Studio take no key and aren't affected.
+
+**Where things are.** Logs go to `%LOCALAPPDATA%\Falcon\Logs`, and settings and saved state to `%APPDATA%\Falcon\data`.
+
+**Item names on disk.** An item's name stays in `metadata.json` exactly as it came, but Windows can't keep every name as a file. `crates/falcon-library/src/disk_name.rs` gives the name an item's files are kept under: `<`, `>`, `:`, `"`, `/`, `\`, `|`, `?`, `*` and control characters become `_`, trailing dots and spaces are dropped, and a device name such as `CON` or `NUL` gets a `_` after it. An item named `a:b` is therefore kept as `a_b.png`, with the name in the metadata still `a:b`. Code builds an item's file names through `Item::original_path` and `Item::thumbnail_name`, never from the name directly. The limit is that a library made or changed this way won't find that file if it goes back to a Mac, which looks for `a:b.png`.
 
 ## What it does
 
@@ -489,7 +503,7 @@ The tips also open by themselves, once: after the welcome flow is finished, a li
 
 ### Error logs
 
-Falcon writes errors, such as a library that fails to open or a crash, to `~/Library/Logs/Falcon/falcon.log`, one line each with the local time and `ERROR`. When the file passes 1 MiB it is renamed `falcon.1.log` (replacing an older one) and a new log starts. Help ▸ Error Logs opens the file with the default app, creating it first if it is missing. The log is for diagnosis only; nothing is sent anywhere.
+Falcon writes errors, such as a library that fails to open or a crash, to `~/Library/Logs/Falcon/falcon.log` (`%LOCALAPPDATA%\Falcon\Logs` on Windows), one line each with the local time and `ERROR`. When the file passes 1 MiB it is renamed `falcon.1.log` (replacing an older one) and a new log starts. Help ▸ Error Logs opens the file with the default app, creating it first if it is missing. The log is for diagnosis only; nothing is sent anywhere.
 
 ### Debug report
 
