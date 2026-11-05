@@ -80,9 +80,7 @@ fn main() {
     let exe = PathBuf::from(std::env::var_os("OUT_DIR").unwrap()).join(if msvc { "falcon-ifc-worker.exe" } else { "falcon-ifc-worker" });
     let mut link: Command = b.get_compiler().to_command();
     if msvc {
-        // No console: a console program started from a windowed app would flash one up. The pipes
-        // for the request and the reply work all the same.
-        link.args(&objects).arg(format!("/Fe:{}", exe.display())).arg("/link").arg("/SUBSYSTEM:WINDOWS").arg("/ENTRY:mainCRTStartup").arg("/OPT:REF");
+        link.args(&objects).arg(format!("/Fe:{}", exe.display())).arg("/link").arg("/OPT:REF");
     } else {
         link.args(&objects).arg("-pthread").arg("-o").arg(&exe);
     }
