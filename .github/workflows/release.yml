@@ -1,84 +1,26 @@
-name: Release
-
-# Pushing a tag like v0.1.0 builds the macOS and Linux packages and publishes them together as a
-# GitHub release, once both have built. The website links to the latest release's assets by their
-# fixed names. A pull request that changes the packaging builds them too, without publishing; the
-# packages are kept as the run's artifacts.
+name: Release (Windows)
 
 on:
   push:
-    tags: ['v*']
-  pull_request:
-    paths:
-      - .github/workflows/release.yml
-      - crates/falcon-ifc/build.rs
-      - scripts/build-ffmpeg.sh
-      - scripts/bundle.sh
-      - scripts/fetch-web-ifc.sh
-      - scripts/package-linux.sh
-      - scripts/package-macos.sh
-
-permissions:
-  contents: read
+    tags:
+      - 'v*'
 
 jobs:
-  macos:
-    # Apple Silicon. package-macos.sh builds for macOS 12 whatever macOS the runner has.
-    runs-on: macos-15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: scripts/build-ffmpeg.sh
-      - run: scripts/fetch-web-ifc.sh
-      - run: scripts/package-macos.sh
-      - name: Test the FFmpeg inside the app
-        run: FALCON_FFMPEG_DIR="$PWD/target/release/Falcon.app/Contents/Frameworks" cargo test -p falcon-ffmpeg
-      - uses: actions/upload-artifact@v4
-        with:
-          name: macos
-          path: target/macos/Falcon-arm64.dmg
-          if-no-files-found: error
+  build-windows:
+    runs-on: windows-latest
 
-  linux:
-    # The oldest supported Ubuntu, since packages only run on a glibc at least this new.
-    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: sudo apt-get update && sudo apt-get install -y pkg-config libasound2-dev nasm zlib1g-dev python3-venv
-      - run: scripts/build-ffmpeg.sh
-      - run: cargo test -p falcon-ffmpeg
-      - run: scripts/package-linux.sh
-      - uses: actions/upload-artifact@v4
-        with:
-          name: linux
-          path: |
-            target/linux/Falcon-x86_64.AppImage
-            target/linux/Falcon-x86_64.deb
-          if-no-files-found: error
 
-  publish:
-    needs: [macos, linux]
-    if: github.ref_type == 'tag'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-      - name: Check the tag against the version
-        run: |
-          version=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)
-          [ "$GITHUB_REF_NAME" = "v$version" ] || { echo "Tag $GITHUB_REF_NAME doesn't match version $version" >&2; exit 1; }
-      - uses: actions/download-artifact@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build Windows
+        run: cargo build --release
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
-          path: dist
-          merge-multiple: true
-      - run: cd dist && sha256sum Falcon-arm64.dmg Falcon-x86_64.AppImage Falcon-x86_64.deb > SHA256SUMS
-      - name: Publish
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "$GITHUB_REF_NAME" dist/Falcon-arm64.dmg dist/Falcon-x86_64.AppImage dist/Falcon-x86_64.deb dist/SHA256SUMS \
-            --title "Falcon $GITHUB_REF_NAME" --notes-file docs/release-notes.md
+          name: windows
+          path: target/release/*.exe
