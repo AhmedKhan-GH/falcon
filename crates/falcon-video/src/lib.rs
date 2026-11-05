@@ -222,6 +222,8 @@ impl rodio::Source for Sound {
 /// What opening FFmpeg's player gives: the player and its sound.
 type Opened = falcon_ffmpeg::Result<(falcon_ffmpeg::Player, Option<falcon_ffmpeg::AudioOut>)>;
 
+// Lives a moment and is moved once; only Windows' audio types tip it over.
+#[cfg_attr(windows, allow(clippy::large_enum_variant))]
 enum Readied {
     System(sys::Prepared),
     Ffmpeg(falcon_ffmpeg::Player, Option<falcon_ffmpeg::AudioOut>),

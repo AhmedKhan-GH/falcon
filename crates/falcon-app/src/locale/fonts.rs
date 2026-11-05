@@ -8,7 +8,22 @@ use eframe::egui::{self, FontData, FontFamily, FontInsert, InsertFontFamily};
 
 use super::Lang;
 
+/// The Windows font for a language's script, if the interface font lacks it.
+#[cfg(windows)]
+fn font_path(lang: Lang) -> Option<std::path::PathBuf> {
+    let file = match lang {
+        Lang::Ja => "YuGothR.ttc",
+        Lang::Ko => "malgun.ttf",
+        Lang::ZhCn => "msyh.ttc",
+        Lang::ZhTw => "msjh.ttc",
+        Lang::En | Lang::De | Lang::Es | Lang::Ru => return None,
+    };
+    let windows = std::env::var_os("SystemRoot").unwrap_or_else(|| r"C:\Windows".into());
+    Some(std::path::Path::new(&windows).join("Fonts").join(file))
+}
+
 /// The macOS font for a language's script, if San Francisco lacks it.
+#[cfg(not(windows))]
 fn font_path(lang: Lang) -> Option<&'static str> {
     match lang {
         Lang::Ja => Some("/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc"),

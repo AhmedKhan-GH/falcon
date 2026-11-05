@@ -1,3 +1,6 @@
+// No console window for a release build on Windows; `attach_console` still
+// finds the terminal it was started from, if any.
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 // Code only macOS calls so far; macOS builds keep the full check.
 #![cfg_attr(not(target_os = "macos"), allow(dead_code, unused_imports))]
 mod access_order;
@@ -87,7 +90,19 @@ mod workspaces;
 
 use std::path::PathBuf;
 
+/// Sends stderr to the terminal this was started from, which a program with
+/// no console of its own doesn't get by itself. Started any other way there
+/// is none, and output goes nowhere.
+#[cfg(all(windows, not(debug_assertions)))]
+fn attach_console() {
+    use windows_sys::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole};
+    // SAFETY: takes no pointers, and failing just leaves no console.
+    unsafe { AttachConsole(ATTACH_PARENT_PROCESS) };
+}
+
 fn main() -> eframe::Result {
+    #[cfg(all(windows, not(debug_assertions)))]
+    attach_console();
     errlog::install_panic_hook();
     // Only libraries in the sandbox folder open, never real ones.
     falcon_library::sandbox::enforce(falcon_library::sandbox::default_root());

@@ -118,12 +118,24 @@ pub fn open_url(url: &str) {
     }
 }
 
+#[cfg(windows)]
+pub use platform::shell_open;
+
 /// Opens the files in `app`.
 pub fn open_in(app: &Path, files: &[PathBuf]) {
     if !files.is_empty() {
         platform::open_in(app, files);
     }
 }
+
+/// Lets the system ask which app opens `file`, and open it there, where it
+/// has its own window for that. False where it hasn't, for the caller to ask.
+pub fn choose_app(file: &Path) -> bool {
+    platform::choose_app(file)
+}
+
+/// Whether [`choose_app`] does anything here.
+pub const SYSTEM_CHOOSER: bool = cfg!(windows);
 
 /// Shows the files in macOS Quick Look (`qlmanage -p`), which stays open
 /// until closed. Never reads the files itself.
@@ -190,6 +202,7 @@ impl AppCache {
 
 /// `path` as a `file://` address, with everything but unreserved characters
 /// and `/` percent-encoded, so it is also safe inside a quoted D-Bus string.
+#[cfg(unix)]
 #[cfg_attr(target_os = "macos", allow(dead_code))]
 fn file_uri(path: &Path) -> String {
     use std::os::unix::ffi::OsStrExt;
@@ -237,6 +250,10 @@ mod platform {
         run_open(reveal_args(files));
     }
 
+    pub fn choose_app(_: &Path) -> bool {
+        false
+    }
+
     fn info(url: &NSURL) -> Option<AppInfo> {
         let path = PathBuf::from(url.path()?.to_string());
         Some(AppInfo { name: app_name(&path), path })
@@ -259,7 +276,112 @@ mod platform {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(windows)]
+mod platform {
+    use std::ffi::{OsStr, OsString};
+    use std::os::windows::ffi::OsStrExt;
+    use std::os::windows::process::CommandExt;
+    use std::path::{Path, PathBuf};
+    use std::process::{Command, Stdio};
+    use std::ptr;
+
+    use windows_sys::Win32::System::Com::{COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE, CoInitializeEx, CoUninitialize};
+    use windows_sys::Win32::UI::Shell::{OAIF_ALLOW_REGISTRATION, OAIF_EXEC, OPENASINFO, SHOpenWithDialog, ShellExecuteW};
+    use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+    use super::{AppInfo, MAX_OPEN, MAX_REVEAL};
+
+    fn wide(text: &OsStr) -> Vec<u16> {
+        text.encode_wide().chain(std::iter::once(0)).collect()
+    }
+
+    /// `path` as the shell wants it: no `\\?\` prefix, only backslashes.
+    fn native(path: &Path) -> PathBuf {
+        falcon_library::sandbox::shown(path).components().collect()
+    }
+
+    /// Runs `work` on a short-lived thread with COM set up the way the shell
+    /// functions ask, so the UI never waits on them.
+    fn on_shell_thread(work: impl FnOnce() + Send + 'static) {
+        std::thread::spawn(move || {
+            // SAFETY: COM is initialised and released on this thread alone.
+            let started = unsafe { CoInitializeEx(ptr::null(), (COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE) as u32) };
+            work();
+            if started >= 0 {
+                // SAFETY: paired with the call above.
+                unsafe { CoUninitialize() };
+            }
+        });
+    }
+
+    /// Hands `target`, a file or an address, to the shell, which opens it in
+    /// the app registered for it. No command line is involved, so nothing in
+    /// the name can be read as anything else.
+    pub fn shell_open(target: OsString) {
+        on_shell_thread(move || {
+            let (verb, target) = (wide(OsStr::new("open")), wide(&target));
+            // SAFETY: both strings are NUL-terminated and outlive the call.
+            unsafe { ShellExecuteW(ptr::null_mut(), verb.as_ptr(), target.as_ptr(), ptr::null(), ptr::null(), SW_SHOWNORMAL) };
+        });
+    }
+
+    pub fn open_default(files: &[PathBuf]) {
+        for f in files.iter().take(MAX_OPEN) {
+            shell_open(native(f).into());
+        }
+    }
+
+    pub fn open_url(args: Vec<OsString>) {
+        if let Some(url) = args.into_iter().last() {
+            shell_open(url);
+        }
+    }
+
+    pub fn open_in(app: &Path, files: &[PathBuf]) {
+        let (app, files) = (native(app), files.iter().take(MAX_OPEN).map(|f| native(f)).collect::<Vec<_>>());
+        std::thread::spawn(move || {
+            let _ = Command::new(app).args(files).stdout(Stdio::null()).stderr(Stdio::null()).status();
+        });
+    }
+
+    /// Selects a file in File Explorer. Explorer takes one file and opens a
+    /// window for it, so a selection shows its first file in each folder.
+    pub fn reveal(files: &[PathBuf]) {
+        let explorer = std::env::var_os("SystemRoot").map_or_else(|| PathBuf::from("explorer.exe"), |r| PathBuf::from(r).join("explorer.exe"));
+        let mut folders = Vec::new();
+        for f in files.iter().take(MAX_REVEAL) {
+            let f = native(f);
+            if folders.contains(&f.parent().map(Path::to_path_buf)) {
+                continue;
+            }
+            folders.push(f.parent().map(Path::to_path_buf));
+            // Explorer reads its own command line, and only understands the
+            // quotes around the path, not around the whole argument.
+            let mut arg = OsString::from("/select,\"");
+            arg.push(&f);
+            arg.push("\"");
+            let _ = Command::new(&explorer).raw_arg(arg).spawn();
+        }
+    }
+
+    pub fn apps(_: &Path) -> (Option<AppInfo>, Vec<AppInfo>) {
+        (None, Vec::new())
+    }
+
+    /// Asks with the system's own Open With window, which does the opening.
+    pub fn choose_app(file: &Path) -> bool {
+        let file = wide(native(file).as_os_str());
+        on_shell_thread(move || {
+            let info = OPENASINFO { pcszFile: file.as_ptr(), pcszClass: ptr::null(), oaifInFlags: OAIF_ALLOW_REGISTRATION | OAIF_EXEC };
+            // SAFETY: the file name is NUL-terminated and outlives the call,
+            // which returns when the window closes.
+            unsafe { SHOpenWithDialog(ptr::null_mut(), &info) };
+        });
+        true
+    }
+}
+
+#[cfg(not(any(target_os = "macos", windows)))]
 mod platform {
     use std::ffi::OsString;
     use std::path::{Path, PathBuf};
@@ -315,12 +437,17 @@ mod platform {
     pub fn apps(_: &Path) -> (Option<AppInfo>, Vec<AppInfo>) {
         (None, Vec::new())
     }
+
+    pub fn choose_app(_: &Path) -> bool {
+        false
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    #[cfg(unix)]
     #[test]
     fn file_addresses_encode_what_could_break_out() {
         assert_eq!(file_uri(Path::new("/l/a.png")), "file:///l/a.png");

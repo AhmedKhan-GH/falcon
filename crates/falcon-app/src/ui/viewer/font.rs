@@ -677,15 +677,20 @@ impl App {
     }
 
     /// Activates or deactivates the font at once, as Eagle's Activate
-    /// button does, without asking. falcon writes only its own folder,
-    /// `~/Library/Fonts/Falcon/`, never Eagle's `EagleApp/`.
+    /// button does, without asking. falcon writes only its own folder
+    /// (`search::falcon_font_dir`), never Eagle's `EagleApp/`.
     fn toggle_font(&mut self, lib: &Library, item: &Item, on: bool) {
         let Some(dir) = search::falcon_font_dir() else { return };
-        if crate::font_install::file_name(item).is_none() {
+        let Some(name) = crate::font_install::file_name(item) else {
             self.flash(tr("This font has no PostScript name to install it under"));
             return;
-        }
-        let result = if on { crate::font_install::activate(&dir, item, &item.original_path(lib.root())).map(|_| ()) } else { crate::font_install::deactivate(&dir, item) };
+        };
+        let result = if on {
+            crate::font_install::activate(&dir, item, &item.original_path(lib.root())).map(|font| crate::font_install::announce(&font))
+        } else {
+            crate::font_install::withdraw(&dir.join(name));
+            crate::font_install::deactivate(&dir, item)
+        };
         match result {
             Ok(()) => {
                 self.ws.font_view.active = activation(item);

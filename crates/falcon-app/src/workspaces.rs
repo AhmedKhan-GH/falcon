@@ -156,13 +156,13 @@ pub fn clear_history(_recent: &[PathBuf], open: &[PathBuf]) -> Vec<PathBuf> {
 
 /// A folder path for display, with the home folder shown as `~`.
 pub fn tilde(path: &Path) -> String {
-    tilde_in(path, std::env::var_os("HOME").map(PathBuf::from).as_deref())
+    tilde_in(path, falcon_library::sandbox::home_dir().as_deref())
 }
 
 fn tilde_in(path: &Path, home: Option<&Path>) -> String {
     match home.and_then(|h| path.strip_prefix(h).ok()) {
         Some(rest) if rest.as_os_str().is_empty() => "~".to_string(),
-        Some(rest) => format!("~/{}", rest.display()),
+        Some(rest) => format!("~{}{}", std::path::MAIN_SEPARATOR, rest.display()),
         None => path.display().to_string(),
     }
 }

@@ -26,7 +26,7 @@ use falcon_library::search;
 /// name could reach outside the folder.
 pub fn file_name(item: &Item) -> Option<String> {
     let ps = search::font_name(item, "postScriptName")?;
-    if ps.is_empty() || ps.starts_with('.') || ps.contains(['/', '\\', '\0', ':']) {
+    if ps.is_empty() || ps.starts_with('.') || ps.contains(['/', '\\', '\0', ':']) || (cfg!(windows) && ps.contains(['<', '>', '"', '|', '?', '*'])) {
         return None;
     }
     Some(format!("{ps}.{}", item.ext))
@@ -84,6 +84,73 @@ pub fn activate(dir: &Path, item: &Item, src: &Path) -> io::Result<PathBuf> {
         std::fs::rename(&tmp, &dest)?;
     }
     Ok(dest)
+}
+
+/// Tells the system about a font just copied in with [`activate`], where
+/// the folder alone doesn't make it available to other apps.
+#[cfg(not(windows))]
+pub fn announce(_font: &Path) {}
+
+/// Takes back [`announce`], before [`deactivate`] removes the file.
+#[cfg(not(windows))]
+pub fn withdraw(_font: &Path) {}
+
+#[cfg(windows)]
+pub use self::windows::{announce, withdraw};
+
+/// A folder of its own means nothing to Windows: a font is loaded for this
+/// session with `AddFontResource`, which also holds the file open until
+/// `RemoveFontResource`, and at each logon from the user's list in the registry.
+#[cfg(windows)]
+mod windows {
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+    use std::path::Path;
+    use std::ptr;
+
+    use windows_sys::Win32::Graphics::Gdi::{AddFontResourceW, RemoveFontResourceW};
+    use windows_sys::Win32::System::Registry::{HKEY_CURRENT_USER, REG_SZ, RegDeleteKeyValueW, RegSetKeyValueW};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{HWND_BROADCAST, SMTO_ABORTIFHUNG, SendMessageTimeoutW, WM_FONTCHANGE};
+
+    const USER_FONTS: &str = r"Software\Microsoft\Windows NT\CurrentVersion\Fonts";
+
+    fn wide(text: impl AsRef<OsStr>) -> Vec<u16> {
+        text.as_ref().encode_wide().chain(std::iter::once(0)).collect()
+    }
+
+    /// The font's value name in the registry list.
+    fn value_name(font: &Path) -> Vec<u16> {
+        let mut name = font.file_stem().unwrap_or_default().to_os_string();
+        name.push(" (Falcon)");
+        wide(name)
+    }
+
+    /// Other apps refresh their font lists on this. Doesn't wait on a hung one.
+    fn broadcast() {
+        // SAFETY: the message carries no pointers.
+        unsafe { SendMessageTimeoutW(HWND_BROADCAST, WM_FONTCHANGE, 0, 0, SMTO_ABORTIFHUNG, 200, ptr::null_mut()) };
+    }
+
+    pub fn announce(font: &Path) {
+        let (path, key, value) = (wide(font), wide(USER_FONTS), value_name(font));
+        // SAFETY: every string is NUL-terminated and outlives its call, and
+        // the data's length in bytes includes the terminator.
+        unsafe {
+            AddFontResourceW(path.as_ptr());
+            RegSetKeyValueW(HKEY_CURRENT_USER, key.as_ptr(), value.as_ptr(), REG_SZ, path.as_ptr().cast(), (path.len() * 2) as u32);
+        }
+        broadcast();
+    }
+
+    pub fn withdraw(font: &Path) {
+        let (path, key, value) = (wide(font), wide(USER_FONTS), value_name(font));
+        // SAFETY: every string is NUL-terminated and outlives its call.
+        unsafe {
+            RemoveFontResourceW(path.as_ptr());
+            RegDeleteKeyValueW(HKEY_CURRENT_USER, key.as_ptr(), value.as_ptr());
+        }
+        broadcast();
+    }
 }
 
 /// Removes the font's copy from `dir` (falcon's folder), if there is one.

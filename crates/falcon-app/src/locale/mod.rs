@@ -274,7 +274,8 @@ fn native_names(text: &str) -> &str {
         return text;
     }
     let mut renamed = RENAMED.lock().unwrap_or_else(|e| e.into_inner());
-    renamed.entry(text.to_string()).or_insert_with(|| Box::leak(text.replace("Finder", "File Manager").into_boxed_str()))
+    let word = if cfg!(windows) { "File Explorer" } else { "File Manager" };
+    renamed.entry(text.to_string()).or_insert_with(|| Box::leak(text.replace("Finder", word).into_boxed_str()))
 }
 
 /// The English text of a key: the key itself, without a `context::`

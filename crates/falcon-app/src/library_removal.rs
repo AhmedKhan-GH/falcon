@@ -8,7 +8,6 @@
 //! as it was.
 
 use std::io;
-use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -55,11 +54,21 @@ fn canon(p: &Path) -> PathBuf {
 }
 
 /// Whether `a` and `b` are one folder by device and inode.
+#[cfg(unix)]
 fn same_file(a: &Path, b: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
     match (std::fs::metadata(a), std::fs::metadata(b)) {
         (Ok(a), Ok(b)) => a.dev() == b.dev() && a.ino() == b.ino(),
         _ => false,
     }
+}
+
+/// Whether `a` and `b` are one folder. Resolving a path on Windows sees
+/// through junctions, links, short names and case, and a folder can't have
+/// hard links, so one folder has one resolved path.
+#[cfg(windows)]
+fn same_file(a: &Path, b: &Path) -> bool {
+    matches!((a.canonicalize(), b.canonicalize()), (Ok(a), Ok(b)) if a == b)
 }
 
 /// Whether `path` is open, inside an open library, or holds one.
@@ -178,9 +187,19 @@ pub fn folder_size(path: &Path, stop: &AtomicBool) -> io::Result<u64> {
 #[cfg(test)]
 mod tests {
     use std::cell::Cell;
+    #[cfg(unix)]
     use std::os::unix::fs::symlink;
 
     use super::*;
+
+    /// A junction, the link to a folder Windows lets anyone make; `is_symlink`
+    /// is true of it, as of a symbolic link.
+    #[cfg(windows)]
+    fn symlink(target: impl AsRef<Path>, link: impl AsRef<Path>) -> io::Result<()> {
+        let plain = |p: &Path| falcon_library::sandbox::shown(p);
+        let out = std::process::Command::new("cmd").arg("/C").arg("mklink").arg("/J").arg(plain(link.as_ref())).arg(plain(target.as_ref())).output()?;
+        if out.status.success() { Ok(()) } else { Err(io::Error::other(String::from_utf8_lossy(&out.stderr).into_owned())) }
+    }
 
     struct Env {
         _tmp: tempfile::TempDir,
@@ -318,6 +337,19 @@ mod tests {
         let mut trailing = e.lib.clone().into_os_string();
         trailing.push("/");
         assert_eq!(run(&e, &e.lib, &[PathBuf::from(trailing)]), Err(Refusal::Open));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn an_open_library_refuses_however_its_path_is_written() {
+        let e = env();
+        let plain = falcon_library::sandbox::shown(&e.lib);
+        let upper = PathBuf::from(plain.to_str().unwrap().to_uppercase());
+        let forward = PathBuf::from(plain.to_str().unwrap().replace('\\', "/"));
+        for spelling in [plain.clone(), upper, forward] {
+            assert_eq!(run(&e, &e.lib, std::slice::from_ref(&spelling)), Err(Refusal::Open), "{spelling:?}");
+            assert_eq!(run(&e, &spelling, std::slice::from_ref(&e.lib)), Err(Refusal::Open), "{spelling:?}");
+        }
     }
 
     #[test]
