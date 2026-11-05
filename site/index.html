@@ -246,8 +246,8 @@
     <div class="wrap">
       <div class="eyebrow">Build from source</div>
       <h2>Build Falcon yourself</h2>
-      <p class="intro">Falcon is open source. You need <a href="https://rustup.rs">Rust</a> 1.89 or newer on either system; each card has the rest.</p>
-      <div class="downloads two">
+      <p class="intro">Falcon is open source. You need <a href="https://rustup.rs">Rust</a> 1.89 or newer on any of the three; each card has the rest.</p>
+      <div class="downloads">
         <div class="card" id="build-mac"><h4>Mac</h4>
           <p><strong>Needs</strong> Apple's command line tools (<code>xcode-select --install</code>). Video plays through macOS; FFmpeg, for the formats macOS can't play, is optional.</p>
           <p><strong>Build and run</strong></p>
@@ -270,8 +270,23 @@ cargo run --release -p falcon-app</pre>
           <p><strong>Package it</strong> Make <code>Falcon-x86_64.AppImage</code> and <code>Falcon-x86_64.deb</code> in <code>target/linux</code>:</p>
           <pre>scripts/package-linux.sh</pre>
         </div>
+        <div class="card" id="build-windows"><h4>Windows</h4>
+          <p><strong>Needs</strong> Rust for the MSVC toolchain, with Visual Studio's C++ build tools. FFmpeg plays video on Windows, so it is built first, in an <a href="https://www.msys2.org">MSYS2</a> UCRT64 shell with these packages and a Windows Python:</p>
+          <pre>pacman -S --needed make diffutils \
+  mingw-w64-ucrt-x86_64-gcc \
+  mingw-w64-ucrt-x86_64-binutils \
+  mingw-w64-ucrt-x86_64-nasm \
+  mingw-w64-ucrt-x86_64-zlib</pre>
+          <p><strong>Build and run</strong></p>
+          <pre>git clone https://github.com/AhmedKhan-GH/falcon
+cd falcon
+scripts/build-ffmpeg.sh
+cargo run --release -p falcon-app</pre>
+          <p><strong>Package it</strong> In the same shell, with <code>cargo</code> on its path, make <code>Falcon-x86_64-setup.exe</code> in <code>target/windows</code>. The script fetches NSIS itself:</p>
+          <pre>scripts/package-windows.sh</pre>
+        </div>
       </div>
-      <p class="fine">While it is in development, Falcon only opens libraries inside <code>~/Falcon Sandbox</code>. The <a href="https://github.com/AhmedKhan-GH/falcon#get-started">README</a> has the command-line tool and more.</p>
+      <p class="fine">While it is in development, Falcon only opens libraries inside <code>~/Falcon Sandbox</code> (<code>%USERPROFILE%\Falcon Sandbox</code> on Windows). The <a href="https://github.com/AhmedKhan-GH/falcon#get-started">README</a> has the command-line tool and more.</p>
     </div>
   </section>
 
