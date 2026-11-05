@@ -8,6 +8,7 @@ pub mod add_to_library;
 pub mod audio;
 pub mod autotag;
 pub mod backup;
+pub mod disk_name;
 pub mod binary_preview;
 pub mod color;
 pub mod combine;

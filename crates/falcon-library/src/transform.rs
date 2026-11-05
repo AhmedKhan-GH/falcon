@@ -146,7 +146,7 @@ impl Library {
             }
         };
         let dir = tempfile::Builder::new().prefix("falcon-crop").tempdir().map_err(|e| Error::io(self.root(), e))?;
-        let file = dir.path().join(format!("{}.{}", item.name, item.ext));
+        let file = dir.path().join(&*crate::disk_name::on_disk(&format!("{}.{}", item.name, item.ext)));
         fs::write(&file, &out).map_err(|e| Error::io(&file, e))?;
         let opts = ImportOptions { folders: item.folders.clone(), tags: item.tags.clone(), url: item.url.clone(), ..Default::default() };
         self.check_folders(&file, &opts)?;

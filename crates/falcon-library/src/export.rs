@@ -63,7 +63,7 @@ impl Plan {
 /// can hold) turned into a space.
 pub fn file_name(item: &Item) -> String {
     let name = item.name.replace(['/', '\0'], " ");
-    if item.ext.is_empty() { name } else { format!("{name}.{}", item.ext) }
+    crate::disk_name::on_disk(&if item.ext.is_empty() { name } else { format!("{name}.{}", item.ext) }).into_owned()
 }
 
 /// Splits a file name at its last dot (none for a leading dot).
@@ -309,7 +309,7 @@ pub fn convertible(item: &Item) -> bool {
 pub fn plan_converted(lib: &Library, ids: &[String], dest: &Path, format: Format, how: Collision) -> Plan {
     let mut seen = HashSet::new();
     let items: Vec<&Item> = ids.iter().filter(|id| seen.insert(id.as_str())).filter_map(|id| lib.item(id)).filter(|i| convertible(i)).collect();
-    let names = items.iter().map(|i| format!("{}.{}", i.name.replace(['/', '\0'], " "), format.ext())).collect();
+    let names = items.iter().map(|i| crate::disk_name::on_disk(&format!("{}.{}", i.name.replace(['/', '\0'], " "), format.ext())).into_owned()).collect();
     let mut plan = Plan { dirs: vec![dest.to_path_buf()], steps: Vec::new(), top: dest.to_path_buf(), overwrite: how == Collision::Replace };
     add_named_steps(&mut plan, lib.root(), &items, names, dest, &listing(dest), how);
     plan

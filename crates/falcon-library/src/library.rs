@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
+use crate::disk_name::on_disk;
 use crate::error::{Error, Result};
 use crate::model::{Folder, Item, LibraryMetadata, MtimeIndex, SavedFilter, Tags};
 use crate::undo::{Committed, Dirty, Transaction, WriteMode};
@@ -347,12 +348,17 @@ impl Item {
         } else {
             format!("{}.{}", self.name, self.ext)
         };
-        self.info_dir(library_root).join(file)
+        self.info_dir(library_root).join(&*on_disk(&file))
+    }
+
+    /// The file name of the item's thumbnail, `<name>_thumbnail.png`.
+    pub fn thumbnail_name(&self) -> String {
+        on_disk(&format!("{}_thumbnail.png", self.name)).into_owned()
     }
 
     /// Path of `<name>_thumbnail.png`, if that file exists.
     pub fn thumbnail_path(&self, library_root: &Path) -> Option<PathBuf> {
-        let p = self.info_dir(library_root).join(format!("{}_thumbnail.png", self.name));
+        let p = self.info_dir(library_root).join(self.thumbnail_name());
         p.is_file().then_some(p)
     }
 }

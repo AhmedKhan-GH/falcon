@@ -767,6 +767,10 @@ pub(crate) fn sanitize_name(stem: &str, ext: &str) -> String {
         out.push(c);
     }
     let out = out.trim().to_string();
+    #[cfg(windows)]
+    if crate::disk_name::is_device(out.split('.').next().unwrap_or(&out)) {
+        return format!("{out}_");
+    }
     if out.is_empty() || out == "." || out == ".." { "_".into() } else { out }
 }
 

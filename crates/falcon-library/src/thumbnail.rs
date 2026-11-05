@@ -535,7 +535,7 @@ impl crate::Library {
     pub fn set_video_thumbnail(&mut self, id: &str, frame: &RgbaImage, at: f64) -> crate::Result<()> {
         let mut item = self.item(id).cloned().ok_or_else(|| self.invalid(format!("no item {id}")))?;
         let bytes = video_thumbnail_jpeg(frame).map_err(|e| self.invalid(e.0))?;
-        let dest = self.info_dir(&item).join(format!("{}_thumbnail.png", item.name));
+        let dest = self.info_dir(&item).join(item.thumbnail_name());
         let img = image::load_from_memory_with_format(&bytes, image::ImageFormat::Jpeg).map_err(|e| self.invalid(e.to_string()))?;
         fs::write(&dest, &bytes).map_err(|e| crate::Error::io(&dest, e))?;
         item.palettes = crate::palette::extract(&img);
@@ -557,7 +557,7 @@ impl crate::Library {
         let img = if (w, h) == (frame.width(), frame.height()) { img } else { img.resize_exact(w, h, RESIZE_FILTER) };
         let mut png = Vec::new();
         img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).map_err(|e| self.invalid(e.to_string()))?;
-        let dest = self.info_dir(&item).join(format!("{}_thumbnail.png", item.name));
+        let dest = self.info_dir(&item).join(item.thumbnail_name());
         fs::write(&dest, png).map_err(|e| crate::Error::io(&dest, e))?;
         item.palettes = crate::palette::extract(&img);
         self.update_item(item)
@@ -577,7 +577,7 @@ impl crate::Library {
         if has_custom_thumbnail(&item) {
             return Ok(false);
         }
-        let dest = self.info_dir(&item).join(format!("{}_thumbnail.png", item.name));
+        let dest = self.info_dir(&item).join(item.thumbnail_name());
         let tmp = dest.with_file_name(".falcon-page_thumbnail.png");
         fs::write(&tmp, &page.bytes).map_err(|e| crate::Error::io(&tmp, e))?;
         if let Err(e) = fs::rename(&tmp, &dest) {
@@ -654,7 +654,7 @@ pub fn custom_thumbnailed(root: &Path, mut item: crate::model::Item, image: &Pat
         return Err(refused(root, "a custom thumbnail can be at most 10 MB"));
     }
     let img = decode(image).map_err(|e| refused(root, format!("cannot read {}: {e}", image.display())))?;
-    let dest = item.info_dir(root).join(format!("{}_thumbnail.png", item.name));
+    let dest = item.info_dir(root).join(item.thumbnail_name());
     fs::copy(image, &dest).map_err(|e| crate::Error::io(&dest, e))?;
     item.width = img.width().into();
     item.height = img.height().into();
@@ -671,7 +671,7 @@ pub fn custom_thumbnailed(root: &Path, mut item: crate::model::Item, image: &Pat
 pub fn redrawn(root: &Path, mut item: crate::model::Item) -> crate::Result<crate::model::Item> {
     let raw = item.original_path(root);
     crate::import::restat(&mut item, &raw)?;
-    let thumb = item.info_dir(root).join(format!("{}_thumbnail.png", item.name));
+    let thumb = item.info_dir(root).join(item.thumbnail_name());
     if !crate::import::redraw(&mut item, &raw, &thumb) {
         return Err(refused(root, format!("cannot draw a thumbnail for {}.{}", item.name, item.ext)));
     }
