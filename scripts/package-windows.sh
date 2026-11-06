@@ -1,7 +1,8 @@
 #!/bin/sh
 # Builds falcon-app in release mode and packages it for 64-bit Windows into target/windows:
 # Falcon-x86_64-setup.exe (installs for the current user, no admin rights needed, see
-# scripts/falcon.nsi) and SHA256SUMS. The folder it installs stays in target/windows/Falcon.
+# scripts/falcon.nsi), Falcon-x86_64-portable.zip (the same app to unzip and run, with the DLLs in
+# a lib folder) and SHA256SUMS. The folder it installs stays in target/windows/Falcon.
 #
 # Run scripts/build-ffmpeg.sh first: without FFmpeg, video can't play on Windows, so this refuses
 # to go on. With scripts/fetch-web-ifc.sh run too, IFC files get web-ifc's geometry. Run it in an
@@ -129,5 +130,16 @@ done
   scripts/falcon.nsi
 
 rm "$INSTALL" "$UNINSTALL"
-(cd "$OUT" && sha256sum Falcon-x86_64-setup.exe > SHA256SUMS)
+
+# The portable zip: one Falcon folder with the programs and licences at the top and the DLLs in
+# lib, where Falcon also looks for FFmpeg. Windows's own tar writes zip files; MSYS2's doesn't.
+PORTABLE=$OUT/portable
+mkdir -p "$PORTABLE"
+cp -R "$APP" "$PORTABLE/Falcon"
+mkdir "$PORTABLE/Falcon/lib"
+mv "$PORTABLE/Falcon"/*.dll "$PORTABLE/Falcon/lib/"
+(cd "$PORTABLE" && "$SYSTEM32/tar.exe" -a -cf ../Falcon-x86_64-portable.zip Falcon)
+rm -rf "$PORTABLE"
+
+(cd "$OUT" && sha256sum Falcon-x86_64-setup.exe Falcon-x86_64-portable.zip > SHA256SUMS)
 ls -l "$OUT"
