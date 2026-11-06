@@ -97,10 +97,18 @@ jobs:
       - run: scripts/package-windows.sh
       - name: Test the FFmpeg inside the app folder
         run: FALCON_FFMPEG_DIR="$PWD/target/windows/Falcon" cargo test -p falcon-ffmpeg
+      - name: Test the FFmpeg inside the portable zip
+        run: |
+          mkdir -p target/portable-test
+          "$(cygpath -u "$SYSTEMROOT")/System32/tar.exe" -xf target/windows/Falcon-x86_64-portable.zip -C target/portable-test
+          [ -f target/portable-test/Falcon/falcon-app.exe ] && [ -f target/portable-test/Falcon/lib/avformat-61.dll ]
+          FALCON_FFMPEG_DIR="$PWD/target/portable-test/Falcon/lib" cargo test -p falcon-ffmpeg
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: target/windows/Falcon-x86_64-setup.exe
+          path: |
+            target/windows/Falcon-x86_64-setup.exe
+            target/windows/Falcon-x86_64-portable.zip
           if-no-files-found: error
 
   publish:
@@ -119,10 +127,10 @@ jobs:
         with:
           path: dist
           merge-multiple: true
-      - run: cd dist && sha256sum Falcon-arm64.dmg Falcon-x86_64.AppImage Falcon-x86_64.deb Falcon-x86_64-setup.exe > SHA256SUMS
+      - run: cd dist && sha256sum Falcon-arm64.dmg Falcon-x86_64.AppImage Falcon-x86_64.deb Falcon-x86_64-setup.exe Falcon-x86_64-portable.zip > SHA256SUMS
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/Falcon-arm64.dmg dist/Falcon-x86_64.AppImage dist/Falcon-x86_64.deb dist/Falcon-x86_64-setup.exe dist/SHA256SUMS \
+          gh release create "$GITHUB_REF_NAME" dist/Falcon-arm64.dmg dist/Falcon-x86_64.AppImage dist/Falcon-x86_64.deb dist/Falcon-x86_64-setup.exe dist/Falcon-x86_64-portable.zip dist/SHA256SUMS \
             --title "Falcon $GITHUB_REF_NAME" --notes-file docs/release-notes.md
