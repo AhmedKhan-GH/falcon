@@ -348,20 +348,22 @@ fn file_name(name: &str, major: u32) -> String {
 
 /// Where the libraries are looked for, in order: `$FALCON_FFMPEG_DIR`,
 /// the app bundle's `Contents/Frameworks` next to the executable (Linux
-/// packages: `lib/falcon` beside `bin`; Windows: the executable's own folder), and the workspace's `target/ffmpeg/lib` that `scripts/build-ffmpeg.sh` fills.
+/// packages: `lib/falcon` beside `bin`; Windows: the executable's own folder, where the installer
+/// puts them, then `lib` in it, where the portable zip does), and the workspace's `target/ffmpeg/lib` that `scripts/build-ffmpeg.sh` fills.
 pub fn search_dirs() -> Vec<PathBuf> {
     let mut dirs = Vec::new();
     if let Some(d) = std::env::var_os("FALCON_FFMPEG_DIR") {
         dirs.push(PathBuf::from(d));
     }
     if let Some(exe_dir) = std::env::current_exe().ok().and_then(|e| e.parent().map(Path::to_path_buf)) {
-        dirs.push(if cfg!(target_os = "macos") {
-            exe_dir.join("../Frameworks")
+        if cfg!(target_os = "macos") {
+            dirs.push(exe_dir.join("../Frameworks"));
         } else if cfg!(windows) {
-            exe_dir
+            dirs.push(exe_dir.clone());
+            dirs.push(exe_dir.join("lib"));
         } else {
-            exe_dir.join("../lib/falcon")
-        });
+            dirs.push(exe_dir.join("../lib/falcon"));
+        }
     }
     dirs.push(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/ffmpeg/lib"));
     dirs
@@ -550,6 +552,15 @@ mod tests {
         assert!(!license_ok("GPL version 3 or later"));
         assert!(!license_ok("nonfree and unredistributable"));
         assert!(!license_ok(""));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_looks_beside_the_exe_then_in_its_lib_folder() {
+        let exe_dir = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
+        let dirs = search_dirs();
+        let beside = dirs.iter().position(|d| *d == exe_dir).unwrap();
+        assert_eq!(dirs[beside + 1], exe_dir.join("lib"));
     }
 
     #[test]
