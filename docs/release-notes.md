@@ -1,6 +1,6 @@
 Falcon for Apple Silicon Macs, 64-bit Windows and 64-bit Linux. Falcon is early alpha. The Mac app isn't notarised by Apple, the Windows downloads aren't code-signed, and the Linux packages aren't signed.
 
-**New in 0.1.3:** a portable download for Windows, a .zip to unzip and run with nothing to install.
+**New in 0.1.4:** on Windows, file dialogs can no longer hide behind Falcon's window and leave it looking frozen, as could happen when creating a first library. Renaming a folder selects its whole name, so typing replaces Untitled, and the in-window menus no longer cut off long items.
 
 **Downloads**
 
