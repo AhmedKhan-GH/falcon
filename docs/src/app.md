@@ -28,7 +28,7 @@ Below the library rows the switcher lists Open Library…, New Library…, Merge
 
 ## Windows
 
-Falcon builds and runs on 64-bit Windows, on Intel and AMD, from the same branch as the other systems. Only Windows 11 has been tried; ARM isn't built. The installer, `Falcon-x86_64-setup.exe`, installs for the current user without admin rights in `%LOCALAPPDATA%\Programs\Falcon`, adds a Start menu entry and an uninstaller to Add or remove programs, and leaves libraries and settings alone when you uninstall. To upgrade, run a newer installer; Falcon doesn't update itself. It isn't code-signed, so Windows SmartScreen warns on first run (More info, then Run anyway).
+Falcon builds and runs on 64-bit Windows, on Intel and AMD, from the same branch as the other systems. Only Windows 11 has been tried; ARM isn't built. The installer, `Falcon-x86_64-setup.exe`, installs for the current user without admin rights in `%LOCALAPPDATA%\Programs\Falcon`, adds a Start menu entry and an uninstaller to Add or remove programs, and leaves libraries and settings alone when you uninstall. To upgrade, run a newer installer; Falcon doesn't update itself. `Falcon-x86_64-portable.zip` holds the same app to unzip anywhere and run without installing: `Falcon\falcon-app.exe` at the top, with the FFmpeg DLLs in `Falcon\lib`, where Falcon looks for them after its own folder. It keeps its libraries and settings in the same places as the installed app; to remove it, delete the folder. It isn't code-signed, so Windows SmartScreen warns on first run (More info, then Run anyway).
 
 Video plays through the bundled FFmpeg (see [Video playback](video.md)).
 

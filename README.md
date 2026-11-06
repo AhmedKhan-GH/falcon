@@ -121,7 +121,7 @@ Every screenshot here is the real app at work on public-domain art. The credits 
 
 **On a Mac with Apple Silicon,** [download the .dmg](https://ahmedkhan-gh.github.io/falcon/#mac), open it and drag Falcon to Applications. Falcon isn't notarised, so the first time you open it, click Open Anyway in System Settings ▸ Privacy & Security; the download page lists the other ways.
 
-**On 64-bit Windows,** [download the installer](https://ahmedkhan-gh.github.io/falcon/#windows) and run it. It installs for you alone, without admin rights. Falcon isn't code-signed, so on first run Windows SmartScreen warns you: click More info, then Run anyway. Some features aren't on Windows yet; the download page lists them.
+**On 64-bit Windows,** [download the installer](https://ahmedkhan-gh.github.io/falcon/#windows) and run it. It installs for you alone, without admin rights. Or get the [portable .zip](https://ahmedkhan-gh.github.io/falcon/#windows-portable), unzip it anywhere and run `Falcon\falcon-app.exe`, with nothing to install. Falcon isn't code-signed, so on first run Windows SmartScreen warns you: click More info, then Run anyway. Some features aren't on Windows yet; the download page lists them.
 
 **On Linux,** download the [AppImage](https://ahmedkhan-gh.github.io/falcon/#linux) (any distribution) or the [.deb](https://ahmedkhan-gh.github.io/falcon/#deb) (Ubuntu, Debian). Some features aren't on Linux yet; the download page lists them.
 
@@ -134,7 +134,7 @@ cargo run --release -p falcon-app          # choose or create a library on first
 scripts/bundle.sh                          # macOS: build target/release/Falcon.app
 scripts/package-macos.sh                   # macOS: build the .dmg in target/macos
 scripts/package-linux.sh                   # Linux: build the AppImage and .deb in target/linux
-scripts/package-windows.sh                 # Windows: build the installer in target/windows
+scripts/package-windows.sh                 # Windows: build the installer and portable zip in target/windows
 ```
 
 While falcon is in development, the app and the command-line tool only open libraries inside `~/Falcon Sandbox`, which is `%USERPROFILE%\Falcon Sandbox` on Windows (set `FALCON_SANDBOX` to use another folder). Copy a library there to try falcon on it.
