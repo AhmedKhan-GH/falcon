@@ -465,7 +465,7 @@ tags:    2</pre>
         <tr><th scope="row">Live web pages, MHTML and bookmark screenshots</th><td class="y" title="Works">✓</td><td class="n" title="Not yet">—</td><td class="n" title="Not yet">—</td><td class="note"></td></tr>
         <tr><th scope="row">Screen capture</th><td class="y" title="Works">✓</td><td class="n" title="Not yet">—</td><td class="n" title="Not yet">—</td><td class="note"></td></tr>
         <tr><th scope="row">Dragging items out of the window</th><td class="y" title="Works">✓</td><td class="n" title="Not yet">—</td><td class="n" title="Not yet">—</td><td class="note"></td></tr>
-        <tr><th scope="row">Opening files from Finder or File Explorer, and <code>eagle://</code> links</th><td class="y" title="Works">✓</td><td class="n" title="Not yet">—</td><td class="n" title="Not yet">—</td><td class="note"></td></tr>
+        <tr><th scope="row">Opening files from Finder or File Explorer, and links that open Falcon</th><td class="y" title="Works">✓</td><td class="n" title="Not yet">—</td><td class="n" title="Not yet">—</td><td class="note"></td></tr>
         <tr><th scope="row">Tray icon, notifications, global hotkeys and the share sheet</th><td class="y" title="Works">✓</td><td class="n" title="Not yet">—</td><td class="n" title="Not yet">—</td><td class="note"></td></tr>
         <tr><th scope="row">Touch ID, starting at login, transparency effects and iCloud handling</th><td class="y" title="Works">✓</td><td class="n" title="Not yet">—</td><td class="n" title="Not yet">—</td><td class="note"></td></tr>
         <tr><th scope="row">Cloud AI providers</th><td class="y" title="Works">✓</td><td class="n" title="Not yet">—</td><td class="n" title="Not yet">—</td><td class="note">See AI features below</td></tr>
@@ -493,22 +493,23 @@ tags:    2</pre>
         <tr><th scope="row">3D: glb, obj, fbx, 3ds, 3mf, dae, ply, stl</th><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="note">Turn and zoom, with textures</td></tr>
         <tr><th scope="row">ifc</th><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="h" title="Partly">◐</td><td class="note">Full geometry through web-ifc; the Linux packages show only the tessellated parts for now</td></tr>
         <tr><th scope="row">url, html, mhtml</th><td class="y" title="Works">✓</td><td class="n" title="Not yet">—</td><td class="n" title="Not yet">—</td><td class="note">Live pages on the Mac; elsewhere they import without one</td></tr>
-        <tr><th scope="row">.library, .eaglepack</th><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="note">Opens libraries, imports and exports packs</td></tr>
+        <tr><th scope="row">Libraries and library packs</th><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="note">Opens libraries, imports and exports packs</td></tr>
         <tr><th scope="row">epub, md, csv, json, odt, ods, odp, usdz, jp2</th><td class="n" title="Not yet">—</td><td class="n" title="Not yet">—</td><td class="n" title="Not yet">—</td><td class="note">Not planned yet; they import as plain items</td></tr>
         </tbody>
         </table></div>
-      <p class="fine">From <a href="https://github.com/AhmedKhan-GH/falcon/blob/main/FORMATS.md" style="color: var(--accent)">FORMATS.md</a>, which covers each of Eagle’s 124 extensions. 101 have been opened from a sample file; the other 23, from closed or paid apps, haven’t been tried on a real file yet.</p>
+      <p class="fine">From <a href="https://github.com/AhmedKhan-GH/falcon/blob/main/FORMATS.md" style="color: var(--accent)">FORMATS.md</a>, which covers 124 file extensions. 101 have been opened from a sample file; the other 23, from closed or paid apps, haven’t been tried on a real file yet.</p>
 
       <h3 class="matrix-title" id="ai">AI features</h3>
       <div class="matrix"><table>
         <thead><tr><th>AI feature</th><th>Mac</th><th>Windows</th><th>Linux</th><th>Notes</th></tr></thead>
         <tbody>
         <tr><th scope="row">AI Search: find pictures by describing them, or by a similar one</th><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="note">CLIP, on your own computer after a one-time model download. The Mac uses its GPU, Windows and Linux the CPU</td></tr>
-        <tr><th scope="row">Local models: Ollama, LM Studio or any OpenAI-compatible server</th><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="note">No key needed; requests go only to the server you set</td></tr>
+        <tr><th scope="row">Local models: Ollama or LM Studio</th><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="note">No key needed; requests go only to the server you set</td></tr>
+        <tr><th scope="row">Any OpenAI-compatible server</th><td class="y" title="Works">✓</td><td class="h" title="Partly">◐</td><td class="h" title="Partly">◐</td><td class="note">On Windows and Linux, only servers that need no key, since keys are kept only in the macOS Keychain</td></tr>
         <tr><th scope="row">Cloud models: OpenAI, Anthropic, Google Gemini, DeepSeek and Tongyi Qwen</th><td class="y" title="Works">✓</td><td class="n" title="Not yet">—</td><td class="n" title="Not yet">—</td><td class="note">Keys are kept in the macOS Keychain; Windows and Linux have no key store yet</td></tr>
         <tr><th scope="row">AI steps in Actions: auto-tag, and write a description into the notes</th><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="note">With a local model on Windows and Linux</td></tr>
-        <tr><th scope="row">Eagle MCP: a local server so AI assistants can use your library</th><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="note">Built in, off until you turn it on</td></tr>
-        <tr><th scope="row">Plugins</th><td class="n" title="Not yet">—</td><td class="n" title="Not yet">—</td><td class="n" title="Not yet">—</td><td class="note">No plugin system yet. Six of Eagle’s plugins are built in instead: Actions, Export in Format, Combine Images, Eagle MCP, AI Models and AI Search</td></tr>
+        <tr><th scope="row">MCP server: lets AI assistants use your library</th><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="note">Built in, off until you turn it on</td></tr>
+        <tr><th scope="row">Plugins</th><td class="n" title="Not yet">—</td><td class="n" title="Not yet">—</td><td class="n" title="Not yet">—</td><td class="note">No plugin system yet. Six extensions are built in instead: Actions, Export in Format, Combine Images, the MCP server, AI Models and AI Search</td></tr>
         </tbody>
         </table></div>
       <p class="fine">✓ works · ◐ partly · — not yet. The Windows and Linux columns follow the code and the docs; on Windows only Windows 11 has been tried by hand.</p>
