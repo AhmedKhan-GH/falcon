@@ -63,9 +63,6 @@
   .actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
   .actions + .actions { margin-top: 12px; }
   .fine { color: var(--faint); font-size: 14px; margin-top: 16px; }
-  .others { color: var(--muted); font-size: 14px; margin-top: 14px; }
-  .others a { color: var(--text); text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 3px; }
-  .others a:hover { text-decoration-color: currentColor; }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 40px auto 0; max-width: 760px; }
   .chip { padding: 6px 14px; border: 1px solid var(--rule); border-radius: 999px; color: var(--muted); font-size: 14px; background: var(--plate); }
   .shot { margin: 56px auto 0; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--rule); box-shadow: 0 40px 120px rgba(0, 0, 0, .6), 0 0 0 1px rgba(255,255,255,.02); }
@@ -183,10 +180,9 @@
     <h1>Falcon is a free, open-source asset manager for everyone.</h1>
     <p class="lede">Collect, tag, search and browse your images, PDFs, fonts, audio and video in one library. Native apps for macOS, Windows and Linux, built in Rust for speed.</p>
     <div class="actions">
-      <a class="btn btn-primary os-download" href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/Falcon-arm64.dmg">Download for Mac</a>
+      <a class="btn btn-primary" href="#download">Download</a>
       <a class="btn btn-ghost" href="book/">Docs</a>
     </div>
-    <p class="others os-others">Other platforms: <a href="#windows">Windows</a> · <a href="#linux">Linux</a></p>
     <p class="fine">Early alpha · macOS 12 or later on Apple Silicon, Windows or Linux on x86-64 (Intel and AMD) · MIT or Apache-2.0</p>
     <div class="chips">
       <span class="chip">JPG &amp; PNG</span><span class="chip">WebP</span><span class="chip">GIF</span><span class="chip">SVG</span>
@@ -532,10 +528,9 @@ tags:    2</pre>
       <h2>Get started</h2>
       <p>Download Falcon for a Mac, Windows or Linux, or build it from source on any of them.</p>
       <div class="actions">
-        <a class="btn btn-primary os-download" href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/Falcon-arm64.dmg">Download for Mac</a>
+        <a class="btn btn-primary" href="#download">Download</a>
         <a class="btn btn-ghost" href="book/">Docs</a>
       </div>
-      <p class="others os-others">Other platforms: <a href="#windows">Windows</a> · <a href="#linux">Linux</a></p>
     </div>
   </div>
 </main>
@@ -553,27 +548,5 @@ tags:    2</pre>
   </div>
 </footer>
 
-<script>
-// The main download button follows the visitor's computer: the Mac download by default (and without script),
-// Windows' installer or the Linux packages when the browser says so; the line beneath offers the other two.
-(() => {
-  const ua = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent;
-  const os = /win/i.test(ua) ? "windows" : /linux|x11/i.test(ua) && !/android/i.test(navigator.userAgent) ? "linux" : "mac";
-  if (os === "mac") return;
-  const main = {
-    windows: ["Download for Windows", "https://github.com/AhmedKhan-GH/falcon/releases/latest/download/Falcon-x86_64-setup.exe"],
-    linux: ["Download for Linux", "#linux"],
-  }[os];
-  const others = { windows: [["Mac", "#mac"], ["Linux", "#linux"]], linux: [["Mac", "#mac"], ["Windows", "#windows"]] }[os];
-  document.querySelectorAll("a.os-download").forEach(a => { a.textContent = main[0]; a.href = main[1]; });
-  document.querySelectorAll(".os-others").forEach(p => {
-    p.textContent = "Other platforms: ";
-    others.forEach(([label, href], i) => {
-      if (i) p.append(" · ");
-      const a = document.createElement("a"); a.href = href; a.textContent = label; p.append(a);
-    });
-  });
-})();
-</script>
 </body>
 </html>
