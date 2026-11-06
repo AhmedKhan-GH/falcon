@@ -217,7 +217,7 @@ impl App {
         let Some(view) = self.model3d.view.as_ref() else { return };
         let ext = format.ext();
         let name = format!("{}.{ext}", item.name);
-        let Some(dest) = rfd::FileDialog::new().set_file_name(name).add_filter(ext.to_uppercase(), &[ext]).save_file() else { return };
+        let Some(dest) = crate::dialog_owner::file_dialog().set_file_name(name).add_filter(ext.to_uppercase(), &[ext]).save_file() else { return };
         match export::write(view.visible_meshes(), format, &dest) {
             Ok(()) => self.flash_brief(tr("Model exported")),
             Err(e) => self.flash_error(trf("Couldn't export the model: {error}", &[("error", &e)])),
@@ -230,7 +230,7 @@ impl App {
     pub(crate) fn model_snapshot(&mut self, item: &Item, size: [u32; 2], aspect: f32) {
         let settings = self.model3d.settings.clone();
         let Some(view) = self.model3d.view.as_mut() else { return };
-        let Some(dest) = rfd::FileDialog::new().set_file_name(format!("{}.png", item.name)).add_filter("PNG", &["png"]).save_file() else { return };
+        let Some(dest) = crate::dialog_owner::file_dialog().set_file_name(format!("{}.png", item.name)).add_filter("PNG", &["png"]).save_file() else { return };
         let vp = snapshot_matrix(view, &settings, aspect);
         let default = settings.default_color.map(|c| f32::from(c) / 255.0);
         // The lines as the scene draws them (the grid's colour follows the

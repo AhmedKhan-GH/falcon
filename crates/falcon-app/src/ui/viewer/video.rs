@@ -677,7 +677,7 @@ impl App {
     /// the item's folder as `<name>.<ext>`, where the viewer finds it next
     /// time, and shown at once.
     fn load_subtitles(&mut self, lib: &Library, item: &Item) {
-        let picked = rfd::FileDialog::new().set_title(tr("Load Subtitles")).add_filter(tr("Subtitles"), &["srt", "vtt"]).pick_file();
+        let picked = crate::dialog_owner::file_dialog().set_title(tr("Load Subtitles")).add_filter(tr("Subtitles"), &["srt", "vtt"]).pick_file();
         let Some(src) = picked else { return };
         let Some(cues) = crate::subtitles::load(&src) else {
             self.flash(tr("No subtitles found in that file"));

@@ -253,7 +253,7 @@ impl App {
                 self.retry_missing(path.clone());
             }
             if ui.button(tr("Select Another Path…")).clicked()
-                && let Some(p) = rfd::FileDialog::new().set_title(tr("Open Eagle Library")).set_directory(falcon_library::sandbox::default_root()).pick_folder()
+                && let Some(p) = crate::dialog_owner::file_dialog().set_title(tr("Open Eagle Library")).set_directory(falcon_library::sandbox::default_root()).pick_folder()
             {
                 // Found elsewhere: once it opens, the old place leaves the history.
                 self.replace_missing(path.clone(), p);
@@ -289,7 +289,7 @@ impl App {
         if self.merge.is_some() {
             return;
         }
-        let Some(source) = rfd::FileDialog::new().set_title(tr("Choose a Library to Merge In")).set_directory(falcon_library::sandbox::default_root()).pick_folder() else {
+        let Some(source) = crate::dialog_owner::file_dialog().set_title(tr("Choose a Library to Merge In")).set_directory(falcon_library::sandbox::default_root()).pick_folder() else {
             return;
         };
         if let Err(e) = falcon_library::sandbox::guard(&source) {
@@ -430,7 +430,7 @@ impl App {
         if self.ws.lib.is_none() {
             return;
         }
-        if let Some(path) = rfd::FileDialog::new().set_title(tr("Import Eagle Package")).add_filter("Eagle Package", &["eaglepack"]).pick_file() {
+        if let Some(path) = crate::dialog_owner::file_dialog().set_title(tr("Import Eagle Package")).add_filter("Eagle Package", &["eaglepack"]).pick_file() {
             let folder = self.scope_folders().into_iter().next();
             self.preview_pack_import(path, folder);
         }
@@ -503,7 +503,7 @@ impl App {
     /// the images, with their names, tags, links, trashed state and dates.
     pub(crate) fn import_inboard_dialog(&mut self) {
         let Some(shared) = self.ws.lib.clone() else { return };
-        let Some(dir) = rfd::FileDialog::new().set_title(tr("Choose an Inboard Backup Folder")).pick_folder() else { return };
+        let Some(dir) = crate::dialog_owner::file_dialog().set_title(tr("Choose an Inboard Backup Folder")).pick_folder() else { return };
         let backup = match falcon_library::inboard::read(&dir) {
             Ok(b) => b,
             Err(_) if !falcon_library::inboard::is_backup(&dir) => {

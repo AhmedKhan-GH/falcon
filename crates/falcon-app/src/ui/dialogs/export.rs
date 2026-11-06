@@ -149,11 +149,11 @@ fn exported(done: usize, failed: usize) -> String {
 fn pick_pack(name: &str) -> Option<PathBuf> {
     let name = name.trim_start_matches('.').replace('/', " ");
     let name = if name.trim().is_empty() { "Untitled".to_string() } else { name };
-    rfd::FileDialog::new().set_title(tr("Export as .eaglepack")).add_filter("Eagle Package", &["eaglepack"]).set_file_name(format!("{name}.eaglepack")).save_file()
+    crate::dialog_owner::file_dialog().set_title(tr("Export as .eaglepack")).add_filter("Eagle Package", &["eaglepack"]).set_file_name(format!("{name}.eaglepack")).save_file()
 }
 
 fn pick_folder() -> Option<PathBuf> {
-    rfd::FileDialog::new().set_title(tr("Export to Computer")).set_can_create_directories(true).pick_folder()
+    crate::dialog_owner::file_dialog().set_title(tr("Export to Computer")).set_can_create_directories(true).pick_folder()
 }
 
 impl App {
@@ -334,7 +334,7 @@ impl App {
                 if ids.is_empty() {
                     return;
                 }
-                let picked = rfd::FileDialog::new().set_title(tr("Export to CSV")).add_filter("CSV", &["csv"]).set_file_name("falcon-export.csv").save_file();
+                let picked = crate::dialog_owner::file_dialog().set_title(tr("Export to CSV")).add_filter("CSV", &["csv"]).set_file_name("falcon-export.csv").save_file();
                 let Some(dest) = picked else { return };
                 match export::write_csv(lib, &ids, &dest) {
                     Ok(n) => {

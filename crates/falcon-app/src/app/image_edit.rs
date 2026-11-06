@@ -194,7 +194,7 @@ impl App {
     pub(crate) fn apply_edit(&mut self, lib: &mut Library, op: Op) -> falcon_library::Result<()> {
         match op {
             Op::PickCustomThumbnail(id) => {
-                let picked = rfd::FileDialog::new().set_title(tr("Choose Thumbnail")).add_filter(tr("Images"), &["jpg", "jpeg", "png", "bmp", "webp"]).pick_file();
+                let picked = crate::dialog_owner::file_dialog().set_title(tr("Choose Thumbnail")).add_filter(tr("Images"), &["jpg", "jpeg", "png", "bmp", "webp"]).pick_file();
                 let Some(path) = picked else { return Ok(()) };
                 lib.set_custom_thumbnail(&id, &path)?;
                 self.ws.loader.forget(&id);
@@ -252,9 +252,9 @@ impl App {
                 if self.local_only(lib, std::slice::from_ref(&id)).is_empty() {
                     return Ok(());
                 }
-                let Some(path) = rfd::FileDialog::new().set_title(tr("Replace with File")).pick_file() else { return Ok(()) };
+                let Some(path) = crate::dialog_owner::file_dialog().set_title(tr("Replace with File")).pick_file() else { return Ok(()) };
                 let file = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
-                let answer = rfd::MessageDialog::new()
+                let answer = crate::dialog_owner::message_dialog()
                     .set_level(rfd::MessageLevel::Warning)
                     .set_title(tr("Replace with File"))
                     .set_description(trf("The item's file becomes a copy of “{file}”. Its name, tags, folders and notes stay; the current file is deleted.", &[("file", &file)]))

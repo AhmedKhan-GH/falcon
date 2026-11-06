@@ -13,7 +13,7 @@ fn count_folders(folders: &[Folder]) -> usize {
 
 impl App {
     pub(crate) fn export_debug_report(&mut self, ctx: &eframe::egui::Context) {
-        let mut dialog = rfd::FileDialog::new().set_title(tr("Export Debug Report")).set_file_name("Falcon Debug Report.zip");
+        let mut dialog = crate::dialog_owner::file_dialog().set_title(tr("Export Debug Report")).set_file_name("Falcon Debug Report.zip");
         if let Some(desktop) = report::desktop() {
             dialog = dialog.set_directory(desktop);
         }

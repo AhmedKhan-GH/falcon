@@ -134,12 +134,12 @@ impl App {
         }
         match request {
             Request::Files { folders } => {
-                if let Some(files) = rfd::FileDialog::new().set_title(tr("Import Files")).pick_files() {
+                if let Some(files) = crate::dialog_owner::file_dialog().set_title(tr("Import Files")).pick_files() {
                     self.import_into(files, folders);
                 }
             }
             Request::Folders { parent } => {
-                let Some(picked) = rfd::FileDialog::new().set_title(tr("Import Folders")).pick_folders() else { return };
+                let Some(picked) = crate::dialog_owner::file_dialog().set_title(tr("Import Folders")).pick_folders() else { return };
                 // As in Eagle, a library is opened rather than imported,
                 // and only when it is the only folder picked.
                 let (libraries, dirs) = logic::split_libraries(picked);

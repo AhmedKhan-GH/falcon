@@ -87,7 +87,7 @@ impl App {
             }
             ui.separator();
             if ui.button(tr("Choose Library…")).clicked()
-                && let Some(p) = rfd::FileDialog::new().set_title(tr("Choose a Library to Add To")).pick_folder()
+                && let Some(p) = crate::dialog_owner::file_dialog().set_title(tr("Choose a Library to Add To")).pick_folder()
             {
                 self.choose_add_target(what.clone(), p);
             }

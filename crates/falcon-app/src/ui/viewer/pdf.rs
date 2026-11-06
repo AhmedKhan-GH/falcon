@@ -1900,7 +1900,7 @@ fn side_panel(o: &mut Open, ui: &mut Ui, side: Rect, tab: Tab, jobs: &mut Vec<Jo
                 }
             });
             if let Some((n, name)) = save
-                && let Some(dest) = rfd::FileDialog::new().set_title(tr("Save Attachment")).set_file_name(name).save_file()
+                && let Some(dest) = crate::dialog_owner::file_dialog().set_title(tr("Save Attachment")).set_file_name(name).save_file()
             {
                 let _ = o.tx.send(Req::Save(n, dest));
             }

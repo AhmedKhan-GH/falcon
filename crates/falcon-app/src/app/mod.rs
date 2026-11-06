@@ -423,6 +423,7 @@ impl eframe::App for App {
 
     fn ui(&mut self, ui: &mut Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        crate::dialog_owner::remember(frame);
         // The red button or ⌘W on the window: like Eagle, falcon stays
         // in the Dock and comes back when its icon is clicked. With the
         // Dock icon option off it leaves the Dock too while the menu bar

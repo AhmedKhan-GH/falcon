@@ -359,7 +359,7 @@ impl App {
     /// Asks for a library and opens it in the background, with a loading
     /// screen (after the warning when tasks run in the shown library).
     pub(crate) fn pick_library(&mut self) {
-        if let Some(p) = rfd::FileDialog::new().set_title(tr("Open Eagle Library")).set_directory(falcon_library::sandbox::default_root()).pick_folder() {
+        if let Some(p) = crate::dialog_owner::file_dialog().set_title(tr("Open Eagle Library")).set_directory(falcon_library::sandbox::default_root()).pick_folder() {
             self.request_switch(Target::Open(p));
         }
     }

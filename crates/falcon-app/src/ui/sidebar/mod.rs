@@ -279,7 +279,7 @@ impl App {
 
     /// Asks for an image and makes it the library's icon.
     pub(crate) fn change_library_icon(&mut self, root: &std::path::Path) {
-        let Some(src) = rfd::FileDialog::new().set_title(tr("Choose Library Icon")).add_filter(tr("Images"), &["jpg", "jpeg", "png", "webp", "gif"]).pick_file() else {
+        let Some(src) = crate::dialog_owner::file_dialog().set_title(tr("Choose Library Icon")).add_filter(tr("Images"), &["jpg", "jpeg", "png", "webp", "gif"]).pick_file() else {
             return;
         };
         let done = falcon_library::sandbox::guard(root).and_then(|()| falcon_library::library_icon::set_icon(root, &src));

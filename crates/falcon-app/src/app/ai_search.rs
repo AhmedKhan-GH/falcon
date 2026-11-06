@@ -188,7 +188,7 @@ impl App {
     /// The camera's Choose Image.
     pub(crate) fn ai_choose_image(&mut self) {
         let extensions = ["jpg", "jpeg", "png", "webp", "gif", "bmp", "tif", "tiff", "heic", "avif"];
-        if let Some(path) = rfd::FileDialog::new().set_title(tr("Choose Image")).add_filter(tr("Images"), &extensions).pick_file() {
+        if let Some(path) = crate::dialog_owner::file_dialog().set_title(tr("Choose Image")).add_filter(tr("Images"), &extensions).pick_file() {
             self.ai_similar_to_file(path);
         }
     }

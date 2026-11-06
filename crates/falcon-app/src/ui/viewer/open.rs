@@ -88,7 +88,7 @@ impl App {
             self.used(&[file]);
             return;
         }
-        let picked = rfd::FileDialog::new().set_title(tr("Choose an App to Open With")).set_directory("/Applications").add_filter(tr("Applications"), &["app"]).pick_file();
+        let picked = crate::dialog_owner::file_dialog().set_title(tr("Choose an App to Open With")).set_directory("/Applications").add_filter(tr("Applications"), &["app"]).pick_file();
         if let Some(app) = picked {
             open_with::open_in(&app, std::slice::from_ref(&file));
             self.used(&[file]);

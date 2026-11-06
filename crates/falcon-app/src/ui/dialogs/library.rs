@@ -173,7 +173,7 @@ impl App {
     /// Asks for the folder (a blocking system dialog) and carries on.
     /// Returns whether the dialog stays open.
     fn pick_folder_for(&mut self, dlg: &mut Create, name: String) -> bool {
-        let folder = rfd::FileDialog::new()
+        let folder = crate::dialog_owner::file_dialog()
             .set_title(tr("Choose where to keep the library"))
             .set_directory(falcon_library::sandbox::default_root())
             .pick_folder();

@@ -1414,7 +1414,7 @@ fn auto_import(p: &mut Page, d: &mut Draft, library: Option<&std::path::Path>, r
             }
         });
         if choose {
-            if let Some(dir) = rfd::FileDialog::new().set_title(tr("Choose a Folder to Watch")).set_can_create_directories(true).pick_folder() {
+            if let Some(dir) = crate::dialog_owner::file_dialog().set_title(tr("Choose a Folder to Watch")).set_can_create_directories(true).pick_folder() {
                 *refused = auto_import_refusal(&dir);
                 if refused.is_none() {
                     d.prefs.auto_import_path = Some(dir);
