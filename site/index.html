@@ -61,6 +61,7 @@
   h1 { font-size: clamp(34px, 5.4vw, 60px); line-height: 1.08; letter-spacing: -0.025em; margin: 0 auto 20px; max-width: 900px; font-weight: 700; }
   .lede { color: var(--muted); font-size: clamp(17px, 2vw, 20px); max-width: 680px; margin: 0 auto 34px; }
   .actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+  .actions + .actions { margin-top: 12px; }
   .fine { color: var(--faint); font-size: 14px; margin-top: 16px; }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 40px auto 0; max-width: 760px; }
   .chip { padding: 6px 14px; border: 1px solid var(--rule); border-radius: 999px; color: var(--muted); font-size: 14px; background: var(--plate); }
@@ -160,10 +161,13 @@
     <h1>Falcon is a free, open-source asset manager for everyone.</h1>
     <p class="lede">Collect, tag, search and browse your images, PDFs, fonts, audio and video in one library. Native apps for macOS, Windows and Linux, built in Rust for speed.</p>
     <div class="actions">
-      <a class="btn btn-ghost" href="#mac">Download for Mac</a>
-      <a class="btn btn-ghost" href="#windows">Download for Windows</a>
-      <a class="btn btn-ghost" href="#linux">Download for Linux</a>
+      <a class="btn btn-primary" href="#mac">Download for Mac</a>
+      <a class="btn btn-primary" href="#windows">Download for Windows</a>
+      <a class="btn btn-primary" href="#linux">Download for Linux</a>
+    </div>
+    <div class="actions">
       <a class="btn btn-ghost" href="#build">Build from source</a>
+      <a class="btn btn-ghost" href="book/">Read the docs</a>
     </div>
     <p class="fine">Early alpha · macOS 12 or later on Apple Silicon, 64-bit Windows or 64-bit Linux · MIT or Apache-2.0</p>
     <div class="chips">
