@@ -697,6 +697,11 @@ impl App {
             );
             if !te.has_focus() && !te.lost_focus() {
                 te.request_focus();
+                // The whole name selected, so typing replaces "Untitled" or the old name.
+                if let Some(mut st) = TextEdit::load_state(ui.ctx(), te.id) {
+                    st.cursor.set_char_range(Some(egui::text::CCursorRange::two(egui::text::CCursor::new(0), egui::text::CCursor::new(buf.chars().count()))));
+                    st.store(ui.ctx(), te.id);
+                }
             }
             let cancel = ui.input(|i| i.key_pressed(Key::Escape));
             if te.lost_focus() || cancel {
