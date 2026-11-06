@@ -740,6 +740,9 @@ mod mac {
 
     /// A menu's items, scrolling when the window is too short for them.
     fn entries(ui: &mut egui::Ui, list: &'static [Entry], keys: &Shortcuts, state: &State) {
+        // As native menus do, the menu widens to its longest item rather than wrapping
+        // it onto a second line, which the scroll area below would cut off.
+        ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
         let height = ui.ctx().content_rect().height() - 48.0;
         egui::ScrollArea::vertical().max_height(height).show(ui, |ui| rows(ui, list, keys, state));
     }
