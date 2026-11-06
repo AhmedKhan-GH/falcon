@@ -113,6 +113,20 @@
   .downloads .card .btn { margin-top: auto; align-self: flex-start; }
   .downloads .card > :has(+ .btn) { margin-bottom: 20px; }
 
+  /* Support tables */
+  .matrix-title { font-size: 20px; margin: 48px 0 14px; scroll-margin-top: 88px; }
+  .matrix { overflow-x: auto; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--plate); }
+  .matrix table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  .matrix th, .matrix td { padding: 10px 14px; text-align: left; vertical-align: top; border-top: 1px solid var(--rule); }
+  .matrix thead th { border-top: 0; color: var(--faint); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }
+  .matrix tbody th { font-weight: 500; color: var(--text); min-width: 220px; }
+  .matrix td.y, .matrix td.h, .matrix td.n, .matrix thead th:nth-child(n+2):nth-child(-n+4) { text-align: center; width: 84px; }
+  .matrix td.y { color: var(--accent); font-weight: 700; }
+  .matrix td.h { color: var(--muted); }
+  .matrix td.n { color: var(--faint); }
+  .matrix td.note { color: var(--muted); min-width: 200px; }
+  .matrix code { font-size: 13px; }
+
   /* Closing */
   .closing { text-align: center; padding: 120px 0 110px; }
   .closing h2 { margin-bottom: 14px; }
@@ -161,15 +175,15 @@
     <h1>Falcon is a free, open-source asset manager for everyone.</h1>
     <p class="lede">Collect, tag, search and browse your images, PDFs, fonts, audio and video in one library. Native apps for macOS, Windows and Linux, built in Rust for speed.</p>
     <div class="actions">
-      <a class="btn btn-primary" href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/Falcon-arm64.dmg">Download for Mac</a>
-      <a class="btn btn-primary" href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/Falcon-x86_64-setup.exe">Download for Windows</a>
-      <a class="btn btn-primary" href="#linux">Download for Linux</a>
+      <a class="btn btn-primary" href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/Falcon-arm64.dmg">Download for Mac · Apple Silicon</a>
+      <a class="btn btn-primary" href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/Falcon-x86_64-setup.exe">Download for Windows · x86-64</a>
+      <a class="btn btn-primary" href="#linux">Download for Linux · x86-64</a>
     </div>
     <div class="actions">
       <a class="btn btn-ghost" href="#build">Build from source</a>
       <a class="btn btn-ghost" href="book/">Read the docs</a>
     </div>
-    <p class="fine">Early alpha · macOS 12 or later on Apple Silicon, 64-bit Windows or 64-bit Linux · MIT or Apache-2.0</p>
+    <p class="fine">Early alpha · macOS 12 or later on Apple Silicon, Windows or Linux on x86-64 (Intel and AMD) · MIT or Apache-2.0</p>
     <div class="chips">
       <span class="chip">JPG &amp; PNG</span><span class="chip">WebP</span><span class="chip">GIF</span><span class="chip">SVG</span>
       <span class="chip">PDF</span><span class="chip">PSD</span><span class="chip">AI</span><span class="chip">HEIC</span>
@@ -185,9 +199,9 @@
     <div class="wrap">
       <div class="eyebrow">Download</div>
       <h2>Download Falcon</h2>
-      <p class="intro">Free. One download for Macs, one for Windows and two for Linux, all holding the same app. To update, download the new version and install it the same way; Falcon doesn't update itself yet.</p>
+      <p class="intro">Free. One download for Macs, one for Windows and two for Linux, all holding the same app. To update, download the new version and install it the same way; Falcon doesn't update itself yet. What works on each system is under <a href="#status" style="color: var(--accent)">Early alpha</a>.</p>
       <div class="downloads two">
-        <div class="card" id="mac"><h4>Mac · .dmg</h4>
+        <div class="card" id="mac"><h4>Mac · Apple Silicon · .dmg</h4>
           <p><strong>For</strong> Macs with Apple Silicon (M1 or newer) and macOS 12 or later. There is no download for Intel Macs yet.</p>
           <p><strong>Install</strong> Open <code>Falcon-arm64.dmg</code> and drag Falcon to Applications.</p>
           <p><strong>First launch</strong> Falcon isn't notarised by Apple, so macOS refuses it at first. Click Open Anyway in System Settings ▸ Privacy &amp; Security; on macOS 14 and earlier you can instead right-click Falcon and choose Open. Or run this in Terminal:</p>
@@ -195,13 +209,13 @@
   /Applications/Falcon.app</pre>
           <a class="btn btn-primary" href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/Falcon-arm64.dmg">Download .dmg</a>
         </div>
-        <div class="card" id="windows"><h4>Windows · installer</h4>
-          <p><strong>For</strong> 64-bit Windows on Intel and AMD. Only Windows 11 has been tried so far.</p>
+        <div class="card" id="windows"><h4>Windows · x86-64 · installer</h4>
+          <p><strong>For</strong> 64-bit Windows on x86-64 (Intel and AMD). There is no build for ARM yet, and only Windows 11 has been tried so far.</p>
           <p><strong>Install</strong> Run <code>Falcon-x86_64-setup.exe</code>. It installs for you alone, without admin rights, in <code>%LOCALAPPDATA%\Programs\Falcon</code>, and adds Falcon to the Start menu. To remove it, use Add or remove programs; your libraries and settings stay.</p>
           <p><strong>First launch</strong> Falcon isn't code-signed, so Windows SmartScreen warns you the first time. Click More info, then Run anyway.</p>
           <a class="btn btn-primary" href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/Falcon-x86_64-setup.exe">Download installer</a>
         </div>
-        <div class="card" id="linux"><h4>Linux · AppImage</h4>
+        <div class="card" id="linux"><h4>Linux · x86-64 · AppImage</h4>
           <p><strong>For</strong> most distributions from 2022 or newer, on 64-bit Intel and AMD.</p>
           <p><strong>Install</strong> Nothing to install: make the file executable and run it.</p>
           <pre>chmod +x Falcon-x86_64.AppImage
@@ -209,37 +223,12 @@
           <p><strong>First launch</strong> Opens straight away. It isn't added to your app menu.</p>
           <a class="btn btn-primary" href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/Falcon-x86_64.AppImage">Download AppImage</a>
         </div>
-        <div class="card" id="deb"><h4>Linux · .deb</h4>
+        <div class="card" id="deb"><h4>Linux · x86-64 · .deb</h4>
           <p><strong>For</strong> Ubuntu, Debian and distributions based on them, from 2022 or newer, on 64-bit Intel and AMD.</p>
           <p><strong>Install</strong> Installs Falcon with an entry in your app menu.</p>
           <pre>sudo apt install ./Falcon-x86_64.deb</pre>
           <p><strong>First launch</strong> Open Falcon from the app menu. To remove it later, run <code>sudo apt remove falcon</code>.</p>
           <a class="btn btn-primary" href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/Falcon-x86_64.deb">Download .deb</a>
-        </div>
-      </div>
-      <div class="status">
-        <div class="card"><h4>Not on Windows yet</h4>
-          <ul>
-            <li>The built-in PDF reader: PDFs open in your default app, with no thumbnail</li>
-            <li>Screen capture, the tray icon, global hotkeys, system notifications and the share sheet</li>
-            <li>Live web pages and bookmark screenshots</li>
-            <li>HEIC, AVIF animation and JPEG XL viewing</li>
-            <li>Thumbnails for formats that rely on macOS QuickLook, such as PowerPoint</li>
-            <li>Dragging items out of the window, and opening files from File Explorer, and links that open Falcon</li>
-            <li>Cloud AI providers: with no place to keep an API key, they can't be set up. Local models such as Ollama don't need one</li>
-            <li>Smaller things: transparency effects, Touch ID, starting at login and iCloud handling. Open With shows Windows' own window, and Show in File Explorer shows only the first file of each folder when you pick several</li>
-          </ul>
-        </div>
-        <div class="card"><h4>Not on Linux yet</h4>
-          <ul>
-            <li>The built-in PDF reader: PDFs open in your default app, with no thumbnail</li>
-            <li>Live web pages and bookmark screenshots</li>
-            <li>Screen capture</li>
-            <li>HEIC, AVIF animation and JPEG XL viewing</li>
-            <li>Thumbnails for formats that rely on macOS QuickLook, such as PowerPoint</li>
-            <li>Dragging items out of the window, the tray icon and notifications</li>
-            <li>Cloud AI providers: with no place to keep an API key, they can't be set up. Local models such as Ollama don't need one</li>
-          </ul>
         </div>
       </div>
       <p class="fine">Falcon is early alpha. The Mac app isn't notarised by Apple, the Windows installer isn't code-signed, and the Linux packages aren't signed. While it is in development, it only opens libraries inside <code>~/Falcon Sandbox</code> (<code>%USERPROFILE%\Falcon Sandbox</code> on Windows), so copy a library there to try it. <a href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/SHA256SUMS">SHA-256 checksums</a> · <a href="https://github.com/AhmedKhan-GH/falcon/releases">All releases</a></p>
@@ -459,10 +448,70 @@ tags:    2</pre>
             <li>A check on screen of some newer features</li>
             <li>Plugins</li>
             <li>Native review of the translations</li>
-            <li>An Intel Mac build, a notarised Mac app, a signed Windows installer, and some features on Windows and Linux</li>
+            <li>An Intel Mac build, a Windows build for ARM, a notarised Mac app and a signed Windows installer</li>
           </ul>
         </div>
       </div>
+
+      <h3 class="matrix-title" id="systems">On each system</h3>
+      <div class="matrix"><table>
+        <thead><tr><th>Feature</th><th>Mac</th><th>Windows</th><th>Linux</th><th>Notes</th></tr></thead>
+        <tbody>
+        <tr><th scope="row">Libraries, import, folders, tags, smart folders, search, layouts, the viewer, the command-line tool and HTTP API</th><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="note"></td></tr>
+        <tr><th scope="row">Video playback</th><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="note">Mac: AVFoundation, with FFmpeg for the rest. Windows and Linux: the bundled FFmpeg</td></tr>
+        <tr><th scope="row">The built-in PDF reader and PDF thumbnails</th><td class="y" title="Works">✓</td><td class="n" title="Not yet">—</td><td class="n" title="Not yet">—</td><td class="note">Elsewhere PDFs open in your default app</td></tr>
+        <tr><th scope="row">HEIC, AVIF and JPEG XL</th><td class="y" title="Works">✓</td><td class="n" title="Not yet">—</td><td class="n" title="Not yet">—</td><td class="note">Read through macOS</td></tr>
+        <tr><th scope="row">Thumbnails through QuickLook: Office, iWork and many design files</th><td class="y" title="Works">✓</td><td class="h" title="Partly">◐</td><td class="h" title="Partly">◐</td><td class="note">Elsewhere, the preview picture stored in the file, where it has one</td></tr>
+        <tr><th scope="row">Live web pages, MHTML and bookmark screenshots</th><td class="y" title="Works">✓</td><td class="n" title="Not yet">—</td><td class="n" title="Not yet">—</td><td class="note"></td></tr>
+        <tr><th scope="row">Screen capture</th><td class="y" title="Works">✓</td><td class="n" title="Not yet">—</td><td class="n" title="Not yet">—</td><td class="note"></td></tr>
+        <tr><th scope="row">Dragging items out of the window</th><td class="y" title="Works">✓</td><td class="n" title="Not yet">—</td><td class="n" title="Not yet">—</td><td class="note"></td></tr>
+        <tr><th scope="row">Opening files from Finder or File Explorer, and <code>eagle://</code> links</th><td class="y" title="Works">✓</td><td class="n" title="Not yet">—</td><td class="n" title="Not yet">—</td><td class="note"></td></tr>
+        <tr><th scope="row">Tray icon, notifications, global hotkeys and the share sheet</th><td class="y" title="Works">✓</td><td class="n" title="Not yet">—</td><td class="n" title="Not yet">—</td><td class="note"></td></tr>
+        <tr><th scope="row">Touch ID, starting at login, transparency effects and iCloud handling</th><td class="y" title="Works">✓</td><td class="n" title="Not yet">—</td><td class="n" title="Not yet">—</td><td class="note"></td></tr>
+        <tr><th scope="row">Cloud AI providers</th><td class="y" title="Works">✓</td><td class="n" title="Not yet">—</td><td class="n" title="Not yet">—</td><td class="note">See AI features below</td></tr>
+        </tbody>
+        </table></div>
+
+      <h3 class="matrix-title" id="formats">File formats</h3>
+      <div class="matrix"><table>
+        <thead><tr><th>Formats</th><th>Mac</th><th>Windows</th><th>Linux</th><th>Notes</th></tr></thead>
+        <tbody>
+        <tr><th scope="row">jpg, png, bmp, gif, webp, svg, tif, tga</th><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="note">Full resolution; GIF and WebP animate</td></tr>
+        <tr><th scope="row">hdr, exr</th><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="note">Tone-mapped, with an exposure slider</td></tr>
+        <tr><th scope="row">psd, psb</th><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="note">Falcon’s own decoder, at full resolution</td></tr>
+        <tr><th scope="row">RAW: arw, cr2, cr3, dng, nef, raf, rw2, orf and 10 more</th><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="note">The full-size preview inside the file</td></tr>
+        <tr><th scope="row">heic, heif, avif, jxl</th><td class="y" title="Works">✓</td><td class="n" title="Not yet">—</td><td class="n" title="Not yet">—</td><td class="note">Through macOS; JPEG XL needs macOS 14</td></tr>
+        <tr><th scope="row">ico, icns, dds</th><td class="y" title="Works">✓</td><td class="h" title="Partly">◐</td><td class="h" title="Partly">◐</td><td class="note">QuickLook on the Mac</td></tr>
+        <tr><th scope="row">ai, ait, eps</th><td class="y" title="Works">✓</td><td class="h" title="Partly">◐</td><td class="h" title="Partly">◐</td><td class="note">Mac: drawn sharp at any zoom. Elsewhere, the preview picture in the file</td></tr>
+        <tr><th scope="row">pdf</th><td class="y" title="Works">✓</td><td class="n" title="Not yet">—</td><td class="n" title="Not yet">—</td><td class="note">A reader with find, spreads, rotation and print</td></tr>
+        <tr><th scope="row">txt</th><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="note">An editor that saves as you type</td></tr>
+        <tr><th scope="row">doc, docx, xls, xlsx, ppt, pptx, key, pages, numbers</th><td class="y" title="Works">✓</td><td class="h" title="Partly">◐</td><td class="h" title="Partly">◐</td><td class="note">QuickLook on the Mac. Elsewhere, the preview picture in the file, where it has one</td></tr>
+        <tr><th scope="row">Design files: xd, sketch, fig, afdesign, afphoto, c4d, blend, clip, skp, dwg, cdr, indd and more</th><td class="y" title="Works">✓</td><td class="h" title="Partly">◐</td><td class="h" title="Partly">◐</td><td class="note">QuickLook where the app that makes them is installed, else the preview picture in the file</td></tr>
+        <tr><th scope="row">ttf, otf, ttc, woff, woff2</th><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="note">A font viewer with specimens and activation</td></tr>
+        <tr><th scope="row">mp3, wav, ogg, flac, aac, m4a</th><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="note">A player over the waveform</td></tr>
+        <tr><th scope="row">mp4, mov, m4v, mkv, webm, avi, wmv, flv, mpg, ts and more</th><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="note">AV1 too, through dav1d</td></tr>
+        <tr><th scope="row">3D: glb, obj, fbx, 3ds, 3mf, dae, ply, stl</th><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="note">Turn and zoom, with textures</td></tr>
+        <tr><th scope="row">ifc</th><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="h" title="Partly">◐</td><td class="note">Full geometry through web-ifc; the Linux packages show only the tessellated parts for now</td></tr>
+        <tr><th scope="row">url, html, mhtml</th><td class="y" title="Works">✓</td><td class="n" title="Not yet">—</td><td class="n" title="Not yet">—</td><td class="note">Live pages on the Mac; elsewhere they import without one</td></tr>
+        <tr><th scope="row">.library, .eaglepack</th><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="note">Opens libraries, imports and exports packs</td></tr>
+        <tr><th scope="row">epub, md, csv, json, odt, ods, odp, usdz, jp2</th><td class="n" title="Not yet">—</td><td class="n" title="Not yet">—</td><td class="n" title="Not yet">—</td><td class="note">Not planned yet; they import as plain items</td></tr>
+        </tbody>
+        </table></div>
+      <p class="fine">From <a href="https://github.com/AhmedKhan-GH/falcon/blob/main/FORMATS.md" style="color: var(--accent)">FORMATS.md</a>, which covers each of Eagle’s 124 extensions. 101 have been opened from a sample file; the other 23, from closed or paid apps, haven’t been tried on a real file yet.</p>
+
+      <h3 class="matrix-title" id="ai">AI features</h3>
+      <div class="matrix"><table>
+        <thead><tr><th>AI feature</th><th>Mac</th><th>Windows</th><th>Linux</th><th>Notes</th></tr></thead>
+        <tbody>
+        <tr><th scope="row">AI Search: find pictures by describing them, or by a similar one</th><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="note">CLIP, on your own computer after a one-time model download. The Mac uses its GPU, Windows and Linux the CPU</td></tr>
+        <tr><th scope="row">Local models: Ollama, LM Studio or any OpenAI-compatible server</th><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="note">No key needed; requests go only to the server you set</td></tr>
+        <tr><th scope="row">Cloud models: OpenAI, Anthropic, Google Gemini, DeepSeek and Tongyi Qwen</th><td class="y" title="Works">✓</td><td class="n" title="Not yet">—</td><td class="n" title="Not yet">—</td><td class="note">Keys are kept in the macOS Keychain; Windows and Linux have no key store yet</td></tr>
+        <tr><th scope="row">AI steps in Actions: auto-tag, and write a description into the notes</th><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="note">With a local model on Windows and Linux</td></tr>
+        <tr><th scope="row">Eagle MCP: a local server so AI assistants can use your library</th><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="y" title="Works">✓</td><td class="note">Built in, off until you turn it on</td></tr>
+        <tr><th scope="row">Plugins</th><td class="n" title="Not yet">—</td><td class="n" title="Not yet">—</td><td class="n" title="Not yet">—</td><td class="note">No plugin system yet. Six of Eagle’s plugins are built in instead: Actions, Export in Format, Combine Images, Eagle MCP, AI Models and AI Search</td></tr>
+        </tbody>
+        </table></div>
+      <p class="fine">✓ works · ◐ partly · — not yet. The Windows and Linux columns follow the code and the docs; on Windows only Windows 11 has been tried by hand.</p>
       <p class="fine">Falcon is early alpha and unsigned. While falcon is in development, the app and the command-line tool only open libraries inside <code>~/Falcon Sandbox</code> (<code>%USERPROFILE%\Falcon Sandbox</code> on Windows), or the folder set in <code>FALCON_SANDBOX</code>. To try falcon on an existing library, copy it there first. See <a href="book/app.html#sandbox" style="color: var(--accent)">Sandbox</a> in the docs.</p>
     </div>
   </section>
