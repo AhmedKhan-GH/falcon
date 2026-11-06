@@ -111,7 +111,9 @@
   .downloads .card strong { color: var(--text); font-weight: 600; }
   .downloads .card pre { margin-top: 8px; padding: 10px 12px; border-radius: 8px; font-size: 13px; }
   .downloads .card .btn { margin-top: auto; align-self: flex-start; }
-  .downloads .card > :has(+ .btn) { margin-bottom: 20px; }
+  .downloads .card > :has(+ .btn), .downloads .card > :has(+ .btns) { margin-bottom: 20px; }
+  .downloads .card .btns { margin-top: auto; display: flex; flex-wrap: wrap; gap: 10px; }
+  .downloads .card .btns .btn { margin-top: 0; }
 
   /* Support tables */
   .matrix-title { font-size: 20px; margin: 48px 0 14px; scroll-margin-top: 88px; }
@@ -199,7 +201,7 @@
     <div class="wrap">
       <div class="eyebrow">Download</div>
       <h2>Download Falcon</h2>
-      <p class="intro">Free. One download for Macs, one for Windows and two for Linux, all holding the same app. To update, download the new version and install it the same way; Falcon doesn't update itself yet. What works on each system is under <a href="#status" style="color: var(--accent)">Early alpha</a>.</p>
+      <p class="intro">Free. One download for Macs, two for Windows and two for Linux, all holding the same app. To update, download the new version and install it the same way; Falcon doesn't update itself yet. What works on each system is under <a href="#status" style="color: var(--accent)">Early alpha</a>.</p>
       <div class="downloads two">
         <div class="card" id="mac"><h4>Mac · Apple Silicon · .dmg</h4>
           <p><strong>For</strong> Macs with Apple Silicon (M1 or newer) and macOS 12 or later. There is no download for Intel Macs yet.</p>
@@ -209,11 +211,15 @@
   /Applications/Falcon.app</pre>
           <a class="btn btn-primary" href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/Falcon-arm64.dmg">Download .dmg</a>
         </div>
-        <div class="card" id="windows"><h4>Windows · x86-64 · installer</h4>
+        <div class="card" id="windows"><h4>Windows · x86-64 · installer or portable</h4>
           <p><strong>For</strong> 64-bit Windows on x86-64 (Intel and AMD). There is no build for ARM yet, and only Windows 11 has been tried so far.</p>
           <p><strong>Install</strong> Run <code>Falcon-x86_64-setup.exe</code>. It installs for you alone, without admin rights, in <code>%LOCALAPPDATA%\Programs\Falcon</code>, and adds Falcon to the Start menu. To remove it, use Add or remove programs; your libraries and settings stay.</p>
+          <p id="windows-portable"><strong>Or portable</strong> Unzip <code>Falcon-x86_64-portable.zip</code> anywhere and run <code>Falcon\falcon-app.exe</code>. Nothing is installed; its DLLs sit in <code>Falcon\lib</code>. To remove it, delete the folder. Your libraries and settings live in the same places as with the installer.</p>
           <p><strong>First launch</strong> Falcon isn't code-signed, so Windows SmartScreen warns you the first time. Click More info, then Run anyway.</p>
-          <a class="btn btn-primary" href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/Falcon-x86_64-setup.exe">Download installer</a>
+          <div class="btns">
+            <a class="btn btn-primary" href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/Falcon-x86_64-setup.exe">Download installer</a>
+            <a class="btn btn-ghost" href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/Falcon-x86_64-portable.zip">Download portable .zip</a>
+          </div>
         </div>
         <div class="card" id="linux"><h4>Linux · x86-64 · AppImage</h4>
           <p><strong>For</strong> most distributions from 2022 or newer, on 64-bit Intel and AMD.</p>
@@ -231,7 +237,7 @@
           <a class="btn btn-primary" href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/Falcon-x86_64.deb">Download .deb</a>
         </div>
       </div>
-      <p class="fine">Falcon is early alpha. The Mac app isn't notarised by Apple, the Windows installer isn't code-signed, and the Linux packages aren't signed. While it is in development, it only opens libraries inside <code>~/Falcon Sandbox</code> (<code>%USERPROFILE%\Falcon Sandbox</code> on Windows), so copy a library there to try it. <a href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/SHA256SUMS">SHA-256 checksums</a> · <a href="https://github.com/AhmedKhan-GH/falcon/releases">All releases</a></p>
+      <p class="fine">Falcon is early alpha. The Mac app isn't notarised by Apple, the Windows downloads aren't code-signed, and the Linux packages aren't signed. While it is in development, it only opens libraries inside <code>~/Falcon Sandbox</code> (<code>%USERPROFILE%\Falcon Sandbox</code> on Windows), so copy a library there to try it. <a href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/SHA256SUMS">SHA-256 checksums</a> · <a href="https://github.com/AhmedKhan-GH/falcon/releases">All releases</a></p>
     </div>
   </section>
 
