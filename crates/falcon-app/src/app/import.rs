@@ -821,7 +821,7 @@ mod tests {
 
     fn error(name: &str, folder: &str) -> ImportError {
         let path = PathBuf::from(name);
-        let failure = Failure::new(&path, &falcon_library::Error::Sandbox("bad".into()));
+        let failure = Failure::new(&path, &falcon_library::Error::Refused("bad".into()));
         ImportError { failure, opts: ImportOptions { folders: vec![folder.into()], ..ImportOptions::default() } }
     }
 

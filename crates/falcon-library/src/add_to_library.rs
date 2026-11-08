@@ -29,8 +29,7 @@
 //! The copy ([`copy_items`]) needs no lock on either library and runs on a
 //! background thread; [`Library::finish_add`] then merges the definitions
 //! into the other library and registers the copied items there. The caller
-//! checks the other library with [`check_target`] first (which applies the
-//! sandbox guard).
+//! checks the other library with [`check_target`] first.
 
 use std::collections::HashSet;
 use std::fs;
@@ -132,11 +131,10 @@ pub enum AddRefusal {
     Library(#[from] Error),
 }
 
-/// Checks that `target` is another library falcon may write: inside the
-/// sandbox, not `current`, holding `metadata.json` and `images/`, and not
-/// made by a newer Eagle.
+/// Checks that `target` is another library falcon may write: not
+/// `current`, holding `metadata.json` and `images/`, and not made by a
+/// newer Eagle.
 pub fn check_target(current: &Path, target: &Path) -> std::result::Result<(), AddRefusal> {
-    crate::sandbox::guard(target)?;
     let same = current == target || matches!((current.canonicalize(), target.canonicalize()), (Ok(x), Ok(y)) if x == y);
     if same {
         return Err(AddRefusal::SameLibrary);

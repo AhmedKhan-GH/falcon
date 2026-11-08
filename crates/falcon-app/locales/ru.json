@@ -2879,7 +2879,6 @@
   "“{name}” holds {files} files. Importing them all may take a while.": "В «{name}» файлов: {files}. Импорт всех может занять некоторое время.",
   "“{name}” is open, so it can't be moved to the Trash.": "Библиотека «{name}» открыта, поэтому её нельзя переместить в Корзину.",
   "“{name}” isn't a plain library folder, so it can't be moved to the Trash.": "«{name}» не является обычной папкой библиотеки, поэтому её нельзя переместить в Корзину.",
-  "“{name}” isn't in the sandbox folder, so it can't be moved to the Trash.": "Библиотека «{name}» не находится в папке песочницы, поэтому её нельзя переместить в Корзину.",
   "“{path}” already has a folder named “{name}”. Replace overwrites files of the same names inside it; Keep Both numbers the new copies.": "В «{path}» уже есть папка «{name}». «Заменить» перезапишет в ней файлы с теми же именами; «Оставить оба» пронумерует новые копии.",
   "“{path}” already has folders named {names}. Replace overwrites files of the same names inside; Keep Both numbers the new copies.": {
     "few": "В «{path}» уже есть папки {names}. «Заменить» перезапишет в них файлы с теми же именами; «Оставить оба» пронумерует новые копии.",

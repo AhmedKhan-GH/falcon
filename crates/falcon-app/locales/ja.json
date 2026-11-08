@@ -2563,7 +2563,6 @@
   "“{name}” holds {files} files. Importing them all may take a while.": "「{name}」には{files}個のファイルがあります。すべて読み込むには時間がかかる場合があります。",
   "“{name}” is open, so it can't be moved to the Trash.": "「{name}」は開いているため、ゴミ箱に入れられません。",
   "“{name}” isn't a plain library folder, so it can't be moved to the Trash.": "「{name}」は通常のライブラリフォルダではないため、ゴミ箱に入れられません。",
-  "“{name}” isn't in the sandbox folder, so it can't be moved to the Trash.": "「{name}」はサンドボックスフォルダの中にないため、ゴミ箱に入れられません。",
   "“{path}” already has a folder named “{name}”. Replace overwrites files of the same names inside it; Keep Both numbers the new copies.": "「{path}」にはすでに「{name}」というフォルダがあります。「置き換える」はフォルダ内の同名ファイルを上書きし、「両方を残す」は新しいコピーに番号を付けます。",
   "“{path}” already has folders named {names}. Replace overwrites files of the same names inside; Keep Both numbers the new copies.": {
     "other": "「{path}」にはすでに{names}というフォルダがあります。「置き換える」はフォルダ内の同名ファイルを上書きし、「両方を残す」は新しいコピーに番号を付けます。"

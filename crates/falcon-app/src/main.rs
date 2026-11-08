@@ -105,8 +105,6 @@ fn main() -> eframe::Result {
     #[cfg(all(windows, not(debug_assertions)))]
     attach_console();
     errlog::install_panic_hook();
-    // Only libraries in the sandbox folder open, never real ones.
-    falcon_library::sandbox::enforce(falcon_library::sandbox::default_root());
     // Before the event loop, so the link that launched the app arrives.
     links::install();
     // Files opened with the app from Finder or dropped on its Dock icon.

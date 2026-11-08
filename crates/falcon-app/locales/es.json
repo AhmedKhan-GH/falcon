@@ -2723,7 +2723,6 @@
   "“{name}” holds {files} files. Importing them all may take a while.": "“{name}” contiene {files} archivos. Importarlos todos puede tardar un poco.",
   "“{name}” is open, so it can't be moved to the Trash.": "«{name}» está abierta, así que no se puede mover a la papelera.",
   "“{name}” isn't a plain library folder, so it can't be moved to the Trash.": "«{name}» no es una carpeta de biblioteca normal, así que no se puede mover a la papelera.",
-  "“{name}” isn't in the sandbox folder, so it can't be moved to the Trash.": "«{name}» no está en la carpeta del entorno aislado, así que no se puede mover a la papelera.",
   "“{path}” already has a folder named “{name}”. Replace overwrites files of the same names inside it; Keep Both numbers the new copies.": "«{path}» ya tiene una carpeta llamada «{name}». Reemplazar sobrescribe los archivos con el mismo nombre que contiene; Conservar ambos numera las copias nuevas.",
   "“{path}” already has folders named {names}. Replace overwrites files of the same names inside; Keep Both numbers the new copies.": {
     "one": "«{path}» ya tiene una carpeta llamada {names}. Reemplazar sobrescribe los archivos con el mismo nombre que contiene; Conservar ambos numera las copias nuevas.",

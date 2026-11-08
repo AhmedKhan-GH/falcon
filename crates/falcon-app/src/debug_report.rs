@@ -135,7 +135,7 @@ fn run(program: &str, args: &[&str]) -> String {
 /// The folder a report is offered to, the Desktop.
 #[cfg(not(windows))]
 pub fn desktop() -> Option<PathBuf> {
-    Some(falcon_library::sandbox::home_dir()?.join("Desktop"))
+    Some(falcon_library::paths::home_dir()?.join("Desktop"))
 }
 
 /// The folder a report is offered to, the Desktop. Windows can keep it away
@@ -157,7 +157,7 @@ pub fn desktop() -> Option<PathBuf> {
         CoTaskMemFree(path.cast());
         found
     };
-    found.or_else(|| Some(falcon_library::sandbox::home_dir()?.join("Desktop")))
+    found.or_else(|| Some(falcon_library::paths::home_dir()?.join("Desktop")))
 }
 
 /// Asks the system about the machine.
@@ -281,7 +281,7 @@ mod tests {
             window: (1280.0, 800.0),
             pixels_per_point: 2.0,
             library: Some(LibraryInfo {
-                path: "/Users/me/Falcon Sandbox/Test.library".into(),
+                path: "/Users/me/Pictures/Test.library".into(),
                 items: 120,
                 folders: 7,
                 tags: 31,
@@ -291,8 +291,8 @@ mod tests {
                     FileInfo { name: "tags.json".into(), kb: None, writable: false },
                 ],
             }),
-            other_libraries: vec!["/Users/me/Falcon Sandbox/Two.library".into()],
-            recent: vec!["/Users/me/Falcon Sandbox/Old.library".into()],
+            other_libraries: vec!["/Users/me/Pictures/Two.library".into()],
+            recent: vec!["/Users/me/Pictures/Old.library".into()],
         }
     }
 
@@ -319,15 +319,15 @@ window: 1280 x 800 points
 pixels per point: 2
 
 Library
-path: /Users/me/Falcon Sandbox/Test.library
+path: /Users/me/Pictures/Test.library
 items: 120
 folders: 7
 tags: 31
 metadata.json: 12 KB, writable
 mtime.json: 4 KB, read-only
 tags.json: missing
-also open: /Users/me/Falcon Sandbox/Two.library
-recent: /Users/me/Falcon Sandbox/Old.library
+also open: /Users/me/Pictures/Two.library
+recent: /Users/me/Pictures/Old.library
 ";
         assert_eq!(text, expected.replace("macOS:", &format!("{OS_NAME}:")));
     }

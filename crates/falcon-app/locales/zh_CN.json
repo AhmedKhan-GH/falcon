@@ -2563,7 +2563,6 @@
   "“{name}” holds {files} files. Importing them all may take a while.": "“{name}”包含{files}个文件。全部导入可能需要一些时间。",
   "“{name}” is open, so it can't be moved to the Trash.": "“{name}”已打开，因此无法移到废纸篓。",
   "“{name}” isn't a plain library folder, so it can't be moved to the Trash.": "“{name}”不是普通的资源库文件夹，因此无法移到废纸篓。",
-  "“{name}” isn't in the sandbox folder, so it can't be moved to the Trash.": "“{name}”不在沙盒文件夹内，因此无法移到废纸篓。",
   "“{path}” already has a folder named “{name}”. Replace overwrites files of the same names inside it; Keep Both numbers the new copies.": "“{path}”中已有名为“{name}”的文件夹。“替换”会覆盖其中同名的文件；“保留两者”会为新副本编号。",
   "“{path}” already has folders named {names}. Replace overwrites files of the same names inside; Keep Both numbers the new copies.": {
     "other": "“{path}”中已有名为{names}的文件夹。“替换”会覆盖其中同名的文件；“保留两者”会为新副本编号。"

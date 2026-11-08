@@ -1124,7 +1124,7 @@ pub fn eagle_font_dir() -> Option<PathBuf> {
     if !cfg!(target_os = "macos") {
         return None;
     }
-    crate::sandbox::home_dir().map(|h| h.join("Library/Fonts/EagleApp"))
+    crate::paths::home_dir().map(|h| h.join("Library/Fonts/EagleApp"))
 }
 
 /// The folder falcon copies the fonts it activates into (macOS:
@@ -1134,13 +1134,13 @@ pub fn eagle_font_dir() -> Option<PathBuf> {
 /// manages; it only reads it.
 pub fn falcon_font_dir() -> Option<PathBuf> {
     if cfg!(target_os = "macos") {
-        return crate::sandbox::home_dir().map(|h| h.join("Library/Fonts/Falcon"));
+        return crate::paths::home_dir().map(|h| h.join("Library/Fonts/Falcon"));
     }
     #[cfg(windows)]
-    return Some(crate::sandbox::local_data_dir()?.join("Falcon").join("Fonts"));
+    return Some(crate::paths::local_data_dir()?.join("Falcon").join("Fonts"));
     #[cfg(not(windows))]
     {
-        let data = std::env::var_os("XDG_DATA_HOME").map(PathBuf::from).or_else(|| Some(crate::sandbox::home_dir()?.join(".local/share")))?;
+        let data = std::env::var_os("XDG_DATA_HOME").map(PathBuf::from).or_else(|| Some(crate::paths::home_dir()?.join(".local/share")))?;
         Some(data.join("fonts/Falcon"))
     }
 }

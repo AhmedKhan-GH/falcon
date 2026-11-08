@@ -2723,7 +2723,6 @@
   "“{name}” holds {files} files. Importing them all may take a while.": "„{name}“ enthält {files} Dateien. Der Import aller Dateien kann eine Weile dauern.",
   "“{name}” is open, so it can't be moved to the Trash.": "„{name}“ ist geöffnet und kann deshalb nicht in den Papierkorb gelegt werden.",
   "“{name}” isn't a plain library folder, so it can't be moved to the Trash.": "„{name}“ ist kein einfacher Mediathek-Ordner und kann deshalb nicht in den Papierkorb gelegt werden.",
-  "“{name}” isn't in the sandbox folder, so it can't be moved to the Trash.": "„{name}“ liegt nicht im Sandbox-Ordner und kann deshalb nicht in den Papierkorb gelegt werden.",
   "“{path}” already has a folder named “{name}”. Replace overwrites files of the same names inside it; Keep Both numbers the new copies.": "„{path}“ enthält bereits einen Ordner namens „{name}“. „Ersetzen“ überschreibt gleichnamige Dateien darin; „Beide behalten“ nummeriert die neuen Kopien.",
   "“{path}” already has folders named {names}. Replace overwrites files of the same names inside; Keep Both numbers the new copies.": {
     "one": "„{path}“ enthält bereits einen Ordner namens {names}. „Ersetzen“ überschreibt gleichnamige Dateien darin; „Beide behalten“ nummeriert die neuen Kopien.",

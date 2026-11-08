@@ -356,10 +356,21 @@ impl App {
         self.request_switch(Target::Create);
     }
 
+    /// A folder dialog for choosing a library or where to keep one. It
+    /// starts in the folder that holds the shown library; with none shown,
+    /// the system picks the starting folder.
+    pub(crate) fn library_folder_dialog(&self, title: &str) -> rfd::FileDialog {
+        let dialog = crate::dialog_owner::file_dialog().set_title(title);
+        match self.ws.root.as_deref().and_then(std::path::Path::parent).filter(|p| !p.as_os_str().is_empty()) {
+            Some(folder) => dialog.set_directory(folder),
+            None => dialog,
+        }
+    }
+
     /// Asks for a library and opens it in the background, with a loading
     /// screen (after the warning when tasks run in the shown library).
     pub(crate) fn pick_library(&mut self) {
-        if let Some(p) = crate::dialog_owner::file_dialog().set_title(tr("Open Eagle Library")).set_directory(falcon_library::sandbox::default_root()).pick_folder() {
+        if let Some(p) = self.library_folder_dialog(tr("Open Eagle Library")).pick_folder() {
             self.request_switch(Target::Open(p));
         }
     }

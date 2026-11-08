@@ -2723,7 +2723,6 @@
   "“{name}” holds {files} files. Importing them all may take a while.": "“{name}” holds {files} files. Importing them all may take a while.",
   "“{name}” is open, so it can't be moved to the Trash.": "“{name}” is open, so it can't be moved to the Trash.",
   "“{name}” isn't a plain library folder, so it can't be moved to the Trash.": "“{name}” isn't a plain library folder, so it can't be moved to the Trash.",
-  "“{name}” isn't in the sandbox folder, so it can't be moved to the Trash.": "“{name}” isn't in the sandbox folder, so it can't be moved to the Trash.",
   "“{path}” already has a folder named “{name}”. Replace overwrites files of the same names inside it; Keep Both numbers the new copies.": "“{path}” already has a folder named “{name}”. Replace overwrites files of the same names inside it; Keep Both numbers the new copies.",
   "“{path}” already has folders named {names}. Replace overwrites files of the same names inside; Keep Both numbers the new copies.": {
     "one": "“{path}” already has a folder named {names}. Replace overwrites files of the same names inside; Keep Both numbers the new copies.",

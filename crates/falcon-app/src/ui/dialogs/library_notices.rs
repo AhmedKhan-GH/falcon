@@ -253,7 +253,7 @@ impl App {
                 self.retry_missing(path.clone());
             }
             if ui.button(tr("Select Another Path…")).clicked()
-                && let Some(p) = crate::dialog_owner::file_dialog().set_title(tr("Open Eagle Library")).set_directory(falcon_library::sandbox::default_root()).pick_folder()
+                && let Some(p) = self.library_folder_dialog(tr("Open Eagle Library")).pick_folder()
             {
                 // Found elsewhere: once it opens, the old place leaves the history.
                 self.replace_missing(path.clone(), p);
@@ -289,13 +289,9 @@ impl App {
         if self.merge.is_some() {
             return;
         }
-        let Some(source) = crate::dialog_owner::file_dialog().set_title(tr("Choose a Library to Merge In")).set_directory(falcon_library::sandbox::default_root()).pick_folder() else {
+        let Some(source) = self.library_folder_dialog(tr("Choose a Library to Merge In")).pick_folder() else {
             return;
         };
-        if let Err(e) = falcon_library::sandbox::guard(&source) {
-            self.show_alert(Alert::new(tr("Can't merge that library"), e.to_string()));
-            return;
-        }
         let planned = merge::plan(&lock(&shared), &source);
         match planned {
             Ok(plan) => self.merge = Some(Merge::Confirm { into, plan: Box::new(plan) }),

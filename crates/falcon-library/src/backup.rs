@@ -262,9 +262,9 @@ mod tests {
         assert_eq!(fnv1a_hex("foobar"), "bf9cf968");
         // Code units, not bytes: one unit per BMP character, two for others.
         assert_ne!(fnv1a_hex("é"), fnv1a_hex("\u{c3}\u{a9}"));
-        let p = Path::new("/Users/me/Falcon Sandbox/Books.library");
-        assert_eq!(app_data_backup_name(p), format!("{}.json", fnv1a_hex("/Users/me/Falcon Sandbox/Books.library")));
-        assert_eq!(app_data_backup_name(Path::new("/Users/me/Falcon Sandbox/Books.library/")), app_data_backup_name(p));
+        let p = Path::new("/Users/me/Pictures/Books.library");
+        assert_eq!(app_data_backup_name(p), format!("{}.json", fnv1a_hex("/Users/me/Pictures/Books.library")));
+        assert_eq!(app_data_backup_name(Path::new("/Users/me/Pictures/Books.library/")), app_data_backup_name(p));
     }
 
     #[test]

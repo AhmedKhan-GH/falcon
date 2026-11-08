@@ -12,7 +12,7 @@
 //!   headers, so a web page can't read an answer even from another local port;
 //! - [`Options::token`] can also ask for `Authorization: Bearer <token>`;
 //! - it serves whatever library [`Handle::set_library`] was last given and has
-//!   no way to open another one, so it stays inside the app's sandbox check;
+//!   no way to open another one;
 //! - write tools exist only while [`Options::allow_writes`] is on.
 
 mod rpc;

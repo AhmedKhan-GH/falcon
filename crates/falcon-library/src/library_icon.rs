@@ -1,6 +1,5 @@
 //! The library's own icon, `icon.png` in the library root. Eagle shows it
-//! next to the library name in the library switcher. The caller checks the
-//! sandbox (`sandbox::guard`) before writing or deleting it.
+//! next to the library name in the library switcher.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};

@@ -2563,7 +2563,6 @@
   "“{name}” holds {files} files. Importing them all may take a while.": "「{name}」包含{files}個檔案。全部匯入可能需要一些時間。",
   "“{name}” is open, so it can't be moved to the Trash.": "「{name}」已開啟，因此無法移到垃圾桶。",
   "“{name}” isn't a plain library folder, so it can't be moved to the Trash.": "「{name}」不是一般的資料庫資料夾，因此無法移到垃圾桶。",
-  "“{name}” isn't in the sandbox folder, so it can't be moved to the Trash.": "「{name}」不在沙盒資料夾內，因此無法移到垃圾桶。",
   "“{path}” already has a folder named “{name}”. Replace overwrites files of the same names inside it; Keep Both numbers the new copies.": "「{path}」中已有名為「{name}」的資料夾。「取代」會覆寫其中同名的檔案；「保留兩者」會為新副本編號。",
   "“{path}” already has folders named {names}. Replace overwrites files of the same names inside; Keep Both numbers the new copies.": {
     "other": "「{path}」中已有名為{names}的資料夾。「取代」會覆寫其中同名的檔案；「保留兩者」會為新副本編號。"

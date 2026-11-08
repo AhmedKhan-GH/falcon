@@ -297,7 +297,7 @@ mod platform {
 
     /// `path` as the shell wants it: no `\\?\` prefix, only backslashes.
     fn native(path: &Path) -> PathBuf {
-        falcon_library::sandbox::shown(path).components().collect()
+        falcon_library::paths::shown(path).components().collect()
     }
 
     /// Runs `work` on a short-lived thread with COM set up the way the shell
@@ -522,7 +522,7 @@ mod tests {
         // Only the windows on this folder are looked at or closed.
         let script = format!(
             "$s = New-Object -ComObject Shell.Application; $s.Windows() | Where-Object {{ $_.Document.Folder.Self.Path -eq '{}' }} | ForEach-Object {{ 'window:' + (($_.Document.SelectedItems() | ForEach-Object {{ Split-Path $_.Path -Leaf }}) -join ','); $_.Quit() }}",
-            falcon_library::sandbox::shown(&folder).display()
+            falcon_library::paths::shown(&folder).display()
         );
         let look = || {
             std::thread::sleep(std::time::Duration::from_secs(4));

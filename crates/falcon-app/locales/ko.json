@@ -2563,7 +2563,6 @@
   "“{name}” holds {files} files. Importing them all may take a while.": "“{name}”에 파일 {files}개가 있습니다. 모두 가져오는 데 시간이 걸릴 수 있습니다.",
   "“{name}” is open, so it can't be moved to the Trash.": "'{name}'은(는) 열려 있어서 휴지통으로 옮길 수 없습니다.",
   "“{name}” isn't a plain library folder, so it can't be moved to the Trash.": "'{name}'은(는) 일반 라이브러리 폴더가 아니어서 휴지통으로 옮길 수 없습니다.",
-  "“{name}” isn't in the sandbox folder, so it can't be moved to the Trash.": "'{name}'은(는) 샌드박스 폴더 안에 있지 않아서 휴지통으로 옮길 수 없습니다.",
   "“{path}” already has a folder named “{name}”. Replace overwrites files of the same names inside it; Keep Both numbers the new copies.": "\"{path}\"에 이미 \"{name}\" 폴더가 있습니다. \"대체\"는 안의 같은 이름 파일을 덮어쓰고, \"모두 유지\"는 새 사본에 번호를 붙입니다.",
   "“{path}” already has folders named {names}. Replace overwrites files of the same names inside; Keep Both numbers the new copies.": {
     "other": "\"{path}\"에 이미 {names} 폴더가 있습니다. \"대체\"는 안의 같은 이름 파일을 덮어쓰고, \"모두 유지\"는 새 사본에 번호를 붙입니다."

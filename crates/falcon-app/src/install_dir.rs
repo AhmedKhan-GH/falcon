@@ -69,12 +69,11 @@ pub fn refusal(lib: &Path) -> Option<String> {
     })
 }
 
-/// The sandbox guard followed by [`refusal`], for every place falcon
-/// creates, opens or writes into a library.
+/// [`refusal`] as a library error, for every place falcon creates, opens
+/// or writes into a library.
 pub fn guard(lib: &Path) -> falcon_library::Result<()> {
-    falcon_library::sandbox::guard(lib)?;
     match refusal(lib) {
-        Some(why) => Err(falcon_library::Error::Sandbox(why)),
+        Some(why) => Err(falcon_library::Error::Refused(why)),
         None => Ok(()),
     }
 }
@@ -114,7 +113,7 @@ mod tests {
     }
 
     #[test]
-    fn the_test_runner_location_is_fine_for_a_sandbox_library() {
+    fn a_library_away_from_the_test_runner_is_fine() {
         // The running test binary is a bare executable; a library elsewhere passes.
         let d = tempfile::tempdir().unwrap();
         assert!(refusal(&d.path().join("A.library")).is_none());

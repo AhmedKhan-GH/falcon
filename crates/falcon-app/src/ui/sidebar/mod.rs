@@ -265,7 +265,7 @@ impl App {
             crate::workspaces::remove_from_list(&mut self.recent, root);
         }
         // A falcon addition: Eagle can't move a library to the Trash.
-        if !missing && self.can_offer_removal(root) {
+        if !missing {
             let open = self.is_library_open(root);
             let button = ui.add_enabled(!open, egui::Button::new(RichText::new(tr("Remove from Disk…")).color(t::p().icon_red)));
             if open {
@@ -282,7 +282,7 @@ impl App {
         let Some(src) = crate::dialog_owner::file_dialog().set_title(tr("Choose Library Icon")).add_filter(tr("Images"), &["jpg", "jpeg", "png", "webp", "gif"]).pick_file() else {
             return;
         };
-        let done = falcon_library::sandbox::guard(root).and_then(|()| falcon_library::library_icon::set_icon(root, &src));
+        let done = falcon_library::library_icon::set_icon(root, &src);
         self.lib_icons.forget(root);
         if let Err(e) = done {
             self.flash(trf("Couldn't change the icon: {error}", &[("error", &e)]));
@@ -290,7 +290,7 @@ impl App {
     }
 
     pub(crate) fn remove_library_icon(&mut self, root: &std::path::Path) {
-        let done = falcon_library::sandbox::guard(root).and_then(|()| falcon_library::library_icon::remove_icon(root));
+        let done = falcon_library::library_icon::remove_icon(root);
         self.lib_icons.forget(root);
         if let Err(e) = done {
             self.flash(trf("Couldn't remove the icon: {error}", &[("error", &e)]));

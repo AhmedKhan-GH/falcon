@@ -50,12 +50,6 @@ impl App {
         open
     }
 
-    /// Whether the switcher offers Remove from Disk for `root`: only for a
-    /// library inside the enforced sandbox.
-    pub(crate) fn can_offer_removal(&self, root: &Path) -> bool {
-        falcon_library::sandbox::root().is_some() && falcon_library::sandbox::check(root).is_ok()
-    }
-
     /// Whether `root` is open, so Remove from Disk is disabled for it.
     pub(crate) fn is_library_open(&self, root: &Path) -> bool {
         rule::is_open(root, &self.open_library_paths())
@@ -78,7 +72,7 @@ impl App {
     }
 
     fn removal_check(&self, root: &Path) -> Result<(), Refusal> {
-        rule::check(root, falcon_library::sandbox::root(), &falcon_library::sandbox::check, &self.open_library_paths())
+        rule::check(root, &self.open_library_paths())
     }
 
     /// Draws the question and, on Move to Trash, trashes the folder.
@@ -136,7 +130,7 @@ impl App {
     /// error and changes nothing; there is no fallback to deleting.
     fn remove_library_now(&mut self, path: &Path, name: &str) {
         let open = self.open_library_paths();
-        let done = rule::trash_library(path, falcon_library::sandbox::root(), &falcon_library::sandbox::check, &open, crate::auto_import::trash);
+        let done = rule::trash_library(path, &open, crate::auto_import::trash);
         match done {
             Ok(()) => {
                 crate::workspaces::remove_from_list(&mut self.recent, path);
@@ -150,18 +144,16 @@ impl App {
     }
 }
 
-/// Which of the three sentences a refusal gets.
+/// Which of the two sentences a refusal gets.
 #[derive(Debug, PartialEq)]
 enum Why {
     Open,
-    Sandbox,
     NotPlain,
 }
 
 fn why(r: Refusal) -> Why {
     match r {
         Refusal::Open | Refusal::InsideOpen | Refusal::ContainsOpen => Why::Open,
-        Refusal::NoSandbox | Refusal::OutsideSandbox | Refusal::IsSandboxRoot | Refusal::ContainsSandbox => Why::Sandbox,
         Refusal::Missing | Refusal::Symlink | Refusal::NotDirectory | Refusal::NotLibrary | Refusal::NoMetadata => Why::NotPlain,
     }
 }
@@ -171,7 +163,6 @@ fn refusal_text(path: &Path, r: Refusal) -> String {
     let name = library_name(path);
     match why(r) {
         Why::Open => trf("“{name}” is open, so it can't be moved to the Trash.", &[("name", &name)]),
-        Why::Sandbox => trf("“{name}” isn't in the sandbox folder, so it can't be moved to the Trash.", &[("name", &name)]),
         Why::NotPlain => trf("“{name}” isn't a plain library folder, so it can't be moved to the Trash.", &[("name", &name)]),
     }
 }
@@ -181,14 +172,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn every_refusal_gets_one_of_three_sentences() {
+    fn every_refusal_gets_one_of_two_sentences() {
         use Refusal::*;
-        for r in [NoSandbox, OutsideSandbox, IsSandboxRoot, ContainsSandbox, Missing, Symlink, NotDirectory, NotLibrary, NoMetadata, Open, InsideOpen, ContainsOpen] {
+        for r in [Missing, Symlink, NotDirectory, NotLibrary, NoMetadata, Open, InsideOpen, ContainsOpen] {
             let text = refusal_text(Path::new("/a/B.library"), r);
             assert!(text.contains('B') && text.contains("Trash"), "{r:?}: {text}");
         }
         assert_eq!(why(Refusal::InsideOpen), Why::Open);
-        assert_eq!(why(Refusal::IsSandboxRoot), Why::Sandbox);
         assert_eq!(why(Refusal::NoMetadata), Why::NotPlain);
     }
 }

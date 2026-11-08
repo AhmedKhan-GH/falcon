@@ -95,22 +95,6 @@ enum Command {
     },
 }
 
-impl Command {
-    /// The library every command works on.
-    fn library(&self) -> &std::path::Path {
-        match self {
-            Command::Import { library, .. }
-            | Command::New { library }
-            | Command::Info { library, .. }
-            | Command::Folder { library, .. }
-            | Command::Backup { library, .. }
-            | Command::Export { library, .. }
-            | Command::ImportPack { library, .. }
-            | Command::Serve { library, .. } => library,
-        }
-    }
-}
-
 fn run(cli: Cli) -> falcon_library::Result<()> {
     match cli.command {
         Command::Import { library, files, folders, tags, no_palette } => {
@@ -174,13 +158,7 @@ fn run(cli: Cli) -> falcon_library::Result<()> {
 }
 
 fn main() -> ExitCode {
-    falcon_library::sandbox::enforce(falcon_library::sandbox::default_root());
-    let cli = Cli::parse();
-    if let Err(e) = falcon_library::sandbox::guard(cli.command.library()) {
-        eprintln!("error: {e}");
-        return ExitCode::FAILURE;
-    }
-    match run(cli) {
+    match run(Cli::parse()) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("error: {e}");

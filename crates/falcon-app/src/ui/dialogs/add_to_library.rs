@@ -4,9 +4,9 @@
 //!
 //! The submenu lists the recent libraries except the shown one, as Eagle's
 //! does, then Choose Library… for any other. The other library must pass the
-//! sandbox and install-folder guards. When it is open in falcon too, the
-//! copied items are registered through its own handle, so its window sees
-//! them at once; otherwise it is opened just for the write.
+//! install-folder guard. When it is open in falcon too, the copied items are
+//! registered through its own handle, so its window sees them at once;
+//! otherwise it is opened just for the write.
 
 use std::path::{Path, PathBuf};
 

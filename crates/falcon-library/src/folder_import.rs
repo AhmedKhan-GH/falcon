@@ -284,7 +284,7 @@ mod tests {
         #[cfg(unix)]
         std::os::unix::fs::symlink(&top, top.join("again")).unwrap();
         #[cfg(windows)]
-        crate::sandbox::tests::junction(&top, &top.join("again"));
+        crate::paths::tests::junction(&top, &top.join("again"));
         let tree = walk(&top);
         assert_eq!(names(&tree.files), ["a.png"]);
         assert!(tree.folders.is_empty());

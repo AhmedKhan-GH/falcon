@@ -16,18 +16,9 @@ use crate::logic::is_library_path;
 /// Why a library may not be removed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Refusal {
-    /// No sandbox folder is enforced, so nothing can be shown to be inside it.
-    NoSandbox,
-    /// The sandbox check, or the folder's resolved path, says it is outside.
-    OutsideSandbox,
-    /// It is the sandbox folder itself.
-    IsSandboxRoot,
-    /// It contains the sandbox folder.
-    ContainsSandbox,
     /// It can't be found or read.
     Missing,
-    /// It, or a folder between it and the sandbox, is a symbolic link, or
-    /// its path has a `..`.
+    /// It, or a folder above it, is a symbolic link, or its path has a `..`.
     Symlink,
     NotDirectory,
     /// Its name doesn't end in `.library`.
@@ -90,41 +81,24 @@ fn open_conflict(path: &Path, canonical: &Path, open: &[PathBuf]) -> Option<Refu
 
 /// Whether `path` may be moved to the Trash.
 ///
-/// `sandbox_root` is `sandbox::root()` and `sandbox_check` is
-/// `sandbox::check`; `open` lists every open or loading library. The
-/// checks run in this order and the first failure is returned: the sandbox
-/// (it must be enforced and agree, the folder must resolve inside it and
-/// be neither it nor a parent of it), then the folder (a real directory
+/// `open` lists every open or loading library. The checks run in this
+/// order and the first failure is returned: the folder (a real directory
 /// named `*.library` with a `metadata.json`, reached through no symbolic
 /// link), then the open libraries.
-pub fn check(path: &Path, sandbox_root: Option<&Path>, sandbox_check: &dyn Fn(&Path) -> Result<(), String>, open: &[PathBuf]) -> Result<(), Refusal> {
-    let root = canon(sandbox_root.ok_or(Refusal::NoSandbox)?);
-    sandbox_check(path).map_err(|_| Refusal::OutsideSandbox)?;
+pub fn check(path: &Path, open: &[PathBuf]) -> Result<(), Refusal> {
     let meta = std::fs::symlink_metadata(path).map_err(|_| Refusal::Missing)?;
     let canonical = path.canonicalize().map_err(|_| Refusal::Missing)?;
-    if canonical == root {
-        return Err(Refusal::IsSandboxRoot);
-    }
-    if root.starts_with(&canonical) {
-        return Err(Refusal::ContainsSandbox);
-    }
-    if !canonical.starts_with(&root) {
-        return Err(Refusal::OutsideSandbox);
-    }
     if meta.file_type().is_symlink() {
         return Err(Refusal::Symlink);
     }
-    // Every folder between the sandbox and it must be a real one too, or
-    // the path trashed would not be the folder shown.
+    // Every folder above it must be a real one too, or the path trashed
+    // would not be the folder shown.
     let abs = std::path::absolute(path).map_err(|_| Refusal::Missing)?;
     if abs.components().any(|c| c == std::path::Component::ParentDir) {
         return Err(Refusal::Symlink);
     }
-    for a in abs.ancestors() {
-        let c = canon(a);
-        if c != root && c.starts_with(&root) && std::fs::symlink_metadata(a).is_ok_and(|m| m.file_type().is_symlink()) {
-            return Err(Refusal::Symlink);
-        }
+    if abs.ancestors().any(|a| std::fs::symlink_metadata(a).is_ok_and(|m| m.file_type().is_symlink())) {
+        return Err(Refusal::Symlink);
     }
     if !meta.is_dir() {
         return Err(Refusal::NotDirectory);
@@ -148,14 +122,8 @@ pub fn is_open(path: &Path, open: &[PathBuf]) -> bool {
 
 /// Runs the whole rule again, then hands `path` to `trasher`. A refusal or
 /// a failed trasher leaves the folder where it is; nothing is deleted.
-pub fn trash_library(
-    path: &Path,
-    sandbox_root: Option<&Path>,
-    sandbox_check: &dyn Fn(&Path) -> Result<(), String>,
-    open: &[PathBuf],
-    trasher: impl FnOnce(&Path) -> io::Result<()>,
-) -> Result<(), TrashError> {
-    check(path, sandbox_root, sandbox_check, open).map_err(TrashError::Refused)?;
+pub fn trash_library(path: &Path, open: &[PathBuf], trasher: impl FnOnce(&Path) -> io::Result<()>) -> Result<(), TrashError> {
+    check(path, open).map_err(TrashError::Refused)?;
     trasher(path).map_err(TrashError::Failed)
 }
 
@@ -196,14 +164,15 @@ mod tests {
     /// is true of it, as of a symbolic link.
     #[cfg(windows)]
     fn symlink(target: impl AsRef<Path>, link: impl AsRef<Path>) -> io::Result<()> {
-        let plain = |p: &Path| falcon_library::sandbox::shown(p);
+        let plain = |p: &Path| falcon_library::paths::shown(p);
         let out = std::process::Command::new("cmd").arg("/C").arg("mklink").arg("/J").arg(plain(link.as_ref())).arg(plain(target.as_ref())).output()?;
         if out.status.success() { Ok(()) } else { Err(io::Error::other(String::from_utf8_lossy(&out.stderr).into_owned())) }
     }
 
     struct Env {
         _tmp: tempfile::TempDir,
-        root: PathBuf,
+        /// The folder the test libraries are in.
+        dir: PathBuf,
         lib: PathBuf,
     }
 
@@ -215,149 +184,113 @@ mod tests {
     fn env() -> Env {
         let tmp = tempfile::tempdir().unwrap();
         let base = tmp.path().canonicalize().unwrap();
-        let root = base.join("Sandbox");
-        let lib = root.join("A.library");
+        let dir = base.join("Libraries");
+        let lib = dir.join("A.library");
         make_lib(&lib);
-        Env { _tmp: tmp, root, lib }
-    }
-
-    fn ok(_: &Path) -> Result<(), String> {
-        Ok(())
-    }
-
-    fn run(e: &Env, path: &Path, open: &[PathBuf]) -> Result<(), Refusal> {
-        check(path, Some(&e.root), &ok, open)
+        Env { _tmp: tmp, dir, lib }
     }
 
     #[test]
-    fn a_plain_closed_library_in_the_sandbox_is_allowed() {
+    fn a_plain_closed_library_is_allowed() {
         let e = env();
-        assert_eq!(run(&e, &e.lib, &[]), Ok(()));
-        let other = e.root.join("B.library");
+        assert_eq!(check(&e.lib, &[]), Ok(()));
+        let other = e.dir.join("B.library");
         make_lib(&other);
-        assert_eq!(run(&e, &e.lib, &[other]), Ok(()));
+        assert_eq!(check(&e.lib, &[other]), Ok(()));
     }
 
     #[test]
-    fn no_enforced_sandbox_refuses() {
+    fn the_folder_holding_libraries_refuses() {
         let e = env();
-        assert_eq!(check(&e.lib, None, &ok, &[]), Err(Refusal::NoSandbox));
-    }
-
-    #[test]
-    fn a_failing_sandbox_check_refuses() {
-        let e = env();
-        let no = |_: &Path| Err("outside".to_string());
-        assert_eq!(check(&e.lib, Some(&e.root), &no, &[]), Err(Refusal::OutsideSandbox));
-    }
-
-    #[test]
-    fn a_library_outside_the_sandbox_refuses_even_if_the_check_agrees() {
-        let e = env();
-        let outside = e.root.parent().unwrap().join("Real.library");
-        make_lib(&outside);
-        assert_eq!(run(&e, &outside, &[]), Err(Refusal::OutsideSandbox));
-    }
-
-    #[test]
-    fn the_sandbox_itself_and_its_parents_refuse() {
-        let e = env();
-        assert_eq!(run(&e, &e.root, &[]), Err(Refusal::IsSandboxRoot));
-        assert_eq!(run(&e, e.root.parent().unwrap(), &[]), Err(Refusal::ContainsSandbox));
-        // A sandbox that is itself named like a library.
-        let odd = e.root.parent().unwrap().join("Odd.library");
-        make_lib(&odd);
-        assert_eq!(check(&odd, Some(&odd), &ok, &[]), Err(Refusal::IsSandboxRoot));
-        let nested = odd.join("Sandbox");
-        std::fs::create_dir_all(&nested).unwrap();
-        assert_eq!(check(&odd, Some(&nested), &ok, &[]), Err(Refusal::ContainsSandbox));
+        assert_eq!(check(&e.dir, &[]), Err(Refusal::NotLibrary));
+        assert_eq!(check(e.dir.parent().unwrap(), &[]), Err(Refusal::NotLibrary));
     }
 
     #[test]
     fn a_symlink_to_a_library_refuses() {
         let e = env();
-        let link = e.root.join("Link.library");
+        let link = e.dir.join("Link.library");
         symlink(&e.lib, &link).unwrap();
-        assert_eq!(run(&e, &link, &[]), Err(Refusal::Symlink));
+        assert_eq!(check(&link, &[]), Err(Refusal::Symlink));
     }
 
     #[test]
     fn a_library_reached_through_a_linked_folder_refuses() {
         let e = env();
-        let dir = e.root.join("Group");
-        std::fs::create_dir_all(&dir).unwrap();
-        symlink(&e.lib, dir.join("C.library")).unwrap();
-        assert_eq!(run(&e, &dir.join("C.library"), &[]), Err(Refusal::Symlink));
-        let via = e.root.join("ViaLink");
-        symlink(&dir, &via).unwrap();
-        make_lib(&dir.join("D.library"));
-        assert_eq!(run(&e, &via.join("D.library"), &[]), Err(Refusal::Symlink));
+        let group = e.dir.join("Group");
+        std::fs::create_dir_all(&group).unwrap();
+        symlink(&e.lib, group.join("C.library")).unwrap();
+        assert_eq!(check(&group.join("C.library"), &[]), Err(Refusal::Symlink));
+        let via = e.dir.join("ViaLink");
+        symlink(&group, &via).unwrap();
+        make_lib(&group.join("D.library"));
+        assert_eq!(check(&via.join("D.library"), &[]), Err(Refusal::Symlink));
     }
 
     #[test]
     fn a_file_refuses() {
         let e = env();
-        let f = e.root.join("F.library");
+        let f = e.dir.join("F.library");
         std::fs::write(&f, "x").unwrap();
-        assert_eq!(run(&e, &f, &[]), Err(Refusal::NotDirectory));
+        assert_eq!(check(&f, &[]), Err(Refusal::NotDirectory));
     }
 
     #[test]
     fn a_folder_without_metadata_refuses() {
         let e = env();
-        let d = e.root.join("N.library");
+        let d = e.dir.join("N.library");
         std::fs::create_dir_all(&d).unwrap();
-        assert_eq!(run(&e, &d, &[]), Err(Refusal::NoMetadata));
+        assert_eq!(check(&d, &[]), Err(Refusal::NoMetadata));
         // A folder named metadata.json is not the file.
         std::fs::create_dir_all(d.join("metadata.json")).unwrap();
-        assert_eq!(run(&e, &d, &[]), Err(Refusal::NoMetadata));
+        assert_eq!(check(&d, &[]), Err(Refusal::NoMetadata));
     }
 
     #[test]
     fn a_wrong_extension_refuses() {
         let e = env();
-        let d = e.root.join("Photos");
+        let d = e.dir.join("Photos");
         make_lib(&d);
-        assert_eq!(run(&e, &d, &[]), Err(Refusal::NotLibrary));
+        assert_eq!(check(&d, &[]), Err(Refusal::NotLibrary));
     }
 
     #[test]
     fn a_missing_path_refuses() {
         let e = env();
-        assert_eq!(run(&e, &e.root.join("Gone.library"), &[]), Err(Refusal::Missing));
+        assert_eq!(check(&e.dir.join("Gone.library"), &[]), Err(Refusal::Missing));
     }
 
     #[test]
     fn an_open_library_refuses_by_path_and_by_spelling() {
         let e = env();
-        assert_eq!(run(&e, &e.lib, std::slice::from_ref(&e.lib)), Err(Refusal::Open));
-        let dotted = e.root.join("Sub/../A.library");
-        std::fs::create_dir_all(e.root.join("Sub")).unwrap();
-        assert_eq!(run(&e, &e.lib, &[dotted]), Err(Refusal::Open));
+        assert_eq!(check(&e.lib, std::slice::from_ref(&e.lib)), Err(Refusal::Open));
+        let dotted = e.dir.join("Sub/../A.library");
+        std::fs::create_dir_all(e.dir.join("Sub")).unwrap();
+        assert_eq!(check(&e.lib, &[dotted]), Err(Refusal::Open));
         let mut trailing = e.lib.clone().into_os_string();
         trailing.push(std::path::MAIN_SEPARATOR_STR);
-        assert_eq!(run(&e, &e.lib, &[PathBuf::from(trailing)]), Err(Refusal::Open));
+        assert_eq!(check(&e.lib, &[PathBuf::from(trailing)]), Err(Refusal::Open));
     }
 
     #[cfg(windows)]
     #[test]
     fn an_open_library_refuses_however_its_path_is_written() {
         let e = env();
-        let plain = falcon_library::sandbox::shown(&e.lib);
+        let plain = falcon_library::paths::shown(&e.lib);
         let upper = PathBuf::from(plain.to_str().unwrap().to_uppercase());
         let forward = PathBuf::from(plain.to_str().unwrap().replace('\\', "/"));
         for spelling in [plain.clone(), upper, forward] {
-            assert_eq!(run(&e, &e.lib, std::slice::from_ref(&spelling)), Err(Refusal::Open), "{spelling:?}");
-            assert_eq!(run(&e, &spelling, std::slice::from_ref(&e.lib)), Err(Refusal::Open), "{spelling:?}");
+            assert_eq!(check(&e.lib, std::slice::from_ref(&spelling)), Err(Refusal::Open), "{spelling:?}");
+            assert_eq!(check(&spelling, std::slice::from_ref(&e.lib)), Err(Refusal::Open), "{spelling:?}");
         }
     }
 
     #[test]
     fn an_open_library_refuses_through_a_symlink() {
         let e = env();
-        let link = e.root.join("Elsewhere.library");
+        let link = e.dir.join("Elsewhere.library");
         symlink(&e.lib, &link).unwrap();
-        assert_eq!(run(&e, &e.lib, &[link]), Err(Refusal::Open));
+        assert_eq!(check(&e.lib, &[link]), Err(Refusal::Open));
     }
 
     #[test]
@@ -366,16 +299,16 @@ mod tests {
         let inner = e.lib.join("Inner.library");
         make_lib(&inner);
         // The open one is inside the candidate.
-        assert_eq!(run(&e, &e.lib, std::slice::from_ref(&inner)), Err(Refusal::ContainsOpen));
+        assert_eq!(check(&e.lib, std::slice::from_ref(&inner)), Err(Refusal::ContainsOpen));
         // The candidate is inside the open one.
-        assert_eq!(run(&e, &inner, std::slice::from_ref(&e.lib)), Err(Refusal::InsideOpen));
+        assert_eq!(check(&inner, std::slice::from_ref(&e.lib)), Err(Refusal::InsideOpen));
     }
 
     #[test]
     fn trashing_runs_the_trasher_once_when_allowed() {
         let e = env();
         let seen = Cell::new(0);
-        let got = trash_library(&e.lib, Some(&e.root), &ok, &[], |p| {
+        let got = trash_library(&e.lib, &[], |p| {
             assert_eq!(p, e.lib);
             seen.set(seen.get() + 1);
             Ok(())
@@ -389,7 +322,7 @@ mod tests {
     fn a_refusal_never_reaches_the_trasher() {
         let e = env();
         let seen = Cell::new(false);
-        let got = trash_library(&e.lib, Some(&e.root), &ok, std::slice::from_ref(&e.lib), |_| {
+        let got = trash_library(&e.lib, std::slice::from_ref(&e.lib), |_| {
             seen.set(true);
             Ok(())
         });
@@ -401,28 +334,28 @@ mod tests {
     fn the_rule_runs_again_when_the_state_changed() {
         let e = env();
         // Fine when the dialog opened.
-        assert_eq!(run(&e, &e.lib, &[]), Ok(()));
+        assert_eq!(check(&e.lib, &[]), Ok(()));
         // Then the library is opened, or its metadata goes, or it turns into a link.
         let seen = Cell::new(false);
         let trasher = |_: &Path| {
             seen.set(true);
             Ok(())
         };
-        assert!(matches!(trash_library(&e.lib, Some(&e.root), &ok, std::slice::from_ref(&e.lib), trasher), Err(TrashError::Refused(Refusal::Open))));
+        assert!(matches!(trash_library(&e.lib, std::slice::from_ref(&e.lib), trasher), Err(TrashError::Refused(Refusal::Open))));
         std::fs::remove_file(e.lib.join("metadata.json")).unwrap();
-        assert!(matches!(trash_library(&e.lib, Some(&e.root), &ok, &[], trasher), Err(TrashError::Refused(Refusal::NoMetadata))));
-        let real = e.root.parent().unwrap().join("Moved");
+        assert!(matches!(trash_library(&e.lib, &[], trasher), Err(TrashError::Refused(Refusal::NoMetadata))));
+        let real = e.dir.parent().unwrap().join("Moved");
         std::fs::rename(&e.lib, &real).unwrap();
         make_lib(&real);
         symlink(&real, &e.lib).unwrap();
-        assert!(matches!(trash_library(&e.lib, Some(&e.root), &ok, &[], trasher), Err(TrashError::Refused(Refusal::OutsideSandbox | Refusal::Symlink))));
+        assert!(matches!(trash_library(&e.lib, &[], trasher), Err(TrashError::Refused(Refusal::Symlink))));
         assert!(!seen.get());
     }
 
     #[test]
     fn a_failed_trasher_is_reported_and_leaves_the_folder() {
         let e = env();
-        let got = trash_library(&e.lib, Some(&e.root), &ok, &[], |_| Err(io::Error::other("no Trash")));
+        let got = trash_library(&e.lib, &[], |_| Err(io::Error::other("no Trash")));
         assert!(matches!(got, Err(TrashError::Failed(_))));
         assert!(e.lib.join("metadata.json").exists());
     }
@@ -442,7 +375,7 @@ mod tests {
         let own = folder_size(&e.lib, &AtomicBool::new(false)).unwrap();
         assert_eq!(own, 1024 + 2, "the two files and metadata.json");
         // A link to a big folder outside adds only itself.
-        let big = e.root.parent().unwrap().join("big");
+        let big = e.dir.parent().unwrap().join("big");
         std::fs::create_dir_all(&big).unwrap();
         std::fs::write(big.join("huge.bin"), vec![0u8; 100_000]).unwrap();
         symlink(&big, e.lib.join("link")).unwrap();
@@ -454,6 +387,6 @@ mod tests {
     fn the_size_walk_fails_when_stopped_or_unreadable() {
         let e = env();
         assert!(folder_size(&e.lib, &AtomicBool::new(true)).is_err());
-        assert!(folder_size(&e.root.join("Gone"), &AtomicBool::new(false)).is_err());
+        assert!(folder_size(&e.dir.join("Gone"), &AtomicBool::new(false)).is_err());
     }
 }

@@ -156,7 +156,7 @@ pub fn clear_history(_recent: &[PathBuf], open: &[PathBuf]) -> Vec<PathBuf> {
 
 /// A folder path for display, with the home folder shown as `~`.
 pub fn tilde(path: &Path) -> String {
-    tilde_in(path, falcon_library::sandbox::home_dir().as_deref())
+    tilde_in(path, falcon_library::paths::home_dir().as_deref())
 }
 
 fn tilde_in(path: &Path, home: Option<&Path>) -> String {

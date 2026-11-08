@@ -4,8 +4,8 @@
 //! running app as an "open documents" Apple event, which [`install`]
 //! catches. The app takes them with [`take`] each frame and treats them
 //! as Eagle does: an `.eaglepack` is imported as a package, a `.library`
-//! is opened (through the sandbox guard, like a dropped one) and anything
-//! else is imported into the shown library.
+//! is opened (through the install-folder guard, like a dropped one) and
+//! anything else is imported into the shown library.
 //!
 //! AppKit installs its own handler for this event while the app finishes
 //! launching, so falcon's handler goes in when AppKit announces that

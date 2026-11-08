@@ -173,10 +173,7 @@ impl App {
     /// Asks for the folder (a blocking system dialog) and carries on.
     /// Returns whether the dialog stays open.
     fn pick_folder_for(&mut self, dlg: &mut Create, name: String) -> bool {
-        let folder = crate::dialog_owner::file_dialog()
-            .set_title(tr("Choose where to keep the library"))
-            .set_directory(falcon_library::sandbox::default_root())
-            .pick_folder();
+        let folder = self.library_folder_dialog(tr("Choose where to keep the library")).pick_folder();
         let Some(folder) = folder else {
             // Cancelled: back to the name, unless there is no dialog to go back to.
             return !dlg.from_welcome;
@@ -452,7 +449,7 @@ mod tests {
         assert!(risky_library_folder(Path::new("/Users/a/Desktop")));
         assert!(risky_library_folder(Path::new("/Users/a/Downloads/x")));
         assert!(risky_library_folder(Path::new("/Users/a/Desktop Stuff")));
-        assert!(!risky_library_folder(Path::new("/Users/a/Falcon Sandbox")));
+        assert!(!risky_library_folder(Path::new("/Users/a/Pictures")));
     }
 
     #[test]
