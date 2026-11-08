@@ -1141,6 +1141,7 @@
   "Move to Group": "Mover al grupo",
   "Move to Top Level": "Mover al nivel superior",
   "Move to Trash": "Mover a la papelera",
+  "Move to Trash…": "Mover a la papelera…",
   "Move to the Trash": "Mover a la papelera",
   "Move up": "Mover hacia arriba",
   "Move {n} folders": {
@@ -1565,7 +1566,6 @@
   "Remove Password for “{name}”": "Quitar contraseña de «{name}»",
   "Remove Password…": "Quitar contraseña…",
   "Remove This Search": "Quitar esta búsqueda",
-  "Remove from Disk…": "Eliminar del disco…",
   "Remove from Folder": "Quitar de la carpeta",
   "Remove from Group": "Quitar del grupo",
   "Remove from List": "Quitar de la lista",

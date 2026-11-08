@@ -1,4 +1,4 @@
-//! Remove from Disk (a falcon addition; Eagle has no such command): moves
+//! Move to Trash for a library (a falcon addition; Eagle has no such command): moves
 //! a library folder to the Trash after a confirmation naming the library
 //! and its size. The rule is in `library_removal.rs`; this is the dialog.
 //! It is drawn with or without a library open, since the switcher's menu
@@ -50,7 +50,7 @@ impl App {
         open
     }
 
-    /// Whether `root` is open, so Remove from Disk is disabled for it.
+    /// Whether `root` is open, so Move to Trash is disabled for it.
     pub(crate) fn is_library_open(&self, root: &Path) -> bool {
         rule::is_open(root, &self.open_library_paths())
     }

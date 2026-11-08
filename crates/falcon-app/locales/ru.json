@@ -1196,6 +1196,7 @@
   "Move to Group": "Переместить в группу",
   "Move to Top Level": "Переместить на верхний уровень",
   "Move to Trash": "Переместить в корзину",
+  "Move to Trash…": "Переместить в корзину…",
   "Move to the Trash": "Переместить в корзину",
   "Move up": "Переместить вверх",
   "Move {n} folders": {
@@ -1640,7 +1641,6 @@
   "Remove Password for “{name}”": "Удаление пароля для «{name}»",
   "Remove Password…": "Удалить пароль…",
   "Remove This Search": "Убрать этот поиск",
-  "Remove from Disk…": "Удалить с диска…",
   "Remove from Folder": "Убрать из папки",
   "Remove from Group": "Убрать из группы",
   "Remove from List": "Убрать из списка",

@@ -267,7 +267,7 @@ impl App {
         // A falcon addition: Eagle can't move a library to the Trash.
         if !missing {
             let open = self.is_library_open(root);
-            let button = ui.add_enabled(!open, egui::Button::new(RichText::new(tr("Remove from Disk…")).color(t::p().icon_red)));
+            let button = ui.add_enabled(!open, egui::Button::new(RichText::new(tr("Move to Trash…")).color(t::p().icon_red)));
             if open {
                 button.on_disabled_hover_text(tr("Close the library first."));
             } else if button.clicked() {

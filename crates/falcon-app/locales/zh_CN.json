@@ -1086,6 +1086,7 @@
   "Move to Group": "移到组",
   "Move to Top Level": "移到顶层",
   "Move to Trash": "移到废纸篓",
+  "Move to Trash…": "移到废纸篓…",
   "Move to the Trash": "移到废纸篓",
   "Move up": "上移",
   "Move {n} folders": {
@@ -1490,7 +1491,6 @@
   "Remove Password for “{name}”": "移除“{name}”的密码",
   "Remove Password…": "移除密码…",
   "Remove This Search": "移除此搜索",
-  "Remove from Disk…": "从磁盘移除…",
   "Remove from Folder": "从文件夹中移除",
   "Remove from Group": "从组中移除",
   "Remove from List": "从列表中移除",

@@ -1086,6 +1086,7 @@
   "Move to Group": "グループへ移動",
   "Move to Top Level": "最上位へ移動",
   "Move to Trash": "ゴミ箱に入れる",
+  "Move to Trash…": "ゴミ箱に入れる…",
   "Move to the Trash": "ゴミ箱に入れる",
   "Move up": "上へ移動",
   "Move {n} folders": {
@@ -1490,7 +1491,6 @@
   "Remove Password for “{name}”": "「{name}」のパスワードを削除",
   "Remove Password…": "パスワードを削除…",
   "Remove This Search": "この検索を削除",
-  "Remove from Disk…": "ディスクから削除…",
   "Remove from Folder": "フォルダから削除",
   "Remove from Group": "グループから削除",
   "Remove from List": "リストから削除",

@@ -101,7 +101,7 @@ pub struct App {
     /// The Notification Center: what toasts and notices said (`notice_history.rs`).
     pub(crate) notices: crate::notice_history::History,
     pub(crate) notice_window_open: bool,
-    /// Remove from Disk is asking for confirmation (`ui/dialogs/remove_library.rs`).
+    /// Move to Trash (for a library) is asking for confirmation (`ui/dialogs/remove_library.rs`).
     pub(crate) remove_library: Option<crate::ui::dialogs::remove_library::RemoveLibrary>,
     /// The library tools' dialogs (`ui/dialogs/tools.rs`).
     pub(crate) tools: crate::ui::dialogs::tools::Tools,

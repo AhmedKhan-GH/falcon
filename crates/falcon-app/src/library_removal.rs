@@ -1,4 +1,4 @@
-//! The rule for Remove from Disk, a falcon addition (Eagle has no such
+//! The rule for moving a library to the Trash, a falcon addition (Eagle has no such
 //! command): when a library folder may be moved to the Trash.
 //!
 //! [`check`] is one pure function (stat calls only) that says OK or names

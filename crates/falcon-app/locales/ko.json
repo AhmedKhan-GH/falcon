@@ -1086,6 +1086,7 @@
   "Move to Group": "그룹으로 이동",
   "Move to Top Level": "최상위로 이동",
   "Move to Trash": "휴지통으로 이동",
+  "Move to Trash…": "휴지통으로 이동…",
   "Move to the Trash": "휴지통으로 이동",
   "Move up": "위로 이동",
   "Move {n} folders": {
@@ -1490,7 +1491,6 @@
   "Remove Password for “{name}”": "“{name}” 비밀번호 제거",
   "Remove Password…": "비밀번호 제거…",
   "Remove This Search": "이 검색 제거",
-  "Remove from Disk…": "디스크에서 제거…",
   "Remove from Folder": "폴더에서 제거",
   "Remove from Group": "그룹에서 제거",
   "Remove from List": "목록에서 제거",

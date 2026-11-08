@@ -1141,6 +1141,7 @@
   "Move to Group": "Move to Group",
   "Move to Top Level": "Move to Top Level",
   "Move to Trash": "Move to Trash",
+  "Move to Trash…": "Move to Trash…",
   "Move to the Trash": "Move to the Trash",
   "Move up": "Move up",
   "Move {n} folders": {
@@ -1565,7 +1566,6 @@
   "Remove Password for “{name}”": "Remove Password for “{name}”",
   "Remove Password…": "Remove Password…",
   "Remove This Search": "Remove This Search",
-  "Remove from Disk…": "Remove from Disk…",
   "Remove from Folder": "Remove from Folder",
   "Remove from Group": "Remove from Group",
   "Remove from List": "Remove from List",
