@@ -238,7 +238,7 @@
           <a class="btn btn-primary" href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/Falcon-x86_64.deb">Download .deb</a>
         </div>
       </div>
-      <p class="fine">Falcon is early alpha. The Mac app isn't notarised by Apple, the Windows downloads aren't code-signed, and the Linux packages aren't signed. While it is in development, it only opens libraries inside <code>~/Falcon Sandbox</code> (<code>%USERPROFILE%\Falcon Sandbox</code> on Windows), so copy a library there to try it. <a href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/SHA256SUMS">SHA-256 checksums</a> · <a href="https://github.com/AhmedKhan-GH/falcon/releases">All releases</a></p>
+      <p class="fine">Falcon is early alpha. The Mac app isn't notarised by Apple, the Windows downloads aren't code-signed, and the Linux packages aren't signed. <a href="https://github.com/AhmedKhan-GH/falcon/releases/latest/download/SHA256SUMS">SHA-256 checksums</a> · <a href="https://github.com/AhmedKhan-GH/falcon/releases">All releases</a></p>
     </div>
   </section>
 
@@ -286,7 +286,7 @@ cargo run --release -p falcon-app</pre>
           <pre>scripts/package-windows.sh</pre>
         </div>
       </div>
-      <p class="fine">While it is in development, Falcon only opens libraries inside <code>~/Falcon Sandbox</code> (<code>%USERPROFILE%\Falcon Sandbox</code> on Windows). The <a href="https://github.com/AhmedKhan-GH/falcon#get-started">README</a> has the command-line tool and more.</p>
+      <p class="fine">The <a href="https://github.com/AhmedKhan-GH/falcon#get-started">README</a> has the command-line tool and more.</p>
     </div>
   </section>
 
@@ -409,8 +409,8 @@ cargo run --release -p falcon-app</pre>
       <h2>Command-line tool and HTTP API</h2>
       <p class="intro">The same engine runs the app, a command-line tool and a local HTTP API, so scripts and other tools can work with your library too.</p>
       <div class="code">
-<pre><span class="c"># Create a library in the sandbox and add files</span>
-<span class="p">$</span> lib=~/"Falcon Sandbox"/Moodboard.library
+<pre><span class="c"># Create a library and add files</span>
+<span class="p">$</span> lib=~/Pictures/Moodboard.library
 <span class="p">$</span> falcon new "$lib"
 <span class="p">$</span> falcon import "$lib" \
     poster.png --tag type --tag 1960s
@@ -520,7 +520,7 @@ tags:    2</pre>
         </tbody>
         </table></div>
       <p class="fine">✓ works · ◐ partly · — not yet. The Windows and Linux columns follow the code and the docs; on Windows only Windows 11 has been tried by hand.</p>
-      <p class="fine">Falcon is early alpha and unsigned. While falcon is in development, the app and the command-line tool only open libraries inside <code>~/Falcon Sandbox</code> (<code>%USERPROFILE%\Falcon Sandbox</code> on Windows), or the folder set in <code>FALCON_SANDBOX</code>. To try falcon on an existing library, copy it there first. See <a href="book/app.html#sandbox" style="color: var(--accent)">Sandbox</a> in the docs.</p>
+      <p class="fine">Falcon is early alpha and unsigned.</p>
     </div>
   </section>
 

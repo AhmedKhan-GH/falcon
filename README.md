@@ -137,13 +137,13 @@ scripts/package-linux.sh                   # Linux: build the AppImage and .deb 
 scripts/package-windows.sh                 # Windows: build the installer and portable zip in target/windows
 ```
 
-While falcon is in development, the app and the command-line tool only open libraries inside `~/Falcon Sandbox`, which is `%USERPROFILE%\Falcon Sandbox` on Windows (set `FALCON_SANDBOX` to use another folder). Copy a library there to try falcon on it.
+The `falcon` command-line tool creates a library, imports files into it, describes it and serves its HTTP API:
 
 ```sh
-cargo run -p falcon -- new ~/"Falcon Sandbox"/Inspiration.library
-cargo run -p falcon -- import ~/"Falcon Sandbox"/Inspiration.library photo.jpg --tag moodboard
-cargo run -p falcon -- info ~/"Falcon Sandbox"/Inspiration.library
-cargo run -p falcon -- serve ~/"Falcon Sandbox"/Inspiration.library     # local HTTP API on 127.0.0.1:41596
+cargo run -p falcon -- new ~/Pictures/Inspiration.library
+cargo run -p falcon -- import ~/Pictures/Inspiration.library photo.jpg --tag moodboard
+cargo run -p falcon -- info ~/Pictures/Inspiration.library
+cargo run -p falcon -- serve ~/Pictures/Inspiration.library     # local HTTP API on 127.0.0.1:41596
 ```
 
 ## Under the hood

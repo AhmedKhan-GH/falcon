@@ -242,7 +242,7 @@ What the page can do is limited:
 - There is no UI delegate, so JavaScript dialogs are answered by WebKit and new windows are refused. Media waits for a user gesture that never comes, so nothing plays.
 - At most one page is open at a time, and its web view and window go when it ends.
 
-Libraries are reached the usual way, so in development the queue only ever writes into a library inside the sandbox folder, and only to the item's own `.info` folder. The compiled rule list goes through a temporary folder that is removed as soon as it has compiled.
+The queue only ever writes to the item's own `.info` folder. The compiled rule list goes through a temporary folder that is removed as soon as it has compiled.
 
 `tests/page_shot.rs` runs the queue against real WebKit on the main thread, with no Dock icon and nothing on screen, using a page served on a free local port. It checks the picture's shape and colour, that first-party loads arrive and third-party ones don't, that no cookie is sent, that dialogs and `window.open` neither hang nor open anything, that a redirect to a file fails and that a page that never answers times out once. It says it skipped when there is no window server session or WebKit can't load a local page.
 

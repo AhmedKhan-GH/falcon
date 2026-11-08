@@ -19,7 +19,7 @@ On Linux, both downloads open straight away.
 
 To update, download the new version and install it the same way. Falcon doesn't update itself yet.
 
-**While Falcon is in development, it only opens libraries inside `~/Falcon Sandbox`,** so copy a library there to try it. On Windows that is `%USERPROFILE%\Falcon Sandbox`.
+**Falcon opens and creates libraries in any folder,** as Eagle does. Earlier versions only opened libraries in one development folder.
 
 **Works on Linux:** libraries, import, thumbnails, tags, folders, search, the image viewer, video playback through a bundled FFmpeg, the local API and the menu bar.
 

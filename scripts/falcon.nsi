@@ -11,7 +11,7 @@
 ; installs elsewhere. If Falcon is running, a silent run changes nothing and exits with status 2.
 ;
 ; The uninstaller deletes the files and shortcuts the installer made, one by one, and the folder only
-; if that leaves it empty. It never touches libraries, the Falcon Sandbox or settings.
+; if that leaves it empty. It never touches libraries or settings.
 
 Unicode true
 SetCompressor /SOLID /FINAL lzma
@@ -62,7 +62,7 @@ VIAddVersionKey "LegalCopyright" "Copyright (c) 2026 ${PUBLISHER}"
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
 
-!define MUI_UNCONFIRMPAGE_TEXT_TOP "Falcon will be removed from your computer. Your libraries, the Falcon Sandbox and your settings stay where they are."
+!define MUI_UNCONFIRMPAGE_TEXT_TOP "Falcon will be removed from your computer. Your libraries and your settings stay where they are."
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
 

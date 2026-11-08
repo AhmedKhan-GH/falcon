@@ -416,7 +416,7 @@ Viewer and player keys (frames, volume, speed, ` zoom toggle, N comment, M mute,
 | Feature | Falcon | Falcon evidence or gap | Local? |
 | --- | --- | --- | --- |
 | Welcome flow: welcome, choose a theme, create or open a library with example names | Done | First-launch welcome (see the Welcome or onboarding row); its browser extension step is online and left out | local |
-| No-library screen offers both Create and Open | Done | Create Library and Open Library with a hint (`ui/dialogs/library.rs`), through the sandbox guard | local |
+| No-library screen offers both Create and Open | Done | Create Library and Open Library with a hint (`ui/dialogs/library.rs`) | local |
 | Tutorial / tips overlay | Done | Falcon addition (Eagle's tutorial is an online video link): six local tips, shown once after the welcome flow, reopened from Help ▸ Show Tips (`tips.rs`). Seen on screen | local |
 | Empty All or folder view: "Drag and Drop" with a hint | Done | Tailored empty states per view | local |
 | Empty search: "Nothing Found, maybe another keyword" | Done | Tailored empty state | local |
@@ -1227,7 +1227,7 @@ Two cross-cutting facts explain many rows:
 | Import Folders from a file dialog (several folders, structure kept) | Done | `app/import.rs` `run_import_request`; Import Folders… and Import Files… in the library switcher and on the empty All and folder pages | local |
 | Warning before importing a very large folder ("contains N items, continue?") | Done | `folder_import::verdict`: 2,000 files or more ask first, as Eagle | local |
 | Refuse folders deeper than 15 levels or with 100k+ files | Done | `folder_import::verdict`, Eagle's numbers | local |
-| Dropping or picking a `.library` folder opens it as a library instead of importing it | Done | `logic::split_libraries` separates `*.library` paths before the import walk in `import_into`; the first opens through the sandbox-guarded `App::open`, the rest are named in a toast. Like Eagle, a `.library` nested inside a dropped folder is not special-cased | local |
+| Dropping or picking a `.library` folder opens it as a library instead of importing it | Done | `logic::split_libraries` separates `*.library` paths before the import walk in `import_into`; the first opens through `App::open`, the rest are named in a toast. Like Eagle, a `.library` nested inside a dropped folder is not special-cased | local |
 | A Pixave `.pxvlibrary` folder is skipped by folder import | Done | `folder_import.rs` walk (everywhere, not only the dialog) | local |
 | Paste files copied in Finder (⌘V) | Done | `app/import.rs` `paste_into` (`arboard` file list) | local |
 | Paste a copied bitmap image as a new PNG item | Done | `app/import.rs` `paste_into` (named "Pasted image <date>") | local |
@@ -1315,7 +1315,7 @@ Two cross-cutting facts explain many rows:
 | Copy Link (the item's source URL) | Done | The source URL has its own entry, Copy ▸ Source URL (`edit.copy.sourceurl`) | local |
 | Copy the image to the clipboard as pixels plus file reference (the AppleScript helper) | Done | One jpg/png/bmp: raw bytes, TIFF, `public.file-url` and `NSFilenamesPboardType` together; several items: a file list, as Eagle | local |
 | macOS Share sheet for items | Done | Share… in the item menu over the selected files (`share.rs`, `NSSharingServicePicker`) | local |
-| Add selected items to another library (from the recent list, or choose a path) | Done | `add_to_library.rs` (both crates): item, single-folder, folder-card, smart-folder and tag-group menus; recent libraries plus Choose Library…; whole `.info` folders copied under a temporary name, existing ids skipped, folder ids kept as Eagle; target must pass the sandbox and install-folder guards; asks above one item; progress with Stop | local |
+| Add selected items to another library (from the recent list, or choose a path) | Done | `add_to_library.rs` (both crates): item, single-folder, folder-card, smart-folder and tag-group menus; recent libraries plus Choose Library…; whole `.info` folders copied under a temporary name, existing ids skipped, folder ids kept as Eagle; target must pass the install-folder guard; asks above one item; progress with Stop | local |
 | Convert WebP items to PNG or JPG (Eagle's "Convert WebP…") | Done | Eagle's tool converts **WebP items to PNG or JPG** (not to WebP): item menu ▸ Convert WebP ▸ PNG/JPG for every WebP in the selection, warning first, animated skipped, old file to the macOS Trash (irreversible for ⌘Z), `ext`/`size` updated | local |
 | Save the current video frame as an item or copy it | Done | Main viewer as Eagle: right-click menu and ⇧S / ⇧C, a JPEG item named after the time, in the video's folders (`ui/viewer/video.rs`). Preview window: the same, as Eagle. Seen on screen | local |
 
@@ -1334,7 +1334,7 @@ Two cross-cutting facts explain many rows:
 | Recent libraries history | Done | `crates/falcon-app/src/workspaces.rs:119-129`, `ui/sidebar/mod.rs` (the switcher popup; 10 entries, `RECENT_LIMIT` in `app/library.rs`) | local |
 | Clear library history | Done | Switcher menu | local |
 | Remove one library from the list | Done | Switcher menu; missing libraries are kept and shown dimmed | local |
-| Library list menu: Remove from Disk | Done | Falcon addition, not an Eagle feature (Eagle's string is the Remove Icon confirmation): moves a closed library inside the sandbox to the macOS Trash after a confirmation naming it, its path and size (`library_removal.rs`, `ui/dialogs/remove_library.rs`). Seen on screen | local |
+| Library list menu: Remove from Disk | Done | Falcon addition, not an Eagle feature (Eagle's string is the Remove Icon confirmation): moves a closed library to the macOS Trash after a confirmation naming it, its path and size (`library_removal.rs`, `ui/dialogs/remove_library.rs`). Seen on screen | local |
 | Set or remove a library icon (`icon.png`) | Done | `library_icon.rs`: shorter side scaled to 64 px, written atomically; Change Icon / Remove Icon in the switcher | local |
 | Warn before switching while tasks run (Force Switch), or block while an AI action runs | Done | `ui/dialogs/switch_warning.rs`: every way of leaving a library with tasks running (the switcher, ⌃Tab and ⌃⇧Tab, a recent library, Open Library…, a dropped library, New Library…, the API's `library/switch`) asks first, with Force Switch and Cancel; the tasks keep running in the background after the switch, which is falcon's design (closing still stops them: "Stop Tasks and Close"). AI runs count as tasks and keep running after a switch, where Eagle blocks. Rule tested; not yet seen on screen | local |
 | Several libraries open at once | Done (beyond Eagle) | `workspaces.rs` (several workspaces), `app/library.rs` `add_workspace` and `focus` | local |

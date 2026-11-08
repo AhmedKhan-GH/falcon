@@ -17,8 +17,6 @@ Falcon is early alpha and unsigned. [PARITY.md](https://github.com/AhmedKhan-GH/
 
 Falcon handles exactly Eagle's set of file formats. [FORMATS.md](https://github.com/AhmedKhan-GH/falcon/blob/main/FORMATS.md) lists each one and its status. Falcon has no plugin system: Actions and Export in Format are built into the app, and [PLUGINS.md](https://github.com/AhmedKhan-GH/falcon/blob/main/PLUGINS.md) lists the plugins Eagle provides that falcon could build later.
 
-While falcon is in development, the app and the CLI only open libraries inside `~/Falcon Sandbox` (or the folder in `FALCON_SANDBOX`). To work on an existing library, copy it there first. See [Sandbox](app.md#sandbox).
-
 ### Working today
 
 - Import with thumbnails and colour palettes, folders with their structure, paste, drag and drop, and screen capture.
@@ -46,7 +44,7 @@ This builds the API docs with `cargo doc` and serves the book at <http://localho
 
 | Crate | Purpose |
 |---|---|
-| `falcon-library` | Reading and writing `.library` folders: import, thumbnails, palettes, metadata, editing, search, smart folders, duplicates, undo, backups, `.eaglepack` files and the sandbox check |
+| `falcon-library` | Reading and writing `.library` folders: import, thumbnails, palettes, metadata, editing, search, smart folders, duplicates, undo, backups and `.eaglepack` files |
 | `falcon-server` | Eagle's local HTTP API |
 | `falcon-app` | The desktop app, built with egui |
 | `falcon-video` | Probing, decoding and playing video through AVFoundation, falling back to `falcon-ffmpeg` |

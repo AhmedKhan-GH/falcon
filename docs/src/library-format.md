@@ -18,7 +18,7 @@ Assets.library/
         └── <name>_thumbnail.png     only for some items
 ```
 
-`icon.png` is the picture the library switcher shows beside the library's name. Falcon's Change Icon scales the chosen image so its shorter side is 64 px, saves it as PNG next to the library's other files and renames it over `icon.png`, so an old icon is never left half written. Remove Icon deletes the file. Both go through the sandbox check. The HTTP API serves the same file.
+`icon.png` is the picture the library switcher shows beside the library's name. Falcon's Change Icon scales the chosen image so its shorter side is 64 px, saves it as PNG next to the library's other files and renames it over `icon.png`, so an old icon is never left half written. Remove Icon deletes the file. The HTTP API serves the same file.
 
 ## Library `metadata.json` (observed)
 
@@ -261,7 +261,7 @@ Eagle's Add to Other Library copies items, a folder, a smart folder or a tag gro
 
 Falcon differs in three small ways. An item copied with a folder keeps only the folder ids the other library has once the tree is merged, so no item points at a missing folder. A new folder's descendants whose ids exist elsewhere in the other library are merged into those, as when merging libraries. And each item folder is copied under a temporary name, its `metadata.json` rewritten there, and then renamed into place, so the other library never sees half an item.
 
-`add_to_library::check_target` refuses the open library itself, a folder that is not a library and one from a newer Eagle, and applies the sandbox guard. `copy_items` needs no lock, reports progress and can be cancelled. `Library::finish_add`, called on the other library, adds the definition (saving `metadata.json` only then) and registers the copied items in memory and in `mtime.json`.
+`add_to_library::check_target` refuses the open library itself, a folder that is not a library and one from a newer Eagle. `copy_items` needs no lock, reports progress and can be cancelled. `Library::finish_add`, called on the other library, adds the definition (saving `metadata.json` only then) and registers the copied items in memory and in `mtime.json`.
 
 ## Inboard backups
 
