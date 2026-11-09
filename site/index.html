@@ -50,6 +50,9 @@
   .btn-ghost { border: 1px solid var(--rule); color: var(--text); background: var(--plate); }
   .btn-ghost:hover { border-color: #45464b; }
   nav .btn { padding: 8px 14px; }
+  /* The GitHub mark in a button: the repository, one click from the hero, the build steps and the end. */
+  .btn .gh { width: 18px; height: 18px; flex: none; }
+  .build-actions { margin: -18px 0 36px; }
 
   /* Hero */
   header.hero { position: relative; padding: 96px 0 40px; text-align: center; overflow: hidden; }
@@ -147,10 +150,10 @@
     .cards { grid-template-columns: 1fr 1fr; }
     .code, .status, .downloads, .downloads.two, .downloads.five { grid-template-columns: 1fr; }
     .downloads.five > .card, .downloads.five > .card:nth-child(n+4) { grid-column: auto; }
-    nav .links { display: none; }
-    nav .btn { margin-left: auto; }
   }
   @media (max-width: 520px) {
+    nav .wrap { gap: 16px; }
+    nav .links { gap: 16px; }
     .cards { grid-template-columns: 1fr; }
     header.hero { padding-top: 64px; }
     section { padding-top: 80px; }
@@ -163,14 +166,10 @@
   <div class="wrap">
     <a class="brand" href="#top"><img src="brand/falcon-icon-256.png?v=3" alt="">Falcon</a>
     <div class="links">
-      <a href="#collect">Features</a>
-      <a href="#open">Open source</a>
-      <a href="#developers">Developers</a>
-      <a href="#status">Status</a>
       <a href="book/">Docs</a>
-      <a href="https://github.com/AhmedKhan-GH/falcon">GitHub ↗</a>
+      <a href="https://github.com/AhmedKhan-GH/falcon">GitHub</a>
+      <a href="#download">Download</a>
     </div>
-    <a class="btn btn-primary" href="#download">Download</a>
   </div>
 </nav>
 
@@ -181,6 +180,7 @@
     <p class="lede">Collect, tag, search and browse your images, PDFs, fonts, audio and video in one library. Native apps for macOS, Windows and Linux, built in Rust for speed.</p>
     <div class="actions">
       <a class="btn btn-primary" href="#download">Download</a>
+      <a class="btn btn-ghost gh-btn" href="https://github.com/AhmedKhan-GH/falcon"><svg class="gh" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg>GitHub</a>
       <a class="btn btn-ghost" href="book/">Docs</a>
       <a class="btn btn-ghost" href="#build">Build from source</a>
     </div>
@@ -247,6 +247,7 @@
       <div class="eyebrow">Build from source</div>
       <h2>Build Falcon yourself</h2>
       <p class="intro">Falcon is open source. You need <a href="https://rustup.rs">Rust</a> 1.89 or newer on any of the three; each card has the rest.</p>
+      <div class="build-actions"><a class="btn btn-ghost gh-btn" href="https://github.com/AhmedKhan-GH/falcon"><svg class="gh" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg>Source on GitHub</a></div>
       <div class="downloads">
         <div class="card" id="build-mac"><h4>Mac</h4>
           <p><strong>Needs</strong> Apple's command line tools (<code>xcode-select --install</code>). Video plays through macOS; FFmpeg, for the formats macOS can't play, is optional.</p>
@@ -530,6 +531,7 @@ tags:    2</pre>
       <p>Download Falcon for a Mac, Windows or Linux, or build it from source on any of them.</p>
       <div class="actions">
         <a class="btn btn-primary" href="#download">Download</a>
+        <a class="btn btn-ghost gh-btn" href="https://github.com/AhmedKhan-GH/falcon"><svg class="gh" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg>GitHub</a>
         <a class="btn btn-ghost" href="book/">Docs</a>
         <a class="btn btn-ghost" href="#build">Build from source</a>
       </div>
