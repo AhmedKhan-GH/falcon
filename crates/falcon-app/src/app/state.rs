@@ -381,6 +381,7 @@ pub(crate) struct Workspace {
     pub(crate) bulk: Option<(usize, Vec<Action>)>,
     pub(crate) smart_dialog: Option<SmartDraft>,
     pub(crate) library_settings: crate::ui::dialogs::library_settings::LibrarySettings,
+    pub(crate) relink_dialog: crate::ui::dialogs::relink::RelinkDialogState,
     pub(crate) view: ViewState,
     /// The GIF player turned on with the viewer's toolbar button, until
     /// the viewer closes (Eagle's `usingGifPlayer`).
@@ -513,6 +514,7 @@ impl Workspace {
             bulk: None,
             smart_dialog: None,
             library_settings: Default::default(),
+            relink_dialog: Default::default(),
             view: ViewState::default(),
             gif_player: false,
             cards: Default::default(),
