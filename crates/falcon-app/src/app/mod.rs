@@ -488,6 +488,7 @@ impl App {
     /// One frame of the main window.
     pub(crate) fn draw(&mut self, ui: &mut Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        ctx.data_mut(|d| d.insert_temp(egui::Id::NULL.with("window_movable"), true));
         if ctx.cumulative_frame_nr() == 0 {
             // Come to the front on launch, like any Mac app.
             ctx.send_viewport_cmd(egui::ViewportCommand::Focus);

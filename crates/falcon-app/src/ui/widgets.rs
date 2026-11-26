@@ -57,7 +57,8 @@ pub(crate) fn viewer_ui(parent: &mut Ui, screen: Rect, salt: &str) -> Ui {
 
 pub(crate) fn window_drag(ui: &Ui, rect: Rect, id: &str) {
     let resp = ui.interact(rect, ui.scope_id().with(("drag", id)), Sense::click_and_drag());
-    if resp.drag_started() {
+    let movable = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::NULL.with("window_movable")).unwrap_or(true));
+    if resp.drag_started() && movable {
         ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
     }
     if resp.double_clicked() {
