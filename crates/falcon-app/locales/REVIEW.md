@@ -78,8 +78,10 @@ The core words, so every file uses one term for one thing.
 
 | File | Keys | State |
 |---|---|---|
+| ban.json | all | machine-written, unreviewed |
 | de.json | all | machine-written, unreviewed |
 | es.json | all | machine-written, unreviewed |
+| id.json | all | machine-written, unreviewed |
 | ja.json | all | machine-written, unreviewed |
 | ko.json | all | machine-written, unreviewed |
 | ru.json | all | machine-written, unreviewed |

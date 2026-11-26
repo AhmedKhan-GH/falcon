@@ -1,8 +1,8 @@
 # Localisation
 
-Falcon's interface comes in eight languages: English, Simplified Chinese,
-Traditional Chinese, Japanese, Korean, German, Spanish and Russian, the
-same set Eagle ships. The translations are falcon's own; none is taken
+Falcon's interface comes in ten languages: English, Simplified Chinese,
+Traditional Chinese, Japanese, Korean, German, Spanish, Russian, Indonesian
+(Bahasa Indonesia) and Balinese (Basa Bali). The translations are falcon's own; none is taken
 from Eagle. Preferences ▸ General ▸ Language picks one, or Automatic,
 which follows the first of macOS's preferred languages (System Settings ▸
 General ▸ Language & Region) that falcon has, else English. A change

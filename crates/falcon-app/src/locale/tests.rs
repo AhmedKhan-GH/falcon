@@ -443,6 +443,10 @@ fn system_tags_map_to_languages() {
     assert_eq!(Lang::from_tag("zh-HK"), Some(Lang::ZhTw));
     assert_eq!(Lang::from_tag("zh"), Some(Lang::ZhCn));
     assert_eq!(Lang::from_tag("ja-JP"), Some(Lang::Ja));
+    assert_eq!(Lang::from_tag("id-ID"), Some(Lang::Id));
+    assert_eq!(Lang::from_tag("id"), Some(Lang::Id));
+    assert_eq!(Lang::from_tag("ban-ID"), Some(Lang::Ban));
+    assert_eq!(Lang::from_tag("ban"), Some(Lang::Ban));
     assert_eq!(Lang::from_tag("pt-BR"), None);
     assert_eq!(Lang::from_tag(""), None);
 }
