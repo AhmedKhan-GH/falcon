@@ -22,6 +22,7 @@ impl App {
             || self.confirm_reload
             || self.clear_history_open
             || self.remove_library.is_some()
+            || self.move_library.is_open()
             || self.force_close.is_some()
             || self.switch_warning.is_some()
             || self.quit.asking.is_some()

@@ -83,6 +83,7 @@ mod tray;
 mod theme;
 mod ui;
 mod library_icons;
+mod library_move;
 mod library_removal;
 mod vibrancy;
 mod watch;

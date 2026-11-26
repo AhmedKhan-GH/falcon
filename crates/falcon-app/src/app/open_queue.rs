@@ -112,7 +112,7 @@ impl App {
                 }
                 Then::Replace { old, new } => {
                     if self.position_of(&new).is_some() {
-                        crate::workspaces::remove_from_list(&mut self.recent, &old);
+                        self.migrate_library_references(&old, &new, None);
                     }
                 }
             }

@@ -57,6 +57,7 @@ pub enum Command {
     NewLibrary,
     LibrarySettings,
     MergeLibrary,
+    MoveLibrary,
     ClearLibraryHistory,
     EmptyCacheReload,
     /// File ▸ Import Folders…
@@ -514,6 +515,7 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::NewLibrary, id: "library.create", group: "Library", label: "Create a new library", default: None, aliases: &[] },
     Spec { cmd: Command::LibrarySettings, id: "library.settings", group: "Library", label: "Library Settings", default: None, aliases: &[] },
     Spec { cmd: Command::MergeLibrary, id: "library.merge", group: "Library", label: "Merge another library into this one", default: None, aliases: &[] },
+    Spec { cmd: Command::MoveLibrary, id: "library.move", group: "Library", label: "Move this library to another folder", default: None, aliases: &[] },
     Spec { cmd: Command::ClearLibraryHistory, id: "library.clearHistory", group: "Library", label: "Clear the library history", default: None, aliases: &[] },
     Spec { cmd: Command::EmptyCacheReload, id: "library.reload", group: "Library", label: "Empty the cache and reload the library", default: None, aliases: &[] },
     Spec { cmd: Command::ImportFolders, id: "file.import.folders", group: "Import", label: "Import folders", default: None, aliases: &[] },

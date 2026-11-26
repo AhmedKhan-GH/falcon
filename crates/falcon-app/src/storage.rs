@@ -90,11 +90,21 @@ fn is_ntfs(type_name: &str) -> bool {
     type_name.to_ascii_lowercase().contains("ntfs")
 }
 
+/// Whether `path` lies on an NTFS volume (only detectable on macOS).
+pub fn is_ntfs_volume(path: &Path) -> bool {
+    platform::volume_type(path).is_some_and(|t| is_ntfs(&t))
+}
+
+/// Free bytes available on the volume holding `path`, when the platform reports it.
+pub fn available_space(path: &Path) -> Option<u64> {
+    platform::available_space(path)
+}
+
 #[cfg(target_os = "macos")]
 mod platform {
     use std::path::Path;
 
-    use objc2_foundation::{NSString, NSURL, NSURLVolumeTypeNameKey};
+    use objc2_foundation::{NSNumber, NSString, NSURL, NSURLVolumeAvailableCapacityKey, NSURLVolumeTypeNameKey};
 
     /// The file system type of the volume holding `path` ("apfs", "ntfs").
     pub fn volume_type(path: &Path) -> Option<String> {
@@ -104,11 +114,25 @@ mod platform {
         unsafe { url.getResourceValue_forKey_error(&mut value, NSURLVolumeTypeNameKey) }.ok()?;
         value?.downcast::<NSString>().ok().map(|s| s.to_string())
     }
+
+    /// Available bytes on the volume containing `path`.
+    pub fn available_space(path: &Path) -> Option<u64> {
+        let url = NSURL::fileURLWithPath(&NSString::from_str(&path.to_string_lossy()));
+        let mut value = None;
+        // SAFETY: the key's value is an NSNumber (or nil).
+        unsafe { url.getResourceValue_forKey_error(&mut value, NSURLVolumeAvailableCapacityKey) }.ok()?;
+        let num = value?.downcast::<NSNumber>().ok()?;
+        u64::try_from(num.as_i64()).ok()
+    }
 }
 
 #[cfg(not(target_os = "macos"))]
 mod platform {
     pub fn volume_type(_: &std::path::Path) -> Option<String> {
+        None
+    }
+
+    pub fn available_space(_: &std::path::Path) -> Option<u64> {
         None
     }
 }
@@ -173,5 +197,12 @@ mod tests {
     fn reads_the_volume_type() {
         let t = platform::volume_type(&std::env::temp_dir());
         assert!(t.is_some_and(|t| !t.is_empty()));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn reads_available_space() {
+        let free = available_space(&std::env::temp_dir());
+        assert!(free.is_some_and(|bytes| bytes > 0));
     }
 }

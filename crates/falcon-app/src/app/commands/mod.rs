@@ -489,6 +489,11 @@ impl App {
             C::NewLibrary => self.new_library(),
             C::LibrarySettings => self.open_library_settings(),
             C::MergeLibrary => self.merge_library(),
+            C::MoveLibrary => {
+                if let Some(root) = self.ws.root.clone() {
+                    self.start_move_library(root);
+                }
+            }
             C::ClearLibraryHistory => self.clear_history_open = true,
             C::EmptyCacheReload => self.confirm_reload = true,
             C::ImportPack => self.import_pack_dialog(),

@@ -236,6 +236,12 @@ impl Library {
         &self.root
     }
 
+    /// Updates the in-memory root folder after the library folder was moved
+    /// on disk.
+    pub fn set_root(&mut self, root: PathBuf) {
+        self.root = root;
+    }
+
     /// All items (including trashed ones), sorted by id.
     pub fn items(&self) -> &[Item] {
         &self.items
