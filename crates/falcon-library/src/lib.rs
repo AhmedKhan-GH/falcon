@@ -41,6 +41,7 @@ pub mod palette;
 pub mod paths;
 pub mod psd;
 pub mod rename;
+pub mod relink;
 pub mod repair;
 pub mod search;
 pub mod smart;

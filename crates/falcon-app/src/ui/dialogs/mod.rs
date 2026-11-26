@@ -24,6 +24,7 @@ pub(crate) mod notice_history;
 pub(crate) mod remove_library;
 pub(crate) mod import_links;
 pub(crate) mod smart;
+pub(crate) mod relink;
 pub(crate) mod switch_warning;
 pub(crate) mod tools;
 pub(crate) mod webp_convert;

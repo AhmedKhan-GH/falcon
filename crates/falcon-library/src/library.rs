@@ -419,6 +419,22 @@ impl Library {
         }
     }
 
+    /// Atomically relinks a missing referenced asset to a new external file path.
+    pub fn relink_item_to_file(&mut self, id: &str, target_path: &Path) -> Result<LinkRecord> {
+        let item = self.item(id).cloned().ok_or_else(|| Error::Refused(format!("unknown item {id}")))?;
+        crate::relink::relink_item_to_file(&self.root, &item, target_path, false)
+    }
+
+    /// Scans a folder for matching candidates for missing items.
+    pub fn preview_relink_folder(&self, items: &[Item], folder: &Path) -> crate::relink::RelinkPreview {
+        crate::relink::preview_relink_folder(&self.root, items, folder)
+    }
+
+    /// Applies accepted relink pairs in batch atomically.
+    pub fn apply_relink_batch(&mut self, pairs: &[(String, PathBuf)]) -> Result<Vec<String>> {
+        crate::relink::apply_relink_batch(&self.root, &self.items, pairs)
+    }
+
     /// Writable payload path inside the library bundle. Strictly refused for all
     /// non-Managed items so source files outside the library are never modified.
     pub fn managed_writable_path(&self, id: &str, action: &str) -> Result<PathBuf> {

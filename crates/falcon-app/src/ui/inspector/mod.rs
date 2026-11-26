@@ -684,6 +684,10 @@ impl App {
         }
         if availability.is_linked() {
             ui.add_space(4.0);
+            if wide_button(ui, ic::LINK, tr("Relink Original…"), true).clicked() {
+                self.open_relink_dialog(lib, vec![item.id.clone()]);
+            }
+            ui.add_space(4.0);
             if wide_button(ui, ic::COPY, tr("Copy Source Path"), copy_path.is_some()).clicked()
                 && let Some(path) = copy_path
             {
