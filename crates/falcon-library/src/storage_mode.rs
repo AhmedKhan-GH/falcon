@@ -119,6 +119,23 @@ fn default_true() -> bool {
     true
 }
 
+/// Where a Copy-mode synchronized item came from, so that renaming the item
+/// in Falcon never makes the same source file import again.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncSource {
+    /// The library item made from the source file.
+    pub item_id: String,
+    /// Size of the source when it was imported (or last seen unchanged).
+    pub size: u64,
+    /// Modification time of the source then, in milliseconds.
+    pub mtime_ms: u64,
+    /// Bounded head and tail hash of the source then, to tell a touched file
+    /// from a changed one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fingerprint: Option<String>,
+}
+
 /// Root configuration persisted at `<library>/falcon.json`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -144,6 +161,12 @@ pub struct FalconConfig {
     /// Reserved forward-compatible delete-sync tombstones (Phase B2).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub excluded_sources: Vec<String>,
+    /// Copy-mode sync provenance, keyed by `<watched folder id>|<path relative
+    /// to the watched folder, with / separators>`. Older Falcon versions
+    /// ignore it, and a copy of falcon.json without it only loses the
+    /// shortcut: the next sync adopts matching items instead of importing.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub sync_sources: std::collections::BTreeMap<String, SyncSource>,
     /// Reserved forward-compatible storage location overrides (Portable Library).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub storage_locations: Option<serde_json::Value>,
@@ -162,6 +185,7 @@ impl Default for FalconConfig {
             library_id: None,
             linked_folders: Vec::new(),
             excluded_sources: Vec::new(),
+            sync_sources: Default::default(),
             storage_locations: None,
         }
     }
@@ -201,10 +225,22 @@ impl FalconConfig {
     }
 
     /// Returns the parsed watched folders list from `linked_folders`.
+    ///
+    /// A folder stored as `Syncing` can only be left over from a pass that was
+    /// cut short (a pass runs under `&mut Library`, so nobody reads the list
+    /// while one is in progress); it is reported as an interrupted error and
+    /// is never shown as syncing forever.
     pub fn watched_folders(&self) -> Vec<WatchedFolder> {
         self.linked_folders
             .iter()
-            .filter_map(|v| serde_json::from_value(v.clone()).ok())
+            .filter_map(|v| serde_json::from_value::<WatchedFolder>(v.clone()).ok())
+            .map(|mut w| {
+                if w.status == SyncStatus::Syncing {
+                    w.status = SyncStatus::Error;
+                    w.last_error = Some("The last sync was interrupted before it finished".into());
+                }
+                w
+            })
             .collect()
     }
 

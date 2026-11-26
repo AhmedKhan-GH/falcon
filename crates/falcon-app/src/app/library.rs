@@ -460,7 +460,15 @@ impl App {
                 } else {
                     let n = stats.added;
                     let m = stats.modified;
-                    self.flash(trf("Folder synced: {n} added, {m} modified", &[("n", &n), ("m", &m)]));
+                    if stats.conflicts > 0 {
+                        let c = stats.conflicts;
+                        self.flash(trf(
+                            "Folder synced: {n} added, {m} modified, {c} changed in the source and left as they were",
+                            &[("n", &n), ("m", &m), ("c", &c)],
+                        ));
+                    } else {
+                        self.flash(trf("Folder synced: {n} added, {m} modified", &[("n", &n), ("m", &m)]));
+                    }
                 }
             }
             Err(e) => {

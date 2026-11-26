@@ -519,6 +519,15 @@ impl Library {
         if !info_dir.is_dir() {
             return Ok(false);
         }
+        // A job that started before the source changed must not put an old
+        // picture on the new file. Refused as retryable; the temporary
+        // thumbnail is removed when `staged` is dropped.
+        if let Some((size, mtime)) = staged.source_identity {
+            let current = self.resolved_source_path(id).ok().and_then(|p| fs::metadata(p).ok());
+            if !current.is_some_and(|m| m.len() == size && to_ms(m.modified().ok()) == mtime) {
+                return Err(Error::Refused("the source changed after the thumbnail was generated".into()));
+            }
+        }
         if let Some(tmp) = staged.temp_thumb.take() {
             let dest = info_dir.join(item.thumbnail_name());
             if staged.keep && tmp.is_file() {
@@ -565,6 +574,9 @@ pub struct StagedThumbnail {
     pub palettes: Vec<crate::model::Palette>,
     pub temp_thumb: Option<std::path::PathBuf>,
     pub keep: bool,
+    /// Size and modification time (ms) of the source this was generated from.
+    /// A commit is refused if the source no longer looks like this.
+    pub source_identity: Option<(u64, u64)>,
 }
 
 impl Drop for StagedThumbnail {
@@ -633,6 +645,7 @@ pub fn stage_deferred_thumbnail(
         palettes,
         temp_thumb: keep.then_some(tmp),
         keep,
+        source_identity: Some((before.len(), to_ms(before.modified().ok()))),
     }))
 }
 
@@ -1012,6 +1025,14 @@ fn file_metadata(item: &mut Item, raw: &Path, opts: &ImportOptions) {
         }
         item.extra.insert("fontMetas".into(), Value::Object(metas));
     }
+}
+
+/// Reads again the metadata that comes from the file itself (camera data,
+/// video size and duration, audio tempo) after a linked source changed. Tags,
+/// notes, folders and a URL already set are kept.
+pub(crate) fn refresh_source_metadata(item: &mut Item, raw: &Path) {
+    let opts = ImportOptions { camera_metadata_all_photos: item.extra.contains_key("rawMetas"), font_weight_tag: false, ..Default::default() };
+    file_metadata(item, raw, &opts);
 }
 
 /// Appends keywords to the tags. As in Eagle, when there are keywords the

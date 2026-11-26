@@ -29,6 +29,13 @@ pub enum FaultPoint {
     MtimeWrite,
     FlushDirtyItem,
     JournalWrite,
+    SyncAfterMarkedSyncing,
+    SyncBeforeFolderCreate,
+    SyncBeforeImport,
+    SyncBeforeRefresh,
+    SyncBeforeRefreshSidecar,
+    SyncBeforeProvenanceSave,
+    SyncBeforeFinalize,
 }
 
 type Hook = Box<dyn FnMut(FaultPoint) -> io::Result<()>>;
