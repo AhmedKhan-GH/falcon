@@ -160,7 +160,13 @@ fn main() -> eframe::Result {
     }
     let app_name = app_data_name();
     let window_title = if app_name == "Falcon" { "Falcon" } else { "Falcon Dev — Unified" };
-    let app_id = if app_name == "Falcon" { "falcon" } else { "falcon-dev" };
+    let app_id = if app_name == "Falcon" {
+        "falcon"
+    } else if app_name == "falcon-qa" {
+        "falcon-qa"
+    } else {
+        "falcon-dev"
+    };
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_title(window_title)
