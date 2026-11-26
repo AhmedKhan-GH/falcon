@@ -20,6 +20,7 @@ pub(crate) mod collect;
 pub(crate) mod confirm;
 pub(crate) mod history;
 pub(crate) mod notice_history;
+pub(crate) mod move_library;
 pub(crate) mod remove_library;
 pub(crate) mod import_links;
 pub(crate) mod smart;

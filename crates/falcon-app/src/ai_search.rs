@@ -88,6 +88,10 @@ impl Engine {
         self.service.set_library(library);
     }
 
+    pub fn relocate_index(&self, old_root: PathBuf, new_root: PathBuf) {
+        self.service.relocate_index(old_root, new_root);
+    }
+
     pub fn set_enabled(&self, on: bool) {
         self.service.set_enabled(on);
     }

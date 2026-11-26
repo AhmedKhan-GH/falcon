@@ -154,6 +154,7 @@ enum Msg {
     ModelChanged,
     Rebuild,
     ForgetIndexes,
+    RelocateIndex(PathBuf, PathBuf),
     Search(Query, usize, Sender<Result<Vec<Hit>, SearchError>>),
     Stop,
 }
@@ -208,6 +209,11 @@ impl Service {
     /// Deletes every library's index.
     pub fn forget_indexes(&self) {
         let _ = self.tx.send(Msg::ForgetIndexes);
+    }
+
+    /// Moves a library's index to its new path after the library moved.
+    pub fn relocate_index(&self, old_root: PathBuf, new_root: PathBuf) {
+        let _ = self.tx.send(Msg::RelocateIndex(old_root, new_root));
     }
 
     /// Starts a search; the answer arrives on the returned channel.
@@ -399,6 +405,15 @@ impl Worker {
                         let _ = std::fs::remove_file(file.path());
                     }
                 }
+                self.force_check();
+            }
+            Msg::RelocateIndex(old_root, new_root) => {
+                if let Some(index) = self.index.as_mut() {
+                    let _ = index.flush();
+                }
+                self.index = None;
+                self.queue.clear();
+                let _ = crate::store::relocate(&self.options.index_dir, &old_root, &new_root, &self.options.model_id, self.options.dim);
                 self.force_check();
             }
             Msg::Search(query, limit, reply) => {

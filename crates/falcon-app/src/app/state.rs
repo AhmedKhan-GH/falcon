@@ -183,6 +183,8 @@ pub(crate) enum Switch {
     Close(usize),
     /// Merge another library into the shown one.
     Merge,
+    /// Move the library at this path to another folder.
+    Move(PathBuf),
 }
 
 /// Background import counters.

@@ -103,6 +103,8 @@ pub struct App {
     pub(crate) notice_window_open: bool,
     /// Move to Trash (for a library) is asking for confirmation (`ui/dialogs/remove_library.rs`).
     pub(crate) remove_library: Option<crate::ui::dialogs::remove_library::RemoveLibrary>,
+    /// Move Library (`ui/dialogs/move_library.rs`).
+    pub(crate) move_library: crate::ui::dialogs::move_library::State,
     /// The library tools' dialogs (`ui/dialogs/tools.rs`).
     pub(crate) tools: crate::ui::dialogs::tools::Tools,
     /// The localhost check of the running API (`api_check.rs`).
@@ -272,6 +274,7 @@ impl App {
             notices: Default::default(),
             notice_window_open: false,
             remove_library: None,
+            move_library: Default::default(),
             tools: Default::default(),
             api_check: Default::default(),
             force_close: None,
@@ -576,6 +579,7 @@ impl App {
         self.reload_confirm(&ctx);
         self.clear_history_dialog(&ctx);
         self.remove_library_dialog(&ctx);
+        self.move_library_dialog(&ctx);
         self.force_close_dialog(&ctx);
         self.switch_warning_dialog(&ctx);
         self.poll_api_check();
@@ -744,6 +748,7 @@ impl App {
             Some(Switch::Focus(i)) => self.request_focus(i),
             Some(Switch::Close(i)) => self.request_close(i),
             Some(Switch::Merge) => self.merge_library(),
+            Some(Switch::Move(p)) => self.start_move_library(p),
             None => {}
         }
         self.run_import_request();
