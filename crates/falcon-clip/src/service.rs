@@ -232,17 +232,27 @@ impl Drop for Service {
     }
 }
 
+/// Distinguishes SVG rasterizer stamps from legacy failed raw-file stamps so
+/// previously skipped `< 100 KB` SVGs retry automatically without invalidating
+/// existing valid vectors in the index.
+const SVG_RASTER_STAMP_TAG: u64 = 0x5356_4732_0000_0000;
+const MAX_AI_SVG_BYTES: u64 = 32 * 1024 * 1024;
+const MAX_AI_SVG_DIM: u32 = 4096;
+
 /// One item waiting to be read.
 struct Job {
     id: String,
     stamp: u64,
     picture: PathBuf,
+    has_thumbnail: bool,
+    ext: String,
 }
 
 /// An item as the index looks at it. Made under the library lock, so it
 /// doesn't touch the disk.
 struct Entry {
     id: String,
+    ext: String,
     /// An item in the Trash keeps its vector, but isn't indexed while there.
     trashed: bool,
     thumbnail: PathBuf,
@@ -474,10 +484,22 @@ impl Worker {
                 continue;
             }
             total += 1;
-            let picture = if entry.thumbnail.is_file() { &entry.thumbnail } else { &entry.original };
-            let stamp = file_stamp(picture);
+            let has_thumbnail = entry.thumbnail.is_file();
+            let picture = if has_thumbnail { &entry.thumbnail } else { &entry.original };
+            let base_stamp = file_stamp(picture);
+            let stamp = if !has_thumbnail && entry.ext.eq_ignore_ascii_case("svg") && base_stamp != 0 {
+                base_stamp ^ SVG_RASTER_STAMP_TAG
+            } else {
+                base_stamp
+            };
             if index.stamp(&entry.id) != Some(stamp) {
-                queue.push_back(Job { id: entry.id.clone(), stamp, picture: picture.clone() });
+                queue.push_back(Job {
+                    id: entry.id.clone(),
+                    stamp,
+                    picture: picture.clone(),
+                    has_thumbnail,
+                    ext: entry.ext.clone(),
+                });
             } else if index.vector(&entry.id).is_none() {
                 skipped += 1;
             }
@@ -509,7 +531,7 @@ impl Worker {
         for job in jobs {
             // A damaged file that panics a decoder is one unreadable item,
             // not the end of the worker.
-            match std::panic::catch_unwind(|| thumbnail::decode(&job.picture)) {
+            match std::panic::catch_unwind(|| decode_for_index(&job.picture, job.has_thumbnail, &job.ext)) {
                 Ok(Ok(picture)) => {
                     pictures.push(picture);
                     good.push(job);
@@ -610,8 +632,9 @@ impl Worker {
                             let item = lib.item(&id).ok_or(SearchError::NoItem)?;
                             entry_of(item, lib.root())
                         };
-                        let picture = if entry.thumbnail.is_file() { entry.thumbnail } else { entry.original };
-                        let image = thumbnail::decode(&picture).map_err(|e| SearchError::BadImage(e.to_string()))?;
+                        let has_thumbnail = entry.thumbnail.is_file();
+                        let picture = if has_thumbnail { entry.thumbnail } else { entry.original };
+                        let image = decode_for_index(&picture, has_thumbnail, &entry.ext).map_err(|e| SearchError::BadImage(e.to_string()))?;
                         self.embed_one(&image)?
                     }
                 }
@@ -704,10 +727,18 @@ fn entries(lib: &Library) -> Vec<Entry> {
 fn entry_of(item: &falcon_library::model::Item, root: &Path) -> Entry {
     Entry {
         id: item.id.clone(),
+        ext: item.ext.clone(),
         trashed: item.is_deleted,
         thumbnail: item.info_dir(root).join(format!("{}_thumbnail.png", item.name)),
         original: item.original_path(root),
     }
+}
+
+fn decode_for_index(path: &Path, has_thumbnail: bool, ext: &str) -> Result<DynamicImage, thumbnail::ThumbError> {
+    if !has_thumbnail && ext.eq_ignore_ascii_case("svg") {
+        return thumbnail::render_svg_bounded(path, thumbnail::max_side("svg"), MAX_AI_SVG_BYTES, MAX_AI_SVG_DIM);
+    }
+    thumbnail::decode(path)
 }
 
 /// What says a file changed: its modified time and size.

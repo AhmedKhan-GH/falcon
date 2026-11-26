@@ -441,3 +441,88 @@ fn switching_libraries_keeps_each_index_apart() {
     service.set_library(None);
     assert_eq!(service.search_blocking(Query::Text("red".into()), 5, WAIT), Err(SearchError::NoLibrary));
 }
+
+#[test]
+fn small_and_large_svgs_index_transparently_and_malformed_svgs_do_not_stall_queue() {
+    let f = Fixture::new();
+    let import_svg = |name: &str, body: &[u8]| -> String {
+        let p = f.dir.path().join(format!("{name}.svg"));
+        std::fs::write(&p, body).unwrap();
+        f.library.lock().unwrap().import_file(&p, &ImportOptions { palette: false, ..Default::default() }).unwrap()
+    };
+
+    // Small transparent SVG (< 100 KB): thumbnail is removed by plan_svg (`remove_thumbnail = true`).
+    let small_green = br##"<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><rect x="20" y="20" width="80" height="80" fill="#00ff00" fill-opacity="0.5"/></svg>"##;
+    let small_id = import_svg("small_green", small_green);
+    let root = f.root();
+    assert!(f.library.lock().unwrap().item(&small_id).unwrap().thumbnail_path(&root).is_none());
+
+    // Large SVG (>= 100 KB): keeps thumbnail file.
+    let mut big_blue = String::from(r##"<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240"><rect width="240" height="240" fill="#0000ff"/>"##);
+    for i in 0..1900 {
+        big_blue.push_str(&format!(r##"<rect x="{}" y="{}" width="1" height="1" fill="#0000ff"/>"##, i % 200, (i * 3) % 200));
+    }
+    big_blue.push_str("</svg>");
+    assert!(big_blue.len() >= 100_000);
+    let big_id = import_svg("big_blue", big_blue.as_bytes());
+    assert!(f.library.lock().unwrap().item(&big_id).unwrap().thumbnail_path(&root).is_some());
+
+    // Malformed SVG: must skip safely without breaking the queue for valid SVGs.
+    let bad_id = import_svg("malformed", b"<svg><not-valid-xml");
+
+    let service = f.service();
+    service.set_library(Some(f.library.clone()));
+    service.set_enabled(true);
+    let status = ready(&service, 3);
+    assert_eq!(status.skipped, 1);
+
+    assert!(ids(&service, "green").contains(&small_id), "small SVG indexed without cached thumbnail");
+    assert!(ids(&service, "blue").contains(&big_id), "large SVG keeps working");
+    assert!(!ids(&service, "green").contains(&bad_id));
+
+    // Visual match on small SVG before re-search succeeds using SVG rasterizer.
+    let sim = service.search_blocking(Query::Item(small_id.clone()), 5, WAIT).unwrap();
+    assert!(sim.iter().any(|h| h.id == small_id));
+}
+
+#[test]
+fn previously_skipped_small_svg_retries_automatically_without_dropping_existing_vectors() {
+    use std::time::UNIX_EPOCH;
+    let f = Fixture::new();
+    let red_id = f.add("red", [250, 10, 10]);
+
+    let svg_path = f.dir.path().join("leaf.svg");
+    std::fs::write(&svg_path, br##"<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><rect width="120" height="120" fill="#00cc00"/></svg>"##).unwrap();
+    let svg_id = f.library.lock().unwrap().import_file(&svg_path, &ImportOptions { palette: false, ..Default::default() }).unwrap();
+
+    // Seed an existing index matching pre-fix state: `red_id` has a vector and `svg_id` has a legacy SKIPPED stamp.
+    let (lib_root, svg_raw) = {
+        let lib = f.library.lock().unwrap();
+        let item = lib.item(&svg_id).unwrap();
+        (lib.root().to_path_buf(), item.original_path(lib.root()))
+    };
+    let m = std::fs::metadata(&svg_raw).unwrap();
+    let legacy_stamp = (m.modified().unwrap().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64) ^ m.len().rotate_left(48);
+
+    {
+        let mut idx = falcon_clip::store::Index::open(&f.index_dir(), &lib_root, "test-model", 3).unwrap();
+        // Stamp for red needs to stay valid; match red's actual stamp.
+        let red_item = f.library.lock().unwrap().item(&red_id).unwrap().clone();
+        let red_pic = red_item.thumbnail_path(&lib_root).unwrap_or_else(|| red_item.original_path(&lib_root));
+        let rm = std::fs::metadata(&red_pic).unwrap();
+        let red_stamp = (rm.modified().unwrap().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64) ^ rm.len().rotate_left(48);
+        idx.put(&red_id, red_stamp, &[1.0, 0.0, 0.0]).unwrap();
+        idx.skip(&svg_id, legacy_stamp).unwrap();
+        idx.flush().unwrap();
+    }
+
+    let service = f.service();
+    service.set_library(Some(f.library.clone()));
+    service.set_enabled(true);
+    let status = ready(&service, 2);
+    assert_eq!(status.skipped, 0);
+    // Only the previously skipped SVG should have been fed through the embedder (1 picture, not 2!).
+    assert_eq!(f.pictures.load(Ordering::SeqCst), 1, "existing valid red vector kept without reindex");
+    assert!(ids(&service, "green").contains(&svg_id));
+    assert!(ids(&service, "red").contains(&red_id));
+}
