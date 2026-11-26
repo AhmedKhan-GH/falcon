@@ -31,7 +31,7 @@ impl Tier {
     fn max_side(self) -> u32 {
         match self {
             Tier::Grid => 512,
-            Tier::Preview => 1024,
+            Tier::Preview => 2048,
             Tier::Full => crate::logic::FULL_TIER_SIDE,
             Tier::Card => crate::logic::CARD_TIER_SIDE,
             Tier::Original => u32::MAX,
@@ -41,7 +41,7 @@ impl Tier {
     fn capacity(self) -> usize {
         match self {
             Tier::Grid => 900,
-            Tier::Preview => 24,
+            Tier::Preview => 16,
             Tier::Full => 4,
             // At most 16 × 1600 × 1600 × 4 bytes, about 160 MB.
             Tier::Card => 16,
@@ -73,6 +73,13 @@ pub struct Job {
     /// Falcon's own decoders had their turn and QuickLook is what is left,
     /// so only the QuickLook worker takes it (see [`next_job`]).
     deferred: bool,
+    pub max_side: Option<u32>,
+}
+
+impl Job {
+    pub fn max_side(&self) -> u32 {
+        self.max_side.unwrap_or_else(|| self.key.1.max_side())
+    }
 }
 
 /// The part of a zoomed picture on screen: fractions of the drawing
@@ -105,7 +112,7 @@ pub fn original_job(lib: &Library, item: &Item, tile: usize) -> Option<Job> {
     let ext = item.ext.to_lowercase();
     let path = lib.resolved_source_path(&item.id).ok()?;
     crate::logic::full_resolution(&ext)
-        .then(|| Job { key: (item.id.clone(), Tier::Original), path, svg: false, quicklook: false, tile, region: None, raw: falcon_library::exif::is_raw(&ext), page: 0, hdr: falcon_library::hdr::is_hdr(&ext), deferred: false })
+        .then(|| Job { key: (item.id.clone(), Tier::Original), path, svg: false, quicklook: false, tile, region: None, raw: falcon_library::exif::is_raw(&ext), page: 0, hdr: falcon_library::hdr::is_hdr(&ext), deferred: false, max_side: None })
 }
 
 /// The job asking QuickLook (PDFKit for a PDF-compatible AI) for the visible
@@ -116,7 +123,7 @@ pub fn quicklook_region_job(lib: &Library, item: &Item) -> Option<Job> {
     let ext = item.ext.to_lowercase();
     let path = lib.resolved_source_path(&item.id).ok()?;
     (crate::logic::hires_quicklook(&ext) && (cfg!(target_os = "macos") || falcon_library::psd::handles(&ext)))
-        .then(|| Job { key: (item.id.clone(), Tier::Full), path, svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false })
+        .then(|| Job { key: (item.id.clone(), Tier::Full), path, svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false, max_side: None })
 }
 
 /// The job decoding page `page` (0-based, above 0) of a multi-page TIFF at
@@ -124,7 +131,7 @@ pub fn quicklook_region_job(lib: &Library, item: &Item) -> Option<Job> {
 pub fn tiff_page_job(lib: &Library, item: &Item, page: usize) -> Option<Job> {
     let key = (format!("{}#page{page}", item.id), Tier::Full);
     let path = lib.resolved_source_path(&item.id).ok()?;
-    Some(Job { key, path, svg: false, quicklook: false, tile: 0, region: None, raw: false, page, hdr: false, deferred: false })
+    Some(Job { key, path, svg: false, quicklook: false, tile: 0, region: None, raw: false, page, hdr: false, deferred: false, max_side: None })
 }
 
 /// The job decoding `item`'s original for a large grid card, for the
@@ -133,7 +140,7 @@ pub fn card_job(lib: &Library, item: &Item) -> Option<Job> {
     let ext = item.ext.to_lowercase();
     let path = lib.resolved_source_path(&item.id).ok()?;
     crate::logic::quality_card_format(&ext)
-        .then(|| Job { key: (item.id.clone(), Tier::Card), path, svg: false, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false })
+        .then(|| Job { key: (item.id.clone(), Tier::Card), path, svg: false, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false, max_side: None })
 }
 
 /// Picks the file to decode for `item`: the thumbnail when it exists (unless
@@ -146,36 +153,36 @@ fn job_for_with(item: &Item, source: Option<PathBuf>, root: &std::path::Path, ti
     let ext = item.ext.to_lowercase();
     let supported = thumbnail::is_supported(&ext);
     let original = supported.then(|| source.clone()).flatten();
-    if tier == Tier::Full && falcon_library::exif::is_raw(&ext) && let Some(path) = source.clone() {
+    if (tier == Tier::Full || tier == Tier::Preview) && falcon_library::exif::is_raw(&ext) && let Some(path) = source.clone() {
         let quicklook = cfg!(target_os = "macos") && !quicklook_hung(&ext);
-        return Some(Job { key: (item.id.clone(), tier), path, svg: false, quicklook, tile: 0, region: None, raw: true, page: 0, hdr: false, deferred: false });
+        return Some(Job { key: (item.id.clone(), tier), path, svg: false, quicklook, tile: 0, region: None, raw: true, page: 0, hdr: false, deferred: false, max_side: None });
     }
-    if tier == Tier::Full && (ext == "tga" || falcon_library::hdr::is_hdr(&ext)) && let Some(path) = source.clone() {
+    if (tier == Tier::Full || tier == Tier::Preview) && (ext == "tga" || falcon_library::hdr::is_hdr(&ext)) && let Some(path) = source.clone() {
         // Decoded by falcon itself (HDR and EXR tone mapped), not QuickLook.
-        return Some(Job { key: (item.id.clone(), tier), path, svg: false, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: falcon_library::hdr::is_hdr(&ext), deferred: false });
+        return Some(Job { key: (item.id.clone(), tier), path, svg: false, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: falcon_library::hdr::is_hdr(&ext), deferred: false, max_side: None });
     }
     // A custom thumbnail stands for a format with no picture of its own.
     if tier == Tier::Full
         && crate::logic::custom_thumbnail_is_picture(&ext, thumbnail::has_custom_thumbnail(item))
         && let Some(t) = item.thumbnail_path(root)
     {
-        return Some(Job { key: (item.id.clone(), tier), path: t, svg: false, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false });
+        return Some(Job { key: (item.id.clone(), tier), path: t, svg: false, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false, max_side: None });
     }
-    if tier == Tier::Full && falcon_library::psd::handles(&ext) && let Some(path) = source.clone() {
+    if (tier == Tier::Full || tier == Tier::Preview) && falcon_library::psd::handles(&ext) && let Some(path) = source.clone() {
         // The merged image, QuickLook where it can't be read and exists.
-        return Some(Job { key: (item.id.clone(), tier), path, svg: false, quicklook: cfg!(target_os = "macos") && !quicklook_hung(&ext), tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false });
+        return Some(Job { key: (item.id.clone(), tier), path, svg: false, quicklook: cfg!(target_os = "macos") && !quicklook_hung(&ext), tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false, max_side: None });
     }
     // Once QuickLook has hung on the format, the full tier is the thumbnail.
     if tier == Tier::Full && !supported && cfg!(target_os = "macos") && !quicklook_hung(&ext) && let Some(path) = source {
-        return Some(Job { key: (item.id.clone(), tier), path, svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false });
+        return Some(Job { key: (item.id.clone(), tier), path, svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false, max_side: None });
     }
     let (path, svg) = match (tier, item.thumbnail_path(root), original) {
-        (Tier::Full, _, Some(o)) => (o, ext == "svg"),
+        (Tier::Full | Tier::Preview, _, Some(o)) => (o, ext == "svg"),
         (_, Some(t), _) => (t, false),
         (_, None, Some(o)) => (o, ext == "svg"),
         (_, None, None) => return None,
     };
-    Some(Job { key: (item.id.clone(), tier), path, svg, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false })
+    Some(Job { key: (item.id.clone(), tier), path, svg, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false, max_side: None })
 }
 
 /// The job for the thumbnail the viewer draws in place of the full render:
@@ -739,6 +746,14 @@ impl Loader {
                 Tier::Original => {
                     self.original.as_ref().is_some_and(|o| o.id == j.key.0) || self.staged.as_ref().is_some_and(|s| s.original.id == j.key.0)
                 }
+                Tier::Preview if j.max_side.is_some() => {
+                    if let Some(tex) = self.caches[&Tier::Preview].peek(&j.key.0) {
+                        let desired = j.max_side.unwrap() as f32;
+                        tex.size_vec2().max_elem() >= desired * 0.85
+                    } else {
+                        false
+                    }
+                }
                 tier => self.caches[&tier].peek(&j.key.0).is_some(),
             } && !self.stale.contains(&j.key);
             if self.failed.contains(&j.key) || self.pending.contains(&j.key) || have {
@@ -849,7 +864,7 @@ fn decode(job: &Job, exposure: f32, linear: &Mutex<Option<(PathBuf, u32, Arc<ima
     if job.key.1 == Tier::Original {
         return decode_tiled(job, exposure, linear);
     }
-    let max = job.key.1.max_side();
+    let max = job.max_side();
     if job.page > 0 {
         let rgba = crate::tiff_pages::decode_page(&job.path, job.page, max)?;
         return Some(Pixels::Whole(ColorImage::from_rgba_unmultiplied([rgba.width() as usize, rgba.height() as usize], rgba.as_raw())));
@@ -1103,7 +1118,7 @@ mod tests {
     }
 
     fn original(path: PathBuf, tile: usize) -> Job {
-        Job { key: ("x".into(), Tier::Original), path, svg: false, quicklook: false, tile, region: None, raw: false, page: 0, hdr: false, deferred: false }
+        Job { key: ("x".into(), Tier::Original), path, svg: false, quicklook: false, tile, region: None, raw: false, page: 0, hdr: false, deferred: false, max_side: None }
     }
 
     /// An item in a library at `root` with the given extension, and its thumbnail file if asked.
@@ -1172,7 +1187,7 @@ mod tests {
 
     #[cfg(target_os = "macos")]
     fn ai_job(path: PathBuf, rect: [f32; 4], size: [u32; 2], render: u32) -> Job {
-        Job { key: ("x".into(), Tier::Full), path, svg: false, quicklook: true, tile: 0, region: Some(Region { rect, size, render, seq: 1 }), raw: false, page: 0, hdr: false, deferred: false }
+        Job { key: ("x".into(), Tier::Full), path, svg: false, quicklook: true, tile: 0, region: Some(Region { rect, size, render, seq: 1 }), raw: false, page: 0, hdr: false, deferred: false, max_side: None }
     }
 
     /// Far past QuickLook's cap: a PDF-compatible AI or AIT is drawn by
@@ -1233,7 +1248,7 @@ mod tests {
             std::fs::write(&path, data).unwrap();
             let page = image::RgbaImage::from_pixel(1000, 500, image::Rgba([9, 8, 7, 255]));
             let rendered: Rendered = Mutex::new(Some((path.clone(), 1000, Arc::new(page))));
-            let job = Job { key: ("x".into(), Tier::Full), path, svg: false, quicklook: true, tile: 0, region: Some(Region { rect: [0.5, 0.0, 1.0, 0.5], size: [80, 40], render: 1000, seq: 1 }), raw: false, page: 0, hdr: false, deferred: false };
+            let job = Job { key: ("x".into(), Tier::Full), path, svg: false, quicklook: true, tile: 0, region: Some(Region { rect: [0.5, 0.0, 1.0, 0.5], size: [80, 40], render: 1000, seq: 1 }), raw: false, page: 0, hdr: false, deferred: false, max_side: None };
             let Some(Pixels::Patch(_, img)) = decode(&job, 1.0, &Mutex::new(None), &rendered) else { panic!("{name}: no patch") };
             assert_eq!(img.size, [500, 250], "{name}");
             assert_eq!(img.pixels[0], Color32::from_rgb(9, 8, 7), "{name}");
@@ -1301,11 +1316,11 @@ mod tests {
 
     /// A full-tier job that only QuickLook can do.
     fn quicklook_job(id: &str) -> Job {
-        Job { key: (id.into(), Tier::Full), path: PathBuf::from(format!("/nowhere/{id}.zzformat")), svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false }
+        Job { key: (id.into(), Tier::Full), path: PathBuf::from(format!("/nowhere/{id}.zzformat")), svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false, max_side: None }
     }
 
     fn preview_job(id: &str, path: PathBuf) -> Job {
-        Job { key: (id.into(), Tier::Preview), path, svg: false, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false }
+        Job { key: (id.into(), Tier::Preview), path, svg: false, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false, max_side: None }
     }
 
     #[test]
@@ -1527,6 +1542,7 @@ mod tests {
             page: 0,
             hdr: false,
             deferred: false,
+            max_side: None,
         };
         let mut q = VecDeque::from([job("region", true), job("a", false), job("b", false)]);
         assert_eq!(next_job(&mut q, true, false).unwrap().key.0, "a");
@@ -1545,7 +1561,7 @@ mod tests {
         let path = PathBuf::from("/nonexistent/deck.pptx");
         let page = image::RgbaImage::from_fn(1000, 500, |x, y| image::Rgba([(x / 4) as u8, (y / 2) as u8, 0, 255]));
         let rendered: Rendered = Mutex::new(Some((path.clone(), 1000, Arc::new(page))));
-        let job = Job { key: ("x".into(), Tier::Full), path, svg: false, quicklook: true, tile: 0, region: Some(Region { rect: [0.5, 0.0, 1.0, 0.5], size: [0, 0], render: 1000, seq: 1 }), raw: false, page: 0, hdr: false, deferred: false };
+        let job = Job { key: ("x".into(), Tier::Full), path, svg: false, quicklook: true, tile: 0, region: Some(Region { rect: [0.5, 0.0, 1.0, 0.5], size: [0, 0], render: 1000, seq: 1 }), raw: false, page: 0, hdr: false, deferred: false, max_side: None };
         let Some(Pixels::Patch(_, img)) = decode(&job, 1.0, &Mutex::new(None), &rendered) else { panic!("no patch") };
         assert_eq!(img.size, [500, 250]);
         assert_eq!(img.pixels[0], Color32::from_rgb(125, 0, 0));
@@ -1610,7 +1626,7 @@ mod tests {
     fn psd_full_tier_and_regions_come_from_the_merged_image() {
         let dir = tempfile::tempdir().unwrap();
         let path = write_psd(dir.path(), "x.psd", 400, 200);
-        let job = Job { key: ("x".into(), Tier::Full), path: path.clone(), svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false };
+        let job = Job { key: ("x".into(), Tier::Full), path: path.clone(), svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false, max_side: None };
         // Small enough to decode whole, with no QuickLook needed.
         let Some(Pixels::Whole(img)) = decode(&job, 1.0, &Mutex::new(None), &Mutex::new(None)) else { panic!("no full tier") };
         assert_eq!(img.size, [400, 200]);
@@ -1671,7 +1687,7 @@ mod tests {
             let t = std::time::Instant::now();
             assert!(decode(&original(path.clone(), 2048), 1.0, &Mutex::new(None), &Mutex::new(None)).is_none(), "past the budget for tiles");
             eprintln!("refused in {:?}", t.elapsed());
-            let full = Job { key: ("x".into(), Tier::Full), path: path.clone(), svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false };
+            let full = Job { key: ("x".into(), Tier::Full), path: path.clone(), svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false, max_side: None };
             let t = std::time::Instant::now();
             let Some(Pixels::Whole(img)) = decode(&full, 1.0, &Mutex::new(None), &Mutex::new(None)) else { panic!("no full tier") };
             eprintln!("full tier {:?} in {:?}", img.size, t.elapsed());
@@ -1701,7 +1717,7 @@ mod tests {
         let path = dir.path().join("x.exr");
         let lin = image::Rgba32FImage::from_pixel(8, 4, image::Rgba([1.0, 1.0, 1.0, 1.0]));
         image::DynamicImage::ImageRgba32F(lin).save(&path).unwrap();
-        let full = Job { key: ("x".into(), Tier::Full), path: path.clone(), svg: false, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: true, deferred: false };
+        let full = Job { key: ("x".into(), Tier::Full), path: path.clone(), svg: false, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: true, deferred: false, max_side: None };
         let kept = Mutex::new(None);
         let Some(Pixels::Whole(a)) = decode(&full, 1.0, &kept, &Mutex::new(None)) else { panic!("no full tier") };
         assert_eq!(a.size, [8, 4]);
@@ -1737,7 +1753,7 @@ mod tests {
         let Some(Pixels::Tiled { size, tiles }) = decode(&original(path.clone(), 128), 1.0, &Mutex::new(None), &Mutex::new(None)) else { panic!("not tiled") };
         assert_eq!(size, [130, 300], "turned by its orientation");
         assert_eq!(tiles.len(), 2 * 3);
-        let full = Job { key: ("x".into(), Tier::Full), path, svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false };
+        let full = Job { key: ("x".into(), Tier::Full), path, svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false, max_side: None };
         let Some(Pixels::Whole(img)) = decode(&full, 1.0, &Mutex::new(None), &Mutex::new(None)) else { panic!("no full tier") };
         assert_eq!(img.size, [130, 300]);
     }
@@ -1760,5 +1776,61 @@ mod tests {
         let biggest = tiles.iter().map(|(_, img)| img.pixels.len() * 4).max().unwrap();
         assert!(biggest <= UPLOAD_BUDGET, "a frame uploads at least one whole tile");
         eprintln!("frames to upload at {} MB a frame: {}", UPLOAD_BUDGET >> 20, tiles.iter().map(|(_, i)| i.pixels.len() * 4).sum::<usize>().div_ceil(UPLOAD_BUDGET));
+    }
+
+    #[test]
+    fn adaptive_preview_resolves_original_source_for_supported_images() {
+        let dir = tempfile::tempdir().unwrap();
+        let item = special_item(dir.path(), "png", true);
+        let thumb = item.thumbnail_path(dir.path()).unwrap();
+        let src = item.managed_storage_path(dir.path());
+        std::fs::write(&src, b"fake png original").unwrap();
+
+        // Tier::Grid uses thumbnail
+        let grid_job = job_for_with(&item, Some(src.clone()), dir.path(), Tier::Grid).unwrap();
+        assert_eq!(grid_job.path, thumb, "Tier::Grid must use thumbnail");
+
+        // Tier::Preview uses original source
+        let preview_job = job_for_with(&item, Some(src.clone()), dir.path(), Tier::Preview).unwrap();
+        assert_eq!(preview_job.path, src, "Tier::Preview must decode original source for high-res rendering");
+    }
+
+    #[test]
+    fn adaptive_preview_falls_back_to_thumbnail_when_source_is_unavailable() {
+        let dir = tempfile::tempdir().unwrap();
+        let item = special_item(dir.path(), "png", true);
+        let thumb = item.thumbnail_path(dir.path()).unwrap();
+
+        // When source is None (e.g. missing linked media), Tier::Preview falls back to thumbnail
+        let preview_job = job_for_with(&item, None, dir.path(), Tier::Preview).unwrap();
+        assert_eq!(preview_job.path, thumb, "Tier::Preview must fall back to thumbnail when source is unavailable");
+    }
+
+    #[test]
+    fn adaptive_preview_respects_custom_max_side() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = write_png(dir.path(), 3000, 2000);
+        let mut job = Job {
+            key: ("test_id".into(), Tier::Preview),
+            path,
+            svg: false,
+            quicklook: false,
+            tile: 0,
+            region: None,
+            raw: false,
+            page: 0,
+            hdr: false,
+            deferred: false,
+            max_side: Some(1024),
+        };
+        assert_eq!(job.max_side(), 1024);
+
+        let Some(Pixels::Whole(img_1024)) = decode(&job, 1.0, &Mutex::new(None), &Mutex::new(None)) else { panic!("failed decode 1024") };
+        assert!(img_1024.size[0] <= 1024 && img_1024.size[1] <= 1024);
+
+        job.max_side = Some(2048);
+        assert_eq!(job.max_side(), 2048);
+        let Some(Pixels::Whole(img_2048)) = decode(&job, 1.0, &Mutex::new(None), &Mutex::new(None)) else { panic!("failed decode 2048") };
+        assert!(img_2048.size[0] > 1024 && img_2048.size[0] <= 2048);
     }
 }

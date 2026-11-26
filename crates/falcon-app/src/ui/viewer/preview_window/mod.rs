@@ -371,7 +371,10 @@ impl App {
                 self.ws.frame_jobs.push(j);
             }
         }
-        let tex = self.ws.loader.get(&item.id, Tier::Full).cloned().or_else(|| self.ws.loader.get(&item.id, Tier::Preview).cloned());
+        let tex = self.ws.loader.get(&item.id, Tier::Full).cloned()
+            .or_else(|| self.ws.loader.get(&item.id, Tier::Preview).cloned())
+            .or_else(|| self.ws.loader.get(&item.id, Tier::Card).cloned())
+            .or_else(|| self.ws.loader.get(&item.id, Tier::Grid).cloned());
         let gray = self.modes.grayscale;
         let file = lib
             .resolved_source_path(&item.id)

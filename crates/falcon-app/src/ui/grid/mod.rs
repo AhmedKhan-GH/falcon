@@ -158,6 +158,32 @@ impl App {
             }
         }
 
+        if pointer.is_some_and(|p| area.contains(p)) {
+            let (pinch, alt_scroll) = ui.input(|i| {
+                (
+                    i.zoom_delta(),
+                    if i.modifiers.alt { i.smooth_scroll_delta.y } else { 0.0 },
+                )
+            });
+            if (pinch - 1.0).abs() > 0.01 {
+                let new_tile = (self.tile * pinch).clamp(crate::app::TILE_MIN, crate::app::TILE_MAX).round();
+                if (new_tile - self.tile).abs() >= 1.0 {
+                    self.tile = new_tile;
+                    if let Some(id) = self.ws.selected.first().cloned() {
+                        self.ws.scroll_to = Some(id);
+                    }
+                }
+            } else if alt_scroll.abs() > 0.5 {
+                let new_tile = (self.tile + alt_scroll * 0.5).clamp(crate::app::TILE_MIN, crate::app::TILE_MAX).round();
+                if (new_tile - self.tile).abs() >= 1.0 {
+                    self.tile = new_tile;
+                    if let Some(id) = self.ws.selected.first().cloned() {
+                        self.ws.scroll_to = Some(id);
+                    }
+                }
+            }
+        }
+
         let mut jobs = Vec::new();
         let mut clicked: Option<(String, Modifiers)> = None;
         let mut opened: Option<String> = None;

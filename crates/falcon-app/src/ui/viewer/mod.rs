@@ -92,7 +92,9 @@ impl App {
         let tex = gif
             .or(page)
             .or_else(|| self.ws.loader.get(&id, Tier::Full).cloned())
-            .or_else(|| self.ws.loader.get(&id, Tier::Preview).cloned());
+            .or_else(|| self.ws.loader.get(&id, Tier::Preview).cloned())
+            .or_else(|| self.ws.loader.get(&id, Tier::Card).cloned())
+            .or_else(|| self.ws.loader.get(&id, Tier::Grid).cloned());
         self.image_canvas(ui, lib, item, tex, bar, area, gif_bar);
     }
 

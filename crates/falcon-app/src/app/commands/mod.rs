@@ -506,8 +506,24 @@ impl App {
             C::ZoomOut if self.zoom_preview(0.8) => {}
             C::ZoomIn if viewer => self.ws.view.zoom_key = Some(logic::ViewZoom::In),
             C::ZoomOut if viewer => self.ws.view.zoom_key = Some(logic::ViewZoom::Out),
-            C::ZoomIn => self.tile = (self.tile + 20.0).min(TILE_MAX),
-            C::ZoomOut => self.tile = (self.tile - 20.0).max(TILE_MIN),
+            C::ZoomIn => {
+                self.tile = (self.tile + 20.0).min(TILE_MAX).round();
+                if let Some(id) = self.ws.selected.first().cloned() {
+                    self.ws.scroll_to = Some(id);
+                }
+            }
+            C::ZoomOut => {
+                self.tile = (self.tile - 20.0).max(TILE_MIN).round();
+                if let Some(id) = self.ws.selected.first().cloned() {
+                    self.ws.scroll_to = Some(id);
+                }
+            }
+            C::ZoomActual if !viewer => {
+                self.tile = 139.0;
+                if let Some(id) = self.ws.selected.first().cloned() {
+                    self.ws.scroll_to = Some(id);
+                }
+            }
             C::ZoomActual => self.ws.view.zoom_key = Some(logic::ViewZoom::Actual),
             C::ZoomFit => self.ws.view.zoom_key = Some(logic::ViewZoom::Fit),
             C::Back if viewer => self.ws.viewer = None,

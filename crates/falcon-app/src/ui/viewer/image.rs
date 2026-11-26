@@ -5,18 +5,18 @@
 use std::collections::HashMap;
 use std::time::Instant;
 
-use eframe::egui::{self, Color32, ColorImage, Pos2, Rect, Sense, TextureHandle, TextureOptions, Ui, Vec2, vec2};
+use eframe::egui::{self, Color32, ColorImage, CornerRadius, Pos2, Rect, Sense, Stroke, StrokeKind, TextureHandle, TextureOptions, Ui, Vec2, vec2};
 use falcon_library::{Library, thumbnail};
 use falcon_library::model::Item;
 
 use crate::app::App;
 use crate::gesture::{Gesture, Outcome};
 use crate::ui::viewer::audio;
-use crate::ui::widgets::ext_placeholder;
+use crate::ui::widgets::{ext_placeholder, galley};
 use crate::loader::{Job, Loader, Original, Tier, job_for, original_job, quicklook_region_job, stand_in_job};
 use crate::locale::{tr, trf};
 use crate::logic;
-use crate::theme::{self as t, mono};
+use crate::theme::{self as t, font, mono};
 
 /// The visible part of a zoomed-in SVG or QuickLook format, its render size
 /// (see `loader::Region`) and since when it has held still.
@@ -238,6 +238,21 @@ impl App {
             self.ws.frame_jobs.push(j);
         }
         self.edit_overlay(ui, item, r, area);
+
+        let status = falcon_library::linked::evaluate_status(lib.config(), item, lib.root());
+        let is_missing_media = matches!(status, falcon_library::linked::AssetStatus::Missing | falcon_library::linked::AssetStatus::Offline | falcon_library::linked::AssetStatus::InvalidReference);
+        if is_missing_media {
+            let banner_rect = Rect::from_center_size(Pos2::new(area.center().x, area.top() + 28.0), vec2(290.0, 36.0));
+            ui.painter().rect_filled(banner_rect, CornerRadius::same(6), Color32::from_black_alpha(200));
+            ui.painter().rect_stroke(banner_rect, CornerRadius::same(6), Stroke::new(1.0, Color32::from_rgb(230, 90, 80)), StrokeKind::Inside);
+            let g = galley(ui, tr("Missing Original Media"), font(12.0), Color32::from_rgb(255, 120, 110), 170.0);
+            ui.painter().galley(Pos2::new(banner_rect.left() + 14.0, banner_rect.center().y - g.size().y / 2.0), g, Color32::from_rgb(255, 120, 110));
+            let btn_rect = Rect::from_min_max(Pos2::new(banner_rect.right() - 86.0, banner_rect.top() + 5.0), Pos2::new(banner_rect.right() - 8.0, banner_rect.bottom() - 5.0));
+            if ui.put(btn_rect, egui::Button::new(egui::RichText::new(tr("Relink…")).font(font(11.0)))).clicked() {
+                self.open_relink_dialog(lib, vec![item.id.clone()]);
+            }
+        }
+
         self.navigator(ui, tex.as_ref(), natural, r, area);
         if let Some(g) = &self.image.gesture {
             paint_trail(&ui.painter().with_clip_rect(area), g);
@@ -328,7 +343,29 @@ impl App {
                 self.ws.view.pan = Vec2::ZERO;
             }
         }
-        if let Some(j) = job_for(lib, item, Tier::Full) {
+        let ppp = ui.ctx().pixels_per_point();
+        let natural_long = natural.x.max(natural.y);
+        let shown_px = (natural_long * scale * ppp).ceil() as u32;
+        let preview_res = if shown_px <= 1024 {
+            1024
+        } else if shown_px <= 2048 {
+            2048
+        } else if shown_px <= 2560 {
+            2560
+        } else {
+            4096
+        }.min(natural_long as u32);
+
+        // Tier 2: Adaptive High-Quality Preview
+        if let Some(mut j) = job_for(lib, item, Tier::Preview) {
+            j.max_side = Some(preview_res);
+            self.ws.frame_jobs.push(j);
+        }
+
+        // Tier 3: Full resolution when inspecting 1:1 or zoomed deep
+        if (scale >= 0.99 || shown_px > preview_res)
+            && let Some(j) = job_for(lib, item, Tier::Full)
+        {
             self.ws.frame_jobs.push(j);
         }
         if self.prefs.remember_zoom && !self.image.edge && self.ws.viewer.as_deref() == Some(id.as_str()) {
