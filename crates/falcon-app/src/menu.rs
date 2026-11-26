@@ -65,6 +65,8 @@ pub struct State {
     pub subfolders: bool,
     /// Hide Unsupported Files is on.
     pub hide_unsupported: bool,
+    /// Show Path Bar is on.
+    pub path_bar: bool,
     pub fullscreen: bool,
     /// Open libraries.
     pub libraries: usize,
@@ -150,7 +152,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::NewSubfolder => grid && s.scope == ScopeKind::Folder,
         C::NewTextFile | C::NewMenu => s.library,
         // The panels can be toggled anywhere, the viewer included.
-        C::ToggleSidebar | C::ToggleInspector | C::ToggleAll => true,
+        C::ToggleSidebar | C::ToggleInspector | C::ToggleAll | C::TogglePathBar => true,
         // In the viewer they zoom the image, else the grid.
         C::ZoomIn | C::ZoomOut => s.library,
         C::ZoomActual | C::ZoomFit => s.library && s.viewer,
@@ -236,6 +238,7 @@ pub enum Check {
     Comments,
     Subfolders,
     HideUnsupported,
+    PathBar,
     Presentation,
     AlwaysOnTop,
     Grayscale,
@@ -259,6 +262,7 @@ impl Check {
             Check::Comments => s.show_comments,
             Check::Subfolders => s.subfolders,
             Check::HideUnsupported => s.hide_unsupported,
+            Check::PathBar => s.path_bar,
             Check::Presentation => s.presenting,
             Check::AlwaysOnTop => s.on_top,
             Check::Grayscale => s.grayscale,
@@ -532,6 +536,7 @@ pub static MENUS: &[(&str, &[Entry])] = &[
             SEP,
             checked("Sidebar", Command::ToggleSidebar, Check::Sidebar),
             checked("Inspector", Command::ToggleInspector, Check::Inspector),
+            checked("Show Path Bar", Command::TogglePathBar, Check::PathBar),
             item("Show or Hide Both Panels", Command::ToggleAll),
             checked("Presentation Mode", Command::Presentation, Check::Presentation),
             SEP,

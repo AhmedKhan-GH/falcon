@@ -18,5 +18,6 @@ pub(crate) mod drop_hint;
 pub(crate) mod drop_unlock;
 pub(crate) mod toolbar;
 pub(crate) mod filter_bar;
+pub(crate) mod path_bar;
 pub(crate) mod dialogs;
 pub(crate) mod menus;

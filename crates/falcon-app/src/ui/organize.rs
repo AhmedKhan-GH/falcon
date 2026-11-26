@@ -525,6 +525,37 @@ impl App {
             self.ws.actions.push(org(OrgAction::FolderIcon(f.id.clone(), f.icon.clone(), color)));
             ui.close();
         }
+
+        // Folder Synchronization options
+        let watched = lib.config().find_watched_by_folder_id(&f.id);
+        if let Some(wf) = watched {
+            ui.separator();
+            if ui.button(tr("Sync Folder Now")).clicked() {
+                self.sync_folder_now(&wf.id);
+                ui.close();
+            }
+            if ui.button(tr("Show Source in Finder")).clicked() {
+                crate::open_with::open_default(std::slice::from_ref(&wf.source_path));
+                ui.close();
+            }
+            let is_disabled = wf.sync_mode == falcon_library::SyncMode::Disabled;
+            let pause_label = if is_disabled { tr("Resume Synchronization") } else { tr("Pause Synchronization") };
+            if ui.button(pause_label).clicked() {
+                self.toggle_folder_sync_pause(&wf.id);
+                ui.close();
+            }
+            if ui.button(tr("Folder Sync Settings…")).clicked() {
+                self.open_preferences();
+                self.prefs_window.set_pane(crate::prefs::Section::AutoImport);
+                ui.close();
+            }
+        } else {
+            ui.separator();
+            if ui.button(tr("Set Up Folder Sync…")).clicked() {
+                self.setup_folder_sync_for(&f.id);
+                ui.close();
+            }
+        }
     }
 }
 

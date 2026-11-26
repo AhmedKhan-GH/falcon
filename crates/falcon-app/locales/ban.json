@@ -40,7 +40,7 @@
   "Accuracy": "Akurasi",
   "Action finished": "Pamargi wusan",
   "Actions": "Pamargi",
-  "Actions don't run in the Trash": "Pamargi nenten mamargi ring Tongos Luu",
+  "Actions don't run in the Trash": "Pamargi nenten mamargi ring Wadah Luu",
   "Activate": "Aktipang",
   "Activated": "Sampun maaktipang",
   "Activated by Eagle": "Kaaktipang olih Eagle",
@@ -137,7 +137,7 @@
   "All Tags": "Samian Tag",
   "All Tags  {n}": "Samian Tag  {n}",
   "All Tags Are in Groups": "Samian Tag Wénten ring Sekaa",
-  "All files, thumbnails and metadata will be moved to the new location. On cross-drive moves, the original folder goes to the Trash once copying finishes.": "Samian berkas, thumbnail miwah metadata pacang kageser ka genah anyar. Rikala ngesér lintas disk, folder mula pacang kakutang ka Tongos Luu sasampun nyalin wusan.",
+  "All files, thumbnails and metadata will be moved to the new location. On cross-drive moves, the original folder goes to the Trash once copying finishes.": "Samian berkas, thumbnail miwah metadata pacang kageser ka genah anyar. Rikala ngesér lintas disk, folder mula pacang kakutang ka Wadah Luu sasampun nyalin wusan.",
   "Allow Falcon in System Settings ▸ General ▸ Login Items.": "Icen Falcon margi ring Setelan Sistem ▸ Umum ▸ Item Munggah.",
   "Allow assistants to change the library": "Lugrayang asisten nguwah pustaka",
   "Almost there…": "Nampek usan…",
@@ -226,9 +226,9 @@
   "Can't read the Inboard backup": "Nenten prasida ngwacen cadangan Inboard",
   "Can't read this file: {error}": "Nenten prasida ngwacen berkas puniki: {error}",
   "Can't save the attachment: {error}": "Nenten prasida nyimpen kempelan: {error}",
-  "Cancel": "Wangsulang",
-  "Cancel (Esc)": "Wangsulang (Esc)",
-  "Cancel Download": "Wangsulang Unduhan",
+  "Cancel": "buwung",
+  "Cancel (Esc)": "buwung (Esc)",
+  "Cancel Download": "buwung Unduhan",
   "Cancel stopped the run before {n} items.": {
     "other": "Pangwangsulan ngandegang pamargi sadurung {n} item."
   },
@@ -272,6 +272,7 @@
   "Choose Image…": "Pilih Gambar…",
   "Choose Library Icon": "Pilih Ikon Pustaka",
   "Choose Library…": "Pilih Pustaka…",
+  "Choose Source Folder to Sync": "Pilih Folder Wit sane Pacang Kasinkronang",
   "Choose Thumbnail": "Pilih Gambar Alit",
   "Choose a Folder to Watch": "Pilih Folder sane Pacang Kapiara",
   "Choose a Library to Add To": "Pilih Pustaka sane Pacang Kawewehin",
@@ -457,7 +458,7 @@
   "Couldn't import {path}: {error}": "Nenten prasida nginpor {path}: {error}",
   "Couldn't make a folder for the screenshot": "Nenten prasida ngaryanin folder antuk tangkapan layar",
   "Couldn't make {path}: {error}": "Nenten prasida ngaryanin {path}: {error}",
-  "Couldn't move “{name}” to the Trash: {error}": "Nenten prasida ngisidang “{name}” ka Tongos Luu: {error}",
+  "Couldn't move “{name}” to the Trash: {error}": "Nenten prasida ngisidang “{name}” ka Wadah Luu: {error}",
   "Couldn't read the frame: {error}": "Nenten prasida ngwacen bingkai: {error}",
   "Couldn't remove the icon: {error}": "Nenten prasida ngicalang ikon: {error}",
   "Couldn't run screencapture: {error}": "Nenten prasida ngamargiang screencapture: {error}",
@@ -787,8 +788,14 @@
   "Folder Paths": "Jalur Folder",
   "Folder Settings": "Pangaturan Folder",
   "Folder Settings…": "Pangaturan Folder…",
+  "Folder Sync Settings…": "Setelan Sinkronisasi Folder…",
+  "Folder Synchronization": "Sinkronisasi Folder",
   "Folder name": "Wasta folder",
   "Folder settings (name and auto-tags)": "Pangaturan folder (wasta lan tag otomatis)",
+  "Folder sync configured: {n} assets imported": "Sinkronisasi folder sampun kasetel: {n} aset kainpor",
+  "Folder sync failed: {error}": "Sinkronisasi folder piwal: {error}",
+  "Folder sync is offline: source folder unreachable": "Sinkronisasi folder nenten online: folder wit nenten prasida kapanggih",
+  "Folder synced: {n} added, {m} modified": "Folder kasinkronang: {n} kawewehin, {m} kauwah",
   "Folder:": "Folder:",
   "Folders": "Folder",
   "Folders (Copy to Library)…": "Folder (Salin ka Pustaka)…",
@@ -857,11 +864,11 @@
   "Hex": "Heks",
   "Hide": "Engkebang",
   "Hide Collect Window": "Engkebang Jendela Papupulan",
-  "Hide Unsupported Files": "Simpen Berkas sane Nenten Kasediayang",
+  "Hide Unsupported Files": "Engkebang Berkas sane Nenten Kedukung",
   "Hide inspector": "Engkebang inspektor",
-  "Hide or show unsupported files": "Simpen utawi cingakin berkas sane nenten kasediayang",
+  "Hide or show unsupported files": "Engkebang utawi cingakin berkas sane nenten kedukung",
   "Hide sidebar": "Engkebang bilah sisi",
-  "Hide unsupported files": "Simpen berkas sane nenten kasediayang",
+  "Hide unsupported files": "Engkebang berkas sane nenten kedukung",
   "High": "Tegeh",
   "Hint (optional)": "Pituduh (opsional)",
   "Hint: {hint}": "Pituduh: {hint}",
@@ -1208,7 +1215,7 @@
   "Names": "Wasta",
   "Navigate": "Navigasi",
   "Navigator": "Navigator",
-  "Neither macOS nor FFmpeg could play this video. Try opening it in another app.": "MacOS miwah FFmpeg sami nenten prasida muter video puniki. Coba ungkab ring aplikasi siosan.",
+  "Neither macOS nor FFmpeg could play this video. Try opening it in another app.": "MacOS miwah FFmpeg sami nenten prasida muter video puniki. Coba buka ring aplikasi siosan.",
   "New Action": "Parilaksana Anyar",
   "New Folder": "Folder Anyar",
   "New Folder Below": "Folder Anyar ring Sor",
@@ -1226,7 +1233,7 @@
   "New Subfolder…": "Subfolder Anyar…",
   "New Text File": "Berkas Teks Anyar",
   "New document": "Dokumen anyar",
-  "New files are imported once they stop growing; the originals stay where they are. Files under 1 KB, temporary (.tmp) files and files without an extension are skipped.": "Berkas anyar kaimpor sasampun wusan agengan; berkas sujati tetep ring genahnyané. Berkas ring sor 1 KB, berkas sawatara (.tmp), miwah berkas tanpa ekstensi kalangkungin.",
+  "New files are imported once they stop growing; the originals stay where they are. Temporary (.tmp) files, empty files and files without an extension are skipped.": "Berkas anyar pacang kainpor yening sampun meneng; berkas mula tetep ring genahne. Berkas sawentara (.tmp), berkas puyung, miwah berkas tan wenten ekstensi pacang kalewatin.",
   "New folder": "Folder anyar",
   "New folder with {n} items": {
     "other": "Folder anyar antuk {n} item"
@@ -1293,6 +1300,7 @@
   "No smart folders found": "Folder cerdas nenten kapanggihin",
   "No specimen for this font": "Nenten wenten conto font puniki",
   "No subtitles found in that file": "Subtitel nenten kapanggihin ring berkas punika",
+  "No synchronized folders configured for this library.": "Durung wenten folder sinkron sane kakonfigurasi ring pustaka puniki.",
   "No tag is left outside a group.": "Nenten wenten tag sane masisa ring jaba grup.",
   "No tags": "Nenten wenten tag",
   "No tags found": "Tag nenten kapanggihin",
@@ -1353,14 +1361,15 @@
   "Open With Another App…": "Ungkab Antuk Aplikasi Siosan…",
   "Open With Default App": "Ungkab Antuk Aplikasi Default",
   "Open a library to take screenshots into": "Ungkab pustaka anggen nyimpen tangkapan layar",
+  "Open a library to view and configure synchronized folders.": "Buka pustaka anggen ngantenang miwah ngonfigurasi folder sinkron.",
   "Open an Eagle library": "Ungkab pustaka Eagle",
   "Open images at actual size instead of fitting them to the window": "Ungkab gambar ring ageng sujati boyo maspasang ka jandela",
   "Open in Browser": "Ungkab ring Peramban",
-  "Open in Default App": "Ungkab ring Aplikasi Default",
-  "Open in Default App ({shortcut})": "Ungkab ring Aplikasi Default ({shortcut})",
+  "Open in Default App": "Buka ring Aplikasi Default",
+  "Open in Default App ({shortcut})": "Buka ring Aplikasi Default ({shortcut})",
   "Open in New Window": "Ungkab ring Jandela Anyar",
   "Open in a new window": "Ungkab ring jandela anyar",
-  "Open in the default app": "Ungkab ring aplikasi default",
+  "Open in the default app": "Buka ring aplikasi default",
   "Open or close the viewer": "Ungkab utawi tutup paningal",
   "Open the Actions panel": "Ungkab panel Parilaksana",
   "Open the BPM filter": "Ungkab filter BPM",
@@ -1400,7 +1409,7 @@
   "Opening…": "Mungkab…",
   "Opens it in a new window": "Mungkab ring jandela anyar",
   "Opens it in falcon": "Mungkab ring Falcon",
-  "Opens it in its default app": "Mungkab ring aplikasi default-nyané",
+  "Opens it in its default app": "Mbuka ring aplikasi default-nyané",
   "Opens the viewer": "Mungkab paningal",
   "Optional": "Pilihan",
   "Options": "Pilihan",
@@ -1447,6 +1456,7 @@
   "Pasting into {count} folders": "Nempelang ka jeroning {count} folder",
   "Pasting into {folder}": "Nempelang ka jeroning {folder}",
   "Pause Indexing": "Uwenang Pangindeksan",
+  "Pause Synchronization": "Rerenang Sinkronisasi",
   "Paused ({n})": "Kauwenang ({n})",
   "Paused at {done} of {total}": "Kauwenang ring {done} saking {total}",
   "Paused at {done} of {total} items": "Kauwenang ring {done} saking {total} item",
@@ -1535,7 +1545,7 @@
   "Rebuild Index": "Wangiang Malih Indeks",
   "Recent": "Sane Anyar",
   "Recent Tags": "Tag Anyar",
-  "Recently Used": "Anyar Kaanggen",
+  "Recently Used": "Wau Keanggen",
   "Recolour tag group": "Warniang malih grup tag",
   "Recommended": "Kasarangang",
   "Recommended Tags": "Tag sane Kasarangang",
@@ -1567,13 +1577,14 @@
   },
   "Refreshing Thumbnails": "Nyegarang Gambar Mini",
   "Regenerate": "Kardi Malih",
-  "Relink": "Gandengang Malih",
-  "Relink Missing Media": "Gandengang Malih Media Ical",
-  "Relink Original…": "Gandengang Malih Berkas Wit…",
-  "Relink batch failed: {e}": "Ngandengang malih makeh tambis iwang: {e}",
-  "Relink failed: {e}": "Ngandengang malih nenten mrasidayang: {e}",
-  "Relinked {n} missing asset(s)": "Prasida ngandengang malih {n} aset sane ical",
-  "Relink…": "Gandengang Malih…",
+  "Register external folders to synchronize their contents with folders in this library.": "Daptarang folder eksternal anggen nyinkronang dagingne sareng folder ring pustaka puniki.",
+  "Relink": "Link Malih",
+  "Relink Missing Media": "Link Malih Media Ical",
+  "Relink Original…": "Link Malih Berkas Wit…",
+  "Relink batch failed: {e}": "Nlink malih makeh tambis iwang: {e}",
+  "Relink failed: {e}": "Nlink malih nenten mrasidayang: {e}",
+  "Relinked {n} missing asset(s)": "Prasida nlink malih {n} aset sane ical",
+  "Relink…": "Link Malih…",
   "Reload": "Muat Malih",
   "Remove": "Icalang",
   "Remove Emoji": "Icalang Emoji",
@@ -1611,7 +1622,7 @@
   "Remove {n} from folder": "Icalang {n} saking folder",
   "Removed the rating": "Peringkat sampun kaicalang",
   "Removed {n} from the folder": "{n} sampun kaicalang saking folder",
-  "Removed {n} from the folder and moved {t} to Trash": "{n} sampun kaicalang saking folder tur {t} kageser ka Tong Mis",
+  "Removed {n} from the folder and moved {t} to Trash": "{n} sampun kaicalang saking folder tur {t} kageser ka Wadah Luu",
   "Removed {n} from {name}": "{n} sampun kaicalang saking {name}",
   "Removed {what} from {n} items": {
     "other": "{what} sampun kaicalang saking {n} item"
@@ -1686,13 +1697,14 @@
   "Restore All Items": "Wangsulang Samian Item",
   "Restore Defaults": "Wangsulang Default",
   "Restore all {n} items in the Trash?": {
-    "other": "Wangsulang samian {n} item ring Tong Mis?"
+    "other": "Wangsulang samian {n} item ring Wadah Luu?"
   },
   "Restore every shortcut to its default?": "Wangsulang nyabran pintasan ka default-nyane?",
   "Restore {n}": "Wangsulang {n}",
   "Restored {n}": "{n} sampun kawangsulang",
   "Result: {width} × {height} px": "Pikolih: {width} × {height} px",
   "Resume Indexing": "Lanturang Pangindeksan",
+  "Resume Synchronization": "Lanturang Sinkronisasi",
   "Resume where each video was left": "Lanturang saking genah kaping untat nyabran video",
   "Retry All": "Coba Malih Samian",
   "Retry this file": "Coba malih berkas puniki",
@@ -1801,6 +1813,7 @@
   "Set Custom Thumbnail…": "Setel Gambar Mini Kustom…",
   "Set Frame as Thumbnail": "Dadosang Bingkai dados Gambar Mini",
   "Set Password": "Setel Kruna Sandi",
+  "Set Up Folder Sync…": "Setel Sinkronisasi Folder…",
   "Set an action's shortcut in the Actions panel.": "Setel pintasan parilaksana ring panel Parilaksana.",
   "Set as Folder Cover": "Dadosang Sampul Folder",
   "Set as the cover of {name}": "Dadosang sampul saking {name}",
@@ -1838,9 +1851,11 @@
   },
   "Show Items with This Tag": "Cingakin Item antuk Tag Puniki",
   "Show Name": "Cingakin Wasta",
+  "Show Path Bar": "Cingakin Bilah Jalur",
   "Show Random": "Cingakin Acak",
   "Show Recently Used": "Cingakin sane Wawu Kaanggen",
   "Show Sidebar": "Cingakin Bilah Sisi",
+  "Show Source in Finder": "Cingakin Wit ring Finder",
   "Show Subfolder Content": "Cingakin Daging Subfolder",
   "Show Tips": "Cingakin Pituduh",
   "Show Uncategorized": "Cingakin Nenten Makategori",
@@ -1870,6 +1885,7 @@
   "Show or hide the filter bar": "Cingakin utawi mengkebang bilah saringan",
   "Show or hide the inspector": "Cingakin utawi mengkebang inspektur",
   "Show or hide the navigator (viewer)": "Cingakin utawi mengkebang navigator (penampil)",
+  "Show or hide the path bar": "Cingakin utawi engkebang bilah jalur",
   "Show or hide the sidebar": "Cingakin utawi mengkebang bilah sisi",
   "Show or hide the sidebar and inspector": "Cingakin utawi mengkebang bilah sisi miwah inspektur",
   "Show or hide the sidebar and inspector (no text field focused)": "Cingakin utawi mengkebang bilah sisi miwah inspektur (nenten wenten genah teks sane katuju)",
@@ -1877,7 +1893,7 @@
   "Show subfolder contents": "Cingakin daging subfolder",
   "Show tag groups (Tab moves through them)": "Cingakin pupulan tag (Tab anggen ngingsirang)",
   "Show the Shortcuts pane": "Cingakin panel Pintasan",
-  "Show the Trash": "Cingakin Tong Mis",
+  "Show the Trash": "Cingakin Wadah Luu",
   "Show the X, Y and Z axes": "Cingakin sumbu X, Y, miwah Z",
   "Show the falcon icon in the menu bar": "Cingakin ikon falcon ring baris menu",
   "Show the files, meshes and materials": "Cingakin berkas, mesh, miwah material",
@@ -1939,6 +1955,7 @@
   "Source": "Wit",
   "Source URL": "URL Wit",
   "Source URLs": "URL Wit",
+  "Source:": "Wit:",
   "Source: {page}, commit {commit}": "Wit: {page}, commit {commit}",
   "Space in the grid": "Genah ring kisi",
   "Specimen": "Spesimen",
@@ -1979,12 +1996,13 @@
   "Subfolders are deleted too.": "Subfolder taler kapuspus.",
   "Subject": "Subjek",
   "Subtitles": "Subtitel",
-  "Successfully relinked '{name}'": "Prasida ngandengang malih '{name}'",
+  "Successfully relinked '{name}'": "Prasida nlink malih '{name}'",
   "Surface": "Pamukaan",
   "Switch": "Ngentos",
   "Switch Library While Tasks Run": "Ngentos Pustaka Rikala Swagina Mamargi",
   "Switched to {name} over the API": "Ngentos ka {name} malarapan API",
   "Switched to {name} over the API. {note}": "Ngentos ka {name} malarapan API. {note}",
+  "Sync Folder Now": "Sinkronang Folder Mangkin",
   "Tag Group": "Pupulan Tag",
   "Tag name": "Wasta tag",
   "Tag screenshots “Screenshot”": "Icénin tag tangkapan layar “Tangkapan Layar”",
@@ -2087,7 +2105,7 @@
   "These items have no source URL": "Item puniki nenten madue URL wit",
   "These keys work from any app, also while falcon is hidden.": "Tombol puniki mamargi saking aplikasi napi ja, taler rikala falcon kasilibang.",
   "They are removed from every item. The items themselves stay.": "Samian kaicalang saking nyabran item. Itemne punika tetep wenten.",
-  "They go back to their folders. ⌘Z puts them back in the Trash.": "Item kawangsulang ka foldernyane. ⌘Z ngwaliang malih ka Tong Mis.",
+  "They go back to their folders. ⌘Z puts them back in the Trash.": "Item kawangsulang ka foldernyane. ⌘Z ngwaliang malih ka Wadah Luu.",
   "They look like items already here. Import them anyway, or leave them out and import the rest.": "Mirib sakadi item sane sampun wenten iriki. Tetep impor, utawi lewatin tur impor sane lianan.",
   "This GIF has one frame": "GIF puniki madue abingkai",
   "This PDF is locked": "PDF puniki makonci",
@@ -2145,8 +2163,8 @@
   "Touch ID didn't unlock the folder": "Touch ID nenten ngampahang kunci folder",
   "Trademark": "Merek Dagang",
   "Transparent": "Tembus Pandang",
-  "Trash": "Tongos Luu",
-  "Trash Is Empty": "Tongos Luu Puyung",
+  "Trash": "Wadah Luu",
+  "Trash Is Empty": "Wadah Luu Puyung",
   "Tree": "Taru",
   "Triangles": "Segitiga",
   "Try Again": "Cobi Malih",
@@ -2164,8 +2182,8 @@
   "URL": "URL",
   "URL copied": "URL kasalin",
   "Unavailable Originals": "Berkas Wit Nenten Kasedia",
-  "Uncategorized": "Tan Makategori",
-  "Uncategorized Items": "Item Tan Makategori",
+  "Uncategorized": "Ten Mekategori",
+  "Uncategorized Items": "Item Ten Mekategori",
   "Undid: {label}": "Ngwangsulang: {label}",
   "Undo": "Wangsul",
   "Undo in {library} reverses all of this run's changes.": "Wangsul ring {library} ngulihang samian paowahan parilaksana puniki.",
@@ -2194,9 +2212,9 @@
   "Unstar tags": "Icalang bintang tag",
   "Unsupported rule": "Uger-uger nenten kasokong",
   "Untag {n}": "Icalang tag {n}",
-  "Untagged": "Tan Patag",
-  "Untagged Items": "Item Tan Patag",
-  "Untitled": "Tan Pamurda",
+  "Untagged": "Ten Metag",
+  "Untagged Items": "Item Ten Metag",
+  "Untitled": "Ten Pamurda",
   "Up": "Duur",
   "Up Vector": "Vektor Duur",
   "Uppercase": "Aksara Ageng",
@@ -2237,12 +2255,12 @@
   "Volume up": "Agengang volume",
   "Wait for the current operation to finish": "Antosang pamargin mangkin ngantos wusan",
   "Waiting for a library to open": "Ngantosang perpustakaan kabikak",
-  "Warning: a connected assistant can then add items, change names, tags and notes, create folders and move items to the Trash, and Falcon won't ask you first. Nothing is deleted for good, and Undo reverses each change.": "Papinget: wantuan sané kasambung prasida ngawewehang item, ngentosin wastan, tag, miwah catetan, ngardi folder, tur ngingsirang item nuju Tongos Luu, tur Falcon nenten pacang mataken dumun. Nenten wenten sané kaicalang langgeng, tur Wangsul prasida ngulihang saluir paowahan.",
+  "Warning: a connected assistant can then add items, change names, tags and notes, create folders and move items to the Trash, and Falcon won't ask you first. Nothing is deleted for good, and Undo reverses each change.": "Papinget: wantuan sané kasambung prasida ngawewehang item, ngentosin wastan, tag, miwah catetan, ngardi folder, tur ngingsirang item nuju Wadah Luu, tur Falcon nenten pacang mataken dumun. Nenten wenten sané kaicalang langgeng, tur Wangsul prasida ngulihang saluir paowahan.",
   "Waterfall": "Grojogan",
   "Waterfall layout": "Tata letak grojogan",
   "We": "Bud",
   "Web archives are shown as a picture. Open it in its own app to browse it.": "Arsip web katampilang pinaka gambar. Bikak ring aplikasinné ngraga anggén nelusur.",
-  "WebP files are usually smaller, so the {format} files will take more space. Each WebP replaced goes to the Trash; animated WebPs are skipped.": "Berkas WebP ketahnyané langkung alit, mawinan berkas {format} pacang nelasang genah langkung jimbar. Saluir WebP sané kagentos pacang kaingsirang nuju Tongos Luu; WebP maanimasi kalangkungin.",
+  "WebP files are usually smaller, so the {format} files will take more space. Each WebP replaced goes to the Trash; animated WebPs are skipped.": "Berkas WebP ketahnyané langkung alit, mawinan berkas {format} pacang nelasang genah langkung jimbar. Saluir WebP sané kagentos pacang kaingsirang nuju Wadah Luu; WebP maanimasi kalangkungin.",
   "When a screenshot is added": "Rikala tangkapan layar kawewehang",
   "When folders or tags are deleted": "Rikala folder utawi tag kaicalang",
   "When items are deleted": "Rikala item kaicalang",
@@ -2471,9 +2489,9 @@
   "starts with": "kakawitin antuk",
   "switcher::Open": "Bikak",
   "tag, tag": "tag, tag",
-  "tag_group::Untitled": "Tan Pamurda",
+  "tag_group::Untitled": "Ten Pamurda",
   "tags::All": "Samian",
-  "tags::Uncategorized": "Tan Makategori",
+  "tags::Uncategorized": "Ten Mekategori",
   "text": "teks",
   "the model could not be read": "modél nenten prasida kawacen",
   "the read stopped": "pamacaan mararian",
@@ -2514,7 +2532,7 @@
     "other": "{message}; {n} item sampun wenten irika"
   },
   "{message}; {n} old WebP files couldn't go to the Trash and were left in their item folders": {
-    "other": "{message}; {n} berkas WebP purwa nenten prasida kaingsirang nuju Tongos Luu tur katimpalang ring folder itemné"
+    "other": "{message}; {n} berkas WebP purwa nenten prasida kaingsirang nuju Wadah Luu tur katimpalang ring folder itemné"
   },
   "{month} {year}": "{month} {year}",
   "{name} (Default)": "{name} (Baku)",
@@ -2550,7 +2568,7 @@
     "other": "{n} berkas iwang kaimpor. Klik anggén ngacingak détil."
   },
   "{n} files go to the Trash. ⌘Z undoes the merge.": {
-    "other": "{n} berkas kaingsirang nuju Tongos Luu. ⌘Z ngwangsulang panggabungan."
+    "other": "{n} berkas kaingsirang nuju Wadah Luu. ⌘Z ngwangsulang panggabungan."
   },
   "{n} files in “{path}” have the same name as an exported image.": {
     "other": "{n} berkas ring “{path}” madué wastan sané pateh sakadi gambar sané kaékspor."
@@ -2559,22 +2577,22 @@
     "other": "{n} berkas ring “{path}” madué wastan sané pateh sakadi item sané kaékspor."
   },
   "{n} files moved to the Trash, saving {size}.": {
-    "other": "{n} berkas kaingsirang nuju Tongos Luu, ngirangin {size}."
+    "other": "{n} berkas kaingsirang nuju Wadah Luu, ngirangin {size}."
   },
   "{n} folders": {
     "other": "{n} folder"
   },
   "{n} folders couldn't be moved to the Trash ({path}: {reason}).": {
-    "other": "{n} folder nenten prasida kaingsirang nuju Tongos Luu ({path}: {reason})."
+    "other": "{n} folder nenten prasida kaingsirang nuju Wadah Luu ({path}: {reason})."
   },
   "{n} folders that belong to no item go to the macOS Trash.": {
-    "other": "{n} folder sané nenten madué item kaingsirang nuju Tongos Luu macOS."
+    "other": "{n} folder sané nenten madué item kaingsirang nuju Wadah Luu macOS."
   },
   "{n} groups · tick the groups to merge": {
     "other": "{n} sekaa · centang sekaa sané jagi kasikiang"
   },
   "{n} groups · {files} go to the Trash": {
-    "other": "{n} sekaa · {files} kaingsirang nuju Tongos Luu"
+    "other": "{n} sekaa · {files} kaingsirang nuju Wadah Luu"
   },
   "{n} groups · {files} picked, merging saves {size}": {
     "other": "{n} sekaa · {files} kapilih, masikiang ngirangin {size}"
@@ -2634,7 +2652,7 @@
     "other": "{n} item pacang nelasang {size} genah disk ring perpustakaan puniki."
   },
   "{n} items with a missing or empty file go to the Trash.": {
-    "other": "{n} item sané madué berkas ical utawi puyung kaingsirang nuju Tongos Luu."
+    "other": "{n} item sané madué berkas ical utawi puyung kaingsirang nuju Wadah Luu."
   },
   "{n} linked references": {
     "other": "{n} pituduh kagandeng"
@@ -2686,8 +2704,8 @@
   "“{name}” has the same contents as an item you already have.": "“{name}” madué daging sané pateh sakadi item sané sampun duwénang ragané.",
   "“{name}” has {depth} or more levels of folders, or {files} or more files. Import its subfolders one at a time instead.": "“{name}” madué {depth} utawi langkung undagan folder, utawi {files} utawi langkung berkas. Becikan impor subfolderné siki-siki.",
   "“{name}” holds {files} files. Importing them all may take a while.": "“{name}” madaging {files} berkas. Ngimpor samian minab nelasang galah akidik.",
-  "“{name}” is open, so it can't be moved to the Trash.": "“{name}” kantun mabikak, mawinan nenten prasida kaingsirang nuju Tongos Luu.",
-  "“{name}” isn't a plain library folder, so it can't be moved to the Trash.": "“{name}” boya ja folder perpustakaan ketah, mawinan nenten prasida kaingsirang nuju Tongos Luu.",
+  "“{name}” is open, so it can't be moved to the Trash.": "“{name}” kantun mabikak, mawinan nenten prasida kaingsirang nuju Wadah Luu.",
+  "“{name}” isn't a plain library folder, so it can't be moved to the Trash.": "“{name}” boya ja folder perpustakaan ketah, mawinan nenten prasida kaingsirang nuju Wadah Luu.",
   "“{path}” already has a folder named “{name}”. Replace overwrites files of the same names inside it; Keep Both numbers the new copies.": "“{path}” sampun madué folder mawasta “{name}”. Gentosin pacang nimpa berkas mawasta pateh ring jeroné; Ajegang Makakalih pacang ngicénin nomor ring salinan anyar.",
   "“{path}” already has folders named {names}. Replace overwrites files of the same names inside; Keep Both numbers the new copies.": {
     "other": "“{path}” sampun madué folder mawasta {names}. Gentosin pacang nimpa berkas mawasta pateh ring jeroné; Ajegang Makakalih pacang ngicénin nomor ring salinan anyar."

@@ -31,6 +31,8 @@ pub enum Command {
     ToggleInspector,
     /// Eagle's View ▸ Sidebar / Inspector: both panels at once.
     ToggleAll,
+    /// View ▸ Show Path Bar: clickable Finder-style breadcrumbs.
+    TogglePathBar,
     ToggleFilter,
     LayoutGrid,
     LayoutJustified,
@@ -379,6 +381,7 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::ToggleSidebar, id: "view.toggle.sidebar", group: "View", label: "Show or hide the sidebar", default: k(CMD_ALT, Key::Num1), aliases: &[] },
     Spec { cmd: Command::ToggleInspector, id: "view.toggle.inspector", group: "View", label: "Show or hide the inspector", default: k(CMD_ALT, Key::Num2), aliases: &[] },
     Spec { cmd: Command::ToggleAll, id: "view.toggle.all", group: "View", label: "Show or hide the sidebar and inspector", default: k(CMD_ALT, Key::Num3), aliases: &[] },
+    Spec { cmd: Command::TogglePathBar, id: "view.toggle.path_bar", group: "View", label: "Show or hide the path bar", default: None, aliases: &[] },
     // Eagle's ⌥1 is Waterfall and ⌥3 the square Grid (its keybind names say the opposite).
     Spec { cmd: Command::LayoutWaterfall, id: "view.layout.waterfall", group: "View", label: "Waterfall layout", default: k(ALT, Key::Num1), aliases: &[] },
     Spec { cmd: Command::LayoutJustified, id: "view.layout.justified", group: "View", label: "Justified layout", default: k(ALT, Key::Num2), aliases: &[] },

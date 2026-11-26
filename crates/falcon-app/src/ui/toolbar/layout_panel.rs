@@ -152,6 +152,7 @@ impl App {
         ui.separator();
         switch_row(ui, tr("Show Sidebar"), &mut self.show_sidebar);
         switch_row(ui, tr("Show Inspector"), &mut self.show_inspector);
+        switch_row(ui, tr("Show Path Bar"), &mut self.prefs.show_path_bar);
         ui.separator();
         if ui.add_sized(vec2(ui.available_width(), 24.0), egui::Button::new(tr("Refresh"))).clicked() {
             self.refresh = true;

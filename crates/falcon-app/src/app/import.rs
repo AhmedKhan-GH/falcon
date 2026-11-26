@@ -590,8 +590,16 @@ impl App {
         let opts = self.prefs.import_options(Vec::new());
         let (ctx, ask_dupes) = (self.ctx.clone(), self.prefs.asks_duplicates());
         for (root, dir, batches) in found {
+            let is_link = if self.ws.root.as_ref() == Some(&root) {
+                self.ws.lib.as_ref().map(|l| super::lock(l).storage_mode() == falcon_library::StorageMode::Link).unwrap_or(false)
+            } else if let Some(ws) = self.others.parked_mut().find(|w| w.root.as_ref() == Some(&root)) {
+                ws.lib.as_ref().map(|l| super::lock(l).storage_mode() == falcon_library::StorageMode::Link).unwrap_or(false)
+            } else {
+                false
+            };
             for files in batches {
-                let removal = self.prefs.auto_import_delete.then(|| crate::auto_import::Removal { watched: dir.clone(), imported: self.auto_import.imported.clone() });
+                // Link Mode assets must NEVER delete or trash source files.
+                let removal = (!is_link && self.prefs.auto_import_delete).then(|| crate::auto_import::Removal { watched: dir.clone(), imported: self.auto_import.imported.clone() });
                 let jobs: Vec<Job> = files.into_iter().map(|path| Job { path, opts: opts.clone() }).collect();
                 if self.ws.root.as_ref() == Some(&root) {
                     if self.prefs.tells_auto_import() {

@@ -48,6 +48,7 @@ pub mod search;
 pub mod smart;
 pub mod smart_draft;
 pub mod storage_mode;
+pub mod folder_sync;
 pub mod sync;
 pub mod tagging;
 pub mod tempo;
@@ -57,6 +58,8 @@ pub mod undo;
 
 pub use error::{Error, Result};
 pub use library::Library;
+pub use storage_mode::{FalconConfig, StorageMode, WatchedFolder, SyncMode, SyncStatus};
+pub use folder_sync::SyncStats;
 pub mod imageio;
 pub mod import;
 pub mod item_ops;

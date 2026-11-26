@@ -24,6 +24,14 @@ pub(crate) fn fastrand_seed() -> u64 {
 }
 
 impl App {
+    /// Exits Preview / Viewer Mode back to Grid Mode, pruning active viewer
+    /// pipelines and cancelling in-flight high-resolution preview fetches.
+    pub(crate) fn exit_viewer(&mut self) {
+        self.ws.viewer = None;
+        self.fetches.prune(None);
+        self.ws.loader.keep_original(None);
+    }
+
     pub(crate) fn go(&mut self, scope: Scope) {
         let scope = match scope {
             Scope::Random(_) => Scope::Random(fastrand_seed()),
@@ -33,6 +41,11 @@ impl App {
         // takes a fresh look at Recently Used.
         self.ws.folders.clear();
         self.recent_shown = None;
+        // Selecting another collection from the sidebar or breadcrumbs always
+        // exits Preview Mode back to Grid Mode.
+        if self.ws.viewer.is_some() {
+            self.exit_viewer();
+        }
         if scope == self.ws.scope {
             return;
         }

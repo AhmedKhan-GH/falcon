@@ -378,6 +378,7 @@ impl App {
             show_comments: self.display.comment_badge,
             subfolders: self.display.subfolders,
             hide_unsupported: self.display.hide_unsupported,
+            path_bar: self.prefs.show_path_bar,
             libraries: self.others.len(),
             presenting: self.modes.presenting,
             on_top: self.modes.on_top,
@@ -503,6 +504,7 @@ impl App {
             C::PreviousLibrary => self.switch_to = Some(Switch::Focus(self.others.step(false))),
             C::ToggleSidebar => self.show_sidebar = !self.show_sidebar,
             C::ToggleInspector => self.show_inspector = !self.show_inspector,
+            C::TogglePathBar => self.prefs.show_path_bar = !self.prefs.show_path_bar,
             C::ToggleAll => {
                 self.toggle_panels();
                 // Tab must not also hand keyboard focus to the first widget.

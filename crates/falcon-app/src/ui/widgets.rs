@@ -180,21 +180,43 @@ pub(crate) fn divider(ui: &mut Ui) {
 }
 
 pub(crate) fn prop(ui: &mut Ui, key: &str, value: &str) -> Response {
-    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 13.0), Sense::hover());
-    let p = ui.painter();
-    p.text(rect.left_center(), Align2::LEFT_CENTER, key, font(12.0), t::p().text);
-    let g = galley(ui, value, mono(12.0), t::p().text_value, rect.width() - 90.0);
-    p.galley(Pos2::new(rect.left() + 90.0, rect.center().y - g.size().y / 2.0), g, t::p().text_value);
-    resp
+    let avail = ui.available_width();
+    let key_g = galley(ui, key, font(12.0), t::p().text, avail);
+    let key_w = key_g.size().x;
+    let col_x = (key_w + 10.0).max(96.0);
+    let val_avail = avail - col_x;
+
+    if val_avail < 60.0 {
+        // Vertical two-line fallback for narrow inspector or long label
+        let val_g = galley(ui, value, mono(12.0), t::p().text_value, avail - 8.0);
+        let h = (key_g.size().y + val_g.size().y + 4.0).max(28.0);
+        let (rect, resp) = ui.allocate_exact_size(vec2(avail, h), Sense::hover());
+        let p = ui.painter();
+        p.galley(rect.left_top(), key_g.clone(), t::p().text);
+        p.galley(Pos2::new(rect.left() + 8.0, rect.top() + key_g.size().y + 2.0), val_g, t::p().text_value);
+        resp.on_hover_text(value)
+    } else {
+        // Single-line layout with dynamic column offset preventing overlap
+        let val_g = galley(ui, value, mono(12.0), t::p().text_value, val_avail);
+        let h = key_g.size().y.max(val_g.size().y).max(14.0);
+        let (rect, resp) = ui.allocate_exact_size(vec2(avail, h), Sense::hover());
+        let p = ui.painter();
+        p.galley(Pos2::new(rect.left(), rect.center().y - key_g.size().y / 2.0), key_g, t::p().text);
+        p.galley(Pos2::new(rect.left() + col_x, rect.center().y - val_g.size().y / 2.0), val_g, t::p().text_value);
+        resp.on_hover_text(value)
+    }
 }
 
 /// Rating row: five stars; clicking the current rating clears it.
 pub(crate) fn rating(ui: &mut Ui, star: u64) -> Option<u64> {
+    let key = tr("Rating");
+    let key_g = galley(ui, key, font(12.0), t::p().text, ui.available_width());
+    let col_x = (key_g.size().x + 10.0).max(96.0);
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 14.0), Sense::hover());
-    ui.painter().text(rect.left_center(), Align2::LEFT_CENTER, tr("Rating"), font(12.0), t::p().text);
+    ui.painter().galley(Pos2::new(rect.left(), rect.center().y - key_g.size().y / 2.0), key_g, t::p().text);
     let mut out = None;
     for n in 1..=5u64 {
-        let c = Pos2::new(rect.left() + 90.0 + 7.0 + (n - 1) as f32 * 17.0, rect.center().y);
+        let c = Pos2::new(rect.left() + col_x + 7.0 + (n - 1) as f32 * 17.0, rect.center().y);
         let hit = ui.interact(Rect::from_center_size(c, Vec2::splat(16.0)), ui.scope_id().with(("star", n)), Sense::click());
         let on = n <= star;
         let fam = egui::FontId::new(13.0, t::fill_family());
@@ -326,4 +348,34 @@ pub(crate) fn ext_placeholder(ui: &Ui, rect: Rect, ext: &str) {
         font((s * 0.18).max(9.0)),
         t::p().text_muted,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn prop_layout_prevents_overlap() {
+        let ctx = egui::Context::default();
+        let mut out = ctx.run_ui(Default::default(), |ui| {
+            // Wide panel (300px): Indonesian "Tanggal Dimodifikasi"
+            ui.allocate_ui(vec2(300.0, 100.0), |ui| {
+                let resp = prop(ui, "Tanggal Dimodifikasi", "2026/10/26 2:15");
+                assert!(resp.rect.height() >= 13.0);
+            });
+
+            // Default inspector width (~220px)
+            ui.allocate_ui(vec2(220.0, 100.0), |ui| {
+                let resp2 = prop(ui, "Tanggal Dimodifikasi", "2026/10/26 2:15");
+                assert!(resp2.rect.height() >= 13.0);
+            });
+
+            // Narrow panel (120px): falls back to two-line layout cleanly
+            ui.allocate_ui(vec2(120.0, 100.0), |ui| {
+                let resp3 = prop(ui, "Tanggal Dimodifikasi", "2026/10/26 2:15");
+                assert!(resp3.rect.height() >= 24.0, "two-line fallback for narrow inspector");
+            });
+        });
+        out.textures_delta.clear();
+    }
 }

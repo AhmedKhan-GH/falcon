@@ -93,6 +93,9 @@ pub struct Prefs {
     /// Falcon's own: folder counts include items in subfolders as well as
     /// items directly in the folder.
     pub subfolder_counts: bool,
+    /// Falcon's own: optional Finder-style clickable breadcrumb path bar
+    /// at the bottom of the central content area.
+    pub show_path_bar: bool,
     /// Eagle's `habits.dblclickSidebarItem`: what double-clicking a folder
     /// or smart folder in the sidebar does.
     pub sidebar_double_click: SidebarDoubleClick,
@@ -348,6 +351,7 @@ impl Default for Prefs {
             ui_zoom: 100,
             sidebar_counts: true,
             subfolder_counts: true,
+            show_path_bar: false,
             sidebar_double_click: SidebarDoubleClick::default(),
             sidebar: SidebarSections::default(),
             double_click: DoubleClick::default(),
@@ -1203,6 +1207,7 @@ fn general(p: &mut Page, d: &mut Draft, login: &crate::login_item::Status) {
         });
         ui.checkbox(&mut d.prefs.sidebar_counts, tr("Show item counts in the sidebar"));
         ui.checkbox(&mut d.prefs.subfolder_counts, tr("Include subfolder items in folder counts"));
+        ui.checkbox(&mut d.prefs.show_path_bar, tr("Show Path Bar"));
     });
     p.block(tr_key("Language"), &["language", "locale", "translation", "english", "chinese", "japanese", "korean", "german", "spanish", "russian"], |ui| {
         let before = d.prefs.language;
@@ -1453,7 +1458,58 @@ fn auto_import(p: &mut Page, d: &mut Draft, library: Option<&std::path::Path>, r
             }
             _ => note(ui, tr("Each library watches the folder named after it inside the chosen folder (\"Books\" for Books.library).")),
         }
-        note(ui, tr("New files are imported once they stop growing; the originals stay where they are. Files under 1 KB, temporary (.tmp) files and files without an extension are skipped."));
+        note(ui, tr("New files are imported once they stop growing; the originals stay where they are. Temporary (.tmp) files, empty files and files without an extension are skipped."));
+    });
+
+    let sync_keywords = ["sync", "folder", "synchronization", "watch", "linked", "external", "link", "mirror"];
+    p.block(tr_key("Folder Synchronization"), &sync_keywords, |ui| {
+        note(ui, tr("Register external folders to synchronize their contents with folders in this library."));
+        if let Some(root) = library {
+            let config = falcon_library::FalconConfig::load_or_default(root).unwrap_or_default();
+            let mut list = config.watched_folders();
+            if list.is_empty() {
+                ui.label(RichText::new(tr("No synchronized folders configured for this library.")).color(t::p().text_muted));
+            } else {
+                let mut changed = false;
+                let mut to_remove = None;
+                for (idx, wf) in list.iter().enumerate() {
+                    ui.group(|ui| {
+                        ui.horizontal(|ui| {
+                            let status_color = match wf.status {
+                                falcon_library::SyncStatus::Success => t::p().icon_green,
+                                falcon_library::SyncStatus::Offline => t::p().icon_orange,
+                                falcon_library::SyncStatus::Error => t::p().icon_red,
+                                _ => t::p().text_muted,
+                            };
+                            ui.label(RichText::new(format!("● {}", wf.status.label())).color(status_color).size(11.0));
+                            ui.label(RichText::new(format!("[{}]", wf.storage_mode.label())).color(t::p().primary).size(11.0));
+                            ui.label(RichText::new(format!("Mode: {}", wf.sync_mode.label())).color(t::p().text_muted).size(11.0));
+                            if ui.small_button(tr("Remove")).clicked() {
+                                to_remove = Some(idx);
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new(tr("Source:")).color(t::p().text_muted).size(11.0));
+                            ui.add(egui::Label::new(RichText::new(wf.source_path.display().to_string()).color(t::p().text_value).size(11.0)).truncate());
+                        });
+                        if let Some(err) = &wf.last_error {
+                            ui.label(RichText::new(err).color(t::p().icon_red).size(10.5));
+                        }
+                    });
+                }
+                if let Some(idx) = to_remove {
+                    list.remove(idx);
+                    changed = true;
+                }
+                if changed {
+                    let mut next = config.clone();
+                    next.set_watched_folders(&list);
+                    let _ = next.save(root);
+                }
+            }
+        } else {
+            note(ui, tr("Open a library to view and configure synchronized folders."));
+        }
     });
 }
 

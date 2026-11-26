@@ -440,6 +440,87 @@ impl App {
             }
         }
     }
+
+    /// Immediately synchronizes a registered watched folder by ID.
+    pub(crate) fn sync_folder_now(&mut self, wf_id: &str) {
+        let Some(shared) = self.ws.lib.clone() else { return };
+        let res = {
+            let mut guard = lock(&shared);
+            let lib: &mut Library = &mut guard;
+            let mut wf = match lib.config().find_watched_folder(wf_id) {
+                Some(w) => w,
+                None => return,
+            };
+            lib.sync_watched_folder(&mut wf)
+        };
+        match res {
+            Ok(stats) => {
+                if stats.offline {
+                    self.flash_error(tr("Folder sync is offline: source folder unreachable"));
+                } else {
+                    let n = stats.added;
+                    let m = stats.modified;
+                    self.flash(trf("Folder synced: {n} added, {m} modified", &[("n", &n), ("m", &m)]));
+                }
+            }
+            Err(e) => {
+                self.flash_error(trf("Folder sync failed: {error}", &[("error", &e)]));
+            }
+        }
+    }
+
+    /// Toggles pause/resume on a watched folder.
+    pub(crate) fn toggle_folder_sync_pause(&mut self, wf_id: &str) {
+        let Some(shared) = self.ws.lib.clone() else { return };
+        let mut guard = lock(&shared);
+        let lib: &mut Library = &mut guard;
+        let mut wf = match lib.config().find_watched_folder(wf_id) {
+            Some(w) => w,
+            None => return,
+        };
+        wf.sync_mode = if wf.sync_mode == falcon_library::SyncMode::Disabled {
+            falcon_library::SyncMode::Auto
+        } else {
+            falcon_library::SyncMode::Disabled
+        };
+        let _ = lib.upsert_watched_folder(wf);
+    }
+
+    /// Prompts the user to pick an external source folder and sets up synchronization for `folder_id`.
+    pub(crate) fn setup_folder_sync_for(&mut self, folder_id: &str) {
+        let Some(dir) = crate::dialog_owner::file_dialog()
+            .set_title(tr("Choose Source Folder to Sync"))
+            .pick_folder()
+        else {
+            return;
+        };
+        let Some(shared) = self.ws.lib.clone() else { return };
+        let res = {
+            let mut guard = lock(&shared);
+            let lib: &mut Library = &mut guard;
+            let mut wf = falcon_library::WatchedFolder {
+                id: falcon_library::ids::new_id(),
+                source_path: dir,
+                folder_id: folder_id.to_string(),
+                storage_mode: lib.storage_mode(),
+                sync_mode: falcon_library::SyncMode::Auto,
+                recursive: true,
+                last_synced: None,
+                status: falcon_library::SyncStatus::Idle,
+                last_error: None,
+            };
+            lib.sync_watched_folder(&mut wf)
+        };
+        match res {
+            Ok(stats) => {
+                let n = stats.added;
+                self.flash(trf("Folder sync configured: {n} assets imported", &[("n", &n)]));
+            }
+            Err(e) => {
+                self.flash_error(trf("Folder sync failed: {error}", &[("error", &e)]));
+            }
+        }
+    }
 }
 
 /// The toast after a smart folder's Refresh.
