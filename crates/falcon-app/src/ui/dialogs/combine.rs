@@ -231,10 +231,11 @@ impl App {
             if self.local_only(&lib, &ids).len() < ids.len() {
                 return;
             }
-            ids.iter().filter_map(|id| lib.item(id)).map(|i| i.original_path(lib.root())).collect()
+            ids.iter().filter_map(|id| lib.resolved_source_path(id).ok()).collect()
         };
         let mut import = self.prefs.import_options(self.combine_folders());
         import.name = Some(tr("Combined Image").to_string());
+        import.storage_mode = Some(falcon_library::storage_mode::StorageMode::Copy);
         let h = self.ws.op.start(&self.ctx, tr("Combining Images"), paths.len() + 1, true);
         std::thread::spawn(move || {
             let stage = || {

@@ -184,8 +184,12 @@ fn entry<'a>(cache: &'a mut HashCache, id: &str, (size, mtime): (u64, u64)) -> &
 
 /// The picture a perceptual hash is taken from, as the library picks it:
 /// the thumbnail, or a small original shown without one.
-fn picture(item: &Item, root: &Path) -> Option<PathBuf> {
-    item.thumbnail_path(root).or_else(|| (thumbnail::is_supported(&item.ext) && item.ext != "svg").then(|| item.original_path(root)))
+fn picture(lib: &Library, item: &Item) -> Option<PathBuf> {
+    item.thumbnail_path(lib.root()).or_else(|| {
+        (thumbnail::is_supported(&item.ext) && item.ext != "svg")
+            .then(|| lib.resolved_source_path(&item.id).ok())
+            .flatten()
+    })
 }
 
 /// Fills the cache item by item, so progress can be shown, then lets the
@@ -193,12 +197,15 @@ fn picture(item: &Item, root: &Path) -> Option<PathBuf> {
 /// hashes. Similar groups put the best copy first, as Eagle does.
 fn scan(lib: Library, method: Method, only: Option<&HashSet<String>>, threshold: u32, cache: &Mutex<HashCache>, progress: &Mutex<Progress>, ctx: &egui::Context) -> Vec<DupGroup> {
     let Ok(mut cache) = cache.lock() else { return Vec::new() };
-    let root = lib.root().to_path_buf();
-    let live: Vec<(&Item, (u64, u64))> = lib
+    let live: Vec<(&Item, PathBuf, (u64, u64))> = lib
         .items()
         .iter()
         .filter(|i| !i.is_deleted && only.is_none_or(|o| o.contains(&i.id)))
-        .filter_map(|i| Some((i, stamp(&i.original_path(&root))?)))
+        .filter_map(|i| {
+            let p = lib.resolved_source_path(&i.id).ok()?;
+            let st = stamp(&p)?;
+            Some((i, p, st))
+        })
         .collect();
     let set = |phase, done, total| {
         if let Ok(mut p) = progress.lock() {
@@ -210,26 +217,26 @@ fn scan(lib: Library, method: Method, only: Option<&HashSet<String>>, threshold:
         Method::Same => {
             // Only files sharing their size with another can be byte-identical.
             let mut sizes: HashMap<u64, usize> = HashMap::new();
-            for (_, (size, _)) in &live {
+            for (_, _, (size, _)) in &live {
                 *sizes.entry(*size).or_default() += 1;
             }
-            let candidates: Vec<_> = live.iter().filter(|(_, s)| sizes[&s.0] > 1).collect();
-            for (n, (item, st)) in candidates.iter().enumerate() {
+            let candidates: Vec<_> = live.iter().filter(|(_, _, s)| sizes[&s.0] > 1).collect();
+            for (n, (item, path, st)) in candidates.iter().enumerate() {
                 set(tr_key("Comparing files"), n, candidates.len());
                 let e = entry(&mut cache, &item.id, *st);
                 if e.content.is_none() {
-                    e.content = duplicates::content_hash(&item.original_path(&root)).ok();
+                    e.content = duplicates::content_hash(path).ok();
                 }
             }
             set(tr_key("Grouping"), candidates.len(), candidates.len());
             duplicates::find_exact_duplicates_in(&lib, only, &mut cache).into_iter().map(|ids| logic::dup_group(true, ids, |_| None)).collect()
         }
         Method::Similar => {
-            for (n, (item, st)) in live.iter().enumerate() {
+            for (n, (item, _, st)) in live.iter().enumerate() {
                 set(tr_key("Comparing pictures"), n, live.len());
                 let e = entry(&mut cache, &item.id, *st);
                 if e.perceptual.is_none() {
-                    e.perceptual = picture(item, &root).and_then(|p| thumbnail::decode(&p).ok()).map(|img| duplicates::perceptual_hash(&img));
+                    e.perceptual = picture(&lib, item).and_then(|p| thumbnail::decode(&p).ok()).map(|img| duplicates::perceptual_hash(&img));
                 }
             }
             set(tr_key("Grouping"), live.len(), live.len());
@@ -399,7 +406,7 @@ impl App {
                     let kept = *id == g.keep;
                     let resp = ui.interact(cell, ui.scope_id().with(("dup", gn, id.as_str())), Sense::click());
                     p.rect_filled(cell, 6.0, if resp.hovered() { t::p().card_hover } else { t::p().card_border });
-                    if let Some(j) = job_for(item, lib.root(), Tier::Grid) {
+                    if let Some(j) = job_for(lib, item, Tier::Grid) {
                         jobs.push(j);
                     }
                     self.draw_image(ui, lib, item, cell.shrink(4.0), false);
@@ -436,8 +443,10 @@ impl App {
                         if ui.button(tr("Open")).clicked() {
                             opened = Some(id.clone());
                         }
-                        let files = [item.original_path(lib.root())];
-                        if ui.button(tr("Open in Default App")).clicked() {
+                        if let Ok(path) = lib.resolved_source_path(&item.id)
+                            && ui.button(tr("Open in Default App")).clicked()
+                        {
+                            let files = [path];
                             crate::open_with::open_default(&files);
                             self.used(&files);
                         }
@@ -596,7 +605,7 @@ impl App {
                         let g = &mut review.groups[review.current];
                         if let Some(item) = lib.item(&g.merge.keep) {
                             let (r, _) = ui.allocate_exact_size(vec2(120.0, 90.0), Sense::hover());
-                            if let Some(j) = job_for(item, lib.root(), Tier::Grid) {
+                            if let Some(j) = job_for(lib, item, Tier::Grid) {
                                 self.ws.frame_jobs.push(j);
                             }
                             self.draw_image(ui, lib, item, r, false);

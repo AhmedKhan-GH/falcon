@@ -118,7 +118,7 @@ impl Fixture {
         let root = self.root();
         let lib = self.library.lock().unwrap();
         let item = lib.item(id).unwrap();
-        item.thumbnail_path(&root).unwrap_or_else(|| item.original_path(&root))
+        item.thumbnail_path(&root).unwrap_or_else(|| lib.resolved_source_path(id).unwrap())
     }
 
     fn set_item(&self, id: &str, change: impl FnOnce(&mut falcon_library::model::Item)) {
@@ -440,4 +440,330 @@ fn switching_libraries_keeps_each_index_apart() {
     assert!(!ids(&service, "red").contains(&red));
     service.set_library(None);
     assert_eq!(service.search_blocking(Query::Text("red".into()), 5, WAIT), Err(SearchError::NoLibrary));
+}
+
+fn add_linked(f: &Fixture, name: &str, size: u32, colour: [u8; 3]) -> (String, PathBuf) {
+    let path = f.dir.path().join("external").join(format!("{name}.png"));
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    RgbImage::from_pixel(size, size, Rgb(colour)).save(&path).unwrap();
+    let mut lib = f.library.lock().unwrap();
+    lib.set_storage_mode(falcon_library::storage_mode::StorageMode::Link).unwrap();
+    let id = lib.import_file(&path, &ImportOptions { palette: false, ..Default::default() }).unwrap();
+    (id, path)
+}
+
+fn reopen_index(f: &Fixture) -> falcon_clip::store::Index {
+    let root = f.root();
+    falcon_clip::store::Index::open(&f.index_dir(), &root, "test-model", 3).unwrap()
+}
+
+fn mutate_sidecar_offline(f: &Fixture, id: &str) -> falcon_library::linked::LinkRecord {
+    let root = f.root();
+    let lib = f.library.lock().unwrap();
+    let sidecar = lib.item(id).unwrap().link_record_path(&root);
+    let orig: falcon_library::linked::LinkRecord = serde_json::from_slice(&std::fs::read(&sidecar).unwrap()).unwrap();
+    let mut offline = orig.clone();
+    offline.volume.mount_point = Some(f.dir.path().join("DisconnectedDrive"));
+    offline.volume.volume_uuid = Some("00000000-0000-0000-0000-DEAD00000099".into());
+    std::fs::write(&sidecar, serde_json::to_vec(&offline).unwrap()).unwrap();
+    orig
+}
+
+fn restore_sidecar(f: &Fixture, id: &str, orig: &falcon_library::linked::LinkRecord) {
+    let root = f.root();
+    let lib = f.library.lock().unwrap();
+    let sidecar = lib.item(id).unwrap().link_record_path(&root);
+    std::fs::write(&sidecar, serde_json::to_vec(orig).unwrap()).unwrap();
+}
+
+#[test]
+fn ai_01_linked_available_asset_indexes_and_searches() {
+    let f = Fixture::new();
+    let (red_id, _src) = add_linked(&f, "linked_red", 32, [250, 10, 10]);
+    let (blue_id, _src2) = add_linked(&f, "linked_blue", 1200, [10, 10, 250]);
+
+    let service = f.service();
+    service.set_library(Some(f.library.clone()));
+    service.set_enabled(true);
+    let status = ready(&service, 2);
+    assert_eq!(status.skipped, 0);
+    assert_eq!(ids(&service, "red"), vec![red_id.clone()]);
+    assert_eq!(ids(&service, "blue"), vec![blue_id.clone()]);
+}
+
+#[test]
+fn ai_02_linked_offline_asset_preserves_existing_embedding() {
+    let f = Fixture::new();
+    let (id, _src) = add_linked(&f, "offline_red", 32, [250, 10, 10]);
+    let service = f.service();
+    service.set_library(Some(f.library.clone()));
+    service.set_enabled(true);
+    ready(&service, 1);
+
+    mutate_sidecar_offline(&f, &id);
+    service.refresh();
+    let status = wait_for(&service, "offline handled", |s| s.phase == Phase::Ready && s.unavailable == 1);
+    assert_eq!(status.skipped, 0);
+    assert!(ids(&service, "red").contains(&id), "existing vector remains searchable while Offline");
+    drop(service);
+
+    let idx = reopen_index(&f);
+    assert!(idx.vector(&id).is_some());
+    assert!(!idx.is_skipped(&id));
+}
+
+#[test]
+fn ai_03_linked_missing_asset_preserves_existing_embedding() {
+    let f = Fixture::new();
+    let (id, src) = add_linked(&f, "missing_green", 32, [10, 250, 10]);
+    let service = f.service();
+    service.set_library(Some(f.library.clone()));
+    service.set_enabled(true);
+    ready(&service, 1);
+
+    std::fs::remove_file(&src).unwrap();
+    service.refresh();
+    let status = wait_for(&service, "missing handled", |s| s.phase == Phase::Ready && s.unavailable == 1);
+    assert_eq!(status.skipped, 0);
+    assert!(ids(&service, "green").contains(&id), "existing vector preserved when Linked source is Missing");
+    drop(service);
+
+    let idx = reopen_index(&f);
+    assert!(idx.vector(&id).is_some());
+    assert!(!idx.is_skipped(&id));
+}
+
+#[test]
+fn ai_04_linked_invalid_reference_preserves_existing_embedding() {
+    let f = Fixture::new();
+    let (id, _src) = add_linked(&f, "invalid_blue", 32, [10, 10, 250]);
+    let service = f.service();
+    service.set_library(Some(f.library.clone()));
+    service.set_enabled(true);
+    ready(&service, 1);
+
+    {
+        let root = f.root();
+        let lib = f.library.lock().unwrap();
+        let sidecar = lib.item(&id).unwrap().link_record_path(&root);
+        std::fs::write(&sidecar, b"{broken json").unwrap();
+    }
+    service.refresh();
+    let status = wait_for(&service, "invalid handled", |s| s.phase == Phase::Ready && s.unavailable == 1);
+    assert_eq!(status.skipped, 0);
+    assert!(ids(&service, "blue").contains(&id));
+    drop(service);
+
+    let idx = reopen_index(&f);
+    assert!(idx.vector(&id).is_some());
+    assert!(!idx.is_skipped(&id));
+}
+
+#[cfg(unix)]
+#[test]
+fn ai_05_linked_permission_denied_preserves_existing_embedding() {
+    use std::os::unix::fs::PermissionsExt;
+    let f = Fixture::new();
+    let (id, src) = add_linked(&f, "perm_red", 32, [250, 10, 10]);
+    let service = f.service();
+    service.set_library(Some(f.library.clone()));
+    service.set_enabled(true);
+    ready(&service, 1);
+
+    std::fs::set_permissions(&src, std::fs::Permissions::from_mode(0o000)).unwrap();
+    if std::fs::File::open(&src).is_ok() {
+        // Running as root bypasses mode bits; restore cleanly and skip.
+        std::fs::set_permissions(&src, std::fs::Permissions::from_mode(0o644)).unwrap();
+        return;
+    }
+
+    service.refresh();
+    let status = wait_for(&service, "permission denied handled", |s| s.phase == Phase::Ready && s.unavailable == 1);
+    assert_eq!(status.skipped, 0);
+    assert!(ids(&service, "red").contains(&id));
+    drop(service);
+
+    let idx = reopen_index(&f);
+    assert!(idx.vector(&id).is_some());
+    assert!(!idx.is_skipped(&id));
+    std::fs::set_permissions(&src, std::fs::Permissions::from_mode(0o644)).unwrap();
+}
+
+#[test]
+fn ai_06_failed_or_aborted_embedder_refresh_preserves_existing_embedding_as_stale() {
+    struct ToggleEmbedder {
+        fail: Arc<std::sync::atomic::AtomicBool>,
+        pictures: Arc<AtomicUsize>,
+    }
+    impl Embedder for ToggleEmbedder {
+        fn embed_images(&mut self, images: &[DynamicImage]) -> Result<Vec<Vec<f32>>, String> {
+            if self.fail.load(Ordering::SeqCst) {
+                return Err("transient model/io abort".into());
+            }
+            Colours { pictures: self.pictures.clone() }.embed_images(images)
+        }
+        fn embed_text(&mut self, text: &str) -> Result<Vec<f32>, String> {
+            Colours { pictures: self.pictures.clone() }.embed_text(text)
+        }
+        fn dim(&self) -> usize {
+            3
+        }
+        fn device(&self) -> String {
+            "Test".into()
+        }
+    }
+
+    let f = Fixture::new();
+    let (id, src) = add_linked(&f, "abort_red", 32, [250, 10, 10]);
+    let fail = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let fail_ref = fail.clone();
+    let pictures = f.pictures.clone();
+    let service = Service::start(Options {
+        index_dir: f.index_dir(),
+        model_id: "test-model".to_string(),
+        dim: 3,
+        throttle: false,
+        is_installed: Box::new(|| true),
+        loader: Box::new(move || Ok(Box::new(ToggleEmbedder { fail: fail_ref.clone(), pictures: pictures.clone() }))),
+        notify: Box::new(|| {}),
+    });
+    service.set_library(Some(f.library.clone()));
+    service.set_enabled(true);
+    ready(&service, 1);
+
+    // Trigger refresh with changed file while embedder fails/aborts.
+    fail.store(true, Ordering::SeqCst);
+    RgbImage::from_pixel(36, 36, Rgb([10, 10, 250])).save(&src).unwrap();
+    service.refresh();
+    let status = wait_for(&service, "failed refresh", |s| s.phase == Phase::Failed);
+    assert!(status.stale >= 1, "last valid embedding retained as stale: {status:?}");
+    assert_eq!(status.skipped, 0);
+    // Re-enabling / recovering keeps old vector in index without having dropped it.
+    fail.store(false, Ordering::SeqCst);
+    drop(service);
+    let idx = reopen_index(&f);
+    assert!(idx.vector(&id).is_some());
+    assert!(!idx.is_skipped(&id));
+}
+
+#[test]
+fn ai_07_decode_failed_refresh_keeps_last_valid_vector_as_stale_until_fixed() {
+    let f = Fixture::new();
+    let (id, src) = add_linked(&f, "stale_swap", 32, [250, 10, 10]);
+    let service = f.service();
+    service.set_library(Some(f.library.clone()));
+    service.set_enabled(true);
+    ready(&service, 1);
+    assert!(ids(&service, "red").contains(&id));
+
+    // Overwrite source with corrupt bytes -> DecodeFailed on refresh, yet old valid embedding stays searchable & stale!
+    std::fs::write(&src, b"not a valid png at all").unwrap();
+    service.refresh();
+    let status = wait_for(&service, "stale after decode failure", |s| s.phase == Phase::Ready && s.stale == 1);
+    assert_eq!(status.skipped, 0, "must NOT mark existing valid embedding as SKIPPED");
+    assert!(ids(&service, "red").contains(&id), "last valid vector still answers searches while stale");
+
+    // Replace with valid green image -> successful refresh clears stale and updates vector.
+    RgbImage::from_pixel(40, 40, Rgb([10, 250, 10])).save(&src).unwrap();
+    service.refresh();
+    let status = wait_for(&service, "recovered from stale", |s| s.phase == Phase::Ready && s.stale == 0);
+    assert_eq!(status.skipped, 0);
+    assert!(ids(&service, "green").contains(&id));
+    assert!(!ids(&service, "red").contains(&id));
+}
+
+#[test]
+fn ai_08_reconnect_without_changes_does_not_force_full_reindex() {
+    let f = Fixture::new();
+    let (id_a, _src_a) = add_linked(&f, "a", 32, [250, 10, 10]);
+    let (_id_b, _src_b) = add_linked(&f, "b", 32, [10, 250, 10]);
+    let service = f.service();
+    service.set_library(Some(f.library.clone()));
+    service.set_enabled(true);
+    ready(&service, 2);
+    assert_eq!(f.pictures.load(Ordering::SeqCst), 2);
+
+    let orig = mutate_sidecar_offline(&f, &id_a);
+    service.refresh();
+    wait_for(&service, "a offline", |s| s.phase == Phase::Ready && s.unavailable == 1);
+
+    restore_sidecar(&f, &id_a, &orig);
+    service.refresh();
+    wait_for(&service, "a back online", |s| s.phase == Phase::Ready && s.unavailable == 0);
+    assert_eq!(f.pictures.load(Ordering::SeqCst), 2, "unchanged source reconnecting must NOT reindex");
+}
+
+#[test]
+fn ai_09_reconnect_with_modified_content_reindexes_only_changed_item() {
+    let f = Fixture::new();
+    let (id_a, src_a) = add_linked(&f, "a", 32, [250, 10, 10]);
+    let (id_b, _src_b) = add_linked(&f, "b", 32, [10, 250, 10]);
+    let service = f.service();
+    service.set_library(Some(f.library.clone()));
+    service.set_enabled(true);
+    ready(&service, 2);
+    assert_eq!(f.pictures.load(Ordering::SeqCst), 2);
+
+    let orig = mutate_sidecar_offline(&f, &id_a);
+    service.refresh();
+    wait_for(&service, "a offline", |s| s.phase == Phase::Ready && s.unavailable == 1);
+
+    // Modify only A externally (different size & color) while offline, then reconnect.
+    RgbImage::from_pixel(44, 44, Rgb([10, 10, 250])).save(&src_a).unwrap();
+    restore_sidecar(&f, &id_a, &orig);
+    service.refresh();
+    wait_for(&service, "only a reindexed", |s| s.phase == Phase::Ready && s.unavailable == 0 && f.pictures.load(Ordering::SeqCst) == 3);
+    assert_eq!(f.pictures.load(Ordering::SeqCst), 3, "ONLY the changed item reindexed (B untouched)");
+    assert!(ids(&service, "blue").contains(&id_a));
+    assert!(ids(&service, "green").contains(&id_b));
+}
+
+#[test]
+fn ai_10_available_unsupported_format_is_marked_skipped() {
+    let f = Fixture::new();
+    let bin = f.dir.path().join("external").join("raw.bin");
+    std::fs::create_dir_all(bin.parent().unwrap()).unwrap();
+    std::fs::write(&bin, b"binary payload with unsupported format").unwrap();
+    let id = {
+        let mut lib = f.library.lock().unwrap();
+        lib.set_storage_mode(falcon_library::storage_mode::StorageMode::Link).unwrap();
+        lib.import_file(&bin, &ImportOptions { palette: false, ..Default::default() }).unwrap()
+    };
+
+    let service = f.service();
+    service.set_library(Some(f.library.clone()));
+    service.set_enabled(true);
+    let status = ready(&service, 1);
+    assert_eq!(status.skipped, 1);
+    drop(service);
+
+    let idx = reopen_index(&f);
+    assert!(idx.is_skipped(&id));
+    assert!(idx.vector(&id).is_none());
+}
+
+#[test]
+fn ai_11_available_corrupt_new_file_decode_failed_is_marked_skipped() {
+    let f = Fixture::new();
+    let bad_png = f.dir.path().join("external").join("corrupt.png");
+    std::fs::create_dir_all(bad_png.parent().unwrap()).unwrap();
+    std::fs::write(&bad_png, b"corrupted png bytes").unwrap();
+    let bad_id = {
+        let mut lib = f.library.lock().unwrap();
+        lib.set_storage_mode(falcon_library::storage_mode::StorageMode::Link).unwrap();
+        lib.import_file(&bad_png, &ImportOptions { palette: false, ..Default::default() }).unwrap()
+    };
+    let (ok_id, _) = add_linked(&f, "ok_green", 32, [10, 250, 10]);
+
+    let service = f.service();
+    service.set_library(Some(f.library.clone()));
+    service.set_enabled(true);
+    let status = ready(&service, 2);
+    assert_eq!(status.skipped, 1);
+    assert!(ids(&service, "green").contains(&ok_id));
+    drop(service);
+
+    let idx = reopen_index(&f);
+    assert!(idx.is_skipped(&bad_id));
+    assert!(idx.vector(&ok_id).is_some());
 }

@@ -232,7 +232,7 @@ mod tests {
             i.id = id.into();
             i.folders = s(&folders);
             std::fs::create_dir_all(i.info_dir(lib.root())).unwrap();
-            std::fs::write(i.original_path(lib.root()), b"x").unwrap();
+            std::fs::write(i.managed_storage_path(lib.root()), b"x").unwrap();
             lib.register_item(i).unwrap();
         }
         // The new list goes to items in "mid" and below; "top" is above.

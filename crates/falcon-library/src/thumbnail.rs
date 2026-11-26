@@ -631,7 +631,13 @@ impl crate::Library {
     /// Re-reads the original's file times and redraws thumbnail and palette,
     /// then saves the item.
     pub(crate) fn redraw_item(&mut self, item: crate::model::Item) -> crate::Result<()> {
-        let item = redrawn(self.root(), item)?;
+        let status = self.asset_status(&item.id).unwrap_or(crate::linked::AssetStatus::Managed);
+        let raw = if status == crate::linked::AssetStatus::Managed {
+            item.managed_storage_path(self.root())
+        } else {
+            self.resolved_source_path(&item.id)?
+        };
+        let item = redrawn_with_path(self.root(), &raw, item)?;
         self.update_item(item)
     }
 }
@@ -666,13 +672,17 @@ pub fn custom_thumbnailed(root: &Path, mut item: crate::model::Item, image: &Pat
 }
 
 /// The file work of Refresh Thumbnail, without the library: re-reads the
-/// original's file times, redraws thumbnail and palette, and returns the
+/// source's file times, redraws thumbnail and palette, and returns the
 /// item as it should be saved.
-pub fn redrawn(root: &Path, mut item: crate::model::Item) -> crate::Result<crate::model::Item> {
-    let raw = item.original_path(root);
-    crate::import::restat(&mut item, &raw)?;
+pub fn redrawn(root: &Path, item: crate::model::Item) -> crate::Result<crate::model::Item> {
+    let raw = crate::linked::resolve_item_read_path(root, &item)?;
+    redrawn_with_path(root, &raw, item)
+}
+
+fn redrawn_with_path(root: &Path, raw: &Path, mut item: crate::model::Item) -> crate::Result<crate::model::Item> {
+    crate::import::restat(&mut item, raw)?;
     let thumb = item.info_dir(root).join(item.thumbnail_name());
-    if !crate::import::redraw(&mut item, &raw, &thumb) {
+    if !crate::import::redraw(&mut item, raw, &thumb) {
         return Err(refused(root, format!("cannot draw a thumbnail for {}.{}", item.name, item.ext)));
     }
     Ok(item)

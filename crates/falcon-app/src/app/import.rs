@@ -629,13 +629,14 @@ fn spawn_jobs(ws: &super::Workspace, ctx: eframe::egui::Context, ask_dupes: bool
             // dialog (`import_dupes`) instead of being committed.
             let result = crate::import_dupes::import_one(&f, &opts, &shared, dupes.as_ref());
             if let Some(removal) = &removal {
-                // The item's original as the library now has it; `None`
-                // when the import failed or the file is held for the
-                // duplicate dialog, which still needs it.
+                // Only clean up an auto-imported source if Falcon copied it inside
+                // the library; never remove/trash an external linked asset's source.
                 let committed = match &result {
                     Ok(Some(id)) => {
                         let lib = lock(&shared);
-                        lib.item(id).map(|item| item.original_path(lib.root()))
+                        (lib.asset_status(id) == Some(falcon_library::linked::AssetStatus::Managed))
+                            .then(|| lib.item(id).map(|item| item.managed_storage_path(lib.root())))
+                            .flatten()
                     }
                     _ => None,
                 };
@@ -726,6 +727,14 @@ impl App {
     }
 
     pub(crate) fn import_files(&mut self, paths: Vec<PathBuf>, folders: Vec<String>) {
+        self.import_files_with_mode(paths, folders, None);
+    }
+
+    pub(crate) fn import_files_copy(&mut self, paths: Vec<PathBuf>, folders: Vec<String>) {
+        self.import_files_with_mode(paths, folders, Some(falcon_library::storage_mode::StorageMode::Copy));
+    }
+
+    fn import_files_with_mode(&mut self, paths: Vec<PathBuf>, folders: Vec<String>, mode_override: Option<falcon_library::storage_mode::StorageMode>) {
         let extra = self.collect_extra.clone();
         if paths.is_empty() {
             return;
@@ -751,6 +760,9 @@ impl App {
         }
         files.sort();
         let mut opts = self.prefs.import_options(folders);
+        if let Some(mode) = mode_override {
+            opts.storage_mode = Some(mode);
+        }
         if let Some(meta) = &extra {
             meta.apply(&mut opts, files.len());
         }
@@ -769,7 +781,7 @@ impl App {
         let Some(shared) = self.ws.lib.clone() else { return };
         let paths: Vec<PathBuf> = {
             let lib = lock(&shared);
-            ids.iter().filter_map(|id| lib.item(id)).map(|i| i.original_path(lib.root())).collect()
+            ids.iter().filter_map(|id| lib.resolved_source_path(id).ok()).collect()
         };
         // One jpg, png or bmp goes as pixels and a file reference together.
         // Never for an original still in iCloud: copying the pixels reads it.
@@ -809,7 +821,7 @@ impl App {
             let path = dir.join(format!("Pasted image {stamp}.png"));
             // The import thread deletes the file once it has copied it in.
             if buf.save(&path).is_ok() {
-                self.import_into(vec![path], folders);
+                self.import_files_copy(vec![path], folders);
             }
         }
     }

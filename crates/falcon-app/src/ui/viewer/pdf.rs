@@ -1440,7 +1440,8 @@ impl PdfState {
         }
         self.close();
         let mark = self.marks.iter().find(|m| m.id == item.id);
-        self.open = Some(Open::new(ctx, item, item.original_path(lib.root()), mark));
+        let path = lib.resolved_source_path(&item.id).unwrap_or_else(|_| item.managed_storage_path(lib.root()));
+        self.open = Some(Open::new(ctx, item, path, mark));
     }
 }
 
@@ -1565,8 +1566,13 @@ impl App {
             if let Some(o) = self.pdf.open.as_mut().filter(|o| o.print) {
                 o.print = false;
                 let title = o.info.pdf.title.clone().unwrap_or_else(|| item.name.clone());
-                if let Err(e) = falcon_pdf::print(&item.original_path(lib.root()), o.info.password.as_deref(), &title, o.layers.chosen()) {
-                    self.flash(trf("Can't print: {error}", &[("error", &e)]));
+                match lib.resolved_source_path(&item.id) {
+                    Ok(path) => {
+                        if let Err(e) = falcon_pdf::print(&path, o.info.password.as_deref(), &title, o.layers.chosen()) {
+                            self.flash(trf("Can't print: {error}", &[("error", &e)]));
+                        }
+                    }
+                    Err(e) => self.flash(trf("Can't print: {error}", &[("error", &e)])),
                 }
             }
             crate::ui::viewer::audio::bar_name(ui, item, bar, name_x, right);

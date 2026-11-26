@@ -241,7 +241,7 @@ pub(crate) mod tests {
             i.id = format!("A{}", n + 1);
             i.tags = s(tags);
             std::fs::create_dir_all(i.info_dir(lib.root())).unwrap();
-            std::fs::write(i.original_path(lib.root()), b"x").unwrap();
+            std::fs::write(i.managed_storage_path(lib.root()), b"x").unwrap();
             lib.register_item(i).unwrap();
         }
         lib

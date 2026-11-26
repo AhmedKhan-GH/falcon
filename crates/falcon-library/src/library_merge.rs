@@ -174,6 +174,7 @@ impl Library {
         }
         self.save_metadata()?;
 
+        let src_linked = crate::storage_mode::FalconConfig::load_or_default(&plan.source).ok().map(|c| c.linked_ids).unwrap_or_default();
         for name in copied {
             let id = name.trim_end_matches(".info");
             let file = self.root().join("images").join(name).join("metadata.json");
@@ -181,8 +182,12 @@ impl Library {
             if item.id != id || self.item(id).is_some() {
                 continue;
             }
+            let is_linked = src_linked.contains(id) || crate::linked::sidecar_path(&item, self.root()).exists();
             let stamp = item.last_modified;
             self.adopt(item, stamp);
+            if is_linked {
+                self.add_linked_id(id)?;
+            }
             report.items += 1;
         }
         if report.items > 0 {

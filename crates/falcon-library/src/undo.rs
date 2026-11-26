@@ -559,7 +559,7 @@ mod tests {
         assert_eq!(t.item_ids().collect::<Vec<_>>(), [c.as_str()]);
         let redo = lib.revert(t).unwrap();
         assert!(item(&lib, &c).is_deleted);
-        assert!(item(&lib, &c).original_path(lib.root()).is_file());
+        assert!(item(&lib, &c).managed_storage_path(lib.root()).is_file());
         lib.revert(redo).unwrap();
         assert!(!item(&lib, &c).is_deleted);
     }

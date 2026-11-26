@@ -104,18 +104,20 @@ pub fn find_exact_duplicates_cached(lib: &Library, cache: &mut HashCache) -> Vec
 pub fn find_exact_duplicates_in(lib: &Library, only: Option<&HashSet<String>>, cache: &mut HashCache) -> Vec<Vec<String>> {
     let items = live(lib, only);
     let order: HashMap<&str, usize> = items.iter().enumerate().map(|(n, i)| (i.id.as_str(), n)).collect();
-    let mut by_size: HashMap<u64, Vec<(&Item, u64)>> = HashMap::new();
+    let mut by_size: HashMap<u64, Vec<(&Item, u64, std::path::PathBuf)>> = HashMap::new();
     for item in &items {
-        if let Some((size, mtime)) = stamp(&item.original_path(lib.root())) {
-            by_size.entry(size).or_default().push((item, mtime));
+        if let Ok(path) = lib.resolved_source_path(&item.id)
+            && let Some((size, mtime)) = stamp(&path)
+        {
+            by_size.entry(size).or_default().push((item, mtime, path));
         }
     }
     let mut by_hash: HashMap<String, Vec<String>> = HashMap::new();
     for (size, group) in by_size.into_iter().filter(|(_, g)| g.len() > 1) {
-        for (item, mtime) in group {
+        for (item, mtime, path) in group {
             let e = cache.entry(&item.id, size, mtime);
             if e.content.is_none() {
-                e.content = content_hash(&item.original_path(lib.root())).ok();
+                e.content = content_hash(&path).ok();
             }
             if let Some(h) = e.content.clone() {
                 by_hash.entry(h).or_default().push(item.id.clone());
@@ -165,10 +167,11 @@ pub fn hamming(a: u64, b: u64) -> u32 {
 
 /// The picture a perceptual hash is taken from: the thumbnail, or the
 /// original for small images shown without one.
-fn picture(item: &Item, root: &Path) -> Option<(std::path::PathBuf, DynamicImage)> {
-    let path = item.thumbnail_path(root).or_else(|| {
-        let o = item.original_path(root);
-        (thumbnail::is_supported(&item.ext) && item.ext != "svg").then_some(o)
+fn picture(lib: &Library, item: &Item) -> Option<(std::path::PathBuf, DynamicImage)> {
+    let path = item.thumbnail_path(lib.root()).or_else(|| {
+        (thumbnail::is_supported(&item.ext) && item.ext != "svg")
+            .then(|| lib.resolved_source_path(&item.id).ok())
+            .flatten()
     })?;
     let img = thumbnail::decode(&path).ok()?;
     Some((path, img))
@@ -195,10 +198,11 @@ pub fn find_near_duplicates_in(lib: &Library, only: Option<&HashSet<String>>, th
     let order: HashMap<&str, usize> = items.iter().enumerate().map(|(n, i)| (i.id.as_str(), n)).collect();
     let mut hashes: Vec<(&str, u64)> = Vec::new();
     for item in &items {
-        let Some((size, mtime)) = stamp(&item.original_path(lib.root())) else { continue };
+        let Ok(path) = lib.resolved_source_path(&item.id) else { continue };
+        let Some((size, mtime)) = stamp(&path) else { continue };
         let e = cache.entry(&item.id, size, mtime);
         if e.perceptual.is_none() {
-            e.perceptual = picture(item, lib.root()).map(|(_, img)| perceptual_hash(&img));
+            e.perceptual = picture(lib, item).map(|(_, img)| perceptual_hash(&img));
         }
         if let Some(h) = e.perceptual {
             hashes.push((item.id.as_str(), h));

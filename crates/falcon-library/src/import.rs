@@ -12,7 +12,9 @@ use unicode_normalization::UnicodeNormalization;
 
 use crate::error::{Error, Result};
 use crate::library::Library;
+use crate::linked::{self, LinkDraft};
 use crate::model::Item;
+use crate::storage_mode::StorageMode;
 use crate::{exif, fontmeta, fontpreview, ids, keywords, media, palette, tempo, thumbnail, waveform, weblink};
 
 /// Longest file name Eagle allows inside an `.info` folder, in bytes.
@@ -55,6 +57,9 @@ pub struct ImportOptions {
     /// The item's date added (`modificationTime`, ms) in place of the
     /// import time, for items brought over from another app.
     pub added_at: Option<u64>,
+    /// Override storage mode for this import (`None` inherits the library's configured mode).
+    /// Generated/internal items must pass `Some(StorageMode::Copy)`.
+    pub storage_mode: Option<StorageMode>,
 }
 
 impl Default for ImportOptions {
@@ -72,6 +77,7 @@ impl Default for ImportOptions {
             name: None,
             trashed: false,
             added_at: None,
+            storage_mode: None,
         }
     }
 }
@@ -196,6 +202,8 @@ pub struct Staged {
     auto_tags: bool,
     /// [`ImportOptions::added_at`].
     added_at: Option<u64>,
+    /// Populated when staged in [`StorageMode::Link`] (zero payload copy).
+    link: Option<LinkDraft>,
 }
 
 impl Staged {
@@ -204,18 +212,47 @@ impl Staged {
         &self.item
     }
 
-    /// The staged copy of the file.
+    /// Path to the readable payload file: external source in Link mode, or the
+    /// staged temporary copy in Copy mode.
     pub fn original(&self) -> std::path::PathBuf {
+        if let Some(link) = &self.link {
+            return link.source_path.clone();
+        }
         let item = &self.item;
         self.dir.path().join(if item.ext.is_empty() { item.name.clone() } else { format!("{}.{}", item.name, item.ext) })
     }
+
+    /// Whether this staged import uses referenced (`Link`) storage mode.
+    pub fn is_linked(&self) -> bool {
+        self.link.is_some()
+    }
 }
 
-/// Copies `path` into a staging folder with its mtime kept, then makes the
-/// thumbnail and palette, following Eagle's import steps.
+/// Copies `path` into a staging folder (or prepares zero-copy referenced metadata
+/// if `opts.storage_mode == Some(StorageMode::Link)`), with thumbnail and palette.
 pub fn stage(path: impl AsRef<Path>, opts: &ImportOptions) -> Result<Staged> {
+    let mode = opts.storage_mode.unwrap_or(StorageMode::Copy);
+    stage_for(path, opts, None, mode)
+}
+
+/// Stages an import honoring `library_mode` (overridden by `opts.storage_mode` when
+/// specified) and validating containment against `library_root` for `Link` mode.
+pub fn stage_for(path: impl AsRef<Path>, opts: &ImportOptions, library_root: Option<&Path>, library_mode: StorageMode) -> Result<Staged> {
     let src = path.as_ref();
+    let mode = opts.storage_mode.unwrap_or(library_mode);
     let refuse = |reason: &str| Error::Import { path: src.to_path_buf(), reason: reason.into() };
+
+    let canonical_src = match (mode, library_root) {
+        (StorageMode::Link, Some(root)) => Some(linked::validate_link_source(src, root)?),
+        (StorageMode::Link, None) => {
+            let m = fs::metadata(src).map_err(|e| Error::io(src, e))?;
+            if !m.is_file() {
+                return Err(refuse(NOT_A_FILE));
+            }
+            Some(fs::canonicalize(src).map_err(|e| Error::io(src, e))?)
+        }
+        (StorageMode::Copy, _) => None,
+    };
 
     let meta = fs::metadata(src).map_err(|e| Error::io(src, e))?;
     if !meta.is_file() {
@@ -266,12 +303,22 @@ pub fn stage(path: impl AsRef<Path>, opts: &ImportOptions) -> Result<Staged> {
     }
 
     let dir = tempfile::Builder::new().prefix(STAGING_PREFIX).tempdir().map_err(|e| Error::io(src, e))?;
-    let file = if item.ext.is_empty() { item.name.clone() } else { format!("{}.{}", item.name, item.ext) };
-    let raw = dir.path().join(file);
-    fs::copy(src, &raw).map_err(|e| Error::io(&raw, e))?;
-    crate::disk_name::make_writable(&raw).map_err(|e| Error::io(&raw, e))?;
-    filetime::set_file_times(&raw, FileTime::from_last_access_time(&meta), FileTime::from_last_modification_time(&meta))
-        .map_err(|e| Error::io(&raw, e))?;
+    let (raw, link) = match mode {
+        StorageMode::Copy => {
+            let file = if item.ext.is_empty() { item.name.clone() } else { format!("{}.{}", item.name, item.ext) };
+            let raw = dir.path().join(file);
+            fs::copy(src, &raw).map_err(|e| Error::io(&raw, e))?;
+            crate::disk_name::make_writable(&raw).map_err(|e| Error::io(&raw, e))?;
+            filetime::set_file_times(&raw, FileTime::from_last_access_time(&meta), FileTime::from_last_modification_time(&meta))
+                .map_err(|e| Error::io(&raw, e))?;
+            (raw, None)
+        }
+        StorageMode::Link => {
+            let target = canonical_src.expect("canonical source checked above");
+            let draft = linked::build_draft(&target, library_root.unwrap_or_else(|| Path::new("/")), &meta, now_ms());
+            (target, Some(draft))
+        }
+    };
 
     let thumb = dir.path().join(format!("{}{THUMB_SUFFIX}", item.name));
     let analysis = generate(&mut item, &raw, &thumb);
@@ -291,19 +338,18 @@ pub fn stage(path: impl AsRef<Path>, opts: &ImportOptions) -> Result<Staged> {
         set_text(&mut item, &raw);
         item.key_order = crate::model::KeyOrder(crate::text::RECORD_KEYS.iter().map(|k| k.to_string()).collect());
     }
-    Ok(Staged { item, dir, auto_tags: opts.folder_auto_tags, added_at: opts.added_at })
+    Ok(Staged { item, dir, auto_tags: opts.folder_auto_tags, added_at: opts.added_at, link })
 }
 
 impl Library {
     /// Imports one file and returns the new item's id.
     ///
-    /// The original is copied into `images/<ID>.info/` with its mtime kept, a
-    /// thumbnail and palette are produced where the format is supported, and
-    /// the item's `metadata.json` and the library's `mtime.json` are written.
-    /// Formats falcon cannot decode import with no thumbnail and no palette.
+    /// In `Copy` mode, the original is copied into `images/<ID>.info/`.
+    /// In `Link` mode, zero payload bytes are copied; instead a validated
+    /// `falcon-link.json` sidecar references the original source in place.
     pub fn import_file(&mut self, path: impl AsRef<Path>, opts: &ImportOptions) -> Result<String> {
         self.check_folders(path.as_ref(), opts)?;
-        let staged = stage(path, opts)?;
+        let staged = stage_for(path, opts, Some(self.root()), self.storage_mode())?;
         self.commit_import(staged)
     }
 
@@ -317,9 +363,13 @@ impl Library {
     }
 
     /// Moves a staged import into `images/<ID>.info/`, stamps its times and
-    /// writes its `metadata.json` and `mtime.json`.
+    /// writes its `metadata.json` (plus `falcon-link.json` & `falcon.json` in
+    /// Link mode), rolling back atomically on failure.
     pub fn commit_import(&mut self, staged: Staged) -> Result<String> {
-        let Staged { mut item, dir, auto_tags, added_at } = staged;
+        let Staged { mut item, dir, auto_tags, added_at, link } = staged;
+        if let Some(draft) = &link {
+            linked::validate_link_source(&draft.source_path, self.root())?;
+        }
         let known = self.folder_ids();
         item.folders.retain(|f| known.contains(f.as_str()));
         if auto_tags {
@@ -329,7 +379,7 @@ impl Library {
         while self.root().join("images").join(format!("{id}.info")).exists() {
             id = ids::new_id();
         }
-        item.id = id;
+        item.id = id.clone();
         let dest = item.info_dir(self.root());
         fs::create_dir_all(&dest).map_err(|e| Error::io(&dest, e))?;
         let moved = (|| -> Result<()> {
@@ -349,12 +399,18 @@ impl Library {
                 None => self.next_import_time(now_ms()),
             };
             item.last_modified = now_ms().max(item.modification_time);
+            if let Some(draft) = link {
+                let record = draft.into_record(id.clone());
+                linked::write_sidecar(&item, self.root(), &record)?;
+                self.add_linked_id(&id)?;
+            }
             self.register_item(item.clone())
         })();
         match moved {
             Ok(()) => Ok(item.id),
             Err(e) => {
                 let _ = fs::remove_dir_all(&dest);
+                let _ = self.remove_linked_id(&id);
                 Err(e)
             }
         }
@@ -1056,7 +1112,7 @@ mod tests {
 
         // Refresh Thumbnail reads the text again, also for an item that
         // had none (imported by an older falcon).
-        let raw = item.original_path(lib.root());
+        let raw = item.managed_storage_path(lib.root());
         fs::write(&raw, "Rewritten").unwrap();
         let mut stale = lib.item(&id).unwrap().clone();
         stale.extra.shift_remove("text");
@@ -1089,7 +1145,7 @@ mod tests {
         assert_eq!(keys(item), ["duration", "bpm", "star"]);
 
         // Without a beat the key goes, as Eagle sets it to undefined.
-        let raw = item.original_path(lib.root());
+        let raw = item.managed_storage_path(lib.root());
         fs::write(&raw, crate::media::tests::wav(8000, 1.25, |t| (t * 300.0).sin())).unwrap();
         let mut lib = Library::open(&root).unwrap();
         assert!(lib.refresh_thumbnail(&id).unwrap());

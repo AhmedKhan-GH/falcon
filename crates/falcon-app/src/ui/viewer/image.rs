@@ -85,8 +85,11 @@ impl App {
         }
         let tf = self.image.tf;
         let is_psd = falcon_library::psd::handles(&ext);
-        if is_psd && self.image.opened != id {
-            self.image.psd.open(&id, item.original_path(lib.root()), ui.ctx());
+        if is_psd
+            && self.image.opened != id
+            && let Ok(path) = lib.resolved_source_path(&id)
+        {
+            self.image.psd.open(&id, path, ui.ctx());
         }
         self.image.psd.poll();
         let natural = if let Some(size) = page_size {
@@ -192,15 +195,15 @@ impl App {
         clip.set_clip_rect(area);
 
         let animated = self.ws.view.anim.as_ref().is_some_and(|a| a.texture().is_some());
-        let ask = SharpAsk { item, root: lib.root(), natural, r, area, tex: tex.as_ref(), tf, plain: !animated && page_size.is_none() };
+        let ask = SharpAsk { item, lib, natural, r, area, tex: tex.as_ref(), tf, plain: !animated && page_size.is_none() };
         let sharp = ask_sharp(ui, &mut self.ws.loader, &mut self.ws.frame_jobs, &self.image.psd, &mut self.image.region_view, &ask);
         let patch = sharp.patch;
         let original = self.ws.loader.original(&id).filter(|_| sharp.original);
 
         // Without a full render, or while QuickLook is still making one, the
         // thumbnail stands in; with neither, the format can't be previewed.
-        let full_failed = self.ws.loader.has_failed(&id, Tier::Full) || job_for(item, lib.root(), Tier::Full).is_none();
-        let preview_job = stand_in_job(item, lib.root(), full_failed);
+        let full_failed = self.ws.loader.has_failed(&id, Tier::Full) || job_for(lib, item, Tier::Full).is_none();
+        let preview_job = stand_in_job(lib, item, full_failed);
         let no_preview = full_failed && (preview_job.is_none() || self.ws.loader.has_failed(&id, Tier::Preview));
         let has_original = original.is_some();
         // The item's own thumbnail background wins over the preference.
@@ -226,7 +229,7 @@ impl App {
                 None if !tf.is_identity() && !animated => paint_transformed(clip.painter(), tex.id(), r, tf),
                 None => egui::Image::new((tex.id(), r.size())).paint_at(&clip, r),
             },
-            (None, None) if no_preview => self.cannot_preview(&mut clip, item, lib.root(), area),
+            (None, None) if no_preview => self.cannot_preview(&mut clip, lib, item, area),
             (None, None) => ext_placeholder(&clip, Rect::from_center_size(area.center(), Vec2::splat(260.0)), &item.ext),
         }
         if tex.is_none()
@@ -325,7 +328,7 @@ impl App {
                 self.ws.view.pan = Vec2::ZERO;
             }
         }
-        if let Some(j) = job_for(item, lib.root(), Tier::Full) {
+        if let Some(j) = job_for(lib, item, Tier::Full) {
             self.ws.frame_jobs.push(j);
         }
         if self.prefs.remember_zoom && !self.image.edge && self.ws.viewer.as_deref() == Some(id.as_str()) {
@@ -420,7 +423,7 @@ impl App {
             }
             None => ext_placeholder(ui, thumb, &item.ext),
         }
-        if let Some(j) = job_for(item, lib.root(), Tier::Preview) {
+        if let Some(j) = job_for(lib, item, Tier::Preview) {
             self.ws.frame_jobs.push(j);
         }
         let megapixels = item.width.saturating_mul(item.height) / 1_000_000;
@@ -514,7 +517,7 @@ pub(crate) fn paint_transformed(painter: &egui::Painter, tex: egui::TextureId, r
 /// A picture on screen, for [`ask_sharp`].
 pub(crate) struct SharpAsk<'a> {
     pub item: &'a Item,
-    pub root: &'a std::path::Path,
+    pub lib: &'a falcon_library::Library,
     /// The picture's size in pixels, as drawn (any turn applied).
     pub natural: Vec2,
     /// Where the picture is drawn, and the part of the window it shows in.
@@ -551,7 +554,7 @@ pub(crate) struct Sharp {
 /// PDFKit (the worker reads which it is; `render` is for QuickLook, `size`
 /// for PDFKit).
 pub(crate) fn ask_sharp(ui: &Ui, loader: &mut Loader, jobs: &mut Vec<Job>, psd: &crate::psd_status::PsdStatus, region_view: &mut Option<RegionView>, a: &SharpAsk) -> Sharp {
-    let SharpAsk { item, root, natural, r, area, tex, tf, plain } = *a;
+    let SharpAsk { item, lib, natural, r, area, tex, tf, plain } = *a;
     let id = &item.id;
     let ext = item.ext.to_lowercase();
     let is_psd = falcon_library::psd::handles(&ext);
@@ -564,7 +567,7 @@ pub(crate) fn ask_sharp(ui: &Ui, loader: &mut Loader, jobs: &mut Vec<Job>, psd: 
         && (!is_psd || tiled)
         && tf.is_identity()
         && logic::wants_original(&ext, natural.x.max(natural.y) as u32, shown_px)
-        && let Some(j) = original_job(item, root, tile)
+        && let Some(j) = original_job(lib, item, tile)
     {
         jobs.push(j);
     }
@@ -584,11 +587,11 @@ pub(crate) fn ask_sharp(ui: &Ui, loader: &mut Loader, jobs: &mut Vec<Job>, psd: 
             let region = region.filter(|(_, side)| *side as f32 > full_side);
             let max = ui.ctx().input(|i| i.max_texture_side).min(8192) as u32;
             let size = logic::illustrator(&ext).then(|| logic::svg_region(image_rect, view_rect, ppp, max)).flatten().map_or([0, 0], |(_, size)| size);
-            (region.map(|(rect, side)| (rect, size, side)), quicklook_region_job(item, root), logic::QUICKLOOK_SETTLE)
+            (region.map(|(rect, side)| (rect, size, side)), quicklook_region_job(lib, item), logic::QUICKLOOK_SETTLE)
         } else {
             let max = ui.ctx().input(|i| i.max_texture_side).min(8192) as u32;
             let region = logic::svg_region(image_rect, view_rect, ppp, max);
-            (region.map(|(rect, size)| (rect, size, 0)), job_for(item, root, Tier::Full), logic::SVG_SETTLE)
+            (region.map(|(rect, size)| (rect, size, 0)), job_for(lib, item, Tier::Full), logic::SVG_SETTLE)
         };
         if let Some((rect, size, render)) = region {
             let same = region_view.is_some_and(|(r0, s0, n0, _)| r0 == rect && s0 == size && n0 == render);
