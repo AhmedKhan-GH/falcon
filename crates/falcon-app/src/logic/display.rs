@@ -109,8 +109,8 @@ pub enum Info {
 
 /// Documents, 3D models and design files whose Dimensions line shows the
 /// file size, as Eagle's does: their pixel size is only the preview's.
-const SIZE_NOT_DIMENSIONS: [&str; 38] = [
-    "mhtml", "html", "fbx", "obj", "glb", "3ds", "3mf", "dae", "ifc", "ply", "stl", "af", "afpub", "afdesign", "afphoto", "fig", "cdr", "skp", "dwg", "blend", "c4d",
+const SIZE_NOT_DIMENSIONS: [&str; 39] = [
+    "mhtml", "html", "fbx", "obj", "glb", "3ds", "3mf", "dae", "ifc", "ply", "stl", "af", "afpub", "afdesign", "afphoto", "aftemplate", "fig", "cdr", "skp", "dwg", "blend", "c4d",
     "clip", "prd", "exr", "hdr", "skt", "ppt", "pptx", "potx", "docx", "doc", "xls", "xlsx", "eddx", "emmx", "number", "page", "txt",
 ];
 

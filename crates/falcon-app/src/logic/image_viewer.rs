@@ -194,7 +194,7 @@ pub fn special_picture_format(ext: &str) -> bool {
     matches!(
         ext,
         "hdr" | "exr" | "ico" | "graffle" | "xmind" | "mindnode" | "psd" | "psdt" | "indd" | "idml" | "indt" | "psb" | "xd" | "c4d" | "blend"
-            | "clip" | "skp" | "dwg" | "dds" | "prd" | "pxd" | "sketch" | "fig" | "afdesign" | "af" | "afpub" | "afphoto" | "ai" | "sketchraw"
+            | "clip" | "skp" | "dwg" | "dds" | "prd" | "pxd" | "sketch" | "fig" | "afdesign" | "af" | "afpub" | "afphoto" | "aftemplate" | "ai" | "sketchraw"
             | "icns" | "skt" | "eps" | "key" | "potx" | "pptx" | "ppt" | "docx" | "doc" | "pages" | "xlsx" | "xls" | "eddx" | "emmx" | "numbers"
             | "cdr"
     )

@@ -155,14 +155,18 @@ pub fn job_for(item: &Item, root: &std::path::Path, tier: Tier) -> Option<Job> {
         // The merged image, QuickLook where it can't be read and exists.
         return Some(Job { key: (item.id.clone(), tier), path: item.original_path(root), svg: false, quicklook: cfg!(target_os = "macos") && !quicklook_hung(&ext), tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false });
     }
-    // Once QuickLook has hung on the format, the full tier is the thumbnail.
-    if tier == Tier::Full && !supported && cfg!(target_os = "macos") && !quicklook_hung(&ext) {
-        return Some(Job { key: (item.id.clone(), tier), path: item.original_path(root), svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false });
+    // Once QuickLook has hung on the format, the full tier is the thumbnail
+    // unless falcon can extract a preview from the file itself.
+    let embedded = has_embedded_preview(&ext);
+    if tier == Tier::Full && !supported && (embedded || (cfg!(target_os = "macos") && !quicklook_hung(&ext))) {
+        let quicklook = cfg!(target_os = "macos") && !quicklook_hung(&ext);
+        return Some(Job { key: (item.id.clone(), tier), path: item.original_path(root), svg: false, quicklook, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false });
     }
     let (path, svg) = match (tier, item.thumbnail_path(root), original) {
         (Tier::Full, _, Some(o)) => (o, ext == "svg"),
         (_, Some(t), _) => (t, false),
         (_, None, Some(o)) => (o, ext == "svg"),
+        (Tier::Grid | Tier::Preview, None, None) if is_affinity(&ext) => (item.original_path(root), false),
         (_, None, None) => return None,
     };
     Some(Job { key: (item.id.clone(), tier), path, svg, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false })
@@ -853,8 +857,8 @@ fn decode(job: &Job, exposure: f32, linear: &Mutex<Option<(PathBuf, u32, Arc<ima
             None if job.quicklook => lane.quicklook(&job.path, max)?,
             None => return None,
         }
-    } else if job.quicklook {
-        native_or_quicklook(&job.path, max, lane)?
+    } else if job.quicklook || has_embedded_preview(&path_ext(&job.path)) {
+        native_or_quicklook(&job.path, max, job.quicklook, lane)?
     } else if job.svg {
         let data = std::fs::read(&job.path).ok()?;
         thumbnail::render_svg(&data, Some(max)).ok()?
@@ -983,15 +987,44 @@ fn imageio(path: &std::path::Path) -> bool {
     path.extension().and_then(|e| e.to_str()).is_some_and(falcon_library::imageio::available)
 }
 
+fn is_affinity(ext: &str) -> bool {
+    matches!(ext, "af" | "afdesign" | "afphoto" | "afpub" | "aftemplate")
+}
+
+fn has_embedded_preview(ext: &str) -> bool {
+    falcon_library::binary_preview::handles(ext) || falcon_library::zip_preview::handles(ext)
+}
+
+fn embedded_preview(path: &std::path::Path) -> Option<image::DynamicImage> {
+    let ext = path_ext(path);
+    falcon_library::binary_preview::preview(path, &ext).or_else(|| falcon_library::zip_preview::preview(path, &ext))
+}
+
 /// A format falcon's own decoder can't read: ImageIO's full decode when it
-/// reads the format, else (or when that fails) a QuickLook render.
-fn native_or_quicklook(path: &std::path::Path, max: u32, lane: &Lane) -> Option<image::DynamicImage> {
+/// reads the format, embedded previews for formats where QuickLook rarely has
+/// a generator, else a QuickLook render (and embedded preview as fallback).
+fn native_or_quicklook(path: &std::path::Path, max: u32, quicklook: bool, lane: &Lane) -> Option<image::DynamicImage> {
     if imageio(path)
         && let Ok(img) = falcon_library::imageio::decode(path)
     {
         return Some(img);
     }
-    lane.quicklook(path, max)
+    let ext = path_ext(path);
+    let first = falcon_library::import::embedded_first(&ext);
+    if first
+        && let Some(img) = embedded_preview(path)
+    {
+        return Some(img);
+    }
+    if quicklook
+        && let Some(img) = lane.quicklook(path, max)
+    {
+        return Some(img);
+    }
+    if !first {
+        return embedded_preview(path);
+    }
+    None
 }
 
 /// A RAW photo's embedded JPEG preview.
@@ -1474,6 +1507,60 @@ mod tests {
         until("the merged image arrives", || {
             l.poll(&ctx);
             l.get("p", Tier::Full).is_some()
+        });
+        assert!(fake.started().is_empty());
+    }
+
+    #[test]
+    fn an_embedded_affinity_preview_never_reaches_quicklook() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("x.af");
+        let mut png = Vec::new();
+        image::RgbaImage::from_pixel(16, 12, image::Rgba([20, 140, 220, 255]))
+            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+            .unwrap();
+        let mut af = Vec::new();
+        af.extend_from_slice(b"\x00\xffKA");
+        af.extend_from_slice(&12u32.to_le_bytes());
+        af.extend_from_slice(b"nsrP#Inf");
+        af.extend_from_slice(&0u64.to_le_bytes());
+        af.extend_from_slice(&32u64.to_le_bytes());
+        af.extend_from_slice(b"\xff\xff\xff\xffThmb");
+        af.extend_from_slice(&1u32.to_le_bytes());
+        af.extend_from_slice(&(png.len() as u32 + 13).to_le_bytes());
+        af.extend_from_slice(&0x1du64.to_le_bytes());
+        af.extend_from_slice(&(png.len() as u32).to_le_bytes());
+        af.push(1);
+        af.extend_from_slice(&png);
+        std::fs::write(&path, af).unwrap();
+
+        let item: Item = serde_json::from_value(serde_json::json!({
+            "id": "AF1", "name": "x", "size": 1, "btime": 0, "mtime": 0, "ext": "af",
+            "tags": [], "folders": [], "isDeleted": false, "url": "", "annotation": "", "modificationTime": 0,
+            "height": 0, "width": 0, "lastModified": 0, "palettes": []
+        }))
+        .unwrap();
+        std::fs::create_dir_all(item.info_dir(dir.path())).unwrap();
+        std::fs::copy(&path, item.original_path(dir.path())).unwrap();
+        let job = job_for(&item, dir.path(), Tier::Full).expect("job for .af without thumbnail");
+
+        let ctx = Context::default();
+        let fake = Arc::new(Fake::default());
+        let mut l = Loader::with_runner(&ctx, 1, fake.runner());
+        l.want(vec![job]);
+        until("the Affinity preview arrives", || {
+            l.poll(&ctx);
+            l.get("AF1", Tier::Full).is_some()
+        });
+        assert!(fake.started().is_empty());
+
+        let grid_job = job_for(&item, dir.path(), Tier::Grid).expect("grid job for .af without thumbnail");
+        let preview_job = job_for(&item, dir.path(), Tier::Preview).expect("preview job for .af without thumbnail");
+        assert!(!grid_job.quicklook && !preview_job.quicklook);
+        l.want(vec![grid_job, preview_job]);
+        until("the Affinity grid and preview tiers arrive", || {
+            l.poll(&ctx);
+            l.get("AF1", Tier::Grid).is_some() && l.get("AF1", Tier::Preview).is_some()
         });
         assert!(fake.started().is_empty());
     }
