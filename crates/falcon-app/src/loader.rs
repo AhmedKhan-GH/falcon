@@ -50,6 +50,32 @@ impl Tier {
     }
 }
 
+/// Byte-based memory budget for large preview/full textures so GPU/RAM usage
+/// stays bounded even when caching 4K/60MP images.
+fn tier_byte_budget(tier: Tier) -> Option<usize> {
+    match tier {
+        Tier::Preview => Some(128 * 1024 * 1024),
+        Tier::Full => Some(128 * 1024 * 1024),
+        _ => None,
+    }
+}
+
+fn texture_bytes(tex: &TextureHandle) -> usize {
+    let [w, h] = tex.size();
+    w * h * 4
+}
+
+fn evict_to_byte_budget(cache: &mut LruCache<String, TextureHandle>, budget: usize) {
+    let mut total: usize = cache.iter().map(|(_, t)| texture_bytes(t)).sum();
+    while total > budget && cache.len() > 1 {
+        if let Some((_, evicted)) = cache.pop_lru() {
+            total = total.saturating_sub(texture_bytes(&evicted));
+        } else {
+            break;
+        }
+    }
+}
+
 pub type Key = (String, Tier);
 
 #[derive(Clone)]
@@ -541,7 +567,11 @@ impl Loader {
                 Some(Pixels::Whole(img)) => {
                     let tex = ctx.load_texture(format!("{}-{:?}", d.key.0, d.key.1), img, self.options(d.key.1));
                     self.stale.remove(&d.key);
-                    self.caches.get_mut(&d.key.1).unwrap().put(d.key.0, tex);
+                    let cache = self.caches.get_mut(&d.key.1).unwrap();
+                    cache.put(d.key.0, tex);
+                    if let Some(budget) = tier_byte_budget(d.key.1) {
+                        evict_to_byte_budget(cache, budget);
+                    }
                 }
                 Some(Pixels::Tiled { size, tiles }) => {
                     self.stale.remove(&d.key);
@@ -1920,5 +1950,24 @@ mod tests {
         assert_eq!(job.max_side(), 2048);
         let Some(Pixels::Whole(img_2048)) = decode(&job, 1.0, &Mutex::new(None), &Mutex::new(None)) else { panic!("failed decode 2048") };
         assert!(img_2048.size[0] > 1024 && img_2048.size[0] <= 2048);
+    }
+
+    #[test]
+    fn preview_cache_enforces_byte_memory_budget() {
+        let ctx = Context::default();
+        let mut cache: LruCache<String, TextureHandle> = LruCache::new(std::num::NonZeroUsize::new(16).unwrap());
+        // 2048x1024 RGBA = 8 MB per texture.
+        // Budget of 16 MB should retain at most 2 textures, never all 5 (40 MB).
+        let img = ColorImage::filled([2048, 1024], Color32::WHITE);
+        for i in 0..5 {
+            let tex = ctx.load_texture(format!("t{i}"), img.clone(), TextureOptions::LINEAR);
+            cache.put(format!("id{i}"), tex);
+            evict_to_byte_budget(&mut cache, 16 * 1024 * 1024);
+        }
+        let total: usize = cache.iter().map(|(_, t)| texture_bytes(t)).sum();
+        assert!(total <= 16 * 1024 * 1024);
+        assert_eq!(cache.len(), 2);
+        assert!(cache.contains("id3"));
+        assert!(cache.contains("id4"));
     }
 }

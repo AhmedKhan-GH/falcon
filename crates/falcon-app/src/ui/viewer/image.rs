@@ -358,6 +358,7 @@ impl App {
         let ppp = ui.ctx().pixels_per_point();
         let natural_long = natural.x.max(natural.y);
         let shown_px = (natural_long * scale * ppp).ceil() as u32;
+        let gpu_max = ui.ctx().input(|i| i.max_texture_side as u32).max(1024);
         let preview_res = if shown_px <= 1024 {
             1024
         } else if shown_px <= 2048 {
@@ -366,7 +367,9 @@ impl App {
             2560
         } else {
             4096
-        }.min(natural_long as u32);
+        }
+        .min(natural_long as u32)
+        .min(gpu_max);
 
         // Tier 2: Adaptive High-Quality Preview
         if let Some(mut j) = job_for(lib, item, Tier::Preview) {
