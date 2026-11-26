@@ -42,6 +42,11 @@ impl Layout {
 /// A caption, when the layout has one, sits below it.
 pub type Place = [f32; 4];
 
+/// Minimum and maximum card aspect ratio in [`Layout::Justified`] so panoramic
+/// banners do not consume a whole row and tall strips keep readable cards.
+const JUSTIFIED_ASPECT_MIN: f32 = 0.4;
+const JUSTIFIED_ASPECT_MAX: f32 = 2.5;
+
 /// Places items with the given aspect ratios (width / height) in `width`.
 /// `size` is the zoom: column width for waterfall and grid, row height for
 /// justified. `caption` is the band under each image (0 when the Display
@@ -75,11 +80,12 @@ pub fn place(layout: Layout, aspects: &[f32], width: f32, size: f32, gap: f32, c
             (out, heights.into_iter().fold(0.0, f32::max), cols)
         }
         Layout::Justified => {
+            let clamped = |a: f32| aspect(a).clamp(JUSTIFIED_ASPECT_MIN, JUSTIFIED_ASPECT_MAX);
             let mut out = Vec::with_capacity(aspects.len());
             let (mut y, mut start, mut sum) = (0.0f32, 0usize, 0.0f32);
             let mut rows = 0;
             for (i, &a) in aspects.iter().enumerate() {
-                sum += aspect(a);
+                sum += clamped(a);
                 let n = (i + 1 - start) as f32;
                 let avail = width - gap * (n - 1.0);
                 let last = i + 1 == aspects.len();
@@ -88,7 +94,7 @@ pub fn place(layout: Layout, aspects: &[f32], width: f32, size: f32, gap: f32, c
                     let h = if sum * size >= avail { avail / sum } else { size };
                     let mut x = 0.0;
                     for &b in &aspects[start..=i] {
-                        let w = aspect(b) * h;
+                        let w = clamped(b) * h;
                         out.push([x, y, w, h]);
                         x += w + gap;
                     }
@@ -191,5 +197,14 @@ mod tests {
         // The tall first item fills column 0; the next two stack in column 1.
         assert_eq!(places[1][0], places[2][0]);
         assert!(places[2][1] > places[1][1]);
+    }
+
+    #[test]
+    fn justified_clamps_extreme_aspect_ratios() {
+        let (places, _, _) = place(Layout::Justified, &[10.0, 0.1, 1.0], 1000.0, 100.0, 10.0, 0.0, 0.0);
+        // Panoramic banner capped at 2.5x row height, thin strip floored at 0.4x.
+        assert!((places[0][2] - 250.0).abs() < 0.01, "wide banner width: {}", places[0][2]);
+        assert!((places[1][2] - 40.0).abs() < 0.01, "tall strip width: {}", places[1][2]);
+        assert!((places[2][2] - 100.0).abs() < 0.01, "square stays 1x: {}", places[2][2]);
     }
 }
