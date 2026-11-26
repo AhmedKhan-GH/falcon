@@ -52,7 +52,7 @@ pub fn max_side(ext: &str) -> u32 {
         e if crate::model3d::EXTENSIONS.contains(&e) => crate::model3d::raster::CANVAS + 2 * crate::model3d::raster::PADDING,
         "ico" | "icns" => 512,
         "pdf" | "doc" | "docx" | "xls" | "xlsx" | "ppt" | "pptx" | "psd" | "psdt" | "ai" | "ait" | "eps" | "hdr" | "exr" | "dds"
-        | "cr3" => 480,
+        | "cr3" | "af" | "afdesign" | "afphoto" | "afpub" | "aftemplate" => 480,
         _ => DEFAULT_MAX_SIDE,
     }
 }

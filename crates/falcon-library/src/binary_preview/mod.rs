@@ -1,12 +1,13 @@
 //! The preview picture inside the binary files of EPS, Illustrator (PostScript
-//! flavour), InDesign, Blender, SketchUp and AutoCAD. Used at import when
-//! QuickLook has no render (no generator for the format is installed).
+//! flavour), InDesign, Blender, SketchUp, AutoCAD and Affinity. Used at import
+//! when QuickLook has no render (no generator for the format is installed).
 //!
 //! Every file here is untrusted. Reads go through the helpers below: a bounded
 //! prefix, a checked range, or a linear scan that stops after [`MAX_SCAN`]
 //! bytes and [`MAX_HITS`] pictures. Pictures are decoded with size and memory
 //! limits, and anything malformed means "no preview" (`None`), never a panic.
 
+mod affinity;
 mod blend;
 mod dwg;
 mod eps;
@@ -33,19 +34,20 @@ pub(crate) const HEAD: u64 = 16 << 20;
 
 /// The extensions this module reads a preview from.
 pub fn handles(ext: &str) -> bool {
-    matches!(ext, "eps" | "ai" | "ait" | "indd" | "indt" | "blend" | "skp" | "dwg")
+    matches!(ext.to_ascii_lowercase().as_str(), "eps" | "ai" | "ait" | "indd" | "indt" | "blend" | "skp" | "dwg" | "af" | "afdesign" | "afphoto" | "afpub" | "aftemplate")
 }
 
 /// The preview picture of the file at `path`; `None` when the format has none
 /// or the file is malformed.
 pub fn preview(path: &Path, ext: &str) -> Option<DynamicImage> {
     let file = File::open(path).ok()?;
-    match ext {
+    match ext.to_ascii_lowercase().as_str() {
         "eps" | "ai" | "ait" => eps::read(file, path),
         "indd" | "indt" => indesign::read(file, path),
         "blend" => blend::read(file, path),
         "skp" => skp::read(file, path),
         "dwg" => dwg::read(file, path),
+        "af" | "afdesign" | "afphoto" | "afpub" | "aftemplate" => affinity::read(file, path),
         _ => None,
     }
 }
@@ -231,7 +233,7 @@ mod tests {
 
     #[test]
     fn unknown_extensions_are_not_handled() {
-        assert!(!handles("pdf") && !handles("mrw") && handles("dwg") && handles("blend"));
+        assert!(!handles("pdf") && !handles("mrw") && !handles("afassets") && handles("dwg") && handles("blend") && handles("af") && handles("AF") && handles("afdesign") && handles("afphoto") && handles("afpub") && handles("aftemplate"));
         let dir = tempfile::tempdir().unwrap();
         let p = dir.path().join("a.txt");
         std::fs::write(&p, b"x").unwrap();
