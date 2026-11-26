@@ -15,8 +15,11 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::error::{Error, Result};
+use crate::fault::{self, FaultPoint};
 use crate::ids;
+use crate::journal::{self, PendingJournal, PendingOpKind};
 use crate::library::{Library, write_json};
+use crate::linked::{AssetStatus, LINK_SIDECAR};
 use crate::model::Item;
 
 /// The item key holding the folders it is pinned in.
@@ -132,8 +135,8 @@ impl Library {
     /// Returns the new id.
     pub fn duplicate_item(&mut self, id: &str) -> Result<String> {
         let item = self.item(id).cloned().ok_or_else(|| self.invalid(format!("no item {id}")))?;
-        let status = self.asset_status(id).unwrap_or(crate::linked::AssetStatus::Managed);
-        if status == crate::linked::AssetStatus::InvalidReference {
+        let status = self.asset_status(id).unwrap_or(AssetStatus::Managed);
+        if status == AssetStatus::InvalidReference {
             return Err(Error::UnsupportedForLinkedAsset {
                 id: id.to_string(),
                 action: "duplicate".into(),
@@ -142,30 +145,68 @@ impl Library {
         }
         let linked_rec = self.link_record(id)?;
         let from = item.info_dir(self.root());
+        let images = self.root().join("images");
         let mut new_id = ids::new_id();
-        while self.root().join("images").join(format!("{new_id}.info")).exists() || self.item(&new_id).is_some() {
+        while images.join(format!("{new_id}.info")).exists()
+            || images.join(format!(".duplicating-{new_id}")).exists()
+            || self.item(&new_id).is_some()
+        {
             new_id = ids::new_id();
         }
         let mut copy = item;
         copy.id = new_id.clone();
+        let stage_name = format!(".duplicating-{new_id}");
+        let stage_dir = images.join(&stage_name);
         let to = copy.info_dir(self.root());
+        let is_linked = linked_rec.is_some();
+        let mut published = false;
+
         let made = (|| -> Result<()> {
-            copy_dir(&from, &to)?;
+            copy_dir(&from, &stage_dir)?;
             if let Some(mut rec) = linked_rec {
                 rec.item_id = new_id.clone();
-                crate::linked::write_sidecar(&copy, self.root(), &rec)?;
-                self.add_linked_id(&new_id)?;
+                crate::storage_mode::atomic_write_json(&stage_dir.join(LINK_SIDECAR), &rec)?;
             }
-            // Written at once even in batched mode, so the folder never
-            // holds the original's metadata under the new name.
-            write_json(&to.join("metadata.json"), &copy)?;
-            self.register_item(copy)
+            // Write new item metadata synchronously inside staging before publication rename so
+            // `<new_id>.info` never temporarily contains old IDs on disk.
+            write_json(&stage_dir.join("metadata.json"), &copy)?;
+            fault::check(FaultPoint::DuplicateAfterStageMetadata, &stage_dir)?;
+
+            journal::write_journal(
+                self.root(),
+                &PendingJournal {
+                    schema_version: journal::JOURNAL_SCHEMA_VERSION,
+                    kind: PendingOpKind::Duplicate,
+                    item_ids: vec![new_id.clone()],
+                    linked_ids: if is_linked { vec![new_id.clone()] } else { Vec::new() },
+                    stage_dirs: vec![stage_name.clone()],
+                    created_at_ms: copy.last_modified,
+                },
+            )?;
+
+            if is_linked {
+                fault::check(FaultPoint::DuplicateBeforeLinkedIds, self.root())?;
+                self.add_linked_id(&new_id)?;
+                fault::check(FaultPoint::DuplicateAfterLinkedIds, self.root())?;
+            }
+
+            fault::check(FaultPoint::DuplicateBeforePublishRename, &to)?;
+            fs::rename(&stage_dir, &to).map_err(|e| Error::io(&to, e))?;
+            published = true;
+            fault::check(FaultPoint::DuplicateAfterPublishRename, &to)?;
+
+            self.register_item(copy)?;
+            self.dirty.items.remove(&new_id);
+            journal::remove_journal(self.root())
         })();
         match made {
             Ok(()) => Ok(new_id),
             Err(e) => {
-                let _ = self.remove_linked_id(&new_id);
-                let _ = fs::remove_dir_all(&to);
+                if !published && !to.exists() {
+                    let _ = self.remove_linked_id(&new_id);
+                    let _ = fs::remove_dir_all(&stage_dir);
+                    let _ = journal::remove_journal(self.root());
+                }
                 Err(e)
             }
         }
@@ -307,7 +348,7 @@ fn copy_dir(from: &Path, to: &Path) -> Result<()> {
         for entry in fs::read_dir(from).map_err(|e| Error::io(from, e))? {
             let entry = entry.map_err(|e| Error::io(from, e))?;
             let name = entry.file_name();
-            if top && name == "metadata.json" {
+            if top && (name == "metadata.json" || name == LINK_SIDECAR) {
                 continue;
             }
             let (src, dest) = (entry.path(), to.join(&name));

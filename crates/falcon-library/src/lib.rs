@@ -16,11 +16,14 @@ pub mod duplicates;
 pub mod edit;
 pub mod error;
 pub mod exif;
+#[doc(hidden)]
+pub mod fault;
 pub mod export;
 pub mod fontmeta;
 pub mod fontpreview;
 pub mod hdr;
 pub mod folder_import;
+pub mod journal;
 pub mod library;
 pub mod manual;
 pub mod merge;

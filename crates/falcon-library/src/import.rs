@@ -11,7 +11,9 @@ use serde_json::{Value, json};
 use unicode_normalization::UnicodeNormalization;
 
 use crate::error::{Error, Result};
-use crate::library::Library;
+use crate::fault::{self, FaultPoint};
+use crate::journal::{self, PendingJournal, PendingOpKind};
+use crate::library::{Library, write_json};
 use crate::linked::{self, LinkDraft};
 use crate::model::Item;
 use crate::storage_mode::StorageMode;
@@ -375,17 +377,32 @@ impl Library {
         if auto_tags {
             crate::autotag::append_new(&mut item.tags, &crate::autotag::auto_tags_for(&self.metadata.folders, &item.folders));
         }
+        let images = self.root().join("images");
         let mut id = ids::new_id();
-        while self.root().join("images").join(format!("{id}.info")).exists() {
+        while images.join(format!("{id}.info")).exists()
+            || images.join(format!(".staging-{id}")).exists()
+            || self.item(&id).is_some()
+        {
             id = ids::new_id();
         }
         item.id = id.clone();
+        item.modification_time = match added_at {
+            Some(t) => t,
+            None => self.next_import_time(now_ms()),
+        };
+        item.last_modified = now_ms().max(item.modification_time);
+
+        let stage_name = format!(".staging-{id}");
+        let stage_dir = images.join(&stage_name);
         let dest = item.info_dir(self.root());
-        fs::create_dir_all(&dest).map_err(|e| Error::io(&dest, e))?;
-        let moved = (|| -> Result<()> {
+        let is_linked = link.is_some();
+        let mut published = false;
+
+        let committed = (|| -> Result<()> {
+            fs::create_dir_all(&stage_dir).map_err(|e| Error::io(&stage_dir, e))?;
             for entry in fs::read_dir(dir.path()).map_err(|e| Error::io(dir.path(), e))? {
                 let entry = entry.map_err(|e| Error::io(dir.path(), e))?;
-                let to = dest.join(entry.file_name());
+                let to = stage_dir.join(entry.file_name());
                 // A rename can't cross volumes; copy then.
                 if fs::rename(entry.path(), &to).is_err() {
                     fs::copy(entry.path(), &to).map_err(|e| Error::io(&to, e))?;
@@ -394,23 +411,50 @@ impl Library {
                     }
                 }
             }
-            item.modification_time = match added_at {
-                Some(t) => t,
-                None => self.next_import_time(now_ms()),
-            };
-            item.last_modified = now_ms().max(item.modification_time);
             if let Some(draft) = link {
                 let record = draft.into_record(id.clone());
-                linked::write_sidecar(&item, self.root(), &record)?;
-                self.add_linked_id(&id)?;
+                crate::storage_mode::atomic_write_json(&stage_dir.join(linked::LINK_SIDECAR), &record)?;
             }
-            self.register_item(item.clone())
+            // Write metadata.json synchronously inside staging BEFORE publication rename so
+            // even WriteMode::Batched never publishes an `.info` dir lacking `metadata.json`.
+            write_json(&stage_dir.join("metadata.json"), &item)?;
+            fault::check(FaultPoint::ImportAfterStageMetadata, &stage_dir)?;
+
+            journal::write_journal(
+                self.root(),
+                &PendingJournal {
+                    schema_version: journal::JOURNAL_SCHEMA_VERSION,
+                    kind: PendingOpKind::Import,
+                    item_ids: vec![id.clone()],
+                    linked_ids: if is_linked { vec![id.clone()] } else { Vec::new() },
+                    stage_dirs: vec![stage_name.clone()],
+                    created_at_ms: now_ms(),
+                },
+            )?;
+
+            if is_linked {
+                fault::check(FaultPoint::ImportBeforeLinkedIds, self.root())?;
+                self.add_linked_id(&id)?;
+                fault::check(FaultPoint::ImportAfterLinkedIds, self.root())?;
+            }
+
+            fault::check(FaultPoint::ImportBeforePublishRename, &dest)?;
+            fs::rename(&stage_dir, &dest).map_err(|e| Error::io(&dest, e))?;
+            published = true;
+            fault::check(FaultPoint::ImportAfterPublishRename, &dest)?;
+
+            self.register_item(item.clone())?;
+            self.dirty.items.remove(&id);
+            journal::remove_journal(self.root())
         })();
-        match moved {
+        match committed {
             Ok(()) => Ok(item.id),
             Err(e) => {
-                let _ = fs::remove_dir_all(&dest);
-                let _ = self.remove_linked_id(&id);
+                if !published && !dest.exists() {
+                    let _ = self.remove_linked_id(&id);
+                    let _ = fs::remove_dir_all(&stage_dir);
+                    let _ = journal::remove_journal(self.root());
+                }
                 Err(e)
             }
         }

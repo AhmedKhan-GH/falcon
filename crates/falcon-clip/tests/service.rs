@@ -767,3 +767,49 @@ fn ai_11_available_corrupt_new_file_decode_failed_is_marked_skipped() {
     assert!(idx.is_skipped(&bad_id));
     assert!(idx.vector(&ok_id).is_some());
 }
+
+#[test]
+fn ai_12_explicit_delete_removes_vector_while_interrupted_ops_create_no_orphans() {
+    let f = Fixture::new();
+    let (id_keep, src_keep) = add_linked(&f, "keep_red", 64, [240, 20, 20]);
+    let (id_del, src_del) = add_linked(&f, "del_green", 64, [20, 240, 20]);
+
+    let service = f.service();
+    service.set_library(Some(f.library.clone()));
+    service.set_enabled(true);
+    ready(&service, 2);
+
+    // Fault-injected interrupted import & duplicate must not create orphan or cross-asset vectors.
+    {
+        let _guard = falcon_library::fault::install(|fp| {
+            if matches!(
+                fp,
+                falcon_library::fault::FaultPoint::ImportBeforePublishRename
+                    | falcon_library::fault::FaultPoint::DuplicateBeforePublishRename
+            ) {
+                Err(std::io::Error::other("simulated crash"))
+            } else {
+                Ok(())
+            }
+        });
+        let mut lib = f.library.lock().unwrap();
+        assert!(lib.import_file(&src_keep, &ImportOptions { palette: false, ..Default::default() }).is_err());
+        assert!(lib.duplicate_item(&id_keep).is_err());
+    }
+
+    // Explicit catalog deletion removes only the deleted item's embedding without touching external source.
+    {
+        let mut lib = f.library.lock().unwrap();
+        lib.delete_permanently(std::slice::from_ref(&id_del)).unwrap();
+    }
+    service.refresh();
+    let status = ready(&service, 1);
+    assert_eq!(status.done, 1);
+    assert!(src_keep.is_file() && src_del.is_file(), "external files untouched");
+    drop(service);
+
+    let idx = reopen_index(&f);
+    assert!(idx.vector(&id_keep).is_some());
+    assert!(idx.vector(&id_del).is_none());
+    assert_eq!(idx.known_ids(), vec![id_keep]);
+}
