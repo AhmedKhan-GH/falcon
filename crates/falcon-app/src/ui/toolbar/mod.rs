@@ -26,7 +26,6 @@ fn shows_results(scope: &Scope, query: &str, filtered: bool) -> bool {
 impl App {
     pub(crate) fn toolbar(&mut self, ui: &mut Ui, lib: &Library) {
         let bar = ui.max_rect();
-        window_drag(ui, bar, "toolbar");
         let cy = bar.center().y;
         let mut x = bar.left() + logic::bar_inset(!self.show_sidebar);
         self.panels_button(ui, Pos2::new(x, cy));
@@ -127,8 +126,25 @@ impl App {
 
         // Zoom slider between the title and the icons.
         let zx = (bar.left() + 237.0).max(title_end + 30.0);
-        if zx + 145.0 < icons_left {
+        let has_zoom = zx + 145.0 < icons_left;
+        if has_zoom {
             self.zoom_slider(ui, Pos2::new(zx, cy));
+        }
+
+        // Window drag on empty toolbar regions only, strictly excluding all
+        // buttons, title, icons, search, and the zoom slider zone.
+        let drag_start = (title_end + 6.0).max(bar.left());
+        if has_zoom {
+            let zoom_left = (zx - 16.0).max(drag_start);
+            let zoom_right = (zx + 140.0).min(icons_left);
+            if zoom_left > drag_start {
+                window_drag(ui, Rect::from_min_max(Pos2::new(drag_start, bar.top()), Pos2::new(zoom_left, bar.bottom())), "toolbar-left");
+            }
+            if zoom_right < icons_left {
+                window_drag(ui, Rect::from_min_max(Pos2::new(zoom_right, bar.top()), Pos2::new(icons_left, bar.bottom())), "toolbar-right");
+            }
+        } else if icons_left > drag_start {
+            window_drag(ui, Rect::from_min_max(Pos2::new(drag_start, bar.top()), Pos2::new(icons_left, bar.bottom())), "toolbar");
         }
         ui.painter().hline(bar.x_range(), bar.bottom() - 0.5, Stroke::new(1.0, t::p().main));
     }
@@ -327,8 +343,8 @@ impl App {
 
         // Expanded interactive hit area covering full track and thumb bounds
         let hit_track = Rect::from_min_max(
-            Pos2::new(track_left - 6.0, cy - 10.0),
-            Pos2::new(track_right + 6.0, cy + 10.0),
+            Pos2::new(track_left - 8.0, cy - 15.0),
+            Pos2::new(track_right + 8.0, cy + 15.0),
         );
         let resp = ui.interact(hit_track, ui.scope_id().with("zoom-slider"), Sense::click_and_drag());
 
@@ -337,7 +353,7 @@ impl App {
         }
 
         if let Some(pos) = resp.interact_pointer_pos()
-            && (resp.dragged() || resp.clicked())
+            && (resp.drag_started() || resp.dragged() || resp.clicked())
         {
             let f = ((pos.x - track_left) / track_width).clamp(0.0, 1.0);
             let new_tile = (TILE_MIN + f * (TILE_MAX - TILE_MIN)).round();
