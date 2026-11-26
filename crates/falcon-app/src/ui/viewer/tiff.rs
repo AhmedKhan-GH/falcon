@@ -53,8 +53,10 @@ impl App {
     /// one); `tiff.natural` then holds its size, for fitting.
     pub(crate) fn tiff_view(&mut self, ctx: &egui::Context, lib: &Library, item: &Item) -> Option<TextureHandle> {
         if self.tiff.id != item.id {
-            if is_tiff(&item.ext) {
-                self.tiff.open(&item.id, item.original_path(lib.root()), ctx);
+            if is_tiff(&item.ext)
+                && let Ok(path) = lib.resolved_source_path(&item.id)
+            {
+                self.tiff.open(&item.id, path, ctx);
             } else {
                 self.tiff = Default::default();
                 self.tiff.id = item.id.clone();
@@ -66,7 +68,7 @@ impl App {
             self.tiff.shown = None;
             return None;
         }
-        let job = tiff_page_job(item, lib.root(), self.tiff.page);
+        let job = tiff_page_job(lib, item, self.tiff.page)?;
         let tex = self.ws.loader.get(&job.key.0, Tier::Full).cloned();
         if !self.ws.loader.has_failed(&job.key.0, Tier::Full) {
             self.ws.frame_jobs.push(job);

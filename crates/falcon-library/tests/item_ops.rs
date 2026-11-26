@@ -50,7 +50,7 @@ fn a_duplicate_is_the_same_folder_with_a_new_id() {
     assert_eq!(metadata(&lib, &copy), before.replace(&id, &copy));
     let (a, b) = (lib.item(&id).unwrap().clone(), lib.item(&copy).unwrap().clone());
     assert_eq!(files(&a.info_dir(lib.root())), files(&b.info_dir(lib.root())));
-    assert_eq!(fs::read(a.original_path(lib.root())).unwrap(), fs::read(b.original_path(lib.root())).unwrap());
+    assert_eq!(fs::read(a.managed_storage_path(lib.root())).unwrap(), fs::read(b.managed_storage_path(lib.root())).unwrap());
     assert_eq!(metadata(&lib, &id), before, "the original is untouched");
     // Reopening finds both, and mtime.json counts them.
     let lib2 = Library::open(lib.root()).unwrap();
@@ -108,13 +108,13 @@ fn a_primary_colour_is_marked_then_set_false() {
 fn changing_the_extension_renames_only_the_original() {
     let (_tmp, mut lib, id) = setup();
     let item = lib.item(&id).unwrap().clone();
-    let bytes = fs::read(item.original_path(lib.root())).unwrap();
+    let bytes = fs::read(item.managed_storage_path(lib.root())).unwrap();
     let thumbs_before = files(&item.info_dir(lib.root()));
     lib.set_extension(&id, "JPEG").unwrap();
     let after = lib.item(&id).unwrap().clone();
     assert_eq!(after.ext, "jpeg");
-    assert_eq!(fs::read(after.original_path(lib.root())).unwrap(), bytes);
-    assert!(!item.original_path(lib.root()).exists());
+    assert_eq!(fs::read(after.managed_storage_path(lib.root())).unwrap(), bytes);
+    assert!(!item.managed_storage_path(lib.root()).exists());
     let expect: Vec<String> = thumbs_before.iter().map(|f| f.replace("pic.png", "pic.jpeg")).collect();
     assert_eq!(files(&after.info_dir(lib.root())), expect);
     assert!(metadata(&lib, &id).contains("\"ext\":\"jpeg\""));
@@ -133,14 +133,14 @@ fn replacing_the_file_keeps_the_item_and_redraws_it() {
     assert_eq!(after.ext, "jpg");
     assert_eq!((after.width, after.height), (200, 100));
     assert_eq!(after.size, fs::metadata(&src).unwrap().len());
-    assert_eq!(fs::read(after.original_path(lib.root())).unwrap(), fs::read(&src).unwrap());
+    assert_eq!(fs::read(after.managed_storage_path(lib.root())).unwrap(), fs::read(&src).unwrap());
     assert_eq!((&after.name, &after.tags, &after.folders, &after.url), (&before.name, &before.tags, &before.folders, &before.url));
     assert_eq!(after.modification_time, before.modification_time);
     // Only the new original and the item's own files remain: no backup or
     // staging file, and the old original is gone.
     let left = files(&after.info_dir(lib.root()));
     assert!(left.iter().all(|f| !f.ends_with(".bk") && !f.contains("falcon-replace")), "{left:?}");
-    assert!(!before.original_path(lib.root()).exists());
+    assert!(!before.managed_storage_path(lib.root()).exists());
     assert!(left.contains(&"pic.jpg".to_string()));
     // The same extension replaces in place.
     let src2 = tmp.path().join("again.jpg");

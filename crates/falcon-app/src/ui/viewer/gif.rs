@@ -334,7 +334,7 @@ impl App {
         if !(self.prefs.always_play_animated || hovered && !alt) || !self.ws.cards.may_play(&item.id) {
             return;
         }
-        let path = item.original_path(lib.root());
+        let Ok(path) = lib.resolved_source_path(&item.id) else { return };
         // An original still in iCloud stays a still rather than download.
         if !self.ws.cards.playing(&item.id) && crate::icloud::is_dataless(&path) {
             return;
@@ -349,7 +349,7 @@ impl App {
     /// `rect`, while it plays.
     pub(crate) fn hover_anim(&mut self, ctx: &egui::Context, lib: &Library, item: &Item, rect: Rect) -> Option<TextureHandle> {
         let kind = anim::card_kind(&item.ext)?;
-        let path = item.original_path(lib.root());
+        let path = lib.resolved_source_path(&item.id).ok()?;
         if crate::icloud::is_dataless(&path) {
             return None;
         }

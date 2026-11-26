@@ -228,7 +228,7 @@ impl App {
                 let ir = Rect::from_center_size(r.center(), ts * sc);
                 egui::Image::new((tex.id(), ir.size())).corner_radius(4).paint_at(ui, ir);
             }
-            if let Some(j) = job_for(item, lib.root(), Tier::Grid) {
+            if let Some(j) = job_for(lib, item, Tier::Grid) {
                 self.ws.frame_jobs.push(j);
             }
         }
@@ -439,7 +439,7 @@ impl App {
         if presp.double_clicked() {
             self.ws.viewer = Some(item.id.clone());
         }
-        if let Some(j) = job_for(&item, lib.root(), Tier::Preview) {
+        if let Some(j) = job_for(lib, &item, Tier::Preview) {
             self.ws.frame_jobs.push(j);
         }
 
@@ -630,14 +630,19 @@ impl App {
             self.ifc_props(ui, lib, &item);
         }
         ui.add_space(4.0);
-        if wide_button(ui, ic::ARROW_SQUARE_OUT, tr("Open in Default App"), true).clicked() {
-            let files = [item.original_path(lib.root())];
+        let resolved = lib.resolved_source_path(&item.id).ok();
+        if wide_button(ui, ic::ARROW_SQUARE_OUT, tr("Open in Default App"), resolved.is_some()).clicked()
+            && let Some(path) = &resolved
+        {
+            let files = [path.clone()];
             crate::open_with::open_default(&files);
             self.used(&files);
         }
         ui.add_space(4.0);
-        if wide_button(ui, ic::EXPORT, tr("Show in Finder"), true).clicked() {
-            crate::open_with::reveal(&[item.original_path(lib.root())]);
+        if wide_button(ui, ic::EXPORT, tr("Show in Finder"), resolved.is_some()).clicked()
+            && let Some(path) = resolved
+        {
+            crate::open_with::reveal(&[path]);
         }
 
         if let Some(it) = changed {

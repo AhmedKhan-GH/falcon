@@ -507,7 +507,13 @@ fn get_item(context: &Context, args: &Args) -> Result<Value, String> {
     v["inTrash"] = json!(item.is_deleted);
     v["createdAt"] = json!(item.btime);
     v["modifiedAt"] = json!(item.mtime);
-    v["filePath"] = json!(item.original_path(lib.root()).display().to_string());
+    let file_path = lib
+        .resolved_source_path(&item.id)
+        .ok()
+        .or_else(|| lib.last_known_source_path(&item.id))
+        .map(|p| p.display().to_string())
+        .unwrap_or_default();
+    v["filePath"] = json!(file_path);
     v["comments"] = item.extra.get("comments").filter(|c| !c.is_null()).cloned().unwrap_or(json!([]));
     v["palettes"] = serde_json::to_value(&item.palettes).unwrap_or(json!([]));
     Ok(v)
@@ -518,7 +524,10 @@ fn get_thumbnail(context: &Context, args: &Args) -> Result<Value, String> {
         let shared = context.library();
         let lib = lock(&shared);
         let item = visible_item(&lib, text(args, "id").unwrap_or(""))?;
-        item.thumbnail_path(lib.root()).unwrap_or_else(|| item.original_path(lib.root()))
+        match item.thumbnail_path(lib.root()) {
+            Some(p) => p,
+            None => lib.resolved_source_path(&item.id).map_err(|e| e.to_string())?,
+        }
     };
     let size = count(args, "maxSize").map_or(THUMBNAIL_SIZE, |s| s as u32);
     let (bytes, mime) = encode_thumbnail(&path, size).ok_or("This item has no thumbnail.")?;
@@ -599,12 +608,12 @@ fn add_item(context: &Context, args: &Args) -> Result<Value, String> {
     }
     let shared = context.library();
     let folders = list_of(args, "folderIds").unwrap_or_default();
-    let root = {
+    let (root, mode) = {
         let lib = lock(&shared);
         for f in &folders {
             check_folder(&lib, f)?;
         }
-        lib.root().to_path_buf()
+        (lib.root().to_path_buf(), lib.storage_mode())
     };
     let opts = ImportOptions {
         folders,
@@ -616,7 +625,7 @@ fn add_item(context: &Context, args: &Args) -> Result<Value, String> {
     };
     // The file is read, thumbnailed and analysed without the lock, because the
     // app locks the same library every frame.
-    let staged = import::stage(path, &opts).map_err(|e| e.to_string())?;
+    let staged = import::stage_for(path, &opts, Some(&root), mode).map_err(|e| e.to_string())?;
     let mut lib = lock(&shared);
     // The folders were checked against this library.
     if lib.root() != root {

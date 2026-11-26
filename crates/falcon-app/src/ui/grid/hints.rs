@@ -54,7 +54,8 @@ impl App {
         }
         let root = lib.root();
         let thumb = item.info_dir(root).join(item.thumbnail_name());
-        let hint = crate::logic::broken_thumb_hint(true, thumb.to_string_lossy().chars().count(), item.original_path(root).is_file(), thumb.is_file());
+        let has_source = lib.resolved_source_path(&item.id).is_ok_and(|p| p.is_file());
+        let hint = crate::logic::broken_thumb_hint(true, thumb.to_string_lossy().chars().count(), has_source, thumb.is_file());
         self.ws.card_hints.broken.insert(item.id.clone(), (now, hint));
         hint
     }

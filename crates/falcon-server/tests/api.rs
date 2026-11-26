@@ -274,7 +274,7 @@ fn item_and_folder_edits() {
     assert_eq!((i["name"].clone(), i["tags"].clone(), i["star"].clone()), (json!("renamed"), json!(["x"]), json!(0)));
     let lib = e.reopen();
     let item = lib.item(&e.b).unwrap();
-    assert!(item.original_path(lib.root()).is_file(), "the file follows the rename");
+    assert!(item.managed_storage_path(lib.root()).is_file(), "the file follows the rename");
     assert_eq!(item.annotation, "n");
     let long = "x".repeat(10001);
     assert_eq!(e.thrown("/api/v2/item/update", json!({"id": e.b, "name": long})), "name too long (max 10000)");

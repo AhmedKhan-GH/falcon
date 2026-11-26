@@ -242,7 +242,7 @@ impl App {
                     hovered = Some((item, card, self.zoom_button(ui, item, card, caption)));
                     self.card_media(ui, lib, item, card, caption, &resp);
                 }
-                if let Some(j) = job_for(item, lib.root(), Tier::Grid) {
+                if let Some(j) = job_for(lib, item, Tier::Grid) {
                     jobs.push(j);
                 }
             }
@@ -328,11 +328,11 @@ impl App {
         if let Some(tex) = self.ws.loader.get(&item.id, Tier::Card) {
             return Some(tex.clone());
         }
-        let path = item.original_path(lib.root());
+        let Ok(path) = lib.resolved_source_path(&item.id) else { return None };
         // An original still in iCloud isn't downloaded for a card.
         if !self.ws.loader.has_failed(&item.id, Tier::Card)
             && !crate::icloud::is_dataless(&path)
-            && let Some(j) = crate::loader::card_job(item, lib.root())
+            && let Some(j) = crate::loader::card_job(lib, item)
         {
             self.ws.frame_jobs.push(j);
         }
@@ -358,7 +358,7 @@ impl App {
                 let r = Rect::from_center_size(rect.center(), natural * scale);
                 egui::Image::new((tex.id(), r.size())).corner_radius(4).paint_at(ui, r);
             }
-            None if failed || job_for(item, lib.root(), Tier::Grid).is_none() => {
+            None if failed || job_for(lib, item, Tier::Grid).is_none() => {
                 ext_placeholder(ui, rect, &item.ext);
                 if failed {
                     broken_mark(ui, rect);
@@ -384,7 +384,7 @@ impl App {
                 let uv = Rect::from_center_size(Pos2::new(0.5, 0.5), vec2(rect.width() / (size.x * s), rect.height() / (size.y * s)));
                 egui::Image::new((tex.id(), rect.size())).uv(uv).corner_radius(4).paint_at(ui, rect);
             }
-            None if failed || job_for(item, lib.root(), Tier::Grid).is_none() => {
+            None if failed || job_for(lib, item, Tier::Grid).is_none() => {
                 ext_placeholder(ui, rect, &item.ext);
                 if failed {
                     broken_mark(ui, rect);
@@ -578,7 +578,7 @@ impl App {
         }
         let original = hover::wants_original(&item.ext, item.width, item.height, rect.size() * ctx.pixels_per_point(), hover::GRID_SIDE);
         let full = if original {
-            if let Some(j) = job_for(item, lib.root(), Tier::Full) {
+            if let Some(j) = job_for(lib, item, Tier::Full) {
                 self.ws.frame_jobs.insert(0, j);
             }
             self.ws.loader.get(&item.id, Tier::Full).cloned()

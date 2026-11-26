@@ -132,7 +132,7 @@ fn refresh_thumbnail_picks_up_a_changed_original() {
     let (_tmp, mut lib, id) = setup("p.png", &picture(1000, 1000, 0), ImageFormat::Png);
     let order = keys(&lib, &id);
     let item = lib.item(&id).unwrap().clone();
-    let raw = item.original_path(lib.root());
+    let raw = item.managed_storage_path(lib.root());
     // Replace the original behind the library's back.
     write(&picture(2000, 1000, 255), &raw, ImageFormat::Png);
     assert!(lib.refresh_thumbnail(&id).unwrap());

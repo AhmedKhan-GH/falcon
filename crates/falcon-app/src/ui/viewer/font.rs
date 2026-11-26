@@ -272,7 +272,7 @@ impl App {
         }
         if self.ws.font_view.id != item.id {
             let family = FontFamily::Name(format!("falcon-font-{}", item.id).into());
-            let data = std::fs::read(item.original_path(lib.root())).ok();
+            let data = lib.resolved_source_path(&item.id).ok().and_then(|p| std::fs::read(p).ok());
             let sfnt = data.as_deref().and_then(fontmeta::sfnt).map(|c| c.into_owned()).filter(|d| egui_can_read(d));
             let fallback = sfnt.is_none();
             let family = sfnt.map(|bytes| {
@@ -555,7 +555,7 @@ impl App {
             // A tier with no job to run counts as failed.
             let mut failed = true;
             for tier in [Tier::Full, Tier::Preview] {
-                if let Some(j) = job_for(item, lib.root(), tier) {
+                if let Some(j) = job_for(lib, item, tier) {
                     self.ws.frame_jobs.push(j);
                     failed &= self.ws.loader.has_failed(&item.id, tier);
                 }
@@ -686,7 +686,14 @@ impl App {
             return;
         };
         let result = if on {
-            crate::font_install::activate(&dir, item, &item.original_path(lib.root())).map(|font| crate::font_install::announce(&font))
+            let path = match lib.resolved_source_path(&item.id) {
+                Ok(p) => p,
+                Err(e) => {
+                    self.flash(trf("Couldn't change the font: {error}", &[("error", &e)]));
+                    return;
+                }
+            };
+            crate::font_install::activate(&dir, item, &path).map(|font| crate::font_install::announce(&font))
         } else {
             crate::font_install::withdraw(&dir.join(name));
             crate::font_install::deactivate(&dir, item)

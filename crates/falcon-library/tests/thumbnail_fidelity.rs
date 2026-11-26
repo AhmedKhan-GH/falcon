@@ -30,7 +30,7 @@ fn compare_filters() {
     for item in lib.items().iter().filter(|i| i.ext == "png") {
         let Some(t) = item.thumbnail_path(lib.root()) else { continue };
         let eagle = thumbnail::decode(&t).unwrap().to_rgba8();
-        let orig = thumbnail::decode(&item.original_path(lib.root())).unwrap();
+        let orig = thumbnail::decode(&item.managed_storage_path(lib.root())).unwrap();
         n += 1;
         let (tw, th) = eagle.dimensions();
         single += mean_abs_diff(&orig.resize_exact(tw, th, FilterType::Lanczos3).to_rgba8(), &eagle);

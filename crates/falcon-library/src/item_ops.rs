@@ -132,6 +132,15 @@ impl Library {
     /// Returns the new id.
     pub fn duplicate_item(&mut self, id: &str) -> Result<String> {
         let item = self.item(id).cloned().ok_or_else(|| self.invalid(format!("no item {id}")))?;
+        let status = self.asset_status(id).unwrap_or(crate::linked::AssetStatus::Managed);
+        if status == crate::linked::AssetStatus::InvalidReference {
+            return Err(Error::UnsupportedForLinkedAsset {
+                id: id.to_string(),
+                action: "duplicate".into(),
+                status,
+            });
+        }
+        let linked_rec = self.link_record(id)?;
         let from = item.info_dir(self.root());
         let mut new_id = ids::new_id();
         while self.root().join("images").join(format!("{new_id}.info")).exists() || self.item(&new_id).is_some() {
@@ -142,6 +151,11 @@ impl Library {
         let to = copy.info_dir(self.root());
         let made = (|| -> Result<()> {
             copy_dir(&from, &to)?;
+            if let Some(mut rec) = linked_rec {
+                rec.item_id = new_id.clone();
+                crate::linked::write_sidecar(&copy, self.root(), &rec)?;
+                self.add_linked_id(&new_id)?;
+            }
             // Written at once even in batched mode, so the folder never
             // holds the original's metadata under the new name.
             write_json(&to.join("metadata.json"), &copy)?;
@@ -150,6 +164,7 @@ impl Library {
         match made {
             Ok(()) => Ok(new_id),
             Err(e) => {
+                let _ = self.remove_linked_id(&new_id);
                 let _ = fs::remove_dir_all(&to);
                 Err(e)
             }
@@ -210,12 +225,12 @@ impl Library {
     /// the thumbnail and everything else stay. Refused when a file of that
     /// name is already in the `.info` folder.
     pub fn set_extension(&mut self, id: &str, ext: &str) -> Result<()> {
+        let old = self.managed_writable_path(id, "change extension")?;
         let ext = check_extension(ext).map_err(|e| self.invalid(e.to_string()))?;
         let mut item = self.item(id).cloned().ok_or_else(|| self.invalid(format!("no item {id}")))?;
         if ext == item.ext {
             return Ok(());
         }
-        let old = item.original_path(self.root());
         let new = item.info_dir(self.root()).join(file_name(&item.name, &ext));
         if new.exists() && !same_file(&old, &new) {
             return Err(self.invalid(format!("{} already exists", new.display())));
@@ -238,13 +253,13 @@ impl Library {
     /// Size, dates and dimensions are read again and the thumbnail and
     /// palette redrawn, except that a custom thumbnail is kept.
     pub fn replace_original(&mut self, id: &str, src: &Path) -> Result<()> {
+        let old = self.managed_writable_path(id, "replace file")?;
         let mut item = self.item(id).cloned().ok_or_else(|| self.invalid(format!("no item {id}")))?;
         if !src.is_file() {
             return Err(Error::Import { path: src.to_path_buf(), reason: "not a file".into() });
         }
         let ext = src.extension().map(|e| e.to_string_lossy().to_lowercase()).filter(|e| !e.is_empty()).unwrap_or_else(|| "unknown".into());
         let dir = item.info_dir(self.root());
-        let old = item.original_path(self.root());
         let new = dir.join(file_name(&item.name, &ext));
         if new != old && new.exists() {
             return Err(self.invalid(format!("{} already exists", new.display())));

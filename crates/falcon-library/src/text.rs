@@ -62,6 +62,7 @@ impl Library {
     /// own undo in the editor, and reverting only the metadata would leave
     /// it describing a file it no longer matches.
     pub fn save_text(&mut self, id: &str, text: &str) -> Result<()> {
+        let raw = self.managed_writable_path(id, "edit text")?;
         let mut item = self.item(id).cloned().ok_or_else(|| self.invalid(format!("no item {id}")))?;
         if !item.ext.eq_ignore_ascii_case("txt") {
             return Err(self.invalid(format!("{}.{} is not a text file", item.name, item.ext)));
@@ -69,7 +70,6 @@ impl Library {
         if text.is_empty() {
             return Err(self.invalid("empty text is not saved"));
         }
-        let raw = item.original_path(self.root());
         let stamp = crate::edit::now_ms();
         let tmp = raw.with_file_name(crate::disk_name::on_disk(&format!("{}.{}.{stamp}", item.name, item.ext)).as_ref());
         let written = (|| -> std::io::Result<()> {
@@ -114,7 +114,7 @@ mod tests {
         let before = lib.item(&id).unwrap().clone();
         lib.save_text(&id, "hello, longer world").unwrap();
         let after = lib.item(&id).unwrap().clone();
-        let raw = after.original_path(lib.root());
+        let raw = after.managed_storage_path(lib.root());
         assert_eq!(fs::read_to_string(&raw).unwrap(), "hello, longer world");
         assert_eq!(after.size, 19);
         assert!(after.mtime >= before.mtime);
@@ -133,7 +133,7 @@ mod tests {
     fn empty_text_and_other_formats_are_refused() {
         let (_tmp, mut lib, id) = library_with_text("keep me");
         assert!(lib.save_text(&id, "").is_err());
-        let raw = lib.item(&id).unwrap().original_path(lib.root());
+        let raw = lib.item(&id).unwrap().managed_storage_path(lib.root());
         assert_eq!(fs::read_to_string(raw).unwrap(), "keep me");
         assert!(lib.save_text("nope", "x").is_err());
     }
