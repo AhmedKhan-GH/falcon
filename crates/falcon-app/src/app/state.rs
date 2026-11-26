@@ -448,6 +448,8 @@ pub(crate) struct Workspace {
     /// The storage checks run when the library opened (`storage.rs`),
     /// until their result is taken.
     pub(crate) health: Option<std::sync::mpsc::Receiver<Vec<crate::storage::Warning>>>,
+    /// Bounded background thumbnail worker pool for deferred Link-mode thumbnails.
+    pub(crate) thumb_worker: Option<Arc<crate::thumb_worker::ThumbWorker>>,
 }
 
 impl Workspace {
@@ -472,10 +474,25 @@ impl Workspace {
             let ctx = ctx.clone();
             crate::storage::spawn_check(r, move || ctx.request_repaint())
         });
+        let thumb_worker = match (&lib, &root) {
+            (Some(shared), Some(r)) => {
+                let worker = Arc::new(crate::thumb_worker::ThumbWorker::new(
+                    Arc::clone(shared),
+                    r.clone(),
+                    ctx.clone(),
+                    true,
+                ));
+                let items = lock(shared).items().to_vec();
+                worker.rediscover_pending(&items);
+                Some(worker)
+            }
+            _ => None,
+        };
         Workspace {
             root,
             watch,
             health,
+            thumb_worker,
             lib,
             loader: Loader::new(ctx),
             scope: Scope::All,

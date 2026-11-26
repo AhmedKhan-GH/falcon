@@ -528,6 +528,29 @@ impl App {
         self.sync_layout();
         self.follow_modes(&ctx);
         t::follow_system(&ctx);
+        if let Some(worker) = &self.ws.thumb_worker {
+            if self.ws.root.as_ref() != Some(worker.root()) {
+                worker.shutdown();
+                self.ws.thumb_worker = match (&self.ws.lib, &self.ws.root) {
+                    (Some(shared), Some(r)) => {
+                        let w = std::sync::Arc::new(crate::thumb_worker::ThumbWorker::new(
+                            std::sync::Arc::clone(shared),
+                            r.clone(),
+                            ctx.clone(),
+                            true,
+                        ));
+                        let items = lock(shared).items().to_vec();
+                        w.rediscover_pending(&items);
+                        Some(w)
+                    }
+                    _ => None,
+                };
+            } else {
+                for id in worker.take_completed() {
+                    self.ws.loader.forget(&id);
+                }
+            }
+        }
         self.ws.loader.poll(&ctx);
         let title = match &self.ws.root {
             Some(r) => r.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default(),

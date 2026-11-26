@@ -286,6 +286,13 @@ impl App {
         self.hover_media.end_frame(ui.ctx().cumulative_frame_nr());
         self.hover_preview(ui, lib, hovered, scrolled, order_changed || clicked.is_some() || opened.is_some());
         self.ws.frame_jobs.extend(jobs);
+        if let Some(worker) = &self.ws.thumb_worker
+            && worker.progress().active
+        {
+            let visible_ids: std::collections::HashSet<String> =
+                self.ws.frame_jobs.iter().map(|j| j.key.0.clone()).collect();
+            worker.update_priorities(&visible_ids, self.ws.selected.first().map(String::as_str));
+        }
         // Thumbnails first; large cards' originals after them.
         let (cards, rest): (Vec<_>, Vec<_>) = std::mem::take(&mut self.ws.frame_jobs).into_iter().partition(|j| j.key.1 == Tier::Card);
         self.ws.frame_jobs = rest;

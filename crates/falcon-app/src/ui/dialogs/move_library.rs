@@ -211,6 +211,9 @@ impl App {
                             Size::Known(s) => s,
                             _ => Stats::default(),
                         };
+                        if let Some(worker) = self.ws.thumb_worker.take() {
+                            worker.shutdown();
+                        }
                         self.begin_move(src, dest, name, stats)
                     }
                     Some(false) => State::Idle,

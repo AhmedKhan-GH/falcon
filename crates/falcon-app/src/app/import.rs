@@ -619,6 +619,8 @@ fn spawn_jobs(ws: &super::Workspace, ctx: eframe::egui::Context, ask_dupes: bool
         return;
     }
     let Some(shared) = ws.lib.clone() else { return };
+    let lib_is_link = lock(&shared).storage_mode() == falcon_library::storage_mode::StorageMode::Link;
+    let thumb_worker = ws.thumb_worker.clone();
     let progress = ws.progress.clone();
     {
         let mut pr = progress.lock().unwrap_or_else(|p| p.into_inner());
@@ -635,10 +637,18 @@ fn spawn_jobs(ws: &super::Workspace, ctx: eframe::egui::Context, ask_dupes: bool
         std::thread::scope(|scope| {
             for _ in 0..workers {
                 scope.spawn(|| {
-                    while let Some(Job { path: f, opts }) = {
+                    while let Some(Job { path: f, mut opts }) = {
                         let mut q = queue.lock().unwrap_or_else(|p| p.into_inner());
                         q.pop_front()
                     } {
+                        if opts.storage_mode.unwrap_or(if lib_is_link {
+                            falcon_library::storage_mode::StorageMode::Link
+                        } else {
+                            falcon_library::storage_mode::StorageMode::Copy
+                        }) == falcon_library::storage_mode::StorageMode::Link
+                        {
+                            opts.defer_thumbnail = true;
+                        }
                         // Paused from the sidebar: wait before the next file (a
                         // stop request ends the wait).
                         while {
@@ -683,6 +693,14 @@ fn spawn_jobs(ws: &super::Workspace, ctx: eframe::egui::Context, ask_dupes: bool
                         pr.done += 1;
                         // `Ok(None)` is a duplicate held for the dialog, not added.
                         if let Ok(Some(id)) = &result {
+                            if opts.defer_thumbnail
+                                && let Some(worker) = &thumb_worker
+                            {
+                                worker.enqueue_batch(
+                                    std::slice::from_ref(id),
+                                    crate::thumb_worker::ThumbPriority::Normal,
+                                );
+                            }
                             pr.added.push(id.clone());
                         }
                         if let Err(e) = &result {
