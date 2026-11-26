@@ -8,7 +8,7 @@
 - The app draws everything with egui painters. Colours and sizes live in `crates/falcon-app/src/theme.rs`, and UI-independent logic lives in `crates/falcon-app/src/logic/` (one file per domain, re-exported as `crate::logic::*`), which has unit tests.
 - `docs/` is an mdBook describing each part. When you change behaviour, update the matching chapter.
 - Test against throwaway copies of libraries in `~/FalconSandbox`, never against the user's real libraries. The app and CLI open libraries anywhere, as Eagle does, so this is a working practice, not something the code enforces.
-- On Windows the home folder is `USERPROFILE` (`paths::home_dir`), never `HOME`, which only Git Bash sets; run the tests with `HOME` unset as well as set. An item's name stays as it came in the metadata, and `disk_name::on_disk` is what it is called on disk, so build an item's file names through `Item::original_path` and `Item::thumbnail_name`.
+- On Windows the home folder is `USERPROFILE` (`paths::home_dir`), never `HOME`, which only Git Bash sets; run the tests with `HOME` unset as well as set. An item's name stays as it came in the metadata, and `disk_name::on_disk` is what it is called on disk, so build an item's file names through `Item::managed_storage_path` and `Item::thumbnail_name`. Read an item's file through `Library::resolved_source_path` (a referenced item's file lives outside the library) and change it only through `Library::managed_writable_path`, which refuses referenced items, so an original outside the library is never written.
 
 ## falcon-app layout
 
