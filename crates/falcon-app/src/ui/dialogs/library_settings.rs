@@ -8,8 +8,8 @@ use falcon_library::storage_mode::StorageMode;
 
 use crate::app::App;
 use crate::locale::{tr, trf};
-use crate::theme as t;
-use crate::ui::widgets::{divider, prop};
+use crate::theme::{self as t, font, mono};
+use crate::ui::widgets::{divider, galley};
 
 /// Modal state for the active library's settings dialog.
 #[derive(Default)]
@@ -101,10 +101,29 @@ impl App {
             divider(ui);
             ui.add_space(4.0);
             let loc = lib.root().display().to_string();
-            prop(ui, tr("Location"), &loc).on_hover_text(&loc);
-            prop(ui, tr("Managed Assets"), &managed_count.to_string());
-            prop(ui, tr("Linked Assets"), &linked_count.to_string());
-            prop(
+            let row = |ui: &mut egui::Ui, key: &str, val: &str| {
+                let (rect, resp) =
+                    ui.allocate_exact_size(egui::vec2(ui.available_width(), 16.0), egui::Sense::hover());
+                let p = ui.painter();
+                let kg = galley(ui, key, font(12.0), t::p().text, 165.0);
+                p.galley(
+                    egui::Pos2::new(rect.left(), rect.center().y - kg.size().y / 2.0),
+                    kg,
+                    t::p().text,
+                );
+                let max_val_w = (rect.width() - 175.0).max(40.0);
+                let vg = galley(ui, val, mono(12.0), t::p().text_value, max_val_w);
+                p.galley(
+                    egui::Pos2::new(rect.right() - vg.size().x, rect.center().y - vg.size().y / 2.0),
+                    vg,
+                    t::p().text_value,
+                );
+                resp
+            };
+            row(ui, tr("Location"), &loc).on_hover_text(&loc);
+            row(ui, tr("Managed Assets"), &managed_count.to_string());
+            row(ui, tr("Linked Assets"), &linked_count.to_string());
+            row(
                 ui,
                 tr("Unavailable Originals"),
                 &unavailable_count.to_string(),

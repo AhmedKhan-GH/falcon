@@ -155,11 +155,12 @@ fn main() -> eframe::Result {
     }
     let app_name = app_data_name();
     let window_title = if app_name == "Falcon" { "Falcon" } else { "Falcon Dev — Referenced Assets" };
+    let app_id = if app_name == "Falcon" { "falcon" } else { "falcon-dev" };
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_title(window_title)
-            // Matches falcon.desktop on Linux, so the desktop shows the icon; macOS ignores it.
-            .with_app_id("falcon")
+            // Matches falcon.desktop on Linux, and drives eframe's persistence folder.
+            .with_app_id(app_id)
             .with_fullsize_content_view(true)
             .with_titlebar_shown(false)
             .with_title_shown(false)
