@@ -716,6 +716,7 @@ impl App {
         if self.ws.smart_dialog.is_some() {
             self.smart_dialog_ui(&ctx, lib);
         }
+        self.library_settings_dialog(&ctx, lib);
         self.organize_dialogs(&ctx, lib);
         self.tag_picker_ui(&ctx, lib);
         self.quick_switch_ui(&ctx, lib);

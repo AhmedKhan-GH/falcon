@@ -12,6 +12,7 @@ pub(crate) mod force_close;
 pub(crate) mod ext;
 pub(crate) mod library;
 pub(crate) mod library_notices;
+pub(crate) mod library_settings;
 pub(crate) mod progress;
 pub(crate) mod quit_confirm;
 pub(crate) mod quick_switch;

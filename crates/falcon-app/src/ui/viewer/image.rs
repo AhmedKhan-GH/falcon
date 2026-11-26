@@ -312,7 +312,7 @@ impl App {
             self.ws.view.zoom = Some(new);
         }
         let tools_x = self.gif_toggle_button(ui, item, x, cy);
-        let tools_left = self.edit_bar(ui, item, tools_x, cy);
+        let tools_left = self.edit_bar(ui, lib, item, tools_x, cy);
         let tools_left = self.tiff_bar(ui, item, tools_left, cy);
         let tools_left = self.exposure_bar(ui, item, tools_left, cy);
         audio::bar_name(ui, item, bar, name_x, tools_left);
