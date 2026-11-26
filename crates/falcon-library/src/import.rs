@@ -561,14 +561,15 @@ fn quicklook_thumbnail(item: &mut Item, raw: &Path, thumb: &Path, max: u32) -> O
 /// Formats whose own preview is tried before QuickLook, which rarely has a
 /// generator for them and can then wait out its whole timeout.
 pub fn embedded_first(ext: &str) -> bool {
-    matches!(ext, "blend" | "dwg" | "skp" | "indd" | "indt" | "idml" | "sketch" | "xmind")
+    matches!(ext, "blend" | "dwg" | "skp" | "indd" | "indt" | "idml" | "sketch" | "xmind" | "af" | "afdesign" | "afphoto" | "afpub" | "aftemplate")
 }
 
 /// The thumbnail of a file QuickLook can't render, from what the file
 /// carries: a RAW photo's embedded preview (turned upright), the preview in
 /// a Sketch, XMind, Keynote or IDML zip, the first page of an Illustrator
-/// file's PDF, or the preview in an EPS, InDesign, Blender, SketchUp or
-/// AutoCAD file. `None` for other formats, and for files with no preview.
+/// file's PDF, or the preview in an EPS, InDesign, Blender, SketchUp,
+/// AutoCAD or Affinity file. `None` for other formats, and for files with no
+/// preview.
 fn embedded_thumbnail(item: &mut Item, raw: &Path, thumb: &Path, max: u32) -> Option<Analysis> {
     let (img, size) = if crate::exif::is_raw(&item.ext) {
         let data = fs::read(raw).ok()?;
@@ -1208,7 +1209,7 @@ mod tests {
         blend.extend(&body);
         assert_eq!(embedded_only("a.blend", &blend).unwrap().0, (3, 2));
         // Files of the other formats with nothing in them give no thumbnail.
-        for name in ["a.eps", "a.indd", "a.indt", "a.skp", "a.dwg", "a.idml", "a.key"] {
+        for name in ["a.eps", "a.indd", "a.indt", "a.skp", "a.dwg", "a.af", "a.afdesign", "a.afphoto", "a.afpub", "a.aftemplate", "a.idml", "a.key"] {
             assert!(embedded_only(name, b"nothing here").is_none(), "{name}");
         }
     }
