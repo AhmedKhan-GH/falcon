@@ -127,16 +127,18 @@ impl App {
         // Zoom slider between the title and the icons.
         let zx = (bar.left() + 237.0).max(title_end + 30.0);
         let has_zoom = zx + 145.0 < icons_left;
-        if has_zoom {
-            self.zoom_slider(ui, Pos2::new(zx, cy));
-        }
+        let slider_dragged = if has_zoom {
+            self.zoom_slider(ui, Pos2::new(zx, cy))
+        } else {
+            false
+        };
 
         // Window drag on empty toolbar regions only, strictly excluding all
         // buttons, title, icons, search, and the zoom slider zone.
         let drag_start = (title_end + 6.0).max(bar.left());
+        let zoom_left = (zx - 16.0).max(drag_start);
+        let zoom_right = (zx + 140.0).min(icons_left);
         if has_zoom {
-            let zoom_left = (zx - 16.0).max(drag_start);
-            let zoom_right = (zx + 140.0).min(icons_left);
             if zoom_left > drag_start {
                 window_drag(ui, Rect::from_min_max(Pos2::new(drag_start, bar.top()), Pos2::new(zoom_left, bar.bottom())), "toolbar-left");
             }
@@ -146,6 +148,23 @@ impl App {
         } else if icons_left > drag_start {
             window_drag(ui, Rect::from_min_max(Pos2::new(drag_start, bar.top()), Pos2::new(icons_left, bar.bottom())), "toolbar");
         }
+
+        // Disable native macOS 28pt titlebar dragging whenever the pointer is
+        // over interactive toolbar controls (especially the zoom slider) or
+        // while the zoom slider is actively being dragged.
+        let over_zoom = has_zoom && ui.input(|i| {
+            i.pointer.hover_pos().is_some_and(|p| {
+                bar.y_range().contains(p.y) && (zoom_left..=zoom_right).contains(&p.x)
+            })
+        });
+        let over_controls = ui.input(|i| {
+            i.pointer.hover_pos().is_some_and(|p| {
+                bar.contains(p) && (p.x >= icons_left || p.x <= title_rect.left())
+            })
+        });
+        let movable = !(slider_dragged || over_zoom || over_controls);
+        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::NULL.with("window_movable"), movable));
+
         ui.painter().hline(bar.x_range(), bar.bottom() - 0.5, Stroke::new(1.0, t::p().main));
     }
 
@@ -309,7 +328,7 @@ impl App {
         }
     }
 
-    pub(crate) fn zoom_slider(&mut self, ui: &mut Ui, left_center: Pos2) {
+    pub(crate) fn zoom_slider(&mut self, ui: &mut Ui, left_center: Pos2) -> bool {
         let cy = left_center.y;
         let x0 = left_center.x;
         let can_zoom_out = self.tile > TILE_MIN;
@@ -384,6 +403,7 @@ impl App {
             p.circle_filled(Pos2::new(kx, y), thumb_r + 2.5, t::p().primary.gamma_multiply(0.35));
         }
         p.circle_filled(Pos2::new(kx, y), thumb_r, Color32::WHITE);
+        resp.dragged() || resp.drag_started()
     }
 
     /// The import progress bar; clears itself a moment after finishing.

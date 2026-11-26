@@ -114,6 +114,27 @@ pub fn sync_main_window(frame: &eframe::Frame, enabled: bool) {
 #[cfg(not(target_os = "macos"))]
 pub fn sync_main_window(_: &eframe::Frame, _: bool) {}
 
+/// Controls whether the main macOS window can be moved by dragging its
+/// native 28pt titlebar region. Temporarily disabled while the pointer is
+/// over interactive toolbar controls (such as the zoom slider) so native
+/// `NSTitlebarView` cannot hijack clicks or drags.
+#[cfg(target_os = "macos")]
+pub fn set_window_movable(frame: &eframe::Frame, movable: bool) {
+    use objc2_app_kit::NSView;
+    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    let Ok(handle) = frame.window_handle() else { return };
+    let RawWindowHandle::AppKit(h) = handle.as_raw() else { return };
+    // SAFETY: `ns_view` is winit's live content view, used on the main thread.
+    let view: &NSView = unsafe { &*h.ns_view.as_ptr().cast() };
+    let Some(window) = view.window() else { return };
+    if window.isMovable() != movable {
+        window.setMovable(movable);
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn set_window_movable(_: &eframe::Frame, _: bool) {}
+
 /// Brings the separate window titled `title` in line with the preference:
 /// blurred or opaque, in falcon's light or dark look. Call it every frame
 /// from inside the window's viewport. eframe has no handle for a window

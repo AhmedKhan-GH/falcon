@@ -477,6 +477,8 @@ impl eframe::App for App {
         self.page_shots_tick(&ctx);
         crate::colorspace::sync(frame, self.prefs.color_space);
         crate::vibrancy::sync_main_window(frame, self.vibrancy_on());
+        let movable = ctx.data(|d| d.get_temp::<bool>(egui::Id::NULL.with("window_movable")).unwrap_or(true));
+        crate::vibrancy::set_window_movable(frame, movable);
         let state = self.menu_state(&ctx);
         self.menu_bar.sync(&ctx, &self.shortcuts, &state, &self.user_actions.menu_entries());
     }
