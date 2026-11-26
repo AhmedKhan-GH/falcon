@@ -441,27 +441,37 @@ impl Library {
                     }
                 }
             }
+            let batched = self.write_mode == crate::undo::WriteMode::Batched;
             if let Some(draft) = link {
                 let record = draft.into_record(id.clone());
-                crate::storage_mode::atomic_write_json(&stage_dir.join(linked::LINK_SIDECAR), &record)?;
+                let sidecar = stage_dir.join(linked::LINK_SIDECAR);
+                if batched {
+                    write_json(&sidecar, &record)?;
+                } else {
+                    crate::storage_mode::atomic_write_json(&sidecar, &record)?;
+                }
             }
             // Write metadata.json synchronously inside staging BEFORE publication rename so
             // even WriteMode::Batched never publishes an `.info` dir lacking `metadata.json`.
             write_json(&stage_dir.join("metadata.json"), &item)?;
-            crate::storage_mode::sync_dir_contents(&stage_dir);
+            if !batched {
+                crate::storage_mode::sync_dir_contents(&stage_dir);
+            }
             fault::check(FaultPoint::ImportAfterStageMetadata, &stage_dir)?;
 
-            journal::write_journal(
-                self.root(),
-                &PendingJournal {
-                    schema_version: journal::JOURNAL_SCHEMA_VERSION,
-                    kind: PendingOpKind::Import,
-                    item_ids: vec![id.clone()],
-                    linked_ids: if is_linked { vec![id.clone()] } else { Vec::new() },
-                    stage_dirs: vec![stage_name.clone()],
-                    created_at_ms: now_ms(),
-                },
-            )?;
+            if !batched {
+                journal::write_journal(
+                    self.root(),
+                    &PendingJournal {
+                        schema_version: journal::JOURNAL_SCHEMA_VERSION,
+                        kind: PendingOpKind::Import,
+                        item_ids: vec![id.clone()],
+                        linked_ids: if is_linked { vec![id.clone()] } else { Vec::new() },
+                        stage_dirs: vec![stage_name.clone()],
+                        created_at_ms: now_ms(),
+                    },
+                )?;
+            }
 
             if is_linked {
                 fault::check(FaultPoint::ImportBeforeLinkedIds, self.root())?;
@@ -471,13 +481,18 @@ impl Library {
 
             fault::check(FaultPoint::ImportBeforePublishRename, &dest)?;
             fs::rename(&stage_dir, &dest).map_err(|e| Error::io(&dest, e))?;
-            crate::storage_mode::sync_dir(&images);
+            if !batched {
+                crate::storage_mode::sync_dir(&images);
+            }
             published = true;
             fault::check(FaultPoint::ImportAfterPublishRename, &dest)?;
 
             self.register_item(item.clone())?;
             self.dirty.items.remove(&id);
-            journal::remove_journal(self.root())
+            if !batched {
+                journal::remove_journal(self.root())?;
+            }
+            Ok(())
         })();
         match committed {
             Ok(()) => Ok(item.id),

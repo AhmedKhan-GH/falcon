@@ -97,11 +97,12 @@ pub(crate) struct Dirty {
     pub(crate) metadata: bool,
     pub(crate) tags: bool,
     pub(crate) saved_filters: bool,
+    pub(crate) config: bool,
 }
 
 impl Dirty {
     fn any(&self) -> bool {
-        !self.items.is_empty() || self.mtime || self.metadata || self.tags || self.saved_filters
+        !self.items.is_empty() || self.mtime || self.metadata || self.tags || self.saved_filters || self.config
     }
 }
 
@@ -289,6 +290,9 @@ impl Library {
         if self.dirty.saved_filters {
             write_json(&root.join("saved-filters.json"), &self.saved_filters)?;
             report.saved_filters = true;
+        }
+        if self.dirty.config {
+            self.config.save(&root)?;
         }
         self.dirty = Dirty::default();
         Ok(report)

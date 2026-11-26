@@ -301,6 +301,12 @@ impl Library {
 
     /// Registers `id` as a linked item in `falcon.json` and persists atomically.
     pub(crate) fn add_linked_id(&mut self, id: &str) -> Result<()> {
+        if self.write_mode == WriteMode::Batched {
+            if self.config.linked_ids.insert(id.to_string()) {
+                self.dirty.config = true;
+            }
+            return Ok(());
+        }
         let mut next = self.config.clone();
         if next.linked_ids.insert(id.to_string()) {
             next.save(&self.root)?;
