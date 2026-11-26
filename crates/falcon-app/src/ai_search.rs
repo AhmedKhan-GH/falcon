@@ -34,9 +34,9 @@ pub const SEARCH_LIMIT: usize = 500;
 /// How long an API search waits, with room for the model to load.
 const API_WAIT: Duration = Duration::from_secs(120);
 
-/// Where AI Search keeps its files.
+/// Where AI Search keeps its writable index files.
 fn data_dir() -> Option<PathBuf> {
-    eframe::storage_dir("Falcon").map(|d| d.join("ai-search"))
+    eframe::storage_dir(crate::app_data_name()).map(|d| d.join("ai-search"))
 }
 
 /// The worker, the download and what they share.
@@ -57,7 +57,16 @@ impl Engine {
     pub fn start(ctx: &egui::Context) -> Option<Arc<Engine>> {
         let base = data_dir()?;
         let model_base = base.join("model");
-        let dir = model::dir_in(&model_base);
+        let mut dir = model::dir_in(&model_base);
+        // Dev builds reuse existing production model weights read-only when present.
+        if crate::app_data_name() != "Falcon" && !model::is_installed(&dir)
+            && let Some(prod_base) = eframe::storage_dir("Falcon").map(|d| d.join("ai-search").join("model"))
+        {
+            let prod_dir = model::dir_in(&prod_base);
+            if model::is_installed(&prod_dir) {
+                dir = prod_dir;
+            }
+        }
         let (for_load, for_check) = (dir.clone(), dir.clone());
         let repaint = ctx.clone();
         let service = Service::start(Options {

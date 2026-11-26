@@ -102,6 +102,23 @@ fn attach_console() {
     unsafe { AttachConsole(ATTACH_PARENT_PROCESS) };
 }
 
+/// Uses an isolated writable app-data directory (`Falcon-Dev`) when launched
+/// from the `Falcon Dev — Referenced Assets.app` bundle so production settings,
+/// recent libraries, logs, and AI indexes are never touched.
+pub(crate) fn app_data_name() -> &'static str {
+    static NAME: std::sync::OnceLock<&'static str> = std::sync::OnceLock::new();
+    NAME.get_or_init(|| {
+        if std::env::current_exe()
+            .ok()
+            .is_some_and(|p| p.to_string_lossy().contains("Falcon Dev"))
+        {
+            "Falcon-Dev"
+        } else {
+            "Falcon"
+        }
+    })
+}
+
 fn main() -> eframe::Result {
     #[cfg(all(windows, not(debug_assertions)))]
     attach_console();
@@ -136,9 +153,11 @@ fn main() -> eframe::Result {
             },
         }
     }
+    let app_name = app_data_name();
+    let window_title = if app_name == "Falcon" { "Falcon" } else { "Falcon Dev — Referenced Assets" };
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
-            .with_title("Falcon")
+            .with_title(window_title)
             // Matches falcon.desktop on Linux, so the desktop shows the icon; macOS ignores it.
             .with_app_id("falcon")
             .with_fullsize_content_view(true)
@@ -151,7 +170,7 @@ fn main() -> eframe::Result {
         ..Default::default()
     };
     eframe::run_native(
-        "Falcon",
+        app_name,
         options,
         Box::new(move |cc| {
             let app = app::App::new(cc, initial, launch);
