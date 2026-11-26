@@ -220,7 +220,7 @@ fn jpeg_frame_pixels(jpeg: &[u8]) -> Option<u64> {
 /// documents such as PDFs.
 pub const QUICKLOOK_SIZE: u32 = 1024;
 /// How long a QuickLook render may take.
-pub const QUICKLOOK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+pub const QUICKLOOK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(6);
 
 /// Why [`quicklook_until`] gave no picture.
 #[derive(Debug)]
