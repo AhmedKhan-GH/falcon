@@ -163,7 +163,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
             grid && matches!(s.scope, ScopeKind::Folder | ScopeKind::Smart) && s.picked_folders < 2 && s.picked_smart < 2
         }
         C::MoveFolder => grid && (s.scope == ScopeKind::Folder || s.picked_folders > 0),
-        C::MergeLibrary | C::EmptyCacheReload | C::ImportPack | C::ImportInboard => s.library,
+        C::MergeLibrary | C::MoveLibrary | C::EmptyCacheReload | C::ImportPack | C::ImportInboard => s.library,
         C::LockApp => s.lockable,
         C::NewLibrary | C::LoadLibrary | C::ClearLibraryHistory | C::SwitchLibrary | C::CollectWindow | C::NotificationCenter | C::Preferences | C::CloseWindow | C::Minimize | C::FullScreen | C::WindowZoom => true,
         C::NextLibrary | C::PreviousLibrary => s.libraries > 1,
@@ -343,6 +343,7 @@ pub static MENUS: &[(&str, &[Entry])] = &[
             item("New Library…", Command::NewLibrary),
             item("Open Library…", Command::SwitchLibrary),
             item("Merge Library…", Command::MergeLibrary),
+            item("Move Library…", Command::MoveLibrary),
             SEP,
             item("Clear Library History…", Command::ClearLibraryHistory),
             item("Empty Cache and Reload…", Command::EmptyCacheReload),
@@ -1369,7 +1370,7 @@ mod tests {
         assert!(!enabled(Command::NextLibrary, &s));
         assert!(enabled(Command::NewLibrary, &s));
         assert!(enabled(Command::ClearLibraryHistory, &s));
-        for c in [Command::MergeLibrary, Command::EmptyCacheReload, Command::ImportPack, Command::ImportInboard] {
+        for c in [Command::MergeLibrary, Command::MoveLibrary, Command::EmptyCacheReload, Command::ImportPack, Command::ImportInboard] {
             assert!(!enabled(c, &s), "{c:?} needs a library");
             assert!(enabled(c, &State { library: true, ..Default::default() }), "{c:?}");
         }

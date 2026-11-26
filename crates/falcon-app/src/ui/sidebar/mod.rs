@@ -259,6 +259,10 @@ impl App {
             ui.close();
             crate::open_with::reveal(&[root.to_path_buf()]);
         }
+        if !missing && ui.button(tr("Move Library…")).clicked() {
+            ui.close();
+            self.switch_to = Some(Switch::Move(root.to_path_buf()));
+        }
         ui.separator();
         if ui.button(tr("Remove from List")).clicked() {
             ui.close();
@@ -401,6 +405,9 @@ impl App {
             }
             if ui.button(tr("Merge Another Library…")).clicked() {
                 self.switch_to = Some(Switch::Merge);
+            }
+            if ui.button(tr("Move Library…")).clicked() {
+                self.switch_to = Some(Switch::Move(current.clone()));
             }
             if ui.button(tr("Empty Cache and Reload…")).clicked() {
                 self.confirm_reload = true;

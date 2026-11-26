@@ -202,6 +202,31 @@ impl FolderEmoji {
         }
     }
 
+    /// Moves every saved folder emoji from `old` to `new` when the library
+    /// moves.
+    pub fn rename_library(&mut self, old: &std::path::Path, new: &std::path::Path) {
+        let old_prefix = format!("{}\n", old.to_string_lossy());
+        let new_prefix = format!("{}\n", new.to_string_lossy());
+        if old_prefix == new_prefix {
+            return;
+        }
+        let keys: Vec<String> = self.map.keys().filter(|k| k.starts_with(&old_prefix)).cloned().collect();
+        let moved: Vec<(String, String)> = keys
+            .into_iter()
+            .filter_map(|k| {
+                let val = self.map.remove(&k)?;
+                let rest = k.strip_prefix(&old_prefix)?;
+                Some((format!("{new_prefix}{rest}"), val))
+            })
+            .collect();
+        for (k, v) in moved {
+            self.map.entry(k).or_insert(v);
+        }
+        if self.scope == old.to_string_lossy() {
+            self.scope = new.to_string_lossy().into_owned();
+        }
+    }
+
     /// Whether any folder has an emoji.
     #[cfg(test)]
     pub fn any(&self) -> bool {
@@ -299,5 +324,19 @@ mod tests {
         m.clear("F1");
         assert_eq!(m.get("F1"), None);
         assert_eq!(m.get("F2"), Some('🌱'));
+    }
+
+    #[test]
+    fn renaming_a_library_moves_its_emojis() {
+        let mut m = FolderEmoji::default();
+        let old = std::path::Path::new("/a.library");
+        let new = std::path::Path::new("/Volumes/SSD/a.library");
+        m.set_library(Some(old));
+        m.set("F1", '🔥');
+        m.rename_library(old, new);
+        m.set_library(Some(new));
+        assert_eq!(m.get("F1"), Some('🔥'));
+        m.set_library(Some(old));
+        assert_eq!(m.get("F1"), None);
     }
 }
