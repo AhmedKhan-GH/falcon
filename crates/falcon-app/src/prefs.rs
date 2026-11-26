@@ -90,6 +90,9 @@ pub struct Prefs {
     pub ui_zoom: u16,
     /// Eagle's `general.showSidebarBadge`: item counts beside sidebar rows.
     pub sidebar_counts: bool,
+    /// Falcon's own: folder counts include items in subfolders as well as
+    /// items directly in the folder.
+    pub subfolder_counts: bool,
     /// Eagle's `habits.dblclickSidebarItem`: what double-clicking a folder
     /// or smart folder in the sidebar does.
     pub sidebar_double_click: SidebarDoubleClick,
@@ -344,6 +347,7 @@ impl Default for Prefs {
             theme: Theme::Dark,
             ui_zoom: 100,
             sidebar_counts: true,
+            subfolder_counts: true,
             sidebar_double_click: SidebarDoubleClick::default(),
             sidebar: SidebarSections::default(),
             double_click: DoubleClick::default(),
@@ -1198,6 +1202,7 @@ fn general(p: &mut Page, d: &mut Draft, login: &crate::login_item::Status) {
             }
         });
         ui.checkbox(&mut d.prefs.sidebar_counts, tr("Show item counts in the sidebar"));
+        ui.checkbox(&mut d.prefs.subfolder_counts, tr("Include subfolder items in folder counts"));
     });
     p.block(tr_key("Language"), &["language", "locale", "translation", "english", "chinese", "japanese", "korean", "german", "spanish", "russian"], |ui| {
         let before = d.prefs.language;

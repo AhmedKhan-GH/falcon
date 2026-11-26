@@ -440,7 +440,7 @@ impl App {
         );
 
         let list_rect = Rect::from_min_max(Pos2::new(full.left(), lib_row.bottom() + 6.0), Pos2::new(full.right() - 1.0, filter_rect.top() - 8.0));
-        let folder_counts = logic::folder_counts(lib.items());
+        let folder_counts = self.folder_counts_for(lib);
         let nav = logic::nav_counts(lib.items(), &lib.metadata.folders, lib.metadata.modification_time);
         let quick: HashSet<String> =
             lib.metadata.quick_access.iter().filter_map(|q| q.get("id").and_then(|v| v.as_str()).map(String::from)).collect();
@@ -581,6 +581,16 @@ impl App {
     /// Preferences turns counts off.
     pub(crate) fn badge(&self, count: usize) -> Option<usize> {
         (count > 0 && self.prefs.sidebar_counts).then_some(count)
+    }
+
+    /// Item counts per folder id for the sidebar and subfolder cards.
+    pub(crate) fn folder_counts_for(&self, lib: &Library) -> HashMap<String, usize> {
+        if self.prefs.subfolder_counts {
+            let hidden = crate::organize::hidden_folders(&lib.metadata.folders, &self.ws.org.unlocked);
+            logic::folder_total_counts(lib.items(), &lib.metadata.folders, &hidden)
+        } else {
+            logic::folder_counts(lib.items())
+        }
     }
 
     pub(crate) fn nav_rows(&mut self, ui: &mut Ui, cx: &SidebarCtx) {
