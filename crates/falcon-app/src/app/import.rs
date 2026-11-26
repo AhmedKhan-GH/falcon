@@ -629,62 +629,73 @@ fn spawn_jobs(ws: &super::Workspace, ctx: eframe::egui::Context, ask_dupes: bool
     }
     let scratch = tempfile_dir().ok();
     let dupes = ask_dupes.then(|| ws.dupes.clone());
+    let workers = jobs.len().clamp(1, 4);
+    let queue = std::sync::Mutex::new(std::collections::VecDeque::from(jobs));
     std::thread::spawn(move || {
-        for Job { path: f, opts } in jobs {
-            // Paused from the sidebar: wait before the next file (a
-            // stop request ends the wait).
-            while {
-                let pr = progress.lock().unwrap_or_else(|p| p.into_inner());
-                pr.paused && !pr.cancel
-            } {
-                std::thread::sleep(crate::tasks::PAUSE_POLL);
-            }
-            if progress.lock().unwrap_or_else(|p| p.into_inner()).cancel {
-                // Stopped: skip the file, but still clear a pasted copy.
-                if scratch.as_ref().is_some_and(|d| f.starts_with(d)) {
-                    let _ = std::fs::remove_file(&f);
-                }
-                progress.lock().unwrap_or_else(|p| p.into_inner()).done += 1;
-                continue;
-            }
-            // A file already in the library is held for the duplicate
-            // dialog (`import_dupes`) instead of being committed.
-            let result = crate::import_dupes::import_one(&f, &opts, &shared, dupes.as_ref());
-            if let Some(removal) = &removal {
-                // Only clean up an auto-imported source if Falcon copied it inside
-                // the library; never remove/trash an external linked asset's source.
-                let committed = match &result {
-                    Ok(Some(id)) => {
-                        let lib = lock(&shared);
-                        (lib.asset_status(id) == Some(falcon_library::linked::AssetStatus::Managed))
-                            .then(|| lib.item(id).map(|item| item.managed_storage_path(lib.root())))
-                            .flatten()
+        std::thread::scope(|scope| {
+            for _ in 0..workers {
+                scope.spawn(|| {
+                    while let Some(Job { path: f, opts }) = {
+                        let mut q = queue.lock().unwrap_or_else(|p| p.into_inner());
+                        q.pop_front()
+                    } {
+                        // Paused from the sidebar: wait before the next file (a
+                        // stop request ends the wait).
+                        while {
+                            let pr = progress.lock().unwrap_or_else(|p| p.into_inner());
+                            pr.paused && !pr.cancel
+                        } {
+                            std::thread::sleep(crate::tasks::PAUSE_POLL);
+                        }
+                        if progress.lock().unwrap_or_else(|p| p.into_inner()).cancel {
+                            // Stopped: skip the file, but still clear a pasted copy.
+                            if scratch.as_ref().is_some_and(|d| f.starts_with(d)) {
+                                let _ = std::fs::remove_file(&f);
+                            }
+                            progress.lock().unwrap_or_else(|p| p.into_inner()).done += 1;
+                            continue;
+                        }
+                        // A file already in the library is held for the duplicate
+                        // dialog (`import_dupes`) instead of being committed.
+                        let result = crate::import_dupes::import_one(&f, &opts, &shared, dupes.as_ref());
+                        if let Some(removal) = &removal {
+                            // Only clean up an auto-imported source if Falcon copied it inside
+                            // the library; never remove/trash an external linked asset's source.
+                            let committed = match &result {
+                                Ok(Some(id)) => {
+                                    let lib = lock(&shared);
+                                    (lib.asset_status(id) == Some(falcon_library::linked::AssetStatus::Managed))
+                                        .then(|| lib.item(id).map(|item| item.managed_storage_path(lib.root())))
+                                        .flatten()
+                                }
+                                _ => None,
+                            };
+                            if removal.finish(&f, committed.as_deref(), crate::auto_import::trash) == crate::auto_import::After::TrashFailed {
+                                crate::errlog::error(&format!("auto-import: couldn't move {} to the Trash", f.display()));
+                            }
+                        }
+                        // Pasted images are staged in falcon's own temp folder; they
+                        // are removed only now, after the import has read them.
+                        if scratch.as_ref().is_some_and(|d| f.starts_with(d)) {
+                            let _ = std::fs::remove_file(&f);
+                        }
+                        let mut pr = progress.lock().unwrap_or_else(|p| p.into_inner());
+                        pr.done += 1;
+                        // `Ok(None)` is a duplicate held for the dialog, not added.
+                        if let Ok(Some(id)) = &result {
+                            pr.added.push(id.clone());
+                        }
+                        if let Err(e) = &result {
+                            pr.failed += 1;
+                            pr.errors.push(ImportError { failure: Failure::new(&f, e), opts: opts.clone() });
+                        }
+                        pr.current = f.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                        drop(pr);
+                        ctx.request_repaint();
                     }
-                    _ => None,
-                };
-                if removal.finish(&f, committed.as_deref(), crate::auto_import::trash) == crate::auto_import::After::TrashFailed {
-                    crate::errlog::error(&format!("auto-import: couldn't move {} to the Trash", f.display()));
-                }
+                });
             }
-            // Pasted images are staged in falcon's own temp folder; they
-            // are removed only now, after the import has read them.
-            if scratch.as_ref().is_some_and(|d| f.starts_with(d)) {
-                let _ = std::fs::remove_file(&f);
-            }
-            let mut pr = progress.lock().unwrap_or_else(|p| p.into_inner());
-            pr.done += 1;
-            // `Ok(None)` is a duplicate held for the dialog, not added.
-            if let Ok(Some(id)) = &result {
-                pr.added.push(id.clone());
-            }
-            if let Err(e) = &result {
-                pr.failed += 1;
-                pr.errors.push(ImportError { failure: Failure::new(&f, e), opts: opts.clone() });
-            }
-            pr.current = f.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-            drop(pr);
-            ctx.request_repaint();
-        }
+        });
     });
 }
 
