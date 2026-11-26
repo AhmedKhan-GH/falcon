@@ -369,6 +369,12 @@ impl Library {
     /// Link mode), rolling back atomically on failure.
     pub fn commit_import(&mut self, staged: Staged) -> Result<String> {
         let Staged { mut item, dir, auto_tags, added_at, link } = staged;
+        if fs::symlink_metadata(journal::journal_path(self.root())).is_ok() {
+            return Err(Error::Refused(format!(
+                "cannot import while an unresolved recovery journal exists at {}; recover first",
+                journal::journal_path(self.root()).display()
+            )));
+        }
         if let Some(draft) = &link {
             linked::validate_link_source(&draft.source_path, self.root())?;
         }
@@ -418,6 +424,7 @@ impl Library {
             // Write metadata.json synchronously inside staging BEFORE publication rename so
             // even WriteMode::Batched never publishes an `.info` dir lacking `metadata.json`.
             write_json(&stage_dir.join("metadata.json"), &item)?;
+            crate::storage_mode::sync_dir_contents(&stage_dir);
             fault::check(FaultPoint::ImportAfterStageMetadata, &stage_dir)?;
 
             journal::write_journal(
@@ -440,6 +447,7 @@ impl Library {
 
             fault::check(FaultPoint::ImportBeforePublishRename, &dest)?;
             fs::rename(&stage_dir, &dest).map_err(|e| Error::io(&dest, e))?;
+            crate::storage_mode::sync_dir(&images);
             published = true;
             fault::check(FaultPoint::ImportAfterPublishRename, &dest)?;
 
@@ -450,7 +458,7 @@ impl Library {
         match committed {
             Ok(()) => Ok(item.id),
             Err(e) => {
-                if !published && !dest.exists() {
+                if !published && !dest.exists() && !matches!(e, Error::Refused(_)) {
                     let _ = self.remove_linked_id(&id);
                     let _ = fs::remove_dir_all(&stage_dir);
                     let _ = journal::remove_journal(self.root());

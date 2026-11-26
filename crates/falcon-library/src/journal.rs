@@ -16,7 +16,8 @@ use serde::{Deserialize, Serialize};
 use crate::error::{Error, Result};
 use crate::fault::{self, FaultPoint};
 use crate::linked::LINK_SIDECAR;
-use crate::storage_mode::{FalconConfig, atomic_write_json, read_json};
+use crate::model::{Item, MtimeIndex};
+use crate::storage_mode::{FalconConfig, atomic_create_json_exclusive, read_json, sync_dir};
 
 /// Transient operation journal persisted at `<library>/.falcon-journal.json`.
 pub const JOURNAL_FILE: &str = ".falcon-journal.json";
@@ -97,14 +98,24 @@ pub(crate) fn journal_path(library_root: &Path) -> PathBuf {
 
 pub(crate) fn write_journal(library_root: &Path, journal: &PendingJournal) -> Result<()> {
     let path = journal_path(library_root);
+    if fs::symlink_metadata(&path).is_ok() {
+        return Err(Error::Refused(format!(
+            "cannot start {:?} while an unresolved recovery journal exists at {}; recover first",
+            journal.kind,
+            path.display()
+        )));
+    }
     fault::check(FaultPoint::JournalWrite, &path)?;
-    atomic_write_json(&path, journal)
+    atomic_create_json_exclusive(&path, journal)
 }
 
 pub(crate) fn remove_journal(library_root: &Path) -> Result<()> {
     let path = journal_path(library_root);
     match fs::remove_file(&path) {
-        Ok(()) => Ok(()),
+        Ok(()) => {
+            sync_dir(library_root);
+            Ok(())
+        }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(e) => Err(Error::io(&path, e)),
     }
@@ -138,11 +149,15 @@ pub(crate) fn dir_has_link_sidecar(dir: &Path) -> bool {
 }
 
 /// Deterministic explicit recovery for an interrupted `.falcon-journal.json`.
-/// Never deletes unverified staging files or external originals.
+/// Idempotent: verifies published items (keeping them intact and repairing stale
+/// `falcon.json::linked_ids` + `mtime.json`), rolls back unpublished `linked_ids`,
+/// and preserves unverified staging files and external originals.
 pub(crate) fn reconcile_journal(
     library_root: &Path,
     config: &mut FalconConfig,
-    loaded_ids: &BTreeSet<String>,
+    items: &[Item],
+    mtime: &mut MtimeIndex,
+    write_mtime: impl FnOnce(&MtimeIndex) -> Result<()>,
 ) -> Result<RecoveryReport> {
     let mut report = RecoveryReport::default();
     let Some(journal) = (match read_journal(library_root) {
@@ -156,21 +171,45 @@ pub(crate) fn reconcile_journal(
         return Ok(report);
     };
 
+    let loaded_ids: BTreeSet<String> = items.iter().map(|i| i.id.clone()).collect();
     let mut cfg_next = config.clone();
     let mut cfg_dirty = false;
+    let mut mtime_dirty = false;
     let images = library_root.join("images");
 
     for id in &journal.item_ids {
-        let published = loaded_ids.contains(id) && images.join(format!("{id}.info")).is_dir();
+        let info_dir = images.join(format!("{id}.info"));
+        let published = loaded_ids.contains(id) && info_dir.is_dir();
         if published {
-            if journal.linked_ids.contains(id) && cfg_next.linked_ids.insert(id.clone()) {
+            let has_sidecar = dir_has_link_sidecar(&info_dir);
+            if (journal.linked_ids.contains(id) || has_sidecar)
+                && cfg_next.linked_ids.insert(id.clone())
+            {
                 cfg_dirty = true;
+            }
+            if let Some(item) = items.iter().find(|i| &i.id == id) {
+                match mtime.entries.iter_mut().find(|(eid, _)| eid == id) {
+                    Some((_, stamp)) if *stamp != item.last_modified => {
+                        *stamp = item.last_modified;
+                        mtime_dirty = true;
+                    }
+                    Some(_) => {}
+                    None => {
+                        mtime.entries.push((id.clone(), item.last_modified));
+                        mtime_dirty = true;
+                    }
+                }
             }
             report.finalized_published.push(id.clone());
         } else if cfg_next.linked_ids.remove(id) {
             cfg_dirty = true;
             report.rolled_back_linked_ids.push(id.clone());
         }
+    }
+
+    if mtime.all != Some(items.len() as u64) {
+        mtime.all = Some(items.len() as u64);
+        mtime_dirty = true;
     }
 
     for stage_name in &journal.stage_dirs {
@@ -183,6 +222,9 @@ pub(crate) fn reconcile_journal(
     if cfg_dirty {
         cfg_next.save(library_root)?;
         *config = cfg_next;
+    }
+    if mtime_dirty {
+        write_mtime(mtime)?;
     }
 
     remove_journal(library_root)?;

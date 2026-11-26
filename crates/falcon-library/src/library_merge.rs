@@ -144,9 +144,14 @@ pub fn copy_items(dest_root: &Path, plan: &MergePlan, cancel: &AtomicBool, mut p
             match fault::check(FaultPoint::MergeCopyItem, &target)
                 .map_err(|e| std::io::Error::other(e.to_string()))
                 .and_then(|()| copy_dir(&src_dir, &tmp))
-                .and_then(|()| fs::rename(&tmp, &target))
-            {
-                Ok(()) => copied.push(name.clone()),
+                .and_then(|()| {
+                    crate::storage_mode::sync_dir_contents(&tmp);
+                    fs::rename(&tmp, &target)
+                }) {
+                Ok(()) => {
+                    crate::storage_mode::sync_dir(&images);
+                    copied.push(name.clone());
+                }
                 Err(e) => {
                     let _ = fs::remove_dir_all(&tmp);
                     failed.push((name.clone(), e.to_string()));

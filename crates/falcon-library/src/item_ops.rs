@@ -134,6 +134,12 @@ impl Library {
     /// the copy keeps the name, tags, folders, dates and everything else.
     /// Returns the new id.
     pub fn duplicate_item(&mut self, id: &str) -> Result<String> {
+        if fs::symlink_metadata(journal::journal_path(self.root())).is_ok() {
+            return Err(Error::Refused(format!(
+                "cannot duplicate while an unresolved recovery journal exists at {}; recover first",
+                journal::journal_path(self.root()).display()
+            )));
+        }
         let item = self.item(id).cloned().ok_or_else(|| self.invalid(format!("no item {id}")))?;
         let status = self.asset_status(id).unwrap_or(AssetStatus::Managed);
         if status == AssetStatus::InvalidReference {
@@ -170,6 +176,7 @@ impl Library {
             // Write new item metadata synchronously inside staging before publication rename so
             // `<new_id>.info` never temporarily contains old IDs on disk.
             write_json(&stage_dir.join("metadata.json"), &copy)?;
+            crate::storage_mode::sync_dir_contents(&stage_dir);
             fault::check(FaultPoint::DuplicateAfterStageMetadata, &stage_dir)?;
 
             journal::write_journal(
@@ -192,6 +199,7 @@ impl Library {
 
             fault::check(FaultPoint::DuplicateBeforePublishRename, &to)?;
             fs::rename(&stage_dir, &to).map_err(|e| Error::io(&to, e))?;
+            crate::storage_mode::sync_dir(&images);
             published = true;
             fault::check(FaultPoint::DuplicateAfterPublishRename, &to)?;
 
@@ -202,7 +210,7 @@ impl Library {
         match made {
             Ok(()) => Ok(new_id),
             Err(e) => {
-                if !published && !to.exists() {
+                if !published && !to.exists() && !matches!(e, Error::Refused(_)) {
                     let _ = self.remove_linked_id(&new_id);
                     let _ = fs::remove_dir_all(&stage_dir);
                     let _ = journal::remove_journal(self.root());
