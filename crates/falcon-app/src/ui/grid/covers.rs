@@ -79,8 +79,8 @@ fn list_rows_cap(rows: usize, row_h: f32, avail: f32) -> f32 {
 }
 
 /// "N items · M subfolders" under a subfolder card, or at its row's right.
-fn folder_meta(lib: &Library, child: &Folder) -> String {
-    let count = lib.items().iter().filter(|i| !i.is_deleted && i.folders.contains(&child.id)).count();
+fn folder_meta(child: &Folder, counts: &std::collections::HashMap<String, usize>) -> String {
+    let count = counts.get(&child.id).copied().unwrap_or(0);
     let mut meta = tr_n(count, "{n} item", "{n} items");
     if !child.children.is_empty() {
         meta.push_str(&format!(" · {}", tr_n(child.children.len(), "{n} subfolder", "{n} subfolders")));
@@ -129,6 +129,7 @@ impl App {
             return;
         }
         let cards = logic::subfolder_cards(folder, self.display.subfolders);
+        let counts = self.folder_counts_for(lib);
         if self.ws.layout == logic::Layout::List {
             let row_h = list_row_height(self.tile);
             let h = list_rows_cap(cards.len(), row_h, ui.available_height());
@@ -149,7 +150,7 @@ impl App {
                         self.strip_cover(ui, lib, child, thumb, &locked, (side * 0.6).max(12.0));
                         let date = Rect::from_min_max(Pos2::new(row.right() - LIST_DATE_W - 10.0, row.top()), Pos2::new(row.right() - 10.0, row.bottom()));
                         p.text(date.right_center(), Align2::RIGHT_CENTER, logic::format_ms(child.modification_time), font(12.0), t::p().text_muted);
-                        let meta = galley(ui, &folder_meta(lib, child), font(12.0), t::p().text_muted, (row.width() * 0.3).max(60.0));
+                        let meta = galley(ui, &folder_meta(child, &counts), font(12.0), t::p().text_muted, (row.width() * 0.3).max(60.0));
                         let meta_x = date.left() - 10.0 - meta.size().x;
                         p.galley(Pos2::new(meta_x, row.center().y - meta.size().y / 2.0), meta, t::p().text_muted);
                         let name_x = thumb.right() + 10.0;
@@ -178,7 +179,7 @@ impl App {
                             // The name: a double-click renames the folder, as in Eagle.
                             let name_rect = Rect::from_min_size(Pos2::new(rect.left(), thumb.bottom() + 4.0), vec2(CARD_W, 19.0));
                             self.strip_name(ui, child, name_rect, Pos2::new(rect.left(), thumb.bottom() + 6.0));
-                            let g = galley(ui, &folder_meta(lib, child), font(11.5), t::p().text_muted, CARD_W);
+                            let g = galley(ui, &folder_meta(child, &counts), font(11.5), t::p().text_muted, CARD_W);
                             ui.painter().galley(Pos2::new(rect.left(), thumb.bottom() + 25.0), g, t::p().text_muted);
                             if resp.double_clicked() || resp.clicked() {
                                 open = Some(child.id.clone());
