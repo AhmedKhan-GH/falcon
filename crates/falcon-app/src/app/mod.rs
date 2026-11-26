@@ -707,7 +707,7 @@ impl App {
         if self.audio.loaded().is_some() && self.audio.loaded() != self.ws.viewer.as_deref() {
             self.audio.stop();
         }
-        self.drop_hint(&ctx);
+        self.drop_hint(&ctx, lib.storage_mode());
         self.capture_notice_ui(&ctx);
         self.video.keep_only(self.ws.viewer.as_deref());
         self.fetches.prune((self.ws.view.id.as_str() == self.ws.viewer.as_deref().unwrap_or_default()).then_some(self.ws.view.file.as_path()));
