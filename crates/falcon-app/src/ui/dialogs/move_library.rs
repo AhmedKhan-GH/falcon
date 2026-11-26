@@ -409,10 +409,25 @@ impl App {
                 if was_active {
                     self.serve_active();
                 }
-                if msg == "cancelled" {
+                // A failed cleanup (disk unplugged, say) leaves a marked staging
+                // folder beside the destination; the original is intact.
+                let leftovers: Vec<String> = dest
+                    .parent()
+                    .map(crate::library_move::stale_staging)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|(p, _)| crate::workspaces::tilde(&p))
+                    .collect();
+                if msg == "cancelled" && leftovers.is_empty() {
                     self.flash(tr("Move cancelled"));
-                } else {
+                } else if leftovers.is_empty() {
                     self.show_alert(Alert::new(tr("Could not move the library"), msg));
+                } else {
+                    let note = trf(
+                        "Your original library is unchanged. A partial copy was left behind and can be deleted: {paths}",
+                        &[("paths", &leftovers.join(", "))],
+                    );
+                    self.show_alert(Alert::new(tr("Could not move the library"), format!("{msg}\n\n{note}")));
                 }
             }
         }

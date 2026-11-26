@@ -161,6 +161,12 @@ mod tests {
         assert_eq!(open.len(), 1);
         assert!(!open.contains(&outside));
 
+        // 5. Every open, create and add-to-library goes through `install_dir::guard`.
+        assert!(crate::install_dir::guard(&inside).is_ok());
+        let refused = crate::install_dir::guard(&outside).unwrap_err().to_string();
+        assert!(refused.contains("escapes authorized QA sandbox"), "{refused}");
+        assert!(crate::install_dir::guard(&traversal).is_err());
+
         // Clean up env
         unsafe {
             std::env::remove_var(QA_DIR_VAR);

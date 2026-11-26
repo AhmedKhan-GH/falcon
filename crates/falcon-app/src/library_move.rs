@@ -349,7 +349,9 @@ pub fn stale_staging(parent: &Path) -> Vec<(PathBuf, bool)> {
 }
 
 /// Removes a staging folder found by [`stale_staging`] after the user agreed.
-/// Refuses anything that is not a real, marked staging folder.
+/// Refuses anything that is not a real, marked staging folder. Not yet offered
+/// in the interface; the failure alert names the folder for manual removal.
+#[allow(dead_code)]
 pub fn remove_stale_staging(path: &Path) -> io::Result<()> {
     let name_ok = path.file_name().is_some_and(|n| n.to_string_lossy().starts_with(STAGING_PREFIX));
     let meta = fs::symlink_metadata(path)?;
@@ -417,6 +419,7 @@ fn scan_source(root: &Path, stop: &AtomicBool) -> io::Result<std::collections::B
     Ok(out)
 }
 
+#[cfg(test)]
 fn copy_dir_cancellable(
     src: &Path,
     dest: &Path,
