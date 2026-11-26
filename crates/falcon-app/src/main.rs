@@ -159,7 +159,7 @@ fn main() -> eframe::Result {
         }
     }
     let app_name = app_data_name();
-    let window_title = if app_name == "Falcon" { "Falcon" } else { "Falcon Dev — Referenced Assets" };
+    let window_title = if app_name == "Falcon" { "Falcon" } else { "Falcon Dev — Unified" };
     let app_id = if app_name == "Falcon" { "falcon" } else { "falcon-dev" };
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
