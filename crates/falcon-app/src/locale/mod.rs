@@ -258,7 +258,7 @@ type Catalogue = HashMap<String, Entry>;
 /// A language's translations, read once from the built-in file. A file
 /// that fails to parse (which the tests rule out) leaves it in English.
 fn catalogue(lang: Lang) -> &'static Catalogue {
-    static LOADED: [OnceLock<Catalogue>; 8] = [const { OnceLock::new() }; 8];
+    static LOADED: [OnceLock<Catalogue>; 10] = [const { OnceLock::new() }; 10];
     LOADED[lang.index()].get_or_init(|| serde_json::from_str(lang.source()).unwrap_or_default())
 }
 
