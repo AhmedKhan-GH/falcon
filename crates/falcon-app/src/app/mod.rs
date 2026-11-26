@@ -385,9 +385,15 @@ impl App {
         // command line (focused if it was already open).
         app.missing = crate::workspaces::missing_shown(&saved.libraries, saved.active, saved.library.as_deref(), |p| p.is_dir());
         let (libraries, active) = crate::workspaces::restore(&saved.libraries, saved.active, saved.library.as_deref(), |p| p.is_dir());
-        // Each is read behind the loading screen; the command line's
-        // starting view waits until they are open (`app/open_queue.rs`).
-        let show = initial.or_else(|| libraries.get(active).cloned());
+        // In QA mode, enforce strict isolation: reject saved production libraries and
+        // validate target path against authorized sandbox boundaries.
+        let (show, libraries) = match crate::qa_isolation::sanitize_startup_libraries(initial, libraries) {
+            Ok((s, libs)) => (s.or_else(|| libs.get(active).cloned()), libs),
+            Err(e) => {
+                crate::errlog::error(&format!("QA Security Isolation violation: {e}"));
+                panic!("QA Security Isolation violation: {e}");
+            }
+        };
         app.queue_launch(libraries, show, launch);
         crate::links::set_repaint(&app.ctx);
         crate::open_files::set_repaint(&app.ctx);

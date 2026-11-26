@@ -57,6 +57,7 @@ mod open_with;
 mod page_shot;
 mod prefs;
 mod progress_eta;
+pub(crate) mod qa_isolation;
 mod share;
 mod quick_switch;
 mod search_state;
@@ -108,7 +109,9 @@ fn attach_console() {
 pub(crate) fn app_data_name() -> &'static str {
     static NAME: std::sync::OnceLock<&'static str> = std::sync::OnceLock::new();
     NAME.get_or_init(|| {
-        if std::env::current_exe()
+        if qa_isolation::is_qa_mode() {
+            "falcon-qa"
+        } else if std::env::current_exe()
             .ok()
             .is_some_and(|p| p.to_string_lossy().contains("Falcon Dev"))
         {

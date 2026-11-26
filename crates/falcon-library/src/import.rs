@@ -89,17 +89,23 @@ const NOT_A_FILE: &str = "not a regular file";
 const EMPTY_FILE: &str = "file is empty";
 const UNRECOGNIZED: &str = "file format is not recognised";
 
-/// Browser download-in-progress extensions (Chrome, Firefox, Safari),
-/// which Eagle's `getExt` treats as having no format.
-const PARTIAL_DOWNLOADS: [&str; 3] = ["crdownload", "part", "download"];
+/// Browser download-in-progress, temporary, and lock extensions,
+/// which Falcon treats as having no recognized format.
+const PARTIAL_DOWNLOADS: [&str; 8] = [
+    "crdownload", "part", "download", "tmp", "temp", "swp", "swo", "lock",
+];
 
 /// Whether Eagle would import a file with this (lower-cased) extension:
-/// any extension at all, except unfinished browser downloads. A file with
-/// no extension is refused as "not recognized"; every other format is
-/// imported, with a thumbnail when one can be made and as an icon
-/// otherwise.
+/// any extension at all, except unfinished browser downloads, temporary, or lock files.
 pub fn is_recognized(ext: &str) -> bool {
-    !ext.is_empty() && !PARTIAL_DOWNLOADS.contains(&ext)
+    if ext.is_empty() {
+        return false;
+    }
+    let lower = ext.to_ascii_lowercase();
+    if lower.contains("~lock~") || lower.ends_with('~') || lower.starts_with('~') {
+        return false;
+    }
+    !PARTIAL_DOWNLOADS.contains(&lower.as_str())
 }
 
 /// Why a file could not be imported, for the app's list of failed imports.
@@ -259,6 +265,10 @@ pub fn stage_for(path: impl AsRef<Path>, opts: &ImportOptions, library_root: Opt
     let meta = fs::metadata(src).map_err(|e| Error::io(src, e))?;
     if !meta.is_file() {
         return Err(refuse(NOT_A_FILE));
+    }
+    let file_name = src.file_name().map(|n| n.to_string_lossy()).unwrap_or_default();
+    if crate::folder_import::is_skipped(&file_name) {
+        return Err(refuse(UNRECOGNIZED));
     }
     let ext = src.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
     if !is_recognized(&ext) {
