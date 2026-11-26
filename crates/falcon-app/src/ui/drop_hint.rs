@@ -4,21 +4,19 @@
 
 use eframe::egui::{self, Color32, CornerRadius, LayerId, Order, Rect, Stroke, StrokeKind, vec2};
 
-use crate::app::{App, lock};
+use crate::app::App;
 use crate::locale::{tr, trf};
 use crate::drop_pos::{self, Target};
 use crate::theme::{self as t, font};
 use falcon_library::storage_mode::StorageMode;
 
 impl App {
-    pub(crate) fn drop_hint(&mut self, ctx: &egui::Context) {
+    pub(crate) fn drop_hint(&mut self, ctx: &egui::Context, lib_mode: StorageMode) {
         let dragging = ctx.input(|i| !i.raw.hovered_files.is_empty());
         let ours = self.native_drag.load(std::sync::atomic::Ordering::Relaxed);
-        let Some(shared) = self.ws.lib.clone() else { return };
         if !dragging || ours {
             return;
         }
-        let lib_mode = lock(&shared).storage_mode();
         let alt_flip = ctx.input(|i| i.modifiers.alt);
         let effective = match (lib_mode, alt_flip) {
             (StorageMode::Copy, true) => StorageMode::Link,
