@@ -71,6 +71,41 @@ pub fn folder_counts(items: &[Item]) -> HashMap<String, usize> {
     out
 }
 
+/// Number of unique live items in each folder and all of its subfolders.
+/// Folders listed in `hidden` (locked and not yet unlocked) do not contribute
+/// items to themselves or their unlocked parents.
+pub fn folder_total_counts(items: &[Item], roots: &[Folder], hidden: &HashSet<String>) -> HashMap<String, usize> {
+    fn index_parents<'a>(list: &'a [Folder], parent: Option<&'a str>, map: &mut HashMap<&'a str, &'a str>) {
+        for f in list {
+            if let Some(p) = parent {
+                map.insert(f.id.as_str(), p);
+            }
+            index_parents(&f.children, Some(f.id.as_str()), map);
+        }
+    }
+    let mut parents = HashMap::new();
+    index_parents(roots, None, &mut parents);
+
+    let mut out = HashMap::new();
+    let mut seen = HashSet::new();
+    for item in items.iter().filter(|i| !i.is_deleted) {
+        seen.clear();
+        for fid in &item.folders {
+            let mut cur = Some(fid.as_str());
+            while let Some(id) = cur {
+                if hidden.contains(id) || !seen.insert(id) {
+                    break;
+                }
+                cur = parents.get(id).copied();
+            }
+        }
+        for id in &seen {
+            *out.entry((*id).to_string()).or_default() += 1;
+        }
+    }
+    out
+}
+
 /// What dropping grid items onto a sidebar folder does, after Eagle's
 /// `classifySelected`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -239,6 +274,34 @@ mod tests {
         assert_eq!(c["A"], 2);
         assert_eq!(c["B"], 2);
         assert!(!c.contains_key("C"));
+    }
+
+    #[test]
+    fn folder_total_counts_include_subfolders_without_double_counting() {
+        use crate::logic::test_util::{folder, item};
+        let roots = vec![folder("A", vec![folder("B", vec![folder("C", vec![])])])];
+        let items = vec![
+            item("I1", "1", &["A"], &[], false, 1, 1, 1),
+            item("I2", "2", &["A", "B"], &[], false, 2, 1, 1),
+            item("I3", "3", &["B"], &[], false, 3, 1, 1),
+            item("I4", "4", &["C"], &[], false, 4, 1, 1),
+            item("I5", "5", &["C"], &[], true, 5, 1, 1),
+        ];
+
+        let c = folder_total_counts(&items, &roots, &HashSet::new());
+        // Live items in A subtree: I1, I2, I3, I4 = 4 (I2 counted once, I5 trashed).
+        assert_eq!(c["A"], 4);
+        // Live items in B subtree: I2, I3, I4 = 3.
+        assert_eq!(c["B"], 3);
+        // Live items in C: I4 = 1.
+        assert_eq!(c["C"], 1);
+
+        // If C is locked/hidden, I4 is excluded from C, B and A.
+        let hidden = HashSet::from(["C".to_string()]);
+        let c_hidden = folder_total_counts(&items, &roots, &hidden);
+        assert_eq!(c_hidden["A"], 3);
+        assert_eq!(c_hidden["B"], 2);
+        assert!(!c_hidden.contains_key("C"));
     }
 }
 
