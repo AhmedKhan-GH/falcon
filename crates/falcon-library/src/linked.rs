@@ -286,7 +286,31 @@ pub fn load_validated_sidecar(
     )
 }
 
-fn load_validated_sidecar_at(
+/// Validates a linked asset sidecar during library merge against BOTH `source_root`
+/// and `dest_root` containment rules (including offline/missing targets and symlinks).
+pub(crate) fn validate_sidecar_for_merge(
+    sidecar: &Path,
+    item_id: &str,
+    expected_linked: bool,
+    source_root: &Path,
+    dest_root: &Path,
+) -> Result<Option<LinkRecord>> {
+    let Some(record) = load_validated_sidecar_at(sidecar, item_id, expected_linked, source_root)?
+    else {
+        return Ok(None);
+    };
+    if path_violates_library_containment(&record.source_path, dest_root) {
+        return Err(Error::AssetUnavailable {
+            id: item_id.to_string(),
+            status: AssetStatus::InvalidReference,
+            path: Some(record.source_path),
+            reason: "linked source path points inside destination library".into(),
+        });
+    }
+    Ok(Some(record))
+}
+
+pub(crate) fn load_validated_sidecar_at(
     sidecar: &Path,
     item_id: &str,
     expected_linked: bool,

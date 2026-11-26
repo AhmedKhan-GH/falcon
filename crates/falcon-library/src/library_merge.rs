@@ -29,8 +29,12 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::error::{Error, Result};
+use crate::fault::{self, FaultPoint};
+use crate::journal::{self, PendingJournal, PendingOpKind};
 use crate::library::Library;
+use crate::linked::{self, LINK_SIDECAR};
 use crate::model::{Folder, Item, LibraryMetadata};
+use crate::storage_mode::FalconConfig;
 
 /// What merging `source` would bring in, read before asking.
 #[derive(Debug, Clone)]
@@ -38,6 +42,8 @@ pub struct MergePlan {
     pub source: PathBuf,
     /// The other library's `metadata.json`.
     pub metadata: LibraryMetadata,
+    /// The other library's validated `falcon.json` (or default when absent).
+    pub source_config: FalconConfig,
     /// Its `images/<id>.info` folder names, sorted.
     pub item_dirs: Vec<String>,
 }
@@ -75,6 +81,7 @@ pub fn plan(dest: &Library, source: &Path) -> std::result::Result<MergePlan, Mer
     if crate::library::is_newer_than_app(&metadata.application_version) {
         return Err(Error::NewerLibrary { path: source.to_path_buf(), version: metadata.application_version }.into());
     }
+    let source_config = FalconConfig::load_or_default(source)?;
     let images = source.join("images");
     let mut item_dirs = Vec::new();
     if images.is_dir() {
@@ -87,7 +94,7 @@ pub fn plan(dest: &Library, source: &Path) -> std::result::Result<MergePlan, Mer
         }
     }
     item_dirs.sort();
-    Ok(MergePlan { source: source.to_path_buf(), metadata, item_dirs })
+    Ok(MergePlan { source: source.to_path_buf(), metadata, source_config, item_dirs })
 }
 
 /// Copies the plan's item folders that `dest_root` lacks into its
@@ -105,9 +112,40 @@ pub fn copy_items(dest_root: &Path, plan: &MergePlan, cancel: &AtomicBool, mut p
         }
         let target = images.join(name);
         if !target.exists() {
+            let src_dir = plan.source.join("images").join(name);
+            let id = name.trim_end_matches(".info");
+            let meta_file = src_dir.join("metadata.json");
+            let meta_ok = fs::read_to_string(&meta_file)
+                .map_err(|e| e.to_string())
+                .and_then(|t| Item::from_json_str(&t).map_err(|e| e.to_string()))
+                .and_then(|item| {
+                    if item.id == id {
+                        Ok(())
+                    } else {
+                        Err(format!("item id '{}' does not match folder stem '{id}'", item.id))
+                    }
+                });
+            let sidecar = src_dir.join(LINK_SIDECAR);
+            let expected_linked = plan.source_config.linked_ids.contains(id);
+            let link_ok = if expected_linked || sidecar.exists() {
+                linked::validate_sidecar_for_merge(&sidecar, id, expected_linked, &plan.source, dest_root)
+                    .map(|_| ())
+                    .map_err(|e| e.to_string())
+            } else {
+                Ok(())
+            };
+            if let Err(reason) = meta_ok.and(link_ok) {
+                failed.push((name.clone(), reason));
+                progress(i + 1, total);
+                continue;
+            }
             let tmp = images.join(format!(".{name}.merging"));
             let _ = fs::remove_dir_all(&tmp);
-            match copy_dir(&plan.source.join("images").join(name), &tmp).and_then(|()| fs::rename(&tmp, &target)) {
+            match fault::check(FaultPoint::MergeCopyItem, &target)
+                .map_err(|e| std::io::Error::other(e.to_string()))
+                .and_then(|()| copy_dir(&src_dir, &tmp))
+                .and_then(|()| fs::rename(&tmp, &target))
+            {
                 Ok(()) => copied.push(name.clone()),
                 Err(e) => {
                     let _ = fs::remove_dir_all(&tmp);
@@ -152,6 +190,26 @@ impl Library {
     /// `copied` by [`copy_items`] in memory and `mtime.json`. Copied items
     /// that can't be read are left on disk and counted out.
     pub fn finish_merge(&mut self, plan: &MergePlan, copied: &[String]) -> Result<MergeReport> {
+        let src_config = FalconConfig::load_or_default(&plan.source)?;
+        let mut ready_items = Vec::new();
+        let mut new_linked_ids = Vec::new();
+        for name in copied {
+            let id = name.trim_end_matches(".info");
+            let item_dir = self.root().join("images").join(name);
+            let file = item_dir.join("metadata.json");
+            let Ok(item) = fs::read_to_string(&file).map_err(|_| ()).and_then(|t| Item::from_json_str(&t).map_err(|_| ())) else { continue };
+            if item.id != id || self.item(id).is_some() || ready_items.iter().any(|existing: &Item| existing.id == id) {
+                continue;
+            }
+            let expected_linked = src_config.linked_ids.contains(id);
+            let sidecar = item_dir.join(LINK_SIDECAR);
+            if expected_linked || sidecar.exists() {
+                linked::validate_sidecar_for_merge(&sidecar, id, expected_linked, self.root(), self.root())?;
+                new_linked_ids.push(id.to_string());
+            }
+            ready_items.push(item);
+        }
+
         let mut report = MergeReport::default();
         let mut known: HashSet<String> = self.folder_ids().into_iter().map(String::from).collect();
         for folder in &plan.metadata.folders {
@@ -172,27 +230,42 @@ impl Library {
                 report.tag_groups += 1;
             }
         }
+
+        if !ready_items.is_empty() {
+            let item_ids: Vec<String> = ready_items.iter().map(|i| i.id.clone()).collect();
+            let created_at_ms = ready_items.iter().map(|i| i.last_modified).max().unwrap_or(0);
+            journal::write_journal(
+                self.root(),
+                &PendingJournal {
+                    schema_version: journal::JOURNAL_SCHEMA_VERSION,
+                    kind: PendingOpKind::Merge,
+                    item_ids,
+                    linked_ids: new_linked_ids.clone(),
+                    stage_dirs: Vec::new(),
+                    created_at_ms,
+                },
+            )?;
+        }
+
+        fault::check(FaultPoint::MergeBeforeLinkedIdsBatch, self.root())?;
+        self.add_linked_ids_batch(&new_linked_ids)?;
+        fault::check(FaultPoint::MergeAfterLinkedIdsBatch, self.root())?;
+
+        fault::check(FaultPoint::MergeBeforeMetadataSave, self.root())?;
         self.save_metadata()?;
 
-        let src_linked = crate::storage_mode::FalconConfig::load_or_default(&plan.source).ok().map(|c| c.linked_ids).unwrap_or_default();
-        for name in copied {
-            let id = name.trim_end_matches(".info");
-            let file = self.root().join("images").join(name).join("metadata.json");
-            let Ok(item) = fs::read_to_string(&file).map_err(|_| ()).and_then(|t| Item::from_json_str(&t).map_err(|_| ())) else { continue };
-            if item.id != id || self.item(id).is_some() {
-                continue;
-            }
-            let is_linked = src_linked.contains(id) || crate::linked::sidecar_path(&item, self.root()).exists();
+        for item in ready_items {
             let stamp = item.last_modified;
             self.adopt(item, stamp);
-            if is_linked {
-                self.add_linked_id(id)?;
-            }
             report.items += 1;
         }
         if report.items > 0 {
+            fault::check(FaultPoint::MergeBeforeMtimeWrite, self.root())?;
             self.mtime.all = Some(self.items().len() as u64);
             self.write_mtime()?;
+        }
+        if !copied.is_empty() {
+            journal::remove_journal(self.root())?;
         }
         Ok(report)
     }
