@@ -21,6 +21,7 @@ pub mod fault;
 pub mod export;
 pub mod fontmeta;
 pub mod fontpreview;
+pub mod format_capability;
 pub mod hdr;
 pub mod folder_import;
 pub mod journal;

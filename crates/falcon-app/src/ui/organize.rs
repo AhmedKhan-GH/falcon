@@ -1221,7 +1221,11 @@ impl App {
             order.sort_by_key(|&i| pos.get(lib.items()[i].id.as_str()).copied().unwrap_or(usize::MAX));
         }
         let hidden = organize::hidden_folders(&lib.metadata.folders, &self.ws.org.unlocked);
-        organize::without_hidden(order, lib.items(), &hidden)
+        let mut order = organize::without_hidden(order, lib.items(), &hidden);
+        if self.display.hide_unsupported {
+            order.retain(|&i| falcon_library::format_capability::is_preview_supported(&lib.items()[i].ext));
+        }
+        order
     }
 
     /// The folder whose items can be dragged into a new order right now

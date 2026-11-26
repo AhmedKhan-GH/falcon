@@ -63,6 +63,8 @@ pub struct State {
     pub show_comments: bool,
     /// Show Subfolder Content is on.
     pub subfolders: bool,
+    /// Hide Unsupported Files is on.
+    pub hide_unsupported: bool,
     pub fullscreen: bool,
     /// Open libraries.
     pub libraries: usize,
@@ -189,7 +191,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::CombineImages => s.library && s.combinable,
         C::Documentation => s.docs,
         C::ShowTips | C::ErrorLogs | C::About | C::DebugReport | C::ColorSpace(_) => true,
-        C::ToggleName | C::ToggleInfo | C::ToggleComments | C::ToggleSubfolders => s.library,
+        C::ToggleName | C::ToggleInfo | C::ToggleComments | C::ToggleSubfolders | C::ToggleHideUnsupported => s.library,
         C::AlwaysOnTop => true,
         C::Grayscale | C::Navigator => s.library,
         C::OpenNewWindow => s.library && (s.viewer || s.selected > 0),
@@ -233,6 +235,7 @@ pub enum Check {
     Info,
     Comments,
     Subfolders,
+    HideUnsupported,
     Presentation,
     AlwaysOnTop,
     Grayscale,
@@ -255,6 +258,7 @@ impl Check {
             Check::Info => s.show_info,
             Check::Comments => s.show_comments,
             Check::Subfolders => s.subfolders,
+            Check::HideUnsupported => s.hide_unsupported,
             Check::Presentation => s.presenting,
             Check::AlwaysOnTop => s.on_top,
             Check::Grayscale => s.grayscale,
@@ -503,6 +507,7 @@ pub static MENUS: &[(&str, &[Entry])] = &[
             checked("Show Item Info", Command::ToggleInfo, Check::Info),
             checked("Show Comment Count", Command::ToggleComments, Check::Comments),
             checked("Show Subfolder Content", Command::ToggleSubfolders, Check::Subfolders),
+            checked("Hide Unsupported Files", Command::ToggleHideUnsupported, Check::HideUnsupported),
             SEP,
             item("Scroll to Top", Command::Scroll(Scroll::Top)),
             item("Scroll to Bottom", Command::Scroll(Scroll::Bottom)),

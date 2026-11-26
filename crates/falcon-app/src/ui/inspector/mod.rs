@@ -171,7 +171,15 @@ impl App {
             // A locked folder keeps its count and size to itself.
             let shut = folder.as_ref().is_some_and(|f| crate::organize::is_shut(f, &self.ws.org.unlocked));
             if !shut {
-                prop(ui, tr("Items"), &items.len().to_string());
+                let total = match &self.ws.scope {
+                    Scope::Folder(id) => self.folder_counts_for(lib).get(id).copied().unwrap_or(items.len()),
+                    _ => items.len(),
+                };
+                if total > items.len() {
+                    prop(ui, tr("Items"), &trf("{visible} ({hidden} hidden)", &[("visible", &items.len().to_string()), ("hidden", &(total - items.len()).to_string())]));
+                } else {
+                    prop(ui, tr("Items"), &items.len().to_string());
+                }
                 prop(ui, tr("Size"), &logic::format_size(size));
             }
             if let Some(f) = &folder {

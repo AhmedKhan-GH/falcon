@@ -431,6 +431,50 @@ mod tests {
         assert_eq!(s(OrderBy::FileSize, true), ["loose", "Zebra", "Mango", "apple"]);
         assert_eq!(s(OrderBy::Resolution, false), ["apple", "Mango", "Zebra", "loose"]);
     }
+
+    #[test]
+    fn format_capability_filtering() {
+        let (roots, mut items) = fixture();
+        // Add a variety of items: Affinity, RAW, PSD, SVG, Sidecars (.xmp, .dop)
+        let mut xmp = items[0].clone();
+        xmp.id = "xmp_item".into();
+        xmp.name = "sidecar".into();
+        xmp.ext = "xmp".into();
+
+        let mut dop = items[0].clone();
+        dop.id = "dop_item".into();
+        dop.name = "dxo".into();
+        dop.ext = "dop".into();
+
+        let mut af = items[0].clone();
+        af.id = "af_item".into();
+        af.name = "vector".into();
+        af.ext = "afdesign".into();
+
+        let mut cr3 = items[0].clone();
+        cr3.id = "raw_item".into();
+        cr3.name = "canon".into();
+        cr3.ext = "cr3".into();
+
+        items.extend([xmp, dop, af, cr3]);
+
+        let vis = visible(&items, &roots, &Scope::All, "", &Filter::default(), OrderBy::Import, true, None);
+        // All items visible without hide_unsupported filter
+        assert_eq!(vis.len(), 8);
+
+        // When hide_unsupported is applied:
+        let filtered: Vec<usize> = vis
+            .into_iter()
+            .filter(|&i| falcon_library::format_capability::is_preview_supported(&items[i].ext))
+            .collect();
+        // 8 - 2 sidecars (.xmp, .dop) = 6 visible items
+        assert_eq!(filtered.len(), 6);
+        let exts: HashSet<&str> = filtered.iter().map(|&i| items[i].ext.as_str()).collect();
+        assert!(exts.contains("afdesign"));
+        assert!(exts.contains("cr3"));
+        assert!(!exts.contains("xmp"));
+        assert!(!exts.contains("dop"));
+    }
 }
 
 #[cfg(test)]

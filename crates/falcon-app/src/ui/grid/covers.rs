@@ -22,6 +22,8 @@ use crate::theme::{self as t, font};
 /// Whether an item may stand in as a folder's default cover.
 fn can_cover(item: &Item, locked: &HashSet<&str>) -> bool {
     !item.is_deleted
+        && falcon_library::format_capability::is_preview_supported(&item.ext)
+        && !falcon_library::format_capability::is_sidecar(&item.ext)
         && item.ext != "txt"
         && item.extra.get("noPreview").and_then(|v| v.as_bool()) != Some(true)
         && !item.folders.iter().any(|f| locked.contains(f.as_str()))
@@ -52,6 +54,9 @@ pub fn cover<'a>(items: &'a [Item], folder: &Folder, order: OrderBy, increase: b
     let mut own: Vec<&Item> = items.iter().filter(|i| i.folders.contains(&folder.id) && can_cover(i, locked)).collect();
     if !own.is_empty() {
         search::sort(&mut own, order, increase);
+        if let Some(&visual) = own.iter().find(|i| falcon_library::format_capability::is_visual_preview(&i.ext)) {
+            return Some(visual);
+        }
         return own.first().copied();
     }
     folder.children.iter().find_map(|c| cover(items, c, order, increase, locked))
@@ -123,6 +128,8 @@ impl App {
                 }
                 ui.add_space(12.0);
                 ui.checkbox(&mut self.display.subfolders, egui::RichText::new(tr("Show subfolder contents")).size(12.5));
+                ui.add_space(12.0);
+                ui.checkbox(&mut self.display.hide_unsupported, egui::RichText::new(tr("Hide unsupported files")).size(12.5));
             });
         });
         if self.display.strip_collapsed {
@@ -342,5 +349,28 @@ mod tests {
         assert_eq!(list_rows_cap(3, 40.0, 1000.0), 120.0, "few rows take their own height");
         assert_eq!(list_rows_cap(50, 40.0, 1000.0), 400.0, "many scroll inside 40% of the grid");
         assert_eq!(list_rows_cap(50, 40.0, 100.0), 80.0, "but always show two rows");
+    }
+
+    #[test]
+    fn cover_excludes_unsupported_and_sidecars_and_prioritizes_visual() {
+        let none = HashSet::new();
+        let folder = Folder::new("F", "Folder", 0);
+
+        // Folder with only sidecars and unsupported files
+        let mut sidecar_items = vec![item("xmp1", "F", 1), item("dop1", "F", 2)];
+        sidecar_items[0].ext = "xmp".into();
+        sidecar_items[1].ext = "dop".into();
+        assert_eq!(cover(&sidecar_items, &folder, OrderBy::Import, true, &none), None, "sidecars must not become covers");
+
+        // Folder with audio and image: visual image prioritized over audio
+        let mut mixed = vec![item("song", "F", 5), item("photo", "F", 1)];
+        mixed[0].ext = "mp3".into();
+        mixed[1].ext = "afphoto".into();
+        // Even though song is newer (time 5 vs 1), photo is visual so it must be prioritized
+        assert_eq!(
+            cover(&mixed, &folder, OrderBy::Import, true, &none).map(|i| i.id.as_str()),
+            Some("photo"),
+            "visual preview format prioritized for folder cover"
+        );
     }
 }

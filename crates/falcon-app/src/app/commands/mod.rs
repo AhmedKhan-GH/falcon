@@ -377,6 +377,7 @@ impl App {
             show_info: self.display.show_info,
             show_comments: self.display.comment_badge,
             subfolders: self.display.subfolders,
+            hide_unsupported: self.display.hide_unsupported,
             libraries: self.others.len(),
             presenting: self.modes.presenting,
             on_top: self.modes.on_top,
@@ -847,6 +848,7 @@ impl App {
             C::ToggleInfo => self.display.show_info = !self.display.show_info,
             C::ToggleComments => self.display.comment_badge = !self.display.comment_badge,
             C::ToggleSubfolders => self.display.subfolders = !self.display.subfolders,
+            C::ToggleHideUnsupported => self.display.hide_unsupported = !self.display.hide_unsupported,
         }
     }
 
