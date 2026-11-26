@@ -238,6 +238,12 @@ impl App {
     /// The menu for a library in the switcher (right-click or the ⋯ button).
     pub(crate) fn library_menu(&mut self, ui: &mut Ui, root: &std::path::Path, missing: bool) {
         if !missing {
+            if self.is_library_open(root)
+                && ui.button(tr("Library Settings…")).clicked()
+            {
+                ui.close();
+                self.open_library_settings();
+            }
             if ui.button(tr("Change Icon…")).clicked() {
                 ui.close();
                 self.change_library_icon(root);
@@ -398,6 +404,10 @@ impl App {
             }
             if ui.button(tr("New Library…")).clicked() {
                 self.switch_to = Some(Switch::Create);
+            }
+            if ui.button(tr("Library Settings…")).clicked() {
+                ui.close();
+                self.open_library_settings();
             }
             if ui.button(tr("Merge Another Library…")).clicked() {
                 self.switch_to = Some(Switch::Merge);

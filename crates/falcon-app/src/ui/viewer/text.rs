@@ -153,9 +153,14 @@ impl App {
         if !item.ext.eq_ignore_ascii_case("txt") {
             return false;
         }
+        let is_linked = lib.is_linked_item(&item.id);
         let path = lib.resolved_source_path(&item.id).unwrap_or_else(|_| item.managed_storage_path(lib.root()));
         if self.ws.text.as_ref().is_none_or(|v| v.id != item.id) {
-            self.ws.text = Some(TextView::open(&item.id, &path));
+            let mut v = TextView::open(&item.id, &path);
+            if is_linked && v.read_only.is_none() {
+                v.read_only = Some(crate::locale::tr_key("Linked files are read-only in Falcon; edit the original file on disk."));
+            }
+            self.ws.text = Some(v);
         }
         let ctx = parent.ctx().clone();
         let now = ctx.input(|i| i.time);
@@ -181,6 +186,9 @@ impl App {
             let disk_empty = std::fs::metadata(&path).is_ok_and(|m| m.len() == 0);
             if reload || textdoc::should_reload(changed, view.autosave.wait(now).is_some(), disk_empty, view.text.is_empty()) {
                 view.read(&path);
+                if is_linked && view.read_only.is_none() {
+                    view.read_only = Some(crate::locale::tr_key("Linked files are read-only in Falcon; edit the original file on disk."));
+                }
             } else if changed {
                 view.stamp = modified(&path);
             }

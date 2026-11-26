@@ -102,19 +102,14 @@ impl App {
         let c = area.center();
         ext_placeholder(ui, Rect::from_center_size(c - vec2(0.0, 70.0), Vec2::splat(150.0)), &item.ext);
         let name = format!("{}.{}", item.name, item.ext);
-        let line = match lib.asset_status(&item.id) {
-            Some(
-                falcon_library::linked::AssetStatus::Offline
-                | falcon_library::linked::AssetStatus::Missing
-                | falcon_library::linked::AssetStatus::InvalidReference,
-            ) => tr("This file wasn't found. If a sync service manages the library, wait until syncing is complete."),
-            _ => {
-                let p = lib.resolved_source_path(&item.id).unwrap_or_else(|_| item.managed_storage_path(lib.root()));
-                if crate::icloud::is_missing(&p) {
-                    tr("This file wasn't found. If a sync service manages the library, wait until syncing is complete.")
-                } else {
-                    tr("Falcon can't show a preview of this file. Try opening it in another app.")
-                }
+        let line = if let Some(notice) = crate::linked_ui::classify_asset(lib, &item.id).viewer_notice() {
+            notice
+        } else {
+            let p = lib.resolved_source_path(&item.id).unwrap_or_else(|_| item.managed_storage_path(lib.root()));
+            if crate::icloud::is_missing(&p) {
+                tr("This file wasn't found. If a sync service manages the library, wait until syncing is complete.")
+            } else {
+                tr("Falcon can't show a preview of this file. Try opening it in another app.")
             }
         };
         self.notice_lines(ui, area, &name, line);

@@ -12,7 +12,7 @@ use crate::icons as ic;
 use crate::loader::{Tier, job_for};
 use crate::logic::{self, Layout, Scope};
 use crate::theme::{self as t, font};
-use crate::ui::widgets::{PIN_BADGE, badge, broken_mark, ext_placeholder, galley, paint_thumb_bg, pin_badge};
+use crate::ui::widgets::{PIN_BADGE, badge, broken_mark, ext_placeholder, list_status_icon, paint_thumb_bg, pin_badge, status_badge, galley};
 
 pub(crate) mod covers;
 pub(crate) mod duplicates;
@@ -430,6 +430,10 @@ impl App {
         if d.ext_badge {
             badge(ui, tile.min + vec2(badge_x, 5.0), &item.ext);
         }
+        let link_status = crate::linked_ui::classify_asset(lib, &item.id);
+        if link_status.is_linked() {
+            status_badge(ui, &item.id, Pos2::new(tile.left() + 5.0, tile.bottom() - 5.0), link_status);
+        }
         if d.comment_badge {
             crate::ui::viewer::comments::count_badge(ui, tile, item);
         }
@@ -492,12 +496,18 @@ impl App {
         }
         let (x0, span) = list_span(row);
         let pinned = self.shows_pin(item);
+        let link_status = crate::linked_ui::classify_asset(lib, &item.id);
         for (col, at, w) in self.display.columns.spans() {
             let (mut x, mut cw) = (x0 + span * at, span * w - 8.0);
             if pinned && col == logic::ListColumn::Name {
                 pin_badge(ui, Pos2::new(x, cy - PIN_BADGE / 2.0));
                 x += PIN_BADGE + 4.0;
                 cw -= PIN_BADGE + 4.0;
+            }
+            if link_status.is_linked() && col == logic::ListColumn::Name {
+                let used = list_status_icon(ui, &item.id, Pos2::new(x, cy), link_status);
+                x += used;
+                cw -= used;
             }
             let (size, color) = if col == logic::ListColumn::Name { (13.0, t::p().text) } else { (12.0, t::p().text_muted) };
             match logic::list_cell(item, col, self.display.show_ext) {

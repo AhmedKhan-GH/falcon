@@ -55,11 +55,16 @@ pub enum Command {
     LoadLibrary,
     /// Library menu (`App::library_ui`).
     NewLibrary,
+    LibrarySettings,
     MergeLibrary,
     ClearLibraryHistory,
     EmptyCacheReload,
     /// File ▸ Import Folders…
     ImportFolders,
+    ImportAsCopy,
+    ImportAsLink,
+    ImportFoldersAsCopy,
+    ImportFoldersAsLink,
     /// File ▸ Import Links…
     ImportLinks,
     /// File ▸ Import submenu.
@@ -507,10 +512,15 @@ pub const TABLE: &[Spec] = &[
     // Export and copy-out (`App::export_keys`).
     Spec { cmd: Command::LoadLibrary, id: "library.load", group: "Library", label: "Choose a library folder to open", default: None, aliases: &[] },
     Spec { cmd: Command::NewLibrary, id: "library.create", group: "Library", label: "Create a new library", default: None, aliases: &[] },
+    Spec { cmd: Command::LibrarySettings, id: "library.settings", group: "Library", label: "Library Settings", default: None, aliases: &[] },
     Spec { cmd: Command::MergeLibrary, id: "library.merge", group: "Library", label: "Merge another library into this one", default: None, aliases: &[] },
     Spec { cmd: Command::ClearLibraryHistory, id: "library.clearHistory", group: "Library", label: "Clear the library history", default: None, aliases: &[] },
     Spec { cmd: Command::EmptyCacheReload, id: "library.reload", group: "Library", label: "Empty the cache and reload the library", default: None, aliases: &[] },
     Spec { cmd: Command::ImportFolders, id: "file.import.folders", group: "Import", label: "Import folders", default: None, aliases: &[] },
+    Spec { cmd: Command::ImportAsCopy, id: "file.import.copy", group: "Import", label: "Import files (Copy to Library)", default: None, aliases: &[] },
+    Spec { cmd: Command::ImportAsLink, id: "file.import.link", group: "Import", label: "Import files (Link / Place)", default: None, aliases: &[] },
+    Spec { cmd: Command::ImportFoldersAsCopy, id: "file.import.folders.copy", group: "Import", label: "Import folders (Copy to Library)", default: None, aliases: &[] },
+    Spec { cmd: Command::ImportFoldersAsLink, id: "file.import.folders.link", group: "Import", label: "Import folders (Link / Place)", default: None, aliases: &[] },
     Spec { cmd: Command::ImportLinks, id: "file.import.links", group: "Import", label: "Import links", default: None, aliases: &[] },
     Spec { cmd: Command::ImportPack, id: "file.import.eaglepack", group: "Import", label: "Import an Eagle package", default: None, aliases: &[] },
     Spec { cmd: Command::ImportInboard, id: "file.import.inboard", group: "Import", label: "Import an Inboard backup", default: None, aliases: &[] },

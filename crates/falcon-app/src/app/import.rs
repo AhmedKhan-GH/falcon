@@ -73,10 +73,16 @@ pub(crate) struct Pending {
 /// An import file dialog, asked for during the frame.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Request {
-    /// Pick files; they go into `folders`.
-    Files { folders: Vec<String> },
-    /// Pick folders; each is imported with its tree inside `parent`.
-    Folders { parent: Option<String> },
+    /// Pick files; they go into `folders`, optionally overriding library storage mode.
+    Files {
+        folders: Vec<String>,
+        mode: Option<falcon_library::storage_mode::StorageMode>,
+    },
+    /// Pick folders; each is imported with its tree inside `parent`, optionally overriding library storage mode.
+    Folders {
+        parent: Option<String>,
+        mode: Option<falcon_library::storage_mode::StorageMode>,
+    },
 }
 
 impl Imports {
@@ -96,7 +102,11 @@ impl App {
     /// as Eagle's menu item does. Safe to call at any point in a frame;
     /// the dialog opens once the frame is done.
     pub fn import_folders_dialog(&mut self) {
-        self.imports.request = Some(Request::Folders { parent: None });
+        self.imports.request = Some(Request::Folders { parent: None, mode: None });
+    }
+
+    pub fn import_folders_dialog_with_mode(&mut self, mode: falcon_library::storage_mode::StorageMode) {
+        self.imports.request = Some(Request::Folders { parent: None, mode: Some(mode) });
     }
 
     /// Import Files…: a dialog for files to import into the open folder,
@@ -104,7 +114,12 @@ impl App {
     /// falcon's own. The dialog opens once the frame is done.
     pub fn import_files_dialog(&mut self) {
         let folders = self.scope_folders();
-        self.imports.request = Some(Request::Files { folders });
+        self.imports.request = Some(Request::Files { folders, mode: None });
+    }
+
+    pub fn import_files_dialog_with_mode(&mut self, mode: falcon_library::storage_mode::StorageMode) {
+        let folders = self.scope_folders();
+        self.imports.request = Some(Request::Files { folders, mode: Some(mode) });
     }
 
     /// Under the empty message in All or an empty folder, an Import Folders…
@@ -121,7 +136,7 @@ impl App {
         }
         let at = Rect::from_center_size(centre, eframe::egui::vec2(160.0, 26.0));
         if ui.put(at, eframe::egui::Button::new(tr("Import Folders…"))).clicked() {
-            self.imports.request = Some(Request::Folders { parent });
+            self.imports.request = Some(Request::Folders { parent, mode: None });
         }
     }
 
@@ -133,12 +148,12 @@ impl App {
             return;
         }
         match request {
-            Request::Files { folders } => {
+            Request::Files { folders, mode } => {
                 if let Some(files) = crate::dialog_owner::file_dialog().set_title(tr("Import Files")).pick_files() {
-                    self.import_into(files, folders);
+                    self.import_into_with_mode(files, folders, mode);
                 }
             }
-            Request::Folders { parent } => {
+            Request::Folders { parent, mode } => {
                 let Some(picked) = crate::dialog_owner::file_dialog().set_title(tr("Import Folders")).pick_folders() else { return };
                 // As in Eagle, a library is opened rather than imported,
                 // and only when it is the only folder picked.
@@ -146,21 +161,26 @@ impl App {
                 if dirs.is_empty() && libraries.len() == 1 {
                     self.import_into(libraries, Vec::new());
                 }
-                self.import_folder_trees(dirs, parent);
+                self.import_folder_trees_with_mode(dirs, parent, mode);
             }
         }
     }
 
-    /// Files dropped from Finder at `at`: on the grid they go into the open
-    /// folder, flattened (Eagle's `onDropContainer`); on a sidebar folder,
-    /// files go into it and folders are ignored (`onDropFolder`); on the
-    /// rest of the sidebar, folders are imported with their trees at the
-    /// top level and loose files are ignored (`onDropSidebar`). A library
-    /// among them is opened, wherever it lands.
+    /// Files dropped from Finder at `at`: zero-click using library default, or
+    /// hold Option/Alt to flip Copy <-> Link for that drop only.
     pub(crate) fn drop_files(&mut self, paths: Vec<PathBuf>, at: Option<Pos2>) {
+        let alt_flip = self.ctx.input(|i| i.modifiers.alt);
+        let mode_override = if alt_flip {
+            self.ws.lib.as_ref().map(|shared| match lock(shared).storage_mode() {
+                falcon_library::storage_mode::StorageMode::Copy => falcon_library::storage_mode::StorageMode::Link,
+                falcon_library::storage_mode::StorageMode::Link => falcon_library::storage_mode::StorageMode::Copy,
+            })
+        } else {
+            None
+        };
         let target = drop_pos::target(at, self.show_sidebar.then_some(self.imports.sidebar).flatten(), &self.imports.folder_rows);
         match target {
-            Target::Grid => self.import(paths),
+            Target::Grid => self.import_into_with_mode(paths, self.scope_folders(), mode_override),
             Target::Folder(id) => {
                 let (libraries, rest) = logic::split_libraries(paths);
                 let (packs, rest) = split_packs(rest);
@@ -169,7 +189,7 @@ impl App {
                 if let Some(first) = packs.into_iter().next() {
                     self.preview_pack_import(first, Some(id.clone()));
                 }
-                self.import_files(files, vec![id]);
+                self.import_files_with_mode(files, vec![id], mode_override);
             }
             Target::Sidebar => {
                 let (libraries, rest) = logic::split_libraries(paths);
@@ -184,18 +204,12 @@ impl App {
                 if dirs.is_empty() && !files.is_empty() {
                     self.flash(tr("Drop folders on the sidebar, or files on the grid or a folder"));
                 }
-                self.import_folder_trees(dirs, None);
+                self.import_folder_trees_with_mode(dirs, None, mode_override);
             }
         }
     }
 
-    /// Imports each directory as an Eagle folder of the same name inside
-    /// `parent` (or at the top level), with its subfolders recreated and
-    /// every file in the folder that mirrors its own, as Eagle's
-    /// `uploadFolderToSidebar` does. Eagle's limits apply to each folder:
-    /// 15 levels or 100,000 files refuse it, 2,000 files ask first.
-    /// Pixave libraries are skipped.
-    pub(crate) fn import_folder_trees(&mut self, mut dirs: Vec<PathBuf>, parent: Option<String>) {
+    pub(crate) fn import_folder_trees_with_mode(&mut self, mut dirs: Vec<PathBuf>, parent: Option<String>, mode_override: Option<falcon_library::storage_mode::StorageMode>) {
         let pixave = dirs.iter().filter(|d| folder_import::is_pixave_library(d)).count();
         dirs.retain(|d| !folder_import::is_pixave_library(d));
         if pixave > 0 {
@@ -211,12 +225,16 @@ impl App {
                 Verdict::Refuse => self.imports.refused.push(display_name(&dir)),
             }
         }
-        self.import_trees(ready, parent);
+        self.import_trees_with_mode(ready, parent, mode_override);
+    }
+
+    fn import_trees(&mut self, trees: Vec<folder_import::Tree>, parent: Option<String>) {
+        self.import_trees_with_mode(trees, parent, None);
     }
 
     /// Creates the folders for walked trees and imports their files; the
     /// last new folder is opened.
-    fn import_trees(&mut self, trees: Vec<folder_import::Tree>, parent: Option<String>) {
+    fn import_trees_with_mode(&mut self, trees: Vec<folder_import::Tree>, parent: Option<String>, mode_override: Option<falcon_library::storage_mode::StorageMode>) {
         if trees.is_empty() {
             return;
         }
@@ -230,7 +248,11 @@ impl App {
                 continue;
             }
             opened = plan.root().map(String::from);
-            jobs.extend(plan.files.into_iter().map(|(path, folder)| Job { path, opts: self.prefs.import_options(vec![folder]) }));
+            jobs.extend(plan.files.into_iter().map(|(path, folder)| {
+                let mut opts = self.prefs.import_options(vec![folder]);
+                opts.storage_mode = mode_override;
+                Job { path, opts }
+            }));
         }
         if let Some(id) = opened {
             self.go(Scope::Folder(id));
@@ -702,6 +724,10 @@ impl App {
     /// Imports `paths` into the shown library. A `*.library` folder among
     /// them is opened instead, never imported (only the first, if several).
     pub(crate) fn import_into(&mut self, paths: Vec<PathBuf>, folders: Vec<String>) {
+        self.import_into_with_mode(paths, folders, None);
+    }
+
+    pub(crate) fn import_into_with_mode(&mut self, paths: Vec<PathBuf>, folders: Vec<String>, mode_override: Option<falcon_library::storage_mode::StorageMode>) {
         let (libraries, paths) = logic::split_libraries(paths);
         // A dropped or opened .eaglepack is imported as a package, not as
         // a file (the first one; Eagle takes one at a time).
@@ -709,7 +735,7 @@ impl App {
         if let Some(first) = packs.into_iter().next() {
             self.preview_pack_import(first, folders.first().cloned());
         }
-        self.import_files(paths, folders);
+        self.import_files_with_mode(paths, folders, mode_override);
         if let Some(first) = libraries.first() {
             // Behind the loading screen, as the switcher's opens are.
             self.request_switch(crate::ui::dialogs::switch_warning::Target::Open(first.clone()));
@@ -724,10 +750,6 @@ impl App {
                 ));
             }
         }
-    }
-
-    pub(crate) fn import_files(&mut self, paths: Vec<PathBuf>, folders: Vec<String>) {
-        self.import_files_with_mode(paths, folders, None);
     }
 
     pub(crate) fn import_files_copy(&mut self, paths: Vec<PathBuf>, folders: Vec<String>) {

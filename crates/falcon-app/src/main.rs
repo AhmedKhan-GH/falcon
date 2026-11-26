@@ -37,6 +37,7 @@ mod hover;
 mod hover_media;
 mod urls;
 mod link_import;
+mod linked_ui;
 mod icloud;
 mod icons;
 mod install_dir;
