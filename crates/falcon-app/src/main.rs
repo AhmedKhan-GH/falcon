@@ -80,6 +80,7 @@ mod toast;
 mod touch_id;
 mod tray;
 mod theme;
+pub(crate) mod thumb_worker;
 mod ui;
 mod library_icons;
 mod library_removal;

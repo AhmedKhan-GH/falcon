@@ -62,6 +62,9 @@ pub struct ImportOptions {
     /// Override storage mode for this import (`None` inherits the library's configured mode).
     /// Generated/internal items must pass `Some(StorageMode::Copy)`.
     pub storage_mode: Option<StorageMode>,
+    /// Defer thumbnail generation and palette extraction to a background worker
+    /// (Adobe Bridge style) when importing in `StorageMode::Link`.
+    pub defer_thumbnail: bool,
 }
 
 impl Default for ImportOptions {
@@ -80,6 +83,7 @@ impl Default for ImportOptions {
             trashed: false,
             added_at: None,
             storage_mode: None,
+            defer_thumbnail: false,
         }
     }
 }
@@ -322,19 +326,29 @@ pub fn stage_for(path: impl AsRef<Path>, opts: &ImportOptions, library_root: Opt
         }
     };
 
-    let thumb = dir.path().join(format!("{}{THUMB_SUFFIX}", item.name));
-    let analysis = generate(&mut item, &raw, &thumb);
-    file_metadata(&mut item, &raw, opts);
-    if opts.palette
-        && let Some(img) = analysis.and_then(|a| match a {
-            Analysis::Original => thumbnail::decode(&raw).ok(),
-            Analysis::Thumbnail => thumbnail::decode(&thumb).ok(),
-        })
-    {
-        item.palettes = palette::extract(&img);
-    }
-    if item.remove_thumbnail == Some(true) {
-        let _ = fs::remove_file(&thumb);
+    if mode == StorageMode::Link && opts.defer_thumbnail {
+        // Fast header-only dimension probe so grid layout has exact aspect ratios
+        // immediately without decoding full pixel buffers or encoding thumbnails.
+        if let Ok((w, h)) = image::image_dimensions(&raw) {
+            item.width = u64::from(w);
+            item.height = u64::from(h);
+        }
+        file_metadata(&mut item, &raw, opts);
+    } else {
+        let thumb = dir.path().join(format!("{}{THUMB_SUFFIX}", item.name));
+        let analysis = generate(&mut item, &raw, &thumb);
+        file_metadata(&mut item, &raw, opts);
+        if opts.palette
+            && let Some(img) = analysis.and_then(|a| match a {
+                Analysis::Original => thumbnail::decode(&raw).ok(),
+                Analysis::Thumbnail => thumbnail::decode(&thumb).ok(),
+            })
+        {
+            item.palettes = palette::extract(&img);
+        }
+        if item.remove_thumbnail == Some(true) {
+            let _ = fs::remove_file(&thumb);
+        }
     }
     if item.ext == "txt" {
         set_text(&mut item, &raw);
@@ -467,6 +481,134 @@ impl Library {
             }
         }
     }
+
+    /// Commits a background-generated thumbnail (`StagedThumbnail`) for `id`
+    /// under the library lock, atomically renaming the temporary thumbnail
+    /// into place and updating `metadata.json`. Returns `Ok(false)` if the
+    /// item no longer exists in the library.
+    pub fn commit_deferred_thumbnail(&mut self, id: &str, mut staged: StagedThumbnail) -> Result<bool> {
+        let Some(mut item) = self.item(id).cloned() else {
+            return Ok(false);
+        };
+        let info_dir = item.info_dir(self.root());
+        if !info_dir.is_dir() {
+            return Ok(false);
+        }
+        if let Some(tmp) = staged.temp_thumb.take() {
+            let dest = info_dir.join(item.thumbnail_name());
+            if staged.keep && tmp.is_file() {
+                if fs::rename(&tmp, &dest).is_err() {
+                    fs::copy(&tmp, &dest).map_err(|e| Error::io(&dest, e))?;
+                    let _ = fs::remove_file(&tmp);
+                }
+            } else {
+                let _ = fs::remove_file(&tmp);
+            }
+        }
+        item.width = staged.width;
+        item.height = staged.height;
+        item.no_thumbnail = staged.no_thumbnail;
+        item.remove_thumbnail = staged.remove_thumbnail;
+        if !staged.palettes.is_empty() {
+            item.palettes = std::mem::take(&mut staged.palettes);
+        }
+        item.last_modified = now_ms().max(item.last_modified);
+        self.register_item(item)?;
+        self.dirty.items.remove(id);
+        Ok(true)
+    }
+}
+
+/// Returns `true` when an item was registered with deferred thumbnail
+/// generation and still needs its background thumbnail built (including
+/// rediscovery after an interrupted session or restart).
+pub fn needs_deferred_thumbnail(item: &Item, root: &Path) -> bool {
+    !item.is_deleted
+        && item.no_thumbnail.is_none()
+        && item.remove_thumbnail != Some(true)
+        && item.ext != "txt"
+        && item.thumbnail_path(root).is_none()
+}
+
+/// Output of lock-free background thumbnail generation, ready to be committed
+/// atomically under the library lock via [`Library::commit_deferred_thumbnail`].
+pub struct StagedThumbnail {
+    pub width: u64,
+    pub height: u64,
+    pub no_thumbnail: Option<bool>,
+    pub remove_thumbnail: Option<bool>,
+    pub palettes: Vec<crate::model::Palette>,
+    pub temp_thumb: Option<std::path::PathBuf>,
+    pub keep: bool,
+}
+
+impl Drop for StagedThumbnail {
+    fn drop(&mut self) {
+        if let Some(tmp) = self.temp_thumb.take() {
+            let _ = fs::remove_file(tmp);
+        }
+    }
+}
+
+/// Generates a thumbnail and optional palette for `item` from `source`
+/// outside the library lock. Verifies source size and mtime before and after
+/// decoding so files modified mid-decode are safely rejected (`Ok(None)`).
+pub fn stage_deferred_thumbnail(
+    item: &Item,
+    source: &Path,
+    info_dir: &Path,
+    extract_palette: bool,
+) -> Result<Option<StagedThumbnail>> {
+    if item.ext == "txt" || !info_dir.is_dir() {
+        return Ok(None);
+    }
+    let before = fs::metadata(source).map_err(|e| Error::io(source, e))?;
+    if !before.is_file() {
+        return Ok(None);
+    }
+    let tmp = info_dir.join(format!(".falcon-bg-{}{THUMB_SUFFIX}", item.id));
+    let _ = fs::remove_file(&tmp);
+
+    let mut next = item.clone();
+    let Some(analysis) = generate(&mut next, source, &tmp) else {
+        let _ = fs::remove_file(&tmp);
+        return Ok(None);
+    };
+
+    // Reject if source file was modified or removed during decode.
+    let Ok(after) = fs::metadata(source) else {
+        let _ = fs::remove_file(&tmp);
+        return Ok(None);
+    };
+    if after.len() != before.len() || after.modified().ok() != before.modified().ok() {
+        let _ = fs::remove_file(&tmp);
+        return Ok(None);
+    }
+
+    let palettes = if extract_palette {
+        let img = match analysis {
+            Analysis::Original => thumbnail::decode(source).ok(),
+            Analysis::Thumbnail => thumbnail::decode(&tmp).ok(),
+        };
+        img.map(|i| palette::extract(&i)).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+
+    let keep = tmp.is_file() && next.remove_thumbnail != Some(true);
+    if !keep {
+        let _ = fs::remove_file(&tmp);
+    }
+
+    Ok(Some(StagedThumbnail {
+        width: next.width,
+        height: next.height,
+        no_thumbnail: next.no_thumbnail,
+        remove_thumbnail: next.remove_thumbnail,
+        palettes,
+        temp_thumb: keep.then_some(tmp),
+        keep,
+    }))
 }
 
 /// Redraws the thumbnail of an item already in a library and recomputes its
