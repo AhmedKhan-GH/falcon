@@ -757,6 +757,23 @@ pub fn matches(query: &str, fields: &[&str]) -> bool {
     query.split_whitespace().all(|w| hay.contains(&w.to_lowercase()))
 }
 
+/// A synchronized folder as the Preferences window shows it.
+#[derive(Clone)]
+pub struct SyncRow {
+    pub wf: falcon_library::WatchedFolder,
+    /// `(done, total)` while a pass is running; `None` when idle.
+    pub running: Option<(usize, usize)>,
+    /// Queued or running.
+    pub active: bool,
+}
+
+/// What the user asked of a synchronized folder in Preferences.
+pub enum SyncCommand {
+    Now(String),
+    Stop(String),
+    Remove(String),
+}
+
 /// The Preferences window. Edits go to a draft; Save and Apply hand it to
 /// the app, Cancel (or Esc) drops it, as in Eagle.
 #[derive(Default)]
@@ -784,6 +801,10 @@ pub struct Window {
     pub ai_search: Option<std::sync::Arc<crate::ai_search::Engine>>,
     /// Why the folder last picked for auto-import was refused.
     auto_import_note: Option<String>,
+    /// The synchronized folders of the shown library with their progress,
+    /// refreshed by the app; and what the user asked of them.
+    pub sync_rows: Vec<SyncRow>,
+    pub sync_commands: Vec<SyncCommand>,
     /// The login item as read when the window opened or last applied.
     login: crate::login_item::Status,
     /// Where the window opens: over the middle of the main window.
@@ -1059,7 +1080,7 @@ impl Window {
             Section::Shortcuts => self.shortcuts(p, d),
             Section::Notification => notification(p, d),
             Section::Password => password(p, d, &mut self.password),
-            Section::AutoImport => auto_import(p, d, self.library.as_deref(), &mut self.auto_import_note),
+            Section::AutoImport => auto_import(p, d, self.library.as_deref(), &mut self.auto_import_note, &self.sync_rows, &mut self.sync_commands),
             Section::AiSearch => crate::ai_search::pane(p, d, self.ai_search.as_deref()),
             Section::AiModels => self.ai.ui(p, &mut d.prefs.ai_models),
             Section::Mcp => mcp::pane(p, d, &mut self.mcp_port_text, self.mcp_status),
@@ -1386,7 +1407,7 @@ pub fn auto_import_refusal(path: &std::path::Path) -> Option<String> {
 }
 
 /// Auto-Import: a folder whose new files are imported by themselves.
-fn auto_import(p: &mut Page, d: &mut Draft, library: Option<&std::path::Path>, refused: &mut Option<String>) {
+fn auto_import(p: &mut Page, d: &mut Draft, library: Option<&std::path::Path>, refused: &mut Option<String>, rows: &[SyncRow], commands: &mut Vec<SyncCommand>) {
     let keywords = ["auto", "import", "watch", "monitor", "folder", "drop", "automatic", "inbox", "delete", "trash", "remove"];
     p.block(tr_key("Auto-import"), &keywords, |ui| {
         let was = d.prefs.auto_import;
@@ -1448,7 +1469,56 @@ fn auto_import(p: &mut Page, d: &mut Draft, library: Option<&std::path::Path>, r
             }
             _ => note(ui, tr("Each library watches the folder named after it inside the chosen folder (\"Books\" for Books.library).")),
         }
-        note(ui, tr("New files are imported once they stop growing; the originals stay where they are. Files under 1 KB, temporary (.tmp) files and files without an extension are skipped."));
+        note(ui, tr("New files are imported once they stop growing; the originals stay where they are. Temporary (.tmp) files, empty files and files without an extension are skipped."));
+    });
+
+    let sync_keywords = ["sync", "folder", "synchronization", "watch", "linked", "external", "link", "mirror"];
+    p.block(tr_key("Folder Synchronization"), &sync_keywords, |ui| {
+        note(ui, tr("Register external folders to synchronize their contents with folders in this library."));
+        if library.is_some() {
+            if rows.is_empty() {
+                ui.label(RichText::new(tr("No synchronized folders configured for this library.")).color(t::p().text_muted));
+            }
+            for row in rows {
+                let wf = &row.wf;
+                ui.group(|ui| {
+                    ui.horizontal(|ui| {
+                        let status_color = match wf.status {
+                            falcon_library::SyncStatus::Success => t::p().icon_green,
+                            falcon_library::SyncStatus::Offline => t::p().icon_orange,
+                            falcon_library::SyncStatus::Error => t::p().icon_red,
+                            _ => t::p().text_muted,
+                        };
+                        let label = match row.running {
+                            Some((done, total)) if total > 0 => trf("Syncing {done} of {total}", &[("done", &done), ("total", &total)]),
+                            _ => wf.status.label().to_string(),
+                        };
+                        ui.label(RichText::new(format!("● {label}")).color(status_color).size(11.0));
+                        ui.label(RichText::new(format!("[{}]", wf.storage_mode.label())).color(t::p().primary).size(11.0));
+                        ui.label(RichText::new(format!("Mode: {}", wf.sync_mode.label())).color(t::p().text_muted).size(11.0));
+                        if row.active {
+                            if ui.small_button(tr("Stop Synchronization")).clicked() {
+                                commands.push(SyncCommand::Stop(wf.id.clone()));
+                            }
+                        } else if ui.small_button(tr("Sync Folder Now")).clicked() {
+                            commands.push(SyncCommand::Now(wf.id.clone()));
+                        }
+                        if ui.small_button(tr("Remove")).clicked() {
+                            commands.push(SyncCommand::Remove(wf.id.clone()));
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new(tr("Source:")).color(t::p().text_muted).size(11.0));
+                        ui.add(egui::Label::new(RichText::new(wf.source_path.display().to_string()).color(t::p().text_value).size(11.0)).truncate());
+                    });
+                    if let Some(err) = &wf.last_error {
+                        ui.label(RichText::new(err).color(t::p().icon_red).size(10.5));
+                    }
+                });
+            }
+        } else {
+            note(ui, tr("Open a library to view and configure synchronized folders."));
+        }
     });
 }
 

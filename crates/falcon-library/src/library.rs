@@ -16,7 +16,7 @@ use crate::journal::{
 };
 use crate::linked::{AiSourceCondition, AiSourceSnapshot, AssetStatus, LinkRecord, evaluate_ai_source, evaluate_status, is_linked_item, load_validated_sidecar, sidecar_path};
 use crate::model::{Folder, Item, LibraryMetadata, MtimeIndex, SavedFilter, Tags};
-use crate::storage_mode::{FalconConfig, StorageMode};
+use crate::storage_mode::{FalconConfig, StorageMode, WatchedFolder};
 use crate::undo::{Committed, Dirty, Transaction, WriteMode};
 
 const METADATA: &str = "metadata.json";
@@ -90,7 +90,11 @@ impl Library {
         let mtime = read_json(&root.join(MTIME))?;
         let tags: Tags = read_json(&root.join(TAGS))?;
         let saved_filters: Vec<SavedFilter> = read_json(&root.join(FILTERS))?;
-        let config = FalconConfig::load_or_default(&root)?;
+        let mut config = FalconConfig::load_or_default(&root)?;
+        // A pass cut short by a crash would otherwise read as syncing forever.
+        if config.recover_interrupted_syncs() {
+            let _ = config.save(&root);
+        }
         let mut diagnostics = Vec::new();
         match read_journal(&root) {
             Ok(Some(j)) => diagnostics.push(LibraryDiagnostic::InterruptedJournal {
@@ -236,6 +240,12 @@ impl Library {
         &self.root
     }
 
+    /// Updates the in-memory root folder after the library folder was moved
+    /// on disk.
+    pub fn set_root(&mut self, root: PathBuf) {
+        self.root = root;
+    }
+
     /// All items (including trashed ones), sorted by id.
     pub fn items(&self) -> &[Item] {
         &self.items
@@ -291,6 +301,38 @@ impl Library {
         next.save(&self.root)?;
         self.config = next;
         Ok(())
+    }
+
+    /// Returns the registered watched folders for this library.
+    pub fn watched_folders(&self) -> Vec<WatchedFolder> {
+        self.config.watched_folders()
+    }
+
+    /// Atomically updates and persists the registered watched folders.
+    pub fn set_watched_folders(&mut self, folders: &[WatchedFolder]) -> Result<()> {
+        let mut next = self.config.clone();
+        next.set_watched_folders(folders);
+        next.save(&self.root)?;
+        self.config = next;
+        Ok(())
+    }
+
+    /// Adds or updates one watched folder configuration.
+    pub fn upsert_watched_folder(&mut self, wf: WatchedFolder) -> Result<()> {
+        let mut list = self.watched_folders();
+        if let Some(pos) = list.iter().position(|w| w.id == wf.id) {
+            list[pos] = wf;
+        } else {
+            list.push(wf);
+        }
+        self.set_watched_folders(&list)
+    }
+
+    /// Removes a watched folder configuration by its stable ID.
+    pub fn remove_watched_folder(&mut self, id: &str) -> Result<()> {
+        let mut list = self.watched_folders();
+        list.retain(|w| w.id != id);
+        self.set_watched_folders(&list)
     }
 
     /// Registers `id` as a linked item in `falcon.json` and persists atomically.

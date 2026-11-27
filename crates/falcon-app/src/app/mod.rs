@@ -28,6 +28,7 @@ pub(crate) mod navigation;
 pub(crate) mod open_queue;
 pub(crate) mod page_shots;
 pub(crate) mod state;
+pub(crate) mod sync_tick;
 pub(crate) mod sounds;
 pub(crate) mod system;
 
@@ -539,6 +540,7 @@ impl App {
                 }
             }
         }
+        self.sync_tick(&ctx);
         self.ws.loader.poll(&ctx);
         let title = match &self.ws.root {
             Some(r) => r.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default(),

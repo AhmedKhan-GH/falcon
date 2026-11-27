@@ -448,6 +448,15 @@ pub(crate) struct Workspace {
     pub(crate) health: Option<std::sync::mpsc::Receiver<Vec<crate::storage::Warning>>>,
     /// Bounded background thumbnail worker pool for deferred Link-mode thumbnails.
     pub(crate) thumb_worker: Option<Arc<crate::thumb_worker::ThumbWorker>>,
+    /// Background folder synchronization of this library (`sync_worker.rs`).
+    pub(crate) sync: Option<Arc<crate::sync_worker::SyncScheduler>>,
+    pub(crate) sync_watchers: crate::sync_worker::SyncWatchers,
+    /// The watched folders as last read, and when.
+    pub(crate) sync_folders: Vec<falcon_library::WatchedFolder>,
+    pub(crate) sync_read: Option<std::time::Instant>,
+    /// Folders whose current or queued pass the user asked for, so that their
+    /// result is reported even when nothing changed.
+    pub(crate) sync_manual: std::collections::HashSet<String>,
 }
 
 impl Workspace {
@@ -486,11 +495,23 @@ impl Workspace {
             }
             _ => None,
         };
+        let sync = match (&lib, &root) {
+            (Some(shared), Some(r)) => {
+                let ctx = ctx.clone();
+                Some(Arc::new(crate::sync_worker::SyncScheduler::new(Arc::clone(shared), r.clone(), move || ctx.request_repaint())))
+            }
+            _ => None,
+        };
         Workspace {
             root,
             watch,
             health,
             thumb_worker,
+            sync,
+            sync_watchers: Default::default(),
+            sync_folders: Vec::new(),
+            sync_read: None,
+            sync_manual: Default::default(),
             lib,
             loader: Loader::new(ctx),
             scope: Scope::All,

@@ -43,6 +43,99 @@ impl StorageMode {
     }
 }
 
+/// How a watched folder synchronizes with its source directory.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SyncMode {
+    #[default]
+    Auto,
+    Manual,
+    Disabled,
+}
+
+impl SyncMode {
+    pub fn label(self) -> &'static str {
+        match self {
+            SyncMode::Auto => "Automatic",
+            SyncMode::Manual => "Manual",
+            SyncMode::Disabled => "Disabled",
+        }
+    }
+}
+
+/// The current status of a synchronized watched folder.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SyncStatus {
+    #[default]
+    Idle,
+    Syncing,
+    Success,
+    Offline,
+    Error,
+}
+
+impl SyncStatus {
+    pub fn label(self) -> &'static str {
+        match self {
+            SyncStatus::Idle => "Idle",
+            SyncStatus::Syncing => "Syncing…",
+            SyncStatus::Success => "Synced",
+            SyncStatus::Offline => "Offline",
+            SyncStatus::Error => "Error",
+        }
+    }
+}
+
+/// Configuration for a watched source folder mapped into a Falcon library folder.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WatchedFolder {
+    /// Stable identifier for this watched folder configuration.
+    pub id: String,
+    /// Absolute path to the source folder on disk.
+    pub source_path: PathBuf,
+    /// Corresponding Falcon library folder ID.
+    pub folder_id: String,
+    /// Storage mode for imported files: Link (reference in place) or Copy.
+    pub storage_mode: StorageMode,
+    /// Synchronization mode: Auto, Manual, or Disabled.
+    pub sync_mode: SyncMode,
+    /// Whether to recursively synchronize nested subfolders.
+    #[serde(default = "default_true")]
+    pub recursive: bool,
+    /// Epoch timestamp in milliseconds of the last successful synchronization.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_synced: Option<u64>,
+    /// Last known synchronization status.
+    #[serde(default)]
+    pub status: SyncStatus,
+    /// Description of the last error encountered (if any).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_error: Option<String>,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+/// Where a Copy-mode synchronized item came from, so that renaming the item
+/// in Falcon never makes the same source file import again.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncSource {
+    /// The library item made from the source file.
+    pub item_id: String,
+    /// Size of the source when it was imported (or last seen unchanged).
+    pub size: u64,
+    /// Modification time of the source then, in milliseconds.
+    pub mtime_ms: u64,
+    /// Bounded head and tail hash of the source then, to tell a touched file
+    /// from a changed one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fingerprint: Option<String>,
+}
+
 /// Root configuration persisted at `<library>/falcon.json`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -68,6 +161,12 @@ pub struct FalconConfig {
     /// Reserved forward-compatible delete-sync tombstones (Phase B2).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub excluded_sources: Vec<String>,
+    /// Copy-mode sync provenance, keyed by `<watched folder id>|<path relative
+    /// to the watched folder, with / separators>`. Older Falcon versions
+    /// ignore it, and a copy of falcon.json without it only loses the
+    /// shortcut: the next sync adopts matching items instead of importing.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub sync_sources: std::collections::BTreeMap<String, SyncSource>,
     /// Reserved forward-compatible storage location overrides (Portable Library).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub storage_locations: Option<serde_json::Value>,
@@ -86,6 +185,7 @@ impl Default for FalconConfig {
             library_id: None,
             linked_folders: Vec::new(),
             excluded_sources: Vec::new(),
+            sync_sources: Default::default(),
             storage_locations: None,
         }
     }
@@ -122,6 +222,52 @@ impl FalconConfig {
     pub fn save(&self, library_root: &Path) -> Result<()> {
         let path = Self::path(library_root);
         atomic_write_json(&path, self)
+    }
+
+    /// Returns the parsed watched folders list from `linked_folders`.
+    pub fn watched_folders(&self) -> Vec<WatchedFolder> {
+        self.linked_folders
+            .iter()
+            .filter_map(|v| serde_json::from_value::<WatchedFolder>(v.clone()).ok())
+            .collect()
+    }
+
+    /// Marks every folder stored as `Syncing` as an interrupted error. A pass
+    /// that is running while the library is open keeps its `Syncing`; one found
+    /// when the library is *opened* was cut short (a crash, a power loss) and
+    /// must not read as syncing forever. Returns whether anything changed.
+    pub fn recover_interrupted_syncs(&mut self) -> bool {
+        let mut changed = false;
+        for value in &mut self.linked_folders {
+            let Ok(mut wf) = serde_json::from_value::<WatchedFolder>(value.clone()) else { continue };
+            if wf.status == SyncStatus::Syncing {
+                wf.status = SyncStatus::Error;
+                wf.last_error = Some("The last sync was interrupted before it finished".into());
+                if let Ok(v) = serde_json::to_value(&wf) {
+                    *value = v;
+                    changed = true;
+                }
+            }
+        }
+        changed
+    }
+
+    /// Serializes and stores `folders` into `linked_folders`.
+    pub fn set_watched_folders(&mut self, folders: &[WatchedFolder]) {
+        self.linked_folders = folders
+            .iter()
+            .filter_map(|f| serde_json::to_value(f).ok())
+            .collect();
+    }
+
+    /// Finds a watched folder definition by its stable ID.
+    pub fn find_watched_folder(&self, id: &str) -> Option<WatchedFolder> {
+        self.watched_folders().into_iter().find(|w| w.id == id)
+    }
+
+    /// Finds a watched folder mapped to a specific library folder ID.
+    pub fn find_watched_by_folder_id(&self, folder_id: &str) -> Option<WatchedFolder> {
+        self.watched_folders().into_iter().find(|w| w.folder_id == folder_id)
     }
 }
 
