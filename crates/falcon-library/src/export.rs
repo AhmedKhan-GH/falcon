@@ -128,7 +128,7 @@ pub fn plan_items(lib: &Library, ids: &[String], dest: &Path, how: Collision) ->
     let mut seen = HashSet::new();
     let items: Vec<&Item> = ids.iter().filter(|id| seen.insert(id.as_str())).filter_map(|id| lib.item(id)).collect();
     let mut plan = Plan { dirs: vec![dest.to_path_buf()], steps: Vec::new(), top: dest.to_path_buf(), overwrite: how == Collision::Replace };
-    add_steps(&mut plan, lib.root(), &items, dest, &listing(dest), how);
+    add_steps(&mut plan, lib, &items, dest, &listing(dest), how);
     plan
 }
 
@@ -177,7 +177,7 @@ pub fn plan_folder(lib: &Library, id: &str, dest: &Path, how: Collision, hidden:
     for (dir, mut items) in dirs {
         let mut seen = HashSet::new();
         items.retain(|i| seen.insert(i.id.as_str()));
-        add_steps(&mut plan, lib.root(), &items, &dir, &listing(&dir), how);
+        add_steps(&mut plan, lib, &items, &dir, &listing(&dir), how);
         plan.dirs.push(dir);
     }
     Some(plan)
@@ -192,7 +192,7 @@ pub fn plan_smart(lib: &Library, id: &str, dest: &Path, how: Collision, hidden: 
     let top = dest.join(folder_dir_name(&name));
     let items: Vec<&Item> = lib.smart_folder_items(id).into_iter().filter(|i| !i.folders.iter().any(|f| hidden.contains(f))).collect();
     let mut plan = Plan { dirs: vec![top.clone()], steps: Vec::new(), top: top.clone(), overwrite: how == Collision::Replace };
-    add_steps(&mut plan, lib.root(), &items, &top, &listing(&top), how);
+    add_steps(&mut plan, lib, &items, &top, &listing(&top), how);
     Some(plan)
 }
 
@@ -200,14 +200,17 @@ fn find_smart<'a>(list: &'a [SmartFolder], id: &str) -> Option<&'a SmartFolder> 
     list.iter().find_map(|s| if s.id == id { Some(s) } else { find_smart(&s.children, id) })
 }
 
-fn add_steps(plan: &mut Plan, root: &Path, items: &[&Item], dir: &Path, existing: &HashSet<String>, how: Collision) {
-    add_named_steps(plan, root, items, items.iter().map(|i| file_name(i)).collect(), dir, existing, how);
+fn add_steps(plan: &mut Plan, lib: &Library, items: &[&Item], dir: &Path, existing: &HashSet<String>, how: Collision) {
+    add_named_steps(plan, lib, items, items.iter().map(|i| file_name(i)).collect(), dir, existing, how);
 }
 
-fn add_named_steps(plan: &mut Plan, root: &Path, items: &[&Item], names: Vec<String>, dir: &Path, existing: &HashSet<String>, how: Collision) {
+fn add_named_steps(plan: &mut Plan, lib: &Library, items: &[&Item], names: Vec<String>, dir: &Path, existing: &HashSet<String>, how: Collision) {
     let names = name_files(&names, existing, how);
     for (item, name) in items.iter().zip(names) {
-        plan.steps.push(Step { id: item.id.clone(), from: item.original_path(root), to: dir.join(name) });
+        let from = lib
+            .resolved_source_path(&item.id)
+            .unwrap_or_else(|_| lib.root().join(".falcon-unavailable").join(&item.id));
+        plan.steps.push(Step { id: item.id.clone(), from, to: dir.join(name) });
     }
 }
 
@@ -311,7 +314,7 @@ pub fn plan_converted(lib: &Library, ids: &[String], dest: &Path, format: Format
     let items: Vec<&Item> = ids.iter().filter(|id| seen.insert(id.as_str())).filter_map(|id| lib.item(id)).filter(|i| convertible(i)).collect();
     let names = items.iter().map(|i| crate::disk_name::on_disk(&format!("{}.{}", i.name.replace(['/', '\0'], " "), format.ext())).into_owned()).collect();
     let mut plan = Plan { dirs: vec![dest.to_path_buf()], steps: Vec::new(), top: dest.to_path_buf(), overwrite: how == Collision::Replace };
-    add_named_steps(&mut plan, lib.root(), &items, names, dest, &listing(dest), how);
+    add_named_steps(&mut plan, lib, &items, names, dest, &listing(dest), how);
     plan
 }
 
@@ -461,7 +464,11 @@ pub fn csv_row(lib: &Library, item: &Item, folder_names: &HashMap<&str, &str>) -
         csv_number(item.extra.get("star")),
         csv_time(item.modification_time),
         csv_time(item.last_modified),
-        item.original_path(lib.root()).display().to_string(),
+        lib.resolved_source_path(&item.id)
+            .ok()
+            .or_else(|| lib.last_known_source_path(&item.id))
+            .map(|p| p.display().to_string())
+            .unwrap_or_default(),
     ]
 }
 
@@ -495,7 +502,12 @@ pub fn write_csv(lib: &Library, ids: &[String], dest: &Path) -> Result<usize> {
 /// Lines for Copy File Path: each item's original, one per line, as Eagle
 /// copies them.
 pub fn paths_text(lib: &Library, items: &[&Item]) -> String {
-    items.iter().map(|i| i.original_path(lib.root()).display().to_string()).collect::<Vec<_>>().join("\n")
+    items
+        .iter()
+        .filter_map(|i| lib.resolved_source_path(&i.id).ok().or_else(|| lib.last_known_source_path(&i.id)))
+        .map(|p| p.display().to_string())
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// Lines for Copy Folder Path: each item's `<id>.info` folder with a
@@ -523,7 +535,7 @@ fn base64_type(ext: &str) -> Option<&'static str> {
 pub fn data_url(lib: &Library, item: &Item) -> Option<String> {
     use base64::Engine;
     let (bytes, kind) = match base64_type(&item.ext) {
-        Some(kind) => (fs::read(item.original_path(lib.root())).ok()?, kind),
+        Some(kind) => (fs::read(lib.resolved_source_path(&item.id).ok()?).ok()?, kind),
         None => {
             let bytes = fs::read(item.thumbnail_path(lib.root())?).ok()?;
             let kind = match image::guess_format(&bytes) {
@@ -540,7 +552,7 @@ pub fn data_url(lib: &Library, item: &Item) -> Option<String> {
 /// Copy Thumbnail: the item's thumbnail decoded, or, for an item without
 /// one, its original if that is an image.
 pub fn thumbnail_image(lib: &Library, item: &Item) -> Option<image::RgbaImage> {
-    let path = item.thumbnail_path(lib.root()).unwrap_or_else(|| item.original_path(lib.root()));
+    let path = item.thumbnail_path(lib.root()).or_else(|| lib.resolved_source_path(&item.id).ok())?;
     crate::thumbnail::decode(&path).ok().map(|i| i.to_rgba8())
 }
 
@@ -615,9 +627,9 @@ mod tests {
         assert_eq!((written.len(), seen), (3, 3));
         for (step, id) in plan.steps.iter().zip(&ids) {
             let item = lib.item(id).unwrap();
-            assert_eq!(fs::read(&step.to).unwrap(), fs::read(item.original_path(lib.root())).unwrap());
+            assert_eq!(fs::read(&step.to).unwrap(), fs::read(item.managed_storage_path(lib.root())).unwrap());
             let a = FileTime::from_last_modification_time(&fs::metadata(&step.to).unwrap());
-            let b = FileTime::from_last_modification_time(&fs::metadata(item.original_path(lib.root())).unwrap());
+            let b = FileTime::from_last_modification_time(&fs::metadata(item.managed_storage_path(lib.root())).unwrap());
             assert_eq!(a.unix_seconds(), b.unix_seconds());
         }
         // No temp files are left behind.
@@ -760,7 +772,7 @@ mod tests {
         assert_eq!(header.split(',').count(), 16);
         assert!(header.starts_with("Item ID,Name,File Type,"));
         let item = lib.item(&ids[1]).unwrap();
-        let path = item.original_path(lib.root()).display().to_string();
+        let path = item.managed_storage_path(lib.root()).display().to_string();
         let want = format!(
             "{},other,png,8,8,,\"https://example.com/a?b=1,2\",\"line one\nline \"\"two\"\"\",\"first\nsecond\",\"blue, logo\",\"Refs, old, GONE\",{},4,2023-11-14 22:13:20,{},{}",
             ids[1], item.size, csv_time(item.last_modified), csv_field(&path)
@@ -784,13 +796,13 @@ mod tests {
         let url = data_url(&lib, items[0]).unwrap();
         let b64 = url.strip_prefix("data:image/png;base64,").unwrap();
         let bytes = base64::engine::general_purpose::STANDARD.decode(b64).unwrap();
-        assert_eq!(bytes, fs::read(items[0].original_path(lib.root())).unwrap());
+        assert_eq!(bytes, fs::read(items[0].managed_storage_path(lib.root())).unwrap());
         assert_eq!(thumbnail_image(&lib, items[0]).unwrap().dimensions(), (8, 8));
 
         // Another kind falls back to its thumbnail, or to nothing.
         let mut other = items[1].clone();
         let info = other.info_dir(lib.root());
-        fs::remove_file(other.original_path(lib.root())).unwrap();
+        fs::remove_file(other.managed_storage_path(lib.root())).unwrap();
         fs::write(info.join("other.txt"), b"hello").unwrap();
         other.ext = "txt".into();
         lib.update_item(other.clone()).unwrap();

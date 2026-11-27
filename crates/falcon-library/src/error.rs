@@ -65,6 +65,36 @@ pub enum Error {
         /// What went wrong.
         reason: String,
     },
+    /// A linked or managed asset payload could not be read or resolved.
+    #[error("asset {id} is {status}: {reason}")]
+    AssetUnavailable {
+        /// Item ID.
+        id: String,
+        /// Evaluated asset status.
+        status: crate::linked::AssetStatus,
+        /// Last known path, if any.
+        path: Option<PathBuf>,
+        /// Human-readable reason.
+        reason: String,
+    },
+    /// A destructive payload operation was requested on a non-managed asset.
+    #[error("cannot perform {action} on {status} asset {id}")]
+    UnsupportedForLinkedAsset {
+        /// Item ID.
+        id: String,
+        /// Operation attempted.
+        action: String,
+        /// Evaluated asset status.
+        status: crate::linked::AssetStatus,
+    },
+    /// `falcon.json` uses a newer schema version than this build supports.
+    #[error("{path} uses Falcon schema v{version}, which is newer than supported")]
+    NewerFalconMetadata {
+        /// Config path.
+        path: PathBuf,
+        /// Schema version in file.
+        version: u32,
+    },
 }
 
 /// Convenience alias.

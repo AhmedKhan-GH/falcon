@@ -390,7 +390,7 @@ fn bilinear(src: &RgbaImage, dw: u32, dh: u32) -> RgbaImage {
 pub fn refresh_source(item: &crate::model::Item, root: &std::path::Path) -> Option<DynamicImage> {
     use crate::thumbnail;
     if item.no_thumbnail == Some(true) {
-        let raw = item.original_path(root);
+        let raw = crate::linked::resolve_item_read_path(root, item).ok()?;
         if item.ext.eq_ignore_ascii_case("svg") {
             return thumbnail::render_svg(&std::fs::read(raw).ok()?, None).ok();
         }

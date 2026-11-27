@@ -15,6 +15,7 @@
 use std::collections::BTreeSet;
 
 use crate::error::Result;
+use crate::fault::{self, FaultPoint};
 use crate::library::{Library, write_json};
 use crate::model::{Item, LibraryMetadata, SavedFilter, Tags};
 
@@ -96,11 +97,12 @@ pub(crate) struct Dirty {
     pub(crate) metadata: bool,
     pub(crate) tags: bool,
     pub(crate) saved_filters: bool,
+    pub(crate) config: bool,
 }
 
 impl Dirty {
     fn any(&self) -> bool {
-        !self.items.is_empty() || self.mtime || self.metadata || self.tags || self.saved_filters
+        !self.items.is_empty() || self.mtime || self.metadata || self.tags || self.saved_filters || self.config
     }
 }
 
@@ -258,12 +260,16 @@ impl Library {
         for id in &self.dirty.items {
             // An item deleted since it was marked has nothing left to write.
             if let Some(item) = self.item(id) {
-                write_json(&item.info_dir(&root).join("metadata.json"), item)?;
+                let path = item.info_dir(&root).join("metadata.json");
+                fault::check(FaultPoint::FlushDirtyItem, &path)?;
+                write_json(&path, item)?;
                 report.items += 1;
             }
         }
         if self.dirty.mtime {
-            write_json(&root.join("mtime.json"), &self.mtime)?;
+            let mtime_path = root.join("mtime.json");
+            fault::check(FaultPoint::MtimeWrite, &mtime_path)?;
+            write_json(&mtime_path, &self.mtime)?;
             report.mtime = true;
         }
         if self.dirty.metadata {
@@ -284,6 +290,9 @@ impl Library {
         if self.dirty.saved_filters {
             write_json(&root.join("saved-filters.json"), &self.saved_filters)?;
             report.saved_filters = true;
+        }
+        if self.dirty.config {
+            self.config.save(&root)?;
         }
         self.dirty = Dirty::default();
         Ok(report)
@@ -559,7 +568,7 @@ mod tests {
         assert_eq!(t.item_ids().collect::<Vec<_>>(), [c.as_str()]);
         let redo = lib.revert(t).unwrap();
         assert!(item(&lib, &c).is_deleted);
-        assert!(item(&lib, &c).original_path(lib.root()).is_file());
+        assert!(item(&lib, &c).managed_storage_path(lib.root()).is_file());
         lib.revert(redo).unwrap();
         assert!(!item(&lib, &c).is_deleted);
     }

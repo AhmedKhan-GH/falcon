@@ -312,7 +312,7 @@ fn a_broken_picture_fails_the_item() {
         if let Some(t) = item.thumbnail_path(lib.root()) {
             std::fs::write(t, b"not a picture").unwrap();
         }
-        std::fs::write(item.original_path(lib.root()), b"not a picture").unwrap();
+        std::fs::write(item.managed_storage_path(lib.root()), b"not a picture").unwrap();
     }
     let (base, bodies) = serve(vec![]);
     let report = go(&shared, &run(&ids, vec![Step::AutoTag]), &plan(&base));

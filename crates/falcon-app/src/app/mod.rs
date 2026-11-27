@@ -28,6 +28,7 @@ pub(crate) mod navigation;
 pub(crate) mod open_queue;
 pub(crate) mod page_shots;
 pub(crate) mod state;
+pub(crate) mod sync_tick;
 pub(crate) mod sounds;
 pub(crate) mod system;
 
@@ -516,6 +517,30 @@ impl App {
         self.sync_layout();
         self.follow_modes(&ctx);
         t::follow_system(&ctx);
+        if let Some(worker) = &self.ws.thumb_worker {
+            if self.ws.root.as_ref() != Some(worker.root()) {
+                worker.shutdown();
+                self.ws.thumb_worker = match (&self.ws.lib, &self.ws.root) {
+                    (Some(shared), Some(r)) => {
+                        let w = std::sync::Arc::new(crate::thumb_worker::ThumbWorker::new(
+                            std::sync::Arc::clone(shared),
+                            r.clone(),
+                            ctx.clone(),
+                            true,
+                        ));
+                        let items = lock(shared).items().to_vec();
+                        w.rediscover_pending(&items);
+                        Some(w)
+                    }
+                    _ => None,
+                };
+            } else {
+                for id in worker.take_completed() {
+                    self.ws.loader.forget(&id);
+                }
+            }
+        }
+        self.sync_tick(&ctx);
         self.ws.loader.poll(&ctx);
         let title = match &self.ws.root {
             Some(r) => r.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default(),
@@ -707,7 +732,7 @@ impl App {
         if self.audio.loaded().is_some() && self.audio.loaded() != self.ws.viewer.as_deref() {
             self.audio.stop();
         }
-        self.drop_hint(&ctx);
+        self.drop_hint(&ctx, lib.storage_mode());
         self.capture_notice_ui(&ctx);
         self.video.keep_only(self.ws.viewer.as_deref());
         self.fetches.prune((self.ws.view.id.as_str() == self.ws.viewer.as_deref().unwrap_or_default()).then_some(self.ws.view.file.as_path()));
@@ -716,6 +741,8 @@ impl App {
         if self.ws.smart_dialog.is_some() {
             self.smart_dialog_ui(&ctx, lib);
         }
+        self.library_settings_dialog(&ctx, lib);
+        self.relink_dialog(&ctx, lib);
         self.organize_dialogs(&ctx, lib);
         self.tag_picker_ui(&ctx, lib);
         self.quick_switch_ui(&ctx, lib);

@@ -140,7 +140,7 @@ impl crate::Library {
         };
         metas.insert("preferLng".into(), Value::String(lang.into()));
         let metas = metas.clone();
-        let raw = item.original_path(self.root());
+        let raw = self.resolved_source_path(&item.id)?;
         let data = std::fs::read(&raw).map_err(|e| crate::Error::io(&raw, e))?;
         if let Some(img) = render(&data, &metas) {
             let thumb = self.info_dir(&item).join(item.thumbnail_name());

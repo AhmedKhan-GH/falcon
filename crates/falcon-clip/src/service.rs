@@ -7,13 +7,14 @@
 //! batch the worker waits as long as the batch took, so it uses at most half
 //! of what the machine could give it and browsing stays smooth.
 
-use std::collections::VecDeque;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, UNIX_EPOCH};
 
 use falcon_library::Library;
+use falcon_library::linked::{AiSourceCondition, AiSourceSnapshot, evaluate_ai_source_snapshot};
 use falcon_library::thumbnail;
 use image::DynamicImage;
 
@@ -110,6 +111,10 @@ pub struct Status {
     pub done: usize,
     /// Of those, how many had no picture to read.
     pub skipped: usize,
+    /// Items whose last known valid embedding is kept while source refresh is pending/failed.
+    pub stale: usize,
+    /// Items whose source is currently offline, missing, invalid, or temporarily inaccessible.
+    pub unavailable: usize,
     /// "Metal" or "CPU", once the model has loaded.
     pub device: Option<String>,
     pub error: Option<String>,
@@ -153,6 +158,7 @@ enum Msg {
     Paused(bool),
     ModelChanged,
     Rebuild,
+    Refresh,
     ForgetIndexes,
     Search(Query, usize, Sender<Result<Vec<Hit>, SearchError>>),
     Stop,
@@ -205,6 +211,11 @@ impl Service {
         let _ = self.tx.send(Msg::Rebuild);
     }
 
+    /// Re-checks source availability and incremental stamps immediately.
+    pub fn refresh(&self) {
+        let _ = self.tx.send(Msg::Refresh);
+    }
+
     /// Deletes every library's index.
     pub fn forget_indexes(&self) {
         let _ = self.tx.send(Msg::ForgetIndexes);
@@ -232,21 +243,31 @@ impl Drop for Service {
     }
 }
 
+/// Distinguishes SVG rasterizer stamps from legacy failed raw-file stamps so
+/// previously skipped `< 100 KB` SVGs retry automatically without invalidating
+/// existing valid vectors in the index.
+const SVG_RASTER_STAMP_TAG: u64 = 0x5356_4732_0000_0000;
+const MAX_AI_SVG_BYTES: u64 = 32 * 1024 * 1024;
+const MAX_AI_SVG_DIM: u32 = 4096;
+
 /// One item waiting to be read.
 struct Job {
     id: String,
     stamp: u64,
     picture: PathBuf,
+    source: AiSourceSnapshot,
+    use_svg_raster: bool,
 }
 
-/// An item as the index looks at it. Made under the library lock, so it
-/// doesn't touch the disk.
+/// An item as the index looks at it. Made under the library lock without
+/// performing blocking external-volume or payload reads.
 struct Entry {
     id: String,
+    ext: String,
     /// An item in the Trash keeps its vector, but isn't indexed while there.
     trashed: bool,
     thumbnail: PathBuf,
-    original: PathBuf,
+    source: AiSourceSnapshot,
 }
 
 struct Worker {
@@ -267,6 +288,14 @@ struct Worker {
     total: usize,
     trashed: usize,
     skipped: usize,
+    stale: usize,
+    unavailable: usize,
+    /// Item IDs that are currently offline/missing/permission-denied/transient
+    /// so we can detect reconnects incrementally without full reindex.
+    unavailable_ids: HashSet<String>,
+    /// Refresh stamps that failed decode while preserving an old vector as stale,
+    /// preventing tight retry loops until the file stamp changes again.
+    failed_refresh_stamps: HashMap<String, u64>,
     /// What the library looked like when last compared.
     signature: Option<u64>,
     last_check: Option<Instant>,
@@ -297,6 +326,10 @@ impl Worker {
             total: 0,
             trashed: 0,
             skipped: 0,
+            stale: 0,
+            unavailable: 0,
+            unavailable_ids: HashSet::new(),
+            failed_refresh_stamps: HashMap::new(),
             signature: None,
             last_check: None,
             last_full_check: None,
@@ -365,6 +398,10 @@ impl Worker {
                 self.total = 0;
                 self.trashed = 0;
                 self.skipped = 0;
+                self.stale = 0;
+                self.unavailable = 0;
+                self.unavailable_ids.clear();
+                self.failed_refresh_stamps.clear();
                 self.force_check();
             }
             Msg::Enabled(on) => {
@@ -388,12 +425,23 @@ impl Worker {
                 if let Some(index) = self.open_index() {
                     let _ = index.reset();
                 }
+                self.failed_refresh_stamps.clear();
+                self.unavailable_ids.clear();
+                self.failure = None;
+                self.force_check();
+            }
+            Msg::Refresh => {
+                self.failed_refresh_stamps.clear();
                 self.failure = None;
                 self.force_check();
             }
             Msg::ForgetIndexes => {
                 self.index = None;
                 self.queue.clear();
+                self.unavailable_ids.clear();
+                self.failed_refresh_stamps.clear();
+                self.stale = 0;
+                self.unavailable = 0;
                 if let Ok(files) = std::fs::read_dir(&self.options.index_dir) {
                     for file in files.flatten() {
                         let _ = std::fs::remove_file(file.path());
@@ -441,6 +489,7 @@ impl Worker {
         self.last_check = Some(now);
         let Some(library) = self.library.clone() else { return };
         let full = self.last_full_check.is_none_or(|at| now.duration_since(at) >= FULL_CHECK_EVERY);
+        let has_watch = !self.unavailable_ids.is_empty() || self.index.as_ref().is_some_and(|i| i.stale_count() > 0);
         // Only the list is read under the lock.
         let (signature, entries) = {
             let lib = lock(&library);
@@ -449,7 +498,7 @@ impl Worker {
                 self.signature = None;
             }
             let signature = signature(&lib);
-            if !full && self.signature == Some(signature) {
+            if !full && !has_watch && self.signature == Some(signature) {
                 return;
             }
             (signature, entries(&lib))
@@ -461,11 +510,19 @@ impl Worker {
         (self.options.notify)();
     }
 
-    /// Queues what changed and forgets what's gone.
+    /// Queues what changed and forgets what's gone, while strictly preserving
+    /// embeddings for unavailable/offline/missing/invalid/permission-denied sources.
     fn compare(&mut self, entries: &[Entry]) {
-        let Some(index) = self.open_index() else { return };
+        self.unavailable_ids.clear();
+        let mut new_unavail = Vec::new();
+        let mut unavailable = 0usize;
+        let mut failed_stamps = std::mem::take(&mut self.failed_refresh_stamps);
+        let Some(index) = self.open_index() else {
+            self.failed_refresh_stamps = failed_stamps;
+            return;
+        };
         let mut queue = VecDeque::new();
-        let mut live = std::collections::HashSet::with_capacity(entries.len());
+        let mut live = HashSet::with_capacity(entries.len());
         let (mut total, mut trashed, mut skipped) = (0, 0, 0);
         for entry in entries {
             live.insert(entry.id.as_str());
@@ -474,21 +531,79 @@ impl Worker {
                 continue;
             }
             total += 1;
-            let picture = if entry.thumbnail.is_file() { &entry.thumbnail } else { &entry.original };
-            let stamp = file_stamp(picture);
-            if index.stamp(&entry.id) != Some(stamp) {
-                queue.push_back(Job { id: entry.id.clone(), stamp, picture: picture.clone() });
-            } else if index.vector(&entry.id).is_none() {
-                skipped += 1;
+            match evaluate_ai_source_snapshot(&entry.source) {
+                AiSourceCondition::Available(src_path) => {
+                    let has_thumbnail = entry.thumbnail.is_file();
+                    let is_linked = entry.source.is_linked_hint();
+                    let stamp = compute_source_stamp(
+                        has_thumbnail,
+                        &entry.thumbnail,
+                        is_linked,
+                        &src_path,
+                        &entry.ext,
+                    );
+                    let existing_vec = index.vector(&entry.id).is_some();
+                    if index.stamp(&entry.id) == Some(stamp) {
+                        index.clear_stale(&entry.id);
+                        failed_stamps.remove(&entry.id);
+                        if !existing_vec {
+                            skipped += 1;
+                        }
+                    } else if existing_vec && failed_stamps.get(&entry.id) == Some(&stamp) {
+                        index.mark_stale(&entry.id);
+                    } else if !has_thumbnail && !thumbnail::is_supported(&entry.ext) {
+                        if existing_vec {
+                            index.mark_stale(&entry.id);
+                            failed_stamps.insert(entry.id.clone(), stamp);
+                        } else {
+                            let _ = index.skip(&entry.id, stamp);
+                            skipped += 1;
+                        }
+                    } else {
+                        let prefer_source = is_linked
+                            && has_thumbnail
+                            && existing_vec
+                            && thumbnail::is_supported(&entry.ext);
+                        let picture = if !has_thumbnail || prefer_source {
+                            src_path
+                        } else {
+                            entry.thumbnail.clone()
+                        };
+                        let use_svg_raster = (!has_thumbnail || prefer_source)
+                            && entry.ext.eq_ignore_ascii_case("svg");
+                        queue.push_back(Job {
+                            id: entry.id.clone(),
+                            stamp,
+                            picture,
+                            source: entry.source.clone(),
+                            use_svg_raster,
+                        });
+                    }
+                }
+                AiSourceCondition::Offline
+                | AiSourceCondition::Missing
+                | AiSourceCondition::InvalidReference
+                | AiSourceCondition::PermissionDenied
+                | AiSourceCondition::TemporarilyUnavailable => {
+                    // Never erase existing embeddings or emit SKIPPED for unavailable sources.
+                    new_unavail.push(entry.id.clone());
+                    unavailable += 1;
+                }
             }
         }
         for id in index.known_ids() {
             if !live.contains(id.as_str()) {
                 let _ = index.remove(&id);
+                failed_stamps.remove(&id);
             }
         }
         let _ = index.flush();
         let _ = index.compact();
+        let stale_count = index.stale_count();
+        self.stale = stale_count;
+        self.unavailable = unavailable;
+        self.unavailable_ids.extend(new_unavail);
+        self.failed_refresh_stamps = failed_stamps;
         self.queue = queue;
         self.total = total;
         self.trashed = trashed;
@@ -505,39 +620,87 @@ impl Worker {
         let jobs: Vec<Job> = self.queue.drain(..count).collect();
         let mut pictures = Vec::with_capacity(count);
         let mut good = Vec::with_capacity(count);
-        let mut bad = Vec::new();
+        let mut decode_failed = Vec::new();
+        let mut unavailable_during_batch = Vec::new();
         for job in jobs {
             // A damaged file that panics a decoder is one unreadable item,
             // not the end of the worker.
-            match std::panic::catch_unwind(|| thumbnail::decode(&job.picture)) {
+            match std::panic::catch_unwind(|| decode_for_index(&job.picture, job.use_svg_raster)) {
                 Ok(Ok(picture)) => {
                     pictures.push(picture);
                     good.push(job);
                 }
-                _ => bad.push(job),
+                _ => {
+                    match evaluate_ai_source_snapshot(&job.source) {
+                        AiSourceCondition::Available(_) => decode_failed.push(job),
+                        AiSourceCondition::Offline
+                        | AiSourceCondition::Missing
+                        | AiSourceCondition::InvalidReference
+                        | AiSourceCondition::PermissionDenied
+                        | AiSourceCondition::TemporarilyUnavailable => unavailable_during_batch.push(job),
+                    }
+                }
             }
         }
         let vectors = match self.embedder.as_mut() {
-            Some(embedder) => embedder.embed_images(&pictures),
-            None => Ok(Vec::new()),
+            Some(embedder) if !pictures.is_empty() => embedder.embed_images(&pictures),
+            _ => Ok(Vec::new()),
         };
         drop(pictures);
         let elapsed = started.elapsed();
         match vectors {
             Ok(vectors) => {
+                let mut newly_skipped = 0usize;
+                let mut failed_stamps = std::mem::take(&mut self.failed_refresh_stamps);
+                let mut new_unavail = Vec::new();
+                let mut new_stale = 0usize;
                 if let Some(index) = self.open_index() {
                     for (job, vector) in good.iter().zip(&vectors) {
+                        failed_stamps.remove(&job.id);
                         let _ = index.put(&job.id, job.stamp, vector);
                     }
-                    for job in &bad {
-                        let _ = index.skip(&job.id, job.stamp);
+                    for job in &decode_failed {
+                        if index.vector(&job.id).is_some() {
+                            index.mark_stale(&job.id);
+                            failed_stamps.insert(job.id.clone(), job.stamp);
+                        } else {
+                            let _ = index.skip(&job.id, job.stamp);
+                            newly_skipped += 1;
+                        }
+                    }
+                    for job in &unavailable_during_batch {
+                        new_unavail.push(job.id.clone());
+                        if index.vector(&job.id).is_some() {
+                            index.mark_stale(&job.id);
+                        }
                     }
                     let _ = index.flush();
+                    new_stale = index.stale_count();
                 }
-                self.skipped += bad.len();
+                self.failed_refresh_stamps = failed_stamps;
+                for id in new_unavail {
+                    if self.unavailable_ids.insert(id) {
+                        self.unavailable += 1;
+                    }
+                }
+                self.stale = new_stale;
+                self.skipped += newly_skipped;
                 self.rate = count as f32 / elapsed.as_secs_f32().max(1e-3);
             }
             Err(err) => {
+                let mut new_stale = self.stale;
+                let mut failed_stamps = std::mem::take(&mut self.failed_refresh_stamps);
+                if let Some(index) = self.open_index() {
+                    for job in good.iter().chain(decode_failed.iter()).chain(unavailable_during_batch.iter()) {
+                        if index.vector(&job.id).is_some() {
+                            index.mark_stale(&job.id);
+                            failed_stamps.insert(job.id.clone(), job.stamp);
+                        }
+                    }
+                    new_stale = index.stale_count();
+                }
+                self.failed_refresh_stamps = failed_stamps;
+                self.stale = new_stale;
                 self.failure = Some(err);
                 self.queue.clear();
             }
@@ -608,10 +771,19 @@ impl Worker {
                         let entry = {
                             let lib = lock(&library);
                             let item = lib.item(&id).ok_or(SearchError::NoItem)?;
-                            entry_of(item, lib.root())
+                            entry_of(&lib, item)
                         };
-                        let picture = if entry.thumbnail.is_file() { entry.thumbnail } else { entry.original };
-                        let image = thumbnail::decode(&picture).map_err(|e| SearchError::BadImage(e.to_string()))?;
+                        let has_thumbnail = entry.thumbnail.is_file();
+                        let picture = if has_thumbnail {
+                            entry.thumbnail
+                        } else {
+                            match evaluate_ai_source_snapshot(&entry.source) {
+                                AiSourceCondition::Available(p) => p,
+                                other => return Err(SearchError::BadImage(format!("source unavailable ({other:?})"))),
+                            }
+                        };
+                        let use_svg_raster = !has_thumbnail && entry.ext.eq_ignore_ascii_case("svg");
+                        let image = decode_for_index(&picture, use_svg_raster).map_err(|e| SearchError::BadImage(e.to_string()))?;
                         self.embed_one(&image)?
                     }
                 }
@@ -665,6 +837,8 @@ impl Worker {
             total: self.total,
             done: self.total.saturating_sub(queued),
             skipped: self.skipped,
+            stale: self.stale,
+            unavailable: self.unavailable,
             device: self.device.clone(),
             error: self.failure.clone(),
             rate: self.rate,
@@ -696,18 +870,49 @@ fn signature(lib: &Library) -> u64 {
 }
 
 fn entries(lib: &Library) -> Vec<Entry> {
-    lib.items().iter().map(|item| entry_of(item, lib.root())).collect()
+    lib.items().iter().map(|item| entry_of(lib, item)).collect()
 }
 
-/// The pictures that can stand for an item: its thumbnail, or the original
-/// file when there's no thumbnail. An item is skipped when reading fails.
-fn entry_of(item: &falcon_library::model::Item, root: &Path) -> Entry {
+fn entry_of(lib: &Library, item: &falcon_library::model::Item) -> Entry {
     Entry {
         id: item.id.clone(),
+        ext: item.ext.clone(),
         trashed: item.is_deleted,
-        thumbnail: item.info_dir(root).join(format!("{}_thumbnail.png", item.name)),
-        original: item.original_path(root),
+        thumbnail: item.info_dir(lib.root()).join(item.thumbnail_name()),
+        source: lib.ai_source_snapshot(item),
     }
+}
+
+fn compute_source_stamp(
+    has_thumbnail: bool,
+    thumbnail: &Path,
+    is_linked: bool,
+    src_path: &Path,
+    ext: &str,
+) -> u64 {
+    let raw_src_stamp = file_stamp(src_path);
+    let src_stamp = if !has_thumbnail && ext.eq_ignore_ascii_case("svg") && raw_src_stamp != 0 {
+        raw_src_stamp ^ SVG_RASTER_STAMP_TAG
+    } else {
+        raw_src_stamp
+    };
+    if has_thumbnail {
+        let thumb_stamp = file_stamp(thumbnail);
+        if is_linked {
+            thumb_stamp.rotate_left(17) ^ src_stamp
+        } else {
+            thumb_stamp
+        }
+    } else {
+        src_stamp
+    }
+}
+
+fn decode_for_index(path: &Path, use_svg_raster: bool) -> Result<DynamicImage, thumbnail::ThumbError> {
+    if use_svg_raster {
+        return thumbnail::render_svg_bounded(path, thumbnail::max_side("svg"), MAX_AI_SVG_BYTES, MAX_AI_SVG_DIM);
+    }
+    thumbnail::decode(path)
 }
 
 /// What says a file changed: its modified time and size.

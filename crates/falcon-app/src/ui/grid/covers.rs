@@ -212,10 +212,10 @@ impl App {
                 let radius = if thumb.height() < 60.0 { 4 } else { 6 };
                 egui::Image::new((tex.id(), thumb.size())).uv(uv).corner_radius(CornerRadius::same(radius)).paint_at(ui, thumb.shrink(1.0));
             }
-            None if job_for(item, lib.root(), Tier::Grid).is_none() => ext_placeholder(ui, thumb, &item.ext),
+            None if job_for(lib, item, Tier::Grid).is_none() => ext_placeholder(ui, thumb, &item.ext),
             None => {}
         }
-        if let Some(j) = job_for(item, lib.root(), Tier::Grid) {
+        if let Some(j) = job_for(lib, item, Tier::Grid) {
             self.ws.frame_jobs.push(j);
         }
     }

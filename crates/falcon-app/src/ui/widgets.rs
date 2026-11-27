@@ -121,6 +121,51 @@ pub(crate) fn pin_badge(ui: &Ui, top_left: Pos2) {
     icon(ui, rect.center(), ic::PUSH_PIN, 12.0, Color32::WHITE);
 }
 
+/// Visual glyph and tint color representing a referenced asset's status.
+pub(crate) fn status_visual(status: crate::linked_ui::UiAvailability) -> (&'static str, Color32) {
+    use crate::linked_ui::UiAvailability as S;
+    match status {
+        S::Managed => (ic::CHECK, t::p().text_muted),
+        S::Linked => (ic::LINK, Color32::WHITE),
+        S::Offline => (ic::HARD_DRIVE, t::p().icon_orange),
+        S::Missing => (ic::WARNING, t::p().icon_red),
+        S::InvalidReference => (ic::PROHIBIT, t::p().icon_red),
+        S::PermissionDenied => (ic::LOCK_SIMPLE, t::p().icon_red),
+        S::TemporarilyUnavailable => (ic::CLOCK, t::p().icon_yellow),
+    }
+}
+
+/// Compact pill badge in the corner of a grid/waterfall/justified card for
+/// linked and unavailable referenced assets (`Managed` items draw nothing).
+pub(crate) fn status_badge(ui: &Ui, id_salt: &str, bottom_left: Pos2, status: crate::linked_ui::UiAvailability) {
+    if !status.is_linked() {
+        return;
+    }
+    let rect = Rect::from_min_size(Pos2::new(bottom_left.x, bottom_left.y - PIN_BADGE), Vec2::splat(PIN_BADGE));
+    let (glyph, tint) = status_visual(status);
+    let p = ui.painter();
+    let fill = if status.is_unavailable() { Color32::from_black_alpha(172) } else { Color32::from_black_alpha(132) };
+    let border = if status.is_unavailable() { tint.gamma_multiply(0.55) } else { Color32::from_white_alpha(44) };
+    p.rect_filled(rect, CornerRadius::same(4), fill);
+    p.rect_stroke(rect, CornerRadius::same(4), Stroke::new(1.0, border), StrokeKind::Inside);
+    icon(ui, rect.center(), glyph, 11.5, tint);
+    ui.interact(rect, ui.scope_id().with(("link-badge", id_salt)), Sense::hover()).on_hover_text(status.badge_tooltip());
+}
+
+/// Compact status icon drawn inside a list row next to the item name.
+pub(crate) fn list_status_icon(ui: &Ui, id_salt: &str, left_center: Pos2, status: crate::linked_ui::UiAvailability) -> f32 {
+    if !status.is_linked() {
+        return 0.0;
+    }
+    const SIZE: f32 = 14.0;
+    let rect = Rect::from_center_size(Pos2::new(left_center.x + SIZE / 2.0, left_center.y), Vec2::splat(SIZE));
+    let (glyph, tint) = status_visual(status);
+    let color = if status == crate::linked_ui::UiAvailability::Linked { t::p().text_muted } else { tint };
+    icon(ui, rect.center(), glyph, 12.0, color);
+    ui.interact(rect, ui.scope_id().with(("list-link-badge", id_salt)), Sense::hover()).on_hover_text(status.badge_tooltip());
+    SIZE + 4.0
+}
+
 /// A small warning mark in the corner of a placeholder whose preview is
 /// broken, sized to the picture.
 pub(crate) fn broken_mark(ui: &Ui, rect: Rect) {
