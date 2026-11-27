@@ -29,25 +29,34 @@ impl App {
     /// Renders the Home Dashboard: prominent greeting/title, compact library metrics overview,
     /// and visual cards for top-level folder collections.
     pub(crate) fn home_page(&mut self, ui: &mut Ui, lib: &Library) {
+        // Derive exact available content width between sidebar and inspector (or window edge)
+        let area_w = ui.available_width();
+        let pad_x = 16.0;
+        let content_w = (area_w - 2.0 * pad_x).max(100.0);
+
         egui::ScrollArea::vertical()
             .id_salt("home_dashboard_scroll")
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                // Consistent horizontal padding (16px) aligning with panel boundaries and window edges
-                let margin = egui::Margin { left: 16, right: 16, top: 20, bottom: 32 };
-                egui::Frame::NONE.inner_margin(margin).show(ui, |ui| {
-                    let content_w = ui.available_width().max(100.0);
+                ui.add_space(20.0);
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 0.0;
+                    ui.add_space(pad_x);
+                    ui.vertical(|ui| {
+                        ui.set_width(content_w);
 
-                    // Zone 1: Home Dashboard Heading
-                    self.home_heading(ui);
-                    ui.add_space(16.0);
+                        // Zone 1: Home Dashboard Heading
+                        self.home_heading(ui);
+                        ui.add_space(16.0);
 
-                    // Zone 2: Library Overview Metrics
-                    self.home_library_overview(ui, lib, content_w);
-                    ui.add_space(28.0);
+                        // Zone 2: Library Overview Metrics
+                        self.home_library_overview(ui, lib, content_w);
+                        ui.add_space(28.0);
 
-                    // Zone 3: Root Folder Collections Grid
-                    self.home_collections_section(ui, lib, content_w);
+                        // Zone 3: Root Folder Collections Grid
+                        self.home_collections_section(ui, lib, content_w);
+                        ui.add_space(32.0);
+                    });
                 });
             });
     }
@@ -150,15 +159,11 @@ impl App {
         let gap = 16.0;
         let target_card_w = 210.0;
         let cols = ((content_w + gap) / (target_card_w + gap)).floor().max(1.0) as usize;
+        let card_w = (content_w - (cols.saturating_sub(1) as f32 * gap)) / cols as f32;
         let dims = CardDims {
-            w: ((content_w - (cols.saturating_sub(1) as f32 * gap)) / cols as f32).max(150.0),
-            thumb_h: 0.0,
-            h: 0.0,
-        };
-        let dims = CardDims {
-            w: dims.w,
-            thumb_h: (dims.w * 0.62).clamp(110.0, 150.0),
-            h: (dims.w * 0.62).clamp(110.0, 150.0) + 56.0,
+            w: card_w,
+            thumb_h: (card_w * 0.62).clamp(110.0, 150.0),
+            h: (card_w * 0.62).clamp(110.0, 150.0) + 56.0,
         };
 
         let locked = covers::locked_folders(&lib.metadata.folders);
@@ -168,10 +173,8 @@ impl App {
 
         for chunk in top_folders.chunks(cols) {
             ui.horizontal(|ui| {
-                for (i, folder) in chunk.iter().enumerate() {
-                    if i > 0 {
-                        ui.add_space(gap);
-                    }
+                ui.spacing_mut().item_spacing.x = gap;
+                for folder in chunk.iter() {
                     if let Some(target) = self.render_folder_card(ui, lib, folder, dims, &locked, &counts) {
                         clicked_folder = Some(target);
                     }
@@ -442,5 +445,31 @@ mod tests {
             ws.order = vec!["item1".into(), "item2".into()];
         }
         assert_eq!(ws.order.len(), 2);
+    }
+
+    #[test]
+    fn home_collections_width_exact_margins_and_no_overflow() {
+        let gap: f32 = 16.0;
+        let pad_x: f32 = 16.0;
+        let target_card_w: f32 = 210.0;
+
+        // Test across a wide range of content area widths (with inspector open or closed)
+        for area_w in [400.0_f32, 600.0, 850.0, 1024.0, 1440.0, 1920.0, 2560.0] {
+            let content_w = (area_w - 2.0 * pad_x).max(100.0);
+            let cols = ((content_w + gap) / (target_card_w + gap)).floor().max(1.0) as usize;
+            let card_w = (content_w - (cols.saturating_sub(1) as f32 * gap)) / cols as f32;
+
+            let total_row_w = cols as f32 * card_w + (cols.saturating_sub(1) as f32 * gap);
+            assert!(
+                (total_row_w - content_w).abs() < 1e-3,
+                "Row width ({total_row_w}) must match content_w ({content_w}) exactly"
+            );
+
+            let right_margin = area_w - (pad_x + total_row_w);
+            assert!(
+                (right_margin - pad_x).abs() < 1e-3,
+                "Right margin ({right_margin}) must match pad_x ({pad_x}) within subpixel tolerance"
+            );
+        }
     }
 }
