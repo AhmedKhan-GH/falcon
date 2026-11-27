@@ -148,6 +148,7 @@ impl App {
         switch_row(ui, tr("Show Extension Label"), &mut d.ext_badge);
         switch_row(ui, tr("Show Comment Count"), &mut d.comment_badge);
         switch_row(ui, tr("Show Subfolder Content"), &mut d.subfolders);
+        switch_row(ui, tr("Hide Unsupported Files"), &mut d.hide_unsupported);
         ui.separator();
         switch_row(ui, tr("Show Sidebar"), &mut self.show_sidebar);
         switch_row(ui, tr("Show Inspector"), &mut self.show_inspector);
