@@ -171,7 +171,11 @@ impl App {
         let inc = self.ws.increase;
 
         for q in &lib.metadata.quick_access {
-            let (Some(kind), Some(id)) = (q.get("type").and_then(|v| v.as_str()), q.get("id").and_then(|v| v.as_str())) else {
+            let (kind, id) = if let Some(s) = q.as_str() {
+                ("folder", s)
+            } else if let (Some(k), Some(i)) = (q.get("type").and_then(|v| v.as_str()), q.get("id").and_then(|v| v.as_str())) {
+                (k, i)
+            } else {
                 continue;
             };
 
