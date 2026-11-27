@@ -201,3 +201,25 @@ The core words, so every file uses one term for one thing.
 ## Reviewed
 
 Nothing yet.
+
+## Owner-approved Balinese wording (do not replace)
+
+These come from the Owner and are locked by the test
+`balinese_owner_approved_wording_is_unchanged` in `src/locale/tests.rs`:
+*Ten Mekategori* (Uncategorized), *Ten Metag* (Untagged), *Wau Keanggen*
+(Recently Used), *Wadah Luu* (Trash), *Buka ring Aplikasi* (Open in … App),
+*Link Malih* (Relink), *Engkebang berkas sane nenten kedukung* (Hide
+unsupported files), *buwung* (Cancel). *Engkebang* means "hide" in this
+vocabulary and *buwung* "cancel"; new strings follow that (Stop
+Synchronization is *Buwung Sinkronisasi*).
+
+## Generated since the Owner's list: needs Owner review
+
+Machine-written Balinese (and the other nine languages) added with the folder
+sync, move and QA work, in `ban.json`:
+
+- "Folder synced: {n} added, {m} modified, {c} changed in the source and left as they were"
+- "Your original library is unchanged. A partial copy was left behind and can be deleted: {paths}"
+- "Stop Synchronization"
+- "Syncing {done} of {total}"
+- "A folder synchronization is still finishing. Try moving the library again in a moment."
