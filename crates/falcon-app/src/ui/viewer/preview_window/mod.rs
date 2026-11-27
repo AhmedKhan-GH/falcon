@@ -680,7 +680,16 @@ impl PreviewWin {
         let natural = if let Some((w, h)) = self.psd.size(&item.id) {
             tf.size(w as f32, h as f32)
         } else if item.width > 0 && item.height > 0 {
-            tf.size(item.width as f32, item.height as f32)
+            if let Some(ref t) = tex {
+                let ts = t.size_vec2();
+                if (ts.x > ts.y && item.width < item.height) || (ts.y > ts.x && item.width > item.height) {
+                    tf.size(item.height as f32, item.width as f32)
+                } else {
+                    tf.size(item.width as f32, item.height as f32)
+                }
+            } else {
+                tf.size(item.width as f32, item.height as f32)
+            }
         } else {
             tex.as_ref().map_or(Vec2::splat(512.0), |t| tf.size(t.size_vec2().x, t.size_vec2().y))
         };

@@ -549,9 +549,25 @@ fn quicklook_thumbnail(item: &mut Item, raw: &Path, thumb: &Path, max: u32) -> O
     // A PSD's header is the file's own word on its size.
     let psd = crate::psd::handles(&item.ext).then(|| crate::psd::dimensions(raw)).flatten();
     // A RAW photo's size is the camera's stated size, as Eagle records it
-    // (its `rawMetas`), not the size of QuickLook's render.
-    let camera = crate::exif::is_raw(&item.ext).then(|| fs::read(raw).ok()).flatten().map(|data| raw_dimensions(&data, raw, (img.width(), img.height())));
-    let (w, h) = psd.or(camera).or(meta.size).unwrap_or((img.width(), img.height()));
+    // (its `rawMetas`), not the size of QuickLook's render. Bounded header read.
+    let camera = if crate::exif::is_raw(&item.ext) {
+        let mut buf = vec![0u8; 262_144];
+        if let Ok(mut file) = fs::File::open(raw)
+            && let Ok(n) = std::io::Read::read(&mut file, &mut buf)
+            && n > 0
+        {
+            buf.truncate(n);
+            Some(raw_dimensions(&buf, raw, (img.width(), img.height())))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+    let (mut w, mut h) = psd.or(camera).or(meta.size).unwrap_or((img.width(), img.height()));
+    if (img.width() > img.height() && w < h) || (img.height() > img.width() && w > h) {
+        std::mem::swap(&mut w, &mut h);
+    }
     item.width = w.into();
     item.height = h.into();
     thumbnail::write_thumbnail(img, max, thumb).ok()?;
