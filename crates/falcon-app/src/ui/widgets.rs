@@ -185,10 +185,18 @@ pub(crate) fn prop(ui: &mut Ui, key: &str, value: &str) -> Response {
     let key_w = key_g.size().x;
     let col_x = (key_w + 10.0).max(96.0);
     let val_avail = avail - col_x;
+    // A value that would be cut off beside its label (a long translated label,
+    // a long date, a narrow inspector) goes under the label in full instead.
+    let natural = galley(ui, value, mono(12.0), t::p().text_value, f32::INFINITY).size().x;
 
-    if val_avail < 60.0 {
-        // Vertical two-line fallback for narrow inspector or long label
-        let val_g = galley(ui, value, mono(12.0), t::p().text_value, avail - 8.0);
+    if val_avail < 60.0 || natural > val_avail {
+        // Vertical two-line fallback for narrow inspector, long label or long value
+        // Up to three lines, so a long value is read in full rather than cut off.
+        let mut job = LayoutJob::simple(value.to_string(), mono(12.0), t::p().text_value, (avail - 8.0).max(1.0));
+        job.wrap.max_rows = 3;
+        job.wrap.break_anywhere = true;
+        job.wrap.overflow_character = Some('…');
+        let val_g = ui.painter().layout_job(job);
         let h = (key_g.size().y + val_g.size().y + 4.0).max(28.0);
         let (rect, resp) = ui.allocate_exact_size(vec2(avail, h), Sense::hover());
         let p = ui.painter();

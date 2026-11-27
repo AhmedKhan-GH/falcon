@@ -167,6 +167,11 @@ mod tests {
         assert!(refused.contains("escapes authorized QA sandbox"), "{refused}");
         assert!(crate::install_dir::guard(&traversal).is_err());
 
+        // 6. A saved auto-import folder outside the sandbox is refused too.
+        let note = crate::prefs::auto_import_refusal(&outside).unwrap();
+        assert!(note.contains("sandbox"), "{note}");
+        assert!(crate::prefs::auto_import_refusal(&inside).is_none());
+
         // Clean up env
         unsafe {
             std::env::remove_var(QA_DIR_VAR);

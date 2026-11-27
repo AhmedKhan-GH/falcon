@@ -1407,7 +1407,10 @@ fn notification(p: &mut Page, d: &mut Draft) {
 
 /// Whether a folder can be watched for auto-import, and why not.
 pub fn auto_import_refusal(path: &std::path::Path) -> Option<String> {
-    if crate::auto_import::is_network_volume(path) {
+    // In QA mode a watched folder outside the sandbox is refused, even one saved by an earlier run.
+    if let Err(e) = crate::qa_isolation::validate_qa_sandbox_path(path) {
+        Some(e.to_string())
+    } else if crate::auto_import::is_network_volume(path) {
         Some(tr("Auto-import doesn't work with network drives. Choose a folder on this Mac or a drive attached to it.").into())
     } else if !path.is_dir() {
         Some(trf("{path} doesn't exist.", &[("path", &path.display())]))

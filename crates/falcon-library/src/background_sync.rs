@@ -664,7 +664,7 @@ fn run(shared: &Mutex<Library>, wf_id: &str, ctl: &SyncControl<'_>) -> Result<Sy
     // Commits a group of staged files under ONE lock hold and flushes what they
     // left pending inside it, so the interface finds nothing to flush after
     // each file. The group is sized so the hold stays near `hold_budget_ms`.
-    let mut commit_batch = |group: Vec<(usize, Produced)>, avg: &mut f64| {
+    let commit_batch = |group: Vec<(usize, Produced)>, avg: &mut f64| {
         if group.is_empty() || halt.load(Ordering::Relaxed) {
             return; // staged files left over after a stop are dropped, cleaning their staging
         }
@@ -833,7 +833,7 @@ fn run(shared: &Mutex<Library>, wf_id: &str, ctl: &SyncControl<'_>) -> Result<Sy
     let out = outcome.into_inner().unwrap_or_else(|p| p.into_inner());
     provenance.extend(out.provenance);
     publish(&|p| p.phase = SyncPhase::Finishing);
-    let mut offline = false;
+    let offline;
     {
         let mut lib = lock(shared);
         check_root(&lib, &snap)?;
