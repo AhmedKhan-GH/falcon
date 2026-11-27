@@ -339,9 +339,26 @@ pub fn stage_for(path: impl AsRef<Path>, opts: &ImportOptions, library_root: Opt
     if mode == StorageMode::Link && opts.defer_thumbnail {
         // Fast header-only dimension probe so grid layout has exact aspect ratios
         // immediately without decoding full pixel buffers or encoding thumbnails.
-        if let Ok((w, h)) = image::image_dimensions(&raw) {
+        if let Ok((mut w, mut h)) = image::image_dimensions(&raw) {
+            if let Some(o) = crate::exif::orientation_of_path(&raw)
+                && crate::exif::is_transposed(o)
+            {
+                std::mem::swap(&mut w, &mut h);
+            }
             item.width = u64::from(w);
             item.height = u64::from(h);
+        } else if crate::exif::is_raw(&item.ext)
+            && let Ok(mut file) = fs::File::open(&raw)
+        {
+            let mut buf = vec![0u8; 262_144];
+            if let Ok(n) = std::io::Read::read(&mut file, &mut buf) {
+                buf.truncate(n);
+                let (rw, rh) = raw_dimensions(&buf, &raw, (0, 0));
+                if rw > 0 && rh > 0 {
+                    item.width = u64::from(rw);
+                    item.height = u64::from(rh);
+                }
+            }
         }
         file_metadata(&mut item, &raw, opts);
     } else {
@@ -547,7 +564,9 @@ impl Library {
             item.palettes = std::mem::take(&mut staged.palettes);
         }
         item.last_modified = now_ms().max(item.last_modified);
+        let to_save = item.clone();
         self.register_item(item)?;
+        let _ = write_json(&info_dir.join("metadata.json"), &to_save);
         self.dirty.items.remove(id);
         Ok(true)
     }
@@ -557,11 +576,23 @@ impl Library {
 /// generation and still needs its background thumbnail built (including
 /// rediscovery after an interrupted session or restart).
 pub fn needs_deferred_thumbnail(item: &Item, root: &Path) -> bool {
-    !item.is_deleted
-        && item.no_thumbnail.is_none()
-        && item.remove_thumbnail != Some(true)
-        && item.ext != "txt"
-        && item.thumbnail_path(root).is_none()
+    if item.is_deleted || item.no_thumbnail.is_some() || item.remove_thumbnail == Some(true) || item.ext == "txt" {
+        return false;
+    }
+    let Some(thumb) = item.thumbnail_path(root) else {
+        return true;
+    };
+    if item.width == 0 && item.height == 0 {
+        return true;
+    }
+    if item.width > 0
+        && item.height > 0
+        && let Ok((tw, th)) = image::image_dimensions(&thumb)
+        && ((tw > th && item.width < item.height) || (th > tw && item.width > item.height))
+    {
+        return true;
+    }
+    false
 }
 
 /// Output of lock-free background thumbnail generation, ready to be committed
@@ -1578,5 +1609,116 @@ mod tests {
         assert!(embedded_only("a.key", &sketch[..sketch.len() - 5]).is_none());
         // Other formats are left alone.
         assert!(embedded_only("a.pages", &sketch).is_none());
+    }
+
+    #[test]
+    fn deferred_import_transposes_dimensions_for_exif_rotated_photos() {
+        let tmp = tempfile::tempdir().unwrap();
+        let lib_dir = tmp.path().join("Test.library");
+        let mut lib = Library::create(&lib_dir).unwrap();
+
+        // 1. Generate a valid 40x20 JPEG image (raw sensor dimensions: landscape)
+        let raw_w = 40u32;
+        let raw_h = 20u32;
+        let mut base_jpeg = Vec::new();
+        DynamicImage::ImageRgb8(image::RgbImage::from_pixel(raw_w, raw_h, image::Rgb([100, 150, 200])))
+            .write_to(&mut std::io::Cursor::new(&mut base_jpeg), image::ImageFormat::Jpeg)
+            .unwrap();
+
+        // 2. Synthesize an APP1 EXIF marker with Orientation = 8 (Rotate 270 CW -> portrait)
+        let tiff_header = vec![
+            b'I', b'I', 42, 0, // little-endian TIFF header
+            8, 0, 0, 0,        // offset to IFD0
+            1, 0,              // 1 directory entry
+            0x12, 0x01,        // tag: Orientation (0x0112)
+            3, 0,              // type: SHORT
+            1, 0, 0, 0,        // count: 1
+            8, 0, 0, 0,        // value: 8
+            0, 0, 0, 0,        // next IFD offset (0)
+        ];
+        let app1_len = (tiff_header.len() + 2 + 6) as u16; // 2 for len itself, 6 for "Exif\0\0"
+        let mut oriented_jpeg = Vec::new();
+        oriented_jpeg.extend_from_slice(&[0xFF, 0xD8]); // SOI
+        oriented_jpeg.extend_from_slice(&[0xFF, 0xE1]); // APP1
+        oriented_jpeg.extend_from_slice(&app1_len.to_be_bytes());
+        oriented_jpeg.extend_from_slice(b"Exif\0\0");
+        oriented_jpeg.extend_from_slice(&tiff_header);
+        oriented_jpeg.extend_from_slice(&base_jpeg[2..]); // rest of JPEG stream
+
+        let photo_path = tmp.path().join("portrait.jpg");
+        fs::write(&photo_path, &oriented_jpeg).unwrap();
+
+        // 3. Import in Link mode with defer_thumbnail = true
+        let opts = ImportOptions {
+            storage_mode: Some(crate::StorageMode::Link),
+            defer_thumbnail: true,
+            ..Default::default()
+        };
+        let id = lib.import_file(&photo_path, &opts).unwrap();
+        let item = lib.item(&id).unwrap().clone();
+
+        // The staged/imported dimensions must be transposed (portrait: 20x40, not 40x20)
+        assert_eq!((item.width, item.height), (20, 40));
+
+        // 4. Background commit updates metadata.json on disk in Batched mode
+        lib.set_write_mode(crate::undo::WriteMode::Batched).unwrap();
+        let staged = StagedThumbnail {
+            width: 20,
+            height: 40,
+            no_thumbnail: None,
+            remove_thumbnail: None,
+            palettes: Vec::new(),
+            temp_thumb: None,
+            keep: false,
+            source_identity: None,
+        };
+        let committed = lib.commit_deferred_thumbnail(&id, staged).unwrap();
+        assert!(committed);
+
+        // Verify metadata.json on disk contains the correct dimensions
+        let on_disk_meta = item.info_dir(lib.root()).join("metadata.json");
+        let disk_text = fs::read_to_string(on_disk_meta).unwrap();
+        let disk_item = Item::from_json_str(&disk_text).unwrap();
+        assert_eq!((disk_item.width, disk_item.height), (20, 40));
+    }
+
+    #[test]
+    fn needs_deferred_thumbnail_detects_unprobed_or_inverted_dimensions() {
+        let tmp = tempfile::tempdir().unwrap();
+        let lib_dir = tmp.path().join("Test.library");
+        let mut lib = Library::create(&lib_dir).unwrap();
+        let src = tmp.path().join("plain.png");
+        let mut valid_png = Vec::new();
+        DynamicImage::ImageRgb8(image::RgbImage::new(1000, 1000))
+            .write_to(&mut std::io::Cursor::new(&mut valid_png), image::ImageFormat::Png)
+            .unwrap();
+        fs::write(&src, &valid_png).unwrap();
+        let id = lib.import_file(&src, &ImportOptions::default()).unwrap();
+        let mut item = lib.item(&id).unwrap().clone();
+
+        // Normally, an item with an existing thumbnail returns false
+        assert!(!needs_deferred_thumbnail(&item, lib.root()));
+
+        // If dimensions are unprobed (0x0), it returns true to resolve dimensions
+        item.width = 0;
+        item.height = 0;
+        assert!(needs_deferred_thumbnail(&item, lib.root()));
+
+        // If thumbnail is portrait (e.g. 10x20) but metadata claims landscape (40x20), it returns true
+        let thumb_path = item.thumbnail_path(lib.root()).unwrap();
+        let mut portrait_thumb = Vec::new();
+        DynamicImage::ImageRgb8(image::RgbImage::new(10, 20))
+            .write_to(&mut std::io::Cursor::new(&mut portrait_thumb), image::ImageFormat::Png)
+            .unwrap();
+        fs::write(&thumb_path, &portrait_thumb).unwrap();
+
+        item.width = 40;
+        item.height = 20;
+        assert!(needs_deferred_thumbnail(&item, lib.root()));
+
+        // If metadata matches the thumbnail orientation (20x40), it returns false
+        item.width = 20;
+        item.height = 40;
+        assert!(!needs_deferred_thumbnail(&item, lib.root()));
     }
 }

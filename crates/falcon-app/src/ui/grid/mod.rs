@@ -114,7 +114,21 @@ impl App {
         let width = area.width() - 2.0 * GRID_PAD_X;
         let aspects: Vec<f32> = items
             .iter()
-            .map(|i| if i.width > 0 && i.height > 0 { i.width as f32 / i.height as f32 } else { 1.0 })
+            .map(|i| {
+                if let Some(tex) = self.ws.loader.get(&i.id, Tier::Grid) {
+                    let ts = tex.size_vec2();
+                    if ts.x > 0.0 && ts.y > 0.0 {
+                        if i.width > 0 && i.height > 0 {
+                            if (ts.x > ts.y && i.width < i.height) || (ts.y > ts.x && i.width > i.height) {
+                                return i.height as f32 / i.width as f32;
+                            }
+                            return i.width as f32 / i.height as f32;
+                        }
+                        return ts.x / ts.y;
+                    }
+                }
+                if i.width > 0 && i.height > 0 { i.width as f32 / i.height as f32 } else { 1.0 }
+            })
             .collect();
         let caption = logic::caption_height(layout, &self.display);
         let (places, content_h, cols) = logic::place(layout, &aspects, width, self.tile, GRID_GAP, caption, ROW_GAP);
@@ -384,7 +398,16 @@ impl App {
         let large = self.large_card(ui, lib, item, rect);
         match playing.or(large).or_else(|| self.ws.loader.get(&item.id, Tier::Grid).cloned()) {
             Some(tex) => {
-                let natural = if item.width > 0 && item.height > 0 { vec2(item.width as f32, item.height as f32) } else { tex.size_vec2() };
+                let natural = if item.width > 0 && item.height > 0 {
+                    let tsize = tex.size_vec2();
+                    if (tsize.x > tsize.y && item.width < item.height) || (tsize.y > tsize.x && item.width > item.height) {
+                        vec2(item.height as f32, item.width as f32)
+                    } else {
+                        vec2(item.width as f32, item.height as f32)
+                    }
+                } else {
+                    tex.size_vec2()
+                };
                 let scale = (rect.width() / natural.x).min(rect.height() / natural.y);
                 // Eagle's object-fit: scale-down never enlarges a small image.
                 let scale = if fill { scale } else { scale.min(1.0) };

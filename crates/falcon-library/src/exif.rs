@@ -329,6 +329,28 @@ pub fn orientation(data: &[u8]) -> Option<u32> {
     from_exif.or_else(|| crw_orientation(data))
 }
 
+/// The EXIF orientation (1-8) of a photo file, read by inspecting up to
+/// 256 KiB of headers so full pixel buffers are never decoded into memory.
+pub fn orientation_of_path(path: &Path) -> Option<u32> {
+    let mut file = std::fs::File::open(path).ok()?;
+    let mut buf = vec![0u8; 262_144];
+    let n = std::io::Read::read(&mut file, &mut buf).ok()?;
+    if n == 0 {
+        return None;
+    }
+    buf.truncate(n);
+    orientation(&buf).or_else(|| {
+        let data = std::fs::read(path).ok()?;
+        orientation(&data)
+    })
+}
+
+/// Returns `true` if EXIF orientation `o` transposes the coordinate axes
+/// (swapping width and height). This applies to orientations 5, 6, 7, and 8.
+pub fn is_transposed(orientation: u32) -> bool {
+    matches!(orientation, 5..=8)
+}
+
 /// The pixel sizes a photo file states for itself: every width and height
 /// pair (`PixelXDimension`/`PixelYDimension` in the EXIF IFD, `ImageWidth`/
 /// `ImageLength` in any IFD the reader walks), as stored, unturned. Thumbnail
