@@ -631,6 +631,12 @@ impl App {
         };
         let grid = self.ws.loader.get(&item.id, Tier::Grid).cloned();
         let natural = match (item.width, item.height, &grid) {
+            (w, h, Some(t))
+                if (t.size_vec2().x > t.size_vec2().y && w < h)
+                    || (t.size_vec2().y > t.size_vec2().x && w > h) =>
+            {
+                vec2(h as f32, w as f32)
+            }
             (w, h, _) if w > 0 && h > 0 => vec2(w as f32, h as f32),
             (_, _, Some(t)) => t.size_vec2(),
             _ => return,

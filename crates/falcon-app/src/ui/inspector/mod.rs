@@ -433,11 +433,28 @@ impl App {
         let w = ui.available_width();
 
         // Preview.
-        let aspect = if item.width > 0 && item.height > 0 { item.height as f32 / item.width as f32 } else { 1.0 };
+        let tex = self.ws.loader.get(&item.id, Tier::Preview).cloned();
+        let tex = tex.or_else(|| self.ws.loader.get(&item.id, Tier::Grid).cloned());
+        let ts = if let Some(ref t) = tex {
+            let tsize = t.size_vec2();
+            if item.width > 0 && item.height > 0 {
+                if (tsize.x > tsize.y && item.width < item.height) || (tsize.y > tsize.x && item.width > item.height) {
+                    vec2(item.height as f32, item.width as f32)
+                } else {
+                    vec2(item.width as f32, item.height as f32)
+                }
+            } else {
+                tsize
+            }
+        } else if item.width > 0 && item.height > 0 {
+            vec2(item.width as f32, item.height as f32)
+        } else {
+            vec2(1.0, 1.0)
+        };
+        let aspect = if ts.x > 0.0 { ts.y / ts.x } else { 1.0 };
         let ph = (w * aspect).clamp(80.0, 260.0);
         let (prect, presp) = ui.allocate_exact_size(vec2(w, ph), Sense::click());
-        if let Some(tex) = self.ws.loader.get(&item.id, Tier::Preview) {
-            let ts = if item.width > 0 { vec2(item.width as f32, item.height as f32) } else { tex.size_vec2() };
+        if let Some(ref tex) = tex {
             let scale = (prect.width() / ts.x).min(prect.height() / ts.y).min(1.0);
             let r = Rect::from_center_size(prect.center(), ts * scale);
             egui::Image::new((tex.id(), r.size())).corner_radius(4).paint_at(ui, r);
@@ -620,7 +637,19 @@ impl App {
                 changed = Some(it);
             }
             if item.width > 0 {
-                prop(ui, tr("Dimensions"), &format!("{} × {}", item.width, item.height));
+                let tex = self.ws.loader.get(&item.id, Tier::Preview).cloned();
+                let tex = tex.or_else(|| self.ws.loader.get(&item.id, Tier::Grid).cloned());
+                let (dw, dh) = if let Some(tex) = tex {
+                    let ts = tex.size_vec2();
+                    if (ts.y > ts.x && item.width > item.height) || (ts.x > ts.y && item.width < item.height) {
+                        (item.height, item.width)
+                    } else {
+                        (item.width, item.height)
+                    }
+                } else {
+                    (item.width, item.height)
+                };
+                prop(ui, tr("Dimensions"), &format!("{dw} × {dh}"));
             }
             if let Some(reason) = self.image.psd.fallback_reason(&item.id) {
                 prop(ui, tr("Render"), &reason);

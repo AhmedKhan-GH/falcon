@@ -564,10 +564,7 @@ impl Library {
             item.palettes = std::mem::take(&mut staged.palettes);
         }
         item.last_modified = now_ms().max(item.last_modified);
-        let to_save = item.clone();
         self.register_item(item)?;
-        let _ = write_json(&info_dir.join("metadata.json"), &to_save);
-        self.dirty.items.remove(id);
         Ok(true)
     }
 }
@@ -576,23 +573,11 @@ impl Library {
 /// generation and still needs its background thumbnail built (including
 /// rediscovery after an interrupted session or restart).
 pub fn needs_deferred_thumbnail(item: &Item, root: &Path) -> bool {
-    if item.is_deleted || item.no_thumbnail.is_some() || item.remove_thumbnail == Some(true) || item.ext == "txt" {
-        return false;
-    }
-    let Some(thumb) = item.thumbnail_path(root) else {
-        return true;
-    };
-    if item.width == 0 && item.height == 0 {
-        return true;
-    }
-    if item.width > 0
-        && item.height > 0
-        && let Ok((tw, th)) = image::image_dimensions(&thumb)
-        && ((tw > th && item.width < item.height) || (th > tw && item.width > item.height))
-    {
-        return true;
-    }
-    false
+    !item.is_deleted
+        && item.no_thumbnail.is_none()
+        && item.remove_thumbnail != Some(true)
+        && item.ext != "txt"
+        && item.thumbnail_path(root).is_none()
 }
 
 /// Output of lock-free background thumbnail generation, ready to be committed
@@ -868,8 +853,21 @@ fn quicklook_thumbnail(item: &mut Item, raw: &Path, thumb: &Path, max: u32) -> O
     // A PSD's header is the file's own word on its size.
     let psd = crate::psd::handles(&item.ext).then(|| crate::psd::dimensions(raw)).flatten();
     // A RAW photo's size is the camera's stated size, as Eagle records it
-    // (its `rawMetas`), not the size of QuickLook's render.
-    let camera = crate::exif::is_raw(&item.ext).then(|| fs::read(raw).ok()).flatten().map(|data| raw_dimensions(&data, raw, (img.width(), img.height())));
+    // (its `rawMetas`), not the size of QuickLook's render. Bounded header read.
+    let camera = if crate::exif::is_raw(&item.ext) {
+        let mut buf = vec![0u8; 262_144];
+        if let Ok(mut file) = fs::File::open(raw)
+            && let Ok(n) = std::io::Read::read(&mut file, &mut buf)
+            && n > 0
+        {
+            buf.truncate(n);
+            Some(raw_dimensions(&buf, raw, (img.width(), img.height())))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
     let (w, h) = psd.or(camera).or(meta.size).unwrap_or((img.width(), img.height()));
     item.width = w.into();
     item.height = h.into();
@@ -1674,6 +1672,10 @@ mod tests {
         };
         let committed = lib.commit_deferred_thumbnail(&id, staged).unwrap();
         assert!(committed);
+        // In Batched mode, dirty items are preserved until flushed
+        assert!(lib.dirty.items.contains(&id));
+        lib.flush().unwrap();
+        assert!(!lib.dirty.items.contains(&id));
 
         // Verify metadata.json on disk contains the correct dimensions
         let on_disk_meta = item.info_dir(lib.root()).join("metadata.json");
@@ -1683,7 +1685,7 @@ mod tests {
     }
 
     #[test]
-    fn needs_deferred_thumbnail_detects_unprobed_or_inverted_dimensions() {
+    fn needs_deferred_thumbnail_is_o1_and_does_not_scan_existing_thumbnails() {
         let tmp = tempfile::tempdir().unwrap();
         let lib_dir = tmp.path().join("Test.library");
         let mut lib = Library::create(&lib_dir).unwrap();
@@ -1696,29 +1698,70 @@ mod tests {
         let id = lib.import_file(&src, &ImportOptions::default()).unwrap();
         let mut item = lib.item(&id).unwrap().clone();
 
-        // Normally, an item with an existing thumbnail returns false
+        // An item with an existing thumbnail returns false without opening thumbnail file
         assert!(!needs_deferred_thumbnail(&item, lib.root()));
 
-        // If dimensions are unprobed (0x0), it returns true to resolve dimensions
-        item.width = 0;
-        item.height = 0;
-        assert!(needs_deferred_thumbnail(&item, lib.root()));
-
-        // If thumbnail is portrait (e.g. 10x20) but metadata claims landscape (40x20), it returns true
-        let thumb_path = item.thumbnail_path(lib.root()).unwrap();
-        let mut portrait_thumb = Vec::new();
-        DynamicImage::ImageRgb8(image::RgbImage::new(10, 20))
-            .write_to(&mut std::io::Cursor::new(&mut portrait_thumb), image::ImageFormat::Png)
-            .unwrap();
-        fs::write(&thumb_path, &portrait_thumb).unwrap();
-
+        // Even if metadata is inverted or zero, existing thumbnail means it's not missing a thumbnail
         item.width = 40;
         item.height = 20;
+        assert!(!needs_deferred_thumbnail(&item, lib.root()));
+
+        // When thumbnail is absent, returns true
+        let thumb_path = item.thumbnail_path(lib.root()).unwrap();
+        fs::remove_file(&thumb_path).unwrap();
         assert!(needs_deferred_thumbnail(&item, lib.root()));
 
-        // If metadata matches the thumbnail orientation (20x40), it returns false
-        item.width = 20;
-        item.height = 40;
+        // If no_thumbnail or remove_thumbnail is set, returns false (no infinite loops)
+        item.no_thumbnail = Some(true);
         assert!(!needs_deferred_thumbnail(&item, lib.root()));
+    }
+
+    #[test]
+    fn test_reconcile_dimensions_and_metadata_persistence_preserves_user_data() {
+        let tmp = tempfile::tempdir().unwrap();
+        let lib_dir = tmp.path().join("EagleCompat.library");
+        let mut lib = Library::create(&lib_dir).unwrap();
+        let src = tmp.path().join("photo.png");
+        let mut valid_png = Vec::new();
+        DynamicImage::ImageRgb8(image::RgbImage::new(10, 20))
+            .write_to(&mut std::io::Cursor::new(&mut valid_png), image::ImageFormat::Png)
+            .unwrap();
+        fs::write(&src, &valid_png).unwrap();
+        let id = lib.import_file(&src, &ImportOptions::default()).unwrap();
+
+        // Add user tags and rating
+        let mut item = lib.item(&id).unwrap().clone();
+        item.tags.push("portrait_tag".into());
+        item.annotation = "keep this annotation".into();
+        // Invert dimensions in metadata (landscape metadata for portrait thumbnail)
+        item.width = 40;
+        item.height = 20;
+        lib.register_item(item).unwrap();
+
+        // 1. In a pure Eagle library (no falcon.json), reconcile does NOT modify the item
+        assert!(!lib.has_falcon_config());
+        let repaired = lib.reconcile_item_dimensions(&id, false).unwrap();
+        assert!(!repaired, "pure Eagle library must not be automatically rewritten");
+        let item_now = lib.item(&id).unwrap();
+        assert_eq!((item_now.width, item_now.height), (40, 20));
+
+        // 2. Explicit force_eagle or Falcon-managed library allows safe repair
+        let repaired = lib.reconcile_item_dimensions(&id, true).unwrap();
+        assert!(repaired, "reconcile succeeds with explicit opt-in");
+
+        let item_repaired = lib.item(&id).unwrap();
+        assert_eq!((item_repaired.width, item_repaired.height), (20, 40));
+        assert_eq!(item_repaired.tags, vec!["portrait_tag"]);
+        assert_eq!(item_repaired.annotation, "keep this annotation");
+
+        // 3. Idempotent: repeated calls do nothing
+        assert!(!lib.reconcile_item_dimensions(&id, true).unwrap());
+
+        // 4. Persistence across reopen
+        let reopened = Library::open(&lib_dir).unwrap();
+        let reopened_item = reopened.item(&id).unwrap();
+        assert_eq!((reopened_item.width, reopened_item.height), (20, 40));
+        assert_eq!(reopened_item.tags, vec!["portrait_tag"]);
+        assert_eq!(reopened_item.annotation, "keep this annotation");
     }
 }

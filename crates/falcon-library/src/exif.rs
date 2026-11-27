@@ -339,10 +339,7 @@ pub fn orientation_of_path(path: &Path) -> Option<u32> {
         return None;
     }
     buf.truncate(n);
-    orientation(&buf).or_else(|| {
-        let data = std::fs::read(path).ok()?;
-        orientation(&data)
-    })
+    orientation(&buf)
 }
 
 /// Returns `true` if EXIF orientation `o` transposes the coordinate axes
@@ -758,5 +755,41 @@ pub(crate) mod tests {
         looped[n - 4..].copy_from_slice(&(n as u32 - 26 - 4).to_le_bytes());
         assert_eq!(orientation(&looped), None);
         assert_eq!(orientation(b"II\x1a\0\0\0HEAPCCDR"), None);
+    }
+
+    #[test]
+    fn test_orientation_of_path_and_transpose() {
+        assert!(!is_transposed(1));
+        assert!(!is_transposed(2));
+        assert!(!is_transposed(3));
+        assert!(!is_transposed(4));
+        assert!(is_transposed(5));
+        assert!(is_transposed(6));
+        assert!(is_transposed(7));
+        assert!(is_transposed(8));
+        assert!(!is_transposed(0));
+        assert!(!is_transposed(9));
+
+        let tmp = tempfile::tempdir().unwrap();
+        let large_dummy = tmp.path().join("large_dummy.bin");
+        // Create a sparse file of 10 MB with no EXIF
+        let file = std::fs::File::create(&large_dummy).unwrap();
+        file.set_len(10 * 1024 * 1024).unwrap();
+        assert_eq!(orientation_of_path(&large_dummy), None);
+
+        // TIFF header with orientation 6
+        let tiff_header = vec![
+            b'I', b'I', 42, 0, // little-endian TIFF
+            8, 0, 0, 0,        // offset to IFD0
+            1, 0,              // 1 entry
+            0x12, 0x01,        // tag: Orientation
+            3, 0,              // SHORT
+            1, 0, 0, 0,        // count: 1
+            6, 0, 0, 0,        // value: 6
+            0, 0, 0, 0,        // next IFD
+        ];
+        let tiff_file = tmp.path().join("test.tif");
+        std::fs::write(&tiff_file, &tiff_header).unwrap();
+        assert_eq!(orientation_of_path(&tiff_file), Some(6));
     }
 }

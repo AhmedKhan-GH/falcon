@@ -398,6 +398,9 @@ impl App {
                 panic!("QA Security Isolation violation: {e}");
             }
         };
+        if show.is_some() {
+            app.missing = None;
+        }
         app.queue_launch(libraries, show, launch);
         crate::links::set_repaint(&app.ctx);
         crate::open_files::set_repaint(&app.ctx);
