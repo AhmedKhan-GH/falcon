@@ -65,7 +65,7 @@ impl App {
                         let ir = Rect::from_center_size(r.center(), ts * sc);
                         egui::Image::new((tex.id(), ir.size())).corner_radius(4).paint_at(ui, ir);
                     }
-                    if let Some(j) = job_for(item, lib.root(), Tier::Grid) {
+                    if let Some(j) = job_for(lib, item, Tier::Grid) {
                         self.ws.frame_jobs.push(j);
                     }
                 }

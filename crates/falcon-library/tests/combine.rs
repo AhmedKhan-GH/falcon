@@ -43,7 +43,7 @@ fn a_combine_makes_one_new_png_and_leaves_the_sources() {
     solid(&red, 10, 20, [255, 0, 0]);
     solid(&green, 30, 20, [0, 255, 0]);
     let ids = [lib.import_file(&red, &ImportOptions::default()).unwrap(), lib.import_file(&green, &ImportOptions::default()).unwrap()];
-    let originals: Vec<_> = ids.iter().map(|id| lib.item(id).unwrap().original_path(lib.root())).collect();
+    let originals: Vec<_> = ids.iter().map(|id| lib.item(id).unwrap().managed_storage_path(lib.root())).collect();
     let snapshot = |lib: &Library| -> Vec<(Vec<u8>, String)> {
         ids.iter()
             .zip(&originals)
@@ -66,7 +66,7 @@ fn a_combine_makes_one_new_png_and_leaves_the_sources() {
     assert_eq!((item.ext.as_str(), item.name.as_str()), ("png", "Combined Image"));
     assert_eq!((item.width, item.height), (44, 20));
     assert_eq!(item.folders, [folder]);
-    let out = image::open(item.original_path(lib.root())).unwrap().into_rgba8();
+    let out = image::open(item.managed_storage_path(lib.root())).unwrap().into_rgba8();
     assert_eq!(*out.get_pixel(0, 0), Rgba([255, 0, 0, 255]));
     assert_eq!(*out.get_pixel(9, 19), Rgba([255, 0, 0, 255]));
     assert_eq!(*out.get_pixel(12, 10), Rgba([255, 255, 255, 255]), "the gap shows the background");

@@ -44,14 +44,17 @@ impl App {
         if !item.ext.eq_ignore_ascii_case("webp") {
             return;
         }
+        let (managed, _) = crate::linked_ui::partition_managed_targets(lib, targets);
+        let ids = webps(&managed, |id| lib.item(id));
+        if ids.is_empty() {
+            ui.add_enabled(false, egui::Button::new(tr("Convert WebP")))
+                .on_disabled_hover_text(tr("Not available for linked files (original files are read-only)"));
+            return;
+        }
         crate::ui::menus::search::submenu(ui, tr("Convert WebP"), |ui| {
             for format in [Format::Png, Format::Jpg] {
                 if ui.button(format.ext().to_uppercase()).clicked() {
-                    // The frame already holds the library's lock.
-                    let ids = webps(targets, |id| lib.item(id));
-                    if !ids.is_empty() {
-                        self.tools.webp.confirm = Some((ids, format));
-                    }
+                    self.tools.webp.confirm = Some((ids.clone(), format));
                 }
             }
         });

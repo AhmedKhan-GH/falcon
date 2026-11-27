@@ -16,8 +16,9 @@ impl App {
         if !item.ext.eq_ignore_ascii_case("ifc") {
             return;
         }
+        let Ok(path) = lib.resolved_source_path(&item.id) else { return };
         let key = format!("{}:{}", item.id, item.size);
-        let facts = self.model3d.ifc.get(ui.ctx(), &key, item.original_path(lib.root()));
+        let facts = self.model3d.ifc.get(ui.ctx(), &key, path);
         for (label, value) in fact_rows(facts) {
             prop(ui, tr(label), &value);
         }

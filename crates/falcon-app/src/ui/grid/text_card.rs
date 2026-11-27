@@ -22,7 +22,7 @@ impl App {
         }
         let read: Option<Arc<str>> = match tc::record_text(item) {
             Some(_) => None,
-            None => Some(self.shell.text_cards.read(item, lib.root())),
+            None => Some(self.shell.text_cards.read(lib, item)),
         };
         let text = tc::record_text(item).or(read.as_deref()).unwrap_or_default();
         let look = tc::look(rect.width());

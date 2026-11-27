@@ -12,7 +12,7 @@ use crate::icons as ic;
 use crate::loader::{Tier, job_for};
 use crate::logic::{self, Layout, Scope};
 use crate::theme::{self as t, font};
-use crate::ui::widgets::{PIN_BADGE, badge, broken_mark, ext_placeholder, galley, paint_thumb_bg, pin_badge};
+use crate::ui::widgets::{PIN_BADGE, badge, broken_mark, ext_placeholder, list_status_icon, paint_thumb_bg, pin_badge, status_badge, galley};
 
 pub(crate) mod covers;
 pub(crate) mod duplicates;
@@ -242,7 +242,7 @@ impl App {
                     hovered = Some((item, card, self.zoom_button(ui, item, card, caption)));
                     self.card_media(ui, lib, item, card, caption, &resp);
                 }
-                if let Some(j) = job_for(item, lib.root(), Tier::Grid) {
+                if let Some(j) = job_for(lib, item, Tier::Grid) {
                     jobs.push(j);
                 }
             }
@@ -260,6 +260,13 @@ impl App {
         self.hover_media.end_frame(ui.ctx().cumulative_frame_nr());
         self.hover_preview(ui, lib, hovered, scrolled, order_changed || clicked.is_some() || opened.is_some());
         self.ws.frame_jobs.extend(jobs);
+        if let Some(worker) = &self.ws.thumb_worker
+            && worker.progress().active
+        {
+            let visible_ids: std::collections::HashSet<String> =
+                self.ws.frame_jobs.iter().map(|j| j.key.0.clone()).collect();
+            worker.update_priorities(&visible_ids, self.ws.selected.first().map(String::as_str));
+        }
         // Thumbnails first; large cards' originals after them.
         let (cards, rest): (Vec<_>, Vec<_>) = std::mem::take(&mut self.ws.frame_jobs).into_iter().partition(|j| j.key.1 == Tier::Card);
         self.ws.frame_jobs = rest;
@@ -328,11 +335,11 @@ impl App {
         if let Some(tex) = self.ws.loader.get(&item.id, Tier::Card) {
             return Some(tex.clone());
         }
-        let path = item.original_path(lib.root());
+        let Ok(path) = lib.resolved_source_path(&item.id) else { return None };
         // An original still in iCloud isn't downloaded for a card.
         if !self.ws.loader.has_failed(&item.id, Tier::Card)
             && !crate::icloud::is_dataless(&path)
-            && let Some(j) = crate::loader::card_job(item, lib.root())
+            && let Some(j) = crate::loader::card_job(lib, item)
         {
             self.ws.frame_jobs.push(j);
         }
@@ -358,7 +365,7 @@ impl App {
                 let r = Rect::from_center_size(rect.center(), natural * scale);
                 egui::Image::new((tex.id(), r.size())).corner_radius(4).paint_at(ui, r);
             }
-            None if failed || job_for(item, lib.root(), Tier::Grid).is_none() => {
+            None if failed || job_for(lib, item, Tier::Grid).is_none() => {
                 ext_placeholder(ui, rect, &item.ext);
                 if failed {
                     broken_mark(ui, rect);
@@ -384,7 +391,7 @@ impl App {
                 let uv = Rect::from_center_size(Pos2::new(0.5, 0.5), vec2(rect.width() / (size.x * s), rect.height() / (size.y * s)));
                 egui::Image::new((tex.id(), rect.size())).uv(uv).corner_radius(4).paint_at(ui, rect);
             }
-            None if failed || job_for(item, lib.root(), Tier::Grid).is_none() => {
+            None if failed || job_for(lib, item, Tier::Grid).is_none() => {
                 ext_placeholder(ui, rect, &item.ext);
                 if failed {
                     broken_mark(ui, rect);
@@ -429,6 +436,10 @@ impl App {
         }
         if d.ext_badge {
             badge(ui, tile.min + vec2(badge_x, 5.0), &item.ext);
+        }
+        let link_status = crate::linked_ui::classify_asset(lib, &item.id);
+        if link_status.is_linked() {
+            status_badge(ui, &item.id, Pos2::new(tile.left() + 5.0, tile.bottom() - 5.0), link_status);
         }
         if d.comment_badge {
             crate::ui::viewer::comments::count_badge(ui, tile, item);
@@ -492,12 +503,18 @@ impl App {
         }
         let (x0, span) = list_span(row);
         let pinned = self.shows_pin(item);
+        let link_status = crate::linked_ui::classify_asset(lib, &item.id);
         for (col, at, w) in self.display.columns.spans() {
             let (mut x, mut cw) = (x0 + span * at, span * w - 8.0);
             if pinned && col == logic::ListColumn::Name {
                 pin_badge(ui, Pos2::new(x, cy - PIN_BADGE / 2.0));
                 x += PIN_BADGE + 4.0;
                 cw -= PIN_BADGE + 4.0;
+            }
+            if link_status.is_linked() && col == logic::ListColumn::Name {
+                let used = list_status_icon(ui, &item.id, Pos2::new(x, cy), link_status);
+                x += used;
+                cw -= used;
             }
             let (size, color) = if col == logic::ListColumn::Name { (13.0, t::p().text) } else { (12.0, t::p().text_muted) };
             match logic::list_cell(item, col, self.display.show_ext) {
@@ -578,7 +595,7 @@ impl App {
         }
         let original = hover::wants_original(&item.ext, item.width, item.height, rect.size() * ctx.pixels_per_point(), hover::GRID_SIDE);
         let full = if original {
-            if let Some(j) = job_for(item, lib.root(), Tier::Full) {
+            if let Some(j) = job_for(lib, item, Tier::Full) {
                 self.ws.frame_jobs.insert(0, j);
             }
             self.ws.loader.get(&item.id, Tier::Full).cloned()

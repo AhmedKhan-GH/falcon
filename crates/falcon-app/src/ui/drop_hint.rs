@@ -5,17 +5,32 @@
 use eframe::egui::{self, Color32, CornerRadius, LayerId, Order, Rect, Stroke, StrokeKind, vec2};
 
 use crate::app::App;
-use crate::locale::tr;
+use crate::locale::{tr, trf};
 use crate::drop_pos::{self, Target};
 use crate::theme::{self as t, font};
+use falcon_library::storage_mode::StorageMode;
 
 impl App {
-    pub(crate) fn drop_hint(&mut self, ctx: &egui::Context) {
+    pub(crate) fn drop_hint(&mut self, ctx: &egui::Context, lib_mode: StorageMode) {
         let dragging = ctx.input(|i| !i.raw.hovered_files.is_empty());
         let ours = self.native_drag.load(std::sync::atomic::Ordering::Relaxed);
-        if !dragging || ours || self.ws.lib.is_none() {
+        if !dragging || ours {
             return;
         }
+        let alt_flip = ctx.input(|i| i.modifiers.alt);
+        let effective = match (lib_mode, alt_flip) {
+            (StorageMode::Copy, true) => StorageMode::Link,
+            (StorageMode::Link, true) => StorageMode::Copy,
+            (m, false) => m,
+        };
+        let mode_label = match effective {
+            StorageMode::Copy => tr("Copy to Library"),
+            StorageMode::Link => tr("Link (Place)"),
+        };
+        let hint_key = match effective {
+            StorageMode::Copy => tr("Hold ⌥ to Link (Place)"),
+            StorageMode::Link => tr("Hold ⌥ to Copy to Library"),
+        };
         // macOS sends no mouse moves during the drag; poll the mouse.
         ctx.request_repaint_after(std::time::Duration::from_millis(50));
         let sidebar = self.show_sidebar.then_some(self.imports.sidebar).flatten();
@@ -37,14 +52,31 @@ impl App {
                 let right = if self.show_inspector { window.right() - self.inspector_width } else { window.right() };
                 let grid = Rect::from_x_y_ranges(left..=right, window.y_range());
                 let text = match &self.ws.scope {
-                    crate::logic::Scope::Folder(_) => tr("Drop files to import them into this folder"),
-                    _ => tr("Drop files to import them"),
+                    crate::logic::Scope::Folder(_) => trf(
+                        "Drop files to import into this folder ({mode})\n{hint}",
+                        &[("mode", &mode_label), ("hint", &hint_key)],
+                    ),
+                    _ => trf(
+                        "Drop files to import ({mode})\n{hint}",
+                        &[("mode", &mode_label), ("hint", &hint_key)],
+                    ),
                 };
-                shade(grid, text);
+                shade(grid, &text);
             }
             Target::Sidebar => {
                 if let Some(s) = sidebar {
-                    shade(s, tr("Drop folders to import them with their subfolders"));
+                    let text = if effective == StorageMode::Link {
+                        trf(
+                            "Drop folders for one-time Link import ({mode})\n{hint}",
+                            &[("mode", &mode_label), ("hint", &hint_key)],
+                        )
+                    } else {
+                        trf(
+                            "Drop folders to import them with their subfolders ({mode})\n{hint}",
+                            &[("mode", &mode_label), ("hint", &hint_key)],
+                        )
+                    };
+                    shade(s, &text);
                 }
             }
             Target::Folder(id) => {

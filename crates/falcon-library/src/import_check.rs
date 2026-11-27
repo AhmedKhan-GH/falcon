@@ -46,7 +46,7 @@ impl Library {
         self.items()
             .iter()
             .filter(|i| !i.is_deleted && i.size == size && i.ext.eq_ignore_ascii_case(ext))
-            .map(|i| (i.id.clone(), i.original_path(self.root())))
+            .filter_map(|i| self.resolved_source_path(&i.id).ok().map(|p| (i.id.clone(), p)))
             .collect()
     }
 

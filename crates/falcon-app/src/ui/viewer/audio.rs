@@ -116,7 +116,10 @@ impl App {
     }
 
     fn audio_view(&mut self, ctx: &egui::Context, ui: &mut Ui, lib: &Library, item: &Item, area: Rect) {
-        let path = item.original_path(lib.root());
+        let Ok(path) = lib.resolved_source_path(&item.id) else {
+            self.cannot_preview(ui, lib, item, area);
+            return;
+        };
         // Eagle starts playing as soon as the item opens.
         self.audio.load(&item.id, &path, &item.ext, true);
         self.audio.tick();

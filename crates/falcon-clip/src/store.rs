@@ -7,7 +7,7 @@
 //! is dropped on load. Later records replace earlier ones; [`Index::compact`]
 //! rewrites the file when enough of it is dead.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
@@ -47,6 +47,8 @@ pub struct Index {
     /// Items that have no picture to read, with the stamp they were tried
     /// at, so they aren't tried again until they change.
     skipped: HashMap<String, u64>,
+    /// Items whose last known valid embedding is kept while source refresh is pending or failed.
+    stale: HashSet<String>,
     file: Option<BufWriter<File>>,
     /// Records in the file that a later record replaced.
     dead: usize,
@@ -67,6 +69,7 @@ impl Index {
             vectors: Vec::new(),
             by_id: HashMap::new(),
             skipped: HashMap::new(),
+            stale: HashSet::new(),
             file: None,
             dead: 0,
         };
@@ -100,6 +103,7 @@ impl Index {
         self.vectors.clear();
         self.by_id.clear();
         self.skipped.clear();
+        self.stale.clear();
         self.dead = 0;
         let mut file = BufWriter::new(File::create(&self.path)?);
         file.write_all(&self.header())?;
@@ -143,6 +147,7 @@ impl Index {
     }
 
     fn set(&mut self, id: &str, stamp: u64, vector: &[f32]) {
+        self.stale.remove(id);
         if self.skipped.remove(id).is_some() {
             self.dead += 1;
         }
@@ -169,6 +174,7 @@ impl Index {
     }
 
     fn drop_entry(&mut self, id: &str) {
+        self.stale.remove(id);
         if self.skipped.remove(id).is_some() {
             self.dead += 2;
         }
@@ -201,10 +207,49 @@ impl Index {
         self.append(VECTOR, id, stamp, Some(vector))
     }
 
-    /// Notes an item with nothing to read.
+    /// Notes an item with nothing to read (call only for unsupported/corrupt
+    /// accessible files without an existing vector).
     pub fn skip(&mut self, id: &str, stamp: u64) -> io::Result<()> {
         self.set_skipped(id, stamp);
         self.append(SKIPPED, id, stamp, None)
+    }
+
+    /// Marks an item `SKIPPED` only if it has no existing valid vector; otherwise
+    /// preserves the existing vector as stale and returns `Ok(false)`.
+    pub fn safe_skip(&mut self, id: &str, stamp: u64) -> io::Result<bool> {
+        if self.by_id.contains_key(id) {
+            self.stale.insert(id.to_string());
+            return Ok(false);
+        }
+        self.skip(id, stamp)?;
+        Ok(true)
+    }
+
+    /// Marks an existing vector as stale while keeping it searchable.
+    pub fn mark_stale(&mut self, id: &str) {
+        if self.by_id.contains_key(id) {
+            self.stale.insert(id.to_string());
+        }
+    }
+
+    /// Clears stale state once source matches or refreshes cleanly.
+    pub fn clear_stale(&mut self, id: &str) {
+        self.stale.remove(id);
+    }
+
+    /// Whether `id`'s preserved vector is currently marked stale.
+    pub fn is_stale(&self, id: &str) -> bool {
+        self.stale.contains(id)
+    }
+
+    /// Number of items with preserved stale vectors.
+    pub fn stale_count(&self) -> usize {
+        self.stale.len()
+    }
+
+    /// Whether `id` is currently recorded as skipped.
+    pub fn is_skipped(&self, id: &str) -> bool {
+        self.skipped.contains_key(id)
     }
 
     /// Forgets an item.

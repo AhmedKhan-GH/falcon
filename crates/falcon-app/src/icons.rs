@@ -61,4 +61,7 @@ pub const SPEAKER_X: &str = "\u{E45C}";
 pub const CORNERS_IN: &str = "\u{E1CE}";
 pub const CORNERS_OUT: &str = "\u{E1D0}";
 pub const DOTS_THREE: &str = "\u{E1FE}";
+pub const HARD_DRIVE: &str = "\u{E2A2}";
+pub const LINK: &str = "\u{E2E2}";
+pub const PROHIBIT: &str = "\u{E3E6}";
 pub const WARNING: &str = "\u{E4E0}";

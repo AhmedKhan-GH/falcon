@@ -97,52 +97,62 @@ pub struct Patch {
     seq: u64,
 }
 
+use falcon_library::Library;
+
 /// The job decoding `item`'s original at full resolution, in tiles of at
 /// most `tile` pixels (see `logic::tile_side`).
-pub fn original_job(item: &Item, root: &std::path::Path, tile: usize) -> Option<Job> {
+pub fn original_job(lib: &Library, item: &Item, tile: usize) -> Option<Job> {
     let ext = item.ext.to_lowercase();
+    let path = lib.resolved_source_path(&item.id).ok()?;
     crate::logic::full_resolution(&ext)
-        .then(|| Job { key: (item.id.clone(), Tier::Original), path: item.original_path(root), svg: false, quicklook: false, tile, region: None, raw: falcon_library::exif::is_raw(&ext), page: 0, hdr: falcon_library::hdr::is_hdr(&ext), deferred: false })
+        .then(|| Job { key: (item.id.clone(), Tier::Original), path, svg: false, quicklook: false, tile, region: None, raw: falcon_library::exif::is_raw(&ext), page: 0, hdr: falcon_library::hdr::is_hdr(&ext), deferred: false })
 }
 
 /// The job asking QuickLook (PDFKit for a PDF-compatible AI) for the visible
 /// part of `item` at the zoom shown (see [`Loader::want_region`]), for the
 /// formats Eagle draws again natively when zoomed (`logic::hires_quicklook`). It shares its key with
 /// the full tier, as an SVG region does.
-pub fn quicklook_region_job(item: &Item, root: &std::path::Path) -> Option<Job> {
+pub fn quicklook_region_job(lib: &Library, item: &Item) -> Option<Job> {
     let ext = item.ext.to_lowercase();
+    let path = lib.resolved_source_path(&item.id).ok()?;
     (crate::logic::hires_quicklook(&ext) && (cfg!(target_os = "macos") || falcon_library::psd::handles(&ext)))
-        .then(|| Job { key: (item.id.clone(), Tier::Full), path: item.original_path(root), svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false })
+        .then(|| Job { key: (item.id.clone(), Tier::Full), path, svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false })
 }
 
 /// The job decoding page `page` (0-based, above 0) of a multi-page TIFF at
 /// the full tier, kept under the key `<id>#page<n>`.
-pub fn tiff_page_job(item: &Item, root: &std::path::Path, page: usize) -> Job {
+pub fn tiff_page_job(lib: &Library, item: &Item, page: usize) -> Option<Job> {
     let key = (format!("{}#page{page}", item.id), Tier::Full);
-    Job { key, path: item.original_path(root), svg: false, quicklook: false, tile: 0, region: None, raw: false, page, hdr: false, deferred: false }
+    let path = lib.resolved_source_path(&item.id).ok()?;
+    Some(Job { key, path, svg: false, quicklook: false, tile: 0, region: None, raw: false, page, hdr: false, deferred: false })
 }
 
 /// The job decoding `item`'s original for a large grid card, for the
 /// formats Eagle swaps in (`logic::quality_card_format`).
-pub fn card_job(item: &Item, root: &std::path::Path) -> Option<Job> {
+pub fn card_job(lib: &Library, item: &Item) -> Option<Job> {
     let ext = item.ext.to_lowercase();
+    let path = lib.resolved_source_path(&item.id).ok()?;
     crate::logic::quality_card_format(&ext)
-        .then(|| Job { key: (item.id.clone(), Tier::Card), path: item.original_path(root), svg: false, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false })
+        .then(|| Job { key: (item.id.clone(), Tier::Card), path, svg: false, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false })
 }
 
 /// Picks the file to decode for `item`: the thumbnail when it exists (unless
 /// the full-size original is wanted and decodable), else a supported original.
-pub fn job_for(item: &Item, root: &std::path::Path, tier: Tier) -> Option<Job> {
+pub fn job_for(lib: &Library, item: &Item, tier: Tier) -> Option<Job> {
+    job_for_with(item, lib.resolved_source_path(&item.id).ok(), lib.root(), tier)
+}
+
+fn job_for_with(item: &Item, source: Option<PathBuf>, root: &std::path::Path, tier: Tier) -> Option<Job> {
     let ext = item.ext.to_lowercase();
     let supported = thumbnail::is_supported(&ext);
-    let original = supported.then(|| item.original_path(root));
-    if tier == Tier::Full && falcon_library::exif::is_raw(&ext) {
+    let original = supported.then(|| source.clone()).flatten();
+    if tier == Tier::Full && falcon_library::exif::is_raw(&ext) && let Some(path) = source.clone() {
         let quicklook = cfg!(target_os = "macos") && !quicklook_hung(&ext);
-        return Some(Job { key: (item.id.clone(), tier), path: item.original_path(root), svg: false, quicklook, tile: 0, region: None, raw: true, page: 0, hdr: false, deferred: false });
+        return Some(Job { key: (item.id.clone(), tier), path, svg: false, quicklook, tile: 0, region: None, raw: true, page: 0, hdr: false, deferred: false });
     }
-    if tier == Tier::Full && (ext == "tga" || falcon_library::hdr::is_hdr(&ext)) {
+    if tier == Tier::Full && (ext == "tga" || falcon_library::hdr::is_hdr(&ext)) && let Some(path) = source.clone() {
         // Decoded by falcon itself (HDR and EXR tone mapped), not QuickLook.
-        return Some(Job { key: (item.id.clone(), tier), path: item.original_path(root), svg: false, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: falcon_library::hdr::is_hdr(&ext), deferred: false });
+        return Some(Job { key: (item.id.clone(), tier), path, svg: false, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: falcon_library::hdr::is_hdr(&ext), deferred: false });
     }
     // A custom thumbnail stands for a format with no picture of its own.
     if tier == Tier::Full
@@ -151,13 +161,13 @@ pub fn job_for(item: &Item, root: &std::path::Path, tier: Tier) -> Option<Job> {
     {
         return Some(Job { key: (item.id.clone(), tier), path: t, svg: false, quicklook: false, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false });
     }
-    if tier == Tier::Full && falcon_library::psd::handles(&ext) {
+    if tier == Tier::Full && falcon_library::psd::handles(&ext) && let Some(path) = source.clone() {
         // The merged image, QuickLook where it can't be read and exists.
-        return Some(Job { key: (item.id.clone(), tier), path: item.original_path(root), svg: false, quicklook: cfg!(target_os = "macos") && !quicklook_hung(&ext), tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false });
+        return Some(Job { key: (item.id.clone(), tier), path, svg: false, quicklook: cfg!(target_os = "macos") && !quicklook_hung(&ext), tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false });
     }
     // Once QuickLook has hung on the format, the full tier is the thumbnail.
-    if tier == Tier::Full && !supported && cfg!(target_os = "macos") && !quicklook_hung(&ext) {
-        return Some(Job { key: (item.id.clone(), tier), path: item.original_path(root), svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false });
+    if tier == Tier::Full && !supported && cfg!(target_os = "macos") && !quicklook_hung(&ext) && let Some(path) = source {
+        return Some(Job { key: (item.id.clone(), tier), path, svg: false, quicklook: true, tile: 0, region: None, raw: false, page: 0, hdr: false, deferred: false });
     }
     let (path, svg) = match (tier, item.thumbnail_path(root), original) {
         (Tier::Full, _, Some(o)) => (o, ext == "svg"),
@@ -174,9 +184,13 @@ pub fn job_for(item: &Item, root: &std::path::Path, tier: Tier) -> Option<Job> {
 /// no generator installed. So a thumbnail is on screen from the start, never
 /// the bare file icon: it goes ahead of everything else in the queue and no
 /// QuickLook run can hold it up (see [`next_job`]).
-pub fn stand_in_job(item: &Item, root: &std::path::Path, full_failed: bool) -> Option<Job> {
-    let waiting_for_quicklook = job_for(item, root, Tier::Full).is_some_and(|j| j.quicklook);
-    (full_failed || waiting_for_quicklook).then(|| job_for(item, root, Tier::Preview)).flatten()
+pub fn stand_in_job(lib: &Library, item: &Item, full_failed: bool) -> Option<Job> {
+    stand_in_job_with(item, lib.resolved_source_path(&item.id).ok(), lib.root(), full_failed)
+}
+
+fn stand_in_job_with(item: &Item, source: Option<PathBuf>, root: &std::path::Path, full_failed: bool) -> Option<Job> {
+    let waiting_for_quicklook = job_for_with(item, source.clone(), root, Tier::Full).is_some_and(|j| j.quicklook);
+    (full_failed || waiting_for_quicklook).then(|| job_for_with(item, source, root, Tier::Preview)).flatten()
 }
 
 /// How long the formats that rarely have a QuickLook generator
@@ -1113,15 +1127,16 @@ mod tests {
         for ext in ["ai", "ait", "blend", "dwg", "eps", "idml", "indd", "indt", "key", "skp"] {
             let item = special_item(dir.path(), ext, true);
             let thumb = item.thumbnail_path(dir.path()).unwrap();
-            let job = stand_in_job(&item, dir.path(), true).unwrap_or_else(|| panic!("{ext}: after the render failed"));
+            let src = Some(item.managed_storage_path(dir.path()));
+            let job = stand_in_job_with(&item, src.clone(), dir.path(), true).unwrap_or_else(|| panic!("{ext}: after the render failed"));
             assert_eq!((job.path, job.quicklook, job.key.1), (thumb.clone(), false, Tier::Preview), "{ext}");
             if cfg!(target_os = "macos") {
                 // While QuickLook runs, too.
-                let job = stand_in_job(&item, dir.path(), false).unwrap_or_else(|| panic!("{ext}: while QuickLook runs"));
+                let job = stand_in_job_with(&item, src.clone(), dir.path(), false).unwrap_or_else(|| panic!("{ext}: while QuickLook runs"));
                 assert_eq!(job.path, thumb, "{ext}");
             }
             std::fs::remove_file(thumb).unwrap();
-            assert!(stand_in_job(&item, dir.path(), true).is_none(), "{ext}: no thumbnail, no stand-in");
+            assert!(stand_in_job_with(&item, src, dir.path(), true).is_none(), "{ext}: no thumbnail, no stand-in");
         }
     }
 
@@ -1129,7 +1144,8 @@ mod tests {
     fn a_decodable_image_loads_its_render_with_no_stand_in() {
         let dir = tempfile::tempdir().unwrap();
         let item = special_item(dir.path(), "png", true);
-        assert!(stand_in_job(&item, dir.path(), false).is_none());
+        let src = Some(item.managed_storage_path(dir.path()));
+        assert!(stand_in_job_with(&item, src, dir.path(), false).is_none());
     }
 
     fn write_ai(path: &std::path::Path, page: &str, content: &str) {
@@ -1413,13 +1429,14 @@ mod tests {
         let item = special_item(dir.path(), "zzhung", true);
         let thumb = item.thumbnail_path(dir.path()).unwrap();
         image::RgbaImage::new(4, 4).save_with_format(&thumb, image::ImageFormat::Png).unwrap();
-        assert!(job_for(&item, dir.path(), Tier::Full).unwrap().quicklook, "tried at first");
+        let src = item.managed_storage_path(dir.path());
+        assert!(job_for_with(&item, Some(src.clone()), dir.path(), Tier::Full).unwrap().quicklook, "tried at first");
 
         let ctx = Context::default();
         let fake = Arc::new(Fake::default());
         fake.times_out.store(true, Ordering::Relaxed);
         let mut l = Loader::with_runner(&ctx, 1, fake.runner());
-        l.want(vec![job_for(&item, dir.path(), Tier::Full).unwrap()]);
+        l.want(vec![job_for_with(&item, Some(src.clone()), dir.path(), Tier::Full).unwrap()]);
         until("it times out", || {
             l.poll(&ctx);
             l.has_failed(&item.id, Tier::Full)
@@ -1427,11 +1444,11 @@ mod tests {
         assert_eq!(*fake.timeouts.lock().unwrap(), [thumbnail::QUICKLOOK_TIMEOUT]);
 
         // Any item of the format: no QuickLook, the thumbnail at once.
-        let job = job_for(&item, dir.path(), Tier::Full).unwrap();
+        let job = job_for_with(&item, Some(src.clone()), dir.path(), Tier::Full).unwrap();
         assert_eq!((job.quicklook, job.path), (false, thumb.clone()));
-        assert!(stand_in_job(&item, dir.path(), false).is_none(), "nothing to stand in for");
+        assert!(stand_in_job_with(&item, Some(src.clone()), dir.path(), false).is_none(), "nothing to stand in for");
         l.forget(&item.id);
-        l.want(vec![job_for(&item, dir.path(), Tier::Full).unwrap()]);
+        l.want(vec![job_for_with(&item, Some(src.clone()), dir.path(), Tier::Full).unwrap()]);
         until("the thumbnail arrives", || {
             l.poll(&ctx);
             l.get(&item.id, Tier::Full).is_some()
@@ -1439,7 +1456,7 @@ mod tests {
         assert_eq!(fake.started().len(), 1, "not retried");
         // With no thumbnail there is nothing to wait for.
         std::fs::remove_file(thumb).unwrap();
-        assert!(job_for(&item, dir.path(), Tier::Full).is_none());
+        assert!(job_for_with(&item, Some(src), dir.path(), Tier::Full).is_none());
     }
 
     #[test]

@@ -380,6 +380,8 @@ pub(crate) struct Workspace {
     /// of items they change (`App::push_bulk`).
     pub(crate) bulk: Option<(usize, Vec<Action>)>,
     pub(crate) smart_dialog: Option<SmartDraft>,
+    pub(crate) library_settings: crate::ui::dialogs::library_settings::LibrarySettings,
+    pub(crate) relink_dialog: crate::ui::dialogs::relink::RelinkDialogState,
     pub(crate) view: ViewState,
     /// The GIF player turned on with the viewer's toolbar button, until
     /// the viewer closes (Eagle's `usingGifPlayer`).
@@ -444,6 +446,8 @@ pub(crate) struct Workspace {
     /// The storage checks run when the library opened (`storage.rs`),
     /// until their result is taken.
     pub(crate) health: Option<std::sync::mpsc::Receiver<Vec<crate::storage::Warning>>>,
+    /// Bounded background thumbnail worker pool for deferred Link-mode thumbnails.
+    pub(crate) thumb_worker: Option<Arc<crate::thumb_worker::ThumbWorker>>,
 }
 
 impl Workspace {
@@ -468,10 +472,25 @@ impl Workspace {
             let ctx = ctx.clone();
             crate::storage::spawn_check(r, move || ctx.request_repaint())
         });
+        let thumb_worker = match (&lib, &root) {
+            (Some(shared), Some(r)) => {
+                let worker = Arc::new(crate::thumb_worker::ThumbWorker::new(
+                    Arc::clone(shared),
+                    r.clone(),
+                    ctx.clone(),
+                    true,
+                ));
+                let items = lock(shared).items().to_vec();
+                worker.rediscover_pending(&items);
+                Some(worker)
+            }
+            _ => None,
+        };
         Workspace {
             root,
             watch,
             health,
+            thumb_worker,
             lib,
             loader: Loader::new(ctx),
             scope: Scope::All,
@@ -511,6 +530,8 @@ impl Workspace {
             confirm: None,
             bulk: None,
             smart_dialog: None,
+            library_settings: Default::default(),
+            relink_dialog: Default::default(),
             view: ViewState::default(),
             gif_player: false,
             cards: Default::default(),

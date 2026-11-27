@@ -5,7 +5,7 @@
 //! falcon) has the start of its file read once and kept here.
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use falcon_library::model::Item;
@@ -60,11 +60,17 @@ pub fn record_text(item: &Item) -> Option<&str> {
 }
 
 impl TextCards {
-    /// The start of the file of `item` (in the library at `root`), for an
-    /// item whose record has no text ([`record_text`]).
-    pub fn read(&mut self, item: &Item, root: &Path) -> Arc<str> {
-        let path = item.original_path(root);
-        let key = (path, item.mtime);
+    /// The start of the file of `item` (using safe resolved read path), for
+    /// an item whose record has no text ([`record_text`]).
+    pub fn read(&mut self, lib: &falcon_library::Library, item: &Item) -> Arc<str> {
+        let Ok(path) = lib.resolved_source_path(&item.id) else {
+            return Arc::from("");
+        };
+        self.read_path(path, item.mtime)
+    }
+
+    fn read_path(&mut self, path: PathBuf, mtime: u64) -> Arc<str> {
+        let key = (path, mtime);
         if let Some(t) = self.read.get(&key) {
             return t.clone();
         }
@@ -116,11 +122,12 @@ mod tests {
         .unwrap();
         let mut cards = TextCards::default();
         assert_eq!(record_text(&item), None);
-        assert_eq!(&*cards.read(&item, tmp.path()), "from the file");
-        std::fs::write(info.join("Note.txt"), "changed").unwrap();
-        assert_eq!(&*cards.read(&item, tmp.path()), "from the file", "kept until the mtime changes");
+        let note = info.join("Note.txt");
+        assert_eq!(&*cards.read_path(note.clone(), item.mtime), "from the file");
+        std::fs::write(&note, "changed").unwrap();
+        assert_eq!(&*cards.read_path(note.clone(), item.mtime), "from the file", "kept until the mtime changes");
         item.mtime = 2;
-        assert_eq!(&*cards.read(&item, tmp.path()), "changed");
+        assert_eq!(&*cards.read_path(note, item.mtime), "changed");
         item.extra.insert("text".into(), "from the record".into());
         assert_eq!(record_text(&item), Some("from the record"));
     }

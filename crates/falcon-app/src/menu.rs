@@ -163,11 +163,11 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
             grid && matches!(s.scope, ScopeKind::Folder | ScopeKind::Smart) && s.picked_folders < 2 && s.picked_smart < 2
         }
         C::MoveFolder => grid && (s.scope == ScopeKind::Folder || s.picked_folders > 0),
-        C::MergeLibrary | C::EmptyCacheReload | C::ImportPack | C::ImportInboard => s.library,
+        C::MergeLibrary | C::EmptyCacheReload | C::ImportPack | C::ImportInboard | C::LibrarySettings => s.library,
         C::LockApp => s.lockable,
         C::NewLibrary | C::LoadLibrary | C::ClearLibraryHistory | C::SwitchLibrary | C::CollectWindow | C::NotificationCenter | C::Preferences | C::CloseWindow | C::Minimize | C::FullScreen | C::WindowZoom => true,
         C::NextLibrary | C::PreviousLibrary => s.libraries > 1,
-        C::Page(_) | C::Import | C::ImportFolders | C::ImportLinks | C::FindDuplicates => s.library,
+        C::Page(_) | C::Import | C::ImportFolders | C::ImportAsCopy | C::ImportAsLink | C::ImportFoldersAsCopy | C::ImportFoldersAsLink | C::ImportLinks | C::FindDuplicates => s.library,
         C::Scroll(_) | C::SelectFirst | C::SelectLast | C::ToggleFolders => grid,
         C::ParentFolder => grid && s.parent,
         C::Reshuffle => grid && (s.scope == ScopeKind::Random || s.random_sorted),
@@ -323,7 +323,18 @@ pub static MENUS: &[(&str, &[Entry])] = &[
             item("Import Folders…", Command::ImportFolders),
             item("Import Links…", Command::ImportLinks),
             item("Import Files…", Command::Import),
-            Entry::Sub("Import", &[item("Eagle Package…", Command::ImportPack), item("Inboard Backup…", Command::ImportInboard)]),
+            Entry::Sub(
+                "Import",
+                &[
+                    item("Files (Copy to Library)…", Command::ImportAsCopy),
+                    item("Files (Link / Place)…", Command::ImportAsLink),
+                    item("Folders (Copy to Library)…", Command::ImportFoldersAsCopy),
+                    item("Folders (Link / Place)…", Command::ImportFoldersAsLink),
+                    SEP,
+                    item("Eagle Package…", Command::ImportPack),
+                    item("Inboard Backup…", Command::ImportInboard),
+                ],
+            ),
             Entry::Sub(
                 "Export",
                 &[
@@ -342,6 +353,7 @@ pub static MENUS: &[(&str, &[Entry])] = &[
         &[
             item("New Library…", Command::NewLibrary),
             item("Open Library…", Command::SwitchLibrary),
+            item("Library Settings…", Command::LibrarySettings),
             item("Merge Library…", Command::MergeLibrary),
             SEP,
             item("Clear Library History…", Command::ClearLibraryHistory),
