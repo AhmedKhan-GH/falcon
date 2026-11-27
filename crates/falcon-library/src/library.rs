@@ -424,54 +424,6 @@ impl Library {
         self.item(id).is_some_and(|item| is_linked_item(&self.config, item, &self.root))
     }
 
-    /// Returns `true` if this library contains a Falcon configuration (`falcon.json`).
-    /// Pure Eagle libraries have no `falcon.json`.
-    pub fn has_falcon_config(&self) -> bool {
-        FalconConfig::path(&self.root).is_file()
-    }
-
-    /// Reconciles an item's stored width and height with its existing valid thumbnail
-    /// orientation if they demonstrably disagree, without regenerating the thumbnail.
-    ///
-    /// Pure Eagle libraries are preserved: this only modifies items in libraries with
-    /// Falcon configuration (`falcon.json`) or tracked referenced assets, unless
-    /// explicitly authorized via `force_eagle`. User metadata (tags, ratings, annotations)
-    /// is strictly preserved.
-    pub fn reconcile_item_dimensions(&mut self, id: &str, force_eagle: bool) -> Result<bool> {
-        if !force_eagle && !self.has_falcon_config() && !self.is_linked_item(id) {
-            return Ok(false);
-        }
-        let Some(mut item) = self.item(id).cloned() else {
-            return Ok(false);
-        };
-        if item.width == 0 || item.height == 0 {
-            return Ok(false);
-        }
-        let thumb_path = if let Some(p) = item.thumbnail_path(&self.root) {
-            p
-        } else if item.no_thumbnail == Some(true) {
-            if let Ok(p) = self.resolved_source_path(id) {
-                p
-            } else {
-                item.managed_storage_path(&self.root)
-            }
-        } else {
-            return Ok(false);
-        };
-        let Ok((tw, th)) = image::image_dimensions(&thumb_path) else {
-            return Ok(false);
-        };
-        // Demonstrably incorrect: thumbnail is portrait while metadata is landscape, or vice-versa.
-        let inverted = (tw > th && item.width < item.height) || (th > tw && item.width > item.height);
-        if !inverted {
-            return Ok(false);
-        }
-        std::mem::swap(&mut item.width, &mut item.height);
-        item.last_modified = crate::edit::now_ms().max(item.last_modified);
-        self.register_item(item)?;
-        Ok(true)
-    }
-
     /// Reads and structurally validates `id`'s `falcon-link.json` sidecar if linked.
     pub fn link_record(&self, id: &str) -> Result<Option<LinkRecord>> {
         let Some(item) = self.item(id) else {
