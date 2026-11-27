@@ -30,7 +30,7 @@ use crate::storage_mode::{FalconConfig, StorageMode, SyncSource, SyncStatus, Wat
 /// How many Copy-mode imports go by between saves of the provenance record.
 const PROVENANCE_SAVE_EVERY: usize = 50;
 
-fn find_folder_in<'a>(folders: &'a [Folder], id: &str) -> Option<&'a Folder> {
+pub(crate) fn find_folder_in<'a>(folders: &'a [Folder], id: &str) -> Option<&'a Folder> {
     for f in folders {
         if f.id == id {
             return Some(f);
@@ -58,6 +58,14 @@ pub struct SyncStats {
     pub added_ids: Vec<String>,
     /// Ids of linked items refreshed in this pass.
     pub refreshed_ids: Vec<String>,
+    /// Ids of imported or refreshed items whose thumbnail still has to be
+    /// drawn (a background pass defers it to the thumbnail worker).
+    pub pending_thumbnail_ids: Vec<String>,
+    /// The pass was stopped on request; what was done is kept.
+    pub cancelled: bool,
+    /// Files left for a later pass because they were modified too recently to
+    /// be trusted as complete.
+    pub unsettled: usize,
     /// True if the source path was offline or unmounted.
     pub offline: bool,
 }
@@ -97,21 +105,21 @@ pub fn is_sync_skipped(name: &str, size: u64) -> bool {
     !crate::import::is_recognized(&ext)
 }
 
-fn mtime_ms(meta: &fs::Metadata) -> u64 {
+pub(crate) fn mtime_ms(meta: &fs::Metadata) -> u64 {
     meta.modified()
         .ok()
         .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
         .map_or(0, |d| d.as_millis() as u64)
 }
 
-fn now_ms() -> u64 {
+pub(crate) fn now_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_millis() as u64)
 }
 
 /// Key of a source file in [`FalconConfig::sync_sources`].
-fn source_key(wf: &WatchedFolder, file: &Path) -> String {
+pub(crate) fn source_key(wf: &WatchedFolder, file: &Path) -> String {
     let rel = file.strip_prefix(&wf.source_path).unwrap_or(file);
     let rel: Vec<String> = rel.components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect();
     format!("{}|{}", wf.id, rel.join("/"))
@@ -379,7 +387,7 @@ impl Library {
 
     /// Writes this watched folder's provenance (the entries starting with
     /// `prefix`) to `falcon.json`.
-    fn store_sync_sources(&mut self, prefix: &str, provenance: &BTreeMap<String, SyncSource>) -> Result<()> {
+    pub(crate) fn store_sync_sources(&mut self, prefix: &str, provenance: &BTreeMap<String, SyncSource>) -> Result<()> {
         fault::check(FaultPoint::SyncBeforeProvenanceSave, self.root())?;
         let mut next: FalconConfig = self.config.clone();
         next.sync_sources.retain(|k, _| !k.starts_with(prefix));
@@ -781,14 +789,21 @@ mod tests {
     #[test]
     fn an_interrupted_sync_never_shows_as_syncing_forever() {
         let tmp = tempfile::tempdir().unwrap();
-        let mut lib = Library::create(tmp.path().join("L.library")).unwrap();
+        let root = tmp.path().join("L.library");
+        let mut lib = Library::create(&root).unwrap();
         let fid = lib.create_folder(None, "F").unwrap();
         let mut wf = wf_for("wf-int", tmp.path(), &fid, StorageMode::Link);
         wf.status = SyncStatus::Syncing;
         lib.upsert_watched_folder(wf).unwrap();
+        assert_eq!(lib.watched_folders()[0].status, SyncStatus::Syncing, "a pass in progress keeps its state");
+        drop(lib);
+        // Found at open, the pass was cut short.
+        let lib = Library::open(&root).unwrap();
         let shown = &lib.watched_folders()[0];
         assert_eq!(shown.status, SyncStatus::Error);
         assert!(shown.last_error.as_deref().is_some_and(|e| e.contains("interrupted")));
+        let again = Library::open(&root).unwrap();
+        assert_eq!(again.watched_folders()[0].status, SyncStatus::Error, "and it was saved");
     }
 
     /// Each persistence and registration boundary of a pass, failed in turn:

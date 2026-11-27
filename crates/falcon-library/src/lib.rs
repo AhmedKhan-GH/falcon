@@ -6,6 +6,7 @@ pub mod actions;
 pub mod alias;
 pub mod add_to_library;
 pub mod audio;
+pub mod background_sync;
 pub mod autotag;
 pub mod backup;
 pub mod disk_name;

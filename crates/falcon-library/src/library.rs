@@ -90,7 +90,11 @@ impl Library {
         let mtime = read_json(&root.join(MTIME))?;
         let tags: Tags = read_json(&root.join(TAGS))?;
         let saved_filters: Vec<SavedFilter> = read_json(&root.join(FILTERS))?;
-        let config = FalconConfig::load_or_default(&root)?;
+        let mut config = FalconConfig::load_or_default(&root)?;
+        // A pass cut short by a crash would otherwise read as syncing forever.
+        if config.recover_interrupted_syncs() {
+            let _ = config.save(&root);
+        }
         let mut diagnostics = Vec::new();
         match read_journal(&root) {
             Ok(Some(j)) => diagnostics.push(LibraryDiagnostic::InterruptedJournal {

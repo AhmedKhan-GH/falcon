@@ -225,23 +225,31 @@ impl FalconConfig {
     }
 
     /// Returns the parsed watched folders list from `linked_folders`.
-    ///
-    /// A folder stored as `Syncing` can only be left over from a pass that was
-    /// cut short (a pass runs under `&mut Library`, so nobody reads the list
-    /// while one is in progress); it is reported as an interrupted error and
-    /// is never shown as syncing forever.
     pub fn watched_folders(&self) -> Vec<WatchedFolder> {
         self.linked_folders
             .iter()
             .filter_map(|v| serde_json::from_value::<WatchedFolder>(v.clone()).ok())
-            .map(|mut w| {
-                if w.status == SyncStatus::Syncing {
-                    w.status = SyncStatus::Error;
-                    w.last_error = Some("The last sync was interrupted before it finished".into());
-                }
-                w
-            })
             .collect()
+    }
+
+    /// Marks every folder stored as `Syncing` as an interrupted error. A pass
+    /// that is running while the library is open keeps its `Syncing`; one found
+    /// when the library is *opened* was cut short (a crash, a power loss) and
+    /// must not read as syncing forever. Returns whether anything changed.
+    pub fn recover_interrupted_syncs(&mut self) -> bool {
+        let mut changed = false;
+        for value in &mut self.linked_folders {
+            let Ok(mut wf) = serde_json::from_value::<WatchedFolder>(value.clone()) else { continue };
+            if wf.status == SyncStatus::Syncing {
+                wf.status = SyncStatus::Error;
+                wf.last_error = Some("The last sync was interrupted before it finished".into());
+                if let Ok(v) = serde_json::to_value(&wf) {
+                    *value = v;
+                    changed = true;
+                }
+            }
+        }
+        changed
     }
 
     /// Serializes and stores `folders` into `linked_folders`.
