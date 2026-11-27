@@ -61,3 +61,4 @@ pub mod waveform;
 pub mod webp_convert;
 pub mod weblink;
 pub mod zip_preview;
+pub mod format_capability;

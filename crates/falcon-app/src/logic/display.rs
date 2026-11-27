@@ -74,11 +74,33 @@ pub struct Display {
     /// `eagle.list.video.muted`, default true, switched by the speaker
     /// button on the preview).
     pub video_muted: bool,
+    /// Hide unsupported file formats and sidecars that Falcon cannot preview.
+    #[serde(default = "default_true")]
+    pub hide_unsupported: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl Default for Display {
     fn default() -> Self {
-        Display { show_name: true, show_info: true, info: InfoType::Dimensions, show_ext: true, ext_badge: true, comment_badge: true, fill: false, subfolders: false, columns: ListColumns::default(), strip_collapsed: false, quality: true, audio_autoplay: true, video_muted: true }
+        Display {
+            show_name: true,
+            show_info: true,
+            info: InfoType::Dimensions,
+            show_ext: true,
+            ext_badge: true,
+            comment_badge: true,
+            fill: false,
+            subfolders: false,
+            columns: ListColumns::default(),
+            strip_collapsed: false,
+            quality: true,
+            audio_autoplay: true,
+            video_muted: true,
+            hide_unsupported: true,
+        }
     }
 }
 
@@ -633,5 +655,24 @@ mod display_tests {
         assert!(broken_thumb_hint(true, 259, false, false).unwrap().contains("wasn't found"));
         assert!(broken_thumb_hint(true, 40, true, false).unwrap().contains("couldn't be read"));
         assert!(broken_thumb_hint(true, 40, false, true).unwrap().contains("couldn't be read"));
+    }
+
+    #[test]
+    fn display_hide_unsupported_defaults_and_persists() {
+        let d = Display::default();
+        assert!(d.hide_unsupported);
+
+        // Deserializing empty JSON object should default hide_unsupported to true
+        let de: Display = serde_json::from_str("{}").unwrap();
+        assert!(de.hide_unsupported);
+
+        // Explicitly false in JSON
+        let de_false: Display = serde_json::from_str("{\"hide_unsupported\": false}").unwrap();
+        assert!(!de_false.hide_unsupported);
+
+        // Roundtrip serialization
+        let s = serde_json::to_string(&d).unwrap();
+        let de_roundtrip: Display = serde_json::from_str(&s).unwrap();
+        assert_eq!(d, de_roundtrip);
     }
 }
