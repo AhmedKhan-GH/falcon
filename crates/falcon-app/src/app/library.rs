@@ -2,6 +2,7 @@
 //! `eagle://` links and the HTTP API's library switch, the local server,
 //! preferences and the app lock, and the recent-libraries list.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -441,53 +442,97 @@ impl App {
         }
     }
 
-    /// Toggles pause/resume on a watched folder.
-    pub(crate) fn toggle_folder_sync_pause(&mut self, wf_id: &str) {
-        let Some(shared) = self.ws.lib.clone() else { return };
-        let mut guard = lock(&shared);
-        let lib: &mut Library = &mut guard;
-        let mut wf = match lib.config().find_watched_folder(wf_id) {
-            Some(w) => w,
-            None => return,
-        };
-        wf.sync_mode = if wf.sync_mode == falcon_library::SyncMode::Disabled {
-            falcon_library::SyncMode::Auto
-        } else {
-            falcon_library::SyncMode::Disabled
-        };
-        let _ = lib.upsert_watched_folder(wf);
+    /// Deduces the external physical directory for a Falcon folder from its linked items.
+    pub(crate) fn deduce_source_path_for_folder(&self, folder_id: &str) -> Option<PathBuf> {
+        let shared = self.ws.lib.as_ref()?.clone();
+        let guard = lock(&shared);
+        let lib: &Library = &guard;
+        let mut path_counts: HashMap<PathBuf, usize> = HashMap::new();
+        for item in lib.items() {
+            if !item.is_deleted
+                && item.folders.iter().any(|f| f == folder_id)
+                && let Some(src) = lib.resolved_source_path(&item.id).ok().or_else(|| lib.last_known_source_path(&item.id))
+                && let Some(parent) = src.parent()
+                && parent.is_dir()
+            {
+                *path_counts.entry(parent.to_path_buf()).or_default() += 1;
+            }
+        }
+        path_counts.into_iter().max_by_key(|(_, c)| *c).map(|(p, _)| p)
     }
 
-    /// Prompts the user to pick an external source folder and sets up synchronization for `folder_id`.
-    pub(crate) fn setup_folder_sync_for(&mut self, folder_id: &str) {
-        let Some(dir) = crate::dialog_owner::file_dialog()
-            .set_title(tr("Choose Source Folder to Sync"))
-            .pick_folder()
-        else {
-            return;
+    /// Returns an existing `WatchedFolder` for `folder_id` or creates a targeted one
+    /// (with `recursive: false` and `sync_mode: SyncMode::Manual`).
+    /// If no path can be automatically deduced, prompts the user with a folder picker.
+    pub(crate) fn ensure_watched_folder_for(&mut self, folder_id: &str) -> Option<falcon_library::WatchedFolder> {
+        let shared = self.ws.lib.as_ref()?.clone();
+        {
+            let guard = lock(&shared);
+            if let Some(wf) = guard.config().find_watched_by_folder_id(folder_id)
+                && wf.source_path.is_dir()
+            {
+                return Some(wf);
+            }
+        }
+
+        // Try deducing from existing linked items in this folder
+        let source_path = if let Some(deduced) = self.deduce_source_path_for_folder(folder_id) {
+            deduced
+        } else {
+            // Prompt the user to pick the folder
+            crate::dialog_owner::file_dialog()
+                .set_title(tr("Choose Source Folder to Sync"))
+                .pick_folder()?
         };
-        let Some(shared) = self.ws.lib.clone() else { return };
+
+        let mut guard = lock(&shared);
+        let lib: &mut Library = &mut guard;
         let id = falcon_library::ids::new_id();
-        let saved = {
-            let mut guard = lock(&shared);
-            let lib: &mut Library = &mut guard;
-            let wf = falcon_library::WatchedFolder {
-                id: id.clone(),
-                source_path: dir,
-                folder_id: folder_id.to_string(),
-                storage_mode: lib.storage_mode(),
-                sync_mode: falcon_library::SyncMode::Auto,
-                recursive: true,
-                last_synced: None,
-                status: falcon_library::SyncStatus::Idle,
-                last_error: None,
-            };
-            lib.upsert_watched_folder(wf)
+        let wf = falcon_library::WatchedFolder {
+            id: id.clone(),
+            source_path,
+            folder_id: folder_id.to_string(),
+            storage_mode: lib.storage_mode(),
+            sync_mode: falcon_library::SyncMode::Manual,
+            recursive: false,
+            last_synced: None,
+            status: falcon_library::SyncStatus::Idle,
+            last_error: None,
         };
-        match saved {
-            // The first pass runs in the background, like every later one.
-            Ok(()) => self.sync_folder_now(&id),
-            Err(e) => self.flash_error(trf("Folder sync failed: {error}", &[("error", &e)])),
+        if lib.upsert_watched_folder(wf.clone()).is_ok() {
+            Some(wf)
+        } else {
+            None
+        }
+    }
+
+    /// Performs an immediate, targeted 1-click sync of this folder only.
+    pub(crate) fn sync_targeted_folder(&mut self, folder_id: &str) {
+        if let Some(wf) = self.ensure_watched_folder_for(folder_id) {
+            self.sync_folder_now(&wf.id);
+        }
+    }
+
+    /// Toggles auto-sync for a targeted folder (Manual <-> Auto).
+    /// When disabled, it switches to Manual and immediately stops the background watcher (0% CPU).
+    pub(crate) fn toggle_folder_auto_sync(&mut self, folder_id: &str) {
+        let Some(shared) = self.ws.lib.clone() else { return };
+        let Some(wf) = self.ensure_watched_folder_for(folder_id) else { return };
+        let mut guard = lock(&shared);
+        let lib: &mut Library = &mut guard;
+        let mut updated = wf;
+        if updated.sync_mode == falcon_library::SyncMode::Auto {
+            updated.sync_mode = falcon_library::SyncMode::Manual;
+            let _ = lib.upsert_watched_folder(updated);
+            self.ws.sync_read = None;
+            self.flash(tr("Auto-Sync disabled (Manual only, 0% CPU)"));
+        } else {
+            updated.sync_mode = falcon_library::SyncMode::Auto;
+            let _ = lib.upsert_watched_folder(updated.clone());
+            self.ws.sync_read = None;
+            self.flash(tr("Auto-Sync enabled for this folder (Active Project)"));
+            drop(guard);
+            self.sync_folder_now(&updated.id);
         }
     }
 }

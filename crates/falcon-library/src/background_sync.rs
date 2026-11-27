@@ -164,6 +164,8 @@ struct Snapshot {
     root: PathBuf,
     /// Linked item ids, to read their sidecars with the lock released.
     linked_ids: Vec<String>,
+    /// Linked item ids in the target folder, for fast prioritized matching.
+    folder_linked_ids: HashSet<String>,
     provenance: BTreeMap<String, SyncSource>,
     /// Non-trashed items, and their id by (folder, name, extension).
     alive: HashSet<String>,
@@ -198,6 +200,12 @@ fn begin(lib: &mut Library, wf_id: &str) -> Result<Begin> {
     let provenance = lib.config().sync_sources.iter().filter(|(k, _)| k.starts_with(&prefix)).map(|(k, v)| (k.clone(), v.clone())).collect();
     let mut alive = HashSet::new();
     let mut slots: HashMap<(String, String, String), Vec<String>> = HashMap::new();
+    let folder_linked_ids: HashSet<String> = lib
+        .items()
+        .iter()
+        .filter(|i| !i.is_deleted && i.folders.iter().any(|f| f == &wf.folder_id) && lib.config().linked_ids.contains(&i.id))
+        .map(|i| i.id.clone())
+        .collect();
     // Only Copy mode asks which items exist and where; Link mode reads sidecars.
     for item in lib.items().iter().filter(|_| wf.storage_mode == StorageMode::Copy) {
         if item.is_deleted {
@@ -211,6 +219,7 @@ fn begin(lib: &mut Library, wf_id: &str) -> Result<Begin> {
     Ok(Begin::Ready(Box::new(Snapshot {
         root: lib.root().to_path_buf(),
         linked_ids: lib.config().linked_ids.iter().cloned().collect(),
+        folder_linked_ids,
         provenance,
         alive,
         slots,
@@ -340,12 +349,32 @@ fn plan(snap: &Snapshot, scan: &Scan, dir_map: &HashMap<PathBuf, String>, ctl: &
     let wf = &snap.wf;
     // Linked sources: canonical path -> (item id, identity on record).
     let mut linked: HashMap<PathBuf, (String, FileIdentity)> = HashMap::new();
-    if wf.storage_mode == StorageMode::Link {
-        for id in &snap.linked_ids {
+    if wf.storage_mode == StorageMode::Link && !scan.files.is_empty() {
+        let scan_canonical: HashSet<PathBuf> = scan.files.iter().map(|f| fs::canonicalize(&f.path).unwrap_or_else(|_| f.path.clone())).collect();
+
+        // Pass 1: Prioritize items already in this folder (instant check for single folder sync)
+        for id in &snap.folder_linked_ids {
             let sidecar = snap.root.join("images").join(format!("{id}.info")).join(linked::LINK_SIDECAR);
             if let Ok(Some(rec)) = linked::load_validated_sidecar_at(&sidecar, id, true, &snap.root) {
                 let key = fs::canonicalize(&rec.source_path).unwrap_or(rec.source_path);
                 linked.insert(key, (id.clone(), rec.identity));
+            }
+        }
+
+        // Pass 2: Check remaining library linked items only if scanned files were not all matched
+        if scan_canonical.iter().any(|p| !linked.contains_key(p)) {
+            for id in &snap.linked_ids {
+                if snap.folder_linked_ids.contains(id) {
+                    continue;
+                }
+                let sidecar = snap.root.join("images").join(format!("{id}.info")).join(linked::LINK_SIDECAR);
+                if let Ok(Some(rec)) = linked::load_validated_sidecar_at(&sidecar, id, true, &snap.root) {
+                    let key = fs::canonicalize(&rec.source_path).unwrap_or(rec.source_path);
+                    linked.insert(key, (id.clone(), rec.identity));
+                    if scan_canonical.iter().all(|p| linked.contains_key(p)) {
+                        break;
+                    }
+                }
             }
         }
     }

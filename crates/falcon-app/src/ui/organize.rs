@@ -527,39 +527,43 @@ impl App {
         }
 
         // Folder Synchronization options
+        ui.separator();
         let watched = lib.config().find_watched_by_folder_id(&f.id);
-        if let Some(wf) = watched {
-            ui.separator();
-            if self.ws.sync.as_ref().is_some_and(|s| s.is_active(&wf.id)) {
-                if ui.button(tr("Stop Synchronization")).clicked() {
-                    if let Some(s) = &self.ws.sync {
-                        s.cancel(&wf.id);
-                    }
-                    ui.close();
+        let is_active = watched.as_ref().is_some_and(|w| self.ws.sync.as_ref().is_some_and(|s| s.is_active(&w.id)));
+        let is_auto = watched.as_ref().is_some_and(|w| w.sync_mode == falcon_library::SyncMode::Auto);
+
+        if is_active {
+            if let Some(wf) = &watched
+                && ui.button(tr("Stop Synchronization")).clicked()
+            {
+                if let Some(s) = &self.ws.sync {
+                    s.cancel(&wf.id);
                 }
-            } else if ui.button(tr("Sync Folder Now")).clicked() {
-                self.sync_folder_now(&wf.id);
                 ui.close();
             }
+        } else if ui.button(tr("Sync This Folder Now")).clicked() {
+            self.sync_targeted_folder(&f.id);
+            ui.close();
+        }
+
+        let auto_sync_label = if is_auto {
+            tr("✓ Auto-Sync Active (Click to Disable)")
+        } else {
+            tr("Enable Auto-Sync (Active Project)")
+        };
+        if ui.button(auto_sync_label).clicked() {
+            self.toggle_folder_auto_sync(&f.id);
+            ui.close();
+        }
+
+        if let Some(wf) = &watched {
             if ui.button(tr("Show Source in Finder")).clicked() {
                 crate::open_with::open_default(std::slice::from_ref(&wf.source_path));
-                ui.close();
-            }
-            let is_disabled = wf.sync_mode == falcon_library::SyncMode::Disabled;
-            let pause_label = if is_disabled { tr("Resume Synchronization") } else { tr("Pause Synchronization") };
-            if ui.button(pause_label).clicked() {
-                self.toggle_folder_sync_pause(&wf.id);
                 ui.close();
             }
             if ui.button(tr("Folder Sync Settings…")).clicked() {
                 self.open_preferences();
                 self.prefs_window.set_pane(crate::prefs::Section::AutoImport);
-                ui.close();
-            }
-        } else {
-            ui.separator();
-            if ui.button(tr("Set Up Folder Sync…")).clicked() {
-                self.setup_folder_sync_for(&f.id);
                 ui.close();
             }
         }

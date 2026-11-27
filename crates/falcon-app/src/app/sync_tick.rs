@@ -124,6 +124,8 @@ impl App {
                             "Folder synced: {n} added, {m} modified, {c} changed in the source and left as they were",
                             &[("n", &n), ("m", &m), ("c", &c)],
                         ));
+                    } else if n == 0 && m == 0 {
+                        self.flash_brief(tr("Folder is up to date"));
                     } else {
                         self.flash(trf("Folder synced: {n} added, {m} modified", &[("n", &n), ("m", &m)]));
                     }
