@@ -5,18 +5,18 @@
 use std::collections::HashMap;
 use std::time::Instant;
 
-use eframe::egui::{self, Color32, ColorImage, Pos2, Rect, Sense, TextureHandle, TextureOptions, Ui, Vec2, vec2};
+use eframe::egui::{self, Color32, ColorImage, CornerRadius, Pos2, Rect, Sense, Stroke, StrokeKind, TextureHandle, TextureOptions, Ui, Vec2, vec2};
 use falcon_library::{Library, thumbnail};
 use falcon_library::model::Item;
 
 use crate::app::App;
 use crate::gesture::{Gesture, Outcome};
 use crate::ui::viewer::audio;
-use crate::ui::widgets::ext_placeholder;
+use crate::ui::widgets::{ext_placeholder, galley};
 use crate::loader::{Job, Loader, Original, Tier, job_for, original_job, quicklook_region_job, stand_in_job};
 use crate::locale::{tr, trf};
 use crate::logic;
-use crate::theme::{self as t, mono};
+use crate::theme::{self as t, font, mono};
 
 /// The visible part of a zoomed-in SVG or QuickLook format, its render size
 /// (see `loader::Region`) and since when it has held still.
@@ -238,6 +238,21 @@ impl App {
             self.ws.frame_jobs.push(j);
         }
         self.edit_overlay(ui, item, r, area);
+
+        let status = falcon_library::linked::evaluate_status(lib.config(), item, lib.root());
+        let is_missing_media = matches!(status, falcon_library::linked::AssetStatus::Missing | falcon_library::linked::AssetStatus::Offline | falcon_library::linked::AssetStatus::InvalidReference);
+        if is_missing_media {
+            let banner_rect = Rect::from_center_size(Pos2::new(area.center().x, area.top() + 28.0), vec2(290.0, 36.0));
+            ui.painter().rect_filled(banner_rect, CornerRadius::same(6), Color32::from_black_alpha(200));
+            ui.painter().rect_stroke(banner_rect, CornerRadius::same(6), Stroke::new(1.0, Color32::from_rgb(230, 90, 80)), StrokeKind::Inside);
+            let g = galley(ui, tr("Missing Original Media"), font(12.0), Color32::from_rgb(255, 120, 110), 170.0);
+            ui.painter().galley(Pos2::new(banner_rect.left() + 14.0, banner_rect.center().y - g.size().y / 2.0), g, Color32::from_rgb(255, 120, 110));
+            let btn_rect = Rect::from_min_max(Pos2::new(banner_rect.right() - 86.0, banner_rect.top() + 5.0), Pos2::new(banner_rect.right() - 8.0, banner_rect.bottom() - 5.0));
+            if ui.put(btn_rect, egui::Button::new(egui::RichText::new(tr("Relink…")).font(font(11.0)))).clicked() {
+                self.open_relink_dialog(lib, vec![item.id.clone()]);
+            }
+        }
+
         self.navigator(ui, tex.as_ref(), natural, r, area);
         if let Some(g) = &self.image.gesture {
             paint_trail(&ui.painter().with_clip_rect(area), g);
@@ -300,9 +315,21 @@ impl App {
             zoom = Some(if (scale - 1.0).abs() > 1e-3 { logic::ViewZoom::Actual } else { logic::ViewZoom::Fit });
         }
         x -= 25.0;
-        let track = Rect::from_min_max(Pos2::new(x - 110.0, cy - 9.0), Pos2::new(x, cy + 9.0));
-        if let Some(v) = zoom_slider(ui, track, logic::zoom_slider_pos(scale)) {
+        let track = Rect::from_min_max(Pos2::new(x - 110.0, cy - 15.0), Pos2::new(x, cy + 15.0));
+        let (slider_val, slider_dragging) = zoom_slider(ui, track, logic::zoom_slider_pos(scale));
+        if let Some(v) = slider_val {
             picked = Some(logic::slider_zoom_snapped(v));
+        }
+        // Prevent macOS native titlebar drag and custom window_drag from stealing
+        // clicks/drags on the viewer zoom slider and right-side zoom controls.
+        let over_viewer_controls = ui.input(|i| {
+            i.pointer.hover_pos().is_some_and(|p| {
+                bar.y_range().contains(p.y)
+                    && ((p.x >= track.left() - 12.0 && p.x <= right) || p.x <= name_x)
+            })
+        });
+        if slider_dragging || over_viewer_controls {
+            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::NULL.with("window_movable"), false));
         }
         // The GIF frame player's toggle sits left of the slider.
         x = track.left() - 20.0;
@@ -328,7 +355,32 @@ impl App {
                 self.ws.view.pan = Vec2::ZERO;
             }
         }
-        if let Some(j) = job_for(lib, item, Tier::Full) {
+        let ppp = ui.ctx().pixels_per_point();
+        let natural_long = natural.x.max(natural.y);
+        let shown_px = (natural_long * scale * ppp).ceil() as u32;
+        let gpu_max = ui.ctx().input(|i| i.max_texture_side as u32).max(1024);
+        let preview_res = if shown_px <= 1024 {
+            1024
+        } else if shown_px <= 2048 {
+            2048
+        } else if shown_px <= 2560 {
+            2560
+        } else {
+            4096
+        }
+        .min(natural_long as u32)
+        .min(gpu_max);
+
+        // Tier 2: Adaptive High-Quality Preview
+        if let Some(mut j) = job_for(lib, item, Tier::Preview) {
+            j.max_side = Some(preview_res);
+            self.ws.frame_jobs.push(j);
+        }
+
+        // Tier 3: Full resolution when inspecting 1:1 or zoomed deep
+        if (scale >= 0.99 || shown_px > preview_res)
+            && let Some(j) = job_for(lib, item, Tier::Full)
+        {
             self.ws.frame_jobs.push(j);
         }
         if self.prefs.remember_zoom && !self.image.edge && self.ws.viewer.as_deref() == Some(id.as_str()) {
@@ -485,22 +537,35 @@ pub(crate) fn paint_trail(painter: &egui::Painter, g: &Gesture) {
 }
 
 /// The viewer's zoom slider over `track` at position `pos` (see
-/// `logic::SLIDER_RANGE`); returns the position dragged or clicked to.
-fn zoom_slider(ui: &mut Ui, track: Rect, pos: f32) -> Option<f32> {
+/// `logic::SLIDER_RANGE`); returns `(picked_position, is_dragging)`.
+fn zoom_slider(ui: &mut Ui, track: Rect, pos: f32) -> (Option<f32>, bool) {
     let (lo, hi) = logic::SLIDER_RANGE;
-    let resp = ui.interact(track, ui.scope_id().with("viewer-zoom-slider"), Sense::click_and_drag());
+    let hit = Rect::from_min_max(
+        Pos2::new(track.left() - 8.0, track.top()),
+        Pos2::new(track.right() + 8.0, track.bottom()),
+    );
+    let resp = ui.interact(hit, ui.scope_id().with("viewer-zoom-slider"), Sense::click_and_drag());
+    if resp.hovered() || resp.dragged() {
+        ui.ctx().set_cursor_icon(if resp.dragged() { egui::CursorIcon::Grabbing } else { egui::CursorIcon::Grab });
+    }
     let picked = resp
         .interact_pointer_pos()
-        .filter(|_| resp.dragged() || resp.clicked())
+        .filter(|_| resp.drag_started() || resp.dragged() || resp.clicked())
         .map(|p| lo + ((p.x - track.left()) / track.width()).clamp(0.0, 1.0) * (hi - lo));
     let f = ((picked.unwrap_or(pos) - lo) / (hi - lo)).clamp(0.0, 1.0);
     let p = ui.painter();
     let y = track.center().y;
     p.line_segment([Pos2::new(track.left(), y), Pos2::new(track.right(), y)], egui::Stroke::new(2.0, t::p().divider));
     let kx = track.left() + f * track.width();
-    p.line_segment([Pos2::new(track.left(), y), Pos2::new(kx, y)], egui::Stroke::new(2.0, t::p().text_muted));
-    p.circle_filled(Pos2::new(kx, y), 6.0, Color32::WHITE);
-    picked
+    if kx > track.left() {
+        p.line_segment([Pos2::new(track.left(), y), Pos2::new(kx, y)], egui::Stroke::new(2.0, t::p().primary));
+    }
+    let thumb_r = if resp.dragged() { 7.5 } else if resp.hovered() { 7.0 } else { 6.0 };
+    if resp.hovered() || resp.dragged() {
+        p.circle_filled(Pos2::new(kx, y), thumb_r + 2.5, t::p().primary.gamma_multiply(0.35));
+    }
+    p.circle_filled(Pos2::new(kx, y), thumb_r, Color32::WHITE);
+    (picked, resp.dragged() || resp.drag_started())
 }
 
 /// Draws texture `tex` over `r` turned and mirrored by `tf`.
