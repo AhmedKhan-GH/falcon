@@ -320,6 +320,7 @@ impl SyncWatchers {
     }
 
     /// Folders being watched.
+    #[cfg(test)]
     pub fn len(&self) -> usize {
         self.watches.len()
     }

@@ -468,6 +468,10 @@ fn pipeline<T: Send>(
 /// Source-derived keys of `Item::extra` a refresh may replace.
 const REFRESHED_EXTRA: [&str; 5] = ["rawMetas", "resolutionWidth", "resolutionHeight", "duration", "bpm"];
 
+/// One staged file's outcome of a grouped commit: its index, the item id or the
+/// error, the source size and mtime it was staged from, and its fingerprint.
+type Committed = (usize, std::result::Result<String, Error>, u64, u64, Option<String>);
+
 struct Prepared {
     id: String,
     /// The identity on record when the pass was planned.
@@ -676,7 +680,7 @@ fn run(shared: &Mutex<Library>, wf_id: &str, ctl: &SyncControl<'_>) -> Result<Sy
         }
         let started = Instant::now();
         let count = group.len();
-        let mut done: Vec<(usize, std::result::Result<String, Error>, u64, u64, Option<String>)> = Vec::new();
+        let mut done: Vec<Committed> = Vec::new();
         {
             let mut lib = lock(shared);
             for (i, Produced { staged, fingerprint }) in group {

@@ -793,7 +793,6 @@
   "Folder Synchronization": "Sinkronisasi Folder",
   "Folder name": "Nama folder",
   "Folder settings (name and auto-tags)": "Pengaturan folder (nama dan tag otomatis)",
-  "Folder sync configured: {n} assets imported": "Sinkronisasi folder dikonfigurasi: {n} aset diimpor",
   "Folder sync failed: {error}": "Sinkronisasi folder gagal: {error}",
   "Folder sync is offline: source folder unreachable": "Sinkronisasi folder luring: folder sumber tidak dapat dijangkau",
   "Folder synced: {n} added, {m} modified": "Folder disinkronkan: {n} ditambahkan, {m} dimodifikasi",

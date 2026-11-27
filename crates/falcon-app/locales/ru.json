@@ -877,7 +877,6 @@
   "Folder Synchronization": "Синхронизация папок",
   "Folder name": "Имя папки",
   "Folder settings (name and auto-tags)": "Настройки папки (название и автотеги)",
-  "Folder sync configured: {n} assets imported": "Синхронизация настроена: импортировано {n} ресурсов",
   "Folder sync failed: {error}": "Сбой синхронизации папки: {error}",
   "Folder sync is offline: source folder unreachable": "Синхронизация офлайн: исходная папка недоступна",
   "Folder synced: {n} added, {m} modified": "Папка синхронизирована: {n} добавлено, {m} изменено",

@@ -1278,7 +1278,7 @@ mod tests {
 
         let ctx = eframe::egui::Context::default();
         let thumbs = Arc::new(crate::thumb_worker::ThumbWorker::new(Arc::clone(&shared), root.clone(), ctx, true));
-        thumbs.rediscover_pending(&shared.lock().unwrap().items().to_vec());
+        thumbs.rediscover_pending(shared.lock().unwrap().items());
         let sync = crate::sync_worker::SyncScheduler::new(Arc::clone(&shared), root.clone(), || {});
         sync.request("wf");
         let until = Instant::now() + Duration::from_secs(30);
@@ -1295,7 +1295,7 @@ mod tests {
             let lib = shared.lock().unwrap();
             (lib.items().len(), measure_library(&root, &AtomicBool::new(false)).unwrap().files)
         };
-        assert!(count >= 10 && count < 410, "the pass was stopped part-way: {count}");
+        assert!((10..410).contains(&count), "the pass was stopped part-way: {count}");
 
         let dest = base.join("Other").join("Mixed.library");
         fs::create_dir_all(dest.parent().unwrap()).unwrap();

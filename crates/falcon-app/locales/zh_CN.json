@@ -793,7 +793,6 @@
   "Folder Synchronization": "文件夹同步",
   "Folder name": "文件夹名称",
   "Folder settings (name and auto-tags)": "文件夹设置（名称和自动标签）",
-  "Folder sync configured: {n} assets imported": "文件夹同步已配置：导入了 {n} 个资源",
   "Folder sync failed: {error}": "文件夹同步失败：{error}",
   "Folder sync is offline: source folder unreachable": "文件夹同步离线：无法访问源文件夹",
   "Folder synced: {n} added, {m} modified": "文件夹已同步：新增 {n} 个，修改 {m} 个",

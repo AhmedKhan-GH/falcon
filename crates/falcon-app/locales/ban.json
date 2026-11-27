@@ -793,7 +793,6 @@
   "Folder Synchronization": "Sinkronisasi Folder",
   "Folder name": "Wasta folder",
   "Folder settings (name and auto-tags)": "Pangaturan folder (wasta lan tag otomatis)",
-  "Folder sync configured: {n} assets imported": "Sinkronisasi folder sampun kasetel: {n} aset kainpor",
   "Folder sync failed: {error}": "Sinkronisasi folder piwal: {error}",
   "Folder sync is offline: source folder unreachable": "Sinkronisasi folder nenten online: folder wit nenten prasida kapanggih",
   "Folder synced: {n} added, {m} modified": "Folder kasinkronang: {n} kawewehin, {m} kauwah",

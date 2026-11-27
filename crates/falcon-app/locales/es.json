@@ -835,7 +835,6 @@
   "Folder Synchronization": "Sincronización de carpetas",
   "Folder name": "Nombre de carpeta",
   "Folder settings (name and auto-tags)": "Ajustes de la carpeta (nombre y etiquetas automáticas)",
-  "Folder sync configured: {n} assets imported": "Sincronización configurada: {n} elementos importados",
   "Folder sync failed: {error}": "Error de sincronización de carpeta: {error}",
   "Folder sync is offline: source folder unreachable": "Sincronización sin conexión: carpeta de origen inaccesible",
   "Folder synced: {n} added, {m} modified": "Carpeta sincronizada: {n} añadidos, {m} modificados",

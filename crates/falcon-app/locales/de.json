@@ -835,7 +835,6 @@
   "Folder Synchronization": "Ordnersynchronisierung",
   "Folder name": "Ordnername",
   "Folder settings (name and auto-tags)": "Ordnereinstellungen (Name und Auto-Tags)",
-  "Folder sync configured: {n} assets imported": "Ordnersynchronisierung konfiguriert: {n} Elemente importiert",
   "Folder sync failed: {error}": "Ordnersynchronisierung fehlgeschlagen: {error}",
   "Folder sync is offline: source folder unreachable": "Ordnersynchronisierung ist offline: Quellordner nicht erreichbar",
   "Folder synced: {n} added, {m} modified": "Ordner synchronisiert: {n} hinzugefügt, {m} geändert",

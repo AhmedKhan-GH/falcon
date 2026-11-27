@@ -835,7 +835,6 @@
   "Folder Synchronization": "Folder Synchronization",
   "Folder name": "Folder name",
   "Folder settings (name and auto-tags)": "Folder settings (name and auto-tags)",
-  "Folder sync configured: {n} assets imported": "Folder sync configured: {n} assets imported",
   "Folder sync failed: {error}": "Folder sync failed: {error}",
   "Folder sync is offline: source folder unreachable": "Folder sync is offline: source folder unreachable",
   "Folder synced: {n} added, {m} modified": "Folder synced: {n} added, {m} modified",

@@ -793,7 +793,6 @@
   "Folder Synchronization": "폴더 동기화",
   "Folder name": "폴더 이름",
   "Folder settings (name and auto-tags)": "폴더 설정(이름과 자동 태그)",
-  "Folder sync configured: {n} assets imported": "폴더 동기화 설정됨: {n}개 에셋 가져옴",
   "Folder sync failed: {error}": "폴더 동기화 실패: {error}",
   "Folder sync is offline: source folder unreachable": "폴더 동기화 오프라인: 소스 폴더에 접근할 수 없음",
   "Folder synced: {n} added, {m} modified": "폴더 동기화 완료: {n}개 추가됨, {m}개 수정됨",

@@ -793,7 +793,6 @@
   "Folder Synchronization": "フォルダ同期",
   "Folder name": "フォルダ名",
   "Folder settings (name and auto-tags)": "フォルダ設定（名前と自動タグ）",
-  "Folder sync configured: {n} assets imported": "フォルダ同期を設定しました: {n} 件インポート",
   "Folder sync failed: {error}": "フォルダの同期に失敗しました: {error}",
   "Folder sync is offline: source folder unreachable": "フォルダ同期がオフラインです: ソースフォルダに接続できません",
   "Folder synced: {n} added, {m} modified": "フォルダを同期しました: {n} 件追加、{m} 件変更",

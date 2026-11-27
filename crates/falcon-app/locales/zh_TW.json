@@ -793,7 +793,6 @@
   "Folder Synchronization": "資料夾同步",
   "Folder name": "資料夾名稱",
   "Folder settings (name and auto-tags)": "資料夾設定（名稱和自動標籤）",
-  "Folder sync configured: {n} assets imported": "資料夾同步已設定：匯入了 {n} 個素材",
   "Folder sync failed: {error}": "資料夾同步失敗：{error}",
   "Folder sync is offline: source folder unreachable": "資料夾同步離線：無法存取來源資料夾",
   "Folder synced: {n} added, {m} modified": "資料夾已同步：新增 {n} 個，修改 {m} 個",
