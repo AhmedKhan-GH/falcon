@@ -297,9 +297,21 @@ impl App {
             zoom = Some(if (scale - 1.0).abs() > 1e-3 { logic::ViewZoom::Actual } else { logic::ViewZoom::Fit });
         }
         x -= 25.0;
-        let track = Rect::from_min_max(Pos2::new(x - 110.0, cy - 9.0), Pos2::new(x, cy + 9.0));
-        if let Some(v) = zoom_slider(ui, track, logic::zoom_slider_pos(scale)) {
+        let track = Rect::from_min_max(Pos2::new(x - 110.0, cy - 15.0), Pos2::new(x, cy + 15.0));
+        let (slider_val, slider_dragging) = zoom_slider(ui, track, logic::zoom_slider_pos(scale));
+        if let Some(v) = slider_val {
             picked = Some(logic::slider_zoom_snapped(v));
+        }
+        // Prevent macOS native titlebar drag and custom window_drag from stealing
+        // clicks/drags on the viewer zoom slider and right-side zoom controls.
+        let over_viewer_controls = ui.input(|i| {
+            i.pointer.hover_pos().is_some_and(|p| {
+                bar.y_range().contains(p.y)
+                    && ((p.x >= track.left() - 12.0 && p.x <= right) || p.x <= name_x)
+            })
+        });
+        if slider_dragging || over_viewer_controls {
+            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::NULL.with("window_movable"), false));
         }
         // The GIF frame player's toggle sits left of the slider.
         x = track.left() - 20.0;
@@ -482,22 +494,35 @@ pub(crate) fn paint_trail(painter: &egui::Painter, g: &Gesture) {
 }
 
 /// The viewer's zoom slider over `track` at position `pos` (see
-/// `logic::SLIDER_RANGE`); returns the position dragged or clicked to.
-fn zoom_slider(ui: &mut Ui, track: Rect, pos: f32) -> Option<f32> {
+/// `logic::SLIDER_RANGE`); returns `(picked_position, is_dragging)`.
+fn zoom_slider(ui: &mut Ui, track: Rect, pos: f32) -> (Option<f32>, bool) {
     let (lo, hi) = logic::SLIDER_RANGE;
-    let resp = ui.interact(track, ui.scope_id().with("viewer-zoom-slider"), Sense::click_and_drag());
+    let hit = Rect::from_min_max(
+        Pos2::new(track.left() - 8.0, track.top()),
+        Pos2::new(track.right() + 8.0, track.bottom()),
+    );
+    let resp = ui.interact(hit, ui.scope_id().with("viewer-zoom-slider"), Sense::click_and_drag());
+    if resp.hovered() || resp.dragged() {
+        ui.ctx().set_cursor_icon(if resp.dragged() { egui::CursorIcon::Grabbing } else { egui::CursorIcon::Grab });
+    }
     let picked = resp
         .interact_pointer_pos()
-        .filter(|_| resp.dragged() || resp.clicked())
+        .filter(|_| resp.drag_started() || resp.dragged() || resp.clicked())
         .map(|p| lo + ((p.x - track.left()) / track.width()).clamp(0.0, 1.0) * (hi - lo));
     let f = ((picked.unwrap_or(pos) - lo) / (hi - lo)).clamp(0.0, 1.0);
     let p = ui.painter();
     let y = track.center().y;
     p.line_segment([Pos2::new(track.left(), y), Pos2::new(track.right(), y)], egui::Stroke::new(2.0, t::p().divider));
     let kx = track.left() + f * track.width();
-    p.line_segment([Pos2::new(track.left(), y), Pos2::new(kx, y)], egui::Stroke::new(2.0, t::p().text_muted));
-    p.circle_filled(Pos2::new(kx, y), 6.0, Color32::WHITE);
-    picked
+    if kx > track.left() {
+        p.line_segment([Pos2::new(track.left(), y), Pos2::new(kx, y)], egui::Stroke::new(2.0, t::p().primary));
+    }
+    let thumb_r = if resp.dragged() { 7.5 } else if resp.hovered() { 7.0 } else { 6.0 };
+    if resp.hovered() || resp.dragged() {
+        p.circle_filled(Pos2::new(kx, y), thumb_r + 2.5, t::p().primary.gamma_multiply(0.35));
+    }
+    p.circle_filled(Pos2::new(kx, y), thumb_r, Color32::WHITE);
+    (picked, resp.dragged() || resp.drag_started())
 }
 
 /// Draws texture `tex` over `r` turned and mirrored by `tf`.
