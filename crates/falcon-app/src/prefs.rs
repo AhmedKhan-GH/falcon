@@ -100,6 +100,26 @@ pub struct Prefs {
     pub startup_destination: StartupDestination,
     /// When `startup_destination` is `SpecificFolder`, the folder ID to open.
     pub startup_folder_id: Option<String>,
+    /// Whether the Recently Imported section is shown on Home dashboard.
+    pub home_show_recent: bool,
+    /// Number of assets shown in Recently Imported.
+    pub home_recent_limit: usize,
+    /// Thumbnail size for Recently Imported assets.
+    pub home_recent_size: RecentThumbSize,
+    /// Whether to display filenames under Recently Imported thumbnails.
+    pub home_show_filenames: bool,
+    /// Whether the Library Overview metric banner is visible on Home.
+    pub home_show_overview: bool,
+    /// Whether the Quick Access Hero section is visible on Home.
+    pub home_show_hero: bool,
+    /// Whether the Library Folders collection grid is visible on Home.
+    pub home_show_folders: bool,
+    /// Size of the Library Folders cards on Home.
+    pub home_card_size: CardSize,
+    /// How Library Folders cards are covered on Home.
+    pub home_cover_style: CoverStyle,
+    /// Whether folder cards (and Quick Access cards) show their asset count.
+    pub home_show_counts: bool,
     /// Eagle's `habits.dblclickSidebarItem`: what double-clicking a folder
     /// or smart folder in the sidebar does.
     pub sidebar_double_click: SidebarDoubleClick,
@@ -307,6 +327,89 @@ impl StartupDestination {
     }
 }
 
+/// Thumbnail display size in the Recently Imported section.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum RecentThumbSize {
+    Small,
+    #[default]
+    Medium,
+    Large,
+}
+
+impl RecentThumbSize {
+    pub const ALL: [RecentThumbSize; 3] = [RecentThumbSize::Small, RecentThumbSize::Medium, RecentThumbSize::Large];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            RecentThumbSize::Small => tr_key("Small"),
+            RecentThumbSize::Medium => tr_key("Medium"),
+            RecentThumbSize::Large => tr_key("Large"),
+        }
+    }
+
+    pub fn tile_width(self) -> f32 {
+        match self {
+            RecentThumbSize::Small => 96.0,
+            RecentThumbSize::Medium => 130.0,
+            RecentThumbSize::Large => 170.0,
+        }
+    }
+}
+
+/// Size of the Library Folders cards on Home.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum CardSize {
+    Small,
+    #[default]
+    Medium,
+    Large,
+}
+
+impl CardSize {
+    pub const ALL: [CardSize; 3] = [CardSize::Small, CardSize::Medium, CardSize::Large];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            CardSize::Small => tr_key("Small"),
+            CardSize::Medium => tr_key("Medium"),
+            CardSize::Large => tr_key("Large"),
+        }
+    }
+
+    /// The width cards aim for; the row then stretches them to fill it.
+    pub fn target_width(self) -> f32 {
+        match self {
+            CardSize::Small => 160.0,
+            CardSize::Medium => 210.0,
+            CardSize::Large => 280.0,
+        }
+    }
+}
+
+/// How a Library Folders card on Home is covered.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum CoverStyle {
+    #[default]
+    Mosaic,
+    Single,
+    Classic,
+}
+
+impl CoverStyle {
+    pub const ALL: [CoverStyle; 3] = [CoverStyle::Mosaic, CoverStyle::Single, CoverStyle::Classic];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            CoverStyle::Mosaic => tr_key("Mosaic Cover"),
+            CoverStyle::Single => tr_key("Single Cover"),
+            CoverStyle::Classic => tr_key("Classic Folder"),
+        }
+    }
+}
+
 /// What double-clicking a sidebar folder does.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
 #[serde(rename_all = "lowercase")]
@@ -381,6 +484,16 @@ impl Default for Prefs {
             show_path_bar: false,
             startup_destination: StartupDestination::default(),
             startup_folder_id: None,
+            home_show_recent: true,
+            home_recent_limit: 20,
+            home_recent_size: RecentThumbSize::Medium,
+            home_show_filenames: true,
+            home_show_overview: false,
+            home_show_hero: true,
+            home_show_folders: true,
+            home_card_size: CardSize::Medium,
+            home_cover_style: CoverStyle::Mosaic,
+            home_show_counts: true,
             sidebar_double_click: SidebarDoubleClick::default(),
             sidebar: SidebarSections::default(),
             double_click: DoubleClick::default(),
@@ -703,6 +816,7 @@ pub struct Draft {
 pub enum Section {
     #[default]
     General,
+    Home,
     Sidebar,
     Controls,
     Preview,
@@ -719,8 +833,9 @@ pub enum Section {
 }
 
 impl Section {
-    pub const ALL: [Section; 13] = [
+    pub const ALL: [Section; 14] = [
         Section::General,
+        Section::Home,
         Section::Sidebar,
         Section::Controls,
         Section::Preview,
@@ -739,6 +854,7 @@ impl Section {
     pub fn label(self) -> &'static str {
         match self {
             Section::General => tr_key("General"),
+            Section::Home => tr_key("Home Dashboard"),
             Section::Sidebar => tr_key("Sidebar"),
             Section::Controls => tr_key("Controls"),
             Section::Preview => tr_key("Preview"),
@@ -757,6 +873,7 @@ impl Section {
     fn icon(self) -> &'static str {
         match self {
             Section::General => crate::icons::GEAR,
+            Section::Home => crate::icons::HOUSE,
             Section::Sidebar => crate::icons::SIDEBAR_SIMPLE,
             Section::Controls => crate::icons::MOUSE,
             Section::Preview => crate::icons::EYE,
@@ -776,7 +893,7 @@ impl Section {
     /// first pane of each group.
     fn group(self) -> u8 {
         match self {
-            Section::General | Section::Sidebar => 0,
+            Section::General | Section::Home | Section::Sidebar => 0,
             Section::Controls | Section::Preview | Section::Screenshot | Section::Shortcuts => 1,
             Section::Notification | Section::Password | Section::AutoImport => 2,
             Section::AiSearch | Section::AiModels | Section::Mcp => 3,
@@ -1110,6 +1227,7 @@ impl Window {
     fn pane_ui(&mut self, p: &mut Page, d: &mut Draft, port_error: Option<&String>) {
         match p.pane {
             Section::General => general(p, d, &self.login),
+            Section::Home => home_dashboard(p, d),
             Section::Sidebar => sidebar(p, d),
             Section::Controls => controls(p, d),
             Section::Preview => preview(p, d),
@@ -1327,6 +1445,73 @@ fn general(p: &mut Page, d: &mut Draft, login: &crate::login_item::Status) {
     p.block(tr_key("Search"), &["search", "typo", "fuzzy", "spelling", "near", "exact", "keyword"], |ui| {
         ui.checkbox(&mut d.prefs.typo_search, tr("Also find near misses when searching"));
         note(ui, tr("Words with a typo or two are listed after the exact matches. Turn it off to find exact text only, as Eagle does."));
+    });
+}
+
+/// Home Dashboard: recently imported and section visibility.
+fn home_dashboard(p: &mut Page, d: &mut Draft) {
+    let keywords_recent = ["home", "dashboard", "recent", "imported", "assets", "thumbnails", "size", "limit", "filenames"];
+    p.block(tr_key("Recently Imported"), &keywords_recent, |ui| {
+        ui.checkbox(&mut d.prefs.home_show_recent, tr("Show Recently Imported"));
+        ui.add_enabled_ui(d.prefs.home_show_recent, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(tr("Number of recent assets"));
+                egui::ComboBox::from_id_salt("home-recent-limit")
+                    .selected_text(d.prefs.home_recent_limit.to_string())
+                    .show_ui(ui, |ui| {
+                        for limit in [5, 10, 15, 20, 30, 50] {
+                            ui.selectable_value(&mut d.prefs.home_recent_limit, limit, limit.to_string());
+                        }
+                    });
+            });
+            ui.horizontal(|ui| {
+                ui.label(tr("Thumbnail size"));
+                egui::ComboBox::from_id_salt("home-recent-size")
+                    .selected_text(tr(d.prefs.home_recent_size.label()))
+                    .show_ui(ui, |ui| {
+                        for size in RecentThumbSize::ALL {
+                            ui.selectable_value(&mut d.prefs.home_recent_size, size, tr(size.label()));
+                        }
+                    });
+            });
+            ui.checkbox(&mut d.prefs.home_show_filenames, tr("Show filenames"));
+        });
+    });
+
+    p.block(tr_key("Quick Access"), &["home", "quick access", "hero", "featured"], |ui| {
+        ui.checkbox(&mut d.prefs.home_show_hero, tr("Show Quick Access Hero"));
+        ui.label(egui::RichText::new(tr("Right-click a Quick Access card to choose the Hero.")).weak());
+    });
+
+    p.block(tr_key("Library Folders"), &["home", "folders", "cards", "size", "cover", "mosaic", "single", "classic", "count"], |ui| {
+        ui.checkbox(&mut d.prefs.home_show_folders, tr("Show Library Folders"));
+        ui.add_enabled_ui(d.prefs.home_show_folders, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(tr("Card size"));
+                egui::ComboBox::from_id_salt("home-card-size")
+                    .selected_text(tr(d.prefs.home_card_size.label()))
+                    .show_ui(ui, |ui| {
+                        for size in CardSize::ALL {
+                            ui.selectable_value(&mut d.prefs.home_card_size, size, tr(size.label()));
+                        }
+                    });
+            });
+            ui.horizontal(|ui| {
+                ui.label(tr("Cover style"));
+                egui::ComboBox::from_id_salt("home-cover-style")
+                    .selected_text(tr(d.prefs.home_cover_style.label()))
+                    .show_ui(ui, |ui| {
+                        for style in CoverStyle::ALL {
+                            ui.selectable_value(&mut d.prefs.home_cover_style, style, tr(style.label()));
+                        }
+                    });
+            });
+        });
+        ui.checkbox(&mut d.prefs.home_show_counts, tr("Show folder asset counts"));
+    });
+
+    p.block(tr_key("Dashboard"), &["home", "dashboard", "overview", "metrics"], |ui| {
+        ui.checkbox(&mut d.prefs.home_show_overview, tr("Show Library Overview"));
     });
 }
 
@@ -2059,7 +2244,7 @@ mod tests {
     #[test]
     fn panes_follow_eagles_order() {
         let labels: Vec<_> = Section::ALL.iter().map(|s| s.label()).collect();
-        assert_eq!(labels, ["General", "Sidebar", "Controls", "Preview", "Screenshot", "Shortcuts", "Notification", "Password", "Auto-Import", "AI Search", "AI Models", "Eagle MCP", "Developer"]);
+        assert_eq!(labels, ["General", "Home Dashboard", "Sidebar", "Controls", "Preview", "Screenshot", "Shortcuts", "Notification", "Password", "Auto-Import", "AI Search", "AI Models", "Eagle MCP", "Developer"]);
         let groups: Vec<_> = Section::ALL.iter().map(|s| s.group()).collect();
         assert!(groups.windows(2).all(|w| w[0] <= w[1]), "groups are contiguous");
         let s: Section = serde_json::from_str(r#""preview""#).unwrap();

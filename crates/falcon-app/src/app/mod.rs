@@ -173,6 +173,8 @@ pub struct App {
     /// Layouts remembered per view, the fallback from before, and the
     /// display options (see `ui/toolbar/layout_panel.rs`).
     pub(crate) layouts: HashMap<String, Layout>,
+    /// Home Dashboard hero and cover choices per library path (`home_lib.rs`).
+    pub(crate) home_libs: HashMap<String, crate::home_lib::HomeLib>,
     pub(crate) legacy_layout: Option<Layout>,
     pub(crate) display: logic::Display,
     /// Reload the shown library from disk next frame (the layout panel's
@@ -308,6 +310,7 @@ impl App {
             menu_bar: Default::default(),
             user_actions: Default::default(),
             layouts: HashMap::new(),
+            home_libs: HashMap::new(),
             legacy_layout: None,
             display: Default::default(),
             refresh: false,
@@ -356,6 +359,7 @@ impl App {
         app.notices.trim();
         app.legacy_layout = saved.layout;
         app.layouts = saved.layouts;
+        app.home_libs = saved.home_libs;
         app.display = saved.display;
         app.prefs = saved.prefs.sanitized();
         let lang = app.prefs.language.resolve();

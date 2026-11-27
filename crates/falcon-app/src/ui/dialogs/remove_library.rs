@@ -136,6 +136,7 @@ impl App {
                 crate::workspaces::remove_from_list(&mut self.recent, path);
                 self.lib_icons.forget(path);
                 self.layouts.remove(path.to_string_lossy().as_ref());
+                self.home_libs.remove(path.to_string_lossy().as_ref());
                 self.flash(trf("Moved “{name}” to the Trash", &[("name", &name)]));
             }
             Err(TrashError::Refused(r)) => self.flash_error(refusal_text(path, r)),

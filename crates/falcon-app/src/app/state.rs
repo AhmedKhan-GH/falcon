@@ -56,6 +56,8 @@ pub(crate) struct Saved {
     /// Layouts by folder or smart folder id, or by library path for the
     /// other pages (`logic::layout_for`).
     pub(crate) layouts: HashMap<String, Layout>,
+    /// Home Dashboard hero and custom cover choices by library path.
+    pub(crate) home_libs: HashMap<String, crate::home_lib::HomeLib>,
     /// The grid display options of the layout panel.
     pub(crate) display: logic::Display,
     pub(crate) prefs: crate::prefs::Prefs,
@@ -465,8 +467,14 @@ pub(crate) struct Workspace {
     pub(crate) home_covers: std::collections::HashMap<String, Option<String>>,
     /// Session cache of resolved mosaic cover asset IDs (up to 4) per folder for Home dashboard.
     pub(crate) home_mosaics: std::collections::HashMap<String, Vec<String>>,
-    /// Cache epoch: (modification_time, items_count, sort, increase) to invalidate home caches.
-    pub(crate) home_cache_epoch: (u64, usize, OrderBy, bool),
+    /// Session cache of recently imported asset IDs for Home dashboard.
+    pub(crate) home_recent_imports: Vec<String>,
+    /// Session cache of smart-folder Quick Access results (count, cover asset id) for Home.
+    pub(crate) home_smart: std::collections::HashMap<String, (usize, Option<String>)>,
+    /// Mutation counter incremented on user edits, organizing actions, imports, and undos.
+    pub(crate) mutation_count: u64,
+    /// Cache epoch: (root, modification_time, items_count, sort, increase, mutation_count, recent_limit) to invalidate home caches.
+    pub(crate) home_cache_epoch: (std::path::PathBuf, u64, usize, OrderBy, bool, u64, usize),
 }
 
 impl Workspace {
@@ -513,7 +521,7 @@ impl Workspace {
             _ => None,
         };
         Workspace {
-            root,
+            root: root.clone(),
             watch,
             health,
             thumb_worker,
@@ -524,7 +532,10 @@ impl Workspace {
             sync_manual: Default::default(),
             home_covers: std::collections::HashMap::new(),
             home_mosaics: std::collections::HashMap::new(),
-            home_cache_epoch: (0, 0, OrderBy::Import, true),
+            home_recent_imports: Vec::new(),
+            home_smart: std::collections::HashMap::new(),
+            mutation_count: 0,
+            home_cache_epoch: (root.clone().unwrap_or_default(), 0, 0, OrderBy::Import, true, 0, 20),
             lib,
             loader: Loader::new(ctx),
             scope: Scope::Home,
@@ -649,6 +660,7 @@ impl App {
             recent_folders: self.recent_folders.clone(),
             layout: self.legacy_layout,
             layouts: self.layouts.clone(),
+            home_libs: self.home_libs.clone(),
             display: self.display.clone(),
             prefs: self.prefs.clone(),
             search: self.search.clone(),

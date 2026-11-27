@@ -140,6 +140,12 @@ impl App {
         {
             self.ws.actions.push(Action::Edit(Op::SetFolderCover(fid.clone(), item.id.clone())));
         }
+        if single
+            && let Scope::Folder(fid) = self.ws.scope.clone()
+            && ui.button(tr("Set as Home Cover")).clicked()
+        {
+            self.set_home_cover(&fid, &item.id);
+        }
         if single && thumbnail::custom_thumbnail_allowed(&item.ext) {
             let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::CustomThumbnail);
             if ui.add(egui::Button::new(tr("Set Custom Thumbnail…")).shortcut_text(keys)).clicked() {

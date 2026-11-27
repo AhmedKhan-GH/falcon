@@ -20,7 +20,7 @@ use crate::logic::{self, Scope};
 use crate::theme::{self as t, font};
 
 /// Whether an item may stand in as a folder's default cover.
-fn can_cover(item: &Item, locked: &HashSet<&str>) -> bool {
+pub(crate) fn can_cover(item: &Item, locked: &HashSet<&str>) -> bool {
     !item.is_deleted
         && falcon_library::format_capability::is_preview_supported(&item.ext)
         && !falcon_library::format_capability::is_sidecar(&item.ext)
@@ -80,10 +80,10 @@ pub fn mosaic_covers<'a>(
     let mut result: Vec<&'a Item> = Vec::with_capacity(4);
 
     // 1. Explicit cover_id takes precedence as primary item
-    if let Some(cid) = &folder.cover_id {
-        if let Some(item) = items.iter().find(|i| i.id == *cid && can_cover(i, locked)) {
-            result.push(item);
-        }
+    if let Some(cid) = &folder.cover_id
+        && let Some(item) = items.iter().find(|i| i.id == *cid && can_cover(i, locked))
+    {
+        result.push(item);
     }
 
     // 2. Folder's own items
@@ -132,14 +132,13 @@ fn collect_subfolder_covers<'a>(
         if child.is_locked() {
             continue;
         }
-        if let Some(cid) = &child.cover_id {
-            if let Some(item) = items.iter().find(|i| i.id == *cid && can_cover(i, locked)) {
-                if !result.iter().any(|r| r.id == item.id) {
-                    result.push(item);
-                    if result.len() >= 4 {
-                        return;
-                    }
-                }
+        if let Some(cid) = &child.cover_id
+            && let Some(item) = items.iter().find(|i| i.id == *cid && can_cover(i, locked))
+            && !result.iter().any(|r| r.id == item.id)
+        {
+            result.push(item);
+            if result.len() >= 4 {
+                return;
             }
         }
         let mut own: Vec<&Item> = items
@@ -411,6 +410,10 @@ impl App {
             }
             self.folder_password_menu(ui, child);
             self.reset_cover_entry(ui, child, shut);
+            if self.ws.scope == Scope::Home && !shut {
+                ui.separator();
+                self.home_folder_menu(ui, lib, &child.id);
+            }
             if !shut {
                 ui.separator();
                 self.tree_export_menu(ui, crate::ui::dialogs::export::Target::Folder(child.id.clone()), true);

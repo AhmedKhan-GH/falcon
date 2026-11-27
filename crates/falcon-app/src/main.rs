@@ -32,6 +32,7 @@ mod gesture;
 mod audio;
 mod auto_import;
 mod fsevents;
+mod home_lib;
 mod hotkeys;
 mod hover;
 mod hover_media;

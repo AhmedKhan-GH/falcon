@@ -516,6 +516,7 @@ impl App {
             };
             match result {
                 Ok(()) => {
+                    self.ws.mutation_count = self.ws.mutation_count.wrapping_add(1);
                     if let Some(s) = sound {
                         self.play_sound(s);
                     }
@@ -556,6 +557,7 @@ impl App {
                             if self.ws.scope != Scope::Trash {
                                 self.ws.selected.retain(|id| lib.item(id).is_some_and(|i| !i.is_deleted));
                             }
+                            self.ws.mutation_count = self.ws.mutation_count.wrapping_add(1);
                             self.flash(if undo { trf("Undid: {label}", &[("label", &label)]) } else { trf("Redid: {label}", &[("label", &label)]) });
                         }
                         Err(e) => self.flash_error(trf("Could not save: {e}", &[("e", &e)])),
@@ -571,6 +573,7 @@ impl App {
     pub(crate) fn end_frame_edits(&mut self, lib: &mut Library) {
         let labels = std::mem::take(&mut self.ws.frame_labels);
         if let Some(mut tx) = lib.end_transaction() {
+            self.ws.mutation_count = self.ws.mutation_count.wrapping_add(1);
             if tx.irreversible {
                 self.ws.undo.clear();
                 self.ws.redo.clear();
