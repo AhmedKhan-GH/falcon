@@ -286,6 +286,30 @@ impl App {
             self.show_alert(Alert::new(tr("Could not move the library"), trf("Could not save pending changes: {error}", &[("error", &e)])));
             return State::Idle;
         }
+        // Background workers must not touch the library while it is copied or
+        // after it has moved: stop them, waiting a bounded time for a running
+        // pass, and let the app start new ones for whichever place the library ends up.
+        let quiet = match self.workspace_for_mut(&src) {
+            Some(ws) => {
+                let quiet = ws.sync.as_ref().is_none_or(|s| s.quiesce(std::time::Duration::from_secs(5)));
+                if quiet {
+                    ws.sync_watchers = Default::default();
+                    ws.sync = None;
+                    if let Some(worker) = ws.thumb_worker.take() {
+                        worker.shutdown();
+                    }
+                }
+                quiet
+            }
+            None => true,
+        };
+        if !quiet {
+            self.show_alert(Alert::new(
+                tr("Could not move the library"),
+                tr("A folder synchronization is still finishing. Try moving the library again in a moment."),
+            ));
+            return State::Idle;
+        }
         if let Some(ws) = self.workspace_for_mut(&src) {
             ws.watch = None;
         }

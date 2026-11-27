@@ -8,6 +8,7 @@
   "5 Stars": "5 Bintang",
   "A > Z": "A > Z",
   "A folder couldn't be created: {error}": "Folder nenten prasida kakarya: {error}",
+  "A folder synchronization is still finishing. Try moving the library again in a moment.": "Sinkronisasi folder kari kaselesaiang. Cobi ngesér library malih ring sue sane tan dados.",
   "A folder with that name already exists in the chosen location.": "Folder antuk pesengan punika sampun wénten ring genah sane kapilih.",
   "A library already exists there. Create again and pick another folder, or change the name.": "Pustaka sampun wénten irika. Karya malih tur pilih folder lianan, utawi gentos pesengannyane.",
   "A library can't be moved inside itself.": "Pustaka nenten prasida kageser ka jero deweknyane.",
@@ -1973,6 +1974,7 @@
   "Status": "Kawentenan",
   "Steps": "Undagan",
   "Stop": "Wusanang",
+  "Stop Synchronization": "Buwung Sinkronisasi",
   "Stop Tasks and Close": "Wusanang Swagina tur Tutup",
   "Stop Tasks and Quit": "Wusanang Swagina tur Medal",
   "Stopped after adding {done} of {n} items to {target}": {
@@ -2004,6 +2006,7 @@
   "Switched to {name} over the API": "Ngentos ka {name} malarapan API",
   "Switched to {name} over the API. {note}": "Ngentos ka {name} malarapan API. {note}",
   "Sync Folder Now": "Sinkronang Folder Mangkin",
+  "Syncing {done} of {total}": "Nyinkronang {done} saking {total}",
   "Tag Group": "Pupulan Tag",
   "Tag name": "Wasta tag",
   "Tag screenshots “Screenshot”": "Icénin tag tangkapan layar “Tangkapan Layar”",

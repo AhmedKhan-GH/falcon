@@ -530,7 +530,14 @@ impl App {
         let watched = lib.config().find_watched_by_folder_id(&f.id);
         if let Some(wf) = watched {
             ui.separator();
-            if ui.button(tr("Sync Folder Now")).clicked() {
+            if self.ws.sync.as_ref().is_some_and(|s| s.is_active(&wf.id)) {
+                if ui.button(tr("Stop Synchronization")).clicked() {
+                    if let Some(s) = &self.ws.sync {
+                        s.cancel(&wf.id);
+                    }
+                    ui.close();
+                }
+            } else if ui.button(tr("Sync Folder Now")).clicked() {
                 self.sync_folder_now(&wf.id);
                 ui.close();
             }

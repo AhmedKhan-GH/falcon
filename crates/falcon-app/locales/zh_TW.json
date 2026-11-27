@@ -8,6 +8,7 @@
   "5 Stars": "5 顆星",
   "A > Z": "A > Z",
   "A folder couldn't be created: {error}": "無法建立資料夾：{error}",
+  "A folder synchronization is still finishing. Try moving the library again in a moment.": "資料夾同步仍在收尾。請稍後再試移動資料庫。",
   "A folder with that name already exists in the chosen location.": "所選位置已存在同名資料夾。",
   "A library already exists there. Create again and pick another folder, or change the name.": "該位置已有資料庫。請重新建立並選擇其他資料夾，或更改名稱。",
   "A library can't be moved inside itself.": "無法將資料庫移入其自身內部。",
@@ -1971,6 +1972,7 @@
   "Status": "狀態",
   "Steps": "步驟",
   "Stop": "停止",
+  "Stop Synchronization": "停止同步",
   "Stop Tasks and Close": "停止工作並關閉",
   "Stop Tasks and Quit": "停止工作並結束",
   "Stopped after adding {done} of {n} items to {target}": {
@@ -2002,6 +2004,7 @@
   "Switched to {name} over the API": "已透過 API 切換到{name}",
   "Switched to {name} over the API. {note}": "已透過 API 切換到{name}。{note}",
   "Sync Folder Now": "立即同步資料夾",
+  "Syncing {done} of {total}": "正在同步：{done}/{total}",
   "Tag Group": "標籤群組",
   "Tag name": "標籤名稱",
   "Tag screenshots “Screenshot”": "為截圖加上「Screenshot」標籤",

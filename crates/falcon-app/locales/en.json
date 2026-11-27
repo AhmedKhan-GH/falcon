@@ -8,6 +8,7 @@
   "5 Stars": "5 Stars",
   "A > Z": "A > Z",
   "A folder couldn't be created: {error}": "A folder couldn't be created: {error}",
+  "A folder synchronization is still finishing. Try moving the library again in a moment.": "A folder synchronization is still finishing. Try moving the library again in a moment.",
   "A folder with that name already exists in the chosen location.": "A folder with that name already exists in the chosen location.",
   "A library already exists there. Create again and pick another folder, or change the name.": "A library already exists there. Create again and pick another folder, or change the name.",
   "A library can't be moved inside itself.": "A library can't be moved inside itself.",
@@ -2064,6 +2065,7 @@
   "Status": "Status",
   "Steps": "Steps",
   "Stop": "Stop",
+  "Stop Synchronization": "Stop Synchronization",
   "Stop Tasks and Close": "Stop Tasks and Close",
   "Stop Tasks and Quit": "Stop Tasks and Quit",
   "Stopped after adding {done} of {n} items to {target}": {
@@ -2099,6 +2101,7 @@
   "Switched to {name} over the API": "Switched to {name} over the API",
   "Switched to {name} over the API. {note}": "Switched to {name} over the API. {note}",
   "Sync Folder Now": "Sync Folder Now",
+  "Syncing {done} of {total}": "Syncing {done} of {total}",
   "Tag Group": "Tag Group",
   "Tag name": "Tag name",
   "Tag screenshots “Screenshot”": "Tag screenshots “Screenshot”",

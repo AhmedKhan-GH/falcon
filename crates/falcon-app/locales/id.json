@@ -8,6 +8,7 @@
   "5 Stars": "5 Bintang",
   "A > Z": "A > Z",
   "A folder couldn't be created: {error}": "Folder tidak dapat dibuat: {error}",
+  "A folder synchronization is still finishing. Try moving the library again in a moment.": "Sinkronisasi folder masih diselesaikan. Coba pindahkan library lagi sebentar lagi.",
   "A folder with that name already exists in the chosen location.": "Folder dengan nama tersebut sudah ada di lokasi yang dipilih.",
   "A library already exists there. Create again and pick another folder, or change the name.": "Pustaka sudah ada di sana. Buat lagi dan pilih folder lain, atau ubah namanya.",
   "A library can't be moved inside itself.": "Pustaka tidak dapat dipindahkan ke dalam dirinya sendiri.",
@@ -1973,6 +1974,7 @@
   "Status": "Status",
   "Steps": "Langkah",
   "Stop": "Hentikan",
+  "Stop Synchronization": "Hentikan Sinkronisasi",
   "Stop Tasks and Close": "Hentikan Tugas dan Tutup",
   "Stop Tasks and Quit": "Hentikan Tugas dan Keluar",
   "Stopped after adding {done} of {n} items to {target}": {
@@ -2004,6 +2006,7 @@
   "Switched to {name} over the API": "Beralih ke {name} melalui API",
   "Switched to {name} over the API. {note}": "Beralih ke {name} melalui API. {note}",
   "Sync Folder Now": "Sinkronkan Folder Sekarang",
+  "Syncing {done} of {total}": "Menyinkronkan {done} dari {total}",
   "Tag Group": "Grup Tag",
   "Tag name": "Nama tag",
   "Tag screenshots “Screenshot”": "Beri tag tangkapan layar dengan “Tangkapan Layar”",

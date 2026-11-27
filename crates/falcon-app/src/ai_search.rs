@@ -59,7 +59,8 @@ impl Engine {
         let model_base = base.join("model");
         let mut dir = model::dir_in(&model_base);
         // Dev builds reuse existing production model weights read-only when present.
-        if crate::app_data_name() != "Falcon" && !model::is_installed(&dir)
+        // QA mode never looks at production data, not even the model.
+        if crate::app_data_name() != "Falcon" && !crate::qa_isolation::is_qa_mode() && !model::is_installed(&dir)
             && let Some(prod_base) = eframe::storage_dir("Falcon").map(|d| d.join("ai-search").join("model"))
         {
             let prod_dir = model::dir_in(&prod_base);

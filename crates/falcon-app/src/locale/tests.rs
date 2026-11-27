@@ -489,3 +489,23 @@ fn lookups_fall_back_to_english() {
         assert_eq!(Lang::from_code(lang.code()), Some(lang));
     }
 }
+
+/// The Owner's own Balinese wording must never be swapped for a generated one.
+#[test]
+fn balinese_owner_approved_wording_is_unchanged() {
+    let (_, ban) = read(Lang::Ban);
+    let text = |k: &str| match ban.get(k) {
+        Some(Entry::Text(t)) => t.clone(),
+        other => panic!("ban.json {k:?}: {other:?}"),
+    };
+    assert_eq!(text("Uncategorized"), "Ten Mekategori");
+    assert_eq!(text("Untagged"), "Ten Metag");
+    assert_eq!(text("Recently Used"), "Wau Keanggen");
+    assert_eq!(text("Trash"), "Wadah Luu");
+    assert_eq!(text("Relink"), "Link Malih");
+    assert_eq!(text("Cancel"), "buwung");
+    assert_eq!(text("Hide unsupported files"), "Engkebang berkas sane nenten kedukung");
+    assert_eq!(text("Open in the default app"), "Buka ring aplikasi default");
+    assert!(text("Open in Default App").starts_with("Buka ring Aplikasi"));
+}
+

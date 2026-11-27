@@ -82,6 +82,7 @@ mod touch_id;
 mod tray;
 mod theme;
 pub(crate) mod thumb_worker;
+pub(crate) mod sync_worker;
 mod ui;
 mod library_icons;
 mod library_move;

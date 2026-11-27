@@ -441,42 +441,6 @@ impl App {
         }
     }
 
-    /// Immediately synchronizes a registered watched folder by ID.
-    pub(crate) fn sync_folder_now(&mut self, wf_id: &str) {
-        let Some(shared) = self.ws.lib.clone() else { return };
-        let res = {
-            let mut guard = lock(&shared);
-            let lib: &mut Library = &mut guard;
-            let mut wf = match lib.config().find_watched_folder(wf_id) {
-                Some(w) => w,
-                None => return,
-            };
-            lib.sync_watched_folder(&mut wf)
-        };
-        match res {
-            Ok(stats) => {
-                if stats.offline {
-                    self.flash_error(tr("Folder sync is offline: source folder unreachable"));
-                } else {
-                    let n = stats.added;
-                    let m = stats.modified;
-                    if stats.conflicts > 0 {
-                        let c = stats.conflicts;
-                        self.flash(trf(
-                            "Folder synced: {n} added, {m} modified, {c} changed in the source and left as they were",
-                            &[("n", &n), ("m", &m), ("c", &c)],
-                        ));
-                    } else {
-                        self.flash(trf("Folder synced: {n} added, {m} modified", &[("n", &n), ("m", &m)]));
-                    }
-                }
-            }
-            Err(e) => {
-                self.flash_error(trf("Folder sync failed: {error}", &[("error", &e)]));
-            }
-        }
-    }
-
     /// Toggles pause/resume on a watched folder.
     pub(crate) fn toggle_folder_sync_pause(&mut self, wf_id: &str) {
         let Some(shared) = self.ws.lib.clone() else { return };
@@ -503,11 +467,12 @@ impl App {
             return;
         };
         let Some(shared) = self.ws.lib.clone() else { return };
-        let res = {
+        let id = falcon_library::ids::new_id();
+        let saved = {
             let mut guard = lock(&shared);
             let lib: &mut Library = &mut guard;
-            let mut wf = falcon_library::WatchedFolder {
-                id: falcon_library::ids::new_id(),
+            let wf = falcon_library::WatchedFolder {
+                id: id.clone(),
                 source_path: dir,
                 folder_id: folder_id.to_string(),
                 storage_mode: lib.storage_mode(),
@@ -517,16 +482,12 @@ impl App {
                 status: falcon_library::SyncStatus::Idle,
                 last_error: None,
             };
-            lib.sync_watched_folder(&mut wf)
+            lib.upsert_watched_folder(wf)
         };
-        match res {
-            Ok(stats) => {
-                let n = stats.added;
-                self.flash(trf("Folder sync configured: {n} assets imported", &[("n", &n)]));
-            }
-            Err(e) => {
-                self.flash_error(trf("Folder sync failed: {error}", &[("error", &e)]));
-            }
+        match saved {
+            // The first pass runs in the background, like every later one.
+            Ok(()) => self.sync_folder_now(&id),
+            Err(e) => self.flash_error(trf("Folder sync failed: {error}", &[("error", &e)])),
         }
     }
 }

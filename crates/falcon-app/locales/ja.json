@@ -8,6 +8,7 @@
   "5 Stars": "星5つ",
   "A > Z": "A > Z",
   "A folder couldn't be created: {error}": "フォルダを作成できませんでした：{error}",
+  "A folder synchronization is still finishing. Try moving the library again in a moment.": "フォルダの同期がまだ終了処理中です。しばらくしてからもう一度ライブラリを移動してください。",
   "A folder with that name already exists in the chosen location.": "選択した場所には、その名前のフォルダがすでに存在します。",
   "A library already exists there. Create again and pick another folder, or change the name.": "そこにはすでにライブラリがあります。もう一度作成して別のフォルダを選ぶか、名前を変更してください。",
   "A library can't be moved inside itself.": "ライブラリを自分自身の内部へ移動することはできません。",
@@ -1971,6 +1972,7 @@
   "Status": "状態",
   "Steps": "ステップ",
   "Stop": "停止",
+  "Stop Synchronization": "同期を停止",
   "Stop Tasks and Close": "タスクを停止して閉じる",
   "Stop Tasks and Quit": "タスクを停止して終了",
   "Stopped after adding {done} of {n} items to {target}": {
@@ -2002,6 +2004,7 @@
   "Switched to {name} over the API": "APIで{name}に切り替えました",
   "Switched to {name} over the API. {note}": "APIで{name}に切り替えました。{note}",
   "Sync Folder Now": "今すぐフォルダを同期",
+  "Syncing {done} of {total}": "同期中：{done}/{total}",
   "Tag Group": "タググループ",
   "Tag name": "タグ名",
   "Tag screenshots “Screenshot”": "スクリーンショットに「Screenshot」タグを付ける",

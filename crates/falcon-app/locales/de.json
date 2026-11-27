@@ -8,6 +8,7 @@
   "5 Stars": "5 Sterne",
   "A > Z": "A > Z",
   "A folder couldn't be created: {error}": "Ein Ordner konnte nicht angelegt werden: {error}",
+  "A folder synchronization is still finishing. Try moving the library again in a moment.": "Eine Ordnersynchronisierung wird noch abgeschlossen. Versuchen Sie es in einem Moment erneut.",
   "A folder with that name already exists in the chosen location.": "Am gewählten Ort existiert bereits ein Ordner mit diesem Namen.",
   "A library already exists there. Create again and pick another folder, or change the name.": "Dort existiert bereits eine Mediathek. Erstellen Sie erneut und wählen Sie einen anderen Ordner oder ändern Sie den Namen.",
   "A library can't be moved inside itself.": "Eine Mediathek kann nicht in sich selbst verschoben werden.",
@@ -2064,6 +2065,7 @@
   "Status": "Status",
   "Steps": "Schritte",
   "Stop": "Stopp",
+  "Stop Synchronization": "Synchronisierung stoppen",
   "Stop Tasks and Close": "Aufgaben stoppen und schließen",
   "Stop Tasks and Quit": "Aufgaben stoppen und beenden",
   "Stopped after adding {done} of {n} items to {target}": {
@@ -2099,6 +2101,7 @@
   "Switched to {name} over the API": "Über die API zu {name} gewechselt",
   "Switched to {name} over the API. {note}": "Über die API zu {name} gewechselt. {note}",
   "Sync Folder Now": "Ordner jetzt synchronisieren",
+  "Syncing {done} of {total}": "Synchronisiere {done} von {total}",
   "Tag Group": "Tag-Gruppe",
   "Tag name": "Tag-Name",
   "Tag screenshots “Screenshot”": "Bildschirmfotos mit „Screenshot“ taggen",

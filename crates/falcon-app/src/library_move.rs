@@ -82,6 +82,10 @@ pub fn check_destination(src: &Path, dest_parent: &Path, other_open: &[PathBuf])
     if let Some(why) = crate::install_dir::refusal(&dest) {
         return Err(Refusal::InstallDir(why));
     }
+    // In QA mode a library never leaves the sandbox.
+    if let Err(e) = crate::qa_isolation::validate_qa_sandbox_path(&dest) {
+        return Err(Refusal::InstallDir(e.to_string()));
+    }
     if dest.exists() || fs::symlink_metadata(&dest).is_ok() {
         return Err(Refusal::AlreadyExists);
     }
@@ -172,7 +176,7 @@ pub fn execute_move(
     execute_move_inner(src, dest, true, crate::storage::available_space, cancel, progress, trasher)
 }
 
-fn execute_move_inner(
+pub(crate) fn execute_move_inner(
     src: &Path,
     dest: &Path,
     allow_rename: bool,
@@ -1214,4 +1218,111 @@ mod tests {
         assert_eq!(fs::read_link(dest.join("link-to-external")).unwrap(), outside);
         assert_eq!(fs::read(&outside).unwrap(), b"referenced original", "external file untouched");
     }
+
+    fn hash_file(p: &Path) -> (String, std::time::SystemTime) {
+        (blake3::hash(&fs::read(p).unwrap()).to_hex().to_string(), fs::metadata(p).unwrap().modified().unwrap())
+    }
+
+    /// A mixed Copy and Link library with the sync and thumbnail workers busy,
+    /// moved across "volumes": the workers are stopped first, the move commits a
+    /// verified copy, the external originals stay byte-identical (and are never
+    /// copied or touched), and every referenced item still resolves afterwards.
+    #[test]
+    fn mixed_library_moves_with_workers_stopped_and_external_originals_untouched() {
+        use falcon_library::storage_mode::{StorageMode, SyncMode, SyncStatus, WatchedFolder};
+        use std::sync::{Arc, Mutex};
+        use std::time::{Duration, Instant};
+
+        let tmp = tempfile::tempdir().unwrap();
+        let base = tmp.path().canonicalize().unwrap();
+        let root = base.join("Mixed.library");
+        let ext = base.join("external");
+        let watched = base.join("watched");
+        fs::create_dir_all(&ext).unwrap();
+        fs::create_dir_all(&watched).unwrap();
+        let png = |p: &Path, w: u32, shade: u8| image::RgbImage::from_pixel(w, 400, image::Rgb([shade, 9, 9])).save(p).unwrap();
+
+        let mut lib = falcon_library::Library::create(&root).unwrap();
+        let fid = lib.create_folder(None, "Watched").unwrap();
+        let mut originals = Vec::new();
+        for i in 0..6u8 {
+            let f = ext.join(format!("linked-{i}.png"));
+            png(&f, 600 + u32::from(i), i);
+            let opts = falcon_library::import::ImportOptions { storage_mode: Some(StorageMode::Link), defer_thumbnail: true, palette: false, ..Default::default() };
+            lib.import_file(&f, &opts).unwrap();
+            originals.push((f.clone(), hash_file(&f)));
+        }
+        for i in 0..4u8 {
+            let f = base.join(format!("managed-{i}.png"));
+            png(&f, 300 + u32::from(i), i + 50);
+            lib.import_file(&f, &falcon_library::import::ImportOptions { storage_mode: Some(StorageMode::Copy), palette: false, ..Default::default() }).unwrap();
+        }
+        for i in 0..400u32 {
+            let f = watched.join(format!("w{i}.png"));
+            png(&f, 200 + (i % 50), (i % 200) as u8);
+            originals.push((f.clone(), hash_file(&f)));
+        }
+        lib.upsert_watched_folder(WatchedFolder {
+            id: "wf".into(),
+            source_path: watched.clone(),
+            folder_id: fid,
+            storage_mode: StorageMode::Link,
+            sync_mode: SyncMode::Manual,
+            recursive: true,
+            last_synced: None,
+            status: SyncStatus::Idle,
+            last_error: None,
+        })
+        .unwrap();
+        let shared: falcon_server::Shared = Arc::new(Mutex::new(lib));
+
+        let ctx = eframe::egui::Context::default();
+        let thumbs = Arc::new(crate::thumb_worker::ThumbWorker::new(Arc::clone(&shared), root.clone(), ctx, true));
+        thumbs.rediscover_pending(&shared.lock().unwrap().items().to_vec());
+        let sync = crate::sync_worker::SyncScheduler::new(Arc::clone(&shared), root.clone(), || {});
+        sync.request("wf");
+        let until = Instant::now() + Duration::from_secs(30);
+        while sync.progress().is_none() && Instant::now() < until {
+            std::thread::sleep(Duration::from_millis(2));
+        }
+
+        // What `begin_move` does.
+        assert!(sync.quiesce(Duration::from_secs(10)));
+        thumbs.shutdown();
+        drop(sync);
+        shared.lock().unwrap().flush().unwrap();
+        let (count, files_before) = {
+            let lib = shared.lock().unwrap();
+            (lib.items().len(), measure_library(&root, &AtomicBool::new(false)).unwrap().files)
+        };
+        assert!(count >= 10 && count < 410, "the pass was stopped part-way: {count}");
+
+        let dest = base.join("Other").join("Mixed.library");
+        fs::create_dir_all(dest.parent().unwrap()).unwrap();
+        let cancel = AtomicBool::new(false);
+        let outcome = execute_move_inner(&root, &dest, false, |_| None, &cancel, |_, _, _| {}, |p| fs::remove_dir_all(p)).unwrap();
+        assert!(!outcome.renamed && outcome.trash_error.is_none());
+        assert!(!root.exists(), "the original was retired only after the commit");
+        assert_eq!(measure_library(&dest, &AtomicBool::new(false)).unwrap().files, files_before);
+
+        // The moved library opens, keeps every item, and every referenced item still resolves.
+        let moved = falcon_library::Library::open(&dest).unwrap();
+        assert_eq!(moved.items().len(), count);
+        let mut linked = 0;
+        for item in moved.items() {
+            if moved.is_linked_item(&item.id) {
+                linked += 1;
+                let p = moved.resolved_source_path(&item.id).unwrap();
+                assert!(p.is_file() && !p.starts_with(&dest), "{p:?} is still outside the library");
+            }
+        }
+        assert!(linked >= 6, "{linked}");
+        // External originals: same bytes, same modification time, nothing added next to them.
+        for (path, before) in &originals {
+            assert_eq!(&hash_file(path), before, "{} changed", path.display());
+        }
+        assert_eq!(fs::read_dir(&ext).unwrap().count(), 6);
+        assert_eq!(fs::read_dir(&watched).unwrap().count(), 400);
+    }
 }
+

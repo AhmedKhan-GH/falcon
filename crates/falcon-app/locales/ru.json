@@ -8,6 +8,7 @@
   "5 Stars": "5 звёзд",
   "A > Z": "А > Я",
   "A folder couldn't be created: {error}": "Не удалось создать папку: {error}",
+  "A folder synchronization is still finishing. Try moving the library again in a moment.": "Синхронизация папки ещё завершается. Повторите перемещение библиотеки через несколько секунд.",
   "A folder with that name already exists in the chosen location.": "Папка с таким именем уже существует в выбранном месте.",
   "A library already exists there. Create again and pick another folder, or change the name.": "Здесь уже есть библиотека. Создайте заново и выберите другую папку или измените имя.",
   "A library can't be moved inside itself.": "Нельзя переместить библиотеку внутрь самой себя.",
@@ -2155,6 +2156,7 @@
   "Status": "Состояние",
   "Steps": "Шаги",
   "Stop": "Остановить",
+  "Stop Synchronization": "Остановить синхронизацию",
   "Stop Tasks and Close": "Остановить задачи и закрыть",
   "Stop Tasks and Quit": "Остановить задачи и выйти",
   "Stopped after adding {done} of {n} items to {target}": {
@@ -2194,6 +2196,7 @@
   "Switched to {name} over the API": "Через API выполнено переключение на «{name}»",
   "Switched to {name} over the API. {note}": "Через API выполнено переключение на «{name}». {note}",
   "Sync Folder Now": "Синхронизировать папку сейчас",
+  "Syncing {done} of {total}": "Синхронизация: {done} из {total}",
   "Tag Group": "Группа тегов",
   "Tag name": "Имя тега",
   "Tag screenshots “Screenshot”": "Добавлять снимкам тег «Screenshot»",

@@ -22,7 +22,7 @@ fn dir() -> Option<PathBuf> {
     #[cfg(not(windows))]
     let state = std::env::var_os("XDG_STATE_HOME").map(PathBuf::from).or_else(|| Some(PathBuf::from(std::env::var_os("HOME")?).join(".local/state")))?;
     #[cfg(not(windows))]
-    Some(state.join("falcon"))
+    Some(state.join(if name == "Falcon" { "falcon" } else { name }))
 }
 
 /// The log file.

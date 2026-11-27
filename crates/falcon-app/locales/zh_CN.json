@@ -8,6 +8,7 @@
   "5 Stars": "5 星",
   "A > Z": "A > Z",
   "A folder couldn't be created: {error}": "无法创建文件夹：{error}",
+  "A folder synchronization is still finishing. Try moving the library again in a moment.": "文件夹同步仍在收尾。请稍后再试移动资源库。",
   "A folder with that name already exists in the chosen location.": "所选位置已存在同名文件夹。",
   "A library already exists there. Create again and pick another folder, or change the name.": "该位置已有资源库。请重新创建并选择其他文件夹，或更改名称。",
   "A library can't be moved inside itself.": "不能将资源库移入其自身内部。",
@@ -1971,6 +1972,7 @@
   "Status": "状态",
   "Steps": "步骤",
   "Stop": "停止",
+  "Stop Synchronization": "停止同步",
   "Stop Tasks and Close": "停止任务并关闭",
   "Stop Tasks and Quit": "停止任务并退出",
   "Stopped after adding {done} of {n} items to {target}": {
@@ -2002,6 +2004,7 @@
   "Switched to {name} over the API": "已通过 API 切换到{name}",
   "Switched to {name} over the API. {note}": "已通过 API 切换到{name}。{note}",
   "Sync Folder Now": "立即同步文件夹",
+  "Syncing {done} of {total}": "正在同步：{done}/{total}",
   "Tag Group": "标签组",
   "Tag name": "标签名称",
   "Tag screenshots “Screenshot”": "为截图添加“Screenshot”标签",
