@@ -434,6 +434,16 @@ fn plural_rules() {
 }
 
 #[test]
+fn all_languages_load_in_catalogue() {
+    for lang in Lang::ALL {
+        set(lang);
+        assert_eq!(current(), lang);
+        assert!(!tr("Folders").is_empty());
+    }
+    set(Lang::En);
+}
+
+#[test]
 fn system_tags_map_to_languages() {
     assert_eq!(Lang::from_tag("en-US"), Some(Lang::En));
     assert_eq!(Lang::from_tag("de_AT.UTF-8"), Some(Lang::De));
@@ -443,6 +453,10 @@ fn system_tags_map_to_languages() {
     assert_eq!(Lang::from_tag("zh-HK"), Some(Lang::ZhTw));
     assert_eq!(Lang::from_tag("zh"), Some(Lang::ZhCn));
     assert_eq!(Lang::from_tag("ja-JP"), Some(Lang::Ja));
+    assert_eq!(Lang::from_tag("id-ID"), Some(Lang::Id));
+    assert_eq!(Lang::from_tag("id"), Some(Lang::Id));
+    assert_eq!(Lang::from_tag("ban-ID"), Some(Lang::Ban));
+    assert_eq!(Lang::from_tag("ban"), Some(Lang::Ban));
     assert_eq!(Lang::from_tag("pt-BR"), None);
     assert_eq!(Lang::from_tag(""), None);
 }
