@@ -651,7 +651,15 @@ impl App {
             self.inspector_width = shown.response.rect.width();
         }
         egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t::p().main)).show(ui, |ui| {
-            let full = ui.max_rect();
+            let mut full = ui.max_rect();
+            let show_path_bar = self.prefs.show_path_bar && !self.modes.presenting;
+            let path_bar_rect = if show_path_bar {
+                let r = Rect::from_min_max(Pos2::new(full.left(), full.bottom() - crate::ui::path_bar::PATH_BAR_HEIGHT), full.max);
+                full.max.y -= crate::ui::path_bar::PATH_BAR_HEIGHT;
+                Some(r)
+            } else {
+                None
+            };
             if self.ws.viewer.is_some() {
                 // Eagle's detail mode: the viewer, with its own bar, takes
                 // the place of the toolbar, filter bar and grid, between
@@ -699,6 +707,11 @@ impl App {
                 g.set_clip_rect(grid);
                 self.grid(&mut g, lib);
                 self.error_toast(ui, Pos2::new(full.center().x, grid_top + 10.0));
+            }
+
+            if let Some(pbr) = path_bar_rect {
+                let mut pb_ui = ui.new_child(egui::UiBuilder::new().max_rect(pbr));
+                self.path_bar(&mut pb_ui, lib, pbr);
             }
 
             self.status_toast(ui, &ctx, full);
