@@ -42,9 +42,9 @@ impl App {
             && ctx.pointer_latest_pos().is_some_and(|p| !ctx.content_rect().contains(p))
             && !self.native_drag.load(std::sync::atomic::Ordering::Relaxed)
         {
-            let files: Vec<PathBuf> = d.0.iter().filter_map(|id| lib.item(id)).map(|i| i.original_path(lib.root())).collect();
-            let preview = d.0.first().and_then(|id| lib.item(id)).map(|i| {
-                i.thumbnail_path(lib.root()).unwrap_or_else(|| i.original_path(lib.root()))
+            let files: Vec<PathBuf> = d.0.iter().filter_map(|id| lib.resolved_source_path(id).ok()).collect();
+            let preview = d.0.first().and_then(|id| lib.item(id)).and_then(|i| {
+                i.thumbnail_path(lib.root()).or_else(|| lib.resolved_source_path(&i.id).ok())
             });
             egui::DragAndDrop::clear_payload(ctx);
             if let Some(image) = preview.filter(|_| !files.is_empty()).map(|p| drag_image(&p)) {

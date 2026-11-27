@@ -93,11 +93,11 @@ impl Library {
     /// Converts WebP item `id` to `format` (see the module docs). `discard`
     /// receives the old WebP once the item is saved.
     pub fn convert_webp(&mut self, id: &str, format: Format, discard: impl FnOnce(&Path) -> std::io::Result<()>) -> Result<Converted> {
+        let old = self.managed_writable_path(id, "convert WebP")?;
         let mut item = self.item(id).cloned().ok_or_else(|| self.invalid(format!("no item {id}")))?;
         if !item.ext.eq_ignore_ascii_case("webp") {
             return Ok(Converted::NotWebp);
         }
-        let old = item.original_path(self.root());
         let bytes = fs::read(&old).map_err(|e| Error::io(&old, e))?;
         if is_animated(&bytes) {
             return Ok(Converted::Animated);
@@ -185,7 +185,7 @@ mod tests {
         assert_eq!(got.unwrap(), Converted::Done);
         let item = lib.item(&id).unwrap().clone();
         assert_eq!(item.ext, "png");
-        let path = item.original_path(lib.root());
+        let path = item.managed_storage_path(lib.root());
         assert_eq!(item.size, fs::metadata(&path).unwrap().len());
         assert_eq!(image::open(&path).unwrap().width(), 40);
         assert_eq!(item.width, 40);
@@ -206,7 +206,7 @@ mod tests {
         lib.convert_webp(&id, Format::Jpg, |p| fs::remove_file(p)).unwrap();
         let item = lib.item(&id).unwrap().clone();
         assert_eq!(item.ext, "jpg");
-        let px = image::open(item.original_path(lib.root())).unwrap().to_rgb8().get_pixel(4, 4).0;
+        let px = image::open(item.managed_storage_path(lib.root())).unwrap().to_rgb8().get_pixel(4, 4).0;
         assert!(px.iter().all(|&c| c > 245), "{px:?}");
     }
 
@@ -235,7 +235,7 @@ mod tests {
         fs::write(item.info_dir(lib.root()).join("pic.png"), b"x").unwrap();
         assert!(lib.convert_webp(&id, Format::Png, |p| fs::remove_file(p)).is_err());
         assert_eq!(lib.item(&id).unwrap().ext, "webp");
-        assert!(item.original_path(lib.root()).exists());
+        assert!(item.managed_storage_path(lib.root()).exists());
         let txt = d.path().join("a.txt");
         fs::write(&txt, b"hi").unwrap();
         let tid = lib.import_file(&txt, &ImportOptions::default()).unwrap();

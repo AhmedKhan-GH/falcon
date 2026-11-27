@@ -146,7 +146,7 @@ struct Input {
 }
 
 fn input_of(lib: &Library, i: &Item) -> Input {
-    let original = || (image::ImageFormat::from_extension(&i.ext).is_some()).then(|| i.original_path(lib.root()));
+    let original = || (image::ImageFormat::from_extension(&i.ext).is_some()).then(|| lib.resolved_source_path(&i.id).ok()).flatten();
     Input {
         id: i.id.clone(),
         label: if i.ext.is_empty() { i.name.clone() } else { format!("{}.{}", i.name, i.ext) },

@@ -40,7 +40,10 @@ impl App {
             return;
         };
         if self.ws.view.id != id {
-            self.ws.view = ViewState { id: id.clone(), file: item.original_path(lib.root()), ..Default::default() };
+            let file = lib.resolved_source_path(&id).or_else(|_| {
+                lib.last_known_source_path(&id).ok_or(())
+            }).unwrap_or_else(|()| item.managed_storage_path(lib.root()));
+            self.ws.view = ViewState { id: id.clone(), file, ..Default::default() };
         }
         // A middle click anywhere in the viewer enters or leaves
         // presentation mode, as Eagle's `onDetailClick`, in every viewer.
@@ -57,8 +60,9 @@ impl App {
         }
         if self.ws.view.anim.is_none()
             && let Some(kind) = crate::anim::kind(&item.ext)
+            && let Ok(path) = lib.resolved_source_path(&id)
         {
-            let mut player = crate::anim::Player::open(ctx, item.original_path(lib.root()), kind, crate::anim::Opts::viewer());
+            let mut player = crate::anim::Player::open(ctx, path, kind, crate::anim::Opts::viewer());
             player.gray = self.modes.grayscale;
             self.ws.view.anim = Some(player);
         }
@@ -94,11 +98,20 @@ impl App {
 
     /// Eagle's "cannot preview" page: the file's type, a line saying so
     /// and a button listing the apps that can open it.
-    pub(crate) fn cannot_preview(&mut self, ui: &mut Ui, item: &Item, root: &std::path::Path, area: Rect) {
+    pub(crate) fn cannot_preview(&mut self, ui: &mut Ui, lib: &Library, item: &Item, area: Rect) {
         let c = area.center();
         ext_placeholder(ui, Rect::from_center_size(c - vec2(0.0, 70.0), Vec2::splat(150.0)), &item.ext);
         let name = format!("{}.{}", item.name, item.ext);
-        let line = if crate::icloud::is_missing(&item.original_path(root)) { tr("This file wasn't found. If a sync service manages the library, wait until syncing is complete.") } else { tr("Falcon can't show a preview of this file. Try opening it in another app.") };
+        let line = if let Some(notice) = crate::linked_ui::classify_asset(lib, &item.id).viewer_notice() {
+            notice
+        } else {
+            let p = lib.resolved_source_path(&item.id).unwrap_or_else(|_| item.managed_storage_path(lib.root()));
+            if crate::icloud::is_missing(&p) {
+                tr("This file wasn't found. If a sync service manages the library, wait until syncing is complete.")
+            } else {
+                tr("Falcon can't show a preview of this file. Try opening it in another app.")
+            }
+        };
         self.notice_lines(ui, area, &name, line);
     }
 

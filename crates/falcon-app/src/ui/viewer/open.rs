@@ -21,9 +21,9 @@ use crate::theme::{self as t, font};
 
 const CARET: &str = ic::CARET_DOWN;
 
-/// The originals of `ids`, in order, skipping ids not in the library.
+/// The originals of `ids`, in order, skipping unavailable or unknown items.
 pub(crate) fn originals(lib: &Library, ids: &[String]) -> Vec<PathBuf> {
-    ids.iter().filter_map(|id| lib.item(id)).map(|i| i.original_path(lib.root())).collect()
+    ids.iter().filter_map(|id| lib.resolved_source_path(id).ok()).collect()
 }
 
 impl App {
@@ -117,7 +117,7 @@ impl App {
             .iter()
             .filter(|id| {
                 let Some(item) = lib.item(id) else { return false };
-                let files = std::iter::once(item.original_path(lib.root())).chain(item.thumbnail_path(lib.root()));
+                let files = lib.resolved_source_path(id).ok().into_iter().chain(item.thumbnail_path(lib.root()));
                 let local = files.map(|f| self.fetches.prefetch(&ctx, &f).is_local()).filter(|l| !l).count() == 0;
                 waiting += usize::from(!local);
                 local
@@ -180,7 +180,9 @@ impl App {
     /// while it shows, so nothing reads the original on this thread.
     pub(crate) fn icloud_viewer(&mut self, parent: &mut Ui, lib: &Library, item: &Item, screen: Rect) -> bool {
         let ctx = &parent.ctx().clone();
-        let path = item.original_path(lib.root());
+        let Ok(path) = lib.resolved_source_path(&item.id) else {
+            return false;
+        };
         let state = self.fetches.ensure(ctx, &path);
         if state.is_local() {
             return false;

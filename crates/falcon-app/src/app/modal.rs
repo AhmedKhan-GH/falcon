@@ -33,6 +33,7 @@ impl App {
             || ws.dup_dialog.is_some()
             || ws.ext_dialog.is_some()
             || ws.smart_dialog.is_some()
+            || (lib && ws.library_settings.open)
             || ws.confirm.is_some()
             || ws.bulk.is_some()
             || ws.op.busy()

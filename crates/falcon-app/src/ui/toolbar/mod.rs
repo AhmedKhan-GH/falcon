@@ -327,6 +327,15 @@ impl App {
         };
         let (total, done, failed, current, paused, started) = snapshot;
         if total == 0 {
+            if let Some(worker) = &self.ws.thumb_worker {
+                let tp = worker.progress();
+                if tp.active && tp.total > 0 {
+                    let f = (tp.done as f32 / tp.total as f32).clamp(0.0, 1.0);
+                    let bar = Rect::from_min_size(rect.min, vec2(rect.width() * f, 2.0));
+                    ui.painter().rect_filled(bar, 0.0, t::p().primary.gamma_multiply(0.8));
+                    return true;
+                }
+            }
             return false;
         }
         if done >= total {

@@ -53,6 +53,7 @@ impl InvalidScan {
 /// Scans the library at `root`, whose loaded items are `items`.
 pub fn scan(root: &Path, items: &[Item]) -> InvalidScan {
     let mut out = InvalidScan::default();
+    let config = crate::storage_mode::FalconConfig::load_or_default(root).unwrap_or_default();
     let known: HashSet<&str> = items.iter().map(|i| i.id.as_str()).collect();
     let images = root.join("images");
     if let Ok(entries) = fs::read_dir(&images) {
@@ -75,7 +76,10 @@ pub fn scan(root: &Path, items: &[Item]) -> InvalidScan {
         let dir = item.info_dir(root);
         if !dir.is_dir() {
             out.gone.push(item.id.clone());
-        } else if !item.is_deleted && !item.original_path(root).exists() {
+        } else if !item.is_deleted
+            && !crate::linked::is_linked_item(&config, item, root)
+            && !item.managed_storage_path(root).exists()
+        {
             out.broken.push(item.id.clone());
         }
     }
@@ -98,7 +102,12 @@ impl Library {
     /// gone, and hands each orphaned folder still there to `discard`.
     pub fn clear_invalid(&mut self, scan: &InvalidScan, mut discard: impl FnMut(&Path) -> std::io::Result<()>) -> Result<Cleared> {
         let mut out = Cleared::default();
-        let broken: Vec<String> = scan.broken.iter().filter(|id| self.item(id).is_some_and(|i| !i.is_deleted)).cloned().collect();
+        let broken: Vec<String> = scan
+            .broken
+            .iter()
+            .filter(|id| self.item(id).is_some_and(|i| !i.is_deleted) && !self.is_linked_item(id))
+            .cloned()
+            .collect();
         if !broken.is_empty() {
             self.set_trashed(&broken, true)?;
             out.trashed = broken.len();
@@ -107,6 +116,7 @@ impl Library {
             if let Some(item) = self.item(id)
                 && !item.info_dir(self.root()).exists()
             {
+                self.remove_linked_id(id)?;
                 self.forget_item(id)?;
                 out.forgotten += 1;
             }
@@ -161,14 +171,14 @@ mod tests {
         fs::write(images.join("DAMAGED.info/metadata.json"), b"{").unwrap();
         // A missing original.
         let a = lib.item(&ids[0]).unwrap().clone();
-        fs::remove_file(a.original_path(lib.root())).unwrap();
+        fs::remove_file(a.managed_storage_path(lib.root())).unwrap();
         // A folder that has gone.
         let b = lib.item(&ids[1]).unwrap().clone();
         fs::remove_dir_all(b.info_dir(lib.root())).unwrap();
         // A missing original already in the Trash is left alone.
         lib.set_trashed(std::slice::from_ref(&ids[2]), true).unwrap();
         let c = lib.item(&ids[2]).unwrap().clone();
-        fs::remove_file(c.original_path(lib.root())).unwrap();
+        fs::remove_file(c.managed_storage_path(lib.root())).unwrap();
 
         let s = scan(lib.root(), lib.items());
         assert_eq!(s.orphans, [images.join("ORPHAN.info")]);
@@ -216,7 +226,7 @@ mod tests {
         let (_d, lib, ids) = setup();
         let item = lib.item(&ids[3]).unwrap().clone();
         let dir = item.info_dir(lib.root());
-        let original = item.original_path(lib.root());
+        let original = item.managed_storage_path(lib.root());
         for e in fs::read_dir(&dir).unwrap() {
             let p = e.unwrap().path();
             if p != original {

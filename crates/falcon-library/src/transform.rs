@@ -64,6 +64,7 @@ impl Library {
     /// their pixels are untouched; PNG, WebP and BMP are re-encoded.
     /// Animated PNG and WebP are refused, as Eagle refuses APNG.
     pub fn rotate_item(&mut self, id: &str, quarter_turns: i32) -> Result<()> {
+        let raw = self.managed_writable_path(id, "rotate")?;
         let item = self.item(id).cloned().ok_or_else(|| self.invalid(format!("no item {id}")))?;
         let ext = item.ext.to_lowercase();
         if !can_rotate(&ext) {
@@ -73,7 +74,6 @@ impl Library {
         if turns == 0 {
             return Ok(());
         }
-        let raw = item.original_path(self.root());
         let data = fs::read(&raw).map_err(|e| Error::io(&raw, e))?;
         let out = if ext == "jpg" || ext == "jpeg" {
             let current = jpeg_orientation(&data).ok_or_else(|| self.invalid("not a JPEG file"))?;
@@ -98,12 +98,12 @@ impl Library {
     /// open undo transaction marked irreversible. Animated PNG and WebP
     /// are refused.
     pub fn flip_item(&mut self, id: &str, flip: Flip) -> Result<()> {
+        let raw = self.managed_writable_path(id, "flip")?;
         let item = self.item(id).cloned().ok_or_else(|| self.invalid(format!("no item {id}")))?;
         let ext = item.ext.to_lowercase();
         if !can_flip(&ext) {
             return Err(self.invalid(format!("falcon can't flip .{} files", item.ext)));
         }
-        let raw = item.original_path(self.root());
         let data = fs::read(&raw).map_err(|e| Error::io(&raw, e))?;
         let out = if ext == "jpg" || ext == "jpeg" {
             let current = jpeg_orientation(&data).ok_or_else(|| self.invalid("not a JPEG file"))?;
@@ -125,8 +125,8 @@ impl Library {
     /// JPEG is encoded at quality 100 without its EXIF block, as a canvas
     /// export does, so its orientation is baked into the pixels.
     pub fn crop_item(&mut self, id: &str, rect: PixelRect) -> Result<()> {
+        let raw = self.managed_writable_path(id, "crop")?;
         let item = self.item(id).cloned().ok_or_else(|| self.invalid(format!("no item {id}")))?;
-        let raw = item.original_path(self.root());
         let Some(out) = self.cropped(&item, rect)? else { return Ok(()) };
         self.rewrite(item, &raw, &out)
     }
@@ -138,17 +138,21 @@ impl Library {
     /// crop of the whole picture still makes a copy.
     pub fn crop_item_as_new(&mut self, id: &str, rect: PixelRect) -> Result<String> {
         let item = self.item(id).cloned().ok_or_else(|| self.invalid(format!("no item {id}")))?;
+        let raw = self.resolved_source_path(&item.id)?;
         let out = match self.cropped(&item, rect)? {
             Some(bytes) => bytes,
-            None => {
-                let raw = item.original_path(self.root());
-                fs::read(&raw).map_err(|e| Error::io(&raw, e))?
-            }
+            None => fs::read(&raw).map_err(|e| Error::io(&raw, e))?,
         };
         let dir = tempfile::Builder::new().prefix("falcon-crop").tempdir().map_err(|e| Error::io(self.root(), e))?;
         let file = dir.path().join(&*crate::disk_name::on_disk(&format!("{}.{}", item.name, item.ext)));
         fs::write(&file, &out).map_err(|e| Error::io(&file, e))?;
-        let opts = ImportOptions { folders: item.folders.clone(), tags: item.tags.clone(), url: item.url.clone(), ..Default::default() };
+        let opts = ImportOptions {
+            folders: item.folders.clone(),
+            tags: item.tags.clone(),
+            url: item.url.clone(),
+            storage_mode: Some(crate::storage_mode::StorageMode::Copy),
+            ..Default::default()
+        };
         self.check_folders(&file, &opts)?;
         let staged = crate::import::stage(&file, &opts)?;
         let new_id = self.commit_import(staged)?;
@@ -168,7 +172,7 @@ impl Library {
         if !can_crop(&ext) {
             return Err(self.invalid(format!("falcon can't crop .{} files", item.ext)));
         }
-        let raw = item.original_path(self.root());
+        let raw = self.resolved_source_path(&item.id)?;
         let data = fs::read(&raw).map_err(|e| Error::io(&raw, e))?;
         self.refuse_animated(&data)?;
         let img = thumbnail::decode(&raw).map_err(|e| self.invalid(e.to_string()))?;
@@ -592,11 +596,11 @@ mod tests {
         assert_eq!((after.width, after.height), (600, 400));
         assert!(after.last_modified > before.last_modified && !after.palettes.is_empty());
         assert_eq!(keys(&lib, &id), order);
-        let img = thumbnail::decode(&after.original_path(lib.root())).unwrap().to_rgb8();
+        let img = thumbnail::decode(&after.managed_storage_path(lib.root())).unwrap().to_rgb8();
         assert_eq!(img.get_pixel(0, 0), src.get_pixel(599, 0));
         assert_eq!(img.get_pixel(10, 300), src.get_pixel(589, 300));
         lib.flip_item(&id, Flip::Vertical).unwrap();
-        let img = thumbnail::decode(&after.original_path(lib.root())).unwrap().to_rgb8();
+        let img = thumbnail::decode(&after.managed_storage_path(lib.root())).unwrap().to_rgb8();
         assert_eq!(img.get_pixel(0, 0), src.get_pixel(599, 399));
     }
 
@@ -607,17 +611,17 @@ mod tests {
         let (_tmp, mut lib, id) = library_with("photo.jpg", &jpg);
         lib.flip_item(&id, Flip::Horizontal).unwrap();
         let item = lib.item(&id).unwrap().clone();
-        let data = fs::read(item.original_path(lib.root())).unwrap();
+        let data = fs::read(item.managed_storage_path(lib.root())).unwrap();
         assert_eq!(jpeg_orientation(&data), Some(2));
         let pixels = |b: &[u8]| image::load_from_memory(b).unwrap().to_rgb8();
         assert!(pixels(&data).into_raw() == pixels(&jpg).into_raw(), "the compressed image is untouched");
         // Shown mirrored: the left edge now holds what was on the right.
-        let shown = thumbnail::decode(&item.original_path(lib.root())).unwrap().to_rgb8();
+        let shown = thumbnail::decode(&item.managed_storage_path(lib.root())).unwrap().to_rgb8();
         let stored = pixels(&jpg);
         assert_eq!(shown.get_pixel(0, 100), stored.get_pixel(299, 100));
         assert_eq!((item.width, item.height), (300, 200));
         lib.flip_item(&id, Flip::Vertical).unwrap();
-        assert_eq!(jpeg_orientation(&fs::read(item.original_path(lib.root())).unwrap()), Some(3));
+        assert_eq!(jpeg_orientation(&fs::read(item.managed_storage_path(lib.root())).unwrap()), Some(3));
         let gif = encode(&picture(10, 10), ImageFormat::Gif);
         let (_tmp, mut lib, id) = library_with("a.gif", &gif);
         assert!(lib.flip_item(&id, Flip::Horizontal).is_err());
@@ -688,7 +692,7 @@ mod tests {
         assert!(after.last_modified > before.last_modified);
         assert_eq!(keys(&lib, &id), order);
         // Anticlockwise: the original's top-right corner is now top-left.
-        let img = thumbnail::decode(&after.original_path(lib.root())).unwrap().to_rgb8();
+        let img = thumbnail::decode(&after.managed_storage_path(lib.root())).unwrap().to_rgb8();
         let src = picture(1200, 800);
         assert_eq!(img.get_pixel(0, 0), src.get_pixel(1199, 0));
     }
@@ -701,14 +705,14 @@ mod tests {
         lib.rotate_item(&id, 1).unwrap();
         let item = lib.item(&id).unwrap().clone();
         assert_eq!((item.width, item.height), (600, 1000));
-        let data = fs::read(item.original_path(lib.root())).unwrap();
+        let data = fs::read(item.managed_storage_path(lib.root())).unwrap();
         assert_eq!(jpeg_orientation(&data), Some(6));
         let pixels = |b: &[u8]| image::load_from_memory(b).unwrap().to_rgb8().into_raw();
         assert!(pixels(&data) == pixels(&jpg), "the compressed image is untouched");
         assert_eq!(item.size, data.len() as u64);
         assert_eq!(keys(&lib, &id), order);
         lib.rotate_item(&id, 3).unwrap();
-        assert_eq!(jpeg_orientation(&fs::read(item.original_path(lib.root())).unwrap()), Some(1));
+        assert_eq!(jpeg_orientation(&fs::read(item.managed_storage_path(lib.root())).unwrap()), Some(1));
         assert_eq!(lib.item(&id).unwrap().width, 1000);
     }
 
@@ -740,7 +744,7 @@ mod tests {
         assert_eq!((item.width, item.height, item.no_thumbnail), (150, 100, Some(true)));
         assert_eq!(thumb_size(&lib, &id), None);
         assert_eq!(keys(&lib, &id), order);
-        let img = thumbnail::decode(&item.original_path(lib.root())).unwrap();
+        let img = thumbnail::decode(&item.managed_storage_path(lib.root())).unwrap();
         assert!(img.color().has_alpha());
     }
 
@@ -758,12 +762,12 @@ mod tests {
         rated.extra.insert("star".into(), 4.into());
         lib.update_item(rated).unwrap();
         let before = lib.item(&id).unwrap().clone();
-        let original_bytes = fs::read(before.original_path(lib.root())).unwrap();
+        let original_bytes = fs::read(before.managed_storage_path(lib.root())).unwrap();
         let meta_before = fs::read(before.info_dir(lib.root()).join("metadata.json")).unwrap();
 
         let new_id = lib.crop_item_as_new(&id, PixelRect { x: 100, y: 100, width: 800, height: 400 }).unwrap();
         assert_ne!(new_id, id);
-        assert_eq!(fs::read(before.original_path(lib.root())).unwrap(), original_bytes, "the original file is untouched");
+        assert_eq!(fs::read(before.managed_storage_path(lib.root())).unwrap(), original_bytes, "the original file is untouched");
         assert_eq!(fs::read(before.info_dir(lib.root()).join("metadata.json")).unwrap(), meta_before, "and so is its record");
         let copy = lib.item(&new_id).unwrap().clone();
         assert_eq!((copy.width, copy.height), (800, 400));

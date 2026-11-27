@@ -25,7 +25,7 @@ fn opens_fixture() {
         for f in &item.folders {
             assert!(ids.contains(f.as_str()), "{} -> missing folder {f}", item.id);
         }
-        assert!(item.original_path(lib.root()).is_file(), "{}", item.id);
+        assert!(item.managed_storage_path(lib.root()).is_file(), "{}", item.id);
     }
     assert!(lib.items().iter().any(|i| i.thumbnail_path(lib.root()).is_some()));
 }
@@ -42,7 +42,7 @@ fn round_trips_byte_identically() {
     for item in lib.items() {
         files.push(format!("images/{}.info/metadata.json", item.id));
         // Payload files are copied unchanged too.
-        let orig = item.original_path(lib.root());
+        let orig = item.managed_storage_path(lib.root());
         let rel = orig.strip_prefix(lib.root()).unwrap().to_str().unwrap().to_string();
         files.push(rel);
     }

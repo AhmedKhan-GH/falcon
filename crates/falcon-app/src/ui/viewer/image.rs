@@ -5,18 +5,18 @@
 use std::collections::HashMap;
 use std::time::Instant;
 
-use eframe::egui::{self, Color32, ColorImage, Pos2, Rect, Sense, TextureHandle, TextureOptions, Ui, Vec2, vec2};
+use eframe::egui::{self, Color32, ColorImage, CornerRadius, Pos2, Rect, Sense, Stroke, StrokeKind, TextureHandle, TextureOptions, Ui, Vec2, vec2};
 use falcon_library::{Library, thumbnail};
 use falcon_library::model::Item;
 
 use crate::app::App;
 use crate::gesture::{Gesture, Outcome};
 use crate::ui::viewer::audio;
-use crate::ui::widgets::ext_placeholder;
+use crate::ui::widgets::{ext_placeholder, galley};
 use crate::loader::{Job, Loader, Original, Tier, job_for, original_job, quicklook_region_job, stand_in_job};
 use crate::locale::{tr, trf};
 use crate::logic;
-use crate::theme::{self as t, mono};
+use crate::theme::{self as t, font, mono};
 
 /// The visible part of a zoomed-in SVG or QuickLook format, its render size
 /// (see `loader::Region`) and since when it has held still.
@@ -85,8 +85,11 @@ impl App {
         }
         let tf = self.image.tf;
         let is_psd = falcon_library::psd::handles(&ext);
-        if is_psd && self.image.opened != id {
-            self.image.psd.open(&id, item.original_path(lib.root()), ui.ctx());
+        if is_psd
+            && self.image.opened != id
+            && let Ok(path) = lib.resolved_source_path(&id)
+        {
+            self.image.psd.open(&id, path, ui.ctx());
         }
         self.image.psd.poll();
         let natural = if let Some(size) = page_size {
@@ -192,15 +195,15 @@ impl App {
         clip.set_clip_rect(area);
 
         let animated = self.ws.view.anim.as_ref().is_some_and(|a| a.texture().is_some());
-        let ask = SharpAsk { item, root: lib.root(), natural, r, area, tex: tex.as_ref(), tf, plain: !animated && page_size.is_none() };
+        let ask = SharpAsk { item, lib, natural, r, area, tex: tex.as_ref(), tf, plain: !animated && page_size.is_none() };
         let sharp = ask_sharp(ui, &mut self.ws.loader, &mut self.ws.frame_jobs, &self.image.psd, &mut self.image.region_view, &ask);
         let patch = sharp.patch;
         let original = self.ws.loader.original(&id).filter(|_| sharp.original);
 
         // Without a full render, or while QuickLook is still making one, the
         // thumbnail stands in; with neither, the format can't be previewed.
-        let full_failed = self.ws.loader.has_failed(&id, Tier::Full) || job_for(item, lib.root(), Tier::Full).is_none();
-        let preview_job = stand_in_job(item, lib.root(), full_failed);
+        let full_failed = self.ws.loader.has_failed(&id, Tier::Full) || job_for(lib, item, Tier::Full).is_none();
+        let preview_job = stand_in_job(lib, item, full_failed);
         let no_preview = full_failed && (preview_job.is_none() || self.ws.loader.has_failed(&id, Tier::Preview));
         let has_original = original.is_some();
         // The item's own thumbnail background wins over the preference.
@@ -226,7 +229,7 @@ impl App {
                 None if !tf.is_identity() && !animated => paint_transformed(clip.painter(), tex.id(), r, tf),
                 None => egui::Image::new((tex.id(), r.size())).paint_at(&clip, r),
             },
-            (None, None) if no_preview => self.cannot_preview(&mut clip, item, lib.root(), area),
+            (None, None) if no_preview => self.cannot_preview(&mut clip, lib, item, area),
             (None, None) => ext_placeholder(&clip, Rect::from_center_size(area.center(), Vec2::splat(260.0)), &item.ext),
         }
         if tex.is_none()
@@ -235,6 +238,21 @@ impl App {
             self.ws.frame_jobs.push(j);
         }
         self.edit_overlay(ui, item, r, area);
+
+        let status = falcon_library::linked::evaluate_status(lib.config(), item, lib.root());
+        let is_missing_media = matches!(status, falcon_library::linked::AssetStatus::Missing | falcon_library::linked::AssetStatus::Offline | falcon_library::linked::AssetStatus::InvalidReference);
+        if is_missing_media {
+            let banner_rect = Rect::from_center_size(Pos2::new(area.center().x, area.top() + 28.0), vec2(290.0, 36.0));
+            ui.painter().rect_filled(banner_rect, CornerRadius::same(6), Color32::from_black_alpha(200));
+            ui.painter().rect_stroke(banner_rect, CornerRadius::same(6), Stroke::new(1.0, Color32::from_rgb(230, 90, 80)), StrokeKind::Inside);
+            let g = galley(ui, tr("Missing Original Media"), font(12.0), Color32::from_rgb(255, 120, 110), 170.0);
+            ui.painter().galley(Pos2::new(banner_rect.left() + 14.0, banner_rect.center().y - g.size().y / 2.0), g, Color32::from_rgb(255, 120, 110));
+            let btn_rect = Rect::from_min_max(Pos2::new(banner_rect.right() - 86.0, banner_rect.top() + 5.0), Pos2::new(banner_rect.right() - 8.0, banner_rect.bottom() - 5.0));
+            if ui.put(btn_rect, egui::Button::new(egui::RichText::new(tr("Relink…")).font(font(11.0)))).clicked() {
+                self.open_relink_dialog(lib, vec![item.id.clone()]);
+            }
+        }
+
         self.navigator(ui, tex.as_ref(), natural, r, area);
         if let Some(g) = &self.image.gesture {
             paint_trail(&ui.painter().with_clip_rect(area), g);
@@ -297,9 +315,21 @@ impl App {
             zoom = Some(if (scale - 1.0).abs() > 1e-3 { logic::ViewZoom::Actual } else { logic::ViewZoom::Fit });
         }
         x -= 25.0;
-        let track = Rect::from_min_max(Pos2::new(x - 110.0, cy - 9.0), Pos2::new(x, cy + 9.0));
-        if let Some(v) = zoom_slider(ui, track, logic::zoom_slider_pos(scale)) {
+        let track = Rect::from_min_max(Pos2::new(x - 110.0, cy - 15.0), Pos2::new(x, cy + 15.0));
+        let (slider_val, slider_dragging) = zoom_slider(ui, track, logic::zoom_slider_pos(scale));
+        if let Some(v) = slider_val {
             picked = Some(logic::slider_zoom_snapped(v));
+        }
+        // Prevent macOS native titlebar drag and custom window_drag from stealing
+        // clicks/drags on the viewer zoom slider and right-side zoom controls.
+        let over_viewer_controls = ui.input(|i| {
+            i.pointer.hover_pos().is_some_and(|p| {
+                bar.y_range().contains(p.y)
+                    && ((p.x >= track.left() - 12.0 && p.x <= right) || p.x <= name_x)
+            })
+        });
+        if slider_dragging || over_viewer_controls {
+            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::NULL.with("window_movable"), false));
         }
         // The GIF frame player's toggle sits left of the slider.
         x = track.left() - 20.0;
@@ -309,7 +339,7 @@ impl App {
             self.ws.view.zoom = Some(new);
         }
         let tools_x = self.gif_toggle_button(ui, item, x, cy);
-        let tools_left = self.edit_bar(ui, item, tools_x, cy);
+        let tools_left = self.edit_bar(ui, lib, item, tools_x, cy);
         let tools_left = self.tiff_bar(ui, item, tools_left, cy);
         let tools_left = self.exposure_bar(ui, item, tools_left, cy);
         audio::bar_name(ui, item, bar, name_x, tools_left);
@@ -325,7 +355,32 @@ impl App {
                 self.ws.view.pan = Vec2::ZERO;
             }
         }
-        if let Some(j) = job_for(item, lib.root(), Tier::Full) {
+        let ppp = ui.ctx().pixels_per_point();
+        let natural_long = natural.x.max(natural.y);
+        let shown_px = (natural_long * scale * ppp).ceil() as u32;
+        let gpu_max = ui.ctx().input(|i| i.max_texture_side as u32).max(1024);
+        let preview_res = if shown_px <= 1024 {
+            1024
+        } else if shown_px <= 2048 {
+            2048
+        } else if shown_px <= 2560 {
+            2560
+        } else {
+            4096
+        }
+        .min(natural_long as u32)
+        .min(gpu_max);
+
+        // Tier 2: Adaptive High-Quality Preview
+        if let Some(mut j) = job_for(lib, item, Tier::Preview) {
+            j.max_side = Some(preview_res);
+            self.ws.frame_jobs.push(j);
+        }
+
+        // Tier 3: Full resolution when inspecting 1:1 or zoomed deep
+        if (scale >= 0.99 || shown_px > preview_res)
+            && let Some(j) = job_for(lib, item, Tier::Full)
+        {
             self.ws.frame_jobs.push(j);
         }
         if self.prefs.remember_zoom && !self.image.edge && self.ws.viewer.as_deref() == Some(id.as_str()) {
@@ -420,7 +475,7 @@ impl App {
             }
             None => ext_placeholder(ui, thumb, &item.ext),
         }
-        if let Some(j) = job_for(item, lib.root(), Tier::Preview) {
+        if let Some(j) = job_for(lib, item, Tier::Preview) {
             self.ws.frame_jobs.push(j);
         }
         let megapixels = item.width.saturating_mul(item.height) / 1_000_000;
@@ -482,22 +537,35 @@ pub(crate) fn paint_trail(painter: &egui::Painter, g: &Gesture) {
 }
 
 /// The viewer's zoom slider over `track` at position `pos` (see
-/// `logic::SLIDER_RANGE`); returns the position dragged or clicked to.
-fn zoom_slider(ui: &mut Ui, track: Rect, pos: f32) -> Option<f32> {
+/// `logic::SLIDER_RANGE`); returns `(picked_position, is_dragging)`.
+fn zoom_slider(ui: &mut Ui, track: Rect, pos: f32) -> (Option<f32>, bool) {
     let (lo, hi) = logic::SLIDER_RANGE;
-    let resp = ui.interact(track, ui.scope_id().with("viewer-zoom-slider"), Sense::click_and_drag());
+    let hit = Rect::from_min_max(
+        Pos2::new(track.left() - 8.0, track.top()),
+        Pos2::new(track.right() + 8.0, track.bottom()),
+    );
+    let resp = ui.interact(hit, ui.scope_id().with("viewer-zoom-slider"), Sense::click_and_drag());
+    if resp.hovered() || resp.dragged() {
+        ui.ctx().set_cursor_icon(if resp.dragged() { egui::CursorIcon::Grabbing } else { egui::CursorIcon::Grab });
+    }
     let picked = resp
         .interact_pointer_pos()
-        .filter(|_| resp.dragged() || resp.clicked())
+        .filter(|_| resp.drag_started() || resp.dragged() || resp.clicked())
         .map(|p| lo + ((p.x - track.left()) / track.width()).clamp(0.0, 1.0) * (hi - lo));
     let f = ((picked.unwrap_or(pos) - lo) / (hi - lo)).clamp(0.0, 1.0);
     let p = ui.painter();
     let y = track.center().y;
     p.line_segment([Pos2::new(track.left(), y), Pos2::new(track.right(), y)], egui::Stroke::new(2.0, t::p().divider));
     let kx = track.left() + f * track.width();
-    p.line_segment([Pos2::new(track.left(), y), Pos2::new(kx, y)], egui::Stroke::new(2.0, t::p().text_muted));
-    p.circle_filled(Pos2::new(kx, y), 6.0, Color32::WHITE);
-    picked
+    if kx > track.left() {
+        p.line_segment([Pos2::new(track.left(), y), Pos2::new(kx, y)], egui::Stroke::new(2.0, t::p().primary));
+    }
+    let thumb_r = if resp.dragged() { 7.5 } else if resp.hovered() { 7.0 } else { 6.0 };
+    if resp.hovered() || resp.dragged() {
+        p.circle_filled(Pos2::new(kx, y), thumb_r + 2.5, t::p().primary.gamma_multiply(0.35));
+    }
+    p.circle_filled(Pos2::new(kx, y), thumb_r, Color32::WHITE);
+    (picked, resp.dragged() || resp.drag_started())
 }
 
 /// Draws texture `tex` over `r` turned and mirrored by `tf`.
@@ -514,7 +582,7 @@ pub(crate) fn paint_transformed(painter: &egui::Painter, tex: egui::TextureId, r
 /// A picture on screen, for [`ask_sharp`].
 pub(crate) struct SharpAsk<'a> {
     pub item: &'a Item,
-    pub root: &'a std::path::Path,
+    pub lib: &'a falcon_library::Library,
     /// The picture's size in pixels, as drawn (any turn applied).
     pub natural: Vec2,
     /// Where the picture is drawn, and the part of the window it shows in.
@@ -551,7 +619,7 @@ pub(crate) struct Sharp {
 /// PDFKit (the worker reads which it is; `render` is for QuickLook, `size`
 /// for PDFKit).
 pub(crate) fn ask_sharp(ui: &Ui, loader: &mut Loader, jobs: &mut Vec<Job>, psd: &crate::psd_status::PsdStatus, region_view: &mut Option<RegionView>, a: &SharpAsk) -> Sharp {
-    let SharpAsk { item, root, natural, r, area, tex, tf, plain } = *a;
+    let SharpAsk { item, lib, natural, r, area, tex, tf, plain } = *a;
     let id = &item.id;
     let ext = item.ext.to_lowercase();
     let is_psd = falcon_library::psd::handles(&ext);
@@ -564,7 +632,7 @@ pub(crate) fn ask_sharp(ui: &Ui, loader: &mut Loader, jobs: &mut Vec<Job>, psd: 
         && (!is_psd || tiled)
         && tf.is_identity()
         && logic::wants_original(&ext, natural.x.max(natural.y) as u32, shown_px)
-        && let Some(j) = original_job(item, root, tile)
+        && let Some(j) = original_job(lib, item, tile)
     {
         jobs.push(j);
     }
@@ -584,11 +652,11 @@ pub(crate) fn ask_sharp(ui: &Ui, loader: &mut Loader, jobs: &mut Vec<Job>, psd: 
             let region = region.filter(|(_, side)| *side as f32 > full_side);
             let max = ui.ctx().input(|i| i.max_texture_side).min(8192) as u32;
             let size = logic::illustrator(&ext).then(|| logic::svg_region(image_rect, view_rect, ppp, max)).flatten().map_or([0, 0], |(_, size)| size);
-            (region.map(|(rect, side)| (rect, size, side)), quicklook_region_job(item, root), logic::QUICKLOOK_SETTLE)
+            (region.map(|(rect, side)| (rect, size, side)), quicklook_region_job(lib, item), logic::QUICKLOOK_SETTLE)
         } else {
             let max = ui.ctx().input(|i| i.max_texture_side).min(8192) as u32;
             let region = logic::svg_region(image_rect, view_rect, ppp, max);
-            (region.map(|(rect, size)| (rect, size, 0)), job_for(item, root, Tier::Full), logic::SVG_SETTLE)
+            (region.map(|(rect, size)| (rect, size, 0)), job_for(lib, item, Tier::Full), logic::SVG_SETTLE)
         };
         if let Some((rect, size, render)) = region {
             let same = region_view.is_some_and(|(r0, s0, n0, _)| r0 == rect && s0 == size && n0 == render);
