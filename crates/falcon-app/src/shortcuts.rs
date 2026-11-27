@@ -153,6 +153,8 @@ pub enum Command {
     ToggleComments,
     /// Show Subfolder Content (Eagle's ⌥⌘7).
     ToggleSubfolders,
+    /// Show or hide the clickable breadcrumb path bar.
+    TogglePathBar,
     /// Open the tag picker for the selection: Organize ▸ Add Tags… (⌘T)
     /// and Eagle's bare T.
     AddTags,
@@ -532,6 +534,7 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::ToggleInfo, id: "view.toggle.listmetas", group: "View", label: "Show or hide item info", default: k(CMD_ALT, Key::Num5), aliases: &[] },
     Spec { cmd: Command::ToggleComments, id: "view.toggle.listannotation", group: "View", label: "Show or hide comment counts", default: k(CMD_ALT, Key::Num6), aliases: &[] },
     Spec { cmd: Command::ToggleSubfolders, id: "view.toggle.subfolder", group: "View", label: "Show or hide subfolder content", default: k(CMD_ALT, Key::Num7), aliases: &[] },
+    Spec { cmd: Command::TogglePathBar, id: "view.toggle.path_bar", group: "View", label: "Show or hide the path bar", default: k(CMD_ALT, Key::P), aliases: &[] },
     // Tags: Organize ▸ Add Tags… and Eagle's T, bound outside its keybind table (falcon's own id).
     Spec { cmd: Command::AddTags, id: "organize.tag.add", group: "Tags", label: "Add tags to the selection", default: k(CMD, Key::T), aliases: &[] },
     Spec { cmd: Command::TagPanel, id: "organize.tag.panel", group: "Tags", label: "Open the tag picker", default: k(NONE, Key::T), aliases: &[] },
