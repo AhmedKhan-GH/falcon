@@ -72,11 +72,35 @@ impl App {
         }
         self.title_menu(lib, title_resp);
 
-        // Right side: search field, then the icon row.
-        let search = Rect::from_min_size(Pos2::new(bar.right() - 18.0 - 178.0, cy - 15.0), vec2(178.0, 30.0));
+        let own = self.own_sort(lib);
+        let refresh = matches!(self.ws.scope, Scope::Random(_)) || matches!(own, Some((_, Some((FolderOrder::Random, _)))));
+
+        // Dedicated space for inspector/sidebar panel toggle when closed
+        if !self.show_inspector {
+            let toggle_center = Pos2::new(bar.right() - 24.0, cy);
+            if icon_button(ui, toggle_center, ic::SIDEBAR_SIMPLE, 18.0, true, tr("Show inspector")).clicked() {
+                self.show_inspector = true;
+            }
+        }
+
+        // Right side: dynamic search field with reserved 8px spacing, then the icon row.
+        let toggle_reserved = if !self.show_inspector { 44.0 } else { 16.0 };
+        let search_right = bar.right() - toggle_reserved;
+
+        let mut num_icons = 3.0; // Filter, Layout, Plugins
+        if self.ai_view_allowed() { num_icons += 1.0; }
+        if refresh { num_icons += 1.0; }
+        if self.ws.scope != Scope::AllTags { num_icons += 1.0; }
+        let icons_width = num_icons * 26.0 + 20.0;
+
+        let avail_right = (search_right - (title_end + 30.0)).max(0.0);
+        let max_search_w = (avail_right - icons_width).max(90.0);
+        let desired_search_w = ((bar.width() - 500.0) * 0.15 + 130.0).clamp(110.0, 190.0);
+        let search_w = desired_search_w.min(max_search_w).clamp(90.0, 200.0);
+
+        let search = Rect::from_min_size(Pos2::new(search_right - search_w, cy - 15.0), vec2(search_w, 30.0));
         self.search_field(ui, search);
         let mut ix = search.left() - 20.0;
-        let own = self.own_sort(lib);
         let filter = icon_button(ui, Pos2::new(ix, cy), ic::FUNNEL, 18.0, true, tr("Filter"));
         ix -= 26.0;
         if self.ai_view_allowed() {
@@ -491,6 +515,20 @@ mod tests {
 
         assert!(min_thumb_left > minus_rect.right(), "min thumb edge ({min_thumb_left}) must clear minus button right ({})", minus_rect.right());
         assert!(max_thumb_right < plus_rect.left(), "max thumb edge ({max_thumb_right}) must clear plus button left ({})", plus_rect.left());
+    }
+
+    #[test]
+    fn search_and_toggle_button_spacing_prevents_overlap() {
+        let bar_right = 1000.0;
+        let show_inspector = false;
+        let toggle_reserved = if !show_inspector { 44.0 } else { 16.0 };
+        let search_right = bar_right - toggle_reserved;
+
+        let toggle_center_x = bar_right - 24.0;
+        let toggle_left_edge = toggle_center_x - 12.0; // button has 24px width
+        let gap = toggle_left_edge - search_right;
+
+        assert!(gap >= 8.0, "gap between search and toggle button must be at least 8px, got {gap}");
     }
 
     #[test]

@@ -33,36 +33,21 @@ impl App {
             .id_salt("home_dashboard_scroll")
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                ui.add_space(20.0);
+                // Consistent horizontal padding (16px) aligning with panel boundaries and window edges
+                let margin = egui::Margin { left: 16, right: 16, top: 20, bottom: 32 };
+                egui::Frame::NONE.inner_margin(margin).show(ui, |ui| {
+                    let content_w = ui.available_width().max(100.0);
 
-                // Responsive horizontal padding based on window width
-                let total_width = ui.available_width();
-                let margin_x = if total_width > 1200.0 {
-                    36.0
-                } else if total_width > 800.0 {
-                    24.0
-                } else {
-                    16.0
-                };
+                    // Zone 1: Home Dashboard Heading
+                    self.home_heading(ui);
+                    ui.add_space(16.0);
 
-                ui.horizontal(|ui| {
-                    ui.add_space(margin_x);
-                    ui.vertical(|ui| {
-                        let content_w = (ui.available_width() - margin_x).max(100.0);
-                        ui.set_max_width(content_w);
+                    // Zone 2: Library Overview Metrics
+                    self.home_library_overview(ui, lib, content_w);
+                    ui.add_space(28.0);
 
-                        // Zone 1: Home Dashboard Heading
-                        self.home_heading(ui);
-                        ui.add_space(16.0);
-
-                        // Zone 2: Library Overview Metrics
-                        self.home_library_overview(ui, lib, content_w);
-                        ui.add_space(28.0);
-
-                        // Zone 3: Root Folder Collections Grid
-                        self.home_collections_section(ui, lib, content_w);
-                        ui.add_space(32.0);
-                    });
+                    // Zone 3: Root Folder Collections Grid
+                    self.home_collections_section(ui, lib, content_w);
                 });
             });
     }

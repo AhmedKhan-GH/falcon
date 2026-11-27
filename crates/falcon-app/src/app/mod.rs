@@ -9,11 +9,9 @@ use eframe::egui::{self, Pos2, Rect, Ui, vec2};
 use falcon_library::Library;
 use falcon_library::search::OrderBy;
 
-use crate::icons as ic;
 use crate::logic::{self, Layout};
-use crate::locale::tr;
 use crate::theme as t;
-use crate::ui::widgets::{galley, icon_button};
+use crate::ui::widgets::galley;
 
 pub(crate) mod actions;
 pub(crate) mod ai_search;
@@ -735,12 +733,6 @@ impl App {
                 let bar = Rect::from_min_size(full.min, vec2(full.width(), t::BAR_HEIGHT));
                 let mut top = ui.new_child(egui::UiBuilder::new().max_rect(bar));
                 self.toolbar(&mut top, lib);
-                if !self.show_inspector {
-                    let c = Pos2::new(bar.right() - 24.0, bar.center().y);
-                    if icon_button(&mut top, c, ic::SIDEBAR_SIMPLE, 18.0, true, tr("Show inspector")).clicked() {
-                        self.show_inspector = true;
-                    }
-                }
                 let mut grid_top = bar.bottom();
                 let pb = Rect::from_min_size(Pos2::new(full.left(), grid_top), vec2(full.width(), 26.0));
                 let mut pui = ui.new_child(egui::UiBuilder::new().max_rect(pb));
