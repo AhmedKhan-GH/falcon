@@ -30,6 +30,7 @@ pub const FOLDER_OPEN: &str = "\u{E256}";
 pub const FOLDER_STAR: &str = "\u{EA86}";
 pub const FUNNEL: &str = "\u{E266}";
 pub const GEAR: &str = "\u{E270}";
+pub const HOUSE: &str = "\u{E2C2}";
 pub const IMAGES: &str = "\u{E836}";
 pub const KEYBOARD: &str = "\u{E2D8}";
 pub const LAYOUT: &str = "\u{E6D6}";

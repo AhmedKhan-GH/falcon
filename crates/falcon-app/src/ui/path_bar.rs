@@ -69,6 +69,13 @@ impl App {
                     icon: ic::BOOKMARK_SIMPLE,
                 });
             }
+            Scope::Home => {
+                segments.push(Segment {
+                    scope: Some(Scope::Home),
+                    name: tr("Home").to_string(),
+                    icon: ic::HOUSE,
+                });
+            }
             Scope::All => {
                 segments.push(Segment {
                     scope: Some(Scope::All),

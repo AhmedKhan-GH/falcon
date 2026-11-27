@@ -494,6 +494,7 @@ pub static MENUS: &[(&str, &[Entry])] = &[
         &[
             checked("Always on Top", Command::AlwaysOnTop, Check::AlwaysOnTop),
             SEP,
+            checked("Home", Command::Page(Page::Home), Check::Page(Page::Home)),
             checked("All Items", Command::Page(Page::All), Check::Page(Page::All)),
             checked("Uncategorized", Command::Page(Page::Uncategorized), Check::Page(Page::Uncategorized)),
             checked("Untagged", Command::Page(Page::Untagged), Check::Page(Page::Untagged)),
@@ -1225,10 +1226,11 @@ mod tests {
         let titles: Vec<&str> = MENUS.iter().map(|m| m.0).collect();
         assert_eq!(titles, ["File", "Library", "Edit", "Find", "Organize", "View", "Window", "Help"]);
         let keys = Shortcuts::default();
-        // Always on Top comes first, then the View pages, ⌘1 to ⌘7.
+        // Always on Top comes first, then Home and the View pages, ⌘1 to ⌘7.
         let view = MENUS.iter().find(|m| m.0 == "View").unwrap().1;
         assert!(matches!(&view[0], Entry::Item(i) if i.cmd == Command::AlwaysOnTop));
-        let pages: Vec<String> = view.iter().skip(2).take(7).filter_map(|e| if let Entry::Item(i) = e { chord(i.cmd, &keys).map(|c| crate::shortcuts::format(&c)) } else { None }).collect();
+        assert!(matches!(&view[2], Entry::Item(i) if i.cmd == Command::Page(Page::Home)));
+        let pages: Vec<String> = view.iter().skip(3).take(7).filter_map(|e| if let Entry::Item(i) = e { chord(i.cmd, &keys).map(|c| crate::shortcuts::format(&c)) } else { None }).collect();
         assert_eq!(pages, (1..=7).map(|n| format!("Command + {n}")).collect::<Vec<_>>());
     }
 

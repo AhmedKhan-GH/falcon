@@ -38,9 +38,10 @@ pub fn sidebar_step(rows: &[Scope], cursor: Option<usize>, current: &Scope, down
 }
 
 /// Which sidebar entry is active.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 pub enum Scope {
     #[default]
+    Home,
     All,
     Uncategorized,
     Untagged,
@@ -65,6 +66,7 @@ impl Scope {
     /// Title shown in the toolbar and inspector.
     pub fn title(&self, roots: &[Folder]) -> String {
         match self {
+            Scope::Home => tr("Home").into(),
             Scope::All => tr("All").into(),
             Scope::Uncategorized => tr("Uncategorized").into(),
             Scope::Untagged => tr("Untagged").into(),
@@ -188,6 +190,7 @@ pub fn tag_counts(items: &[Item]) -> Vec<(String, usize)> {
 
 fn in_scope(item: &Item, scope: &Scope, index: &search::FolderIndex) -> bool {
     match scope {
+        Scope::Home => false,
         Scope::Trash => item.is_deleted,
         // Recently Used lists what was opened, trashed items too, as in
         // Eagle; the caller's `only` set holds the list.

@@ -13,6 +13,7 @@ pub(crate) mod emoji_menu;
 pub(crate) mod sidebar;
 pub(crate) mod inspector;
 pub(crate) mod viewer;
+pub(crate) mod home;
 pub(crate) mod grid;
 pub(crate) mod drop_hint;
 pub(crate) mod drop_unlock;

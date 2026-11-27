@@ -190,6 +190,8 @@ pub struct App {
     pub(crate) tag_look: crate::tags::TagLook,
     /// Emoji folder icons and their textures (`folder_emoji.rs`).
     pub(crate) folder_emoji: crate::folder_emoji_tex::FolderEmojis,
+    /// Last opened scope for StartupDestination::LastOpened.
+    pub(crate) last_scope: Option<crate::logic::Scope>,
     /// The auto-import folder's watcher and what it has handed over
     /// (`auto_import.rs`).
     pub(crate) auto_import: crate::auto_import::AutoImport,
@@ -316,6 +318,7 @@ impl App {
             folds: Folds::default(),
             tag_look: Default::default(),
             folder_emoji: Default::default(),
+            last_scope: None,
             auto_import: Default::default(),
             modes: Default::default(),
             preview: Vec::new(),
@@ -380,6 +383,7 @@ impl App {
         app.folds = saved.folds;
         app.tag_look = saved.tag_look;
         app.folder_emoji.store = saved.folder_emoji;
+        app.last_scope = saved.last_scope;
         app.text_zoom = saved.text_zoom.unwrap_or(0).min(crate::textdoc::ZOOM_LEVELS - 1);
         app.auto_import.imported = Arc::new(Mutex::new(saved.auto_imported));
         app.font_look = saved.font_look.unwrap_or_default();

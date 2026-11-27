@@ -267,6 +267,7 @@ impl Scroll {
 /// The sidebar pages ⌘1–⌘7 open, in the order of Eagle's View menu.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Page {
+    Home,
     All,
     Uncategorized,
     Untagged,
@@ -277,11 +278,12 @@ pub enum Page {
 }
 
 impl Page {
-    pub const ALL: [Page; 7] = [Page::All, Page::Uncategorized, Page::Untagged, Page::Recent, Page::Random, Page::AllTags, Page::Trash];
+    pub const ALL: [Page; 8] = [Page::Home, Page::All, Page::Uncategorized, Page::Untagged, Page::Recent, Page::Random, Page::AllTags, Page::Trash];
 
     pub fn scope(self) -> crate::logic::Scope {
         use crate::logic::Scope;
         match self {
+            Page::Home => Scope::Home,
             Page::All => Scope::All,
             Page::Uncategorized => Scope::Uncategorized,
             Page::Untagged => Scope::Untagged,
@@ -465,7 +467,8 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::PreviousLibrary, id: "library.previous", group: "Library", label: "Previous open library", default: k(CTRL_SHIFT, Key::Tab), aliases: &[] },
     Spec { cmd: Command::Preferences, id: "app.preferences", group: "App", label: "Preferences", default: k(CMD, Key::Comma), aliases: &[] },
     Spec { cmd: Command::LockApp, id: "app.lock", group: "App", label: "Lock falcon", default: k(CMD_ALT, Key::L), aliases: &[] },
-    // Eagle's View ▸ All … Trash.
+    // Eagle's View ▸ All … Trash, and falcon's Home.
+    Spec { cmd: Command::Page(Page::Home), id: "view.home", group: "Go", label: "Show Home", default: k(CMD_SHIFT, Key::H), aliases: &[] },
     Spec { cmd: Command::Page(Page::All), id: "view.all", group: "Go", label: "Show All", default: k(CMD, Key::Num1), aliases: &[] },
     Spec { cmd: Command::Page(Page::Uncategorized), id: "view.unfiled", group: "Go", label: "Show Uncategorized", default: k(CMD, Key::Num2), aliases: &[] },
     Spec { cmd: Command::Page(Page::Untagged), id: "view.untagged", group: "Go", label: "Show Untagged", default: k(CMD, Key::Num3), aliases: &[] },
@@ -1277,9 +1280,11 @@ mod tests {
     fn page_keys_follow_eagles_view_menu() {
         let keys = Shortcuts::default();
         let digits = [Key::Num1, Key::Num2, Key::Num3, Key::Num4, Key::Num5, Key::Num6, Key::Num7];
-        for (key, page) in digits.into_iter().zip(Page::ALL) {
+        let pages = [Page::All, Page::Uncategorized, Page::Untagged, Page::Recent, Page::Random, Page::AllTags, Page::Trash];
+        for (key, page) in digits.into_iter().zip(pages) {
             assert_eq!(keys.resolve(key, CMD), Some(Command::Page(page)), "{key:?}");
         }
+        assert_eq!(keys.resolve(Key::H, CMD_SHIFT), Some(Command::Page(Page::Home)));
         // ⌥1 is still a layout and ⌥⌘1 the sidebar.
         assert_eq!(keys.resolve(Key::Num1, ALT), Some(Command::LayoutWaterfall));
         assert_eq!(keys.resolve(Key::Num1, CMD_ALT), Some(Command::ToggleSidebar));

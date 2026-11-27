@@ -65,7 +65,7 @@ impl App {
     /// Keeps `ws.order` current while the viewer hides the grid, so the
     /// viewer's stepping and counter follow edits and deletions.
     pub(crate) fn refresh_order(&mut self, lib: &Library) {
-        if self.scope_gate(lib).is_some() {
+        if self.ws.scope == Scope::Home || self.scope_gate(lib).is_some() {
             self.ws.order.clear();
             return;
         }
@@ -74,6 +74,11 @@ impl App {
     }
 
     pub(crate) fn grid(&mut self, ui: &mut Ui, lib: &Library) {
+        if self.ws.scope == Scope::Home {
+            self.ws.order.clear();
+            self.home_page(ui, lib);
+            return;
+        }
         let area = ui.max_rect();
         self.ws.cards.begin(ui.ctx().cumulative_frame_nr());
         // The grayscale preview grays the cards too, as Eagle's does.

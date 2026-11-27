@@ -84,7 +84,7 @@ fn list_rows_cap(rows: usize, row_h: f32, avail: f32) -> f32 {
 }
 
 /// "N items · M subfolders" under a subfolder card, or at its row's right.
-fn folder_meta(child: &Folder, counts: &std::collections::HashMap<String, usize>) -> String {
+pub(crate) fn folder_meta(child: &Folder, counts: &std::collections::HashMap<String, usize>) -> String {
     let count = counts.get(&child.id).copied().unwrap_or(0);
     let mut meta = tr_n(count, "{n} item", "{n} items");
     if !child.children.is_empty() {
@@ -261,7 +261,7 @@ impl App {
 
     /// Items dropped on a subfolder card or row go into it, as on a sidebar
     /// row (`target` lights up while they hover), and its right-click menu.
-    fn strip_drop_and_menu(&mut self, ui: &Ui, lib: &Library, child: &Folder, resp: &egui::Response, target: Rect, radius: CornerRadius) {
+    pub(crate) fn strip_drop_and_menu(&mut self, ui: &Ui, lib: &Library, child: &Folder, resp: &egui::Response, target: Rect, radius: CornerRadius) {
         if resp.dnd_hover_payload::<crate::app::DragItems>().is_some() {
             ui.painter().rect_filled(target, radius, t::p().primary.gamma_multiply(0.25));
             ui.painter().rect_stroke(target, radius, Stroke::new(1.5, t::p().primary), StrokeKind::Inside);

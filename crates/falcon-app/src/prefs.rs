@@ -96,6 +96,10 @@ pub struct Prefs {
     /// Falcon's own: optional Finder-style clickable breadcrumb path bar
     /// at the bottom of the central content area.
     pub show_path_bar: bool,
+    /// Where Falcon navigates when a library opens.
+    pub startup_destination: StartupDestination,
+    /// When `startup_destination` is `SpecificFolder`, the folder ID to open.
+    pub startup_folder_id: Option<String>,
     /// Eagle's `habits.dblclickSidebarItem`: what double-clicking a folder
     /// or smart folder in the sidebar does.
     pub sidebar_double_click: SidebarDoubleClick,
@@ -280,6 +284,29 @@ pub enum SpaceKey {
     Scroll,
 }
 
+/// Where Falcon opens on launch.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum StartupDestination {
+    #[default]
+    Home,
+    LastOpened,
+    SpecificFolder,
+    All,
+}
+
+impl StartupDestination {
+    pub const ALL: [Self; 4] = [Self::Home, Self::LastOpened, Self::SpecificFolder, Self::All];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Home => tr_key("Home Dashboard"),
+            Self::LastOpened => tr_key("Last Opened Location"),
+            Self::SpecificFolder => tr_key("Specific Folder"),
+            Self::All => tr_key("All Assets"),
+        }
+    }
+}
+
 /// What double-clicking a sidebar folder does.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
 #[serde(rename_all = "lowercase")]
@@ -352,6 +379,8 @@ impl Default for Prefs {
             sidebar_counts: true,
             subfolder_counts: true,
             show_path_bar: false,
+            startup_destination: StartupDestination::default(),
+            startup_folder_id: None,
             sidebar_double_click: SidebarDoubleClick::default(),
             sidebar: SidebarSections::default(),
             double_click: DoubleClick::default(),
@@ -1254,7 +1283,7 @@ fn general(p: &mut Page, d: &mut Draft, login: &crate::login_item::Status) {
             ui.checkbox(&mut d.prefs.menu_icon, tr("Show the falcon icon in the menu bar"));
         }
     });
-    p.block(tr_key("Startup"), &["startup", "login", "log in", "open at login", "launch", "start", "dock", "close", "quit"], |ui| {
+    p.block(tr_key("Startup"), &["startup", "login", "log in", "open at login", "launch", "start", "dock", "close", "quit", "destination", "home"], |ui| {
         use crate::login_item::Status;
         let usable = !matches!(login, Status::Unavailable(_));
         ui.add_enabled(usable, egui::Checkbox::new(&mut d.launch_at_login, tr("Open Falcon when you log in")));
@@ -1264,6 +1293,28 @@ fn general(p: &mut Page, d: &mut Draft, login: &crate::login_item::Status) {
             Status::NeedsApproval => note(ui, tr("Allow Falcon in System Settings ▸ General ▸ Login Items.")),
             Status::Unavailable(why) => note(ui, why),
             _ => {}
+        }
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            ui.label(tr("Startup destination"));
+            egui::ComboBox::from_id_salt("startup-destination")
+                .selected_text(tr(d.prefs.startup_destination.label()))
+                .show_ui(ui, |ui| {
+                    for dest in StartupDestination::ALL {
+                        ui.selectable_value(&mut d.prefs.startup_destination, dest, tr(dest.label()));
+                    }
+                });
+        });
+        if d.prefs.startup_destination == StartupDestination::SpecificFolder {
+            ui.horizontal(|ui| {
+                ui.label(tr("Folder ID"));
+                let mut fid = d.prefs.startup_folder_id.clone().unwrap_or_default();
+                if ui.text_edit_singleline(&mut fid).changed() {
+                    let trimmed = fid.trim().to_string();
+                    d.prefs.startup_folder_id = if trimmed.is_empty() { None } else { Some(trimmed) };
+                }
+            });
+            note(ui, tr("Falcon will open this folder on launch, or Home if it is missing or invalid."));
         }
     });
     p.block(tr_key("Importing"), &["import", "collect", "keywords", "iptc", "xmp", "tags", "duplicate", "already", "select", "new items", "retina", "2x", "@2x", "screenshot"], |ui| {

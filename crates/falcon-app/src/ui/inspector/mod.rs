@@ -166,12 +166,17 @@ impl App {
         }
         divider(ui);
         let items: Vec<&Item> = self.ws.order.iter().filter_map(|id| lib.item(id)).collect();
-        let size: u64 = items.iter().map(|i| i.size).sum();
+        let size: u64 = if self.ws.scope == Scope::Home {
+            lib.items().iter().map(|i| i.size).sum()
+        } else {
+            items.iter().map(|i| i.size).sum()
+        };
         if self.fold_heading(ui, Fold::Properties, tr("Properties")) {
             // A locked folder keeps its count and size to itself.
             let shut = folder.as_ref().is_some_and(|f| crate::organize::is_shut(f, &self.ws.org.unlocked));
             if !shut {
                 let total = match &self.ws.scope {
+                    Scope::Home => lib.items().len(),
                     Scope::Folder(id) => self.folder_counts_for(lib).get(id).copied().unwrap_or(items.len()),
                     _ => items.len(),
                 };

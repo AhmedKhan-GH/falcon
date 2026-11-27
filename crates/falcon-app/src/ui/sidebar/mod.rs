@@ -612,7 +612,8 @@ impl App {
 
     pub(crate) fn nav_rows(&mut self, ui: &mut Ui, cx: &SidebarCtx) {
         let n = cx.nav;
-        let entries: [(&str, &str, Scope, usize); 8] = [
+        let entries: [(&str, &str, Scope, usize); 9] = [
+            (ic::HOUSE, tr_key("Home"), Scope::Home, 0),
             (ic::IMAGES, tr_key("All"), Scope::All, n.all),
             (ic::FOLDER_DASHED, tr_key("Uncategorized"), Scope::Uncategorized, n.uncategorized),
             (ic::TAG_SIMPLE, tr_key("Untagged"), Scope::Untagged, n.untagged),
@@ -645,12 +646,14 @@ impl App {
                     }
                 });
             }
-            if scope != Scope::Trash && scope != Scope::Recent {
+            if scope != Scope::Trash && scope != Scope::Recent && scope != Scope::Home {
                 // As in Eagle, the entries' menu picks which of them show;
                 // it stays open while you tick them. Trash and Recently Used
                 // have menus of their own.
                 egui::Popup::context_menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
                     ui.set_min_width(180.0);
+                    let mut home = true;
+                    ui.add_enabled(false, egui::Checkbox::new(&mut home, tr("Home")));
                     let mut all = true;
                     ui.add_enabled(false, egui::Checkbox::new(&mut all, tr("All")));
                     let s = &mut self.prefs.sidebar;

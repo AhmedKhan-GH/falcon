@@ -120,6 +120,12 @@ impl App {
         ws.sort = self.ws.sort;
         ws.increase = self.ws.increase;
         ws.layout = self.ws.layout;
+        let startup_scope = if let Some(shared) = &ws.lib {
+            self.resolve_startup_scope(&lock(shared))
+        } else {
+            Scope::Home
+        };
+        ws.scope = startup_scope;
         if self.ws.lib.is_none() {
             // The empty window holds the folder state restored on launch.
             ws.collapsed = std::mem::take(&mut self.ws.collapsed);
@@ -129,6 +135,55 @@ impl App {
         }
         self.serve_active();
     }
+
+    /// Resolves the startup destination scope based on preferences and active library.
+    pub(crate) fn resolve_startup_scope(&self, lib: &Library) -> Scope {
+        resolve_startup_destination(
+            self.prefs.startup_destination,
+            self.prefs.startup_folder_id.as_deref(),
+            self.last_scope.as_ref(),
+            lib,
+        )
+    }
+}
+
+/// Resolves which `Scope` Falcon opens into for a given library.
+pub(crate) fn resolve_startup_destination(
+    destination: crate::prefs::StartupDestination,
+    specific_folder_id: Option<&str>,
+    last_scope: Option<&Scope>,
+    lib: &Library,
+) -> Scope {
+    use crate::prefs::StartupDestination;
+    match destination {
+        StartupDestination::Home => Scope::Home,
+        StartupDestination::All => Scope::All,
+        StartupDestination::LastOpened => {
+            if let Some(scope) = last_scope.filter(|s| is_valid_scope(s, lib)) {
+                return (*scope).clone();
+            }
+            Scope::Home
+        }
+        StartupDestination::SpecificFolder => {
+            if let Some(fid) = specific_folder_id.filter(|fid| logic::find_folder(&lib.metadata.folders, fid).is_some()) {
+                return Scope::Folder(fid.to_string());
+            }
+            Scope::Home
+        }
+    }
+}
+
+/// Verifies whether `scope` is valid and present in `lib`.
+pub(crate) fn is_valid_scope(scope: &Scope, lib: &Library) -> bool {
+    match scope {
+        Scope::Home | Scope::All | Scope::Uncategorized | Scope::Untagged | Scope::Recent | Scope::Random(_) | Scope::AllTags | Scope::Duplicates | Scope::Trash => true,
+        Scope::Folder(id) => logic::find_folder(&lib.metadata.folders, id).is_some(),
+        Scope::Tag(t) => lib.items().iter().any(|item| item.tags.iter().any(|x| x == t)),
+        Scope::Smart(id) => lib.smart_folders().iter().any(|s| &s.id == id),
+    }
+}
+
+impl App {
 
     /// Where the library at `path` sits in the switcher, if it is open.
     pub(crate) fn position_of(&self, path: &std::path::Path) -> Option<usize> {

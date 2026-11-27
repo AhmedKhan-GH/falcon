@@ -100,6 +100,8 @@ pub(crate) struct Saved {
     pub(crate) tips_seen: bool,
     /// Emoji chosen as folder icons, kept here and not in the library.
     pub(crate) folder_emoji: crate::folder_emoji::FolderEmoji,
+    /// Last active scope when the app was closed.
+    pub(crate) last_scope: Option<crate::logic::Scope>,
 }
 
 /// An inspector section whose title folds it away.
@@ -459,6 +461,8 @@ pub(crate) struct Workspace {
     /// Folders whose current or queued pass the user asked for, so that their
     /// result is reported even when nothing changed.
     pub(crate) sync_manual: std::collections::HashSet<String>,
+    /// Session cache of resolved cover asset IDs per folder for Home dashboard.
+    pub(crate) home_covers: std::collections::HashMap<String, Option<String>>,
 }
 
 impl Workspace {
@@ -514,9 +518,10 @@ impl Workspace {
             sync_folders: Vec::new(),
             sync_read: None,
             sync_manual: Default::default(),
+            home_covers: std::collections::HashMap::new(),
             lib,
             loader: Loader::new(ctx),
-            scope: Scope::All,
+            scope: Scope::Home,
             back: Vec::new(),
             forward: Vec::new(),
             query: String::new(),
@@ -661,6 +666,7 @@ impl App {
             notices: self.notices.clone(),
             tips_seen: self.tips_seen,
             folder_emoji: self.folder_emoji.store.clone(),
+            last_scope: Some(self.ws.scope.clone()),
         };
         eframe::set_value(storage, eframe::APP_KEY, &saved);
     }
