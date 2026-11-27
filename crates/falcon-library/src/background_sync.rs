@@ -97,6 +97,11 @@ pub struct SyncControl<'a> {
     /// Files modified within this many milliseconds are left for a later pass
     /// (they may still be being written). 0 trusts every file.
     pub settle_ms: u64,
+    /// Target length of one lock hold: staged files are committed in groups
+    /// that fit it (1 to 8 files), with one flush per group.
+    pub hold_budget_ms: u64,
+    /// Least rest after a hold when `pace` is above 0.
+    pub min_rest_ms: u64,
 }
 
 fn lock(m: &Mutex<Library>) -> MutexGuard<'_, Library> {
@@ -643,64 +648,64 @@ fn run(shared: &Mutex<Library>, wf_id: &str, ctl: &SyncControl<'_>) -> Result<Sy
     publish(&|p| p.phase = SyncPhase::Importing);
     let mode = snap.wf.storage_mode;
     let defer = ctl.defer_thumbnails && mode == StorageMode::Link;
+    // After a hold the committer rests a share of it (at least `min_rest_ms`)
+    // so a waiting interface thread gets the lock.
     let rest = |took: Duration| {
         if ctl.pace > 0.0 {
-            std::thread::sleep(took.mul_f32(ctl.pace));
+            std::thread::sleep(took.mul_f32(ctl.pace).max(Duration::from_millis(ctl.min_rest_ms)));
         }
     };
     struct Produced {
         staged: crate::import::Staged,
         fingerprint: Option<String>,
     }
-    pipeline::<Produced>(
-        imports.len(),
-        ctl.threads,
-        &halt,
-        &|i| {
-            sync_halt();
-            if halt.load(Ordering::Relaxed) {
-                return None;
+    let mut batch: Vec<(usize, Produced)> = Vec::new();
+    let mut avg_commit_ms = 20.0f64;
+    // Commits a group of staged files under ONE lock hold and flushes what they
+    // left pending inside it, so the interface finds nothing to flush after
+    // each file. The group is sized so the hold stays near `hold_budget_ms`.
+    let mut commit_batch = |group: Vec<(usize, Produced)>, avg: &mut f64| {
+        if group.is_empty() || halt.load(Ordering::Relaxed) {
+            return; // staged files left over after a stop are dropped, cleaning their staging
+        }
+        if let Err(e) = marker.mark() {
+            outcome.lock().unwrap_or_else(|p| p.into_inner()).first_error.get_or_insert(e);
+            stop.store(true, Ordering::Relaxed);
+            halt.store(true, Ordering::Relaxed);
+            return;
+        }
+        let started = Instant::now();
+        let count = group.len();
+        let mut done: Vec<(usize, std::result::Result<String, Error>, u64, u64, Option<String>)> = Vec::new();
+        {
+            let mut lib = lock(shared);
+            for (i, Produced { staged, fingerprint }) in group {
+                let (path, _, _) = imports[i];
+                if let Err(e) = check_root(&lib, &snap).and_then(|()| fault::check(FaultPoint::SyncBeforeImport, path)) {
+                    done.push((i, Err(e), 0, 0, None));
+                    break;
+                }
+                let (size, mtime) = (staged.item().size, staged.item().mtime);
+                let committed = lib.commit_import(staged);
+                let failed = committed.is_err();
+                done.push((i, committed, size, mtime, fingerprint));
+                if failed {
+                    break;
+                }
             }
-            let (path, folder_id, _) = imports[i];
-            let opts = ImportOptions { folders: vec![folder_id.clone()], storage_mode: Some(mode), defer_thumbnail: defer, ..Default::default() };
-            let staged = stage(path, &opts).ok()?;
-            let fingerprint = (mode == StorageMode::Copy).then(|| linked::compute_fast_fingerprint(path, staged.item().size).ok()).flatten();
-            Some(Produced { staged, fingerprint })
-        },
-        &mut |i, produced| {
-            sync_halt();
-            let (path, _, key) = imports[i];
-            let Some(Produced { staged, fingerprint }) = produced else {
-                let mut out = outcome.lock().unwrap_or_else(|p| p.into_inner());
-                out.skipped += 1;
-                drop(out);
-                publish(&|p| p.done += 1);
-                return;
-            };
-            if halt.load(Ordering::Relaxed) {
-                return;
+            if lib.has_pending_writes()
+                && let Err(e) = lib.flush()
+            {
+                done.push((usize::MAX, Err(e), 0, 0, None));
             }
-            if let Err(e) = fault::check(FaultPoint::SyncBeforeImport, path) {
-                outcome.lock().unwrap_or_else(|p| p.into_inner()).first_error.get_or_insert(e);
-                stop.store(true, Ordering::Relaxed);
-                halt.store(true, Ordering::Relaxed);
-                return;
-            }
-            let (size, mtime) = (staged.item().size, staged.item().mtime);
-            if let Err(e) = marker.mark() {
-                outcome.lock().unwrap_or_else(|p| p.into_inner()).first_error.get_or_insert(e);
-                stop.store(true, Ordering::Relaxed);
-                halt.store(true, Ordering::Relaxed);
-                return;
-            }
-            let started = Instant::now();
-            let committed = {
-                let mut lib = lock(shared);
-                check_root(&lib, &snap).and_then(|()| lib.commit_import(staged))
-            };
-            rest(started.elapsed());
+        }
+        let took = started.elapsed();
+        *avg = 0.7 * *avg + 0.3 * (took.as_secs_f64() * 1000.0 / count as f64);
+        rest(took);
+        for (i, committed, size, mtime, fingerprint) in done {
             match committed {
                 Ok(id) => {
+                    let (path, _, key) = imports[i];
                     let mut out = outcome.lock().unwrap_or_else(|p| p.into_inner());
                     if mode == StorageMode::Copy {
                         out.provenance.push((key.clone(), SyncSource { item_id: id.clone(), size, mtime_ms: mtime, fingerprint }));
@@ -722,8 +727,42 @@ fn run(shared: &Mutex<Library>, wf_id: &str, ctl: &SyncControl<'_>) -> Result<Sy
                     halt.store(true, Ordering::Relaxed);
                 }
             }
+        }
+    };
+    pipeline::<Produced>(
+        imports.len(),
+        ctl.threads,
+        &halt,
+        &|i| {
+            sync_halt();
+            if halt.load(Ordering::Relaxed) {
+                return None;
+            }
+            let (path, folder_id, _) = imports[i];
+            let opts = ImportOptions { folders: vec![folder_id.clone()], storage_mode: Some(mode), defer_thumbnail: defer, ..Default::default() };
+            let staged = stage(path, &opts).ok()?;
+            let fingerprint = (mode == StorageMode::Copy).then(|| linked::compute_fast_fingerprint(path, staged.item().size).ok()).flatten();
+            Some(Produced { staged, fingerprint })
+        },
+        &mut |i, produced| {
+            sync_halt();
+            let Some(produced) = produced else {
+                outcome.lock().unwrap_or_else(|p| p.into_inner()).skipped += 1;
+                publish(&|p| p.done += 1);
+                return;
+            };
+            if halt.load(Ordering::Relaxed) {
+                return;
+            }
+            batch.push((i, produced));
+            let due = (ctl.hold_budget_ms as f64 / avg_commit_ms.max(1.0)).clamp(1.0, 8.0) as usize;
+            if batch.len() >= due {
+                commit_batch(std::mem::take(&mut batch), &mut avg_commit_ms);
+            }
         },
     );
+    // What was staged last still has to be committed (unless the pass stopped).
+    commit_batch(std::mem::take(&mut batch), &mut avg_commit_ms);
 
     // ---- refreshes (Link) ---------------------------------------------------
     if !refreshes.is_empty() && !stop_all() {
@@ -890,7 +929,7 @@ mod tests {
     }
 
     fn ctl<'a>(cancel: &'a AtomicBool, progress: &'a (dyn Fn(&SyncProgress) + Sync), threads: usize) -> SyncControl<'a> {
-        SyncControl { cancel, progress, threads, defer_thumbnails: false, pace: 0.0, settle_ms: 0 }
+        SyncControl { cancel, progress, threads, defer_thumbnails: false, pace: 0.0, settle_ms: 0, hold_budget_ms: 40, min_rest_ms: 0 }
     }
 
     fn quiet(_: &SyncProgress) {}
@@ -1147,7 +1186,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let (shared, _, _) = setup(tmp.path(), StorageMode::Link, 5, 1);
         let cancel = AtomicBool::new(false);
-        let control = SyncControl { cancel: &cancel, progress: &quiet, threads: 2, defer_thumbnails: true, pace: 0.0, settle_ms: 0 };
+        let control = SyncControl { cancel: &cancel, progress: &quiet, threads: 2, defer_thumbnails: true, pace: 0.0, settle_ms: 0, hold_budget_ms: 40, min_rest_ms: 0 };
         let stats = sync_shared(&shared, "wf", &control).unwrap();
         assert_eq!(stats.added, 5);
         assert_eq!(stats.pending_thumbnail_ids.len(), 5);
@@ -1159,14 +1198,36 @@ mod tests {
     #[ignore = "measurement, not a check"]
     fn bench() {
         let sizes: Vec<usize> = std::env::var("FALCON_BENCH").unwrap_or_else(|_| "1000".into()).split(',').filter_map(|s| s.trim().parse().ok()).collect();
+        let runs: usize = std::env::var("FALCON_RUNS").ok().and_then(|v| v.parse().ok()).unwrap_or(1);
+        let legacy = std::env::var("FALCON_LEGACY").is_ok();
         for mode in [StorageMode::Link, StorageMode::Copy] {
             for &n in &sizes {
-                bench_once(mode, n, false);
-                if n <= 1000 {
-                    bench_once(mode, n, true);
+                // Fewer repeats for the largest sizes, which take minutes each.
+                for run in 0..(if n >= 10_000 { 1 } else { runs }) {
+                    println!("BENCH-RUN mode={mode:?} n={n} run={run}");
+                    bench_once(mode, n, false);
+                    if legacy && n <= 1000 && run == 0 {
+                        bench_once(mode, n, true);
+                    }
                 }
             }
         }
+    }
+
+    fn bench_pace() -> f32 {
+        std::env::var("FALCON_PACE").ok().and_then(|v| v.parse().ok()).unwrap_or(0.15)
+    }
+
+    fn bench_budget() -> u64 {
+        std::env::var("FALCON_BUDGET").ok().and_then(|v| v.parse().ok()).unwrap_or(40)
+    }
+
+    /// CPU seconds this process has used so far (`ps` reports hundredths).
+    fn cpu_secs() -> f64 {
+        let out = std::process::Command::new("ps").args(["-o", "cputime=", "-p", &std::process::id().to_string()]).output().ok();
+        let text = out.map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_default();
+        // [[hh:]mm:]ss.cc
+        text.split(':').try_fold(0.0, |acc, part| part.parse::<f64>().ok().map(|v| acc * 60.0 + v)).unwrap_or(0.0)
     }
 
     fn rss_kb() -> u64 {
@@ -1184,6 +1245,7 @@ mod tests {
         lock(&shared).set_write_mode(crate::undo::WriteMode::Batched).unwrap();
         let done = AtomicBool::new(false);
         let rss_before = rss_kb();
+        let cpu_before = cpu_secs();
         let (stalls, peak_rss, elapsed, added) = std::thread::scope(|scope| {
             let probe = scope.spawn(|| {
                 let mut waits = Vec::new();
@@ -1216,7 +1278,7 @@ mod tests {
                 let mut wf = lib.config().find_watched_folder("wf").unwrap();
                 lib.sync_watched_folder(&mut wf).unwrap().added
             } else {
-                let c = SyncControl { cancel: &cancel, progress: &quiet, threads: 4, defer_thumbnails: mode == StorageMode::Link, pace: 1.0, settle_ms: 0 };
+                let c = SyncControl { cancel: &cancel, progress: &quiet, threads: 4, defer_thumbnails: mode == StorageMode::Link, pace: bench_pace(), settle_ms: 0, hold_budget_ms: bench_budget(), min_rest_ms: 2 };
                 sync_shared(&shared, "wf", &c).unwrap().added
             };
             let elapsed = started.elapsed();
@@ -1226,17 +1288,38 @@ mod tests {
         let mut ms: Vec<f64> = stalls.iter().map(|d| d.as_secs_f64() * 1000.0).collect();
         ms.sort_by(|a, b| a.partial_cmp(b).unwrap());
         let pct = |p: f64| ms.get(((ms.len() as f64 - 1.0) * p) as usize).copied().unwrap_or(0.0);
+        let cpu = cpu_secs() - cpu_before;
         println!(
-            "BENCH mode={mode:?} n={n} path={} added={added} duration={:.2}s rate={:.0}/s lock_wait_probes={} p50={:.1}ms p99={:.1}ms max={:.1}ms peak_rss_delta={}MB",
-            if legacy { "legacy(lock held)" } else { "background" },
+            "BENCH mode={mode:?} n={n} path={} added={added} duration={:.2} rate={:.1} probes={} p50={:.2} p95={:.2} p99={:.2} max={:.2} cpu_pct={:.0} rss_mb={}",
+            if legacy { "legacy" } else { "background" },
             elapsed.as_secs_f64(),
             added as f64 / elapsed.as_secs_f64(),
             ms.len(),
             pct(0.5),
+            pct(0.95),
             pct(0.99),
             ms.last().copied().unwrap_or(0.0),
+            100.0 * cpu / elapsed.as_secs_f64(),
             peak_rss.saturating_sub(rss_before) / 1024,
         );
+        // An unchanged pass (what an automatic folder runs every five minutes).
+        if !legacy {
+            let cancel = AtomicBool::new(false);
+            let c = SyncControl { cancel: &cancel, progress: &quiet, threads: 4, defer_thumbnails: mode == StorageMode::Link, pace: bench_pace(), settle_ms: 0, hold_budget_ms: bench_budget(), min_rest_ms: 2 };
+            let (cpu0, t0) = (cpu_secs(), Instant::now());
+            let mut times = Vec::new();
+            for _ in 0..3 {
+                let t = Instant::now();
+                let st = sync_shared(&shared, "wf", &c).unwrap();
+                assert_eq!((st.added, st.modified), (0, 0));
+                times.push(t.elapsed().as_secs_f64());
+            }
+            println!(
+                "BENCH-IDLE mode={mode:?} n={n} pass_secs={:.3},{:.3},{:.3} cpu_pct={:.0}",
+                times[0], times[1], times[2],
+                100.0 * (cpu_secs() - cpu0) / t0.elapsed().as_secs_f64()
+            );
+        }
         // Cancellation latency on a fresh library of the same size.
         if !legacy {
             let tmp2 = tempfile::tempdir().unwrap();
@@ -1249,10 +1332,10 @@ mod tests {
                     *at.lock().unwrap() = Some(Instant::now());
                 }
             };
-            let c = SyncControl { cancel: &cancel, progress: &progress, threads: 4, defer_thumbnails: mode == StorageMode::Link, pace: 1.0, settle_ms: 0 };
+            let c = SyncControl { cancel: &cancel, progress: &progress, threads: 4, defer_thumbnails: mode == StorageMode::Link, pace: bench_pace(), settle_ms: 0, hold_budget_ms: bench_budget(), min_rest_ms: 2 };
             let stats = sync_shared(&shared2, "wf", &c).unwrap();
             let latency = at.lock().unwrap().map(|t| t.elapsed());
-            println!("BENCH mode={mode:?} n={n} cancel_at=50% cancelled={} added_when_stopped={} cancel_latency={:?}", stats.cancelled, stats.added, latency);
+            println!("BENCH-CANCEL mode={mode:?} n={n} cancelled={} added_when_stopped={} latency_ms={:.1}", stats.cancelled, stats.added, latency.map_or(f64::NAN, |l| l.as_secs_f64() * 1000.0));
         }
     }
 

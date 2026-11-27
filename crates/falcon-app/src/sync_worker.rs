@@ -34,7 +34,9 @@ pub const POLL_FALLBACK: Duration = Duration::from_secs(300);
 const STAGE_THREADS: usize = 3;
 /// After each commit under the library lock the committer rests for this
 /// share of the commit's time, leaving the interface at least half of it.
-const PACE: f32 = 1.0;
+const PACE: f32 = 0.15;
+/// Target length of one hold of the library lock, in milliseconds.
+const HOLD_BUDGET_MS: u64 = 40;
 /// How often a watcher looks at whether its source is there (an unplugged
 /// drive, a renamed folder).
 const PROBE: Duration = if cfg!(test) { Duration::from_millis(100) } else { Duration::from_secs(2) };
@@ -241,7 +243,7 @@ fn worker_loop(inner: &Inner, shared: &Shared, repaint: &(dyn Fn() + Send + Sync
                 repaint();
             }
         };
-        let control = SyncControl { cancel: &inner.cancel, progress: &on_progress, threads: STAGE_THREADS, defer_thumbnails: true, pace: PACE, settle_ms: SETTLE };
+        let control = SyncControl { cancel: &inner.cancel, progress: &on_progress, threads: STAGE_THREADS, defer_thumbnails: true, pace: PACE, settle_ms: SETTLE, hold_budget_ms: HOLD_BUDGET_MS, min_rest_ms: 2 };
         // A panic in a pass must not take the worker (and every later sync) with it.
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| sync_shared(shared, &wf_id, &control)))
             .map_err(|_| "the synchronization stopped unexpectedly".to_string())
