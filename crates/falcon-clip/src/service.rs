@@ -243,12 +243,20 @@ impl Drop for Service {
     }
 }
 
+/// Distinguishes SVG rasterizer stamps from legacy failed raw-file stamps so
+/// previously skipped `< 100 KB` SVGs retry automatically without invalidating
+/// existing valid vectors in the index.
+const SVG_RASTER_STAMP_TAG: u64 = 0x5356_4732_0000_0000;
+const MAX_AI_SVG_BYTES: u64 = 32 * 1024 * 1024;
+const MAX_AI_SVG_DIM: u32 = 4096;
+
 /// One item waiting to be read.
 struct Job {
     id: String,
     stamp: u64,
     picture: PathBuf,
     source: AiSourceSnapshot,
+    use_svg_raster: bool,
 }
 
 /// An item as the index looks at it. Made under the library lock without
@@ -527,7 +535,13 @@ impl Worker {
                 AiSourceCondition::Available(src_path) => {
                     let has_thumbnail = entry.thumbnail.is_file();
                     let is_linked = entry.source.is_linked_hint();
-                    let stamp = compute_source_stamp(has_thumbnail, &entry.thumbnail, is_linked, &src_path);
+                    let stamp = compute_source_stamp(
+                        has_thumbnail,
+                        &entry.thumbnail,
+                        is_linked,
+                        &src_path,
+                        &entry.ext,
+                    );
                     let existing_vec = index.vector(&entry.id).is_some();
                     if index.stamp(&entry.id) == Some(stamp) {
                         index.clear_stale(&entry.id);
@@ -549,14 +563,20 @@ impl Worker {
                         let prefer_source = is_linked
                             && has_thumbnail
                             && existing_vec
-                            && thumbnail::is_supported(&entry.ext)
-                            && !entry.ext.eq_ignore_ascii_case("svg");
-                        let picture = if !has_thumbnail || prefer_source { src_path } else { entry.thumbnail.clone() };
+                            && thumbnail::is_supported(&entry.ext);
+                        let picture = if !has_thumbnail || prefer_source {
+                            src_path
+                        } else {
+                            entry.thumbnail.clone()
+                        };
+                        let use_svg_raster = (!has_thumbnail || prefer_source)
+                            && entry.ext.eq_ignore_ascii_case("svg");
                         queue.push_back(Job {
                             id: entry.id.clone(),
                             stamp,
                             picture,
                             source: entry.source.clone(),
+                            use_svg_raster,
                         });
                     }
                 }
@@ -605,7 +625,7 @@ impl Worker {
         for job in jobs {
             // A damaged file that panics a decoder is one unreadable item,
             // not the end of the worker.
-            match std::panic::catch_unwind(|| thumbnail::decode(&job.picture)) {
+            match std::panic::catch_unwind(|| decode_for_index(&job.picture, job.use_svg_raster)) {
                 Ok(Ok(picture)) => {
                     pictures.push(picture);
                     good.push(job);
@@ -753,7 +773,8 @@ impl Worker {
                             let item = lib.item(&id).ok_or(SearchError::NoItem)?;
                             entry_of(&lib, item)
                         };
-                        let picture = if entry.thumbnail.is_file() {
+                        let has_thumbnail = entry.thumbnail.is_file();
+                        let picture = if has_thumbnail {
                             entry.thumbnail
                         } else {
                             match evaluate_ai_source_snapshot(&entry.source) {
@@ -761,7 +782,8 @@ impl Worker {
                                 other => return Err(SearchError::BadImage(format!("source unavailable ({other:?})"))),
                             }
                         };
-                        let image = thumbnail::decode(&picture).map_err(|e| SearchError::BadImage(e.to_string()))?;
+                        let use_svg_raster = !has_thumbnail && entry.ext.eq_ignore_ascii_case("svg");
+                        let image = decode_for_index(&picture, use_svg_raster).map_err(|e| SearchError::BadImage(e.to_string()))?;
                         self.embed_one(&image)?
                     }
                 }
@@ -861,8 +883,19 @@ fn entry_of(lib: &Library, item: &falcon_library::model::Item) -> Entry {
     }
 }
 
-fn compute_source_stamp(has_thumbnail: bool, thumbnail: &Path, is_linked: bool, src_path: &Path) -> u64 {
-    let src_stamp = file_stamp(src_path);
+fn compute_source_stamp(
+    has_thumbnail: bool,
+    thumbnail: &Path,
+    is_linked: bool,
+    src_path: &Path,
+    ext: &str,
+) -> u64 {
+    let raw_src_stamp = file_stamp(src_path);
+    let src_stamp = if !has_thumbnail && ext.eq_ignore_ascii_case("svg") && raw_src_stamp != 0 {
+        raw_src_stamp ^ SVG_RASTER_STAMP_TAG
+    } else {
+        raw_src_stamp
+    };
     if has_thumbnail {
         let thumb_stamp = file_stamp(thumbnail);
         if is_linked {
@@ -873,6 +906,13 @@ fn compute_source_stamp(has_thumbnail: bool, thumbnail: &Path, is_linked: bool, 
     } else {
         src_stamp
     }
+}
+
+fn decode_for_index(path: &Path, use_svg_raster: bool) -> Result<DynamicImage, thumbnail::ThumbError> {
+    if use_svg_raster {
+        return thumbnail::render_svg_bounded(path, thumbnail::max_side("svg"), MAX_AI_SVG_BYTES, MAX_AI_SVG_DIM);
+    }
+    thumbnail::decode(path)
 }
 
 /// What says a file changed: its modified time and size.

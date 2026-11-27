@@ -152,9 +152,50 @@ pub fn read_json<T: DeserializeOwned>(path: &Path) -> Result<T> {
     serde_json::from_slice(&bytes).map_err(|e| Error::json(path, e))
 }
 
+/// Serializes `value` without clobbering an existing target (`persist_noclobber`).
+/// Used for multi-file intent journals so concurrent writers or unresolved
+/// transactions can never be silently overwritten.
+pub(crate) fn atomic_create_json_exclusive<T: Serialize>(path: &Path, value: &T) -> Result<()> {
+    let bytes = serde_json::to_vec_pretty(value).map_err(|e| Error::json(path, e))?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| Error::io(path, std::io::Error::other("missing parent directory")))?;
+    let mut tmp = NamedTempFile::new_in(parent).map_err(|e| Error::io(path, e))?;
+    tmp.write_all(&bytes).map_err(|e| Error::io(path, e))?;
+    tmp.flush().map_err(|e| Error::io(path, e))?;
+    tmp.as_file().sync_all().map_err(|e| Error::io(path, e))?;
+    tmp.persist_noclobber(path).map_err(|e| {
+        if e.error.kind() == std::io::ErrorKind::AlreadyExists {
+            Error::Refused(format!(
+                "an unresolved transaction journal already exists at {}",
+                path.display()
+            ))
+        } else {
+            Error::io(path, e.error)
+        }
+    })?;
+    sync_dir(parent);
+    Ok(())
+}
+
 /// Best-effort parent directory sync after atomic rename.
-fn sync_dir(dir: &Path) {
+pub(crate) fn sync_dir(dir: &Path) {
     if let Ok(d) = File::open(dir) {
         let _ = d.sync_all();
     }
+}
+
+/// Best-effort sync of all regular files inside `dir` and the directory itself.
+pub(crate) fn sync_dir_contents(dir: &Path) {
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_file()
+                && let Ok(f) = File::open(&path)
+            {
+                let _ = f.sync_all();
+            }
+        }
+    }
+    sync_dir(dir);
 }

@@ -484,3 +484,133 @@ fn ssd_simulated_volume_unavailability_and_io_failures() {
     assert_eq!(reopened.item(&id).unwrap().tags, vec!["ssd-tag"]);
     assert_eq!(hash_file(&src), src_hash);
 }
+
+#[test]
+fn journal_post_publish_mtime_cleanup_double_write_corrupt_idempotent_and_concurrent_safety() {
+    use falcon_library::journal::JOURNAL_FILE;
+    let dir = tempfile::tempdir().unwrap();
+    let mut lib = create_lib(&dir, "JournalReview");
+    lib.set_storage_mode(StorageMode::Link).unwrap();
+
+    let src = dir.path().join("src1.png");
+    write_png(&src, 40, 40, [40, 200, 120]);
+    let src_hash = hash_file(&src);
+
+    // 1. Interruption immediately AFTER publication rename & BEFORE mtime.json persistence / journal cleanup.
+    {
+        let _guard = fault::install(|fp| {
+            if fp == FaultPoint::MtimeWrite {
+                Err(io::Error::other("crash before mtime persistence"))
+            } else {
+                Ok(())
+            }
+        });
+        assert!(lib.import_file(&src, &ImportOptions::default()).is_err());
+    }
+    let published_id = fs::read_dir(lib.root().join("images"))
+        .unwrap()
+        .flatten()
+        .find_map(|e| {
+            let n = e.file_name().to_string_lossy().into_owned();
+            n.strip_suffix(".info").map(str::to_string)
+        })
+        .expect("published .info preserved");
+    assert!(lib.root().join(JOURNAL_FILE).is_file());
+
+    // 2. Existing pending journal must block any subsequent write cleanly without overwriting itself!
+    let src2 = dir.path().join("src2.png");
+    write_png(&src2, 40, 40, [200, 80, 20]);
+    let journal_before = fs::read(lib.root().join(JOURNAL_FILE)).unwrap();
+    let second = lib.import_file(&src2, &ImportOptions::default()).unwrap_err();
+    assert!(matches!(second, Error::Refused(_)), "expected refusal when journal exists: {second}");
+    assert_eq!(
+        fs::read(lib.root().join(JOURNAL_FILE)).unwrap(),
+        journal_before,
+        "unresolved pending journal must never be overwritten"
+    );
+
+    // 3. Reopen & idempotent recovery keeps the published item, restores mtime.json, and clears journal.
+    let mut reopened = Library::open(lib.root()).unwrap();
+    assert_eq!(reopened.items().len(), 1);
+    assert_eq!(reopened.asset_status(&published_id), Some(AssetStatus::Linked));
+    assert!(reopened
+        .diagnostics()
+        .iter()
+        .any(|d| matches!(d, LibraryDiagnostic::InterruptedJournal { .. })));
+
+    let rec1 = reopened.recover_pending_journal().unwrap();
+    assert_eq!(rec1.finalized_published, vec![published_id.clone()]);
+    assert!(rec1.journal_cleared);
+    assert!(!lib.root().join(JOURNAL_FILE).exists());
+    let disk_mtime: serde_json::Value =
+        serde_json::from_slice(&fs::read(lib.root().join("mtime.json")).unwrap()).unwrap();
+    assert_eq!(disk_mtime["all"], 1);
+    assert!(disk_mtime.get(&published_id).is_some());
+
+    // Repeated recovery attempt is cleanly idempotent and preserves published item.
+    let rec2 = reopened.recover_pending_journal().unwrap();
+    assert!(!rec2.journal_cleared);
+    assert!(rec2.finalized_published.is_empty());
+    assert_eq!(reopened.items().len(), 1);
+
+    // 4. Corrupt journal refuses recovery AND blocks new writes without deleting staging data.
+    let orphan_stage = reopened.root().join("images/.staging-ORPHAN1");
+    fs::create_dir_all(&orphan_stage).unwrap();
+    fs::write(orphan_stage.join("metadata.json"), b"partial").unwrap();
+    fs::write(reopened.root().join(JOURNAL_FILE), b"{corrupt-journal").unwrap();
+    let mut corrupt_open = Library::open(reopened.root()).unwrap();
+    assert!(corrupt_open
+        .diagnostics()
+        .iter()
+        .any(|d| matches!(d, LibraryDiagnostic::CorruptJournal { .. })));
+    assert!(matches!(corrupt_open.recover_pending_journal(), Err(Error::Refused(_))));
+    assert!(matches!(
+        corrupt_open.import_file(&src2, &ImportOptions::default()),
+        Err(Error::Refused(_))
+    ));
+    assert!(orphan_stage.join("metadata.json").is_file());
+    fs::remove_file(reopened.root().join(JOURNAL_FILE)).unwrap();
+
+    // 5. Multiple sequential interrupted ops preserve multiple orphan staging dirs without deleting unverified data.
+    let orphan2 = reopened.root().join("images/.staging-ORPHAN2");
+    fs::create_dir_all(&orphan2).unwrap();
+    let seq = Library::open(reopened.root()).unwrap();
+    assert_eq!(
+        seq.diagnostics()
+            .iter()
+            .filter(|d| matches!(d, LibraryDiagnostic::OrphanStagingDir { .. }))
+            .count(),
+        2
+    );
+
+    // 6. Concurrent journal creation race across two handles fails closed for loser (`persist_noclobber`).
+    let root_path = reopened.root().to_path_buf();
+    let r1 = root_path.clone();
+    let r2 = root_path.clone();
+    let s1 = src2.clone();
+    let s2 = src2.clone();
+    let t1 = std::thread::spawn(move || {
+        let mut l1 = Library::open(&r1).unwrap();
+        let _g = fault::install(|fp| {
+            if fp == FaultPoint::ImportBeforePublishRename {
+                std::thread::sleep(std::time::Duration::from_millis(80));
+            }
+            Ok(())
+        });
+        l1.import_file(&s1, &ImportOptions::default())
+    });
+    let t2 = std::thread::spawn(move || {
+        let mut l2 = Library::open(&r2).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(15));
+        l2.import_file(&s2, &ImportOptions::default())
+    });
+    let o1 = t1.join().unwrap();
+    let o2 = t2.join().unwrap();
+    assert!(o1.is_ok() || o2.is_ok(), "at least one concurrent writer finishes cleanly");
+    if o1.is_ok()
+        && let Err(err) = o2
+    {
+        assert!(matches!(err, Error::Refused(_)));
+    }
+    assert_eq!(hash_file(&src), src_hash);
+}

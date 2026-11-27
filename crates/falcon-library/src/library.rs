@@ -328,8 +328,15 @@ impl Library {
     /// Explicitly reconciles a pending `.falcon-journal.json` from an interrupted
     /// multi-file operation. Preserves unverified staging data and external sources.
     pub fn recover_pending_journal(&mut self) -> Result<RecoveryReport> {
+        let mtime_path = self.root.join(MTIME);
+        let report = journal::reconcile_journal(
+            &self.root,
+            &mut self.config,
+            &self.items,
+            &mut self.mtime,
+            |mtime| write_json(&mtime_path, mtime),
+        )?;
         let loaded_ids: BTreeSet<String> = self.items.iter().map(|i| i.id.clone()).collect();
-        let report = journal::reconcile_journal(&self.root, &mut self.config, &loaded_ids)?;
         self.diagnostics.retain(|d| {
             !matches!(
                 d,

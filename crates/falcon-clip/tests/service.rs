@@ -813,3 +813,202 @@ fn ai_12_explicit_delete_removes_vector_while_interrupted_ops_create_no_orphans(
     assert!(idx.vector(&id_del).is_none());
     assert_eq!(idx.known_ids(), vec![id_keep]);
 }
+
+#[test]
+fn small_and_large_svgs_index_transparently_and_malformed_svgs_do_not_stall_queue() {
+    let f = Fixture::new();
+    let import_svg = |name: &str, body: &[u8]| -> String {
+        let p = f.dir.path().join(format!("{name}.svg"));
+        std::fs::write(&p, body).unwrap();
+        f.library.lock().unwrap().import_file(&p, &ImportOptions { palette: false, ..Default::default() }).unwrap()
+    };
+
+    // Small transparent SVG (< 100 KB): thumbnail is removed by plan_svg (`remove_thumbnail = true`).
+    let small_green = br##"<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><rect x="20" y="20" width="80" height="80" fill="#00ff00" fill-opacity="0.5"/></svg>"##;
+    let small_id = import_svg("small_green", small_green);
+    let root = f.root();
+    assert!(f.library.lock().unwrap().item(&small_id).unwrap().thumbnail_path(&root).is_none());
+
+    // Large SVG (>= 100 KB): keeps thumbnail file.
+    let mut big_blue = String::from(r##"<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240"><rect width="240" height="240" fill="#0000ff"/>"##);
+    for i in 0..1900 {
+        big_blue.push_str(&format!(r##"<rect x="{}" y="{}" width="1" height="1" fill="#0000ff"/>"##, i % 200, (i * 3) % 200));
+    }
+    big_blue.push_str("</svg>");
+    assert!(big_blue.len() >= 100_000);
+    let big_id = import_svg("big_blue", big_blue.as_bytes());
+    assert!(f.library.lock().unwrap().item(&big_id).unwrap().thumbnail_path(&root).is_some());
+
+    // Malformed SVG: must skip safely without breaking the queue for valid SVGs.
+    let bad_id = import_svg("malformed", b"<svg><not-valid-xml");
+
+    let service = f.service();
+    service.set_library(Some(f.library.clone()));
+    service.set_enabled(true);
+    let status = ready(&service, 3);
+    assert_eq!(status.skipped, 1);
+
+    assert!(ids(&service, "green").contains(&small_id), "small SVG indexed without cached thumbnail");
+    assert!(ids(&service, "blue").contains(&big_id), "large SVG keeps working");
+    assert!(!ids(&service, "green").contains(&bad_id));
+
+    // Visual match on small SVG succeeds using SVG rasterizer.
+    let sim = service.search_blocking(Query::Item(small_id.clone()), 5, WAIT).unwrap();
+    assert!(sim.iter().any(|h| h.id == small_id));
+}
+
+#[test]
+fn previously_skipped_small_svg_retries_automatically_without_dropping_existing_vectors() {
+    use std::time::UNIX_EPOCH;
+    let f = Fixture::new();
+    let red_id = f.add("red", [250, 10, 10]);
+
+    let svg_path = f.dir.path().join("leaf.svg");
+    std::fs::write(&svg_path, br##"<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><rect width="120" height="120" fill="#00cc00"/></svg>"##).unwrap();
+    let svg_id = f.library.lock().unwrap().import_file(&svg_path, &ImportOptions { palette: false, ..Default::default() }).unwrap();
+
+    let (lib_root, svg_raw) = {
+        let lib = f.library.lock().unwrap();
+        let item = lib.item(&svg_id).unwrap();
+        (lib.root().to_path_buf(), item.managed_storage_path(lib.root()))
+    };
+    let m = std::fs::metadata(&svg_raw).unwrap();
+    let legacy_stamp = (m.modified().unwrap().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64) ^ m.len().rotate_left(48);
+
+    {
+        let mut idx = falcon_clip::store::Index::open(&f.index_dir(), &lib_root, "test-model", 3).unwrap();
+        let red_item = f.library.lock().unwrap().item(&red_id).unwrap().clone();
+        let red_pic = red_item.thumbnail_path(&lib_root).unwrap_or_else(|| red_item.managed_storage_path(&lib_root));
+        let rm = std::fs::metadata(&red_pic).unwrap();
+        let red_stamp = (rm.modified().unwrap().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64) ^ rm.len().rotate_left(48);
+        idx.put(&red_id, red_stamp, &[1.0, 0.0, 0.0]).unwrap();
+        idx.skip(&svg_id, legacy_stamp).unwrap();
+        idx.flush().unwrap();
+    }
+
+    let service = f.service();
+    service.set_library(Some(f.library.clone()));
+    service.set_enabled(true);
+    let status = ready(&service, 2);
+    assert_eq!(status.skipped, 0);
+    assert_eq!(f.pictures.load(Ordering::SeqCst), 1, "existing valid red vector kept without reindex");
+    assert!(ids(&service, "green").contains(&svg_id));
+    assert!(ids(&service, "red").contains(&red_id));
+}
+
+#[test]
+fn combined_linked_svg_offline_missing_corrupt_reconnect_and_delete_matrix() {
+    use std::time::UNIX_EPOCH;
+    let f = Fixture::new();
+    let red_managed = f.add("existing_red", [250, 10, 10]);
+
+    let ext_dir = f.dir.path().join("ext_svg");
+    std::fs::create_dir_all(&ext_dir).unwrap();
+    let green_svg_path = ext_dir.join("icon.svg");
+    let green_svg_bytes = br##"<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96"><rect width="96" height="96" fill="#00e000"/></svg>"##;
+    std::fs::write(&green_svg_path, green_svg_bytes).unwrap();
+    let green_hash = blake3::hash(green_svg_bytes).to_hex().to_string();
+
+    let (linked_svg_id, legacy_svg_id) = {
+        let mut lib = f.library.lock().unwrap();
+        lib.set_storage_mode(falcon_library::storage_mode::StorageMode::Link).unwrap();
+        let linked_svg_id = lib.import_file(&green_svg_path, &ImportOptions { palette: false, ..Default::default() }).unwrap();
+        assert!(lib.item(&linked_svg_id).unwrap().thumbnail_path(lib.root()).is_none());
+
+        let legacy_path = ext_dir.join("legacy.svg");
+        std::fs::write(&legacy_path, green_svg_bytes).unwrap();
+        let legacy_svg_id = lib.import_file(&legacy_path, &ImportOptions { palette: false, ..Default::default() }).unwrap();
+        (linked_svg_id, legacy_svg_id)
+    };
+
+    let (lib_root, red_pic, legacy_src) = {
+        let lib = f.library.lock().unwrap();
+        let r = lib.item(&red_managed).unwrap();
+        let rp = r.thumbnail_path(lib.root()).unwrap_or_else(|| r.managed_storage_path(lib.root()));
+        let ls = lib.resolved_source_path(&legacy_svg_id).unwrap();
+        (lib.root().to_path_buf(), rp, ls)
+    };
+    let stamp_of = |p: &Path| {
+        let m = std::fs::metadata(p).unwrap();
+        (m.modified().unwrap().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64) ^ m.len().rotate_left(48)
+    };
+    {
+        let mut idx = falcon_clip::store::Index::open(&f.index_dir(), &lib_root, "test-model", 3).unwrap();
+        idx.put(&red_managed, stamp_of(&red_pic), &[1.0, 0.0, 0.0]).unwrap();
+        idx.skip(&legacy_svg_id, stamp_of(&legacy_src)).unwrap();
+        idx.flush().unwrap();
+    }
+
+    let service = f.service();
+    service.set_library(Some(f.library.clone()));
+    service.set_enabled(true);
+    let s1 = ready(&service, 3);
+    assert_eq!(s1.skipped, 0);
+    // 2 SVGs indexed cleanly; existing valid `red_managed` vector NOT needlessly reindexed!
+    assert_eq!(f.pictures.load(Ordering::SeqCst), 2);
+    assert!(ids(&service, "green").contains(&linked_svg_id));
+    assert!(ids(&service, "green").contains(&legacy_svg_id));
+    assert!(ids(&service, "red").contains(&red_managed));
+
+    // Offline & Missing linked small SVG retain embedding.
+    let orig_sidecar = mutate_sidecar_offline(&f, &linked_svg_id);
+    service.refresh();
+    let s_off = wait_for(&service, "offline svg", |s| s.phase == Phase::Ready && s.unavailable == 1);
+    assert_eq!(s_off.unavailable, 1);
+    assert!(ids(&service, "green").contains(&linked_svg_id));
+
+    restore_sidecar(&f, &linked_svg_id, &orig_sidecar);
+    std::fs::remove_file(&green_svg_path).unwrap();
+    service.refresh();
+    wait_for(&service, "missing svg", |s| s.phase == Phase::Ready && s.unavailable == 1);
+    assert!(ids(&service, "green").contains(&linked_svg_id));
+
+    // Reconnect original bytes -> returns cleanly without reindex if stamp untouched; restore file with new mtime.
+    std::fs::write(&green_svg_path, green_svg_bytes).unwrap();
+    service.refresh();
+    ready(&service, 3);
+    assert!(ids(&service, "green").contains(&linked_svg_id));
+
+    // Corrupt linked SVG on refresh -> retains last-known-good green embedding as stale!
+    let prev_runs = f.pictures.load(Ordering::SeqCst);
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    std::fs::write(&green_svg_path, b"<svg><broken-xml").unwrap();
+    service.refresh();
+    let s_stale = wait_for(&service, "corrupt svg stale", |s| s.phase == Phase::Ready && s.stale == 1);
+    assert_eq!(s_stale.stale, 1);
+    assert!(ids(&service, "green").contains(&linked_svg_id), "corrupt refresh keeps last-known-good embedding");
+
+    // Modified valid SVG triggers incremental reindex (switches from green to blue).
+    let blue_svg_bytes = br##"<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96"><rect width="96" height="96" fill="#0000ee"/></svg>"##;
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    std::fs::write(&green_svg_path, blue_svg_bytes).unwrap();
+    service.refresh();
+    let s_mod = wait_for(&service, "modified svg reindexed", |s| s.phase == Phase::Ready && s.stale == 0);
+    assert_eq!(s_mod.stale, 0);
+    assert!(f.pictures.load(Ordering::SeqCst) > prev_runs);
+    assert!(ids(&service, "blue").contains(&linked_svg_id));
+
+    // Reconnect unchanged without content change avoids extra embed calls.
+    let runs_before_unchanged = f.pictures.load(Ordering::SeqCst);
+    let side2 = mutate_sidecar_offline(&f, &linked_svg_id);
+    service.refresh();
+    wait_for(&service, "offline2", |s| s.phase == Phase::Ready && s.unavailable == 1);
+    restore_sidecar(&f, &linked_svg_id, &side2);
+    service.refresh();
+    ready(&service, 3);
+    assert_eq!(f.pictures.load(Ordering::SeqCst), runs_before_unchanged);
+
+    // Explicit catalog deletion removes only intended vector (`legacy_svg_id`), keeping others intact.
+    {
+        let mut lib = f.library.lock().unwrap();
+        lib.delete_permanently(std::slice::from_ref(&legacy_svg_id)).unwrap();
+    }
+    service.refresh();
+    ready(&service, 2);
+    drop(service);
+    let idx = reopen_index(&f);
+    assert!(idx.vector(&legacy_svg_id).is_none());
+    assert!(idx.vector(&linked_svg_id).is_some());
+    assert!(idx.vector(&red_managed).is_some());
+    assert_eq!(blake3::hash(green_svg_bytes).to_hex().to_string(), green_hash);
+}
