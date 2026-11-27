@@ -62,6 +62,137 @@ pub fn cover<'a>(items: &'a [Item], folder: &Folder, order: OrderBy, increase: b
     folder.children.iter().find_map(|c| cover(items, c, order, increase, locked))
 }
 
+/// Up to 4 distinct items for a folder's mosaic cover.
+/// If `folder.cover_id` is set, it is placed first.
+/// Any remaining slots are filled with valid own items, and if fewer than 4,
+/// from descendant subfolders.
+pub fn mosaic_covers<'a>(
+    items: &'a [Item],
+    folder: &Folder,
+    order: OrderBy,
+    increase: bool,
+    locked: &HashSet<&str>,
+) -> Vec<&'a Item> {
+    if folder.is_locked() {
+        return Vec::new();
+    }
+
+    let mut result: Vec<&'a Item> = Vec::with_capacity(4);
+
+    // 1. Explicit cover_id takes precedence as primary item
+    if let Some(cid) = &folder.cover_id {
+        if let Some(item) = items.iter().find(|i| i.id == *cid && can_cover(i, locked)) {
+            result.push(item);
+        }
+    }
+
+    // 2. Folder's own items
+    let mut own: Vec<&Item> = items
+        .iter()
+        .filter(|i| i.folders.contains(&folder.id) && can_cover(i, locked) && !result.iter().any(|r| r.id == i.id))
+        .collect();
+
+    if !own.is_empty() {
+        search::sort(&mut own, order, increase);
+        let (mut visual, non_visual): (Vec<&Item>, Vec<&Item>) = own
+            .into_iter()
+            .partition(|i| falcon_library::format_capability::is_visual_preview(&i.ext));
+        visual.extend(non_visual);
+
+        for item in visual {
+            if result.len() >= 4 {
+                break;
+            }
+            result.push(item);
+        }
+    }
+
+    // 3. Collect from descendant subfolders if fewer than 4 items
+    if result.len() < 4 && !folder.children.is_empty() {
+        collect_subfolder_covers(items, &folder.children, order, increase, locked, &mut result);
+    }
+
+    result
+}
+
+fn collect_subfolder_covers<'a>(
+    items: &'a [Item],
+    children: &[Folder],
+    order: OrderBy,
+    increase: bool,
+    locked: &HashSet<&str>,
+    result: &mut Vec<&'a Item>,
+) {
+    let mut next_level: Vec<&Folder> = Vec::new();
+
+    for child in children {
+        if result.len() >= 4 {
+            return;
+        }
+        if child.is_locked() {
+            continue;
+        }
+        if let Some(cid) = &child.cover_id {
+            if let Some(item) = items.iter().find(|i| i.id == *cid && can_cover(i, locked)) {
+                if !result.iter().any(|r| r.id == item.id) {
+                    result.push(item);
+                    if result.len() >= 4 {
+                        return;
+                    }
+                }
+            }
+        }
+        let mut own: Vec<&Item> = items
+            .iter()
+            .filter(|i| i.folders.contains(&child.id) && can_cover(i, locked) && !result.iter().any(|r| r.id == i.id))
+            .collect();
+        if !own.is_empty() {
+            search::sort(&mut own, order, increase);
+            let (mut visual, non_visual): (Vec<&Item>, Vec<&Item>) = own
+                .into_iter()
+                .partition(|i| falcon_library::format_capability::is_visual_preview(&i.ext));
+            visual.extend(non_visual);
+            for item in visual {
+                if result.len() >= 4 {
+                    return;
+                }
+                result.push(item);
+            }
+        }
+        for gc in &child.children {
+            next_level.push(gc);
+        }
+    }
+
+    if result.len() < 4 && !next_level.is_empty() {
+        for gc in next_level {
+            if result.len() >= 4 {
+                break;
+            }
+            if gc.is_locked() {
+                continue;
+            }
+            let mut own: Vec<&Item> = items
+                .iter()
+                .filter(|i| i.folders.contains(&gc.id) && can_cover(i, locked) && !result.iter().any(|r| r.id == i.id))
+                .collect();
+            if !own.is_empty() {
+                search::sort(&mut own, order, increase);
+                let (mut visual, non_visual): (Vec<&Item>, Vec<&Item>) = own
+                    .into_iter()
+                    .partition(|i| falcon_library::format_capability::is_visual_preview(&i.ext));
+                visual.extend(non_visual);
+                for item in visual {
+                    if result.len() >= 4 {
+                        break;
+                    }
+                    result.push(item);
+                }
+            }
+        }
+    }
+}
+
 const CARD_W: f32 = 150.0;
 const THUMB_H: f32 = 100.0;
 const STRIP_H: f32 = THUMB_H + 56.0;
@@ -372,5 +503,70 @@ mod tests {
             Some("photo"),
             "visual preview format prioritized for folder cover"
         );
+    }
+
+    #[test]
+    fn mosaic_covers_selection_and_adaptive_fallback() {
+        let none = HashSet::new();
+
+        // 0 items
+        let empty_folder = Folder::new("E", "Empty", 0);
+        assert!(mosaic_covers(&[], &empty_folder, OrderBy::Import, true, &none).is_empty());
+
+        // 1 item -> Single cover
+        let items_1 = vec![item("i1", "F1", 1)];
+        let folder_1 = Folder::new("F1", "F1", 0);
+        let covers_1 = mosaic_covers(&items_1, &folder_1, OrderBy::Import, true, &none);
+        assert_eq!(covers_1.len(), 1);
+        assert_eq!(covers_1[0].id, "i1");
+
+        // 2 items -> 2-split
+        let items_2 = vec![item("i1", "F2", 1), item("i2", "F2", 2)];
+        let folder_2 = Folder::new("F2", "F2", 0);
+        let covers_2 = mosaic_covers(&items_2, &folder_2, OrderBy::Import, true, &none);
+        assert_eq!(covers_2.len(), 2);
+
+        // 3 items -> 3-balanced
+        let items_3 = vec![item("i1", "F3", 1), item("i2", "F3", 2), item("i3", "F3", 3)];
+        let folder_3 = Folder::new("F3", "F3", 0);
+        let covers_3 = mosaic_covers(&items_3, &folder_3, OrderBy::Import, true, &none);
+        assert_eq!(covers_3.len(), 3);
+
+        // 5 items -> bounded to 4 distinct items
+        let items_5 = vec![
+            item("i1", "F5", 1),
+            item("i2", "F5", 2),
+            item("i3", "F5", 3),
+            item("i4", "F5", 4),
+            item("i5", "F5", 5),
+        ];
+        let folder_5 = Folder::new("F5", "F5", 0);
+        let covers_5 = mosaic_covers(&items_5, &folder_5, OrderBy::Import, true, &none);
+        assert_eq!(covers_5.len(), 4, "bounded to 4 distinct items");
+
+        // Explicit cover_id takes precedence as #1 item
+        let mut folder_cover = Folder::new("F5", "FC", 0);
+        folder_cover.cover_id = Some("i3".into());
+        let covers_cov = mosaic_covers(&items_5, &folder_cover, OrderBy::Import, true, &none);
+        assert_eq!(covers_cov[0].id, "i3", "explicit cover_id must be first item in mosaic");
+        assert_eq!(covers_cov.len(), 4);
+
+        // Parent borrowing up to 4 from children when own items < 4
+        let mut parent = Folder::new("P", "Parent", 0);
+        let child = Folder::new("C", "Child", 0);
+        let items_nested = vec![
+            item("p1", "P", 1),
+            item("c1", "C", 2),
+            item("c2", "C", 3),
+            item("c3", "C", 4),
+        ];
+        parent.children.push(child);
+        let covers_parent = mosaic_covers(&items_nested, &parent, OrderBy::Import, true, &none);
+        assert_eq!(covers_parent.len(), 4, "parent collects remaining slots from subfolder");
+        assert_eq!(covers_parent[0].id, "p1");
+
+        // Locked folder returns 0
+        let locked: HashSet<&str> = ["F5"].into_iter().collect();
+        assert!(mosaic_covers(&items_5, &folder_5, OrderBy::Import, true, &locked).is_empty());
     }
 }

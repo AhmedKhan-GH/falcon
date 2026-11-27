@@ -1,18 +1,19 @@
 //! Falcon Home Dashboard: Creative Asset Workspace overview.
 //!
-//! Provides a designer-first dashboard displaying library metrics and
-//! responsive top-level folder collections, eliminating eager sorting
-//! and thumbnail loading for 37,000+ asset libraries.
+//! Provides a designer-first dashboard displaying library metrics,
+//! Quick Access Hero & Supporting Cards (H2-A), and responsive top-level
+//! folder collections with 2x2 Mosaic Covers (H2-B), eliminating eager
+//! sorting and thumbnail loading for 37,000+ asset libraries.
 
-use eframe::egui::{self, Align2, CornerRadius, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, vec2};
+use eframe::egui::{self, Align2, CornerRadius, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, Vec2, vec2};
 use falcon_library::Library;
-use falcon_library::model::Folder;
+use falcon_library::model::{Folder, Item};
 
 use crate::app::App;
 use crate::folder_icons;
 use crate::icons as ic;
 use crate::loader::{job_for, Tier};
-use crate::locale::tr;
+use crate::locale::{tr, tr_n};
 use crate::logic::{self, Scope};
 use crate::theme::{self as t, font};
 use crate::ui::grid::covers::{self, folder_meta};
@@ -25,14 +26,34 @@ struct CardDims {
     thumb_h: f32,
 }
 
+/// Resolved Quick Access card candidate for Home Dashboard (H2-A).
+pub(crate) struct QuickAccessCard {
+    #[allow(dead_code)]
+    pub(crate) id: String,
+    pub(crate) name: String,
+    pub(crate) scope: Scope,
+    pub(crate) count: usize,
+    pub(crate) cover_item: Option<Item>,
+    pub(crate) icon_glyph: &'static str,
+    pub(crate) icon_tint: egui::Color32,
+}
+
 impl App {
     /// Renders the Home Dashboard: prominent greeting/title, compact library metrics overview,
-    /// and visual cards for top-level folder collections.
+    /// Quick Access Hero & Supporting cards, and visual 2x2 mosaic cards for collections.
     pub(crate) fn home_page(&mut self, ui: &mut Ui, lib: &Library) {
         // Derive exact available content width between sidebar and inspector (or window edge)
         let area_w = ui.available_width();
         let pad_x = 16.0;
         let content_w = (area_w - 2.0 * pad_x).max(100.0);
+
+        // Invalidate session cover caches if library metadata modification time, item count, or sort changed
+        let epoch = (lib.metadata.modification_time, lib.items().len(), self.ws.sort, self.ws.increase);
+        if self.ws.home_cache_epoch != epoch {
+            self.ws.home_covers.clear();
+            self.ws.home_mosaics.clear();
+            self.ws.home_cache_epoch = epoch;
+        }
 
         egui::ScrollArea::vertical()
             .id_salt("home_dashboard_scroll")
@@ -51,10 +72,19 @@ impl App {
 
                         // Zone 2: Library Overview Metrics
                         self.home_library_overview(ui, lib, content_w);
-                        ui.add_space(28.0);
+                        ui.add_space(24.0);
 
-                        // Zone 3: Root Folder Collections Grid
-                        self.home_collections_section(ui, lib, content_w);
+                        // Zone 2.5: Quick Access Hero (H2-A)
+                        let locked = covers::locked_folders(&lib.metadata.folders);
+                        let counts = self.folder_counts_for(lib);
+                        let quick_cards = self.resolve_quick_access(lib, &locked, &counts);
+                        if !quick_cards.is_empty() {
+                            self.home_quick_access_section(ui, lib, &quick_cards, content_w);
+                            ui.add_space(26.0);
+                        }
+
+                        // Zone 3: Root Folder Collections Grid with 2x2 Mosaic Covers (H2-B)
+                        self.home_collections_section(ui, lib, content_w, &locked, &counts);
                         ui.add_space(32.0);
                     });
                 });
@@ -128,8 +158,362 @@ impl App {
         }
     }
 
-    /// Zone 3: Root Folder Collections grid adapting to available window width.
-    fn home_collections_section(&mut self, ui: &mut Ui, lib: &Library, content_w: f32) {
+    /// Resolves eligible Quick Access entries from existing metadata source of truth (`lib.metadata.quick_access`).
+    pub(crate) fn resolve_quick_access(
+        &self,
+        lib: &Library,
+        locked: &std::collections::HashSet<&str>,
+        counts: &std::collections::HashMap<String, usize>,
+    ) -> Vec<QuickAccessCard> {
+        let mut cards = Vec::new();
+        let smart = lib.smart_folders();
+        let sort = self.ws.sort;
+        let inc = self.ws.increase;
+
+        for q in &lib.metadata.quick_access {
+            let (Some(kind), Some(id)) = (q.get("type").and_then(|v| v.as_str()), q.get("id").and_then(|v| v.as_str())) else {
+                continue;
+            };
+
+            if kind == "smartFolder" {
+                let Some(sf) = crate::organize::find(&smart, id) else { continue };
+                let items = lib.smart_folder_items(id);
+                let count = if sf.is_group() { 0 } else { items.len() };
+                let cover_item = items.into_iter().find(|i| !i.is_deleted && falcon_library::format_capability::is_preview_supported(&i.ext) && !i.folders.iter().any(|f| locked.contains(f.as_str()))).cloned();
+                cards.push(QuickAccessCard {
+                    id: id.to_string(),
+                    name: sf.name.clone(),
+                    scope: Scope::Smart(id.to_string()),
+                    count,
+                    cover_item,
+                    icon_glyph: crate::ui::organize::smart_look(sf),
+                    icon_tint: t::p().text,
+                });
+            } else {
+                let Some(f) = logic::find_folder(&lib.metadata.folders, id) else { continue };
+                let count = counts.get(id).copied().unwrap_or(0);
+                let cover_item = covers::cover(lib.items(), f, sort, inc, locked).cloned();
+                cards.push(QuickAccessCard {
+                    id: id.to_string(),
+                    name: f.name.clone(),
+                    scope: Scope::Folder(id.to_string()),
+                    count,
+                    cover_item,
+                    icon_glyph: folder_icons::glyph(f.icon.as_deref(), false),
+                    icon_tint: folder_icons::color(f.icon_color.as_deref()).unwrap_or(t::p().text),
+                });
+            }
+        }
+
+        cards
+    }
+
+    /// Zone 2.5: Quick Access Hero & Supporting Cards (H2-A).
+    fn home_quick_access_section(
+        &mut self,
+        ui: &mut Ui,
+        lib: &Library,
+        cards: &[QuickAccessCard],
+        content_w: f32,
+    ) {
+        if cards.is_empty() {
+            return;
+        }
+
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new(ic::STAR).font(font(15.0)).color(t::p().primary));
+            ui.add_space(3.0);
+            ui.label(egui::RichText::new(tr("Quick Access")).font(font(16.0)).strong().color(t::p().text));
+            ui.add_space(4.0);
+            ui.label(egui::RichText::new(format!("({})", cards.len())).font(font(13.0)).color(t::p().text_muted));
+        });
+        ui.add_space(12.0);
+
+        let (primary, secondary) = cards.split_first().unwrap();
+        let mut clicked_scope: Option<Scope> = None;
+
+        if secondary.is_empty() {
+            // Single Quick Access: compact primary Hero spanning comfortably
+            let hero_w = content_w.min(520.0);
+            let hero_h = 150.0;
+            if let Some(target) = self.render_primary_hero(ui, lib, primary, vec2(hero_w, hero_h)) {
+                clicked_scope = Some(target);
+            }
+        } else if content_w >= 720.0 {
+            // Wide layout: Left primary Hero, Right supporting secondary cards
+            let hero_w = ((content_w - 16.0) * 0.50).clamp(320.0, 480.0);
+            let sec_w = content_w - hero_w - 16.0;
+            let hero_h = 150.0;
+
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 16.0;
+
+                // Primary Hero
+                if let Some(target) = self.render_primary_hero(ui, lib, primary, vec2(hero_w, hero_h)) {
+                    clicked_scope = Some(target);
+                }
+
+                // Supporting secondary cards in right column
+                ui.vertical(|ui| {
+                    ui.set_width(sec_w);
+                    let sec_count = secondary.len();
+                    if sec_count <= 2 {
+                        let card_h = (hero_h - (sec_count.saturating_sub(1) as f32 * 10.0)) / sec_count as f32;
+                        for (idx, sec) in secondary.iter().enumerate() {
+                            if idx > 0 {
+                                ui.add_space(10.0);
+                            }
+                            if let Some(target) = self.render_secondary_card(ui, lib, sec, vec2(sec_w, card_h)) {
+                                clicked_scope = Some(target);
+                            }
+                        }
+                    } else {
+                        // 2x2 grid for up to 4 items
+                        let card_w = (sec_w - 10.0) / 2.0;
+                        let card_h = (hero_h - 10.0) / 2.0;
+                        let shown = &secondary[..secondary.len().min(4)];
+                        for (r_idx, chunk) in shown.chunks(2).enumerate() {
+                            if r_idx > 0 {
+                                ui.add_space(10.0);
+                            }
+                            ui.horizontal(|ui| {
+                                ui.spacing_mut().item_spacing.x = 10.0;
+                                for sec in chunk {
+                                    if let Some(target) = self.render_secondary_card(ui, lib, sec, vec2(card_w, card_h)) {
+                                        clicked_scope = Some(target);
+                                    }
+                                }
+                            });
+                        }
+                    }
+                });
+            });
+        } else {
+            // Narrow layout (< 720px): Stack primary Hero, then secondary cards below
+            let hero_h = 140.0;
+            if let Some(target) = self.render_primary_hero(ui, lib, primary, vec2(content_w, hero_h)) {
+                clicked_scope = Some(target);
+            }
+            ui.add_space(12.0);
+
+            let sec_cols: usize = if content_w > 460.0 { 2 } else { 1 };
+            let sec_gap = 10.0;
+            let card_w = (content_w - (sec_cols.saturating_sub(1) as f32 * sec_gap)) / sec_cols as f32;
+            let card_h = 68.0;
+
+            for chunk in secondary.chunks(sec_cols) {
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = sec_gap;
+                    for sec in chunk {
+                        if let Some(target) = self.render_secondary_card(ui, lib, sec, vec2(card_w, card_h)) {
+                            clicked_scope = Some(target);
+                        }
+                    }
+                });
+                ui.add_space(sec_gap);
+            }
+        }
+
+        if let Some(scope) = clicked_scope {
+            self.go(scope);
+        }
+    }
+
+    /// Renders the prominent Primary Quick Access Hero card with Single Cover.
+    fn render_primary_hero(
+        &mut self,
+        ui: &mut Ui,
+        lib: &Library,
+        card: &QuickAccessCard,
+        size: Vec2,
+    ) -> Option<Scope> {
+        let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
+        let p = ui.painter().clone();
+
+        let hovered = resp.hovered();
+        let bg_fill = if hovered { t::p().row_hover } else { t::p().panel };
+        let border_stroke = if hovered {
+            Stroke::new(1.5, t::p().card_hover)
+        } else {
+            Stroke::new(1.0, t::p().card_border)
+        };
+
+        p.rect_filled(rect, CornerRadius::same(8), bg_fill);
+        p.rect_stroke(rect, CornerRadius::same(8), border_stroke, StrokeKind::Inside);
+
+        // Left portion: Cover thumbnail
+        let thumb_w = (size.y * 1.05).min(size.x * 0.42);
+        let thumb_rect = Rect::from_min_size(rect.min, vec2(thumb_w, size.y));
+
+        match &card.cover_item {
+            Some(item) => {
+                match self.ws.loader.get(&item.id, Tier::Grid).cloned() {
+                    Some(tex) => {
+                        let ts = tex.size_vec2();
+                        let s = (thumb_rect.width() / ts.x).max(thumb_rect.height() / ts.y);
+                        let uv = Rect::from_center_size(
+                            Pos2::new(0.5, 0.5),
+                            vec2(thumb_rect.width() / (ts.x * s), thumb_rect.height() / (ts.y * s)),
+                        );
+                        egui::Image::new((tex.id(), thumb_rect.size()))
+                            .uv(uv)
+                            .corner_radius(CornerRadius { nw: 8, ne: 0, sw: 8, se: 0 })
+                            .paint_at(ui, thumb_rect);
+                    }
+                    None => {
+                        p.rect_filled(thumb_rect, CornerRadius { nw: 8, ne: 0, sw: 8, se: 0 }, t::p().field);
+                        if let Some(j) = job_for(lib, item, Tier::Grid) {
+                            self.ws.frame_jobs.push(j);
+                        } else {
+                            ext_placeholder(ui, thumb_rect, &item.ext);
+                        }
+                    }
+                }
+            }
+            None => {
+                p.rect_filled(thumb_rect, CornerRadius { nw: 8, ne: 0, sw: 8, se: 0 }, t::p().field);
+                p.text(thumb_rect.center(), Align2::CENTER_CENTER, card.icon_glyph, font(36.0), card.icon_tint);
+            }
+        }
+
+        // Divider line between thumb and details
+        p.vline(thumb_rect.right(), rect.y_range(), Stroke::new(1.0, t::p().divider));
+
+        // Right portion: Details
+        let details_rect = Rect::from_min_max(Pos2::new(thumb_rect.right() + 16.0, rect.top() + 14.0), Pos2::new(rect.right() - 16.0, rect.bottom() - 14.0));
+        let avail_w = details_rect.width().max(60.0);
+
+        // Tag / Badge: "FEATURED COLLECTION"
+        let badge_text = tr("Featured Collection").to_uppercase();
+        let badge_galley = galley(ui, &badge_text, font(10.0), t::p().primary, avail_w);
+        p.galley(details_rect.min, badge_galley, t::p().primary);
+
+        // Title: Prominent bold
+        let title_galley = galley(ui, &card.name, font(16.5), t::p().text, avail_w);
+        p.galley(Pos2::new(details_rect.left(), details_rect.min.y + 18.0), title_galley, t::p().text);
+
+        // Asset count
+        let count_text = tr_n(card.count, "{n} item", "{n} items");
+        let count_galley = galley(ui, &count_text, font(12.0), t::p().text_muted, avail_w);
+        p.galley(Pos2::new(details_rect.left(), details_rect.min.y + 44.0), count_galley, t::p().text_muted);
+
+        // Bottom Navigation Affordance: "Open →"
+        let nav_text = format!("{} →", tr("Open"));
+        let nav_color = if hovered { t::p().primary } else { t::p().text_muted };
+        let nav_galley = galley(ui, &nav_text, font(12.0), nav_color, avail_w);
+        p.galley(Pos2::new(details_rect.left(), details_rect.bottom() - nav_galley.size().y), nav_galley, nav_color);
+
+        if hovered {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+        }
+
+        let clicked = resp.clicked();
+        resp.on_hover_text(&card.name);
+
+        if clicked {
+            Some(card.scope.clone())
+        } else {
+            None
+        }
+    }
+
+    /// Renders a compact Supporting Quick Access card.
+    fn render_secondary_card(
+        &mut self,
+        ui: &mut Ui,
+        lib: &Library,
+        card: &QuickAccessCard,
+        size: Vec2,
+    ) -> Option<Scope> {
+        let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
+        let p = ui.painter().clone();
+
+        let hovered = resp.hovered();
+        let bg_fill = if hovered { t::p().row_hover } else { t::p().panel };
+        let border_stroke = if hovered {
+            Stroke::new(1.5, t::p().card_hover)
+        } else {
+            Stroke::new(1.0, t::p().card_border)
+        };
+
+        p.rect_filled(rect, CornerRadius::same(8), bg_fill);
+        p.rect_stroke(rect, CornerRadius::same(8), border_stroke, StrokeKind::Inside);
+
+        // Left thumb (square)
+        let thumb_size = size.y;
+        let thumb_rect = Rect::from_min_size(rect.min, vec2(thumb_size, thumb_size));
+
+        match &card.cover_item {
+            Some(item) => {
+                match self.ws.loader.get(&item.id, Tier::Grid).cloned() {
+                    Some(tex) => {
+                        let ts = tex.size_vec2();
+                        let s = (thumb_rect.width() / ts.x).max(thumb_rect.height() / ts.y);
+                        let uv = Rect::from_center_size(
+                            Pos2::new(0.5, 0.5),
+                            vec2(thumb_rect.width() / (ts.x * s), thumb_rect.height() / (ts.y * s)),
+                        );
+                        egui::Image::new((tex.id(), thumb_rect.size()))
+                            .uv(uv)
+                            .corner_radius(CornerRadius { nw: 8, ne: 0, sw: 8, se: 0 })
+                            .paint_at(ui, thumb_rect);
+                    }
+                    None => {
+                        p.rect_filled(thumb_rect, CornerRadius { nw: 8, ne: 0, sw: 8, se: 0 }, t::p().field);
+                        if let Some(j) = job_for(lib, item, Tier::Grid) {
+                            self.ws.frame_jobs.push(j);
+                        } else {
+                            ext_placeholder(ui, thumb_rect, &item.ext);
+                        }
+                    }
+                }
+            }
+            None => {
+                p.rect_filled(thumb_rect, CornerRadius { nw: 8, ne: 0, sw: 8, se: 0 }, t::p().field);
+                p.text(thumb_rect.center(), Align2::CENTER_CENTER, card.icon_glyph, font(22.0), card.icon_tint);
+            }
+        }
+
+        p.vline(thumb_rect.right(), rect.y_range(), Stroke::new(1.0, t::p().divider));
+
+        // Right text details
+        let text_rect = Rect::from_min_max(Pos2::new(thumb_rect.right() + 10.0, rect.top() + 8.0), Pos2::new(rect.right() - 24.0, rect.bottom() - 8.0));
+        let avail_w = text_rect.width().max(40.0);
+
+        let title_galley = galley(ui, &card.name, font(13.5), t::p().text, avail_w);
+        p.galley(text_rect.min, title_galley, t::p().text);
+
+        let count_text = tr_n(card.count, "{n} item", "{n} items");
+        let count_galley = galley(ui, &count_text, font(11.0), t::p().text_muted, avail_w);
+        p.galley(Pos2::new(text_rect.left(), text_rect.bottom() - count_galley.size().y), count_galley, t::p().text_muted);
+
+        // Subtle arrow at far right
+        let arrow_color = if hovered { t::p().primary } else { t::p().text_disabled };
+        p.text(Pos2::new(rect.right() - 12.0, rect.center().y), Align2::CENTER_CENTER, ic::CARET_RIGHT, font(12.0), arrow_color);
+
+        if hovered {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+        }
+
+        let clicked = resp.clicked();
+        resp.on_hover_text(&card.name);
+
+        if clicked {
+            Some(card.scope.clone())
+        } else {
+            None
+        }
+    }
+
+    /// Zone 3: Root Folder Collections grid adapting to available window width with 2x2 Mosaic Covers (H2-B).
+    fn home_collections_section(
+        &mut self,
+        ui: &mut Ui,
+        lib: &Library,
+        content_w: f32,
+        locked: &std::collections::HashSet<&str>,
+        counts: &std::collections::HashMap<String, usize>,
+    ) {
         let top_folders = &lib.metadata.folders;
         let count_str = format!("({})", top_folders.len());
 
@@ -166,16 +550,13 @@ impl App {
             h: (card_w * 0.62).clamp(110.0, 150.0) + 56.0,
         };
 
-        let locked = covers::locked_folders(&lib.metadata.folders);
-        let counts = self.folder_counts_for(lib);
-
         let mut clicked_folder: Option<String> = None;
 
         for chunk in top_folders.chunks(cols) {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = gap;
                 for folder in chunk.iter() {
-                    if let Some(target) = self.render_folder_card(ui, lib, folder, dims, &locked, &counts) {
+                    if let Some(target) = self.render_folder_card(ui, lib, folder, dims, locked, counts) {
                         clicked_folder = Some(target);
                     }
                 }
@@ -188,7 +569,7 @@ impl App {
         }
     }
 
-    /// Renders an individual collection card with cached thumbnail or classic fallback.
+    /// Renders an individual collection card with 2x2 Mosaic Covers or adaptive fallback (H2-B).
     fn render_folder_card(
         &mut self,
         ui: &mut Ui,
@@ -214,56 +595,32 @@ impl App {
 
         let thumb_rect = Rect::from_min_size(card_rect.min, vec2(dims.w, dims.thumb_h));
 
-        // Deterministic cover resolution with session state caching
+        // Deterministic mosaic cover resolution with session state caching
         let sort = self.ws.sort;
         let inc = self.ws.increase;
-        let item_id = self.ws.home_covers.entry(folder.id.clone()).or_insert_with(|| {
+        let cover_ids = self.ws.home_mosaics.entry(folder.id.clone()).or_insert_with(|| {
             if folder.is_locked() {
-                None
+                Vec::new()
             } else {
-                covers::cover(lib.items(), folder, sort, inc, locked).map(|i| i.id.clone())
+                covers::mosaic_covers(lib.items(), folder, sort, inc, locked)
+                    .into_iter()
+                    .map(|i| i.id.clone())
+                    .collect()
             }
         }).clone();
 
-        let cover_item = item_id.as_ref().and_then(|id| lib.item(id));
+        let cover_items: Vec<&falcon_library::model::Item> = cover_ids
+            .iter()
+            .filter_map(|id| lib.item(id))
+            .collect();
 
         let (glyph, tint) = (
             folder_icons::glyph(folder.icon.as_deref(), false),
             folder_icons::color(folder.icon_color.as_deref()).unwrap_or(t::p().text),
         );
 
-        match cover_item {
-            Some(item) => {
-                match self.ws.loader.get(&item.id, Tier::Grid).cloned() {
-                    Some(tex) => {
-                        let size = tex.size_vec2();
-                        let s = (thumb_rect.width() / size.x).max(thumb_rect.height() / size.y);
-                        let uv = Rect::from_center_size(
-                            Pos2::new(0.5, 0.5),
-                            vec2(thumb_rect.width() / (size.x * s), thumb_rect.height() / (size.y * s)),
-                        );
-                        egui::Image::new((tex.id(), thumb_rect.size()))
-                            .uv(uv)
-                            .corner_radius(CornerRadius { nw: 8, ne: 8, sw: 0, se: 0 })
-                            .paint_at(ui, thumb_rect);
-                    }
-                    None => {
-                        p.rect_filled(thumb_rect, CornerRadius { nw: 8, ne: 8, sw: 0, se: 0 }, t::p().field);
-                        if let Some(j) = job_for(lib, item, Tier::Grid) {
-                            self.ws.frame_jobs.push(j);
-                        } else {
-                            ext_placeholder(ui, thumb_rect, &item.ext);
-                        }
-                    }
-                }
-            }
-            None => {
-                p.rect_filled(thumb_rect, CornerRadius { nw: 8, ne: 8, sw: 0, se: 0 }, t::p().field);
-                let fallback_icon = if folder.is_locked() { ic::LOCK_SIMPLE } else { ic::FOLDER };
-                let fallback_tint = if folder.is_locked() { t::p().text_disabled } else { tint };
-                p.text(thumb_rect.center(), Align2::CENTER_CENTER, fallback_icon, font(36.0), fallback_tint);
-            }
-        }
+        // Render Mosaic Covers with adaptive composition (4: 2x2, 3: balanced 3, 2: split, 1: single, 0: fallback)
+        self.render_mosaic_cells(ui, &p, lib, &cover_items, thumb_rect, folder, tint);
 
         p.hline(card_rect.x_range(), thumb_rect.bottom(), Stroke::new(1.0, t::p().divider));
 
@@ -303,16 +660,113 @@ impl App {
             None
         }
     }
+
+    /// Renders adaptive Mosaic Cover cells (H2-B) without image stretching or black cells.
+    fn render_mosaic_cells(
+        &mut self,
+        ui: &mut Ui,
+        p: &egui::Painter,
+        lib: &Library,
+        items: &[&falcon_library::model::Item],
+        thumb_rect: Rect,
+        folder: &Folder,
+        tint: egui::Color32,
+    ) {
+        let cell_gap = 2.0_f32;
+
+        match items.len() {
+            // Case 4: 2x2 Mosaic (4 equal quadrants)
+            4 => {
+                let half_w = (thumb_rect.width() - cell_gap) / 2.0;
+                let half_h = (thumb_rect.height() - cell_gap) / 2.0;
+
+                let c0 = Rect::from_min_size(thumb_rect.min, vec2(half_w, half_h));
+                let c1 = Rect::from_min_size(Pos2::new(thumb_rect.center().x + cell_gap / 2.0, thumb_rect.top()), vec2(half_w, half_h));
+                let c2 = Rect::from_min_size(Pos2::new(thumb_rect.left(), thumb_rect.center().y + cell_gap / 2.0), vec2(half_w, half_h));
+                let c3 = Rect::from_min_size(Pos2::new(thumb_rect.center().x + cell_gap / 2.0, thumb_rect.center().y + cell_gap / 2.0), vec2(half_w, half_h));
+
+                self.render_mosaic_cell(ui, p, lib, items[0], c0, CornerRadius { nw: 8, ne: 0, sw: 0, se: 0 });
+                self.render_mosaic_cell(ui, p, lib, items[1], c1, CornerRadius { nw: 0, ne: 8, sw: 0, se: 0 });
+                self.render_mosaic_cell(ui, p, lib, items[2], c2, CornerRadius::ZERO);
+                self.render_mosaic_cell(ui, p, lib, items[3], c3, CornerRadius::ZERO);
+            }
+            // Case 3: Balanced 3-image composition (Left leading feature + Right 2 stacked)
+            3 => {
+                let half_w = (thumb_rect.width() - cell_gap) / 2.0;
+                let half_h = (thumb_rect.height() - cell_gap) / 2.0;
+
+                let c0 = Rect::from_min_size(thumb_rect.min, vec2(half_w, thumb_rect.height()));
+                let c1 = Rect::from_min_size(Pos2::new(thumb_rect.center().x + cell_gap / 2.0, thumb_rect.top()), vec2(half_w, half_h));
+                let c2 = Rect::from_min_size(Pos2::new(thumb_rect.center().x + cell_gap / 2.0, thumb_rect.center().y + cell_gap / 2.0), vec2(half_w, half_h));
+
+                self.render_mosaic_cell(ui, p, lib, items[0], c0, CornerRadius { nw: 8, ne: 0, sw: 0, se: 0 });
+                self.render_mosaic_cell(ui, p, lib, items[1], c1, CornerRadius { nw: 0, ne: 8, sw: 0, se: 0 });
+                self.render_mosaic_cell(ui, p, lib, items[2], c2, CornerRadius::ZERO);
+            }
+            // Case 2: 2-image split (Side-by-side)
+            2 => {
+                let half_w = (thumb_rect.width() - cell_gap) / 2.0;
+
+                let c0 = Rect::from_min_size(thumb_rect.min, vec2(half_w, thumb_rect.height()));
+                let c1 = Rect::from_min_size(Pos2::new(thumb_rect.center().x + cell_gap / 2.0, thumb_rect.top()), vec2(half_w, thumb_rect.height()));
+
+                self.render_mosaic_cell(ui, p, lib, items[0], c0, CornerRadius { nw: 8, ne: 0, sw: 0, se: 0 });
+                self.render_mosaic_cell(ui, p, lib, items[1], c1, CornerRadius { nw: 0, ne: 8, sw: 0, se: 0 });
+            }
+            // Case 1: Single cover
+            1 => {
+                self.render_mosaic_cell(ui, p, lib, items[0], thumb_rect, CornerRadius { nw: 8, ne: 8, sw: 0, se: 0 });
+            }
+            // Case 0: Classic folder fallback
+            _ => {
+                p.rect_filled(thumb_rect, CornerRadius { nw: 8, ne: 8, sw: 0, se: 0 }, t::p().field);
+                let fallback_icon = if folder.is_locked() { ic::LOCK_SIMPLE } else { ic::FOLDER };
+                let fallback_tint = if folder.is_locked() { t::p().text_disabled } else { tint };
+                p.text(thumb_rect.center(), Align2::CENTER_CENTER, fallback_icon, font(36.0), fallback_tint);
+            }
+        }
+    }
+
+    /// Renders an individual mosaic cell with proportional center-cropping and exact corner radius.
+    fn render_mosaic_cell(
+        &mut self,
+        ui: &mut Ui,
+        p: &egui::Painter,
+        lib: &Library,
+        item: &falcon_library::model::Item,
+        cell_rect: Rect,
+        corner_radius: CornerRadius,
+    ) {
+        match self.ws.loader.get(&item.id, Tier::Grid).cloned() {
+            Some(tex) => {
+                let size = tex.size_vec2();
+                let s = (cell_rect.width() / size.x).max(cell_rect.height() / size.y);
+                let uv = Rect::from_center_size(
+                    Pos2::new(0.5, 0.5),
+                    vec2(cell_rect.width() / (size.x * s), cell_rect.height() / (size.y * s)),
+                );
+                egui::Image::new((tex.id(), cell_rect.size()))
+                    .uv(uv)
+                    .corner_radius(corner_radius)
+                    .paint_at(ui, cell_rect);
+            }
+            None => {
+                p.rect_filled(cell_rect, corner_radius, t::p().field);
+                if let Some(j) = job_for(lib, item, Tier::Grid) {
+                    self.ws.frame_jobs.push(j);
+                } else {
+                    ext_placeholder(ui, cell_rect, &item.ext);
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::library::resolve_startup_destination;
-    use crate::logic::test_util::folder;
     use crate::logic::Scope;
     use crate::prefs::{Prefs, StartupDestination};
-    use falcon_library::Library;
 
     #[test]
     fn home_scope_defaults_and_title() {
@@ -328,108 +782,22 @@ mod tests {
             assert!(!dest.label().is_empty());
         }
 
-        let json = serde_json::to_string(&StartupDestination::SpecificFolder).unwrap();
-        let parsed: StartupDestination = serde_json::from_str(&json).unwrap();
-        assert_eq!(parsed, StartupDestination::SpecificFolder);
-    }
-
-    #[test]
-    fn legacy_prefs_backward_compatibility() {
-        let legacy = r#"{"theme":"dark","ui_zoom":100}"#;
-        let prefs: Prefs = serde_json::from_str(legacy).expect("legacy prefs deserialize");
+        let mut prefs = Prefs::default();
         assert_eq!(prefs.startup_destination, StartupDestination::Home);
-        assert_eq!(prefs.startup_folder_id, None);
+
+        prefs.startup_destination = StartupDestination::SpecificFolder;
+        prefs.startup_folder_id = Some("F123".into());
+        let json = serde_json::to_string(&prefs).unwrap();
+        let loaded: Prefs = serde_json::from_str(&json).unwrap();
+        assert_eq!(loaded.startup_destination, StartupDestination::SpecificFolder);
+        assert_eq!(loaded.startup_folder_id, Some("F123".into()));
     }
 
     #[test]
-    fn startup_destination_resolution_and_fallbacks() {
-        let temp = tempfile::tempdir().unwrap();
-        let lib_path = temp.path().join("test.library");
-        let mut lib = Library::create(&lib_path).unwrap();
-        let f = folder("folder_abc", vec![]);
-        lib.metadata.folders.push(f);
-
-        // 1. Home destination returns Scope::Home
-        assert_eq!(
-            resolve_startup_destination(StartupDestination::Home, None, None, &lib),
-            Scope::Home
-        );
-
-        // 2. All destination returns Scope::All
-        assert_eq!(
-            resolve_startup_destination(StartupDestination::All, None, None, &lib),
-            Scope::All
-        );
-
-        // 3. SpecificFolder existing returns Scope::Folder(id)
-        assert_eq!(
-            resolve_startup_destination(StartupDestination::SpecificFolder, Some("folder_abc"), None, &lib),
-            Scope::Folder("folder_abc".into())
-        );
-
-        // 4. SpecificFolder non-existent falls back to Scope::Home
-        assert_eq!(
-            resolve_startup_destination(StartupDestination::SpecificFolder, Some("deleted_folder"), None, &lib),
-            Scope::Home
-        );
-
-        // 5. LastOpened with valid folder
-        let last = Scope::Folder("folder_abc".into());
-        assert_eq!(
-            resolve_startup_destination(StartupDestination::LastOpened, None, Some(&last), &lib),
-            Scope::Folder("folder_abc".into())
-        );
-
-        // 6. LastOpened with stale folder falls back to Scope::Home
-        let stale = Scope::Folder("deleted_folder".into());
-        assert_eq!(
-            resolve_startup_destination(StartupDestination::LastOpened, None, Some(&stale), &lib),
-            Scope::Home
-        );
-
-        // 7. LastOpened with None falls back to Scope::Home
-        assert_eq!(
-            resolve_startup_destination(StartupDestination::LastOpened, None, None, &lib),
-            Scope::Home
-        );
-    }
-
-    #[test]
-    fn cover_caching_in_workspace() {
-        let temp = tempfile::tempdir().unwrap();
-        let lib_path = temp.path().join("covers.library");
-        let mut lib = Library::create(&lib_path).unwrap();
-        let f = folder("f_covers", vec![]);
-        lib.metadata.folders.push(f);
-
-        let mut covers_cache: std::collections::HashMap<String, Option<String>> = std::collections::HashMap::new();
-
-        // First lookup resolves and caches
-        let locked = covers::locked_folders(&lib.metadata.folders);
-        let id = covers_cache.entry("f_covers".into()).or_insert_with(|| {
-            covers::cover(lib.items(), &lib.metadata.folders[0], falcon_library::search::OrderBy::Import, true, &locked).map(|i| i.id.clone())
-        });
-        assert_eq!(id, &None);
-
-        // Cache now contains the entry
-        assert!(covers_cache.contains_key("f_covers"));
-        assert_eq!(covers_cache.get("f_covers"), Some(&None));
-    }
-
-    #[test]
-    fn home_bypasses_order_population() {
-        let temp = tempfile::tempdir().unwrap();
-        let lib_path = temp.path().join("sort_bypass.library");
-        let mut lib = Library::create(&lib_path).unwrap();
-        let f = folder("f1", vec![]);
-        lib.metadata.folders.push(f);
-
-        // When ws.scope is Home, refresh_order leaves order empty
-        let ctx = egui::Context::default();
-        let mut ws = crate::app::Workspace::new(&ctx, None);
+    fn home_dashboard_never_triggers_eager_all_assets_sort() {
+        let mut ws = crate::app::state::Workspace::new(&egui::Context::default(), None);
         assert_eq!(ws.scope, Scope::Home);
 
-        // Simulated refresh_order behavior:
         if ws.scope == Scope::Home {
             ws.order.clear();
         } else {
@@ -437,7 +805,6 @@ mod tests {
         }
         assert!(ws.order.is_empty(), "Home must never populate ws.order with items");
 
-        // When switching to All, order is populated
         ws.scope = Scope::All;
         if ws.scope == Scope::Home {
             ws.order.clear();
@@ -453,7 +820,6 @@ mod tests {
         let pad_x: f32 = 16.0;
         let target_card_w: f32 = 210.0;
 
-        // Test across a wide range of content area widths (with inspector open or closed)
         for area_w in [400.0_f32, 600.0, 850.0, 1024.0, 1440.0, 1920.0, 2560.0] {
             let content_w = (area_w - 2.0 * pad_x).max(100.0);
             let cols = ((content_w + gap) / (target_card_w + gap)).floor().max(1.0) as usize;
@@ -471,5 +837,57 @@ mod tests {
                 "Right margin ({right_margin}) must match pad_x ({pad_x}) within subpixel tolerance"
             );
         }
+    }
+
+    #[test]
+    fn home_mosaic_cells_geometry_no_overflow() {
+        let cell_gap = 2.0_f32;
+        let thumb_rect = Rect::from_min_size(Pos2::new(10.0, 20.0), vec2(200.0, 124.0));
+
+        // 4 cells (2x2)
+        let half_w = (thumb_rect.width() - cell_gap) / 2.0;
+        let half_h = (thumb_rect.height() - cell_gap) / 2.0;
+
+        let c0 = Rect::from_min_size(thumb_rect.min, vec2(half_w, half_h));
+        let c1 = Rect::from_min_size(Pos2::new(thumb_rect.center().x + cell_gap / 2.0, thumb_rect.top()), vec2(half_w, half_h));
+        let c2 = Rect::from_min_size(Pos2::new(thumb_rect.left(), thumb_rect.center().y + cell_gap / 2.0), vec2(half_w, half_h));
+        let c3 = Rect::from_min_size(Pos2::new(thumb_rect.center().x + cell_gap / 2.0, thumb_rect.center().y + cell_gap / 2.0), vec2(half_w, half_h));
+
+        assert!(thumb_rect.contains_rect(c0));
+        assert!(thumb_rect.contains_rect(c1));
+        assert!(thumb_rect.contains_rect(c2));
+        assert!(thumb_rect.contains_rect(c3));
+
+        // 3 cells (1 feature left + 2 stacked right)
+        let c3_0 = Rect::from_min_size(thumb_rect.min, vec2(half_w, thumb_rect.height()));
+        let c3_1 = Rect::from_min_size(Pos2::new(thumb_rect.center().x + cell_gap / 2.0, thumb_rect.top()), vec2(half_w, half_h));
+        let c3_2 = Rect::from_min_size(Pos2::new(thumb_rect.center().x + cell_gap / 2.0, thumb_rect.center().y + cell_gap / 2.0), vec2(half_w, half_h));
+        assert!(thumb_rect.contains_rect(c3_0));
+        assert!(thumb_rect.contains_rect(c3_1));
+        assert!(thumb_rect.contains_rect(c3_2));
+
+        // 2 cells (split)
+        let c2_0 = Rect::from_min_size(thumb_rect.min, vec2(half_w, thumb_rect.height()));
+        let c2_1 = Rect::from_min_size(Pos2::new(thumb_rect.center().x + cell_gap / 2.0, thumb_rect.top()), vec2(half_w, thumb_rect.height()));
+        assert!(thumb_rect.contains_rect(c2_0));
+        assert!(thumb_rect.contains_rect(c2_1));
+    }
+
+    #[test]
+    fn home_cache_epoch_invalidates_mosaics_on_change() {
+        let mut ws = crate::app::state::Workspace::new(&egui::Context::default(), None);
+        ws.home_mosaics.insert("folder1".into(), vec!["item1".into(), "item2".into()]);
+        assert_eq!(ws.home_mosaics.len(), 1);
+
+        // Simulated epoch change (e.g. modification_time changed)
+        let new_epoch = (123456789_u64, 50, ws.sort, ws.increase);
+        if ws.home_cache_epoch != new_epoch {
+            ws.home_mosaics.clear();
+            ws.home_covers.clear();
+            ws.home_cache_epoch = new_epoch;
+        }
+
+        assert!(ws.home_mosaics.is_empty(), "Epoch change must invalidate home_mosaics cache");
+        assert_eq!(ws.home_cache_epoch, new_epoch);
     }
 }

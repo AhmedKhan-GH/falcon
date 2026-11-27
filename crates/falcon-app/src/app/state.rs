@@ -463,6 +463,10 @@ pub(crate) struct Workspace {
     pub(crate) sync_manual: std::collections::HashSet<String>,
     /// Session cache of resolved cover asset IDs per folder for Home dashboard.
     pub(crate) home_covers: std::collections::HashMap<String, Option<String>>,
+    /// Session cache of resolved mosaic cover asset IDs (up to 4) per folder for Home dashboard.
+    pub(crate) home_mosaics: std::collections::HashMap<String, Vec<String>>,
+    /// Cache epoch: (modification_time, items_count, sort, increase) to invalidate home caches.
+    pub(crate) home_cache_epoch: (u64, usize, OrderBy, bool),
 }
 
 impl Workspace {
@@ -519,6 +523,8 @@ impl Workspace {
             sync_read: None,
             sync_manual: Default::default(),
             home_covers: std::collections::HashMap::new(),
+            home_mosaics: std::collections::HashMap::new(),
+            home_cache_epoch: (0, 0, OrderBy::Import, true),
             lib,
             loader: Loader::new(ctx),
             scope: Scope::Home,
