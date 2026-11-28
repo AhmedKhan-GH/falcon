@@ -498,6 +498,29 @@ fn session_calls_never_lock_the_library() {
 }
 
 #[test]
+fn recent_folders_reflect_recent_use_then_library_order() {
+    let e = env();
+    // Nothing used yet: the library's own top-level folders, in order.
+    e.server.start_session(600);
+    let names = |v: Value| v["data"].as_array().unwrap().iter().map(|f| f["name"].as_str().unwrap().to_string()).collect::<Vec<_>>();
+    assert_eq!(names(e.send("GET", "/api/folder/listRecent", &opaque(), None).json()), ["Open"], "locked folders never appear in a browser session");
+    // The app hands over what it knows; the newest first, unknown ids ignored, nothing twice.
+    {
+        let mut lib = e.lib.lock().unwrap();
+        lib.create_folder(None, "Untitled").unwrap();
+    }
+    let untitled = e.lib.lock().unwrap().all_folders().iter().find(|f| f.name == "Untitled").unwrap().id.clone();
+    e.server.set_recent_folders(vec!["GONE".into(), untitled.clone(), e.open.clone(), untitled.clone()]);
+    assert_eq!(names(e.send("GET", "/api/folder/listRecent", &opaque(), None).json()), ["Untitled", "Open"]);
+    // An import over the API moves its destination to the front and tells the app.
+    assert!(e.server.take_recent_folders().is_none());
+    let r = e.send("POST", "/api/item/addFromURL", &[], Some(&json!({"url": png_data_url(), "folderId": e.open}).to_string()));
+    assert_eq!(r.code, 200, "{}", r.body);
+    assert_eq!(e.server.take_recent_folders().unwrap()[0], e.open);
+    assert_eq!(names(e.send("GET", "/api/folder/listRecent", &opaque(), None).json()), ["Open", "Untitled"]);
+}
+
+#[test]
 fn sessions_expire_and_end_with_the_library() {
     let e = env();
     e.server.start_session(1);

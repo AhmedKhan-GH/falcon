@@ -392,7 +392,20 @@ impl App {
 
     /// Carries out what Preferences asked of the browser import session and
     /// tells it how long is left.
+    /// Keeps the API's recent folders and the app's the same, both ways.
+    fn sync_recent_folders(&mut self) {
+        let Some(h) = &self.server else { return };
+        if let Some(v) = h.take_recent_folders() {
+            self.server_recents = v.clone();
+            self.recent_folders = v;
+        } else if self.recent_folders != self.server_recents {
+            h.set_recent_folders(self.recent_folders.clone());
+            self.server_recents = self.recent_folders.clone();
+        }
+    }
+
     fn drive_session(&mut self) {
+        self.sync_recent_folders();
         match self.prefs_window.session_cmd.take() {
             Some(crate::prefs::SessionCmd::Start) => self.start_browser_session(),
             Some(crate::prefs::SessionCmd::Stop) => self.stop_browser_session(),

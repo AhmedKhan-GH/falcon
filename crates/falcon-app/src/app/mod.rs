@@ -91,6 +91,8 @@ pub struct App {
     pub(crate) recent: Vec<PathBuf>,
     /// Folders items were last added to, newest first (`app/commands/items.rs`).
     pub(crate) recent_folders: Vec<String>,
+    /// The recent folders last handed to the API, to hand over only on a change.
+    pub(crate) server_recents: Vec<String>,
     /// The Rename dialog for several items, and the template it used last.
     pub(crate) item_rename: Option<commands::items::ItemRename>,
     pub(crate) rename_template: String,
@@ -279,6 +281,7 @@ impl App {
             open_apps: Default::default(),
             recent: Vec::new(),
             recent_folders: Vec::new(),
+            server_recents: Vec::new(),
             item_rename: None,
             rename_template: "Untitled - %N".into(),
             recent_items: Default::default(),

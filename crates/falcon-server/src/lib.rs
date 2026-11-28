@@ -82,6 +82,10 @@ struct State {
     /// library: the app holds that lock for a whole frame, and a second lock from
     /// the same thread never returns.
     root: Mutex<String>,
+    /// Folders items were last added to, newest first (Eagle's "recent folders"):
+    /// what a browser's folder picker offers first. The app hands it over and takes it back.
+    recent: Mutex<Vec<String>>,
+    recent_changed: AtomicBool,
     /// Times of recent requests from browsers, for the rate limit.
     browser_hits: Mutex<std::collections::VecDeque<std::time::Instant>>,
 }
@@ -176,6 +180,8 @@ impl State {
             next_pending: std::sync::atomic::AtomicU64::new(1),
             notify: Mutex::new(None),
             root: Mutex::new(root_of(lib)),
+            recent: Mutex::new(Vec::new()),
+            recent_changed: AtomicBool::new(false),
             browser_hits: Mutex::new(std::collections::VecDeque::new()),
         }
     }
@@ -205,6 +211,42 @@ impl State {
             Some(x) => (true, x.origins.clone()),
             None => (false, HashSet::new()),
         }
+    }
+
+    /// Notes the folders an import went into as the newest recent ones.
+    fn remember_folders(&self, ids: &[String]) {
+        if ids.is_empty() {
+            return;
+        }
+        let mut r = self.recent.lock().unwrap_or_else(|p| p.into_inner());
+        for id in ids.iter().rev() {
+            r.retain(|x| x != id);
+            r.insert(0, id.clone());
+        }
+        r.truncate(32);
+        self.recent_changed.store(true, Ordering::SeqCst);
+    }
+
+    /// Up to `max` folder ids for `listRecent`: the recent ones that still exist
+    /// (and are not in `skip`), then top-level folders in library order, so the
+    /// list is never empty or stale.
+    fn recent_ids(&self, lib: &Library, skip: &HashSet<String>, max: usize) -> Vec<String> {
+        let known = lib.folder_ids();
+        let mut out: Vec<String> = Vec::new();
+        for id in self.recent.lock().unwrap_or_else(|p| p.into_inner()).iter() {
+            if known.contains(id.as_str()) && !skip.contains(id) && !out.contains(id) && out.len() < max {
+                out.push(id.clone());
+            }
+        }
+        for f in &lib.metadata.folders {
+            if out.len() >= max {
+                break;
+            }
+            if !skip.contains(&f.id) && !out.contains(&f.id) {
+                out.push(f.id.clone());
+            }
+        }
+        out
     }
 
     fn wake(&self) {
@@ -382,6 +424,17 @@ impl Handle {
         if let Some(e) = self.state.pending.lock().unwrap_or_else(|p| p.into_inner()).iter().find(|e| e.info.id == id) {
             *e.decision.lock().unwrap_or_else(|p| p.into_inner()) = Some(accept);
         }
+    }
+
+    /// Hands over the folders items were last added to (newest first).
+    pub fn set_recent_folders(&self, ids: Vec<String>) {
+        *self.state.recent.lock().unwrap_or_else(|p| p.into_inner()) = ids;
+        self.state.recent_changed.store(false, Ordering::SeqCst);
+    }
+
+    /// The recent folders, if an import over the API changed them since the last call.
+    pub fn take_recent_folders(&self) -> Option<Vec<String>> {
+        self.state.recent_changed.swap(false, Ordering::SeqCst).then(|| self.state.recent.lock().unwrap_or_else(|p| p.into_inner()).clone())
     }
 
     /// Hands over what wakes the app when an import is waiting.
@@ -741,6 +794,17 @@ fn handle(lib: &Shared, state: &State, port: u16, legacy: bool, mut req: Request
         "/api/v2/playground" => Reply::Page(PLAYGROUND),
         _ => route(lib, state, &method, &path, &args),
     };
+    if tier == policy::Tier::Import && matches!(reply, Reply::Empty | Reply::Data(_)) {
+        let l = lock(lib);
+        let mut ids = folder_ids(&l, &args);
+        if let Some(Value::Array(items)) = args.get("items") {
+            for e in items.iter().filter_map(Value::as_object) {
+                ids.extend(folder_ids(&l, e));
+            }
+        }
+        drop(l);
+        state.remember_folders(&ids);
+    }
     row.status = send(req, reply, cors);
     row.why = why.into();
     state.record(row);
@@ -779,11 +843,11 @@ fn session_reply(lib: &Shared, state: &State, path: &str) -> Reply {
         "/api/folder/listRecent" => {
             let mut blocked = HashSet::new();
             blocked_folder_ids(&l.metadata.folders, &mut blocked, false);
-            let flat: Vec<Value> = l
-                .all_folders()
-                .into_iter()
-                .filter(|f| !blocked.contains(&f.id))
-                .take(16)
+            let all = l.all_folders();
+            let flat: Vec<Value> = state
+                .recent_ids(&l, &blocked, 16)
+                .iter()
+                .filter_map(|id| all.iter().find(|f| f.id == *id))
                 .map(|f| json!({"id": f.id, "name": f.name, "description": "", "children": [], "iconColor": f.icon_color, "icon": f.icon}))
                 .collect();
             Reply::Data(Value::Array(flat))
@@ -1251,7 +1315,9 @@ fn route(lib: &Shared, state: &State, method: &Method, path: &str, args: &Map<St
         }
         "/api/folder/listRecent" => {
             let open = state.unlocked_in(&lib.root().display().to_string());
-            Reply::Data(Value::Array(lib.all_folders().into_iter().take(16).map(|f| folder_json_with(f, &open)).collect()))
+            let all = lib.all_folders();
+            let ids = state.recent_ids(lib, &HashSet::new(), 16);
+            Reply::Data(Value::Array(ids.iter().filter_map(|id| all.iter().find(|f| f.id == *id)).map(|f| folder_json_with(f, &open)).collect()))
         }
         "/api/folder/unlock" => {
             let id = s(args, "folderId").unwrap_or("");
