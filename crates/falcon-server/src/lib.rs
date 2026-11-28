@@ -817,7 +817,14 @@ fn session_folder(f: &Folder) -> Option<Value> {
         return None;
     }
     let kids: Vec<Value> = f.children.iter().filter_map(session_folder).collect();
-    Some(json!({"id": f.id, "name": f.name, "description": "", "children": kids, "iconColor": f.icon_color, "icon": f.icon}))
+    Some(json!({"id": f.id, "name": one_line(&f.name), "description": "", "children": kids, "iconColor": f.icon_color, "icon": f.icon}))
+}
+
+/// A folder name for a picker row: line separators, line breaks and other control
+/// characters (a name may hold U+2028, which breaks a list row's layout) become one space.
+fn one_line(name: &str) -> String {
+    let s: String = name.chars().map(|c| if c.is_control() || c == '\u{2028}' || c == '\u{2029}' || c == '\u{85}' { ' ' } else { c }).collect();
+    s.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 fn blocked_folder_ids(folders: &[Folder], out: &mut HashSet<String>, under_locked: bool) {
@@ -848,7 +855,7 @@ fn session_reply(lib: &Shared, state: &State, path: &str) -> Reply {
                 .recent_ids(&l, &blocked, 16)
                 .iter()
                 .filter_map(|id| all.iter().find(|f| f.id == *id))
-                .map(|f| json!({"id": f.id, "name": f.name, "description": "", "children": [], "iconColor": f.icon_color, "icon": f.icon}))
+                .map(|f| json!({"id": f.id, "name": one_line(&f.name), "description": "", "children": [], "iconColor": f.icon_color, "icon": f.icon}))
                 .collect();
             Reply::Data(Value::Array(flat))
         }
@@ -1924,6 +1931,14 @@ fn authorized(host_ok: bool, token: &str, given: Option<&str>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn picker_names_are_single_lines() {
+        assert_eq!(one_line("2000+ Must Collect \u{2028}Open Source SVG Icons"), "2000+ Must Collect Open Source SVG Icons");
+        assert_eq!(one_line("a\nb\t c\u{2029}d"), "a b c d");
+        assert_eq!(one_line("  plain name  "), "plain name");
+        assert_eq!(one_line("猫の写真"), "猫の写真");
+    }
 
     #[test]
     fn query_strings_decode() {
