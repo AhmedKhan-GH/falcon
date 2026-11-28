@@ -36,9 +36,36 @@ const PACKAGES: [&str; 3] = ["key", "pxd", "mindnode"];
 /// Names starting with a dot are skipped as hidden files as well.
 const JUNK: [&str; 4] = ["Thumbs.db", "ehthumbs.db", "Desktop.ini", "Icon\r"];
 
-/// Whether a walk leaves `name` out: hidden files and OS junk.
+/// Known temporary, lock, swap, and download-in-progress extensions.
+const TEMP_EXTENSIONS: [&str; 8] = [
+    "tmp", "temp", "swp", "swo", "lock", "crdownload", "part", "download",
+];
+
+/// Whether a walk leaves `name` out: hidden files, OS junk, lock files, and temporary files.
 pub fn is_skipped(name: &str) -> bool {
-    name.starts_with('.') || JUNK.iter().any(|j| j.eq_ignore_ascii_case(name))
+    if name.starts_with('.') {
+        return true;
+    }
+    // Microsoft Office temporary lock files (~$filename)
+    if name.starts_with("~$") {
+        return true;
+    }
+    // Editor and Unix backup files (filename~)
+    if name.ends_with('~') {
+        return true;
+    }
+    // Affinity and general lock files (e.g. filename.af~lock~, filename.afdesign~lock~, filename.afphoto~lock~)
+    let lower = name.to_ascii_lowercase();
+    if lower.contains("~lock~") {
+        return true;
+    }
+    // Temporary, swap, and partial download extensions
+    if let Some(ext) = lower.rsplit('.').next()
+        && TEMP_EXTENSIONS.contains(&ext)
+    {
+        return true;
+    }
+    JUNK.iter().any(|j| j.eq_ignore_ascii_case(name))
 }
 
 fn is_package(path: &Path) -> bool {
@@ -383,5 +410,28 @@ mod tests {
         let bad = super::plan(&walk(&tmp.path().join("Photos")), Some("NOPE"), crate::ids::new_id);
         assert!(lib.create_folders(&bad.folders).is_err());
         assert_eq!(Library::open(&root).unwrap().metadata.folders.len(), before);
+    }
+
+    #[test]
+    fn lock_and_temporary_files_are_skipped() {
+        assert!(is_skipped("nov 2.af~lock~"));
+        assert!(is_skipped("project.afdesign~lock~"));
+        assert!(is_skipped("photo.afphoto~lock~"));
+        assert!(is_skipped("~$Document.docx"));
+        assert!(is_skipped("notes.txt~"));
+        assert!(is_skipped("cache.tmp"));
+        assert!(is_skipped("data.temp"));
+        assert!(is_skipped(".DS_Store"));
+        assert!(is_skipped("image.png.crdownload"));
+        assert!(is_skipped("large.zip.part"));
+        assert!(is_skipped(".swp"));
+        assert!(is_skipped("Thumbs.db"));
+
+        // Valid files must NOT be skipped
+        assert!(!is_skipped("nov 2.afdesign"));
+        assert!(!is_skipped("nov 2.afphoto"));
+        assert!(!is_skipped("document.docx"));
+        assert!(!is_skipped("photo.jpg"));
+        assert!(!is_skipped("banner.png"));
     }
 }

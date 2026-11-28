@@ -12,7 +12,7 @@ use crate::icons as ic;
 use crate::loader::{Tier, job_for};
 use crate::logic::{self, Layout, Scope};
 use crate::theme::{self as t, font};
-use crate::ui::widgets::{PIN_BADGE, badge, broken_mark, ext_placeholder, galley, paint_thumb_bg, pin_badge};
+use crate::ui::widgets::{PIN_BADGE, badge, broken_mark, ext_placeholder, list_status_icon, paint_thumb_bg, pin_badge, status_badge, galley};
 
 pub(crate) mod covers;
 pub(crate) mod duplicates;
@@ -65,7 +65,7 @@ impl App {
     /// Keeps `ws.order` current while the viewer hides the grid, so the
     /// viewer's stepping and counter follow edits and deletions.
     pub(crate) fn refresh_order(&mut self, lib: &Library) {
-        if self.scope_gate(lib).is_some() {
+        if self.ws.scope == Scope::Home || self.scope_gate(lib).is_some() {
             self.ws.order.clear();
             return;
         }
@@ -74,6 +74,11 @@ impl App {
     }
 
     pub(crate) fn grid(&mut self, ui: &mut Ui, lib: &Library) {
+        if self.ws.scope == Scope::Home {
+            self.ws.order.clear();
+            self.home_page(ui, lib);
+            return;
+        }
         let area = ui.max_rect();
         self.ws.cards.begin(ui.ctx().cumulative_frame_nr());
         // The grayscale preview grays the cards too, as Eagle's does.
@@ -114,7 +119,29 @@ impl App {
         let width = area.width() - 2.0 * GRID_PAD_X;
         let aspects: Vec<f32> = items
             .iter()
-            .map(|i| if i.width > 0 && i.height > 0 { i.width as f32 / i.height as f32 } else { 1.0 })
+            .map(|i| {
+                if let Some(tex) = self.ws.loader.get(&i.id, Tier::Grid) {
+                    let ts = tex.size_vec2();
+                    if ts.x > 0.0 && ts.y > 0.0 {
+                        if i.width > 0 && i.height > 0 {
+                            let tex_ratio = ts.x / ts.y;
+                            let item_ratio = i.width as f32 / i.height as f32;
+                            let swap_ratio = i.height as f32 / i.width as f32;
+                            if (swap_ratio / tex_ratio - 1.0).abs() < 0.20
+                                && ((ts.x > ts.y && i.width < i.height) || (ts.y > ts.x && i.width > i.height))
+                            {
+                                return swap_ratio;
+                            }
+                            if (item_ratio / tex_ratio - 1.0).abs() < 0.20 {
+                                return item_ratio;
+                            }
+                            return tex_ratio;
+                        }
+                        return ts.x / ts.y;
+                    }
+                }
+                if i.width > 0 && i.height > 0 { i.width as f32 / i.height as f32 } else { 1.0 }
+            })
             .collect();
         let caption = logic::caption_height(layout, &self.display);
         let (places, content_h, cols) = logic::place(layout, &aspects, width, self.tile, GRID_GAP, caption, ROW_GAP);
@@ -155,6 +182,32 @@ impl App {
                 let cur = ui.ctx().data(|d| d.get_temp::<f32>(ui.scope_id().with("grid-offset"))).unwrap_or(0.0);
                 scroll = scroll.vertical_scroll_offset((cur + step).clamp(0.0, (total_h - area.height()).max(0.0)));
                 ui.ctx().request_repaint();
+            }
+        }
+
+        if pointer.is_some_and(|p| area.contains(p)) {
+            let (pinch, alt_scroll) = ui.input(|i| {
+                (
+                    i.zoom_delta(),
+                    if i.modifiers.alt { i.smooth_scroll_delta.y } else { 0.0 },
+                )
+            });
+            if (pinch - 1.0).abs() > 0.01 {
+                let new_tile = (self.tile * pinch).clamp(crate::app::TILE_MIN, crate::app::TILE_MAX).round();
+                if (new_tile - self.tile).abs() >= 1.0 {
+                    self.tile = new_tile;
+                    if let Some(id) = self.ws.selected.first().cloned() {
+                        self.ws.scroll_to = Some(id);
+                    }
+                }
+            } else if alt_scroll.abs() > 0.5 {
+                let new_tile = (self.tile + alt_scroll * 0.5).clamp(crate::app::TILE_MIN, crate::app::TILE_MAX).round();
+                if (new_tile - self.tile).abs() >= 1.0 {
+                    self.tile = new_tile;
+                    if let Some(id) = self.ws.selected.first().cloned() {
+                        self.ws.scroll_to = Some(id);
+                    }
+                }
             }
         }
 
@@ -242,7 +295,7 @@ impl App {
                     hovered = Some((item, card, self.zoom_button(ui, item, card, caption)));
                     self.card_media(ui, lib, item, card, caption, &resp);
                 }
-                if let Some(j) = job_for(item, lib.root(), Tier::Grid) {
+                if let Some(j) = job_for(lib, item, Tier::Grid) {
                     jobs.push(j);
                 }
             }
@@ -260,6 +313,13 @@ impl App {
         self.hover_media.end_frame(ui.ctx().cumulative_frame_nr());
         self.hover_preview(ui, lib, hovered, scrolled, order_changed || clicked.is_some() || opened.is_some());
         self.ws.frame_jobs.extend(jobs);
+        if let Some(worker) = &self.ws.thumb_worker
+            && worker.progress().active
+        {
+            let visible_ids: std::collections::HashSet<String> =
+                self.ws.frame_jobs.iter().map(|j| j.key.0.clone()).collect();
+            worker.update_priorities(&visible_ids, self.ws.selected.first().map(String::as_str));
+        }
         // Thumbnails first; large cards' originals after them.
         let (cards, rest): (Vec<_>, Vec<_>) = std::mem::take(&mut self.ws.frame_jobs).into_iter().partition(|j| j.key.1 == Tier::Card);
         self.ws.frame_jobs = rest;
@@ -328,11 +388,11 @@ impl App {
         if let Some(tex) = self.ws.loader.get(&item.id, Tier::Card) {
             return Some(tex.clone());
         }
-        let path = item.original_path(lib.root());
+        let Ok(path) = lib.resolved_source_path(&item.id) else { return None };
         // An original still in iCloud isn't downloaded for a card.
         if !self.ws.loader.has_failed(&item.id, Tier::Card)
             && !crate::icloud::is_dataless(&path)
-            && let Some(j) = crate::loader::card_job(item, lib.root())
+            && let Some(j) = crate::loader::card_job(lib, item)
         {
             self.ws.frame_jobs.push(j);
         }
@@ -351,14 +411,30 @@ impl App {
         let large = self.large_card(ui, lib, item, rect);
         match playing.or(large).or_else(|| self.ws.loader.get(&item.id, Tier::Grid).cloned()) {
             Some(tex) => {
-                let natural = if item.width > 0 && item.height > 0 { vec2(item.width as f32, item.height as f32) } else { tex.size_vec2() };
+                let natural = if item.width > 0 && item.height > 0 {
+                    let tsize = tex.size_vec2();
+                    let tex_ratio = tsize.x / tsize.y;
+                    let item_ratio = item.width as f32 / item.height as f32;
+                    let swap_ratio = item.height as f32 / item.width as f32;
+                    if (swap_ratio / tex_ratio - 1.0).abs() < 0.20
+                        && ((tsize.x > tsize.y && item.width < item.height) || (tsize.y > tsize.x && item.width > item.height))
+                    {
+                        vec2(item.height as f32, item.width as f32)
+                    } else if (item_ratio / tex_ratio - 1.0).abs() < 0.20 {
+                        vec2(item.width as f32, item.height as f32)
+                    } else {
+                        tsize
+                    }
+                } else {
+                    tex.size_vec2()
+                };
                 let scale = (rect.width() / natural.x).min(rect.height() / natural.y);
                 // Eagle's object-fit: scale-down never enlarges a small image.
                 let scale = if fill { scale } else { scale.min(1.0) };
                 let r = Rect::from_center_size(rect.center(), natural * scale);
                 egui::Image::new((tex.id(), r.size())).corner_radius(4).paint_at(ui, r);
             }
-            None if failed || job_for(item, lib.root(), Tier::Grid).is_none() => {
+            None if failed || job_for(lib, item, Tier::Grid).is_none() => {
                 ext_placeholder(ui, rect, &item.ext);
                 if failed {
                     broken_mark(ui, rect);
@@ -384,7 +460,7 @@ impl App {
                 let uv = Rect::from_center_size(Pos2::new(0.5, 0.5), vec2(rect.width() / (size.x * s), rect.height() / (size.y * s)));
                 egui::Image::new((tex.id(), rect.size())).uv(uv).corner_radius(4).paint_at(ui, rect);
             }
-            None if failed || job_for(item, lib.root(), Tier::Grid).is_none() => {
+            None if failed || job_for(lib, item, Tier::Grid).is_none() => {
                 ext_placeholder(ui, rect, &item.ext);
                 if failed {
                     broken_mark(ui, rect);
@@ -429,6 +505,10 @@ impl App {
         }
         if d.ext_badge {
             badge(ui, tile.min + vec2(badge_x, 5.0), &item.ext);
+        }
+        let link_status = crate::linked_ui::classify_asset(lib, &item.id);
+        if link_status.is_linked() {
+            status_badge(ui, &item.id, Pos2::new(tile.left() + 5.0, tile.bottom() - 5.0), link_status);
         }
         if d.comment_badge {
             crate::ui::viewer::comments::count_badge(ui, tile, item);
@@ -492,12 +572,18 @@ impl App {
         }
         let (x0, span) = list_span(row);
         let pinned = self.shows_pin(item);
+        let link_status = crate::linked_ui::classify_asset(lib, &item.id);
         for (col, at, w) in self.display.columns.spans() {
             let (mut x, mut cw) = (x0 + span * at, span * w - 8.0);
             if pinned && col == logic::ListColumn::Name {
                 pin_badge(ui, Pos2::new(x, cy - PIN_BADGE / 2.0));
                 x += PIN_BADGE + 4.0;
                 cw -= PIN_BADGE + 4.0;
+            }
+            if link_status.is_linked() && col == logic::ListColumn::Name {
+                let used = list_status_icon(ui, &item.id, Pos2::new(x, cy), link_status);
+                x += used;
+                cw -= used;
             }
             let (size, color) = if col == logic::ListColumn::Name { (13.0, t::p().text) } else { (12.0, t::p().text_muted) };
             match logic::list_cell(item, col, self.display.show_ext) {
@@ -565,8 +651,21 @@ impl App {
         };
         let grid = self.ws.loader.get(&item.id, Tier::Grid).cloned();
         let natural = match (item.width, item.height, &grid) {
-            (w, h, _) if w > 0 && h > 0 => vec2(w as f32, h as f32),
+            (w, h, Some(t)) if w > 0 && h > 0 => {
+                let ts = t.size_vec2();
+                let tex_ratio = ts.x / ts.y;
+                let item_ratio = w as f32 / h as f32;
+                let swap_ratio = h as f32 / w as f32;
+                if (swap_ratio / tex_ratio - 1.0).abs() < 0.20 && ((ts.x > ts.y && w < h) || (ts.y > ts.x && w > h)) {
+                    vec2(h as f32, w as f32)
+                } else if (item_ratio / tex_ratio - 1.0).abs() < 0.20 {
+                    vec2(w as f32, h as f32)
+                } else {
+                    ts
+                }
+            }
             (_, _, Some(t)) => t.size_vec2(),
+            (w, h, _) if w > 0 && h > 0 => vec2(w as f32, h as f32),
             _ => return,
         };
         let window = ctx.content_rect();
@@ -578,7 +677,7 @@ impl App {
         }
         let original = hover::wants_original(&item.ext, item.width, item.height, rect.size() * ctx.pixels_per_point(), hover::GRID_SIDE);
         let full = if original {
-            if let Some(j) = job_for(item, lib.root(), Tier::Full) {
+            if let Some(j) = job_for(lib, item, Tier::Full) {
                 self.ws.frame_jobs.insert(0, j);
             }
             self.ws.loader.get(&item.id, Tier::Full).cloned()

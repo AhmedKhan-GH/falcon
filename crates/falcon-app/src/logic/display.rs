@@ -74,11 +74,28 @@ pub struct Display {
     /// `eagle.list.video.muted`, default true, switched by the speaker
     /// button on the preview).
     pub video_muted: bool,
+    /// Hide unsupported file formats and sidecars that Falcon cannot preview.
+    pub hide_unsupported: bool,
 }
 
 impl Default for Display {
     fn default() -> Self {
-        Display { show_name: true, show_info: true, info: InfoType::Dimensions, show_ext: true, ext_badge: true, comment_badge: true, fill: false, subfolders: false, columns: ListColumns::default(), strip_collapsed: false, quality: true, audio_autoplay: true, video_muted: true }
+        Display {
+            show_name: true,
+            show_info: true,
+            info: InfoType::Dimensions,
+            show_ext: true,
+            ext_badge: true,
+            comment_badge: true,
+            fill: false,
+            subfolders: false,
+            columns: ListColumns::default(),
+            strip_collapsed: false,
+            quality: true,
+            audio_autoplay: true,
+            video_muted: true,
+            hide_unsupported: true,
+        }
     }
 }
 
@@ -109,8 +126,8 @@ pub enum Info {
 
 /// Documents, 3D models and design files whose Dimensions line shows the
 /// file size, as Eagle's does: their pixel size is only the preview's.
-const SIZE_NOT_DIMENSIONS: [&str; 38] = [
-    "mhtml", "html", "fbx", "obj", "glb", "3ds", "3mf", "dae", "ifc", "ply", "stl", "af", "afpub", "afdesign", "afphoto", "fig", "cdr", "skp", "dwg", "blend", "c4d",
+const SIZE_NOT_DIMENSIONS: [&str; 39] = [
+    "mhtml", "html", "fbx", "obj", "glb", "3ds", "3mf", "dae", "ifc", "ply", "stl", "af", "afpub", "afdesign", "afphoto", "aftemplate", "fig", "cdr", "skp", "dwg", "blend", "c4d",
     "clip", "prd", "exr", "hdr", "skt", "ppt", "pptx", "potx", "docx", "doc", "xls", "xlsx", "eddx", "emmx", "number", "page", "txt",
 ];
 
@@ -633,5 +650,24 @@ mod display_tests {
         assert!(broken_thumb_hint(true, 259, false, false).unwrap().contains("wasn't found"));
         assert!(broken_thumb_hint(true, 40, true, false).unwrap().contains("couldn't be read"));
         assert!(broken_thumb_hint(true, 40, false, true).unwrap().contains("couldn't be read"));
+    }
+
+    #[test]
+    fn display_hide_unsupported_defaults_and_persists() {
+        let d = Display::default();
+        assert!(d.hide_unsupported);
+
+        // Deserializing empty JSON object should default hide_unsupported to true
+        let de: Display = serde_json::from_str("{}").unwrap();
+        assert!(de.hide_unsupported);
+
+        // Explicitly false in JSON
+        let de_false: Display = serde_json::from_str("{\"hide_unsupported\": false}").unwrap();
+        assert!(!de_false.hide_unsupported);
+
+        // Roundtrip serialization
+        let s = serde_json::to_string(&d).unwrap();
+        let de_roundtrip: Display = serde_json::from_str(&s).unwrap();
+        assert_eq!(d, de_roundtrip);
     }
 }

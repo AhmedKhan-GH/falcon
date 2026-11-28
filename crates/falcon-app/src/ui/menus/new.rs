@@ -101,7 +101,7 @@ impl App {
         if let Some(pick) = chosen {
             egui::Popup::close_id(&ctx, id);
             match pick {
-                Pick::Command(cmd) => self.run_command(&ctx, cmd),
+                Pick::Command(cmd) => self.defer_command(&ctx, cmd),
                 Pick::Duplicates(range) => self.find_duplicates_in(range),
                 Pick::Document(template) => {
                     let folders = self.scope_folders();
@@ -134,6 +134,12 @@ impl App {
         entry(self, ui, &mut chosen, tr_key("Import Folders…"), Command::ImportFolders, true);
         entry(self, ui, &mut chosen, tr_key("Import Links…"), Command::ImportLinks, true);
         entry(self, ui, &mut chosen, tr_key("Import Files…"), Command::Import, true);
+        crate::ui::menus::search::submenu(ui, tr("Import With Mode"), |ui| {
+            entry(self, ui, &mut chosen, tr_key("Files (Copy to Library)…"), Command::ImportAsCopy, true);
+            entry(self, ui, &mut chosen, tr_key("Files (Link / Place)…"), Command::ImportAsLink, true);
+            entry(self, ui, &mut chosen, tr_key("Folders (Copy to Library)…"), Command::ImportFoldersAsCopy, true);
+            entry(self, ui, &mut chosen, tr_key("Folders (Link / Place)…"), Command::ImportFoldersAsLink, true);
+        });
         entry(self, ui, &mut chosen, tr_key("Import Eagle Package…"), Command::ImportPack, true);
         crate::ui::menus::search::submenu(ui, tr("Auto-Import"), |ui| {
             if ui.button(tr("Settings…")).clicked() {

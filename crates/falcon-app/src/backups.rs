@@ -86,7 +86,7 @@ impl Drop for Running {
 /// also copied (`falcon_library::backup::backup_library_with`), as Eagle
 /// keeps one in its app data.
 pub fn app_backup_dir() -> Option<PathBuf> {
-    eframe::storage_dir("Falcon").map(|d| d.join("eagle-backup"))
+    eframe::storage_dir(crate::app_data_name()).map(|d| d.join("eagle-backup"))
 }
 
 /// Backs up the library at `root` now, on this thread.

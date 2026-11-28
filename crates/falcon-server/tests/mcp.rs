@@ -507,7 +507,7 @@ fn writes_go_through_the_library_and_can_be_undone() {
     }
     assert!(!lib.item(&e.a).unwrap().is_deleted);
     assert_eq!(lib.item(&e.b).unwrap().tags, ["blue"]);
-    assert!(lib.item(&e.b).unwrap().original_path(&e.root).ends_with("b.png"));
+    assert!(lib.item(&e.b).unwrap().managed_storage_path(&e.root).ends_with("b.png"));
     assert!(lib.item(&id).unwrap().is_deleted, "an undone import goes to the Trash");
     assert!(!lib.folder_ids().contains(top["id"].as_str().unwrap()));
     drop(lib);

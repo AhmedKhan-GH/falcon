@@ -23,6 +23,34 @@ pub(crate) const TILE_MAX: f32 = 400.0;
 
 /// What falcon remembers between launches, as Eagle does: the open
 /// libraries, zoom, sort and panel layout.
+/// What a cached count was computed from: it is recomputed when this changes,
+/// and at least every few seconds in case something changed it unseen.
+#[derive(Clone, PartialEq, Eq)]
+pub(crate) struct CountsKey {
+    pub(crate) items: usize,
+    pub(crate) mutations: u64,
+    pub(crate) modified: u64,
+    pub(crate) flag: usize,
+}
+
+pub(crate) struct CountsCache<T> {
+    pub(crate) key: CountsKey,
+    pub(crate) at: std::time::Instant,
+    pub(crate) value: T,
+}
+
+impl<T: Clone> CountsCache<T> {
+    /// The cached value if it is still current for `key`.
+    pub(crate) fn current(cache: &std::sync::Mutex<Option<CountsCache<T>>>, key: &CountsKey) -> Option<T> {
+        let g = cache.lock().unwrap_or_else(|p| p.into_inner());
+        g.as_ref().filter(|c| c.key == *key && c.at.elapsed() < std::time::Duration::from_secs(10)).map(|c| c.value.clone())
+    }
+
+    pub(crate) fn store(cache: &std::sync::Mutex<Option<CountsCache<T>>>, key: CountsKey, value: T) {
+        *cache.lock().unwrap_or_else(|p| p.into_inner()) = Some(CountsCache { key, at: std::time::Instant::now(), value });
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Default)]
 #[serde(default)]
 pub(crate) struct Saved {
@@ -56,6 +84,8 @@ pub(crate) struct Saved {
     /// Layouts by folder or smart folder id, or by library path for the
     /// other pages (`logic::layout_for`).
     pub(crate) layouts: HashMap<String, Layout>,
+    /// Home Dashboard hero and custom cover choices by library path.
+    pub(crate) home_libs: HashMap<String, crate::home_lib::HomeLib>,
     /// The grid display options of the layout panel.
     pub(crate) display: logic::Display,
     pub(crate) prefs: crate::prefs::Prefs,
@@ -100,6 +130,8 @@ pub(crate) struct Saved {
     pub(crate) tips_seen: bool,
     /// Emoji chosen as folder icons, kept here and not in the library.
     pub(crate) folder_emoji: crate::folder_emoji::FolderEmoji,
+    /// Last active scope when the app was closed.
+    pub(crate) last_scope: Option<crate::logic::Scope>,
 }
 
 /// An inspector section whose title folds it away.
@@ -183,6 +215,8 @@ pub(crate) enum Switch {
     Close(usize),
     /// Merge another library into the shown one.
     Merge,
+    /// Move the library at this path to another folder.
+    Move(PathBuf),
 }
 
 /// Background import counters.
@@ -380,6 +414,8 @@ pub(crate) struct Workspace {
     /// of items they change (`App::push_bulk`).
     pub(crate) bulk: Option<(usize, Vec<Action>)>,
     pub(crate) smart_dialog: Option<SmartDraft>,
+    pub(crate) library_settings: crate::ui::dialogs::library_settings::LibrarySettings,
+    pub(crate) relink_dialog: crate::ui::dialogs::relink::RelinkDialogState,
     pub(crate) view: ViewState,
     /// The GIF player turned on with the viewer's toolbar button, until
     /// the viewer closes (Eagle's `usingGifPlayer`).
@@ -444,6 +480,35 @@ pub(crate) struct Workspace {
     /// The storage checks run when the library opened (`storage.rs`),
     /// until their result is taken.
     pub(crate) health: Option<std::sync::mpsc::Receiver<Vec<crate::storage::Warning>>>,
+    /// Bounded background thumbnail worker pool for deferred Link-mode thumbnails.
+    pub(crate) thumb_worker: Option<Arc<crate::thumb_worker::ThumbWorker>>,
+    /// Background folder synchronization of this library (`sync_worker.rs`).
+    pub(crate) sync: Option<Arc<crate::sync_worker::SyncScheduler>>,
+    pub(crate) sync_watchers: crate::sync_worker::SyncWatchers,
+    /// The watched folders as last read, and when.
+    pub(crate) sync_folders: Vec<falcon_library::WatchedFolder>,
+    pub(crate) sync_read: Option<std::time::Instant>,
+    /// Folders whose current or queued pass the user asked for, so that their
+    /// result is reported even when nothing changed.
+    pub(crate) sync_manual: std::collections::HashSet<String>,
+    /// Session cache of resolved cover asset IDs per folder for Home dashboard.
+    pub(crate) home_covers: std::collections::HashMap<String, Option<String>>,
+    /// Session cache of resolved mosaic cover asset IDs (up to 4) per folder for Home dashboard.
+    pub(crate) home_mosaics: std::collections::HashMap<String, Vec<String>>,
+    /// Session cache of recently imported asset IDs for Home dashboard.
+    pub(crate) home_recent_imports: Vec<String>,
+    /// Session cache of smart-folder Quick Access results (count, cover asset id) for Home.
+    pub(crate) home_smart: std::collections::HashMap<String, (usize, Option<String>)>,
+    /// Home's Quick Access shows the cards that did not fit ("View all"); not saved.
+    pub(crate) home_quick_all: bool,
+    /// Folder item counts and sidebar counts, computed once per change of the
+    /// library instead of every frame (each walks every item).
+    pub(crate) counts_cache: std::sync::Mutex<Option<CountsCache<std::collections::HashMap<String, usize>>>>,
+    pub(crate) nav_cache: std::sync::Mutex<Option<CountsCache<logic::NavCounts>>>,
+    /// Mutation counter incremented on user edits, organizing actions, imports, and undos.
+    pub(crate) mutation_count: u64,
+    /// Cache epoch: (root, modification_time, items_count, sort, increase, mutation_count, recent_limit) to invalidate home caches.
+    pub(crate) home_cache_epoch: (std::path::PathBuf, u64, usize, OrderBy, bool, u64, usize),
 }
 
 impl Workspace {
@@ -468,13 +533,49 @@ impl Workspace {
             let ctx = ctx.clone();
             crate::storage::spawn_check(r, move || ctx.request_repaint())
         });
+        let thumb_worker = match (&lib, &root) {
+            (Some(shared), Some(r)) => {
+                let worker = Arc::new(crate::thumb_worker::ThumbWorker::new(
+                    Arc::clone(shared),
+                    r.clone(),
+                    ctx.clone(),
+                    true,
+                ));
+                let items = lock(shared).items().to_vec();
+                worker.rediscover_pending(&items);
+                Some(worker)
+            }
+            _ => None,
+        };
+        let sync = match (&lib, &root) {
+            (Some(shared), Some(r)) => {
+                let ctx = ctx.clone();
+                Some(Arc::new(crate::sync_worker::SyncScheduler::new(Arc::clone(shared), r.clone(), move || ctx.request_repaint())))
+            }
+            _ => None,
+        };
         Workspace {
-            root,
+            root: root.clone(),
             watch,
             health,
+            thumb_worker,
+            sync,
+            sync_watchers: Default::default(),
+            sync_folders: Vec::new(),
+            sync_read: None,
+            sync_manual: Default::default(),
+            home_covers: std::collections::HashMap::new(),
+            home_mosaics: std::collections::HashMap::new(),
+            home_recent_imports: Vec::new(),
+            home_smart: std::collections::HashMap::new(),
+            home_quick_all: false,
+            counts_cache: std::sync::Mutex::new(None),
+            nav_cache: std::sync::Mutex::new(None),
+            mutation_count: 0,
+            home_cache_epoch: (root.clone().unwrap_or_default(), 0, 0, OrderBy::Import, true, 0, 20),
             lib,
             loader: Loader::new(ctx),
-            scope: Scope::All,
+            scope: Scope::Home,
             back: Vec::new(),
             forward: Vec::new(),
             query: String::new(),
@@ -511,6 +612,8 @@ impl Workspace {
             confirm: None,
             bulk: None,
             smart_dialog: None,
+            library_settings: Default::default(),
+            relink_dialog: Default::default(),
             view: ViewState::default(),
             gif_player: false,
             cards: Default::default(),
@@ -594,6 +697,7 @@ impl App {
             recent_folders: self.recent_folders.clone(),
             layout: self.legacy_layout,
             layouts: self.layouts.clone(),
+            home_libs: self.home_libs.clone(),
             display: self.display.clone(),
             prefs: self.prefs.clone(),
             search: self.search.clone(),
@@ -617,6 +721,7 @@ impl App {
             notices: self.notices.clone(),
             tips_seen: self.tips_seen,
             folder_emoji: self.folder_emoji.store.clone(),
+            last_scope: Some(self.ws.scope.clone()),
         };
         eframe::set_value(storage, eframe::APP_KEY, &saved);
     }

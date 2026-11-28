@@ -97,7 +97,7 @@ impl App {
             return;
         }
         if v.preview.is_none() {
-            let path = item.original_path(lib.root());
+            let Ok(path) = lib.resolved_source_path(&item.id) else { return };
             // An original still in iCloud isn't downloaded for a preview.
             if crate::icloud::is_dataless(&path) {
                 return;
@@ -167,7 +167,7 @@ impl App {
         }
         let player = &mut self.hover_media.player;
         if !started {
-            let path = item.original_path(lib.root());
+            let Ok(path) = lib.resolved_source_path(&item.id) else { return };
             if crate::icloud::is_dataless(&path) {
                 return;
             }

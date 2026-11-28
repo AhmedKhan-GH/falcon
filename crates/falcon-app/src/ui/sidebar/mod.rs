@@ -238,6 +238,12 @@ impl App {
     /// The menu for a library in the switcher (right-click or the ⋯ button).
     pub(crate) fn library_menu(&mut self, ui: &mut Ui, root: &std::path::Path, missing: bool) {
         if !missing {
+            if self.is_library_open(root)
+                && ui.button(tr("Library Settings…")).clicked()
+            {
+                ui.close();
+                self.open_library_settings();
+            }
             if ui.button(tr("Change Icon…")).clicked() {
                 ui.close();
                 self.change_library_icon(root);
@@ -258,6 +264,10 @@ impl App {
         if ui.add_enabled(!missing, egui::Button::new(tr("Show in Finder"))).clicked() {
             ui.close();
             crate::open_with::reveal(&[root.to_path_buf()]);
+        }
+        if !missing && ui.button(tr("Move Library…")).clicked() {
+            ui.close();
+            self.switch_to = Some(Switch::Move(root.to_path_buf()));
         }
         ui.separator();
         if ui.button(tr("Remove from List")).clicked() {
@@ -399,8 +409,15 @@ impl App {
             if ui.button(tr("New Library…")).clicked() {
                 self.switch_to = Some(Switch::Create);
             }
+            if ui.button(tr("Library Settings…")).clicked() {
+                ui.close();
+                self.open_library_settings();
+            }
             if ui.button(tr("Merge Another Library…")).clicked() {
                 self.switch_to = Some(Switch::Merge);
+            }
+            if ui.button(tr("Move Library…")).clicked() {
+                self.switch_to = Some(Switch::Move(current.clone()));
             }
             if ui.button(tr("Empty Cache and Reload…")).clicked() {
                 self.confirm_reload = true;
@@ -440,8 +457,8 @@ impl App {
         );
 
         let list_rect = Rect::from_min_max(Pos2::new(full.left(), lib_row.bottom() + 6.0), Pos2::new(full.right() - 1.0, filter_rect.top() - 8.0));
-        let folder_counts = logic::folder_counts(lib.items());
-        let nav = logic::nav_counts(lib.items(), &lib.metadata.folders, lib.metadata.modification_time);
+        let folder_counts = self.folder_counts_for(lib);
+        let nav = self.nav_counts_for(lib);
         let quick: HashSet<String> =
             lib.metadata.quick_access.iter().filter_map(|q| q.get("id").and_then(|v| v.as_str()).map(String::from)).collect();
         let cx = SidebarCtx { folder_counts: &folder_counts, nav: &nav, quick: &quick };
@@ -583,9 +600,44 @@ impl App {
         (count > 0 && self.prefs.sidebar_counts).then_some(count)
     }
 
+    /// Item counts per folder id for the sidebar and subfolder cards.
+    pub(crate) fn folder_counts_for(&self, lib: &Library) -> HashMap<String, usize> {
+        use crate::app::state::{CountsCache, CountsKey};
+        let key = CountsKey {
+            items: lib.items().len(),
+            mutations: self.ws.mutation_count,
+            modified: lib.metadata.modification_time,
+            flag: usize::from(self.prefs.subfolder_counts) + 2 * self.ws.org.unlocked.len(),
+        };
+        if let Some(v) = CountsCache::current(&self.ws.counts_cache, &key) {
+            return v;
+        }
+        let out = if self.prefs.subfolder_counts {
+            let hidden = crate::organize::hidden_folders(&lib.metadata.folders, &self.ws.org.unlocked);
+            logic::folder_total_counts(lib.items(), &lib.metadata.folders, &hidden)
+        } else {
+            logic::folder_counts(lib.items())
+        };
+        CountsCache::store(&self.ws.counts_cache, key, out.clone());
+        out
+    }
+
+    /// The fixed sidebar counts, cached like [`App::folder_counts_for`].
+    pub(crate) fn nav_counts_for(&self, lib: &Library) -> logic::NavCounts {
+        use crate::app::state::{CountsCache, CountsKey};
+        let key = CountsKey { items: lib.items().len(), mutations: self.ws.mutation_count, modified: lib.metadata.modification_time, flag: 0 };
+        if let Some(v) = CountsCache::current(&self.ws.nav_cache, &key) {
+            return v;
+        }
+        let out = logic::nav_counts(lib.items(), &lib.metadata.folders, lib.metadata.modification_time);
+        CountsCache::store(&self.ws.nav_cache, key, out.clone());
+        out
+    }
+
     pub(crate) fn nav_rows(&mut self, ui: &mut Ui, cx: &SidebarCtx) {
         let n = cx.nav;
-        let entries: [(&str, &str, Scope, usize); 8] = [
+        let entries: [(&str, &str, Scope, usize); 9] = [
+            (ic::HOUSE, tr_key("Home"), Scope::Home, 0),
             (ic::IMAGES, tr_key("All"), Scope::All, n.all),
             (ic::FOLDER_DASHED, tr_key("Uncategorized"), Scope::Uncategorized, n.uncategorized),
             (ic::TAG_SIMPLE, tr_key("Untagged"), Scope::Untagged, n.untagged),
@@ -618,12 +670,14 @@ impl App {
                     }
                 });
             }
-            if scope != Scope::Trash && scope != Scope::Recent {
+            if scope != Scope::Trash && scope != Scope::Recent && scope != Scope::Home {
                 // As in Eagle, the entries' menu picks which of them show;
                 // it stays open while you tick them. Trash and Recently Used
                 // have menus of their own.
                 egui::Popup::context_menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
                     ui.set_min_width(180.0);
+                    let mut home = true;
+                    ui.add_enabled(false, egui::Checkbox::new(&mut home, tr("Home")));
                     let mut all = true;
                     ui.add_enabled(false, egui::Checkbox::new(&mut all, tr("All")));
                     let s = &mut self.prefs.sidebar;
@@ -786,7 +840,7 @@ impl App {
             let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::ToggleSubfolders);
             let mark = if self.display.subfolders { crate::icons::CHECK } else { " " };
             if ui.add(egui::Button::new(format!("{mark}  {}", tr("Show Subfolder Content"))).shortcut_text(keys)).clicked() {
-                self.run_command(&ui.ctx().clone(), crate::shortcuts::Command::ToggleSubfolders);
+                self.defer_command(&ui.ctx().clone(), crate::shortcuts::Command::ToggleSubfolders);
             }
             ui.separator();
             if ui.add_enabled(!shut, egui::Button::new(RichText::new(tr("Delete Folder")).color(t::p().icon_red))).clicked() {

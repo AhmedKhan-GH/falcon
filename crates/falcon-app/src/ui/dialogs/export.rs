@@ -381,7 +381,7 @@ impl App {
         // Base64 and a single thumbnail read files on this thread; one still
         // in iCloud would hold the window until it downloads.
         if matches!(kind, CopyKind::Base64 | CopyKind::Thumbnail) && n == 1 {
-            let mut files = vec![first.original_path(lib.root())];
+            let mut files: Vec<PathBuf> = lib.resolved_source_path(&first.id).ok().into_iter().collect();
             files.extend(first.thumbnail_path(lib.root()));
             if files.iter().any(|f| crate::icloud::is_dataless(f)) {
                 self.flash(tr("This item is still in iCloud; open it once to download it, then copy again"));
@@ -426,8 +426,11 @@ impl App {
                 clip.set_image(arboard::ImageData { width: w as usize, height: h as usize, bytes: img.into_raw().into() }).is_ok()
             })
         } else {
-            let files: Vec<PathBuf> = items.iter().map(|i| i.thumbnail_path(lib.root()).unwrap_or_else(|| i.original_path(lib.root()))).collect();
-            clip.set().file_list(&files).is_ok()
+            let files: Vec<PathBuf> = items
+                .iter()
+                .filter_map(|i| i.thumbnail_path(lib.root()).or_else(|| lib.resolved_source_path(&i.id).ok()))
+                .collect();
+            !files.is_empty() && clip.set().file_list(&files).is_ok()
         };
         self.flash_brief(if !ok {
             tr("No thumbnail to copy").to_string()

@@ -110,7 +110,8 @@ impl TextView {
         let Some(text) = self.unsaved().map(str::to_string) else { return Ok(()) };
         lib.save_text(&self.id, &text)?;
         self.saved = text;
-        self.stamp = lib.item(&self.id).and_then(|i| modified(&i.original_path(lib.root())));
+        let stamp_path = lib.resolved_source_path(&self.id).unwrap_or_else(|_| lib.item(&self.id).map(|i| i.managed_storage_path(lib.root())).unwrap_or_default());
+        self.stamp = modified(&stamp_path);
         Ok(())
     }
 }
@@ -152,9 +153,14 @@ impl App {
         if !item.ext.eq_ignore_ascii_case("txt") {
             return false;
         }
-        let path = item.original_path(lib.root());
+        let is_linked = lib.is_linked_item(&item.id);
+        let path = lib.resolved_source_path(&item.id).unwrap_or_else(|_| item.managed_storage_path(lib.root()));
         if self.ws.text.as_ref().is_none_or(|v| v.id != item.id) {
-            self.ws.text = Some(TextView::open(&item.id, &path));
+            let mut v = TextView::open(&item.id, &path);
+            if is_linked && v.read_only.is_none() {
+                v.read_only = Some(crate::locale::tr_key("Linked files are read-only in Falcon; edit the original file on disk."));
+            }
+            self.ws.text = Some(v);
         }
         let ctx = parent.ctx().clone();
         let now = ctx.input(|i| i.time);
@@ -180,6 +186,9 @@ impl App {
             let disk_empty = std::fs::metadata(&path).is_ok_and(|m| m.len() == 0);
             if reload || textdoc::should_reload(changed, view.autosave.wait(now).is_some(), disk_empty, view.text.is_empty()) {
                 view.read(&path);
+                if is_linked && view.read_only.is_none() {
+                    view.read_only = Some(crate::locale::tr_key("Linked files are read-only in Falcon; edit the original file on disk."));
+                }
             } else if changed {
                 view.stamp = modified(&path);
             }
@@ -366,11 +375,13 @@ impl App {
         let dir = std::env::temp_dir().join("falcon-new").join(falcon_library::ids::new_id());
         let file = dir.join(template.file_name());
         let made = std::fs::create_dir_all(&dir).and_then(|()| std::fs::write(&file, template.bytes()));
-        let id = made.map_err(|source| falcon_library::Error::Io { path: file.clone(), source }).and_then(|()| lib.import_file(&file, &self.prefs.import_options(folders)));
+        let mut opts = self.prefs.import_options(folders);
+        opts.storage_mode = Some(falcon_library::storage_mode::StorageMode::Copy);
+        let id = made.map_err(|source| falcon_library::Error::Io { path: file.clone(), source }).and_then(|()| lib.import_file(&file, &opts));
         let _ = std::fs::remove_dir_all(&dir);
         let id = id?;
         if template == Template::Text {
-            let mut view = TextView::open(&id, &lib.item(&id).map(|i| i.original_path(lib.root())).unwrap_or_default());
+            let mut view = TextView::open(&id, &lib.resolved_source_path(&id).unwrap_or_default());
             view.focus = true;
             self.ws.text = Some(view);
             self.ws.viewer = Some(id.clone());

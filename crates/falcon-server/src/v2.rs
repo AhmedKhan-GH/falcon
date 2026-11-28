@@ -6,6 +6,7 @@
 //! `message`. Lookups that find nothing mostly return `false` or nothing
 //! rather than throwing, and each handler keeps Eagle's choice.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -295,7 +296,7 @@ fn add_entry(e: &Map<String, Value>, batch: bool) -> Map<String, Value> {
     m
 }
 
-fn add_one(lib: &Shared, e: &Map<String, Value>, batch: bool) -> Result<String, String> {
+fn add_one(lib: &Shared, e: &Map<String, Value>, batch: bool, unlocked: &HashSet<String>) -> Result<String, String> {
     let m = add_entry(e, batch);
     let none = Map::new();
     if e.contains_key("bookmarkURL") {
@@ -303,30 +304,30 @@ fn add_one(lib: &Shared, e: &Map<String, Value>, batch: bool) -> Result<String, 
     } else if let Some(b) = e.get("base64") {
         let b = b.as_str().unwrap_or_default();
         let url = if b.starts_with("data:") { b.to_string() } else { format!("data:image/png;base64,{b}") };
-        super::add_url(lib, &url, &m, &none)
+        super::add_url(lib, &url, &m, &none, unlocked)
     } else if let Some(u) = e.get("url") {
-        super::add_url(lib, u.as_str().unwrap_or_default(), &m, &none)
+        super::add_url(lib, u.as_str().unwrap_or_default(), &m, &none, unlocked)
     } else if let Some(p) = e.get("path") {
         let p = PathBuf::from(p.as_str().unwrap_or_default());
         if p.is_dir() {
             return Err("not support for directory".into());
         }
-        super::add_path(lib, p, &m, &none, false)
+        super::add_path(lib, p, &m, &none, false, unlocked)
     } else {
         Err("item.add requires at least one of: url, path, base64, bookmarkURL".into())
     }
 }
 
 /// `/api/v2/item/add`: `{id}` for one entry, `{ids}` for `items`.
-pub(crate) fn add_item(lib: &Shared, args: &Map<String, Value>) -> Reply {
+pub(crate) fn add_item(lib: &Shared, args: &Map<String, Value>, unlocked: &HashSet<String>) -> Reply {
     if let Some(Value::Array(items)) = args.get("items") {
         if items.len() > MAX_ARRAY {
             return fail(format!("Batch limit exceeded: max {MAX_ARRAY} items per request, got {}", items.len()));
         }
-        let ids: Vec<String> = items.iter().filter_map(Value::as_object).filter_map(|e| add_one(lib, e, true).ok()).collect();
+        let ids: Vec<String> = items.iter().filter_map(Value::as_object).filter_map(|e| add_one(lib, e, true, unlocked).ok()).collect();
         return Reply::Data(json!({"ids": ids}));
     }
-    match add_one(lib, args, false) {
+    match add_one(lib, args, false, unlocked) {
         Ok(id) => Reply::Data(json!({"id": id})),
         Err(e) => fail(e),
     }

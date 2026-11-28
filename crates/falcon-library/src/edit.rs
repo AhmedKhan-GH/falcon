@@ -12,6 +12,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::error::{Error, Result};
 use crate::import::sanitize_name;
 use crate::library::{Library, write_json};
+use crate::linked::AssetStatus;
 use crate::ids;
 use crate::model::{Comment, Folder, FolderOrder, ICON_COLORS, Item, SavedFilter, TagGroup};
 
@@ -30,8 +31,13 @@ impl Library {
         }
         if item.name != old.name {
             let root = self.root().to_path_buf();
-            let (from, to) = (old.original_path(&root), item.original_path(&root));
-            fs::rename(&from, &to).map_err(|e| Error::io(&from, e))?;
+            let status = self.asset_status(&item.id).unwrap_or(AssetStatus::Managed);
+            // Rename external/referenced assets ONLY in Falcon display metadata & cached thumbnail;
+            // never rename or touch external source files.
+            if status == AssetStatus::Managed {
+                let (from, to) = (old.managed_storage_path(&root), item.managed_storage_path(&root));
+                fs::rename(&from, &to).map_err(|e| Error::io(&from, e))?;
+            }
             if let Some(thumb) = old.thumbnail_path(&root) {
                 let dest = thumb.with_file_name(item.thumbnail_name());
                 fs::rename(&thumb, &dest).map_err(|e| Error::io(&thumb, e))?;
@@ -113,6 +119,7 @@ impl Library {
             if dir.is_dir() {
                 fs::remove_dir_all(&dir).map_err(|e| Error::io(&dir, e))?;
             }
+            self.remove_linked_id(id)?;
             self.forget_item(id)?;
         }
         Ok(())

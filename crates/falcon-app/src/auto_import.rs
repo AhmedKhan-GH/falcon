@@ -42,7 +42,8 @@ use std::time::{Duration, Instant, UNIX_EPOCH};
 pub const POLL: Duration = Duration::from_secs(2);
 /// How long a file must stay unchanged before it is imported.
 pub const SETTLE: Duration = Duration::from_secs(3);
-/// Eagle skips files of 1,000 bytes or less (SVGs only when empty).
+/// Historical Eagle constant (Eagle skips files of 1,000 bytes or less).
+#[allow(dead_code)]
 pub const MIN_SIZE: u64 = 1000;
 /// How many imported files are remembered.
 pub const REMEMBERED: usize = 5000;
@@ -79,8 +80,8 @@ pub fn skip(name: &str, size: u64) -> Option<Skip> {
     if ext == "url" || !falcon_library::import::is_recognized(&ext) {
         return Some(Skip::Unsupported);
     }
-    let least = if ext == "svg" { 1 } else { MIN_SIZE };
-    (size <= least).then_some(Skip::TooSmall)
+    // Only zero-byte empty files are skipped as TooSmall; small valid files are kept.
+    (size == 0).then_some(Skip::TooSmall)
 }
 
 /// What identifies a version of a file: its size and modification time.
@@ -487,9 +488,11 @@ mod tests {
         assert_eq!(skip("README", 5000), Some(Skip::NoExtension));
         assert_eq!(skip("link.url", 5000), Some(Skip::Unsupported));
         assert_eq!(skip("movie.mp4.crdownload", 5000), Some(Skip::Unsupported));
-        assert_eq!(skip("tiny.png", 1000), Some(Skip::TooSmall));
+        assert_eq!(skip("empty.png", 0), Some(Skip::TooSmall));
+        assert_eq!(skip("tiny.png", 500), None);
         assert_eq!(skip("small.png", 1001), None);
-        assert_eq!(skip("icon.svg", 1), Some(Skip::TooSmall));
+        assert_eq!(skip("empty.svg", 0), Some(Skip::TooSmall));
+        assert_eq!(skip("icon.svg", 1), None);
         assert_eq!(skip("icon.svg", 2), None);
         assert_eq!(skip("model.XYZ", 5000), None, "any other format imports, as dropped files do");
     }
@@ -529,6 +532,7 @@ mod tests {
         let dir = tmp.path();
         std::fs::write(dir.join("big.png"), vec![1u8; 4000]).unwrap();
         std::fs::write(dir.join("small.png"), vec![1u8; 10]).unwrap();
+        std::fs::write(dir.join("empty.png"), b"").unwrap();
         std::fs::write(dir.join("part.png.tmp"), vec![1u8; 4000]).unwrap();
         std::fs::create_dir(dir.join("sub")).unwrap();
         let imported = Mutex::new(Imported::default());
@@ -536,8 +540,11 @@ mod tests {
         let t0 = Instant::now();
         assert!(scan(dir, &mut settle, &imported, t0).is_empty());
         assert!(scan(dir, &mut settle, &imported, t0 + Duration::from_secs(2)).is_empty());
-        let ready = scan(dir, &mut settle, &imported, t0 + Duration::from_secs(4));
-        assert_eq!(ready, [dir.join("big.png")]);
+        let mut ready = scan(dir, &mut settle, &imported, t0 + Duration::from_secs(4));
+        ready.sort();
+        let mut expected = vec![dir.join("big.png"), dir.join("small.png")];
+        expected.sort();
+        assert_eq!(ready, expected);
         // Not again while it stays as it is, even after a restart.
         let mut fresh = Settle::default();
         for s in [0, 4, 8] {

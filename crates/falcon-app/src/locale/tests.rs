@@ -434,6 +434,16 @@ fn plural_rules() {
 }
 
 #[test]
+fn all_languages_load_in_catalogue() {
+    for lang in Lang::ALL {
+        set(lang);
+        assert_eq!(current(), lang);
+        assert!(!tr("Folders").is_empty());
+    }
+    set(Lang::En);
+}
+
+#[test]
 fn system_tags_map_to_languages() {
     assert_eq!(Lang::from_tag("en-US"), Some(Lang::En));
     assert_eq!(Lang::from_tag("de_AT.UTF-8"), Some(Lang::De));
@@ -443,6 +453,10 @@ fn system_tags_map_to_languages() {
     assert_eq!(Lang::from_tag("zh-HK"), Some(Lang::ZhTw));
     assert_eq!(Lang::from_tag("zh"), Some(Lang::ZhCn));
     assert_eq!(Lang::from_tag("ja-JP"), Some(Lang::Ja));
+    assert_eq!(Lang::from_tag("id-ID"), Some(Lang::Id));
+    assert_eq!(Lang::from_tag("id"), Some(Lang::Id));
+    assert_eq!(Lang::from_tag("ban-ID"), Some(Lang::Ban));
+    assert_eq!(Lang::from_tag("ban"), Some(Lang::Ban));
     assert_eq!(Lang::from_tag("pt-BR"), None);
     assert_eq!(Lang::from_tag(""), None);
 }
@@ -475,3 +489,23 @@ fn lookups_fall_back_to_english() {
         assert_eq!(Lang::from_code(lang.code()), Some(lang));
     }
 }
+
+/// The Owner's own Balinese wording must never be swapped for a generated one.
+#[test]
+fn balinese_owner_approved_wording_is_unchanged() {
+    let (_, ban) = read(Lang::Ban);
+    let text = |k: &str| match ban.get(k) {
+        Some(Entry::Text(t)) => t.clone(),
+        other => panic!("ban.json {k:?}: {other:?}"),
+    };
+    assert_eq!(text("Uncategorized"), "Ten Mekategori");
+    assert_eq!(text("Untagged"), "Ten Metag");
+    assert_eq!(text("Recently Used"), "Wau Keanggen");
+    assert_eq!(text("Trash"), "Wadah Luu");
+    assert_eq!(text("Relink"), "Link Malih");
+    assert_eq!(text("Cancel"), "buwung");
+    assert_eq!(text("Hide unsupported files"), "Engkebang berkas sane nenten kedukung");
+    assert_eq!(text("Open in the default app"), "Buka ring aplikasi default");
+    assert!(text("Open in Default App").starts_with("Buka ring Aplikasi"));
+}
+

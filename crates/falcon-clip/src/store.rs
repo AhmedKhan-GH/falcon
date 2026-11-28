@@ -7,7 +7,7 @@
 //! is dropped on load. Later records replace earlier ones; [`Index::compact`]
 //! rewrites the file when enough of it is dead.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
@@ -47,6 +47,8 @@ pub struct Index {
     /// Items that have no picture to read, with the stamp they were tried
     /// at, so they aren't tried again until they change.
     skipped: HashMap<String, u64>,
+    /// Items whose last known valid embedding is kept while source refresh is pending or failed.
+    stale: HashSet<String>,
     file: Option<BufWriter<File>>,
     /// Records in the file that a later record replaced.
     dead: usize,
@@ -67,6 +69,7 @@ impl Index {
             vectors: Vec::new(),
             by_id: HashMap::new(),
             skipped: HashMap::new(),
+            stale: HashSet::new(),
             file: None,
             dead: 0,
         };
@@ -100,6 +103,7 @@ impl Index {
         self.vectors.clear();
         self.by_id.clear();
         self.skipped.clear();
+        self.stale.clear();
         self.dead = 0;
         let mut file = BufWriter::new(File::create(&self.path)?);
         file.write_all(&self.header())?;
@@ -143,6 +147,7 @@ impl Index {
     }
 
     fn set(&mut self, id: &str, stamp: u64, vector: &[f32]) {
+        self.stale.remove(id);
         if self.skipped.remove(id).is_some() {
             self.dead += 1;
         }
@@ -169,6 +174,7 @@ impl Index {
     }
 
     fn drop_entry(&mut self, id: &str) {
+        self.stale.remove(id);
         if self.skipped.remove(id).is_some() {
             self.dead += 2;
         }
@@ -201,10 +207,49 @@ impl Index {
         self.append(VECTOR, id, stamp, Some(vector))
     }
 
-    /// Notes an item with nothing to read.
+    /// Notes an item with nothing to read (call only for unsupported/corrupt
+    /// accessible files without an existing vector).
     pub fn skip(&mut self, id: &str, stamp: u64) -> io::Result<()> {
         self.set_skipped(id, stamp);
         self.append(SKIPPED, id, stamp, None)
+    }
+
+    /// Marks an item `SKIPPED` only if it has no existing valid vector; otherwise
+    /// preserves the existing vector as stale and returns `Ok(false)`.
+    pub fn safe_skip(&mut self, id: &str, stamp: u64) -> io::Result<bool> {
+        if self.by_id.contains_key(id) {
+            self.stale.insert(id.to_string());
+            return Ok(false);
+        }
+        self.skip(id, stamp)?;
+        Ok(true)
+    }
+
+    /// Marks an existing vector as stale while keeping it searchable.
+    pub fn mark_stale(&mut self, id: &str) {
+        if self.by_id.contains_key(id) {
+            self.stale.insert(id.to_string());
+        }
+    }
+
+    /// Clears stale state once source matches or refreshes cleanly.
+    pub fn clear_stale(&mut self, id: &str) {
+        self.stale.remove(id);
+    }
+
+    /// Whether `id`'s preserved vector is currently marked stale.
+    pub fn is_stale(&self, id: &str) -> bool {
+        self.stale.contains(id)
+    }
+
+    /// Number of items with preserved stale vectors.
+    pub fn stale_count(&self) -> usize {
+        self.stale.len()
+    }
+
+    /// Whether `id` is currently recorded as skipped.
+    pub fn is_skipped(&self, id: &str) -> bool {
+        self.skipped.contains_key(id)
     }
 
     /// Forgets an item.
@@ -274,13 +319,8 @@ impl Index {
         scored.into_iter().map(|(score, i)| Hit { id: self.ids[i].clone(), score }).collect()
     }
 
-    /// Rewrites the file when enough of it is dead.
-    pub fn compact(&mut self) -> io::Result<bool> {
-        if self.dead < COMPACT_AFTER || self.dead < self.ids.len() + self.skipped.len() {
-            return Ok(false);
-        }
-        self.flush()?;
-        self.file = None;
+    /// Writes the live records cleanly to `self.path` via a temp file.
+    fn write_snapshot(&self) -> io::Result<()> {
         let temp = self.path.with_extension("index.new");
         {
             let mut out = BufWriter::new(File::create(&temp)?);
@@ -293,7 +333,17 @@ impl Index {
             }
             out.flush()?;
         }
-        fs::rename(&temp, &self.path)?;
+        fs::rename(&temp, &self.path)
+    }
+
+    /// Rewrites the file when enough of it is dead.
+    pub fn compact(&mut self) -> io::Result<bool> {
+        if self.dead < COMPACT_AFTER || self.dead < self.ids.len() + self.skipped.len() {
+            return Ok(false);
+        }
+        self.flush()?;
+        self.file = None;
+        self.write_snapshot()?;
         self.file = Some(BufWriter::new(OpenOptions::new().append(true).open(&self.path)?));
         self.dead = 0;
         Ok(true)
@@ -303,6 +353,30 @@ impl Index {
     pub fn reset(&mut self) -> io::Result<()> {
         self.start_file()
     }
+}
+
+/// Moves the index file of `old_root` to `new_root`'s path and updates the
+/// root path in its header so a moved library keeps its embeddings.
+/// Returns `true` when an existing index was moved.
+pub fn relocate(dir: &Path, old_root: &Path, new_root: &Path, model: &str, dim: usize) -> io::Result<bool> {
+    let old_path = path_for(dir, old_root);
+    let new_path = path_for(dir, new_root);
+    if !old_path.is_file() || old_path == new_path {
+        return Ok(false);
+    }
+    let mut index = Index::open(dir, old_root, model, dim)?;
+    if index.ids.is_empty() && index.skipped.is_empty() {
+        index.file = None;
+        let _ = fs::remove_file(&old_path);
+        return Ok(false);
+    }
+    index.flush()?;
+    index.file = None;
+    index.root = new_root.display().to_string();
+    index.path = new_path;
+    index.write_snapshot()?;
+    let _ = fs::remove_file(&old_path);
+    Ok(true)
 }
 
 fn write_record(out: &mut impl Write, tag: u8, id: &str, stamp: u64, vector: Option<&[f32]>) -> io::Result<()> {
@@ -447,5 +521,24 @@ mod tests {
         assert_eq!(ix.stamp("a"), Some(399));
         assert_eq!(ix.stamp("b"), Some(5));
         assert_eq!(ix.stamp("s"), Some(7));
+    }
+
+    #[test]
+    fn relocating_moves_the_index_and_keeps_vectors() {
+        let dir = tempfile::tempdir().unwrap();
+        let old = Path::new("/tmp/Old.library");
+        let new = Path::new("/Volumes/SSD/Old.library");
+        let mut ix = Index::open(dir.path(), old, "m1", 2).unwrap();
+        ix.put("a", 1, &[1.0, 0.0]).unwrap();
+        ix.skip("s", 2).unwrap();
+        ix.flush().unwrap();
+        drop(ix);
+        assert!(relocate(dir.path(), old, new, "m1", 2).unwrap());
+        assert!(!path_for(dir.path(), old).exists());
+        let moved = Index::open(dir.path(), new, "m1", 2).unwrap();
+        assert!(moved.is_for(new));
+        assert_eq!(moved.stamp("a"), Some(1));
+        assert_eq!(moved.vector("a"), Some(&[1.0, 0.0][..]));
+        assert_eq!(moved.stamp("s"), Some(2));
     }
 }

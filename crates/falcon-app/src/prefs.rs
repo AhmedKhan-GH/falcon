@@ -57,6 +57,12 @@ pub struct Prefs {
     pub api_enabled: bool,
     /// The first port the API tries.
     pub api_port: u16,
+    /// Also listen on Eagle's port, so Eagle's browser extension can find
+    /// Falcon. Off by default, and never turned on for existing users.
+    pub eagle_compat: bool,
+    /// Browser extension origins (`chrome-extension://…`) allowed to use the
+    /// API. Empty by default: a browser extension is refused until approved.
+    pub approved_extension_origins: Vec<String>,
     /// Eagle's `developer.apiToken`: requests carrying it as `token` are
     /// served by the API whatever their `Host`. Empty by default, as in
     /// Eagle; only Generate/Regenerate in the Developer pane makes one.
@@ -90,6 +96,36 @@ pub struct Prefs {
     pub ui_zoom: u16,
     /// Eagle's `general.showSidebarBadge`: item counts beside sidebar rows.
     pub sidebar_counts: bool,
+    /// Falcon's own: folder counts include items in subfolders as well as
+    /// items directly in the folder.
+    pub subfolder_counts: bool,
+    /// Falcon's own: optional Finder-style clickable breadcrumb path bar
+    /// at the bottom of the central content area.
+    pub show_path_bar: bool,
+    /// Where Falcon navigates when a library opens.
+    pub startup_destination: StartupDestination,
+    /// When `startup_destination` is `SpecificFolder`, the folder ID to open.
+    pub startup_folder_id: Option<String>,
+    /// Whether the Recently Imported section is shown on Home dashboard.
+    pub home_show_recent: bool,
+    /// Number of assets shown in Recently Imported.
+    pub home_recent_limit: usize,
+    /// Thumbnail size for Recently Imported assets.
+    pub home_recent_size: RecentThumbSize,
+    /// Whether to display filenames under Recently Imported thumbnails.
+    pub home_show_filenames: bool,
+    /// Whether the Library Overview metric banner is visible on Home.
+    pub home_show_overview: bool,
+    /// Whether the Quick Access Hero section is visible on Home.
+    pub home_show_hero: bool,
+    /// Whether the Library Folders collection grid is visible on Home.
+    pub home_show_folders: bool,
+    /// Size of the Library Folders cards on Home.
+    pub home_card_size: CardSize,
+    /// How Library Folders cards are covered on Home.
+    pub home_cover_style: CoverStyle,
+    /// Whether folder cards (and Quick Access cards) show their asset count.
+    pub home_show_counts: bool,
     /// Eagle's `habits.dblclickSidebarItem`: what double-clicking a folder
     /// or smart folder in the sidebar does.
     pub sidebar_double_click: SidebarDoubleClick,
@@ -274,6 +310,143 @@ pub enum SpaceKey {
     Scroll,
 }
 
+/// Where Falcon opens on launch.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum StartupDestination {
+    #[default]
+    Home,
+    LastOpened,
+    SpecificFolder,
+    All,
+}
+
+impl StartupDestination {
+    pub const ALL: [Self; 4] = [Self::Home, Self::LastOpened, Self::SpecificFolder, Self::All];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Home => tr_key("Home Dashboard"),
+            Self::LastOpened => tr_key("Last Opened Location"),
+            Self::SpecificFolder => tr_key("Specific Folder"),
+            Self::All => tr_key("All Assets"),
+        }
+    }
+}
+
+/// Thumbnail display size in the Recently Imported section.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum RecentThumbSize {
+    Small,
+    #[default]
+    Medium,
+    Large,
+}
+
+impl RecentThumbSize {
+    pub const ALL: [RecentThumbSize; 3] = [RecentThumbSize::Small, RecentThumbSize::Medium, RecentThumbSize::Large];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            RecentThumbSize::Small => tr_key("Small"),
+            RecentThumbSize::Medium => tr_key("Medium"),
+            RecentThumbSize::Large => tr_key("Large"),
+        }
+    }
+
+    pub fn tile_width(self) -> f32 {
+        match self {
+            RecentThumbSize::Small => 96.0,
+            RecentThumbSize::Medium => 130.0,
+            RecentThumbSize::Large => 170.0,
+        }
+    }
+}
+
+/// A request from the Browser Integration block that the app carries out at once.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SessionCmd {
+    Start,
+    Stop,
+}
+
+/// What the Developer pane shows and asks about browser integration.
+pub struct BrowserUi<'a> {
+    pub compat: &'a CompatStatus,
+    pub legacy: Option<&'a str>,
+    pub blocked: Option<&'a str>,
+    pub recent: &'a [String],
+    /// Seconds left in the browser import session, if one is running.
+    pub session: Option<u64>,
+    pub cmd: &'a mut Option<SessionCmd>,
+}
+
+/// What the Eagle-compatibility listener is doing, for Preferences.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum CompatStatus {
+    #[default]
+    Off,
+    /// Asked for, but the local API is off or not running.
+    NeedsApi,
+    Listening(u16),
+    /// Something else answers on Eagle's port; nothing was started.
+    Conflict(String),
+    Failed(String),
+}
+
+/// Size of the Library Folders cards on Home.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum CardSize {
+    Small,
+    #[default]
+    Medium,
+    Large,
+}
+
+impl CardSize {
+    pub const ALL: [CardSize; 3] = [CardSize::Small, CardSize::Medium, CardSize::Large];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            CardSize::Small => tr_key("Small"),
+            CardSize::Medium => tr_key("Medium"),
+            CardSize::Large => tr_key("Large"),
+        }
+    }
+
+    /// The width cards aim for; the row then stretches them to fill it.
+    pub fn target_width(self) -> f32 {
+        match self {
+            CardSize::Small => 160.0,
+            CardSize::Medium => 210.0,
+            CardSize::Large => 280.0,
+        }
+    }
+}
+
+/// How a Library Folders card on Home is covered.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum CoverStyle {
+    #[default]
+    Mosaic,
+    Single,
+    Classic,
+}
+
+impl CoverStyle {
+    pub const ALL: [CoverStyle; 3] = [CoverStyle::Mosaic, CoverStyle::Single, CoverStyle::Classic];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            CoverStyle::Mosaic => tr_key("Mosaic Cover"),
+            CoverStyle::Single => tr_key("Single Cover"),
+            CoverStyle::Classic => tr_key("Classic Folder"),
+        }
+    }
+}
+
 /// What double-clicking a sidebar folder does.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
 #[serde(rename_all = "lowercase")]
@@ -332,6 +505,8 @@ impl Default for Prefs {
             font_style_tags: true,
             api_enabled: true,
             api_port: falcon_server::DEFAULT_PORT,
+            eagle_compat: false,
+            approved_extension_origins: Vec::new(),
             api_token: String::new(),
             mcp_enabled: false,
             mcp_port: falcon_server::mcp::DEFAULT_PORT,
@@ -344,6 +519,20 @@ impl Default for Prefs {
             theme: Theme::Dark,
             ui_zoom: 100,
             sidebar_counts: true,
+            subfolder_counts: true,
+            show_path_bar: false,
+            startup_destination: StartupDestination::default(),
+            startup_folder_id: None,
+            home_show_recent: true,
+            home_recent_limit: 20,
+            home_recent_size: RecentThumbSize::Medium,
+            home_show_filenames: true,
+            home_show_overview: false,
+            home_show_hero: true,
+            home_show_folders: true,
+            home_card_size: CardSize::Medium,
+            home_cover_style: CoverStyle::Mosaic,
+            home_show_counts: true,
             sidebar_double_click: SidebarDoubleClick::default(),
             sidebar: SidebarSections::default(),
             double_click: DoubleClick::default(),
@@ -666,6 +855,7 @@ pub struct Draft {
 pub enum Section {
     #[default]
     General,
+    Home,
     Sidebar,
     Controls,
     Preview,
@@ -682,8 +872,9 @@ pub enum Section {
 }
 
 impl Section {
-    pub const ALL: [Section; 13] = [
+    pub const ALL: [Section; 14] = [
         Section::General,
+        Section::Home,
         Section::Sidebar,
         Section::Controls,
         Section::Preview,
@@ -702,6 +893,7 @@ impl Section {
     pub fn label(self) -> &'static str {
         match self {
             Section::General => tr_key("General"),
+            Section::Home => tr_key("Home Dashboard"),
             Section::Sidebar => tr_key("Sidebar"),
             Section::Controls => tr_key("Controls"),
             Section::Preview => tr_key("Preview"),
@@ -720,6 +912,7 @@ impl Section {
     fn icon(self) -> &'static str {
         match self {
             Section::General => crate::icons::GEAR,
+            Section::Home => crate::icons::HOUSE,
             Section::Sidebar => crate::icons::SIDEBAR_SIMPLE,
             Section::Controls => crate::icons::MOUSE,
             Section::Preview => crate::icons::EYE,
@@ -739,7 +932,7 @@ impl Section {
     /// first pane of each group.
     fn group(self) -> u8 {
         match self {
-            Section::General | Section::Sidebar => 0,
+            Section::General | Section::Home | Section::Sidebar => 0,
             Section::Controls | Section::Preview | Section::Screenshot | Section::Shortcuts => 1,
             Section::Notification | Section::Password | Section::AutoImport => 2,
             Section::AiSearch | Section::AiModels | Section::Mcp => 3,
@@ -757,6 +950,23 @@ pub fn matches(query: &str, fields: &[&str]) -> bool {
     query.split_whitespace().all(|w| hay.contains(&w.to_lowercase()))
 }
 
+/// A synchronized folder as the Preferences window shows it.
+#[derive(Clone)]
+pub struct SyncRow {
+    pub wf: falcon_library::WatchedFolder,
+    /// `(done, total)` while a pass is running; `None` when idle.
+    pub running: Option<(usize, usize)>,
+    /// Queued or running.
+    pub active: bool,
+}
+
+/// What the user asked of a synchronized folder in Preferences.
+pub enum SyncCommand {
+    Now(String),
+    Stop(String),
+    Remove(String),
+}
+
 /// The Preferences window. Edits go to a draft; Save and Apply hand it to
 /// the app, Cancel (or Esc) drops it, as in Eagle.
 #[derive(Default)]
@@ -771,6 +981,17 @@ pub struct Window {
     mcp_port_text: String,
     /// What the MCP server is doing now, for its pane.
     pub mcp_status: mcp::Status,
+    /// The Eagle-compatibility listener's state, and the last browser
+    /// extension origin the API refused, for the Developer pane.
+    pub compat_status: CompatStatus,
+    /// The older-API listener's state, shown under the status.
+    pub compat_note: Option<String>,
+    pub blocked_origin: Option<String>,
+    /// The API's latest requests, newest first, as text lines (diagnostics).
+    pub recent_requests: Vec<String>,
+    /// Seconds left in the browser import session, and what Preferences asked for it.
+    pub session_remaining: Option<u64>,
+    pub session_cmd: Option<SessionCmd>,
     recorder: Recorder,
     password: PasswordForm,
     /// The theme and interface size last saved or applied; previewed
@@ -784,6 +1005,10 @@ pub struct Window {
     pub ai_search: Option<std::sync::Arc<crate::ai_search::Engine>>,
     /// Why the folder last picked for auto-import was refused.
     auto_import_note: Option<String>,
+    /// The synchronized folders of the shown library with their progress,
+    /// refreshed by the app; and what the user asked of them.
+    pub sync_rows: Vec<SyncRow>,
+    pub sync_commands: Vec<SyncCommand>,
     /// The login item as read when the window opened or last applied.
     login: crate::login_item::Status,
     /// Where the window opens: over the middle of the main window.
@@ -1052,6 +1277,7 @@ impl Window {
     fn pane_ui(&mut self, p: &mut Page, d: &mut Draft, port_error: Option<&String>) {
         match p.pane {
             Section::General => general(p, d, &self.login),
+            Section::Home => home_dashboard(p, d),
             Section::Sidebar => sidebar(p, d),
             Section::Controls => controls(p, d),
             Section::Preview => preview(p, d),
@@ -1059,11 +1285,14 @@ impl Window {
             Section::Shortcuts => self.shortcuts(p, d),
             Section::Notification => notification(p, d),
             Section::Password => password(p, d, &mut self.password),
-            Section::AutoImport => auto_import(p, d, self.library.as_deref(), &mut self.auto_import_note),
+            Section::AutoImport => auto_import(p, d, self.library.as_deref(), &mut self.auto_import_note, &self.sync_rows, &mut self.sync_commands),
             Section::AiSearch => crate::ai_search::pane(p, d, self.ai_search.as_deref()),
             Section::AiModels => self.ai.ui(p, &mut d.prefs.ai_models),
             Section::Mcp => mcp::pane(p, d, &mut self.mcp_port_text, self.mcp_status),
-            Section::Developer => developer(p, d, &mut self.port_text, port_error),
+            Section::Developer => {
+                let ui = BrowserUi { compat: &self.compat_status, legacy: self.compat_note.as_deref(), blocked: self.blocked_origin.as_deref(), recent: &self.recent_requests, session: self.session_remaining, cmd: &mut self.session_cmd };
+                developer(p, d, &mut self.port_text, port_error, ui)
+            }
         }
     }
 
@@ -1198,6 +1427,8 @@ fn general(p: &mut Page, d: &mut Draft, login: &crate::login_item::Status) {
             }
         });
         ui.checkbox(&mut d.prefs.sidebar_counts, tr("Show item counts in the sidebar"));
+        ui.checkbox(&mut d.prefs.subfolder_counts, tr("Include subfolder items in folder counts"));
+        ui.checkbox(&mut d.prefs.show_path_bar, tr("Show Path Bar"));
     });
     p.block(tr_key("Language"), &["language", "locale", "translation", "english", "chinese", "japanese", "korean", "german", "spanish", "russian"], |ui| {
         let before = d.prefs.language;
@@ -1223,7 +1454,7 @@ fn general(p: &mut Page, d: &mut Draft, login: &crate::login_item::Status) {
             ui.checkbox(&mut d.prefs.menu_icon, tr("Show the falcon icon in the menu bar"));
         }
     });
-    p.block(tr_key("Startup"), &["startup", "login", "log in", "open at login", "launch", "start", "dock", "close", "quit"], |ui| {
+    p.block(tr_key("Startup"), &["startup", "login", "log in", "open at login", "launch", "start", "dock", "close", "quit", "destination", "home"], |ui| {
         use crate::login_item::Status;
         let usable = !matches!(login, Status::Unavailable(_));
         ui.add_enabled(usable, egui::Checkbox::new(&mut d.launch_at_login, tr("Open Falcon when you log in")));
@@ -1233,6 +1464,28 @@ fn general(p: &mut Page, d: &mut Draft, login: &crate::login_item::Status) {
             Status::NeedsApproval => note(ui, tr("Allow Falcon in System Settings ▸ General ▸ Login Items.")),
             Status::Unavailable(why) => note(ui, why),
             _ => {}
+        }
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            ui.label(tr("Startup destination"));
+            egui::ComboBox::from_id_salt("startup-destination")
+                .selected_text(tr(d.prefs.startup_destination.label()))
+                .show_ui(ui, |ui| {
+                    for dest in StartupDestination::ALL {
+                        ui.selectable_value(&mut d.prefs.startup_destination, dest, tr(dest.label()));
+                    }
+                });
+        });
+        if d.prefs.startup_destination == StartupDestination::SpecificFolder {
+            ui.horizontal(|ui| {
+                ui.label(tr("Folder ID"));
+                let mut fid = d.prefs.startup_folder_id.clone().unwrap_or_default();
+                if ui.text_edit_singleline(&mut fid).changed() {
+                    let trimmed = fid.trim().to_string();
+                    d.prefs.startup_folder_id = if trimmed.is_empty() { None } else { Some(trimmed) };
+                }
+            });
+            note(ui, tr("Falcon will open this folder on launch, or Home if it is missing or invalid."));
         }
     });
     p.block(tr_key("Importing"), &["import", "collect", "keywords", "iptc", "xmp", "tags", "duplicate", "already", "select", "new items", "retina", "2x", "@2x", "screenshot"], |ui| {
@@ -1245,6 +1498,73 @@ fn general(p: &mut Page, d: &mut Draft, login: &crate::login_item::Status) {
     p.block(tr_key("Search"), &["search", "typo", "fuzzy", "spelling", "near", "exact", "keyword"], |ui| {
         ui.checkbox(&mut d.prefs.typo_search, tr("Also find near misses when searching"));
         note(ui, tr("Words with a typo or two are listed after the exact matches. Turn it off to find exact text only, as Eagle does."));
+    });
+}
+
+/// Home Dashboard: recently imported and section visibility.
+fn home_dashboard(p: &mut Page, d: &mut Draft) {
+    let keywords_recent = ["home", "dashboard", "recent", "imported", "assets", "thumbnails", "size", "limit", "filenames"];
+    p.block(tr_key("Recently Imported"), &keywords_recent, |ui| {
+        ui.checkbox(&mut d.prefs.home_show_recent, tr("Show Recently Imported"));
+        ui.add_enabled_ui(d.prefs.home_show_recent, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(tr("Number of recent assets"));
+                egui::ComboBox::from_id_salt("home-recent-limit")
+                    .selected_text(d.prefs.home_recent_limit.to_string())
+                    .show_ui(ui, |ui| {
+                        for limit in [5, 10, 15, 20, 30, 50] {
+                            ui.selectable_value(&mut d.prefs.home_recent_limit, limit, limit.to_string());
+                        }
+                    });
+            });
+            ui.horizontal(|ui| {
+                ui.label(tr("Thumbnail size"));
+                egui::ComboBox::from_id_salt("home-recent-size")
+                    .selected_text(tr(d.prefs.home_recent_size.label()))
+                    .show_ui(ui, |ui| {
+                        for size in RecentThumbSize::ALL {
+                            ui.selectable_value(&mut d.prefs.home_recent_size, size, tr(size.label()));
+                        }
+                    });
+            });
+            ui.checkbox(&mut d.prefs.home_show_filenames, tr("Show filenames"));
+        });
+    });
+
+    p.block(tr_key("Quick Access"), &["home", "quick access", "hero", "featured"], |ui| {
+        ui.checkbox(&mut d.prefs.home_show_hero, tr("Show Quick Access Hero"));
+        ui.label(egui::RichText::new(tr("Right-click a Quick Access card to choose the Hero.")).weak());
+    });
+
+    p.block(tr_key("Library Folders"), &["home", "folders", "cards", "size", "cover", "mosaic", "single", "classic", "count"], |ui| {
+        ui.checkbox(&mut d.prefs.home_show_folders, tr("Show Library Folders"));
+        ui.add_enabled_ui(d.prefs.home_show_folders, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(tr("Card size"));
+                egui::ComboBox::from_id_salt("home-card-size")
+                    .selected_text(tr(d.prefs.home_card_size.label()))
+                    .show_ui(ui, |ui| {
+                        for size in CardSize::ALL {
+                            ui.selectable_value(&mut d.prefs.home_card_size, size, tr(size.label()));
+                        }
+                    });
+            });
+            ui.horizontal(|ui| {
+                ui.label(tr("Cover style"));
+                egui::ComboBox::from_id_salt("home-cover-style")
+                    .selected_text(tr(d.prefs.home_cover_style.label()))
+                    .show_ui(ui, |ui| {
+                        for style in CoverStyle::ALL {
+                            ui.selectable_value(&mut d.prefs.home_cover_style, style, tr(style.label()));
+                        }
+                    });
+            });
+        });
+        ui.checkbox(&mut d.prefs.home_show_counts, tr("Show folder asset counts"));
+    });
+
+    p.block(tr_key("Dashboard"), &["home", "dashboard", "overview", "metrics"], |ui| {
+        ui.checkbox(&mut d.prefs.home_show_overview, tr("Show Library Overview"));
     });
 }
 
@@ -1376,7 +1696,10 @@ fn notification(p: &mut Page, d: &mut Draft) {
 
 /// Whether a folder can be watched for auto-import, and why not.
 pub fn auto_import_refusal(path: &std::path::Path) -> Option<String> {
-    if crate::auto_import::is_network_volume(path) {
+    // In QA mode a watched folder outside the sandbox is refused, even one saved by an earlier run.
+    if let Err(e) = crate::qa_isolation::validate_qa_sandbox_path(path) {
+        Some(e.to_string())
+    } else if crate::auto_import::is_network_volume(path) {
         Some(tr("Auto-import doesn't work with network drives. Choose a folder on this Mac or a drive attached to it.").into())
     } else if !path.is_dir() {
         Some(trf("{path} doesn't exist.", &[("path", &path.display())]))
@@ -1386,7 +1709,7 @@ pub fn auto_import_refusal(path: &std::path::Path) -> Option<String> {
 }
 
 /// Auto-Import: a folder whose new files are imported by themselves.
-fn auto_import(p: &mut Page, d: &mut Draft, library: Option<&std::path::Path>, refused: &mut Option<String>) {
+fn auto_import(p: &mut Page, d: &mut Draft, library: Option<&std::path::Path>, refused: &mut Option<String>, rows: &[SyncRow], commands: &mut Vec<SyncCommand>) {
     let keywords = ["auto", "import", "watch", "monitor", "folder", "drop", "automatic", "inbox", "delete", "trash", "remove"];
     p.block(tr_key("Auto-import"), &keywords, |ui| {
         let was = d.prefs.auto_import;
@@ -1448,7 +1771,56 @@ fn auto_import(p: &mut Page, d: &mut Draft, library: Option<&std::path::Path>, r
             }
             _ => note(ui, tr("Each library watches the folder named after it inside the chosen folder (\"Books\" for Books.library).")),
         }
-        note(ui, tr("New files are imported once they stop growing; the originals stay where they are. Files under 1 KB, temporary (.tmp) files and files without an extension are skipped."));
+        note(ui, tr("New files are imported once they stop growing; the originals stay where they are. Temporary (.tmp) files, empty files and files without an extension are skipped."));
+    });
+
+    let sync_keywords = ["sync", "folder", "synchronization", "watch", "linked", "external", "link", "mirror"];
+    p.block(tr_key("Folder Synchronization"), &sync_keywords, |ui| {
+        note(ui, tr("Register external folders to synchronize their contents with folders in this library."));
+        if library.is_some() {
+            if rows.is_empty() {
+                ui.label(RichText::new(tr("No synchronized folders configured for this library.")).color(t::p().text_muted));
+            }
+            for row in rows {
+                let wf = &row.wf;
+                ui.group(|ui| {
+                    ui.horizontal(|ui| {
+                        let status_color = match wf.status {
+                            falcon_library::SyncStatus::Success => t::p().icon_green,
+                            falcon_library::SyncStatus::Offline => t::p().icon_orange,
+                            falcon_library::SyncStatus::Error => t::p().icon_red,
+                            _ => t::p().text_muted,
+                        };
+                        let label = match row.running {
+                            Some((done, total)) if total > 0 => trf("Syncing {done} of {total}", &[("done", &done), ("total", &total)]),
+                            _ => wf.status.label().to_string(),
+                        };
+                        ui.label(RichText::new(format!("● {label}")).color(status_color).size(11.0));
+                        ui.label(RichText::new(format!("[{}]", wf.storage_mode.label())).color(t::p().primary).size(11.0));
+                        ui.label(RichText::new(format!("Mode: {}", wf.sync_mode.label())).color(t::p().text_muted).size(11.0));
+                        if row.active {
+                            if ui.small_button(tr("Stop Synchronization")).clicked() {
+                                commands.push(SyncCommand::Stop(wf.id.clone()));
+                            }
+                        } else if ui.small_button(tr("Sync Folder Now")).clicked() {
+                            commands.push(SyncCommand::Now(wf.id.clone()));
+                        }
+                        if ui.small_button(tr("Remove")).clicked() {
+                            commands.push(SyncCommand::Remove(wf.id.clone()));
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new(tr("Source:")).color(t::p().text_muted).size(11.0));
+                        ui.add(egui::Label::new(RichText::new(wf.source_path.display().to_string()).color(t::p().text_value).size(11.0)).truncate());
+                    });
+                    if let Some(err) = &wf.last_error {
+                        ui.label(RichText::new(err).color(t::p().icon_red).size(10.5));
+                    }
+                });
+            }
+        } else {
+            note(ui, tr("Open a library to view and configure synchronized folders."));
+        }
     });
 }
 
@@ -1600,7 +1972,8 @@ pub fn new_token() -> String {
     format!("{}-{}-{}-{}-{}", &hex[0..8], &hex[8..12], &hex[12..16], &hex[16..20], &hex[20..32])
 }
 
-fn developer(p: &mut Page, d: &mut Draft, port_text: &mut String, error: Option<&String>) {
+fn developer(p: &mut Page, d: &mut Draft, port_text: &mut String, error: Option<&String>, b: BrowserUi) {
+    let BrowserUi { compat, legacy, blocked, recent, session, cmd } = b;
     let pr = &mut d.prefs;
     let first = parse_port(port_text).unwrap_or(pr.api_port);
     p.block(tr_key("API token"), &["api", "token", "key", "auth", "developer", "restful"], |ui| {
@@ -1641,11 +2014,92 @@ fn developer(p: &mut Page, d: &mut Draft, port_text: &mut String, error: Option<
             }
         });
     });
+    p.block(tr_key("Browser Integration"), &["browser", "extension", "eagle", "compatibility", "port", "41595", "pinterest", "origin"], |ui| {
+        ui.checkbox(&mut pr.eagle_compat, tr("Eagle Extension Compatibility"));
+        note(ui, tr("Also listens on Eagle's port so Eagle's browser extension can find falcon. Off by default. falcon never reports itself as Eagle, and it does not start if Eagle or another program already uses the port."));
+        match compat {
+            CompatStatus::Off => note(ui, tr("Compatibility is off.")),
+            CompatStatus::NeedsApi => note(ui, tr("Turn on the local API to use this.")),
+            CompatStatus::Listening(port) => note(ui, &trf("Listening on port {port}.", &[("port", port)])),
+            CompatStatus::Conflict(m) | CompatStatus::Failed(m) => {
+                ui.label(RichText::new(trf("Not started: {error}", &[("error", m)])).size(11.0).color(t::p().icon_red));
+            }
+        }
+        if let Some(n) = legacy {
+            note(ui, n);
+        }
+        ui.add_space(6.0);
+        ui.label(RichText::new(tr("Approved browser extensions")).size(12.0));
+        note(ui, tr("Web pages can never use the API. A browser extension can only after you approve it here, and never to read files by path."));
+        let mut remove = None;
+        for (i, o) in pr.approved_extension_origins.iter().enumerate() {
+            ui.horizontal(|ui| {
+                ui.add(egui::Label::new(RichText::new(o).monospace().size(11.0)).selectable(true));
+                if ui.button(tr("Remove")).clicked() {
+                    remove = Some(i);
+                }
+            });
+        }
+        if let Some(i) = remove {
+            pr.approved_extension_origins.remove(i);
+        }
+        if let Some(o) = blocked.and_then(falcon_server::normalize_origin).filter(|o| !pr.approved_extension_origins.contains(o)) {
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(trf("Refused a request from {origin}", &[("origin", &o)])).size(11.0));
+                if ui.button(tr("Allow")).clicked() {
+                    pr.approved_extension_origins.push(o);
+                }
+            });
+        }
+        if !recent.is_empty() {
+            ui.add_space(6.0);
+            ui.label(RichText::new(tr("Recent API requests")).size(12.0));
+            note(ui, tr("Metadata only: no query strings, bodies, cookies or tokens."));
+            for line in recent {
+                ui.add(egui::Label::new(RichText::new(line).monospace().size(10.0)).selectable(true));
+            }
+        }
+    });
+    p.block(tr_key("Browser Import Session"), &["browser", "session", "import", "pinterest", "extension", "folders", "temporary"], |ui| {
+        note(ui, tr("A session lets the browser extension list folder and tag names (never password-protected folders or file paths) and send images for import, which you confirm here. It ends after 10 minutes, when you stop it, when another library is shown, or when falcon quits. Any program or page that can send the same requests during a session can read those names."));
+        match session {
+            Some(left) => {
+                let time = format!("{}:{:02}", left / 60, left % 60);
+                ui.label(RichText::new(trf("Session active: {time} left.", &[("time", &time)])).size(12.0));
+                if ui.button(tr("Stop session")).clicked() {
+                    *cmd = Some(SessionCmd::Stop);
+                }
+            }
+            None => {
+                note(ui, tr("No session is active."));
+                if ui.button(tr("Start 10-minute session")).clicked() {
+                    *cmd = Some(SessionCmd::Start);
+                }
+            }
+        }
+    });
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn eagle_compatibility_is_off_by_default_and_never_enabled_for_existing_users() {
+        assert!(!Prefs::default().eagle_compat);
+        assert!(Prefs::default().approved_extension_origins.is_empty(), "no browser extension is approved by default");
+        // State saved before BEC-1 has neither key.
+        let old: Prefs = serde_json::from_str(r#"{"api_enabled": true, "api_port": 41596}"#).unwrap();
+        assert!(!old.eagle_compat && old.approved_extension_origins.is_empty());
+        let on = Prefs { eagle_compat: true, approved_extension_origins: vec!["chrome-extension://abc".into()], ..Prefs::default() };
+        let back: Prefs = serde_json::from_str(&serde_json::to_string(&on).unwrap()).unwrap();
+        assert!(back.eagle_compat);
+        assert_eq!(back.approved_extension_origins, ["chrome-extension://abc"]);
+        // The compatibility port is Eagle's, and the API's own range still never includes it.
+        assert_eq!(falcon_server::EAGLE_PORT, EAGLE_PORT);
+        assert!(!on.api_ports().unwrap().contains(&EAGLE_PORT));
+        assert_eq!(CompatStatus::default(), CompatStatus::Off);
+    }
 
     #[test]
     fn rotate_mode_loads_old_prefs() {
@@ -1925,7 +2379,7 @@ mod tests {
     #[test]
     fn panes_follow_eagles_order() {
         let labels: Vec<_> = Section::ALL.iter().map(|s| s.label()).collect();
-        assert_eq!(labels, ["General", "Sidebar", "Controls", "Preview", "Screenshot", "Shortcuts", "Notification", "Password", "Auto-Import", "AI Search", "AI Models", "Eagle MCP", "Developer"]);
+        assert_eq!(labels, ["General", "Home Dashboard", "Sidebar", "Controls", "Preview", "Screenshot", "Shortcuts", "Notification", "Password", "Auto-Import", "AI Search", "AI Models", "Eagle MCP", "Developer"]);
         let groups: Vec<_> = Section::ALL.iter().map(|s| s.group()).collect();
         assert!(groups.windows(2).all(|w| w[0] <= w[1]), "groups are contiguous");
         let s: Section = serde_json::from_str(r#""preview""#).unwrap();

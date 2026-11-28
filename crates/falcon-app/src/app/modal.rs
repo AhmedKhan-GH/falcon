@@ -22,6 +22,7 @@ impl App {
             || self.confirm_reload
             || self.clear_history_open
             || self.remove_library.is_some()
+            || self.move_library.is_open()
             || self.force_close.is_some()
             || self.switch_warning.is_some()
             || self.quit.asking.is_some()
@@ -33,6 +34,7 @@ impl App {
             || ws.dup_dialog.is_some()
             || ws.ext_dialog.is_some()
             || ws.smart_dialog.is_some()
+            || (lib && ws.library_settings.open)
             || ws.confirm.is_some()
             || ws.bulk.is_some()
             || ws.op.busy()

@@ -72,6 +72,9 @@ pub fn refusal(lib: &Path) -> Option<String> {
 /// [`refusal`] as a library error, for every place falcon creates, opens
 /// or writes into a library.
 pub fn guard(lib: &Path) -> falcon_library::Result<()> {
+    // In QA mode no library outside the sandbox may be opened, created or
+    // written, however the request got here (dialog, link, drop, recent list).
+    crate::qa_isolation::validate_qa_sandbox_path(lib).map_err(|e| falcon_library::Error::Refused(e.to_string()))?;
     match refusal(lib) {
         Some(why) => Err(falcon_library::Error::Refused(why)),
         None => Ok(()),

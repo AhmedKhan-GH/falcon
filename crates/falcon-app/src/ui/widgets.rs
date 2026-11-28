@@ -57,7 +57,8 @@ pub(crate) fn viewer_ui(parent: &mut Ui, screen: Rect, salt: &str) -> Ui {
 
 pub(crate) fn window_drag(ui: &Ui, rect: Rect, id: &str) {
     let resp = ui.interact(rect, ui.scope_id().with(("drag", id)), Sense::click_and_drag());
-    if resp.drag_started() {
+    let movable = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::NULL.with("window_movable")).unwrap_or(true));
+    if resp.drag_started() && movable {
         ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
     }
     if resp.double_clicked() {
@@ -121,6 +122,51 @@ pub(crate) fn pin_badge(ui: &Ui, top_left: Pos2) {
     icon(ui, rect.center(), ic::PUSH_PIN, 12.0, Color32::WHITE);
 }
 
+/// Visual glyph and tint color representing a referenced asset's status.
+pub(crate) fn status_visual(status: crate::linked_ui::UiAvailability) -> (&'static str, Color32) {
+    use crate::linked_ui::UiAvailability as S;
+    match status {
+        S::Managed => (ic::CHECK, t::p().text_muted),
+        S::Linked => (ic::LINK, Color32::WHITE),
+        S::Offline => (ic::HARD_DRIVE, t::p().icon_orange),
+        S::Missing => (ic::WARNING, t::p().icon_red),
+        S::InvalidReference => (ic::PROHIBIT, t::p().icon_red),
+        S::PermissionDenied => (ic::LOCK_SIMPLE, t::p().icon_red),
+        S::TemporarilyUnavailable => (ic::CLOCK, t::p().icon_yellow),
+    }
+}
+
+/// Compact pill badge in the corner of a grid/waterfall/justified card for
+/// linked and unavailable referenced assets (`Managed` items draw nothing).
+pub(crate) fn status_badge(ui: &Ui, id_salt: &str, bottom_left: Pos2, status: crate::linked_ui::UiAvailability) {
+    if !status.is_linked() {
+        return;
+    }
+    let rect = Rect::from_min_size(Pos2::new(bottom_left.x, bottom_left.y - PIN_BADGE), Vec2::splat(PIN_BADGE));
+    let (glyph, tint) = status_visual(status);
+    let p = ui.painter();
+    let fill = if status.is_unavailable() { Color32::from_black_alpha(172) } else { Color32::from_black_alpha(132) };
+    let border = if status.is_unavailable() { tint.gamma_multiply(0.55) } else { Color32::from_white_alpha(44) };
+    p.rect_filled(rect, CornerRadius::same(4), fill);
+    p.rect_stroke(rect, CornerRadius::same(4), Stroke::new(1.0, border), StrokeKind::Inside);
+    icon(ui, rect.center(), glyph, 11.5, tint);
+    ui.interact(rect, ui.scope_id().with(("link-badge", id_salt)), Sense::hover()).on_hover_text(status.badge_tooltip());
+}
+
+/// Compact status icon drawn inside a list row next to the item name.
+pub(crate) fn list_status_icon(ui: &Ui, id_salt: &str, left_center: Pos2, status: crate::linked_ui::UiAvailability) -> f32 {
+    if !status.is_linked() {
+        return 0.0;
+    }
+    const SIZE: f32 = 14.0;
+    let rect = Rect::from_center_size(Pos2::new(left_center.x + SIZE / 2.0, left_center.y), Vec2::splat(SIZE));
+    let (glyph, tint) = status_visual(status);
+    let color = if status == crate::linked_ui::UiAvailability::Linked { t::p().text_muted } else { tint };
+    icon(ui, rect.center(), glyph, 12.0, color);
+    ui.interact(rect, ui.scope_id().with(("list-link-badge", id_salt)), Sense::hover()).on_hover_text(status.badge_tooltip());
+    SIZE + 4.0
+}
+
 /// A small warning mark in the corner of a placeholder whose preview is
 /// broken, sized to the picture.
 pub(crate) fn broken_mark(ui: &Ui, rect: Rect) {
@@ -134,21 +180,51 @@ pub(crate) fn divider(ui: &mut Ui) {
 }
 
 pub(crate) fn prop(ui: &mut Ui, key: &str, value: &str) -> Response {
-    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 13.0), Sense::hover());
-    let p = ui.painter();
-    p.text(rect.left_center(), Align2::LEFT_CENTER, key, font(12.0), t::p().text);
-    let g = galley(ui, value, mono(12.0), t::p().text_value, rect.width() - 90.0);
-    p.galley(Pos2::new(rect.left() + 90.0, rect.center().y - g.size().y / 2.0), g, t::p().text_value);
-    resp
+    let avail = ui.available_width();
+    let key_g = galley(ui, key, font(12.0), t::p().text, avail);
+    let key_w = key_g.size().x;
+    let col_x = (key_w + 10.0).max(96.0);
+    let val_avail = avail - col_x;
+    // A value that would be cut off beside its label (a long translated label,
+    // a long date, a narrow inspector) goes under the label in full instead.
+    let natural = galley(ui, value, mono(12.0), t::p().text_value, f32::INFINITY).size().x;
+
+    if val_avail < 60.0 || natural > val_avail {
+        // Vertical two-line fallback for narrow inspector, long label or long value
+        // Up to three lines, so a long value is read in full rather than cut off.
+        let mut job = LayoutJob::simple(value.to_string(), mono(12.0), t::p().text_value, (avail - 8.0).max(1.0));
+        job.wrap.max_rows = 3;
+        job.wrap.break_anywhere = true;
+        job.wrap.overflow_character = Some('…');
+        let val_g = ui.painter().layout_job(job);
+        let h = (key_g.size().y + val_g.size().y + 4.0).max(28.0);
+        let (rect, resp) = ui.allocate_exact_size(vec2(avail, h), Sense::hover());
+        let p = ui.painter();
+        p.galley(rect.left_top(), key_g.clone(), t::p().text);
+        p.galley(Pos2::new(rect.left() + 8.0, rect.top() + key_g.size().y + 2.0), val_g, t::p().text_value);
+        resp.on_hover_text(value)
+    } else {
+        // Single-line layout with dynamic column offset preventing overlap
+        let val_g = galley(ui, value, mono(12.0), t::p().text_value, val_avail);
+        let h = key_g.size().y.max(val_g.size().y).max(14.0);
+        let (rect, resp) = ui.allocate_exact_size(vec2(avail, h), Sense::hover());
+        let p = ui.painter();
+        p.galley(Pos2::new(rect.left(), rect.center().y - key_g.size().y / 2.0), key_g, t::p().text);
+        p.galley(Pos2::new(rect.left() + col_x, rect.center().y - val_g.size().y / 2.0), val_g, t::p().text_value);
+        resp.on_hover_text(value)
+    }
 }
 
 /// Rating row: five stars; clicking the current rating clears it.
 pub(crate) fn rating(ui: &mut Ui, star: u64) -> Option<u64> {
+    let key = tr("Rating");
+    let key_g = galley(ui, key, font(12.0), t::p().text, ui.available_width());
+    let col_x = (key_g.size().x + 10.0).max(96.0);
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 14.0), Sense::hover());
-    ui.painter().text(rect.left_center(), Align2::LEFT_CENTER, tr("Rating"), font(12.0), t::p().text);
+    ui.painter().galley(Pos2::new(rect.left(), rect.center().y - key_g.size().y / 2.0), key_g, t::p().text);
     let mut out = None;
     for n in 1..=5u64 {
-        let c = Pos2::new(rect.left() + 90.0 + 7.0 + (n - 1) as f32 * 17.0, rect.center().y);
+        let c = Pos2::new(rect.left() + col_x + 7.0 + (n - 1) as f32 * 17.0, rect.center().y);
         let hit = ui.interact(Rect::from_center_size(c, Vec2::splat(16.0)), ui.scope_id().with(("star", n)), Sense::click());
         let on = n <= star;
         let fam = egui::FontId::new(13.0, t::fill_family());
@@ -280,4 +356,34 @@ pub(crate) fn ext_placeholder(ui: &Ui, rect: Rect, ext: &str) {
         font((s * 0.18).max(9.0)),
         t::p().text_muted,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn prop_layout_prevents_overlap() {
+        let ctx = egui::Context::default();
+        let mut out = ctx.run_ui(Default::default(), |ui| {
+            // Wide panel (300px): Indonesian "Tanggal Dimodifikasi"
+            ui.allocate_ui(vec2(300.0, 100.0), |ui| {
+                let resp = prop(ui, "Tanggal Dimodifikasi", "2026/10/26 2:15");
+                assert!(resp.rect.height() >= 13.0);
+            });
+
+            // Default inspector width (~220px)
+            ui.allocate_ui(vec2(220.0, 100.0), |ui| {
+                let resp2 = prop(ui, "Tanggal Dimodifikasi", "2026/10/26 2:15");
+                assert!(resp2.rect.height() >= 13.0);
+            });
+
+            // Narrow panel (120px): falls back to two-line layout cleanly
+            ui.allocate_ui(vec2(120.0, 100.0), |ui| {
+                let resp3 = prop(ui, "Tanggal Dimodifikasi", "2026/10/26 2:15");
+                assert!(resp3.rect.height() >= 24.0, "two-line fallback for narrow inspector");
+            });
+        });
+        out.textures_delta.clear();
+    }
 }

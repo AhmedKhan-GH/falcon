@@ -2,6 +2,7 @@
 //! `eagle://` links and the HTTP API's library switch, the local server,
 //! preferences and the app lock, and the recent-libraries list.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -119,6 +120,12 @@ impl App {
         ws.sort = self.ws.sort;
         ws.increase = self.ws.increase;
         ws.layout = self.ws.layout;
+        let startup_scope = if let Some(shared) = &ws.lib {
+            self.resolve_startup_scope(&lock(shared))
+        } else {
+            Scope::Home
+        };
+        ws.scope = startup_scope;
         if self.ws.lib.is_none() {
             // The empty window holds the folder state restored on launch.
             ws.collapsed = std::mem::take(&mut self.ws.collapsed);
@@ -128,6 +135,55 @@ impl App {
         }
         self.serve_active();
     }
+
+    /// Resolves the startup destination scope based on preferences and active library.
+    pub(crate) fn resolve_startup_scope(&self, lib: &Library) -> Scope {
+        resolve_startup_destination(
+            self.prefs.startup_destination,
+            self.prefs.startup_folder_id.as_deref(),
+            self.last_scope.as_ref(),
+            lib,
+        )
+    }
+}
+
+/// Resolves which `Scope` Falcon opens into for a given library.
+pub(crate) fn resolve_startup_destination(
+    destination: crate::prefs::StartupDestination,
+    specific_folder_id: Option<&str>,
+    last_scope: Option<&Scope>,
+    lib: &Library,
+) -> Scope {
+    use crate::prefs::StartupDestination;
+    match destination {
+        StartupDestination::Home => Scope::Home,
+        StartupDestination::All => Scope::All,
+        StartupDestination::LastOpened => {
+            if let Some(scope) = last_scope.filter(|s| is_valid_scope(s, lib)) {
+                return (*scope).clone();
+            }
+            Scope::Home
+        }
+        StartupDestination::SpecificFolder => {
+            if let Some(fid) = specific_folder_id.filter(|fid| logic::find_folder(&lib.metadata.folders, fid).is_some()) {
+                return Scope::Folder(fid.to_string());
+            }
+            Scope::Home
+        }
+    }
+}
+
+/// Verifies whether `scope` is valid and present in `lib`.
+pub(crate) fn is_valid_scope(scope: &Scope, lib: &Library) -> bool {
+    match scope {
+        Scope::Home | Scope::All | Scope::Uncategorized | Scope::Untagged | Scope::Recent | Scope::Random(_) | Scope::AllTags | Scope::Duplicates | Scope::Trash => true,
+        Scope::Folder(id) => logic::find_folder(&lib.metadata.folders, id).is_some(),
+        Scope::Tag(t) => lib.items().iter().any(|item| item.tags.iter().any(|x| x == t)),
+        Scope::Smart(id) => lib.smart_folders().iter().any(|s| &s.id == id),
+    }
+}
+
+impl App {
 
     /// Where the library at `path` sits in the switcher, if it is open.
     pub(crate) fn position_of(&self, path: &std::path::Path) -> Option<usize> {
@@ -230,6 +286,8 @@ impl App {
     /// Preferences. Never Eagle's own port: clients of a running (or later
     /// started) Eagle must keep reaching Eagle.
     pub(crate) fn start_server(&mut self) {
+        self.compat = None;
+        self.compat_legacy = None;
         self.server = None;
         self.api_check.cancel();
         self.clear_api_warning();
@@ -242,11 +300,191 @@ impl App {
                 self.api_check.start(h.port, move || ctx.request_repaint());
                 self.server = Some(h);
                 self.share_with_server();
+                self.sync_compat();
             }
             Err(e) => {
                 crate::errlog::error(&format!("API not started: {e}"));
+                self.sync_compat();
                 self.show_alert(Alert::new(crate::api_check::title(), crate::api_check::start_failed_message(&ports)));
             }
+        }
+    }
+
+    /// Starts or stops the listener on Eagle's port to match the preference
+    /// and records what happened. It is a second listener of the same API
+    /// (see `falcon_server::Handle::start_compat`); it never replaces another
+    /// program's listener, and a conflict leaves compatibility off.
+    pub(crate) fn sync_compat(&mut self) {
+        self.compat = None;
+        self.compat_legacy = None;
+        self.prefs_window.compat_note = None;
+        self.compat_status = if !self.prefs.eagle_compat {
+            // Compatibility off also ends any browser import session.
+            if let Some(h) = &self.server {
+                h.stop_session();
+            }
+            crate::prefs::CompatStatus::Off
+        } else {
+            self.start_compat_listeners()
+        };
+        self.prefs_window.compat_status = self.compat_status.clone();
+    }
+
+    /// Opens the listener on Eagle's port and the one for the extension's
+    /// older API, refusing any port something else already uses.
+    fn start_compat_listeners(&mut self) -> crate::prefs::CompatStatus {
+        let Some(h) = &self.server else { return crate::prefs::CompatStatus::NeedsApi };
+        let ctx = self.ctx.clone();
+        match h.start_compat(falcon_server::EAGLE_PORT, move || ctx.request_repaint()) {
+            Ok(l) => {
+                let port = l.port;
+                self.compat = Some(l);
+                // The extension saves through its older API on its own port.
+                let ctx = self.ctx.clone();
+                self.prefs_window.compat_note = Some(match h.start_legacy(falcon_server::LEGACY_PORT, move || ctx.request_repaint()) {
+                    Ok(l2) => {
+                        self.compat_legacy = Some(l2);
+                        trf("Older extension API on port {port}: listening.", &[("port", &falcon_server::LEGACY_PORT)])
+                    }
+                    Err(e) => trf("Older extension API on port {port} not started: {error}", &[("port", &falcon_server::LEGACY_PORT), ("error", &e.to_string())]),
+                });
+                crate::prefs::CompatStatus::Listening(port)
+            }
+            Err(falcon_server::CompatError::InUse(m)) => crate::prefs::CompatStatus::Conflict(m),
+            Err(falcon_server::CompatError::Failed(m)) => crate::prefs::CompatStatus::Failed(m),
+        }
+    }
+
+    /// The toolbar's "Save from the browser": opens the extension's ports if
+    /// they aren't open and starts a 10-minute session, in one click. Without
+    /// the Preferences switch the ports close again when the session ends.
+    pub(crate) fn start_browser_session(&mut self) {
+        if self.server.is_none() {
+            self.flash_error(tr("Turn on the local API in Preferences ▸ Developer first."));
+            return;
+        }
+        if self.compat.is_none() {
+            self.compat_status = self.start_compat_listeners();
+            self.prefs_window.compat_status = self.compat_status.clone();
+        }
+        match &self.compat_status {
+            crate::prefs::CompatStatus::Conflict(m) | crate::prefs::CompatStatus::Failed(m) => {
+                let m = trf("Not started: {error}", &[("error", m)]);
+                self.compat = None;
+                self.compat_legacy = None;
+                self.flash_error(m);
+            }
+            _ => {
+                if let Some(h) = &self.server {
+                    h.start_session(600);
+                }
+                self.flash(tr("Browser import session started"));
+            }
+        }
+    }
+
+    pub(crate) fn stop_browser_session(&mut self) {
+        if let Some(h) = &self.server {
+            h.stop_session();
+        }
+        self.flash(tr("Browser import session stopped"));
+    }
+
+    /// Carries out what Preferences asked of the browser import session and
+    /// tells it how long is left.
+    /// Keeps the API's recent folders and the app's the same, both ways.
+    fn sync_recent_folders(&mut self) {
+        let Some(h) = &self.server else { return };
+        if let Some(v) = h.take_recent_folders() {
+            self.server_recents = v.clone();
+            self.recent_folders = v;
+        } else if self.recent_folders != self.server_recents {
+            h.set_recent_folders(self.recent_folders.clone());
+            self.server_recents = self.recent_folders.clone();
+        }
+    }
+
+    fn drive_session(&mut self) {
+        self.sync_recent_folders();
+        match self.prefs_window.session_cmd.take() {
+            Some(crate::prefs::SessionCmd::Start) => self.start_browser_session(),
+            Some(crate::prefs::SessionCmd::Stop) => self.stop_browser_session(),
+            None => {}
+        }
+        self.prefs_window.session_remaining = self.server.as_ref().and_then(|h| h.session_remaining());
+        if self.prefs_window.session_remaining.is_some() {
+            // The toolbar and Preferences show a countdown.
+            self.ctx.request_repaint_after(std::time::Duration::from_secs(1));
+        }
+        // Ports opened only for a session close with it.
+        if self.prefs_window.session_remaining.is_none() && !self.prefs.eagle_compat && (self.compat.is_some() || self.compat_legacy.is_some()) {
+            self.compat = None;
+            self.compat_legacy = None;
+            self.compat_status = crate::prefs::CompatStatus::Off;
+            self.prefs_window.compat_status = crate::prefs::CompatStatus::Off;
+            self.prefs_window.compat_note = None;
+        }
+    }
+
+    /// Asks before a browser import is committed: where it comes from, what
+    /// and how many, and where it would go. Nothing is imported until Import.
+    pub(crate) fn import_confirm_modal(&mut self, ctx: &egui::Context) {
+        let Some(h) = &self.server else { return };
+        let Some(p) = h.pending_imports().into_iter().next() else { return };
+        if self.import_attention != Some(p.id) {
+            self.import_attention = Some(p.id);
+            ctx.send_viewport_cmd(egui::ViewportCommand::RequestUserAttention(egui::UserAttentionType::Informational));
+            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+        }
+        let mut answer = None;
+        let modal = egui::Modal::new(egui::Id::unique("browser-import-confirm")).show(ctx, |ui| {
+            ui.set_width(360.0);
+            ui.label(egui::RichText::new(tr("Import from the browser?")).size(15.0));
+            ui.add_space(6.0);
+            ui.label(trf("Source: {site}", &[("site", &p.site)]));
+            ui.label(trf("Items: {count}", &[("count", &p.count)]));
+            ui.label(trf("From: {hosts}", &[("hosts", &p.hosts.join(", "))]));
+            let folder = if p.folder.is_empty() { tr("Library root").to_string() } else { p.folder.clone() };
+            ui.label(trf("Into: {folder}", &[("folder", &folder)]));
+            ui.add_space(10.0);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.button(tr("Import")).clicked() {
+                    answer = Some(true);
+                }
+                if ui.button(tr("Cancel")).clicked() {
+                    answer = Some(false);
+                }
+            });
+        });
+        if modal.should_close() {
+            answer = Some(false);
+        }
+        if let Some(a) = answer {
+            h.resolve_import(p.id, a);
+        }
+    }
+
+    /// Hands Preferences the last browser extension origin the API refused.
+    pub(crate) fn poll_blocked_origin(&mut self) {
+        self.drive_session();
+        if self.prefs_window.open {
+            self.prefs_window.blocked_origin = self.server.as_ref().and_then(|h| h.blocked_origin());
+            self.prefs_window.recent_requests = self
+                .server
+                .as_ref()
+                .map(|h| {
+                    h.recent_requests()
+                        .iter()
+                        .rev()
+                        .take(10)
+                        .map(|r| {
+                            let t = r.secs % 86400;
+                            let when = format!("{:02}:{:02}:{:02}Z", t / 3600, t / 60 % 60, t % 60);
+                            format!("{when} :{} {} {} origin={} ref={} fetch={} [{}] {} → {} ({})", r.port, r.method, r.path, if r.origin.is_empty() { "-" } else { &r.origin }, if r.referer.is_empty() { "-" } else { &r.referer }, r.fetch, r.flags, r.caller, r.status, r.why)
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
         }
     }
 
@@ -272,6 +510,9 @@ impl App {
     pub(crate) fn share_with_server(&self) {
         let Some(h) = &self.server else { return };
         h.set_token(&self.prefs.api_token);
+        h.set_approved_origins(&self.prefs.approved_extension_origins);
+        let ctx = self.ctx.clone();
+        h.set_notify(move || ctx.request_repaint());
         h.set_preferences(self.prefs.eagle_preferences());
         h.set_history(self.recent.iter().map(|p| p.display().to_string()).collect());
         if let Some(engine) = &self.ai.engine {
@@ -291,6 +532,8 @@ impl App {
         self.prefs_window.show_with(crate::prefs::Draft { prefs: self.prefs.clone(), panels, keys: self.shortcuts.clone(), launch_at_login: crate::login_item::status().is_on() });
         self.prefs_window.library = self.ws.root.clone();
         self.show_mcp_status();
+        self.prefs_window.compat_status = self.compat_status.clone();
+        self.prefs_window.blocked_origin = self.server.as_ref().and_then(|h| h.blocked_origin());
     }
 
     /// Whether menus and boxes are translucent: as being edited in
@@ -316,6 +559,7 @@ impl App {
     /// Takes the Preferences window's Save or Apply.
     pub(crate) fn apply_preferences(&mut self, d: crate::prefs::Draft) {
         let restart = self.prefs.api_changed(&d.prefs);
+        let compat_changed = self.prefs.eagle_compat != d.prefs.eagle_compat;
         // The collect folder is chosen in the collect window, which may
         // have changed it while Preferences was open.
         let folder = self.prefs.collect_folder.take();
@@ -347,6 +591,13 @@ impl App {
             if self.ws.lib.is_some() && !self.prefs.api_enabled {
                 self.flash(tr("API stopped"));
             }
+        } else if compat_changed {
+            self.sync_compat();
+        }
+        if let Some(h) = &self.server
+            && h.blocked_origin().is_some_and(|o| self.prefs.approved_extension_origins.contains(&o))
+        {
+            h.clear_blocked_origin();
         }
     }
 
@@ -442,6 +693,30 @@ impl App {
     }
 }
 
+/// Deduces the external physical directory for a Falcon folder from its linked items directly from `&Library`.
+/// Operates on the already-provided reference without re-acquiring mutexes (preventing UI deadlocks),
+/// and samples up to 10 items for fast responsiveness.
+pub(crate) fn deduce_source_path_from_lib(lib: &Library, folder_id: &str) -> Option<PathBuf> {
+    let mut path_counts: HashMap<PathBuf, usize> = HashMap::new();
+    let mut checked = 0;
+    for item in lib.items() {
+        if !item.is_deleted && item.folders.iter().any(|f| f == folder_id) {
+            if let Some(src) = lib.last_known_source_path(&item.id).or_else(|| lib.resolved_source_path(&item.id).ok()) {
+                if let Some(parent) = src.parent() {
+                    if parent.is_dir() {
+                        *path_counts.entry(parent.to_path_buf()).or_default() += 1;
+                        checked += 1;
+                        if checked >= 10 {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    path_counts.into_iter().max_by_key(|(_, c)| *c).map(|(p, _)| p)
+}
+
 /// The toast after a smart folder's Refresh.
 fn smart_refreshed_text(name: &str, n: usize) -> String {
     tr_nf(n, "{name} now has {n} item", "{name} now has {n} items", &[("name", &name)])
@@ -463,5 +738,12 @@ mod tests {
     fn restore_note_names_the_library_and_backup() {
         let note = restored_note(Path::new("/s/Photos.library/backup/backup-2026-10-26 02.15.25.310.json"));
         assert_eq!(note, "Photos's metadata.json was damaged and was restored from backup/backup-2026-10-26 02.15.25.310.json; the damaged file was kept in backup/");
+    }
+
+    #[test]
+    fn deduce_source_path_empty_folder_returns_none() {
+        let tmp = tempfile::tempdir().unwrap();
+        let lib = falcon_library::Library::create(tmp.path().join("L.library")).unwrap();
+        assert_eq!(super::deduce_source_path_from_lib(&lib, "nonexistent"), None);
     }
 }

@@ -261,11 +261,13 @@ pub struct CropState {
     pub bounds: Vec2,
     /// Until when the size readout stays up after a key, in `InputState::time`.
     pub readout_until: f64,
+    /// False for linked assets, which must never overwrite the original file.
+    pub can_overwrite: bool,
 }
 
 impl CropState {
     pub fn new(w: f32, h: f32) -> CropState {
-        CropState { rect: Rect::from_min_size(Pos2::ZERO, vec2(w, h)), drag: None, confirming: false, fields: [None, None], bounds: vec2(w, h), readout_until: 0.0 }
+        CropState { rect: Rect::from_min_size(Pos2::ZERO, vec2(w, h)), drag: None, confirming: false, fields: [None, None], bounds: vec2(w, h), readout_until: 0.0, can_overwrite: true }
     }
 
     /// Acts on the crop keys among `events` and takes them out, so nothing
@@ -367,21 +369,45 @@ impl App {
 
     /// The crop tool's controls in the viewer bar, right-aligned at `right`.
     /// Returns the x left of what it drew.
-    pub(crate) fn crop_bar(&mut self, ui: &mut Ui, item: &Item, right: f32, cy: f32) -> f32 {
+    pub(crate) fn crop_bar(&mut self, ui: &mut Ui, item: &Item, is_linked: bool, right: f32, cy: f32) -> f32 {
         let Some(crop) = self.ws.tools.crop.as_mut() else { return right };
-        let button = |ui: &mut Ui, x: f32, w: f32, label: &str, primary: bool| {
+        crop.can_overwrite = !is_linked;
+        if is_linked {
+            crop.confirming = false;
+        }
+        let button = |ui: &mut Ui, x: f32, w: f32, label: &str, primary: bool, enabled: bool| {
             let r = Rect::from_center_size(Pos2::new(x - w / 2.0, cy), vec2(w, 26.0));
-            let b = egui::Button::new(egui::RichText::new(label).color(t::p().text)).fill(if primary { t::p().primary } else { t::p().button });
-            ui.put(r, b)
+            let b = egui::Button::new(egui::RichText::new(label).color(if enabled { t::p().text } else { t::p().text_muted }))
+                .fill(if !enabled {
+                    t::p().button
+                } else if primary {
+                    t::p().primary
+                } else {
+                    t::p().button
+                });
+            ui.add_enabled(enabled, b.min_size(r.size())).on_hover_text_at_pointer("")
         };
-        if crop.confirming {
-            if button(ui, right, 130.0, tr("Replace Original"), true).clicked() {
+        let put_button = |ui: &mut Ui, x: f32, w: f32, label: &str, primary: bool, enabled: bool| {
+            let r = Rect::from_center_size(Pos2::new(x - w / 2.0, cy), vec2(w, 26.0));
+            let b = egui::Button::new(egui::RichText::new(label).color(if enabled { t::p().text } else { t::p().text_muted }))
+                .fill(if !enabled {
+                    t::p().button
+                } else if primary {
+                    t::p().primary
+                } else {
+                    t::p().button
+                });
+            ui.put(r, |ui: &mut Ui| ui.add_enabled(enabled, b))
+        };
+        let _ = button;
+        if crop.confirming && !is_linked {
+            if put_button(ui, right, 130.0, tr("Replace Original"), true, true).clicked() {
                 let rect = pixel_rect(crop.rect);
                 self.ws.actions.push(Action::Edit(Op::Crop(item.id.clone(), rect)));
                 self.ws.tools.crop = None;
                 return right - 138.0;
             }
-            if button(ui, right - 138.0, 70.0, tr("Back"), false).clicked() {
+            if put_button(ui, right - 138.0, 70.0, tr("Back"), false, true).clicked() {
                 crop.confirming = false;
             }
             let g = ui.painter().layout_no_wrap(tr("Cropping overwrites the original file and can't be undone").into(), font(12.0), t::p().text_muted);
@@ -389,16 +415,21 @@ impl App {
             ui.painter().galley(Pos2::new(left, cy - g.size().y / 2.0), g, t::p().text_muted);
             left - 8.0
         } else {
-            if button(ui, right, 70.0, tr("Save"), true).on_hover_text(tr("Save (Enter, ⇧C, ⌘S)")).clicked() {
+            let save_tip = if is_linked {
+                tr("Disabled for linked files (original files are read-only). Use Save As to create a new copy.")
+            } else {
+                tr("Save (Enter, ⇧C, ⌘S)")
+            };
+            if put_button(ui, right, 70.0, tr("Save"), !is_linked, !is_linked).on_hover_text(save_tip).clicked() {
                 crop.confirming = true;
             }
-            if button(ui, right - 78.0, 80.0, tr("Save As"), false).on_hover_text(tr("Save the crop as a new item")).clicked() {
+            if put_button(ui, right - 78.0, 80.0, tr("Save As"), is_linked, true).on_hover_text(tr("Save the crop as a new item")).clicked() {
                 let rect = pixel_rect(crop.rect);
                 self.ws.actions.push(Action::Edit(Op::CropAsNew(item.id.clone(), rect)));
                 self.ws.tools.crop = None;
                 return right - 166.0;
             }
-            if button(ui, right - 166.0, 70.0, tr("Cancel"), false).on_hover_text(tr("Cancel (Esc)")).clicked() {
+            if put_button(ui, right - 166.0, 70.0, tr("Cancel"), false, true).on_hover_text(tr("Cancel (Esc)")).clicked() {
                 self.ws.tools.crop = None;
                 return right - 244.0;
             }
@@ -439,28 +470,42 @@ impl App {
 
     /// Rotate and crop buttons for the viewer bar, laid out leftwards from
     /// `x`. Returns the x where the next control can go.
-    pub(crate) fn rotate_crop_buttons(&mut self, ui: &mut Ui, item: &Item, mut x: f32, cy: f32) -> f32 {
+    pub(crate) fn rotate_crop_buttons(&mut self, ui: &mut Ui, item: &Item, is_linked: bool, mut x: f32, cy: f32) -> f32 {
         if transform::can_crop(&item.ext) {
             let open = self.ws.tools.crop.is_some();
-            if icon_button(ui, Pos2::new(x, cy), ic::CROP, 17.0, !open, tr("Crop")).clicked() && !open {
+            let tip = if is_linked { tr("Crop (Save as new item)") } else { tr("Crop") };
+            if icon_button(ui, Pos2::new(x, cy), ic::CROP, 17.0, !open, tip).clicked() && !open {
                 self.start_crop(item);
+                if let Some(crop) = self.ws.tools.crop.as_mut() {
+                    crop.can_overwrite = !is_linked;
+                }
             }
             x -= 30.0;
         }
+        let allow_transform = !is_linked || self.prefs.rotate_mode == crate::prefs::RotateMode::Preview;
         let keyed = |label: &str, cmd| self.shortcuts.tooltip(ui.ctx(), label, cmd);
-        let (rotate_tip, flip_tip) = (keyed(tr("Rotate Left"), crate::shortcuts::Command::RotateLeft), format!("{}\n{}", keyed(tr("Flip Horizontal"), crate::shortcuts::Command::FlipHorizontal), tr("⇧-click: Flip Vertical")));
+        let (rotate_tip, flip_tip) = if allow_transform {
+            (
+                keyed(tr("Rotate Left"), crate::shortcuts::Command::RotateLeft),
+                format!("{}\n{}", keyed(tr("Flip Horizontal"), crate::shortcuts::Command::FlipHorizontal), tr("⇧-click: Flip Vertical")),
+            )
+        } else {
+            let ro = tr("Not available for linked files (original files are read-only)");
+            (ro.to_string(), ro.to_string())
+        };
         if transform::can_rotate(&item.ext) {
-            if icon_button(ui, Pos2::new(x, cy), ic::ARROW_CLOCKWISE, 17.0, true, tr("Rotate Right")).clicked() {
+            let rr_tip = if allow_transform { tr("Rotate Right") } else { tr("Not available for linked files (original files are read-only)") };
+            if icon_button(ui, Pos2::new(x, cy), ic::ARROW_CLOCKWISE, 17.0, allow_transform, rr_tip).clicked() {
                 self.rotate_request(vec![item.id.clone()], 1);
             }
             x -= 30.0;
-            if icon_button(ui, Pos2::new(x, cy), ic::ARROW_COUNTER_CLOCKWISE, 17.0, true, &rotate_tip).clicked() {
+            if icon_button(ui, Pos2::new(x, cy), ic::ARROW_COUNTER_CLOCKWISE, 17.0, allow_transform, &rotate_tip).clicked() {
                 self.rotate_request(vec![item.id.clone()], -1);
             }
             x -= 30.0;
         }
         if transform::can_flip(&item.ext) {
-            if icon_button(ui, Pos2::new(x, cy), ic::FLIP_HORIZONTAL, 17.0, true, &flip_tip).clicked() {
+            if icon_button(ui, Pos2::new(x, cy), ic::FLIP_HORIZONTAL, 17.0, allow_transform, &flip_tip).clicked() {
                 let flip = crate::app::image_edit::flip_for_click(ui.input(|i| i.modifiers.shift));
                 self.flip_request(vec![item.id.clone()], flip);
             }

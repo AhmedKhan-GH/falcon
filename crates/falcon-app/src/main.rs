@@ -32,11 +32,13 @@ mod gesture;
 mod audio;
 mod auto_import;
 mod fsevents;
+mod home_lib;
 mod hotkeys;
 mod hover;
 mod hover_media;
 mod urls;
 mod link_import;
+mod linked_ui;
 mod icloud;
 mod icons;
 mod install_dir;
@@ -56,6 +58,7 @@ mod open_with;
 mod page_shot;
 mod prefs;
 mod progress_eta;
+pub(crate) mod qa_isolation;
 mod share;
 mod quick_switch;
 mod search_state;
@@ -79,8 +82,11 @@ mod toast;
 mod touch_id;
 mod tray;
 mod theme;
+pub(crate) mod thumb_worker;
+pub(crate) mod sync_worker;
 mod ui;
 mod library_icons;
+mod library_move;
 mod library_removal;
 mod vibrancy;
 mod watch;
@@ -99,6 +105,25 @@ fn attach_console() {
     use windows_sys::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole};
     // SAFETY: takes no pointers, and failing just leaves no console.
     unsafe { AttachConsole(ATTACH_PARENT_PROCESS) };
+}
+
+/// Uses an isolated writable app-data directory (`Falcon-Dev`) when launched
+/// from the `Falcon Dev — Referenced Assets.app` bundle so production settings,
+/// recent libraries, logs, and AI indexes are never touched.
+pub(crate) fn app_data_name() -> &'static str {
+    static NAME: std::sync::OnceLock<&'static str> = std::sync::OnceLock::new();
+    NAME.get_or_init(|| {
+        if qa_isolation::is_qa_mode() {
+            "falcon-qa"
+        } else if std::env::current_exe()
+            .ok()
+            .is_some_and(|p| p.to_string_lossy().contains("Falcon Dev"))
+        {
+            "Falcon-Dev"
+        } else {
+            "Falcon"
+        }
+    })
 }
 
 fn main() -> eframe::Result {
@@ -135,11 +160,20 @@ fn main() -> eframe::Result {
             },
         }
     }
+    let app_name = app_data_name();
+    let window_title = if app_name == "Falcon" { "Falcon" } else { "Falcon Dev — Unified" };
+    let app_id = if app_name == "Falcon" {
+        "falcon"
+    } else if app_name == "falcon-qa" {
+        "falcon-qa"
+    } else {
+        "falcon-dev"
+    };
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
-            .with_title("Falcon")
-            // Matches falcon.desktop on Linux, so the desktop shows the icon; macOS ignores it.
-            .with_app_id("falcon")
+            .with_title(window_title)
+            // Matches falcon.desktop on Linux, and drives eframe's persistence folder.
+            .with_app_id(app_id)
             .with_fullsize_content_view(true)
             .with_titlebar_shown(false)
             .with_title_shown(false)
@@ -150,7 +184,7 @@ fn main() -> eframe::Result {
         ..Default::default()
     };
     eframe::run_native(
-        "Falcon",
+        app_name,
         options,
         Box::new(move |cc| {
             let app = app::App::new(cc, initial, launch);

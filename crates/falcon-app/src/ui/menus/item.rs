@@ -29,6 +29,14 @@ impl App {
         if targets.len() == 1 && self.ws.scope != Scope::Trash {
             self.location_menu(ui, lib, item);
         }
+        let linked_count = targets.iter().filter(|id| lib.is_linked_item(id)).count();
+        if linked_count > 0
+            && self.ws.scope != Scope::Trash
+            && ui.button(tr("Relink Original…")).clicked()
+        {
+            let linked_targets: Vec<String> = targets.iter().filter(|id| lib.is_linked_item(id)).cloned().collect();
+            self.open_relink_dialog(lib, linked_targets);
+        }
         if targets.len() == 1 && !in_viewer && self.ws.scope != Scope::Trash {
             let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::VisualMatch);
             if ui.add_enabled(self.ai_ready(), egui::Button::new(tr("Visual Match")).shortcut_text(keys)).on_disabled_hover_text(tr("Install the model in Preferences ▸ AI Search")).clicked() {

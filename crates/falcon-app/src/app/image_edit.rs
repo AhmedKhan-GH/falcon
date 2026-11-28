@@ -140,6 +140,12 @@ impl App {
         {
             self.ws.actions.push(Action::Edit(Op::SetFolderCover(fid.clone(), item.id.clone())));
         }
+        if single
+            && let Scope::Folder(fid) = self.ws.scope.clone()
+            && ui.button(tr("Set as Home Cover")).clicked()
+        {
+            self.set_home_cover(&fid, &item.id);
+        }
         if single && thumbnail::custom_thumbnail_allowed(&item.ext) {
             let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::CustomThumbnail);
             if ui.add(egui::Button::new(tr("Set Custom Thumbnail…")).shortcut_text(keys)).clicked() {
@@ -154,8 +160,14 @@ impl App {
                 self.ws.actions.push(Action::Edit(Op::ResetCustomThumbnail(item.id.clone())));
             }
         }
-        if single && ui.button(tr("Replace with File…")).clicked() {
-            self.ws.actions.push(Action::Edit(Op::ReplaceFile(item.id.clone())));
+        let single_linked = single && lib.is_linked_item(&item.id);
+        if single {
+            if single_linked {
+                ui.add_enabled(false, egui::Button::new(tr("Replace with File…")))
+                    .on_disabled_hover_text(tr("Not available for linked files (original files are read-only)"));
+            } else if ui.button(tr("Replace with File…")).clicked() {
+                self.ws.actions.push(Action::Edit(Op::ReplaceFile(item.id.clone())));
+            }
         }
         let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::RefreshThumbnail);
         if ui.add(egui::Button::new(tr("Refresh Thumbnail")).shortcut_text(keys)).clicked() {
@@ -165,7 +177,9 @@ impl App {
             self.ws.actions.push(Action::Edit(Op::RefreshPalette(targets.to_vec())));
         }
         let ext_of = |id: &str| lib.item(id).map(|i| i.ext.clone());
-        let rotatable = editable(targets, ext_of, transform::can_rotate);
+        let (managed_targets, _) = crate::linked_ui::partition_managed_targets(lib, targets);
+        let rotatable = editable(&managed_targets, ext_of, transform::can_rotate);
+        let any_rotatable = !editable(targets, ext_of, transform::can_rotate).is_empty();
         if !rotatable.is_empty() {
             if ui.button(tr("Rotate Left")).clicked() {
                 self.rotate_request(rotatable.clone(), -1);
@@ -173,8 +187,13 @@ impl App {
             if ui.button(tr("Rotate Right")).clicked() {
                 self.rotate_request(rotatable, 1);
             }
+        } else if any_rotatable {
+            let ro = tr("Not available for linked files (original files are read-only)");
+            ui.add_enabled(false, egui::Button::new(tr("Rotate Left"))).on_disabled_hover_text(ro);
+            ui.add_enabled(false, egui::Button::new(tr("Rotate Right"))).on_disabled_hover_text(ro);
         }
-        let flippable = editable(targets, ext_of, transform::can_flip);
+        let flippable = editable(&managed_targets, ext_of, transform::can_flip);
+        let any_flippable = !editable(targets, ext_of, transform::can_flip).is_empty();
         if !flippable.is_empty() {
             if ui.button(tr("Flip Horizontal")).clicked() {
                 self.flip_request(flippable.clone(), Flip::Horizontal);
@@ -182,10 +201,17 @@ impl App {
             if ui.button(tr("Flip Vertical")).clicked() {
                 self.flip_request(flippable, Flip::Vertical);
             }
+        } else if any_flippable {
+            let ro = tr("Not available for linked files (original files are read-only)");
+            ui.add_enabled(false, egui::Button::new(tr("Flip Horizontal"))).on_disabled_hover_text(ro);
+            ui.add_enabled(false, egui::Button::new(tr("Flip Vertical"))).on_disabled_hover_text(ro);
         }
-        if single && transform::can_crop(&item.ext) && ui.button(tr("Crop…")).clicked() {
-            self.ws.viewer = Some(item.id.clone());
-            self.ws.tools.crop_next = Some(item.id.clone());
+        if single && transform::can_crop(&item.ext) {
+            let label = if single_linked { tr("Crop (Save as New Copy)…") } else { tr("Crop…") };
+            if ui.button(label).clicked() {
+                self.ws.viewer = Some(item.id.clone());
+                self.ws.tools.crop_next = Some(item.id.clone());
+            }
         }
     }
 
@@ -249,7 +275,7 @@ impl App {
                 Ok(())
             }
             Op::ReplaceFile(id) => {
-                if self.local_only(lib, std::slice::from_ref(&id)).is_empty() {
+                if lib.is_linked_item(&id) || self.local_only(lib, std::slice::from_ref(&id)).is_empty() {
                     return Ok(());
                 }
                 let Some(path) = crate::dialog_owner::file_dialog().set_title(tr("Replace with File")).pick_file() else { return Ok(()) };
@@ -350,7 +376,7 @@ impl App {
                 let ids = self.local_only(lib, &ids);
                 let mut r = Ok(());
                 for id in &ids {
-                    if lib.item(id).is_some_and(|i| transform::can_rotate(&i.ext)) {
+                    if !lib.is_linked_item(id) && lib.item(id).is_some_and(|i| transform::can_rotate(&i.ext)) {
                         r = r.and(lib.rotate_item(id, turns));
                         self.ws.loader.forget(id);
                     }
@@ -361,7 +387,7 @@ impl App {
                 let ids = self.local_only(lib, &ids);
                 let mut r = Ok(());
                 for id in &ids {
-                    if lib.item(id).is_some_and(|i| transform::can_flip(&i.ext)) {
+                    if !lib.is_linked_item(id) && lib.item(id).is_some_and(|i| transform::can_flip(&i.ext)) {
                         r = r.and(lib.flip_item(id, flip));
                         self.ws.loader.forget(id);
                     }
@@ -369,7 +395,7 @@ impl App {
                 r
             }
             Op::Crop(id, rect) => {
-                if self.local_only(lib, std::slice::from_ref(&id)).is_empty() {
+                if lib.is_linked_item(&id) || self.local_only(lib, std::slice::from_ref(&id)).is_empty() {
                     return Ok(());
                 }
                 let r = lib.crop_item(&id, rect);
@@ -430,7 +456,7 @@ impl App {
                 } else {
                     self.ws.tools.crop = None;
                 }
-            } else if enter {
+            } else if enter && crop.can_overwrite {
                 if crop.confirming {
                     let rect = crate::ui::viewer::crop::pixel_rect(crop.rect);
                     if let Some(id) = self.ws.viewer.clone() {
@@ -496,12 +522,13 @@ impl App {
 
     /// The tools' buttons in the viewer bar, leftwards from `x`. Returns
     /// the x left of them.
-    pub(crate) fn edit_bar(&mut self, ui: &mut Ui, item: &Item, x: f32, cy: f32) -> f32 {
+    pub(crate) fn edit_bar(&mut self, ui: &mut Ui, lib: &Library, item: &Item, x: f32, cy: f32) -> f32 {
+        let is_linked = lib.is_linked_item(&item.id);
         if self.ws.tools.crop.is_some() {
-            return self.crop_bar(ui, item, x + 12.0, cy);
+            return self.crop_bar(ui, item, is_linked, x + 12.0, cy);
         }
         let x = self.comment_button(ui, item, x, cy);
-        self.rotate_crop_buttons(ui, item, x, cy) + 14.0
+        self.rotate_crop_buttons(ui, item, is_linked, x, cy) + 14.0
     }
 }
 

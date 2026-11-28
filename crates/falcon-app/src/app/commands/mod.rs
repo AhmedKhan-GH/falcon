@@ -50,10 +50,11 @@ pub(crate) fn editable_now(ids: &[String], lib: &Library) -> [bool; 4] {
     use falcon_library::combine::can_combine;
     use falcon_library::transform::{can_crop, can_flip, can_rotate};
     let ext = |id: &String| lib.item(id).map(|i| i.ext.as_str());
+    let managed_ext = |id: &String| (!lib.is_linked_item(id)).then(|| lib.item(id).map(|i| i.ext.as_str())).flatten();
     [
-        ids.iter().filter_map(ext).any(can_flip),
-        ids.iter().filter_map(ext).any(can_rotate),
-        ids.len() == 1 && ids.iter().filter_map(ext).any(can_crop),
+        ids.iter().filter_map(managed_ext).any(can_flip),
+        ids.iter().filter_map(managed_ext).any(can_rotate),
+        ids.len() == 1 && ids.iter().filter_map(managed_ext).any(can_crop),
         ids.iter().filter_map(ext).filter(|e| can_combine(e)).count() >= 2,
     ]
 }
@@ -376,6 +377,8 @@ impl App {
             show_info: self.display.show_info,
             show_comments: self.display.comment_badge,
             subfolders: self.display.subfolders,
+            hide_unsupported: self.display.hide_unsupported,
+            path_bar: self.prefs.show_path_bar,
             libraries: self.others.len(),
             presenting: self.modes.presenting,
             on_top: self.modes.on_top,
@@ -462,6 +465,13 @@ impl App {
         }
     }
 
+    /// Runs `cmd` after this frame's draw instead of now: for a menu entry drawn
+    /// inside the frame, where the library is locked.
+    pub(crate) fn defer_command(&mut self, ctx: &egui::Context, cmd: crate::shortcuts::Command) {
+        self.shell.deferred_command = Some(cmd);
+        ctx.request_repaint();
+    }
+
     /// Runs one command, from a key press or a menu click. A command that
     /// can't act now (`menu::enabled`) does nothing. Called before the
     /// frame locks the library, which some commands lock themselves.
@@ -486,7 +496,13 @@ impl App {
             }
             C::LoadLibrary => self.pick_library(),
             C::NewLibrary => self.new_library(),
+            C::LibrarySettings => self.open_library_settings(),
             C::MergeLibrary => self.merge_library(),
+            C::MoveLibrary => {
+                if let Some(root) = self.ws.root.clone() {
+                    self.start_move_library(root);
+                }
+            }
             C::ClearLibraryHistory => self.clear_history_open = true,
             C::EmptyCacheReload => self.confirm_reload = true,
             C::ImportPack => self.import_pack_dialog(),
@@ -495,6 +511,7 @@ impl App {
             C::PreviousLibrary => self.switch_to = Some(Switch::Focus(self.others.step(false))),
             C::ToggleSidebar => self.show_sidebar = !self.show_sidebar,
             C::ToggleInspector => self.show_inspector = !self.show_inspector,
+            C::TogglePathBar => self.prefs.show_path_bar = !self.prefs.show_path_bar,
             C::ToggleAll => {
                 self.toggle_panels();
                 // Tab must not also hand keyboard focus to the first widget.
@@ -504,8 +521,24 @@ impl App {
             C::ZoomOut if self.zoom_preview(0.8) => {}
             C::ZoomIn if viewer => self.ws.view.zoom_key = Some(logic::ViewZoom::In),
             C::ZoomOut if viewer => self.ws.view.zoom_key = Some(logic::ViewZoom::Out),
-            C::ZoomIn => self.tile = (self.tile + 20.0).min(TILE_MAX),
-            C::ZoomOut => self.tile = (self.tile - 20.0).max(TILE_MIN),
+            C::ZoomIn => {
+                self.tile = (self.tile + 20.0).min(TILE_MAX).round();
+                if let Some(id) = self.ws.selected.first().cloned() {
+                    self.ws.scroll_to = Some(id);
+                }
+            }
+            C::ZoomOut => {
+                self.tile = (self.tile - 20.0).max(TILE_MIN).round();
+                if let Some(id) = self.ws.selected.first().cloned() {
+                    self.ws.scroll_to = Some(id);
+                }
+            }
+            C::ZoomActual if !viewer => {
+                self.tile = 139.0;
+                if let Some(id) = self.ws.selected.first().cloned() {
+                    self.ws.scroll_to = Some(id);
+                }
+            }
             C::ZoomActual => self.ws.view.zoom_key = Some(logic::ViewZoom::Actual),
             C::ZoomFit => self.ws.view.zoom_key = Some(logic::ViewZoom::Fit),
             C::Back if viewer => self.ws.viewer = None,
@@ -746,7 +779,11 @@ impl App {
             // Only for a focused text field (`text_command`).
             C::Cut => {}
             C::Import => self.import_files_dialog(),
+            C::ImportAsCopy => self.import_files_dialog_with_mode(falcon_library::storage_mode::StorageMode::Copy),
+            C::ImportAsLink => self.import_files_dialog_with_mode(falcon_library::storage_mode::StorageMode::Link),
             C::ImportFolders => self.import_folders_dialog(),
+            C::ImportFoldersAsCopy => self.import_folders_dialog_with_mode(falcon_library::storage_mode::StorageMode::Copy),
+            C::ImportFoldersAsLink => self.import_folders_dialog_with_mode(falcon_library::storage_mode::StorageMode::Link),
             C::ImportLinks => self.import_links_dialog(),
             C::FindDuplicates => {
                 self.ws.viewer = None;
@@ -756,7 +793,7 @@ impl App {
                 let Some(shared) = self.ws.lib.clone() else { return };
                 let ids = self.acted_on();
                 let lib = lock(&shared);
-                let ext_of = |id: &str| lib.item(id).map(|i| i.ext.clone());
+                let ext_of = |id: &str| (!lib.is_linked_item(id)).then(|| lib.item(id).map(|i| i.ext.clone())).flatten();
                 use falcon_library::transform;
                 match cmd {
                     C::FlipHorizontal => {
@@ -769,8 +806,10 @@ impl App {
                     }
                     _ => {
                         if self.ws.tools.crop.is_some() {
-                            // The crop key again saves.
-                            if let Some(c) = self.ws.tools.crop.as_mut() {
+                            // The crop key again saves (only when original overwrite is allowed).
+                            if let Some(c) = self.ws.tools.crop.as_mut()
+                                && c.can_overwrite
+                            {
                                 c.confirming = true;
                             }
                         } else if let [id] = image_edit::editable(&ids, ext_of, transform::can_crop).as_slice() {
@@ -818,6 +857,7 @@ impl App {
             C::ToggleInfo => self.display.show_info = !self.display.show_info,
             C::ToggleComments => self.display.comment_badge = !self.display.comment_badge,
             C::ToggleSubfolders => self.display.subfolders = !self.display.subfolders,
+            C::ToggleHideUnsupported => self.display.hide_unsupported = !self.display.hide_unsupported,
         }
     }
 

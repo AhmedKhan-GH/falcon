@@ -31,6 +31,8 @@ pub enum Command {
     ToggleInspector,
     /// Eagle's View ▸ Sidebar / Inspector: both panels at once.
     ToggleAll,
+    /// View ▸ Show Path Bar: clickable Finder-style breadcrumbs.
+    TogglePathBar,
     ToggleFilter,
     LayoutGrid,
     LayoutJustified,
@@ -55,11 +57,17 @@ pub enum Command {
     LoadLibrary,
     /// Library menu (`App::library_ui`).
     NewLibrary,
+    LibrarySettings,
     MergeLibrary,
+    MoveLibrary,
     ClearLibraryHistory,
     EmptyCacheReload,
     /// File ▸ Import Folders…
     ImportFolders,
+    ImportAsCopy,
+    ImportAsLink,
+    ImportFoldersAsCopy,
+    ImportFoldersAsLink,
     /// File ▸ Import Links…
     ImportLinks,
     /// File ▸ Import submenu.
@@ -153,6 +161,8 @@ pub enum Command {
     ToggleComments,
     /// Show Subfolder Content (Eagle's ⌥⌘7).
     ToggleSubfolders,
+    /// Hide or show unsupported files.
+    ToggleHideUnsupported,
     /// Open the tag picker for the selection: Organize ▸ Add Tags… (⌘T)
     /// and Eagle's bare T.
     AddTags,
@@ -257,6 +267,7 @@ impl Scroll {
 /// The sidebar pages ⌘1–⌘7 open, in the order of Eagle's View menu.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Page {
+    Home,
     All,
     Uncategorized,
     Untagged,
@@ -267,11 +278,12 @@ pub enum Page {
 }
 
 impl Page {
-    pub const ALL: [Page; 7] = [Page::All, Page::Uncategorized, Page::Untagged, Page::Recent, Page::Random, Page::AllTags, Page::Trash];
+    pub const ALL: [Page; 8] = [Page::Home, Page::All, Page::Uncategorized, Page::Untagged, Page::Recent, Page::Random, Page::AllTags, Page::Trash];
 
     pub fn scope(self) -> crate::logic::Scope {
         use crate::logic::Scope;
         match self {
+            Page::Home => Scope::Home,
             Page::All => Scope::All,
             Page::Uncategorized => Scope::Uncategorized,
             Page::Untagged => Scope::Untagged,
@@ -371,6 +383,7 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::ToggleSidebar, id: "view.toggle.sidebar", group: "View", label: "Show or hide the sidebar", default: k(CMD_ALT, Key::Num1), aliases: &[] },
     Spec { cmd: Command::ToggleInspector, id: "view.toggle.inspector", group: "View", label: "Show or hide the inspector", default: k(CMD_ALT, Key::Num2), aliases: &[] },
     Spec { cmd: Command::ToggleAll, id: "view.toggle.all", group: "View", label: "Show or hide the sidebar and inspector", default: k(CMD_ALT, Key::Num3), aliases: &[] },
+    Spec { cmd: Command::TogglePathBar, id: "view.toggle.path_bar", group: "View", label: "Show or hide the path bar", default: None, aliases: &[] },
     // Eagle's ⌥1 is Waterfall and ⌥3 the square Grid (its keybind names say the opposite).
     Spec { cmd: Command::LayoutWaterfall, id: "view.layout.waterfall", group: "View", label: "Waterfall layout", default: k(ALT, Key::Num1), aliases: &[] },
     Spec { cmd: Command::LayoutJustified, id: "view.layout.justified", group: "View", label: "Justified layout", default: k(ALT, Key::Num2), aliases: &[] },
@@ -454,7 +467,8 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::PreviousLibrary, id: "library.previous", group: "Library", label: "Previous open library", default: k(CTRL_SHIFT, Key::Tab), aliases: &[] },
     Spec { cmd: Command::Preferences, id: "app.preferences", group: "App", label: "Preferences", default: k(CMD, Key::Comma), aliases: &[] },
     Spec { cmd: Command::LockApp, id: "app.lock", group: "App", label: "Lock falcon", default: k(CMD_ALT, Key::L), aliases: &[] },
-    // Eagle's View ▸ All … Trash.
+    // Eagle's View ▸ All … Trash, and falcon's Home.
+    Spec { cmd: Command::Page(Page::Home), id: "view.home", group: "Go", label: "Show Home", default: k(CMD_SHIFT, Key::H), aliases: &[] },
     Spec { cmd: Command::Page(Page::All), id: "view.all", group: "Go", label: "Show All", default: k(CMD, Key::Num1), aliases: &[] },
     Spec { cmd: Command::Page(Page::Uncategorized), id: "view.unfiled", group: "Go", label: "Show Uncategorized", default: k(CMD, Key::Num2), aliases: &[] },
     Spec { cmd: Command::Page(Page::Untagged), id: "view.untagged", group: "Go", label: "Show Untagged", default: k(CMD, Key::Num3), aliases: &[] },
@@ -507,10 +521,16 @@ pub const TABLE: &[Spec] = &[
     // Export and copy-out (`App::export_keys`).
     Spec { cmd: Command::LoadLibrary, id: "library.load", group: "Library", label: "Choose a library folder to open", default: None, aliases: &[] },
     Spec { cmd: Command::NewLibrary, id: "library.create", group: "Library", label: "Create a new library", default: None, aliases: &[] },
+    Spec { cmd: Command::LibrarySettings, id: "library.settings", group: "Library", label: "Library Settings", default: None, aliases: &[] },
     Spec { cmd: Command::MergeLibrary, id: "library.merge", group: "Library", label: "Merge another library into this one", default: None, aliases: &[] },
+    Spec { cmd: Command::MoveLibrary, id: "library.move", group: "Library", label: "Move this library to another folder", default: None, aliases: &[] },
     Spec { cmd: Command::ClearLibraryHistory, id: "library.clearHistory", group: "Library", label: "Clear the library history", default: None, aliases: &[] },
     Spec { cmd: Command::EmptyCacheReload, id: "library.reload", group: "Library", label: "Empty the cache and reload the library", default: None, aliases: &[] },
     Spec { cmd: Command::ImportFolders, id: "file.import.folders", group: "Import", label: "Import folders", default: None, aliases: &[] },
+    Spec { cmd: Command::ImportAsCopy, id: "file.import.copy", group: "Import", label: "Import files (Copy to Library)", default: None, aliases: &[] },
+    Spec { cmd: Command::ImportAsLink, id: "file.import.link", group: "Import", label: "Import files (Link / Place)", default: None, aliases: &[] },
+    Spec { cmd: Command::ImportFoldersAsCopy, id: "file.import.folders.copy", group: "Import", label: "Import folders (Copy to Library)", default: None, aliases: &[] },
+    Spec { cmd: Command::ImportFoldersAsLink, id: "file.import.folders.link", group: "Import", label: "Import folders (Link / Place)", default: None, aliases: &[] },
     Spec { cmd: Command::ImportLinks, id: "file.import.links", group: "Import", label: "Import links", default: None, aliases: &[] },
     Spec { cmd: Command::ImportPack, id: "file.import.eaglepack", group: "Import", label: "Import an Eagle package", default: None, aliases: &[] },
     Spec { cmd: Command::ImportInboard, id: "file.import.inboard", group: "Import", label: "Import an Inboard backup", default: None, aliases: &[] },
@@ -532,6 +552,7 @@ pub const TABLE: &[Spec] = &[
     Spec { cmd: Command::ToggleInfo, id: "view.toggle.listmetas", group: "View", label: "Show or hide item info", default: k(CMD_ALT, Key::Num5), aliases: &[] },
     Spec { cmd: Command::ToggleComments, id: "view.toggle.listannotation", group: "View", label: "Show or hide comment counts", default: k(CMD_ALT, Key::Num6), aliases: &[] },
     Spec { cmd: Command::ToggleSubfolders, id: "view.toggle.subfolder", group: "View", label: "Show or hide subfolder content", default: k(CMD_ALT, Key::Num7), aliases: &[] },
+    Spec { cmd: Command::ToggleHideUnsupported, id: "view.toggle.hide_unsupported", group: "View", label: "Hide or show unsupported files", default: k(NONE, Key::F12), aliases: &[] },
     // Tags: Organize ▸ Add Tags… and Eagle's T, bound outside its keybind table (falcon's own id).
     Spec { cmd: Command::AddTags, id: "organize.tag.add", group: "Tags", label: "Add tags to the selection", default: k(CMD, Key::T), aliases: &[] },
     Spec { cmd: Command::TagPanel, id: "organize.tag.panel", group: "Tags", label: "Open the tag picker", default: k(NONE, Key::T), aliases: &[] },
@@ -1259,9 +1280,11 @@ mod tests {
     fn page_keys_follow_eagles_view_menu() {
         let keys = Shortcuts::default();
         let digits = [Key::Num1, Key::Num2, Key::Num3, Key::Num4, Key::Num5, Key::Num6, Key::Num7];
-        for (key, page) in digits.into_iter().zip(Page::ALL) {
+        let pages = [Page::All, Page::Uncategorized, Page::Untagged, Page::Recent, Page::Random, Page::AllTags, Page::Trash];
+        for (key, page) in digits.into_iter().zip(pages) {
             assert_eq!(keys.resolve(key, CMD), Some(Command::Page(page)), "{key:?}");
         }
+        assert_eq!(keys.resolve(Key::H, CMD_SHIFT), Some(Command::Page(Page::Home)));
         // ⌥1 is still a layout and ⌥⌘1 the sidebar.
         assert_eq!(keys.resolve(Key::Num1, ALT), Some(Command::LayoutWaterfall));
         assert_eq!(keys.resolve(Key::Num1, CMD_ALT), Some(Command::ToggleSidebar));
